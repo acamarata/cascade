@@ -31,7 +31,12 @@ import (
 //   dependency; the contract also names this explicitly) — follow mode
 //   polls via os.Stat + read. stdout=data / stderr=diag output contract
 //   (D/S-06.T5): production callers pass os.Stdout/os.Stderr for
-//   Out/Diag; tests always pass buffers.
+//   Out/Diag; tests always pass buffers. The file open goes through
+//   openLogFile (daemon_logs_unix.go / daemon_logs_windows.go): a plain
+//   os.Open on Windows omits FILE_SHARE_DELETE, so rotation.go's own
+//   rename-away-and-reopen (the exact case followLoop below exists to
+//   survive) would fail with ERROR_SHARING_VIOLATION while this handler
+//   still holds the old file open — a real bug, not a test artifact.
 // SPORT: runtime/logger (ADD, per T-2 sport_updates).
 
 // DaemonLogsOptions carries DaemonLogsHandler's inputs.
@@ -76,7 +81,7 @@ func DaemonLogsHandler(ctx context.Context, opts DaemonLogsOptions) error {
 		interval = 200 * time.Millisecond
 	}
 
-	f, err := os.Open(opts.Path)
+	f, err := openLogFile(opts.Path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			_, _ = fmt.Fprintf(opts.Diag, "runtime: daemon logs: no log file yet at %s\n", opts.Path)

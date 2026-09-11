@@ -66,8 +66,9 @@ const SchemaVersion = jobsSchemaVersion
 // MigrationSet is the jobs domain's seven-table schema.
 func MigrationSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
-		SchemaVersion:        jobsSchemaVersion,
-		MinimumReaderVersion: jobsSchemaVersion,
+		SetID:         "jobs",
+		SchemaVersion: jobsSchemaVersion,
+		ReaderCeiling: jobsSchemaVersion,
 		Steps: []migrate.MigrationStep{
 			jobTableStep(),
 			taskDependencyTableStep(),

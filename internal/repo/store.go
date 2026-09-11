@@ -46,11 +46,19 @@ import (
 const tableInventory = "context_repo_inventory"
 
 // repoInventorySchemaVersion is this package's MigrationSet target
-// version -- the next unused slot in cascade.db's single global
-// schema_version sequence (see internal/context/scope/schema.go's doc
-// comment for why the sequence is global). Claimed slots as of this
-// ticket: bootstrap=1, context/scope=2, retrieval/lifecycle=3,
-// providers/registry=4, jobs=5, providers/usage=6. This package claims 7.
+// version, within this package's OWN SetID ("repo").
+//
+// R-16.77 correction (this comment's own prior history): this used to
+// describe "the next unused slot in cascade.db's single global
+// schema_version sequence," listing claimed slots including
+// providers/registry=4 and providers/usage=6 -- both wrong even under
+// the old model, since neither package ever targeted cascade.db
+// (providers/registry and providers/usage each open their own dedicated
+// .db file; see their migration.go doc comments' own corrections).
+// R-16.77 gave internal/storage/migrate's applied_migrations ledger
+// PER-SET identity (key: (SetID, schema_version)), so this package's
+// schema_version is independent of every other set's regardless --
+// there is no shared sequence left to claim a slot in.
 const repoInventorySchemaVersion = 7
 
 // SchemaVersion is repoInventorySchemaVersion exported for a future
@@ -62,9 +70,10 @@ const SchemaVersion = repoInventorySchemaVersion
 // domain.
 func MigrationSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
-		SchemaVersion:        repoInventorySchemaVersion,
-		MinimumReaderVersion: repoInventorySchemaVersion,
-		Steps:                []migrate.MigrationStep{repoInventoryTableStep()},
+		SetID:         "repo",
+		SchemaVersion: repoInventorySchemaVersion,
+		ReaderCeiling: repoInventorySchemaVersion,
+		Steps:         []migrate.MigrationStep{repoInventoryTableStep()},
 	}
 }
 

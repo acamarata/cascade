@@ -3,11 +3,40 @@ package secrets
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
+
+// fakeCommandModeEnv selects TestMain's re-exec behaviour for
+// TestExecRunner: execRunner's own contract is "run an arbitrary external
+// command, capture stdout/stderr/exit code" and has nothing to do with a
+// shell, so the fixture must not depend on one either — a hardcoded
+// /bin/echo or /bin/sh (Windows parity pass 3/4) is not a real executable
+// there. Re-exec'ing this same compiled test binary (TestMain intercepts
+// before m.Run(), the same idiom cmd/cascade/config/config_edit_test.go
+// uses for its fake $EDITOR) is a real, portable child process on every
+// platform this package targets.
+const fakeCommandModeEnv = "CASCADE_TEST_FAKE_COMMAND_MODE"
+
+// TestMain intercepts before flag parsing when fakeCommandModeEnv is set:
+// the process was re-exec'd to stand in for an external command, not to
+// run tests. Any other invocation runs m.Run() exactly as if this
+// function did not exist.
+func TestMain(m *testing.M) {
+	switch os.Getenv(fakeCommandModeEnv) {
+	case "hello":
+		fmt.Println("hello")
+		os.Exit(0)
+	case "boom":
+		fmt.Fprintln(os.Stderr, "boom")
+		os.Exit(3)
+	}
+	os.Exit(m.Run())
+}
 
 // isKind reports whether err carries the given taxonomy kind.
 func isKind(err error, want cascade.Kind) bool {
@@ -73,14 +102,22 @@ func TestConfigDefaults(t *testing.T) {
 }
 
 func TestExecRunner(t *testing.T) {
-	out, err := execRunner(context.Background(), "/bin/echo", "hello")
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+
+	t.Setenv(fakeCommandModeEnv, "hello")
+	out, err := execRunner(context.Background(), self)
 	if err != nil {
 		t.Fatalf("echo: %v", err)
 	}
 	if strings.TrimSpace(string(out)) != "hello" {
 		t.Fatalf("echo output = %q", out)
 	}
-	_, err = execRunner(context.Background(), "/bin/sh", "-c", "echo boom >&2; exit 3")
+
+	t.Setenv(fakeCommandModeEnv, "boom")
+	_, err = execRunner(context.Background(), self)
 	if err == nil {
 		t.Fatal("a failing command reported success")
 	}

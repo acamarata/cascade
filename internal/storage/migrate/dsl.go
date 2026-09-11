@@ -203,17 +203,30 @@ type MigrationStep struct {
 }
 
 // MigrationSet is one forward migration: every step in Steps advances the
-// schema to SchemaVersion as a single unit. MinimumReaderVersion is the
-// oldest on-disk schema_version this binary can still open — Apply (in
+// schema to SchemaVersion as a single unit. ReaderCeiling is the newest
+// on-disk schema_version this binary can still open — Apply (in
 // ledger.go) refuses to proceed, returning *SchemaDowngradeError, when the
-// ledger's recorded schema_version exceeds it.
+// ledger's recorded schema_version (for this same SetID) exceeds it. The
+// ledger keys every row by (SetID, schema_version) — R-16.77 — so two
+// MigrationSets with different SetID values may freely share a
+// SchemaVersion; version numbers are no longer a tree-wide scarce
+// resource.
 type MigrationSet struct {
+	// SetID identifies this set independently of every other set sharing
+	// the same ledger table. Required (non-empty) for every caller —
+	// Apply refuses a set with SetID == "". Two non-test
+	// migrate.MigrationSet{...} composite literals in different
+	// packages must never share one (internal/build's ledger-identity
+	// gate enforces this mechanically across the tree).
+	SetID string
 	// SchemaVersion is the monotonically increasing version this set
-	// advances the schema to. Must be >= 1.
+	// advances the schema to, within its own SetID. Must be >= 1.
 	SchemaVersion int
-	// MinimumReaderVersion is the oldest on-disk schema_version this
-	// binary understands.
-	MinimumReaderVersion int
+	// ReaderCeiling is the newest on-disk schema_version (for this
+	// SetID) this binary understands. Named for what Apply actually
+	// enforces — a ceiling — per R-16.77 (formerly ReaderCeiling,
+	// which said "minimum" while ledger.go always enforced a maximum).
+	ReaderCeiling int
 	// Steps are applied in order.
 	Steps []MigrationStep
 }

@@ -37,6 +37,13 @@ const (
 	EgressClassPluginRemote EgressClass = "plugin-remote"
 	// EgressClassRegistryFetch is the plugin registry fetch.
 	EgressClassRegistryFetch EgressClass = "registry-fetch"
+	// EgressClassCIPoll is the GitHub Actions REST polling client's
+	// outbound fetch (P1-E25-W5-S51-T2, 06 §5.17). The ticket's own text
+	// names this class's home as "internal/secrets/classes.go" -- that
+	// file does not exist in this tree; the real registry, and every
+	// other landed egress class, lives here. Registered here rather than
+	// there.
+	EgressClassCIPoll EgressClass = "ci-poll"
 )
 
 // defaultClasses is the registration table. It is a slice of pairs rather
@@ -55,6 +62,7 @@ var defaultClasses = []struct {
 	{EgressClassBackupTarget, InterceptConfig{Enabled: true, AllowRestricted: true, Owner: "S/S-41.T3"}},
 	{EgressClassPluginRemote, InterceptConfig{Enabled: false, Owner: "O/S-33.T4"}},
 	{EgressClassRegistryFetch, InterceptConfig{Enabled: true, Owner: "X/S-50.T1"}},
+	{EgressClassCIPoll, InterceptConfig{Enabled: true, Owner: "P1-E25-W5-S51-T2"}},
 }
 
 // defaultRegistry holds the classes this build ships with. It is package

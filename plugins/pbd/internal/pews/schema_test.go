@@ -72,10 +72,11 @@ var wantNormativeOrder = []string{
 	"docs_updates",
 }
 
-// wantExtraOrder is 06 §1's five declared extra flags, in the order it
+// wantExtraOrder is 06 §1's six declared extra flags, in the order it
 // lists them.
 var wantExtraOrder = []string{
 	"subtickets", "journals", "owner_prereq", "gate_only", "external_contract",
+	"amendment_note",
 }
 
 // yamlTagName strips a struct tag's trailing ",omitempty" (etc.) leaving
@@ -91,13 +92,13 @@ func yamlTagName(tag reflect.StructTag) string {
 }
 
 // TestTicketSchema asserts Ticket's field declaration order matches the 17
-// normative fields followed by exactly the 5 declared extra flags, and no
+// normative fields followed by exactly the 6 declared extra flags, and no
 // others.
 func TestTicketSchema(t *testing.T) {
 	rt := reflect.TypeOf(Ticket{})
 	want := append(append([]string{}, wantNormativeOrder...), wantExtraOrder...)
 	if rt.NumField() != len(want) {
-		t.Fatalf("Ticket has %d fields, want exactly %d (17 normative + 5 extra)", rt.NumField(), len(want))
+		t.Fatalf("Ticket has %d fields, want exactly %d (17 normative + 6 extra)", rt.NumField(), len(want))
 	}
 	for i, name := range want {
 		got := yamlTagName(rt.Field(i).Tag)
@@ -112,6 +113,7 @@ func TestTicketSchema(t *testing.T) {
 func fullTicket() Ticket {
 	journals, gateOnly, external := true, false, true
 	prereq := "second machine"
+	amendment := "AMENDED per R-00.0 (T0, synthetic). Example amendment note."
 	return Ticket{
 		ID: "P1-E00-W0-S00-T1", Title: "Example", ShortDesc: "One sentence.",
 		FullDesc: "Longer\ndescription.\n", Branch: "P1-E00-W0-S00-T1-Example",
@@ -130,6 +132,7 @@ func fullTicket() Ticket {
 		DocsUpdates:  []string{".github/wiki/Example.md"},
 		Subtickets:   []string{"P1-E00-W0-S00-T1a"},
 		Journals:     &journals, OwnerPrereq: &prereq, GateOnly: &gateOnly, ExternalContract: &external,
+		AmendmentNote: &amendment,
 	}
 }
 
@@ -208,7 +211,7 @@ func testOmittedFlagsStayNil(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecodeTicket(minimal): %v", err)
 	}
-	if tk.Journals != nil || tk.OwnerPrereq != nil || tk.GateOnly != nil || tk.ExternalContract != nil || tk.Subtickets != nil {
+	if tk.Journals != nil || tk.OwnerPrereq != nil || tk.GateOnly != nil || tk.ExternalContract != nil || tk.Subtickets != nil || tk.AmendmentNote != nil {
 		t.Fatalf("expected all extra flags omitted (nil), got %+v", tk)
 	}
 	out, err := EncodeTicket(tk)

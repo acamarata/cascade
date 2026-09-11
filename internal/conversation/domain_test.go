@@ -194,11 +194,11 @@ func TestApplyConversationSchemaRequiresDBAndClock(t *testing.T) {
 	}
 }
 
-// TestConversationMigrationMinimumReaderVersionRefusesDowngrade matches
+// TestConversationMigrationReaderCeilingRefusesDowngrade matches
 // internal/providers/registry/migration_test.go's identical test: a
-// MigrationSet claiming a lower MinimumReaderVersion than the ledger's
+// MigrationSet claiming a lower ReaderCeiling than the ledger's
 // on-disk schema_version must be refused.
-func TestConversationMigrationMinimumReaderVersionRefusesDowngrade(t *testing.T) {
+func TestConversationMigrationReaderCeilingRefusesDowngrade(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	dialect := migrate.SQLiteEmitter{}
@@ -209,8 +209,8 @@ func TestConversationMigrationMinimumReaderVersionRefusesDowngrade(t *testing.T)
 	}
 
 	downgraded := MigrationSet()
-	downgraded.MinimumReaderVersion = conversationSchemaVersion - 1
+	downgraded.ReaderCeiling = conversationSchemaVersion - 1
 	if err := migrate.Apply(ctx, migrate.ApplyConfig{DB: db, Dialect: dialect, Clock: clock}, downgraded); err == nil {
-		t.Fatal("Apply with a lowered MinimumReaderVersion should have been refused, got nil error")
+		t.Fatal("Apply with a lowered ReaderCeiling should have been refused, got nil error")
 	}
 }

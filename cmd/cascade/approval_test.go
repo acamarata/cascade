@@ -118,17 +118,12 @@ func TestApprovalViewsRender(t *testing.T) {
 	}
 }
 
-// TestApprovalGrantRequiresTheToken proves the CLI refuses before it dials
-// when the signed token is absent: a request id alone is never enough.
-func TestApprovalGrantRequiresTheToken(t *testing.T) {
-	out, err := execRoot(t, "approval", "grant", "01J8ZC5W2K4F6H8M0P2R4T6V8X")
-	if err == nil {
-		t.Fatalf("approval grant with no token succeeded: %s", out)
-	}
-	if !strings.Contains(err.Error(), "token") {
-		t.Errorf("the refusal does not name the missing token: %v", err)
-	}
-}
+// TestApprovalGrantRequiresTheToken (POSIX: !windows) and its Windows
+// mirror live in approval_elevation_unix_test.go / approval_windows_test.go
+// (Windows parity pass 3): grant is an ELEVATED verb, and on Windows it
+// refuses via refuseElevatedOnUnsupportedPlatform before ever reaching
+// the --token check this test drives, so a single platform-neutral
+// version cannot assert one true thing everywhere.
 
 // TestApprovalCommands_TransportFailurePropagates drives list/show/deny/
 // expire's REAL RunE past approvalClient's success and into the actual

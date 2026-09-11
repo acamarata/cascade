@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // TestFleetSessionsMountedOnRoot is the R-14.166 reachability proof: both
@@ -119,11 +120,27 @@ func TestDecodeSessionEvent_MalformedNeverPanics(t *testing.T) {
 
 // TestEmbeddedFleetSessionRows_RunsWithoutDaemon proves the D/S-07.T4
 // embedded path (a live census scan, no persisted domain store) runs to
-// completion with no daemon and no panic, on every platform this ticket
-// targets - it never dials a socket, so it belongs in this file's
-// no-network unit lane.
+// completion with no daemon and no panic, on the platforms where
+// process census enumeration has a real implementation - it never dials
+// a socket, so it belongs in this file's no-network unit lane. On
+// Windows, internal/fleet/census's Enumerate is a deliberate tier-2
+// refusal (its own census_windows_test.go proves that directly); this
+// branch proves the refusal propagates through embeddedFleetSessionRows
+// unchanged rather than being silently swallowed into an empty row set.
+// This test stays in fleet_test.go (a GOOS branch, not a sibling file)
+// for the same files_scope reason TestFleetSessionsWatch_WindowsTier2Refusal
+// does, below.
 func TestEmbeddedFleetSessionRows_RunsWithoutDaemon(t *testing.T) {
 	rows, err := embeddedFleetSessionRows()
+	if goruntime.GOOS == "windows" {
+		if err == nil {
+			t.Fatal("embeddedFleetSessionRows succeeded on Windows, where process census enumeration is unsupported (tier-2)")
+		}
+		if !cascade.HasKind(err, cascade.KindUnsupported) {
+			t.Errorf("embeddedFleetSessionRows error kind = %v, want unsupported", err)
+		}
+		return
+	}
 	if err != nil {
 		t.Fatalf("embeddedFleetSessionRows: unexpected error: %v", err)
 	}

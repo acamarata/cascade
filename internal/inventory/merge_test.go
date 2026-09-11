@@ -21,8 +21,10 @@ func TestLoad(t *testing.T) {
 	if r.ErrorKinds != 14 {
 		t.Errorf("ErrorKinds = %d, want 14", r.ErrorKinds)
 	}
-	if r.StorageDomains != 11 {
-		t.Errorf("StorageDomains = %d, want 11", r.StorageDomains)
+	// Twelve since R-16.75 added ci_results to the closed domain set; see
+	// TestStorageDomainCount on why this stays a hand-updated literal.
+	if r.StorageDomains != 12 {
+		t.Errorf("StorageDomains = %d, want 12", r.StorageDomains)
 	}
 	if r.CLICommands != 2 {
 		t.Errorf("CLICommands = %d, want 2", r.CLICommands)

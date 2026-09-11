@@ -553,27 +553,6 @@
     "caller_site": "cmd/cascade/daemon_unix_store.go"
   },
   {
-    "symbol": "internal/conversation.ApplyConversationSchema",
-    "reason": "Same gap as internal/conversation.NewStore above: this ticket's own migration entry point has no composition-root caller inside files_scope (cmd/cascade/daemon_unix_store.go's runtimeReaderCeiling, which would need a term for conversation.SchemaVersion, is outside files_scope.change, which is empty for this ticket), matching internal/providers/registry.ApplyMigrationSchema's identical precedent. ApplyConversationSchema is fully implemented and tested (TestApplyConversationSchemaCreatesTables, TestApplyConversationSchemaIdempotent, TestApplyConversationSchemaRequiresDBAndClock, TestConversationMigrationMinimumReaderVersionRefusesDowngrade) against a real migrated SQLite database. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "expected_caller": "the daemon storage composition root (cmd/cascade/daemon_unix_store.go), alongside its existing ApplyScopeSchema/RetrievalMigrationSet/registry/jobs/usage calls, adding a term for conversation.SchemaVersion to runtimeReaderCeiling; retire this entry once that wiring lands",
-    "retire_ticket": "UNOWNED",
-    "caller_site": "cmd/cascade/daemon_unix_store.go"
-  },
-  {
-    "symbol": "internal/conversation.NewTurnID",
-    "reason": "The content-addressed Turn.ID constructor a caller uses to build a Turn before calling Store.AppendTurn. This package's own AppendTurn takes an already-constructed Turn (matching the ticket's exact ConversationStore method list, which has no CreateTurn), so NewTurnID's only callers today are this package's own tests, which exercise it directly (TestContentAddressedIDsAreDeterministicAndDistinct) and via every AppendTurn/AppendSegment round trip in store_test.go/conversation_test.go. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "expected_caller": "the T2 adapter layer's turn-construction path, once it builds a Turn from an incoming user/assistant exchange and calls Store.AppendTurn; retire this entry once that wiring lands",
-    "retire_ticket": "UNOWNED",
-    "caller_site": "internal/conversation/adapter.go"
-  },
-  {
-    "symbol": "internal/conversation.NewSegmentID",
-    "reason": "NewTurnID's twin for Segment.ID. Same gap: no production caller exists in this ticket's scope, only this package's own tests (TestContentAddressedIDsAreDeterministicAndDistinct and every AppendSegment round trip). No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "expected_caller": "the T2 adapter layer's segment-construction path, once it builds a Segment from a turn's typed content slices and calls Store.AppendSegment; retire this entry once that wiring lands",
-    "retire_ticket": "UNOWNED",
-    "caller_site": "internal/conversation/adapter.go"
-  },
-  {
     "symbol": "internal/conversation/topics.AssertFloors",
     "reason": "The topic fixture corpus and evaluator landed under P1-E21-W5-S45-T1. The classifier that calls LoadCorpus and Evaluate is S-45.T2. The labeled corpus itself is an outstanding owner prerequisite. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
     "expected_caller": "internal/conversation/topics/classifier.go, which P1-E21-W5-S45-T2 constructs; retire this entry when that lands",
@@ -1006,5 +985,82 @@
     "expected_caller": "a future migration ticket that moves the PEWS tree's source of truth from YAML files to database-backed storage (06-FORGE-SPEC §6.4's 'until then'), which would call Convert (or its direct successor) as the one-time migration step; retire this entry if/when that ticket lands, or if a phase-close tool adopts Convert directly",
     "retire_ticket": "P1-E14-W3-S30-T3",
     "caller_site": "internal/migrate/pews_migrate.go"
+  },
+  {
+    "symbol": "internal/ci.ApplyMigrationSchema",
+    "reason": "P1-E25-W5-S51-T2: no composition-root wiring in this ticket's files_scope, matching internal/providers/registry.ApplyMigrationSchema's identical precedent; a later composition-root ticket wires this in",
+    "expected_caller": "a future internal/daemon/ci_wire.go composition-root file that constructs the live internal/ci schema against cmd/cascade's shared *sql.DB, matching internal/providers/registry's own migration wiring precedent; retire this entry once that lands",
+    "retire_ticket": "P1-E25-W5-S51-T2",
+    "caller_site": "internal/daemon/ci_wire.go"
+  },
+  {
+    "symbol": "internal/ci.NewClient",
+    "reason": "P1-E25-W5-S51-T2: same as ApplyMigrationSchema above -- the polling Client has no scheduler wiring yet",
+    "expected_caller": "the same future internal/daemon/ci_wire.go, once it constructs a live internal/ci.Client and registers its poll as a scheduler Runnable; retire this entry once that lands",
+    "retire_ticket": "P1-E25-W5-S51-T2",
+    "caller_site": "internal/daemon/ci_wire.go"
+  },
+  {
+    "symbol": "internal/ci.Upsert",
+    "reason": "P1-E25-W5-S51-T2: same as above -- Upsert is Client's would-be write path once wired",
+    "expected_caller": "the same future internal/daemon/ci_wire.go, once it calls Upsert against each polled run/job/step; retire this entry once that lands",
+    "retire_ticket": "P1-E25-W5-S51-T2",
+    "caller_site": "internal/daemon/ci_wire.go"
+  },
+  {
+    "symbol": "internal/conversation.JournalEntryThreadCreate",
+    "reason": "P1-E20-W5-S44-T4: reserved journalPayload.Type discriminator, closed vocabulary per R-21.216 (internal/fleet/journal.Kind's eight-member enum is CLOSED, so these three types live inside the payload, not as new Kind values). Thread creation is currently an implicit side effect of AppendTurn (domain.go), so nothing constructs a ThreadCreate-typed payload yet; the constant is exercised only by TestConversationResume_SkipsReservedPayloadTypes, which proves Resume treats it as a safe no-op.",
+    "expected_caller": "a future explicit thread-lifecycle ticket that journals thread creation as its own event rather than an implicit AppendTurn side effect; retire this entry once that lands",
+    "retire_ticket": "P1-E20-W5-S44-T4",
+    "caller_site": "internal/conversation/journal.go"
+  },
+  {
+    "symbol": "internal/conversation.JournalEntrySegmentStateTransition",
+    "reason": "P1-E20-W5-S44-T4: JournalEntryThreadCreate's twin gap. This package defines no segment-state machine of its own to transition, so nothing constructs a SegmentStateTransition-typed payload yet; exercised only by TestConversationResume_SkipsReservedPayloadTypes, which proves Resume treats it as a safe no-op.",
+    "expected_caller": "a future segment-state-machine ticket that journals segment state transitions as their own event; retire this entry once that lands",
+    "retire_ticket": "P1-E20-W5-S44-T4",
+    "caller_site": "internal/conversation/journal.go"
+  },
+  {
+    "symbol": "internal/bench.Gate",
+    "reason": "P1-E28-W10-S58-T2 builds the go test -bench output parser and budget gate as a standalone package with no CLI verb calling it yet -- ParseBenchOutput/Gate/RegisteredBudgets are fully implemented and tested against real go test -bench=. output, but no cmd/cascade command runs a bench and feeds the result through this package.",
+    "expected_caller": "a future `cascade bench` (or CI bench-gate) command in cmd/cascade that runs go test -bench=., pipes stdout through ParseBenchOutput, and calls Gate against RegisteredBudgets; retire this entry once that lands",
+    "retire_ticket": "P1-E28-W10-S58-T2",
+    "caller_site": "cmd/cascade/bench.go"
+  },
+  {
+    "symbol": "internal/bench.ParseBenchOutput",
+    "reason": "internal/bench.Gate's sibling gap above -- same missing CLI verb, same expected caller.",
+    "expected_caller": "the same future `cascade bench` command named in internal/bench.Gate's entry; retire alongside it",
+    "retire_ticket": "P1-E28-W10-S58-T2",
+    "caller_site": "cmd/cascade/bench.go"
+  },
+  {
+    "symbol": "internal/bench.RegisteredBudgets",
+    "reason": "internal/bench.Gate's sibling gap above -- same missing CLI verb, same expected caller.",
+    "expected_caller": "the same future `cascade bench` command named in internal/bench.Gate's entry; retire alongside it",
+    "retire_ticket": "P1-E28-W10-S58-T2",
+    "caller_site": "cmd/cascade/bench.go"
+  },
+  {
+    "symbol": "internal/conversation.NewAdapter",
+    "reason": "P1-E20-W5-S43-T2 builds the JSON-RPC adapter (chat.append_turn/get_thread/list_threads) as a standalone package: no daemon composition-root ticket yet constructs a live Adapter over a real Store/EventBus and registers it on the daemon's rpc.Registry. Fully implemented and tested through a real rpc.Registry.Dispatch in every adapter_test.go/adapter_journal_test.go case.",
+    "expected_caller": "a future internal/daemon/conversation_rpc.go composition-root file, matching plugins/pbd's own pbd_rpc.go precedent, which would construct a live Adapter and call RegisterHandlers on the daemon's real rpc.Registry; retire this entry once that lands",
+    "retire_ticket": "P1-E20-W5-S43-T2",
+    "caller_site": "internal/daemon/conversation_rpc.go"
+  },
+  {
+    "symbol": "internal/conversation.RefuseSSEEmbedded",
+    "reason": "P1-E20-W5-S43-T2's Windows tier-2 SSE-mirror entry point: the same composition-root gap as NewAdapter above -- nothing on the daemon's Windows build calls it yet, only platform_windows_test.go.",
+    "expected_caller": "the Windows daemon composition root's SSE-mirror wiring, once it exists; retire this entry once that lands",
+    "retire_ticket": "P1-E20-W5-S43-T2",
+    "caller_site": "internal/conversation/platform_windows.go"
+  },
+  {
+    "symbol": "internal/retrieval.IngestGitRepo",
+    "reason": "P1-E25-W5-S52-T6 builds the code-corpus git ingest as a standalone function: no ingest command yet calls it and feeds the result to internal/retrieval/embed's Pipeline.Run, the write path this function's own doc comment names as its intended consumer.",
+    "expected_caller": "a future ingest command (e.g. `cascade retrieval ingest` or a repo-scan composition root) that calls IngestGitRepo and hands its Chunks to embed.Pipeline.Run; retire this entry once that lands",
+    "retire_ticket": "P1-E25-W5-S52-T6",
+    "caller_site": "cmd/cascade/retrieval.go"
   }
 ]

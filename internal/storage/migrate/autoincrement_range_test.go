@@ -34,8 +34,8 @@ import (
 // drive both emitters through the same shape.
 func autoincrementTableSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateTable,
 			Table: &migrate.TableDef{

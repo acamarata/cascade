@@ -31,3 +31,30 @@ machine or account identifier, or a credential-shaped string. This is a
 PUBLIC repository; see conversation_test.go's `TestErrorsNeverEchoContent`
 for the enforced proof that a synthetic marker placed in Content never
 reaches an error's message text.
+
+## SSE fixture provenance (P1-E20-W5-S43-T2)
+
+- **Capture tool:** the repository's own real counterparts, not a
+  recorded/replayed capture file. `sse_integration_test.go`'s
+  `TestClientLocalEcho_RealSocket_EchoPrecedesResponse` drives the SSE
+  wire format LIVE, end to end: a real `net/http` client subscribes to
+  `GET /events` over a real unix-socket listener started by
+  `internal/daemon.Run` (the same entry point the production daemon
+  uses), a real `chat.append_turn` JSON-RPC call is POSTed over the same
+  socket, and the test parses the resulting `event:`/`data:`/`id:`/
+  `retry:` framing `internal/rpc/sse.go`'s `writeSSEEvent` emits (never a
+  second, self-authored parser) to prove the CLIENT-LOCAL ECHO event
+  arrives before the JSON-RPC response is read.
+- **Version:** `internal/rpc` at the commit this ticket lands in
+  (`writeSSEEvent`'s frame shape is unchanged since D/S-06.T4); Go
+  `net/http` from the repository's pinned toolchain (`go.mod`).
+- **Date:** 2026-09-11.
+- **Why no static `.txt`/`.golden` fixture file:** the SSE stream's
+  content includes a monotonically assigned `id:` (the bus's own Seq)
+  and a wall-clock-adjacent `Timestamp` field inside the substituted JSON
+  payload, so a byte-frozen static fixture would either need to hide
+  those fields (weakening the proof this is real streamed output) or go
+  stale every time the bus's Seq allocation order shifts. The live
+  integration test is the fixture: it is Art.2's "real counterpart",
+  captured fresh on every CI run rather than checked in once and drifting
+  from the code that produces it.

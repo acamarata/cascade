@@ -16,9 +16,16 @@ func TestErrorKindCount(t *testing.T) {
 	}
 }
 
+// TestStorageDomainCount asserts a LITERAL on purpose. The storage domain
+// set is CLOSED (R-14.5, amended to eleven by R-16.51 and to twelve by
+// R-16.75's ci_results), so this number must only ever change as a
+// deliberate act accompanied by a T0 amendment — exactly as the exhaustive
+// linter forces every DomainID switch to be updated by hand. Deriving it
+// from the tree would let the closed set grow silently, which is the one
+// thing the closure is for.
 func TestStorageDomainCount(t *testing.T) {
-	if got := StorageDomainCount(); got != 11 {
-		t.Fatalf("StorageDomainCount() = %d, want 11", got)
+	if got := StorageDomainCount(); got != 12 {
+		t.Fatalf("StorageDomainCount() = %d, want 12", got)
 	}
 }
 

@@ -17,23 +17,23 @@ import (
 // SPORT: internal.storage.migrate.Ledger/ADDED (P1-E02-W1-S02-T3).
 
 // SchemaDowngradeError reports that the ledger's on-disk schema_version
-// exceeds the binary's MinimumReaderVersion — the opener would otherwise
+// exceeds the binary's ReaderCeiling — the opener would otherwise
 // silently open a schema newer than it understands. Wraps
 // cascade.KindIntegrity (a verification step — the version check — failed).
 type SchemaDowngradeError struct {
 	// OnDiskVersion is the schema_version recorded in the ledger.
 	OnDiskVersion int
-	// MinimumReaderVersion is the binary's MigrationSet.MinimumReaderVersion.
-	MinimumReaderVersion int
-	inner                *cascade.Error
+	// ReaderCeiling is the binary's MigrationSet.ReaderCeiling.
+	ReaderCeiling int
+	inner         *cascade.Error
 }
 
 func newSchemaDowngradeError(onDisk, minReader int) *SchemaDowngradeError {
 	return &SchemaDowngradeError{
-		OnDiskVersion:        onDisk,
-		MinimumReaderVersion: minReader,
+		OnDiskVersion: onDisk,
+		ReaderCeiling: minReader,
 		inner: cascade.Newf(cascade.KindIntegrity,
-			"migrate: on-disk schema_version %d exceeds binary minimum_reader_version %d — refusing to open a schema newer than this binary understands",
+			"migrate: on-disk schema_version %d exceeds binary reader_ceiling %d — refusing to open a schema newer than this binary understands",
 			onDisk, minReader),
 	}
 }

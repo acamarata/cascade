@@ -225,23 +225,25 @@ func TestPluginMigrationLedgerConflict(t *testing.T) {
 		t.Fatalf("first Apply: %v", err)
 	}
 
-	var claimedGlobal int
-	if err := db.QueryRowContext(ctx, `SELECT MAX(schema_version) FROM applied_migrations`).Scan(&claimedGlobal); err != nil {
-		t.Fatalf("reading claimed global version: %v", err)
+	const widgetPluginSetID = "plugin:widget-plugin" // mirrors PluginMigrator's own pluginSetID convention (plugin_migrate.go)
+	var claimedVersion int
+	if err := db.QueryRowContext(ctx, `SELECT MAX(schema_version) FROM applied_migrations WHERE set_id = ?`, widgetPluginSetID).Scan(&claimedVersion); err != nil {
+		t.Fatalf("reading claimed version: %v", err)
 	}
 
-	// Re-target the SAME global slot widget-plugin's migration actually
-	// claimed, but with different step content — the exact "migration
-	// definition changed after it was applied" hazard migrate.Apply's
-	// checksum-conflict detection exists to catch. We drive this directly
-	// against the lower-level migrate.Apply call (rather than through
-	// PluginMigrator, which always advances to a fresh slot) to prove the
-	// underlying refusal PluginMigrator relies on is real, asserted
-	// against the spec's own ledger behavior, never against a second copy
-	// of itself.
+	// Re-target the SAME (SetID, schema_version) widget-plugin's
+	// migration actually claimed, but with different step content — the
+	// exact "migration definition changed after it was applied" hazard
+	// migrate.Apply's checksum-conflict detection exists to catch. We
+	// drive this directly against the lower-level migrate.Apply call
+	// (rather than through PluginMigrator, which always advances to a
+	// fresh version) to prove the underlying refusal PluginMigrator
+	// relies on is real, asserted against the spec's own ledger
+	// behavior, never against a second copy of itself.
 	conflictingSet := migrate.MigrationSet{
-		SchemaVersion:        claimedGlobal,
-		MinimumReaderVersion: claimedGlobal,
+		SetID:         widgetPluginSetID,
+		SchemaVersion: claimedVersion,
+		ReaderCeiling: claimedVersion,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateTable,
 			Table: &migrate.TableDef{
@@ -258,6 +260,6 @@ func TestPluginMigrationLedgerConflict(t *testing.T) {
 	}, conflictingSet)
 	var conflict *migrate.MigrationConflictError
 	if !errors.As(err, &conflict) {
-		t.Fatalf("re-applying changed content at the same global slot = %v, want *migrate.MigrationConflictError", err)
+		t.Fatalf("re-applying changed content at the same (SetID, schema_version) = %v, want *migrate.MigrationConflictError", err)
 	}
 }

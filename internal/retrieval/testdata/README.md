@@ -84,6 +84,22 @@ pass by agreeing with itself.
   the non-negative "plus one" form, ties broken by ascending chunk id.
 - **Captured**: 2026-09-05.
 
+## Code-corpus git counterpart (P1-E25-W5-S52-T6)
+
+`gitcorpus_test.go`'s `TestCodeCorpus_RealGitCounterpart` and its
+sibling error-path tests do not use a checked-in fixture. Per this
+ticket's Art.2 requirement, they build a REAL git repository at
+`t.TempDir()` and drive it through the real git CLI (`git init`,
+`git add`, `git commit` — no hand-authored index-dialect fixture):
+
+- **Tool**: `git`
+- **Version**: captured at test time via `git --version` and logged with
+  `t.Logf`, so the CI runner's actual git version is part of the test's
+  own record rather than a value hand-typed here.
+- **Date**: created fresh on every run — this is a live-counterpart test,
+  not a point-in-time recording; Art.2's git requirement is exercised
+  live rather than replayed from a frozen capture.
+
 ## fuzz corpus
 
 `FuzzChunk`'s seed corpus does NOT live in this directory. Per

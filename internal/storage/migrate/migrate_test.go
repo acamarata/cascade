@@ -116,7 +116,7 @@ func TestIdempotentApply(t *testing.T) {
 }
 
 // TestDowngradeRefusal seeds the ledger at schema_version=5 (via a real
-// Apply call), then applies a set whose MinimumReaderVersion=3 and asserts
+// Apply call), then applies a set whose ReaderCeiling=3 and asserts
 // *migrate.SchemaDowngradeError with the correct on-disk and binary
 // version fields populated — the opener must never silently open a schema
 // newer than it understands.
@@ -125,8 +125,9 @@ func TestDowngradeRefusal(t *testing.T) {
 	cfg := applyConfig(t, db, path)
 
 	seed := migrate.MigrationSet{
-		SchemaVersion:        5,
-		MinimumReaderVersion: 5,
+		SetID:         "downgrade",
+		SchemaVersion: 5,
+		ReaderCeiling: 5,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateTable,
 			Table: &migrate.TableDef{
@@ -140,8 +141,9 @@ func TestDowngradeRefusal(t *testing.T) {
 	}
 
 	tooOld := migrate.MigrationSet{
-		SchemaVersion:        6,
-		MinimumReaderVersion: 3,
+		SetID:         "downgrade",
+		SchemaVersion: 6,
+		ReaderCeiling: 3,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateTable,
 			Table: &migrate.TableDef{
@@ -161,17 +163,17 @@ func TestDowngradeRefusal(t *testing.T) {
 func assertDowngradeRefused(t *testing.T, db *sql.DB, err error) {
 	t.Helper()
 	if err == nil {
-		t.Fatal("Apply with stale MinimumReaderVersion: want *SchemaDowngradeError, got nil")
+		t.Fatal("Apply with stale ReaderCeiling: want *SchemaDowngradeError, got nil")
 	}
 	var downgrade *migrate.SchemaDowngradeError
 	if !errors.As(err, &downgrade) {
-		t.Fatalf("Apply with stale MinimumReaderVersion: want *SchemaDowngradeError, got %T: %v", err, err)
+		t.Fatalf("Apply with stale ReaderCeiling: want *SchemaDowngradeError, got %T: %v", err, err)
 	}
 	if downgrade.OnDiskVersion != 5 {
 		t.Errorf("OnDiskVersion = %d, want 5", downgrade.OnDiskVersion)
 	}
-	if downgrade.MinimumReaderVersion != 3 {
-		t.Errorf("MinimumReaderVersion = %d, want 3", downgrade.MinimumReaderVersion)
+	if downgrade.ReaderCeiling != 3 {
+		t.Errorf("ReaderCeiling = %d, want 3", downgrade.ReaderCeiling)
 	}
 
 	var count int
@@ -191,8 +193,9 @@ func TestMigrationConflict(t *testing.T) {
 	cfg := applyConfig(t, db, path)
 
 	original := migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SetID:         "conflict",
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{
 			{Kind: migrate.StepCreateTable, Table: &migrate.TableDef{
 				Name: "a", Columns: []migrate.ColumnDef{{Name: "id", Type: migrate.TypeInteger}},
@@ -207,8 +210,9 @@ func TestMigrationConflict(t *testing.T) {
 	}
 
 	changed := migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SetID:         "conflict",
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{
 			original.Steps[0], // unchanged
 			{Kind: migrate.StepCreateTable, Table: &migrate.TableDef{
@@ -257,7 +261,7 @@ func TestPreMigrationSnapshotExists(t *testing.T) {
 // checks directly (no database needed — they fail before any I/O).
 func TestApplyConfig_Validation(t *testing.T) {
 	valid := migrate.ApplyConfig{DB: &sql.DB{}, Dialect: migrate.SQLiteEmitter{}, Clock: testkit.NewFrozenClock(time.Now())}
-	set := migrate.MigrationSet{SchemaVersion: 1, MinimumReaderVersion: 1}
+	set := migrate.MigrationSet{SetID: "validation", SchemaVersion: 1, ReaderCeiling: 1}
 
 	cases := []struct {
 		name string
@@ -268,7 +272,7 @@ func TestApplyConfig_Validation(t *testing.T) {
 		{"missing Dialect", migrate.ApplyConfig{DB: valid.DB, Clock: valid.Clock}, set},
 		{"missing Clock", migrate.ApplyConfig{DB: valid.DB, Dialect: valid.Dialect}, set},
 		{"DBPath without BackupDir", migrate.ApplyConfig{DB: valid.DB, Dialect: valid.Dialect, Clock: valid.Clock, DBPath: "/tmp/x.db"}, set},
-		{"SchemaVersion zero", valid, migrate.MigrationSet{SchemaVersion: 0, MinimumReaderVersion: 1}},
+		{"SchemaVersion zero", valid, migrate.MigrationSet{SetID: "validation", SchemaVersion: 0, ReaderCeiling: 1}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

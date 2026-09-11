@@ -33,8 +33,9 @@ var update = flag.Bool("update", false, "update golden fixtures")
 // posts(user_id). This exercises every construct both emitters support.
 func referenceMigrationSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SetID:         "reference",
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{
 			{
 				Kind:        migrate.StepCreateTable,

@@ -18,8 +18,8 @@ import (
 
 func TestRefusal_CompositeAutoincrementPrimaryKey(t *testing.T) {
 	set := migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateTable,
 			Table: &migrate.TableDef{
@@ -40,8 +40,8 @@ func TestRefusal_CompositeAutoincrementPrimaryKey(t *testing.T) {
 
 func TestRefusal_AutoincrementNonIntegerColumn(t *testing.T) {
 	set := migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateTable,
 			Table: &migrate.TableDef{
@@ -61,8 +61,8 @@ func TestRefusal_AutoincrementNonIntegerColumn(t *testing.T) {
 
 func TestRefusal_AutoincrementNotPrimaryKey(t *testing.T) {
 	set := migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateTable,
 			Table: &migrate.TableDef{
@@ -82,8 +82,8 @@ func TestRefusal_AutoincrementNotPrimaryKey(t *testing.T) {
 
 func TestRefusal_MultipleAutoincrementColumns(t *testing.T) {
 	set := migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateTable,
 			Table: &migrate.TableDef{
@@ -113,8 +113,8 @@ func TestRefusal_ForeignKeyOnDeleteInjection(t *testing.T) {
 	}
 	for _, action := range hostile {
 		set := migrate.MigrationSet{
-			SchemaVersion:        1,
-			MinimumReaderVersion: 1,
+			SchemaVersion: 1,
+			ReaderCeiling: 1,
 			Steps: []migrate.MigrationStep{{
 				Kind: migrate.StepCreateTable,
 				Table: &migrate.TableDef{
@@ -143,8 +143,8 @@ func TestRefusal_ForeignKeyOnDeleteInjection(t *testing.T) {
 // single "note" column here) be discarded without any error.
 func TestRefusal_ReservedLedgerTableName(t *testing.T) {
 	set := migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateTable,
 			Table: &migrate.TableDef{
@@ -165,8 +165,8 @@ func TestRefusal_ReservedLedgerTableName(t *testing.T) {
 // legitimately-named table.
 func TestRefusal_ReservedLedgerIndexName(t *testing.T) {
 	set := migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateIndex,
 			Index: &migrate.IndexDef{
@@ -191,8 +191,8 @@ func TestRefusal_ReservedLedgerIndexName(t *testing.T) {
 // exempted (ledgerBootstrap, dsl.go).
 func TestLegitimateLedgerNamedTable_Unaffected(t *testing.T) {
 	set := migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{
 			{
 				Kind: migrate.StepCreateTable,
@@ -231,8 +231,8 @@ func TestLegitimateLedgerNamedTable_Unaffected(t *testing.T) {
 // unportable, not composite keys in general.
 func TestCompositePrimaryKeyWithoutAutoincrement_Allowed(t *testing.T) {
 	set := migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateTable,
 			Table: &migrate.TableDef{

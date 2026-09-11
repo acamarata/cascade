@@ -4,10 +4,21 @@
 //	own fake-$EDITOR harness (fakeEditorScript/newTestRootWithEnv),
 //	which is a cohesive, separable seam from the rest of the command
 //	tree's tests.
+//
+// Constraints: fakeEditorScript's $EDITOR stand-in must be a real,
+//
+//	directly-executable binary on every platform runEditor's
+//	exec.CommandContext(editorCommand(deps), tmpPath) runs on — a `#!/bin/sh`
+//	script is not one on Windows ("%1 is not a valid Win32 application"),
+//	so the stand-in is this same compiled test binary, re-run as a plain
+//	child process (TestMain intercepts before m.Run(), the same re-exec
+//	idiom providers/sqlite/lock_crossprocess_test.go uses for its helper
+//	process) rather than a shell script.
 package config
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,19 +30,59 @@ import (
 	"github.com/acamarata/cascade/internal/runtime"
 )
 
-func fakeEditorScript(t *testing.T, appendLine string) string {
-	t.Helper()
-	dir := t.TempDir()
-	script := filepath.Join(dir, "fake-editor.sh")
-	content := "#!/bin/sh\nprintf '%s\\n' " + shellQuote(appendLine) + " >> \"$1\"\n"
-	if err := os.WriteFile(script, []byte(content), 0o755); err != nil {
-		t.Fatal(err)
+// fakeEditorLineEnv carries the line TestMain's fake-editor branch
+// appends to the file named in its last argument (tmpPath, per
+// runEditor's exec.CommandContext(editorCommand(deps), tmpPath) call
+// shape — no other argument is ever passed). Its absence means "run the
+// real test suite."
+const fakeEditorLineEnv = "CASCADE_TEST_FAKE_EDITOR_LINE"
+
+// TestMain intercepts before flag parsing when fakeEditorLineEnv is set:
+// the process was re-exec'd (os.Args[0], inherited via exec.Cmd's nil
+// Env, per t.Setenv's os.Setenv) to stand in for $EDITOR, not to run
+// tests. Any other invocation runs m.Run() exactly as if this function
+// did not exist.
+func TestMain(m *testing.M) {
+	if line, ok := os.LookupEnv(fakeEditorLineEnv); ok {
+		os.Exit(runFakeEditor(line))
 	}
-	return script
+	os.Exit(m.Run())
 }
 
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+// runFakeEditor appends line + "\n" to the file named in the process's
+// last argument (tmpPath) and returns the process exit code, mirroring
+// what the former `printf ... >> "$1"` shell script did, without
+// depending on a shell or a shebang existing on the target platform.
+func runFakeEditor(line string) int {
+	if len(os.Args) < 2 {
+		return 1
+	}
+	path := os.Args[len(os.Args)-1]
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return 1
+	}
+	_, writeErr := fmt.Fprintf(f, "%s\n", line)
+	closeErr := f.Close()
+	if writeErr != nil || closeErr != nil {
+		return 1
+	}
+	return 0
+}
+
+// fakeEditorScript points $EDITOR at this same test binary and stashes
+// appendLine in the real OS environment (t.Setenv, not deps' injected
+// Getenv map — runEditor execs a genuine OS subprocess, which inherits
+// the process environment, not this test's hermetic Deps) for TestMain
+// to pick up when the subprocess starts.
+func fakeEditorScript(t *testing.T, appendLine string) string {
+	t.Helper()
+	t.Setenv(fakeEditorLineEnv, appendLine)
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+	return self
 }
 
 func TestConfigCLI_Edit_ValidSaveApplies(t *testing.T) {

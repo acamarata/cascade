@@ -19,10 +19,8 @@ var normativeFields = []string{
 	"docs_updates",
 }
 
-// extraFlagFields lists the five Forge-declared extra flags and no others.
-var extraFlagFields = []string{
-	"subtickets", "journals", "owner_prereq", "gate_only", "external_contract",
-}
+// extraFlagFields lists the six Forge-declared extra flags and no others.
+var extraFlagFields = []string{"subtickets", "journals", "owner_prereq", "gate_only", "external_contract", "amendment_note"}
 
 // filesScopeFields lists the three keys files_scope may carry.
 var filesScopeFields = []string{"add", "change", "delete"}
@@ -146,10 +144,9 @@ type Phase struct {
 }
 
 // Ticket is the PEWS ticket-schema v2 contract: the 17 normative fields in
-// 06 §1 order, followed by the five declared extra flags and no others. A
-// pointer field (Journals, OwnerPrereq, GateOnly, ExternalContract) is nil
-// when the source YAML omitted the key, distinguishing omission from an
-// explicit zero value; Subtickets uses the same distinction via a nil slice.
+// 06 §1 order, followed by the six declared extra flags and no others. A
+// pointer field (Journals, OwnerPrereq, GateOnly, ExternalContract,
+// AmendmentNote) is nil when the YAML omitted the key; Subtickets uses a nil slice.
 type Ticket struct {
 	ID                 string     `yaml:"id"`
 	Title              string     `yaml:"title"`
@@ -175,6 +172,9 @@ type Ticket struct {
 	OwnerPrereq      *string  `yaml:"owner_prereq,omitempty"`
 	GateOnly         *bool    `yaml:"gate_only,omitempty"`
 	ExternalContract *bool    `yaml:"external_contract,omitempty"`
+
+	// AmendmentNote records a binding post-authoring scope change; free text.
+	AmendmentNote *string `yaml:"amendment_note,omitempty"`
 }
 
 // DecodeTicket parses data as a PEWS ticket-schema v2 document. It never

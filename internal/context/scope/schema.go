@@ -73,8 +73,9 @@ const SchemaVersion = scopeSchemaVersion
 // throughout this package.
 func MigrationSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
-		SchemaVersion:        scopeSchemaVersion,
-		MinimumReaderVersion: scopeSchemaVersion,
+		SetID:         "scope",
+		SchemaVersion: scopeSchemaVersion,
+		ReaderCeiling: scopeSchemaVersion,
 		Steps: []migrate.MigrationStep{
 			repositoryTableStep(),
 			repoPathTableStep(),

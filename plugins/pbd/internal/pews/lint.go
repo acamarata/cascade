@@ -58,6 +58,7 @@ func Lint(tree *Tree) (LintReport, error) {
 	}
 	gateOnly := idSet(gateOnlyLocs)
 	art11 := idSet(art11Locs)
+	filesLess := idSet(filesLessLocs)
 
 	var issues []LintIssue
 	for _, t := range tree.Tickets {
@@ -66,7 +67,7 @@ func Lint(tree *Tree) (LintReport, error) {
 		issues = append(issues, ruleDependencyForm(t)...)
 		issues = append(issues, ruleCRWeight(t)...)
 		issues = append(issues, ruleAcceptanceDoD(t)...)
-		issues = append(issues, ruleFilesScope(t)...)
+		issues = append(issues, ruleFilesScope(t, filesLess)...)
 		issues = append(issues, ruleJournals(t)...)
 		issues = append(issues, ruleGateOnly(t, gateOnly)...)
 		issues = append(issues, ruleArt11(t, art11)...)

@@ -47,8 +47,9 @@ import (
 // schema_version 1.
 func callerMigrationSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SetID:         "caller",
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateTable,
 			Table: &migrate.TableDef{
@@ -122,7 +123,7 @@ func TestOpen_MigratorAppliedBeforeReturn(t *testing.T) {
 // closes both connection pools it had already opened.
 func TestOpen_MigratorFailureAbortsOpen(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cascade.db")
-	// MinimumReaderVersion 0 combined with a pre-seeded higher on-disk
+	// ReaderCeiling 0 combined with a pre-seeded higher on-disk
 	// version would trigger ErrSchemaDowngrade; simpler here: an invalid
 	// MigrationSet (SchemaVersion 0) fails ApplyConfig validation
 	// immediately, which is exactly the "migrator returns an error"

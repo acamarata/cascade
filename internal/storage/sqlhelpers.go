@@ -90,9 +90,33 @@ func ensureLedgerTable(ctx context.Context, db *sql.DB) error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		schema_version INTEGER NOT NULL,
 		checksum TEXT NOT NULL,
-		applied_at INTEGER NOT NULL
+		applied_at INTEGER NOT NULL,
+		set_id TEXT NOT NULL
 	)`, quoteIdent(bootstrapLedgerTable))
-	_, err := db.ExecContext(ctx, ddl)
+	if _, err := db.ExecContext(ctx, ddl); err != nil {
+		return err
+	}
+	return ensureSetIDColumn(ctx, db)
+}
+
+// ensureSetIDColumn upgrades an on-disk applied_migrations table that
+// predates R-16.77's per-set identity column, mirroring
+// internal/storage/migrate's own ensureSetIDColumn (this package
+// deliberately does not import migrate — see this file's package doc —
+// so the shape is kept in step by hand, not by shared code). Guarded so
+// re-running it against an already-upgraded table is a no-op: both
+// modernc-sqlite ("duplicate column name") and Postgres ("already
+// exists") report the retry as a plain error with no typed sentinel.
+func ensureSetIDColumn(ctx context.Context, db *sql.DB) error {
+	_, err := db.ExecContext(ctx,
+		`ALTER TABLE `+quoteIdent(bootstrapLedgerTable)+` ADD COLUMN set_id TEXT NOT NULL DEFAULT ''`)
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "duplicate column") || strings.Contains(msg, "already exists") {
+		return nil
+	}
 	return err
 }
 
@@ -109,8 +133,8 @@ func stampSchemaVersion(ctx context.Context, db *sql.DB, clock Clock) error {
 
 	var alreadyStamped bool
 	err := db.QueryRowContext(ctx,
-		`SELECT 1 FROM `+quoteIdent(bootstrapLedgerTable)+` WHERE schema_version = ? LIMIT 1`,
-		bootstrapSchemaVersion,
+		`SELECT 1 FROM `+quoteIdent(bootstrapLedgerTable)+` WHERE schema_version = ? AND set_id = ? LIMIT 1`,
+		bootstrapSchemaVersion, bootstrapSetID,
 	).Scan(new(int))
 	switch err {
 	case nil:
@@ -125,8 +149,8 @@ func stampSchemaVersion(ctx context.Context, db *sql.DB, clock Clock) error {
 	}
 
 	_, err = db.ExecContext(ctx,
-		`INSERT INTO `+quoteIdent(bootstrapLedgerTable)+` (schema_version, checksum, applied_at) VALUES (?, ?, ?)`,
-		bootstrapSchemaVersion, bootstrapStampChecksum, clock.Now().Unix(),
+		`INSERT INTO `+quoteIdent(bootstrapLedgerTable)+` (schema_version, checksum, applied_at, set_id) VALUES (?, ?, ?, ?)`,
+		bootstrapSchemaVersion, bootstrapStampChecksum, clock.Now().Unix(), bootstrapSetID,
 	)
 	if err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "storage: insert schema_version stamp row")

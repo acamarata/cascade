@@ -43,7 +43,7 @@ import (
 //     was recorded is caught BEFORE any further step in the same Apply
 //     call executes (fail-fast within one call).
 //   - Downgrade refusal: an on-disk schema_version newer than the
-//     binary's MinimumReaderVersion is refused before any DDL runs.
+//     binary's ReaderCeiling is refused before any DDL runs.
 //   - NOT guaranteed: atomicity of a single Apply call across MULTIPLE
 //     steps. Each step is its own DDL statement plus its own ledger
 //     INSERT; if the process dies between step N's DDL and step N's
@@ -85,6 +85,13 @@ var ledgerDef = TableDef{
 		{Name: "schema_version", Type: TypeInteger, NotNull: true},
 		{Name: "checksum", Type: TypeText, NotNull: true},
 		{Name: "applied_at", Type: TypeInteger, NotNull: true},
+		// set_id is the R-16.77 per-set identity column. A fresh CREATE
+		// TABLE gets it directly (no legacy rows exist to violate
+		// NOT NULL); an existing on-disk table predating this column is
+		// upgraded separately by ensureSetIDColumn's guarded ALTER TABLE
+		// ... DEFAULT '' (ledger_queries.go), since this DSL's ColumnDef
+		// has no DEFAULT clause.
+		{Name: "set_id", Type: TypeText, NotNull: true},
 	},
 }
 
@@ -118,25 +125,27 @@ func Apply(ctx context.Context, cfg ApplyConfig, set MigrationSet) error {
 		return err
 	}
 
-	onDisk, err := currentSchemaVersion(ctx, cfg.DB)
+	onDisk, err := currentSchemaVersion(ctx, cfg.DB, cfg.Dialect, set.SetID)
 	if err != nil {
 		return err
 	}
-	if onDisk > set.MinimumReaderVersion {
-		return newSchemaDowngradeError(onDisk, set.MinimumReaderVersion)
+	if onDisk > set.ReaderCeiling {
+		return newSchemaDowngradeError(onDisk, set.ReaderCeiling)
 	}
 	if set.SchemaVersion < onDisk {
 		// Nothing to do: this set's target version has already been
-		// superseded by a later one on disk. Forward-only, so this is a
-		// successful no-op, not an error. (set.SchemaVersion == onDisk is
-		// NOT short-circuited here — it still falls through to the
-		// checksum-conflict check below, which is exactly the case that
-		// catches a migration's content changing after it was already
-		// applied.)
+		// superseded by a later one on disk, WITHIN THE SAME SetID
+		// (R-16.77 — the ledger keys rows by (SetID, schema_version), so
+		// this comparison is scoped to set.SetID and never sees another
+		// set's rows). Forward-only, so this is a successful no-op, not
+		// an error. (set.SchemaVersion == onDisk is NOT short-circuited
+		// here — it still falls through to the checksum-conflict check
+		// below, which is exactly the case that catches a migration's
+		// content changing after it was already applied.)
 		return nil
 	}
 
-	applied, err := ledgerRowsForVersion(ctx, cfg.DB, cfg.Dialect, set.SchemaVersion)
+	applied, err := ledgerRowsForVersion(ctx, cfg.DB, cfg.Dialect, set.SetID, set.SchemaVersion)
 	if err != nil {
 		return err
 	}
@@ -164,6 +173,9 @@ func validateApplyConfig(cfg ApplyConfig, set MigrationSet) error {
 	}
 	if set.SchemaVersion < 1 {
 		return cascade.Newf(cascade.KindInvalidInput, "migrate: MigrationSet.SchemaVersion must be >= 1, got %d", set.SchemaVersion)
+	}
+	if set.SetID == "" {
+		return cascade.New(cascade.KindInvalidInput, "migrate: MigrationSet.SetID is required (R-16.77 per-set identity)")
 	}
 	return nil
 }
@@ -215,7 +227,7 @@ func applyRemainingSteps(ctx context.Context, cfg ApplyConfig, set MigrationSet,
 				return cascade.Wrapf(cascade.KindUnavailable, err, "migrate: apply schema_version %d step %d", set.SchemaVersion, i)
 			}
 		}
-		if err := insertLedgerRow(ctx, cfg.DB, cfg.Dialect, set.SchemaVersion, stepChecksum(step), cfg.Clock.Now()); err != nil {
+		if err := insertLedgerRow(ctx, cfg.DB, cfg.Dialect, set.SetID, set.SchemaVersion, stepChecksum(step), cfg.Clock.Now()); err != nil {
 			return err
 		}
 	}

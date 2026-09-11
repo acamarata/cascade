@@ -14,21 +14,18 @@ import (
 // Purpose: PluginMigrator — the B/S-02.T3 migration-builder adapter
 // backing PluginStorage.Migrate (plugin.go), per this ticket's task 4.
 //
-// Tree correction (full contradiction quoted in this ticket's journal):
-// the contract says Migrate should "stamp schema_version ... per B/S-02.T3
-// contract" as if each caller owned an independent version sequence. It
-// does not — internal/jobs/migration.go's own R-14.198 finding is that
-// applied_migrations keys schema_version GLOBALLY across cascade.db, one
-// sequence shared by every migrate.Apply caller (bootstrap=1, scope=2,
-// lifecycle=3, registry=4, jobs=5). Compile-time packages coordinate by
-// grepping `SchemaVersion:`; a RUNTIME-installed plugin cannot. This file
-// resolves that: pluginMigrationState (a small JSON record, stored per
-// plugin) tracks the plugin-local Version last applied and the GLOBAL
-// slot it landed under. A call whose highest Version is already recorded
-// is the idempotent no-op path (no ledger read, no DDL, no write).
-// Otherwise this file claims the NEXT global slot via MAX(schema_version)
-// at call time (never a compile-time constant) and calls migrate.Apply
-// under it, then records the plugin-local -> global mapping.
+// R-16.77 update (this ticket's own history, corrected): the applied_
+// migrations ledger USED to key schema_version GLOBALLY across
+// cascade.db, one sequence shared by every migrate.Apply caller, which
+// meant a RUNTIME-installed plugin could not coordinate via a compile-
+// time constant the way domain packages did (they grepped
+// `SchemaVersion:`) — it had to claim the next global MAX(schema_version)
+// slot at call time instead. R-16.77 gave the ledger PER-SET identity
+// (key: (SetID, schema_version)), so that indirection is no longer
+// needed: pluginSetID gives every plugin its own set identity, and
+// pluginMigrationState just tracks the plugin-local Version last
+// applied. A call whose highest Version is already recorded is the
+// idempotent no-op path (no ledger read, no DDL, no write).
 //
 // SPORT: internal.storage.PluginMigrator/ADDED (P1-E15-W4-S32-T3).
 
@@ -36,11 +33,13 @@ import (
 // plugin's own domain, holding its pluginMigrationState JSON record.
 const pluginMigrationStateKey = "__migration_state__"
 
-// pluginMigrationState records how far one plugin's schema has migrated
-// (PluginVersion) and which global ledger slot it landed under.
+// pluginMigrationState records how far one plugin's schema has migrated.
+// Pre-R-16.77 this also carried a GlobalVersion (the shared ledger's
+// claimed global slot); per-set identity gives every plugin its own
+// SetID (pluginSetID) and its own schema_version space, so there is no
+// global slot left to record.
 type pluginMigrationState struct {
 	PluginVersion int `json:"plugin_version"`
-	GlobalVersion int `json:"global_version"`
 }
 
 // PluginMigrator is the real Migrator (plugin.go) implementation, backed
@@ -82,8 +81,9 @@ func NewPluginMigrator(db *sql.DB, dialect migrate.Dialect, clock migrate.Clock,
 	return &PluginMigrator{db: db, dialect: dialect, clock: clock, dbPath: dbPath, backupDir: backupDir, store: store}, nil
 }
 
-// Apply implements Migrator; see the package doc comment for the
-// global-slot indirection.
+// Apply implements Migrator. Per R-16.77, each plugin owns its own SetID
+// (pluginSetID) and its own schema_version space — see applyOne — so this
+// no longer claims a slot in a tree-wide shared sequence.
 func (m *PluginMigrator) Apply(ctx context.Context, pluginID string, migrations []plugin.Migration) (plugin.MigrationReport, error) {
 	if err := validatePluginID(pluginID); err != nil {
 		return plugin.MigrationReport{}, err
@@ -105,12 +105,10 @@ func (m *PluginMigrator) Apply(ctx context.Context, pluginID string, migrations 
 
 	applied := make([]int, 0, len(pending))
 	for _, mig := range pending {
-		globalVersion, verr := m.applyOne(ctx, pluginID, mig)
-		if verr != nil {
+		if verr := m.applyOne(ctx, pluginID, mig); verr != nil {
 			return plugin.MigrationReport{}, verr
 		}
 		state.PluginVersion = mig.Version
-		state.GlobalVersion = globalVersion
 		if serr := m.saveState(ctx, pluginID, state); serr != nil {
 			return plugin.MigrationReport{}, serr
 		}
@@ -120,27 +118,25 @@ func (m *PluginMigrator) Apply(ctx context.Context, pluginID string, migrations 
 	return plugin.MigrationReport{AppliedVersions: applied, CurrentVersion: state.PluginVersion}, nil
 }
 
-// applyOne claims the next global slot and applies mig's steps under it.
-func (m *PluginMigrator) applyOne(ctx context.Context, pluginID string, mig plugin.Migration) (int, error) {
+// applyOne applies mig's steps under this plugin's own SetID
+// (pluginSetID) at mig.Version — its own schema_version, independent of
+// every other plugin's and every other domain's (R-16.77).
+func (m *PluginMigrator) applyOne(ctx context.Context, pluginID string, mig plugin.Migration) error {
 	dialect := m.dialect
 	if mig.PortabilityPostgresOnly {
 		dialect = migrate.PostgresEmitter{}
 	}
 
-	nextGlobal, err := m.nextGlobalVersion(ctx)
-	if err != nil {
-		return 0, err
-	}
-
 	set := migrate.MigrationSet{
-		SchemaVersion:        nextGlobal,
-		MinimumReaderVersion: nextGlobal,
-		Steps:                make([]migrate.MigrationStep, 0, len(mig.Steps)),
+		SetID:         pluginSetID(pluginID),
+		SchemaVersion: mig.Version,
+		ReaderCeiling: mig.Version,
+		Steps:         make([]migrate.MigrationStep, 0, len(mig.Steps)),
 	}
 	for _, step := range mig.Steps {
 		table, terr := convertTableDef(pluginID, step.Table)
 		if terr != nil {
-			return 0, terr
+			return terr
 		}
 		set.Steps = append(set.Steps, migrate.MigrationStep{
 			Kind:        migrate.StepCreateTable,
@@ -149,26 +145,22 @@ func (m *PluginMigrator) applyOne(ctx context.Context, pluginID string, mig plug
 		})
 	}
 
-	if err := migrate.Apply(ctx, migrate.ApplyConfig{
+	return migrate.Apply(ctx, migrate.ApplyConfig{
 		DB:        m.db,
 		Dialect:   dialect,
 		Clock:     m.clock,
 		DBPath:    m.dbPath,
 		BackupDir: m.backupDir,
-	}, set); err != nil {
-		return 0, err
-	}
-	return nextGlobal, nil
+	}, set)
 }
 
-// nextGlobalVersion reads MAX(schema_version) and returns one past it.
-func (m *PluginMigrator) nextGlobalVersion(ctx context.Context) (int, error) {
-	row := m.db.QueryRowContext(ctx, `SELECT COALESCE(MAX(schema_version), 0) FROM `+bootstrapLedgerTable)
-	var maxVersion int
-	if err := row.Scan(&maxVersion); err != nil {
-		return 0, cascade.Wrap(cascade.KindUnavailable, err, "storage: plugin migrate: reading current ledger version")
-	}
-	return maxVersion + 1, nil
+// pluginSetID builds the R-16.77 SetID for one plugin's migrations: each
+// plugin gets its own set identity, so two plugins (or a plugin and any
+// domain package) never collide in the shared ledger regardless of which
+// schema_version each claims. pluginID is already validated
+// (validatePluginID) before this is ever called.
+func pluginSetID(pluginID string) string {
+	return "plugin:" + pluginID
 }
 
 func (m *PluginMigrator) loadState(ctx context.Context, pluginID string) (pluginMigrationState, error) {

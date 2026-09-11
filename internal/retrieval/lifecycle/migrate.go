@@ -48,11 +48,11 @@ const retrievalSchemaVersion = 3
 const SchemaVersion = retrievalSchemaVersion
 
 // RetrievalMigrationSet is the retrieval index domain's MigrationSet. Its
-// Steps are empty today (this file's CONTRACT NOTE); MinimumReaderVersion
+// Steps are empty today (this file's CONTRACT NOTE); ReaderCeiling
 // equals SchemaVersion so no binary older than the one that introduced
 // this call can reopen a database this verb has migrated.
 func RetrievalMigrationSet() migrate.MigrationSet {
-	return migrate.MigrationSet{SchemaVersion: retrievalSchemaVersion, MinimumReaderVersion: retrievalSchemaVersion}
+	return migrate.MigrationSet{SetID: "lifecycle", SchemaVersion: retrievalSchemaVersion, ReaderCeiling: retrievalSchemaVersion}
 }
 
 // MigrateDeps configures Migrate. It is deliberately independent of

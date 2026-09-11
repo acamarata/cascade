@@ -3,7 +3,7 @@
 //	ResolveDSNEnvRef, RefuseSecretLiteral, and kvMigrationSet's DDL shape
 //	via migrate.PostgresEmitter{}. None of these need a live Postgres
 //	server: the live proof (ordered apply, schema_version,
-//	minimum_reader_version refusal, all against a real server) is
+//	reader_ceiling refusal, all against a real server) is
 //	providers/postgres/integration_test.go's job — this file proves the
 //	profile-agnostic pieces this package owns.
 //
@@ -116,8 +116,8 @@ func TestRefuseSecretLiteral(t *testing.T) {
 // TestPostgresLiveMigration.
 func TestKVMigrationSet_EmitsPortableDDL(t *testing.T) {
 	set := kvMigrationSet()
-	if set.SchemaVersion != 1 || set.MinimumReaderVersion != 1 {
-		t.Fatalf("kvMigrationSet versions = %d/%d, want 1/1", set.SchemaVersion, set.MinimumReaderVersion)
+	if set.SchemaVersion != 1 || set.ReaderCeiling != 1 {
+		t.Fatalf("kvMigrationSet versions = %d/%d, want 1/1", set.SchemaVersion, set.ReaderCeiling)
 	}
 	stmts, err := migrate.PostgresEmitter{}.Emit(set)
 	if err != nil {

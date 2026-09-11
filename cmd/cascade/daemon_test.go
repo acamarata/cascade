@@ -1,14 +1,20 @@
 // Purpose: cobra-wiring tests for `cascade daemon` — mounting, argument
 //
-//	validation, --json envelope shape, and (on this build platform) an
-//	end-to-end status/start/stop/restart round-trip against a real
-//	background daemon process built from this same module, so the CLI
-//	layer's plumbing (config load → Settings resolution → internal/daemon
-//	call → output.Writer rendering) is proven, not just internal/daemon's
-//	own unit tests. The Windows refusal PATH itself is proven by internal/
+//	validation, and (on this build platform) an end-to-end
+//	status/start/stop/restart round-trip against a real background
+//	daemon process built from this same module, so the CLI layer's
+//	plumbing (config load → Settings resolution → internal/daemon call →
+//	output.Writer rendering) is proven, not just internal/daemon's own
+//	unit tests. The --json envelope shape assertion for `daemon status`
+//	and the idempotent-stop assertion are platform-SPLIT, not neutral —
+//	internal/daemon's Windows build (lifecycle_windows.go) refuses both
+//	verbs unconditionally, so what daemon status --json actually renders
+//	there is an error envelope, not the Running/PID/Uptime shape this
+//	file asserts for the platforms that have a real daemon. See
+//	daemon_status_stop_unix_test.go / daemon_status_stop_windows_test.go.
+//	The Windows refusal PATH itself is additionally proven by internal/
 //	daemon's own build-tagged daemon_windows_test.go, run on the Windows
-//	CI lane (R-14.131) — this file stays platform-neutral and, on a non-
-//	Windows build machine, only asserts today's actual observed behaviour.
+//	CI lane (R-14.131).
 //
 // Constraints: Art.7.1 — every test roots CASCADE_HOME/CASCADE_SOCKET at
 //
@@ -19,7 +25,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -78,38 +83,13 @@ func TestDaemonCmd_ExtraArgsRejected(t *testing.T) {
 	}
 }
 
-func TestDaemonStatusCmd_NotRunning_JSONEnvelope(t *testing.T) {
-	home := t.TempDir()
-	out, err := execDaemon(t, home, "daemon", "status", "--json")
-	if err != nil {
-		t.Fatalf("daemon status: %v (%s)", err, out)
-	}
-
-	var envelope struct {
-		OK   bool `json:"ok"`
-		Data struct {
-			Running     bool    `json:"running"`
-			PID         int     `json:"pid"`
-			UptimeS     float64 `json:"uptime_s"`
-			Connections int     `json:"connections"`
-			Detail      string  `json:"detail"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &envelope); err != nil {
-		t.Fatalf("unmarshal envelope: %v\noutput: %s", err, out)
-	}
-	if envelope.Data.Running {
-		t.Errorf("fresh CASCADE_HOME reports a running daemon: %+v", envelope.Data)
-	}
-}
-
-func TestDaemonStopCmd_NothingRunning_IsIdempotent(t *testing.T) {
-	home := t.TempDir()
-	out, err := execDaemon(t, home, "daemon", "stop")
-	if err != nil {
-		t.Fatalf("daemon stop against nothing running: %v (%s)", err, out)
-	}
-}
+// TestDaemonStatusCmd_NotRunning_JSONEnvelope and
+// TestDaemonStopCmd_NothingRunning_IsIdempotent live in
+// daemon_status_stop_unix_test.go (!windows) and
+// daemon_status_stop_windows_test.go (windows): internal/daemon's
+// Windows build refuses both verbs unconditionally, so "nothing running"
+// on Windows is a typed refusal, not the JSON/idempotent shape these
+// tests assert for the platforms with a real daemon.
 
 // TestDaemonStartStopRestartStatus_RealBinary is the end-to-end round-trip:
 // it builds the real cascade binary once, then drives start → status →

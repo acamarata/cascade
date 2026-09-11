@@ -1,13 +1,17 @@
-# Cascade v2 bench lane (P1-E01-W1-S01-T3).
+# Cascade v2 bench lane (P1-E01-W1-S01-T3; terminal wiring by
+# P1-E28-W10-S58-T2).
 #
 # Two independent checks:
 #   - budget-assertion harness: internal/build's AssertBudgets
-#     (internal/build/bench.go) compared against whatever budgets are
-#     registered. This ticket registers ZERO numeric budgets (§D-38 —
-#     each consuming subsystem ticket registers its own; AB/S-58.T2 owns
-#     asserting the full set) so this step is green-empty by design, not a
+#     (internal/build/bench.go) plus internal/bench's registration
+#     inventory (internal/bench/registry.go's Budgets table, keyed
+#     "<import path>/<BenchmarkName>" per R-16.72) and its own violation
+#     gate. The table ships empty as of S-58.T2 — a repo-wide search of
+#     every ticket's acceptance criteria for a stated numeric bench
+#     ceiling found none — so this step is green-empty by design, not a
 #     stub (Art.1 — infrastructure whose consumers arrive later, same
-#     pattern as the fuzz lane).
+#     pattern as the fuzz lane). See .github/wiki/CI-Gates.md for how a
+#     later ticket registers a real ceiling.
 #   - benchstat comparison vs the PR's base branch: runs `go test -bench`
 #     on both the PR head and its merge-base, diffs with benchstat. This
 #     is observational only at this ticket (no budget numbers exist to
@@ -44,6 +48,9 @@ jobs:
 
       - name: internal/build budget harness
         run: go test ./internal/build/... -run TestAssertBudgets -v
+
+      - name: internal/bench registration inventory + violation gate (P1-E28-W10-S58-T2)
+        run: go test ./internal/bench/... -run 'TestBudgetRegistry|TestBudgetViolationGate|TestBudgetGateOnHEAD' -v
 
   benchstat:
     name: benchstat vs base branch

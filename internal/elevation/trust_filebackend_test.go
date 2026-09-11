@@ -10,6 +10,7 @@ package elevation
 import (
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"testing"
 	"time"
 )
@@ -40,15 +41,37 @@ func TestFileBackend_RoundTrip(t *testing.T) {
 
 func TestFileBackend_Load_GenericIOError(t *testing.T) {
 	// A path whose parent component is a FILE, not a directory, makes
-	// os.ReadFile fail with something other than os.IsNotExist — exercises
-	// fileBackend.Load's generic-error branch (distinct from "not found").
+	// os.ReadFile fail with something other than os.IsNotExist on POSIX
+	// (ENOTDIR) — exercises fileBackend.Load's generic-error branch
+	// (distinct from "not found").
+	//
+	// On Windows this is a genuine platform difference, not a bug: the
+	// Win32 API collapses "a path component is a file, not a directory"
+	// into the same ERROR_PATH_NOT_FOUND that a plain missing file gets,
+	// and os.IsNotExist reports true for both. Go's os package cannot
+	// recover the POSIX ENOTDIR distinction from that single Win32 code,
+	// so on Windows Load has no way to tell the two cases apart and
+	// correctly reports ok=false, err=nil, same as a genuinely absent
+	// record. This is fail-safe, not fail-open: Enroll's subsequent Save
+	// into the same blocked path still fails (TestFileBackend_Save_
+	// WriteFailure), so a corrupted parent still refuses the record
+	// rather than silently succeeding.
 	dir := t.TempDir()
 	blocker := filepath.Join(dir, "not-a-directory")
 	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
 		t.Fatalf("write blocker file: %v", err)
 	}
 	backend := NewFileBackend(blocker).(fileBackend) // dataDir/elevation/trust.json under a FILE
-	_, _, err := backend.Load()
+	_, ok, err := backend.Load()
+	if goruntime.GOOS == "windows" {
+		if err != nil {
+			t.Fatalf("Load returned an error on Windows, where this shape is indistinguishable from absent: %v", err)
+		}
+		if ok {
+			t.Fatal("Load must not report ok=true for a record it never wrote")
+		}
+		return
+	}
 	if err == nil {
 		t.Fatal("Load must surface a generic I/O error, not silently report absent")
 	}

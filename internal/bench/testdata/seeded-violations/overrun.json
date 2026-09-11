@@ -1,0 +1,15 @@
+{
+  "_comment": "Permanent seeded-violation fixture for P1-E28-W10-S58-T2's TestBudgetViolationGate. A fake budget for a fake qualified benchmark name, paired with a measured result that exceeds every metric. Loaded by internal/bench's tests only via internal/build.LoadBudgetFixture; never merged into the live Budgets table and never removed from the live tree.",
+  "budget": {
+    "Name": "github.com/acamarata/cascade/internal/bench/testdata.BenchmarkSeededFixture",
+    "MaxNsPerOp": 100,
+    "MaxAllocsPerOp": 1,
+    "MaxBytesPerOp": 64
+  },
+  "result": {
+    "Name": "github.com/acamarata/cascade/internal/bench/testdata.BenchmarkSeededFixture",
+    "NsPerOp": 999,
+    "AllocsPerOp": 9,
+    "BytesPerOp": 999
+  }
+}

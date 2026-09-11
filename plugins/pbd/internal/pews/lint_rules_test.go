@@ -147,7 +147,7 @@ func TestRuleFilesScope(t *testing.T) {
 	id := "P1-E14-W3-S28-T1"
 	t.Run("clean passes", func(t *testing.T) {
 		rec := mustRecord(t, id, cleanTicketYAML(id))
-		if v := ruleFilesScope(rec); len(v) != 0 {
+		if v := ruleFilesScope(rec, nil); len(v) != 0 {
 			t.Errorf("issues = %+v, want none", v)
 		}
 	})
@@ -155,7 +155,7 @@ func TestRuleFilesScope(t *testing.T) {
 		yaml := strings.Replace(cleanTicketYAML(id), "files_scope:\n  add:\n    - plugins/pbd/x.go\n  change: []\n  delete: []\n",
 			"files_scope:\n  add: []\n  change: []\n  delete: []\n", 1)
 		rec := mustRecord(t, id, yaml)
-		if v := ruleFilesScope(rec); !hasKind(v, LintKindFilesScopeEmpty) {
+		if v := ruleFilesScope(rec, nil); !hasKind(v, LintKindFilesScopeEmpty) {
 			t.Errorf("issues = %+v, want LintKindFilesScopeEmpty", v)
 		}
 	})
@@ -186,7 +186,7 @@ func TestRuleJournals(t *testing.T) {
 }
 
 func TestRuleGateOnly(t *testing.T) {
-	member := canonicalIDLoc{"J", 4, 21, 3}.id() // 06 §3's gate_only closed set
+	member := canonicalIDLoc{"J", 3, 21, 3}.id() // 06 §3's gate_only closed set (J/S-21.T3 is W3, not W4)
 	nonMember := "P1-E14-W3-S28-T1"
 	gateOnly := idSet(gateOnlyLocs)
 

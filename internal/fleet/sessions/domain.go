@@ -24,9 +24,10 @@
 //
 // CONTRACT DEVIATION (domain registration, recorded, not papered over).
 // The contract text describes "the sessions storage domain in cascade.db"
-// as if this ticket adds a DomainID. R-14.5's eleven-domain set is CLOSED
-// (R-16.51 is its one ratified amendment, adding `policy`) and this
-// ticket has no standing to add a twelfth. internal/storage/domains.go
+// as if this ticket adds a DomainID. R-14.5's twelve-domain set is CLOSED
+// (R-16.51 and R-16.75 are its two ratified amendments, adding `policy`
+// and `ci_results`) and this ticket has no standing to add a thirteenth.
+// internal/storage/domains.go
 // already documents DomainSessions's OwnerPkg as "internal/fleet
 // (sessions, nodes, lanes, journal — P1-E13-W3-S27-T1)" — sessions is
 // literally named first. This package therefore persists under

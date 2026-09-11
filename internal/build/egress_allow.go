@@ -85,6 +85,7 @@ var EgressExecNotYetMigrated = []EgressAllowEntry{
 	{"internal/daemon/service", "installs the platform service definition"},
 	{"internal/doctor", "probes the toolchain the operator has installed"},
 	{"internal/inventory", "shells out to `git ls-files`/`git rev-parse` to derive tree-wide counts (providers, plugins, SPORT lines) at generation time; no subprocess in the installed binary's own request path"},
+	{"internal/retrieval", "the code-corpus git counterpart (P1-E25-W5-S52-T6): GitTrackedFiles shells out to `git ls-files -z` to enumerate a repository's tracked files, the R-14.80 decision that git is already an Art.2 external contract exercised in tests, not a new module dependency"},
 	{"internal/inventory/gen", "the counts.json generator; resolves the repo root via `git rev-parse --show-toplevel`, same class as internal/inventory above"},
 	{"internal/inventory/sport", "shells out to `git ls-files` to derive the tracked .go file list at SPORT-registry generation time only (ComputeRegistry/tree.go); the production binary reads the embedded registry.json instead (embed.go) and never spawns this"},
 	{"internal/secrets", "reads a custody backend through its platform command-line tool"},

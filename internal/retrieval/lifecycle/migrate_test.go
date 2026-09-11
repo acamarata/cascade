@@ -66,7 +66,7 @@ func TestRecallIndexMigrateRunsCleanTwice(t *testing.T) {
 }
 
 // TestRecallIndexMigrateOlderBinaryRefusal proves a binary whose
-// MinimumReaderVersion is below the on-disk schema_version is refused.
+// ReaderCeiling is below the on-disk schema_version is refused.
 // The on-disk version only ever advances through a real ledger row, which
 // migrate.Apply writes only for a set that carries at least one step —
 // RetrievalMigrationSet does not (this file's CONTRACT NOTE) — so this
@@ -79,7 +79,8 @@ func TestRecallIndexMigrateOlderBinaryRefusal(t *testing.T) {
 
 	futureVersion := lifecycle.SchemaVersion + 1
 	future := migrate.MigrationSet{
-		SchemaVersion: futureVersion, MinimumReaderVersion: futureVersion,
+		SetID:         "lifecycle", // same SetID lifecycle.Migrate uses (R-16.77) — this simulates a NEWER version of the SAME set already on disk.
+		SchemaVersion: futureVersion, ReaderCeiling: futureVersion,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateTable, Description: "test: advance the ledger past this binary",
 			Table: &migrate.TableDef{Name: "lifecycle_test_future", Columns: []migrate.ColumnDef{

@@ -14,21 +14,21 @@
 // situation internal/fleet/sessions/domain.go and internal/retrieval/
 // lifecycle/migrate.go each already hit and recorded identically. This
 // package therefore does NOT call storage.Bootstrap or claim a DomainID.
-// It authors its own migrate.MigrationSet against cascade.db's raw *sql.DB,
-// exactly as internal/context/scope/schema.go does for the same reason.
+// It authors its own migrate.MigrationSet.
 //
-// SCHEMA VERSION (R-14.198). applied_migrations keys schema_version
-// GLOBALLY with no per-MigrationSet identity (internal/context/scope/
-// schema.go's scopeSchemaVersion doc comment documents this in full).
-// The claimed slots in the tree as of this ticket: bootstrap=1,
-// context/scope=2, retrieval/lifecycle=3. This package claims the next
-// unused slot, 4. The composition root's reader ceiling
-// (cmd/cascade/daemon_unix_store.go's runtimeReaderCeiling) would need a
-// term for registry.SchemaVersion, but that file is outside this ticket's
-// files_scope (files_scope.change is empty) -- wiring it in is left to the
-// composition-root ticket that constructs a live Registry, matching the
-// unretired providers/anthropic.New-class testonly-allow.json entries this
-// same wiring gap already documents for the driver constructors.
+// DATABASE CORRECTION (R-16.77). This package's schema does NOT target
+// cascade.db: cmd/cascade/provider_health_cmd.go opens it against a
+// dedicated providers.db file (providerRegistryDBFile), entirely separate
+// from cascade.db's own applied_migrations ledger. An earlier version of
+// this comment claimed a "claimed slot" (4) in cascade.db's (pre-R-16.77)
+// global schema_version sequence, and a composition-root ceiling term
+// this package supposedly still needed; both claims were wrong -- this
+// package never touched cascade.db, so no cascade.db reader ceiling ever
+// needed a term for it, and R-16.77 gave the ledger PER-SET identity
+// (key: (SetID, schema_version)) so version numbers are no longer a
+// tree-wide scarce resource for anyone regardless. This package's
+// MigrationSet carries its own SetID ("providers-registry") and its own
+// independent schema_version.
 //
 // SPORT: provider.registry/ADD (P1-E10-W3-S20-T2).
 
@@ -63,8 +63,9 @@ const SchemaVersion = registrySchemaVersion
 // MigrationSet is the providers registry's two-table schema.
 func MigrationSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
-		SchemaVersion:        registrySchemaVersion,
-		MinimumReaderVersion: registrySchemaVersion,
+		SetID:         "providers-registry",
+		SchemaVersion: registrySchemaVersion,
+		ReaderCeiling: registrySchemaVersion,
 		Steps: []migrate.MigrationStep{
 			providerRecordsTableStep(),
 			providerLanesTableStep(),

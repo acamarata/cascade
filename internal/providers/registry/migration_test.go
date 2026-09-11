@@ -82,7 +82,7 @@ func TestApplyMigrationSchemaRequiresDBAndClock(t *testing.T) {
 	}
 }
 
-func TestMigrationMinimumReaderVersionRefusesDowngrade(t *testing.T) {
+func TestMigrationReaderCeilingRefusesDowngrade(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	dialect := migrate.SQLiteEmitter{}
@@ -92,12 +92,12 @@ func TestMigrationMinimumReaderVersionRefusesDowngrade(t *testing.T) {
 		t.Fatalf("ApplyMigrationSchema: %v", err)
 	}
 
-	// A set claiming a lower MinimumReaderVersion than the ledger's
+	// A set claiming a lower ReaderCeiling than the ledger's
 	// on-disk schema_version must be refused, exercising the
-	// minimum_reader_version check the acceptance criteria names.
+	// reader_ceiling check the acceptance criteria names.
 	downgraded := MigrationSet()
-	downgraded.MinimumReaderVersion = registrySchemaVersion - 1
+	downgraded.ReaderCeiling = registrySchemaVersion - 1
 	if err := migrate.Apply(ctx, migrate.ApplyConfig{DB: db, Dialect: dialect, Clock: clock}, downgraded); err == nil {
-		t.Fatal("Apply with a lowered MinimumReaderVersion should have been refused, got nil error")
+		t.Fatal("Apply with a lowered ReaderCeiling should have been refused, got nil error")
 	}
 }

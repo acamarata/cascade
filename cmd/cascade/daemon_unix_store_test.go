@@ -143,8 +143,9 @@ func TestRuntimeMigrator_AppliesAStepThroughTheProductionCallback(t *testing.T) 
 
 	var captured *sql.DB
 	set := migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SetID:         "probe",
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{{
 			Kind:        migrate.StepCreateTable,
 			Description: "create the migrator probe table",

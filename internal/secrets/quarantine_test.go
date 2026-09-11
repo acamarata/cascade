@@ -10,6 +10,7 @@ package secrets
 import (
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -245,8 +246,16 @@ func TestQuarantineKeyIsReusedAcrossOpens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat key: %v", err)
 	}
-	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Errorf("the quarantine key is mode %o, want 600", perm)
+	// Windows has no POSIX permission bits (windows-parity-pass-4): a
+	// writable file there always reports as mode 0666 regardless of the
+	// 0600 requested at creation — see custody_filevault_test.go's
+	// TestFileVaultKeyFileLifecycle for the identical, longer-documented
+	// case. The id-stability assertions above already ran and are the
+	// load-bearing part of this test on every platform.
+	if goruntime.GOOS != "windows" {
+		if perm := info.Mode().Perm(); perm != 0o600 {
+			t.Errorf("the quarantine key is mode %o, want 600", perm)
+		}
 	}
 }
 

@@ -11,8 +11,8 @@ import (
 
 // Purpose: define the CLOSED cascade.db domain layout — R-14.5's ratified
 //
-//	list, amended to ELEVEN by R-16.51 — as a typed enum, plus Bootstrap,
-//	the idempotent
+//	list, amended to ELEVEN by R-16.51 and to TWELVE by R-16.75 (adds
+//	ci_results) — as a typed enum, plus Bootstrap, the idempotent
 //	function that stamps a fresh or existing cascade.db with each
 //	domain's anchor table, WAL mode, and the initial schema_version.
 //
@@ -24,8 +24,8 @@ import (
 // Outputs: BootstrapReport{TablesCreated, Delta}, or a *cascade.Error.
 // Constraints: the domain set is CLOSED by R-14.5 as amended by R-16.51 —
 //
-//	DomainID is a defined string type with exactly eleven constants
-//	(the R-14.5 ten plus `policy`), never a bare string at any
+//	DomainID is a defined string type with exactly twelve constants
+//	(the R-14.5 ten plus `policy` and `ci_results`), never a bare string at any
 //	call site. golangci-lint's exhaustive analyzer (R-14.101,
 //	default-signifies-exhaustive: false) is enabled repo-wide, so any
 //	future switch over DomainID that omits a case — including one added
@@ -40,26 +40,27 @@ import (
 //
 //	internal.storage.domains.Bootstrap/ADDED (P1-E02-W1-S03-T1).
 
-// DomainID identifies one of the eleven cascade.db domains RATIFIED as
-// forged by T0 ruling R-14.5 and amended by R-16.51. The set is closed:
-// adding, removing, or renaming a domain requires a T0 amendment to R-14.5
-// (R-16.51 is exactly such an amendment, and the only one so far — it adds
-// `policy`, the domain internal/policy's grants, standing grants, deny-list
-// patterns, autonomy-profile state and classifier cache live in; the
-// approval-token single-use ledger stays in `audit` per 06 §5.24). Exactly
-// as pkg/cascade.Kind's
+// DomainID identifies one of the twelve cascade.db domains RATIFIED as
+// forged by T0 ruling R-14.5 and amended by R-16.51 and R-16.75. The set is
+// closed: adding, removing, or renaming a domain requires a T0 amendment to
+// R-14.5 (R-16.51 adds `policy`, the domain internal/policy's grants,
+// standing grants, deny-list patterns, autonomy-profile state and
+// classifier cache live in — the approval-token single-use ledger stays in
+// `audit` per 06 §5.24; R-16.75 adds `ci_results`, the domain internal/ci's
+// ci_run/ci_job/ci_step records live in). Exactly as pkg/cascade.Kind's
 // taxonomy is closed by R-14.3). DomainID is a defined string type so a
 // typo is a compile-time type mismatch, never a silently-wrong runtime
 // string threaded through Store's namespace argument.
 type DomainID string
 
-// The closed eleven-domain enumeration: the R-14.5 ten ("context, memory,
+// The closed twelve-domain enumeration: the R-14.5 ten ("context, memory,
 // audit, secrets, sessions, config, retrieval, blobs, queue, jobs ... jobs
-// and sessions ARE distinct domains") plus R-16.51's `policy`, appended
-// last so the ten ratified positions keep the order every existing
-// consumer already observes. Declaration order here is AllDomains's
-// order, and AllDomains is built from this exact sequence (never map
-// iteration), so both are deterministic across runs and across builds.
+// and sessions ARE distinct domains") plus R-16.51's `policy` and R-16.75's
+// `ci_results`, each appended last in ruling order so the earlier ratified
+// positions keep the order every existing consumer already observes.
+// Declaration order here is AllDomains's order, and AllDomains is built
+// from this exact sequence (never map iteration), so both are
+// deterministic across runs and across builds.
 const (
 	DomainContext   DomainID = "context"
 	DomainMemory    DomainID = "memory"
@@ -76,6 +77,13 @@ const (
 	// and classifier cache. Registered by P1-E09-W2-S17-T1; the domain's
 	// migration is authored by the B/S-02.T3 migration builder.
 	DomainPolicy DomainID = "policy"
+	// DomainCIResults is the R-16.75 twelfth domain: internal/ci's
+	// ci_run/ci_job/ci_step records, ingested from the GitHub Actions
+	// REST API by P1-E25-W5-S51-T2's polling client. Appended after
+	// DomainPolicy so the eleven earlier ratified positions keep the
+	// order every existing consumer already observes, matching R-16.51's
+	// own append discipline.
+	DomainCIResults DomainID = "ci_results"
 )
 
 // ReservedPluginHostNamespace is the R-14.100 reserved PluginStorage
@@ -83,19 +91,21 @@ const (
 // PluginStorage itself now lives in plugin.go (P1-E15-W4-S32-T3),
 // layered on pkg/provider.Store's namespace-scoped kv table under
 // PluginNamespace below — never on the domain-anchor tables Bootstrap
-// creates here, and never a twelfth DomainID (the eleven-domain set stays
-// CLOSED). domains_test.go's isolation test asserts none of this ticket's
-// TablePrefix values collides with this reserved prefix, so the closed
-// domain set never encroaches on a namespace R-14.100 already reserved
-// elsewhere. Exported so that test (and any future consumer) can assert
-// against it directly rather than duplicating the literal string.
+// creates here, and never a plugin-specific DomainID of its own (the
+// closed set grows only by a T0 ruling amendment, R-16.51 and R-16.75 so
+// far, never by a plugin's own registration). domains_test.go's isolation test asserts none of this ticket's
+// TablePrefix values (now twelve, R-16.51 and R-16.75) collides with this
+// reserved prefix, so the closed domain set never encroaches on a
+// namespace R-14.100 already reserved elsewhere. Exported so that test
+// (and any future consumer) can assert against it directly rather than
+// duplicating the literal string.
 const ReservedPluginHostNamespace = "plugin.__host__"
 
 // PluginNamespace builds the provider.Store namespace one plugin's
 // PluginStorage slot lives under: "plugin.<id>". This is a plain string
-// namespace, not a DomainID — the eleven-domain set is closed by R-14.5/
-// R-16.51, and a dynamically-installed plugin cannot participate in a
-// closed, compile-time-enumerated set. Callers must validate id before
+// namespace, not a DomainID — the twelve-domain set is closed by R-14.5/
+// R-16.51/R-16.75, and a dynamically-installed plugin cannot participate
+// in a closed, compile-time-enumerated set. Callers must validate id before
 // calling this (plugin.go's validatePluginID) so a malformed or reserved
 // id can never silently collide with ReservedPluginHostNamespace or with
 // another plugin's slot.
@@ -116,7 +126,7 @@ type DomainMeta struct {
 // cascade.db domain. Consumers that must handle every domain (Bootstrap,
 // StorageHealthCheck, `cascade doctor --storage`, and any future
 // domain-aware code) range over this slice rather than hard-coding the
-// eleven values, so a future R-14.5
+// twelve values, so a future R-14.5
 // amendment changes only this one declaration.
 var AllDomains = []DomainMeta{
 	{ID: DomainContext, TablePrefix: "context", OwnerPkg: "internal/context (Epic E); internal/repo's context_repo_inventory table also lives here (Epic AG, P1-E33-W7-S67-T1) -- the R-14.5/R-16.51 domain list stays CLOSED per R-21.22, so a new table joins an existing domain rather than adding a twelfth DomainID"},
@@ -130,6 +140,7 @@ var AllDomains = []DomainMeta{
 	{ID: DomainQueue, TablePrefix: "queue", OwnerPkg: "internal/storage/queue"},
 	{ID: DomainJobs, TablePrefix: "jobs", OwnerPkg: "internal/jobs (DAG/execution/lease/worktree domain, Epic AC; P1-E29-W6-S59-T1)"},
 	{ID: DomainPolicy, TablePrefix: "policy", OwnerPkg: "internal/policy (Epic I; R-16.51)"},
+	{ID: DomainCIResults, TablePrefix: "ci_results", OwnerPkg: "internal/ci (Epic Y; R-16.75; P1-E25-W5-S51-T2)"},
 }
 
 // Clock abstracts time.Now so Bootstrap never reads the wall clock
@@ -195,6 +206,14 @@ const bootstrapSchemaVersion = 1
 // rather than a hash of nothing pretending to mean something.
 const bootstrapStampChecksum = "bootstrap-stamp"
 
+// bootstrapSetID is Bootstrap's own R-16.77 per-set identity — Bootstrap
+// is a SECOND writer of the applied_migrations ledger that bypasses
+// internal/storage/migrate.Apply entirely (this package deliberately
+// does not import migrate — see this file's package doc), so its
+// sentinel row must carry a set_id of its own rather than defaulting to
+// "" (the legacy-row value every per-set query is scoped away from).
+const bootstrapSetID = "storage"
+
 // healthProbeTable is a reserved, non-domain table Bootstrap creates
 // alongside the ten domain anchors, existing solely for
 // StorageHealthCheck's probe-write round-trip check (internal/storage/
@@ -202,7 +221,7 @@ const bootstrapStampChecksum = "bootstrap-stamp"
 // domain logic.
 const healthProbeTable = "__health_probe__"
 
-// Bootstrap idempotently creates the eleven domain anchor tables plus the
+// Bootstrap idempotently creates the twelve domain anchor tables plus the
 // reserved health-probe table, sets WAL mode, and stamps the initial
 // schema_version row. Calling Bootstrap twice on the same database is a
 // no-op on the second call (§5.9): TablesCreated is 0, Delta reports zero,

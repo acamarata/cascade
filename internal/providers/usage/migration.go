@@ -14,18 +14,24 @@
 // internal/retrieval/lifecycle/migrate.go have each already hit and
 // recorded identically. This package therefore does NOT call
 // storage.Bootstrap or claim a DomainID; it authors its own
-// migrate.MigrationSet against cascade.db's raw *sql.DB.
+// migrate.MigrationSet.
 //
-// SCHEMA VERSION (R-14.198). applied_migrations keys schema_version
-// GLOBALLY with no per-MigrationSet identity. The claimed slots in the
-// tree as of this ticket: bootstrap=1, context/scope=2,
-// retrieval/lifecycle=3, providers/registry=4, jobs=5. This package
-// claims the next unused slot, 6.
+// DATABASE CORRECTION (R-16.77). This package's schema does NOT target
+// cascade.db: cmd/cascade/provider_health_cmd.go opens it against a
+// dedicated provider-usage.db file (providerUsageDBFile), entirely
+// separate from cascade.db's own applied_migrations ledger. An earlier
+// version of this comment claimed a "claimed slot" in cascade.db's
+// (pre-R-16.77) global schema_version sequence; that claim was wrong on
+// two counts -- this package never touched cascade.db, and R-16.77 gave
+// the ledger PER-SET identity (key: (SetID, schema_version)) so version
+// numbers are no longer a tree-wide scarce resource for anyone. This
+// package's MigrationSet carries its own SetID ("providers-usage") and
+// its own independent schema_version.
 //
 // Inputs: none at this layer.
 // Outputs: a migrate.MigrationSet / ApplyMigrationSchema.
 // Constraints: idempotent re-apply (migrate.Apply's own contract);
-//   minimum_reader_version equals schema_version, matching registry's own
+//   reader_ceiling equals schema_version, matching registry's own
 //   choice (no reader compatibility window needed for a brand-new table).
 // SPORT: provider.usage/ADD (P1-E10-W3-S20-T4).
 
@@ -58,9 +64,10 @@ const SchemaVersion = usageSchemaVersion
 // COST CALCULATION/WRITE INTERFACE contract.
 func MigrationSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
-		SchemaVersion:        usageSchemaVersion,
-		MinimumReaderVersion: usageSchemaVersion,
-		Steps:                []migrate.MigrationStep{providerUsageTableStep()},
+		SetID:         "providers-usage",
+		SchemaVersion: usageSchemaVersion,
+		ReaderCeiling: usageSchemaVersion,
+		Steps:         []migrate.MigrationStep{providerUsageTableStep()},
 	}
 }
 

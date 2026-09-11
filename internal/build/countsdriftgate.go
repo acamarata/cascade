@@ -104,8 +104,11 @@ var countsDriftWordToNumber = map[string]int{
 var countsDriftPattern = regexp.MustCompile(`(?i)\b([0-9]+|[a-z]+)[- ](kind|domain)(s)?\b`)
 
 // countsDriftAnchorWords are the words this repo's own prose always pairs
-// with a genuine total-count statement for "kind" or "domain"
-// ("14-kind taxonomy", "eleven-domain set", "eleven-domain enumeration").
+// with a genuine total-count statement for "kind" or "domain": the noun
+// turns into a stated total when one of these words comes right after it
+// (a digit count immediately followed by "kind" and then the word
+// "taxonomy" is one shape this catches; a spelled-out number immediately
+// followed by "domain" and then either "set" or "enumeration" is another).
 // Requiring one immediately after the matched noun is what keeps this gate
 // from flagging every incidental "one domain" or "two kinds of X" in the
 // tree — a documented precision/recall tradeoff (see the package doc's
@@ -119,10 +122,11 @@ var countsDriftAnchorWords = []string{"taxonomy", "enumeration", "set"}
 // export/import") states a genuine total. Two shapes are recognized: the
 // noun is immediately followed (after optional whitespace) by one of
 // countsDriftAnchorWords, or noun is "domain", plural, and immediately
-// followed by a comma (the CHANGELOG.md "Storage: eleven domains,
-// per-domain..." shape, which never carries an anchor WORD). The comma
-// shape is domain-only: a plain English list ("three kinds, two actors,
-// two verdicts") reads identically for "kind" and is common prose that
+// followed by a comma (the shape CHANGELOG.md uses for its storage
+// summary line: a spelled-out plural count followed straight by a comma
+// and a description, never by an anchor WORD). That comma shape applies
+// to "domain" only: a plain English list ("three kinds, two actors, two
+// verdicts") reads identically for "kind" and is common prose that
 // states nothing about the frozen taxonomy.
 func countsDriftAnchored(noun string, rest string, plural bool) bool {
 	trimmed := strings.TrimLeft(rest, " \t")
@@ -156,16 +160,23 @@ func CountsDriftSkipsPath(rel string) bool {
 }
 
 // CountsDriftExemptions names tracked lines this gate would otherwise flag
-// (or would flag once a taxonomy/domain count changes) but which state a
-// total for a DIFFERENT, unrelated enum that happens to share the word
-// "kind" and this repo's own "N-kind enumeration" phrasing with
-// pkg/cascade's frozen taxonomy — the "wrong noun attribution" blind spot
-// the package doc names. Each entry is a file:line key with a reason,
-// checked live by TestCountsDriftGate_ExemptionsAreLive so a stale one (the
-// line moved, or no longer matches) is caught rather than silently
-// widening.
+// but which are correct as written, for one of two reasons. First: the
+// line states a total for a DIFFERENT, unrelated enum that happens to
+// share the word "kind" and this repo's own "N-kind enumeration" phrasing
+// with pkg/cascade's frozen taxonomy — the "wrong noun attribution" blind
+// spot the package doc names. Second: the line is a historical release
+// record (a CHANGELOG.md or docs/releases entry) stating the count that
+// was true AT THE TIME that build was cut, before a later ruling amended
+// the live enumeration — rewriting a shipped release's own notes to match
+// today's count would make the record claim the release contained
+// something it did not, which is worse than a gate false positive. Each
+// entry is a file:line key with a reason, checked live by
+// TestCountsDriftGate_ExemptionsAreLive so a stale one (the line moved, or
+// no longer matches) is caught rather than silently widening.
 var CountsDriftExemptions = map[string]string{
 	"internal/fleet/journal/journal.go:92": "states fleet/journal.Kind's own closed eight-member enumeration, not pkg/cascade.Kind",
+	"CHANGELOG.md:34":                      "alpha-1 release record: the storage domain set genuinely had eleven members when alpha-1 was cut, before R-16.75 added a twelfth (ci_results) — rewriting this to twelve would falsify what alpha-1 actually shipped",
+	"docs/releases/alpha1.md:25":           "alpha-1 release record: the storage domain set genuinely had eleven members when alpha-1 was cut, before R-16.75 added a twelfth (ci_results) — rewriting this to twelve would falsify what alpha-1 actually shipped",
 }
 
 // CheckCountsDrift scans every path in trackedFiles (repo-relative, under

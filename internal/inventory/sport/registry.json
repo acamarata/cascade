@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-11T15:02:48Z",
+  "generated_at": "2026-09-11T17:05:00Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1628,6 +1628,13 @@
       "name": "cli/approval-standing",
       "sites": [
         {
+          "file": "cmd/cascade/approval_elevation_unix_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E09-W2-S18-T6",
+          "raw": "cli/approval-standing/ADD (P1-E09-W2-S18-T6)"
+        },
+        {
           "file": "cmd/cascade/approval_platform_unix.go",
           "line": 8,
           "status": "ADD",
@@ -1647,6 +1654,13 @@
           "status": "ADD",
           "ticket": "P1-E09-W2-S18-T6",
           "raw": "cli/approval-standing/ADD (P1-E09-W2-S18-T6)."
+        },
+        {
+          "file": "cmd/cascade/approval_windows_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E09-W2-S18-T6",
+          "raw": "cli/approval-standing/ADD (P1-E09-W2-S18-T6)"
         }
       ],
       "statuses": [
@@ -2120,8 +2134,22 @@
           "raw": "cmd/cascade/daemon (CHANGE, per D/S-07.T2 sport_updates)."
         },
         {
+          "file": "cmd/cascade/daemon_status_stop_unix_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "T-2",
+          "raw": "cmd/cascade/daemon (ADD, per T-2 sport_updates)"
+        },
+        {
+          "file": "cmd/cascade/daemon_status_stop_windows_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "T-2",
+          "raw": "cmd/cascade/daemon (ADD, per T-2 sport_updates)"
+        },
+        {
           "file": "cmd/cascade/daemon_test.go",
-          "line": 17,
+          "line": 23,
           "status": "ADD",
           "ticket": "T-2",
           "raw": "cmd/cascade/daemon (ADD, per T-2 sport_updates)."
@@ -2132,6 +2160,12 @@
           "status": "ADD",
           "ticket": "T-2",
           "raw": "cmd/cascade/daemon (ADD, per T-2 sport_updates; R-14.117 sibling"
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_ceiling_test.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "cmd/cascade/daemon (ADD — schema ceiling coverage invariant)."
         },
         {
           "file": "cmd/cascade/daemon_unix_cmd_test.go",
@@ -2773,6 +2807,35 @@
           "status": "ADD",
           "ticket": "P1-E11-W3-S23-T2",
           "raw": "conductor.fanout/ADD (P1-E11-W3-S23-T2, T0 unblock)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "conductor.flow",
+      "sites": [
+        {
+          "file": "internal/conductor/flow.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E11-W3-S23-T6",
+          "raw": "conductor.flow/ADD (P1-E11-W3-S23-T6)."
+        },
+        {
+          "file": "internal/conductor/flow_fuzz_test.go",
+          "line": 4,
+          "status": "ADD",
+          "ticket": "P1-E11-W3-S23-T6",
+          "raw": "conductor.flow/ADD (P1-E11-W3-S23-T6)."
+        },
+        {
+          "file": "internal/conductor/flow_test.go",
+          "line": 4,
+          "status": "ADD",
+          "ticket": "P1-E11-W3-S23-T6",
+          "raw": "conductor.flow/ADD (P1-E11-W3-S23-T6)."
         }
       ],
       "statuses": [
@@ -3630,7 +3693,7 @@
         },
         {
           "file": "internal/fleet/tailer/tailer.go",
-          "line": 36,
+          "line": 45,
           "status": "ADD",
           "ticket": "T-2",
           "raw": "fleet/tailer (ADD, per T-2 sport_updates)."
@@ -3648,10 +3711,23 @@
           "status": "ADD",
           "ticket": "T-2",
           "raw": "fleet/tailer (ADD, per T-2 sport_updates)."
+        },
+        {
+          "file": "internal/fleet/tailer/tailer_unix.go",
+          "line": 10,
+          "status": "CHANGE",
+          "raw": "fleet/tailer (CHANGED, windows-parity-pass-4)."
+        },
+        {
+          "file": "internal/fleet/tailer/tailer_windows.go",
+          "line": 23,
+          "status": "CHANGE",
+          "raw": "fleet/tailer (CHANGED, windows-parity-pass-4)."
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -3960,6 +4036,79 @@
       ]
     },
     {
+      "name": "internal.bench.Budgets",
+      "sites": [
+        {
+          "file": "internal/bench/registry.go",
+          "line": 35,
+          "status": "ADD",
+          "ticket": "P1-E28-W10-S58-T2",
+          "raw": "internal.bench.Budgets/ADDED (P1-E28-W10-S58-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.bench.Gate",
+      "sites": [
+        {
+          "file": "internal/bench/gate.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E28-W10-S58-T2",
+          "raw": "internal.bench.Gate/ADDED (P1-E28-W10-S58-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.bench.ParseBenchOutput",
+      "sites": [
+        {
+          "file": "internal/bench/gate_test.go",
+          "line": 1,
+          "status": "ADD",
+          "raw": "internal.bench.ParseBenchOutput/ADDED test coverage"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.bench.RegisteredBudgets",
+      "sites": [
+        {
+          "file": "internal/bench/registry_test.go",
+          "line": 1,
+          "status": "ADD",
+          "ticket": "P1-E28-W10-S58-T2",
+          "raw": "internal.bench.RegisteredBudgets/ADDED test coverage (P1-E28-W10-S58-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.bench.TestBudgetRegistry",
+      "sites": [
+        {
+          "file": "internal/bench/budgets_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal.bench.TestBudgetRegistry/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.build.CheckCountsDrift",
       "sites": [
         {
@@ -3967,6 +4116,20 @@
           "line": 40,
           "status": "ADD",
           "raw": "internal.build.CheckCountsDrift/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.build.CheckLedgerIdentity",
+      "sites": [
+        {
+          "file": "internal/build/ledgeridentitygate.go",
+          "line": 38,
+          "status": "ADD",
+          "raw": "internal.build.CheckLedgerIdentity/ADDED (R-16.77)."
         }
       ],
       "statuses": [
@@ -4016,6 +4179,140 @@
       ]
     },
     {
+      "name": "internal.ci.Client",
+      "sites": [
+        {
+          "file": "internal/ci/poll.go",
+          "line": 31,
+          "status": "ADD",
+          "raw": "internal.ci.Client/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.Client.PollRuns",
+      "sites": [
+        {
+          "file": "internal/ci/poll.go",
+          "line": 31,
+          "status": "ADD",
+          "raw": "internal.ci.Client.PollRuns/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.Client.PollRuns/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/poll_pagination_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T2",
+          "raw": "internal.ci.Client.PollRuns/TESTED (P1-E25-W5-S51-T2)."
+        },
+        {
+          "file": "internal/ci/poll_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "internal.ci.Client.PollRuns/TESTED,"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.MigrationSet",
+      "sites": [
+        {
+          "file": "internal/ci/domain.go",
+          "line": 45,
+          "status": "ADD",
+          "raw": "internal.ci.MigrationSet/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.MigrationSet/TESTED, internal.ci.Upsert/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/domain_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "internal.ci.MigrationSet/TESTED, internal.ci.Upsert/TESTED"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.Upsert",
+      "sites": [
+        {
+          "file": "internal/ci/domain.go",
+          "line": 45,
+          "status": "ADD",
+          "raw": "internal.ci.Upsert/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.normalizeActionsRun/FUZZED",
+      "sites": [
+        {
+          "file": "internal/ci/fuzz_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T2",
+          "raw": "internal.ci.normalizeActionsRun/FUZZED (P1-E25-W5-S51-T2)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.normalizeActionsRuns",
+      "sites": [
+        {
+          "file": "internal/ci/normalize.go",
+          "line": 22,
+          "status": "ADD",
+          "raw": "internal.ci.normalizeActionsRuns/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.normalizeActionsRuns/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/normalize_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "internal.ci.normalizeActionsRuns/TESTED,"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal.conversation",
       "sites": [
         {
@@ -4024,6 +4321,57 @@
           "status": "ADD",
           "ticket": "P1-E20-W5-S43-T1",
           "raw": "internal.conversation/ADDED (P1-E20-W5-S43-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.conversation.adapter",
+      "sites": [
+        {
+          "file": "internal/conversation/adapter.go",
+          "line": 35,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T2",
+          "raw": "internal.conversation.adapter/ADDED (P1-E20-W5-S43-T2)."
+        },
+        {
+          "file": "internal/conversation/adapter_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T2",
+          "raw": "internal.conversation.adapter/ADDED (tests) (P1-E20-W5-S43-T2)."
+        },
+        {
+          "file": "internal/conversation/sse_integration_test.go",
+          "line": 29,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T2",
+          "raw": "internal.conversation.adapter/ADDED (integration test) (P1-E20-W5-S43-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.conversation.adapter_errors",
+      "sites": [
+        {
+          "file": "internal/conversation/adapter_errors.go",
+          "line": 33,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T2",
+          "raw": "internal.conversation.adapter_errors/ADDED (P1-E20-W5-S43-T2)."
+        },
+        {
+          "file": "internal/conversation/adapter_errors_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T2",
+          "raw": "internal.conversation.adapter_errors/ADDED (tests) (P1-E20-W5-S43-T2)."
         }
       ],
       "statuses": [
@@ -4068,6 +4416,64 @@
           "status": "ADD",
           "ticket": "P1-E20-W5-S43-T1",
           "raw": "internal.conversation.errors/ADDED (P1-E20-W5-S43-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.conversation.journal",
+      "sites": [
+        {
+          "file": "internal/conversation/journal.go",
+          "line": 47,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T4",
+          "raw": "internal.conversation.journal/ADDED (P1-E20-W5-S44-T4)."
+        },
+        {
+          "file": "internal/conversation/journal_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T4",
+          "raw": "internal.conversation.journal/ADDED (tests) (P1-E20-W5-S44-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.conversation.sse",
+      "sites": [
+        {
+          "file": "internal/conversation/platform_windows.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T2",
+          "raw": "internal.conversation.sse/ADDED (P1-E20-W5-S43-T2)."
+        },
+        {
+          "file": "internal/conversation/platform_windows_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T2",
+          "raw": "internal.conversation.sse/ADDED (tests) (P1-E20-W5-S43-T2)."
+        },
+        {
+          "file": "internal/conversation/sse.go",
+          "line": 36,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T2",
+          "raw": "internal.conversation.sse/ADDED (P1-E20-W5-S43-T2)."
+        },
+        {
+          "file": "internal/conversation/sse_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T2",
+          "raw": "internal.conversation.sse/ADDED (tests) (P1-E20-W5-S43-T2)."
         }
       ],
       "statuses": [
@@ -4699,6 +5105,28 @@
       ]
     },
     {
+      "name": "internal.fleet.rpc.bench_lane",
+      "sites": [
+        {
+          "file": "internal/fleet/rpc.go",
+          "line": 29,
+          "status": "ADD",
+          "ticket": "P1-E12-W3-S25-T5",
+          "raw": "internal.fleet.rpc.bench_lane/ADDED (P1-E12-W3-S25-T5)."
+        },
+        {
+          "file": "internal/fleet/rpc_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E12-W3-S25-T5",
+          "raw": "internal.fleet.rpc.bench_lane/ADDED (P1-E12-W3-S25-T5)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.fleet.sessions.RegisterHandlers",
       "sites": [
         {
@@ -4752,7 +5180,7 @@
       "sites": [
         {
           "file": "internal/fleet/sessions/domain.go",
-          "line": 40,
+          "line": 41,
           "status": "ADD",
           "ticket": "P1-E12-W3-S24-T3",
           "raw": "internal.fleet.sessions.Store/ADDED (P1-E12-W3-S24-T3)."
@@ -5748,6 +6176,26 @@
       ]
     },
     {
+      "name": "internal.retrieval.IngestGitRepo",
+      "sites": [
+        {
+          "file": "internal/retrieval/gitcorpus.go",
+          "line": 45,
+          "status": "ADD",
+          "raw": "internal.retrieval.IngestGitRepo/ADDED"
+        },
+        {
+          "file": "internal/retrieval/gitcorpus_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "internal.retrieval.IngestGitRepo/ADDED test coverage"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.retrieval.Leg",
       "sites": [
         {
@@ -5837,6 +6285,20 @@
           "line": 27,
           "status": "ADD",
           "raw": "internal.retrieval.corpus.Corpus/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.retrieval.corpus.CorpusIDCode",
+      "sites": [
+        {
+          "file": "internal/retrieval/corpus/registry.go",
+          "line": 28,
+          "status": "ADD",
+          "raw": "internal.retrieval.corpus.CorpusIDCode/ADDED"
         }
       ],
       "statuses": [
@@ -6312,7 +6774,7 @@
       "sites": [
         {
           "file": "internal/storage/plugin_migrate.go",
-          "line": 33,
+          "line": 30,
           "status": "ADD",
           "ticket": "P1-E15-W4-S32-T3",
           "raw": "internal.storage.PluginMigrator/ADDED (P1-E15-W4-S32-T3)."
@@ -6449,7 +6911,7 @@
         },
         {
           "file": "internal/storage/domains_layout_test.go",
-          "line": 9,
+          "line": 10,
           "status": "ADD",
           "raw": "internal.storage.domains.AllDomains/ADDED"
         }
@@ -6704,7 +7166,7 @@
         },
         {
           "file": "internal/storage/migrate/ledger_queries.go",
-          "line": 18,
+          "line": 19,
           "status": "ADD",
           "ticket": "P1-E02-W1-S02-T3",
           "raw": "internal.storage.migrate.Ledger/ADDED (P1-E02-W1-S02-T3)."
@@ -7776,6 +8238,64 @@
           "status": "ADD",
           "ticket": "P1-E04-W1-S07-T6",
           "raw": "internal/elevation windowsKeystore/ADDED (P1-E04-W1-S07-T6)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/fleet.HeadroomModel",
+      "sites": [
+        {
+          "file": "internal/fleet/headroom.go",
+          "line": 34,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S40-T2",
+          "raw": "internal/fleet.HeadroomModel (ADD, P1-E18-W4-S40-T2)."
+        },
+        {
+          "file": "internal/fleet/headroom_publish_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "T-2",
+          "raw": "internal/fleet.HeadroomModel (ADD, per T-2 sport_updates)."
+        },
+        {
+          "file": "internal/fleet/headroom_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "T-2",
+          "raw": "internal/fleet.HeadroomModel (ADD, per T-2 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/fleet.bench",
+      "sites": [
+        {
+          "file": "internal/fleet/bench.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E12-W3-S25-T5",
+          "raw": "internal/fleet.bench (ADD, P1-E12-W3-S25-T5)."
+        },
+        {
+          "file": "internal/fleet/bench_integration_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E12-W3-S25-T5",
+          "raw": "internal/fleet.bench (ADD, P1-E12-W3-S25-T5)."
+        },
+        {
+          "file": "internal/fleet/bench_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "T-5",
+          "raw": "internal/fleet.bench (ADD, per T-5 sport_updates)."
         }
       ],
       "statuses": [
@@ -11088,6 +11608,28 @@
       ]
     },
     {
+      "name": "plugins/pbd lifecycle",
+      "sites": [
+        {
+          "file": "plugins/pbd/lifecycle.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T1",
+          "raw": "plugins/pbd lifecycle (ADD) — P1-E14-W3-S30-T1."
+        },
+        {
+          "file": "plugins/pbd/lifecycle_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T1",
+          "raw": "plugins/pbd lifecycle (ADD) — P1-E14-W3-S30-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/pbd lint",
       "sites": [
         {
@@ -11222,6 +11764,35 @@
       ]
     },
     {
+      "name": "plugins/pbd/internal/pews dogfood-convert",
+      "sites": [
+        {
+          "file": "plugins/pbd/internal/pews/dogfood.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T3",
+          "raw": "plugins/pbd/internal/pews dogfood-convert (ADD) — P1-E14-W3-S30-T3."
+        },
+        {
+          "file": "plugins/pbd/internal/pews/dogfood_local_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T3",
+          "raw": "plugins/pbd/internal/pews dogfood-convert (ADD) — P1-E14-W3-S30-T3."
+        },
+        {
+          "file": "plugins/pbd/internal/pews/dogfood_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T3",
+          "raw": "plugins/pbd/internal/pews dogfood-convert (ADD) — P1-E14-W3-S30-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/pbd/internal/pews draft-isolation",
       "sites": [
         {
@@ -11237,6 +11808,28 @@
           "status": "ADD",
           "ticket": "P1-E14-W3-S29-T2",
           "raw": "plugins/pbd/internal/pews draft-isolation (ADD) — P1-E14-W3-S29-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/pbd/internal/pews lifecycle",
+      "sites": [
+        {
+          "file": "plugins/pbd/internal/pews/lifecycle.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T1",
+          "raw": "plugins/pbd/internal/pews lifecycle (ADD) — P1-E14-W3-S30-T1."
+        },
+        {
+          "file": "plugins/pbd/internal/pews/lifecycle_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T1",
+          "raw": "plugins/pbd/internal/pews lifecycle (ADD) — P1-E14-W3-S30-T1."
         }
       ],
       "statuses": [
@@ -11263,7 +11856,21 @@
       "sites": [
         {
           "file": "plugins/pbd/internal/pews/lint_rules.go",
-          "line": 18,
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S28-T4",
+          "raw": "plugins/pbd/internal/pews lint_rules (ADD) — P1-E14-W3-S28-T4."
+        },
+        {
+          "file": "plugins/pbd/internal/pews/lint_rules_dod.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S28-T4",
+          "raw": "plugins/pbd/internal/pews lint_rules (ADD) — P1-E14-W3-S28-T4."
+        },
+        {
+          "file": "plugins/pbd/internal/pews/lint_rules_sets.go",
+          "line": 14,
           "status": "ADD",
           "ticket": "P1-E14-W3-S28-T4",
           "raw": "plugins/pbd/internal/pews lint_rules (ADD) — P1-E14-W3-S28-T4."
@@ -11558,7 +12165,7 @@
       "sites": [
         {
           "file": "internal/providers/usage/migration.go",
-          "line": 30,
+          "line": 36,
           "status": "ADD",
           "ticket": "P1-E10-W3-S20-T4",
           "raw": "provider.usage/ADD (P1-E10-W3-S20-T4)."
@@ -12910,7 +13517,7 @@
         },
         {
           "file": "internal/runtime/daemon_logs.go",
-          "line": 35,
+          "line": 40,
           "status": "ADD",
           "ticket": "T-2",
           "raw": "runtime/logger (ADD, per T-2 sport_updates)."
@@ -12921,6 +13528,18 @@
           "status": "ADD",
           "ticket": "T-2",
           "raw": "runtime/logger (ADD, per T-2 sport_updates)."
+        },
+        {
+          "file": "internal/runtime/daemon_logs_unix.go",
+          "line": 10,
+          "status": "CHANGE",
+          "raw": "runtime/logger (CHANGED, windows-parity-pass-4)."
+        },
+        {
+          "file": "internal/runtime/daemon_logs_windows.go",
+          "line": 28,
+          "status": "CHANGE",
+          "raw": "runtime/logger (CHANGED, windows-parity-pass-4)."
         },
         {
           "file": "internal/runtime/logger.go",
@@ -12938,7 +13557,8 @@
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -13141,9 +13761,41 @@
       "statuses": [
         "ADD"
       ]
+    },
+    {
+      "name": "windows-parity-pass-3",
+      "sites": [
+        {
+          "file": "cmd/cascade/approval_elevation_unix_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "windows-parity-pass-3."
+        },
+        {
+          "file": "cmd/cascade/approval_windows_test.go",
+          "line": 16,
+          "status": "",
+          "raw": "windows-parity-pass-3."
+        },
+        {
+          "file": "cmd/cascade/daemon_status_stop_unix_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "windows-parity-pass-3."
+        },
+        {
+          "file": "cmd/cascade/daemon_status_stop_windows_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "windows-parity-pass-3."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
     }
   ],
-  "total_sites": 1319,
-  "unspecified_count": 23,
-  "multi_status_count": 18
+  "total_sites": 1382,
+  "unspecified_count": 28,
+  "multi_status_count": 20
 }

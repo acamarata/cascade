@@ -28,6 +28,7 @@ func TestEgressClassesR21265Registered(t *testing.T) {
 		{EgressClassBackupTarget, "backup-target", "S/S-41.T3", true, true},
 		{EgressClassPluginRemote, "plugin-remote", "O/S-33.T4", false, false},
 		{EgressClassRegistryFetch, "registry-fetch", "X/S-50.T1", true, false},
+		{EgressClassCIPoll, "ci-poll", "P1-E25-W5-S51-T2", true, false},
 	}
 	registry := DefaultRegistry()
 	if got, want := len(registry.Classes()), len(cases); got != want {

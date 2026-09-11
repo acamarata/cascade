@@ -5,7 +5,7 @@
 //	CLOSES the B/S-03.T5 rule-19 allowed-fail leg (06 §5.19): every
 //	storetest.RunStoreTests sub-test now passes against a REAL Postgres
 //	server, not the former stub. Also proves the live migration behaviors
-//	(ordered apply, schema_version, minimum_reader_version refusal) and
+//	(ordered apply, schema_version, reader_ceiling refusal) and
 //	the named error paths (unreachable server, missing env-ref, auth
 //	failure, migration failure, older-reader refusal) — never a
 //	hand-rolled fake postgres (Art.2).
@@ -77,7 +77,7 @@ func TestPostgresStoretestUnderDocker(t *testing.T) {
 }
 
 // TestPostgresLiveMigration proves the B/S-02.T3 postgres dialect applies
-// live: ordered apply, schema_version, minimum_reader_version refusal —
+// live: ordered apply, schema_version, reader_ceiling refusal —
 // the "W1 golden-SQL contract holds on postgres" acceptance criterion.
 // DBPath is left empty (no §D-18 snapshot): that mechanism copies a
 // SQLite .db file and has no meaning for a live Postgres connection, per
@@ -110,15 +110,16 @@ func TestPostgresLiveMigration(t *testing.T) {
 	set := liveMigrationTestSet()
 	cfg := migrate.ApplyConfig{DB: db, Dialect: migrate.PostgresEmitter{}, Clock: fixedClock{}}
 	assertOrderedApplyAndIdempotence(ctx, t, db, cfg, set)
-	assertMinimumReaderVersionRefusal(ctx, t, cfg, set)
+	assertReaderCeilingRefusal(ctx, t, cfg, set)
 }
 
 // liveMigrationTestSet is the single-table MigrationSet
 // TestPostgresLiveMigration proves live.
 func liveMigrationTestSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SetID:         "live-integration",
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateTable,
 			Table: &migrate.TableDef{
@@ -151,17 +152,17 @@ func assertOrderedApplyAndIdempotence(ctx context.Context, t *testing.T, db *sql
 	}
 }
 
-// assertMinimumReaderVersionRefusal proves a set claiming a lower
-// MinimumReaderVersion than the on-disk schema_version is refused with
+// assertReaderCeilingRefusal proves a set claiming a lower
+// ReaderCeiling than the on-disk schema_version is refused with
 // *migrate.SchemaDowngradeError before any DDL runs.
-func assertMinimumReaderVersionRefusal(ctx context.Context, t *testing.T, cfg migrate.ApplyConfig, set migrate.MigrationSet) {
+func assertReaderCeilingRefusal(ctx context.Context, t *testing.T, cfg migrate.ApplyConfig, set migrate.MigrationSet) {
 	t.Helper()
 	downgrade := set
 	downgrade.SchemaVersion = 2
-	downgrade.MinimumReaderVersion = 0
+	downgrade.ReaderCeiling = 0
 	err := migrate.Apply(ctx, cfg, downgrade)
 	if err == nil {
-		t.Fatal("Apply with MinimumReaderVersion below the recorded schema_version succeeded, want a downgrade refusal")
+		t.Fatal("Apply with ReaderCeiling below the recorded schema_version succeeded, want a downgrade refusal")
 	}
 	var downgradeErr *migrate.SchemaDowngradeError
 	if !errors.As(err, &downgradeErr) {

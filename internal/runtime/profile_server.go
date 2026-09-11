@@ -129,7 +129,7 @@ func RefuseSecretLiteral(value string) error {
 // against Postgres: the same namespace/key/value shape
 // providers/postgres's schemaDDL constant creates, but authored through
 // the DSL so the B/S-02.T3 golden-SQL contract (ordered apply,
-// schema_version, minimum_reader_version refusal) is exercised via
+// schema_version, reader_ceiling refusal) is exercised via
 // internal/storage/migrate.Apply itself, not merely as generated text.
 // providers/postgres.Open creates the same table independently (its own
 // schemaDDL, CREATE TABLE IF NOT EXISTS) for callers that skip migration
@@ -137,8 +137,9 @@ func RefuseSecretLiteral(value string) error {
 // forms are idempotent CREATE TABLE IF NOT EXISTS.
 func kvMigrationSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SetID:         "runtime-profile-kv",
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateTable,
 			Table: &migrate.TableDef{

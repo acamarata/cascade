@@ -59,7 +59,14 @@ func TestCountsDriftGate_SeededViolationRed_Digit(t *testing.T) {
 
 // TestCountsDriftGate_SeededViolationRed_Word proves the gate catches both
 // an English-word kind mismatch ("thirteen kinds") and an English-word
-// domain mismatch ("twelve domains") in the same file.
+// domain mismatch ("eleven domains") in the same file. Both stated
+// numbers are "one less than the real, live count" by construction
+// (13 vs. the real 14-kind taxonomy, 11 vs. the real 12-domain set) —
+// this fixture is NOT insulated from the real counts changing, exactly
+// like digit_violation.go's "13-kind" above. The next kind or domain
+// amendment (R-14.3/R-14.5's successor rulings) will need this fixture's
+// stated numbers AND these two asserted values bumped together, the same
+// edit clean.go and this test's own kind assertion above already need.
 func TestCountsDriftGate_SeededViolationRed_Word(t *testing.T) {
 	fixtureDir := countsdriftFixtureDir(t)
 	rel := "word_violation.md"
@@ -68,7 +75,7 @@ func TestCountsDriftGate_SeededViolationRed_Word(t *testing.T) {
 		t.Fatalf("counts drift gate: %v", err)
 	}
 	countsdriftAssertFound(t, v, "kind", 13)
-	countsdriftAssertFound(t, v, "domain", 12)
+	countsdriftAssertFound(t, v, "domain", 11)
 }
 
 // TestCountsDriftGate_CleanFixtureGreen proves a file stating the CORRECT
@@ -86,14 +93,17 @@ func TestCountsDriftGate_CleanFixtureGreen(t *testing.T) {
 
 // TestCountsDriftGate_RealTreeGreen scans the entire real, tracked tree
 // (skipping testdata/, per CountsDriftSkipsPath) and asserts zero
-// violations. This is the CI-facing half: every one of the eight sites
-// AGENT-BRIEF named (providers/openai/auth.go, internal/context's two
-// error files, internal/memory/store.go, internal/providers/intake/errors.go,
-// internal/output/exitcodes_test.go, internal/nodes/records.go,
-// CHANGELOG.md) states "14-kind" or "eleven domain(s)" and every one of
-// them was verified, by this exact test, to already be correct — this
-// gate's value is that the NEXT taxonomy or domain-set amendment which
-// forgets one of them now fails CI instead of shipping silently wrong.
+// violations, after CountsDriftExemptions removes the entries that are
+// correct on their own terms (a different enum's count, or a historical
+// release record stating what was true when it was cut). Every one of
+// the seven sites AGENT-BRIEF named (providers/openai/auth.go,
+// internal/context's two error files, internal/memory/store.go,
+// internal/providers/intake/errors.go, internal/output/exitcodes_test.go,
+// internal/nodes/records.go) states "14-kind" or "twelve domain(s)" and
+// every one of them was verified, by this exact test, to already be
+// correct — this gate's value is that the NEXT taxonomy or domain-set
+// amendment which forgets one of them now fails CI instead of shipping
+// silently wrong.
 func TestCountsDriftGate_RealTreeGreen(t *testing.T) {
 	root := countsdriftModuleRoot(t)
 	files, err := ListTrackedFiles(root)

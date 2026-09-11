@@ -27,12 +27,21 @@ import (
 // Outputs: Next() yields one redacted Record per transcript line, or
 //   io.EOF when the tailer has caught up with the file's current content
 //   (not a permanent stop — callers poll and call Next again).
-// Constraints: no platform-specific build tags — rotation and truncation
-//   detection use only os.SameFile and os.FileInfo.Size, both portable,
-//   so the GOOS matrix (darwin/linux/windows) builds identically. Every
-//   read is buffered in-process (t.pending); an unterminated final line
-//   is never treated as complete, so a line split across two polls is
-//   never truncated or duplicated.
+// Constraints: rotation and truncation detection use only os.SameFile and
+//   os.FileInfo.Size, both portable, so the GOOS matrix (darwin/linux/
+//   windows) shares this file's logic identically. The one platform split
+//   is openTranscript (tailer_unix.go / tailer_windows.go): Go's os.Open
+//   on Windows opens with FILE_SHARE_READ|FILE_SHARE_WRITE but NOT
+//   FILE_SHARE_DELETE, so a harness rotating (rename) or removing its own
+//   transcript while this tailer holds it open would fail on Windows with
+//   ERROR_SHARING_VIOLATION — a real production defect, not a test
+//   artifact, since rotation is exactly the scenario this package exists
+//   to survive. tailer_windows.go opens with FILE_SHARE_DELETE added so
+//   the writer's rename/remove succeeds while this handle stays open,
+//   matching POSIX's rename-with-open-handle semantics. Every read is
+//   buffered in-process (t.pending); an unterminated final line is never
+//   treated as complete, so a line split across two polls is never
+//   truncated or duplicated.
 // SPORT: fleet/tailer (ADD, per T-2 sport_updates).
 
 // readChunkSize is how much the tailer reads from the file per poll when
@@ -79,7 +88,7 @@ func (t *Tailer) Close() error {
 }
 
 func (t *Tailer) open() error {
-	f, err := os.Open(t.path)
+	f, err := openTranscript(t.path)
 	if err != nil {
 		return cascade.Wrapf(cascade.KindNotFound, err, "open transcript %s", t.path)
 	}

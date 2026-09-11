@@ -63,17 +63,16 @@ func TestConversationRoundTrip(t *testing.T) {
 	}
 }
 
-// TestSchemaVersionDoesNotCollideWithClaimedSlots guards this ticket's
-// own SCHEMA VERSION doc comment: as of this ticket, the tree's other
-// claimed global schema slots are 1 (bootstrap), 2 (scope), 3
-// (retrieval/lifecycle), 4 (registry), 5 (jobs), 6 (usage). This package
-// claims 7. A future package that also claims 7 would silently corrupt
-// the shared applied_migrations ledger (R-14.198) -- this test at least
-// catches THIS package regressing to a value already known to collide.
-func TestSchemaVersionDoesNotCollideWithClaimedSlots(t *testing.T) {
-	claimed := map[int]bool{1: true, 2: true, 3: true, 4: true, 5: true, 6: true}
-	if claimed[conversationSchemaVersion] {
-		t.Errorf("conversationSchemaVersion=%d collides with an already-claimed global slot", conversationSchemaVersion)
+// TestMigrationSetCarriesOwnSetID guards R-16.77's per-set identity
+// fix directly: this package's MigrationSet must carry a non-empty,
+// package-specific SetID, which is what makes conversationSchemaVersion
+// independent of every other package's schema_version in the shared
+// applied_migrations ledger (superseding the pre-R-16.77 "claimed
+// global slot" collision concern this test used to guard).
+func TestMigrationSetCarriesOwnSetID(t *testing.T) {
+	set := MigrationSet()
+	if set.SetID != "conversation" {
+		t.Errorf("MigrationSet().SetID = %q, want %q", set.SetID, "conversation")
 	}
 }
 

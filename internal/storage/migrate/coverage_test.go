@@ -41,8 +41,9 @@ func TestErrorTypes_MessageAndUnwrap(t *testing.T) {
 	cfg := applyConfig(t, db, path)
 
 	seed := migrate.MigrationSet{
-		SchemaVersion:        2,
-		MinimumReaderVersion: 2,
+		SetID:         "errtypes",
+		SchemaVersion: 2,
+		ReaderCeiling: 2,
 		Steps: []migrate.MigrationStep{{
 			Kind:  migrate.StepCreateTable,
 			Table: &migrate.TableDef{Name: "seed", Columns: []migrate.ColumnDef{{Name: "id", Type: migrate.TypeInteger}}},
@@ -51,7 +52,7 @@ func TestErrorTypes_MessageAndUnwrap(t *testing.T) {
 	if err := migrate.Apply(context.Background(), cfg, seed); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	err := migrate.Apply(context.Background(), cfg, migrate.MigrationSet{SchemaVersion: 3, MinimumReaderVersion: 1, Steps: seed.Steps})
+	err := migrate.Apply(context.Background(), cfg, migrate.MigrationSet{SetID: "errtypes", SchemaVersion: 3, ReaderCeiling: 1, Steps: seed.Steps})
 	assertSchemaDowngradeShape(t, err)
 	assertMigrationConflictShape(t)
 }
@@ -78,8 +79,9 @@ func assertSchemaDowngradeShape(t *testing.T, err error) {
 func assertMigrationConflictShape(t *testing.T) {
 	t.Helper()
 	conflictSet := migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SetID:         "conflictshape",
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{{
 			Kind:  migrate.StepCreateTable,
 			Table: &migrate.TableDef{Name: "c1", Columns: []migrate.ColumnDef{{Name: "id", Type: migrate.TypeInteger}}},
@@ -109,9 +111,9 @@ func assertMigrationConflictShape(t *testing.T) {
 // an unrecognized StepKind value.
 func TestEmitStep_InvalidShapes(t *testing.T) {
 	cases := []migrate.MigrationSet{
-		{SchemaVersion: 1, MinimumReaderVersion: 1, Steps: []migrate.MigrationStep{{Kind: migrate.StepCreateTable}}},
-		{SchemaVersion: 1, MinimumReaderVersion: 1, Steps: []migrate.MigrationStep{{Kind: migrate.StepCreateIndex}}},
-		{SchemaVersion: 1, MinimumReaderVersion: 1, Steps: []migrate.MigrationStep{{Kind: migrate.StepKind(99)}}},
+		{SchemaVersion: 1, ReaderCeiling: 1, Steps: []migrate.MigrationStep{{Kind: migrate.StepCreateTable}}},
+		{SchemaVersion: 1, ReaderCeiling: 1, Steps: []migrate.MigrationStep{{Kind: migrate.StepCreateIndex}}},
+		{SchemaVersion: 1, ReaderCeiling: 1, Steps: []migrate.MigrationStep{{Kind: migrate.StepKind(99)}}},
 	}
 	for i, set := range cases {
 		if _, err := (migrate.SQLiteEmitter{}).Emit(set); err == nil {
@@ -131,7 +133,7 @@ func TestEmitCreateIndex_InvalidShapes(t *testing.T) {
 	}
 	for i, idx := range cases {
 		idxCopy := idx
-		set := migrate.MigrationSet{SchemaVersion: 1, MinimumReaderVersion: 1, Steps: []migrate.MigrationStep{{Kind: migrate.StepCreateIndex, Index: &idxCopy}}}
+		set := migrate.MigrationSet{SchemaVersion: 1, ReaderCeiling: 1, Steps: []migrate.MigrationStep{{Kind: migrate.StepCreateIndex, Index: &idxCopy}}}
 		if _, err := (migrate.SQLiteEmitter{}).Emit(set); err == nil {
 			t.Errorf("case %d: want error, got nil", i)
 		}
@@ -149,7 +151,7 @@ func TestEmitForeignKey_InvalidIdentifiers(t *testing.T) {
 	}
 	for i, fk := range cases {
 		set := migrate.MigrationSet{
-			SchemaVersion: 1, MinimumReaderVersion: 1,
+			SchemaVersion: 1, ReaderCeiling: 1,
 			Steps: []migrate.MigrationStep{{
 				Kind: migrate.StepCreateTable,
 				Table: &migrate.TableDef{
@@ -170,7 +172,7 @@ func TestEmitForeignKey_InvalidIdentifiers(t *testing.T) {
 // clause and is valid, real DDL.
 func TestSinglePrimaryKeyWithoutAutoincrement(t *testing.T) {
 	set := migrate.MigrationSet{
-		SchemaVersion: 1, MinimumReaderVersion: 1,
+		SchemaVersion: 1, ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateTable,
 			Table: &migrate.TableDef{
@@ -195,7 +197,7 @@ func TestSinglePrimaryKeyWithoutAutoincrement(t *testing.T) {
 // keyword.
 func TestUnknownColumnType(t *testing.T) {
 	set := migrate.MigrationSet{
-		SchemaVersion: 1, MinimumReaderVersion: 1,
+		SchemaVersion: 1, ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateTable,
 			Table: &migrate.TableDef{

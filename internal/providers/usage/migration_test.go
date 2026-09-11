@@ -41,7 +41,7 @@ func newTestManager(t *testing.T, clk Clock) *Manager {
 }
 
 // TestMigrationIdempotent: applying the schema twice (empty DB, then a
-// pre-migrated DB) both exit cleanly, and minimum_reader_version is
+// pre-migrated DB) both exit cleanly, and reader_ceiling is
 // exercised.
 func TestMigrationIdempotent(t *testing.T) {
 	db := openTestDB(t)

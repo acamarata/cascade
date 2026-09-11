@@ -17,6 +17,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -64,8 +65,16 @@ func TestBlobStore_New_RootIsAFile(t *testing.T) {
 
 // seedNotADirectory places a regular file at the shard-prefix directory
 // path for hash within namespace, so a subsequent Get/Exists/Stat's path
-// traversal through it fails with ENOTDIR — an os error that is NOT
-// os.ErrNotExist, exercising each method's cascade.KindUnavailable branch.
+// traversal through it fails with ENOTDIR on POSIX — an os error that is
+// NOT os.ErrNotExist, exercising each method's cascade.KindUnavailable
+// branch. On Windows (windows-parity-pass-4) this collapses to the same
+// ERROR_PATH_NOT_FOUND a genuinely missing file gets: Win32 has no
+// equivalent of POSIX ENOTDIR for "a path component is a file, not a
+// directory", and errors.Is(err, os.ErrNotExist) reports true for both,
+// so Get/Exists/Stat correctly take the NotFound branch there instead —
+// a real, unavoidable platform difference, not a bug in this driver. See
+// internal/elevation/trust_filebackend_test.go's
+// TestFileBackend_Load_GenericIOError for the identical case.
 func seedNotADirectory(t *testing.T, root, namespace string, hash provider.Hash) {
 	t.Helper()
 	hex := hash.String()
@@ -87,7 +96,14 @@ func TestBlobStore_Get_PathTraversalError(t *testing.T) {
 	var h provider.Hash
 	h[0] = 0xAB
 	seedNotADirectory(t, root, "ns", h)
-	if _, err := b.Get(context.Background(), "ns", h); !cascade.HasKind(err, cascade.KindUnavailable) {
+	_, err = b.Get(context.Background(), "ns", h)
+	if goruntime.GOOS == "windows" {
+		if !cascade.HasKind(err, cascade.KindNotFound) {
+			t.Fatalf("Get through a blocked path component on Windows: want KindNotFound, got %v", err)
+		}
+		return
+	}
+	if !cascade.HasKind(err, cascade.KindUnavailable) {
 		t.Fatalf("Get through a blocked path component: want KindUnavailable, got %v", err)
 	}
 }
@@ -101,7 +117,18 @@ func TestBlobStore_Exists_PathTraversalError(t *testing.T) {
 	var h provider.Hash
 	h[0] = 0xAB
 	seedNotADirectory(t, root, "ns", h)
-	if _, err := b.Exists(context.Background(), "ns", h); !cascade.HasKind(err, cascade.KindUnavailable) {
+	exists, err := b.Exists(context.Background(), "ns", h)
+	if goruntime.GOOS == "windows" {
+		// Exists's own contract treats os.ErrNotExist as (false, nil),
+		// never an error — and on Windows the blocked-path stat IS
+		// os.ErrNotExist (see seedNotADirectory's doc comment), so this
+		// takes that branch exactly as a genuinely missing hash would.
+		if err != nil || exists {
+			t.Fatalf("Exists through a blocked path component on Windows: want (false, nil), got (%v, %v)", exists, err)
+		}
+		return
+	}
+	if !cascade.HasKind(err, cascade.KindUnavailable) {
 		t.Fatalf("Exists through a blocked path component: want KindUnavailable, got %v", err)
 	}
 }
@@ -115,7 +142,14 @@ func TestBlobStore_Stat_PathTraversalError(t *testing.T) {
 	var h provider.Hash
 	h[0] = 0xAB
 	seedNotADirectory(t, root, "ns", h)
-	if _, err := b.Stat(context.Background(), "ns", h); !cascade.HasKind(err, cascade.KindUnavailable) {
+	_, err = b.Stat(context.Background(), "ns", h)
+	if goruntime.GOOS == "windows" {
+		if !cascade.HasKind(err, cascade.KindNotFound) {
+			t.Fatalf("Stat through a blocked path component on Windows: want KindNotFound, got %v", err)
+		}
+		return
+	}
+	if !cascade.HasKind(err, cascade.KindUnavailable) {
 		t.Fatalf("Stat through a blocked path component: want KindUnavailable, got %v", err)
 	}
 }

@@ -7,18 +7,18 @@ package conversation
 //   (internal/storage/migrate), matching internal/jobs/migration.go's and
 //   internal/providers/registry/migration.go's exact precedent.
 //
-// SCHEMA VERSION (R-14.198, global ledger, no per-MigrationSet identity):
-// claimed slots as of this ticket: bootstrap=1, scope=2,
-// retrieval/lifecycle=3, registry=4, jobs=5, usage=6. This package claims 7.
+// SCHEMA VERSION: MigrationSet's own SetID ("conversation") keeps its
+// schema_version independent of every other set's (ledger key: SetID +
+// schema_version, R-16.77) -- the fix that unblocked daemon wiring.
 //
 // DOMAIN REGISTRATION and RAW-SQL MIGRATION FILE: two contract/tree
-// contradictions, both quoted in full in this ticket's journal.
-// Summary: internal/storage/domains.go's AllDomains is CLOSED at eleven
-// members and this ticket's files_scope.change is empty, so this package
-// does NOT claim a DomainID -- table-prefixed "conversation_" instead,
-// matching internal/providers/registry.MigrationSet's identical situation.
-// And no package in this tree authors an executable raw-SQL migration (the
-// DSL below is); migrations/001_conversation_tables.sql is a checked-in
+// contradictions, both quoted in full in this ticket's journal. Summary:
+// internal/storage/domains.go's AllDomains is CLOSED at eleven members
+// and this ticket's files_scope.change is empty, so this package does
+// NOT claim a DomainID -- table-prefixed "conversation_" instead, matching
+// internal/providers/registry.MigrationSet's identical situation. And no
+// package in this tree authors an executable raw-SQL migration (the DSL
+// below is); migrations/001_conversation_tables.sql is a checked-in
 // human-readable reference only, never imported or executed.
 //
 // PRIVACY (this ticket's own hard rule): Segment.Content carries free-text
@@ -240,8 +240,9 @@ func uniqueIdx(name, table string, cols ...string) migrate.MigrationStep {
 // out-of-order check even runs (see store.go's rowExists doc comment).
 func MigrationSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
-		SchemaVersion:        conversationSchemaVersion,
-		MinimumReaderVersion: conversationSchemaVersion,
+		SetID:         "conversation",
+		SchemaVersion: conversationSchemaVersion,
+		ReaderCeiling: conversationSchemaVersion,
 		Steps: []migrate.MigrationStep{
 			{Kind: migrate.StepCreateTable, Description: "conversation_thread", Table: &migrate.TableDef{
 				Name: tableThread, Columns: []migrate.ColumnDef{id("id"), text("name"), num("created_at")},
@@ -274,4 +275,26 @@ func ApplyConversationSchema(ctx context.Context, db *sql.DB, dialect migrate.Di
 	return migrate.Apply(ctx, migrate.ApplyConfig{
 		DB: db, Dialect: dialect, Clock: clock, DBPath: dbPath, BackupDir: backupDir,
 	}, MigrationSet())
+}
+
+// bootstrapResume is the daemon-startup entry point for P1-E20-W5-S44-T4's
+// journal integration (journal.go): for every thread id in threadIDs it
+// calls Resume against js/store and sums the applied counts, so a caller
+// resuming after a crash restores every in-progress thread's state in one
+// call rather than looping Resume itself. Transparent to callers per this
+// ticket's own contract: a thread whose journal has nothing unresolved
+// contributes 0 and is not itself an error. The caller supplies
+// threadIDs (e.g. from a durable thread-id list this composition root
+// already tracks) rather than this function discovering them, since
+// conversation.Store has no ListThreadIDs-shaped call cheaper than
+// ListThreads -- see store.go's own Store interface.
+func bootstrapResume(ctx context.Context, js JournalStore, store Store, threadIDs []string) (applied int, err error) {
+	for _, threadID := range threadIDs {
+		n, err := Resume(ctx, js, store, threadID)
+		if err != nil {
+			return applied, err
+		}
+		applied += n
+	}
+	return applied, nil
 }

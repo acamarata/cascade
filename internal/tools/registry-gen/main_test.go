@@ -201,14 +201,20 @@ func TestRunWriteIndexFailureRefusesPartialOutput(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("running as root: directory permissions do not block writes")
 	}
+	// makeDirGenuinelyUnwritable (dirunwritable_unix_test.go /
+	// dirunwritable_windows_test.go) applies a real, platform-appropriate
+	// write denial: POSIX chmod on unix, an explicit DACL DENY ACE on
+	// Windows (windows-parity-pass-5), where os.Chmod only toggles a
+	// cosmetic FILE_ATTRIBUTE_READONLY that never blocks writes into a
+	// directory. The Windows helper proves the denial actually took
+	// effect by attempting a real write before returning, so this test
+	// cannot pass for the wrong reason. See custody_filevault_test.go's
+	// TestFileVaultAvailableFalseOnUnwritableDir for the same case.
 	priv := ed25519.NewKeyFromSeed(fixedSeed45())
 	t.Setenv("REG_GEN_TEST_KEY_RO", base64.StdEncoding.EncodeToString(priv))
 
 	outDir := t.TempDir()
-	if err := os.Chmod(outDir, 0o555); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(outDir, 0o755) })
+	makeDirGenuinelyUnwritable(t, outDir)
 
 	w, _, stderr := testWriter()
 	code := run(w, []string{

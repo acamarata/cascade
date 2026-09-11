@@ -10,7 +10,7 @@
 // pkg/** only, never internal/** (Art.10.2), so this package cannot import
 // internal/storage/migrate directly, even though that package is exactly
 // what proves the B/S-02.T3 postgres dialect's ordered-apply,
-// schema_version/minimum_reader_version refusal, and §D-18 pre-migration
+// schema_version/reader_ceiling refusal, and §D-18 pre-migration
 // snapshot behaviors live against a real server (this ticket's
 // integration_test.go does that proof, from a _test.go file, which is not
 // bound by the providers/** import restriction the same way non-test

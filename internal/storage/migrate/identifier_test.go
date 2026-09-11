@@ -28,8 +28,8 @@ import (
 // both emitters through validateIdentifier with a hostile candidate.
 func hostileTableName(name string) migrate.MigrationSet {
 	return migrate.MigrationSet{
-		SchemaVersion:        1,
-		MinimumReaderVersion: 1,
+		SchemaVersion: 1,
+		ReaderCeiling: 1,
 		Steps: []migrate.MigrationStep{{
 			Kind: migrate.StepCreateTable,
 			Table: &migrate.TableDef{
@@ -89,8 +89,8 @@ func TestHostileIdentifiers_ReservedWordsAcceptedAndSafe(t *testing.T) {
 	for _, word := range reserved {
 		t.Run(word, func(t *testing.T) {
 			set := migrate.MigrationSet{
-				SchemaVersion:        1,
-				MinimumReaderVersion: 1,
+				SchemaVersion: 1,
+				ReaderCeiling: 1,
 				Steps: []migrate.MigrationStep{{
 					Kind: migrate.StepCreateTable,
 					Table: &migrate.TableDef{

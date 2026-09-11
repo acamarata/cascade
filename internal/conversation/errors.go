@@ -43,3 +43,27 @@ var ErrTurnNotFound = cascade.New(cascade.KindNotFound, "conversation: turn not 
 // CreatedAt, or a negative Seq). Fail-closed: unparseable or incomplete
 // input is refused, never defaulted.
 var ErrInvalidRecord = cascade.New(cascade.KindInvalidInput, "conversation: invalid record")
+
+// ErrMalformedTurnPayload reports that a chat.append_turn JSON-RPC
+// request could not be decoded into appendTurnParams (unknown field,
+// wrong type, missing thread_id/role). Static message only -- see this
+// file's PRIVACY doc comment; the raw params bytes are never echoed.
+var ErrMalformedTurnPayload = cascade.New(cascade.KindInvalidInput, "conversation: malformed chat.append_turn payload")
+
+// ErrEgressSubstitutionFailed reports that the H/S-16.T1 substitution
+// pass over a conversation.turn_appended SSE payload failed. Fails
+// closed: AppendTurn's storage write has already committed by the time
+// this can fire (T1's append-only guarantee is independent of the SSE
+// mirror), but no event is ever emitted unsubstituted.
+var ErrEgressSubstitutionFailed = cascade.New(cascade.KindUnavailable, "conversation: egress substitution failed for turn_appended event")
+
+// ErrSSEWriteFailed reports that publishing conversation.turn_appended
+// to the SSE bridge failed after substitution succeeded.
+var ErrSSEWriteFailed = cascade.New(cascade.KindUnavailable, "conversation: sse write failed for turn_appended event")
+
+// ErrSSEUnavailableOnEmbedded reports that the SSE mirror was requested
+// while running in Windows tier-2 daemonless/embedded one-shot mode,
+// where no SSE bridge exists at all (06-FORGE-SPEC §2). chat.append_turn
+// itself still succeeds and the turn is persisted; only the mirror is
+// refused. See sse.go's RefuseSSEOnEmbedded.
+var ErrSSEUnavailableOnEmbedded = cascade.New(cascade.KindUnsupported, "conversation: SSE mirror unavailable in embedded one-shot mode (Windows tier-2)")

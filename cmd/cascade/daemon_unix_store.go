@@ -38,8 +38,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/acamarata/cascade/internal/context/scope"
-	"github.com/acamarata/cascade/internal/retrieval/lifecycle"
+	"github.com/acamarata/cascade/internal/conversation"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage"
 	"github.com/acamarata/cascade/internal/storage/migrate"
@@ -63,35 +62,21 @@ const runtimeSchemaVersion = 1
 // runtimeMigrationSet is the production MigrationSet openRuntimeStore's
 // Migrator adapter applies. See runtimeSchemaVersion's doc comment for
 // why Steps is empty as of this wiring.
+//
+// R-16.77: the ledger now keys schema_version per SetID, not globally
+// per file, so this set's ReaderCeiling covers only its OWN SetID
+// ("runtime") — it no longer needs to know about scope's, lifecycle's,
+// or any other domain's SchemaVersion. runtimeReaderCeiling() (the
+// hand-maintained max() this doc comment used to require a term in for
+// every bundled domain) and internal/build/schemaceilinggate*.go (the
+// gate that policed it) are RETIRED: a superseded invariant, per
+// R-16.77's ruling text.
 func runtimeMigrationSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
-		SchemaVersion:        runtimeSchemaVersion,
-		MinimumReaderVersion: runtimeReaderCeiling(),
+		SetID:         "runtime",
+		SchemaVersion: runtimeSchemaVersion,
+		ReaderCeiling: runtimeSchemaVersion,
 	}
-}
-
-// runtimeReaderCeiling is the highest on-disk schema_version this binary
-// can open. MigrationSet.MinimumReaderVersion is named for a floor but is
-// enforced as a CEILING (migrate/ledger.go refuses when onDisk > it), so
-// it must cover every domain set this binary bundles, not just this one.
-// The ledger keys schema_version globally with no per-set identity, so a
-// domain schema targeting 2 raises the whole file to 2 and a ceiling of
-// runtimeSchemaVersion (1) would make the daemon refuse to reopen the
-// database it had just written (R-14.198). Add a max() term here for each
-// new bundled domain set rather than hardcoding a literal.
-func runtimeReaderCeiling() int {
-	ceiling := runtimeSchemaVersion
-	if scope.SchemaVersion > ceiling {
-		ceiling = scope.SchemaVersion
-	}
-	// lifecycle.SchemaVersion: the retrieval index domain's slot (F/S-11.T4).
-	// See lifecycle/migrate.go's SCHEMA VERSION doc comment for why this
-	// term is required, not optional, the moment that package's Migrate
-	// verb ever runs against this binary's cascade.db.
-	if lifecycle.SchemaVersion > ceiling {
-		ceiling = lifecycle.SchemaVersion
-	}
-	return ceiling
 }
 
 // newRuntimeMigrator builds the sqlite.Migrator this composition root
@@ -132,6 +117,14 @@ func newRuntimeMigratorWithSet(dbPath string, clock runtime.Clock, rawDB **sql.D
 			return err
 		}
 		if _, err := storage.Bootstrap(ctx, db, storage.BootstrapOpts{Clock: clock}); err != nil {
+			return err
+		}
+		// internal/conversation carries its own SetID ("conversation",
+		// domain.go) so its schema_version is independent of every
+		// other set applied against this same db (R-16.77) — wiring it
+		// here no longer risks the downgrade refusal that blocked this
+		// under the old global-version ledger.
+		if err := conversation.ApplyConversationSchema(ctx, db, migrate.SQLiteEmitter{}, clock, dbPath, backupDir); err != nil {
 			return err
 		}
 		return nil

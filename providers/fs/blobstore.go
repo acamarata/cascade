@@ -146,10 +146,36 @@ func (b *BlobStore) Put(ctx context.Context, namespace string, data io.Reader) (
 	if err := os.MkdirAll(filepath.Dir(finalPath), 0o755); err != nil {
 		return provider.Hash{}, cascade.Wrapf(cascade.KindUnavailable, err, "fs.BlobStore.Put: creating blob directory for namespace %q", namespace)
 	}
-	if err := os.Rename(tmpPath, finalPath); err != nil {
-		return provider.Hash{}, cascade.Wrapf(cascade.KindUnavailable, err, "fs.BlobStore.Put: renaming into place for namespace %q", namespace)
+	if err := renameBlobIntoPlace(tmpPath, finalPath, namespace); err != nil {
+		return provider.Hash{}, err
 	}
 	return hash, nil
+}
+
+// renameBlobIntoPlace renames tmpPath onto finalPath. This package's own
+// doc comment claims "each rename succeeds" for concurrent same-content
+// Puts, on the POSIX assumption that rename onto an existing destination
+// is atomic for every caller. That is true on POSIX but NOT on Windows
+// (windows-parity-pass-4, a real bug in that assumption, not a platform
+// quirk to special-case around): MoveFileEx can return
+// ERROR_ACCESS_DENIED when two renames race onto the same destination,
+// even though the loser's content is bit-identical to the winner's (both
+// hashed the same bytes to reach this same finalPath). Rather than add a
+// platform-specific syscall retry (Art.5's "no platform-specific
+// syscalls" for this package), check whether a concurrent winner already
+// completed: if finalPath exists now, this Put is logically satisfied —
+// the content that's there is, by construction, identical to what this
+// call would have written — and the failed rename is not a real
+// failure. Only a finalPath that still does not exist after the rename
+// failed is a genuine error.
+func renameBlobIntoPlace(tmpPath, finalPath, namespace string) error {
+	if err := os.Rename(tmpPath, finalPath); err != nil {
+		if _, statErr := os.Stat(finalPath); statErr == nil {
+			return nil
+		}
+		return cascade.Wrapf(cascade.KindUnavailable, err, "fs.BlobStore.Put: renaming into place for namespace %q", namespace)
+	}
+	return nil
 }
 
 // Get implements provider.BlobStore.

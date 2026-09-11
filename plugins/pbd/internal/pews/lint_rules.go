@@ -2,19 +2,16 @@
 // rules N/S-28.T4 owns — is a loaded, structurally valid ticket's OWN
 // CONTRACT well-formed and complete enough to build from, as opposed to
 // validate.go's question of whether the tree it lives in is structurally
-// sound. Each rule reads one already-decoded Ticket (plus, for the two
-// tree-relative rules, a lookup of its siblings) and reports every
-// violation it finds — never just the first.
+// sound. Each rule reads one already-decoded Ticket (plus, for the one
+// tree-relative rule here, a lookup of its siblings) and reports every
+// violation it finds — never just the first. The closed-set membership
+// rules (gate_only, Art.11, files-scope exemption, cr_level rank) live
+// in lint_rules_sets.go; the Article-3 Ticket DoD clause rule lives in
+// lint_rules_dod.go — split out to keep this file under the 300-line cap.
 // Inputs: TicketRecord values from an already-Validate-clean Tree (lint.go
-// enforces that precondition); the two closed tables below (06-FORGE-SPEC
-// §3's gate_only set and 12-QUALITY-CONSTITUTION Art.11's ten-ticket set)
-// are reproduced here from spec prose because the tree has no field
-// recording either membership.
+// enforces that precondition).
 // Outputs: []LintIssue per rule; lint.go concatenates and sorts them.
-// Constraints: pure functions, no filesystem/clock/network access; the
-// canonical-id ids below are built with canonicalID/epicNumberFromLetters
-// (store.go) so a typo cannot silently diverge from the id format T2
-// already enforces.
+// Constraints: pure functions, no filesystem/clock/network access.
 // SPORT: plugins/pbd/internal/pews lint_rules (ADD) — P1-E14-W3-S28-T4.
 package pews
 
@@ -22,6 +19,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // LintIssueKind names the class of one contract-completeness finding.
@@ -56,10 +54,10 @@ type LintIssue struct {
 	Message  string
 }
 
-// canonicalIDLoc names a ticket by tree location, letting the two closed
-// tables below build canonical ids with the same canonicalID/
-// epicNumberFromLetters helpers store.go uses, instead of hand-typing the
-// "P1-E.." strings and risking a silent divergence.
+// canonicalIDLoc names a ticket by tree location, letting the closed
+// tables in lint_rules_sets.go build canonical ids with the same
+// canonicalID/epicNumberFromLetters helpers store.go uses, instead of
+// hand-typing the "P1-E.." strings and risking a silent divergence.
 type canonicalIDLoc struct {
 	letters              string
 	wave, sprint, ticket int
@@ -67,25 +65,6 @@ type canonicalIDLoc struct {
 
 func (l canonicalIDLoc) id() string {
 	return canonicalID("P1", epicNumberFromLetters(l.letters), l.wave, l.sprint, l.ticket)
-}
-
-// art11Locs is 12-QUALITY-CONSTITUTION.md Art.11's TEN-ticket hardening-
-// clause restriction (R-16.27 as amended by R-21.20), reproduced from
-// 06-FORGE-SPEC.md §5 rule 25's literal enumeration. Membership is closed:
-// no eleventh ticket may carry the clause, and none of the ten may omit
-// it.
-var art11Locs = []canonicalIDLoc{
-	{"D", 1, 7, 7}, {"I", 2, 18, 7}, {"N", 3, 30, 5}, {"S", 4, 42, 7},
-	{"Y", 5, 52, 7}, {"AF", 6, 66, 5}, {"AJ", 7, 72, 6}, {"AM", 8, 76, 4},
-	{"AR", 9, 85, 5}, {"AB", 10, 58, 7},
-}
-
-// gateOnlyLocs is 06-FORGE-SPEC.md §3's gate_only closed set: the tickets
-// whose gate_only flag must read true, and the only tickets it may.
-var gateOnlyLocs = []canonicalIDLoc{
-	{"J", 4, 21, 3}, {"W", 6, 49, 4}, {"Q", 4, 38, 5}, {"S", 4, 42, 5},
-	{"AB", 10, 58, 6}, {"AD", 6, 62, 4}, {"AF", 6, 66, 4}, {"AJ", 7, 72, 5},
-	{"AM", 8, 76, 3}, {"AL", 6, 75, 3}, {"W", 6, 49, 3}, {"AN", 9, 78, 5},
 }
 
 func idSet(locs []canonicalIDLoc) map[string]bool {
@@ -98,15 +77,6 @@ func idSet(locs []canonicalIDLoc) map[string]bool {
 
 var dependencyIDRe = regexp.MustCompile(`^P[0-9]+-E[0-9]+-W[0-9]+-S[0-9]+-T[0-9]+$`)
 var branchRe = regexp.MustCompile(`^P[0-9]+-E[A-Za-z0-9]+-W[0-9]+-S[0-9]+-T[0-9]+-[A-Za-z0-9-]+$`)
-
-// dodPhrases are the Article-3 Ticket DoD substrings 06-FORGE-SPEC.md §5
-// rule 25 requires acceptance_criteria to carry verbatim enough to match
-// on, joined across all acceptance_criteria entries.
-var dodPhrases = []string{
-	"checks green in CI", "error-path tests present", "-race clean",
-	"no Article-1 stubs", "docs_updates landed", "CR by a different agent",
-	"journal written",
-}
 
 // ruleFieldConstraints checks the four free-text 06 §1 fields that carry
 // no enum (title, short_desc, full_desc, branch): non-empty, and title's
@@ -122,9 +92,13 @@ func ruleFieldConstraints(t TicketRecord) []LintIssue {
 	req("short_desc", t.Ticket.ShortDesc)
 	req("full_desc", t.Ticket.FullDesc)
 	req("branch", t.Ticket.Branch)
-	if len(t.Ticket.Title) > 60 {
+	// utf8.RuneCountInString, never len(): 06 §1 field 2's "≤60 chars" is a
+	// human character count, and titles routinely carry multi-byte runes
+	// (·, →) that len() (byte count) over-counts, flagging a 57-character
+	// title as 61 "chars" for carrying two 3-byte arrows.
+	if n := utf8.RuneCountInString(t.Ticket.Title); n > 60 {
 		v = append(v, LintIssue{LintKindFieldTooLong, t.ID, t.RelPath,
-			fmt.Sprintf("title is %d chars, 06 §1 field 2 caps it at 60", len(t.Ticket.Title))})
+			fmt.Sprintf("title is %d chars, 06 §1 field 2 caps it at 60", n)})
 	}
 	if t.Ticket.Branch != "" && !branchRe.MatchString(t.Ticket.Branch) {
 		v = append(v, LintIssue{LintKindFieldRequired, t.ID, t.RelPath,
@@ -181,82 +155,10 @@ func ruleDependencyForm(t TicketRecord) []LintIssue {
 	return v
 }
 
-// ruleCRWeight checks 06 §1 field 14's weight -> cr_level floor: XS/S
-// requires at least CR-A, M/L at least CR-B, XL at least CR-C. A
-// security-class ticket may always add more (checked as "contains", not
-// "equals"), so this is a floor, never an exact-match rule.
-func ruleCRWeight(t TicketRecord) []LintIssue {
-	floor := map[Weight]CRLevel{
-		WeightXS: CRLevelA, WeightS: CRLevelA,
-		WeightM: CRLevelB, WeightL: CRLevelB,
-		WeightXL: CRLevelC,
-	}
-	want, ok := floor[t.Ticket.Weight]
-	if !ok || strings.Contains(string(t.Ticket.CRLevel), string(want)) {
-		return nil
-	}
-	return []LintIssue{{LintKindCRWeightMismatch, t.ID, t.RelPath,
-		fmt.Sprintf("weight %s requires cr_level to include %s, got %s", t.Ticket.Weight, want, t.Ticket.CRLevel)}}
-}
-
-// ruleAcceptanceDoD checks that acceptance_criteria's combined text
-// carries every 06 §5 rule 25 Article-3 Ticket DoD phrase.
-func ruleAcceptanceDoD(t TicketRecord) []LintIssue {
-	joined := strings.Join(t.Ticket.AcceptanceCriteria, "\n")
-	for _, phrase := range dodPhrases {
-		if !strings.Contains(joined, phrase) {
-			return []LintIssue{{LintKindMissingDoD, t.ID, t.RelPath,
-				fmt.Sprintf("acceptance_criteria is missing the Article-3 Ticket DoD phrase %q", phrase)}}
-		}
-	}
-	return nil
-}
-
-// ruleFilesScope flags a files_scope with all three lists empty: a
-// contract that touches nothing is not buildable.
-func ruleFilesScope(t TicketRecord) []LintIssue {
-	fs := t.Ticket.FilesScope
-	if len(fs.Add) == 0 && len(fs.Change) == 0 && len(fs.Delete) == 0 {
-		return []LintIssue{{LintKindFilesScopeEmpty, t.ID, t.RelPath, "files_scope declares no add, change, or delete entries"}}
-	}
-	return nil
-}
-
 // ruleJournals enforces 06 §1's "journals: true (always)" extra flag.
 func ruleJournals(t TicketRecord) []LintIssue {
 	if t.Ticket.Journals == nil || !*t.Ticket.Journals {
 		return []LintIssue{{LintKindJournalsMissing, t.ID, t.RelPath, "journals must be set to true on every ticket"}}
-	}
-	return nil
-}
-
-// ruleGateOnly enforces 06 §3's gate_only closed set symmetrically: a
-// member must carry gate_only: true, and gate_only: true is unauthorized
-// on any id outside the set.
-func ruleGateOnly(t TicketRecord, gateOnly map[string]bool) []LintIssue {
-	is := t.Ticket.GateOnly != nil && *t.Ticket.GateOnly
-	member := gateOnly[t.ID]
-	switch {
-	case is && !member:
-		return []LintIssue{{LintKindGateOnlyUnexpected, t.ID, t.RelPath, "gate_only: true is not authorized on this ticket"}}
-	case !is && member:
-		return []LintIssue{{LintKindGateOnlyMissing, t.ID, t.RelPath, "this ticket is in 06 §3's gate_only set and must declare gate_only: true"}}
-	}
-	return nil
-}
-
-// ruleArt11 enforces Art.11's TEN-ticket closed set symmetrically: a
-// member's acceptance_criteria must carry the Article-11 clause, and the
-// clause is unauthorized on any ticket outside the set.
-func ruleArt11(t TicketRecord, art11 map[string]bool) []LintIssue {
-	joined := strings.ToLower(strings.Join(t.Ticket.AcceptanceCriteria, "\n"))
-	has := strings.Contains(joined, "art.11") || strings.Contains(joined, "article 11") || strings.Contains(joined, "article-11")
-	member := art11[t.ID]
-	switch {
-	case member && !has:
-		return []LintIssue{{LintKindArt11Missing, t.ID, t.RelPath, "this ticket is in Art.11's TEN-ticket set and must carry the Article-11 acceptance clause"}}
-	case !member && has:
-		return []LintIssue{{LintKindArt11Unauthorized, t.ID, t.RelPath, "the Article-11 clause is unauthorized on any ticket outside the TEN-ticket set"}}
 	}
 	return nil
 }

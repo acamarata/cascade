@@ -11,12 +11,13 @@
 // list exactly, so an Encode of a Ticket always emits the fields in
 // normative order.
 //
-// Beyond the 17, exactly five extra flags are declared and no others:
-// subtickets, journals, owner_prereq, gate_only, and external_contract. Each
-// is optional; DecodeTicket preserves the distinction between "omitted" and
-// "present with its zero value" (an omitted bool flag decodes to a nil
-// pointer, not false; an omitted string flag decodes to a nil pointer, not
-// the empty string), and EncodeTicket omits exactly what was never set.
+// Beyond the 17, exactly six extra flags are declared and no others:
+// subtickets, journals, owner_prereq, gate_only, external_contract, and
+// amendment_note. Each is optional; DecodeTicket preserves the distinction
+// between "omitted" and "present with its zero value" (an omitted bool flag
+// decodes to a nil pointer, not false; an omitted string flag decodes to a
+// nil pointer, not the empty string), and EncodeTicket omits exactly what
+// was never set.
 //
 // # Locked value sets
 //

@@ -63,7 +63,7 @@ resolved membership refs as read-only evidence; it never writes a
 
 `Inventory` persists as one additional table,
 `context_repo_inventory`, in the existing `context` domain --
-`internal/storage/domains.go`'s eleven-domain enumeration stays CLOSED per
+`internal/storage/domains.go`'s twelve-domain enumeration stays CLOSED per
 R-21.22, so this ticket adds a table to a domain internal/context/scope
 already owns rather than a new `DomainID`. See this ticket's journal for
 the full contract/tree contradiction this resolves.

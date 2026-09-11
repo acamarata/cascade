@@ -104,45 +104,9 @@ func TestStandingCommandsCarryTheirFlags(t *testing.T) {
 	}
 }
 
-// TestElevatedPlatformGate pins the gate's behaviour on the platform this
-// test binary was built for. On a platform with an elevation flow it
-// permits, and the daemon decides; the Windows refusal is asserted by
-// approval_windows_test.go, which builds only there.
-func TestElevatedPlatformGate(t *testing.T) {
-	err := refuseElevatedOnUnsupportedPlatform("approval grant")
-	if err != nil {
-		t.Fatalf("the platform gate refused on a platform with an elevation flow: %v", err)
-	}
-}
-
-// TestStandingCommands_TransportFailurePropagates drives grant, standing
-// list, standing create/change and standing revoke's REAL RunE past
-// approvalClient's success and into the actual client call, which fails to
-// dial a socket nothing serves.
-func TestStandingCommands_TransportFailurePropagates(t *testing.T) {
-	cases := []struct {
-		name string
-		cmd  func(approvalDeps) *cobra.Command
-		args []string
-	}{
-		{"grant", func(d approvalDeps) *cobra.Command { return newApprovalGrantCmd(d) },
-			[]string{"01J8ZC5W2K4F6H8M0P2R4T6V8X", "--token", "signed-token-value"}},
-		{"standing list", newStandingListCmd, nil},
-		{"standing create", func(d approvalDeps) *cobra.Command { return newStandingWriteCmd(d, "create") },
-			[]string{"--grant-id", "01J8ZC5W2K4F6H8M0P2R4T6V8X", "--capability", "fs.write"}},
-		{"standing revoke", newStandingRevokeCmd, []string{"--capability", "fs.write"}},
-	}
-	for _, tc := range cases {
-		deps := hermeticApprovalDeps(t)
-		out, err := execLeaf(t, tc.cmd(deps), tc.args)
-		if err == nil {
-			t.Fatalf("approval %s succeeded against a socket nothing listens on: %s", tc.name, out)
-		}
-		if !cascade.HasKind(err, cascade.KindUnavailable) {
-			t.Errorf("approval %s error kind = %v, want unavailable", tc.name, err)
-		}
-		if !strings.Contains(err.Error(), "daemon not running or unreachable") {
-			t.Errorf("approval %s error = %v, want it to name the unreachable daemon", tc.name, err)
-		}
-	}
-}
+// TestElevatedPlatformGate and TestStandingCommands_TransportFailurePropagates
+// live in approval_elevation_unix_test.go (!windows) and approval_windows_test.go
+// (windows): grant and standing create are ELEVATED verbs, and Windows
+// refuses them locally, before any dial, so a single platform-neutral
+// version of either test cannot assert one true thing on every platform
+// this ticket targets. See approval_windows_test.go's doc comment.

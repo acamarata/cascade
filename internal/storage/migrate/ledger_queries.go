@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -42,14 +43,49 @@ func ensureLedgerTable(ctx context.Context, db *sql.DB, dialect Dialect) error {
 			return cascade.Wrap(cascade.KindUnavailable, err, "migrate: create "+ledgerTableName+" table")
 		}
 	}
-	return nil
+	return ensureSetIDColumn(ctx, db)
+}
+
+// ensureSetIDColumn upgrades an on-disk applied_migrations table that
+// predates R-16.77's per-set identity column: ledgerDef's set_id column
+// only lands on a fresh CREATE TABLE (ensureLedgerTable's IF NOT EXISTS
+// is a no-op against an existing table), so an existing table needs this
+// explicit ALTER. Guarded so it is idempotent: a database that already
+// has the column returns the driver's "already exists"/"duplicate
+// column" error, which this treats as success rather than surfacing it.
+// Legacy rows get the empty-string default (R-16.77), which is invisible
+// to every per-set query (they all filter WHERE set_id = ?), so each
+// set's next Apply simply re-runs its own steps against the CREATE TABLE/
+// INDEX IF NOT EXISTS statements ledger.go's own guarantee already says
+// are idempotent no-ops.
+func ensureSetIDColumn(ctx context.Context, db *sql.DB) error {
+	_, err := db.ExecContext(ctx,
+		`ALTER TABLE `+quoteIdent(ledgerTableName)+` ADD COLUMN set_id TEXT NOT NULL DEFAULT ''`)
+	if err == nil || isDuplicateColumnError(err) {
+		return nil
+	}
+	return cascade.Wrap(cascade.KindUnavailable, err, "migrate: add set_id column to "+ledgerTableName)
+}
+
+// isDuplicateColumnError reports whether err is the driver's "this column
+// already exists" refusal — both modernc-sqlite ("duplicate column name:
+// set_id") and Postgres ("column \"set_id\" ... already exists") report
+// this as a plain error with no typed sentinel, so string matching is the
+// only real-counterpart signal either driver gives.
+func isDuplicateColumnError(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "duplicate column") || strings.Contains(msg, "already exists")
 }
 
 // currentSchemaVersion returns MAX(schema_version) recorded in the
-// ledger, or 0 if the ledger has no rows yet (a fresh database).
-func currentSchemaVersion(ctx context.Context, db *sql.DB) (int, error) {
+// ledger for setID, or 0 if that set has no rows yet (a fresh set, or a
+// fresh database). Scoped per R-16.77: a legacy row (set_id = "") or a
+// different set's rows never affect this result.
+func currentSchemaVersion(ctx context.Context, db *sql.DB, dialect Dialect, setID string) (int, error) {
 	var version sql.NullInt64
-	row := db.QueryRowContext(ctx, `SELECT MAX(schema_version) FROM `+quoteIdent(ledgerTableName))
+	row := db.QueryRowContext(ctx,
+		`SELECT MAX(schema_version) FROM `+quoteIdent(ledgerTableName)+` WHERE set_id = `+paramPlaceholder(dialect, 1),
+		setID)
 	if err := row.Scan(&version); err != nil {
 		return 0, cascade.Wrap(cascade.KindUnavailable, err, "migrate: read current schema_version")
 	}
@@ -79,12 +115,15 @@ func paramPlaceholder(dialect Dialect, i int) string {
 	return "?"
 }
 
-// ledgerRowsForVersion returns every ledger row recorded for
-// schemaVersion, in application order (ORDER BY id).
-func ledgerRowsForVersion(ctx context.Context, db *sql.DB, dialect Dialect, schemaVersion int) ([]ledgerRow, error) {
+// ledgerRowsForVersion returns every ledger row recorded for setID at
+// schemaVersion, in application order (ORDER BY id). Scoped by set_id
+// (R-16.77) so a different set's rows at the same schemaVersion are
+// never returned here.
+func ledgerRowsForVersion(ctx context.Context, db *sql.DB, dialect Dialect, setID string, schemaVersion int) ([]ledgerRow, error) {
 	rows, err := db.QueryContext(ctx,
-		`SELECT schema_version, checksum, applied_at FROM `+quoteIdent(ledgerTableName)+` WHERE schema_version = `+paramPlaceholder(dialect, 1)+` ORDER BY id`,
-		schemaVersion)
+		`SELECT schema_version, checksum, applied_at FROM `+quoteIdent(ledgerTableName)+
+			` WHERE schema_version = `+paramPlaceholder(dialect, 1)+` AND set_id = `+paramPlaceholder(dialect, 2)+` ORDER BY id`,
+		schemaVersion, setID)
 	if err != nil {
 		return nil, cascade.Wrap(cascade.KindUnavailable, err, "migrate: read ledger rows")
 	}
@@ -104,12 +143,12 @@ func ledgerRowsForVersion(ctx context.Context, db *sql.DB, dialect Dialect, sche
 	return out, nil
 }
 
-// insertLedgerRow records one newly-applied step.
-func insertLedgerRow(ctx context.Context, db *sql.DB, dialect Dialect, schemaVersion int, checksum string, appliedAt time.Time) error {
+// insertLedgerRow records one newly-applied step under setID.
+func insertLedgerRow(ctx context.Context, db *sql.DB, dialect Dialect, setID string, schemaVersion int, checksum string, appliedAt time.Time) error {
 	_, err := db.ExecContext(ctx,
-		`INSERT INTO `+quoteIdent(ledgerTableName)+` (schema_version, checksum, applied_at) VALUES (`+
-			paramPlaceholder(dialect, 1)+`, `+paramPlaceholder(dialect, 2)+`, `+paramPlaceholder(dialect, 3)+`)`,
-		schemaVersion, checksum, appliedAt.Unix())
+		`INSERT INTO `+quoteIdent(ledgerTableName)+` (schema_version, checksum, applied_at, set_id) VALUES (`+
+			paramPlaceholder(dialect, 1)+`, `+paramPlaceholder(dialect, 2)+`, `+paramPlaceholder(dialect, 3)+`, `+paramPlaceholder(dialect, 4)+`)`,
+		schemaVersion, checksum, appliedAt.Unix(), setID)
 	if err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "migrate: insert ledger row")
 	}
