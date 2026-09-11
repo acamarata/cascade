@@ -70,7 +70,10 @@ func TestClientModelExecuteWrapper(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ModelExecute() error = %v", err)
 	}
-	if resp != wantResp {
+	// reflect.DeepEqual, not !=: ModelResponse now carries the slice
+	// fields Legs (R-21.214) and Selection.ReasonFlags (T0 unblock,
+	// P1-E11-W3-S22-T2), so the struct is no longer comparable with ==.
+	if !reflect.DeepEqual(resp, wantResp) {
 		t.Fatalf("ModelExecute() = %+v, want %+v", resp, wantResp)
 	}
 	if len(caller.calls) != 1 {

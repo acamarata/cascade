@@ -1,0 +1,14 @@
+# Force LF line endings on checkout for source and text files, regardless
+# of the checking-out platform's core.autocrlf setting. Windows CI checks
+# out with autocrlf true by default, which rewrites LF to CRLF; several
+# byte-exact golden/hash comparisons and gofmt (which flags CRLF as
+# unformatted) then fail on Windows for a reason that has nothing to do
+# with the code under test. See WINDOWS-PARITY-TRIAGE.md category C.
+* text=auto eol=lf
+
+# testdata/ subtrees are fixture bytes, not source: fuzz corpus seeds,
+# golden hashes, and deliberately-encoded (including CRLF) test inputs.
+# These must reach every platform byte-identical to what is committed, so
+# they are marked -text to opt them OUT of the line-ending normalization
+# above, not to reintroduce it selectively.
+**/testdata/** -text

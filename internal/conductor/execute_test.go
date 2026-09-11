@@ -203,17 +203,14 @@ func TestExecute_CancellationPropagation(t *testing.T) {
 	_ = drained
 }
 
-// TestExecute_FanOutParentResponseShape is PARTIALLY MET (S-23.T2): the
-// full parent-response shape R-21.214 describes (parent JobID, empty
-// Output, summed cost_record, index-ordered Legs) needs
-// provider.ModelRequest.FanOut and provider.ModelResponse.Legs/CostRecord,
-// which R-40.X8 places in pkg/provider/model.go - outside both S-22.T1's
-// and this ticket's files_scope. What IS provided and asserted here:
-// Executor.ExecuteFanOut (execute.go) routes n legs through FanOut
-// (fanout.go), using e.Execute as each leg's exec function, and returns
-// one index-ordered ModelResponse per leg, each with its own real JobID
-// from a real (audited) Execute call. See the journal for both sides of
-// the pkg/provider/model.go contradiction quoted.
+// TestExecute_FanOutParentResponseShape is MET (T0 unblock,
+// P1-E11-W3-S22-T1/S23-T2): Executor.ExecuteFanOut (execute.go) routes n
+// legs through FanOut (fanout.go), using e.Execute as each leg's exec
+// function, and returns one index-ordered ModelResponse per leg, each
+// with its own real JobID from a real (audited) Execute call.
+// TestExecute_FanOutParentResponseShape_Assembled (below) covers the full
+// R-21.214 parent shape (parent JobID, empty Output, summed Usage,
+// index-ordered Legs) that provider.ModelResponse.Legs now carries.
 // concurrencySafeRouter wraps a *fakeRouter's fixed-mapping behavior
 // without its unsynchronized calls counter (model_test.go's fakeRouter is
 // shared across every _test.go file in this package and is not safe for
@@ -248,5 +245,47 @@ func TestExecute_FanOutParentResponseShape(t *testing.T) {
 	}
 	if deps.audit.count() != 2 {
 		t.Fatalf("audit count = %d, want 2 (one per leg through Execute)", deps.audit.count())
+	}
+}
+
+// TestExecute_FanOutParentResponseShape_Assembled asserts
+// ExecuteFanOutResponse's R-21.214 parent shape: a parent JobID distinct
+// from every leg's own JobID, empty parent Output, Legs holding the same
+// index-ordered leg responses ExecuteFanOut returns, and parent Usage
+// equal to the sum of every leg's Usage.
+func TestExecute_FanOutParentResponseShape_Assembled(t *testing.T) {
+	cfg, _ := newReadyConfig(t)
+	cfg.Router = concurrencySafeRouter{}
+	exec, err := NewExecutor(cfg)
+	if err != nil {
+		t.Fatalf("NewExecutor: %v", err)
+	}
+	req := validReq()
+	parent, err := exec.ExecuteFanOutResponse(context.Background(), req, 3, nil, passthroughPermit, &spyJournal{})
+	if err != nil {
+		t.Fatalf("ExecuteFanOutResponse: %v", err)
+	}
+	if parent.JobID == "" {
+		t.Fatal("parent JobID is empty")
+	}
+	if parent.Output != "" {
+		t.Errorf("parent Output = %q, want empty", parent.Output)
+	}
+	if len(parent.Legs) != 3 {
+		t.Fatalf("len(parent.Legs) = %d, want 3", len(parent.Legs))
+	}
+	var wantInput, wantOutput int
+	for i, leg := range parent.Legs {
+		if leg.JobID == "" {
+			t.Errorf("leg %d: empty JobID", i)
+		}
+		if leg.JobID == parent.JobID {
+			t.Errorf("leg %d: JobID collides with parent JobID", i)
+		}
+		wantInput += leg.Usage.InputTokens
+		wantOutput += leg.Usage.OutputTokens
+	}
+	if parent.Usage.InputTokens != wantInput || parent.Usage.OutputTokens != wantOutput {
+		t.Errorf("parent Usage = %+v, want summed {%d %d}", parent.Usage, wantInput, wantOutput)
 	}
 }

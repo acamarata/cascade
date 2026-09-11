@@ -10,6 +10,7 @@
 package sqlite
 
 import (
+	"errors"
 	"os"
 
 	"golang.org/x/sys/unix"
@@ -36,7 +37,11 @@ func acquireExclusiveLock(path string) (unlock func() error, err error) {
 	}
 	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
 		_ = f.Close()
-		return nil, cascade.Wrapf(cascade.KindConflict, err, "sqlite: exclusive lock held by another process on %s", path)
+		// errors.Join, not a substitution: callers keep the STRONGER
+		// errors.Is(err, unix.EWOULDBLOCK) check (lock_unix_errno_test.go)
+		// as well as the new portable errors.Is(err, ErrLockHeld) one.
+		joined := errors.Join(err, ErrLockHeld)
+		return nil, cascade.Wrapf(cascade.KindConflict, joined, "sqlite: exclusive lock held by another process on %s", path)
 	}
 	return func() error {
 		_ = unix.Flock(int(f.Fd()), unix.LOCK_UN)

@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/internal/output"
+	"github.com/acamarata/cascade/internal/runtime"
 )
 
 // noColorFlag backs the --no-color persistent flag (07-CLI-COMMAND-TREE
@@ -57,7 +58,17 @@ func registerNoColorFlag(root *cobra.Command) {
 func main() {
 	root := newRootCmd()
 
-	err := root.Execute()
+	// ExecuteC (not Execute) returns the actually-resolved leaf command,
+	// so its Context() — populated by PersistentPreRunE's
+	// attachServerProfile (root.go/profile_attach.go) when --profile
+	// server is active — is reachable here to Close the composed
+	// ServerProfile's Postgres + pgvector connections before the process
+	// exits. Without this, every server-profile invocation would open
+	// real connections and never close them (P1-E17-W4-S38-T4).
+	cmd, err := root.ExecuteC()
+	if sp, ok := runtime.ServerProfileFrom(cmd.Context()); ok {
+		_ = sp.Close()
+	}
 
 	// internal/output.NewDefault is the sole sanctioned place any file in
 	// this module names os.Stdout/os.Stderr outside a _test.go file — see

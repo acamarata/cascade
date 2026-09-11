@@ -133,13 +133,6 @@
     "caller_site": "cmd/cascade/doctor.go"
   },
   {
-    "symbol": "providers/postgres.Open",
-    "reason": "The postgres provider is selectable by configuration, but no shipped code path resolves a provider by name yet, so nothing constructs it. Postgres is therefore unreachable in a running daemon regardless of configuration. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "expected_caller": "the provider resolution path that maps a configured driver name to its Open function",
-    "retire_ticket": "UNOWNED",
-    "caller_site": "internal/storage/provider_resolve.go"
-  },
-  {
     "symbol": "internal/memory.NewProjectionJob",
     "reason": "The projection is the memory store's derived read side. The memory CLI verbs (P1-E07-W2-S13-T3) deliberately do NOT run it: that ticket's recall is a direct file scan, because the indexed, ranked recall surface is the retrieval fusion path in Epic F, which is the query side this projection exists to serve. The forget pipeline (P1-E07-W2-S14-T4) has since landed and CONSUMES this job through an interface, so its ScrubRecord and Orphans methods have a real production caller; what is still missing is the composition root that CONSTRUCTS a job, which is why the constructor is still named here and the daemon's forget reports its index leg as not configured. A projection nothing ever runs indexes nothing, so this entry must not outlive that path.",
     "expected_caller": "the recall fusion path (Epic F S-11), which queries the rows it writes, and whatever schedules the projection run behind it",

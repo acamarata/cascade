@@ -148,8 +148,9 @@ func Open(ctx context.Context, path string, opts ...Option) (*Driver, error) {
 	// acquireExclusiveLock's three platform implementations (flock_darwin.go
 	// / flock_linux.go / flock_windows.go) each return a *cascade.Error
 	// with the Kind that already fits their failure (KindConflict for a
-	// held lock, KindUnsupported for windows's tier-2 refusal) — propagated
-	// as-is rather than re-wrapped, so the caller sees the real reason.
+	// held lock, KindUnavailable if the sidecar itself could not be
+	// opened) — propagated as-is rather than re-wrapped, so the caller
+	// sees the real reason.
 	unlock, err := acquireExclusiveLock(path)
 	if err != nil {
 		return nil, err

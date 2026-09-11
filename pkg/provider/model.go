@@ -148,6 +148,14 @@ type Selection struct {
 	Provider string `json:"provider"`
 	// Model is the resolved model identifier within that lane.
 	Model string `json:"model"`
+	// ReasonFlags carries the router's own filter-by-filter provenance
+	// tags for this pick (e.g. "cost:cheapest-selected"), in filter
+	// order. Added (T0 decision, P1-E11-W3-S22-T2 unblock) so the frozen
+	// Router.Select path - not only the SelectExplain companion - can
+	// carry an explanation on the value it already returns; a router
+	// that does not populate it leaves the zero value (nil), which is a
+	// valid "no explanation given" state, never an error.
+	ReasonFlags []string `json:"reason_flags,omitempty"`
 }
 
 // ModelRequest is the single job-dispatch shape every model.execute caller
@@ -176,6 +184,19 @@ type ModelRequest struct {
 	// this job needs; the router excludes any lane whose Capabilities does
 	// not satisfy every field set here.
 	RequiredCapabilities RequiredCapabilities `json:"required_capabilities"`
+	// FanOut is the leg count for R-21.214 concurrent N-way dispatch: 0
+	// or 1 means a single, ordinary dispatch. A caller never sets this
+	// above 1 on a leg request itself - internal/conductor's FanOut
+	// primitive resets every dispatched leg's copy to exactly 1 (R-21.214
+	// "each leg clears ReservationID" and resets FanOut), so a driver
+	// that only ever sees FanOut in {0,1} is not a defect.
+	FanOut int `json:"fan_out,omitempty"`
+	// ReservationID names the AO/S-79.T4 reservation this request was
+	// admitted under, when one exists. internal/conductor's FanOut
+	// primitive clears this field on every per-leg copy before dispatch
+	// (R-21.214), since each leg takes its own reservation rather than
+	// inheriting the parent's.
+	ReservationID string `json:"reservation_id,omitempty"`
 }
 
 // ModelResponse is what a completed (or terminally failed) ModelRequest
@@ -189,8 +210,19 @@ type ModelResponse struct {
 	Selection Selection `json:"selection"`
 	// Output is the model's final text output.
 	Output string `json:"output"`
-	// Usage reports token counts for this exchange.
+	// Usage reports token counts for this exchange. On a fan-out parent
+	// response (Legs non-empty), Usage is the sum of every leg's own
+	// Usage (R-21.214 "summed cost") rather than a separately-typed cost
+	// record - Usage already carries per-exchange token accounting, and
+	// this ticket adds no second, competing cost type for the same
+	// concept.
 	Usage Usage `json:"usage"`
+	// Legs holds one ModelResponse per R-21.214 fan-out leg, in leg-index
+	// order, when this response is a fan-out parent. A non-fan-out
+	// response leaves Legs nil. A parent response's own Output is always
+	// empty and its own JobID identifies the fan-out dispatch itself, not
+	// any one leg.
+	Legs []ModelResponse `json:"legs,omitempty"`
 }
 
 // ModelExecutor executes ModelRequest jobs through the daemon's model.execute

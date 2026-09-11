@@ -150,14 +150,6 @@ func TestFanOut_NegativeN_InvalidRequest(t *testing.T) {
 	}
 }
 
-// TestFanOut_LegFanOutResetToOne documents an UNMET acceptance criterion:
-// provider.ModelRequest has no FanOut field to reset (pkg/provider/model.go
-// is outside this ticket's files_scope), so there is nothing this test can
-// assert about. See the journal's contradiction entry.
-func TestFanOut_LegFanOutResetToOne(t *testing.T) {
-	t.Skip("provider.ModelRequest has no FanOut field; pkg/provider/model.go is outside this ticket's files_scope (see journal)")
-}
-
 func TestFanOut_NoAdmitCalled(t *testing.T) {
 	// FanOut imports no governor package and declares no
 	// AdmissionController (R-21.214) - this is a static, compile-time
@@ -180,13 +172,6 @@ func TestFanOut_NoAdmitCalled(t *testing.T) {
 	if atomic.LoadInt32(&permitCalls) != 3 {
 		t.Fatalf("withPermit calls = %d, want 3 (one per leg, never a separate Admit)", atomic.LoadInt32(&permitCalls))
 	}
-}
-
-// TestFanOut_PerLegReservationCleared documents an UNMET acceptance
-// criterion for the same reason as TestFanOut_LegFanOutResetToOne:
-// provider.ModelRequest has no ReservationID field.
-func TestFanOut_PerLegReservationCleared(t *testing.T) {
-	t.Skip("provider.ModelRequest has no ReservationID field; pkg/provider/model.go is outside this ticket's files_scope (see journal)")
 }
 
 func TestFanOut_ResumeSkipsCompletedLegs(t *testing.T) {

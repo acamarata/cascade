@@ -136,11 +136,10 @@ func (r *DefaultRouter) buildSnapshot(ctx context.Context) (routeSnapshot, error
 
 // Select implements the frozen Router interface (S-22.T1's model.go):
 // Select(ctx, req, exclude...) (provider.Selection, error). It is a thin
-// wrapper over SelectExplain that discards the reason flags, because the
-// frozen interface signature has no field to carry them on (see the
-// journal's CONTRACT DEVIATION entry: R-40.X12 locks Selection to J/S-19
-// .T1's pkg/provider type, which declares only LaneID, Provider and
-// Model).
+// wrapper over SelectExplain that discards SelectExplain's own second
+// return value, but the explanation is not lost: provider.Selection now
+// carries ReasonFlags directly (T0 decision, P1-E11-W3-S22-T2 unblock),
+// and filterCost sets it on the exact Selection this method returns.
 func (r *DefaultRouter) Select(ctx context.Context, req provider.ModelRequest, exclude ...string) (provider.Selection, error) {
 	sel, _, err := r.SelectExplain(ctx, req, exclude...)
 	return sel, err

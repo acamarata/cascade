@@ -136,7 +136,7 @@ func Apply(ctx context.Context, cfg ApplyConfig, set MigrationSet) error {
 		return nil
 	}
 
-	applied, err := ledgerRowsForVersion(ctx, cfg.DB, set.SchemaVersion)
+	applied, err := ledgerRowsForVersion(ctx, cfg.DB, cfg.Dialect, set.SchemaVersion)
 	if err != nil {
 		return err
 	}
@@ -215,7 +215,7 @@ func applyRemainingSteps(ctx context.Context, cfg ApplyConfig, set MigrationSet,
 				return cascade.Wrapf(cascade.KindUnavailable, err, "migrate: apply schema_version %d step %d", set.SchemaVersion, i)
 			}
 		}
-		if err := insertLedgerRow(ctx, cfg.DB, set.SchemaVersion, stepChecksum(step), cfg.Clock.Now()); err != nil {
+		if err := insertLedgerRow(ctx, cfg.DB, cfg.Dialect, set.SchemaVersion, stepChecksum(step), cfg.Clock.Now()); err != nil {
 			return err
 		}
 	}

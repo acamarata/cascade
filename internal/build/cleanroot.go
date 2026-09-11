@@ -28,10 +28,18 @@ import (
 // yet — their eventual presence must never turn this gate red, and their
 // current absence must never turn it red either.
 var CleanRootAllowedFiles = map[string]bool{
-	"README.md":        true,
-	"LICENSE":          true,
-	"CHANGELOG.md":     true,
-	".gitignore":       true,
+	"README.md":    true,
+	"LICENSE":      true,
+	"CHANGELOG.md": true,
+	".gitignore":   true,
+	// .gitattributes is the same KIND of file as .gitignore: a git control
+	// file that only works at the repository root. It is not decoration
+	// here. It carries `* text=auto eol=lf`, which stops the Windows CI
+	// runner's default core.autocrlf from rewriting the whole tree to CRLF
+	// on checkout - that rewrite was flagging every tracked .go file as not
+	// gofmt-clean and accounted for roughly 35-40 Windows failures. Removing
+	// it to satisfy a root-tidiness rule would re-break Windows.
+	".gitattributes":   true,
 	"install.sh":       true,
 	"go.mod":           true,
 	"go.sum":           true,

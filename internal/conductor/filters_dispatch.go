@@ -100,9 +100,12 @@ func filterCost(cand laneCandidate, classes []TaskClassRow, req provider.ModelRe
 	_ = resolveLaneAffinity(classes, req.TaskClass)
 	flags = append(flags, "cost:cheapest-selected")
 	sel := provider.Selection{
-		LaneID:   cand.lane.LaneName,
-		Provider: cand.provider.Name,
-		Model:    resolveModel(cand),
+		LaneID:      cand.lane.LaneName,
+		Provider:    cand.provider.Name,
+		Model:       resolveModel(cand),
+		ReasonFlags: flags, // T0 decision (S-22.T2 unblock): the frozen
+		// Select path now carries its own explanation on the value it
+		// returns, not only through the SelectExplain companion.
 	}
 	return sel, flags, nil
 }

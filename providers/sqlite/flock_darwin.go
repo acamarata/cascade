@@ -12,6 +12,7 @@
 package sqlite
 
 import (
+	"errors"
 	"os"
 	"syscall"
 
@@ -37,7 +38,11 @@ func acquireExclusiveLock(path string) (unlock func() error, err error) {
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		_ = f.Close()
-		return nil, cascade.Wrapf(cascade.KindConflict, err, "sqlite: exclusive lock held by another process on %s", path)
+		// errors.Join, not a substitution: callers keep the STRONGER
+		// errors.Is(err, syscall.EWOULDBLOCK) check (lock_unix_errno_test.go)
+		// as well as the new portable errors.Is(err, ErrLockHeld) one.
+		joined := errors.Join(err, ErrLockHeld)
+		return nil, cascade.Wrapf(cascade.KindConflict, joined, "sqlite: exclusive lock held by another process on %s", path)
 	}
 	return func() error {
 		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)

@@ -2,57 +2,50 @@
 
 This directory has no fixtures. It exists to record the provenance and the
 honest scope of the `storetest-under-docker` CI job
-(`.github/workflows/ci.yml`), per this ticket's (P1-E02-W1-S03-T5)
-`docs_updates` and 12-QUALITY-CONSTITUTION.md Art.2 (real-counterpart
-verification claims must be accurate, never implied beyond what actually
-ran).
+(`.github/workflows/ci.yml`), per 12-QUALITY-CONSTITUTION.md Art.2
+(real-counterpart verification claims must be accurate, never implied
+beyond what actually ran).
 
-## What the lane runs
+## What the lane runs (P1-E17-W4-S38-T4, current state)
 
-- **Image:** `postgres:17`, pulled from the official DockerHub Postgres
-  image (`docker.io/library/postgres`), as a GitHub Actions `services:`
-  container on the `build-test`-family `ubuntu-latest` runner.
-- **Command:** `go test -tags=postgres -count=1 ./providers/postgres/...`,
-  which runs `driver_test.go`'s `TestPostgresStore_Conformance` — the
-  shared `internal/storage/storetest.RunStoreTests` suite driven against
-  `providers/postgres`'s stub `Driver`.
-- **Job flag:** `continue-on-error: true`.
-- **Added:** 2026-09-02, by P1-E02-W1-S03-T5.
+- **Image:** `pgvector/pgvector:pg16` — a Postgres 16 image with the
+  pgvector extension available (this job's service container is shared
+  with the `pgvector-storetest-under-docker` job, which needs the
+  extension; a plain `postgres:17` image, used before this ticket, does
+  not carry it).
+- **Command:** `go test -tags="postgres integration" -count=1 -race
+  ./providers/postgres/... -v`.
+- **Job status:** REQUIRED (`continue-on-error` removed by this ticket).
 
-## W1 status: lane-plumbing-only (allowed-fail)
+## History
 
-`providers/postgres/store.go` in W1 is a total build-tagged stub
-(`//go:build postgres`): every `provider.Store` method returns
-`cascade.ErrUnsupported` without touching the wire — `Open` never dials
-the container at all. Every `storetest.RunStoreTests` sub-test therefore
-FAILS against it, by construction, every time this job runs.
+**P1-E02-W1-S03-T5 (2026-09-02):** `providers/postgres/store.go` was a
+total build-tagged stub — every `provider.Store` method returned
+`cascade.ErrUnsupported` without touching the wire. Every
+`storetest.RunStoreTests` sub-test failed by construction, so the job
+carried `continue-on-error: true` (allowed-fail per 06-FORGE-SPEC.md
+§5.19, D-2: "the LATER ticket's AC carries the integration test").
 
-That failure is expected and is why the job carries
-`continue-on-error: true` with the job-level comment `allowed-fail W1 —
-Q/S-38.T4 carries the passing integration AC` in `ci.yml`. This ticket's
-allowed-fail precedent is 06-FORGE-SPEC.md §5.19 (D-2): "where a W1
-ticket needs a later subsystem, the leg is allowed-fail and the LATER
-ticket's AC carries the integration test."
+**P1-E17-W4-S38-T4 (this ticket) CLOSES that leg.** `store.go` is deleted;
+the real driver (`postgres.go` + `postgres_store.go` + `postgres_tx.go` +
+`postgres_errors.go` + `postgres_migrate.go`) speaks the actual Postgres
+wire via `jackc/pgx/v5`'s `stdlib` `database/sql` adapter (pure Go, no
+CGO). `storetest.RunStoreTests` passes for real against the live
+`pgvector/pgvector:pg16` service container — see
+`providers/postgres/integration_test.go`'s `TestPostgresStoretestUnderDocker`.
+The same file's `TestPostgresLiveMigration` proves
+`internal/storage/migrate`'s Postgres dialect applies live: ordered apply,
+`schema_version`, `MinimumReaderVersion` downgrade refusal, and idempotent
+re-apply.
 
-**What this lane DOES prove in W1:** the `postgres:17` service container
-is provisioned and reachable by the runner, and the stub compiles and
-runs (fails, honestly) under `-tags=postgres` in that real environment —
-lane plumbing only.
+**What this lane proves:** real Postgres wire behavior for every
+`provider.Store` method including transactions and `CompareAndSwap`
+conflict detection, `-race` clean; live schema migration; the named error
+paths (unreachable server, missing env-ref — `internal/runtime`'s own
+lane — auth failure). See `docs/storage.md` §Server profile for the full
+picture, including the collation gotcha this ticket found live
+(`postgres.go`'s `schemaDDL` doc comment).
 
-**What this lane does NOT prove in W1:** any real Postgres wire behavior.
-The stub refuses before it ever reaches the wire, so no query, no
-connection-pool behavior, and no error-code mapping is exercised here.
-Claiming otherwise would violate Art.2 — this file exists precisely so no
-later reader mistakes a green "container reachable" step for a passing
-conformance run.
-
-## Q/S-38.T4 (completion reference)
-
-Q/S-38.T4 replaces `store.go`'s stub body with a real `jackc/pgx`-backed
-driver in this same package, adds the native-Postgres-error-code ->
-taxonomy-`Kind` mapping (`errors.go`, mirroring
-`providers/sqlite/errors.go`'s per-code approach rather than collapsing
-every failure to `KindUnavailable`), and removes this job's
-`continue-on-error: true` once `storetest.RunStoreTests` passes for real
-against this same lane. No other change to the job's shape (image,
-command, service definition) is expected to be needed.
+**What this lane does NOT prove:** the Redis/S3 legs of the server
+profile (S-38.T6/T7, not yet built) or the cross-machine sync round-trip
+(S-38.T5, gate_only).

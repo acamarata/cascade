@@ -80,7 +80,11 @@ func newRootCmd() *cobra.Command {
 			if globalFlags.Quiet && globalFlags.Verbose {
 				return cascade.New(cascade.KindInvalidInput, "--quiet and --verbose are mutually exclusive")
 			}
-			cmd.SetContext(probeDaemonlessAndAttach(cmd.Context()))
+			ctx, err := attachServerProfile(probeDaemonlessAndAttach(cmd.Context()))
+			if err != nil {
+				return err
+			}
+			cmd.SetContext(ctx)
 			return nil
 		},
 	}
@@ -267,21 +271,13 @@ func (l lazyPaths) StorageRoot(profile runtime.Profile) string {
 }
 
 // probeDaemonlessAndAttach is the §D-3 socket-probe auto-fallback: run
-// ALWAYS, for every command, before any subcommand's RunE — there is no
-// --daemonless flag (07-CLI-COMMAND-TREE's global-flag set is fixed),
-// this probe is the only activation path. It stats+dials the socket via
-// runtime.ProbeDaemonless (which itself reuses probeSocket, the SAME
-// function recovery scanning uses — no second probe), attaches the
-// resulting DaemonlessState to ctx for every command/subsystem to read
-// via runtime.DaemonlessStateFrom, and — in non-quiet mode — emits a
-// stderr notice through internal/output (never a bare fmt.Print) when
-// embedded mode activates.
-//
-// A path-resolution failure (e.g. HOME unresolvable) is reported the same
-// way lazyPaths handles it elsewhere in this file: the probe is skipped,
-// ctx is returned unchanged, and DaemonlessStateFrom's ok=false tells a
-// caller "unknown," never "confirmed not embedded" — never a guessed
-// answer standing in for a real one.
+// ALWAYS, before any subcommand's RunE (no --daemonless flag exists). It
+// dials the socket via runtime.ProbeDaemonless (reusing probeSocket, the
+// same function recovery scanning uses), attaches the resulting
+// DaemonlessState to ctx for runtime.DaemonlessStateFrom, and — non-quiet
+// mode only — warns via internal/output when embedded mode activates. A
+// path-resolution failure skips the probe and returns ctx unchanged;
+// DaemonlessStateFrom's ok=false then means "unknown," never a guess.
 func probeDaemonlessAndAttach(ctx context.Context) context.Context {
 	paths, err := runtime.NewDefaultPathProvider()
 	if err != nil {

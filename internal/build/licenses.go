@@ -134,6 +134,22 @@ var KnownModuleLicenses = map[string]string{
 	"modernc.org/mathutil": "BSD-3-Clause",
 	"modernc.org/memory":   "BSD-3-Clause",
 	"modernc.org/sqlite":   "BSD-3-Clause",
+	// P1-E17-W4-S38-T4 added github.com/jackc/pgx/v5 (the pure-Go, no-CGO
+	// Postgres wire driver providers/postgres and providers/pgvector are
+	// built on, replacing the B/S-03.T5 stub) and its transitive closure:
+	// github.com/jackc/pgpassfile, github.com/jackc/pgservicefile,
+	// github.com/jackc/puddle/v2, golang.org/x/sync, golang.org/x/text.
+	// Verified against each module's module-cache LICENSE file: the three
+	// jackc/* modules are MIT (same author/header as jackc/pgconn family
+	// already common in the Go Postgres ecosystem); golang.org/x/sync and
+	// golang.org/x/text carry the same standard Go Authors BSD-3-Clause
+	// text as golang.org/x/sys and golang.org/x/mod above.
+	"github.com/jackc/pgx/v5":        "MIT",
+	"github.com/jackc/pgpassfile":    "MIT",
+	"github.com/jackc/pgservicefile": "MIT",
+	"github.com/jackc/puddle/v2":     "MIT",
+	"golang.org/x/sync":              "BSD-3-Clause",
+	"golang.org/x/text":              "BSD-3-Clause",
 }
 
 // LicenseDependency is one require-directive entry parsed from a go.mod:

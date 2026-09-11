@@ -136,6 +136,12 @@ func TestRouter_CapabilityFilter(t *testing.T) {
 	if sel.LaneID != "lane-a" {
 		t.Fatalf("LaneID = %q, want lane-a", sel.LaneID)
 	}
+	// T0 unblock (P1-E11-W3-S22-T2): the frozen Select path itself now
+	// carries an explanation on the Selection it returns, not only
+	// through the SelectExplain companion.
+	if len(sel.ReasonFlags) == 0 {
+		t.Error("sel.ReasonFlags is empty via the frozen Select path, want non-empty")
+	}
 }
 
 // TestRouter_RequiredCapability_NoMatch asserts a required capability

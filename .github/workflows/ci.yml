@@ -338,24 +338,19 @@ jobs:
         run: go test -run '^TestIdentifierSweepGate_Live$' ./internal/build/ -v
 
   storetest-under-docker:
-    # P1-E02-W1-S03-T5: allowed-fail W1 — Q/S-38.T4 carries the passing
-    # integration AC. providers/postgres/store.go is a build-tagged total
-    # stub in W1 (every provider.Store method returns
-    # cascade.ErrUnsupported without touching the wire), so every
-    # storetest.RunStoreTests sub-test this job runs is EXPECTED to fail —
-    # that is exactly what continue-on-error: true below is for. This lane
-    # proves plumbing only: the postgres:17 service container is
-    # provisioned and reachable, and the stub compiles and runs under
-    # -tags=postgres in that real environment (06-FORGE-SPEC.md §5.19,
-    # D-2 allowed-fail precedent). No Postgres wire behavior is verified
-    # here — see providers/postgres/testdata/README.md for the full,
-    # honest scope statement and the Q/S-38.T4 completion reference.
-    name: storetest-under-docker (postgres, allowed-fail W1)
+    # P1-E17-W4-S38-T4 CLOSES the P1-E02-W1-S03-T5 rule-19 allowed-fail
+    # leg (06 §5.19: "B/S-03.T5 (postgres → Q/S-38.T4)"): the driver is no
+    # longer a stub, so this job is REQUIRED — continue-on-error is gone.
+    # The service image is pgvector/pgvector:pg16 (a Postgres 16 image
+    # with the pgvector extension available), not bare postgres:17,
+    # because this job now ALSO backs the pgvector conformance lane below
+    # — one real server, both Store and VectorStore families proven
+    # against it, per Art.2 (never a hand-rolled fake).
+    name: storetest-under-docker (postgres, required)
     runs-on: ubuntu-latest
-    continue-on-error: true
     services:
       postgres:
-        image: postgres:17
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: cascade_test
@@ -376,14 +371,83 @@ jobs:
       - name: verify postgres service container is reachable
         run: pg_isready -h localhost -p 5432 -U postgres
 
-      # CASCADE_TEST_POSTGRES_DSN fixes the DSN convention Q/S-38.T4's
-      # real driver will consume; the W1 stub never reads it (Open never
-      # dials), so this env var is inert today and only documents the
-      # lane's future shape.
-      - name: go test -tags=postgres ./providers/postgres/...
+      - name: go test -tags="postgres integration" ./providers/postgres/...
         env:
           CASCADE_TEST_POSTGRES_DSN: postgres://postgres:postgres@localhost:5432/cascade_test?sslmode=disable
-        run: go test -tags=postgres -count=1 ./providers/postgres/... -v
+        run: go test -tags="postgres integration" -count=1 -race ./providers/postgres/... -v
+
+  pgvector-storetest-under-docker:
+    # P1-E17-W4-S38-T4: the pgvector VectorStore driver's conformance run
+    # against the SAME pgvector-enabled server image as the job above —
+    # a separate job (rather than a step in storetest-under-docker) so a
+    # pgvector-specific failure is visible on its own CI check name.
+    name: pgvector-storetest-under-docker (required)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cascade_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: verify postgres service container is reachable
+        run: pg_isready -h localhost -p 5432 -U postgres
+
+      - name: go test -tags="postgres integration" ./providers/pgvector/...
+        env:
+          CASCADE_TEST_POSTGRES_DSN: postgres://postgres:postgres@localhost:5432/cascade_test?sslmode=disable
+        run: go test -tags="postgres integration" -count=1 -race ./providers/pgvector/... -v
+
+  server-profile-assembly:
+    # P1-E17-W4-S38-T4: internal/runtime's profile-agnostic composition
+    # pieces (DSN env-ref resolution, the live migration closure) against
+    # the same real server. TestServerProfileAssembly is this ticket's
+    # named check; internal/runtime carries no postgres build tag itself
+    # (it never imports providers/**, per Art.10.2), so this job's own
+    # tests run untagged — the `integration` tag alone gates the live-DB
+    # cases, matching this package's existing tag convention.
+    name: server-profile-assembly (required)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cascade_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: verify postgres service container is reachable
+        run: pg_isready -h localhost -p 5432 -U postgres
+
+      - name: go test ./internal/runtime/... (server profile composition)
+        env:
+          CASCADE_TEST_POSTGRES_DSN: postgres://postgres:postgres@localhost:5432/cascade_test?sslmode=disable
+        run: go test -count=1 -race ./internal/runtime/... -v
 
   node-tunnel-real-sshd:
     # P1-E17-W4-S36-T3, Art.2: the ssh tunnel exercised against a REAL
@@ -444,14 +508,14 @@ jobs:
 
   ci-gate:
     name: ci-gate (required status)
-    needs: [build-test, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate]
+    needs: [build-test, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, server-profile-assembly]
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: All lanes green
         run: |
           set -eu
-          for r in "${{ needs.build-test.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}" "${{ needs.retrieval-eval-gate.result }}"; do
+          for r in "${{ needs.build-test.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}" "${{ needs.retrieval-eval-gate.result }}" "${{ needs.storetest-under-docker.result }}" "${{ needs.pgvector-storetest-under-docker.result }}" "${{ needs.server-profile-assembly.result }}"; do
             if [ "$r" != "success" ]; then
               echo "ci-gate: a required lane did not succeed ($r)"
               exit 1

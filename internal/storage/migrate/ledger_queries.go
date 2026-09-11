@@ -3,6 +3,7 @@ package migrate
 import (
 	"context"
 	"database/sql"
+	"strconv"
 	"time"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -58,11 +59,31 @@ func currentSchemaVersion(ctx context.Context, db *sql.DB) (int, error) {
 	return int(version.Int64), nil
 }
 
+// paramPlaceholder returns the dialect-correct bound-parameter marker for
+// the i'th (1-indexed) parameter in a query: SQLite (and every other
+// database/sql driver that speaks the ordinal "?" convention) uses a bare
+// "?" regardless of position; Postgres's extended query protocol requires
+// the positional "$1", "$2", ... form instead. Every hand-written query in
+// this file that carries a bound parameter goes through this helper — a
+// literal "?" hard-coded into a query string is exactly the bug this
+// function exists to prevent (P1-E17-W4-S38-T4 found ledgerRowsForVersion
+// and insertLedgerRow shipping a bare "?" that had never been exercised
+// against a live Postgres server before this ticket's docker lane;
+// Postgres's own driver rejects "?" outright as a syntax error rather than
+// silently accepting it, which is why the SQLite-only lane never caught
+// this).
+func paramPlaceholder(dialect Dialect, i int) string {
+	if dialect != nil && dialect.Name() == "postgres" {
+		return "$" + strconv.Itoa(i)
+	}
+	return "?"
+}
+
 // ledgerRowsForVersion returns every ledger row recorded for
 // schemaVersion, in application order (ORDER BY id).
-func ledgerRowsForVersion(ctx context.Context, db *sql.DB, schemaVersion int) ([]ledgerRow, error) {
+func ledgerRowsForVersion(ctx context.Context, db *sql.DB, dialect Dialect, schemaVersion int) ([]ledgerRow, error) {
 	rows, err := db.QueryContext(ctx,
-		`SELECT schema_version, checksum, applied_at FROM `+quoteIdent(ledgerTableName)+` WHERE schema_version = ? ORDER BY id`,
+		`SELECT schema_version, checksum, applied_at FROM `+quoteIdent(ledgerTableName)+` WHERE schema_version = `+paramPlaceholder(dialect, 1)+` ORDER BY id`,
 		schemaVersion)
 	if err != nil {
 		return nil, cascade.Wrap(cascade.KindUnavailable, err, "migrate: read ledger rows")
@@ -84,9 +105,10 @@ func ledgerRowsForVersion(ctx context.Context, db *sql.DB, schemaVersion int) ([
 }
 
 // insertLedgerRow records one newly-applied step.
-func insertLedgerRow(ctx context.Context, db *sql.DB, schemaVersion int, checksum string, appliedAt time.Time) error {
+func insertLedgerRow(ctx context.Context, db *sql.DB, dialect Dialect, schemaVersion int, checksum string, appliedAt time.Time) error {
 	_, err := db.ExecContext(ctx,
-		`INSERT INTO `+quoteIdent(ledgerTableName)+` (schema_version, checksum, applied_at) VALUES (?, ?, ?)`,
+		`INSERT INTO `+quoteIdent(ledgerTableName)+` (schema_version, checksum, applied_at) VALUES (`+
+			paramPlaceholder(dialect, 1)+`, `+paramPlaceholder(dialect, 2)+`, `+paramPlaceholder(dialect, 3)+`)`,
 		schemaVersion, checksum, appliedAt.Unix())
 	if err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "migrate: insert ledger row")

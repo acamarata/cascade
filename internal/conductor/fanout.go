@@ -17,6 +17,10 @@
 //   model input or output content reaches a journal entry - only task_id,
 //   leg_index, a request digest and a job id.
 // SPORT: conductor.fanout/ADD (P1-E11-W3-S23-T2).
+// T0 note (P1-E11-W3-S22-T1/T2/S23-T2 unblock): once pkg/provider/model.go
+// gained FanOut, ReservationID and ModelResponse.Legs, dispatchLeg resets
+// and clears the first two per leg, and ExecuteFanOutResponse (below)
+// assembles the R-21.214 parent-response shape from FanOut's own results.
 
 package conductor
 
@@ -139,11 +143,14 @@ func dispatchLeg(
 		return legResult{index: idx, err: err}
 	}
 
-	legReq := req // per-leg copy; FanOut/ReservationID clearing is not
-	// possible here - provider.ModelRequest carries neither field and
-	// pkg/provider/model.go is outside this ticket's files_scope. See the
-	// journal's contradiction entry (mirrors S-22.T1's own inherited
-	// blocker).
+	legReq := req // per-leg copy
+	// R-21.214: each dispatched leg resets its own FanOut to 1 (never the
+	// parent's leg count) and clears ReservationID (a leg takes its own
+	// reservation rather than inheriting the parent's) - T0 decision,
+	// P1-E11-W3-S23-T2 unblock, once pkg/provider/model.go carried both
+	// fields.
+	legReq.FanOut = 1
+	legReq.ReservationID = ""
 
 	digest := audit.HashParams([]byte(legReq.TaskID + "|" + strconv.Itoa(idx)))
 	_ = journal.AppendLeg(ctx, "fanout_leg_started", legReq.TaskID, idx, map[string]string{
@@ -172,4 +179,35 @@ func dispatchLeg(
 	})
 
 	return legResult{index: idx, resp: resp, err: legErr}
+}
+
+// ExecuteFanOutResponse dispatches n legs via Executor.ExecuteFanOut and
+// assembles the R-21.214 fan-out parent-response shape: a fresh parent
+// JobID, empty Output, Usage summed across every leg, and Legs holding
+// each leg's own response in index order. It is additive alongside
+// ExecuteFanOut (which keeps returning the raw index-ordered leg slice
+// unchanged) rather than a replacement, so no existing caller's signature
+// changes.
+func (e *Executor) ExecuteFanOutResponse(ctx context.Context, req provider.ModelRequest, n int, completed map[int]JobID, withPermit WithPermitFn, journal JournalAppender) (provider.ModelResponse, error) {
+	legs, err := e.ExecuteFanOut(ctx, req, n, completed, withPermit, journal)
+	if err != nil {
+		return provider.ModelResponse{}, err
+	}
+	return assembleFanOutParent(legs)
+}
+
+// assembleFanOutParent builds the R-21.214 parent shape from an
+// index-ordered leg slice: a fresh JobID, empty Output, Legs set verbatim,
+// and Usage summed across every leg.
+func assembleFanOutParent(legs []provider.ModelResponse) (provider.ModelResponse, error) {
+	jobID, err := cascade.NewID()
+	if err != nil {
+		return provider.ModelResponse{}, cascade.Wrap(cascade.KindInternal, err, "conductor: minting fan-out parent job id")
+	}
+	parent := provider.ModelResponse{JobID: provider.JobID(jobID), Legs: legs}
+	for _, leg := range legs {
+		parent.Usage.InputTokens += leg.Usage.InputTokens
+		parent.Usage.OutputTokens += leg.Usage.OutputTokens
+	}
+	return parent, nil
 }

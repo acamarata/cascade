@@ -34,21 +34,24 @@ import (
 // SPORT: providers.sqlite.driver/CHANGED (P1-E02-W1-S03-T1).
 
 // LockProbeResult reports the outcome of ProbeExclusiveLock's non-blocking,
-// non-acquiring check for the §D-3 sidecar exclusive lock. Exactly one of
-// Held or Unsupported is meaningful per platform: darwin/linux report Held
-// (Unsupported always false); windows always reports Unsupported (Held is
-// meaningless there, since flock_windows.go's acquireExclusiveLock never
-// actually probes anything — see ProbeExclusiveLock's doc comment).
+// non-acquiring check for the §D-3 sidecar exclusive lock. All three
+// platforms (darwin, linux, windows) now report a real Held value —
+// flock_windows.go implements an actual LockFileEx lock rather than the
+// former unconditional tier-2 refusal, so Unsupported is unreachable from
+// the current three acquireExclusiveLock implementations. The field stays
+// (StorageHealthCheck, outside this package, already switches on it) as a
+// forward-compatible reporting slot for any future platform whose
+// acquireExclusiveLock genuinely cannot probe.
 type LockProbeResult struct {
 	// Held reports that another process currently holds the exclusive
 	// lock on the probed database file. ProbeExclusiveLock cannot tell a
 	// live owner apart from a stale lock left by a crashed process — both
-	// present identically at the flock(2) layer — so callers
+	// present identically at the OS lock layer — so callers
 	// (StorageHealthCheck) report presence only, never "stale" as a firm
 	// diagnosis.
 	Held bool
-	// Unsupported reports the windows tier-2 refusal: this platform has
-	// no real probe implementation, so Held carries no information.
+	// Unsupported is unreachable from darwin, linux and windows as of the
+	// windows LockFileEx ticket; see this type's doc comment.
 	Unsupported bool
 	// Detail is a human-readable elaboration (the underlying refusal or
 	// conflict message), always populated when Held or Unsupported is
@@ -63,12 +66,13 @@ type LockProbeResult struct {
 // Art.10.2 only denies providers/** importing internal/**). It wraps the
 // SAME per-platform acquireExclusiveLock helpers Open already uses
 // (flock_darwin.go / flock_linux.go's LOCK_EX|LOCK_NB, flock_windows.go's
-// tier-2 refusal): on darwin/linux it attempts the identical non-blocking
-// acquire and, if it succeeds, releases immediately before returning — this
-// function never holds the lock beyond the probe itself, so it can never be
-// the thing that makes a real Open elsewhere fail. A cascade.KindConflict
-// failure means some other lock holder (live daemon or a stale lock from a
-// crashed process) currently owns it; a cascade.KindUnsupported failure
+// LockFileEx): on all three platforms it attempts the identical
+// non-blocking acquire and, if it succeeds, releases immediately before
+// returning — this function never holds the lock beyond the probe itself,
+// so it can never be the thing that makes a real Open elsewhere fail. A
+// cascade.KindConflict failure means some other lock holder (live daemon
+// or a stale lock from a crashed process) currently owns it; a
+// cascade.KindUnsupported failure
 // (windows) is reported via Unsupported, not returned as an error — a
 // health check must not fail merely because it is running on a platform
 // this ticket's flock support does not yet cover. Any other error (e.g.

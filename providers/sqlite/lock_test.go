@@ -1,9 +1,23 @@
-// Purpose: §D-3 arbitration tests — exclusive flock double-open (Art.5
+// Purpose: §D-3 arbitration tests — exclusive lock double-open (same
 //
-//	darwin/linux) and the daemon-owns-store / socket-probe refusal paths.
-//	Split from driver_test.go under R-14.117.
+//	process) and the daemon-owns-store / socket-probe refusal paths. Split
+//	from driver_test.go under R-14.117; the cross-process half of the
+//	same-purpose test lives in lock_crossprocess_test.go, split out under
+//	the same file's 300-line cap.
 //
-// SPORT: providers.sqlite.Driver/ADDED (P1-E02-W1-S02-T2).
+// Constraints: this file carries NO build tag and asserts the PORTABLE
+//
+//	errors.Is(err, sqlite.ErrLockHeld) check on every platform, now that
+//	flock_windows.go implements a real LockFileEx lock instead of an
+//	unconditional refusal. Darwin/linux's STRONGER, errno-specific
+//	assertion (errors.Is(err, syscall.EWOULDBLOCK)) lives in the
+//	build-tagged lock_unix_errno_test.go so it is never loosened by this
+//	file going portable.
+//
+// SPORT: providers.sqlite.Driver/ADDED (P1-E02-W1-S02-T2), CHANGED
+//
+//	(windows LockFileEx ticket: ErrLockHeld, obsolete windows skips
+//	removed, cross-process test split to lock_crossprocess_test.go).
 package sqlite_test
 
 import (
@@ -11,9 +25,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
-	"syscall"
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -21,29 +32,16 @@ import (
 )
 
 // TestOpen_ExclusiveLockRefusesSecondOpener proves the §D-3 "never two
-// writers" invariant end to end through the public Open API: a second
-// Open of the same path while the first is still held is refused, and on
-// darwin/linux the refusal traces back to EWOULDBLOCK (Art.5). On windows
-// (tier-2 scope, not run on this darwin host — verified by build+vet only
-// per the ticket's environment note) the FIRST Open already refuses, since
-// flock_windows.go always returns the compile-tagged refusal.
+// writers" invariant end to end through the public Open API, same-process.
+// This is necessary but not sufficient evidence on its own — see
+// TestOpen_ExclusiveLockRefusesSecondOpener_CrossProcess (in
+// lock_crossprocess_test.go) for why a genuinely separate OS process is
+// also required.
 func TestOpen_ExclusiveLockRefusesSecondOpener(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cascade.db")
 	ctx := context.Background()
 
 	first, err := sqlite.Open(ctx, path)
-	if runtime.GOOS == "windows" {
-		if err == nil {
-			t.Fatal("Open: want windows tier-2 refusal, got nil error")
-		}
-		if !cascade.HasKind(err, cascade.KindUnsupported) {
-			t.Fatalf("Open on windows: want KindUnsupported, got %v", err)
-		}
-		if !strings.Contains(err.Error(), "windows") {
-			t.Fatalf("Open on windows: refusal message %q does not mention windows", err.Error())
-		}
-		return
-	}
 	if err != nil {
 		t.Fatalf("first Open: %v", err)
 	}
@@ -60,8 +58,8 @@ func TestOpen_ExclusiveLockRefusesSecondOpener(t *testing.T) {
 	if !cascade.HasKind(err, cascade.KindConflict) {
 		t.Fatalf("second Open: want KindConflict, got %v", err)
 	}
-	if !errors.Is(err, syscall.EWOULDBLOCK) {
-		t.Fatalf("second Open: want errors.Is(err, syscall.EWOULDBLOCK), got %v", err)
+	if !errors.Is(err, sqlite.ErrLockHeld) {
+		t.Fatalf("second Open: want errors.Is(err, sqlite.ErrLockHeld), got %v", err)
 	}
 }
 
@@ -114,11 +112,10 @@ func TestOpen_SocketProbeError(t *testing.T) {
 // path and refuse the second Open — not silently succeed with two
 // unrelated ".lock" files. Without canonicalDBPath, "cascade.db" and its
 // absolute equivalent produce two different lock filenames and both
-// Opens would succeed, defeating the "never two writers" invariant.
+// Opens would succeed, defeating the "never two writers" invariant. Now
+// runs on windows too: flock_windows.go implements a real lock, so this
+// is no longer unreachable there.
 func TestOpen_ExclusiveLockRefusesSecondOpener_RelativeVsAbsolute(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("flock_windows.go refuses on the FIRST Open (tier-2 scope); canonicalization is unreachable")
-	}
 	dir := t.TempDir()
 	absPath := filepath.Join(dir, "cascade.db")
 	ctx := context.Background()
@@ -159,11 +156,10 @@ func TestOpen_ExclusiveLockRefusesSecondOpener_RelativeVsAbsolute(t *testing.T) 
 // same canonicalization for a symlink pointing at the database file's
 // real path: opening the target directly, then opening it again through a
 // symlink from a different directory, must derive the same sidecar lock
-// path and refuse the second Open.
+// path and refuse the second Open. Now runs on windows too (symlinks
+// require either Developer Mode or an elevated process there; the CI
+// runner image has Developer Mode enabled).
 func TestOpen_ExclusiveLockRefusesSecondOpener_SymlinkVsTarget(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("flock_windows.go refuses on the FIRST Open (tier-2 scope); canonicalization is unreachable")
-	}
 	targetDir := t.TempDir()
 	linkDir := t.TempDir()
 	targetPath := filepath.Join(targetDir, "cascade.db")
@@ -196,7 +192,9 @@ func TestOpen_ExclusiveLockRefusesSecondOpener_SymlinkVsTarget(t *testing.T) {
 // TestProbeExclusiveLock covers the health-check primitive, which measured
 // 0% despite being what StorageHealthCheck relies on to report whether a
 // database is already in use. An uncovered probe that always answered
-// "free" would make the health check quietly useless.
+// "free" would make the health check quietly useless. Now expects a real
+// Held/free answer on every platform: flock_windows.go no longer reports
+// Unsupported.
 func TestProbeExclusiveLock(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "probe.db")
@@ -205,9 +203,6 @@ func TestProbeExclusiveLock(t *testing.T) {
 		res, err := sqlite.ProbeExclusiveLock(path)
 		if err != nil {
 			t.Fatalf("ProbeExclusiveLock on a free path: %v", err)
-		}
-		if res.Unsupported {
-			t.Skip("platform does not support flock; refusal is honest, nothing further to assert")
 		}
 		if res.Held {
 			t.Fatalf("Held = true on a path nobody has opened")
@@ -224,9 +219,6 @@ func TestProbeExclusiveLock(t *testing.T) {
 		res, err := sqlite.ProbeExclusiveLock(path)
 		if err != nil {
 			t.Fatalf("ProbeExclusiveLock while open: %v", err)
-		}
-		if res.Unsupported {
-			t.Skip("platform does not support flock")
 		}
 		if !res.Held {
 			t.Fatal("Held = false while a driver holds the database open")
