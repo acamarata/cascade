@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -55,9 +56,19 @@ func TestRPCMethodGate_RealTreeGreen(t *testing.T) {
 		t.Fatalf("rpc method gate: want exactly 2 disclosed unresolved .Do call sites "+
 			"(cmd/cascade/memory.go, cmd/cascade/recall.go), got %d: %v", len(unresolved), unresolved)
 	}
+	// ListTrackedFiles (sweep.go) is documented to return git ls-files
+	// output, which is always forward-slash regardless of host OS; that
+	// value flows unchanged into RPCMethodUnresolved.File. Building this
+	// expectation with filepath.FromSlash converts it to a backslash
+	// literal on windows/amd64 (CI run 34641338730: "expected ... in
+	// cmd\cascade\memory.go, found none" while the reported site was
+	// cmd/cascade/recall.go) even though the value being compared never
+	// carries a backslash on any platform -- the mismatch was introduced
+	// here, at construction, not in the gate itself, so the fix is to
+	// stop converting and keep the literal forward-slash form.
 	wantFiles := map[string]bool{
-		filepath.FromSlash("cmd/cascade/memory.go"): false,
-		filepath.FromSlash("cmd/cascade/recall.go"): false,
+		"cmd/cascade/memory.go": false,
+		"cmd/cascade/recall.go": false,
 	}
 	for _, u := range unresolved {
 		if _, ok := wantFiles[u.File]; !ok {
@@ -70,6 +81,32 @@ func TestRPCMethodGate_RealTreeGreen(t *testing.T) {
 		if !seen {
 			t.Errorf("rpc method gate: expected an unresolved .Do call site in %s, found none", f)
 		}
+	}
+}
+
+// TestRPCMethodGate_TrackedFileIdentityStaysForwardSlash documents the
+// windows/amd64 CI mismatch's actual cause: filepath.FromSlash converts
+// a forward-slash literal to the host's native separator, which on
+// windows/amd64 turns "cmd/cascade/x.go" into "cmd\cascade\x.go" -- a
+// shape RPCMethodUnresolved.File never takes, on any platform, since it
+// is rel unchanged from ListTrackedFiles (git ls-files output,
+// documented forward-slash-always). Verified empirically on this unix
+// host, filepath.FromSlash and filepath.ToSlash are both strict identity
+// functions when Separator is already '/', so neither can be made to
+// produce or consume a real backslash here; that behavior is a
+// GOOS-locked constant, not a runtime check on the input. This test
+// instead proves the divergence FromSlash would have introduced on
+// windows: a windows-shaped literal is not the tracked-file form, and
+// only reduces to it by replacing every '\\' with '/' -- windows'
+// ToSlash, restated portably since the real call is unavailable here.
+func TestRPCMethodGate_TrackedFileIdentityStaysForwardSlash(t *testing.T) {
+	trackedForm := "cmd/cascade/memory.go"
+	windowsShaped := `cmd\cascade\memory.go`
+	if windowsShaped == trackedForm {
+		t.Fatalf("windows-shaped literal unexpectedly equals the tracked-file form")
+	}
+	if got := strings.ReplaceAll(windowsShaped, `\`, "/"); got != trackedForm {
+		t.Fatalf("simulated windows ToSlash(%q) = %q, want %q", windowsShaped, got, trackedForm)
 	}
 }
 

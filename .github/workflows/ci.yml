@@ -475,11 +475,22 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # IMAGES COME FROM quay.io, NOT Docker Hub. An anonymous Docker Hub
+      # pull from a GitHub-hosted runner is rate-limited and was refused
+      # outright ("pull access denied for minio/minio ... may require
+      # docker login"), which failed this lane on its first real CI run
+      # while passing locally, where the image was already cached. MinIO
+      # publishes the same images to quay.io, which needs no login.
+      #
+      # Tags are PINNED, not :latest: a lane that proves a driver against
+      # a real server is worthless if the server silently changes
+      # underneath it, and a floating tag also makes a green run
+      # unreproducible later.
       - name: start minio server
         run: |
           docker run -d --name cascade-ci-minio -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-            minio/minio:latest server /data
+            quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
           for i in $(seq 1 30); do
             curl -sf http://localhost:9000/minio/health/live && break
             sleep 1
@@ -487,9 +498,9 @@ jobs:
 
       - name: create minio test bucket
         run: |
-          docker run --rm --network host minio/mc:latest \
+          docker run --rm --network host quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z \
             mc alias set localminio http://localhost:9000 minioadmin minioadmin
-          docker run --rm --network host minio/mc:latest \
+          docker run --rm --network host quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z \
             mc mb localminio/cascade-test-bucket
 
       - name: go test -tags=integration ./providers/s3/...

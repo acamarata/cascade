@@ -157,11 +157,11 @@ func runNodeServe(ctx context.Context, deps nodeServeDeps) error {
 	}
 	comp, err := composeNodeServe(ctx, deps)
 	if err != nil {
-		return err
+		return drainOrFail(ctx, err)
 	}
 	stopBackground, err := startNodeServeBackgroundLoops(ctx, comp, deps)
 	if err != nil {
-		return err
+		return drainOrFail(ctx, err)
 	}
 	defer stopBackground()
 

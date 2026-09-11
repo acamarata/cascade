@@ -92,15 +92,22 @@ func exportedDecls(p *packages.Package, root string) []declInfo {
 	return out
 }
 
-// relFile relativizes an absolute source path against root. Falls back
-// to the absolute path only if it does not lie under root at all (should
-// not happen for anything go/packages loads from this call's own root).
+// relFile relativizes an absolute source path against root and returns
+// it in slash form. GraphNode.File becomes a stable, persisted
+// identifier (compared byte-for-byte against the golden fixture and
+// used as a map key in reachability.go), so it must never carry the
+// OS-native separator filepath.Rel returns on Windows; ToSlash is
+// applied here, at the point the identifier is built, matching the
+// convention internal/build's other path-identifier gates use (e.g.
+// LedgerIdentitySkipsPath, CountsDriftSkipsPath). Falls back to the
+// absolute path only if it does not lie under root at all (should not
+// happen for anything go/packages loads from this call's own root).
 func relFile(root, abs string) string {
 	rel, err := filepath.Rel(root, abs)
 	if err != nil {
 		return abs
 	}
-	return rel
+	return filepath.ToSlash(rel)
 }
 
 // declsFromNode classifies one top-level ast.Decl into zero or more
