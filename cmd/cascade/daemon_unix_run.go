@@ -38,7 +38,6 @@ import (
 	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
-	"github.com/acamarata/cascade/pkg/plugin"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -117,9 +116,9 @@ func withPolicyHandlers(pol *policyWiring) rpcServerOption {
 }
 
 func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, settings daemon.Settings, paths runtime.PathProvider, memoryAdmin *memory.AdminHandler, store provider.Store, opts ...rpcServerOption) (*http.Server, *daemon.Manifest, *int64, error) {
-	knownEventKind := func(kind events.EventKind) bool {
+	knownEventKind := rpc.CombineKnownEventKind(func(kind events.EventKind) bool {
 		return kind == daemon.EventKindShutdownRequested
-	}
+	}, rpc.KnownJobLeaseEventKind)
 	sse := rpc.NewSSEHandler(bus, "daemon", knownEventKind, clock)
 
 	registry := rpc.NewRegistry()
@@ -130,8 +129,7 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	// socket a client connecting to the daemon uses. The tool registry
 	// applies its own exposure filter, so registering the method here does
 	// not widen what a caller can reach.
-	tools := mcp.NewToolRegistry(plugin.Builtins)
-	if err := transport.RegisterSocketMCP(registry, mcp.NewServer(tools)); err != nil {
+	if err := transport.RegisterSocketMCP(registry, mcp.NewServer(daemonMCPToolRegistry())); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -161,6 +159,14 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 		return nil, nil, nil, err
 	}
 
+	// jobs.scheduler (AC/S-59.T5's DAG scheduler): the daemon composition
+	// root's call site for a subsystem that shipped built, tested, and
+	// reachable from nothing that ships — see daemon_unix_scheduler_dag.go's
+	// header comment.
+	if err := wireJobScheduler(context.Background(), manifest, bus, clock, paths, store); err != nil {
+		return nil, nil, nil, err
+	}
+
 	// conductor.expand (R-21.68), the AQ-owned row of the same conductor.*
 	// manifest: see daemon_unix_evidence.go's header comment.
 	if err := wireConductorExpand(context.Background(), registry, paths, clock); err != nil {
@@ -182,21 +188,9 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 			return nil, nil, nil, err
 		}
 	}
-
-	// fleet.journal_show/replay (P1-E13-W3-S27-T4), registered for the
-	// same reason status.get is: a handler built, tested and never
-	// mounted is a subsystem R-14.223 found nothing could reach. The
-	// SAME store this composition root already opened is the SAME store
-	// wireResumeScan (daemon_resume.go) reads its journal from, so this
-	// is a second reader over the one real journal, not a second one.
-	daemon.RegisterFleetJournalHandler(registry, store, clock)
-
-	// fleet.attention.list/get/ack (P1-E18-W4-S39-T1), registered for the
-	// same reason fleet.journal_show/replay is immediately above: a
-	// handler built, tested and never mounted is a subsystem nothing
-	// shipping can reach.
-	daemon.RegisterFleetAttentionHandler(registry, store, clock, bus)
-
+	if err := wireFleetNodeAndJobHandlers(registry, store, clock, bus, paths); err != nil {
+		return nil, nil, nil, err
+	}
 	return daemon.NewRPCServer(registry, sse), manifest, connections, nil
 }
 

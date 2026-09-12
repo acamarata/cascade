@@ -74,4 +74,9 @@ func TestNodeVerbsRefuseOnWindows(t *testing.T) {
 	admit.SetContext(context.Background())
 	admit.SetArgs([]string{"worker@host1", "--trust-tier", "worker-trusted"})
 	windowsRefused(t, "enroll", admit.Execute())
+
+	upgrade := newNodeUpgradeCmd(deps)
+	upgrade.SetContext(context.Background())
+	upgrade.SetArgs([]string{"some-node", "--artifact", "x", "--signature", "y"})
+	windowsRefused(t, "upgrade", upgrade.Execute())
 }

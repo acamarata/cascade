@@ -227,10 +227,11 @@ func newNodeRemoveCmd(deps nodeCLIDeps) *cobra.Command {
 	}
 }
 
-// mountNodeCLICmds attaches list/status/drain/remove/rotate-key/revoke to
-// the `node` group node_serve.go's mountNodeCmd already created (that
-// function mounts `serve` alone, per its own doc comment; this ticket's
-// job is every other verb). enroll is node_admit.go's newNodeAdmitCmd.
+// mountNodeCLICmds attaches list/status/drain/remove/rotate-key/revoke/
+// upgrade to the `node` group node_serve.go's mountNodeCmd already
+// created (that function mounts `serve` alone, per its own doc comment).
+// enroll is node_admit.go's newNodeAdmitCmd; upgrade is S-36.T5's
+// node_upgrade.go newNodeUpgradeCmd.
 func mountNodeCLICmds(cmd *cobra.Command, deps nodeCLIDeps) {
 	cmd.AddCommand(newNodeAdmitCmd(deps))
 	cmd.AddCommand(newNodeListCmd(deps))
@@ -239,4 +240,5 @@ func mountNodeCLICmds(cmd *cobra.Command, deps nodeCLIDeps) {
 	cmd.AddCommand(newNodeRemoveCmd(deps))
 	cmd.AddCommand(newNodeRotateKeyCmd(deps))
 	cmd.AddCommand(newNodeRevokeCmd(deps))
+	cmd.AddCommand(newNodeUpgradeCmd(deps))
 }

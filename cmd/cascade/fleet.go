@@ -94,6 +94,7 @@ func mountFleetCmd(root *cobra.Command) {
 	mountFleetSessionsAlias(root)
 	mountFleetJournalAlias(root, deps)
 	mountFleetAttentionAlias(root, deps)
+	mountFleetTopAlias(root, deps)
 }
 
 // mountFleetSessionsAlias registers the hidden top-level `cascade
@@ -121,6 +122,13 @@ func newFleetCmd(deps fleetSessionsDeps) *cobra.Command {
 	cmd.AddCommand(newFleetJournalCmd(deps))
 	cmd.AddCommand(newFleetBenchCmd(deps))
 	cmd.AddCommand(newFleetAttentionCmd(deps))
+	// jobs/leases (P1-E29-W6-S60-T1, R-16.21: fleet absorbs jobs|leases).
+	cmd.AddCommand(newFleetJobsCmd(deps))
+	cmd.AddCommand(newFleetLeasesCmd(deps))
+	// top (P1-E18-W4-S40-T1, R-16.21: fleet absorbs top).
+	cmd.AddCommand(newFleetTopCmd(deps))
+	// capacity (P1-E31-W6-S63-T4, R-16.21: fleet absorbs capacity).
+	cmd.AddCommand(newFleetCapacityCmd(deps))
 	return cmd
 }
 

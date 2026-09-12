@@ -1,0 +1,2 @@
+go test fuzz v1
+string("/soul edit body I am Ada. I like precision.")

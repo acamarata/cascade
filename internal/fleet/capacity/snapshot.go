@@ -41,6 +41,7 @@ package capacity
 import (
 	"time"
 
+	"github.com/acamarata/cascade/internal/fleet/topology"
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/providers/registry"
 )
@@ -177,4 +178,15 @@ type FleetSnapshot struct {
 	Providers        map[string]ProviderSlot `json:"providers"`
 	Nodes            map[string]NodeSlot     `json:"nodes"`
 	TaskCapabilities []TaskCapabilityRow     `json:"task_capabilities"`
+	// Quota is the R-21.26 quota-domain snapshot (S-77.T3's
+	// fleet.quota.snapshot payload), embedded ADDITIVELY: every
+	// pre-existing field and JSON name above is unchanged, and an older
+	// payload with no "quota" key decodes this field to its zero value
+	// (topology.QuotaSnapshot{}, Domains nil, every domain confidence 0)
+	// rather than failing to decode. Population is this ticket's own
+	// composition-root concern -- see internal/fleet/capacity/compositor.go's
+	// header (out of this ticket's files_scope) for where a future ticket
+	// wires a live source into this field; until then it is always the
+	// documented zero value on every Compositor-built snapshot.
+	Quota topology.QuotaSnapshot `json:"quota"`
 }

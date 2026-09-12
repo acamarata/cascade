@@ -146,6 +146,107 @@ are registered by this ticket.
 the sole dispatch door; AC leases become subordinate claims it creates.
 Routing acquisition through `economics.Reserve` is AO/S-79.T4's.
 
+## Worktree manager: one isolated tree per lease (AC/S-59.T3)
+
+`WorktreeManager` (`worktree.go`/`worktree_mutex.go`/`worktree_store.go`/
+`worktree_events.go`/`worktree_list.go`/`worktree_sweep.go`/
+`worktree_quarantine.go`/`worktree_snapshot.go`) drives the REAL `git`
+binary over `os/exec` (no CGO) so that every held lease owns exactly one
+isolated working tree at the R-16.37 constants verbatim: root
+`<repo>/.cascade/worktrees/job-<id>`, branch `job/<id>`, where `<id>` is
+the lease-holding job id (`ResourceLease.Holder`).
+
+**Create/converge.** `Create(lease, repoRoot)` runs `git worktree add
+<path> -b <branch>` and persists a `Worktree` row (`{lease ref, repo,
+path, branch}`, S-59.T1's model) — or, if a row for the SAME lease
+already resolves to a path still on disk, returns it as-is with no
+second `add` and no error (daemon-restart/resume safety).
+
+**Remove.** `Remove(lease)` runs `git status --porcelain` on the
+per-lease path first: a dirty tree refuses with a typed error NAMING the
+path, never a silent force. Only a verified-clean tree is actually
+removed (`git worktree remove <path>` + row delete).
+
+**Lifecycle wiring (acquired -> create, released/expired -> remove).**
+`apply`/`Run` (`worktree_events.go`) consume `lease_events.go`'s own
+`jobs.lease` bus events IN-PACKAGE (no cross-package seam — same
+package as the publisher) and dispatch acquired to `Create`, released
+and expired to `Remove`; contended/renewed are no-ops. Since a lease
+event carries only a repo ID, never a filesystem path, `RepoRootResolver`
+is the seam this ticket defines to cross that gap — the daemon
+composition root wires the only honest implementation available today,
+`IdentityRepoRootResolver` (repo id IS the root), and a future repo-id
+registry swaps it without touching `Create`/`Remove`/`Run`. The daemon
+composition root (`internal/daemon/subsystems.go`'s
+`RegisterWorktreeSweep`, `internal/daemon/subsystems_worktree.go`'s
+`RegisterWorktreeManager`) is the only production caller: no CLI verb and
+no RPC method exist for any of this (`fleet jobs`/`fleet leases` are
+AC/S-60.T1's).
+
+**Orphan sweep at daemon start (R-21.140/R-21.177).**
+`WorktreeManager.Sweep`, wired at subsystem startup via
+`RegisterWorktreeSweep`, reconciles every stored row: it removes ONLY a
+worktree whose lease is `released` AND whose tree is clean (`git status
+--porcelain` empty) AND whose holder execution's recorded `pgid` (S-59.T1
+column, written at spawn by AD/S-61.T1) has no live process
+(`ProcessLivenessProbe`, the SAME seam `lease_fence.go`'s `Reclaim`
+uses). A live pgid blocks the sweep ENTIRELY — never removed, never
+quarantined. An `expired_unconfirmed` lease, or one this store has no
+record of, is left untouched (fail-closed). `git worktree prune` runs
+once per repo this pass actually removed or quarantined something in
+(including a row whose directory already vanished outside this manager,
+clearing whichever stale admin metadata that leaves behind). A second
+sweep over an unchanged state returns zero deltas by construction.
+
+**Quarantine, never delete, a dirty orphan (R-21.140/R-21.177).** A
+released, dead-pgid orphan whose tree is DIRTY is MOVED (never deleted)
+to `<repo>/.cascade/worktrees/quarantine/job-<id>`; git admin metadata is
+then detached with `git worktree remove --force`, targeting the now-
+vacated original path, AFTER the move. The row is re-keyed to the new
+path (the schema carries no quarantine flag — S-59.T1's migration is out
+of this ticket's files_scope — so "quarantined" is the path shape
+itself: under `.../worktrees/quarantine/`, excluded from the sweep's own
+candidate set, which is what makes a second sweep over it a no-op).
+Journal metadata records `{lease id, epoch, holder job id, pgid probe
+result, dirty file count, moved-from, moved-to}`, and exactly one
+`R/S-39.T1` attention item is raised (idempotent on `(kind, source_ref)`,
+the same rule `lease_events.go`'s fenced/expired paths use).
+
+**Porcelain parser (`worktree_list.go`).** A strict, fail-closed parser
+over `git worktree list --porcelain`: an unrecognized line, or an
+attribute line before its block's own `worktree ` header, is a typed
+parse error, never a guessed entry. `FuzzWorktreePorcelain`
+(`worktree_list_test.go`), seeded from a real capture (provenance:
+`internal/jobs/testdata/README.md`), runs 30s of adversarial input with
+zero panics.
+
+**Immutable candidate snapshot (R-21.147).** `Snapshot(lease, epoch,
+selectedUntracked)` stages ONLY the explicitly selected untracked paths
+and returns a content-addressed tree hash stamped with the epoch,
+refusing under a stale epoch through the S-59.T2 `Fence` entry point
+(`FenceFunc`, a method-value seam over `(*LeaseManager).Fence`).
+CONTRACT-VS-TREE NOTE: the plan text names `git add --intent-to-add` as
+the staging step; verified against real git, `--intent-to-add` records a
+path's presence with a null blob and `write-tree` emits the canonical
+empty-tree hash for it regardless of content — so this file stages with
+a real `git add`, takes the tree, then `git reset --` to leave the
+worktree's ordinary staging area exactly as it found it. Attempt-scoped
+run ids, cancellation tombstones and late-result rejection belong to
+AF/S-65.T2, which binds a CI run and an acceptance re-run to this tree
+hash; they are not implemented here.
+
+**Git-metadata serialization (R-21.177, `worktree_mutex.go`).** Every
+`worktree add`/`remove`/`prune`/`write-tree` runs behind a per-repository
+in-process mutex with bounded backoff on an observed `index.lock` (50ms
+base, doubling, 5 attempts, 2s ceiling) and a typed error at the ceiling
+— parallel admitted leases on one repository never race `.git/worktrees`
+or `index.lock`.
+
+**Boundaries.** No CLI verb, no RPC method, no lease semantics (S-59.T2's),
+no scheduling/admission (S-59.T5's), no DAG planning (S-59.T4's). The
+`.cascade/` gitignore entry is untouched (R-16.37: owned by the E
+generator).
+
 ## Migration and owner registration
 
 `internal/jobs.MigrationSet()` claims schema_version 5 in cascade.db's
@@ -458,16 +559,302 @@ gate cannot call into a live `policy.Engine` to verify its caller.
 trust boundary; AF/S-66.T1's hook-pack registration is the real
 production caller that will thread the real engine id through.
 
+## Scheduler (P1-E29-W6-S59-T5)
+
+`Scheduler.Advance(ctx, dag, event, jobStates, activeLeases, governorFn)
+ScheduleDelta` is the pure DAG-scheduling primitive: no side effects, no
+DB calls, no lease acquisition. `governorFn` is the ONE admission seam
+(`func(context.Context, governor.AdmissionRequest) (governor.Permit,
+error)`, R-16.64) -- this package imports only `AdmissionRequest`/
+`Permit` from `internal/fleet/governor`, never the concrete
+`AdmissionController`.
+
+**Admissibility**: a `DagNode` is admitted when every `deps[]` entry is
+`accepted` and no active lease held by another holder intersects its
+`mutable_scope` (T2's doublestar `Scope.Intersects`); an
+`expired_unconfirmed` lease still counts as active (R-21.139) until a
+`LeaseReclaimed` event frees it. Admissible nodes are ordered priority
+descending, then node id ascending (deterministic tiebreak), and
+`governorFn` is called at most once per admissible node per `Advance`
+call -- on success the node lands in `LeasesToAcquire` carrying the
+observed lease epoch (a fenced acquire) and the granted `Permit`, whose
+`Release()` the coordinator calls on that node's terminal outcome.
+
+**Idempotent cancel** (R-21.140/R-21.174): `CancelRequested` on
+`accepted`/`rejected`/`cancelled`/`failed`/`cancelling` is a no-op
+delta; on any other state it emits exactly one `->cancelling`
+transition plus one outbox intent for the driver cancel effect. The
+terminal `->cancelled` transition is emitted ONLY on
+`TerminationConfirmed` (a confirmed process-group exit, or an executor
+reconciliation reporting no live writer) -- never on the bare cancel
+request itself.
+
+**LeaseExpired** never mutates job state; it appends an
+`AttentionRaised` `Event` to `EventsToEmit` so the coordinator can route
+it onward (the real `supervision.Store` push already happens in
+`lease_expiry.go`'s own sweep -- this is the scheduler's pass-through
+signal, not a second write of the same item).
+
+**Resume** (`Scheduler.Resume(ctx, store, journal, heartbeatInterval,
+probes, compensate)`), called once at daemon start: reconciles the
+R-21.148 transactional outbox by idempotency key
+(`<site>:<job_id>:<attempt_generation>:<payload_hash>`, the five sites
+spawn/lease-acquire/inbox-publish/ci-dispatch/integration) --
+confirming an existing effect without re-performing it, marking an
+absent one to re-perform under the same key, and COMPENSATING (never
+advancing) a row whose owning job already reached a terminal state;
+reaps executions whose `heartbeat_at` exceeds three
+`heartbeatInterval` periods into `abandoned` with their result
+rejected; then scans `running` jobs whose lease has passed
+`ttl+expiry_grace` (2h10m, R-16.37) and re-enters them at `leased` --
+but only for a job the REAL M/S-27.T1 journal (the `Reader` seam;
+`internal/fleet/journal` is never imported directly from this package)
+shows an actual replayed trail for, and never for a lease still
+`expired_unconfirmed` (R-21.139/R-21.177; that scope waits for the
+S-59.T2 reclaim path). The kill -9 test
+(`scheduler_resume_test.go:TestResumeKill9MidDAG`) proves this against
+a REAL child OS process SIGKILLed mid-write and the REAL on-disk
+journal it left behind.
+
+**Controller singleton** (R-21.169): `Advance` and `Resume` both refuse
+with a typed permission error on a node daemon. This ticket reuses
+`internal/nodes`' existing `Role`/`RequireController` primitive
+(`P1-E36-W7-S72-T2`, which explicitly names AC/S-59.T5 as its intended
+caller) rather than building a second advisory-lock mechanism, via
+`scheduler_controller.go`'s `Guard`.
+
 ## Ownership boundaries
 
 This domain ships the schema, records, state machine, typed store, DAG
 planner, risk classifier, job templates, lifecycle stages, the
-tightening-only risk-gate overlay, the `policy risk explain` CLI, and
+tightening-only risk-gate overlay, the `policy risk explain` CLI,
+(P1-E29-W6-S59-T3) the worktree manager and orphan sweep above,
+(P1-E29-W6-S59-T5) the scheduler/admission/resume/outbox above, and
 (P1-E29-W6-S60-T3) the completion-gate engine and evidence ledger
 above. It does not implement: the lease fence check/reclaim's own
-composition (AC/S-59.T2 ships `Fence`/`Reclaim`, wired here only as a
-consumer), the worktree manager (AC/S-59.T3), the scheduler/admission
-(AC/S-59.T5), the DAG-assembly CLI/RPC surface (AC/S-60.T1), the
-completion-gate hook-pack registration that gives `CompletionPolicy` a
-real production caller (AF/S-66.T1), or the `ci_attestation` writer
-(AF/S-65.T4).
+composition (AC/S-59.T2 ships `Fence`/`Reclaim`, consumed here by both
+the worktree manager and the completion gate; also `worktree_snapshot.go`'s
+and `worktree_sweep.go`'s pgid PRODUCER via AD/S-61.T1's `SpawnResult`),
+the DAG-assembly CLI/RPC surface (AC/S-60.T1, which mounts `fleet
+jobs`/`fleet leases` and is the only place either surface is ever meant
+to appear), the completion-gate hook-pack registration that gives
+`CompletionPolicy` a real production caller (AF/S-66.T1), the
+`ci_attestation` writer (AF/S-65.T4, the consumer of
+`worktree_snapshot.go`'s tree hash), or a repo-id -> filesystem-path
+registry (no such registry exists anywhere in this tree today;
+`RepoRootResolver`'s `IdentityRepoRootResolver` is this ticket's
+documented stand-in, swappable without touching `Create`/`Remove`/`Run`).
+
+## PEWS compiler
+
+`CompileTicket(PEWSContract, RiskGateOverlay) (PlanInput, GateSet, error)`
+(`pews_compiler.go`) is the pure PEWS 17-field-to-`PlanInput` compiler.
+`PEWSContract` (`pews_compiler_types.go`) mirrors the PEWS ticket
+schema's 17 fields field-for-field without importing the schema's own
+package: the import-boundary rule runs `plugins/providers` -> `pkg`
+only, and Go's own `internal/` visibility separately makes that package
+unreachable from here. The party holding a decoded ticket builds a
+`PEWSContract` from it field-for-field; wiring that live caller is a
+later integration point, not this compiler.
+
+The 17-field map is NORMATIVE (`pews_compiler_fieldmap.go`): `id`,
+`depends_on`, and the `files_scope` ADD+CHANGE+DELETE union map onto
+`TicketInput{ID, DependsOn, Footprint}` verbatim -- the DAG planner's
+own shape, no new `PlanInput` variant. Every other field has its own
+named mapping function returning the value in its documented job/DAG
+target shape (`job.name`, job metadata, one verification job per check
+command, completion-gate evidence requirements, an integrate job), even
+where no concrete Go type for that target exists yet in this tree.
+
+`cr_level`/`qa_level` resolve to a declared `RiskClass`
+(`pews_compiler_riskclass.go`) covering the complete canonical
+`cr_level` form set: `CR-B` or `CR-A+CR-B`, and `QA-A` or `QA-B`, are
+Normal; `CR-B+CR-C` or `CR-A+CR-B+CR-C`, and `QA-C`, are High. The
+resolved class is the higher of the two; Critical is never derivable
+from levels -- it is a footprint/domain classification, never a
+`cr_level`/`qa_level` combination. `DeclaredGateSet` resolves that class
+through the ONE risk-gate table, tightened by a `RiskGateOverlay`; no
+second gate-set table is defined here.
+
+`EffectiveTicketGateSet(declared, classifierDerived GateSet)`
+(`pews_compiler_gateset.go`) is the union the compiler does NOT resolve
+itself: the classifier-derived set needs `Planner.Plan`'s result, which
+needs a `SessionScope` no `PEWSContract` carries, so the caller runs
+`Planner.Plan` separately and unions its result with `CompileTicket`'s
+declared set here. The classifier-derived set is an UNLOWERABLE FLOOR
+-- every one of its members survives into the result regardless of what
+the ticket declares -- and an empty `classifierDerived` refuses rather
+than falling back to the declared set alone.
+
+Every one of the seventeen fields is required
+(`pews_compiler_errors.go`): a missing (nil slice, or empty required
+string) or unparseable field fails closed by name, ahead of the more
+specific sentinels for an empty ticket id, an unknown `model_class`, or
+an unknown `cr_level`/`qa_level`. `CompileTicket` never returns a
+partial `PlanInput` alongside an error.
+
+## Fleet jobs and leases CLI and RPC surface (P1-E29-W6-S60-T1)
+
+### JSON-RPC methods
+
+All six methods are registered against the daemon's `internal/rpc.Registry`
+by `internal/rpc/jobs.go`/`jobs_effects.go`, and mounted at the daemon
+composition root by `cmd/cascade/daemon_unix_jobs_rpc.go`.
+
+| Method | Request | Response | Notes |
+|---|---|---|---|
+| `job.list` | `{ScopeGlob, State, Limit, Cursor}` (untagged Go field names on the wire) | `{"jobs":[...],"cursor":"..."}` | Paginated; `ScopeGlob` matches against `doublestar.Match`, `State` is an exact job-state filter |
+| `job.show` | `{"id":"..."}` | one job record | Typed `KindNotFound` for an unknown id |
+| `job.cancel` | `{"id":"..."}` | `{}` | Idempotent: already-terminal or already-cancelling is success with no transition. Guarded: refused on a non-controller daemon (`job.advance`) |
+| `job.retry` | `{"id":"..."}` | the new job record | FAILED/REJECTED only; CANCELLED returns `ErrNotRetryable` (typed `KindConflict`); the new job's id is deterministically derived from the R-21.148 outbox key, so a replayed call resolves to the same row |
+| `lease.list` | `{ScopeGlob, Limit, Cursor}` | `{"leases":[...],"cursor":"..."}` | `id` is the external `"<repo_id>:<scope_glob>"` convention (`ResourceLease` has no surrogate id column) |
+| `lease.release` | `{"id":"...", "as_job":"..."}` | `{}` | Releasing the caller's own job's lease (`as_job` matches the lease holder) is unelevated; any other release requires an attestation (see Elevation below). Guarded: refused on a non-controller daemon |
+
+### Elevation for lease.release
+
+`lease.release` on a lease held by another job is elevated, but NOT
+through `internal/rpc/elevation.go`'s global `elevationTable` — that
+table is a closed, spec-transcribed list independently re-asserted by
+`TestElevationTableMatchesSpec`, and `lease.release` predates that
+table. `handleLeaseRelease` (`jobs_effects.go`) builds its own local
+elevation check using the same `NonceLedger.Issue`/`VerifyAttestation`
+primitives: a first call without an attestation returns
+`ELEVATION_REQUIRED` with a nonce; a retry wraps the original params
+under `{"_args":..., "_attestation":{...}}` (the same `elevatedEnvelope`
+shape `elevation.go` uses) and is verified against the daemon's
+`TrustStore`.
+
+### Filtered SSE (six job/lease event kinds)
+
+`internal/rpc/sse_jobs.go` registers six `events.EventKind` constants
+with the daemon's existing `GET /events` SSE mechanism
+(`internal/rpc/sse.go`): `job.leased`, `job.transitioned`,
+`job.completed`, `job.failed`, `lease.acquired`, `lease.expired`.
+
+The real filter (`parseFilter`/`filterSet`, `sse.go`) is **exact
+`EventKind`-string membership, comma-separated** — there is no glob
+matching. A client requests all four job kinds with
+`?filter=job.leased,job.transitioned,job.completed,job.failed`, not a
+`job:*` wildcard (see `sse_jobs.go`'s doc comment for the full
+contract-vs-tree note this deviates from).
+
+**Open gap:** no production caller in this tree publishes these six
+event kinds yet — only `jobs.EventLeaseAcquired`
+(`"jobs.lease.acquired"`) and `jobs.EventLeaseExpired`
+(`"jobs.lease.expired"`), under different literal strings, feed the
+scheduler's own internal admission loop. Wiring a real job/lease
+lifecycle event source is scheduler/admission logic this ticket's own
+acceptance criteria excludes ("No scheduler logic... added") and is left
+for a future ticket. `internal/rpc/sse_filter_test.go` and the recorded
+fixture at `internal/rpc/testdata/sse-session.txt` prove the
+REGISTRATION/delivery mechanism this ticket owns, against synthetic
+events.
+
+### R-21.148 outbox semantics
+
+`job.cancel`, `job.retry` and `lease.release` each record an outbox row
+(`internal/jobs.OutboxSiteIntegration`) before performing their effect
+and confirm it after. Because `*jobs.Store`'s exported mutators accept
+no external transaction, the record/effect/confirm sequence is NOT one
+atomic transaction (a real gap from the contract's "same store
+transaction" wording — see `jobs_effects.go`'s CONTRACT NOTE); instead,
+each effect is idempotent by construction:
+
+- `job.cancel`'s pre-check (mirroring `scheduler.go`'s `advanceCancel`)
+  short-circuits to success before any transition runs;
+- `job.retry`'s new job id is derived deterministically from the outbox
+  idempotency key, so a replayed call's `PutJob` resolves to the exact
+  same row via `INSERT ... ON CONFLICT DO UPDATE`;
+- `lease.release` delegates to `LeaseManager.Release`, whose own
+  contract already treats "already released, or never existed" as a
+  no-op.
+
+### CLI reference
+
+`cascade fleet jobs list [--scope <glob>] [--state <state>] [--cursor <c>] [--limit N] [--json]`
+`cascade fleet jobs show <job-id> [--json]`
+`cascade fleet jobs cancel <job-id>`
+`cascade fleet jobs retry <job-id> [--json]`
+`cascade fleet leases list [--scope <glob>] [--cursor <c>] [--limit N] [--json]`
+`cascade fleet leases release <lease-id> [--as-job <job-id>]`
+
+All verbs dial the daemon's unix socket via `internal/client.Client.Do`
+(`cmd/cascade/fleet_jobs.go`/`fleet_leases.go`); with no reachable daemon
+each refuses with an actionable `cascade daemon run` message. Per the
+`cmd-rpc-server-boundary` rule, these CLI files do not import
+`internal/rpc` — they declare their own field-matching wire structs.
+
+### Acceptance story (P1-E29-W6-S60-T4): plan through accepted
+
+`internal/jobs/acceptance_path1_test.go` drives one docs/**-only PEWS
+fixture through the real planner, lease manager, worktree manager,
+evidence ledger and completion policy, asserting store state at every
+step rather than only the events each stage emits:
+
+```mermaid
+sequenceDiagram
+    participant P as Planner.Plan
+    participant L as LeaseManager
+    participant W as WorktreeManager
+    participant E as EvidenceLedger
+    participant C as CompletionPolicy
+    P->>P: classify docs/** footprint -> risk_class low
+    P->>L: Acquire(docs/**, job)
+    L-->>P: Granted
+    P->>W: Create(lease, repoRoot)
+    W-->>P: worktree at job/<id>
+    Note over E: append lint, tests (attempt running)
+    P->>C: Transition running->verifying
+    P->>C: Transition verifying->reviewing
+    Note over E: append review
+    P->>C: Transition reviewing->accepted
+    C-->>P: job.State == accepted
+```
+
+The planner (`planner.go`) yields exactly ONE node per ticket — there is
+no separate "review node"; running→verifying→reviewing→accepted are
+states of the same job, and the review evidence is appended between the
+reviewing admission and the final transition.
+
+`GateSetForRiskClass(RiskClassLow)` resolves to the verbatim
+`{format, static, targeted_verification}` table row. Note that
+`evidenceKindsForGateSet` (`completion_errors.go`) has no evidence-kind
+mapping for any of those three gate items — only `build`/`lint`/
+`targeted_tests`/`code_review`/`adversarial_review` map to an
+`EvidenceKind` — so `CompletionPolicy.Transition`'s completeness check
+does not actually require lint/tests/review evidence at Low; the
+acceptance test appends and queries them anyway because Path 1's own
+steps call for it, not because the gate demands it.
+
+### Contending-lease admission order
+
+`internal/jobs/acceptance_path3_test.go` holds a real `docs/**` lease,
+proves two real `docs/developer/**` job nodes are excluded from
+`Scheduler.Advance`'s `LeasesToAcquire` while it is held (there is no
+`queued` `JobState`/`LeaseState` anywhere in this package — an excluded
+node simply stays `pending`), releases the holder's lease via
+`LeaseManager.Release`, and re-`Advance`s: both contenders are admitted
+in one batch, ordered priority-descending then id-ascending (not FIFO —
+the lower-priority node was seeded first). The higher-priority winner is
+then driven through a real `Acquire` into `running`.
+
+### Kill-9 resume and real-socket RPC: not yet an acceptance path
+
+Two legs of the full DAG lifecycle acceptance story are not exercised
+end-to-end yet:
+
+- **Kill-9 resume over a real daemon.** `testkit.SpawnDaemon` does not
+  exist anywhere in the tree; `scheduler_resume_kill9_test.go` already
+  documents this and substitutes a real self-exec subprocess plus
+  `Scheduler.Resume` against the on-disk journal. No daemon startup path
+  calls `Scheduler.Resume` today — `cmd/cascade/daemon_unix_jobs_rpc.go`
+  wires job.\*/lease.\* RPC handlers over a fresh in-process
+  `Store`/`LeaseManager` on every daemon start, with no journal replay.
+- **job.list/lease.list over a real unix socket.** `internal/build/
+  hygiene.go`'s `NoNetworkUnitTestScanFile` gate forbids `net`/`net/http`
+  imports in any untagged `_test.go` file; a real socket dial requires
+  the `integration` build tag, which this ticket's own `checks:` list
+  does not pass to its `-run TestAcceptance` invocation.
+
+Both are tracked as open work — see `internal/jobs/testdata/README.md`'s
+acceptance-suite section and the ticket's BLOCKED journal.

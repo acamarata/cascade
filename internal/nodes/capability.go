@@ -128,7 +128,19 @@ type CapabilityReport struct {
 	Capabilities []string `json:"capabilities"`
 	// K12 is the node's self-reported hardware-envelope classification.
 	K12 K12Preset `json:"k12"`
+	// BuildVersion is the node's own internal/buildinfo.Version stamp
+	// (§D-17/§D-33), carried here so version.go's controller-side
+	// same-minor-window warning (WouldFallOutOfWindow) can read a node's
+	// last-reported version without a separate wire round trip. Untrusted
+	// wire input like every other field in this struct: version.go's
+	// parser fails closed on anything malformed, never on this bound
+	// check, which only guards against an oversized string.
+	BuildVersion string `json:"build_version,omitempty"`
 }
+
+// maxBuildVersionLen bounds CapabilityReport.BuildVersion, mirroring
+// maxCapabilityLen's role for the Capabilities slice.
+const maxBuildVersionLen = 32
 
 // ValidateCapabilityReport fail-closed-validates an untrusted
 // CapabilityReport: the capability list must not exceed maxCapabilities
@@ -158,6 +170,9 @@ func ValidateCapabilityReport(cr CapabilityReport) error {
 	}
 	if cr.K12.Class != k12ClassMinimal && cr.K12.Class != k12ClassBalanced && cr.K12.Class != k12ClassPerformance {
 		return cascade.Newf(cascade.KindInvalidInput, "nodes: capability report has unrecognized k12 class %q", cr.K12.Class)
+	}
+	if len(cr.BuildVersion) > maxBuildVersionLen {
+		return cascade.Newf(cascade.KindInvalidInput, "nodes: capability report build_version exceeds the %d-byte limit", maxBuildVersionLen)
 	}
 	return nil
 }

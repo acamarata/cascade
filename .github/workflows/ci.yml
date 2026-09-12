@@ -597,6 +597,59 @@ jobs:
       - name: go test -tags=integration ./internal/nodes/ (real loopback sshd)
         run: go test -tags=integration -race -count=1 ./internal/nodes/ -run '^TestTunnelRealSSHD' -v
 
+  node-provision-real-counterparts:
+    # P1-E17-W4-S36-T5, Art.2: fleet version provisioning exercised against
+    # a REAL loopback sshd (TestProvisionRealSSHD) and the REAL minisign
+    # CLI (TestVersionVerifyRealMinisign), never a self-authored dialect —
+    # see internal/nodes/testdata/README.md for provenance. Same
+    # allowed-fail shape as node-tunnel-real-sshd above (D-2 precedent).
+    name: node-provision-real-counterparts (loopback OpenSSH + minisign, allowed-fail)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: install openssh-server and minisign
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends openssh-server minisign
+          /usr/sbin/sshd -V
+          minisign -v
+
+      - name: go test -tags=integration ./internal/nodes/ (real sshd + real minisign)
+        run: go test -tags=integration -race -count=1 ./internal/nodes/ -run '^(TestProvisionRealSSHD|TestVersionVerifyRealMinisign)$' -v
+
+  sync-chunked-transfer-real-sshd:
+    # P1-E17-W4-S38-T1, Art.2: the chunked-transfer wire framing and
+    # resumable transfer loop exercised against a REAL loopback sshd, over
+    # internal/nodes' existing ExecDialer/ExecSession (S-36.T5's
+    # transport, reused as-is). Same allowed-fail shape as
+    # node-tunnel-real-sshd/node-provision-real-counterparts above (D-2
+    # precedent: loopback OpenSSH availability is infra outside this
+    # repo's control, never a required gate).
+    name: sync-chunked-transfer-real-sshd (loopback OpenSSH, allowed-fail)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: install openssh-server
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends openssh-server
+          /usr/sbin/sshd -V
+
+      - name: go test -tags=integration ./internal/sync/ (real loopback sshd)
+        run: go test -tags=integration -race -count=1 ./internal/sync/ -run '^TestSyncChunkedTransferRealSSHD$' -v
+
   retrieval-eval-gate:
     # P1-E06-W2-S12-T6 (R-16.9): the retrieval evaluation harness over
     # the committed corpus/query-set fixtures, the v1 August-2026

@@ -39,6 +39,7 @@ import (
 	"path/filepath"
 
 	"github.com/acamarata/cascade/internal/conversation"
+	"github.com/acamarata/cascade/internal/jobs"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage"
 	"github.com/acamarata/cascade/internal/storage/migrate"
@@ -125,6 +126,15 @@ func newRuntimeMigratorWithSet(dbPath string, clock runtime.Clock, rawDB **sql.D
 		// here no longer risks the downgrade refusal that blocked this
 		// under the old global-version ledger.
 		if err := conversation.ApplyConversationSchema(ctx, db, migrate.SQLiteEmitter{}, clock, dbPath, backupDir); err != nil {
+			return err
+		}
+		// internal/jobs' own "jobs-outbox" SetID (R-16.77), the R-21.148
+		// transactional outbox jobs.RecordIntent/MarkEffect/ConfirmEffect
+		// read and write. AC/S-59.T5 shipped ApplyOutboxSchema with no
+		// production caller anywhere in this tree (internal/build's
+		// test-only gate); this is that caller, applied the same way and
+		// in the same callback as every sibling domain's own schema above.
+		if err := jobs.ApplyOutboxSchema(ctx, db, migrate.SQLiteEmitter{}, clock, dbPath, backupDir); err != nil {
 			return err
 		}
 		return nil

@@ -20,8 +20,6 @@
 package secrets
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"strconv"
 	"strings"
@@ -59,23 +57,19 @@ type EnvEntry struct {
 // over the length cap. A duplicate key is NOT an error: later wins, which
 // is what makes a re-import idempotent, and the report counts it.
 func ParseVaultEnv(data []byte) ([]EnvEntry, error) {
-	var out []EnvEntry
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Buffer(make([]byte, 0, 64*1024), maxEnvLineLen)
-	lineNo := 0
-	for scanner.Scan() {
-		lineNo++
-		entry, ok, err := parseEnvLine(scanner.Text(), lineNo)
+	records, err := scanEnvRecords(data)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]EnvEntry, 0, len(records))
+	for _, record := range records {
+		entry, ok, err := parseEnvLine(record.text, record.line)
 		if err != nil {
 			return nil, err
 		}
 		if ok {
 			out = append(out, entry)
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, cascade.Wrapf(cascade.KindInvalidInput, err,
-			"secrets: vault.env line %d could not be read (a line may exceed the %d-byte limit)", lineNo+1, maxEnvLineLen)
 	}
 	return out, nil
 }

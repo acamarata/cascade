@@ -150,3 +150,11 @@ To add one:
    switches instructions.
 4. Add the new harness to the table in § 1 of this document and to the
    provenance index in `internal/context/testdata/README.md`.
+
+## 7. Bulk regen across many projects
+
+`cascade context sync --project-list FILE` scans many project directories
+at once instead of just the working directory, reusing the exact
+generation and write path described above for every project it finds
+drift in. See `docs/migration-guide.md` for the flag's write semantics
+(`--check`, `CASCADE_NO_INPUT`, `--yes`).

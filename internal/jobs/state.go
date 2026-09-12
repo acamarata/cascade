@@ -148,6 +148,34 @@ func TransitionAllowed(from, to JobState) error {
 	return nil
 }
 
+// resumeEdges is the THIRD restricted edge set (R-16.82), parallel to
+// policyEdges but with a different authority boundary: running->leased,
+// invokable ONLY by the controller-guarded Resume path (R-21.169), never
+// through the public store path (TransitionAllowed/publicEdges are left
+// exactly as they are). On the public path any caller could demote a job
+// still executing on a live worker, producing two workers on one job.
+var resumeEdges = map[transitionEdge]bool{
+	{JobStateRunning, JobStateLeased}: true,
+}
+
+// ResumeTransitionAllowed reports whether the RESUME-ONLY restricted path
+// may move a job from `from` to `to`: exactly the resumeEdges set, never
+// publicEdges or policyEdges. Resume has exactly one transition to make;
+// this fails closed on unknown states the same way TransitionAllowed
+// does.
+func ResumeTransitionAllowed(from, to JobState) error {
+	if !from.Valid() {
+		return cascade.Newf(cascade.KindInvalidInput, "jobs: unknown job state %q", string(from))
+	}
+	if !to.Valid() {
+		return cascade.Newf(cascade.KindInvalidInput, "jobs: unknown job state %q", string(to))
+	}
+	if resumeEdges[transitionEdge{from, to}] {
+		return nil
+	}
+	return cascade.Newf(cascade.KindConflict, "jobs: illegal transition %s->%s", from, to)
+}
+
 // PolicyTransitionAllowed reports whether the policy-authorized path may
 // move a job from `from` to `to`: exactly the four policyEdges, on top
 // of every publicEdges transition (a policy caller may also drive any

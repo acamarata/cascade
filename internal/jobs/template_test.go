@@ -4,15 +4,18 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/acamarata/cascade/internal/conductor"
 )
 
-// TestTemplateRegistry_Completeness asserts By resolves exactly the six
-// DECIDED kinds and nothing else -- the registry-completeness
-// acceptance criterion.
+// TestTemplateRegistry_Completeness asserts By resolves exactly the
+// seven registered kinds (the original six plus AH/S-70.T2's release
+// gate) and nothing else -- the registry-completeness acceptance
+// criterion.
 func TestTemplateRegistry_Completeness(t *testing.T) {
 	kinds := []string{
 		TemplateKindImplement, TemplateKindReview, TemplateKindAdversarial,
-		TemplateKindQA, TemplateKindCI, TemplateKindIntegrate,
+		TemplateKindQA, TemplateKindCI, TemplateKindIntegrate, TemplateKindRelease,
 	}
 	for _, kind := range kinds {
 		t.Run(kind, func(t *testing.T) {
@@ -89,6 +92,58 @@ func TestRequireTemplateContext_EmptyID(t *testing.T) {
 	ctx := WithTemplateContext(context.Background(), TemplateContext{})
 	if _, err := (QaTemplate{}).Resolve(ctx); err == nil {
 		t.Fatal("Resolve with empty TemplateContext.ID: expected an error, got nil")
+	}
+}
+
+// TestReleaseTemplate_Resolve asserts ReleaseTemplate.Resolve is fixed at
+// RiskClassCritical (never classifier-derived: the same TemplateContext
+// footprint that would classify Low elsewhere must not move this), with
+// mutable_scope=nil, min_task_class=arbitrate, and node_requirements
+// empty even when the caller's own TemplateContext carries values in
+// every one of those fields -- proving Resolve drops them rather than
+// passing them through.
+func TestReleaseTemplate_Resolve(t *testing.T) {
+	ctx := WithTemplateContext(context.Background(), TemplateContext{
+		ID:        "release-1",
+		Footprint: []string{"docs/**"}, // would classify Low if it were consulted
+		DependsOn: []string{"ci-1"},
+		PassThroughFields: PassThroughFields{
+			Capabilities:     []string{"release"},
+			NodeRequirements: map[string]string{"clean-room": "true"},
+			Timeout:          5,
+			CostCeiling:      1.5,
+			Priority:         2,
+		},
+	})
+	node, err := (ReleaseTemplate{}).Resolve(ctx)
+	if err != nil {
+		t.Fatalf("Resolve: unexpected error %v", err)
+	}
+	if node.RiskClass != RiskClassCritical {
+		t.Fatalf("RiskClass = %q, want %q (fixed, never classifier-derived)", node.RiskClass, RiskClassCritical)
+	}
+	if node.MutableScope != nil {
+		t.Fatalf("MutableScope = %v, want nil", node.MutableScope)
+	}
+	if node.MinTaskClass != conductor.TaskClassArbitrate {
+		t.Fatalf("MinTaskClass = %q, want %q", node.MinTaskClass, conductor.TaskClassArbitrate)
+	}
+	if node.NodeRequirements != nil {
+		t.Fatalf("NodeRequirements = %v, want nil (no R-16.37 executor capability applies)", node.NodeRequirements)
+	}
+	if node.ID != "release-1" || len(node.Deps) != 1 || node.Deps[0] != "ci-1" {
+		t.Fatalf("ID/Deps pass-through broken: got ID=%q Deps=%v", node.ID, node.Deps)
+	}
+	if len(node.Capabilities) != 1 || node.Capabilities[0] != "release" {
+		t.Fatalf("Capabilities pass-through broken: got %v", node.Capabilities)
+	}
+}
+
+// TestReleaseTemplate_MissingContext asserts the shared guard refuses
+// rather than resolving a zero-value DagNode.
+func TestReleaseTemplate_MissingContext(t *testing.T) {
+	if _, err := (ReleaseTemplate{}).Resolve(context.Background()); err == nil {
+		t.Fatal("Resolve with no TemplateContext: expected an error, got nil")
 	}
 }
 

@@ -175,9 +175,17 @@ func assemble(content []byte, spans []rehydrationSpan, values [][]byte) []byte {
 // heap pages the process may hand to something else.
 func zeroAll(values [][]byte) {
 	for _, v := range values {
-		for i := range v {
-			v[i] = 0
-		}
+		zero(v)
+	}
+}
+
+// zero wipes one sensitive buffer in place. Split out of zeroAll because
+// the export path (export.go) wipes single buffers -- a marshalled
+// document, one entry's value -- and a second hand-rolled loop there
+// would be a second place to forget.
+func zero(v []byte) {
+	for i := range v {
+		v[i] = 0
 	}
 }
 

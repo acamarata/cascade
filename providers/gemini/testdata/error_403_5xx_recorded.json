@@ -1,0 +1,17 @@
+{
+  "provenance": "See providers/gemini/testdata/README.md -- transcribed from the documented google.rpc.Status error envelope (2026-09-06), not a live capture (no network in this build environment). Added by P1-E40-W9-S78-T1 for the chooser's 403/5xx error-semantics seam.",
+  "cases": [
+    {
+      "name": "forbidden_billing_disabled",
+      "status": 403,
+      "body": "{\"error\":{\"code\":403,\"message\":\"the caller's project has billing disabled\",\"status\":\"PERMISSION_DENIED\"}}",
+      "want_kind": "capability-denied"
+    },
+    {
+      "name": "gateway_timeout",
+      "status": 504,
+      "body": "{\"error\":{\"code\":504,\"message\":\"deadline exceeded upstream\",\"status\":\"DEADLINE_EXCEEDED\"}}",
+      "want_kind": "unavailable"
+    }
+  ]
+}

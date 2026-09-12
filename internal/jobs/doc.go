@@ -125,14 +125,109 @@
 // daemon-exposed method, so it was left unshipped rather than shipped
 // unauthenticated (see the S-69.T1 journal).
 //
+// # Scheduler (AC/S-59.T5)
+//
+// scheduler_types.go/scheduler.go/scheduler_admit.go/scheduler_resume.go
+// implement Scheduler.Advance(ctx, dag, event, jobStates, activeLeases,
+// governorFn) ScheduleDelta: a PURE function -- no side effects, no DB
+// calls, no lease acquisition -- that admits non-contending DagNodes in
+// parallel under the injected GovernorFn (the ONE admission seam,
+// func(context.Context, governor.AdmissionRequest) (governor.Permit,
+// error); this package imports only those two types from
+// internal/fleet/governor, never the concrete AdmissionController),
+// respects DagNode.Priority (descending, then node id ascending as the
+// deterministic tiebreak), and idempotently cancels a job (CancelRequested
+// on any non-terminal state emits exactly one ->cancelling transition
+// plus an outbox intent; on a terminal state or cancelling itself it is a
+// no-op; the terminal ->cancelled transition is emitted only on
+// TerminationConfirmed). LeaseExpired never mutates state -- it appends
+// an AttentionRaised Event to EventsToEmit -- and an expired_unconfirmed
+// lease still counts as active for admissibility until a LeaseReclaimed
+// event frees its scope (R-21.139/R-21.177). An unknown Event type is a
+// typed KindInvalidInput error in ScheduleDelta.Errors, never a panic.
+//
+// Scheduler.Resume(ctx, store, journal, heartbeatInterval, probes,
+// compensate) reconciles the R-21.148 transactional outbox (outbox.go,
+// migration_outbox.go) by idempotency key, reaps executions whose
+// heartbeat_at exceeds three heartbeatInterval periods into `abandoned`,
+// then re-enters `running` jobs whose lease has passed ttl+expiry_grace
+// (2h10m, R-16.37) at `leased` -- but ONLY when the Journal Reader seam
+// (no direct import of internal/fleet/journal from this package; the
+// caller wires it to the real M/S-27.T1 store) shows a real replayed
+// trail for that job, and never for a lease still expired_unconfirmed.
+// Advance and Resume both run only on the controller
+// (scheduler_controller.go's Guard, wired onto internal/nodes'
+// R-21.169 Role/RequireController primitive -- see the ticket journal
+// for why this ticket reuses that existing guard rather than a second
+// advisory-lock mechanism).
+//
+// # PEWS compiler (AH/S-69.T3)
+//
+// CompileTicket(PEWSContract, RiskGateOverlay) (PlanInput, GateSet, error)
+// is the pure PEWS 17-field-to-PlanInput compiler AC/S-59.T4 named this
+// package as the boundary consumer for. PEWSContract mirrors the
+// N/S-28.T1 schema's 17 fields field-for-field without importing
+// plugins/pbd/internal/pews -- 02-TARGET-STRUCTURE's v1.1 import-boundary
+// rule runs plugins/providers -> pkg only, and Go's own internal/
+// visibility rule additionally makes that package unreachable from here
+// regardless. The party holding a decoded pews.Ticket builds a
+// PEWSContract from it field-for-field; that caller is a downstream
+// integration point (AH/S-70.T1), not this package.
+//
+// The R-21.192 field map is NORMATIVE: id, depends_on and the
+// files_scope ADD+CHANGE+DELETE union map onto TicketInput{ID,
+// DependsOn, Footprint} verbatim -- AC/S-59.T4's own shape, no new
+// PlanInput variant. Every other row (title, short_desc/full_desc,
+// branch, weight, tasks, checks, acceptance_criteria, spec_refs,
+// sport_updates, docs_updates) has its own named mapping function in
+// pews_compiler_fieldmap.go returning the value in its documented
+// job/DAG target shape, even where no concrete Go type for that target
+// exists yet in this tree (job metadata, verification jobs, an
+// integrate job) -- those rows exist for a future job-metadata consumer
+// and are exercised by test, per this ticket's own explicit descope of
+// scheduling/leases/worktrees/CLI/RPC/YAML decoding.
+//
+// The CRLevel/QALevel -> RiskClass derivation covers the complete
+// R-16.42 canonical form set: CR-B or CR-A+CR-B, and QA-A or QA-B, are
+// Normal; CR-B+CR-C or CR-A+CR-B+CR-C, and QA-C, are High. The resolved
+// class is the higher of the two (risk.go's own severity ranking);
+// RiskClassCritical is never derivable from levels -- Critical is a
+// footprint/domain classification (AC/S-59.T4 rule 1), never a
+// cr_level/qa_level combination. DeclaredGateSet resolves that class
+// through the ONE risk-gate table (GateSetForRiskClass), tightened by
+// an AH/S-69.T1 RiskGateOverlay -- no second gate-set table exists here
+// (R-16.70(b)).
+//
+// EffectiveTicketGateSet(declared, classifierDerived GateSet) is the
+// R-21.192 union responsibility this compiler does NOT resolve itself:
+// the classifier-derived set needs Planner.Plan's result, which needs a
+// SessionScope no PEWSContract carries, so the caller runs Planner.Plan
+// separately and unions its result with CompileTicket's declared set
+// here. The classifier-derived set is an UNLOWERABLE FLOOR -- every one
+// of its members survives into the result regardless of what the
+// ticket declares -- and an empty classifierDerived refuses with
+// ErrUnclassifiedFootprint rather than falling back to the declared set
+// alone.
+//
+// Every one of the seventeen fields is required: ValidateContractFields
+// fails closed on a missing (nil slice, or empty required string) or
+// unparseable field with ErrMissingContractField or
+// ErrUnparseableContractField naming the field, ahead of the more
+// specific ErrEmptyTicketID / ErrUnknownModelClass / ErrUnknownReviewLevel
+// sentinels for id, model_class, cr_level and qa_level. CompileTicket
+// never returns a partial PlanInput alongside an error.
+//
 // # Scope boundaries
 //
 // This package ships the schema, records, state machine, store, DAG
-// planner, risk classifier, job templates, lifecycle stages and the
-// risk-gate overlay. It does NOT implement: the lease model's fence
-// check/reclaim (AC/S-59.T2), the worktree manager (AC/S-59.T3), the
-// scheduler/admission (AC/S-59.T5), the DAG-assembly CLI/RPC surface
-// (AC/S-60.T1), or the completion gate that acts on Reclassify's or
-// RaiseRiskClass's result (AC/S-60.T3). No ci_attestation table exists
-// here -- AF/S-65.T4 owns it.
+// planner, risk classifier, job templates, lifecycle stages, the
+// risk-gate overlay, the PEWS compiler, and (AC/S-59.T5) the
+// scheduler/admission/resume/outbox. It does NOT implement: the lease
+// model's fence check/reclaim (AC/S-59.T2), the worktree manager
+// (AC/S-59.T3), the DAG-assembly CLI/RPC surface (AC/S-60.T1), the
+// completion gate that acts on Reclassify's or RaiseRiskClass's result
+// (AC/S-60.T3) -- verifying/reviewing/accepted transitions are that
+// engine's alone; the scheduler never emits them -- or a live
+// plugins/pbd caller for the PEWS compiler (AH/S-70.T1). No
+// ci_attestation table exists here -- AF/S-65.T4 owns it.
 package jobs

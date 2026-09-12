@@ -31,9 +31,9 @@ import (
 	"github.com/acamarata/cascade/internal/conductor"
 )
 
-// The six DECIDED template kind names (19 §Epic AC S-60.T2). These are
-// the COMPLETE registry: TemplateRegistry.By resolves exactly these six
-// and ErrUnknownTemplateKind for anything else.
+// The six DECIDED template kind names (19 §Epic AC S-60.T2), plus the
+// seventh AH/S-70.T2 adds below. TemplateRegistry.By resolves exactly
+// these seven and ErrUnknownTemplateKind for anything else.
 const (
 	TemplateKindImplement   = "implement"
 	TemplateKindReview      = "review"
@@ -41,6 +41,11 @@ const (
 	TemplateKindQA          = "qa"
 	TemplateKindCI          = "ci"
 	TemplateKindIntegrate   = "integrate"
+	// TemplateKindRelease is the seventh kind (19 §Epic AH S-70.T2): a
+	// release/CD gate, Critical class by declaration (R-16.13), never
+	// classifier-derived. No alias ("release-gate" included) is
+	// registered -- 06 §5.1 never-invent-scope names exactly this one.
+	TemplateKindRelease = "release"
 )
 
 func init() {
@@ -50,6 +55,47 @@ func init() {
 	TemplateRegistry.Register(TemplateKindQA, QaTemplate{})
 	TemplateRegistry.Register(TemplateKindCI, CiTemplate{})
 	TemplateRegistry.Register(TemplateKindIntegrate, NewIntegrateTemplate(nil))
+	TemplateRegistry.Register(TemplateKindRelease, ReleaseTemplate{})
+}
+
+// ReleaseTemplate resolves the "release" kind: a Critical-class release/
+// CD gate node. It is stateless -- see release_gate.go's header CONTRACT
+// DEVIATION note for why it holds no ApprovalQueue/RollbackEvidence
+// fields despite this ticket's contract text naming them on the type:
+// Resolve's output never varies by either, and the separate
+// RequireHumanApproval function (release_gate.go) takes both as direct
+// parameters instead.
+type ReleaseTemplate struct{}
+
+// Resolve implements JobTemplate. Unlike readOnlyNode's four kinds,
+// MutableScope is nil for a DIFFERENT reason than "read-only": a release
+// gate approves or blocks an artifact an earlier ci/integrate node
+// already built, so it has no footprint of its own to declare, mutable or
+// not. RiskClass is FIXED at RiskClassCritical -- never classifier-
+// derived, matching Epic AH's DECIDED "Release/CD gate = Critical class"
+// rule -- and NodeRequirements is always empty: R-16.37 fixes the
+// executor-capability name set (clean-room, docker, xcode, gpu plus
+// toolchain fingerprint), none of which a release gate needs, and the
+// human-approval requirement is expressed by RiskClassCritical's own gate
+// set (riskgates.go's GateHumanApproval/GateRollbackEvidence/
+// GateReleaseGate), not by an invented node requirement.
+func (ReleaseTemplate) Resolve(ctx context.Context) (DagNode, error) {
+	tc, err := requireTemplateContext(ctx)
+	if err != nil {
+		return DagNode{}, err
+	}
+	return DagNode{
+		ID:               tc.ID,
+		Capabilities:     tc.Capabilities,
+		Deps:             tc.DependsOn,
+		MutableScope:     nil,
+		RiskClass:        RiskClassCritical,
+		MinTaskClass:     conductor.TaskClassArbitrate,
+		NodeRequirements: nil,
+		Timeout:          tc.Timeout,
+		CostCeiling:      tc.CostCeiling,
+		Priority:         tc.Priority,
+	}, nil
 }
 
 // ImplementTemplate resolves the "implement" kind: mutable_scope is the

@@ -3,7 +3,12 @@
 // verbatim (job persistence across restart, advisory-lock exclusion,
 // skip-missed), and I/S-18.T5's ActionRouter gating every dispatch already
 // transits (scheduler.Scheduler.routeDispatch -- installed once via
-// SetActionGate by the composition root, never by this file).
+// SetActionGate by the composition root, never by this file). S-42.T4
+// extends this file with the parallel verification-job registration
+// (RegisterVerificationJob/RegisterConfiguredVerificationJobs), riding the
+// identical scheduler primitives, cadence source, and skip-unmatched
+// reporting -- verification needs no elevation gate at all (it is
+// read-only), so it carries none of the ElevationProof machinery below.
 //
 // Inputs: a *scheduler.Scheduler (already constructed, not yet Activated),
 // a provider.Store namespace, and the TargetRecord/TargetPolicy pairs to
@@ -18,7 +23,7 @@
 // this codebase: a structural guarantee (the closure below hardcodes ""),
 // not a runtime check this file could accidentally skip.
 //
-// SPORT: internal.backup.schedule/ADD (P1-E19-W4-S42-T1).
+// SPORT: internal.backup.schedule/ADD (P1-E19-W4-S42-T1); CHANGED (P1-E19-W4-S42-T4).
 
 // Package backup doc: see doc.go for the canonical package comment.
 package backup
@@ -39,6 +44,14 @@ import (
 const backupJobOwnerPrefix = "backup:target:"
 
 func backupJobOwner(target string) string { return backupJobOwnerPrefix + target }
+
+// verifyJobOwnerPrefix names every scheduled verification Runnable
+// RegisterVerificationJob registers (S-42.T4), distinct from
+// backupJobOwnerPrefix above so a target's create and verify jobs never
+// collide as scheduler owners.
+const verifyJobOwnerPrefix = "backup:verify:"
+
+func verifyJobOwner(target string) string { return verifyJobOwnerPrefix + target }
 
 // RegisterBackupJob registers one target's scheduled backup job on sched:
 // a Runnable that fires fireBackupTarget with an empty ElevationProof (see
@@ -137,4 +150,68 @@ func fireBackupTarget(ctx context.Context, store provider.Store, namespace strin
 		return m, recErr
 	}
 	return m, snapErr
+}
+
+// RegisterVerificationJob registers one target's scheduled verification
+// job (S-42.T4) on sched: a Runnable that calls RunVerification, plus the
+// persisted CronJob at policy.EffectiveVerifyCronSpec(). A policy with
+// VerifyDisabled set registers nothing for this target and returns nil --
+// the per-target toggle, read as policy-record data (no config.toml key).
+// Call before sched.Activate, matching RegisterBackupJob's own precedent.
+func RegisterVerificationJob(ctx context.Context, sched *scheduler.Scheduler, store provider.Store, namespace string, target TargetRecord, policy TargetPolicy, clock runtime.Clock, engine *egress.Engine, getenv func(string) string, sink AttentionSink) error {
+	if target.Name != policy.Target {
+		return cascade.Newf(cascade.KindInvalidInput,
+			"backup: policy target %q does not match target record %q", policy.Target, target.Name)
+	}
+	if err := target.Validate(); err != nil {
+		return err
+	}
+	if err := policy.Validate(); err != nil {
+		return err
+	}
+	if policy.VerifyDisabled {
+		return nil
+	}
+	owner := verifyJobOwner(target.Name)
+	runnable := func(fireCtx context.Context) error {
+		_, err := RunVerification(fireCtx, store, namespace, target, engine, getenv, clock, sink)
+		return err
+	}
+	if err := sched.RegisterRunnable(owner, runnable); err != nil {
+		return err
+	}
+	return sched.ScheduleJob(ctx, owner, policy.EffectiveVerifyCronSpec(), owner)
+}
+
+// RegisterConfiguredVerificationJobs is the composition-root entry point
+// (S-42.T4), mirroring RegisterConfiguredBackupJobs exactly: it lists
+// every persisted TargetRecord/TargetPolicy pair in namespace and
+// registers each as a scheduled verification job via
+// RegisterVerificationJob. A target with no matching policy is skipped --
+// reported via the returned skipped slice, never silently. Safe to call
+// on every daemon startup; call before sched.Activate.
+func RegisterConfiguredVerificationJobs(ctx context.Context, sched *scheduler.Scheduler, store provider.Store, namespace string, clock runtime.Clock, engine *egress.Engine, getenv func(string) string, sink AttentionSink) (skipped []string, err error) {
+	targetsList, err := ListTargets(ctx, store, namespace)
+	if err != nil {
+		return nil, err
+	}
+	policies, err := ListPolicies(ctx, store, namespace)
+	if err != nil {
+		return nil, err
+	}
+	byTarget := make(map[string]TargetPolicy, len(policies))
+	for _, p := range policies {
+		byTarget[p.Target] = p
+	}
+	for _, target := range targetsList {
+		policy, ok := byTarget[target.Name]
+		if !ok {
+			skipped = append(skipped, target.Name)
+			continue
+		}
+		if err := RegisterVerificationJob(ctx, sched, store, namespace, target, policy, clock, engine, getenv, sink); err != nil {
+			return skipped, err
+		}
+	}
+	return skipped, nil
 }

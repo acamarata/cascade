@@ -7,6 +7,8 @@ Usage:
 
 Available Commands:
   approval       Inspect and decide queued approval requests
+  backup         Create, list, restore, export, and import encrypted backups
+  chat           Chat with the cascade assistant (interactive TUI or one-shot)
   completion     Generate shell completion scripts
   config         Inspect and edit cascade's config.toml
   context        Session-scope and context-engine commands

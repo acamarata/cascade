@@ -1,0 +1,16 @@
+{
+  "cases": [
+    {
+      "prompt": "Write a Go function named Add that takes two ints and returns their sum. Reply with the function only.",
+      "must_contain": "func"
+    },
+    {
+      "prompt": "The following Go snippet is missing a closing brace: func Foo() { return. Reply with the corrected snippet.",
+      "must_contain": "}"
+    },
+    {
+      "prompt": "Reply with the single word: ok",
+      "must_contain": "ok"
+    }
+  ]
+}

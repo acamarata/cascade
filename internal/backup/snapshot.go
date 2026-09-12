@@ -65,12 +65,19 @@ type SnapshotRecord struct {
 
 // CreateSnapshotDeps collects CreateSnapshot's constructor-time
 // collaborators. Domains maps a domain name to the capture adapter that
-// exports it (S-41.T1's SQLiteCapture, or any future Exporter).
+// exports it (S-41.T1's SQLiteCapture, or any future Exporter). Escrow is
+// the S-42.T6 recovery-key escrow guard: OPTIONAL (nil skips the check,
+// preserving every caller that predates the ceremony), but the production
+// composition root (cmd/cascade) always supplies a real
+// AuditEscrowChecker, so the shipped `backup create` and scheduled-fire
+// paths are fail-closed in practice even though the engine itself
+// tolerates an unconfigured caller.
 type CreateSnapshotDeps struct {
 	Target       Target
 	AgeRecipient string
 	Clock        runtime.Clock
 	Domains      map[string]Exporter
+	Escrow       EscrowChecker
 }
 
 // CreateSnapshot runs the elevated snapshot-create operation: for every
@@ -92,6 +99,9 @@ func CreateSnapshot(ctx context.Context, proof ElevationProof, deps CreateSnapsh
 	}
 	if len(deps.Domains) == 0 {
 		return Manifest{}, cascade.New(cascade.KindInvalidInput, "backup: CreateSnapshot requires at least one domain")
+	}
+	if err := checkEscrowed(ctx, deps.Escrow); err != nil {
+		return Manifest{}, err
 	}
 	entries, names, err := captureAllDomains(ctx, deps)
 	if err != nil {
@@ -120,6 +130,25 @@ func CreateSnapshot(ctx context.Context, proof ElevationProof, deps CreateSnapsh
 		return Manifest{}, err
 	}
 	return m, nil
+}
+
+// checkEscrowed enforces the S-42.T6 escrow guard when one is configured.
+// A nil checker is a documented no-op (see CreateSnapshotDeps.Escrow); a
+// configured checker that reports false is ErrBackupKeyNotEscrowed, the
+// same refusal for a scheduled fire and a manual create alike, since both
+// paths call this same function with no separate branch of their own.
+func checkEscrowed(ctx context.Context, checker EscrowChecker) error {
+	if checker == nil {
+		return nil
+	}
+	escrowed, err := checker.Escrowed(ctx)
+	if err != nil {
+		return err
+	}
+	if !escrowed {
+		return ErrBackupKeyNotEscrowed
+	}
+	return nil
 }
 
 // captureAllDomains runs Snapshot (pipeline.go) once per domain, in

@@ -509,6 +509,26 @@ unavailable rather than guessed. Sourcing it needs a metadata sidecar this
 build does not have, and a fabricated last-used timestamp on a security
 surface is worse than an honest absence.
 
+## Fleet topology credential custody
+
+`internal/fleet/topology`'s five entities (`account`, `credential`,
+`quota_domain`, `runtime_profile`, `lane`) live inside the existing
+`config` storage domain and hold no credential value anywhere. A
+`Credential` row's `secret_ref` column is a vault-key NAME only,
+structurally the same `VaultKeyRef` shape the provider registry already
+uses, never the string it names. The reconcile pass that populates these
+tables from the provider registry copies that reference by name and never
+dereferences it: no code path in this package ever calls into the vault to
+resolve a value, so there is nothing here for `cascade vault get` to be an
+alternative to.
+
+Every write to any of the five tables runs the package's own invariant
+checker first, which enforces (among other things) that a lane's
+credential reference resolves to a credential whose quota domain, account,
+and runtime profile all agree with the lane's own: a mismatch is refused
+rather than silently written, closing off the case where a call would
+authenticate against one account while charging another's quota.
+
 ## Doctor checks for the vault
 
 `cascade doctor` registers five named secrets checks:

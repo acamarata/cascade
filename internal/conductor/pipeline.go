@@ -110,6 +110,55 @@ func (p *Pipeline) embedCapability() embedDispatch {
 	}
 }
 
+// countDispatch is the unexported raw count-execution capability: the
+// Count-verb counterpart to execCapability/embedDispatch, added by
+// FIX-manifest-collision-and-conductor-seam for the same reason
+// embedDispatch was added under R-40.X10 - providers/agents/local needs a
+// sel-resolved leaf-dispatch path to ModelProvider.Count that never
+// requires it to hold a raw ModelProvider itself.
+type countDispatch func(ctx context.Context, sel provider.Selection, req provider.CountRequest) (provider.CountResponse, error)
+
+// countCapability returns the unexported countDispatch, dispatching
+// through the injected ProviderResolver exactly like capability() and
+// embedCapability() do for Chat/Embed. It is count.go's Executor.Count's
+// sole permitted entry into pkg/provider.ModelProvider.Count.
+func (p *Pipeline) countCapability() countDispatch {
+	resolver := p.cfg.Resolver
+	return func(ctx context.Context, sel provider.Selection, req provider.CountRequest) (provider.CountResponse, error) {
+		driver, err := resolver.Resolve(ctx, sel)
+		if err != nil {
+			return provider.CountResponse{}, err
+		}
+		return driver.Count(ctx, req)
+	}
+}
+
+// streamDispatch is the unexported raw stream-execution capability: the
+// Stream-verb counterpart to execCapability, added for the same reason as
+// countDispatch above. Unlike ExecuteStream's own router-driven, channel-
+// based form, this is the sel-resolved leaf form: it forwards to
+// ModelProvider.Stream's own (ctx, req, sink) error shape directly, with
+// no channel bridging and no CancelFunc (plain pkg/provider types only,
+// so a caller outside this package can hold the matching interface with
+// no adapter type needed, unlike Embed's EmbeddingExecutorFunc).
+type streamDispatch func(ctx context.Context, sel provider.Selection, req provider.ChatRequest, sink provider.StreamSink) error
+
+// streamCapability returns the unexported streamDispatch, dispatching
+// through the injected ProviderResolver exactly like the other three
+// leaf-dispatch capabilities. It is stream_door.go's Executor.Stream's
+// sole permitted entry into pkg/provider.ModelProvider.Stream outside
+// ExecuteStream's own router-driven path.
+func (p *Pipeline) streamCapability() streamDispatch {
+	resolver := p.cfg.Resolver
+	return func(ctx context.Context, sel provider.Selection, req provider.ChatRequest, sink provider.StreamSink) error {
+		driver, err := resolver.Resolve(ctx, sel)
+		if err != nil {
+			return err
+		}
+		return driver.Stream(ctx, req, sink)
+	}
+}
+
 // NewExecutor constructs the model.execute door. It fails closed
 // (ErrConstructionFailed) when Router, Resolver, Audit or Clock is nil:
 // these four are mechanical requirements every configuration needs, and

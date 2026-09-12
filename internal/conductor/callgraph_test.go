@@ -78,7 +78,15 @@ func callgraphEdgesInFile(file *ast.File, vars map[string]bool) []callgraphEdge 
 func TestExecute_ProviderCallGraph(t *testing.T) {
 	root := seamModuleRoot(t)
 	fset := token.NewFileSet()
-	allowed := map[string]bool{"Pipeline.capability": true, "Pipeline.embedCapability": true}
+	allowed := map[string]bool{
+		"Pipeline.capability": true, "Pipeline.embedCapability": true,
+		// FIX-manifest-collision-and-conductor-seam: the Chat/Count/Stream
+		// sel-based leaf-dispatch doors (chat.go, count.go, stream_door.go),
+		// added alongside embed.go's pre-existing R-40.X10 Embed door so
+		// providers/agents/local can reach every ModelProvider verb it
+		// needs without ever holding one itself.
+		"Pipeline.countCapability": true, "Pipeline.streamCapability": true,
+	}
 	var bad []string
 	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {

@@ -157,6 +157,18 @@ func fetchContextShow(ctx context.Context, deps contextScopeDeps) (daemon.Contex
 // daemon paths can never disagree about what slicing means.
 func resolveContextSliceEmbedded(ctx context.Context, deps contextScopeDeps, params daemon.ContextAssembleParams) (daemon.ContextSliceResult, error) {
 	dataDir := deps.Paths.DataDir()
+	// sql.Open("sqlite", ...) does NOT create dataDir (same gap as
+	// node_serve_presence.go's startPresenceSubsystems and
+	// context_scope.go's resolveContextScopeEmbedded): the driver opens
+	// the file directly and SQLITE_CANTOPENs (error 14) when the parent is
+	// missing. On a virgin HOME with no daemon ever run, `context slice`
+	// was the first command to hit this, since `doctor` bootstraps the
+	// directory itself but nothing forces a user to run it first
+	// (DEFECT-context-slice-no-mkdir-virgin-home.md). 0o700 matches
+	// openRuntimeStore's (daemon_unix_store.go) own choice for this dir.
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		return daemon.ContextSliceResult{}, cascade.Wrap(cascade.KindUnavailable, err, "cascade context slice: create data directory")
+	}
 	dbPath := filepath.Join(dataDir, "cascade.db")
 	db, err := sql.Open("sqlite", "file:"+dbPath+"?_busy_timeout=5000")
 	if err != nil {

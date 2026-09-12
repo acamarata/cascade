@@ -159,8 +159,49 @@ linters:
             # and the daemon's own PathProvider to site the evidence schema and
             # blob store, so it cannot live in internal/daemon either.
             - "!**/cmd/cascade/daemon_unix_evidence.go"
+            # daemon_unix_jobs_rpc.go and daemon_unix_jobs_rpc_adapters.go earn
+            # their exemption on the identical grounds as
+            # daemon_unix_conductor.go/daemon_unix_evidence.go above: they are
+            # composition-root files called only from buildRPCServer, they
+            # REGISTER job.*/lease.* on the daemon's own registry, and they
+            # never dial the daemon. internal/rpc cannot be imported from
+            # internal/jobs or internal/nodes (both are real import cycles —
+            # see internal/rpc/jobs.go's own doc comment), so the adapter
+            # translating *jobs.Store/*jobs.LeaseManager/nodes.Role into
+            # internal/rpc's duck-typed seams can only live here
+            # (P1-E29-W6-S60-T1).
+            - "!**/cmd/cascade/daemon_unix_jobs_rpc.go"
+            - "!**/cmd/cascade/daemon_unix_jobs_rpc_adapters.go"
+            # daemon_unix_run_fleetjobs.go (P1-E40-W9-S77-T3) is a
+            # mechanical relocation of wireFleetAndNodeHandlers/
+            # wireFleetNodeAndJobHandlers/wireJobRPCHandlers out of
+            # daemon_unix_run.go, split under that file's own 300-line cap
+            # -- the identical composition-root reasoning as
+            # daemon_unix_run.go's own exemption above: it REGISTERS
+            # fleet.*/node.*/job.*/lease.* on the daemon's own registry
+            # from buildRPCServer and never dials the daemon.
+            - "!**/cmd/cascade/daemon_unix_run_fleetjobs.go"
             - "!**/cmd/cascade/mcp.go"
             - "!**/cmd/cascade/elevate_helper.go"
+            # backup_elevation.go never dials the daemon - there is no
+            # client.Client.Call anywhere in it, no socket, no HTTP round
+            # trip to a running server. It runs the 06 §5.14 nonce +
+            # local-auth-signature + middleware-verify + single-use-ledger
+            # ceremony entirely IN-PROCESS, inside the CLI invocation that
+            # needs a backup.ElevationProof: it constructs its OWN
+            # NonceLedger (elevation_ledger.go's own doc comment already
+            # documents that ledger as memory-only, "deliberately not
+            # durable across a daemon restart" - a fresh per-invocation
+            # ledger has the identical characteristic, not a weaker one),
+            # issues a nonce, shells out to the elevate-helper subcommand's
+            # local-auth signature, then verifies that attestation against
+            # the SAME rpc.ElevationMiddleware the daemon composition root
+            # (daemon_unix_run.go) wires server-side - reusing the one
+            # audited verification function rather than a second hand-
+            # rolled copy of it. This is the wire-type/verification-reuse
+            # case the rule's own comment above describes, not a hand-
+            # rolled outbound client (P1-E19-W4-S42-T3).
+            - "!**/cmd/cascade/backup_elevation.go"
             - "!**/*_test.go"
           deny:
             - pkg: "github.com/acamarata/cascade/internal/rpc"

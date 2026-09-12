@@ -1,0 +1,12 @@
+id: AAAAAAAAAAE
+data: {"seq":1,"kind":"job.leased","source":"{\"job_id\":\"job-1\"}","payload":"eyJqb2JfaWQiOiJqb2ItMSJ9"}
+
+id: AAAAAAAAAAI
+data: {"seq":2,"kind":"job.transitioned","source":"{\"job_id\":\"job-1\",\"from\":\"leased\",\"to\":\"running\"}","payload":"eyJqb2JfaWQiOiJqb2ItMSIsImZyb20iOiJsZWFzZWQiLCJ0byI6InJ1bm5pbmcifQ=="}
+
+id: AAAAAAAAAAM
+data: {"seq":3,"kind":"job.completed","source":"{\"job_id\":\"job-1\"}","payload":"eyJqb2JfaWQiOiJqb2ItMSJ9"}
+
+id: AAAAAAAAAAQ
+data: {"seq":4,"kind":"lease.acquired","source":"{\"job_id\":\"job-1\",\"lease_id\":\"repo1:/a\"}","payload":"eyJqb2JfaWQiOiJqb2ItMSIsImxlYXNlX2lkIjoicmVwbzE6L2EifQ=="}
+

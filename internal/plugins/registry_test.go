@@ -8,9 +8,15 @@ import (
 	// plugin.RegisterBuiltin — the compile-time registration this whole
 	// test suite exercises. registry.go (this package, under test) itself
 	// now imports plugins/codex and plugins/opencode to wire their real
-	// generators (P1-E16-W4-S34-T3, P1-E16-W4-S35-T1), so this test
-	// binary also observes cascade-codex and cascade-opencode registered
-	// — see TestBuiltinRegistry_List's updated count below.
+	// generators (P1-E16-W4-S34-T3, P1-E16-W4-S35-T1), and
+	// cascadepa_wiring.go (also this package) imports plugins/cascade-pa
+	// to wire its real client adapter, so this test binary also observes
+	// cascade-codex, cascade-opencode, and cascade-pa registered — see
+	// TestBuiltinRegistry_List's updated count below. cascade-pa's
+	// manifest declares no commands (its "chat" command is mounted
+	// directly on root, not through this registry — see
+	// FIX-manifest-collision-and-conductor-seam), so it now loads
+	// validly instead of being rejected on a name collision.
 	_ "github.com/acamarata/cascade/plugins/examples/example-builtin"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -97,7 +103,7 @@ func TestBuiltinRegistry_GetUnknown(t *testing.T) {
 func TestBuiltinRegistry_List(t *testing.T) {
 	r := loadedRegistry(t)
 	list := r.List()
-	wantIDs := []string{"cascade-codex", "cascade-opencode", "example-builtin"}
+	wantIDs := []string{"cascade-codex", "cascade-opencode", "cascade-pa", "example-builtin"}
 	if len(list) != len(wantIDs) {
 		t.Fatalf("List() len = %d, want %d (%v)", len(list), len(wantIDs), wantIDs)
 	}

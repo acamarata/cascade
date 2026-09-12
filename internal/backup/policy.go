@@ -3,15 +3,27 @@
 // spec parsed through C/S-04.T4's own FuzzCronParse path -- this file adds
 // no new parser) and domain set, plus the per-target snapshot Outcome
 // bookkeeping every fire produces -- what schedule.go's fire closure writes
-// and S-42.T4's future verification and S-42.T5's drill read.
+// and S-42.T4's verification and S-42.T5's drill read.
+//
+// S-42.T4 EXTENSION: VerifyCronSpec/VerifyDisabled are this ticket's own
+// per-target verification cadence/toggle -- policy-record DATA (08 §3 has
+// no [backup] config.toml section), never a second parser: VerifyCronSpec
+// rides the identical scheduler.ParseSpec path CronSpec already uses. An
+// empty VerifyCronSpec means "use DefaultVerifyCronSpec" (the ticket's 24h
+// default), so every TargetPolicy record S-42.T1 already persisted decodes
+// with the correct default with no migration. Outcome gained Kind/
+// CheckedChunks/DurationMS (all omitempty on the wire) so a verification
+// fire's record is distinguishable from a create fire's without breaking
+// any already-persisted create Outcome (Kind decodes to "" -> OutcomeKindCreate).
 //
 // Inputs: a provider.Store namespace and TargetPolicy/Outcome values.
 // Outputs: persisted records, sorted deterministically on every listing.
-// Constraints: the §22 per-target VERIFIED state is S-42.T4's, not this
-// file's -- Outcome records only "a snapshot fired for this target, at this
-// time, with this result", never a verification claim.
+// Constraints: the §22 per-target VERIFIED state is recorded by an Outcome
+// with Kind == OutcomeKindVerify and Success == true -- Outcome records
+// otherwise only say "a fire happened for this target, at this time, with
+// this result".
 //
-// SPORT: internal.backup.policy/ADD (P1-E19-W4-S42-T1).
+// SPORT: internal.backup.policy/ADD (P1-E19-W4-S42-T1); CHANGED (P1-E19-W4-S42-T4).
 
 // Package backup doc: see doc.go for the canonical package comment.
 package backup
@@ -37,6 +49,28 @@ type TargetPolicy struct {
 	Target   string
 	CronSpec string
 	Domains  []string
+	// VerifyCronSpec is this target's verification cadence (S-42.T4). Empty
+	// means DefaultVerifyCronSpec ("@every 24h").
+	VerifyCronSpec string
+	// VerifyDisabled turns OFF scheduled verification for this target when
+	// true (S-42.T4's per-target toggle). The zero value (false) keeps
+	// verification ON by default -- an already-persisted S-42.T1 policy
+	// record predating this field decodes as VerifyDisabled == false.
+	VerifyDisabled bool
+}
+
+// DefaultVerifyCronSpec is the S-42.T4 policy-record default cadence when
+// a TargetPolicy leaves VerifyCronSpec empty. This is DATA, never a
+// config.toml key (08 §3 has no [backup] section).
+const DefaultVerifyCronSpec = "@every 24h"
+
+// EffectiveVerifyCronSpec returns p.VerifyCronSpec, or DefaultVerifyCronSpec
+// when p leaves it unset.
+func (p TargetPolicy) EffectiveVerifyCronSpec() string {
+	if strings.TrimSpace(p.VerifyCronSpec) == "" {
+		return DefaultVerifyCronSpec
+	}
+	return p.VerifyCronSpec
 }
 
 // policyKeyPrefix namespaces persisted TargetPolicy records, distinct from
@@ -47,7 +81,8 @@ func policyKey(target string) string { return policyKeyPrefix + target }
 
 // Validate fails closed on a policy this build cannot safely schedule: an
 // empty target name, an unparseable cron spec (via C/S-04.T4's own
-// scheduler.ParseSpec -- no new parser), or an empty domain set.
+// scheduler.ParseSpec -- no new parser), an empty domain set, or (S-42.T4)
+// a non-empty VerifyCronSpec that fails the same parser.
 func (p TargetPolicy) Validate() error {
 	if strings.TrimSpace(p.Target) == "" {
 		return cascade.New(cascade.KindInvalidInput, "backup: policy target name is required")
@@ -58,14 +93,24 @@ func (p TargetPolicy) Validate() error {
 	if len(p.Domains) == 0 {
 		return cascade.New(cascade.KindInvalidInput, "backup: policy requires at least one domain")
 	}
+	if strings.TrimSpace(p.VerifyCronSpec) != "" {
+		if _, err := scheduler.ParseSpec(p.VerifyCronSpec); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
-// policyWire is TargetPolicy's JSON wire shape.
+// policyWire is TargetPolicy's JSON wire shape. Field order/types must
+// match TargetPolicy exactly: encodePolicy/decodePolicy convert between
+// the two directly (policyWire(p) / TargetPolicy(wire)), not field by
+// field.
 type policyWire struct {
-	Target   string   `json:"target"`
-	CronSpec string   `json:"cron_spec"`
-	Domains  []string `json:"domains"`
+	Target         string   `json:"target"`
+	CronSpec       string   `json:"cron_spec"`
+	Domains        []string `json:"domains"`
+	VerifyCronSpec string   `json:"verify_cron_spec,omitempty"`
+	VerifyDisabled bool     `json:"verify_disabled,omitempty"`
 }
 
 func encodePolicy(p TargetPolicy) ([]byte, error) {
@@ -136,17 +181,37 @@ func ListPolicies(ctx context.Context, store provider.Store, namespace string) (
 	return pols, nil
 }
 
+// OutcomeKindCreate/OutcomeKindVerify/OutcomeEffectiveKind (S-42.T4) live
+// in verify.go, next to their one real producer/consumer, to keep this
+// file under the 300-line cap.
+
 // Outcome is one fire's per-target bookkeeping: which target, which
 // snapshot (empty when the fire never produced one -- e.g. the elevation
 // refusal every unattended scheduled fire takes), when (from the injected
 // Clock, never bare time.Now), and whether it succeeded. ErrorText carries
 // the refusal/failure detail for a failed fire, empty on success.
+//
+// Kind/CheckedChunks/DurationMS (S-42.T4) are populated for a verification
+// fire only (Kind == OutcomeKindVerify); a create fire leaves them zero.
+// A Success verification Outcome IS the §22 per-target VERIFIED state --
+// there is no separate boolean or record shape for it.
 type Outcome struct {
 	Target    string
 	Snapshot  string
 	When      time.Time
 	Success   bool
 	ErrorText string
+	// Kind is OutcomeKindCreate or OutcomeKindVerify. Empty decodes to
+	// OutcomeKindCreate (see OutcomeEffectiveKind) for wire compatibility
+	// with every Outcome S-42.T1 already persisted.
+	Kind string
+	// CheckedChunks is VerifyIntegrity's GateReport.ObjectsVerified for a
+	// successful verification fire; zero otherwise.
+	CheckedChunks int
+	// DurationMS is the verification pass's wall-clock duration in
+	// milliseconds, measured via the injected Clock (never bare
+	// time.Now); zero for a create fire.
+	DurationMS int64
 }
 
 // outcomeKeyPrefix namespaces persisted Outcome records, one per target per
@@ -160,11 +225,14 @@ func outcomeKey(target string, when time.Time) string {
 
 // outcomeWire is Outcome's JSON wire shape.
 type outcomeWire struct {
-	Target    string `json:"target"`
-	Snapshot  string `json:"snapshot,omitempty"`
-	When      string `json:"when"`
-	Success   bool   `json:"success"`
-	ErrorText string `json:"error,omitempty"`
+	Target        string `json:"target"`
+	Snapshot      string `json:"snapshot,omitempty"`
+	When          string `json:"when"`
+	Success       bool   `json:"success"`
+	ErrorText     string `json:"error,omitempty"`
+	Kind          string `json:"kind,omitempty"`
+	CheckedChunks int    `json:"checked_chunks,omitempty"`
+	DurationMS    int64  `json:"duration_ms,omitempty"`
 }
 
 // RecordOutcome persists one fire's Outcome. Outcomes are append-only (each
@@ -180,6 +248,7 @@ func RecordOutcome(ctx context.Context, store provider.Store, namespace string, 
 	wire := outcomeWire{
 		Target: o.Target, Snapshot: o.Snapshot,
 		When: o.When.UTC().Format(time.RFC3339Nano), Success: o.Success, ErrorText: o.ErrorText,
+		Kind: o.Kind, CheckedChunks: o.CheckedChunks, DurationMS: o.DurationMS,
 	}
 	data, err := json.Marshal(wire)
 	if err != nil {
@@ -213,6 +282,7 @@ func ListOutcomes(ctx context.Context, store provider.Store, namespace, target s
 		outs = append(outs, Outcome{
 			Target: wire.Target, Snapshot: wire.Snapshot, When: when,
 			Success: wire.Success, ErrorText: wire.ErrorText,
+			Kind: wire.Kind, CheckedChunks: wire.CheckedChunks, DurationMS: wire.DurationMS,
 		})
 	}
 	if iterErr := it.Err(); iterErr != nil {

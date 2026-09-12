@@ -124,6 +124,12 @@ type Config struct {
 	// DefaultFusionEnabled. Resolved from the raw tree directly
 	// (resolveFusionEnabled below), not via fusionSection.
 	FusionEnabled bool
+	// FleetAccounts is R-21.44's `[fleet.accounts."<id>"]` map, keyed by
+	// account id (P1-E41-W9-S80-T1). PERSONAL config: never present in a
+	// tracked file. Hot -- not in coldSections (hotreload.go), so a
+	// config.toml edit to it applies live under the same
+	// freezeColdSections path telemetry.go's own doc comment describes.
+	FleetAccounts map[string]FleetAccountConfig
 	// Extra holds every top-level section other than schema_version,
 	// runtime, and elevation, exactly as decoded from the file: valid
 	// future 08 §3 sections preserved for round-tripping, never
@@ -256,6 +262,7 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 		Logging:       sec.logging,
 		Retrieval:     sec.retrieval,
 		FusionEnabled: sec.fusionEnabled,
+		FleetAccounts: sec.fleetAccounts,
 		Extra:         extraSections(tree),
 		sources:       sources,
 		rawTree:       tree,

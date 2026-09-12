@@ -1,0 +1,31 @@
+id = "example-agent-provider"
+name = "Example Agent Provider"
+schema = "cascade.plugin/v2"
+version = "0.1.0"
+host_version = ">=0.1.0"
+runtime = "wasm"
+requires = ["agent.invoke"]
+
+[[provides.tools]]
+name = "chat"
+description = "Completes a chat exchange via the plugin_invoke chat method."
+
+[[provides.tools]]
+name = "embed"
+description = "Returns embedding vectors via the plugin_invoke embed method."
+
+[[provides.tools]]
+name = "count"
+description = "Returns a token count via the plugin_invoke count method."
+
+[[provides.tools]]
+name = "stream"
+description = "Completes a chat exchange as a buffered event sequence via the plugin_invoke stream method."
+
+[[provides.tools]]
+name = "capabilities"
+description = "Describes this plugin's tool-capability support via the plugin_invoke capabilities method."
+
+[[permissions]]
+name = "agent.invoke"
+description = "Allow the host to invoke this plugin's AgentProvider methods through its plugin_invoke export."

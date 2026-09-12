@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-11T22:03:24Z",
+  "generated_at": "2026-09-12T22:56:16Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -118,6 +118,28 @@
           "line": 24,
           "status": "ADD",
           "raw": "ApprovalVerifier/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "Broker.Import",
+      "sites": [
+        {
+          "file": "internal/secrets/export.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "Broker.Import/ADD (P1-E19-W4-S42-T3)."
+        },
+        {
+          "file": "internal/secrets/export_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "Broker.Import/ADD (P1-E19-W4-S42-T3)."
         }
       ],
       "statuses": [
@@ -417,6 +439,20 @@
           "line": 32,
           "status": "ADD",
           "raw": "EvalRequest/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "ExecDialer",
+      "sites": [
+        {
+          "file": "internal/nodes/provision.go",
+          "line": 29,
+          "status": "ADD",
+          "raw": "ExecDialer/ADDED"
         }
       ],
       "statuses": [
@@ -1067,6 +1103,20 @@
       ]
     },
     {
+      "name": "ParseReleaseVersion",
+      "sites": [
+        {
+          "file": "internal/nodes/version.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "ParseReleaseVersion/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "PendingEntry",
       "sites": [
         {
@@ -1244,6 +1294,20 @@
           "line": 29,
           "status": "ADD",
           "raw": "RecordStore/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "RegisterUpgradeHandler",
+      "sites": [
+        {
+          "file": "internal/nodes/upgrade.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "RegisterUpgradeHandler/ADDED"
         }
       ],
       "statuses": [
@@ -1636,6 +1700,20 @@
       ]
     },
     {
+      "name": "VerifyMinisign",
+      "sites": [
+        {
+          "file": "internal/nodes/minisign.go",
+          "line": 28,
+          "status": "ADD",
+          "raw": "VerifyMinisign/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "audit/audit-log",
       "sites": [
         {
@@ -1886,6 +1964,28 @@
       ]
     },
     {
+      "name": "cli/context-sync-projects",
+      "sites": [
+        {
+          "file": "cmd/cascade/context_sync_projects.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T3",
+          "raw": "cli/context-sync-projects/ADD (P1-E26-W10-S53-T3 sport_updates)."
+        },
+        {
+          "file": "cmd/cascade/context_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T3",
+          "raw": "cli/context-sync-projects/ADD (P1-E26-W10-S53-T3 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cli/policy",
       "sites": [
         {
@@ -1916,6 +2016,241 @@
       ]
     },
     {
+      "name": "cmd.cascade.backup",
+      "sites": [
+        {
+          "file": "cmd/cascade/backup.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup/ADD (P1-E19-W4-S42-T3); CHANGED (P1-E19-W4-S42-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd.cascade.backup-create",
+      "sites": [
+        {
+          "file": "cmd/cascade/backup_create.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-create/ADD (P1-E19-W4-S42-T3)."
+        },
+        {
+          "file": "cmd/cascade/backup_create_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-create/ADD (tests) (P1-E19-W4-S42-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd.cascade.backup-elevation",
+      "sites": [
+        {
+          "file": "cmd/cascade/backup_elevation.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-elevation/ADD (P1-E19-W4-S42-T3)."
+        },
+        {
+          "file": "cmd/cascade/backup_elevation_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-elevation/ADD (tests) (P1-E19-W4-S42-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd.cascade.backup-export",
+      "sites": [
+        {
+          "file": "cmd/cascade/backup_export.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-export/ADD (P1-E19-W4-S42-T3)."
+        },
+        {
+          "file": "cmd/cascade/backup_export_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-export/ADD (tests) (P1-E19-W4-S42-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd.cascade.backup-import",
+      "sites": [
+        {
+          "file": "cmd/cascade/backup_import.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-import/ADD (P1-E19-W4-S42-T3)."
+        },
+        {
+          "file": "cmd/cascade/backup_import_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-import/ADD (tests) (P1-E19-W4-S42-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd.cascade.backup-key",
+      "sites": [
+        {
+          "file": "cmd/cascade/backup_key.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T6",
+          "raw": "cmd.cascade.backup-key/ADD (P1-E19-W4-S42-T6)."
+        },
+        {
+          "file": "cmd/cascade/backup_key_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T6",
+          "raw": "cmd.cascade.backup-key/ADD (tests) (P1-E19-W4-S42-T6)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd.cascade.backup-list",
+      "sites": [
+        {
+          "file": "cmd/cascade/backup_list.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-list/ADD (P1-E19-W4-S42-T3)."
+        },
+        {
+          "file": "cmd/cascade/backup_list_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-list/ADD (tests) (P1-E19-W4-S42-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd.cascade.backup-restore",
+      "sites": [
+        {
+          "file": "cmd/cascade/backup_restore.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-restore/ADD (P1-E19-W4-S42-T3)."
+        },
+        {
+          "file": "cmd/cascade/backup_restore_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-restore/ADD (tests) (P1-E19-W4-S42-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd.cascade.backup-store",
+      "sites": [
+        {
+          "file": "cmd/cascade/backup_store_unix.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-store/ADD (P1-E19-W4-S42-T3)."
+        },
+        {
+          "file": "cmd/cascade/backup_store_windows.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-store/ADD (P1-E19-W4-S42-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd.cascade.backup-target",
+      "sites": [
+        {
+          "file": "cmd/cascade/backup_target.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-target/ADD (P1-E19-W4-S42-T3)."
+        },
+        {
+          "file": "cmd/cascade/backup_target_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-target/ADD (tests) (P1-E19-W4-S42-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd.cascade.backup-verify",
+      "sites": [
+        {
+          "file": "cmd/cascade/backup_verify.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T4",
+          "raw": "cmd.cascade.backup-verify/ADD (P1-E19-W4-S42-T4)."
+        },
+        {
+          "file": "cmd/cascade/backup_verify_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T4",
+          "raw": "cmd.cascade.backup-verify/ADD (tests) (P1-E19-W4-S42-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd.cascade.cmd.context-scope-show",
       "sites": [
         {
@@ -1939,9 +2274,16 @@
           "status": "ADD",
           "ticket": "T-2",
           "raw": "cmd.cascade.cmd.context-slice-show (ADD, per T-2 sport_updates)."
+        },
+        {
+          "file": "cmd/cascade/context_slice_virgin_home_test.go",
+          "line": 15,
+          "status": "",
+          "raw": "cmd.cascade.cmd.context-slice-show (FIX, virgin-HOME bootstrap)."
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -2065,6 +2407,13 @@
           "raw": "cmd.cascade.cmd.recall (ADD, per T-3 sport_updates)."
         },
         {
+          "file": "cmd/cascade/recall_default_scope_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "T-3",
+          "raw": "cmd.cascade.cmd.recall (ADD, per T-3 sport_updates)."
+        },
+        {
           "file": "cmd/cascade/recall_harness_test.go",
           "line": 13,
           "status": "ADD",
@@ -2171,6 +2520,18 @@
           "raw": "cmd/cascade — cobra-root, global-flags, version, completions."
         },
         {
+          "file": "cmd/cascade/root_daemon_run_test.go",
+          "line": 25,
+          "status": "",
+          "raw": "cmd/cascade — cobra-root, global-flags, version, completions"
+        },
+        {
+          "file": "cmd/cascade/root_paths.go",
+          "line": 19,
+          "status": "",
+          "raw": "cmd/cascade — cobra-root, global-flags, version, completions."
+        },
+        {
           "file": "cmd/cascade/root_paths_test.go",
           "line": 15,
           "status": "",
@@ -2181,6 +2542,12 @@
           "line": 11,
           "status": "",
           "raw": "cmd/cascade — cobra-root, global-flags, version, completions."
+        },
+        {
+          "file": "cmd/cascade/testhelper_home_test.go",
+          "line": 14,
+          "status": "",
+          "raw": "cmd/cascade — test helper only, no exported surface."
         },
         {
           "file": "cmd/cascade/version.go",
@@ -2411,6 +2778,20 @@
           "raw": "cmd/cascade/daemon (CHANGED, registration split)."
         },
         {
+          "file": "cmd/cascade/daemon_unix_jobs_rpc.go",
+          "line": 32,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T1",
+          "raw": "cmd/cascade/daemon (ADD, P1-E29-W6-S60-T1)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_jobs_rpc_adapters.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T1",
+          "raw": "cmd/cascade/daemon (ADD, P1-E29-W6-S60-T1)."
+        },
+        {
           "file": "cmd/cascade/daemon_unix_memory_forget_test.go",
           "line": 12,
           "status": "CHANGE",
@@ -2474,6 +2855,13 @@
           "raw": "cmd/cascade/daemon (ADD)."
         },
         {
+          "file": "cmd/cascade/daemon_unix_run_fleetjobs.go",
+          "line": 9,
+          "status": "CHANGE",
+          "ticket": "P1-E40-W9-S77-T3",
+          "raw": "cmd/cascade/daemon (CHANGED, P1-E40-W9-S77-T3 wiring split)."
+        },
+        {
           "file": "cmd/cascade/daemon_unix_run_memory.go",
           "line": 25,
           "status": "ADD",
@@ -2492,10 +2880,37 @@
           "raw": "cmd/cascade/daemon (CHANGED — R-14.175 scheduler wiring)."
         },
         {
+          "file": "cmd/cascade/daemon_unix_scheduler_dag.go",
+          "line": 43,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "cmd/cascade/daemon (ADD, merge-fix for P1-E29-W6-S59-T5; FIX"
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_scheduler_dag_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "cmd/cascade/daemon (ADD, merge-fix for P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_scheduler_resume_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "cmd/cascade/daemon (FIX, DEFECT-scheduler-resume-never-called)."
+        },
+        {
           "file": "cmd/cascade/daemon_unix_scheduler_test.go",
           "line": 12,
           "status": "CHANGE",
           "raw": "cmd/cascade/daemon (CHANGED — R-14.175 scheduler wiring"
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_scheduler_verify_test.go",
+          "line": 8,
+          "status": "CHANGE",
+          "ticket": "P1-E19-W4-S42-T4",
+          "raw": "cmd/cascade/daemon (CHANGED — P1-E19-W4-S42-T4 wiring verification)."
         },
         {
           "file": "cmd/cascade/daemon_unix_socket_integration_test.go",
@@ -2706,6 +3121,94 @@
       ]
     },
     {
+      "name": "cmd/cascade/fleet-capacity-cli",
+      "sites": [
+        {
+          "file": "cmd/cascade/fleet_capacity.go",
+          "line": 66,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T4",
+          "raw": "cmd/cascade/fleet-capacity-cli (ADD, P1-E31-W6-S63-T4)."
+        },
+        {
+          "file": "cmd/cascade/fleet_capacity_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T4",
+          "raw": "cmd/cascade/fleet-capacity-cli (ADD, P1-E31-W6-S63-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/fleet-jobs-cli",
+      "sites": [
+        {
+          "file": "cmd/cascade/fleet_jobs.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T1",
+          "raw": "cmd/cascade/fleet-jobs-cli (ADD, P1-E29-W6-S60-T1)."
+        },
+        {
+          "file": "cmd/cascade/fleet_jobs_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T1",
+          "raw": "cmd/cascade/fleet-jobs-cli (ADD, P1-E29-W6-S60-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/fleet-leases-cli",
+      "sites": [
+        {
+          "file": "cmd/cascade/fleet_leases.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T1",
+          "raw": "cmd/cascade/fleet-leases-cli (ADD, P1-E29-W6-S60-T1)."
+        },
+        {
+          "file": "cmd/cascade/fleet_leases_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T1",
+          "raw": "cmd/cascade/fleet-leases-cli (ADD, P1-E29-W6-S60-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/fleet-top-cli",
+      "sites": [
+        {
+          "file": "cmd/cascade/fleet_top.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S40-T1",
+          "raw": "cmd/cascade/fleet-top-cli (ADD, P1-E18-W4-S40-T1)."
+        },
+        {
+          "file": "cmd/cascade/fleet_top_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S40-T1",
+          "raw": "cmd/cascade/fleet-top-cli (ADD, P1-E18-W4-S40-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade/mcp",
       "sites": [
         {
@@ -2853,6 +3356,21 @@
       ]
     },
     {
+      "name": "cmd/cascade/node upgrade",
+      "sites": [
+        {
+          "file": "cmd/cascade/node_upgrade.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S36-T5",
+          "raw": "cmd/cascade/node upgrade/ADDED (P1-E17-W4-S36-T5)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade/run",
       "sites": [
         {
@@ -2959,6 +3477,12 @@
           "raw": "cmd/cascade/vault (ADD - import)."
         },
         {
+          "file": "cmd/cascade/vault_list_format_test.go",
+          "line": 20,
+          "status": "",
+          "raw": "cmd/cascade/vault (DEFECT fix, no sport_updates — no new"
+        },
+        {
           "file": "cmd/cascade/vault_quarantine.go",
           "line": 23,
           "status": "ADD",
@@ -2972,6 +3496,28 @@
         }
       ],
       "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade:chat-mount",
+      "sites": [
+        {
+          "file": "cmd/cascade/builtin_plugins.go",
+          "line": 45,
+          "status": "ADD",
+          "raw": "cmd/cascade:chat-mount (ADD) -- FIX-cascade-chat-client-wiring."
+        },
+        {
+          "file": "cmd/cascade/chat_wiring_test.go",
+          "line": 22,
+          "status": "",
+          "raw": "cmd/cascade:chat-mount (TEST) -- FIX-cascade-chat-client-wiring."
+        }
+      ],
+      "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -2984,6 +3530,34 @@
           "status": "ADD",
           "ticket": "P1-E11-W3-S23-T3",
           "raw": "conductor.cancel/ADD (P1-E11-W3-S23-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "conductor.chat-leaf-door",
+      "sites": [
+        {
+          "file": "internal/conductor/chat.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "conductor.chat-leaf-door/ADD (FIX-manifest-collision-and-conductor-seam)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "conductor.count-leaf-door",
+      "sites": [
+        {
+          "file": "internal/conductor/count.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "conductor.count-leaf-door/ADD (FIX-manifest-collision-and-conductor-seam)."
         }
       ],
       "statuses": [
@@ -3160,6 +3734,20 @@
           "status": "ADD",
           "ticket": "P1-E11-W3-S22-T3",
           "raw": "conductor.sensitivity/ADD (P1-E11-W3-S22-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "conductor.stream-leaf-door",
+      "sites": [
+        {
+          "file": "internal/conductor/stream_door.go",
+          "line": 23,
+          "status": "ADD",
+          "raw": "conductor.stream-leaf-door/ADD (FIX-manifest-collision-and-conductor-seam)."
         }
       ],
       "statuses": [
@@ -3838,6 +4426,136 @@
       ]
     },
     {
+      "name": "fleet.capacity.expected_time",
+      "sites": [
+        {
+          "file": "internal/fleet/capacity/expected_time.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T2",
+          "raw": "fleet.capacity.expected_time (ADD, P1-E31-W6-S63-T2)."
+        },
+        {
+          "file": "internal/fleet/capacity/expected_time_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T2",
+          "raw": "fleet.capacity.expected_time (ADD, P1-E31-W6-S63-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.capacity.policy",
+      "sites": [
+        {
+          "file": "internal/fleet/capacity/errors.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T2",
+          "raw": "fleet.capacity.policy (ADD, P1-E31-W6-S63-T2)."
+        },
+        {
+          "file": "internal/fleet/capacity/errors_test.go",
+          "line": 4,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T2",
+          "raw": "fleet.capacity.policy (ADD, P1-E31-W6-S63-T2)."
+        },
+        {
+          "file": "internal/fleet/capacity/explain.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T2",
+          "raw": "fleet.capacity.policy (ADD, P1-E31-W6-S63-T2)."
+        },
+        {
+          "file": "internal/fleet/capacity/explain_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T2",
+          "raw": "fleet.capacity.policy (ADD, P1-E31-W6-S63-T2)."
+        },
+        {
+          "file": "internal/fleet/capacity/policy.go",
+          "line": 36,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T2",
+          "raw": "fleet.capacity.policy (ADD, P1-E31-W6-S63-T2)."
+        },
+        {
+          "file": "internal/fleet/capacity/policy_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T2",
+          "raw": "fleet.capacity.policy (ADD, P1-E31-W6-S63-T2)."
+        },
+        {
+          "file": "internal/fleet/capacity/tier_policy.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T2",
+          "raw": "fleet.capacity.policy (ADD, P1-E31-W6-S63-T2)."
+        },
+        {
+          "file": "internal/fleet/capacity/tier_policy_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T2",
+          "raw": "fleet.capacity.policy (ADD, P1-E31-W6-S63-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.capacity.probe",
+      "sites": [
+        {
+          "file": "internal/fleet/capacity/probe.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T2",
+          "raw": "fleet.capacity.probe (ADD, P1-E31-W6-S63-T2)."
+        },
+        {
+          "file": "internal/fleet/capacity/probe_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T2",
+          "raw": "fleet.capacity.probe (ADD, P1-E31-W6-S63-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.capacity.request",
+      "sites": [
+        {
+          "file": "internal/fleet/capacity/request.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T2",
+          "raw": "fleet.capacity.request (ADD, P1-E31-W6-S63-T2)."
+        },
+        {
+          "file": "internal/fleet/capacity/request_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T2",
+          "raw": "fleet.capacity.request (ADD, P1-E31-W6-S63-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "fleet.capacity.rpc",
       "sites": [
         {
@@ -3882,6 +4600,20 @@
           "status": "ADD",
           "ticket": "T-1",
           "raw": "fleet.capacity.snapshot (ADD, per T-1 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.quota.rpc",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/rpc_quota.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "fleet.quota.rpc (ADD, per T3 sport_updates)."
         }
       ],
       "statuses": [
@@ -4059,6 +4791,28 @@
       ]
     },
     {
+      "name": "fleet/capacity/priors",
+      "sites": [
+        {
+          "file": "internal/fleet/capacity/priors.go",
+          "line": 54,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T4",
+          "raw": "fleet/capacity/priors (ADD, P1-E31-W6-S63-T4)."
+        },
+        {
+          "file": "internal/fleet/capacity/priors_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S63-T4",
+          "raw": "fleet/capacity/priors (ADD, P1-E31-W6-S63-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "fleet/census",
       "sites": [
         {
@@ -4130,6 +4884,80 @@
           "status": "ADD",
           "ticket": "T-1",
           "raw": "fleet/census (ADD, per T-1 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/economics/accounts",
+      "sites": [
+        {
+          "file": "internal/fleet/economics/accounts.go",
+          "line": 35,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S80-T1",
+          "raw": "fleet/economics/accounts/ADD (P1-E41-W9-S80-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/economics/health",
+      "sites": [
+        {
+          "file": "internal/fleet/economics/health.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S80-T1",
+          "raw": "fleet/economics/health/ADD (P1-E41-W9-S80-T1)."
+        },
+        {
+          "file": "internal/fleet/economics/health_state.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S80-T1",
+          "raw": "fleet/economics/health/ADD (P1-E41-W9-S80-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/economics/pressure",
+      "sites": [
+        {
+          "file": "internal/fleet/economics/economics_types.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T1",
+          "raw": "fleet/economics/pressure/ADD (P1-E41-W9-S79-T1)."
+        },
+        {
+          "file": "internal/fleet/economics/shadow_price.go",
+          "line": 32,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T1",
+          "raw": "fleet/economics/pressure/ADD (P1-E41-W9-S79-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/economics/window",
+      "sites": [
+        {
+          "file": "internal/fleet/economics/window.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S80-T1",
+          "raw": "fleet/economics/window/ADD (P1-E41-W9-S80-T1)."
         }
       ],
       "statuses": [
@@ -4346,6 +5174,426 @@
       ]
     },
     {
+      "name": "fleet/topology/availability",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/availability.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T3",
+          "raw": "fleet/topology/availability/ADD (P1-E40-W9-S77-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/batch",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/batch.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S78-T1",
+          "raw": "fleet/topology/batch/ADD (P1-E40-W9-S78-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/bucket",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/bucket.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T3",
+          "raw": "fleet/topology/bucket/ADD (P1-E40-W9-S77-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/candidates",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/candidates.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S78-T1",
+          "raw": "fleet/topology/candidates/ADD (P1-E40-W9-S78-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/chooser",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/chooser.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S78-T1",
+          "raw": "fleet/topology/chooser/ADD (P1-E40-W9-S78-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/chooser_errors",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/chooser_errors.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S78-T1",
+          "raw": "fleet/topology/chooser_errors/ADD (P1-E40-W9-S78-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/chooser_pressure",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/chooser_pressure.go",
+          "line": 38,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S78-T1",
+          "raw": "fleet/topology/chooser_pressure/ADD (P1-E40-W9-S78-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/chooser_score",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/chooser_score.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S78-T1",
+          "raw": "fleet/topology/chooser_score/ADD (P1-E40-W9-S78-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/dimensions",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/dimensions.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T3",
+          "raw": "fleet/topology/dimensions/ADD (P1-E40-W9-S77-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/enums",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/enums.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T1",
+          "raw": "fleet/topology/enums/ADD (P1-E40-W9-S77-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/errors",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/errors.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T1",
+          "raw": "fleet/topology/errors/ADD (P1-E40-W9-S77-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/freshness",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/freshness.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T3",
+          "raw": "fleet/topology/freshness/ADD (P1-E40-W9-S77-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/invariants",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/invariants.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T1",
+          "raw": "fleet/topology/invariants/ADD (P1-E40-W9-S77-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/lane_class",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/lane_class.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T1",
+          "raw": "fleet/topology/lane_class/ADD (P1-E40-W9-S77-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/lane_identity",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/lane_identity.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T1",
+          "raw": "fleet/topology/lane_identity/ADD (P1-E40-W9-S77-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/limit_scope",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/limit_scope.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T3",
+          "raw": "fleet/topology/limit_scope/ADD (P1-E40-W9-S77-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/migration",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/migration.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T1",
+          "raw": "fleet/topology/migration/ADD (P1-E40-W9-S77-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/offering_snapshot",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/offering_snapshot.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T1",
+          "raw": "fleet/topology/offering_snapshot/ADD (P1-E40-W9-S77-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/quota_snapshot",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/quota_snapshot.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T3",
+          "raw": "fleet/topology/quota_snapshot/ADD (P1-E40-W9-S77-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/quota_store",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/quota_store.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T3",
+          "raw": "fleet/topology/quota_store/ADD (P1-E40-W9-S77-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/reconcile",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/reconcile.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T1",
+          "raw": "fleet/topology/reconcile/ADD (P1-E40-W9-S77-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/reserve_bounds",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/reserve_bounds.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T3",
+          "raw": "fleet/topology/reserve_bounds/ADD (P1-E40-W9-S77-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/schema",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/schema.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T1",
+          "raw": "fleet/topology/schema/ADD (P1-E40-W9-S77-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/scope_transition",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/scope_transition.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S78-T1",
+          "raw": "fleet/topology/scope_transition/ADD (P1-E40-W9-S78-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/source_ladder",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/source_ladder.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T3",
+          "raw": "fleet/topology/source_ladder/ADD (P1-E40-W9-S77-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/store",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/store.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T1",
+          "raw": "fleet/topology/store/ADD (P1-E40-W9-S77-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/types",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/types.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T1",
+          "raw": "fleet/topology/types/ADD (P1-E40-W9-S77-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/window_map",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/window_map.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T3",
+          "raw": "fleet/topology/window_map/ADD (P1-E40-W9-S77-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "integration proof",
       "sites": [
         {
@@ -4556,6 +5804,94 @@
       ]
     },
     {
+      "name": "internal.backup.escrow",
+      "sites": [
+        {
+          "file": "internal/backup/escrow.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T6",
+          "raw": "internal.backup.escrow/ADDED (P1-E19-W4-S42-T6)."
+        },
+        {
+          "file": "internal/backup/escrow_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T6",
+          "raw": "internal.backup.escrow/ADD (tests) (P1-E19-W4-S42-T6)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.backup.export",
+      "sites": [
+        {
+          "file": "internal/backup/export.go",
+          "line": 27,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T2",
+          "raw": "internal.backup.export/ADDED (P1-E19-W4-S42-T2)."
+        },
+        {
+          "file": "internal/backup/export_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T2",
+          "raw": "internal.backup.export/ADDED (P1-E19-W4-S42-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.backup.import",
+      "sites": [
+        {
+          "file": "internal/backup/import.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T2",
+          "raw": "internal.backup.import/ADDED (P1-E19-W4-S42-T2)."
+        },
+        {
+          "file": "internal/backup/import_decode.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T2",
+          "raw": "internal.backup.import/ADDED (P1-E19-W4-S42-T2); split from"
+        },
+        {
+          "file": "internal/backup/import_id.go",
+          "line": 5,
+          "status": "CHANGE",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "internal.backup.import/CHANGE (P1-E19-W4-S42-T3)."
+        },
+        {
+          "file": "internal/backup/import_id_test.go",
+          "line": 9,
+          "status": "CHANGE",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "internal.backup.import/CHANGE (tests) (P1-E19-W4-S42-T3)."
+        },
+        {
+          "file": "internal/backup/import_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T2",
+          "raw": "internal.backup.import/ADDED (P1-E19-W4-S42-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD",
+        "CHANGE"
+      ]
+    },
+    {
       "name": "internal.backup.integrity",
       "sites": [
         {
@@ -4607,6 +5943,35 @@
       ]
     },
     {
+      "name": "internal.backup.mcp",
+      "sites": [
+        {
+          "file": "internal/backup/mcp.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "internal.backup.mcp/ADD (P1-E19-W4-S42-T3); CHANGED (P1-E19-W4-S42-T4)."
+        },
+        {
+          "file": "internal/backup/mcp_list_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "internal.backup.mcp/ADD (tests) (P1-E19-W4-S42-T3)."
+        },
+        {
+          "file": "internal/backup/mcp_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "internal.backup.mcp/ADD (P1-E19-W4-S42-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.backup.pipeline",
       "sites": [
         {
@@ -4640,10 +6005,10 @@
       "sites": [
         {
           "file": "internal/backup/policy.go",
-          "line": 14,
+          "line": 26,
           "status": "ADD",
           "ticket": "P1-E19-W4-S42-T1",
-          "raw": "internal.backup.policy/ADD (P1-E19-W4-S42-T1)."
+          "raw": "internal.backup.policy/ADD (P1-E19-W4-S42-T1); CHANGED (P1-E19-W4-S42-T4)."
         },
         {
           "file": "internal/backup/policy_test.go",
@@ -4651,6 +6016,35 @@
           "status": "ADD",
           "ticket": "P1-E19-W4-S42-T1",
           "raw": "internal.backup.policy/ADD (tests) (P1-E19-W4-S42-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.backup.recovery",
+      "sites": [
+        {
+          "file": "internal/backup/recovery.go",
+          "line": 35,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T6",
+          "raw": "internal.backup.recovery/ADDED (P1-E19-W4-S42-T6)."
+        },
+        {
+          "file": "internal/backup/recovery_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T6",
+          "raw": "internal.backup.recovery/ADD (tests) (P1-E19-W4-S42-T6)."
+        },
+        {
+          "file": "internal/backup/recovery_vault_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T6",
+          "raw": "internal.backup.recovery/ADD (tests) (P1-E19-W4-S42-T6)."
         }
       ],
       "statuses": [
@@ -4706,10 +6100,10 @@
       "sites": [
         {
           "file": "internal/backup/schedule.go",
-          "line": 21,
+          "line": 26,
           "status": "ADD",
           "ticket": "P1-E19-W4-S42-T1",
-          "raw": "internal.backup.schedule/ADD (P1-E19-W4-S42-T1)."
+          "raw": "internal.backup.schedule/ADD (P1-E19-W4-S42-T1); CHANGED (P1-E19-W4-S42-T4)."
         },
         {
           "file": "internal/backup/schedule_test.go",
@@ -4913,6 +6307,57 @@
           "status": "ADD",
           "ticket": "P1-E19-W4-S41-T3",
           "raw": "internal.backup.targets.s3/ADDED (P1-E19-W4-S41-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.backup.vaultexport",
+      "sites": [
+        {
+          "file": "internal/backup/vaultexport.go",
+          "line": 36,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T2",
+          "raw": "internal.backup.vaultexport/ADDED (P1-E19-W4-S42-T2)."
+        },
+        {
+          "file": "internal/backup/vaultexport_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T2",
+          "raw": "internal.backup.vaultexport/ADDED (P1-E19-W4-S42-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.backup.verify",
+      "sites": [
+        {
+          "file": "internal/backup/verify.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T4",
+          "raw": "internal.backup.verify/ADD (P1-E19-W4-S42-T4)."
+        },
+        {
+          "file": "internal/backup/verify_schedule_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T4",
+          "raw": "internal.backup.verify/ADD (tests) (P1-E19-W4-S42-T4)."
+        },
+        {
+          "file": "internal/backup/verify_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T4",
+          "raw": "internal.backup.verify/ADD (tests) (P1-E19-W4-S42-T4)."
         }
       ],
       "statuses": [
@@ -6109,6 +7554,42 @@
           "status": "ADD",
           "ticket": "P1-E12-W3-S24-T3",
           "raw": "internal.fleet.sessions.Store/ADDED (P1-E12-W3-S24-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.fleet.top",
+      "sites": [
+        {
+          "file": "internal/fleet/top.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S40-T1",
+          "raw": "internal.fleet.top/ADDED (P1-E18-W4-S40-T1)."
+        },
+        {
+          "file": "internal/fleet/top_fetch.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S40-T1",
+          "raw": "internal.fleet.top/ADDED (P1-E18-W4-S40-T1)."
+        },
+        {
+          "file": "internal/fleet/top_render.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S40-T1",
+          "raw": "internal.fleet.top/ADDED (P1-E18-W4-S40-T1)."
+        },
+        {
+          "file": "internal/fleet/top_types.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S40-T1",
+          "raw": "internal.fleet.top/ADDED (P1-E18-W4-S40-T1)."
         }
       ],
       "statuses": [
@@ -7681,6 +9162,20 @@
           "status": "ADD",
           "ticket": "P1-E04-W1-S06-T4",
           "raw": "internal.rpc.SSEHandler/ADDED (P1-E04-W1-S06-T4)."
+        },
+        {
+          "file": "internal/rpc/sse_filter_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T1",
+          "raw": "internal.rpc.SSEHandler/ADDED job/lease topics (P1-E29-W6-S60-T1)."
+        },
+        {
+          "file": "internal/rpc/sse_jobs.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T1",
+          "raw": "internal.rpc.SSEHandler/ADDED job/lease topics (P1-E29-W6-S60-T1)."
         }
       ],
       "statuses": [
@@ -7695,6 +9190,26 @@
           "line": 12,
           "status": "ADD",
           "raw": "internal.runtime.parseConfigSections/ADDED (T0, R-14.201)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.secrets.Broker.Export",
+      "sites": [
+        {
+          "file": "internal/secrets/export.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "internal.secrets.Broker.Export/ADD"
+        },
+        {
+          "file": "internal/secrets/export_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "internal.secrets.Broker.Export/ADD"
         }
       ],
       "statuses": [
@@ -8447,6 +9962,162 @@
       ]
     },
     {
+      "name": "internal.sync",
+      "sites": [
+        {
+          "file": "internal/sync/fakestore_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "internal.sync (tests only)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.sync.chunk",
+      "sites": [
+        {
+          "file": "internal/sync/chunk.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T1",
+          "raw": "internal.sync.chunk/ADDED (P1-E17-W4-S38-T1)."
+        },
+        {
+          "file": "internal/sync/chunk_test.go",
+          "line": 2,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T1",
+          "raw": "internal.sync.chunk/ADDED (P1-E17-W4-S38-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.sync.config",
+      "sites": [
+        {
+          "file": "internal/sync/config.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T1",
+          "raw": "internal.sync.config/ADDED (P1-E17-W4-S38-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.sync.cursor",
+      "sites": [
+        {
+          "file": "internal/sync/cursor.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T1",
+          "raw": "internal.sync.cursor/ADDED (P1-E17-W4-S38-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.sync.domains",
+      "sites": [
+        {
+          "file": "internal/sync/domains.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T1",
+          "raw": "internal.sync.domains/ADDED (P1-E17-W4-S38-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.sync.egress",
+      "sites": [
+        {
+          "file": "internal/sync/egress.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T1",
+          "raw": "internal.sync.egress/ADDED (P1-E17-W4-S38-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.sync.engine",
+      "sites": [
+        {
+          "file": "internal/sync/engine.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T1",
+          "raw": "internal.sync.engine/ADDED (P1-E17-W4-S38-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.sync.filter",
+      "sites": [
+        {
+          "file": "internal/sync/filter.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T1",
+          "raw": "internal.sync.filter/ADDED (P1-E17-W4-S38-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.sync.staging",
+      "sites": [
+        {
+          "file": "internal/sync/staging.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T1",
+          "raw": "internal.sync.staging/ADDED (P1-E17-W4-S38-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.sync.transfer",
+      "sites": [
+        {
+          "file": "internal/sync/transfer.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T1",
+          "raw": "internal.sync.transfer/ADDED (P1-E17-W4-S38-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/build",
       "sites": [
         {
@@ -8850,6 +10521,13 @@
           "raw": "internal/daemon (ADD, per T-2 sport_updates)."
         },
         {
+          "file": "internal/daemon/node_upgrade_rpc.go",
+          "line": 29,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S36-T5",
+          "raw": "internal/daemon (ADD, T0-daemon-composition-root, P1-E17-W4-S36-T5)."
+        },
+        {
           "file": "internal/daemon/policy_rpc.go",
           "line": 22,
           "status": "CHANGE",
@@ -8860,6 +10538,13 @@
           "line": 7,
           "status": "ADD",
           "raw": "internal/daemon (ADD, coverage-floor fix)."
+        },
+        {
+          "file": "internal/daemon/quota_rpc.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T3",
+          "raw": "internal/daemon (ADD, T0-daemon-composition-root, P1-E40-W9-S77-T3)."
         },
         {
           "file": "internal/daemon/reachability_wiring.go",
@@ -8908,6 +10593,47 @@
           "raw": "internal/daemon (CHANGE, P1-E11-W3-S22-T4)."
         },
         {
+          "file": "internal/daemon/subsystems_scheduler.go",
+          "line": 76,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "internal/daemon (ADD, merge-fix for P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "internal/daemon/subsystems_scheduler_events.go",
+          "line": 33,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "internal/daemon (ADD, merge-fix for P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "internal/daemon/subsystems_scheduler_resume_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "internal/daemon (FIX, DEFECT-scheduler-resume-never-called)."
+        },
+        {
+          "file": "internal/daemon/subsystems_scheduler_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "internal/daemon (ADD, merge-fix for P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "internal/daemon/subsystems_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T3",
+          "raw": "internal/daemon (ADD, P1-E29-W6-S59-T3)."
+        },
+        {
+          "file": "internal/daemon/subsystems_worktree.go",
+          "line": 27,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T3",
+          "raw": "internal/daemon (ADD, P1-E29-W6-S59-T3)."
+        },
+        {
           "file": "internal/daemon/upgrade.go",
           "line": 30,
           "status": "ADD",
@@ -8950,6 +10676,7 @@
         }
       ],
       "statuses": [
+        "",
         "ADD",
         "CHANGE"
       ]
@@ -9678,6 +11405,70 @@
       ]
     },
     {
+      "name": "internal/migration",
+      "sites": [
+        {
+          "file": "internal/migration/diff.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T3",
+          "raw": "internal/migration [ADD] (P1-E26-W10-S53-T3 sport_updates)."
+        },
+        {
+          "file": "internal/migration/instruction_regen.go",
+          "line": 46,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T3",
+          "raw": "internal/migration [ADD] (P1-E26-W10-S53-T3 sport_updates)."
+        },
+        {
+          "file": "internal/migration/instruction_regen_apply_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T3",
+          "raw": "internal/migration [ADD] (P1-E26-W10-S53-T3 sport_updates)."
+        },
+        {
+          "file": "internal/migration/instruction_regen_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T3",
+          "raw": "internal/migration [ADD] (P1-E26-W10-S53-T3 sport_updates)."
+        },
+        {
+          "file": "internal/migration/instruction_regen_windows_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T3",
+          "raw": "internal/migration [ADD] (P1-E26-W10-S53-T3 sport_updates)."
+        },
+        {
+          "file": "internal/migration/report.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T3",
+          "raw": "internal/migration [ADD] (P1-E26-W10-S53-T3 sport_updates)."
+        },
+        {
+          "file": "internal/migration/report_test.go",
+          "line": 2,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T3",
+          "raw": "internal/migration [ADD] (P1-E26-W10-S53-T3 sport_updates)."
+        },
+        {
+          "file": "internal/migration/scan.go",
+          "line": 29,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T3",
+          "raw": "internal/migration [ADD] (P1-E26-W10-S53-T3 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/nodes",
       "sites": [
         {
@@ -9700,6 +11491,21 @@
           "line": 40,
           "status": "ADD",
           "raw": "internal/nodes CapabilityReport/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes DeferSelfUpdate",
+      "sites": [
+        {
+          "file": "internal/nodes/channel.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S36-T5",
+          "raw": "internal/nodes DeferSelfUpdate/ADDED (P1-E17-W4-S36-T5)."
         }
       ],
       "statuses": [
@@ -9824,6 +11630,34 @@
       ]
     },
     {
+      "name": "internal/nodes MinisignSignature",
+      "sites": [
+        {
+          "file": "internal/nodes/minisign.go",
+          "line": 28,
+          "status": "ADD",
+          "raw": "internal/nodes MinisignSignature/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes NegotiateVersion",
+      "sites": [
+        {
+          "file": "internal/nodes/version.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "internal/nodes NegotiateVersion/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/nodes NetworkWatcher",
       "sites": [
         {
@@ -9832,6 +11666,21 @@
           "status": "ADD",
           "ticket": "P1-E36-W7-S72-T2",
           "raw": "internal/nodes NetworkWatcher/ADDED (P1-E36-W7-S72-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes NewSSHExecDialer",
+      "sites": [
+        {
+          "file": "internal/nodes/provision_ssh.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S36-T5",
+          "raw": "internal/nodes NewSSHExecDialer/ADDED (P1-E17-W4-S36-T5)."
         }
       ],
       "statuses": [
@@ -9910,6 +11759,20 @@
       ]
     },
     {
+      "name": "internal/nodes Provision",
+      "sites": [
+        {
+          "file": "internal/nodes/provision.go",
+          "line": 29,
+          "status": "ADD",
+          "raw": "internal/nodes Provision/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/nodes Role",
       "sites": [
         {
@@ -9952,6 +11815,20 @@
       ]
     },
     {
+      "name": "internal/nodes RunUpgrade",
+      "sites": [
+        {
+          "file": "internal/nodes/upgrade.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "internal/nodes RunUpgrade/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/nodes Section",
       "sites": [
         {
@@ -9981,6 +11858,21 @@
       ]
     },
     {
+      "name": "internal/nodes TestProvisionRealSSHD",
+      "sites": [
+        {
+          "file": "internal/nodes/provision_integration_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E17-W4-S36-T5",
+          "raw": "internal/nodes TestProvisionRealSSHD (P1-E17-W4-S36-T5)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/nodes TestTunnelRealSSHD",
       "sites": [
         {
@@ -9989,6 +11881,21 @@
           "status": "",
           "ticket": "P1-E17-W4-S36-T3",
           "raw": "internal/nodes TestTunnelRealSSHD (P1-E17-W4-S36-T3)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/nodes TestVersionVerifyRealMinisign",
+      "sites": [
+        {
+          "file": "internal/nodes/minisign_integration_test.go",
+          "line": 11,
+          "status": "",
+          "ticket": "P1-E17-W4-S36-T5",
+          "raw": "internal/nodes TestVersionVerifyRealMinisign (P1-E17-W4-S36-T5)."
         }
       ],
       "statuses": [
@@ -10172,7 +12079,7 @@
       "sites": [
         {
           "file": "internal/plugins/registry_test.go",
-          "line": 31,
+          "line": 37,
           "status": "ADD",
           "ticket": "P1-E03-W1-S05-T7",
           "raw": "internal/plugins builtin-registry tests (ADD) — P1-E03-W1-S05-T7."
@@ -10319,6 +12226,57 @@
         }
       ],
       "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-review-wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_review_wiring.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T4",
+          "raw": "internal/plugins:cascadepa-review-wiring (ADD) — P1-E22-W5-S47-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-soul-wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_soul_wiring.go",
+          "line": 47,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T3",
+          "raw": "internal/plugins:cascadepa-soul-wiring (ADD) — P1-E22-W5-S47-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_wiring.go",
+          "line": 43,
+          "status": "ADD",
+          "raw": "internal/plugins:cascadepa-wiring (ADD) -- FIX-cascade-chat-client-wiring."
+        },
+        {
+          "file": "internal/plugins/cascadepa_wiring_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "internal/plugins:cascadepa-wiring (TEST) -- FIX-cascade-chat-client-wiring."
+        }
+      ],
+      "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -11531,6 +13489,21 @@
       ]
     },
     {
+      "name": "internal/sync TestSyncChunkedTransferRealSSHD",
+      "sites": [
+        {
+          "file": "internal/sync/transfer_integration_test.go",
+          "line": 12,
+          "status": "",
+          "ticket": "P1-E17-W4-S38-T1",
+          "raw": "internal/sync TestSyncChunkedTransferRealSSHD (P1-E17-W4-S38-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/tools/registry-gen",
       "sites": [
         {
@@ -11554,6 +13527,35 @@
           "status": "ADD",
           "ticket": "P1-E24-W5-S50-T5",
           "raw": "internal/tools/registry-gen tests (ADD) — P1-E24-W5-S50-T5."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "jobs/acceptance",
+      "sites": [
+        {
+          "file": "internal/jobs/acceptance_path1_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T4",
+          "raw": "jobs/acceptance/ADD (P1-E29-W6-S60-T4)."
+        },
+        {
+          "file": "internal/jobs/acceptance_path3_test.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T4",
+          "raw": "jobs/acceptance/ADD (P1-E29-W6-S60-T4)."
+        },
+        {
+          "file": "internal/jobs/acceptance_test.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T4",
+          "raw": "jobs/acceptance/ADD (P1-E29-W6-S60-T4)."
         }
       ],
       "statuses": [
@@ -11840,6 +13842,78 @@
       ]
     },
     {
+      "name": "jobs/pews-compiler",
+      "sites": [
+        {
+          "file": "internal/jobs/pews_compiler.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E34-W7-S69-T3",
+          "raw": "jobs/pews-compiler/ADD (P1-E34-W7-S69-T3)."
+        },
+        {
+          "file": "internal/jobs/pews_compiler_errors.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E34-W7-S69-T3",
+          "raw": "jobs/pews-compiler/ADD (P1-E34-W7-S69-T3)."
+        },
+        {
+          "file": "internal/jobs/pews_compiler_fieldmap.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E34-W7-S69-T3",
+          "raw": "jobs/pews-compiler/ADD (P1-E34-W7-S69-T3)."
+        },
+        {
+          "file": "internal/jobs/pews_compiler_gateset.go",
+          "line": 27,
+          "status": "ADD",
+          "ticket": "P1-E34-W7-S69-T3",
+          "raw": "jobs/pews-compiler/ADD (P1-E34-W7-S69-T3)."
+        },
+        {
+          "file": "internal/jobs/pews_compiler_riskclass.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E34-W7-S69-T3",
+          "raw": "jobs/pews-compiler/ADD (P1-E34-W7-S69-T3)."
+        },
+        {
+          "file": "internal/jobs/pews_compiler_types.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E34-W7-S69-T3",
+          "raw": "jobs/pews-compiler/ADD (P1-E34-W7-S69-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "jobs/release-gate",
+      "sites": [
+        {
+          "file": "internal/jobs/release_gate.go",
+          "line": 65,
+          "status": "ADD",
+          "ticket": "P1-E34-W7-S70-T2",
+          "raw": "jobs/release-gate/ADD (P1-E34-W7-S70-T2)."
+        },
+        {
+          "file": "internal/jobs/rollback_evidence.go",
+          "line": 32,
+          "status": "ADD",
+          "ticket": "P1-E34-W7-S70-T2",
+          "raw": "jobs/release-gate/ADD (P1-E34-W7-S70-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "jobs/risk-classifier",
       "sites": [
         {
@@ -11906,6 +13980,154 @@
       ]
     },
     {
+      "name": "jobs/scheduler",
+      "sites": [
+        {
+          "file": "internal/jobs/scheduler.go",
+          "line": 34,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "jobs/scheduler/ADD (P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "internal/jobs/scheduler_admit.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "jobs/scheduler/ADD (P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "internal/jobs/scheduler_admit_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "jobs/scheduler/ADD (tests) (P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "internal/jobs/scheduler_controller.go",
+          "line": 34,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "jobs/scheduler/ADD (P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "internal/jobs/scheduler_controller_test.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "jobs/scheduler/ADD (tests) (P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "internal/jobs/scheduler_reenter.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "jobs/scheduler/ADD (P1-E29-W6-S59-T5); FIX R-16.82."
+        },
+        {
+          "file": "internal/jobs/scheduler_resume.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "jobs/scheduler/ADD (P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "internal/jobs/scheduler_resume_kill9_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "jobs/scheduler/ADD (tests) (P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "internal/jobs/scheduler_resume_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "jobs/scheduler/ADD (tests) (P1-E29-W6-S59-T5); FIX R-16.82."
+        },
+        {
+          "file": "internal/jobs/scheduler_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "jobs/scheduler/ADD (tests) (P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "internal/jobs/scheduler_types.go",
+          "line": 40,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "jobs/scheduler/ADD (P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "internal/jobs/scheduler_types_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "jobs/scheduler/ADD (tests) (P1-E29-W6-S59-T5)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "jobs/scheduler-outbox",
+      "sites": [
+        {
+          "file": "internal/jobs/migration_outbox.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "jobs/scheduler-outbox/ADD (P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "internal/jobs/migration_outbox_test.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "jobs/scheduler-outbox/ADD (tests) (P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "internal/jobs/outbox.go",
+          "line": 32,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "jobs/scheduler-outbox/ADD (P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "internal/jobs/outbox_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "jobs/scheduler-outbox/ADD (tests) (P1-E29-W6-S59-T5)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "jobs/scheduler/FIX",
+      "sites": [
+        {
+          "file": "internal/jobs/store_job_resume.go",
+          "line": 27,
+          "status": "",
+          "raw": "jobs/scheduler/FIX (R-16.82, DEFECT-resume-transition-not-applied)."
+        },
+        {
+          "file": "internal/jobs/store_job_resume_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "jobs/scheduler/FIX (R-16.82, DEFECT-resume-transition-not-applied)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "jobs/store",
       "sites": [
         {
@@ -11932,6 +14154,252 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "jobs/worktree-manager",
+      "sites": [
+        {
+          "file": "internal/jobs/worktree.go",
+          "line": 27,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T3",
+          "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
+        },
+        {
+          "file": "internal/jobs/worktree_events.go",
+          "line": 40,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T3",
+          "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
+        },
+        {
+          "file": "internal/jobs/worktree_list.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T3",
+          "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
+        },
+        {
+          "file": "internal/jobs/worktree_list_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T3",
+          "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
+        },
+        {
+          "file": "internal/jobs/worktree_mutex.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T3",
+          "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
+        },
+        {
+          "file": "internal/jobs/worktree_quarantine.go",
+          "line": 29,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T3",
+          "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
+        },
+        {
+          "file": "internal/jobs/worktree_quarantine_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T3",
+          "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
+        },
+        {
+          "file": "internal/jobs/worktree_snapshot.go",
+          "line": 50,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T3",
+          "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
+        },
+        {
+          "file": "internal/jobs/worktree_snapshot_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T3",
+          "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
+        },
+        {
+          "file": "internal/jobs/worktree_store.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T3",
+          "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
+        },
+        {
+          "file": "internal/jobs/worktree_sweep.go",
+          "line": 30,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T3",
+          "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
+        },
+        {
+          "file": "internal/jobs/worktree_sweep_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T3",
+          "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
+        },
+        {
+          "file": "internal/jobs/worktree_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T3",
+          "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
+        },
+        {
+          "file": "internal/jobs/worktree_windows_test.go",
+          "line": 33,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T3",
+          "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "memory/import-batch",
+      "sites": [
+        {
+          "file": "internal/memory/import_batch.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T1",
+          "raw": "memory/import-batch/ADD (P1-E26-W10-S53-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "migration/v1",
+      "sites": [
+        {
+          "file": "internal/migration/v1/dryrun.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T1",
+          "raw": "migration/v1/ADD (P1-E26-W10-S53-T1)."
+        },
+        {
+          "file": "internal/migration/v1/importer.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T1",
+          "raw": "migration/v1/ADD (P1-E26-W10-S53-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "migration/v1/accounts",
+      "sites": [
+        {
+          "file": "internal/migration/v1/accounts.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T1",
+          "raw": "migration/v1/accounts/ADD (P1-E26-W10-S53-T1)."
+        },
+        {
+          "file": "internal/migration/v1/accounts_map.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T1",
+          "raw": "migration/v1/accounts/ADD (P1-E26-W10-S53-T1)."
+        },
+        {
+          "file": "internal/migration/v1/accounts_types.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T1",
+          "raw": "migration/v1/accounts/ADD (P1-E26-W10-S53-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "migration/v1/config",
+      "sites": [
+        {
+          "file": "internal/migration/v1/config.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T1",
+          "raw": "migration/v1/config/ADD (P1-E26-W10-S53-T1)."
+        },
+        {
+          "file": "internal/migration/v1/config_translate.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T1",
+          "raw": "migration/v1/config/ADD (P1-E26-W10-S53-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "migration/v1/memory",
+      "sites": [
+        {
+          "file": "internal/migration/v1/memory.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T1",
+          "raw": "migration/v1/memory/ADD (P1-E26-W10-S53-T1)."
+        },
+        {
+          "file": "internal/migration/v1/memory_parse.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T1",
+          "raw": "migration/v1/memory/ADD (P1-E26-W10-S53-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "migration/v1/vault",
+      "sites": [
+        {
+          "file": "internal/migration/v1/vault.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T1",
+          "raw": "migration/v1/vault/ADD (P1-E26-W10-S53-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "migration/v1/wiring",
+      "sites": [
+        {
+          "file": "cmd/cascade/migrate.go",
+          "line": 6,
+          "status": "",
+          "ticket": "P1-E26-W10-S53-T1",
+          "raw": "migration/v1/wiring (P1-E26-W10-S53-T1)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -12805,6 +15273,107 @@
       ]
     },
     {
+      "name": "plugins/cascade-pa:cmd:chat",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/cmd/chat.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T3",
+          "raw": "plugins/cascade-pa:cmd:chat (ADD) — P1-E20-W5-S43-T3."
+        },
+        {
+          "file": "plugins/cascade-pa/cmd/chat_tui.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T3",
+          "raw": "plugins/cascade-pa:cmd:chat (ADD) — P1-E20-W5-S43-T3."
+        },
+        {
+          "file": "plugins/cascade-pa/cmd/chat_tui_run.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T3",
+          "raw": "plugins/cascade-pa:cmd:chat (ADD) — P1-E20-W5-S43-T3."
+        },
+        {
+          "file": "plugins/cascade-pa/cmd/chat_windows_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T3",
+          "raw": "plugins/cascade-pa:cmd:chat (ADD) — P1-E20-W5-S43-T3."
+        },
+        {
+          "file": "plugins/cascade-pa/commands.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T3",
+          "raw": "plugins/cascade-pa:cmd:chat (ADD) — P1-E20-W5-S43-T3."
+        },
+        {
+          "file": "plugins/cascade-pa/plugin.go",
+          "line": 45,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T3",
+          "raw": "plugins/cascade-pa:cmd:chat (ADD) — P1-E20-W5-S43-T3; manifest"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa:review-chat",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/events.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T4",
+          "raw": "plugins/cascade-pa:review-chat (ADD) — P1-E22-W5-S47-T4;"
+        },
+        {
+          "file": "plugins/cascade-pa/review_chat.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T4",
+          "raw": "plugins/cascade-pa:review-chat (ADD) — P1-E22-W5-S47-T4."
+        },
+        {
+          "file": "plugins/cascade-pa/review_chat_integration_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T4",
+          "raw": "plugins/cascade-pa:review-chat (ADD) — P1-E22-W5-S47-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa:soul-chat",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/soul_chat.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T3",
+          "raw": "plugins/cascade-pa:soul-chat (ADD) — P1-E22-W5-S47-T3."
+        },
+        {
+          "file": "plugins/cascade-pa/soul_chat_integration_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T3",
+          "raw": "plugins/cascade-pa:soul-chat (ADD) — P1-E22-W5-S47-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/codex",
       "sites": [
         {
@@ -12880,6 +15449,28 @@
       ]
     },
     {
+      "name": "plugins/examples/example-agent-provider",
+      "sites": [
+        {
+          "file": "plugins/examples/example-agent-provider/main.go",
+          "line": 43,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T2",
+          "raw": "plugins/examples/example-agent-provider (ADD) — P1-E15-W4-S33-T2."
+        },
+        {
+          "file": "plugins/examples/example-agent-provider/wasm_invoke.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T2",
+          "raw": "plugins/examples/example-agent-provider (ADD) — P1-E15-W4-S33-T2"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/examples/example-builtin",
       "sites": [
         {
@@ -12898,6 +15489,51 @@
       ],
       "statuses": [
         "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/examples/example-connector",
+      "sites": [
+        {
+          "file": "plugins/examples/example-connector/main.go",
+          "line": 30,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T2",
+          "raw": "plugins/examples/example-connector (ADD) — P1-E15-W4-S33-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/examples/example-domain",
+      "sites": [
+        {
+          "file": "plugins/examples/example-domain/domain.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T2",
+          "raw": "plugins/examples/example-domain (ADD) — P1-E15-W4-S33-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/examples/integration_test",
+      "sites": [
+        {
+          "file": "plugins/examples/integration_test.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T2",
+          "raw": "plugins/examples/integration_test (ADD) — P1-E15-W4-S33-T2."
+        }
+      ],
+      "statuses": [
         "ADD"
       ]
     },
@@ -13528,6 +16164,13 @@
           "raw": "provider.registry/ADD (P1-E10-W3-S20-T2/T3 coverage)."
         },
         {
+          "file": "internal/providers/registry/import_batch.go",
+          "line": 7,
+          "status": "CHANGE",
+          "ticket": "P1-E26-W10-S53-T1",
+          "raw": "provider.registry/CHANGED (P1-E26-W10-S53-T1)."
+        },
+        {
           "file": "internal/providers/registry/lanes.go",
           "line": 11,
           "status": "ADD",
@@ -13571,7 +16214,8 @@
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -13679,6 +16323,55 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "providers.agents.local",
+      "sites": [
+        {
+          "file": "providers/agents/local/compliance.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S62-T1",
+          "raw": "providers.agents.local/ADD (P1-E30-W6-S62-T1)."
+        },
+        {
+          "file": "providers/agents/local/doc.go",
+          "line": 46,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S62-T1",
+          "raw": "providers.agents.local/ADD (P1-E30-W6-S62-T1)."
+        },
+        {
+          "file": "providers/agents/local/driver.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S62-T1",
+          "raw": "providers.agents.local/ADD (P1-E30-W6-S62-T1); model-seam"
+        },
+        {
+          "file": "providers/agents/local/jobs.go",
+          "line": 12,
+          "status": "CHANGE",
+          "raw": "providers.agents.local/CHANGE (file split only) —"
+        },
+        {
+          "file": "providers/agents/local/qualification.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S62-T1",
+          "raw": "providers.agents.local/ADD (P1-E30-W6-S62-T1); model-seam CHANGE"
+        },
+        {
+          "file": "providers/agents/local/seams.go",
+          "line": 36,
+          "status": "CHANGE",
+          "raw": "providers.agents.local/CHANGE (model-seam: raw ModelProvider -\u003e"
+        }
+      ],
+      "statuses": [
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -14365,6 +17058,12 @@
           "line": 3,
           "status": "ADD",
           "raw": "placeholder: providers/gemini driver (ADD) - see gemini.go."
+        },
+        {
+          "file": "providers/gemini/stream_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "placeholder: providers/gemini driver (ADD) - see gemini.go."
         }
       ],
       "statuses": [
@@ -14802,6 +17501,61 @@
       ]
     },
     {
+      "name": "rpc/job.* methods",
+      "sites": [
+        {
+          "file": "internal/jobs/query.go",
+          "line": 35,
+          "status": "ADD",
+          "raw": "rpc/job.* methods (ADD; type=rpc-handler, package=internal/rpc)"
+        },
+        {
+          "file": "internal/jobs/query_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "rpc/job.* methods (ADD) depends on this read surface"
+        },
+        {
+          "file": "internal/rpc/jobs.go",
+          "line": 30,
+          "status": "ADD",
+          "raw": "rpc/job.* methods (ADD; type=rpc-handler, package=internal/rpc)"
+        },
+        {
+          "file": "internal/rpc/jobs_effects.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T1",
+          "raw": "rpc/job.* methods (ADD) (P1-E29-W6-S60-T1)."
+        },
+        {
+          "file": "internal/rpc/jobs_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T1",
+          "raw": "rpc/job.* methods (ADD) (P1-E29-W6-S60-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "rpc/lease.* methods",
+      "sites": [
+        {
+          "file": "internal/rpc/jobs_lease_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T1",
+          "raw": "rpc/lease.* methods (ADD) (P1-E29-W6-S60-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "runtime.profile_server",
       "sites": [
         {
@@ -14944,10 +17698,25 @@
         },
         {
           "file": "internal/runtime/config_test.go",
-          "line": 26,
+          "line": 27,
           "status": "ADD",
           "ticket": "T-1",
           "raw": "runtime/config (ADD, placeholder per T-1 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "runtime/config-fleet-accounts",
+      "sites": [
+        {
+          "file": "internal/runtime/config_fleet.go",
+          "line": 45,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S80-T1",
+          "raw": "runtime/config-fleet-accounts (ADD, P1-E41-W9-S80-T1)."
         }
       ],
       "statuses": [
@@ -15439,6 +18208,28 @@
       ]
     },
     {
+      "name": "secrets/vault-import",
+      "sites": [
+        {
+          "file": "internal/secrets/import_atomic.go",
+          "line": 7,
+          "status": "CHANGE",
+          "ticket": "P1-E26-W10-S53-T1",
+          "raw": "secrets/vault-import/CHANGED (P1-E26-W10-S53-T1)."
+        },
+        {
+          "file": "internal/secrets/import_multiline.go",
+          "line": 6,
+          "status": "CHANGE",
+          "ticket": "P1-E26-W10-S53-T1",
+          "raw": "secrets/vault-import/CHANGED (P1-E26-W10-S53-T1)."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
+      ]
+    },
+    {
       "name": "windows-parity-pass-3",
       "sites": [
         {
@@ -15471,7 +18262,7 @@
       ]
     }
   ],
-  "total_sites": 1552,
-  "unspecified_count": 34,
-  "multi_status_count": 25
+  "total_sites": 1815,
+  "unspecified_count": 40,
+  "multi_status_count": 32
 }

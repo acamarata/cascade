@@ -39,6 +39,10 @@ type recallHarness struct {
 	// dispatch, when set, answers the call through a real rpc.Registry
 	// instead of returning a canned result.
 	dispatch *rpc.Registry
+	// getwdErr, when set, is returned by the injected Getwd instead of a
+	// resolved directory — the honest-failure case resolveDefaultScope
+	// (recall.go) refuses on, rather than defaulting.
+	getwdErr error
 }
 
 func (h *recallHarness) deps(t *testing.T) recallDeps {
@@ -48,6 +52,12 @@ func (h *recallHarness) deps(t *testing.T) recallDeps {
 		Paths:   fakeMemoryPaths{root: root},
 		Getenv:  func(string) string { return "" },
 		Environ: func() []string { return nil },
+		Getwd: func() (string, error) {
+			if h.getwdErr != nil {
+				return "", h.getwdErr
+			}
+			return root, nil
+		},
 		Call: func(ctx context.Context, _, method string, params, out any) error {
 			h.calls = append(h.calls, recordedCall{Method: method, Params: params})
 			if h.dispatch != nil {

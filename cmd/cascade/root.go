@@ -80,7 +80,7 @@ func newRootCmd() *cobra.Command {
 			if globalFlags.Quiet && globalFlags.Verbose {
 				return cascade.New(cascade.KindInvalidInput, "--quiet and --verbose are mutually exclusive")
 			}
-			ctx, err := attachServerProfile(probeDaemonlessAndAttach(cmd.Context()))
+			ctx, err := attachServerProfile(probeDaemonlessAndAttach(cmd.Context(), cmd))
 			if err != nil {
 				return err
 			}
@@ -127,14 +127,17 @@ func mountSubcommands(root *cobra.Command) {
 	mountDoctorCmd(root)
 	mountElevateHelperCmd(root)
 	mountVaultCmd(root)
+	mountBackupCmd(root)
 	mountMemoryCmd(root)
 	mountRecallCmd(root)
 	mountContextCmd(root)
 	mountApprovalCmd(root)
 	mountPolicyCmd(root)
 	mountProviderCmd(root)
+	mountMigrateCmd(root)
 	mountFleetCmd(root)
 	mountNodeCmd(root)
+	mountChatCmd(root)
 }
 
 // mountMCPCmd attaches the `mcp` command tree (D/S-06.T6), following
@@ -229,47 +232,6 @@ func guardUnknownSubcommands(cmd *cobra.Command) {
 	}
 }
 
-// lazyPaths defers NewDefaultPathProvider to first use, so constructing the
-// command tree never touches the environment. Each accessor resolves on
-// demand and returns the zero value if resolution fails; the config commands
-// validate the paths they receive and report the failure themselves.
-type lazyPaths struct{}
-
-func (lazyPaths) resolve() runtime.PathProvider {
-	p, err := runtime.NewDefaultPathProvider()
-	if err != nil {
-		return nil
-	}
-	return p
-}
-
-func (l lazyPaths) get(f func(runtime.PathProvider) string) string {
-	p := l.resolve()
-	if p == nil {
-		return ""
-	}
-	return f(p)
-}
-
-func (l lazyPaths) Root() string {
-	return l.get(func(p runtime.PathProvider) string { return p.Root() })
-}
-func (l lazyPaths) ConfigPath() string {
-	return l.get(func(p runtime.PathProvider) string { return p.ConfigPath() })
-}
-func (l lazyPaths) SocketPath() string {
-	return l.get(func(p runtime.PathProvider) string { return p.SocketPath() })
-}
-func (l lazyPaths) DataDir() string {
-	return l.get(func(p runtime.PathProvider) string { return p.DataDir() })
-}
-func (l lazyPaths) LogDir() string {
-	return l.get(func(p runtime.PathProvider) string { return p.LogDir() })
-}
-func (l lazyPaths) StorageRoot(profile runtime.Profile) string {
-	return l.get(func(p runtime.PathProvider) string { return p.StorageRoot(profile) })
-}
-
 // probeDaemonlessAndAttach is the §D-3 socket-probe auto-fallback: run
 // ALWAYS, before any subcommand's RunE (no --daemonless flag exists). It
 // dials the socket via runtime.ProbeDaemonless (reusing probeSocket, the
@@ -278,13 +240,20 @@ func (l lazyPaths) StorageRoot(profile runtime.Profile) string {
 // mode only — warns via internal/output when embedded mode activates. A
 // path-resolution failure skips the probe and returns ctx unchanged;
 // DaemonlessStateFrom's ok=false then means "unknown," never a guess.
-func probeDaemonlessAndAttach(ctx context.Context) context.Context {
+//
+// The warning is suppressed for `cascade daemon run` itself (isDaemonRunCmd):
+// that command's own socket has not opened yet at the instant this probe
+// dials it, so "daemon not running" is always true about the invocation the
+// user just ran and reads as a startup failure rather than the accurate
+// pre-bind snapshot it is. No other command's socket is ever the one this
+// probe is dialing on behalf of, so every other command keeps the warning.
+func probeDaemonlessAndAttach(ctx context.Context, cmd *cobra.Command) context.Context {
 	paths, err := runtime.NewDefaultPathProvider()
 	if err != nil {
 		return ctx
 	}
 	st := runtime.ProbeDaemonless(paths.SocketPath(), daemonlessProbeTimeout, nil)
-	if st.Embedded && !globalFlags.Quiet {
+	if st.Embedded && !globalFlags.Quiet && !isDaemonRunCmd(cmd) {
 		w := output.NewDefault(globalFlags.JSON, globalFlags.Quiet, globalFlags.Verbose, noColorFlag)
 		if st.ProbeErr != nil {
 			w.Warn("daemon liveness undecidable (%v); running in embedded (daemonless) mode", st.ProbeErr)
@@ -293,4 +262,11 @@ func probeDaemonlessAndAttach(ctx context.Context) context.Context {
 		}
 	}
 	return runtime.WithDaemonlessState(ctx, st)
+}
+
+// isDaemonRunCmd reports whether cmd is `cascade daemon run` specifically,
+// by full command path — not just the leaf name "run", which other command
+// groups could plausibly reuse.
+func isDaemonRunCmd(cmd *cobra.Command) bool {
+	return cmd != nil && cmd.CommandPath() == "cascade daemon run"
 }

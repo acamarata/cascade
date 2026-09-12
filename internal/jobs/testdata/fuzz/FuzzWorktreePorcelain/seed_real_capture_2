@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("worktree /private/tmp/wtcheck\nHEAD 695a7afc0e0bd450f7bc9e05a7fd0d7853f2c51f\nbranch refs/heads/master\n\nworktree /private/tmp/wtcheck/.cascade/worktrees/job-1\nHEAD 695a7afc0e0bd450f7bc9e05a7fd0d7853f2c51f\nbranch refs/heads/job/1\nlocked manual test lock\n\n")

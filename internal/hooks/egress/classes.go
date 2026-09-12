@@ -44,6 +44,16 @@ const (
 	// other landed egress class, lives here. Registered here rather than
 	// there.
 	EgressClassCIPoll EgressClass = "ci-poll"
+	// EgressClassSync is the server<->local<->node sync engine's
+	// outbound leg (§D-30, P1-E17-W4-S38-T1, 06 §5.17): every chunk,
+	// cursor frame, and acknowledgement the sync engine writes to a peer
+	// transits this class. Registered here per this ticket's own
+	// registrant convention (internal/sync/egress.go calls RegisterClass
+	// at its own init over this constant); AllowRestricted is NOT set —
+	// the pre-serialization filter (internal/sync/filter.go) already
+	// refuses local-only/restricted records before a byte reaches this
+	// class, so this class itself stays as strict as every other default.
+	EgressClassSync EgressClass = "sync"
 )
 
 // defaultClasses is the registration table. It is a slice of pairs rather

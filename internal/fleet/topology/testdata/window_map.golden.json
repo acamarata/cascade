@@ -1,0 +1,11 @@
+[
+  {"dimension": "rpm", "window": "rolling", "length_seconds": 60},
+  {"dimension": "tpm", "window": "rolling", "length_seconds": 60},
+  {"dimension": "rpd", "window": "day", "length_seconds": 86400},
+  {"dimension": "session_5h", "window": "5h", "length_seconds": 18000},
+  {"dimension": "window_5h", "window": "5h", "length_seconds": 18000},
+  {"dimension": "weekly_shared", "window": "week", "length_seconds": 604800},
+  {"dimension": "weekly_model_fraction", "window": "week", "length_seconds": 604800},
+  {"dimension": "weekly", "window": "week", "length_seconds": 604800},
+  {"dimension": "monthly", "window": "month", "length_seconds": 2592000}
+]

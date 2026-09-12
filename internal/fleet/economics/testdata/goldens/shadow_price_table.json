@@ -1,0 +1,173 @@
+[
+  {
+    "case": "executive-abundant",
+    "lane_class": "executive",
+    "mode_multiplier": 1.0,
+    "reserve": 0.2,
+    "remaining_fraction": 1.0,
+    "dimension": "rpm",
+    "domain_remaining_fraction": 1.0,
+    "ewma429": 0.0
+  },
+  {
+    "case": "executive-xhigh-band-upper-boundary",
+    "lane_class": "executive-xhigh",
+    "mode_multiplier": 1.5,
+    "reserve": 0.2,
+    "remaining_fraction": 0.30,
+    "dimension": "rpm",
+    "domain_remaining_fraction": 0.8,
+    "ewma429": 0.0
+  },
+  {
+    "case": "critic-band-midpoint",
+    "lane_class": "critic",
+    "mode_multiplier": 1.0,
+    "reserve": 0.2,
+    "remaining_fraction": 0.25,
+    "dimension": "rpm",
+    "domain_remaining_fraction": 0.5,
+    "ewma429": 0.0
+  },
+  {
+    "case": "specialist-at-reserve-hard",
+    "lane_class": "specialist",
+    "mode_multiplier": 2.0,
+    "reserve": 0.3,
+    "remaining_fraction": 0.30,
+    "dimension": "rpm",
+    "domain_remaining_fraction": 0.6,
+    "ewma429": 0.0
+  },
+  {
+    "case": "advisor-hard-above-absolute-floor",
+    "lane_class": "advisor",
+    "mode_multiplier": 1.0,
+    "reserve": 0.4,
+    "remaining_fraction": 0.25,
+    "dimension": "rpm",
+    "domain_remaining_fraction": 0.9,
+    "ewma429": 0.0
+  },
+  {
+    "case": "lead-below-absolute-floor",
+    "lane_class": "lead",
+    "mode_multiplier": 1.2,
+    "reserve": 0.4,
+    "remaining_fraction": 0.1,
+    "dimension": "rpm",
+    "domain_remaining_fraction": 0.3,
+    "ewma429": 0.0
+  },
+  {
+    "case": "deep-at-absolute-floor-boundary",
+    "lane_class": "deep",
+    "mode_multiplier": 1.0,
+    "reserve": 0.4,
+    "remaining_fraction": 0.2,
+    "dimension": "rpm",
+    "domain_remaining_fraction": 0.4,
+    "ewma429": 0.0
+  },
+  {
+    "case": "harness-sub-ahead-of-budget",
+    "lane_class": "harness-sub",
+    "mode_multiplier": 1.0,
+    "reserve": 0.2,
+    "remaining_fraction": 1.0,
+    "dimension": "rpm",
+    "domain_remaining_fraction": 1.0,
+    "ewma429": 0.0
+  },
+  {
+    "case": "worker-dedicated-behind-budget",
+    "lane_class": "worker-dedicated",
+    "mode_multiplier": 1.0,
+    "reserve": 0.2,
+    "remaining_fraction": 1.0,
+    "dimension": "rpm",
+    "domain_remaining_fraction": 0.05,
+    "ewma429": 0.0
+  },
+  {
+    "case": "worker-fast-mild-pressure",
+    "lane_class": "worker-fast",
+    "mode_multiplier": 1.0,
+    "reserve": 0.1,
+    "remaining_fraction": 1.0,
+    "dimension": "rpm",
+    "domain_remaining_fraction": 0.5,
+    "ewma429": 0.0
+  },
+  {
+    "case": "pool-premium-clamped-max-pressure",
+    "lane_class": "pool-premium",
+    "mode_multiplier": 0.5,
+    "reserve": 0.2,
+    "remaining_fraction": 1.0,
+    "dimension": "rpm",
+    "domain_remaining_fraction": 0.01,
+    "ewma429": 0.0
+  },
+  {
+    "case": "pool-cheap-near-reset-clamped-min-pressure",
+    "lane_class": "pool-cheap",
+    "mode_multiplier": 1.0,
+    "reserve": 0.2,
+    "remaining_fraction": 1.0,
+    "dimension": "rpd",
+    "domain_remaining_fraction": 0.9,
+    "reset_in_seconds": 3600,
+    "ewma429": 0.0
+  },
+  {
+    "case": "api-paid-hard-and-behind-budget",
+    "lane_class": "api-paid",
+    "mode_multiplier": 1.0,
+    "reserve": 0.2,
+    "remaining_fraction": 0.2,
+    "dimension": "rpm",
+    "domain_remaining_fraction": 0.05,
+    "ewma429": 0.0
+  },
+  {
+    "case": "api-free-soft-band-interior",
+    "lane_class": "api-free",
+    "mode_multiplier": 2.0,
+    "reserve": 0.2,
+    "remaining_fraction": 0.27,
+    "dimension": "rpm",
+    "domain_remaining_fraction": 0.7,
+    "ewma429": 0.0
+  },
+  {
+    "case": "api-batch-abundant-low-reserve",
+    "lane_class": "api-batch",
+    "mode_multiplier": 0.5,
+    "reserve": 0.1,
+    "remaining_fraction": 1.0,
+    "dimension": "rpm",
+    "domain_remaining_fraction": 1.0,
+    "ewma429": 0.0
+  },
+  {
+    "case": "local-zero-reserve",
+    "lane_class": "local",
+    "mode_multiplier": 1.0,
+    "reserve": 0.0,
+    "remaining_fraction": 1.0,
+    "dimension": "rpm",
+    "domain_remaining_fraction": 1.0,
+    "ewma429": 0.0
+  },
+  {
+    "case": "unranked-hard-and-below-floor",
+    "lane_class": "unranked",
+    "mode_multiplier": 1.0,
+    "reserve": 0.3,
+    "remaining_fraction": 0.1,
+    "dimension": "rpm",
+    "domain_remaining_fraction": 0.2,
+    "ewma429": 0.0
+  }
+]

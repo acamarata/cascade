@@ -30,6 +30,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -205,6 +206,21 @@ func trimValue(raw []byte) []byte {
 type listView struct {
 	Names   []string `json:"names"`
 	Backend string   `json:"backend"`
+}
+
+// String renders the human table, mirroring vault_audit.go's AuditReport
+// format (backend line, then one indented line per entry) so `vault list`
+// stops being the outlier in the vault command group. Without this method,
+// output.Writer.Result falls back to fmt's default `%v` verb and prints the
+// raw struct literal (e.g. "{[] file-vault}") instead of readable text.
+func (v listView) String() string {
+	var b strings.Builder
+	b.WriteString("backend: " + v.Backend + "\n")
+	b.WriteString("names: " + strconv.Itoa(len(v.Names)))
+	for _, name := range v.Names {
+		b.WriteString("\n  " + name)
+	}
+	return b.String()
 }
 
 func newVaultListCmd(deps vaultDeps) *cobra.Command {

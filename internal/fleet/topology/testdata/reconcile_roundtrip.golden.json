@@ -1,0 +1,44 @@
+{
+  "account": {
+    "id": "anthropic-1",
+    "provider": "anthropic",
+    "billing_kind": "subscription",
+    "billing_user_reported_monthly_micros": 0,
+    "role": "workforce"
+  },
+  "quota_domain": {
+    "id": "anthropic-1:subscription",
+    "account_ref": "anthropic-1",
+    "kind": "subscription_window",
+    "billing_tier": "discover",
+    "quarantined": false
+  },
+  "runtime_profile": {
+    "id": "anthropic-1:anthropic",
+    "runtime": "api",
+    "config_home": "",
+    "persistent": false,
+    "endpoint_host": "",
+    "endpoint_port": 0,
+    "env_var": ""
+  },
+  "credential": {
+    "id": "anthropic-1",
+    "account_ref": "anthropic-1",
+    "quota_domain_ref": "anthropic-1:subscription",
+    "secret_ref": "vault://anthropic-1/oauth",
+    "runtime_profile_ref": "anthropic-1:anthropic",
+    "health": "ok"
+  },
+  "lane": {
+    "id": "a7b3fe4cb8ce0722",
+    "runtime_profile_ref": "anthropic-1:anthropic",
+    "quota_domain_ref": "anthropic-1:subscription",
+    "model_id": "claude-opus",
+    "effort": "n/a",
+    "interaction_class": "interactive",
+    "lane_class": "unranked",
+    "base_shadow_price": 1.0,
+    "health": "available"
+  }
+}

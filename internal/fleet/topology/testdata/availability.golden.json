@@ -1,0 +1,46 @@
+[
+  {
+    "name": "no_reservations",
+    "scope": "scope:acct-1",
+    "dimension": "rpm",
+    "capacity_observed": 100,
+    "committed_since_observation": 10,
+    "reservations": [],
+    "want": 90
+  },
+  {
+    "name": "held_and_committed_both_count",
+    "scope": "scope:acct-1",
+    "dimension": "rpm",
+    "capacity_observed": 100,
+    "committed_since_observation": 0,
+    "reservations": [
+      {"reservation_id": "r1", "scope": "scope:acct-1", "dimension": "rpm", "state": "held", "estimate": 20},
+      {"reservation_id": "r2", "scope": "scope:acct-1", "dimension": "rpm", "state": "committed", "estimate": 15}
+    ],
+    "want": 65
+  },
+  {
+    "name": "other_scope_and_dimension_ignored",
+    "scope": "scope:acct-1",
+    "dimension": "rpm",
+    "capacity_observed": 100,
+    "committed_since_observation": 0,
+    "reservations": [
+      {"reservation_id": "r1", "scope": "scope:acct-2", "dimension": "rpm", "state": "held", "estimate": 999},
+      {"reservation_id": "r2", "scope": "scope:acct-1", "dimension": "tpm", "state": "held", "estimate": 999}
+    ],
+    "want": 100
+  },
+  {
+    "name": "can_go_negative_when_overcommitted",
+    "scope": "scope:acct-1",
+    "dimension": "rpd",
+    "capacity_observed": 10,
+    "committed_since_observation": 5,
+    "reservations": [
+      {"reservation_id": "r1", "scope": "scope:acct-1", "dimension": "rpd", "state": "held", "estimate": 20}
+    ],
+    "want": -15
+  }
+]

@@ -1,0 +1,11 @@
+[
+  {
+    "case": "unknown-source-lane-sustained-429",
+    "lane_class": "worker-fast",
+    "mode_multiplier": 1.0,
+    "reserve": 0.2,
+    "remaining_fraction": 0.5,
+    "ewma429_zero": 0.0,
+    "ewma429_sustained": 0.9
+  }
+]

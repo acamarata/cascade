@@ -45,6 +45,15 @@ type Tool struct {
 // binary.
 type ManifestSource func() []plugin.BuiltinRegistration
 
+// CoreRegistration is a first-party tool registration. First-party tools
+// traverse the same closed grant filter as plugin tools; callers cannot use
+// this seam to publish a mutation tool with an unrecognized grant.
+type CoreRegistration struct {
+	Tool    Tool
+	Grants  []string
+	Handler func(context.Context, []byte) ([]byte, error)
+}
+
 // knownSafeGrants is the closed set of capability grants this ticket
 // recognizes as compatible with MCP exposure. It intentionally contains
 // exactly one entry: "read" is the only grant W1's plugin host confers
@@ -84,25 +93,34 @@ type ToolRegistry struct {
 // so Call can dispatch without re-walking every registration.
 type resolvedTool struct {
 	descriptor Tool
-	handlers   plugin.BuiltinHandlers
+	handler    func(context.Context, []byte) ([]byte, error)
 }
 
 // NewToolRegistry builds a ToolRegistry over source, computing the
 // filtered tool set once at construction — the registry is read-only for
 // its lifetime, matching the stateless-core convention this ticket's
 // contract sets for the rest of the package.
-func NewToolRegistry(source ManifestSource) *ToolRegistry {
+func NewToolRegistry(source ManifestSource, core ...CoreRegistration) *ToolRegistry {
 	r := &ToolRegistry{source: source, tools: make(map[string]resolvedTool)}
 	for _, reg := range source() {
 		if !isExposable(reg.Grants) {
 			continue
 		}
 		for _, t := range reg.Manifest.Provides.Tools {
+			handlers := reg.Handlers
 			r.tools[t.Name] = resolvedTool{
 				descriptor: Tool{Name: t.Name, Description: t.Description, PluginID: reg.Manifest.ID},
-				handlers:   reg.Handlers,
+				handler: func(ctx context.Context, input []byte) ([]byte, error) {
+					return handlers.DispatchTool(ctx, t.Name, input)
+				},
 			}
 		}
+	}
+	for _, reg := range core {
+		if !isExposable(reg.Grants) || reg.Handler == nil || reg.Tool.Name == "" {
+			continue
+		}
+		r.tools[reg.Tool.Name] = resolvedTool{descriptor: reg.Tool, handler: reg.Handler}
 	}
 	return r
 }
@@ -128,5 +146,5 @@ func (r *ToolRegistry) Call(ctx context.Context, name string, input []byte) ([]b
 	if !ok {
 		return nil, fmt.Errorf("unknown tool: %s", name)
 	}
-	return rt.handlers.DispatchTool(ctx, name, input)
+	return rt.handler(ctx, input)
 }

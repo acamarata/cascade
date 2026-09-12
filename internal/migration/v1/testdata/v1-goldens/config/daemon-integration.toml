@@ -1,0 +1,17 @@
+# Test configuration — reduced intervals so integration tests complete quickly.
+# Loaded by spawn_daemon() which sets CASCADE_CONFIG_DIR=<tmpdir>.
+
+[daemon]
+log_level = "debug"
+log_format = "pretty"
+
+[watcher]
+debounce_ms = 50
+
+[quota_poller]
+enabled = true
+interval_secs = 10
+
+[project_poller]
+enabled = true
+interval_secs = 10

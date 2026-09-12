@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -201,5 +202,92 @@ func TestRetrievalFusionEnabledDefault(t *testing.T) {
 	if cfg.FusionEnabled != DefaultFusionEnabled {
 		t.Fatalf("Load with no retrieval.fusion.enabled key resolved FusionEnabled=%v, want DefaultFusionEnabled=%v",
 			cfg.FusionEnabled, DefaultFusionEnabled)
+	}
+}
+
+// TestConfigFleetAccountsSection is this ticket's (P1-E41-W9-S80-T1)
+// contract-named check: `[fleet.accounts."<id>"]` parses role and the
+// three numeric keys, an out-of-range preserve_weekly_reserve is a typed
+// *ConfigError naming both boundaries and one value on each side, and a
+// rejected hot reload leaves the running FleetAccounts value in place
+// (C/S-05.T8 path) -- see config_fleet.go's own CONTRACT DEVIATION note
+// for why this is a local [0.0,0.60] check rather than a direct call to
+// topology.ValidateReserve (a real import cycle prevents it).
+func TestConfigFleetAccountsSection(t *testing.T) {
+	toml := "[fleet.accounts.\"acct-a\"]\n" +
+		"role = \"executive\"\n" +
+		"preserve_weekly_reserve = 0.30\n" +
+		"executive_model_fraction_soft = 0.35\n" +
+		"executive_model_fraction_hard = 0.47\n"
+	dir := t.TempDir()
+	path := writeConfigFile(t, dir, toml)
+	cfg, err := Load(context.Background(), LoadOptions{Path: path, Getenv: func(string) string { return "" }, Environ: fakeEnviron(nil)})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	acct, ok := cfg.FleetAccounts["acct-a"]
+	if !ok {
+		t.Fatal("FleetAccounts[\"acct-a\"] missing")
+	}
+	if acct.Role != "executive" {
+		t.Fatalf("Role = %q, want executive", acct.Role)
+	}
+	if acct.PreserveWeeklyReserve == nil || *acct.PreserveWeeklyReserve != 0.30 {
+		t.Fatalf("PreserveWeeklyReserve = %v, want 0.30", acct.PreserveWeeklyReserve)
+	}
+	if acct.ExecutiveModelFractionSoft == nil || *acct.ExecutiveModelFractionSoft != 0.35 {
+		t.Fatalf("ExecutiveModelFractionSoft = %v, want 0.35", acct.ExecutiveModelFractionSoft)
+	}
+	if acct.ExecutiveModelFractionHard == nil || *acct.ExecutiveModelFractionHard != 0.47 {
+		t.Fatalf("ExecutiveModelFractionHard = %v, want 0.47", acct.ExecutiveModelFractionHard)
+	}
+}
+
+// TestConfigFleetAccountsReserveRangeBoundaries: both boundary values
+// (0.0, 0.60) accepted, one value on each side (-0.01, 0.61) refused.
+func TestConfigFleetAccountsReserveRangeBoundaries(t *testing.T) {
+	cases := []struct {
+		v       float64
+		wantErr bool
+	}{
+		{0.0, false},
+		{0.60, false},
+		{-0.01, true},
+		{0.61, true},
+	}
+	for _, c := range cases {
+		toml := fmt.Sprintf("[fleet.accounts.\"acct-a\"]\npreserve_weekly_reserve = %v\n", c.v)
+		dir := t.TempDir()
+		path := writeConfigFile(t, dir, toml)
+		_, err := Load(context.Background(), LoadOptions{Path: path, Getenv: func(string) string { return "" }, Environ: fakeEnviron(nil)})
+		if (err != nil) != c.wantErr {
+			t.Fatalf("preserve_weekly_reserve=%v: err=%v, wantErr=%v", c.v, err, c.wantErr)
+		}
+		var cfgErr *ConfigError
+		if c.wantErr && !errors.As(err, &cfgErr) {
+			t.Fatalf("preserve_weekly_reserve=%v: error %v is not a *ConfigError", c.v, err)
+		}
+	}
+}
+
+// TestConfigFleetAccountsRejectedReloadKeepsRunningValues: a hot reload
+// that fails Load's own validation (an out-of-range reserve) is rejected,
+// and Current() still returns the value from BEFORE the bad edit.
+func TestConfigFleetAccountsRejectedReloadKeepsRunningValues(t *testing.T) {
+	hr, path, _, _, _ := newTestHotReloader(t, "[fleet.accounts.\"acct-a\"]\npreserve_weekly_reserve = 0.30\n")
+	before := hr.Current().FleetAccounts["acct-a"]
+	if before.PreserveWeeklyReserve == nil || *before.PreserveWeeklyReserve != 0.30 {
+		t.Fatalf("initial PreserveWeeklyReserve = %v, want 0.30", before.PreserveWeeklyReserve)
+	}
+
+	_ = writeFile(t, path, "[fleet.accounts.\"acct-a\"]\npreserve_weekly_reserve = 5.0\n")
+	outcome := hr.Reload(context.Background())
+	if !outcome.Rejected || outcome.Accepted {
+		t.Fatalf("expected the reload to be rejected, got %+v", outcome)
+	}
+
+	after := hr.Current().FleetAccounts["acct-a"]
+	if after.PreserveWeeklyReserve == nil || *after.PreserveWeeklyReserve != 0.30 {
+		t.Fatalf("running PreserveWeeklyReserve after rejected reload = %v, want unchanged 0.30", after.PreserveWeeklyReserve)
 	}
 }

@@ -20,6 +20,11 @@ type configSections struct {
 	logging       loggingSection
 	retrieval     retrievalSection
 	fusionEnabled bool
+	// fleetAccounts is R-21.44's `[fleet.accounts."<id>"]` map (P1-E41-
+	// W9-S80-T1), added to this dispatch struct rather than to files_scope's
+	// literal config.go/schema.go pair alone -- see config_fleet.go's own
+	// files_scope-deviation note.
+	fleetAccounts map[string]FleetAccountConfig
 }
 
 // parseConfigSections runs each section parser in turn, returning on the
@@ -38,6 +43,9 @@ func parseConfigSections(tree map[string]interface{}, warn func(string, ...inter
 		return configSections{}, err
 	}
 	if s.fusionEnabled, err = resolveFusionEnabled(tree); err != nil {
+		return configSections{}, err
+	}
+	if s.fleetAccounts, err = parseFleetAccountsSection(tree, warn); err != nil {
 		return configSections{}, err
 	}
 	return s, nil

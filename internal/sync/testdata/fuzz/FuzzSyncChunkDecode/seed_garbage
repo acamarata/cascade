@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("not a chunk frame at all, just noise 0123456789")

@@ -57,6 +57,72 @@ the same refusal `node serve` uses).
   hold the private key for `<id>` in its own keystore); `revoke` calls
   `RecordStore.Revoke`, moving the current key into the record's
   `RevokedKeys` set.
+- **`upgrade [NODE_ID] [--all] --artifact <path> --signature <path> [--pubkey <path>]`**
+  ⚠ (elevated, already in `internal/rpc`'s elevation table): see
+  [Version management](#version-management-s-36t5) below.
+
+## Version management (S-36.T5)
+
+Fleet version management (§D-17): enroll-time and rollout binary
+provisioning over ssh, with minisign verification post-transfer, a
+same-minor version negotiation window, and the node-managed install
+channel deferral.
+
+**Provisioning (`internal/nodes.Provision`).** Ships a signed release
+artifact to a node over ssh, or verifies the node's preinstalled version
+stamp and skips (idempotent convergence: a second run against an
+already-current node reports `Skipped`, never re-transfers). The
+artifact's minisign signature is verified BEFORE any dial or transfer —
+an invalid or missing signature refuses outright, and the node is never
+contacted. After transfer, the receiving end's actual bytes are
+checksummed and compared against a digest computed locally over the
+already-verified artifact before it was sent; a mismatch (an interrupted
+or corrupted transfer) refuses the install and removes the partial
+upload, leaving the previous binary untouched. Install itself is an
+atomic `chmod +x && mv -f` into place: nothing is ever removed before its
+verified replacement is fully staged, so a crash or refusal at any point
+before that rename structurally cannot leave a node without a working
+binary.
+
+**Minisign verification (`internal/nodes.VerifyMinisign`, §D-32).** A
+real parser and verifier for minisign's own armored signature-file
+format (both the legacy `Ed` direct-Ed25519 mode and the default `ED`
+BLAKE2b-512-prehashed mode), verified byte-for-byte against the real
+`minisign` 0.12 CLI (`internal/nodes/testdata/minisign/README.md`
+records provenance). This is the SAME signature format the §D-16 release
+train's `.goreleaser.yaml`/`release.yml` already produce and verify for
+end-user checksum verification — node provisioning checks the identical
+artifact class through the identical wire format, never a second dialect.
+
+**Version negotiation (`internal/nodes.NegotiateVersion`, §D-17).**
+Controller and node versions must share the same major.minor window.
+`Provision` refuses to ship an artifact outside its own controller
+version's window before ever dialing a node (a controller must never
+push a binary it could not itself negotiate with). `WouldFallOutOfWindow`
+surfaces an advisory `skew_warning` on a node whose pre-upgrade version
+had already drifted out of window — never a refusal, just visibility.
+The node's build stamp rides `CapabilityReport.BuildVersion` (S-36.T2's
+heartbeat report).
+
+**`node upgrade [--all]`** routes through the same elevation flow every
+other elevated verb in this package uses (`ELEVATION_REQUIRED` without a
+proof; `CASCADE_NO_INPUT=1` hard-errors rather than prompting; refused
+outright on Windows tier-2; CLI+RPC-with-auth only, never MCP-exposed).
+`--all` rolls every enrolled, non-drained node with a configured
+`RouteConfig`; a node with no route is reported `Skipped` with a reason,
+never silently omitted, and one node's failure never aborts the rollout
+for the rest — every node gets its own reported outcome. The daemon also
+exposes `node.upgrade` over RPC (`internal/daemon/node_upgrade_rpc.go`),
+reading a staged artifact/signature from `DataDir()/nodes/upgrade/` (an
+operator, or a future release-fetch ticket, stages the files there before
+calling it).
+
+**Node-managed install channel (§D-33, `internal/nodes.DeferSelfUpdate`).**
+A binary stamped `install_channel=node-managed`
+(`internal/buildinfo.ResolvedInstallChannel`) is under this controller
+rollout, not a self-directed update path. `DeferSelfUpdate` reports true
+for that one channel value; AA/S-55.T7's `cascade self-update` (not yet
+built) is the consumer named in `internal/build/testonly-allow.json`.
 
 ## Heartbeat and capability report
 

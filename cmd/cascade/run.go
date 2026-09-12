@@ -114,7 +114,21 @@ func newRunCmd(deps runDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Dispatch a one-shot or streaming model task through the conductor",
-		Args:  usageArgs(cobra.NoArgs),
+		Long: "Dispatch a one-shot or streaming model task through the conductor.\n\n" +
+			"When the resolved lane is the in-process local-model lane " +
+			"(providers/agents/local), task classes classify, extract and " +
+			"summarize always dispatch. Task classes code, reason, review and " +
+			"arbitrate dispatch only for a model id that has passed the named " +
+			"qualification fixture under providers/ollama/testdata/qualification/ " +
+			"— authoring is a per-model capability, never a global flag, and no " +
+			"config setting or environment variable can grant it. A model with no " +
+			"recorded qualification, a failing one, or a stale one all refuse with " +
+			"a not-qualified error.",
+		Example: "  # Run the named qualification fixture against a model id to grant\n" +
+			"  # it authoring task classes, then verify the result before use:\n" +
+			"  cascade run --task classify --input \"triage this\"\n" +
+			"  cascade run --task code --input \"...\"  # refuses until the model qualifies",
+		Args: usageArgs(cobra.NoArgs),
 		PreRunE: func(*cobra.Command, []string) error {
 			return validateTaskClass(flags.Task)
 		},

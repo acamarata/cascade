@@ -46,6 +46,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/acamarata/cascade/internal/backup"
 	"github.com/acamarata/cascade/internal/mcp"
 	"github.com/acamarata/cascade/internal/mcp/transport"
 	"github.com/acamarata/cascade/internal/output"
@@ -82,7 +83,12 @@ type mcpDeps struct {
 
 // productionMCPDeps builds mcpDeps against the real environment.
 func productionMCPDeps() mcpDeps {
-	tools := func() *mcp.ToolRegistry { return mcp.NewToolRegistry(plugin.Builtins) }
+	tools := func() *mcp.ToolRegistry {
+		bDeps := productionBackupDeps()
+		return mcp.NewToolRegistry(plugin.Builtins,
+			backup.MCPRegistration(backupSnapshotLister(bDeps)),
+			backup.VerifyMCPRegistration(backupVerifyRunner(bDeps)))
+	}
 	paths := lazyPaths{}
 	return mcpDeps{
 		Paths:    paths,

@@ -39,6 +39,7 @@ type fakeProvider struct {
 	chatFn   func(context.Context, provider.ChatRequest) (provider.ChatResponse, error)
 	streamFn func(context.Context, provider.ChatRequest, provider.StreamSink) error
 	embedFn  func(context.Context, provider.ModelEmbedRequest) (provider.ModelEmbedResponse, error)
+	countFn  func(context.Context, provider.CountRequest) (provider.CountResponse, error)
 }
 
 func (f *fakeProvider) Chat(ctx context.Context, req provider.ChatRequest) (provider.ChatResponse, error) {
@@ -53,7 +54,10 @@ func (f *fakeProvider) Embed(ctx context.Context, req provider.ModelEmbedRequest
 	}
 	return provider.ModelEmbedResponse{}, nil
 }
-func (f *fakeProvider) Count(context.Context, provider.CountRequest) (provider.CountResponse, error) {
+func (f *fakeProvider) Count(ctx context.Context, req provider.CountRequest) (provider.CountResponse, error) {
+	if f.countFn != nil {
+		return f.countFn(ctx, req)
+	}
 	return provider.CountResponse{}, nil
 }
 func (f *fakeProvider) Stream(ctx context.Context, req provider.ChatRequest, sink provider.StreamSink) error {

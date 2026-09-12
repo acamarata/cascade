@@ -1,0 +1,35 @@
+# node-upgrade.txt
+#
+# Documents the `cascade node upgrade [--all]` ⚠ behavioral scenarios
+# this ticket's contract names (P1-E17-W4-S36-T5). This module carries no
+# testscript (rogpeppe/testscript) dependency -- adding one needs the
+# license gate this repo has not cleared (see the sibling
+# fleet-sessions.txtar / context-scope-show.txtar, which make the same
+# call). The scenarios below are instead expressed as executable Go in
+# internal/nodes/upgrade_test.go (RunUpgrade rollout semantics),
+# internal/nodes/upgrade_rpc_test.go (the real rpc.Registry.Dispatch
+# wiring proof), and internal/nodes/provision_test.go (the fail-closed
+# signature/checksum/version-window refusals and the atomic-install
+# rollback proof). This file records the intended script form for when a
+# testscript dependency is cleared.
+
+# A bare invocation with neither NODE_ID nor --all is refused before any
+# elevation prompt or dial.
+! exec cascade node upgrade
+stderr 'pass a NODE_ID or --all'
+
+# --artifact/--signature are required even once a target is named.
+! exec cascade node upgrade some-node
+stderr '--artifact and --signature are required'
+
+# With CASCADE_NO_INPUT=1 and no enrolled elevation helper, the elevated
+# verb hard-errors rather than hanging on a local-presence prompt (06
+# §5.8/§5.14).
+env CASCADE_NO_INPUT=1
+! exec cascade node upgrade --all --artifact does-not-exist --signature does-not-exist
+stderr 'ELEVATION_REQUIRED|CASCADE_NO_INPUT'
+
+# Windows tier-2: the verb is an asserted refusal, never a silent skip
+# (06 §2, Art.5.3) -- exercised natively in
+# cmd/cascade/node_windows_test.go, not here (this script's Go host
+# cannot cross-compile-and-run a windows binary).

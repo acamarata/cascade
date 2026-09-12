@@ -56,6 +56,8 @@ const contextSyncDialTimeout = contextAssembleDialTimeout
 // newContextSyncCmd builds `context sync [--check]`.
 func newContextSyncCmd(deps contextScopeDeps) *cobra.Command {
 	var checkOnly bool
+	var projectList string
+	var yes bool
 	cmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Check or regenerate harness instruction files against the current context",
@@ -64,9 +66,20 @@ func newContextSyncCmd(deps contextScopeDeps) *cobra.Command {
 			"--check reports drift without writing anything and exits non-zero\n" +
 			"if any file is stale. The default mode regenerates every stale\n" +
 			"file atomically and exits 0, printing how many files changed; a\n" +
-			"second run over an already-synced tree changes nothing.",
+			"second run over an already-synced tree changes nothing.\n\n" +
+			"--project-list FILE switches to bulk mode (P1-E26-W10-S53-T3): FILE\n" +
+			"names one project directory per line, and every one is scanned\n" +
+			"instead of just the current directory. --check reports every\n" +
+			"project's drift and writes nothing. Without --check: on a TTY,\n" +
+			"each project with drift is confirmed individually before it is\n" +
+			"written; under CASCADE_NO_INPUT=1, --yes applies every confirmed\n" +
+			"project without prompting, and its absence prints the report and\n" +
+			"exits 0 without writing anything.",
 		Args: usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if projectList != "" {
+				return runContextSyncProjects(cmd, deps, projectList, checkOnly, yes)
+			}
 			result, err := fetchContextSync(cmd.Context(), deps, checkOnly)
 			if err != nil {
 				return err
@@ -79,6 +92,10 @@ func newContextSyncCmd(deps contextScopeDeps) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&checkOnly, "check", false,
 		"report drift without writing; exit non-zero if any file is stale")
+	cmd.Flags().StringVar(&projectList, "project-list", "",
+		"bulk mode: scan every project directory named in FILE (one per line) instead of the current directory")
+	cmd.Flags().BoolVar(&yes, "yes", false,
+		"bulk mode: apply every confirmed project's drift without prompting")
 	return cmd
 }
 

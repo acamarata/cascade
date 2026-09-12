@@ -1,0 +1,19 @@
+[
+  { "class": "executive", "base_shadow_price": 12.0 },
+  { "class": "executive-xhigh", "base_shadow_price": 16.0 },
+  { "class": "critic", "base_shadow_price": 8.0 },
+  { "class": "specialist", "base_shadow_price": 10.0 },
+  { "class": "advisor", "base_shadow_price": 7.0 },
+  { "class": "lead", "base_shadow_price": 2.5 },
+  { "class": "deep", "base_shadow_price": 4.5 },
+  { "class": "harness-sub", "base_shadow_price": 2.0 },
+  { "class": "worker-dedicated", "base_shadow_price": 1.1 },
+  { "class": "worker-fast", "base_shadow_price": 0.55 },
+  { "class": "pool-premium", "base_shadow_price": 2.5 },
+  { "class": "pool-cheap", "base_shadow_price": 0.35 },
+  { "class": "api-paid", "base_shadow_price": 0.25 },
+  { "class": "api-free", "base_shadow_price": 0.10 },
+  { "class": "api-batch", "base_shadow_price": 0.15 },
+  { "class": "local", "base_shadow_price": 0.05 },
+  { "class": "unranked", "base_shadow_price": 1.0 }
+]

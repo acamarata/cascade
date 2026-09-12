@@ -192,6 +192,17 @@ func resolveContextScopeEmbedded(ctx context.Context, deps contextScopeDeps, par
 		params.Cwd = cwd
 	}
 	dataDir := deps.Paths.DataDir()
+	// sql.Open("sqlite", ...) does NOT create dataDir (verified: it goes
+	// straight to the driver, which SQLITE_CANTOPENs against a missing
+	// parent). openRuntimeStore's own MkdirAll (daemon_unix_store.go) covers
+	// the daemon path, but this embedded fallback is a separate composition
+	// root and skipped it, so the first command a brand-new user ever ran
+	// (no ~/.cascade yet, no daemon) failed with an unactionable sqlite
+	// error instead of just working. 0o700: private data dir, matching
+	// openRuntimeStore's own choice.
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		return contextScopeResult{}, cascade.Wrap(cascade.KindUnavailable, err, "cascade context scope show: create data directory")
+	}
 	dbPath := filepath.Join(dataDir, "cascade.db")
 	db, err := sql.Open("sqlite", "file:"+dbPath+"?_busy_timeout=5000")
 	if err != nil {

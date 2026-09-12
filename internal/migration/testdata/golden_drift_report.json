@@ -1,0 +1,22 @@
+{
+  "projects": [
+    {
+      "project_path": "testdata/fixture_project",
+      "drift": [
+        {
+          "harness_file": "testdata/fixture_project/.claude/CLAUDE.md",
+          "added": 2,
+          "removed": 2,
+          "diff_body": "-\u003c!-- cascade:generate-instructions digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 --\u003e\n+\u003c!-- cascade:generate-instructions digest=sha256:2685b1cce720933cc0da48bd66c91972504a6f863dbd05f3d64e59e5cde35eb0 --\u003e\n ## Cascade Context — PRI Tier (Per-Repo Instructions)\n \n **MCP server:** `stdio: cascade mcp stdio`\n \n Call `cascade.search` before responding to queries about this project.\n Call `cascade.context_slice` to retrieve relevant context from the RAG index.\n If the cascade MCP tools are unavailable, run `cascade recall` and `cascade context slice` through Bash instead.\n \n ## Style\n \n-Long sentences are fine here, this is the deliberately stale fixture.\n+Short sentences.\n \n \u003c!-- /cascade:generate-instructions --\u003e\n"
+        },
+        {
+          "harness_file": "testdata/fixture_project/AGENTS.md",
+          "added": 14,
+          "removed": 0,
+          "diff_body": "+\u003c!-- cascade:generate-instructions digest=sha256:2685b1cce720933cc0da48bd66c91972504a6f863dbd05f3d64e59e5cde35eb0 --\u003e\n+## Cascade Context — PRI Tier (Per-Repo Instructions)\n+\n+**MCP server:** `stdio: cascade mcp stdio`\n+\n+Call `cascade.search` before responding to queries about this project.\n+Call `cascade.context_slice` to retrieve relevant context from the RAG index.\n+If the cascade MCP tools are unavailable, run `cascade recall` and `cascade context slice` through Bash instead.\n+\n+## Style\n+\n+Short sentences.\n+\n+\u003c!-- /cascade:generate-instructions --\u003e\n"
+        }
+      ]
+    }
+  ],
+  "partial": false
+}

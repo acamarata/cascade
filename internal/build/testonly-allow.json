@@ -7,20 +7,6 @@
     "caller_site": "internal/providers/registry/registry.go"
   },
   {
-    "symbol": "internal/rpc.ElevationMiddleware",
-    "reason": "The elevation gate is built before the verbs it gates. No elevated verb is registered on the daemon yet, so installing it today would gate nothing. Building the guard first is the right order. Leaving it uninstalled once an elevated verb exists would not be. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "expected_caller": "buildRPCServer in cmd/cascade/daemon_unix_run.go, in the SAME change that registers the first elevated verb",
-    "retire_ticket": "UNOWNED",
-    "caller_site": "cmd/cascade/daemon_unix_run.go"
-  },
-  {
-    "symbol": "internal/rpc.NewNonceLedger",
-    "reason": "Constructed only by the elevation middleware, which is not installed yet. Retire together with the ElevationMiddleware entry. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "expected_caller": "buildRPCServer in cmd/cascade/daemon_unix_run.go, alongside ElevationMiddleware",
-    "retire_ticket": "UNOWNED",
-    "caller_site": "cmd/cascade/daemon_unix_run.go"
-  },
-  {
     "symbol": "internal/runtime.NewBaselineChecker",
     "reason": "Built and tested; no caller on the daemon start path. The doctor command cannot construct one either: it needs a provider.Store, an EventPublisher and an AuditRecorder, none of which the CLI layer opens. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
     "expected_caller": "the daemon start path, or a doctor.Check adapter over the baseline checker once the daemon exposes the store it needs",
@@ -392,13 +378,6 @@
     "caller_site": "internal/fleet/governor/escalation_wiring.go"
   },
   {
-    "symbol": "internal/fleet/governor.NewSampler",
-    "reason": "S-26.T1 builds the resource sampler as a shared dependency of two sibling tickets that have not landed yet: the admission controller (S-26.T2) and the throttle ladder (S-26.T3). Both need a single, already-running Sampler to read from, so the sampler ships first with only its own test suite as a caller.",
-    "expected_caller": "the admission controller and throttle ladder (P1-E13-W3-S26-T2, P1-E13-W3-S26-T3), and the daemon composition root that starts the shared Sampler both of them read from; retire this entry once either lands",
-    "retire_ticket": "P1-E13-W3-S26-T2",
-    "caller_site": "cmd/cascade/daemon_unix_run.go"
-  },
-  {
     "symbol": "providers/openai.New",
     "reason": "P1-E10-W3-S19-T3 builds the real openai-compat ModelProvider driver as a standalone package with no wiring ticket of its own, the same shape as providers/anthropic.New above: the universal provider intake and registry that will call New to construct a live instance are S-20.T1 and S-20.T2, both explicitly out of this ticket's files_scope. The driver ships fully implemented and tested against recorded fixtures (openai/moonshot/zai/deepseek-style 401s, a constructed 429, malformed/truncated stream fixtures) plus a tagged live lane; only its construction call site is missing until the registry lands.",
     "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live openai.Driver; retire this entry once either lands",
@@ -565,20 +544,6 @@
     "expected_caller": "internal/fleet/census/collector_wire.go, which P1-E12-W3-S24-T3 constructs; retire this entry when that lands",
     "retire_ticket": "P1-E12-W3-S24-T3",
     "caller_site": "internal/fleet/census/collector_wire.go"
-  },
-  {
-    "symbol": "internal/jobs.ApplyJobsSchema",
-    "reason": "The jobs domain landed under P1-E29-W6-S59-T1, whose files_scope covers internal/jobs/* only. The jobs CLI surface is S-60.T1. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/fleet_jobs.go, which P1-E29-W6-S60-T1 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E29-W6-S60-T1",
-    "caller_site": "cmd/cascade/fleet_jobs.go"
-  },
-  {
-    "symbol": "internal/jobs.NewStore",
-    "reason": "The jobs domain landed under P1-E29-W6-S59-T1, whose files_scope covers internal/jobs/* only. The jobs CLI surface is S-60.T1. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "expected_caller": "cmd/cascade/fleet_jobs.go, which P1-E29-W6-S60-T1 constructs; retire this entry when that lands",
-    "retire_ticket": "P1-E29-W6-S60-T1",
-    "caller_site": "cmd/cascade/fleet_jobs.go"
   },
   {
     "symbol": "internal/nodes.SignRotationRequest",
@@ -852,13 +817,6 @@
     "expected_caller": "the daemon composition root (internal/daemon/subsystems.go), alongside its NewExecutor call, once a real ProviderResolver exists; retire this entry once it calls conductor.RegisterHandlers",
     "retire_ticket": "P1-E11-W3-S22-T4",
     "caller_site": "internal/daemon/subsystems.go"
-  },
-  {
-    "symbol": "internal/backup.Restore",
-    "reason": "P1-E19-W4-S41-T4 builds the elevated restore operation - integrity gate first (chain walk via ReadManifest, object completeness/AEAD re-decrypt), then domain selection and storage.Import write-back - fully implemented and tested (real round trip, corrupted-artifact refusals, destination-untouched-on-refusal). The CLI/MCP surface that calls it as `backup restore` and supplies a real ElevationProof is S-42.T3's, explicitly out of this ticket's scope (06-FORGE-SPEC §5.14: create/restore are elevated, CLI/MCP gate wiring named as S-42.T3's), mirroring the CreateSnapshot entry above.",
-    "expected_caller": "S-42.T3's `backup restore` CLI/MCP handler, which resolves a real attestation and calls Restore; retire this entry once it lands",
-    "retire_ticket": "P1-E19-W4-S42-T3",
-    "caller_site": "internal/backup/restore_command.go"
   },
   {
     "symbol": "internal/conductor.ParseVerdict",
@@ -1135,10 +1093,10 @@
   },
   {
     "symbol": "internal/nodes.CancelInFlight",
-    "reason": "The R-21.197 one-transaction release seam this ticket's contract requires (a job whose node went unavailable, when canceled, releases its W9 reservation, AC lease and worktree together). No ticket in this tree has yet built the real reservation/lease/worktree types this seam composes - AH/S-70.T3 builds the analogous gate-denied stall/release path but for a different trigger. This function is real, tested (TestCancelReleasesReservationLeaseWorktree/TestCancelInFlightRunsAllDespiteOneFailure), and ready to compose whichever ticket lands those release functions first.",
+    "reason": "The R-21.197 one-transaction release seam this ticket's contract requires (a job whose node went unavailable, when canceled, releases its W9 reservation, AC lease and worktree together). No ticket in this tree has yet built the real reservation/lease/worktree types this seam composes - AH/S-70.T3 builds the analogous gate-denied stall/release path but for a different trigger. This function is real, tested (TestCancelReleasesReservationLeaseWorktree/TestCancelInFlightRunsAllDespiteOneFailure), and ready to compose whichever ticket lands those release functions first. (caller_site corrected during the AC/S-59.T5 x T3 merge-fix: internal/jobs/scheduler.go now exists and never called this symbol -- the earlier promise could not come true.)",
     "expected_caller": "the presence-aware stall/cancellation path a forward ticket builds once W9 reservations, AC/S-59 leases and worktrees each expose their own release function",
     "retire_ticket": "UNOWNED",
-    "caller_site": "internal/jobs/scheduler.go"
+    "caller_site": "internal/nodes/presence_cancel.go"
   },
   {
     "symbol": "internal/nodes.PendingCandidate",
@@ -1146,41 +1104,6 @@
     "expected_caller": "T1's deferred discovery.go producer, feeding AI/S-71's real proposal store",
     "retire_ticket": "P1-E35-W7-S71-T1",
     "caller_site": "internal/nodes/discovery.go"
-  },
-  {
-    "symbol": "internal/nodes.ResolveRole",
-    "reason": "R-21.169's controller-singleton Role resolver, built over the real, already-persisted ControllerBindingBackend (serve.go). Its intended caller - AC/S-59.T5's job.advance/lease.acquire/lease.release handlers - is this ticket's own full_desc item 9's explicit forward note: 'AC/S-59.T5's handlers apply the guard'.",
-    "expected_caller": "AC/S-59.T5's RPC handlers, resolving this daemon's Role once at connection or startup time",
-    "retire_ticket": "P1-E29-W6-S59-T5",
-    "caller_site": "internal/jobs/scheduler.go"
-  },
-  {
-    "symbol": "internal/nodes.RequireController",
-    "reason": "The guard AC/S-59.T5 applies before job.advance/lease.acquire/lease.release, per this ticket's own forward note (full_desc item 9). Real and tested (TestNodeRoleRefusesSchedulerRPCs/TestControllerRoleAllowsSchedulerRPCs) against every GuardedMethods entry.",
-    "expected_caller": "AC/S-59.T5's three named RPC handlers",
-    "retire_ticket": "P1-E29-W6-S59-T5",
-    "caller_site": "internal/jobs/scheduler.go"
-  },
-  {
-    "symbol": "internal/nodes.GuardedMethods",
-    "reason": "Names the three RPC methods RequireController guards, so AC/S-59.T5's handlers and this package's own tests both enumerate the same list once rather than each hardcoding it. Retires alongside RequireController.",
-    "expected_caller": "AC/S-59.T5's RPC handler registration",
-    "retire_ticket": "P1-E29-W6-S59-T5",
-    "caller_site": "internal/jobs/scheduler.go"
-  },
-  {
-    "symbol": "internal/nodes.WithRole",
-    "reason": "The context-carried alternate call shape for Role, offered alongside RequireController's explicit-parameter shape for whichever call chain AC/S-59.T5's handlers turn out to need. Retires alongside RequireController/ResolveRole.",
-    "expected_caller": "AC/S-59.T5's RPC handler chain, if it resolves Role once per connection rather than per call",
-    "retire_ticket": "P1-E29-W6-S59-T5",
-    "caller_site": "internal/jobs/scheduler.go"
-  },
-  {
-    "symbol": "internal/nodes.RoleFromContext",
-    "reason": "Reads back the Role WithRole stored on a context. Retires alongside WithRole/RequireController/ResolveRole.",
-    "expected_caller": "AC/S-59.T5's RPC handler chain, if it resolves Role once per connection rather than per call",
-    "retire_ticket": "P1-E29-W6-S59-T5",
-    "caller_site": "internal/jobs/scheduler.go"
   },
   {
     "symbol": "internal/jobs.LifecycleStages",
@@ -1218,20 +1141,6 @@
     "caller_site": "internal/daemon/stall_detector.go"
   },
   {
-    "symbol": "internal/jobs.NewLeaseManager",
-    "reason": "P1-E29-W6-S59-T2 ships the one-mutable-writer LeaseManager (Acquire/Release/Renew/SweepExpired/Fence/Reclaim) fully implemented and tested, including real -race mutual-exclusion and expiry-race proofs, but the daemon composition root that would construct a live LeaseManager from the daemon's own db-backed Store, clock, controller-advisory-lock check and event/journal/attention sink is out of this ticket's files_scope (internal/jobs/* only) -- no cmd/cascade or internal/daemon file constructs one yet.",
-    "expected_caller": "a new internal/daemon composition-root file (or cmd/cascade's daemon start path) once it wires the controller-lock check, the real journal.Store/events.Bus/supervision.Store instances, and internal/nodes' driver-side pgid recording (AD/S-61.T1) that Reclaim's liveness probe depends on; retire this entry once it lands",
-    "retire_ticket": "P1-E29-W6-S60-T1",
-    "caller_site": "internal/daemon/lease_composition.go"
-  },
-  {
-    "symbol": "internal/jobs.DefaultLeaseDefaults",
-    "reason": "P1-E29-W6-S59-T2 ships the R-16.37 verbatim [jobs].lease constants as a typed, injectable LeaseDefaults value, exercised directly by every lease test, but registering [jobs].lease as an internal/runtime/config section (08-INIT-CONFIG-SPEC section 3) is a materially different piece of work than this ticket's files_scope covers (see lease.go's LeaseDefaults doc comment for the full contract-vs-files_scope note) -- no config loader calls this yet.",
-    "expected_caller": "internal/runtime/config's [jobs] section parser, once it exists, falling back to DefaultLeaseDefaults() when the section is absent; retire this entry once it lands",
-    "retire_ticket": "P1-E29-W6-S60-T1",
-    "caller_site": "internal/runtime/config_jobs.go"
-  },
-  {
     "symbol": "internal/jobs.WireLeaseRelease",
     "reason": "P1-E29-W6-S59-T2 ships the release-on-terminal wiring seam (Store.SetTerminalHook plus this exported one-line installer, since LeaseManager.releaseAllForJob is unexported and Store cannot hold a *LeaseManager directly without an import cycle) and proves it end to end in TestWireLeaseReleaseInstallsHook, but calling it from the real daemon composition root is the same out-of-files_scope composition-root work NewLeaseManager's own entry above records.",
     "expected_caller": "the same daemon composition-root file that constructs the production LeaseManager (see internal/jobs.NewLeaseManager's entry); retire both together",
@@ -1267,48 +1176,6 @@
     "caller_site": "internal/daemon/storage_bootstrap.go"
   },
   {
-    "symbol": "internal/backup.PutTarget",
-    "reason": "P1-E19-W4-S42-T1 ships the target registry's write side, fully implemented and tested (validation, the H/S-15.T3 secret-literal refusal), but the operator-facing surface that calls it with a real name/kind/driver-config -- `backup target add` -- is S-42.T3's CLI/MCP surface, explicitly out of this ticket's own BOUNDARY paragraph. The composition-root read side (ListTargets, via RegisterConfiguredBackupJobs) is already wired at daemon boot.",
-    "expected_caller": "S-42.T3's `backup target add` CLI/MCP handler; retire this entry once it lands",
-    "retire_ticket": "P1-E19-W4-S42-T3",
-    "caller_site": "cmd/cascade/backup_cmd.go"
-  },
-  {
-    "symbol": "internal/backup.GetTarget",
-    "reason": "P1-E19-W4-S42-T1 ships the target registry's by-name read, tested against a real in-memory Store, but the operator-facing surface that would look up one target by name is S-42.T3's CLI/MCP surface (`backup target list` uses ListTargets, already wired), explicitly out of this ticket's own BOUNDARY paragraph.",
-    "expected_caller": "S-42.T3's `backup target` CLI/MCP handler(s) that need a single named record; retire this entry once one lands",
-    "retire_ticket": "P1-E19-W4-S42-T3",
-    "caller_site": "cmd/cascade/backup_cmd.go"
-  },
-  {
-    "symbol": "internal/backup.DeleteTarget",
-    "reason": "P1-E19-W4-S42-T1 ships the target registry's delete, but the operator-facing surface that calls it -- `backup target remove` -- is S-42.T3's CLI/MCP surface, explicitly out of this ticket's own BOUNDARY paragraph.",
-    "expected_caller": "S-42.T3's `backup target remove` CLI/MCP handler; retire this entry once it lands",
-    "retire_ticket": "P1-E19-W4-S42-T3",
-    "caller_site": "cmd/cascade/backup_cmd.go"
-  },
-  {
-    "symbol": "internal/backup.PutPolicy",
-    "reason": "P1-E19-W4-S42-T1 ships the per-target cadence policy's write side, fully implemented and tested (cron-spec validation via C/S-04.T4's own ParseSpec, non-empty domain set), but the operator-facing surface that supplies a real cron spec and domain set is S-42.T3's CLI/MCP surface, explicitly out of this ticket's own BOUNDARY paragraph. The composition-root read side (ListPolicies, via RegisterConfiguredBackupJobs) is already wired at daemon boot.",
-    "expected_caller": "S-42.T3's `backup target add`/policy-setting CLI/MCP handler; retire this entry once it lands",
-    "retire_ticket": "P1-E19-W4-S42-T3",
-    "caller_site": "cmd/cascade/backup_cmd.go"
-  },
-  {
-    "symbol": "internal/backup.GetPolicy",
-    "reason": "P1-E19-W4-S42-T1 ships the per-target policy's by-name read, tested against a real in-memory Store, but the operator-facing surface that would look up one target's policy is S-42.T3's CLI/MCP surface, explicitly out of this ticket's own BOUNDARY paragraph.",
-    "expected_caller": "S-42.T3's `backup target` CLI/MCP handler(s) that need a single named policy; retire this entry once one lands",
-    "retire_ticket": "P1-E19-W4-S42-T3",
-    "caller_site": "cmd/cascade/backup_cmd.go"
-  },
-  {
-    "symbol": "internal/backup.ListOutcomes",
-    "reason": "P1-E19-W4-S42-T1 ships the per-target outcome bookkeeping's read side (RecordOutcome, the write side, is already wired: every scheduled fire calls it via fireBackupTarget). The consumer that reads outcome history back -- S-42.T4's verification cron and S-42.T5's lose-the-laptop drill -- is explicitly out of this ticket's own BOUNDARY paragraph.",
-    "expected_caller": "S-42.T4's verification cron (reads recent outcomes to decide pass/fail) and S-42.T5's drill; retire this entry once either lands",
-    "retire_ticket": "P1-E19-W4-S42-T4",
-    "caller_site": "internal/backup/verify.go"
-  },
-  {
     "symbol": "internal/evidence.NewClaimID",
     "reason": "P1-E43-W9-S83-T1: mints a fresh CLM-<id>. Its real caller is AQ/S-83.T2's distiller, which writes every extracted claim with produced_by plus at least one Evidence row -- explicitly out of this ticket's own BOUNDARIES paragraph. Exercised directly in claims_test.go (prefix, length, uniqueness).",
     "expected_caller": "AQ/S-83.T2's distiller, when it mints a new Claim row",
@@ -1342,6 +1209,292 @@
     "expected_caller": "AQ/S-83.T2's distiller, when it wires internal/jobs.Store and providers/fs (or providers/s3) into evidence.NewCapturer",
     "retire_ticket": "P1-E43-W9-S83-T2",
     "caller_site": "internal/evidence/distill.go"
+  },
+  {
+    "symbol": "internal/jobs.MarkEffect",
+    "reason": "R-21.148's transactional outbox writer: transition an intent row to effect once the effect it describes actually ran. The only real trigger for that -- a confirmed process-group termination -- is the AD/S-61.T1 driver's TerminationConfirmed report (scheduler_types.go's own doc comment names it as this tree's forward, not-yet-built consumer); marking a row effect before that driver exists would misreport an effect that never ran. Real and tested (outbox_test.go) against the real jobs_outbox schema this same merge-fix wires via ApplyOutboxSchema.",
+    "expected_caller": "the AD/S-61.T1 termination driver, once it confirms a job's process-group exit and the coordinator marks the paired outbox row's effect",
+    "retire_ticket": "S-61.T1",
+    "caller_site": "internal/nodes/termination_driver.go"
+  },
+  {
+    "symbol": "internal/jobs.CompileTicket",
+    "reason": "AH/S-69.T3's own contract text names this as a pure PEWS 17-field-to-PlanInput compiler whose live plugins/pbd caller is an explicit downstream integration point outside this ticket's scope (\"not in scope: ... wiring a live plugins/pbd caller to this function\"); the party holding a decoded PEWS ticket that will build a PEWSContract and call this does not exist yet. Real and fully tested (pews_compiler_test.go) against the real TicketInput/PlanInput/GateSet shapes it produces.",
+    "expected_caller": "AH/S-70.T1's acceptance ticket, which exercises the compiler end to end from a live plugins/pbd caller",
+    "retire_ticket": "P1-E34-W7-S70-T1",
+    "caller_site": "plugins/pbd/plan_compile.go"
+  },
+  {
+    "symbol": "internal/jobs.EffectiveTicketGateSet",
+    "reason": "The R-21.192 union of a ticket's declared gate set with a footprint classifier's derived gate set needs Planner.Plan's classifier result, which needs a SessionScope this pure compiler does not carry; AH/S-69.T3's contract explicitly leaves that union's caller to the same downstream integration point as CompileTicket (AH/S-70.T1). Real and fully tested (pews_compiler_gateset_test.go), including the unlowerable-floor property test across all four risk classes.",
+    "expected_caller": "AH/S-70.T1's acceptance ticket, which calls Planner.Plan for the classifier-derived set and unions it with CompileTicket's declared set here",
+    "retire_ticket": "P1-E34-W7-S70-T1",
+    "caller_site": "plugins/pbd/plan_compile.go"
+  },
+  {
+    "symbol": "internal/fleet/topology.Reconcile",
+    "reason": "R-21.24's own full_desc names Reconcile as the function that rewrites J/S-20.T2 provider-registry records into topology rows, but the recurring job that calls it on a schedule is R-21.28's mandatory six-hour discovery/reconcile job, explicitly scoped to P1-E40-W9-S77-T5 (\"Add provider lane discovery and the reconcile job\"), not this ticket. Reconcile is fully implemented, transactional, and tested end to end against a real *registry.Registry (reconcile_test.go).",
+    "expected_caller": "P1-E40-W9-S77-T5's six-hour reconcile job",
+    "retire_ticket": "P1-E40-W9-S77-T5",
+    "caller_site": "internal/jobs/fleet_reconcile.go"
+  },
+  {
+    "symbol": "internal/fleet/topology.Available",
+    "reason": "P1-E40-W9-S77-T3 (R-21.114) ships Available as a pure function of a scope, a dimension, the absolute counters and a slice of ReservationEstimate -- it deliberately takes no store reference, which is what makes 'no dispatch path mutates quota_bucket' structural. The reservation ROW itself lives in the jobs domain and is inserted by AO/S-79.T4, which is the ticket that will actually call Available against a live reservation set at dispatch time. Fully implemented and pinned against testdata/availability.golden.json (TestAvailableDerivedFromReservations).",
+    "expected_caller": "AO/S-79.T4's reservation-first dispatch path, which reads the jobs-domain reservation rows and calls Available before granting a new reservation",
+    "retire_ticket": "P1-E41-W9-S79-T4",
+    "caller_site": "internal/jobs/quota_reservation.go"
+  },
+  {
+    "symbol": "internal/fleet/topology.ExecutiveModelFractionSoft",
+    "reason": "P1-E40-W9-S77-T3 (R-21.117) names the R-21.34 executive-role eligibility caps' canonical string constants so every future reference to them uses one name. The routing/eligibility check that actually reads these caps against a candidate lane's role is AO/S-80.T1's scheduler, not this ticket -- this ticket only owns the naming and the guarantee that BarrierBucket never returns either name (TestExecutiveModelFractionNamesAreNeverBarrierBuckets).",
+    "expected_caller": "AO/S-80.T1's scheduler, which reads executive_model_fraction_soft/hard to gate executive-role eligibility",
+    "retire_ticket": "P1-E41-W9-S80-T1",
+    "caller_site": "internal/jobs/executive_eligibility.go"
+  },
+  {
+    "symbol": "internal/fleet/topology.ExecutiveModelFractionHard",
+    "reason": "Same gap as ExecutiveModelFractionSoft directly above: both names are consumed together by the same future scheduler eligibility check.",
+    "expected_caller": "AO/S-80.T1's scheduler, which reads executive_model_fraction_soft/hard to gate executive-role eligibility",
+    "retire_ticket": "P1-E41-W9-S80-T1",
+    "caller_site": "internal/jobs/executive_eligibility.go"
+  },
+  {
+    "symbol": "internal/fleet/topology.GaugeReservable",
+    "reason": "P1-E40-W9-S77-T3 (R-21.116) ships GaugeReservable, the batch-gauge eligibility check ('reservable iff gauge + estimate <= limit'). Its caller is the same future dispatch path Available and Reservable feed (AO/S-79.T4), which reads QuotaDomain.Batch's live gauge state before admitting a new concurrent request or enqueued-token reservation. Fully implemented and tested (TestGaugeReservable).",
+    "expected_caller": "AO/S-79.T4's reservation-first dispatch path, which checks GaugeReservable against the domain's current concurrent-request/enqueued-token gauges before admitting a new batch reservation",
+    "retire_ticket": "P1-E41-W9-S79-T4",
+    "caller_site": "internal/jobs/quota_reservation.go"
+  },
+  {
+    "symbol": "internal/fleet/topology.Merge",
+    "reason": "P1-E40-W9-S77-T3 (R-21.26) ships Merge, the source-precedence reconciliation of two observations of the SAME bucket. This ticket's own UpsertBucket persists one observation at a time (upsert by domain_id, dimension) and does not itself combine multiple concurrently-arriving sources -- that reconciliation belongs to R-21.28's six-hour discovery/reconcile job, which observes a domain from more than one source (provider-status polling and a CLI probe) in the same pass and must not let a stale provider-status reading silently overwrite a fresher cli-observation. Fully implemented and pinned against testdata/source_ladder_merge.golden.json (TestSourceLadderMerge).",
+    "expected_caller": "P1-E40-W9-S77-T5's six-hour reconcile job, which merges every source's observation of one bucket before calling UpsertBucket with the reconciled result",
+    "retire_ticket": "P1-E40-W9-S77-T5",
+    "caller_site": "internal/jobs/fleet_reconcile.go"
+  },
+  {
+    "symbol": "internal/fleet/topology.Select",
+    "reason": "P1-E40-W9-S77-T3 (R-21.109) ships Select, the highest-precedence non-expired observation among several. Like Merge above, its caller is R-21.28's six-hour discovery/reconcile job, which is the only place multiple observations of one bucket are ever collected together before a single reconciled write.",
+    "expected_caller": "P1-E40-W9-S77-T5's six-hour reconcile job, which selects the winning non-expired observation across every source before calling UpsertBucket",
+    "retire_ticket": "P1-E40-W9-S77-T5",
+    "caller_site": "internal/jobs/fleet_reconcile.go"
+  },
+  {
+    "symbol": "internal/fleet/topology.SlidingWindowSum",
+    "reason": "P1-E40-W9-S77-T3 (R-21.109) ships SlidingWindowSum, the rolling-window (rpm/tpm) timestamped-consumption sum. Its caller is AO/S-79.T4's dispatch path, which records each request's timestamped consumption and sums the trailing window before computing pressure for a rolling dimension -- this ticket ships the formula and its test (TestSlidingWindowSumOnlyCountsWithinWindow) but not the consumption event log that future ticket owns.",
+    "expected_caller": "AO/S-79.T4's reservation-first dispatch path, which maintains the timestamped consumption log for rpm/tpm and calls SlidingWindowSum to compute rolling pressure",
+    "retire_ticket": "P1-E41-W9-S79-T4",
+    "caller_site": "internal/jobs/quota_reservation.go"
+  },
+  {
+    "symbol": "internal/fleet/topology.ValidateReserve",
+    "reason": "P1-E40-W9-S77-T3 (R-21.117) ships ValidateReserve, clamping preserve_weekly_reserve to [0.0, 0.60]. Its contract explicitly names its caller: 'the AO/S-80.T1 config load calls it at load time so a reserve of 1.0 can never make a lane permanently ineligible' -- that config load is out of this ticket's files_scope. Fully implemented and tested (TestValidateReserveRange).",
+    "expected_caller": "AO/S-80.T1's config load, which calls ValidateReserve on the configured preserve_weekly_reserve value before it reaches the scheduler",
+    "retire_ticket": "P1-E41-W9-S80-T1",
+    "caller_site": "internal/jobs/scheduler_config.go"
+  },
+  {
+    "symbol": "internal/jobs.RequireHumanApproval",
+    "reason": "P1-E34-W7-S70-T2 ships the Critical-class release/CD gate's human-approval redemption (RequireHumanApproval) and its rollback-evidence verifier, fully implemented and tested end to end against a real ApprovalQueue-shaped double (scope binding, single-use, non-human-principal refusal, queue-error propagation), but the release-train composition root that would construct a real ReleaseCandidate and call it is AB/S-58's v2.0.0 release-train work, explicitly out of this ticket's own scope (files_scope covers internal/jobs/* only).",
+    "expected_caller": "AB/S-58's v2.0.0 release-train tickets, which construct the real ReleaseCandidate and ApprovalQueue and call RequireHumanApproval as the release job's Critical-class gate; retire this entry once one lands",
+    "retire_ticket": "P1-E28-W10-S58-T1",
+    "caller_site": "internal/daemon/release_gate_composition.go"
+  },
+  {
+    "symbol": "providers/agents/local.New",
+    "reason": "P1-E30-W6-S62-T1 builds the local-model AgentProvider driver as a standalone package with no wiring ticket of its own, the same shape as providers/anthropic.New/providers/ollama.New above: the composition root that constructs and holds a live local.Driver in the agent-lane pool is the conductor agent-lane quota bridge (S-62.T2), out of this files_scope. The driver ships fully implemented and unit-tested (task-class gating, compliance posture, full AgentProvider job-verb surface) against a fake ModelProvider and ConfigStore; only its construction call site is missing until that bridge lands.",
+    "expected_caller": "the conductor agent-lane quota bridge (P1-E30-W6-S62-T2), which constructs and holds a live local.Driver over a real ModelProvider and ConfigStore; retire this entry once it lands",
+    "retire_ticket": "P1-E30-W6-S62-T2",
+    "caller_site": "internal/conductor/agent_lane_local.go"
+  },
+  {
+    "symbol": "providers/agents/local.NewQualifier",
+    "reason": "P1-E30-W6-S62-T1 builds the R-21.170 per-model authoring Qualifier fully implemented and unit-tested (missing/failing/stale-hash rows all fail closed, a passing row grants authoring for that model id only), but the composition root that constructs one over a real ModelProvider, the real config-domain ConfigStore adapter, and a real Clock is the same conductor agent-lane quota bridge (S-62.T2) that constructs local.Driver, out of this files_scope.",
+    "expected_caller": "the conductor agent-lane quota bridge (P1-E30-W6-S62-T2), which constructs a Qualifier and injects it into local.New alongside a real ModelProvider; retire this entry once it lands",
+    "retire_ticket": "P1-E30-W6-S62-T2",
+    "caller_site": "internal/conductor/agent_lane_local.go"
+  },
+  {
+    "symbol": "internal/nodes.DeferSelfUpdate",
+    "reason": "P1-E17-W4-S36-T5 implements the §D-33 install-channel deferral gate (node-managed installs must defer upgrades to the controller rollout) fully implemented and unit-tested, but the consuming command, `cascade self-update`, is AA/S-55.T7's own ticket and does not exist anywhere in this tree yet -- there is no self-update code path this ticket could wire the gate into.",
+    "expected_caller": "AA/S-55.T7's `cascade self-update` command, which calls DeferSelfUpdate(buildinfo.ResolvedInstallChannel()) before acting and returns ChannelDeferralError() when it reports true; retire this entry once that ticket lands",
+    "retire_ticket": "P1-E27-W10-S55-T7",
+    "caller_site": "cmd/cascade/self_update.go"
+  },
+  {
+    "symbol": "internal/nodes.ChannelDeferralError",
+    "reason": "The typed refusal DeferSelfUpdate's caller returns; ships alongside DeferSelfUpdate for the same reason (AA/S-55.T7 has not landed) -- see that entry's reason for the full context.",
+    "expected_caller": "AA/S-55.T7's `cascade self-update` command; retire this entry once that ticket lands",
+    "retire_ticket": "P1-E27-W10-S55-T7",
+    "caller_site": "cmd/cascade/self_update.go"
+  },
+  {
+    "symbol": "internal/fleet/capacity.NewTierPolicy",
+    "reason": "P1-E31-W6-S63-T2 ships the tier-policy engine (SelectTier, the jump rule, the reserve flag) fully implemented and unit-tested against test-only stub CapabilityScorer/EstimateSource/ProbeAdmission doubles. NewTierPolicy's real production caller needs a live FleetSnapshot -> map[Tier]TierSlot projection (the profile/tier config-domain binding) that no landed ticket ships yet -- see policy.go's own CONTRACT DEVIATION note. That composition-root wiring is S-63.T3/S-64.T2's job.",
+    "expected_caller": "S-63.T3/S-64.T2's fleet-scheduling composition root, which resolves a FleetSnapshot into map[Tier]TierSlot, constructs one NewTierPolicy per daemon lifetime with the real EstimateSource/ProbeAdmission/Clock, and calls SelectTier per ResourceRequest; retire this entry once it lands",
+    "retire_ticket": "P1-E31-W6-S64-T2",
+    "caller_site": "internal/daemon/subsystems_fleet.go"
+  },
+  {
+    "symbol": "internal/fleet/capacity.NewDefaultProbeAdmission",
+    "reason": "Ships alongside NewTierPolicy for the same reason: DefaultProbeAdmission is this ticket's real R-21.166 ProbeAdmission implementation, fully unit-tested (TestProbeAdmissionBackoff, TestTierPolicyProbeOnlyUnknown), but its production caller is the same not-yet-landed fleet-scheduling composition root -- see NewTierPolicy's entry above for full context.",
+    "expected_caller": "S-63.T3/S-64.T2's fleet-scheduling composition root, which constructs one DefaultProbeAdmission per daemon lifetime and injects it into NewTierPolicy; retire this entry once it lands",
+    "retire_ticket": "P1-E31-W6-S64-T2",
+    "caller_site": "internal/daemon/subsystems_fleet.go"
+  },
+  {
+    "symbol": "internal/fleet/capacity.ValidateResourceRequest",
+    "reason": "P1-E31-W6-S63-T2 ships the ResourceRequest fail-closed normalizer (task_class/min_quality/deadline/sensitivity/risk_class/data_class validation, R-21.143's raise-only floor) fully unit-tested, but the caller that builds a ResourceRequest from a real dispatch intent and calls this before SelectTier is the same not-yet-landed fleet-scheduling composition root -- see NewTierPolicy's entry above for full context.",
+    "expected_caller": "S-63.T3/S-64.T2's fleet-scheduling composition root, which normalizes every caller-supplied ResourceRequest through this before SelectTier; retire this entry once it lands",
+    "retire_ticket": "P1-E31-W6-S64-T2",
+    "caller_site": "internal/daemon/subsystems_fleet.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.NewWindowAccountant",
+    "reason": "P1-E41-W9-S80-T1 ships WindowAccountant, the subscription-window bucket accountant, fully implemented and tested against a real modernc/sqlite topology+usage store pair. Its constructor's real caller is the scarcity scheduler / periodic accounting job that owns a live topology.Store, topology.QuotaStore and provider.UsageReader triple at daemon runtime -- that composition-root wiring belongs to AO/S-79's scheduler tickets, out of this ticket's files_scope (internal/fleet/economics and internal/runtime config only).",
+    "expected_caller": "AO/S-79's scarcity scheduler composition root, which constructs one WindowAccountant per subscription_window domain and calls Buckets on each accounting pass",
+    "retire_ticket": "P1-E41-W9-S79-T1",
+    "caller_site": "internal/daemon/economics_wiring.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.ResolveAccountRole",
+    "reason": "P1-E41-W9-S80-T1 ships the R-21.34 fail-closed role resolver, fully implemented and tested (TestRoleFailClosed). Its caller is the config-to-policy binding that reads FleetAccountConfig.Role off internal/runtime.Config.FleetAccounts and resolves it before constructing an AccountPolicy -- that binding is the scheduler/doctor composition root (AP/S-82's doctor divergence surface, AO/S-79's scheduler), out of this ticket's files_scope.",
+    "expected_caller": "the doctor divergence surface (AP/S-82) and the scheduler's config-to-policy binding (AO/S-79), both of which resolve a configured role before use",
+    "retire_ticket": "P1-E43-W9-S82-T2",
+    "caller_site": "internal/daemon/economics_wiring.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.ClampFractionCaps",
+    "reason": "P1-E41-W9-S80-T1 ships the R-21.34 published-cap clamp, fully implemented and tested (TestClampFractionCaps). Its caller is AO/S-79's scheduler, which reads the weekly_model_fraction bucket produced by this same ticket's WindowAccountant and clamps the configured fraction caps before the executive-eligibility check -- out of this ticket's files_scope.",
+    "expected_caller": "AO/S-79's scheduler, which clamps a configured AccountPolicy's fraction caps against the live weekly_model_fraction bucket before evaluating executive-role eligibility",
+    "retire_ticket": "P1-E41-W9-S79-T1",
+    "caller_site": "internal/daemon/economics_wiring.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.EffectiveLaneClass",
+    "reason": "P1-E41-W9-S80-T1 ships the R-21.34/R-21.45 executive-overflow derivation, fully implemented and tested (TestEffectiveLaneClassExecutiveOverflow). P1-E41-W9-S79-T1 (pressure/shadow-price/reserve-barrier) landed shadow_price.go taking BasePrice as a caller-supplied field on ShadowPriceInput, never deriving it from a Lane/Account pair itself (06-FORGE-SPEC S5.1 -- that ticket's own contract names no such call). The real caller is AO/S-79.T3's ranking pass (rank.go), which resolves each candidate lane's EFFECTIVE class before building the ShadowPriceInput it hands to ShadowPrice.",
+    "expected_caller": "AO/S-79.T3's rank.go, which calls EffectiveLaneClass on every candidate lane before computing its shadow price",
+    "retire_ticket": "P1-E41-W9-S79-T3",
+    "caller_site": "internal/fleet/economics/rank.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.ExecutiveOverflowEligible",
+    "reason": "P1-E41-W9-S80-T1 ships the R-21.34/R-21.45 hard-reserve eligibility gate for the executive-overflow lane, fully implemented and tested (TestExecutiveOverflowEligibleOnlyAtHardReserve). P1-E41-W9-S79-T1 (pressure/shadow-price/reserve-barrier) owns no eligibility predicate -- its ShadowPrice/ReserveBarrier are pure pricing functions with no ReserveState input, and eligibility/correlation/utility ranking is explicitly out of that ticket's scope. The real caller is AO/S-79.T3's eligibility filter (eligibility.go), which checks this before ever offering an executive-overflow candidate to a workforce account.",
+    "expected_caller": "AO/S-79.T3's eligibility.go, which calls ExecutiveOverflowEligible(reserveState) before including an executive-overflow candidate",
+    "retire_ticket": "P1-E41-W9-S79-T3",
+    "caller_site": "internal/fleet/economics/eligibility.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.ExecutiveRoleLadder",
+    "reason": "P1-E41-W9-S80-T1 ships the R-21.92 hard-reserve role-resolution ladder, fully implemented and tested (TestExecutiveRoleLadderAtHardReserve). Its caller is AP/S-81's executive coordinator, which resolves the executive role's lane preference in this exact order when at hard reserve -- out of this ticket's files_scope.",
+    "expected_caller": "AP/S-81's executive coordinator, which calls ExecutiveRoleLadder(reserveState) to resolve lane preference at hard reserve",
+    "retire_ticket": "P1-E42-W9-S81-T1",
+    "caller_site": "internal/daemon/executive_coordinator.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.ResolveExecutiveAccount",
+    "reason": "P1-E41-W9-S80-T1 ships the R-21.110b single/first-configured-account executive default, fully implemented and tested (TestResolveExecutiveAccountSingle). Its caller is the doctor divergence surface / executive coordinator boot path, which resolves the effective executive account once at startup -- AP/S-82's doctor and AP/S-81's coordinator, out of this ticket's files_scope.",
+    "expected_caller": "AP/S-82's doctor divergence report and AP/S-81's executive coordinator boot path, both of which resolve the effective executive account",
+    "retire_ticket": "P1-E43-W9-S82-T2",
+    "caller_site": "internal/daemon/executive_coordinator.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.ReserveAdjustedRemaining",
+    "reason": "P1-E41-W9-S80-T1 ships the R-21.131 project-share input (reserve-adjusted remaining), fully implemented and tested. The division and ErrProjectShareExceeded refusal that consume it are explicitly owned by AO/S-79.T4, not this ticket -- this ticket ships only the input.",
+    "expected_caller": "AO/S-79.T4's project-quota-share division, which reads ReserveAdjustedRemaining(barrier, reserve) as its numerator",
+    "retire_ticket": "P1-E41-W9-S79-T4",
+    "caller_site": "internal/fleet/economics/reserve_availability.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.HealthKeys",
+    "reason": "P1-E41-W9-S80-T1 ships the R-21.52 fleet health-summary projection, fully implemented and tested against every key/state combination (TestHealthKeys, TestHealthKeysScarce, TestHealthKeysUnavailable, TestHealthKeysRedaction). Its named consumer is AP/S-82.T2's fleet.health.summary RPC handler, which has not landed in this tree yet -- explicitly named in this ticket's own spec_refs.",
+    "expected_caller": "AP/S-82.T2's fleet.health.summary RPC handler, which calls HealthKeys(snapshot, lanes, domains, accounts, clock) and returns the result over the wire",
+    "retire_ticket": "P1-E43-W9-S82-T2",
+    "caller_site": "internal/daemon/fleet_health_rpc.go"
+  },
+  {
+    "symbol": "internal/fleet/topology.NewChooser",
+    "reason": "P1-E40-W9-S78-T1 ships the api-project chooser (candidates.go/chooser.go/chooser_errors.go/scope_transition.go/batch.go), fully implemented and unit-tested (chooser_test.go and siblings) with a seeded deterministic rand.Source and injected clock/PrivacyGate/CascadeFn per R-21.132. Its real caller is the daemon composition root that constructs one long-lived Chooser, feeds it topology snapshots via SetTopology after each Reconcile, and exposes Candidates/Choose/OnProviderError to the dispatch path -- explicitly out of this ticket's scope (full_desc's own 'NOT HERE' list names 'the CLI/RPC/SSE surface (S-78.T3)').",
+    "expected_caller": "S-78.T3's daemon composition-root wiring, alongside the fleet lanes CLI/RPC/SSE surface",
+    "retire_ticket": "P1-E40-W9-S78-T3",
+    "caller_site": "cmd/cascade/daemon_chooser_wire.go"
+  },
+  {
+    "symbol": "internal/fleet/topology.DeriveBatchBucket",
+    "reason": "P1-E40-W9-S78-T1 ships the R-21.29 batch sibling bucket (batch.go), gated on a paid api_project domain with batch.supported, fully implemented and tested (batch_test.go). Its real caller is reconcileLane (reconcile.go), once the six-hour discovery/reconcile job (P1-E40-W9-S77-T5, itself still awaiting its own job-scheduler wiring per this file's Reconcile entry) carries a billing-tier/batch-support signal from the provider registry -- that signal does not exist in registry.ProviderRecord/LaneRecord today, so wiring here now would be a fabricated call, not a real one.",
+    "expected_caller": "P1-E40-W9-S77-T5's six-hour reconcile job, once it resolves a domain's billing tier and batch support and calls reconcileLane with it",
+    "retire_ticket": "P1-E40-W9-S77-T5",
+    "caller_site": "internal/jobs/fleet_reconcile.go"
+  },
+  {
+    "symbol": "internal/fleet/topology.DeriveBatchLane",
+    "reason": "Same gap as DeriveBatchBucket immediately above: the interaction_class:batch lane reconcile derives over a batch-supported domain has no real caller until reconcileLane has a billing-tier/batch-support signal to act on. Fully implemented and tested (batch_test.go's TestDeriveBatchBucketAndLane, TestDeriveBatchRefusesUnqualifiedDomains).",
+    "expected_caller": "P1-E40-W9-S77-T5's six-hour reconcile job, alongside DeriveBatchBucket",
+    "retire_ticket": "P1-E40-W9-S77-T5",
+    "caller_site": "internal/jobs/fleet_reconcile.go"
+  },
+  {
+    "symbol": "internal/sync.NewEngine",
+    "reason": "P1-E17-W4-S38-T1 ships the sync engine core (domains/cursors/filter/chunk/transfer/egress), fully implemented and unit-tested including a real-sshd integration test. Engine composition needs a provider.Store, which is only available where daemon_unix_run.go's buildRPCServer already resolves one -- that file is out of this ticket's files_scope (only cmd/cascade/daemon.go is, and it is already at the 300-line cap with no Store of its own to inject, mirroring this same file's existing NodeTunnels/Target CONTRADICTION precedent).",
+    "expected_caller": "S-38.T2/T3's daemon composition-root wiring, once a provider.Store is threaded to the sync engine construction site",
+    "retire_ticket": "P1-E17-W4-S38-T3",
+    "caller_site": "cmd/cascade/sync_daemon_wire.go"
+  },
+  {
+    "symbol": "internal/sync.AllCoreClasses",
+    "reason": "P1-E17-W4-S38-T1 ships the domain-class registry diagnostic accessor, fully implemented and unit-tested (TestNoDomainClassEscapesTheClosedTwelveDomainSet). Its real caller is a future `cascade sync status`/doctor surface -- explicitly S-38.T3's CLI/RPC scope, not this ticket's ('no CLI verb here').",
+    "expected_caller": "S-38.T3's `cascade sync status` command or an internal/doctor sync check listing registered domain classes",
+    "retire_ticket": "P1-E17-W4-S38-T3",
+    "caller_site": "cmd/cascade/sync.go"
+  },
+  {
+    "symbol": "internal/sync.PluginClass",
+    "reason": "P1-E17-W4-S38-T1 ships plugin-manifest-v2 `storage.sync` key resolution, fully implemented and unit-tested. Its real caller is the plugin manifest v2 loader (O/S-32.T3), which reads the declared storage.sync key per plugin and calls this to resolve the plugin's DomainClass -- that loader wiring is out of this ticket's files_scope.",
+    "expected_caller": "O/S-32.T3's plugin manifest v2 loader, once it threads a plugin's storage.sync declaration through PluginClass",
+    "retire_ticket": "P1-E15-W4-S32-T3",
+    "caller_site": "internal/plugins/manifest.go"
+  },
+  {
+    "symbol": "internal/sync.ParseSection",
+    "reason": "P1-E17-W4-S38-T1 ships the [sync] config section parser (tightening-only hot reload per D-26), fully implemented and unit-tested. The contract names internal/runtime's C/S-04.T1 config frame (parseConfigSections) as its real caller, but that file is not in this ticket's files_scope (only internal/sync/config.go is) -- see this file's own header CONTRADICTION note.",
+    "expected_caller": "internal/runtime/config_sections.go's parseConfigSections, which would add a parseSyncSection call alongside its existing section parsers",
+    "retire_ticket": "P1-E17-W4-S38-T3",
+    "caller_site": "internal/runtime/config_sync.go"
+  },
+  {
+    "symbol": "internal/sync.BeginStaging",
+    "reason": "P1-E17-W4-S38-T1 ships blob staging with BLAKE3 content-address admission, fully implemented and unit-tested (TestBlobStagingDigestMismatchRejected, TestInterruptedBlobTransferNotAdmitted). Its real caller is the receive-side of the chunked transfer, which S-38.T2's merge strategies and S-38.T3's CLI/RPC surface build on top of this ticket's transfer.go/chunk.go -- explicitly out of this ticket's scope.",
+    "expected_caller": "S-38.T2's blob receive path, which begins staging before the first chunk of a blob transfer arrives",
+    "retire_ticket": "P1-E17-W4-S38-T2",
+    "caller_site": "internal/sync/receive.go"
+  },
+  {
+    "symbol": "internal/sync.ResumeStaging",
+    "reason": "Same gap as BeginStaging immediately above: the resumable receive-side entry point has no real caller until S-38.T2/T3 build the receive path this ticket's transfer primitives support.",
+    "expected_caller": "S-38.T2's blob receive path, on a reconnect after a mid-transfer drop",
+    "retire_ticket": "P1-E17-W4-S38-T2",
+    "caller_site": "internal/sync/receive.go"
+  },
+  {
+    "symbol": "internal/sync.AppendStagedChunk",
+    "reason": "Same gap as BeginStaging: the per-chunk staging append has no real caller until S-38.T2/T3's receive path drives ReceiveStream with this as its ChunkSink.",
+    "expected_caller": "S-38.T2's blob receive path, as the ChunkSink argument to ReceiveStream",
+    "retire_ticket": "P1-E17-W4-S38-T2",
+    "caller_site": "internal/sync/receive.go"
+  },
+  {
+    "symbol": "internal/sync.AdmitBlob",
+    "reason": "Same gap as BeginStaging: final blob admission has no real caller until S-38.T2/T3's receive path completes a staged transfer.",
+    "expected_caller": "S-38.T2's blob receive path, once ReceiveStream reports the stream's last chunk sunk",
+    "retire_ticket": "P1-E17-W4-S38-T2",
+    "caller_site": "internal/sync/receive.go"
+  },
+  {
+    "symbol": "internal/sync.ReceiveBytes",
+    "reason": "P1-E17-W4-S38-T1 ships the in-memory record-batch reassembly helper, fully implemented and unit-tested (TestTransferBytesRoundTrip and the resumable-drop tests). Its real caller is the receive-side record-batch path S-38.T2/T3 build; SendBatch (this ticket's own send-side entry point) is wired and tested, but nothing in this ticket's scope receives a batch back yet.",
+    "expected_caller": "S-38.T2's record-batch receive path, the mirror of Engine.SendBatch",
+    "retire_ticket": "P1-E17-W4-S38-T2",
+    "caller_site": "internal/sync/receive.go"
   }
-
 ]

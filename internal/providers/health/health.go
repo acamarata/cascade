@@ -41,6 +41,7 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/fleet/topology"
 	"github.com/acamarata/cascade/internal/providers/registry"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -94,6 +95,68 @@ type Manager struct {
 	prober    Prober
 	backoff   *backoffState
 	lastProbe *lastProbeResults
+	chooser   Chooser
+	resolve   ResolveCredential
+}
+
+// Chooser is the minimal internal/fleet/topology seam DemoteProvider
+// routes rate_limited_429/dead_key_hard/dead_key_soft through (P1-E40-W9-
+// S78-T1), declared as a structural interface rather than importing
+// *topology.Chooser's concrete type -- topology.Chooser satisfies it
+// unchanged. A Manager built with NewManager alone (no WithChooser call)
+// never routes: DemoteProvider then falls back to its own registry
+// write, the pre-ticket behaviour, so an unwired Manager stays fully
+// functional.
+type Chooser interface {
+	OnProviderError(ctx context.Context, dom topology.DomainID, cred topology.CredentialID, err error) (topology.Retry, error)
+}
+
+// ResolveCredential maps a registry provider name onto its
+// fleet-topology (DomainID, CredentialID), or ("", "", false) when the
+// name has no topology mapping yet -- e.g. a provider not migrated onto
+// the fleet-topology entities. DemoteProvider falls back to the legacy
+// whole-provider demotion whenever this returns false.
+type ResolveCredential func(name string) (topology.DomainID, topology.CredentialID, bool)
+
+// WithChooser returns a Manager that routes rate_limited_429 (marks the
+// DOMAIN rate_limited) and dead_key_hard/dead_key_soft (quarantines the
+// CREDENTIAL) through chooser via resolve, instead of demoting the whole
+// provider record. The HealthManager remains the single writer of
+// health_status/health_checked_at/demotion_count: a routed reason never
+// reaches the registry write below, and intake_fail/capability_denied
+// are never routed (only the three reasons R-21.29 names).
+func (m *Manager) WithChooser(chooser Chooser, resolve ResolveCredential) *Manager {
+	m.chooser = chooser
+	m.resolve = resolve
+	return m
+}
+
+// routedReasonKind maps the three routable DemotionReason values onto the
+// frozen pkg/cascade kind OnProviderError classifies. Only these three
+// route through the chooser -- intake_fail and capability_denied are
+// never in this table and always fall back to the registry write.
+var routedReasonKind = map[provider.DemotionReason]cascade.Kind{
+	provider.ReasonRateLimited429: cascade.KindQuotaExhausted,
+	provider.ReasonDeadKeyHard:    cascade.KindPermissionDenied,
+	provider.ReasonDeadKeySoft:    cascade.KindPermissionDenied,
+}
+
+// routeThroughChooser attempts the chooser seam for reason/name, returning
+// (handled=true, err) when it routed (never reaching the registry write),
+// or (handled=false, nil) to fall back to the legacy path -- no Chooser/
+// ResolveCredential configured, no routable kind, or resolve found no
+// topology mapping for name.
+func (m *Manager) routeThroughChooser(ctx context.Context, name string, reason provider.DemotionReason) (handled bool, err error) {
+	kind, routable := routedReasonKind[reason]
+	if !routable || m.chooser == nil || m.resolve == nil {
+		return false, nil
+	}
+	dom, cred, ok := m.resolve(name)
+	if !ok {
+		return false, nil
+	}
+	_, err = m.chooser.OnProviderError(ctx, dom, cred, cascade.Newf(kind, "health: %s for provider %q", reason, name))
+	return true, err
 }
 
 // NewManager returns a ready-to-use Manager. evictionThreshold<=0 uses
@@ -125,6 +188,13 @@ func (m *Manager) DemoteProvider(ctx context.Context, name string, reason provid
 		// caller demoting an unknown name should still see
 		// ErrProviderNotFound) and stop -- no write, no event.
 		_, err := m.reg.GetProvider(ctx, name)
+		return err
+	}
+	if handled, err := m.routeThroughChooser(ctx, name, reason); handled {
+		// Routed: the chooser marked the domain/credential per R-21.29,
+		// never the whole provider record -- the registry write below
+		// (this manager's sole health_status/demotion_count writer) is
+		// skipped entirely for this call.
 		return err
 	}
 

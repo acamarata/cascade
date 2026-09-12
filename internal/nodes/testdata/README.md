@@ -35,7 +35,41 @@ against a REAL sshd, never a self-authored dialect: OpenSSH's own
   instead, so nothing here goes stale or needs updating when the
   generated config's shape changes.
 
+## minisign real-counterpart provenance (S-36.T5, Art.2.2)
+
+`minisign/` holds a small, committed fixture set proving `ParseMinisignSignature`/
+`VerifyMinisign` against a real `minisign` CLI, never a self-authored dialect.
+
+- **Tool**: `minisign` 0.12 (Homebrew, `/opt/homebrew/bin/minisign`), run
+  locally at fixture-generation time (2026-09-12, P1-E17-W4-S36-T5).
+- **Files**: `artifact.bin` (the signed message, `"hello world content\n"`),
+  `artifact.bin.minisig` (the real detached signature, default `ED`
+  BLAKE2b-512-prehashed algorithm, trusted comment `"test comment v1"`),
+  `test.pub` (the corresponding public key). The matching SECRET key was
+  generated with `minisign -G -p test.pub -s test.key -W` into a
+  throwaway `/tmp` directory and never written anywhere under this repo —
+  only the public artifacts a verifier needs are committed.
+- **Generation**: `minisign -S -s test.key -m artifact.bin -x
+  artifact.bin.minisig -t "test comment v1" -W`. Independently
+  cross-verified with `minisign -V -p test.pub -m artifact.bin -x
+  artifact.bin.minisig` ("Signature and comment signature verified")
+  before being committed.
+- **Why committed (unlike the ssh tunnel lane above)**: a minisign
+  signature and public key carry no secret material and no shape a
+  credential scanner recognizes — GitHub push protection does not block
+  them, and a small deterministic fixture lets the unit-test suite (not
+  just the `integration`-tagged lane) exercise the exact real wire format
+  without invoking a subprocess on every run. The `integration`-tagged
+  `TestVersionVerifyRealMinisign` and `TestProvisionRealSSHD` additionally
+  generate a FRESH ephemeral keypair and sign a fresh artifact at test run
+  time (mirroring the ssh tunnel lane's discipline above), so the
+  real-counterpart proof does not rest solely on one committed fixture.
+- **`fuzz/FuzzMinisignSignature/`**: three seeds — the real fixture above,
+  an empty input, and a hand-shaped malformed line pair — for this
+  ticket's mandated `FuzzMinisignSignature` target (06 §5.7).
+
 ## Existing fixtures
 
-`fuzz/` and `trust/` predate this ticket and are unrelated to the ssh
-tunnel; see their own git history for provenance.
+`fuzz/` (excluding `FuzzMinisignSignature/`, S-36.T5) and `trust/` predate
+this ticket and are unrelated to the ssh tunnel or minisign; see their own
+git history for provenance.

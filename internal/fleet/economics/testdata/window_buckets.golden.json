@@ -1,0 +1,9 @@
+{
+  "provenance": "hand-transcribed from 21-T0-RULINGS-R21.md R-21.26/R-21.116, never captured from this package's own output",
+  "dimensions": [
+    { "name": "session_5h", "window": "5h" },
+    { "name": "weekly_shared", "window": "week" },
+    { "name": "weekly_model_fraction", "window": "week" },
+    { "name": "monthly", "window": "month" }
+  ]
+}

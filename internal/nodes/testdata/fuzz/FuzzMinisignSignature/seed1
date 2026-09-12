@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("untrusted comment: signature from minisign secret key\nRUSehI0oW9zImC9M4ciNU/HchDrlhZikkZg/17GCQJLTTr0uzr/6PEKbG/lI+qHVBfL9xPMNEMIBbIjhfN41UT9RMLpH1CRqSQg=\ntrusted comment: test comment v1\nyY7VpQvJ1tC0fCLXv9OSLAzggG6VRXRel+rtouFU05D3Q6j6gnikL6a1pYee9doGJDn1GcZReWMwnP7dBY55Cw==\n")

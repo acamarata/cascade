@@ -1,0 +1,23 @@
+id = "example-connector"
+name = "Example Connector"
+schema = "cascade.plugin/v2"
+version = "0.1.0"
+host_version = ">=0.1.0"
+runtime = "wasm"
+requires = ["network.egress", "storage.domain.write"]
+
+[[provides.domains]]
+name = "example-connector.raw"
+description = "Raw records this connector fetches from its declared source, before any normalization."
+
+[[provides.tools]]
+name = "example-connector.fetch-raw"
+description = "Fetches the connector's current batch of raw records."
+
+[[permissions]]
+name = "network.egress"
+description = "Reach this connector's declared upstream source over the network."
+
+[[permissions]]
+name = "storage.domain.write"
+description = "Write fetched raw records into this plugin's own example-connector.raw storage domain."

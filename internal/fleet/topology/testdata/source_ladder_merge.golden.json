@@ -1,0 +1,44 @@
+[
+  {
+    "name": "provider_status_beats_cli_observation",
+    "existing": {"source": "cli-observation", "observed_at": "2026-09-01T00:00:00Z", "confidence": 0.9},
+    "incoming": {"source": "provider-status", "observed_at": "2026-09-01T00:00:00Z", "confidence": 0.1},
+    "winner": "incoming"
+  },
+  {
+    "name": "cli_observation_beats_user_estimate",
+    "existing": {"source": "user-estimate", "observed_at": "2026-09-01T00:00:00Z", "confidence": 0.9},
+    "incoming": {"source": "cli-observation", "observed_at": "2026-09-01T00:00:00Z", "confidence": 0.1},
+    "winner": "incoming"
+  },
+  {
+    "name": "user_estimate_beats_unknown",
+    "existing": {"source": "unknown", "observed_at": "2026-09-01T00:00:00Z", "confidence": 0.9},
+    "incoming": {"source": "user-estimate", "observed_at": "2026-09-01T00:00:00Z", "confidence": 0.1},
+    "winner": "incoming"
+  },
+  {
+    "name": "never_downgrades_stronger_existing",
+    "existing": {"source": "provider-status", "observed_at": "2026-09-01T00:00:00Z", "confidence": 0.1},
+    "incoming": {"source": "unknown", "observed_at": "2026-09-02T00:00:00Z", "confidence": 0.9},
+    "winner": "existing"
+  },
+  {
+    "name": "equal_precedence_later_observed_at_wins",
+    "existing": {"source": "cli-observation", "observed_at": "2026-09-01T00:00:00Z", "confidence": 0.9},
+    "incoming": {"source": "cli-observation", "observed_at": "2026-09-02T00:00:00Z", "confidence": 0.1},
+    "winner": "incoming"
+  },
+  {
+    "name": "equal_precedence_and_time_higher_confidence_wins",
+    "existing": {"source": "cli-observation", "observed_at": "2026-09-01T00:00:00Z", "confidence": 0.2},
+    "incoming": {"source": "cli-observation", "observed_at": "2026-09-01T00:00:00Z", "confidence": 0.8},
+    "winner": "incoming"
+  },
+  {
+    "name": "fully_tied_prefers_existing",
+    "existing": {"source": "unknown", "observed_at": "2026-09-01T00:00:00Z", "confidence": 0.5},
+    "incoming": {"source": "unknown", "observed_at": "2026-09-01T00:00:00Z", "confidence": 0.5},
+    "winner": "existing"
+  }
+]

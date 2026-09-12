@@ -1,0 +1,43 @@
+# fleet_capacity.txtar
+#
+# Documents the `cascade fleet capacity [--json]` behavioral scenarios
+# this ticket's contract names (P1-E31-W6-S63-T4). This module carries no
+# testscript (rogpeppe/testscript) dependency -- see the sibling
+# fleet-sessions.txtar / context-slice.txtar / context-scope-show.txtar,
+# which make the identical call: adding one needs a license gate this
+# repo has not cleared. The scenarios below are instead expressed as
+# executable Go in cmd/cascade/fleet_capacity_test.go: mount reachability
+# and the mutation proof (TestFleetCapacityMountedOnRoot), the no-daemon
+# actionable refusal (TestFleetCapacity_NoDaemon_ActionableError), a
+# positional argument refusal (TestFleetCapacity_ExtraArgRefused), human
+# table rendering for both a populated and an empty snapshot
+# (TestFleetCapacitySnapshot_TableHasRequiredColumns,
+# TestFleetCapacitySnapshot_EmptyTableHasHeaderOnly), the --json envelope
+# shape (TestFleetCapacityResult_JSONEnvelope,
+# TestFleetCapacityResult_EmptyJSONEnvelope), and CASCADE_NO_INPUT parity
+# (TestFleetCapacity_CASCADE_NO_INPUT_Identical). This file records the
+# intended script form for when a testscript dependency is cleared.
+
+# One-shot human output on an isolated environment (no daemon reachable)
+# is refused with an actionable message, not a panic or a fabricated
+# empty snapshot -- a FleetSnapshot is the daemon's own in-memory state
+# (S-63.T1's Compositor), never something this command reconstructs
+# standalone.
+! exec cascade fleet capacity
+stderr 'cascade daemon run'
+
+# --json emits the versioned envelope (the SAME repo-wide contract every
+# other cascade --json command uses; see fleet_capacity.go's header,
+# deviation 2) -- automation parity, no interactive prompts either way.
+! exec cascade --json fleet capacity
+stdout '"ok":\s*false'
+
+# A positional argument is refused.
+! exec cascade fleet capacity extra-arg
+stderr 'unknown command'
+
+# CASCADE_NO_INPUT=1 produces the identical refusal -- this command never
+# branches on interactivity.
+env CASCADE_NO_INPUT=1
+! exec cascade fleet capacity
+stderr 'cascade daemon run'

@@ -1,0 +1,58 @@
+# Purpose: the P1-E29-W6-S60-T4 acceptance fixture -- a minimal but
+# structurally valid 17-field PEWS ticket whose files_scope ADD/CHANGE
+# targets two docs/ paths only, so the AC/S-59.T4 classifier resolves
+# risk_class Low (risk.go's allDocsOrMarkdown rule). Loaded by
+# acceptance_test.go's own decoder (there is no production PEWSContract
+# YAML decoder in the tree yet -- pews_compiler.go's own doc comment
+# says decoding is "out of this ticket's scope" -- so this file's shape
+# is this acceptance test's own, not a schema any production code reads).
+#
+# CONTRACT NOTE (quoted in the journal): pews_compiler_riskclass.go's
+# crLevelRiskClass/qaLevelRiskClass tables have NO entry that resolves to
+# RiskClassLow (CR-B/CR-A+CR-B -> Normal; CR-B+CR-C/CR-A+CR-B+CR-C ->
+# High; QA-A/QA-B -> Normal; QA-C -> High) -- so DeclaredGateSet, and
+# therefore EffectiveTicketGateSet's union with it, can never resolve to
+# exactly {format, static, targeted_verification} for ANY valid cr_level/
+# qa_level combination. cr_level/qa_level below are CR-B/QA-A (the
+# lowest legal declared class, Normal) to keep the declared half as
+# close to the classifier floor as the real table allows; the verbatim
+# Low gate set the acceptance test asserts comes from
+# GateSetForRiskClass(node.RiskClass) alone, not from the declared/
+# effective union.
+id: P1-E29-W6-S60-T4-FIXTURE
+title: Acceptance fixture -- docs-only Low-risk ticket
+short_desc: A minimal docs-only ticket used to exercise the full jobs DAG lifecycle end to end.
+full_desc: |
+  This fixture carries no real product change. Its only purpose is to
+  give the AC/S-59.T4 planner and risk classifier a structurally valid,
+  docs/**-only footprint so the acceptance suite can drive a real
+  plan -> lease -> worktree -> evidence -> accepted lifecycle without
+  touching any file the repo's own gates would treat as Normal or above.
+branch: P1-EAC-W6-S60-T4-fixture
+weight: S
+model_class: build
+depends_on: []
+tasks:
+  - 'Add docs/fixture-a.md'
+  - 'Update docs/fixture-b.md'
+  - 'Record the acceptance evidence'
+checks:
+  - go build ./internal/jobs/...
+  - go test -race -count=1 ./internal/jobs/... -run TestAcceptance
+acceptance_criteria:
+  - docs/fixture-a.md exists
+  - docs/fixture-b.md is updated
+files_scope:
+  add:
+    - docs/fixture-a.md
+  change:
+    - docs/fixture-b.md
+  delete: []
+spec_refs:
+  - 19-PEWS-PLAN-W6-W8-AGENTIC.md §Wave 6 §Epic AC §S-60.T4
+cr_level: CR-B
+qa_level: QA-A
+sport_updates:
+  - 'internal/jobs: VALIDATED entity Job (acceptance fixture)'
+docs_updates:
+  - internal/jobs/testdata/README.md

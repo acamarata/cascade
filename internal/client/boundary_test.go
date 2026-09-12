@@ -74,8 +74,28 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// .golangci.yml's cmd-rpc-server-boundary exemption list; the two must
 	// be edited together or this gate and the linter disagree.
 	"daemon_unix_evidence.go": true,
-	"mcp.go":                  true,
-	"elevate_helper.go":       true,
+	// daemon_unix_jobs_rpc.go and daemon_unix_jobs_rpc_adapters.go: the
+	// P1-E29-W6-S60-T1 composition-root call site for job.*/lease.* — see
+	// .golangci.yml's cmd-rpc-server-boundary comment (edited together
+	// with this map) for the full justification.
+	"daemon_unix_jobs_rpc.go":          true,
+	"daemon_unix_jobs_rpc_adapters.go": true,
+	// daemon_unix_run_fleetjobs.go (P1-E40-W9-S77-T3): a mechanical
+	// relocation of wireFleetAndNodeHandlers/wireFleetNodeAndJobHandlers/
+	// wireJobRPCHandlers out of daemon_unix_run.go under its own 300-line
+	// cap. This mirrors .golangci.yml's cmd-rpc-server-boundary exemption
+	// list; the two must be edited together.
+	"daemon_unix_run_fleetjobs.go": true,
+	"mcp.go":                       true,
+	"elevate_helper.go":            true,
+	// backup_elevation.go never dials the daemon: it runs the 06 §5.14
+	// nonce + local-auth-signature + middleware-verify + single-use-ledger
+	// ceremony entirely in-process, reusing the daemon's own
+	// rpc.ElevationMiddleware as a verification primitive rather than a
+	// second hand-rolled copy of it. This map mirrors .golangci.yml's
+	// cmd-rpc-server-boundary exemption list; the two must be edited
+	// together or this gate and the linter disagree (P1-E19-W4-S42-T3).
+	"backup_elevation.go": true,
 }
 
 // scanCmdCascadeRPCImports returns, sorted, the base filenames under dir

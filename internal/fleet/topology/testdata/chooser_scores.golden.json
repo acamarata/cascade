@@ -1,0 +1,59 @@
+[
+  {
+    "case": "ahead_of_budget",
+    "dimension": "rpd",
+    "reserve": 0.2,
+    "ttr_seconds": 18000,
+    "actual_remaining": 0.6,
+    "source": "cli-observation",
+    "ewma_429": 0,
+    "expected_pressure": 0.5
+  },
+  {
+    "case": "behind_budget",
+    "dimension": "rpd",
+    "reserve": 0.2,
+    "ttr_seconds": 45000,
+    "actual_remaining": 0.3,
+    "source": "cli-observation",
+    "ewma_429": 0,
+    "expected_pressure": 4.0864839866
+  },
+  {
+    "case": "near_reset",
+    "dimension": "rpd",
+    "reserve": 0.2,
+    "ttr_seconds": 200,
+    "actual_remaining": 0.5,
+    "source": "cli-observation",
+    "ewma_429": 0,
+    "expected_pressure": 0.5
+  },
+  {
+    "case": "rolling_window",
+    "dimension": "rpm",
+    "reserve": 0.3,
+    "remaining_fraction": 0.4,
+    "source": "provider-status",
+    "ewma_429": 0,
+    "expected_pressure": 2.0707911957
+  },
+  {
+    "case": "unknown_source_no_429_history",
+    "dimension": "rpm",
+    "reserve": 0.2,
+    "remaining_fraction": 1,
+    "source": "unknown",
+    "ewma_429": 0,
+    "expected_pressure": 1.0
+  },
+  {
+    "case": "unknown_source_sustained_429",
+    "dimension": "rpm",
+    "reserve": 0.2,
+    "remaining_fraction": 1,
+    "source": "unknown",
+    "ewma_429": 0.8,
+    "expected_pressure": 3.4
+  }
+]

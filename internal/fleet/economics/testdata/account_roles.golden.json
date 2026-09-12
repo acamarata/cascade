@@ -1,0 +1,8 @@
+{
+  "provenance": "hand-transcribed from 21-T0-RULINGS-R21.md R-21.34, never captured from this package's own output",
+  "roles": [
+    { "role": "executive", "preserve_weekly_reserve": 0.30, "executive_model_fraction_soft": 0.35, "executive_model_fraction_hard": 0.47 },
+    { "role": "workforce", "preserve_weekly_reserve": 0.15, "executive_model_fraction_soft": 0.35, "executive_model_fraction_hard": 0.47 },
+    { "role": "specialist", "preserve_weekly_reserve": 0.20, "executive_model_fraction_soft": 0.35, "executive_model_fraction_hard": 0.47 }
+  ]
+}

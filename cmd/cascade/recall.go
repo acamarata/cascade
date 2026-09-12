@@ -42,6 +42,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/client"
 	"github.com/acamarata/cascade/internal/daemon"
+	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/internal/retrieval/recall"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -69,6 +70,13 @@ type recallDeps struct {
 	Paths   runtime.PathProvider
 	Getenv  runtime.Getenv
 	Environ func() []string
+	// Getwd resolves the process's working directory, the one signal
+	// resolveDefaultScope uses to decide whether a --scope default can be
+	// honestly claimed at all. A nil Getwd falls back to os.Getwd,
+	// matching internal/context/discover.go's HomeDirFunc nil-fallback
+	// convention, so the construction sites that predate this field never
+	// need editing.
+	Getwd func() (string, error)
 	// Call reaches the daemon. Production uses the SDK client; tests
 	// substitute a recorder.
 	Call recallCallFunc
@@ -80,6 +88,7 @@ func productionRecallDeps() recallDeps {
 		Paths:   lazyPaths{},
 		Getenv:  os.Getenv,
 		Environ: os.Environ,
+		Getwd:   os.Getwd,
 		Call:    clientRecallCall,
 	}
 }
@@ -120,6 +129,11 @@ func newRecallCmd(deps recallDeps) *cobra.Command {
 		Args: usageArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params.Query = args[0]
+			scope, err := resolveDefaultScope(deps, params.Scope)
+			if err != nil {
+				return err
+			}
+			params.Scope = scope
 			var result recall.QueryResult
 			if err := recallCall(cmd, deps, recall.MethodQuery, params, &result); err != nil {
 				return err
@@ -147,6 +161,48 @@ func recallCall(cmd *cobra.Command, deps recallDeps, method string, params, out 
 		return scrubDiagnostic(err)
 	}
 	return scrubDiagnostic(deps.Call(cmd.Context(), socketPath, method, params, out))
+}
+
+// resolveDefaultScope fills in the scope `cascade recall` searches within
+// when the caller passed no --scope. An explicit scope passes through
+// untouched (TestRecallSendsItsFlagsAsParams's pin).
+//
+// corpus.Membership.Validate() fails closed on an empty scope on purpose
+// ("a caller that built a broken membership has a bug the caller needs
+// told about"); that check stays exactly as strict. The bug this fixes is
+// upstream of it: this command built that broken membership itself by
+// forwarding "" whenever --scope was never given, which is every
+// invocation `cascade recall --help`'s documented default flow describes.
+//
+// The scope graph that would resolve a genuine per-project reference does
+// not exist yet (corpus/scope.go: "the resolver that produces session
+// scope ids is a separate ticket"). Until it lands, this follows the one
+// place the tree has already made the identical call for the identical
+// reason: internal/memory/rpc.go's DefaultScopeRef ("rather than
+// inventing a per-call scope the store cannot check, every record written
+// here lands in one named scope"). Landing on that same value is what
+// lets a default-scoped recall find what `cascade memory remember`
+// already filed there, rather than a second placeholder that could never
+// match it.
+//
+// The one thing resolved rather than hardcoded is whether a session
+// exists to default anything for: an unreadable working directory is not
+// "no project", it is a broken environment with no honest default, so it
+// refuses by name naming --scope instead of forwarding another empty
+// value for the membership check to reject with its own internal wording.
+func resolveDefaultScope(deps recallDeps, scope string) (string, error) {
+	if scope != "" {
+		return scope, nil
+	}
+	getwd := deps.Getwd
+	if getwd == nil {
+		getwd = os.Getwd
+	}
+	if _, err := getwd(); err != nil {
+		return "", cascade.Wrap(cascade.KindInvalidInput, err,
+			"cascade recall: could not resolve a default scope; pass --scope explicitly")
+	}
+	return memory.DefaultScopeRef, nil
 }
 
 // recallResolveSocket loads config.toml — the single resolution model every

@@ -1,0 +1,15 @@
+event: fleet.sessions.changed
+id: 1
+data: {"session_id":"sess-alpha","harness":"claude","account":"acct-1","state":"running","updated_at":1700000000}
+retry: 3000
+
+event: fleet.sessions.changed
+id: 2
+data: {"session_id":"sess-beta","harness":"codex","account":"acct-2","state":"stalled","updated_at":1700000030}
+retry: 3000
+
+event: fleet.sessions.changed
+id: 3
+data: {"session_id":"sess-alpha","harness":"claude","account":"acct-1","state":"completed","updated_at":1700000060}
+retry: 3000
+

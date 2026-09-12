@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"encoding/base64"
 	"strings"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/elevation"
+	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -48,6 +50,54 @@ func TestVaultCLIGetRequiresElevation(t *testing.T) {
 	}
 	if stdout != "s3cr3t" {
 		t.Fatalf("the refused rotate changed the stored value to %q", stdout)
+	}
+}
+
+// TestVaultCLIGetElevationRequiredMessageCasing is
+// DEFECT-elevation-required-case-mismatch.md's regression test. It drives
+// `cascade vault get` through the real CLI entry point AND the real
+// production elevationGate (newElevationGate, wired the same way
+// productionVaultDeps wires it — a keystore/backend pair that cannot prove
+// local presence, so policy.ErrElevationRequired is the one that actually
+// builds the message; the test-only refusingGate fake used elsewhere in
+// this file is deliberately NOT used here, since its hardcoded message
+// contains the literal uppercase substring this test must tell apart from
+// the real one). The error is then rendered through the SAME production
+// path main.go uses (internal/output.Writer.Fail over os.Stderr) so the
+// literal bytes asserted here are the literal bytes a shell pipeline sees.
+//
+// pkg/cascade/kinds.go documents the kind strings as lowercase-hyphenated
+// and part of the frozen wire contract ("must never change once a kind
+// ships"), so the fix landed in the ticket's check pattern
+// (T-7.yaml, ELEVATION_REQUIRED -> elevation-required), never in the CLI:
+// this test pins the CLI's existing, correct casing and would catch either
+// a future accidental uppercase rename OR a regression back to it.
+func TestVaultCLIGetElevationRequiredMessageCasing(t *testing.T) {
+	deps := testVaultDeps(t, okGate{}, map[string]string{"CASCADE_NO_INPUT": "1"})
+	if _, _, err := runVault(t, deps, "s3cr3t\n", "set", "CASCADE_GATE_PROBE"); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	deps.Gate = newElevationGate(
+		func() elevation.ElevationKeystore { return unavailableKeystore{} },
+		func() elevation.Backend { return emptyBackend{} },
+		runtime.NewSystemClock(),
+		func(string) string { return "" },
+	)
+
+	_, _, err := runVault(t, deps, "", "get", "CASCADE_GATE_PROBE")
+	if !isCLIKind(err, cascade.KindElevationRequired) {
+		t.Fatalf("get with no session = %v, want ELEVATION_REQUIRED", err)
+	}
+
+	var stderr bytes.Buffer
+	output.New(&bytes.Buffer{}, &stderr, false, false, false, true).Fail(err)
+	rendered := stderr.String()
+
+	if !strings.Contains(rendered, "elevation-required") {
+		t.Fatalf("rendered CLI error %q does not contain the taxonomy's lowercase-hyphenated kind", rendered)
+	}
+	if strings.Contains(rendered, "ELEVATION_REQUIRED") {
+		t.Fatalf("rendered CLI error %q regressed to the uppercase literal", rendered)
 	}
 }
 

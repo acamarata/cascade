@@ -243,19 +243,204 @@ add|list|remove` CLI verbs.
   writes an `Outcome` (target, snapshot id if any, when, success,
   error text) via `RecordOutcome` (key prefix `backup:outcome:`,
   chronologically ordered per target via `ListOutcomes`) — the
-  bookkeeping the (not-yet-built) verification cron and lose-the-laptop
-  drill read.
+  bookkeeping the verification cron below and the lose-the-laptop drill
+  read.
+
+### Verification cron (S-42.T4)
+
+`RegisterConfiguredVerificationJobs` registers one additional scheduled
+job per configured target, on the SAME scheduler, alongside the create
+job above (`backup:verify:<name>` vs `backup:target:<name>` as scheduler
+owners, so a target's create and verify jobs never collide). Each fire
+calls `RunVerification` (`internal/backup/verify.go`):
+
+- **Cadence and toggle are policy-record data** — `TargetPolicy` carries
+  `VerifyCronSpec` (empty = `DefaultVerifyCronSpec`, `"@every 24h"`) and
+  `VerifyDisabled` (zero value = enabled), both parsed/validated through
+  the identical `scheduler.ParseSpec` the create cadence uses. There is
+  no `[backup]` `config.toml` section for either value (08 §3).
+- **The check itself is read-only** — it builds the target's real driver,
+  finds the target's most recent snapshot, and calls S-41.T4's
+  `VerifyIntegrity` in full (chain-wide manifest signature/root_hash
+  verification plus a complete re-decrypt/hash check of the target
+  snapshot's own objects). No restore, no write beyond this package's
+  existing read paths. A target with no snapshot yet is a benign no-op:
+  no `Outcome`, no attention push, no error.
+- **§22 VERIFIED state** — a successful pass writes an `Outcome` with
+  `Kind == OutcomeKindVerify`, `Success == true`, and the real
+  `CheckedChunks`/`DurationMS` the gate measured; this recorded Outcome
+  IS the §22 per-target VERIFIED state — there is no separate flag.
+- **Failure routing** — a failed pass records the failing `Outcome` AND
+  pushes a real `internal/fleet/supervision` attention item
+  (`Kind: KindError`, scoped globally under the target name), with a
+  JSON-encoded `{target, snapshot_id, failure_reason, journal_ref}`
+  payload carried in the item's `SourceRef` (the attention schema's own
+  documented "opaque, interpreted by whichever subsystem pushed it"
+  field — there is no dedicated structured-payload column). A successful
+  pass never pushes anything.
+- **Windows** — this registration function is plain Go with no build
+  tag (like `RegisterConfiguredBackupJobs`); on Windows it simply has no
+  caller, because no daemon exists there at all to call it from
+  (`cmd/cascade/daemon_windows.go`: "there is no daemon at all"). `backup
+  verify` (below) is therefore the only verification path on Windows — a
+  fact documented in the CLI's own `--help` text, since no Windows daemon
+  startup event exists to log a notice from.
+
+## Portable export & import
+
+`export.go`/`import.go`/`vaultexport.go` build and consume the single-file
+`tar.zst.age` artifact `backup export`/`backup import` will operate on
+(00-VISION principle 10) — the elevated (06 §5.14) `ExportPortable`/
+`ImportPortable` operations, plus the OPT-IN §D-34 passphrase-wrapped
+vault export leg.
+
+- **Format and pipeline order** — `ExportPortable` tars three things
+  verbatim (config/repo.json, the target snapshot's `previous_snapshot`
+  chain's manifests so the restore side can chain-verify, and the target
+  snapshot's OWN manifest entries' objects only — never an ancestor's,
+  mirroring `VerifyIntegrity`'s documented object-scope decision exactly)
+  and runs the result through `crypto.go`'s existing stages unchanged:
+  zstd-compress, then age-encrypt to the repo's own recipient
+  (compress-THEN-encrypt, 00-VISION principle 10). The tar members
+  themselves are untouched: config/repo.json is already plaintext,
+  manifests and objects are already age-encrypted by `CreateSnapshot`/
+  `Pipeline.Write`. The outer wrap is a second, independent layer over
+  the whole bundle — no new key or signature scheme is introduced.
+- **The OPT-IN §D-34 vault export** — off by default (`ExportOptions.
+  IncludeVault` defaults false; no other field can turn it on). When set,
+  a passphrase and a `VaultExporter` are both required (fail-closed
+  otherwise); the collaborator returns an ALREADY passphrase-wrapped
+  envelope, added as one additional tar member before the outer wrap.
+  This package never sees, holds, or infers a raw secret value — it only
+  ever moves bytes a real vault broker already wrapped.
+- **Gate-first import** — `ImportPortable` reverses the pipeline
+  (age-decrypt, zstd-decompress, `decodeImportBundle`), lands every
+  repo-content member onto a destination `Target`, then runs S-41.T4's
+  `VerifyIntegrity` gate BEFORE the landing is considered adopted. Any
+  gate failure deletes every key the call just wrote and refuses — the
+  destination is left exactly as it was found, never a half-verified
+  repo. The restore-side §D-34 vault import (via `VaultImporter`) runs
+  only after the gate passes, and only when the bundle actually carries a
+  vault member; a present member with no supplied passphrase refuses
+  rather than being silently skipped.
+- **The import bundle decoder** — `decodeImportBundle` is this package's
+  own decoder of an externally-carried format (06 §5.7, fuzzed as
+  `FuzzImportBundleDecode`): every entry name must fall under one of the
+  three layout prefixes (or the exact vault member name), a `..`/absolute
+  path segment or a non-regular entry (directory, symlink, hardlink)
+  refuses, and both entry count and per-entry size are bounded. It never
+  extracts on a malformed or traversal-carrying bundle.
+- **Elevated verbs** — both `ExportPortable` and `ImportPortable` carry
+  06 §5.14's elevated-verb class exactly like `CreateSnapshot`/`Restore`:
+  a non-empty `ElevationProof` is required at the operation boundary; the
+  CLI/MCP attestation flow and gate wiring are S-42.T3's.
+- **Key/passphrase custody** — the outer-wrap key resolves via the same
+  vault/env-ref-only `AgeIdentityEnvVar`/repo-recipient story restore and
+  verify already use; the §D-34 passphrase is supplied at export and
+  required at import, and is never persisted by this package. No key or
+  passphrase material ever lands inside the artifact unwrapped or beside
+  it.
+- **§D-34's re-auth alternative** — an operator who opts out of the vault
+  export leg restores a usable machine via the documented re-auth runbook
+  (`provider add`, provider by provider) instead of a vault import; the
+  lose-the-laptop drill (S-42.T5) proves this leg.
+
+## CLI & MCP surface
+
+The 07-CLI-COMMAND-TREE §backup verb set, verbatim, over the operations
+above (`cascade backup --help` and each subcommand's own `--help` are the
+generated source of truth; the shapes below are captured from a real build
+of this binary):
+
+```
+cascade backup list [--json]
+cascade backup target add NAME (fs|s3|rclone) LOCATION_REF --cron SPEC --domain NAME [--domain NAME ...]
+cascade backup target list [--json]
+cascade backup target remove NAME
+cascade backup create [--target NAME] [--yes]
+cascade backup restore [--domain NAME ...] [--yes]
+cascade backup export --out PATH [--include-vault --vault-passphrase-file PATH] [--yes]
+cascade backup import --in PATH [--vault-passphrase-file PATH] [--yes]
+cascade backup verify [--target NAME] [--json]
+```
+
+- **`list`, `target add|list|remove`, and `verify`** are read/registry-only
+  — no elevation, never a prompt. `target add` refuses a location-ref value
+  that looks like a literal credential (the same H/S-15.T3 detector every
+  other credential-shaped input in this repo is checked against) and
+  refuses an unrecognized target kind or `--domain` value. `verify` is the
+  manual, one-shot equivalent of the verification cron above (§5.8
+  automation parity): same `RunVerification` call, same
+  `VerificationReport` schema, an unregistered `--target` refuses
+  `NOT_FOUND`.
+- **`create`, `restore`, `export`, `import`** are elevated (07 rationale 7):
+  each first runs the 06 §5.14 flow — a nonce challenge, the hidden
+  `elevate-helper --sign` user-session local-auth signature, hardware-backed
+  attestation bound to `{method, params_hash, nonce, exp}`, verification
+  through `internal/rpc`'s elevation middleware, and a single-use nonce
+  ledger — before the underlying operation ever runs. A missing or invalid
+  attestation refuses `ELEVATION_REQUIRED`, at the operation boundary
+  (`internal/backup`'s own `ErrElevationRequired`/`ErrExportElevationRequired`/
+  `ErrImportElevationRequired`), never bypassed by the CLI layer.
+- **`--yes`** confirms an elevated verb non-interactively once already
+  attested; **`CASCADE_NO_INPUT=1`** with no `--yes` exits 1 with a
+  structured error and never attempts the confirmation prompt (§5.8
+  automation parity) — proven by `cmd/cascade/backup_elevation_test.go`'s
+  `TestBackupAuthorizerNoInputMissingYes`.
+- **`export --include-vault`** is the only way to include the §D-34
+  passphrase-wrapped whole-vault leg; it requires `--vault-passphrase-file`
+  and refuses closed without one. Every other export/import call carries no
+  vault material at all — proven end to end (real CLI process, real
+  artifact bytes, real `ImportPortable`) by
+  `cmd/cascade/backup_export_test.go`'s
+  `TestBackupCLIExportDefaultCarriesNoVaultMaterial`.
+- **Windows**: `list` and `target add|list|remove` work normally (pure Go,
+  no elevation). The elevated verbs' actual Windows-tier-2 refusal is a
+  daemon/elevation-layer property this ticket's files_scope has no path to
+  touch — `internal/elevation.ErrWindowsTier2` exists and
+  `backupKeystore` (cmd/cascade/backup_elevation.go) refuses through it
+  whenever the injected keystore reports the tier-2 storage class
+  (`cmd/cascade/backup_elevation_test.go`'s `TestBackupAuthorizerWindowsTier2`
+  proves the CLI-layer refusal); no daemon actually runs on Windows to
+  drive a scheduled fire down that same path, which is a platform fact, not
+  a claim this document makes.
+- `backup status`, `--profile`, `--dry-run`, and a positional snapshot-id
+  shape are not in 07 and are not implemented anywhere in this tree
+  (06 §5.1).
+
+**MCP**: `cascade_backup_list` and `cascade_backup_verify` are the two
+registered tools (D/S-06.T6's registration seam,
+`internal/backup/mcp.go`'s `MCPRegistration`/`VerifyMCPRegistration`;
+wired at both `cmd/cascade/mcp.go` and the daemon's own `buildRPCServer`).
+Both are read-only (`Grants: ["read"]`); `cascade_backup_list` takes no
+arguments and schema-matches `backup list --json` exactly,
+`cascade_backup_verify` takes an optional `{"target": "NAME"}` and
+schema-matches `backup verify --json`'s `VerificationReport` exactly — the
+same `RunVerification` call underlies both surfaces
+(`cmd/cascade/backup_verify.go`'s `backupVerifyRunner`). No elevated verb
+is ever registered (07 rationale 7) — `internal/backup/mcp_test.go`
+unit-tests both input validators and the exclusion, and
+`internal/backup/testdata/mcp/README.md` carries a real captured session
+(tool, binary commit, and date) per Art.2.2.
 
 ## Scope
 
-This document covers the engine `internal/backup` ships: the repository
-layout, the capture adapters, the chunk → dedup → compress → encrypt
-pipeline (including its own read-side verification), the fs/s3/rclone
-targets, and restore + the integrity gate. Not covered here, because they
-are not built yet:
+This document covers the engine `internal/backup` ships plus the CLI/MCP
+surface above: the repository layout, the capture adapters, the chunk →
+dedup → compress → encrypt pipeline (including its own read-side
+verification), the fs/s3/rclone targets, restore + the integrity gate,
+multi-target scheduling, the portable export/import layer (including the
+opt-in vault export), and the `backup` CLI/MCP surface. Not covered here,
+because they are not built yet:
 
-- **Snapshots and manifests** — the signed record of which object ids
-  make up one point-in-time backup.
 - **The recovery-key ceremony** — issuing, wrapping, and escrowing the
-  age identity this pipeline consumes.
-- **The `backup` CLI/MCP surface.**
+  age identity this pipeline consumes, and `backup key export|import`.
+- **`backup verify`** and its ✦ MCP read tool — the verification cron.
+- **The real Epic H `Broker.Export`/`Import` adapter's own end-to-end
+  ceremony fixtures** beyond the unit-level proofs in
+  `internal/secrets/export_test.go` — the vault-export leg's
+  `VaultExporter`/`VaultImporter` interfaces are satisfied by
+  `internal/secrets.Broker.Export`/`Import` (both shipped by this ticket,
+  gated on the same `ElevationGate` seam as `vault get`/`rotate`), but the
+  lose-the-laptop drill exercising the full opt-out re-auth runbook is
+  S-42.T5's.

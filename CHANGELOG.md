@@ -57,6 +57,18 @@ daemon's storage layout. It has not landed yet; this entry is a forward
 pointer, not a claim that the command exists. It will get its own
 changelog entry, under this same `v2.0.0` section, the day it ships.
 
+## [v2.0.0-alpha.2]
+
+Second wave-gate snapshot tag. Local build only: not published, not
+installable, exists so Wave 2 could be checked as an artifact rather than
+as a working tree. Adds context/recall/memory/vault surface verification
+on top of the alpha.1 W1 conditions. Two P1 defects and three P2 defects
+were found and filed against the artifact during this gate (`cascade
+recall` fails unconditionally on a fresh install; `cascade context slice`
+does not bootstrap its own data directory on a virgin `$HOME`); see
+`docs/waves/w2-gate-report.md` and `docs/releases/alpha2-dogfood.md` for
+the full report and dogfood session this section is curated from.
+
 ## [v2.0.0-alpha.1]
 
 First wave-gate snapshot tag. Local build only: not published, not

@@ -1,0 +1,29 @@
+[
+  {
+    "runtime_profile_ref": "rp-1",
+    "quota_domain_ref": "dom-1",
+    "canonical_id": "canonical-a",
+    "model_id": "should-be-ignored",
+    "effort": "medium",
+    "interaction_class": "interactive",
+    "want_lane_id": "9797ec7e3ef77cd7"
+  },
+  {
+    "runtime_profile_ref": "rp-2",
+    "quota_domain_ref": "dom-2",
+    "canonical_id": "",
+    "model_id": "model-x",
+    "effort": "high",
+    "interaction_class": "batch",
+    "want_lane_id": "f604578e30a27a2d"
+  },
+  {
+    "runtime_profile_ref": "rp-3",
+    "quota_domain_ref": "dom-3",
+    "canonical_id": "",
+    "model_id": "",
+    "effort": "n/a",
+    "interaction_class": "interactive",
+    "want_lane_id": "1a3be19a14753846"
+  }
+]

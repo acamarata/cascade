@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -135,19 +136,44 @@ func TestEmbedErrorPaths(t *testing.T) {
 	})
 }
 
+// wireKind maps the fixture's want_kind wire string onto its cascade.Kind.
+var wireKind = map[string]cascade.Kind{
+	"capability-denied": cascade.KindCapabilityDenied, "unavailable": cascade.KindUnavailable,
+}
+
 func testRecordedStatusMapping(t *testing.T) {
-	statusCases := []struct {
+	type sc struct {
 		name   string
 		status int
 		body   string
 		want   cascade.Kind
-	}{
+	}
+	statusCases := []sc{
 		{"bad request", 400, `{"error":{"code":400,"message":"bad","status":"INVALID_ARGUMENT"}}`, cascade.KindInvalidInput},
 		{"unauthenticated", 401, `{"error":{"code":401,"message":"denied","status":"UNAUTHENTICATED"}}`, cascade.KindPermissionDenied},
 		{"not found", 404, `{"error":{"code":404,"message":"missing","status":"NOT_FOUND"}}`, cascade.KindNotFound},
 		{"quota", 429, `{"error":{"code":429,"message":"slow down","status":"RESOURCE_EXHAUSTED"}}`, cascade.KindQuotaExhausted},
 		{"internal", 500, `{"error":{"code":500,"message":"oops","status":"INTERNAL"}}`, cascade.KindUnavailable},
-		{"unavailable", 503, `{"error":{"code":503,"message":"busy","status":"UNAVAILABLE"}}`, cascade.KindUnavailable},
+	}
+	// The 403/5xx rows come from the provenance-stamped fixture (Art.2):
+	// exercised from a stated corpus, never a self-authored dialect.
+	data, err := os.ReadFile("testdata/error_403_5xx_recorded.json")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	var doc struct {
+		Cases []struct {
+			Name     string `json:"name"`
+			Body     string `json:"body"`
+			WantKind string `json:"want_kind"`
+			Status   int    `json:"status"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("decode fixture: %v", err)
+	}
+	for _, c := range doc.Cases {
+		statusCases = append(statusCases, sc{c.Name, c.Status, c.Body, wireKind[c.WantKind]})
 	}
 	for _, tc := range statusCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -176,125 +202,4 @@ func TestChatInputValidation(t *testing.T) {
 			}
 		})
 	}
-}
-
-const recordedStreamSSE = "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hi\"}],\"role\":\"model\"}}]}\n\n" +
-	"data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"!\"}],\"role\":\"model\"},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":4,\"candidatesTokenCount\":2,\"totalTokenCount\":6}}\n\n"
-
-func TestStreamHappyPath(t *testing.T) {
-	doer := &fakeDoer{queue: []fakeResp{{status: 200, body: recordedStreamSSE}}}
-	d := keyAuthDriver(t, doer)
-	var deltas []string
-	sawDone := false
-	req := provider.ChatRequest{Messages: []provider.ChatMessage{{Role: "user", Content: "hi"}}}
-	err := d.Stream(context.Background(), req, func(ev provider.StreamEvent) error {
-		switch ev.Kind {
-		case provider.StreamEventDelta:
-			deltas = append(deltas, ev.Delta)
-		case provider.StreamEventDone:
-			sawDone = true
-		case provider.StreamEventUnknown, provider.StreamEventToolCall, provider.StreamEventUsage, provider.StreamEventError:
-			// Not asserted by this happy-path test.
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("Stream: %v", err)
-	}
-	if !sawDone || len(deltas) != 2 || deltas[0] != "Hi" || deltas[1] != "!" {
-		t.Fatalf("deltas=%v done=%v", deltas, sawDone)
-	}
-}
-
-// Both malformed and truncated chunks are KindIntegrity, never a panic.
-func TestStreamMalformedOrTruncatedChunkReportsIntegrityError(t *testing.T) {
-	bodies := map[string]string{
-		"malformed": "data: not-json\n\n",
-		"truncated": "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"cut off",
-	}
-	for name, body := range bodies {
-		t.Run(name, func(t *testing.T) {
-			doer := &fakeDoer{queue: []fakeResp{{status: 200, body: body}}}
-			d := keyAuthDriver(t, doer)
-			var sawErrorEvent bool
-			req := provider.ChatRequest{Messages: []provider.ChatMessage{{Role: "user", Content: "hi"}}}
-			err := d.Stream(context.Background(), req, func(ev provider.StreamEvent) error {
-				sawErrorEvent = sawErrorEvent || ev.Kind == provider.StreamEventError
-				return nil
-			})
-			if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindIntegrity {
-				t.Fatalf("kind = %v, ok=%v, want KindIntegrity", kind, ok)
-			}
-			if !sawErrorEvent {
-				t.Fatal("sink never received the terminal error event")
-			}
-		})
-	}
-}
-
-func TestStreamMidStreamErrorChunkIsTypedAndTerminal(t *testing.T) {
-	body := "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hi\"}]}}]}\n\n" +
-		"data: {\"error\":{\"code\":429,\"message\":\"slow down\",\"status\":\"RESOURCE_EXHAUSTED\"}}\n\n" +
-		"data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"never delivered\"}]}}]}\n\n"
-	doer := &fakeDoer{queue: []fakeResp{{status: 200, body: body}}}
-	d := keyAuthDriver(t, doer)
-	var terminalCount int
-	var deltas []string
-	req := provider.ChatRequest{Messages: []provider.ChatMessage{{Role: "user", Content: "hi"}}}
-	err := d.Stream(context.Background(), req, func(ev provider.StreamEvent) error {
-		if ev.Kind == provider.StreamEventDone || ev.Kind == provider.StreamEventError {
-			terminalCount++
-		}
-		if ev.Kind == provider.StreamEventDelta {
-			deltas = append(deltas, ev.Delta)
-		}
-		return nil
-	})
-	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindQuotaExhausted {
-		t.Fatalf("kind = %v, ok=%v, want KindQuotaExhausted", kind, ok)
-	}
-	if terminalCount != 1 {
-		t.Fatalf("terminalCount = %d, want exactly 1", terminalCount)
-	}
-	if len(deltas) != 1 || deltas[0] != "Hi" {
-		t.Fatalf("deltas = %v, want exactly the pre-error delta", deltas)
-	}
-}
-
-func TestStreamNonOKStatus(t *testing.T) {
-	doer := &fakeDoer{queue: []fakeResp{{status: 500, body: `{"error":{"code":500,"message":"boom","status":"INTERNAL"}}`}}}
-	d := keyAuthDriver(t, doer)
-	req := provider.ChatRequest{Messages: []provider.ChatMessage{{Role: "user", Content: "hi"}}}
-	err := d.Stream(context.Background(), req, func(provider.StreamEvent) error { return nil })
-	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindUnavailable {
-		t.Fatalf("kind = %v, ok=%v, want KindUnavailable", kind, ok)
-	}
-}
-
-func TestStreamSinkErrorAborts(t *testing.T) {
-	doer := &fakeDoer{queue: []fakeResp{{status: 200, body: recordedStreamSSE}}}
-	d := keyAuthDriver(t, doer)
-	sinkErr := errors.New("sink refuses")
-	req := provider.ChatRequest{Messages: []provider.ChatMessage{{Role: "user", Content: "hi"}}}
-	err := d.Stream(context.Background(), req, func(provider.StreamEvent) error { return sinkErr })
-	if !errors.Is(err, sinkErr) {
-		t.Fatalf("err = %v, want sinkErr", err)
-	}
-}
-
-// FuzzGeminiWireDecode fuzzes the decode path; it must never panic.
-func FuzzGeminiWireDecode(f *testing.F) {
-	for _, seed := range [][]byte{nil, {}, []byte("data: {\n\n"), []byte("data: {\"error\":not-json}\n\n"), []byte("data: {}"), []byte(":\n\n")} {
-		f.Add(seed)
-	}
-	f.Fuzz(func(t *testing.T, in []byte) {
-		defer func() {
-			if r := recover(); r != nil {
-				t.Fatalf("decode panicked on %q: %v", in, r)
-			}
-		}()
-		for _, chunk := range scanGeminiSSE(strings.NewReader(string(in))) {
-			_, _, _ = decodeGeminiChunk(chunk)
-		}
-	})
 }

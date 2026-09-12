@@ -46,8 +46,7 @@ type rawResponse struct {
 	body   []byte
 }
 
-// Status codes named here, not imported from net/http, so this file needs
-// no "net" import (Art.7.2).
+// Status codes named here, not imported from net/http (Art.7.2).
 const (
 	statusBadRequest          = 400
 	statusUnauthorized        = 401
@@ -121,8 +120,7 @@ type wireErrorBody struct {
 	Error wireErrorDetail `json:"error"`
 }
 
-// isDeadKeyEnvelope reports a "dead"-key auth failure: Gemini reports an
-// invalid key as HTTP 400, so message/status content distinguishes it.
+// isDeadKeyEnvelope reports a "dead"-key auth failure (Gemini reports an invalid key as HTTP 400).
 func isDeadKeyEnvelope(wireErr wireErrorBody) bool {
 	switch wireErr.Error.Status {
 	case "UNAUTHENTICATED", "PERMISSION_DENIED":
@@ -140,8 +138,10 @@ func mapStatusError(status int, body []byte) error {
 	switch {
 	case status == statusTooManyRequests:
 		return cascade.New(cascade.KindQuotaExhausted, msg)
-	case status == statusUnauthorized, status == statusForbidden:
+	case status == statusUnauthorized:
 		return cascade.New(cascade.KindPermissionDenied, msg)
+	case status == statusForbidden: // disabled/billing (R-21.29): domain quarantine, not credential
+		return cascade.New(cascade.KindCapabilityDenied, msg)
 	case status == statusBadRequest && isDeadKeyEnvelope(wireErr):
 		return cascade.New(cascade.KindPermissionDenied, msg)
 	case status == statusBadRequest:

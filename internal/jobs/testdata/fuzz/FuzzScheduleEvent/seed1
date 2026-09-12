@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"kind\":\"lease_acquired\",\"job_id\":\"j1\",\"lease_id\":\"l1\"}")

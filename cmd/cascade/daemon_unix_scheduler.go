@@ -41,6 +41,7 @@ import (
 	"github.com/acamarata/cascade/internal/backup"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/events/scheduler"
+	"github.com/acamarata/cascade/internal/fleet/supervision"
 	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage"
@@ -124,6 +125,25 @@ func startScheduler(ctx context.Context, store provider.Store, rawDB *sql.DB, pa
 	// added later would refuse (KindUnavailable) until a future ticket
 	// threads one through; an fs target needs none and works today.
 	if _, err := backup.RegisterConfiguredBackupJobs(ctx, sched, store, schedulerNamespace, clock, nil, os.Getenv); err != nil {
+		return nil, nil, nil, err
+	}
+	// P1-E19-W4-S42-T4: the same registry's verification jobs, on the SAME
+	// scheduler, before Activate — mirroring RegisterConfiguredBackupJobs
+	// immediately above exactly (same no-op-until-configured behavior on a
+	// fresh daemon, same nil engine). A real *supervision.Store is
+	// attnStore, over the SAME store/clock/bus this composition root
+	// already has open (internal/daemon/attention_rpc.go's
+	// RegisterFleetAttentionHandler builds its own Store identically over
+	// this same trio), so a verification failure a background tick detects
+	// reaches the real R/S-39.T1 attention queue, not a second, disconnected
+	// one — a nil bus degrades to no-SSE mode, matching that file's own
+	// nil-check precedent.
+	var attnBus supervision.EventBus
+	if bus != nil {
+		attnBus = bus
+	}
+	attnStore := supervision.NewStore(store, clock, attnBus, supervision.NewSystemIDGenerator(), 0)
+	if _, err := backup.RegisterConfiguredVerificationJobs(ctx, sched, store, schedulerNamespace, clock, nil, os.Getenv, attnStore); err != nil {
 		return nil, nil, nil, err
 	}
 	if _, err := sched.Activate(ctx); err != nil {

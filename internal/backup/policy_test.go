@@ -52,6 +52,47 @@ func TestTargetPolicy_Validate_NoDomains(t *testing.T) {
 	}
 }
 
+// TestTargetPolicy_Validate_VerifyCronSpec proves S-42.T4's addition: an
+// empty VerifyCronSpec (the DefaultVerifyCronSpec case) passes, a valid
+// explicit one passes, and an unparseable one fails closed through the
+// identical scheduler.ParseSpec CronSpec already uses.
+func TestTargetPolicy_Validate_VerifyCronSpec(t *testing.T) {
+	base := TargetPolicy{Target: "nas", CronSpec: "@every 6h", Domains: []string{"context"}}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("Validate(empty VerifyCronSpec) = %v, want nil", err)
+	}
+	base.VerifyCronSpec = "@every 24h"
+	if err := base.Validate(); err != nil {
+		t.Fatalf("Validate(valid VerifyCronSpec) = %v, want nil", err)
+	}
+	base.VerifyCronSpec = "not a cron spec"
+	if err := base.Validate(); err == nil {
+		t.Fatal("Validate(bad VerifyCronSpec) = nil, want an error")
+	}
+}
+
+// TestTargetPolicy_RoundTrip_VerifyFields proves VerifyCronSpec/
+// VerifyDisabled persist and round-trip through PutPolicy/GetPolicy
+// exactly like every other field.
+func TestTargetPolicy_RoundTrip_VerifyFields(t *testing.T) {
+	ctx := context.Background()
+	store := storetest.NewMemStore()
+	pol := TargetPolicy{
+		Target: "nas-verify", CronSpec: "@every 6h", Domains: []string{"context"},
+		VerifyCronSpec: "@every 12h", VerifyDisabled: true,
+	}
+	if err := PutPolicy(ctx, store, testPolicyNamespace, pol); err != nil {
+		t.Fatalf("PutPolicy: %v", err)
+	}
+	got, err := GetPolicy(ctx, store, testPolicyNamespace, "nas-verify")
+	if err != nil {
+		t.Fatalf("GetPolicy: %v", err)
+	}
+	if got.VerifyCronSpec != "@every 12h" || !got.VerifyDisabled {
+		t.Fatalf("GetPolicy round-trip = %+v, want VerifyCronSpec=@every 12h VerifyDisabled=true", got)
+	}
+}
+
 func TestOutcome_RecordAndList_ChronologicalOrder(t *testing.T) {
 	ctx := context.Background()
 	store := storetest.NewMemStore()

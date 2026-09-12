@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("---\nname: REDACTED\ndescription: REDACTED\ntype: feedback\nformat: 1\n---\nREDACTED\n")

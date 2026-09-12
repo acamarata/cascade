@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("[daemon]\nlog_level = \"info\"\n")

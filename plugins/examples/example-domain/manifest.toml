@@ -1,0 +1,43 @@
+id = "example-domain"
+name = "Example Domain Pipeline"
+schema = "cascade.plugin/v2"
+version = "0.1.0"
+host_version = ">=0.1.0"
+runtime = "wasm"
+requires = [
+  "connector.example-connector.read",
+  "connector.example-agent-provider.invoke",
+  "storage.domain.write",
+]
+
+[[provides.domains]]
+name = "example-domain.raw"
+description = "Raw records ingested from declared connectors, before normalization."
+
+[[provides.domains]]
+name = "example-domain.canonical"
+description = "Canonical records normalized from raw connector input."
+
+[[provides.domains]]
+name = "example-domain.derived"
+description = "Derived summary records computed deterministically from canonical records."
+
+[[provides.tools]]
+name = "example-domain.run-pipeline"
+description = "Runs the raw-to-canonical-to-derived pipeline over one raw record."
+
+[[provides.intents]]
+name = "example-domain.summarize"
+description = "Satisfies a natural-language request to summarize this domain's derived records."
+
+[[permissions]]
+name = "connector.example-connector.read"
+description = "Read raw records produced by the example-connector plugin."
+
+[[permissions]]
+name = "connector.example-agent-provider.invoke"
+description = "Invoke the example-agent-provider plugin to annotate derived records."
+
+[[permissions]]
+name = "storage.domain.write"
+description = "Write canonical and derived records into this plugin's declared storage domains."

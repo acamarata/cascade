@@ -20,6 +20,24 @@ func TestValidateCapabilityReportAccepted(t *testing.T) {
 	}
 }
 
+func TestValidateCapabilityReportBuildVersionAccepted(t *testing.T) {
+	r := validReport()
+	r.BuildVersion = "v2.5.0"
+	if err := ValidateCapabilityReport(r); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateCapabilityReportBuildVersionOverlong(t *testing.T) {
+	r := validReport()
+	r.BuildVersion = strings.Repeat("v", maxBuildVersionLen+1)
+	if err := ValidateCapabilityReport(r); err == nil {
+		t.Fatal("expected a refusal for an overlong build_version")
+	} else if kind, _ := cascade.KindOf(err); kind != cascade.KindInvalidInput {
+		t.Fatalf("kind = %v, want KindInvalidInput", kind)
+	}
+}
+
 func TestValidateCapabilityReportTooManyCapabilities(t *testing.T) {
 	caps := make([]string, maxCapabilities+1)
 	for i := range caps {

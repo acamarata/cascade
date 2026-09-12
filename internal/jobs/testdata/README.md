@@ -67,3 +67,88 @@ Tool/version/date: `modernc.org/sqlite` v1.58.0 (root go.mod pin),
 `github.com/bmatcuk/doublestar/v4` v4.10.0 (MIT license; added by this
 ticket per 06-FORGE-SPEC.md §7's standing license-gate authorization),
 Go 1.26, recorded 2026-09-11.
+
+## Worktree manager (P1-E29-W6-S59-T3) Art.2 real-counterpart provenance
+
+- **Git binary:** every worktree test
+  (`worktree_test.go`/`worktree_list_test.go`/`worktree_sweep_test.go`/
+  `worktree_quarantine_test.go`/`worktree_snapshot_test.go`) drives the
+  REAL `git` binary found on `PATH` (`newExecGitRunner`, worktree.go)
+  against a throwaway repository created fresh under `t.TempDir()` by
+  `newTestGitRepo` (worktree_test.go) -- `git init`, a real commit, then
+  real `git worktree add|remove|list|status|write-tree` calls. No
+  porcelain output or git error text is ever hand-authored; only the
+  injected BINARY PATH is swapped, and only for the two tests that
+  specifically exercise a git-binary-failure path
+  (`TestWorktreeCreateBrokenGitBinaryIsTypedError`,
+  `withGitBinary`).
+- **Capture tool/version/date:** `git version 2.51.0` (Homebrew,
+  `/opt/homebrew/bin/git`), captured 2026-09-12, via
+  `git -C <repo> worktree list --porcelain` (plain and, for the locked
+  seed, after `git worktree lock <path> --reason "manual test lock"`).
+  NOTE: this shell's bare `git` on `PATH` is transparently rewritten by
+  this environment's own `rtk` token-optimizing wrapper and does not
+  reproduce raw porcelain output when invoked interactively; every
+  capture and every test in this package instead invokes the binary by
+  its resolved absolute path (`/opt/homebrew/bin/git`) or through Go's
+  `os/exec`, which resolves `PATH` directly and is never subject to that
+  interactive-shell rewrite.
+- **FuzzWorktreePorcelain seed corpus**
+  (`testdata/fuzz/FuzzWorktreePorcelain/`): `seed_real_capture_1` is a
+  clean two-worktree real capture (main + one linked worktree on branch
+  `job/1`); `seed_real_capture_2` is the same repository after locking
+  the linked worktree, capturing a real `locked <reason>` line. Both
+  paths are real filesystem paths from the capturing machine
+  (`/private/tmp/wtcheck/...`), not synthesized. `worktree_list_test.go`
+  additionally seeds inline (`f.Add`) a detached, a `locked`-with-reason,
+  and a `prunable`-with-reason block, transcribed verbatim from this same
+  capture session, plus three adversarial shapes (empty input, an
+  attribute line before any `worktree` header, an unrecognized keyword).
+  `FuzzWorktreePorcelain` ran 30s clean (1.76M execs, 138 corpus entries,
+  zero crashers) on 2026-09-12.
+- **pgid liveness:** `worktree_sweep_test.go` injects the SAME
+  `fakeLivenessProbe` lease_fence_test.go already defines (package-level,
+  no redeclaration) -- the pgid-liveness question has no real counterpart
+  in a unit test, exactly as this file's Lease model section above
+  records for `Reclaim`'s own tests.
+- **Journal/attention:** `worktree_quarantine_test.go` wires a real
+  `internal/fleet/journal.SQLiteStore` and a real
+  `internal/fleet/supervision.Store`, both backed by
+  `internal/storage/storetest.NewMemStore()` -- the same real-counterpart
+  pattern `lease_events_test.go`'s `newTestSink` already establishes in
+  this package.
+
+## Acceptance suite (P1-E29-W6-S60-T4) Art.2 provenance and status
+
+`pews-ticket-fixture.yaml` is this acceptance suite's own fixture (a
+minimal, structurally valid 17-field PEWS ticket, docs/**-only). There is
+no production PEWSContract YAML decoder anywhere in the tree
+(`pews_compiler.go`'s own doc comment: decoding is explicitly out of that
+compiler's scope), so `acceptance_test.go`'s `loadFixtureContract` is
+this suite's own loader over its own fixture shape, not a schema any
+production code reads.
+
+Paths 1 (happy path, `acceptance_path1_test.go`) and 3 (contending
+lease, `acceptance_path3_test.go`) drive the REAL Planner, LeaseManager,
+WorktreeManager (a real `git` binary against a throwaway repo under
+`t.TempDir()`), EvidenceLedger (a real `internal/audit.Log` over a real
+`storetest.NewMemStore()`), CompletionPolicy and Scheduler -- no
+hand-authored executor double, no synthetic gate-set table. Both were
+verified RED (a deliberately broken assertion, real failure output) then
+GREEN, and pass under `-race`.
+
+Paths 2 (kill -9 mid-DAG via a real daemon process, over its real
+socket) and 4 (job.list/lease.list over a real unix socket) are NOT
+implemented in this suite. See
+`.claude/planning/p1/phase/journals/BLOCKED-P1-E29-W6-S60-T4.md` for the
+full accounting: `testkit.SpawnDaemon` does not exist anywhere in the
+tree (S-59.T5's own kill9 test already documents this and uses a
+self-exec subprocess idiom instead); no daemon startup path resumes jobs
+DAG state from the on-disk journal (`cmd/cascade/daemon_unix_jobs_rpc.go`
+wires job.*/lease.* RPC handlers over a fresh in-process Store/
+LeaseManager but never calls `Scheduler.Resume`); and a real unix-socket
+RPC dial requires importing `net`/`net/http`, which
+`internal/build/hygiene.go`'s `NoNetworkUnitTestScanFile` gate forbids in
+any `_test.go` file lacking the `integration` build tag -- a tag this
+ticket's own `checks:` list does not carry on its `-run TestAcceptance`
+invocation.
