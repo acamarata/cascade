@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T10:08:47Z",
+  "generated_at": "2026-09-13T10:38:25Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -15934,6 +15934,13 @@
           "raw": "plugins/cascade-pa:cmd:chat (ADD) — P1-E20-W5-S43-T3."
         },
         {
+          "file": "plugins/cascade-pa/cmd/chat_refusal_nonwindows_test.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T3",
+          "raw": "plugins/cascade-pa:cmd:chat (ADD) — P1-E20-W5-S43-T3."
+        },
+        {
           "file": "plugins/cascade-pa/cmd/chat_tui.go",
           "line": 31,
           "status": "ADD",
@@ -18928,7 +18935,7 @@
       ]
     }
   ],
-  "total_sites": 1876,
+  "total_sites": 1877,
   "unspecified_count": 61,
   "multi_status_count": 35
 }

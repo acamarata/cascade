@@ -9,6 +9,7 @@ package cmd
 // SPORT: plugins/cascade-pa:cmd:chat (ADD) — P1-E20-W5-S43-T3.
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -46,5 +47,23 @@ func TestChatWindowsOneShotUnaffected(t *testing.T) {
 	}
 	if errors.Is(err, errChatWindowsTUIRefusal) {
 		t.Fatal("runChat: one-shot mode must never surface the TUI tier-2 refusal")
+	}
+}
+
+// TestRunTUIWindowsTierTwoRefusal proves runTUI itself (chat_tui_run.go),
+// called directly rather than through runChat's own dispatch, also
+// refuses with the tier-2 message on windows before ever consulting
+// activeClient() — the windows-side counterpart to
+// TestRunTUIRefusesUnconfiguredClient (chat_refusal_nonwindows_test.go),
+// which proves the unconfigured-Client refusal that windows can never
+// reach because this check runs first.
+func TestRunTUIWindowsTierTwoRefusal(t *testing.T) {
+	c := newTestCobraCommand()
+	err := runTUI(context.Background(), c, "")
+	if !errors.Is(err, errChatWindowsTUIRefusal) {
+		t.Fatalf("runTUI: err = %v, want errChatWindowsTUIRefusal", err)
+	}
+	if got, ok := cascade.KindOf(err); !ok || got != cascade.KindUnsupported {
+		t.Fatalf("runTUI: Kind = %v (ok=%v), want KindUnsupported", got, ok)
 	}
 }

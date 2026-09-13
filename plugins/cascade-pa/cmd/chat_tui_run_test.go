@@ -93,18 +93,14 @@ func TestNewSubmitFuncCancelStopsPump(t *testing.T) {
 	}
 }
 
-// TestRunTUIRefusesUnconfiguredClient proves runTUI itself (not just
-// runChat's dispatch to it) refuses immediately, with no tea.Program ever
-// constructed — this call would hang on a real terminal loop if the
-// preflight check were missing, so a passing, fast test IS the proof.
-func TestRunTUIRefusesUnconfiguredClient(t *testing.T) {
-	resetClient(t)
-	c := newTestCobraCommand()
-	err := runTUI(context.Background(), c, "")
-	if !errors.Is(err, errClientUnconfigured) {
-		t.Fatalf("runTUI: err = %v, want errClientUnconfigured", err)
-	}
-}
+// TestRunTUIRefusesUnconfiguredClient moved to
+// chat_refusal_nonwindows_test.go (//go:build !windows): runTUI checks
+// goruntime.GOOS=="windows" before the unconfigured-Client check
+// (chat_tui_run.go), so on windows this call always returns
+// errChatWindowsTUIRefusal and never reaches errClientUnconfigured. The
+// windows-side counterpart is TestRunTUIWindowsTierTwoRefusal
+// (chat_windows_test.go), which drives runTUI directly and asserts the
+// tier-2 refusal it actually returns there.
 
 // TestUnconfiguredClientStream proves the default Client's Stream method
 // also fails closed: a closed, empty token channel and exactly one typed

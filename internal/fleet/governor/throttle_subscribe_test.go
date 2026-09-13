@@ -15,16 +15,28 @@ import (
 )
 
 // waitGoroutineCount polls runtime.NumGoroutine (yielding via
-// runtime.Gosched, never time.Sleep) until it matches want or a bounded
-// number of attempts is exhausted, returning the last observed count.
-// This is the standard non-sleeping idiom for a goroutine-leak
-// assertion: the watcher goroutines Subscribe starts exit asynchronously
-// relative to cancel(), so some scheduling slack is unavoidable, but no
-// wall-clock wait is ever needed to prove convergence.
-func waitGoroutineCount(t *testing.T, want int) int {
+// runtime.Gosched, never time.Sleep) until it drops to ceiling or below,
+// or a bounded number of attempts is exhausted, returning the last
+// observed count. This is the standard non-sleeping idiom for a
+// goroutine-leak assertion: the watcher goroutines Subscribe starts exit
+// asynchronously relative to cancel(), so some scheduling slack is
+// unavoidable, but no wall-clock wait is ever needed to prove
+// convergence.
+//
+// Deliberately "<=", never "==": runtime-internal goroutines (GC
+// workers, sysmon, the finalizer goroutine) come and go independent of
+// anything this test does, and can push NumGoroutine below a snapshot
+// taken moments earlier with no leak involved at all - the assertion
+// this helper exists for is "no extra goroutine survived cancellation",
+// not "the process has exactly as many goroutines as some earlier
+// instant", and the latter is what actually flaked CI (observed: count
+// dropped from a baseline of 3 to 2, never above it - proof of unrelated
+// runtime churn, not a leak, since a real leak can only ever push the
+// count up).
+func waitGoroutineCount(t *testing.T, ceiling int) int {
 	t.Helper()
 	got := runtime.NumGoroutine()
-	for i := 0; i < 10000 && got != want; i++ {
+	for i := 0; i < 10000 && got > ceiling; i++ {
 		runtime.Gosched()
 		got = runtime.NumGoroutine()
 	}
@@ -86,8 +98,8 @@ func TestThrottleLadderSubscribeCancelStopsDelivery(t *testing.T) {
 	<-ch // drain the one real transition
 
 	cancel()
-	if got := waitGoroutineCount(t, before); got != before {
-		t.Fatalf("goroutine count after cancel = %d, want back to pre-Subscribe baseline %d (leak)", got, before)
+	if got := waitGoroutineCount(t, before); got > before {
+		t.Fatalf("goroutine count after cancel = %d, want at or below pre-Subscribe baseline %d (leak)", got, before)
 	}
 
 	src.p = 0.0
@@ -111,8 +123,8 @@ func TestThrottleLadderSubscribeContextCancelAutoUnsubscribes(t *testing.T) {
 	defer cancel()
 	ctxCancel()
 
-	if got := waitGoroutineCount(t, before); got != before {
-		t.Fatalf("goroutine count after ctx cancellation = %d, want back to baseline %d (leak)", got, before)
+	if got := waitGoroutineCount(t, before); got > before {
+		t.Fatalf("goroutine count after ctx cancellation = %d, want at or below baseline %d (leak)", got, before)
 	}
 	if _, ok := <-ch; ok {
 		t.Fatal("channel still open (or delivering) after its context was cancelled")

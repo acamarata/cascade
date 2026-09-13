@@ -227,20 +227,14 @@ func TestChatNoInputWithPromptRunsHeadlessly(t *testing.T) {
 	}
 }
 
-// TestChatTUIRefusesWhenDaemonUnreachable: `cascade chat` with no prompt
-// and an unconfigured Client refuses immediately with a typed error
-// WITHOUT ever constructing a tea.Program — proof there is no blank
-// screen, no hang, and no silent retry loop. This is the TTY-free proof
-// for the "no arg" path: runChat never reaches tea.NewProgram in this
-// case, so the test needs no TTY and completes instantly.
-func TestChatTUIRefusesWhenDaemonUnreachable(t *testing.T) {
-	resetClient(t)
-	c := newTestCobraCommand()
-	err := runChat(c, chatOptions{}, fakeEnv{}.lookup)
-	if !errors.Is(err, errClientUnconfigured) {
-		t.Fatalf("runChat: err = %v, want errClientUnconfigured", err)
-	}
-}
+// TestChatTUIRefusesWhenDaemonUnreachable moved to
+// chat_refusal_nonwindows_test.go (//go:build !windows): on windows,
+// runChat's no-prompt path refuses with the unconditional tier-2 message
+// (errChatWindowsTUIRefusal) before it can ever reach the
+// unconfigured-Client check this test asserts, so the behavior it proves
+// cannot occur there. The windows-side counterpart is
+// TestChatWindowsTUIRefusal (chat_windows_test.go) plus the new
+// TestRunTUIWindowsTierTwoRefusal added there.
 
 // TestWriteOneShotResultDefaultForm locks in the non-JSON, non-quiet
 // rendering shape independent of runChat, so a future refactor of

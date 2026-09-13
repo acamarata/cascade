@@ -118,8 +118,19 @@ func TestDriftReportGreen(t *testing.T) {
 // assertGoldenReport compares got's JSON encoding against the frozen fixture
 // at path byte-for-byte (CI reads it read-only; a real regen of this fixture
 // is a manual, reviewed step, never something a test does to itself).
+// HarnessFile is a real on-disk path (filepath.Join'd, so backslash-
+// separated on windows); the checked-in fixture is written with forward
+// slashes, so the comparison runs on a copy of got with every HarnessFile
+// normalized via filepath.ToSlash. This does not touch the production
+// path DriftEntry actually carries (asserted natively at line ~74 via
+// filepath.Join), only the byte-for-byte fixture comparison.
 func assertGoldenReport(t *testing.T, path string, got Report) {
 	t.Helper()
+	for i, pr := range got.Projects {
+		for j, d := range pr.Drift {
+			got.Projects[i].Drift[j].HarnessFile = filepath.ToSlash(d.HarnessFile)
+		}
+	}
 	gotJSON, err := json.MarshalIndent(got, "", "  ")
 	if err != nil {
 		t.Fatalf("marshal report: %v", err)
@@ -170,10 +181,15 @@ func TestLoadProjectList(t *testing.T) {
 }
 
 // TestMergeProjectPaths asserts dedup, order, and list-before-registered
-// precedence.
+// precedence. MergeProjectPaths runs every entry through filepath.Clean,
+// which normalizes to the native separator (backslash on windows), so the
+// expected values are computed the same way production does rather than
+// hardcoded as POSIX literals -- the windows-specific separator/dedup
+// behavior itself is covered natively by
+// TestMergeProjectPathsWindowsDedup (instruction_regen_windows_test.go).
 func TestMergeProjectPaths(t *testing.T) {
 	got := MergeProjectPaths([]string{"/a", "/b", "/a"}, []string{"/b", "/c"})
-	want := []string{"/a", "/b", "/c"}
+	want := []string{filepath.Clean("/a"), filepath.Clean("/b"), filepath.Clean("/c")}
 	if len(got) != len(want) {
 		t.Fatalf("MergeProjectPaths = %v, want %v", got, want)
 	}

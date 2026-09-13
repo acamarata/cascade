@@ -162,7 +162,12 @@ func writeCursor(path string, cur stagingCursor) error {
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "sync: write staging cursor")
 	}
-	f, err := os.Open(path)
+	// Reopen for a durability fsync. This MUST be a writable handle: on
+	// windows, FlushFileBuffers (what (*os.File).Sync calls) requires the
+	// handle to hold GENERIC_WRITE, and a read-only os.Open handle fails
+	// Sync with "Access is denied" -- fsync on a read-only fd is a no-op
+	// success on POSIX, which is why this was invisible outside windows CI.
+	f, err := os.OpenFile(path, os.O_WRONLY, 0o600)
 	if err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "sync: reopen staging cursor for fsync")
 	}
