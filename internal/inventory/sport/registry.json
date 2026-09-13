@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T22:39:52Z",
+  "generated_at": "2026-09-13T23:39:41Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3131,6 +3131,12 @@
           "line": 31,
           "status": "ADD",
           "raw": "cmd/cascade/daemon (ADD, R-16.80)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_conductor_test.go",
+          "line": 10,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGE, DEFECT-conductor-execute-"
         },
         {
           "file": "cmd/cascade/daemon_unix_context_assemble_integration_test.go",
@@ -11282,9 +11288,9 @@
         },
         {
           "file": "internal/daemon/conductor_execute.go",
-          "line": 28,
+          "line": 33,
           "status": "ADD",
-          "raw": "internal/daemon (ADD, R-16.80)."
+          "raw": "internal/daemon (ADD, R-16.80; CHANGE, DEFECT-conductor-execute-"
         },
         {
           "file": "internal/daemon/conductor_execute_integration_test.go",
@@ -14244,6 +14250,26 @@
           "status": "ADD",
           "ticket": "P1-E09-W2-S18-T6",
           "raw": "internal/policy rpc-standing-handlers/ADDED (P1-E09-W2-S18-T6)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/providers/dispatch",
+      "sites": [
+        {
+          "file": "internal/providers/dispatch/build.go",
+          "line": 26,
+          "status": "ADD",
+          "raw": "internal/providers/dispatch (ADD, DEFECT-conductor-execute-"
+        },
+        {
+          "file": "internal/providers/dispatch/resolver.go",
+          "line": 39,
+          "status": "ADD",
+          "raw": "internal/providers/dispatch (ADD, DEFECT-conductor-execute-"
         }
       ],
       "statuses": [
@@ -18270,6 +18296,26 @@
       ]
     },
     {
+      "name": "providers/transport",
+      "sites": [
+        {
+          "file": "providers/transport/http_doer.go",
+          "line": 45,
+          "status": "ADD",
+          "raw": "providers/transport (ADD, DEFECT-conductor-execute-permanently-"
+        },
+        {
+          "file": "providers/transport/http_doer_realtype_test.go",
+          "line": 46,
+          "status": "ADD",
+          "raw": "providers/transport (ADD, FIX-transport-coverage-shrink.md)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "repo/graph-cross-scope-gating",
       "sites": [
         {
@@ -19444,7 +19490,7 @@
       ]
     }
   ],
-  "total_sites": 1929,
+  "total_sites": 1934,
   "unspecified_count": 62,
   "multi_status_count": 39
 }
