@@ -1,0 +1,72 @@
+# Symbols exempt from TestNoFreshOrphanedAllowEntries because they predate the
+# gate. Each names a retire_ticket that is ALREADY CLOSED and a caller_site that
+# does not exist, so nothing will ever retire it and no count could see it.
+#
+# THIS LIST IS SHRINK-ONLY. Never append to it. A new gap gets wired, or marked
+# UNOWNED (which the debt ratchet in testonly-debt-baseline.txt counts), never
+# parked here. Removing an entry means the symbol got a real caller: delete the
+# line and lower the debt baseline in the same change.
+#
+# Lines beginning with "#" are comments. See
+# DEFECT-orphaned-allow-entries-systemic.md for how this list was measured.
+internal/bench.Gate
+internal/bench.ParseBenchOutput
+internal/bench.RegisteredBudgets
+internal/ci.ApplyMigrationSchema
+internal/ci.NewClient
+internal/ci.Upsert
+internal/conductor.ApplyUsageMigrationSchema
+internal/conductor.NewDaemonRouter
+internal/conductor.NewDefaultProductionSpawnHook
+internal/conductor.NewUsageStore
+internal/conversation.NewAdapter
+internal/coverage.BuildCoverageMatrix
+internal/coverage.GapReport
+internal/coverage.LoadDeferrals
+internal/coverage.LoadInventory
+internal/coverage.LoadTicketTree
+internal/fleet.RegisterBenchHandlers
+internal/fleet.WithBenchClock
+internal/fleet/capacity.RegisterHandlers
+internal/fleet/capacity.WireSSE
+internal/fleet/census.NewCollector
+internal/fleet/economics.ClampFractionCaps
+internal/fleet/economics.NewWindowAccountant
+internal/fleet/journal.AllKinds
+internal/fleet/supervision.NewAttentionCheck
+internal/fleet/supervision.NewDetector
+internal/fleet/supervision.NewSubscription
+internal/fleet/tailer.NewTailer
+internal/fleet/topology.ExecutiveModelFractionHard
+internal/fleet/topology.ExecutiveModelFractionSoft
+internal/fleet/topology.ValidateReserve
+internal/jobs.LifecycleStages
+internal/jobs.ParseLifecycleStage
+internal/jobs.RaiseRiskClass
+internal/jobs.ReclassificationStages
+internal/jobs.WireLeaseRelease
+internal/jobs.WithTemplateContext
+internal/nodes.GetLiveness
+internal/nodes.NewPairingStore
+internal/nodes.NewTunnelHeartbeatSender
+internal/nodes.SignHeartbeatFrame
+internal/nodes.SignRotationRequest
+internal/nodes.SignTranscript
+internal/policy.ElevationClassVerbs
+internal/policy.NewApprovalSigner
+internal/policy.NewTeamCarrier
+internal/providers/health.DefaultIntervals
+internal/providers/health.NewScheduler
+internal/retrieval.IngestGitRepo
+internal/retrieval/embed.New
+internal/rpc.NewSupervisorEventEmitter
+internal/secrets.NewApprovalKeyReader
+internal/secrets.NewScrubber
+internal/sync.PluginClass
+plugins/pbd.ClaimRPC
+plugins/pbd.DoneRPC
+plugins/pbd.StepRPC
+plugins/pbd/internal/pews.CarryForward
+plugins/pbd/internal/pews.Convert
+plugins/pbd/internal/pews.DecodeLifecyclePayload
+providers/embeddings.NewProviderEmbedder

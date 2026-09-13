@@ -65,6 +65,17 @@ type TestOnlyAllowEntry struct {
 	// the day the owning ticket creates the file, the exemption must
 	// already be wired, or the promise was false.
 	CallerSite string `json:"caller_site"`
+	// AddedByTicket names the ticket whose lane wrote this entry, so a
+	// self-referential exemption (an entry naming its own author as the
+	// ticket that will retire it, a closed loop by construction) can be
+	// refused mechanically. Optional and forward-only: it was added after
+	// the 227 legacy entries already existed, none of which record their
+	// own provenance, and back-filling it from git history is not sound
+	// (this tree's commit subjects do not carry ticket ids, verified
+	// against 200 real commits). Empty means "provenance not recorded";
+	// FindSelfReferentialAllowEntries skips those rather than guessing.
+	// When set, it is validated against ticketIDPattern like RetireTicket.
+	AddedByTicket string `json:"added_by_ticket,omitempty"`
 }
 
 // UnownedTicket is the literal RetireTicket value for a legacy exemption
@@ -138,6 +149,10 @@ func validateTicketAndCallerSite(e TestOnlyAllowEntry) error {
 	}
 	if strings.HasPrefix(site, "/") || strings.Contains(site, "..") {
 		return fmt.Errorf("test-only gate: %s has caller_site %q, which must be a repo-relative path", e.Symbol, site)
+	}
+	if added := strings.TrimSpace(e.AddedByTicket); added != "" && !ticketIDPattern.MatchString(added) {
+		return fmt.Errorf("test-only gate: %s has added_by_ticket %q, which matches no known ticket id shape",
+			e.Symbol, added)
 	}
 	return nil
 }
