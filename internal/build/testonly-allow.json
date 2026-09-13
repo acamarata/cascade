@@ -399,13 +399,6 @@
     "caller_site": "internal/providers/registry/registry.go"
   },
   {
-    "symbol": "internal/fleet/sessions.New",
-    "reason": "The sessions domain Store constructor. Its production caller is cmd/cascade/daemon_unix_run.go's buildRPCServer, which composes the real provider.Store, runtime.Clock, and events.Bus into a Store and passes it to RegisterHandlers and the SSE surface. That file is not in P1-E12-W3-S24-T3's files_scope (only internal/fleet/sessions/*, internal/storage/domains.go, cmd/cascade/root.go, and internal/rpc/registry.go are); Store itself is fully implemented and tested against a real MemStore and a real providers/sqlite driver.",
-    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, in the wiring ticket that mounts the fleet.sessions surface; retire this entry once it constructs a Store and calls RegisterHandlers/NewSSEHandler with it",
-    "retire_ticket": "P1-E12-W3-S24-T3",
-    "caller_site": "cmd/cascade/daemon_unix_run.go"
-  },
-  {
     "symbol": "internal/fleet/sessions.RegisterHandlers",
     "reason": "Binds fleet.sessions.list to an *rpc.Registry. Every landed precedent for registering a daemon RPC method (context.scope.show, memory.*, recall.*) is called from cmd/cascade/daemon_unix_run.go's buildRPCServer, which this ticket's files_scope does not include. RegisterHandlers itself is exercised end-to-end against a real rpc.Registry (rpc_test.go: happy path, empty params, and the unknown-filter-field refusal). No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
     "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, alongside the other registerXxxHandler calls; retire this entry once it is called there",
@@ -1078,6 +1071,13 @@
     "caller_site": "internal/daemon/attention_subscription.go"
   },
   {
+    "symbol": "internal/rpc.NewSupervisorEventEmitter",
+    "reason": "P1-E18-W4-S40-T4 ships the four supervisor.* SSE event payload shapes and their emitter fully implemented and tested against a real *events.Bus (supervisor_sse_test.go: a real SSEHandler round trip captures all four kinds into testdata/supervisor-sse-fixture.ndjson). A real producer call site needs two things this ticket's files_scope does not reach: (1) internal/fleet/supervision's Store.Push/stallSupervisor and internal/fleet.HeadroomPublisher.publish, none of which are in files_scope; and (2) the SAME daemon-lifetime context gap internal/fleet/supervision.NewSubscription's own entry above already records -- buildRPCServer has no such context to run a background publisher goroutine against, and HeadroomPublisher itself has no production caller anywhere yet either (no *runtime.Registry is constructed in cmd/cascade's composition path today).",
+    "expected_caller": "a real event producer inside internal/fleet/supervision (Store.Push, stallSupervisor.CreateSupervisor, stallNotifier.Notify) and internal/fleet.HeadroomPublisher.tick, once both the daemon-lifetime context and a production *runtime.Registry exist",
+    "retire_ticket": "P1-E18-W4-S40-T4",
+    "caller_site": "internal/fleet/supervision (attention/stall/escalation) and internal/fleet/headroom.go"
+  },
+  {
     "symbol": "internal/fleet/supervision.NewAttentionCheck",
     "reason": "P1-E18-W4-S39-T1 ships the `cascade doctor` attention-queue check fully implemented and tested (doctorcheck_test.go covers OK/warn/error), but productionCheckRegistry (cmd/cascade/doctor_mounts.go) has no cascade.db-backed provider.Store today -- every check it mounts is file-backed (internal/nodes.RecordStore) or config-backed, so mounting this check needs a new second sqlite connection first (registerContextEngineHandlers' own precedent for the identical need), which is a separate, larger change than this ticket's RPC-side wiring. Recorded in internal/build/doctormountgate.go's DoctorMountExemptions (NewAttentionCheck entry) for the mount gate specifically.",
     "expected_caller": "a new cmd/cascade/doctor_mounts_attention.go, opening its own supervision.Store the same way registerContextEngineHandlers opens its own scope.GraphStore connection",
@@ -1148,32 +1148,11 @@
     "caller_site": "internal/daemon/lease_composition.go"
   },
   {
-    "symbol": "internal/jobs.NewEvidenceLedger",
-    "reason": "P1-E29-W6-S60-T3 ships the R-21.145/R-21.183 evidence ledger, fully implemented and tested (Append/Query/Cursor/Verify all exercised against a real modernc-sqlite db), but the composition root that constructs a live *EvidenceLedger for the running daemon is AF/S-66.T1's completion-gate hook-pack registration, which does not exist yet.",
-    "expected_caller": "AF/S-66.T1's hook-pack composition root; retire this entry once it lands",
-    "retire_ticket": "P1-E29-W6-S66-T1",
-    "caller_site": "internal/daemon/completion_gate_composition.go"
-  },
-  {
-    "symbol": "internal/jobs.NewProducerAuthz",
-    "reason": "P1-E29-W6-S60-T3 ships the R-21.145/R-21.177 producer-authorization check, fully implemented and tested, but the composition root that wires a real isController/LeaseFencer pair into it is the same AF/S-66.T1 hook-pack registration NewEvidenceLedger's own entry names.",
-    "expected_caller": "AF/S-66.T1's hook-pack composition root; retire this entry once it lands",
-    "retire_ticket": "P1-E29-W6-S66-T1",
-    "caller_site": "internal/daemon/completion_gate_composition.go"
-  },
-  {
-    "symbol": "internal/jobs.NewCompletionPolicy",
-    "reason": "P1-E29-W6-S60-T3 ships the completion-gate engine (CompletionPolicy.Transition), fully implemented and tested end to end including the live jobs.gate.denied-to-stall-detector integration test, but the real policy-engine caller that constructs one and threads the real EngineID through is AF/S-66.T1's hook-pack registration, explicitly deferred by this ticket's own contract text.",
-    "expected_caller": "AF/S-66.T1's hook-pack composition root; retire this entry once it lands",
-    "retire_ticket": "P1-E29-W6-S66-T1",
-    "caller_site": "internal/daemon/completion_gate_composition.go"
-  },
-  {
-    "symbol": "internal/jobs.ApplyEvidenceSchema",
-    "reason": "P1-E29-W6-S60-T3 ships the jobs_evidence table's own MigrationSet and apply function, proved idempotent against a real modernc-sqlite db, but the daemon startup path that applies every domain's schema (alongside ApplyJobsSchema) is composition-root work outside this ticket's files_scope.",
-    "expected_caller": "the daemon storage-bootstrap composition root that already calls ApplyJobsSchema; retire this entry once it also calls this one",
-    "retire_ticket": "P1-E29-W6-S60-T3",
-    "caller_site": "internal/daemon/storage_bootstrap.go"
+    "symbol": "internal/fleet/hookpacks.NewCompletionGateDoctorCheck",
+    "reason": "P1-E32-W6-S66-T1 ships the R-16.47/R-21.176 completion-gate doctor.Check, fully implemented and tested (StatusError when the pack is missing, StatusWarn when a LivenessProbe reports the daemon unreachable while a job is active). Mounting it into cmd/cascade/doctor_mounts.go's productionCheckRegistry as written would always report StatusError: `cascade doctor` runs as its own fresh process (doctor_mounts.go's own doc comment: a fresh *CheckRegistry per invocation) and never runs wireCompletionHookPack, so hookpacks.DefaultRegistry inside that process never gains the completion-gate entry the live daemon registers -- a real architecture gap, not a files_scope one: `cascade doctor` needs a way to observe the LIVE DAEMON's own registration state (a status RPC field, or a persisted install marker) rather than reading this CLI invocation's own separate in-process singleton. That decision is unresolved and belongs to a new file, not an edit to the existing doctor_mounts.go.",
+    "expected_caller": "a new cmd/cascade/doctor_completion_gate.go, once the live-vs-persisted-state design question above is decided; retire this entry once it lands",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/doctor_completion_gate.go"
   },
   {
     "symbol": "internal/evidence.NewClaimID",

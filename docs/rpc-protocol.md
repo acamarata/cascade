@@ -78,3 +78,30 @@ closes it after an unrecoverable delivery error.
 `GET /events` depends on the daemon's unix socket IPC layer, which is not
 available on Windows. A Windows client receives HTTP 501 with a message
 explaining the limitation.
+
+## supervisor.* methods and events
+
+The `supervisor.*` namespace is reserved for future product consumption
+(a dashboard). It is implemented in `internal/rpc` (`supervisor.go`,
+`supervisor_sse.go`) and reserves no core storage domain of its own.
+
+**`supervisor.snapshot`** (no params) returns the current fleet
+supervision snapshot: `schema_version`, `attention_queue_depth`,
+`stall_count`, one `sessions[]` entry per known session
+(`session_id`, `action_count`, `interrupt_count`), `headroom_ceiling`
+(nullable), `autonomy_profile`, and `auto_advance_tier`. With no daemon
+supervision surface running, it returns a taxonomy `unavailable` error
+(JSON-RPC `-32004`, CLI exit `5`) rather than a panic or a zero-value
+result.
+
+**`supervisor.events_schema`** (no params) returns the versioned schema
+doc describing the four SSE event payloads below.
+
+Four typed SSE events are published on the same `GET /events` stream
+above (under the `"daemon"` bus namespace, so they are visible without an
+extra subscription): `supervisor.attention_added`,
+`supervisor.stall_detected`, `supervisor.escalation`, and
+`supervisor.headroom_update`. Every payload carries `schema_version`; see
+`supervisor.events_schema`'s response for the full per-kind field list, or
+`internal/rpc/testdata/supervisor-sse-fixture.ndjson` for a captured
+example of all four.

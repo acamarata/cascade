@@ -1,0 +1,27 @@
+{
+  "request": {
+    "id": 1,
+    "jsonrpc": "2.0",
+    "method": "supervisor.snapshot"
+  },
+  "result": {
+    "attention_queue_depth": 3,
+    "auto_advance_tier": "L1",
+    "autonomy_profile": "balanced",
+    "headroom_ceiling": 8,
+    "schema_version": 1,
+    "sessions": [
+      {
+        "action_count": 14,
+        "interrupt_count": 2,
+        "session_id": "sess-alpha"
+      },
+      {
+        "action_count": 5,
+        "interrupt_count": 1,
+        "session_id": "sess-beta"
+      }
+    ],
+    "stall_count": 2
+  }
+}

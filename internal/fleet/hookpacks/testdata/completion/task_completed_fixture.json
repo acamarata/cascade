@@ -1,0 +1,6 @@
+{
+  "job_id": "job_01J9EXAMPLE0000000000001",
+  "task_id": "T-1",
+  "session_id": "ses_01J9EXAMPLE0000000000001",
+  "event_type": "TaskCompleted"
+}

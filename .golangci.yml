@@ -202,6 +202,17 @@ linters:
             # case the rule's own comment above describes, not a hand-
             # rolled outbound client (P1-E19-W4-S42-T3).
             - "!**/cmd/cascade/backup_elevation.go"
+            # hooks.go (P1-E32-W6-S66-T1) is the AF/S-66.T1 completion-gate
+            # composition-root connector, on the identical grounds as
+            # daemon_unix_jobs_rpc.go above: it is called only from
+            # buildRPCServer, it REGISTERS
+            # fleet.sessions.completion_check on the daemon's own
+            # registry, and it never dials the daemon. It needs its own
+            # jobs-domain db handle and PathProvider, the same
+            # "second sqlite connection" pattern registerContextEngineHandlers
+            # and wireJobRPC already use, so it cannot live in
+            # internal/daemon either.
+            - "!**/cmd/cascade/hooks.go"
             - "!**/*_test.go"
           deny:
             - pkg: "github.com/acamarata/cascade/internal/rpc"

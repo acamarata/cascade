@@ -96,6 +96,13 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// cmd-rpc-server-boundary exemption list; the two must be edited
 	// together or this gate and the linter disagree (P1-E19-W4-S42-T3).
 	"backup_elevation.go": true,
+	// hooks.go (P1-E32-W6-S66-T1): the AF/S-66.T1 composition-root
+	// connector. It REGISTERS fleet.sessions.completion_check on the
+	// daemon's own registry and never dials the daemon, the identical
+	// daemon-SIDE reasoning as daemon_unix_jobs_rpc.go above. This map
+	// mirrors .golangci.yml's cmd-rpc-server-boundary exemption list; the
+	// two must be edited together or this gate and the linter disagree.
+	"hooks.go": true,
 }
 
 // scanCmdCascadeRPCImports returns, sorted, the base filenames under dir

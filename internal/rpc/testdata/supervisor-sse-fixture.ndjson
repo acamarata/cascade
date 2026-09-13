@@ -1,0 +1,12 @@
+id: AAAAAAAAAAE
+data: {"seq":1,"kind":"supervisor.attention_added","source":"supervisor.attention_added","payload":"eyJzY2hlbWFfdmVyc2lvbiI6MSwiaXRlbV9pZCI6ImF0dG4tMDAxIiwia2luZCI6InBvbGljeS1hc2siLCJzY29wZV9raW5kIjoic2Vzc2lvbiIsInNjb3BlX2lkIjoic2Vzcy1hbHBoYSJ9"}
+
+id: AAAAAAAAAAI
+data: {"seq":2,"kind":"supervisor.stall_detected","source":"supervisor.stall_detected","payload":"eyJzY2hlbWFfdmVyc2lvbiI6MSwic2Vzc2lvbl9pZCI6InNlc3MtYWxwaGEiLCJzdGFsbF9raW5kIjoibm8tcHJvZ3Jlc3MifQ=="}
+
+id: AAAAAAAAAAM
+data: {"seq":3,"kind":"supervisor.escalation","source":"supervisor.escalation","payload":"eyJzY2hlbWFfdmVyc2lvbiI6MSwic2Vzc2lvbl9pZCI6InNlc3MtYWxwaGEiLCJydW5nIjoic3VwZXJ2aXNvci10YXNrIn0="}
+
+id: AAAAAAAAAAQ
+data: {"seq":4,"kind":"supervisor.headroom_update","source":"supervisor.headroom_update","payload":"eyJzY2hlbWFfdmVyc2lvbiI6MSwicmVzb3VyY2UiOiJpbmZsaWdodCIsImVuZm9yY2VkX2NlaWxpbmciOjgsInJhdGlvIjowLjM3NX0="}
+

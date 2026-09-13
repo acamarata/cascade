@@ -118,7 +118,7 @@ func withPolicyHandlers(pol *policyWiring) rpcServerOption {
 func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, settings daemon.Settings, paths runtime.PathProvider, memoryAdmin *memory.AdminHandler, store provider.Store, opts ...rpcServerOption) (*http.Server, *daemon.Manifest, *int64, error) {
 	knownEventKind := rpc.CombineKnownEventKind(func(kind events.EventKind) bool {
 		return kind == daemon.EventKindShutdownRequested
-	}, rpc.KnownJobLeaseEventKind)
+	}, rpc.KnownJobLeaseEventKind, rpc.KnownSupervisorEventKind)
 	sse := rpc.NewSSEHandler(bus, "daemon", knownEventKind, clock)
 
 	registry := rpc.NewRegistry()
@@ -189,6 +189,12 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 		}
 	}
 	if err := wireFleetNodeAndJobHandlers(registry, store, clock, bus, paths); err != nil {
+		return nil, nil, nil, err
+	}
+	// fleet.sessions.completion_check (AF/S-66.T1, R-16.16/R-21.176): see
+	// cmd/cascade/hooks.go's header comment for why this call site lives
+	// here rather than in this ticket's own files_scope.
+	if err := wireCompletionHookPack(context.Background(), registry, store, clock, bus, paths); err != nil {
 		return nil, nil, nil, err
 	}
 	return daemon.NewRPCServer(registry, sse), manifest, connections, nil

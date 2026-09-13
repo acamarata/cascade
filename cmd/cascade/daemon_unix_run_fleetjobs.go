@@ -32,6 +32,15 @@ import (
 func wireFleetAndNodeHandlers(registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider) error {
 	daemon.RegisterFleetJournalHandler(registry, store, clock)
 	daemon.RegisterFleetAttentionHandler(registry, store, clock, bus)
+	// supervisor.snapshot/events_schema (P1-E18-W4-S40-T4). metrics/
+	// autonomy are nil here: no *runtime.Registry (C-S05.T4) is
+	// constructed anywhere in this composition path yet, and no
+	// *policy.Controller is threaded into this function — see
+	// internal/daemon/supervisor_rpc.go's own DISCLOSED GAPS note. The
+	// handlers still register and answer real, honestly-degraded data
+	// (an absent headroom ceiling, a "locked"/"none" autonomy reading)
+	// rather than being left unreachable.
+	daemon.RegisterSupervisorHandler(registry, store, clock, bus, nil, nil)
 	daemon.RegisterNodeUpgradeHandler(registry, paths, clock)
 	// The returned *sql.DB is intentionally not closed here: this
 	// composition root does not yet track per-registration close hooks
