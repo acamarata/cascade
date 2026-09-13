@@ -1,12 +1,5 @@
 [
   {
-    "symbol": "providers/anthropic.New",
-    "reason": "P1-E10-W3-S19-T2 builds the real Anthropic ModelProvider driver as a standalone package with no wiring ticket of its own: the universal provider intake and registry that will call New to construct a live instance are S-20.T1 and S-20.T2, both explicitly out of this ticket's scope (files_scope covers only providers/anthropic/*). The driver ships fully implemented and tested against recorded fixtures; only its construction call site is missing until the registry lands.",
-    "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live anthropic.Driver; retire this entry once either lands",
-    "retire_ticket": "P1-E10-W3-S20-T1",
-    "caller_site": "internal/providers/registry/registry.go"
-  },
-  {
     "symbol": "internal/runtime.NewBaselineChecker",
     "reason": "Built and tested; no caller on the daemon start path. The doctor command cannot construct one either: it needs a provider.Store, an EventPublisher and an AuditRecorder, none of which the CLI layer opens. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
     "expected_caller": "the daemon start path, or a doctor.Check adapter over the baseline checker once the daemon exposes the store it needs",
@@ -369,27 +362,6 @@
     "expected_caller": "the escalation ladder (P1-E13-W3-S27-T3), which reads back a subset of kinds via Replay's kinds filter and will assert its own filter list against AllKinds()",
     "retire_ticket": "P1-E13-W3-S27-T3",
     "caller_site": "internal/fleet/governor/escalation_wiring.go"
-  },
-  {
-    "symbol": "providers/openai.New",
-    "reason": "P1-E10-W3-S19-T3 builds the real openai-compat ModelProvider driver as a standalone package with no wiring ticket of its own, the same shape as providers/anthropic.New above: the universal provider intake and registry that will call New to construct a live instance are S-20.T1 and S-20.T2, both explicitly out of this ticket's files_scope. The driver ships fully implemented and tested against recorded fixtures (openai/moonshot/zai/deepseek-style 401s, a constructed 429, malformed/truncated stream fixtures) plus a tagged live lane; only its construction call site is missing until the registry lands.",
-    "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live openai.Driver; retire this entry once either lands",
-    "retire_ticket": "P1-E10-W3-S20-T1",
-    "caller_site": "internal/providers/registry/registry.go"
-  },
-  {
-    "symbol": "providers/ollama.New",
-    "reason": "P1-E10-W3-S19-T5 builds the real ollama ModelProvider driver as a standalone package with no wiring ticket of its own, the same shape as providers/anthropic.New and providers/openai.New above: the universal provider intake and registry that will call New to construct a live instance are S-20.T1 and S-20.T2, both explicitly out of this ticket's files_scope. The driver ships fully implemented and tested against transcribed/recorded fixtures plus a tagged live lane; only its construction call site is missing until the registry lands.",
-    "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live ollama.Driver; retire this entry once either lands",
-    "retire_ticket": "P1-E10-W3-S20-T1",
-    "caller_site": "internal/providers/registry/registry.go"
-  },
-  {
-    "symbol": "providers/gemini.New",
-    "reason": "P1-E10-W3-S19-T4 builds the real Gemini ModelProvider driver as a standalone package with no wiring ticket of its own: the universal provider intake and registry that will call New to construct a live instance are S-20.T1 and S-20.T2, both explicitly out of this ticket scope (files_scope covers only providers/gemini/*). The driver ships fully implemented and tested against recorded fixtures; only its construction call site is missing until the registry lands.",
-    "expected_caller": "the universal provider intake (P1-E10-W3-S20-T1) and the provider registry (P1-E10-W3-S20-T2), which construct and hold a live gemini.Driver; retire this entry once either lands",
-    "retire_ticket": "P1-E10-W3-S20-T1",
-    "caller_site": "internal/providers/registry/registry.go"
   },
   {
     "symbol": "internal/fleet/sessions.RegisterHandlers",
@@ -810,13 +782,6 @@
     "expected_caller": "the same future daemon composition file named in ApplyUsageMigrationSchema's entry above; retire this entry once it calls NewUsageStore and Executor.SetUsageStore",
     "retire_ticket": "P1-E11-W3-S22-T4",
     "caller_site": "internal/daemon/conductor_usage_wiring.go"
-  },
-  {
-    "symbol": "internal/conductor.RegisterHandlers",
-    "reason": "job.cancel's registration takes a *Executor, so it is blocked by the SAME missing dependency as internal/conductor.NewExecutor directly above (no production conductor.ProviderResolver implementation exists anywhere in this tree yet - see that entry's corrected reason, T0-daemon-composition-root/R-14.223 follow-up). RegisterHandlers itself is fully wired and tested against a real *rpc.Registry (cancel_test.go); only a real Executor to register against is missing.",
-    "expected_caller": "the daemon composition root (internal/daemon/subsystems.go), alongside its NewExecutor call, once a real ProviderResolver exists; retire this entry once it calls conductor.RegisterHandlers",
-    "retire_ticket": "P1-E11-W3-S22-T4",
-    "caller_site": "internal/daemon/subsystems.go"
   },
   {
     "symbol": "internal/conductor.ParseVerdict",

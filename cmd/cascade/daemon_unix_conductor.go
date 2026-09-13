@@ -34,16 +34,19 @@ package main
 import (
 	"context"
 	"database/sql"
+	"net/http"
 	"path/filepath"
 
 	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/daemon"
+	providerdispatch "github.com/acamarata/cascade/internal/providers/dispatch"
 	providerregistry "github.com/acamarata/cascade/internal/providers/registry"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/pkg/provider"
+	providertransport "github.com/acamarata/cascade/providers/transport"
 )
 
 // wireConductorAndReachability is buildRPCServer's single call site for
@@ -62,15 +65,25 @@ func wireConductorAndReachability(ctx context.Context, registry *rpc.Registry, m
 
 // wireConductorExecute opens the same durable providers.db `provider
 // add/list/health` already use (openMigratedDB, provider_health_cmd.go),
-// builds a real registry.Reader and a fail-closed default QuotaPolicy
+// builds a real registry.Reader, a fail-closed default QuotaPolicy
 // (no [conductor.quota] TOML section is parsed at this call site yet --
 // a disclosed, narrower gap than R-16.80's connector fix, since
 // ParseQuotaConfig(nil) itself already fails closed to a safe single-lane
-// default rather than an error), and calls
-// daemon.RegisterConductorExecuteHandler with them plus the daemon's real
-// audit.Writer. resolver is nil: no production conductor.ProviderResolver
-// implementation exists anywhere in this tree yet (internal/build/
-// testonly-allow.json's internal/conductor.NewExecutor entry).
+// default rather than an error), and a real conductor.ProviderResolver
+// (dispatch.NewResolver, DEFECT-conductor-execute-permanently-
+// unavailable.md), then calls daemon.RegisterConductorExecuteHandler with
+// all of them plus the daemon's real audit.Writer.
+//
+// The resolver's CredentialSource is nil here: connecting it to
+// internal/secrets.Broker requires deciding how a headless daemon obtains
+// vault access with no interactive elevation prompt, which is an owner
+// decision this call site does not make (see the DEFECT journal's fix
+// journal for the exact question). Until that seam is supplied, every
+// key-authenticated provider fails closed with a typed KindUnavailable
+// naming its missing credential rather than the previous permanent,
+// construction-time KindUnavailable from a nil resolver: dispatch is now
+// refused at the true credential boundary, per-request, not before the
+// executor can even be built.
 func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest, paths runtime.PathProvider, clock runtime.Clock, store provider.Store) error {
 	regDB, err := openMigratedDB(ctx, filepath.Join(paths.DataDir(), providerRegistryDBFile),
 		func(ctx context.Context, db *sql.DB) error {
@@ -87,5 +100,9 @@ func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest 
 	}
 	quota := conductor.NewQuotaPolicy(cfg, clock)
 	auditWriter := audit.New(store, clock, nil)
-	return daemon.RegisterConductorExecuteHandler(registry, manifest, reader, quota, nil, auditWriter, clock)
+	resolver, err := providerdispatch.NewResolver(reg, nil, clock, providertransport.NewHTTPTransport(&http.Client{}))
+	if err != nil {
+		return err
+	}
+	return daemon.RegisterConductorExecuteHandler(registry, manifest, reader, quota, resolver, auditWriter, clock)
 }

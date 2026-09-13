@@ -7,25 +7,31 @@ package daemon
 //   production caller before this file: `cascade run` dialed a method
 //   nobody answered.
 // Inputs: the daemon's shared *rpc.Registry and Manifest, a real
-//   provider.ProviderRegistryReader and conductor.QuotaSpiller, an
-//   optional conductor.ProviderResolver (nil today - no production
-//   implementation exists anywhere in this tree, see internal/build/
-//   testonly-allow.json's internal/conductor.NewExecutor entry), a real
+//   provider.ProviderRegistryReader and conductor.QuotaSpiller, a
+//   conductor.ProviderResolver (cmd/cascade/daemon_unix_conductor.go
+//   passes internal/providers/dispatch.NewResolver's real implementation,
+//   see DEFECT-conductor-execute-permanently-unavailable.md), a real
 //   audit.Writer, and the shared conductor.Clock.
 // Outputs: a registered "conductor.execute" handler that always answers
 //   for real - never method-not-found - plus a real *conductor.
 //   DefaultRouter recorded on Manifest under "conductor.router" and a
 //   real-or-failed *conductor.Executor recorded under
-//   "conductor.executor".
+//   "conductor.executor". Once construction succeeds, "job.cancel" is
+//   also registered against the same real *Executor
+//   (conductor.RegisterHandlers), retiring internal/build/testonly-
+//   allow.json's entry for that symbol.
 // Constraints: never registers a fabricated Resolver. A handler that
 //   always errors dressed up as a working seam is exactly the shortcut
-//   Art.1 forbids (the same reasoning internal/build/testonly-allow.json
-//   already records against internal/conductor.NewExecutor). This file's
-//   handler is the real Executor.Execute call the moment a real Resolver
-//   exists; until then it answers NewExecutor's own real
-//   ErrConstructionFailed, a genuine typed error distinct from
-//   method-not-found.
-// SPORT: internal/daemon (ADD, R-16.80).
+//   Art.1 forbids. A nil resolver argument still answers NewExecutor's
+//   own real ErrConstructionFailed (a genuine typed error distinct from
+//   method-not-found) rather than panicking, but the daemon composition
+//   root no longer passes nil: it passes a real resolver whose own
+//   CredentialSource seam is unwired pending an owner decision on daemon
+//   credential custody (see that resolver's own doc comment), so a
+//   key-authenticated dispatch today fails closed per-call, inside
+//   Resolve, rather than once at construction time.
+// SPORT: internal/daemon (ADD, R-16.80; CHANGE, DEFECT-conductor-execute-
+//   permanently-unavailable.md).
 
 import (
 	"context"
@@ -77,6 +83,7 @@ func RegisterConductorExecuteHandler(
 	}
 	manifest.Started(conductorExecutorSubsystem, "executor constructed")
 	registry.Register(ConductorExecuteMethod, conductorExecuteHandler(exec))
+	conductor.RegisterHandlers(registry, exec)
 	return nil
 }
 
