@@ -60,34 +60,10 @@ func TestBackupCLICreateNoInputMissingYes(t *testing.T) {
 	}
 }
 
-// TestBackupCLICreateSucceedsWithRealAttestation is the Art.2 real-stack
-// wiring proof: a genuine ed25519 elevation ceremony over a real fs target
-// produces a real signed snapshot manifest, then a mutation removing the
-// elevation gate call (proven in backup_elevation_test.go's RED case) shows
-// the refusal path is not a no-op -- together, both directions prove
-// runBackupCreate really calls deps.Authorize then deps.Create, not a
-// bypass in either direction.
-func TestBackupCLICreateSucceedsWithRealAttestation(t *testing.T) {
-	ks := newSigningKeystore(t)
-	pubB64, _ := ks.PubKeyB64()
-	elevateDeps := testElevateHelperDeps(ks, enrolledSigningBackend{pubKeyB64: pubB64}, nil)
-	deps := testBackupDeps(t, newBackupAuthorizer(elevateDeps))
-	addTestFSTarget(t, deps, "primary")
-
-	if _, _, err := runBackup(t, deps, "", "create", "--target", "primary", "--yes"); err != nil {
-		t.Fatalf("create with a real attestation: %v", err)
-	}
-
-	listOut, _, err := runBackup(t, deps, "", "list", "--json")
-	if err != nil {
-		t.Fatalf("list after create: %v", err)
-	}
-	var result backupListResult
-	unmarshalJSONEnvelope(t, listOut, &result)
-	if len(result.Snapshots) != 1 || result.Snapshots[0].Outcome != "success" {
-		t.Fatalf("list after a real create = %+v, want exactly one successful snapshot", result.Snapshots)
-	}
-}
+// TestBackupCLICreateSucceedsWithRealAttestation moved to
+// backup_create_realceremony_test.go (`!windows`): it requires the full
+// elevation ceremony to succeed, which is architecturally impossible on
+// Windows (internal/rpc/elevation_windows.go's tier-2 refusal).
 
 // TestBackupCLICreateUnknownTarget proves selecting a target name that was
 // never registered is a typed not-found refusal, before any elevation

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-12T22:56:16Z",
+  "generated_at": "2026-09-13T06:55:32Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2041,6 +2041,13 @@
           "raw": "cmd.cascade.backup-create/ADD (P1-E19-W4-S42-T3)."
         },
         {
+          "file": "cmd/cascade/backup_create_realceremony_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-create/ADD (tests) (P1-E19-W4-S42-T3)."
+        },
+        {
           "file": "cmd/cascade/backup_create_test.go",
           "line": 6,
           "status": "ADD",
@@ -2063,8 +2070,22 @@
           "raw": "cmd.cascade.backup-elevation/ADD (P1-E19-W4-S42-T3)."
         },
         {
+          "file": "cmd/cascade/backup_elevation_realceremony_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-elevation/ADD (tests) (P1-E19-W4-S42-T3)."
+        },
+        {
           "file": "cmd/cascade/backup_elevation_test.go",
           "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-elevation/ADD (tests) (P1-E19-W4-S42-T3)."
+        },
+        {
+          "file": "cmd/cascade/backup_windows_tier2_test.go",
+          "line": 16,
           "status": "ADD",
           "ticket": "P1-E19-W4-S42-T3",
           "raw": "cmd.cascade.backup-elevation/ADD (tests) (P1-E19-W4-S42-T3)."
@@ -2086,7 +2107,7 @@
         },
         {
           "file": "cmd/cascade/backup_export_test.go",
-          "line": 9,
+          "line": 19,
           "status": "ADD",
           "ticket": "P1-E19-W4-S42-T3",
           "raw": "cmd.cascade.backup-export/ADD (tests) (P1-E19-W4-S42-T3)."
@@ -2105,6 +2126,13 @@
           "status": "ADD",
           "ticket": "P1-E19-W4-S42-T3",
           "raw": "cmd.cascade.backup-import/ADD (P1-E19-W4-S42-T3)."
+        },
+        {
+          "file": "cmd/cascade/backup_import_realceremony_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-import/ADD (tests) (P1-E19-W4-S42-T3)."
         },
         {
           "file": "cmd/cascade/backup_import_test.go",
@@ -2127,6 +2155,13 @@
           "status": "ADD",
           "ticket": "P1-E19-W4-S42-T6",
           "raw": "cmd.cascade.backup-key/ADD (P1-E19-W4-S42-T6)."
+        },
+        {
+          "file": "cmd/cascade/backup_key_realceremony_test.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T6",
+          "raw": "cmd.cascade.backup-key/ADD (tests) (P1-E19-W4-S42-T6)."
         },
         {
           "file": "cmd/cascade/backup_key_test.go",
@@ -2166,11 +2201,25 @@
       "name": "cmd.cascade.backup-restore",
       "sites": [
         {
+          "file": "cmd/cascade/backup_ceremony_helpers_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-restore/ADD (tests) (P1-E19-W4-S42-T3)."
+        },
+        {
           "file": "cmd/cascade/backup_restore.go",
           "line": 5,
           "status": "ADD",
           "ticket": "P1-E19-W4-S42-T3",
           "raw": "cmd.cascade.backup-restore/ADD (P1-E19-W4-S42-T3)."
+        },
+        {
+          "file": "cmd/cascade/backup_restore_realceremony_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-restore/ADD (tests) (P1-E19-W4-S42-T3)."
         },
         {
           "file": "cmd/cascade/backup_restore_test.go",
@@ -2239,8 +2288,15 @@
           "raw": "cmd.cascade.backup-verify/ADD (P1-E19-W4-S42-T4)."
         },
         {
+          "file": "cmd/cascade/backup_verify_realceremony_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T4",
+          "raw": "cmd.cascade.backup-verify/ADD (tests) (P1-E19-W4-S42-T4)."
+        },
+        {
           "file": "cmd/cascade/backup_verify_test.go",
-          "line": 6,
+          "line": 7,
           "status": "ADD",
           "ticket": "P1-E19-W4-S42-T4",
           "raw": "cmd.cascade.backup-verify/ADD (tests) (P1-E19-W4-S42-T4)."
@@ -18262,7 +18318,7 @@
       ]
     }
   ],
-  "total_sites": 1815,
+  "total_sites": 1823,
   "unspecified_count": 40,
   "multi_status_count": 32
 }

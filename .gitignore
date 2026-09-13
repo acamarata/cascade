@@ -25,3 +25,10 @@ coverage.html
 
 # Coverage profiles written by the gate checks and contract check lines.
 .cover/
+
+# internal/migration's drift-detection fixture is a checked-in test input
+# named .claude/CLAUDE.md, not an AI workspace file; the blanket .claude/
+# rule above would otherwise silently drop it from every checkout
+# (TestDriftReportRed then reads a missing file as empty content).
+!/internal/migration/testdata/fixture_project/.claude/
+!/internal/migration/testdata/fixture_project/.claude/CLAUDE.md

@@ -1,3 +1,5 @@
+//go:build !windows
+
 // Purpose: `cascade backup export [--include-vault]` tests.
 // Inputs: a real fs target with one real snapshot, a real elevation
 // ceremony, real ExportPortable/ImportPortable collaborators.
@@ -6,6 +8,14 @@
 // Constraints: default export carries no vault material; --include-vault
 // with no --vault-passphrase-file refuses rather than silently proceeding
 // unwrapped.
+// Every test in this file calls createTestSnapshot, which runs the full
+// real elevation ceremony; that ceremony is architecturally unreachable on
+// Windows (internal/rpc/elevation_windows.go's tier-2 refusal preempts it,
+// internal/rpc/elevation_flow_windows_test.go), so this whole file carries
+// the same `!windows` tag as the POSIX attestation flow it exercises
+// (elevation_unix.go), per the AGENT-BRIEF's "build tags on test files"
+// rule -- not a runtime skip. backup_windows_tier2_test.go is this
+// package's Windows-side proof of the refusal (R-14.131).
 // SPORT: cmd.cascade.backup-export/ADD (tests) (P1-E19-W4-S42-T3).
 package main
 

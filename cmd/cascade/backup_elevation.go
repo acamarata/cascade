@@ -12,6 +12,7 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	goruntime "runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -148,7 +149,24 @@ func issueBackupChallenge(ctx context.Context, gate rpc.HandlerFunc, params json
 		return "", cascade.Wrap(cascade.KindInternal, merr, "backup: encode elevation challenge")
 	}
 	var challenge backupElevationChallenge
-	if merr := json.Unmarshal(data, &challenge); merr != nil || challenge.Nonce == "" {
+	if merr := json.Unmarshal(data, &challenge); merr != nil {
+		return "", cascade.New(cascade.KindIntegrity, "backup: elevation challenge has no nonce")
+	}
+	if challenge.Nonce == "" {
+		// A nonce-less ELEVATION_REQUIRED is not always a bug: on
+		// Windows, platformElevationRefusal (internal/rpc/elevation_windows.go)
+		// deliberately returns the same code with no nonce because the
+		// tier-2 refusal is terminal -- there is nothing to attest with
+		// and no retry is possible (internal/rpc/elevation_flow_windows_test.go
+		// asserts this exact nonce-less shape is the canonical Windows
+		// behavior). Reporting it as an integrity violation on Windows
+		// mislabels correct, by-design behavior and would mask a real
+		// integrity bug's identical message on POSIX. Anywhere else, an
+		// empty nonce IS a genuine bug upstream of this fail-closed
+		// check, and must stay refused.
+		if goruntime.GOOS == "windows" {
+			return "", elevation.ErrWindowsTier2()
+		}
 		return "", cascade.New(cascade.KindIntegrity, "backup: elevation challenge has no nonce")
 	}
 	return challenge.Nonce, nil

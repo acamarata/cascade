@@ -131,31 +131,17 @@ func TestBackupAuthorizerUnconfirmed(t *testing.T) {
 	}
 }
 
-// TestBackupAuthorizerRealAttestationVerifies is the success-path proof:
-// with --yes, a real ed25519 signature from an enrolled key round-trips
-// through the nonce challenge, rpc.ElevationMiddleware's real verification,
-// and the single-use ledger, minting a non-empty ElevationProof. Swapping
-// the enrolled public key for an unrelated one (below) proves the
-// verification is real, not a hardcoded pass.
-func TestBackupAuthorizerRealAttestationVerifies(t *testing.T) {
-	ks := newSigningKeystore(t)
-	pubB64, _ := ks.PubKeyB64()
-	deps := testElevateHelperDeps(ks, enrolledSigningBackend{pubKeyB64: pubB64}, nil)
-	authorize := newBackupAuthorizer(deps)
-	cmd := &cobra.Command{}
-	cmd.SetIn(strings.NewReader(""))
-	proof, err := authorize(t.Context(), cmd, "backup.create", []byte(`{"target":"t"}`), true)
-	if err != nil {
-		t.Fatalf("authorize with --yes and a real enrolled signature: %v", err)
-	}
-	if proof == "" {
-		t.Fatal("authorize returned an empty proof on a verified attestation")
-	}
-}
+// TestBackupAuthorizerRealAttestationVerifies moved to
+// backup_elevation_realceremony_test.go (`!windows`): it asserts the real
+// attestation ceremony SUCCEEDS, which platformElevationRefusal
+// (internal/rpc/elevation_windows.go) makes architecturally impossible on
+// Windows.
 
 // TestBackupAuthorizerRejectsUnenrolledKey is the RED half of the above
 // proof: an attestation signed by a DIFFERENT key than the one enrolled in
-// the trust store must fail verification, never mint a proof.
+// the trust store must fail verification, never mint a proof. (On Windows
+// this still refuses -- via the platform's tier-2 preemption rather than
+// key-mismatch verification -- so it stays platform-agnostic here.)
 func TestBackupAuthorizerRejectsUnenrolledKey(t *testing.T) {
 	signer := newSigningKeystore(t)
 	other := newSigningKeystore(t)
