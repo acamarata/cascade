@@ -156,3 +156,126 @@ func TestLoadGrandfatherList_MissingFileErrors(t *testing.T) {
 		t.Fatal("loadGrandfatherList: expected an error for a missing file")
 	}
 }
+
+// TestScanClosedTickets_SkipsSubdirectories proves the IsDir skip is load
+// bearing, not redundant with the filename regex: the subdirectory here
+// is NAMED exactly like a real journal (P1-E01-W1-S02-T1.md as a
+// directory, not a file), so a scan that forgot to skip directories would
+// wrongly count it as a second closed ticket. A directory named to merely
+// look unrelated ("not-a-journal") would pass even without the IsDir
+// check, since the regex alone would reject it — that would not prove
+// this branch does anything.
+func TestScanClosedTickets_SkipsSubdirectories(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "P1-E01-W1-S02-T1.md"), 0o755); err != nil {
+		t.Fatalf("Mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "P1-E01-W1-S01-T1.md"), []byte("done\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	got, err := scanClosedTickets(dir)
+	if err != nil {
+		t.Fatalf("scanClosedTickets: %v", err)
+	}
+	if len(got) != 1 || got[0] != "P1-E01-W1-S01-T1" {
+		t.Fatalf("scanClosedTickets = %v, want exactly [P1-E01-W1-S01-T1] (the directory must not match despite its name)", got)
+	}
+}
+
+// TestRun_MissingJournalsDirReturnsError proves run's own error return
+// for scanClosedTickets failing (a checkout with no journals directory
+// at all, e.g. a fresh clone before any ticket ever closed).
+func TestRun_MissingJournalsDirReturnsError(t *testing.T) {
+	root := t.TempDir()
+	clock := runtime.NewFixedClock(time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC))
+	if err := run(testOutputWriter(), root, clock); err == nil {
+		t.Fatal("run: expected an error when the journals directory is missing")
+	}
+}
+
+// TestRun_MalformedAllowListReturnsError proves run's own error return
+// for the test-only allow list failing to parse.
+func TestRun_MalformedAllowListReturnsError(t *testing.T) {
+	root := writeGenFixture(t, []string{"P1-E01-W1-S01-T1.md"}, "not valid json", "")
+	clock := runtime.NewFixedClock(time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC))
+	if err := run(testOutputWriter(), root, clock); err == nil {
+		t.Fatal("run: expected an error for a malformed testonly-allow.json")
+	}
+}
+
+// TestRun_MissingGrandfatherFileReturnsError proves run's own error
+// return for the orphan grandfather list failing to read, with a valid
+// journals directory and allow list in place so the failure is
+// attributable to the grandfather read alone.
+func TestRun_MissingGrandfatherFileReturnsError(t *testing.T) {
+	root := t.TempDir()
+	journalsDir := filepath.Join(root, ".claude", "planning", "p1", "phase", "journals")
+	if err := os.MkdirAll(journalsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll journals: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(journalsDir, "P1-E01-W1-S01-T1.md"), []byte("done\n"), 0o644); err != nil {
+		t.Fatalf("writing journal: %v", err)
+	}
+	buildDir := filepath.Join(root, "internal", "build")
+	// The testdata directory is created (unlike the other fixtures'
+	// helper) so a WriteFile failure later in run() cannot masquerade as
+	// this test's signal: if the grandfather-read error were ever
+	// dropped, run() would otherwise succeed all the way through to a
+	// real write, making this test a false pass for the wrong reason.
+	if err := os.MkdirAll(filepath.Join(buildDir, "testdata"), 0o755); err != nil {
+		t.Fatalf("MkdirAll internal/build/testdata: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(buildDir, "testonly-allow.json"), []byte("[]"), 0o644); err != nil {
+		t.Fatalf("writing testonly-allow.json: %v", err)
+	}
+	// Deliberately no testdata/testonly-orphan-grandfather.txt written.
+	clock := runtime.NewFixedClock(time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC))
+	err := run(testOutputWriter(), root, clock)
+	if err == nil {
+		t.Fatal("run: expected an error when the grandfather list is missing")
+	}
+	if !strings.Contains(err.Error(), "grandfather") {
+		t.Fatalf("run error = %q, want it to name the grandfather list read", err.Error())
+	}
+}
+
+// TestRun_WriteFailureReturnsError proves run's own error return when the
+// manifest cannot be written: a directory already occupies the exact
+// output path, so os.WriteFile refuses (EISDIR), a portable way to force
+// a real write failure without touching filesystem permission bits.
+func TestRun_WriteFailureReturnsError(t *testing.T) {
+	root := writeGenFixture(t, []string{"P1-E01-W1-S01-T1.md"}, "[]", "")
+	outPath := filepath.Join(root, "internal", "build", "testdata", "closed-ticket-manifest.json")
+	if err := os.Mkdir(outPath, 0o755); err != nil {
+		t.Fatalf("Mkdir outPath: %v", err)
+	}
+	clock := runtime.NewFixedClock(time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC))
+	if err := run(testOutputWriter(), root, clock); err == nil {
+		t.Fatal("run: expected an error when the output path is occupied by a directory")
+	}
+}
+
+// TestRepoRoot_ResolvesRealCheckoutRoot calls the real, unmodified
+// repoRoot against this actual checkout (the only honest way to exercise
+// a function whose entire body is "ask git" — no fixture stands in for a
+// real repository here) and proves it resolves a real root by checking
+// go.mod exists directly under it.
+func TestRepoRoot_ResolvesRealCheckoutRoot(t *testing.T) {
+	root, err := repoRoot()
+	if err != nil {
+		t.Fatalf("repoRoot: %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(root, "go.mod")); statErr != nil {
+		t.Fatalf("repoRoot returned %q, which has no go.mod: %v", root, statErr)
+	}
+}
+
+// TestRepoRoot_NoGitOnPathReturnsError proves the error path: with git
+// unresolvable via PATH, repoRoot must fail rather than return a bogus
+// root.
+func TestRepoRoot_NoGitOnPathReturnsError(t *testing.T) {
+	t.Setenv("PATH", "")
+	if _, err := repoRoot(); err == nil {
+		t.Fatal("repoRoot: expected an error with no git on PATH")
+	}
+}
