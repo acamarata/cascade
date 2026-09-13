@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T18:33:14Z",
+  "generated_at": "2026-09-13T19:34:03Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2553,9 +2553,21 @@
         },
         {
           "file": "cmd/cascade/recall_embedded.go",
-          "line": 26,
+          "line": 35,
           "status": "",
-          "raw": "cmd.cascade.cmd.recall (FIX, embedded-path routing)."
+          "raw": "cmd.cascade.cmd.recall (FIX, embedded-path routing; FIX,"
+        },
+        {
+          "file": "cmd/cascade/recall_embedded_test.go",
+          "line": 21,
+          "status": "",
+          "raw": "cmd.cascade.cmd.recall (TEST, embedded-path error branches)."
+        },
+        {
+          "file": "cmd/cascade/recall_fts_leg_integration_test.go",
+          "line": 16,
+          "status": "",
+          "raw": "cmd.cascade.cmd.recall (FIX, full-text leg wiring, daemon side)."
         },
         {
           "file": "cmd/cascade/recall_harness_test.go",
@@ -2964,6 +2976,12 @@
       "name": "cmd/cascade test-support",
       "sites": [
         {
+          "file": "cmd/cascade/main_test.go",
+          "line": 29,
+          "status": "ADD",
+          "raw": "cmd/cascade test-support (ADD)."
+        },
+        {
           "file": "cmd/cascade/paths_fake_test.go",
           "line": 12,
           "status": "ADD",
@@ -3322,6 +3340,13 @@
     {
       "name": "cmd/cascade/daemon:hooks",
       "sites": [
+        {
+          "file": "cmd/cascade/hooks_more_test.go",
+          "line": 19,
+          "status": "",
+          "ticket": "P1-E32-W6-S66-T1",
+          "raw": "cmd/cascade/daemon:hooks (TEST, P1-E32-W6-S66-T1 branch follow-up)."
+        },
         {
           "file": "cmd/cascade/hooks_test.go",
           "line": 12,
@@ -4576,6 +4601,58 @@
       ]
     },
     {
+      "name": "daemon.status_widget",
+      "sites": [
+        {
+          "file": "internal/daemon/status_widget.go",
+          "line": 44,
+          "status": "ADD",
+          "ticket": "P1-E38-W8-S74-T1",
+          "raw": "daemon.status_widget (ADD, P1-E38-W8-S74-T1)."
+        },
+        {
+          "file": "internal/daemon/status_widget_peeruid_integration_test.go",
+          "line": 41,
+          "status": "ADD",
+          "ticket": "P1-E38-W8-S74-T1",
+          "raw": "daemon.status_widget (ADD, P1-E38-W8-S74-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "daemon.status_widget.jobs",
+      "sites": [
+        {
+          "file": "internal/daemon/status_widget_jobs.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E38-W8-S74-T1",
+          "raw": "daemon.status_widget.jobs (ADD, P1-E38-W8-S74-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "daemon.status_widget.sse",
+      "sites": [
+        {
+          "file": "internal/daemon/status_widget_sse.go",
+          "line": 45,
+          "status": "ADD",
+          "ticket": "P1-E38-W8-S74-T1",
+          "raw": "daemon.status_widget.sse (ADD, P1-E38-W8-S74-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "doctor/bundle",
       "sites": [
         {
@@ -5035,6 +5112,28 @@
           "status": "ADD",
           "ticket": "T-1",
           "raw": "fleet.capacity.snapshot (ADD, per T-1 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.capacity.widget",
+      "sites": [
+        {
+          "file": "internal/fleet/capacity/widget.go",
+          "line": 30,
+          "status": "ADD",
+          "ticket": "P1-E38-W8-S74-T1",
+          "raw": "fleet.capacity.widget (ADD, P1-E38-W8-S74-T1)."
+        },
+        {
+          "file": "internal/fleet/capacity/widget_redact.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E38-W8-S74-T1",
+          "raw": "fleet.capacity.widget (ADD, Redact half, P1-E38-W8-S74-T1)."
         }
       ],
       "statuses": [
@@ -18723,6 +18822,21 @@
       ]
     },
     {
+      "name": "runtime/config-widget",
+      "sites": [
+        {
+          "file": "internal/runtime/config_widget.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E38-W8-S74-T1",
+          "raw": "runtime/config-widget (ADD, P1-E38-W8-S74-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "runtime/config-write-verbs",
       "sites": [
         {
@@ -19254,7 +19368,7 @@
       ]
     }
   ],
-  "total_sites": 1908,
+  "total_sites": 1919,
   "unspecified_count": 62,
   "multi_status_count": 37
 }
