@@ -1,0 +1,11 @@
+{
+  "classify": 512,
+  "segment": 1024,
+  "summarize": 2048,
+  "extract": 2048,
+  "chat": 4096,
+  "code": 8192,
+  "reason": 4096,
+  "review": 4096,
+  "arbitrate": 2048
+}

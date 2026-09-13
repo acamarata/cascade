@@ -37,6 +37,7 @@ package backup
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/binary"
@@ -63,13 +64,10 @@ var (
 	ErrManifestChainBroken              = cascade.New(cascade.KindIntegrity, "backup: manifest previous_snapshot chain is broken")
 )
 
-// ManifestSigningKeyEnvVar is the vault/env reference this ticket resolves
-// the Ed25519 backup-manifest signing key from (§D-15 "creds env-ref only"
-// - never a literal, never a tracked file). Its value is a base64
-// (standard, unpadded-or-padded both accepted) encoding of a 32-byte
-// Ed25519 seed. The S-42.T6 ceremony populates the reference; this ticket
-// never generates a key and carries no dependency on that later ticket -
-// when the reference is absent, ManifestSigningKey refuses.
+// ManifestSigningKeyEnvVar is the env-var fallback for the Ed25519
+// backup-manifest signing key (§D-15 "creds env-ref only", never a
+// literal): a base64 encoding of a 32-byte seed. See ManifestSigningKey
+// for the vault-first resolution order the S-42.T6 ceremony populates.
 const ManifestSigningKeyEnvVar = "CASCADE_BACKUP_MANIFEST_SIGNING_KEY"
 
 // ErrManifestSigningKeyMissing is CreateSnapshot's fail-closed refusal
@@ -79,24 +77,37 @@ const ManifestSigningKeyEnvVar = "CASCADE_BACKUP_MANIFEST_SIGNING_KEY"
 var ErrManifestSigningKeyMissing = cascade.New(cascade.KindInvalidInput,
 	"backup: "+ManifestSigningKeyEnvVar+" is not set; run the recovery-key ceremony before the first snapshot")
 
-// ManifestSigningKey resolves the Ed25519 signing key from
-// ManifestSigningKeyEnvVar. It never falls back to a literal or generates
-// one; an absent or malformed reference is refused, never a "verification
-// skipped" default.
-func ManifestSigningKey() (ed25519.PrivateKey, error) {
+// ManifestSigningKey resolves the Ed25519 signing key: the S-42.T6
+// ceremony's vault entry when vault is non-nil and holds one, else the
+// pre-existing env var as a STATED fallback (see keysource.go) -- the
+// returned KeySource says which one answered
+// (DEFECT-backup-keys-vault-not-read.md). vault may be nil. An absent or
+// malformed reference from EITHER custody refuses, never "skipped".
+func ManifestSigningKey(ctx context.Context, vault VaultStore) (ed25519.PrivateKey, KeySource, error) {
 	raw := os.Getenv(ManifestSigningKeyEnvVar)
-	if raw == "" {
-		return nil, ErrManifestSigningKeyMissing
+	source, found, err := resolveKeySource(ctx, vault, ManifestSigningKeyVaultName, raw != "")
+	if err != nil {
+		return nil, "", err
+	}
+	if !found {
+		return nil, "", ErrManifestSigningKeyMissing
+	}
+	if source == KeySourceVault {
+		key, err := manifestSigningKeyFromVault(ctx, vault)
+		if err != nil {
+			return nil, "", err
+		}
+		return key, KeySourceVault, nil
 	}
 	seed, err := base64.StdEncoding.DecodeString(raw)
 	if err != nil {
-		return nil, cascade.Wrap(cascade.KindInvalidInput, err, "backup: decode manifest signing key seed")
+		return nil, "", cascade.Wrap(cascade.KindInvalidInput, err, "backup: decode manifest signing key seed")
 	}
 	if len(seed) != ed25519.SeedSize {
-		return nil, cascade.Newf(cascade.KindInvalidInput,
+		return nil, "", cascade.Newf(cascade.KindInvalidInput,
 			"backup: manifest signing key seed is %d bytes, want %d", len(seed), ed25519.SeedSize)
 	}
-	return ed25519.NewKeyFromSeed(seed), nil
+	return ed25519.NewKeyFromSeed(seed), KeySourceEnvFallback, nil
 }
 
 // EncryptionInfo is the §21 encryption sub-object.

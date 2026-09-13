@@ -83,25 +83,46 @@ var ErrGateChainCycle = cascade.New(cascade.KindIntegrity,
 var ErrGateObjectHashMalformed = cascade.New(cascade.KindIntegrity,
 	"backup: manifest object ref hash is not valid hex")
 
-// AgeIdentity resolves the backup age identity from
-// AgeIdentityEnvVar, parsing it eagerly (via the reference age
-// library) so a malformed reference fails closed here rather than at the
-// first Decrypt call several steps later.
-func AgeIdentity() (string, error) {
+// AgeIdentity resolves the backup age identity: the S-42.T6 ceremony's
+// vault entry (AgeIdentityVaultName, recovery.go) when vault is non-nil
+// and holds one, otherwise the pre-existing AgeIdentityEnvVar as a STATED
+// fallback -- the returned KeySource says which one answered
+// (DEFECT-backup-keys-vault-not-read.md). vault may be nil (no elevated
+// broker at the call site). Either custody's value is parsed eagerly (via
+// the reference age library) so a malformed reference fails closed here
+// rather than at the first Decrypt call several steps later.
+func AgeIdentity(ctx context.Context, vault VaultStore) (string, KeySource, error) {
 	raw := os.Getenv(AgeIdentityEnvVar)
-	if raw == "" {
-		return "", ErrAgeIdentityMissing
+	source, found, err := resolveKeySource(ctx, vault, AgeIdentityVaultName, raw != "")
+	if err != nil {
+		return "", "", err
+	}
+	if !found {
+		return "", "", ErrAgeIdentityMissing
+	}
+	if source == KeySourceVault {
+		identity, err := ageIdentityFromVault(ctx, vault)
+		if err != nil {
+			return "", "", err
+		}
+		return identity, KeySourceVault, nil
 	}
 	if _, err := age.ParseX25519Identity(raw); err != nil {
-		return "", cascade.Wrap(cascade.KindInvalidInput, err, "backup: parse backup age identity")
+		return "", "", cascade.Wrap(cascade.KindInvalidInput, err, "backup: parse backup age identity")
 	}
-	return raw, nil
+	return raw, KeySourceEnvFallback, nil
 }
 
-// GateOptions collects VerifyIntegrity's collaborators.
+// GateOptions collects VerifyIntegrity's collaborators. Vault is optional
+// (nil at an unelevated call site such as `backup verify`/`backup list`,
+// which never gained a vault-read broker by this fix -- see
+// AgeIdentity's own doc comment); when set, it is the S-42.T6 ceremony's
+// vault the elevated Restore/ImportPortable callers already hold a proof
+// for.
 type GateOptions struct {
 	Target Target
 	PubKey ed25519.PublicKey
+	Vault  VaultStore
 }
 
 // GateReport summarizes one passed VerifyIntegrity call. The two counters
@@ -144,7 +165,7 @@ func VerifyIntegrity(ctx context.Context, opts GateOptions, id SnapshotID) (Mani
 		return Manifest{}, GateReport{}, cascade.New(cascade.KindInvalidInput,
 			"backup: VerifyIntegrity requires a valid Ed25519 public key")
 	}
-	identity, err := AgeIdentity()
+	identity, _, err := AgeIdentity(ctx, opts.Vault)
 	if err != nil {
 		return Manifest{}, GateReport{}, err
 	}

@@ -69,6 +69,10 @@ type RestoreOptions struct {
 	// ConflictStrategy is passed through to storage.Import for every
 	// domain (default: storage.ConflictStrategyError, the zero value).
 	ConflictStrategy storage.ConflictStrategy
+	// Vault is optional (nil at a caller with no elevated broker) and
+	// resolves the gate's and AgeIdentity's vault-first, env-fallback
+	// custody (DEFECT-backup-keys-vault-not-read.md).
+	Vault VaultStore
 }
 
 // RestoreReport summarizes one successful Restore call.
@@ -94,7 +98,7 @@ func Restore(ctx context.Context, proof ElevationProof, opts RestoreOptions, id 
 		return RestoreReport{}, cascade.New(cascade.KindInvalidInput,
 			"backup: restore requires a non-nil destination database")
 	}
-	m, _, err := VerifyIntegrity(ctx, GateOptions{Target: opts.Target, PubKey: opts.PubKey}, id)
+	m, _, err := VerifyIntegrity(ctx, GateOptions{Target: opts.Target, PubKey: opts.PubKey, Vault: opts.Vault}, id)
 	if err != nil {
 		return RestoreReport{}, err
 	}
@@ -102,7 +106,7 @@ func Restore(ctx context.Context, proof ElevationProof, opts RestoreOptions, id 
 	if err != nil {
 		return RestoreReport{}, err
 	}
-	identity, err := AgeIdentity()
+	identity, _, err := AgeIdentity(ctx, opts.Vault)
 	if err != nil {
 		return RestoreReport{}, err
 	}

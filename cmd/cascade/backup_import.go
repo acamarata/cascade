@@ -83,7 +83,7 @@ func importPortableBackup(cmd *cobra.Command, deps backupDeps, record backup.Tar
 }
 
 func backupImportOptions(deps backupDeps, target backup.Target, passphraseFile string, proof backup.ElevationProof) (backup.ImportOptions, error) {
-	opts := backup.ImportOptions{Dest: target}
+	opts := backup.ImportOptions{Dest: target, Vault: backupOptionalVault(deps, proof)}
 	if passphraseFile == "" {
 		return opts, nil
 	}

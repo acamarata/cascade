@@ -83,6 +83,7 @@ func restoreLatestBackup(cmd *cobra.Command, deps backupDeps, rt *backupRuntime,
 	}
 	report, err := deps.Restore(cmd.Context(), proof, backup.RestoreOptions{
 		Target: target, DB: rt.DB, PubKey: pubKey, Domains: domains,
+		Vault: backupOptionalVault(deps, proof),
 	}, latest.ID)
 	if err != nil {
 		return err

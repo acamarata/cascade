@@ -62,12 +62,23 @@ func runBackupCreate(cmd *cobra.Command, deps backupDeps, targetName string, yes
 	return createBackupSnapshot(cmd.Context(), cmd, deps, rt, record, policy, proof)
 }
 
+// backupCreateResult wraps the signed Manifest with the DEFECT-backup-
+// keys-vault-not-read.md STATED custody source: an operator can see
+// whether the ceremony's vault or the env-var fallback answered, rather
+// than the two custody paths silently merging (the exact defect this
+// records against regressing).
+type backupCreateResult struct {
+	backup.Manifest
+	AgeIdentitySource backup.KeySource `json:"age_identity_source"`
+}
+
 func createBackupSnapshot(ctx context.Context, cmd *cobra.Command, deps backupDeps, rt *backupRuntime, record backup.TargetRecord, policy backup.TargetPolicy, proof backup.ElevationProof) error {
 	target, err := deps.BuildTarget(ctx, record, nil, deps.Getenv)
 	if err != nil {
 		return recordCreateFailure(ctx, rt, deps, record.Name, err)
 	}
-	recipient, err := backupAgeRecipient()
+	vault := backupOptionalVault(deps, proof)
+	recipient, source, err := backupAgeRecipient(ctx, vault)
 	if err != nil {
 		return recordCreateFailure(ctx, rt, deps, record.Name, err)
 	}
@@ -79,6 +90,7 @@ func createBackupSnapshot(ctx context.Context, cmd *cobra.Command, deps backupDe
 		Target: target, AgeRecipient: recipient, Clock: deps.Clock,
 		Domains: backupCaptureDomains(rt, policy.Domains),
 		Escrow:  backupEscrowChecker(deps, rt),
+		Vault:   vault,
 	}, previous)
 	if err != nil {
 		return recordCreateFailure(ctx, rt, deps, record.Name, err)
@@ -88,19 +100,19 @@ func createBackupSnapshot(ctx context.Context, cmd *cobra.Command, deps backupDe
 	}); err != nil {
 		return err
 	}
-	return backupOutputWriter(cmd).Result(manifest)
+	return backupOutputWriter(cmd).Result(backupCreateResult{Manifest: manifest, AgeIdentitySource: source})
 }
 
-func backupAgeRecipient() (string, error) {
-	identityText, err := backup.AgeIdentity()
+func backupAgeRecipient(ctx context.Context, vault backup.VaultStore) (string, backup.KeySource, error) {
+	identityText, source, err := backup.AgeIdentity(ctx, vault)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	identity, err := age.ParseX25519Identity(identityText)
 	if err != nil {
-		return "", cascade.Wrap(cascade.KindInvalidInput, err, "backup: invalid age identity")
+		return "", "", cascade.Wrap(cascade.KindInvalidInput, err, "backup: invalid age identity")
 	}
-	return identity.Recipient().String(), nil
+	return identity.Recipient().String(), source, nil
 }
 
 func backupCaptureDomains(rt *backupRuntime, names []string) map[string]backup.Exporter {

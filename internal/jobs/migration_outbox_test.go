@@ -112,10 +112,29 @@ func TestOutboxCrashHelperProcess(_ *testing.T) {
 
 // spawnAndKillOutboxHelper re-execs this test binary as TestOutboxCrashHelperProcess
 // against path/site/phase, waits for READY, then sends a REAL SIGKILL.
+//
+// The helper's blocking read is wired to an os.Pipe whose write end this
+// function holds open for the helper's whole lifetime (never written to,
+// closed only by cmd.Wait's process cleanup). Leaving cmd.Stdin unset would
+// connect the child to the null device instead, which reads as an
+// IMMEDIATE EOF rather than blocking -- the child would then race its own
+// clean exit against this function's Kill() call. That race is invisible
+// on POSIX (Kill on an already-exited-but-unreaped process is a silent
+// no-op) but surfaces on Windows as "TerminateProcess: Access is denied"
+// (ERROR_ACCESS_DENIED against a process that has already exited), which
+// is exactly the flake this comment fixes. A held-open pipe guarantees the
+// helper is still genuinely blocked in ReadByte when the SIGKILL lands, on
+// every platform.
 func spawnAndKillOutboxHelper(t *testing.T, path string, site OutboxSite, phase string) {
 	t.Helper()
 	cmd := exec.Command(os.Args[0], "-test.run=^TestOutboxCrashHelperProcess$")
 	cmd.Env = append(os.Environ(), crashEnvDBPath+"="+path, crashEnvSite+"="+string(site), crashEnvPhase+"="+phase)
+	stdinReader, stdinWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("stdin pipe: %v", err)
+	}
+	defer func() { _ = stdinWriter.Close() }()
+	cmd.Stdin = stdinReader
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatalf("StdoutPipe: %v", err)
@@ -123,6 +142,7 @@ func spawnAndKillOutboxHelper(t *testing.T, path string, site OutboxSite, phase 
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start helper: %v", err)
 	}
+	_ = stdinReader.Close() // the child holds its own duplicated handle
 	line, _ := bufio.NewReader(stdout).ReadString('\n')
 	if line != "READY\n" {
 		_ = cmd.Process.Kill()

@@ -142,9 +142,14 @@ func TestWorktreeCreateConverges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
+	// git always reports worktree paths with forward slashes, even on
+	// Windows, while first.Path was built with filepath.Join (backslashes
+	// there). Compare on the slash-normalized form so this assertion holds
+	// on every platform rather than only where the two happen to agree.
 	count := 0
+	wantSlash := filepath.ToSlash(first.Path)
 	for _, e := range entries {
-		if e.Path == first.Path {
+		if filepath.ToSlash(e.Path) == wantSlash {
 			count++
 		}
 	}

@@ -72,12 +72,18 @@ type SnapshotRecord struct {
 // AuditEscrowChecker, so the shipped `backup create` and scheduled-fire
 // paths are fail-closed in practice even though the engine itself
 // tolerates an unconfigured caller.
+// Vault is optional too (nil at a caller with no elevated broker), and
+// resolves ManifestSigningKey's vault-first, env-fallback custody
+// (DEFECT-backup-keys-vault-not-read.md) -- the production composition
+// root supplies the same broker CreateSnapshot's own proof already
+// elevated.
 type CreateSnapshotDeps struct {
 	Target       Target
 	AgeRecipient string
 	Clock        runtime.Clock
 	Domains      map[string]Exporter
 	Escrow       EscrowChecker
+	Vault        VaultStore
 }
 
 // CreateSnapshot runs the elevated snapshot-create operation: for every
@@ -90,7 +96,7 @@ func CreateSnapshot(ctx context.Context, proof ElevationProof, deps CreateSnapsh
 	if proof == "" {
 		return Manifest{}, ErrElevationRequired
 	}
-	signingKey, err := ManifestSigningKey()
+	signingKey, _, err := ManifestSigningKey(ctx, deps.Vault)
 	if err != nil {
 		return Manifest{}, err
 	}

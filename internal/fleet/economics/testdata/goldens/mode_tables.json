@@ -1,0 +1,29 @@
+{
+  "multipliers": [
+    {"class": "executive",          "plan": 0.60, "build": 2.5,  "crunch": 10.0, "verify": 0.80, "incident": 0.30},
+    {"class": "executive-xhigh",    "plan": 0.60, "build": 2.5,  "crunch": 10.0, "verify": 0.80, "incident": 0.30},
+    {"class": "critic",             "plan": 0.80, "build": 1.8,  "crunch": 8.0,  "verify": 1.0,  "incident": 0.40},
+    {"class": "specialist",         "plan": 1.1,  "build": 2.0,  "crunch": 10.0, "verify": 0.60, "incident": 0.25},
+    {"class": "advisor",            "plan": 0.9,  "build": 1.5,  "crunch": 8.0,  "verify": 0.75, "incident": 0.40},
+    {"class": "lead",               "plan": 1.1,  "build": 0.65, "crunch": 2.5,  "verify": 1.0,  "incident": 0.70},
+    {"class": "deep",               "plan": 1.1,  "build": 0.65, "crunch": 2.5,  "verify": 1.0,  "incident": 0.70},
+    {"class": "harness-sub",        "plan": 1.1,  "build": 0.65, "crunch": 2.5,  "verify": 1.0,  "incident": 0.70},
+    {"class": "worker-dedicated",   "plan": 1.0,  "build": 0.65, "crunch": 1.0,  "verify": 0.9,  "incident": 0.60},
+    {"class": "worker-fast",        "plan": 1.1,  "build": 0.65, "crunch": 2.5,  "verify": 1.0,  "incident": 0.70},
+    {"class": "pool-premium",       "plan": 1.1,  "build": 0.65, "crunch": 2.5,  "verify": 1.0,  "incident": 0.70},
+    {"class": "pool-cheap",         "plan": 1.0,  "build": 0.8,  "crunch": 0.50, "verify": 0.9,  "incident": 1.0},
+    {"class": "api-paid",           "plan": 0.8,  "build": 0.8,  "crunch": 0.60, "verify": 0.8,  "incident": 0.65},
+    {"class": "api-free",           "plan": 0.8,  "build": 0.8,  "crunch": 0.60, "verify": 0.8,  "incident": 0.65},
+    {"class": "api-batch",          "plan": 1.5,  "build": 1.0,  "crunch": 0.35, "verify": 1.2,  "incident": 2.00},
+    {"class": "local",              "plan": 0.8,  "build": 0.8,  "crunch": 0.60, "verify": 0.8,  "incident": 0.65},
+    {"class": "unranked",           "plan": 0.8,  "build": 0.8,  "crunch": 0.60, "verify": 0.8,  "incident": 0.65},
+    {"class": "executive-overflow", "plan": 0.60, "build": 2.5,  "crunch": 10.0, "verify": 0.80, "incident": 0.30}
+  ],
+  "weights": [
+    {"mode": "plan",     "quality": 5.0, "scarcity": 1.4, "diversity": 1.8, "latency": 0.3, "reliability": 1.0},
+    {"mode": "build",    "quality": 5.0, "scarcity": 1.8, "diversity": 1.0, "latency": 0.5, "reliability": 1.0},
+    {"mode": "crunch",   "quality": 4.0, "scarcity": 2.6, "diversity": 0.6, "latency": 0.7, "reliability": 1.0},
+    {"mode": "verify",   "quality": 5.0, "scarcity": 1.0, "diversity": 2.4, "latency": 0.3, "reliability": 1.0},
+    {"mode": "incident", "quality": 6.0, "scarcity": 0.4, "diversity": 1.2, "latency": 1.0, "reliability": 1.5}
+  ]
+}

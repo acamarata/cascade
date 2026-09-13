@@ -9,6 +9,7 @@
 package backup
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
@@ -56,21 +57,21 @@ func TestManifestSigningKey_GeneratedHere(t *testing.T) {
 
 func TestManifestSigningKey_MissingEnvRefuses(t *testing.T) {
 	t.Setenv(ManifestSigningKeyEnvVar, "")
-	if _, err := ManifestSigningKey(); err == nil {
+	if _, _, err := ManifestSigningKey(context.Background(), nil); err == nil {
 		t.Fatal("ManifestSigningKey() with unset env = nil error, want ErrManifestSigningKeyMissing")
 	}
 }
 
 func TestManifestSigningKey_MalformedEnvRefuses(t *testing.T) {
 	t.Setenv(ManifestSigningKeyEnvVar, "not-valid-base64!!!")
-	if _, err := ManifestSigningKey(); !cascade.HasKind(err, cascade.KindInvalidInput) {
+	if _, _, err := ManifestSigningKey(context.Background(), nil); !cascade.HasKind(err, cascade.KindInvalidInput) {
 		t.Fatalf("ManifestSigningKey(malformed base64) error kind = %v, want KindInvalidInput", err)
 	}
 }
 
 func TestManifestSigningKey_WrongLengthSeedRefuses(t *testing.T) {
 	t.Setenv(ManifestSigningKeyEnvVar, base64.StdEncoding.EncodeToString([]byte("too-short")))
-	if _, err := ManifestSigningKey(); !cascade.HasKind(err, cascade.KindInvalidInput) {
+	if _, _, err := ManifestSigningKey(context.Background(), nil); !cascade.HasKind(err, cascade.KindInvalidInput) {
 		t.Fatalf("ManifestSigningKey(short seed) error kind = %v, want KindInvalidInput", err)
 	}
 }
@@ -79,12 +80,15 @@ func TestManifestSigningKey_ValidEnvResolves(t *testing.T) {
 	seed := make([]byte, ed25519.SeedSize)
 	_, _ = rand.Read(seed)
 	t.Setenv(ManifestSigningKeyEnvVar, base64.StdEncoding.EncodeToString(seed))
-	key, err := ManifestSigningKey()
+	key, source, err := ManifestSigningKey(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("ManifestSigningKey: %v", err)
 	}
 	if len(key) != ed25519.PrivateKeySize {
 		t.Fatalf("len(key) = %d, want %d", len(key), ed25519.PrivateKeySize)
+	}
+	if source != KeySourceEnvFallback {
+		t.Fatalf("source = %q, want %q", source, KeySourceEnvFallback)
 	}
 }
 

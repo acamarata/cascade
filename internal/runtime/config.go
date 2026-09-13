@@ -130,6 +130,9 @@ type Config struct {
 	// config.toml edit to it applies live under the same
 	// freezeColdSections path telemetry.go's own doc comment describes.
 	FleetAccounts map[string]FleetAccountConfig
+	// Economics is the [fleet.economics] block (P1-E41-W9-S79-T2). Hot --
+	// not in coldSections, so a config.toml edit applies live.
+	Economics economicsSection
 	// Extra holds every top-level section other than schema_version,
 	// runtime, and elevation, exactly as decoded from the file: valid
 	// future 08 §3 sections preserved for round-tripping, never
@@ -263,6 +266,7 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 		Retrieval:     sec.retrieval,
 		FusionEnabled: sec.fusionEnabled,
 		FleetAccounts: sec.fleetAccounts,
+		Economics:     sec.economics,
 		Extra:         extraSections(tree),
 		sources:       sources,
 		rawTree:       tree,

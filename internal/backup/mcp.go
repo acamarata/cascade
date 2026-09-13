@@ -47,7 +47,10 @@ func ListSnapshots(ctx context.Context, store provider.Store, namespace string, 
 	if len(targets) == 0 {
 		return []SnapshotSummary{}, nil
 	}
-	identity, err := AgeIdentity()
+	// Unelevated read path (`backup list`/MCP list, no proof): stays
+	// env-var-only by design, matching backup verify's own precedent --
+	// see AgeIdentity's doc comment.
+	identity, _, err := AgeIdentity(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

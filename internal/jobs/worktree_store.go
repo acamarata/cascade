@@ -26,6 +26,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"path/filepath"
+	"strings"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -58,16 +60,33 @@ func deleteWorktreeRow(ctx context.Context, s *Store, path string) error {
 	return nil
 }
 
+// quarantinePathMarker is the slash-normalized substring that flags a row's
+// path as already parked under a repo's quarantine directory (see
+// worktree_quarantine.go's quarantinePath).
+const quarantinePathMarker = "/" + worktreesDirName + "/" + quarantineDirName + "/"
+
+// isQuarantinedPath reports whether path (as stored, in the host's native
+// separator form — filepath.Join on Windows yields backslashes) falls
+// under the quarantine directory. The check runs on the slash-normalized
+// form so it matches on every platform: a SQL "LIKE '%...%'" against the
+// forward-slash literal above would silently never match a
+// backslash-separated Windows path, which let a quarantined row keep
+// showing up as "active" on Windows only (R-14 windows/jobs fix).
+func isQuarantinedPath(path string) bool {
+	return strings.Contains(filepath.ToSlash(path), quarantinePathMarker)
+}
+
 // listActiveWorktreeRows returns every worktree row NOT already parked
 // under a repo's quarantine directory — the sweep's candidate set
 // (worktree_sweep.go). Quarantined rows are excluded by path shape (see
 // worktree_quarantine.go's quarantinePath), not a schema column: the
 // jobs_worktree table (S-59.T1's migration, out of this ticket's
-// files_scope) carries no quarantine flag.
+// files_scope) carries no quarantine flag. Filtering happens in Go
+// (isQuarantinedPath), not SQL, so it is separator-agnostic across
+// platforms.
 func listActiveWorktreeRows(ctx context.Context, s *Store) ([]Worktree, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT path, lease_repo_id, lease_scope_glob, repo, branch FROM `+tableWorktree+`
-		 WHERE path NOT LIKE '%'||?||'%'`, "/"+worktreesDirName+"/"+quarantineDirName+"/")
+		`SELECT path, lease_repo_id, lease_scope_glob, repo, branch FROM `+tableWorktree)
 	if err != nil {
 		return nil, cascade.Wrap(cascade.KindUnavailable, err, "jobs: list active worktree rows")
 	}
@@ -78,6 +97,9 @@ func listActiveWorktreeRows(ctx context.Context, s *Store) ([]Worktree, error) {
 		var w Worktree
 		if err := rows.Scan(&w.Path, &w.LeaseRepoID, &w.LeaseScopeGlob, &w.Repo, &w.Branch); err != nil {
 			return nil, cascade.Wrap(cascade.KindUnavailable, err, "jobs: scan worktree row")
+		}
+		if isQuarantinedPath(w.Path) {
+			continue
 		}
 		out = append(out, w)
 	}

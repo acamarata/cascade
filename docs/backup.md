@@ -345,6 +345,60 @@ vault export leg.
   (`provider add`, provider by provider) instead of a vault import; the
   lose-the-laptop drill (S-42.T5) proves this leg.
 
+## Recovery
+
+`cascade backup key export|import` (S-42.T6) is the recovery-key
+ceremony: `export` mints (or reads back) the vault-held backup age
+identity and the R-14.58 manifest-signing keypair, passphrase-wraps the
+identity into a printable armored `age` artifact, writes it to a path
+outside every configured target (the location invariant runs before
+elevation), and records a `backup.key_export` escrow event that
+`CreateSnapshot` requires before the first snapshot. `import <path>` on a
+restoring machine unwraps the artifact with the same passphrase and loads
+the recovered identity into that machine's vault. Both verbs are elevated
+(06 §5.14) and Windows tier-2 refuses them the same way `create`/`restore`
+do.
+
+**Current limitation.** `backup create`/`restore`/`verify` still resolve
+`CASCADE_BACKUP_AGE_IDENTITY` / `CASCADE_BACKUP_MANIFEST_SIGNING_KEY` from
+the process environment only; they do not yet read the vault entries the
+ceremony above writes. Until that lands, an operator who has run the
+ceremony still needs one of the two paths below to reach a working
+machine.
+
+### Re-auth runbook
+
+The §D-34 alternative to a vault export: on a clean install, register
+each provider again through the universal intake path instead of
+restoring the old vault contents.
+
+1. Install the same `cascade` binary; do not import anything into the
+   vault.
+2. For every provider the lost machine had configured, run
+   `cascade provider add <name> --key-env <VAR>` (or `--oauth` where the
+   provider supports it) with the credential supplied fresh — never
+   copied from the old machine.
+3. Run `cascade provider list` and confirm every provider the workload
+   needs is present and verified.
+4. Run `cascade doctor` and confirm it exits 0.
+
+This path never touches the backup age identity or the manifest-signing
+key at all — it re-establishes provider credentials directly and leaves
+the backup vault-export leg (`backup export --include-vault` /
+`backup import`) as the alternative when the operator opted into it.
+
+### Windows manual-restore procedure
+
+The elevated backup verbs (`create`, `restore`, `export`, `import`,
+`key export|import`) return the typed `ErrWindowsTier2` refusal on
+Windows (D/S-07.T6) — no elevation ceremony is reachable there, so this
+engine never runs a restore on a Windows host. Recovering a Windows
+machine means: install `cascade` on a macOS or Linux host, complete the
+restore there (either recovery path above), then move the resulting data
+directory (or re-run the re-auth runbook natively) onto the Windows
+machine. `cascade backup list`, `target add|list|remove`, and `verify`
+remain usable on Windows throughout, since none of them is elevated.
+
 ## CLI & MCP surface
 
 The 07-CLI-COMMAND-TREE §backup verb set, verbatim, over the operations
@@ -430,17 +484,10 @@ surface above: the repository layout, the capture adapters, the chunk →
 dedup → compress → encrypt pipeline (including its own read-side
 verification), the fs/s3/rclone targets, restore + the integrity gate,
 multi-target scheduling, the portable export/import layer (including the
-opt-in vault export), and the `backup` CLI/MCP surface. Not covered here,
-because they are not built yet:
-
-- **The recovery-key ceremony** — issuing, wrapping, and escrowing the
-  age identity this pipeline consumes, and `backup key export|import`.
-- **`backup verify`** and its ✦ MCP read tool — the verification cron.
-- **The real Epic H `Broker.Export`/`Import` adapter's own end-to-end
-  ceremony fixtures** beyond the unit-level proofs in
-  `internal/secrets/export_test.go` — the vault-export leg's
-  `VaultExporter`/`VaultImporter` interfaces are satisfied by
-  `internal/secrets.Broker.Export`/`Import` (both shipped by this ticket,
-  gated on the same `ElevationGate` seam as `vault get`/`rotate`), but the
-  lose-the-laptop drill exercising the full opt-out re-auth runbook is
-  S-42.T5's.
+opt-in vault export), the recovery-key ceremony and its known
+env-var-only key resolution limitation (§Recovery), and the `backup`
+CLI/MCP surface. The S-42.T5 lose-the-laptop acceptance drill
+(`internal/backup/drill_integration_test.go`, `-tags=integration`)
+exercises the concurrent-write create/restore cycle, a corrupted-artifact
+and withheld-key refusal, and the ceremony-only path end to end; it
+confirms the §Recovery limitation above rather than working around it.

@@ -101,7 +101,10 @@ func exportLatestBackup(cmd *cobra.Command, deps backupDeps, rt *backupRuntime, 
 }
 
 func backupExportOptions(_ *cobra.Command, deps backupDeps, target backup.Target, flags backupExportFlags, proof backup.ElevationProof) (backup.ExportOptions, error) {
-	opts := backup.ExportOptions{Target: target, IncludeVault: flags.includeVault}
+	opts := backup.ExportOptions{
+		Target: target, IncludeVault: flags.includeVault,
+		Vault: backupOptionalVault(deps, proof),
+	}
 	if !flags.includeVault {
 		return opts, nil
 	}

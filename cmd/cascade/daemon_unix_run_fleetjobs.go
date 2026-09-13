@@ -25,9 +25,10 @@ import (
 // fleet.journal_show/replay (P1-E13-W3-S27-T4, over the SAME store
 // wireResumeScan reads its journal from — a second reader, not a second
 // journal), fleet.attention.list/get/ack (P1-E18-W4-S39-T1),
-// node.upgrade (P1-E17-W4-S36-T5, see node_upgrade_rpc.go's header), and
+// node.upgrade (P1-E17-W4-S36-T5, see node_upgrade_rpc.go's header),
 // fleet.quota.snapshot (P1-E40-W9-S77-T3, see
-// internal/daemon/quota_rpc.go's header).
+// internal/daemon/quota_rpc.go's header), and fleet.mode.show/set
+// (P1-E41-W9-S79-T2, see internal/daemon/fleet_mode_rpc.go's header).
 func wireFleetAndNodeHandlers(registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider) error {
 	daemon.RegisterFleetJournalHandler(registry, store, clock)
 	daemon.RegisterFleetAttentionHandler(registry, store, clock, bus)
@@ -38,7 +39,12 @@ func wireFleetAndNodeHandlers(registry *rpc.Registry, store provider.Store, cloc
 	// disclosed gap) -- it lives for the daemon process's lifetime and is
 	// reclaimed on process exit, matching every sibling registerXHandler
 	// call in this function today.
-	_, err := daemon.RegisterFleetQuotaHandler(registry, paths, clock)
+	if _, err := daemon.RegisterFleetQuotaHandler(registry, paths, clock); err != nil {
+		return err
+	}
+	// fleet.mode.show/set (P1-E41-W9-S79-T2, see
+	// internal/daemon/fleet_mode_rpc.go's header).
+	_, err := daemon.RegisterFleetModeHandler(registry, paths, clock)
 	return err
 }
 

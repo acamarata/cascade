@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T09:17:00Z",
+  "generated_at": "2026-09-13T10:08:47Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3522,6 +3522,35 @@
       ]
     },
     {
+      "name": "cmd/cascade/fleet-mode-cli",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_run_fleetmode_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T2",
+          "raw": "cmd/cascade/fleet-mode-cli (ADD, P1-E41-W9-S79-T2)."
+        },
+        {
+          "file": "cmd/cascade/fleet_mode.go",
+          "line": 27,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T2",
+          "raw": "cmd/cascade/fleet-mode-cli (ADD, P1-E41-W9-S79-T2)."
+        },
+        {
+          "file": "cmd/cascade/fleet_mode_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T2",
+          "raw": "cmd/cascade/fleet-mode-cli (ADD, P1-E41-W9-S79-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade/fleet-top-cli",
       "sites": [
         {
@@ -4956,6 +4985,20 @@
       ]
     },
     {
+      "name": "fleet.mode.rpc",
+      "sites": [
+        {
+          "file": "internal/fleet/economics/rpc_mode.go",
+          "line": 34,
+          "status": "ADD",
+          "raw": "fleet.mode.rpc (ADD, per T2 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "fleet.quota.rpc",
       "sites": [
         {
@@ -5277,6 +5320,51 @@
       ]
     },
     {
+      "name": "fleet/economics/mode",
+      "sites": [
+        {
+          "file": "internal/fleet/economics/mode.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T2",
+          "raw": "fleet/economics/mode/ADD (P1-E41-W9-S79-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/economics/mode-migration",
+      "sites": [
+        {
+          "file": "internal/fleet/economics/mode_migration.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T2",
+          "raw": "fleet/economics/mode-migration/ADD (P1-E41-W9-S79-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/economics/mode-store",
+      "sites": [
+        {
+          "file": "internal/fleet/economics/mode_store.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T2",
+          "raw": "fleet/economics/mode-store/ADD (P1-E41-W9-S79-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "fleet/economics/pressure",
       "sites": [
         {
@@ -5292,6 +5380,100 @@
           "status": "ADD",
           "ticket": "P1-E41-W9-S79-T1",
           "raw": "fleet/economics/pressure/ADD (P1-E41-W9-S79-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/economics/reservation",
+      "sites": [
+        {
+          "file": "internal/fleet/economics/reserve.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T4",
+          "raw": "fleet/economics/reservation/ADD (P1-E41-W9-S79-T4)."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_errors.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T4",
+          "raw": "fleet/economics/reservation/ADD (P1-E41-W9-S79-T4)."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_estimate.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T4",
+          "raw": "fleet/economics/reservation/ADD (P1-E41-W9-S79-T4)."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_fixtures_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T4",
+          "raw": "fleet/economics/reservation/ADD (P1-E41-W9-S79-T4)."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_migration.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T4",
+          "raw": "fleet/economics/reservation/ADD (P1-E41-W9-S79-T4)."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_store.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T4",
+          "raw": "fleet/economics/reservation/ADD (P1-E41-W9-S79-T4)."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_teardown.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T4",
+          "raw": "fleet/economics/reservation/ADD (P1-E41-W9-S79-T4)."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_types.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T4",
+          "raw": "fleet/economics/reservation/ADD (P1-E41-W9-S79-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/economics/tables",
+      "sites": [
+        {
+          "file": "internal/fleet/economics/tables.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T2",
+          "raw": "fleet/economics/tables/ADD (P1-E41-W9-S79-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/economics/tables-override",
+      "sites": [
+        {
+          "file": "internal/fleet/economics/tables_override.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T2",
+          "raw": "fleet/economics/tables-override/ADD (P1-E41-W9-S79-T2)."
         }
       ],
       "statuses": [
@@ -6153,6 +6335,28 @@
       ]
     },
     {
+      "name": "internal.backup.drill",
+      "sites": [
+        {
+          "file": "internal/backup/drill_ceremony_test.go",
+          "line": 13,
+          "status": "CHANGE",
+          "raw": "internal.backup.drill/CHANGED (DEFECT-backup-keys-vault-not-read fix)."
+        },
+        {
+          "file": "internal/backup/drill_integration_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T5",
+          "raw": "internal.backup.drill/ADD (P1-E19-W4-S42-T5)."
+        }
+      ],
+      "statuses": [
+        "ADD",
+        "CHANGE"
+      ]
+    },
+    {
       "name": "internal.backup.escrow",
       "sites": [
         {
@@ -6263,6 +6467,32 @@
           "status": "ADD",
           "ticket": "P1-E19-W4-S41-T4",
           "raw": "internal.backup.integrity/ADDED (P1-E19-W4-S41-T4)."
+        },
+        {
+          "file": "internal/backup/integrity_vault_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "internal.backup.integrity/ADD (tests) (FIX-backup-default-lane-coverage)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.backup.keysource",
+      "sites": [
+        {
+          "file": "internal/backup/keysource.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "internal.backup.keysource/ADD (DEFECT-backup-keys-vault-not-read fix)."
+        },
+        {
+          "file": "internal/backup/keysource_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal.backup.keysource/ADD (tests) (FIX-backup-default-lane-coverage)."
         }
       ],
       "statuses": [
@@ -6285,6 +6515,12 @@
           "status": "ADD",
           "ticket": "P1-E19-W4-S41-T2",
           "raw": "internal.backup.manifest/ADD (P1-E19-W4-S41-T2)."
+        },
+        {
+          "file": "internal/backup/manifest_vault_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "internal.backup.manifest/ADD (tests) (FIX-backup-default-lane-coverage)."
         }
       ],
       "statuses": [
@@ -10809,6 +11045,13 @@
           "status": "ADD",
           "ticket": "T-2",
           "raw": "internal/daemon (ADD, per T-2 sport_updates)."
+        },
+        {
+          "file": "internal/daemon/fleet_mode_rpc.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T2",
+          "raw": "internal/daemon (ADD, T0-daemon-composition-root, P1-E41-W9-S79-T2)."
         },
         {
           "file": "internal/daemon/journal_rpc.go",
@@ -18117,6 +18360,21 @@
       ]
     },
     {
+      "name": "runtime/config-economics",
+      "sites": [
+        {
+          "file": "internal/runtime/config_economics.go",
+          "line": 45,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T2",
+          "raw": "runtime/config-economics (ADD, P1-E41-W9-S79-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "runtime/config-fleet-accounts",
       "sites": [
         {
@@ -18670,7 +18928,7 @@
       ]
     }
   ],
-  "total_sites": 1851,
+  "total_sites": 1876,
   "unspecified_count": 61,
-  "multi_status_count": 34
+  "multi_status_count": 35
 }

@@ -64,6 +64,12 @@ type ExportOptions struct {
 	// VaultPassphrase is required when IncludeVault is true, and ignored
 	// otherwise. Never persisted, never logged, never echoed in an error.
 	VaultPassphrase string
+	// Vault is the UNRELATED S-42.T6 ceremony seam (optional, nil at a
+	// caller with no elevated broker): resolves the backup age identity's
+	// vault-first, env-fallback custody for THIS export's own outer wrap
+	// (DEFECT-backup-keys-vault-not-read.md) -- never confuse with
+	// VaultBroker above, the opt-in §D-34 leg.
+	Vault VaultStore
 }
 
 // ExportPortable builds and returns one portable tar.zst.age artifact for
@@ -105,7 +111,7 @@ func ExportPortable(ctx context.Context, proof ElevationProof, opts ExportOption
 // opt-in vault member. Split out of ExportPortable to stay under the
 // 50-line function cap.
 func buildExportTar(ctx context.Context, opts ExportOptions, id SnapshotID) ([]byte, error) {
-	identity, err := AgeIdentity()
+	identity, _, err := AgeIdentity(ctx, opts.Vault)
 	if err != nil {
 		return nil, err
 	}

@@ -116,6 +116,25 @@ func backupEscrowChecker(deps backupDeps, rt *backupRuntime) backup.EscrowChecke
 	return backup.AuditEscrowChecker{Reader: deps.AuditLog(rt.Store)}
 }
 
+// backupOptionalVault adapts deps.NewVault(proof) into a backup.VaultStore
+// for the DEFECT-backup-keys-vault-not-read.md fix, or nil on any error
+// (including testBackupDeps's own always-erroring NewVault stub, which
+// every pre-fix backup CLI test relies on). Swallowing a NewVault error
+// here rather than propagating it preserves that entire pre-existing test
+// suite unchanged: nil is manifest.go/integrity.go's documented "fall
+// through to the env var" signal, exactly like a nil CreateSnapshotDeps.
+// Escrow (Deviation 1, S-42.T6's journal) -- never a hard failure.
+func backupOptionalVault(deps backupDeps, proof backup.ElevationProof) backup.VaultStore {
+	if deps.NewVault == nil {
+		return nil
+	}
+	broker, err := deps.NewVault(proof)
+	if err != nil {
+		return nil
+	}
+	return backupVaultStoreAdapter{broker: broker}
+}
+
 func mountBackupCmd(root *cobra.Command) {
 	cmd := newBackupCmd(productionBackupDeps())
 	guardUnknownSubcommands(cmd)

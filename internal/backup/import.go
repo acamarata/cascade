@@ -55,6 +55,13 @@ type ImportOptions struct {
 	// VaultPassphrase unlocks a present vault member. Required only when
 	// the bundle actually carries one.
 	VaultPassphrase string
+	// Vault is the UNRELATED S-42.T6 ceremony seam (optional, nil at a
+	// caller with no elevated broker): resolves the backup age identity's
+	// vault-first, env-fallback custody for decrypting the artifact and
+	// for the internal VerifyIntegrity gate below
+	// (DEFECT-backup-keys-vault-not-read.md) -- never confuse with
+	// VaultImporter above, the restore-side §D-34 leg.
+	Vault VaultStore
 }
 
 // ImportReport summarizes one successful ImportPortable call.
@@ -79,7 +86,7 @@ func ImportPortable(ctx context.Context, proof ElevationProof, opts ImportOption
 	if opts.Dest == nil {
 		return ImportReport{}, cascade.New(cascade.KindInvalidInput, "backup: import requires a non-nil destination target")
 	}
-	identity, err := AgeIdentity()
+	identity, _, err := AgeIdentity(ctx, opts.Vault)
 	if err != nil {
 		return ImportReport{}, err
 	}
@@ -104,7 +111,7 @@ func ImportPortable(ctx context.Context, proof ElevationProof, opts ImportOption
 		rollbackLanded(ctx, opts.Dest, landedKeys)
 		return ImportReport{}, err
 	}
-	if _, _, err := VerifyIntegrity(ctx, GateOptions{Target: opts.Dest, PubKey: opts.PubKey}, id); err != nil {
+	if _, _, err := VerifyIntegrity(ctx, GateOptions{Target: opts.Dest, PubKey: opts.PubKey, Vault: opts.Vault}, id); err != nil {
 		rollbackLanded(ctx, opts.Dest, landedKeys)
 		return ImportReport{}, err
 	}

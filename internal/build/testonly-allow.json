@@ -1496,5 +1496,89 @@
     "expected_caller": "S-38.T2's record-batch receive path, the mirror of Engine.SendBatch",
     "retire_ticket": "P1-E17-W4-S38-T2",
     "caller_site": "internal/sync/receive.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.Modes",
+    "reason": "P1-E41-W9-S79-T2 ships the closed eight-value Mode enum as data. Modes() is the enumeration accessor a config/CLI listing surface would call; this ticket's own scope explicitly excludes eligibility, correlation and utility ranking (AO/S-79.T3), which is the first consumer that needs to enumerate every mode.",
+    "expected_caller": "AO/S-79.T3's eligibility/ranking surface, or a future `cascade fleet mode set` shell-completion list",
+    "retire_ticket": "P1-E41-W9-S79-T3",
+    "caller_site": "internal/fleet/economics/mode.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.NewTables",
+    "reason": "P1-E41-W9-S79-T2 ships Tables as an immutable snapshot type consumed by ApplyOverrides. Its real production caller is the daemon composition root that resolves the live [fleet.economics] overrides before a dispatch decision, which is AO/S-79.T3/T4's scope (this ticket's own NOT IN SCOPE section names both), not T2's.",
+    "expected_caller": "the AO/S-79.T4 dispatch path's config-to-Tables resolution step",
+    "retire_ticket": "P1-E41-W9-S79-T4",
+    "caller_site": "internal/fleet/economics/tables_override.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.ApplyOverrides",
+    "reason": "Same gap as NewTables directly above: ApplyOverrides merges the decoded [fleet.economics] block onto the base table, but the composition root that reads internal/runtime.Config.Economics and calls it is AO/S-79.T3/T4's scope, explicitly excluded from this ticket (NOT IN SCOPE: eligibility, correlation, ranking, atomic reservation).",
+    "expected_caller": "the AO/S-79.T4 dispatch path's config-to-Tables resolution step",
+    "retire_ticket": "P1-E41-W9-S79-T4",
+    "caller_site": "internal/fleet/economics/tables_override.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.UtilityWeights",
+    "reason": "P1-E41-W9-S79-T2 ships the R-21.32 utility-weight table as data. Its consumer is the six-term utility ranking formula, which is AO/S-79.T3's scope by this ticket's own NOT IN SCOPE section (\"eligibility, correlation and utility ranking (AO/S-79.T3)\") -- T2 ships the table, not the formula that reads it.",
+    "expected_caller": "AO/S-79.T3's ranking/eligibility filter",
+    "retire_ticket": "P1-E41-W9-S79-T3",
+    "caller_site": "internal/fleet/economics/tables.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.NewReserver",
+    "reason": "P1-E41-W9-S79-T4 ships the full atomic-reservation pipeline (reserve.go/reserve_teardown.go) fully implemented and tested, including the partial-failure rollback and concurrency proofs, but this same ticket's own wiring work -- internal/jobs/scheduler_admit.go replacing its per-node Admit with economics.Reserve, and the internal/conductor ModelRequest.ReservationID / execute.go dispatch-door / fanout.go WithPermitFn changes -- was not completed in this pass. The construction call site therefore does not exist yet.",
+    "expected_caller": "a new internal/jobs/scheduler_reserve.go, mirroring scheduler_admit.go's own file-per-concern split, which will hold the live *economics.Reserver once this ticket's wiring tasks land",
+    "retire_ticket": "P1-E41-W9-S79-T4",
+    "caller_site": "internal/jobs/scheduler_reserve.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.NewReservationStore",
+    "reason": "Same gap as NewReserver: the ReservationStore is fully implemented and tested over a real modernc-sqlite db, but the composition root that opens the jobs-domain database and constructs the live store (mirroring internal/jobs.NewStore's own daemon-start precedent) has not been wired yet.",
+    "expected_caller": "a new internal/daemon/subsystems_reservation.go, mirroring the existing subsystems_scheduler.go/subsystems_worktree.go per-subsystem split, once P1-E41-W9-S79-T4's wiring tasks land",
+    "retire_ticket": "P1-E41-W9-S79-T4",
+    "caller_site": "internal/daemon/subsystems_reservation.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.ApplyReservationSchema",
+    "reason": "The jobs_reservation MigrationSet is fully implemented and tested (table creation, all four indexes, idempotent re-apply), but no composition root calls it yet because the daemon-start wiring is the same deferred portion of P1-E41-W9-S79-T4 noted on NewReservationStore.",
+    "expected_caller": "the same future internal/daemon/subsystems_reservation.go, beside ApplyJobsSchema's own registration",
+    "retire_ticket": "P1-E41-W9-S79-T4",
+    "caller_site": "internal/daemon/subsystems_reservation.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.ParseReservationState",
+    "reason": "The fail-closed parser is fully implemented and table-tested against the full transition matrix, but its only intended caller is the reservation RPC/CLI surface (`cascade fleet reservation ...` or an equivalent daemon RPC), which is out of this ticket's files_scope and not part of this pass.",
+    "expected_caller": "a future internal/daemon/reservation_rpc.go, mirroring quota_rpc.go's own per-surface split, decoding a wire reservation state",
+    "retire_ticket": "P1-E41-W9-S79-T4",
+    "caller_site": "internal/daemon/reservation_rpc.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.ParseReservationKind",
+    "reason": "Same situation as ParseReservationState: fully implemented and tested, but its caller is the same deferred reservation RPC/CLI surface.",
+    "expected_caller": "the same future internal/daemon/reservation_rpc.go, decoding a wire reservation kind",
+    "retire_ticket": "P1-E41-W9-S79-T4",
+    "caller_site": "internal/daemon/reservation_rpc.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.EstimateFor",
+    "reason": "The R-21.35/R-21.50 token estimate is fully implemented and golden-tested, but its caller is the dispatch path that hydrates a context and builds a ReserveRequest before calling Reserve -- internal/conductor/execute.go's dispatch door, which this pass's deferred wiring did not reach.",
+    "expected_caller": "a future internal/conductor/execute_reserve.go split out of execute.go's dispatch door, building the Estimate for its ReserveRequest before calling economics.Reserve",
+    "retire_ticket": "P1-E41-W9-S79-T4",
+    "caller_site": "internal/conductor/execute_reserve.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.ActualSourceReported",
+    "reason": "The ActualSource enum's second member is exercised by reserve_store_test.go's round-trip proof, but the only production writer of a `reported` value is Reconcile (reserve_actual.go, R-21.121), which is explicitly out of this ticket's delivered scope this pass -- the store persists whatever ActualSource it is given, but nothing yet sets it to `reported`.",
+    "expected_caller": "reserve_actual.go's Reconcile, once built, on receiving a real adapter usage report",
+    "retire_ticket": "P1-E41-W9-S79-T4",
+    "caller_site": "internal/fleet/economics/reserve_actual.go"
+  },
+  {
+    "symbol": "internal/fleet/economics.ReservationSchemaVersion",
+    "reason": "Exported for a future composition root's reader-ceiling max(), matching topology.SchemaVersion's and jobs.SchemaVersion's own already-landed precedent (jobs.SchemaVersion carries an identical testonly-allow entry). No composition root computes that max yet.",
+    "expected_caller": "a future cmd/cascade/daemon_unix_reservation.go split out of daemon_unix_run.go's runtimeReaderCeiling computation, alongside jobs.SchemaVersion and topology.SchemaVersion",
+    "retire_ticket": "P1-E41-W9-S79-T4",
+    "caller_site": "cmd/cascade/daemon_unix_reservation.go"
   }
 ]
