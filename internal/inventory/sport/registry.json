@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T20:32:42Z",
+  "generated_at": "2026-09-13T20:40:06Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4680,6 +4680,12 @@
           "raw": "daemon.status_widget (ADD, P1-E38-W8-S74-T1)."
         },
         {
+          "file": "internal/daemon/status_widget_errors_test.go",
+          "line": 14,
+          "status": "",
+          "raw": "daemon.status_widget (coverage follow-up)."
+        },
+        {
           "file": "internal/daemon/status_widget_peeruid_integration_test.go",
           "line": 41,
           "status": "ADD",
@@ -4688,6 +4694,7 @@
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -19437,7 +19444,7 @@
       ]
     }
   ],
-  "total_sites": 1928,
+  "total_sites": 1929,
   "unspecified_count": 62,
-  "multi_status_count": 38
+  "multi_status_count": 39
 }
