@@ -102,6 +102,15 @@ type StatusWidgetDeps struct {
 	showProjectNames func() bool
 	clock            runtime.Clock
 	seq              atomic.Uint64
+	// jobsCloser closes the second cascade.db connection
+	// openWidgetJobsStore opened for activeJobsCount. Production
+	// (cmd/cascade's withStatusWidgetHandler) discards the returned deps
+	// entirely and relies on process exit to reclaim it (see
+	// openWidgetJobsStore's own doc comment); a test that owns deps
+	// directly must call this on cleanup instead, or its t.TempDir()
+	// store directory outlives the open handle, which os.RemoveAll
+	// refuses on Windows (unlike POSIX, which unlinks happily).
+	jobsCloser func() error
 }
 
 // capacitySnapshot pulls the provider/node sources fresh (nil-safe — see
@@ -247,7 +256,7 @@ func RegisterStatusWidgetHandler(registry *rpc.Registry, store provider.Store, c
 	if store == nil {
 		return nil, nil
 	}
-	activeJobsCount, _, err := openWidgetJobsStore(context.Background(), paths, clock)
+	activeJobsCount, jobsCloser, err := openWidgetJobsStore(context.Background(), paths, clock)
 	if err != nil {
 		return nil, err
 	}
@@ -258,6 +267,7 @@ func RegisterStatusWidgetHandler(registry *rpc.Registry, store provider.Store, c
 		activeJobsCount:  activeJobsCount,
 		showProjectNames: showProjectNames,
 		clock:            clock,
+		jobsCloser:       jobsCloser,
 	}
 
 	// Attention-push trigger: safe to call comp.Snapshot() (via

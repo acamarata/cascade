@@ -56,6 +56,12 @@ func setupStatusWidget(t *testing.T, bus *events.Bus) (*rpc.Registry, *StatusWid
 	if deps == nil {
 		t.Fatal("RegisterStatusWidgetHandler returned a nil deps for a real store")
 	}
+	// Registered after t.TempDir()'s own cleanup (line above), so t.Cleanup's
+	// LIFO order runs this FIRST: the jobs-domain cascade.db connection is
+	// closed before TempDir tries to remove the directory it lives in.
+	// Without this, RemoveAll fails on Windows (open-file delete refusal)
+	// though it passes silently on POSIX, which unlinks an open file.
+	t.Cleanup(func() { _ = deps.jobsCloser() })
 	return registry, deps
 }
 
@@ -113,6 +119,10 @@ func TestStatusWidgetChangedSSE(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RegisterStatusWidgetHandler: %v", err)
 	}
+	// See setupStatusWidget's identical cleanup for why this must be
+	// registered here, after t.TempDir() above: LIFO closes the handle
+	// before TempDir's RemoveAll runs.
+	t.Cleanup(func() { _ = deps.jobsCloser() })
 
 	ctx := context.Background()
 	sub, err := bus.Subscribe(ctx, statusWidgetNamespace, "test-cursor", 8)
