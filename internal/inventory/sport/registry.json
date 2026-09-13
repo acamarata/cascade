@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T17:59:02Z",
+  "generated_at": "2026-09-13T18:32:17Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2552,6 +2552,12 @@
           "raw": "cmd.cascade.cmd.recall (ADD, per T-3 sport_updates)."
         },
         {
+          "file": "cmd/cascade/recall_embedded.go",
+          "line": 26,
+          "status": "",
+          "raw": "cmd.cascade.cmd.recall (FIX, embedded-path routing)."
+        },
+        {
           "file": "cmd/cascade/recall_harness_test.go",
           "line": 13,
           "status": "ADD",
@@ -2571,9 +2577,16 @@
           "status": "ADD",
           "ticket": "T-3",
           "raw": "cmd.cascade.cmd.recall (ADD, per T-3 sport_updates)."
+        },
+        {
+          "file": "cmd/cascade/recall_virgin_home_test.go",
+          "line": 15,
+          "status": "",
+          "raw": "cmd.cascade.cmd.recall (FIX, embedded-path routing test)."
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -11026,6 +11039,12 @@
           "raw": "internal/client (ADD)."
         },
         {
+          "file": "internal/client/socket_path_test.go",
+          "line": 14,
+          "status": "",
+          "raw": "internal/client (FIX, socket path length taxonomy error)."
+        },
+        {
           "file": "internal/client/stream_integration_test.go",
           "line": 11,
           "status": "ADD",
@@ -11053,6 +11072,7 @@
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -19234,7 +19254,7 @@
       ]
     }
   ],
-  "total_sites": 1905,
+  "total_sites": 1908,
   "unspecified_count": 62,
-  "multi_status_count": 35
+  "multi_status_count": 37
 }
