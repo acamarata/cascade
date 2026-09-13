@@ -28,6 +28,7 @@ import (
 	"github.com/acamarata/cascade/internal/retrieval/recall"
 	"github.com/acamarata/cascade/internal/retrieval/rrf"
 	"github.com/acamarata/cascade/internal/rpc"
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -108,6 +109,18 @@ func reencode(v, out any) error {
 }
 
 // run executes the command and returns its stdout, stderr and error.
+//
+// It attaches a live DaemonlessState (Embedded: false) to the context
+// itself: this drives newRecallCmd directly rather than through the full
+// newRootCmd tree, so root.go's PersistentPreRunE never runs and
+// DaemonlessStateFrom would otherwise read back ok=false — which
+// recallQuery (recall_embedded.go) treats as "unknown, default to
+// embedded", per root.go's own rule. This harness's whole reason to exist
+// is the injected Call seam (h.deps's recallDeps.Call): every case here
+// asserts against what THAT seam recorded or returned, so it must always
+// exercise the client branch, never the embedded one that ignores it
+// entirely and reads a real (here, absent or fixture) catalog off disk
+// instead.
 func (h *recallHarness) run(t *testing.T, args ...string) (string, string, error) {
 	t.Helper()
 	cmd := newRecallCmd(h.deps(t))
@@ -126,7 +139,8 @@ func (h *recallHarness) run(t *testing.T, args ...string) (string, string, error
 	cmd.SetArgs(args)
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
-	err := cmd.ExecuteContext(context.Background())
+	ctx := runtime.WithDaemonlessState(context.Background(), runtime.DaemonlessState{Embedded: false})
+	err := cmd.ExecuteContext(ctx)
 	return stdout.String(), stderr.String(), err
 }
 

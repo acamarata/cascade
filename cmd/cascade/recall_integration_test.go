@@ -83,6 +83,16 @@ func startRecallDaemon(t *testing.T) recallDeps {
 }
 
 // runRecallAgainstDaemon executes the real command against the live daemon.
+//
+// It attaches a live DaemonlessState to the context itself: this drives
+// newRecallCmd directly rather than through the full newRootCmd tree, so
+// root.go's PersistentPreRunE never runs and DaemonlessStateFrom would
+// otherwise read back ok=false — which recallQuery (recall_embedded.go)
+// treats as "unknown, default to embedded", per root.go's own rule. Without
+// this, every test below would silently take the embedded path instead of
+// exercising the live daemon startRecallDaemon just stood up, which is
+// exactly what TestRecallCommandUsesClientPathWhenDaemonIsLive exists to
+// catch.
 func runRecallAgainstDaemon(t *testing.T, deps recallDeps, args ...string) (string, error) {
 	t.Helper()
 	cmd := newRecallCmd(deps)
@@ -97,7 +107,9 @@ func runRecallAgainstDaemon(t *testing.T, deps recallDeps, args ...string) (stri
 	cmd.SetArgs(args)
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
-	err := cmd.ExecuteContext(context.Background())
+	ctx := runtime.WithDaemonlessState(context.Background(),
+		runtime.DaemonlessState{Embedded: false, SocketPath: deps.Paths.SocketPath()})
+	err := cmd.ExecuteContext(ctx)
 	return out.String(), err
 }
 
@@ -139,6 +151,38 @@ func TestRecallCommandReachesTheRealDaemon(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), t.TempDir()) || strings.Contains(err.Error(), "/Users") {
 		t.Errorf("the diagnostic carried a machine path: %v", err)
+	}
+}
+
+// TestRecallCommandUsesClientPathWhenDaemonIsLive is DEFECT-recall-no-
+// embedded-path.md's "prove both branches" requirement, the daemon-live
+// half (TestRecallVirginHomeNoIndexNeverDials, cmd/cascade/
+// recall_virgin_home_test.go, is the no-daemon half). It asserts real
+// observable state, not merely that the call returned a plausible error:
+// the embedded path (recall_embedded.go's resolveRecallEmbedded) always
+// creates <DataDir>/retrieval via os.MkdirAll before it does anything
+// else, and deps.Paths here (fakeMemoryPaths{root: sockDir}) is the SAME
+// root the CLI's own recall.query request would resolve socketPath from —
+// a directory NEITHER the real daemon (which uses ITS OWN, separate
+// t.TempDir() paths) NOR a correctly-routed client call ever touches. If
+// the client branch were skipped, that directory would exist afterwards;
+// this proves it does not.
+func TestRecallCommandUsesClientPathWhenDaemonIsLive(t *testing.T) {
+	deps := startRecallDaemon(t)
+	sockDir := filepath.Dir(deps.Paths.SocketPath())
+
+	out, err := runRecallAgainstDaemon(t, deps, "anything", "--scope", "project/cascade")
+	if err == nil {
+		t.Fatalf("an unbuilt index must refuse, not answer:\n%s", out)
+	}
+	if !cascade.HasKind(err, cascade.KindNotFound) {
+		t.Fatalf("err = %v, want the DAEMON's not-found refusal", err)
+	}
+
+	cliLocalDataDir := filepath.Join(sockDir, "data")
+	if _, statErr := os.Stat(cliLocalDataDir); !os.IsNotExist(statErr) {
+		t.Fatalf("%s exists (stat err=%v): the CLI took the EMBEDDED path locally instead of "+
+			"dialing the live daemon this test stood up", cliLocalDataDir, statErr)
 	}
 }
 

@@ -134,8 +134,8 @@ func newRecallCmd(deps recallDeps) *cobra.Command {
 				return err
 			}
 			params.Scope = scope
-			var result recall.QueryResult
-			if err := recallCall(cmd, deps, recall.MethodQuery, params, &result); err != nil {
+			result, err := recallQuery(cmd, deps, params)
+			if err != nil {
 				return err
 			}
 			return recallWriter(cmd).Result(recallView{result: result, cite: params.Cite})

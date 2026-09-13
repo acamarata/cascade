@@ -43,6 +43,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"runtime"
 	"time"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -59,8 +60,44 @@ type DialFunc func(ctx context.Context, socketPath string) (net.Conn, error)
 // domain socket at socketPath. Exported so every command that builds a
 // Client shares one dialer rather than re-deriving the same three lines
 // (cmd/cascade/status.go's productionStatusDeps is its production caller).
+//
+// It refuses a socketPath this platform's sockaddr_un cannot hold BEFORE
+// dialing (DEFECT-recall-no-embedded-path.md's secondary finding): left
+// unchecked, the kernel's own connect(2) fails with a bare "invalid
+// argument" that classifyTransportError's fallback then reports as "daemon
+// not running or unreachable" — true of the symptom, silent about a cause
+// no daemon restart can fix.
 func UnixDialer(ctx context.Context, socketPath string) (net.Conn, error) {
+	if err := unixSocketPathError(socketPath); err != nil {
+		return nil, err
+	}
 	return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
+}
+
+// maxUnixSocketPathBytes is this platform's usable capacity for a unix
+// domain socket path. sockaddr_un.sun_path is a fixed-size byte array that
+// must also hold the path's trailing NUL, so a path AT this many bytes
+// already will not fit: 104 on the BSD family cascade's darwin builds run
+// on, 108 on Linux (T0 measured a 126-byte macOS path failing with
+// "connect: invalid argument" — a HOME nested deep enough to push
+// <HOME>/.cascade/daemon.sock past the limit).
+func maxUnixSocketPathBytes() int {
+	if runtime.GOOS == "darwin" {
+		return 104
+	}
+	return 108
+}
+
+// unixSocketPathError reports the taxonomy error for a socketPath this
+// platform's sockaddr_un cannot hold, or nil when it fits.
+func unixSocketPathError(socketPath string) error {
+	limit := maxUnixSocketPathBytes()
+	if len(socketPath) < limit {
+		return nil
+	}
+	return cascade.Newf(cascade.KindUnavailable,
+		"client: daemon socket path is %d bytes, at or over this platform's %d-byte unix socket path limit: %s",
+		len(socketPath), limit, socketPath)
 }
 
 // rpcPath is the daemon's single JSON-RPC route (internal/rpc.RPCPath).
