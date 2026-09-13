@@ -223,9 +223,14 @@ func TestFSTarget_DeleteEscapingKeyRefused(t *testing.T) {
 
 func TestFSTarget_DeadlineExceededRefusesBeforeIO(t *testing.T) {
 	tgt := newFSTarget(t)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	// A deadline already in the past, rather than a short timeout plus a
+	// sleep: the sleep raced the platform timer granularity, so on a loaded
+	// Windows runner ctx.Err() had not fired yet and Put legitimately
+	// succeeded. Backdating the deadline makes ctx.Err() true at the moment
+	// it is read, on every platform, so this asserts the refusal itself
+	// rather than the scheduler's punctuality.
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer cancel()
-	time.Sleep(5 * time.Millisecond)
 	if err := tgt.Put(ctx, "k", strings.NewReader("v")); !cascade.HasKind(err, cascade.KindTimeout) {
 		t.Fatalf("Put(deadline exceeded) = %v, want KindTimeout", err)
 	}
