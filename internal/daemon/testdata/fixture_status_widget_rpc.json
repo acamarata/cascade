@@ -1,0 +1,16 @@
+{
+  "request": {
+    "id": 1,
+    "jsonrpc": "2.0",
+    "method": "status.widget"
+  },
+  "result": {
+    "active_jobs_count": 0,
+    "attention_count": 0,
+    "generated_at": "2026-09-13T12:00:00Z",
+    "nodes": [],
+    "projects": [],
+    "rows": [],
+    "seq": 0
+  }
+}

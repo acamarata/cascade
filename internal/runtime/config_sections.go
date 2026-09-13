@@ -28,6 +28,9 @@ type configSections struct {
 	// economics is the [fleet.economics] block (P1-E41-W9-S79-T2), same
 	// deviation as fleetAccounts above -- see config_economics.go.
 	economics economicsSection
+	// widget is the [widget] block (P1-E38-W8-S74-T1), same deviation as
+	// fleetAccounts above -- see config_widget.go.
+	widget widgetSection
 }
 
 // parseConfigSections runs each section parser in turn, returning on the
@@ -52,6 +55,9 @@ func parseConfigSections(tree map[string]interface{}, warn func(string, ...inter
 		return configSections{}, err
 	}
 	if s.economics, err = parseEconomicsSection(tree); err != nil {
+		return configSections{}, err
+	}
+	if s.widget, err = parseWidgetSection(tree); err != nil {
 		return configSections{}, err
 	}
 	return s, nil

@@ -105,3 +105,56 @@ extra subscription): `supervisor.attention_added`,
 `supervisor.events_schema`'s response for the full per-kind field list, or
 `internal/rpc/testdata/supervisor-sse-fixture.ndjson` for a captured
 example of all four.
+
+## status.widget and status.widget_changed
+
+`status.widget` is implemented in `internal/daemon` (`status_widget.go`,
+`status_widget_sse.go`, `status_widget_jobs.go`) over its own
+`internal/fleet/capacity.Compositor` instance. It is registered on the
+same method registry every other daemon RPC is, so it is dispatched only
+after the socket-peer-UID check above refuses a non-owner connection.
+
+**`status.widget`** takes optional params `{"scope": <ScopeRef>}` (a
+`ScopeRef` is `{"kind": "...", "id": "..."}`, `internal/context/scope.Ref`
+under the hood — there is no separate `SessionScopeRef` type). When
+`scope` is omitted, the daemon has no per-connection session identity to
+resolve one from (the peer-UID check above is a single-owner boolean, not
+a session/task/project scope — see `internal/fleet/supervision`'s own
+`fleet.attention.list`, whose `own_scope` param is REQUIRED for the same
+reason), so it defaults to the global scope kind.
+
+The response is a `WidgetSnapshot`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `rows` | `WidgetRow[]` | one per provider profile/pool |
+| `attention_count` | int | unacked items in the resolved scope |
+| `active_jobs_count` | int or `null` | `null` only when the daemon has no jobs domain — never a fabricated 0 |
+| `nodes` | `NodePresenceSummary[]` | `{id, presence, reachable, trust_tier}` |
+| `projects` | `ProjectRow[]` or `null` | always `null` today — no production source populates it yet |
+| `generated_at`, `seq` | | `seq` is the same monotonic counter `status.widget_changed` uses |
+
+Each `WidgetRow` carries `ref` (opaque stable id), `label` (neutral
+display label), `kind`, `five_hour`/`seven_day` (`{utilization_pct,
+resets_in}`, both fields `null` together when the source is stale or
+absent — never a fabricated zero), `state`, `reauth_required`, and
+`updated_at`.
+
+**Redaction (always applied, before the response leaves the daemon):**
+every `ref`/`label`/`id` field is scanned for five PII pattern families
+(email, remote URL, absolute path, hostname, `@handle`); a match replaces
+`ref`/`id` with a short stable hash and `label` with the literal
+`"redacted"`. Independently, `[widget].show_project_names` (see
+`config-reference.md`) controls whether `projects[].label` carries the
+real project label or the stable neutral form `"Project 1"`, `"Project
+2"`, ... — the PII scan above still applies on top of either choice.
+
+**`status.widget_changed`** is an SSE event on the same `GET /events`
+stream, under the `"daemon"` namespace (the one namespace the daemon's
+real `/events` endpoint subscribes to — an event published under any
+other namespace is invisible to it, a mistake `fleet.capacity_changed`
+makes today). It fires on two real triggers: a material change in the
+underlying `capacity.Compositor` snapshot, and a push or ack through
+status.widget's own attention-queue reader. The payload is a full,
+redacted `WidgetSnapshot` with an incrementing `seq` for client dedup
+(small enough that a delta encoding is not needed).

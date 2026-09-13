@@ -94,7 +94,8 @@ func platformDaemonRun(ctx context.Context, deps daemonDeps) error {
 	defer cleanupBackground()
 
 	server, manifest, connections, err := buildRPCServer(bus, deps.Clock, logProvider.Logger(), settings, paths, memoryAdmin, store,
-		withPolicyHandlers(pol))
+		withPolicyHandlers(pol),
+		withStatusWidgetHandler(store, deps.Clock, bus, paths, cfg.Widget.ShowProjectNames))
 	if err != nil {
 		return err
 	}

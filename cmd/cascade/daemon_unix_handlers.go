@@ -14,11 +14,13 @@ import (
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/retrieval"
 	"github.com/acamarata/cascade/internal/retrieval/fusion"
 	"github.com/acamarata/cascade/internal/retrieval/recall"
 	"github.com/acamarata/cascade/internal/retrieval/rrf"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 func registerStatusHandler(registry *rpc.Registry, clock runtime.Clock, logger *slog.Logger, settings daemon.Settings) (*daemon.Manifest, *int64) {
@@ -51,17 +53,31 @@ func recallIndexDir(paths runtime.PathProvider) string {
 // end has never heard of recall.query.
 //
 // WHICH LEGS ARE WIRED, stated plainly. The query-time vector leg is
-// registered with no embedder and no vector store, which is the state
-// this build is in: no embedding provider is configured at this
-// composition root yet, and the full-text leg (F/S-10.T2) has not landed.
-// The leg's own contract covers that case — it SKIPS, publishing its
-// unavailability event on the real bus rather than inventing vectors — so
-// a recall here reports that no retrieval leg is available
-// (KindUnavailable) rather than returning an empty result set a user
-// would read as an empty index. Adding a leg is a change to this call.
-func registerRecallHandler(registry *rpc.Registry, paths runtime.PathProvider, bus *events.Bus) error {
+// registered with no embedder and no vector store: no embedding provider
+// is configured at this composition root yet, and the leg's own contract
+// covers that case by SKIPPING rather than inventing vectors. The
+// full-text leg (F/S-10.T2, internal/retrieval.NewLeg) is wired over the
+// SAME store this call's own caller (buildRPCServer) already opened for
+// every other domain's RPC namespace — the identical store
+// RegisterRecallIndexHandler builds recall.index.rebuild's own index
+// over (internal/daemon/recall_index.go's mustIndex) — so a rebuilt index
+// and a live query read the same rows. A nil store (some existing test
+// harnesses' minimal buildRPCServer calls) leaves the full-text leg
+// unregistered rather than reaching into a store that does not exist,
+// the same degradation RegisterRecallIndexHandler already applies. Only
+// once neither leg is configured does a recall here report that no
+// retrieval leg is available (KindUnavailable).
+func registerRecallHandler(registry *rpc.Registry, paths runtime.PathProvider, bus *events.Bus, store provider.Store) error {
 	catalog := recall.NewFileCatalog(filepath.Join(recallIndexDir(paths), recall.CatalogFileName))
-	svc, err := recall.NewService(catalog, rrf.Params{}, fusion.NewVectorLeg(nil, nil, bus))
+	legs := []recall.Leg{fusion.NewVectorLeg(nil, nil, bus)}
+	if store != nil {
+		idx, err := retrieval.NewIndex(store)
+		if err != nil {
+			return err
+		}
+		legs = append(legs, retrieval.NewLeg(idx))
+	}
+	svc, err := recall.NewService(catalog, rrf.Params{}, legs...)
 	if err != nil {
 		return err
 	}

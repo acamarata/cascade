@@ -1,0 +1,70 @@
+{
+  "accounts": [
+    {
+      "account": "acc1",
+      "provider": "anthropic",
+      "email": "user@example.com",
+      "quota_opaque": false,
+      "usage": {
+        "five_hour": {
+          "utilization": 42.5,
+          "resets_at": 1780000000,
+          "resets_in": "2h15m",
+          "status": "available"
+        },
+        "seven_day": {
+          "utilization": 61.0,
+          "resets_at": 1780400000,
+          "resets_in": "3d4h",
+          "status": "available"
+        }
+      }
+    },
+    {
+      "account": "acc2",
+      "provider": "anthropic",
+      "email": "user2@example.com",
+      "quota_opaque": false,
+      "usage": {
+        "five_hour": {
+          "utilization": 95.0,
+          "resets_at": 1780010000,
+          "resets_in": "10m",
+          "status": "constrained"
+        },
+        "seven_day": {
+          "utilization": 70.0,
+          "resets_at": 1780400000,
+          "resets_in": "3d",
+          "status": "available"
+        },
+        "seven_day_opus": {
+          "utilization": 88.0,
+          "resets_at": 1780400000,
+          "resets_in": "3d",
+          "status": "constrained"
+        }
+      }
+    },
+    {
+      "account": "gfp-pool",
+      "provider": "google-flash-free",
+      "email": null,
+      "quota_opaque": true,
+      "usage": {
+        "five_hour": {
+          "utilization": 12.0,
+          "resets_at": 1780005000,
+          "resets_in": "1h",
+          "status": "available"
+        },
+        "seven_day": {
+          "utilization": 20.0,
+          "resets_at": 1780400000,
+          "resets_in": "3d",
+          "status": "available"
+        }
+      }
+    }
+  ]
+}

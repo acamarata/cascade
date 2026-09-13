@@ -196,13 +196,6 @@
     "caller_site": "internal/policy/lane_privacy.go"
   },
   {
-    "symbol": "internal/retrieval.NewLeg",
-    "reason": "The full-text leg satisfies the recall surface's Leg contract exactly (a compile-time assertion in its test proves it) and labels its ranked list with the leg name the ranking core reserved for it. It is not constructed by shipping code for the same reason NewIndex is not: the recall composition root passes only the vector leg today, and adding the full-text leg there means opening the retrieval index in the same change. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "expected_caller": "the daemon's recall composition root, which passes this leg to recall.NewService alongside the vector leg once NewIndex is wired",
-    "retire_ticket": "UNOWNED",
-    "caller_site": "internal/retrieval/composition.go"
-  },
-  {
     "symbol": "internal/policy.NewSameTurnLedger",
     "reason": "The same-turn authorization ledger. It is fed by the AUTHORIZE token parser at the command ingress, which this ticket explicitly does not build, and it is attached to the policy engine, which has no shipping caller yet. NewEngine attaches NoSameTurnAuth in the meantime, which authorizes nothing and is fully wired. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
     "expected_caller": "the ingress that parses an AUTHORIZE token, alongside the composition root that builds the policy engine",
@@ -987,22 +980,15 @@
     "caller_site": "internal/repo/watch.go"
   },
   {
-    "symbol": "internal/fleet/capacity.NewCompositor",
-    "reason": "P1-E31-W6-S63-T1 ships the FleetSnapshot compositor with no daemon-composition-root ticket in files_scope: the downstream consumer (P1-E38-W8-S74-T1, status.widget) was itself filed BLOCKED specifically because these types did not exist yet, and its own journal names this ticket as the unblock step. Compositor is exercised end to end against real registry/nodes/governor shapes in compositor_test.go and rpc_test.go, not through a production caller.",
-    "expected_caller": "cmd/cascade's daemon composition root, constructing one Compositor and calling UpdateProviders/UpdateNodes/UpdateSampler from the real providers registry, nodes RecordStore, and governor Sampler once P1-E38-W8-S74-T1 (or the composition-root wiring ticket it depends on) lands",
-    "retire_ticket": "P1-E38-W8-S74-T1",
-    "caller_site": "cmd/cascade/daemon_capacity_wire.go"
-  },
-  {
     "symbol": "internal/fleet/capacity.RegisterHandlers",
-    "reason": "Binds fleet.capacity to an *rpc.Registry. Mirrors internal/fleet/sessions.RegisterHandlers's identical precedent (same allow-list, same reasoning): every landed daemon RPC method is registered from cmd/cascade's composition root, which this ticket's files_scope does not include. Exercised end to end against a real rpc.Registry.Dispatch in rpc_test.go (TestFleetCapacityRPC, TestFleetCapacityRPC_DaemonNotReady).",
+    "reason": "Binds fleet.capacity to an *rpc.Registry. Mirrors internal/fleet/sessions.RegisterHandlers's identical precedent (same allow-list, same reasoning): every landed daemon RPC method is registered from cmd/cascade's composition root, which this ticket's files_scope does not include. Exercised end to end against a real rpc.Registry.Dispatch in rpc_test.go (TestFleetCapacityRPC, TestFleetCapacityRPC_DaemonNotReady). STATUS NOTE (P1-E38-W8-S74-T1, done, recorded in its journal): that ticket landed status.widget over its OWN separate capacity.Compositor instance (internal/daemon/status_widget.go) and retired capacity.NewCompositor's own entry on that basis, but never calls fleet.capacity's RegisterHandlers itself -- the cascade fleet capacity CLI (cmd/cascade/fleet_capacity.go) dialing this method against a real daemon remains unwired. retire_ticket below is stale (that ticket will not retire this entry); left as the last real assignment pending a T0 re-triage rather than invented here.",
     "expected_caller": "cmd/cascade's daemon composition root, alongside the other registerXxxHandler calls",
     "retire_ticket": "P1-E38-W8-S74-T1",
     "caller_site": "cmd/cascade/daemon_capacity_wire.go"
   },
   {
     "symbol": "internal/fleet/capacity.WireSSE",
-    "reason": "Installs the fleet.capacity_changed SSE mirror onto a Compositor's ChangeFunc. Exercised end to end against a real events.Bus-shaped fake in rpc_test.go (TestFleetCapacitySSEFires: fires within one Compositor tick, monotonic Seq, no-op on a no-change update); the real *events.Bus is constructed only by the daemon composition root.",
+    "reason": "Installs the fleet.capacity_changed SSE mirror onto a Compositor's ChangeFunc. Exercised end to end against a real events.Bus-shaped fake in rpc_test.go (TestFleetCapacitySSEFires: fires within one Compositor tick, monotonic Seq, no-op on a no-change update); the real *events.Bus is constructed only by the daemon composition root. STATUS NOTE (P1-E38-W8-S74-T1, done, recorded in its journal): that ticket found fleet.capacity_changed's own \"fleet\" namespace choice is invisible to the daemon's one real /events subscriber (bound to \"daemon\" only, per internal/rpc/supervisor_sse.go's own NAMESPACE precedent) -- a pre-existing defect recorded in that ticket's journal, not fixed by it, and did not call WireSSE itself. retire_ticket below is stale; left as the last real assignment pending a T0 re-triage rather than invented here.",
     "expected_caller": "cmd/cascade's daemon composition root, alongside RegisterHandlers",
     "retire_ticket": "P1-E38-W8-S74-T1",
     "caller_site": "cmd/cascade/daemon_capacity_wire.go"

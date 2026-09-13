@@ -115,10 +115,28 @@ func withPolicyHandlers(pol *policyWiring) rpcServerOption {
 	}
 }
 
+// withStatusWidgetHandler registers status.widget (P1-E38-W8-S74-T1) the
+// same optional-registration way withPolicyHandlers does — added as an
+// rpcServerOption rather than a new wireFleetAndNodeHandlers parameter so
+// this ticket touches none of that function's other call sites (its own
+// tests included), matching R-16.79's "smallest real change, not a
+// signature ripple" precedent. showProjectNames is read once, at daemon
+// startup, from the already-loaded *runtime.Config
+// (platformDaemonRun's own cfg) — see status_widget.go's own doc comment
+// for why no live config-reload subscription reaches this composition
+// path today (the same disclosed gap [logging]'s hot keys are the one
+// exception to, via LogProvider.SetLevel/Reconfigure).
+func withStatusWidgetHandler(store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider, showProjectNames bool) rpcServerOption {
+	return func(registry *rpc.Registry) error {
+		_, err := daemon.RegisterStatusWidgetHandler(registry, store, clock, bus, paths, func() bool { return showProjectNames })
+		return err
+	}
+}
+
 func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, settings daemon.Settings, paths runtime.PathProvider, memoryAdmin *memory.AdminHandler, store provider.Store, opts ...rpcServerOption) (*http.Server, *daemon.Manifest, *int64, error) {
 	knownEventKind := rpc.CombineKnownEventKind(func(kind events.EventKind) bool {
 		return kind == daemon.EventKindShutdownRequested
-	}, rpc.KnownJobLeaseEventKind, rpc.KnownSupervisorEventKind)
+	}, rpc.KnownJobLeaseEventKind, rpc.KnownSupervisorEventKind, daemon.KnownStatusWidgetEventKind)
 	sse := rpc.NewSSEHandler(bus, "daemon", knownEventKind, clock)
 
 	registry := rpc.NewRegistry()
@@ -139,7 +157,10 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	registerMemoryHandler(registry, paths, clock, bus, memoryAdmin)
 
 	// The recall.* namespace (F/S-11.T3), registered for the same reason.
-	if err := registerRecallHandler(registry, paths, bus); err != nil {
+	// store is threaded through so the full-text leg opens over the same
+	// cascade.db recall.index.rebuild writes into (see
+	// registerRecallHandler's doc comment).
+	if err := registerRecallHandler(registry, paths, bus, store); err != nil {
 		return nil, nil, nil, err
 	}
 

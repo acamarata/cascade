@@ -133,6 +133,8 @@ type Config struct {
 	// Economics is the [fleet.economics] block (P1-E41-W9-S79-T2). Hot --
 	// not in coldSections, so a config.toml edit applies live.
 	Economics economicsSection
+	// Widget is the [widget] block (P1-E38-W8-S74-T1, R-21.200); hot.
+	Widget widgetSection
 	// Extra holds every top-level section other than schema_version,
 	// runtime, and elevation, exactly as decoded from the file: valid
 	// future 08 §3 sections preserved for round-tripping, never
@@ -174,6 +176,7 @@ func (c *Config) EffectiveEntries() []EffectiveEntry {
 	values["runtime.data_dir"] = c.Runtime.DataDir
 	values["elevation.allow_remote"] = c.Elevation.AllowRemote
 	values["elevation.helper_pubkey"] = c.Elevation.HelperPubkey
+	values["widget.show_project_names"] = c.Widget.ShowProjectNames
 	flattenTree(c.Extra, "", values)
 
 	entries := make([]EffectiveEntry, 0, len(values))
@@ -267,6 +270,7 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 		FusionEnabled: sec.fusionEnabled,
 		FleetAccounts: sec.fleetAccounts,
 		Economics:     sec.economics,
+		Widget:        sec.widget,
 		Extra:         extraSections(tree),
 		sources:       sources,
 		rawTree:       tree,

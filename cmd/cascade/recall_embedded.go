@@ -15,6 +15,15 @@
 //	recall.query method dispatches to — so this file adds no second,
 //	independently-maintained fusion or result-shaping path.
 //
+// Also wires internal/retrieval.NewLeg (the full-text leg) into both the
+// daemon and this embedded composition over a real cascade.db, closing
+// the gap FIX-recall-embedded-path.md's own journal recorded as
+// explicitly out of scope: until now no shipped composition root opened
+// a retrieval index, so a real query — daemon or embedded — could never
+// return fused results or a citation, only KindUnavailable once a catalog
+// existed. See openEmbeddedFTSLeg below and
+// daemon_unix_handlers.go's registerRecallHandler for the daemon side.
+//
 // Inputs: the recall.QueryParams RunE already built.
 // Outputs: recall.QueryResult, or a scrubbed taxonomy error.
 //
@@ -23,7 +32,8 @@
 //	(Art.10.3). No platform-specific imports (Art.5) — the FileCatalog
 //	read and Service composition are identical on every OS.
 //
-// SPORT: cmd.cascade.cmd.recall (FIX, embedded-path routing).
+// SPORT: cmd.cascade.cmd.recall (FIX, embedded-path routing; FIX,
+// full-text leg wiring).
 package main
 
 import (
@@ -34,11 +44,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/acamarata/cascade/internal/retrieval"
 	"github.com/acamarata/cascade/internal/retrieval/fusion"
 	"github.com/acamarata/cascade/internal/retrieval/recall"
 	"github.com/acamarata/cascade/internal/retrieval/rrf"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/providers/sqlite"
 )
 
 // recallQuery routes recall.query through the client when the daemonless
@@ -71,7 +83,8 @@ func recallQuery(cmd *cobra.Command, deps recallDeps, params recall.QueryParams)
 // resolveRecallEmbedded builds the identical recall.Service composition
 // registerRecallHandler builds for the daemon (same FileCatalog path
 // convention, same rrf.Params, same fusion.NewVectorLeg with no embedder
-// configured), then calls recall.NewHandler(svc).Query — the exact
+// configured, same internal/retrieval.NewLeg full-text leg over cascade.db
+// once opened), then calls recall.NewHandler(svc).Query — the exact
 // function the daemon's RPC dispatcher calls — so the embedded and daemon
 // paths can never disagree about what one recall means.
 //
@@ -98,7 +111,15 @@ func resolveRecallEmbedded(ctx context.Context, deps recallDeps, params recall.Q
 			"cascade recall: create retrieval index directory")
 	}
 	catalog := recall.NewFileCatalog(filepath.Join(indexDir, recall.CatalogFileName))
-	svc, err := recall.NewService(catalog, rrf.Params{}, fusion.NewVectorLeg(nil, nil, nil))
+
+	ftsLeg, closeStore, err := openEmbeddedFTSLeg(ctx, deps.Paths)
+	if err != nil {
+		return recall.QueryResult{}, err
+	}
+	defer closeStore()
+	legs := []recall.Leg{fusion.NewVectorLeg(nil, nil, nil), ftsLeg}
+
+	svc, err := recall.NewService(catalog, rrf.Params{}, legs...)
 	if err != nil {
 		return recall.QueryResult{}, err
 	}
@@ -116,4 +137,29 @@ func resolveRecallEmbedded(ctx context.Context, deps recallDeps, params recall.Q
 			"cascade recall: embedded handler returned %T, not recall.QueryResult", out)
 	}
 	return result, nil
+}
+
+// openEmbeddedFTSLeg opens cascade.db (its own connection, separate from
+// any daemon process — matching cmd/cascade/doctor_recall_index.go's
+// buildRecallIndexManager and internal/daemon/context_scope.go's "own
+// second connection" precedent) and wraps it in the full-text leg, for a
+// one-shot embedded recall. The caller must invoke the returned closer once
+// it is done with the leg. There is no bootstrap step beyond opening the
+// file: sqlite.Open creates cascade.db when it does not exist yet, and
+// internal/retrieval's schema lives in the driver's own key-value
+// namespace rather than a bespoke migration (fts5_schema.go's recorded
+// contract deviation), so a virgin HOME's first embedded recall opens
+// cleanly with an index that simply holds nothing yet.
+func openEmbeddedFTSLeg(ctx context.Context, paths runtime.PathProvider) (recall.Leg, func(), error) {
+	dbPath := filepath.Join(paths.DataDir(), "cascade.db")
+	driver, err := sqlite.Open(ctx, dbPath)
+	if err != nil {
+		return nil, nil, cascade.Wrap(cascade.KindUnavailable, err, "cascade recall: open cascade.db")
+	}
+	idx, err := retrieval.NewIndex(driver)
+	if err != nil {
+		_ = driver.Close()
+		return nil, nil, err
+	}
+	return retrieval.NewLeg(idx), func() { _ = driver.Close() }, nil
 }

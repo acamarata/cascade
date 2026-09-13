@@ -15,13 +15,18 @@ package main
 // SPORT: cmd.cascade.cmd.recall (FIX, embedded-path routing test).
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/retrieval"
+	"github.com/acamarata/cascade/internal/retrieval/corpus"
+	"github.com/acamarata/cascade/internal/retrieval/recall"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/providers/sqlite"
 )
 
 // TestRecallVirginHomeNoIndexNeverDials is the primary regression proof:
@@ -55,15 +60,22 @@ func TestRecallVirginHomeNoIndexNeverDials(t *testing.T) {
 	}
 }
 
-// TestRecallVirginHomeEmptyIndexNoLegAvailable proves the embedded path
+// TestRecallVirginHomeEmptyIndexMatchesNothing proves the embedded path
 // runs the REAL recall.Service.Query fusion logic end to end, rather than
 // short-circuiting on "no index" alone: with a genuinely built (if empty)
-// catalog present, the answer changes to the leg-availability refusal
-// (KindUnavailable — this build wires no full-text or embedding leg,
-// registerRecallHandler's own doc comment in daemon_unix_handlers.go), the
-// identical answer a live daemon serving the same empty catalog would give.
-// Still never a dial error either way.
-func TestRecallVirginHomeEmptyIndexNoLegAvailable(t *testing.T) {
+// catalog present, the answer is a real, honest empty match ("no
+// results", no error) rather than a leg-availability refusal.
+//
+// This assertion changed from KindUnavailable to "no results" as part of
+// FIX-retrieval-leg-wiring.md: this file's sibling, openEmbeddedFTSLeg
+// (recall_embedded.go), now opens cascade.db and wires
+// internal/retrieval.NewLeg alongside the vector leg on every embedded
+// recall, so a build with an available (if empty) full-text index no
+// longer has "no retrieval leg is available" as a reachable answer here —
+// that refusal now requires the catalog itself to be missing or broken
+// (TestRecallVirginHomeNoIndexNeverDials above), not merely empty. Still
+// never a dial error either way.
+func TestRecallVirginHomeEmptyIndexMatchesNothing(t *testing.T) {
 	virginHome := filepath.Join(t.TempDir(), "never-created", ".cascade")
 	indexDir := filepath.Join(virginHome, "data", "retrieval")
 	if err := os.MkdirAll(indexDir, 0o700); err != nil {
@@ -79,14 +91,93 @@ func TestRecallVirginHomeEmptyIndexNoLegAvailable(t *testing.T) {
 	}
 
 	got, err := execRootProductionVirginHome(t, virginHome, "recall", "gofmt")
-	if err == nil {
-		t.Fatalf("cascade recall against an empty index with no leg configured: got nil error, "+
-			"want the leg-unavailable refusal\noutput:\n%s", got)
+	if err != nil {
+		t.Fatalf("cascade recall against a real, empty index: %v\noutput:\n%s", err, got)
 	}
-	if !cascade.HasKind(err, cascade.KindUnavailable) {
-		t.Fatalf("err = %v, want KindUnavailable (\"no retrieval leg is available\")", err)
+	if strings.Contains(got, "daemon not running") || strings.Contains(got, "dial unix") {
+		t.Fatalf("output = %q, still a dial-error shape, not a real empty match", got)
 	}
-	if strings.Contains(err.Error(), "daemon not running") || strings.Contains(err.Error(), "dial unix") {
-		t.Fatalf("err = %v, still a dial-error shape, not the catalog/leg refusal", err)
+	if !strings.Contains(got, "no results") {
+		t.Fatalf("output = %q, want the real \"no results\" answer an available, empty index gives", got)
+	}
+}
+
+// seedRealRetrievalIndex writes one real chunk into dataDir/cascade.db
+// through the production write path (retrieval.NewIndex.Write) and the
+// matching catalog.json, then releases cascade.db's §D-3 exclusive flock
+// before returning: the embedded path opens its own connection
+// (recall_embedded.go's openEmbeddedFTSLeg), and the real production open
+// call this proves out would itself refuse with a held-lock conflict if
+// the seeding connection were still open.
+func seedRealRetrievalIndex(t *testing.T, dataDir string) corpus.Corpus {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dataDir, "retrieval"), 0o700); err != nil {
+		t.Fatalf("test setup: mkdir: %v", err)
+	}
+
+	c := corpus.Corpus{
+		ID: "handbook", ScopeRef: "project/example",
+		Privacy: corpus.PrivacyProject, Visibility: corpus.VisibilityScopeLocal, Trust: corpus.TrustTrusted,
+	}
+	body := "reciprocal rank fusion combines ranked lists from every retrieval leg"
+	chunk := retrieval.Chunk{
+		ID: retrieval.ChunkID([]byte(body)), Path: "handbook/fusion.md",
+		Content: []byte(body), Lang: "markdown", EndByte: len(body),
+	}
+
+	driver, err := sqlite.Open(context.Background(), filepath.Join(dataDir, "cascade.db"))
+	if err != nil {
+		t.Fatalf("test setup: sqlite.Open: %v", err)
+	}
+	idx, err := retrieval.NewIndex(driver)
+	if err != nil {
+		t.Fatalf("test setup: retrieval.NewIndex: %v", err)
+	}
+	if err := idx.Write(context.Background(), c.ID, []retrieval.Chunk{chunk}); err != nil {
+		t.Fatalf("test setup: Write: %v", err)
+	}
+	if err := driver.Close(); err != nil {
+		t.Fatalf("test setup: close seeding driver: %v", err)
+	}
+
+	catalogDoc := recall.CatalogDoc{
+		Version: recall.CatalogVersion,
+		Corpora: []corpus.Corpus{c},
+		Records: []corpus.Record{{
+			ID: chunk.ID, CorpusID: c.ID, ScopeRef: c.ScopeRef,
+			Privacy: c.Privacy, Visibility: c.Visibility, Trust: c.Trust,
+		}},
+	}
+	raw, err := json.Marshal(catalogDoc)
+	if err != nil {
+		t.Fatalf("test setup: marshal catalog: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "retrieval", recall.CatalogFileName), raw, 0o600); err != nil {
+		t.Fatalf("test setup: write catalog: %v", err)
+	}
+	return c
+}
+
+// TestRecallVirginHomeEmbeddedPathFusesRealHits is
+// FIX-retrieval-leg-wiring.md's end-to-end proof that the embedded
+// composition root (recall_embedded.go's openEmbeddedFTSLeg) answers from
+// a REAL full-text index rather than only ever degrading to "no leg" or
+// "no results": seedRealRetrievalIndex seeds one real chunk, then this
+// drives the real CLI end to end and asserts the corpus that chunk was
+// indexed under appears in the printed table.
+func TestRecallVirginHomeEmbeddedPathFusesRealHits(t *testing.T) {
+	virginHome := filepath.Join(t.TempDir(), "never-created", ".cascade")
+	c := seedRealRetrievalIndex(t, filepath.Join(virginHome, "data"))
+
+	got, err := execRootProductionVirginHome(t, virginHome,
+		"recall", "reciprocal rank fusion", "--scope", string(c.ScopeRef))
+	if err != nil {
+		t.Fatalf("cascade recall against a real index: %v\noutput:\n%s", err, got)
+	}
+	if strings.Contains(got, "no results") {
+		t.Fatalf("real content was indexed under %q but recall reported no results:\n%s", c.ID, got)
+	}
+	if !strings.Contains(got, c.ID) {
+		t.Fatalf("output does not name the indexed corpus %q:\n%s", c.ID, got)
 	}
 }

@@ -21,6 +21,7 @@ a `SIGHUP`, a `cascade config reload`, or an fsnotify-detected write
 | `[retrieval]`, `[memory]`, `[conductor]`, `[notify]`, `[nodes]`, `[sync]`, `[telemetry]`, `[hooks]`, `[governor]`, `[registry]`, `[plugins]`, `[plugins.<name>]` | hot (per 08 §3's table) | **Registered, awaiting their owning ticket.** These sections have no typed consumer anywhere in this tree yet (they live only in `Config.Extra`, the generic preserved map). A change to one of them is accepted into the in-memory `*Config` snapshot, so a subsequent `cascade config get`/`list --effective` sees the new value immediately, but nothing today reads `Config.Extra["retrieval"]` (etc.) to actually change behavior. Calling this "hot-reloaded" without qualification would be an Art.1 violation; it is accurate to say the *snapshot* reloads, not that a *behavior* changes, until each section's owning subsystem ticket lands and starts consuming it through `HotReloader.applyLive`. |
 | `[policy]`, `[secrets]`, `[sync]` (domain classes), `[nodes]` (`trust_tier`), `[conductor]` (external-routing/spill) | hot, but **tightening-only** | Same "snapshot updates, no live consumer yet" caveat as above, and every change is additionally run through the loosening gate (next section) before it is even accepted into the snapshot. |
 | `[elevation]` | **never hot-reloadable, either direction** | A change to `allow_remote` or `helper_pubkey`, tightening or loosening, is unconditionally rejected via hot-reload. Rotating either requires an out-of-band elevated verb with a valid attestation (not shipped in W1); a config.toml edit alone is never sufficient. |
+| `[widget]` | hot (per 08 §3) | **Registered with a real typed consumer** (`status.widget`'s `StatusWidgetDeps.showProjectNames`, `internal/daemon/status_widget.go`), but read exactly once, at daemon composition time (`platformDaemonRun`'s `cfg.Widget.ShowProjectNames`) — the same "snapshot updates, no live-following consumer yet" caveat as the `[retrieval]`/`[memory]`/... row above applies here too: a `config.toml` edit updates what `cascade config get` reports immediately, but a running daemon keeps the value it started with until restarted. |
 
 ## Tightening-only enforcement (the loosening gate)
 
@@ -268,3 +269,17 @@ and read by `internal/daemon`'s `UpgradeManager`. It is allowed-fail by
 design: an unreadable or absent checkpoint is a clean start, never a
 startup error. Actually resuming session state from that checkpoint is
 deferred; see `daemon.md` for the current, recorded scope.
+
+## `[widget]` keys
+
+`show_project_names` is a boolean, default `false` (R-21.200). It governs
+`status.widget`'s per-scope display labels (see `rpc-protocol.md`'s
+`status.widget` section): `false` (the default) has the daemon substitute
+the stable neutral label `"Project 1"`, `"Project 2"`, ... — ordered by
+each project/scope's opaque id — for every project and scope name in the
+response; `true` emits the real, user-chosen display label instead. This
+does not affect `ref`/`id` fields (always opaque) or the unconditional PII
+scrub every row field gets regardless of this setting. Unrecognised keys
+inside `[widget]` are a hard typed error, matching `[fleet.economics]`'s
+validate-before-write behavior rather than `[fleet.accounts]`'s
+per-entry leniency.
