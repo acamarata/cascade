@@ -113,10 +113,10 @@
   },
   {
     "symbol": "internal/memory.NewProjectionJob",
-    "reason": "The projection is the memory store's derived read side. The memory CLI verbs (P1-E07-W2-S13-T3) deliberately do NOT run it: that ticket's recall is a direct file scan, because the indexed, ranked recall surface is the retrieval fusion path in Epic F, which is the query side this projection exists to serve. The forget pipeline (P1-E07-W2-S14-T4) has since landed and CONSUMES this job through an interface, so its ScrubRecord and Orphans methods have a real production caller; what is still missing is the composition root that CONSTRUCTS a job, which is why the constructor is still named here and the daemon's forget reports its index leg as not configured. A projection nothing ever runs indexes nothing, so this entry must not outlive that path.",
-    "expected_caller": "the recall fusion path (Epic F S-11), which queries the rows it writes, and whatever schedules the projection run behind it",
-    "retire_ticket": "P1-E07-W2-S13-T3",
-    "caller_site": "internal/retrieval/recall.go"
+    "reason": "The projection is the memory store's derived read side. The memory CLI verbs (P1-E07-W2-S13-T3) deliberately do NOT run it: memory.recall is a direct file scan and already finds a remembered record on its own (verified against a real binary, T0 2026-09-13). This entry previously named P1-E07-W2-S13-T3 (already DONE) and caller_site internal/retrieval/recall.go (never created) -- an orphaned, invisible exemption of exactly the DEFECT-orphaned-allow-entries-systemic.md shape. Corrected: R-14.65 and R-21.282(c) settle that the bare `cascade recall <query>` surface (F/S-11.T3) never gets a memory leg (\"F/S-11.T3's leg to G/S-13.T2 is struck\"); the projection's real, ticketed consumer is the multi-domain `cascade recall what` fusion surface, P1-E22-W5-S47-T1 (Epic V), which fans out across turns/threads/memories/files via RRF and is UNBUILT as of this writing (no recallwhat.go, no recall.what RPC method, no journal). The forget pipeline (P1-E07-W2-S14-T4) has since landed and CONSUMES this job through an interface, so its ScrubRecord and Orphans methods have a real production caller; what is still missing is the composition root that CONSTRUCTS a job, which is why the constructor is still named here and the daemon's forget reports its index leg as not configured. A projection nothing ever runs indexes nothing, so this entry must not outlive P1-E22-W5-S47-T1.",
+    "expected_caller": "internal/retrieval/recallwhat.go's RecallWhatService (P1-E22-W5-S47-T1, Epic V), which fuses turns/threads/memories/files and is the only ticketed consumer of this projection; NOT the bare `cascade recall` command (F/S-11.T3), whose leg to this projection R-21.282(c) explicitly struck",
+    "retire_ticket": "P1-E22-W5-S47-T1",
+    "caller_site": "internal/retrieval/recallwhat.go"
   },
   {
     "symbol": "internal/memory.NewPromotionLadder",
