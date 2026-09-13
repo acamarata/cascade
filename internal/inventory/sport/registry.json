@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T17:13:06Z",
+  "generated_at": "2026-09-13T17:55:10Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -15111,6 +15111,28 @@
       ]
     },
     {
+      "name": "migration/v1/indexrebuild",
+      "sites": [
+        {
+          "file": "internal/migration/v1/indexrebuild.go",
+          "line": 33,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T2",
+          "raw": "migration/v1/indexrebuild/ADD (P1-E26-W10-S53-T2)."
+        },
+        {
+          "file": "internal/migration/v1/indexrebuild_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T2",
+          "raw": "migration/v1/indexrebuild/ADD (P1-E26-W10-S53-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "migration/v1/memory",
       "sites": [
         {
@@ -15126,6 +15148,35 @@
           "status": "ADD",
           "ticket": "P1-E26-W10-S53-T1",
           "raw": "migration/v1/memory/ADD (P1-E26-W10-S53-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "migration/v1/paritychecker",
+      "sites": [
+        {
+          "file": "internal/migration/v1/paritychecker.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T2",
+          "raw": "migration/v1/paritychecker/ADD (P1-E26-W10-S53-T2)."
+        },
+        {
+          "file": "internal/migration/v1/paritychecker_ratify_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T2",
+          "raw": "migration/v1/paritychecker/ADD (P1-E26-W10-S53-T2)."
+        },
+        {
+          "file": "internal/migration/v1/paritychecker_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T2",
+          "raw": "migration/v1/paritychecker/ADD (P1-E26-W10-S53-T2)."
         }
       ],
       "statuses": [
@@ -19029,7 +19080,7 @@
       ]
     }
   ],
-  "total_sites": 1887,
+  "total_sites": 1892,
   "unspecified_count": 60,
   "multi_status_count": 35
 }
