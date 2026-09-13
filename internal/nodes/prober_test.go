@@ -30,6 +30,32 @@ func newTestRecordStore(t *testing.T) *RecordStore {
 	return NewRecordStore(NewFileRecordBackend(t.TempDir()), newFakeClock())
 }
 
+// awaitProbePasses advances the clock and fires the ticker n times,
+// waiting after each fire for the probe function to actually enter
+// (through probed) instead of sleeping a fixed interval. The old form
+// slept 10ms per pass and assumed the prober goroutine had been scheduled
+// and finished within it; on a loaded CI runner it had not, the streak
+// never reached ProbeMissThreshold, and the assertion failed with
+// presence still "reachable". TestProberTriggerOutOfCycleRunsImmediately
+// in this same file already used this handshake.
+//
+// The caller must still cancel the prober and wait for Run to return
+// before asserting on the store: probed is sent from INSIDE the probe
+// function, so the record write for the final pass happens after it, and
+// Run only returns once that pass has completed.
+func awaitProbePasses(t *testing.T, clock *fakeClock, ticker *fakeTicker, probed <-chan struct{}, n int) {
+	t.Helper()
+	for i := 0; i < n; i++ {
+		clock.advance(15 * time.Second)
+		ticker.fire()
+		select {
+		case <-probed:
+		case <-time.After(10 * time.Second):
+			t.Fatalf("probe pass %d of %d never ran", i+1, n)
+		}
+	}
+}
+
 func TestProberDirectMissesTransitionToUnavailable(t *testing.T) {
 	store := newTestRecordStore(t)
 	if err := store.put(DeviceRecord{NodeID: "n1", Presence: PresenceReachable}); err != nil {
@@ -38,14 +64,14 @@ func TestProberDirectMissesTransitionToUnavailable(t *testing.T) {
 	clock := newFakeClock()
 	ticker := newFakeTicker()
 	bus := &captureBus{}
-	probeCalls := 0
+	probed := make(chan struct{})
 	prober := NewProber(ProberDeps{
 		Records: store,
 		Clock:   clock,
 		Ticker:  ticker,
 		Bus:     bus,
 		Probe: func(_ context.Context, _ DeviceRecord, now time.Time) ProbeOutcome {
-			probeCalls++
+			probed <- struct{}{}
 			return ProbeOutcome{Reachable: false, At: now}
 		},
 	})
@@ -55,18 +81,19 @@ func TestProberDirectMissesTransitionToUnavailable(t *testing.T) {
 	done := make(chan struct{})
 	go func() { prober.Run(ctx); close(done) }()
 
-	for i := 0; i < ProbeMissThreshold; i++ {
-		clock.advance(15 * time.Second)
-		ticker.fire()
-		time.Sleep(10 * time.Millisecond)
-	}
+	awaitProbePasses(t, clock, ticker, probed, ProbeMissThreshold)
 	cancel()
 	<-done
 
-	assertMissesTransitioned(t, store, bus, probeCalls)
+	assertMissesTransitioned(t, store, bus)
 }
 
-func assertMissesTransitioned(t *testing.T, store *RecordStore, bus *captureBus, probeCalls int) {
+// assertMissesTransitioned checks the post-conditions of a full miss
+// streak. It no longer takes a probe-call count: awaitProbePasses
+// receives once per pass and fails the test if any pass does not run, so
+// "the probe actually ran, ProbeMissThreshold times" is already proven
+// before this is reached, and more strictly than a non-zero counter did.
+func assertMissesTransitioned(t *testing.T, store *RecordStore, bus *captureBus) {
 	t.Helper()
 	rec, err := store.Get("n1")
 	if err != nil {
@@ -74,9 +101,6 @@ func assertMissesTransitioned(t *testing.T, store *RecordStore, bus *captureBus,
 	}
 	if rec.Presence != PresenceUnavailable {
 		t.Fatalf("presence = %q, want unavailable after %d misses", rec.Presence, ProbeMissThreshold)
-	}
-	if probeCalls == 0 {
-		t.Fatal("probe function was never called")
 	}
 	found := false
 	for _, e := range bus.published {
@@ -180,9 +204,11 @@ func TestProberRouteCheckedOnlyAtThirdMiss(t *testing.T) {
 		t.Fatal(err)
 	}
 	clock, ticker, checker := newFakeClock(), newFakeTicker(), &fakeRouteChecker{routeOK: true}
+	probed := make(chan struct{})
 	prober := NewProber(ProberDeps{
 		Records: store, Clock: clock, Ticker: ticker, RouteChecker: checker,
 		Probe: func(_ context.Context, _ DeviceRecord, now time.Time) ProbeOutcome {
+			probed <- struct{}{}
 			return ProbeOutcome{Reachable: false, At: now}
 		},
 	})
@@ -190,11 +216,7 @@ func TestProberRouteCheckedOnlyAtThirdMiss(t *testing.T) {
 	done := make(chan struct{})
 	go func() { prober.Run(ctx); close(done) }()
 
-	for i := 0; i < ProbeMissThreshold; i++ {
-		clock.advance(15 * time.Second)
-		ticker.fire()
-		time.Sleep(10 * time.Millisecond)
-	}
+	awaitProbePasses(t, clock, ticker, probed, ProbeMissThreshold)
 	cancel()
 	<-done
 

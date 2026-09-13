@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T08:05:32Z",
+  "generated_at": "2026-09-13T09:17:00Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3746,6 +3746,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/run/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/run_exec_dispatch_test.go",
+          "line": 13,
+          "status": "",
+          "raw": "cmd/cascade/run/TEST (coverage ratchet, cmd/cascade)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -18656,7 +18670,7 @@
       ]
     }
   ],
-  "total_sites": 1850,
-  "unspecified_count": 60,
+  "total_sites": 1851,
+  "unspecified_count": 61,
   "multi_status_count": 34
 }
