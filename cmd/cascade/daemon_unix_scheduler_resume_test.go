@@ -106,6 +106,16 @@ func getJobStateFromDB(t *testing.T, paths fakeMemoryPaths, id string) jobs.JobS
 // in the store -- the DEFECT-scheduler-resume-never-called symptom
 // exactly.
 func TestBuildRPCServer_ResumesStaleRunningJobAtLeased(t *testing.T) {
+	// Art.7.1: buildRPCServer is the PRODUCTION composition root. Its MCP
+	// registration opens this process's vault, which resolves its data
+	// directory from $HOME, not from the PathProvider injected below. On a
+	// host with an OS keychain that selects the keychain and creates
+	// nothing; on linux there is no keychain, custody falls back to the
+	// encrypted file vault, and it CREATES $HOME/.cascade/data/vault.key.
+	// That is invisible on a dev machine and failed CI's redirected-HOME
+	// job every run. Same reason as
+	// TestPlatformDaemonRun_ReturnsOnContextCancel's own redirect.
+	t.Setenv("HOME", t.TempDir())
 	clock := runtime.NewFixedClock(fixedSchedulerResumeE2ENow)
 	paths := fakeMemoryPaths{root: t.TempDir()}
 	seedStaleRunningJobDB(t, paths, "e2e-resume-job-1")
