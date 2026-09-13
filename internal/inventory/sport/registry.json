@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T17:55:10Z",
+  "generated_at": "2026-09-13T17:59:02Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3291,12 +3291,34 @@
           "status": "ADD",
           "ticket": "T-2",
           "raw": "cmd/cascade/daemon (ADD, per T-2 sport_updates; R-14.117 sibling"
+        },
+        {
+          "file": "cmd/cascade/hooks.go",
+          "line": 52,
+          "status": "ADD",
+          "ticket": "P1-E32-W6-S66-T1",
+          "raw": "cmd/cascade/daemon (ADD, P1-E32-W6-S66-T1)."
         }
       ],
       "statuses": [
         "",
         "ADD",
         "CHANGE"
+      ]
+    },
+    {
+      "name": "cmd/cascade/daemon:hooks",
+      "sites": [
+        {
+          "file": "cmd/cascade/hooks_test.go",
+          "line": 12,
+          "status": "",
+          "ticket": "P1-E32-W6-S66-T1",
+          "raw": "cmd/cascade/daemon:hooks (TEST) -- P1-E32-W6-S66-T1."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -5568,6 +5590,57 @@
       ]
     },
     {
+      "name": "fleet/hookpacks.CompletionGateDoctorCheck",
+      "sites": [
+        {
+          "file": "internal/fleet/hookpacks/doctor_check.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E32-W6-S66-T1",
+          "raw": "fleet/hookpacks.CompletionGateDoctorCheck/ADD (P1-E32-W6-S66-T1)."
+        },
+        {
+          "file": "internal/fleet/hookpacks/doctor_check_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E32-W6-S66-T1",
+          "raw": "fleet/hookpacks.CompletionGateDoctorCheck/ADD (P1-E32-W6-S66-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/hookpacks.CompletionHookPayload/CompletionHookResponse",
+      "sites": [
+        {
+          "file": "internal/fleet/hookpacks/completion_gate.go",
+          "line": 49,
+          "status": "",
+          "raw": "fleet/hookpacks.CompletionHookPayload/CompletionHookResponse/"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "fleet/hookpacks.CompletionHookPayload/PolicyGate",
+      "sites": [
+        {
+          "file": "internal/fleet/hookpacks/completion_gate_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E32-W6-S66-T1",
+          "raw": "fleet/hookpacks.CompletionHookPayload/PolicyGate/ADD (P1-E32-W6-S66-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "fleet/hookpacks.HookRegistry",
       "sites": [
         {
@@ -5576,6 +5649,43 @@
           "status": "ADD",
           "ticket": "P1-E12-W3-S24-T4",
           "raw": "fleet/hookpacks.HookRegistry/ADDED (P1-E12-W3-S24-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/hookpacks.JobResolver/ResolveJobID",
+      "sites": [
+        {
+          "file": "internal/fleet/hookpacks/completion_scope.go",
+          "line": 27,
+          "status": "ADD",
+          "ticket": "P1-E32-W6-S66-T1",
+          "raw": "fleet/hookpacks.JobResolver/ResolveJobID/ADD (P1-E32-W6-S66-T1)."
+        },
+        {
+          "file": "internal/fleet/hookpacks/completion_scope_test.go",
+          "line": 4,
+          "status": "ADD",
+          "ticket": "P1-E32-W6-S66-T1",
+          "raw": "fleet/hookpacks.JobResolver/ResolveJobID/ADD (P1-E32-W6-S66-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/hookpacks.ParseCompletionHookPayload",
+      "sites": [
+        {
+          "file": "internal/fleet/hookpacks/completion_gate_fuzz_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E32-W6-S66-T1",
+          "raw": "fleet/hookpacks.ParseCompletionHookPayload/ADD (P1-E32-W6-S66-T1)."
         }
       ],
       "statuses": [
@@ -11340,6 +11450,20 @@
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T3",
           "raw": "internal/daemon (ADD, P1-E29-W6-S59-T3 coverage follow-up)."
+        },
+        {
+          "file": "internal/daemon/supervisor_rpc.go",
+          "line": 39,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S40-T4",
+          "raw": "internal/daemon (ADD, T0-daemon-composition-root; P1-E18-W4-S40-T4)."
+        },
+        {
+          "file": "internal/daemon/supervisor_rpc_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S40-T4",
+          "raw": "internal/daemon (ADD, P1-E18-W4-S40-T4)."
         },
         {
           "file": "internal/daemon/upgrade.go",
@@ -19048,6 +19172,36 @@
       ]
     },
     {
+      "name": "supervisor.rpc_surface",
+      "sites": [
+        {
+          "file": "internal/rpc/supervisor.go",
+          "line": 35,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S40-T4",
+          "raw": "supervisor.rpc_surface/ADDED (P1-E18-W4-S40-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "supervisor.sse_events",
+      "sites": [
+        {
+          "file": "internal/rpc/supervisor_sse.go",
+          "line": 27,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S40-T4",
+          "raw": "supervisor.sse_events/ADDED (P1-E18-W4-S40-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "windows-parity-pass-3",
       "sites": [
         {
@@ -19080,7 +19234,7 @@
       ]
     }
   ],
-  "total_sites": 1892,
-  "unspecified_count": 60,
+  "total_sites": 1905,
+  "unspecified_count": 62,
   "multi_status_count": 35
 }
