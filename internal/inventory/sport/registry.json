@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T10:38:25Z",
+  "generated_at": "2026-09-13T11:07:40Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2674,6 +2674,28 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "cmd.cascade.migrate",
+      "sites": [
+        {
+          "file": "cmd/cascade/migrate.go",
+          "line": 28,
+          "status": "CHANGE",
+          "ticket": "P1-E26-W10-S53-T4",
+          "raw": "cmd.cascade.migrate/CHANGED (P1-E26-W10-S53-T4)."
+        },
+        {
+          "file": "cmd/cascade/migrate_test.go",
+          "line": 6,
+          "status": "CHANGE",
+          "ticket": "P1-E26-W10-S53-T4",
+          "raw": "cmd.cascade.migrate/CHANGED (P1-E26-W10-S53-T4)."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
       ]
     },
     {
@@ -8837,6 +8859,79 @@
       ]
     },
     {
+      "name": "internal.migration.LedgerStore",
+      "sites": [
+        {
+          "file": "internal/migration/ledger.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T4",
+          "raw": "internal.migration.LedgerStore/ADD (P1-E26-W10-S53-T4)."
+        },
+        {
+          "file": "internal/migration/ledger_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T4",
+          "raw": "internal.migration.LedgerStore/ADD (P1-E26-W10-S53-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.migration.MigrateV1",
+      "sites": [
+        {
+          "file": "internal/migration/migrate_cmd.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T4",
+          "raw": "internal.migration.MigrateV1/ADD (P1-E26-W10-S53-T4)."
+        },
+        {
+          "file": "internal/migration/migrate_cmd_resume_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T4",
+          "raw": "internal.migration.MigrateV1/ADD (P1-E26-W10-S53-T4)."
+        },
+        {
+          "file": "internal/migration/migrate_cmd_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T4",
+          "raw": "internal.migration.MigrateV1/ADD (P1-E26-W10-S53-T4)."
+        },
+        {
+          "file": "internal/migration/migrate_cmd_windows_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T4",
+          "raw": "internal.migration.MigrateV1/ADD (P1-E26-W10-S53-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.migration.schema",
+      "sites": [
+        {
+          "file": "internal/migration/schema.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S53-T4",
+          "raw": "internal.migration.schema/ADD (P1-E26-W10-S53-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.notify.Config",
       "sites": [
         {
@@ -11231,6 +11326,13 @@
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T3",
           "raw": "internal/daemon (ADD, P1-E29-W6-S59-T3)."
+        },
+        {
+          "file": "internal/daemon/subsystems_worktree_test.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S59-T3",
+          "raw": "internal/daemon (ADD, P1-E29-W6-S59-T3 coverage follow-up)."
         },
         {
           "file": "internal/daemon/upgrade.go",
@@ -15036,21 +15138,6 @@
       ],
       "statuses": [
         "ADD"
-      ]
-    },
-    {
-      "name": "migration/v1/wiring",
-      "sites": [
-        {
-          "file": "cmd/cascade/migrate.go",
-          "line": 6,
-          "status": "",
-          "ticket": "P1-E26-W10-S53-T1",
-          "raw": "migration/v1/wiring (P1-E26-W10-S53-T1)."
-        }
-      ],
-      "statuses": [
-        ""
       ]
     },
     {
@@ -18935,7 +19022,7 @@
       ]
     }
   ],
-  "total_sites": 1877,
-  "unspecified_count": 61,
+  "total_sites": 1886,
+  "unspecified_count": 60,
   "multi_status_count": 35
 }

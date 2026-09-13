@@ -136,18 +136,27 @@ func TestAdmitBlobWithoutAnyStagedFileFails(t *testing.T) {
 }
 
 func TestBeginStagingRejectsUnwritableDir(t *testing.T) {
-	if os.Getuid() == 0 {
-		t.Skip("root ignores permission bits")
+	// This test denies write access to a directory and asserts BeginStaging
+	// refuses to create its staging subdirectory under it. root ignores
+	// permission bits entirely, so the denial never takes effect and the
+	// assertion would fail for a reason unrelated to the code under test.
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: permission bits do not restrict root, so this case cannot be exercised")
 	}
-	parent := t.TempDir()
-	locked := filepath.Join(parent, "locked")
-	if err := os.MkdirAll(locked, 0o500); err != nil {
-		t.Fatalf("mkdir locked: %v", err)
-	}
+	// makeDirGenuinelyUnwritable (dirunwritable_unix_test.go /
+	// dirunwritable_windows_test.go) applies a real, platform-appropriate
+	// write denial: POSIX chmod on unix, an explicit DACL DENY ACE on
+	// Windows, where os.Chmod only toggles a cosmetic
+	// FILE_ATTRIBUTE_READONLY that never blocks writes into a directory.
+	// The Windows helper proves the denial actually took effect by
+	// attempting a real write before returning, so this test cannot pass
+	// for the wrong reason.
+	locked := t.TempDir()
+	makeDirGenuinelyUnwritable(t, locked)
 	addr := ContentAddress(blake3.Sum256([]byte("x")))
 	dir := filepath.Join(locked, "staging")
 	if err := BeginStaging(dir, addr, 1); err == nil {
-		t.Fatal("BeginStaging under a read-only parent must fail")
+		t.Fatal("BeginStaging under a genuinely unwritable parent must fail")
 	}
 }
 
