@@ -55,6 +55,22 @@ func init() {
 // can inject a fake without touching the real environment (Art.7.1).
 type pathResolver func() (runtime.PathProvider, error)
 
+// rpcDoer is the minimal seam every cascadepa_*_wiring.go adapter needs
+// from *internal/client.Client: one JSON-RPC round trip. *client.Client
+// already satisfies this (its Do method has this identical shape), so
+// returning rpcDoer from each file's rpcClient() method is a pure
+// narrowing, never a behavior change. It exists so a unit test can
+// substitute a fake round trip and prove each adapter method's SUCCESS
+// mapping: internal/plugins is not on the egress ruling's allowed-"net"-
+// importer list (internal/build/egress_allow.go), and internal/build's
+// Art.7.2 gate bars "net"/"net/http" from every untagged _test.go file,
+// so no unit-lane test can reach a success response through a real
+// socket. The doer field below defaults to nil in every production
+// constructor; only a same-package test ever sets it.
+type rpcDoer interface {
+	Do(ctx context.Context, method string, params, out any) error
+}
+
 // cascadePAClient adapts internal/client's unix-socket JSON-RPC transport
 // to plugins/cascade-pa/cmd.Client. Path resolution is deferred to each
 // call, never performed at init time, so importing this package (and thus
@@ -63,6 +79,9 @@ type cascadePAClient struct {
 	dial         client.DialFunc
 	timeout      time.Duration
 	resolvePaths pathResolver
+	// doer, when non-nil, replaces the real rpcClient() construction --
+	// see rpcDoer's own doc comment. Always nil in production.
+	doer rpcDoer
 }
 
 // newCascadePAClient builds a cascadePAClient from its three collaborators,
@@ -116,7 +135,10 @@ var errReplyGenerationUnavailable = cascade.New(cascade.KindUnsupported,
 // KindUnavailable rather than panicking -- the real environment can always
 // fail to resolve a home directory, and this call happens per-request, at
 // invocation time, never at import/construction time.
-func (c *cascadePAClient) rpcClient() (*client.Client, error) {
+func (c *cascadePAClient) rpcClient() (rpcDoer, error) {
+	if c.doer != nil {
+		return c.doer, nil
+	}
 	paths, err := c.resolvePaths()
 	if err != nil {
 		return nil, cascade.Wrap(cascade.KindUnavailable, err, "cascade chat: resolve daemon socket path")

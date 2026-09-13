@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T06:55:32Z",
+  "generated_at": "2026-09-13T08:05:32Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2118,6 +2118,21 @@
       ]
     },
     {
+      "name": "cmd.cascade.backup-export/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/backup_export_passphrase_test.go",
+          "line": 6,
+          "status": "",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-export/TEST (P1-E19-W4-S42-T3)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd.cascade.backup-import",
       "sites": [
         {
@@ -2147,6 +2162,21 @@
       ]
     },
     {
+      "name": "cmd.cascade.backup-import/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/backup_import_options_test.go",
+          "line": 7,
+          "status": "",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-import/TEST (P1-E19-W4-S42-T3)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd.cascade.backup-key",
       "sites": [
         {
@@ -2173,6 +2203,21 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd.cascade.backup-key/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/backup_key_passphrase_test.go",
+          "line": 7,
+          "status": "",
+          "ticket": "P1-E19-W4-S42-T6",
+          "raw": "cmd.cascade.backup-key/TEST (P1-E19-W4-S42-T6)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -2256,6 +2301,21 @@
       ]
     },
     {
+      "name": "cmd.cascade.backup-store/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/backup_store_unix_test.go",
+          "line": 11,
+          "status": "",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup-store/TEST (P1-E19-W4-S42-T3)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd.cascade.backup-target",
       "sites": [
         {
@@ -2304,6 +2364,28 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd.cascade.backup/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/backup_adapters_test.go",
+          "line": 11,
+          "status": "",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup/TEST (P1-E19-W4-S42-T3/T4)."
+        },
+        {
+          "file": "cmd/cascade/backup_deps_test.go",
+          "line": 7,
+          "status": "",
+          "ticket": "P1-E19-W4-S42-T3",
+          "raw": "cmd.cascade.backup/TEST (P1-E19-W4-S42-T3)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -2522,6 +2604,188 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd.cascade.fleet-attention/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/fleet_attention_client_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "cmd.cascade.fleet-attention/TEST (fleet attention composition root)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd.cascade.fleet-jobs/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/fleet_jobs_client_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "cmd.cascade.fleet-jobs/TEST (fleet jobs client composition root)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd.cascade.fleet-top/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/fleet_top_client_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "cmd.cascade.fleet-top/TEST (fleet top composition root)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd.cascade.fleet-watch/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/fleet_watch_render_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "cmd.cascade.fleet-watch/TEST (fleet watch render path)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd.cascade.memory-soul/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/memory_soul_editor_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd.cascade.memory-soul/TEST (memory soul edit ceremony)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd.cascade.migrate/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/migrate_factory_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "cmd.cascade.migrate/TEST (migrate v1 composition root)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd.cascade.node-serve/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/node_serve_deps_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "cmd.cascade.node-serve/TEST (node serve composition root)."
+        },
+        {
+          "file": "cmd/cascade/node_serve_heartbeat_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "cmd.cascade.node-serve/TEST (node serve heartbeat wiring)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd.cascade.node-upgrade/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/node_upgrade_dialer_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "cmd.cascade.node-upgrade/TEST (node upgrade dialer composition)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd.cascade.run/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/run_deps_test.go",
+          "line": 6,
+          "status": "",
+          "ticket": "P1-E11-W3-S23-T1",
+          "raw": "cmd.cascade.run/TEST (P1-E11-W3-S23-T1)."
+        },
+        {
+          "file": "cmd/cascade/run_exec_paths_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E11-W3-S23-T1",
+          "raw": "cmd.cascade.run/TEST (P1-E11-W3-S23-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd.cascade.vault-audit/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/vault_audit_store_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "cmd.cascade.vault-audit/TEST (vault audit composition root)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd.cascade.vault/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/vault_deps_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "cmd.cascade.vault/TEST (vault composition root)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd.cascade/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/misc_adapters_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "cmd.cascade/TEST (composition-root adapter coverage)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -3011,6 +3275,21 @@
         "",
         "ADD",
         "CHANGE"
+      ]
+    },
+    {
+      "name": "cmd/cascade/daemon:jobs-rpc-adapters",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_jobs_rpc_test.go",
+          "line": 16,
+          "status": "",
+          "ticket": "P1-E29-W6-S60-T1",
+          "raw": "cmd/cascade/daemon:jobs-rpc-adapters (TEST) -- P1-E29-W6-S60-T1."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -10663,6 +10942,13 @@
           "raw": "internal/daemon (ADD, merge-fix for P1-E29-W6-S59-T5)."
         },
         {
+          "file": "internal/daemon/subsystems_scheduler_events_test.go",
+          "line": 13,
+          "status": "",
+          "ticket": "P1-E29-W6-S59-T5",
+          "raw": "internal/daemon (TEST, merge-fix for P1-E29-W6-S59-T5)."
+        },
+        {
           "file": "internal/daemon/subsystems_scheduler_resume_test.go",
           "line": 12,
           "status": "",
@@ -10806,6 +11092,21 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal/daemon:node-upgrade-rpc",
+      "sites": [
+        {
+          "file": "internal/daemon/node_upgrade_rpc_test.go",
+          "line": 9,
+          "status": "",
+          "ticket": "P1-E17-W4-S36-T5",
+          "raw": "internal/daemon:node-upgrade-rpc (TEST) -- P1-E17-W4-S36-T5."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -12294,9 +12595,17 @@
           "status": "ADD",
           "ticket": "P1-E22-W5-S47-T4",
           "raw": "internal/plugins:cascadepa-review-wiring (ADD) — P1-E22-W5-S47-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_review_wiring_test.go",
+          "line": 11,
+          "status": "",
+          "ticket": "P1-E22-W5-S47-T4",
+          "raw": "internal/plugins:cascadepa-review-wiring (TEST) -- P1-E22-W5-S47-T4."
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -12309,15 +12618,29 @@
           "status": "ADD",
           "ticket": "P1-E22-W5-S47-T3",
           "raw": "internal/plugins:cascadepa-soul-wiring (ADD) — P1-E22-W5-S47-T3."
+        },
+        {
+          "file": "internal/plugins/cascadepa_soul_wiring_test.go",
+          "line": 11,
+          "status": "",
+          "ticket": "P1-E22-W5-S47-T3",
+          "raw": "internal/plugins:cascadepa-soul-wiring (TEST) -- P1-E22-W5-S47-T3."
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
     {
       "name": "internal/plugins:cascadepa-wiring",
       "sites": [
+        {
+          "file": "internal/plugins/cascadepa_rpc_success_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "internal/plugins:cascadepa-wiring (TEST) -- closes the ratchet"
+        },
         {
           "file": "internal/plugins/cascadepa_wiring.go",
           "line": 43,
@@ -13542,6 +13865,21 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal/secrets:import-atomic",
+      "sites": [
+        {
+          "file": "internal/secrets/import_atomic_test.go",
+          "line": 22,
+          "status": "",
+          "ticket": "P1-E26-W10-S53-T1",
+          "raw": "internal/secrets:import-atomic (TEST) -- P1-E26-W10-S53-T1."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -18318,7 +18656,7 @@
       ]
     }
   ],
-  "total_sites": 1823,
-  "unspecified_count": 40,
-  "multi_status_count": 32
+  "total_sites": 1850,
+  "unspecified_count": 60,
+  "multi_status_count": 34
 }

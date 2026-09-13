@@ -43,13 +43,20 @@ type cascadePAReviewClient struct {
 	dial         client.DialFunc
 	timeout      time.Duration
 	resolvePaths pathResolver
+	// doer, when non-nil, replaces the real rpcClient() construction --
+	// see cascadepa_wiring.go's rpcDoer doc comment. Always nil in
+	// production.
+	doer rpcDoer
 }
 
 func newCascadePAReviewClient(dial client.DialFunc, timeout time.Duration, resolvePaths pathResolver) *cascadePAReviewClient {
 	return &cascadePAReviewClient{dial: dial, timeout: timeout, resolvePaths: resolvePaths}
 }
 
-func (c *cascadePAReviewClient) rpcClient() (*client.Client, error) {
+func (c *cascadePAReviewClient) rpcClient() (rpcDoer, error) {
+	if c.doer != nil {
+		return c.doer, nil
+	}
 	paths, err := c.resolvePaths()
 	if err != nil {
 		return nil, wrapReviewPathFailure(err)

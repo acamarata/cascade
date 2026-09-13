@@ -77,6 +77,23 @@ func deadPid(t *testing.T) int {
 // internally (daemon_unix.go); this test never constructs one and passes
 // it in, so a passing test proves reachability from the real entry point,
 // not a component test's ability to drive DomainRegistry directly.
+//
+// Cancel once the daemon is actually SERVING, not after a fixed
+// wall-clock delay -- same fix as TestPlatformDaemonRun_ReturnsOnContextCancel
+// (daemon_unix_run_test.go), applied here for the identical reason. This
+// test's own fixed 300ms budget bounded the WHOLE startup sequence
+// (config load, store open, the recovery scan's publish, resume scan,
+// background subsystems, RPC server build) rather than just "how long do
+// we let the daemon serve before asking it to stop". Under -race, or once
+// startup grew heavier (worktree sweep, jobs RPC, scheduler resume all
+// now run in this same path), that budget can expire mid-recovery: the
+// scan's publishRecoveryEvent write gets cancelled by the SAME context
+// whose deadline was meant to bound total run time, and platformDaemonRun
+// returns an error instead of the clean nil this test asserts. That is
+// the host/scheduling speed leaking into the test's result, not a defect
+// in the recovery path itself -- the lock-cleanup assertion below is
+// unaffected either way, since recovery runs and commits before the
+// daemon ever starts serving.
 func TestPlatformDaemonRun_OrphanedAdvisoryLock_CleanedUpByProductionPath(t *testing.T) {
 	// Art.7.1: this drives the PRODUCTION path, which resolves its data
 	// directory from $HOME and opens the vault there. On a host with an OS
@@ -98,8 +115,18 @@ func TestPlatformDaemonRun_OrphanedAdvisoryLock_CleanedUpByProductionPath(t *tes
 	}
 	closeSeed() // release the flock before platformDaemonRun opens the same file
 
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	go func() {
+		deadline := time.Now().Add(30 * time.Second)
+		for time.Now().Before(deadline) {
+			if socketDialable(paths.SocketPath()) {
+				break
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		cancel()
+	}()
 	if err := platformDaemonRun(ctx, deps); err != nil {
 		t.Fatalf("platformDaemonRun: %v", err)
 	}

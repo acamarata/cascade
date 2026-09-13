@@ -124,8 +124,17 @@ func TestFleetTopErrors_AreActionable(t *testing.T) {
 }
 
 // TestSessionListerAdapter_MapsRows proves the daemon-record-to-view-row
-// mapping used by both --once and the interactive path.
+// mapping used by both --once and the interactive path. Self-skips on
+// Windows: sessions.Client.List (internal/fleet/sessions/rpc.go) refuses
+// with ErrWindowsTier2Unavailable before ever calling the injected
+// RPCCaller there (tier-2 has no daemon at all), so on that GOOS this
+// test's fakeRPCCaller is never reached and there is no mapping to prove
+// — TestSessionsListClient_WindowsTier2Refusal (rpc_test.go) already
+// covers that refusal itself, for real, on a Windows CI lane.
 func TestSessionListerAdapter_MapsRows(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("sessions.Client.List refuses before the RPCCaller on windows tier-2; see rpc.go")
+	}
 	adapter := sessionListerAdapter{
 		inner: sessions.NewClient(fakeRPCCaller{
 			result: []sessions.SessionRecord{

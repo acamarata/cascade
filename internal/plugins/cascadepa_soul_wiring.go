@@ -55,13 +55,20 @@ type cascadePASoulClient struct {
 	dial         client.DialFunc
 	timeout      time.Duration
 	resolvePaths pathResolver
+	// doer, when non-nil, replaces the real rpcClient() construction --
+	// see cascadepa_wiring.go's rpcDoer doc comment. Always nil in
+	// production.
+	doer rpcDoer
 }
 
 func newCascadePASoulClient(dial client.DialFunc, timeout time.Duration, resolvePaths pathResolver) *cascadePASoulClient {
 	return &cascadePASoulClient{dial: dial, timeout: timeout, resolvePaths: resolvePaths}
 }
 
-func (c *cascadePASoulClient) rpcClient() (*client.Client, error) {
+func (c *cascadePASoulClient) rpcClient() (rpcDoer, error) {
+	if c.doer != nil {
+		return c.doer, nil
+	}
 	paths, err := c.resolvePaths()
 	if err != nil {
 		return nil, cascade.Wrap(cascade.KindUnavailable, err, "cascade chat: /soul edit: resolve daemon socket path")
