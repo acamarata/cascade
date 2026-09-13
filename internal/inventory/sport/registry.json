@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T19:34:03Z",
+  "generated_at": "2026-09-13T20:11:22Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2430,7 +2430,7 @@
       "sites": [
         {
           "file": "cmd/cascade/memory.go",
-          "line": 29,
+          "line": 33,
           "status": "ADD",
           "ticket": "T-3",
           "raw": "cmd.cascade.cmd.memory (ADD, per T-3 sport_updates)."
@@ -2441,6 +2441,18 @@
           "status": "CHANGE",
           "ticket": "P1-E07-W2-S14-T3",
           "raw": "cmd.cascade.cmd.memory (CHANGED, P1-E07-W2-S14-T3)."
+        },
+        {
+          "file": "cmd/cascade/memory_embedded.go",
+          "line": 40,
+          "status": "",
+          "raw": "cmd.cascade.cmd.memory (FIX, embedded-path routing)."
+        },
+        {
+          "file": "cmd/cascade/memory_embedded_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd.cascade.cmd.memory (TEST, embedded-path routing)."
         },
         {
           "file": "cmd/cascade/memory_forget_test.go",
@@ -2476,9 +2488,16 @@
           "status": "ADD",
           "ticket": "T-3",
           "raw": "cmd.cascade.cmd.memory (ADD, per T-3 sport_updates)."
+        },
+        {
+          "file": "cmd/cascade/memory_virgin_home_test.go",
+          "line": 13,
+          "status": "",
+          "raw": "cmd.cascade.cmd.memory (FIX, embedded-path routing test)."
         }
       ],
       "statuses": [
+        "",
         "ADD",
         "CHANGE"
       ]
@@ -3828,10 +3847,16 @@
         },
         {
           "file": "cmd/cascade/run_exec.go",
-          "line": 23,
+          "line": 31,
           "status": "ADD",
           "ticket": "P1-E11-W3-S23-T1",
           "raw": "cmd/cascade/run (ADD, P1-E11-W3-S23-T1/T3)."
+        },
+        {
+          "file": "cmd/cascade/run_exec_daemonless_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade/run (FIX, daemonless refusal)."
         },
         {
           "file": "cmd/cascade/run_exec_output_test.go",
@@ -3856,6 +3881,7 @@
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -3878,10 +3904,16 @@
       "sites": [
         {
           "file": "cmd/cascade/status.go",
-          "line": 26,
+          "line": 34,
           "status": "CHANGE",
           "ticket": "T-3",
           "raw": "cmd/cascade/status (CHANGE, per T-3 sport_updates — routed"
+        },
+        {
+          "file": "cmd/cascade/status_daemonless_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade/status (FIX, daemonless refusal)."
         },
         {
           "file": "cmd/cascade/status_integration_test.go",
@@ -3899,6 +3931,7 @@
         }
       ],
       "statuses": [
+        "",
         "ADD",
         "CHANGE"
       ]
@@ -4252,6 +4285,42 @@
           "status": "ADD",
           "ticket": "P1-E11-W3-S22-T4",
           "raw": "conductor.task-classes/ADD (P1-E11-W3-S22-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "conductor.usage-attribution",
+      "sites": [
+        {
+          "file": "internal/conductor/usage.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E11-W3-S23-T4",
+          "raw": "conductor.usage-attribution/ADD (P1-E11-W3-S23-T4)."
+        },
+        {
+          "file": "internal/conductor/usage_migration.go",
+          "line": 48,
+          "status": "ADD",
+          "ticket": "P1-E11-W3-S23-T4",
+          "raw": "conductor.usage-attribution/ADD (P1-E11-W3-S23-T4)."
+        },
+        {
+          "file": "internal/conductor/usage_migration_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E11-W3-S23-T4",
+          "raw": "conductor.usage-attribution/ADD (P1-E11-W3-S23-T4)."
+        },
+        {
+          "file": "internal/conductor/usage_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E11-W3-S23-T4",
+          "raw": "conductor.usage-attribution/ADD (P1-E11-W3-S23-T4)."
         }
       ],
       "statuses": [
@@ -19368,7 +19437,7 @@
       ]
     }
   ],
-  "total_sites": 1919,
+  "total_sites": 1928,
   "unspecified_count": 62,
-  "multi_status_count": 37
+  "multi_status_count": 38
 }
