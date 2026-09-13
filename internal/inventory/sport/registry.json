@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T11:07:40Z",
+  "generated_at": "2026-09-13T17:13:06Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5442,6 +5442,13 @@
         {
           "file": "internal/fleet/economics/reserve_migration.go",
           "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E41-W9-S79-T4",
+          "raw": "fleet/economics/reservation/ADD (P1-E41-W9-S79-T4)."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_permit.go",
+          "line": 18,
           "status": "ADD",
           "ticket": "P1-E41-W9-S79-T4",
           "raw": "fleet/economics/reservation/ADD (P1-E41-W9-S79-T4)."
@@ -19022,7 +19029,7 @@
       ]
     }
   ],
-  "total_sites": 1886,
+  "total_sites": 1887,
   "unspecified_count": 60,
   "multi_status_count": 35
 }
