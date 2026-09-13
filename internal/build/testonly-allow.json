@@ -1580,5 +1580,33 @@
     "expected_caller": "a future cmd/cascade/daemon_unix_reservation.go split out of daemon_unix_run.go's runtimeReaderCeiling computation, alongside jobs.SchemaVersion and topology.SchemaVersion",
     "retire_ticket": "P1-E41-W9-S79-T4",
     "caller_site": "cmd/cascade/daemon_unix_reservation.go"
+  },
+  {
+    "symbol": "internal/migration/v1.RebuildIndex",
+    "reason": "P1-E26-W10-S53-T2 builds the real F/S-10+F/S-11 recall-index rebuild over migrated content, composed exactly like cmd/cascade/doctor_recall_index.go's buildRecallIndexManager (same cascade.db path, same lifecycle.Manager, same git-tree-hash pattern). The sprint's own CLI command (cmd/cascade/migrate.go, P1-E26-W10-S53-T4) already landed in e72e15d and depends only on S-53.T1 and P1-E02-W1-S02-T3, never on this ticket, and this ticket's files_scope covers only internal/migration/v1/* plus docs/migration-guide.md, not cmd/cascade/migrate.go. RebuildIndex is fully implemented and tested end to end (TestRebuildIndex, TestRebuildIndex_Idempotent, TestRebuildIndex_EmptyRoot) against a real sqlite-backed FTS5 index; only its call site is missing.",
+    "expected_caller": "a new cmd/cascade/migrate_recall_index.go, split out the way doctor_recall_index.go already is, calling RebuildIndex from runMigrateV1 after the S-53.T1 importers complete; retire this entry once a ticket adds that file and call",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "cmd/cascade/migrate_recall_index.go"
+  },
+  {
+    "symbol": "internal/migration/v1.NewParityChecker",
+    "reason": "Golden-parity checking (TestParityChecker_GoldenCoverage and its siblings, all real end to end over the rebuilt index) is, by design, CI-gate infrastructure over this package's own testdata/v1-goldens/recall fixtures \u2014 the same shape as internal/retrieval/eval's LoadCorpus/RunKnownItem (R-16.9's CI-only evaluation harness, also testonly-allow-exempted in this file): its fixtures live under a relative testdata path that only resolves from this package's own directory, so it is not a function a shipped, installed binary could call against a real user's migration. No 07-CLI-COMMAND-TREE.md verb exists for it and none is proposed.",
+    "expected_caller": "none by design; this package's own CI-gate test suite (TestParityChecker_GoldenCoverage) is the sole intended caller, matching internal/retrieval/eval's precedent",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/migration/v1/paritycheck_verb.go"
+  },
+  {
+    "symbol": "internal/migration/v1.LoadGoldenQueries",
+    "reason": "Same CI-only golden-parity harness as NewParityChecker in this file; loads the queries.json fixture the checker scores against.",
+    "expected_caller": "same as internal/migration/v1.NewParityChecker",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/migration/v1/paritycheck_verb.go"
+  },
+  {
+    "symbol": "internal/migration/v1.LoadDivergenceLedger",
+    "reason": "Same CI-only golden-parity harness as NewParityChecker in this file; loads the ratified-divergence ledger the checker's tripwire pattern reads.",
+    "expected_caller": "same as internal/migration/v1.NewParityChecker",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/migration/v1/paritycheck_verb.go"
   }
 ]

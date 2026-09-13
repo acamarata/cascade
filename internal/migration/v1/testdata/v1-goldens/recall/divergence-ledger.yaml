@@ -1,0 +1,13 @@
+# Divergence ledger for the recall golden set (R-14.82 tripwire pattern).
+#
+# Every row here names a query whose rebuilt v2 result set did not exactly
+# match its v1 golden hashes, why the difference is accepted, and the
+# ticket that ratified it. TestParityChecker_GoldenCoverage fails on any
+# unratified divergence; a row here is the only way to make a divergence
+# pass, and adding one is a deliberate, reviewed decision, never a fix for
+# a failing test.
+#
+# Currently empty: the three golden queries in queries.json report exact
+# 100% top-k coverage against the rebuilt index, so no divergence has ever
+# needed ratifying.
+[]

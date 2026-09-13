@@ -98,3 +98,27 @@ an empty mutation delta. Existing-wins and unchanged rows remain visible in the
 result but are not counted as mutations. Dry runs use the same parsers, store
 lookups, conflict checks, and validation as live runs while performing zero
 writes.
+
+## Recall index rebuild and golden parity
+
+After memory content lands in its v2 destination, `internal/migration/v1`'s
+`RebuildIndex` re-runs the same chunk/FTS5/vector index build the retrieval
+system's own `recall index rebuild` verb uses (F/S-10 chunking, F/S-11 write
+and verify), pointed at the migrated content's directories instead of the
+retrieval config's normal registered sources. It calls no new ingest or
+chunking logic of its own; it composes the existing chunkers and
+`internal/retrieval/lifecycle.Manager` exactly as
+`cmd/cascade/doctor_recall_index.go`'s `buildRecallIndexManager` already does,
+then verifies the result the same way `cascade doctor` does. The rebuild is
+idempotent: re-running it over an unchanged migrated tree writes no new
+entries and deletes none.
+
+`ParityChecker`, alongside it in the same package, is CI-gate infrastructure,
+not a runtime tool: it runs a small set of golden recall queries — harvested
+from a real, self-hosted v1 installation's own retrieval index, with
+provenance recorded in
+`internal/migration/v1/testdata/v1-goldens/recall/README.md` — against a
+freshly rebuilt index, and requires exact top-k content-hash coverage. Any
+accepted divergence is recorded in that directory's `divergence-ledger.yaml`
+with the query, the missing or surplus hashes, and the rationale; an
+unratified divergence fails the check rather than passing silently.

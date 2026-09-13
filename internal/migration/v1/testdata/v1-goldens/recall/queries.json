@@ -1,0 +1,29 @@
+[
+  {
+    "query_id": "recall-golden-1",
+    "query": "manifest schema template files",
+    "scope": "project/migration-golden",
+    "k": 3,
+    "expected_content_hashes": [
+      "10c4d4b9ac4713679f117b83ef20fb1f48fec6b580b89aa25cc0bec8784bab98"
+    ]
+  },
+  {
+    "query_id": "recall-golden-2",
+    "query": "sub tickets abandon partial work",
+    "scope": "project/migration-golden",
+    "k": 3,
+    "expected_content_hashes": [
+      "067d84c403997b9509096a729e5a59b8a30cfc7b98bf025c1242a840d685aaae"
+    ]
+  },
+  {
+    "query_id": "recall-golden-3",
+    "query": "pews dag cascade tier tree",
+    "scope": "project/migration-golden",
+    "k": 3,
+    "expected_content_hashes": [
+      "238ca4058bd8db046036710743d830ceb6efe90fd00397238147f05e9c6eb3f8"
+    ]
+  }
+]
