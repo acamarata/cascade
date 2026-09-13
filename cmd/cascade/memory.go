@@ -8,7 +8,11 @@
 //	cmd-rpc-server-boundary depguard rule), and the flag surface. The
 //	socket resolution and the one scrubbed call boundary live in
 //	memory_call.go; rendering and the diagnostic scrub live in
-//	memory_view.go.
+//	memory_view.go. The four verbs below route through memoryRoute
+//	(memory_embedded.go), never memoryCall directly, so a daemonless
+//	invocation answers from the embedded memory.Handler instead of
+//	dialing a socket nothing serves
+//	(DEFECT-cli-surfaces-promise-embedded-mode.md).
 //
 // Inputs: cobra args/flags; a memoryDeps injected at construction so no
 //
@@ -154,7 +158,7 @@ func newMemoryRememberCmd(deps memoryDeps) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params.Content = args[0]
 			var result memory.RememberResult
-			if err := memoryCall(cmd, deps, memory.MethodRemember, params, &result); err != nil {
+			if err := memoryRoute(cmd, deps, memory.MethodRemember, params, &result); err != nil {
 				return err
 			}
 			return memoryWriter(cmd).Result(rememberView{result})
@@ -181,7 +185,7 @@ func newMemoryRecallCmd(deps memoryDeps) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params.Query = args[0]
 			var result memory.RecallResult
-			if err := memoryCall(cmd, deps, memory.MethodRecall, params, &result); err != nil {
+			if err := memoryRoute(cmd, deps, memory.MethodRecall, params, &result); err != nil {
 				return err
 			}
 			return memoryWriter(cmd).Result(unitsView{Units: result.Units, Unreadable: result.Unreadable})
@@ -213,7 +217,7 @@ func newMemoryForgetCmd(deps memoryDeps) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params.ID = args[0]
 			var result memory.ForgetResult
-			if err := memoryCall(cmd, deps, memory.MethodForget, params, &result); err != nil {
+			if err := memoryRoute(cmd, deps, memory.MethodForget, params, &result); err != nil {
 				return err
 			}
 			return memoryWriter(cmd).Result(forgetView{result})
@@ -237,7 +241,7 @@ func newMemoryListCmd(deps memoryDeps) *cobra.Command {
 		Args: usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			var result memory.ListResult
-			if err := memoryCall(cmd, deps, memory.MethodList, params, &result); err != nil {
+			if err := memoryRoute(cmd, deps, memory.MethodList, params, &result); err != nil {
 				return err
 			}
 			return memoryWriter(cmd).Result(unitsView{

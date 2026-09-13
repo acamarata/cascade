@@ -247,13 +247,20 @@ func guardUnknownSubcommands(cmd *cobra.Command) {
 // user just ran and reads as a startup failure rather than the accurate
 // pre-bind snapshot it is. No other command's socket is ever the one this
 // probe is dialing on behalf of, so every other command keeps the warning.
+//
+// It is also suppressed for `cascade run` (isRunCmd), for a different
+// reason: that command has no embedded fallback at all (run_exec.go's
+// fetchRun refuses outright when daemonless, the way approval.go refuses),
+// so telling the user it is "running in embedded (daemonless) mode" would
+// be false, not merely premature (DEFECT-cli-surfaces-promise-embedded-
+// mode.md).
 func probeDaemonlessAndAttach(ctx context.Context, cmd *cobra.Command) context.Context {
 	paths, err := runtime.NewDefaultPathProvider()
 	if err != nil {
 		return ctx
 	}
 	st := runtime.ProbeDaemonless(paths.SocketPath(), daemonlessProbeTimeout, nil)
-	if st.Embedded && !globalFlags.Quiet && !isDaemonRunCmd(cmd) {
+	if st.Embedded && !globalFlags.Quiet && !isDaemonRunCmd(cmd) && !isRunCmd(cmd) && !isStatusCmd(cmd) {
 		w := output.NewDefault(globalFlags.JSON, globalFlags.Quiet, globalFlags.Verbose, noColorFlag)
 		if st.ProbeErr != nil {
 			w.Warn("daemon liveness undecidable (%v); running in embedded (daemonless) mode", st.ProbeErr)
@@ -269,4 +276,21 @@ func probeDaemonlessAndAttach(ctx context.Context, cmd *cobra.Command) context.C
 // groups could plausibly reuse.
 func isDaemonRunCmd(cmd *cobra.Command) bool {
 	return cmd != nil && cmd.CommandPath() == "cascade daemon run"
+}
+
+// isStatusCmd reports whether cmd is `cascade status`, suppressed for the
+// same reason as isRunCmd: status refuses outright when daemonless, because
+// version, pid, uptime and connection count are all live snapshots of the
+// daemon process and have no honest embedded answer. Announcing embedded
+// mode and then refusing contradicts itself, which is the whole point of
+// DEFECT-cli-surfaces-promise-embedded-mode.md.
+func isStatusCmd(cmd *cobra.Command) bool {
+	return cmd != nil && cmd.CommandPath() == "cascade status"
+}
+
+// isRunCmd reports whether cmd is `cascade run` specifically, by full
+// command path - not just the leaf name "run", which other command groups
+// (daemon run included) already reuse.
+func isRunCmd(cmd *cobra.Command) bool {
+	return cmd != nil && cmd.CommandPath() == "cascade run"
 }

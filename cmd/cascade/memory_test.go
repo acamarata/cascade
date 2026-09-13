@@ -118,6 +118,8 @@ func (h *memoryHarness) deps(t *testing.T) memoryDeps {
 }
 
 // run executes one memory verb and returns its stdout, stderr and error.
+// Attaches Embedded:false explicitly (mirrors recallHarness.run): with no
+// state attached, memoryRoute defaults to embedded and ignores h.deps.Call.
 func (h *memoryHarness) run(t *testing.T, args ...string) (string, string, error) {
 	t.Helper()
 	cmd := newMemoryCmd(h.deps(t))
@@ -136,7 +138,8 @@ func (h *memoryHarness) run(t *testing.T, args ...string) (string, string, error
 	cmd.SetArgs(args)
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
-	err := cmd.ExecuteContext(context.Background())
+	ctx := runtime.WithDaemonlessState(context.Background(), runtime.DaemonlessState{Embedded: false})
+	err := cmd.ExecuteContext(ctx)
 	return stdout.String(), stderr.String(), err
 }
 

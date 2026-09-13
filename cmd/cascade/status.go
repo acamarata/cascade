@@ -21,7 +21,15 @@
 //
 //	effect on it (automation parity, §5.8). Never writes to
 //	os.Stdout/os.Stderr directly (internal/output's contract, enforced by
-//	forbidigo + internal/build's AST output gate).
+//	forbidigo + internal/build's AST output gate). There is no embedded
+//	fallback for this verb: StatusResponse's own doc comment states every
+//	field is "assembled from live daemon state at request time - no
+//	placeholder, no field that can only ever hold one value (Art.1)", and
+//	PID/uptime/connections/health-of-subsystems exist only inside a
+//	running daemon process. A daemonless invocation is REFUSED with an
+//	actionable error rather than answered with zero-valued stand-ins for
+//	fields that have no honest embedded value
+//	(DEFECT-cli-surfaces-promise-embedded-mode.md).
 //
 // SPORT: cmd/cascade/status (CHANGE, per T-3 sport_updates — routed
 //
@@ -109,6 +117,12 @@ func newStatusCmd(deps statusDeps) *cobra.Command {
 // its own tests (client_integration_test.go) prove it against a real
 // daemon-shaped socket.
 func fetchStatus(ctx context.Context, deps statusDeps) (daemon.StatusResponse, error) {
+	if st, ok := runtime.DaemonlessStateFrom(ctx); ok && st.Embedded {
+		return daemon.StatusResponse{}, cascade.Newf(cascade.KindUnavailable,
+			"cascade status needs a running daemon: version, pid, uptime and connection "+
+				"count are all live snapshots of the daemon process itself, with no honest "+
+				"embedded answer. Start it with `cascade daemon start`.")
+	}
 	settings, err := resolveStatusSocket(ctx, deps)
 	if err != nil {
 		return daemon.StatusResponse{}, err

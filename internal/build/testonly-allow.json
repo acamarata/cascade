@@ -798,6 +798,20 @@
     "caller_site": "internal/daemon/conductor_spawn_wiring.go"
   },
   {
+    "symbol": "internal/conductor.ApplyUsageMigrationSchema",
+    "reason": "P1-E11-W3-S23-T4 builds the jobs-domain jobs_usage table's migration (R-16.52), fully implemented and tested against a real modernc-sqlite db, but the daemon composition root that would open cascade.db and call this before constructing a *UsageStore does not exist yet - the SAME missing dependency internal/conductor.NewDefaultProductionSpawnHook's own entry above documents (internal/daemon/subsystems.go explicitly records zero NewExecutor call sites). Until a daemon file calls ApplyUsageMigrationSchema, it has no production caller.",
+    "expected_caller": "a future daemon composition file that opens cascade.db, calls ApplyUsageMigrationSchema, constructs a *UsageStore via NewUsageStore, and wires both onto the Executor via SetUsageStore/SetUsageAggregator; retire this entry once it does",
+    "retire_ticket": "P1-E11-W3-S22-T4",
+    "caller_site": "internal/daemon/conductor_usage_wiring.go"
+  },
+  {
+    "symbol": "internal/conductor.NewUsageStore",
+    "reason": "Same gap as internal/conductor.ApplyUsageMigrationSchema directly above: NewUsageStore is fully implemented and tested against a real modernc-sqlite db, but the daemon composition root that would construct one and call Executor.SetUsageStore does not exist yet.",
+    "expected_caller": "the same future daemon composition file named in ApplyUsageMigrationSchema's entry above; retire this entry once it calls NewUsageStore and Executor.SetUsageStore",
+    "retire_ticket": "P1-E11-W3-S22-T4",
+    "caller_site": "internal/daemon/conductor_usage_wiring.go"
+  },
+  {
     "symbol": "internal/conductor.RegisterHandlers",
     "reason": "job.cancel's registration takes a *Executor, so it is blocked by the SAME missing dependency as internal/conductor.NewExecutor directly above (no production conductor.ProviderResolver implementation exists anywhere in this tree yet - see that entry's corrected reason, T0-daemon-composition-root/R-14.223 follow-up). RegisterHandlers itself is fully wired and tested against a real *rpc.Registry (cancel_test.go); only a real Executor to register against is missing.",
     "expected_caller": "the daemon composition root (internal/daemon/subsystems.go), alongside its NewExecutor call, once a real ProviderResolver exists; retire this entry once it calls conductor.RegisterHandlers",

@@ -51,6 +51,11 @@ type Executor struct {
 	spawnHook       SpawnHook
 	spawnSem        chan struct{}
 	spawnDrops      int64
+	// usageStore/usageAgg/costEstimator (P1-E11-W3-S23-T4): R-16.52 usage/
+	// cost seams, see usage.go's Set* methods; same reasoning as above.
+	usageStore    UsageRecorder
+	usageAgg      UsageAggregator
+	costEstimator CostEstimator
 }
 
 // CancelFunc cancels an in-flight ExecuteStream job. It is idempotent
@@ -75,6 +80,7 @@ var _ provider.ModelExecutor = (*Executor)(nil)
 // (authorize failure) mints no job id at all - there is nothing yet for a
 // client to subscribe to.
 func (e *Executor) Execute(ctx context.Context, req provider.ModelRequest) (provider.ModelResponse, error) {
+	start := e.usageClockStart() // P1-E11-W3-S23-T4: see usage.go's CONTRACT NOTE.
 	if err := e.pipeline.Ready(); err != nil {
 		return provider.ModelResponse{}, err
 	}
@@ -91,10 +97,7 @@ func (e *Executor) Execute(ctx context.Context, req provider.ModelRequest) (prov
 	jobID := JobID(rawID)
 	dctx, cancel := context.WithCancel(ctx)
 	e.cancels().register(jobID, cancel)
-	defer func() {
-		cancel()
-		e.cancels().deregister(jobID)
-	}()
+	defer func() { cancel(); e.cancels().deregister(jobID) }()
 
 	sel, err := e.router.Select(dctx, req)
 	if err != nil {
@@ -108,21 +111,18 @@ func (e *Executor) Execute(ctx context.Context, req provider.ModelRequest) (prov
 		e.publishTerminal(ctx, jobID, "error")
 		return provider.ModelResponse{}, ErrEgressSubstitutionFailed
 	}
-	resp, finalSel, err := e.dispatchWithFailover(dctx, sel, req)
+	resp, finalSel, attempt, err := e.dispatchWithFailover(dctx, sel, req)
 	if err != nil {
 		mapped := mapProviderError(err)
 		e.auditOutcome(ctx, req, tier, finalSel, "provider_failure", mapped)
 		e.publishTerminal(ctx, jobID, "error")
+		e.attributeUsage(ctx, req, jobID, finalSel, attempt, resp.Usage, err, start)
 		return provider.ModelResponse{}, mapped
 	}
-	out := provider.ModelResponse{
-		JobID:     provider.JobID(jobID),
-		Selection: finalSel,
-		Output:    resp.Message.Content,
-		Usage:     resp.Usage,
-	}
+	out := provider.ModelResponse{JobID: provider.JobID(jobID), Selection: finalSel, Output: resp.Message.Content, Usage: resp.Usage}
 	e.auditOutcome(ctx, req, tier, finalSel, "success", nil)
 	e.publishTerminal(ctx, jobID, "done")
+	e.attributeUsage(ctx, req, jobID, finalSel, attempt, resp.Usage, nil, start)
 	e.trySpawn(req, finalSel) // P1-E12-W3-S25-T3: no-op unless IsSubprocessDispatch(finalSel)
 	return out, nil
 }
@@ -155,20 +155,23 @@ func (e *Executor) authorize(ctx context.Context, req provider.ModelRequest) (pr
 // dispatchWithFailover dispatches to sel, and on a capability-denied
 // provider error re-selects EXACTLY ONCE with sel excluded, then dispatches
 // to the re-selected lane. Never a retry on the denying lane, never
-// rotation, never a second failover (R-21.213).
-func (e *Executor) dispatchWithFailover(ctx context.Context, sel provider.Selection, req provider.ModelRequest) (provider.ChatResponse, provider.Selection, error) {
+// rotation, never a second failover (R-21.213). The returned int is the
+// dispatch attempt count (P1-E11-W3-S23-T4, R-16.33's UsageRecord.Attempt):
+// 1 for an ordinary dispatch, 2 only when the capability-denied failover
+// actually re-dispatched.
+func (e *Executor) dispatchWithFailover(ctx context.Context, sel provider.Selection, req provider.ModelRequest) (provider.ChatResponse, provider.Selection, int, error) {
 	dispatch := e.pipeline.capability()
 	chatReq := toChatRequest(req)
 	resp, err := dispatch(ctx, sel, chatReq)
 	if err == nil || !cascade.HasKind(err, cascade.KindCapabilityDenied) {
-		return resp, sel, err
+		return resp, sel, 1, err
 	}
 	reSel, selErr := e.router.Select(ctx, req, sel.LaneID)
 	if selErr != nil {
-		return provider.ChatResponse{}, sel, err
+		return provider.ChatResponse{}, sel, 1, err
 	}
 	resp, err = dispatch(ctx, reSel, chatReq)
-	return resp, reSel, err
+	return resp, reSel, 2, err
 }
 
 // ExecuteStream runs req as a streaming exchange: a buffered(1) channel of

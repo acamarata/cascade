@@ -79,6 +79,15 @@ func startMemoryDaemon(t *testing.T) (memoryDeps, string) {
 }
 
 // runMemory executes one verb against the live daemon and returns stdout.
+//
+// It attaches an explicit Embedded:false DaemonlessState before executing
+// for the reason memory_test.go's memoryHarness.run does (mirroring
+// recall_harness_test.go's identical fix): this helper never goes through
+// newRootCmd, so root.go's PersistentPreRunE never runs and
+// DaemonlessStateFrom would otherwise read back ok=false, which
+// memoryRoute (memory_embedded.go) treats as "unknown, default to
+// embedded" — silently skipping the real daemon this file exists to
+// exercise.
 func runMemory(t *testing.T, deps memoryDeps, args ...string) (string, error) {
 	t.Helper()
 	cmd := newMemoryCmd(deps)
@@ -94,7 +103,8 @@ func runMemory(t *testing.T, deps memoryDeps, args ...string) (string, error) {
 	cmd.SetArgs(args)
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
-	err := cmd.ExecuteContext(context.Background())
+	ctx := runtime.WithDaemonlessState(context.Background(), runtime.DaemonlessState{Embedded: false})
+	err := cmd.ExecuteContext(ctx)
 	return stdout.String(), err
 }
 

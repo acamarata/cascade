@@ -18,7 +18,15 @@
 // Constraints: dials the daemon exclusively through internal/client.Client
 //
 //	(hard requirement 1) - never internal/rpc. streamResult never blocks
-//	past ctx or body's own EOF/error (bounded, no infinite read).
+//	past ctx or body's own EOF/error (bounded, no infinite read). There is
+//	no embedded fallback for `cascade run`: task dispatch, provider
+//	selection, cost accounting and the streamed job log all live in the
+//	daemon's conductor, so a daemonless invocation is REFUSED with an
+//	actionable error, the same way cmd/cascade/approval.go refuses
+//	(DEFECT-cli-surfaces-promise-embedded-mode.md). root.go's daemonless
+//	probe also does not print its "embedded (daemonless) mode" warning
+//	for this command (isRunCmd), since this command never runs in that
+//	mode.
 //
 // SPORT: cmd/cascade/run (ADD, P1-E11-W3-S23-T1/T3).
 package main
@@ -123,6 +131,11 @@ func renderRunResult(w *output.Writer, resp provider.ModelResponse) error {
 // the ONLY call site in this file that reaches the daemon (hard
 // requirement 1).
 func fetchRun(ctx context.Context, deps runDeps, params runRequestParams) (provider.ModelResponse, error) {
+	if st, ok := runtime.DaemonlessStateFrom(ctx); ok && st.Embedded {
+		return provider.ModelResponse{}, cascade.Newf(cascade.KindUnavailable,
+			"cascade run needs a running daemon: task dispatch, provider selection and cost "+
+				"accounting all live in the daemon's conductor. Start it with `cascade daemon start`.")
+	}
 	settings, err := resolveRunSocket(ctx, deps)
 	if err != nil {
 		return provider.ModelResponse{}, err
