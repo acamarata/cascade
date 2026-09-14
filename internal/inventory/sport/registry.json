@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-14T14:50:07Z",
+  "generated_at": "2026-09-14T15:36:36Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3064,6 +3064,21 @@
           "status": "ADD",
           "ticket": "P1-E04-W1-S07-T6",
           "raw": "cmd/cascade elevate-helper tests/ADDED (P1-E04-W1-S07-T6)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade plugin.add handler",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_rpc.go",
+          "line": 46,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T4",
+          "raw": "cmd/cascade plugin.add handler (ADD) — P1-E15-W4-S32-T4"
         }
       ],
       "statuses": [
@@ -11799,6 +11814,13 @@
           "raw": "internal/daemon (ADD, per T-1 sport_updates)."
         },
         {
+          "file": "internal/daemon/status_json_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "T-1",
+          "raw": "internal/daemon (ADD, per T-1 sport_updates)."
+        },
+        {
           "file": "internal/daemon/status_test.go",
           "line": 7,
           "status": "ADD",
@@ -13360,6 +13382,28 @@
       ]
     },
     {
+      "name": "internal/plugins dispatch",
+      "sites": [
+        {
+          "file": "internal/plugins/dispatch.go",
+          "line": 51,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T4",
+          "raw": "internal/plugins dispatch (ADD) — P1-E15-W4-S32-T4 COMPLETION PASS."
+        },
+        {
+          "file": "internal/plugins/dispatch_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T4",
+          "raw": "internal/plugins dispatch (ADD) — P1-E15-W4-S32-T4 COMPLETION PASS."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins harness-generator-wiring tests",
       "sites": [
         {
@@ -13408,7 +13452,7 @@
       "sites": [
         {
           "file": "internal/plugins/lifecycle.go",
-          "line": 28,
+          "line": 30,
           "status": "ADD",
           "ticket": "P1-E15-W4-S32-T4",
           "raw": "internal/plugins lifecycle-metadata/ADD — P1-E15-W4-S32-T4."
@@ -19862,7 +19906,7 @@
       ]
     }
   ],
-  "total_sites": 1968,
+  "total_sites": 1972,
   "unspecified_count": 63,
   "multi_status_count": 39
 }
