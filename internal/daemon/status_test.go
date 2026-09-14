@@ -122,9 +122,16 @@ func TestStatusGet_HealthDegradesOnFailedSubsystem(t *testing.T) {
 	}
 }
 
-// TestStatusGet_HealthDegradesOnDisabledOrSkipped covers the other two
-// non-ok manifest states.
-func TestStatusGet_HealthDegradesOnDisabledOrSkipped(t *testing.T) {
+// TestStatusGet_HealthNotDegradedByDisabledOrSkipped is the defect fix
+// this test replaces TestStatusGet_HealthDegradesOnDisabledOrSkipped for
+// (DEFECT-status-degraded-on-fresh-install.md): SubsystemDisabled (the
+// operator's own choice) and SubsystemSkipped (a disclosed, expected
+// precondition-absent state - e.g. reachability with no stored symbol
+// graph yet, the exact production shape on every fresh install) must NOT
+// degrade Health. The old test asserted the opposite and was itself the
+// bug's proof: it pinned the behaviour that made every fresh install read
+// "degraded" forever.
+func TestStatusGet_HealthNotDegradedByDisabledOrSkipped(t *testing.T) {
 	cases := []struct {
 		name string
 		set  func(m *Manifest)
@@ -144,12 +151,50 @@ func TestStatusGet_HealthDegradesOnDisabledOrSkipped(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Handler: %v", err)
 			}
-			if got := result.(StatusResponse).Health; got != "degraded" {
-				t.Fatalf("Health = %q, want %q", got, "degraded")
+			resp := result.(StatusResponse)
+			if resp.Health != "ok" {
+				t.Fatalf("Health = %q, want %q (%s must not degrade health)", resp.Health, "ok", tc.name)
 			}
 		})
 	}
 }
+
+// TestStatusGet_SubsystemsFieldReportsSkippedDetail proves the OTHER half
+// of the fix: Health's meaning changed, but nothing was suppressed - a
+// Skipped subsystem's name, state and reason are still real, readable
+// content in StatusResponse.Subsystems, store-state asserted field by
+// field (not merely "the call happened").
+func TestStatusGet_SubsystemsFieldReportsSkippedDetail(t *testing.T) {
+	clock := runtime.NewFixedClock(time.Now())
+	manifest := NewManifest(nil, clock)
+	manifest.Register(reachabilityLikeSubsystemName)
+	manifest.Skipped(reachabilityLikeSubsystemName, "no stored symbol graph for /tmp/cgf yet")
+
+	provider := NewStatusProvider(clock, clock.Now(), "/tmp/d.sock", nil, manifest)
+	result, err := provider.Handler()(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("Handler: %v", err)
+	}
+	resp := result.(StatusResponse)
+	if resp.Health != "ok" {
+		t.Fatalf("Health = %q, want %q", resp.Health, "ok")
+	}
+	if len(resp.Subsystems) != 1 {
+		t.Fatalf("Subsystems = %+v, want exactly 1 entry", resp.Subsystems)
+	}
+	got := resp.Subsystems[0]
+	if got.Name != reachabilityLikeSubsystemName || got.State != SubsystemSkipped || got.Detail != "no stored symbol graph for /tmp/cgf yet" {
+		t.Errorf("Subsystems[0] = %+v, want name=%q state=Skipped detail=the real reason", got, reachabilityLikeSubsystemName)
+	}
+}
+
+// reachabilityLikeSubsystemName mirrors reachability_wiring.go's real
+// "jobs.reachability" constant without importing across files purely for
+// a literal - this test proves the general Manifest->StatusResponse path,
+// not a hardcoded coupling to that specific subsystem's name. The
+// SubsystemError-still-degrades direction is already covered above by
+// TestStatusGet_HealthDegradesOnFailedSubsystem - not duplicated here.
+const reachabilityLikeSubsystemName = "jobs.reachability"
 
 // TestStatusGet_NilManifestReportsOK covers the documented nil-manifest
 // fallback (only reachable from a test that omits it).

@@ -19,6 +19,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -39,8 +40,32 @@ func TestDecodeStatusEnvelope_Success(t *testing.T) {
 		},
 		Health: "ok",
 	}
-	if got != want {
+	// reflect.DeepEqual, not "!=": StatusResponse carries a Subsystems
+	// slice field, which makes it a non-comparable type (a Go compile
+	// error, not a runtime one, if this reverted to "!=").
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)
+	}
+}
+
+// TestDecodeStatusEnvelope_SubsystemsDecode proves a Skipped subsystem's
+// name/state/detail survive the wire round trip: status.get's JSON
+// envelope is the only place a human sees WHY reachability was skipped on
+// a fresh install (DEFECT-status-degraded-on-fresh-install.md), so a
+// silently-dropped Subsystems field would be exactly the "reported
+// nowhere" regression that defect is about.
+func TestDecodeStatusEnvelope_SubsystemsDecode(t *testing.T) {
+	body := strings.NewReader(`{"jsonrpc":"2.0","id":"1","result":{"version":"v1","daemon":{"pid":9,"uptime_s":1.5,"connections":4,"socket_path":"/tmp/d.sock"},"health":"ok","subsystems":[{"name":"jobs.reachability","state":"skipped","detail":"no stored symbol graph for /tmp/cgf yet","updated_at":"2026-09-14T00:00:00.000Z"}]}}`)
+	got, err := decodeStatusEnvelope(body)
+	if err != nil {
+		t.Fatalf("decodeStatusEnvelope: unexpected error: %v", err)
+	}
+	if len(got.Subsystems) != 1 {
+		t.Fatalf("Subsystems = %+v, want exactly 1 entry", got.Subsystems)
+	}
+	s := got.Subsystems[0]
+	if s.Name != "jobs.reachability" || s.State != daemon.SubsystemSkipped || s.Detail != "no stored symbol graph for /tmp/cgf yet" {
+		t.Errorf("Subsystems[0] = %+v, want jobs.reachability/Skipped with its reason", s)
 	}
 }
 
@@ -87,6 +112,28 @@ func TestStatusHumanView_String(t *testing.T) {
 	}}
 	got := v.String()
 	for _, want := range []string{"version", "1.2.3-test", "pid", "4242", "uptime_s", "12.500", "connections", "2", "socket_path", "/var/run/cascade/daemon.sock", "health", "ok"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("String() = %q, missing %q", got, want)
+		}
+	}
+}
+
+// TestStatusHumanView_String_SkippedSubsystemVisible proves a Skipped
+// subsystem's name and reason render in the human table even when Health
+// is "ok" - the exact acceptance property this defect fix requires: a
+// human reading `cascade status` on a fresh install still sees WHY
+// reachability was skipped, not just an unqualified "healthy".
+func TestStatusHumanView_String_SkippedSubsystemVisible(t *testing.T) {
+	v := statusHumanView{daemon.StatusResponse{
+		Version: "1.2.3-test",
+		Daemon:  daemon.StatusDaemonFields{PID: 1, SocketPath: "/tmp/d.sock"},
+		Health:  "ok",
+		Subsystems: []daemon.SubsystemStatus{
+			{Name: "jobs.reachability", State: daemon.SubsystemSkipped, Detail: "no stored symbol graph for /tmp/cgf yet"},
+		},
+	}}
+	got := v.String()
+	for _, want := range []string{"subsystem:jobs.reachability", "skipped", "no stored symbol graph for /tmp/cgf yet"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("String() = %q, missing %q", got, want)
 		}
