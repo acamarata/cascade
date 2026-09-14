@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-14T13:30:12Z",
+  "generated_at": "2026-09-14T13:42:47Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -11722,7 +11722,7 @@
         },
         {
           "file": "internal/daemon/status.go",
-          "line": 19,
+          "line": 26,
           "status": "ADD",
           "ticket": "T-1",
           "raw": "internal/daemon (ADD, per T-1 sport_updates)."
