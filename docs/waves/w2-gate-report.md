@@ -243,3 +243,81 @@ regression discovery at W6.
    found. W3 triage should explicitly check whether any later-wave ticket
    depends on `cascade recall` or on `context slice`'s current bootstrap
    behavior before treating the fix as isolated.
+
+## RE-VERIFICATION 2026-09-14 — fresh artifact v2.0.0-alpha.2-SNAPSHOT-6ca1b3a
+
+Re-run in full against a freshly built snapshot from `p1-integration` at commit
+`6ca1b3a` (stale `dist/` from the `79bc5cc` build cleared first; `goreleaser
+release --snapshot --clean` re-run under `flock`, exit 0, 3m1s). Same local tag
+`v2.0.0-alpha.2` (never pushed; confirmed again via `git ls-remote --tags
+origin`). Checksums and minisign signature re-verified against the new archives
+(`shasum -a 256 -c` all 10 entries OK; `minisign -Vm` verified).
+
+**The two P1 defects this gate previously blocked on are FIXED, confirmed on
+this fresh artifact, both platforms (this machine for macOS — still no second
+clean Mac — and a debian:stable-slim Docker container for Linux):**
+
+- `context slice` / `context scope show` virgin-HOME bootstrap
+  (DEFECT-context-slice-no-mkdir-virgin-home.md): now creates `~/.cascade/data`
+  correctly before opening the store on a HOME never created before. Verified
+  against a real, git-initialized, hand-authored fixture (not testdata):
+  correct tier discovery (PRI, 83 tokens, 3 sources) and correct instruction
+  merge, identical output on both platforms.
+- `cascade recall` dial-error-on-fresh-install (DEFECT-recall-broken-fresh-
+  install.md / DEFECT-recall-no-embedded-path.md): no longer dials or throws a
+  transport error; the embedded (daemonless) path now answers honestly. The
+  full-text leg is also now wired into both composition roots (a related fix,
+  FIX-retrieval-leg-wiring.md, landed alongside), so a query over an index that
+  actually has content now returns a real fused, cited result — this was
+  independently spot-checked, not just taken from the fix journal's own
+  transcript.
+
+**A new blocking finding surfaced by this re-run, not present in the previous
+pass's scope:** `cascade recall index rebuild` reports `CorporaIndexed: 0`
+against the same real fixture that `context slice` correctly discovers, on both
+platforms, even after registering the fixture via `cascade config set
+retrieval.sources '[...]'`. Root-caused: `(*Config).RetrievalSources()` has zero
+production callers tree-wide; the config key parses and round-trips but nothing
+in the tree ever reads it into the indexer. Filed as
+DEFECT-retrieval-sources-not-wired-to-ingest.md, P0. This means recall's ROUTING
+and FUSION are now genuinely fixed, but there is still no way for a real user to
+get a real corpus INTO the index through any shipped command — the acceptance
+criterion "cascade recall ... against a real corpus" remains unmet, for a
+different reason than the previous pass found.
+
+**Two further defects found on this fresh artifact, not previously filed:**
+
+- `cascade doctor` deterministically fails (`ERROR retrieval_index could not
+  open the retrieval index`, exit 5) whenever the daemon is running, on both
+  platforms, 3/3 reproductions each. Root-caused this time (the previous pass
+  only observed the symptom): `--json`'s Detail field shows `sqlite: exclusive
+  lock held by another process` — the doctor check's own lazily-built second
+  connection to `cascade.db` conflicts with the daemon's already-open primary
+  connection, in the same process. Filed as
+  DEFECT-doctor-retrieval-index-exclusive-lock.md, P1. This fails the W1
+  condition "`cascade doctor` exits 0 with no warnings" whenever a daemon is
+  up, which is the common case, on both platforms.
+- `cascade config set widget.show_project_names true` fails with "unknown
+  config key", even though `config get`/`config list` both recognize and
+  display the same key with its correct default. Reproduced on both platforms;
+  other keys (`schema_version`, `runtime.profile`) set correctly, so this is
+  key-specific, not systemic. Filed as
+  DEFECT-config-set-widget-key-unknown.md, P2.
+
+**Unchanged from the previous pass:** memory (remember/recall/list) fully
+verified both platforms; vault list/audit fully functional both platforms
+(macOS Keychain, Linux file-vault fallback correctly selected); `vault get`
+correctly refuses with `elevation-required` (lowercase — matches this
+contract's own check text verbatim; the earlier case-mismatch defect is moot
+for the current contract). Provenance attestation remains unsatisfiable locally
+by the pipeline's own design (unchanged from the previous pass's finding).
+
+**Gate disposition: still BLOCKED**, for a different reason than before. The
+two defects that previously blocked this gate are genuinely fixed and
+independently re-verified here. The gate does not pass regardless, because the
+recall acceptance criterion's "real corpus" half is unmet for a newly
+root-caused, structural reason (DEFECT-retrieval-sources-not-wired-to-ingest.md,
+P0), and a live-daemon `cascade doctor` regression (P1) now fails a named W1
+condition on both platforms. See
+`.claude/planning/p1/phase/journals/BLOCKED-P1-E09-W2-S18-T7.md` for the full
+adjudication.
