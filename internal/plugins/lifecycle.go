@@ -8,22 +8,24 @@
 //
 // Outputs: PluginMetadata records; a not-found sentinel on a missing name.
 //
-// Constraints: this file imports only pkg/** (never internal/**):
-//
-//	.golangci.yml's plugins-providers-boundary depguard rule denies ANY
-//	non-test file matching "**/plugins/**/*.go" from importing
-//	internal/**, which includes this file itself (confirmed by
-//	P1-E15-W4-S31-T3/T4's journals for the identical pattern one
-//	directory over). internal/storage.PluginStorage — the natural-looking
-//	fit — is therefore never imported here: it also isolates ONE plugin's
-//	own data from every OTHER plugin's (NewPluginStorage refuses the
-//	reserved "__host__" id outright, by design — R-14.100's own
-//	ReservedPluginHostNamespace doc comment). What this package needs is
-//	the HOST's own bookkeeping across every installed plugin, which is a
-//	plain pkg/provider.Store namespace, not a PluginStorage instance.
-//	cmd/cascade/plugin.go (outside plugins/**, so unrestricted) is the
-//	real composition root that supplies a *providers/sqlite.Driver
-//	(itself a provider.Store) bound to this namespace.
+// Constraints: this file imports only pkg/** (never internal/**), but NOT
+// because the depguard boundary forces it to (CORRECTED in this ticket's
+// COMPLETION PASS — see dispatch.go's package doc comment for the
+// verified boundary shape: a file directly at internal/plugins/<x>.go,
+// this file included, is free to import internal/**; only its
+// SUBPACKAGES, e.g. internal/plugins/process and internal/plugins/wasm,
+// are restricted to pkg/**-only). internal/storage.PluginStorage — the
+// natural-looking fit regardless — is still never imported HERE, on its
+// own independent merits: it isolates ONE plugin's own data from every
+// OTHER plugin's (NewPluginStorage refuses the reserved "__host__" id
+// outright, by design — R-14.100's own ReservedPluginHostNamespace doc
+// comment), and what this file needs is the HOST's own bookkeeping across
+// every installed plugin, which is a plain pkg/provider.Store namespace,
+// not a PluginStorage instance. cmd/cascade/plugin.go supplies the real
+// *providers/sqlite.Driver (itself a provider.Store) bound to this
+// namespace; dispatch.go is the real composition root that DOES construct
+// a PluginStorage, for the different job of provisioning an elevated
+// plugin's own isolated domain.
 //
 // SPORT: internal/plugins lifecycle-metadata/ADD — P1-E15-W4-S32-T4.
 package plugins
@@ -76,6 +78,11 @@ type PluginMetadata struct {
 	// Grants is the capability grant set currently in effect, mirroring
 	// the installed manifest's Requires at the time it was granted.
 	Grants []string `json:"grants"`
+	// HostABIVersion is the wasm host-ABI version (internal/plugins/wasm.
+	// HostABIVersion) this installation was provisioned under, for a
+	// RuntimeWasm plugin only (dispatch.go's ProvisionElevated). Zero for
+	// every other RuntimeMode.
+	HostABIVersion int `json:"host_abi_version,omitempty"`
 }
 
 // metadataKey builds the storage key for name's record.

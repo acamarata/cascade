@@ -213,6 +213,18 @@ linters:
             # and wireJobRPC already use, so it cannot live in
             # internal/daemon either.
             - "!**/cmd/cascade/hooks.go"
+            # plugin_rpc.go (P1-E15-W4-S32-T4 COMPLETION PASS) is the
+            # D/S-07.T4 plugin.add composition-root connector, on the
+            # identical grounds as hooks.go directly above: it is called
+            # only from buildRPCServer, it REGISTERS "plugin.add" on the
+            # daemon's own registry, and it never dials the daemon. It
+            # cannot live in internal/daemon like RegisterRecallIndexHandler
+            # does: internal/plugins imports internal/client (cascadepa_
+            # wiring.go et al.), and internal/client imports internal/daemon
+            # (context_scope.go, status.go) — so internal/daemon importing
+            # internal/plugins is a real cycle (go build: "import cycle not
+            # allowed"). cmd/cascade already imports both without incident.
+            - "!**/cmd/cascade/plugin_rpc.go"
             - "!**/*_test.go"
           deny:
             - pkg: "github.com/acamarata/cascade/internal/rpc"

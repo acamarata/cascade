@@ -103,6 +103,15 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// mirrors .golangci.yml's cmd-rpc-server-boundary exemption list; the
 	// two must be edited together or this gate and the linter disagree.
 	"hooks.go": true,
+	// plugin_rpc.go (P1-E15-W4-S32-T4 COMPLETION PASS): the D/S-07.T4
+	// plugin.add composition-root connector. It REGISTERS "plugin.add" on
+	// the daemon's own registry and never dials the daemon, the identical
+	// daemon-SIDE reasoning as hooks.go above. It cannot live in
+	// internal/daemon: internal/plugins imports internal/client, which
+	// imports internal/daemon — a real cycle. This map mirrors
+	// .golangci.yml's cmd-rpc-server-boundary exemption list; the two must
+	// be edited together or this gate and the linter disagree.
+	"plugin_rpc.go": true,
 }
 
 // scanCmdCascadeRPCImports returns, sorted, the base filenames under dir

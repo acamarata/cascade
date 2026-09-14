@@ -10,14 +10,14 @@
 // elevation middleware itself ("the elevation middleware is D/S-06.T3's,
 // not reimplemented here" — contract, verbatim). Once daemon-availability
 // is confirmed, the actual elevated request routes through the D/S-07.T3
-// client SDK (pluginClient) to a "plugin.add" RPC method; no daemon-side
-// handler for that method exists yet in this tree (S32-T3's journal
-// recorded the identical gap: "No new CLI surface. No new JSON-RPC method
-// registration" was out of ITS scope, and registering one is out of this
-// ticket's files_scope too — internal/rpc/*.go is not listed). A real
-// daemon therefore answers "method not found" today; this file's own
-// responsibility (the local decision, the refusal, and the wire call it
-// is correct to attempt) is complete and tested independent of that gap.
+// client SDK (pluginClient) to a "plugin.add" RPC method, now REGISTERED
+// on the daemon's real composition root (internal/daemon/plugin_rpc.go,
+// this ticket's COMPLETION PASS — see that file's doc comment). The
+// request carries the full manifest bytes (pluginAddParams.ManifestBytes
+// below), not just the id: the daemon-side handler cannot re-derive the
+// manifest's Runtime/Requires/Version from an id and checksum alone, and
+// the CLI already has the parsed bytes in hand from this same command's
+// os.ReadFile call.
 //
 // SPORT: cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4).
 package main
@@ -84,7 +84,7 @@ func runPluginAdd(cmd *cobra.Command, deps pluginDeps, ref, checksum string) err
 	case plugins.AddOutcomeAlreadyInstalled:
 		return pluginOutputWriter(cmd).Result(pluginAddView{Message: plugins.AlreadyInstalledMessage(res.Metadata.Name, res.Metadata.InstalledVersion)})
 	case plugins.AddOutcomeElevationRequired:
-		return runPluginAddElevated(cmd, deps, res.Manifest, checksum)
+		return runPluginAddElevated(cmd, deps, res.Manifest, checksum, manifestBytes)
 	case plugins.AddOutcomeInstalled:
 		return pluginOutputWriter(cmd).Result(pluginAddView{
 			Message: "installed " + res.Metadata.Name + " v" + res.Metadata.InstalledVersion,
@@ -98,7 +98,7 @@ func runPluginAdd(cmd *cobra.Command, deps pluginDeps, ref, checksum string) err
 // runPluginAddElevated displays the requested grant set and, unless
 // CASCADE_NO_INPUT=1 (§5.8, hard error, never a silent default), routes
 // the elevated request to the daemon via the client SDK.
-func runPluginAddElevated(cmd *cobra.Command, deps pluginDeps, m plugin.Manifest, checksum string) error {
+func runPluginAddElevated(cmd *cobra.Command, deps pluginDeps, m plugin.Manifest, checksum string, manifestBytes []byte) error {
 	if pluginNoInput(deps) {
 		return plugins.ErrNoInputHardError("add")
 	}
@@ -113,15 +113,21 @@ func runPluginAddElevated(cmd *cobra.Command, deps pluginDeps, m plugin.Manifest
 		return err
 	}
 	var result pluginAddView
-	if err := c.Do(cmd.Context(), "plugin.add", pluginAddParams{ID: m.ID, Checksum: checksum}, &result); err != nil {
+	params := pluginAddParams{ID: m.ID, Checksum: checksum, ManifestBytes: manifestBytes}
+	if err := c.Do(cmd.Context(), "plugin.add", params, &result); err != nil {
 		return err
 	}
 	return w.Result(result)
 }
 
+// pluginAddParams is the "plugin.add" wire request. ManifestBytes carries
+// the full parsed manifest source: the daemon-side handler
+// (internal/daemon/plugin_rpc.go) cannot re-derive Runtime/Requires/
+// Version from an id and checksum alone.
 type pluginAddParams struct {
-	ID       string `json:"id"`
-	Checksum string `json:"checksum,omitempty"`
+	ID            string `json:"id"`
+	Checksum      string `json:"checksum,omitempty"`
+	ManifestBytes []byte `json:"manifest_bytes"`
 }
 
 type pluginAddView struct {

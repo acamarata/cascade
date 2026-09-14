@@ -194,13 +194,15 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 		return nil, nil, nil, err
 	}
 
-	// recall.index.* (F/S-11.T4), registered for the same reason. A nil
-	// store (some existing test harnesses' minimal buildRPCServer calls)
-	// leaves the namespace unregistered rather than reaching into a store
-	// that does not exist — see internal/daemon/recall_index.go's doc
-	// comment.
+	// recall.index.* (F/S-11.T4) and plugin.add (D/S-07.T4, R-16.80 gate
+	// closure), both registered over their own second sqlite connection
+	// to the same dbPath — factored into registerDBPathHandlers purely to
+	// keep this function under Art.10.3's 50-line cap. A nil store (some
+	// existing test harnesses' minimal buildRPCServer calls) leaves both
+	// namespaces unregistered rather than reaching into a store that does
+	// not exist.
 	dbPath := filepath.Join(paths.DataDir(), "cascade.db")
-	if err := daemon.RegisterRecallIndexHandler(registry, paths, clock, store, dbPath); err != nil {
+	if err := registerDBPathHandlers(registry, paths, clock, store, dbPath); err != nil {
 		return nil, nil, nil, err
 	}
 
