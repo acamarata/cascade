@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T23:39:41Z",
+  "generated_at": "2026-09-14T00:42:28Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2686,6 +2686,28 @@
           "line": 7,
           "status": "",
           "raw": "cmd.cascade.fleet-top/TEST (fleet top composition root)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd.cascade.fleet-usage/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/fleet_usage_filters_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E18-W4-S40-T5",
+          "raw": "cmd.cascade.fleet-usage/TEST (P1-E18-W4-S40-T5)."
+        },
+        {
+          "file": "cmd/cascade/fleet_usage_test.go",
+          "line": 7,
+          "status": "",
+          "ticket": "P1-E18-W4-S40-T5",
+          "raw": "cmd.cascade.fleet-usage/TEST (P1-E18-W4-S40-T5)."
         }
       ],
       "statuses": [
@@ -5414,6 +5436,21 @@
           "status": "ADD",
           "ticket": "P1-E18-W4-S39-T5",
           "raw": "fleet.supervision.stall/ADDED (P1-E18-W4-S39-T5)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.usage_command",
+      "sites": [
+        {
+          "file": "cmd/cascade/fleet_usage.go",
+          "line": 39,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S40-T5",
+          "raw": "fleet.usage_command/ADD (P1-E18-W4-S40-T5)."
         }
       ],
       "statuses": [
@@ -19490,7 +19527,7 @@
       ]
     }
   ],
-  "total_sites": 1934,
-  "unspecified_count": 62,
+  "total_sites": 1937,
+  "unspecified_count": 63,
   "multi_status_count": 39
 }
