@@ -100,7 +100,20 @@
 //     fmt.Println), which legitimately prints on its own account to
 //     demonstrate a plugin's own I/O, independent of the cascade CLI's
 //     output contract. Scoped to plugins/examples/** only — a real,
-//     first-party plugin anywhere else in plugins/** is still gated.
+//     first-party plugin anywhere else in plugins/** is still gated as
+//     LIBRARY code; see exemption 4 for its entry point.
+//  4. A `package main` file under plugins/** — a PROCESS-TIER plugin is a
+//     standalone binary, not part of the cascade CLI's output contract
+//     this gate exists to protect: its stdout IS the JSON-RPC wire to its
+//     host and its stderr is captured by the host as that plugin's stderr
+//     tail. It also cannot route through internal/output at all, because
+//     Art.10.2 forbids plugins/** from importing internal/**, so gating it
+//     here would demand something the boundary rules make impossible.
+//     Keyed on the PACKAGE CLAUSE, not the directory: library files inside
+//     the same plugin stay gated (exemption 3), and `package main`
+//     anywhere outside plugins/** — cmd/cascade above all, which is the
+//     CLI whose contract this protects — is untouched.
+//     outputgate_plugin_main_test.go asserts all three of those edges.
 package build
 
 import (
@@ -160,6 +173,21 @@ func OutputgateIsExempt(path string) bool {
 	return false
 }
 
+// OutputgateIsPluginEntryPoint reports whether path is the entry point of a
+// standalone plugin binary: a `package main` file under plugins/.
+//
+// Both halves are load-bearing. Without the plugins/ prefix this would
+// exempt cmd/cascade, the very CLI whose output contract the gate protects.
+// Without the package-main check it would exempt a plugin's library files,
+// which have no business writing to a stream directly and stay gated.
+func OutputgateIsPluginEntryPoint(path, pkgName string) bool {
+	if pkgName != "main" {
+		return false
+	}
+	slash := strings.ReplaceAll(path, "\\", "/")
+	return strings.Contains(slash, "/plugins/") || strings.HasPrefix(slash, "plugins/")
+}
+
 // outputgateResolveImports builds the local-identifier -> real-import-path
 // map for a file's "os" and "fmt" imports, and separately reports any
 // dot-import of either as an immediate violation — a dot-imported call is
@@ -203,6 +231,9 @@ func OutputgateScanFile(path string) ([]OutputViolation, error) {
 	file, err := parser.ParseFile(fset, path, nil, 0)
 	if err != nil {
 		return nil, err
+	}
+	if OutputgateIsPluginEntryPoint(path, file.Name.Name) {
+		return nil, nil
 	}
 
 	aliasToPkg, out := outputgateResolveImports(fset, path, file)
