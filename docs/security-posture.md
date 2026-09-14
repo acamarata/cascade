@@ -623,3 +623,55 @@ same middleware under `EgressClassConductor`. `internal/conductor/embed.go`
 is outside this ticket's files_scope, so that wiring has not landed;
 embedding dispatch does not yet transit the substitution pass. This is a
 tracked gap, not a silent one.
+
+## Plugin host boundary enforcement
+
+`internal/plugins/host.HostBoundaryEnforcer` is the capability-grant
+checkpoint every process-tier plugin host call transits: declared net
+scopes for `host_http_request` (`CheckHTTP`), storage domains for
+`host_storage_*` (`CheckStorage`), the vault broker for `host_secret_ref`
+(`CheckSecretRef`), and the policy engine for every other capability
+(`CheckGeneric`). Every check fails closed — an unknown, malformed,
+missing, or empty grant denies; there is no default-allow path.
+
+**Credential custody.** `CheckSecretRef` never reads or returns a raw
+vault value. It resolves a key through a `SecretBroker` seam to this
+package's own opaque `SecretHandle` type, whose only public operations
+are `Equal` and `IsZero`; `String()` deliberately never renders the
+underlying reference. R-21.211 names this same non-string-handle shape
+as `secrets.Handle`, attributed to H/S-15.T3, H/S-15.T4 and I/S-18.T2 —
+none of which shipped that type (H/S-15.T4's own journal records this:
+"No `Handle` type exists in the tree"). `SecretHandle` here is this
+package's own type for that reason, not an alias of a type that does not
+exist; a composition root's `SecretBroker` implementation is what
+ultimately decides which vault entries a plugin may reference at all.
+
+**Net scope and storage-domain audit.** Every denial — HTTP, storage,
+secret-ref, and policy — is recorded through the enforcer's `AuditSink`
+with the plugin id, the call type, and the reason; a granted secret-ref
+resolution is recorded too. `AuditSink` is a required constructor
+argument: an enforcer that cannot record a decision fails to build.
+
+**Divergence taxonomy.** A denial carries `cascade.KindCapabilityDenied`
+uniformly across all four checks, matching the sentinel
+`cascade.ErrCapabilityDenied` the ticket names explicitly. This differs
+from that Kind's own doc comment (which frames "capability denied" as a
+billing-tier concept — a tier that does not sell a feature at all); this
+package instead uses it for a plugin capability GRANT the operator did
+not authorize. Both readings are "the capability was not granted"; no new
+Kind was added to the frozen 14-member taxonomy (R-14.3).
+
+**Known gap (recorded, not silent): the process-tier transport has no
+plugin-to-host request/response path.** `internal/plugins/process`'s
+JSON-RPC transport correlates a plugin REQUEST's id against the host's
+own outstanding `Call`, not the reverse; a plugin-initiated request (id
+set, expecting a reply) decodes as a `Notification` with its id
+discarded, and no response ever reaches the plugin. `HostBoundaryEnforcer`
+is wired into the one channel that does reach the host today —
+`ProcessRuntime`'s notification-consumption loop
+(`internal/plugins/process/hostcalls.go`) — so every recognized host-ABI
+call is checked, but a process-tier plugin cannot yet receive the
+*result* of an allowed `host_http_request` or `host_secret_ref` call.
+Closing that gap needs an id-correlation half inside `Transport`, which
+is outside this ticket's files_scope. See the P1-E15-W4-S31-T4 journal
+for the full contradiction.

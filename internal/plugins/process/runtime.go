@@ -9,19 +9,17 @@
 //
 // Inputs: a Manifest and the runtime's injected collaborators (Clock,
 //
-//	Stderr writer, egress registrar/interceptor, command factory, audit
-//	sink, restart policy).
+//	Stderr, egress seams, audit sink, restart policy, capability checker).
 //
 // Outputs: a *Handle on success, or a typed error with no process forked.
 // Constraints: process spawn is NOT egress (R-21.265) — internal/plugins/
 //
 //	process is the os/exec importer allowlist's one normative entry
-//	(internal/build/egress_allow.go), and this file registers the
-//	plugin-process STDIO class separately, idempotently, via the H/S-16.T1
-//	inventory. The trusted-tier gate runs before any Commander is built,
-//	so a non-trusted manifest never reaches os/exec.
+//	(internal/build/egress_allow.go); it also registers the
+//	plugin-process STDIO class (H/S-16.T1) idempotently, and gates spawn
+//	on trust tier, so a non-trusted manifest never reaches os/exec.
 //
-// SPORT: internal/plugins/process runtime (ADD) — P1-E15-W4-S31-T3.
+// SPORT: internal/plugins/process runtime (ADD) — P1-E15-W4-S31-T3; host-call dispatch (CHANGE) — P1-E15-W4-S31-T4.
 
 package process
 
@@ -93,7 +91,8 @@ type ProcessRuntime struct {
 	Audit AuditSink
 	// StartupTimeout bounds spawn-through-handshake. Zero uses
 	// DefaultCallTimeout.
-	StartupTimeout time.Duration
+	StartupTimeout    time.Duration
+	CapabilityChecker HostCapabilityChecker // plugin capability boundary (hostcalls.go); nil is unwired
 	// commandFactory builds the Commander Launch starts. Defaults to
 	// defaultCommandFactory; a test overrides it.
 	commandFactory CommandFactory
@@ -208,6 +207,7 @@ func (rt *ProcessRuntime) spawnAndHandshake(ctx context.Context, manifest Manife
 		return nil, err
 	}
 	go rt.monitor(cmd, manifest, h)
+	go rt.consumeHostCalls(context.Background(), h)
 	return h, nil
 }
 
@@ -284,6 +284,7 @@ func (rt *ProcessRuntime) respawn(manifest Manifest, h *Handle) (Commander, erro
 	}
 	h.Ack = ack
 	h.swapTransport(transport)
+	go rt.consumeHostCalls(context.Background(), h)
 	return cmd, nil
 }
 

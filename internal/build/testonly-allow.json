@@ -1552,5 +1552,29 @@
     "expected_caller": "internal/daemon/recall_index.go's RegisterRecallIndexHandler (and cmd/cascade/doctor_recall_index.go's buildRecallIndexManager), once a future ticket adds a real embedding-provider composition root and conditionally wires Vectors: localvector.New(store) alongside a non-nil Pipeline -- not the current recall_index.go, which this ticket just made stop calling it, hence the new file name rather than the existing one",
     "retire_ticket": "UNOWNED",
     "caller_site": "internal/daemon/recall_index_embedder.go"
+  },
+  {
+    "symbol": "internal/plugins/host.NewHostBoundaryEnforcer",
+    "reason": "P1-E15-W4-S31-T4 built the plugin capability boundary (CheckHTTP/CheckStorage/CheckSecretRef/CheckGeneric) but golangci's plugins-providers-boundary depguard rule forbids ANY internal/plugins/**/*.go non-test file from importing internal/** at all, including internal/plugins/host itself -- so internal/plugins/process/runtime.go (this ticket's only in-scope wiring point) can only hold a local HostCapabilityChecker seam (hostcalls.go), never construct a *host.HostBoundaryEnforcer directly. The real construction site is a composition root outside internal/plugins/** entirely; none exists yet (internal/daemon has zero plugin-related files as of this writing, grep-verified). Epic O's own acceptance/gate ticket, S-33.T4, is the nearest ticket whose files_scope touches the top-level plugins composition surface (internal/plugins/dispatch.go, internal/plugins/types.go) and is the natural place a real *host.HostBoundaryEnforcer gets built and assigned to a runtime's CapabilityChecker field for every tier, process included. This ticket's own tests (package host, exempt from the depguard rule) and its integration test (TestHostBoundary_RealPluginABI, via a test-local checkerAdapter) are the only current callers.",
+    "expected_caller": "the composition root that constructs a real *host.HostBoundaryEnforcer per launched plugin and assigns it (via an adapter) to process.ProcessRuntime.CapabilityChecker and the equivalent seam on the wasm/remote runtimes; S-33.T4 (Epic O's acceptance ticket) is the nearest ticket positioned to add it",
+    "retire_ticket": "P1-E15-W4-S33-T4",
+    "caller_site": "internal/plugins/dispatch.go",
+    "added_by_ticket": "P1-E15-W4-S31-T4"
+  },
+  {
+    "symbol": "internal/plugins/host.PolicyVerdictAsk",
+    "reason": "PolicyVerdict mirrors internal/policy.Verdict's three values as this package's own string-free, dependency-free enum (capability.go/policy.go doc comments explain the depguard boundary this works around). CheckGeneric's production code compares only against PolicyVerdictAllow (the fail-closed default covers Ask and Deny identically, by design: this file's doc comment states an ask verdict is treated as a denial at a synchronous host boundary with no channel back to an operator). The identifier itself is therefore only referenced by this package's own tests, which construct a fakePolicyEngine returning each of the three verdicts to prove CheckGeneric's fail-closed behavior per verdict. The real internal/policy.Engine on the other side of the (not-yet-built) composition root's PolicyEngine adapter is what will actually produce a PolicyVerdictAsk value at runtime.",
+    "expected_caller": "the composition root's PolicyEngine adapter over the real internal/policy.Engine.Evaluate, which will map that engine's VerdictAsk to this value when it starts producing real verdicts; the same composition root named for NewHostBoundaryEnforcer above",
+    "retire_ticket": "P1-E15-W4-S33-T4",
+    "caller_site": "internal/plugins/dispatch.go",
+    "added_by_ticket": "P1-E15-W4-S31-T4"
+  },
+  {
+    "symbol": "internal/plugins/host.PolicyVerdictDeny",
+    "reason": "The zero value of PolicyVerdict, chosen deliberately so a PolicyEngine implementation that forgets to set the field denies rather than allows (fail-closed by construction, per this file's own doc comment). Because it is the zero value, no production comparison in this package ever needs to name it explicitly -- CheckGeneric's only explicit comparison is `verdict != PolicyVerdictAllow`, which already covers PolicyVerdictDeny without spelling it. Only this package's tests reference the identifier by name, to assert the zero-value default explicitly (TestPolicyVerdictZeroValueIsDeny) and to exercise CheckGeneric against an explicit deny verdict.",
+    "expected_caller": "the composition root's PolicyEngine adapter over internal/policy.Engine.Evaluate, once it maps that engine's VerdictDeny to this value; the same composition root named for NewHostBoundaryEnforcer above",
+    "retire_ticket": "P1-E15-W4-S33-T4",
+    "caller_site": "internal/plugins/dispatch.go",
+    "added_by_ticket": "P1-E15-W4-S31-T4"
   }
 ]

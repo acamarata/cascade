@@ -463,3 +463,46 @@ outbound byte. There is no second path, sanctioned or otherwise.
 **"Does `runtime = \"remote\"` work yet?"** No. Remote runtime is planned
 for P2 and is not available in the current release, regardless of the
 `[plugins].enable_remote_runtime` flag's value — see §2.
+
+## 11. Process-tier host boundary enforcement
+
+Every process-tier host-ABI call — `host_http_request`, `host_storage_*`,
+`host_secret_ref`, and every other capability-gated call — transits
+`internal/plugins/host.HostBoundaryEnforcer` before anything else happens
+with it. This is the process-tier counterpart to §4's WASM host-ABI
+checks (`host_http`'s inline net-scope check, `host_secretref`'s broker
+routing): same rules, same fail-closed posture, a separate implementation
+because the two runtimes cannot share code across the
+`plugins-providers-boundary` package boundary.
+
+**What gets checked.**
+
+- `host_http_request` — the target URL's host against your declared net
+  scopes (§7's bare-hostname / `*.example.com` rules apply identically).
+- `host_storage_*` — the domain against your declared storage domains;
+  a domain outside that set is refused unless you hold the explicit
+  cross-domain capability.
+- `host_secret_ref` — routed to the vault broker's reference verb; you
+  receive an opaque handle, never the stored value (§6's rules apply
+  identically on this tier).
+- everything else (`host_tool_register`, `host_event_emit`,
+  `host_stream_emit`) — the policy engine's own allow/ask/deny decision
+  for that capability. An "ask" verdict is treated as a denial at this
+  boundary: a host call has no channel back to an operator to answer an
+  interactive prompt mid-call.
+
+**Denied-call error structure.** Every refusal is `cascade`'s
+capability-denied error kind, wrapping the specific reason: an
+out-of-scope host for HTTP, an undeclared domain for storage, the
+broker's own error for a secret reference, or the policy engine's
+explanation text for everything else. Every denial is also recorded to
+the audit trail with your plugin id, the call type, and that same reason
+— nothing about a refusal is silent.
+
+**Known gap.** The process-tier transport does not yet carry a result
+back to a plugin for a request-shaped host call — an allowed
+`host_http_request` is checked and would proceed, but nothing yet
+delivers its HTTP response to your process. This is a transport-layer
+gap tracked in `docs/security-posture.md` §Plugin host boundary
+enforcement, not a plugin-author-facing behavior change: a denied call
+still behaves as documented above.
