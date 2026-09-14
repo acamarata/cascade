@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-14T14:20:04Z",
+  "generated_at": "2026-09-14T14:50:07Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1979,6 +1979,77 @@
           "status": "ADD",
           "ticket": "P1-E26-W10-S53-T3",
           "raw": "cli/context-sync-projects/ADD (P1-E26-W10-S53-T3 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cli/plugin-lifecycle",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T4",
+          "raw": "cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4)."
+        },
+        {
+          "file": "cmd/cascade/plugin_add.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T4",
+          "raw": "cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4)."
+        },
+        {
+          "file": "cmd/cascade/plugin_manage.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T4",
+          "raw": "cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4)."
+        },
+        {
+          "file": "cmd/cascade/plugin_perms.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T4",
+          "raw": "cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4)."
+        },
+        {
+          "file": "cmd/cascade/plugin_platform_unix.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T4",
+          "raw": "cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4)."
+        },
+        {
+          "file": "cmd/cascade/plugin_platform_windows.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T4",
+          "raw": "cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4)."
+        },
+        {
+          "file": "cmd/cascade/plugin_store_unix.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T4",
+          "raw": "cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4)."
+        },
+        {
+          "file": "cmd/cascade/plugin_store_windows.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T4",
+          "raw": "cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4)."
+        },
+        {
+          "file": "cmd/cascade/plugin_update.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T4",
+          "raw": "cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4)."
         }
       ],
       "statuses": [
@@ -13303,6 +13374,66 @@
       ]
     },
     {
+      "name": "internal/plugins lifecycle-add",
+      "sites": [
+        {
+          "file": "internal/plugins/lifecycle_add.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T4",
+          "raw": "internal/plugins lifecycle-add/ADD — P1-E15-W4-S32-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins lifecycle-manage",
+      "sites": [
+        {
+          "file": "internal/plugins/lifecycle_manage.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T4",
+          "raw": "internal/plugins lifecycle-manage/ADD — P1-E15-W4-S32-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins lifecycle-metadata",
+      "sites": [
+        {
+          "file": "internal/plugins/lifecycle.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T4",
+          "raw": "internal/plugins lifecycle-metadata/ADD — P1-E15-W4-S32-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins lifecycle-update",
+      "sites": [
+        {
+          "file": "internal/plugins/lifecycle_update.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T4",
+          "raw": "internal/plugins lifecycle-update/ADD — P1-E15-W4-S32-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins/host capability-boundary",
       "sites": [
         {
@@ -19731,7 +19862,7 @@
       ]
     }
   ],
-  "total_sites": 1955,
+  "total_sites": 1968,
   "unspecified_count": 63,
   "multi_status_count": 39
 }
