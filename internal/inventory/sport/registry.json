@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-14T11:28:56Z",
+  "generated_at": "2026-09-14T12:46:29Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -11710,9 +11710,15 @@
         },
         {
           "file": "internal/daemon/recall_index.go",
-          "line": 29,
+          "line": 33,
           "status": "CHANGE",
           "raw": "internal/daemon (CHANGED — recall.index.* registration,"
+        },
+        {
+          "file": "internal/daemon/recall_index_sources.go",
+          "line": 39,
+          "status": "CHANGE",
+          "raw": "internal/daemon (CHANGED, retrieval.sources ingest wiring)."
         },
         {
           "file": "internal/daemon/status.go",
@@ -19635,7 +19641,7 @@
       ]
     }
   ],
-  "total_sites": 1948,
+  "total_sites": 1949,
   "unspecified_count": 63,
   "multi_status_count": 39
 }
