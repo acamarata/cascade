@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-14T18:49:27Z",
+  "generated_at": "2026-09-14T18:58:02Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3064,6 +3064,20 @@
           "status": "ADD",
           "ticket": "P1-E04-W1-S07-T6",
           "raw": "cmd/cascade elevate-helper tests/ADDED (P1-E04-W1-S07-T6)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade plugin-view tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_views_test.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "cmd/cascade plugin-view tests (ADD)."
         }
       ],
       "statuses": [
@@ -20283,7 +20297,7 @@
       ]
     }
   ],
-  "total_sites": 2008,
+  "total_sites": 2009,
   "unspecified_count": 63,
   "multi_status_count": 39
 }
