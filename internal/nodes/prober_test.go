@@ -242,9 +242,11 @@ func TestProberRouteFailsStaysUnavailable(t *testing.T) {
 		t.Fatal(err)
 	}
 	clock, ticker, checker := newFakeClock(), newFakeTicker(), &fakeRouteChecker{routeOK: false}
+	probed := make(chan struct{})
 	prober := NewProber(ProberDeps{
 		Records: store, Clock: clock, Ticker: ticker, RouteChecker: checker,
 		Probe: func(_ context.Context, _ DeviceRecord, now time.Time) ProbeOutcome {
+			probed <- struct{}{}
 			return ProbeOutcome{Reachable: false, At: now}
 		},
 	})
@@ -252,11 +254,7 @@ func TestProberRouteFailsStaysUnavailable(t *testing.T) {
 	done := make(chan struct{})
 	go func() { prober.Run(ctx); close(done) }()
 
-	for i := 0; i < ProbeMissThreshold; i++ {
-		clock.advance(15 * time.Second)
-		ticker.fire()
-		time.Sleep(10 * time.Millisecond)
-	}
+	awaitProbePasses(t, clock, ticker, probed, ProbeMissThreshold)
 	cancel()
 	<-done
 

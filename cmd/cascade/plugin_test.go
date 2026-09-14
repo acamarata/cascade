@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -191,7 +192,18 @@ func TestPluginCLI_PermsNoInputHardError(t *testing.T) {
 	if err == nil {
 		t.Fatal("plugin perms grant with CASCADE_NO_INPUT=1 succeeded, want the hard error")
 	}
-	if !strings.Contains(err.Error(), "CASCADE_NO_INPUT") {
-		t.Fatalf("error = %v, want it to name CASCADE_NO_INPUT", err)
+	// Windows refuses every elevated plugin verb EARLIER and for a more
+	// fundamental reason: the elevation helper is tier-2 refused outright
+	// (plugin_platform_windows.go, whose doc comment states the ordering
+	// is deliberate -- "before any daemon-required or CASCADE_NO_INPUT
+	// check runs, with the exact wording Art.5's acceptance criteria
+	// name"). So the refusal is asserted per-GOOS on its own exact
+	// wording; neither branch settles for "some error happened".
+	want := "CASCADE_NO_INPUT"
+	if goruntime.GOOS == "windows" {
+		want = "elevation not available on Windows tier-2"
+	}
+	if !strings.Contains(err.Error(), want) {
+		t.Fatalf("error = %v, want it to name %q", err, want)
 	}
 }
