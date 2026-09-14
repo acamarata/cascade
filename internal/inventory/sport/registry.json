@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-14T15:59:40Z",
+  "generated_at": "2026-09-14T16:42:00Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -13468,6 +13468,57 @@
       ]
     },
     {
+      "name": "internal/plugins dispatch-remote",
+      "sites": [
+        {
+          "file": "internal/plugins/dispatch_remote.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "internal/plugins dispatch-remote (ADD) — P1-E15-W4-S33-T4."
+        },
+        {
+          "file": "internal/plugins/dispatch_remote_integration_test.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "internal/plugins dispatch-remote (ADD) — P1-E15-W4-S33-T4."
+        },
+        {
+          "file": "internal/plugins/dispatch_remote_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "internal/plugins dispatch-remote (ADD) — P1-E15-W4-S33-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins epic-o-acceptance",
+      "sites": [
+        {
+          "file": "internal/plugins/epic_o_accept_test.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "internal/plugins epic-o-acceptance (ADD) — P1-E15-W4-S33-T4."
+        },
+        {
+          "file": "internal/plugins/epic_o_remote_integration_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "internal/plugins epic-o-acceptance (ADD) — P1-E15-W4-S33-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins harness-generator-wiring tests",
       "sites": [
         {
@@ -13751,6 +13802,91 @@
           "status": "ADD",
           "ticket": "P1-E24-W5-S50-T1",
           "raw": "internal/plugins/registryfetch (ADD) — P1-E24-W5-S50-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins/remote",
+      "sites": [
+        {
+          "file": "internal/plugins/remote/doer.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "internal/plugins/remote (ADD) — P1-E15-W4-S33-T4."
+        },
+        {
+          "file": "internal/plugins/remote/doer_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "internal/plugins/remote (ADD) — P1-E15-W4-S33-T4."
+        },
+        {
+          "file": "internal/plugins/remote/egress.go",
+          "line": 42,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "internal/plugins/remote (ADD) — P1-E15-W4-S33-T4."
+        },
+        {
+          "file": "internal/plugins/remote/egress_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "internal/plugins/remote (ADD) — P1-E15-W4-S33-T4."
+        },
+        {
+          "file": "internal/plugins/remote/fuzz_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "internal/plugins/remote (ADD) — P1-E15-W4-S33-T4."
+        },
+        {
+          "file": "internal/plugins/remote/handshake.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "internal/plugins/remote (ADD) — P1-E15-W4-S33-T4."
+        },
+        {
+          "file": "internal/plugins/remote/remote.go",
+          "line": 39,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "internal/plugins/remote (ADD) — P1-E15-W4-S33-T4."
+        },
+        {
+          "file": "internal/plugins/remote/remote_edge_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "internal/plugins/remote (ADD) — P1-E15-W4-S33-T4."
+        },
+        {
+          "file": "internal/plugins/remote/remote_integration_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "internal/plugins/remote (ADD) — P1-E15-W4-S33-T4."
+        },
+        {
+          "file": "internal/plugins/remote/remote_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "internal/plugins/remote (ADD) — P1-E15-W4-S33-T4."
+        },
+        {
+          "file": "internal/plugins/remote/remote_windows_test.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "internal/plugins/remote (ADD) — P1-E15-W4-S33-T4."
         }
       ],
       "statuses": [
@@ -16827,6 +16963,21 @@
       ]
     },
     {
+      "name": "pkg/plugin remote-spec",
+      "sites": [
+        {
+          "file": "pkg/plugin/remote_spec.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "pkg/plugin remote-spec (ADD) — P1-E15-W4-S33-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "pkg/plugin/registry/generator",
       "sites": [
         {
@@ -19402,6 +19553,21 @@
       ]
     },
     {
+      "name": "runtime/config-plugins",
+      "sites": [
+        {
+          "file": "internal/runtime/config_plugins.go",
+          "line": 37,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S33-T4",
+          "raw": "runtime/config-plugins (ADD, P1-E15-W4-S33-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "runtime/config-telemetry",
       "sites": [
         {
@@ -19970,7 +20136,7 @@
       ]
     }
   ],
-  "total_sites": 1980,
+  "total_sites": 1998,
   "unspecified_count": 63,
   "multi_status_count": 39
 }
