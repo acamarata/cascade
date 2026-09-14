@@ -141,6 +141,39 @@ jobs:
       - name: go vet -tags pam ./...
         run: CGO_ENABLED=1 go vet -tags pam ./...
 
+  # Plugin ABI v1 conformance suite (P1-E15-W4-S32-T2): one shared fixture
+  # set (internal/plugins/conformance/testdata/fixtures/abi_v1.json) driven
+  # through the builtin delegate path, the real wazero WASM runtime, and a
+  # real forked process-runtime subprocess. Runs on each matrix entry's OWN
+  # native runner (mirrors build-test's matrix above), so the wasm leg's
+  # real wazero execution and the process leg's real subprocess spawn both
+  # run natively, never cross-compiled. Fails the build if any runtime
+  # deviates from the fixture set (TestConformance_AllRuntimesAgree) or if
+  # the fixture set is missing a happy/error pair for any ABI v1 host
+  # function (TestFixtureSet_CoversAllHostFnsWithHappyAndErrorPairs) --
+  # both are real go test assertions, not a separate script, so a local
+  # `go test ./internal/plugins/conformance/...` already enforces them.
+  conformance-suite:
+    name: plugin ABI conformance (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: darwin, goarch: arm64, runner: macos-15 }
+          - { goos: linux, goarch: amd64, runner: ubuntu-latest }
+          - { goos: linux, goarch: arm64, runner: ubuntu-24.04-arm }
+          - { goos: windows, goarch: amd64, runner: windows-latest }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: plugin ABI conformance suite
+        run: go test -race -count=1 -v ./internal/plugins/conformance/...
+
   race:
     name: race detector
     runs-on: ubuntu-latest
@@ -680,14 +713,14 @@ jobs:
 
   ci-gate:
     name: ci-gate (required status)
-    needs: [build-test, darwin-amd64-build, linux-pam-build, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, redis-storetest-under-docker, s3-storetest-under-docker, server-profile-assembly]
+    needs: [build-test, darwin-amd64-build, linux-pam-build, conformance-suite, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, redis-storetest-under-docker, s3-storetest-under-docker, server-profile-assembly]
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: All lanes green
         run: |
           set -eu
-          for r in "${{ needs.build-test.result }}" "${{ needs.darwin-amd64-build.result }}" "${{ needs.linux-pam-build.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}" "${{ needs.retrieval-eval-gate.result }}" "${{ needs.storetest-under-docker.result }}" "${{ needs.pgvector-storetest-under-docker.result }}" "${{ needs.redis-storetest-under-docker.result }}" "${{ needs.s3-storetest-under-docker.result }}" "${{ needs.server-profile-assembly.result }}"; do
+          for r in "${{ needs.build-test.result }}" "${{ needs.darwin-amd64-build.result }}" "${{ needs.linux-pam-build.result }}" "${{ needs.conformance-suite.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}" "${{ needs.retrieval-eval-gate.result }}" "${{ needs.storetest-under-docker.result }}" "${{ needs.pgvector-storetest-under-docker.result }}" "${{ needs.redis-storetest-under-docker.result }}" "${{ needs.s3-storetest-under-docker.result }}" "${{ needs.server-profile-assembly.result }}"; do
             if [ "$r" != "success" ]; then
               echo "ci-gate: a required lane did not succeed ($r)"
               exit 1

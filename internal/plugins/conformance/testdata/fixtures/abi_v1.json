@@ -1,0 +1,134 @@
+[
+  {
+    "method": "host_log",
+    "kind": "happy",
+    "wasm_request": {"level": "info", "message": "hello from conformance"}
+  },
+  {
+    "method": "host_log",
+    "kind": "error",
+    "wasm_request": {"level": "info", "message": ""},
+    "expect_err_kind": "invalid-input",
+    "note": "process runtime observes no host_log notification at all -- hostcalls.go's real method vocabulary has no entry for it (not http, not storage, not secret_ref, and hostGenericCapability has no \"host_log\" key), so ProcessMethod is deliberately left empty. This IS the recorded finding for host_log, not a suite gap."
+  },
+  {
+    "method": "host_storage",
+    "kind": "happy",
+    "wasm_request": {"op": "put", "key": "conformance-key", "value": "aGVsbG8="},
+    "process_method": "host_storage_put",
+    "process_params": {"domain": "conformance-domain"},
+    "process_grant_profile": "granted",
+    "expect_process_allowed": true
+  },
+  {
+    "method": "host_storage",
+    "kind": "error",
+    "wasm_request": {"op": "get", "key": "never-set-key"},
+    "expect_err_kind": "not-found",
+    "process_method": "host_storage_get",
+    "process_params": {"domain": "other-domain"},
+    "process_grant_profile": "denied",
+    "expect_process_allowed": false,
+    "note": "wire-shape divergence: process/hostcalls.go's decodeHostParam(n.Params, \"domain\") checks only the storage DOMAIN, never key existence -- it has no equivalent to the wasm ABI's op/key/value StorageRequest shape at all. So this fixture's wasm/builtin error (a real not-found on a missing key) and its process denial (an ungranted domain) are genuinely different real causes, not the same check exercised twice; forcing them to share one cause would misrepresent what process actually verifies."
+  },
+  {
+    "method": "host_http",
+    "kind": "happy",
+    "wasm_request": {"method": "GET", "url": "https://allowed.example.com/resource"},
+    "process_method": "host_http_request",
+    "process_params": {"url": "https://allowed.example.com/resource"},
+    "process_grant_profile": "granted",
+    "expect_process_allowed": true
+  },
+  {
+    "method": "host_http",
+    "kind": "error",
+    "wasm_request": {"method": "GET", "url": "https://denied.example.net/resource"},
+    "expect_err_kind": "permission-denied",
+    "process_method": "host_http_request",
+    "process_params": {"url": "https://denied.example.net/resource"},
+    "process_grant_profile": "denied",
+    "expect_process_allowed": false,
+    "note": "the one fixture where all three runtimes gate on the SAME real concept (declared net scope) via parallel, independently-authored scope-matching implementations (wasm/host_abi_net.go's checkNetScope and host/http.go's CheckHTTP -- capability.go's own doc comment records why the two cannot share code across the plugins-providers-boundary depguard rule)."
+  },
+  {
+    "method": "host_stream",
+    "kind": "happy",
+    "wasm_request": {"channelId": "ch-1", "data": "aGVsbG8="},
+    "process_method": "host_stream_emit",
+    "process_params": {},
+    "process_grant_profile": "granted",
+    "expect_process_allowed": true
+  },
+  {
+    "method": "host_stream",
+    "kind": "error",
+    "wasm_request": {"channelId": "", "data": "aGVsbG8="},
+    "expect_err_kind": "invalid-input",
+    "process_method": "host_stream_emit",
+    "process_params": {},
+    "process_grant_profile": "denied",
+    "expect_process_allowed": false,
+    "note": "divergence in WHAT is checked: wasm/builtin deny on an empty channelId (a payload-field validation inside the delegate). process's CheckGeneric (host/policy.go) never inspects the notification's params at all -- checkHostCall's default branch only maps the method name to a capability string and asks the policy engine, so this fixture's process denial comes from the deliberately-denying policy profile, not from the empty field process never looks at."
+  },
+  {
+    "method": "host_secretref",
+    "kind": "happy",
+    "wasm_request": {"name": "db-password"},
+    "process_method": "host_secret_ref",
+    "process_params": {"key": "db-password"},
+    "process_grant_profile": "granted",
+    "expect_process_allowed": true
+  },
+  {
+    "method": "host_secretref",
+    "kind": "error",
+    "wasm_request": {"name": ""},
+    "expect_err_kind": "invalid-input",
+    "process_method": "host_secret_ref",
+    "process_params": {"key": ""},
+    "process_grant_profile": "denied",
+    "expect_process_allowed": false,
+    "note": "genuine agreement: both legs deny an empty identifier for the same real reason (wasm/host_abi_secret.go's req.Name==\"\" check; host/secret.go's CheckSecretRef key==\"\" check), independently implemented on each side of the plugins-providers-boundary depguard rule."
+  },
+  {
+    "method": "host_eventemit",
+    "kind": "happy",
+    "wasm_request": {"topic": "conformance.event", "payload": "e30="},
+    "process_method": "host_event_emit",
+    "process_params": {},
+    "process_grant_profile": "granted",
+    "expect_process_allowed": true
+  },
+  {
+    "method": "host_eventemit",
+    "kind": "error",
+    "wasm_request": {"topic": "", "payload": "e30="},
+    "expect_err_kind": "invalid-input",
+    "process_method": "host_event_emit",
+    "process_params": {},
+    "process_grant_profile": "denied",
+    "expect_process_allowed": false,
+    "note": "same class of divergence as host_stream: wasm/builtin deny on an empty topic field; process denies via the policy profile, never inspecting params."
+  },
+  {
+    "method": "host_toolregister",
+    "kind": "happy",
+    "wasm_request": {"toolName": "conformance-tool", "schema": "e30="},
+    "process_method": "host_tool_register",
+    "process_params": {},
+    "process_grant_profile": "granted",
+    "expect_process_allowed": true
+  },
+  {
+    "method": "host_toolregister",
+    "kind": "error",
+    "wasm_request": {"toolName": "", "schema": "e30="},
+    "expect_err_kind": "invalid-input",
+    "process_method": "host_tool_register",
+    "process_params": {},
+    "process_grant_profile": "denied",
+    "expect_process_allowed": false,
+    "note": "same class of divergence as host_stream/host_eventemit: wasm/builtin deny on an empty toolName field; process denies via the policy profile, never inspecting params."
+  }
+]
