@@ -367,3 +367,68 @@ remains unsatisfiable locally by design (reused, not re-claimed).
 **Gate disposition: still BLOCKED**, for a fourth, narrower reason. Full
 adjudication in
 `.claude/planning/p1/phase/journals/BLOCKED-P1-E09-W2-S18-T7.md`.
+
+## RE-VERIFICATION 2026-09-14 (fourth pass, HEAD 8edab2b)
+
+Re-run against a freshly built `go build ./cmd/cascade` binary (not a goreleaser
+snapshot) at `p1-integration` HEAD `8edab2b`, tree clean. Swap was at 96% used
+before starting (`vm.swapusage`); only a single `go build` was run this pass, under
+`~/bin/flock /tmp/cascade-heavy.lock`, exit 0 — the release pipeline was reused, not
+re-run, for the same reason and with the same scope justification as the two prior
+passes (the fixes verified here touch only `internal/daemon`, `internal/runtime`,
+and `internal/retrieval/lifecycle`).
+
+**All four defects this gate previously blocked on are independently confirmed
+FIXED**, against a real, hand-authored, git-initialized fixture (`/tmp/cgf`) with a
+live daemon on a fresh HOME (`/tmp/cgh`):
+
+- `DEFECT-retrieval-sources-not-wired-to-ingest.md` (P0): `cascade recall index
+  rebuild --json` reports `CorporaIndexed: 1`, `ChunksWritten: 1`; `cascade recall
+  "marker-token-flarp-3391" --cite` returns a real cited hit from the fixture.
+- `DEFECT-doctor-retrieval-index-exclusive-lock.md` (P1): `cascade doctor` against
+  the live daemon no longer reports the exclusive-lock error.
+- `DEFECT-config-set-widget-key-unknown.md` (P2): `cascade config set
+  widget.show_project_names true` succeeds and round-trips via `config get`.
+- `DEFECT-vector-leg-never-written-on-rebuild.md` (P1): `cascade doctor` against
+  the live daemon, after real ingest, now reports `OK retrieval_index retrieval
+  index is current and consistent`, exit 0 (previously `WARN ... 1
+  vector-incomplete`, exit 5). `cascade recall` still returns the cited hit;
+  daemonless `doctor` on the same virgin HOME, before the daemon was ever started,
+  was also exit 0 with no warnings. Confirmed at the code level: both composition
+  roots (`internal/daemon/recall_index.go`, `cmd/cascade/doctor_recall_index.go`,
+  commit `23f7e31`) now leave `Vectors` nil, and `internal/retrieval/lifecycle`'s
+  `vectorIncomplete` and delete path both correctly guard `m.vectors == nil`.
+
+**New blocking finding, independent of all four fixes above:** `cascade status`
+reports `"health":"degraded"` on every fresh install, at every point checked in
+this session (immediately after daemon start, after index rebuild, after `context
+slice`/`context show`) — never `"ok"`. Root-caused: `internal/daemon/
+reachability_wiring.go`'s `WireReachability`, wired to real daemon startup via
+`cmd/cascade/daemon_unix_conductor.go:63`, marks the `jobs.reachability` subsystem
+`SubsystemSkipped` whenever no symbol graph is stored for the current repository —
+true of every repository on a first-ever start, since graph-building is not a
+W1/W2 surface (`cascade init`, which might build one, is explicitly out of this
+gate's scope). `internal/daemon/status.go`'s `health()` treats `SubsystemSkipped`
+as `degraded`, identically to a subsystem that tried and failed to start. Filed
+`DEFECT-status-degraded-on-fresh-install.md`, P1. This is not caused by, or
+downstream of, this pass's four fixes — it predates them. The original
+2026-09-12 pass (above) observed and quoted the same `health: degraded` reading
+but marked the item VERIFIED, attributing it to the (separate) retrieval_index
+doctor finding rather than to the subsystem manifest, which is `status.health()`'s
+actual and only input; that attribution does not hold up on inspection of
+`status.go`, so the "status healthy" W1 condition has not actually been satisfied
+by any pass to date.
+
+`config set`/`get` (TOML-literal quoting required, as previously found),
+IPC round trip (`status --json` from a second invocation against the running
+daemon), `context slice`/`show` (correct tier discovery, 21 tokens, 1 source),
+`memory remember/list/recall` (`--type`, not `--kind`, is the correct flag; a real
+record round-tripped via its `reference/<hash>` address), and `vault
+list`/`audit`/`get` (clean, exit 0/0/8, `elevation-required` matching this
+contract's literal check text) were all re-confirmed correct on the fresh
+artifact. Provenance attestation remains unsatisfiable locally by design (reused,
+not re-claimed).
+
+**Gate disposition: still BLOCKED**, for a fifth, independent reason. Full
+adjudication in
+`.claude/planning/p1/phase/journals/BLOCKED-P1-E09-W2-S18-T7.md`.
