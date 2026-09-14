@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-14T15:36:36Z",
+  "generated_at": "2026-09-14T15:59:40Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -9596,6 +9596,70 @@
           "line": 19,
           "status": "ADD",
           "raw": "internal.notify.Subscriber/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.plugins.conformance",
+      "sites": [
+        {
+          "file": "internal/plugins/conformance/fixture_dispatch_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T2",
+          "raw": "internal.plugins.conformance/ADDED (P1-E15-W4-S32-T2)."
+        },
+        {
+          "file": "internal/plugins/conformance/fixture_runner_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T2",
+          "raw": "internal.plugins.conformance/ADDED (P1-E15-W4-S32-T2)."
+        },
+        {
+          "file": "internal/plugins/conformance/harness_process_test.go",
+          "line": 29,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T2",
+          "raw": "internal.plugins.conformance/ADDED (P1-E15-W4-S32-T2)"
+        },
+        {
+          "file": "internal/plugins/conformance/harness_process_windows_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T2",
+          "raw": "internal.plugins.conformance/ADDED (P1-E15-W4-S32-T2)."
+        },
+        {
+          "file": "internal/plugins/conformance/harness_test.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T2",
+          "raw": "internal.plugins.conformance/ADDED (P1-E15-W4-S32-T2)."
+        },
+        {
+          "file": "internal/plugins/conformance/harness_wazero_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T2",
+          "raw": "internal.plugins.conformance/ADDED (P1-E15-W4-S32-T2)"
+        },
+        {
+          "file": "internal/plugins/conformance/refsink_test.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T2",
+          "raw": "internal.plugins.conformance/ADDED (P1-E15-W4-S32-T2)."
+        },
+        {
+          "file": "internal/plugins/conformance/suite_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S32-T2",
+          "raw": "internal.plugins.conformance/ADDED (P1-E15-W4-S32-T2)."
         }
       ],
       "statuses": [
@@ -19906,7 +19970,7 @@
       ]
     }
   ],
-  "total_sites": 1972,
+  "total_sites": 1980,
   "unspecified_count": 63,
   "multi_status_count": 39
 }
