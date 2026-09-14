@@ -132,6 +132,7 @@ func mountSubcommands(root *cobra.Command) {
 	mountRecallCmd(root)
 	mountContextCmd(root)
 	mountApprovalCmd(root)
+	mountPluginCmd(root)
 	mountPolicyCmd(root)
 	mountProviderCmd(root)
 	mountMigrateCmd(root)
