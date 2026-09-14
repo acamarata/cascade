@@ -150,8 +150,16 @@ func TestDaemonSubsystems_WorktreeManagerAcquiredWiresRealCreate(t *testing.T) {
 	}
 
 	runCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	m := NewManifest(nil, runtime.NewSystemClock())
+	// Cancel AND join before this test's TempDir git repo is removed.
+	// t.Cleanup is LIFO, so this runs before newDaemonTestGitRepo's
+	// RemoveAll; cancelling alone leaves the manager goroutine possibly
+	// mid-git-operation, whose open handles make the removal fail on
+	// Windows.
+	t.Cleanup(func() {
+		cancel()
+		m.Wait()
+	})
 	if err := m.RegisterWorktreeManager(runCtx, bus, wt, jobs.IdentityRepoRootResolver, "test-cursor"); err != nil {
 		t.Fatalf("RegisterWorktreeManager: %v", err)
 	}

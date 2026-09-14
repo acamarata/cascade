@@ -28,8 +28,6 @@ import (
 	"sync"
 
 	"github.com/acamarata/cascade/internal/conductor"
-	"github.com/acamarata/cascade/internal/fleet/journal"
-	"github.com/acamarata/cascade/internal/fleet/supervision"
 	"github.com/acamarata/cascade/internal/jobs"
 	"github.com/acamarata/cascade/internal/repo"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -89,6 +87,11 @@ type Manifest struct {
 	clock   runtime.Clock
 	entries map[string]*SubsystemStatus
 	order   []string
+
+	// running tracks the background goroutines the Register* methods
+	// start, so a caller can WAIT for them rather than only cancelling
+	// their context and hoping.
+	running sync.WaitGroup
 }
 
 // NewManifest builds a Manifest. A nil logger discards log lines (tests
@@ -262,34 +265,3 @@ func (m *Manifest) RegisterReachability(graph *repo.SymbolGraph) (jobs.Reachabil
 }
 
 // worktreeSweepSubsystem is the fail-loud Manifest name
-// RegisterWorktreeSweep reports under (R-14.87).
-const worktreeSweepSubsystem = "jobs.worktree.sweep"
-
-// RegisterWorktreeSweep is the daemon composition root's call site for
-// AC/S-59.T3's HOW step 5: it constructs the WorktreeManager (the real
-// jobs.NewWorktreeManager production call site) and runs its Sweep once,
-// synchronously, AT subsystem startup (R-21.140/R-21.177's daemon-start
-// orphan reconciliation), recording the outcome against m -- the exact
-// RegisterConductorRouter/RegisterReachability posture above. The
-// returned *jobs.WorktreeManager is the SAME instance
-// RegisterWorktreeManager (subsystems_worktree.go) then wires to the
-// acquired/released event stream, so both halves of this ticket's daemon
-// wiring share one manager.
-//
-// CONTRACT DEVIATION (recorded, matching both precedents above): no
-// daemon startup path (daemon.go, lifecycle_unix.go) yet calls
-// RegisterWorktreeSweep -- out of this ticket's files_scope. See
-// subsystems_worktree.go's RegisterWorktreeManager for the companion
-// event-wiring call site, split out purely for the 300-line cap.
-func (m *Manifest) RegisterWorktreeSweep(ctx context.Context, store *jobs.Store, j journal.Store, attn *supervision.Store, probe jobs.ProcessLivenessProbe) (*jobs.WorktreeManager, jobs.SweepResult, error) {
-	m.Register(worktreeSweepSubsystem)
-	wt := jobs.NewWorktreeManager(store, j, attn, probe)
-	result, err := wt.Sweep(ctx)
-	if err != nil {
-		m.Failed(worktreeSweepSubsystem, err.Error())
-		return wt, result, err
-	}
-	m.Started(worktreeSweepSubsystem, fmt.Sprintf("%d removed, %d quarantined, %d pruned",
-		len(result.Removed), len(result.Quarantined), len(result.Pruned)))
-	return wt, result, nil
-}

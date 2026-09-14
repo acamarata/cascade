@@ -156,11 +156,11 @@ func (m *Manifest) RegisterScheduler(ctx context.Context, bus *events.Bus, clock
 		m.Failed(jobSchedulerSubsystem, err.Error())
 		return nil, err
 	}
-	go func() {
+	m.goSubsystem(func() {
 		if runErr := runSchedulerConsumer(roleCtx, sched, sub); runErr != nil {
 			m.Failed(jobSchedulerSubsystem, runErr.Error())
 		}
-	}()
+	})
 	m.Started(jobSchedulerSubsystem, fmt.Sprintf("role=%s subscribed cursor %q on namespace %q (%s)", role, cursorName, jobs.LeaseEventNamespace, resumeDetail))
 	return sched, nil
 }

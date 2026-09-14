@@ -53,8 +53,16 @@ func TestDaemonSubsystems_WorktreeManagerNilResolveRootDefaultsToIdentity(t *tes
 	}
 
 	runCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	m := NewManifest(nil, runtime.NewSystemClock())
+	// Cancel AND join before the test's TempDir is removed. t.Cleanup runs
+	// LIFO, so this registers after newDaemonTestGitRepo's TempDir and
+	// therefore runs before its RemoveAll. Cancelling alone is not enough:
+	// the manager goroutine can still be mid-git-operation, and on Windows
+	// an open handle makes removing the worktree directory fail outright.
+	t.Cleanup(func() {
+		cancel()
+		m.Wait()
+	})
 	if err := m.RegisterWorktreeManager(runCtx, bus, wt, nil, "nil-resolver-cursor"); err != nil {
 		t.Fatalf("RegisterWorktreeManager with nil resolveRoot: %v", err)
 	}
@@ -101,8 +109,13 @@ func TestDaemonSubsystems_WorktreeManagerRunErrorReportsFailed(t *testing.T) {
 	wt := jobs.NewWorktreeManager(store, nil, nil, fakeProbe{alive: false})
 
 	runCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	m := NewManifest(nil, runtime.NewSystemClock())
+	// Join the goroutine rather than only cancelling it, so it cannot
+	// outlive the test and report into a Manifest a later test is reading.
+	t.Cleanup(func() {
+		cancel()
+		m.Wait()
+	})
 	if err := m.RegisterWorktreeManager(runCtx, bus, wt, nil, "bad-payload-cursor"); err != nil {
 		t.Fatalf("RegisterWorktreeManager: %v", err)
 	}
