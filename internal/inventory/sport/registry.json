@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-14T13:49:40Z",
+  "generated_at": "2026-09-14T14:20:04Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -13303,6 +13303,81 @@
       ]
     },
     {
+      "name": "internal/plugins/host capability-boundary",
+      "sites": [
+        {
+          "file": "internal/plugins/host/capability.go",
+          "line": 36,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S31-T4",
+          "raw": "internal/plugins/host capability-boundary (ADD) — P1-E15-W4-S31-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins/host http-scope-check",
+      "sites": [
+        {
+          "file": "internal/plugins/host/http.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S31-T4",
+          "raw": "internal/plugins/host http-scope-check (ADD) — P1-E15-W4-S31-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins/host policy-delegate-check",
+      "sites": [
+        {
+          "file": "internal/plugins/host/policy.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S31-T4",
+          "raw": "internal/plugins/host policy-delegate-check (ADD) — P1-E15-W4-S31-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins/host secret-ref-boundary",
+      "sites": [
+        {
+          "file": "internal/plugins/host/secret.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S31-T4",
+          "raw": "internal/plugins/host secret-ref-boundary (ADD) — P1-E15-W4-S31-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins/host storage-domain-check",
+      "sites": [
+        {
+          "file": "internal/plugins/host/storage.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S31-T4",
+          "raw": "internal/plugins/host storage-domain-check (ADD) — P1-E15-W4-S31-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins/process handshake",
       "sites": [
         {
@@ -13311,6 +13386,21 @@
           "status": "ADD",
           "ticket": "P1-E15-W4-S31-T3",
           "raw": "internal/plugins/process handshake (ADD) — P1-E15-W4-S31-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins/process host-call-dispatch",
+      "sites": [
+        {
+          "file": "internal/plugins/process/hostcalls.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S31-T4",
+          "raw": "internal/plugins/process host-call-dispatch (ADD) — P1-E15-W4-S31-T4."
         }
       ],
       "statuses": [
@@ -13337,10 +13427,10 @@
       "sites": [
         {
           "file": "internal/plugins/process/runtime.go",
-          "line": 24,
+          "line": 22,
           "status": "ADD",
           "ticket": "P1-E15-W4-S31-T3",
-          "raw": "internal/plugins/process runtime (ADD) — P1-E15-W4-S31-T3."
+          "raw": "internal/plugins/process runtime (ADD) — P1-E15-W4-S31-T3; host-call dispatch (CHANGE) — P1-E15-W4-S31-T4."
         }
       ],
       "statuses": [
@@ -19641,7 +19731,7 @@
       ]
     }
   ],
-  "total_sites": 1949,
+  "total_sites": 1955,
   "unspecified_count": 63,
   "multi_status_count": 39
 }
