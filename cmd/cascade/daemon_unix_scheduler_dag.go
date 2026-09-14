@@ -125,3 +125,22 @@ func openSchedulerResumeJobsStore(ctx context.Context, paths runtime.PathProvide
 	}
 	return jobs.NewStore(db), func() { _ = db.Close() }, nil
 }
+
+// wireBackgroundSubsystems registers every long-lived background subsystem
+// the daemon supervises.
+//
+// Grouping them is not only line-count bookkeeping: these are the pieces
+// that keep running after buildRPCServer returns, and having one call site
+// makes "what does this daemon run in the background" answerable by reading
+// one function instead of scanning the whole composition root.
+//
+// The harness watch deliberately does not fail startup. A watch that cannot
+// run is a missing observation, not a broken daemon; the manifest records
+// its state for `cascade daemon status` to report either way.
+func wireSupervisedSubsystems(ctx context.Context, manifest *daemon.Manifest, bus *events.Bus, clock runtime.Clock, paths runtime.PathProvider, store provider.Store, settings daemon.Settings) error {
+	if err := wireJobScheduler(ctx, manifest, bus, clock, paths, store); err != nil {
+		return err
+	}
+	wireHarnessSessionWatch(ctx, manifest, bus, settings.SocketPath)
+	return nil
+}

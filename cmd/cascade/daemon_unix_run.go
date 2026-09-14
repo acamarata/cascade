@@ -180,11 +180,11 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 		return nil, nil, nil, err
 	}
 
-	// jobs.scheduler (AC/S-59.T5's DAG scheduler): the daemon composition
-	// root's call site for a subsystem that shipped built, tested, and
-	// reachable from nothing that ships — see daemon_unix_scheduler_dag.go's
-	// header comment.
-	if err := wireJobScheduler(context.Background(), manifest, bus, clock, paths, store); err != nil {
+	// The background subsystems this daemon supervises: the DAG scheduler
+	// and cascade-claude's session watch. Grouped into one call to keep
+	// buildRPCServer under Art.10.3's 50-line cap, the same reason
+	// registerDBPathHandlers below is factored out.
+	if err := wireSupervisedSubsystems(context.Background(), manifest, bus, clock, paths, store, settings); err != nil {
 		return nil, nil, nil, err
 	}
 
