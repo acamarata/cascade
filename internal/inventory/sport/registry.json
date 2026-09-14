@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-14T18:02:50Z",
+  "generated_at": "2026-09-14T18:31:08Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -13446,6 +13446,21 @@
       ]
     },
     {
+      "name": "internal/plugins cascade-claude wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/claude_wiring.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "internal/plugins cascade-claude wiring (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins dispatch",
       "sites": [
         {
@@ -17168,6 +17183,66 @@
       ]
     },
     {
+      "name": "plugins/claude entity",
+      "sites": [
+        {
+          "file": "plugins/claude/plugin.go",
+          "line": 34,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "plugins/claude entity (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/claude hook-pack install",
+      "sites": [
+        {
+          "file": "plugins/claude/hooks.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "plugins/claude hook-pack install (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/claude install",
+      "sites": [
+        {
+          "file": "plugins/claude/install.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "plugins/claude install (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/claude mcp-registration",
+      "sites": [
+        {
+          "file": "plugins/claude/mcp.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "plugins/claude mcp-registration (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/codex",
       "sites": [
         {
@@ -20151,7 +20226,7 @@
       ]
     }
   ],
-  "total_sites": 1999,
+  "total_sites": 2004,
   "unspecified_count": 63,
   "multi_status_count": 39
 }
