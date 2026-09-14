@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-14T19:03:23Z",
+  "generated_at": "2026-09-14T19:33:58Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -13664,11 +13664,25 @@
       ]
     },
     {
+      "name": "internal/plugins lifecycle-record tests",
+      "sites": [
+        {
+          "file": "internal/plugins/lifecycle_records_test.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "internal/plugins lifecycle-record tests (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins lifecycle-refusal tests",
       "sites": [
         {
           "file": "internal/plugins/lifecycle_refusals_test.go",
-          "line": 19,
+          "line": 18,
           "status": "ADD",
           "raw": "internal/plugins lifecycle-refusal tests (ADD)."
         }
@@ -20339,7 +20353,7 @@
       ]
     }
   ],
-  "total_sites": 2012,
+  "total_sites": 2013,
   "unspecified_count": 63,
   "multi_status_count": 39
 }
