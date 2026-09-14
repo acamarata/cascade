@@ -1,0 +1,9 @@
+{
+  "records": [
+    {"provider": "anthropic", "lane": "main", "model": "claude-sonnet-5", "date": "2026-08-20", "tokens_in": 1000, "tokens_out": 200, "cost_micro_usd": 5000},
+    {"provider": "anthropic", "lane": "main", "model": "claude-sonnet-5", "date": "2026-08-25", "tokens_in": 500, "tokens_out": 100, "cost_micro_usd": 2500},
+    {"provider": "anthropic", "lane": "batch", "model": "claude-haiku-5", "date": "2026-08-22", "tokens_in": 3000, "tokens_out": 600, "cost_micro_usd": 1500},
+    {"provider": "openai", "lane": "main", "model": "gpt-5-codex", "date": "2026-08-21", "tokens_in": 2000, "tokens_out": 400, "cost_micro_usd": 8000},
+    {"provider": "openai", "lane": "main", "model": "gpt-5-codex", "date": "2026-08-28", "tokens_in": 2200, "tokens_out": 450, "cost_micro_usd": 8800}
+  ]
+}
