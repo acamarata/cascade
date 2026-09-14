@@ -10,11 +10,15 @@ package main
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/doctor"
 	"github.com/acamarata/cascade/internal/retrieval/lifecycle"
+	"github.com/acamarata/cascade/providers/sqlite"
 )
 
 // TestDoctorRetrievalIndexCheckIsRegistered proves productionCheckRegistry
@@ -33,6 +37,49 @@ func TestDoctorRetrievalIndexCheckIsRegistered(t *testing.T) {
 		}
 	}
 	t.Fatalf("retrieval_index is not registered on the real productionCheckRegistry")
+}
+
+// TestBuildRecallIndexManager_LiveDaemonLock reproduces
+// DEFECT-doctor-retrieval-index-exclusive-lock.md end to end: a second
+// real sqlite.Open against paths.DataDir()/cascade.db, held open exactly
+// as a running `cascade daemon` would hold it (the same setup
+// internal/runtime's TestWriteArbitration uses to prove the arbitration
+// primitive itself), then the retrieval_index doctor check run through it.
+//
+// Before the fix this failed with exit-5-shaped StatusError ("could not
+// open the retrieval index" / "sqlite: exclusive lock held by another
+// process") on every run against a live daemon — the gate's own
+// reproduction. After the fix, Run must report a non-error status: the
+// check has nothing built yet in this fresh temp dir, so the honest
+// answer is StatusOK "no retrieval index has been built yet", reached
+// through the read-only fallback rather than through failure.
+func TestBuildRecallIndexManager_LiveDaemonLock(t *testing.T) {
+	paths := doctorTestPaths(t)
+	if err := os.MkdirAll(paths.DataDir(), 0o700); err != nil {
+		t.Fatalf("MkdirAll(DataDir): %v", err)
+	}
+	dbPath := filepath.Join(paths.DataDir(), "cascade.db")
+	ctx := context.Background()
+
+	daemonDriver, err := sqlite.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("simulate the daemon's own Open: %v", err)
+	}
+	t.Cleanup(func() { _ = daemonDriver.Close() })
+
+	check := lifecycle.NewDoctorCheck(buildRecallIndexManager(paths, doctorTestClock()))
+	result, err := check.Run(ctx)
+	if err != nil {
+		t.Fatalf("DoctorCheck.Run against a live daemon lock returned an error: %v, want (result, nil)", err)
+	}
+	if result.Status == doctor.StatusError {
+		t.Fatalf("DoctorCheck.Run against a live daemon lock = %+v, want a non-error status "+
+			"(a flock conflict must never be a read failure)", result)
+	}
+	if result.Message != "no retrieval index has been built yet" {
+		t.Fatalf("DoctorCheck.Run against a live daemon lock: Message = %q, want the honest "+
+			"no-index-yet message (read-only fallback must still see the real filesystem state)", result.Message)
+	}
 }
 
 // TestDoctorGitTreeHash_MatchesRealGit drives doctorGitTreeHash against

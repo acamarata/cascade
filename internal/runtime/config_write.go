@@ -43,11 +43,25 @@ import (
 // Validate/knownKeys type exists anywhere in this package before this
 // ticket), so this is a hand-maintained list sourced directly from
 // 08-INIT-CONFIG-SPEC.md §3's section table (representative keys) plus the
-// two typed sections this package already owns. It is intentionally not
+// typed sections this package already owns. It is intentionally not
 // exhaustive over every plugin-namespaced key ([plugins.<name>].*, opaque
 // per-manifest) — those are validated by the owning plugin's manifest, not
 // here (Art.1: no invented validation for sections this ticket does not
 // own).
+//
+// FIX (DEFECT-config-set-widget-key-unknown.md): config_widget.go's
+// [widget] section (P1-E38-W8-S74-T1) landed after this list was last
+// updated and was never added here, so `cascade config get/list` (which
+// read Config.EffectiveEntries' own separate, always-current
+// "widget.show_project_names" entry, config.go's EffectiveEntries)
+// recognised the key while `cascade config set` refused it as unknown —
+// the two verbs had drifted onto different registries. This is the fix:
+// this list is the ONE registry `set`/`unset`/`get`/`list` all resolve
+// a key's validity against (get/list never refuse an unknown key today,
+// but Validate — called by both Set and Unset below — round-trips
+// through parseWidgetSection regardless, so the key must be listed here
+// for the verb that DOES gate on it). Add every future typed section's
+// key here the same way, not as a one-off special case.
 var knownConfigKeys = []string{
 	"schema_version",
 	"runtime.profile", "runtime.home", "runtime.data_dir",
@@ -71,6 +85,7 @@ var knownConfigKeys = []string{
 	"registry.url", "registry.cache_dir", "registry.cache_ttl", "registry.pubkey_path",
 	"plugins.enable", "plugins.disable", "plugins.harness", "plugins.enable_remote_runtime",
 	"elevation.allow_remote", "elevation.helper_pubkey",
+	"widget.show_project_names",
 }
 
 // bareKeyPattern matches a single valid TOML bare key segment (the subset

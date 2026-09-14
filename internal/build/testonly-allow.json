@@ -21,13 +21,6 @@
     "caller_site": "cmd/cascade/daemon_unix.go"
   },
   {
-    "symbol": "internal/runtime.OpenEmbeddedReadStore",
-    "reason": "The read-only open used by the daemonless read path, awaiting the first daemonless read verb. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "expected_caller": "daemonless read verb implementations",
-    "retire_ticket": "UNOWNED",
-    "caller_site": "cmd/cascade/daemon_unix_run.go"
-  },
-  {
     "symbol": "internal/runtime.NewFixedClock",
     "reason": "A deterministic clock provided for tests in other packages. Shipping code correctly uses the system clock. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
     "expected_caller": "none; test-facing by design, kept out of a test-only package because production types reference the Clock interface",
