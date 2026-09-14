@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-14T18:58:02Z",
+  "generated_at": "2026-09-14T19:03:23Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -13526,6 +13526,20 @@
       ]
     },
     {
+      "name": "internal/plugins dispatch-failure tests",
+      "sites": [
+        {
+          "file": "internal/plugins/dispatch_failures_test.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "internal/plugins dispatch-failure tests (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins dispatch-remote",
       "sites": [
         {
@@ -13548,6 +13562,20 @@
           "status": "ADD",
           "ticket": "P1-E15-W4-S33-T4",
           "raw": "internal/plugins dispatch-remote (ADD) — P1-E15-W4-S33-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins dispatch-tier tests",
+      "sites": [
+        {
+          "file": "internal/plugins/dispatch_tiers_test.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "internal/plugins dispatch-tier tests (ADD)."
         }
       ],
       "statuses": [
@@ -13629,6 +13657,20 @@
           "status": "ADD",
           "ticket": "P1-E15-W4-S32-T4",
           "raw": "internal/plugins lifecycle-metadata/ADD — P1-E15-W4-S32-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins lifecycle-refusal tests",
+      "sites": [
+        {
+          "file": "internal/plugins/lifecycle_refusals_test.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "internal/plugins lifecycle-refusal tests (ADD)."
         }
       ],
       "statuses": [
@@ -20297,7 +20339,7 @@
       ]
     }
   ],
-  "total_sites": 2009,
+  "total_sites": 2012,
   "unspecified_count": 63,
   "multi_status_count": 39
 }
