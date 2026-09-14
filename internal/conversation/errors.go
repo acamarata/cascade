@@ -67,3 +67,27 @@ var ErrSSEWriteFailed = cascade.New(cascade.KindUnavailable, "conversation: sse 
 // itself still succeeds and the turn is persisted; only the mirror is
 // refused. See sse.go's RefuseSSEOnEmbedded.
 var ErrSSEUnavailableOnEmbedded = cascade.New(cascade.KindUnsupported, "conversation: SSE mirror unavailable in embedded one-shot mode (Windows tier-2)")
+
+// ErrBadCursor reports that a PaginationFilter.Cursor could not be
+// decoded: wrong opaque-token prefix, invalid base64url, unparseable
+// JSON, or a turn cursor whose encoded thread id does not match the
+// threadID a ListTurnsPage call was made with. Fail-closed, never a
+// panic -- see pagination.go's decodeCursor and cursor_fuzz_test.go's
+// FuzzCursorDecode for the enforced proof over adversarial bytes.
+var ErrBadCursor = cascade.New(cascade.KindInvalidInput, "conversation: malformed pagination cursor")
+
+// ErrSearchUnavailable reports that SearchTurns was called against a
+// store whose database has no conversation_turn_fts virtual table --
+// the FTS5 index ensureFTS5 (search.go) only creates on the SQLite
+// dialect (P1 has no Postgres FTS5 equivalent). Search fails closed
+// rather than returning an empty or partial result set that looks like
+// "no matches".
+var ErrSearchUnavailable = cascade.New(cascade.KindUnsupported, "conversation: full-text search unavailable (no fts5 index on this store)")
+
+// ErrThreadNotFound reports that ArchiveThread was called with a thread
+// id that has no corresponding row. Unlike AppendSegment's turn-existence
+// check (a structural FK gap the append path leans on because SQLite's
+// FOREIGN KEY constraints are never enabled -- no PRAGMA foreign_keys=ON
+// anywhere in this tree), ArchiveThread checks explicitly rather than
+// silently writing an orphaned archive-marker row.
+var ErrThreadNotFound = cascade.New(cascade.KindNotFound, "conversation: thread not found")

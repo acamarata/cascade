@@ -204,8 +204,10 @@ const (
 
 // conversationSchemaVersion is this package's MigrationSet target
 // version -- the next unused slot in the single global sequence. See this
-// file's SCHEMA VERSION doc comment.
-const conversationSchemaVersion = 7
+// file's SCHEMA VERSION doc comment. Bumped 7->8 by P1-E20-W5-S44-T3 for
+// the two new marker tables archive.go/retention.go's MigrationSet steps
+// add below (conversation_thread_archive, conversation_turn_tombstone).
+const conversationSchemaVersion = 8
 
 // SchemaVersion is conversationSchemaVersion exported for a future
 // composition root's reader-ceiling max(), matching registry/jobs's own
@@ -213,31 +215,13 @@ const conversationSchemaVersion = 7
 // ApplyConversationSchema.
 const SchemaVersion = conversationSchemaVersion
 
-// text/id/num are terse column-literal builders so the five table/index
-// steps below fit one line per column instead of one ColumnDef struct
-// literal per line -- pure formatting sugar, no behavior of their own.
-func text(name string) migrate.ColumnDef {
-	return migrate.ColumnDef{Name: name, Type: migrate.TypeText, NotNull: true}
-}
-func num(name string) migrate.ColumnDef {
-	return migrate.ColumnDef{Name: name, Type: migrate.TypeInteger, NotNull: true}
-}
-func id(name string) migrate.ColumnDef {
-	return migrate.ColumnDef{Name: name, Type: migrate.TypeText, PrimaryKey: true, NotNull: true}
-}
-func fk(col, refTable string) migrate.ForeignKeyDef {
-	return migrate.ForeignKeyDef{Column: col, RefTable: refTable, RefColumn: "id"}
-}
-func uniqueIdx(name, table string, cols ...string) migrate.MigrationStep {
-	return migrate.MigrationStep{Kind: migrate.StepCreateIndex, Description: "unique " + name,
-		Index: &migrate.IndexDef{Name: name, Table: table, Columns: cols, Unique: true}}
-}
+// text/id/num/fk/uniqueIdx moved to archive.go under Art.10.3's 300-line
+// cap once this ticket's two new table steps landed -- same behavior.
 
-// MigrationSet is the conversation domain's three-table schema. The two
-// unique indexes are the DB-level, structural half of the append-only
-// invariant: a second INSERT at an already-used (thread_id, seq) or
-// (turn_id, seq) fails the constraint before this package's own
-// out-of-order check even runs (see store.go's rowExists doc comment).
+// MigrationSet is the conversation domain's five-table schema: the three
+// from S-43.T1 plus conversation_thread_archive/conversation_turn_tombstone
+// (archive.go/retention.go -- NEW tables, not ALTER TABLE; the migrate DSL
+// has no ALTER step, see search.go's identical FTS5 note). The two
 func MigrationSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
 		SetID:         "conversation",
@@ -259,12 +243,25 @@ func MigrationSet() migrate.MigrationSet {
 				ForeignKeys: []migrate.ForeignKeyDef{fk("turn_id", tableTurn)},
 			}},
 			uniqueIdx("idx_conversation_segment_turn_seq", tableSegment, "turn_id", "seq"),
+			{Kind: migrate.StepCreateTable, Description: "conversation_thread_archive: archived-state marker (R-14.90)", Table: &migrate.TableDef{
+				Name:        tableThreadArchive,
+				Columns:     []migrate.ColumnDef{id("thread_id"), num("archived_at")},
+				ForeignKeys: []migrate.ForeignKeyDef{fk("thread_id", tableThread)},
+			}},
+			{Kind: migrate.StepCreateTable, Description: "conversation_turn_tombstone: logical-prune marker", Table: &migrate.TableDef{
+				Name:        tableTurnTombstone,
+				Columns:     []migrate.ColumnDef{id("turn_id"), num("tombstoned_at")},
+				ForeignKeys: []migrate.ForeignKeyDef{fk("turn_id", tableTurn)},
+			}},
 		},
 	}
 }
 
-// ApplyConversationSchema idempotently applies MigrationSet against db.
-// dbPath/backupDir enable migrate's SQLite snapshot when non-empty.
+// ApplyConversationSchema idempotently applies MigrationSet against db,
+// then ensureFTS5 (search.go) -- a raw DDL statement the typed migrate
+// DSL cannot express (no virtual-table step kind exists), issued outside
+// the ledger but still idempotent via its own IF NOT EXISTS. dbPath/
+// backupDir enable migrate's SQLite snapshot when non-empty.
 func ApplyConversationSchema(ctx context.Context, db *sql.DB, dialect migrate.Dialect, clock migrate.Clock, dbPath, backupDir string) error {
 	if db == nil {
 		return cascade.New(cascade.KindInvalidInput, "conversation: ApplyConversationSchema requires a non-nil db")
@@ -272,9 +269,12 @@ func ApplyConversationSchema(ctx context.Context, db *sql.DB, dialect migrate.Di
 	if clock == nil {
 		return cascade.New(cascade.KindInvalidInput, "conversation: ApplyConversationSchema requires a non-nil Clock")
 	}
-	return migrate.Apply(ctx, migrate.ApplyConfig{
+	if err := migrate.Apply(ctx, migrate.ApplyConfig{
 		DB: db, Dialect: dialect, Clock: clock, DBPath: dbPath, BackupDir: backupDir,
-	}, MigrationSet())
+	}, MigrationSet()); err != nil {
+		return err
+	}
+	return ensureFTS5(ctx, db, dialect)
 }
 
 // bootstrapResume is the daemon-startup entry point for P1-E20-W5-S44-T4's

@@ -18,6 +18,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sync"
 
 	mcsqlite "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
@@ -48,11 +49,43 @@ type Store interface {
 	ListSegments(ctx context.Context, turnID string) ([]Segment, error)
 	// ListThreads returns every thread, ordered by CreatedAt then ID.
 	ListThreads(ctx context.Context) ([]Thread, error)
+
+	// ListTurnsPage returns a bounded, Seq-ordered page of threadID's
+	// turns (pagination.go). Cursor=="" starts at the beginning; a
+	// non-empty one must come from a prior call for this SAME threadID --
+	// ErrBadCursor on a malformed or foreign token, never a panic.
+	ListTurnsPage(ctx context.Context, threadID string, filter PaginationFilter) (TurnPage, error)
+	// ListThreadsPage returns a bounded page of threads ordered like
+	// ListThreads. Archived threads (archive.go) are excluded unless
+	// filter.IncludeArchived is set.
+	ListThreadsPage(ctx context.Context, filter PaginationFilter) (ThreadPage, error)
+	// SearchTurns runs a parameterised FTS5 MATCH query over segment
+	// content (search.go), ranked by SQLite's own bm25 relevance.
+	// ErrSearchUnavailable with no fts5 index; adversarial MATCH syntax
+	// is KindInvalidInput, never a panic, never interpolated SQL.
+	SearchTurns(ctx context.Context, query string, filter SearchFilter) ([]TurnMatch, error)
+	// ArchiveThread marks threadID archived as of archivedAt (a
+	// caller-resolved Clock reading): excluded from ListThreadsPage's
+	// default listing, every turn/segment unchanged (archive.go).
+	ArchiveThread(ctx context.Context, threadID string, archivedAt int64) error
+	// UnarchiveThread restores normal visibility; a no-op if not archived.
+	UnarchiveThread(ctx context.Context, threadID string) error
+	// IsArchived reports whether threadID carries an archive marker.
+	IsArchived(ctx context.Context, threadID string) (bool, error)
+	// PruneTurns logically tombstones turns meeting BOTH policy dimensions
+	// (retention.go) as of now (a caller-resolved Clock reading).
+	// Idempotent: a repeat call against unchanged data tombstones 0 rows.
+	PruneTurns(ctx context.Context, policy RetentionPolicy, now int64) (PruneResult, error)
 }
 
-// conversationStore is the SQLite-backed Store impl.
+// conversationStore is the SQLite-backed Store impl. ftsOnce/ftsOK cache
+// whether this db carries the search.go FTS5 index (probed lazily, once,
+// via sqlite_master -- see hasFTS) so AppendSegment's per-append mirror
+// write and SearchTurns's own refusal do not re-probe on every call.
 type conversationStore struct {
-	db *sql.DB
+	db      *sql.DB
+	ftsOnce sync.Once
+	ftsOK   bool
 }
 
 // NewStore wraps db, which must already carry the MigrationSet tables.
@@ -119,9 +152,15 @@ func (s *conversationStore) AppendSegment(ctx context.Context, seg Segment) erro
 	if err := validateSegment(seg); err != nil {
 		return err
 	}
+	// hasFTS is probed HERE, before the tx opens, never inside runTx's
+	// closure: it queries s.db (the pool), and SetMaxOpenConns(1) (every
+	// test here) has one connection to give out -- querying the pool
+	// from inside an open *sql.Tx on it deadlocks waiting for the
+	// connection that tx itself holds.
+	fts := s.hasFTS(ctx)
 	return runTx(ctx, s.db, func(tx *sql.Tx) error {
-		var exists int
-		err := tx.QueryRowContext(ctx, `SELECT 1 FROM `+tableTurn+` WHERE id = ?`, seg.TurnID).Scan(&exists)
+		var threadID string
+		err := tx.QueryRowContext(ctx, `SELECT thread_id FROM `+tableTurn+` WHERE id = ?`, seg.TurnID).Scan(&threadID)
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrTurnNotFound
 		}
@@ -148,7 +187,13 @@ func (s *conversationStore) AppendSegment(ctx context.Context, seg Segment) erro
 		_, err = tx.ExecContext(ctx,
 			`INSERT INTO `+tableSegment+` (id, turn_id, seq, kind, content, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
 			seg.ID, seg.TurnID, seg.Seq, string(seg.Kind), seg.Content, seg.CreatedAt)
-		return translateAppendError(err, "conversation: append segment")
+		if err := translateAppendError(err, "conversation: append segment"); err != nil {
+			return err
+		}
+		if fts {
+			return mirrorSegmentFTS(ctx, tx, seg, threadID)
+		}
+		return nil
 	})
 }
 
@@ -188,58 +233,10 @@ func (s *conversationStore) ListThreads(ctx context.Context) ([]Thread, error) {
 		nil, scanThread, "threads")
 }
 
-func scanTurn(rows *sql.Rows) (Turn, error) {
-	var t Turn
-	var role string
-	if err := rows.Scan(&t.ID, &t.ThreadID, &t.Seq, &role, &t.CreatedAt); err != nil {
-		return Turn{}, cascade.Wrap(cascade.KindUnavailable, err, "conversation: scan turn")
-	}
-	r, err := DecodeRole(role)
-	t.Role = r
-	return t, err
-}
-
-func scanSegment(rows *sql.Rows) (Segment, error) {
-	var seg Segment
-	var kind string
-	if err := rows.Scan(&seg.ID, &seg.TurnID, &seg.Seq, &kind, &seg.Content, &seg.CreatedAt); err != nil {
-		return Segment{}, cascade.Wrap(cascade.KindUnavailable, err, "conversation: scan segment")
-	}
-	k, err := DecodeSegmentKind(kind)
-	seg.Kind = k
-	return seg, err
-}
-
-func scanThread(rows *sql.Rows) (Thread, error) {
-	var t Thread
-	if err := rows.Scan(&t.ID, &t.Name, &t.CreatedAt); err != nil {
-		return Thread{}, cascade.Wrap(cascade.KindUnavailable, err, "conversation: scan thread")
-	}
-	return t, nil
-}
-
-// listRows runs query/args and decodes every row with scan; shared by
-// ListTurns/ListSegments/ListThreads so the plumbing exists once.
-func listRows[T any](ctx context.Context, db *sql.DB, query string, args []any, scan func(*sql.Rows) (T, error), what string) ([]T, error) {
-	rows, err := db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "conversation: list %s", what)
-	}
-	defer func() { _ = rows.Close() }()
-
-	var out []T
-	for rows.Next() {
-		v, err := scan(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, v)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "conversation: iterate %s", what)
-	}
-	return out, nil
-}
+// scanTurn/scanSegment/scanThread/listRows moved to pagination.go (shared
+// by the plain and cursor-paginated listers alike) to keep this file
+// under Art.10.3's 300-line cap once ListTurnsPage/ListThreadsPage's own
+// interface additions landed above.
 
 // runTx commits fn's *sql.Tx on nil, else rolls back -- the
 // existence/next-seq/insert sequence runs atomically, no TOCTOU window.
