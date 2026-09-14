@@ -240,3 +240,31 @@ func toFloat(v interface{}) (float64, bool) {
 		return 0, false
 	}
 }
+
+// DefaultFusionEnabled is the shipped default: the F/S-12.T6 gate verdict
+// measured against the committed fixtures (R-16.9).
+// TestRetrievalFusionEnabledDefault recomputes it every run and fails if
+// this constant disagrees.
+//
+// Moved here from config.go (P1-E15-W4-S33-T4, LANE-RULES §8): config.go
+// hit the 300-line cap after this ticket's own [plugins] addition, and
+// this constant plus resolveFusionEnabled below are already thematically
+// this file's own [retrieval.fusion] surface, not config.go's Load
+// plumbing.
+const DefaultFusionEnabled = true
+
+// resolveFusionEnabled reads retrieval.fusion.enabled out of tree; absent
+// resolves to DefaultFusionEnabled, present must be a bool.
+func resolveFusionEnabled(tree map[string]interface{}) (bool, error) {
+	table, _ := tree["retrieval"].(map[string]interface{})
+	fusion, _ := table["fusion"].(map[string]interface{})
+	raw, ok := fusion["enabled"]
+	if !ok {
+		return DefaultFusionEnabled, nil
+	}
+	enabled, ok := raw.(bool)
+	if !ok {
+		return false, &ConfigError{Field: "retrieval.fusion.enabled", Reason: "must be a boolean"}
+	}
+	return enabled, nil
+}

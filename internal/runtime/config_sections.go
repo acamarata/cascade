@@ -31,6 +31,9 @@ type configSections struct {
 	// widget is the [widget] block (P1-E38-W8-S74-T1), same deviation as
 	// fleetAccounts above -- see config_widget.go.
 	widget widgetSection
+	// plugins is the [plugins] block (P1-E15-W4-S33-T4), same deviation
+	// as fleetAccounts above -- see config_plugins.go.
+	plugins pluginsSection
 }
 
 // parseConfigSections runs each section parser in turn, returning on the
@@ -58,6 +61,9 @@ func parseConfigSections(tree map[string]interface{}, warn func(string, ...inter
 		return configSections{}, err
 	}
 	if s.widget, err = parseWidgetSection(tree); err != nil {
+		return configSections{}, err
+	}
+	if s.plugins, err = parsePluginsSection(tree); err != nil {
 		return configSections{}, err
 	}
 	return s, nil

@@ -56,6 +56,7 @@ import (
 	"database/sql"
 
 	"github.com/acamarata/cascade/internal/plugins/process"
+	"github.com/acamarata/cascade/internal/plugins/remote"
 	"github.com/acamarata/cascade/internal/plugins/wasm"
 	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/internal/storage"
@@ -75,11 +76,17 @@ const pluginHostDomainOwner = "cascade.plugin-host"
 // (process-tier, or a grant-expanding wasm/builtin manifest). domains
 // must be the SAME *storage.PluginDomainRegistry instance across every
 // call for the daemon's lifetime (see package doc).
+// enableRemoteRuntime and remoteIntercept are the P1-E15-W4-S33-T4
+// [plugins].enable_remote_runtime flag and the real egress.Engine-backed
+// Interceptor this file builds for the RuntimeRemote case
+// (newDispatchRemoteInterceptor, below); a caller with no remote-runtime
+// manifests to install may pass (false, nil).
 func ProvisionElevated(
 	ctx context.Context,
 	db *sql.DB, dialect migrate.Dialect, clock migrate.Clock, dbPath, backupDir string,
 	store provider.Store, domains *storage.PluginDomainRegistry,
 	m plugin.Manifest, checksum string,
+	enableRemoteRuntime bool, remoteIntercept remote.Interceptor,
 ) (PluginMetadata, error) {
 	rec := PluginMetadata{
 		Name:             m.ID,
@@ -121,10 +128,7 @@ func ProvisionElevated(
 	case plugin.RuntimeBuiltin:
 		// Compiled into the host binary; no runtime construction needed.
 	case plugin.RuntimeRemote:
-		// P1-E15-W4-S33-T4 owns the remote runtime (handshake-only, P2
-		// full execution) — not this ticket's files_scope.
-		return PluginMetadata{}, cascade.Newf(cascade.KindUnsupported,
-			"plugin: %s: remote-runtime plugins are not yet supported by elevated install", m.ID)
+		return PluginMetadata{}, provisionRemoteRuntime(ctx, m, enableRemoteRuntime, remoteIntercept)
 	default:
 		return PluginMetadata{}, cascade.Newf(cascade.KindUnsupported,
 			"plugin: %s: runtime %q has no elevated-install path yet", m.ID, m.Runtime)

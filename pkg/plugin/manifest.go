@@ -193,6 +193,12 @@ type Manifest struct {
 	// Permissions lists the consent-dialog entries shown to the user
 	// before enabling this plugin.
 	Permissions []PermissionDisplay `toml:"permissions"`
+	// Remote declares the connection endpoint for a RuntimeRemote
+	// manifest (P1-E15-W4-S33-T4); zero value for every other runtime.
+	// Added because no field named a remote endpoint anywhere in this
+	// struct before this ticket, despite RuntimeRemote already being a
+	// valid RuntimeMode — see remote_spec.go's header comment.
+	Remote RemoteSpec `toml:"remote"`
 }
 
 // ErrCode identifies which of ParseManifest/Validate's named rejection

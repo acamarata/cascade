@@ -231,6 +231,16 @@ func validateRuntime(m Manifest) []ValidationError {
 			Message: fmt.Sprintf("runtime %q is not one of builtin|process|wasm|remote", m.Runtime),
 		}}
 	}
+	// P1-E15-W4-S33-T4: a remote-runtime manifest with no endpoint has
+	// nothing for internal/plugins/remote.Dispatch to dial, so it is
+	// refused at the same required-field rule as id/name rather than
+	// surfacing as a connection failure at handshake time.
+	if m.Runtime == RuntimeRemote && strings.TrimSpace(m.Remote.Host) == "" {
+		return []ValidationError{{
+			Field: "remote.host", Kind: ErrCodeRequiredField,
+			Message: "remote.host must not be empty when runtime = \"remote\"",
+		}}
+	}
 	return nil
 }
 

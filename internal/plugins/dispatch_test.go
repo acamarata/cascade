@@ -39,7 +39,9 @@ runtime = "wasm"
 `
 
 // remoteManifest mirrors builtinManifest, declaring runtime = "remote"
-// (P1-E15-W4-S33-T4 owns remote-tier elevated install, not this ticket).
+// with a [remote] endpoint (P1-E15-W4-S33-T4: validateRuntime refuses an
+// empty remote.host at parse time, so any remote-tier fixture needs one
+// even when the test never actually dials it).
 const remoteManifest = `
 id = "demo"
 name = "Demo"
@@ -47,6 +49,10 @@ schema = "cascade.plugin/v2"
 version = "1.0.0"
 host_version = ">=2.0.0"
 runtime = "remote"
+
+[remote]
+host = "127.0.0.1"
+port = 1
 `
 
 type dispatchFixedClock struct{ t time.Time }
@@ -90,7 +96,7 @@ func TestProvisionElevated_ProcessTierRefuses(t *testing.T) {
 	domains := storage.NewPluginDomainRegistry()
 	m := mustParseManifest(t, processManifest)
 
-	_, err := ProvisionElevated(ctx, db, migrate.SQLiteEmitter{}, dispatchFixedClock{}, "", "", store, domains, m, "")
+	_, err := ProvisionElevated(ctx, db, migrate.SQLiteEmitter{}, dispatchFixedClock{}, "", "", store, domains, m, "", false, nil)
 	if err == nil {
 		t.Fatal("ProvisionElevated: want a refusal for a process-tier manifest, got nil error")
 	}
@@ -126,7 +132,7 @@ func TestProvisionElevated_WasmTierInstalls(t *testing.T) {
 	domains := storage.NewPluginDomainRegistry()
 	m := mustParseManifest(t, wasmManifest)
 
-	rec, err := ProvisionElevated(ctx, db, migrate.SQLiteEmitter{}, dispatchFixedClock{}, "", "", store, domains, m, "")
+	rec, err := ProvisionElevated(ctx, db, migrate.SQLiteEmitter{}, dispatchFixedClock{}, "", "", store, domains, m, "", false, nil)
 	if err != nil {
 		t.Fatalf("ProvisionElevated: %v", err)
 	}
@@ -170,7 +176,7 @@ func TestProvisionElevated_BuiltinTierInstalls(t *testing.T) {
 	domains := storage.NewPluginDomainRegistry()
 	m := mustParseManifest(t, grantingManifest) // builtin-tier, requires=["net.http"]
 
-	rec, err := ProvisionElevated(ctx, db, migrate.SQLiteEmitter{}, dispatchFixedClock{}, "", "", store, domains, m, "abc123")
+	rec, err := ProvisionElevated(ctx, db, migrate.SQLiteEmitter{}, dispatchFixedClock{}, "", "", store, domains, m, "abc123", false, nil)
 	if err != nil {
 		t.Fatalf("ProvisionElevated: %v", err)
 	}
@@ -192,7 +198,7 @@ func TestProvisionElevated_BuiltinTierInstalls(t *testing.T) {
 	// elevation) must not fail against the already-claimed domain —
 	// PluginDomainRegistry.Register is documented idempotent for the
 	// same owner.
-	if _, err := ProvisionElevated(ctx, db, migrate.SQLiteEmitter{}, dispatchFixedClock{}, "", "", store, domains, m, "abc123"); err != nil {
+	if _, err := ProvisionElevated(ctx, db, migrate.SQLiteEmitter{}, dispatchFixedClock{}, "", "", store, domains, m, "abc123", false, nil); err != nil {
 		t.Fatalf("second ProvisionElevated for the same plugin id: %v", err)
 	}
 }
@@ -207,7 +213,7 @@ func TestProvisionElevated_RemoteTierRefuses(t *testing.T) {
 	domains := storage.NewPluginDomainRegistry()
 	m := mustParseManifest(t, remoteManifest)
 
-	_, err := ProvisionElevated(ctx, db, migrate.SQLiteEmitter{}, dispatchFixedClock{}, "", "", store, domains, m, "")
+	_, err := ProvisionElevated(ctx, db, migrate.SQLiteEmitter{}, dispatchFixedClock{}, "", "", store, domains, m, "", false, nil)
 	if err == nil {
 		t.Fatal("ProvisionElevated: want a refusal for a remote-tier manifest, got nil error")
 	}
@@ -218,3 +224,12 @@ func TestProvisionElevated_RemoteTierRefuses(t *testing.T) {
 		t.Error("LoadMetadata after refused remote-tier add: ok=true, want false")
 	}
 }
+
+// The flag=true, real-handshake path (ProvisionElevated with
+// enableRemoteRuntime=true over a real loopback server) needs a real
+// socket, which internal/build's TestNoNetworkUnitTest_RealTreeGreen
+// gate forbids in any non-integration _test.go tree-wide (AGENT-BRIEF /
+// LANE-RULES §6). That proof lives in
+// dispatch_remote_integration_test.go (`//go:build integration`)
+// instead; found the hard way when this file originally imported
+// net/net-http/httptest directly and the gate caught it.

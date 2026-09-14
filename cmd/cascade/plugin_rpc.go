@@ -138,8 +138,20 @@ func pluginAddRPCHandler(
 			return nil, cascade.Newf(cascade.KindInvalidInput,
 				"plugin.add: manifest id %q does not match requested id %q", m.ID, params.ID)
 		}
+		// enableRemoteRuntime is hardcoded false here: wirePluginAddHandler
+		// (below) is not handed a *runtime.Config today, and threading one
+		// through buildRPCServer's signature to reach it would touch every
+		// existing call site and test, none of which are this ticket's —
+		// the same disclosed tradeoff this file's own header comment
+		// already states for dbPath/backupDir. A remote-runtime `plugin
+		// add` over this RPC path therefore always takes the Art.1.3
+		// deferred-warning branch (remote.ErrRemoteRuntimeNotEnabled)
+		// until a later ticket threads the live [plugins].enable_remote_runtime
+		// value in; ProvisionElevated's RuntimeRemote branch builds its
+		// own real egress.Engine-backed Interceptor when that flag does
+		// flip true and no caller-supplied one is given (dispatch_remote.go).
 		rec, err := plugins.ProvisionElevated(
-			ctx, db, migrate.SQLiteEmitter{}, clock, "", "", store, domains, m, params.Checksum)
+			ctx, db, migrate.SQLiteEmitter{}, clock, "", "", store, domains, m, params.Checksum, false, nil)
 		if err != nil {
 			return nil, err
 		}

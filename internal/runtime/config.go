@@ -135,6 +135,8 @@ type Config struct {
 	Economics economicsSection
 	// Widget is the [widget] block (P1-E38-W8-S74-T1, R-21.200); hot.
 	Widget widgetSection
+	// Plugins is the [plugins] block (P1-E15-W4-S33-T4, R-14.48); hot (see config_plugins.go).
+	Plugins pluginsSection
 	// Extra holds every top-level section other than schema_version,
 	// runtime, and elevation, exactly as decoded from the file: valid
 	// future 08 §3 sections preserved for round-tripping, never
@@ -177,6 +179,7 @@ func (c *Config) EffectiveEntries() []EffectiveEntry {
 	values["elevation.allow_remote"] = c.Elevation.AllowRemote
 	values["elevation.helper_pubkey"] = c.Elevation.HelperPubkey
 	values["widget.show_project_names"] = c.Widget.ShowProjectNames
+	values["plugins.enable_remote_runtime"] = c.Plugins.EnableRemoteRuntime
 	flattenTree(c.Extra, "", values)
 
 	entries := make([]EffectiveEntry, 0, len(values))
@@ -271,30 +274,9 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 		FleetAccounts: sec.fleetAccounts,
 		Economics:     sec.economics,
 		Widget:        sec.widget,
+		Plugins:       sec.plugins,
 		Extra:         extraSections(tree),
 		sources:       sources,
 		rawTree:       tree,
 	}, nil
-}
-
-// DefaultFusionEnabled is the shipped default: the F/S-12.T6 gate verdict
-// measured against the committed fixtures (R-16.9).
-// TestRetrievalFusionEnabledDefault recomputes it every run and fails if
-// this constant disagrees.
-const DefaultFusionEnabled = true
-
-// resolveFusionEnabled reads retrieval.fusion.enabled out of tree; absent
-// resolves to DefaultFusionEnabled, present must be a bool.
-func resolveFusionEnabled(tree map[string]interface{}) (bool, error) {
-	table, _ := tree["retrieval"].(map[string]interface{})
-	fusion, _ := table["fusion"].(map[string]interface{})
-	raw, ok := fusion["enabled"]
-	if !ok {
-		return DefaultFusionEnabled, nil
-	}
-	enabled, ok := raw.(bool)
-	if !ok {
-		return false, &ConfigError{Field: "retrieval.fusion.enabled", Reason: "must be a boolean"}
-	}
-	return enabled, nil
 }

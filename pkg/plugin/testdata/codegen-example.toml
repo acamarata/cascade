@@ -27,3 +27,7 @@ rpc_method = 'plugin.authorkit-example.status'
 [[permissions]]
 name = 'network.egress'
 description = "Make outbound network requests on the user's behalf."
+
+[remote]
+host = ''
+port = 0
