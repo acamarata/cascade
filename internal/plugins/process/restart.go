@@ -222,6 +222,38 @@ type Handle struct {
 	lifetimeCtx context.Context
 }
 
+// DrainGrace bounds how long awaitReadsDone waits for the plugin's stdout
+// to reach EOF.
+//
+// It is a liveness backstop, never evidence of anything. For an ordinary
+// plugin the process's exit closes its stdout, so EOF arrives within
+// microseconds and this bound is never approached. It exists for the case
+// that genuinely cannot reach EOF: a plugin that forked a grandchild which
+// inherited stdout and outlived it. There the write end stays open after
+// the plugin is gone, and an unbounded wait would hang the crash monitor
+// forever -- trading a lost final frame for a supervisor that never
+// notices the crash at all, which is strictly worse.
+var DrainGrace = 5 * time.Second
+
+// awaitReadsDone blocks until every byte the plugin wrote to stdout has
+// been read, so a caller may then Wait on the process without discarding
+// the plugin's final frames (Transport.Done explains the os/exec contract
+// this exists to honour). A Handle with no transport has nothing to drain.
+func (h *Handle) awaitReadsDone() {
+	h.mu.RLock()
+	t := h.transport
+	h.mu.RUnlock()
+	if t == nil {
+		return
+	}
+	timer := time.NewTimer(DrainGrace)
+	defer timer.Stop()
+	select {
+	case <-t.Done():
+	case <-timer.C:
+	}
+}
+
 // lifetime returns h's process-lifetime context, defaulting to
 // context.Background for a Handle built without one (every test
 // constructing a Handle literal): a zero lifetime must mean "not

@@ -56,7 +56,13 @@ type Transport struct {
 	closed  bool
 
 	notifications chan Notification
-	readErr       chan error
+	// done is closed once readLoop has consumed the plugin's stdout to
+	// EOF. It is what lets a caller honour os/exec's StdoutPipe contract:
+	// "Wait will close the pipe after seeing the command exit ... it is
+	// thus incorrect to call Wait before all reads from the pipe have
+	// completed."
+	done    chan struct{}
+	readErr chan error
 }
 
 // NewTransport builds a Transport over w (the plugin's stdin) and r (its
@@ -71,6 +77,7 @@ func NewTransport(w io.Writer, r io.Reader, callTimeout time.Duration) *Transpor
 		callTimeout:   callTimeout,
 		pending:       make(map[uint64]*pendingCall),
 		notifications: make(chan Notification, 16),
+		done:          make(chan struct{}),
 		readErr:       make(chan error, 1),
 	}
 	go t.readLoop(r)
@@ -81,9 +88,18 @@ func NewTransport(w io.Writer, r io.Reader, callTimeout time.Duration) *Transpor
 // pending caller never claims (server-initiated notifications).
 func (t *Transport) Notifications() <-chan Notification { return t.notifications }
 
+// Done returns a channel closed once every byte the plugin wrote to stdout
+// has been read. A supervisor must wait on it before calling Wait on the
+// process: os/exec closes the stdout pipe as soon as Wait sees the command
+// exit, so calling Wait first discards whatever the plugin wrote on its way
+// out. That loss is load-sensitive rather than deterministic, which is
+// exactly what makes it worth an explicit barrier.
+func (t *Transport) Done() <-chan struct{} { return t.done }
+
 // readLoop scans newline-delimited frames from r until EOF or a decode
 // error, routing each to its pending call or the notification channel.
 func (t *Transport) readLoop(r io.Reader) {
+	defer close(t.done)
 	defer close(t.notifications)
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)

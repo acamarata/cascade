@@ -85,7 +85,7 @@ func (f *fakeCommander) respond() {
 			return
 		}
 		if seenHello && f.crashAfterHello {
-			f.waitErr <- fakeExitError{code: f.exitCode}
+			f.exit()
 			return
 		}
 	}
@@ -93,10 +93,20 @@ func (f *fakeCommander) respond() {
 	// terminating this plugin after a version-mismatch refusal). Report
 	// an exit so a blocked cmd.Wait() unblocks, unless a crash exit was
 	// already sent above.
+	f.exit()
+}
+
+// exit simulates the process exiting. Closing stdout is part of exiting,
+// not an extra: a real process cannot exit while its own stdout write end
+// stays open, so a fake that signalled Wait without closing the pipe was
+// modelling a state os/exec never produces -- and it hid the fact that the
+// monitor must let reads finish before it reaps (Transport.Done).
+func (f *fakeCommander) exit() {
 	select {
 	case f.waitErr <- fakeExitError{code: f.exitCode}:
 	default:
 	}
+	_ = f.stdoutW.Close()
 }
 
 func (f *fakeCommander) writeResponse(id uint64, result json.RawMessage) bool {

@@ -225,6 +225,11 @@ func (rt *ProcessRuntime) monitor(cmd Waiter, manifest Manifest, h *Handle) {
 	policy := rt.Restart.resolved()
 	current := cmd
 	for {
+		// The plugin's stdout must be fully read BEFORE Wait: os/exec
+		// closes that pipe once Wait sees the command exit, so waiting
+		// first silently discards whatever the plugin wrote on its way out
+		// -- including a host call it made and is entitled to have handled.
+		h.awaitReadsDone()
 		exitCode := waitExitCode(current)
 		restarts := h.state.incrementRestart()
 		final := restarts > policy.MaxAttempts
