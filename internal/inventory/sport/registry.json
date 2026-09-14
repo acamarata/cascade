@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-14T00:51:30Z",
+  "generated_at": "2026-09-14T11:28:00Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4240,6 +4240,20 @@
           "status": "ADD",
           "ticket": "P1-E11-W3-S22-T2",
           "raw": "conductor.router/ADD (P1-E11-W3-S22-T2)."
+        },
+        {
+          "file": "internal/conductor/routing_matrix_edge_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E11-W3-S23-T5",
+          "raw": "conductor.router/ADD (P1-E11-W3-S23-T5)."
+        },
+        {
+          "file": "internal/conductor/routing_matrix_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E11-W3-S23-T5",
+          "raw": "conductor.router/ADD (P1-E11-W3-S23-T5)."
         }
       ],
       "statuses": [
@@ -19621,7 +19635,7 @@
       ]
     }
   ],
-  "total_sites": 1946,
+  "total_sites": 1948,
   "unspecified_count": 63,
   "multi_status_count": 39
 }
