@@ -168,20 +168,22 @@ func updateCmdWithFrom(t *testing.T, from string) *cobra.Command {
 	return cmd
 }
 
-// TestRunPluginUpdate_Refusals pins every refusal the update verb makes
-// before it touches a store. Each names what the operator must do next; a
-// refusal that merely says "invalid" leaves them guessing.
-func TestRunPluginUpdate_Refusals(t *testing.T) {
-	deps := testPluginDeps(t)
+// updateRefusalCase is one guard clause runPluginUpdate applies before it
+// touches a store.
+type updateRefusalCase struct {
+	name    string
+	args    []string
+	from    string
+	all     bool
+	wantIn  string
+	wantErr cascade.Kind
+}
 
-	cases := []struct {
-		name    string
-		args    []string
-		from    string
-		all     bool
-		wantIn  string
-		wantErr cascade.Kind
-	}{
+// updateRefusalCases is the table, lifted out of the test so the test body
+// stays within the function-length gate.
+func updateRefusalCases(t *testing.T) []updateRefusalCase {
+	t.Helper()
+	return []updateRefusalCase{
 		{
 			name:    "--all is refused with the per-plugin instruction",
 			all:     true,
@@ -190,7 +192,6 @@ func TestRunPluginUpdate_Refusals(t *testing.T) {
 		},
 		{
 			name:    "a missing name is refused",
-			args:    nil,
 			wantIn:  "a plugin name is required",
 			wantErr: cascade.KindInvalidInput,
 		},
@@ -208,8 +209,14 @@ func TestRunPluginUpdate_Refusals(t *testing.T) {
 			wantErr: cascade.KindInvalidInput,
 		},
 	}
+}
 
-	for _, tc := range cases {
+// TestRunPluginUpdate_Refusals pins every refusal the update verb makes
+// before it touches a store. Each names what the operator must do next; a
+// refusal that merely says "invalid" leaves them guessing.
+func TestRunPluginUpdate_Refusals(t *testing.T) {
+	deps := testPluginDeps(t)
+	for _, tc := range updateRefusalCases(t) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := runPluginUpdate(updateCmdWithFrom(t, tc.from), deps, tc.args, "", tc.all)
 			if err == nil {
