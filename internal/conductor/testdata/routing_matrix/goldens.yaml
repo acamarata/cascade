@@ -1,0 +1,447 @@
+# Routing-matrix goldens for P1-E11-W3-S23-T5.
+# Provenance and regeneration instructions: see README.md in this directory.
+# Every value below was hand-derived from reading the real filter source
+# (router.go, filters_capability.go, filters_dispatch.go) BEFORE this file
+# was used to assert against the implementation - never captured from a test
+# run and then asserted back against itself.
+
+pairs:
+  - task_class: classify
+    sensitivity: restricted
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:restricted:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: classify
+    sensitivity: local-only
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:local-only:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: classify
+    sensitivity: internal
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:internal:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: classify
+    sensitivity: public
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:public:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: segment
+    sensitivity: restricted
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:restricted:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: segment
+    sensitivity: local-only
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:local-only:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: segment
+    sensitivity: internal
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:internal:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: segment
+    sensitivity: public
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:public:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: summarize
+    sensitivity: restricted
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:restricted:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: summarize
+    sensitivity: local-only
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:local-only:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: summarize
+    sensitivity: internal
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:internal:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: summarize
+    sensitivity: public
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:public:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: extract
+    sensitivity: restricted
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:restricted:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: extract
+    sensitivity: local-only
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:local-only:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: extract
+    sensitivity: internal
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:internal:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: extract
+    sensitivity: public
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:public:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: chat
+    sensitivity: restricted
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:restricted:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: chat
+    sensitivity: local-only
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:local-only:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: chat
+    sensitivity: internal
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:internal:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: chat
+    sensitivity: public
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:public:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: code
+    sensitivity: restricted
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:restricted:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: code
+    sensitivity: local-only
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:local-only:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: code
+    sensitivity: internal
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:internal:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: code
+    sensitivity: public
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:public:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: reason
+    sensitivity: restricted
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:restricted:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: reason
+    sensitivity: local-only
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:local-only:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: reason
+    sensitivity: internal
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:internal:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: reason
+    sensitivity: public
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:public:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: review
+    sensitivity: restricted
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:restricted:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: review
+    sensitivity: local-only
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:local-only:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: review
+    sensitivity: internal
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:internal:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: review
+    sensitivity: public
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:public:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: arbitrate
+    sensitivity: restricted
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:restricted:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: arbitrate
+    sensitivity: local-only
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:local-only:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: arbitrate
+    sensitivity: internal
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:internal:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+  - task_class: arbitrate
+    sensitivity: public
+    want_lane_id: lane-a
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:public:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+
+filter_stages:
+  - name: capability-matched
+    base_url: "http://127.0.0.1:8080"
+    health: "healthy"
+    required_search: true
+    capability_search: "supported"
+    want_lane_id: "lane-a"
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:restricted:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+    want_err: ""
+
+  - name: capability-denied
+    base_url: "http://127.0.0.1:8080"
+    health: "healthy"
+    required_search: true
+    capability_search: "unsupported"
+    want_err: "ErrNoCapableProvider"
+    want_flags:
+      - "capability:0-matched"
+
+  - name: capability-unprobed-excluded
+    base_url: "http://127.0.0.1:8080"
+    health: "healthy"
+    required_search: true
+    capability_search: "unknown"
+    want_err: "ErrNoCapableProvider"
+    want_flags:
+      - "capability:1-unprobed-excluded"
+      - "capability:0-matched"
+
+  - name: sensitivity-permitted-local
+    base_url: "http://127.0.0.1:8080"
+    health: "healthy"
+    sensitivity: "local-only"
+    want_lane_id: "lane-a"
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:local-only:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+    want_err: ""
+
+  - name: sensitivity-filtered-local
+    base_url: "https://remote.example.com"
+    health: "healthy"
+    sensitivity: "local-only"
+    want_err: "ErrNoLane"
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:local-only:1-filtered"
+
+  - name: health-clean
+    base_url: "http://127.0.0.1:8080"
+    health: "healthy"
+    want_lane_id: "lane-a"
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:restricted:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+    want_err: ""
+
+  - name: health-evicted
+    base_url: "http://127.0.0.1:8080"
+    health: "evicted"
+    want_err: "ErrAllProvidersEvicted"
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:restricted:0-filtered"
+      - "health:1-evicted"
+
+  - name: quota-pool-selected
+    base_url: "http://127.0.0.1:8080"
+    health: "healthy"
+    pool_membership: "pool-x"
+    want_lane_id: "lane-a"
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:restricted:0-filtered"
+      - "health:0-evicted"
+      - "quota:pool-pool-x:lane-lane-a"
+      - "cost:cheapest-selected"
+    want_err: ""
+
+  - name: quota-priority-selected
+    base_url: "http://127.0.0.1:8080"
+    health: "healthy"
+    want_lane_id: "lane-a"
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:restricted:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+    want_err: ""
+
+  - name: cost-cheapest-selected
+    base_url: "http://127.0.0.1:8080"
+    health: "healthy"
+    want_lane_id: "lane-a"
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:restricted:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+    want_err: ""
+
