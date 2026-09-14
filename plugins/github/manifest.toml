@@ -1,0 +1,109 @@
+# cascade-github plugin manifest (cascade.plugin/v2).
+#
+# This plugin is PROCESS tier: the host's ProcessRuntime launches the
+# compiled binary from this manifest. It is never registered in the
+# compile-time builtin registry; main_test.go asserts this package
+# registers nothing, and internal/plugins/builtin_tier_only_test.go asserts
+# the populated registry carries no cascade-github entry.
+#
+# The manifest is parsed with DisallowUnknownFields, so every key below is
+# one the v2 schema defines. Two consequences worth stating rather than
+# leaving to be rediscovered:
+#
+#   - The schema has no dedicated net-scope key. The single host this
+#     plugin may reach, api.github.com, is therefore declared as a required
+#     capability below and repeated in the consent permission text, which
+#     is what an operator actually reads before enabling it.
+#   - The schema has no OAuth-scope key either. The classic `repo` scope is
+#     declared the same way. README.md carries the fine-grained-token
+#     permission mapping.
+
+id = "cascade-github"
+name = "Cascade GitHub"
+schema = "cascade.plugin/v2"
+version = "0.1.0"
+host_version = ">=0.1.0"
+runtime = "process"
+
+# Capabilities this plugin needs granted before the host will enable it.
+requires = [
+  "net.http:api.github.com",
+  "oauth:repo",
+  "host.secret_ref",
+]
+
+[[provides.tools]]
+name = "cascade-github.repos.list"
+description = "List a user's or organization's repositories."
+
+[[provides.tools]]
+name = "cascade-github.repos.get"
+description = "Fetch one repository's record."
+
+[[provides.tools]]
+name = "cascade-github.repos.clone_url"
+description = "Report the clone URL GitHub gives for a repository."
+
+[[provides.tools]]
+name = "cascade-github.issues.list"
+description = "List a repository's issues, optionally filtered by state."
+
+[[provides.tools]]
+name = "cascade-github.issues.get"
+description = "Fetch one issue by number."
+
+[[provides.tools]]
+name = "cascade-github.issues.create"
+description = "Open an issue with a title, optional body and optional labels."
+
+[[provides.tools]]
+name = "cascade-github.issues.comment"
+description = "Add a comment to an issue."
+
+[[provides.tools]]
+name = "cascade-github.issues.close"
+description = "Close an issue, changing its state and nothing else."
+
+[[provides.tools]]
+name = "cascade-github.prs.list"
+description = "List a repository's pull requests, optionally filtered by state."
+
+[[provides.tools]]
+name = "cascade-github.prs.get"
+description = "Fetch one pull request by number."
+
+[[provides.tools]]
+name = "cascade-github.prs.create"
+description = "Open a pull request from a head branch into a base branch."
+
+[[provides.tools]]
+name = "cascade-github.prs.merge"
+description = "Merge a pull request using merge, squash or rebase."
+
+[[provides.tools]]
+name = "cascade-github.prs.review_request"
+description = "Request reviews on a pull request from users or teams."
+
+[[provides.commands]]
+name = "github-repos"
+description = "List or inspect GitHub repositories."
+
+[[provides.commands]]
+name = "github-issues"
+description = "List, open, comment on or close GitHub issues."
+
+[[provides.commands]]
+name = "github-prs"
+description = "List, open, merge or request review on GitHub pull requests."
+
+[[permissions]]
+name = "network"
+description = "Reach api.github.com, and no other host, to call the GitHub REST API."
+
+[[permissions]]
+name = "oauth"
+description = "Complete a GitHub OAuth authorization in your browser, requesting the classic `repo` scope."
+
+[[permissions]]
+name = "host-secret-ref"
+description = "Hand the resulting token to Cascade's vault for storage. The token is never written to a config file or to this manifest."
