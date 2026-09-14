@@ -432,3 +432,54 @@ not re-claimed).
 **Gate disposition: still BLOCKED**, for a fifth, independent reason. Full
 adjudication in
 `.claude/planning/p1/phase/journals/BLOCKED-P1-E09-W2-S18-T7.md`.
+
+## RE-VERIFICATION 2026-09-14 (fifth pass, HEAD 63a27d1) — GATE VERIFIED / PASS
+
+Re-run against a freshly built `go build ./cmd/cascade` binary (not a goreleaser
+snapshot) at `p1-integration` HEAD `63a27d1`, tree clean. Swap was at 7750/8192MB used
+(441MB free) before starting; a single `go build` ran this pass, under `~/bin/flock
+/tmp/cascade-heavy.lock`, exit 0. Release pipeline, config/IPC round trip, and
+context/memory/vault surfaces are REUSED from the fourth pass and the original
+2026-09-12 pass — none of this pass's landed change (`383f818`, `internal/daemon/
+status.go` + `cmd/cascade/status.go`) touches those surfaces.
+
+**All five previously-blocking defects are independently confirmed FIXED**, against a
+real, hand-authored, git-initialized fixture (`/tmp/cgf6`) with a live daemon on a fresh
+HOME (`/tmp/cgh6`), commands run as one consolidated script so the working directory
+never drifted mid-sequence:
+
+- `DEFECT-retrieval-sources-not-wired-to-ingest.md` (P0): `cascade recall index rebuild
+  --json` reports `CorporaIndexed: 1`, `ChunksWritten: 1`; `cascade recall
+  "marker-token-zebra-4471" --cite` returns a real cited hit from the fixture.
+- `DEFECT-doctor-retrieval-index-exclusive-lock.md` (P1): `cascade doctor` against the
+  live daemon, before and after ingest, exits 0 every time.
+- `DEFECT-config-set-widget-key-unknown.md` (P2): `cascade config set
+  widget.show_project_names true` succeeds and round-trips via `config get`.
+- `DEFECT-vector-leg-never-written-on-rebuild.md` (P1): `cascade doctor` after real
+  ingest reports `OK retrieval_index retrieval index is current and consistent`, exit 0.
+- `DEFECT-status-degraded-on-fresh-install.md` (P1, fix `383f818`, new this pass):
+  `cascade status --json` on a fresh HOME, before any ingest, reports `"health":"ok"`
+  while `jobs.reachability` shows `"state":"skipped"` with its reason, visible in both
+  the JSON envelope and the plain rendered table
+  (`subsystem:jobs.reachability skipped (no stored symbol graph for
+  /tmp/cgh6/.cascade/data yet)`). Exit 0.
+
+**One candidate finding this pass surfaced and resolved against itself, not filed as a
+defect:** an earlier, unchained sub-pass of this same run saw `doctor` report `WARN
+retrieval_index ... marker drifted` after a successful ingest. Root-caused: that
+`doctor` invocation's shell cwd had reverted to the cascade repo root rather than the
+fixture directory between tool calls, and `cmd/cascade/doctor_recall_index.go`'s
+`doctorGitTreeHash` runs `git rev-parse HEAD`/`git status --porcelain` against the CLI
+process's own invocation cwd (no `cmd.Dir` set) rather than the daemon's fixed startup
+cwd — so it hashed the wrong repository. Re-run as one consolidated script with a single
+unambiguous working directory: `doctor` reports `current and consistent` immediately
+after the first rebuild, every time. This is a harness/methodology artifact of this
+verification pass, not a product regression, and it does not reproduce under the
+contract's own normal usage (running `cascade doctor` from the project directory).
+
+**Gate disposition: VERIFIED / PASS.** All five previously-named blockers are fixed and
+independently re-verified here on a freshly built artifact. Provenance attestation
+remains unsatisfiable locally by the release pipeline's own design (reused finding from
+the original 2026-09-12 pass, not re-claimed as newly met). Per
+`.claude/planning/p1/phase/journals/P1-E09-W2-S18-T7.md`, this ticket is DONE; the
+`BLOCKED-P1-E09-W2-S18-T7.md` journal is deleted.
