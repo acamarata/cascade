@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-14T18:38:16Z",
+  "generated_at": "2026-09-14T18:49:27Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -13461,6 +13461,21 @@
       ]
     },
     {
+      "name": "internal/plugins cascade-claude wiring tests",
+      "sites": [
+        {
+          "file": "internal/plugins/claude_wiring_test.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "internal/plugins cascade-claude wiring tests (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins dispatch",
       "sites": [
         {
@@ -13476,6 +13491,20 @@
           "status": "ADD",
           "ticket": "P1-E15-W4-S32-T4",
           "raw": "internal/plugins dispatch (ADD) — P1-E15-W4-S32-T4 COMPLETION PASS."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins dispatch-adapter tests",
+      "sites": [
+        {
+          "file": "internal/plugins/dispatch_adapters_test.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal/plugins dispatch-adapter tests (ADD)."
         }
       ],
       "statuses": [
@@ -13601,6 +13630,34 @@
           "status": "ADD",
           "ticket": "P1-E15-W4-S32-T4",
           "raw": "internal/plugins lifecycle-update/ADD — P1-E15-W4-S32-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins remote-dispatch-adapter tests",
+      "sites": [
+        {
+          "file": "internal/plugins/dispatch_remote_adapters_test.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal/plugins remote-dispatch-adapter tests (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins store-failure tests",
+      "sites": [
+        {
+          "file": "internal/plugins/lifecycle_storefail_test.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "internal/plugins store-failure tests (ADD)."
         }
       ],
       "statuses": [
@@ -20226,7 +20283,7 @@
       ]
     }
   ],
-  "total_sites": 2004,
+  "total_sites": 2008,
   "unspecified_count": 63,
   "multi_status_count": 39
 }
