@@ -321,3 +321,49 @@ P0), and a live-daemon `cascade doctor` regression (P1) now fails a named W1
 condition on both platforms. See
 `.claude/planning/p1/phase/journals/BLOCKED-P1-E09-W2-S18-T7.md` for the full
 adjudication.
+
+## RE-VERIFICATION 2026-09-14 (second pass, HEAD 8e82bae)
+
+Re-run against a freshly built `go build ./cmd/cascade` binary (not a
+goreleaser snapshot — see below) at `p1-integration` HEAD `8e82bae`.
+
+**Release pipeline: REUSED, not re-run.** The three fixes this pass verified
+touch only `internal/daemon`, `internal/runtime`, and
+`internal/retrieval/lifecycle` — none of the goreleaser/signing/SBOM surface
+the prior pass's snapshot run already verified at commit `6ca1b3a`. Given this
+machine's standing swap/OOM constraint, those release-pipeline findings
+(signing, checksums, SBOMs, minisign, local-only tag) are reused as-is from
+the `RE-VERIFICATION 2026-09-14` section above rather than re-run.
+
+**All three defects this gate previously blocked on are now independently
+confirmed FIXED** against a real, hand-authored, git-initialized fixture with
+a live daemon:
+- `DEFECT-retrieval-sources-not-wired-to-ingest.md` (P0): `cascade recall index
+  rebuild --json` now reports real `CorporaIndexed`/`ChunksWritten`, and
+  `cascade recall "<term>" --cite` returns a real, cited hit from the fixture.
+- `DEFECT-doctor-retrieval-index-exclusive-lock.md` (P1): the prior
+  `could not open the retrieval index` exit-5 error under a live daemon no
+  longer occurs.
+- `DEFECT-config-set-widget-key-unknown.md` (P2): `cascade config set
+  widget.show_project_names true` now succeeds and round-trips via `config get`.
+
+**New blocking finding:** once real content is ingested, `cascade doctor`
+under the same live daemon now reports `WARN retrieval_index ... 1
+vector-incomplete` (exit 5) — a different failure of the same named W1
+condition the fixed lock defect had been masking. Root-caused:
+`internal/daemon/recall_index.go` always wires a non-nil vector store, but
+neither `Manager.Rebuild` nor `Manager.Update` ever writes to it (only
+`Delete` and `Count` have production callers) — so the vector leg can never
+converge once any content exists. Filed
+`DEFECT-vector-leg-never-written-on-rebuild.md`, P1. Not independently
+re-verified on Linux this pass: judged a pure Go composition gap with no
+platform-conditional code, and a second Docker+Go pass was not worth the
+memory risk for a structurally platform-independent finding.
+
+`context slice`/`show`, `memory remember/list/recall`, and `vault list/audit`
+were all re-confirmed correct on the fresh artifact. Provenance attestation
+remains unsatisfiable locally by design (reused, not re-claimed).
+
+**Gate disposition: still BLOCKED**, for a fourth, narrower reason. Full
+adjudication in
+`.claude/planning/p1/phase/journals/BLOCKED-P1-E09-W2-S18-T7.md`.

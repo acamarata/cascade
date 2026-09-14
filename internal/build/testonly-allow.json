@@ -1545,5 +1545,12 @@
     "expected_caller": "same as internal/migration/v1.NewParityChecker",
     "retire_ticket": "UNOWNED",
     "caller_site": "internal/migration/v1/paritycheck_verb.go"
+  },
+  {
+    "symbol": "providers/localvector.New",
+    "reason": "P1-E09-W2-S18-T7 (Wave-2 hardening gate) fixed DEFECT-vector-leg-never-written-on-rebuild.md: internal/daemon/recall_index.go and cmd/cascade/doctor_recall_index.go used to wire a non-nil localvector.New(store) into lifecycle.ManagerOptions.Vectors with no Pipeline ever set, so Rebuild/Update could never write a vector row while doctor's Verify still counted the (always-empty) vector namespace and reported vector-incomplete on every install that had ever ingested real content. The only correct fix, per rebuild.go's own ManagerOptions.Vectors doc comment ('nil means no embedder is configured'), is to leave Vectors nil at both composition roots until a real embedding provider is genuinely configured -- there is no such provider wired anywhere in this build (embed.New and providers/embeddings.NewProviderEmbedder are themselves test-only per this same file). That removed localvector.New's only two production callers. Searched the full planning corpus (all 406 tickets, closed-ticket-manifest.json) for an open ticket that owns wiring a real embedding provider into the retrieval composition root; none exists -- this is a genuine, currently-unassigned product gap (DEFECT-vector-leg-never-written-on-rebuild.md's own 'Unblocks when' names it 'a T0/product decision, not this gate's to make'), not a wiring shortcut. Recorded UNOWNED rather than named against a closed ticket (which the orphan gate would flag) or this ticket itself (self-referential, refused outright); testonly-unowned-baseline.txt and testonly-debt-baseline.txt raised by one to match, disclosed in this ticket's journal.",
+    "expected_caller": "internal/daemon/recall_index.go's RegisterRecallIndexHandler (and cmd/cascade/doctor_recall_index.go's buildRecallIndexManager), once a future ticket adds a real embedding-provider composition root and conditionally wires Vectors: localvector.New(store) alongside a non-nil Pipeline -- not the current recall_index.go, which this ticket just made stop calling it, hence the new file name rather than the existing one",
+    "retire_ticket": "UNOWNED",
+    "caller_site": "internal/daemon/recall_index_embedder.go"
   }
 ]

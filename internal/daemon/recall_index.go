@@ -51,7 +51,6 @@ import (
 	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
-	"github.com/acamarata/cascade/providers/localvector"
 )
 
 // RecallIndexRebuildMethod, RecallIndexVerifyMethod, RecallIndexMigrateMethod
@@ -80,10 +79,21 @@ func RegisterRecallIndexHandler(
 		CatalogPath: filepath.Join(recallIndexDataDir(paths), recallIndexCatalogName),
 		Store:       store,
 		Index:       mustIndex(store),
-		Vectors:     localvector.New(store),
-		Sources:     configSourceProvider{configPath: paths.ConfigPath()},
-		Clock:       clock,
-		TreeHash:    gitTreeHashExec,
+		// Vectors/Pipeline: left nil. No embedding provider is configured
+		// at this composition root (registerRecallHandler's own doc
+		// comment states the same thing for the query-time leg), so
+		// wiring a non-nil localvector.New(store) here — with nothing
+		// that ever calls Pipeline.Run to populate it — left Rebuild/
+		// Update able to DELETE and Verify able to COUNT a vector leg
+		// that nothing WRITES, which made `cascade doctor` warn
+		// `vector-incomplete` on every install that had ever ingested a
+		// real document (DEFECT-vector-leg-never-written-on-rebuild.md).
+		// rebuild.go's own ManagerOptions.Vectors doc comment already
+		// specifies nil as "no embedder is configured"; this now matches
+		// it, and Verify's vectorIncomplete correctly reports empty.
+		Sources:  configSourceProvider{configPath: paths.ConfigPath()},
+		Clock:    clock,
+		TreeHash: gitTreeHashExec,
 	})
 	if err != nil {
 		return err

@@ -16,7 +16,6 @@ import (
 	"github.com/acamarata/cascade/internal/retrieval/lifecycle"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
-	"github.com/acamarata/cascade/providers/localvector"
 )
 
 // buildRecallIndexManager lazily opens cascade.db and builds a
@@ -43,10 +42,10 @@ import (
 // doc comment. No socket probe is injected (nil, matching those two
 // existing callers): the fallback triggers on the raw flock conflict
 // alone, so this needs no daemon-liveness check of its own to be correct.
-// retrieval.NewIndex, localvector.New and lifecycle.ManagerOptions.Store
-// all accept the resulting provider.Store, whichever concrete connection
-// it turned out to be, so nothing downstream of Open needs to know which
-// path was taken.
+// retrieval.NewIndex and lifecycle.ManagerOptions.Store both accept the
+// resulting provider.Store, whichever concrete connection it turned out
+// to be, so nothing downstream of Open needs to know which path was
+// taken.
 func buildRecallIndexManager(paths runtime.PathProvider, clock runtime.Clock) lifecycle.ManagerBuilder {
 	return func(ctx context.Context) (*lifecycle.Manager, func(), error) {
 		dbPath := filepath.Join(paths.DataDir(), "cascade.db")
@@ -64,9 +63,15 @@ func buildRecallIndexManager(paths runtime.PathProvider, clock runtime.Clock) li
 			CatalogPath: filepath.Join(paths.DataDir(), "retrieval", "catalog.json"),
 			Store:       store,
 			Index:       idx,
-			Vectors:     localvector.New(store),
-			Clock:       clock,
-			TreeHash:    doctorGitTreeHash,
+			// Vectors: left nil, matching internal/daemon/recall_index.go's
+			// production wiring — no embedding provider is configured at
+			// this composition root, so this check must not construct a
+			// vector store nothing ever writes into
+			// (DEFECT-vector-leg-never-written-on-rebuild.md). Verify's
+			// vectorIncomplete then correctly skips vector-completeness
+			// checking instead of reporting a false incompleteness.
+			Clock:    clock,
+			TreeHash: doctorGitTreeHash,
 		})
 		if err != nil {
 			closer()
