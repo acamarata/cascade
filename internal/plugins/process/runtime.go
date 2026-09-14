@@ -172,7 +172,7 @@ func (rt *ProcessRuntime) Launch(ctx context.Context, manifest Manifest) (*Handl
 
 	startupCtx, cancel := context.WithTimeout(ctx, rt.resolvedStartupTimeout())
 	defer cancel()
-	return rt.spawnAndHandshake(startupCtx, manifest)
+	return rt.spawnAndHandshake(ctx, startupCtx, manifest)
 }
 
 // resolvedStartupTimeout returns rt.StartupTimeout, defaulting to
@@ -193,14 +193,20 @@ func emitConsentWarning(w io.Writer, m Manifest) {
 }
 
 // spawnAndHandshake starts the Commander, negotiates the handshake, and
-// on success starts the crash-isolation monitor.
-func (rt *ProcessRuntime) spawnAndHandshake(ctx context.Context, manifest Manifest) (*Handle, error) {
-	cmd, transport, err := rt.spawnOne(ctx, manifest)
+// on success starts the crash-isolation monitor. lifetimeCtx governs how
+// long the plugin may run; startupCtx bounds only the handshake. Passing
+// startupCtx as the lifetime killed every plugin the instant Launch
+// returned — see lifetime.go's Constraints.
+func (rt *ProcessRuntime) spawnAndHandshake(lifetimeCtx, startupCtx context.Context, manifest Manifest) (*Handle, error) {
+	cmd, transport, err := rt.spawnOne(lifetimeCtx, manifest)
 	if err != nil {
 		return nil, err
 	}
-	h := &Handle{Manifest: manifest, transport: transport, state: &stateBox{}, tail: newStderrTailer(64)}
-	h.Ack, err = performHandshake(ctx, transport, manifest.Name, manifest.minProtocolVersion())
+	h := &Handle{
+		Manifest: manifest, transport: transport, state: &stateBox{},
+		tail: newStderrTailer(64), lifetimeCtx: lifetimeCtx,
+	}
+	h.Ack, err = performHandshake(startupCtx, transport, manifest.Name, manifest.minProtocolVersion())
 	if err != nil {
 		_ = transport.Close()
 		_ = cmd.Wait()
@@ -209,24 +215,6 @@ func (rt *ProcessRuntime) spawnAndHandshake(ctx context.Context, manifest Manife
 	go rt.monitor(cmd, manifest, h)
 	go rt.consumeHostCalls(context.Background(), h)
 	return h, nil
-}
-
-// spawnOne builds a Commander from manifest, opens its stdio pipes,
-// starts it, and wraps its stdio in a Transport.
-func (rt *ProcessRuntime) spawnOne(ctx context.Context, manifest Manifest) (Commander, *Transport, error) {
-	cmd := rt.factory()(ctx, manifest)
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, nil, cascade.Wrap(cascade.KindUnavailable, err, "process: opening plugin stdin")
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, nil, cascade.Wrap(cascade.KindUnavailable, err, "process: opening plugin stdout")
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, nil, cascade.Wrap(cascade.KindUnavailable, err, "process: starting plugin process")
-	}
-	return cmd, NewTransport(stdin, stdout, rt.StartupTimeout), nil
 }
 
 // monitor waits for the process to exit, restarts it per rt.Restart up
@@ -270,13 +258,13 @@ func (rt *ProcessRuntime) reportCrash(manifest Manifest, exitCode, restarts int,
 // success) an atomic swap of h's transport. The returned Commander is
 // what the monitor loop waits on next.
 func (rt *ProcessRuntime) respawn(manifest Manifest, h *Handle) (Commander, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), rt.resolvedStartupTimeout())
+	startupCtx, cancel := context.WithTimeout(context.Background(), rt.resolvedStartupTimeout())
 	defer cancel()
-	cmd, transport, err := rt.spawnOne(ctx, manifest)
+	cmd, transport, err := rt.spawnOne(h.lifetime(), manifest)
 	if err != nil {
 		return nil, err
 	}
-	ack, err := performHandshake(ctx, transport, manifest.Name, manifest.minProtocolVersion())
+	ack, err := performHandshake(startupCtx, transport, manifest.Name, manifest.minProtocolVersion())
 	if err != nil {
 		_ = transport.Close()
 		_ = cmd.Wait()

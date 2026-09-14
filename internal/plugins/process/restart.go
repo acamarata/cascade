@@ -214,6 +214,23 @@ type Handle struct {
 	transport *Transport
 	state     *stateBox
 	tail      *stderrTailer
+	// lifetimeCtx is the context governing how long this plugin's
+	// process may run. It is stored rather than passed because a
+	// respawn happens on the monitor goroutine, long after the Launch
+	// call that owns the lifetime has returned — and it must never be
+	// the handshake's bounded context (lifetime.go's Constraints).
+	lifetimeCtx context.Context
+}
+
+// lifetime returns h's process-lifetime context, defaulting to
+// context.Background for a Handle built without one (every test
+// constructing a Handle literal): a zero lifetime must mean "not
+// bounded", never a nil context that panics on the next spawn.
+func (h *Handle) lifetime() context.Context {
+	if h.lifetimeCtx == nil {
+		return context.Background()
+	}
+	return h.lifetimeCtx
 }
 
 // Call performs one JSON-RPC round trip through the current transport. A
