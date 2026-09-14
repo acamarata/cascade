@@ -3,6 +3,7 @@ package claude
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -27,9 +28,23 @@ func TestDefaultLookPathFindsARealExecutable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("defaultLookPath: %v", err)
 	}
-	if got != target {
+	// On Windows the candidate is built from PATHEXT, whose entries are
+	// upper-case (".EXE"), so the resolver returns "probe.EXE" for a file
+	// written as "probe.exe". Both name the same file — Windows paths are
+	// case-insensitive — and this is exactly what os/exec.LookPath returns,
+	// which this resolver reimplements. Comparing case-sensitively there
+	// asserts a property the platform does not have.
+	if !samePath(got, target) {
 		t.Fatalf("resolved %q, want %q", got, target)
 	}
+}
+
+// samePath compares two paths under the running platform's own case rules.
+func samePath(a, b string) bool {
+	if runtimeIsWindows() {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
 
 // TestDefaultLookPathReportsMissing proves an absent binary is a real

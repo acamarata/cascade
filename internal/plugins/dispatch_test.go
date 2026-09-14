@@ -13,6 +13,7 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 	"time"
@@ -100,9 +101,24 @@ func TestProvisionElevated_ProcessTierRefuses(t *testing.T) {
 	if err == nil {
 		t.Fatal("ProvisionElevated: want a refusal for a process-tier manifest, got nil error")
 	}
-	if !strings.Contains(err.Error(), "trust_tier") {
-		t.Errorf("ProvisionElevated error = %q, want it to contain %q (the real process.wrapUntrusted message)",
-			err.Error(), "trust_tier")
+	// The refusal itself is universal; the CAUSE underneath it is not.
+	// On linux/darwin the trust gate in process.wrapUntrusted refuses
+	// ("trust_tier"). On Windows the platform gate refuses first — process
+	// plugins need the daemon, which Windows tier-2 does not have — so the
+	// trust refusal wraps THAT instead. Both are correct refusals, and
+	// asserting the linux wording everywhere asserts a property Windows
+	// does not have.
+	wantCause := "trust_tier"
+	if goruntime.GOOS == "windows" {
+		wantCause = "not launched on windows"
+	}
+	if !strings.Contains(err.Error(), wantCause) {
+		t.Errorf("ProvisionElevated error = %q, want it to contain %q", err.Error(), wantCause)
+	}
+	// What must hold on EVERY platform: the refusal is the trust gate's,
+	// named as such, not some unrelated failure that happens to error.
+	if !strings.Contains(err.Error(), "process-tier plugin") {
+		t.Errorf("ProvisionElevated error = %q, want the trust gate's own refusal", err.Error())
 	}
 	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindPolicyDenied {
 		t.Errorf("cascade.KindOf(err) = (%v, %v), want (KindPolicyDenied, true)", kind, ok)
