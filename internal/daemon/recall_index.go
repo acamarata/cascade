@@ -15,7 +15,11 @@ package daemon
 // Outputs: internal/retrieval/lifecycle's four RPC methods, bound to a
 // real Manager over the real store; migrate additionally opens its own
 // second sqlite connection to apply the retrieval domain's MigrationSet,
-// mirroring context_scope.go's documented "second connection" choice.
+// mirroring context_scope.go's documented "second connection" choice. The
+// Manager's Sources is configSourceProvider (recall_index_sources.go),
+// reading retrieval.sources[] out of config.toml fresh on every call —
+// closing DEFECT-retrieval-sources-not-wired-to-ingest.md, the gap that
+// left `cascade recall index rebuild` unable to index any real project.
 //
 // Constraints: os/exec lives ONLY in this file's two GitTreeHashFunc/
 // GitDiffFunc implementations — internal/daemon is already an
@@ -27,7 +31,7 @@ package daemon
 // registerMemoryHandler already applies to a nil memoryAdmin.
 //
 // SPORT: internal/daemon (CHANGED — recall.index.* registration,
-// P1-E06-W2-S11-T4).
+// P1-E06-W2-S11-T4; CHANGED again, retrieval.sources ingest wiring).
 import (
 	"context"
 	"database/sql"
@@ -77,6 +81,7 @@ func RegisterRecallIndexHandler(
 		Store:       store,
 		Index:       mustIndex(store),
 		Vectors:     localvector.New(store),
+		Sources:     configSourceProvider{configPath: paths.ConfigPath()},
 		Clock:       clock,
 		TreeHash:    gitTreeHashExec,
 	})
