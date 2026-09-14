@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-14T00:42:28Z",
+  "generated_at": "2026-09-14T00:51:30Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -7690,6 +7690,28 @@
       ]
     },
     {
+      "name": "internal.conversation.archive",
+      "sites": [
+        {
+          "file": "internal/conversation/archive.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T3",
+          "raw": "internal.conversation.archive/ADDED (P1-E20-W5-S44-T3)."
+        },
+        {
+          "file": "internal/conversation/archive_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T3",
+          "raw": "internal.conversation.archive/ADDED (tests) (P1-E20-W5-S44-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.conversation.domain",
       "sites": [
         {
@@ -7749,6 +7771,78 @@
           "status": "ADD",
           "ticket": "P1-E20-W5-S44-T4",
           "raw": "internal.conversation.journal/ADDED (tests) (P1-E20-W5-S44-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.conversation.pagination",
+      "sites": [
+        {
+          "file": "internal/conversation/cursor_fuzz_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal.conversation.pagination/ADDED (fuzz)"
+        },
+        {
+          "file": "internal/conversation/pagination.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T3",
+          "raw": "internal.conversation.pagination/ADDED (P1-E20-W5-S44-T3)."
+        },
+        {
+          "file": "internal/conversation/pagination_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T3",
+          "raw": "internal.conversation.pagination/ADDED (tests) (P1-E20-W5-S44-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.conversation.retention",
+      "sites": [
+        {
+          "file": "internal/conversation/retention.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T3",
+          "raw": "internal.conversation.retention/ADDED (P1-E20-W5-S44-T3)."
+        },
+        {
+          "file": "internal/conversation/retention_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T3",
+          "raw": "internal.conversation.retention/ADDED (tests) (P1-E20-W5-S44-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.conversation.search",
+      "sites": [
+        {
+          "file": "internal/conversation/search.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T3",
+          "raw": "internal.conversation.search/ADDED (P1-E20-W5-S44-T3)."
+        },
+        {
+          "file": "internal/conversation/search_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T3",
+          "raw": "internal.conversation.search/ADDED (tests) (P1-E20-W5-S44-T3)."
         }
       ],
       "statuses": [
@@ -19527,7 +19621,7 @@
       ]
     }
   ],
-  "total_sites": 1937,
+  "total_sites": 1946,
   "unspecified_count": 63,
   "multi_status_count": 39
 }
