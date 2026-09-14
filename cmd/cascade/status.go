@@ -195,7 +195,13 @@ type statusHumanView struct {
 	daemon.StatusResponse
 }
 
-// String renders statusHumanView as the default human-readable table.
+// String renders statusHumanView as the default human-readable table. A
+// non-empty Subsystems (e.g. a disclosed Skipped reachability state on a
+// fresh install) appends one row per subsystem AFTER the FIELD/VALUE
+// table, so a Disabled/Skipped subsystem's name and reason stay visible
+// to a human reading `cascade status` even though neither degrades health
+// above (DEFECT-status-degraded-on-fresh-install.md - a fix to what
+// Health MEANS, never a suppression of what is reported).
 func (v statusHumanView) String() string {
 	var buf bytes.Buffer
 	tw := tabwriter.NewWriter(&buf, 0, 4, 2, ' ', 0)
@@ -209,6 +215,9 @@ func (v statusHumanView) String() string {
 	_, _ = fmt.Fprintf(tw, "connections\t%d\n", v.Daemon.Connections)
 	_, _ = fmt.Fprintf(tw, "socket_path\t%s\n", v.Daemon.SocketPath)
 	_, _ = fmt.Fprintf(tw, "health\t%s\n", v.Health)
+	for _, s := range v.Subsystems {
+		_, _ = fmt.Fprintf(tw, "subsystem:%s\t%s (%s)\n", s.Name, s.State, s.Detail)
+	}
 	_ = tw.Flush()
 	return strings.TrimRight(buf.String(), "\n")
 }
