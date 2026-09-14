@@ -1,0 +1,4 @@
+{
+  "request": {"jsonrpc":"2.0","method":"tools/list","mcp_method":"tools/list","mcp_name":"golden-client","id":1},
+  "response": {"jsonrpc":"2.0","id":1,"result":{"protocol_version":"2026-07-28","tools":[{"name":"greet-tool","description":"Greets the caller by name.","plugin_id":"example-builtin"}]}}
+}

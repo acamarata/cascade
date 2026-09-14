@@ -103,7 +103,12 @@ func TestBuiltinRegistry_GetUnknown(t *testing.T) {
 func TestBuiltinRegistry_List(t *testing.T) {
 	r := loadedRegistry(t)
 	list := r.List()
-	wantIDs := []string{"cascade-codex", "cascade-opencode", "cascade-pa", "example-builtin"}
+	// The pinned inventory of every builtin this binary ships, sorted by id.
+	// It grows only when a real plugin is added and wired: cascade-claude
+	// joined here with P1-E16-W4-S34-T1, and this assertion failing on that
+	// change is the registry proving the new plugin actually reaches
+	// plugin.Builtins() rather than being built and left unreachable.
+	wantIDs := []string{"cascade-claude", "cascade-codex", "cascade-opencode", "cascade-pa", "example-builtin"}
 	if len(list) != len(wantIDs) {
 		t.Fatalf("List() len = %d, want %d (%v)", len(list), len(wantIDs), wantIDs)
 	}

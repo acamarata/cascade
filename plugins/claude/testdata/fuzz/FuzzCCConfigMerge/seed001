@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\n  \"mcpServers\": {\n    \"cascade\": {\n      \"command\": \"cascade\",\n      \"args\": [\"mcp\", \"serve\", \"--stdio\"],\n      \"protocol_version\": \"2026-07-28\"\n    },\n    \"other-server\": {\n      \"command\": \"other\",\n      \"args\": [\"--serve\"],\n      \"unknown_field\": {\"nested\": true}\n    }\n  },\n  \"unrelatedTopLevelKey\": [1, 2, 3]\n}\n")
