@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-14T17:39:56Z",
+  "generated_at": "2026-09-14T17:58:41Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -13698,6 +13698,21 @@
       ]
     },
     {
+      "name": "internal/plugins/process lifetime",
+      "sites": [
+        {
+          "file": "internal/plugins/process/lifetime.go",
+          "line": 27,
+          "status": "ADD",
+          "ticket": "P1-E15-W4-S31-T3",
+          "raw": "internal/plugins/process lifetime (ADD) — P1-E15-W4-S31-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins/process restart",
       "sites": [
         {
@@ -20136,7 +20151,7 @@
       ]
     }
   ],
-  "total_sites": 1998,
+  "total_sites": 1999,
   "unspecified_count": 63,
   "multi_status_count": 39
 }
