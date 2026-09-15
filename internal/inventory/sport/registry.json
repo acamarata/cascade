@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-14T19:33:58Z",
+  "generated_at": "2026-09-15T23:31:48Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4139,6 +4139,21 @@
       ],
       "statuses": [
         "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade:harness-watch",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_harness_watch.go",
+          "line": 32,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "cmd/cascade:harness-watch (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
         "ADD"
       ]
     },
@@ -11454,6 +11469,21 @@
       ]
     },
     {
+      "name": "internal/build tests",
+      "sites": [
+        {
+          "file": "internal/build/outputgate_plugin_main_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "internal/build tests (ADD) — P1-E25-W5-S51-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/buildinfo",
       "sites": [
         {
@@ -11911,6 +11941,12 @@
           "status": "ADD",
           "ticket": "T-2",
           "raw": "internal/daemon (ADD, per T-2 sport_updates)."
+        },
+        {
+          "file": "internal/daemon/subsystems_goroutines.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, subsystem goroutine join)."
         },
         {
           "file": "internal/daemon/subsystems_router_test.go",
@@ -12574,6 +12610,21 @@
           "status": "ADD",
           "ticket": "T-4",
           "raw": "internal/fleet/governor.calibrate (ADD, per T-4 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/fleet/sessions:subscribe",
+      "sites": [
+        {
+          "file": "internal/fleet/sessions/subscribe.go",
+          "line": 32,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "internal/fleet/sessions:subscribe (ADD) — P1-E16-W4-S34-T1."
         }
       ],
       "statuses": [
@@ -13460,6 +13511,21 @@
       ]
     },
     {
+      "name": "internal/plugins cascade-claude watch wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/claude_watch_wiring.go",
+          "line": 30,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "internal/plugins cascade-claude watch wiring (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins cascade-claude wiring",
       "sites": [
         {
@@ -13728,6 +13794,21 @@
           "line": 17,
           "status": "ADD",
           "raw": "internal/plugins store-failure tests (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins tests",
+      "sites": [
+        {
+          "file": "internal/plugins/builtin_tier_only_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "internal/plugins tests (ADD) — P1-E25-W5-S51-T1."
         }
       ],
       "statuses": [
@@ -17370,6 +17451,43 @@
       ]
     },
     {
+      "name": "plugins/claude tests",
+      "sites": [
+        {
+          "file": "plugins/claude/watch_rules_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "plugins/claude tests (ADD) — P1-E16-W4-S34-T1."
+        },
+        {
+          "file": "plugins/claude/watch_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "plugins/claude tests (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/claude:watch",
+      "sites": [
+        {
+          "file": "plugins/claude/watch.go",
+          "line": 33,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "plugins/claude:watch (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/codex",
       "sites": [
         {
@@ -17527,6 +17645,250 @@
           "status": "ADD",
           "ticket": "P1-E15-W4-S33-T2",
           "raw": "plugins/examples/integration_test (ADD) — P1-E15-W4-S33-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github",
+      "sites": [
+        {
+          "file": "plugins/github/main.go",
+          "line": 35,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github (ADD) — P1-E25-W5-S51-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github auth",
+      "sites": [
+        {
+          "file": "plugins/github/auth/oauth.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github auth (ADD) — P1-E25-W5-S51-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github tests",
+      "sites": [
+        {
+          "file": "plugins/github/auth_flow_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github tests (ADD) — P1-E25-W5-S51-T1."
+        },
+        {
+          "file": "plugins/github/fakes_test.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github tests (ADD) — P1-E25-W5-S51-T1."
+        },
+        {
+          "file": "plugins/github/main_test.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github tests (ADD) — P1-E25-W5-S51-T1."
+        },
+        {
+          "file": "plugins/github/stream_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github tests (ADD) — P1-E25-W5-S51-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github tools",
+      "sites": [
+        {
+          "file": "plugins/github/tools/repos.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github tools (ADD) — P1-E25-W5-S51-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github tools/issues",
+      "sites": [
+        {
+          "file": "plugins/github/tools/issues.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github tools/issues (ADD) — P1-E25-W5-S51-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github tools/prs",
+      "sites": [
+        {
+          "file": "plugins/github/tools/prs.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github tools/prs (ADD) — P1-E25-W5-S51-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github/auth tests",
+      "sites": [
+        {
+          "file": "plugins/github/auth/exchange_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github/auth tests (ADD) — P1-E25-W5-S51-T1."
+        },
+        {
+          "file": "plugins/github/auth/loopback_integration_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github/auth tests (ADD) — P1-E25-W5-S51-T1."
+        },
+        {
+          "file": "plugins/github/auth/refresher_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github/auth tests (ADD) — P1-E25-W5-S51-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github/auth:exchange",
+      "sites": [
+        {
+          "file": "plugins/github/auth/exchange.go",
+          "line": 35,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github/auth:exchange (ADD) — P1-E25-W5-S51-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github/auth:loopback",
+      "sites": [
+        {
+          "file": "plugins/github/auth/loopback.go",
+          "line": 34,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github/auth:loopback (ADD) — P1-E25-W5-S51-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github/tools tests",
+      "sites": [
+        {
+          "file": "plugins/github/tools/client_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github/tools tests (ADD) — P1-E25-W5-S51-T1."
+        },
+        {
+          "file": "plugins/github/tools/transport_integration_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github/tools tests (ADD) — P1-E25-W5-S51-T1."
+        },
+        {
+          "file": "plugins/github/tools/transport_test.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github/tools tests (ADD) — P1-E25-W5-S51-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github/tools:client",
+      "sites": [
+        {
+          "file": "plugins/github/tools/client.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github/tools:client (ADD) — P1-E25-W5-S51-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github/tools:transport",
+      "sites": [
+        {
+          "file": "plugins/github/tools/transport.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github/tools:transport (ADD) — P1-E25-W5-S51-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github:auth-flow",
+      "sites": [
+        {
+          "file": "plugins/github/auth_flow.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github:auth-flow (ADD) — P1-E25-W5-S51-T1."
         }
       ],
       "statuses": [
@@ -20353,7 +20715,7 @@
       ]
     }
   ],
-  "total_sites": 2013,
+  "total_sites": 2042,
   "unspecified_count": 63,
   "multi_status_count": 39
 }
