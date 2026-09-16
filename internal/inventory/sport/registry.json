@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-16T09:42:57Z",
+  "generated_at": "2026-09-16T09:56:12Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -18668,6 +18668,27 @@
       "name": "plugins/pbd tests",
       "sites": [
         {
+          "file": "plugins/pbd/dispatch_cmd_test.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T4",
+          "raw": "plugins/pbd tests (ADD) — P1-E14-W3-S30-T4."
+        },
+        {
+          "file": "plugins/pbd/dispatch_golden_paths_test.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T4",
+          "raw": "plugins/pbd tests (ADD) — P1-E14-W3-S30-T4."
+        },
+        {
+          "file": "plugins/pbd/dispatch_golden_test.go",
+          "line": 40,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T4",
+          "raw": "plugins/pbd tests (ADD) — P1-E14-W3-S30-T4."
+        },
+        {
           "file": "plugins/pbd/dispatch_test.go",
           "line": 21,
           "status": "ADD",
@@ -21380,7 +21401,7 @@
       ]
     }
   ],
-  "total_sites": 2097,
+  "total_sites": 2100,
   "unspecified_count": 66,
   "multi_status_count": 40
 }

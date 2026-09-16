@@ -139,6 +139,8 @@ func mountSubcommands(root *cobra.Command) {
 	mountFleetCmd(root)
 	mountNodeCmd(root)
 	mountChatCmd(root)
+	mountRunCmd(root)
+	mountPluginNamespaceCmds(root)
 }
 
 // mountMCPCmd attaches the `mcp` command tree (D/S-06.T6), following

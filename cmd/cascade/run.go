@@ -99,10 +99,16 @@ type runFlags struct {
 	Input       []string
 }
 
-// mountRunCmd attaches `run` to root. NOT YET CALLED from
-// mountSubcommands (root.go/testdata/golden_help.txt are outside this
-// ticket's files_scope and are concurrently owned by other work this
-// phase) - see the journal for the exact one-line follow-up this leaves.
+// mountRunCmd attaches `run` to root.
+//
+// It was deliberately left UNMOUNTED when K/S-23.T1 landed, because
+// root.go and testdata/golden_help.txt were owned by concurrent work that
+// phase, and the follow-up was recorded here rather than done. The W3
+// hardening gate found the consequence in the shipped artifact: `cascade
+// run` did not exist in the binary at all, so the whole K-epic CLI surface
+// was unreachable by a user — an Art.6 known-broken component that no unit
+// test could see, because every test mounted the command itself. Mounted
+// from mountSubcommands since; golden_help.txt carries it.
 func mountRunCmd(root *cobra.Command) {
 	root.AddCommand(newRunCmd(productionRunDeps()))
 }

@@ -19,10 +19,12 @@ Available Commands:
   mcp            Serve the policy-filtered MCP tool registry
   memory         Remember, recall and forget memory records
   node           Manage this machine's participation in the node fleet
+  pbd            PBD Engine
   plugin         Manage the plugin lifecycle: install, inspect, and remove
   policy         Explain and inspect policy decisions
   provider       Register and manage model providers
   recall         Search the retrieval index and print cited results
+  run            Dispatch a one-shot or streaming model task through the conductor
   status         One-shot summary of the running daemon
   vault          Store and retrieve secrets in the platform keychain
   version        Print the cascade version, commit, build date, and install channel

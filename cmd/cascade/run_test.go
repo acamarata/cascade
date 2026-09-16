@@ -222,10 +222,16 @@ func TestRunCmd_OnlyModelDoor(t *testing.T) {
 	// 07 note 9: run is the sole location for model-dispatch flags. No
 	// other cobra command in cmd/cascade declares --task/--require/
 	// --sensitivity/--fan-out/--stream.
+	// The real root now MOUNTS run (mountRunCmd, found unmounted by the W3
+	// hardening gate), so this walks the shipping tree and skips run by
+	// COMMAND PATH. It used to add a second run command and skip that one
+	// by pointer identity, which silently stopped checking anything the
+	// moment the real one appeared beside it.
 	globalFlags = GlobalFlags{}
 	root := newRootCmd()
-	runCmd := newRunCmd(runDeps{})
-	root.AddCommand(runCmd)
+	if _, _, err := root.Find([]string{"run"}); err != nil {
+		t.Fatalf("the root command tree has no run command: %v", err)
+	}
 
 	// CONTRACT DEVIATION (recorded, not papered over): the ticket's literal
 	// wording names --task and --stream among the flags no OTHER command
@@ -242,7 +248,7 @@ func TestRunCmd_OnlyModelDoor(t *testing.T) {
 	modelFlags := []string{"require", "sensitivity", "fan-out"}
 	var walk func(cmd *cobra.Command)
 	walk = func(cmd *cobra.Command) {
-		if cmd != runCmd {
+		if cmd.CommandPath() != "cascade run" {
 			for _, name := range modelFlags {
 				if cmd.Flags().Lookup(name) != nil {
 					t.Errorf("command %q declares model-dispatch flag --%s, want it declared only on run", cmd.CommandPath(), name)
