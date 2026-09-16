@@ -161,6 +161,7 @@ func newMCPCmd(deps mcpDeps) *cobra.Command {
 
 func newMCPServeCmd(deps mcpDeps) *cobra.Command {
 	var stdioFlag, socketFlag bool
+	var captureDir string
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Start the MCP server on the selected transport",
@@ -176,11 +177,22 @@ func newMCPServeCmd(deps mcpDeps) *cobra.Command {
 			if useSocket {
 				return deps.ServeSocket(cmd.Context())
 			}
-			return deps.ServeStdio(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout())
+			in, out := cmd.InOrStdin(), cmd.OutOrStdout()
+			if captureDir != "" {
+				tappedIn, tappedOut, closeCapture, err := captureStreams(captureDir, in, out)
+				if err != nil {
+					return err
+				}
+				defer closeCapture()
+				in, out = tappedIn, tappedOut
+			}
+			return deps.ServeStdio(cmd.Context(), in, out)
 		},
 	}
 	cmd.Flags().BoolVar(&stdioFlag, "stdio", false, "serve MCP over line-framed stdio")
 	cmd.Flags().BoolVar(&socketFlag, "socket", false, "serve MCP over the cascade unix socket")
+	cmd.Flags().StringVar(&captureDir, "capture", "",
+		"tee raw stdio frames to <dir>/{in,out}.jsonl (diagnostic; stdio only)")
 	return cmd
 }
 

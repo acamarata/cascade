@@ -121,14 +121,32 @@ func resolveDispatchDeps(
 // against the operator's working tree, which is the one outcome a remote
 // dispatch must never produce silently.
 func requireDispatchConfig(cfg nodes.Section) error {
-	for field, value := range map[string]string{
-		"dispatch_repo_root": cfg.DispatchRepoRoot,
-		"dispatch_remote":    cfg.DispatchRemote,
-	} {
-		if strings.TrimSpace(value) == "" {
-			return cascade.Newf(cascade.KindInvalidInput,
-				"daemon: remote dispatch needs [nodes].%s configured", field)
+	// An ORDERED slice, not a map. This ranged over a map until the W-4
+	// MCP work happened to shuffle the runtime's iteration: with both
+	// knobs unset the refusal named whichever field came out first, so the
+	// message an operator got was nondeterministic and the test asserting
+	// it passed by luck. A map-iteration-order flake is never acceptable
+	// (registry.go's List says the same for the same reason).
+	//
+	// It also reports EVERY missing knob rather than the first. An
+	// operator with both unset should be told both, not made to fix one
+	// and run again to discover the next.
+	required := []struct {
+		field string
+		value string
+	}{
+		{"dispatch_repo_root", cfg.DispatchRepoRoot},
+		{"dispatch_remote", cfg.DispatchRemote},
+	}
+	var missing []string
+	for _, r := range required {
+		if strings.TrimSpace(r.value) == "" {
+			missing = append(missing, r.field)
 		}
+	}
+	if len(missing) > 0 {
+		return cascade.Newf(cascade.KindInvalidInput,
+			"daemon: remote dispatch needs [nodes].%s configured", strings.Join(missing, " and [nodes]."))
 	}
 	return nil
 }

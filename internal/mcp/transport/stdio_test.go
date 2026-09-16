@@ -40,7 +40,7 @@ func readLines(t *testing.T, out *bytes.Buffer) []string {
 }
 
 func TestStdioTransport_HappyPath(t *testing.T) {
-	in := strings.NewReader(`{"jsonrpc":"2.0","method":"tools/list","mcp_method":"tools/list","mcp_name":"c","id":1}` + "\n")
+	in := strings.NewReader(`{"jsonrpc":"2.0","method":"tools/list","id":1}` + "\n")
 	out := &bytes.Buffer{}
 	tr := transport.NewStdioTransport(echoOK(), in, out)
 
@@ -131,7 +131,7 @@ func TestStdioTransport_OversizedLine(t *testing.T) {
 }
 
 func TestStdioTransport_CanceledContext(t *testing.T) {
-	in := strings.NewReader(strings.Repeat(`{"jsonrpc":"2.0","method":"tools/list","mcp_method":"tools/list","mcp_name":"c","id":1}`+"\n", 5))
+	in := strings.NewReader(strings.Repeat(`{"jsonrpc":"2.0","method":"tools/list","id":1}`+"\n", 5))
 	out := &bytes.Buffer{}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

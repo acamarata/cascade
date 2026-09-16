@@ -42,8 +42,8 @@ func leakingDispatcher() fakeDispatcher {
 // asserts the credential never reaches the writer. Removing the firewall
 // call in StdioTransport.writeResponse turns this test red.
 func TestStdioResponseIsFilteredOnTheRealPath(t *testing.T) {
-	in := strings.NewReader(`{"jsonrpc":"2.0","method":"tools/call","mcp_method":"tools/call",` +
-		`"mcp_name":"c","id":1,"params":{"name":"x"}}` + "\n")
+	in := strings.NewReader(`{"jsonrpc":"2.0","method":"tools/call",` +
+		`"id":1,"params":{"name":"x"}}` + "\n")
 	out := &bytes.Buffer{}
 	tr := transport.NewStdioTransport(leakingDispatcher(), in, out)
 
@@ -66,7 +66,7 @@ func TestStdioResponseIsFilteredOnTheRealPath(t *testing.T) {
 // transport whose marshaler could not be built writes nothing at all
 // rather than falling back to a plain encode.
 func TestStdioRefusesToWriteWithoutAFirewall(t *testing.T) {
-	in := strings.NewReader(`{"jsonrpc":"2.0","method":"tools/list","mcp_method":"tools/list","mcp_name":"c","id":1}` + "\n")
+	in := strings.NewReader(`{"jsonrpc":"2.0","method":"tools/list","id":1}` + "\n")
 	out := &bytes.Buffer{}
 	tr := transport.NewStdioTransport(echoOK(), in, out).WithResponseMarshaler(nil)
 

@@ -65,7 +65,7 @@ func FuzzMCPFrame(f *testing.F) {
 	for _, s := range []string{
 		"", "{}", "null", `{"jsonrpc":"2.0"`, // truncated
 		`{"jsonrpc":"2.0","method":123}`, // wrong type
-		`{"jsonrpc":"2.0","method":"tools/list","mcp_method":"tools/list","mcp_name":"c","id":1}`,
+		`{"jsonrpc":"2.0","method":"tools/list","id":1}`,
 	} {
 		f.Add(s)
 	}

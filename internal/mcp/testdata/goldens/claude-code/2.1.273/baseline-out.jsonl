@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":0,"error":{"code":-32600,"message":"missing required mcp_method/mcp_name fields"}}

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-16T10:43:00Z",
+  "generated_at": "2026-09-16T11:02:25Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4284,6 +4284,21 @@
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T1",
           "raw": "cmd/cascade:harness-watch (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade:mcp-capture",
+      "sites": [
+        {
+          "file": "cmd/cascade/mcp_capture.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E04-W4-S86-T1",
+          "raw": "cmd/cascade:mcp-capture (ADD) — P1-E04-W4-S86-T1."
         }
       ],
       "statuses": [
@@ -12957,14 +12972,44 @@
         },
         {
           "file": "internal/mcp/server.go",
-          "line": 24,
+          "line": 38,
           "status": "ADD",
           "ticket": "P1-E04-W1-S06-T6",
-          "raw": "internal/mcp [ADD] (P1-E04-W1-S06-T6 sport_updates)."
+          "raw": "internal/mcp [ADD] (P1-E04-W1-S06-T6); [CHANGE] P1-E04-W4-S86-T1."
         }
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal/mcp goldens",
+      "sites": [
+        {
+          "file": "internal/mcp/goldens_test.go",
+          "line": 34,
+          "status": "ADD",
+          "ticket": "P1-E04-W4-S86-T1",
+          "raw": "internal/mcp goldens (ADD) — P1-E04-W4-S86-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/mcp tests",
+      "sites": [
+        {
+          "file": "internal/mcp/server_test.go",
+          "line": 21,
+          "status": "CHANGE",
+          "ticket": "P1-E04-W4-S86-T1",
+          "raw": "internal/mcp tests [CHANGE] — P1-E04-W4-S86-T1."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
       ]
     },
     {
@@ -13011,6 +13056,21 @@
           "line": 19,
           "status": "ADD",
           "raw": "internal/mcp/transport test-support (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/mcp:initialize",
+      "sites": [
+        {
+          "file": "internal/mcp/initialize.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E04-W4-S86-T1",
+          "raw": "internal/mcp:initialize (ADD) — P1-E04-W4-S86-T1."
         }
       ],
       "statuses": [
@@ -21666,7 +21726,7 @@
       ]
     }
   ],
-  "total_sites": 2119,
+  "total_sites": 2123,
   "unspecified_count": 66,
   "multi_status_count": 40
 }

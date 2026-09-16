@@ -1,6 +1,7 @@
 // This file carries NO build tag on purpose: it asserts RegisterSocketMCP's
 // behaviour on BOTH platforms -- the real registration on unix, and the
-// tier-2 refusal socket_windows.go performs. MCPMethod now lives in the
+// tier-2 refusal socket_windows.go performs. transport.MCPMethod (the
+// JSON-RPC bridge method name, unrelated to the deleted wire dialect) lives in the
 // untagged method.go so this file compiles on windows too; tagging the test
 // instead would have silently deleted the windows-refusal coverage.
 
@@ -60,7 +61,7 @@ func TestRegisterSocketMCP_Dispatches(t *testing.T) {
 
 	params, marshalErr := json.Marshal(&mcp.Frame{
 		JSONRPC: "2.0", Method: "tools/list",
-		MCPMethod: "tools/list", MCPName: "c", ID: json.RawMessage("1"),
+		ID: json.RawMessage("1"),
 	})
 	if marshalErr != nil {
 		t.Fatal(marshalErr)

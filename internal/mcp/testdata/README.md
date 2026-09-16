@@ -1,84 +1,74 @@
-# internal/mcp wire fixture provenance
+# internal/mcp testdata — provenance
 
-## Protocol pin
+## The goldens are real, and that is the whole point
 
-`MCP_PROTOCOL_VERSION = "2026-07-28"` (server.go's `MCPProtocolVersion`),
-per T0 ruling R-14.14: a stateless core, no initialize handshake, no
-session id, required `mcp_method`/`mcp_name` fields on every request, MRTR
-(MCP Request-Triggered Requests) in place of server-initiated messages.
+`goldens/claude-code/2.1.273/` holds an MCP session captured from the
+**installed Claude Code 2.1.273** driving the built `cascade` binary, with
+`cascade mcp serve --stdio --capture <dir>`. Captured 2026-09-16.
 
-## Golden slots
-
-This directory is reserved for wire-golden fixtures captured from a real
-`rmcp 3.0.1` client conformant to the 2026-07-28 revision, per this
-ticket's Art.2 (real-counterpart) requirement: fixtures must never be
-self-authored.
-
-## Gate decision (W1 hardening gate): explicit deferral, risk stated
-
-The W1 gate had to either capture these goldens from a real client or
-record an explicit deferral with the risk stated. It records the deferral,
-for a reason that is not "the toolchain was unavailable".
-
-`rmcp 3.0.1` is downloadable and a Rust toolchain is present, so the
-original blocker is gone. What remains is a protocol mismatch. R-14.14
-pins this server to a stateless core with no `initialize` handshake and a
-required `mcp_method`/`mcp_name` pair on every request; `server.go`
-rejects any frame missing them (`missing required mcp_method/mcp_name
-fields`). A stock rmcp client opens with `initialize` and sends neither
-field, so driving this server with one yields rejection frames, not
-conformant `tools/list` or `tools/call` bytes. There is no off-the-shelf
-client that speaks this dialect, so "captured from a real conformant
-client" cannot be satisfied by any client that exists today.
-
-THE RISK, stated plainly: these fixtures prove only that the
-implementation agrees with itself. If the frame layout in the contract
-text is wrong, or the server drifts from it, nothing here will notice. A
-real interoperability defect would ship undetected. That is the failure
-shape a golden fixture exists to prevent, and it is not prevented here.
-
-Closing it needs one of two things, and both are decisions above this
-gate: publish the dialect so a conformant client can be written (then
-capture against it), or move the server onto the standard MCP handshake so
-an existing client is a real counterpart. Recorded for the wave-2 and
-release gates rather than silently carried.
-
-## Known gap: no rmcp capture in this pass
-
-This implementation pass had no network access and no `rmcp` toolchain
-available in its build environment, so no such capture was possible here.
-`internal/mcp/server_test.go` and `internal/mcp/transport/*_test.go`
-instead exercise the pinned revision's request/response shapes (header
-validation, tools/list, tools/call, the notifications/ack MRTR exchange,
-malformed-frame error paths) against fixtures this package authored itself
-from the ticket contract's own text — this satisfies the pinned revision's
-documented *behavior*, but does NOT satisfy Art.2's "never self-authored"
-requirement for the wire bytes themselves. A follow-up pass with `rmcp
-3.0.1` available must:
-
-1. Run an `rmcp 3.0.1` client against a running `cascade mcp serve
-   --stdio` (or `--socket`) process.
-2. Capture the literal request/response byte sequences for: tools/list,
-   tools/call (success and unknown-tool), a header-validation rejection,
-   and one notifications/ack exchange.
-3. Save them here as `*.golden.json`, record capture date and the exact
-   `rmcp` version below, and wire `TestMCPGoldens` in
-   `internal/mcp/server_test.go` (or a new `golden_test.go`, if the
-   ticket's file scope is amended to add one) to assert byte-for-byte
-   against them.
-
-## Spec-upgrade policy
-
-A future MCP revision requires a new T0 ruling amending R-14.14 before
-`MCPProtocolVersion` changes. Until then, any request whose behavior this
-package cannot express under the 2026-07-28 stateless core (an
-`initialize` handshake, a session id, a server-initiated request) is
-rejected as an unrecognized method — never silently upgraded or
-downgraded.
-
-| Field | Value |
+| File | What it is |
 |---|---|
-| Source | not captured; explicit deferral recorded at the W1 hardening gate |
-| MCP spec revision | 2026-07-28 |
-| Capture tool | rmcp 3.0.1 (pinned by R-14.14; not yet run) |
-| Capture date | pending |
+| `in.jsonl` | every frame the client sent, in order |
+| `out.jsonl` | every frame cascade answered with |
+| `baseline-in.jsonl` | the client's FIRST frame, from before the fix |
+| `baseline-out.jsonl` | what the old wire answered it with: `-32600` |
+
+The captured session is `initialize` → `notifications/initialized` →
+`tools/list` → `tools/call`. It ended with the client listing cascade's
+four tools and invoking one — the first time any real client has completed
+a session against this server.
+
+`goldens_test.go` replays `in.jsonl` and compares against `out.jsonl` frame
+by frame. One field is not compared literally: `serverInfo.version` is the
+build stamp, so it is asserted equal to `buildinfo.Version` instead of
+frozen — stricter than skipping it, since a wrong value still fails.
+
+## Why there is no self-authored fixture any more
+
+There used to be a `tools_list.golden.json` written from a contract's own
+text, with a note in this file admitting it did not satisfy Art.2. It has
+been deleted. It could not have caught the defect that mattered: it agreed
+with the server because both came from the same description.
+
+## The history, because it repeated
+
+1. **R-14.14** pinned a revision and described its wire. The server was
+   built to that description: `mcp_method`/`mcp_name` frame fields and a
+   `notifications/ack` method. **No client sends any of those.**
+2. **R-14.238** diagnosed that correctly — "no off-the-shelf client speaks
+   this dialect" — and then described a *different* wire from a *different*
+   published revision: `server/discover`, a `_meta` layer carrying
+   `io.modelcontextprotocol/protocolVersion`, `2026-07-28`, and `-32022`
+   for a legacy `initialize`.
+3. **The capture** (2026-09-16, R-14.246) shows the real client sends
+   `initialize` first and only, with `protocolVersion` **`2025-11-25`** in
+   `params`, no `_meta` at the frame level, and never probes
+   `server/discover`. Building to step 2 would have rejected the only
+   client that exists — the same symptom, one layer up.
+
+**The rule this produced:** a wire protocol is specified by BYTES FROM A
+REAL PEER, never by a description of a specification — including a
+description written in a ruling, including one written to correct the
+previous description. Capture first, implement second, commit the capture.
+
+## Known gap: tools have no input schema
+
+`tools/list` emits a permissive `{"type":"object","properties":{}}` for
+every tool, because `pkg/plugin.ToolSpec` has no schema field to emit.
+
+This is not cosmetic, and the capture proves it: the one `tools/call` in
+the session failed with `root must not be empty`, because nothing told the
+model that the tool needs a `root` argument, so it sent `{}`. Filed as an
+Art.9 defect — the fix is a schema field on the manifest, not an invented
+schema here, which would describe arguments no handler reads.
+
+## Re-capturing
+
+```
+cascade mcp serve --stdio --capture <dir>     # via a throwaway .mcp.json
+claude -p --mcp-config <file> "list the cascade tools"
+```
+
+Copy `<dir>/{in,out}.jsonl` into a directory named for the client version.
+Never hand-edit a golden: if the bytes changed, either the server changed
+or the client did, and both are things a person should look at.

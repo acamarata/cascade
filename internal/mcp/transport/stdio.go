@@ -95,6 +95,12 @@ func (t *StdioTransport) Serve(ctx context.Context) error {
 			continue
 		}
 		resp := t.dispatchLine(ctx, line)
+		// A nil response means the frame was a NOTIFICATION. JSON-RPC 2.0
+		// forbids answering one, and a real client treats an unsolicited
+		// message as a protocol violation — so nothing is written.
+		if resp == nil {
+			continue
+		}
 		if err := t.writeResponse(ctx, resp); err != nil {
 			return err
 		}

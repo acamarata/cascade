@@ -99,8 +99,17 @@ func TestResolvingADispatchNeedsItsCollaborators(t *testing.T) {
 	_, _, err := resolveDispatchDeps(d, rv, store, clock, func() (nodes.Section, error) {
 		return nodes.Section{}, nil
 	}, "n1")
-	if err == nil || !strings.Contains(err.Error(), "dispatch_repo_root") {
-		t.Errorf("err = %v, want the config refusal naming the missing knob", err)
+	// BOTH missing knobs must be named, deterministically. This assertion
+	// used to name only one and passed by luck: requireDispatchConfig
+	// ranged over a map, so which knob it reported depended on Go's
+	// iteration order.
+	if err == nil {
+		t.Fatal("an unconfigured section resolved")
+	}
+	for _, knob := range []string{"dispatch_repo_root", "dispatch_remote"} {
+		if !strings.Contains(err.Error(), knob) {
+			t.Errorf("err = %v, want it to name the missing knob %q", err, knob)
+		}
 	}
 	// A node that is not enrolled is refused too.
 	if _, _, err := resolveDispatchDeps(d, rv, store, clock, func() (nodes.Section, error) {
