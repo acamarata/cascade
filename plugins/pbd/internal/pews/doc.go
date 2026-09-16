@@ -12,8 +12,8 @@
 // normative order.
 //
 // Beyond the 17, exactly six extra flags are declared and no others:
-// subtickets, journals, owner_prereq, gate_only, external_contract, and
-// amendment_note. Each is optional; DecodeTicket preserves the distinction
+// subtickets, journals, owner_prereq, gate_only, external_contract,
+// amendment_note, and security_class. Each is optional; DecodeTicket preserves the distinction
 // between "omitted" and "present with its zero value" (an omitted bool flag
 // decodes to a nil pointer, not false; an omitted string flag decodes to a
 // nil pointer, not the empty string), and EncodeTicket omits exactly what

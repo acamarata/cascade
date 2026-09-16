@@ -72,11 +72,13 @@ var wantNormativeOrder = []string{
 	"docs_updates",
 }
 
-// wantExtraOrder is 06 §1's six declared extra flags, in the order it
-// lists them.
+// wantExtraOrder is 06 §1's declared extra flags, in the order it lists
+// them. security_class (R-14.215 item 5) is the seventh: the W3 hardening
+// gate found every pbd command failing on cascade's own planning tree
+// because the schema did not declare it.
 var wantExtraOrder = []string{
 	"subtickets", "journals", "owner_prereq", "gate_only", "external_contract",
-	"amendment_note",
+	"amendment_note", "security_class",
 }
 
 // yamlTagName strips a struct tag's trailing ",omitempty" (etc.) leaving
@@ -92,13 +94,13 @@ func yamlTagName(tag reflect.StructTag) string {
 }
 
 // TestTicketSchema asserts Ticket's field declaration order matches the 17
-// normative fields followed by exactly the 6 declared extra flags, and no
+// normative fields followed by exactly the declared extra flags, and no
 // others.
 func TestTicketSchema(t *testing.T) {
 	rt := reflect.TypeOf(Ticket{})
 	want := append(append([]string{}, wantNormativeOrder...), wantExtraOrder...)
 	if rt.NumField() != len(want) {
-		t.Fatalf("Ticket has %d fields, want exactly %d (17 normative + 6 extra)", rt.NumField(), len(want))
+		t.Fatalf("Ticket has %d fields, want exactly %d (17 normative + %d extra)", rt.NumField(), len(want), len(wantExtraOrder))
 	}
 	for i, name := range want {
 		got := yamlTagName(rt.Field(i).Tag)
@@ -111,7 +113,7 @@ func TestTicketSchema(t *testing.T) {
 // fullTicket builds a Ticket with every field, including every extra flag,
 // populated with a distinct value.
 func fullTicket() Ticket {
-	journals, gateOnly, external := true, false, true
+	journals, gateOnly, external, security := true, false, true, true
 	prereq := "second machine"
 	amendment := "AMENDED per R-00.0 (T0, synthetic). Example amendment note."
 	return Ticket{
@@ -132,7 +134,7 @@ func fullTicket() Ticket {
 		DocsUpdates:  []string{".github/wiki/Example.md"},
 		Subtickets:   []string{"P1-E00-W0-S00-T1a"},
 		Journals:     &journals, OwnerPrereq: &prereq, GateOnly: &gateOnly, ExternalContract: &external,
-		AmendmentNote: &amendment,
+		AmendmentNote: &amendment, SecurityClass: &security,
 	}
 }
 

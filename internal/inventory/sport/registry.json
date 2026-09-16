@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-16T09:56:12Z",
+  "generated_at": "2026-09-16T09:59:50Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3137,6 +3137,13 @@
       "name": "cmd/cascade tests",
       "sites": [
         {
+          "file": "cmd/cascade/plugin_namespaces_test.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T5",
+          "raw": "cmd/cascade tests (ADD) — P1-E14-W3-S30-T5 (Art.9)."
+        },
+        {
           "file": "cmd/cascade/run_requirements_test.go",
           "line": 13,
           "status": "ADD",
@@ -4211,6 +4218,21 @@
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T1",
           "raw": "cmd/cascade:harness-watch (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade:plugin-namespaces",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_namespaces.go",
+          "line": 33,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T5",
+          "raw": "cmd/cascade:plugin-namespaces (ADD) — P1-E14-W3-S30-T5 (Art.9)."
         }
       ],
       "statuses": [
@@ -21401,7 +21423,7 @@
       ]
     }
   ],
-  "total_sites": 2100,
+  "total_sites": 2102,
   "unspecified_count": 66,
   "multi_status_count": 40
 }

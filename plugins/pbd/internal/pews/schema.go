@@ -19,8 +19,17 @@ var normativeFields = []string{
 	"docs_updates",
 }
 
-// extraFlagFields lists the six Forge-declared extra flags and no others.
-var extraFlagFields = []string{"subtickets", "journals", "owner_prereq", "gate_only", "external_contract", "amendment_note"}
+// extraFlagFields lists the Forge-declared extra flags and no others.
+//
+// security_class was MISSING here until the W3 hardening gate ran the
+// tagged artifact against cascade's own planning tree and every pbd
+// command failed on it (`unknown ticket field "security_class"`). The flag
+// is ratified — R-14.215 item 5 restored it on three AN tickets after a
+// sweep stripped it, and rules that any future removal must cite a ruling
+// — so the schema was the side that was wrong. Nothing caught it because
+// the only test that reads the real tree is skipped unless
+// CASCADE_PBD_DOGFOOD_SRC is set, and it never was.
+var extraFlagFields = []string{"subtickets", "journals", "owner_prereq", "gate_only", "external_contract", "amendment_note", "security_class"}
 
 // filesScopeFields lists the three keys files_scope may carry.
 var filesScopeFields = []string{"add", "change", "delete"}
@@ -144,9 +153,10 @@ type Phase struct {
 }
 
 // Ticket is the PEWS ticket-schema v2 contract: the 17 normative fields in
-// 06 §1 order, followed by the six declared extra flags and no others. A
+// 06 §1 order, followed by the declared extra flags and no others. A
 // pointer field (Journals, OwnerPrereq, GateOnly, ExternalContract,
-// AmendmentNote) is nil when the YAML omitted the key; Subtickets uses a nil slice.
+// AmendmentNote, SecurityClass) is nil when the YAML omitted the key;
+// Subtickets uses a nil slice.
 type Ticket struct {
 	ID                 string     `yaml:"id"`
 	Title              string     `yaml:"title"`
@@ -175,6 +185,10 @@ type Ticket struct {
 
 	// AmendmentNote records a binding post-authoring scope change; free text.
 	AmendmentNote *string `yaml:"amendment_note,omitempty"`
+
+	// SecurityClass marks a ticket whose work is security-critical
+	// (R-14.215 item 5). Nil when the YAML omitted the key.
+	SecurityClass *bool `yaml:"security_class,omitempty"`
 }
 
 // DecodeTicket parses data as a PEWS ticket-schema v2 document. It never
