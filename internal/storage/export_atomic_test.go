@@ -11,6 +11,7 @@ package storage_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -58,9 +59,56 @@ func TestImportAtomicRollback(t *testing.T) {
 	if err := storage.Export(context.Background(), db, storage.DomainSessions, &after); err != nil {
 		t.Fatalf("Export (after): %v", err)
 	}
-	if !bytes.Equal(before.Bytes(), after.Bytes()) {
-		t.Fatalf("domain state changed across the failed import:\n--- before ---\n%s\n--- after ---\n%s", before.Bytes(), after.Bytes())
+	// Compare the ROWS, not the whole stream. The header carries
+	// exported_at, a wall-clock stamp, so a byte-for-byte comparison of two
+	// exports asserts "both ran inside the same second" as well as the
+	// property this test is about — and on the race lane they do not: CI
+	// saw 22:39:00Z against 22:39:01Z with identical rows. The header's own
+	// stable fields are asserted separately below, so nothing is dropped.
+	beforeRows, beforeHeader := splitExport(t, before.Bytes())
+	afterRows, afterHeader := splitExport(t, after.Bytes())
+	if beforeRows != afterRows {
+		t.Fatalf("domain state changed across the failed import:\n--- before ---\n%s\n--- after ---\n%s",
+			beforeRows, afterRows)
 	}
+	if beforeRows == "" {
+		t.Fatal("neither export carried a row; the comparison above would pass on an empty domain")
+	}
+	if beforeHeader != afterHeader {
+		t.Errorf("export header changed apart from its timestamp:\n before: %s\n after:  %s",
+			beforeHeader, afterHeader)
+	}
+}
+
+// splitExport returns an export stream's row lines joined, and its header
+// line with the exported_at field removed — the two halves that must hold
+// steady across a rolled-back import. exported_at is deliberately the one
+// field dropped: it is the only value in the stream that changes without
+// the domain changing.
+func splitExport(t *testing.T, stream []byte) (rows, header string) {
+	t.Helper()
+	var rowLines []string
+	for _, line := range strings.Split(strings.TrimRight(string(stream), "\n"), "\n") {
+		switch {
+		case strings.Contains(line, `"_type":"header"`):
+			var h map[string]any
+			if err := json.Unmarshal([]byte(line), &h); err != nil {
+				t.Fatalf("export header is not JSON: %v (%s)", err, line)
+			}
+			delete(h, "exported_at")
+			encoded, err := json.Marshal(h)
+			if err != nil {
+				t.Fatalf("re-encode header: %v", err)
+			}
+			header = string(encoded)
+		case line != "":
+			rowLines = append(rowLines, line)
+		}
+	}
+	if header == "" {
+		t.Fatalf("export carried no header line: %s", stream)
+	}
+	return strings.Join(rowLines, "\n"), header
 }
 
 // TestImportAtomicRollback_BadBase64Value proves the same rollback
