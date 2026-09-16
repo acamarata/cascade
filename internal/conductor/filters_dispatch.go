@@ -67,6 +67,22 @@ func filterQuota(ctx context.Context, quota QuotaSpiller, allLanes, cands []lane
 			excluded = append(excluded, LaneID(c.lane.LaneName))
 		}
 	}
+	// An UNCONFIGURED spill order expresses no preference, and must not
+	// veto. defaultQuotaConfig() has an empty SpillOrder and the daemon
+	// parses no [conductor.quota] section, so NextLane returned
+	// ErrAllLanesExhausted for every request on every machine — the true
+	// cause behind the "no candidate lane" the W3 hardening gate saw from a
+	// real `cascade run` against a real, live-verified provider.
+	//
+	// Fail-closed is for AUTHORIZATION, not for PREFERENCE. A preference
+	// list nobody filled in must not mean "no lane may run": that makes the
+	// product inoperable out of the box, which is not a safe default, it is
+	// a broken one. An order the operator DID configure still decides.
+	// (R-14.245.)
+	if sp, ok := quota.(spillOrderReporter); ok && !sp.SpillOrderConfigured() {
+		flags = append(flags, "quota:unconfigured-spill-order")
+		return cands[0], flags, nil
+	}
 	picked, err := quota.NextLane(ctx, excluded)
 	if err != nil {
 		return laneCandidate{}, flags, err
@@ -81,6 +97,16 @@ func filterQuota(ctx context.Context, quota QuotaSpiller, allLanes, cands []lane
 	// already produced - an invariant violation in the excluded-set
 	// construction above, never a lane to dispatch to.
 	return laneCandidate{}, flags, ErrAllProvidersEvicted
+}
+
+// spillOrderReporter is the optional capability a spiller exposes to say
+// whether an operator actually configured a spill order. It is an optional
+// interface rather than a new method on QuotaSpiller because that seam is
+// frozen (S-22.T1's model.go); a spiller that does not implement it keeps
+// today's behaviour exactly.
+type spillOrderReporter interface {
+	// SpillOrderConfigured reports whether a spill order was configured.
+	SpillOrderConfigured() bool
 }
 
 // quotaFlag names the ReasonFlag for the lane NextLane picked: a "pool"

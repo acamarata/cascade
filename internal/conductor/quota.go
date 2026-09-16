@@ -254,6 +254,16 @@ func NewQuotaPolicy(cfg QuotaConfig, clk Clock) *QuotaPolicy {
 // or cost -- that filtering is P1-E11-W3-S22-T2's Router, the sole
 // permitted caller (quota_arch_test.go asserts no other call site
 // exists).
+// SpillOrderConfigured reports whether the operator configured a spill
+// order. An empty order means no preference was expressed — see
+// filterQuota, which treats that as "do not veto" rather than "refuse
+// everything" (R-14.245).
+func (p *QuotaPolicy) SpillOrderConfigured() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.order) > 0
+}
+
 func (p *QuotaPolicy) NextLane(ctx context.Context, excluded []LaneID) (LaneID, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err

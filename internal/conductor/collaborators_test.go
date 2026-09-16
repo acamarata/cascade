@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -130,3 +131,86 @@ func TestTheOwnersOwnDeniesAreEnforced(t *testing.T) {
 		}
 	}
 }
+
+// unconfiguredSpiller reports no spill order and refuses every NextLane,
+// exactly as the daemon's own QuotaPolicy did with ParseQuotaConfig(nil).
+type unconfiguredSpiller struct{ called bool }
+
+func (s *unconfiguredSpiller) SpillOrderConfigured() bool { return false }
+
+func (s *unconfiguredSpiller) NextLane(context.Context, []LaneID) (LaneID, error) {
+	s.called = true
+	return "", ErrAllLanesExhausted
+}
+
+// configuredSpiller names one lane.
+type configuredSpiller struct{ lane LaneID }
+
+func (s configuredSpiller) SpillOrderConfigured() bool { return true }
+
+func (s configuredSpiller) NextLane(context.Context, []LaneID) (LaneID, error) {
+	return s.lane, nil
+}
+
+// laneNamed builds one candidate.
+func laneNamed(name string) laneCandidate {
+	return laneCandidate{lane: provider.LaneInfo{LaneName: name, ProviderName: name}}
+}
+
+// TestAnUnconfiguredSpillOrderDoesNotVeto is the W3 gate's root cause,
+// turned into a standing assertion. defaultQuotaConfig() has an empty
+// SpillOrder and the daemon parses no [conductor.quota] section, so every
+// dispatch on every machine was refused with "no candidate lane".
+func TestAnUnconfiguredSpillOrderDoesNotVeto(t *testing.T) {
+	spiller := &unconfiguredSpiller{}
+	cands := []laneCandidate{laneNamed("alpha"), laneNamed("beta")}
+
+	got, flags, err := filterQuota(context.Background(), spiller, cands, cands, nil, nil)
+	if err != nil {
+		t.Fatalf("filterQuota: %v, want the first surviving candidate", err)
+	}
+	if got.lane.LaneName != "alpha" {
+		t.Errorf("picked %q, want the first candidate in the router's own sorted order", got.lane.LaneName)
+	}
+	if spiller.called {
+		t.Error("NextLane was consulted for a spiller that reports no configured order")
+	}
+	if len(flags) == 0 || flags[len(flags)-1] != "quota:unconfigured-spill-order" {
+		t.Errorf("flags = %v, want the reason recorded rather than silently applied", flags)
+	}
+}
+
+// TestAConfiguredSpillOrderStillDecides is the other half: the fix must
+// not disable a spill order the operator actually wrote.
+func TestAConfiguredSpillOrderStillDecides(t *testing.T) {
+	cands := []laneCandidate{laneNamed("alpha"), laneNamed("beta")}
+
+	got, _, err := filterQuota(context.Background(), configuredSpiller{lane: "beta"}, cands, cands, nil, nil)
+	if err != nil {
+		t.Fatalf("filterQuota: %v", err)
+	}
+	if got.lane.LaneName != "beta" {
+		t.Errorf("picked %q, want the configured order's choice", got.lane.LaneName)
+	}
+}
+
+// TestAnEmptyQuotaPolicyReportsItself keeps the real policy honest about
+// which side of that fork it is on.
+func TestAnEmptyQuotaPolicyReportsItself(t *testing.T) {
+	cfg, divergent, err := ParseQuotaConfig(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !divergent {
+		t.Error("a missing [conductor.quota] section no longer reports divergence")
+	}
+	policy := NewQuotaPolicy(cfg, stubClock{})
+	if policy.SpillOrderConfigured() {
+		t.Error("the default policy claims a configured spill order")
+	}
+}
+
+// stubClock is a fixed clock for the policy above.
+type stubClock struct{}
+
+func (stubClock) Now() time.Time { return time.Unix(0, 0).UTC() }

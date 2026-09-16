@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-16T10:28:37Z",
+  "generated_at": "2026-09-16T10:31:37Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1848,6 +1848,21 @@
           "status": "ADD",
           "ticket": "P1-E10-W4-S87-T1",
           "raw": "cli.provider.add:lane (ADD) — P1-E10-W4-S87-T1 (Art.9, W3 gate)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cli.vault.grant",
+      "sites": [
+        {
+          "file": "cmd/cascade/vault_grant.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E10-W4-S87-T1",
+          "raw": "cli.vault.grant/ADD — P1-E10-W4-S87-T1."
         }
       ],
       "statuses": [
@@ -4340,7 +4355,7 @@
       "sites": [
         {
           "file": "internal/conductor/collaborators_test.go",
-          "line": 16,
+          "line": 17,
           "status": "ADD",
           "ticket": "P1-E10-W4-S87-T1",
           "raw": "conductor.collaborators tests (ADD) — P1-E10-W4-S87-T1."
@@ -15729,6 +15744,21 @@
       ]
     },
     {
+      "name": "internal/providers/dispatch credentials",
+      "sites": [
+        {
+          "file": "internal/providers/dispatch/credentials.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E10-W4-S87-T1",
+          "raw": "internal/providers/dispatch credentials/ADD — P1-E10-W4-S87-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/rpc",
       "sites": [
         {
@@ -16024,6 +16054,81 @@
           "line": 13,
           "status": "ADD",
           "raw": "internal/secrets file-vault-age-codec/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/secrets grant",
+      "sites": [
+        {
+          "file": "internal/secrets/grant.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E10-W4-S87-T1",
+          "raw": "internal/secrets grant/ADD — P1-E10-W4-S87-T1 (R-14.243)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/secrets grant tests",
+      "sites": [
+        {
+          "file": "internal/secrets/grant_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E10-W4-S87-T1",
+          "raw": "internal/secrets grant tests (ADD) — P1-E10-W4-S87-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/secrets grant-read",
+      "sites": [
+        {
+          "file": "internal/secrets/broker_grant.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E10-W4-S87-T1",
+          "raw": "internal/secrets grant-read/ADD — P1-E10-W4-S87-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/secrets grant-read tests",
+      "sites": [
+        {
+          "file": "internal/secrets/broker_grant_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E10-W4-S87-T1",
+          "raw": "internal/secrets grant-read tests (ADD) — P1-E10-W4-S87-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/secrets grant-store",
+      "sites": [
+        {
+          "file": "internal/secrets/grant_store.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E10-W4-S87-T1",
+          "raw": "internal/secrets grant-store/ADD — P1-E10-W4-S87-T1."
         }
       ],
       "statuses": [
@@ -21505,7 +21610,7 @@
       ]
     }
   ],
-  "total_sites": 2108,
+  "total_sites": 2115,
   "unspecified_count": 66,
   "multi_status_count": 40
 }
