@@ -92,6 +92,27 @@ var coverageSecurityPackages = map[string]bool{
 // ok is false for pkg/** (excluded) and for anything outside the five
 // scanned root trees.
 func PackageTier(importPath string) (tier CoverageTier, floor float64, ok bool) {
+	return PackageTierFor(importPath, false)
+}
+
+// PackageTierFor classifies importPath knowing whether it is `package main`
+// (R-14.239).
+//
+// A COMPOSITION ROOT is defined by role, not by directory: a `package main`
+// that wires transports, listeners, dials and main() around decision
+// packages. cmd/** and plugins/<name>/ are the same role and take the same
+// floor. The tier map classified by path prefix alone, which predates
+// plugin binaries existing, so a plugin's own main package was being held
+// to the floor written for its library siblings — and a composition root
+// cannot clear a library floor, because the statements it exists to hold
+// are exactly the ones no unit lane can reach.
+//
+// The rule is stated for the ROLE and binds on every plugin binary
+// identically, present and future. The sibling DECISION packages keep their
+// own tier's floor: plugins/<name>/<sub>/ is NOT a composition root, and
+// the socket-code ruling's "provably no socket reachable" standard is what
+// holds them there.
+func PackageTierFor(importPath string, isMain bool) (tier CoverageTier, floor float64, ok bool) {
 	if strings.HasPrefix(importPath, "pkg/") || importPath == "pkg" {
 		return "", 0, false
 	}
@@ -102,6 +123,14 @@ func PackageTier(importPath string) (tier CoverageTier, floor float64, ok bool) 
 		return TierCLI, coverageTierFloors[TierCLI], true
 	}
 	if strings.HasPrefix(importPath, "providers/") || strings.HasPrefix(importPath, "plugins/") {
+		if isMain {
+			// R-14.239 guard 1: the package is `package main`. Guards 2
+			// (the journal enumerates every untested statement by class)
+			// and 3 (no decision logic in the root) are review-time
+			// conditions the ruling places on the ticket, not properties
+			// this function can read off an import path.
+			return TierCLI, coverageTierFloors[TierCLI], true
+		}
 		return TierPlugins, coverageTierFloors[TierPlugins], true
 	}
 	if strings.HasPrefix(importPath, "internal/") {
@@ -239,12 +268,20 @@ type CoverageViolation struct {
 // entirely: there is nothing to measure, and Art.4 floors govern shipped
 // behavior, not empty packages.
 func CheckCoverage(profile map[string]*CoverageStats, baseline map[string]BaselineEntry) []CoverageViolation {
+	return CheckCoverageWithRoots(profile, baseline, nil)
+}
+
+// CheckCoverageWithRoots is CheckCoverage knowing which packages are
+// composition roots (R-14.239). roots may be nil, which classifies every
+// package by path prefix alone — the behaviour before that ruling, kept for
+// callers that have no tree to read package clauses from.
+func CheckCoverageWithRoots(profile map[string]*CoverageStats, baseline map[string]BaselineEntry, roots map[string]bool) []CoverageViolation {
 	var out []CoverageViolation
 	for pkg, stats := range profile {
 		if stats.TotalStmts == 0 {
 			continue
 		}
-		tier, floor, ok := PackageTier(pkg)
+		tier, floor, ok := PackageTierFor(pkg, roots[pkg])
 		if !ok {
 			continue
 		}

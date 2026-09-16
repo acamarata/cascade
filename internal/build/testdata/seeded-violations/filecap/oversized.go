@@ -13,6 +13,7 @@ package fixture
 func Oversized() int {
 	return 0
 }
+
 // padding line 001 to push this fixture past the 300-line cap.
 // padding line 002 to push this fixture past the 300-line cap.
 // padding line 003 to push this fixture past the 300-line cap.

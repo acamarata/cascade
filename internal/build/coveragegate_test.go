@@ -106,7 +106,14 @@ func TestCoverageGate_Live(t *testing.T) {
 	stripped := coverageStripAll(profile)
 	baseline := coverageLoadBaseline(t, root)
 
-	v := CheckCoverage(stripped, baseline)
+	// R-14.239: a composition root (`package main`) takes the CLI floor
+	// whatever tree it lives in, so the gate reads package clauses off the
+	// real checkout rather than guessing from the path.
+	roots, err := MainPackages(root)
+	if err != nil {
+		t.Fatalf("coverage gate: discovering composition roots: %v", err)
+	}
+	v := CheckCoverageWithRoots(stripped, baseline, roots)
 	// R-14.155: floor/ratchet checking alone cannot see a package whose
 	// profile entry is missing entirely (a test binary that failed to
 	// compile, or panicked before the profile was written) — completeness
@@ -142,7 +149,14 @@ func TestCoverageGate_SeededFloorBreachRed(t *testing.T) {
 	root := coverageModuleRoot(t)
 	baseline := coverageLoadBaseline(t, root)
 
-	v := CheckCoverage(stripped, baseline)
+	// R-14.239: a composition root (`package main`) takes the CLI floor
+	// whatever tree it lives in, so the gate reads package clauses off the
+	// real checkout rather than guessing from the path.
+	roots, err := MainPackages(root)
+	if err != nil {
+		t.Fatalf("coverage gate: discovering composition roots: %v", err)
+	}
+	v := CheckCoverageWithRoots(stripped, baseline, roots)
 	var found bool
 	for _, viol := range v {
 		if viol.Package == "internal/policy" && viol.Reason == "floor" {
@@ -174,7 +188,14 @@ func TestCoverageGate_SeededRatchetDropRed(t *testing.T) {
 	root := coverageModuleRoot(t)
 	baseline := coverageLoadBaseline(t, root)
 
-	v := CheckCoverage(stripped, baseline)
+	// R-14.239: a composition root (`package main`) takes the CLI floor
+	// whatever tree it lives in, so the gate reads package clauses off the
+	// real checkout rather than guessing from the path.
+	roots, err := MainPackages(root)
+	if err != nil {
+		t.Fatalf("coverage gate: discovering composition roots: %v", err)
+	}
+	v := CheckCoverageWithRoots(stripped, baseline, roots)
 	var found bool
 	for _, viol := range v {
 		if viol.Package == "internal/build" {
