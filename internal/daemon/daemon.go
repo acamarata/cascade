@@ -42,6 +42,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -72,40 +73,8 @@ type Settings struct {
 	SocketPath    string
 	ShutdownGrace time.Duration
 	GraceSet      bool
-}
-
-// ResolveSettings reads the [daemon] section out of cfg.Extra (it is not a
-// typed Config field — only runtime/elevation/logging are typed sections as
-// of C/S-04.T1; everything else round-trips through Extra, per
-// config_write.go's knownConfigKeys doc) and resolves Settings against
-// paths' derived socket default. A malformed shutdown_grace value (present
-// but neither a Go duration string nor a plain number of seconds) is a
-// typed KindInvalidInput error — this ticket does not silently ignore bad
-// config.
-func ResolveSettings(cfg *runtime.Config, paths runtime.PathProvider) (Settings, error) {
-	s := Settings{SocketPath: paths.SocketPath()}
-	if cfg == nil || cfg.Extra == nil {
-		return s, nil
-	}
-	section, ok := cfg.Extra["daemon"].(map[string]interface{})
-	if !ok {
-		return s, nil
-	}
-	if sock, ok := section["socket"].(string); ok && sock != "" {
-		s.SocketPath = sock
-	}
-	raw, present := section["shutdown_grace"]
-	if !present {
-		return s, nil
-	}
-	grace, err := parseGraceValue(raw)
-	if err != nil {
-		return Settings{}, cascade.Wrapf(cascade.KindInvalidInput, err,
-			"daemon.shutdown_grace: %v", raw)
-	}
-	s.ShutdownGrace = grace
-	s.GraceSet = true
-	return s, nil
+	// Nodes is the [nodes] section; node_dispatch_rpc.go reads its knobs.
+	Nodes nodes.Section
 }
 
 // parseGraceValue accepts either a Go duration string ("5s", per every

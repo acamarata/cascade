@@ -1,8 +1,9 @@
 // Purpose: `cascade node serve` — the node agent's CLI composition root:
 //
-//	wires internal/nodes' real identity/record/keystore/known_hosts
-//	backends, mounts its RPC surface (node.enroll, node.heartbeat) on the
-//	node's own unix socket, and serves it until a termination signal.
+//	wires internal/nodes' real identity/record/keystore/known_hosts/action
+//	backends, mounts its RPC surface (node.enroll, node.heartbeat,
+//	node.dispatch.execute) on the node's own unix socket, and serves it
+//	until a termination signal.
 //
 // Inputs: process args/flags (none beyond the persistent globals); the
 //
@@ -30,7 +31,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -46,7 +46,6 @@ import (
 
 	"github.com/acamarata/cascade/internal/nodes"
 	cruntime "github.com/acamarata/cascade/internal/runtime"
-	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -113,39 +112,6 @@ type nodeServeComposition struct {
 	registry    *nodes.ServeRegistry
 	recordStore *nodes.RecordStore
 	knownHosts  *nodes.KnownHosts
-}
-
-// composeNodeServe resolves dataDir and builds every collaborator
-// runNodeServe needs: the keystore, this node's local identity (generated
-// on first run), and the real RPC registry (node.enroll, node.heartbeat).
-func composeNodeServe(ctx context.Context, deps nodeServeDeps) (nodeServeComposition, error) {
-	dataDir := deps.Paths.DataDir()
-	if dataDir == "" {
-		return nodeServeComposition{}, cascade.New(cascade.KindUnavailable, "node serve: could not resolve the data directory")
-	}
-	keystore, err := nodes.NewNodeKeystore(secrets.Config{Dir: deps.SecretsDir, ForceFileVault: deps.SecretsDir != ""})
-	if err != nil {
-		return nodeServeComposition{}, cascade.Wrap(cascade.KindUnavailable, err, "node serve: open keystore")
-	}
-	self, err := nodes.EnsureLocalIdentity(ctx, nodes.NewFileSelfIdentityBackend(dataDir), keystore, rand.Reader)
-	if err != nil {
-		return nodeServeComposition{}, cascade.Wrap(cascade.KindUnavailable, err, "node serve: establish local identity")
-	}
-	recordStore := nodes.NewRecordStore(nodes.NewFileRecordBackend(dataDir), deps.Clock)
-	knownHosts := nodes.NewKnownHosts(nodes.NewFileKnownHostsBackend(dataDir))
-	registry := nodes.NewServeRegistry(nodes.ServeDeps{
-		Records:    recordStore,
-		KnownHosts: knownHosts,
-		Keystore:   keystore,
-		Self:       self,
-		Sequences:  nodes.NewSequenceStore(),
-		Clock:      deps.Clock,
-		Timeout:    nodes.DefaultHeartbeatTimeout,
-	})
-	return nodeServeComposition{
-		dataDir: dataDir, keystore: keystore, self: self, registry: registry,
-		recordStore: recordStore, knownHosts: knownHosts,
-	}, nil
 }
 
 // runNodeServe is the platform-independent entry point: it refuses on

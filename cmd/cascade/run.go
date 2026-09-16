@@ -39,7 +39,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -201,42 +200,31 @@ type runRequestParams struct {
 	DryRun       bool             `json:"dry_run,omitempty"`
 }
 
-// runRequirements is --require's k=v shape, mapped onto the three
-// recognized keys (reasoning, context, structured) - pkg/provider.
-// Requirements is a fixed three-field struct, not a generic map, so an
-// unrecognized --require key is a client-side validation error rather
-// than a silently-dropped or wire-passthrough value.
+// runRequirements is --require's k=v shape. The three LANE keys
+// (reasoning, context, structured) map onto pkg/provider.Requirements, a
+// fixed three-field struct, so an unrecognized lane key is a client-side
+// validation error rather than a silently-dropped or wire-passthrough
+// value.
+//
+// NodeCapabilities carries the separate, NODE dimension behind a reserved
+// `node.` prefix: `--require node.browser=true`. The namespace is not
+// decoration. Node capabilities are advertised BY MACHINES and are an open
+// set, so they cannot be a fixed enumeration the CLI validates against the
+// way the three lane keys are — while lane keys must stay closed, because
+// a typo there should fail rather than reach a provider as nothing. One
+// flag, two namespaces, each validated the way its own vocabulary allows.
 type runRequirements struct {
 	Reasoning  string `json:"reasoning,omitempty"`
 	Context    int    `json:"context,omitempty"`
 	Structured bool   `json:"structured,omitempty"`
+	// NodeCapabilities are the capability names a node must report to be
+	// eligible to run this work (S-37.T1 placement).
+	NodeCapabilities []string `json:"node_capabilities,omitempty"`
 }
 
 type runChatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
-}
-
-// buildRequirements maps --require's k=v pairs onto runRequirements.
-func buildRequirements(kv map[string]string) (runRequirements, error) {
-	var r runRequirements
-	for k, v := range kv {
-		var err error
-		switch k {
-		case "reasoning":
-			r.Reasoning = v
-		case "context":
-			r.Context, err = strconv.Atoi(v)
-		case "structured":
-			r.Structured, err = strconv.ParseBool(v)
-		default:
-			return r, cascade.Newf(cascade.KindInvalidInput, "cascade run: --require key %q is not valid (valid: reasoning, context, structured)", k)
-		}
-		if err != nil {
-			return r, cascade.Wrapf(cascade.KindInvalidInput, err, "cascade run: --require %s=%s", k, v)
-		}
-	}
-	return r, nil
 }
 
 // buildInputs parses --input entries ("role:content", role defaulting to

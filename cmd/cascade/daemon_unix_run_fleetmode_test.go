@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/fleet/economics"
 	"github.com/acamarata/cascade/internal/rpc"
@@ -43,7 +44,7 @@ func TestWireFleetAndNodeHandlers_RegistersFleetModeMethods(t *testing.T) {
 	bus := events.New(storetest.NewMemStore(), runtime.NewSystemClock())
 	paths := fakeMemoryPaths{root: t.TempDir()}
 
-	if err := wireFleetAndNodeHandlers(registry, storetest.NewMemStore(), clock, bus, paths); err != nil {
+	if err := wireFleetAndNodeHandlers(registry, storetest.NewMemStore(), clock, bus, paths, daemon.Settings{}); err != nil {
 		t.Fatalf("wireFleetAndNodeHandlers: %v", err)
 	}
 	if !registry.Registered(economics.MethodFleetModeShow) {

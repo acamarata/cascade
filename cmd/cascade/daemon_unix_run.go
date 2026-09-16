@@ -211,7 +211,7 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 			return nil, nil, nil, err
 		}
 	}
-	if err := wireFleetNodeAndJobHandlers(registry, store, clock, bus, paths); err != nil {
+	if err := wireFleetNodeAndJobHandlers(registry, store, clock, bus, paths, settings); err != nil {
 		return nil, nil, nil, err
 	}
 	// fleet.sessions.completion_check (AF/S-66.T1, R-16.16/R-21.176): see

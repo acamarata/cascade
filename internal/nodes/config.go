@@ -51,6 +51,17 @@ type Section struct {
 	// network not in this list (e.g. one never paired on before) is
 	// never scanned, even with ScanLAN=true.
 	DiscoveryNetworks []string `toml:"discovery_networks"`
+	// DispatchRepoRoot is the controller-side repository a remote
+	// dispatch cuts its work branch in and fetches results into
+	// (S-37.T2). Empty means remote dispatch is not configured, and a
+	// dispatch is REFUSED rather than falling back to the controller's
+	// own checkout — running remote work against the operator's working
+	// tree is the one outcome this must never produce silently.
+	DispatchRepoRoot string `toml:"dispatch_repo_root"`
+	// DispatchRemote is the git remote both the controller and the node
+	// reach for a dispatch (S-37.T2). Empty is refused, for the same
+	// reason DispatchRepoRoot is.
+	DispatchRemote string `toml:"dispatch_remote"`
 	// Travel marks this controller machine as one that regularly leaves
 	// its home LAN (08-INIT-CONFIG-SPEC.md §3 Round-16 schema,
 	// P1-E36-W7-S72-T3). Default false. Travel=true unconditionally
@@ -96,6 +107,9 @@ func parseSection(raw map[string]interface{}) (Section, error) {
 	if err := parseDiscoverySection(raw, &sec); err != nil {
 		return Section{}, err
 	}
+	if err := parseDispatchSection(raw, &sec); err != nil {
+		return Section{}, err
+	}
 	if v, ok := raw["travel"]; ok {
 		b, ok := v.(bool)
 		if !ok {
@@ -133,3 +147,39 @@ func parseDiscoverySection(raw map[string]interface{}, sec *Section) error {
 	}
 	return nil
 }
+
+// parseDispatchSection parses the S-37.T2 remote-dispatch knobs into sec.
+//
+// Split out of parseSection for the 50-line cap, exactly as
+// parseDiscoverySection was. A present-but-wrong-typed value is refused
+// rather than ignored: a config-time typo must not surface only when
+// someone finally dispatches work to a node.
+func parseDispatchSection(raw map[string]interface{}, sec *Section) error {
+	for key, into := range map[string]*string{
+		"dispatch_repo_root": &sec.DispatchRepoRoot,
+		"dispatch_remote":    &sec.DispatchRemote,
+	} {
+		v, ok := raw[key]
+		if !ok {
+			continue
+		}
+		str, ok := v.(string)
+		if !ok {
+			return cascade.Newf(cascade.KindInvalidInput, "nodes: [nodes].%s must be a string", key)
+		}
+		*into = str
+	}
+	return nil
+}
+
+// LoadSection parses the [nodes] table out of a decoded config document.
+//
+// raw is the "nodes" sub-tree (runtime.Config.Extra["nodes"]), or nil when
+// the section is absent — an absent section is valid and yields the zero
+// Section, because every field has a safe empty default and the two
+// dispatch knobs refuse at use rather than at load.
+//
+// This is the section's first production entry point: parseSection had a
+// test caller only, so until now the [nodes] table was decoded nowhere in a
+// shipping binary.
+func LoadSection(raw map[string]interface{}) (Section, error) { return parseSection(raw) }

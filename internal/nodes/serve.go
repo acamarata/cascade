@@ -158,6 +158,11 @@ type ServeDeps struct {
 	Sequences    *SequenceStore
 	Clock        Clock
 	Timeout      time.Duration
+	// Actions is the node's durable action log (S-37.T2). Nil leaves the
+	// dispatch leg unmounted rather than mounting one that cannot dedup.
+	Actions ActionLog
+	// EnrollmentID binds this node's result frames to its enrollment.
+	EnrollmentID string
 }
 
 // BuildServeRegistry mounts node.enroll (S-36.T1's RegisterHandlers) and
@@ -186,6 +191,19 @@ func BuildServeRegistry(deps ServeDeps) *rpc.Registry {
 		Clock:     deps.Clock,
 		Timeout:   deps.Timeout,
 	})
+	// The node-side dispatch leg (S-37.T2). Mounted only when the
+	// composition root supplied a durable action log: without one there is
+	// no dedup, and a node that answers a redelivered action twice is
+	// worse than one that does not answer at all.
+	if deps.Actions != nil {
+		RegisterExecuteHandler(registry, ExecuteDeps{
+			Actions:      deps.Actions,
+			Sign:         deps.Keystore.Sign,
+			Self:         deps.Self,
+			EnrollmentID: deps.EnrollmentID,
+			Sequences:    deps.Sequences,
+		})
+	}
 	return registry
 }
 

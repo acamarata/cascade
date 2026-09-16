@@ -1,0 +1,121 @@
+{
+  "provenance": [
+    "A DECISION TABLE, not a captured counterpart. Placement eligibility is a pure",
+    "internal decision with no external contract to capture from, so these rows are",
+    "authored directly from P1-E17-W4-S37-T1's stated rules and each names the rule it",
+    "encodes. They are never regenerated from the engine's own output: a row is changed",
+    "only by changing the rule it cites, which is why every row carries a 'rule' field.",
+    "The fleet-state and trust filters have their own focused tests; this table exists to",
+    "pin the COMBINATIONS, where an ordering mistake between filters would otherwise hide."
+  ],
+  "cases": [
+    {
+      "name": "every filter clear",
+      "rule": "a reachable, connected, undrained node reporting every required capability is eligible",
+      "requirement": {"capabilities": ["browser", "docker"], "sensitivity": "normal"},
+      "candidates": [
+        {"node_id": "n1", "tier": "worker-trusted", "presence": "reachable", "tunnel": "up", "capabilities": ["browser", "docker", "gpu"]}
+      ],
+      "eligible": ["n1"]
+    },
+    {
+      "name": "order is preserved for the router",
+      "rule": "the eligible set is returned in candidate order so the router sees a deterministic set",
+      "requirement": {"capabilities": [], "sensitivity": "normal"},
+      "candidates": [
+        {"node_id": "n-c", "tier": "controller", "presence": "reachable", "tunnel": "up", "capabilities": []},
+        {"node_id": "n-a", "tier": "worker-trusted", "presence": "reachable", "tunnel": "up", "capabilities": []},
+        {"node_id": "n-b", "tier": "paired-device", "presence": "reachable", "tunnel": "up", "capabilities": []}
+      ],
+      "eligible": ["n-c", "n-a", "n-b"]
+    },
+    {
+      "name": "one missing capability excludes",
+      "rule": "a node must report ALL required capabilities, not some",
+      "requirement": {"capabilities": ["browser", "docker"], "sensitivity": "normal"},
+      "candidates": [
+        {"node_id": "n1", "tier": "worker-trusted", "presence": "reachable", "tunnel": "up", "capabilities": ["browser"]}
+      ],
+      "eligible": []
+    },
+    {
+      "name": "capability match is exact, never a prefix",
+      "rule": "a capability is a name from a shared vocabulary, not a pattern",
+      "requirement": {"capabilities": ["docker"], "sensitivity": "normal"},
+      "candidates": [
+        {"node_id": "n1", "tier": "worker-trusted", "presence": "reachable", "tunnel": "up", "capabilities": ["docker-ce"]}
+      ],
+      "eligible": []
+    },
+    {
+      "name": "no required capabilities still applies every other filter",
+      "rule": "an empty requirement set demands nothing of capabilities and bypasses nothing else",
+      "requirement": {"capabilities": [], "sensitivity": "normal"},
+      "candidates": [
+        {"node_id": "drained", "tier": "worker-trusted", "presence": "reachable", "tunnel": "up", "drained": true, "capabilities": []},
+        {"node_id": "ok", "tier": "worker-trusted", "presence": "reachable", "tunnel": "up", "capabilities": []}
+      ],
+      "eligible": ["ok"]
+    },
+    {
+      "name": "local-only work is eligible nowhere",
+      "rule": "local-only work never runs on an enrolled node regardless of capability match or tier",
+      "requirement": {"capabilities": [], "sensitivity": "local-only"},
+      "candidates": [
+        {"node_id": "perfect", "tier": "controller", "presence": "reachable", "tunnel": "up", "capabilities": ["browser", "docker"]}
+      ],
+      "eligible": []
+    },
+    {
+      "name": "unresolvable sensitivity is treated as local-only",
+      "rule": "an unrecognized sensitivity resolves most restrictively",
+      "requirement": {"capabilities": [], "sensitivity": "not-a-sensitivity"},
+      "candidates": [
+        {"node_id": "perfect", "tier": "controller", "presence": "reachable", "tunnel": "up", "capabilities": []}
+      ],
+      "eligible": []
+    },
+    {
+      "name": "restricted work needs at least worker-trusted",
+      "rule": "restricted work clears worker-trusted and controller, never paired-device",
+      "requirement": {"capabilities": [], "sensitivity": "restricted"},
+      "candidates": [
+        {"node_id": "paired", "tier": "paired-device", "presence": "reachable", "tunnel": "up", "capabilities": []},
+        {"node_id": "worker", "tier": "worker-trusted", "presence": "reachable", "tunnel": "up", "capabilities": []},
+        {"node_id": "controller", "tier": "controller", "presence": "reachable", "tunnel": "up", "capabilities": []}
+      ],
+      "eligible": ["worker", "controller"]
+    },
+    {
+      "name": "only reachable presence places",
+      "rule": "unknown, unavailable and remote-via-route are all not placeable",
+      "requirement": {"capabilities": [], "sensitivity": "normal"},
+      "candidates": [
+        {"node_id": "unknown", "tier": "worker-trusted", "presence": "unknown", "tunnel": "up", "capabilities": []},
+        {"node_id": "unavailable", "tier": "worker-trusted", "presence": "unavailable", "tunnel": "up", "capabilities": []},
+        {"node_id": "via-route", "tier": "worker-trusted", "presence": "remote-via-route", "tunnel": "up", "capabilities": []},
+        {"node_id": "never-probed", "tier": "worker-trusted", "presence": "", "tunnel": "up", "capabilities": []},
+        {"node_id": "reachable", "tier": "worker-trusted", "presence": "reachable", "tunnel": "up", "capabilities": []}
+      ],
+      "eligible": ["reachable"]
+    },
+    {
+      "name": "only an up tunnel places",
+      "rule": "placement can only target nodes the controller is connected to right now",
+      "requirement": {"capabilities": [], "sensitivity": "normal"},
+      "candidates": [
+        {"node_id": "down", "tier": "worker-trusted", "presence": "reachable", "tunnel": "down", "capabilities": []},
+        {"node_id": "reconnecting", "tier": "worker-trusted", "presence": "reachable", "tunnel": "reconnecting", "capabilities": []},
+        {"node_id": "up", "tier": "worker-trusted", "presence": "reachable", "tunnel": "up", "capabilities": []}
+      ],
+      "eligible": ["up"]
+    },
+    {
+      "name": "an empty fleet is a placement failure",
+      "rule": "an empty eligible set is always an error, never a silent fallback",
+      "requirement": {"capabilities": [], "sensitivity": "normal"},
+      "candidates": [],
+      "eligible": []
+    }
+  ]
+}

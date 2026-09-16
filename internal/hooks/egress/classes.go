@@ -54,6 +54,17 @@ const (
 	// refuses local-only/restricted records before a byte reaches this
 	// class, so this class itself stays as strict as every other default.
 	EgressClassSync EgressClass = "sync"
+	// EgressClassNodeDispatch is the remote node-dispatch leg (§D-30,
+	// P1-E17-W4-S37-T2, 06 §5.17): every byte the controller ships to an
+	// enrolled node transits it — git refs on the push/fetch legs, RPC
+	// frames over the ssh tunnel, journal-stream records coming back, and
+	// per-dispatch token handoffs. Registered by its owner at
+	// internal/nodes/egress.go's init, per the same registrant convention
+	// EgressClassSync follows. AllowRestricted is NOT set: restricted work
+	// reaches a node only when placement already proved the node's trust
+	// tier, and this class stays as strict as every other default so a
+	// caller cannot widen admission by writing straight to it.
+	EgressClassNodeDispatch EgressClass = "node-dispatch"
 )
 
 // defaultClasses is the registration table. It is a slice of pairs rather
