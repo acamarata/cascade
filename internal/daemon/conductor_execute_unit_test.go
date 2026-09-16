@@ -11,13 +11,16 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/internal/conductor"
+	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -52,7 +55,7 @@ func TestRegisterConductorExecuteHandler_NilResolver_RealRefusal(t *testing.T) {
 	clock := runtime.NewSystemClock()
 	auditWriter := newTestAuditWriter(t)
 
-	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, nil, auditWriter, clock); err != nil {
+	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, nil, auditWriter, clock, ConductorSecurity{}); err != nil {
 		t.Fatalf("RegisterConductorExecuteHandler: unexpected error %v", err)
 	}
 	if !registry.Registered(ConductorExecuteMethod) {
@@ -91,7 +94,7 @@ func TestRegisterConductorExecuteHandler_RealExecutor_DecodesAndDispatches(t *te
 	clock := runtime.NewSystemClock()
 	auditWriter := newTestAuditWriter(t)
 
-	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, fakeProviderResolver{}, auditWriter, clock); err != nil {
+	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, fakeProviderResolver{}, auditWriter, clock, ConductorSecurity{}); err != nil {
 		t.Fatalf("RegisterConductorExecuteHandler: unexpected error %v", err)
 	}
 
@@ -124,7 +127,7 @@ func TestRegisterConductorExecuteHandler_RealExecutor_BadParams(t *testing.T) {
 	clock := runtime.NewSystemClock()
 	auditWriter := newTestAuditWriter(t)
 
-	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, fakeProviderResolver{}, auditWriter, clock); err != nil {
+	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, fakeProviderResolver{}, auditWriter, clock, ConductorSecurity{}); err != nil {
 		t.Fatalf("RegisterConductorExecuteHandler: unexpected error %v", err)
 	}
 
@@ -136,5 +139,86 @@ func TestRegisterConductorExecuteHandler_RealExecutor_BadParams(t *testing.T) {
 	kind, ok := cascade.KindFromJSONRPCCode(errObj.Code)
 	if !ok || kind != cascade.KindInvalidInput {
 		t.Errorf("error kind = %v (ok=%v), want KindInvalidInput", kind, ok)
+	}
+}
+
+// fullSecurity is a ConductorSecurity with every collaborator present, so
+// Pipeline.Ready() passes. It uses the package's REAL production
+// collaborators wherever they are pure; only the firewall needs a
+// constructed engine, which this helper builds over a temp-dir custody.
+func fullSecurity(t *testing.T) ConductorSecurity {
+	t.Helper()
+	detector, err := secrets.NewDetector(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Passphrase plus an always-failing runner forces the encrypted file
+	// vault: on a host with an OS keychain SelectCustody prefers it, and a
+	// unit test must never write into the operator's real credential store.
+	custody, err := secrets.SelectCustody(secrets.Config{
+		Service:    "cascade-conductor-security-test",
+		Dir:        t.TempDir(),
+		Passphrase: "conductor-security-test-pass",
+		Runner: func(context.Context, string, ...string) ([]byte, error) {
+			return nil, errors.New("no platform keychain in this test")
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	broker, err := secrets.NewBroker(custody, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vault, err := secrets.NewEgressVault(broker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firewall, err := egress.NewEngine(egress.DefaultRegistry(), vault, detector)
+	if err != nil {
+		t.Fatal(err)
+	}
+	classifier, err := conductor.NewContentClassifier(testScanner{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ConductorSecurity{
+		Classifier: classifier, Taxonomy: conductor.TaskClassRegistry{},
+		Policy: conductor.NewOwnerPolicy(nil), Sensitivity: conductor.FailClosedSensitivity{},
+		Firewall: firewall,
+	}
+}
+
+// testScanner finds nothing, so the classifier admits every request.
+type testScanner struct{}
+
+func (testScanner) ScanCertainClasses(string) []string { return nil }
+
+// TestRegisterConductorExecuteHandler_WithSecurity_PipelineIsReady is the
+// W3 gate's own finding turned into a standing assertion: with every
+// collaborator supplied, a dispatch must get PAST Ready() and fail at the
+// provider boundary instead. Before P1-E10-W4-S87-T1 the composition root
+// supplied none of them, so the shipped daemon refused every call with
+// "security pipeline not ready" and no test in the tree noticed.
+func TestRegisterConductorExecuteHandler_WithSecurity_PipelineIsReady(t *testing.T) {
+	registry := rpc.NewRegistry()
+	manifest := NewManifest(nil, runtime.NewSystemClock())
+	clock := runtime.NewSystemClock()
+
+	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{},
+		fakeProviderResolver{}, newTestAuditWriter(t), clock, fullSecurity(t)); err != nil {
+		t.Fatalf("RegisterConductorExecuteHandler: %v", err)
+	}
+
+	params, err := json.Marshal(conductorExecuteParams{
+		TaskID: "t1", TaskClass: "chat",
+		Inputs: []conductorExecuteMessage{{Role: "user", Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, errObj := registry.Dispatch(context.Background(), &rpc.Request{Method: ConductorExecuteMethod, Params: params})
+	if errObj != nil && strings.Contains(errObj.Message, conductor.ErrSecurityPipelineNotReady.Error()) {
+		t.Fatalf("the pipeline is still not ready with every collaborator supplied: %q", errObj.Message)
 	}
 }

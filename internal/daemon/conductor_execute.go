@@ -39,6 +39,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/internal/conductor"
+	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -47,6 +48,24 @@ import (
 // ConductorExecuteMethod is the JSON-RPC method name cmd/cascade/
 // run_exec.go:132's fetchRun dials.
 const ConductorExecuteMethod = "conductor.execute"
+
+// ConductorSecurity carries the five R-21.206 security-pipeline
+// collaborators from the composition root to NewExecutor.
+//
+// They travel as a struct rather than as five more positional parameters
+// because the constructor already takes seven, and because
+// Pipeline.Ready() treats them as ONE thing: all five present, or every
+// call refused. A zero ConductorSecurity therefore produces exactly the
+// pre-existing "security pipeline not ready" behaviour — the composition
+// root can still bring the door up before they are built, which is what it
+// did for the whole of W-3 (see the W-3 gate report, Art.9).
+type ConductorSecurity struct {
+	Classifier  conductor.Classifier
+	Taxonomy    conductor.TaskClassTable
+	Policy      conductor.PolicyEvaluator
+	Sensitivity conductor.SensitivityGate
+	Firewall    *egress.Engine
+}
 
 // conductorExecutorSubsystem is the fail-loud Manifest name this file's
 // NewExecutor attempt reports under (R-14.87), distinct from
@@ -67,6 +86,7 @@ func RegisterConductorExecuteHandler(
 	resolver conductor.ProviderResolver,
 	auditWriter audit.Writer,
 	clock conductor.Clock,
+	security ConductorSecurity,
 ) error {
 	router, err := manifest.RegisterConductorRouter(reg, quota, clock)
 	if err != nil {
@@ -75,6 +95,11 @@ func RegisterConductorExecuteHandler(
 	manifest.Register(conductorExecutorSubsystem)
 	exec, cerr := conductor.NewExecutor(conductor.ExecutorConfig{
 		Router: router, Resolver: resolver, Audit: auditWriter, Clock: clock,
+		Classifier:  security.Classifier,
+		Taxonomy:    security.Taxonomy,
+		Policy:      security.Policy,
+		Sensitivity: security.Sensitivity,
+		Firewall:    security.Firewall,
 	})
 	if cerr != nil {
 		manifest.Failed(conductorExecutorSubsystem, cerr.Error())

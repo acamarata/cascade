@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-16T10:00:26Z",
+  "generated_at": "2026-09-16T10:13:09Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -19026,6 +19026,21 @@
       ]
     },
     {
+      "name": "plugins/pbd/internal/pews:enums",
+      "sites": [
+        {
+          "file": "plugins/pbd/internal/pews/enums.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T5",
+          "raw": "plugins/pbd/internal/pews:enums (ADD) — P1-E14-W3-S30-T5 (Art.10.3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/pbd:dispatch",
       "sites": [
         {
@@ -21423,7 +21438,7 @@
       ]
     }
   ],
-  "total_sites": 2102,
+  "total_sites": 2103,
   "unspecified_count": 66,
   "multi_status_count": 40
 }

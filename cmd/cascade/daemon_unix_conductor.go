@@ -104,5 +104,9 @@ func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest 
 	if err != nil {
 		return err
 	}
-	return daemon.RegisterConductorExecuteHandler(registry, manifest, reader, quota, resolver, auditWriter, clock)
+	security, serr := conductorSecurity(paths)
+	if serr != nil {
+		return serr
+	}
+	return daemon.RegisterConductorExecuteHandler(registry, manifest, reader, quota, resolver, auditWriter, clock, security)
 }

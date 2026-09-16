@@ -49,6 +49,9 @@ edit it by hand and say why in the ticket journal.
 
 ## Identifier sweep
 
-These files carry harvested planning prose in a PUBLIC repo.
-`TestGoldenTicketsCarryNoIdentifiers` re-runs the sweep on every test run so
-a later refresh cannot reintroduce a path or account name silently.
+These files carry harvested planning prose in a PUBLIC repo, so a refresh
+must be swept before it is committed. The sweep that covers them is the
+repo's own — `internal/build`'s identifier-sweep gate over tracked files,
+which reads the private pattern file CI supplies. This directory carries no
+second copy of that check: a local list of literal identifiers is both
+weaker than the real gate and, being literal, a leak in its own right.

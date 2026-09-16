@@ -30,12 +30,17 @@ import (
 // "conductor.execute" no longer answers the permanent, construction-time
 // "executor unavailable" refusal a nil resolver argument produces
 // (internal/daemon's own TestRegisterConductorExecuteHandler_NilResolver_
-// RealRefusal names that exact string). It instead reaches the real
-// Executor and fails at the separately-disclosed security-pipeline gate
-// (ErrSecurityPipelineNotReady - Classifier/Taxonomy/Policy/Sensitivity/
-// Firewall are not wired at this composition root, a different, already
-// documented gap this ticket does not close) - proof the resolver this
-// ticket built is genuinely in the loop, not a fabricated pass-through.
+// RealRefusal names that exact string), and no longer stops at the
+// security-pipeline gate either.
+//
+// UPDATED by P1-E10-W4-S87-T1: this test used to REQUIRE
+// ErrSecurityPipelineNotReady, because Classifier/Taxonomy/Policy/
+// Sensitivity/Firewall were unwired here. The W3 hardening gate found what
+// that meant in the product — a real `cascade run` refused at cascade's own
+// door — so they are wired now, and the assertion moved forward one stage:
+// the request must get PAST readiness and be judged on its own merits. A
+// bare task_class with no inputs is an invalid request, which is the real
+// Executor's own validation speaking.
 func TestWireConductorExecute_ConstructsARealExecutor(t *testing.T) {
 	dir := t.TempDir()
 	paths := fakeMemoryPaths{root: dir}
@@ -60,13 +65,16 @@ func TestWireConductorExecute_ConstructsARealExecutor(t *testing.T) {
 	}
 	_, errObj := registry.Dispatch(context.Background(), &rpc.Request{Method: daemon.ConductorExecuteMethod, Params: params})
 	if errObj == nil {
-		t.Fatal("Dispatch() = nil error, want the real security-pipeline-not-ready refusal")
+		t.Fatal("Dispatch() = nil error, want the real Executor's own validation refusal")
 	}
 	if strings.Contains(errObj.Message, "executor unavailable") {
-		t.Fatalf("error message = %q: still the nil-resolver permanent-refusal branch (the exact defect this ticket fixes)", errObj.Message)
+		t.Fatalf("error message = %q: still the nil-resolver permanent-refusal branch", errObj.Message)
 	}
-	if !strings.Contains(errObj.Message, conductor.ErrSecurityPipelineNotReady.Error()) {
-		t.Fatalf("error message = %q, want it to name ErrSecurityPipelineNotReady (proof dispatch reached the real Executor)", errObj.Message)
+	if strings.Contains(errObj.Message, conductor.ErrSecurityPipelineNotReady.Error()) {
+		t.Fatalf("error message = %q: the security pipeline is still unwired at this composition root", errObj.Message)
+	}
+	if !strings.Contains(errObj.Message, conductor.ErrInvalidRequest.Error()) {
+		t.Fatalf("error message = %q, want the real Executor's own ErrInvalidRequest", errObj.Message)
 	}
 
 	if !registry.Registered(conductor.JobCancelMethod) {
