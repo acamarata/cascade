@@ -3,6 +3,7 @@ package auth
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"io"
 	"net/url"
 	"strings"
 	"testing"
@@ -224,5 +225,33 @@ func TestTokenResponseValidateCatchesA200Failure(t *testing.T) {
 	}
 	if err := (TokenResponse{AccessToken: "gho_x", TokenType: "bearer"}).Validate(); err != nil {
 		t.Fatalf("a good token response was refused: %v", err)
+	}
+}
+
+// TestRandomnessFailureIsATypedError proves a randomness source that
+// cannot answer produces an error rather than a short or predictable
+// value — the one outcome a PKCE flow must never have.
+func TestRandomnessFailureIsATypedError(t *testing.T) {
+	_, err := randomURLSafeFrom(exhaustedReader{}, 64)
+	if err == nil {
+		t.Fatal("a failing randomness source produced a value")
+	}
+	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindInternal {
+		t.Errorf("kind = %v (ok=%v), want KindInternal", kind, ok)
+	}
+}
+
+// exhaustedReader yields nothing, standing in for a randomness source that
+// cannot supply the bytes asked of it.
+type exhaustedReader struct{}
+
+func (exhaustedReader) Read([]byte) (int, error) { return 0, io.EOF }
+
+// TestShortRandomnessIsRefused proves a source that returns FEWER bytes
+// than asked is refused rather than silently producing a shorter, weaker
+// verifier — io.ReadFull is what makes that true.
+func TestShortRandomnessIsRefused(t *testing.T) {
+	if _, err := randomURLSafeFrom(strings.NewReader("only-a-few"), 64); err == nil {
+		t.Fatal("a source supplying fewer bytes than requested was accepted")
 	}
 }

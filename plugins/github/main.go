@@ -94,7 +94,7 @@ type broker struct {
 }
 
 func main() {
-	p := &broker{doer: tools.HTTPDoer{}, post: auth.HTTPPoster}
+	p := &broker{doer: tools.HTTPDoer{}, post: HTTPPoster}
 	if err := p.run(os.Stdin, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintf(os.Stderr, "cascade-github: %v\n", err)
 		os.Exit(1)

@@ -6,8 +6,15 @@
 //	because it imports "net/http", which Art.7.2's no-network unit lane
 //	forbids outright.
 //
-// SPORT: plugins/github/auth tests (ADD) — P1-E25-W5-S51-T1.
-package auth
+// It lives in package main because that is where Listen lives: the plugin's
+// composition root owns every socket it opens, and the auth package it calls
+// into owns the decisions. This file previously sat in package auth and
+// silently stopped compiling when Listen moved — no CI lane built
+// plugins/** with the integration tag, so nothing said so. The lane added in
+// ci.yml alongside this move is what keeps that from recurring.
+//
+// SPORT: plugins/github tests (MOVE from plugins/github/auth) — P1-E25-W5-S51-T1.
+package main
 
 import (
 	"context"
@@ -15,6 +22,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/acamarata/cascade/plugins/github/auth"
 )
 
 // TestLoopbackBindsLocalhostOnly is the exposure assertion: the callback
@@ -45,7 +54,7 @@ func TestLoopbackAcceptsTheRedirectAndVerifiesState(t *testing.T) {
 	}
 	defer func() { _ = lb.Close() }()
 
-	pkce, err := NewPKCE()
+	pkce, err := auth.NewPKCE()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +94,7 @@ func TestLoopbackRejectsAForgedState(t *testing.T) {
 	}
 	defer func() { _ = lb.Close() }()
 
-	pkce, err := NewPKCE()
+	pkce, err := auth.NewPKCE()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +126,7 @@ func TestLoopbackWaitHonorsCancellation(t *testing.T) {
 	}
 	defer func() { _ = lb.Close() }()
 
-	pkce, err := NewPKCE()
+	pkce, err := auth.NewPKCE()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -161,38 +161,3 @@ func TestExchangeValidatesBeforeSending(t *testing.T) {
 		t.Error("an exchange with no transport reported success")
 	}
 }
-
-// TestTokenRequestAsksForJSON pins the header that decides the response
-// FORMAT. GitHub's token endpoint answers form-encoded by default; without
-// this the body decodes to a zero TokenResponse — no token, no error — and
-// the failure surfaces as a confusing integrity error rather than as the
-// missing header it actually is.
-func TestTokenRequestAsksForJSON(t *testing.T) {
-	req, err := buildTokenRequest(context.Background(), TokenEndpoint,
-		url.Values{"code": {"c"}, "code_verifier": {"v"}})
-	if err != nil {
-		t.Fatalf("buildTokenRequest: %v", err)
-	}
-	if got := req.Header.Get("Accept"); got != "application/json" {
-		t.Errorf("Accept = %q; GitHub answers form-encoded without this", got)
-	}
-	if got := req.Header.Get("Content-Type"); got != "application/x-www-form-urlencoded" {
-		t.Errorf("Content-Type = %q", got)
-	}
-	if req.Method != "POST" {
-		t.Errorf("method = %q", req.Method)
-	}
-	if req.URL.String() != TokenEndpoint {
-		t.Errorf("url = %q, want the token endpoint", req.URL.String())
-	}
-	if req.Body == nil {
-		t.Error("the token request carries no form body")
-	}
-}
-
-// TestTokenRequestRefusesAnUnusableEndpoint covers the build error path.
-func TestTokenRequestRefusesAnUnusableEndpoint(t *testing.T) {
-	if _, err := buildTokenRequest(context.Background(), "://not a url", nil); err == nil {
-		t.Fatal("an unusable endpoint was accepted")
-	}
-}

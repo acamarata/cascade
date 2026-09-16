@@ -30,6 +30,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"io"
 	"net/url"
 	"strings"
 	"sync"
@@ -116,15 +117,27 @@ func NewPKCE() (PKCE, error) {
 	}, nil
 }
 
-// randomURLSafe returns n random bytes base64url-encoded without padding.
+// randomURLSafe returns n random bytes base64url-encoded without padding,
+// drawn from crypto/rand.
 func randomURLSafe(n int) (string, error) {
+	// nolint:forbidigo // crypto/rand.Reader, not math/rand — shared
+	// selector text (internal/rpc/sse.go: same limitation). PKCE
+	// randomness must be cryptographic and must NOT be seedable: an
+	// injectable SEEDED source here would be a security defect, not the
+	// reproducibility Art.7.3 asks for.
+	return randomURLSafeFrom(rand.Reader, n)
+}
+
+// randomURLSafeFrom is randomURLSafe over an explicit source.
+//
+// The source is a parameter so the FAILURE path is reachable in a test — a
+// randomness source that cannot answer must produce a typed error rather
+// than a short or predictable value. It is not a seam for choosing WHICH
+// randomness the flow uses: every production caller passes crypto/rand's
+// reader, and a seedable source here would be a security defect.
+func randomURLSafeFrom(src io.Reader, n int) (string, error) {
 	buf := make([]byte, n)
-	// nolint:forbidigo // crypto/rand.Read, not math/rand.Read — shared
-	// selector text "rand.Read" (internal/rpc/sse.go: same limitation).
-	// PKCE randomness must be cryptographic and must NOT be seedable:
-	// an injectable seeded source here would be a security defect, not
-	// the reproducibility Art.7.3 asks for.
-	if _, err := rand.Read(buf); err != nil {
+	if _, err := io.ReadFull(src, buf); err != nil {
 		return "", cascade.Wrap(cascade.KindInternal, err, "github: generating OAuth randomness")
 	}
 	return base64.RawURLEncoding.EncodeToString(buf), nil

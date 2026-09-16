@@ -3,8 +3,6 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"io"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -87,45 +85,4 @@ func Exchange(ctx context.Context, post Poster, cfg provider.ProviderOAuthConfig
 		return TokenResponse{}, err
 	}
 	return out, nil
-}
-
-// buildTokenRequest renders the token-endpoint POST.
-//
-// The Accept header is the non-obvious half and the reason this is its own
-// function: GitHub's token endpoint answers with a FORM-ENCODED body by
-// default, not JSON. Without "Accept: application/json" the response decodes
-// to a zero TokenResponse — no token and no error — which Validate then
-// reports as an integrity failure with nothing useful to say.
-func buildTokenRequest(ctx context.Context, endpoint string, form url.Values) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint,
-		strings.NewReader(form.Encode()))
-	if err != nil {
-		return nil, cascade.Wrap(cascade.KindInvalidInput, err, "github: building the token request")
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Accept", "application/json")
-	return req, nil
-}
-
-// HTTPPoster is the real token-endpoint transport.
-func HTTPPoster(ctx context.Context, endpoint string, form url.Values) (int, []byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, ExchangeTimeout)
-	defer cancel()
-
-	req, err := buildTokenRequest(ctx, endpoint, form)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	resp, err := (&http.Client{Timeout: ExchangeTimeout}).Do(req)
-	if err != nil {
-		return 0, nil, cascade.Wrap(cascade.KindUnavailable, err, "github: calling the token endpoint")
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return 0, nil, cascade.Wrap(cascade.KindUnavailable, err, "github: reading the token response")
-	}
-	return resp.StatusCode, body, nil
 }

@@ -42,7 +42,7 @@ type callbackWaiter interface {
 }
 
 // listenLoopback is the production listener factory.
-func listenLoopback() (callbackWaiter, error) { return auth.Listen() }
+func listenLoopback() (callbackWaiter, error) { return Listen() }
 
 // pendingFlow is an authorization in progress: the values that started it,
 // and the listener waiting for it to come back.
