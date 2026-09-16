@@ -90,7 +90,7 @@ func productionVaultDeps() vaultDeps {
 			return secrets.SelectCustody(secrets.Config{Service: vaultService, Dir: dir})
 		},
 		Gate: newElevationGate(
-			elevation.NewKeystore,
+			productionKeystore,
 			func() elevation.Backend {
 				return elevation.NewFileBackend(paths.get(func(p runtime.PathProvider) string { return p.DataDir() }))
 			},

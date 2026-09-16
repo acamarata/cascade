@@ -54,6 +54,13 @@ type elevateHelperDeps struct {
 	// hardware/OS probing at command-tree construction time), and tests
 	// substitute an in-process fake.
 	Keystore func() elevation.ElevationKeystore
+	// Enroll generates this host's device key, falling back to the file
+	// keystore when the platform one is reachable but cannot store (the
+	// W-3 gate's OSStatus -34018 case). Separate from Keystore because
+	// enrolment is the only operation allowed to CHANGE which backend this
+	// host is on. Nil means "use Keystore().GenerateKey()", which is what
+	// the in-process fakes in this package's tests want.
+	Enroll func() (elevation.ElevationKeystore, error)
 	// TrustBackend constructs the trust-record Backend. Deferred for the
 	// same reason lazyPaths defers path resolution elsewhere in this
 	// package: constructing the tree must never touch the environment.
@@ -67,7 +74,10 @@ type elevateHelperDeps struct {
 func productionElevateHelperDeps() elevateHelperDeps {
 	paths := lazyPaths{}
 	return elevateHelperDeps{
-		Keystore: elevation.NewKeystore,
+		Keystore: productionKeystore,
+		Enroll: func() (elevation.ElevationKeystore, error) {
+			return elevation.Enroll(paths.get(func(p runtime.PathProvider) string { return p.DataDir() }))
+		},
 		TrustBackend: func() elevation.Backend {
 			return elevation.NewFileBackend(paths.get(func(p runtime.PathProvider) string { return p.DataDir() }))
 		},
@@ -126,13 +136,26 @@ func runElevateHelper(cmd *cobra.Command, deps elevateHelperDeps, args []string)
 // refuses with ErrAlreadyEnrolled and this function does NOT print a
 // fingerprint or touch the record.
 func runElevateHelperEnroll(cmd *cobra.Command, deps elevateHelperDeps) error {
-	ks := deps.Keystore()
-	if err := ks.GenerateKey(); err != nil {
+	ks, err := enrollKeystore(deps)
+	if err != nil {
 		return err
 	}
 	pub, err := ks.PubKeyB64()
 	if err != nil {
 		return err
+	}
+	// Name the tier. A file-backed device key is a WEAKER proof than a
+	// hardware-gated one — possession of a 0600 file rather than a human at
+	// the device — and an operator who is on it must be told, here and by
+	// `cascade doctor`. A fallback the operator cannot see is the dishonest
+	// version of this fix (P1-W3-01).
+	if ks.Tier() == elevation.TierFile {
+		if _, werr := fmt.Fprintln(cmd.ErrOrStderr(),
+			"elevation: no hardware or OS keystore is usable on this host; "+
+				"enrolled a FILE-backed device key instead. This proves possession of a "+
+				"0600 key file in the cascade data directory, not local presence."); werr != nil {
+			return cascade.Wrap(cascade.KindUnavailable, werr, "elevate-helper: write the tier notice")
+		}
 	}
 	store := elevation.NewElevationTrustStore(deps.TrustBackend(), deps.Clock)
 	fp, err := store.Enroll(pub)
@@ -144,6 +167,19 @@ func runElevateHelperEnroll(cmd *cobra.Command, deps elevateHelperDeps) error {
 		return cascade.Wrap(cascade.KindUnavailable, err, "elevate-helper: write enrollment confirmation")
 	}
 	return nil
+}
+
+// enrollKeystore runs the deps' enrolment, or the plain generate a test's
+// in-process fake supplies.
+func enrollKeystore(deps elevateHelperDeps) (elevation.ElevationKeystore, error) {
+	if deps.Enroll != nil {
+		return deps.Enroll()
+	}
+	ks := deps.Keystore()
+	if err := ks.GenerateKey(); err != nil {
+		return nil, err
+	}
+	return ks, nil
 }
 
 // runElevateHelperSign implements --sign: under CASCADE_NO_INPUT=1 this

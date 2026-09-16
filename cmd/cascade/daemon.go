@@ -261,7 +261,7 @@ func productionElevationPrecondition(paths runtime.PathProvider) runtime.Elevati
 		if paths == nil || paths.DataDir() == "" {
 			return false, false
 		}
-		ks := elevation.NewKeystore()
+		ks := productionKeystore()
 		trust := elevation.NewElevationTrustStore(elevation.NewFileBackend(paths.DataDir()), runtime.SystemClock{})
 		return trust.IsEnrolled(), ks.IsAvailable()
 	}

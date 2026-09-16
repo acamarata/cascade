@@ -133,7 +133,7 @@ func newVaultGrantsCmd(deps vaultDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			views := make([]vaultGrantView, 0, len(records))
+			views := make(vaultGrantList, 0, len(records))
 			for _, g := range records {
 				views = append(views, vaultGrantView{
 					ID: g.ID, KeyRef: g.KeyRef, Verb: g.Verb,
@@ -166,4 +166,35 @@ func newVaultRevokeCmd(deps vaultDeps) *cobra.Command {
 			return grants.Revoke(cmd.Context(), args[0])
 		},
 	}
+}
+
+// String renders one grant as a line of text. Without it the writer falls
+// back to Go's default struct formatting and prints `{id key verb expiry
+// false}` — the same raw-struct output defect the W-3 gate recorded against
+// `vault list` and `recall index rebuild`.
+func (v vaultGrantView) String() string {
+	state := "live"
+	if v.Revoked {
+		state = "revoked"
+	}
+	return v.ID + "  " + v.KeyRef + "  " + v.Verb + "  expires " + v.ExpiresAt + "  " + state
+}
+
+// vaultGrantList renders the register as one line per grant, so the list
+// command prints text rather than a Go slice literal.
+type vaultGrantList []vaultGrantView
+
+// String renders every grant, or says plainly that there are none.
+func (l vaultGrantList) String() string {
+	if len(l) == 0 {
+		return "no standing grants on this machine"
+	}
+	out := ""
+	for i, v := range l {
+		if i > 0 {
+			out += "\n"
+		}
+		out += v.String()
+	}
+	return out
 }
