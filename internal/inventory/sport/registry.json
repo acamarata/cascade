@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-16T22:50:31Z",
+  "generated_at": "2026-09-16T23:10:45Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3014,6 +3014,12 @@
           "raw": "cmd/cascade (ADD, coverage-floor fix)."
         },
         {
+          "file": "cmd/cascade/fleet_no_daemon_test.go",
+          "line": 36,
+          "status": "",
+          "raw": "cmd/cascade."
+        },
+        {
           "file": "cmd/cascade/main.go",
           "line": 21,
           "status": "",
@@ -3800,6 +3806,20 @@
       "statuses": [
         "ADD",
         "CHANGE"
+      ]
+    },
+    {
+      "name": "cmd/cascade/fleet tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/fleet_no_daemon_test.go",
+          "line": 36,
+          "status": "ADD",
+          "raw": "cmd/cascade/fleet tests (ADD) — coverage ratchet"
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -21965,7 +21985,7 @@
       ]
     }
   ],
-  "total_sites": 2139,
+  "total_sites": 2141,
   "unspecified_count": 66,
   "multi_status_count": 40
 }
