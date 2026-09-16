@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/fleet/supervision"
 	"github.com/acamarata/cascade/internal/policy"
 )
 
@@ -23,17 +24,44 @@ func (e *recordingEngine) Evaluate(_ context.Context, req policy.EvalRequest) (p
 	return policy.EvalOutcome{Verdict: policy.VerdictAllow, Level: policy.L0, Layer: policy.LayerAutonomyProfile}, nil
 }
 
-// TestRouteActionPerformsNoClassification asserts the router holds a
-// policy engine and nothing else, and that the request it builds carries
-// the command text verbatim with no resolved level of any kind: a
-// destructive command and a read command reach the evaluator identically
-// apart from that text, because the router does not look at it.
+// routerFields is the closed set of fields ActionRouter may carry.
+//
+// It is an allowlist, not a denylist, because the property being protected
+// is "the router classifies nothing" (R-21.236) and a denylist of
+// classifier-shaped names would miss the next one. Adding a name here is
+// therefore a deliberate act that has to be justified:
+//
+//   - engine, audit: the router's original two collaborators.
+//   - advance, advanceSink: the tier-1 ask-resolution stage
+//     (P1-E18-W4-S39-T2). These do NOT classify. The stage receives the
+//     level the engine already resolved and has no access to the command
+//     text at all — asserted below on ActionDescriptor's own shape, so
+//     this entry cannot become a loophole by drift.
+var routerFields = map[string]bool{
+	"engine": true, "audit": true, "advance": true, "advanceSink": true,
+}
+
+// TestRouteActionPerformsNoClassification asserts the router holds only its
+// declared collaborators, that nothing it holds can classify, and that the
+// request it builds carries the command text verbatim with no resolved
+// level of any kind: a destructive command and a read command reach the
+// evaluator identically apart from that text, because the router does not
+// look at it.
 func TestRouteActionPerformsNoClassification(t *testing.T) {
 	rt := reflect.TypeOf(ActionRouter{})
 	for i := 0; i < rt.NumField(); i++ {
-		name := rt.Field(i).Name
-		if name != "engine" && name != "audit" {
-			t.Fatalf("ActionRouter carries field %q; it holds a policy engine and an audit writer only", name)
+		if name := rt.Field(i).Name; !routerFields[name] {
+			t.Fatalf("ActionRouter carries field %q, which is not in the declared set; "+
+				"if it is legitimate, add it to routerFields WITH the reason it does not classify", name)
+		}
+	}
+	// The ask-resolution stage must never receive the command text. If it
+	// could, it could resolve the rung a second time, which is exactly what
+	// R-21.236 forbids.
+	descriptor := reflect.TypeOf(supervision.ActionDescriptor{})
+	for _, banned := range []string{"Command", "Params", "Action"} {
+		if _, found := descriptor.FieldByName(banned); found {
+			t.Fatalf("ActionDescriptor carries %q; the stage could reclassify from it", banned)
 		}
 	}
 	if _, found := rt.FieldByName("classifier"); found {

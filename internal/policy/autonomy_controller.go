@@ -140,6 +140,9 @@ type Controller struct {
 	emit     AuditEmitter
 	profile  atomic.Pointer[AutonomyProfile]
 	batching atomic.Pointer[ApprovalBatching]
+	// ceiling is the auto_advance_ceiling master switch, swapped with the
+	// profile so a reload cannot leave the two disagreeing.
+	ceiling atomic.Pointer[Ceiling]
 }
 
 // NewController returns a Controller with no profile loaded yet. emit may
@@ -181,6 +184,22 @@ func (c *Controller) Batching() ApprovalBatching {
 	return defaultApprovalBatching()
 }
 
+// AutoAdvanceCeiling returns the running auto-advance master switch.
+//
+// Before any config has been applied it returns CeilingDisabled, which is
+// also what an explicitly unconfigured install resolves to: a daemon that
+// has not read a config must not auto-approve anything, and neither must
+// one whose operator never asked for it.
+func (c *Controller) AutoAdvanceCeiling() Ceiling {
+	if c == nil {
+		return CeilingDisabled
+	}
+	if ceiling := c.ceiling.Load(); ceiling != nil {
+		return *ceiling
+	}
+	return CeilingDisabled
+}
+
 // Apply parses, resolves and installs the [policy] section of tree.
 //
 // On success the profile and the batching numerics are swapped atomically
@@ -212,12 +231,15 @@ func (c *Controller) Apply(ctx context.Context, tree map[string]interface{}) err
 		return err
 	}
 	batching := cfg.Batching
+	ceiling := cfg.AutoAdvanceCeiling
 	c.profile.Store(profile)
 	c.batching.Store(&batching)
+	c.ceiling.Store(&ceiling)
 	c.record(ctx, EventAutonomyProfileLoaded, map[string]interface{}{
 		"profile":                 profile.Name(),
 		"approval_batch_window_s": batching.WindowSeconds,
 		"approval_batch_cap":      batching.Cap,
+		"auto_advance_ceiling":    ceiling.String(),
 	})
 	return nil
 }

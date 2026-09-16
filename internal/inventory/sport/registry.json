@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-16T11:02:25Z",
+  "generated_at": "2026-09-16T21:59:58Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -12676,6 +12676,36 @@
       ]
     },
     {
+      "name": "internal/events/routing autoadvance tests",
+      "sites": [
+        {
+          "file": "internal/events/routing/router_autoadvance_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T2",
+          "raw": "internal/events/routing autoadvance tests (ADD) — P1-E18-W4-S39-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/events/routing:autoadvance",
+      "sites": [
+        {
+          "file": "internal/events/routing/router_autoadvance.go",
+          "line": 27,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T2",
+          "raw": "internal/events/routing:autoadvance (ADD) — P1-E18-W4-S39-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/fleet.HeadroomModel",
       "sites": [
         {
@@ -12940,6 +12970,111 @@
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T1",
           "raw": "internal/fleet/sessions:stream-fold (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/fleet/supervision autoadvance audit tests",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/autoadvance_audit_test.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T2",
+          "raw": "internal/fleet/supervision autoadvance audit tests (ADD) — P1-E18-W4-S39-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/fleet/supervision autoadvance tests",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/autoadvance_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T2",
+          "raw": "internal/fleet/supervision autoadvance tests (ADD) — P1-E18-W4-S39-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/fleet/supervision:autoadvance",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/autoadvance.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T2",
+          "raw": "internal/fleet/supervision:autoadvance (ADD) — P1-E18-W4-S39-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/fleet/supervision:autoadvance-audit",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/autoadvance_audit.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T2",
+          "raw": "internal/fleet/supervision:autoadvance-audit (ADD) — P1-E18-W4-S39-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/fleet/supervision:autoadvance-errors",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/autoadvance_errors.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T2",
+          "raw": "internal/fleet/supervision:autoadvance-errors (ADD) — P1-E18-W4-S39-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/fleet/supervision:autoadvance-queue",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/autoadvance_queue.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T2",
+          "raw": "internal/fleet/supervision:autoadvance-queue (ADD) — P1-E18-W4-S39-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/fleet/supervision:autoadvance-types",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/autoadvance_types.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T2",
+          "raw": "internal/fleet/supervision:autoadvance-types (ADD) — P1-E18-W4-S39-T2."
         }
       ],
       "statuses": [
@@ -15606,6 +15741,21 @@
       ]
     },
     {
+      "name": "internal/policy autonomy-ceiling tests",
+      "sites": [
+        {
+          "file": "internal/policy/autonomy_ceiling_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T2",
+          "raw": "internal/policy autonomy-ceiling tests (ADD) — P1-E18-W4-S39-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/policy builtinProfiles",
       "sites": [
         {
@@ -15833,6 +15983,21 @@
           "status": "ADD",
           "ticket": "P1-E09-W2-S18-T6",
           "raw": "internal/policy rpc-standing-handlers/ADDED (P1-E09-W2-S18-T6)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/policy:autonomy-ceiling",
+      "sites": [
+        {
+          "file": "internal/policy/autonomy_ceiling.go",
+          "line": 27,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T2",
+          "raw": "internal/policy:autonomy-ceiling (ADD) — P1-E18-W4-S39-T2."
         }
       ],
       "statuses": [
@@ -21726,7 +21891,7 @@
       ]
     }
   ],
-  "total_sites": 2123,
+  "total_sites": 2134,
   "unspecified_count": 66,
   "multi_status_count": 40
 }

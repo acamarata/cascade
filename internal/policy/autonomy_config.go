@@ -109,6 +109,10 @@ type Config struct {
 	// the typed jobs.RiskGateOverlay, validating each gate-step name
 	// against AC/S-59.T4's own vocabulary.
 	RiskGates map[string][]string `json:"-"`
+	// AutoAdvanceCeiling is [policy].auto_advance_ceiling: the master
+	// switch for tier-1 auto-approval (autonomy_ceiling.go). Absent means
+	// disabled — the feature arrives switched off.
+	AutoAdvanceCeiling Ceiling `json:"auto_advance_ceiling"`
 }
 
 // ParseConfig reads the [policy] section out of tree.
@@ -118,7 +122,10 @@ type Config struct {
 // documented default state of an unconfigured install. Absence is the only
 // thing treated leniently here — everything present is parsed strictly.
 func ParseConfig(tree map[string]interface{}) (Config, error) {
-	out := Config{Overlays: map[Verdict][]RiskLevel{}, Batching: defaultApprovalBatching()}
+	out := Config{
+		Overlays: map[Verdict][]RiskLevel{}, Batching: defaultApprovalBatching(),
+		AutoAdvanceCeiling: CeilingDisabled,
+	}
 	raw, ok := tree[policySectionKey]
 	if !ok {
 		return out, nil
@@ -142,6 +149,11 @@ func ParseConfig(tree map[string]interface{}) (Config, error) {
 	if err := out.parseRiskGates(table); err != nil {
 		return Config{}, err
 	}
+	ceiling, err := parseCeiling(table)
+	if err != nil {
+		return Config{}, err
+	}
+	out.AutoAdvanceCeiling = ceiling
 	return out, nil
 }
 
@@ -159,6 +171,7 @@ var policyOwnedKeys = map[string]bool{
 	"approval_batch_window_s": true,
 	"approval_batch_cap":      true,
 	"risk_gates":              true,
+	ceilingKey:                true,
 }
 
 // checkPolicyKeys refuses any key under [policy] that is neither owned

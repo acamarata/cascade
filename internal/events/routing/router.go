@@ -58,6 +58,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/internal/policy"
+	"github.com/acamarata/cascade/internal/retrieval/corpus"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -106,6 +107,12 @@ type Action struct {
 	Ref string
 	// Summary is the human-readable line an approval prompt shows.
 	Summary string
+	// SourceTrust is the propagated trust of the instruction that
+	// produced this action (F/S-10.T4). It gates tier-1 auto-advance and
+	// nothing else: an unset value is NOT trusted, so a call site that
+	// does not set it simply never auto-advances, which is the correct
+	// behaviour for one that cannot vouch for its input.
+	SourceTrust corpus.TrustLevel
 }
 
 // Validate refuses an action the router cannot route. Every field it names
@@ -160,6 +167,11 @@ var _ PolicyEngine = (*policy.Engine)(nil)
 type ActionRouter struct {
 	engine PolicyEngine
 	audit  audit.Writer
+	// advance is the optional tier-1 ask-resolution stage
+	// (router_autoadvance.go). Nil means auto-advance is off, which is the
+	// default state of an unconfigured install.
+	advance     AutoAdvance
+	advanceSink AutoAdvanceSink
 }
 
 // NewActionRouter returns a router over engine, recording every decision
@@ -200,6 +212,10 @@ func (r *ActionRouter) RouteAction(ctx context.Context, action Action) (policy.V
 	if auditErr := r.record(ctx, action, out, verdict); auditErr != nil {
 		return policy.VerdictDeny, out.Trace, auditErr
 	}
+	// The ask-resolution stage. It runs AFTER the engine and only on an
+	// ask, so it is not a second decision point: it can turn an ask into
+	// an allow and can do nothing else. See router_autoadvance.go.
+	verdict, err = r.resolveAutoAdvance(ctx, action, out, verdict, err)
 	return verdict, out.Trace, err
 }
 
