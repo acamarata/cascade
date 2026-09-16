@@ -155,8 +155,12 @@ func TestRunFleetSessionsWatch_DialFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("runFleetSessionsWatch: expected a dial error against a socket nothing listens on")
 	}
-	if !strings.Contains(err.Error(), "dial /events") {
-		t.Errorf("err = %v, want it to mention dialing /events", err)
+	// The wording comes from daemon_events_dial.go, the single client both
+	// --watch and the harness watch now dial through; the assertion is on
+	// what it must say (which endpoint, and that dialing it is what
+	// failed), not on one spelling of it.
+	if !strings.Contains(err.Error(), "dialing") || !strings.Contains(err.Error(), "/events") {
+		t.Errorf("err = %v, want it to name dialing the /events stream", err)
 	}
 }
 

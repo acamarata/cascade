@@ -18,14 +18,9 @@
 package main
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"io"
-	"net"
-	"net/http"
 	goruntime "runtime"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -69,25 +64,13 @@ func runFleetSessionsWatch(cmd *cobra.Command, deps fleetSessionsDeps) error {
 	return watchFleetSessionsLoop(ctx, w, body)
 }
 
-// dialFleetSessionsEvents opens GET /events?topic=fleet.sessions against
-// the daemon socket, reusing client.UnixDialer-shaped dial functions -
-// the same exported dial seam every command uses, never a hand-rolled
-// second transport.
+// dialFleetSessionsEvents opens the daemon's /events stream filtered to
+// the fleet session topic. The transport is daemon_events_dial.go's single
+// client - the same one the harness watch uses - never a hand-rolled
+// second one, and the topic comes from the package that publishes it so
+// the two cannot drift.
 func dialFleetSessionsEvents(ctx context.Context, deps fleetSessionsDeps, socketPath string) (io.ReadCloser, func(), error) {
-	httpClient := &http.Client{Transport: &http.Transport{
-		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return deps.DialContext(ctx, socketPath)
-		},
-	}}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix/events?topic=fleet.sessions", nil)
-	if err != nil {
-		return nil, func() {}, cascade.Wrap(cascade.KindInternal, err, "cascade fleet sessions --watch: build request")
-	}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, func() {}, cascade.Wrap(cascade.KindUnavailable, err, "cascade fleet sessions --watch: dial /events")
-	}
-	return resp.Body, func() { _ = resp.Body.Close() }, nil
+	return dialDaemonEvents(ctx, deps.DialContext, socketPath, sessions.Topic)
 }
 
 // watchFleetSessionsLoop reads body's SSE stream line by line, folding
@@ -96,43 +79,20 @@ func dialFleetSessionsEvents(ctx context.Context, deps fleetSessionsDeps, socket
 // NDJSON line on non-TTY (D/S-06.T5's stream contract). Never panics on
 // malformed input - an undecodable data block is skipped, not fatal.
 func watchFleetSessionsLoop(ctx context.Context, w *output.Writer, body io.Reader) error {
+	records := make(chan sessions.SessionRecord, 16)
+	go func() {
+		defer close(records)
+		sessions.ReadRecords(ctx, body, records)
+	}()
+
 	seen := map[string]sessions.SessionRecord{}
-	scanner := bufio.NewScanner(body)
-	var data []string
-	for scanner.Scan() {
-		if ctx.Err() != nil {
-			return nil
-		}
-		line := scanner.Text()
-		if strings.HasPrefix(line, "data:") {
-			data = append(data, strings.TrimPrefix(strings.TrimPrefix(line, "data:"), " "))
-			continue
-		}
-		if line != "" || len(data) == 0 {
-			continue
-		}
-		rec, ok := decodeSessionEvent(strings.Join(data, "\n"))
-		data = nil
-		if !ok {
-			continue
-		}
+	for rec := range records {
 		seen[rec.SessionID] = rec
 		if err := renderFleetSessionsWatchUpdate(w, seen, rec); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-// decodeSessionEvent decodes one SSE "data:" block as a
-// fleet.sessions.changed payload (domain.go's Store.emit marshals a
-// bare SessionRecord).
-func decodeSessionEvent(data string) (sessions.SessionRecord, bool) {
-	var rec sessions.SessionRecord
-	if err := json.Unmarshal([]byte(data), &rec); err != nil {
-		return sessions.SessionRecord{}, false
-	}
-	return rec, true
 }
 
 // renderFleetSessionsWatchUpdate renders the just-arrived event: one

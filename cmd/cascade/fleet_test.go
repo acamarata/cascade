@@ -19,6 +19,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/fleet/sessions"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -93,12 +94,12 @@ func TestFormatElapsed_ZeroOrNegativeIsDash(t *testing.T) {
 // TestDecodeSessionEvent_RoundTrip proves an SSE data block carrying a
 // marshaled SessionRecord decodes back to the same record.
 func TestDecodeSessionEvent_RoundTrip(t *testing.T) {
-	rec, ok := decodeSessionEvent(`{"session_id":"s1","harness":"claude","account":"a1","state":"active"}`)
+	rec, ok := sessions.DecodeSessionEvent(`{"session_id":"s1","harness":"claude","account":"a1","state":"active"}`)
 	if !ok {
-		t.Fatal("decodeSessionEvent: expected ok=true for a valid record")
+		t.Fatal("DecodeSessionEvent: expected ok=true for a valid record")
 	}
 	if rec.SessionID != "s1" || rec.Harness != "claude" || rec.Account != "a1" || rec.State != "active" {
-		t.Errorf("decodeSessionEvent round-trip mismatch: %+v", rec)
+		t.Errorf("DecodeSessionEvent round-trip mismatch: %+v", rec)
 	}
 }
 
@@ -112,8 +113,8 @@ func TestDecodeSessionEvent_MalformedNeverPanics(t *testing.T) {
 		}
 	}()
 	for _, in := range []string{"", "not json", "{", `{"session_id":123}`} {
-		if _, ok := decodeSessionEvent(in); ok {
-			t.Errorf("decodeSessionEvent(%q) = ok true, want false", in)
+		if _, ok := sessions.DecodeSessionEvent(in); ok {
+			t.Errorf("sessions.DecodeSessionEvent(%q) = ok true, want false", in)
 		}
 	}
 }

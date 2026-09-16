@@ -15,7 +15,7 @@ import (
 //	— the session watch's two seams, wired to the real fleet session stream
 //	and the real daemon event bus.
 //
-// Inputs: a dialer and socket path for the daemon; the event bus.
+// Inputs: an opener for the daemon's session stream; the event bus.
 // Outputs: a claude.Watcher whose Subscribe and Emit reach real
 //
 //	counterparts, so the watch is reachable from a running program rather
@@ -27,6 +27,12 @@ import (
 //	transition means, when to synthesize a stop, how to back off); this file
 //	owns only the translation between its types and the fleet's.
 //
+//	It does NOT dial. The stream arrives as an opener the daemon's
+//	composition root supplies, because opening a socket belongs there
+//	(journals/RULING-coverage-socket-code.md) — and because a dial inside
+//	this package would put the translation loop below out of reach of the
+//	default unit lane, which is where it is worth asserting.
+//
 // SPORT: internal/plugins cascade-claude watch wiring (ADD) — P1-E16-W4-S34-T1.
 
 // claudeWatchNamespace is the event-bus namespace the watch publishes
@@ -37,27 +43,38 @@ const claudeWatchNamespace = "plugins.claude.sessions"
 //
 // It is a constructor rather than an init()-time global because both of its
 // collaborators are per-daemon values that do not exist at package-init
-// time: the socket path is resolved at startup and the bus is constructed
-// with the daemon's own store and clock.
-func NewClaudeSessionWatcher(dial sessions.DialFunc, socketPath string, bus *events.Bus) *claude.Watcher {
+// time: the stream is opened against a socket path resolved at startup, and
+// the bus is constructed with the daemon's own store and clock.
+func NewClaudeSessionWatcher(open SessionStreamOpener, bus *events.Bus) *claude.Watcher {
 	return &claude.Watcher{
-		Subscribe: claudeSessionSubscriber(dial, socketPath),
+		Subscribe: claudeSessionSubscriber(open),
 		Emit:      claudeLifecycleEmitter(bus),
 	}
 }
 
+// SessionStreamOpener opens a stream of fleet session records.
+//
+// The daemon's composition root supplies the real one, which dials the
+// daemon socket; a test supplies a channel directly. This is the seam that
+// keeps the dial out of this package.
+type SessionStreamOpener func(ctx context.Context) (<-chan sessions.SessionRecord, func(), error)
+
 // claudeSessionSubscriber adapts the fleet session stream into the
 // plugin's Subscriber seam.
-func claudeSessionSubscriber(dial sessions.DialFunc, socketPath string) claude.Subscriber {
+func claudeSessionSubscriber(open SessionStreamOpener) claude.Subscriber {
 	return func(ctx context.Context) (<-chan claude.SessionEvent, func(), error) {
-		stream, err := sessions.Subscribe(ctx, dial, socketPath)
+		if open == nil {
+			return nil, nil, cascade.New(cascade.KindInternal,
+				"plugins: no session stream was wired for the cascade-claude watch")
+		}
+		records, release, err := open(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
 		out := make(chan claude.SessionEvent, 16)
 		go func() {
 			defer close(out)
-			for rec := range stream.Records {
+			for rec := range records {
 				ev, ok := claudeSessionEvent(rec)
 				if !ok {
 					continue
@@ -69,7 +86,7 @@ func claudeSessionSubscriber(dial sessions.DialFunc, socketPath string) claude.S
 				}
 			}
 		}()
-		return out, stream.Close, nil
+		return out, release, nil
 	}
 }
 

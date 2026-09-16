@@ -8,6 +8,7 @@ import (
 	"github.com/acamarata/cascade/internal/client"
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/fleet/sessions"
 	"github.com/acamarata/cascade/internal/plugins"
 )
 
@@ -41,6 +42,30 @@ func wireHarnessSessionWatch(ctx context.Context, manifest *daemon.Manifest, bus
 		manifest.RegisterHarnessSessionWatch(ctx, nil)
 		return
 	}
-	watcher := plugins.NewClaudeSessionWatcher(client.UnixDialer, socketPath, bus)
+	watcher := plugins.NewClaudeSessionWatcher(claudeSessionStream(client.UnixDialer, socketPath), bus)
 	manifest.RegisterHarnessSessionWatch(ctx, watcher.Run)
+}
+
+// claudeSessionStream opens the daemon's session stream for the watch.
+//
+// This is the dial, and it lives here rather than in internal/plugins or
+// internal/fleet/sessions on purpose: the composition root owns the sockets
+// the process opens, and it already had to dial /events for
+// `cascade fleet sessions --watch`. Both callers now share
+// dialDaemonEvents; the fold that turns the stream back into records stays
+// in the package that defines the wire format.
+func claudeSessionStream(dial eventsDialer, socketPath string) plugins.SessionStreamOpener {
+	return func(ctx context.Context) (<-chan sessions.SessionRecord, func(), error) {
+		body, release, err := dialDaemonEvents(ctx, dial, socketPath, sessions.Topic)
+		if err != nil {
+			return nil, nil, err
+		}
+		records := make(chan sessions.SessionRecord, 16)
+		go func() {
+			defer close(records)
+			defer release()
+			sessions.ReadRecords(ctx, body, records)
+		}()
+		return records, release, nil
+	}
 }
