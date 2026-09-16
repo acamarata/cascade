@@ -140,6 +140,9 @@ func newVaultCmd(deps vaultDeps) *cobra.Command {
 		newVaultImportCmd(deps),
 		newVaultAuditCmd(deps),
 		newVaultQuarantineCmd(deps),
+		newVaultGrantCmd(deps),
+		newVaultGrantsCmd(deps),
+		newVaultRevokeCmd(deps),
 	)
 	return cmd
 }

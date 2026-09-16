@@ -262,7 +262,8 @@ func TestVaultMountedOnRealRoot(t *testing.T) {
 	if vault == nil {
 		t.Fatal("`vault` is not mounted on the real root command")
 	}
-	want := map[string]bool{"set": false, "get": false, "list": false, "rotate": false, "import": false, "audit": false, "quarantine": false}
+	want := map[string]bool{"set": false, "get": false, "list": false, "rotate": false, "import": false,
+		"audit": false, "quarantine": false, "grant": false, "grants": false, "revoke": false}
 	for _, sub := range vault.Commands() {
 		if _, ok := want[sub.Name()]; ok {
 			want[sub.Name()] = true

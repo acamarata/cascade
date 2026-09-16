@@ -31,6 +31,7 @@ import (
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/hooks/egress"
+	providerdispatch "github.com/acamarata/cascade/internal/providers/dispatch"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -116,4 +117,39 @@ func daemonEgressFirewall(paths runtime.PathProvider, detector *secrets.Detector
 		return nil, err
 	}
 	return egress.NewEngine(egress.DefaultRegistry(), vault, detector)
+}
+
+// daemonCredentialSource builds the resolver's credential reader.
+//
+// It opens the SAME custody and the SAME grant register the `cascade vault`
+// commands use, so a grant issued at the terminal is the grant the daemon
+// reads under — there is one register, not a daemon-side copy.
+//
+// No elevation gate is passed: the daemon has no human to prove presence,
+// which is the whole reason grants exist. Broker.Get itself still refuses
+// without a gate, so this path gains no elevated read; only GetGranted
+// succeeds, and only for a key a human has granted.
+func daemonCredentialSource(paths runtime.PathProvider) (*providerdispatch.GrantedCredentials, error) {
+	if paths == nil {
+		return nil, cascade.New(cascade.KindUnavailable,
+			"conductor: the credential source needs a resolved data directory")
+	}
+	dir := paths.DataDir()
+	custody, err := secrets.SelectCustody(secrets.Config{Service: vaultService, Dir: dir})
+	if err != nil {
+		return nil, err
+	}
+	broker, err := secrets.NewBroker(custody, nil)
+	if err != nil {
+		return nil, err
+	}
+	store, err := secrets.NewFileGrantStore(dir)
+	if err != nil {
+		return nil, err
+	}
+	grants, err := secrets.NewGrants(store, runtime.NewSystemClock())
+	if err != nil {
+		return nil, err
+	}
+	return providerdispatch.NewGrantedCredentials(broker, grants)
 }

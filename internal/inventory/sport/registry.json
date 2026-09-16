@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-16T10:14:24Z",
+  "generated_at": "2026-09-16T10:28:37Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1840,6 +1840,21 @@
       ]
     },
     {
+      "name": "cli.provider.add:lane",
+      "sites": [
+        {
+          "file": "cmd/cascade/provider_lane.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E10-W4-S87-T1",
+          "raw": "cli.provider.add:lane (ADD) — P1-E10-W4-S87-T1 (Art.9, W3 gate)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cli/approval",
       "sites": [
         {
@@ -3142,6 +3157,13 @@
           "status": "ADD",
           "ticket": "P1-E14-W3-S30-T5",
           "raw": "cmd/cascade tests (ADD) — P1-E14-W3-S30-T5 (Art.9)."
+        },
+        {
+          "file": "cmd/cascade/provider_lane_test.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E10-W4-S87-T1",
+          "raw": "cmd/cascade tests (ADD) — P1-E10-W4-S87-T1."
         },
         {
           "file": "cmd/cascade/run_requirements_test.go",
@@ -21483,7 +21505,7 @@
       ]
     }
   ],
-  "total_sites": 2106,
+  "total_sites": 2108,
   "unspecified_count": 66,
   "multi_status_count": 40
 }

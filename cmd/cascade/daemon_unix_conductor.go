@@ -74,16 +74,16 @@ func wireConductorAndReachability(ctx context.Context, registry *rpc.Registry, m
 // unavailable.md), then calls daemon.RegisterConductorExecuteHandler with
 // all of them plus the daemon's real audit.Writer.
 //
-// The resolver's CredentialSource is nil here: connecting it to
-// internal/secrets.Broker requires deciding how a headless daemon obtains
-// vault access with no interactive elevation prompt, which is an owner
-// decision this call site does not make (see the DEFECT journal's fix
-// journal for the exact question). Until that seam is supplied, every
-// key-authenticated provider fails closed with a typed KindUnavailable
-// naming its missing credential rather than the previous permanent,
-// construction-time KindUnavailable from a nil resolver: dispatch is now
-// refused at the true credential boundary, per-request, not before the
-// executor can even be built.
+// The resolver's CredentialSource is the STANDING-GRANT reader
+// (R-14.243, daemon_unix_conductor_security.go's daemonCredentialSource).
+// It used to be nil, because "how does a headless daemon obtain vault
+// access with no interactive elevation prompt" was an open question; it is
+// answered now — a human issues `cascade vault grant <name>` through the
+// same elevation gate `vault get` uses, scoped to one key and one verb,
+// expiring, revocable and audited. With no live grant the behaviour is
+// unchanged from before: a typed KindUnavailable naming the key, refused
+// at the true credential boundary per request, never a prompt from a
+// process with nobody to answer it.
 func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest, paths runtime.PathProvider, clock runtime.Clock, store provider.Store) error {
 	regDB, err := openMigratedDB(ctx, filepath.Join(paths.DataDir(), providerRegistryDBFile),
 		func(ctx context.Context, db *sql.DB) error {
@@ -100,7 +100,11 @@ func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest 
 	}
 	quota := conductor.NewQuotaPolicy(cfg, clock)
 	auditWriter := audit.New(store, clock, nil)
-	resolver, err := providerdispatch.NewResolver(reg, nil, clock, providertransport.NewHTTPTransport(&http.Client{}))
+	credentials, cerr := daemonCredentialSource(paths)
+	if cerr != nil {
+		return cerr
+	}
+	resolver, err := providerdispatch.NewResolver(reg, credentials, clock, providertransport.NewHTTPTransport(&http.Client{}))
 	if err != nil {
 		return err
 	}

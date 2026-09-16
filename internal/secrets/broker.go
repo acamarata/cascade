@@ -56,8 +56,9 @@ type ElevationGate interface {
 
 // Broker is the vault's single entry point.
 type Broker struct {
-	custody Custody
-	gate    ElevationGate
+	custody    Custody
+	gate       ElevationGate
+	grantAudit GrantAudit
 }
 
 // NewBroker builds a broker over custody. A nil custody is refused rather
