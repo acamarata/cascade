@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-16T09:10:54Z",
+  "generated_at": "2026-09-16T09:34:26Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -13419,6 +13419,36 @@
       ]
     },
     {
+      "name": "internal/nodes TestDispatchRealGit",
+      "sites": [
+        {
+          "file": "internal/nodes/dispatch_git_integration_test.go",
+          "line": 19,
+          "status": "",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes TestDispatchRealGit (P1-E17-W4-S37-T2)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/nodes TestDispatchRealSSHD",
+      "sites": [
+        {
+          "file": "internal/nodes/dispatch_sshd_integration_test.go",
+          "line": 17,
+          "status": "",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes TestDispatchRealSSHD (P1-E17-W4-S37-T2)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/nodes TestProvisionRealSSHD",
       "sites": [
         {
@@ -21260,7 +21290,7 @@
       ]
     }
   ],
-  "total_sites": 2089,
-  "unspecified_count": 63,
+  "total_sites": 2091,
+  "unspecified_count": 65,
   "multi_status_count": 40
 }

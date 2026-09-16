@@ -25,14 +25,15 @@ func TestBuiltinRegistration(t *testing.T) {
 	}
 	// P1-E14-W3-S28-T4 (contract lint) adds `lint` alongside T2's already-
 	// landed `validate`, P1-E14-W3-S28-T3 (authoring) adds create/edit/
-	// move, P1-E14-W3-S29-T4 adds status/board, and P1-E14-W3-S30-T1 (this
-	// ticket) adds claim/step/done; this proves exactly these ten are
-	// mounted.
+	// move, P1-E14-W3-S29-T4 adds status/board, P1-E14-W3-S30-T1 adds
+	// claim/step/done, and P1-E14-W3-S30-T2 adds dispatch; this proves
+	// exactly these eleven are mounted.
 	wantCommands := map[string]bool{
 		validateCommandName: true, lintCommandName: true,
 		createCommandName: true, editCommandName: true, moveCommandName: true,
 		statusCommandName: true, boardCommandName: true,
 		claimCommandName: true, stepCommandName: true, doneCommandName: true,
+		dispatchCommandName: true,
 	}
 	if len(entry.Manifest.Provides.Commands) != len(wantCommands) {
 		t.Fatalf("commands = %+v, want exactly %v", entry.Manifest.Provides.Commands, wantCommands)

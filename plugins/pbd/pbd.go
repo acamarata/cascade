@@ -52,6 +52,10 @@ const pluginID = "pbd"
 // mount respectively. createCommandName, editCommandName, and
 // moveCommandName (author.go) are T3's.
 const validateCommandName = "validate"
+
+// dispatchCommandName is the verb that sends a claimed ticket through the
+// Conductor's model door (S-30.T2).
+const dispatchCommandName = "dispatch"
 const lintCommandName = "lint"
 
 // init registers cascade-pbd with the host's compile-time registry. A
@@ -91,6 +95,7 @@ func manifestCommands() []plugin.CommandSpec {
 		{Name: claimCommandName, Description: "Claim a PEWS ticket, starting its lifecycle.", RPCMethod: claimRPCMethod},
 		{Name: stepCommandName, Description: "Record a step, CR, or QA pass in a PEWS ticket's lifecycle.", RPCMethod: stepRPCMethod},
 		{Name: doneCommandName, Description: "Complete a PEWS ticket's lifecycle.", RPCMethod: doneRPCMethod},
+		{Name: dispatchCommandName, Description: "Dispatch a PEWS ticket through the Conductor's model door."},
 	}
 }
 
@@ -111,7 +116,10 @@ type handlers struct{}
 // purely for line-budget room (Art.10.5's 300-line cap).
 
 // DispatchIntent always refuses: this ticket provides no intents.
-func (handlers) DispatchIntent(_ context.Context, name string, _ []byte) ([]byte, error) {
+func (handlers) DispatchIntent(ctx context.Context, name string, _ []byte) ([]byte, error) {
+	if handled, err := agenticIntent(ctx, name); handled {
+		return nil, err
+	}
 	return nil, cascade.Newf(cascade.KindUnsupported, "pbd: no intent named %q", name)
 }
 
@@ -124,6 +132,8 @@ func (handlers) RunCommand(ctx context.Context, name string, args []string) erro
 	switch name {
 	case claimCommandName, stepCommandName, doneCommandName:
 		return runLifecycleCommand(ctx, name, args)
+	case dispatchCommandName:
+		return runDispatchCommand(ctx, args)
 	case validateCommandName, lintCommandName:
 		if len(args) == 0 || args[0] == "" {
 			return cascade.Newf(cascade.KindInvalidInput, "pbd %s: a tree root argument is required", name)
