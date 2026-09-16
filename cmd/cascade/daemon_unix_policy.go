@@ -160,7 +160,10 @@ func wirePolicy(ctx context.Context, store provider.Store, clock runtime.Clock, 
 	if err != nil {
 		return nil, err
 	}
-	router = attachAutoAdvance(router, controller, store, clock, log)
+	router, err = attachAutoAdvance(router, engine, controller, store, clock, log)
+	if err != nil {
+		return nil, err
+	}
 	wiring := &policyWiring{Registry: registry, Engine: engine, Router: router, Queue: queue}
 	wiring.Handlers = policy.MethodHandlers(policy.RPCDeps{
 		Queue:    queue,
@@ -240,14 +243,22 @@ func validateRiskGateOverlay(cfg *runtime.Config) error {
 	return err
 }
 
-// attachAutoAdvance adds the tier-1 ask-resolution stage to router
-// (P1-E18-W4-S39-T2).
+// attachAutoAdvance adds the tier-1 ask-resolution stage to router, behind
+// the mandatory first-run dry-run gate (P1-E18-W4-S39-T2, P1-E18-W4-S39-T4).
 //
 // It reads the ceiling off the LIVE controller rather than a value captured
 // here, so a config reload that turns auto-advance off is observed by the
 // very next action rather than at the next daemon restart. With the ceiling
 // at its default — disabled — this changes nothing about how any action is
 // decided; it is the operator's opt-in that switches it on.
+//
+// The dry-run gate is wired in the same breath as the stage it guards: it
+// wraps the ask-resolution path at the router (R-14.247 §7), simulates on
+// the production engine this file built, and persists its first_run_done
+// flags in the audit domain of the SAME store every other policy record
+// here uses. It is not configurable off and has no switch; an install that
+// could not build it refuses the boot rather than shipping the tier-1 path
+// unguarded.
 //
 // The attention store is built over the SAME store/clock this composition
 // root already holds, which is this repo's established pattern for it
@@ -257,12 +268,20 @@ func validateRiskGateOverlay(cfg *runtime.Config) error {
 // degrades to no-SSE mode — a refusal is queued and listed, it just does
 // not push a live notification.
 func attachAutoAdvance(
-	router *routing.ActionRouter, controller *policy.Controller,
+	router *routing.ActionRouter, engine *policy.Engine, controller *policy.Controller,
 	store provider.Store, clock runtime.Clock, log audit.Writer,
-) *routing.ActionRouter {
+) (*routing.ActionRouter, error) {
 	attention := supervision.NewStore(store, clock, nil, supervision.NewSystemIDGenerator(), 0)
+	flags, err := supervision.NewFirstRunFlags(store)
+	if err != nil {
+		return nil, err
+	}
+	gate, err := supervision.EnforceDryRunFirst(engine, flags, controller, attention, log)
+	if err != nil {
+		return nil, err
+	}
 	return router.WithAutoAdvance(
 		supervision.NewAutoAdvanceEvaluator(controller),
 		supervision.NewAutoAdvanceRecorder(log, attention, supervision.ScopeRef{}),
-	)
+	).WithDryRunFirst(gate), nil
 }

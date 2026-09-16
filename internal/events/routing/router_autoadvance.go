@@ -51,6 +51,23 @@ type AutoAdvanceSink interface {
 		decision supervision.PolicyDecision, trust supervision.TrustTag, verdict supervision.Verdict) error
 }
 
+// DryRunFirst is the mandatory first-run dry-run gate the router consults
+// before the ask-resolution stage may resolve an ask (R-14.247 §7). The
+// concrete implementation is the supervision package's
+// supervision.DryRunFirstGuard; it is an interface here for the same
+// reason AutoAdvance is — the router does not gain the guard's
+// construction concerns.
+type DryRunFirst interface {
+	// Guard receives the request the router ALREADY built for its one
+	// live Evaluate, passed by value — never a copy re-derived from the
+	// action descriptor, which carries no command text. A nil error
+	// passes the stage; a non-nil one blocks the action.
+	Guard(ctx context.Context, req policy.EvalRequest) error
+}
+
+// Compile-time proof that the production guard satisfies the seam.
+var _ DryRunFirst = (*supervision.DryRunFirstGuard)(nil)
+
 // WithAutoAdvance attaches the ask-resolution stage.
 //
 // It returns the router so a composition root can chain it, and it is a
@@ -62,16 +79,41 @@ func (r *ActionRouter) WithAutoAdvance(advance AutoAdvance, sink AutoAdvanceSink
 	return r
 }
 
+// WithDryRunFirst attaches the mandatory first-run dry-run gate.
+//
+// It returns the router so a composition root can chain it. A router
+// without a gate behaves exactly as before; the daemon's policy
+// composition root always installs one. The gate is not configurable off
+// and carries no switch — a bypassable first-run check would be a
+// placeholder where a guarantee was specified.
+func (r *ActionRouter) WithDryRunFirst(gate DryRunFirst) *ActionRouter {
+	r.dryFirst = gate
+	return r
+}
+
 // resolveAutoAdvance runs the stage.
 //
 // Only an `ask` with no error is eligible. Everything else — allow, deny,
 // or an evaluation that already failed — passes through untouched, which
 // is what keeps this incapable of widening anything.
 func (r *ActionRouter) resolveAutoAdvance(
-	ctx context.Context, action Action, out policy.EvalOutcome, verdict policy.Verdict, err error,
+	ctx context.Context, action Action, req policy.EvalRequest,
+	out policy.EvalOutcome, verdict policy.Verdict, err error,
 ) (policy.Verdict, error) {
 	if r.advance == nil || verdict != policy.VerdictAsk || err != nil {
 		return verdict, err
+	}
+	// The mandatory first-run dry-run gate (R-14.247 §7), before the
+	// stage may turn an ask into an approval. It decides nothing: Simulate
+	// discards its writes, and the verdict the caller acts on remains the
+	// one this router's single Evaluate returned — the rung is still
+	// resolved exactly once. A block is a deny with an error, so the ask
+	// can never silently become an approval the first run was not
+	// simulated for.
+	if r.dryFirst != nil {
+		if gateErr := r.dryFirst.Guard(ctx, req); gateErr != nil {
+			return policy.VerdictDeny, gateErr
+		}
 	}
 	descriptor := supervision.ActionDescriptor{
 		Ref: action.Ref, Origin: string(action.Origin), Verb: action.Verb,

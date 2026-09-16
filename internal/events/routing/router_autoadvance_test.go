@@ -186,3 +186,104 @@ func TestAnUnregisteredVerbIsTreatedAsElevated(t *testing.T) {
 		t.Error("an action with no verb was treated as an elevated verb call")
 	}
 }
+
+// --- the mandatory first-run dry-run gate (P1-E18-W4-S39-T4, R-14.247 §7) ---
+
+// stubGate is a DryRunFirst that records the request it was handed and
+// refuses on demand.
+type stubGate struct {
+	calls int
+	err   error
+	saw   policy.EvalRequest
+}
+
+func (g *stubGate) Guard(_ context.Context, req policy.EvalRequest) error {
+	g.calls++
+	g.saw = req
+	return g.err
+}
+
+// TestTheDryRunGateBlocksBeforeTheStageIsConsulted holds §7's shape at the
+// wiring level: the gate runs before the ask-resolution stage, receives the
+// request the router built for its one live Evaluate (command text
+// verbatim — it is the same value, not a re-derivation from the
+// descriptor), and a block is a deny that never reaches the stage — so an
+// ask cannot become an approval the first run was not simulated for.
+func TestTheDryRunGateBlocksBeforeTheStageIsConsulted(t *testing.T) {
+	advance := &stubAdvance{verdict: policy.VerdictAllow, advance: supervision.VerdictAutoApproved}
+	sink := &recordingSink{}
+	gate := &stubGate{err: errors.New("the simulated action is refused")}
+	r, err := NewActionRouter(askingEngine{verdict: policy.VerdictAsk, level: policy.L0}, newAuditLog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	r = r.WithAutoAdvance(advance, sink).WithDryRunFirst(gate)
+
+	verdict, _, err := r.RouteAction(context.Background(), trustedAction())
+	if verdict != policy.VerdictDeny {
+		t.Errorf("verdict = %v, want deny", verdict)
+	}
+	if err == nil {
+		t.Error("a blocked first run must return the gate's error, not a silent deny")
+	}
+	if gate.calls != 1 {
+		t.Errorf("the gate ran %d times, want 1", gate.calls)
+	}
+	if gate.saw.Action != trustedAction().Command {
+		t.Errorf("the gate saw %+v, want the engine's own request with the command verbatim", gate.saw)
+	}
+	if advance.calls != 0 {
+		t.Errorf("the stage was consulted past a gate block (%d times)", advance.calls)
+	}
+	if len(sink.verdicts) != 0 {
+		t.Errorf("the stage recorded %v past a gate block", sink.verdicts)
+	}
+}
+
+// TestTheGatePassesThroughToTheStage is the other half: a gate that does
+// not block changes nothing — the stage still resolves the ask, exactly as
+// an unwired gate's router would.
+func TestTheGatePassesThroughToTheStage(t *testing.T) {
+	advance := &stubAdvance{verdict: policy.VerdictAllow, advance: supervision.VerdictAutoApproved}
+	sink := &recordingSink{}
+	r, err := NewActionRouter(askingEngine{verdict: policy.VerdictAsk, level: policy.L0}, newAuditLog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	r = r.WithAutoAdvance(advance, sink).WithDryRunFirst(&stubGate{})
+
+	verdict, _, err := r.RouteAction(context.Background(), trustedAction())
+	if err != nil || verdict != policy.VerdictAllow {
+		t.Fatalf("verdict = %v err = %v, want the stage's allow", verdict, err)
+	}
+	if advance.calls != 1 || len(sink.verdicts) != 1 {
+		t.Errorf("stage calls %d, sink records %d, want 1 and 1", advance.calls, len(sink.verdicts))
+	}
+}
+
+// TestTheGateOnlyRunsWhereTier1CouldFire holds the gate to its own claim:
+// an action the engine already allowed or denied never pays for a
+// simulation it does not need.
+func TestTheGateOnlyRunsWhereTier1CouldFire(t *testing.T) {
+	for _, verdict := range []policy.Verdict{policy.VerdictAllow, policy.VerdictDeny} {
+		gate := &stubGate{}
+		r, err := NewActionRouter(askingEngine{verdict: verdict, level: policy.L0}, newAuditLog())
+		if err != nil {
+			t.Fatal(err)
+		}
+		r = r.WithAutoAdvance(&stubAdvance{verdict: policy.VerdictAllow}, &recordingSink{}).WithDryRunFirst(gate)
+		// A deny is reported as an error — that is the router's contract,
+		// not a failure of this test — so only the allow leg asserts a nil
+		// error. What BOTH legs assert is that the gate never ran.
+		_, _, err = r.RouteAction(context.Background(), trustedAction())
+		if verdict == policy.VerdictAllow && err != nil {
+			t.Fatalf("allow: %v", err)
+		}
+		if verdict == policy.VerdictDeny && err == nil {
+			t.Fatal("deny: RouteAction returned no error; a refused action must report one")
+		}
+		if gate.calls != 0 {
+			t.Errorf("%v: the gate ran %d times, want 0 — no auto-advance, no gate", verdict, gate.calls)
+		}
+	}
+}

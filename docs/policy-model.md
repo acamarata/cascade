@@ -516,3 +516,49 @@ shown rather than the first being overwritten.
 - An unset data class reads as the most restricted material; an unset verdict on a
   `LayerResult` reads as "settled nothing" and never as an allow.
 - A missing autonomy profile falls through layer 5 to layer 6 and denies.
+
+## The dry-run-first gate on tier-1 auto-advance
+
+The first time tier-1 auto-advance could turn an `ask` into an approval for
+a given account under a given autonomy profile, the action is SIMULATED
+before it is permitted to run. That simulation is the same
+side-effect-free evaluation described above: it discards its writes and
+decides nothing. The verdict the daemon acts on is still the one its single
+live evaluation returned.
+
+The guarantee is one simulation per `{account, autonomy profile}` pair, and
+it survives a restart. The profile is identified by its name plus a
+fingerprint of the table it actually resolves, so loading a different
+profile — or the same profile with different overlays — re-triggers the
+simulation. An approval earned under one profile is never carried across to
+another.
+
+### There is no switch
+
+The gate is not configurable off, and no configuration key reaches it. A
+first-run check an operator could turn off before it had ever fired would
+be a placeholder where a guarantee was specified, so the option does not
+exist.
+
+### What each failure does, and why they differ
+
+These are three different questions, and answering all three with "block"
+would be fail-closed on preference rather than on authorization.
+
+| What failed | What happens | Why |
+| --- | --- | --- |
+| The simulation itself, for any reason | The action is blocked, an attention item is filed, and NO completion flag is written | A simulation that could not finish has not shown the action is safe. Writing a flag here would let the very next attempt run live having never been simulated at all. |
+| Reading the completion flag | The simulation runs; nothing is blocked | An unreadable store means the answer is UNKNOWN, which is not "already done". Re-running a simulation that writes nothing costs nothing, while blocking would let a broken store take the operator's autonomy away entirely. |
+| Writing the completion flag, after the simulation succeeded | The action proceeds; an attention item is filed | The simulation happened, so the promise — never fire live on a first attempt without one — is kept. The only consequence is that the gate fires again, and the operator is told so. |
+
+### Where the record lives
+
+The completion flag is a keyed record in the audit domain of the same store
+every other policy record uses, under
+`autoadvance:first_run_done:<account>:<profile-version>`. It is not in the
+audit log: that log is append-only and has no read, so "has this already
+happened" is not a question it can answer. The simulation's TRACE — the
+verdict, the rung, the deciding layer and the engine's own explanation — IS
+appended to the audit log, which is what an append-only log is for. The
+trace carries no command text and no parameters; it is bound to the action
+by the same parameter hash the routing record uses.

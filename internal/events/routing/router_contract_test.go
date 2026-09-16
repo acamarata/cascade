@@ -37,8 +37,14 @@ func (e *recordingEngine) Evaluate(_ context.Context, req policy.EvalRequest) (p
 //     level the engine already resolved and has no access to the command
 //     text at all — asserted below on ActionDescriptor's own shape, so
 //     this entry cannot become a loophole by drift.
+//   - dryFirst: the mandatory first-run dry-run gate (P1-E18-W4-S39-T4,
+//     R-14.247 §7). It does NOT classify: it receives the request the
+//     router already built for its one live Evaluate and can only block a
+//     run, never allow one — an approval still has to come from the
+//     engine's verdict through the stage above.
 var routerFields = map[string]bool{
 	"engine": true, "audit": true, "advance": true, "advanceSink": true,
+	"dryFirst": true,
 }
 
 // TestRouteActionPerformsNoClassification asserts the router holds only its

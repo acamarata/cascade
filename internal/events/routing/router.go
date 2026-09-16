@@ -172,6 +172,11 @@ type ActionRouter struct {
 	// default state of an unconfigured install.
 	advance     AutoAdvance
 	advanceSink AutoAdvanceSink
+	// dryFirst is the mandatory first-run dry-run gate
+	// (P1-E18-W4-S39-T4, R-14.247 §7). It runs only on the ask-resolution
+	// path, receives the request the engine already evaluated, and can
+	// only BLOCK — it classifies nothing and resolves no rung.
+	dryFirst DryRunFirst
 }
 
 // NewActionRouter returns a router over engine, recording every decision
@@ -207,7 +212,11 @@ func (r *ActionRouter) RouteAction(ctx context.Context, action Action) (policy.V
 		return policy.VerdictDeny, policy.Trace{}, err
 	}
 
-	out, evalErr := r.engine.Evaluate(ctx, action.request())
+	// The request is built ONCE and handed to the engine and the
+	// first-run gate alike, so the gate simulates exactly what was
+	// evaluated — never a copy re-derived elsewhere (R-14.247 §7).
+	req := action.request()
+	out, evalErr := r.engine.Evaluate(ctx, req)
 	verdict, err := decide(action, out, evalErr)
 	if auditErr := r.record(ctx, action, out, verdict); auditErr != nil {
 		return policy.VerdictDeny, out.Trace, auditErr
@@ -215,7 +224,7 @@ func (r *ActionRouter) RouteAction(ctx context.Context, action Action) (policy.V
 	// The ask-resolution stage. It runs AFTER the engine and only on an
 	// ask, so it is not a second decision point: it can turn an ask into
 	// an allow and can do nothing else. See router_autoadvance.go.
-	verdict, err = r.resolveAutoAdvance(ctx, action, out, verdict, err)
+	verdict, err = r.resolveAutoAdvance(ctx, action, req, out, verdict, err)
 	return verdict, out.Trace, err
 }
 
