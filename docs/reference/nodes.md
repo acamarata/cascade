@@ -230,6 +230,92 @@ at test time (`internal/nodes/tunnel_test.go`; provenance in
 `internal/nodes/testdata/README.md`) and wires the CI job
 `node-tunnel-real-sshd`.
 
+## Remote dispatch (S-37.T2)
+
+The controller ships work to an enrolled node over git: it pushes a work
+branch, the node checks it out into a dedicated worktree, runs, and pushes
+its results back. Placement (S-37.T1) decides which nodes are eligible
+before any of this begins; a node that fails placement is never reached.
+
+**Direction.** The ssh tunnel is a *reverse* forward: the node connects out
+and its connections arrive at the controller's own RPC socket. The node is
+therefore the RPC client and the controller the server, so a dispatch is a
+rendezvous rather than a call to the node. The controller publishes an
+attempt and waits; the node claims it, runs it, and reports back. Three
+verbs live on the controller for the node to call:
+
+| verb | who calls it | what it does |
+|---|---|---|
+| `node.dispatch` | the controller's own run path | ships one dispatch |
+| `node.dispatch.claim` | the node | takes the work placed on it, once |
+| `node.dispatch.report` | the node | returns its signed result frame |
+| `node.dispatch.journal` | the node | streams journal records back |
+
+The node also answers `node.dispatch.execute` on its own socket.
+
+**Naming.** Branch `dispatch/<dispatch-id>/<attempt>`, worktree
+`<repo>/.cascade/worktrees/dispatch-<dispatch-id>-<attempt>`. Both are
+deliberately disjoint from the jobs namespace (`job/<id>`). The worktree is
+removed on any terminal outcome.
+
+**Fencing.** Every attempt carries a monotonic number, and it is inside the
+*signed* payload — so a partitioned node cannot relabel a stale result as
+the current attempt without invalidating its own signature. Results, pushes
+and journal records from a superseded attempt are all refused with
+`ErrStaleAttempt`. A retry after a dropped attempt lands on its own branch,
+so a node that is still alive and pushing to the old one cannot write into
+the live attempt's work.
+
+A dispatch id names one dispatch. On a terminal outcome the controller
+forgets its attempt (the register is not allowed to grow without bound), so
+reusing a *completed* dispatch id restarts numbering at 1 and reuses that
+ref. Mint a fresh id per dispatch.
+
+**Deduplication.** Every dispatched action carries a stable action id. The
+node records it durably — written and fsynced — *before* the action runs,
+so a redelivery after a crash is refused rather than re-run. A duplicate is
+answered with outcome `refused`, not an error: the work already happened,
+and an error would invite the retry that duplicates the side effect. An
+action declares whether it is idempotent; an ambiguous outcome on a
+non-idempotent action is held in `unknown-outcome` for a human decision and
+is never auto-re-queued.
+
+**Credentials (§D-11).** Static API keys are NEVER shipped to a node —
+those lanes relay their calls through the controller, and the dispatch
+result reports `relayed` so a caller can tell a node that was trusted with
+a token from one that was not. Lanes that support short-lived credentials
+get a per-dispatch scoped token bound to {job, node, audience, verbs,
+expiry <= 1h}, delivered only over the control channel to the node's
+in-memory broker. A token is never written to git, journals, payloads,
+argv, the environment or any persisted store, and does not survive a node
+crash. As defence in depth the payload is *also* scanned: anything shaped
+like a long-lived provider key is refused before the push leg runs.
+
+**Egress.** The node-dispatch egress class is registered at
+`internal/nodes`' own package init, so every outbound payload — git refs,
+RPC frames, journal records, token handoffs — transits the substitution and
+sensitivity pass.
+
+**Configuration.** Remote dispatch reads two knobs from `[nodes]`:
+
+```toml
+[nodes]
+dispatch_repo_root = "/srv/work"          # controller-side repository
+dispatch_remote    = "/srv/remote.git"    # the remote both sides reach
+```
+
+Either one missing REFUSES the dispatch. There is deliberately no fallback
+to the controller's own checkout: running remote work against the
+operator's working tree is the one outcome this must never produce
+silently.
+
+**Failures.** Unreachable node, failed push or fetch, a tunnel dropped
+mid-dispatch, and a worktree that could not be prepared are each their own
+typed error. A dropped tunnel is reported as such rather than as an
+unreachable node, because the branch was already pushed and the work may be
+running — telling those apart is what S-37.T3's recovery depends on. There
+is never a silent fallback to running the work locally.
+
 ## Travel profile
 
 `[nodes].travel` (bool, default false) marks THIS controller machine as
