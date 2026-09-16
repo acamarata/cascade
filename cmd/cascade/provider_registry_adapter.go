@@ -56,7 +56,14 @@ func newRegistryAdapter(reg *registry.Registry) intake.Registry {
 // registry-only field UpsertProvider's zero value would otherwise reset.
 func (a registryAdapter) UpsertProvider(ctx context.Context, rec intake.ProviderRecord) error {
 	merged := mergeIntakeOntoRegistryRecord(ctx, a.reg, rec)
-	return a.reg.UpsertProvider(ctx, merged)
+	if err := a.reg.UpsertProvider(ctx, merged); err != nil {
+		return err
+	}
+	// And its ROUTER LANE. Without this the provider row exists and every
+	// dispatch still answers "no candidate lane", because the router
+	// selects over lanes — the exact failure the W3 hardening gate found in
+	// the tagged artifact. See provider_lane.go.
+	return upsertProviderLane(ctx, a.reg, rec)
 }
 
 // GetProvider implements intake.Registry, translating the durable record
