@@ -46,7 +46,32 @@ func (b *recordingBridge) count(kind events.EventKind) int {
 	return n
 }
 
+// terminalStreamTypes is the closed set publishTerminal emits (stream.go's
+// own terminalKind). Deltas travel under the SAME events.EventKind, so
+// filtering by kind alone does not select terminal events — which is what
+// made TestStream_TerminalEventOrdering flake: whether the one delta had
+// been published before cancel() won or lost the race decided whether the
+// count was 1 or 2, and the race lane lost it.
+var terminalStreamTypes = map[string]bool{"done": true, "error": true, "cancelled": true}
+
+// terminalTypes returns the TERMINAL payload types published under kind,
+// in publication order.
 func (b *recordingBridge) terminalTypes(kind events.EventKind) []string {
+	var out []string
+	for _, t := range b.publishedTypes(kind) {
+		if terminalStreamTypes[t] {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// publishedTypes returns EVERY payload type published under kind, deltas
+// included, in publication order. The ordering assertion needs the
+// unfiltered sequence: "exactly one terminal" and "nothing follows it" are
+// different claims, and only the second one catches a delta that escaped
+// after the job ended.
+func (b *recordingBridge) publishedTypes(kind events.EventKind) []string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	var out []string
@@ -211,6 +236,13 @@ func TestStream_TerminalEventOrdering(t *testing.T) {
 		t.Fatalf("ExecuteStreamJob: %v", err)
 	}
 	waitFor(t, func() bool { return exec.cancels().len() > 0 })
+	// Wait for the delta to be PUBLISHED, not merely sunk, before
+	// cancelling. Without this the test only sometimes reached the case it
+	// is about — whether a delta shares the job's event kind with the
+	// terminal — and on the race lane it reached it and failed. Forcing the
+	// harder interleaving makes the assertion mean the same thing on every
+	// run.
+	waitFor(t, func() bool { return len(bridge.publishedTypes(jobEventKind(id))) > 0 })
 	cancel()
 	drainStream(t, ch)
 
@@ -220,5 +252,15 @@ func TestStream_TerminalEventOrdering(t *testing.T) {
 	}
 	if types[0] != "cancelled" {
 		t.Fatalf("terminal event = %q, want \"cancelled\"", types[0])
+	}
+	// The ordering half this test is named for: the terminal event is the
+	// LAST thing published for the job. A delta that escaped after it would
+	// reach a subscriber that had already been told the job ended.
+	all := bridge.publishedTypes(jobEventKind(id))
+	if len(all) == 0 {
+		t.Fatal("nothing at all was published for this job")
+	}
+	if last := all[len(all)-1]; !terminalStreamTypes[last] {
+		t.Errorf("published sequence = %v; %q came after the terminal event", all, last)
 	}
 }
