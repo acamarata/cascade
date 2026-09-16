@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-16T10:39:06Z",
+  "generated_at": "2026-09-16T10:43:00Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3094,6 +3094,20 @@
           "status": "ADD",
           "ticket": "P1-E04-W1-S07-T6",
           "raw": "cmd/cascade elevate-helper tests/ADDED (P1-E04-W1-S07-T6)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade elevation-keystore",
+      "sites": [
+        {
+          "file": "cmd/cascade/elevation_keystore.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "cmd/cascade elevation-keystore/ADD — P1-W3-01 (W-3 gate, Art.9)."
         }
       ],
       "statuses": [
@@ -12485,6 +12499,34 @@
       ]
     },
     {
+      "name": "internal/elevation file-keystore",
+      "sites": [
+        {
+          "file": "internal/elevation/keystore_file.go",
+          "line": 34,
+          "status": "ADD",
+          "raw": "internal/elevation file-keystore/ADD — P1-W3-01 (W-3 gate, Art.9)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation file-keystore tests",
+      "sites": [
+        {
+          "file": "internal/elevation/keystore_file_test.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal/elevation file-keystore tests (ADD) — P1-W3-01."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/elevation fileBackend tests",
       "sites": [
         {
@@ -12508,6 +12550,20 @@
           "status": "ADD",
           "ticket": "P1-E04-W1-S07-T6",
           "raw": "internal/elevation keystore tests/ADDED (P1-E04-W1-S07-T6)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation keystore-select",
+      "sites": [
+        {
+          "file": "internal/elevation/keystore_select.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal/elevation keystore-select/ADD — P1-W3-01 (W-3 gate)."
         }
       ],
       "statuses": [
@@ -21610,7 +21666,7 @@
       ]
     }
   ],
-  "total_sites": 2115,
+  "total_sites": 2119,
   "unspecified_count": 66,
   "multi_status_count": 40
 }
