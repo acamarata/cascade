@@ -177,3 +177,68 @@ func TestSelectKeystoreNeverDowngradesSilently(t *testing.T) {
 		t.Error("a file keystore was selected with no directory to put a key in")
 	}
 }
+
+// TestAKeystoreWithNowhereToWriteRefuses is the failure mode that would be
+// worst if it were silent: a keystore constructed with no data directory
+// must refuse to enrol rather than report success and store nothing. A
+// caller that believed it had enrolled would sign nothing and every
+// attestation would fail later, at the point where a human is waiting.
+func TestAKeystoreWithNowhereToWriteRefuses(t *testing.T) {
+	err := fileKeystore{dir: ""}.GenerateKey()
+	if !cascade.HasKind(err, cascade.KindUnavailable) {
+		t.Fatalf("GenerateKey with no directory: err = %v, want KindUnavailable", err)
+	}
+}
+
+// TestGenerateKeyReportsAnUnwritableLocation covers the two storage
+// failures separately, because they are reported from different calls and
+// a caller distinguishes them only by the message: the directory cannot be
+// created, and the key file cannot be written.
+func TestGenerateKeyReportsAnUnwritableLocation(t *testing.T) {
+	// A regular file where the data directory should be: MkdirAll fails.
+	blocked := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(blocked, []byte("in the way"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := NewFileKeystore(blocked).GenerateKey(); !cascade.HasKind(err, cascade.KindUnavailable) {
+		t.Errorf("GenerateKey over a file-as-directory: err = %v, want KindUnavailable", err)
+	}
+
+	// A directory where the key file should be: WriteFile fails.
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, elevationKeyFileName), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := NewFileKeystore(dir).GenerateKey(); !cascade.HasKind(err, cascade.KindUnavailable) {
+		t.Errorf("GenerateKey over a directory-as-key-file: err = %v, want KindUnavailable", err)
+	}
+}
+
+// TestPubKeyB64DistinguishesUnenrolledFromDamaged holds the distinction
+// that decides what an operator is told to DO. "Not enrolled" means run
+// the enrolment; "damaged" means the key on disk is unusable and
+// re-enrolling would orphan the trust record. Reporting the second as the
+// first would walk the operator straight into that.
+func TestPubKeyB64DistinguishesUnenrolledFromDamaged(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := NewFileKeystore(dir).PubKeyB64(); !cascade.HasKind(err, cascade.KindNotFound) {
+		t.Errorf("PubKeyB64 with no key: err = %v, want KindNotFound", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, elevationKeyFileName), []byte("not base64!!"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewFileKeystore(dir).PubKeyB64(); !cascade.HasKind(err, cascade.KindIntegrity) {
+		t.Errorf("PubKeyB64 over a damaged key: err = %v, want KindIntegrity", err)
+	}
+}
+
+// TestSelectKeystoreNeverReturnsAFileTierWithNoDirectory is the rule
+// SelectKeystore's own doc comment states, asserted unconditionally rather
+// than only on hosts with no platform keystore: with no directory there is
+// nothing to fall back TO, so returning a file keystore would hand the
+// caller one that cannot store anything and would only fail later.
+func TestSelectKeystoreNeverReturnsAFileTierWithNoDirectory(t *testing.T) {
+	if got := SelectKeystore("").Tier(); got == TierFile {
+		t.Errorf("Tier() = %q with no directory, want the platform keystore's own tier", got)
+	}
+}
