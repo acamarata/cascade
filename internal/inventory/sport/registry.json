@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-15T23:31:48Z",
+  "generated_at": "2026-09-16T09:10:54Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3134,6 +3134,21 @@
       ]
     },
     {
+      "name": "cmd/cascade tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/run_requirements_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "cmd/cascade tests (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade.profile-server",
       "sites": [
         {
@@ -3848,7 +3863,7 @@
         },
         {
           "file": "cmd/cascade/node_serve.go",
-          "line": 27,
+          "line": 28,
           "status": "ADD",
           "ticket": "T-2",
           "raw": "cmd/cascade/node (ADD, per T-2 sport_updates)."
@@ -3957,6 +3972,36 @@
           "status": "ADD",
           "ticket": "P1-E17-W4-S36-T5",
           "raw": "cmd/cascade/node upgrade/ADDED (P1-E17-W4-S36-T5)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/node-serve-composition",
+      "sites": [
+        {
+          "file": "cmd/cascade/node_serve_composition.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "cmd/cascade/node-serve-composition (ADD, P1-E17-W4-S37-T2 split)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/node-serve-dispatch",
+      "sites": [
+        {
+          "file": "cmd/cascade/node_serve_dispatch.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "cmd/cascade/node-serve-dispatch (ADD, P1-E17-W4-S37-T2)."
         }
       ],
       "statuses": [
@@ -4143,14 +4188,44 @@
       ]
     },
     {
+      "name": "cmd/cascade:daemon-events-dial",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_events_dial.go",
+          "line": 32,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "cmd/cascade:daemon-events-dial (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade:harness-watch",
       "sites": [
         {
           "file": "cmd/cascade/daemon_unix_harness_watch.go",
-          "line": 32,
+          "line": 33,
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T1",
           "raw": "cmd/cascade:harness-watch (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade:run-requirements",
+      "sites": [
+        {
+          "file": "cmd/cascade/run_requirements.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "cmd/cascade:run-requirements (ADD) — P1-E17-W4-S37-T2."
         }
       ],
       "statuses": [
@@ -11472,11 +11547,32 @@
       "name": "internal/build tests",
       "sites": [
         {
+          "file": "internal/build/coveragegate_roots_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal/build tests (ADD) — R-14.239."
+        },
+        {
           "file": "internal/build/outputgate_plugin_main_test.go",
           "line": 13,
           "status": "ADD",
           "ticket": "P1-E25-W5-S51-T1",
           "raw": "internal/build tests (ADD) — P1-E25-W5-S51-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/build:coverage-roots",
+      "sites": [
+        {
+          "file": "internal/build/coveragegate_roots.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E01-W1-S01-T8",
+          "raw": "internal/build:coverage-roots (ADD) — P1-E01-W1-S01-T8 (R-14.239)."
         }
       ],
       "statuses": [
@@ -11865,6 +11961,13 @@
           "raw": "internal/daemon (ADD, per T-2 sport_updates)."
         },
         {
+          "file": "internal/daemon/node_dispatch_rpc.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/daemon (ADD, P1-E17-W4-S37-T2)."
+        },
+        {
           "file": "internal/daemon/node_upgrade_rpc.go",
           "line": 29,
           "status": "ADD",
@@ -11913,6 +12016,13 @@
           "line": 39,
           "status": "CHANGE",
           "raw": "internal/daemon (CHANGED, retrieval.sources ingest wiring)."
+        },
+        {
+          "file": "internal/daemon/settings.go",
+          "line": 4,
+          "status": "CHANGE",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/daemon (CHANGED, P1-E17-W4-S37-T2 settings split)."
         },
         {
           "file": "internal/daemon/status.go",
@@ -12070,6 +12180,21 @@
         "",
         "ADD",
         "CHANGE"
+      ]
+    },
+    {
+      "name": "internal/daemon tests",
+      "sites": [
+        {
+          "file": "internal/daemon/node_dispatch_rpc_test.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/daemon tests (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -12617,14 +12742,29 @@
       ]
     },
     {
-      "name": "internal/fleet/sessions:subscribe",
+      "name": "internal/fleet/sessions tests",
       "sites": [
         {
-          "file": "internal/fleet/sessions/subscribe.go",
-          "line": 32,
+          "file": "internal/fleet/sessions/stream_fold_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/fleet/sessions tests (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/fleet/sessions:stream-fold",
+      "sites": [
+        {
+          "file": "internal/fleet/sessions/stream_fold.go",
+          "line": 37,
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T1",
-          "raw": "internal/fleet/sessions:subscribe (ADD) — P1-E16-W4-S34-T1."
+          "raw": "internal/fleet/sessions:stream-fold (ADD) — P1-E16-W4-S34-T1."
         }
       ],
       "statuses": [
@@ -13396,6 +13536,158 @@
       ]
     },
     {
+      "name": "internal/nodes placement",
+      "sites": [
+        {
+          "file": "internal/nodes/placement.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T1",
+          "raw": "internal/nodes placement (ADD) — P1-E17-W4-S37-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes placement error mapping",
+      "sites": [
+        {
+          "file": "internal/nodes/placement_errors.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T1",
+          "raw": "internal/nodes placement error mapping (ADD) — P1-E17-W4-S37-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes placement fleet-state filters",
+      "sites": [
+        {
+          "file": "internal/nodes/placement_state.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T1",
+          "raw": "internal/nodes placement fleet-state filters (ADD) — P1-E17-W4-S37-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes placement trust filter",
+      "sites": [
+        {
+          "file": "internal/nodes/placement_trust.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T1",
+          "raw": "internal/nodes placement trust filter (ADD) — P1-E17-W4-S37-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes tests",
+      "sites": [
+        {
+          "file": "internal/nodes/action_log_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        },
+        {
+          "file": "internal/nodes/dispatch_creds_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        },
+        {
+          "file": "internal/nodes/dispatch_execute_test.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        },
+        {
+          "file": "internal/nodes/dispatch_frame_test.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        },
+        {
+          "file": "internal/nodes/dispatch_git_test.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        },
+        {
+          "file": "internal/nodes/dispatch_handler_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        },
+        {
+          "file": "internal/nodes/dispatch_paths_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        },
+        {
+          "file": "internal/nodes/dispatch_rendezvous_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        },
+        {
+          "file": "internal/nodes/dispatch_ship_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        },
+        {
+          "file": "internal/nodes/dispatch_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        },
+        {
+          "file": "internal/nodes/egress_test.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        },
+        {
+          "file": "internal/nodes/journal_stream_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/nodes travel_test.go",
       "sites": [
         {
@@ -13404,6 +13696,186 @@
           "status": "ADD",
           "ticket": "P1-E36-W7-S72-T3",
           "raw": "internal/nodes travel_test.go/ADDED (P1-E36-W7-S72-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes:action-log",
+      "sites": [
+        {
+          "file": "internal/nodes/action_log.go",
+          "line": 32,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes:action-log (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes:dispatch",
+      "sites": [
+        {
+          "file": "internal/nodes/dispatch.go",
+          "line": 27,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes:dispatch (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes:dispatch-creds",
+      "sites": [
+        {
+          "file": "internal/nodes/dispatch_creds.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes:dispatch-creds (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes:dispatch-errors",
+      "sites": [
+        {
+          "file": "internal/nodes/dispatch_errors.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes:dispatch-errors (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes:dispatch-execute",
+      "sites": [
+        {
+          "file": "internal/nodes/dispatch_execute.go",
+          "line": 36,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes:dispatch-execute (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes:dispatch-frame",
+      "sites": [
+        {
+          "file": "internal/nodes/dispatch_frame.go",
+          "line": 29,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes:dispatch-frame (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes:dispatch-git",
+      "sites": [
+        {
+          "file": "internal/nodes/dispatch_git.go",
+          "line": 38,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes:dispatch-git (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes:dispatch-handler",
+      "sites": [
+        {
+          "file": "internal/nodes/dispatch_handler.go",
+          "line": 36,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes:dispatch-handler (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes:dispatch-rendezvous",
+      "sites": [
+        {
+          "file": "internal/nodes/dispatch_rendezvous.go",
+          "line": 37,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes:dispatch-rendezvous (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes:dispatch-ship",
+      "sites": [
+        {
+          "file": "internal/nodes/dispatch_ship.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes:dispatch-ship (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes:egress",
+      "sites": [
+        {
+          "file": "internal/nodes/egress.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes:egress (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes:journal-stream",
+      "sites": [
+        {
+          "file": "internal/nodes/journal_stream.go",
+          "line": 32,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes:journal-stream (ADD) — P1-E17-W4-S37-T2."
         }
       ],
       "statuses": [
@@ -13515,7 +13987,7 @@
       "sites": [
         {
           "file": "internal/plugins/claude_watch_wiring.go",
-          "line": 30,
+          "line": 36,
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T1",
           "raw": "internal/plugins cascade-claude watch wiring (ADD) — P1-E16-W4-S34-T1."
@@ -13809,6 +14281,13 @@
           "status": "ADD",
           "ticket": "P1-E25-W5-S51-T1",
           "raw": "internal/plugins tests (ADD) — P1-E25-W5-S51-T1."
+        },
+        {
+          "file": "internal/plugins/claude_watch_wiring_test.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "internal/plugins tests (ADD) — P1-E16-W4-S34-T1."
         }
       ],
       "statuses": [
@@ -17685,6 +18164,13 @@
       "name": "plugins/github tests",
       "sites": [
         {
+          "file": "plugins/github/auth_flow_errors_test.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github tests (ADD) — P1-E25-W5-S51-T1."
+        },
+        {
           "file": "plugins/github/auth_flow_test.go",
           "line": 13,
           "status": "ADD",
@@ -17699,6 +18185,13 @@
           "raw": "plugins/github tests (ADD) — P1-E25-W5-S51-T1."
         },
         {
+          "file": "plugins/github/loopback_integration_test.go",
+          "line": 16,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github tests (MOVE from plugins/github/auth) — P1-E25-W5-S51-T1."
+        },
+        {
           "file": "plugins/github/main_test.go",
           "line": 17,
           "status": "ADD",
@@ -17711,9 +18204,17 @@
           "status": "ADD",
           "ticket": "P1-E25-W5-S51-T1",
           "raw": "plugins/github tests (ADD) — P1-E25-W5-S51-T1."
+        },
+        {
+          "file": "plugins/github/transport_test.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github tests (ADD) — P1-E25-W5-S51-T1."
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -17773,8 +18274,8 @@
           "raw": "plugins/github/auth tests (ADD) — P1-E25-W5-S51-T1."
         },
         {
-          "file": "plugins/github/auth/loopback_integration_test.go",
-          "line": 9,
+          "file": "plugins/github/auth/loopback_wait_test.go",
+          "line": 18,
           "status": "ADD",
           "ticket": "P1-E25-W5-S51-T1",
           "raw": "plugins/github/auth tests (ADD) — P1-E25-W5-S51-T1."
@@ -17796,7 +18297,7 @@
       "sites": [
         {
           "file": "plugins/github/auth/exchange.go",
-          "line": 35,
+          "line": 33,
           "status": "ADD",
           "ticket": "P1-E25-W5-S51-T1",
           "raw": "plugins/github/auth:exchange (ADD) — P1-E25-W5-S51-T1."
@@ -17811,10 +18312,25 @@
       "sites": [
         {
           "file": "plugins/github/auth/loopback.go",
-          "line": 34,
+          "line": 29,
           "status": "ADD",
           "ticket": "P1-E25-W5-S51-T1",
           "raw": "plugins/github/auth:loopback (ADD) — P1-E25-W5-S51-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github/auth:refresh",
+      "sites": [
+        {
+          "file": "plugins/github/auth/refresh.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github/auth:refresh (ADD) — P1-E25-W5-S51-T1."
         }
       ],
       "statuses": [
@@ -17827,6 +18343,20 @@
         {
           "file": "plugins/github/tools/client_test.go",
           "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github/tools tests (ADD) — P1-E25-W5-S51-T1."
+        },
+        {
+          "file": "plugins/github/tools/decoders_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github/tools tests (ADD) — P1-E25-W5-S51-T1."
+        },
+        {
+          "file": "plugins/github/tools/refusals_test.go",
+          "line": 16,
           "status": "ADD",
           "ticket": "P1-E25-W5-S51-T1",
           "raw": "plugins/github/tools tests (ADD) — P1-E25-W5-S51-T1."
@@ -17889,6 +18419,21 @@
           "status": "ADD",
           "ticket": "P1-E25-W5-S51-T1",
           "raw": "plugins/github:auth-flow (ADD) — P1-E25-W5-S51-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github:transport",
+      "sites": [
+        {
+          "file": "plugins/github/transport.go",
+          "line": 36,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T1",
+          "raw": "plugins/github:transport (ADD) — P1-E25-W5-S51-T1."
         }
       ],
       "statuses": [
@@ -20715,7 +21260,7 @@
       ]
     }
   ],
-  "total_sites": 2042,
+  "total_sites": 2089,
   "unspecified_count": 63,
-  "multi_status_count": 39
+  "multi_status_count": 40
 }
