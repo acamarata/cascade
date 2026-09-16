@@ -22,6 +22,7 @@
 //	forgot to set one cannot be mistaken for an approval.
 //
 // SPORT: internal/fleet/supervision:autoadvance-types (ADD) — P1-E18-W4-S39-T2.
+
 package supervision
 
 import (

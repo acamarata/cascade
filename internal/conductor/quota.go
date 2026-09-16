@@ -246,14 +246,6 @@ func NewQuotaPolicy(cfg QuotaConfig, clk Clock) *QuotaPolicy {
 	}
 }
 
-// NextLane returns the first lane in spill_order that is neither in
-// excluded nor currently within an active rate-limit window, or
-// ErrAllLanesExhausted if none qualifies. NextLane is an ORDERING
-// function over a candidate set the caller has already produced
-// (R-21.264): it does not itself evaluate capability, sensitivity, health
-// or cost -- that filtering is P1-E11-W3-S22-T2's Router, the sole
-// permitted caller (quota_arch_test.go asserts no other call site
-// exists).
 // SpillOrderConfigured reports whether the operator configured a spill
 // order. An empty order means no preference was expressed — see
 // filterQuota, which treats that as "do not veto" rather than "refuse
@@ -264,6 +256,14 @@ func (p *QuotaPolicy) SpillOrderConfigured() bool {
 	return len(p.order) > 0
 }
 
+// NextLane returns the first lane in spill_order that is neither in
+// excluded nor currently within an active rate-limit window, or
+// ErrAllLanesExhausted if none qualifies. NextLane is an ORDERING
+// function over a candidate set the caller has already produced
+// (R-21.264): it does not itself evaluate capability, sensitivity, health
+// or cost -- that filtering is P1-E11-W3-S22-T2's Router, the sole
+// permitted caller (quota_arch_test.go asserts no other call site
+// exists).
 func (p *QuotaPolicy) NextLane(ctx context.Context, excluded []LaneID) (LaneID, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err

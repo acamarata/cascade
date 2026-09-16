@@ -18,6 +18,7 @@
 //	invite an operator to "approve" something the engine refused outright.
 //
 // SPORT: internal/fleet/supervision:autoadvance-queue (ADD) — P1-E18-W4-S39-T2.
+
 package supervision
 
 import "context"

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -146,8 +147,15 @@ func TestTheRegisterCarriesNoSecretValue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Errorf("register mode = %v, want 0600", perm)
+	// POSIX-only, for the reason internal/elevation's keystore_file_test.go
+	// states at length: Windows implements no Unix permission bits, so the
+	// check would assert the syscall's 0666 fallback rather than the store's
+	// intent. The rest of this test — the structural "no value field" half,
+	// which is the standing rule it exists for — runs on every platform.
+	if runtime.GOOS != "windows" {
+		if perm := info.Mode().Perm(); perm != 0o600 {
+			t.Errorf("register mode = %v, want 0600", perm)
+		}
 	}
 	// The register names the key; it must never be able to carry a value,
 	// which is structural — Grant has no value field. Asserted on the bytes

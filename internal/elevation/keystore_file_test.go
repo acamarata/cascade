@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -41,6 +42,16 @@ func TestGenerateKeyIsIdempotent(t *testing.T) {
 }
 
 // TestTheKeyFileIsNotWorldReadable is the one protection this tier has.
+//
+// The mode assertion is POSIX-only, and deliberately so rather than by
+// omission: Windows does not implement Unix permission bits at all, so
+// os.Stat there reports 0666 for a file opened with 0600 and the check would
+// be asserting the syscall's fallback, not the keystore's intent. On Windows
+// the file's confidentiality rests on the ACL its parent (the per-user config
+// directory) inherits, which the Go standard library exposes no portable way
+// to read. What IS asserted on every platform is that GenerateKey wrote a
+// regular, non-empty file at the expected path — so the test cannot pass
+// vacuously on the platform where the mode half is skipped.
 func TestTheKeyFileIsNotWorldReadable(t *testing.T) {
 	dir := t.TempDir()
 	if err := NewFileKeystore(dir).GenerateKey(); err != nil {
@@ -49,6 +60,12 @@ func TestTheKeyFileIsNotWorldReadable(t *testing.T) {
 	info, err := os.Stat(filepath.Join(dir, elevationKeyFileName))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !info.Mode().IsRegular() || info.Size() == 0 {
+		t.Fatalf("key file is %v of %d bytes, want a non-empty regular file", info.Mode(), info.Size())
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no Unix permission bits; the mode half of this check cannot run there")
 	}
 	if perm := info.Mode().Perm(); perm != 0o600 {
 		t.Errorf("key file mode = %v, want 0600", perm)

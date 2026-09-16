@@ -160,25 +160,7 @@ func wirePolicy(ctx context.Context, store provider.Store, clock runtime.Clock, 
 	if err != nil {
 		return nil, err
 	}
-	// The tier-1 ask-resolution stage (P1-E18-W4-S39-T2). It reads the
-	// ceiling off the LIVE controller rather than a value captured here, so
-	// a config reload that turns auto-advance off is observed by the very
-	// next action rather than at the next daemon restart. With the ceiling
-	// at its default — disabled — this changes nothing about how any
-	// action is decided; it is the operator's opt-in that switches it on.
-	//
-	// The attention store is built over the SAME store/clock this root
-	// already has open, which is this repo's established pattern for it
-	// (daemon_unix_scheduler.go and internal/daemon/attention_rpc.go each
-	// build their own identically): they reach the one queue, not a second
-	// disconnected one. The bus is not in this function's signature, and a
-	// nil bus degrades to no-SSE mode — the refusal is queued and listed,
-	// it just does not push a live notification.
-	attention := supervision.NewStore(store, clock, nil, supervision.NewSystemIDGenerator(), 0)
-	router = router.WithAutoAdvance(
-		supervision.NewAutoAdvanceEvaluator(controller),
-		supervision.NewAutoAdvanceRecorder(log, attention, supervision.ScopeRef{}),
-	)
+	router = attachAutoAdvance(router, controller, store, clock, log)
 	wiring := &policyWiring{Registry: registry, Engine: engine, Router: router, Queue: queue}
 	wiring.Handlers = policy.MethodHandlers(policy.RPCDeps{
 		Queue:    queue,
@@ -256,4 +238,31 @@ func validateRiskGateOverlay(cfg *runtime.Config) error {
 	}
 	_, err = jobs.BuildRiskGateOverlay(parsed.RiskGates)
 	return err
+}
+
+// attachAutoAdvance adds the tier-1 ask-resolution stage to router
+// (P1-E18-W4-S39-T2).
+//
+// It reads the ceiling off the LIVE controller rather than a value captured
+// here, so a config reload that turns auto-advance off is observed by the
+// very next action rather than at the next daemon restart. With the ceiling
+// at its default — disabled — this changes nothing about how any action is
+// decided; it is the operator's opt-in that switches it on.
+//
+// The attention store is built over the SAME store/clock this composition
+// root already holds, which is this repo's established pattern for it
+// (daemon_unix_scheduler.go and internal/daemon/attention_rpc.go each build
+// their own identically): they reach the one queue, not a second
+// disconnected one. The event bus is not available here, and a nil bus
+// degrades to no-SSE mode — a refusal is queued and listed, it just does
+// not push a live notification.
+func attachAutoAdvance(
+	router *routing.ActionRouter, controller *policy.Controller,
+	store provider.Store, clock runtime.Clock, log audit.Writer,
+) *routing.ActionRouter {
+	attention := supervision.NewStore(store, clock, nil, supervision.NewSystemIDGenerator(), 0)
+	return router.WithAutoAdvance(
+		supervision.NewAutoAdvanceEvaluator(controller),
+		supervision.NewAutoAdvanceRecorder(log, attention, supervision.ScopeRef{}),
+	)
 }

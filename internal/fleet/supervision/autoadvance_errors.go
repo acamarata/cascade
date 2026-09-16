@@ -3,6 +3,7 @@
 //	beside it so autoadvance.go stays within Art.10.3's line budget.
 //
 // SPORT: internal/fleet/supervision:autoadvance-errors (ADD) — P1-E18-W4-S39-T2.
+
 package supervision
 
 import "github.com/acamarata/cascade/pkg/cascade"
