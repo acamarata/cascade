@@ -2,7 +2,6 @@ package pews
 
 import (
 	"bytes"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -33,103 +32,6 @@ var extraFlagFields = []string{"subtickets", "journals", "owner_prereq", "gate_o
 
 // filesScopeFields lists the three keys files_scope may carry.
 var filesScopeFields = []string{"add", "change", "delete"}
-
-// Weight is a ticket's sizing class (06 §1 field 6). The zero value is
-// intentionally invalid; use Valid to test membership.
-type Weight string
-
-// WeightXS, WeightS, WeightM, WeightL, and WeightXL are the five locked
-// weight values, in the order 06 §1 lists them, smallest to largest.
-const (
-	WeightXS Weight = "XS"
-	WeightS  Weight = "S"
-	WeightM  Weight = "M"
-	WeightL  Weight = "L"
-	WeightXL Weight = "XL"
-)
-
-var weightValues = []Weight{WeightXS, WeightS, WeightM, WeightL, WeightXL}
-
-// Valid reports whether w is one of the five locked weight values.
-func (w Weight) Valid() bool { return inSet(w, weightValues) }
-
-// ModelClass is a ticket's execution-time model tier (06 §1 field 7, §4).
-type ModelClass string
-
-// The five model-class values 06 §4 defines: mech (mechanical sweeps/
-// config/goldens), build (standard implementation), heavy (concurrency/
-// storage/firewall/sync), review (CR-B), and arbiter (CR-C or gate tickets).
-const (
-	ModelClassMech    ModelClass = "mech"
-	ModelClassBuild   ModelClass = "build"
-	ModelClassHeavy   ModelClass = "heavy"
-	ModelClassReview  ModelClass = "review"
-	ModelClassArbiter ModelClass = "arbiter"
-)
-
-var modelClassValues = []ModelClass{
-	ModelClassMech, ModelClassBuild, ModelClassHeavy, ModelClassReview, ModelClassArbiter,
-}
-
-// Valid reports whether m is one of the five locked model-class values.
-func (m ModelClass) Valid() bool { return inSet(m, modelClassValues) }
-
-// QALevel is a ticket's QA depth (06 §1 field 15).
-type QALevel string
-
-// The three QA-level values 06 §1 defines: QA-A (unit default), QA-B
-// (integration at a cross-epic seam), and QA-C (e2e on an acceptance ticket).
-const (
-	QALevelA QALevel = "QA-A"
-	QALevelB QALevel = "QA-B"
-	QALevelC QALevel = "QA-C"
-)
-
-var qaLevelValues = []QALevel{QALevelA, QALevelB, QALevelC}
-
-// Valid reports whether q is one of the three locked QA-level values.
-func (q QALevel) Valid() bool { return inSet(q, qaLevelValues) }
-
-// CRLevel is a ticket's code-review depth (06 §1 field 14): a non-empty,
-// '+'-joined, strictly increasing combination of CR-A, CR-B, and CR-C, e.g.
-// "CR-B" or "CR-A+CR-B+CR-C". The join order always follows CR-A, CR-B,
-// CR-C; Valid rejects any other order, a repeated token, or an unknown one.
-type CRLevel string
-
-// CRLevelA, CRLevelB, and CRLevelC are the three CR-level tokens a CRLevel
-// combines, in join order.
-const (
-	CRLevelA CRLevel = "CR-A"
-	CRLevelB CRLevel = "CR-B"
-	CRLevelC CRLevel = "CR-C"
-)
-
-var crLevelTokens = []CRLevel{CRLevelA, CRLevelB, CRLevelC}
-
-// Valid reports whether c is a well-formed CRLevel combination.
-func (c CRLevel) Valid() bool {
-	if c == "" {
-		return false
-	}
-	last := -1
-	for _, part := range strings.Split(string(c), "+") {
-		idx := crLevelIndex(CRLevel(part))
-		if idx < 0 || idx <= last {
-			return false
-		}
-		last = idx
-	}
-	return true
-}
-
-func crLevelIndex(c CRLevel) int {
-	for i, t := range crLevelTokens {
-		if t == c {
-			return i
-		}
-	}
-	return -1
-}
 
 // FilesScope is the files_scope field (06 §1 field 12): the ADD/CHANGE/
 // DELETE shape a ticket declares its file-level effect through. Each list
