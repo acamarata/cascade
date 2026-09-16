@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-16T23:40:07Z",
+  "generated_at": "2026-09-16T23:42:47Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5675,6 +5675,35 @@
       ]
     },
     {
+      "name": "fleet.supervision dry-run-first direction tests",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/dryrun_enforce_directions_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "fleet.supervision dry-run-first direction tests (ADD)"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.supervision dry-run-first tests",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/dryrun_enforce_test.go",
+          "line": 33,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T4",
+          "raw": "fleet.supervision dry-run-first tests (ADD) — P1-E18-W4-S39-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "fleet.supervision.AttentionCheck",
       "sites": [
         {
@@ -5713,6 +5742,42 @@
           "status": "ADD",
           "ticket": "P1-E18-W4-S39-T1",
           "raw": "fleet.supervision.Client/ADDED (P1-E18-W4-S39-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.supervision.EnforceDryRunFirst",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/dryrun_enforce.go",
+          "line": 47,
+          "status": "ADD",
+          "raw": "fleet.supervision.EnforceDryRunFirst/ADDED"
+        },
+        {
+          "file": "internal/fleet/supervision/dryrun_trace.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T4",
+          "raw": "fleet.supervision.EnforceDryRunFirst/ADDED (P1-E18-W4-S39-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.supervision.FirstRunFlags",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/dryrun_flags.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T4",
+          "raw": "fleet.supervision.FirstRunFlags/ADDED (P1-E18-W4-S39-T4,"
         }
       ],
       "statuses": [
@@ -21985,7 +22050,7 @@
       ]
     }
   ],
-  "total_sites": 2141,
+  "total_sites": 2146,
   "unspecified_count": 66,
   "multi_status_count": 40
 }
