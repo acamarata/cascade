@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-16T10:13:09Z",
+  "generated_at": "2026-09-16T10:14:24Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3507,6 +3507,21 @@
       ]
     },
     {
+      "name": "cmd/cascade/daemon:conductor-security",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_conductor_security.go",
+          "line": 27,
+          "status": "ADD",
+          "ticket": "P1-E10-W4-S87-T1",
+          "raw": "cmd/cascade/daemon:conductor-security (ADD) — P1-E10-W4-S87-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade/daemon:hooks",
       "sites": [
         {
@@ -4277,6 +4292,36 @@
           "line": 25,
           "status": "ADD",
           "raw": "conductor.chat-leaf-door/ADD (FIX-manifest-collision-and-conductor-seam)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "conductor.collaborators",
+      "sites": [
+        {
+          "file": "internal/conductor/collaborators.go",
+          "line": 27,
+          "status": "ADD",
+          "ticket": "P1-E10-W4-S87-T1",
+          "raw": "conductor.collaborators/ADD — P1-E10-W4-S87-T1 (R-14.243)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "conductor.collaborators tests",
+      "sites": [
+        {
+          "file": "internal/conductor/collaborators_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E10-W4-S87-T1",
+          "raw": "conductor.collaborators tests (ADD) — P1-E10-W4-S87-T1."
         }
       ],
       "statuses": [
@@ -21438,7 +21483,7 @@
       ]
     }
   ],
-  "total_sites": 2103,
+  "total_sites": 2106,
   "unspecified_count": 66,
   "multi_status_count": 40
 }
