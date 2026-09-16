@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/acamarata/cascade/internal/fleet/sessions"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -55,10 +56,13 @@ func dialDaemonEvents(ctx context.Context, dial eventsDialer, socketPath, topic 
 		},
 	}}
 	// The host is a placeholder: the transport above ignores it and dials
-	// the unix socket instead. The topic is escaped because it reaches a
-	// query string.
+	// the unix socket instead. The path comes from the package that MOUNTS
+	// the handler rather than being spelled again here — a second copy of
+	// "/events" is a second thing to keep in step, and this dial would go
+	// on succeeding against a stale route until someone moved the mount.
+	// The topic is escaped because it reaches a query string.
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		"http://unix/events?topic="+url.QueryEscape(topic), nil)
+		"http://unix"+sessions.EventsPath+"?topic="+url.QueryEscape(topic), nil)
 	if err != nil {
 		return nil, noop, cascade.Wrap(cascade.KindInternal, err,
 			"cascade: building the daemon /events request")
