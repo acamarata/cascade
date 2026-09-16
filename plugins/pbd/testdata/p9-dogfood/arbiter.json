@@ -1,0 +1,30 @@
+{
+  "ticket": {
+    "id": "P9-E5-W3-S7-T1",
+    "title": "Extend ModelCatalog with cost and context fields; add ranked_for to selection; mandatory task_class",
+    "model_class": "arbiter",
+    "tasks": [
+      "Extend the existing model catalog (crates/cascade-core/src/model_catalog.rs ::CatalogModel and YamlModel) with two new numeric fields: cost_usd_per_1k: f64 and context_capacity_k: u32.",
+      "These fields are added to the canonical models/models.yaml (already embedded at compile time via include_str! in model_catalog.rs at line 45) alongside the existing quota_cost_weight (prose cost, parsed into CatalogModel.cost) and context_tokens fields.",
+      "No second capability store, no CapabilityEntry struct, and no CapabilityMap struct — cost and context data live solely in CatalogModel, which is the single source of truth for model reference data."
+    ],
+    "spec_refs": []
+  },
+  "source_file": "E-05/waves/W-3/sprints/S-07/tickets/T-P9-E5-W3-S7-T1.yaml",
+  "request": {
+    "task_id": "P9-E5-W3-S7-T1",
+    "task_class": "arbitrate",
+    "inputs": [
+      {
+        "role": "user",
+        "content": "Extend ModelCatalog with cost and context fields; add ranked_for to selection; mandatory task_class\n- Extend the existing model catalog (crates/cascade-core/src/model_catalog.rs ::CatalogModel and YamlModel) with two new numeric fields: cost_usd_per_1k: f64 and context_capacity_k: u32.\n- These fields are added to the canonical models/models.yaml (already embedded at compile time via include_str! in model_catalog.rs at line 45) alongside the existing quota_cost_weight (prose cost, parsed into CatalogModel.cost) and context_tokens fields.\n- No second capability store, no CapabilityEntry struct, and no CapabilityMap struct — cost and context data live solely in CatalogModel, which is the single source of truth for model reference data."
+      }
+    ],
+    "requirements": {
+      "reasoning": "",
+      "context": 0,
+      "structured": false
+    },
+    "sensitivity": "restricted"
+  }
+}

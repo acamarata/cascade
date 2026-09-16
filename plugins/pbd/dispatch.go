@@ -150,6 +150,15 @@ func (d *ConductorDispatcher) request(ticket *pews.Ticket) (provider.ModelReques
 		return provider.ModelRequest{}, cascade.New(cascade.KindInvalidInput,
 			"pbd: a ticket needs an id to be dispatched and correlated")
 	}
+	// A ticket with no tasks carries no work. Dispatching it would send the
+	// model a bare title and bill a lane for it, and the empty result would
+	// read as a completed ticket — a silent no-op of exactly the kind Art.1
+	// forbids. The refusal is here rather than at the caller because every
+	// caller reaches the door through this one function.
+	if len(ticket.Tasks) == 0 {
+		return provider.ModelRequest{}, cascade.Newf(cascade.KindInvalidInput,
+			"pbd: ticket %s declares no tasks, so there is no work to dispatch", ticket.ID)
+	}
 	taskClass, ok := dispatch.TaskClassFor(ticket.ModelClass)
 	if !ok {
 		return provider.ModelRequest{}, cascade.Newf(cascade.KindInvalidInput,

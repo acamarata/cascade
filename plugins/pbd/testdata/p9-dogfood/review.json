@@ -1,0 +1,30 @@
+{
+  "ticket": {
+    "id": "P9-E4-W2-S7-T1",
+    "title": "Cockpit UI: scoped header, live counter strip, collapsible PEWS tree, blue pane-first theme, and the three read routes it is served by",
+    "model_class": "review",
+    "tasks": [
+      "Build the Planning Cockpit surface — the Artifact-pane experience the user watches while planning with the agent (01-ADDENDUM §1).",
+      "This is the foundational Epic D ticket: it delivers the cockpit component library (CockpitHeader, CounterStrip, PhaseTree), the CockpitPage that composes them, and the three daemon read routes that feed them from the B02 projection.",
+      "D02 (SSE live updates), D04 (drill-in), D06 (build mode), D08 (authoring), and D10 (perf budget) all extend this surface."
+    ],
+    "spec_refs": []
+  },
+  "source_file": "E-04/waves/W-2/sprints/S-07/tickets/T-P9-E4-W2-S7-T1.yaml",
+  "request": {
+    "task_id": "P9-E4-W2-S7-T1",
+    "task_class": "review",
+    "inputs": [
+      {
+        "role": "user",
+        "content": "Cockpit UI: scoped header, live counter strip, collapsible PEWS tree, blue pane-first theme, and the three read routes it is served by\n- Build the Planning Cockpit surface — the Artifact-pane experience the user watches while planning with the agent (01-ADDENDUM §1).\n- This is the foundational Epic D ticket: it delivers the cockpit component library (CockpitHeader, CounterStrip, PhaseTree), the CockpitPage that composes them, and the three daemon read routes that feed them from the B02 projection.\n- D02 (SSE live updates), D04 (drill-in), D06 (build mode), D08 (authoring), and D10 (perf budget) all extend this surface."
+      }
+    ],
+    "requirements": {
+      "reasoning": "",
+      "context": 0,
+      "structured": false
+    },
+    "sensitivity": "restricted"
+  }
+}

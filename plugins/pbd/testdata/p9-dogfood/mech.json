@@ -1,0 +1,34 @@
+{
+  "ticket": {
+    "id": "P9-E1-W1-S1-T1",
+    "title": "Unified storage schema ADR + migration 0001: one 3NF, scope-namespaced ~/.cascade/cascade.db for the six legacy fragments",
+    "model_class": "mech",
+    "tasks": [
+      "Today Cascade's daemon state is split across six SQLite fragments directly under ~/.cascade/ (all six verified present on this machine 2026-08-26): tasks.db (crates/cascade-core/src/tasks/migrations.rs:33 open_tasks_db), memory.db (crates/cascade-rag/src/memory/db.rs:44 open_memory_db), events.db (crates/cascade-daemon/src/event_bus.rs:29 DB_NAME), scheduler.db (crates/cascade-daemon/src/supervisor.rs:492), registry.db (crates/cascade-daemon/src/discovery/registry.rs:42, db_files::REGISTRY), and provider-usage.db (crates/cascade-daemon/src/ipc.rs:306).",
+      "This ticket delivers the DESIGN artifact the whole epic builds on: an Accepted ADR with the full 3NF ERD, the unified-DB path helper, and the complete unified schema applied as version 1 of a new \"unified\" MigrationRegistry.",
+      "Locked storage decisions it must encode (00-SCOPE.md §Decision 5, 05-FORGE-SPEC.md §Decided 5): single ~/.cascade/cascade.db, WAL mode, daemon single-writer, scope columns (tier, project, repo, app) on every domain table, NULLable by tier."
+    ],
+    "spec_refs": [
+      "00-SCOPE.md §Locked decisions 5 (one database) and §Draft epic map E-P9-A",
+      "10-wave1-foundations.md §E-P9-A ticket A01 (source)",
+      "01-ADDENDUM.md §3 (ADDED/CHANGED/DELETED must be unambiguous before RTB)"
+    ]
+  },
+  "source_file": "E-01/waves/W-1/sprints/S-01/tickets/T-P9-E1-W1-S1-T1.yaml",
+  "request": {
+    "task_id": "P9-E1-W1-S1-T1",
+    "task_class": "code",
+    "inputs": [
+      {
+        "role": "user",
+        "content": "Unified storage schema ADR + migration 0001: one 3NF, scope-namespaced ~/.cascade/cascade.db for the six legacy fragments\n- Today Cascade's daemon state is split across six SQLite fragments directly under ~/.cascade/ (all six verified present on this machine 2026-08-26): tasks.db (crates/cascade-core/src/tasks/migrations.rs:33 open_tasks_db), memory.db (crates/cascade-rag/src/memory/db.rs:44 open_memory_db), events.db (crates/cascade-daemon/src/event_bus.rs:29 DB_NAME), scheduler.db (crates/cascade-daemon/src/supervisor.rs:492), registry.db (crates/cascade-daemon/src/discovery/registry.rs:42, db_files::REGISTRY), and provider-usage.db (crates/cascade-daemon/src/ipc.rs:306).\n- This ticket delivers the DESIGN artifact the whole epic builds on: an Accepted ADR with the full 3NF ERD, the unified-DB path helper, and the complete unified schema applied as version 1 of a new \"unified\" MigrationRegistry.\n- Locked storage decisions it must encode (00-SCOPE.md §Decision 5, 05-FORGE-SPEC.md §Decided 5): single ~/.cascade/cascade.db, WAL mode, daemon single-writer, scope columns (tier, project, repo, app) on every domain table, NULLable by tier.\n\nSpec references:\n- 00-SCOPE.md §Locked decisions 5 (one database) and §Draft epic map E-P9-A\n- 10-wave1-foundations.md §E-P9-A ticket A01 (source)\n- 01-ADDENDUM.md §3 (ADDED/CHANGED/DELETED must be unambiguous before RTB)"
+      }
+    ],
+    "requirements": {
+      "reasoning": "",
+      "context": 0,
+      "structured": false
+    },
+    "sensitivity": "restricted"
+  }
+}

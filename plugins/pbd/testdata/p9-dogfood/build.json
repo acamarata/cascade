@@ -1,0 +1,34 @@
+{
+  "ticket": {
+    "id": "P9-E2-W1-S6-T1",
+    "title": "Centralize the seven-state P9 phase lifecycle in cascade-types and make CLI, engine, daemon, MCP, and app consume it",
+    "model_class": "build",
+    "tasks": [
+      "Replace the contradictory phase-state definitions with one canonical Rust enum in cascade-types.",
+      "Today crates/cascade-core/src/pbd/schema.rs:23-40 defines Opening, Planning, ReadyToBuild, Building, Wrapup, and Archived; apps/cascade-app/src/types/pbd.ts:16 independently declares planning, ready_to_build, building, qa, shipped, and archived; crates/cascade-daemon/src/project_poller.rs:45 stores phase_status as an unchecked String.",
+      "Deliver PhaseStatus with the exact serialized values init, planning, ready_to_build, building, verifying, shipped, and archived, plus one transition table and compatibility aliases for opening, ready, build, qa, and wrapup."
+    ],
+    "spec_refs": [
+      "00-SCOPE.md §Locked decision 4 and §Draft epic map E-P9-B",
+      "01-ADDENDUM.md §1.2 and §10.1 (header status and current lifecycle)",
+      "10-wave1-foundations.md §E-P9-B ticket B01 (source)"
+    ]
+  },
+  "source_file": "E-02/waves/W-1/sprints/S-06/tickets/T-P9-E2-W1-S6-T1.yaml",
+  "request": {
+    "task_id": "P9-E2-W1-S6-T1",
+    "task_class": "code",
+    "inputs": [
+      {
+        "role": "user",
+        "content": "Centralize the seven-state P9 phase lifecycle in cascade-types and make CLI, engine, daemon, MCP, and app consume it\n- Replace the contradictory phase-state definitions with one canonical Rust enum in cascade-types.\n- Today crates/cascade-core/src/pbd/schema.rs:23-40 defines Opening, Planning, ReadyToBuild, Building, Wrapup, and Archived; apps/cascade-app/src/types/pbd.ts:16 independently declares planning, ready_to_build, building, qa, shipped, and archived; crates/cascade-daemon/src/project_poller.rs:45 stores phase_status as an unchecked String.\n- Deliver PhaseStatus with the exact serialized values init, planning, ready_to_build, building, verifying, shipped, and archived, plus one transition table and compatibility aliases for opening, ready, build, qa, and wrapup.\n\nSpec references:\n- 00-SCOPE.md §Locked decision 4 and §Draft epic map E-P9-B\n- 01-ADDENDUM.md §1.2 and §10.1 (header status and current lifecycle)\n- 10-wave1-foundations.md §E-P9-B ticket B01 (source)"
+      }
+    ],
+    "requirements": {
+      "reasoning": "",
+      "context": 0,
+      "structured": false
+    },
+    "sensitivity": "restricted"
+  }
+}

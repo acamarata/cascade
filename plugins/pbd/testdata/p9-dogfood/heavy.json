@@ -1,0 +1,34 @@
+{
+  "ticket": {
+    "id": "P9-E3-W2-S1-T1",
+    "title": "One-app convergence design doc: route map, 100% parity matrix across all three current UI surfaces, full-vs-pane layout system, explicit ADD/CHANGE/DELETE list",
+    "model_class": "heavy",
+    "tasks": [
+      "Deliver the design artifact all of Epic C builds on.",
+      "Ground truth in the repo is THREE UI surfaces, not two (the wave doc's ground-truth paragraph predates the third): (1) apps/cascade-app — the React+Vite+Tailwind SPA wrapped by Tauri, route table at apps/cascade-app/src/routes/index.tsx:88-137 with hub routes /vault (VaultHub), /projects (ProjectsHub), /accounts (AccountsHub), /settings (SettingsHub) plus /chat, /inbox, /tasks, /personal; (2) apps/cascade-dashboard — a second React app (@cascade/dashboard, apps/cascade-dashboard/package.json) whose panels (components/personal/ThreadsPanel, IdeasInboxPanel, ScheduledTasksPanel, CRDChainsPanel, FleetQuotaPanel, AccountLedgerPanel; components/projects/ProjectGrid, RepoCardList, ASIOverviewCard, PEWSScaffoldTree; HooksEditor; GPChatPanel) are what the daemon actually serves today via CASCADE_DASHBOARD_DIST (crates/cascade-daemon/src/dashboard.rs:544-546, crates/cascade-daemon/src/http/mod.rs:32-40); (3) src/web — the vanilla cascade-dash (src/web/app.js, 926 lines: kanban/memory/inbox/ideas views plus a GCI map/list/editor tab, emoji task-state text parse at src/web/app.js:74-85) which is already ORPHANED — nothing in crates/, scripts/, or src/launchd/ references it.",
+      "This ticket writes the Accepted design doc that enumerates 100% of views across all three surfaces with a destination in apps/cascade-app or an explicit kill decision, the pane route contract /p/{project}[/{repo}[/{app}]] (00-SCOPE.md §Decision 3), the full-vs-pane layout system built on the existing chrome (apps/cascade-app/src/layouts/AppLayout.tsx — Sidebar + TopBar + content + StatusBar), and the explicit ADD/CHANGE/DELETE list 01-ADDENDUM §3 requires before RTB."
+    ],
+    "spec_refs": [
+      "00-SCOPE.md §Locked decisions 2-3 (single app, pane routes) and §Draft epic map E-P9-C",
+      "01-ADDENDUM.md §1 (cockpit UX contract) and §3 (ADDED/CHANGED/DELETED before RTB)",
+      "11-wave2-surface.md §E-P9-C ticket C01 (source) and objective/ground-truth section"
+    ]
+  },
+  "source_file": "E-03/waves/W-2/sprints/S-01/tickets/T-P9-E3-W2-S1-T1.yaml",
+  "request": {
+    "task_id": "P9-E3-W2-S1-T1",
+    "task_class": "code",
+    "inputs": [
+      {
+        "role": "user",
+        "content": "One-app convergence design doc: route map, 100% parity matrix across all three current UI surfaces, full-vs-pane layout system, explicit ADD/CHANGE/DELETE list\n- Deliver the design artifact all of Epic C builds on.\n- Ground truth in the repo is THREE UI surfaces, not two (the wave doc's ground-truth paragraph predates the third): (1) apps/cascade-app — the React+Vite+Tailwind SPA wrapped by Tauri, route table at apps/cascade-app/src/routes/index.tsx:88-137 with hub routes /vault (VaultHub), /projects (ProjectsHub), /accounts (AccountsHub), /settings (SettingsHub) plus /chat, /inbox, /tasks, /personal; (2) apps/cascade-dashboard — a second React app (@cascade/dashboard, apps/cascade-dashboard/package.json) whose panels (components/personal/ThreadsPanel, IdeasInboxPanel, ScheduledTasksPanel, CRDChainsPanel, FleetQuotaPanel, AccountLedgerPanel; components/projects/ProjectGrid, RepoCardList, ASIOverviewCard, PEWSScaffoldTree; HooksEditor; GPChatPanel) are what the daemon actually serves today via CASCADE_DASHBOARD_DIST (crates/cascade-daemon/src/dashboard.rs:544-546, crates/cascade-daemon/src/http/mod.rs:32-40); (3) src/web — the vanilla cascade-dash (src/web/app.js, 926 lines: kanban/memory/inbox/ideas views plus a GCI map/list/editor tab, emoji task-state text parse at src/web/app.js:74-85) which is already ORPHANED — nothing in crates/, scripts/, or src/launchd/ references it.\n- This ticket writes the Accepted design doc that enumerates 100% of views across all three surfaces with a destination in apps/cascade-app or an explicit kill decision, the pane route contract /p/{project}[/{repo}[/{app}]] (00-SCOPE.md §Decision 3), the full-vs-pane layout system built on the existing chrome (apps/cascade-app/src/layouts/AppLayout.tsx — Sidebar + TopBar + content + StatusBar), and the explicit ADD/CHANGE/DELETE list 01-ADDENDUM §3 requires before RTB.\n\nSpec references:\n- 00-SCOPE.md §Locked decisions 2-3 (single app, pane routes) and §Draft epic map E-P9-C\n- 01-ADDENDUM.md §1 (cockpit UX contract) and §3 (ADDED/CHANGED/DELETED before RTB)\n- 11-wave2-surface.md §E-P9-C ticket C01 (source) and objective/ground-truth section"
+      }
+    ],
+    "requirements": {
+      "reasoning": "",
+      "context": 0,
+      "structured": false
+    },
+    "sensitivity": "restricted"
+  }
+}

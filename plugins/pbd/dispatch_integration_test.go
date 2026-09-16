@@ -187,8 +187,11 @@ func TestDispatchRealConductor_UnmappableNeverCrossesTheSocket(t *testing.T) {
 	var cancelled string
 	caller := realSocketDoor(t, &seen, &cancelled)
 
+	// Tasks are present deliberately: without them the empty-task refusal
+	// would fire first and this test would pass without ever reaching the
+	// mapping it claims to exercise.
 	_, err := NewConductorDispatcher(caller).Dispatch(context.Background(), &pews.Ticket{
-		ID: "P1-X", Title: "x", ModelClass: "oracle",
+		ID: "P1-X", Title: "x", ModelClass: "oracle", Tasks: []string{"do it"},
 	})
 	if err == nil {
 		t.Fatal("a ticket with an unmappable model_class crossed the socket")

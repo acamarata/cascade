@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-16T09:34:26Z",
+  "generated_at": "2026-09-16T09:42:57Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -18561,6 +18561,21 @@
       ]
     },
     {
+      "name": "plugins/pbd TestDispatchRealConductor",
+      "sites": [
+        {
+          "file": "plugins/pbd/dispatch_integration_test.go",
+          "line": 22,
+          "status": "",
+          "ticket": "P1-E14-W3-S30-T2",
+          "raw": "plugins/pbd TestDispatchRealConductor (P1-E14-W3-S30-T2)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "plugins/pbd author",
       "sites": [
         {
@@ -18650,6 +18665,21 @@
       ]
     },
     {
+      "name": "plugins/pbd tests",
+      "sites": [
+        {
+          "file": "plugins/pbd/dispatch_test.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T2",
+          "raw": "plugins/pbd tests (ADD) — P1-E14-W3-S30-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/pbd validate",
       "sites": [
         {
@@ -18722,6 +18752,36 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "plugins/pbd/internal/dispatch tests",
+      "sites": [
+        {
+          "file": "plugins/pbd/internal/dispatch/mapping_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T2",
+          "raw": "plugins/pbd/internal/dispatch tests (ADD) — P1-E14-W3-S30-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/pbd/internal/dispatch:mapping",
+      "sites": [
+        {
+          "file": "plugins/pbd/internal/dispatch/mapping.go",
+          "line": 30,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T2",
+          "raw": "plugins/pbd/internal/dispatch:mapping (ADD) — P1-E14-W3-S30-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -18916,6 +18976,36 @@
           "status": "ADD",
           "ticket": "P1-E14-W3-S28-T2",
           "raw": "plugins/pbd/internal/pews validate (ADD) — P1-E14-W3-S28-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/pbd:dispatch",
+      "sites": [
+        {
+          "file": "plugins/pbd/dispatch.go",
+          "line": 34,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T2",
+          "raw": "plugins/pbd:dispatch (ADD) — P1-E14-W3-S30-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/pbd:dispatch-cmd",
+      "sites": [
+        {
+          "file": "plugins/pbd/dispatch_cmd.go",
+          "line": 34,
+          "status": "ADD",
+          "ticket": "P1-E14-W3-S30-T2",
+          "raw": "plugins/pbd:dispatch-cmd (ADD) — P1-E14-W3-S30-T2."
         }
       ],
       "statuses": [
@@ -21290,7 +21380,7 @@
       ]
     }
   ],
-  "total_sites": 2091,
-  "unspecified_count": 65,
+  "total_sites": 2097,
+  "unspecified_count": 66,
   "multi_status_count": 40
 }
