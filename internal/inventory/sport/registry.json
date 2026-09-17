@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T16:47:23Z",
+  "generated_at": "2026-09-17T17:22:55Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -17666,6 +17666,21 @@
       ]
     },
     {
+      "name": "internal/runtime/init reconverge apply",
+      "sites": [
+        {
+          "file": "internal/runtime/init/reconverge_apply_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T14",
+          "raw": "internal/runtime/init reconverge apply (ADD) — P1-E16-W4-S35-T14."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/runtime/init seams",
       "sites": [
         {
@@ -24235,7 +24250,7 @@
       ]
     }
   ],
-  "total_sites": 2329,
+  "total_sites": 2330,
   "unspecified_count": 69,
   "multi_status_count": 41
 }

@@ -10,7 +10,7 @@ package daemon
 //
 // Inputs: the daemon's runtime.PathProvider (config.toml's path). Sources
 // re-reads the config fresh on every call — the same choice
-// gitTreeHashExec/gitDiffExec already make for git state in this same
+// GitTreeHash/gitDiffExec already make for git state in this same
 // file's sibling — so a live `cascade config set retrieval.sources` takes
 // effect on the next rebuild without a daemon restart.
 //

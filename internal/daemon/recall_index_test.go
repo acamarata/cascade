@@ -115,44 +115,44 @@ func TestParseNameStatus(t *testing.T) {
 	}
 }
 
-// TestGitTreeHashExec_RealRepositoryChangesWithTheWorktree proves the
+// TestGitTreeHash_RealRepositoryChangesWithTheWorktree proves the
 // marker is worktree-sensitive, which is what lets drift be detected
 // before a commit rather than only after one.
-func TestGitTreeHashExec_RealRepositoryChangesWithTheWorktree(t *testing.T) {
+func TestGitTreeHash_RealRepositoryChangesWithTheWorktree(t *testing.T) {
 	dir := t.TempDir()
 	seedRepo(t, dir)
 	chdir(t, dir)
 
-	clean, err := gitTreeHashExec(context.Background())
+	clean, err := GitTreeHash(context.Background())
 	if err != nil {
-		t.Fatalf("gitTreeHashExec: %v", err)
+		t.Fatalf("GitTreeHash: %v", err)
 	}
 	if clean == "" {
-		t.Fatal("gitTreeHashExec returned an empty marker inside a real repository")
+		t.Fatal("GitTreeHash returned an empty marker inside a real repository")
 	}
 
 	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("two\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	dirty, err := gitTreeHashExec(context.Background())
+	dirty, err := GitTreeHash(context.Background())
 	if err != nil {
-		t.Fatalf("gitTreeHashExec (dirty): %v", err)
+		t.Fatalf("GitTreeHash (dirty): %v", err)
 	}
 	if dirty == clean {
 		t.Fatal("marker did not change after an uncommitted edit; drift would be undetectable until commit")
 	}
 }
 
-// TestGitTreeHashExec_NoRepositoryIsSupported pins the documented
+// TestGitTreeHash_NoRepositoryIsSupported pins the documented
 // fallback: no repository is a supported configuration, not an error.
-func TestGitTreeHashExec_NoRepositoryIsSupported(t *testing.T) {
+func TestGitTreeHash_NoRepositoryIsSupported(t *testing.T) {
 	chdir(t, t.TempDir())
-	got, err := gitTreeHashExec(context.Background())
+	got, err := GitTreeHash(context.Background())
 	if err != nil {
-		t.Fatalf("gitTreeHashExec outside a repository = %v, want nil error", err)
+		t.Fatalf("GitTreeHash outside a repository = %v, want nil error", err)
 	}
 	if got != "" {
-		t.Fatalf("gitTreeHashExec outside a repository = %q, want empty", got)
+		t.Fatalf("GitTreeHash outside a repository = %q, want empty", got)
 	}
 }
 
@@ -161,7 +161,7 @@ func TestGitDiffExec(t *testing.T) {
 	seedRepo(t, dir)
 	chdir(t, dir)
 
-	marker, err := gitTreeHashExec(context.Background())
+	marker, err := GitTreeHash(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

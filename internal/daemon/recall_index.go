@@ -93,7 +93,7 @@ func RegisterRecallIndexHandler(
 		// it, and Verify's vectorIncomplete correctly reports empty.
 		Sources:  configSourceProvider{configPath: paths.ConfigPath()},
 		Clock:    clock,
-		TreeHash: gitTreeHashExec,
+		TreeHash: GitTreeHash,
 	})
 	if err != nil {
 		return err
@@ -160,32 +160,13 @@ func recallIndexMigrateHandler(clock runtime.Clock, dbPath string) rpc.HandlerFu
 	}
 }
 
-// gitTreeHashExec is the production lifecycle.GitTreeHashFunc: the
-// current commit plus a stable digest of the working tree's uncommitted
-// changes, so an edit changes the marker even before it is committed.
-// Falls back to the empty string on any git failure (no repository, git
-// absent) rather than erroring — an install with no git repository is a
-// supported configuration (the marker then always reads DRIFTED, which
-// is the documented fail-closed behavior for an unresolvable marker).
-func gitTreeHashExec(ctx context.Context) (string, error) {
-	head, err := recallIndexRunGit(ctx, "rev-parse", "HEAD")
-	if err != nil {
-		return "", nil //nolint:nilerr // no repository is a supported, not an error, configuration
-	}
-	status, err := recallIndexRunGit(ctx, "status", "--porcelain")
-	if err != nil {
-		status = ""
-	}
-	return head + ":" + retrieval.ChunkID([]byte(status)), nil
-}
-
 // gitDiffExec is the production lifecycle.GitDiffFunc: the paths that
 // changed between sinceTreeHash's commit and the current working tree.
-// sinceTreeHash carries gitTreeHashExec's own "<commit>:<digest>" shape;
+// sinceTreeHash carries GitTreeHash's own "<commit>:<digest>" shape;
 // only the commit half is meaningful to `git diff`.
 func gitDiffExec(ctx context.Context, sinceTreeHash string) ([]lifecycle.ChangedPath, string, error) {
 	commit, _, _ := strings.Cut(sinceTreeHash, ":")
-	newTree, err := gitTreeHashExec(ctx)
+	newTree, err := GitTreeHash(ctx)
 	if err != nil || commit == "" {
 		return nil, newTree, err
 	}

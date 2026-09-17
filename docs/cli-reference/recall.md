@@ -150,6 +150,29 @@ A fresh install with no index yet reports OK, not a warning. An absent
 index on a machine that has never indexed anything is the expected state,
 and a check that cries about it teaches people to ignore `doctor`.
 
+### The generation marker is computed once
+
+The index records the tree it was built from as a **generation marker**:
+the current commit, plus a digest of whatever is uncommitted in the working
+tree. The second half is what lets drift be noticed before a commit rather
+than only after one.
+
+Both surfaces that report on the marker — `cascade recall index verify` and
+`cascade doctor`'s `retrieval_index` check — compute it with the **same
+function**, `internal/daemon.GitTreeHash`. There is deliberately only one
+implementation. There used to be two, the doctor carrying its own copy
+under a comment promising the algorithm was identical; the copy hashed
+`git status --porcelain` without trimming it, so on any working tree with
+an uncommitted change the two disagreed: `verify` reported the marker
+current while `doctor` reported it drifted and exited 5. A clean checkout —
+every test fixture, every CI run — hashed identically either way, so
+nothing caught it until the wave gate ran the real binary on a real
+machine (R-14.278).
+
+A machine with no git repository has no marker to compute. That is a
+supported configuration: the marker then reads as drifted, which is the
+fail-closed direction.
+
 ### Schema versions
 
 The retrieval index shares one globally keyed migration ledger with every

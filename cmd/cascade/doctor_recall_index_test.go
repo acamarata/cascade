@@ -13,9 +13,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/doctor"
 	"github.com/acamarata/cascade/internal/retrieval/lifecycle"
 	"github.com/acamarata/cascade/providers/sqlite"
@@ -82,32 +82,86 @@ func TestBuildRecallIndexManager_LiveDaemonLock(t *testing.T) {
 	}
 }
 
-// TestDoctorGitTreeHash_MatchesRealGit drives doctorGitTreeHash against
-// this repo's own working tree and asserts its "HEAD:status-digest" shape
-// against an independently-run `git rev-parse HEAD` — the same real
-// counterpart the function itself shells out to (not a second copy of the
-// function's own logic).
-func TestDoctorGitTreeHash_MatchesRealGit(t *testing.T) {
+// TestDoctorAndDaemonAgreeOnADirtyTree is the assertion this check
+// shipped without: that the marker `cascade doctor` computes and the
+// marker the daemon's recall.index.* handlers compute are the SAME value
+// on a working tree with an uncommitted change.
+//
+// The doctor used to carry its own copy of the algorithm, under a comment
+// asserting it was identical to the daemon's. It hashed `git status
+// --porcelain` WITHOUT trimming the trailing newline the daemon's helper
+// strips, so every dirty tree produced two different digests: `cascade
+// recall index verify` reported the marker current, `cascade doctor`
+// reported it drifted, and doctor exited 5 forever on any machine with an
+// uncommitted edit (R-14.278).
+//
+// A CLEAN tree could not catch it — both halves hash the empty string to
+// the same digest — which is why the two shape-only tests that preceded
+// this one both passed. So this test dirties the tree on purpose.
+func TestDoctorAndDaemonAgreeOnADirtyTree(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not on PATH")
 	}
-	want, err := exec.CommandContext(context.Background(), "git", "rev-parse", "HEAD").Output()
+	dir := t.TempDir()
+	seedGitRepo(t, dir)
+	chdirForTest(t, dir)
+
+	clean, err := daemon.GitTreeHash(context.Background())
 	if err != nil {
-		t.Skipf("not inside a git worktree: %v", err)
+		t.Fatalf("GitTreeHash (clean): %v", err)
 	}
-	got, err := doctorGitTreeHash(context.Background())
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("edited\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dirty, err := daemon.GitTreeHash(context.Background())
 	if err != nil {
-		t.Fatalf("doctorGitTreeHash: %v", err)
+		t.Fatalf("GitTreeHash (dirty): %v", err)
 	}
-	wantHead := strings.TrimSpace(string(want))
-	parts := strings.SplitN(got, ":", 2)
-	if len(parts) != 2 {
-		t.Fatalf("doctorGitTreeHash() = %q, want \"<head>:<digest>\"", got)
+	if dirty == clean {
+		t.Fatal("the marker did not move after an uncommitted edit; drift would be invisible until commit")
 	}
-	if parts[0] != wantHead {
-		t.Fatalf("doctorGitTreeHash() head = %q, want %q (real git rev-parse HEAD)", parts[0], wantHead)
+
+	// What the doctor check itself is wired to, reached through the real
+	// builder rather than by naming the function again — a test that
+	// called daemon.GitTreeHash twice would pass even if the check were
+	// re-pointed at a second copy tomorrow.
+	viaDoctor, err := doctorMarkerFunc()(context.Background())
+	if err != nil {
+		t.Fatalf("the doctor check's tree-hash func: %v", err)
 	}
-	if parts[1] == "" {
-		t.Fatalf("doctorGitTreeHash() status digest is empty, want a chunk id (even for a clean tree)")
+	if viaDoctor != dirty {
+		t.Fatalf("doctor computes %q and the daemon computes %q for the same dirty tree; "+
+			"`doctor` and `recall index verify` would disagree out loud", viaDoctor, dirty)
 	}
+}
+
+// seedGitRepo makes a one-commit repository in dir.
+func seedGitRepo(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"init"}, {"config", "user.email", "t@example.invalid"}, {"config", "user.name", "t"},
+		{"add", "."}, {"commit", "-m", "seed"},
+	} {
+		cmd := exec.CommandContext(context.Background(), "git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+}
+
+// chdirForTest enters dir and restores the old working directory.
+func chdirForTest(t *testing.T, dir string) {
+	t.Helper()
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(old) })
 }

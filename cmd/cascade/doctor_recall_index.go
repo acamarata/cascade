@@ -8,10 +8,9 @@ package main
 
 import (
 	"context"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
+	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/retrieval"
 	"github.com/acamarata/cascade/internal/retrieval/lifecycle"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -71,7 +70,7 @@ func buildRecallIndexManager(paths runtime.PathProvider, clock runtime.Clock) li
 			// vectorIncomplete then correctly skips vector-completeness
 			// checking instead of reporting a false incompleteness.
 			Clock:    clock,
-			TreeHash: doctorGitTreeHash,
+			TreeHash: doctorMarkerFunc(),
 		})
 		if err != nil {
 			closer()
@@ -81,23 +80,16 @@ func buildRecallIndexManager(paths runtime.PathProvider, clock runtime.Clock) li
 	}
 }
 
-// doctorGitTreeHash is the doctor command's own copy of the production
-// GitTreeHashFunc (identical algorithm to internal/daemon/recall_index.go's
-// gitTreeHashExec: HEAD plus a digest of the working tree's uncommitted
-// changes). Duplicated rather than exported from internal/daemon, since
-// that package's os/exec use is scoped to its own composition-root files
-// and this CLI-side check has no daemon to reach; both copies fail closed
-// to "" on any git error, which verify's MarkerStatus reads as DRIFTED.
-func doctorGitTreeHash(ctx context.Context) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "rev-parse", "HEAD")
-	head, err := cmd.Output()
-	if err != nil {
-		return "", nil //nolint:nilerr // no repository is a supported, not an error, configuration
-	}
-	statusCmd := exec.CommandContext(ctx, "git", "status", "--porcelain")
-	status, err := statusCmd.Output()
-	if err != nil {
-		status = nil
-	}
-	return strings.TrimSpace(string(head)) + ":" + retrieval.ChunkID(status), nil
-}
+// doctorMarkerFunc is what this check computes the generation marker
+// with: internal/daemon's GitTreeHash, the SAME function the daemon's own
+// recall.index.* handlers use.
+//
+// A named wiring point rather than an inline reference, so the test can
+// assert what the check is actually pointed at. This file used to carry
+// its own copy of the algorithm — the copy forgot to trim `git status
+// --porcelain`, so on any dirty working tree `cascade doctor` and
+// `cascade recall index verify` disagreed about whether the marker had
+// drifted, and doctor exited 5 (R-14.278). There is one implementation
+// now; if a second is ever wanted, this is the line that would have to
+// change, and the test watches it.
+func doctorMarkerFunc() lifecycle.GitTreeHashFunc { return daemon.GitTreeHash }
