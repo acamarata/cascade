@@ -24,14 +24,12 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
-
 	"github.com/acamarata/cascade/internal/backup/targets"
+	"github.com/acamarata/cascade/internal/context/hydration"
 	"github.com/acamarata/cascade/internal/doctor"
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/retrieval/lifecycle"
@@ -73,6 +71,12 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	// enrolled" - an unreadable subject is never silently OK.
 	reg.Register(nodes.NewHealthCheck(nodesRecordStoreFor(paths, clock), clock, 0))
 	reg.Register(targets.NewRcloneDoctorCheck(nil)) // backup (P1-E19-W4-S41-T3)
+	// context-hydration (P1-E16-W4-S34-T4): counts the degraded-hydration
+	// events the prompt hook publishes. It is the only place a degraded
+	// hydration becomes visible at all -- the hook fails OPEN by design,
+	// so from the user's side a degraded hydration and a session with no
+	// context worth injecting look identical.
+	reg.Register(hydration.NewCheck(hydrationStoreFor(paths), clock))
 	checks, err := secretsDoctorChecks(ctx, paths, clock)
 	if err != nil {
 		return nil, err
@@ -171,71 +175,6 @@ func configuredVaultKeys(ctx context.Context, paths runtime.PathProvider) []stri
 		}
 	}
 	return secrets.VaultRefsIn(b.String())
-}
-
-// confirmDoctorFix gates `--fix`. It runs BEFORE any check, so a refusal
-// costs nothing and nothing is mutated on the way to it.
-//
-// Under CASCADE_NO_INPUT=1 it is a hard error rather than a silent
-// proceed: --fix flushes a queue an operator may still want to review,
-// and a non-interactive caller cannot be asked. Otherwise it asks once,
-// and anything but an explicit yes refuses.
-func confirmDoctorFix(cmd *cobra.Command, deps doctorDeps, f *doctorFlags) error {
-	if !f.fix {
-		return nil
-	}
-	if deps.Getenv("CASCADE_NO_INPUT") == "1" {
-		return cascade.New(cascade.KindElevationRequired,
-			"cascade doctor --fix needs an interactive confirmation and CASCADE_NO_INPUT=1 is set; "+
-				"run it without CASCADE_NO_INPUT, or resolve each finding with the command its remediation names")
-	}
-	if deps.ConfirmFix == nil {
-		return cascade.New(cascade.KindUnavailable,
-			"cascade doctor --fix: no confirmation reader is configured; refusing to remediate unasked")
-	}
-	ok, err := deps.ConfirmFix(cmd)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return cascade.New(cascade.KindPermissionDenied,
-			"cascade doctor --fix: not confirmed; nothing was changed")
-	}
-	return nil
-}
-
-// confirmOnStdin reads a single y/N answer from the command's own input
-// stream. Anything but an explicit "y"/"yes" is a no, including an
-// unreadable stream: a confirmation nobody gave is not a yes.
-func confirmOnStdin(cmd *cobra.Command) (bool, error) {
-	if _, err := cmd.ErrOrStderr().Write([]byte(
-		"cascade doctor --fix will flush the pending quarantine queue. Continue? [y/N] ")); err != nil {
-		return false, cascade.Wrap(cascade.KindUnavailable, err, "cascade doctor: could not prompt for confirmation")
-	}
-	reader := bufio.NewReader(cmd.InOrStdin())
-	line, err := reader.ReadString('\n')
-	if err != nil && line == "" {
-		return false, nil
-	}
-	answer := strings.ToLower(strings.TrimSpace(line))
-	return answer == "y" || answer == "yes", nil
-}
-
-// providerHealthSourceAdapter adapts openProviderStorage
-// (provider_health_cmd.go) to doctor.ProviderHealthSource: each call
-// opens the registry+health storage fresh and closes it before
-// returning, mirroring how `cascade provider list/test/health` already
-// treat that storage as per-invocation rather than long-lived.
-type providerHealthSourceAdapter struct {
-	// paths is the PathProvider the caller injected. It exists because
-	// this adapter USED to discard it and call productionProviderDeps()
-	// unconditionally, which meant `cascade doctor` always read the
-	// DEFAULT provider store no matter what CASCADE_HOME resolved to. A
-	// diagnostic that reports on a different store than the one the
-	// operator configured is worse than no diagnostic, and it also leaked
-	// real databases into the redirected HOME the hygiene lane asserts is
-	// clean, which is how it was found.
-	paths runtime.PathProvider
 }
 
 // providerHealthSourceFor returns the production doctor.ProviderHealthSource.

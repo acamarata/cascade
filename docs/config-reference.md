@@ -283,3 +283,35 @@ scrub every row field gets regardless of this setting. Unrecognised keys
 inside `[widget]` are a hard typed error, matching `[fleet.economics]`'s
 validate-before-write behavior rather than `[fleet.accounts]`'s
 per-entry leniency.
+
+## `[context.hydration]` keys
+
+The prompt-hydration hook's four settings (`R-16.6a`). All four have
+defaults, so the section is optional; an absent section hydrates with the
+values below.
+
+| Key | Default | What it does |
+|---|---|---|
+| `enabled` | `true` | Whether the hook is INSTALLED. False removes the descriptor from the harness's hook config, so nothing runs at all. |
+| `budget_tokens` | `2000` | The token budget the slice is assembled under, passed through as `--budget`. |
+| `min_score` | `0.35` | The fused-score floor, in `[0, 1]`. A retrieved record scoring below it is dropped from the capsule. |
+| `timeout_seconds` | `3` | The whole hook's bound. On expiry it injects nothing and exits 0. |
+
+**`enabled` gates installation, not behaviour.** It decides whether the
+hook exists, not what it does once it runs. Scope safety is the scope
+resolver's job; this switch is not a privacy control and turning it off
+does not make anything safer that was unsafe with it on.
+
+**A malformed value is refused, not defaulted.** `enabled = "no"` fails
+the load with the key named rather than quietly enabling hydration:
+someone who wrote a value there meant something by it, and substituting
+one they did not write is the opposite of what they asked for. The hook
+itself takes the opposite posture — a config it cannot read leaves it
+running on the documented defaults — because one prompt losing its
+context to a typo in an unrelated table is worse than a prompt hydrated
+with the values the docs describe.
+
+**Reload class: hot, read at registration.** Like `[widget]`, the value a
+running daemon uses is the one it started with. A change takes effect on
+the next registration pass — a daemon restart, or the next
+`cascade context harness sync`.

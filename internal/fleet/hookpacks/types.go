@@ -108,6 +108,14 @@ type HookDescriptor struct {
 	EventType       HookEventType
 	Matcher         string
 	CommandTemplate string
+	// TimeoutSeconds is the per-hook timeout the harness enforces, in
+	// seconds. Zero omits the field and leaves the harness's own default
+	// in place — which is the right answer for a fire-and-forget POST
+	// that already carries `curl -m 1`, and the wrong one for a hook the
+	// harness WAITS on. P1-E16-W4-S34-T4's hydration hook is the second
+	// kind: the harness blocks the user's prompt until it answers, so the
+	// bound has to be stated rather than inherited.
+	TimeoutSeconds int
 }
 
 // HookPack is a named, ordered set of HookDescriptors that install and

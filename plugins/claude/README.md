@@ -95,6 +95,58 @@ true here already: **profile membership is never authorization.** A tool in
 `compact-write` still passes the capability filter, so an ungranted
 capability withholds it exactly as it would in `full`.
 
+## Prompt hydration
+
+Every prompt a harness session submits fires a `UserPromptSubmit` hook that
+runs `cascade context slice --hook`. The hook reads the harness's payload on
+stdin, assembles a budgeted context slice for that payload's working
+directory, drops every retrieved record below the configured fused-score
+floor, and injects what is left as additional context — so a session starts
+knowing what Cascade knows, without anyone running a command.
+
+The capsule's first line names what it is:
+
+```
+Cascade context (scope: repository/cascade, 3 items)
+```
+
+### It never blocks a prompt
+
+Hydration is CONTEXT, not policy. There is no failure mode in the hook that
+stops a prompt: a payload it cannot decode, a daemon it cannot reach, an
+unbuilt retrieval index, its own three-second timeout — every one of them
+prints nothing and exits 0, and the session proceeds unhydrated. It cannot
+gate, block or modify a prompt, and it has no code path that tries.
+
+The one thing it will not print is an EMPTY capsule. "Nothing cleared the
+score floor" and "here is no context" are different statements, and only the
+first one is true.
+
+### That silence is the problem, so it is counted
+
+Because it fails open, a degraded hydration is invisible from the user's
+side: a session with no context worth injecting and a session whose slice
+failed look identical. So every failure publishes a `context.hydration.degraded`
+event, and `cascade doctor` reports the count over the trailing 24 hours —
+warning above zero, failing above twenty. That check is the only place the
+silence becomes visible.
+
+The event goes through the daemon when one is reachable and straight onto
+the event log otherwise. That split is not a preference: the store takes an
+exclusive lock, so a hook that wrote directly while the daemon held the
+database would fail in exactly the common case.
+
+### Settings
+
+`[context.hydration]` in `config.toml` — `enabled` (default true),
+`budget_tokens` (2000), `min_score` (0.35), `timeout_seconds` (3). See
+`docs/config-reference.md` § `[context.hydration]` keys.
+
+`enabled` gates INSTALLATION: false means the hook descriptor is never
+written into the harness's hook config, so nothing runs. It is not a privacy
+control — scope safety is the scope resolver's job, and turning hydration off
+does not make anything safer that was unsafe with it on.
+
 ## What is deliberately not here
 
 The ticket contract names two further capabilities. Neither is unfinished

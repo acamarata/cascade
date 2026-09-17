@@ -133,7 +133,7 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	// context.scope.show (E/S-08.T4) and context.slice/context.show
 	// (E/S-09.T2) — see registerContextEngineHandlers below for why each
 	// owns a second sqlite connection instead of threading rawDB in.
-	if err := registerContextEngineHandlers(registry, paths, clock); err != nil {
+	if err := registerContextEngineHandlers(registry, paths, clock, bus); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -221,7 +221,7 @@ func mcpFilterFromOptions(opts []rpcServerOption) mcp.CapabilityFilter {
 // documented no-op after the first opens it (every schema apply here is
 // idempotent by contract). context.sync opens no connection at all — see
 // internal/daemon/context_sync.go's doc comment.
-func registerContextEngineHandlers(registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock) error {
+func registerContextEngineHandlers(registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock, bus *events.Bus) error {
 	if _, err := daemon.RegisterContextScopeHandler(registry, paths, clock); err != nil {
 		return err
 	}
@@ -231,6 +231,11 @@ func registerContextEngineHandlers(registry *rpc.Registry, paths runtime.PathPro
 	if err := daemon.RegisterContextSyncHandler(registry, paths, clock); err != nil {
 		return err
 	}
+	// context.hydration.degraded (P1-E16-W4-S34-T4): the prompt-hydration
+	// hook's telemetry door. It exists because the store takes an
+	// EXCLUSIVE lock — a hook that published directly while this daemon
+	// held the database would fail in exactly the common case.
+	daemon.RegisterContextHydrationHandler(registry, bus)
 	return nil
 }
 

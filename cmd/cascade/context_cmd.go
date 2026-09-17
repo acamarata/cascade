@@ -60,11 +60,20 @@ const contextAssembleDialTimeout = 5 * time.Second
 // newContextSliceCmd builds `context slice`.
 func newContextSliceCmd(deps contextScopeDeps) *cobra.Command {
 	var budget int
+	var hook bool
 	cmd := &cobra.Command{
 		Use:   "slice",
 		Short: "Assemble the token-budgeted context slice for this working directory",
 		Args:  usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// --hook is a different OUTPUT contract, not a different
+			// assembly: it reads a harness UserPromptSubmit payload on
+			// stdin and answers in the harness's own injection JSON
+			// rather than the versioned envelope (P1-E16-W4-S34-T4).
+			// See context_slice_hook.go.
+			if hook {
+				return runContextSliceHook(cmd, deps)
+			}
 			var override *int
 			if cmd.Flags().Changed("budget") {
 				override = &budget
@@ -77,6 +86,8 @@ func newContextSliceCmd(deps contextScopeDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().IntVar(&budget, "budget", 0, "override the max-token budget (must be positive)")
+	cmd.Flags().BoolVar(&hook, "hook", false,
+		"read a harness UserPromptSubmit payload on stdin and emit the prompt-hydration capsule")
 	return cmd
 }
 
@@ -105,8 +116,18 @@ func fetchContextSlice(ctx context.Context, deps contextScopeDeps, budget *int) 
 	if err != nil {
 		return daemon.ContextSliceResult{}, cascade.Wrap(cascade.KindUnavailable, err, "cascade context slice: resolve cwd")
 	}
-	params := daemon.ContextAssembleParams{Cwd: cwd, MaxTokens: budget}
+	return fetchContextSliceFor(ctx, deps, daemon.ContextAssembleParams{Cwd: cwd, MaxTokens: budget})
+}
 
+// fetchContextSliceFor is fetchContextSlice with the working directory
+// supplied rather than read from the process.
+//
+// The hydration hook needs it: the directory that matters there is the
+// one in the harness payload, and the hook process's own cwd is whatever
+// the harness happened to spawn it in. Factored out rather than
+// duplicated so both callers share one routing rule — a second copy is
+// how a daemonless path quietly stops matching the daemon one.
+func fetchContextSliceFor(ctx context.Context, deps contextScopeDeps, params daemon.ContextAssembleParams) (daemon.ContextSliceResult, error) {
 	st, ok := runtime.DaemonlessStateFrom(ctx)
 	if ok && !st.Embedded {
 		settings, err := daemon.ResolveSettings(nil, deps.Paths)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	casctx "github.com/acamarata/cascade/internal/context"
+	"github.com/acamarata/cascade/internal/context/hydration"
 	"github.com/acamarata/cascade/internal/fleet/hookpacks"
 	"github.com/acamarata/cascade/plugins/claude"
 )
@@ -58,6 +59,30 @@ func init() {
 	if err := claude.SetHookPackRenderer(renderDefaultHookPacks); err != nil {
 		panic("internal/plugins: wire cascade-claude hook-pack renderer: " + err.Error())
 	}
+}
+
+// RegisterHydrationPack registers the P1-E16-W4-S34-T4 prompt-hydration
+// hook pack when cfg says hydration is enabled, and returns whether it
+// did.
+//
+// It is NOT called from init, unlike the sessions pack, because the
+// decision depends on configuration and init runs before any config is
+// loaded. The composition root calls it once the config is in hand.
+//
+// [context.hydration].enabled gates INSTALLATION, not per-invocation
+// behaviour (R-16.6a): with it false the descriptor is never written into
+// the harness's hook config, so no hook runs at all. Scope safety is the
+// scope resolver's job, never this switch's.
+//
+// Registering the SAME pack name twice is how a re-registration after a
+// config reload replaces the previous descriptor set rather than
+// appending to it -- HookRegistry.RegisterPack keys by name.
+func RegisterHydrationPack(cfg hydration.Config) bool {
+	if !cfg.Enabled {
+		return false
+	}
+	hookpacks.DefaultRegistry.RegisterPack(hookpacks.HydrationPackName, hookpacks.HydrationPack())
+	return true
 }
 
 // claudePackName is the hook-registry key for cascade-claude's pack. It

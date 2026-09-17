@@ -58,6 +58,12 @@ var ErrEmptySocketPath = cascade.New(cascade.KindInvalidInput, "hookpacks: socke
 type hookCommandEntry struct {
 	Type    string `json:"type"`
 	Command string `json:"command"`
+	// Timeout is the harness's own per-hook timeout field, in seconds,
+	// omitted when the descriptor states none (P1-E16-W4-S34-T4). The
+	// field name and unit are the harness's, confirmed against the real
+	// client's embedded hook documentation — see
+	// testdata/cc-hook-fixtures/README.md.
+	Timeout int `json:"timeout,omitempty"`
 }
 
 // hookConfigEntry is one rendered HookDescriptor's installable
@@ -82,6 +88,7 @@ func (p HookPack) Render(socketPath string) ([]json.RawMessage, error) {
 			Hooks: []hookCommandEntry{{
 				Type:    "command",
 				Command: strings.ReplaceAll(d.CommandTemplate, socketPlaceholder, socketPath),
+				Timeout: d.TimeoutSeconds,
 			}},
 		}
 		raw, err := json.Marshal(entry)

@@ -1,0 +1,9 @@
+{
+  "session_id": "2e75df83-35a2-4557-8d2c-00b4a6f5acd7",
+  "transcript_path": "/tmp/ccapture/cfg/projects/-private-tmp-ccapture/2e75df83-35a2-4557-8d2c-00b4a6f5acd7.jsonl",
+  "cwd": "/private/tmp/ccapture",
+  "prompt_id": "64427c57-b2a1-45b8-b2db-d52889aabae9",
+  "permission_mode": "bypassPermissions",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "say ok"
+}

@@ -33,9 +33,12 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"log/slog"
 
+	"github.com/acamarata/cascade/internal/context/hydration"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/memory"
+	"github.com/acamarata/cascade/internal/plugins"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/provider"
 )
@@ -123,6 +126,20 @@ func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, d
 		return nil, nil, nil, err
 	}
 
+	// The prompt-hydration hook pack (P1-E16-W4-S34-T4). Registered here
+	// rather than in an init, because whether it registers at all is a
+	// configuration question -- [context.hydration].enabled -- and init
+	// runs before any config is loaded. Registering makes the descriptor
+	// part of the union a harness install renders; it does not itself
+	// install anything.
+	//
+	// A malformed [context.hydration] table registers NOTHING rather than
+	// registering the defaults: a user who wrote something there meant it,
+	// and quietly enabling hydration because their value did not parse is
+	// the opposite of what they asked for. The config loader is where they
+	// learn the table is wrong.
+	registerHydrationPack(cfg, logProvider.Logger())
+
 	// The fleet metrics' attention consumer. It counts promotions off the
 	// attention topic's OWN event stream, which is the one source that
 	// actually publishes (P1-E18-W4-S40-T3): auto-advance resolutions are
@@ -150,4 +167,28 @@ func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, d
 		schedCancel()
 		schedCleanup(context.Background())
 	}, nil
+}
+
+// registerHydrationPack resolves [context.hydration] and registers the
+// prompt-hydration hook pack when it is enabled, logging what it decided.
+//
+// It logs rather than returning an error for the same reason the metrics
+// consumer above does: a hook pack is a feature, and refusing to start a
+// daemon over one would trade a working system for a complete one.
+func registerHydrationPack(cfg *runtime.Config, log *slog.Logger) {
+	if cfg == nil {
+		return
+	}
+	resolved, err := hydration.LoadSection(cfg.Extra[hydration.ParentSectionName])
+	if err != nil {
+		log.Warn("prompt hydration not registered", slog.String("reason", err.Error()))
+		return
+	}
+	if plugins.RegisterHydrationPack(resolved) {
+		log.Debug("prompt hydration registered",
+			slog.Int("budget_tokens", resolved.BudgetTokens),
+			slog.Float64("min_score", resolved.MinScore))
+		return
+	}
+	log.Debug("prompt hydration disabled by configuration")
 }
