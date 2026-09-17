@@ -1,0 +1,30 @@
+=== role=gci name=.config/opencode/AGENTS.md
+<!-- cascade:generate-instructions digest=sha256:c71d7f9ba7f2daae5655ba7845dc7e3c7d0356ac0f810ee71515841e6d4f4885 -->
+## Cascade Context — GCI Tier (Global Cascade Instructions)
+
+**MCP server:** `stdio: cascade mcp stdio`
+
+Call `cascade.search` before responding to queries about this project.
+Call `cascade.context_slice` to retrieve relevant context from the RAG index.
+If the cascade MCP tools are unavailable, run `cascade recall` and `cascade context slice` through Bash instead.
+
+# Global
+
+Short sentences.
+
+<!-- /cascade:generate-instructions -->
+=== role=pri name=AGENTS.md
+<!-- cascade:generate-instructions digest=sha256:77ba86093bbdcd917047e45d409823f44671044d0458db42196734b023dca058 -->
+## Cascade Context — PRI Tier (Per-Repo Instructions)
+
+**MCP server:** `stdio: cascade mcp stdio`
+
+Call `cascade.search` before responding to queries about this project.
+Call `cascade.context_slice` to retrieve relevant context from the RAG index.
+If the cascade MCP tools are unavailable, run `cascade recall` and `cascade context slice` through Bash instead.
+
+# Repo Instructions
+
+Run the tests.
+
+<!-- /cascade:generate-instructions -->

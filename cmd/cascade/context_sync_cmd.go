@@ -179,7 +179,7 @@ func (v contextSyncCheckHumanView) String() string {
 		if d.Stale {
 			status = "stale"
 		}
-		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", d.Harness, d.Path, status, d.Reason)
+		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", driftHarnessLabel(d), d.Path, status, d.Reason)
 	}
 	_ = tw.Flush()
 	return strings.TrimRight(buf.String(), "\n")
@@ -192,4 +192,17 @@ type contextSyncHumanView struct{ daemon.ContextSyncResult }
 // contract names verbatim.
 func (v contextSyncHumanView) String() string {
 	return fmt.Sprintf("%d file(s) regenerated / %d already fresh", v.Regenerated, v.AlreadyFresh)
+}
+
+// driftHarnessLabel names every harness that reads the row's file.
+//
+// One file at one path can serve two harnesses, and the row is printed
+// once. Labelling it with only the first claimant tells an operator whose
+// other harness is the drifted one that some unrelated harness is the
+// problem — and, worse, implies theirs is fine.
+func driftHarnessLabel(d cascadecontext.DriftResult) string {
+	if len(d.AlsoServes) == 0 {
+		return d.Harness
+	}
+	return d.Harness + "+" + strings.Join(d.AlsoServes, "+")
 }

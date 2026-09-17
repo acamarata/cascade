@@ -20,15 +20,23 @@ import "sort"
 // reader.
 func WithDrift(states []HarnessState, result SyncResult) []HarnessState {
 	byKind := map[HarnessKind]DriftResult{}
+	// Every harness the entry names, not just the first claimant. Two of
+	// the three read one file at one path, so the check reports it once
+	// under one name and lists the rest in AlsoServes. Indexing on
+	// Harness alone left the second harness with no entry at all, and a
+	// harness with no drift entry reads as "in sync" — a stale file
+	// reported as healthy, in the surface built to say otherwise.
 	for _, d := range result.Drift {
-		kind := HarnessKind(d.Harness)
-		// First stale entry wins: a harness with several generated files
-		// is drifted if ANY of them is, and the first reason is the one
-		// a reader acts on.
-		if existing, seen := byKind[kind]; seen && existing.Stale {
-			continue
+		for _, name := range append([]string{d.Harness}, d.AlsoServes...) {
+			kind := HarnessKind(name)
+			// First stale entry wins: a harness with several generated
+			// files is drifted if ANY of them is, and the first reason
+			// is the one a reader acts on.
+			if existing, seen := byKind[kind]; seen && existing.Stale {
+				continue
+			}
+			byKind[kind] = d
 		}
-		byKind[kind] = d
 	}
 	out := make([]HarnessState, len(states))
 	copy(out, states)

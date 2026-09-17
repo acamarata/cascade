@@ -92,6 +92,25 @@ instruction files for all three regardless of what is on the machine, so
 drift on an absent harness is true of the file and of no use to the
 reader.
 
+## One file, two harnesses
+
+Two of the three harnesses read `AGENTS.md` at the same project path. One
+file on disk serves both, with identical content — that is the convention
+those tools share, not a collision to work around.
+
+Two things follow from it:
+
+- **Drift is reported once, for both.** `cascade context sync --check`
+  prints one row for that file and labels it with every harness that reads
+  it (`codex+opencode`), because one file on disk is one row. `harness
+  list` shows the same drift against each of them.
+- **Uninstalling one of them removes the file the other reads.** This is a
+  known gap, not a design: an adapter cannot currently tell whether
+  another harness is installed. Until it can, re-run `cascade context
+  harness sync` after uninstalling either one.
+
+The two only diverge at the global tier, where each has its own directory.
+
 ## The doctor row
 
 ```
@@ -104,6 +123,19 @@ check runs alongside every other one, as a normal row in the report.
 The check reports which harnesses are installed and whether their
 instruction files are current. Harness status alone does not change
 doctor's exit code — existing exit-code semantics are unchanged.
+
+## Conformance
+
+Every shipped harness serializer is held to one suite: same managed-block
+markers, same rendered body for a given tier, idempotent install, drift
+reported once per file and against every harness that reads it, and a
+typed refusal on malformed input. The suite runs over the registry of
+serializers rather than a list written beside it, so adding a harness opts
+it in automatically.
+
+The corpus it asserts against is captured from real generator runs;
+provenance for each golden is in `internal/context/testdata/cross-harness/README.md`
+and `internal/plugins/testdata/cross-harness/README.md`.
 
 ## See also
 

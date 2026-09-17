@@ -56,6 +56,20 @@ type DriftResult struct {
 	Stale bool
 	// Reason names why Stale is true. Empty when Stale is false.
 	Reason string
+	// AlsoServes names the OTHER harnesses that read this same file.
+	//
+	// Two of the three harnesses read `AGENTS.md` at the same project
+	// path, so one file on disk serves both. The check reports that file
+	// once — reporting it twice under two names would tell a caller two
+	// files are stale when one is — and Harness above holds the first
+	// claimant. Without this field the second claimant vanishes, and a
+	// consumer that keys drift BY HARNESS then finds no entry for it and
+	// reports it in sync. That is not a hypothetical: it is what
+	// `cascade context harness list` did for opencode until this field
+	// existed.
+	//
+	// Empty means exactly one harness reads this file.
+	AlsoServes []string `json:"also_serves,omitempty"`
 }
 
 // SyncResult summarizes one DriftCheck or one regeneration run.
@@ -116,7 +130,7 @@ func harnessName(w HarnessGenerator) string {
 func DriftCheck(ctx context.Context, mc MergedContext, roots map[TierRole]string) ([]DriftResult, error) {
 	_ = ctx // no I/O in this package's generators needs cancellation today
 	var results []DriftResult
-	seen := make(map[string]struct{}, len(roots)*3)
+	seen := make(map[string]int, len(roots)*3)
 	for _, w := range harnessWriters() {
 		name := harnessName(w)
 		files, err := w.Generate(mc)
@@ -124,32 +138,38 @@ func DriftCheck(ctx context.Context, mc MergedContext, roots map[TierRole]string
 			results = append(results, DriftResult{Harness: name, Stale: true, Reason: err.Error()})
 			return results, err
 		}
-		results = append(results, driftForFiles(name, files, roots, seen)...)
+		driftForFiles(name, files, roots, seen, &results)
 	}
 	return results, nil
 }
 
-// driftForFiles reports drift for one harness's freshly generated files,
-// skipping any path an earlier harness in the same run already reported —
-// two harnesses that read the same file at the same path (the AGENTS.md
-// pair) must not be reported twice under two different harness names for
-// what is, on disk, one file.
-func driftForFiles(name string, files []HarnessFile, roots map[TierRole]string, seen map[string]struct{}) []DriftResult {
-	results := make([]DriftResult, 0, len(files))
+// driftForFiles appends drift for one harness's freshly generated files to
+// out, and records name on an EXISTING entry when an earlier harness in
+// the same run already reported that path.
+//
+// Two harnesses read the same file at the same path (the AGENTS.md pair),
+// and it must not be reported twice under two different harness names for
+// what is, on disk, one file. But the second harness is not dropped: it is
+// added to that entry's AlsoServes, because a consumer keying drift by
+// harness needs to find it there. seen maps a path to its entry's index in
+// out for exactly that reason.
+func driftForFiles(
+	name string, files []HarnessFile, roots map[TierRole]string, seen map[string]int, out *[]DriftResult,
+) {
 	for _, f := range files {
 		root := roots[f.Role]
 		if root == "" {
 			continue
 		}
 		path := filepath.Join(root, filepath.FromSlash(f.Name))
-		if _, dup := seen[path]; dup {
+		if i, dup := seen[path]; dup {
+			(*out)[i].AlsoServes = append((*out)[i].AlsoServes, name)
 			continue
 		}
-		seen[path] = struct{}{}
 		stale, reason := fileDrift(path, f)
-		results = append(results, DriftResult{Harness: name, Path: path, Stale: stale, Reason: reason})
+		seen[path] = len(*out)
+		*out = append(*out, DriftResult{Harness: name, Path: path, Stale: stale, Reason: reason})
 	}
-	return results
 }
 
 // fileDrift reports whether path's on-disk content differs from f, reusing
