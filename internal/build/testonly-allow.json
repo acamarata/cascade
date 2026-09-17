@@ -1347,34 +1347,6 @@
     "symbol": "internal/storage/queue.New"
   },
   {
-    "caller_site": "cmd/cascade/sync_cmd.go",
-    "expected_caller": "`cascade sync run`, which asks the peer for its cursor before serving an incremental batch",
-    "reason": "The refusal is real and tested: a peer whose cursor predates the oldest retained tombstone cannot be caught up incrementally without handing it back every record it should have removed. Nothing calls it yet because the surface that receives a peer's cursor is the sync CLI/RPC, which P1-E17-W4-S38-T3 builds. Listed rather than deleted because deleting it would mean rediscovering the resurrection hazard when that ticket lands.",
-    "retire_ticket": "P1-E17-W4-S38-T3",
-    "symbol": "internal/sync.CheckPeerCursor"
-  },
-  {
-    "caller_site": "cmd/cascade/sync_cmd.go",
-    "expected_caller": "`cascade sync status`, which reports what this peer's tier may sync",
-    "reason": "The diagnostic half of the domain x tier table. Its consumer is the status verb P1-E17-W4-S38-T3 builds; the gate behind it (EligibleForTier) is wired and reached.",
-    "retire_ticket": "P1-E17-W4-S38-T3",
-    "symbol": "internal/sync.EligibleDomains"
-  },
-  {
-    "caller_site": "cmd/cascade/sync_daemon_wire.go",
-    "expected_caller": "S-38.T2/T3's daemon composition-root wiring, once a provider.Store is threaded to the sync engine construction site",
-    "reason": "P1-E17-W4-S38-T1 ships the sync engine core (domains/cursors/filter/chunk/transfer/egress), fully implemented and unit-tested including a real-sshd integration test. Engine composition needs a provider.Store, which is only available where daemon_unix_run.go's buildRPCServer already resolves one -- that file is out of this ticket's files_scope (only cmd/cascade/daemon.go is, and it is already at the 300-line cap with no Store of its own to inject, mirroring this same file's existing NodeTunnels/Target CONTRADICTION precedent).",
-    "retire_ticket": "P1-E17-W4-S38-T3",
-    "symbol": "internal/sync.NewEngine"
-  },
-  {
-    "caller_site": "internal/runtime/config_sync.go",
-    "expected_caller": "internal/runtime/config_sections.go's parseConfigSections, which would add a parseSyncSection call alongside its existing section parsers",
-    "reason": "P1-E17-W4-S38-T1 ships the [sync] config section parser (tightening-only hot reload per D-26), fully implemented and unit-tested. The contract names internal/runtime's C/S-04.T1 config frame (parseConfigSections) as its real caller, but that file is not in this ticket's files_scope (only internal/sync/config.go is) -- see this file's own header CONTRADICTION note.",
-    "retire_ticket": "P1-E17-W4-S38-T3",
-    "symbol": "internal/sync.ParseSection"
-  },
-  {
     "caller_site": "internal/plugins/manifest.go",
     "expected_caller": "O/S-32.T3's plugin manifest v2 loader, once it threads a plugin's storage.sync declaration through PluginClass",
     "reason": "P1-E17-W4-S38-T1 ships plugin-manifest-v2 `storage.sync` key resolution, fully implemented and unit-tested. Its real caller is the plugin manifest v2 loader (O/S-32.T3), which reads the declared storage.sync key per plugin and calls this to resolve the plugin's DomainClass -- that loader wiring is out of this ticket's files_scope.",

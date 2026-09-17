@@ -33,6 +33,11 @@ import (
 // (P1-E41-W9-S79-T2, see internal/daemon/fleet_mode_rpc.go's header).
 func wireFleetAndNodeHandlers(registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider, settings daemon.Settings) error {
 	daemon.RegisterFleetJournalHandler(registry, store, clock)
+	// sync.status/run/conflicts_list/conflicts_resolve (P1-E17-W4-S38-T3).
+	// Mounted unconditionally: see internal/daemon/sync_rpc.go for why a
+	// nil store does not disable this namespace the way it disables its
+	// neighbours.
+	daemon.RegisterSyncHandlers(registry, store, clock, settings.Sync)
 	daemon.RegisterFleetAttentionHandler(registry, store, clock, bus)
 	// supervisor.snapshot/events_schema (P1-E18-W4-S40-T4), now over the
 	// process's REAL metrics registry (P1-E18-W4-S40-T3 closed the

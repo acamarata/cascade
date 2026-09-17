@@ -1,0 +1,48 @@
+# sync-conflicts.txtar
+#
+# testscript: executable
+#
+# `cascade sync conflicts list|resolve` — the read surface and the two
+# refusals on the elevated one. Run in process by TestScript
+# (script_test.go).
+
+# An empty journal SAYS it is empty rather than printing a bare header a
+# reader would take for a broken command.
+exec cascade sync conflicts list
+stdout 'no conflicts journaled'
+
+exec cascade --json sync conflicts list
+stdout '"conflicts"'
+
+# Resolving a record the journal never carried is refused, and the refusal
+# points at the verb that would list the open ones.
+! exec cascade sync conflicts resolve cfg-3 --keep server
+stderr 'no journaled conflict names record'
+stderr 'sync conflicts list'
+
+# A side this verb does not know is refused rather than defaulted. The
+# choice is a parameter, never a prompt, so a non-interactive run can
+# make it — but it has to actually make it.
+! exec cascade sync conflicts resolve cfg-3 --keep mine
+stderr 'is not a side to keep'
+
+! exec cascade sync conflicts resolve cfg-3
+stderr 'is not a side to keep'
+
+# Under CASCADE_NO_INPUT=1 the discarding side is a HARD ERROR, never a
+# hang and never an assumption: a machine that cannot ask must be told.
+# This refusal lands before the record is even looked up, which is why it
+# is visible on an empty journal.
+env CASCADE_NO_INPUT=1
+! exec cascade sync conflicts resolve cfg-3 --keep local
+stderr 'requires --yes'
+stderr 'no prompt was attempted'
+
+# The harmless side is NOT gated by the same rule: a non-interactive
+# machine can still accept what the merge already decided.
+! exec cascade sync conflicts resolve cfg-3 --keep server
+stderr 'no journaled conflict names record'
+
+# `resolve` needs the record it is about.
+! exec cascade sync conflicts resolve
+stderr 'accepts 1 arg'

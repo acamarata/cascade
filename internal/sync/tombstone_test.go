@@ -99,6 +99,15 @@ func TestTombstonesNeverPruned(t *testing.T) {
 			"it deleted for every peer that was offline across the prune",
 			tombstoneRetention, retentionNever)
 	}
+	// The floor SendBatch's guard compares a peer's cursor against has to
+	// agree with the constant above. Pinned together here so a second
+	// retention policy cannot land while OldestRetainedTombstone still
+	// answers zero — which would leave the guard wired and toothless, the
+	// worst of both.
+	if got := OldestRetainedTombstone(); got != 0 {
+		t.Errorf("OldestRetainedTombstone() = %d under retention %q; nothing is ever pruned, "+
+			"so the oldest retained tombstone is the oldest that ever existed", got, tombstoneRetention)
+	}
 }
 
 // TestVectorUnionIsCommutative is the property a hand-written case missed

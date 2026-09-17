@@ -118,7 +118,19 @@ func TestIsElevated_ConditionalVerbs(t *testing.T) {
 		{"plugin.add", `{"name":"x"}`, false},
 		{"plugin.add", `{"name":"x","process_tier":"trusted"}`, true},
 		{"plugin.add", `{"name":"x","grant_expand":true}`, true},
-		{"sync.conflicts_resolve", `{"resolution":"client-primary"}`, false},
+		// Keeping the server's side is what the merge already decided:
+		// re-affirming it changes nothing and is not elevated.
+		{"sync.conflicts_resolve", `{"record_id":"cfg-3","keep":"server"}`, false},
+		// Keeping the local side DISCARDS the server's copy. This is the
+		// §5.14 case, and the one the rule used to let through ungated.
+		{"sync.conflicts_resolve", `{"record_id":"cfg-3","keep":"local"}`, true},
+		// Fail closed: a side that is missing, unreadable, or not one of
+		// the two elevates rather than slipping past the gate.
+		{"sync.conflicts_resolve", `{"record_id":"cfg-3"}`, true},
+		{"sync.conflicts_resolve", `{"record_id":"cfg-3","keep":7}`, true},
+		{"sync.conflicts_resolve", `not json`, true},
+		// The field the rule used to read is not a side to keep; sending
+		// it must not exempt anything.
 		{"sync.conflicts_resolve", `{"resolution":"server-primary"}`, true},
 		{"policy.set", `{"direction":"narrow"}`, false},
 		{"policy.set", `{"direction":"loosen"}`, true},

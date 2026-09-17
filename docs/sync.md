@@ -206,3 +206,39 @@ path ever widens a tier.
 | Peer cursor older than the oldest tombstone | Refused; full resync required |
 | Phase state diverged | Refused and journaled; never engine-merged |
 | Blob never admitted by staging | Refused; the union carries admitted blobs only |
+
+## CLI (S-38.T3)
+
+The `sync` noun mirrors the `sync.*` RPC methods one for one:
+
+| Verb | RPC method | Reads | Writes |
+|---|---|---|---|
+| `sync status` | `sync.status` | domain classes, strategies, tier eligibility, cursors, open-conflict count | — |
+| `sync run [--domain <d>]` | `sync.run` | the eligible domain set | one engine run per domain |
+| `sync conflicts list` | `sync.conflicts_list` | the journal above | — |
+| `sync conflicts resolve <id> --keep server\|local` | `sync.conflicts_resolve` | the journal | the resolution |
+
+Three properties of this surface are load-bearing rather than cosmetic:
+
+**Status lists every registered domain, including the ones this peer's
+tier may not sync.** The report exists to explain why something is not
+syncing, and omitting the domain is the least useful possible answer to
+that question.
+
+**A cursor position that could not be read is reported as unread, never as
+zero.** Zero is a real position — a domain that has never synced is at
+zero — so `position` and `position_known` are separate fields, and the
+human rendering prints `?`.
+
+**Discarding the server-primary side is the only elevated resolution.**
+`--keep server` re-affirms what the merge already decided and changes
+nothing; `--keep local` throws the server's copy away and overrides the
+authority a server-primary domain is defined by (06-FORGE-SPEC §5.14). The
+side is chosen by flag, never by a blocking prompt, so a non-interactive
+run can make the choice — but the discarding side is additionally refused
+on Windows (tier-2), refused under `CASCADE_NO_INPUT=1` without `--yes`,
+and refused outright when no elevation gate is wired. It is never exposed
+as an MCP tool.
+
+Full verb reference, including exit codes and the current implementation
+status of `sync run`: [docs/cli-reference/sync.md](cli-reference/sync.md).

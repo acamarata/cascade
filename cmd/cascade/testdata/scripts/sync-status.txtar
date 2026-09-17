@@ -1,0 +1,34 @@
+# sync-status.txtar
+#
+# testscript: executable
+#
+# `cascade sync status` on a machine that has never synced. Run in
+# process by TestScript (script_test.go) against the REAL composition
+# root, so what this asserts is what an operator's own shell would see.
+
+# Every registered domain is listed, including the ones this peer's tier
+# may not sync: a report that omitted them would answer "why is memory not
+# syncing?" by omitting memory.
+exec cascade sync status
+stdout 'peer tier: controller'
+stdout 'open conflicts: 0'
+stdout 'config/config'
+stdout 'memory/memory'
+stdout 'blobs/blobs'
+
+# The strategy each domain would merge with is named, so a reader can tell
+# a server-primary overwrite from an append merge before one happens.
+stdout 'server-primary-lww'
+stdout 'append-merge-tombstones'
+
+# --json emits the versioned envelope, with the position and its
+# separate "was it readable" flag. Zero is a real position — a domain that
+# has never synced is AT zero — so the two facts never collapse into one.
+exec cascade --json sync status
+stdout '"domains"'
+stdout '"position_known"'
+stdout '"eligible"'
+
+# A positional argument is refused rather than ignored.
+! exec cascade sync status extra-arg
+stderr 'unknown command'

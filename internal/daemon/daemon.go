@@ -45,6 +45,7 @@ import (
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
+	syncpkg "github.com/acamarata/cascade/internal/sync"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -75,6 +76,19 @@ type Settings struct {
 	GraceSet      bool
 	// Nodes is the [nodes] section; node_dispatch_rpc.go reads its knobs.
 	Nodes nodes.Section
+	// Sync is the [sync] section's per-domain class overrides, parsed by
+	// internal/sync.ParseSection. sync_rpc.go hands it to the sync
+	// surface, so `sync status` and `sync run` answer with the class the
+	// operator actually configured.
+	//
+	// Resolved HERE rather than in internal/runtime's config frame, which
+	// is where the section parser's original allow-list entry expected
+	// its caller: internal/runtime cannot import internal/sync without a
+	// cycle (sync -> hooks/egress -> secrets -> audit -> events ->
+	// runtime). This package already resolves [nodes] out of Extra for
+	// exactly the same reason, so the section follows the precedent that
+	// exists rather than the one that was guessed at.
+	Sync syncpkg.Config
 }
 
 // parseGraceValue accepts either a Go duration string ("5s", per every

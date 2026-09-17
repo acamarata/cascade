@@ -68,6 +68,20 @@ func NewCursorStore(store provider.Store, clock Clock) *CursorStore {
 // (Position 0) if none has ever been written — a fresh sync starts at
 // position zero, which Advance treats as the lowest valid position.
 func (c *CursorStore) Get(ctx context.Context, domain storage.DomainID, subkind string) (Cursor, error) {
+	if c == nil || c.store == nil {
+		// A typed refusal, not a panic and not a zero cursor. Reporting
+		// position zero for "there is no store" would tell a caller this
+		// domain had never synced, which is a different fact from "this
+		// process cannot tell you" — and `sync status` renders the first
+		// as a number an operator would believe.
+		//
+		// This guard cannot catch a TYPED nil — a (*Driver)(nil) in the
+		// interface is not == nil — so it is the second line of defence,
+		// not the first. The first is every constructor returning the
+		// interface type rather than the concrete one.
+		return Cursor{}, cascade.New(cascade.KindUnavailable,
+			"sync: no cursor store is open, so no domain's position can be read")
+	}
 	raw, err := c.store.Get(ctx, cursorNamespace, cursorKey(domain, subkind))
 	if err != nil {
 		if cascade.HasKind(err, cascade.KindNotFound) {

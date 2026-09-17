@@ -1,0 +1,31 @@
+# sync-run.txtar
+#
+# testscript: executable
+#
+# `cascade sync run` — the refusals, which are the whole of this verb's
+# behaviour on a machine with no sync session open. Run in process by
+# TestScript (script_test.go).
+
+# A domain nobody registered is a TYPO, and is refused naming what is
+# registered. This is checked before the wiring gap below, because a
+# caller's typo is their mistake whether or not this machine could have
+# synced anything.
+! exec cascade sync run --domain confgi
+stderr 'not a registered sync domain'
+stderr 'config/config'
+
+# With no run path wired, `run` REPORTS that nothing would be synced. The
+# outcome table is absent: reporting success for work nobody did is the
+# one result this composition must never produce.
+! exec cascade sync run
+stderr 'no run path is wired'
+! stdout 'RESULT'
+
+# The refusal is typed, so --json carries it as a failure rather than as
+# an empty success document.
+! exec cascade --json sync run
+stdout '"ok": false'
+
+# A positional argument is refused.
+! exec cascade sync run nonsense
+stderr 'unknown command'

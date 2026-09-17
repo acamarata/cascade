@@ -73,6 +73,16 @@ func (e *Engine) Cursors() *CursorStore { return e.cursors }
 // the admitted set through the sync egress class, and sends it as a
 // chunked stream on conn starting at fromSeq.
 func (e *Engine) SendBatch(ctx context.Context, conn io.Writer, domain storage.DomainID, subkind string, recs []Record, streamID uint64, fromSeq uint64) (Cursor, error) {
+	// fromSeq IS the peer's cursor: it is the position the peer asked to
+	// be served from. A peer whose cursor predates the oldest retained
+	// tombstone cannot be caught up incrementally — the deletes it missed
+	// are the pruned ones — so serving it would hand back every record it
+	// should have removed. Refused here, before a single record is
+	// filtered, because a resurrection is not visible until the records
+	// reappear.
+	if err := CheckPeerCursor(fromSeq, OldestRetainedTombstone()); err != nil {
+		return Cursor{}, err
+	}
 	admitted, excluded := FilterBatch(recs)
 	pos := e.nextPosition(ctx, domain, subkind)
 	for _, excl := range excluded {

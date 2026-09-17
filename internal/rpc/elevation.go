@@ -173,11 +173,17 @@ var elevationTable = []verbRule{
 	{method: "node.enroll", always: true},
 	{method: "node.remove", always: true},
 	{method: "node.upgrade", always: true},
-	// sync.conflicts_resolve is elevated only when the resolution
-	// discards local state in favor of server-primary, per §5.14.
-	{method: "sync.conflicts_resolve", conditional: func(p json.RawMessage) bool {
-		return jsonFieldEquals(p, "resolution", "server-primary")
-	}},
+	// sync.conflicts_resolve is elevated when the resolution DISCARDS the
+	// server-primary side, per §5.14 ("when discarding server-primary").
+	//
+	// This rule used to read the other way round — it elevated
+	// `{"resolution":"server-primary"}`, which is the side that keeps
+	// what the merge already decided and changes nothing — so the gate
+	// stood in front of the harmless verb and the destructive one went
+	// through ungated. It also read a params field (`resolution`) that no
+	// caller sends: internal/sync's surface takes `keep`, so even the
+	// inverted rule never matched a real request (R-14.273).
+	{method: "sync.conflicts_resolve", conditional: discardsServerPrimary},
 	// policy/sensitivity changes are elevated only when they LOOSEN
 	// (widen) the resolved value, per §5.14 + §5 item 16's "widening a
 	// resolved tier is a LOOSENING (elevated verb); narrowing is always

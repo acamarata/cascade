@@ -98,6 +98,27 @@ func unionKeys(a, b map[string]uint64) map[string]struct{} {
 	return keys
 }
 
+// OldestRetainedTombstone is the lowest revision whose tombstone this
+// device still holds.
+//
+// It is ZERO, and says so plainly rather than hiding behind a lookup:
+// tombstoneRetention is the compile-time constant `never` (config.go), so
+// nothing is ever pruned and every tombstone ever written is still here.
+// Every peer cursor is therefore catchable today, and CheckPeerCursor
+// below cannot currently refuse.
+//
+// It exists as a function anyway, and the guard is wired, because the day
+// retention becomes settable is the day the resurrection hazard becomes
+// real — and the cost of finding that out then is a fleet quietly handing
+// deleted records back to each other. Wiring the check now costs one
+// comparison; discovering it later costs the data.
+// A second retention policy must change this function as well as the
+// constant; tombstone_test.go pins the pair together so it cannot be
+// added while this still answers zero.
+func OldestRetainedTombstone() uint64 {
+	return 0
+}
+
 // CheckPeerCursor refuses a peer whose cursor predates the oldest retained
 // tombstone.
 //

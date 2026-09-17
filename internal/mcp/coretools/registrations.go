@@ -47,7 +47,7 @@ func Registrations(dispatcher Dispatcher) []mcp.CoreRegistration {
 	}
 	var out []mcp.CoreRegistration
 	for _, spec := range Specs() {
-		if !dispatcher.Registered(spec.Method) {
+		if !exposable(spec) || !dispatcher.Registered(spec.Method) {
 			continue
 		}
 		out = append(out, registrationFor(dispatcher, spec, spec.Name))
@@ -60,6 +60,26 @@ func Registrations(dispatcher Dispatcher) []mcp.CoreRegistration {
 		}
 	}
 	return out
+}
+
+// exposable reports whether spec may appear on the MCP surface at all,
+// independently of whether this process happens to serve its method.
+//
+// AN ELEVATED VERB IS NEVER AN MCP TOOL (07's header rule). Decided here,
+// at the moment of registration, rather than only asserted in a test: MCP
+// carries no attestation, so a verb the elevation table lists — even one
+// it lists only CONDITIONALLY — would arrive at its handler through this
+// surface with no gate in front of it at all.
+//
+// A refused spec is skipped silently, like a tool the capability filter
+// hides, because a client that could tell "denied" from "does not exist"
+// would learn that a privileged tool exists.
+//
+// Its own function so it can be exercised against a verb that is actually
+// elevated: nothing in Specs() is today, and a branch no test can reach
+// is a branch that stops working without anybody noticing.
+func exposable(spec Spec) bool {
+	return !rpc.IsElevatedVerb(spec.Method)
 }
 
 // Unservable names every spec whose method this dispatcher does not

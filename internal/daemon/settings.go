@@ -7,6 +7,7 @@ package daemon
 
 import (
 	"github.com/acamarata/cascade/internal/runtime"
+	syncpkg "github.com/acamarata/cascade/internal/sync"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -27,6 +28,14 @@ func ResolveSettings(cfg *runtime.Config, paths runtime.PathProvider) (Settings,
 		return Settings{}, err
 	}
 	s.Nodes = nodesSection
+	// The [sync] overrides. A malformed or WIDENING entry is a typed
+	// error, never a silently-dropped key: a class an operator set and
+	// the daemon ignored would be a policy they believed was in force.
+	syncCfg, err := syncpkg.ParseSection(cfg.Extra, nil)
+	if err != nil {
+		return Settings{}, err
+	}
+	s.Sync = syncCfg
 	section, ok := cfg.Extra["daemon"].(map[string]interface{})
 	if !ok {
 		return s, nil

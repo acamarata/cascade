@@ -27,6 +27,7 @@ Available Commands:
   recall         Search the retrieval index and print cited results
   run            Dispatch a one-shot or streaming model task through the conductor
   status         One-shot summary of the running daemon
+  sync           Replicate domains between this device and its peers
   vault          Store and retrieve secrets in the platform keychain
   version        Print the cascade version, commit, build date, and install channel
 
