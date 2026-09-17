@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T11:43:14Z",
+  "generated_at": "2026-09-17T11:50:11Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -16962,8 +16962,22 @@
       "name": "internal/runtime/init acceptance",
       "sites": [
         {
+          "file": "internal/runtime/init/accept_endpoint_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T5",
+          "raw": "internal/runtime/init acceptance (ADD) -- P1-E16-W4-S35-T5."
+        },
+        {
           "file": "internal/runtime/init/accept_harness_test.go",
           "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T5",
+          "raw": "internal/runtime/init acceptance (ADD) — P1-E16-W4-S35-T5."
+        },
+        {
+          "file": "internal/runtime/init/accept_provider_test.go",
+          "line": 14,
           "status": "ADD",
           "ticket": "P1-E16-W4-S35-T5",
           "raw": "internal/runtime/init acceptance (ADD) — P1-E16-W4-S35-T5."
@@ -23054,7 +23068,7 @@
       ]
     }
   ],
-  "total_sites": 2233,
+  "total_sites": 2235,
   "unspecified_count": 66,
   "multi_status_count": 40
 }

@@ -1,0 +1,9 @@
+{
+  "id": "msg_accept_fixture",
+  "type": "message",
+  "role": "assistant",
+  "model": "accept-model-1",
+  "content": [{ "type": "text", "text": "hi" }],
+  "stop_reason": "max_tokens",
+  "usage": { "input_tokens": 1, "output_tokens": 1 }
+}

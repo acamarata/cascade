@@ -210,3 +210,14 @@ func jsonTail(out string) string {
 	}
 	return out
 }
+
+// runEnv is run with an explicit environment, for a scenario that needs a
+// variable the standard one does not carry.
+func (e env) runEnv(t *testing.T, environ []string, args ...string) (string, int) {
+	t.Helper()
+	cmd := exec.Command(e.bin, args...)
+	cmd.Dir = e.project
+	cmd.Env = environ
+	out, err := cmd.CombinedOutput()
+	return string(out), exitCodeOf(t, err)
+}

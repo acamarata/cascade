@@ -1,0 +1,14 @@
+{
+  "id": "chatcmpl-accept-fixture",
+  "object": "chat.completion",
+  "created": 1700000000,
+  "model": "accept-model-1",
+  "choices": [
+    {
+      "index": 0,
+      "message": { "role": "assistant", "content": "hi" },
+      "finish_reason": "length"
+    }
+  ],
+  "usage": { "prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2 }
+}

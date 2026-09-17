@@ -1,0 +1,13 @@
+{
+  "data": [
+    {
+      "id": "accept-model-1",
+      "type": "model",
+      "display_name": "Accept Fixture Model",
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "has_more": false,
+  "first_id": "accept-model-1",
+  "last_id": "accept-model-1"
+}
