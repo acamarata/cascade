@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -151,6 +152,14 @@ func TestSaveLeavesNoTemporaryFileBehind(t *testing.T) {
 	info, err := os.Stat(StatePath(home))
 	if err != nil {
 		t.Fatalf("Stat: %v", err)
+	}
+	// Windows does not carry POSIX permission bits: os.Stat reports 0666
+	// for a file created with 0600, so the mode half of this assertion
+	// measures the platform rather than the code. The temp-file half above
+	// is the part that is portable, and it still runs there.
+	if goruntime.GOOS == GOOSWindows {
+		t.Logf("journal mode not asserted: %s has no POSIX permission bits", goruntime.GOOS)
+		return
 	}
 	if mode := info.Mode().Perm(); mode != 0o600 {
 		t.Errorf("journal mode = %o, want 0600 (it sits in the cascade home)", mode)

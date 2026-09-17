@@ -15,6 +15,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"sort"
 	"testing"
 
@@ -106,9 +107,25 @@ func crossHarnessProject(t *testing.T) string {
 	home := t.TempDir()
 	writeTierFile(t, dir, "# Repo Instructions\n\nRun the tests.\n")
 	writeTierFile(t, home, "# Global\n\nShort sentences.\n")
-	t.Setenv("HOME", home)
+	pinHome(t, home)
 	crossHarnessHome = home
 	return dir
+}
+
+// pinHome points os.UserHomeDir at home on every platform this suite runs
+// on.
+//
+// HOME alone is not enough: os.UserHomeDir reads %USERPROFILE% on
+// windows, so a fixture that sets only HOME leaves discovery reading the
+// RUNNER's home there — where no tier file exists. The global-tier half
+// of every assertion below then silently measures nothing, which is how
+// the goldens passed on two platforms and failed on the third.
+func pinHome(t *testing.T, home string) {
+	t.Helper()
+	t.Setenv("HOME", home)
+	if goruntime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", home)
+	}
 }
 
 // crossHarnessHome is the fake home the current fixture set, so a captured
