@@ -23,6 +23,10 @@ type fakeSecurity struct {
 	fail  map[string]string // subcommand -> stderr to fail with
 }
 
+// fakeKeychainPath is the explicit keychain the unit lane hands custody,
+// so no test ever resolves (or writes to) the real default one.
+const fakeKeychainPath = "/fake/Library/Keychains/login.keychain-db"
+
 func newFakeSecurity() *fakeSecurity {
 	return &fakeSecurity{items: map[string]string{}, fail: map[string]string{}}
 }
@@ -39,6 +43,8 @@ func (f *fakeSecurity) run(_ context.Context, name string, args ...string) ([]by
 	switch sub {
 	case "list-keychains":
 		return []byte("\"/Users/x/Library/Keychains/login.keychain-db\"\n"), nil
+	case "default-keychain":
+		return []byte("    \"/Users/x/Library/Keychains/login.keychain-db\"\n"), nil
 	case "add-generic-password":
 		f.items[flagValue(args, "-a")] = flagValue(args, "-X")
 		return nil, nil
@@ -71,7 +77,9 @@ func flagValue(args []string, flag string) string {
 func newFakeKeychain(t *testing.T) (*keychainCustody, *fakeSecurity) {
 	t.Helper()
 	fake := newFakeSecurity()
-	custody, err := platformCustody(Config{Service: "cascade-unit-test", Runner: fake.run})
+	custody, err := platformCustody(Config{
+		Service: "cascade-unit-test", Runner: fake.run, KeychainPath: fakeKeychainPath,
+	})
 	if err != nil {
 		t.Fatalf("platformCustody: %v", err)
 	}
@@ -145,7 +153,7 @@ func TestKeychainNotFoundAndUnavailable(t *testing.T) {
 	if err := kc.Set(ctx, "TOKEN", []byte("v")); !isKind(err, cascade.KindUnavailable) {
 		t.Fatalf("Set over an unwritable keychain = %v", err)
 	}
-	fake.fail["list-keychains"] = "boom"
+	fake.fail["default-keychain"] = "boom"
 	if kc.Available() {
 		t.Fatal("Available() = true with a failing security tool")
 	}
@@ -239,8 +247,9 @@ func TestPlatformElevatedRefusalIsNilOnDarwin(t *testing.T) {
 func TestSelectCustodyForceFileVaultSkipsAnAvailablePlatformBackend(t *testing.T) {
 	unforcedFake := newFakeSecurity()
 	unforced, err := SelectCustody(Config{
-		Service: "cascade-force-file-vault-test",
-		Runner:  unforcedFake.run,
+		Service:      "cascade-force-file-vault-test",
+		Runner:       unforcedFake.run,
+		KeychainPath: fakeKeychainPath,
 	})
 	if err != nil {
 		t.Fatalf("SelectCustody (unforced): %v", err)
@@ -255,6 +264,7 @@ func TestSelectCustodyForceFileVaultSkipsAnAvailablePlatformBackend(t *testing.T
 		Dir:            t.TempDir(),
 		Passphrase:     "force-file-vault-test",
 		Runner:         forcedFake.run,
+		KeychainPath:   fakeKeychainPath,
 		ForceFileVault: true,
 	})
 	if err != nil {

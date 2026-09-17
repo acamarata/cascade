@@ -23,9 +23,10 @@ package secrets
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
+	"os"
 	"strings"
+	"sync"
 )
 
 const (
@@ -42,13 +43,27 @@ const (
 type keychainCustody struct {
 	service string
 	run     commandRunner
+	// stat checks that a resolved keychain path exists.
+	stat func(string) (os.FileInfo, error)
+	// configured is Config.KeychainPath: an explicit keychain that skips
+	// the default lookup and its existence check entirely.
+	configured string
+
+	// The resolved keychain, computed once. Every security call passes it
+	// as the trailing keychain argument, so none of them consults the
+	// search list and none of them can raise a dialog (R-14.260).
+	once         sync.Once
+	keychainPath string
+	keychainErr  error
 }
 
 // platformCustody builds the darwin backend. It never fails at
 // construction: availability is a runtime probe, so a host without the
 // security tool selects the file vault instead of erroring at startup.
 func platformCustody(cfg Config) (Custody, error) {
-	return &keychainCustody{service: cfg.Service, run: cfg.runner()}, nil
+	return &keychainCustody{
+		service: cfg.Service, run: cfg.runner(), stat: os.Stat, configured: cfg.KeychainPath,
+	}, nil
 }
 
 // platformElevatedRefusal reports the platform-wide refusal of elevated
@@ -58,12 +73,84 @@ func platformElevatedRefusal() error { return nil }
 // Name reports the backend label used in diagnostics.
 func (k *keychainCustody) Name() string { return darwinCustodyName }
 
-// Available probes the security tool with a harmless subcommand. It reports
-// false rather than guessing when the probe cannot run at all.
-func (k *keychainCustody) Available() bool {
-	_, err := k.run(context.Background(), securityBin, "list-keychains")
-	return err == nil
+// resolveKeychain returns the explicit path of the user's default
+// keychain, or an error when none resolves.
+//
+// R-14.260, after an incident: /usr/bin/security raises a GUI modal
+// ("A keychain cannot be found to store ...") whenever it is asked to
+// write and no default keychain resolves on the search list. A redirected
+// HOME has no search list -- which is every fake-home test, the Art.7.1
+// redirected-HOME lane, a daemon under a service account, and a fresh
+// machine account before first login. A modal appeared on a real desktop
+// and hung a whole test package.
+//
+// So this package never relies on the search list. The path is resolved
+// once, checked to exist, and passed as the trailing keychain argument to
+// every security call. With no path resolved nothing is invoked at all:
+// custody reports unavailable and SelectCustody lands on the encrypted
+// file vault. There is no code path from here to a dialog.
+func (k *keychainCustody) resolveKeychain(ctx context.Context) (string, error) {
+	k.once.Do(func() {
+		if k.configured != "" {
+			k.keychainPath = k.configured
+			return
+		}
+		out, err := k.run(ctx, securityBin, "default-keychain", "-d", "user")
+		if err != nil {
+			k.keychainErr = ErrCustodyUnavailable(darwinCustodyName, redactRunner(err))
+			return
+		}
+		path := strings.Trim(strings.TrimSpace(string(out)), `"`)
+		if path == "" {
+			k.keychainErr = ErrCustodyUnavailable(darwinCustodyName,
+				errors.New("no default user keychain is configured"))
+			return
+		}
+		if k.stat != nil {
+			if _, statErr := k.stat(path); statErr != nil {
+				k.keychainErr = ErrCustodyUnavailable(darwinCustodyName,
+					errors.New("the default user keychain does not exist"))
+				return
+			}
+		}
+		k.keychainPath = path
+	})
+	return k.keychainPath, k.keychainErr
 }
+
+// Available reports whether this backend can hold a secret, by resolving
+// the keychain it would write into.
+//
+// It used to run `security list-keychains`, which succeeds on a host where
+// Set fails: with HOME pointed anywhere but the logged-in user's home,
+// list-keychains still finds the System keychain and exits 0 while a write
+// has no user keychain to go into. SelectCustody gates a write on this
+// answer, so it chose a keychain it could not write to and never reached
+// the file vault (R-14.258 Finding 6).
+//
+// It then, briefly, probed by WRITING -- a probe should exercise the
+// capability it gates -- and that is what raised the modal. The write
+// still happens, but only into a path already proven to resolve and
+// exist, which is the state in which security has nothing to ask about.
+func (k *keychainCustody) Available() bool {
+	ctx := context.Background()
+	keychain, err := k.resolveKeychain(ctx)
+	if err != nil {
+		return false
+	}
+	_, setErr := k.run(ctx, securityBin, "add-generic-password",
+		"-a", availabilityProbeAccount, "-s", k.service, "-U", "-X", hex.EncodeToString([]byte{0}), keychain)
+	// Deferred in spirit: the delete runs whether or not the write
+	// reported success, so a probe can never accumulate.
+	_, _ = k.run(ctx, securityBin, "delete-generic-password",
+		"-a", availabilityProbeAccount, "-s", k.service, keychain)
+	return setErr == nil
+}
+
+// availabilityProbeAccount is the account the probe writes and deletes. It
+// is namespaced like every other entry, so one left behind by a killed
+// process is visible to List and removable by the normal verbs.
+const availabilityProbeAccount = keychainAccountPrefix + availabilityProbeName
 
 func (k *keychainCustody) account(name string) string { return keychainAccountPrefix + name }
 
@@ -73,8 +160,12 @@ func (k *keychainCustody) Set(ctx context.Context, name string, value []byte) er
 	if err := validateSecretName(name); err != nil {
 		return err
 	}
-	_, err := k.run(ctx, securityBin, "add-generic-password",
-		"-a", k.account(name), "-s", k.service, "-U", "-X", hex.EncodeToString(value))
+	keychain, err := k.resolveKeychain(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = k.run(ctx, securityBin, "add-generic-password",
+		"-a", k.account(name), "-s", k.service, "-U", "-X", hex.EncodeToString(value), keychain)
 	if err != nil {
 		return ErrCustodyUnavailable(darwinCustodyName, redactRunner(err))
 	}
@@ -88,8 +179,12 @@ func (k *keychainCustody) Get(ctx context.Context, name string) ([]byte, error) 
 	if err := validateSecretName(name); err != nil {
 		return nil, err
 	}
+	keychain, err := k.resolveKeychain(ctx)
+	if err != nil {
+		return nil, err
+	}
 	out, err := k.run(ctx, securityBin, "find-generic-password",
-		"-a", k.account(name), "-s", k.service, "-w")
+		"-a", k.account(name), "-s", k.service, "-w", keychain)
 	if err != nil {
 		if isKeychainNotFound(err) {
 			return nil, ErrSecretNotFound(name)
@@ -118,8 +213,12 @@ func (k *keychainCustody) Delete(ctx context.Context, name string) error {
 	if err := validateSecretName(name); err != nil {
 		return err
 	}
-	_, err := k.run(ctx, securityBin, "delete-generic-password",
-		"-a", k.account(name), "-s", k.service)
+	keychain, err := k.resolveKeychain(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = k.run(ctx, securityBin, "delete-generic-password",
+		"-a", k.account(name), "-s", k.service, keychain)
 	switch {
 	case err == nil:
 		return k.indexRemove(ctx, name)
@@ -138,76 +237,6 @@ func (k *keychainCustody) Delete(ctx context.Context, name string) error {
 // reads.
 func (k *keychainCustody) List(ctx context.Context) ([]string, error) {
 	return k.readIndex(ctx)
-}
-
-// indexAccount is the account attribute of the name-index entry. It is
-// namespaced away from the secret accounts so it can never collide with a
-// stored name (validateSecretName rejects ':').
-const indexAccount = keychainAccountPrefix + "index:names"
-
-// readIndex loads the stored name list. A missing index is an empty vault;
-// an index that will not decode is an integrity refusal, never a silently
-// empty list, because reporting "no secrets" for a vault that has them
-// invites a caller to overwrite them.
-func (k *keychainCustody) readIndex(ctx context.Context) ([]string, error) {
-	out, err := k.run(ctx, securityBin, "find-generic-password",
-		"-a", indexAccount, "-s", k.service, "-w")
-	if err != nil {
-		if isKeychainNotFound(err) {
-			return []string{}, nil
-		}
-		return nil, ErrCustodyUnavailable(darwinCustodyName, redactRunner(err))
-	}
-	raw, err := decodeKeychainValue(out)
-	if err != nil {
-		return nil, err
-	}
-	var names []string
-	if uerr := json.Unmarshal(raw, &names); uerr != nil {
-		return nil, ErrCustodyCorrupt(darwinCustodyName, errors.New("the keychain name index is not a valid name list"))
-	}
-	return sortedNames(names), nil
-}
-
-// writeIndex replaces the stored name list.
-func (k *keychainCustody) writeIndex(ctx context.Context, names []string) error {
-	encoded, err := json.Marshal(sortedNames(names))
-	if err != nil {
-		return ErrCustodyUnavailable(darwinCustodyName, err)
-	}
-	if _, err := k.run(ctx, securityBin, "add-generic-password",
-		"-a", indexAccount, "-s", k.service, "-U", "-X", hex.EncodeToString(encoded)); err != nil {
-		return ErrCustodyUnavailable(darwinCustodyName, redactRunner(err))
-	}
-	return nil
-}
-
-// indexAdd and indexRemove keep the name index in step with the entries.
-func (k *keychainCustody) indexAdd(ctx context.Context, name string) error {
-	names, err := k.readIndex(ctx)
-	if err != nil {
-		return err
-	}
-	for _, existing := range names {
-		if existing == name {
-			return nil
-		}
-	}
-	return k.writeIndex(ctx, append(names, name))
-}
-
-func (k *keychainCustody) indexRemove(ctx context.Context, name string) error {
-	names, err := k.readIndex(ctx)
-	if err != nil {
-		return err
-	}
-	kept := make([]string, 0, len(names))
-	for _, existing := range names {
-		if existing != name {
-			kept = append(kept, existing)
-		}
-	}
-	return k.writeIndex(ctx, kept)
 }
 
 // isKeychainNotFound classifies the security tool's "not found" failure.

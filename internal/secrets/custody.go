@@ -129,6 +129,16 @@ type Config struct {
 	// Default false: production callers never set this, so a real user's
 	// secrets always land in their OS keychain/keyring when one works.
 	ForceFileVault bool
+	// KeychainPath names the macOS keychain file custody reads and writes,
+	// skipping the default-keychain lookup entirely.
+	//
+	// It exists because every security invocation must carry an explicit
+	// keychain (R-14.260): relying on the default search list is what let
+	// /usr/bin/security raise a GUI dialog on a host where none resolves.
+	// A test points this at a throwaway keychain it created; production
+	// leaves it empty and the path is resolved once from the user's
+	// default. Ignored on every platform but darwin.
+	KeychainPath string
 }
 
 func (c Config) rand() io.Reader {
@@ -144,6 +154,12 @@ func (c Config) runner() commandRunner {
 	}
 	return execRunner
 }
+
+// availabilityProbeName is the secret name each platform backend writes
+// and deletes to prove it can hold a secret. It passes validateSecretName,
+// so the probe travels the same path a real Set does rather than a
+// looser one.
+const availabilityProbeName = "CASCADE_AVAILABILITY_PROBE"
 
 // SelectCustody picks the custody backend for this host: the platform
 // backend when it is available, otherwise the encrypted file vault. It

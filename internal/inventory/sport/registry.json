@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T11:11:24Z",
+  "generated_at": "2026-09-17T11:43:14Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -16969,6 +16969,13 @@
           "raw": "internal/runtime/init acceptance (ADD) — P1-E16-W4-S35-T5."
         },
         {
+          "file": "internal/runtime/init/accept_resume_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T5",
+          "raw": "internal/runtime/init acceptance (ADD) — P1-E16-W4-S35-T5."
+        },
+        {
           "file": "internal/runtime/init/accept_support_test.go",
           "line": 8,
           "status": "ADD",
@@ -17247,6 +17254,12 @@
           "raw": "internal/secrets Custody/ADDED (darwin keychain)."
         },
         {
+          "file": "internal/secrets/custody_darwin_index.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal/secrets Custody/ADDED (darwin keychain name index)."
+        },
+        {
           "file": "internal/secrets/custody_filevault.go",
           "line": 22,
           "status": "ADD",
@@ -17263,6 +17276,21 @@
           "line": 19,
           "status": "ADD",
           "raw": "internal/secrets Custody/ADDED (windows tier-2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/secrets Custody availability probe",
+      "sites": [
+        {
+          "file": "internal/secrets/custody_darwin_probe_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T9",
+          "raw": "internal/secrets Custody availability probe (ADD) -- P1-E16-W4-S35-T9."
         }
       ],
       "statuses": [
@@ -23026,7 +23054,7 @@
       ]
     }
   ],
-  "total_sites": 2230,
+  "total_sites": 2233,
   "unspecified_count": 66,
   "multi_status_count": 40
 }
