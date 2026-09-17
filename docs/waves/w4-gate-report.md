@@ -203,7 +203,7 @@ Against the shipped artifact on macOS, real `HOME`, no fixtures.
 | `plugin info <unknown>` | not-found, naming both populations |
 | `plugin enable/disable/remove <builtin>` | refused, `unsupported`, each message explaining that a builtin is always active |
 | `node list` | "no enrolled nodes" |
-| `sync status` | seven domains, each with strategy, eligibility and cursor |
+| `sync status` | one row per registered sync domain/subkind pair, each with its merge strategy, this peer's eligibility and the cursor position |
 | `sync conflicts list` | "no conflicts journaled" |
 | `sync run` (daemonless) | refused: "no run path is wired, so nothing would be synced; reporting success here would be a lie an operator could not see through" |
 | `backup target add` / `list` | target stored and rendered as a table |

@@ -1,0 +1,21 @@
+{
+  "_comment": [
+    "The envelope shape `cascade run --json` answers a dispatch with.",
+    "Values are illustrative; the drill asserts the KEYS, because the key",
+    "set is the contract a caller parses and the values are whatever the",
+    "provider said. A golden that pinned values would have to be rewritten",
+    "every time a model answered differently, and would be rewritten",
+    "without anyone reading it."
+  ],
+  "version": 1,
+  "ok": true,
+  "data": {
+    "output": "ok",
+    "job_id": "00000000000000000000000000",
+    "cost": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    },
+    "legs": []
+  }
+}
