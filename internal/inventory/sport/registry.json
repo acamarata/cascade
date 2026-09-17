@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T15:45:26Z",
+  "generated_at": "2026-09-17T15:54:25Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -14996,6 +14996,20 @@
       ]
     },
     {
+      "name": "internal/nodes status:resume-carriage",
+      "sites": [
+        {
+          "file": "internal/nodes/resume_carriage_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "internal/nodes status:resume-carriage (ADD tests) —"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/nodes tests",
       "sites": [
         {
@@ -15159,6 +15173,21 @@
           "status": "ADD",
           "ticket": "P1-E36-W7-S72-T3",
           "raw": "internal/nodes travel_test.go/ADDED (P1-E36-W7-S72-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes tunnel echo helper",
+      "sites": [
+        {
+          "file": "internal/nodes/tunnel_echo_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T7",
+          "raw": "internal/nodes tunnel echo helper (ADD) — P1-E17-W4-S37-T7."
         }
       ],
       "statuses": [
@@ -23996,7 +24025,7 @@
       ]
     }
   ],
-  "total_sites": 2313,
+  "total_sites": 2315,
   "unspecified_count": 69,
   "multi_status_count": 41
 }
