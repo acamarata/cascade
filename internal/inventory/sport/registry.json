@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T17:51:03Z",
+  "generated_at": "2026-09-17T18:08:05Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1714,6 +1714,42 @@
       ]
     },
     {
+      "name": "acceptance/j-s21-compat-sub",
+      "sites": [
+        {
+          "file": "internal/acceptance/j_s21_compat_sub_test.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E10-W3-S21-T3",
+          "raw": "acceptance/j-s21-compat-sub (ADD) — P1-E10-W3-S21-T3."
+        },
+        {
+          "file": "internal/acceptance/j_s21_rehearsal_test.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E10-W3-S21-T3",
+          "raw": "acceptance/j-s21-compat-sub (ADD) — P1-E10-W3-S21-T3."
+        },
+        {
+          "file": "internal/acceptance/j_s21_script_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E10-W3-S21-T3",
+          "raw": "acceptance/j-s21-compat-sub (ADD) — P1-E10-W3-S21-T3."
+        },
+        {
+          "file": "internal/acceptance/j_s21_steps_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E10-W3-S21-T3",
+          "raw": "acceptance/j-s21-compat-sub (ADD) — P1-E10-W3-S21-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "audit/audit-log",
       "sites": [
         {
@@ -3155,6 +3191,21 @@
       ],
       "statuses": [
         "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade daemon usage wiring",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_usage.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E11-W3-S23-T7",
+          "raw": "cmd/cascade daemon usage wiring (ADD) — P1-E11-W3-S23-T7."
+        }
+      ],
+      "statuses": [
         "ADD"
       ]
     },
@@ -24264,7 +24315,7 @@
       ]
     }
   ],
-  "total_sites": 2332,
+  "total_sites": 2337,
   "unspecified_count": 69,
   "multi_status_count": 41
 }

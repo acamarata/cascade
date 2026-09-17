@@ -54,6 +54,7 @@ import (
 	"encoding/json"
 
 	"github.com/acamarata/cascade/internal/daemon"
+	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/plugins"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -72,9 +73,18 @@ import (
 // and relocated here (rather than left inline in daemon_unix_run.go)
 // purely to keep that file under Art.10.3's 300-line file cap.
 func registerDBPathHandlers(
-	registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock, store provider.Store, dbPath string,
+	ctx context.Context, registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock,
+	bus *events.Bus, store provider.Store, dbPath string,
 ) error {
 	if err := daemon.RegisterRecallIndexHandler(registry, paths, clock, store, dbPath); err != nil {
+		return err
+	}
+	// chat.* (T/S-43.T2) belongs in this group by the same description:
+	// a namespace over its own second connection to this same cascade.db.
+	// It registers even when store is nil, because it does not use the
+	// shared store at all — and because a chat surface that silently did
+	// not register is precisely the defect this wiring closed (R-14.284).
+	if err := wireChatHandlers(ctx, registry, paths, clock, bus); err != nil {
 		return err
 	}
 	return wirePluginAddHandler(registry, clock, store, dbPath)

@@ -126,20 +126,6 @@
     "symbol": "internal/conversation.JournalEntryThreadCreate"
   },
   {
-    "caller_site": "internal/daemon/conversation_rpc.go",
-    "expected_caller": "a future internal/daemon/conversation_rpc.go composition-root file, matching plugins/pbd's own pbd_rpc.go precedent, which would construct a live Adapter and call RegisterHandlers on the daemon's real rpc.Registry; retire this entry once that lands",
-    "reason": "P1-E20-W5-S43-T2 builds the JSON-RPC adapter (chat.append_turn/get_thread/list_threads) as a standalone package: no daemon composition-root ticket yet constructs a live Adapter over a real Store/EventBus and registers it on the daemon's rpc.Registry. Fully implemented and tested through a real rpc.Registry.Dispatch in every adapter_test.go/adapter_journal_test.go case.",
-    "retire_ticket": "P1-E20-W5-S43-T2",
-    "symbol": "internal/conversation.NewAdapter"
-  },
-  {
-    "caller_site": "cmd/cascade/daemon_unix_store.go",
-    "expected_caller": "the T2 adapter/SSE layer (or the daemon storage composition root, cmd/cascade/daemon_unix_store.go), which would construct a live conversationStore over the shared *sql.DB and pass it to the adapter API; retire this entry once that wiring lands",
-    "reason": "P1-E20-W5-S43-T1 builds the append-only conversation domain (Thread/Turn/Segment types, ConversationStore) as a standalone package with no composition-root ticket of its own: files_scope.change is empty, matching internal/jobs.NewStore's and internal/providers/registry.NewRegistry's identical precedent. No CLI/RPC surface ships in this ticket (the adapter API is T2, the cascade chat CLI is T3, MCP tools are T4 -- see domain.go's Scope boundary). NewStore/conversationStore is fully implemented and tested (append/read round trips, ErrImmutable on a duplicate turn/segment id, ErrOutOfOrder refusal, ErrTurnNotFound, insertion-order listing, clock-injection proof, and TestErrorsNeverEchoContent) against a real migrated modernc-sqlite database.",
-    "retire_ticket": "P1-E20-W5-S43-T1",
-    "symbol": "internal/conversation.NewStore"
-  },
-  {
     "caller_site": "internal/conversation/platform_windows.go",
     "expected_caller": "the Windows daemon composition root's SSE-mirror wiring, once it exists; retire this entry once that lands",
     "reason": "P1-E20-W5-S43-T2's Windows tier-2 SSE-mirror entry point: the same composition-root gap as NewAdapter above -- nothing on the daemon's Windows build calls it yet, only platform_windows_test.go.",

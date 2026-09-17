@@ -168,7 +168,7 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	// namespaces unregistered rather than reaching into a store that does
 	// not exist.
 	dbPath := filepath.Join(paths.DataDir(), "cascade.db")
-	if err := registerDBPathHandlers(registry, paths, clock, store, dbPath); err != nil {
+	if err := registerDBPathHandlers(context.Background(), registry, paths, clock, bus, store, dbPath); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -275,22 +275,4 @@ func runRecoveryScan(ctx context.Context, paths runtime.PathProvider, settings d
 		Registry:    runtime.NewStoreDomainRegistry(store),
 	})
 	return err
-}
-
-// recallIndexDir is where the retrieval index lives: {CASCADE_HOME}/data/
-// retrieval. It sits under the data directory rather than beside the
-// config because, unlike the memory store, it is derived state a user
-// never edits by hand: it is rebuilt from the sources, and a corrupt or
-// absent one is repaired by rebuilding rather than by opening it.
-
-// registerMemoryAndRecall mounts the memory.* and recall.* namespaces.
-// store is threaded through so recall's full-text leg opens over the same
-// cascade.db recall.index.rebuild writes into (see registerRecallHandler's
-// doc comment).
-func registerMemoryAndRecall(
-	registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock,
-	bus *events.Bus, store provider.Store, memoryAdmin *memory.AdminHandler,
-) error {
-	registerMemoryHandler(registry, paths, clock, bus, memoryAdmin)
-	return registerRecallHandler(registry, paths, bus, store)
 }
