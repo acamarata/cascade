@@ -192,7 +192,12 @@ homebrew_casks:
     directory: Casks
     skip_upload: auto
     homepage: "https://github.com/acamarata/cascade"
-    description: "Cascade: a local-first AI agent runtime — one binary, CLI and daemon."
+    # `brew style` refuses a description that starts with the cask's own
+    # name or ends with a full stop (Cask/Desc), and a tap that will not
+    # pass style is a tap that will not be accepted. Found by the W-4
+    # hardening gate running `brew style` over the generated cask
+    # (R-14.277); the wording below says the same thing and passes.
+    description: "Local-first AI agent runtime — one binary, CLI and daemon"
     license: "MIT"
     binaries:
       - cascade

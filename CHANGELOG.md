@@ -57,6 +57,78 @@ daemon's storage layout. It has not landed yet; this entry is a forward
 pointer, not a claim that the command exists. It will get its own
 changelog entry, under this same `v2.0.0` section, the day it ships.
 
+## [v2.0.0-alpha.4]
+
+Fourth wave-gate snapshot tag. Local build only: not published, not
+installable, exists so Wave 4 could be checked as an artifact rather than
+as a working tree. It is the **first** gate that can assert the full
+install → `cascade init` → `cascade doctor` story, because `init` itself
+did not exist before this wave.
+
+### Added
+
+- **`cascade init`**, the nine-step setup wizard: preflight, profile,
+  storage, plugin catalog, providers, harness wiring, telemetry, daemon
+  install and a first-run health check, with a journal so an interrupted
+  run resumes rather than starting over. `--yes` answers every default,
+  `--check` reports what a run would change without changing anything,
+  `--config` reads a `cascade.init/v1` setup file, and `--reconverge`
+  converges an already-configured machine while leaving the operator's own
+  edits in place.
+- **`cascade sync`**: `status`, `run`, `conflicts list` and
+  `conflicts resolve`, over seven registered domains with their merge
+  strategies, per-peer-tier eligibility and cursor positions. Discarding
+  the server's copy of a record is the one elevated verb, and a caller
+  with no elevation gate wired is refused rather than allowed through.
+- **`cascade plugin`** now tells the truth about builtins: `list` carries
+  a SOURCE column, `info` answers for a compiled-in plugin from the
+  registry, and `enable`/`disable`/`remove` refuse one by explaining that
+  it is always present and always active.
+- **`cascade backup`** target management (`target add`/`list`), snapshot
+  listing, and the recovery-key ceremony that `create`/`verify` require.
+- **Node re-queue and tunnel state**: a lost node's work is re-queued, the
+  resume point reaches the machine that acts on it, and the controller
+  answers the tunnel question from the heartbeat it actually holds.
+
+### Fixed
+
+- `cascade init --check` could never exit 0: it counted a health check
+  that changes nothing as a pending change. It now reports "nothing to do"
+  on a converged machine, and plans creating the cascade home and the
+  local database — the two largest changes a run makes, which it had never
+  counted at all.
+- `cascade init` reported `~/.cascade/cascade.db` as this machine's
+  storage and created an empty database there, while everything else in
+  the product opens `~/.cascade/data/cascade.db`.
+- `cascade init` asked `Enable <plugin>?` for every builtin and
+  discarded the answer; `--enable-plugin`/`--disable-plugin` printed a
+  plan and performed none of it.
+- `cascade doctor` reported the retrieval generation marker as drifted —
+  and exited 5 — on any working tree with an uncommitted change, while
+  `cascade recall index verify` reported the same marker current.
+- Thirty CLI results printed Go's default formatting at operators, among
+  them `cascade backup list` (`{[]}`) and `cascade backup target list`
+  (`map[targets:[]]`).
+- Every `cascade sync` verb leaked its database handle.
+- The generated Homebrew cask failed `brew style`.
+
+The full gate record, including the two residuals that need a second
+machine or an owner-executed ceremony, is in `docs/waves/w4-gate-report.md`.
+
+## [v2.0.0-alpha.3]
+
+Third wave-gate snapshot tag. Local build only, same terms as the others.
+Its entry is recorded here late: the W-3 gate landed its report and not
+its changelog section, and the omission was found by the W-4 gate reading
+back over this file.
+
+Seven defects were found against the artifact and fixed in that wave,
+including `cascade run` and the whole `cascade pbd` namespace never being
+mounted, a security pipeline that was never wired, and an empty quota
+spill order that vetoed every dispatch. Five P2s and one P1 were carried
+into W-4 triage; §8 of `docs/waves/w4-gate-report.md` records what became
+of each. The full report is `docs/waves/w3-gate-report.md`.
+
 ## [v2.0.0-alpha.2]
 
 Second wave-gate snapshot tag. Local build only: not published, not
