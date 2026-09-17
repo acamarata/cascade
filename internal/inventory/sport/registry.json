@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T00:04:05Z",
+  "generated_at": "2026-09-17T00:04:34Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3551,6 +3551,12 @@
           "raw": "cmd/cascade/daemon (CHANGED — R-14.175 migrator/Bootstrap"
         },
         {
+          "file": "cmd/cascade/daemon_unix_supervision.go",
+          "line": 29,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGED — supervision stage wiring)."
+        },
+        {
           "file": "cmd/cascade/daemon_unix_test.go",
           "line": 12,
           "status": "ADD",
@@ -5704,6 +5710,96 @@
       ]
     },
     {
+      "name": "fleet.supervision tier-2 Windows tests",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/tier2_windows_test.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T3",
+          "raw": "fleet.supervision tier-2 Windows tests (ADD) — P1-E18-W4-S39-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.supervision tier-2 real-PTY test",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/tier2_pty_test.go",
+          "line": 36,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T3",
+          "raw": "fleet.supervision tier-2 real-PTY test (ADD) — P1-E18-W4-S39-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.supervision tier-2 tests",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/tier2_test.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T3",
+          "raw": "fleet.supervision tier-2 tests (ADD) — P1-E18-W4-S39-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.supervision tier-3 tests",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/tier3_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T3",
+          "raw": "fleet.supervision tier-3 tests (ADD) — P1-E18-W4-S39-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.supervision tier-config tests",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/tiers_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T3",
+          "raw": "fleet.supervision tier-config tests (ADD) — P1-E18-W4-S39-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.supervision tier-dispatch tests",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/tier_dispatch_test.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T3",
+          "raw": "fleet.supervision tier-dispatch tests (ADD) — P1-E18-W4-S39-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "fleet.supervision.AttentionCheck",
       "sites": [
         {
@@ -5852,6 +5948,108 @@
           "status": "ADD",
           "ticket": "P1-E18-W4-S39-T1",
           "raw": "fleet.supervision.Subscription/ADDED (P1-E18-W4-S39-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.supervision.Tier",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/tiers.go",
+          "line": 32,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T3",
+          "raw": "fleet.supervision.Tier/ADDED (P1-E18-W4-S39-T3). The contract"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.supervision.Tier2Supervisor",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/tier2.go",
+          "line": 34,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T3",
+          "raw": "fleet.supervision.Tier2Supervisor/ADDED (P1-E18-W4-S39-T3)."
+        },
+        {
+          "file": "internal/fleet/supervision/tier2_other.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T3",
+          "raw": "fleet.supervision.Tier2Supervisor/ADDED (P1-E18-W4-S39-T3)."
+        },
+        {
+          "file": "internal/fleet/supervision/tier2_prompt.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T3",
+          "raw": "fleet.supervision.Tier2Supervisor/ADDED (P1-E18-W4-S39-T3)."
+        },
+        {
+          "file": "internal/fleet/supervision/tier2_termios_darwin.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T3",
+          "raw": "fleet.supervision.Tier2Supervisor/ADDED (P1-E18-W4-S39-T3)."
+        },
+        {
+          "file": "internal/fleet/supervision/tier2_termios_linux.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T3",
+          "raw": "fleet.supervision.Tier2Supervisor/ADDED (P1-E18-W4-S39-T3)."
+        },
+        {
+          "file": "internal/fleet/supervision/tier2_unix.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T3",
+          "raw": "fleet.supervision.Tier2Supervisor/ADDED (P1-E18-W4-S39-T3)."
+        },
+        {
+          "file": "internal/fleet/supervision/tier2_windows.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T3",
+          "raw": "fleet.supervision.Tier2Supervisor/ADDED (P1-E18-W4-S39-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.supervision.Tier3Supervisor",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/tier3.go",
+          "line": 32,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T3",
+          "raw": "fleet.supervision.Tier3Supervisor/ADDED (P1-E18-W4-S39-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.supervision.TierDispatcher",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/tier_dispatch.go",
+          "line": 30,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T3",
+          "raw": "fleet.supervision.TierDispatcher/ADDED (P1-E18-W4-S39-T3)."
         }
       ],
       "statuses": [
@@ -22050,7 +22248,7 @@
       ]
     }
   ],
-  "total_sites": 2146,
+  "total_sites": 2163,
   "unspecified_count": 66,
   "multi_status_count": 40
 }
