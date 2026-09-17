@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T01:05:11Z",
+  "generated_at": "2026-09-17T01:06:56Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -14768,6 +14768,36 @@
       ]
     },
     {
+      "name": "internal/plugins cascade-claude uninstall hook",
+      "sites": [
+        {
+          "file": "internal/plugins/claude_uninstall.go",
+          "line": 34,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "internal/plugins cascade-claude uninstall hook (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins cascade-claude uninstall tests",
+      "sites": [
+        {
+          "file": "internal/plugins/claude_uninstall_test.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "internal/plugins cascade-claude uninstall tests (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins cascade-claude watch wiring",
       "sites": [
         {
@@ -18872,6 +18902,36 @@
       ]
     },
     {
+      "name": "plugins/claude uninstall",
+      "sites": [
+        {
+          "file": "plugins/claude/uninstall.go",
+          "line": 38,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "plugins/claude uninstall (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/claude uninstall tests",
+      "sites": [
+        {
+          "file": "plugins/claude/uninstall_test.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "plugins/claude uninstall tests (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/claude:watch",
       "sites": [
         {
@@ -22306,7 +22366,7 @@
       ]
     }
   ],
-  "total_sites": 2168,
+  "total_sites": 2172,
   "unspecified_count": 66,
   "multi_status_count": 40
 }
