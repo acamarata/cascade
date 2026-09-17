@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"testing"
 
 	cascadecontext "github.com/acamarata/cascade/internal/context"
@@ -53,6 +54,10 @@ func TestContextHarnessListReportsEverySupportedHarness(t *testing.T) {
 	result, errObj := registry.Dispatch(context.Background(), &rpc.Request{
 		JSONRPC: "2.0", Method: ContextHarnessListMethod, Params: raw, ID: json.RawMessage(`1`),
 	})
+	if goruntime.GOOS == "windows" {
+		assertTier2Refusal(t, errObj)
+		return
+	}
 	if errObj != nil {
 		t.Fatalf("Dispatch(%s): %+v", ContextHarnessListMethod, errObj)
 	}
@@ -61,28 +66,7 @@ func TestContextHarnessListReportsEverySupportedHarness(t *testing.T) {
 		t.Fatalf("result type = %T, want ContextHarnessListResult", result)
 	}
 
-	seen := map[cascadecontext.HarnessKind]cascadecontext.HarnessState{}
-	for _, state := range got.Harnesses {
-		seen[state.Kind] = state
-	}
-	for _, kind := range []cascadecontext.HarnessKind{
-		cascadecontext.HarnessClaude, cascadecontext.HarnessCodex, cascadecontext.HarnessOpenCode,
-	} {
-		state, present := seen[kind]
-		if !present {
-			t.Errorf("%s has no row at all; an absent harness must be reported, not dropped", kind)
-			continue
-		}
-		if state.InstallPath == "" {
-			t.Errorf("%s reports no path; a false negative is undebuggable without one", kind)
-		}
-	}
-	if !seen[cascadecontext.HarnessClaude].Detected {
-		t.Errorf("the seeded harness at %s was not detected", installed)
-	}
-	if seen[cascadecontext.HarnessCodex].Detected {
-		t.Error("a harness that is not installed was reported as detected")
-	}
+	assertEveryHarnessReported(t, got.Harnesses, installed)
 }
 
 // TestContextHarnessListRefusesAnEmptyCwd: the daemon's own working
@@ -165,5 +149,54 @@ func TestContextHarnessSyncRefusesAnEmptyCwd(t *testing.T) {
 	})
 	if errObj == nil {
 		t.Fatal("Dispatch accepted a harness sync with no cwd")
+	}
+}
+
+// assertTier2Refusal requires the method to surface the detector's own
+// refusal on a platform whose harness paths this build does not resolve.
+//
+// An empty list would read as "no harnesses installed" on a machine
+// nobody could look at, which is the false negative this whole surface
+// exists to prevent. Asserted rather than skipped: the windows lane is
+// the only runner that takes this branch.
+func assertTier2Refusal(t *testing.T, errObj *rpc.ErrorObject) {
+	t.Helper()
+	if errObj == nil {
+		t.Fatal("the method answered on a platform where detection is not available")
+	}
+	if errObj.Code != cascade.KindUnsupported.JSONRPCCode() {
+		t.Errorf("error code = %d, want the KindUnsupported code %d",
+			errObj.Code, cascade.KindUnsupported.JSONRPCCode())
+	}
+}
+
+// assertEveryHarnessReported requires a row for each supported harness,
+// each naming where it was probed, with the seeded one detected and the
+// others not.
+//
+// Both directions matter. A test that only checked the installed harness
+// would pass against a detector that reported everything installed, which
+// is the more dangerous of the two wrong answers here.
+func assertEveryHarnessReported(t *testing.T, rows []cascadecontext.HarnessState, seededPath string) {
+	t.Helper()
+	seen := map[cascadecontext.HarnessKind]cascadecontext.HarnessState{}
+	for _, state := range rows {
+		seen[state.Kind] = state
+	}
+	for _, kind := range cascadecontext.SupportedHarnesses() {
+		state, present := seen[kind]
+		if !present {
+			t.Errorf("%s has no row at all; an absent harness must be reported, not dropped", kind)
+			continue
+		}
+		if state.InstallPath == "" {
+			t.Errorf("%s reports no path; a false negative is undebuggable without one", kind)
+		}
+	}
+	if !seen[cascadecontext.HarnessClaude].Detected {
+		t.Errorf("the seeded harness at %s was not detected", seededPath)
+	}
+	if seen[cascadecontext.HarnessCodex].Detected {
+		t.Error("a harness that is not installed was reported as detected")
 	}
 }

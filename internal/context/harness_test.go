@@ -50,6 +50,7 @@ func harnessDetectCases() []harnessDetectCase {
 	claudeRoot := filepath.Join("/h", ".claude")
 	codexRoot := filepath.Join("/h", ".codex")
 	desktopAppRoot := filepath.Join("/h", "Library", "Application Support", "Claude")
+	overrideRoot := filepath.Join("/elsewhere", "cfg")
 
 	return []harnessDetectCase{
 		{"nothing installed", "darwin", homeEnv, probeFor(), nil},
@@ -73,12 +74,18 @@ func harnessDetectCases() []harnessDetectCase {
 			probeFor(filepath.Join("/h", ".config", "opencode")), []HarnessKind{HarnessOpenCode}},
 		// Each harness's own override wins over both, which is how a
 		// second installation of one harness is found at all.
+		//
+		// overrideRoot rather than the literal: configRoot cleans the
+		// override, and on a platform whose separator is not "/" the
+		// cleaned form differs from what was written. A probe keyed on
+		// the written form then never matches — which is how this case
+		// passed on darwin and failed on the windows lane.
 		{"an override relocates one harness", "darwin",
-			envFor(map[string]string{"HOME": "/h", OverrideVarFor(HarnessClaude): "/elsewhere/cfg"}),
-			probeFor("/elsewhere/cfg", codexRoot),
+			envFor(map[string]string{"HOME": "/h", OverrideVarFor(HarnessClaude): overrideRoot}),
+			probeFor(filepath.Clean(overrideRoot), codexRoot),
 			[]HarnessKind{HarnessClaude, HarnessCodex}},
 		{"an override in force means the default root is not probed", "darwin",
-			envFor(map[string]string{"HOME": "/h", OverrideVarFor(HarnessClaude): "/elsewhere/cfg"}),
+			envFor(map[string]string{"HOME": "/h", OverrideVarFor(HarnessClaude): overrideRoot}),
 			probeFor(claudeRoot), nil},
 	}
 }
