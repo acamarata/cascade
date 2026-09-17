@@ -60,10 +60,5 @@ func RegisterFleetAttentionHandler(registry *rpc.Registry, store provider.Store,
 	if store == nil {
 		return
 	}
-	var eventBus supervision.EventBus
-	if bus != nil {
-		eventBus = bus
-	}
-	attnStore := supervision.NewStore(store, clock, eventBus, supervision.NewSystemIDGenerator(), 0)
-	supervision.RegisterHandlers(registry, attnStore, nil)
+	supervision.RegisterHandlers(registry, NewAttentionStore(store, clock, bus), nil)
 }

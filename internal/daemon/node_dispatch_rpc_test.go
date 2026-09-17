@@ -30,6 +30,7 @@ func TestTheDispatchVerbsAreMounted(t *testing.T) {
 		registry, nodes.NewRecordStore(nodes.NewFileRecordBackend(t.TempDir()), runtime.NewSystemClock()),
 		runtime.NewSystemClock(),
 		func() (nodes.Section, error) { return configuredSection(), nil },
+		RecoveryStores{},
 	)
 	if dispatcher == nil || rendezvous == nil {
 		t.Fatal("the composition returned no dispatcher or rendezvous")
@@ -87,10 +88,10 @@ func TestResolvingADispatchNeedsItsCollaborators(t *testing.T) {
 
 	if _, _, _, err := resolveDispatchDeps(d, rv, nil, clock, func() (nodes.Section, error) {
 		return configuredSection(), nil
-	}, "n1"); err == nil {
+	}, RecoveryStores{}, "n1"); err == nil {
 		t.Error("a dispatch resolved with no record store")
 	}
-	if _, _, _, err := resolveDispatchDeps(d, rv, store, clock, nil, "n1"); err == nil {
+	if _, _, _, err := resolveDispatchDeps(d, rv, store, clock, nil, RecoveryStores{}, "n1"); err == nil {
 		t.Error("a dispatch resolved with no config reader")
 	}
 	// An unconfigured section refuses BEFORE the node is looked up, so a
@@ -98,7 +99,7 @@ func TestResolvingADispatchNeedsItsCollaborators(t *testing.T) {
 	// "no such node".
 	_, _, _, err := resolveDispatchDeps(d, rv, store, clock, func() (nodes.Section, error) {
 		return nodes.Section{}, nil
-	}, "n1")
+	}, RecoveryStores{}, "n1")
 	// BOTH missing knobs must be named, deterministically. This assertion
 	// used to name only one and passed by luck: requireDispatchConfig
 	// ranged over a map, so which knob it reported depended on Go's
@@ -114,7 +115,7 @@ func TestResolvingADispatchNeedsItsCollaborators(t *testing.T) {
 	// A node that is not enrolled is refused too.
 	if _, _, _, err := resolveDispatchDeps(d, rv, store, clock, func() (nodes.Section, error) {
 		return configuredSection(), nil
-	}, "never-enrolled"); err == nil {
+	}, RecoveryStores{}, "never-enrolled"); err == nil {
 		t.Error("a dispatch resolved against a node that was never enrolled")
 	}
 }

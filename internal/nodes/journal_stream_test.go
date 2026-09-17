@@ -69,7 +69,7 @@ func TestAStreamedRecordLandsCarryingItsAttempt(t *testing.T) {
 		t.Errorf("appended under entity %q operation %q", sink.entities[0], sink.operation[0])
 	}
 
-	var got streamedEntry
+	var got StreamedEntry
 	if err := json.Unmarshal(sink.payloads[0], &got); err != nil {
 		t.Fatalf("the appended entry is not JSON: %v", err)
 	}

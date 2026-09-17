@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/fleet/journal"
+	"github.com/acamarata/cascade/internal/fleet/supervision"
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -76,16 +77,37 @@ func RegisterNodeDispatchHandlers(
 	records *nodes.RecordStore,
 	clock runtime.Clock,
 	config func() (nodes.Section, error),
+	recovery RecoveryStores,
 ) (*nodes.Dispatcher, *nodes.Rendezvous) {
 	dispatcher := nodes.NewDispatcher()
 	rendezvous := nodes.NewRendezvous()
 
 	nodes.RegisterDispatchHandler(registry,
 		func(_ context.Context, nodeID string) (nodes.ShipDeps, nodes.RequeueDeps, nodes.DeviceRecord, error) {
-			return resolveDispatchDeps(dispatcher, rendezvous, records, clock, config, nodeID)
+			return resolveDispatchDeps(dispatcher, rendezvous, records, clock, config, recovery, nodeID)
 		})
 	nodes.RegisterDispatchNodeHandlers(registry, rendezvous)
 	return dispatcher, rendezvous
+}
+
+// RecoveryStores are the two already-open stores the recovery path needs
+// and the dispatch composition cannot build for itself.
+//
+// Passed as a struct rather than two more positional parameters because
+// the constructor already takes four, and because the pair belongs
+// together: the journal says what the lost attempt recorded, the queue
+// says who finds out when nothing can be done about it. A daemon wired
+// with neither still dispatches and still REPORTS a loss; what it cannot
+// do is re-queue.
+type RecoveryStores struct {
+	// Journal is the SAME store RegisterNodeDispatchJournal mounts. One
+	// store, not a second connection: a reader over a different handle
+	// would have a different idea of what has been checkpointed, and the
+	// resume point it produced would be a guess dressed as a fact.
+	Journal *journal.SQLiteStore
+	// Attention is the SAME queue RegisterFleetAttentionHandler serves,
+	// so a held dispatch is visible to the verb an operator reads.
+	Attention *supervision.Store
 }
 
 // resolveDispatchDeps builds one dispatch's dependencies.
@@ -95,6 +117,7 @@ func resolveDispatchDeps(
 	records *nodes.RecordStore,
 	clock runtime.Clock,
 	config func() (nodes.Section, error),
+	recovery RecoveryStores,
 	nodeID string,
 ) (nodes.ShipDeps, nodes.RequeueDeps, nodes.DeviceRecord, error) {
 	if records == nil || config == nil {
@@ -113,25 +136,26 @@ func resolveDispatchDeps(
 		return nodes.ShipDeps{}, nodes.RequeueDeps{}, nodes.DeviceRecord{}, err
 	}
 	deps := dispatcher.ShipDepsFor(cfg.DispatchRepoRoot, cfg.DispatchRemote, execGitRunner{}, rendezvous, dispatchClock{clock})
-	return deps, resolveRequeueDeps(dispatcher, records, clock), record, nil
+	return deps, resolveRequeueDeps(dispatcher, records, clock, recovery), record, nil
 }
 
 // resolveRequeueDeps builds the recovery collaborators for one dispatch:
 // the same fencing register the ship leg uses, the real enrolled-node set
-// as replacement candidates, and the real liveness and tunnel readings.
+// as replacement candidates, the real liveness and tunnel readings, the
+// journal the lost attempt streamed into, and the attention queue a held
+// outcome lands in.
 //
-// Continuity and Attention are deliberately left NIL here. Both have real
-// owners elsewhere in the tree and neither is reachable from this
-// constructor yet: the journal store is opened by the caller that mounts
-// RegisterNodeDispatchJournal, and the attention queue belongs to R/S-39.
-// Leaving them nil is not a silent gap — nodes.PlanRequeue REFUSES on
-// either one being absent, so a lost node on a daemon wired this far is
-// reported, never quietly dropped. Wiring them is S-37.T3's own follow-up
-// (P1-E17-W4-S37-T6).
+// All five are real as of P1-E17-W4-S37-T6. The two that were nil —
+// continuity and attention — each made nodes.PlanRequeue REFUSE, so a
+// lost node was reported with the reason recovery could not proceed
+// rather than re-queued; a daemon built with a nil RecoveryStores still
+// behaves that way, which is what makes the missing wiring visible
+// instead of silent.
 func resolveRequeueDeps(
 	dispatcher *nodes.Dispatcher,
 	records *nodes.RecordStore,
 	clock runtime.Clock,
+	recovery RecoveryStores,
 ) nodes.RequeueDeps {
 	enrolled, err := records.List()
 	if err != nil {
@@ -141,15 +165,14 @@ func resolveRequeueDeps(
 		enrolled = nil
 	}
 	return nodes.RequeueDeps{
-		// Placement carries no tunnel lookup, and that is a real gap
-		// rather than an oversight: nothing in this daemon holds
-		// per-node tunnel state — the S-36.T3 manager lives on the node
-		// side of the reverse forward. A nil lookup places NOTHING
-		// (Engine's own documented fail-closed default), so a lost node
-		// here is reported with both the loss and the reason recovery
-		// could not proceed, never silently dropped.
+		// The tunnel reading comes from the heartbeat, because in a
+		// reverse-forward architecture that is the only evidence of a
+		// live tunnel this side holds — see dispatchTunnels (R-14.274).
+		Placement:  nodes.Engine{Tunnels: dispatchTunnels(records, clock)},
 		Candidates: nodes.CandidatesFrom(enrolled),
 		Attempts:   dispatcher.Attempts(),
+		Continuity: journalContinuity{store: recovery.Journal},
+		Attention:  attentionFiler{store: recovery.Attention},
 		Liveness: func(nodeID string) nodes.Liveness {
 			rec, getErr := records.Get(nodeID)
 			if getErr != nil {

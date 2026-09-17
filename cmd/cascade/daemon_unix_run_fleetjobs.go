@@ -38,6 +38,14 @@ func wireFleetAndNodeHandlers(registry *rpc.Registry, store provider.Store, cloc
 	// nil store does not disable this namespace the way it disables its
 	// neighbours.
 	daemon.RegisterSyncHandlers(registry, store, clock, settings.Sync)
+	// ONE attention queue and ONE dispatch journal, built here and shared:
+	// the attention handler serves the queue over RPC while the dispatch
+	// recovery path writes into it, and the journal verb mounts the same
+	// store the continuity reader replays. A second store over either
+	// namespace would be a second view of one thing, and a held dispatch
+	// filed into one would be invisible in the other (P1-E17-W4-S37-T6).
+	attention := daemon.NewAttentionStore(store, clock, bus)
+	dispatchJournal := journal.New(store, clock, "nodes.dispatch")
 	daemon.RegisterFleetAttentionHandler(registry, store, clock, bus)
 	// supervisor.snapshot/events_schema (P1-E18-W4-S40-T4), now over the
 	// process's REAL metrics registry (P1-E18-W4-S40-T3 closed the
@@ -68,11 +76,12 @@ func wireFleetAndNodeHandlers(registry *rpc.Registry, store provider.Store, cloc
 		nodes.NewRecordStore(nodes.NewFileRecordBackend(paths.DataDir()), clock),
 		clock,
 		func() (nodes.Section, error) { return settings.Nodes, nil },
+		daemon.RecoveryStores{Journal: dispatchJournal, Attention: attention},
 	)
 	// The journal-stream verb rides the SAME fencing register, so a
 	// streamed record is fenced against the very attempt the ship leg
 	// minted for it.
-	daemon.RegisterNodeDispatchJournal(registry, dispatcher, journal.New(store, clock, "nodes.dispatch"))
+	daemon.RegisterNodeDispatchJournal(registry, dispatcher, dispatchJournal)
 	// The returned *sql.DB is intentionally not closed here: this
 	// composition root does not yet track per-registration close hooks
 	// (registerContextEngineHandlers' own connections have the identical

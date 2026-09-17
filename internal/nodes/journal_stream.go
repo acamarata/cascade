@@ -135,21 +135,38 @@ func fenceJournalRecord(reg *AttemptRegister, rec JournalRecord) error {
 	return nil
 }
 
-// streamedEntry is what one admitted record becomes in the journal.
+// StreamedEntry is what one admitted record becomes in the journal.
 //
 // The node's own record is carried VERBATIM in Record rather than merged
 // into this object: re-encoding it here would reorder its keys and re-escape
 // its strings, so the entry a reader replays would not be the bytes the node
 // actually produced.
-type streamedEntry struct {
+type StreamedEntry struct {
 	DispatchID string          `json:"dispatch_id"`
 	Attempt    uint64          `json:"attempt"`
 	Record     json.RawMessage `json:"record,omitempty"`
 }
 
+// DecodeStreamedEntry reads back what stampJournalRecord wrote.
+//
+// Exported, with its type, so the composition root's continuity reader
+// decodes the SHAPE THIS PACKAGE WROTE rather than a hand-copied struct
+// with the same field tags. Two declarations of one wire format drift,
+// and the drift here would be silent: a continuity reader that could not
+// find the attempt number would report every record as attempt zero, and
+// a replacement would resume from a fence nobody minted.
+func DecodeStreamedEntry(payload json.RawMessage) (StreamedEntry, error) {
+	var entry StreamedEntry
+	if err := json.Unmarshal(payload, &entry); err != nil {
+		return StreamedEntry{}, cascade.Wrap(cascade.KindIntegrity, err,
+			"nodes: decoding a streamed journal record")
+	}
+	return entry, nil
+}
+
 // stampJournalRecord wraps the node's record with its fencing identity.
 func stampJournalRecord(rec JournalRecord) (json.RawMessage, error) {
-	encoded, err := json.Marshal(streamedEntry{
+	encoded, err := json.Marshal(StreamedEntry{
 		DispatchID: rec.DispatchID,
 		Attempt:    rec.Attempt,
 		Record:     rec.Payload,

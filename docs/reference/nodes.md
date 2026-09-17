@@ -532,6 +532,48 @@ process that was never allowed to clean up after itself.
 The cross-machine variant of the same drill is the 06 §7 owner
 prerequisite; it gates that drill only, never this one.
 
+### What is wired (S-37.T6)
+
+The recovery path has five collaborators. All five are real on a shipping
+daemon as of S-37.T6; before it, two were nil and every loss was reported
+rather than recovered.
+
+| Collaborator | Source | What its absence costs |
+|---|---|---|
+| Candidate set | the enrolled device records | nothing to place on; the re-queue refuses |
+| Fencing register | the same one the ship leg mints from | a replacement that races the attempt it replaces |
+| Liveness | the heartbeat, three-state | every ship failure reads as a possible loss (fail closed) |
+| Tunnel state | the heartbeat — see below | placement places nothing |
+| Journal continuity | the dispatch journal store | the re-queue refuses rather than resuming from scratch |
+| Attention queue | the fleet attention store | a held outcome refuses rather than being held quietly |
+
+**The tunnel reading comes from the heartbeat, and that is a decision
+rather than a shortcut (R-14.274).** Placement wants to know whether a node
+is connected. The controller never dials a node: the node dials out and the
+session carries a *reverse* forward, so the controller holds no socket it
+could inspect and no per-node tunnel object — the tunnel manager lives on
+the node side. What the controller does hold is the heartbeat, and the
+heartbeat travels over that same tunnel, so its arrival within the timeout
+is direct evidence the tunnel was up. The mapping fails closed at the one
+place it could go either way: an unknown liveness reads as **down**, never
+as *reconnecting*, because "reconnecting" would tell placement a node is on
+its way back when the daemon in fact knows nothing.
+
+**One journal and one queue, not two of each.** The continuity reader
+replays the same store the dispatch-journal verb appends to, and the
+attention filer writes into the same queue `cascade fleet attention` serves.
+A second store over either namespace would be a second view of one thing,
+and a held dispatch filed into one of them would be invisible in the other.
+
+**The resume point is decided but not yet delivered.** `PlanRequeue`
+computes the replacement's resume position from the journal, and the daemon
+now really reads it. What does not exist yet is the channel that carries it
+to the replacement node: neither the attempt, the claim response, nor the
+execute request has a field for it, so a replacement on a *different*
+machine still starts from its own empty action log. Tracked as its own
+ticket; the durable-dedup case (the same node coming back) is unaffected and
+already works.
+
 ## Windows
 
 `cascade node serve` refuses unconditionally on Windows: the serve
