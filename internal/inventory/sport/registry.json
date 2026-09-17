@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T14:51:42Z",
+  "generated_at": "2026-09-17T15:32:18Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1855,6 +1855,66 @@
       ]
     },
     {
+      "name": "cli.sync",
+      "sites": [
+        {
+          "file": "cmd/cascade/sync_cmd.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T3",
+          "raw": "cli.sync/ADD (P1-E17-W4-S38-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cli.sync deps",
+      "sites": [
+        {
+          "file": "cmd/cascade/sync_deps.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T3",
+          "raw": "cli.sync deps (ADD) — P1-E17-W4-S38-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cli.sync surface",
+      "sites": [
+        {
+          "file": "cmd/cascade/sync_surface.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T3",
+          "raw": "cli.sync surface (ADD) — P1-E17-W4-S38-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cli.sync views",
+      "sites": [
+        {
+          "file": "cmd/cascade/sync_view.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T3",
+          "raw": "cli.sync views (ADD) — P1-E17-W4-S38-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cli.vault.grant",
       "sites": [
         {
@@ -3260,6 +3320,65 @@
       ]
     },
     {
+      "name": "cmd/cascade root mounts",
+      "sites": [
+        {
+          "file": "cmd/cascade/root_mounts.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "cmd/cascade root mounts (ADD, file-cap split) —"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade sync guards + views",
+      "sites": [
+        {
+          "file": "cmd/cascade/sync_guard_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T3",
+          "raw": "cmd/cascade sync guards + views (ADD tests) — P1-E17-W4-S38-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade sync tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/sync_cmd_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T3",
+          "raw": "cmd/cascade sync tests (ADD) — P1-E17-W4-S38-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade sync windows",
+      "sites": [
+        {
+          "file": "cmd/cascade/sync_windows_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T3",
+          "raw": "cmd/cascade sync windows (ADD tests) — P1-E17-W4-S38-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade test-support",
       "sites": [
         {
@@ -3302,6 +3421,21 @@
           "status": "ADD",
           "ticket": "P1-E17-W4-S37-T2",
           "raw": "cmd/cascade tests (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade testscript driver",
+      "sites": [
+        {
+          "file": "cmd/cascade/script_test.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T3",
+          "raw": "cmd/cascade testscript driver (ADD) — P1-E17-W4-S38-T3."
         }
       ],
       "statuses": [
@@ -13023,6 +13157,28 @@
       ]
     },
     {
+      "name": "internal/daemon sync.*",
+      "sites": [
+        {
+          "file": "internal/daemon/sync_rpc.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T3",
+          "raw": "internal/daemon sync.* (ADD) — P1-E17-W4-S38-T3."
+        },
+        {
+          "file": "internal/daemon/sync_rpc_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T3",
+          "raw": "internal/daemon sync.* (ADD tests) — P1-E17-W4-S38-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/daemon tests",
       "sites": [
         {
@@ -13928,6 +14084,20 @@
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T2",
           "raw": "internal/mcp/coretools (ADD) — P1-E16-W4-S34-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/mcp/coretools elevated exclusion",
+      "sites": [
+        {
+          "file": "internal/mcp/coretools/elevated_exclusion_test.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal/mcp/coretools elevated exclusion (ADD tests) —"
         }
       ],
       "statuses": [
@@ -17166,6 +17336,21 @@
       ]
     },
     {
+      "name": "internal/rpc elevation verbs",
+      "sites": [
+        {
+          "file": "internal/rpc/elevation_verbs.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T3",
+          "raw": "internal/rpc elevation verbs (ADD) — P1-E17-W4-S38-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/runtime EmbeddedRuntime",
       "sites": [
         {
@@ -18084,6 +18269,51 @@
       ]
     },
     {
+      "name": "internal/sync rpc handlers",
+      "sites": [
+        {
+          "file": "internal/sync/rpc_handlers.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T3",
+          "raw": "internal/sync rpc handlers (ADD) — P1-E17-W4-S38-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync rpc resolve tests",
+      "sites": [
+        {
+          "file": "internal/sync/rpc_resolve_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T3",
+          "raw": "internal/sync rpc resolve tests (ADD) — P1-E17-W4-S38-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync rpc surface",
+      "sites": [
+        {
+          "file": "internal/sync/rpc.go",
+          "line": 39,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T3",
+          "raw": "internal/sync rpc surface (ADD) — P1-E17-W4-S38-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/sync strategy registry",
       "sites": [
         {
@@ -18177,6 +18407,13 @@
           "status": "ADD",
           "ticket": "P1-E17-W4-S38-T2",
           "raw": "internal/sync tests (ADD) — P1-E17-W4-S38-T2."
+        },
+        {
+          "file": "internal/sync/rpc_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T3",
+          "raw": "internal/sync tests (ADD) — P1-E17-W4-S38-T3."
         },
         {
           "file": "internal/sync/strategy_test.go",
@@ -23731,7 +23968,7 @@
       ]
     }
   ],
-  "total_sites": 2293,
+  "total_sites": 2310,
   "unspecified_count": 69,
   "multi_status_count": 40
 }
