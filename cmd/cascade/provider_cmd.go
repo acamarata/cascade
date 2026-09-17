@@ -159,7 +159,7 @@ func runProviderAdd(cmd *cobra.Command, deps providerDeps, name string, flags pr
 	if err != nil {
 		return err
 	}
-	return vaultOutputWriter(cmd).Result(result)
+	return vaultOutputWriter(cmd).Result(providerAddView{AddResult: result})
 }
 
 // resolveProviderRegistry returns the intake.Registry `add` writes through

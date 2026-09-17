@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T12:06:53Z",
+  "generated_at": "2026-09-17T12:15:09Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3217,6 +3217,28 @@
           "status": "ADD",
           "ticket": "P1-E15-W4-S32-T4",
           "raw": "cmd/cascade plugin.add handler (ADD) — P1-E15-W4-S32-T4"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade provider add view",
+      "sites": [
+        {
+          "file": "cmd/cascade/provider_view.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T10",
+          "raw": "cmd/cascade provider add view (ADD) — P1-E16-W4-S35-T10."
+        },
+        {
+          "file": "cmd/cascade/provider_view_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T10",
+          "raw": "cmd/cascade provider add view (ADD) — P1-E16-W4-S35-T10."
         }
       ],
       "statuses": [
@@ -18578,6 +18600,20 @@
       ]
     },
     {
+      "name": "pkg.provider capability state encoding",
+      "sites": [
+        {
+          "file": "pkg/provider/capability_json_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "pkg.provider capability state encoding (ADD) —"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "pkg.provider.AgentProvider tests",
       "sites": [
         {
@@ -23110,7 +23146,7 @@
       ]
     }
   ],
-  "total_sites": 2239,
+  "total_sites": 2242,
   "unspecified_count": 66,
   "multi_status_count": 40
 }

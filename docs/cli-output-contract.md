@@ -200,3 +200,35 @@ no cascade output behavior is reachable only through a live terminal:
 - `Progress`/`Warn`/`Debug` are diagnostic-only: never put data a script
   might need to parse into any of the three: data belongs in `Result` or
   an `NDJSON().Emit` call.
+- Pass `Result` a VIEW, never a domain type. `Result` renders a
+  non-JSON value through `fmt.Stringer` and nothing else, so a bare struct
+  prints Go's default formatting — `{converged [] {acme anthropic ...}}` —
+  on a terminal. A view embeds its result, so `--json` keeps emitting the
+  same document and a new field cannot reach one surface and not the other.
+- Every field a `--json` envelope carries needs a `json:"..."` tag in
+  `snake_case`. Untagged, Go's own field name reaches the document:
+  `"Providers"` beside `"providers"`, `"AuthModes"` beside `"auth_modes"`.
+  This applies to nested types too, including ones from `pkg/`.
+
+## Enumerations on the wire
+
+An enumeration is written as its stable lowercase NAME, never its ordinal.
+`0`, `1` and `2` say nothing to a consumer on their own, and they change
+meaning the day a member is inserted in the middle.
+
+`provider.CapabilityState` is the worked example. It marshals as
+`"unknown"`, `"supported"` or `"unsupported"`, matching the words the human
+rendering already prints, so the two surfaces agree about the same value.
+
+Two rules come with it:
+
+- **Reads accept the old encoding; writes only emit the new one.** This
+  value is persisted — the provider registry stores each record's
+  capabilities as JSON — so a build that only read names would make every
+  row an existing installation already has undecodable. Accepting the
+  ordinal on read lets the old encoding drain out of the store as records
+  are re-verified, with nothing to migrate.
+- **An unrecognised value is an error, not the zero member.** Reading an
+  unknown word as "unknown" turns a decoding failure into a
+  plausible-looking answer, which for a tri-state whose whole point is that
+  "not probed" is a distinct state is the worse of the two outcomes.

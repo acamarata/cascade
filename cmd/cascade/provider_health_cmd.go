@@ -201,7 +201,13 @@ func (r providerListRow) String() string {
 	return fmt.Sprintf("%-20s %-14s %-8s %-10s lanes=%d", r.Name, r.Driver, r.Tier, r.Health, r.Lanes)
 }
 
-type providerListResult struct{ Providers []providerListRow }
+// providerListResult is the `provider list` envelope. The tag is not
+// decoration: without it the field reaches --json as "Providers", Go's own
+// name, inside a document whose every other key is snake_case
+// (P1-E16-W4-S35-T10).
+type providerListResult struct {
+	Providers []providerListRow `json:"providers"`
+}
 
 func (r providerListResult) String() string {
 	if len(r.Providers) == 0 {

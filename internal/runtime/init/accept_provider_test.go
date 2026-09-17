@@ -136,17 +136,11 @@ func (e env) providerNames(t *testing.T) ([]string, int) {
 	if code != 0 {
 		return nil, code
 	}
-	// "Providers", capitalised, is what the envelope actually carries:
-	// the result type has no JSON tag on that field, so Go's own name
-	// reaches the document. Decoding the snake_case spelling the rest of
-	// the contract uses finds nothing. Written as it IS, with the defect
-	// recorded in P1-E16-W4-S35-T10 rather than hidden behind a decoder
-	// that quietly accepts both.
 	var envelope struct {
 		Data struct {
 			Providers []struct {
 				Name string `json:"name"`
-			} `json:"Providers"`
+			} `json:"providers"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal([]byte(jsonTail(out)), &envelope); err != nil {

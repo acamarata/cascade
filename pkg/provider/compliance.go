@@ -37,31 +37,31 @@ type CompliancePosture struct {
 	// "api-key", "oauth", "session-cookie"). Kept as a plain string slice
 	// rather than a closed enum, since the set of vendor auth modes is
 	// open-ended and owned by each driver, not by this contract.
-	AuthModes []string
+	AuthModes []string `json:"auth_modes"`
 	// InteractiveEntitlement reports whether this lane's credentials were
 	// obtained through an interactive, human-present login flow.
-	InteractiveEntitlement bool
+	InteractiveEntitlement bool `json:"interactive_entitlement"`
 	// ProgrammaticEntitlement reports whether this lane's credentials were
 	// obtained through a programmatic (API key, service account) grant.
-	ProgrammaticEntitlement bool
+	ProgrammaticEntitlement bool `json:"programmatic_entitlement"`
 	// AutomationModes lists the automation modes this lane's vendor terms
 	// permit (e.g. "batch", "agent", "scheduled"). Open-ended for the same
 	// reason as AuthModes.
-	AutomationModes []string
+	AutomationModes []string `json:"automation_modes"`
 	// CredentialSharing is always CredentialSharingForbidden.
 	// NewCompliancePosture is the only constructor and never accepts a
 	// different value; Validate refuses any other value found on a
 	// hand-built CompliancePosture.
-	CredentialSharing CredentialSharingPolicy
+	CredentialSharing CredentialSharingPolicy `json:"credential_sharing"`
 	// Pacing free-text-describes the rate-limiting cadence this lane's
 	// vendor terms impose (e.g. "steady", "burst-then-cooldown"). Kept as
 	// a description rather than a numeric rate: the exact shape of a
 	// vendor's pacing rule is driver-specific and not this contract's to
 	// normalize.
-	Pacing string
+	Pacing string `json:"pacing"`
 	// MultiProfileEnabled reports whether more than one authenticated
 	// profile may be active for this lane concurrently.
-	MultiProfileEnabled bool
+	MultiProfileEnabled bool `json:"multi_profile_enabled"`
 }
 
 // NewCompliancePosture builds a CompliancePosture from the caller's declared

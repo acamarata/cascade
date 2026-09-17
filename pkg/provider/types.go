@@ -19,7 +19,12 @@
 
 package provider
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+
+	"github.com/acamarata/cascade/pkg/cascade"
+)
 
 // ChatMessage is one turn of a chat exchange: a role and its text content.
 // It is intentionally minimal and vendor-neutral - a driver translates it to
@@ -141,6 +146,60 @@ func (s CapabilityState) String() string {
 	return capabilityStateNames[s]
 }
 
+// MarshalJSON writes the state's stable lowercase NAME, not its ordinal.
+//
+// Without this, a tri-state whose whole point is "unknown is different
+// from unsupported" reaches every JSON consumer as 0, 1 or 2 — numbers
+// that say nothing on their own and that silently change meaning if a
+// member is ever inserted. The name is already the spelling the human
+// rendering uses, so the two surfaces now agree about the same value.
+func (s CapabilityState) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.String())
+}
+
+// UnmarshalJSON accepts the name MarshalJSON writes, and the ORDINAL that
+// earlier builds wrote.
+//
+// The ordinal branch is not leniency, it is the read side of a format
+// change. This value is PERSISTED — the provider registry stores each
+// record's capabilities as JSON in sqlite — so a build that only read
+// names would make every row an existing installation already has
+// undecodable, and `cascade provider list` would fail outright on a
+// machine that worked yesterday. Found exactly that way, by running the
+// built binary against a registry populated before the change.
+//
+// Reads accept both, writes emit only the name: the old encoding drains
+// out of the store as rows are re-verified, and nothing has to migrate.
+//
+// An unrecognised name, and an ordinal outside the declared set, are both
+// errors rather than CapabilityUnknown. Silently reading either as "not
+// probed" turns a decoding failure into a plausible-looking capability,
+// which is the worse of the two outcomes for a tri-state whose whole point
+// is that unknown is a distinct answer.
+func (s *CapabilityState) UnmarshalJSON(raw []byte) error {
+	var name string
+	if err := json.Unmarshal(raw, &name); err == nil {
+		for i, known := range capabilityStateNames {
+			if name == known {
+				*s = CapabilityState(i) //nolint:gosec // i indexes a 3-element array.
+				return nil
+			}
+		}
+		return cascade.Newf(cascade.KindInvalidInput, "provider: %q is not a capability state", name)
+	}
+	var ordinal uint8
+	if err := json.Unmarshal(raw, &ordinal); err != nil {
+		return cascade.Newf(cascade.KindInvalidInput,
+			"provider: a capability state is a name or a legacy ordinal, got %s", raw)
+	}
+	state := CapabilityState(ordinal)
+	if !state.Valid() {
+		return cascade.Newf(cascade.KindInvalidInput, "provider: %d is not a capability state", ordinal)
+	}
+	*s = state
+	return nil
+}
+
 // RequiredCapabilities mirrors Capabilities' six R-14.88 tool-capability
 // dimensions as a required-capability set: a caller sets the fields it
 // needs to true, and the router (K/S-22.T2) excludes any candidate lane
@@ -162,16 +221,16 @@ type RequiredCapabilities struct {
 // every J/S-19 driver must fill. Capabilities describes a lane; it never
 // routes - matching requirements against it is K/S-22.T2's job.
 type Capabilities struct {
-	Search           CapabilityState
-	URLFetch         CapabilityState
-	Vision           CapabilityState
-	ToolUse          CapabilityState
-	LongContext      CapabilityState
-	StructuredOutput CapabilityState
+	Search           CapabilityState `json:"search"`
+	URLFetch         CapabilityState `json:"url_fetch"`
+	Vision           CapabilityState `json:"vision"`
+	ToolUse          CapabilityState `json:"tool_use"`
+	LongContext      CapabilityState `json:"long_context"`
+	StructuredOutput CapabilityState `json:"structured_output"`
 	// CompliancePosture is the R-16.10 posture this lane operates under.
 	// credential_sharing is always CredentialSharingForbidden;
 	// NewCompliancePosture is the only constructor and enforces this.
-	CompliancePosture CompliancePosture
+	CompliancePosture CompliancePosture `json:"compliance_posture"`
 }
 
 // Satisfies reports whether c resolves every dimension req sets to true as
