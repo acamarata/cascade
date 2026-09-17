@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T01:32:22Z",
+  "generated_at": "2026-09-17T01:56:18Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3974,6 +3974,27 @@
           "status": "ADD",
           "ticket": "T-6",
           "raw": "cmd/cascade/mcp (ADD, per T-6 sport_updates)."
+        },
+        {
+          "file": "cmd/cascade/mcp_tools.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T2",
+          "raw": "cmd/cascade/mcp (ADD) — P1-E16-W4-S34-T2."
+        },
+        {
+          "file": "cmd/cascade/mcp_tools_unix.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T2",
+          "raw": "cmd/cascade/mcp (ADD) — P1-E16-W4-S34-T2."
+        },
+        {
+          "file": "cmd/cascade/mcp_tools_windows.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T2",
+          "raw": "cmd/cascade/mcp (ADD) — P1-E16-W4-S34-T2."
         }
       ],
       "statuses": [
@@ -13547,6 +13568,21 @@
       ]
     },
     {
+      "name": "internal/mcp capability filter",
+      "sites": [
+        {
+          "file": "internal/mcp/policy_filter.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T2",
+          "raw": "internal/mcp capability filter (ADD) — P1-E16-W4-S34-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/mcp goldens",
       "sites": [
         {
@@ -13574,6 +13610,42 @@
       ],
       "statuses": [
         "CHANGE"
+      ]
+    },
+    {
+      "name": "internal/mcp/coretools",
+      "sites": [
+        {
+          "file": "internal/mcp/coretools/deferrals.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T2",
+          "raw": "internal/mcp/coretools (ADD) — P1-E16-W4-S34-T2."
+        },
+        {
+          "file": "internal/mcp/coretools/policy.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T2",
+          "raw": "internal/mcp/coretools (ADD) — P1-E16-W4-S34-T2."
+        },
+        {
+          "file": "internal/mcp/coretools/registrations.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T2",
+          "raw": "internal/mcp/coretools (ADD) — P1-E16-W4-S34-T2."
+        },
+        {
+          "file": "internal/mcp/coretools/specs.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T2",
+          "raw": "internal/mcp/coretools (ADD) — P1-E16-W4-S34-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -22410,7 +22482,7 @@
       ]
     }
   ],
-  "total_sites": 2176,
+  "total_sites": 2184,
   "unspecified_count": 66,
   "multi_status_count": 40
 }
