@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T15:54:25Z",
+  "generated_at": "2026-09-17T16:02:47Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -23993,6 +23993,111 @@
       ]
     },
     {
+      "name": "sync/acceptance-drill",
+      "sites": [
+        {
+          "file": "internal/sync/acceptance_test.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T5",
+          "raw": "sync/acceptance-drill (ADD) — P1-E17-W4-S38-T5."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "sync/acceptance-drill conflicts",
+      "sites": [
+        {
+          "file": "internal/sync/acceptance_conflicts_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T5",
+          "raw": "sync/acceptance-drill conflicts (ADD) — P1-E17-W4-S38-T5."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "sync/acceptance-drill evidence",
+      "sites": [
+        {
+          "file": "internal/sync/acceptance_evidence_test.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T5",
+          "raw": "sync/acceptance-drill evidence (ADD) — P1-E17-W4-S38-T5."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "sync/acceptance-drill resolve",
+      "sites": [
+        {
+          "file": "internal/sync/acceptance_resolve_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T5",
+          "raw": "sync/acceptance-drill resolve (ADD) — P1-E17-W4-S38-T5."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "sync/acceptance-drill security",
+      "sites": [
+        {
+          "file": "internal/sync/acceptance_security_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T5",
+          "raw": "sync/acceptance-drill security (ADD) — P1-E17-W4-S38-T5."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "sync/acceptance-drill sshd rehearsal",
+      "sites": [
+        {
+          "file": "internal/sync/acceptance_sshd_integration_test.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T5",
+          "raw": "sync/acceptance-drill sshd rehearsal (ADD) — P1-E17-W4-S38-T5."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "sync/acceptance-drill strategies",
+      "sites": [
+        {
+          "file": "internal/sync/acceptance_strategies_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T5",
+          "raw": "sync/acceptance-drill strategies (ADD) — P1-E17-W4-S38-T5."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "windows-parity-pass-3",
       "sites": [
         {
@@ -24025,7 +24130,7 @@
       ]
     }
   ],
-  "total_sites": 2315,
+  "total_sites": 2322,
   "unspecified_count": 69,
   "multi_status_count": 41
 }
