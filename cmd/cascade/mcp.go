@@ -48,6 +48,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/backup"
 	"github.com/acamarata/cascade/internal/mcp"
+	"github.com/acamarata/cascade/internal/mcp/coretools"
 	"github.com/acamarata/cascade/internal/mcp/transport"
 	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/internal/rpc"
@@ -83,13 +84,22 @@ type mcpDeps struct {
 
 // productionMCPDeps builds mcpDeps against the real environment.
 func productionMCPDeps() mcpDeps {
+	paths := lazyPaths{}
+	// The first-party v1-parity tool set (P1-E16-W4-S34-T2) and the
+	// capability filter that gates it. Both are built per call, because
+	// the filter is consulted once per registry and a grant change is
+	// meant to take effect on the NEXT registration pass — which is this
+	// call.
 	tools := func() *mcp.ToolRegistry {
 		bDeps := productionBackupDeps()
-		return mcp.NewToolRegistry(plugin.Builtins,
+		wiring := buildMCPToolWiring(context.Background(), paths, runtime.SystemClock{})
+		core := []mcp.CoreRegistration{
 			backup.MCPRegistration(backupSnapshotLister(bDeps)),
-			backup.VerifyMCPRegistration(backupVerifyRunner(bDeps)))
+			backup.VerifyMCPRegistration(backupVerifyRunner(bDeps)),
+		}
+		return mcp.NewToolRegistry(plugin.Builtins, wiring.Filter,
+			append(core, coretools.Registrations(wiring.Methods)...)...)
 	}
-	paths := lazyPaths{}
 	return mcpDeps{
 		Paths:    paths,
 		NewTools: tools,
@@ -203,8 +213,7 @@ func newMCPToolsCmd(deps mcpDeps) *cobra.Command {
 		Short: "Print the policy-filtered MCP tool registry",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			w := mcpOutputWriter(cmd)
-			return w.Result(map[string]any{"tools": deps.NewTools().List()})
+			return mcpOutputWriter(cmd).Result(mcpToolsListResult(deps))
 		},
 	})
 	return root
@@ -219,4 +228,41 @@ func mcpOutputWriter(cmd *cobra.Command) *output.Writer {
 	verbose, _ := cmd.Flags().GetBool("verbose")
 	noColor, _ := cmd.Flags().GetBool("no-color")
 	return output.New(cmd.OutOrStdout(), cmd.OutOrStderr(), jsonOut, quiet, verbose, noColor)
+}
+
+// mcpToolsListResult renders `mcp tools list`.
+//
+// It reports four lists, not one, because "why is tool X not here?" is
+// the only interesting question this command answers and a bare list
+// cannot answer it. A tool is absent for exactly one of three reasons,
+// and each has its own field:
+//
+//   - withheld: the tool exists and its method is served, but the policy
+//     engine does not grant its capability. `cascade policy grant <name>`
+//     is the fix.
+//   - unservable: this build does not serve the RPC method the tool
+//     dispatches to, so no tool was registered at all. Nothing an
+//     operator can grant will change that.
+//   - deferred: the v1 tool has no v2 surface yet, with the ticket that
+//     owns it. Nothing to grant, nothing to serve, and the reason is
+//     recorded rather than left to be rediscovered.
+//
+// The wire surface deliberately says more than tools/list does: an
+// operator at a terminal is not the untrusted model the registry withholds
+// names from.
+func mcpToolsListResult(deps mcpDeps) map[string]any {
+	wiring := buildMCPToolWiring(context.Background(), deps.Paths, runtime.SystemClock{})
+	defer wiring.Close()
+
+	registry := deps.NewTools()
+	deferred := make([]map[string]string, 0, len(coretools.Deferrals()))
+	for _, d := range coretools.Deferrals() {
+		deferred = append(deferred, map[string]string{"v1_name": d.V1Name, "ticket": d.Ticket, "reason": d.Reason})
+	}
+	return map[string]any{
+		"tools":      registry.List(),
+		"withheld":   registry.FilteredOut(),
+		"unservable": coretools.Unservable(wiring.Methods),
+		"deferred":   deferred,
+	}
 }

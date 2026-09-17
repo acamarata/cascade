@@ -71,13 +71,21 @@ func schedulerSubject() policy.Subject {
 // class can only RAISE the level an action is evaluated at, never lower
 // it, so a class named here can never widen what the classifier resolved.
 func bootCapabilities() []policy.Capability {
-	return []policy.Capability{
+	caps := []policy.Capability{
 		{
 			Name:          schedulerCapability,
 			Desc:          "dispatch a registered scheduled runnable",
 			DefaultPolicy: policy.ClassLocalDev,
 		},
 	}
+	// The MCP tool capabilities (P1-E16-W4-S34-T2) are registered HERE,
+	// in the daemon's one capability registry, rather than in a second
+	// registry of their own. An unregistered capability denies, so an MCP
+	// tool asking about a capability this registry has never heard of
+	// would be withheld for a reason that has nothing to do with the
+	// operator's grants — and `cascade policy grant memory.write` would
+	// have nothing to grant against.
+	return append(caps, mcpToolCapabilities()...)
 }
 
 // policyWiring is what wirePolicy built, named as a set so a caller cannot

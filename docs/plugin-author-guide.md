@@ -81,6 +81,58 @@ Until then, `internal/plugins.BuiltinRegistry.Grants(id)` is a read-only
 mirror of what `RegisterBuiltin` seeded: it grants nothing beyond
 `"read"` on its own.
 
+## Registering an MCP tool, and the capability filter
+
+A plugin's manifest tools reach MCP through `Manifest.Provides.Tools` and
+are exposed when the plugin's `Grants` pass `isExposable` — the W1 path
+described above. First-party tools take a second, narrower route, and
+`internal/mcp/coretools` is the reference for it (`P1-E16-W4-S34-T2`).
+
+A first-party tool is an `mcp.CoreRegistration`:
+
+```go
+mcp.CoreRegistration{
+    Tool: mcp.Tool{
+        Name:        "cascade_memory_recall",
+        Description: "Find records in the memory store ...",
+        PluginID:    "cascade.core.tools",
+        InputSchema: schema, // JSON Schema for the arguments
+    },
+    Grants:             []string{"read"},
+    RequiredCapability: "memory.read",
+    Handler:            handler,
+}
+```
+
+Three things about that shape are worth copying rather than reinventing.
+
+**The schema describes what the handler reads.** `InputSchema` is emitted
+verbatim in `tools/list`. A tool that declares none still gets the
+permissive object schema the protocol requires — which is honest for a
+manifest tool, since the manifest format carries no schema field — but a
+schema that describes arguments no handler reads is worse than none.
+`coretools` transcribes each schema from its method's own Go params type
+and cites that type in a comment above it.
+
+**`Grants` and `RequiredCapability` are different questions.** `Grants` is
+the W1 plugin-exposure vocabulary; `RequiredCapability` is the policy
+engine's. Both run, and neither replaces the other. A tool that names a
+capability and finds no filter wired is **not exposed** — naming a
+capability and having nothing to ask is exactly the case that must not
+default to exposure.
+
+**Delegate; do not reimplement.** `coretools` handlers dispatch through the
+process's own `*rpc.Registry`, so a tool is a second *view* onto a method
+the daemon already serves rather than a second implementation of it. A tool
+whose method this build does not serve registers nothing at all — better an
+absent tool than one that answers "method not found".
+
+The filter is consulted once per registry, at construction, so a grant
+change takes effect on the next registration pass. `cascade mcp tools list`
+reports the three reasons a tool can be missing — `withheld` (no grant),
+`unservable` (no such method here), `deferred` (no surface yet) — because a
+bare list cannot answer "why is my tool not here?".
+
 ## RPC naming convention
 
 A plugin's `provides.commands[]` entries mount under a JSON-RPC method

@@ -21,7 +21,7 @@ import (
 func fakeMCPDeps() (*mcpDeps, *[]string) {
 	var calls []string
 	deps := &mcpDeps{
-		NewTools: func() *mcp.ToolRegistry { return mcp.NewToolRegistry(plugin.Builtins) },
+		NewTools: func() *mcp.ToolRegistry { return mcp.NewToolRegistry(plugin.Builtins, mcp.AllowAllFilter{}) },
 		ServeStdio: func(context.Context, io.Reader, io.Writer) error {
 			calls = append(calls, "stdio")
 			return nil

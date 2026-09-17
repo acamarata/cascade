@@ -116,12 +116,16 @@ func negotiateVersion(offered string) string {
 
 // toolDescriptor is one entry of tools/list, in MCP's own shape.
 //
-// InputSchema is REQUIRED by the protocol and is emitted as a permissive
-// object schema, because the plugin manifest declares no per-tool schema
-// today. That is a real gap, stated rather than papered over: a tool whose
-// arguments are undescribed is one the model must guess at. The manifest
-// gaining a schema field is the fix; inventing one here would be worse,
-// since it would describe arguments no handler actually reads.
+// InputSchema is REQUIRED by the protocol. A tool that declares one gets
+// its own, verbatim: P1-E16-W4-S34-T2 added Tool.InputSchema and the
+// first-party registrations in internal/mcp/coretools fill it from the
+// params their RPC method really decodes.
+//
+// A tool that declares none still gets the permissive object schema, and
+// the reason is unchanged: the plugin manifest format carries no per-tool
+// schema field, so a manifest-sourced tool has nothing to declare.
+// Inventing one here would be worse than the permissive schema, since it
+// would describe arguments no handler actually reads.
 type toolDescriptor struct {
 	Name        string         `json:"name"`
 	Description string         `json:"description"`
@@ -145,8 +149,19 @@ func toolsListResult(tools *ToolRegistry) toolsListBody {
 		out = append(out, toolDescriptor{
 			Name:        t.Name,
 			Description: t.Description,
-			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+			InputSchema: inputSchemaOrPermissive(t.InputSchema),
 		})
 	}
 	return toolsListBody{Tools: out}
+}
+
+// inputSchemaOrPermissive returns the tool's declared schema, or the
+// permissive object schema when it declared none. The protocol requires
+// the field, so there is no third answer: omitting it would produce a
+// tools/list a conformant client rejects.
+func inputSchemaOrPermissive(declared map[string]any) map[string]any {
+	if len(declared) > 0 {
+		return declared
+	}
+	return map[string]any{"type": "object", "properties": map[string]any{}}
 }

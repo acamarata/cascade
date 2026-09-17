@@ -127,3 +127,30 @@ each, including the marks kept on purpose (the tombstone, the account, the
 consolidation account) and the ones nothing here can reach (a candidate
 draft, and the bytes themselves, which are unlinked and not shredded). See
 `docs/memory-architecture.md` § Forget pipeline.
+
+## `cascade mcp tools list`
+
+Prints the MCP tool registry a harness session would see, and — more
+usefully — why a tool it does not see is missing.
+
+A tool is absent for exactly one of three reasons, and the output has a
+field for each:
+
+| Field | Meaning | What to do |
+|---|---|---|
+| `tools` | Registered and visible to the harness. | — |
+| `withheld` | The tool exists and its method is served, but the policy engine does not grant its capability. | `cascade policy grant <capability>`, then restart the MCP server. |
+| `unservable` | This build serves no RPC method for the tool, so nothing was registered. | Nothing to grant; the surface does not exist here. |
+| `deferred` | A Cascade v1 tool with no v2 surface yet, with the ticket that owns it and what is actually missing. | Nothing to grant or serve; the gap is recorded, not forgotten. |
+
+The MCP wire surface itself reports far less: `tools/list` omits a withheld
+tool entirely and `tools/call` reports it as unknown, so a model cannot
+learn that a privileged tool exists on this machine. This command is for
+the operator at a terminal, who is not the party that distinction protects
+against.
+
+The capability filter is consulted once, when the registry is built, so a
+grant made now takes effect on the **next** registration pass: restart
+`cascade mcp serve`, or re-run `cascade context harness sync`. See
+`plugins/claude/README.md` § The MCP tools a session sees for the tool
+table and the profile rules.

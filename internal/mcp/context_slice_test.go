@@ -34,7 +34,7 @@ import (
 )
 
 func TestContextSliceToolNotYetExposed(t *testing.T) {
-	registry := NewToolRegistry(plugin.Builtins)
+	registry := NewToolRegistry(plugin.Builtins, AllowAllFilter{})
 	for _, tool := range registry.List() {
 		if tool.Name == "cascade_context_slice" {
 			t.Fatalf("cascade_context_slice is exposed, but no in-scope composition-root wiring registered it in this ticket -- update this test once a later ticket adds the blank-import site")

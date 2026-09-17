@@ -95,8 +95,16 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// cmd-rpc-server-boundary exemption list; the two must be edited
 	// together.
 	"daemon_unix_run_options.go": true,
-	"mcp.go":                     true,
-	"elevate_helper.go":          true,
+	// mcp_tools.go (P1-E16-W4-S34-T2): the method table the first-party
+	// MCP tools dispatch through. It REGISTERS on a registry it
+	// constructs itself and never dials the daemon -- the identical
+	// composition-root reasoning as mcp.go's own exemption below, which
+	// it was split out of for the 300-line cap. This map mirrors
+	// .golangci.yml's cmd-rpc-server-boundary exemption list; the two
+	// must be edited together.
+	"mcp_tools.go":      true,
+	"mcp.go":            true,
+	"elevate_helper.go": true,
 	// backup_elevation.go never dials the daemon: it runs the 06 §5.14
 	// nonce + local-auth-signature + middleware-verify + single-use-ledger
 	// ceremony entirely in-process, reusing the daemon's own

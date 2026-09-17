@@ -143,7 +143,7 @@ func (passthroughInterceptor) Intercept(_ context.Context, _ egress.Capability, 
 func TestDispatchToolsCallRejectsMalformedParams(t *testing.T) {
 	// An empty manifest source: this test never reaches a tool, it stops at
 	// the params decode. (NewToolRegistry calls its source, so nil panics.)
-	srv := NewServer(NewToolRegistry(func() []plugin.BuiltinRegistration { return nil }))
+	srv := NewServer(NewToolRegistry(func() []plugin.BuiltinRegistration { return nil }, AllowAllFilter{}))
 
 	resp := srv.Dispatch(context.Background(), &Frame{
 		JSONRPC: "2.0",

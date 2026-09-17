@@ -35,6 +35,15 @@ type Tool struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	PluginID    string `json:"plugin_id"`
+	// InputSchema is the tool's JSON Schema for its arguments, emitted
+	// verbatim in tools/list (P1-E16-W4-S34-T2, R-14.251 rule 1).
+	//
+	// A nil schema is not a defect and is not invented around: the plugin
+	// manifest format carries no per-tool schema, so a manifest-sourced
+	// tool has none to declare. initialize.go emits the permissive object
+	// schema the protocol requires in that case, and says why. A tool that
+	// DOES declare one is describing arguments its handler really reads.
+	InputSchema map[string]any `json:"input_schema,omitempty"`
 }
 
 // ManifestSource returns the current set of compile-time-registered plugin
@@ -52,6 +61,17 @@ type CoreRegistration struct {
 	Tool    Tool
 	Grants  []string
 	Handler func(context.Context, []byte) ([]byte, error)
+	// RequiredCapability names the policy capability a caller must hold
+	// for this tool to APPEAR in tools/list (P1-E16-W4-S34-T2). An empty
+	// value means the tool declares no capability of its own and is
+	// governed by Grants alone, which is every registration that predates
+	// this field.
+	//
+	// A non-empty value is checked against the registry's CapabilityFilter
+	// at construction. A registry built without one denies every such
+	// tool: naming a capability and finding nothing to ask is exactly the
+	// case that must not default to exposure.
+	RequiredCapability string
 }
 
 // knownSafeGrants is the closed set of capability grants this ticket
@@ -87,6 +107,12 @@ func isExposable(grants []string) bool {
 type ToolRegistry struct {
 	source ManifestSource
 	tools  map[string]resolvedTool
+	// filtered names every tool a capability check excluded, in sorted
+	// order. It is reported by FilteredOut for the debug log this
+	// ticket's contract asks for, and it never reaches an MCP client:
+	// see Call's doc comment for why a client must not be able to tell a
+	// denied tool from an absent one.
+	filtered []string
 }
 
 // resolvedTool pairs a Tool descriptor with the handler that services it,
@@ -100,7 +126,16 @@ type resolvedTool struct {
 // filtered tool set once at construction — the registry is read-only for
 // its lifetime, matching the stateless-core convention this ticket's
 // contract sets for the rest of the package.
-func NewToolRegistry(source ManifestSource, core ...CoreRegistration) *ToolRegistry {
+// filter is consulted ONCE, here: the registry is read-only for its
+// lifetime, so a grant change takes effect on the next registration pass,
+// which is a new registry (P1-E16-W4-S34-T2). A nil filter is the
+// fail-closed default, which withholds every tool that names a
+// capability.
+func NewToolRegistry(source ManifestSource, filter CapabilityFilter, core ...CoreRegistration) *ToolRegistry {
+	if filter == nil {
+		filter = DenyAllFilter{}
+	}
+	ctx := context.Background()
 	r := &ToolRegistry{source: source, tools: make(map[string]resolvedTool)}
 	for _, reg := range source() {
 		if !isExposable(reg.Grants) {
@@ -120,9 +155,26 @@ func NewToolRegistry(source ManifestSource, core ...CoreRegistration) *ToolRegis
 		if !isExposable(reg.Grants) || reg.Handler == nil || reg.Tool.Name == "" {
 			continue
 		}
+		if reg.RequiredCapability != "" && !filter.Allow(ctx, reg.RequiredCapability) {
+			r.filtered = append(r.filtered, reg.Tool.Name)
+			continue
+		}
 		r.tools[reg.Tool.Name] = resolvedTool{descriptor: reg.Tool, handler: reg.Handler}
 	}
+	sort.Strings(r.filtered)
 	return r
+}
+
+// FilteredOut names every tool the capability filter excluded, sorted.
+//
+// It is for the composition root's debug log and for tests. It is
+// deliberately NOT reachable from any wire surface: List omits these
+// tools and Call reports them as unknown, so nothing a client can ask
+// reveals that a denied tool exists.
+func (r *ToolRegistry) FilteredOut() []string {
+	out := make([]string, len(r.filtered))
+	copy(out, r.filtered)
+	return out
 }
 
 // List returns the policy-filtered tool set, sorted by name for

@@ -60,7 +60,7 @@ func TestToolRegistry_FailClosedPolicy(t *testing.T) {
 			source := func() []plugin.BuiltinRegistration {
 				return []plugin.BuiltinRegistration{reg("p-"+tc.name, tc.grants, "tool-"+tc.name)}
 			}
-			r := NewToolRegistry(source)
+			r := NewToolRegistry(source, AllowAllFilter{})
 			list := r.List()
 			exposed := len(list) == 1
 			if exposed != tc.wantExpose {
@@ -77,7 +77,7 @@ func TestToolRegistry_UnknownToolCallFailsClosed(t *testing.T) {
 	source := func() []plugin.BuiltinRegistration {
 		return []plugin.BuiltinRegistration{reg("p1", []string{"admin"}, "secret-tool")}
 	}
-	r := NewToolRegistry(source)
+	r := NewToolRegistry(source, AllowAllFilter{})
 	if _, err := r.Call(context.Background(), "secret-tool", nil); err == nil {
 		t.Fatal("Call succeeded for a filtered-out tool, want an error")
 	}
@@ -92,7 +92,7 @@ func TestToolRegistry_List_Deterministic(t *testing.T) {
 			reg("p-a", []string{"read"}, "aaa-tool"),
 		}
 	}
-	r := NewToolRegistry(source)
+	r := NewToolRegistry(source, AllowAllFilter{})
 	list := r.List()
 	if len(list) != 2 || list[0].Name != "aaa-tool" || list[1].Name != "zzz-tool" {
 		t.Fatalf("List() = %+v, want sorted [aaa-tool, zzz-tool]", list)

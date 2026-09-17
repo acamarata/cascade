@@ -34,6 +34,7 @@ import (
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/mcp"
+	"github.com/acamarata/cascade/internal/mcp/coretools"
 	"github.com/acamarata/cascade/internal/mcp/transport"
 	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/rpc"
@@ -109,20 +110,23 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	// socket a client connecting to the daemon uses. The tool registry
 	// applies its own exposure filter, so registering the method here does
 	// not widen what a caller can reach.
-	if err := transport.RegisterSocketMCP(registry, mcp.NewServer(daemonMCPToolRegistry())); err != nil {
-		return nil, nil, nil, err
+	// The MCP dispatcher is registered LAST, after every namespace it
+	// exposes, so coretools.Registrations sees the finished method table:
+	// a tool whose method is not yet bound registers nothing at all, and
+	// registering the dispatcher here would have exposed exactly zero
+	// first-party tools (P1-E16-W4-S34-T2).
+	registerSocketMCP := func() error {
+		return transport.RegisterSocketMCP(registry,
+			mcp.NewServer(daemonMCPToolRegistry(registry, mcpFilterFromOptions(opts))))
 	}
 
-	// The memory.* namespace (G/S-13.T3). Registered here for the same
-	// reason status.get is: a handler the composition root never mounts is
-	// a subsystem that ships built, tested and unreachable.
-	registerMemoryHandler(registry, paths, clock, bus, memoryAdmin)
-
-	// The recall.* namespace (F/S-11.T3), registered for the same reason.
-	// store is threaded through so the full-text leg opens over the same
-	// cascade.db recall.index.rebuild writes into (see
-	// registerRecallHandler's doc comment).
-	if err := registerRecallHandler(registry, paths, bus, store); err != nil {
+	// The memory.* namespace (G/S-13.T3) and the recall.* namespace
+	// (F/S-11.T3). Registered here for the same reason status.get is: a
+	// handler the composition root never mounts is a subsystem that ships
+	// built, tested and unreachable. Grouped into one call to keep
+	// buildRPCServer under Art.10.3's 50-line cap, the same reason
+	// registerDBPathHandlers below is factored out.
+	if err := registerMemoryAndRecall(registry, paths, clock, bus, store, memoryAdmin); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -180,7 +184,27 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	if err := wireCompletionHookPack(context.Background(), registry, store, clock, bus, paths); err != nil {
 		return nil, nil, nil, err
 	}
+	if err := registerSocketMCP(); err != nil {
+		return nil, nil, nil, err
+	}
 	return daemon.NewRPCServer(registry, sse), manifest, connections, nil
+}
+
+// mcpFilterFromOptions builds the capability filter the daemon's MCP tool
+// registry consults, over the SAME policy engine every other gated call
+// site in this process shares.
+//
+// No engine in the options means no filter: a daemon that could not build
+// its policy engine exposes no capability-gated tool, which is the same
+// fail-closed answer mcpToolFilter gives the stdio path for the same
+// reason.
+func mcpFilterFromOptions(opts []rpcServerOption) mcp.CapabilityFilter {
+	for _, opt := range opts {
+		if opt.policyEngine != nil {
+			return coretools.NewPolicyFilter(opt.policyEngine, mcpToolSubject)
+		}
+	}
+	return mcp.DenyAllFilter{}
 }
 
 // registerContextEngineHandlers registers context.scope.show (E/S-08.T4),
@@ -250,3 +274,15 @@ func runRecoveryScan(ctx context.Context, paths runtime.PathProvider, settings d
 // config because, unlike the memory store, it is derived state a user
 // never edits by hand: it is rebuilt from the sources, and a corrupt or
 // absent one is repaired by rebuilding rather than by opening it.
+
+// registerMemoryAndRecall mounts the memory.* and recall.* namespaces.
+// store is threaded through so recall's full-text leg opens over the same
+// cascade.db recall.index.rebuild writes into (see registerRecallHandler's
+// doc comment).
+func registerMemoryAndRecall(
+	registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock,
+	bus *events.Bus, store provider.Store, memoryAdmin *memory.AdminHandler,
+) error {
+	registerMemoryHandler(registry, paths, clock, bus, memoryAdmin)
+	return registerRecallHandler(registry, paths, bus, store)
+}

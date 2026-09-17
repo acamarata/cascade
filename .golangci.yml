@@ -189,6 +189,13 @@ linters:
             # daemon's own registry or contributes a collaborator to it;
             # none dials the daemon.
             - "!**/cmd/cascade/daemon_unix_run_options.go"
+            # mcp_tools.go (P1-E16-W4-S34-T2) builds the method table the
+            # first-party MCP tools dispatch through. It REGISTERS on a
+            # registry it constructs itself and never dials the daemon --
+            # the identical composition-root reasoning as mcp.go's own
+            # exemption below, which it was split out of for the 300-line
+            # cap.
+            - "!**/cmd/cascade/mcp_tools.go"
             - "!**/cmd/cascade/mcp.go"
             - "!**/cmd/cascade/elevate_helper.go"
             # backup_elevation.go never dials the daemon - there is no

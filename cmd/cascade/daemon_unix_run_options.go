@@ -26,6 +26,7 @@ package main
 import (
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/mcp/coretools"
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -47,6 +48,13 @@ type rpcServerOption struct {
 	// register is the further registration to apply to the built
 	// registry. Nil for an option that only contributes a collaborator.
 	register func(*rpc.Registry) error
+	// policyEngine is the process's one policy engine, carried so the MCP
+	// tool registry can gate its first-party tools on the SAME engine
+	// every other call site evaluates through (P1-E16-W4-S34-T2). It
+	// rides on withPolicyHandlers rather than on an option of its own,
+	// because a daemon with policy handlers and a daemon with a policy
+	// engine are the same daemon.
+	policyEngine coretools.Evaluator
 }
 
 // withPolicyHandlers registers the approval/policy method set built by
@@ -54,12 +62,16 @@ type rpcServerOption struct {
 // at the far end, which is what a caller that never built a policy engine
 // should present, rather than verbs backed by nothing.
 func withPolicyHandlers(pol *policyWiring) rpcServerOption {
-	return rpcServerOption{register: func(registry *rpc.Registry) error {
+	opt := rpcServerOption{register: func(registry *rpc.Registry) error {
 		if pol == nil || len(pol.Handlers) == 0 {
 			return nil
 		}
 		return daemon.RegisterPolicyHandlers(registry, pol.Handlers)
 	}}
+	if pol != nil && pol.Engine != nil {
+		opt.policyEngine = pol.Engine
+	}
+	return opt
 }
 
 // withNodePlacement supplies the live controller-side tunnel registry as

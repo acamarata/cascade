@@ -21,7 +21,7 @@ import (
 // SPORT: internal/mcp tests [CHANGE] — P1-E04-W4-S86-T1.
 
 func emptyRegistry() *mcp.ToolRegistry {
-	return mcp.NewToolRegistry(func() []plugin.BuiltinRegistration { return nil })
+	return mcp.NewToolRegistry(func() []plugin.BuiltinRegistration { return nil }, mcp.AllowAllFilter{})
 }
 
 func mustID(t *testing.T, n int) json.RawMessage {
@@ -129,7 +129,7 @@ func TestANotificationIsAnsweredWithSilence(t *testing.T) {
 // TestToolsListCarriesAnInputSchema holds the field a client needs to call
 // a tool at all. An entry without it is one the model cannot invoke.
 func TestToolsListCarriesAnInputSchema(t *testing.T) {
-	s := mcp.NewServer(mcp.NewToolRegistry(plugin.Builtins))
+	s := mcp.NewServer(mcp.NewToolRegistry(plugin.Builtins, mcp.AllowAllFilter{}))
 	got := resultOf(t, s.Dispatch(context.Background(), &mcp.Frame{
 		JSONRPC: "2.0", Method: mcp.MethodToolsList, ID: mustID(t, 1),
 	}))
@@ -157,7 +157,7 @@ func TestToolsListCarriesAnInputSchema(t *testing.T) {
 
 // TestToolsListIsDeterministic keeps a cached listing stable.
 func TestToolsListIsDeterministic(t *testing.T) {
-	s := mcp.NewServer(mcp.NewToolRegistry(plugin.Builtins))
+	s := mcp.NewServer(mcp.NewToolRegistry(plugin.Builtins, mcp.AllowAllFilter{}))
 	first, _ := json.Marshal(s.Dispatch(context.Background(),
 		&mcp.Frame{JSONRPC: "2.0", Method: mcp.MethodToolsList, ID: mustID(t, 1)}).Result)
 	second, _ := json.Marshal(s.Dispatch(context.Background(),
@@ -170,7 +170,7 @@ func TestToolsListIsDeterministic(t *testing.T) {
 // TestToolsCallReturnsContentBlocks holds the result shape. MCP has no
 // "raw JSON result": a tool's output reaches the model as content blocks.
 func TestToolsCallReturnsContentBlocks(t *testing.T) {
-	s := mcp.NewServer(mcp.NewToolRegistry(plugin.Builtins))
+	s := mcp.NewServer(mcp.NewToolRegistry(plugin.Builtins, mcp.AllowAllFilter{}))
 	got := resultOf(t, s.Dispatch(context.Background(), &mcp.Frame{
 		JSONRPC: "2.0", Method: mcp.MethodToolsCall, ID: mustID(t, 2),
 		Params: json.RawMessage(`{"name":"greet-tool","arguments":"Cascade"}`),

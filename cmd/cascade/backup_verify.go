@@ -17,6 +17,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/backup"
 	"github.com/acamarata/cascade/internal/mcp"
+	"github.com/acamarata/cascade/internal/mcp/coretools"
 	"github.com/acamarata/cascade/pkg/plugin"
 )
 
@@ -91,9 +92,16 @@ func backupVerifyRunner(deps backupDeps) backup.VerifyRunFunc {
 // shared productionBackupDeps() so both surfaces resolve the same
 // registry/store. Split out of daemon_unix_run.go's buildRPCServer purely
 // to stay under Art.10.3's 50-line function cap.
-func daemonMCPToolRegistry() *mcp.ToolRegistry {
+func daemonMCPToolRegistry(methods coretools.Dispatcher, filter mcp.CapabilityFilter) *mcp.ToolRegistry {
 	bDeps := productionBackupDeps()
-	return mcp.NewToolRegistry(plugin.Builtins,
+	core := []mcp.CoreRegistration{
 		backup.MCPRegistration(backupSnapshotLister(bDeps)),
-		backup.VerifyMCPRegistration(backupVerifyRunner(bDeps)))
+		backup.VerifyMCPRegistration(backupVerifyRunner(bDeps)),
+	}
+	// The first-party v1-parity tool set (P1-E16-W4-S34-T2) dispatches
+	// through the daemon's OWN method table -- the same handler values
+	// every RPC client reaches, never a second composition of them. A
+	// method this daemon does not serve registers no tool at all.
+	return mcp.NewToolRegistry(plugin.Builtins, filter,
+		append(core, coretools.Registrations(methods)...)...)
 }

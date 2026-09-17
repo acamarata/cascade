@@ -16,6 +16,85 @@ Runtime `builtin`, default on. Registered at compile time through
 | Hook pack install | `InstallHookPack` | Renders the registered hook packs for the daemon socket and installs the union config, with a version companion. |
 | MCP registration | `RegisterMCP` | Adds the Cascade MCP server to the harness MCP config, preserving every entry and key it does not own. |
 
+## The MCP tools a session sees
+
+This plugin registers the Cascade MCP **server**; it does not define the
+tools. The tools are core, declared in `internal/mcp/coretools` and served
+by the binary this plugin writes into the harness's MCP config
+(`cascade mcp serve --stdio`). A harness talks to the core, not to a plugin
+(`R-14.251`).
+
+### The v1-parity set
+
+Seven of Cascade v1's twenty-four MCP tools have a v2 surface and are
+registered:
+
+| Tool | Answers through | Capability | Mutating |
+|---|---|---|---|
+| `cascade_context_search` (alias `cascade_search`) | `recall.query` | `context.read` | no |
+| `cascade_context_slice` | `context.slice` | `context.read` | no |
+| `cascade_context_sync` | `context.sync` | `context.read` | yes |
+| `cascade_memory_recall` | `memory.recall` | `memory.read` | no |
+| `cascade_memory_search` | `memory.recall` | `memory.read` | no |
+| `cascade_memory_remember` | `memory.remember` | `memory.write` | yes |
+| `cascade_memory_forget` | `memory.forget` | `memory.write` | yes |
+
+The other seventeen are recorded in `internal/mcp/coretools/deferrals.go`,
+each with the ticket that owns the missing surface and what is actually
+missing. The shape of that gap: v1's MCP surface was largely a filesystem
+API over a project's `.claude` tree — tier files, master lists, a PCI inbox
+directory, a PBD phase tree of YAML — and v2 does not have that tree.
+
+`internal/mcp/coretools/testdata/v1-goldens/tools.json` is the harvested v1
+inventory, and a test asserts the equation that makes it mean something:
+every v1 tool is either registered or deferred with a ticket. A tool that
+was dropped silently fails it.
+
+### Which tools appear under which grants
+
+A tool appears in `tools/list` only when the policy engine grants its
+capability. `cascade policy grant context.read` makes the three context
+tools appear on the next registration pass; revoking it makes them
+disappear on the next one. Three rules govern it:
+
+- **Fail-closed.** No engine, an unregistered capability, an evaluation
+  error, or any verdict short of `allow` all mean the tool is absent. An
+  `ask` verdict is a denial *here* even though it is not one at call time:
+  a tool the user has not already granted must not appear in a list the
+  model reads as "things I may call".
+- **A denied tool is indistinguishable from an absent one.** The server
+  reports both as unknown, so a model cannot learn that a privileged tool
+  exists on this machine. `cascade mcp tools list` tells the *operator* the
+  difference — `withheld` (grant it), `unservable` (this build serves no
+  such method), `deferred` (no v2 surface yet, with the ticket).
+- **Grants take effect on the next registration pass.** The filter is
+  consulted once per registry. Restart the MCP server, or run
+  `cascade context harness sync`, and the list is rebuilt.
+
+On Windows the grant store composition does not exist yet, so no
+capability-gated tool is listed there. That is an asserted refusal with a
+test on it (Art.5), not a silent gap.
+
+### MCP profiles
+
+`R-21.179` splits the tool set into three named profiles, selected per
+harness session by `[mcp].profile = compact | compact-write | full`:
+
+- **`compact`** is the default registration and is READ-ONLY. A prompt
+  injection reaching the default profile must not reach outbound messaging
+  or quota spend in one step.
+- **`compact-write`** is opt-in and holds the mutating tools. Cascade-
+  launched executive sessions receive it; a session the user starts does
+  not.
+- **`full`** is the complete policy-filtered set described above, opted
+  into with `cascade context harness sync --mcp-profile full`.
+
+The profile-switch mechanism and each compact profile's membership belong
+to `AK/S-73.T3` and `AP/S-82.T1` (`R-21.258`), not to this build. What is
+true here already: **profile membership is never authorization.** A tool in
+`compact-write` still passes the capability filter, so an ungranted
+capability withholds it exactly as it would in `full`.
+
 ## What is deliberately not here
 
 The ticket contract names two further capabilities. Neither is unfinished

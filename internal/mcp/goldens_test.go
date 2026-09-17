@@ -144,7 +144,7 @@ func normalizeServerVersion(t *testing.T, frame map[string]any) {
 // stubs because the golden exercises tools/list and one pbd call; the
 // DESCRIPTORS are the production ones, which is what the capture recorded.
 func capturedRegistry() *mcp.ToolRegistry {
-	return mcp.NewToolRegistry(shippedBuiltins,
+	return mcp.NewToolRegistry(shippedBuiltins, mcp.AllowAllFilter{},
 		backup.MCPRegistration(func(context.Context) ([]backup.SnapshotSummary, error) { return nil, nil }),
 		backup.VerifyMCPRegistration(func(context.Context, string) (backup.VerificationReport, error) {
 			return backup.VerificationReport{}, nil

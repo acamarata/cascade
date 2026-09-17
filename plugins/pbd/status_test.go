@@ -207,7 +207,7 @@ func testRealJSONRPCClient(t *testing.T) {
 
 func testRealMCPClient(t *testing.T) {
 	root := mkStatusFixture(t)
-	registry := mcp.NewToolRegistry(func() []plugin.BuiltinRegistration { return plugin.Builtins() })
+	registry := mcp.NewToolRegistry(func() []plugin.BuiltinRegistration { return plugin.Builtins() }, mcp.AllowAllFilter{})
 	found := false
 	for _, tool := range registry.List() {
 		found = found || tool.Name == "cascade_plugin_pbd_status"
