@@ -681,7 +681,14 @@ jobs:
           /usr/sbin/sshd -V
 
       - name: go test -tags=integration ./internal/sync/ (real loopback sshd)
-        run: go test -tags=integration -race -count=1 ./internal/sync/ -run '^TestSyncChunkedTransferRealSSHD$' -v
+        # The chunked transfer (S-38.T1) and the acceptance drill's
+        # dress rehearsal over that same real transport (S-38.T5): the
+        # SAME script the unconditional in-process rehearsal runs, with
+        # every batch shipped to a remote file over a real ssh session
+        # and read back through a real remote `cat`, so the only thing
+        # left untested before the two-machine drill is which machine is
+        # on the other end.
+        run: go test -tags=integration -race -count=1 ./internal/sync/ -run '^(TestSyncChunkedTransferRealSSHD|TestSyncRoundTripDressRehearsalRealSSHD|TestTheSSHCarrierReallyMovesTheBytes)$' -v
 
   retrieval-eval-gate:
     # P1-E06-W2-S12-T6 (R-16.9): the retrieval evaluation harness over

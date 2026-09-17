@@ -207,6 +207,120 @@ path ever widens a tier.
 | Phase state diverged | Refused and journaled; never engine-merged |
 | Blob never admitted by staging | Refused; the union carries admitted blobs only |
 
+## Acceptance drill (S-38.T5)
+
+The two-machine runbook. Everything below runs as one script; the only
+difference between the rehearsals and the acceptance is which machine is on
+the other end.
+
+### Target resolution
+
+The drill reads its peer from the environment, never from a prompt — so a
+non-interactive run can supply one, and `CASCADE_NO_INPUT=1` changes
+nothing here:
+
+| Variable | Meaning |
+|---|---|
+| `CASCADE_ACCEPTANCE_SYNC_TARGET` | the enrolled second machine, `user@host[:port]` (port defaults to 22) |
+| `CASCADE_ACCEPTANCE_SYNC_NODE_ID` | that machine's enrolled node id |
+
+**Every failure is a typed error, and none of them is a loopback
+substitution.** Nothing configured is `unavailable`; something configured
+wrongly is `invalid-input`; a target set without a node id is refused
+because the drill asserts trust-tier eligibility for a *specific* enrolled
+node and cannot infer which one. A harness that quietly fell back to two
+engines in one process would report the acceptance as passed on evidence
+nobody asked for, which is the one outcome this design exists to prevent.
+
+### The three lanes
+
+| Lane | Runs | Proves |
+|---|---|---|
+| In-process rehearsal | always | the script |
+| Real-sshd rehearsal (`integration`) | CI, allowed-fail | the script over the real transport |
+| The drill | with a target configured | the acceptance |
+
+The two rehearsals call the *same* function the drill does. What is
+threaded through them is the transport: the in-process lane hands the
+encoded batch straight across, the sshd lane ships it to a remote file over
+a real ssh session and reads it back through a real remote `cat`.
+
+### What is injected
+
+The adversarial corpus under `internal/sync/testdata/conflicts/`, not
+fixtures written for the drill. Those cases were built to break the merges
+and are digest-gated, so a drill that invented its own conflicts would be
+proving the merges against inputs chosen after the merges existed.
+
+One case per record domain class: config (delete-vs-write), accounts
+(revision tie-break), registry (24h clock skew), memory (concurrent
+update), conversation (double tombstone). Blobs and phase-state are
+asserted separately — the blob union is keyed by content address and cannot
+collide on a record id, and phase state is git's answer rather than a
+record merge.
+
+Fixture records are given an explicit sensitivity tier before they are
+shipped, because an **unset tier resolves to restricted**: left unset,
+every one would be filtered out of every batch and the drill would assert
+convergence over an empty wire.
+
+### What is asserted
+
+- **Both directions, then convergence** — by record id *and content hash*.
+  Two sides holding the same ids with different contents is the divergence
+  that looks like convergence from a length check.
+- **No silent loss**, stated over the ids each side held *before* the
+  drill. Asserting it afterwards asserts only that the merge agrees with
+  itself.
+- **The planned strategy ran** — the S-38.T2 table verbatim, checked on
+  what the round trip selected. A merge chosen wrongly resolves perfectly
+  and still produces the wrong answer.
+- **The losing config side is journaled**, with both identities.
+- **A tombstone survives both directions.** One that survived only one
+  would resurrect on the next sync.
+- **Cursors never regress**, and a regress is refused rather than read as a
+  resync-from-scratch signal.
+- **An interrupted transfer resumes from the last acknowledged chunk** —
+  the drop costs the chunks not yet sent, never the ones already applied.
+
+### Security invariants, on the wire
+
+Asserted on what the receiver *decoded*, not on raw wire bytes: a payload
+is base64 inside the batch's JSON, so a `contains` check over the wire
+would fail to find a payload that was plainly there and "prove" an
+exclusion that never happened.
+
+- No vault-domain record is admitted at any declared tier — the refusal is
+  structural, because a vault record declared public is still a vault
+  record.
+- Local-only material does not leave the owning device, and its exclusion
+  is journaled with a reason.
+- Trust-tier eligibility decides what crosses: a worker-trusted peer is
+  refused the memory domain, and a controller is not.
+- The accounts domain carries metadata only; a restricted record is dropped
+  from **both** sides and journaled, because one arriving is as much a
+  fault as one leaving.
+
+### The elevated resolve
+
+Discarding the server's copy routes the 06 §5.14 flow through the same
+`sync.Deps` the CLI and the RPC use. Refused when the gate says no, refused
+when there is no gate at all, and honored with the result recording that
+the gate ran. Keeping the server side is not elevated: it re-affirms what
+the merge already decided.
+
+### Evidence a completed drill must show
+
+A validated record — target and node id, every domain injected, the merge
+that decided each, the conflict-journal dump with both sides, convergence,
+and the red-team result. It refuses to validate when a domain has no
+recorded strategy, when the sides did not converge, or when the security
+result is not clean, so an acceptance record cannot become a formality.
+
+The real drill against the enrolled second machine is one of the 06 §7
+owner prerequisites. It gates that evidence only — never the harness, never
+either rehearsal.
+
 ## CLI (S-38.T3)
 
 The `sync` noun mirrors the `sync.*` RPC methods one for one:
