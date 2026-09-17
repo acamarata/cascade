@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T01:56:18Z",
+  "generated_at": "2026-09-17T02:15:49Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3280,6 +3280,28 @@
       ]
     },
     {
+      "name": "cmd/cascade/context-slice-hook",
+      "sites": [
+        {
+          "file": "cmd/cascade/context_slice_hook.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T4",
+          "raw": "cmd/cascade/context-slice-hook (ADD) — P1-E16-W4-S34-T4."
+        },
+        {
+          "file": "cmd/cascade/context_slice_hook_deps.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T4",
+          "raw": "cmd/cascade/context-slice-hook (ADD) — P1-E16-W4-S34-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade/daemon",
       "sites": [
         {
@@ -3693,6 +3715,13 @@
           "raw": "cmd/cascade/doctor (ADD) - doctor command"
         },
         {
+          "file": "cmd/cascade/doctor_confirm.go",
+          "line": 9,
+          "status": "CHANGE",
+          "ticket": "P1-E16-W4-S34-T4",
+          "raw": "cmd/cascade/doctor (CHG) — P1-E16-W4-S34-T4."
+        },
+        {
           "file": "cmd/cascade/doctor_counts.go",
           "line": 24,
           "status": "ADD",
@@ -3703,6 +3732,13 @@
           "line": 10,
           "status": "ADD",
           "raw": "cmd/cascade/doctor (ADD - counts subcommand)."
+        },
+        {
+          "file": "cmd/cascade/doctor_mounts_hydration.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T4",
+          "raw": "cmd/cascade/doctor (ADD) — P1-E16-W4-S34-T4."
         },
         {
           "file": "cmd/cascade/doctor_recall_index.go",
@@ -3977,7 +4013,14 @@
         },
         {
           "file": "cmd/cascade/mcp_tools.go",
-          "line": 21,
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T2",
+          "raw": "cmd/cascade/mcp (ADD) — P1-E16-W4-S34-T2."
+        },
+        {
+          "file": "cmd/cascade/mcp_tools_boot_test.go",
+          "line": 10,
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T2",
           "raw": "cmd/cascade/mcp (ADD) — P1-E16-W4-S34-T2."
@@ -12262,6 +12305,35 @@
       ]
     },
     {
+      "name": "internal/context/hydration",
+      "sites": [
+        {
+          "file": "internal/context/hydration/config.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T4",
+          "raw": "internal/context/hydration (ADD) — P1-E16-W4-S34-T4."
+        },
+        {
+          "file": "internal/context/hydration/doctor.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T4",
+          "raw": "internal/context/hydration (ADD) — P1-E16-W4-S34-T4."
+        },
+        {
+          "file": "internal/context/hydration/events.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T4",
+          "raw": "internal/context/hydration (ADD) — P1-E16-W4-S34-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/conversation/topics corpus+eval-harness",
       "sites": [
         {
@@ -12325,6 +12397,13 @@
           "line": 42,
           "status": "ADD",
           "raw": "internal/daemon (ADD, context.slice + context.show registration,"
+        },
+        {
+          "file": "internal/daemon/context_hydration.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T4",
+          "raw": "internal/daemon (ADD, context.hydration.degraded) — P1-E16-W4-S34-T4."
         },
         {
           "file": "internal/daemon/context_scope.go",
@@ -13390,6 +13469,21 @@
           "status": "ADD",
           "ticket": "T-4",
           "raw": "internal/fleet/governor.calibrate (ADD, per T-4 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/fleet/hookpacks hydration pack",
+      "sites": [
+        {
+          "file": "internal/fleet/hookpacks/hydration.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T4",
+          "raw": "internal/fleet/hookpacks hydration pack (ADD) — P1-E16-W4-S34-T4."
         }
       ],
       "statuses": [
@@ -14933,7 +15027,7 @@
       "sites": [
         {
           "file": "internal/plugins/claude_wiring.go",
-          "line": 25,
+          "line": 26,
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T1",
           "raw": "internal/plugins cascade-claude wiring (ADD) — P1-E16-W4-S34-T1."
@@ -22482,7 +22576,7 @@
       ]
     }
   ],
-  "total_sites": 2184,
+  "total_sites": 2194,
   "unspecified_count": 66,
   "multi_status_count": 40
 }
