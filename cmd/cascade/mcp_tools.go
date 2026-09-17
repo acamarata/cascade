@@ -12,7 +12,8 @@
 //
 // Constraints: platform-neutral (Art.5). `cascade mcp serve --stdio` is
 //
-//	the surface Claude Code speaks to on every OS, so this file may not
+//	the surface the first-party harness client speaks to on every OS, so
+//	this file may not
 //	depend on daemon_unix_run.go's !windows composition and instead calls
 //	the SAME internal/daemon and internal/memory registration functions
 //	that file does. Every failure degrades to a filter that exposes

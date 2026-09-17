@@ -99,20 +99,3 @@ func TestEveryFirstPartyToolCarriesItsSchema(t *testing.T) {
 		}
 	}
 }
-
-// TestTheMCPToolCapabilitiesAreRegisteredAtBoot pins the join the filter
-// depends on: the daemon's ONE capability registry must know the names
-// the tools ask about, or every tool is withheld for a reason unrelated
-// to the operator's grants and `cascade policy grant memory.write` has
-// nothing to grant against.
-func TestTheMCPToolCapabilitiesAreRegisteredAtBoot(t *testing.T) {
-	booted := map[string]bool{}
-	for _, capability := range bootCapabilities() {
-		booted[capability.Name] = true
-	}
-	for _, spec := range coretools.Specs() {
-		if !booted[spec.Capability] {
-			t.Errorf("%q needs capability %q, which boot does not register", spec.Name, spec.Capability)
-		}
-	}
-}

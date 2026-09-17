@@ -4,8 +4,8 @@ package coretools_test
 //   tool's JSON Schema conforms to the subset MCP's own wire uses and
 //   survives the tools/list encoding unchanged.
 // Constraints: split from tools_test.go to stay under Art.10.3's 300-line
-//   cap. The shape asserted here is the one the captured Claude Code
-//   exchange (internal/mcp/testdata/goldens) shows a real client
+//   cap. The shape asserted here is the one the captured exchange under
+//   internal/mcp/testdata/goldens shows a real first-party client
 //   receiving and accepting — not a shape this repository invented.
 
 import (
@@ -17,8 +17,9 @@ import (
 
 // TestMCPToolSchemaRoundTrip asserts every registered schema conforms to
 // the JSON Schema subset MCP's own wire uses — the shape the captured
-// Claude Code exchange in internal/mcp/testdata/goldens shows the client
-// receiving and accepting — and survives the tools/list encoding verbatim.
+// captured exchange in internal/mcp/testdata/goldens shows a real
+// first-party client receiving and accepting — and survives the
+// tools/list encoding verbatim.
 func TestMCPToolSchemaRoundTrip(t *testing.T) {
 	for _, spec := range coretools.Specs() {
 		t.Run(spec.Name, func(t *testing.T) {
