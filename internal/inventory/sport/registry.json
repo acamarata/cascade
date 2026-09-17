@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T14:22:28Z",
+  "generated_at": "2026-09-17T14:51:42Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -17844,6 +17844,21 @@
       ]
     },
     {
+      "name": "internal/sync TestMergePhaseStateRealGit",
+      "sites": [
+        {
+          "file": "internal/sync/merge_git_integration_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync TestMergePhaseStateRealGit (P1-E17-W4-S38-T2)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/sync TestSyncChunkedTransferRealSSHD",
       "sites": [
         {
@@ -17856,6 +17871,345 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "internal/sync append merge",
+      "sites": [
+        {
+          "file": "internal/sync/merge_append.go",
+          "line": 33,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync append merge (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync config merge",
+      "sites": [
+        {
+          "file": "internal/sync/merge_config.go",
+          "line": 27,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync config merge (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync conflict journal",
+      "sites": [
+        {
+          "file": "internal/sync/conflicts.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync conflict journal (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync content-address union",
+      "sites": [
+        {
+          "file": "internal/sync/merge_ca.go",
+          "line": 29,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync content-address union (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync domain-tier eligibility",
+      "sites": [
+        {
+          "file": "internal/sync/domain_tier.go",
+          "line": 39,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync domain-tier eligibility (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync eligibility",
+      "sites": [
+        {
+          "file": "internal/sync/eligibility.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync eligibility (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync fixture corpus",
+      "sites": [
+        {
+          "file": "internal/sync/fixtures_test.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync fixture corpus (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync git carriage",
+      "sites": [
+        {
+          "file": "internal/sync/merge_git.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync git carriage (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync merge application",
+      "sites": [
+        {
+          "file": "internal/sync/merge_apply.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync merge application (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync merge errors",
+      "sites": [
+        {
+          "file": "internal/sync/merge_errors.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync merge errors (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync metadata merge",
+      "sites": [
+        {
+          "file": "internal/sync/merge_metadata.go",
+          "line": 30,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync metadata merge (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync ordering",
+      "sites": [
+        {
+          "file": "internal/sync/ordering.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync ordering (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync properties",
+      "sites": [
+        {
+          "file": "internal/sync/properties_test.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync properties (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync receive path",
+      "sites": [
+        {
+          "file": "internal/sync/receive.go",
+          "line": 40,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync receive path (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync strategy registry",
+      "sites": [
+        {
+          "file": "internal/sync/strategy.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync strategy registry (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync tests",
+      "sites": [
+        {
+          "file": "internal/sync/conflicts_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync tests (ADD) — P1-E17-W4-S38-T2."
+        },
+        {
+          "file": "internal/sync/domain_tier_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync tests (ADD) — P1-E17-W4-S38-T2."
+        },
+        {
+          "file": "internal/sync/eligibility_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync tests (ADD) — P1-E17-W4-S38-T2."
+        },
+        {
+          "file": "internal/sync/merge_append_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync tests (ADD) — P1-E17-W4-S38-T2."
+        },
+        {
+          "file": "internal/sync/merge_apply_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync tests (ADD) — P1-E17-W4-S38-T2."
+        },
+        {
+          "file": "internal/sync/merge_ca_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync tests (ADD) — P1-E17-W4-S38-T2."
+        },
+        {
+          "file": "internal/sync/merge_config_test.go",
+          "line": 4,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync tests (ADD) — P1-E17-W4-S38-T2."
+        },
+        {
+          "file": "internal/sync/merge_git_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync tests (ADD) — P1-E17-W4-S38-T2."
+        },
+        {
+          "file": "internal/sync/merge_metadata_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync tests (ADD) — P1-E17-W4-S38-T2."
+        },
+        {
+          "file": "internal/sync/ordering_test.go",
+          "line": 4,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync tests (ADD) — P1-E17-W4-S38-T2."
+        },
+        {
+          "file": "internal/sync/receive_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync tests (ADD) — P1-E17-W4-S38-T2."
+        },
+        {
+          "file": "internal/sync/strategy_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync tests (ADD) — P1-E17-W4-S38-T2."
+        },
+        {
+          "file": "internal/sync/tombstone_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync tests (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/sync tombstones",
+      "sites": [
+        {
+          "file": "internal/sync/tombstone.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S38-T2",
+          "raw": "internal/sync tombstones (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -23377,7 +23731,7 @@
       ]
     }
   ],
-  "total_sites": 2263,
-  "unspecified_count": 68,
+  "total_sites": 2293,
+  "unspecified_count": 69,
   "multi_status_count": 40
 }

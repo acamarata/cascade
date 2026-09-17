@@ -1,0 +1,8 @@
+{
+  "domain": "phase-state",
+  "case": "non-fast-forward-diverged",
+  "description": "Local and remote both committed independently from a shared ancestor, producing a genuine merge conflict candidate. phaseMergeGit must refuse with ErrPhaseStateDiverged rather than attempt an engine-side merge; both refs are journaled. Built fresh per test run per the same provenance note as phase-git-fast-forward.json.",
+  "sideA": {"role": "local", "commitsFrom": "shared-ancestor", "to": "phase: local-2"},
+  "sideB": {"role": "remote", "commitsFrom": "shared-ancestor", "to": "phase: remote-2"},
+  "expected": {"fastForwarded": false, "error": "ErrPhaseStateDiverged"}
+}

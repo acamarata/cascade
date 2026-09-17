@@ -1,0 +1,12 @@
+controller	accounts
+controller	blobs
+controller	config
+controller	conversation
+controller	memory
+controller	phase-state
+controller	registry
+paired-device	(no domains)
+worker-trusted	blobs
+worker-trusted	config
+worker-trusted	phase-state
+worker-trusted	registry

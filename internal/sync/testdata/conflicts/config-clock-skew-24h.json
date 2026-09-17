@@ -1,0 +1,11 @@
+{
+  "domain": "config",
+  "case": "clock-skew-24h-local-ahead",
+  "description": "The local node's wall clock is 24h ahead of the server's, but the server holds the higher revision; wall-clock time must never be compared, so the server wins despite the local write appearing newer by wall clock alone.",
+  "sideA": [
+    {"RecordID": "cfg-3", "Revision": 10, "HLC": 40, "NodeID": "server", "WallClock": 1000000, "Value": "server-value", "ValueHash": "hash-server", "Sensitivity": "normal", "Tombstone": false}
+  ],
+  "sideB": [
+    {"RecordID": "cfg-3", "Revision": 3, "HLC": 20, "NodeID": "local-ahead-clock", "WallClock": 1086400, "Value": "local-value", "ValueHash": "hash-local", "Sensitivity": "normal", "Tombstone": false}
+  ]
+}

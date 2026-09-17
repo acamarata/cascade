@@ -33,6 +33,26 @@ type Config struct {
 	Overrides map[string]Class
 }
 
+// Retention is how long a domain keeps its tombstones.
+type Retention string
+
+// retentionNever is the only value P1 supports.
+//
+// A tombstone is the only evidence a record was deleted. Prune it and
+// every peer that was offline across the prune hands the record back on
+// its next sync, because from its side the record simply exists and the
+// other side has never heard of it — the delete is indistinguishable from
+// a record that was never written. So tombstones are kept, the store grows
+// slowly and predictably, and the day that becomes a problem is a decision
+// somebody makes deliberately rather than a default nobody chose.
+const retentionNever Retention = "never"
+
+// tombstoneRetention is the compiled-in `[sync].tombstone_retention`
+// value. A constant rather than a config key in P1: making it settable
+// would offer an operator a switch whose consequence (silent
+// resurrections on stale peers) is not visible from where the switch is.
+const tombstoneRetention = retentionNever
+
 // classRank orders Class from most to least permissive, so "narrower"
 // has an unambiguous meaning for the tightening-only check.
 var classRank = map[Class]int{

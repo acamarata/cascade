@@ -1,0 +1,11 @@
+{
+  "domain": "blob",
+  "case": "union-rechunked-payload-two-hashes",
+  "description": "Two sides claim the same LogicalID (the same underlying document) but were chunked differently before staging, producing two DISTINCT content addresses. Per R-21.223, CA union does not deduplicate across chunkings -- both addresses must survive the union. This is a documented constraint for Q/S-38.T2's dedup pass, not a bug in this spike.",
+  "sideA": [
+    {"logicalID": "blob-d", "dataBase64": "bG9naWNhbCBwYXlsb2FkIGNodW5rZWQgYXMgb25lIHdob2xlIHNlZ21lbnQ="}
+  ],
+  "sideB": [
+    {"logicalID": "blob-d", "dataBase64": "bG9naWNhbCBwYXlsb2FkIGNodW5rZWQgYXMgdHdvIHNtYWxsZXIgc2VnbWVu"}
+  ]
+}

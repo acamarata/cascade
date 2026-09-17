@@ -31,6 +31,23 @@ type Record struct {
 	Tier          egress.SensitivityTier
 	PolicyVersion int
 	Payload       []byte
+	// Order is the record's position in the total order the merges
+	// compare by (ordering.go). Zero for a record that has never been
+	// through a merge, which orders below every real write.
+	Order OrderKey
+	// Hash is the content hash. It is carried rather than recomputed from
+	// Payload because a journaled LOSS has no payload to hash — the
+	// losing bytes are the ones being discarded — and a journal entry
+	// that could not name what was lost would be half an answer.
+	Hash string
+	// Tombstone marks a delete. In the append domains a tombstone
+	// dominates a concurrent update; in the config domains it competes
+	// like any other write. See tombstone.go.
+	Tombstone bool
+	// Vector is the version vector, read only by the append merge. Nil
+	// for domains that do not carry one, which VectorCompare reads as an
+	// empty vector rather than as an error.
+	Vector map[string]uint64
 }
 
 // AdmitResult is Admit's verdict.

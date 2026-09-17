@@ -1,0 +1,11 @@
+{
+  "domain": "context",
+  "case": "sensitivity-filter-before-serialization",
+  "description": "One normal, one local-only, and one restricted memory record. TestSensitivityFilteredBeforeSerialization asserts that only the normal record survives FilterSensitive, both excluded ids are journaled with the policy version, and the cursor advances past them explicitly.",
+  "sideA": [
+    {"RecordID": "sens-normal", "VersionVector": {}, "Revision": 1, "HLC": 1, "NodeID": "node-a", "Content": "shareable", "Sensitivity": "normal", "Tombstone": false},
+    {"RecordID": "sens-local-only", "VersionVector": {}, "Revision": 1, "HLC": 1, "NodeID": "node-a", "Content": "device-only-secret", "Sensitivity": "local-only", "Tombstone": false},
+    {"RecordID": "sens-restricted", "VersionVector": {}, "Revision": 1, "HLC": 1, "NodeID": "node-a", "Content": "restricted-secret", "Sensitivity": "restricted", "Tombstone": false}
+  ],
+  "sideB": []
+}

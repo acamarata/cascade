@@ -756,6 +756,27 @@ jobs:
       - name: go test -tags=integration ./internal/nodes/ (real git)
         run: go test -tags=integration -race -count=1 ./internal/nodes/ -run '^TestDispatchRealGit' -v
 
+  sync-merge-real-git:
+    # P1-E17-W4-S38-T2, Art.2: phase-state carriage exercised against REAL
+    # git repositories. Fast-forward eligibility is git's question and git
+    # answers it; a hand-rolled version would pass its own tests and
+    # disagree with the tool that actually moves the refs.
+    #
+    # NOT allowed-fail, same shape as node-dispatch-real-git: git is on
+    # every runner image and every repository is created by the test in its
+    # own temp dir, so a red result is this repo's bug and must block.
+    name: sync-merge-real-git (real git repositories)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: go test -tags=integration ./internal/sync/ (real git)
+        run: go test -tags=integration -race -count=1 ./internal/sync/ -run '^TestMergePhaseStateRealGit$' -v
+
   node-kill-mid-run:
     # P1-E17-W4-S37-T3, Art.2: the v1 DST-S4 acceptance — a REAL
     # `cascade node serve` process, SIGKILLed mid-run, and the interrupted
@@ -783,14 +804,14 @@ jobs:
 
   ci-gate:
     name: ci-gate (required status)
-    needs: [build-test, darwin-amd64-build, linux-pam-build, conformance-suite, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, redis-storetest-under-docker, s3-storetest-under-docker, server-profile-assembly, plugin-integration, node-dispatch-real-git, node-kill-mid-run]
+    needs: [build-test, darwin-amd64-build, linux-pam-build, conformance-suite, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, redis-storetest-under-docker, s3-storetest-under-docker, server-profile-assembly, plugin-integration, node-dispatch-real-git, node-kill-mid-run, sync-merge-real-git]
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: All lanes green
         run: |
           set -eu
-          for r in "${{ needs.build-test.result }}" "${{ needs.darwin-amd64-build.result }}" "${{ needs.linux-pam-build.result }}" "${{ needs.conformance-suite.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}" "${{ needs.retrieval-eval-gate.result }}" "${{ needs.storetest-under-docker.result }}" "${{ needs.pgvector-storetest-under-docker.result }}" "${{ needs.redis-storetest-under-docker.result }}" "${{ needs.s3-storetest-under-docker.result }}" "${{ needs.server-profile-assembly.result }}" "${{ needs.plugin-integration.result }}" "${{ needs.node-dispatch-real-git.result }}" "${{ needs.node-kill-mid-run.result }}"; do
+          for r in "${{ needs.build-test.result }}" "${{ needs.darwin-amd64-build.result }}" "${{ needs.linux-pam-build.result }}" "${{ needs.conformance-suite.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}" "${{ needs.retrieval-eval-gate.result }}" "${{ needs.storetest-under-docker.result }}" "${{ needs.pgvector-storetest-under-docker.result }}" "${{ needs.redis-storetest-under-docker.result }}" "${{ needs.s3-storetest-under-docker.result }}" "${{ needs.server-profile-assembly.result }}" "${{ needs.plugin-integration.result }}" "${{ needs.node-dispatch-real-git.result }}" "${{ needs.node-kill-mid-run.result }}" "${{ needs.sync-merge-real-git.result }}"; do
             if [ "$r" != "success" ]; then
               echo "ci-gate: a required lane did not succeed ($r)"
               exit 1

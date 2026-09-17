@@ -30,8 +30,26 @@ import (
 // Engine is the sync engine core's composition surface. The zero value
 // is not usable; build one with NewEngine.
 type Engine struct {
-	cursors *CursorStore
-	egress  *egress.Engine
+	cursors   *CursorStore
+	egress    *egress.Engine
+	conflicts *ConflictJournal
+	// git carries phase state. Nil is valid and is a REFUSAL rather than
+	// a skip: a sync reporting success while carrying no phase state
+	// would leave two machines disagreeing about what the work is.
+	git GitRunner
+}
+
+// Conflicts is the journal every merge writes to, and the one
+// S-38.T3's `sync conflicts list` reads.
+func (e *Engine) Conflicts() *ConflictJournal { return e.conflicts }
+
+// WithGitRunner wires phase-state carriage and returns e, so a
+// composition root can build the engine in one expression. Injected
+// rather than constructed here because internal/sync may not spawn
+// processes (the process-spawn allowlist).
+func (e *Engine) WithGitRunner(git GitRunner) *Engine {
+	e.git = git
+	return e
 }
 
 // NewEngine builds an Engine over store (cursor/exclusion persistence),
@@ -40,7 +58,7 @@ type Engine struct {
 // egress.Engine — SendBatch reports KindUnavailable if it is called
 // without one).
 func NewEngine(store provider.Store, clock Clock, eg *egress.Engine) *Engine {
-	return &Engine{cursors: NewCursorStore(store, clock), egress: eg}
+	return &Engine{cursors: NewCursorStore(store, clock), egress: eg, conflicts: &ConflictJournal{}}
 }
 
 // Cursors exposes the underlying CursorStore for a consumer (S-38.T2's

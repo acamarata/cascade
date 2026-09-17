@@ -1,0 +1,11 @@
+{
+  "domain": "context",
+  "case": "resurrection-attempt-suppressed",
+  "description": "One side tombstoned a record at a low revision; the other side carries a concurrent update at a much higher revision and larger version vector, attempting to resurrect it. Tombstone dominance must suppress the resurrection in either merge order.",
+  "sideA": [
+    {"RecordID": "mem-3", "VersionVector": {"node-a": 2}, "Revision": 5, "HLC": 10, "NodeID": "node-a", "Content": "", "Sensitivity": "normal", "Tombstone": true}
+  ],
+  "sideB": [
+    {"RecordID": "mem-3", "VersionVector": {"node-b": 50}, "Revision": 500, "HLC": 999, "NodeID": "node-b", "Content": "resurrected-content", "Sensitivity": "normal", "Tombstone": false}
+  ]
+}

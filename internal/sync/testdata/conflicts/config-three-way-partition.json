@@ -1,0 +1,11 @@
+{
+  "domain": "config",
+  "case": "three-way-partition-rejoin",
+  "description": "Three replicas each wrote the same config record while network-partitioned from each other; on rejoin, merging the three pairwise views in either association order must converge to the same winner.",
+  "sideA": [
+    {"RecordID": "cfg-4", "Revision": 5, "HLC": 10, "NodeID": "node-1", "WallClock": 3000, "Value": "v1", "ValueHash": "h1", "Sensitivity": "normal", "Tombstone": false},
+    {"RecordID": "cfg-4", "Revision": 7, "HLC": 5, "NodeID": "node-2", "WallClock": 3050, "Value": "v2", "ValueHash": "h2", "Sensitivity": "normal", "Tombstone": false},
+    {"RecordID": "cfg-4", "Revision": 6, "HLC": 30, "NodeID": "node-3", "WallClock": 3100, "Value": "v3", "ValueHash": "h3", "Sensitivity": "normal", "Tombstone": false}
+  ],
+  "sideB": []
+}
