@@ -43,7 +43,9 @@ func (w *Wizard) stepPreflight(ctx context.Context, state *State) error {
 		// had an EMPTY plan and exited 0: "nothing to do" about a
 		// machine with no cascade home at all (R-14.280).
 		w.say("   %s does not exist yet", w.deps.Home)
-		w.plan("create %s", w.deps.Home)
+		if !w.writing() {
+			w.plan("create %s", w.deps.Home)
+		}
 	}
 	if err := w.deps.Storage.Probe(ctx, w.deps.Home, w.writing()); err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err,
@@ -155,6 +157,13 @@ func (w *Wizard) stepStorage(_ context.Context, state *State) error {
 // converged machine's --check stays silent and exits 0 — which is the
 // whole point of the flag.
 func (w *Wizard) planDatabase(path string) {
+	// A REAL run is doing it, not planning it. w.plan both records and
+	// prints, so calling it here unguarded made `init --yes` announce
+	// "would create the local database" about a database it was creating
+	// — the guard every other plan site already has.
+	if w.writing() {
+		return
+	}
 	if _, err := os.Stat(path); err == nil {
 		return
 	}

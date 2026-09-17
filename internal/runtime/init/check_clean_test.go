@@ -129,3 +129,30 @@ func TestCheckOnAVirginMachinePlansSomethingOnEveryPlatform(t *testing.T) {
 		})
 	}
 }
+
+// TestAWritingRunNeverSaysWould is the assertion that was missing when
+// the two new plan entries landed: `w.plan` both RECORDS and PRINTS, so a
+// plan call on the writing path makes a real run announce "would create
+// the local database" about a database it is creating.
+//
+// Caught by running the shipped binary, not by the suite — which is the
+// whole reason the wave gate exists. Held here so the next plan call that
+// forgets the guard fails a test instead of an operator's reading.
+func TestAWritingRunNeverSaysWould(t *testing.T) {
+	w, rec, out, _ := fixture(t, Options{Mode: ModeYes, NoDaemon: true}, nil)
+	rec.detected = nil
+	rec.entries = nil
+
+	report, err := w.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run(--yes): %v", err)
+	}
+	if len(report.Diff) != 0 {
+		t.Errorf("a writing run recorded a plan %v; the plan is what a --check run answers with", report.Diff)
+	}
+	for _, line := range strings.Split(out.String(), "\n") {
+		if strings.Contains(line, "would create") {
+			t.Errorf("a run that is doing the work said %q", strings.TrimSpace(line))
+		}
+	}
+}
