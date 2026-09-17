@@ -1,0 +1,81 @@
+# fleet_usage.txtar
+#
+# Documents the `cascade fleet usage [--json] [--since] [--provider]`
+# behavioral scenarios this ticket's contract names (P1-E18-W4-S40-T5).
+#
+# WHY THIS FILE IS PROSE AND NOT A TESTSCRIPT. This module carries no
+# rogpeppe/testscript dependency, and adding one needs a license gate this
+# repo has not cleared. The sibling fleet_capacity.txtar,
+# fleet-sessions.txtar, context-slice.txtar and context-scope-show.txtar
+# all make the identical call and record the identical reason. The
+# scenarios below are therefore expressed as executable Go, driven through
+# the real cobra Execute() entry point rather than by calling the render
+# helpers directly — which is the part a testscript would have given us and
+# the part that matters.
+#
+# A reader arriving here from the contract's "testscript" wording should
+# know: the coverage is real, the driver is real, and only the harness
+# differs. Each scenario below names the Go test that is it.
+#
+# ---------------------------------------------------------------------
+# Scenario: table output over a seeded fixture
+# ---------------------------------------------------------------------
+# exec cascade fleet usage
+# stdout 'requests='
+#
+#   TestFleetUsageScript/table, and TestFleetUsageTable for the column
+#   assertions. Seeded from internal/fleet/testdata/usage-fixture.json
+#   through the real usage store, so the sums are aggregated by the
+#   shipping code path rather than by the test.
+#
+# ---------------------------------------------------------------------
+# Scenario: the versioned JSON envelope
+# ---------------------------------------------------------------------
+# exec cascade fleet usage --json
+# stdout '"ok": true'
+#
+#   TestFleetUsageScript/json. The envelope is the D/S-06.T5 output
+#   contract's, and the assertion is that encoding/json parses it — a
+#   string match alone would pass on a document no client could read.
+#
+# ---------------------------------------------------------------------
+# Scenario: --since and --provider narrow the rows
+# ---------------------------------------------------------------------
+# exec cascade fleet usage --since=7d --provider=anthropic
+# stdout 'anthropic'
+# ! stdout 'openai'
+#
+#   TestFleetUsageFilters/since, TestFleetUsageFilters/provider, and
+#   TestFleetUsageScript/since_and_provider_combined. The negative half is
+#   the load-bearing one: a filter that returns everything also returns
+#   the rows you asked for.
+#
+# ---------------------------------------------------------------------
+# Scenario: error paths
+# ---------------------------------------------------------------------
+# ! exec cascade fleet usage --since=not-a-duration
+# stderr 'invalid-input'
+# ! exec cascade fleet usage extra-arg
+# stderr 'invalid-input'
+#
+#   TestFleetUsageScript/error_path_bad_since and
+#   TestFleetUsageScript/error_path_extra_arg. Both assert the KIND, not
+#   the message text, because the kind is what the exit code derives from.
+#
+# ---------------------------------------------------------------------
+# Scenario: headless — no daemon socket present
+# ---------------------------------------------------------------------
+# exec cascade fleet usage
+# stdout 'anthropic'
+#
+#   TestFleetUsageHeadless. `fleet usage` reads the local usage ledger, so
+#   it is one of the three fleet verbs that legitimately works with no
+#   daemon (the other two are `fleet sessions` and `fleet top`); the walk
+#   in fleet_no_daemon_test.go names it in notDaemonOnly for exactly this
+#   reason.
+#
+# ---------------------------------------------------------------------
+# Scenario: the --since parser never panics
+# ---------------------------------------------------------------------
+#   FuzzSinceFlagParse (06 rule 5.7), seeded from
+#   cmd/cascade/testdata/fuzz/FuzzSinceFlagParse/seed001.
