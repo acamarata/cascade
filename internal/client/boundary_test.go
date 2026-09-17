@@ -95,6 +95,23 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// cmd-rpc-server-boundary exemption list; the two must be edited
 	// together.
 	"daemon_unix_run_options.go": true,
+	// daemon_unix_chat.go (P1-E20-W5-S43-T5): the composition-root call
+	// site that REGISTERS chat.append_turn/get_thread/list_threads on the
+	// daemon's own registry. It serves RPC and never dials it — the
+	// identical daemon-SIDE reasoning as daemon_unix_conductor.go and
+	// daemon_unix_evidence.go above. It needs the daemon's own
+	// PathProvider and event bus to site the store and the SSE mirror, so
+	// it cannot live in internal/daemon either. This map mirrors
+	// .golangci.yml's cmd-rpc-server-boundary exemption list; the two must
+	// be edited together.
+	"daemon_unix_chat.go": true,
+	// daemon_unix_memory_recall.go (P1-E20-W5-S43-T5): a mechanical
+	// relocation of registerMemoryAndRecall out of daemon_unix_run.go
+	// under its own 300-line cap — the same move, for the same reason,
+	// that daemon_unix_run_memory.go and daemon_unix_run_fleetjobs.go
+	// already carry exemptions for. It MOUNTS memory.* and recall.* on the
+	// daemon's registry and dials nothing.
+	"daemon_unix_memory_recall.go": true,
 	// mcp_tools.go (P1-E16-W4-S34-T2): the method table the first-party
 	// MCP tools dispatch through. It REGISTERS on a registry it
 	// constructs itself and never dials the daemon -- the identical

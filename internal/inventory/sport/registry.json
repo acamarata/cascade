@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T18:08:05Z",
+  "generated_at": "2026-09-17T18:17:57Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3192,6 +3192,42 @@
       "statuses": [
         "",
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade daemon chat wiring",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_chat.go",
+          "line": 29,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T5",
+          "raw": "cmd/cascade daemon chat wiring (ADD) — P1-E20-W5-S43-T5."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_chat_integration_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T5",
+          "raw": "cmd/cascade daemon chat wiring (ADD) — P1-E20-W5-S43-T5."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade daemon composition",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_memory_recall.go",
+          "line": 8,
+          "status": "CHANGE",
+          "raw": "cmd/cascade daemon composition (CHANGED — split for the file"
+        }
+      ],
+      "statuses": [
+        "CHANGE"
       ]
     },
     {
@@ -8836,11 +8872,23 @@
           "raw": "internal.conversation.adapter/ADDED (tests) (P1-E20-W5-S43-T2)."
         },
         {
+          "file": "internal/conversation/adapter_newthread_test.go",
+          "line": 5,
+          "status": "CHANGE",
+          "raw": "internal.conversation.adapter (CHANGED — thread minting,"
+        },
+        {
           "file": "internal/conversation/adapter_test.go",
           "line": 7,
           "status": "ADD",
           "ticket": "P1-E20-W5-S43-T2",
           "raw": "internal.conversation.adapter/ADDED (tests) (P1-E20-W5-S43-T2)."
+        },
+        {
+          "file": "internal/conversation/adapter_wire.go",
+          "line": 6,
+          "status": "CHANGE",
+          "raw": "internal.conversation.adapter (CHANGED — wire split,"
         },
         {
           "file": "internal/conversation/sse_integration_test.go",
@@ -8851,7 +8899,8 @@
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -9088,6 +9137,21 @@
           "status": "ADD",
           "ticket": "P1-E20-W5-S43-T1",
           "raw": "internal.conversation.store/ADDED (P1-E20-W5-S43-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.conversation.thread-id",
+      "sites": [
+        {
+          "file": "internal/conversation/threadid.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T4",
+          "raw": "internal.conversation.thread-id (ADD) — P1-E20-W5-S43-T4."
         }
       ],
       "statuses": [
@@ -24315,7 +24379,7 @@
       ]
     }
   ],
-  "total_sites": 2337,
+  "total_sites": 2343,
   "unspecified_count": 69,
-  "multi_status_count": 41
+  "multi_status_count": 42
 }

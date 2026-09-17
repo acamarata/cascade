@@ -102,44 +102,6 @@ func mapped(h rpc.HandlerFunc) rpc.HandlerFunc {
 	}
 }
 
-// appendTurnParams is chat.append_turn's wire request shape: one turn's
-// role plus its ordered content segments. Unknown fields are rejected
-// (DisallowUnknownFields) so a caller typo surfaces immediately rather
-// than being silently dropped.
-type appendTurnParams struct {
-	ThreadID string              `json:"thread_id"`
-	Role     string              `json:"role"`
-	Segments []appendSegmentWire `json:"segments"`
-}
-
-type appendSegmentWire struct {
-	Kind    string `json:"kind"`
-	Content string `json:"content"`
-}
-
-// appendTurnResult is chat.append_turn's wire response shape.
-type appendTurnResult struct {
-	ThreadID string `json:"thread_id"`
-	TurnID   string `json:"turn_id"`
-	Seq      int64  `json:"seq"`
-}
-
-func decodeAppendTurnParams(raw json.RawMessage) (appendTurnParams, error) {
-	var p appendTurnParams
-	if len(raw) == 0 {
-		return p, ErrMalformedTurnPayload
-	}
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&p); err != nil {
-		return appendTurnParams{}, ErrMalformedTurnPayload
-	}
-	if p.ThreadID == "" || p.Role == "" {
-		return appendTurnParams{}, ErrMalformedTurnPayload
-	}
-	return p, nil
-}
-
 // handleAppendTurn is chat.append_turn. It appends turn.Role+Segments to
 // ThreadID via a.store (T1's append-only Store, so mutation history
 // cannot be reopened through this adapter -- see adapter_test.go's
@@ -159,6 +121,14 @@ func (a *Adapter) handleAppendTurn(ctx context.Context, raw json.RawMessage) (an
 	if err != nil {
 		return nil, ErrMalformedTurnPayload
 	}
+	// A caller that named no thread is starting one, and the id is minted
+	// HERE rather than client-side: see threadid.go (R-14.285).
+	if params.ThreadID == "" {
+		params.ThreadID, err = NewThreadID()
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	existing, err := a.store.ListTurns(ctx, params.ThreadID)
 	if err != nil {
@@ -168,14 +138,9 @@ func (a *Adapter) handleAppendTurn(ctx context.Context, raw json.RawMessage) (an
 	now := a.clock.Now().Unix()
 	turn := Turn{ID: NewTurnID(params.ThreadID, seq, role), ThreadID: params.ThreadID, Seq: seq, Role: role, CreatedAt: now}
 
-	segments := make([]Segment, 0, len(params.Segments))
-	for i, sw := range params.Segments {
-		kind, err := DecodeSegmentKind(sw.Kind)
-		if err != nil {
-			return nil, ErrMalformedTurnPayload
-		}
-		segments = append(segments, Segment{ID: NewSegmentID(turn.ID, int64(i), kind), TurnID: turn.ID, Seq: int64(i),
-			Kind: kind, Content: sw.Content, CreatedAt: now})
+	segments, err := decodeSegments(params.Segments, turn.ID, now)
+	if err != nil {
+		return nil, err
 	}
 
 	// P1-E20-W5-S44-T4: when a JournalStore is configured (SetJournal),
