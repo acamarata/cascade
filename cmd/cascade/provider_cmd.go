@@ -100,6 +100,7 @@ type providerAddFlags struct {
 	keyEnv   string
 	oauth    bool
 	baseURL  string
+	kind     string
 	noVerify bool
 	pool     string
 }
@@ -114,7 +115,10 @@ func newProviderAddCmd(deps providerDeps) *cobra.Command {
 			"the named environment variable once, non-interactively), or --oauth\n" +
 			"(runs a PKCE browser flow; refuses under CASCADE_NO_INPUT=1, citing\n" +
 			"--key/--key-env as alternatives) selects the credential source.\n" +
-			"--base-url overrides the driver's default API root. --no-verify skips\n" +
+			"--base-url overrides the driver's default API root. --kind pins the\n" +
+			"driver shape, so the probe tries that one and a mismatch is reported\n" +
+			"as a wrong pin rather than as a credential nothing matched.\n" +
+			"--no-verify skips\n" +
 			"the live 1-token verify call and records a warning. --pool <name> joins\n" +
 			"a key-pool lane. Re-adding an existing name re-verifies and updates the\n" +
 			"record rather than creating a duplicate.",
@@ -132,6 +136,7 @@ func newProviderAddCmd(deps providerDeps) *cobra.Command {
 	f.StringVar(&flags.keyEnv, "key-env", "", "read the credential once from the named environment variable")
 	f.BoolVar(&flags.oauth, "oauth", false, "run the PKCE loopback OAuth flow")
 	f.StringVar(&flags.baseURL, "base-url", "", "override the driver's default API root")
+	f.StringVar(&flags.kind, "kind", "", "pin the driver shape instead of letting the probe decide")
 	f.BoolVar(&flags.noVerify, "no-verify", false, "skip the live micro-verify call")
 	f.StringVar(&flags.pool, "pool", "", "join the named key-pool")
 	return cmd
@@ -184,7 +189,10 @@ func resolveProviderRegistry(ctx context.Context, deps providerDeps) (intake.Reg
 // intake.AddRequest, reading a --key value from stdin per vault.go's rule
 // that a credential is never a positional argument.
 func buildAddRequest(cmd *cobra.Command, deps providerDeps, name string, flags providerAddFlags) (intake.AddRequest, error) {
-	req := intake.AddRequest{Name: name, BaseURL: flags.baseURL, NoVerify: flags.noVerify, Pool: flags.pool}
+	req := intake.AddRequest{
+		Name: name, BaseURL: flags.baseURL, Kind: intake.DriverKind(flags.kind),
+		NoVerify: flags.noVerify, Pool: flags.pool,
+	}
 	set := 0
 	if flags.key {
 		set++

@@ -181,7 +181,7 @@ func TestProbeAndEnumerateDriverHintOverride(t *testing.T) {
 		"https://api.anthropic.com/v1/models": {Status: 200, Body: loadFixture(t, "probe_anthropic.golden.json")},
 	}}
 	deps := Deps{Doer: doer, Egress: engine}
-	kind, _, _, err := probeAndEnumerate(context.Background(), deps, "sk-test", "", DriverGemini)
+	kind, _, _, err := probeAndEnumerate(context.Background(), deps, "sk-test", "", DriverGemini, "")
 	if err != nil {
 		t.Fatalf("probeAndEnumerate: %v", err)
 	}

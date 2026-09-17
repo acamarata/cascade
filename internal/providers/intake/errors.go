@@ -136,3 +136,39 @@ func errEmptyKeyEnvValue(envVar string) error {
 	return cascade.Newf(cascade.KindInvalidInput,
 		"intake: environment variable %q named by --key-env is unset or empty", envVar)
 }
+
+// errPinnedShapeFailed reports that the ONE shape the caller pinned did
+// not answer.
+//
+// A separate message from errShapeProbeFailed on purpose. "None of
+// anthropic-compat, openai-compat or gemini matched this credential" sends
+// an author who pinned a shape to check their credential, when what they
+// need to know is that the shape they named is not what that endpoint
+// speaks.
+func errPinnedShapeFailed(pin DriverKind, attempts []probeAttempt) error {
+	detail := "the endpoint did not answer"
+	if len(attempts) == 1 {
+		a := attempts[0]
+		if a.err != nil {
+			detail = fmt.Sprintf("%s: %s", a.endpoint, a.err)
+		} else {
+			detail = fmt.Sprintf("%s: HTTP %d", a.endpoint, a.status)
+		}
+	}
+	return cascade.Wrapf(cascade.KindInvalidInput, ErrShapeProbeFailed,
+		"intake: the pinned driver kind %q did not match this endpoint (%s); "+
+			"remove the pin to let the shape probe decide, or name the kind the endpoint speaks",
+		pin, detail)
+}
+
+// errUnknownPinnedKind reports a pinned kind this build has no probe
+// target for, naming the ones it does.
+func errUnknownPinnedKind(pin DriverKind) error {
+	known := make([]string, 0, len(probeOrder))
+	for _, target := range probeOrder {
+		known = append(known, string(target.kind))
+	}
+	return cascade.Wrapf(cascade.KindInvalidInput, ErrUnparseableDirective,
+		"intake: %q is not a driver kind this build can probe; the probeable kinds are %s",
+		pin, strings.Join(known, ", "))
+}

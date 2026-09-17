@@ -22,7 +22,6 @@ package intake
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"time"
@@ -158,11 +157,36 @@ func acquireIntakeGate(engine *egress.Engine, tier egress.SensitivityTier) (egre
 // one specific server, so the probe tries only that driver's shape
 // against it - never a mix of bases across kinds).
 func shapeProbe(ctx context.Context, doer Doer, engine *egress.Engine, key, baseOverride string) (DriverKind, string, []byte, error) {
+	return shapeProbeFor(ctx, doer, engine, key, baseOverride, "")
+}
+
+// shapeProbeFor is shapeProbe with an optional PIN.
+//
+// A pinned kind is an assertion by whoever named it -- a setup file's
+// `kind`, or `provider add --kind` -- so only that candidate is tried. The
+// probe is a guess made when nobody said; it does not get to overrule
+// somebody who did.
+//
+// Trying only the pinned candidate is also what makes the failure useful.
+// Probing all three and then overriding the winner, which is what the
+// OAuth hint used to do, reports "none of anthropic-compat, openai-compat
+// or gemini matched this credential" when the real answer is "the shape
+// you pinned is not what that endpoint speaks" (R-14.264).
+func shapeProbeFor(
+	ctx context.Context, doer Doer, engine *egress.Engine, key, baseOverride string, pin DriverKind,
+) (DriverKind, string, []byte, error) {
 	if _, err := acquireIntakeGate(engine, egress.TierInternal); err != nil {
 		return "", "", nil, err
 	}
+	candidates := probeOrder
+	if pin != "" {
+		candidates = candidatesFor(pin)
+		if len(candidates) == 0 {
+			return "", "", nil, errUnknownPinnedKind(pin)
+		}
+	}
 	var attempts []probeAttempt
-	for _, target := range probeOrder {
+	for _, target := range candidates {
 		base := baseOverride
 		if base == "" {
 			base = defaultBases[target.kind]
@@ -199,63 +223,23 @@ func shapeProbe(ctx context.Context, doer Doer, engine *egress.Engine, key, base
 		}
 		attempts = append(attempts, probeAttempt{kind: target.kind, endpoint: endpoint, status: resp.Status})
 	}
+	if pin != "" {
+		return "", "", nil, errPinnedShapeFailed(pin, attempts)
+	}
 	return "", "", nil, errShapeProbeFailed(attempts)
 }
 
-// modelsFromProbe decodes body against kind's known models-list shape and
-// returns the model IDs, in the order the vendor listed them. An unknown
-// shape (a 200 this build cannot decode) is the fail-closed refusal
-// errUnknownEndpointShape - never a partially-populated model list.
-func modelsFromProbe(kind DriverKind, body []byte) ([]string, error) {
-	switch kind {
-	case DriverAnthropic:
-		var wire struct {
-			Data []struct {
-				ID string `json:"id"`
-			} `json:"data"`
+// candidatesFor returns the one probe target matching pin, or nothing when
+// this build has no target for that kind.
+//
+// Nothing rather than a fallback to the full order: a kind with no probe
+// target is a kind this build cannot verify, and quietly probing the other
+// three would register a provider under a driver nobody asked for.
+func candidatesFor(pin DriverKind) []probeTarget {
+	for _, target := range probeOrder {
+		if target.kind == pin {
+			return []probeTarget{target}
 		}
-		if err := json.Unmarshal(body, &wire); err != nil {
-			return nil, errUnknownEndpointShape(kind, http.StatusOK)
-		}
-		out := make([]string, 0, len(wire.Data))
-		for _, m := range wire.Data {
-			out = append(out, m.ID)
-		}
-		return out, nil
-	case DriverOpenAICompat:
-		var wire struct {
-			Data []struct {
-				ID string `json:"id"`
-			} `json:"data"`
-		}
-		if err := json.Unmarshal(body, &wire); err != nil {
-			return nil, errUnknownEndpointShape(kind, http.StatusOK)
-		}
-		out := make([]string, 0, len(wire.Data))
-		for _, m := range wire.Data {
-			out = append(out, m.ID)
-		}
-		return out, nil
-	case DriverGemini:
-		var wire struct {
-			Models []struct {
-				Name string `json:"name"`
-			} `json:"models"`
-		}
-		if err := json.Unmarshal(body, &wire); err != nil {
-			return nil, errUnknownEndpointShape(kind, http.StatusOK)
-		}
-		out := make([]string, 0, len(wire.Models))
-		for _, m := range wire.Models {
-			out = append(out, m.Name)
-		}
-		return out, nil
-	case DriverOllama, DriverLocalLLM:
-		// Local drivers are never shape-probed (there is no vendor
-		// credential to try): they are selected only by an explicit
-		// directive, and their own driver package owns model enumeration.
-		return nil, errUnknownEndpointShape(kind, http.StatusOK)
-	default:
-		return nil, errUnknownEndpointShape(kind, http.StatusOK)
 	}
+	return nil
 }

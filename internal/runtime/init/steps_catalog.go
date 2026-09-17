@@ -192,6 +192,9 @@ func (w *Wizard) specProviders(ctx context.Context, state *State, spec *initconf
 // usage error from a child process.
 func providerAddArgs(d initconfig.ProviderDirective) []string {
 	args := []string{"provider", "add", d.Name, "--key-env", d.KeyEnv}
+	if d.Kind != "" {
+		args = append(args, "--kind", d.Kind)
+	}
 	if d.BaseURL != "" {
 		args = append(args, "--base-url", d.BaseURL)
 	}

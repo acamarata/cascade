@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/acamarata/cascade/internal/providers/intake"
 	"github.com/acamarata/cascade/pkg/cascade"
 	toml "github.com/pelletier/go-toml/v2"
 )
@@ -224,7 +225,63 @@ func (p ProviderDirective) validate(index int) error {
 			"cascade init: provider %q has no key_env; a file-driven run reads the key from the "+
 				"environment variable key_env names, never from the file itself", p.Name)
 	}
+	// A kind is checked HERE, at the file, with a nearest match — the same
+	// treatment an unknown KEY already gets. An author who wrote
+	// "openai_compat" should learn it from their own input, not from a
+	// probe failing against a real endpoint several steps later.
+	if p.Kind != "" && !knownDriverKind(p.Kind) {
+		if suggestion := nearestDriverKind(p.Kind); suggestion != "" {
+			return cascade.Newf(cascade.KindInvalidInput,
+				"cascade init: provider %q names kind %q; did you mean %q?", p.Name, p.Kind, suggestion)
+		}
+		return cascade.Newf(cascade.KindInvalidInput,
+			"cascade init: provider %q names kind %q; this build knows %s",
+			p.Name, p.Kind, strings.Join(driverKinds, ", "))
+	}
 	return nil
+}
+
+// driverKinds are the kinds a [[providers]] entry may pin, read from the
+// intake pipeline that has to honour them.
+//
+// Read rather than re-spelled. A second copy of this list drifts, and the
+// way it drifts is the quiet one: a kind in the file's list and not the
+// pipeline's parses here and fails at the probe, several steps later and
+// against a real endpoint.
+var driverKinds = func() []string {
+	kinds := intake.DriverKinds()
+	out := make([]string, 0, len(kinds))
+	for _, k := range kinds {
+		out = append(out, string(k))
+	}
+	return out
+}()
+
+// knownDriverKind reports whether kind is one this build knows.
+func knownDriverKind(kind string) bool {
+	for _, known := range driverKinds {
+		if kind == known {
+			return true
+		}
+	}
+	return false
+}
+
+// nearestDriverKind suggests the closest known kind, or "" when nothing is
+// close enough. Same threshold as the unknown-key suggestion, and the same
+// reason for the silence: one bad guess teaches an author to ignore every
+// later one.
+func nearestDriverKind(kind string) string {
+	best, bestDistance := "", editDistance(kind, "")+1
+	for _, known := range driverKinds {
+		if d := editDistance(kind, known); d < bestDistance {
+			best, bestDistance = known, d
+		}
+	}
+	if bestDistance > len(kind)/2+1 {
+		return ""
+	}
+	return best
 }
 
 // String renders a directive for a diagnostic, naming the variable and

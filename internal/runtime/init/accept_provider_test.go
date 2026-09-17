@@ -153,26 +153,17 @@ func (e env) providerNames(t *testing.T) ([]string, int) {
 	return names, 0
 }
 
-// TestAcceptInitTheSetupFileKindIsIgnored is a RECORDED HAZARD, not a
-// contract: it pins behaviour that is wrong, so the day it changes is
-// visible.
+// TestAcceptInitTheSetupFileKindPinsTheShape replaces the recorded hazard
+// P1-E16-W4-S35-T5 left here, now that P1-E16-W4-S35-T12 has landed.
 //
-// `kind` is a documented field of cascade.init/v1 — "pins the provider
-// shape, when the author would rather not let the probe decide" — and
-// nothing reads it. `providerAddArgs` never passes it, `cascade provider
-// add` has no flag to receive it, and `intake.AddRequest` has no field to
-// hold it. An author who pins a shape gets whatever the probe picks.
-//
-// Proved here rather than asserted from the source: the endpoint below
-// serves ONLY the openai-compat shape and the file pins exactly that, so
-// a build that honoured `kind` would verify successfully. This build
-// instead probes its way to another driver, asks for a path the fixture
-// does not serve, and the run fails.
-//
-// When P1-E16-W4-S35-T12 lands, this test fails. Replace it with the
-// positive assertion — the setup file pins the shape and the endpoint
-// sees that shape's request — rather than deleting it.
-func TestAcceptInitTheSetupFileKindIsIgnored(t *testing.T) {
+// The hazard asserted the opposite — that `kind` was accepted by the
+// schema and read by nobody — and it was written to fail the day that
+// changed, naming the ticket and saying to replace it with this rather
+// than delete it. This is that replacement, and it is the same setup: the
+// endpoint serves ONLY the openai-compat shape, and the file pins exactly
+// that. Before the pin was honoured the probe reached the anthropic driver
+// and asked for a path the fixture does not serve.
+func TestAcceptInitTheSetupFileKindPinsTheShape(t *testing.T) {
 	e := newEnv(t)
 	endpoint := newVerifyEndpoint(t, shapeOpenAICompat, "accept-key")
 
@@ -182,14 +173,38 @@ func TestAcceptInitTheSetupFileKindIsIgnored(t *testing.T) {
 
 	config := e.writeSetupFile(t, endpoint.URL, "openai-compat")
 	out, code := e.runWithKey(t, "accept-key", "init", "--config", config, "--no-daemon")
+	if code != 0 {
+		t.Fatalf("a run pinning the shape the endpoint speaks exited %d:\n%s", code, out)
+	}
+	if got := endpoint.paths(); !contains(got, "/v1/chat/completions") {
+		t.Errorf("the endpoint saw %v; the pinned openai-compat verify never ran", got)
+	}
+	if names, _ := e.providerNames(t); !contains(names, "accept-provider") {
+		t.Errorf("provider list = %v, want the provider the setup file named", names)
+	}
+}
+
+// TestAcceptInitAWrongPinSaysSo: pinning a shape the endpoint does not
+// speak must name the PIN. "None of anthropic-compat, openai-compat or
+// gemini matched this credential" sends an author to check their key,
+// when what they need to know is that the shape they named is wrong.
+func TestAcceptInitAWrongPinSaysSo(t *testing.T) {
+	e := newEnv(t)
+	endpoint := newVerifyEndpoint(t, shapeAnthropic, "accept-key")
+
+	if out, code := e.run(t, initArgs...); code != 0 {
+		t.Fatalf("scenario A prerequisite exited %d:\n%s", code, out)
+	}
+
+	config := e.writeSetupFile(t, endpoint.URL, "openai-compat")
+	out, code := e.runWithKey(t, "accept-key", "init", "--config", config, "--no-daemon")
 	if code == 0 {
-		t.Fatalf("RECORDED HAZARD FIXED: the setup file's kind was honoured and the run succeeded. "+
-			"P1-E16-W4-S35-T12 has landed; replace this test with the positive assertion.\n%s", out)
+		t.Fatalf("a run pinning a shape the endpoint does not speak succeeded:\n%s", out)
 	}
-	if got := endpoint.paths(); contains(got, "/v1/chat/completions") {
-		t.Fatalf("RECORDED HAZARD FIXED: the endpoint saw the openai-compat request the file pinned (%v). "+
-			"Replace this test with the positive assertion.", got)
+	if !strings.Contains(out, "openai-compat") {
+		t.Errorf("the failure does not name the pin:\n%s", out)
 	}
-	t.Logf("RECORDED HAZARD: the setup file pinned kind=openai-compat and the run reached %v instead; "+
-		"`kind` is accepted by the schema and read by nothing (P1-E16-W4-S35-T12)", endpoint.paths())
+	if strings.Contains(out, "none of anthropic-compat") {
+		t.Errorf("a wrong pin reported as an unmatched credential:\n%s", out)
+	}
 }

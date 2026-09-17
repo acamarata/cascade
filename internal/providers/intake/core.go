@@ -77,7 +77,7 @@ func Add(ctx context.Context, deps Deps, req AddRequest) (AddResult, error) {
 	if err != nil {
 		return AddResult{}, err
 	}
-	kind, base, models, err := probeAndEnumerate(ctx, deps, cred, req.BaseURL, driverHint)
+	kind, base, models, err := probeAndEnumerate(ctx, deps, cred, req.BaseURL, driverHint, req.Kind)
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -210,8 +210,13 @@ func (a oauthClockAdapter) Now() time.Time { return a.c.Now() }
 // probeAndEnumerate runs the shape probe (or, when driverHint is set by
 // the OAuth path, probes only that one candidate) and returns the
 // enumerated model list.
-func probeAndEnumerate(ctx context.Context, deps Deps, cred, baseOverride string, driverHint DriverKind) (DriverKind, string, []string, error) {
-	kind, base, body, err := shapeProbe(ctx, deps.Doer, deps.Egress, cred, baseOverride)
+// A pin beats a hint beats a guess: req.Kind is what an author asserted,
+// driverHint is what the OAuth path already knows, and the probe's answer
+// is the fallback when nobody said.
+func probeAndEnumerate(
+	ctx context.Context, deps Deps, cred, baseOverride string, driverHint, pin DriverKind,
+) (DriverKind, string, []string, error) {
+	kind, base, body, err := shapeProbeFor(ctx, deps.Doer, deps.Egress, cred, baseOverride, pin)
 	if err != nil {
 		return "", "", nil, err
 	}

@@ -67,6 +67,14 @@ type AddRequest struct {
 	KeyValue []byte
 	// KeyEnvVar names the environment variable for CredentialKeyEnv.
 	KeyEnvVar string
+	// Kind PINS the driver shape, skipping the probe's guess.
+	//
+	// Empty means "let the probe decide", which is the ordinary case. A
+	// value here is an assertion by whoever named it -- a setup file's
+	// `kind`, or `provider add --kind` -- so the probe tries that
+	// candidate and only that one, and a mismatch is reported as a wrong
+	// PIN rather than as a credential nothing matched.
+	Kind DriverKind
 	// BaseURL overrides the probed/default API root.
 	BaseURL string
 	// NoVerify skips the live micro-verify (and the capability probe,
@@ -87,6 +95,12 @@ func (r AddRequest) Validate() error {
 		return errNoCredentialSource()
 	default:
 		return errNoCredentialSource()
+	}
+	// A pin is refused HERE, before anything reaches the network, so an
+	// author who mistyped a kind learns it from their own input rather
+	// than from a probe failing against a real endpoint.
+	if r.Kind != "" && !r.Kind.Valid() {
+		return errUnknownPinnedKind(r.Kind)
 	}
 	return nil
 }

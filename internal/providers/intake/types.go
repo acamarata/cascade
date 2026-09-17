@@ -57,6 +57,19 @@ func (k DriverKind) Valid() bool {
 	return false
 }
 
+// DriverKinds lists every driver kind this build declares, in the order
+// they are documented.
+//
+// Exported because the setup-file parser has to refuse a `kind` it cannot
+// honour, at the file, and a second copy of this list would drift: a kind
+// in one and not the other parses and then fails at the probe, several
+// steps later and against a real endpoint (R-14.264).
+func DriverKinds() []DriverKind {
+	return []DriverKind{
+		DriverAnthropic, DriverOpenAICompat, DriverGemini, DriverOllama, DriverLocalLLM,
+	}
+}
+
 // AuthType names how a provider record's credential is held. Exactly two
 // members: 08-INIT-CONFIG-SPEC.md §2 defines no third.
 type AuthType string

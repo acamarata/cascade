@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T12:15:09Z",
+  "generated_at": "2026-09-17T12:22:40Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -16949,6 +16949,20 @@
       ]
     },
     {
+      "name": "internal/providers/intake model enumeration",
+      "sites": [
+        {
+          "file": "internal/providers/intake/models.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal/providers/intake model enumeration (ADD) --"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/rpc",
       "sites": [
         {
@@ -17230,6 +17244,20 @@
           "status": "ADD",
           "ticket": "P1-E16-W4-S35-T6",
           "raw": "internal/runtime/init wizard (ADD) — P1-E16-W4-S35-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/runtime/initconfig driver kinds",
+      "sites": [
+        {
+          "file": "internal/runtime/initconfig/driverkinds_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal/runtime/initconfig driver kinds (ADD) —"
         }
       ],
       "statuses": [
@@ -23146,7 +23174,7 @@
       ]
     }
   ],
-  "total_sites": 2242,
+  "total_sites": 2244,
   "unspecified_count": 66,
   "multi_status_count": 40
 }

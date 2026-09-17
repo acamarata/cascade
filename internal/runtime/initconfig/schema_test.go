@@ -25,7 +25,7 @@ harness = "auto"
 
 [[providers]]
 name = "anthropic"
-kind = "anthropic-compat"
+kind = "anthropic"
 auth = "key-env"
 key_env = "ANTHROPIC_API_KEY"
 verify = true
@@ -67,7 +67,12 @@ func TestParseReadsEveryField(t *testing.T) {
 		t.Fatalf("providers = %+v", cfg.Providers)
 	}
 	p := cfg.Providers[0]
-	if p.Name != "anthropic" || p.KeyEnv != "ANTHROPIC_API_KEY" || !p.Verify || p.Kind != "anthropic-compat" {
+	// "anthropic", not "anthropic-compat": the latter is PROSE, used in
+	// the probe-order comments and in one error message, and was never a
+	// DriverKind. This fixture carried it until the parser started
+	// checking the field (P1-E16-W4-S35-T12) -- which is what a field
+	// nothing reads looks like from the test side.
+	if p.Name != "anthropic" || p.KeyEnv != "ANTHROPIC_API_KEY" || !p.Verify || p.Kind != "anthropic" {
 		t.Errorf("provider = %+v", p)
 	}
 	if !cfg.Harnesses.Detect || len(cfg.Harnesses.Install) != 2 {
