@@ -238,7 +238,10 @@ func microVerify(ctx context.Context, deps Deps, kind DriverKind, base, cred, mo
 	req := microVerifyRequest(kind, base, cred, model)
 	resp, err := deps.Doer.Do(ctx, req)
 	if err != nil {
-		return errMicroVerifyFailed(model, 0, err.Error())
+		// Same reason as the shape probe's: the gemini request carries
+		// the credential in its query string, so the transport error
+		// quotes it.
+		return errMicroVerifyFailed(model, 0, redactCredential(err, cred).Error())
 	}
 	if resp.Status != 200 {
 		return errMicroVerifyFailed(model, resp.Status, microVerifyGuidance(resp.Status))

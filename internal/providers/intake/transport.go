@@ -185,7 +185,13 @@ func shapeProbe(ctx context.Context, doer Doer, engine *egress.Engine, key, base
 		}
 		resp, err := doer.Do(ctx, HTTPRequest{Method: target.method, URL: url, Headers: headers})
 		if err != nil {
-			attempts = append(attempts, probeAttempt{kind: target.kind, endpoint: endpoint, err: err})
+			// Redacted here, where the key is in hand. The endpoint string
+			// above was already safe; this is the WRAPPED CAUSE, which
+			// quotes the URL the transport was handed -- the copy that
+			// still had the credential in it.
+			attempts = append(attempts, probeAttempt{
+				kind: target.kind, endpoint: endpoint, err: redactCredential(err, key),
+			})
 			continue
 		}
 		if resp.Status == http.StatusOK {
@@ -252,45 +258,4 @@ func modelsFromProbe(kind DriverKind, body []byte) ([]string, error) {
 	default:
 		return nil, errUnknownEndpointShape(kind, http.StatusOK)
 	}
-}
-
-// microVerifyBody builds the 1-token completion request body for model
-// under kind.
-func microVerifyBody(kind DriverKind, model string) []byte {
-	// Anthropic and every openai-compat-shaped driver (openai-compat,
-	// ollama, localllm) share one request shape; only gemini differs.
-	// One case list per shape, exhaustive over all 5 DriverKind members,
-	// avoids repeating the JSON literal per member.
-	payload := map[string]any{
-		"model": model, "max_tokens": 1,
-		"messages": []map[string]string{{"role": "user", "content": "hi"}},
-	}
-	switch kind {
-	case DriverGemini:
-		payload = map[string]any{
-			"contents":         []map[string]any{{"parts": []map[string]string{{"text": "hi"}}}},
-			"generationConfig": map[string]any{"maxOutputTokens": 1},
-		}
-	case DriverAnthropic, DriverOpenAICompat, DriverOllama, DriverLocalLLM:
-		// payload already set to the shared shape above.
-	}
-	b, _ := json.Marshal(payload)
-	return b
-}
-
-// microVerifyRequest builds the full HTTPRequest for the live micro-verify
-// call, per driver kind's chat-completion endpoint.
-func microVerifyRequest(kind DriverKind, base, key, model string) HTTPRequest {
-	body := microVerifyBody(kind, model)
-	switch kind {
-	case DriverAnthropic:
-		return HTTPRequest{Method: http.MethodPost, URL: base + "/v1/messages", Body: body,
-			Headers: map[string]string{"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}}
-	case DriverGemini:
-		return HTTPRequest{Method: http.MethodPost, URL: base + "/v1beta/models/" + model + ":generateContent?key=" + key, Body: body,
-			Headers: map[string]string{"content-type": "application/json"}}
-	case DriverOpenAICompat, DriverOllama, DriverLocalLLM:
-	}
-	return HTTPRequest{Method: http.MethodPost, URL: base + "/v1/chat/completions", Body: body,
-		Headers: map[string]string{"Authorization": "Bearer " + key, "content-type": "application/json"}}
 }
