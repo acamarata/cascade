@@ -36,6 +36,23 @@ import (
 	"github.com/acamarata/cascade/internal/rpc"
 )
 
+// waitForRemoteSocket blocks until the forwarded socket accepts a
+// connection, so a test asserting over the tunnel fails for what it is
+// about rather than for arriving early.
+func waitForRemoteSocket(t *testing.T, path string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		conn, err := (&net.Dialer{}).DialContext(context.Background(), "unix", path)
+		if err == nil {
+			_ = conn.Close()
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("the forwarded socket %s never accepted a connection", path)
+}
+
 // dispatchOverTunnel issues one JSON-RPC call to the node-forwarded socket
 // and returns the decoded response body.
 func dispatchOverTunnel(t *testing.T, remoteSock, method, params string) map[string]any {
@@ -144,6 +161,13 @@ func TestDispatchRealSSHD(t *testing.T) {
 	if tun.State() != TunnelUp {
 		t.Fatalf("tunnel never reached TunnelUp against the real sshd (state=%v)", tun.State())
 	}
+	// TunnelUp means the SSH session is established, not that sshd has
+	// finished creating the forwarded socket on the remote side. The two
+	// are separate events and the gap widens on a loaded machine: under
+	// `-race` with the rest of the package running, the first call here
+	// failed with "no such file or directory" for n.sock. Wait for the
+	// carrier to actually carry before asserting anything over it.
+	waitForRemoteSocket(t, remoteSock)
 
 	// A claim for a node with nothing placed on it is refused, over the
 	// real wire, as a typed error rather than an empty success.

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T13:17:53Z",
+  "generated_at": "2026-09-17T13:44:30Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -14786,6 +14786,13 @@
       "name": "internal/nodes tests",
       "sites": [
         {
+          "file": "internal/nodes/action_log_failure_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        },
+        {
           "file": "internal/nodes/action_log_test.go",
           "line": 14,
           "status": "ADD",
@@ -14795,6 +14802,13 @@
         {
           "file": "internal/nodes/dispatch_creds_test.go",
           "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        },
+        {
+          "file": "internal/nodes/dispatch_edges_test.go",
+          "line": 12,
           "status": "ADD",
           "ticket": "P1-E17-W4-S37-T2",
           "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
@@ -14814,6 +14828,20 @@
           "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
         },
         {
+          "file": "internal/nodes/dispatch_frame_verify_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        },
+        {
+          "file": "internal/nodes/dispatch_git_failure_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        },
+        {
           "file": "internal/nodes/dispatch_git_test.go",
           "line": 20,
           "status": "ADD",
@@ -14823,6 +14851,13 @@
         {
           "file": "internal/nodes/dispatch_handler_test.go",
           "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T2",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        },
+        {
+          "file": "internal/nodes/dispatch_node_verbs_test.go",
+          "line": 12,
           "status": "ADD",
           "ticket": "P1-E17-W4-S37-T2",
           "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
@@ -14999,7 +15034,7 @@
       "sites": [
         {
           "file": "internal/nodes/dispatch_handler.go",
-          "line": 36,
+          "line": 37,
           "status": "ADD",
           "ticket": "P1-E17-W4-S37-T2",
           "raw": "internal/nodes:dispatch-handler (ADD) — P1-E17-W4-S37-T2."
@@ -23224,7 +23259,7 @@
       ]
     }
   ],
-  "total_sites": 2248,
+  "total_sites": 2253,
   "unspecified_count": 67,
   "multi_status_count": 40
 }

@@ -34,6 +34,48 @@ var keychainGateAllow = map[string]string{
 	"internal/secrets/custody_windows_test.go": "//go:build windows; asserts fallback when no native backend exists",
 }
 
+// keychainGateSkipsDir names the directories this gate does not read.
+//
+// The last three are gitignored trees and therefore not part of the
+// repository this gate is about. A developer with a git worktree under
+// .claude/ would otherwise be shown offenders from a checkout of another
+// commit, whose paths cannot match the allow-list either — green in CI, red
+// on their machine (R-14.269).
+func keychainGateSkipsDir(name string) bool {
+	switch name {
+	case ".git", ".cover", "node_modules", "seeded-violations",
+		".claude", ".opencode", ".cascade":
+		return true
+	}
+	return false
+}
+
+// keychainGateOffenders returns every SelectCustody call in src that could
+// reach the operator's real credential store.
+func keychainGateOffenders(rel, src string) []string {
+	var out []string
+	lines := strings.Split(src, "\n")
+	for i, line := range lines {
+		if !strings.Contains(line, "SelectCustody(") {
+			continue
+		}
+		// Look ahead over the composite literal. A Runner that fails is
+		// what forces the file vault; without one, a host with a platform
+		// backend hands back the real store.
+		window := strings.Join(lines[i:min(i+14, len(lines))], "\n")
+		if strings.Contains(window, "Runner:") {
+			continue
+		}
+		// No Service means no platform backend is even attempted, so such a
+		// call cannot reach the real store.
+		if !strings.Contains(window, "Service:") {
+			continue
+		}
+		out = append(out, rel+":"+itoa(i+1)+" SelectCustody with a Service and no Runner")
+	}
+	return out
+}
+
 func TestNoTestReachesTheRealKeychain(t *testing.T) {
 	root := coverageModuleRoot(t)
 	var offenders []string
@@ -43,8 +85,7 @@ func TestNoTestReachesTheRealKeychain(t *testing.T) {
 			return walkErr
 		}
 		if d.IsDir() {
-			switch d.Name() {
-			case ".git", ".cover", "node_modules", "seeded-violations":
+			if keychainGateSkipsDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -60,26 +101,7 @@ func TestNoTestReachesTheRealKeychain(t *testing.T) {
 		if readErr != nil {
 			return readErr
 		}
-		lines := strings.Split(string(src), "\n")
-		for i, line := range lines {
-			if !strings.Contains(line, "SelectCustody(") {
-				continue
-			}
-			// Look ahead over the composite literal. A Runner that fails is
-			// what forces the file vault; without one, a host with a
-			// platform backend hands back the real store.
-			window := strings.Join(lines[i:min(i+14, len(lines))], "\n")
-			if strings.Contains(window, "Runner:") {
-				continue
-			}
-			// No Service means no platform backend is even attempted, so
-			// such a call cannot reach the real store.
-			if !strings.Contains(window, "Service:") {
-				continue
-			}
-			offenders = append(offenders,
-				filepath.ToSlash(rel)+":"+itoa(i+1)+" SelectCustody with a Service and no Runner")
-		}
+		offenders = append(offenders, keychainGateOffenders(filepath.ToSlash(rel), string(src))...)
 		return nil
 	})
 	if err != nil {

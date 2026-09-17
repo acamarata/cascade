@@ -157,8 +157,14 @@ func TestSeam_NoDirectModelProviderCallOutsideConductor(t *testing.T) {
 	fset := token.NewFileSet()
 	var violations []string
 	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
 			return err
+		}
+		if d.IsDir() {
+			if seamSkipsDir(d.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return nil

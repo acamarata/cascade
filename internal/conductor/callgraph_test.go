@@ -75,6 +75,43 @@ func callgraphEdgesInFile(file *ast.File, vars map[string]bool) []callgraphEdge 
 // permitted callers of a pkg/provider.ModelProvider verb. See
 // TestExecute_ProviderCallGraphCatchesSeededViolation for proof this scan
 // can fail.
+// seamSkipsDir names the directories these module-root walks do not read.
+//
+// Gitignored trees are not part of this repository, so a developer with a
+// git worktree under .claude/ must not be shown findings from a checkout of
+// another commit — green in CI, red on their machine (R-14.269). The walks
+// are also prefix-filtered further down, which makes this belt and braces
+// rather than the only thing holding.
+func seamSkipsDir(name string) bool {
+	return name != "." && strings.HasPrefix(name, ".")
+}
+
+// callgraphEdgesInPath reports every forbidden ModelProvider call in one
+// file, named by its repo-relative path.
+func callgraphEdgesInPath(fset *token.FileSet, path, rel string, allowed map[string]bool) []string {
+	if strings.Contains(rel, string(filepath.Separator)+".") || strings.Contains(rel, "testdata") {
+		return nil
+	}
+	file, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		return nil
+	}
+	alias := seamProviderAlias(file)
+	if alias == "" {
+		return nil
+	}
+	vars := seamProviderVars(file, alias)
+	inConductor := strings.HasPrefix(rel, "internal"+string(filepath.Separator)+"conductor"+string(filepath.Separator))
+	var out []string
+	for _, e := range callgraphEdgesInFile(file, vars) {
+		if inConductor && allowed[e.caller] {
+			continue
+		}
+		out = append(out, rel+": "+e.caller+" -> ModelProvider."+e.verb)
+	}
+	return out
+}
+
 func TestExecute_ProviderCallGraph(t *testing.T) {
 	root := seamModuleRoot(t)
 	fset := token.NewFileSet()
@@ -89,32 +126,20 @@ func TestExecute_ProviderCallGraph(t *testing.T) {
 	}
 	var bad []string
 	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
 			return err
+		}
+		if d.IsDir() {
+			if seamSkipsDir(d.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
 		rel, _ := filepath.Rel(root, path)
-		if strings.Contains(rel, string(filepath.Separator)+".") || strings.Contains(rel, "testdata") {
-			return nil
-		}
-		file, perr := parser.ParseFile(fset, path, nil, 0)
-		if perr != nil {
-			return nil
-		}
-		alias := seamProviderAlias(file)
-		if alias == "" {
-			return nil
-		}
-		vars := seamProviderVars(file, alias)
-		inConductor := strings.HasPrefix(rel, "internal"+string(filepath.Separator)+"conductor"+string(filepath.Separator))
-		for _, e := range callgraphEdgesInFile(file, vars) {
-			if inConductor && allowed[e.caller] {
-				continue
-			}
-			bad = append(bad, rel+": "+e.caller+" -> ModelProvider."+e.verb)
-		}
+		bad = append(bad, callgraphEdgesInPath(fset, path, rel, allowed)...)
 		return nil
 	})
 	if walkErr != nil {

@@ -1,6 +1,7 @@
 package nodes
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 
@@ -268,8 +269,16 @@ func RegisterDispatchJournalHandler(registry *rpc.Registry, deps JournalStreamDe
 }
 
 // decodeParams decodes one call's params, naming the verb in any failure.
+//
+// JSON null counts as ABSENT, not as a value. A `"params": null` frame is
+// four bytes, so a length check alone lets it through, and unmarshalling
+// null into a struct leaves the zero value untouched — the verb then runs
+// against a claim from node "" or a report for dispatch "". Each verb's own
+// validation happens to refuse those today, which is precisely why this
+// guard is worth having: it refuses at the boundary, by name, instead of
+// relying on every downstream rule to keep noticing.
 func decodeParams(params json.RawMessage, into any, method string) error {
-	if len(params) == 0 {
+	if len(params) == 0 || string(bytes.TrimSpace(params)) == "null" {
 		return cascade.Newf(cascade.KindInvalidInput, "nodes: %s requires params", method)
 	}
 	if err := json.Unmarshal(params, into); err != nil {

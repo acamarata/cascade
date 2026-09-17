@@ -233,7 +233,15 @@ func TestNextLane_SoleCallerIsRouter(t *testing.T) {
 		}
 		if d.IsDir() {
 			base := d.Name()
-			if base == ".git" || base == "vendor" || base == "node_modules" {
+			switch base {
+			case ".git", "vendor", "node_modules",
+				// Gitignored trees, and therefore not part of the
+				// repository this arch rule is about. A developer with a
+				// git worktree under .claude/ would otherwise see this
+				// gate report call sites in a checkout of another commit,
+				// which is green in CI and red on their machine
+				// (R-14.269).
+				".claude", ".opencode", ".cascade":
 				return filepath.SkipDir
 			}
 			return nil

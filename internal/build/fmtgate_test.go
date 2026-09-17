@@ -32,7 +32,14 @@ func TestGofmtClean_RealTreeGreen(t *testing.T) {
 		}
 		if d.IsDir() {
 			switch d.Name() {
-			case ".git", "node_modules", ".cover", "seeded-violations":
+			// The last three are gitignored trees and therefore not part of
+			// the repository this gate is about. A developer with a git
+			// worktree under .claude/ would otherwise be shown offenders
+			// from a checkout of another commit, whose paths cannot match
+			// the allow-list either — green in CI, red on their machine
+			// (R-14.269).
+			case ".git", "node_modules", ".cover", "seeded-violations",
+				".claude", ".opencode", ".cascade":
 				return filepath.SkipDir
 			}
 			return nil

@@ -1,7 +1,7 @@
 package nodes
 
 import (
-	"strings"
+	"reflect"
 	"testing"
 	"time"
 
@@ -69,21 +69,39 @@ func TestAScopedGrantIsBoundAndShortLived(t *testing.T) {
 }
 
 // TestAGrantNeverCarriesSecretMaterial is the assertion that makes this
-// type safe to log, journal and test: it names a vault key and never a
-// value. The check is on the RENDERED grant, not on the field list, so a
-// field added later that carries a secret fails here.
+// type safe to log and journal: it names a vault key and never a value.
+//
+// It asserts over the FIELD SET, not over a sample secret. The earlier form
+// joined five named fields and searched them for a constant that nothing
+// ever put there — it could not fail, and its own comment claimed that a
+// field added later would be caught, which was the opposite of true: a new
+// field would not have been in the join at all. There is no code path that
+// puts a secret VALUE into this struct, so the only thing worth pinning is
+// that the struct's shape has not grown one.
 func TestAGrantNeverCarriesSecretMaterial(t *testing.T) {
-	const secret = "ghp_thisisalivesecretvalue"
 	g, err := NewTokenGrant("job-1", "node-a", "github", "vault/github",
 		[]string{"read"}, credNow, time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rendered := strings.Join([]string{
-		g.JobID, g.NodeID, g.Audience, g.VaultKey, strings.Join(g.Verbs, ","),
-	}, "|")
-	if strings.Contains(rendered, secret) {
-		t.Fatal("a grant carried secret material")
+	// The bindings, and nothing else. A field outside this set is not
+	// necessarily a secret — but it has not been reviewed for whether it
+	// is one, and this grant is written to a journal.
+	bindings := map[string]bool{
+		"JobID": true, "NodeID": true, "Audience": true,
+		"Verbs": true, "VaultKey": true, "ExpiresAt": true,
+	}
+	typ := reflect.TypeOf(g)
+	for i := range typ.NumField() {
+		if name := typ.Field(i).Name; !bindings[name] {
+			t.Errorf("TokenGrant grew field %q. This struct is journalled and logged, so a field "+
+				"holding credential material would put it at rest. Add it to the reviewed set "+
+				"here once you have checked it carries a reference and not a value.", name)
+		}
+	}
+	if len(bindings) > typ.NumField() {
+		t.Errorf("%d reviewed field(s) for %d actual: a binding was REMOVED, which makes the "+
+			"grant broader, not narrower", len(bindings), typ.NumField())
 	}
 	if g.VaultKey != "vault/github" {
 		t.Errorf("vault key = %q, want the reference the value is fetched by", g.VaultKey)

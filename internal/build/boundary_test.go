@@ -133,7 +133,10 @@ func scanBoundary(t *testing.T, roots ...string) []boundaryViolation {
 				return err
 			}
 			if d.IsDir() {
-				if d.Name() == "testdata" {
+				// "testdata", and every gitignored dot-directory: a git
+				// worktree under .claude/ is a checkout of another commit
+				// and not part of this repository (R-14.269).
+				if n := d.Name(); n == "testdata" || (n != "." && strings.HasPrefix(n, ".")) {
 					return filepath.SkipDir
 				}
 				return nil
