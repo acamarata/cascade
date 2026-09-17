@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T03:01:23Z",
+  "generated_at": "2026-09-17T03:26:59Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3136,6 +3136,43 @@
           "line": 15,
           "status": "ADD",
           "raw": "cmd/cascade elevation-keystore/ADD — P1-W3-01 (W-3 gate, Art.9)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade init",
+      "sites": [
+        {
+          "file": "cmd/cascade/init_cmd.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T6",
+          "raw": "cmd/cascade init (ADD) — P1-E16-W4-S35-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade init adapters",
+      "sites": [
+        {
+          "file": "cmd/cascade/init_adapters.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T6",
+          "raw": "cmd/cascade init adapters (ADD) — P1-E16-W4-S35-T6."
+        },
+        {
+          "file": "cmd/cascade/init_platform.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T6",
+          "raw": "cmd/cascade init adapters (ADD) — P1-E16-W4-S35-T6."
         }
       ],
       "statuses": [
@@ -16907,6 +16944,126 @@
       ]
     },
     {
+      "name": "internal/runtime/init prompters",
+      "sites": [
+        {
+          "file": "internal/runtime/init/prompt.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T6",
+          "raw": "internal/runtime/init prompters (ADD) — P1-E16-W4-S35-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/runtime/init seams",
+      "sites": [
+        {
+          "file": "internal/runtime/init/deps.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T6",
+          "raw": "internal/runtime/init seams (ADD) — P1-E16-W4-S35-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/runtime/init state journal",
+      "sites": [
+        {
+          "file": "internal/runtime/init/state.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T6",
+          "raw": "internal/runtime/init state journal (ADD) — P1-E16-W4-S35-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/runtime/init steps 1-3",
+      "sites": [
+        {
+          "file": "internal/runtime/init/steps_preflight.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T6",
+          "raw": "internal/runtime/init steps 1-3 (ADD) — P1-E16-W4-S35-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/runtime/init steps 4-5",
+      "sites": [
+        {
+          "file": "internal/runtime/init/steps_catalog.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T6",
+          "raw": "internal/runtime/init steps 4-5 (ADD) — P1-E16-W4-S35-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/runtime/init steps 6-7",
+      "sites": [
+        {
+          "file": "internal/runtime/init/steps_harness.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T6",
+          "raw": "internal/runtime/init steps 6-7 (ADD) — P1-E16-W4-S35-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/runtime/init steps 8-9",
+      "sites": [
+        {
+          "file": "internal/runtime/init/steps_daemon.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T6",
+          "raw": "internal/runtime/init steps 8-9 (ADD) — P1-E16-W4-S35-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/runtime/init wizard",
+      "sites": [
+        {
+          "file": "internal/runtime/init/wizard.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T6",
+          "raw": "internal/runtime/init wizard (ADD) — P1-E16-W4-S35-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/secrets Broker",
       "sites": [
         {
@@ -22714,7 +22871,7 @@
       ]
     }
   ],
-  "total_sites": 2206,
+  "total_sites": 2217,
   "unspecified_count": 66,
   "multi_status_count": 40
 }
