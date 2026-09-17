@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T17:26:04Z",
+  "generated_at": "2026-09-17T17:29:08Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3411,6 +3411,13 @@
     {
       "name": "cmd/cascade test-support",
       "sites": [
+        {
+          "file": "cmd/cascade/init_db_path_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T15",
+          "raw": "cmd/cascade test-support (ADD, P1-E16-W4-S35-T15)."
+        },
         {
           "file": "cmd/cascade/main_test.go",
           "line": 29,
@@ -24257,7 +24264,7 @@
       ]
     }
   ],
-  "total_sites": 2331,
+  "total_sites": 2332,
   "unspecified_count": 69,
   "multi_status_count": 41
 }

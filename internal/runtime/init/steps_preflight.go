@@ -35,7 +35,15 @@ func (w *Wizard) stepPreflight(ctx context.Context, state *State) error {
 	if _, err := os.Stat(w.deps.Home); err == nil {
 		w.say("   %s already exists; resuming rather than starting over", w.deps.Home)
 	} else {
+		// PLANNED, not merely said. Creating the cascade home is the
+		// first and largest change a run makes, and --check answers
+		// "would anything change?" from the plan. It was said only, so
+		// on a platform where the daemon step is skipped — Windows,
+		// where DaemonSupported is false — a virgin machine's --check
+		// had an EMPTY plan and exited 0: "nothing to do" about a
+		// machine with no cascade home at all (R-14.280).
 		w.say("   %s does not exist yet", w.deps.Home)
+		w.plan("create %s", w.deps.Home)
 	}
 	if err := w.deps.Storage.Probe(ctx, w.deps.Home, w.writing()); err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err,
@@ -119,9 +127,10 @@ func (w *Wizard) stepStorage(_ context.Context, state *State) error {
 		// can relocate it; a run with nobody there has nothing to
 		// decide, and asking would turn a computed path into a question
 		// CASCADE_NO_INPUT then has to refuse. A value the wizard
-		// computed is not an answer it assumed on somebody's behalf.
+		// computed is not an answer it assumed on somebody's guess.
 		state.StoragePath = def
 		w.say("   sqlite: %s", def)
+		w.planDatabase(def)
 		return nil
 	}
 	path, err := w.deps.Prompt.Line("Where should the local database live?", def)
@@ -133,7 +142,23 @@ func (w *Wizard) stepStorage(_ context.Context, state *State) error {
 	}
 	state.StoragePath = path
 	w.say("   sqlite: %s", path)
+	w.planDatabase(path)
 	return nil
+}
+
+// planDatabase records that a run would create the local database, when
+// it is not there yet.
+//
+// Said AND planned, for the same reason the cascade home is: --check
+// answers "would anything change?" from the plan, and creating this file
+// is a change. A database that already exists plans nothing, so a
+// converged machine's --check stays silent and exits 0 — which is the
+// whole point of the flag.
+func (w *Wizard) planDatabase(path string) {
+	if _, err := os.Stat(path); err == nil {
+		return
+	}
+	w.plan("create the local database at %s", path)
 }
 
 // serverStoragePrompts are the three references the server profile needs,
