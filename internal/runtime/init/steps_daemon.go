@@ -125,7 +125,15 @@ func (w *Wizard) enrollHelper(ctx context.Context, state *State) error {
 func (w *Wizard) stepDoctor(ctx context.Context, state *State) error {
 	w.say("== doctor")
 	if !w.writing() {
-		w.plan("run `cascade doctor --first-run`")
+		// SAID, NOT PLANNED. --check reports what a run would CHANGE, and
+		// exits 3 when there is something. A health check changes
+		// nothing, so planning it made --check exit 3 on every machine
+		// including a fully converged one — the flag's one
+		// differentiating behaviour, and it never happened. Found by the
+		// W-4 hardening gate against the shipped artifact (R-14.277);
+		// every test of --check ran against a virgin home, where the
+		// exit code is 3 for real reasons and this one hid behind them.
+		w.say("   would run `cascade doctor --first-run` (a health check; it changes nothing)")
 		w.summary(*state)
 		return nil
 	}

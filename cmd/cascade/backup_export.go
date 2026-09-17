@@ -94,9 +94,9 @@ func exportLatestBackup(cmd *cobra.Command, deps backupDeps, rt *backupRuntime, 
 	if err := deps.WriteFile(flags.outPath, artifact, 0o600); err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "backup: write portable export")
 	}
-	return backupOutputWriter(cmd).Result(map[string]any{
-		"snapshot": latest.ID, "target": record.Name, "output": flags.outPath,
-		"vault_included": flags.includeVault,
+	return backupOutputWriter(cmd).Result(backupExportResult{
+		Snapshot: latest.ID, Target: record.Name, Output: flags.outPath,
+		VaultIncluded: flags.includeVault,
 	})
 }
 

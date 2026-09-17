@@ -79,7 +79,7 @@ func importPortableBackup(cmd *cobra.Command, deps backupDeps, record backup.Tar
 	if err != nil {
 		return err
 	}
-	return backupOutputWriter(cmd).Result(report)
+	return backupOutputWriter(cmd).Result(importReportView{report})
 }
 
 func backupImportOptions(deps backupDeps, target backup.Target, passphraseFile string, proof backup.ElevationProof) (backup.ImportOptions, error) {

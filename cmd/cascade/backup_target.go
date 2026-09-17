@@ -119,7 +119,7 @@ func newBackupTargetListCmd(deps backupDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return backupOutputWriter(cmd).Result(map[string]any{"targets": views})
+			return backupOutputWriter(cmd).Result(backupTargetListResult{Targets: views})
 		},
 	}
 }
@@ -171,7 +171,7 @@ func newBackupTargetRemoveCmd(deps backupDeps) *cobra.Command {
 			if err := backup.DeleteTarget(cmd.Context(), rt.Store, backupRegistryNamespace, args[0]); err != nil {
 				return err
 			}
-			return backupOutputWriter(cmd).Result(map[string]any{"name": args[0], "removed": true})
+			return backupOutputWriter(cmd).Result(backupTargetRemovedResult{Name: args[0], Removed: true})
 		},
 	}
 }

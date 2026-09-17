@@ -182,7 +182,13 @@ func TestResolveKeepServerIsNotElevated(t *testing.T) {
 // gated, and that the verb the gate sees names what is being discarded.
 func TestResolveKeepLocalGoesThroughTheGate(t *testing.T) {
 	gate := &countingGate{}
-	out, err := runSyncCmd(t, newSyncConflictsResolveCmd(testSyncDeps(gate)), "cfg-3", "--keep", "local")
+	// A named platform, because the tier-2 refusal is a DIFFERENT rule
+	// and fires first: left to this build's own GOOS these two tests
+	// asserted the elevation gate everywhere except the one lane where
+	// they would have caught it moving.
+	deps := testSyncDeps(gate)
+	deps.GOOS = "linux"
+	out, err := runSyncCmd(t, newSyncConflictsResolveCmd(deps), "cfg-3", "--keep", "local")
 	if err != nil {
 		t.Fatalf("resolve --keep local: %v", err)
 	}
@@ -197,7 +203,9 @@ func TestResolveKeepLocalGoesThroughTheGate(t *testing.T) {
 // TestResolveKeepLocalWithNoGateIsRefused is the rule that a machine
 // which cannot check must not be the machine that allows it.
 func TestResolveKeepLocalWithNoGateIsRefused(t *testing.T) {
-	_, err := runSyncCmd(t, newSyncConflictsResolveCmd(testSyncDeps(nil)), "cfg-3", "--keep", "local")
+	deps := testSyncDeps(nil)
+	deps.GOOS = "linux"
+	_, err := runSyncCmd(t, newSyncConflictsResolveCmd(deps), "cfg-3", "--keep", "local")
 	if !isCLIKind(err, cascade.KindElevationRequired) {
 		t.Fatalf("resolve --keep local with no gate = %v, want KindElevationRequired", err)
 	}

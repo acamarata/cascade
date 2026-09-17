@@ -250,7 +250,7 @@ func mcpOutputWriter(cmd *cobra.Command) *output.Writer {
 // The wire surface deliberately says more than tools/list does: an
 // operator at a terminal is not the untrusted model the registry withholds
 // names from.
-func mcpToolsListResult(deps mcpDeps) map[string]any {
+func mcpToolsListResult(deps mcpDeps) mcpToolsView {
 	wiring := buildMCPToolWiring(context.Background(), deps.Paths, runtime.SystemClock{})
 	defer wiring.Close()
 
@@ -259,10 +259,10 @@ func mcpToolsListResult(deps mcpDeps) map[string]any {
 	for _, d := range coretools.Deferrals() {
 		deferred = append(deferred, map[string]string{"v1_name": d.V1Name, "ticket": d.Ticket, "reason": d.Reason})
 	}
-	return map[string]any{
-		"tools":      registry.List(),
-		"withheld":   registry.FilteredOut(),
-		"unservable": coretools.Unservable(wiring.Methods),
-		"deferred":   deferred,
+	return mcpToolsView{
+		Tools:      registry.List(),
+		Withheld:   registry.FilteredOut(),
+		Unservable: coretools.Unservable(wiring.Methods),
+		Deferred:   deferred,
 	}
 }

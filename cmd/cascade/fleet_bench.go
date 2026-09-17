@@ -85,7 +85,7 @@ func newFleetBenchCmd(deps fleetSessionsDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return fleetSessionsOutputWriter(cmd).Result(result)
+			return fleetSessionsOutputWriter(cmd).Result(benchResultView{result})
 		},
 	}
 	cmd.Flags().IntVar(&n, "n", 1, "probe count")

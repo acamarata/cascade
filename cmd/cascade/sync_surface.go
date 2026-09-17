@@ -17,16 +17,33 @@ import (
 // syncSurface is the CLI's view of the sync.* methods.
 type syncSurface struct{ deps syncpkg.Deps }
 
-// surface builds the surface one verb call uses, opening the engine at
-// that moment rather than when the command tree was described.
-func (d syncDeps) surface() syncSurface {
+// withSurface opens the surface one verb call uses, runs fn against it,
+// and CLOSES whatever it opened.
+//
+// The close is the point. Opening the engine per call is right — the
+// command tree is described on every invocation and must touch nothing —
+// but the store it opens holds a file handle, and nothing was giving it
+// back. A one-shot CLI process gets away with that because exiting closes
+// it; a test harness does not, and neither does any longer-lived host.
+// The W-4 hardening gate found it on the Windows lane, where an unclosed
+// sqlite file cannot be deleted at all and three tests failed cleaning up
+// after themselves (R-14.277).
+//
+// A store supplied directly (Engine set, as a test does) is NOT closed
+// here: this function closes what it opened, and closing a collaborator
+// somebody else owns is how a shared handle disappears underneath them.
+func (d syncDeps) withSurface(fn func(syncSurface) error) error {
 	engine := d.Engine
 	if engine == nil && d.OpenEngine != nil {
-		engine = d.OpenEngine()
+		opened, closer := d.OpenEngine()
+		engine = opened
+		if closer != nil {
+			defer func() { _ = closer.Close() }()
+		}
 	}
-	return syncSurface{deps: syncpkg.Deps{
-		Engine: engine, PeerTier: d.PeerTier, Gate: d.Gate, Run: d.Run,
-	}}
+	return fn(syncSurface{deps: syncpkg.Deps{
+		Engine: engine, PeerTier: d.PeerTier, Gate: d.Gate, Run: d.Run, Config: d.Config,
+	}})
 }
 
 // Status answers sync.status.

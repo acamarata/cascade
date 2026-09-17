@@ -20,17 +20,67 @@ package transport_test
 
 import (
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
+// sweepStaleTransportHomes removes cascade-transport-home* dirs left behind
+// by previous runs of this test binary that were killed before reaching the
+// os.RemoveAll below (test timeout, interrupted CI job, unwound panic) --
+// see the matching helper and comment in cmd/cascade/main_test.go, which
+// this package's TestMain mirrors.
+func sweepStaleTransportHomes() {
+	entries, err := os.ReadDir(os.TempDir())
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), "cascade-transport-home") {
+			continue
+		}
+		_ = os.RemoveAll(filepath.Join(os.TempDir(), e.Name()))
+	}
+}
+
 func TestMain(m *testing.M) {
+	sweepStaleTransportHomes()
+
 	home, err := os.MkdirTemp("", "cascade-transport-home")
 	if err != nil {
 		panic("transport tests: could not create a throwaway HOME: " + err.Error())
 	}
+
+	// Pin GOPATH/GOMODCACHE to their real, persistent values before
+	// redirecting HOME -- see cmd/cascade/main_test.go for why: without
+	// this, any `go` subprocess spawned during the suite falls back to
+	// Go's HOME-relative default and re-downloads the whole module cache
+	// into this throwaway dir.
+	goCacheEnv := map[string]string{"GOPATH": "", "GOMODCACHE": ""}
+	for key := range goCacheEnv {
+		if v := os.Getenv(key); v != "" {
+			goCacheEnv[key] = v
+			continue
+		}
+		out, err := exec.Command("go", "env", key).Output()
+		if err == nil {
+			goCacheEnv[key] = strings.TrimSpace(string(out))
+		}
+	}
+
 	if err := os.Setenv("HOME", home); err != nil {
 		panic("transport tests: could not redirect HOME: " + err.Error())
 	}
+	for key, val := range goCacheEnv {
+		if val == "" {
+			continue
+		}
+		if err := os.Setenv(key, val); err != nil {
+			panic("transport tests: could not pin " + key + ": " + err.Error())
+		}
+	}
+
 	code := m.Run()
 	_ = os.RemoveAll(home)
 	os.Exit(code)

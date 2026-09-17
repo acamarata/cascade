@@ -44,8 +44,15 @@ func TestBackupCLIKeyExportImportRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("key export: %v", err)
 	}
-	if !strings.Contains(stdout, "manifest_signing_pubkey") {
-		t.Fatalf("key export result did not report a manifest_signing_pubkey: %s", stdout)
+	// The HUMAN rendering, which is what this verb's operator reads. It
+	// used to be a Go map dump, so the assertion matched the JSON field
+	// name by accident; now it names the fact the operator needs — the
+	// pubkey their restoring machine will verify manifests against.
+	if !strings.Contains(stdout, "manifest signing pubkey") {
+		t.Fatalf("key export result did not report the manifest signing pubkey: %s", stdout)
+	}
+	if !strings.Contains(stdout, "somewhere OTHER than your backup target") {
+		t.Fatalf("key export dropped the escrow guidance, which is the point of the verb: %s", stdout)
 	}
 	artifact, err := os.ReadFile(out)
 	if err != nil {

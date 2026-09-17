@@ -33,10 +33,20 @@ stderr 'is not a side to keep'
 # hang and never an assumption: a machine that cannot ask must be told.
 # This refusal lands before the record is even looked up, which is why it
 # is visible on an empty journal.
+#
+# Not on Windows: there the tier-2 platform refusal fires FIRST, and
+# asserting the non-interactive rule where a different rule applies would
+# be asserting the wrong thing rather than finding a broken one. The
+# Windows refusal has its own assertion below, and its own Go test on that
+# lane (sync_windows_test.go).
 env CASCADE_NO_INPUT=1
-! exec cascade sync conflicts resolve cfg-3 --keep local
-stderr 'requires --yes'
-stderr 'no prompt was attempted'
+[!windows] ! exec cascade sync conflicts resolve cfg-3 --keep local
+[!windows] stderr 'requires --yes'
+[!windows] stderr 'no prompt was attempted'
+
+# On Windows the same command is refused for being elevated at all.
+[windows] ! exec cascade sync conflicts resolve cfg-3 --keep local
+[windows] stderr 'refused on Windows'
 
 # The harmless side is NOT gated by the same rule: a non-interactive
 # machine can still accept what the merge already decided.

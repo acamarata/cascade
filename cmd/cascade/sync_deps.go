@@ -14,6 +14,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -38,8 +39,10 @@ import (
 // command had written nothing.
 func productionSyncDeps() syncDeps {
 	return syncDeps{
-		OpenEngine: func() *syncpkg.Engine {
-			return syncpkg.NewEngine(openSyncStore(), runtime.NewSystemClock(), nil)
+		OpenEngine: func() (*syncpkg.Engine, io.Closer) {
+			store := openSyncStore()
+			closer, _ := store.(io.Closer)
+			return syncpkg.NewEngine(store, runtime.NewSystemClock(), nil), closer
 		},
 		PeerTier: nodes.TierController,
 		Getenv:   os.Getenv,

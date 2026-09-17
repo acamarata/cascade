@@ -15,6 +15,7 @@ package main
 
 import (
 	"context"
+	"io"
 	goruntime "runtime"
 	"strings"
 
@@ -37,7 +38,13 @@ type syncDeps struct {
 	// because building the real engine opens a database, and the command
 	// tree is CONSTRUCTED for every invocation of this binary — including
 	// `--help` and `cascade version`. Nil is valid when Engine is set.
-	OpenEngine func() *syncpkg.Engine
+	//
+	// It returns the CLOSER alongside, because what it opens has to be
+	// given back: see withSurface.
+	OpenEngine func() (*syncpkg.Engine, io.Closer)
+	// Config is the operator's `[sync]` section, which may narrow a
+	// domain's class. The zero value means no overrides.
+	Config syncpkg.Config
 	// PeerTier is the trust tier eligibility is answered for.
 	PeerTier nodes.Tier
 	// Gate authorizes an elevated resolution. Nil refuses rather than
@@ -88,11 +95,13 @@ func newSyncStatusCmd(deps syncDeps) *cobra.Command {
 		Args:        usageArgs(cobra.NoArgs),
 		Annotations: map[string]string{"local": "true"},
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			res, err := deps.surface().Status(cmd.Context())
-			if err != nil {
-				return err
-			}
-			return vaultOutputWriter(cmd).Result(syncStatusView{res})
+			return deps.withSurface(func(s syncSurface) error {
+				res, err := s.Status(cmd.Context())
+				if err != nil {
+					return err
+				}
+				return vaultOutputWriter(cmd).Result(syncStatusView{res})
+			})
 		},
 	}
 }
@@ -111,11 +120,13 @@ func newSyncRunCmd(deps syncDeps) *cobra.Command {
 		Args:        usageArgs(cobra.NoArgs),
 		Annotations: map[string]string{"local": "true"},
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			res, err := deps.surface().Run(cmd.Context(), domain)
-			if err != nil {
-				return err
-			}
-			return vaultOutputWriter(cmd).Result(syncRunView{res})
+			return deps.withSurface(func(s syncSurface) error {
+				res, err := s.Run(cmd.Context(), domain)
+				if err != nil {
+					return err
+				}
+				return vaultOutputWriter(cmd).Result(syncRunView{res})
+			})
 		},
 	}
 	cmd.Flags().StringVar(&domain, "domain", "", "sync only this domain (default: every permitted domain)")
@@ -141,11 +152,13 @@ func newSyncConflictsListCmd(deps syncDeps) *cobra.Command {
 		Args:        usageArgs(cobra.NoArgs),
 		Annotations: map[string]string{"local": "true"},
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			res, err := deps.surface().Conflicts(cmd.Context())
-			if err != nil {
-				return err
-			}
-			return vaultOutputWriter(cmd).Result(syncConflictsView{res})
+			return deps.withSurface(func(s syncSurface) error {
+				res, err := s.Conflicts(cmd.Context())
+				if err != nil {
+					return err
+				}
+				return vaultOutputWriter(cmd).Result(syncConflictsView{res})
+			})
 		},
 	}
 }
@@ -170,11 +183,13 @@ func newSyncConflictsResolveCmd(deps syncDeps) *cobra.Command {
 			if err := deps.guardElevatedResolve(keep, yes); err != nil {
 				return err
 			}
-			res, err := deps.surface().Resolve(cmd.Context(), args[0], keep)
-			if err != nil {
-				return err
-			}
-			return vaultOutputWriter(cmd).Result(syncResolveView{res})
+			return deps.withSurface(func(s syncSurface) error {
+				res, err := s.Resolve(cmd.Context(), args[0], keep)
+				if err != nil {
+					return err
+				}
+				return vaultOutputWriter(cmd).Result(syncResolveView{res})
+			})
 		},
 	}
 	cmd.Flags().StringVar(&keep, "keep", "",

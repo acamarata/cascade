@@ -111,8 +111,8 @@ func exportRecoveryKey(cmd *cobra.Command, deps backupDeps, rt *backupRuntime, f
 	guidance := "Recovery key exported and escrowed. Store this file somewhere OTHER than your backup " +
 		"target -- it is the only way to decrypt your backups if the vault is lost. Run " +
 		"`cascade backup key import " + flags.outPath + "` on a restoring machine to load it back."
-	return backupOutputWriter(cmd).Result(map[string]any{
-		"output": flags.outPath, "manifest_signing_pubkey": encodeBackupPubKey(signingPub), "guidance": guidance,
+	return backupOutputWriter(cmd).Result(backupKeyExportResult{
+		Output: flags.outPath, ManifestSigningPubKey: encodeBackupPubKey(signingPub), Guidance: guidance,
 	})
 }
 
@@ -164,7 +164,7 @@ func runBackupKeyImport(cmd *cobra.Command, deps backupDeps, flags backupKeyImpo
 	if err := (backupVaultStoreAdapter{broker: broker}).Set(cmd.Context(), backup.AgeIdentityVaultName, []byte(identity)); err != nil {
 		return err
 	}
-	return backupOutputWriter(cmd).Result(map[string]any{"input": path, "loaded": true})
+	return backupOutputWriter(cmd).Result(backupKeyImportResult{Input: path, Loaded: true})
 }
 
 // resolveKeyPassphrase implements §5.8 parity: --passphrase-env is the

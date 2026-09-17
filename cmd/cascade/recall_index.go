@@ -56,7 +56,7 @@ func newRecallIndexRebuildCmd(deps recallDeps) *cobra.Command {
 			if err := recallCall(cmd, deps, daemon.RecallIndexRebuildMethod, nil, &result); err != nil {
 				return err
 			}
-			return recallWriter(cmd).Result(result)
+			return recallWriter(cmd).Result(rebuildResultView{result})
 		},
 	}
 }
@@ -75,7 +75,7 @@ func newRecallIndexVerifyCmd(deps recallDeps) *cobra.Command {
 			if err := recallCall(cmd, deps, daemon.RecallIndexVerifyMethod, nil, &result); err != nil {
 				return err
 			}
-			return recallWriter(cmd).Result(result)
+			return recallWriter(cmd).Result(verifyReportView{result})
 		},
 	}
 }
@@ -94,7 +94,7 @@ func newRecallIndexMigrateCmd(deps recallDeps) *cobra.Command {
 			if err := recallCall(cmd, deps, daemon.RecallIndexMigrateMethod, nil, &result); err != nil {
 				return err
 			}
-			return recallWriter(cmd).Result(result)
+			return recallWriter(cmd).Result(migrateResultView{result})
 		},
 	}
 }
@@ -113,7 +113,7 @@ func newRecallIndexUpdateCmd(deps recallDeps) *cobra.Command {
 			if err := recallCall(cmd, deps, daemon.RecallIndexUpdateMethod, nil, &result); err != nil {
 				return err
 			}
-			return recallWriter(cmd).Result(result)
+			return recallWriter(cmd).Result(updateResultView{result})
 		},
 	}
 }

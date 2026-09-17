@@ -46,7 +46,7 @@ func newDaemonInstallCmd(deps daemonDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return outputWriter(cmd).Result(report)
+			return outputWriter(cmd).Result(serviceDeltaView{report})
 		},
 	}
 }
@@ -68,7 +68,7 @@ func newDaemonUninstallCmd(deps daemonDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return outputWriter(cmd).Result(report)
+			return outputWriter(cmd).Result(serviceDeltaView{report})
 		},
 	}
 }

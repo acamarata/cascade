@@ -63,7 +63,7 @@ func runBackupVerify(cmd *cobra.Command, deps backupDeps, targetName string) err
 	if err != nil {
 		return err
 	}
-	return backupOutputWriter(cmd).Result(report)
+	return backupOutputWriter(cmd).Result(verificationReportView{report})
 }
 
 // backupVerifyRunner adapts deps into the backup.VerifyRunFunc the

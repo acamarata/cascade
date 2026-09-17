@@ -30,6 +30,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -105,9 +106,20 @@ func runScript(t *testing.T, script string) {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
+		// A platform condition, spelled the way the real runner spells it:
+		// `[windows] …` runs only there, `[!windows] …` runs everywhere
+		// else. Needed because some refusals are platform rules — the
+		// Windows tier-2 refusal fires BEFORE the non-interactive one, so
+		// a script asserting the second would be asserting the wrong rule
+		// on that lane rather than a broken one.
+		rest, skip := scriptConditionSkips(line)
+		if skip {
+			continue
+		}
+		line = rest
 		negated := false
-		if rest, ok := strings.CutPrefix(line, "! "); ok {
-			negated, line = true, strings.TrimSpace(rest)
+		if trimmed, ok := strings.CutPrefix(line, "! "); ok {
+			negated, line = true, strings.TrimSpace(trimmed)
 		}
 		verb, rest, _ := strings.Cut(line, " ")
 		rest = strings.TrimSpace(rest)
@@ -125,6 +137,37 @@ func runScript(t *testing.T, script string) {
 				"(env, exec, stdout, stderr); a silently-ignored line asserts nothing", i+1, verb)
 		}
 	}
+}
+
+// scriptConditionSkips strips a leading `[cond]` and reports whether this
+// platform should skip the line.
+//
+// Only GOOS conditions are implemented, and an UNKNOWN condition skips
+// the line while the runner keeps going — no: it does not. An unknown
+// condition is a directive this runner does not understand, and the rule
+// for those is the same as everywhere else here, so it is left on the
+// line and the directive switch rejects it by name. A condition that
+// silently skipped what it did not understand would turn a typo into a
+// test that asserts nothing.
+func scriptConditionSkips(line string) (rest string, skip bool) {
+	if !strings.HasPrefix(line, "[") {
+		return line, false
+	}
+	end := strings.Index(line, "]")
+	if end < 0 {
+		return line, false
+	}
+	cond := line[1:end]
+	rest = strings.TrimSpace(line[end+1:])
+	negated := strings.HasPrefix(cond, "!")
+	cond = strings.TrimPrefix(cond, "!")
+	if cond != "windows" && cond != "darwin" && cond != "linux" {
+		// Not a GOOS: leave the bracket on so the directive switch
+		// refuses the line rather than skipping it quietly.
+		return line, false
+	}
+	matches := goruntime.GOOS == cond
+	return rest, matches == negated
 }
 
 // scriptEnv applies one `env KEY=VALUE` line.

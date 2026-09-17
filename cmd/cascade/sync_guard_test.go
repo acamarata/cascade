@@ -176,9 +176,20 @@ func TestProductionSyncDepsWiresWhatItClaims(t *testing.T) {
 		t.Fatalf("building the sync deps created %v in a clean home (err=%v)", entries, err)
 	}
 
-	engine := deps.OpenEngine()
+	// Opened AND CLOSED: the opener hands back the closer precisely so a
+	// caller can give the file handle back, and a test that leaked one
+	// would be asserting the behaviour this ticket fixed while
+	// reproducing the bug (Windows cannot delete an open sqlite file, so
+	// the leak surfaced there as a failed TempDir cleanup).
+	engine, closer := deps.OpenEngine()
+	if closer != nil {
+		defer func() { _ = closer.Close() }()
+	}
 	if engine == nil || engine.Conflicts() == nil {
 		t.Error("the opened engine has no conflict journal")
+	}
+	if closer == nil {
+		t.Error("the production opener returned no closer; whatever it opened cannot be given back")
 	}
 	if deps.PeerTier == "" {
 		t.Error("production wired no peer tier; status could not say which question it answered")

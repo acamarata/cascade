@@ -88,5 +88,5 @@ func restoreLatestBackup(cmd *cobra.Command, deps backupDeps, rt *backupRuntime,
 	if err != nil {
 		return err
 	}
-	return backupOutputWriter(cmd).Result(report)
+	return backupOutputWriter(cmd).Result(restoreReportView{report})
 }

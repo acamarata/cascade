@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T16:02:47Z",
+  "generated_at": "2026-09-17T16:31:54Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3320,6 +3320,36 @@
       ]
     },
     {
+      "name": "cmd/cascade report views",
+      "sites": [
+        {
+          "file": "cmd/cascade/report_views.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T7",
+          "raw": "cmd/cascade report views (ADD) — P1-E19-W4-S42-T7."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade result-stringer gate",
+      "sites": [
+        {
+          "file": "cmd/cascade/result_stringer_test.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T7",
+          "raw": "cmd/cascade result-stringer gate (ADD) — P1-E19-W4-S42-T7."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade root mounts",
       "sites": [
         {
@@ -3470,6 +3500,21 @@
       "statuses": [
         "ADD",
         "CHANGE"
+      ]
+    },
+    {
+      "name": "cmd/cascade/backup views",
+      "sites": [
+        {
+          "file": "cmd/cascade/backup_views.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T7",
+          "raw": "cmd/cascade/backup views (ADD) — P1-E19-W4-S42-T7."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -4495,6 +4540,21 @@
       ]
     },
     {
+      "name": "cmd/cascade/run view",
+      "sites": [
+        {
+          "file": "cmd/cascade/run_views.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T7",
+          "raw": "cmd/cascade/run view (ADD) — P1-E19-W4-S42-T7."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade/run/TEST",
       "sites": [
         {
@@ -4599,6 +4659,21 @@
       ],
       "statuses": [
         "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/vault views",
+      "sites": [
+        {
+          "file": "cmd/cascade/vault_views.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T7",
+          "raw": "cmd/cascade/vault views (ADD) — P1-E19-W4-S42-T7."
+        }
+      ],
+      "statuses": [
         "ADD"
       ]
     },
@@ -23650,6 +23725,21 @@
       ]
     },
     {
+      "name": "runtime/init --check clean verdict",
+      "sites": [
+        {
+          "file": "internal/runtime/init/check_clean_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T7",
+          "raw": "runtime/init --check clean verdict (ADD tests) — P1-E19-W4-S42-T7."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "runtime/lockfile",
       "sites": [
         {
@@ -24130,7 +24220,7 @@
       ]
     }
   ],
-  "total_sites": 2322,
+  "total_sites": 2328,
   "unspecified_count": 69,
   "multi_status_count": 41
 }
