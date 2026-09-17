@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T02:15:49Z",
+  "generated_at": "2026-09-17T02:46:50Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3273,6 +3273,21 @@
           "status": "ADD",
           "ticket": "T-8",
           "raw": "cmd/cascade/config (ADD, placeholder per T-8 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/context-harness",
+      "sites": [
+        {
+          "file": "cmd/cascade/context_harness_cmd.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T3",
+          "raw": "cmd/cascade/context-harness (ADD) — P1-E16-W4-S35-T3."
         }
       ],
       "statuses": [
@@ -12305,6 +12320,73 @@
       ]
     },
     {
+      "name": "internal/context harness config parse",
+      "sites": [
+        {
+          "file": "internal/context/harness_config.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T3",
+          "raw": "internal/context harness config parse (ADD) — P1-E16-W4-S35-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/context harness detection",
+      "sites": [
+        {
+          "file": "internal/context/harness.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T3",
+          "raw": "internal/context harness detection (ADD) — P1-E16-W4-S35-T3."
+        },
+        {
+          "file": "internal/context/harness_paths.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T3",
+          "raw": "internal/context harness detection (ADD) — P1-E16-W4-S35-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/context harness doctor check",
+      "sites": [
+        {
+          "file": "internal/context/harness_doctor.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T3",
+          "raw": "internal/context harness doctor check (ADD) — P1-E16-W4-S35-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/context harness drift",
+      "sites": [
+        {
+          "file": "internal/context/harness_drift.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T3",
+          "raw": "internal/context harness drift (ADD) — P1-E16-W4-S35-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/context/hydration",
       "sites": [
         {
@@ -12397,6 +12479,13 @@
           "line": 42,
           "status": "ADD",
           "raw": "internal/daemon (ADD, context.slice + context.show registration,"
+        },
+        {
+          "file": "internal/daemon/context_harness.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T3",
+          "raw": "internal/daemon (ADD, context.harness_list/sync) — P1-E16-W4-S35-T3."
         },
         {
           "file": "internal/daemon/context_hydration.go",
@@ -22576,7 +22665,7 @@
       ]
     }
   ],
-  "total_sites": 2194,
+  "total_sites": 2201,
   "unspecified_count": 66,
   "multi_status_count": 40
 }
