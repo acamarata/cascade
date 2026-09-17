@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T02:46:50Z",
+  "generated_at": "2026-09-17T03:01:23Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -12320,6 +12320,35 @@
       ]
     },
     {
+      "name": "internal/context cross-harness conformance",
+      "sites": [
+        {
+          "file": "internal/context/cross_harness_golden_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T4",
+          "raw": "internal/context cross-harness conformance (ADD) — P1-E16-W4-S35-T4."
+        },
+        {
+          "file": "internal/context/cross_harness_lifecycle_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T4",
+          "raw": "internal/context cross-harness conformance (ADD) — P1-E16-W4-S35-T4."
+        },
+        {
+          "file": "internal/context/cross_harness_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T4",
+          "raw": "internal/context cross-harness conformance (ADD) — P1-E16-W4-S35-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/context harness config parse",
       "sites": [
         {
@@ -15135,6 +15164,26 @@
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T1",
           "raw": "internal/plugins cascade-claude wiring tests (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins cross-harness adapter conformance",
+      "sites": [
+        {
+          "file": "internal/plugins/cross_harness_golden_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal/plugins cross-harness adapter conformance (ADD) —"
+        },
+        {
+          "file": "internal/plugins/cross_harness_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal/plugins cross-harness adapter conformance (ADD) —"
         }
       ],
       "statuses": [
@@ -22665,7 +22714,7 @@
       ]
     }
   ],
-  "total_sites": 2201,
+  "total_sites": 2206,
   "unspecified_count": 66,
   "multi_status_count": 40
 }
