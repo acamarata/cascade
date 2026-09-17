@@ -100,6 +100,10 @@ func newContextCmd(deps contextScopeDeps) *cobra.Command {
 	// context_cmd.go under the 300-line cap — see that file's own doc
 	// comment for the files_scope contradiction this records.
 	contextCmd.AddCommand(newContextSyncCmd(deps))
+	// 07's command tree folds harness under context (rationale #3).
+	// `harness sync` and the older `context sync` above are one
+	// operation under two names; see context_harness_cmd.go.
+	contextCmd.AddCommand(newContextHarnessCmd(deps))
 	return contextCmd
 }
 

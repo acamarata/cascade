@@ -29,6 +29,7 @@ import (
 	"strings"
 
 	"github.com/acamarata/cascade/internal/backup/targets"
+	cascadecontext "github.com/acamarata/cascade/internal/context"
 	"github.com/acamarata/cascade/internal/context/hydration"
 	"github.com/acamarata/cascade/internal/doctor"
 	"github.com/acamarata/cascade/internal/nodes"
@@ -71,12 +72,16 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	// enrolled" - an unreadable subject is never silently OK.
 	reg.Register(nodes.NewHealthCheck(nodesRecordStoreFor(paths, clock), clock, 0))
 	reg.Register(targets.NewRcloneDoctorCheck(nil)) // backup (P1-E19-W4-S41-T3)
+	// harness (P1-E16-W4-S35-T3): which coding harnesses are installed and
+	// whether the instruction files cascade generates for them are current.
+	// It is the check `doctor --harness` narrows to.
+	reg.Register(cascadecontext.NewHarnessCheck(productionHarnessDetector(), productionHarnessDrift()))
 	// context-hydration (P1-E16-W4-S34-T4): counts the degraded-hydration
 	// events the prompt hook publishes. It is the only place a degraded
 	// hydration becomes visible at all -- the hook fails OPEN by design,
 	// so from the user's side a degraded hydration and a session with no
 	// context worth injecting look identical.
-	reg.Register(hydration.NewCheck(hydrationStoreFor(paths), clock))
+	reg.Register(hydration.NewCheck(hydrationCountFor(paths, clock), clock))
 	checks, err := secretsDoctorChecks(ctx, paths, clock)
 	if err != nil {
 		return nil, err

@@ -33,6 +33,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	cascadecontext "github.com/acamarata/cascade/internal/context"
 	"github.com/acamarata/cascade/internal/doctor"
 	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -89,6 +90,12 @@ func mountDoctorCmd(root *cobra.Command) {
 type doctorFlags struct {
 	firstRun bool
 	fix      bool
+	// harness narrows the run to the harness check (P1-E16-W4-S35-T3),
+	// which is 07 rationale #3's "detection lives in doctor --harness".
+	// It is a FILTER over the same registry --first-run filters, not a
+	// second code path: the check runs identically either way, and
+	// doctor's exit-code semantics are whatever that one check reports.
+	harness bool
 }
 
 // newDoctorCmd builds the `doctor` command and its `bundle` subcommand.
@@ -109,6 +116,8 @@ func newDoctorCmd(deps doctorDeps) *cobra.Command {
 		"run only the checks tagged for a first-run health check")
 	cmd.Flags().BoolVar(&f.fix, "fix", false,
 		"attempt to remediate every fixable check that reports a problem")
+	cmd.Flags().BoolVar(&f.harness, "harness", false,
+		"run only the coding-harness detection and instruction-drift check")
 	cmd.AddCommand(newDoctorBundleCmd(deps))
 	cmd.AddCommand(newDoctorCountsCmd(deps))
 	cmd.AddCommand(newDoctorSportCmd(deps))
@@ -144,6 +153,12 @@ func executeChecks(ctx context.Context, deps doctorDeps, f *doctorFlags) (doctor
 	checks := reg.List()
 	if f.firstRun {
 		checks = reg.FirstRun()
+	}
+	if f.harness {
+		// Narrowed LAST, so --harness --first-run is the harness check
+		// either way rather than an empty run whose meaning depends on
+		// flag order.
+		checks = onlyHarnessCheck(reg)
 	}
 	if len(checks) == 0 {
 		// An empty run reports OutcomeOK, which would render as a silent
@@ -256,4 +271,18 @@ func doctorOutputWriter(cmd *cobra.Command) *output.Writer {
 	verbose, _ := cmd.Flags().GetBool("verbose")
 	noColor, _ := cmd.Flags().GetBool("no-color")
 	return output.New(cmd.OutOrStdout(), cmd.OutOrStderr(), jsonOut, quiet, verbose, noColor)
+}
+
+// onlyHarnessCheck narrows a run to the harness check.
+//
+// A registry with no harness check returns nothing, which executeChecks
+// turns into a refusal rather than a silent clean report — the same rule
+// it applies to an empty run from any other cause (Art.1: absence is
+// never a pass).
+func onlyHarnessCheck(reg *doctor.CheckRegistry) []doctor.Check {
+	check, ok := reg.Lookup(cascadecontext.HarnessCheckName)
+	if !ok {
+		return nil
+	}
+	return []doctor.Check{check}
 }

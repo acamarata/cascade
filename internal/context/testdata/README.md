@@ -188,3 +188,58 @@ the target file name differs; (2) the CC writer's format is independently
 golden-validated against v1's harvested production output in
 `v1-goldens/cc/` (see `gen_cc_test.go`). A fresh interactive capture for
 either tool remains a documented gap, not a silent one.
+
+## cc-harness-fixtures: the first-party client's own state file
+
+### `cc-harness-fixtures/harness-config.json`
+
+A **live capture** of a harness's own state file, taken from a real
+installation.
+
+| | |
+|---|---|
+| Tool | the first-party harness client |
+| Version | 2.1.273 (the `firstStartVersion` the file itself records) |
+| Captured | 2026-09-16 |
+| Ticket | P1-E16-W4-S35-T3 |
+| Method | a throwaway config directory and an empty project directory, both under `/tmp`; the client's own `mcp add` was run three times against them (one project-scoped server, one user-scoped server, and cascade itself). The file below is the one the client wrote, reformatted with `json.dumps(indent=2)` and otherwise untouched except for the redactions noted next. |
+
+Three values were redacted, and nothing else:
+
+| Field | Replaced with | Why |
+|---|---|---|
+| `machineID` | a placeholder string | a per-install identifier derived from the capturing machine |
+| `userID` | a placeholder string | the same |
+| the single `projects` key | `/capture/project` | it was an absolute path on the capturing machine |
+
+Every KEY, every nesting level, every other value and the real version
+string are exactly what the client wrote. The redactions are values this
+repository must not publish, not shape this parser cares about — and
+`ParseHarnessConfig` reads neither redacted field, so the fixture
+exercises the same code path the real file would.
+
+`ParseHarnessConfig` reads two facts out of it: the recorded version, and
+whether cascade is registered as an MCP server. Both are easy to get
+wrong from memory. This capture carries the MCP table at **two different
+scopes** — a user-scoped `mcpServers` at the document root and a
+project-scoped one nested under `projects.<path>.mcpServers` — which is
+the shape the parser has to handle and which no reasonable reconstruction
+would have included. It also nests the whole MCP table under keys
+(`firstStartVersion`, `migrationVersion`, `seenNotifications`, …) that
+exist only because a real client has a real upgrade history.
+
+This capture also settles the gap the section above records. The three
+fixtures in `internal/fleet/hookpacks/testdata/cc-hook-fixtures/` were
+authored from a builder's knowledge because "no live session was
+available". That constraint is false for anything a CLI harness can be
+driven to produce (`R-14.252`): a throwaway config directory plus one
+non-interactive run yields a real artifact in a minute. This file and
+`cmd/cascade/testdata/cc-hook-fixtures/userpromptsubmit.json` were both
+made that way.
+
+### `fuzz/FuzzHarnessConfigParse/`
+
+Seeds for `FuzzHarnessConfigParse`. The corpus seeds the real capture
+above plus the degenerate inputs a parser over untrusted bytes has to
+survive: empty, not JSON, a JSON scalar where an object is expected, and
+an `mcpServers` whose values are of the wrong type.

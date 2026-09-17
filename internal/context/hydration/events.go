@@ -67,6 +67,39 @@ func CountDegraded(ctx context.Context, store provider.Store, now time.Time, win
 	if err != nil {
 		return 0, err
 	}
+	return countInWindow(all, now, window), nil
+}
+
+// Replayer reads one namespace's event log from an offset. Its one method
+// is transcribed from internal/events' Bus.Replay, pinned below, so this
+// package can be handed the daemon's own live bus rather than opening a
+// second handle to a database the daemon already holds exclusively.
+type Replayer interface {
+	Replay(ctx context.Context, namespace string, offset uint64) ([]events.Event, error)
+}
+
+var _ Replayer = (*events.Bus)(nil)
+
+// CountEvents counts degraded events inside window, over an already-open
+// bus.
+//
+// CountDegraded above opens its own bus over a store; this takes one that
+// is already open. The distinction is not stylistic: the store driver
+// takes an exclusive lock, so the process that already holds the database
+// is the only one that can answer while it is running.
+func CountEvents(ctx context.Context, bus Replayer, now time.Time, window time.Duration) (int, error) {
+	if bus == nil {
+		return 0, nil
+	}
+	all, err := bus.Replay(ctx, DegradedNamespace, 0)
+	if err != nil {
+		return 0, err
+	}
+	return countInWindow(all, now, window), nil
+}
+
+// countInWindow is the shared tail of both counters.
+func countInWindow(all []events.Event, now time.Time, window time.Duration) int {
 	cutoff := now.Add(-window)
 	count := 0
 	for _, e := range all {
@@ -74,5 +107,5 @@ func CountDegraded(ctx context.Context, store provider.Store, now time.Time, win
 			count++
 		}
 	}
-	return count, nil
+	return count
 }

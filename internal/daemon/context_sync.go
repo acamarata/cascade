@@ -72,13 +72,26 @@ func RegisterContextSyncHandler(registry *rpc.Registry, _ runtime.PathProvider, 
 }
 
 // decodeContextSyncParams decodes raw into ContextSyncParams, failing
-// closed on malformed input.
+// closed on malformed input and on a missing working directory.
+//
+// An empty Cwd is refused rather than defaulted. internal/context.Sync
+// joins its repo argument with each harness's relative instruction path,
+// so an empty one yields RELATIVE paths — which a regenerating run would
+// then write into whatever directory the daemon happens to have been
+// started in, and a --check run would report drift about a tree nobody
+// asked about. The daemon's own working directory is meaningless to a
+// client asking about a project; the only honest answer to "sync which
+// tree?" with no tree named is a refusal.
 func decodeContextSyncParams(raw json.RawMessage) (ContextSyncParams, error) {
 	var p ContextSyncParams
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return ContextSyncParams{}, cascade.Wrap(cascade.KindInvalidInput, err, "daemon: context.sync: malformed params")
 		}
+	}
+	if p.Cwd == "" {
+		return ContextSyncParams{}, cascade.New(cascade.KindInvalidInput,
+			"daemon: context.sync: cwd must not be empty")
 	}
 	return p, nil
 }

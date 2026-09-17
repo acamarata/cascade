@@ -17,10 +17,12 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/acamarata/cascade/internal/context/hydration"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/rpc"
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -44,13 +46,35 @@ type ContextHydrationDegradedResult struct {
 	Seq uint64 `json:"seq"`
 }
 
-// RegisterContextHydrationHandler binds the method against bus.
+// ContextHydrationReportMethod reports how many degraded hydrations the
+// log holds inside a window.
+//
+// It exists because the doctor check cannot read the log for itself while
+// this daemon is running: the store driver takes an exclusive lock, so a
+// check that opened the file would fail whenever the system was up. The
+// owner of the database answers instead.
+const ContextHydrationReportMethod = "context.hydration.report"
+
+// ContextHydrationReportParams is the report's wire params. An unset or
+// non-positive WindowSeconds uses the ruled 24-hour window.
+type ContextHydrationReportParams struct {
+	WindowSeconds int `json:"window_seconds,omitempty"`
+}
+
+// ContextHydrationReportResult is the count and the window it covers, so
+// a caller never has to assume which window it was told about.
+type ContextHydrationReportResult struct {
+	Count         int `json:"count"`
+	WindowSeconds int `json:"window_seconds"`
+}
+
+// RegisterContextHydrationHandler binds the methods against bus.
 //
 // A nil bus registers NOTHING rather than a handler that always fails:
 // the hook's own fallback is to publish directly, and a method that
 // answers with a refusal would make it stop trying.
-func RegisterContextHydrationHandler(registry *rpc.Registry, bus *events.Bus) {
-	if bus == nil {
+func RegisterContextHydrationHandler(registry *rpc.Registry, bus *events.Bus, clock runtime.Clock) {
+	if bus == nil || clock == nil {
 		return
 	}
 	registry.Register(ContextHydrationDegradedMethod, func(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -73,5 +97,22 @@ func RegisterContextHydrationHandler(registry *rpc.Registry, bus *events.Bus) {
 			return nil, err
 		}
 		return ContextHydrationDegradedResult{Seq: published.Seq}, nil
+	})
+	registry.Register(ContextHydrationReportMethod, func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p ContextHydrationReportParams
+		if len(raw) > 0 {
+			if err := json.Unmarshal(raw, &p); err != nil {
+				return nil, cascade.Wrap(cascade.KindInvalidInput, err, "context.hydration.report: decode params")
+			}
+		}
+		window := hydration.DegradedWindow
+		if p.WindowSeconds > 0 {
+			window = time.Duration(p.WindowSeconds) * time.Second
+		}
+		count, err := hydration.CountEvents(ctx, bus, clock.Now(), window)
+		if err != nil {
+			return nil, err
+		}
+		return ContextHydrationReportResult{Count: count, WindowSeconds: int(window / time.Second)}, nil
 	})
 }

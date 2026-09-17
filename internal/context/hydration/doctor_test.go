@@ -3,6 +3,8 @@ package hydration
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,11 +19,13 @@ type fixedClock struct{ at time.Time }
 
 func (c fixedClock) Now() time.Time { return c.at }
 
-// memStore returns a fresh in-memory store and a StoreFunc over it.
-func memStore(t *testing.T) (provider.Store, StoreFunc) {
+// memStore returns a fresh in-memory store and a CountFunc over it.
+func memStore(t *testing.T) (provider.Store, CountFunc) {
 	t.Helper()
 	store := storetest.NewMemStore()
-	return store, func(context.Context) (provider.Store, func(), error) { return store, func() {}, nil }
+	return store, func(ctx context.Context) (int, error) {
+		return CountDegraded(ctx, store, time.Now(), DegradedWindow)
+	}
 }
 
 // TestHydrationDoctorCheckThresholds walks R-16.6a's two boundaries from
@@ -85,7 +89,7 @@ func TestOnlyEventsInsideTheWindowCount(t *testing.T) {
 // working.
 func TestAnUnreadableLogIsAnErrorNotOK(t *testing.T) {
 	boom := errors.New("data directory is unreadable")
-	failing := func(context.Context) (provider.Store, func(), error) { return nil, nil, boom }
+	failing := func(context.Context) (int, error) { return 0, boom }
 
 	got, err := NewCheck(failing, runtime.SystemClock{}).Run(context.Background())
 	if err != nil {
@@ -130,5 +134,32 @@ func TestPublishingToNothingIsANoOp(t *testing.T) {
 	PublishDegraded(context.Background(), nil, []byte(`{}`))
 	if count, err := CountDegraded(context.Background(), nil, time.Now(), DegradedWindow); err != nil || count != 0 {
 		t.Fatalf("count over a nil store = %d (err %v)", count, err)
+	}
+}
+
+// TestABusyLogIsReportedNotFailed pins the distinction the store driver's
+// single-owner design forces: a log held by another component of this
+// installation is a statement about the machine, not a fault. Reporting
+// it as an error would make `cascade doctor` fail on every machine whose
+// daemon is running — a diagnostic failing on its own success condition.
+//
+// It is OK, and the message says plainly that no count was taken, so it
+// is not a silent pass over an unmeasured subject either.
+func TestABusyLogIsReportedNotFailed(t *testing.T) {
+	busy := func(context.Context) (int, error) {
+		return 0, fmt.Errorf("%w: another process has it", ErrLogBusy)
+	}
+	got, err := NewCheck(busy, runtime.SystemClock{}).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got.Status != doctor.StatusOK {
+		t.Fatalf("status = %v, want StatusOK", got.Status)
+	}
+	if !strings.Contains(got.Message, "not counted") {
+		t.Errorf("message = %q; a busy log must say no count was taken", got.Message)
+	}
+	if got.Remediation == "" {
+		t.Error("a busy log reports no way to get the count")
 	}
 }

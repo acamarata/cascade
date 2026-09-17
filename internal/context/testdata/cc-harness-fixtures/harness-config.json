@@ -1,0 +1,52 @@
+{
+  "firstStartTime": "2026-09-17T02:17:51.142Z",
+  "firstStartVersion": "2.1.273",
+  "machineID": "<redacted: per-install identifier, see testdata/README.md>",
+  "opusProMigrationComplete": true,
+  "sonnet1m45MigrationComplete": true,
+  "seenNotifications": {},
+  "hasResetAutoModeOptInForDefaultOffer": true,
+  "migrationVersion": 14,
+  "userID": "<redacted: per-install identifier, see testdata/README.md>",
+  "projects": {
+    "/capture/project": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {
+        "probe-server": {
+          "type": "stdio",
+          "command": "/bin/echo",
+          "args": [
+            "hello"
+          ],
+          "env": {}
+        }
+      },
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false
+    }
+  },
+  "mcpServers": {
+    "probe-user": {
+      "type": "stdio",
+      "command": "/bin/echo",
+      "args": [
+        "hi"
+      ],
+      "env": {}
+    },
+    "cascade": {
+      "type": "stdio",
+      "command": "cascade",
+      "args": [
+        "mcp",
+        "serve",
+        "--stdio"
+      ],
+      "env": {}
+    }
+  }
+}

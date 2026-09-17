@@ -235,8 +235,11 @@ func registerContextEngineHandlers(registry *rpc.Registry, paths runtime.PathPro
 	// hook's telemetry door. It exists because the store takes an
 	// EXCLUSIVE lock — a hook that published directly while this daemon
 	// held the database would fail in exactly the common case.
-	daemon.RegisterContextHydrationHandler(registry, bus)
-	return nil
+	daemon.RegisterContextHydrationHandler(registry, bus, clock)
+	// context.harness_list / context.harness_sync (P1-E16-W4-S35-T3):
+	// 07's harness surface, served beside the context namespace it folds
+	// under.
+	return daemon.RegisterContextHarnessHandlers(registry, paths, clock)
 }
 
 // registerStatusHandler builds this composition root's *daemon.Manifest

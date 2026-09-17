@@ -13,11 +13,12 @@ package hydration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/acamarata/cascade/internal/doctor"
-	"github.com/acamarata/cascade/pkg/provider"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // The two R-16.6a thresholds, over DegradedWindow.
@@ -35,10 +36,18 @@ const (
 // CheckName is the check's stable slug.
 const CheckName = "context-hydration"
 
-// StoreFunc opens the store the check reads. It is a function rather than
-// a value so the check can be registered at init, before any database
-// exists, and resolve one only when it runs.
-type StoreFunc func(ctx context.Context) (provider.Store, func(), error)
+// CountFunc reports how many degraded hydrations happened inside the
+// window. It is a function rather than a store handle for a reason the
+// doctor runner forced: checks run CONCURRENTLY, and the event log lives
+// in a database whose driver takes an exclusive lock, so a check that
+// opened it for itself would fail every sibling check that wanted the
+// same file — and would fail outright whenever the daemon held it, which
+// is the normal state.
+//
+// The composition root supplies an implementation that asks the daemon
+// when one is live and reads the log directly otherwise, the same
+// daemon-or-embedded split every other verb uses.
+type CountFunc func(ctx context.Context) (int, error)
 
 // Clock is the time source, kept local so this package never reads the
 // wall clock directly (forbidigo).
@@ -46,14 +55,14 @@ type Clock interface{ Now() time.Time }
 
 // Check reports degraded-hydration counts.
 type Check struct {
-	store StoreFunc
+	count CountFunc
 	clock Clock
 }
 
 var _ doctor.Check = (*Check)(nil)
 
-// NewCheck builds the check over store and clock.
-func NewCheck(store StoreFunc, clock Clock) *Check { return &Check{store: store, clock: clock} }
+// NewCheck builds the check over count and clock.
+func NewCheck(count CountFunc, clock Clock) *Check { return &Check{count: count, clock: clock} }
 
 // Name is the check's slug.
 func (*Check) Name() string { return CheckName }
@@ -78,25 +87,44 @@ func (*Check) Fix(context.Context) (doctor.FixResult, error) {
 
 // Run counts degraded events over the trailing window.
 func (c *Check) Run(ctx context.Context) (doctor.CheckResult, error) {
-	if c.store == nil || c.clock == nil {
+	if c.count == nil || c.clock == nil {
 		return doctor.CheckResult{
 			Status:      doctor.StatusError,
-			Message:     "hydration check is not wired to a store",
+			Message:     "hydration check is not wired to an event-log reader",
 			Remediation: "this is a build defect, not a configuration problem; report it",
 		}, nil
 	}
-	store, closeStore, err := c.store(ctx)
-	if err != nil {
-		return unverifiable(err), nil
+	count, err := c.count(ctx)
+	if errors.Is(err, ErrLogBusy) {
+		return logBusy(err), nil
 	}
-	if closeStore != nil {
-		defer closeStore()
-	}
-	count, err := CountDegraded(ctx, store, c.clock.Now(), DegradedWindow)
 	if err != nil {
 		return unverifiable(err), nil
 	}
 	return resultFor(count), nil
+}
+
+// ErrLogBusy reports that the event log exists and is held exclusively by
+// another component of this installation.
+//
+// It is a distinct error because it is a distinct FACT. The store driver
+// is single-owner by design (an exclusive flock), so a held log means the
+// system is running, not broken — and `cascade doctor` failing on a
+// machine whose daemon is up would be a diagnostic that reports its own
+// success condition as a fault.
+var ErrLogBusy = cascade.New(cascade.KindConflict,
+	"the hydration event log is held by another component of this installation")
+
+// logBusy renders that fact. StatusOK, because nothing is wrong — and
+// with the message saying plainly that no count was taken, so it is not
+// a silent pass over an unmeasured subject.
+func logBusy(err error) doctor.CheckResult {
+	return doctor.CheckResult{
+		Status:      doctor.StatusOK,
+		Message:     "degraded hydrations were not counted: the event log is in use",
+		Detail:      err.Error(),
+		Remediation: "a running daemon answers this count itself; to read the log directly, stop the daemon first",
+	}
 }
 
 // unverifiable renders the "could not check" outcome. It is ERROR, not
