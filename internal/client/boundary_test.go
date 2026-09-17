@@ -86,8 +86,17 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// cap. This mirrors .golangci.yml's cmd-rpc-server-boundary exemption
 	// list; the two must be edited together.
 	"daemon_unix_run_fleetjobs.go": true,
-	"mcp.go":                       true,
-	"elevate_helper.go":            true,
+	// daemon_unix_run_options.go (P1-E17-W4-S37-T1): the same kind of
+	// relocation — the rpcServerOption type, its constructors and the two
+	// helpers buildRPCServer reads them through, split out of
+	// daemon_unix_run.go under its own 300-line cap. Every option either
+	// REGISTERS on the daemon's own registry or contributes a collaborator
+	// to it; none dials the daemon. This map mirrors .golangci.yml's
+	// cmd-rpc-server-boundary exemption list; the two must be edited
+	// together.
+	"daemon_unix_run_options.go": true,
+	"mcp.go":                     true,
+	"elevate_helper.go":          true,
 	// backup_elevation.go never dials the daemon: it runs the 06 §5.14
 	// nonce + local-auth-signature + middleware-verify + single-use-ledger
 	// ceremony entirely in-process, reusing the daemon's own

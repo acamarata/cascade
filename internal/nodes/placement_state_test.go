@@ -137,3 +137,32 @@ func TestFleetStateReportsDrainFirst(t *testing.T) {
 		t.Fatalf("reason = %q, want %q reported first", reason, ReasonDrained)
 	}
 }
+
+// TestPlacementLivenessThreeState is R-21.225 asserted through the real
+// engine rather than through placeablePresence alone: liveness is the
+// three-state {reachable, unavailable, unknown} result, `unknown` is the
+// fail-closed default on heartbeat timeout, and ANYTHING other than
+// reachable is not placeable. There is no binary heartbeat-dead test to
+// get wrong.
+//
+// remote-via-route and the never-probed empty value ride along because
+// they are values a record can really carry, and a filter written as
+// "not unavailable" would place all three of the non-reachable ones.
+func TestPlacementLivenessThreeState(t *testing.T) {
+	req := Requirement{Sensitivity: SensitivityNormal}
+	for _, presence := range []Presence{PresenceUnknown, PresenceUnavailable, PresenceRemoteViaRoute, ""} {
+		rec := DeviceRecord{NodeID: "n1", Tier: TierWorkerTrusted, Presence: presence}
+		eligible, err := upEngine().Eligible(req, []Candidate{{Record: rec}})
+		if err == nil {
+			t.Errorf("presence %q placed %d node(s); only reachable may place", presence, len(eligible))
+		}
+	}
+	reachable := DeviceRecord{NodeID: "n1", Tier: TierWorkerTrusted, Presence: PresenceReachable}
+	eligible, err := upEngine().Eligible(req, []Candidate{{Record: reachable}})
+	if err != nil {
+		t.Fatalf("a reachable node was refused: %v", err)
+	}
+	if len(eligible) != 1 || eligible[0].NodeID != "n1" {
+		t.Fatalf("eligible = %+v, want exactly n1", eligible)
+	}
+}

@@ -40,6 +40,7 @@ import (
 	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/daemon"
+	"github.com/acamarata/cascade/internal/nodes"
 	providerdispatch "github.com/acamarata/cascade/internal/providers/dispatch"
 	providerregistry "github.com/acamarata/cascade/internal/providers/registry"
 	"github.com/acamarata/cascade/internal/rpc"
@@ -53,11 +54,11 @@ import (
 // both R-16.80 connectors. A nil store leaves both unregistered (see this
 // file's header comment); any other failure is propagated, matching every
 // sibling registerXHandler's own error-propagation convention.
-func wireConductorAndReachability(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest, paths runtime.PathProvider, clock runtime.Clock, store provider.Store) error {
+func wireConductorAndReachability(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest, paths runtime.PathProvider, clock runtime.Clock, store provider.Store, tunnels nodes.TunnelStateLookup) error {
 	if store == nil {
 		return nil
 	}
-	if err := wireConductorExecute(ctx, registry, manifest, paths, clock, store); err != nil {
+	if err := wireConductorExecute(ctx, registry, manifest, paths, clock, store, tunnels); err != nil {
 		return err
 	}
 	return daemon.WireReachability(ctx, manifest, paths, clock)
@@ -84,7 +85,7 @@ func wireConductorAndReachability(ctx context.Context, registry *rpc.Registry, m
 // unchanged from before: a typed KindUnavailable naming the key, refused
 // at the true credential boundary per request, never a prompt from a
 // process with nobody to answer it.
-func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest, paths runtime.PathProvider, clock runtime.Clock, store provider.Store) error {
+func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest, paths runtime.PathProvider, clock runtime.Clock, store provider.Store, tunnels nodes.TunnelStateLookup) error {
 	regDB, err := openMigratedDB(ctx, filepath.Join(paths.DataDir(), providerRegistryDBFile),
 		func(ctx context.Context, db *sql.DB) error {
 			return providerregistry.ApplyMigrationSchema(ctx, db, migrate.SQLiteEmitter{}, clock, "", "")
@@ -112,5 +113,15 @@ func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest 
 	if serr != nil {
 		return serr
 	}
-	return daemon.RegisterConductorExecuteHandler(registry, manifest, reader, quota, resolver, auditWriter, clock, security)
+	return daemon.RegisterConductorExecuteHandler(registry, manifest, reader, quota, resolver, auditWriter, clock, security,
+		conductor.NodePlacement(nodes.Engine{Tunnels: tunnels}, nodeRecordStore(paths, clock)))
+}
+
+// nodeRecordStore opens the enrolled-node record store over the SAME
+// data-dir file every `node` verb already uses (node_serve_composition.go,
+// node_keys.go, daemon_unix_run_fleetjobs.go all build it this way), so
+// placement decides over the one real enrolled fleet rather than a second,
+// parallel view of it.
+func nodeRecordStore(paths runtime.PathProvider, clock runtime.Clock) *nodes.RecordStore {
+	return nodes.NewRecordStore(nodes.NewFileRecordBackend(paths.DataDir()), clock)
 }

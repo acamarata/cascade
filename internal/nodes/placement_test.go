@@ -201,3 +201,47 @@ func TestPlacementWithoutAConnectionSourcePlacesNothing(t *testing.T) {
 		t.Fatal("an engine with no connection source placed work anyway")
 	}
 }
+
+// TestCandidatesFromPairsEachRecordWithItsOwnReport proves the assembly
+// step does not cross the wires. A one-record fleet would pass under any
+// implementation, so this uses two records whose reports differ and
+// asserts each kept its own.
+func TestCandidatesFromPairsEachRecordWithItsOwnReport(t *testing.T) {
+	records := []DeviceRecord{
+		{NodeID: "n1", LastReport: CapabilityReport{Capabilities: []string{"browser"}}},
+		{NodeID: "n2", LastReport: CapabilityReport{Capabilities: []string{"docker"}}},
+	}
+	candidates := CandidatesFrom(records)
+	if len(candidates) != len(records) {
+		t.Fatalf("got %d candidates, want %d", len(candidates), len(records))
+	}
+	for i, c := range candidates {
+		if c.Record.NodeID != records[i].NodeID {
+			t.Fatalf("candidate %d is record %q, want %q", i, c.Record.NodeID, records[i].NodeID)
+		}
+		if !HasCapability(c.Report, records[i].LastReport.Capabilities[0]) {
+			t.Fatalf("candidate %q carries report %+v, want its own", c.Record.NodeID, c.Report)
+		}
+	}
+}
+
+// TestCandidatesFromGivesAnUnheardNodeNothing pins the fail-closed reading
+// of a record with no verified heartbeat yet: it advertises nothing, so it
+// satisfies no capability requirement. The assertion goes through Eligible
+// rather than inspecting the zero report, because "advertises nothing" is
+// only useful if it also means "is never placed".
+func TestCandidatesFromGivesAnUnheardNodeNothing(t *testing.T) {
+	unheard := DeviceRecord{NodeID: "n1", Tier: TierWorkerTrusted, Presence: PresenceReachable}
+	engine := Engine{Tunnels: func(string) TunnelState { return TunnelUp }}
+
+	req := Requirement{Capabilities: []string{"browser"}, Sensitivity: SensitivityNormal}
+	if _, err := engine.Eligible(req, CandidatesFrom([]DeviceRecord{unheard})); err == nil {
+		t.Fatal("a node that has never reported a capability satisfied a capability requirement")
+	}
+	// The same node IS placeable for work that requires no capability:
+	// the refusal above must come from the empty report, not from the
+	// record being unheard-of in some broader sense.
+	if _, err := engine.Eligible(Requirement{Sensitivity: SensitivityNormal}, CandidatesFrom([]DeviceRecord{unheard})); err != nil {
+		t.Fatalf("a node with no capability requirement was refused: %v", err)
+	}
+}

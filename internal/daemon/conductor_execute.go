@@ -78,6 +78,11 @@ const conductorExecutorSubsystem = "conductor.executor"
 // method - a client always gets a real answer, never method-not-found -
 // but what that answer IS depends on whether NewExecutor could actually
 // build an Executor from the collaborators supplied.
+//
+// routerOpts are the optional router collaborators the composition root
+// built (today: conductor.NodePlacement, the P1-E17-W4-S37-T1 K×Q seam).
+// Variadic so the callers that have none — every test harness here — name
+// none.
 func RegisterConductorExecuteHandler(
 	registry *rpc.Registry,
 	manifest *Manifest,
@@ -87,8 +92,9 @@ func RegisterConductorExecuteHandler(
 	auditWriter audit.Writer,
 	clock conductor.Clock,
 	security ConductorSecurity,
+	routerOpts ...conductor.RouterOption,
 ) error {
-	router, err := manifest.RegisterConductorRouter(reg, quota, clock)
+	router, err := manifest.RegisterConductorRouter(reg, quota, clock, routerOpts...)
 	if err != nil {
 		return err
 	}

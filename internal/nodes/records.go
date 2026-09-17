@@ -33,13 +33,9 @@
 package nodes
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"sort"
 	"time"
 
-	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -63,6 +59,16 @@ type DeviceRecord struct {
 	// preserved verbatim across rotation per R-21.220 — this ticket never
 	// reads or writes individual cursor values, only round-trips the map).
 	SyncCursors map[string]string `json:"sync_cursors,omitempty"`
+	// LastReport is the capability report carried by this node's most
+	// recent VERIFIED heartbeat (heartbeat.go's ProcessHeartbeat is the
+	// only writer, and it writes only after VerifyHeartbeatFrame passes).
+	// It is the placement engine's capability input: placement.go's
+	// Candidate pairs a record with this report, so a node's advertised
+	// capabilities are exactly the ones it most recently proved it could
+	// sign for. Zero until the first verified heartbeat, which is the
+	// fail-closed reading placement wants — a node nothing has heard from
+	// advertises nothing and satisfies no capability requirement.
+	LastReport CapabilityReport `json:"last_report,omitzero"`
 	// Drained reports whether this node has been marked drained (drain.go,
 	// P1-E17-W4-S36-T4): not accepting new work. S-37.T1's placement
 	// filter reads this flag; it does not remove the record or affect
@@ -250,43 +256,4 @@ type PendingCandidate struct {
 	Source       string    `json:"source"`
 	Detail       string    `json:"detail,omitempty"`
 	DiscoveredAt time.Time `json:"discovered_at"`
-}
-
-// fileRecordBackend is the production RecordBackend: one JSON file under
-// dataDir/nodes/devices.json (mirrors internal/elevation's fileBackend
-// precedent).
-type fileRecordBackend struct {
-	path string
-}
-
-// NewFileRecordBackend returns a RecordBackend that persists at
-// <dataDir>/nodes/devices.json.
-func NewFileRecordBackend(dataDir string) RecordBackend {
-	return fileRecordBackend{path: filepath.Join(dataDir, "nodes", "devices.json")}
-}
-
-func (b fileRecordBackend) Load() (map[string]DeviceRecord, error) {
-	data, err := os.ReadFile(b.path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return map[string]DeviceRecord{}, nil
-		}
-		return nil, err
-	}
-	var records map[string]DeviceRecord
-	if err := json.Unmarshal(data, &records); err != nil {
-		return nil, cascade.Wrap(cascade.KindIntegrity, err, "nodes: device record store is not valid JSON")
-	}
-	if records == nil {
-		records = map[string]DeviceRecord{}
-	}
-	return records, nil
-}
-
-func (b fileRecordBackend) Save(records map[string]DeviceRecord) error {
-	data, err := json.MarshalIndent(records, "", "  ")
-	if err != nil {
-		return err
-	}
-	return runtime.WriteBytesAtomic(b.path, data)
 }

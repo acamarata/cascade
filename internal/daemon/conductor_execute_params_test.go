@@ -8,6 +8,7 @@ package daemon
 // SPORT: internal/daemon (ADD, coverage-floor fix).
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -97,7 +98,12 @@ func TestConductorExecuteParams_ToModelRequest_MapsEveryField(t *testing.T) {
 	if req.FanOut != p.FanOut {
 		t.Errorf("FanOut = %d, want %d", req.FanOut, p.FanOut)
 	}
-	if req.Requirements != p.Requirements {
+	// reflect.DeepEqual rather than ==: Requirements carries the open
+	// NodeCapabilities slice (P1-E17-W4-S37-T1), so the struct is no
+	// longer comparable. Comparing the whole value still asserts the
+	// same thing — every requirement field round-trips, the new one
+	// included.
+	if !reflect.DeepEqual(req.Requirements, p.Requirements) {
 		t.Errorf("Requirements = %+v, want %+v", req.Requirements, p.Requirements)
 	}
 	if len(req.Inputs) != len(p.Inputs) {

@@ -116,3 +116,36 @@ func TestTierNameRendersTheUnsetTier(t *testing.T) {
 		t.Fatalf("tierName(worker-trusted) = %q", got)
 	}
 }
+
+// TestPlacementPairedDeviceFailsRestricted is R-21.220 asserted through
+// the real engine: the trust filter compares the ORDERED rank
+// (controller=2 > worker-trusted=1 > paired-device=0) against the gate
+// `rank(tier) >= rank(worker-trusted)`, so a paired device is never
+// eligible for restricted work no matter what it advertises.
+//
+// The paired device here reports the required capability and is otherwise
+// perfect; the worker-trusted node beside it is identical but for its
+// tier. An implementation that ranked by declaration order, or that
+// treated an unranked tier as zero, would place the wrong one.
+func TestPlacementPairedDeviceFailsRestricted(t *testing.T) {
+	req := Requirement{Capabilities: []string{"browser"}, Sensitivity: SensitivityRestricted}
+	node := func(id string, tier Tier) Candidate {
+		return Candidate{
+			Record: DeviceRecord{NodeID: id, Tier: tier, Presence: PresenceReachable},
+			Report: CapabilityReport{Capabilities: []string{"browser"}},
+		}
+	}
+	engine := Engine{Tunnels: func(string) TunnelState { return TunnelUp }}
+
+	eligible, err := engine.Eligible(req, []Candidate{node("paired", TierPairedDevice), node("worker", TierWorkerTrusted)})
+	if err != nil {
+		t.Fatalf("restricted work found no home beside a worker-trusted node: %v", err)
+	}
+	if len(eligible) != 1 || eligible[0].NodeID != "worker" {
+		t.Fatalf("eligible = %+v, want exactly the worker-trusted node", eligible)
+	}
+
+	if _, err := engine.Eligible(req, []Candidate{node("paired", TierPairedDevice)}); err == nil {
+		t.Fatal("restricted work was placed on a paired device")
+	}
+}

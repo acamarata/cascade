@@ -230,6 +230,103 @@ at test time (`internal/nodes/tunnel_test.go`; provenance in
 `internal/nodes/testdata/README.md`) and wires the CI job
 `node-tunnel-real-sshd`.
 
+## Placement (S-37.T1)
+
+Placement answers one question: given a unit of work, which enrolled nodes
+are ELIGIBLE to run it? It decides a set, never a choice — scoring the
+eligible set by cost, health and lane affinity is the conductor router's
+job, and the two are kept apart deliberately so neither can quietly become
+the other.
+
+The requirement surface is `cascade run --require node.<capability>=true`
+(an open, machine-advertised vocabulary, unlike the closed three-key lane
+vocabulary alongside it). A request that names no node capability is not a
+placement question at all and never reaches this engine.
+
+### Eligibility dimensions
+
+Four filters, applied most-restrictive-first so the exclusion an operator
+is shown is the most fundamental one true of that node, not whichever check
+happened to run first:
+
+| Order | Filter | A node is excluded when |
+|---|---|---|
+| 1 | Sensitivity / trust tier | the work is local-only, or the node's tier does not clear the work's sensitivity |
+| 2 | Drain | an operator marked the node as not accepting new work |
+| 3 | Presence | presence is anything other than `reachable` |
+| 4 | Connection | no tunnel to the node is up |
+| 5 | Capability | the node does not report every required capability |
+
+Capability matching is exact. A capability name is a term from a shared
+vocabulary, not a prefix or a pattern, so a node reporting `docker-ce` does
+not satisfy a requirement for `docker`.
+
+A node's capabilities come from `DeviceRecord.LastReport` — the report
+carried by its most recent **verified** heartbeat. A node that has never
+sent one advertises nothing and satisfies no capability requirement.
+
+### The trust-tier placement matrix
+
+Tiers are compared by ordered rank: `controller` (2) > `worker-trusted`
+(1) > `paired-device` (0).
+
+| Work sensitivity | Eligible nodes |
+|---|---|
+| local-only | **none** — the controller machine is the only place it may run |
+| restricted | `rank(tier) >= rank(worker-trusted)`; a paired device is never eligible |
+| normal | any node whose tier this build recognizes |
+
+Two readings fail closed rather than fail open:
+
+- An unresolvable or unrecognized sensitivity resolves to **local-only**.
+  Guessing wrong on a classification is the case that leaks work off the
+  controller machine, so it resolves the way that cannot.
+- Local-only work excludes every candidate unconditionally, whatever tier
+  string a record happens to carry. Every candidate is an *enrolled* node
+  and therefore not the controller machine running the engine; routing
+  local-only work to a remote node because its stored tier read
+  `controller` is precisely the leak the classification exists to prevent.
+
+`policy.external_allowed = false` on a request forces local-only placement
+regardless of its declared sensitivity, so a caller that both forbids
+leaving the controller machine and demands a capability only another
+machine can advertise is refused rather than half-honoured.
+
+### No eligible node
+
+An empty eligible set is always an error, never an empty list with no
+error. Work classified to run somewhere specific fails loudly when it
+cannot, rather than silently falling back to the controller machine — the
+caller must not be able to read "nowhere to run this" as success.
+
+The error is `KindUnavailable` (the request was well formed and permitted;
+there is simply nowhere to run it right now) and names the aggregate first,
+then the breakdown by reason, then per-node detail bounded so a large fleet
+produces a readable message:
+
+```
+nodes: no enrolled node is eligible for this work (4 considered, 0 eligible);
+required capabilities: browser; by reason: 2 drained, 1 not-connected,
+1 missing-capability; node-a: node is drained and is not accepting new work; ...
+```
+
+An engine wired without a connection source places **nothing**, and says so
+in those words (`(no connection source wired)`) rather than reporting every
+node as merely disconnected — two very different bugs.
+
+### Where it is consulted
+
+`internal/conductor`'s router runs the eligibility consult ahead of its
+five lane filters: "is there a machine for this at all" is the more
+fundamental question than "which lane serves it", and a request nothing can
+host should not cost a registry read. The router holds no copy of the
+eligibility rules; it supplies the inputs and propagates the answer.
+
+A router with no placement engine wired **refuses** a request that names
+node capabilities. It does not route it as though the requirement had not
+been typed: a caller cannot tell a satisfied requirement from an ignored one
+by looking at a successful response.
+
 ## Remote dispatch (S-37.T2)
 
 The controller ships work to an enrolled node over git: it pushes a work

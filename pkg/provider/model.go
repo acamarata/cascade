@@ -116,6 +116,25 @@ type Requirements struct {
 	// Structured reports whether the caller requires structured (e.g.
 	// JSON-schema-constrained) output.
 	Structured bool `json:"structured"`
+	// NodeCapabilities are the capability names an enrolled NODE must
+	// advertise to be eligible to run this work, e.g. ["browser",
+	// "docker"]. It is a separate dimension from the three fields above:
+	// those describe the model LANE, this describes the MACHINE.
+	//
+	// The key is not new to the wire. `cascade run --require
+	// node.<capability>=true` (cmd/cascade/run_requirements.go) has always
+	// serialised it inside the requirements object as `node_capabilities`;
+	// until P1-E17-W4-S37-T1 nothing on the daemon side declared a field
+	// to decode it into, so every such requirement was accepted by the CLI
+	// and silently dropped at the door. Declaring it here is what makes
+	// the flag mean something (see internal/nodes/placement.go and
+	// internal/conductor/router.go's node-eligibility consult).
+	//
+	// Unlike the three lane keys this is an OPEN set: capability names are
+	// advertised by machines, so no closed Go enumeration can validate
+	// them. Empty means the work imposes no node requirement and the
+	// router never consults placement at all.
+	NodeCapabilities []string `json:"node_capabilities,omitempty"`
 }
 
 // Policy is the model.execute policy block (02-TARGET-STRUCTURE.md §key

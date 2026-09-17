@@ -95,7 +95,11 @@ func platformDaemonRun(ctx context.Context, deps daemonDeps) error {
 
 	server, manifest, connections, err := buildRPCServer(bus, deps.Clock, logProvider.Logger(), settings, paths, memoryAdmin, store,
 		withPolicyHandlers(pol),
-		withStatusWidgetHandler(store, deps.Clock, bus, paths, cfg.Widget.ShowProjectNames))
+		withStatusWidgetHandler(store, deps.Clock, bus, paths, cfg.Widget.ShowProjectNames),
+		// The controller-side tunnel registry this same process holds
+		// (daemon.go's startNodeTunnelService) is the placement engine's
+		// connection source — P1-E17-W4-S37-T1.
+		withNodePlacement(deps.NodeTunnels))
 	if err != nil {
 		return err
 	}

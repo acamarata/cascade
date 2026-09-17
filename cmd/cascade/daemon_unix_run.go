@@ -95,44 +95,6 @@ func (a *runtimeEventBusAdapter) Publish(ctx context.Context, namespace, kind, s
 // composition-root wiring this closes: without it, status.get would exist,
 // be tested, and be unreachable from a live daemon, exactly the pattern
 // R-14.166 named and forbade going forward.
-// rpcServerOption is one further registration buildRPCServer applies to
-// the registry it just built. It is variadic rather than a parameter
-// because the composition roots that have a policy engine to register are
-// not the only callers of buildRPCServer, and a caller with nothing to add
-// should not have to name it.
-type rpcServerOption func(*rpc.Registry) error
-
-// withPolicyHandlers registers the approval/policy method set built by
-// wirePolicy. A nil wiring registers nothing: the verbs are simply absent
-// at the far end, which is what a caller that never built a policy engine
-// should present, rather than verbs backed by nothing.
-func withPolicyHandlers(pol *policyWiring) rpcServerOption {
-	return func(registry *rpc.Registry) error {
-		if pol == nil || len(pol.Handlers) == 0 {
-			return nil
-		}
-		return daemon.RegisterPolicyHandlers(registry, pol.Handlers)
-	}
-}
-
-// withStatusWidgetHandler registers status.widget (P1-E38-W8-S74-T1) the
-// same optional-registration way withPolicyHandlers does — added as an
-// rpcServerOption rather than a new wireFleetAndNodeHandlers parameter so
-// this ticket touches none of that function's other call sites (its own
-// tests included), matching R-16.79's "smallest real change, not a
-// signature ripple" precedent. showProjectNames is read once, at daemon
-// startup, from the already-loaded *runtime.Config
-// (platformDaemonRun's own cfg) — see status_widget.go's own doc comment
-// for why no live config-reload subscription reaches this composition
-// path today (the same disclosed gap [logging]'s hot keys are the one
-// exception to, via LogProvider.SetLevel/Reconfigure).
-func withStatusWidgetHandler(store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider, showProjectNames bool) rpcServerOption {
-	return func(registry *rpc.Registry) error {
-		_, err := daemon.RegisterStatusWidgetHandler(registry, store, clock, bus, paths, func() bool { return showProjectNames })
-		return err
-	}
-}
-
 func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, settings daemon.Settings, paths runtime.PathProvider, memoryAdmin *memory.AdminHandler, store provider.Store, opts ...rpcServerOption) (*http.Server, *daemon.Manifest, *int64, error) {
 	knownEventKind := rpc.CombineKnownEventKind(func(kind events.EventKind) bool {
 		return kind == daemon.EventKindShutdownRequested
@@ -176,7 +138,7 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	// Placed after registerContextEngineHandlers because WireReachability's
 	// ApplyGraphSchema requires context.scope's ApplyScopeSchema to have
 	// already created its foreign-key target in this same cascade.db.
-	if err := wireConductorAndReachability(context.Background(), registry, manifest, paths, clock, store); err != nil {
+	if err := wireConductorAndReachability(context.Background(), registry, manifest, paths, clock, store, nodeTunnelLookup(opts)); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -206,10 +168,8 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 		return nil, nil, nil, err
 	}
 
-	for _, opt := range opts {
-		if err := opt(registry); err != nil {
-			return nil, nil, nil, err
-		}
+	if err := applyServerOptions(registry, opts); err != nil {
+		return nil, nil, nil, err
 	}
 	if err := wireFleetNodeAndJobHandlers(registry, store, clock, bus, paths, settings); err != nil {
 		return nil, nil, nil, err

@@ -57,6 +57,14 @@ type DefaultRouter struct {
 	quota    QuotaSpiller
 	clock    Clock
 	classes  []TaskClassRow
+	// placement and fleet are the K×Q node-eligibility seam
+	// (P1-E17-W4-S37-T1), wired by WithNodePlacement at the composition
+	// root and consulted by consultPlacement — see router_placement.go,
+	// which owns both. They are nil on a router built for lane selection
+	// alone; consultPlacement documents what that means for a request
+	// that names node capabilities (it refuses, it does not ignore them).
+	placement NodeEligibility
+	fleet     NodeFleet
 }
 
 // NewRouter builds a Router. No vendor names or provider identifiers are
@@ -150,12 +158,21 @@ func (r *DefaultRouter) Select(ctx context.Context, req provider.ModelRequest, e
 // SAME function Select calls (not a second code path assembled after the
 // fact, R-14.85): the explanation can never drift from the decision
 // because both come from one evaluation of one routeSnapshot.
+// The node-ELIGIBILITY consult (P1-E17-W4-S37-T1) runs ahead of the five
+// filters: "is there a machine that can run this at all" is the more
+// fundamental question than "which lane serves it", and a request that
+// nothing can host should not cost a registry read. It is a no-op for
+// every request that names no node capabilities, which is every request
+// the five filters saw before this seam existed. See router_placement.go.
 func (r *DefaultRouter) SelectExplain(ctx context.Context, req provider.ModelRequest, exclude ...string) (provider.Selection, []string, error) {
+	flags, err := r.consultPlacement(req, nil)
+	if err != nil {
+		return provider.Selection{}, flags, err
+	}
 	snap, err := r.buildSnapshot(ctx)
 	if err != nil {
-		return provider.Selection{}, nil, err
+		return provider.Selection{}, flags, err
 	}
-	var flags []string
 
 	cands := excludeNamed(snap.lanes, exclude)
 

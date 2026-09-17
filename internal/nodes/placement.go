@@ -147,3 +147,20 @@ func joinNames(names []string) string {
 	}
 	return out
 }
+
+// CandidatesFrom pairs each enrolled record with the capability report
+// that record itself carries (DeviceRecord.LastReport — written only by
+// ProcessHeartbeat, and only after the frame's signature verified).
+//
+// It exists so a caller does not have to know HOW a node's capabilities
+// are obtained in order to ask whether that node is eligible. A record
+// whose node has never sent a verified heartbeat carries the zero report,
+// which advertises nothing and therefore satisfies no capability
+// requirement — the fail-closed reading, reached without a special case.
+func CandidatesFrom(records []DeviceRecord) []Candidate {
+	candidates := make([]Candidate, 0, len(records))
+	for _, rec := range records {
+		candidates = append(candidates, Candidate{Record: rec, Report: rec.LastReport})
+	}
+	return candidates
+}

@@ -211,7 +211,7 @@ const conductorRouterSubsystem = "conductor.router"
 // outside this ticket's files_scope (internal/daemon/subsystems.go only).
 // See task_classes.go's journal entry for both sides quoted, and this
 // file's own testonly-allow.json entry recording the same gap.
-func (m *Manifest) RegisterConductorRouter(reg provider.ProviderRegistryReader, quota conductor.QuotaSpiller, clock conductor.Clock) (*conductor.DefaultRouter, error) {
+func (m *Manifest) RegisterConductorRouter(reg provider.ProviderRegistryReader, quota conductor.QuotaSpiller, clock conductor.Clock, opts ...conductor.RouterOption) (*conductor.DefaultRouter, error) {
 	m.Register(conductorRouterSubsystem)
 	classes := conductor.TaskClasses()
 	if len(classes) != 9 {
@@ -220,6 +220,12 @@ func (m *Manifest) RegisterConductorRouter(reg provider.ProviderRegistryReader, 
 		return nil, fmt.Errorf("daemon: %s: %s", conductorRouterSubsystem, reason)
 	}
 	router := conductor.NewRouter(reg, quota, clock, classes)
+	// Optional collaborators the composition root may have built (today:
+	// the P1-E17-W4-S37-T1 node-placement seam). A caller with none names
+	// none; the router is fully usable for lane selection without them.
+	for _, opt := range opts {
+		opt(router)
+	}
 	m.Started(conductorRouterSubsystem, fmt.Sprintf("%d task classes loaded", len(classes)))
 	return router, nil
 }

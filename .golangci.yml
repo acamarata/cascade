@@ -181,6 +181,14 @@ linters:
             # fleet.*/node.*/job.*/lease.* on the daemon's own registry
             # from buildRPCServer and never dials the daemon.
             - "!**/cmd/cascade/daemon_unix_run_fleetjobs.go"
+            # daemon_unix_run_options.go (P1-E17-W4-S37-T1) is the same
+            # kind of relocation: the rpcServerOption type, its
+            # constructors and the two helpers buildRPCServer reads them
+            # through, split out of daemon_unix_run.go under that file's
+            # own 300-line cap. Every option it builds REGISTERS on the
+            # daemon's own registry or contributes a collaborator to it;
+            # none dials the daemon.
+            - "!**/cmd/cascade/daemon_unix_run_options.go"
             - "!**/cmd/cascade/mcp.go"
             - "!**/cmd/cascade/elevate_helper.go"
             # backup_elevation.go never dials the daemon - there is no

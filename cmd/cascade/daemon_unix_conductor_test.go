@@ -52,7 +52,7 @@ func TestWireConductorExecute_ConstructsARealExecutor(t *testing.T) {
 	registry := rpc.NewRegistry()
 	manifest := daemon.NewManifest(nil, clock)
 
-	if err := wireConductorExecute(context.Background(), registry, manifest, paths, clock, store); err != nil {
+	if err := wireConductorExecute(context.Background(), registry, manifest, paths, clock, store, nil); err != nil {
 		t.Fatalf("wireConductorExecute: %v", err)
 	}
 	if !registry.Registered(daemon.ConductorExecuteMethod) {

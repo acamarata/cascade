@@ -218,6 +218,17 @@ tri-state `CapabilityState` (`unknown` the zero value, `supported`,
 `Capabilities.Satisfies(RequiredCapabilities)` reports whether every
 dimension the caller set to true resolves to `supported`.
 
+These six dimensions describe a model LANE. They are a separate axis from
+the capabilities an enrolled MACHINE advertises (`browser`, `docker`,
+`4hr_runtime`, …), which are an open set the node itself reports and which
+the router resolves through node placement, not through `Satisfies`. A
+request carries them as `Requirements.NodeCapabilities` (the wire key
+`node_capabilities`, set by `cascade run --require node.<capability>=true`)
+and the router consults `internal/nodes`' eligibility engine for them
+before it scores a single lane — see `docs/reference/nodes.md` §Placement
+for the filters, the trust-tier matrix and the fail-closed
+no-eligible-node behaviour.
+
 `Capabilities.CompliancePosture` (R-16.10) is every driver's vendor-terms
 self-declaration: `AuthModes`, `InteractiveEntitlement`,
 `ProgrammaticEntitlement`, `AutomationModes`, `Pacing`,

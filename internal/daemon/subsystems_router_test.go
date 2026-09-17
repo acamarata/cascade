@@ -90,3 +90,26 @@ func TestDaemonSubsystems_RouterTaxonomyWired_FailsClosedOnEmptyTable(t *testing
 		}
 	}
 }
+
+// TestDaemonSubsystems_RouterOptionsApplied proves the optional
+// collaborators the composition root builds actually reach the router.
+// Without this, RegisterConductorRouter could accept conductor.
+// NodePlacement and quietly drop it, and every symptom would look exactly
+// like a fleet with no eligible nodes.
+func TestDaemonSubsystems_RouterOptionsApplied(t *testing.T) {
+	m := NewManifest(nil, runtime.NewSystemClock())
+	applied := 0
+	router, err := m.RegisterConductorRouter(fakeRegistryReader{}, fakeQuotaSpiller{}, runtime.NewSystemClock(),
+		func(*conductor.DefaultRouter) { applied++ },
+		func(*conductor.DefaultRouter) { applied++ },
+	)
+	if err != nil {
+		t.Fatalf("RegisterConductorRouter: unexpected error %v", err)
+	}
+	if router == nil {
+		t.Fatal("RegisterConductorRouter returned a nil router with a nil error")
+	}
+	if applied != 2 {
+		t.Fatalf("%d of 2 router options were applied", applied)
+	}
+}

@@ -122,6 +122,12 @@ func ProcessHeartbeat(ctx context.Context, deps HeartbeatDeps, f HeartbeatFrame)
 
 	now := deps.Clock.Now()
 	rec.LastSeen = now
+	// The frame's report is retained only here, after VerifyHeartbeatFrame
+	// passed: placement reads a node's capabilities from the record, so a
+	// report that failed verification must never reach it. Before
+	// P1-E17-W4-S37-T1 the report was validated on decode and then
+	// discarded, which left placement with no capability input at all.
+	rec.LastReport = f.Report
 	fromPresence := rec.Presence
 	rec, transitioned := AdvancePresence(rec, PresenceObservation{OK: true, At: now, Authenticated: true}, now)
 	if err := deps.Records.put(rec); err != nil {
