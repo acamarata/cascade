@@ -7,8 +7,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -111,6 +113,18 @@ func TestTheWizardUsesTheRealHarnessDetector(t *testing.T) {
 	}
 
 	states, err := initHarnessDetector().Detect(context.Background())
+	if runtime.GOOS == "windows" {
+		// Tier-2: the refusal IS the correct answer here, and asserting
+		// it beats skipping — this is the only runner that executes
+		// that branch.
+		if !errors.Is(err, cascadecontext.ErrHarnessDetectionUnsupported) {
+			t.Fatalf("err = %v, want the tier-2 refusal on this platform", err)
+		}
+		if len(states) != 0 {
+			t.Errorf("a refusal still reported %d harness(es)", len(states))
+		}
+		return
+	}
 	if err != nil {
 		t.Fatalf("Detect: %v", err)
 	}

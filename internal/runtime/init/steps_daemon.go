@@ -148,7 +148,7 @@ func (w *Wizard) summary(state State) {
 	w.say("   storage     %s", orNone(state.StoragePath))
 	w.say("   plugins     %s", orNone(joinRefs(state.Plugins)))
 	w.say("   providers   %s", orNone(joinRefs(state.Providers)))
-	w.say("   harnesses   %s", orNone(joinRefs(state.Harnesses)))
+	w.say("   harnesses   %s", harnessLine(state))
 	w.say("   telemetry   %s", onOff(state.Telemetry))
 	w.say("   daemon      %s", daemonLine(state))
 	if state.HelperFingerprint != "" {
@@ -156,6 +156,21 @@ func (w *Wizard) summary(state State) {
 	}
 	w.say("")
 	w.say("next: `cascade doctor` for a full health check, `cascade context sync` after editing instructions")
+}
+
+// harnessLine renders step 6's outcome, including why nothing happened.
+//
+// "none" and "this platform cannot look" are different answers, and a
+// summary that printed the first for the second would tell a windows
+// operator they have no harnesses installed when nobody checked.
+func harnessLine(state State) string {
+	if len(state.Harnesses) > 0 {
+		return joinRefs(state.Harnesses)
+	}
+	if state.HarnessSkipReason != "" {
+		return "none (" + state.HarnessSkipReason + ")"
+	}
+	return "none"
 }
 
 // daemonLine renders step 8's outcome, including why nothing happened.

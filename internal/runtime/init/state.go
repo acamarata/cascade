@@ -112,6 +112,10 @@ type State struct {
 	Providers []string `json:"providers,omitempty"`
 	// Harnesses are the harness kinds wired in step 6.
 	Harnesses []string `json:"harnesses,omitempty"`
+	// HarnessSkipReason names why step 6 wired nothing, so step 9's
+	// summary can say so rather than printing an empty list that reads
+	// as "no harnesses installed".
+	HarnessSkipReason string `json:"harness_skip_reason,omitempty"`
 	// Telemetry records step 7's answer.
 	Telemetry bool `json:"telemetry"`
 	// DaemonInstalled records whether step 8 installed the service. It

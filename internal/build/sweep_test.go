@@ -228,7 +228,19 @@ func TestIdentifierSweepGate_Live(t *testing.T) {
 	if aerr != nil {
 		t.Fatal(aerr) // fail closed: an unreadable allow list blocks, never skips
 	}
-	if rng := os.Getenv("CASCADE_HYGIENE_SWEEP_RANGE"); rng != "" {
+	// Two hygiene gates take a commit range under near-identical names:
+	// this one reads SweepRangeEnvVar and the conventional-commit gate
+	// reads CommitRangeEnvVar. Setting the wrong one used to make this
+	// gate silently scan tracked files ONLY and report success — a
+	// pre-push check failing open, which is the failure mode it can
+	// least afford. Name the mistake instead of absorbing it.
+	rng := os.Getenv(SweepRangeEnvVar)
+	if rng == "" && os.Getenv(CommitRangeEnvVar) != "" {
+		t.Fatalf("identifier sweep: %s is set but %s is not — %s belongs to the "+
+			"conventional-commit gate, and this gate would have scanned no commit messages at all",
+			CommitRangeEnvVar, SweepRangeEnvVar, CommitRangeEnvVar)
+	}
+	if rng != "" {
 		commits, cerr := LoadCommitRange(root, rng)
 		if cerr != nil {
 			t.Fatalf("identifier sweep: loading commit range %q: %v", rng, cerr)

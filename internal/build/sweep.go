@@ -64,6 +64,22 @@ const (
 	IdentifierPatternsEnvVar     = "CASCADE_IDENTIFIER_PATTERNS"
 )
 
+// The two hygiene gates' commit-range variables, named here so the gate
+// that reads one can say which it wanted when somebody sets the other.
+//
+// Two near-identical names is a hazard by itself. What made it a real one
+// is that setting the wrong name made the identifier sweep scan tracked
+// files ONLY and report SUCCESS — a pre-push check failing open, and
+// silently, for whoever confused them.
+const (
+	// SweepRangeEnvVar is the range the identifier sweep scans commit
+	// messages over.
+	SweepRangeEnvVar = "CASCADE_HYGIENE_SWEEP_RANGE"
+	// CommitRangeEnvVar is the CONVENTIONAL-COMMIT gate's variable, read
+	// by the sweep only to recognise it having been set by mistake.
+	CommitRangeEnvVar = "CASCADE_HYGIENE_COMMIT_RANGE"
+)
+
 // SweepViolation is one pattern hit: where it was found (a tracked file's
 // repo-relative path, or "commit-message[N]") and on which line (1-based;
 // 0 for a match that spans how SweepContent joins lines, which currently

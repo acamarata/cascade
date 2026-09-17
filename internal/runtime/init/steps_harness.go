@@ -21,9 +21,26 @@ func (w *Wizard) stepHarnesses(ctx context.Context, state *State) error {
 	found, err := w.deps.Detector.Detect(ctx)
 	if err != nil {
 		// A platform whose harness paths this build does not resolve
-		// refuses rather than reporting an empty fleet. Reporting "no
+		// REFUSES rather than reporting an empty fleet — reporting "no
 		// harnesses installed" for a machine nobody looked at is a false
 		// negative the operator would act on.
+		//
+		// But that refusal must not fail the whole setup. Windows is a
+		// tier-2 platform where a headless one-shot is exactly what the
+		// tier promises, and a step that does not apply there is the
+		// same situation step 8 is in with the service manager: skipped
+		// with a stated reason, and a nil error. Any OTHER failure — an
+		// unreadable home, a cancelled context — still fails, because
+		// those are not "this step does not apply here".
+		//
+		// Found by the windows CI lane. Every local run on darwin took
+		// the other branch, and `cascade init` on windows failed at
+		// step 6 for as long as this returned the error.
+		if cascade.HasKind(err, cascade.KindUnsupported) {
+			state.HarnessSkipReason = err.Error()
+			w.say("   skipped: %v", err)
+			return nil
+		}
 		return err
 	}
 	wanted, err := w.harnessFilter(found)
