@@ -210,3 +210,53 @@ redacted before publication. See `docs/developer/hooks.md` for the full
 engine contract (timeout bound, at-least-once/idempotency, audit
 guarantee) and the composition-root wiring this section's fields feed
 into.
+
+## `[plugins]` and what a plugin selection means
+
+Two surfaces take a plugin selection, and they mean different things by it.
+
+**`cascade init` (a fresh run) takes none.** Every plugin in the catalog is
+a **builtin**: compiled into this binary, its command namespace mounted
+unconditionally, with no install record, no version to pin, and no enabled
+flag that anything reads. So step 4 *states* what this build ships rather
+than asking about it:
+
+```
+== plugins
+   [built in] cascade-claude  Cascade Claude Harness
+   [built in] pbd             PBD Engine
+```
+
+A setup file may still carry a `[plugins]` table. On a fresh run it selects
+nothing, and the run says so out loud rather than ignoring the key in
+silence:
+
+```toml
+[plugins]
+enable = ["pbd"]      # a fresh run reports: these are all built in,
+                      # there is nothing to select
+```
+
+`cascade plugin list` shows the same set with `SOURCE = builtin`, and
+`cascade plugin enable|disable <builtin>` refuses with that fact. All three
+surfaces say the same thing.
+
+**`cascade init --reconverge` takes a real one**, because its subject is
+*installed* plugins — the ones `cascade plugin add` put on this machine,
+which do have a stored enabled flag:
+
+```
+cascade init --reconverge --enable-plugin notifier --disable-plugin legacy
+```
+
+The run prints the plan and then performs it, through `cascade plugin
+enable` / `cascade plugin disable`. Two rules apply:
+
+- A plugin **you** turned on explicitly is never turned off by a blanket
+  `--disable-plugin` from a setup file; the run reports it as kept.
+- A toggle that fails is reported and does not fail the converge. A
+  builtin named here refuses with "this plugin is built in", the config
+  writes and harness regeneration still land, and the run says which
+  plugin did not move.
+
+`--check` prints the same plan and performs none of it.
