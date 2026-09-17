@@ -82,9 +82,19 @@ func attachAutoAdvance(
 	if err != nil {
 		return nil, err
 	}
+	// The fleet counters observe the SAME recorder every verdict already
+	// travels through (P1-E18-W4-S40-T3). Counting here rather than off a
+	// bus event means the number is taken at the one sink that sees every
+	// verdict, and no event kind had to be invented to carry it.
+	_, metrics, err := daemonMetrics()
+	if err != nil {
+		return nil, err
+	}
+	recorder := supervision.NewAutoAdvanceRecorder(log, attention, supervision.ScopeRef{}).
+		WithObserver(metrics)
 	return router.WithAutoAdvance(
 		supervision.NewAutoAdvanceEvaluator(controller),
-		supervision.NewAutoAdvanceRecorder(log, attention, supervision.ScopeRef{}),
+		recorder,
 	).WithDryRunFirst(gate).WithTierSupervision(tiers), nil
 }
 

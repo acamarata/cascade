@@ -34,15 +34,24 @@ import (
 func wireFleetAndNodeHandlers(registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider, settings daemon.Settings) error {
 	daemon.RegisterFleetJournalHandler(registry, store, clock)
 	daemon.RegisterFleetAttentionHandler(registry, store, clock, bus)
-	// supervisor.snapshot/events_schema (P1-E18-W4-S40-T4). metrics/
-	// autonomy are nil here: no *runtime.Registry (C-S05.T4) is
-	// constructed anywhere in this composition path yet, and no
-	// *policy.Controller is threaded into this function — see
-	// internal/daemon/supervisor_rpc.go's own DISCLOSED GAPS note. The
-	// handlers still register and answer real, honestly-degraded data
-	// (an absent headroom ceiling, a "locked"/"none" autonomy reading)
-	// rather than being left unreachable.
-	daemon.RegisterSupervisorHandler(registry, store, clock, bus, nil, nil)
+	// supervisor.snapshot/events_schema (P1-E18-W4-S40-T4), now over the
+	// process's REAL metrics registry (P1-E18-W4-S40-T3 closed the
+	// C-S05.T4 half of the gap this comment used to record): the fleet
+	// counters are registered against the same registry this hands the
+	// handler, so a snapshot reads the numbers the supervision stages
+	// actually incremented, without importing internal/fleet.
+	//
+	// autonomy is still nil — no *policy.Controller is threaded into this
+	// function — so the autonomy reading remains the honestly-degraded
+	// "locked"/"none" internal/daemon/supervisor_rpc.go's DISCLOSED GAPS
+	// note describes. A metrics registry that could not be built is an
+	// error rather than a silent nil: zeros that read like a quiet fleet
+	// are the one answer nobody can act on.
+	metricsReg, _, err := daemonMetrics()
+	if err != nil {
+		return err
+	}
+	daemon.RegisterSupervisorHandler(registry, store, clock, bus, metricsReg, nil)
 	daemon.RegisterNodeUpgradeHandler(registry, paths, clock)
 	// node.dispatch + the two verbs the NODE calls back over its own
 	// tunnel (P1-E17-W4-S37-T2, see internal/daemon/node_dispatch_rpc.go's
@@ -70,8 +79,8 @@ func wireFleetAndNodeHandlers(registry *rpc.Registry, store provider.Store, cloc
 	}
 	// fleet.mode.show/set (P1-E41-W9-S79-T2, see
 	// internal/daemon/fleet_mode_rpc.go's header).
-	_, err := daemon.RegisterFleetModeHandler(registry, paths, clock)
-	return err
+	_, modeErr := daemon.RegisterFleetModeHandler(registry, paths, clock)
+	return modeErr
 }
 
 // wireFleetNodeAndJobHandlers combines wireFleetAndNodeHandlers and
@@ -79,8 +88,8 @@ func wireFleetAndNodeHandlers(registry *rpc.Registry, store provider.Store, cloc
 // under Art.10.3's 50-line function cap -- mechanical composition, not a
 // new concern.
 func wireFleetNodeAndJobHandlers(registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider, settings daemon.Settings) error {
-	if err := wireFleetAndNodeHandlers(registry, store, clock, bus, paths, settings); err != nil {
-		return err
+	if ferr := wireFleetAndNodeHandlers(registry, store, clock, bus, paths, settings); ferr != nil {
+		return ferr
 	}
 	return wireJobRPCHandlers(registry, paths, clock)
 }

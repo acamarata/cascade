@@ -123,10 +123,22 @@ func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, d
 		return nil, nil, nil, err
 	}
 
+	// The fleet metrics' attention consumer. It counts promotions off the
+	// attention topic's OWN event stream, which is the one source that
+	// actually publishes (P1-E18-W4-S40-T3): auto-advance resolutions are
+	// counted at the recorder instead, and the PEWS lifecycle has no
+	// interrupt phase to subscribe to. A subscription that cannot be
+	// opened is logged and skipped rather than failing the boot — a
+	// counter is observability, and refusing to start a daemon over one
+	// would trade a working system for a complete graph.
+	metricsCtx, metricsCancel := context.WithCancel(ctx)
+	startFleetMetricsConsumer(metricsCtx, bus, logProvider.Logger())
+
 	schedCtx, schedCancel := context.WithCancel(ctx)
 	_, admin, schedCleanup, err := startScheduler(
 		schedCtx, store, rawDB, paths, cfg, deps.Clock, bus, logProvider.Logger(), pol.Router)
 	if err != nil {
+		metricsCancel()
 		schedCancel()
 		watcher.Stop()
 		return nil, nil, nil, err
@@ -134,6 +146,7 @@ func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, d
 
 	return admin, pol, func() {
 		watcher.Stop()
+		metricsCancel()
 		schedCancel()
 		schedCleanup(context.Background())
 	}, nil

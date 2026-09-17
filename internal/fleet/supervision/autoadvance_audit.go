@@ -89,6 +89,31 @@ type AutoAdvanceRecorder struct {
 	writer audit.Writer
 	pusher AttentionPusher
 	scope  ScopeRef
+	// observer counts the verdict for the fleet metrics
+	// (P1-E18-W4-S40-T3). It is attached after construction rather than
+	// passed in, because the metric set is built by a different part of
+	// the composition root and making it a constructor argument would
+	// force every caller to state that it has none.
+	observer VerdictObserver
+}
+
+// VerdictObserver is handed every auto-advance verdict, for counting.
+//
+// It is a distinct seam from the audit writer and the attention queue
+// because it is the only one of the three that may not fail: a counter
+// that returned an error would give the recorder a third failure to
+// reconcile against a decision that is already made. It returns nothing,
+// and an observer that panics is the observer's defect, not a route that
+// should have been refused.
+type VerdictObserver interface {
+	RecordAutoAdvance(decision PolicyDecision, verdict Verdict)
+}
+
+// WithObserver attaches the counting seam and returns the recorder, so a
+// composition root can chain it.
+func (r *AutoAdvanceRecorder) WithObserver(o VerdictObserver) *AutoAdvanceRecorder {
+	r.observer = o
+	return r
 }
 
 // NewAutoAdvanceRecorder builds the recorder. Both sinks may be nil, which
@@ -109,6 +134,12 @@ func (r *AutoAdvanceRecorder) Record(
 	ctx context.Context, action ActionDescriptor,
 	decision PolicyDecision, trust TrustTag, verdict Verdict,
 ) error {
+	if r.observer != nil {
+		// Counted BEFORE the writes, so a failing audit sink cannot make
+		// the fleet's own view of how much work went through disagree
+		// with what actually went through.
+		r.observer.RecordAutoAdvance(decision, verdict)
+	}
 	auditErr := RecordAutoAdvance(ctx, r.writer, action, decision, trust, verdict)
 	if _, err := QueueAutoAdvanceRefusal(ctx, r.pusher, action, r.scope, verdict); err != nil && auditErr == nil {
 		return err
