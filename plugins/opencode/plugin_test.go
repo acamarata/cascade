@@ -122,6 +122,10 @@ func TestRunCommandInstallAndUninstall(t *testing.T) {
 		t.Fatalf("expected %s to exist after RunCommand(install): %v", path, err)
 	}
 
+	// The uninstall handler asks the shared-path resolver, whose unwired
+	// default refuses rather than answering "nothing is shared". This
+	// drives the wired case; the refusal has its own test.
+	withSharedPathResolver(t, noSharedPaths)
 	if err := (handlers{}).RunCommand(context.Background(), cmdUninstall, nil); err != nil {
 		t.Fatalf("RunCommand(uninstall) = %v, want nil", err)
 	}

@@ -104,10 +104,10 @@ Two things follow from it:
   prints one row for that file and labels it with every harness that reads
   it (`codex+opencode`), because one file on disk is one row. `harness
   list` shows the same drift against each of them.
-- **Uninstalling one of them removes the file the other reads.** This is a
-  known gap, not a design: an adapter cannot currently tell whether
-  another harness is installed. Until it can, re-run `cascade context
-  harness sync` after uninstalling either one.
+- **Uninstalling one of them keeps the file the other reads.** Cascade
+  checks which harnesses are actually installed and leaves any instruction
+  file another one still reads, reporting it rather than deleting it. Once
+  you uninstall the last harness that reads it, the file goes.
 
 The two only diverge at the global tier, where each has its own directory.
 

@@ -40,6 +40,7 @@ import (
 	"encoding/json"
 
 	"github.com/acamarata/cascade/internal/audit"
+	casctx "github.com/acamarata/cascade/internal/context"
 	"github.com/acamarata/cascade/pkg/cascade"
 	claude "github.com/acamarata/cascade/plugins/claude"
 )
@@ -56,6 +57,9 @@ type ClaudeTeardown struct {
 	paths  claude.Paths
 	cwd    string
 	writer audit.Writer
+	// detector answers which harnesses this machine has, so the teardown
+	// can tell which files another one still reads.
+	detector harnessDetector
 }
 
 // NewClaudeTeardown builds the teardown hook.
@@ -66,7 +70,14 @@ type ClaudeTeardown struct {
 // because the row could not be written — would leave an operator unable to
 // remove a plugin from a machine whose audit log is unavailable.
 func NewClaudeTeardown(paths claude.Paths, cwd string, writer audit.Writer) *ClaudeTeardown {
-	return &ClaudeTeardown{paths: paths, cwd: cwd, writer: writer}
+	return &ClaudeTeardown{paths: paths, cwd: cwd, writer: writer, detector: hostHarnessDetector()}
+}
+
+// WithDetector returns t using d to decide which harnesses are installed.
+// The unit lane states an installed set instead of installing one.
+func (t *ClaudeTeardown) WithDetector(d harnessDetector) *ClaudeTeardown {
+	t.detector = d
+	return t
 }
 
 // Teardown runs cascade-claude's removal and records it.
@@ -79,7 +90,16 @@ func (t *ClaudeTeardown) Teardown(ctx context.Context, name string) error {
 	if name != claudePackName {
 		return nil
 	}
-	results, removeErr := claude.Uninstall(ctx, t.paths, t.cwd)
+	// The shared set is computed HERE, where both the detector and every
+	// harness generator are reachable; the adapter is told, never left to
+	// guess (R-14.265). A detection failure aborts rather than falling
+	// back to "nothing is shared", which is the answer that deletes a file
+	// the other harness was still reading.
+	shared, sharedErr := sharedPathsFor(ctx, t.detector, casctx.HarnessClaude, t.cwd)
+	if sharedErr != nil {
+		return sharedErr
+	}
+	results, removeErr := claude.Uninstall(ctx, t.paths, t.cwd, shared)
 	auditErr := t.record(ctx, results, removeErr)
 	if removeErr != nil {
 		return removeErr

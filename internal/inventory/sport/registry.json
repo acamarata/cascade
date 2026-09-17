@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T12:22:40Z",
+  "generated_at": "2026-09-17T12:30:59Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -15503,6 +15503,26 @@
       ]
     },
     {
+      "name": "internal/plugins shared instruction paths",
+      "sites": [
+        {
+          "file": "internal/plugins/shared_paths.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal/plugins shared instruction paths (ADD) —"
+        },
+        {
+          "file": "internal/plugins/shared_paths_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal/plugins shared instruction paths (ADD) --"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins store-failure tests",
       "sites": [
         {
@@ -23174,7 +23194,7 @@
       ]
     }
   ],
-  "total_sites": 2244,
+  "total_sites": 2246,
   "unspecified_count": 66,
   "multi_status_count": 40
 }

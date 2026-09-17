@@ -89,7 +89,7 @@ func TestUninstallRemovesEverythingItInstalled(t *testing.T) {
 		MCPServerName: map[string]any{"command": "cascade"},
 	}, nil)
 
-	results, err := Uninstall(context.Background(), env.paths, env.cwd)
+	results, err := Uninstall(context.Background(), env.paths, env.cwd, nil)
 	if err != nil {
 		t.Fatalf("uninstall: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestTheConfigDirectoryItselfSurvives(t *testing.T) {
 	if err := os.WriteFile(bystander, []byte("not ours"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Uninstall(context.Background(), env.paths, env.cwd); err != nil {
+	if _, err := Uninstall(context.Background(), env.paths, env.cwd, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(env.paths.HookConfig); err != nil {
@@ -141,7 +141,7 @@ func TestAnEditedInstructionFileIsKept(t *testing.T) {
 	if err := os.WriteFile(env.instr, []byte("# generated\n\n## my own notes\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	results, err := Uninstall(context.Background(), env.paths, env.cwd)
+	results, err := Uninstall(context.Background(), env.paths, env.cwd, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestOtherMCPServersSurvive(t *testing.T) {
 		"someone-else": map[string]any{"command": "their-binary", "args": []string{"--serve"}},
 	}, map[string]any{"unrelatedTopLevelKey": "preserved"})
 
-	if _, err := Uninstall(context.Background(), env.paths, env.cwd); err != nil {
+	if _, err := Uninstall(context.Background(), env.paths, env.cwd, nil); err != nil {
 		t.Fatal(err)
 	}
 	raw, err := os.ReadFile(env.paths.MCPConfig)
@@ -206,10 +206,10 @@ func TestUninstallIsIdempotent(t *testing.T) {
 		MCPServerName: map[string]any{"command": "cascade"},
 	}, nil)
 
-	if _, err := Uninstall(context.Background(), env.paths, env.cwd); err != nil {
+	if _, err := Uninstall(context.Background(), env.paths, env.cwd, nil); err != nil {
 		t.Fatalf("first uninstall: %v", err)
 	}
-	results, err := Uninstall(context.Background(), env.paths, env.cwd)
+	results, err := Uninstall(context.Background(), env.paths, env.cwd, nil)
 	if err != nil {
 		t.Fatalf("second uninstall: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestNothingIsRemovedWhenTheGeneratorIsUnwired(t *testing.T) {
 	env := newUninstallEnv(t)
 	Generate = unwiredGenerator
 
-	_, err := Uninstall(context.Background(), env.paths, env.cwd)
+	_, err := Uninstall(context.Background(), env.paths, env.cwd, nil)
 	if err == nil {
 		t.Fatal("an unwired generator did not refuse")
 	}
@@ -247,7 +247,7 @@ func TestNothingIsRemovedWhenTheGeneratorIsUnwired(t *testing.T) {
 // on a harness that never had an MCP config.
 func TestAMissingMCPConfigIsNothingToRemove(t *testing.T) {
 	env := newUninstallEnv(t)
-	results, err := Uninstall(context.Background(), env.paths, env.cwd)
+	results, err := Uninstall(context.Background(), env.paths, env.cwd, nil)
 	if err != nil {
 		t.Fatalf("uninstall: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestAConfigWithoutOurEntryIsLeftByteIdentical(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Uninstall(context.Background(), env.paths, env.cwd); err != nil {
+	if _, err := Uninstall(context.Background(), env.paths, env.cwd, nil); err != nil {
 		t.Fatal(err)
 	}
 	after, err := os.ReadFile(env.paths.MCPConfig)

@@ -14,7 +14,6 @@ package plugins
 import (
 	"context"
 	"os"
-	"path/filepath"
 	goruntime "runtime"
 	"sort"
 	"testing"
@@ -31,7 +30,7 @@ import (
 type adapter struct {
 	name      string
 	install   func(ctx context.Context, cwd string) ([]string, error)
-	uninstall func(ctx context.Context, cwd string) ([]string, []string, error)
+	uninstall func(ctx context.Context, cwd string, shared map[string]string) ([]string, []string, error)
 }
 
 // crossHarnessAdapters returns the adapters this suite runs over.
@@ -52,8 +51,8 @@ func crossHarnessAdapters() []adapter {
 				}
 				return paths, err
 			},
-			uninstall: func(ctx context.Context, cwd string) ([]string, []string, error) {
-				res, err := codex.Uninstall(ctx, cwd)
+			uninstall: func(ctx context.Context, cwd string, shared map[string]string) ([]string, []string, error) {
+				res, err := codex.Uninstall(ctx, cwd, shared)
 				var removed, clean []string
 				for _, r := range res {
 					if r.Removed {
@@ -76,8 +75,8 @@ func crossHarnessAdapters() []adapter {
 				}
 				return paths, err
 			},
-			uninstall: func(ctx context.Context, cwd string) ([]string, []string, error) {
-				res, err := opencode.Uninstall(ctx, cwd)
+			uninstall: func(ctx context.Context, cwd string, shared map[string]string) ([]string, []string, error) {
+				res, err := opencode.Uninstall(ctx, cwd, shared)
 				var removed, clean []string
 				for _, r := range res {
 					if r.Removed {
@@ -159,7 +158,7 @@ func TestCrossHarnessUninstallManifest(t *testing.T) {
 				}
 			}
 
-			removed, _, err := a.uninstall(context.Background(), dir)
+			removed, _, err := a.uninstall(context.Background(), dir, nil)
 			if err != nil {
 				t.Fatalf("uninstall: %v", err)
 			}
@@ -185,10 +184,10 @@ func TestCrossHarnessUninstallIsIdempotent(t *testing.T) {
 			if _, err := a.install(context.Background(), dir); err != nil {
 				t.Fatalf("install: %v", err)
 			}
-			if _, _, err := a.uninstall(context.Background(), dir); err != nil {
+			if _, _, err := a.uninstall(context.Background(), dir, nil); err != nil {
 				t.Fatalf("first uninstall: %v", err)
 			}
-			removed, clean, err := a.uninstall(context.Background(), dir)
+			removed, clean, err := a.uninstall(context.Background(), dir, nil)
 			if err != nil {
 				t.Fatalf("second uninstall: %v", err)
 			}
@@ -200,46 +199,6 @@ func TestCrossHarnessUninstallIsIdempotent(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestUninstallingOneHarnessTakesTheSharedFile is a RECORDED HAZARD, not a
-// passing design.
-//
-// The two AGENTS.md harnesses read one file at one project path. Each
-// adapter's uninstall asks its generator which files are its own and
-// removes them, guarded by a filename check — and for this file both
-// answers are correct and identical. So uninstalling either one deletes
-// the instruction file the other still needs, and the surviving harness is
-// silently de-configured.
-//
-// Neither adapter can currently detect the other: they may not import
-// internal/, so neither can ask which harnesses are installed. This test
-// pins the CURRENT behaviour so it is documented rather than discovered,
-// and fails the moment it changes — at which point the fix has landed and
-// this test is the one to rewrite. See the ticket filed in R-14.254.
-func TestUninstallingOneHarnessTakesTheSharedFile(t *testing.T) {
-	dir := crossHarnessProject(t)
-
-	if _, err := codex.Install(context.Background(), dir); err != nil {
-		t.Fatalf("installing the first harness: %v", err)
-	}
-	if _, err := opencode.Install(context.Background(), dir); err != nil {
-		t.Fatalf("installing the second harness: %v", err)
-	}
-	shared := filepath.Join(dir, "AGENTS.md")
-	if _, err := os.Stat(shared); err != nil {
-		t.Fatalf("the shared instruction file was not installed: %v", err)
-	}
-
-	if _, err := codex.Uninstall(context.Background(), dir); err != nil {
-		t.Fatalf("uninstalling the first harness: %v", err)
-	}
-	if _, err := os.Stat(shared); !os.IsNotExist(err) {
-		t.Skipf("the shared file survived one harness's uninstall (stat err = %v) — "+
-			"the hazard this test records has been fixed; rewrite it as an assertion", err)
-	}
-	t.Log("RECORDED HAZARD: uninstalling one AGENTS.md harness removed the instruction " +
-		"file the other still reads; the surviving harness is now silently unconfigured")
 }
 
 // sortedCopy returns a sorted copy, so an order difference between an

@@ -47,29 +47,57 @@ import (
 	"path/filepath"
 )
 
-// UninstallResult reports what happened to one file this plugin manages.
+// UninstallResult reports what happened to one candidate path.
+//
+// Four outcomes, and an operator needs to tell them apart: Removed means
+// the file is gone, AlreadyClean means there was nothing to do, Kept means
+// there is still a file on disk that this uninstall deliberately left, and
+// neither of the three means the path was refused (that is an error). The
+// three harness adapters carry the same shape so a caller handling all of
+// them does not need three vocabularies (R-14.265).
 type UninstallResult struct {
 	// Path is the file considered.
 	Path string
-	// Removed is true when the file existed and was deleted, false when it
-	// was already absent — which is a success, not a failure.
+	// Removed is true when the file existed and was deleted.
 	Removed bool
-	// Kept is true when the file was left in place deliberately: it exists
-	// but this plugin could not confirm it is its own. A kept file is
-	// reported so an operator can deal with it, never silently deleted.
+	// AlreadyClean is true when the file did not exist (idempotent no-op).
+	AlreadyClean bool
+	// Kept is true when the file exists and was left in place on purpose.
 	Kept bool
+	// KeptReason says why, in a sentence an operator can act on. Empty
+	// unless Kept. A bare boolean tells somebody a file survived and
+	// nothing about what to do with it.
+	KeptReason string
 }
+
+// SharedPaths is the set of files another INSTALLED harness still reads.
+//
+// It is a PARAMETER, not an option with a default, because the default
+// that would be convenient here — "nothing is shared" — is exactly the bug
+// this type exists to remove (R-14.265). Every call site has to say
+// something, and a caller that genuinely knows of no other harness passes
+// an empty set on purpose rather than by omission.
+//
+// The set is computed by the composition root, which is the only place
+// that can see both what is installed and what each install generates.
+// This package may not import internal/**, so it cannot compute it, and a
+// base-name heuristic on this side would refuse to remove AGENTS.md on a
+// machine where only one harness was ever installed.
+type SharedPaths map[string]string
+
+// Claims reports the harness still reading path, or "" when nothing does.
+func (s SharedPaths) Claims(path string) string { return s[path] }
 
 // Uninstall removes every file cascade-claude installs for cwd.
 //
 // It continues past a file it could not remove, so one stubborn file does
 // not leave the rest of the harness half-configured; the first error is
 // returned once every other file has been dealt with.
-func Uninstall(ctx context.Context, paths Paths, cwd string) ([]UninstallResult, error) {
+func Uninstall(ctx context.Context, paths Paths, cwd string, shared SharedPaths) ([]UninstallResult, error) {
 	results := make([]UninstallResult, 0, 4)
 	var firstErr error
 
-	instructions, genErr := uninstallInstructions(ctx, cwd)
+	instructions, genErr := uninstallInstructions(ctx, cwd, shared)
 	results = append(results, instructions...)
 	firstErr = keepFirst(firstErr, genErr)
 
@@ -94,7 +122,7 @@ func Uninstall(ctx context.Context, paths Paths, cwd string) ([]UninstallResult,
 // would drift is by leaving a file behind that nobody remembered to add.
 // A generator that is not wired is reported, and nothing is removed — this
 // plugin will not delete files it cannot confirm it wrote.
-func uninstallInstructions(ctx context.Context, cwd string) ([]UninstallResult, error) {
+func uninstallInstructions(ctx context.Context, cwd string, shared SharedPaths) ([]UninstallResult, error) {
 	files, err := Generate(ctx, cwd)
 	if err != nil {
 		return nil, fmt.Errorf("cascade-claude: uninstall: cannot determine which instruction files are ours: %w", err)
@@ -102,7 +130,7 @@ func uninstallInstructions(ctx context.Context, cwd string) ([]UninstallResult, 
 	results := make([]UninstallResult, 0, len(files))
 	var firstErr error
 	for _, f := range files {
-		res, removeErr := removeIfOurs(f.Path, f.Content)
+		res, removeErr := removeIfOurs(f.Path, f.Content, shared)
 		results = append(results, res)
 		firstErr = keepFirst(firstErr, removeErr)
 	}
@@ -115,16 +143,25 @@ func uninstallInstructions(ctx context.Context, cwd string) ([]UninstallResult, 
 // A file whose content has DIVERGED is kept and reported: the operator
 // edited it, or something else owns it now, and either way deleting it
 // would destroy work this plugin did not do.
-func removeIfOurs(path string, ours []byte) (UninstallResult, error) {
+func removeIfOurs(path string, ours []byte, shared SharedPaths) (UninstallResult, error) {
+	if by := shared.Claims(path); by != "" {
+		return UninstallResult{
+			Path: path, Kept: true,
+			KeptReason: "the " + by + " harness is installed and still reads this file",
+		}, nil
+	}
 	onDisk, err := os.ReadFile(path) //nolint:gosec // path comes from the generator, not from user input.
 	if os.IsNotExist(err) {
-		return UninstallResult{Path: path}, nil
+		return UninstallResult{Path: path, AlreadyClean: true}, nil
 	}
 	if err != nil {
 		return UninstallResult{Path: path}, fmt.Errorf("cascade-claude: uninstall: read %s: %w", path, err)
 	}
 	if !bytesEqual(onDisk, ours) {
-		return UninstallResult{Path: path, Kept: true}, nil
+		return UninstallResult{
+			Path: path, Kept: true,
+			KeptReason: "the file has been edited since this plugin wrote it",
+		}, nil
 	}
 	if err := os.Remove(path); err != nil {
 		return UninstallResult{Path: path}, fmt.Errorf("cascade-claude: uninstall: remove %s: %w", path, err)
