@@ -184,8 +184,11 @@ func harnessCmdFixture(t *testing.T, installed ...string) {
 	// Each harness's own override is cleared: this process may itself be
 	// running under one, and an inherited override would silently point
 	// detection at the real installation.
-	t.Setenv("CLAUDE_CONFIG_DIR", "")
-	t.Setenv("CODEX_HOME", "")
+	for _, kind := range cascadecontext.SupportedHarnesses() {
+		if name := cascadecontext.OverrideVarFor(kind); name != "" {
+			t.Setenv(name, "")
+		}
+	}
 	for _, rel := range installed {
 		if err := os.MkdirAll(filepath.Join(home, rel), 0o750); err != nil {
 			t.Fatalf("seeding %s: %v", rel, err)

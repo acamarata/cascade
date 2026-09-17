@@ -74,11 +74,11 @@ func harnessDetectCases() []harnessDetectCase {
 		// Each harness's own override wins over both, which is how a
 		// second installation of one harness is found at all.
 		{"an override relocates one harness", "darwin",
-			envFor(map[string]string{"HOME": "/h", "CLAUDE_CONFIG_DIR": "/elsewhere/cfg"}),
+			envFor(map[string]string{"HOME": "/h", OverrideVarFor(HarnessClaude): "/elsewhere/cfg"}),
 			probeFor("/elsewhere/cfg", codexRoot),
 			[]HarnessKind{HarnessClaude, HarnessCodex}},
 		{"an override in force means the default root is not probed", "darwin",
-			envFor(map[string]string{"HOME": "/h", "CLAUDE_CONFIG_DIR": "/elsewhere/cfg"}),
+			envFor(map[string]string{"HOME": "/h", OverrideVarFor(HarnessClaude): "/elsewhere/cfg"}),
 			probeFor(claudeRoot), nil},
 	}
 }

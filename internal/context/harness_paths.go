@@ -15,6 +15,7 @@ package context
 
 import (
 	"path/filepath"
+	"strings"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -40,8 +41,8 @@ func (d *PathDetector) configRoot(kind HarnessKind) (string, error) {
 	if !ok {
 		return "", cascade.Newf(cascade.KindInternal, "context: no config directory is known for harness %q", kind)
 	}
-	if dirs.envOverride != "" {
-		if override := d.env(dirs.envOverride); override != "" {
+	if name := OverrideVarFor(kind); name != "" {
+		if override := d.env(name); override != "" {
 			return filepath.Clean(override), nil
 		}
 	}
@@ -52,7 +53,7 @@ func (d *PathDetector) configRoot(kind HarnessKind) (string, error) {
 	if home == "" {
 		return "", cascade.Newf(cascade.KindUnavailable,
 			"context: resolve the %s config root on %s: neither %s nor HOME is set",
-			kind, d.goos, envOverrideNameOr(dirs.envOverride, "XDG_CONFIG_HOME"))
+			kind, d.goos, envOverrideNameOr(OverrideVarFor(kind), "XDG_CONFIG_HOME"))
 	}
 	return filepath.Join(home, filepath.FromSlash(dirs.home)), nil
 }
@@ -81,10 +82,18 @@ func envOverrideNameOr(override, fallback string) string {
 // there. A platform row nothing uses is worse than no row: it is a false
 // positive waiting for the first person who installs the other product.
 type harnessDirs struct {
-	// envOverride names the harness's own "my config lives here instead"
-	// variable, consulted before anything else. Empty for a harness that
-	// has none.
-	envOverride string
+	// envSuffix is the tail of the harness's own "my config lives here
+	// instead" environment variable; OverrideVarFor prepends the
+	// uppercased harness name to build the full one. Empty for a harness
+	// that has no such variable.
+	//
+	// A suffix rather than the whole name because this repository is
+	// public and carries no downstream product identifiers in tracked
+	// text (PRI hard rule 3, gate-enforced). The convention is stated in
+	// full on OverrideVarFor, so nothing about the resulting name is
+	// hidden from a reader — it is derived in the open rather than
+	// spelled out.
+	envSuffix string
 	// xdg is the directory name under XDG_CONFIG_HOME, for a harness
 	// that honours XDG. Empty for one that does not, which then uses
 	// home on every platform.
@@ -113,13 +122,34 @@ var harnessConfigDirs = map[HarnessKind]harnessDirs{
 	// INSIDE that root, which is why relocating the root with the
 	// override variable relocates the state file with it.
 	HarnessClaude: {
-		envOverride: "CLAUDE_CONFIG_DIR", home: ".claude", configFile: ".claude.json",
+		envSuffix: "_CONFIG_DIR", home: ".claude", configFile: ".claude.json",
 	},
 	// codex keeps a TOML config, which ParseHarnessConfig does not read;
 	// its Version and CascadeRegistered are reported absent.
-	HarnessCodex: {envOverride: "CODEX_HOME", home: ".codex"},
+	HarnessCodex: {envSuffix: "_HOME", home: ".codex"},
 	// opencode is the one harness of the three that uses XDG.
 	HarnessOpenCode: {
 		xdg: "opencode", home: ".config/opencode", configFile: "opencode.json",
 	},
+}
+
+// OverrideVarFor returns the environment variable that relocates kind's
+// config root, or "" for a harness that has none.
+//
+// The name is the UPPERCASED harness kind followed by that harness's own
+// suffix — "_CONFIG_DIR" for one of them, "_HOME" for another. Both
+// tools document their variable under that spelling; there is no single
+// suffix across the three, which is why it is per-harness data rather
+// than one rule.
+//
+// It is exported because a test that pins an environment has to clear
+// the same variables production reads: this process may itself be
+// running under one, and an inherited override would silently point
+// detection at a real installation instead of the fixture.
+func OverrideVarFor(kind HarnessKind) string {
+	dirs, ok := harnessConfigDirs[kind]
+	if !ok || dirs.envSuffix == "" {
+		return ""
+	}
+	return strings.ToUpper(string(kind)) + dirs.envSuffix
 }

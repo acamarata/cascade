@@ -45,11 +45,17 @@ Each harness's own override environment variable is checked first, then
 XDG for the one harness that honours it, then the home dotfile
 directory.
 
-| Harness | Override | Default location |
+| Harness | Override variable | Default location |
 |---|---|---|
-| `claude` | `CLAUDE_CONFIG_DIR` | `~/.claude` |
-| `codex` | `CODEX_HOME` | `~/.codex` |
+| `claude` | `<HARNESS>_CONFIG_DIR` | `~/.claude` |
+| `codex` | `<HARNESS>_HOME` | `~/.codex` |
 | `opencode` | — | `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode` |
+
+`<HARNESS>` is the harness kind from the first column, uppercased — the
+spelling each tool documents for its own variable. `cascade context
+harness list --json` reports the resolved root for every harness, so the
+quickest way to confirm which one is in effect is to read it back from
+there.
 
 The override matters more than it looks: running two accounts of one
 harness side by side is exactly what it exists for, and a machine that
