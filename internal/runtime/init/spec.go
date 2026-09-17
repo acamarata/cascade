@@ -63,11 +63,11 @@ func (p *SpecPrompter) Confirm(question string, def bool) (bool, error) {
 // fails those tests.
 func (p *SpecPrompter) confirmFromSpec(question string) (bool, bool) {
 	switch {
-	case strings.HasPrefix(question, "Enable "):
-		if !p.spec.PluginsSet {
-			return false, false
-		}
-		return contains(p.spec.Plugins, between(question, "Enable ", "?")), true
+	// No "Enable <plugin>?" branch: step 4 no longer asks. Every catalog
+	// entry is a builtin, always present and always active, so there was
+	// never an answer for a file to give (R-14.277). The file's `plugins`
+	// key still drives the RECONVERGE path, where the subject is
+	// installed plugins and a toggle is real.
 	case strings.HasPrefix(question, "Wire "):
 		if !p.spec.HarnessesSet {
 			return false, false

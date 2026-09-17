@@ -14,8 +14,17 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// TestTheCatalogIsTheLiveRegistry: a checklist offering a plugin this
-// build cannot install would install nothing and report success.
+// TestTheCatalogIsTheLiveRegistry: the step states what this build ships,
+// and states ALL of it.
+//
+// It used to assert that only the default-on entry was selected, which
+// described a selection that did not exist: every catalog entry is a
+// builtin, mounted unconditionally by the composition root, and no code
+// path anywhere reads DefaultOn or the journalled list to decide whether
+// one runs (R-14.277). The old assertion therefore passed while `beta`
+// was fully active on the machine the wizard had just reported it off on.
+// What is worth holding is that the row set comes from the LIVE registry
+// and that the journal records what is actually there.
 func TestTheCatalogIsTheLiveRegistry(t *testing.T) {
 	w, rec, out, _ := fixture(t, Options{Mode: ModeYes}, nil)
 	rec.entries = []CatalogEntry{
@@ -27,12 +36,44 @@ func TestTheCatalogIsTheLiveRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if got := report.State.Plugins; len(got) != 1 || got[0] != "alpha" {
-		t.Errorf("selected %v, want only the default-on entry", got)
+	if got := report.State.Plugins; len(got) != 2 || got[0] != "alpha" || got[1] != "beta" {
+		t.Errorf("journalled %v, want every entry this build ships", got)
 	}
 	for _, name := range []string{"alpha", "beta"} {
 		if !strings.Contains(out.String(), name) {
-			t.Errorf("the checklist omits %q, so its state cannot be seen:\n%s", name, out)
+			t.Errorf("the catalog omits %q, so its state cannot be seen:\n%s", name, out)
+		}
+	}
+	if !strings.Contains(out.String(), "built in") {
+		t.Errorf("the catalog does not say these are built in, which is why they are not a choice:\n%s", out)
+	}
+}
+
+// TestTheCatalogIsNotAQuestion is the mutation-proof for the assertion
+// above: an interactive run, where a prompt WOULD be asked if the step
+// still asked one, and the record of every question it did ask.
+func TestTheCatalogIsNotAQuestion(t *testing.T) {
+	prompt := &scriptedPrompter{
+		choices: []string{ProfileLocal},
+		lines:   []string{"/db"},
+		// add-a-provider no, wire claude no, wire opencode no,
+		// telemetry no, daemon no — plus two spares, so that a step 4
+		// which HAS started asking again reaches the assertion below
+		// instead of dying on "unscripted Confirm" three steps later.
+		confirms: []bool{false, false, false, false, false, false, false},
+	}
+	w, rec, _, _ := fixture(t, Options{}, prompt)
+	rec.entries = []CatalogEntry{
+		{Name: "alpha", Description: "one", DefaultOn: true},
+		{Name: "beta", Description: "two", DefaultOn: false},
+	}
+
+	if _, err := w.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	for _, q := range prompt.asked {
+		if strings.HasPrefix(q, "Enable ") {
+			t.Errorf("the step asked %q, and nothing anywhere reads the answer", q)
 		}
 	}
 }
@@ -154,9 +195,12 @@ func TestANonPlatformDetectionFailureStillFails(t *testing.T) {
 // work.
 func TestTheProviderLoopRunsTheRealSubcommand(t *testing.T) {
 	prompt := &scriptedPrompter{
-		choices:  []string{ProfileLocal, CredentialKey},
-		lines:    []string{"/db", "anthropic"},
-		confirms: []bool{true, true, false, false, false, true, true},
+		choices: []string{ProfileLocal, CredentialKey},
+		lines:   []string{"/db", "anthropic"},
+		// add-a-provider yes, then no; wire claude no, wire opencode no;
+		// telemetry yes, daemon yes. No plugin answer: step 4 states the
+		// builtins rather than asking about them (R-14.277).
+		confirms: []bool{true, false, false, false, true, true},
 	}
 	w, rec, _, _ := fixture(t, Options{}, prompt)
 
@@ -188,7 +232,7 @@ func TestAProviderAddFailureFailsTheStep(t *testing.T) {
 	prompt := &scriptedPrompter{
 		choices:  []string{ProfileLocal, CredentialOAuth},
 		lines:    []string{"/db", "anthropic"},
-		confirms: []bool{true, true},
+		confirms: []bool{true},
 	}
 	w, rec, _, _ := fixture(t, Options{}, prompt)
 	rec.subErr = errors.New("micro-verify rejected the key (401)")

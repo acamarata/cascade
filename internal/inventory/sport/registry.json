@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T16:37:39Z",
+  "generated_at": "2026-09-17T16:47:23Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4483,6 +4483,21 @@
           "status": "ADD",
           "ticket": "P1-E17-W4-S37-T2",
           "raw": "cmd/cascade/node-serve-dispatch (ADD, P1-E17-W4-S37-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/plugin builtins",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_builtins.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E19-W4-S42-T7",
+          "raw": "cmd/cascade/plugin builtins (ADD) — P1-E19-W4-S42-T7."
         }
       ],
       "statuses": [
@@ -24220,7 +24235,7 @@
       ]
     }
   ],
-  "total_sites": 2328,
+  "total_sites": 2329,
   "unspecified_count": 69,
   "multi_status_count": 41
 }

@@ -17,10 +17,11 @@ import (
 // the step is satisfied without asking.
 func TestProfileFlagPreselectsStepTwo(t *testing.T) {
 	prompt := &scriptedPrompter{
-		// three storage references, then the plugin checkbox, then
-		// "add a provider?" answered no, telemetry no, daemon yes.
+		// three storage references, then "add a provider?" answered no,
+		// the two detected harnesses declined, telemetry no, daemon yes.
+		// Step 4 takes no answer: the builtins are stated (R-14.277).
 		lines:    []string{"vault://pg", "vault://redis", "vault://s3"},
-		confirms: []bool{true, false, false, false, false, true},
+		confirms: []bool{false, false, false, false, true},
 	}
 	w, _, _, _ := fixture(t, Options{Profile: ProfileServer}, prompt)
 

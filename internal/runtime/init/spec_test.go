@@ -141,6 +141,14 @@ enabled = true
 install = true
 `)
 	w, rec, out, _ := fixture(t, Options{Spec: spec}, NewSpecPrompter(spec))
+	// Two entries, one of them NOT named by the file, so "the file
+	// selected a subset" and "the file selected nothing" are
+	// distinguishable. With the fixture's single entry they were not,
+	// and this test asserted a selection that never happened.
+	rec.entries = []CatalogEntry{
+		{Name: "claude", Description: "the first", DefaultOn: true},
+		{Name: "alpha", Description: "the second", DefaultOn: false},
+	}
 
 	report, err := w.Run(context.Background())
 	if err != nil {
@@ -149,8 +157,15 @@ install = true
 	if report.State.Profile != "server" {
 		t.Errorf("profile = %q, want the file's", report.State.Profile)
 	}
-	if got := report.State.Plugins; len(got) != 1 || got[0] != "claude" {
-		t.Errorf("plugins = %v, want only the one the file enabled", got)
+	// The file's [plugins] key selects NOTHING on a fresh run: every
+	// catalog entry is a builtin and is active either way (R-14.277).
+	// Journalling the file's subset would record a machine state that is
+	// not this machine's.
+	if got := report.State.Plugins; len(got) != 2 || got[0] != "alpha" || got[1] != "claude" {
+		t.Errorf("plugins = %v, want every builtin this binary ships", got)
+	}
+	if !strings.Contains(out.String(), "nothing to select") {
+		t.Errorf("the file named plugins and was not told the naming selects nothing:\n%s", out)
 	}
 	if got := rec.wired; len(got) != 1 || got[0] != "opencode" {
 		t.Errorf("wired %v, want only the harness the file named", got)

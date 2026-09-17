@@ -33,18 +33,30 @@ func (w *Wizard) stepPlugins(_ context.Context, state *State) error {
 		w.say("   this build registers no plugins")
 		return nil
 	}
+	// STATED, NOT ASKED (R-14.277). The catalog IS the builtin registry:
+	// every entry is compiled into this binary, its command namespace is
+	// mounted unconditionally by the composition root, and nothing
+	// anywhere reads an enabled flag for one. The step used to prompt
+	// "Enable <name>?" for each and then use the answer for the summary
+	// card and nothing else — a No changed nothing, and the plugin still
+	// ran. A question whose answer is discarded is worse than no
+	// question: it tells an operator they made a choice.
+	//
+	// `cascade plugin list` shows the same set marked builtin, and
+	// `plugin enable|disable` refuses one with that fact, so all three
+	// surfaces now say the same thing.
 	selected := make([]string, 0, len(entries))
 	for _, e := range entries {
-		on, err := w.deps.Prompt.Confirm("Enable "+e.Name+"? ("+e.Description+")", e.DefaultOn)
-		if err != nil {
-			return err
-		}
-		mark := " "
-		if on {
-			mark = "x"
-			selected = append(selected, e.Name)
-		}
-		w.say("   [%s] %-12s %s", mark, e.Name, e.Description)
+		selected = append(selected, e.Name)
+		w.say("   [built in] %-12s %s", e.Name, e.Description)
+	}
+	if spec := w.opts.Spec; spec != nil && spec.PluginsSet {
+		// A setup file may still NAME plugins; it is told plainly that
+		// the naming selects nothing here, rather than having its key
+		// silently ignored or the whole file refused over it. The same
+		// key does real work on the reconverge path, where the subject
+		// is INSTALLED plugins.
+		w.say("   this file names plugins, and they are all built in: there is nothing to select")
 	}
 	state.Plugins = selected
 	return nil

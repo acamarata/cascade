@@ -103,7 +103,7 @@ func (w *Wizard) Reconverge(ctx context.Context, opts ReconvergeOptions) (Conver
 	if !w.writing() {
 		return merged, nil
 	}
-	if err := w.applyConvergence(ctx, merged, providers, harnesses); err != nil {
+	if err := w.applyConvergence(ctx, merged, providers, plugins, harnesses); err != nil {
 		return merged, err
 	}
 	if !merged.Clean() {
@@ -171,7 +171,7 @@ func (w *Wizard) reportConvergence(
 // path. A second implementation of either here would drift from it.
 func (w *Wizard) applyConvergence(
 	ctx context.Context, merged Convergence,
-	providers ProviderConvergence, harnesses HarnessConvergence,
+	providers ProviderConvergence, plugins PluginConvergence, harnesses HarnessConvergence,
 ) error {
 	for _, key := range merged.Applied {
 		if err := w.deps.Sub.Run(ctx, "config", "set", key, renderValue(merged.desiredFor(key))); err != nil {
@@ -193,6 +193,15 @@ func (w *Wizard) applyConvergence(
 			w.say("   provider %s did not verify: %v", name, err)
 		}
 	}
+	// The plugin convergence is APPLIED, not only reported. It was
+	// computed, printed and dropped, so `--enable-plugin`/`--disable-plugin`
+	// printed a plan and performed none of it (R-14.277).
+	//
+	// A per-name failure is REPORTED rather than fatal, matching the
+	// provider re-verify above: a plugin that is built in refuses the
+	// toggle with that fact, and an operator is better served by being
+	// told than by a converge that otherwise succeeded failing over it.
+	w.applyPluginToggles(ctx, plugins)
 	if len(harnesses.Regenerate) > 0 {
 		// ONE sync, not one per file: `context harness sync` regenerates
 		// every stale file in the tree, so calling it per path would run
@@ -203,4 +212,28 @@ func (w *Wizard) applyConvergence(
 		}
 	}
 	return nil
+}
+
+// applyPluginToggles runs the enable/disable the convergence decided.
+//
+// Through `cascade plugin enable|disable`, for the same reason config and
+// provider work go through their own subcommands: that command owns what a
+// plugin's enabled flag means, including the refusal for a builtin, and a
+// second implementation here would be the surface that disagrees with it.
+//
+// Nothing here is fatal. A toggle that fails leaves the named plugin as it
+// was and says so; the alternative is a converge that wrote the config,
+// added the providers and regenerated the harness files, then reported
+// total failure because one plugin would not turn off.
+func (w *Wizard) applyPluginToggles(ctx context.Context, plugins PluginConvergence) {
+	for _, name := range plugins.Enable {
+		if err := w.deps.Sub.Run(ctx, "plugin", "enable", name); err != nil {
+			w.say("   plugin %s did not enable: %v", name, err)
+		}
+	}
+	for _, name := range plugins.Disable {
+		if err := w.deps.Sub.Run(ctx, "plugin", "disable", name); err != nil {
+			w.say("   plugin %s did not disable: %v", name, err)
+		}
+	}
 }
