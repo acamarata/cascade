@@ -139,5 +139,7 @@ and `internal/plugins/testdata/cross-harness/README.md`.
 
 ## See also
 
+- [Setting Cascade Up](Init-Guide.md) — `cascade init` step 6 is where
+  harnesses are first wired.
 - [Context Reference](Context-Reference.md) — session scope, context
   assembly, and the tier cascade the instruction files are generated from.

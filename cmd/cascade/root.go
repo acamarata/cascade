@@ -118,6 +118,7 @@ func newRootCmd() *cobra.Command {
 // there is exactly one tree the binary, the tests and the golden help
 // fixture all see.
 func mountSubcommands(root *cobra.Command) {
+	mountInitCmd(root)
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newCompletionCmd(root))
 	mountConfigCmd(root)

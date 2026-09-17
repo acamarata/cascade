@@ -1,0 +1,2 @@
+go test fuzz v1
+string("{\"projects\":{\"/p\":\"not an object\"}}")

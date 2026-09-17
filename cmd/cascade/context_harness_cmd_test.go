@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -205,10 +207,25 @@ func harnessCmdFixture(t *testing.T, installed ...string) {
 // checked the installed harness would pass against a detector that
 // reported everything installed, which is the more dangerous of the two
 // wrong answers here.
+//
+// On a tier-2 platform the correct answer is the refusal, and that is
+// what is asserted there — not a skip. "This build does not support
+// harness detection here" is a behaviour worth pinning, and a skipped
+// test would leave the one platform that takes a different code path
+// untested on the only runner that executes it.
 func TestFetchContextHarnessListEmbedded(t *testing.T) {
 	harnessCmdFixture(t, ".claude")
 
 	result, err := fetchContextHarnessList(context.Background(), contextScopeDeps{})
+	if runtime.GOOS == "windows" {
+		if !errors.Is(err, cascadecontext.ErrHarnessDetectionUnsupported) {
+			t.Fatalf("err = %v, want the tier-2 refusal on this platform", err)
+		}
+		if len(result.Harnesses) != 0 {
+			t.Errorf("a refusal still reported %d harness(es)", len(result.Harnesses))
+		}
+		return
+	}
 	if err != nil {
 		t.Fatalf("fetchContextHarnessList: %v", err)
 	}
@@ -241,7 +258,17 @@ func TestContextHarnessListCommandPrintsTheTable(t *testing.T) {
 	cmd.SetErr(buf)
 	cmd.SetArgs(nil)
 	cmd.SetContext(context.Background())
-	if err := cmd.Execute(); err != nil {
+	err := cmd.Execute()
+	if runtime.GOOS == "windows" {
+		// Tier-2: the command surfaces the detector's refusal rather
+		// than printing an empty table, which would read as "no
+		// harnesses installed" on a machine nobody could look at.
+		if !errors.Is(err, cascadecontext.ErrHarnessDetectionUnsupported) {
+			t.Fatalf("err = %v, want the tier-2 refusal on this platform", err)
+		}
+		return
+	}
+	if err != nil {
 		t.Fatalf("context harness list: %v", err)
 	}
 
