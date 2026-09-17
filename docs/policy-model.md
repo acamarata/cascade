@@ -562,3 +562,51 @@ verdict, the rung, the deciding layer and the engine's own explanation — IS
 appended to the audit log, which is what an append-only log is for. The
 trace carries no command text and no parameters; it is bound to the action
 by the same parameter hash the routing record uses.
+
+## Supervision tiers
+
+Three tiers decide how a held action reaches a person. The tier is
+CONFIGURATION — `[fleet.supervision].tier`, a hot-reload key — and never a
+command-line flag. A tier chosen per invocation would let the caller pick
+how much supervision its own action receives, which is the one party that
+must not choose.
+
+| Tier | Name | What it does |
+| --- | --- | --- |
+| 1 | hook-mediated | The auto-advance stage decides within the profile's ceiling. Nothing attaches to a terminal. This is the default. |
+| 2 | PTY-attached | Every action at risk level L2 or above is held until a person approves it on an attached pseudo-terminal. Below L2 the tier has no opinion and the action falls through to tier 1's stage. |
+| 3 | suggest-only | Nothing executes. Every action becomes a suggestion filed for review, at every rung. |
+
+An absent section resolves to tier 1, which is both the documented default
+and the least autonomous of the three. A present but unrecognised value is
+an error that refuses the config file: an operator who wrote `tier = 4`
+meant something, and guessing which of three things they meant is worse
+than refusing — especially when the cheapest guess would silently give
+them less supervision than they asked for. For the same reason, selecting
+a tier whose supervisor is not wired REFUSES the action rather than
+falling back to tier 1.
+
+### Tier 2, and what "fails closed" means here
+
+A denial, a prompt that could not be shown, a terminal that detached
+mid-question, and an environment with nobody at the keyboard
+(`CASCADE_NO_INPUT=1`) all reach the same answer: the action does not run.
+They differ only in what the operator is told. Only an explicit `y` or
+`yes` approves — an approval parser that accepted anything except a
+recognised "no" would turn a stray keystroke, or a terminal that closed
+before the person answered, into consent.
+
+Tier 2 needs a pseudo-terminal, which Windows does not provide
+(06-FORGE-SPEC §2). There it returns a typed refusal naming tiers 1 and 3
+as the alternatives, rather than an imitation of an approval prompt: an
+operator told "unsupported" picks another tier, while one whose prompts
+misbehave learns to distrust the approval itself.
+
+### Tier 3 is not a deny
+
+An agent told its action was denied retries, or works around. An agent
+told the action is waiting for a person does neither, which is why tier 3
+is a tier rather than a policy verdict. The suggestion names the action,
+its rung and the engine's own reason; it never carries the command text,
+because a list read at leisure is exactly the wrong place to accumulate a
+second copy of every command the fleet wanted to run.

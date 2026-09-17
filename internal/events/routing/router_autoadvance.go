@@ -68,6 +68,31 @@ type DryRunFirst interface {
 // Compile-time proof that the production guard satisfies the seam.
 var _ DryRunFirst = (*supervision.DryRunFirstGuard)(nil)
 
+// TierSupervisor resolves an ask under the operator's configured
+// supervision tier (P1-E18-W4-S39-T3, R-16.54). The concrete
+// implementation is supervision.TierDispatcher.
+//
+// handled=false means tier 1 — the auto-advance stage below decides,
+// exactly as it did before this seam existed. handled=true means the tier
+// answered, and the router returns that answer unchanged: it does not
+// second-guess a supervisor and it does not classify anything to reach it.
+type TierSupervisor interface {
+	Supervise(ctx context.Context, req policy.EvalRequest, out policy.EvalOutcome) (bool, policy.Verdict, error)
+}
+
+// Compile-time proof that the production dispatcher satisfies the seam.
+var _ TierSupervisor = (*supervision.TierDispatcher)(nil)
+
+// WithTierSupervision attaches the configured-tier stage.
+//
+// A router without one behaves exactly as before — tier 1 — which is also
+// what the dispatcher answers when the config selects tier 1, so the two
+// paths agree rather than merely coinciding.
+func (r *ActionRouter) WithTierSupervision(tiers TierSupervisor) *ActionRouter {
+	r.tiers = tiers
+	return r
+}
+
 // WithAutoAdvance attaches the ask-resolution stage.
 //
 // It returns the router so a composition root can chain it, and it is a
@@ -113,6 +138,17 @@ func (r *ActionRouter) resolveAutoAdvance(
 	if r.dryFirst != nil {
 		if gateErr := r.dryFirst.Guard(ctx, req); gateErr != nil {
 			return policy.VerdictDeny, gateErr
+		}
+	}
+	// The configured supervision tier, after the dry-run gate and before
+	// the tier-1 stage. Tiers 2 and 3 answer here and the stage below is
+	// not consulted at all — an operator who asked for a human on the
+	// terminal, or for suggestions only, did not ask for a hook to decide
+	// as well. Tier 1 reports handled=false and changes nothing.
+	if r.tiers != nil {
+		handled, tierVerdict, tierErr := r.tiers.Supervise(ctx, req, out)
+		if handled {
+			return tierVerdict, tierErr
 		}
 	}
 	descriptor := supervision.ActionDescriptor{

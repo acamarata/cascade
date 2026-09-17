@@ -197,4 +197,11 @@ var KnownModuleLicenses = map[string]string{
 	"github.com/clipperhouse/uax29/v2":      "MIT",
 	"github.com/rivo/uniseg":                "MIT",
 	"github.com/xo/terminfo":                "MIT",
+
+	// P1-E18-W4-S39-T3 (R-16.54) promoted github.com/creack/pty to a
+	// direct require: tier-2 PTY supervision attaches a real OS
+	// pseudo-terminal through it. MIT, verified against the module's own
+	// LICENSE file; pure Go syscalls with no cgo, which is what keeps the
+	// core CGO-free (repo hard rule 2).
+	"github.com/creack/pty": "MIT",
 }

@@ -37,6 +37,11 @@ func (e *recordingEngine) Evaluate(_ context.Context, req policy.EvalRequest) (p
 //     level the engine already resolved and has no access to the command
 //     text at all — asserted below on ActionDescriptor's own shape, so
 //     this entry cannot become a loophole by drift.
+//   - tiers: the configured-tier stage (P1-E18-W4-S39-T3, R-16.54). It
+//     does NOT classify either: the tier comes from the operator's config
+//     file, never from the action, and the stage is handed the level the
+//     engine already resolved. It can only answer an ask the engine
+//     already reached.
 //   - dryFirst: the mandatory first-run dry-run gate (P1-E18-W4-S39-T4,
 //     R-14.247 §7). It does NOT classify: it receives the request the
 //     router already built for its one live Evaluate and can only block a
@@ -44,7 +49,7 @@ func (e *recordingEngine) Evaluate(_ context.Context, req policy.EvalRequest) (p
 //     engine's verdict through the stage above.
 var routerFields = map[string]bool{
 	"engine": true, "audit": true, "advance": true, "advanceSink": true,
-	"dryFirst": true,
+	"dryFirst": true, "tiers": true,
 }
 
 // TestRouteActionPerformsNoClassification asserts the router holds only its

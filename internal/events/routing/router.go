@@ -177,6 +177,10 @@ type ActionRouter struct {
 	// path, receives the request the engine already evaluated, and can
 	// only BLOCK — it classifies nothing and resolves no rung.
 	dryFirst DryRunFirst
+	// tiers resolves an ask under the operator's configured supervision
+	// tier. Like dryFirst it classifies nothing: it receives the level the
+	// engine already resolved and never sees the command text.
+	tiers TierSupervisor
 }
 
 // NewActionRouter returns a router over engine, recording every decision
