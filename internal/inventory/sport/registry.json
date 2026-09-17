@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T00:57:57Z",
+  "generated_at": "2026-09-17T00:59:12Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3427,6 +3427,12 @@
           "raw": "cmd/cascade/daemon (CHANGED — P1-E07-W2-S13-T4 memory job wiring"
         },
         {
+          "file": "cmd/cascade/daemon_unix_metrics.go",
+          "line": 30,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGED — fleet metrics wiring)."
+        },
+        {
           "file": "cmd/cascade/daemon_unix_policy.go",
           "line": 30,
           "status": "CHANGE",
@@ -5447,6 +5453,58 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "fleet.Metrics",
+      "sites": [
+        {
+          "file": "internal/fleet/metrics.go",
+          "line": 37,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S40-T3",
+          "raw": "fleet.Metrics/ADDED (P1-E18-W4-S40-T3). The contract names the"
+        },
+        {
+          "file": "internal/fleet/metrics_events.go",
+          "line": 40,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S40-T3",
+          "raw": "fleet.Metrics/ADDED (P1-E18-W4-S40-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.Metrics source tests",
+      "sites": [
+        {
+          "file": "internal/fleet/metrics_sources_test.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S40-T3",
+          "raw": "fleet.Metrics source tests (ADD) — P1-E18-W4-S40-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.Metrics tests",
+      "sites": [
+        {
+          "file": "internal/fleet/metrics_test.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S40-T3",
+          "raw": "fleet.Metrics tests (ADD) — P1-E18-W4-S40-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -22248,7 +22306,7 @@
       ]
     }
   ],
-  "total_sites": 2163,
+  "total_sites": 2168,
   "unspecified_count": 66,
   "multi_status_count": 40
 }
