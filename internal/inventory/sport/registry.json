@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T00:59:12Z",
+  "generated_at": "2026-09-17T01:05:11Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2049,7 +2049,7 @@
         },
         {
           "file": "cmd/cascade/plugin_manage.go",
-          "line": 19,
+          "line": 26,
           "status": "ADD",
           "ticket": "P1-E15-W4-S32-T4",
           "raw": "cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4)."

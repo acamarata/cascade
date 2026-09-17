@@ -16,13 +16,24 @@
 // "nothing to drain," the honest answer for a one-shot CLI process that
 // never held the plugin's live handle in the first place.
 //
+// UPDATE (P1-E16-W4-S34-T1): remove no longer passes nil. Draining a live
+// in-daemon handle is still out of reach here, but cascade-claude's
+// UNINSTALL is not — it is filesystem work a one-shot CLI process can do,
+// and leaving it undone meant removing that plugin deleted its record and
+// left every file it had written on disk. claudeTeardown below is that
+// hook; it declines by name for every other plugin.
+//
 // SPORT: cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4).
 package main
 
 import (
 	"context"
+	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/acamarata/cascade/internal/audit"
+	claude "github.com/acamarata/cascade/plugins/claude"
 
 	"github.com/acamarata/cascade/internal/plugins"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -78,7 +89,7 @@ func newPluginRemoveCmd(deps pluginDeps) *cobra.Command {
 		Args:  usageArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rec, err := withPluginStore(cmd.Context(), deps, func(ctx context.Context, store provider.Store) (plugins.PluginMetadata, error) {
-				return plugins.RemovePlugin(ctx, store, nil, args[0])
+				return plugins.RemovePlugin(ctx, store, claudeTeardown(deps, store), args[0])
 			})
 			if err != nil {
 				return err
@@ -95,4 +106,26 @@ type pluginRemoveView struct {
 
 func (v pluginRemoveView) String() string {
 	return "removed " + v.Name + " (was v" + v.RemovedVersion + ")"
+}
+
+// claudeTeardown builds the uninstall hook `plugin remove` runs
+// (P1-E16-W4-S34-T1). Before this the seam was passed nil, so removing
+// cascade-claude deleted its RECORD and left every file it had written on
+// disk — an uninstall that uninstalled nothing.
+//
+// A teardown that cannot be built is nil, which RemovePlugin treats as
+// "no hook": the record is still removed. That is the honest degradation.
+// Refusing to remove a plugin because its harness paths could not be
+// resolved would strand an operator on a machine whose harness is already
+// gone, which is exactly when they are most likely to be removing it.
+func claudeTeardown(deps pluginDeps, store provider.Store) plugins.ProcessTeardown {
+	paths, err := claude.HostPaths()
+	if err != nil {
+		return nil
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil
+	}
+	return plugins.NewClaudeTeardown(paths, cwd, audit.New(store, deps.Clock, nil))
 }
