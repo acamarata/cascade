@@ -36,9 +36,11 @@
           }
         }
       },
-      "status": "deferred",
-      "deferred_to": "P1-E16-W4-S34-T5",
-      "reason": "v2 has no RPC that reads a tier instruction file by tier name; the tier files are written by `cascade context harness sync`, not served"
+      "status": "registered",
+      "name": "cascade_context_show",
+      "rpc_method": "context.show",
+      "capability": "context.read",
+      "alias": ""
     },
     {
       "v1_name": "cascade.search",
@@ -122,7 +124,7 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-E16-W4-S34-T5",
+      "deferred_to": "P1-E33-W7-S67-T3",
       "reason": "internal/repo builds a SymbolGraph for reachability only; it exposes no symbol-search entry point and no tree-sitter function index"
     },
     {
@@ -232,7 +234,7 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-E16-W4-S34-T5",
+      "deferred_to": "retired",
       "reason": "v2 has no project master-list surface; the concept did not survive the clean-sheet rewrite"
     },
     {
@@ -261,7 +263,7 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-E16-W4-S34-T5",
+      "deferred_to": "retired",
       "reason": "v1 read a project memory FILE by (project, file); v2's store is record-addressed by (kind, name) and has no file-path surface"
     },
     {
@@ -296,7 +298,7 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-E16-W4-S34-T5",
+      "deferred_to": "retired",
       "reason": "v1 APPENDED to a project memory file; v2's memory.remember writes a whole record, which is a different operation and needs its own schema decision"
     },
     {
@@ -393,7 +395,7 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-E16-W4-S34-T5",
+      "deferred_to": "served-by-plugin",
       "reason": "the PBD phase tree is plugins/pbd's; internal/mcp must not import plugins/**, and no pbd.* RPC namespace is registered"
     },
     {
@@ -437,7 +439,7 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-E16-W4-S34-T5",
+      "deferred_to": "served-by-plugin",
       "reason": "same: no pbd.* RPC namespace exists for internal/mcp to dispatch into"
     },
     {
@@ -501,7 +503,7 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-E16-W4-S34-T5",
+      "deferred_to": "served-by-plugin",
       "reason": "same"
     },
     {
@@ -527,7 +529,7 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-E16-W4-S34-T5",
+      "deferred_to": "served-by-plugin",
       "reason": "same"
     },
     {
@@ -549,7 +551,7 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-E16-W4-S34-T5",
+      "deferred_to": "served-by-plugin",
       "reason": "same"
     },
     {
@@ -588,7 +590,7 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-E16-W4-S34-T5",
+      "deferred_to": "served-by-plugin",
       "reason": "same"
     },
     {
@@ -617,7 +619,7 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-E16-W4-S34-T5",
+      "deferred_to": "retired",
       "reason": "v2 has no api-routes.yaml checker, and the tool issued outbound HTTP, which needs an egress class before it can be exposed to a model"
     },
     {
@@ -639,7 +641,7 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-E16-W4-S34-T5",
+      "deferred_to": "P1-E37-W8-S73-T3",
       "reason": "v1 drained a filesystem inbox directory; v2 routes notifications through internal/notify with no such directory"
     },
     {
@@ -657,7 +659,7 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-E16-W4-S34-T5",
+      "deferred_to": "retired",
       "reason": "internal/secrets ships a content Detector, not a repository scanner; there is no scan entry point to dispatch into"
     },
     {
@@ -675,7 +677,7 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-E16-W4-S34-T5",
+      "deferred_to": "retired",
       "reason": "v2 runs its dependency audit in CI (the supply-chain lane), not through an in-process surface a tool could call"
     },
     {

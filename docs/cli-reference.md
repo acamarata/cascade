@@ -141,7 +141,12 @@ field for each:
 | `tools` | Registered and visible to the harness. | — |
 | `withheld` | The tool exists and its method is served, but the policy engine does not grant its capability. | `cascade policy grant <capability>`, then restart the MCP server. |
 | `unservable` | This build serves no RPC method for the tool, so nothing was registered. | Nothing to grant; the surface does not exist here. |
-| `deferred` | A Cascade v1 tool with no v2 surface yet, with the ticket that owns it and what is actually missing. | Nothing to grant or serve; the gap is recorded, not forgotten. |
+| `deferred` | A Cascade v1 tool this build does not register, with what is actually missing. | Read the row. It says one of three things (`R-14.266`): a ticket owns the surface and it is coming; a PLUGIN serves the concept and the row names the tool to call instead; or the concept is RETIRED and the row names the ruling that retired it. |
+
+A deferral marked retired or served-by-plugin has to name its ruling or its
+replacement surface. The parity test enforces that, because a sentinel with
+no evidence behind it is a way to make a row stop failing without deciding
+anything — which is the move the deferral list exists to prevent.
 
 The MCP wire surface itself reports far less: `tools/list` omits a withheld
 tool entirely and `tools/call` reports it as unknown, so a model cannot

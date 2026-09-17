@@ -26,12 +26,13 @@ by the binary this plugin writes into the harness's MCP config
 
 ### The v1-parity set
 
-Seven of Cascade v1's twenty-four MCP tools have a v2 surface and are
+Eight of Cascade v1's twenty-four MCP tools have a v2 surface and are
 registered:
 
 | Tool | Answers through | Capability | Mutating |
 |---|---|---|---|
 | `cascade_context_search` (alias `cascade_search`) | `recall.query` | `context.read` | no |
+| `cascade_context_show` | `context.show` | `context.read` | no |
 | `cascade_context_slice` | `context.slice` | `context.read` | no |
 | `cascade_context_sync` | `context.sync` | `context.read` | yes |
 | `cascade_memory_recall` | `memory.recall` | `memory.read` | no |
@@ -39,16 +40,37 @@ registered:
 | `cascade_memory_remember` | `memory.remember` | `memory.write` | yes |
 | `cascade_memory_forget` | `memory.forget` | `memory.write` | yes |
 
-The other seventeen are recorded in `internal/mcp/coretools/deferrals.go`,
-each with the ticket that owns the missing surface and what is actually
-missing. The shape of that gap: v1's MCP surface was largely a filesystem
-API over a project's `.claude` tree — tier files, master lists, a PCI inbox
-directory, a PBD phase tree of YAML — and v2 does not have that tree.
+The other sixteen are recorded in `internal/mcp/coretools/deferrals.go`,
+each with what is actually missing and one of three outcomes (`R-14.266`):
+
+- **Owned by a ticket.** `cascade.search_codebase` waits on the symbol
+  graph AG/S-67.T3 registers as a retrieval corpus; the three inbox tools
+  wait on AK/S-73.T3.
+- **Served by a plugin.** The six PBD phase-tree tools are answered by
+  `cascade-pbd`'s own `cascade_plugin_pbd_status` and
+  `cascade_plugin_pbd_board`. Core cannot register them — `internal/**`
+  may not import `plugins/**` — and it does not need to: the plugin's
+  manifest surfaces them itself. Its mutating `plugin.pbd.claim/step/done`
+  RPC is deliberately not a tool, so a model can read the board and not
+  move a ticket on it.
+- **Retired.** Master lists, the route check, the two memory FILE surfaces
+  and the two security tools do not return. The memory pair is covered in
+  concept by the four registered record-addressed tools. The secret
+  scanner is refused on its merits: a tool that scans a repository for
+  credentials and hands them to a model is an exfiltration surface with a
+  helpful name.
+
+The shape of the gap: v1's MCP surface was largely a filesystem API over a
+project's `.claude` tree — tier files, master lists, a PCI inbox directory,
+a PBD phase tree of YAML — and v2 does not have that tree.
 
 `internal/mcp/coretools/testdata/v1-goldens/tools.json` is the harvested v1
 inventory, and a test asserts the equation that makes it mean something:
 every v1 tool is either registered or deferred with a ticket. A tool that
-was dropped silently fails it.
+was dropped silently fails it, and a deferral marked retired or
+served-by-plugin must name its ruling or its replacement surface — a
+sentinel is otherwise a way to stop a row failing without deciding
+anything.
 
 ### Which tools appear under which grants
 

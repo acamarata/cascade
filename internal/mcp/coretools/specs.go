@@ -118,12 +118,17 @@ func boolean(description string) map[string]any {
 // schema does not is a drift this package cannot detect for you — which
 // is why each citation names the exact Go type to re-read.
 func Specs() []Spec {
-	return append(contextSpecs(), memorySpecs()...)
+	out := retrievalSpecs()
+	out = append(out, contextSpecs()...)
+	return append(out, memorySpecs()...)
 }
 
-// contextSpecs are the tools over the knowledge base: retrieval, context
-// assembly and harness sync.
-func contextSpecs() []Spec {
+// retrievalSpecs are the tools over the retrieval engine. Split from
+// contextSpecs because the two answer different questions — "find me a
+// passage" and "what am I operating under" — and because one function
+// carrying every knowledge-base tool outgrew the 50-line cap the moment
+// R-14.266 registered the tier reader.
+func retrievalSpecs() []Spec {
 	return []Spec{
 		// recall.QueryParams (internal/retrieval/recall/rpc.go).
 		{
@@ -141,6 +146,39 @@ func contextSpecs() []Spec {
 				"entitlement": str("Highest privacy tier this query may see. Empty resolves to the project tier."),
 				"k":           num("Maximum results. Zero uses the server default."),
 				"cite":        boolean("Also return the rendered Markdown citation block."),
+			}),
+		},
+	}
+}
+
+// contextSpecs are the tools over context assembly and harness sync: what
+// the session is operating under, and keeping it current.
+func contextSpecs() []Spec {
+	return []Spec{
+		// daemon.ContextShowParams (internal/daemon/context_assemble.go).
+		//
+		// Registered by P1-E16-W4-S34-T5, which found the deferral's
+		// premise false: context.show has been on the daemon since
+		// E/S-09.T2 and returns every resolved tier by NAME with its full
+		// content, which is exactly what v1's cascade.read answered. The
+		// deferral said "v2 has no RPC that reads a tier instruction file
+		// by tier name" — nobody had looked (R-14.266).
+		//
+		// v1 took a tier and returned one file; this takes a working
+		// directory and returns every tier. That is the better shape for
+		// the question a model actually asks ("what instructions am I
+		// under?") and it is the shape that already exists, so no new
+		// surface was forged to narrow it.
+		{
+			Name:   "cascade_context_show",
+			V1Name: "cascade.read",
+			Description: "Show every resolved context tier for a working directory, in order, with " +
+				"each tier's full instruction text and token count. This is what the session is " +
+				"operating under.",
+			Method:     "context.show",
+			Capability: CapabilityContextRead,
+			Schema: object([]string{"cwd"}, map[string]any{
+				"cwd": str("Absolute path of the working directory whose tiers to show."),
 			}),
 		},
 		// daemon.ContextAssembleParams (internal/daemon/context_assemble.go).

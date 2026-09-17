@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -59,30 +60,7 @@ func loadGolden(t *testing.T) []goldenTool {
 // promised.
 func TestMCPToolV1GoldenParity(t *testing.T) {
 	golden := loadGolden(t)
-
-	registered := map[string]Spec{}
-	for _, s := range Specs() {
-		if s.V1Name == "" {
-			t.Fatalf("spec %q descends from no v1 tool; the golden has nothing to join it on", s.Name)
-		}
-		if _, dup := registered[s.V1Name]; dup {
-			t.Fatalf("two specs claim v1 tool %q", s.V1Name)
-		}
-		registered[s.V1Name] = s
-	}
-	deferred := map[string]Deferral{}
-	for _, d := range Deferrals() {
-		if d.Ticket == "" || d.Reason == "" {
-			t.Fatalf("deferral %q states no ticket or no reason; Art.1.3 requires both", d.V1Name)
-		}
-		if _, dup := deferred[d.V1Name]; dup {
-			t.Fatalf("v1 tool %q is deferred twice", d.V1Name)
-		}
-		if _, both := registered[d.V1Name]; both {
-			t.Fatalf("v1 tool %q is both registered and deferred", d.V1Name)
-		}
-		deferred[d.V1Name] = d
-	}
+	registered, deferred := indexByV1Name(t)
 
 	for _, g := range golden {
 		spec, isRegistered := registered[g.V1Name]
@@ -108,6 +86,43 @@ func TestMCPToolV1GoldenParity(t *testing.T) {
 	for name := range deferred {
 		t.Errorf("deferral names v1 tool %q, which the v1 inventory does not contain", name)
 	}
+}
+
+// indexByV1Name joins the two live surfaces — what is registered and what
+// is deferred — onto the v1 name the golden keys on, failing on any tool
+// that appears in both or twice in either.
+//
+// It is the parity test's setup half, lifted out so neither half runs into
+// the function-length cap as the surfaces grow; every check it makes is a
+// precondition the comparison below would otherwise read past.
+func indexByV1Name(t *testing.T) (map[string]Spec, map[string]Deferral) {
+	t.Helper()
+
+	registered := map[string]Spec{}
+	for _, s := range Specs() {
+		if s.V1Name == "" {
+			t.Fatalf("spec %q descends from no v1 tool; the golden has nothing to join it on", s.Name)
+		}
+		if _, dup := registered[s.V1Name]; dup {
+			t.Fatalf("two specs claim v1 tool %q", s.V1Name)
+		}
+		registered[s.V1Name] = s
+	}
+	deferred := map[string]Deferral{}
+	for _, d := range Deferrals() {
+		if d.Ticket == "" || d.Reason == "" {
+			t.Fatalf("deferral %q states no ticket or no reason; Art.1.3 requires both", d.V1Name)
+		}
+		assertDeferralEvidence(t, d)
+		if _, dup := deferred[d.V1Name]; dup {
+			t.Fatalf("v1 tool %q is deferred twice", d.V1Name)
+		}
+		if _, both := registered[d.V1Name]; both {
+			t.Fatalf("v1 tool %q is both registered and deferred", d.V1Name)
+		}
+		deferred[d.V1Name] = d
+	}
+	return registered, deferred
 }
 
 // assertGoldenMatchesSpec checks the fields the golden and the spec both
@@ -174,6 +189,39 @@ func TestNoMutatingToolIsEligibleForTheReadOnlyProfile(t *testing.T) {
 		}
 		if s.Mutating && s.Capability == CapabilityMemoryRead {
 			t.Errorf("%q is marked mutating but needs only a read capability", s.Name)
+		}
+	}
+}
+
+// assertDeferralEvidence holds the two non-ticket outcomes to their own
+// evidence (R-14.266).
+//
+// A deferral's Ticket normally names the open ticket that owns the missing
+// surface, and the orphan gate checks that ticket is still open. "Retired"
+// and "served by a plugin" are not tickets, so nothing downstream can
+// check them — which is exactly why they need checking here. Without this,
+// either sentinel is a way to make a row stop failing without deciding
+// anything, and that is the move the whole deferral list exists to
+// prevent.
+func assertDeferralEvidence(t *testing.T, d Deferral) {
+	t.Helper()
+	switch d.Ticket {
+	case Retired:
+		if !strings.Contains(d.Reason, "RETIRED by R-") {
+			t.Errorf("%q is marked retired but its reason names no ruling: %q", d.V1Name, d.Reason)
+		}
+	case ServedByPlugin:
+		if !strings.Contains(d.Reason, "SERVED by ") {
+			t.Errorf("%q is marked served-by-plugin but its reason names no surface: %q", d.V1Name, d.Reason)
+		}
+		if !strings.Contains(d.Reason, "cascade_plugin_") && !strings.Contains(d.Reason, "plugin.") {
+			t.Errorf("%q says a plugin serves it but names no tool or method a caller could use: %q",
+				d.V1Name, d.Reason)
+		}
+	default:
+		if strings.HasPrefix(d.Ticket, "retired") || strings.HasPrefix(d.Ticket, "served") {
+			t.Errorf("%q uses a sentinel-shaped ticket %q that is not one of the declared sentinels",
+				d.V1Name, d.Ticket)
 		}
 	}
 }
