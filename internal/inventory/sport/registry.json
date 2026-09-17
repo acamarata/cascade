@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T01:12:33Z",
+  "generated_at": "2026-09-17T01:32:22Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2819,6 +2819,13 @@
           "raw": "cmd.cascade.fleet-usage/TEST (P1-E18-W4-S40-T5)."
         },
         {
+          "file": "cmd/cascade/fleet_usage_smoke_test.go",
+          "line": 35,
+          "status": "",
+          "ticket": "P1-E18-W4-S40-T5",
+          "raw": "cmd.cascade.fleet-usage/TEST (P1-E18-W4-S40-T5)."
+        },
+        {
           "file": "cmd/cascade/fleet_usage_test.go",
           "line": 7,
           "status": "",
@@ -3486,6 +3493,13 @@
           "line": 25,
           "status": "ADD",
           "raw": "cmd/cascade/daemon (ADD)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_run_options.go",
+          "line": 23,
+          "status": "CHANGE",
+          "ticket": "P1-E17-W4-S37-T1",
+          "raw": "cmd/cascade/daemon (CHG) — P1-E17-W4-S37-T1."
         },
         {
           "file": "cmd/cascade/daemon_unix_run_test.go",
@@ -4658,6 +4672,21 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "conductor.router node-eligibility seam",
+      "sites": [
+        {
+          "file": "internal/conductor/router_placement.go",
+          "line": 17,
+          "status": "CHANGE",
+          "ticket": "P1-E17-W4-S37-T1",
+          "raw": "conductor.router node-eligibility seam (CHG) — P1-E17-W4-S37-T1."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
       ]
     },
     {
@@ -14381,6 +14410,21 @@
       ]
     },
     {
+      "name": "internal/nodes records file backend",
+      "sites": [
+        {
+          "file": "internal/nodes/records_file.go",
+          "line": 13,
+          "status": "CHANGE",
+          "ticket": "P1-E17-W4-S37-T1",
+          "raw": "internal/nodes records file backend (CHG) — P1-E17-W4-S37-T1."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
+      ]
+    },
+    {
       "name": "internal/nodes tests",
       "sites": [
         {
@@ -22366,7 +22410,7 @@
       ]
     }
   ],
-  "total_sites": 2172,
+  "total_sites": 2176,
   "unspecified_count": 66,
   "multi_status_count": 40
 }
