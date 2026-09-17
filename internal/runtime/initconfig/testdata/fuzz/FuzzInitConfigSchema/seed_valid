@@ -1,0 +1,2 @@
+go test fuzz v1
+string("\nschema = \"cascade.init/v1\"\nprofile = \"local\"\n\n[plugins]\nenable = [\"cascade-claude\", \"pbd\"]\ndisable = [\"cascade-pa\"]\nharness = \"auto\"\n\n[[providers]]\nname = \"anthropic\"\nkind = \"anthropic-compat\"\nauth = \"key-env\"\nkey_env = \"ANTHROPIC_API_KEY\"\nverify = true\n\n[harnesses]\ndetect = true\ninstall = [\"claude\", \"codex\"]\n\n[server]\npostgres_dsn_env = \"CASCADE_PG_DSN\"\nredis_url_env = \"CASCADE_REDIS_URL\"\ns3_env_prefix = \"CASCADE_S3\"\n\n[telemetry]\nenabled = false\n\n[daemon]\ninstall = true\n")

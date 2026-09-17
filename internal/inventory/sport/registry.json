@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T03:26:59Z",
+  "generated_at": "2026-09-17T10:50:38Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3173,6 +3173,21 @@
           "status": "ADD",
           "ticket": "P1-E16-W4-S35-T6",
           "raw": "cmd/cascade init adapters (ADD) — P1-E16-W4-S35-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade init reconverge",
+      "sites": [
+        {
+          "file": "cmd/cascade/init_reconverge.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T7",
+          "raw": "cmd/cascade init reconverge (ADD) — P1-E16-W4-S35-T7."
         }
       ],
       "statuses": [
@@ -16944,6 +16959,21 @@
       ]
     },
     {
+      "name": "internal/runtime/init non-interactive spec",
+      "sites": [
+        {
+          "file": "internal/runtime/init/spec.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T7",
+          "raw": "internal/runtime/init non-interactive spec (ADD) — P1-E16-W4-S35-T7."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/runtime/init prompters",
       "sites": [
         {
@@ -16952,6 +16982,35 @@
           "status": "ADD",
           "ticket": "P1-E16-W4-S35-T6",
           "raw": "internal/runtime/init prompters (ADD) — P1-E16-W4-S35-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/runtime/init reconverge",
+      "sites": [
+        {
+          "file": "internal/runtime/init/reconverge.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T7",
+          "raw": "internal/runtime/init reconverge (ADD) — P1-E16-W4-S35-T7."
+        },
+        {
+          "file": "internal/runtime/init/reconverge_run.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T7",
+          "raw": "internal/runtime/init reconverge (ADD) — P1-E16-W4-S35-T7."
+        },
+        {
+          "file": "internal/runtime/init/reconverge_units.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T7",
+          "raw": "internal/runtime/init reconverge (ADD) -- P1-E16-W4-S35-T7."
         }
       ],
       "statuses": [
@@ -17057,6 +17116,58 @@
           "status": "ADD",
           "ticket": "P1-E16-W4-S35-T6",
           "raw": "internal/runtime/init wizard (ADD) — P1-E16-W4-S35-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/runtime/initconfig env map",
+      "sites": [
+        {
+          "file": "internal/runtime/initconfig/env.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T7",
+          "raw": "internal/runtime/initconfig env map (ADD) — P1-E16-W4-S35-T7."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/runtime/initconfig loader",
+      "sites": [
+        {
+          "file": "internal/runtime/initconfig/load.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T7",
+          "raw": "internal/runtime/initconfig loader (ADD) — P1-E16-W4-S35-T7."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/runtime/initconfig schema",
+      "sites": [
+        {
+          "file": "internal/runtime/initconfig/schema.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T7",
+          "raw": "internal/runtime/initconfig schema (ADD) — P1-E16-W4-S35-T7."
+        },
+        {
+          "file": "internal/runtime/initconfig/suggest.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T7",
+          "raw": "internal/runtime/initconfig schema (ADD) — P1-E16-W4-S35-T7."
         }
       ],
       "statuses": [
@@ -22871,7 +22982,7 @@
       ]
     }
   ],
-  "total_sites": 2217,
+  "total_sites": 2226,
   "unspecified_count": 66,
   "multi_status_count": 40
 }

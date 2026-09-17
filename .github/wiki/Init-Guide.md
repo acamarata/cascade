@@ -45,6 +45,73 @@ journal, not config, not a harness file. It exits 0 when the machine is
 already set up and 3 when there is work to do, which makes it usable as a
 CI assertion.
 
+## Driving it from a file
+
+```
+cascade init --config cascade-init.toml
+```
+
+reads every answer from a `cascade.init/v1` file. `CASCADE_INIT_CONFIG`
+is the same instruction.
+
+```toml
+schema = "cascade.init/v1"
+profile = "local"
+
+[plugins]
+enable = ["cascade-claude", "pbd"]
+
+[[providers]]
+name = "anthropic"
+auth = "key-env"
+key_env = "ANTHROPIC_API_KEY"
+verify = true
+
+[harnesses]
+detect = true
+install = ["claude"]
+
+[telemetry]
+enabled = false
+
+[daemon]
+install = true
+```
+
+**`key_env` names a variable, never a key.** The value is read from your
+environment at the moment the provider is added and handed straight to
+`cascade provider add`; it is never written to the file, the journal, or
+a log line. A setup file is a file people commit, so a key written into
+one is refused before any step runs — and the refusal does not quote what
+it found.
+
+`auth = "oauth"` is refused on this path. The browser flow needs a person
+at the browser, and a file-driven run has neither; use `key-env`, or run
+`cascade init` interactively.
+
+An unknown key is refused with a suggestion rather than ignored:
+
+```
+unknown key "plugins.enabel" in the setup file; did you mean "plugins.enable"?
+```
+
+A file declaring a schema this build does not read is refused too, rather
+than read for whichever fields happen to be recognised.
+
+### Precedence
+
+Flags beat the environment, which beats the file, which beats the
+defaults. One exception, in one direction: `CASCADE_TELEMETRY=0` wins over
+a file that enabled telemetry, and nothing can enable it over an
+environment that said 0.
+
+### Never blocking
+
+`CASCADE_NO_INPUT=1` turns any question that would block into an error
+naming what was missing. `--yes` and a complete setup file both satisfy
+it — the guard fires only where nothing can answer and nothing may be
+assumed.
+
 ## Flags
 
 | Flag | Effect |
@@ -54,6 +121,9 @@ CI assertion.
 | `--profile <p>` | Preselect step 2. |
 | `--harness a,b` | Wire only these, from the ones detected. |
 | `--no-daemon` | Skip step 8. |
+| `--config <f>` | Read every answer from a `cascade.init/v1` file. |
+| `--reconverge` | Converge an existing install toward the file, keeping your edits. |
+| `--force-section <s>` | During a reconverge, overwrite your edits in these config sections. |
 
 `--harness` narrows what was **detected**. Naming a harness this build
 does not know is refused rather than quietly wiring nothing — if you
@@ -93,9 +163,37 @@ Run `cascade daemon run` yourself, or start it from Task Scheduler.
 
 ## Converging an existing install
 
-`--reconverge` is not available in this build and refuses rather than
-falling back to a fresh run. A fresh run over a configured machine would
-overwrite the configuration you asked it to converge.
+```
+cascade init --config cascade-init.toml --reconverge
+```
+
+brings a machine that is already set up back in line with the file. It
+converges; it never regenerates.
+
+**Your edits win.** A config value you changed is yours: the run reports
+the difference and leaves your value in place. `--force-section
+<section>` overrides that for one section, and only that section.
+
+```
+kept your retrieval.fusion = off (this run wanted on; --force-section retrieval to override)
+```
+
+The same rule everywhere else:
+
+- **Providers** already in the registry are re-verified, never re-added,
+  and a provider the file does not mention is never removed.
+- **Plugins** you turned on yourself are left on, even if the file lists
+  them under `disable`.
+- **Instruction files** are regenerated only when they are stale *and*
+  untouched. One you hand-edited is reported and left alone.
+
+It exits 0 when everything converged and 3 when your edits held. A key the
+file asks for that this build's configuration does not have is reported
+as unsettable rather than attempted.
+
+`--reconverge` needs `--config`: without a file there is nothing to
+converge toward but the shipped defaults, and comparing against those
+would try to revert every deliberate choice on the machine.
 
 ## See also
 

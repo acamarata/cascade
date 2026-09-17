@@ -1,0 +1,23 @@
+# init_config_oauth.txtar
+#
+# R-14.53. Executable form: cmd/cascade/init_config_test.go's
+# TestInitConfigOAuth. See init_config_valid.txtar's header for why this
+# repo carries no testscript runner.
+
+# A file-driven run has nobody at the browser, so an oauth directive can
+# only hang or fail confusingly. It is refused BEFORE any step executes,
+# and the message names the alternative.
+! exec cascade init --config cascade-init.toml
+stderr 'auth="oauth"'
+stderr 'key-env'
+
+# Nothing was configured.
+! exists $HOME/.cascade
+
+-- cascade-init.toml --
+schema = "cascade.init/v1"
+
+[[providers]]
+name = "anthropic"
+auth = "oauth"
+key_env = "ANTHROPIC_API_KEY"

@@ -1,0 +1,42 @@
+# init_no_input.txtar
+#
+# Executable form: cmd/cascade/init_config_test.go's TestInitNoInput and
+# TestInitNoInputIsSatisfiedByYesOrByAFile. See init_config_valid.txtar's
+# header for why this repo carries no testscript runner.
+
+# CASCADE_NO_INPUT with nothing to answer from refuses at the first site
+# that would block, naming both ways out.
+env CASCADE_NO_INPUT=1
+! exec cascade init
+stderr 'Which profile'
+stderr '--yes'
+stderr '--config'
+
+# A refusal that can never succeed leaves no resumable journal: it is
+# deterministic given the command line, so the journal would only make the
+# next, correctly invoked run skip steps this one never completed.
+! exists $HOME/.cascade/init-state.json
+
+# The half that proves the guard is not simply refusing everything.
+exec cascade init --yes --no-daemon
+stdout 'cascade is set up'
+
+exec cascade init --config cascade-init.toml
+stdout 'cascade is set up'
+
+-- cascade-init.toml --
+schema = "cascade.init/v1"
+profile = "local"
+
+[plugins]
+enable = ["cascade-claude"]
+
+[harnesses]
+detect = true
+install = []
+
+[telemetry]
+enabled = false
+
+[daemon]
+install = false

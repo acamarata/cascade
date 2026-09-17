@@ -13,6 +13,8 @@ package init
 import (
 	"context"
 	"io"
+
+	"github.com/acamarata/cascade/internal/runtime/initconfig"
 )
 
 // Prompter asks the operator a question. The wizard never reads a
@@ -148,6 +150,14 @@ type Deps struct {
 
 	// Secrets refuses a literal secret typed into a prompt.
 	Secrets LiteralSecretGuard
+	// Current reads what is already configured, for a reconverge. Nil is
+	// legitimate for a fresh run and is a refusal for --reconverge.
+	Current CurrentState
+	// Getenv reads the environment a setup file's key_env entries point
+	// at. Injected so a test never depends on the developer's own
+	// environment, and so the ONE place that reads a credential is
+	// named rather than reached for inline (Art.7.1).
+	Getenv initconfig.EnvFunc
 }
 
 // LiteralSecretGuard refuses a value that looks like a secret typed in

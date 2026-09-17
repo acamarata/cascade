@@ -109,6 +109,17 @@ func (w *Wizard) stepStorage(_ context.Context, state *State) error {
 		return w.serverStorage(state)
 	}
 	def := filepath.Join(w.deps.Home, "cascade.db")
+	if !w.interactive() {
+		// The local database's location is DERIVED from the cascade
+		// home, not chosen. The prompt exists so a person at a terminal
+		// can relocate it; a run with nobody there has nothing to
+		// decide, and asking would turn a computed path into a question
+		// CASCADE_NO_INPUT then has to refuse. A value the wizard
+		// computed is not an answer it assumed on somebody's behalf.
+		state.StoragePath = def
+		w.say("   sqlite: %s", def)
+		return nil
+	}
 	path, err := w.deps.Prompt.Line("Where should the local database live?", def)
 	if err != nil {
 		return err

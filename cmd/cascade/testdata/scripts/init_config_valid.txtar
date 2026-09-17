@@ -1,0 +1,47 @@
+# init_config_valid.txtar
+#
+# Documents the `cascade init --config` scenario this ticket's contract
+# names. This module carries no testscript (rogpeppe/testscript)
+# dependency -- adding one needs the license gate this repo has not
+# cleared (see cmd/cascade/testdata/scripts/context-slice.txtar, which
+# makes the same call). The scenario below is expressed as executable Go
+# in cmd/cascade/init_config_test.go's TestInitConfigValid and
+# TestInitConfigFromTheEnvironment; this file records the intended script
+# form for when a testscript dependency is cleared.
+
+# A well-formed cascade.init/v1 file drives every step with no prompts.
+env CASCADE_INIT_ANTHROPIC_KEY=from-the-environment-never-the-file
+exec cascade init --config cascade-init.toml
+stdout 'profile     local'
+stdout 'cascade-claude'
+stdout 'cascade is set up'
+! stderr 'prompt'
+
+# CASCADE_INIT_CONFIG is the same instruction as --config. A build that
+# honoured only the flag would hang in any CI that sets the variable.
+env CASCADE_INIT_CONFIG=$WORK/cascade-init.toml
+exec cascade init
+stdout 'cascade is set up'
+
+-- cascade-init.toml --
+schema = "cascade.init/v1"
+profile = "local"
+
+[plugins]
+enable = ["cascade-claude"]
+
+[[providers]]
+name = "anthropic"
+auth = "key-env"
+key_env = "CASCADE_INIT_ANTHROPIC_KEY"
+verify = false
+
+[harnesses]
+detect = true
+install = []
+
+[telemetry]
+enabled = false
+
+[daemon]
+install = false

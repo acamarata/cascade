@@ -9,6 +9,7 @@ package init
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -187,18 +188,20 @@ func TestWizardRefusesAHalfWiredBuild(t *testing.T) {
 	}
 }
 
-// TestWizardRefusesReconverge pins R-14.52's scope split as a refusal
-// rather than a silent fresh run: a fresh run over a configured machine
-// would overwrite the configuration the operator asked to converge.
-func TestWizardRefusesReconverge(t *testing.T) {
+// TestReconvergeRefusesWithoutAReadableMachine pins the rule that keeps a
+// reconverge from degrading into a fresh run: converging against a state
+// nobody could read would overwrite the configuration the operator asked
+// to converge, which is the one outcome neither of them wanted.
+func TestReconvergeRefusesWithoutAReadableMachine(t *testing.T) {
 	w, rec, _, _ := fixture(t, Options{Mode: ModeYes, Reconverge: true}, nil)
+	w.deps.Current = nil
 
 	_, err := w.Run(context.Background())
 	if err == nil {
-		t.Fatal("Run performed a reconverge this build does not implement")
+		t.Fatal("Run converged against a machine it could not read")
 	}
-	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindUnsupported {
-		t.Errorf("kind = %v (typed %t), want KindUnsupported", kind, ok)
+	if !errors.Is(err, ErrReconvergeUnavailable) {
+		t.Errorf("err = %v, want ErrReconvergeUnavailable", err)
 	}
 	if rec.installed || len(rec.wired) > 0 {
 		t.Error("the refusal still changed the machine")

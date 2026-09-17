@@ -18,7 +18,34 @@ import (
 // stepHarnesses is step 6.
 func (w *Wizard) stepHarnesses(ctx context.Context, state *State) error {
 	w.say("== harnesses")
-	found, err := w.deps.Detector.Detect(ctx)
+	found, skipped, err := w.detectHarnesses(ctx, state)
+	if err != nil || skipped {
+		return err
+	}
+	wanted, err := w.harnessFilter(found)
+	if err != nil {
+		return err
+	}
+	return w.wireHarnesses(ctx, state, found, wanted)
+}
+
+// detectHarnesses runs detection, or reports why it did not.
+//
+// Two reasons it does not, and they are different: a setup file asked for
+// no harness to be touched, or this platform's harness paths are not ones
+// this build resolves. Both leave a stated reason on the journal, because
+// step 9's summary must not print a bare "none" for a machine nobody
+// looked at.
+func (w *Wizard) detectHarnesses(ctx context.Context, state *State) (found []HarnessState, skipped bool, err error) {
+	if spec := w.opts.Spec; spec != nil && spec.HarnessesSet && !spec.DetectHarnesses {
+		// Detecting anyway and then declining every one reaches the same
+		// end state by a route that reads the operator's machine after
+		// they said not to.
+		state.HarnessSkipReason = "the setup file turned harness detection off"
+		w.say("   skipped: %s", state.HarnessSkipReason)
+		return nil, true, nil
+	}
+	found, err = w.deps.Detector.Detect(ctx)
 	if err != nil {
 		// A platform whose harness paths this build does not resolve
 		// REFUSES rather than reporting an empty fleet — reporting "no
@@ -39,15 +66,17 @@ func (w *Wizard) stepHarnesses(ctx context.Context, state *State) error {
 		if cascade.HasKind(err, cascade.KindUnsupported) {
 			state.HarnessSkipReason = err.Error()
 			w.say("   skipped: %v", err)
-			return nil
+			return nil, true, nil
 		}
-		return err
+		return nil, false, err
 	}
-	wanted, err := w.harnessFilter(found)
-	if err != nil {
-		return err
-	}
+	return found, false, nil
+}
 
+// wireHarnesses confirms and installs each detected harness in wanted.
+func (w *Wizard) wireHarnesses(
+	ctx context.Context, state *State, found []HarnessState, wanted map[string]bool,
+) error {
 	wired := make([]string, 0, len(found))
 	for _, h := range found {
 		if !h.Detected {

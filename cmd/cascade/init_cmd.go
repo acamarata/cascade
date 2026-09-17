@@ -21,6 +21,7 @@ import (
 	cascadecontext "github.com/acamarata/cascade/internal/context"
 	"github.com/acamarata/cascade/internal/runtime"
 	cascadeinit "github.com/acamarata/cascade/internal/runtime/init"
+	"github.com/acamarata/cascade/internal/runtime/initconfig"
 	"github.com/acamarata/cascade/pkg/cascade"
 
 	"github.com/spf13/cobra"
@@ -35,6 +36,8 @@ type initFlags struct {
 	harnesses  []string
 	noDaemon   bool
 	reconverge bool
+	configPath string
+	force      []string
 }
 
 // mountInitCmd attaches `cascade init`, following mountDoctorCmd's
@@ -67,9 +70,13 @@ func newInitCmd() *cobra.Command {
 	cmd.Flags().StringVar(&f.profile, "profile", "", "preselect the profile (local, server or worker)")
 	cmd.Flags().StringSliceVar(&f.harnesses, "harness", nil,
 		"wire only these harnesses, from the ones detected")
+	cmd.Flags().StringVar(&f.configPath, "config", "",
+		"read the answers from a cascade.init/v1 setup file instead of prompting")
 	cmd.Flags().BoolVar(&f.noDaemon, "no-daemon", false, "skip installing the daemon as a service")
+	cmd.Flags().StringSliceVar(&f.force, "force-section", nil,
+		"overwrite your edits in these config sections during a reconverge")
 	cmd.Flags().BoolVar(&f.reconverge, "reconverge", false,
-		"converge an existing installation (not available in this build)")
+		"converge an existing installation toward the setup file, keeping your own edits")
 	return cmd
 }
 
@@ -87,8 +94,22 @@ func newInitCmd() *cobra.Command {
 var ErrInitCheckFoundWork = cascade.New(cascade.KindNotFound,
 	"cascade init --check: this machine is not fully set up")
 
+// ErrReconvergeCheckFoundWork is the same answer for a --reconverge
+// --check run. A separate error because it is a different statement: the
+// machine IS set up, and has drifted from the setup file.
+var ErrReconvergeCheckFoundWork = cascade.New(cascade.KindNotFound,
+	"cascade init --reconverge --check: this machine has drifted from the setup file")
+
 // runInit resolves the environment, builds the wizard and runs it.
 func runInit(cmd *cobra.Command, f *initFlags) error {
+	// The setup file is read FIRST. A file that cannot be read, or that
+	// carries a credential, or that names a browser flow, fails here —
+	// before the wizard exists, and therefore before any step could have
+	// changed the machine.
+	spec, err := resolveInitSpec(f)
+	if err != nil {
+		return err
+	}
 	paths, err := runtime.NewPathProvider(nil, nil)
 	if err != nil {
 		return err
@@ -97,14 +118,59 @@ func runInit(cmd *cobra.Command, f *initFlags) error {
 	if err != nil {
 		return err
 	}
-	report, err := cascadeinit.New(deps, initOptions(f)).Run(cmd.Context())
+	opts := initOptions(f)
+	opts.Spec = spec
+	if spec != nil {
+		deps.Prompt = cascadeinit.NewSpecPrompter(spec)
+	}
+	if f.reconverge {
+		deps.Current = initCurrentState{paths: paths}
+		if opts.ReconvergeOptions, err = reconvergeOptionsFrom(spec, f.force); err != nil {
+			return err
+		}
+	}
+	report, err := cascadeinit.New(deps, opts).Run(cmd.Context())
 	if err != nil {
 		return err
 	}
 	if f.check && len(report.Diff) > 0 {
+		if f.reconverge {
+			return ErrReconvergeCheckFoundWork
+		}
 		return ErrInitCheckFoundWork
 	}
 	return nil
+}
+
+// resolveInitSpec reads the setup file and merges it with the flags and
+// the environment, or returns nil when this run is fully interactive.
+//
+// A spec is produced whenever ANY non-interactive input exists — a
+// --config path, CASCADE_INIT_CONFIG, or CASCADE_NO_INPUT — because the
+// guard that refuses an unanswerable prompt lives in the spec's prompter,
+// and a NO_INPUT run with no file still has to be guarded.
+func resolveInitSpec(f *initFlags) (*initconfig.Spec, error) {
+	path := f.configPath
+	if path == "" {
+		path = os.Getenv(initconfig.EnvConfig)
+	}
+	if path == "" && os.Getenv(initconfig.EnvNoInput) == "" {
+		return nil, nil
+	}
+	var file *initconfig.InitConfig
+	if path != "" {
+		scanner, err := initconfig.NewSecretScanner()
+		if err != nil {
+			return nil, err
+		}
+		if file, err = initconfig.Load(path, scanner); err != nil {
+			return nil, err
+		}
+	}
+	return initconfig.Resolve(initconfig.Flags{
+		ConfigPath: path, Yes: f.yes, Profile: f.profile,
+		Harnesses: f.harnesses, NoDaemon: f.noDaemon,
+	}, initconfig.OSEnv, file)
 }
 
 // initOptions maps the flags onto the wizard's options.
@@ -165,6 +231,7 @@ func productionInitDeps(cmd *cobra.Command, paths runtime.PathProvider) (cascade
 		},
 		Storage: initStorageProbe{},
 		Secrets: initSecretGuard{},
+		Getenv:  initGetenv,
 	}, nil
 }
 

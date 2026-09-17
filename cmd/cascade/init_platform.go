@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"testing"
 
 	"github.com/acamarata/cascade/internal/doctor"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -122,10 +123,40 @@ type initSubprocess struct {
 
 var _ cascadeinit.Subprocess = initSubprocess{}
 
+// ErrSubprocessInTest refuses to re-exec the binary when it is a TEST
+// binary rather than cascade.
+//
+// os.Executable under `go test` resolves to the test binary, so a
+// hand-off from a test that reaches the real applier runs the whole suite
+// as a child — which runs it again, and so on. That is a fork bomb, and
+// it presents as a test that simply hangs, which is the worst way to find
+// one.
+//
+// A test that MEANS to exercise this adapter passes arguments the test
+// binary understands (`-test.run=^$`); a test that reaches it by accident
+// gets this refusal instead of a wedged machine.
+var ErrSubprocessInTest = cascade.New(cascade.KindUnsupported,
+	"cascade init: refusing to re-exec the test binary as a cascade subcommand; "+
+		"drive this path with --check, or inject a Subprocess that records the call")
+
+// testFlagArgs reports whether args are the test binary's own flags,
+// which is how this adapter's own test drives a real child safely.
+func testFlagArgs(args []string) bool {
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-test.") {
+			return false
+		}
+	}
+	return len(args) > 0
+}
+
 // Run executes `cascade <args...>`, passing the terminal through so the
 // child can hold its own conversation with the operator — which is the
 // whole reason these two steps hand off rather than calling in.
 func (s initSubprocess) Run(ctx context.Context, args ...string) error {
+	if testing.Testing() && !testFlagArgs(args) {
+		return ErrSubprocessInTest
+	}
 	self, err := os.Executable()
 	if err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "cascade init: locate the cascade binary")
@@ -140,6 +171,9 @@ func (s initSubprocess) Run(ctx context.Context, args ...string) error {
 
 // runCascade runs a subcommand and captures its output.
 func runCascade(ctx context.Context, args ...string) (string, error) {
+	if testing.Testing() && !testFlagArgs(args) {
+		return "", ErrSubprocessInTest
+	}
 	self, err := os.Executable()
 	if err != nil {
 		return "", cascade.Wrap(cascade.KindUnavailable, err, "cascade init: locate the cascade binary")

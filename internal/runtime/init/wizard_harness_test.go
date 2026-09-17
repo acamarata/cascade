@@ -38,6 +38,8 @@ type recorder struct {
 	probeErr     error
 	probedCreate []bool
 	secretErr    error
+	env          map[string]string
+	current      CurrentState
 }
 
 func (r *recorder) Detect(context.Context) ([]HarnessState, error) { return r.detected, r.detectErr }
@@ -155,6 +157,7 @@ func fixture(t *testing.T, opts Options, prompt Prompter) (*Wizard, *recorder, *
 		},
 		entries:     []CatalogEntry{{Name: "claude", Description: "the first harness", DefaultOn: true}},
 		fingerprint: "SHA256:deadbeef",
+		env:         map[string]string{},
 	}
 	out := &bytes.Buffer{}
 	if prompt == nil {
@@ -164,6 +167,7 @@ func fixture(t *testing.T, opts Options, prompt Prompter) (*Wizard, *recorder, *
 		Home: home, Cwd: t.TempDir(), GOOS: "darwin", Out: out, Prompt: prompt,
 		Detector: rec, Wirer: rec, Catalog: rec, Service: rec,
 		Enroller: rec, Doctor: rec, Sub: rec, Storage: rec, Secrets: rec,
+		Getenv: func(key string) string { return rec.env[key] },
 	}
 	return New(deps, opts), rec, out, home
 }

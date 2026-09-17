@@ -15,7 +15,10 @@ package init
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
+	"github.com/acamarata/cascade/internal/runtime/initconfig"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -45,10 +48,19 @@ type Options struct {
 	Harnesses []string
 	// NoDaemon skips step 8 (--no-daemon).
 	NoDaemon bool
-	// Reconverge is step 1's third branch. T6 delegates it: the full
-	// three-way merge is P/S-35.T7's scope (R-14.52), and this build
-	// refuses rather than performing a partial version of it.
+	// Reconverge is step 1's third branch.
 	Reconverge bool
+	// ReconvergeOptions are the second run's desired state, read when
+	// Reconverge is true.
+	ReconvergeOptions ReconvergeOptions
+	// Spec carries a resolved non-interactive answer set (--config,
+	// CASCADE_INIT_*). Nil leaves the interactive flow unchanged.
+	//
+	// It reaches the steps as a Prompter, exactly as --yes and --check
+	// do; this field exists because two steps need more than an answer
+	// from it — step 5 runs its provider DIRECTIVES, and step 6 honours
+	// harnesses.detect = false.
+	Spec *initconfig.Spec
 }
 
 // Report is what a run produces.
@@ -62,15 +74,9 @@ type Report struct {
 	Steps []string
 	// Diff is --check's rendering of what a real run would change.
 	Diff []string
+	// Converged is set by a --reconverge run, and nil otherwise.
+	Converged *Convergence
 }
-
-// ErrReconvergeNotImplemented is step 1's refusal for the reconverge
-// branch. It is a REFUSAL, not a fallback to a fresh run: a fresh run
-// over a configured machine would overwrite the configuration the
-// operator asked to converge.
-var ErrReconvergeNotImplemented = cascade.New(cascade.KindUnsupported,
-	"cascade init: reconverge is not available in this build (P1-E16-W4-S35-T7); "+
-		"re-run without --reconverge to resume, or remove ~/.cascade to start fresh")
 
 // Wizard runs the nine steps.
 type Wizard struct {
@@ -117,7 +123,8 @@ func (w *Wizard) Run(ctx context.Context) (Report, error) {
 		return Report{}, err
 	}
 	if w.opts.Reconverge {
-		return Report{}, ErrReconvergeNotImplemented
+		merged, rerr := w.Reconverge(ctx, w.opts.ReconvergeOptions)
+		return Report{Converged: &merged, Diff: w.diff}, rerr
 	}
 	report := Report{Resumed: found && state.CompletedStep > 0}
 
@@ -129,7 +136,7 @@ func (w *Wizard) Run(ctx context.Context) (Report, error) {
 		}
 		if err := run(w, ctx, &state); err != nil {
 			report.State = state
-			return report, err
+			return report, w.discardJournalIfUnrunnable(err)
 		}
 		state.CompletedStep = step
 		report.Steps = append(report.Steps, step.String())
@@ -161,6 +168,29 @@ func (w *Wizard) Run(ctx context.Context) (Report, error) {
 	return report, nil
 }
 
+// discardJournalIfUnrunnable removes the journal when the run failed
+// because the INVOCATION cannot proceed, rather than because something
+// went wrong part way through real work.
+//
+// The journal means "this run was interrupted and can be resumed". A
+// prompt-guard refusal is not that: it is deterministic given the command
+// line, so re-running identically refuses identically — and the journal
+// it left would make the next, correctly invoked run report a resume and
+// SKIP steps the refused run only appeared to complete. Step 1's probe is
+// one of them, and skipping the proof that the cascade home is writable
+// because a doomed run once journaled it is a real loss.
+//
+// The original error is always returned; the cleanup is best-effort,
+// because failing to tidy up is not worth replacing the reason the
+// operator actually needs to read.
+func (w *Wizard) discardJournalIfUnrunnable(err error) error {
+	if !errors.Is(err, ErrPromptRequired) {
+		return err
+	}
+	_ = DeleteState(w.deps.Home)
+	return err
+}
+
 // validate refuses a half-wired wizard before it changes anything.
 func (w *Wizard) validate() error {
 	missing := []string{}
@@ -170,7 +200,8 @@ func (w *Wizard) validate() error {
 		"Catalog": w.deps.Catalog != nil, "Service": w.deps.Service != nil, "Enroller": w.deps.Enroller != nil,
 		"Doctor": w.deps.Doctor != nil, "Sub": w.deps.Sub != nil,
 		"Storage": w.deps.Storage != nil, "Secrets": w.deps.Secrets != nil,
-		"GOOS": w.deps.GOOS != "",
+		"Getenv": w.deps.Getenv != nil,
+		"GOOS":   w.deps.GOOS != "",
 	} {
 		if !present {
 			missing = append(missing, name)
@@ -200,11 +231,16 @@ func (w *Wizard) plan(format string, args ...any) {
 	w.say("would %s", line)
 }
 
-// interactive reports whether a real operator is answering. Both --yes
-// and --check answer for them, and the two steps that need an answer
-// nobody can default (a provider credential, a server connection
-// reference) ask this rather than naming one mode.
-func (w *Wizard) interactive() bool { return w.opts.Mode == ModeInteractive }
+// interactive reports whether a real operator is answering.
+//
+// --yes, --check and a resolved setup file all answer for them. The steps
+// that need an answer nobody can compute — a provider credential, a
+// server connection reference — ask this rather than naming one mode, so
+// a fourth way of running non-interactively does not have to be added to
+// three separate conditions.
+func (w *Wizard) interactive() bool {
+	return w.opts.Mode == ModeInteractive && w.opts.Spec == nil
+}
 
 // writing reports whether this run may change anything. Every step asks
 // before acting, which is what makes --check a mode rather than a flag

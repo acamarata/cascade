@@ -12,6 +12,7 @@ package init
 import (
 	"context"
 
+	"github.com/acamarata/cascade/internal/runtime/initconfig"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -58,6 +59,9 @@ func (w *Wizard) stepPlugins(_ context.Context, state *State) error {
 // `provider add` refuses is refused here too, by its own exit status.
 func (w *Wizard) stepProviders(ctx context.Context, state *State) error {
 	w.say("== providers")
+	if spec := w.opts.Spec; spec != nil && spec.ProvidersSet {
+		return w.specProviders(ctx, state, spec)
+	}
 	if !w.interactive() {
 		// A non-interactive run configures no providers. Adding one
 		// needs a credential or a browser, and a mode whose contract is
@@ -145,4 +149,54 @@ func credentialFlag(mode string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+// specProviders runs the [[providers]] directives a setup file supplied.
+//
+// The directive names an environment VARIABLE, never a key. The value is
+// read here, at the moment the provider is added, and handed straight to
+// `cascade provider add --key-env`; it never enters the Spec, the journal
+// or a log line. A variable that is unset is a refusal naming the
+// variable — a provider added with an empty key fails later, somewhere
+// that cannot say which setup file sent it.
+func (w *Wizard) specProviders(ctx context.Context, state *State, spec *initconfig.Spec) error {
+	added := make([]string, 0, len(spec.Providers))
+	for _, directive := range spec.Providers {
+		if _, err := directive.KeyFor(w.deps.Getenv); err != nil {
+			return err
+		}
+		if !w.writing() {
+			w.plan("add provider %s through `cascade provider add`", directive)
+			added = append(added, directive.Name)
+			continue
+		}
+		if err := w.deps.Sub.Run(ctx, providerAddArgs(directive)...); err != nil {
+			return cascade.Wrapf(cascade.KindUnavailable, err,
+				"cascade init: `cascade provider add %s`", directive.Name)
+		}
+		added = append(added, directive.Name)
+		w.say("   added %s", directive.Name)
+	}
+	state.Providers = added
+	if len(added) == 0 {
+		w.say("   none")
+	}
+	return nil
+}
+
+// providerAddArgs builds the subcommand invocation for one directive.
+//
+// Composed in one place rather than at the call site so the flag names —
+// which belong to `cascade provider add`, not to this package — are
+// written once. A typo in a concatenated flag surfaces as an unhelpful
+// usage error from a child process.
+func providerAddArgs(d initconfig.ProviderDirective) []string {
+	args := []string{"provider", "add", d.Name, "--key-env", d.KeyEnv}
+	if d.BaseURL != "" {
+		args = append(args, "--base-url", d.BaseURL)
+	}
+	if !d.Verify {
+		args = append(args, "--no-verify")
+	}
+	return args
 }
