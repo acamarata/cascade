@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T12:52:26Z",
+  "generated_at": "2026-09-17T13:17:53Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -15189,7 +15189,7 @@
       "sites": [
         {
           "file": "internal/plugins/claude_uninstall_test.go",
-          "line": 19,
+          "line": 20,
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T1",
           "raw": "internal/plugins cascade-claude uninstall tests (ADD) — P1-E16-W4-S34-T1."
@@ -15552,6 +15552,21 @@
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T1",
           "raw": "internal/plugins tests (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins tier-2 shared paths",
+      "sites": [
+        {
+          "file": "internal/plugins/shared_paths_tier2_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T13",
+          "raw": "internal/plugins tier-2 shared paths (ADD) -- P1-E16-W4-S35-T13."
         }
       ],
       "statuses": [
@@ -21908,6 +21923,21 @@
       ]
     },
     {
+      "name": "providers/intake pinned-shape probe",
+      "sites": [
+        {
+          "file": "internal/providers/intake/transport_pin_test.go",
+          "line": 7,
+          "status": "",
+          "ticket": "P1-E16-W4-S35-T13",
+          "raw": "providers/intake pinned-shape probe (TEST) — P1-E16-W4-S35-T13."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "providers/ollama driver",
       "sites": [
         {
@@ -23194,7 +23224,7 @@
       ]
     }
   ],
-  "total_sites": 2246,
-  "unspecified_count": 66,
+  "total_sites": 2248,
+  "unspecified_count": 67,
   "multi_status_count": 40
 }

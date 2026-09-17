@@ -94,7 +94,9 @@ func (t *ClaudeTeardown) Teardown(ctx context.Context, name string) error {
 	// harness generator are reachable; the adapter is told, never left to
 	// guess (R-14.265). A detection failure aborts rather than falling
 	// back to "nothing is shared", which is the answer that deletes a file
-	// the other harness was still reading.
+	// the other harness was still reading — except the documented tier-2
+	// refusal, which degrades to the conservative set inside sharedPathsFor
+	// rather than making uninstall impossible on that platform (R-14.267).
 	shared, sharedErr := sharedPathsFor(ctx, t.detector, casctx.HarnessClaude, t.cwd)
 	if sharedErr != nil {
 		return sharedErr

@@ -70,7 +70,8 @@ type UninstallResult struct {
 	KeptReason string
 }
 
-// SharedPaths is the set of files another INSTALLED harness still reads.
+// SharedPaths maps a file this plugin would remove to the REASON it must
+// be kept instead — an operator-facing sentence, not a harness name.
 //
 // It is a PARAMETER, not an option with a default, because the default
 // that would be convenient here — "nothing is shared" — is exactly the bug
@@ -83,9 +84,17 @@ type UninstallResult struct {
 // This package may not import internal/**, so it cannot compute it, and a
 // base-name heuristic on this side would refuse to remove AGENTS.md on a
 // machine where only one harness was ever installed.
+//
+// THE VALUE IS THE REASON, and that is load-bearing (R-14.267). This
+// package used to receive a harness name and compose "the X harness is
+// installed and still reads this file". On a platform where harness
+// detection is unavailable the host knows a file is shared and does NOT
+// know that anything is installed, so that sentence is a claim this build
+// cannot support. Only the composition root can tell the two cases apart,
+// so only the composition root writes the sentence.
 type SharedPaths map[string]string
 
-// Claims reports the harness still reading path, or "" when nothing does.
+// Claims reports why path must be kept, or "" when nothing claims it.
 func (s SharedPaths) Claims(path string) string { return s[path] }
 
 // Uninstall removes every file cascade-claude installs for cwd.
@@ -144,10 +153,10 @@ func uninstallInstructions(ctx context.Context, cwd string, shared SharedPaths) 
 // edited it, or something else owns it now, and either way deleting it
 // would destroy work this plugin did not do.
 func removeIfOurs(path string, ours []byte, shared SharedPaths) (UninstallResult, error) {
-	if by := shared.Claims(path); by != "" {
+	if why := shared.Claims(path); why != "" {
 		return UninstallResult{
 			Path: path, Kept: true,
-			KeptReason: "the " + by + " harness is installed and still reads this file",
+			KeptReason: why,
 		}, nil
 	}
 	onDisk, err := os.ReadFile(path) //nolint:gosec // path comes from the generator, not from user input.

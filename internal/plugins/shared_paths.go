@@ -17,6 +17,7 @@ package plugins
 
 import (
 	"context"
+	"errors"
 	"os"
 	goruntime "runtime"
 
@@ -78,41 +79,95 @@ func pathsFromOpenCode(ctx context.Context, cwd string) ([]string, error) {
 	return out, nil
 }
 
-// sharedPathsFor returns the paths some INSTALLED harness other than
-// removing would generate for cwd, mapped to that harness's name.
+// sharedPathsFor returns the paths some other harness would generate for
+// cwd, mapped to the REASON the file must be kept.
 //
 // Installed, not merely supported: a harness this machine does not have is
 // not reading anything, so keeping a file for its sake would leave
-// cascade's own file behind on every uninstall. Detection failing is an
-// error, never an empty set — "I could not tell" and "nothing else is
-// installed" are the two answers this function must never confuse, because
-// one of them ends in a deleted file.
+// cascade's own file behind on every uninstall. Detection failing is never
+// an empty set — "I could not tell" and "nothing else is installed" are the
+// two answers this function must never confuse, because one of them ends in
+// a deleted file (R-14.265).
+//
+// TIER-2 IS THE THIRD ANSWER (R-14.267). On a platform whose harness paths
+// this build does not resolve, Detect refuses with
+// ErrHarnessDetectionUnsupported. Returning that refusal made every
+// uninstall on such a platform fail before removing anything — which is not
+// what "I could not tell" should cost. Here it degrades to the conservative
+// set: every OTHER supported harness is treated as a possible reader, and
+// the reason SAYS the detection was unavailable rather than claiming an
+// installation nobody verified. An operator who knows better deletes one
+// file; the alternative silently de-configures a harness they kept. Every
+// other detector error is still an error.
 func sharedPathsFor(
 	ctx context.Context, detector harnessDetector, removing casctx.HarnessKind, cwd string,
 ) (map[string]string, error) {
 	states, err := detector.Detect(ctx)
 	if err != nil {
-		return nil, err
+		if !errors.Is(err, casctx.ErrHarnessDetectionUnsupported) {
+			return nil, err
+		}
+		return undetectableSharedPaths(ctx, removing, cwd)
 	}
-	generators := harnessGeneratorsByKind()
 	shared := map[string]string{}
 	for _, state := range states {
 		if !state.Detected || state.Kind == removing {
 			continue
 		}
-		generate, ok := generators[state.Kind]
-		if !ok {
-			continue
-		}
-		paths, genErr := generate(ctx, cwd)
-		if genErr != nil {
-			return nil, genErr
-		}
-		for _, p := range paths {
-			shared[p] = string(state.Kind)
+		if err := addHarnessPaths(ctx, shared, state.Kind, cwd, installedReason(state.Kind)); err != nil {
+			return nil, err
 		}
 	}
 	return shared, nil
+}
+
+// undetectableSharedPaths is the tier-2 set: every supported harness other
+// than the one being removed, each path carrying a reason that names the
+// platform limit instead of asserting an install.
+func undetectableSharedPaths(
+	ctx context.Context, removing casctx.HarnessKind, cwd string,
+) (map[string]string, error) {
+	shared := map[string]string{}
+	for kind := range harnessGeneratorsByKind() {
+		if kind == removing {
+			continue
+		}
+		if err := addHarnessPaths(ctx, shared, kind, cwd, undetectableReason(kind)); err != nil {
+			return nil, err
+		}
+	}
+	return shared, nil
+}
+
+// addHarnessPaths records every path kind generates for cwd under reason.
+func addHarnessPaths(
+	ctx context.Context, into map[string]string, kind casctx.HarnessKind, cwd, reason string,
+) error {
+	generate, ok := harnessGeneratorsByKind()[kind]
+	if !ok {
+		return nil
+	}
+	paths, err := generate(ctx, cwd)
+	if err != nil {
+		return err
+	}
+	for _, p := range paths {
+		into[p] = reason
+	}
+	return nil
+}
+
+// installedReason is what an operator reads when detection worked.
+func installedReason(kind casctx.HarnessKind) string {
+	return "the " + string(kind) + " harness is installed and still reads this file"
+}
+
+// undetectableReason is what an operator reads when it did not. It states
+// the limit and the remedy, because "kept" with no way to act on it is the
+// bare boolean R-14.265 replaced.
+func undetectableReason(kind casctx.HarnessKind) string {
+	return "this platform cannot detect installed harnesses (tier-2), and the " + string(kind) +
+		" harness writes this same file; delete it by hand if that harness is not installed"
 }
 
 // harnessDetector is the detection seam, so a test can state which

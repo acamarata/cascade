@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/acamarata/cascade/internal/audit"
+	casctx "github.com/acamarata/cascade/internal/context"
 	"github.com/acamarata/cascade/pkg/cascade"
 	claude "github.com/acamarata/cascade/plugins/claude"
 )
@@ -31,6 +32,13 @@ func teardownEnv(t *testing.T) (*ClaudeTeardown, *recordingWriter, string) {
 	t.Helper()
 	root := t.TempDir()
 	cwd := t.TempDir()
+	// The teardown asks the HOST detector and the real per-harness
+	// generators which files another harness reads, and both read the
+	// home directory. Pinned so these tests measure the audit behaviour
+	// they are about, on a home nobody else has written to — and so a
+	// tier-2 runner, where detection refuses and the conservative set is
+	// computed instead, still resolves a home to compute it from.
+	pinHome(t, t.TempDir())
 	instr := filepath.Join(cwd, "CLAUDE.md")
 	content := []byte("# instructions\n")
 	if err := os.MkdirAll(filepath.Join(root, "hooks"), 0o755); err != nil {
@@ -211,5 +219,58 @@ func TestAFailedRemovalIsStillRecorded(t *testing.T) {
 	}
 	if row.Error == "" {
 		t.Error("the row does not carry the failure that stopped the uninstall")
+	}
+}
+
+// statedDetector reports exactly the harnesses a test names installed.
+type statedDetector struct{ installed []casctx.HarnessKind }
+
+func (d statedDetector) Detect(context.Context) ([]casctx.HarnessState, error) {
+	states := make([]casctx.HarnessState, 0, len(d.installed))
+	for _, k := range d.installed {
+		states = append(states, casctx.HarnessState{Kind: k, Detected: true})
+	}
+	return states, nil
+}
+
+// TestTheTeardownKeepsAFileAnotherInstalledHarnessReads drives the
+// teardown through a STATED installed set rather than the host's, which is
+// the seam WithDetector exists for.
+//
+// The generator is pointed at the file two harnesses share, so the
+// teardown's own answer ("this is mine") and the detector's ("something
+// else reads it") disagree — which is the only interesting case. The file
+// must survive and be reported, with a reason naming the harness the
+// detector actually found.
+func TestTheTeardownKeepsAFileAnotherInstalledHarnessReads(t *testing.T) {
+	td, w, _ := teardownEnv(t)
+	cwd := crossHarnessProject(t)
+	shared := filepath.Join(cwd, "AGENTS.md")
+	if err := os.WriteFile(shared, []byte("# shared\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	prev := claude.Generate
+	claude.Generate = func(context.Context, string) ([]claude.GeneratedFile, error) {
+		return []claude.GeneratedFile{{Path: shared, Content: []byte("# shared\n")}}, nil
+	}
+	t.Cleanup(func() { claude.Generate = prev })
+	td.cwd = cwd
+
+	if err := td.WithDetector(statedDetector{[]casctx.HarnessKind{casctx.HarnessCodex}}).
+		Teardown(context.Background(), claudePackName); err != nil {
+		t.Fatalf("teardown: %v", err)
+	}
+	if _, err := os.Stat(shared); err != nil {
+		t.Fatalf("the file another installed harness reads was removed: %v", err)
+	}
+	if len(w.events) != 1 {
+		t.Fatalf("%d audit rows, want exactly 1", len(w.events))
+	}
+	var row uninstallRow
+	if err := json.Unmarshal(w.events[0].Explain, &row); err != nil {
+		t.Fatalf("the row's payload is not JSON: %v", err)
+	}
+	if len(row.Kept) == 0 {
+		t.Errorf("the audit row names no kept file: %+v; an operator who is not told cannot act on it", row)
 	}
 }

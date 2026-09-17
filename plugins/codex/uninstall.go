@@ -51,7 +51,8 @@ type UninstallResult struct {
 	KeptReason string
 }
 
-// SharedPaths is the set of files another INSTALLED harness still reads.
+// SharedPaths maps a file this plugin would remove to the REASON it must
+// be kept instead — an operator-facing sentence, not a harness name.
 //
 // It is a PARAMETER, not an option with a default, because the default
 // that would be convenient here — "nothing is shared" — is exactly the bug
@@ -64,9 +65,17 @@ type UninstallResult struct {
 // This package may not import internal/**, so it cannot compute it, and a
 // base-name heuristic on this side would refuse to remove AGENTS.md on a
 // machine where only one harness was ever installed.
+//
+// THE VALUE IS THE REASON, and that is load-bearing (R-14.267). This
+// package used to receive a harness name and compose "the X harness is
+// installed and still reads this file". On a platform where harness
+// detection is unavailable the host knows a file is shared and does NOT
+// know that anything is installed, so that sentence is a claim this build
+// cannot support. Only the composition root can tell the two cases apart,
+// so only the composition root writes the sentence.
 type SharedPaths map[string]string
 
-// Claims reports the harness still reading path, or "" when nothing does.
+// Claims reports why path must be kept, or "" when nothing claims it.
 func (s SharedPaths) Claims(path string) string { return s[path] }
 
 // SharedPathResolverFunc reports which files another installed harness
@@ -141,14 +150,14 @@ func removeManaged(path string, shared SharedPaths) (UninstallResult, error) {
 		return UninstallResult{}, fmt.Errorf(
 			"cascade-codex: uninstall: refusing unrecognized path %q (must be named %s)", path, agentsFileName)
 	}
-	if by := shared.Claims(path); by != "" {
+	if why := shared.Claims(path); why != "" {
 		// Checked before the stat, not after: whether another harness
 		// reads this file does not depend on whether it happens to be
 		// there right now, and asking in that order keeps "kept" from
 		// ever being reported as "already clean".
 		return UninstallResult{
 			Path: path, Kept: true,
-			KeptReason: "the " + by + " harness is installed and still reads this file",
+			KeptReason: why,
 		}, nil
 	}
 	if _, err := os.Stat(path); err != nil {

@@ -13,6 +13,7 @@ package plugins
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -37,6 +38,7 @@ import (
 // hand-built set — a hardcoded map here would pass against an adapter that
 // never asked anything.
 func TestUninstallingOneHarnessLeavesTheOtherConfigured(t *testing.T) {
+	requireDetection(t)
 	dir := crossHarnessProject(t)
 	seedHarnessRoots(t)
 
@@ -77,6 +79,7 @@ func TestUninstallingOneHarnessLeavesTheOtherConfigured(t *testing.T) {
 // own file on every machine, which is the failure the keep rule must not
 // trade for.
 func TestUninstallingTheLastHarnessLeavesNothingBehind(t *testing.T) {
+	requireDetection(t)
 	dir := crossHarnessProject(t)
 	seedHarnessRoots(t)
 
@@ -112,6 +115,23 @@ func TestUninstallingTheLastHarnessLeavesNothingBehind(t *testing.T) {
 	}
 	if _, err := os.Stat(shared); !os.IsNotExist(err) {
 		t.Errorf("a full uninstall left %s behind (stat err = %v)", shared, err)
+	}
+}
+
+// requireDetection skips a test that states what an INSTALLED set implies,
+// on a platform where nothing can be detected.
+//
+// The skip is honest rather than evasive because the tier-2 behaviour has
+// its own tests below: these two say "detection reported X, therefore Y",
+// and a platform that reports nothing cannot reach that premise
+// (R-14.267).
+func requireDetection(t *testing.T) {
+	t.Helper()
+	if _, err := hostHarnessDetector().Detect(context.Background()); err != nil {
+		if errors.Is(err, casctx.ErrHarnessDetectionUnsupported) {
+			t.Skip("harness detection is unsupported here (tier-2); see the tier-2 tests below")
+		}
+		t.Fatalf("probing the host detector: %v", err)
 	}
 }
 
