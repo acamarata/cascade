@@ -39,6 +39,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/acamarata/cascade/pkg/provider"
+
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
@@ -208,25 +210,29 @@ func TestExamplePlugin_WazeroInvokeRoundTrip(t *testing.T) {
 		t.Fatal("plugin_invoke returned an empty result payload")
 	}
 
-	var caps struct {
-		StructuredOutput int
-	}
+	// Decoded into the REAL type, not a hand-transcribed copy of its wire
+	// shape. The copy this replaced declared `StructuredOutput int`, which
+	// matched the encoding exactly until P1-E16-W4-S35-T10 gave
+	// Capabilities its JSON tags and made the states encode as names --
+	// at which point the copy silently decoded nothing and read as
+	// "unknown". A test that transcribes a contract is a second copy of
+	// it, and this is what the second copy costs.
+	var caps provider.Capabilities
 	if err := json.Unmarshal(result.Result, &caps); err != nil {
 		t.Fatalf("result payload is not a structured Capabilities response: %v", err)
 	}
-	// Asserted against the exact provider.CapabilitySupported wire value
-	// (1), not merely "non-zero": a mutation of the production handler to
-	// report CapabilityUnsupported (2, also non-zero) proved a
-	// non-zero-only check does not catch that regression. See the
-	// mutation evidence recorded in this ticket's journal.
+	// Asserted against the exact provider.CapabilitySupported value, not
+	// merely "not unknown": a mutation of the production handler to report
+	// CapabilityUnsupported is also not-unknown, and a looser check does
+	// not catch that regression. See the mutation evidence recorded in
+	// this ticket's journal.
 	//
 	// The wording above deliberately avoids the literal marker phrase the
 	// pre-commit guard greps for: that guard exists to stop a lane
 	// committing while its wiring is still commented out mid-proof, and a
 	// comment merely DESCRIBING a completed proof is a false positive for
 	// it. Keep the guard strict and keep prose clear of its trigger.
-	const capabilitySupportedWireValue = 1
-	if caps.StructuredOutput != capabilitySupportedWireValue {
-		t.Fatalf("expected StructuredOutput == %d (provider.CapabilitySupported), got %+v", capabilitySupportedWireValue, caps)
+	if caps.StructuredOutput != provider.CapabilitySupported {
+		t.Fatalf("StructuredOutput = %v, want %v", caps.StructuredOutput, provider.CapabilitySupported)
 	}
 }

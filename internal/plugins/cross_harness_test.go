@@ -14,6 +14,7 @@ package plugins
 import (
 	"context"
 	"os"
+	"path/filepath"
 	goruntime "runtime"
 	"sort"
 	"testing"
@@ -125,6 +126,12 @@ func pinHome(t *testing.T, home string) {
 	if goruntime.GOOS == "windows" {
 		t.Setenv("USERPROFILE", home)
 	}
+	// XDG_CONFIG_HOME too, because one of the three harnesses honours it
+	// and the detector consults it FIRST. Leaving it alone pins the home
+	// for two harnesses and lets the third read whatever the runner has
+	// exported — which is how the shared-path test passed on darwin, where
+	// CI exports nothing, and failed on linux, where it does.
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 }
 
 // crossHarnessHome is the fake home the current fixture set, so a captured
