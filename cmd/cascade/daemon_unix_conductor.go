@@ -113,7 +113,12 @@ func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest 
 	if serr != nil {
 		return serr
 	}
-	return daemon.RegisterConductorExecuteHandler(registry, manifest, reader, quota, resolver, auditWriter, clock, security,
+	accounting, aerr := wireConductorAccounting(ctx, paths, clock, reg)
+	if aerr != nil {
+		return aerr
+	}
+	return daemon.RegisterConductorExecuteHandler(registry, manifest, reader, quota, resolver, auditWriter, clock,
+		security, accounting,
 		conductor.NodePlacement(nodes.Engine{Tunnels: tunnels}, nodeRecordStore(paths, clock)))
 }
 

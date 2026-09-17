@@ -55,7 +55,7 @@ func TestRegisterConductorExecuteHandler_NilResolver_RealRefusal(t *testing.T) {
 	clock := runtime.NewSystemClock()
 	auditWriter := newTestAuditWriter(t)
 
-	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, nil, auditWriter, clock, ConductorSecurity{}); err != nil {
+	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, nil, auditWriter, clock, ConductorSecurity{}, ConductorAccounting{}); err != nil {
 		t.Fatalf("RegisterConductorExecuteHandler: unexpected error %v", err)
 	}
 	if !registry.Registered(ConductorExecuteMethod) {
@@ -94,7 +94,7 @@ func TestRegisterConductorExecuteHandler_RealExecutor_DecodesAndDispatches(t *te
 	clock := runtime.NewSystemClock()
 	auditWriter := newTestAuditWriter(t)
 
-	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, fakeProviderResolver{}, auditWriter, clock, ConductorSecurity{}); err != nil {
+	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, fakeProviderResolver{}, auditWriter, clock, ConductorSecurity{}, ConductorAccounting{}); err != nil {
 		t.Fatalf("RegisterConductorExecuteHandler: unexpected error %v", err)
 	}
 
@@ -127,7 +127,7 @@ func TestRegisterConductorExecuteHandler_RealExecutor_BadParams(t *testing.T) {
 	clock := runtime.NewSystemClock()
 	auditWriter := newTestAuditWriter(t)
 
-	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, fakeProviderResolver{}, auditWriter, clock, ConductorSecurity{}); err != nil {
+	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, fakeProviderResolver{}, auditWriter, clock, ConductorSecurity{}, ConductorAccounting{}); err != nil {
 		t.Fatalf("RegisterConductorExecuteHandler: unexpected error %v", err)
 	}
 
@@ -206,7 +206,7 @@ func TestRegisterConductorExecuteHandler_WithSecurity_PipelineIsReady(t *testing
 	clock := runtime.NewSystemClock()
 
 	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{},
-		fakeProviderResolver{}, newTestAuditWriter(t), clock, fullSecurity(t)); err != nil {
+		fakeProviderResolver{}, newTestAuditWriter(t), clock, fullSecurity(t), ConductorAccounting{}); err != nil {
 		t.Fatalf("RegisterConductorExecuteHandler: %v", err)
 	}
 

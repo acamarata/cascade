@@ -189,16 +189,47 @@ func mountProviderQueryCmds(cmd *cobra.Command, deps providerDeps) {
 
 // providerListRow is one `cascade provider list` row (table and --json).
 type providerListRow struct {
-	Name         string                `json:"name"`
-	Driver       string                `json:"driver"`
-	Tier         string                `json:"tier"`
-	Health       string                `json:"health"`
+	Name   string `json:"name"`
+	Driver string `json:"driver"`
+	Tier   string `json:"tier"`
+	Health string `json:"health"`
+	// AccountKind is how this provider is paid for — a subscription, a
+	// metered key, a local model. It is what makes Cost readable: "no
+	// prices" means something different for a flat-rate subscription than
+	// for a metered account.
+	AccountKind string `json:"account_kind"`
+	// Cost says what the registry knows about this provider's prices.
+	// ALWAYS PRESENT, and explicitly "unknown" when nothing is stored —
+	// an absent field reads as a rendering bug, and "cascade has no
+	// prices for this provider" is a real state an operator acts on when
+	// a spend report comes out empty (R-14.282).
+	Cost         string                `json:"cost"`
 	Lanes        int                   `json:"lanes"`
 	Capabilities provider.Capabilities `json:"capabilities"`
 }
 
 func (r providerListRow) String() string {
-	return fmt.Sprintf("%-20s %-14s %-8s %-10s lanes=%d", r.Name, r.Driver, r.Tier, r.Health, r.Lanes)
+	return fmt.Sprintf("%-20s %-14s %-8s %-10s %-12s %-18s lanes=%d",
+		r.Name, r.Driver, r.Tier, r.Health, r.AccountKind, r.Cost, r.Lanes)
+}
+
+// costSummary says what the registry knows about a provider's prices.
+//
+// Three distinct answers, never collapsed: no record at all, a record
+// naming no models, and a record with prices. The first two look alike in
+// a spend report and mean different things — one is "nobody has ever
+// fetched prices for this provider", the other is "prices were fetched and
+// this provider has none", which is the normal state of a flat-rate
+// subscription.
+func costSummary(rec *registry.CostRecord) string {
+	switch {
+	case rec == nil:
+		return "unknown"
+	case len(rec.Models) == 0:
+		return "no per-model prices"
+	default:
+		return fmt.Sprintf("%d model(s) priced", len(rec.Models))
+	}
 }
 
 // providerListResult is the `provider list` envelope. The tag is not
@@ -254,7 +285,8 @@ func runProviderList(cmd *cobra.Command, deps providerDeps) error {
 	for i, rec := range recs {
 		rows[i] = providerListRow{
 			Name: rec.Name, Driver: string(rec.Driver), Tier: string(rec.Tier),
-			Health: string(rec.HealthStatus), Lanes: laneCount[rec.Name], Capabilities: rec.Capabilities,
+			Health: string(rec.HealthStatus), AccountKind: string(rec.AccountKind),
+			Cost: costSummary(rec.Cost), Lanes: laneCount[rec.Name], Capabilities: rec.Capabilities,
 		}
 	}
 	return vaultOutputWriter(cmd).Result(providerListResult{Providers: rows})

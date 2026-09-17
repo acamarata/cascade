@@ -88,3 +88,51 @@ whatever was consumed so far) and `tokens_out` of `0` when nothing was
 generated yet. No special-case branch exists for this: it is the ordinary
 provider-error branch, since a mid-flight cancellation surfaces as the
 provider call returning the context's own error.
+
+## Where the numbers come from, and how to tell they are being counted
+
+The two stores above are populated by the daemon at startup, through
+`daemon.ConductorAccounting`, which carries all three write seams the
+executor exposes:
+
+| Seam | Target |
+|---|---|
+| `SetUsageStore` | one `jobs_usage` row per dispatch, in `~/.cascade/data/cascade.db` |
+| `SetUsageAggregator` | the per-provider counters in `~/.cascade/data/provider-usage.db` — the SAME file `cascade provider usage` reads |
+| `SetCostEstimator` | the provider registry's rate card |
+
+**All three or none.** Wiring the two writers and leaving the estimator
+nil would record every dispatch at a cost of zero — a wrong number, which
+an operator believes, rather than an absent one, which prompts a question.
+
+**`cascade status` says whether it is on:**
+
+```
+subsystem:conductor.executor  running (executor constructed; usage accounting wired)
+```
+
+The other two values are `usage accounting partially wired (some dispatch
+facts are not counted)` and `usage accounting NOT wired (dispatches are not
+counted)`. That line exists because this subsystem's failure mode is
+silence: for the whole of Waves 3 and 4 the three seams had no production
+caller, `attributeUsage` wrote through nil hooks, and `cascade provider
+usage` reported an empty table on a machine that had been dispatching all
+week — no error, no warning, no degraded subsystem (R-14.283).
+
+## What a zero cost means
+
+The cost estimator prices a dispatch from the registry's rate card. A
+provider whose `CostRecord` is nil — the registry's explicit "prices were
+never fetched" — prices at **zero**, and a `jobs_usage` row has nowhere to
+carry the difference between "this was free" and "cascade does not know".
+
+So the distinction lives where an operator reads it, in `cascade provider
+list`'s `cost` column:
+
+| Column value | Meaning |
+|---|---|
+| `unknown` | no rate card has ever been fetched for this provider |
+| `no per-model prices` | a rate card exists and names no models — the normal state of a flat-rate subscription |
+| `N model(s) priced` | N models have a per-token price |
+
+A spend report that comes out at zero is read against that column.

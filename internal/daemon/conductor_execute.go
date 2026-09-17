@@ -92,6 +92,7 @@ func RegisterConductorExecuteHandler(
 	auditWriter audit.Writer,
 	clock conductor.Clock,
 	security ConductorSecurity,
+	accounting ConductorAccounting,
 	routerOpts ...conductor.RouterOption,
 ) error {
 	router, err := manifest.RegisterConductorRouter(reg, quota, clock, routerOpts...)
@@ -112,7 +113,8 @@ func RegisterConductorExecuteHandler(
 		registry.Register(ConductorExecuteMethod, conductorExecuteUnavailableHandler(cerr))
 		return nil
 	}
-	manifest.Started(conductorExecutorSubsystem, "executor constructed")
+	accounting.wire(exec)
+	manifest.Started(conductorExecutorSubsystem, "executor constructed; "+accounting.summary())
 	registry.Register(ConductorExecuteMethod, conductorExecuteHandler(exec))
 	conductor.RegisterHandlers(registry, exec)
 	return nil
@@ -157,5 +159,55 @@ func conductorExecuteHandler(exec *conductor.Executor) rpc.HandlerFunc {
 			return nil, err
 		}
 		return exec.Execute(ctx, req)
+	}
+}
+
+// ConductorAccounting carries the three write seams every dispatch's
+// usage is recorded through, built by the composition root because all
+// three need a database this package does not open.
+//
+// ALL THREE OR NONE, and the manifest says which. They were seams with no
+// production caller for the whole of W-3 and W-4: the executor was built,
+// `attributeUsage` ran, and it wrote through two nil hooks and a nil
+// estimator, so `cascade provider usage` reported an empty table on a
+// machine that had been dispatching (R-14.283). Nothing was degraded and
+// nothing warned — the number was simply absent and read as zero spend.
+//
+// Wiring two of the three would be worse than wiring none: a recorded row
+// with a confidently wrong cost is a number an operator believes, where
+// an absent row at least prompts the question.
+type ConductorAccounting struct {
+	// Store writes one jobs_usage row per dispatch.
+	Store conductor.UsageRecorder
+	// Aggregator increments the per-provider counters `cascade provider
+	// usage` reads.
+	Aggregator conductor.UsageAggregator
+	// Cost prices a dispatch from the registry's rate card.
+	Cost conductor.CostEstimator
+}
+
+// wire attaches whatever was supplied. Each setter is nil-safe by its own
+// contract, so a partially built ConductorAccounting degrades exactly as
+// far as it should rather than panicking at the first dispatch.
+func (a ConductorAccounting) wire(exec *conductor.Executor) {
+	exec.SetUsageStore(a.Store).SetUsageAggregator(a.Aggregator).SetCostEstimator(a.Cost)
+}
+
+// summary is the manifest line's accounting clause, so `cascade status`
+// shows whether dispatches are being counted.
+//
+// It exists because the failure mode here is SILENT: an unwired accounting
+// path produces no error, no warning and no degraded subsystem — only an
+// empty report much later. A status line that says so is the difference
+// between a regression somebody notices and one somebody discovers during
+// a spend review.
+func (a ConductorAccounting) summary() string {
+	switch {
+	case a.Store == nil && a.Aggregator == nil:
+		return "usage accounting NOT wired (dispatches are not counted)"
+	case a.Store == nil || a.Aggregator == nil || a.Cost == nil:
+		return "usage accounting partially wired (some dispatch facts are not counted)"
+	default:
+		return "usage accounting wired"
 	}
 }

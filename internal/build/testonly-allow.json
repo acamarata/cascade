@@ -49,13 +49,6 @@
     "symbol": "internal/ci.Upsert"
   },
   {
-    "caller_site": "internal/daemon/conductor_usage_wiring.go",
-    "expected_caller": "a future daemon composition file that opens cascade.db, calls ApplyUsageMigrationSchema, constructs a *UsageStore via NewUsageStore, and wires both onto the Executor via SetUsageStore/SetUsageAggregator; retire this entry once it does",
-    "reason": "P1-E11-W3-S23-T4 builds the jobs-domain jobs_usage table's migration (R-16.52), fully implemented and tested against a real modernc-sqlite db, but the daemon composition root that would open cascade.db and call this before constructing a *UsageStore does not exist yet - the SAME missing dependency internal/conductor.NewDefaultProductionSpawnHook's own entry above documents (internal/daemon/subsystems.go explicitly records zero NewExecutor call sites). Until a daemon file calls ApplyUsageMigrationSchema, it has no production caller.",
-    "retire_ticket": "P1-E11-W3-S22-T4",
-    "symbol": "internal/conductor.ApplyUsageMigrationSchema"
-  },
-  {
     "caller_site": "internal/conductor/flow.go",
     "expected_caller": "P1-E29-W6-S60-T2 (typed job templates for six work kinds, including adversarial), which depends on this ticket and will call Consensus once per round to aggregate reviewer verdicts; retire this entry once it lands",
     "reason": "Same P1-E11-W3-S23-T6 scope constraint as ParseVerdict above: the adversarial-verify-N caller that aggregates N reviewers' verdicts via Consensus is W6 Epics AC/AD and is not yet built. Every branch (weighted share, high-price veto, exact-0.5 tie, empty-quorum typed error) is exercised directly by flow_test.go.",
@@ -82,13 +75,6 @@
     "reason": "P1-E12-W3-S25-T3 builds the unified spawned-agent registry (sessions.SpawnRecord/Registry/DefaultRegistry) and this composition-root assembly function (builds a DefaultRegistry and returns the SpawnHook that registers into it), fully implemented and tested against a real storetest.MemStore, but the daemon composition root that would call it and pass the result to Executor.SetSpawnHook does not exist yet - internal/daemon/subsystems.go already wires the Router but explicitly documents zero NewExecutor call sites (its own comment: \"NewExecutor returns zero production call sites\"), so the SpawnHook wiring is even further out. Until a daemon file actually calls this function, it has no production caller.",
     "retire_ticket": "P1-E11-W3-S22-T4",
     "symbol": "internal/conductor.NewDefaultProductionSpawnHook"
-  },
-  {
-    "caller_site": "internal/daemon/conductor_usage_wiring.go",
-    "expected_caller": "the same future daemon composition file named in ApplyUsageMigrationSchema's entry above; retire this entry once it calls NewUsageStore and Executor.SetUsageStore",
-    "reason": "Same gap as internal/conductor.ApplyUsageMigrationSchema directly above: NewUsageStore is fully implemented and tested against a real modernc-sqlite db, but the daemon composition root that would construct one and call Executor.SetUsageStore does not exist yet.",
-    "retire_ticket": "P1-E11-W3-S22-T4",
-    "symbol": "internal/conductor.NewUsageStore"
   },
   {
     "caller_site": "internal/conductor/flow.go",
