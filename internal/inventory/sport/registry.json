@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T15:32:18Z",
+  "generated_at": "2026-09-17T15:45:26Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -13157,6 +13157,34 @@
       ]
     },
     {
+      "name": "internal/daemon status:requeue-collaborators",
+      "sites": [
+        {
+          "file": "internal/daemon/node_requeue_e2e_test.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal/daemon status:requeue-collaborators (ADD tests) —"
+        },
+        {
+          "file": "internal/daemon/node_requeue_wiring.go",
+          "line": 12,
+          "status": "",
+          "ticket": "P1-E17-W4-S37-T6",
+          "raw": "internal/daemon status:requeue-collaborators (P1-E17-W4-S37-T6)."
+        },
+        {
+          "file": "internal/daemon/node_requeue_wiring_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "internal/daemon status:requeue-collaborators (ADD tests) —"
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/daemon sync.*",
       "sites": [
         {
@@ -23968,7 +23996,7 @@
       ]
     }
   ],
-  "total_sites": 2310,
+  "total_sites": 2313,
   "unspecified_count": 69,
-  "multi_status_count": 40
+  "multi_status_count": 41
 }
