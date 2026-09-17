@@ -80,9 +80,10 @@ func RegisterNodeDispatchHandlers(
 	dispatcher := nodes.NewDispatcher()
 	rendezvous := nodes.NewRendezvous()
 
-	nodes.RegisterDispatchHandler(registry, func(_ context.Context, nodeID string) (nodes.ShipDeps, nodes.DeviceRecord, error) {
-		return resolveDispatchDeps(dispatcher, rendezvous, records, clock, config, nodeID)
-	})
+	nodes.RegisterDispatchHandler(registry,
+		func(_ context.Context, nodeID string) (nodes.ShipDeps, nodes.RequeueDeps, nodes.DeviceRecord, error) {
+			return resolveDispatchDeps(dispatcher, rendezvous, records, clock, config, nodeID)
+		})
 	nodes.RegisterDispatchNodeHandlers(registry, rendezvous)
 	return dispatcher, rendezvous
 }
@@ -95,24 +96,68 @@ func resolveDispatchDeps(
 	clock runtime.Clock,
 	config func() (nodes.Section, error),
 	nodeID string,
-) (nodes.ShipDeps, nodes.DeviceRecord, error) {
+) (nodes.ShipDeps, nodes.RequeueDeps, nodes.DeviceRecord, error) {
 	if records == nil || config == nil {
-		return nodes.ShipDeps{}, nodes.DeviceRecord{}, cascade.New(cascade.KindInternal,
+		return nodes.ShipDeps{}, nodes.RequeueDeps{}, nodes.DeviceRecord{}, cascade.New(cascade.KindInternal,
 			"daemon: the dispatch path is not wired to a record store and a config reader")
 	}
 	cfg, err := config()
 	if err != nil {
-		return nodes.ShipDeps{}, nodes.DeviceRecord{}, err
+		return nodes.ShipDeps{}, nodes.RequeueDeps{}, nodes.DeviceRecord{}, err
 	}
 	if err := requireDispatchConfig(cfg); err != nil {
-		return nodes.ShipDeps{}, nodes.DeviceRecord{}, err
+		return nodes.ShipDeps{}, nodes.RequeueDeps{}, nodes.DeviceRecord{}, err
 	}
 	record, err := records.Get(nodeID)
 	if err != nil {
-		return nodes.ShipDeps{}, nodes.DeviceRecord{}, err
+		return nodes.ShipDeps{}, nodes.RequeueDeps{}, nodes.DeviceRecord{}, err
 	}
 	deps := dispatcher.ShipDepsFor(cfg.DispatchRepoRoot, cfg.DispatchRemote, execGitRunner{}, rendezvous, dispatchClock{clock})
-	return deps, record, nil
+	return deps, resolveRequeueDeps(dispatcher, records, clock), record, nil
+}
+
+// resolveRequeueDeps builds the recovery collaborators for one dispatch:
+// the same fencing register the ship leg uses, the real enrolled-node set
+// as replacement candidates, and the real liveness and tunnel readings.
+//
+// Continuity and Attention are deliberately left NIL here. Both have real
+// owners elsewhere in the tree and neither is reachable from this
+// constructor yet: the journal store is opened by the caller that mounts
+// RegisterNodeDispatchJournal, and the attention queue belongs to R/S-39.
+// Leaving them nil is not a silent gap — nodes.PlanRequeue REFUSES on
+// either one being absent, so a lost node on a daemon wired this far is
+// reported, never quietly dropped. Wiring them is S-37.T3's own follow-up
+// (P1-E17-W4-S37-T6).
+func resolveRequeueDeps(
+	dispatcher *nodes.Dispatcher,
+	records *nodes.RecordStore,
+	clock runtime.Clock,
+) nodes.RequeueDeps {
+	enrolled, err := records.List()
+	if err != nil {
+		// A record store that cannot be listed places nothing, which is
+		// the same answer an empty candidate set gives: the re-queue is
+		// refused and the loss is reported.
+		enrolled = nil
+	}
+	return nodes.RequeueDeps{
+		// Placement carries no tunnel lookup, and that is a real gap
+		// rather than an oversight: nothing in this daemon holds
+		// per-node tunnel state — the S-36.T3 manager lives on the node
+		// side of the reverse forward. A nil lookup places NOTHING
+		// (Engine's own documented fail-closed default), so a lost node
+		// here is reported with both the loss and the reason recovery
+		// could not proceed, never silently dropped.
+		Candidates: nodes.CandidatesFrom(enrolled),
+		Attempts:   dispatcher.Attempts(),
+		Liveness: func(nodeID string) nodes.Liveness {
+			rec, getErr := records.Get(nodeID)
+			if getErr != nil {
+				return nodes.LivenessUnknown
+			}
+			return nodes.ComputeLiveness(rec, clock.Now(), nodes.DefaultHeartbeatTimeout)
+		},
+	}
 }
 
 // requireDispatchConfig refuses an unconfigured dispatch outright.

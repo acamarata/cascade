@@ -23,16 +23,32 @@ type recordingCaller struct {
 	calls  int
 	signer ed25519.PrivateKey
 	rec    DeviceRecord
+	// failFirst makes only the FIRST call fail, which is what a node lost
+	// mid-dispatch looks like to the recovery path: the replacement must
+	// then be able to succeed, or a test cannot tell "recovered" from
+	// "failed twice".
+	failFirst error
 }
 
-func (c *recordingCaller) Call(_ context.Context, _ string, attempt Attempt) (DispatchFrame, error) {
+func (c *recordingCaller) Call(_ context.Context, nodeID string, attempt Attempt) (DispatchFrame, error) {
 	c.calls++
 	if c.err != nil {
 		return DispatchFrame{}, c.err
 	}
+	if c.failFirst != nil && c.calls == 1 {
+		return DispatchFrame{}, c.failFirst
+	}
+	// Stamped for the node actually called, not for the one this caller
+	// was built around: a recovery test ships the replacement to a
+	// DIFFERENT node, and a frame claiming the lost node's id would fail
+	// verification for a reason that has nothing to do with recovery.
+	rec := c.rec
+	if nodeID != "" {
+		rec.NodeID = nodeID
+	}
 	f := c.frame
-	f.NodeID = c.rec.NodeID
-	f.EnrollmentID = DeriveEnrollmentID(c.rec)
+	f.NodeID = rec.NodeID
+	f.EnrollmentID = DeriveEnrollmentID(rec)
 	f.DispatchID = attempt.DispatchID
 	if f.Attempt == 0 {
 		f.Attempt = attempt.Attempt

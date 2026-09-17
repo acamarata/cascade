@@ -50,7 +50,6 @@ import (
 
 	"github.com/acamarata/cascade/internal/nodes"
 	cruntime "github.com/acamarata/cascade/internal/runtime"
-	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -126,10 +125,7 @@ func composeNodeAdmit(ctx context.Context, deps nodeCLIDeps) (nodeAdmitCompositi
 	if dataDir == "" {
 		return nodeAdmitComposition{}, cascade.New(cascade.KindUnavailable, "node enroll: could not resolve the data directory")
 	}
-	keystore, err := nodes.NewNodeKeystore(secrets.Config{
-		Dir:            deps.SecretsDir,
-		ForceFileVault: deps.SecretsDir != "",
-	})
+	keystore, err := nodes.NewNodeKeystore(nodeKeystoreConfig(deps.SecretsDir, dataDir))
 	if err != nil {
 		return nodeAdmitComposition{}, err
 	}

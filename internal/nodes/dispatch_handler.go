@@ -1,7 +1,6 @@
 package nodes
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 
@@ -66,6 +65,13 @@ type DispatchRequest struct {
 	Verbs    []string `json:"verbs,omitempty"`
 	// Payload is the work description the node receives.
 	Payload json.RawMessage `json:"payload,omitempty"`
+	// Capabilities are what the work needs, carried so a re-queue after a
+	// lost node re-applies the ORIGINAL placement demand rather than a
+	// weaker one reconstructed from what is left (S-37.T3).
+	Capabilities []string `json:"capabilities,omitempty"`
+	// EntityID is the journal entity this dispatch's records stream to,
+	// and the one a replacement attempt resumes from.
+	EntityID string `json:"entity_id,omitempty"`
 }
 
 // DispatchResult is what the controller reports back.
@@ -83,7 +89,12 @@ type DispatchResult struct {
 
 // dispatchHandlerDeps resolves the ship dependencies and the device record
 // for the selected node.
-type dispatchHandlerDeps func(ctx context.Context, nodeID string) (ShipDeps, DeviceRecord, error)
+// It returns the recovery collaborators alongside the ship ones because
+// the handler is where a lost node is first observed, and a composition
+// root that supplied no recovery deps gets the fail-closed behaviour (a
+// zero RequeueDeps places nothing and holds nothing) rather than silently
+// losing the work.
+type dispatchHandlerDeps func(ctx context.Context, nodeID string) (ShipDeps, RequeueDeps, DeviceRecord, error)
 
 // RegisterDispatchHandler mounts DispatchMethod on registry.
 func RegisterDispatchHandler(registry *rpc.Registry, resolve dispatchHandlerDeps) {
@@ -92,7 +103,7 @@ func RegisterDispatchHandler(registry *rpc.Registry, resolve dispatchHandlerDeps
 		if err != nil {
 			return nil, err
 		}
-		deps, record, err := resolve(ctx, req.NodeID)
+		deps, recovery, record, err := resolve(ctx, req.NodeID)
 		if err != nil {
 			return nil, err
 		}
@@ -104,12 +115,14 @@ func RegisterDispatchHandler(registry *rpc.Registry, resolve dispatchHandlerDeps
 		if err != nil {
 			return nil, err
 		}
-		outcome, err := Ship(ctx, deps, record, ShipRequest{
-			DispatchID:  req.DispatchID,
-			Head:        req.Head,
-			Work:        Action{ID: req.ActionID, Idempotent: req.Idempotent},
-			Sensitivity: Sensitivity(req.Sensitivity),
-			Payload:     req.Payload,
+		outcome, err := ShipWithRecovery(ctx, deps, recovery, record, ShipRequest{
+			DispatchID:   req.DispatchID,
+			Head:         req.Head,
+			Work:         Action{ID: req.ActionID, Idempotent: req.Idempotent},
+			Sensitivity:  Sensitivity(req.Sensitivity),
+			Payload:      req.Payload,
+			Capabilities: req.Capabilities,
+			EntityID:     req.EntityID,
 		})
 		if err != nil {
 			return nil, err
@@ -165,6 +178,13 @@ type Dispatcher struct {
 func NewDispatcher() *Dispatcher {
 	return &Dispatcher{attempts: NewAttemptRegister(), sequences: NewSequenceStore()}
 }
+
+// Attempts exposes this controller's fencing register.
+//
+// Exported for the recovery path: a replacement attempt must be minted
+// from the SAME register the lost attempt came from, or it does not
+// supersede it and the fence is decorative.
+func (d *Dispatcher) Attempts() *AttemptRegister { return d.attempts }
 
 // ShipDepsFor builds the ship dependencies for one call over this
 // controller's shared fencing state.
@@ -243,46 +263,4 @@ func RegisterDispatchNodeHandlers(registry *rpc.Registry, rv *Rendezvous) {
 		}
 		return map[string]bool{"accepted": true}, nil
 	})
-}
-
-// DispatchJournalMethod is how a node streams journal records back.
-const DispatchJournalMethod = "node.dispatch.journal"
-
-// RegisterDispatchJournalHandler mounts the journal-stream verb over deps.
-//
-// It is separate from RegisterDispatchNodeHandlers because its dependency
-// is different in kind: claim and report need only the rendezvous, while
-// this needs the controller's journal store, which the composition root
-// opens. Mounting it separately means a daemon without a journal store
-// still serves the other two rather than failing to register any of them.
-func RegisterDispatchJournalHandler(registry *rpc.Registry, deps JournalStreamDeps) {
-	registry.Register(DispatchJournalMethod, func(ctx context.Context, params json.RawMessage) (any, error) {
-		var rec JournalRecord
-		if err := decodeParams(params, &rec, DispatchJournalMethod); err != nil {
-			return nil, err
-		}
-		if err := StreamJournalRecord(ctx, deps, rec); err != nil {
-			return nil, err
-		}
-		return map[string]bool{"appended": true}, nil
-	})
-}
-
-// decodeParams decodes one call's params, naming the verb in any failure.
-//
-// JSON null counts as ABSENT, not as a value. A `"params": null` frame is
-// four bytes, so a length check alone lets it through, and unmarshalling
-// null into a struct leaves the zero value untouched — the verb then runs
-// against a claim from node "" or a report for dispatch "". Each verb's own
-// validation happens to refuse those today, which is precisely why this
-// guard is worth having: it refuses at the boundary, by name, instead of
-// relying on every downstream rule to keep noticing.
-func decodeParams(params json.RawMessage, into any, method string) error {
-	if len(params) == 0 || string(bytes.TrimSpace(params)) == "null" {
-		return cascade.Newf(cascade.KindInvalidInput, "nodes: %s requires params", method)
-	}
-	if err := json.Unmarshal(params, into); err != nil {
-		return cascade.Wrapf(cascade.KindInvalidInput, err, "nodes: %s: decode request", method)
-	}
-	return nil
 }

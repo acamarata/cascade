@@ -31,8 +31,8 @@ func TestTheDispatchVerbShipsThroughTheRealEngine(t *testing.T) {
 		Sequence: 1, ActionID: "a1", Outcome: OutcomeSucceeded,
 	})
 	reg := rpc.NewRegistry()
-	RegisterDispatchHandler(reg, func(context.Context, string) (ShipDeps, DeviceRecord, error) {
-		return deps, rec, nil
+	RegisterDispatchHandler(reg, func(context.Context, string) (ShipDeps, RequeueDeps, DeviceRecord, error) {
+		return deps, RequeueDeps{}, rec, nil
 	})
 
 	result, errObj := dispatchCall(t, reg,
@@ -61,8 +61,8 @@ func TestTheDispatchVerbShipsThroughTheRealEngine(t *testing.T) {
 func TestTheDispatchVerbRefusesAnIncompleteCall(t *testing.T) {
 	deps, rec, caller, _ := shipHarness(t, DispatchFrame{})
 	reg := rpc.NewRegistry()
-	RegisterDispatchHandler(reg, func(context.Context, string) (ShipDeps, DeviceRecord, error) {
-		return deps, rec, nil
+	RegisterDispatchHandler(reg, func(context.Context, string) (ShipDeps, RequeueDeps, DeviceRecord, error) {
+		return deps, RequeueDeps{}, rec, nil
 	})
 
 	for _, params := range []string{

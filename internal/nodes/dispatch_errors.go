@@ -37,9 +37,22 @@ import (
 // the two is current.
 var ErrStaleAttempt = errors.New("nodes: dispatch frame from a superseded attempt")
 
+// ErrDispatchUnreachable and ErrDispatchTunnelDropped are the two
+// node-is-gone sentinels, wrapped by the constructors below.
+//
+// They exist so recovery can tell a LOST node from a node that answered.
+// The kind is not enough: a failed push, fetch or worktree is
+// KindUnavailable too, and those are the CONTROLLER's own git failing —
+// moving that work to a second machine would fail there in exactly the
+// same way, having pushed a branch to it first.
+var (
+	ErrDispatchUnreachable   = errors.New("nodes: the node could not be reached")
+	ErrDispatchTunnelDropped = errors.New("nodes: the tunnel dropped mid-dispatch")
+)
+
 // ErrNodeUnreachable reports a node that could not be reached at all.
 func ErrNodeUnreachable(nodeID string, cause error) error {
-	return cascade.Wrapf(cascade.KindUnavailable, cause,
+	return cascade.Wrapf(cascade.KindUnavailable, errors.Join(ErrDispatchUnreachable, cause),
 		"nodes: node %q is unreachable; the dispatch was not shipped", nodeID)
 }
 
@@ -51,7 +64,7 @@ func ErrNodeUnreachable(nodeID string, cause error) error {
 // caller that cannot tell them apart would either re-queue work that is
 // still running or abandon work that never started.
 func ErrTunnelDropped(nodeID, dispatchID string, cause error) error {
-	return cascade.Wrapf(cascade.KindUnavailable, cause,
+	return cascade.Wrapf(cascade.KindUnavailable, errors.Join(ErrDispatchTunnelDropped, cause),
 		"nodes: the tunnel to node %q dropped during dispatch %s; the outcome is unknown", nodeID, dispatchID)
 }
 
@@ -194,4 +207,49 @@ func errShipUnwired() error {
 func errDispatchRanAndFailed(dispatchID, nodeID string) error {
 	return cascade.Newf(cascade.KindUnavailable,
 		"nodes: dispatch %s ran on node %q and failed there", dispatchID, nodeID)
+}
+
+// errUnidentifiedHold refuses a hold that names no dispatch or no action.
+//
+// Both ids are what makes a held item reconcilable: without the action id
+// nobody can ask the node's dedup log whether the work ran, which is the
+// only question a person holding this item needs answered.
+func errUnidentifiedHold() error {
+	return cascade.New(cascade.KindInvalidInput,
+		"nodes: holding an unknown outcome needs both a dispatch id and an action id")
+}
+
+// errNoAttentionFiler refuses to hold a dispatch nobody will be told about.
+func errNoAttentionFiler(dispatchID string) error {
+	return cascade.Newf(cascade.KindInternal,
+		"nodes: dispatch %s cannot be held: no attention filer is wired, and a held dispatch "+
+			"nobody is told about is a lost one", dispatchID)
+}
+
+// errUnidentifiedResume refuses a resume point for no entity.
+func errUnidentifiedResume() error {
+	return cascade.New(cascade.KindInvalidInput,
+		"nodes: resuming a dispatch needs the journal entity its records were streamed to")
+}
+
+// errNoContinuityReader refuses to guess that a journal is empty.
+//
+// "I could not read it" and "there is nothing in it" produce the same
+// resume point and mean opposite things; the second re-runs work the lost
+// attempt already finished.
+func errNoContinuityReader(entityID string) error {
+	return cascade.Newf(cascade.KindInternal,
+		"nodes: no journal reader is wired, so the records entity %s already holds cannot be read; "+
+			"resuming without them would repeat work the lost attempt completed", entityID)
+}
+
+// errNoAttemptRegister refuses a re-queue that cannot be fenced.
+//
+// Without the register the replacement would reuse the lost attempt's
+// number, land on its branch, and be indistinguishable from it — which is
+// precisely the partitioned-node race fencing exists to remove.
+func errNoAttemptRegister(dispatchID string) error {
+	return cascade.Newf(cascade.KindInternal,
+		"nodes: dispatch %s cannot be re-queued: no attempt register is wired, so the replacement "+
+			"could not be fenced against the attempt it replaces", dispatchID)
 }

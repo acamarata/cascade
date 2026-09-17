@@ -85,18 +85,18 @@ func TestResolvingADispatchNeedsItsCollaborators(t *testing.T) {
 	clock := runtime.NewSystemClock()
 	store := nodes.NewRecordStore(nodes.NewFileRecordBackend(t.TempDir()), clock)
 
-	if _, _, err := resolveDispatchDeps(d, rv, nil, clock, func() (nodes.Section, error) {
+	if _, _, _, err := resolveDispatchDeps(d, rv, nil, clock, func() (nodes.Section, error) {
 		return configuredSection(), nil
 	}, "n1"); err == nil {
 		t.Error("a dispatch resolved with no record store")
 	}
-	if _, _, err := resolveDispatchDeps(d, rv, store, clock, nil, "n1"); err == nil {
+	if _, _, _, err := resolveDispatchDeps(d, rv, store, clock, nil, "n1"); err == nil {
 		t.Error("a dispatch resolved with no config reader")
 	}
 	// An unconfigured section refuses BEFORE the node is looked up, so a
 	// misconfigured controller reports the config rather than a confusing
 	// "no such node".
-	_, _, err := resolveDispatchDeps(d, rv, store, clock, func() (nodes.Section, error) {
+	_, _, _, err := resolveDispatchDeps(d, rv, store, clock, func() (nodes.Section, error) {
 		return nodes.Section{}, nil
 	}, "n1")
 	// BOTH missing knobs must be named, deterministically. This assertion
@@ -112,7 +112,7 @@ func TestResolvingADispatchNeedsItsCollaborators(t *testing.T) {
 		}
 	}
 	// A node that is not enrolled is refused too.
-	if _, _, err := resolveDispatchDeps(d, rv, store, clock, func() (nodes.Section, error) {
+	if _, _, _, err := resolveDispatchDeps(d, rv, store, clock, func() (nodes.Section, error) {
 		return configuredSection(), nil
 	}, "never-enrolled"); err == nil {
 		t.Error("a dispatch resolved against a node that was never enrolled")

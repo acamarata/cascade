@@ -24,7 +24,7 @@ func composeNodeServe(ctx context.Context, deps nodeServeDeps) (nodeServeComposi
 	if dataDir == "" {
 		return nodeServeComposition{}, cascade.New(cascade.KindUnavailable, "node serve: could not resolve the data directory")
 	}
-	keystore, err := nodes.NewNodeKeystore(secrets.Config{Dir: deps.SecretsDir, ForceFileVault: deps.SecretsDir != ""})
+	keystore, err := nodes.NewNodeKeystore(nodeKeystoreConfig(deps.SecretsDir, dataDir))
 	if err != nil {
 		return nodeServeComposition{}, cascade.Wrap(cascade.KindUnavailable, err, "node serve: open keystore")
 	}
@@ -50,4 +50,27 @@ func composeNodeServe(ctx context.Context, deps nodeServeDeps) (nodeServeComposi
 		dataDir: dataDir, keystore: keystore, self: self, registry: registry,
 		recordStore: recordStore, knownHosts: knownHosts,
 	}, nil
+}
+
+// nodeKeystoreConfig builds the secrets config every node command opens its
+// keystore with.
+//
+// Dir is ALWAYS set, to the data directory when no test overrode it. That
+// is the fix for a production refusal, not a tidy-up: SelectCustody falls
+// back to the encrypted file vault when no platform backend is available,
+// and the file vault refuses to construct without a directory — so with Dir
+// empty, `cascade node serve` could not start at all on a headless Linux
+// box, a locked keychain, or a CI runner. The node agent is the component
+// most likely to run exactly there (R-14.270).
+//
+// ForceFileVault stays tied to the OVERRIDE alone. Setting Dir does not
+// force the file vault — SelectCustody still prefers a working platform
+// backend — so a real user's key still lands in their OS keychain, and only
+// a test that deliberately named a directory opts out of it.
+func nodeKeystoreConfig(secretsDir, dataDir string) secrets.Config {
+	dir := secretsDir
+	if dir == "" {
+		dir = dataDir
+	}
+	return secrets.Config{Dir: dir, ForceFileVault: secretsDir != ""}
 }

@@ -131,8 +131,8 @@ func TestAnUnrecordedActionHasNoOutcome(t *testing.T) {
 // TestAnUnresolvableDispatchIsRefusedBeforeShipping proves the RPC entry
 // surfaces a dependency-resolution failure instead of shipping without one.
 func TestAnUnresolvableDispatchIsRefusedBeforeShipping(t *testing.T) {
-	reg := newDispatchRegistry(t, func(context.Context, string) (ShipDeps, DeviceRecord, error) {
-		return ShipDeps{}, DeviceRecord{}, errNoActionLog()
+	reg := newDispatchRegistry(t, func(context.Context, string) (ShipDeps, RequeueDeps, DeviceRecord, error) {
+		return ShipDeps{}, RequeueDeps{}, DeviceRecord{}, errNoActionLog()
 	})
 	_, errObj := dispatchCall(t, reg,
 		`{"dispatch_id":"d1","node_id":"n1","action_id":"a1","sensitivity":"normal"}`)
@@ -147,8 +147,8 @@ func TestAStaticKeyLaneIsReportedAsRelayed(t *testing.T) {
 	deps, rec, _, head := shipHarness(t, DispatchFrame{
 		Sequence: 1, ActionID: "a1", Outcome: OutcomeSucceeded,
 	})
-	reg := newDispatchRegistry(t, func(context.Context, string) (ShipDeps, DeviceRecord, error) {
-		return deps, rec, nil
+	reg := newDispatchRegistry(t, func(context.Context, string) (ShipDeps, RequeueDeps, DeviceRecord, error) {
+		return deps, RequeueDeps{}, rec, nil
 	})
 	result, errObj := dispatchCall(t, reg,
 		`{"dispatch_id":"d1","node_id":"n1","action_id":"a1","head":"`+head+
@@ -164,8 +164,8 @@ func TestAStaticKeyLaneIsReportedAsRelayed(t *testing.T) {
 
 // TestAMalformedDispatchCallIsRefused covers the params decoder.
 func TestAMalformedDispatchCallIsRefused(t *testing.T) {
-	reg := newDispatchRegistry(t, func(context.Context, string) (ShipDeps, DeviceRecord, error) {
-		return ShipDeps{}, DeviceRecord{}, nil
+	reg := newDispatchRegistry(t, func(context.Context, string) (ShipDeps, RequeueDeps, DeviceRecord, error) {
+		return ShipDeps{}, RequeueDeps{}, DeviceRecord{}, nil
 	})
 	if _, errObj := dispatchCall(t, reg, `{"dispatch_id":{"not":"a string"}}`); errObj == nil {
 		t.Fatal("a malformed dispatch call was accepted")

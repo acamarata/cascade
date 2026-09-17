@@ -756,16 +756,41 @@ jobs:
       - name: go test -tags=integration ./internal/nodes/ (real git)
         run: go test -tags=integration -race -count=1 ./internal/nodes/ -run '^TestDispatchRealGit' -v
 
+  node-kill-mid-run:
+    # P1-E17-W4-S37-T3, Art.2: the v1 DST-S4 acceptance — a REAL
+    # `cascade node serve` process, SIGKILLed mid-run, and the interrupted
+    # work re-queues and resumes with its journal while the action it was
+    # running produces exactly one side effect across the kill.
+    #
+    # NOT allowed-fail, for the same reason as node-dispatch-real-git: the
+    # only external thing this needs is a Go toolchain and a writable
+    # /tmp. It builds the shipped binary itself and runs it against a
+    # throwaway home, so a red result is this repo's bug and must block.
+    #
+    # Not on windows: `cascade node serve` refuses there per the S-36.T2
+    # tier-2 ruling, and there is no SIGKILL to send it.
+    name: node-kill-mid-run (real node agent, SIGKILL)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: go test -tags=integration ./internal/nodes/ (kill a real node agent)
+        run: go test -tags=integration -count=1 ./internal/nodes/ -run '^TestKillNodeMidRun$' -v
+
   ci-gate:
     name: ci-gate (required status)
-    needs: [build-test, darwin-amd64-build, linux-pam-build, conformance-suite, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, redis-storetest-under-docker, s3-storetest-under-docker, server-profile-assembly, plugin-integration, node-dispatch-real-git]
+    needs: [build-test, darwin-amd64-build, linux-pam-build, conformance-suite, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, redis-storetest-under-docker, s3-storetest-under-docker, server-profile-assembly, plugin-integration, node-dispatch-real-git, node-kill-mid-run]
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: All lanes green
         run: |
           set -eu
-          for r in "${{ needs.build-test.result }}" "${{ needs.darwin-amd64-build.result }}" "${{ needs.linux-pam-build.result }}" "${{ needs.conformance-suite.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}" "${{ needs.retrieval-eval-gate.result }}" "${{ needs.storetest-under-docker.result }}" "${{ needs.pgvector-storetest-under-docker.result }}" "${{ needs.redis-storetest-under-docker.result }}" "${{ needs.s3-storetest-under-docker.result }}" "${{ needs.server-profile-assembly.result }}" "${{ needs.plugin-integration.result }}" "${{ needs.node-dispatch-real-git.result }}"; do
+          for r in "${{ needs.build-test.result }}" "${{ needs.darwin-amd64-build.result }}" "${{ needs.linux-pam-build.result }}" "${{ needs.conformance-suite.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}" "${{ needs.retrieval-eval-gate.result }}" "${{ needs.storetest-under-docker.result }}" "${{ needs.pgvector-storetest-under-docker.result }}" "${{ needs.redis-storetest-under-docker.result }}" "${{ needs.s3-storetest-under-docker.result }}" "${{ needs.server-profile-assembly.result }}" "${{ needs.plugin-integration.result }}" "${{ needs.node-dispatch-real-git.result }}" "${{ needs.node-kill-mid-run.result }}"; do
             if [ "$r" != "success" ]; then
               echo "ci-gate: a required lane did not succeed ($r)"
               exit 1

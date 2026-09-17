@@ -35,7 +35,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/internal/nodes"
-	"github.com/acamarata/cascade/internal/secrets"
 )
 
 // nodeKeyView renders a rotate-key/revoke result.
@@ -68,10 +67,7 @@ func newNodeRotateKeyCmd(deps nodeCLIDeps) *cobra.Command {
 			}
 			nodeID := args[0]
 			dataDir := deps.Paths.DataDir()
-			keystore, err := nodes.NewNodeKeystore(secrets.Config{
-				Dir:            deps.SecretsDir,
-				ForceFileVault: deps.SecretsDir != "",
-			})
+			keystore, err := nodes.NewNodeKeystore(nodeKeystoreConfig(deps.SecretsDir, dataDir))
 			if err != nil {
 				return err
 			}

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T13:44:30Z",
+  "generated_at": "2026-09-17T14:22:28Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -14591,6 +14591,21 @@
       ]
     },
     {
+      "name": "internal/nodes TestKillNodeMidRun",
+      "sites": [
+        {
+          "file": "internal/nodes/dispatch_kill_integration_test.go",
+          "line": 23,
+          "status": "",
+          "ticket": "P1-E17-W4-S37-T3",
+          "raw": "internal/nodes TestKillNodeMidRun (P1-E17-W4-S37-T3)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/nodes TestProvisionRealSSHD",
       "sites": [
         {
@@ -14800,6 +14815,13 @@
           "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
         },
         {
+          "file": "internal/nodes/continuity_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T3",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T3."
+        },
+        {
           "file": "internal/nodes/dispatch_creds_test.go",
           "line": 14,
           "status": "ADD",
@@ -14903,6 +14925,27 @@
           "status": "ADD",
           "ticket": "P1-E17-W4-S37-T2",
           "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
+        },
+        {
+          "file": "internal/nodes/requeue_run_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T3",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T3."
+        },
+        {
+          "file": "internal/nodes/requeue_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T3",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T3."
+        },
+        {
+          "file": "internal/nodes/unknown_outcome_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T3",
+          "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T3."
         }
       ],
       "statuses": [
@@ -14933,6 +14976,21 @@
           "status": "ADD",
           "ticket": "P1-E17-W4-S37-T2",
           "raw": "internal/nodes:action-log (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes:continuity",
+      "sites": [
+        {
+          "file": "internal/nodes/continuity.go",
+          "line": 30,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T3",
+          "raw": "internal/nodes:continuity (ADD) — P1-E17-W4-S37-T3."
         }
       ],
       "statuses": [
@@ -15034,10 +15092,25 @@
       "sites": [
         {
           "file": "internal/nodes/dispatch_handler.go",
-          "line": 37,
+          "line": 36,
           "status": "ADD",
           "ticket": "P1-E17-W4-S37-T2",
           "raw": "internal/nodes:dispatch-handler (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes:dispatch-journal-verb",
+      "sites": [
+        {
+          "file": "internal/nodes/dispatch_journal_verb.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T3",
+          "raw": "internal/nodes:dispatch-journal-verb (ADD) — P1-E17-W4-S37-T3 split."
         }
       ],
       "statuses": [
@@ -15098,6 +15171,51 @@
           "status": "ADD",
           "ticket": "P1-E17-W4-S37-T2",
           "raw": "internal/nodes:journal-stream (ADD) — P1-E17-W4-S37-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes:requeue",
+      "sites": [
+        {
+          "file": "internal/nodes/requeue.go",
+          "line": 36,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T3",
+          "raw": "internal/nodes:requeue (ADD) — P1-E17-W4-S37-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes:requeue-run",
+      "sites": [
+        {
+          "file": "internal/nodes/requeue_run.go",
+          "line": 33,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T3",
+          "raw": "internal/nodes:requeue-run (ADD) — P1-E17-W4-S37-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes:unknown-outcome",
+      "sites": [
+        {
+          "file": "internal/nodes/unknown_outcome.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E17-W4-S37-T3",
+          "raw": "internal/nodes:unknown-outcome (ADD) — P1-E17-W4-S37-T3."
         }
       ],
       "statuses": [
@@ -23259,7 +23377,7 @@
       ]
     }
   ],
-  "total_sites": 2253,
-  "unspecified_count": 67,
+  "total_sites": 2263,
+  "unspecified_count": 68,
   "multi_status_count": 40
 }

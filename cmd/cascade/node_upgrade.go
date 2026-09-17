@@ -32,7 +32,6 @@ import (
 
 	"github.com/acamarata/cascade/internal/buildinfo"
 	"github.com/acamarata/cascade/internal/nodes"
-	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -173,7 +172,7 @@ func composeUpgradeDialer(ctx context.Context, deps nodeCLIDeps) (nodes.ExecDial
 	if dataDir == "" {
 		return nil, nil, cascade.New(cascade.KindUnavailable, "node upgrade: could not resolve the data directory")
 	}
-	keystore, err := nodes.NewNodeKeystore(secrets.Config{Dir: deps.SecretsDir, ForceFileVault: deps.SecretsDir != ""})
+	keystore, err := nodes.NewNodeKeystore(nodeKeystoreConfig(deps.SecretsDir, deps.Paths.DataDir()))
 	if err != nil {
 		return nil, nil, err
 	}

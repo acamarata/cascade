@@ -62,6 +62,14 @@ type ShipRequest struct {
 	// Payload is the work description the node receives. It is checked
 	// for static key material before anything ships.
 	Payload []byte
+	// Capabilities are the capability names the work needs, carried so a
+	// re-queue can re-apply the ORIGINAL placement demand rather than a
+	// weaker one reconstructed from what is left (S-37.T3).
+	Capabilities []string
+	// EntityID is the journal entity this dispatch's records stream to.
+	// Recovery reads it to find where the lost attempt got to; without it
+	// a replacement would start the work over.
+	EntityID string
 }
 
 // ShipOutcome is what one completed dispatch produced.
@@ -113,7 +121,19 @@ func Ship(ctx context.Context, deps ShipDeps, node DeviceRecord, req ShipRequest
 		return ShipOutcome{}, ErrNodeUnreachable(node.NodeID, errShipUnwired())
 	}
 
-	attempt := NewAttempt(deps.Attempts, req.DispatchID, node.NodeID, deps.now())
+	return shipAttempt(ctx, deps, node, req,
+		NewAttempt(deps.Attempts, req.DispatchID, node.NodeID, deps.now()))
+}
+
+// shipAttempt is Ship's body, at an attempt somebody has already minted.
+//
+// Split out because recovery needs it: S-37.T3's re-queue mints the
+// replacement's attempt as part of DECIDING to replace (that number is the
+// fence against the attempt it supersedes), and shipping it must use that
+// number rather than minting a second one and skipping the first.
+func shipAttempt(
+	ctx context.Context, deps ShipDeps, node DeviceRecord, req ShipRequest, attempt Attempt,
+) (outcome ShipOutcome, err error) {
 	defer func() {
 		// Terminal outcome: the worktree goes, whatever happened.
 		_ = deps.Git.RemoveWorktree(ctx, req.DispatchID, attempt.Attempt)

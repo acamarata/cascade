@@ -457,6 +457,81 @@ whole `[nodes]` section has no hot-reload registration hook in the tree
 at all yet (`config.go`'s own doc comment records this pre-existing gap,
 predating this ticket); this ticket does not reintroduce or worsen it.
 
+## Failure semantics (S-37.T3)
+
+A node can disappear mid-dispatch. The work it was running must not
+disappear with it, and must not silently run twice either.
+
+**The three loss signals.** Liveness is three-state — `reachable`,
+`unavailable`, `unknown` — and only `reachable` is evidence that a node is
+there. Both of the others are re-queue signals, `unknown` included: it is
+what a controller with no news reads, and treating an absence of bad news
+as health parks work on a machine that is gone. The tunnel state and the
+ship leg's own typed errors are read the same way. A dispatch is considered
+lost when any of the three says so, and the most specific signal is the one
+reported, because that is the one an operator can act on.
+
+**Re-queue re-enters placement.** The replacement target goes back through
+the same placement engine with the same requirement, so trust tier,
+sensitivity, liveness, connection and drain are all re-applied. Recovery is
+where bypassing a filter is most tempting — the work is already late — and
+where it is least defensible, because the filter in the way is the one
+saying this machine must not see this work. Local-only work is still never
+dispatched to any node. If nothing is eligible, that is the answer: the
+controller does not decide to run it itself.
+
+The node that was just lost is excluded explicitly rather than left to fail
+placement. Its device record's liveness is maintained by a different loop on
+a different schedule, so a recovery that trusted the record would place the
+work straight back onto the machine it just left.
+
+**Re-queue is fenced.** The replacement takes the next attempt number from
+the same register the original used, so it runs on its own branch
+(`dispatch/<id>/<attempt+1>`) and its own worktree. Results, pushes and
+journal records still arriving from the superseded attempt are refused with
+`ErrStaleAttempt`. A partitioned-but-alive node cannot race its own
+replacement.
+
+**Journal continuity.** The records the lost attempt streamed back are the
+resume substrate. The replacement starts after the entity's last published
+checkpoint and carries the operation ids already accounted for, so it
+continues rather than starting over. The read is deliberately generous — it
+may re-deliver an operation the first attempt finished, and it will never
+skip one — because a re-delivery is caught by the node's durable dedup and
+a skip is not caught by anything.
+
+An unreadable journal is an ERROR, not a cold start. "There is nothing
+recorded" and "I could not read what is recorded" produce the same resume
+point and mean opposite things, and acting on the first when the second is
+true re-runs completed work.
+
+**At-least-once is not unconditional.** Only actions declared idempotent
+re-queue automatically. For one that is not, both automatic choices are
+destructive — re-running may duplicate an external effect, abandoning may
+lose work that succeeded — and nothing in the system can tell which. So it
+is HELD in `unknown-outcome` for a person, surfaced as an attention entry,
+and never auto-re-queued or dropped. Holding requires an attention filer:
+with none wired the controller refuses rather than holding quietly, because
+a held item nobody is told about is a lost one with extra steps.
+
+Durable dedup is what makes the automatic case safe when the replacement is
+the SAME node coming back — a restart or a reconnect. It cannot help when
+the replacement is a different machine, whose action log is empty. That
+limit is exactly why the held state exists.
+
+**The kill-node drill.** `TestKillNodeMidRun` (tagged `integration`, CI job
+`node-kill-mid-run`) runs a real `cascade node serve` process against a
+throwaway home, has it reserve an action in its durable on-disk log,
+SIGKILLs it — no graceful shutdown, nothing runs on the way out — and then
+asserts the controller reads the dead socket as a loss, re-queues onto a
+healthy spare at a fresh fenced attempt carrying the lost attempt's journal
+position, and that the action is refused when it is redelivered to a
+restarted node over the same data directory. One side effect, across a
+process that was never allowed to clean up after itself.
+
+The cross-machine variant of the same drill is the 06 §7 owner
+prerequisite; it gates that drill only, never this one.
+
 ## Windows
 
 `cascade node serve` refuses unconditionally on Windows: the serve
