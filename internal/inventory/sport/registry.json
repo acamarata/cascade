@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T11:50:11Z",
+  "generated_at": "2026-09-17T12:06:53Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -15201,6 +15201,13 @@
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T1",
           "raw": "internal/plugins cascade-claude wiring (ADD) — P1-E16-W4-S34-T1."
+        },
+        {
+          "file": "internal/plugins/claude_wiring_seams_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T5",
+          "raw": "internal/plugins cascade-claude wiring (ADD) — P1-E16-W4-S35-T5."
         }
       ],
       "statuses": [
@@ -16878,6 +16885,41 @@
           "status": "ADD",
           "ticket": "P1-E10-W4-S87-T1",
           "raw": "internal/providers/dispatch credentials tests (ADD) — P1-E10-W4-S87-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/providers/intake credential redaction",
+      "sites": [
+        {
+          "file": "internal/providers/intake/redact.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T11",
+          "raw": "internal/providers/intake credential redaction (ADD) -- P1-E16-W4-S35-T11."
+        },
+        {
+          "file": "internal/providers/intake/redact_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "internal/providers/intake credential redaction (ADD) --"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/providers/intake micro-verify request",
+      "sites": [
+        {
+          "file": "internal/providers/intake/microverify.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal/providers/intake micro-verify request (ADD) --"
         }
       ],
       "statuses": [
@@ -23068,7 +23110,7 @@
       ]
     }
   ],
-  "total_sites": 2235,
+  "total_sites": 2239,
   "unspecified_count": 66,
   "multi_status_count": 40
 }

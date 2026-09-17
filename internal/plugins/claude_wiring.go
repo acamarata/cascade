@@ -51,39 +51,70 @@ import (
 // construction is broken, matching registry.go's established
 // init-time-registry-failure pattern.
 func init() {
-	if err := claude.SetGenerator(harnessGeneratorCC(&casctx.CCInstructionWriter{})); err != nil {
-		panic("internal/plugins: wire cascade-claude generator: " + err.Error())
-	}
 	// R-16.48: the pack is registered under this plugin's own name. The
-	// descriptors come from hookpacks.SessionsPack(), whose event types are
-	// each backed by a captured fixture — this ticket registers that pack
+	// descriptors come from hookpacks.SessionsPack(), whose event types
+	// are each backed by a captured fixture — this registers that pack
 	// rather than authoring a second, unfixtured copy of it.
 	hookpacks.DefaultRegistry.RegisterPack(claudePackName, hookpacks.SessionsPack())
-	if err := claude.SetHookPackRenderer(renderDefaultHookPacks); err != nil {
-		panic("internal/plugins: wire cascade-claude hook-pack renderer: " + err.Error())
-	}
-	// The socket is DERIVED from the cascade home, and the environment
-	// variable is only an override. Without this the plugin's own
-	// resolver could reach nothing but the override, so a hook-pack
-	// install refused on any machine that had not exported one.
-	if err := claude.SetSocketResolver(runtimeSocket); err != nil {
-		panic("internal/plugins: wire cascade-claude socket resolver: " + err.Error())
-	}
-	// Without this the plugin writes whole files, which destroys whatever
-	// the operator wrote around the managed block.
-	if err := claude.SetInstructionWriter(managedBlockWriter); err != nil {
-		panic("internal/plugins: wire cascade-claude instruction writer: " + err.Error())
+
+	// Four seams, one failure policy, stated once. Written as a table
+	// rather than as four if-err-panic blocks because the policy is the
+	// same for all of them and repeating it invites the fifth seam to be
+	// wired with a slightly different one.
+	//
+	//   generator          — renders the instruction files
+	//   hook-pack renderer — renders the session hook pack
+	//   socket resolver    — DERIVES the daemon socket from the cascade
+	//                        home, so an unset override is not a refusal
+	//   instruction writer — merges the managed block, so an operator's
+	//                        edits around it survive a regeneration
+	for _, seam := range []struct {
+		what string
+		err  error
+	}{
+		{"generator", claude.SetGenerator(harnessGeneratorCC(&casctx.CCInstructionWriter{}))},
+		{"hook-pack renderer", claude.SetHookPackRenderer(renderDefaultHookPacks)},
+		{"socket resolver", claude.SetSocketResolver(runtimeSocket)},
+		{"instruction writer", claude.SetInstructionWriter(managedBlockWriter)},
+	} {
+		if seam.err != nil {
+			panic("internal/plugins: wire cascade-claude " + seam.what + ": " + seam.err.Error())
+		}
 	}
 }
 
-// managedBlockWriter materializes one instruction file through the
-// context engine's managed-block writer.
+// runtimeSocket resolves the daemon socket the way every other consumer in
+// this tree does, through the runtime's path provider.
+//
+// The seam exists because the socket is DERIVED from the cascade home and
+// the environment variable is only an override. plugins/** may not import
+// internal/** (Art.10.2), so without this the plugin's own resolver could
+// reach nothing but that override -- and an unset override made the
+// hook-pack install refuse on every machine whose operator had never
+// exported one (R-14.258 Finding 4).
+func runtimeSocket() (string, error) {
+	paths, err := runtime.NewPathProvider(os.Getenv, os.UserHomeDir)
+	if err != nil {
+		return "", err
+	}
+	// No empty-socket guard here on purpose. SocketPath returns the
+	// override or a path derived from the cascade home, so it cannot be
+	// empty once the provider constructed -- and the hook-pack renderer
+	// already refuses an empty socket, where that refusal is reachable and
+	// tested. A second check that no test can drive is a branch nobody can
+	// prove still works.
+	return paths.SocketPath(), nil
+}
+
+// managedBlockWriter materializes one instruction file through the context
+// engine's managed-block writer, so whatever the operator wrote around
+// that block survives a regeneration.
 //
 // RefuseIfEdited, and the refusal is translated into a PRESERVED result
 // rather than an error: 08 §2's rule for a second setup run is "modified
-// → report, no silent overwrite", and failing the whole run would be a
-// third behaviour neither the rule nor the operator asked for. Every
-// other failure is still an error.
+// -> report, no silent overwrite", and failing the whole run would be a
+// third behaviour neither the rule nor the operator asked for. Every other
+// failure is still an error.
 func managedBlockWriter(path string, content []byte) (claude.InstallResult, error) {
 	res, err := casctx.WriteHarnessFile(path, casctx.HarnessFile{Content: content}, casctx.RefuseIfEdited)
 	if err != nil {
@@ -96,20 +127,6 @@ func managedBlockWriter(path string, content []byte) (claude.InstallResult, erro
 		return claude.InstallResult{Path: path}, err
 	}
 	return claude.InstallResult{Path: path, Changed: res.Action != casctx.ActionUnchanged}, nil
-}
-
-// runtimeSocket resolves the daemon socket the way every other consumer in
-// this tree does, through the runtime's path provider.
-func runtimeSocket() (string, error) {
-	paths, err := runtime.NewPathProvider(os.Getenv, os.UserHomeDir)
-	if err != nil {
-		return "", err
-	}
-	socket := paths.SocketPath()
-	if socket == "" {
-		return "", fmt.Errorf("internal/plugins: the runtime resolved an empty daemon socket")
-	}
-	return socket, nil
 }
 
 // RegisterHydrationPack registers the P1-E16-W4-S34-T4 prompt-hydration
