@@ -226,6 +226,10 @@ type ClaimResponse struct {
 	DispatchID string `json:"dispatch_id"`
 	Attempt    uint64 `json:"attempt"`
 	Branch     string `json:"branch"`
+	// Resume is where this attempt picks up. Absent on a first attempt —
+	// there is nothing to resume from — and populated on a replacement
+	// with what the lost attempt actually recorded.
+	Resume ResumePoint `json:"resume,omitzero"`
 }
 
 // RegisterDispatchNodeHandlers mounts the node-facing claim and report
@@ -250,6 +254,7 @@ func RegisterDispatchNodeHandlers(registry *rpc.Registry, rv *Rendezvous) {
 			DispatchID: attempt.DispatchID,
 			Attempt:    attempt.Attempt,
 			Branch:     attempt.Branch,
+			Resume:     attempt.Resume,
 		}, nil
 	})
 

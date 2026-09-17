@@ -50,6 +50,16 @@ type ExecuteRequest struct {
 	// Outcome is what running the action produced. An unrecognized value
 	// is refused rather than forwarded.
 	Outcome DispatchOutcome `json:"outcome"`
+	// Resume is what the claim handed this attempt: where the attempt it
+	// replaces got to, and which operations that attempt already
+	// accounted for. Absent on a first attempt.
+	//
+	// It is the ONLY thing that protects a replacement on a DIFFERENT
+	// machine. This node's own durable log covers the case where the
+	// replacement is this node coming back; a machine that has never seen
+	// the work has an empty log and would re-run every completed
+	// operation without it.
+	Resume ResumePoint `json:"resume,omitzero"`
 }
 
 // ExecuteDeps are the node leg's collaborators.
@@ -78,14 +88,25 @@ func ExecuteDispatch(ctx context.Context, deps ExecuteDeps, req ExecuteRequest) 
 
 	outcome := req.Outcome
 	action := Action{ID: req.ActionID, Idempotent: req.Idempotent}
-	if err := ReserveAction(ctx, deps.Actions, action); err != nil {
-		// A duplicate is not a failure: the work already happened. It is
-		// reported as a refusal so the controller records a conflict
-		// rather than retrying.
-		if !isDuplicateAction(err) {
-			return DispatchFrame{}, err
-		}
+	switch {
+	case req.Resume.Completed(req.ActionID):
+		// THE CARRIED HALF OF THE SAME FACT. The lost attempt already
+		// accounted for this action, and this node's own log cannot know
+		// that — it may never have seen the work. Refused BEFORE
+		// ReserveAction, so the action is not recorded as having run
+		// here: it ran somewhere else, and recording it locally would
+		// make a later re-delivery indistinguishable from a real one.
 		outcome = OutcomeRefused
+	default:
+		if err := ReserveAction(ctx, deps.Actions, action); err != nil {
+			// A duplicate is not a failure: the work already happened. It
+			// is reported as a refusal so the controller records a
+			// conflict rather than retrying.
+			if !isDuplicateAction(err) {
+				return DispatchFrame{}, err
+			}
+			outcome = OutcomeRefused
+		}
 	}
 
 	// The node mints its own monotonic sequence: the controller refuses a

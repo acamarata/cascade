@@ -195,6 +195,16 @@ type Attempt struct {
 	NodeID     string
 	Branch     string
 	StartedAt  time.Time
+	// Resume is where this attempt picks up, and is set only on a
+	// REPLACEMENT: a first attempt has nothing to resume from, and its
+	// zero value is the cold start it actually is.
+	//
+	// It lives on the attempt rather than being passed alongside it
+	// because the attempt is what travels — minted by the controller,
+	// handed to the node by the claim verb, quoted back on the execute
+	// call. A resume point carried on any other path could arrive with a
+	// different attempt's number attached to it.
+	Resume ResumePoint
 }
 
 // NewAttempt mints the next attempt for a dispatch.

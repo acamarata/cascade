@@ -83,6 +83,11 @@ func ShipWithRecovery(
 		NodeID:     plan.Node.NodeID,
 		Branch:     plan.Branch,
 		StartedAt:  deps.now(),
+		// The point of reading the journal at all. Dropping it here left
+		// the replacement to start from its own empty action log, which
+		// is the failure continuity exists to prevent and which durable
+		// dedup cannot catch when the replacement is a different machine.
+		Resume: plan.Resume,
 	})
 }
 

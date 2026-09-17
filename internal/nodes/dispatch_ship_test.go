@@ -28,10 +28,15 @@ type recordingCaller struct {
 	// then be able to succeed, or a test cannot tell "recovered" from
 	// "failed twice".
 	failFirst error
+	// seen records every attempt this caller was handed, so a test can
+	// assert what the REPLACEMENT carried rather than only that a
+	// replacement happened.
+	seen []Attempt
 }
 
 func (c *recordingCaller) Call(_ context.Context, nodeID string, attempt Attempt) (DispatchFrame, error) {
 	c.calls++
+	c.seen = append(c.seen, attempt)
 	if c.err != nil {
 		return DispatchFrame{}, c.err
 	}

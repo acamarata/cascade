@@ -53,21 +53,29 @@ type JournalContinuityReader interface {
 }
 
 // ResumePoint is where a replacement attempt picks up.
+// It carries JSON TAGS because it travels: the controller decides it and
+// the replacement NODE acts on it, over the claim response and the execute
+// request (P1-E17-W4-S37-T7). Before that carriage existed the point was
+// computed and discarded, and a replacement on a machine that had never
+// seen the work re-ran everything the lost attempt had already done.
 type ResumePoint struct {
 	// EntityID is the journal entity.
-	EntityID string
+	EntityID string `json:"entity_id,omitempty"`
 	// Seq is the last sequence the lost attempt recorded, and the point
 	// the replacement continues after. Zero means nothing was recorded.
-	Seq uint64
+	Seq uint64 `json:"seq,omitempty"`
 	// CompletedOperations are the operation ids already accounted for,
 	// oldest first and de-duplicated. The replacement carries these so a
 	// re-delivered operation is recognised rather than re-run.
-	CompletedOperations []string
+	CompletedOperations []string `json:"completed_operations,omitempty"`
 	// FromScratch is true only when the entity's journal holds nothing
 	// after its checkpoint — the genuine cold start. It is a separate
 	// field rather than `Seq == 0` because a caller asserting on it is
-	// asserting the thing that matters: whether work was lost.
-	FromScratch bool
+	// asserting the thing that matters: whether work was lost. It is
+	// carried on the wire for the same reason: a receiver that had to
+	// infer it from a zero sequence would be inferring the one thing the
+	// field exists to state.
+	FromScratch bool `json:"from_scratch,omitempty"`
 }
 
 // ResumeFrom builds the resume point for entityID.

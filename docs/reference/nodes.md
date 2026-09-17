@@ -565,14 +565,37 @@ attention filer writes into the same queue `cascade fleet attention` serves.
 A second store over either namespace would be a second view of one thing,
 and a held dispatch filed into one of them would be invisible in the other.
 
-**The resume point is decided but not yet delivered.** `PlanRequeue`
-computes the replacement's resume position from the journal, and the daemon
-now really reads it. What does not exist yet is the channel that carries it
-to the replacement node: neither the attempt, the claim response, nor the
-execute request has a field for it, so a replacement on a *different*
-machine still starts from its own empty action log. Tracked as its own
-ticket; the durable-dedup case (the same node coming back) is unaffected and
-already works.
+### The resume point's journey (S-37.T7)
+
+`PlanRequeue` decides the replacement's resume position from the journal,
+and it now travels the whole way to the machine that acts on it:
+
+```
+journal  →  PlanRequeue  →  Attempt.Resume  →  ClaimResponse.Resume  →  ExecuteRequest.Resume
+                                                                              ↓
+                                                        refused before the action runs
+```
+
+A first attempt carries none: there is nothing to resume from, and the zero
+value is the cold start it actually is. A replacement carries the sequence
+the lost attempt reached, the operations it already accounted for, and an
+explicit `from_scratch` flag — explicit because a receiver inferring it from
+a zero sequence would be inferring the one thing the field exists to state.
+
+**The carried list is checked the same way the local log is, and before
+it.** An action the resume point names as completed is refused without being
+reserved: it ran somewhere else, and recording it in *this* node's durable
+log would make a later, genuine re-delivery indistinguishable from this one.
+An action the list does not name runs normally — the carried list is a
+specific fact, never a blanket refusal.
+
+This is what covers a replacement on a **different** machine. That node's
+own action log is empty, so nothing local can tell it the work was already
+done; before the carriage existed, the controller computed the answer and
+threw it away, and such a replacement re-ran everything the lost attempt had
+completed. Durable dedup still covers the other case — the same node coming
+back — and the two are deliberately two sources of one fact, checked
+identically.
 
 ## Windows
 
