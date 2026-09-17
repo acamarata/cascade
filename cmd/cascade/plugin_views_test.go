@@ -22,19 +22,27 @@ import (
 // must read as a sentence, not as a bare header with no rows) and the
 // populated one.
 func TestPluginListView_EmptyAndPopulated(t *testing.T) {
-	if got := pluginListView(nil).String(); got != "no plugins are installed" {
+	if got := (pluginListView{}).String(); got != "this build ships no plugins and none are installed" {
 		t.Fatalf("empty list rendered %q, want a plain-language sentence", got)
 	}
 
-	got := pluginListView([]plugins.PluginMetadata{
-		{Name: "cascade-claude", InstalledVersion: "0.1.0", Enabled: true, RuntimeMode: "builtin"},
-		{Name: "other", InstalledVersion: "2.3.4", Enabled: false, RuntimeMode: "process"},
-	}).String()
+	// BOTH populations, because the W-4 hardening gate found `plugin
+	// list` blind to the ones this binary ships: `cascade init` named
+	// five plugins and this verb said none were installed, while their
+	// commands worked (R-14.277).
+	got := pluginListView{
+		Installed: []plugins.PluginMetadata{
+			{Name: "other", InstalledVersion: "2.3.4", Enabled: false, RuntimeMode: "process"},
+		},
+		Builtin: []builtinPluginRow{
+			{Name: "cascade-claude", Version: "0.1.0", Runtime: "builtin"},
+		},
+	}.String()
 
 	for _, want := range []string{
-		"NAME", "VERSION", "ENABLED", "RUNTIME",
-		"cascade-claude", "0.1.0", "true", "builtin",
-		"other", "2.3.4", "false", "process",
+		"NAME", "SOURCE", "VERSION", "ENABLED", "RUNTIME",
+		"cascade-claude", "0.1.0", "builtin",
+		"other", "2.3.4", "false", "process", "installed",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("rendered list is missing %q:\n%s", want, got)
@@ -45,6 +53,47 @@ func TestPluginListView_EmptyAndPopulated(t *testing.T) {
 	}
 	if lines := strings.Count(got, "\n") + 1; lines != 3 {
 		t.Errorf("rendered list has %d lines, want a header plus one row per plugin", lines)
+	}
+}
+
+// TestBuiltinsAreNotToggleable pins the truthful refusal. Saying a builtin
+// was "not installed" was actionable and wrong: an operator could go and
+// try to install a plugin whose commands were already working.
+func TestBuiltinsAreNotToggleable(t *testing.T) {
+	err := errBuiltinNotToggleable("disable", "pbd")
+	if err == nil {
+		t.Fatal("a builtin toggle was permitted")
+	}
+	for _, want := range []string{"built into this binary", "always active", "pbd"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not say %q: %v", want, err)
+		}
+	}
+	if strings.Contains(err.Error(), "not installed") {
+		t.Errorf("the refusal still claims the plugin is not installed: %v", err)
+	}
+}
+
+// TestTheBuiltinRegistryIsReadable proves this binary really does ship
+// plugins, so the list above is not a view over an empty set forever.
+func TestTheBuiltinRegistryIsReadable(t *testing.T) {
+	rows, err := builtinPluginRows()
+	if err != nil {
+		t.Fatalf("the builtin registry would not load: %v", err)
+	}
+	if len(rows) == 0 {
+		t.Fatal("this build registers no builtin plugins; `cascade init` would list none either")
+	}
+	for _, r := range rows {
+		if r.Name == "" || r.Version == "" {
+			t.Errorf("builtin row %+v is missing its identity", r)
+		}
+		if !isBuiltinPlugin(r.Name) {
+			t.Errorf("%q is listed as a builtin but isBuiltinPlugin says otherwise", r.Name)
+		}
+	}
+	if isBuiltinPlugin("definitely-not-a-builtin") {
+		t.Error("an unknown name reports as a builtin; every plugin would be untoggleable")
 	}
 }
 

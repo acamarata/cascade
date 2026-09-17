@@ -55,6 +55,12 @@ func newPluginToggleCmd(deps pluginDeps, verb string, enabled bool) *cobra.Comma
 		Short: "Toggle whether an installed plugin is active",
 		Args:  usageArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// A builtin is refused with what it IS, not with "not
+			// installed" — which was false, and which an operator could
+			// act on by trying to install something already running.
+			if isBuiltinPlugin(args[0]) {
+				return errBuiltinNotToggleable(verb, args[0])
+			}
 			rec, err := withPluginStore(cmd.Context(), deps, func(ctx context.Context, store provider.Store) (plugins.PluginMetadata, error) {
 				return plugins.SetEnabled(ctx, store, args[0], enabled)
 			})
@@ -88,6 +94,9 @@ func newPluginRemoveCmd(deps pluginDeps) *cobra.Command {
 		Short: "Uninstall a plugin: teardown (if running), then delete its record",
 		Args:  usageArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if isBuiltinPlugin(args[0]) {
+				return errBuiltinNotToggleable("remove", args[0])
+			}
 			rec, err := withPluginStore(cmd.Context(), deps, func(ctx context.Context, store provider.Store) (plugins.PluginMetadata, error) {
 				return plugins.RemovePlugin(ctx, store, claudeTeardown(deps, store), args[0])
 			})

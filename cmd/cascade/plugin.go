@@ -139,22 +139,44 @@ func newPluginListCmd(deps pluginDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return pluginOutputWriter(cmd).Result(pluginListView(recs))
+			// The builtins are listed alongside, because they are what
+			// this binary actually ships and an operator who just ran
+			// `cascade init` was told about them by name.
+			builtins, loadErr := builtinPluginRows()
+			if loadErr != nil {
+				return loadErr
+			}
+			return pluginOutputWriter(cmd).Result(pluginListView{Installed: recs, Builtin: builtins})
 		},
 	}
 }
 
-type pluginListView []plugins.PluginMetadata
+// pluginListView is what `plugin list` renders: everything this host has,
+// from both populations.
+type pluginListView struct {
+	Installed []plugins.PluginMetadata `json:"installed"`
+	Builtin   []builtinPluginRow       `json:"builtin"`
+}
 
+// String lists both, with a SOURCE column, because "installed" and
+// "compiled in" behave differently: one can be removed and disabled, the
+// other cannot.
 func (v pluginListView) String() string {
-	if len(v) == 0 {
-		return "no plugins are installed"
+	if len(v.Installed) == 0 && len(v.Builtin) == 0 {
+		return "this build ships no plugins and none are installed"
 	}
 	var buf bytes.Buffer
 	tw := tabwriter.NewWriter(&buf, 0, 4, 2, ' ', 0)
-	_, _ = fmt.Fprintf(tw, "NAME\tVERSION\tENABLED\tRUNTIME\n")
-	for _, r := range v {
-		_, _ = fmt.Fprintf(tw, "%s\t%s\t%t\t%s\n", r.Name, r.InstalledVersion, r.Enabled, r.RuntimeMode)
+	_, _ = fmt.Fprintf(tw, "NAME\tSOURCE\tVERSION\tENABLED\tRUNTIME\n")
+	for _, r := range v.Builtin {
+		// Always enabled: nothing reads an enabled flag for a builtin,
+		// and printing "false" for one whose commands work would be the
+		// same contradiction in a narrower place.
+		_, _ = fmt.Fprintf(tw, "%s\tbuiltin\t%s\ttrue\t%s\n", r.Name, r.Version, r.Runtime)
+	}
+	for _, r := range v.Installed {
+		_, _ = fmt.Fprintf(tw, "%s\tinstalled\t%s\t%t\t%s\n",
+			r.Name, r.InstalledVersion, r.Enabled, r.RuntimeMode)
 	}
 	_ = tw.Flush()
 	return strings.TrimRight(buf.String(), "\n")
@@ -167,13 +189,21 @@ func newPluginInfoCmd(deps pluginDeps) *cobra.Command {
 		Short: "Show one installed plugin's full record",
 		Args:  usageArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// A builtin answers from the registry: it has no store
+			// record, and saying it is not installed was the same
+			// contradiction `plugin list` used to produce.
+			if builtin, ok := builtinPluginByName(args[0]); ok {
+				return pluginOutputWriter(cmd).Result(builtin)
+			}
 			rec, err := withPluginStore(cmd.Context(), deps, func(ctx context.Context, store provider.Store) (plugins.PluginMetadata, error) {
 				rec, ok, err := plugins.LoadMetadata(ctx, store, args[0])
 				if err != nil {
 					return plugins.PluginMetadata{}, err
 				}
 				if !ok {
-					return plugins.PluginMetadata{}, cascade.Newf(cascade.KindNotFound, "plugin: %q is not installed", args[0])
+					return plugins.PluginMetadata{}, cascade.Newf(cascade.KindNotFound,
+						"plugin: %q is neither installed nor built into this binary; "+
+							"`cascade plugin list` shows both", args[0])
 				}
 				return rec, nil
 			})
