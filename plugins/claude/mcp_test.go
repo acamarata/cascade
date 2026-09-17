@@ -12,11 +12,13 @@ import (
 // tempPaths builds a Paths rooted in a fresh temp directory.
 func tempPaths(t *testing.T) Paths {
 	t.Helper()
-	root := t.TempDir()
+	home := t.TempDir()
+	root := filepath.Join(home, configDirName)
 	return Paths{
 		ConfigRoot: root,
-		MCPConfig:  filepath.Join(root, mcpConfigName),
-		HookConfig: filepath.Join(root, hookConfigName),
+		MCPConfig:  filepath.Join(home, mcpConfigName),
+		Settings:   filepath.Join(root, settingsName),
+		HookConfig: filepath.Join(root, hookDirName),
 	}
 }
 

@@ -3,10 +3,13 @@ package plugins
 import (
 	"context"
 	"fmt"
+	"os"
 
 	casctx "github.com/acamarata/cascade/internal/context"
 	"github.com/acamarata/cascade/internal/context/hydration"
 	"github.com/acamarata/cascade/internal/fleet/hookpacks"
+	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/plugins/claude"
 )
 
@@ -59,6 +62,54 @@ func init() {
 	if err := claude.SetHookPackRenderer(renderDefaultHookPacks); err != nil {
 		panic("internal/plugins: wire cascade-claude hook-pack renderer: " + err.Error())
 	}
+	// The socket is DERIVED from the cascade home, and the environment
+	// variable is only an override. Without this the plugin's own
+	// resolver could reach nothing but the override, so a hook-pack
+	// install refused on any machine that had not exported one.
+	if err := claude.SetSocketResolver(runtimeSocket); err != nil {
+		panic("internal/plugins: wire cascade-claude socket resolver: " + err.Error())
+	}
+	// Without this the plugin writes whole files, which destroys whatever
+	// the operator wrote around the managed block.
+	if err := claude.SetInstructionWriter(managedBlockWriter); err != nil {
+		panic("internal/plugins: wire cascade-claude instruction writer: " + err.Error())
+	}
+}
+
+// managedBlockWriter materializes one instruction file through the
+// context engine's managed-block writer.
+//
+// RefuseIfEdited, and the refusal is translated into a PRESERVED result
+// rather than an error: 08 §2's rule for a second setup run is "modified
+// → report, no silent overwrite", and failing the whole run would be a
+// third behaviour neither the rule nor the operator asked for. Every
+// other failure is still an error.
+func managedBlockWriter(path string, content []byte) (claude.InstallResult, error) {
+	res, err := casctx.WriteHarnessFile(path, casctx.HarnessFile{Content: content}, casctx.RefuseIfEdited)
+	if err != nil {
+		if kind, ok := cascade.KindOf(err); ok && kind == cascade.KindConflict {
+			return claude.InstallResult{
+				Path: path, Preserved: true,
+				Reason: "left alone: the managed block has been edited by hand",
+			}, nil
+		}
+		return claude.InstallResult{Path: path}, err
+	}
+	return claude.InstallResult{Path: path, Changed: res.Action != casctx.ActionUnchanged}, nil
+}
+
+// runtimeSocket resolves the daemon socket the way every other consumer in
+// this tree does, through the runtime's path provider.
+func runtimeSocket() (string, error) {
+	paths, err := runtime.NewPathProvider(os.Getenv, os.UserHomeDir)
+	if err != nil {
+		return "", err
+	}
+	socket := paths.SocketPath()
+	if socket == "" {
+		return "", fmt.Errorf("internal/plugins: the runtime resolved an empty daemon socket")
+	}
+	return socket, nil
 }
 
 // RegisterHydrationPack registers the P1-E16-W4-S34-T4 prompt-hydration

@@ -18,7 +18,6 @@ package context
 
 import (
 	"context"
-	"path/filepath"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -186,11 +185,11 @@ func (d *PathDetector) readConfigInto(state *HarnessState, root string) {
 	if d.read == nil {
 		return
 	}
-	name := harnessConfigDirs[state.Kind].configFile
-	if name == "" {
+	path := d.configFilePath(state.Kind, root)
+	if path == "" {
 		return
 	}
-	raw, err := d.read(filepath.Join(root, name))
+	raw, err := d.read(path)
 	if err != nil {
 		return
 	}

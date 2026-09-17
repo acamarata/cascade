@@ -63,7 +63,13 @@ var _ cascadeinit.HarnessWirer = initHarnessWirer{}
 func (initHarnessWirer) Wire(ctx context.Context, kind, cwd string) error {
 	switch kind {
 	case "claude":
-		_, err := claude.Install(ctx, cwd)
+		// InstallAll, not Install: Install writes the instruction files
+		// and nothing else, and step 6's own plan line promises
+		// "instruction files, hook pack, MCP entry". Calling the narrow
+		// one made `cascade init` print "claude wired" for a harness
+		// whose `cascade context harness list` still reported
+		// cascade_registered=false.
+		_, err := claude.InstallAll(ctx, cwd)
 		return err
 	case "codex":
 		_, err := codex.Install(ctx, cwd)

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 )
 
 // Purpose: resolve the three normative harness config paths, and install
@@ -23,114 +22,6 @@ import (
 //   follows exactly. Windows is tier-2: its paths resolve (so the branch is
 //   real and testable) but install refuses.
 // SPORT: plugins/claude install (ADD) — P1-E16-W4-S34-T1.
-
-// # HARNESS PATHS (NORMATIVE)
-//
-// 08-INIT-CONFIG-SPEC carries no §paths section, so P1-E16-W4-S34-T1's own
-// contract is the source of truth for these three paths and they are read
-// from nowhere else in the tree. Every branch is selected by an explicit
-// goos argument rather than discovered by probing, so all three run on any
-// host and CI's GOOS matrix confirms rather than provides the coverage.
-const (
-	// configDirDarwin is ConfigRoot's tail under $HOME on darwin.
-	configDirDarwin = "Library/Application Support/Claude"
-	// configDirLinux is ConfigRoot's tail under the XDG config home.
-	configDirLinux = "claude"
-	// configDirWindows is ConfigRoot's tail under %APPDATA%.
-	configDirWindows = "Claude"
-	// mcpConfigName is MCPConfig's basename under ConfigRoot.
-	mcpConfigName = "mcp.json"
-	// hookConfigName is HookConfig's basename under ConfigRoot.
-	hookConfigName = "hooks"
-)
-
-// Env reads one environment variable, returning "" when it is unset. It is
-// injected so a test can drive any platform's branch on any host without
-// mutating the real process environment.
-type Env func(string) string
-
-// Paths is the resolved set of harness config locations.
-type Paths struct {
-	// ConfigRoot is the harness's per-user configuration directory.
-	ConfigRoot string
-	// MCPConfig is the MCP server configuration file.
-	MCPConfig string
-	// HookConfig is the directory holding installed hook-pack configs.
-	HookConfig string
-}
-
-// ResolvePaths resolves the three harness paths for goos using env. It
-// never touches the filesystem: an unset variable is an error naming the
-// variable, never a silent fallback to a path that happens to exist.
-func ResolvePaths(goos string, env Env) (Paths, error) {
-	if env == nil {
-		return Paths{}, fmt.Errorf("cascade-claude: ResolvePaths: env must not be nil")
-	}
-	var root string
-	switch goos {
-	case "darwin":
-		home := env("HOME")
-		if home == "" {
-			return Paths{}, fmt.Errorf("cascade-claude: resolve config root on darwin: HOME is unset")
-		}
-		root = filepath.Join(home, filepath.FromSlash(configDirDarwin))
-	case "windows":
-		appData := env("APPDATA")
-		if appData == "" {
-			return Paths{}, fmt.Errorf("cascade-claude: resolve config root on windows: APPDATA is unset")
-		}
-		root = filepath.Join(appData, configDirWindows)
-	default:
-		// Every non-darwin, non-windows GOOS follows the XDG base-directory
-		// spec, which is what the contract's "linux" row describes; naming
-		// the rule rather than the one GOOS keeps freebsd and friends from
-		// falling into a branch that was never written for them.
-		if xdg := env("XDG_CONFIG_HOME"); xdg != "" {
-			root = filepath.Join(xdg, configDirLinux)
-			break
-		}
-		home := env("HOME")
-		if home == "" {
-			return Paths{}, fmt.Errorf("cascade-claude: resolve config root on %s: neither XDG_CONFIG_HOME nor HOME is set", goos)
-		}
-		root = filepath.Join(home, ".config", configDirLinux)
-	}
-	return Paths{
-		ConfigRoot: root,
-		MCPConfig:  filepath.Join(root, mcpConfigName),
-		HookConfig: filepath.Join(root, hookConfigName),
-	}, nil
-}
-
-// HostPaths resolves the paths for the running host from its real
-// environment. It is the production entry point; hostPathsFor is the
-// testable core.
-func HostPaths() (Paths, error) { return hostPathsFor(runtime.GOOS, os.Getenv) }
-
-// hostPathsFor resolves goos's paths and applies the tier-2 refusal.
-//
-// The refusal lives HERE, at the one gate every host-facing entry point
-// passes through, rather than inside Install/RegisterMCP. Art.5 makes
-// Windows tier-2 for this integration, so nothing may install there; but
-// putting the GOOS check inside each capability would make those pure
-// functions behave differently per platform and force every one of their
-// tests to skip on the Windows lane — and a skip is not a pass. With the
-// gate here, the capabilities stay platform-independent and directly
-// testable everywhere, while no host path can reach them on Windows.
-// ResolvePaths still resolves the Windows root, so that branch remains
-// real and asserted rather than unreachable.
-func hostPathsFor(goos string, env Env) (Paths, error) {
-	if goos == "windows" {
-		return Paths{}, errWindowsTier2("resolve the harness config root")
-	}
-	return ResolvePaths(goos, env)
-}
-
-// errWindowsTier2 reports the tier-2 refusal, naming the tier rather than
-// failing obscurely or half-installing.
-func errWindowsTier2(step string) error {
-	return fmt.Errorf("cascade-claude: %s: harness integration not available on Windows tier-2", step)
-}
 
 // # GENERATOR SEAM
 //
@@ -185,6 +76,45 @@ type InstallResult struct {
 	// from what was already on disk; false when the write was skipped
 	// because the content already matched (idempotent no-op).
 	Changed bool
+	// Preserved is true when the file was left alone because somebody
+	// had edited it. It is not an error and not a change: the operator's
+	// edit is the more valuable of the two, and the caller REPORTS this
+	// rather than resolving it.
+	Preserved bool
+	// Reason states why a file was preserved. Empty otherwise.
+	Reason string
+}
+
+// InstructionWriterFunc materializes one generated instruction file.
+//
+// A seam, like Generate, because the rule for these files lives in
+// internal/context (which this package may not import, Art.10.2): an
+// instruction file carries a MANAGED BLOCK, and a regeneration replaces
+// that block while leaving everything the operator wrote around it
+// untouched. A plain whole-file write destroys those edits -- which is
+// what this package did until the S-35.T5 acceptance suite ran a second
+// `cascade init` over a hand-edited file and watched the edit disappear.
+type InstructionWriterFunc func(path string, content []byte) (InstallResult, error)
+
+// WriteInstructionFile is the active writer. internal/plugins wires it to
+// the managed-block writer; the default below is the whole-file write,
+// which is correct only for a file this plugin fully owns.
+var WriteInstructionFile InstructionWriterFunc = wholeFileWriter
+
+// SetInstructionWriter installs w as the active writer. A nil w is
+// refused rather than silently reverting to the destructive default.
+func SetInstructionWriter(w InstructionWriterFunc) error {
+	if w == nil {
+		return fmt.Errorf("cascade-claude: SetInstructionWriter: writer must not be nil")
+	}
+	WriteInstructionFile = w
+	return nil
+}
+
+// wholeFileWriter is WriteInstructionFile's default.
+func wholeFileWriter(path string, content []byte) (InstallResult, error) {
+	changed, err := writeIfChanged(path, content)
+	return InstallResult{Path: path, Changed: changed}, err
 }
 
 // Install renders the harness instruction golden for cwd via Generate and
@@ -198,11 +128,11 @@ func Install(ctx context.Context, cwd string) ([]InstallResult, error) {
 	}
 	results := make([]InstallResult, 0, len(files))
 	for _, f := range files {
-		changed, err := writeIfChanged(f.Path, f.Content)
+		res, err := WriteInstructionFile(f.Path, f.Content)
 		if err != nil {
 			return results, err
 		}
-		results = append(results, InstallResult{Path: f.Path, Changed: changed})
+		results = append(results, res)
 	}
 	return results, nil
 }
@@ -270,16 +200,42 @@ func runInstall(ctx context.Context, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("cascade-claude: getwd: %w", err)
 	}
-	if _, err := Install(ctx, cwd); err != nil {
-		return err
+	_, err = InstallAll(ctx, cwd)
+	return err
+}
+
+// InstallAll performs every part of wiring this harness: the instruction
+// files, the hook pack, and the MCP server entry. It returns one
+// InstallResult per file it considered, whether or not that file changed.
+//
+// Exported because `cascade init` step 6 needs exactly this, and was
+// calling Install alone -- which writes the instruction files and nothing
+// else. The wizard then printed "wired" for a harness with no hook pack
+// and no MCP entry, and `cascade context harness list` reported
+// cascade_registered=false straight after a successful setup run. One
+// spelling of "wire this harness", reached from both the subcommand and
+// the wizard, is what keeps those two from drifting apart again.
+//
+// The order is deliberate: instructions first, because they are the part
+// that works with no daemon and no PATH entry, then the two that depend
+// on the installed binary being findable. A failure at any step returns
+// what was done so far rather than discarding it -- a half-wired harness
+// the operator can see beats a half-wired harness reported as nothing.
+func InstallAll(ctx context.Context, cwd string) ([]InstallResult, error) {
+	results, err := Install(ctx, cwd)
+	if err != nil {
+		return results, err
 	}
 	paths, err := HostPaths()
 	if err != nil {
-		return err
+		return results, err
 	}
-	if _, err := InstallHookPack(paths); err != nil {
-		return err
+	hooks, err := InstallHookPack(paths)
+	results = append(results, hooks...)
+	if err != nil {
+		return results, err
 	}
-	_, err = RegisterMCP(paths)
-	return err
+	mcp, err := RegisterMCP(paths)
+	results = append(results, mcp)
+	return results, err
 }

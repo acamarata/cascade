@@ -78,21 +78,59 @@ func SetHookPackRenderer(r HookPackRendererFunc) error {
 	return nil
 }
 
-// SocketPath returns the daemon socket the hook pack's commands will post
-// to, read from CASCADE_SOCKET via env. An unset variable is an error, not
-// a guessed default: the renderer itself refuses an empty socket
-// (ErrEmptySocketPath) rather than falling back, and a hook pack installed
-// against a guessed path would fail silently at session time.
+// SocketResolverFunc reports the daemon socket the hook pack's commands
+// will post to.
+type SocketResolverFunc func() (string, error)
+
+// ResolveSocket is the active resolver. internal/plugins wires it to the
+// runtime's own path provider at process boot, the same way Generate and
+// RenderHookPack are wired.
+//
+// The seam exists because the socket is DERIVED, not supplied: the
+// runtime computes it from the cascade home and treats the environment
+// variable as an override. This package cannot import internal/**
+// (Art.10.2), so without the seam its only reachable answer was the
+// override -- and an unset override made the hook-pack install refuse on
+// every machine whose operator had never exported one, which is nearly
+// all of them. `cascade init` failed outright at step 6 for exactly that
+// reason.
+//
+// The refusal on an empty result is kept: the renderer refuses an empty
+// socket, and a hook pack installed against a guessed path fails silently
+// at session time. What changed is that "derive it" is now an answer, and
+// only a genuinely unresolvable socket refuses.
+var ResolveSocket SocketResolverFunc = envSocketResolver
+
+// SetSocketResolver installs r as the active resolver. A nil r is refused
+// rather than silently reverting to the environment-only resolver.
+func SetSocketResolver(r SocketResolverFunc) error {
+	if r == nil {
+		return fmt.Errorf("cascade-claude: SetSocketResolver: resolver must not be nil")
+	}
+	ResolveSocket = r
+	return nil
+}
+
+// envSocketResolver is ResolveSocket's default, for a process that never
+// wired the runtime: the override, or a refusal naming it.
+func envSocketResolver() (string, error) { return SocketPath(os.Getenv) }
+
+// SocketPath returns the daemon socket read from the override variable via
+// env. An unset variable is an error rather than a guess -- callers that
+// can DERIVE the socket inject a resolver instead of calling this.
 func SocketPath(env Env) (string, error) {
 	if env == nil {
 		return "", fmt.Errorf("cascade-claude: SocketPath: env must not be nil")
 	}
-	socket := env("CASCADE_SOCKET")
+	socket := env(socketOverrideVar)
 	if socket == "" {
-		return "", fmt.Errorf("cascade-claude: resolve daemon socket: CASCADE_SOCKET is unset")
+		return "", fmt.Errorf("cascade-claude: resolve daemon socket: %s is unset", socketOverrideVar)
 	}
 	return socket, nil
 }
+
+// socketOverrideVar names the environment override for the daemon socket.
+const socketOverrideVar = "CASCADE_SOCKET"
 
 // InstallHookPack renders the hook-pack union for the host's daemon socket
 // and installs it under paths.HookConfig, together with its version
@@ -105,7 +143,7 @@ func SocketPath(env Env) (string, error) {
 // it a changed socket path would render different commands that the version
 // check alone would silently decline to install.
 func InstallHookPack(paths Paths) ([]InstallResult, error) {
-	socket, err := SocketPath(os.Getenv)
+	socket, err := ResolveSocket()
 	if err != nil {
 		return nil, err
 	}

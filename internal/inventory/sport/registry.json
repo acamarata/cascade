@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T10:51:10Z",
+  "generated_at": "2026-09-17T11:11:24Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -15197,7 +15197,7 @@
       "sites": [
         {
           "file": "internal/plugins/claude_wiring.go",
-          "line": 26,
+          "line": 29,
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T1",
           "raw": "internal/plugins cascade-claude wiring (ADD) — P1-E16-W4-S34-T1."
@@ -16952,6 +16952,35 @@
           "line": 8,
           "status": "ADD",
           "raw": "internal/runtime daemon-logs-rotation-gap/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/runtime/init acceptance",
+      "sites": [
+        {
+          "file": "internal/runtime/init/accept_harness_test.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T5",
+          "raw": "internal/runtime/init acceptance (ADD) — P1-E16-W4-S35-T5."
+        },
+        {
+          "file": "internal/runtime/init/accept_support_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T5",
+          "raw": "internal/runtime/init acceptance (ADD) — P1-E16-W4-S35-T5."
+        },
+        {
+          "file": "internal/runtime/init/accept_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S35-T5",
+          "raw": "internal/runtime/init acceptance (ADD) — P1-E16-W4-S35-T5."
         }
       ],
       "statuses": [
@@ -19470,7 +19499,7 @@
       "sites": [
         {
           "file": "plugins/claude/install.go",
-          "line": 25,
+          "line": 24,
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T1",
           "raw": "plugins/claude install (ADD) — P1-E16-W4-S34-T1."
@@ -19489,6 +19518,21 @@
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T1",
           "raw": "plugins/claude mcp-registration (ADD) — P1-E16-W4-S34-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/claude paths",
+      "sites": [
+        {
+          "file": "plugins/claude/paths.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E16-W4-S34-T1",
+          "raw": "plugins/claude paths (ADD) -- P1-E16-W4-S34-T1."
         }
       ],
       "statuses": [
@@ -22982,7 +23026,7 @@
       ]
     }
   ],
-  "total_sites": 2226,
+  "total_sites": 2230,
   "unspecified_count": 66,
   "multi_status_count": 40
 }

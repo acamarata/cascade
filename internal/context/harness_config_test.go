@@ -159,7 +159,14 @@ func TestDetectReadsTheHarnessConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("configRoot: %v", err)
 	}
-	wantPath := filepath.Join(root, ".claude.json")
+	// Through configFilePath, not joined onto the root here: with no
+	// override set this harness keeps its user config BESIDE home, and a
+	// test that composed the path itself would pass against a detector
+	// reading the wrong one.
+	wantPath := detector.configFilePath(HarnessClaude, root)
+	if wantPath == "" {
+		t.Fatal("configFilePath resolved nothing for a harness whose config this build reads")
+	}
 
 	var asked []string
 	states, err := detector.WithFileReader(func(path string) ([]byte, error) {

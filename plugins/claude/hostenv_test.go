@@ -41,8 +41,11 @@ func TestHostPathsUsesTheRealEnvironment(t *testing.T) {
 	if !strings.HasPrefix(paths.ConfigRoot, home) {
 		t.Fatalf("ConfigRoot = %q, want it under the HOME the test set (%q)", paths.ConfigRoot, home)
 	}
-	if paths.MCPConfig != filepath.Join(paths.ConfigRoot, mcpConfigName) {
-		t.Fatalf("MCPConfig = %q, want it under the resolved config root", paths.MCPConfig)
+	// A sibling of the config root, not a file inside it: the user-scope
+	// MCP config hangs off HOME directly.
+	if paths.MCPConfig != filepath.Join(home, mcpConfigName) {
+		t.Fatalf("MCPConfig = %q, want the user-scope file under HOME (%q)",
+			paths.MCPConfig, filepath.Join(home, mcpConfigName))
 	}
 }
 

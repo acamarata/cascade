@@ -106,6 +106,17 @@ type harnessDirs struct {
 	// build does not read that one", not an oversight, and it is why
 	// Version is documented as absent rather than guessed.
 	configFile string
+	// besideHomeWithoutOverride says the config file sits NEXT TO the
+	// home directory rather than inside the config root, whenever the
+	// override variable is unset.
+	//
+	// Verified on a machine running two instances of the same harness at
+	// once: the plain instance keeps its user config at
+	// $HOME/<configFile>, and the instance started with the override set
+	// keeps it at <override>/<configFile>. Reading only the root-relative
+	// spelling finds a stale file (or none) for the plain instance, which
+	// is how a registered MCP server reads back as unregistered.
+	besideHomeWithoutOverride bool
 }
 
 // harnessConfigDirs is the path table. It is a var rather than a switch
@@ -118,11 +129,12 @@ type harnessDirs struct {
 // on the machine this was written on.
 var harnessConfigDirs = map[HarnessKind]harnessDirs{
 	// The first-party harness client keeps a dotfile root on every
-	// platform and does not honour XDG_CONFIG_HOME; its state file sits
-	// INSIDE that root, which is why relocating the root with the
-	// override variable relocates the state file with it.
+	// platform and does not honour XDG_CONFIG_HOME. Its user state file
+	// sits beside HOME by default and moves INSIDE the root when the
+	// override relocates it -- see besideHomeWithoutOverride.
 	HarnessClaude: {
 		envSuffix: "_CONFIG_DIR", home: ".claude", configFile: ".claude.json",
+		besideHomeWithoutOverride: true,
 	},
 	// codex keeps a TOML config, which ParseHarnessConfig does not read;
 	// its Version and CascadeRegistered are reported absent.
@@ -152,4 +164,24 @@ func OverrideVarFor(kind HarnessKind) string {
 		return ""
 	}
 	return strings.ToUpper(string(kind)) + dirs.envSuffix
+}
+
+// configFilePath resolves where kind keeps the state file this build can
+// read, given its already-resolved root. It returns "" for a harness whose
+// config this build does not read.
+func (d *PathDetector) configFilePath(kind HarnessKind, root string) string {
+	dirs, ok := harnessConfigDirs[kind]
+	if !ok || dirs.configFile == "" {
+		return ""
+	}
+	if dirs.besideHomeWithoutOverride {
+		if name := OverrideVarFor(kind); name == "" || d.env(name) == "" {
+			home := d.env("HOME")
+			if home == "" {
+				return ""
+			}
+			return filepath.Join(home, dirs.configFile)
+		}
+	}
+	return filepath.Join(root, dirs.configFile)
 }

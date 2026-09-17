@@ -22,36 +22,47 @@ func envMap(kv map[string]string) Env {
 	return func(k string) string { return kv[k] }
 }
 
+// TestResolvePaths_PerPlatform pins the paths against the harness's real
+// layout, verified against an installation (R-14.253).
+//
+// Every platform lands on $HOME/.claude, and the darwin case is the one
+// that matters most: the earlier contract sent it to the macOS
+// Application Support directory, which belongs to the DESKTOP application
+// -- a different product sharing a name. Everything this plugin wrote
+// there was invisible to the harness, and a wire that registered nothing
+// still reported success.
 func TestResolvePaths_PerPlatform(t *testing.T) {
 	cases := []struct {
-		name     string
-		goos     string
-		env      map[string]string
-		wantRoot string
+		name         string
+		goos         string
+		env          map[string]string
+		wantRoot     string
+		wantMCP      string
+		wantSettings string
 	}{
 		{
-			name:     "darwin under HOME",
-			goos:     "darwin",
-			env:      map[string]string{"HOME": "/Users/x"},
-			wantRoot: filepath.Join("/Users/x", "Library", "Application Support", "Claude"),
+			name:         "darwin is not the desktop application's directory",
+			goos:         "darwin",
+			env:          map[string]string{"HOME": "/Users/x"},
+			wantRoot:     filepath.Join("/Users/x", ".claude"),
+			wantMCP:      filepath.Join("/Users/x", ".claude.json"),
+			wantSettings: filepath.Join("/Users/x", ".claude", "settings.json"),
 		},
 		{
-			name:     "linux honours XDG_CONFIG_HOME",
-			goos:     "linux",
-			env:      map[string]string{"XDG_CONFIG_HOME": "/cfg", "HOME": "/home/x"},
-			wantRoot: filepath.Join("/cfg", "claude"),
+			name:         "linux does not apply XDG to a harness that ignores it",
+			goos:         "linux",
+			env:          map[string]string{"XDG_CONFIG_HOME": "/cfg", "HOME": "/home/x"},
+			wantRoot:     filepath.Join("/home/x", ".claude"),
+			wantMCP:      filepath.Join("/home/x", ".claude.json"),
+			wantSettings: filepath.Join("/home/x", ".claude", "settings.json"),
 		},
 		{
-			name:     "linux falls back to HOME/.config",
-			goos:     "linux",
-			env:      map[string]string{"HOME": "/home/x"},
-			wantRoot: filepath.Join("/home/x", ".config", "claude"),
-		},
-		{
-			name:     "windows under APPDATA",
-			goos:     "windows",
-			env:      map[string]string{"APPDATA": `C:\Users\x\AppData\Roaming`},
-			wantRoot: filepath.Join(`C:\Users\x\AppData\Roaming`, "Claude"),
+			name:         "windows reads the variable os.UserHomeDir reads there",
+			goos:         "windows",
+			env:          map[string]string{"USERPROFILE": `C:\Users\x`},
+			wantRoot:     filepath.Join(`C:\Users\x`, ".claude"),
+			wantMCP:      filepath.Join(`C:\Users\x`, ".claude.json"),
+			wantSettings: filepath.Join(`C:\Users\x`, ".claude", "settings.json"),
 		},
 	}
 	for _, tc := range cases {
@@ -63,13 +74,47 @@ func TestResolvePaths_PerPlatform(t *testing.T) {
 			if got.ConfigRoot != tc.wantRoot {
 				t.Fatalf("ConfigRoot = %q, want %q", got.ConfigRoot, tc.wantRoot)
 			}
-			if want := filepath.Join(tc.wantRoot, "mcp.json"); got.MCPConfig != want {
-				t.Fatalf("MCPConfig = %q, want %q", got.MCPConfig, want)
+			if got.MCPConfig != tc.wantMCP {
+				t.Fatalf("MCPConfig = %q, want %q", got.MCPConfig, tc.wantMCP)
 			}
-			if want := filepath.Join(tc.wantRoot, "hooks"); got.HookConfig != want {
-				t.Fatalf("HookConfig = %q, want %q", got.HookConfig, want)
+			if got.Settings != tc.wantSettings {
+				t.Fatalf("Settings = %q, want %q", got.Settings, tc.wantSettings)
 			}
 		})
+	}
+}
+
+// TestTheOverrideMovesTheUserConfigToo: an instance running under the
+// config-dir override keeps its user config INSIDE that directory, while
+// an instance without one keeps it beside HOME. Verified on a machine
+// running both at once. Following only one of the two rules writes the
+// MCP entry where one of the two instances never looks.
+func TestTheOverrideMovesTheUserConfigToo(t *testing.T) {
+	relocated := filepath.Join("/elsewhere", "cfg")
+	got, err := ResolvePaths("darwin", envMap(map[string]string{
+		"HOME": "/Users/x", OverrideVar(): relocated,
+	}))
+	if err != nil {
+		t.Fatalf("ResolvePaths: %v", err)
+	}
+	if got.ConfigRoot != relocated {
+		t.Errorf("ConfigRoot = %q, want the override %q", got.ConfigRoot, relocated)
+	}
+	if want := filepath.Join(relocated, ".claude.json"); got.MCPConfig != want {
+		t.Errorf("MCPConfig = %q, want %q -- an overridden instance keeps its user config beside its own root",
+			got.MCPConfig, want)
+	}
+	if want := filepath.Join(relocated, "settings.json"); got.Settings != want {
+		t.Errorf("Settings = %q, want %q", got.Settings, want)
+	}
+}
+
+// TestOverrideVarIsDerivedFromTheHarnessName keeps the deny-listed literal
+// out of the tree while still proving the variable this plugin reads is
+// the one the harness publishes.
+func TestOverrideVarIsDerivedFromTheHarnessName(t *testing.T) {
+	if got, want := OverrideVar(), strings.ToUpper(harnessName)+"_CONFIG_DIR"; got != want {
+		t.Errorf("OverrideVar() = %q, want %q", got, want)
 	}
 }
 
@@ -81,8 +126,8 @@ func TestResolvePaths_MissingVariablesRefuse(t *testing.T) {
 		goos, wantIn string
 	}{
 		{"darwin", "HOME"},
-		{"windows", "APPDATA"},
-		{"linux", "XDG_CONFIG_HOME"},
+		{"windows", "USERPROFILE"},
+		{"linux", "HOME"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.goos, func(t *testing.T) {
