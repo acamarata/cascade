@@ -16,6 +16,26 @@ A driver that satisfies its family's `internal/storage/storetest` suite is
 correct by construction against the interface contract — the suite is
 shared across every driver for that family, local or server.
 
+## Where the local database lives
+
+One path, resolved one way: **`<cascade root>/data/cascade.db`**, from
+`runtime.PathProvider`'s `DataDir()`. The cascade root is `~/.cascade`
+unless `CASCADE_HOME` says otherwise.
+
+Everything that opens the local Store resolves it that way — the daemon,
+every embedded (daemonless) verb, every doctor check, and the `cascade
+init` wizard, which is handed the path by the composition root rather than
+deriving one of its own. It used to derive one, and got
+`<cascade root>/cascade.db`: a path nothing else ever opened, printed to
+the operator as "storage", with an empty database left sitting at it by
+the setup probe (R-14.279). If you are looking for your data, there is one
+file, and `cascade init` names it.
+
+Alongside it in the same directory sit the small single-purpose databases
+that are deliberately NOT in it — `providers.db`, `provider-usage.db`,
+`provider-events.db` — plus `vault.key`, `blobs/`, `retrieval/` and
+`backups/`.
+
 ## Server profile
 
 The server profile (`--profile server` / `CASCADE_PROFILE=server`) composes

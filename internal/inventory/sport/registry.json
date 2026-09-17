@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T17:22:55Z",
+  "generated_at": "2026-09-17T17:26:04Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -12966,6 +12966,13 @@
           "raw": "internal/daemon (ADD, T0-daemon-composition-root, P1-E41-W9-S79-T2)."
         },
         {
+          "file": "internal/daemon/git_marker.go",
+          "line": 24,
+          "status": "CHANGE",
+          "ticket": "P1-E19-W4-S42-T8",
+          "raw": "internal/daemon (CHANGED — one tree-hash function, P1-E19-W4-S42-T8)."
+        },
+        {
           "file": "internal/daemon/journal_rpc.go",
           "line": 32,
           "status": "ADD",
@@ -24250,7 +24257,7 @@
       ]
     }
   ],
-  "total_sites": 2330,
+  "total_sites": 2331,
   "unspecified_count": 69,
   "multi_status_count": 41
 }

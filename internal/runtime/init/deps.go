@@ -129,6 +129,16 @@ type StorageProbe interface {
 type Deps struct {
 	// Home is the cascade home the journal and config live under.
 	Home string
+	// LocalDBPath is where THIS INSTALLATION's sqlite database lives.
+	//
+	// Injected rather than derived from Home, because the wizard must not
+	// be the second place that decides the layout. It used to compute
+	// Home/cascade.db while the daemon, the embedded verbs and the doctor
+	// checks all open DataDir()/cascade.db — so `init` reported a path
+	// nothing opened, and its storage probe created an empty database
+	// there (R-14.279). The composition root passes the same value it
+	// hands every other subsystem; a blank one is a refusal, not a guess.
+	LocalDBPath string
 	// Cwd is the project directory harness instructions are written for.
 	Cwd string
 	// GOOS is the platform whose branch to take. Injected rather than

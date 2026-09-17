@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -165,7 +166,11 @@ func fixture(t *testing.T, opts Options, prompt Prompter) (*Wizard, *recorder, *
 	}
 	deps := Deps{
 		Home: home, Cwd: t.TempDir(), GOOS: "darwin", Out: out, Prompt: prompt,
-		Detector: rec, Wirer: rec, Catalog: rec, Service: rec,
+		// Under home/data, exactly where the composition root points it
+		// — not home/cascade.db, which is the path init used to advertise
+		// and nothing ever opened (R-14.279).
+		LocalDBPath: filepath.Join(home, "data", "cascade.db"),
+		Detector:    rec, Wirer: rec, Catalog: rec, Service: rec,
 		Enroller: rec, Doctor: rec, Sub: rec, Storage: rec, Secrets: rec,
 		Getenv: func(key string) string { return rec.env[key] },
 	}

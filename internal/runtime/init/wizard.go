@@ -195,7 +195,8 @@ func (w *Wizard) discardJournalIfUnrunnable(err error) error {
 func (w *Wizard) validate() error {
 	missing := []string{}
 	for name, present := range map[string]bool{
-		"Home": w.deps.Home != "", "Out": w.deps.Out != nil, "Prompt": w.deps.Prompt != nil,
+		"Home": w.deps.Home != "", "LocalDBPath": w.deps.LocalDBPath != "",
+		"Out": w.deps.Out != nil, "Prompt": w.deps.Prompt != nil,
 		"Detector": w.deps.Detector != nil, "Wirer": w.deps.Wirer != nil,
 		"Catalog": w.deps.Catalog != nil, "Service": w.deps.Service != nil, "Enroller": w.deps.Enroller != nil,
 		"Doctor": w.deps.Doctor != nil, "Sub": w.deps.Sub != nil,

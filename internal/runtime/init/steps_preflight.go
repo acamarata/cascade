@@ -10,7 +10,6 @@ package init
 import (
 	"context"
 	"os"
-	"path/filepath"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -108,7 +107,12 @@ func (w *Wizard) stepStorage(_ context.Context, state *State) error {
 	if state.Profile == ProfileServer {
 		return w.serverStorage(state)
 	}
-	def := filepath.Join(w.deps.Home, "cascade.db")
+	// The composition root's own path, not one recomputed here. A second
+	// derivation of the layout is how this step came to advertise
+	// Home/cascade.db while every subsystem opened DataDir()/cascade.db,
+	// and how its probe left an empty database at the advertised path
+	// (R-14.279).
+	def := w.deps.LocalDBPath
 	if !w.interactive() {
 		// The local database's location is DERIVED from the cascade
 		// home, not chosen. The prompt exists so a person at a terminal

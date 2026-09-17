@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	"os"
+	"path/filepath"
 	goruntime "runtime"
 
 	cascadecontext "github.com/acamarata/cascade/internal/context"
@@ -215,17 +216,23 @@ func productionInitDeps(cmd *cobra.Command, paths runtime.PathProvider) (cascade
 		f.check = flag.Value.String() == "true"
 	}
 	return cascadeinit.Deps{
-		Home:     paths.Root(),
-		Cwd:      cwd,
-		GOOS:     goruntime.GOOS,
-		Out:      cmd.OutOrStdout(),
-		Prompt:   initPrompter(cmd, f),
-		Detector: initHarnessDetector(),
-		Wirer:    initHarnessWirer{},
-		Catalog:  initPluginCatalog{},
-		Service:  initServiceInstaller{paths: paths},
-		Enroller: initHelperEnroller{},
-		Doctor:   initDoctorRunner{paths: paths},
+		Home: paths.Root(),
+		// The SAME expression every other composition-root site uses to
+		// reach this installation's database (daemon_unix_store.go,
+		// recall_embedded.go, doctor_recall_index.go and the rest). The
+		// wizard is handed it rather than deriving its own, so `init`
+		// cannot advertise a path nothing opens (R-14.279).
+		LocalDBPath: filepath.Join(paths.DataDir(), "cascade.db"),
+		Cwd:         cwd,
+		GOOS:        goruntime.GOOS,
+		Out:         cmd.OutOrStdout(),
+		Prompt:      initPrompter(cmd, f),
+		Detector:    initHarnessDetector(),
+		Wirer:       initHarnessWirer{},
+		Catalog:     initPluginCatalog{},
+		Service:     initServiceInstaller{paths: paths},
+		Enroller:    initHelperEnroller{},
+		Doctor:      initDoctorRunner{paths: paths},
 		Sub: initSubprocess{
 			in: cmd.InOrStdin(), out: cmd.OutOrStdout(), err: cmd.ErrOrStderr(),
 		},
