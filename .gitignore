@@ -1,6 +1,7 @@
 # AI workspace (never tracked)
 .claude/
 .opencode/
+.cascade/
 
 # OS
 .DS_Store
