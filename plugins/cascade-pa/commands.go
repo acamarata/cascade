@@ -94,8 +94,8 @@ func printInChatReply(reply string) error {
 type handlers struct{}
 
 // DispatchTool: cascade-pa provides no tools in this ticket.
-func (handlers) DispatchTool(ctx context.Context, name string, input []byte) ([]byte, error) {
-	return activeDispatcher().Dispatch(ctx, name, input)
+func (handlers) DispatchTool(_ context.Context, name string, _ []byte) ([]byte, error) {
+	return nil, cascade.New(cascade.KindNotFound, fmt.Sprintf("cascade-pa: unknown tool %q", name))
 }
 
 // DispatchIntent: cascade-pa provides no intents in this ticket.
