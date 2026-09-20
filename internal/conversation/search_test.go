@@ -10,9 +10,11 @@ package conversation
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"path/filepath"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/storage/migrate"
 )
 
@@ -184,5 +186,102 @@ func TestEnsureFTS5_NonSQLiteDialectIsNoOp(t *testing.T) {
 	}
 	if err := ensureFTS5(ctx, db, nil); err != nil {
 		t.Fatalf("ensureFTS5(nil dialect) = %v, want nil (documented no-op)", err)
+	}
+}
+
+// TestSearchOverTheWireReachesTheIndex is the assertion S-44.T3 shipped
+// without: SearchTurns is reachable from a running program.
+//
+// The FTS5 index was built, tested at store level, and bound to no RPC
+// method, so nothing outside this package could query it and
+// cascade_cpa_search went on running the plain scan the index was written
+// to replace. A capability with no caller is not a feature (R-14.283).
+func TestSearchOverTheWireReachesTheIndex(t *testing.T) {
+	_, registry, _ := newTestAdapter(t)
+	seedWireTurn(t, registry, "th-wire", "the migration ledger is idempotent")
+	seedWireTurn(t, registry, "th-wire", "a turtle crawls slowly")
+	seedWireTurn(t, registry, "th-other", "migration again, elsewhere")
+
+	res, errObj := dispatch(t, registry, MethodSearch, searchParams{Query: "migration"})
+	if errObj != nil {
+		t.Fatalf("chat.search errored: %+v", errObj)
+	}
+	set, ok := res.(searchResultSet)
+	if !ok {
+		t.Fatalf("chat.search result = %#v, want searchResultSet", res)
+	}
+	if len(set.Results) != 2 {
+		t.Fatalf("chat.search(migration) returned %d hits, want the two matching turns", len(set.Results))
+	}
+	for _, r := range set.Results {
+		if r.TurnID == "" || r.ThreadID == "" {
+			t.Errorf("hit %+v is missing its identity", r)
+		}
+		if r.Content == "" {
+			t.Errorf("hit %+v carries no content, so no caller can build an excerpt", r)
+		}
+		// Negated bm25: SQLite's own number is lower-is-better and
+		// negative, and a field called "score" is read the other way.
+		if r.Score <= 0 {
+			t.Errorf("score = %v for %q, want a positive higher-is-better value", r.Score, r.Content)
+		}
+	}
+	// A positivity check alone would pass against a hardcoded constant, so
+	// assert the scores actually CARRY the index's ranking: two different
+	// turns must not come back with the same score, and the results must
+	// arrive best-first.
+	if set.Results[0].Score == set.Results[1].Score {
+		t.Errorf("both hits scored %v; the rank is not reaching the caller", set.Results[0].Score)
+	}
+	if set.Results[0].Score < set.Results[1].Score {
+		t.Errorf("scores %v then %v are ascending; results must arrive best-first",
+			set.Results[0].Score, set.Results[1].Score)
+	}
+}
+
+func TestSearchOverTheWireScopesToOneThread(t *testing.T) {
+	_, registry, _ := newTestAdapter(t)
+	seedWireTurn(t, registry, "th-a", "migration one")
+	seedWireTurn(t, registry, "th-b", "migration two")
+
+	res, errObj := dispatch(t, registry, MethodSearch, searchParams{Query: "migration", ThreadID: "th-b"})
+	if errObj != nil {
+		t.Fatalf("chat.search errored: %+v", errObj)
+	}
+	set := res.(searchResultSet)
+	if len(set.Results) != 1 || set.Results[0].ThreadID != "th-b" {
+		t.Fatalf("scoped search = %+v, want only th-b's turn", set.Results)
+	}
+}
+
+func TestSearchOverTheWireRefusesAnEmptyQuery(t *testing.T) {
+	// FTS5 would reject it anyway; the refusal an operator reads should
+	// name the request's problem, not surface a syntax error from an index.
+	_, registry, _ := newTestAdapter(t)
+	for _, q := range []string{"", "   "} {
+		if _, errObj := dispatch(t, registry, MethodSearch, searchParams{Query: q}); errObj == nil {
+			t.Errorf("chat.search(%q): errObj = nil, want a refusal", q)
+		}
+	}
+}
+
+func TestSearchOverTheWireRefusesAnUnknownField(t *testing.T) {
+	_, registry, _ := newTestAdapter(t)
+	raw := json.RawMessage(`{"query":"x","thred_id":"typo"}`)
+	if _, errObj := registry.Dispatch(context.Background(),
+		&rpc.Request{JSONRPC: "2.0", Method: MethodSearch, Params: raw}); errObj == nil {
+		t.Error("chat.search accepted an unknown field; a caller typo must not be silently dropped")
+	}
+}
+
+// seedWireTurn appends one single-segment turn through the wire.
+func seedWireTurn(t *testing.T, registry *rpc.Registry, threadID, content string) {
+	t.Helper()
+	_, errObj := dispatch(t, registry, MethodAppendTurn, appendTurnParams{
+		ThreadID: threadID, Role: "user",
+		Segments: []appendSegmentWire{{Kind: "text", Content: content}},
+	})
+	if errObj != nil {
+		t.Fatalf("seeding %q: %+v", content, errObj)
 	}
 }

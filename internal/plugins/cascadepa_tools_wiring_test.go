@@ -33,6 +33,8 @@ type methodRPCDoer struct {
 	threadErr  error
 	listRes    listThreadsResultWire
 	listErr    error
+	searchRes  searchResultSetWire
+	searchErr  error
 	calls      []string
 	threadSeen []string
 }
@@ -51,6 +53,11 @@ func (m *methodRPCDoer) Do(_ context.Context, method string, params, out any) er
 			return m.threadErr
 		}
 		*out.(*getThreadResultWire) = m.threadRes
+	case conversation.MethodSearch:
+		if m.searchErr != nil {
+			return m.searchErr
+		}
+		*out.(*searchResultSetWire) = m.searchRes
 	case conversation.MethodListThreads:
 		if m.listErr != nil {
 			return m.listErr

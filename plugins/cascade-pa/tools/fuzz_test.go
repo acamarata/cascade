@@ -40,6 +40,12 @@ func (f *fuzzConversations) Thread(_ context.Context, id string) (ThreadDetail, 
 	}}, nil
 }
 
+func (f *fuzzConversations) Search(_ context.Context, _ SearchRequest) ([]SearchResult, error) {
+	// The index answers with the same bytes the decoder was handed, so the
+	// fuzzer drives the excerpt cutter through the indexed path too.
+	return []SearchResult{{ThreadID: "t1", TurnID: "u1", Content: f.content, Score: 1}}, nil
+}
+
 func (f *fuzzConversations) Threads(_ context.Context) ([]ThreadSummary, error) {
 	return []ThreadSummary{{ID: "t1", Title: f.content, UpdatedAt: "2026-09-20T00:00:00Z"}}, nil
 }

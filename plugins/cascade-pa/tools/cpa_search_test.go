@@ -196,3 +196,72 @@ func itoa(n int) string {
 	}
 	return string(b)
 }
+
+func TestSearchUsesTheIndexWhenOneExists(t *testing.T) {
+	// The indexed path is the point of S-44.T3: the FTS5 backend replaces
+	// the scan. What must survive the swap is the {results} shape, and the
+	// excerpt must still be cut by this package (which knows not to halve a
+	// rune) rather than by the daemon.
+	svc := twoThreadService()
+	svc.searchResults = []SearchResult{
+		{ThreadID: "t9", TurnID: "z1", Content: "the migration ledger is idempotent", Score: 4.5},
+		{ThreadID: "t9", TurnID: "z2", Content: "nothing relevant here", Score: 1.25},
+	}
+	d := NewDispatcher(svc)
+	hits := searchFor(t, d, `{"query":"migration","limit":7}`)
+
+	if len(hits) != 2 {
+		t.Fatalf("hits = %d, want the index's two rows", len(hits))
+	}
+	if hits[0].TurnID != "z1" || hits[0].ThreadID != "t9" {
+		t.Errorf("hit 0 = %+v, want the index's own first row", hits[0])
+	}
+	// The backend's relevance, not a constant: a swap that kept score 1.0
+	// would have thrown away the only thing FTS5 adds over the scan.
+	if hits[0].Score != 4.5 || hits[1].Score != 1.25 {
+		t.Errorf("scores = %v/%v, want the backend's own", hits[0].Score, hits[1].Score)
+	}
+	if hits[0].Excerpt != "the migration ledger is idempotent" {
+		t.Errorf("excerpt = %q, want it cut from the indexed content", hits[0].Excerpt)
+	}
+	// A hit whose content does not contain the literal query still gets an
+	// excerpt: FTS5 matches stems and tokens a substring search cannot find.
+	// Asserting only "not empty" would pass on any string at all, so this
+	// pins what the excerpt must be — the head of the indexed content.
+	if hits[1].Excerpt != "nothing relevant here" {
+		t.Errorf("stem-match excerpt = %q, want the head of the indexed content", hits[1].Excerpt)
+	}
+	// The request must carry the caller's scope and bound to the backend,
+	// rather than the backend being asked for everything and trimmed here.
+	if len(svc.gotSearch) != 1 || svc.gotSearch[0].Query != "migration" || svc.gotSearch[0].Limit != 7 {
+		t.Errorf("Search called with %+v, want the query and limit passed through", svc.gotSearch)
+	}
+}
+
+func TestSearchFallsBackToTheScanWithNoIndex(t *testing.T) {
+	// A store with no FTS5 index must not report "no matches" — that would
+	// tell an agent its operator never wrote the words in front of them.
+	svc := twoThreadService()
+	svc.searchErr = ErrSearchUnavailable
+	d := NewDispatcher(svc)
+	hits := searchFor(t, d, `{"query":"migration"}`)
+	if len(hits) != 3 {
+		t.Fatalf("hits = %d, want the scan's three matches", len(hits))
+	}
+	if hits[0].Score != 1.0 {
+		t.Errorf("scan score = %v, want the scan's constant 1.0", hits[0].Score)
+	}
+}
+
+func TestSearchReportsAFailedIndexRatherThanEmptyResults(t *testing.T) {
+	// "the search did not run" and "nothing matched" are different facts.
+	// Returning an empty result set for the first is the failure mode this
+	// whole package is careful about elsewhere.
+	svc := twoThreadService()
+	svc.searchErr = cascade.New(cascade.KindUnavailable, "daemon not running")
+	d := NewDispatcher(svc)
+	err := dispatchErr(t, d, ToolSearch, `{"query":"migration"}`)
+	if !cascade.HasKind(err, cascade.KindUnavailable) {
+		t.Fatalf("index failure: err = %v, want KindUnavailable propagated", err)
+	}
+}

@@ -48,6 +48,9 @@ const (
 	MethodAppendTurn  = "chat.append_turn"
 	MethodGetThread   = "chat.get_thread"
 	MethodListThreads = "chat.list_threads"
+	// MethodSearch is S-44.T3's FTS5 search, reachable over the wire.
+	// Without it SearchTurns is a Go method no running program can call.
+	MethodSearch = "chat.search"
 )
 
 // Adapter binds T1's Store to the D/S-06.T3 method registry and the SSE
@@ -85,6 +88,7 @@ func (a *Adapter) RegisterHandlers(registry *rpc.Registry) {
 	registry.Register(MethodAppendTurn, mapped(a.handleAppendTurn))
 	registry.Register(MethodGetThread, mapped(a.handleGetThread))
 	registry.Register(MethodListThreads, mapped(a.handleListThreads))
+	registry.Register(MethodSearch, mapped(a.handleSearch))
 }
 
 // mapped routes h's returned error through adapter_errors.go's
@@ -250,4 +254,43 @@ func (a *Adapter) handleListThreads(ctx context.Context, raw json.RawMessage) (a
 		return nil, err
 	}
 	return listThreadsResult{Threads: threads}, nil
+}
+
+// handleSearch is chat.search: the FTS5 index, over the wire.
+//
+// WHY THIS EXISTS. S-44.T3 built SearchTurns, PruneTurns and thread
+// archival into this package and stopped at its boundary: nothing outside
+// internal/conversation called any of them, so the FTS5 index this ticket
+// created could not be reached by a running program, and
+// cascade_cpa_search went on running the plain store scan the index was
+// written to replace. A capability with no caller is not a feature
+// (R-14.283).
+//
+// The rank is REPORTED AS A SCORE, negated. SQLite's bm25() is
+// lower-is-better and returns negative values; a field named "score" is
+// read higher-is-better by everything that consumes one. Negating is a
+// monotonic relabelling of SQLite's own number — it invents no ranking.
+func (a *Adapter) handleSearch(ctx context.Context, raw json.RawMessage) (any, error) {
+	p, err := decodeSearchParams(raw)
+	if err != nil {
+		return nil, err
+	}
+	matches, err := a.store.SearchTurns(ctx, p.Query, SearchFilter{ThreadID: p.ThreadID, Limit: p.Limit})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]searchResultWire, 0, len(matches))
+	for _, m := range matches {
+		segs, segErr := a.store.ListSegments(ctx, m.Turn.ID)
+		if segErr != nil {
+			return nil, segErr
+		}
+		out = append(out, searchResultWire{
+			ThreadID: m.Turn.ThreadID,
+			TurnID:   m.Turn.ID,
+			Content:  joinSegmentContent(segs),
+			Score:    -m.Rank,
+		})
+	}
+	return searchResultSet{Results: out}, nil
 }

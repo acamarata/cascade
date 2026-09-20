@@ -81,6 +81,10 @@ func (r *recordingConversations) Thread(_ context.Context, id string) (tools.Thr
 	return tools.ThreadDetail{ThreadID: id}, nil
 }
 
+func (r *recordingConversations) Search(_ context.Context, _ tools.SearchRequest) ([]tools.SearchResult, error) {
+	return nil, tools.ErrSearchUnavailable
+}
+
 func (r *recordingConversations) Threads(_ context.Context) ([]tools.ThreadSummary, error) {
 	return []tools.ThreadSummary{{ID: r.threadID, Title: r.threadID, UpdatedAt: r.at}}, nil
 }

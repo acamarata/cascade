@@ -30,6 +30,10 @@ type fakeConversations struct {
 	threads    []ThreadSummary
 	threadsErr error
 
+	searchResults []SearchResult
+	searchErr     error
+	gotSearch     []SearchRequest
+
 	details   map[string]ThreadDetail
 	detailErr map[string]error
 	gotThread []string
@@ -54,6 +58,19 @@ func (f *fakeConversations) Thread(_ context.Context, id string) (ThreadDetail, 
 
 func (f *fakeConversations) Threads(_ context.Context) ([]ThreadSummary, error) {
 	return f.threads, f.threadsErr
+}
+
+// Search answers from the "index". A fixture that sets neither results nor
+// an error reports NO INDEX, so cascade_cpa_search falls back to the scan:
+// that is the path most of this package's search tests are about, and a
+// default of "indexed, zero hits" would have silently turned every one of
+// them into an assertion about an empty result set.
+func (f *fakeConversations) Search(_ context.Context, req SearchRequest) ([]SearchResult, error) {
+	f.gotSearch = append(f.gotSearch, req)
+	if f.searchResults == nil && f.searchErr == nil {
+		return nil, ErrSearchUnavailable
+	}
+	return f.searchResults, f.searchErr
 }
 
 // dispatchJSON runs one tool and decodes its result into out.

@@ -75,7 +75,14 @@ func seedAgedTurns(t *testing.T, s Store, threadID string, n int) {
 	}
 }
 
-func TestPruneTurns_ZeroWindowNoOp(t *testing.T) {
+// THE NAMES ARE THE CHECK. This ticket's contract runs
+//   go test ./internal/conversation/... -run '^TestRetention'
+// and these cases were originally called TestPruneTurns_*, which that
+// pattern does not match: the check reported "[no tests to run]" and passed
+// while proving nothing. Renaming them is what makes the contract's own
+// check execute. A future rename must keep the TestRetention prefix.
+
+func TestRetentionZeroWindowIsANoOp(t *testing.T) {
 	s, db := newTestStoreWithDB(t)
 	seedAgedTurns(t, s, "th-zero", 5)
 
@@ -99,7 +106,7 @@ func TestPruneTurns_ZeroWindowNoOp(t *testing.T) {
 	}
 }
 
-func TestPruneTurns_ExactRowCountAndIdempotentDoublePrune(t *testing.T) {
+func TestRetentionTombstonesExactlyTheQualifyingRowsAndIsIdempotent(t *testing.T) {
 	s, db := newTestStoreWithDB(t)
 	seedAgedTurns(t, s, "th-prune", 5) // seq 0..4, all CreatedAt=100
 
@@ -142,13 +149,13 @@ func TestPruneTurns_ExactRowCountAndIdempotentDoublePrune(t *testing.T) {
 	}
 }
 
-// TestPruneTurns_SchedulerEntryPointSignature proves PruneTurns's shape
+// TestRetentionRegistersAsASchedulerJob proves PruneTurns's shape
 // is accepted by a REAL internal/events/scheduler.Scheduler
 // (RegisterRunnable + ScheduleJob + Tick), never a fake scheduler double
 // -- see retention.go's own FINDING doc comment on why this test, not a
 // live composition-root registration, is what discharges this ticket's
 // AC ("standalone invocation test with a test scheduler").
-func TestPruneTurns_SchedulerEntryPointSignature(t *testing.T) {
+func TestRetentionRegistersAsASchedulerJob(t *testing.T) {
 	s, db := newTestStoreWithDB(t)
 	seedAgedTurns(t, s, "th-sched", 3)
 
@@ -191,8 +198,8 @@ func TestPruneTurns_SchedulerEntryPointSignature(t *testing.T) {
 	}
 }
 
-// TestAdapterPruneTurns_RoundTrip drives the Go-level Adapter surface.
-func TestAdapterPruneTurns_RoundTrip(t *testing.T) {
+// TestRetentionAdapterRoundTrip drives the Go-level Adapter surface.
+func TestRetentionAdapterRoundTrip(t *testing.T) {
 	adapter, registry, _ := newTestAdapter(t)
 	for i := 0; i < 3; i++ {
 		if _, errObj := dispatch(t, registry, MethodAppendTurn, appendTurnParams{

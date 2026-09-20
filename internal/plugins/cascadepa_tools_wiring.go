@@ -180,6 +180,50 @@ func (c *cascadePAConversations) threadUpdatedAt(ctx context.Context, rpc rpcDoe
 	return detail.Turns[len(detail.Turns)-1].CreatedAt
 }
 
+// Search runs the daemon's FTS5 index through chat.search.
+//
+// A store with no index answers with conversation.ErrSearchUnavailable,
+// which crosses the wire as TEXT: the taxonomy kind survives, the identity
+// does not. Recognising it takes BOTH halves, and neither alone will do.
+//
+// The kind alone is too broad — KindUnsupported is shared with everything
+// else the daemon refuses. The message alone is forgeable: review found
+// that a QUERY containing the marker text comes back inside SQLite's own
+// MATCH syntax error, which a substring test would mistake for a missing
+// index and answer with a silent scan. That error is KindInvalidInput
+// (translateSearchError), so requiring the kind as well closes it.
+func (c *cascadePAConversations) Search(ctx context.Context, req tools.SearchRequest) ([]tools.SearchResult, error) {
+	rpc, err := c.rpc()
+	if err != nil {
+		return nil, err
+	}
+	var res searchResultSetWire
+	params := searchParamsWire{Query: req.Query, ThreadID: req.ThreadID, Limit: req.Limit}
+	if err := rpc.Do(ctx, conversation.MethodSearch, params, &res); err != nil {
+		if cascade.HasKind(err, cascade.KindUnsupported) &&
+			strings.Contains(err.Error(), searchUnavailableMarker) {
+			return nil, tools.ErrSearchUnavailable
+		}
+		return nil, err
+	}
+	out := make([]tools.SearchResult, 0, len(res.Results))
+	for _, r := range res.Results {
+		out = append(out, tools.SearchResult{
+			ThreadID: r.ThreadID, TurnID: r.TurnID, Content: r.Content, Score: r.Score,
+		})
+	}
+	return out, nil
+}
+
+// searchUnavailableMarker is the part of conversation.ErrSearchUnavailable's
+// message that names the actual condition. It is a literal rather than a
+// slice of the sentinel: a marker derived by trimming a hardcoded prefix
+// would silently become the WHOLE message if that prefix ever changed, and
+// still match — which is not the safety the derivation appeared to give.
+// The literal is pinned to the sentinel by a test instead, which fails
+// loudly if the two drift.
+const searchUnavailableMarker = "no fts5 index on this store"
+
 // joinSegmentText flattens a turn's segments into the one content string
 // the tool schemas expose.
 //
@@ -231,4 +275,22 @@ type turnWithSegsWire struct {
 
 type listThreadsResultWire struct {
 	Threads []conversation.Thread `json:"threads"`
+}
+
+// The client-side shapes for chat.search.
+type searchParamsWire struct {
+	Query    string `json:"query"`
+	ThreadID string `json:"thread_id"`
+	Limit    int    `json:"limit"`
+}
+
+type searchResultWire struct {
+	ThreadID string  `json:"thread_id"`
+	TurnID   string  `json:"turn_id"`
+	Content  string  `json:"content"`
+	Score    float64 `json:"score"`
+}
+
+type searchResultSetWire struct {
+	Results []searchResultWire `json:"results"`
 }

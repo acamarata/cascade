@@ -78,7 +78,38 @@ type Conversations interface {
 	Thread(ctx context.Context, threadID string) (ThreadDetail, error)
 	// Threads lists every thread.
 	Threads(ctx context.Context) ([]ThreadSummary, error)
+	// Search finds turns whose content matches query, best first. An
+	// implementation whose store has no full-text index returns exactly
+	// ErrSearchUnavailable, and cascade_cpa_search falls back to its own
+	// scan rather than telling an agent there are no matches.
+	Search(ctx context.Context, req SearchRequest) ([]SearchResult, error)
 }
+
+// SearchRequest is one full-text query.
+type SearchRequest struct {
+	Query    string
+	ThreadID string
+	Limit    int
+}
+
+// SearchResult is one indexed hit: the matching turn's full content, which
+// the tool cuts an excerpt from, plus the backend's own relevance score
+// (higher is better).
+type SearchResult struct {
+	ThreadID string
+	TurnID   string
+	Content  string
+	Score    float64
+}
+
+// ErrSearchUnavailable is the answer from a store with no full-text index.
+//
+// Compared by IDENTITY, never with errors.Is: (*cascade.Error).Is matches
+// on KIND alone, so errors.Is against this sentinel would hold for any
+// KindUnsupported error the daemon might return. An implementation must
+// return this exact value for the fallback to engage.
+var ErrSearchUnavailable = cascade.New(cascade.KindUnsupported,
+	"cascade-pa: the conversation store has no full-text index")
 
 // AppendRequest is one turn to record.
 type AppendRequest struct {

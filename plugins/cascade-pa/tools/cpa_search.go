@@ -65,10 +65,6 @@ func (d *Dispatcher) search(ctx context.Context, input []byte) ([]byte, error) {
 		return nil, cascade.Newf(cascade.KindInvalidInput,
 			"%s: query is empty; every turn matches the empty string, which is not a search", ToolSearch)
 	}
-	threads, err := d.searchScope(ctx, in.ThreadID)
-	if err != nil {
-		return nil, err
-	}
 	limit := in.Limit
 	if limit <= 0 {
 		limit = DefaultSearchLimit
@@ -76,7 +72,56 @@ func (d *Dispatcher) search(ctx context.Context, input []byte) ([]byte, error) {
 	if limit > MaxHistoryLimit {
 		limit = MaxHistoryLimit
 	}
-	return json.Marshal(SearchOutput{Results: scanThreads(ctx, d.svc, threads, in.Query, limit)})
+	found, err := d.hits(ctx, in, limit)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(SearchOutput{Results: found})
+}
+
+// hits answers from the full-text index, falling back to the scan.
+//
+// THE FALLBACK IS NOT BELT-AND-BRACES. S-44.T3's FTS5 index is created by
+// ensureFTS5, a raw DDL statement the typed migration builder cannot
+// express, and only on the SQLite dialect — so a store on another dialect,
+// or one whose index could not be built, has nothing to query. Reporting
+// "no matches" there would tell an agent its operator has never written the
+// words they are looking at. The scan is slower and unranked, and it is a
+// true answer.
+func (d *Dispatcher) hits(ctx context.Context, in SearchInput, limit int) ([]SearchHit, error) {
+	found, err := d.svc.Search(ctx, SearchRequest{Query: in.Query, ThreadID: in.ThreadID, Limit: limit})
+	if err != nil {
+		// Identity, not errors.Is: see ErrSearchUnavailable's own comment.
+		if err == ErrSearchUnavailable {
+			// Only NOW resolve which threads to walk. Listing every thread
+			// up front cost a round trip on the healthy path, where the
+			// index answers without needing them at all.
+			threads, scopeErr := d.searchScope(ctx, in.ThreadID)
+			if scopeErr != nil {
+				return nil, scopeErr
+			}
+			return scanThreads(ctx, d.svc, threads, in.Query, limit), nil
+		}
+		// Every other failure is REPORTED. Returning an empty result set
+		// would tell an agent its operator has written nothing matching,
+		// when what actually happened is that the search did not run.
+		return nil, err
+	}
+	out := make([]SearchHit, 0, len(found))
+	for _, f := range found {
+		idx := strings.Index(strings.ToLower(f.Content), strings.ToLower(in.Query))
+		if idx < 0 {
+			// The index matched on a stem or a token this substring search
+			// cannot locate. Show the head of the turn rather than nothing.
+			idx = 0
+		}
+		out = append(out, SearchHit{
+			ThreadID: f.ThreadID, TurnID: f.TurnID,
+			Excerpt: excerptAround(f.Content, idx, len(in.Query)),
+			Score:   f.Score,
+		})
+	}
+	return out, nil
 }
 
 // searchScope resolves which threads to scan.
