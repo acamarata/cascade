@@ -350,7 +350,21 @@ jobs:
             if [ -z "$before" ] || [ "$before" = "$zero" ]; then
               range="${{ github.sha }}"
             else
-              range="${before}..${{ github.sha }}"
+              # After a force-push, `before` is the rewritten-away tip: still
+              # an object on GitHub, but on no ref, so checkout's fetch never
+              # brings it down and `git log before..after` dies with "bad
+              # revision" and the gate fails closed on a range it could not
+              # load (run 35542176274). Fetch it by SHA first; GitHub serves
+              # any reachable object by hash. If it is truly gone, sweep the
+              # whole branch since the default branch instead of nothing.
+              git fetch --no-tags --quiet origin "$before" 2>/dev/null || true
+              if git cat-file -e "${before}^{commit}" 2>/dev/null; then
+                range="${before}..${{ github.sha }}"
+              else
+                base="$(git merge-base origin/main "${{ github.sha }}")"
+                echo "before=$before is not fetchable; sweeping ${base}..${{ github.sha }}"
+                range="${base}..${{ github.sha }}"
+              fi
             fi
           fi
           echo "range=$range" >> "$GITHUB_OUTPUT"
