@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-20T19:19:33Z",
+  "generated_at": "2026-09-20T19:32:09Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -16606,6 +16606,13 @@
       "name": "internal/plugins:cascadepa-tools-wiring",
       "sites": [
         {
+          "file": "internal/plugins/cascadepa_tools_search_test.go",
+          "line": 10,
+          "status": "",
+          "ticket": "P1-E20-W5-S44-T3",
+          "raw": "internal/plugins:cascadepa-tools-wiring (TEST) — P1-E20-W5-S44-T3."
+        },
+        {
           "file": "internal/plugins/cascadepa_tools_wiring.go",
           "line": 35,
           "status": "ADD",
@@ -24576,7 +24583,7 @@
       ]
     }
   ],
-  "total_sites": 2359,
+  "total_sites": 2360,
   "unspecified_count": 69,
   "multi_status_count": 47
 }
