@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-20T20:13:30Z",
+  "generated_at": "2026-09-20T22:29:52Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5598,6 +5598,141 @@
           "status": "ADD",
           "ticket": "T-2",
           "raw": "context-engine/merge-model (ADD, per T-2 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/summarizer-cheap-lane",
+      "sites": [
+        {
+          "file": "internal/context/summarizer_cheap_lane_test.go",
+          "line": 35,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T2",
+          "raw": "context-engine/summarizer-cheap-lane (ADD, P1-E21-W5-S46-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/summarizer-concurrency-test",
+      "sites": [
+        {
+          "file": "internal/context/summarizer_concurrency_test.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T2",
+          "raw": "context-engine/summarizer-concurrency-test (ADD, P1-E21-W5-S46-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/summarizer-core",
+      "sites": [
+        {
+          "file": "internal/context/summarizer_core.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T2",
+          "raw": "context-engine/summarizer-core (ADD, P1-E21-W5-S46-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/summarizer-degrade-test",
+      "sites": [
+        {
+          "file": "internal/context/summarizer_degrade_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T2",
+          "raw": "context-engine/summarizer-degrade-test (ADD, P1-E21-W5-S46-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/summarizer-dispatch",
+      "sites": [
+        {
+          "file": "internal/context/summarizer_dispatch.go",
+          "line": 45,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T2",
+          "raw": "context-engine/summarizer-dispatch (ADD, P1-E21-W5-S46-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/summarizer-errors",
+      "sites": [
+        {
+          "file": "internal/context/summarizer_errors.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T2",
+          "raw": "context-engine/summarizer-errors (ADD, P1-E21-W5-S46-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/summarizer-measurement-test",
+      "sites": [
+        {
+          "file": "internal/context/summarizer_measurement_test.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T2",
+          "raw": "context-engine/summarizer-measurement-test (ADD, P1-E21-W5-S46-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/summarizer-rolling-test",
+      "sites": [
+        {
+          "file": "internal/context/summarizer_rolling_test.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T2",
+          "raw": "context-engine/summarizer-rolling-test (ADD, P1-E21-W5-S46-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/summarizer-types",
+      "sites": [
+        {
+          "file": "internal/context/summarizer_types.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T2",
+          "raw": "context-engine/summarizer-types (ADD, P1-E21-W5-S46-T2)."
         }
       ],
       "statuses": [
@@ -16610,6 +16745,58 @@
       ]
     },
     {
+      "name": "internal/plugins/resolver",
+      "sites": [
+        {
+          "file": "internal/plugins/resolver/resolver.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T3",
+          "raw": "internal/plugins/resolver (ADD) — P1-E24-W5-S50-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins/resolver fuzz tests",
+      "sites": [
+        {
+          "file": "internal/plugins/resolver/fuzz_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T3",
+          "raw": "internal/plugins/resolver fuzz tests (ADD) — P1-E24-W5-S50-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins/resolver tests",
+      "sites": [
+        {
+          "file": "internal/plugins/resolver/resolver_ranking_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T3",
+          "raw": "internal/plugins/resolver tests (ADD) — P1-E24-W5-S50-T3."
+        },
+        {
+          "file": "internal/plugins/resolver/resolver_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T3",
+          "raw": "internal/plugins/resolver tests (ADD) — P1-E24-W5-S50-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins:cascadepa-review-wiring",
       "sites": [
         {
@@ -20431,6 +20618,36 @@
           "status": "ADD",
           "ticket": "P1-E15-W4-S33-T1",
           "raw": "pkg/plugin guest-invoke-shim tests (ADD) — P1-E15-W4-S33-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "pkg/plugin intents",
+      "sites": [
+        {
+          "file": "pkg/plugin/intents.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T3",
+          "raw": "pkg/plugin intents (ADD) — P1-E24-W5-S50-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "pkg/plugin intents tests",
+      "sites": [
+        {
+          "file": "pkg/plugin/intents_test.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T3",
+          "raw": "pkg/plugin intents tests (ADD) — P1-E24-W5-S50-T3."
         }
       ],
       "statuses": [
@@ -24659,7 +24876,7 @@
       ]
     }
   ],
-  "total_sites": 2366,
+  "total_sites": 2381,
   "unspecified_count": 70,
   "multi_status_count": 49
 }
