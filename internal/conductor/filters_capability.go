@@ -156,8 +156,26 @@ func computedLocalityIsLocal(p provider.ProviderInfo) bool {
 	if host == "localhost" || host == "::1" {
 		return true
 	}
-	// IPv4 loopback range is 127.0.0.0/8; checking the literal dotted
-	// prefix avoids importing "net" (an egress-firewall-gated package,
-	// A-T2) for a computation that never opens a socket.
-	return strings.HasPrefix(host, "127.")
+	// IPv4 loopback is 127.0.0.0/8, and ONLY as a literal address.
+	//
+	// A bare `HasPrefix(host, "127.")` admits `127.evil.com` — a
+	// registrable domain whose Hostname() starts with "127." and which
+	// resolves wherever its owner points it. A provider record with that
+	// BaseURL would be classified controller-local, and every local-only
+	// gate built on this predicate would wave it through. Found by the
+	// independent review of P1-E20-W5-S44-T2.
+	//
+	// Still no "net" import (egress-firewall-gated, A-T2) for a
+	// computation that never opens a socket: a dotted-decimal host has no
+	// characters but digits and dots, which is exactly what separates the
+	// literal address from the domain.
+	if !strings.HasPrefix(host, "127.") {
+		return false
+	}
+	for _, r := range host {
+		if (r < '0' || r > '9') && r != '.' {
+			return false
+		}
+	}
+	return true
 }

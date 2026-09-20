@@ -765,7 +765,7 @@
   {
     "caller_site": "internal/memory/consolidation.go",
     "expected_caller": "the session surface that records memory observations as they occur (the consolidation surface that observes during a session), which calls PromotionLadder.Observe per reference",
-    "reason": "The mechanical promotion lane is complete and tested. The review-queue CLI (P1-E07-W2-S14-T3) has since landed and does NOT call it: that surface is the HUMAN lane and drives Promote/Revert on the ledger directly, by design \u2014 the ladder's Observe is the auto lane, and a review action routed through it would record an observation nobody made. The remaining gap is therefore the surface that records observations during a session, which is still ahead. The forget pipeline (P1-E07-W2-S14-T4) has now landed too and does NOT call it either: forgetting retires a record, while the ladder records observations, and routing a retirement through it would count evidence nobody produced.",
+    "reason": "The mechanical promotion lane is complete and tested. The review-queue CLI (P1-E07-W2-S14-T3) has since landed and does NOT call it: that surface is the HUMAN lane and drives Promote/Revert on the ledger directly, by design — the ladder's Observe is the auto lane, and a review action routed through it would record an observation nobody made. The remaining gap is therefore the surface that records observations during a session, which is still ahead. The forget pipeline (P1-E07-W2-S14-T4) has now landed too and does NOT call it either: forgetting retires a record, while the ladder records observations, and routing a retirement through it would count evidence nobody produced.",
     "retire_ticket": "P1-E07-W2-S14-T3",
     "symbol": "internal/memory.NewPromotionLadder"
   },
@@ -786,7 +786,7 @@
   {
     "caller_site": "internal/migration/v1/paritycheck_verb.go",
     "expected_caller": "none by design; this package's own CI-gate test suite (TestParityChecker_GoldenCoverage) is the sole intended caller, matching internal/retrieval/eval's precedent",
-    "reason": "Golden-parity checking (TestParityChecker_GoldenCoverage and its siblings, all real end to end over the rebuilt index) is, by design, CI-gate infrastructure over this package's own testdata/v1-goldens/recall fixtures \u2014 the same shape as internal/retrieval/eval's LoadCorpus/RunKnownItem (R-16.9's CI-only evaluation harness, also testonly-allow-exempted in this file): its fixtures live under a relative testdata path that only resolves from this package's own directory, so it is not a function a shipped, installed binary could call against a real user's migration. No 07-CLI-COMMAND-TREE.md verb exists for it and none is proposed.",
+    "reason": "Golden-parity checking (TestParityChecker_GoldenCoverage and its siblings, all real end to end over the rebuilt index) is, by design, CI-gate infrastructure over this package's own testdata/v1-goldens/recall fixtures — the same shape as internal/retrieval/eval's LoadCorpus/RunKnownItem (R-16.9's CI-only evaluation harness, also testonly-allow-exempted in this file): its fixtures live under a relative testdata path that only resolves from this package's own directory, so it is not a function a shipped, installed binary could call against a real user's migration. No 07-CLI-COMMAND-TREE.md verb exists for it and none is proposed.",
     "retire_ticket": "UNOWNED",
     "symbol": "internal/migration/v1.NewParityChecker"
   },
@@ -814,7 +814,7 @@
   {
     "caller_site": "cmd/cascade/self_update.go",
     "expected_caller": "AA/S-55.T7's `cascade self-update` command, which calls DeferSelfUpdate(buildinfo.ResolvedInstallChannel()) before acting and returns ChannelDeferralError() when it reports true; retire this entry once that ticket lands",
-    "reason": "P1-E17-W4-S36-T5 implements the \u00a7D-33 install-channel deferral gate (node-managed installs must defer upgrades to the controller rollout) fully implemented and unit-tested, but the consuming command, `cascade self-update`, is AA/S-55.T7's own ticket and does not exist anywhere in this tree yet -- there is no self-update code path this ticket could wire the gate into.",
+    "reason": "P1-E17-W4-S36-T5 implements the §D-33 install-channel deferral gate (node-managed installs must defer upgrades to the controller rollout) fully implemented and unit-tested, but the consuming command, `cascade self-update`, is AA/S-55.T7's own ticket and does not exist anywhere in this tree yet -- there is no self-update code path this ticket could wire the gate into.",
     "retire_ticket": "P1-E27-W10-S55-T7",
     "symbol": "internal/nodes.DeferSelfUpdate"
   },
@@ -828,7 +828,7 @@
   {
     "caller_site": "internal/fleet/placement/filter.go",
     "expected_caller": "S-37.T1's placement filter, which P1-E18-W4-S37-T1 constructs; retire this entry when that lands",
-    "reason": "P1-E17-W4-S36-T2's capability-report membership test, built for S-37.T1's placement filter (02-TARGET-STRUCTURE \u00a7Key contracts: need{browser, docker, 4hr_runtime} -> Conductor selects node) -- S-37.T1 has not landed, so nothing calls it yet.",
+    "reason": "P1-E17-W4-S36-T2's capability-report membership test, built for S-37.T1's placement filter (02-TARGET-STRUCTURE §Key contracts: need{browser, docker, 4hr_runtime} -> Conductor selects node) -- S-37.T1 has not landed, so nothing calls it yet.",
     "retire_ticket": "P1-E18-W4-S37-T1",
     "symbol": "internal/nodes.HasCapability"
   },
@@ -977,8 +977,8 @@
   },
   {
     "caller_site": "internal/policy/evaluate.go",
-    "expected_caller": "the policy evaluation engine (04 \u00a7Epic I S-17.T2) and the first path that carries a corpus record beyond its owning scope",
-    "reason": "The TEAM carrier from P1-E09-W2-S17-T1. Its consumers are the policy evaluation engine and the sharing paths that carry a corpus record to the team; both are later tickets. Building the authorization rule before the callers that need it is the right order \u2014 leaving it unwired once a sharing path exists would not be.",
+    "expected_caller": "the policy evaluation engine (04 §Epic I S-17.T2) and the first path that carries a corpus record beyond its owning scope",
+    "reason": "The TEAM carrier from P1-E09-W2-S17-T1. Its consumers are the policy evaluation engine and the sharing paths that carry a corpus record to the team; both are later tickets. Building the authorization rule before the callers that need it is the right order — leaving it unwired once a sharing path exists would not be.",
     "retire_ticket": "P1-E09-W2-S17-T1",
     "symbol": "internal/policy.NewTeamCarrier"
   },
@@ -1013,7 +1013,7 @@
   {
     "caller_site": "cmd/cascade/provider_cmd.go",
     "expected_caller": "the `cascade init --config cascade-init.toml` command, which feeds each parsed AddRequest to internal/providers/intake.Add; retire this entry once that command lands",
-    "reason": "P1-E10-W3-S20-T1 implements the non-interactive [[providers]] intake directive parser per 08-INIT-CONFIG-SPEC.md \u00a72, but this ticket's files_scope covers only internal/providers/intake/* and cmd/cascade/provider_cmd.go (the `provider add` command) - it does not include a `cascade init` command, which is a separate, not-yet-landed ticket. ParseInitConfig is fully implemented and tested (TestParseInitConfig* in config_test.go) against the CASCADE_NO_INPUT and secret-literal rules; only the `cascade init --config` call site is missing.",
+    "reason": "P1-E10-W3-S20-T1 implements the non-interactive [[providers]] intake directive parser per 08-INIT-CONFIG-SPEC.md §2, but this ticket's files_scope covers only internal/providers/intake/* and cmd/cascade/provider_cmd.go (the `provider add` command) - it does not include a `cascade init` command, which is a separate, not-yet-landed ticket. ParseInitConfig is fully implemented and tested (TestParseInitConfig* in config_test.go) against the CASCADE_NO_INPUT and secret-literal rules; only the `cascade init --config` call site is missing.",
     "retire_ticket": "P1-E10-W3-S20-T1",
     "symbol": "internal/providers/intake.ParseInitConfig"
   },
@@ -1118,7 +1118,7 @@
   {
     "caller_site": "internal/retrieval/eval/verb.go",
     "expected_caller": "same as internal/retrieval/eval.LoadCorpus",
-    "reason": "R-16.9's measured verdict function. It is called by this ticket's own CI-gate tests and by internal/runtime's/internal/doctor's cross-package default-agreement checks, never by a running cascade binary \u2014 see LoadCorpus's entry in this file for why no CLI surface exists for it. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "reason": "R-16.9's measured verdict function. It is called by this ticket's own CI-gate tests and by internal/runtime's/internal/doctor's cross-package default-agreement checks, never by a running cascade binary — see LoadCorpus's entry in this file for why no CLI surface exists for it. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
     "retire_ticket": "UNOWNED",
     "symbol": "internal/retrieval/eval.FusionDefaultGate"
   },
@@ -1272,7 +1272,7 @@
   {
     "caller_site": "internal/runtime/hotreload.go",
     "expected_caller": "HotReloader.applyLive in internal/runtime/hotreload.go, in the change that gives the [secrets] section a typed consumer; retire together with the NewDetector entry",
-    "reason": "The [secrets] entropy_floor / confidence_threshold rows (08-INIT-CONFIG-SPEC \u00a73, R-16.47) are ratified and hot-reloadable, but internal/runtime does not yet hand any typed consumer its [secrets] section - docs/config-reference.md records that these sections currently live only in Config.Extra with no live consumer. The parser is written now so the reload path has something validated to call the moment the section is wired; Detector.Reload, its in-process counterpart, is exercised under -race today. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
+    "reason": "The [secrets] entropy_floor / confidence_threshold rows (08-INIT-CONFIG-SPEC §3, R-16.47) are ratified and hot-reloadable, but internal/runtime does not yet hand any typed consumer its [secrets] section - docs/config-reference.md records that these sections currently live only in Config.Extra with no live consumer. The parser is written now so the reload path has something validated to call the moment the section is wired; Detector.Reload, its in-process counterpart, is exercised under -race today. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
     "retire_ticket": "UNOWNED",
     "symbol": "internal/secrets.ParseDetectionConfig"
   },
@@ -1369,8 +1369,8 @@
   },
   {
     "caller_site": "internal/migrate/pews_migrate.go",
-    "expected_caller": "a future migration ticket that moves the PEWS tree's source of truth from YAML files to database-backed storage (06-FORGE-SPEC \u00a76.4's 'until then'), which would call Convert (or its direct successor) as the one-time migration step; retire this entry if/when that ticket lands, or if a phase-close tool adopts Convert directly",
-    "reason": "P1-E14-W3-S30-T3 (dogfood-convert P1 plan through PEWS engine) is itself the dogfood proof, not a shipped end-user feature: its own HOW section explicitly forbids adding a new CLI verb ('the ratified 07 pbd namespace is unchanged') and forbids a plan-Markdown parser or dep-grammar re-resolver. Convert is exercised two ways: TestDogfoodConvert (committed fixture trees, happy path plus every error path) and the env-guarded TestDogfoodConvertRealPlan (CASCADE_PBD_DOGFOOD_SRC), which converts the real, gitignored P1 tree locally and cross-checks the active ticket count against .plan-audit.py. 06-FORGE-SPEC \u00a76.4 frames this as an engine-conversion proof for a YAML tree that remains its own source of truth 'until then' \u2014 Convert has no reason to run outside a test or a future migration tool.",
+    "expected_caller": "a future migration ticket that moves the PEWS tree's source of truth from YAML files to database-backed storage (06-FORGE-SPEC §6.4's 'until then'), which would call Convert (or its direct successor) as the one-time migration step; retire this entry if/when that ticket lands, or if a phase-close tool adopts Convert directly",
+    "reason": "P1-E14-W3-S30-T3 (dogfood-convert P1 plan through PEWS engine) is itself the dogfood proof, not a shipped end-user feature: its own HOW section explicitly forbids adding a new CLI verb ('the ratified 07 pbd namespace is unchanged') and forbids a plan-Markdown parser or dep-grammar re-resolver. Convert is exercised two ways: TestDogfoodConvert (committed fixture trees, happy path plus every error path) and the env-guarded TestDogfoodConvertRealPlan (CASCADE_PBD_DOGFOOD_SRC), which converts the real, gitignored P1 tree locally and cross-checks the active ticket count against .plan-audit.py. 06-FORGE-SPEC §6.4 frames this as an engine-conversion proof for a YAML tree that remains its own source of truth 'until then' — Convert has no reason to run outside a test or a future migration tool.",
     "retire_ticket": "P1-E14-W3-S30-T3",
     "symbol": "plugins/pbd/internal/pews.Convert"
   },
@@ -1415,5 +1415,12 @@
     "reason": "P1-E09-W2-S18-T7 (Wave-2 hardening gate) fixed DEFECT-vector-leg-never-written-on-rebuild.md: internal/daemon/recall_index.go and cmd/cascade/doctor_recall_index.go used to wire a non-nil localvector.New(store) into lifecycle.ManagerOptions.Vectors with no Pipeline ever set, so Rebuild/Update could never write a vector row while doctor's Verify still counted the (always-empty) vector namespace and reported vector-incomplete on every install that had ever ingested real content. The only correct fix, per rebuild.go's own ManagerOptions.Vectors doc comment ('nil means no embedder is configured'), is to leave Vectors nil at both composition roots until a real embedding provider is genuinely configured -- there is no such provider wired anywhere in this build (embed.New and providers/embeddings.NewProviderEmbedder are themselves test-only per this same file). That removed localvector.New's only two production callers. Searched the full planning corpus (all 406 tickets, closed-ticket-manifest.json) for an open ticket that owns wiring a real embedding provider into the retrieval composition root; none exists -- this is a genuine, currently-unassigned product gap (DEFECT-vector-leg-never-written-on-rebuild.md's own 'Unblocks when' names it 'a T0/product decision, not this gate's to make'), not a wiring shortcut. Recorded UNOWNED rather than named against a closed ticket (which the orphan gate would flag) or this ticket itself (self-referential, refused outright); testonly-unowned-baseline.txt and testonly-debt-baseline.txt raised by one to match, disclosed in this ticket's journal.",
     "retire_ticket": "UNOWNED",
     "symbol": "providers/localvector.New"
+  },
+  {
+    "caller_site": "internal/conversation/reply.go",
+    "expected_caller": "P1-E45-W10-S89-T6 \"Deliver promised chat replies and cancellation\" -- its files_scope adds internal/conversation/reply.go, the reply pipeline and the first production code that will route conversation content. It reads the thread privacy_mode through the ThreadPrivacyStore surface and wraps the dispatch context with ContextWithThreadPrivacy before the conductor selects a lane. Nothing bars that import direction: internal/conversation imports no conductor today and conductor imports no conversation, so there is no cycle and no boundary_test/arch_test rule against it. Retire this entry in that change.",
+    "reason": "P1-E20-W5-S44-T2 builds the enforcement half of thread privacy modes: the (privacy_mode x lane_type) table, FILTER 0 in Router.Select, and the ErrSensitivityViolation refusal, all exercised end to end by internal/conductor/privacy_test.go. The producing half is wired and shipped too -- `cascade chat --private`/`--local-only` reaches conversation_thread_privacy through chat.append_turn's privacy_mode param, with a production caller at every hop. What has no production caller is the one seam that JOINS them, because the joining component does not exist: no daemon code generates an assistant reply yet (internal/plugins/cascadepa_wiring.go returns errReplyGenerationUnavailable), so no conversation-class task reaches Router.Select at all. This is NOT the R-14.283 shape of a seam whose caller exists and was never wired -- the caller is a ticket that has not run. Building the gate first is deliberate: S-89.T6 must not be the change that both introduces conversation routing AND decides how privacy is enforced on it.",
+    "retire_ticket": "P1-E45-W10-S89-T6",
+    "symbol": "internal/conductor.ContextWithThreadPrivacy"
   }
 ]

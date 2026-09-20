@@ -205,9 +205,9 @@ const (
 // conversationSchemaVersion is this package's MigrationSet target
 // version -- the next unused slot in the single global sequence. See this
 // file's SCHEMA VERSION doc comment. Bumped 7->8 by P1-E20-W5-S44-T3 for
-// the two new marker tables archive.go/retention.go's MigrationSet steps
-// add below (conversation_thread_archive, conversation_turn_tombstone).
-const conversationSchemaVersion = 8
+// the marker tables archive.go/retention.go add below; 8->9 by
+// P1-E20-W5-S44-T2 for conversation_thread_privacy (privacy.go).
+const conversationSchemaVersion = 9
 
 // SchemaVersion is conversationSchemaVersion exported for a future
 // composition root's reader-ceiling max(), matching registry/jobs's own
@@ -215,8 +215,7 @@ const conversationSchemaVersion = 8
 // ApplyConversationSchema.
 const SchemaVersion = conversationSchemaVersion
 
-// text/id/num/fk/uniqueIdx moved to archive.go under Art.10.3's 300-line
-// cap once this ticket's two new table steps landed -- same behavior.
+// text/id/num/fk/uniqueIdx moved to archive.go under Art.10.3's 300-line cap.
 
 // MigrationSet is the conversation domain's five-table schema: the three
 // from S-43.T1 plus conversation_thread_archive/conversation_turn_tombstone
@@ -236,6 +235,7 @@ func MigrationSet() migrate.MigrationSet {
 				Columns:     []migrate.ColumnDef{id("id"), text("thread_id"), num("seq"), text("role"), num("created_at")},
 				ForeignKeys: []migrate.ForeignKeyDef{fk("thread_id", tableThread)},
 			}},
+			privacyStep(),
 			uniqueIdx("idx_conversation_turn_thread_seq", tableTurn, "thread_id", "seq"),
 			{Kind: migrate.StepCreateTable, Description: "conversation_segment: append-only", Table: &migrate.TableDef{
 				Name:        tableSegment,

@@ -74,5 +74,33 @@ no turn or segment data is ever touched by archiving.
 a plain Go method -- `ListTurnsPage`, `ListThreadsPage`, `SearchTurns`,
 `ArchiveThread`, `UnarchiveThread`, `PruneTurns` -- for a future
 CLI/MCP surface to call. None of them are registered on the JSON-RPC
-registry yet: only `chat.append_turn`, `chat.get_thread`, and
-`chat.list_threads` are wire methods today.
+registry yet: `chat.append_turn`, `chat.get_thread`,
+`chat.list_threads` and `chat.search` are the wire methods today.
+
+## Thread privacy modes
+
+Every thread carries a privacy mode: one of the four §5.16 sensitivity
+tiers (`local-only`, `restricted`, `internal`, `public`).
+
+It lives in its own marker table, `conversation_thread_privacy`, rather
+than as a column on the thread row -- the typed migration DSL has no
+ALTER step, so adding a column to an existing table means authoring a new
+table, the same shape `conversation_thread_archive` already uses.
+
+**Absence means restricted.** A thread with no row in that table reads
+back `restricted`, and so does a thread that does not exist and a row
+whose stored text is not a tier name. The fail-closed default is
+therefore true by construction rather than by a branch someone could
+invert. `provider.SensitivityTier`'s own zero value is `restricted` for
+the same reason.
+
+`chat.append_turn` takes an optional `privacy_mode`, applied to the
+thread that call CREATES. Sent with an existing `thread_id` it is
+REFUSED, naming the thread: a caller that believes it privatised a thread
+and did not is the failure this prevents. The mode is written before the
+turn is committed, so there is no window in which a thread has content
+and reads as looser than it was created.
+
+`Adapter.SetThreadPrivacy` / `Adapter.ThreadPrivacy` are the Go surface.
+Enforcement is the conductor's -- see the security posture note on
+[thread privacy modes](https://github.com/acamarata/cascade/blob/main/docs/security-posture/egress-firewall.md).

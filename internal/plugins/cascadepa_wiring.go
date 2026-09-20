@@ -102,6 +102,12 @@ type appendTurnParams struct {
 	ThreadID string              `json:"thread_id"`
 	Role     string              `json:"role"`
 	Segments []appendSegmentWire `json:"segments"`
+	// PrivacyMode carries `chat --private` / `--local-only` as the §5.16
+	// tier NAME, matching cascade run's own wire choice: a name survives
+	// as itself, where SensitivityTier's numeric encoding would put the
+	// fail-closed tier at 0 and make an omitted field indistinguishable
+	// from an explicit "restricted".
+	PrivacyMode string `json:"privacy_mode,omitempty"`
 }
 
 type appendSegmentWire struct {
@@ -159,9 +165,10 @@ func (c *cascadePAClient) OneShot(ctx context.Context, req pacmd.OneShotRequest)
 		return pacmd.OneShotResult{}, err
 	}
 	params := appendTurnParams{
-		ThreadID: req.Thread,
-		Role:     "user",
-		Segments: []appendSegmentWire{{Kind: "text", Content: req.Prompt}},
+		ThreadID:    req.Thread,
+		Role:        "user",
+		Segments:    []appendSegmentWire{{Kind: "text", Content: req.Prompt}},
+		PrivacyMode: req.Privacy,
 	}
 	var result appendTurnResult
 	if err := rpc.Do(ctx, conversation.MethodAppendTurn, params, &result); err != nil {

@@ -22,6 +22,12 @@ type appendTurnParams struct {
 	ThreadID string              `json:"thread_id"`
 	Role     string              `json:"role"`
 	Segments []appendSegmentWire `json:"segments"`
+	// PrivacyMode is the §5.16 tier name a caller creating a thread wants
+	// it created under ("local-only", "restricted", "internal",
+	// "public"). Meaningful ONLY when thread_id is empty, because that is
+	// the request that creates a thread; see handleAppendTurn for why
+	// sending it on a continuation is refused rather than ignored.
+	PrivacyMode string `json:"privacy_mode,omitempty"`
 }
 
 type appendSegmentWire struct {

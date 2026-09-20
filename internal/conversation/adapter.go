@@ -125,13 +125,9 @@ func (a *Adapter) handleAppendTurn(ctx context.Context, raw json.RawMessage) (an
 	if err != nil {
 		return nil, ErrMalformedTurnPayload
 	}
-	// A caller that named no thread is starting one, and the id is minted
-	// HERE rather than client-side: see threadid.go (R-14.285).
-	if params.ThreadID == "" {
-		params.ThreadID, err = NewThreadID()
-		if err != nil {
-			return nil, err
-		}
+	params.ThreadID, err = a.resolveAppendThread(ctx, params)
+	if err != nil {
+		return nil, err
 	}
 
 	existing, err := a.store.ListTurns(ctx, params.ThreadID)

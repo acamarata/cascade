@@ -1,6 +1,8 @@
 // Purpose: the Router - the conductor's sole lane-selection entry point
-//   (R-40.X11). Select applies five sequential filters (capability,
-//   sensitivity, health, quota/spill, cost) over ONE immutable metadata
+//   (R-40.X11). Select applies the thread-privacy gate (FILTER 0,
+//   privacy.go, P1-E20-W5-S44-T2 - a no-op when no conversation thread is
+//   in scope) and then five sequential filters (capability, sensitivity,
+//   health, quota/spill, cost) over ONE immutable metadata
 //   snapshot taken at entry (R-21.213), and returns the pkg/provider SDK
 //   Selection type the frozen Router interface (S-22.T1's model.go)
 //   already declares.
@@ -175,6 +177,14 @@ func (r *DefaultRouter) SelectExplain(ctx context.Context, req provider.ModelReq
 	}
 
 	cands := excludeNamed(snap.lanes, exclude)
+
+	// FILTER 0, ahead of capability: a thread's privacy_mode decides which
+	// lanes its work may reach AT ALL, and a refusal here is reported as a
+	// privacy refusal rather than as a capability miss. See privacy.go.
+	cands, flags, err = filterPrivacy(ctx, cands, flags)
+	if err != nil {
+		return provider.Selection{}, flags, err
+	}
 
 	cands, flags, err = filterCapability(cands, req, flags)
 	if err != nil {

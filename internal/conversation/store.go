@@ -59,6 +59,9 @@ type Store interface {
 	// ListThreads. Archived threads (archive.go) are excluded unless
 	// filter.IncludeArchived is set.
 	ListThreadsPage(ctx context.Context, filter PaginationFilter) (ThreadPage, error)
+	// ThreadPrivacyStore is the privacy_mode half, declared beside its
+	// implementation in privacy.go rather than inline here.
+	ThreadPrivacyStore
 	// SearchTurns runs a parameterised FTS5 MATCH query over segment
 	// content (search.go), ranked by SQLite's own bm25 relevance.
 	// ErrSearchUnavailable with no fts5 index; adversarial MATCH syntax

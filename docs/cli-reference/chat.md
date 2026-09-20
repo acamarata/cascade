@@ -12,6 +12,8 @@ cascade chat [prompt] [flags]
 | `--thread` | continue an existing thread by id |
 | `--json` | emit `{turn_id, thread_id, content}` |
 | `--quiet` | suppress the metadata headers in one-shot output |
+| `--private` | create the thread `restricted` |
+| `--local-only` | create the thread `local-only` |
 
 With a prompt it sends one turn and exits. With no prompt it opens the
 interactive terminal UI; under `CASCADE_NO_INPUT=1` with no prompt it
@@ -60,3 +62,32 @@ thread row is created on first use. A run with no `--thread` currently
 needs one supplied — minting an id for a fresh conversation belongs with
 the `cascade_cpa_send` MCP tool's own thread-creation rule (T/S-43.T4),
 so that both surfaces mint the same way rather than two ways.
+
+## Privacy modes
+
+`--private` and `--local-only` set the thread's privacy mode, one of the
+four §5.16 sensitivity tiers, at the moment the thread is created:
+
+| Flag | Mode | What it refuses at routing |
+|---|---|---|
+| `--local-only` | `local-only` | every lane that is not on this machine |
+| `--private` | `restricted` | every lane whose destination cannot be resolved |
+| neither | `restricted` | the same as `--private`; this is the fail-closed default |
+
+The two flags name different tiers, so passing both is a usage error
+rather than a precedence rule -- a command that says two things gets an
+answer, not a silent choice between them.
+
+A mode is set on the request that CREATES a thread. Passing `--private`
+together with `--thread <id>` is refused, naming the thread: an existing
+thread's mode is not changed, and answering nothing would leave you
+believing it had been.
+
+Not passing a flag is not the same as passing `--private`, even though
+both yield `restricted`. Without a flag the CLI sends no mode at all and
+the daemon applies the default; with `--private` the thread carries a
+mode you chose. The distinction is what an audit of "which threads did
+someone deliberately mark" reads.
+
+Enforcement is the router's, not this command's: see
+[Thread privacy modes](../security-posture/egress-firewall.md).

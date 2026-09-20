@@ -48,6 +48,11 @@ type OneShotRequest struct {
 	Thread string
 	// Prompt is the user's message text.
 	Prompt string
+	// Privacy is the §5.16 tier NAME this thread should be created under
+	// ("local-only" or "restricted"), or "" to send none and let the
+	// daemon apply its own fail-closed default. Only meaningful when
+	// Thread is empty: that is the request that creates a thread.
+	Privacy string
 }
 
 // OneShotResult is the adapter's reply to a OneShotRequest: the identifiers
@@ -159,6 +164,12 @@ type chatOptions struct {
 	thread string
 	json   bool
 	quiet  bool
+	// private and localOnly are the 07-CLI-COMMAND-TREE per-thread privacy
+	// modes. They are mutually exclusive and BOTH optional: neither one
+	// set is not "no privacy", it is §5.16's fail-closed restricted, which
+	// the daemon applies whether or not this command says so.
+	private   bool
+	localOnly bool
 }
 
 // NewChatCommand builds the `chat` cobra command cascade-pa's commands.go
@@ -181,6 +192,9 @@ func NewChatCommand() *cobra.Command {
 			if opts.prompt == "" && len(args) > 0 {
 				opts.prompt = args[0]
 			}
+			if _, err := resolveChatPrivacy(opts); err != nil {
+				return err
+			}
 			return runChat(cc, opts, osLookupEnv)
 		},
 	}
@@ -188,6 +202,10 @@ func NewChatCommand() *cobra.Command {
 	c.Flags().StringVar(&opts.thread, "thread", "", "continue an existing thread by id")
 	c.Flags().BoolVar(&opts.json, "json", false, "emit a structured JSON result: {turn_id, thread_id, content}")
 	c.Flags().BoolVar(&opts.quiet, "quiet", false, "suppress metadata headers in one-shot output")
+	c.Flags().BoolVar(&opts.private, "private", false,
+		"create the thread restricted: its content may not ride a lane whose destination cannot be resolved")
+	c.Flags().BoolVar(&opts.localOnly, "local-only", false,
+		"create the thread local-only: its content may never leave this machine")
 	return c
 }
 
@@ -210,8 +228,12 @@ func runChat(cc *cobra.Command, opts chatOptions, lookupEnv envLookup) error {
 		return runTUI(ctx, cc, opts.thread)
 	}
 
+	privacy, err := resolveChatPrivacy(opts)
+	if err != nil {
+		return err
+	}
 	client := activeClient()
-	res, err := client.OneShot(ctx, OneShotRequest{Thread: opts.thread, Prompt: opts.prompt})
+	res, err := client.OneShot(ctx, OneShotRequest{Thread: opts.thread, Prompt: opts.prompt, Privacy: privacy})
 	if err != nil {
 		return err
 	}
