@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-20T19:33:09Z",
+  "generated_at": "2026-09-20T20:13:30Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5164,6 +5164,29 @@
       ]
     },
     {
+      "name": "conductor.privacy",
+      "sites": [
+        {
+          "file": "internal/conductor/privacy.go",
+          "line": 43,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T2",
+          "raw": "conductor.privacy/ADD (P1-E20-W5-S44-T2)."
+        },
+        {
+          "file": "internal/conductor/privacy_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E20-W5-S44-T2",
+          "raw": "conductor.privacy (TEST) — P1-E20-W5-S44-T2."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "conductor.router",
       "sites": [
         {
@@ -5182,7 +5205,7 @@
         },
         {
           "file": "internal/conductor/router.go",
-          "line": 19,
+          "line": 21,
           "status": "ADD",
           "ticket": "P1-E11-W3-S22-T2",
           "raw": "conductor.router/ADD (P1-E11-W3-S22-T2)."
@@ -9110,6 +9133,21 @@
       ]
     },
     {
+      "name": "internal.conversation.privacy",
+      "sites": [
+        {
+          "file": "internal/conversation/privacy.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T2",
+          "raw": "internal.conversation.privacy/ADDED (P1-E20-W5-S44-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.conversation.retention",
       "sites": [
         {
@@ -12944,6 +12982,21 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal/conversation:privacy",
+      "sites": [
+        {
+          "file": "internal/conversation/privacy_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E20-W5-S44-T2",
+          "raw": "internal/conversation:privacy (TEST) — P1-E20-W5-S44-T2."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -20730,6 +20783,29 @@
       ]
     },
     {
+      "name": "plugins/cascade-pa:cmd:chat privacy flags",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/cmd/chat_privacy.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T2",
+          "raw": "plugins/cascade-pa:cmd:chat privacy flags (ADD) — P1-E20-W5-S44-T2."
+        },
+        {
+          "file": "plugins/cascade-pa/cmd/chat_privacy_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E20-W5-S44-T2",
+          "raw": "plugins/cascade-pa:cmd:chat privacy flags (TEST) — P1-E20-W5-S44-T2."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/cascade-pa:mcp-tools",
       "sites": [
         {
@@ -24583,7 +24659,7 @@
       ]
     }
   ],
-  "total_sites": 2360,
-  "unspecified_count": 69,
-  "multi_status_count": 47
+  "total_sites": 2366,
+  "unspecified_count": 70,
+  "multi_status_count": 49
 }
