@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-20T14:06:05Z",
+  "generated_at": "2026-09-20T14:23:10Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3214,7 +3214,7 @@
       "sites": [
         {
           "file": "cmd/cascade/chat_platform_regression_test.go",
-          "line": 10,
+          "line": 9,
           "status": "ADD",
           "ticket": "P1-E45-W10-S88-T2",
           "raw": "cmd/cascade chat platform boundary (ADD) — P1-E45-W10-S88-T2."
