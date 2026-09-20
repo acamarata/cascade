@@ -4,8 +4,7 @@ package main
 //   straight through — chat registration must COMPILE AND WORK on every
 //   supported platform, while the daemon it normally runs under stays
 //   absent on tier-2. UNTAGGED ON PURPOSE: a platform-tagged test could
-//   not have caught F1 — the half that was missing is the half that would
-//   not have compiled the test either.
+//   not have caught F1.
 //
 // SPORT: cmd/cascade chat platform boundary (ADD) — P1-E45-W10-S88-T2.
 
@@ -60,15 +59,20 @@ func chatRegistryForTest(t *testing.T) *rpc.Registry {
 	clock := runtime.NewSystemClock()
 	registry := rpc.NewRegistry()
 	bus := events.New(storetest.NewMemStore(), clock)
-	err := wireChatHandlers(context.Background(), registry, fakeDaemonPaths{root: t.TempDir()}, clock, bus)
+	// shortCascadeHome, not t.TempDir(): wireChatHandlers holds its sqlite
+	// handle for the daemon process's lifetime by design (see its header),
+	// and Windows will not delete an open file — t.TempDir()'s cleanup
+	// FAILED THIS TEST on the windows/amd64 lane of run 35515465618, the
+	// first run in which that lane compiled at all. This helper's RemoveAll
+	// is best-effort; the OS reclaims the directory.
+	err := wireChatHandlers(context.Background(), registry, fakeDaemonPaths{root: shortCascadeHome(t)}, clock, bus)
 	if err != nil {
 		t.Fatalf("wireChatHandlers on this platform: %v", err)
 	}
 	return registry
 }
 
-// assertChatMethodBound fails only on -32601: a params-less append is a
-// malformed payload, a good answer; only -32601 means nothing answered.
+// assertChatMethodBound fails only on -32601: nothing answered at all.
 func assertChatMethodBound(t *testing.T, registry *rpc.Registry, method string) {
 	t.Helper()
 	req, parseErr := rpc.Parse([]byte(`{"jsonrpc":"2.0","id":1,"method":"` + method + `","params":{}}`))
@@ -82,7 +86,6 @@ func assertChatMethodBound(t *testing.T, registry *rpc.Registry, method string) 
 	}
 }
 
-// supportedTuples: the matrix .github/workflows/ci.yml builds.
 var supportedTuples = []struct{ GOOS, GOARCH string }{
 	{"darwin", "arm64"},
 	{"linux", "amd64"},
@@ -101,8 +104,7 @@ type platformPackage struct {
 // TestP1ChatPlatformCompilation is audit F1 turned into a gate: F1 was a
 // SYMBOL TABLE bug, so this asserts the closure property on every tuple CI
 // builds — every package-level name REFERENCED in the file set go keeps
-// for a platform is also DECLARED in it. go/build's own evaluator honours
-// `//go:build` and the implicit `_windows.go` rule as the compiler does.
+// for a platform is also DECLARED in it, using go/build's own evaluator.
 func TestP1ChatPlatformCompilation(t *testing.T) {
 	pkgs := loadPlatformPackages(t)
 
@@ -137,9 +139,8 @@ func TestP1ChatPlatformCompilation(t *testing.T) {
 	t.Logf("checked %d package-level references across %d platform tuples", checked, len(pkgs))
 }
 
-// TestP1WindowsChatRefusal pins the OTHER half: making the chat wiring
-// portable must not have given tier-2 a daemon. The refusals live behind
-// `//go:build windows`, so this runs the portable one they route into.
+// TestP1WindowsChatRefusal pins the OTHER half: portable chat wiring must
+// not have given tier-2 a daemon. It runs the portable refusal seam.
 func TestP1WindowsChatRefusal(t *testing.T) {
 	pkgs := loadPlatformPackages(t)
 	byGOOS := map[string]*platformPackage{}
@@ -277,8 +278,7 @@ func collectPackageDecls(file *ast.File, base string, into map[string]string) {
 }
 
 // collectPackageRefs records the two unqualified-identifier positions a
-// build tag can break: `name(...)` and `Name{...}`. Narrower than "every
-// identifier" on purpose — it cannot mistake a field or selector for one.
+// build tag can break: `name(...)` and `Name{...}`.
 func collectPackageRefs(file *ast.File, base string, into map[string]string) {
 	ast.Inspect(file, func(n ast.Node) bool {
 		var name string

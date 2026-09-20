@@ -48,6 +48,14 @@ func (f *fakeProbeTicker) Stop() {
 // Prober loop — never a synthetic call to nodes.NewProber from the test
 // itself.
 //
+// WHY THE LOOP BELOW ALSO WATCHES errCh: "presence never transitioned" is
+// what this poll says when the subsystem never started at all. On the
+// windows/amd64 lane of run 35515465618 — the first run in which that lane
+// compiled, the Windows build having been broken until P1-E45-W10-S88-T2 —
+// that message was the only thing anyone saw, and it names a symptom rather
+// than runNodeServe's own typed error. Reporting the error when it is
+// already available turns an opaque red into a diagnosable one.
+//
 // MUTATION PROOF (R-16.80 Ruling 3, run manually this session and
 // recorded in the ticket journal): commenting out
 // startNodeServeBackgroundLoops' call to startPresenceSubsystems makes
@@ -92,9 +100,17 @@ func TestNodeServeWiresRealPresenceProbeLoop(t *testing.T) {
 	// if Prober.Run has not yet reached its select loop.
 	ticker.ch <- struct{}{}
 
+	waitForPresenceUnknown(t, store, peer.NodeID, errCh)
+}
+
+// waitForPresenceUnknown polls until the real Prober loop flips the record,
+// or says why it never did. Split out of the test above to keep that
+// function under Art.10.3's 50-line cap.
+func waitForPresenceUnknown(t *testing.T, store *nodes.RecordStore, id string, errCh chan error) {
+	t.Helper()
 	deadline := time.After(5 * time.Second)
 	for {
-		rec, err := store.Get(peer.NodeID)
+		rec, err := store.Get(id)
 		if err != nil {
 			t.Fatalf("Get (poll): %v", err)
 		}
@@ -102,6 +118,10 @@ func TestNodeServeWiresRealPresenceProbeLoop(t *testing.T) {
 			return // the real Prober loop, driven from runNodeServe, made the transition
 		}
 		select {
+		case serveErr := <-errCh:
+			errCh <- serveErr // cap 1, so this cannot block; t.Cleanup still drains it
+			t.Fatalf("runNodeServe returned before presence transitioned: %v (last observed presence = %q)",
+				serveErr, rec.Presence)
 		case <-deadline:
 			t.Fatalf("presence never transitioned to unknown; last observed = %q", rec.Presence)
 		case <-time.After(10 * time.Millisecond):
