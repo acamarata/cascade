@@ -103,3 +103,55 @@ in-process against the local `cascade.db` file. Both paths return
 identical data. The command never prompts, is unaffected by
 `CASCADE_NO_INPUT`, and runs on Windows exactly like every other
 one-shot, daemonless command.
+
+## Rolling summaries
+
+When a block of content does not fit the remaining token budget, the context
+composer asks the rolling summarizer for a shorter stand-in. Summaries are
+kept at three granularities:
+
+| Level | Scope | Source window | Summary bound |
+|---|---|---|---|
+| `turn-window` | the recent turns of one thread | 4000 tokens | 500 tokens |
+| `thread` | one whole topic thread | 16000 tokens | 250 tokens |
+| `epoch` | a period spanning several threads | 64000 tokens | 125 tokens |
+
+**What selects a level.** The remaining budget does. A level is affordable
+when its whole summary still fits what is left, so a large remaining budget
+gets the least compressed level and a tight one gets the most compressed. The
+boundaries are the two higher-detail levels' own bounds: 500 tokens or more
+selects `turn-window`, 250 to 499 selects `thread`, and anything below 250
+selects `epoch`. All three windows and bounds are code defaults. There is no
+configuration section for them.
+
+**Rolling, not rebuilt.** A regeneration is handed the summary already on
+record together with the new content window, and the model is asked to update
+the old summary so it also covers the new material. A summary therefore keeps
+carrying facts from content that has since fallen out of the window, instead
+of being rebuilt from whatever slice of history happens to fit.
+
+**Staleness and failure are never served silently.** A stored summary records
+the version of the source it was generated from. When the current source
+differs, the summary is stale and a regeneration runs behind a guard keyed on
+the entity, the level and the source version, so concurrent callers of the
+same version share one regeneration while a caller holding newer content
+starts its own. If that regeneration fails, the engine reports the failure and
+the staleness as events naming which stage failed, and the composer is given
+an error rather than the old text, and it drops the block from the assembly
+and records why. A summary that describes a previous version of the source
+never reaches an assembly that claims to describe the current one.
+
+**Size bound.** A model response longer than its level's bound is a failed
+summarization, not a large one. It is not stored and not served, and the
+failure names the size that broke the bound.
+
+**Cheap-lane routing.** Every summarization is dispatched through the
+Conductor with task class `summarize`, whose taxonomy row carries a cheap lane
+affinity and low reasoning requirement. The summarizer names the task class
+and nothing else about the lane: which lane serves it is the router's
+decision.
+
+**Sensitivity is inherited.** A summarization request declares no policy and
+leaves its sensitivity tier unset, which resolves to `restricted`. The thread's
+own privacy mode is applied by the router's first filter, from the request
+context, on every selection. The summarizer cannot widen it.

@@ -1,0 +1,41 @@
+# cascade.plugin/v2 manifest for the "cascade-pbd" first-party plugin
+# (02-TARGET-STRUCTURE.md §First-party plugin catalog v1:
+# "cascade-pbd | builtin | N | opt-in").
+# Provenance: pkg/plugin/testdata/README.md.
+
+id            = "cascade-pbd"
+name          = "Cascade PBD"
+schema        = "cascade.plugin/v2"
+version       = "0.1.0"
+host_version  = ">=2.0.0"
+runtime       = "builtin"
+requires      = ["storage.domain"]
+
+[[provides.intents]]
+name        = "plan-phase"
+description = "Plan a new phase's epics, waves, sprints, and tickets."
+
+[[provides.intents]]
+name        = "build-ticket"
+description = "Execute a single ticket's tasks and checks to completion."
+
+[[provides.tools]]
+name        = "pbd.plan"
+description = "Generate or update the phase's PEWS YAML state from a brief."
+
+[[provides.tools]]
+name        = "pbd.build"
+description = "Run one ticket's build-execution loop against its contract."
+
+[[provides.domains]]
+name        = "pbd"
+description = "Namespaced storage domain holding phase/epic/wave/sprint/ticket state."
+
+[[provides.commands]]
+name        = "pbd"
+description = "Phase-based development: plan and build phases from the CLI."
+rpc_method  = "plugin.cascade-pbd.status"
+
+[[permissions]]
+name        = "storage.domain"
+description = "Read and write the pbd storage domain (phase/ticket state)."

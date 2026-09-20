@@ -91,24 +91,31 @@
     "symbol": "internal/context.GenerateCCInstructions"
   },
   {
-    "caller_site": "internal/conversation/compose.go",
-    "expected_caller": "the conversation acceptance flow landed by P1-E21-W5-S46-T5, which constructs a Composer over a real TokenCounter and calls Compose per request; retire this entry when that lands",
-    "reason": "P1-E21-W5-S46-T1 builds the context Composer as a standalone, fully-tested unit (bounded-context invariant table + generated matrix, composer_invariant_test.go). Its production caller is the conversation acceptance flow that assembles a real per-request context from tier+memory+retrieval+history content, which is S-46.T5 ('Verify topic auto-filing and bounded-context acceptance', same sprint), explicitly out of this ticket's files_scope (internal/context/composer_*.go and testdata only). T4's topics/threads CLI may also become a caller.",
-    "retire_ticket": "P1-E21-W5-S46-T5",
+    "caller_site": "internal/conversation/reply.go",
+    "expected_caller": "the chat reply pipeline landed by P1-E45-W10-S89-T6, whose files_scope adds internal/conversation/reply.go: it constructs a Composer over a real TokenCounter and calls Compose to assemble the per-turn context it sends through the Conductor. Retire this entry when that lands.",
+    "reason": "P1-E21-W5-S46-T1 builds the context Composer as a standalone, fully-tested unit (bounded-context invariant table + generated matrix, composer_invariant_test.go). Its production caller is the first place a real per-request context is assembled from tier+memory+retrieval+history content for a chat turn, which is the reply pipeline of P1-E45-W10-S89-T6 ('Deliver promised chat replies and cancellation'), explicitly out of this ticket's files_scope (internal/context/composer_*.go and testdata only). CORRECTION (P1-E21-W5-S46-T2 rework): this entry previously named internal/conversation/compose.go under retire_ticket P1-E21-W5-S46-T5, and no ticket in the phase adds that file -- S-46.T5 is the topic-auto-filing and bounded-context acceptance ticket and adds no composition root. The promise was therefore unfalsifiable as written.",
+    "retire_ticket": "P1-E45-W10-S89-T6",
     "symbol": "internal/context.NewComposer"
   },
   {
-    "caller_site": "internal/conversation/compose.go",
+    "caller_site": "internal/conversation/reply.go",
+    "expected_caller": "the same chat reply pipeline named in internal/context.NewComposer's entry above (P1-E45-W10-S89-T6, whose files_scope adds internal/conversation/reply.go): it constructs a real Summarizer via NewSummarizer (a provider.ModelExecutor, a provider.Store, a provider.TokenCounter, a Clock and the daemon's event publisher) and passes it as NewComposer's SummarizerGetter argument. Retire this entry when that lands.",
+    "reason": "P1-E21-W5-S46-T2 builds the rolling-summary engine (Summarizer: GetSummary's entity/granularity-keyed regeneration, storage round-trip via the B/S-02 provider.Store abstraction, version-keyed single-flight guard, and the Summarize method satisfying composer_types.go's SummarizerGetter seam) as a standalone, fully-tested unit -- summarizer_core_test.go, summarizer_dispatch_test.go, summarizer_rolling_test.go, summarizer_degrade_test.go, summarizer_concurrency_test.go, summarizer_cheap_lane_test.go. Its production caller is the same reply pipeline that first constructs a Composer (see NewComposer's own entry above, same file, same ticket): this ticket's files_scope is limited to internal/context/summarizer_*.go and includes no composition-root file. T1 and T2 share no compile-time dependency by design (T2 depends only on the SummarizerGetter interface T1 declares), so neither ticket's files_scope can wire the other in. CORRECTION (this ticket's rework): the entry previously named internal/conversation/compose.go under retire_ticket P1-E21-W5-S46-T5, a file no ticket in the phase adds.",
+    "retire_ticket": "P1-E45-W10-S89-T6",
+    "symbol": "internal/context.NewSummarizer"
+  },
+  {
+    "caller_site": "internal/conversation/reply.go",
     "expected_caller": "the conversation acceptance flow landed by P1-E21-W5-S46-T5, which tags memory/SOUL-store content with SlotKindMemory before calling Compose; retire this entry when that lands",
-    "reason": "Composer's SlotKind vocabulary (tier/memory/retrieval/history) is exercised end-to-end by this ticket's own tests, but no production caller tags a real Slot with SlotKindMemory until a real memory/SOUL-store reader is wired into the Composer by S-46.T5. Same shape and same owner as internal/context.NewComposer above.",
-    "retire_ticket": "P1-E21-W5-S46-T5",
+    "reason": "Composer's SlotKind vocabulary (tier/memory/retrieval/history) is exercised end-to-end by this ticket's own tests, but no production caller tags a real Slot with SlotKindMemory until a real memory/SOUL-store reader is wired into the Composer by S-46.T5. Same shape and same owner as internal/context.NewComposer above. [2026-09-21: caller_site was internal/conversation/compose.go under P1-E21-W5-S46-T5, a file no contract adds (S-46.T5 adds only tests and a README), so the promise could never be checked; repointed with the NewComposer/NewSummarizer entries to the reply pipeline, whose contract adds internal/conversation/reply.go.]",
+    "retire_ticket": "P1-E45-W10-S89-T6",
     "symbol": "internal/context.SlotKindMemory"
   },
   {
-    "caller_site": "internal/conversation/compose.go",
+    "caller_site": "internal/conversation/reply.go",
     "expected_caller": "the conversation acceptance flow landed by P1-E21-W5-S46-T5, which tags fused retrieval chunks with SlotKindRetrieval before calling Compose; retire this entry when that lands",
-    "reason": "Same shape as internal/context.SlotKindMemory directly above: no production caller tags a real Slot with SlotKindRetrieval until S-46.T5 wires retrieval hits into the Composer.",
-    "retire_ticket": "P1-E21-W5-S46-T5",
+    "reason": "Same shape as internal/context.SlotKindMemory directly above: no production caller tags a real Slot with SlotKindRetrieval until S-46.T5 wires retrieval hits into the Composer. [2026-09-21: caller_site was internal/conversation/compose.go under P1-E21-W5-S46-T5, a file no contract adds (S-46.T5 adds only tests and a README), so the promise could never be checked; repointed with the NewComposer/NewSummarizer entries to the reply pipeline, whose contract adds internal/conversation/reply.go.]",
+    "retire_ticket": "P1-E45-W10-S89-T6",
     "symbol": "internal/context.SlotKindRetrieval"
   },
   {
@@ -1422,5 +1429,12 @@
     "reason": "P1-E20-W5-S44-T2 builds the enforcement half of thread privacy modes: the (privacy_mode x lane_type) table, FILTER 0 in Router.Select, and the ErrSensitivityViolation refusal, all exercised end to end by internal/conductor/privacy_test.go. The producing half is wired and shipped too -- `cascade chat --private`/`--local-only` reaches conversation_thread_privacy through chat.append_turn's privacy_mode param, with a production caller at every hop. What has no production caller is the one seam that JOINS them, because the joining component does not exist: no daemon code generates an assistant reply yet (internal/plugins/cascadepa_wiring.go returns errReplyGenerationUnavailable), so no conversation-class task reaches Router.Select at all. This is NOT the R-14.283 shape of a seam whose caller exists and was never wired -- the caller is a ticket that has not run. Building the gate first is deliberate: S-89.T6 must not be the change that both introduces conversation routing AND decides how privacy is enforced on it.",
     "retire_ticket": "P1-E45-W10-S89-T6",
     "symbol": "internal/conductor.ContextWithThreadPrivacy"
+  },
+  {
+    "caller_site": "internal/plugins/cascadepa_install_wiring.go",
+    "expected_caller": "P1-E24-W5-S50-T4 \"Conversational install: propose, confirm, install, resume\" -- 31-CONTINUOUS-BUILD-GUIDE.md's S50T4 alias maps the ticket's historical pa.go wording to plugins/cascade-pa/plugin.go and commands.go plus this planned internal/plugins/cascadepa_install_wiring.go host seam (guide 31 line 48 authorizes that planned file). That flow's propose step is exactly a resolver.NewIntentResolver().Resolve(ctx, installed, verifiedIndex, intent) call mapping an unmet intent to candidate plugins before proposing one to the user, per this ticket's own full_desc (\"consumed first by the conversational install flow\"). Retire this entry once that file lands and calls NewIntentResolver.",
+    "reason": "P1-E24-W5-S50-T3 builds the Resolver interface (pkg/plugin/intents.go, exempt from this gate -- pkg is the public SDK surface) and its internal/plugins/resolver implementation, fully tested end to end (installed-first, registry ranking, ambiguity, fail-closed) via resolver_test.go, resolver_ranking_test.go and FuzzIntentResolve. No composition-root file wires internal/plugins/resolver.NewIntentResolver into a live command path yet, and none can today: S-50.T2 (`cascade plugin search`) is itself unbuilt -- there is no cmd/cascade/plugin_search.go in the tree -- and even once it lands it is query-ranking over RegistryClient.Search, not intent binding, so it would not call this symbol. Search answers \"what matches these words\"; the resolver answers \"which plugin provides this intent\". S-50.T4's host seam is the ticket's own documented first consumer, verified absent in the tree at dispatch time.",
+    "retire_ticket": "P1-E24-W5-S50-T4",
+    "symbol": "internal/plugins/resolver.NewIntentResolver"
   }
 ]

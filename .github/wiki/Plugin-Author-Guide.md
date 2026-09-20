@@ -506,3 +506,64 @@ delivers its HTTP response to your process. This is a transport-layer
 gap tracked in `docs/security-posture.md` §Plugin host boundary
 enforcement, not a plugin-author-facing behavior change: a denied call
 still behaves as documented above.
+
+## 12. Intent resolution
+
+An intent is a named capability your plugin declares under
+`provides.intents` (§1). When the host has an intent string in hand and no
+plugin bound to it yet, it asks the intent resolver which plugin should
+satisfy it. This section describes what the resolver does with your
+declarations, so you can predict whether your plugin will be chosen.
+
+**Installed first.** The resolver scans the installed plugins before it
+looks at the registry at all. A plugin is considered only if the host has
+it enabled: a disabled plugin is never a candidate, whatever its manifest
+declares. The match is on the intent name, compared case-insensitively
+after trimming surrounding whitespace, so `plan-phase` and `PLAN-Phase`
+select the same plugin. Exactly one enabled installed match ends the
+lookup, and the registry is not consulted.
+
+**Registry tiers.** If no installed plugin matches, the resolver ranks the
+entries in the verified registry index. The registry index publishes an
+id, a name, a description, and free-text tags for each plugin; it does not
+publish `provides.intents`. Tags are therefore how you make an entry
+findable by intent: publish the intent name as a tag. Three tiers, in
+order of strength:
+
+1. **Exact tag.** One of the entry's tags equals the intent.
+2. **Tag prefix.** One of the entry's tags has the intent as a prefix.
+   The intent `lint` matches the tag `linter`. The direction is one way
+   only: the tag `lint` does not match the intent `linter`.
+3. **Keyword.** The intent appears somewhere inside the entry's name or
+   description.
+
+A stronger tier always wins outright, and candidates within one tier are
+ordered by plugin id so the result is the same on every call. The entry's
+id is deliberately not matched at any tier. An id that happens to read
+like an intent is a naming coincidence, not a declaration, so name the
+intent in your tags if you want the entry to surface for it. Weaker
+matches are kept in the result behind the winner rather than discarded, so
+a caller can show alternatives.
+
+**Ambiguity is refused, not guessed.** If two or more candidates tie at
+the strongest tier, the resolver returns an ambiguity carrying the whole
+ranked list plus the size of the tied group, and it installs nothing. The
+caller decides how to ask the user which one to use. Nothing is silently
+dropped to break a tie, and no plugin is picked just because it sorted
+first. Two enabled installed plugins declaring the same intent is the same
+situation and gets the same answer.
+
+**A registry candidate needs a verified index.** The resolver will not
+read an index it cannot prove was signed. It accepts only a verified-index
+witness, a value that can be produced only by running the real signature
+verification over the raw index bytes; there is no way to build one around
+that check. With no witness the resolver refuses outright rather than
+returning a partial answer. In practice this means a tampered or unsigned
+index yields no candidates at all, and your plugin can be resolved from
+the registry only while the index carrying it verifies. Installed-first
+resolution is unaffected, because it never reads the index.
+
+**A blank intent is a refusal.** An empty or whitespace-only intent string
+is rejected as invalid input, which is a different answer from "nothing
+provides this intent". A caller that cannot tell the two apart is a caller
+with a bug, so the resolver keeps them separate.
