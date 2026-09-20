@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-20T22:39:27Z",
+  "generated_at": "2026-09-20T23:50:09Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -906,8 +906,8 @@
       "name": "N/S-28.T1",
       "sites": [
         {
-          "file": "internal/conversation/topics/eval.go",
-          "line": 16,
+          "file": "internal/conversation/topics/eval_harness_test.go",
+          "line": 43,
           "status": "",
           "raw": "N/S-28.T1"
         }
@@ -13109,10 +13109,81 @@
       "name": "internal/conversation/topics corpus+eval-harness",
       "sites": [
         {
-          "file": "internal/conversation/topics/eval.go",
-          "line": 16,
+          "file": "internal/conversation/topics/eval_harness_test.go",
+          "line": 43,
           "status": "ADD",
           "raw": "internal/conversation/topics corpus+eval-harness (ADD)"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/conversation/topics segmenter",
+      "sites": [
+        {
+          "file": "internal/conversation/topics/hysteresis.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S45-T2",
+          "raw": "internal/conversation/topics segmenter (ADD) (P1-E21-W5-S45-T2)."
+        },
+        {
+          "file": "internal/conversation/topics/segmenter_config.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S45-T2",
+          "raw": "internal/conversation/topics segmenter (ADD) (P1-E21-W5-S45-T2)."
+        },
+        {
+          "file": "internal/conversation/topics/segmenter_core.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S45-T2",
+          "raw": "internal/conversation/topics segmenter (ADD) (P1-E21-W5-S45-T2)."
+        },
+        {
+          "file": "internal/conversation/topics/segmenter_corpus_fixture_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S45-T2",
+          "raw": "internal/conversation/topics segmenter (ADD) (P1-E21-W5-S45-T2)."
+        },
+        {
+          "file": "internal/conversation/topics/segmenter_corpus_test.go",
+          "line": 29,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S45-T2",
+          "raw": "internal/conversation/topics segmenter (ADD) (P1-E21-W5-S45-T2)."
+        },
+        {
+          "file": "internal/conversation/topics/segmenter_errors.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S45-T2",
+          "raw": "internal/conversation/topics segmenter (ADD) (P1-E21-W5-S45-T2)."
+        },
+        {
+          "file": "internal/conversation/topics/segmenter_harness_test.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S45-T2",
+          "raw": "internal/conversation/topics segmenter (ADD) (P1-E21-W5-S45-T2)."
+        },
+        {
+          "file": "internal/conversation/topics/segmenter_types.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S45-T2",
+          "raw": "internal/conversation/topics segmenter (ADD) (P1-E21-W5-S45-T2)."
+        },
+        {
+          "file": "internal/conversation/topics/topic_stack.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S45-T2",
+          "raw": "internal/conversation/topics segmenter (ADD) (P1-E21-W5-S45-T2)."
         }
       ],
       "statuses": [
@@ -24876,7 +24947,7 @@
       ]
     }
   ],
-  "total_sites": 2381,
+  "total_sites": 2390,
   "unspecified_count": 70,
   "multi_status_count": 49
 }
