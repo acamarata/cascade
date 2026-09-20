@@ -1,6 +1,33 @@
-// Package topics (eval.go): Purpose: the corpus record format,
-// load-and-validate function, and evaluation scorers (boundary F1,
-// topic-assignment accuracy) that this ticket and T2's segmenter share.
+// Package topics (eval_harness_test.go): Purpose: the corpus record
+// format, load-and-validate function, and evaluation scorers (boundary F1,
+// topic-assignment accuracy) used to measure a segmenter against a labeled
+// transcript corpus.
+//
+// TEST-ONLY BY DECISION (T0, P1-E21-W5-S45-T2, 2026-09-20; R-14.283): this
+// was originally eval.go, a package-level (non-_test.go) file, on the
+// premise that S-45.T2's segmenter/classifier would call LoadCorpus and
+// Evaluate directly. It shipped the segmenter instead as segmenter_core.go,
+// which calls none of these exported functions: scoring predicted
+// boundaries against a labeled corpus is a measurement a test performs,
+// never a step a daemon runs, and no ticket (07-CLI-COMMAND-TREE.md ratifies
+// no topic-eval verb) plans to add one. Zero non-test callers exist for
+// LoadCorpus, LoadCorpusRecord, Evaluate, AssertFloors, Corpus,
+// CorpusRecord, EvalResult, and EvalPredictions across internal/, cmd/,
+// pkg/, plugins/ as of this move. One symbol eval.go defined, Turn, IS a
+// non-test dependency (segmenter_core.go's Segment/embedAll/classifyAll and
+// segmenter_types.go's Segmenter interface all take []Turn), so Turn moved
+// to segmenter_types.go instead of here - see that file's doc comment.
+// Leaving the rest as shipped code would have made the three allow-list
+// exemptions and the grandfather append that covered them permanent: the
+// orphan gate (internal/build/orphangate.go) would carry this as dead
+// surface forever with no ticket ever able to retire it by wiring a
+// caller. Moving it into a _test.go file removes it from that gate's
+// surface entirely instead of exempting it from a check it will never
+// pass. No build tag: both the untagged tests (eval_test.go,
+// eval_fuzz_test.go, segmenter_harness_test.go) and the
+// topics_corpus-tagged tests (eval_corpus_test.go, segmenter_corpus_test.go,
+// segmenter_corpus_fixture_test.go) call these symbols, so this file must
+// compile under both.
 //
 // Inputs: JSON corpus records on disk (see CorpusRecord) and an
 // EvalPredictions value a caller derives from its own segmenter/classifier
@@ -28,12 +55,6 @@ import (
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
-
-// Turn is one speaker turn in a corpus record.
-type Turn struct {
-	Speaker string `json:"speaker"`
-	Text    string `json:"text"`
-}
 
 // CorpusRecord is one labeled transcript: its turns, the turn indices where
 // a human labeler marked a topic boundary, and the topic label assigned to

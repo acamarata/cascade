@@ -140,27 +140,6 @@
     "symbol": "internal/conversation.RefuseSSEEmbedded"
   },
   {
-    "caller_site": "internal/conversation/topics/classifier.go",
-    "expected_caller": "internal/conversation/topics/classifier.go, which P1-E21-W5-S45-T2 constructs; retire this entry when that lands",
-    "reason": "The topic fixture corpus and evaluator landed under P1-E21-W5-S45-T1. The classifier that calls LoadCorpus and Evaluate is S-45.T2. The labeled corpus itself is an outstanding owner prerequisite. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "retire_ticket": "P1-E21-W5-S45-T2",
-    "symbol": "internal/conversation/topics.AssertFloors"
-  },
-  {
-    "caller_site": "internal/conversation/topics/classifier.go",
-    "expected_caller": "internal/conversation/topics/classifier.go, which P1-E21-W5-S45-T2 constructs; retire this entry when that lands",
-    "reason": "The topic fixture corpus and evaluator landed under P1-E21-W5-S45-T1. The classifier that calls LoadCorpus and Evaluate is S-45.T2. The labeled corpus itself is an outstanding owner prerequisite. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "retire_ticket": "P1-E21-W5-S45-T2",
-    "symbol": "internal/conversation/topics.Evaluate"
-  },
-  {
-    "caller_site": "internal/conversation/topics/classifier.go",
-    "expected_caller": "internal/conversation/topics/classifier.go, which P1-E21-W5-S45-T2 constructs; retire this entry when that lands",
-    "reason": "The topic fixture corpus and evaluator landed under P1-E21-W5-S45-T1. The classifier that calls LoadCorpus and Evaluate is S-45.T2. The labeled corpus itself is an outstanding owner prerequisite. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "retire_ticket": "P1-E21-W5-S45-T2",
-    "symbol": "internal/conversation/topics.LoadCorpus"
-  },
-  {
     "caller_site": "internal/tools/coverage-matrix/main.go",
     "expected_caller": "internal/tools/coverage-matrix, the generator and pre-push gate S-57.T1 did not finish; retire this entry when that lands",
     "reason": "P1-E28-W10-S57-T1 landed internal/coverage as the library half of the inventory-coverage-matrix gate: it builds the inventory-coverage matrix. The ticket shipped PARTIAL by its own account; the pre-push and CI wiring, the coverage-matrix.json artifact and the diff gate are explicitly not built yet, so nothing shipping calls these. The live check that does exercise them reads the ticket corpus under .claude/, which is gitignored and therefore unreadable from CI, so it cannot be the production caller either.",
@@ -1436,5 +1415,13 @@
     "reason": "P1-E24-W5-S50-T3 builds the Resolver interface (pkg/plugin/intents.go, exempt from this gate -- pkg is the public SDK surface) and its internal/plugins/resolver implementation, fully tested end to end (installed-first, registry ranking, ambiguity, fail-closed) via resolver_test.go, resolver_ranking_test.go and FuzzIntentResolve. No composition-root file wires internal/plugins/resolver.NewIntentResolver into a live command path yet, and none can today: S-50.T2 (`cascade plugin search`) is itself unbuilt -- there is no cmd/cascade/plugin_search.go in the tree -- and even once it lands it is query-ranking over RegistryClient.Search, not intent binding, so it would not call this symbol. Search answers \"what matches these words\"; the resolver answers \"which plugin provides this intent\". S-50.T4's host seam is the ticket's own documented first consumer, verified absent in the tree at dispatch time.",
     "retire_ticket": "P1-E24-W5-S50-T4",
     "symbol": "internal/plugins/resolver.NewIntentResolver"
+  },
+  {
+    "caller_site": "internal/conversation/topics/auto_thread.go",
+    "expected_caller": "P1-E21-W5-S45-T3 \"Implement auto-thread routing, taxonomy, exemplar store\" -- its files_scope.add lists internal/conversation/topics/auto_thread.go, and its own full_desc names the call directly: AutoThreader's constructor accepts a Segmenter and Route(ctx, turns) calls Segmenter.Segment(ctx, turns) before mapping each Boundary's Label through TaxonomyConfig.Resolve. Retire this entry once that file lands and calls NewSegmenter to build the Segmenter it wires in.",
+    "reason": "P1-E21-W5-S45-T2 builds the complete four-component segmenter (cheap-lane classify, embedding-distance boundary detection, hysteresis filter, bounded topic stack) fully tested end to end: unit tests for every branch (the four hysteresis scenarios with explicit expected boundary indices, a Window-mutation pair proving the filter is consulted, stack bounds, empty turns, nil ctx, cancellation and deadline mapping, embed-batch-contract and zero-norm refusals, classifier/embedder error propagation by cause identity) plus a synthetic-corpus harness that runs the real Segment/Evaluate/AssertFloors path untagged and is proven able to fail, and the tagged corpus harness (segmenter_corpus_test.go, build tag topics_corpus) that skips pending the owner-supplied corpus P1-E21-W5-S45-T1 already documented as absent. This ticket's own contract explicitly defers the composition-root caller: 'Do not add CLI surfaces, taxonomy defaults, or observe-log behavior here; those are S-45.T3 and S-45.T4.' NewSegmenter (segmenter_core.go) is the constructor S-45.T3's AutoThreader wires a Segmenter through; until that ticket lands, NewSegmenter is exercised only by this ticket's own tests.",
+    "retire_ticket": "P1-E21-W5-S45-T3",
+    "added_by_ticket": "P1-E21-W5-S45-T2",
+    "symbol": "internal/conversation/topics.NewSegmenter"
   }
 ]
