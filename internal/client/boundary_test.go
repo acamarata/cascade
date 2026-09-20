@@ -95,7 +95,8 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// cmd-rpc-server-boundary exemption list; the two must be edited
 	// together.
 	"daemon_unix_run_options.go": true,
-	// daemon_unix_chat.go (P1-E20-W5-S43-T5): the composition-root call
+	// chat_wiring.go (P1-E20-W5-S43-T5; renamed from daemon_unix_chat.go
+	// and de-tagged by P1-E45-W10-S88-T2): the composition-root call
 	// site that REGISTERS chat.append_turn/get_thread/list_threads on the
 	// daemon's own registry. It serves RPC and never dials it — the
 	// identical daemon-SIDE reasoning as daemon_unix_conductor.go and
@@ -104,7 +105,7 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// it cannot live in internal/daemon either. This map mirrors
 	// .golangci.yml's cmd-rpc-server-boundary exemption list; the two must
 	// be edited together.
-	"daemon_unix_chat.go": true,
+	"chat_wiring.go": true,
 	// daemon_unix_memory_recall.go (P1-E20-W5-S43-T5): a mechanical
 	// relocation of registerMemoryAndRecall out of daemon_unix_run.go
 	// under its own 300-line cap — the same move, for the same reason,

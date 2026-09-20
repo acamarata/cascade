@@ -159,14 +159,15 @@ linters:
             # and the daemon's own PathProvider to site the evidence schema and
             # blob store, so it cannot live in internal/daemon either.
             - "!**/cmd/cascade/daemon_unix_evidence.go"
-            # daemon_unix_chat.go earns its exemption on the identical
+            # chat_wiring.go (renamed from daemon_unix_chat.go and de-tagged
+            # by P1-E45-W10-S88-T2) earns its exemption on the identical
             # grounds: a composition-root file called only from
             # registerDBPathHandlers, which REGISTERS chat.append_turn /
             # get_thread / list_threads on the daemon's own registry and
             # never dials the daemon. It needs the daemon's own
             # PathProvider and event bus to site the conversation store and
             # the SSE mirror (R-14.284).
-            - "!**/cmd/cascade/daemon_unix_chat.go"
+            - "!**/cmd/cascade/chat_wiring.go"
             # daemon_unix_memory_recall.go is a mechanical relocation of
             # registerMemoryAndRecall out of daemon_unix_run.go under its
             # own 300-line cap — the same move daemon_unix_run_memory.go
