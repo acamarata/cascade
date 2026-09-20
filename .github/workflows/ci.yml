@@ -737,8 +737,62 @@ jobs:
           go test -count=1 ./internal/runtime/... -run '^TestRetrievalFusionEnabledDefault$' -v
           go test -count=1 ./internal/doctor/... -run '^TestRetrievalFusionGateNote$' -v
 
-      - name: go test (decoder fuzz smoke)
-        run: go test -run '^$' -fuzz '^FuzzEvalFixture$' -fuzztime=10s ./internal/retrieval/eval/
+      # A single `go test -fuzz -fuzztime=10s` step used to stand here, and
+      # it went red on run 35385774947 with
+      #     --- FAIL: FuzzEvalFixture (11.01s)
+      #         context deadline exceeded
+      # on code that passed the run before and passed the run after. No
+      # crasher was written and no testdata/fuzz path appeared in the log.
+      # Eight local repetitions of that exact command: eight passes, zero
+      # crashers, and EVERY run -- pass or fail -- overshoots to ~11.2s
+      # against a 10s box; the 0/sec final sample that looks like a stall
+      # appears in six of the eight green runs, so it is ordinary output.
+      # The failure is therefore in the fuzzing COORDINATOR's shutdown
+      # reporting, not in the decoder: internal/fuzz/fuzz.go calls
+      # stop(ctx.Err()) and stop suppresses it only when err ==
+      # fuzzCtx.Err(), an equality test that loses the race whenever the
+      # parent's deadline closes ctx.Done() before cancellation has
+      # propagated to the derived fuzzCtx.
+      #
+      # A wall-clock search cannot BE a deterministic gate, so the
+      # obligation is split in two. The first step is the gate: the fuzz
+      # target over its committed corpus, with no timer, no worker
+      # processes and nothing to race -- it cannot flake, and until now no
+      # step ran it at all. The second step is the search, and it now tells
+      # "found something" (fail the job) apart from "the time box expired"
+      # (not a defect signal). Raising -fuzztime alone would only move the
+      # race; discarding the search would lose real coverage.
+      - name: go test (decoder corpus, deterministic)
+        run: |
+          set -o pipefail
+          go test -count=1 -run '^FuzzEvalFixture$' -v ./internal/retrieval/eval/ 2>&1 | tee /tmp/fuzzseed.log
+          grep -q -- '--- PASS: FuzzEvalFixture' /tmp/fuzzseed.log || {
+            echo "::error::FuzzEvalFixture did not execute over its committed corpus."
+            exit 1
+          }
+
+      - name: go test (decoder fuzz smoke, discovery)
+        run: |
+          set +e
+          go test -run '^$' -fuzz '^FuzzEvalFixture$' -fuzztime=30s -timeout=5m \
+            ./internal/retrieval/eval/ 2>&1 | tee /tmp/fuzzsmoke.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          if [ "$rc" -eq 0 ]; then exit 0; fi
+          if grep -qE 'Failing input written to|^panic: |test timed out' /tmp/fuzzsmoke.log; then
+            echo "::error::fuzzing found a real defect in the decoder. This is a finding, not a flake."
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain internal/retrieval/eval/testdata)" ]; then
+            echo "::error::fuzzing wrote a new corpus entry under testdata/fuzz. Treat it as a finding."
+            exit 1
+          fi
+          if grep -q 'context deadline exceeded' /tmp/fuzzsmoke.log; then
+            echo "::warning::fuzz discovery hit its time box. Go reports that as 'context deadline exceeded'; no crasher was written, so it is not a defect signal. The deterministic corpus step above is the gate."
+            exit 0
+          fi
+          echo "::error::fuzzing failed for a reason this step does not recognise. Read /tmp/fuzzsmoke.log in the job output."
+          exit 1
 
   plugin-integration:
     # The `integration`-tagged tests under plugins/** — the loopback OAuth
