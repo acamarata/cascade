@@ -567,10 +567,20 @@ jobs:
     # P1-E17-W4-S38-T4: internal/runtime's profile-agnostic composition
     # pieces (DSN env-ref resolution, the live migration closure) against
     # the same real server. TestServerProfileAssembly is this ticket's
-    # named check; internal/runtime carries no postgres build tag itself
-    # (it never imports providers/**, per Art.10.2), so this job's own
-    # tests run untagged — the `integration` tag alone gates the live-DB
-    # cases, matching this package's existing tag convention.
+    # named check. internal/runtime carries no postgres build tag (it never
+    # imports providers/**, per Art.10.2) — but the named check DOES carry
+    # `//go:build integration`, and until CX2-120 this job ran untagged, so
+    # the check it is named after never compiled in:
+    #
+    #   $ go test ./internal/runtime/... -run '^TestServerProfileAssembly$'
+    #   ok  .../internal/runtime  1.303s [no tests to run]
+    #
+    # The job was green and proved nothing. Two steps now: the untagged
+    # unit lane it always ran, unchanged, and the named check with its tag,
+    # scoped by -run the way every other integration lane in this file is.
+    # The tagged step asserts the case actually EXECUTED, because
+    # TestServerProfileAssembly skips when CASCADE_TEST_POSTGRES_DSN is
+    # unset — a silent skip would put the job straight back where it was.
     name: server-profile-assembly (required)
     runs-on: ubuntu-latest
     services:
@@ -600,6 +610,18 @@ jobs:
         env:
           CASCADE_TEST_POSTGRES_DSN: postgres://postgres:postgres@localhost:5432/cascade_test?sslmode=disable
         run: go test -count=1 -race ./internal/runtime/... -v
+
+      - name: go test -tags=integration ./internal/runtime/ (TestServerProfileAssembly, the named check)
+        env:
+          CASCADE_TEST_POSTGRES_DSN: postgres://postgres:postgres@localhost:5432/cascade_test?sslmode=disable
+        run: |
+          set -o pipefail
+          go test -tags=integration -count=1 -race ./internal/runtime/ \
+            -run '^TestServerProfileAssembly$' -v 2>&1 | tee /tmp/assembly.log
+          grep -q -- '--- PASS: TestServerProfileAssembly' /tmp/assembly.log || {
+            echo "::error::TestServerProfileAssembly did not execute. A skipped or filtered-out named check cannot close this job's obligation."
+            exit 1
+          }
 
   node-tunnel-real-sshd:
     # P1-E17-W4-S36-T3, Art.2: the ssh tunnel exercised against a REAL
