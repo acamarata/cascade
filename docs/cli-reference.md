@@ -159,3 +159,36 @@ grant made now takes effect on the **next** registration pass: restart
 `cascade mcp serve`, or re-run `cascade context harness sync`. See
 `plugins/claude/README.md` § The MCP tools a session sees for the tool
 table and the profile rules.
+
+### The conversation tools
+
+`cascade-pa` registers three of the tools this command lists. They give a
+harness session the same three questions `cascade chat` asks, answered
+through the same daemon methods, so an agent and a person see one
+conversation rather than two. Full schemas, paging rules and limitations:
+`plugins/cascade-pa/README.md`.
+
+| Tool | In | Out |
+|---|---|---|
+| `cascade_cpa_send` | `{content, thread_id?, sensitivity?}` | `{turn_id, thread_id, created_at, sensitivity}` |
+| `cascade_cpa_history` | `{thread_id?, limit?, before_turn_id?}` | `{items, next_cursor?}` |
+| `cascade_cpa_search` | `{query, thread_id?, limit?}` | `{results: [{thread_id, turn_id, excerpt, score}]}` |
+
+Three behaviours are worth knowing at the terminal, because they are the
+ones that look like bugs and are not:
+
+- **`sensitivity` fails closed.** Unset, unknown, misspelled and
+  differently-cased all resolve to `restricted` (06 §5.16) — `"Public"` is
+  not `public`. The resolved tier comes back in the result, so a caller that
+  narrowed its own request can see that it did. The tier is reported but not
+  yet stored: `chat.append_turn` has no field for it.
+- **`limit` is clamped, not refused.** 20 by default, 100 at the ceiling. A
+  request for a thousand turns returns a hundred rather than an error.
+- **`cascade_cpa_search` is a substring scan** at this point in the plan, so
+  every `score` is `1.0`. The FTS5 backend replaces the scan later and keeps
+  this shape.
+
+If all three are missing from `tools`, the plugin is disabled. If they are
+present but every call refuses with *no conversation service is wired*, the
+process has a plugin but no daemon composition root behind it — that is a
+different fault from an empty conversation store, and the message says so.

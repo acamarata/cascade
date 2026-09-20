@@ -47,7 +47,12 @@
 //	command entry REMOVED — FIX-manifest-collision-and-conductor-seam.
 package cascadepa
 
-import "github.com/acamarata/cascade/pkg/plugin"
+import (
+	"sync"
+
+	"github.com/acamarata/cascade/pkg/plugin"
+	"github.com/acamarata/cascade/plugins/cascade-pa/tools"
+)
 
 // pluginID is this plugin's manifest id.
 const pluginID = "cascade-pa"
@@ -79,5 +84,54 @@ func manifest() plugin.Manifest {
 		Version:     "0.1.0",
 		HostVersion: ">=0.1.0",
 		Runtime:     plugin.RuntimeBuiltin,
+		// The MCP surface is generated from this manifest, so a tool
+		// missing from this list is absent from every harness no matter
+		// what DispatchTool can service. Built FROM the tools package
+		// rather than repeating its constants, so the list a harness sees
+		// and the list Dispatch routes cannot drift.
+		Provides: plugin.Provides{Tools: toolSpecs()},
 	}
+}
+
+// SetConversations injects the conversation service the three tools call.
+//
+// A seam, like pacmd.SetClient beside it, and for the same reason: this
+// package may not import internal/** (Art.10.2, R-14.69), and the only
+// implementation lives at the composition root over the daemon's chat.*
+// methods. Until it is called the tools refuse with tools.ErrNoService,
+// which is a different answer from "you have no conversations".
+func SetConversations(c tools.Conversations) {
+	toolState.mu.Lock()
+	toolState.dispatcher = tools.NewDispatcher(c)
+	toolState.mu.Unlock()
+}
+
+// toolState holds the injected dispatcher. Guarded because SetConversations
+// runs at daemon startup while DispatchTool can be called from any harness
+// session concurrently.
+var toolState struct {
+	mu         sync.Mutex
+	dispatcher *tools.Dispatcher
+}
+
+// activeDispatcher returns the injected dispatcher, or one over no service
+// (which refuses) when nothing has been injected.
+func activeDispatcher() *tools.Dispatcher {
+	toolState.mu.Lock()
+	defer toolState.mu.Unlock()
+	if toolState.dispatcher == nil {
+		return tools.NewDispatcher(nil)
+	}
+	return toolState.dispatcher
+}
+
+// toolSpecs renders the tools package's registration order as manifest
+// entries.
+func toolSpecs() []plugin.ToolSpec {
+	names := tools.Names()
+	out := make([]plugin.ToolSpec, 0, len(names))
+	for _, n := range names {
+		out = append(out, plugin.ToolSpec{Name: n, Description: tools.Description(n)})
+	}
+	return out
 }

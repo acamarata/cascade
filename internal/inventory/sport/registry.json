@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-20T14:41:08Z",
+  "generated_at": "2026-09-20T15:14:28Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -16603,6 +16603,29 @@
       ]
     },
     {
+      "name": "internal/plugins:cascadepa-tools-wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_tools_wiring.go",
+          "line": 35,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T4",
+          "raw": "internal/plugins:cascadepa-tools-wiring (ADD) — P1-E20-W5-S43-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_tools_wiring_test.go",
+          "line": 10,
+          "status": "",
+          "ticket": "P1-E20-W5-S43-T4",
+          "raw": "internal/plugins:cascadepa-tools-wiring (TEST) — P1-E20-W5-S43-T4."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins:cascadepa-wiring",
       "sites": [
         {
@@ -20700,6 +20723,112 @@
       ]
     },
     {
+      "name": "plugins/cascade-pa:mcp-tools",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/mcp_tools_test.go",
+          "line": 13,
+          "status": "",
+          "ticket": "P1-E20-W5-S43-T4",
+          "raw": "plugins/cascade-pa:mcp-tools (TEST) — P1-E20-W5-S43-T4."
+        },
+        {
+          "file": "plugins/cascade-pa/tools/fuzz_test.go",
+          "line": 18,
+          "status": "",
+          "ticket": "P1-E20-W5-S43-T4",
+          "raw": "plugins/cascade-pa:mcp-tools (TEST) — P1-E20-W5-S43-T4."
+        },
+        {
+          "file": "plugins/cascade-pa/tools/tools.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T4",
+          "raw": "plugins/cascade-pa:mcp-tools (ADD) — P1-E20-W5-S43-T4."
+        },
+        {
+          "file": "plugins/cascade-pa/tools/tools_test.go",
+          "line": 13,
+          "status": "",
+          "ticket": "P1-E20-W5-S43-T4",
+          "raw": "plugins/cascade-pa:mcp-tools (TEST) — P1-E20-W5-S43-T4."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa:mcp-tools:cascade_cpa_history",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/tools/cpa_history.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T4",
+          "raw": "plugins/cascade-pa:mcp-tools:cascade_cpa_history (ADD) — P1-E20-W5-S43-T4."
+        },
+        {
+          "file": "plugins/cascade-pa/tools/cpa_history_test.go",
+          "line": 6,
+          "status": "",
+          "ticket": "P1-E20-W5-S43-T4",
+          "raw": "plugins/cascade-pa:mcp-tools:cascade_cpa_history (TEST) — P1-E20-W5-S43-T4."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa:mcp-tools:cascade_cpa_search",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/tools/cpa_search.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T4",
+          "raw": "plugins/cascade-pa:mcp-tools:cascade_cpa_search (ADD) — P1-E20-W5-S43-T4."
+        },
+        {
+          "file": "plugins/cascade-pa/tools/cpa_search_test.go",
+          "line": 5,
+          "status": "",
+          "ticket": "P1-E20-W5-S43-T4",
+          "raw": "plugins/cascade-pa:mcp-tools:cascade_cpa_search (TEST) — P1-E20-W5-S43-T4."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa:mcp-tools:cascade_cpa_send",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/tools/cpa_send.go",
+          "line": 4,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S43-T4",
+          "raw": "plugins/cascade-pa:mcp-tools:cascade_cpa_send (ADD) — P1-E20-W5-S43-T4."
+        },
+        {
+          "file": "plugins/cascade-pa/tools/cpa_send_test.go",
+          "line": 6,
+          "status": "",
+          "ticket": "P1-E20-W5-S43-T4",
+          "raw": "plugins/cascade-pa:mcp-tools:cascade_cpa_send (TEST) — P1-E20-W5-S43-T4."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/cascade-pa:review-chat",
       "sites": [
         {
@@ -24447,7 +24576,7 @@
       ]
     }
   ],
-  "total_sites": 2347,
+  "total_sites": 2359,
   "unspecified_count": 69,
-  "multi_status_count": 42
+  "multi_status_count": 47
 }

@@ -93,9 +93,11 @@ func printInChatReply(reply string) error {
 // arguments plus pacmd's package-level Client seam (see cmd/chat.go).
 type handlers struct{}
 
-// DispatchTool: cascade-pa provides no tools in this ticket.
-func (handlers) DispatchTool(_ context.Context, name string, _ []byte) ([]byte, error) {
-	return nil, cascade.New(cascade.KindNotFound, fmt.Sprintf("cascade-pa: unknown tool %q", name))
+// DispatchTool routes an MCP tool call to the cascade_cpa_* dispatcher.
+// The comment here used to read "cascade-pa provides no tools in this
+// ticket", which stopped being true when S-43.T4 registered three.
+func (handlers) DispatchTool(ctx context.Context, name string, input []byte) ([]byte, error) {
+	return activeDispatcher().Dispatch(ctx, name, input)
 }
 
 // DispatchIntent: cascade-pa provides no intents in this ticket.

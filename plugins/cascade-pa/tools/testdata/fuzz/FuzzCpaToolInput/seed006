@@ -1,0 +1,2 @@
+go test fuzz v1
+string("{\"content\":\"\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5x\",\"sensitivity\":\"public\"}")

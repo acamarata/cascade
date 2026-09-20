@@ -1,0 +1,2 @@
+go test fuzz v1
+string("{\"thread_id\":\"\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\",\"query\":\"needle\",\"limit\":1}")
