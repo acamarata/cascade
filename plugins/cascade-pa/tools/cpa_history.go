@@ -113,9 +113,11 @@ func (d *Dispatcher) threadTurns(ctx context.Context, in HistoryInput) ([]byte, 
 // first, plus the cursor for the page before it.
 //
 // NEWEST FIRST is what a cursor of "" means here: an agent opening a
-// thread wants its recent end, and paging backwards from there. The
-// returned page is then re-ordered oldest-first, because that is the order
-// a conversation reads in.
+// thread wants its recent end, and pages backwards from there. Which turns
+// are SELECTED is therefore driven from the end of the slice; the order
+// WITHIN the page is the store's own, oldest first, because that is the
+// order a conversation reads in. Nothing is re-ordered — the slice
+// preserves what Thread returned.
 //
 // A cursor naming a turn this thread does not contain returns the newest
 // page rather than an error. The turn may have been retained away since

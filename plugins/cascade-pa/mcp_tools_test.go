@@ -90,36 +90,19 @@ func (r *recordingConversations) Threads(_ context.Context) ([]tools.ThreadSumma
 // The ARGUMENTS come from the client's own bytes and the RESULT SHAPE from
 // the server's own bytes — see testdata/mcp_fixtures/README.md for how the
 // session was captured. Ids and timestamps are per-run, so this asserts the
-// keys each result carries, never the values the recording happened to get.
+// keys each result carries; TestCpaMCPRoundTripValuesAreConsistent below
+// asserts the values that CAN be checked.
 func TestCpaMCPRoundTrip(t *testing.T) {
-	in, out := readFrames(t, "claude-code-2.1.273-in.jsonl"), readFrames(t, "claude-code-2.1.273-out.jsonl")
-	results := map[int]toolCallResult{}
-	for _, f := range out {
-		if f.ID == nil || f.Result == nil {
-			continue
-		}
-		var r toolCallResult
-		if err := json.Unmarshal(f.Result, &r); err == nil && len(r.Content) > 0 {
-			results[*f.ID] = r
-		}
-	}
-
+	args, results := recordedCalls(t)
 	svc := &recordingConversations{threadID: "thread-replay", turnID: "turn-replay", at: "2026-09-20T14:54:32Z"}
 	d := tools.NewDispatcher(svc)
 	calls := 0
-	for _, f := range in {
-		if f.Method != "tools/call" {
-			continue
-		}
-		var p toolCallParams
-		if err := json.Unmarshal(f.Params, &p); err != nil {
-			t.Fatalf("decoding a recorded tools/call: %v", err)
-		}
-		if !strings.HasPrefix(p.Name, "cascade_cpa_") {
+	for name, raw := range args {
+		if !strings.HasPrefix(name, "cascade_cpa_") {
 			continue
 		}
 		calls++
-		assertRecordedCallReplays(t, d, p, results[*f.ID])
+		assertRecordedCallReplays(t, d, name, raw, results[name])
 	}
 	if calls == 0 {
 		t.Fatal("the recorded session contains no cascade_cpa_* tool call; this test asserted nothing")
@@ -129,25 +112,22 @@ func TestCpaMCPRoundTrip(t *testing.T) {
 
 // assertRecordedCallReplays runs one recorded call and compares its result's
 // KEYS with the recorded one's.
-func assertRecordedCallReplays(t *testing.T, d *tools.Dispatcher, p toolCallParams, recorded toolCallResult) {
+func assertRecordedCallReplays(t *testing.T, d *tools.Dispatcher, name string, args json.RawMessage, recorded string) {
 	t.Helper()
-	got, err := d.Dispatch(context.Background(), p.Name, p.Arguments)
+	if recorded == "" {
+		t.Fatalf("%s: the recorded session has no result for this call", name)
+	}
+	got, err := d.Dispatch(context.Background(), name, args)
 	if err != nil {
-		t.Fatalf("%s(%s): %v", p.Name, p.Arguments, err)
+		t.Fatalf("%s(%s): %v", name, args, err)
 	}
-	if recorded.IsError {
-		t.Fatalf("%s: the recorded session reports isError; the fixture is not a success case", p.Name)
-	}
-	if len(recorded.Content) == 0 || recorded.Content[0].Type != "text" {
-		t.Fatalf("%s: recorded result is not a text content block: %+v", p.Name, recorded.Content)
-	}
-	wantKeys, gotKeys := jsonKeys(t, []byte(recorded.Content[0].Text)), jsonKeys(t, got)
+	wantKeys, gotKeys := jsonKeys(t, []byte(recorded)), jsonKeys(t, got)
 	if len(wantKeys) != len(gotKeys) {
-		t.Fatalf("%s: result keys = %v, the recorded session's were %v", p.Name, gotKeys, wantKeys)
+		t.Fatalf("%s: result keys = %v, the recorded session's were %v", name, gotKeys, wantKeys)
 	}
 	for k := range wantKeys {
 		if _, ok := gotKeys[k]; !ok {
-			t.Errorf("%s: result is missing %q, which the recorded session carried", p.Name, k)
+			t.Errorf("%s: result is missing %q, which the recorded session carried", name, k)
 		}
 	}
 }
@@ -164,6 +144,83 @@ func jsonKeys(t *testing.T, raw []byte) map[string]struct{} {
 		out[k] = struct{}{}
 	}
 	return out
+}
+
+// TestCpaMCPRoundTripValuesAreConsistent reads the recorded VALUES, not
+// just the recorded keys.
+//
+// Independent review found that TestCpaMCPRoundTrip compares key sets, so
+// emptying the fixture fails it but hand-editing a value does not. These
+// two relations hold between frames of a genuine session and would have to
+// be forged together to survive an edit: the sensitivity the server
+// reported is the fail-closed resolution of the one the client asked for,
+// and the thread the send named is the thread the listing then returned.
+func TestCpaMCPRoundTripValuesAreConsistent(t *testing.T) {
+	args, results := recordedCalls(t)
+	var sent struct {
+		ThreadID    string `json:"thread_id"`
+		Sensitivity string `json:"sensitivity"`
+	}
+	sendText, ok := results[tools.ToolSend]
+	if !ok {
+		t.Fatal("the recorded session has no cascade_cpa_send result")
+	}
+	if err := json.Unmarshal([]byte(sendText), &sent); err != nil {
+		t.Fatalf("decoding the recorded send result: %v", err)
+	}
+
+	var asked struct {
+		Sensitivity string `json:"sensitivity"`
+	}
+	if err := json.Unmarshal(args[tools.ToolSend], &asked); err != nil {
+		t.Fatalf("decoding the recorded send arguments: %v", err)
+	}
+	if want := tools.ResolveSensitivity(asked.Sensitivity); sent.Sensitivity != want {
+		t.Errorf("recorded sensitivity = %q for a request asking %q; fail-closed resolution gives %q",
+			sent.Sensitivity, asked.Sensitivity, want)
+	}
+	if sent.ThreadID == "" {
+		t.Fatal("the recorded send named no thread; the server is supposed to mint one")
+	}
+	historyText, ok := results[tools.ToolHistory]
+	if !ok {
+		t.Fatal("the recorded session has no cascade_cpa_history result")
+	}
+	if !strings.Contains(historyText, sent.ThreadID) {
+		t.Errorf("the thread the send minted (%s) does not appear in the recorded listing %s",
+			sent.ThreadID, historyText)
+	}
+}
+
+// recordedCalls pairs each recorded tools/call with its result text.
+func recordedCalls(t *testing.T) (map[string]json.RawMessage, map[string]string) {
+	t.Helper()
+	in, out := readFrames(t, "claude-code-2.1.273-in.jsonl"), readFrames(t, "claude-code-2.1.273-out.jsonl")
+	byID := map[int]string{}
+	for _, f := range out {
+		if f.ID == nil || f.Result == nil {
+			continue
+		}
+		var r toolCallResult
+		if err := json.Unmarshal(f.Result, &r); err == nil && len(r.Content) > 0 {
+			byID[*f.ID] = r.Content[0].Text
+		}
+	}
+	args, results := map[string]json.RawMessage{}, map[string]string{}
+	for _, f := range in {
+		if f.Method != "tools/call" || f.ID == nil {
+			continue
+		}
+		var p toolCallParams
+		if err := json.Unmarshal(f.Params, &p); err != nil {
+			t.Fatalf("decoding a recorded tools/call: %v", err)
+		}
+		args[p.Name] = p.Arguments
+		if text, ok := byID[*f.ID]; ok {
+			results[p.Name] = text
+		}
+	}
+	return args, results
 }
 
 // TestCpaMCPRoundTripUsesARealClientsFrames guards the fixture itself. A

@@ -8,6 +8,7 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -125,13 +126,33 @@ func TestHistoryClampsAnOversizedLimit(t *testing.T) {
 func TestHistoryUnknownCursorReturnsTheNewestPage(t *testing.T) {
 	// The turn may have been retained away since the agent read it.
 	// Refusing would strand a caller holding a cursor it cannot repair.
+	//
+	// The thread is longer than the page on purpose. An earlier version of
+	// this test used five turns and a default limit of twenty, so the whole
+	// thread came back whatever the cursor did — it would have passed
+	// against an implementation that ignored before_turn_id entirely, which
+	// is the one thing it exists to rule out. The third assertion below is
+	// the one that fails in that case.
 	svc := &fakeConversations{details: map[string]ThreadDetail{
-		"t1": {ThreadID: "t1", Turns: turnsFixture(5)},
+		"t1": {ThreadID: "t1", Turns: turnsFixture(25)},
 	}}
 	d := NewDispatcher(svc)
-	ids, _ := historyTurnIDs(t, d, `{"thread_id":"t1","before_turn_id":"turn-does-not-exist"}`)
-	if len(ids) != 5 || ids[4] != "turn-5" {
-		t.Fatalf("page = %v, want the whole thread ending at turn-5", ids)
+
+	noCursor, _ := historyTurnIDs(t, d, `{"thread_id":"t1","limit":5}`)
+	unknown, _ := historyTurnIDs(t, d, `{"thread_id":"t1","limit":5,"before_turn_id":"turn-does-not-exist"}`)
+	known, _ := historyTurnIDs(t, d, `{"thread_id":"t1","limit":5,"before_turn_id":"turn-21"}`)
+
+	if len(noCursor) != 5 || noCursor[4] != "turn-25" {
+		t.Fatalf("no cursor = %v, want the newest five ending at turn-25", noCursor)
+	}
+	if strings.Join(unknown, ",") != strings.Join(noCursor, ",") {
+		t.Errorf("unknown cursor = %v, want the same page as no cursor at all (%v)", unknown, noCursor)
+	}
+	if strings.Join(known, ",") == strings.Join(noCursor, ",") {
+		t.Fatalf("a KNOWN cursor returned the same page as none (%v); before_turn_id is being ignored", known)
+	}
+	if known[0] != "turn-16" || known[4] != "turn-20" {
+		t.Errorf("known cursor page = %v, want turn-16…turn-20", known)
 	}
 }
 
