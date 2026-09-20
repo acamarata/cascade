@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-17T18:17:57Z",
+  "generated_at": "2026-09-20T14:06:05Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3195,15 +3195,53 @@
       ]
     },
     {
-      "name": "cmd/cascade daemon chat wiring",
+      "name": "cmd/cascade accounting tests",
       "sites": [
         {
-          "file": "cmd/cascade/daemon_unix_chat.go",
-          "line": 29,
+          "file": "cmd/cascade/daemon_unix_usage_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E45-W10-S88-T2",
+          "raw": "cmd/cascade accounting tests (ADD) — P1-E45-W10-S88-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade chat platform boundary",
+      "sites": [
+        {
+          "file": "cmd/cascade/chat_platform_regression_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E45-W10-S88-T2",
+          "raw": "cmd/cascade chat platform boundary (ADD) — P1-E45-W10-S88-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade chat wiring",
+      "sites": [
+        {
+          "file": "cmd/cascade/chat_wiring.go",
+          "line": 40,
           "status": "ADD",
           "ticket": "P1-E20-W5-S43-T5",
-          "raw": "cmd/cascade daemon chat wiring (ADD) — P1-E20-W5-S43-T5."
-        },
+          "raw": "cmd/cascade chat wiring (ADD) — P1-E20-W5-S43-T5; platform tag"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade daemon chat wiring",
+      "sites": [
         {
           "file": "cmd/cascade/daemon_unix_chat_integration_test.go",
           "line": 8,
@@ -3393,6 +3431,21 @@
       ]
     },
     {
+      "name": "cmd/cascade provider view tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/provider_cost_view_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E45-W10-S88-T2",
+          "raw": "cmd/cascade provider view tests (ADD) — P1-E45-W10-S88-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade provider-deps-constructor",
       "sites": [
         {
@@ -3560,6 +3613,21 @@
           "status": "ADD",
           "ticket": "P1-E17-W4-S38-T3",
           "raw": "cmd/cascade testscript driver (ADD) — P1-E17-W4-S38-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade view tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/result_views_render_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E45-W10-S88-T2",
+          "raw": "cmd/cascade view tests (ADD) — P1-E45-W10-S88-T2."
         }
       ],
       "statuses": [
@@ -24379,7 +24447,7 @@
       ]
     }
   ],
-  "total_sites": 2343,
+  "total_sites": 2347,
   "unspecified_count": 69,
   "multi_status_count": 42
 }
