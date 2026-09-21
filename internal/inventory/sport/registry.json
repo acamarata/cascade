@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T16:37:12Z",
+  "generated_at": "2026-09-21T18:00:30Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1484,6 +1484,20 @@
       ]
     },
     {
+      "name": "S-47.T1",
+      "sites": [
+        {
+          "file": "cmd/cascade/recall.go",
+          "line": 29,
+          "status": "",
+          "raw": "S-47.T1."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "SECRETS_AUDIT_REPORT",
       "sites": [
         {
@@ -2961,10 +2975,10 @@
       "sites": [
         {
           "file": "cmd/cascade/recall.go",
-          "line": 28,
+          "line": 29,
           "status": "ADD",
           "ticket": "T-3",
-          "raw": "cmd.cascade.cmd.recall (ADD, per T-3 sport_updates)."
+          "raw": "cmd.cascade.cmd.recall (ADD, per T-3); `what` mount ADD"
         },
         {
           "file": "cmd/cascade/recall_default_scope_test.go",
@@ -3047,6 +3061,28 @@
           "status": "ADD",
           "ticket": "P1-E06-W2-S11-T4",
           "raw": "cmd.cascade.cmd.recall.index (ADD, P1-E06-W2-S11-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd.cascade.cmd.recall.what",
+      "sites": [
+        {
+          "file": "cmd/cascade/recall_what.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T1",
+          "raw": "cmd.cascade.cmd.recall.what (ADD, P1-E22-W5-S47-T1)."
+        },
+        {
+          "file": "cmd/cascade/recall_what_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T1",
+          "raw": "cmd.cascade.cmd.recall.what (ADD, P1-E22-W5-S47-T1)."
         }
       ],
       "statuses": [
@@ -4180,6 +4216,13 @@
           "line": 11,
           "status": "CHANGE",
           "raw": "cmd/cascade/daemon (CHANGED — policy composition root"
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_recall_what.go",
+          "line": 40,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T1",
+          "raw": "cmd/cascade/daemon (ADD, P1-E22-W5-S47-T1, D1)."
         },
         {
           "file": "cmd/cascade/daemon_unix_recovery_test.go",
@@ -13062,6 +13105,106 @@
       ]
     },
     {
+      "name": "internal.retrieval.RecallWhatService",
+      "sites": [
+        {
+          "file": "internal/retrieval/recallwhat.go",
+          "line": 40,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T1",
+          "raw": "internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1)."
+        },
+        {
+          "file": "internal/retrieval/recallwhat_egress.go",
+          "line": 19,
+          "status": "CHANGE",
+          "ticket": "P1-E22-W5-S47-T1",
+          "raw": "internal.retrieval.RecallWhatService/CHANGED (P1-E22-W5-S47-T1"
+        },
+        {
+          "file": "internal/retrieval/recallwhat_filter.go",
+          "line": 30,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T1",
+          "raw": "internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1)."
+        },
+        {
+          "file": "internal/retrieval/recallwhat_filter_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T1",
+          "raw": "internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1)."
+        },
+        {
+          "file": "internal/retrieval/recallwhat_legs.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T1",
+          "raw": "internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1)."
+        },
+        {
+          "file": "internal/retrieval/recallwhat_legs_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T1",
+          "raw": "internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1)."
+        },
+        {
+          "file": "internal/retrieval/recallwhat_memoryleg_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T1",
+          "raw": "internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1)."
+        },
+        {
+          "file": "internal/retrieval/recallwhat_redact.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T1",
+          "raw": "internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1)."
+        },
+        {
+          "file": "internal/retrieval/recallwhat_redact_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T1",
+          "raw": "internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1)."
+        },
+        {
+          "file": "internal/retrieval/recallwhat_rpc.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T1",
+          "raw": "internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1)."
+        },
+        {
+          "file": "internal/retrieval/recallwhat_scope.go",
+          "line": 19,
+          "status": "CHANGE",
+          "ticket": "P1-E22-W5-S47-T1",
+          "raw": "internal.retrieval.RecallWhatService/CHANGED (P1-E22-W5-S47-T1"
+        },
+        {
+          "file": "internal/retrieval/recallwhat_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T1",
+          "raw": "internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1)."
+        },
+        {
+          "file": "internal/retrieval/recallwhat_testkit_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T1",
+          "raw": "internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD",
+        "CHANGE"
+      ]
+    },
+    {
       "name": "internal.retrieval.citations.Assemble",
       "sites": [
         {
@@ -16557,6 +16700,13 @@
           "line": 31,
           "status": "ADD",
           "raw": "internal/integration (ADD, E/S-08.T4)."
+        },
+        {
+          "file": "internal/integration/recall_what_test.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T1",
+          "raw": "internal/integration (ADD, P1-E22-W5-S47-T1, fix item 12)."
         }
       ],
       "statuses": [
@@ -28742,7 +28892,7 @@
       ]
     }
   ],
-  "total_sites": 2691,
-  "unspecified_count": 128,
-  "multi_status_count": 66
+  "total_sites": 2709,
+  "unspecified_count": 129,
+  "multi_status_count": 67
 }
