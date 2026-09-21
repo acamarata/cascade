@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T15:11:31Z",
+  "generated_at": "2026-09-21T16:37:12Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -14761,6 +14761,35 @@
       ]
     },
     {
+      "name": "internal/context acceptance",
+      "sites": [
+        {
+          "file": "internal/context/acceptance_bounded_context_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T5",
+          "raw": "internal/context acceptance (ADD) (P1-E21-W5-S46-T5)."
+        },
+        {
+          "file": "internal/context/acceptance_errors_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T5",
+          "raw": "internal/context acceptance (ADD) (P1-E21-W5-S46-T5)."
+        },
+        {
+          "file": "internal/context/acceptance_rolling_summary_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T5",
+          "raw": "internal/context acceptance (ADD) (P1-E21-W5-S46-T5)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/context cross-harness conformance",
       "sites": [
         {
@@ -14886,14 +14915,50 @@
       ]
     },
     {
+      "name": "internal/conversation/topics acceptance",
+      "sites": [
+        {
+          "file": "internal/conversation/topics/acceptance_autofile_fixture_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T5",
+          "raw": "internal/conversation/topics acceptance (ADD) (P1-E21-W5-S46-T5)."
+        },
+        {
+          "file": "internal/conversation/topics/acceptance_autofile_test.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T5",
+          "raw": "internal/conversation/topics acceptance (ADD) (P1-E21-W5-S46-T5)."
+        },
+        {
+          "file": "internal/conversation/topics/acceptance_errors_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T5",
+          "raw": "internal/conversation/topics acceptance (ADD) (P1-E21-W5-S46-T5)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/conversation/topics auto-thread",
       "sites": [
         {
           "file": "internal/conversation/topics/auto_thread.go",
-          "line": 45,
+          "line": 58,
           "status": "ADD",
           "ticket": "P1-E21-W5-S45-T3",
           "raw": "internal/conversation/topics auto-thread (ADD) (P1-E21-W5-S45-T3)."
+        },
+        {
+          "file": "internal/conversation/topics/auto_thread_opener_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S45-T3",
+          "raw": "internal/conversation/topics auto-thread (ADD) (P1-E21-W5-S45-T3);"
         }
       ],
       "statuses": [
@@ -15015,7 +15080,7 @@
         },
         {
           "file": "internal/conversation/topics/segmenter_core.go",
-          "line": 26,
+          "line": 37,
           "status": "ADD",
           "ticket": "P1-E21-W5-S45-T2",
           "raw": "internal/conversation/topics segmenter (ADD) (P1-E21-W5-S45-T2)."
@@ -15050,7 +15115,7 @@
         },
         {
           "file": "internal/conversation/topics/segmenter_types.go",
-          "line": 19,
+          "line": 26,
           "status": "ADD",
           "ticket": "P1-E21-W5-S45-T2",
           "raw": "internal/conversation/topics segmenter (ADD) (P1-E21-W5-S45-T2)."
@@ -28677,7 +28742,7 @@
       ]
     }
   ],
-  "total_sites": 2684,
+  "total_sites": 2691,
   "unspecified_count": 128,
   "multi_status_count": 66
 }
