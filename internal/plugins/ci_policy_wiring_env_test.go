@@ -9,6 +9,7 @@ package plugins
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -77,13 +78,18 @@ func TestLoadCIPolicyConfig_NoHomeIsAnError(t *testing.T) {
 }
 
 // fileVaultIn forces the encrypted file vault under the wiring's own
-// DataDir with a test-only service label, so the probe travels the real
-// custody path without a keychain in reach.
+// DataDir with a test-only service label and a Runner that fails, so the
+// platform backend reports unavailable and the probe travels the real
+// custody path with no keychain in reach (the keychain gate checks for
+// exactly this Runner).
 func fileVaultIn() custodySelector {
 	return func(cfg secrets.Config) (secrets.Custody, error) {
-		cfg.ForceFileVault = true
-		cfg.Service = "cascade-test-ci-policy"
-		return secrets.SelectCustody(cfg)
+		return secrets.SelectCustody(secrets.Config{
+			Service: "cascade-test-ci-policy", Dir: cfg.Dir, ForceFileVault: true,
+			Runner: func(context.Context, string, ...string) ([]byte, error) {
+				return nil, errors.New("keychain unreachable in this test")
+			},
+		})
 	}
 }
 
