@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T03:55:48Z",
+  "generated_at": "2026-09-21T05:16:35Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -17774,6 +17774,29 @@
       ]
     },
     {
+      "name": "internal/plugins:review-wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/review_wiring.go",
+          "line": 59,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/plugins:review-wiring (ADD) -- P1-E25-W5-S52-T4"
+        },
+        {
+          "file": "internal/plugins/review_wiring_test.go",
+          "line": 7,
+          "status": "",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/plugins:review-wiring (TEST) -- P1-E25-W5-S52-T4."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/policy ApprovalError",
       "sites": [
         {
@@ -18802,6 +18825,246 @@
           "line": 12,
           "status": "ADD",
           "raw": "internal/providers/intake model enumeration (ADD) --"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/review.artifact",
+      "sites": [
+        {
+          "file": "internal/review/artifact.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/review.artifact/ADD (P1-E25-W5-S52-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/review.artifact-tests",
+      "sites": [
+        {
+          "file": "internal/review/artifact_test.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/review.artifact-tests (ADD, P1-E25-W5-S52-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/review.checklist",
+      "sites": [
+        {
+          "file": "internal/review/checklist.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/review.checklist/ADD (P1-E25-W5-S52-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/review.checklist-tests",
+      "sites": [
+        {
+          "file": "internal/review/checklist_test.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/review.checklist-tests (ADD, P1-E25-W5-S52-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/review.codec-proof",
+      "sites": [
+        {
+          "file": "internal/review/codec_test.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/review.codec-proof (ADD, P1-E25-W5-S52-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/review.crc",
+      "sites": [
+        {
+          "file": "internal/review/crc.go",
+          "line": 32,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/review.crc/ADD (P1-E25-W5-S52-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/review.events",
+      "sites": [
+        {
+          "file": "internal/review/events.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/review.events/ADD (P1-E25-W5-S52-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/review.family-tests",
+      "sites": [
+        {
+          "file": "internal/review/family_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/review.family-tests (ADD, P1-E25-W5-S52-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/review.lane-fixture",
+      "sites": [
+        {
+          "file": "internal/review/lanefixture_test.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/review.lane-fixture (ADD, P1-E25-W5-S52-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/review.prose",
+      "sites": [
+        {
+          "file": "internal/review/prose.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/review.prose/ADD (P1-E25-W5-S52-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/review.prose-tests",
+      "sites": [
+        {
+          "file": "internal/review/prose_test.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/review.prose-tests (ADD, P1-E25-W5-S52-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/review.provider",
+      "sites": [
+        {
+          "file": "internal/review/provider.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/review.provider/ADD (P1-E25-W5-S52-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/review.request",
+      "sites": [
+        {
+          "file": "internal/review/request.go",
+          "line": 33,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/review.request/ADD (P1-E25-W5-S52-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/review.reviewer",
+      "sites": [
+        {
+          "file": "internal/review/reviewer.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/review.reviewer/ADD (P1-E25-W5-S52-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/review.router-proof",
+      "sites": [
+        {
+          "file": "internal/review/router_test.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/review.router-proof (ADD, P1-E25-W5-S52-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/review.templates",
+      "sites": [
+        {
+          "file": "internal/review/templates.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "internal/review.templates/ADD (P1-E25-W5-S52-T4)."
         }
       ],
       "statuses": [
@@ -23307,6 +23570,21 @@
       ]
     },
     {
+      "name": "plugins/review entity",
+      "sites": [
+        {
+          "file": "plugins/review/plugin.go",
+          "line": 32,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T4",
+          "raw": "plugins/review entity (ADD) -- P1-E25-W5-S52-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "provider",
       "sites": [
         {
@@ -25809,7 +26087,7 @@
       ]
     }
   ],
-  "total_sites": 2455,
+  "total_sites": 2474,
   "unspecified_count": 84,
-  "multi_status_count": 51
+  "multi_status_count": 52
 }
