@@ -98,6 +98,38 @@ const (
 	// AllowRestricted is NOT set: no restricted-tier value has a path into
 	// that plugin's detection flow to begin with.
 	EgressClassNselfBackend EgressClass = "nself-backend"
+	// EgressClassWikiGitPush is the cascade-github plugin's wiki git push
+	// (P1-E25-W5-S51-T6, 06 §5.17): `cascade github wiki sync`'s clone and
+	// push of a repository's github.com/{owner}/{repo}.wiki.git endpoint.
+	// It is registered here for the central inventory this file's own doc
+	// comment describes, and the cascade-github manifest's declared net
+	// scope is extended to github.com to match.
+	//
+	// This entry is DOCUMENTATION-AND-AUDIT, not a live enforcement point
+	// this class's traffic actually transits: plugins/github/wiki (like
+	// plugins/github's existing api.github.com calls, P1-E25-W5-S51-T1's
+	// "declared, accepted-risk design, trusted tier") is a PROCESS-tier
+	// plugin — a separate OS process from the daemon that owns this
+	// registry — so plugins/** cannot import this package (Art.10.2) and
+	// cannot call Engine.Intercept across the process boundary the way a
+	// same-process builtin plugin does (contrast
+	// internal/plugins/nself_wiring.go's live EgressInterceptor binding,
+	// which only works because cascade-nself links into the same binary).
+	// The trusted-tier consent the operator grants when enabling
+	// cascade-github (the manifest's `requires` + permissions display) is
+	// this class's real gate — exactly as it already is for this same
+	// plugin's own api.github.com calls (plugins/github/tools' HTTPDoer),
+	// which likewise register no egress class of their own and rely
+	// entirely on that same consent boundary. This is not an invented
+	// exception: 06-FORGE-SPEC.md's binding rule 21 (O/S-31.T3, "process-tier
+	// plugin custody") states it exactly — "their DIRECT network egress is
+	// declared accepted-risk in the trusted-tier consent warning, with
+	// declared net scopes recorded and audited" — which this entry plus the
+	// manifest's extended net scope is. The confirming review (P1-E25-W5-S51-T6
+	// PRE-RULING 2) confirmed rule 21 covers this axis; it does NOT cover
+	// the separate local-file/argv-disclosure risk runner.go's gitAuthEnv
+	// addresses (D3).
+	EgressClassWikiGitPush EgressClass = "wiki-git-push"
 )
 
 // defaultClasses is the registration table. It is a slice of pairs rather
@@ -127,6 +159,7 @@ var defaultClasses = []struct {
 		AllowedTiers: []SensitivityTier{TierInternal},
 		Owner:        "P1-E25-W5-S52-T2",
 	}},
+	{EgressClassWikiGitPush, InterceptConfig{Enabled: true, Owner: "P1-E25-W5-S51-T6"}},
 }
 
 // defaultRegistry holds the classes this build ships with. It is package

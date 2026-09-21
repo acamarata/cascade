@@ -21,8 +21,9 @@
 //	no cascade-github entry where that registry is actually populated.
 //
 //	Direct GitHub API egress is this plugin's declared, accepted-risk
-//	design (trusted tier, single net scope api.github.com): the plugin
-//	performs its own calls rather than describing them for the host.
+//	design (trusted tier, net scopes api.github.com and, since
+//	P1-E25-W5-S51-T6, github.com for wiki git): the plugin performs its
+//	own calls rather than describing them for the host.
 //
 //	The token reaches the vault through a host_secret_ref host-fn
 //	notification and is never written into the manifest or any config
@@ -49,13 +50,25 @@
 //	host-side (cmd/cascade/github_ci_watch_cmd.go) — this plugin process is
 //	never launched to serve them.
 //
+//	P1-E25-W5-S51-T6's `github-wiki-sync`/`github-wiki-check` manifest
+//	commands are the OPPOSITE case: they DO dispatch into this process
+//	(wiki_cmd.go's wikiReply, on the "cascade-github.wiki." method prefix
+//	added to dispatch below) because the git clone/commit/push these
+//	commands perform is exec-only (plugins/github/wiki's GitRunner), never
+//	a REST call tools.Client could route. Repo-visibility and confirmation
+//	are checked inside plugins/github/wiki itself; this process has no
+//	terminal to prompt on, so --yes travels in the RPC call's args.
+//
 // SPORT: plugins/github (ADD) — P1-E25-W5-S51-T1; github-ci-wait/
 //
 //	github.ci.merge-on-green manifest commands (CHANGE) — P1-E25-W5-S51-T3;
 //	github-ci-watch-add|list|remove manifest commands (CHANGE) —
-//	P1-E25-W5-S51-T4. All are MOUNTED by the host's process-tier command
-//	mount (cmd/cascade/plugin_process_mount.go); the dotted name is what
-//	lets `merge-on-green` stay one path segment.
+//	P1-E25-W5-S51-T4; github-wiki-sync/github-wiki-check manifest commands
+//	(CHANGE) — P1-E25-W5-S51-T6. Every command above is DECLARED in the
+//	manifest; only wiki-sync/wiki-check and prs.merge (via T3) actually
+//	dispatch into this process today — the rest are host-side or, for
+//	github-repos/issues/prs, still unmounted by the CLI (T1's declared
+//	gap, unrelated to this process's own dispatch table).
 package main
 
 import (
@@ -131,11 +144,17 @@ func (p *broker) setToken(token string) {
 	p.token = token
 }
 
-// client returns an API client carrying whatever token this process holds.
+// client returns an API client carrying whatever token this process
+// holds: setToken's, or token_env.go's env fallback when none was set
+// (D2; see that file's header comment).
 func (p *broker) client() tools.Client {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return tools.Client{Doer: p.doer, Token: p.token}
+	token := p.token
+	if token == "" {
+		token = tokenFromEnv(os.Getenv)
+	}
+	return tools.Client{Doer: p.doer, Token: token}
 }
 
 // emit writes one pre-encoded frame (a notification) to stdout.
@@ -201,6 +220,8 @@ func (p *broker) dispatch(in frame) (out frame, reply bool) {
 		return p.authBeginReply(in)
 	case in.Method == "cascade.auth.complete":
 		return p.authCompleteReply(in)
+	case strings.HasPrefix(in.Method, PluginName+".wiki."):
+		return p.wikiReply(in) // wiki_cmd.go (P1-E25-W5-S51-T6): git exec, not a tools.Client REST call.
 	case strings.HasPrefix(in.Method, PluginName+"."):
 		return p.toolReply(in)
 	default:

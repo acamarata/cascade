@@ -26,8 +26,15 @@ host_version = ">=0.1.0"
 runtime = "process"
 
 # Capabilities this plugin needs granted before the host will enable it.
+#
+# net.http:github.com (added P1-E25-W5-S51-T6) is the git hosting
+# endpoint `cascade github wiki sync`/`wiki check` clone and push against
+# (https://github.com/{owner}/{repo}.wiki.git) -- distinct from
+# api.github.com, which is this plugin's REST API endpoint and carries no
+# git-protocol traffic of its own.
 requires = [
   "net.http:api.github.com",
+  "net.http:github.com",
   "oauth:repo",
   "host.secret_ref",
 ]
@@ -122,9 +129,21 @@ description = "List configured [ci.watch] entries (P1-E25-W5-S51-T4)."
 name = "github-ci-watch-remove"
 description = "Stop watching a repository's CI results (P1-E25-W5-S51-T4)."
 
+[[provides.commands]]
+name = "github-wiki-sync"
+description = "Push .github/wiki/ to the repository's GitHub wiki (public repos only, P1-E25-W5-S51-T6)."
+
+[[provides.commands]]
+name = "github-wiki-check"
+description = "Report drift between .github/wiki/ and the repository's GitHub wiki, read-only (P1-E25-W5-S51-T6)."
+
 [[permissions]]
 name = "network"
-description = "Reach api.github.com, and no other host, to call the GitHub REST API."
+description = "Reach api.github.com to call the GitHub REST API."
+
+[[permissions]]
+name = "network-wiki-git"
+description = "Reach github.com (git protocol, {owner}/{repo}.wiki.git) to clone and push a public repository's wiki for `cascade github wiki sync`, and to clone it read-only for `cascade github wiki check`. No other host is reached."
 
 [[permissions]]
 name = "oauth"

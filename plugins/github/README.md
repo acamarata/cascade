@@ -303,6 +303,87 @@ process.
     add` (the same gap `ci wait`/`merge-on-green`'s own README section
     records; `cmd/cascade/doctor*.go` is outside this ticket's file scope).
 
+## Wiki sync / drift gate (P1-E25-W5-S51-T6)
+
+`cascade github wiki sync` and `cascade github wiki check` implement the
+v1 wiki-sync pattern natively: pushing `.github/wiki/` to a repository's
+GitHub wiki, and a read-only drift gate for CI. Both live in
+`plugins/github/wiki` — unlike CI wait/merge-on-green and CI watch above,
+these DO dispatch into this process (`wiki_cmd.go`'s `wikiReply`), because
+the git clone/commit/push they perform is exec-only, never a REST call
+`tools.Client` could route.
+
+**SCOPE: public repositories only.** GitHub does not expose a wiki git
+endpoint for a private repository under standard OAuth scopes; both
+commands refuse gracefully with a typed error on one (visibility is
+checked via the existing `repos.get` call, so no new API surface or scope
+is added for it).
+
+- `cascade github wiki sync [--yes]` clones `https://github.com/{owner}/
+  {repo}.wiki.git`, overwrites the clone from the local `.github/wiki/`
+  directory, commits (author `cascade-bot`) and pushes. An empty local
+  `.github/wiki/` is a no-op (exit 0, nothing pushed); a local wiki that
+  already matches the remote is likewise a no-op. `--yes` is required
+  under `CASCADE_NO_INPUT=1`; without it, sync refuses with the message
+  "no prompt was attempted" rather than hanging on a prompt this process
+  has no terminal to show (`--yes` at the CLI layer is the confirmation
+  itself — there is no interactive y/N to collect). A non-fast-forward
+  push (a concurrent wiki edit) refuses with guidance pointing at `wiki
+  check`, never a silent overwrite.
+- `cascade github wiki check` clones the remote wiki read-only (never
+  pushes, needs no `--yes`) and diffs it against `.github/wiki/`,
+  reporting added/removed/changed files. `wiki_cmd.go`'s RPC result adds
+  an `exit_code` field (0 clean, 1 drift) for the eventual CLI layer.
+- Both commands exec the real `git` binary (06-FORGE-SPEC §5.15: clone is
+  L1-L2, push is L3) rather than speak the git wire protocol themselves —
+  the same exec-only pattern `internal/ci`'s local runner and
+  `internal/jobs`' git worktrees already use elsewhere in this tree. An
+  absent `git` binary produces a typed, actionable error, never a panic.
+- **Egress note.** `net.http:github.com` is a new manifest net scope
+  (distinct from `api.github.com`, this plugin's REST endpoint), and
+  `wiki-git-push` is registered in the central egress inventory
+  (`internal/hooks/egress/classes.go`) for the audit record. It is
+  documentation-and-audit rather than a live-enforced Interceptor call:
+  this process-tier plugin cannot call the host's `egress.Engine`
+  across the process boundary (Art.10.2), so the trusted-tier consent an
+  operator grants when enabling `cascade-github` is this class's real
+  gate — the same posture this plugin's own `api.github.com` calls
+  already have.
+- **Auto-sync.** `internal/repo/templates/wiki-sync-workflow.yml` is a
+  compiled-in GitHub Actions workflow template (R-21.187: workflow bodies
+  come only from `internal/repo/templates/`) that triggers on push to
+  `main` (paths filter `.github/wiki/**`) and runs `cascade github wiki
+  sync --yes`. A repository opts in by copying it into
+  `.github/workflows/`.
+- **Fixture provenance.** `plugins/github/wiki/testdata/` carries a real
+  git bundle captured from `acamarata/hijri-core`'s public wiki (Art.2);
+  provenance (tool, version, date, source repo) is in that directory's
+  own `README.md`.
+- **Authentication.** `client()` (`main.go`) uses the interactively-
+  authorized vault token when one exists, else falls back to
+  `CASCADE_GITHUB_TOKEN`/`GITHUB_TOKEN`/`GH_TOKEN` from this process's own
+  environment (`token_env.go`, the same precedence `cascade github ci
+  wait` uses) — the only way a CI-launched process, which never runs the
+  interactive OAuth flow, can authenticate. The token never appears in a
+  `git` argv, in git config on disk, or in an error/log message: it
+  travels only as a per-invocation `git` `http.extraheader` environment
+  variable (`runner.go`'s `gitAuthEnv`, the `actions/checkout` technique),
+  supplied fresh to both the clone and the push.
+- **Symlink refusal.** `readTree` (`filetree.go`) `Lstat`s every entry and
+  refuses the whole read with a typed `KindPolicyDenied` error the instant
+  it finds a symlink anywhere under `--local-dir`, rather than following
+  it — a symlink under `.github/wiki/` could otherwise read and push
+  content from outside the tree.
+- **CLI mount.** `wiki-sync`/`wiki-check` are mounted
+  (`cmd/cascade/github_wiki_cmd.go`, `plugin_process_mount.go`), so
+  `cascade github wiki --help`/`sync --help`/`check --help` all work on
+  the built binary. What both verbs still hit today is the SAME
+  trust-elevation prerequisite `cascade github ci merge-on-green` already
+  names (S-51.T3): no process-tier plugin can be launched in this build
+  yet, so the live git operation refuses with a typed `KindUnavailable`
+  error (`internal/plugins/wiki_wiring.go`) until P1-E24-W5-S50-T4 lands —
+  never a fabricated success.
+
 ## Build and test
 
 ```bash

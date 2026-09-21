@@ -103,6 +103,15 @@ func processPluginCommands() []processPluginCommand {
 			Name:        "github-ci-watch-remove",
 			Description: "Stop watching a repository's CI results (P1-E25-W5-S51-T4).",
 		},
+		{
+			Name:        "github-wiki-sync",
+			Description: "Push .github/wiki/ to the repository's GitHub wiki (public repos only, P1-E25-W5-S51-T6).",
+		},
+		{
+			Name: "github-wiki-check",
+			Description: "Report drift between .github/wiki/ and the repository's GitHub wiki, read-only " +
+				"(P1-E25-W5-S51-T6).",
+		},
 	}
 	out := make([]processPluginCommand, 0, len(specs))
 	for _, s := range specs {

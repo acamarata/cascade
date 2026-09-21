@@ -1,0 +1,54 @@
+# cascade github wiki sync auto-sync workflow (P1-E25-W5-S51-T6).
+#
+# This is a COMPILED-IN TEMPLATE (R-21.187: hook and workflow bodies come
+# only from internal/repo/templates/) — its body is not generated, it is
+# this exact file. A repository opts in by copying it into
+# .github/workflows/ (AA/S-55.T2 does this for cascade's own repo, whose
+# .github/wiki/ is its docs source of truth).
+#
+# SCOPE (matches cascade-github wiki sync itself): PUBLIC repositories
+# only. GitHub does not expose a wiki git endpoint for a private
+# repository under standard OAuth scopes, and `cascade github wiki sync`
+# refuses on one gracefully — running this workflow against a private
+# repository would simply fail the sync step with that same refusal.
+#
+# `--yes` is required: this runs unattended (06-FORGE-SPEC §5.8 automation
+# parity), so the workflow itself is the operator's standing confirmation
+# to push, made once by committing this file into .github/workflows/.
+#
+# The install step below builds `cascade` from this repository's own
+# cmd/cascade — correct for cascade's own dogfooding use (AA/S-55.T2) and
+# for any other repository that vendors or depends on this module. A
+# repository that does not build cascade from source should replace that
+# one step with however it installs the `cascade` CLI (a released binary,
+# a package manager, …); every other step is unchanged.
+#
+# Every `uses:` is pinned to a full commit SHA (never a floating tag),
+# matching this repo's own ci.yml/release.yml convention — the resolved
+# version is in the trailing comment.
+name: Wiki Sync
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/wiki/**'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Build cascade
+        run: go build -o "$(go env GOPATH)/bin/cascade" ./cmd/cascade
+
+      - name: Sync wiki
+        env:
+          CASCADE_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: cascade github wiki sync --yes

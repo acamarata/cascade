@@ -43,6 +43,8 @@ func TestProcessPluginMountBuildsTheContractedVerbPaths(t *testing.T) {
 		{"github", "prs"},
 		{"github", "ci", "wait"},
 		{"github", "ci", "merge-on-green"},
+		{"github", "wiki", "sync"},
+		{"github", "wiki", "check"},
 	} {
 		cmd := findMounted(t, path...)
 		if cmd.RunE == nil && cmd.Run == nil {

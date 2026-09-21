@@ -75,18 +75,37 @@ func TestThisPackageRegistersNoBuiltin(t *testing.T) {
 // consents to. The v2 schema has no dedicated net-scope or OAuth-scope key,
 // so both are declared through `requires` and repeated in the permission
 // text; this test is what keeps those two places from drifting apart.
+//
+// allowedNetScopes is the closed set: api.github.com (this plugin's REST
+// API) and github.com (P1-E25-W5-S51-T6's wiki git clone/push endpoint,
+// distinct from the API host). Anything else is an extra host nobody
+// reviewed.
 func TestManifestDeclaresTheNetworkAndOAuthScope(t *testing.T) {
 	m := loadManifest(t)
+	allowedNetScopes := map[string]bool{
+		"net.http:api.github.com": true,
+		"net.http:github.com":     true,
+	}
 
 	required := strings.Join(m.Requires, " ")
-	for _, want := range []string{"api.github.com", "repo"} {
+	for _, want := range []string{"api.github.com", "github.com", "repo"} {
 		if !strings.Contains(required, want) {
 			t.Errorf("requires = %v, want it to declare %q", m.Requires, want)
 		}
 	}
+	gotNetScopes := map[string]bool{}
 	for _, r := range m.Requires {
-		if strings.HasPrefix(r, "net.http:") && r != "net.http:api.github.com" {
-			t.Errorf("requires declares the extra net scope %q; api.github.com is the only host this plugin may reach", r)
+		if !strings.HasPrefix(r, "net.http:") {
+			continue
+		}
+		gotNetScopes[r] = true
+		if !allowedNetScopes[r] {
+			t.Errorf("requires declares the extra net scope %q; only api.github.com and github.com are reviewed hosts", r)
+		}
+	}
+	for want := range allowedNetScopes {
+		if !gotNetScopes[want] {
+			t.Errorf("requires = %v, missing the exact scope %q (a substring match on the joined list is not enough)", m.Requires, want)
 		}
 	}
 
@@ -96,6 +115,9 @@ func TestManifestDeclaresTheNetworkAndOAuthScope(t *testing.T) {
 	}
 	if !strings.Contains(consent, "api.github.com") {
 		t.Error("no permission text names api.github.com; an operator consents to what they can read")
+	}
+	if !strings.Contains(consent, ".wiki.git") {
+		t.Error("no permission text names the wiki git endpoint; an operator consents to what they can read")
 	}
 	if !strings.Contains(consent, "never written") {
 		t.Error("no permission text states that the token is not written to config")

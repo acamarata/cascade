@@ -48,6 +48,12 @@ func hostedProcessVerbs() map[string]func() *cobra.Command {
 		"github-ci-watch-add":      newGitHubCIWatchAddCmd,
 		"github-ci-watch-list":     newGitHubCIWatchListCmd,
 		"github-ci-watch-remove":   newGitHubCIWatchRemoveCmd,
+		// P1-E25-W5-S51-T6, D1: wiki sync/check dispatch into the
+		// cascade-github process (see github_wiki_cmd.go's header), unlike
+		// the host-native verbs above, but still mount through this same
+		// hosted map so `cascade github wiki --help` is reachable.
+		"github-wiki-sync":  func() *cobra.Command { return newGitHubWikiSyncCmd(productionGitHubWikiCaller) },
+		"github-wiki-check": func() *cobra.Command { return newGitHubWikiCheckCmd(productionGitHubWikiCaller) },
 	}
 }
 
