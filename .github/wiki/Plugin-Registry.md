@@ -125,3 +125,42 @@ a safe no-op, not a second install attempt.
 Declining, an install failure, or an unapproved elevation all stop before
 the intent resumes — a failed or declined install never leaves the
 original agent action waiting on a plugin that was not actually installed.
+
+## Acceptance: "link my GitHub" end to end
+
+`plugins/cascade-pa/install/acceptance_x_test.go` proves the conversational
+install flow above against real, provenance-stamped fixtures rather than
+mocked collaborators: a real Ed25519-signed registry index naming
+cascade-github (`testdata/acceptance/`, see that directory's `README.md` for
+signing provenance), a real intent resolver, a real elevation broker
+(genuine Ed25519 key generation, real nonce/attestation round trip), and
+the real plugin-add lifecycle functions — the same ones `cascade plugin
+add` calls.
+
+- **Happy path** (`TestAcceptance_X_LinkGitHub`): "link my GitHub" resolves
+  to cascade-github, a proposal is echoed before anything installs, the
+  operator confirms, and — because cascade-github is a process-tier plugin
+  — elevation is required. One subtest proves the install is refused when
+  no elevation broker is configured at all; the other drives a genuine
+  broker to a verified approval and shows the elevation witness reaches
+  the retried install call only after that approval, never before.
+- **Known limit, proven rather than hidden**: no plugin in this tree can
+  actually finish a process-tier elevated install yet — the host has no
+  mechanism to mark any manifest's trust tier above "untrusted", so the
+  real install lifecycle refuses at that gate every time, for every
+  process-tier plugin, not just cascade-github. The acceptance test
+  asserts this real, current refusal (and that zero installed-metadata
+  record is left behind) rather than faking a successful "tools are live"
+  outcome. Separately, the MCP tool surface only ever sources tools from
+  the compile-time builtin registry — an installed process-tier plugin's
+  declared tools have no path into it yet, mounted or not. Both are
+  tracked as open host-mount gaps, not defects in this flow.
+- **Already installed** (`TestAcceptance_X_AlreadyInstalled`): a candidate
+  already on record as installed skips elevation entirely — the add
+  lifecycle's own idempotency check short-circuits before the elevation
+  decision is ever evaluated — and resumes immediately, proving the §5.9
+  idempotency contract on a real, passing run.
+- **Error paths**: a registry fetch failure, a checksum-tampered artifact,
+  and an explicit decline each produce zero install attempts and no
+  resume, exercising the real registry client's sentinel errors and the
+  real artifact verifier.
