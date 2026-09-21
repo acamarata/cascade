@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T20:30:02Z",
+  "generated_at": "2026-09-21T21:02:10Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -19438,8 +19438,22 @@
           "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- FIX P1-E24-W5-S50-T4 (D3)."
         },
         {
+          "file": "internal/plugins/cascadepa_install_elevator_helpers_test.go",
+          "line": 12,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- P1-E24-W5-S50-T4"
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_elevator_posix_test.go",
+          "line": 17,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- P1-E24-W5-S50-T4"
+        },
+        {
           "file": "internal/plugins/cascadepa_install_elevator_test.go",
-          "line": 11,
+          "line": 28,
           "status": "",
           "ticket": "P1-E24-W5-S50-T4",
           "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- P1-E24-W5-S50-T4."
@@ -19450,6 +19464,13 @@
           "status": "ADD",
           "ticket": "P1-E24-W5-S50-T4",
           "raw": "internal/plugins:cascadepa-install-wiring (ADD) -- FIX P1-E24-W5-S50-T4 (D2)."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_elevator_windows_test.go",
+          "line": 18,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- P1-E24-W5-S50-T4"
         },
         {
           "file": "internal/plugins/cascadepa_install_events.go",
@@ -29286,7 +29307,7 @@
       ]
     }
   ],
-  "total_sites": 2757,
+  "total_sites": 2760,
   "unspecified_count": 130,
   "multi_status_count": 72
 }
