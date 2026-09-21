@@ -1,0 +1,4 @@
+go test fuzz v1
+string("marker-dir")
+string("/srv/app/.nself")
+string("postgres://cascade:not-a-real-secret@127.0.0.1:5432/cascade")

@@ -80,6 +80,24 @@ const (
 	// tier, and this class stays as strict as every other default so a
 	// caller cannot widen admission by writing straight to it.
 	EgressClassNodeDispatch EgressClass = "node-dispatch"
+	// EgressClassNselfBackend is the cascade-nself plugin's outbound leg
+	// (P1-E25-W5-S52-T2, 06 §5.17): every tool response that plugin
+	// emits transits this class. Today that is its project-detection
+	// report; a future ticket's real backend leg (if the counterpart CLI
+	// ever grows the handshake verb its contract assumed) inherits the
+	// same class rather than registering a second one.
+	// plugins/nself cannot import this package at all (Art.10.2,
+	// plugins-providers-boundary depguard) so it carries its own local,
+	// string-identical mirror (plugins/nself/doctor.go's EgressClass/
+	// SensitivityTier) and writes through an injected EgressInterceptor
+	// seam — the same shape internal/plugins/process/types.go documents
+	// for the identical depguard reason. The REAL engine is bound to that
+	// seam by internal/plugins/nself_wiring.go; with nothing bound the
+	// plugin refuses to emit rather than passing bytes through unfiltered,
+	// so this config is enforced rather than decorative.
+	// AllowRestricted is NOT set: no restricted-tier value has a path into
+	// that plugin's detection flow to begin with.
+	EgressClassNselfBackend EgressClass = "nself-backend"
 )
 
 // defaultClasses is the registration table. It is a slice of pairs rather
@@ -103,6 +121,11 @@ var defaultClasses = []struct {
 		Enabled: true, AllowRestricted: false,
 		AllowedTiers: []SensitivityTier{TierInternal, TierPublic},
 		Owner:        "P1-E23-W5-S48-T1",
+	}},
+	{EgressClassNselfBackend, InterceptConfig{
+		Enabled: true, AllowRestricted: false,
+		AllowedTiers: []SensitivityTier{TierInternal},
+		Owner:        "P1-E25-W5-S52-T2",
 	}},
 }
 

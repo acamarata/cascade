@@ -30,6 +30,7 @@ func TestEgressClassesR21265Registered(t *testing.T) {
 		{EgressClassRegistryFetch, "registry-fetch", "X/S-50.T1", true, false},
 		{EgressClassCIPoll, "ci-poll", "P1-E25-W5-S51-T2", true, false},
 		{EgressClassBridge, "bridge", "P1-E23-W5-S48-T1", true, false},
+		{EgressClassNselfBackend, "nself-backend", "P1-E25-W5-S52-T2", true, false},
 	}
 	registry := DefaultRegistry()
 	if got, want := len(registry.Classes()), len(cases); got != want {

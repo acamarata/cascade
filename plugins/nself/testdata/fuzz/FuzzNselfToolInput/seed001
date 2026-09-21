@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"root_dir\":\"/srv/app\",\"unexpected\":[1,2,3]}")
