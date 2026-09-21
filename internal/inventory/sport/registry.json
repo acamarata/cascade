@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T18:00:30Z",
+  "generated_at": "2026-09-21T18:20:06Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2342,14 +2342,35 @@
         },
         {
           "file": "cmd/cascade/plugin_update.go",
-          "line": 9,
+          "line": 18,
           "status": "ADD",
           "ticket": "P1-E15-W4-S32-T4",
-          "raw": "cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4)."
+          "raw": "cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4); registry path"
+        },
+        {
+          "file": "cmd/cascade/plugin_update_registry.go",
+          "line": 34,
+          "status": "CHANGE",
+          "ticket": "P1-E24-W5-S50-T8",
+          "raw": "cli/plugin-lifecycle/CHANGE (P1-E24-W5-S50-T8, reworked)."
+        },
+        {
+          "file": "cmd/cascade/plugin_update_rework_test.go",
+          "line": 10,
+          "status": "CHANGE",
+          "raw": "cli/plugin-lifecycle/CHANGE tests"
+        },
+        {
+          "file": "cmd/cascade/plugin_update_test.go",
+          "line": 20,
+          "status": "CHANGE",
+          "ticket": "P1-E24-W5-S50-T8",
+          "raw": "cli/plugin-lifecycle/CHANGE tests (P1-E24-W5-S50-T8)."
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -23639,10 +23660,10 @@
         },
         {
           "file": "pkg/plugin/registry_verify.go",
-          "line": 19,
+          "line": 23,
           "status": "ADD",
           "ticket": "P1-E24-W5-S50-T1",
-          "raw": "pkg/plugin registry-client (ADD) — P1-E24-W5-S50-T1."
+          "raw": "pkg/plugin registry-client (ADD) — P1-E24-W5-S50-T1; VerifyArtifact"
         },
         {
           "file": "pkg/plugin/verify_artifact.go",
@@ -23735,6 +23756,50 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "pkg/plugin registry-client-update",
+      "sites": [
+        {
+          "file": "pkg/plugin/update.go",
+          "line": 43,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T8",
+          "raw": "pkg/plugin registry-client-update (ADD) — P1-E24-W5-S50-T8."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "pkg/plugin registry-client-update tests",
+      "sites": [
+        {
+          "file": "pkg/plugin/update_e2e_test.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T8",
+          "raw": "pkg/plugin registry-client-update tests (ADD) — P1-E24-W5-S50-T8."
+        },
+        {
+          "file": "pkg/plugin/update_security_test.go",
+          "line": 15,
+          "status": "CHANGE",
+          "raw": "pkg/plugin registry-client-update tests (CHANGE, rework) —"
+        },
+        {
+          "file": "pkg/plugin/update_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T8",
+          "raw": "pkg/plugin registry-client-update tests (ADD) — P1-E24-W5-S50-T8."
+        }
+      ],
+      "statuses": [
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -27894,6 +27959,21 @@
       ]
     },
     {
+      "name": "rework",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_update_rework_test.go",
+          "line": 10,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T8",
+          "raw": "rework (P1-E24-W5-S50-T8)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "rpc/conductor-expand",
       "sites": [
         {
@@ -28892,7 +28972,7 @@
       ]
     }
   ],
-  "total_sites": 2709,
-  "unspecified_count": 129,
-  "multi_status_count": 67
+  "total_sites": 2717,
+  "unspecified_count": 130,
+  "multi_status_count": 69
 }
