@@ -40,11 +40,16 @@
 // GLOBALLY across cascade.db with no per-MigrationSet identity. Claimed
 // slots as of this ticket: bootstrap=1, context/scope=2,
 // retrieval/lifecycle=3, providers/registry=4, jobs=5, providers/usage=6,
-// conversation=7. This package claims the next unused slot, 8.
+// conversation=7. This package claims the next unused slot, 8. P1-E25-W5-
+// S51-T5 bumps ciSchemaVersion to 9 (adding tableRunSource,
+// domain_source.go) -- safe under either reading of "global": the ledger
+// keys by (SetID, schema_version) per R-16.77, and 9 is this SetID's own
+// next unused slot regardless.
 //
 // SPORT: internal.ci.MigrationSet/ADDED, internal.ci.Upsert/ADDED
 //
-//	(P1-E25-W5-S51-T2).
+//	(P1-E25-W5-S51-T2). internal.ci.UpsertRunSource/ADDED,
+//	internal.ci.runSource/ADDED (P1-E25-W5-S51-T5).
 package ci
 
 import (
@@ -65,12 +70,20 @@ const (
 	tableRun  = "ci_run"
 	tableJob  = "ci_job"
 	tableStep = "ci_step"
+	// tableRunSource is the P1-E25-W5-S51-T5 side table added below: a
+	// new table, not an ALTER TABLE ... ADD COLUMN on ci_run, because
+	// internal/storage/migrate's DSL offers no ALTER step at all (see
+	// domain_source.go's own doc comment, matching
+	// internal/conversation/archive.go's identical precedent for the
+	// same DSL gap).
+	tableRunSource = "ci_run_source"
 )
 
 // ciSchemaVersion is this package's MigrationSet target version -- the
-// next unused slot in the single global sequence. See this file's SCHEMA
-// VERSION doc comment.
-const ciSchemaVersion = 8
+// next unused slot in the single global sequence. Bumped 8 -> 9 by
+// P1-E25-W5-S51-T5 to add tableRunSource (domain_source.go); see this
+// file's SCHEMA VERSION doc comment.
+const ciSchemaVersion = 9
 
 // SchemaVersion is ciSchemaVersion exported for a future composition
 // root's reader-ceiling max(), matching every sibling package's own
@@ -95,6 +108,7 @@ func MigrationSet() migrate.MigrationSet {
 			runTableStep(),
 			jobTableStep(),
 			stepTableStep(),
+			sourceTableStep(),
 		},
 	}
 }

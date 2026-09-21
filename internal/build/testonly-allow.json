@@ -29,24 +29,10 @@
   },
   {
     "caller_site": "internal/daemon/ci_wire.go",
-    "expected_caller": "a future internal/daemon/ci_wire.go composition-root file that constructs the live internal/ci schema against cmd/cascade's shared *sql.DB, matching internal/providers/registry's own migration wiring precedent; retire this entry once that lands",
-    "reason": "P1-E25-W5-S51-T2: no composition-root wiring in this ticket's files_scope, matching internal/providers/registry.ApplyMigrationSchema's identical precedent; a later composition-root ticket wires this in",
-    "retire_ticket": "P1-E25-W5-S51-T2",
-    "symbol": "internal/ci.ApplyMigrationSchema"
-  },
-  {
-    "caller_site": "internal/daemon/ci_wire.go",
     "expected_caller": "the same future internal/daemon/ci_wire.go, once it constructs a live internal/ci.Client and registers its poll as a scheduler Runnable; retire this entry once that lands",
     "reason": "P1-E25-W5-S51-T2: same as ApplyMigrationSchema above -- the polling Client has no scheduler wiring yet",
     "retire_ticket": "P1-E25-W5-S51-T2",
     "symbol": "internal/ci.NewClient"
-  },
-  {
-    "caller_site": "internal/daemon/ci_wire.go",
-    "expected_caller": "the same future internal/daemon/ci_wire.go, once it calls Upsert against each polled run/job/step; retire this entry once that lands",
-    "reason": "P1-E25-W5-S51-T2: same as above -- Upsert is Client's would-be write path once wired",
-    "retire_ticket": "P1-E25-W5-S51-T2",
-    "symbol": "internal/ci.Upsert"
   },
   {
     "caller_site": "internal/conductor/flow.go",

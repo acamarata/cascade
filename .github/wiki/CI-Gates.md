@@ -54,6 +54,33 @@ three violations — the negative proof that removing or weakening the
 assertion call makes this test fail. The fixture is never merged into
 the live `Budgets` table and is never removed from the tree.
 
+## `cascade ci status` aggregates both sources
+
+The gates above are the ones `go test ./internal/build/...` enforces on the
+tree. They are a different thing from CI *results*, which cascade records in
+the `ci_results` domain from two independent producers:
+
+| Producer | `source` | Written by |
+|---|---|---|
+| hosted GitHub Actions | `github-actions` | the `cascade-github` plugin's ingestion |
+| the local lint/test/build gate | `local` | `cascade ci run` |
+
+`cascade ci status` shows both together, newest first, with the `source`
+column naming which produced each row. A row with no recorded source reads
+as `github-actions`: every row written before the source marker existed came
+from the polling path, so an absent marker can only mean that producer.
+
+Local run ids are additionally allocated in the **negative** integers, per
+repository, so they cannot collide with GitHub's own (always positive)
+workflow-run ids — the sign alone tells the two apart in `ci_run` and
+`ci_job`, even before the source marker is consulted.
+
+Which repositories may use which producer is the never-pay policy's
+decision, and it is enforced in both directions: `cascade ci run` refuses a
+repository routed to hosted Actions, and the Actions polling path refuses a
+repository routed to the local gate. See `docs/cli-reference/ci.md` for the
+`[ci.policy]` and `[ci.local]` keys.
+
 ## Other gates
 
 See `internal/build/*.go` (gofmt-clean, dead-code, test-only usage,

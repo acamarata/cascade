@@ -37,7 +37,7 @@ func TestPollRuns_Pagination(t *testing.T) {
 		page1: {Status: 200, Body: []byte(fmt.Sprintf(`{"total_count":150,"workflow_runs":%s}`, runList(100, 1)))},
 		page2: {Status: 200, Body: []byte(fmt.Sprintf(`{"total_count":150,"workflow_runs":%s}`, runList(50, 101)))},
 	}}
-	c := NewClient(doer, testEngine(t), "https://api.github.com", 1)
+	c := NewClient(doer, testEngine(t), "https://api.github.com", 1, allowActionsRoutes)
 	res, err := c.PollRuns(context.Background(), "o", "r")
 	if err != nil {
 		t.Fatalf("PollRuns: %v", err)
@@ -52,7 +52,7 @@ func TestPollRuns_Pagination(t *testing.T) {
 func TestPollRuns_NonOKStatus(t *testing.T) {
 	url := "https://api.github.com/repos/o/r/actions/runs?per_page=100&page=1"
 	doer := &fakeDoer{responses: map[string]HTTPResponse{url: {Status: 500}}}
-	c := NewClient(doer, testEngine(t), "https://api.github.com", 1)
+	c := NewClient(doer, testEngine(t), "https://api.github.com", 1, allowActionsRoutes)
 	if _, err := c.PollRuns(context.Background(), "o", "r"); err == nil {
 		t.Error("expected an error for HTTP 500")
 	}
@@ -63,7 +63,7 @@ func TestPollRuns_NonOKStatus(t *testing.T) {
 func TestPollJobs_NotModifiedAndErrors(t *testing.T) {
 	url304 := "https://api.github.com/repos/o/r/actions/runs/1/jobs?per_page=100"
 	doer := &fakeDoer{responses: map[string]HTTPResponse{url304: {Status: 304}}}
-	c := NewClient(doer, testEngine(t), "https://api.github.com", 1)
+	c := NewClient(doer, testEngine(t), "https://api.github.com", 1, allowActionsRoutes)
 	res, err := c.PollJobs(context.Background(), "o", "r", 1)
 	if err != nil {
 		t.Fatalf("PollJobs (304): %v", err)
@@ -74,21 +74,21 @@ func TestPollJobs_NotModifiedAndErrors(t *testing.T) {
 
 	url500 := "https://api.github.com/repos/o/r/actions/runs/2/jobs?per_page=100"
 	doer2 := &fakeDoer{responses: map[string]HTTPResponse{url500: {Status: 500}}}
-	c2 := NewClient(doer2, testEngine(t), "https://api.github.com", 1)
+	c2 := NewClient(doer2, testEngine(t), "https://api.github.com", 1, allowActionsRoutes)
 	if _, err := c2.PollJobs(context.Background(), "o", "r", 2); err == nil {
 		t.Error("expected an error for HTTP 500")
 	}
 
 	urlBad := "https://api.github.com/repos/o/r/actions/runs/3/jobs?per_page=100"
 	doer3 := &fakeDoer{responses: map[string]HTTPResponse{urlBad: {Status: 200, Body: []byte(`not json`)}}}
-	c3 := NewClient(doer3, testEngine(t), "https://api.github.com", 1)
+	c3 := NewClient(doer3, testEngine(t), "https://api.github.com", 1, allowActionsRoutes)
 	if _, err := c3.PollJobs(context.Background(), "o", "r", 3); err == nil {
 		t.Error("expected an error for malformed job JSON")
 	}
 }
 
 func TestPollRuns_TransportError(t *testing.T) {
-	c := NewClient(errDoer{err: context.DeadlineExceeded}, testEngine(t), "https://api.github.com", 1)
+	c := NewClient(errDoer{err: context.DeadlineExceeded}, testEngine(t), "https://api.github.com", 1, allowActionsRoutes)
 	if _, err := c.PollRuns(context.Background(), "o", "r"); err == nil {
 		t.Error("expected an error when the transport fails")
 	}
@@ -111,7 +111,7 @@ func (d *twoPageDoer) Do(_ context.Context, req HTTPRequest) (HTTPResponse, erro
 func TestPollRuns_SecondPageTransportError(t *testing.T) {
 	page1 := "https://api.github.com/repos/o/r/actions/runs?per_page=100&page=1"
 	doer := &twoPageDoer{page1URL: page1, page1Body: []byte(fmt.Sprintf(`{"total_count":150,"workflow_runs":%s}`, runList(100, 1)))}
-	c := NewClient(doer, testEngine(t), "https://api.github.com", 1)
+	c := NewClient(doer, testEngine(t), "https://api.github.com", 1, allowActionsRoutes)
 	if _, err := c.PollRuns(context.Background(), "o", "r"); err == nil {
 		t.Error("expected an error when the second page's transport fails")
 	}
@@ -126,7 +126,7 @@ func TestPollRuns_SecondPageNonOK(t *testing.T) {
 		page1: {Status: 200, Body: []byte(fmt.Sprintf(`{"total_count":150,"workflow_runs":%s}`, runList(100, 1)))},
 		page2: {Status: 500},
 	}}
-	c := NewClient(doer, testEngine(t), "https://api.github.com", 1)
+	c := NewClient(doer, testEngine(t), "https://api.github.com", 1, allowActionsRoutes)
 	if _, err := c.PollRuns(context.Background(), "o", "r"); err == nil {
 		t.Error("expected an error when a later page returns HTTP 500")
 	}
@@ -141,7 +141,7 @@ func TestPollRuns_SecondPageMalformedBody(t *testing.T) {
 		page1: {Status: 200, Body: []byte(fmt.Sprintf(`{"total_count":150,"workflow_runs":%s}`, runList(100, 1)))},
 		page2: {Status: 200, Body: []byte(`not json`)},
 	}}
-	c := NewClient(doer, testEngine(t), "https://api.github.com", 1)
+	c := NewClient(doer, testEngine(t), "https://api.github.com", 1, allowActionsRoutes)
 	if _, err := c.PollRuns(context.Background(), "o", "r"); err == nil {
 		t.Error("expected an error when a later page's body is malformed")
 	}
@@ -156,7 +156,7 @@ func TestPollRuns_SecondPageEmpty(t *testing.T) {
 		page1: {Status: 200, Body: []byte(fmt.Sprintf(`{"total_count":150,"workflow_runs":%s}`, runList(100, 1)))},
 		page2: {Status: 200, Body: []byte(`{"total_count":150,"workflow_runs":[]}`)},
 	}}
-	c := NewClient(doer, testEngine(t), "https://api.github.com", 1)
+	c := NewClient(doer, testEngine(t), "https://api.github.com", 1, allowActionsRoutes)
 	res, err := c.PollRuns(context.Background(), "o", "r")
 	if err != nil {
 		t.Fatalf("PollRuns: %v", err)
@@ -171,7 +171,7 @@ func TestPollRuns_SecondPageEmpty(t *testing.T) {
 func TestPollRuns_MalformedFirstPage(t *testing.T) {
 	url := "https://api.github.com/repos/o/r/actions/runs?per_page=100&page=1"
 	doer := &fakeDoer{responses: map[string]HTTPResponse{url: {Status: 200, Body: []byte(`not json`)}}}
-	c := NewClient(doer, testEngine(t), "https://api.github.com", 1)
+	c := NewClient(doer, testEngine(t), "https://api.github.com", 1, allowActionsRoutes)
 	if _, err := c.PollRuns(context.Background(), "o", "r"); err == nil {
 		t.Error("expected an error for a malformed first page")
 	}

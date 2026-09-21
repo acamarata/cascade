@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/cmd/cascade/config"
+	"github.com/acamarata/cascade/internal/ci"
 	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -143,6 +144,20 @@ func mountSubcommands(root *cobra.Command) {
 	mountChatCmd(root)
 	mountRunCmd(root)
 	mountPluginNamespaceCmds(root)
+	mountCICmd(root)
+}
+
+// mountCICmd attaches the `ci` command tree (P1-E25-W5-S51-T5, R-16.31 --
+// a CORE noun, never a github-plugin verb). It lives here, not in a
+// cmd/cascade/ci.go file, because internal/ci.NewCICmd already carries
+// the actual command logic (this ticket's own files_scope names
+// internal/ci/runner_cmd.go for it) -- matching mountConfigCmd's
+// identical pattern two functions above, where cmd/cascade/config
+// carries the logic and root.go only mounts it.
+func mountCICmd(root *cobra.Command) {
+	cmd := ci.NewCICmd(ci.ProductionCmdDeps())
+	guardUnknownSubcommands(cmd)
+	root.AddCommand(cmd)
 }
 
 // usageArgs adapts a cobra positional-argument validator so its errors carry

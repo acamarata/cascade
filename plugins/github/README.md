@@ -131,6 +131,41 @@ is parent-aware: `name` and `email` are blanked only inside objects that
 carry a `login` (that is, inside user objects), so a repository's own `name`
 survives.
 
+## CI policy
+
+`cipolicy` (`plugins/github/cipolicy`) holds this plugin's CI provider
+policy resolver: the decision about where a repository's CI coverage
+belongs. It is the only part of the never-pay rule that lives here.
+
+| Repository | Route |
+|---|---|
+| matches a `[ci.policy.repos] private` glob pattern | local gate, with a refusal for the Actions path |
+| no match, a GitHub token configured | hosted GitHub Actions |
+| no match, no token configured | local gate |
+
+Patterns are globs over `owner/repo` (`path.Match`, case-insensitive), so
+`acamarata/*` covers an owner and `*` never crosses the `/`. There is no
+`allow_paid` key and no bypass parameter: `Config` carries the pattern list
+and a boolean for token presence, and nothing else, so no caller can force
+a private repository onto paid CI.
+
+The resolver is a pure decision — no network call, no subprocess, no clock
+— and it imports `pkg/cascade` and the standard library only.
+
+**The run and status verbs are not here.** Per R-16.31 `cascade ci run` and
+`cascade ci status` are core commands (`internal/ci`), not plugin verbs; see
+`docs/cli-reference/ci.md`. The host reads this resolver's decision through
+the composition bridge at `internal/plugins/ci_policy_wiring.go`, which is
+the one package allowed to import both `internal/**` and `plugins/**`
+(Art.10.2). That bridge is also why the resolver sits in the `cipolicy`
+subpackage rather than in `plugins/github` itself: `plugins/github` is
+`package main`, and nothing can import a main package.
+
+What this plugin still owns for CI is ingestion: normalizing GitHub Actions
+runs into the `ci_results` domain. That path now asks the same resolver
+before it spends a request, and refuses to poll Actions for a repository the
+policy routes local.
+
 ## Build and test
 
 ```bash

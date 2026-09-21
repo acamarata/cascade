@@ -20,8 +20,12 @@
 //	is read" framing applies equally here: a 304 short-circuits before any
 //	normalize call, not merely before any write).
 //
-// Constraints: every outbound call transits egress.Engine.Capability +
+// Constraints: every outbound call first transits the never-pay policy
 //
+//	guard (P1-E25-W5-S51-T5: guardActionsPoll refuses to spend a request
+//	on a repository [ci.policy] routes to the local gate, and refuses
+//	outright when no policy resolver was supplied -- R-14.77), and then
+//	egress.Engine.Capability +
 //	egress.SensitivityPass on EgressClassCIPoll before doer.Do runs, per
 //	06 §5.17 (matching intake.acquireIntakeGate's exact two-check
 //	sequence). Pagination stops once the accumulated run/job count
@@ -80,6 +84,7 @@ type PollResult struct {
 type Client struct {
 	doer    Doer
 	engine  *egress.Engine
+	routes  RouteResolver
 	baseURL string
 	repoID  int64
 	etags   map[string]string
@@ -87,11 +92,18 @@ type Client struct {
 
 // NewClient builds a Client. baseURL defaults to https://api.github.com
 // when empty.
-func NewClient(doer Doer, engine *egress.Engine, baseURL string, repoID int64) *Client {
+//
+// routes is the never-pay policy resolver (route.go), and it is a
+// CONSTRUCTOR parameter rather than an optional setter on purpose: polling
+// Actions is the paid direction R-14.77 exists to stop, so a Client that
+// was never given a policy must refuse every call rather than poll
+// unguarded. Passing nil is allowed by the type system and refused by
+// every verb.
+func NewClient(doer Doer, engine *egress.Engine, baseURL string, repoID int64, routes RouteResolver) *Client {
 	if baseURL == "" {
 		baseURL = "https://api.github.com"
 	}
-	return &Client{doer: doer, engine: engine, baseURL: baseURL, repoID: repoID, etags: map[string]string{}}
+	return &Client{doer: doer, engine: engine, routes: routes, baseURL: baseURL, repoID: repoID, etags: map[string]string{}}
 }
 
 // acquireCIPollGate runs the two checks R-21.265/06-§5.17 require before
@@ -120,6 +132,9 @@ func (c *Client) acquireCIPollGate() (egress.Capability, error) {
 // normalize call; GitHub's own semantics make a conditional 304 on page 1
 // mean "nothing changed," so later pages are never fetched in that case.
 func (c *Client) PollRuns(ctx context.Context, owner, repo string) (PollResult, error) {
+	if err := guardActionsPoll(ctx, c.routes, owner+"/"+repo); err != nil {
+		return PollResult{}, err
+	}
 	if _, err := c.acquireCIPollGate(); err != nil {
 		return PollResult{}, err
 	}
@@ -165,6 +180,9 @@ func (c *Client) PollRuns(ctx context.Context, owner, repo string) (PollResult, 
 
 // PollJobs fetches every job (and its steps) for one run.
 func (c *Client) PollJobs(ctx context.Context, owner, repo string, runID int64) (PollResult, error) {
+	if err := guardActionsPoll(ctx, c.routes, owner+"/"+repo); err != nil {
+		return PollResult{}, err
+	}
 	if _, err := c.acquireCIPollGate(); err != nil {
 		return PollResult{}, err
 	}

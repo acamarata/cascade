@@ -137,6 +137,12 @@ type Config struct {
 	Widget widgetSection
 	// Plugins is the [plugins] block (P1-E15-W4-S33-T4, R-14.48); hot (see config_plugins.go).
 	Plugins pluginsSection
+	// CIPolicy is the [ci.policy] block (P1-E25-W5-S51-T5, R-14.77); hot
+	// (see config_ci.go).
+	CIPolicy ciPolicySection
+	// CILocal is the [ci.local] block (P1-E25-W5-S51-T5); hot (see
+	// config_ci.go).
+	CILocal ciLocalSection
 	// Extra holds every top-level section other than schema_version,
 	// runtime, and elevation, exactly as decoded from the file: valid
 	// future 08 §3 sections preserved for round-tripping, never
@@ -275,6 +281,8 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 		Economics:     sec.economics,
 		Widget:        sec.widget,
 		Plugins:       sec.plugins,
+		CIPolicy:      sec.ciPolicy,
+		CILocal:       sec.ciLocal,
 		Extra:         extraSections(tree),
 		sources:       sources,
 		rawTree:       tree,

@@ -34,6 +34,11 @@ type configSections struct {
 	// plugins is the [plugins] block (P1-E15-W4-S33-T4), same deviation
 	// as fleetAccounts above -- see config_plugins.go.
 	plugins pluginsSection
+	// ciPolicy is the [ci.policy] block and ciLocal the [ci.local] block
+	// (P1-E25-W5-S51-T5), same deviation as fleetAccounts above -- see
+	// config_ci.go.
+	ciPolicy ciPolicySection
+	ciLocal  ciLocalSection
 }
 
 // parseConfigSections runs each section parser in turn, returning on the
@@ -64,6 +69,12 @@ func parseConfigSections(tree map[string]interface{}, warn func(string, ...inter
 		return configSections{}, err
 	}
 	if s.plugins, err = parsePluginsSection(tree); err != nil {
+		return configSections{}, err
+	}
+	if s.ciPolicy, err = parseCIPolicySection(tree); err != nil {
+		return configSections{}, err
+	}
+	if s.ciLocal, err = parseCILocalSection(tree); err != nil {
 		return configSections{}, err
 	}
 	return s, nil

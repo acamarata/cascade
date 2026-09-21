@@ -83,7 +83,7 @@ func TestPollRuns_ETagRoundTrip_304NoWrite(t *testing.T) {
 		runsURL: {Status: 200, Header: map[string]string{"Etag": capturedETag},
 			Body: []byte(`{"total_count":1,"workflow_runs":[{"id":34616832466,"status":"completed","conclusion":"success"}]}`)},
 	}}
-	c := NewClient(doer, testEngine(t), "https://api.github.com", 42)
+	c := NewClient(doer, testEngine(t), "https://api.github.com", 42, allowActionsRoutes)
 
 	first, err := c.PollRuns(context.Background(), "acamarata", "cascade")
 	if err != nil {
@@ -123,7 +123,7 @@ func TestPollJobs_RealFixture(t *testing.T) {
 	body := loadFixture(t, "run_jobs.json")
 	url := "https://api.github.com/repos/acamarata/cascade/actions/runs/34616832399/jobs?per_page=100"
 	doer := &fakeDoer{responses: map[string]HTTPResponse{url: {Status: 200, Body: body}}}
-	c := NewClient(doer, testEngine(t), "https://api.github.com", 1)
+	c := NewClient(doer, testEngine(t), "https://api.github.com", 1, allowActionsRoutes)
 	res, err := c.PollJobs(context.Background(), "acamarata", "cascade", 34616832399)
 	if err != nil {
 		t.Fatalf("PollJobs: %v", err)
@@ -140,7 +140,7 @@ func TestAcquireCIPollGate_DisabledClassRefused(t *testing.T) {
 	reg := egress.NewRegistry()
 	reg.MustRegister(egress.EgressClassCIPoll, egress.InterceptConfig{Enabled: false, Owner: "test"})
 	doer := &fakeDoer{}
-	c := NewClient(doer, buildEngine(t, reg), "https://api.github.com", 1)
+	c := NewClient(doer, buildEngine(t, reg), "https://api.github.com", 1, allowActionsRoutes)
 	if _, err := c.PollRuns(context.Background(), "o", "r"); err == nil {
 		t.Error("expected a refusal for a disabled ci-poll class")
 	}
@@ -157,7 +157,7 @@ func TestAcquireCIPollGate_SensitivityRefused(t *testing.T) {
 	reg.MustRegister(egress.EgressClassCIPoll, egress.InterceptConfig{
 		Enabled: true, Owner: "test", AllowedTiers: []egress.SensitivityTier{egress.TierPublic},
 	})
-	c := NewClient(&fakeDoer{}, buildEngine(t, reg), "https://api.github.com", 1)
+	c := NewClient(&fakeDoer{}, buildEngine(t, reg), "https://api.github.com", 1, allowActionsRoutes)
 	if _, err := c.PollRuns(context.Background(), "o", "r"); err == nil {
 		t.Error("expected a sensitivity-pass refusal")
 	}
@@ -165,7 +165,7 @@ func TestAcquireCIPollGate_SensitivityRefused(t *testing.T) {
 
 // TestNewClient_DefaultBaseURL covers the empty-baseURL branch.
 func TestNewClient_DefaultBaseURL(t *testing.T) {
-	c := NewClient(&fakeDoer{}, testEngine(t), "", 1)
+	c := NewClient(&fakeDoer{}, testEngine(t), "", 1, allowActionsRoutes)
 	if c.baseURL != "https://api.github.com" {
 		t.Errorf("baseURL = %q, want the default", c.baseURL)
 	}
