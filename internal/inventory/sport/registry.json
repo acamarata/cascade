@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T19:06:57Z",
+  "generated_at": "2026-09-21T20:08:08Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5199,6 +5199,29 @@
         }
       ],
       "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade:cascadepa-install-hostdeps",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_cascadepa_install.go",
+          "line": 58,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "cmd/cascade:cascadepa-install-hostdeps (ADD) -- FIX P1-E24-W5-S50-T4 (D1)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_cascadepa_install_test.go",
+          "line": 18,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "cmd/cascade:cascadepa-install-hostdeps (TEST) -- FIX P1-E24-W5-S50-T4 (D2)."
+        }
+      ],
+      "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -19313,6 +19336,191 @@
       ]
     },
     {
+      "name": "internal/plugins:cascadepa-install-wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_install_confirm.go",
+          "line": 51,
+          "status": "CHANGE",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (CHANGED) -- FIX P1-E24-W5-S50-T4 (D1, round 3)."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_confirm_e2e_test.go",
+          "line": 10,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_confirm_errors_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- FIX P1-E24-W5-S50-T4 (D1, D3)."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_confirm_test.go",
+          "line": 12,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_dbevents.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (ADD) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_dbevents_test.go",
+          "line": 14,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- FIX P1-E24-W5-S50-T4 (D1, round 3)."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_echo.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (ADD) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_echo_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_elevator.go",
+          "line": 42,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (ADD) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_elevator_challenge_test.go",
+          "line": 10,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- FIX P1-E24-W5-S50-T4 (D3)."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_elevator_test.go",
+          "line": 11,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_elevator_verify.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (ADD) -- FIX P1-E24-W5-S50-T4 (D2)."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_events.go",
+          "line": 39,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (ADD) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_events_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_hostdeps_test.go",
+          "line": 14,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- FIX P1-E24-W5-S50-T4 (D1)."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_installer.go",
+          "line": 50,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (ADD) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_installer_close_test.go",
+          "line": 7,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_installer_coverage_test.go",
+          "line": 14,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- FIX P1-E24-W5-S50-T4 (D3, D5)."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_installer_elevation_test.go",
+          "line": 10,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_installer_test.go",
+          "line": 12,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_shared_store.go",
+          "line": 38,
+          "status": "CHANGE",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (CHANGED) -- FIX P1-E24-W5-S50-T4 (D1, round 3)."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_shared_store_test.go",
+          "line": 16,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- FIX P1-E24-W5-S50-T4 (D1, D2, round 3)."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_verify.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (ADD) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_wiring.go",
+          "line": 54,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (ADD) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_install_wiring_test.go",
+          "line": 15,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "internal/plugins:cascadepa-install-wiring (TEST) -- P1-E24-W5-S50-T4."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD",
+        "CHANGE"
+      ]
+    },
+    {
       "name": "internal/plugins:cascadepa-review-wiring",
       "sites": [
         {
@@ -24210,6 +24418,64 @@
       ]
     },
     {
+      "name": "plugins/cascade-pa/install",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/install/elevation.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "plugins/cascade-pa/install (ADD) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "plugins/cascade-pa/install/elevation_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "plugins/cascade-pa/install (ADD) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "plugins/cascade-pa/install/events.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "plugins/cascade-pa/install (ADD) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "plugins/cascade-pa/install/events_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "plugins/cascade-pa/install (ADD) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "plugins/cascade-pa/install/flow.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "plugins/cascade-pa/install (ADD) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "plugins/cascade-pa/install/flow_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "plugins/cascade-pa/install (ADD) -- P1-E24-W5-S50-T4."
+        },
+        {
+          "file": "plugins/cascade-pa/install/flow_threadid_test.go",
+          "line": 6,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "plugins/cascade-pa/install (TEST) -- FIX P1-E24-W5-S50-T4 (D4)."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/cascade-pa/telegram",
       "sites": [
         {
@@ -24638,7 +24904,7 @@
         },
         {
           "file": "plugins/cascade-pa/commands.go",
-          "line": 19,
+          "line": 21,
           "status": "ADD",
           "ticket": "P1-E20-W5-S43-T3",
           "raw": "plugins/cascade-pa:cmd:chat (ADD) — P1-E20-W5-S43-T3."
@@ -24649,6 +24915,13 @@
           "status": "ADD",
           "ticket": "P1-E20-W5-S43-T3",
           "raw": "plugins/cascade-pa:cmd:chat (ADD) — P1-E20-W5-S43-T3; manifest"
+        },
+        {
+          "file": "plugins/cascade-pa/plugin_test.go",
+          "line": 23,
+          "status": "CHANGE",
+          "ticket": "P1-E24-W5-S50-T4",
+          "raw": "plugins/cascade-pa:cmd:chat (CHANGED) -- P1-E24-W5-S50-T4."
         }
       ],
       "statuses": [
@@ -28984,7 +29257,7 @@
       ]
     }
   ],
-  "total_sites": 2719,
+  "total_sites": 2754,
   "unspecified_count": 130,
-  "multi_status_count": 69
+  "multi_status_count": 72
 }
