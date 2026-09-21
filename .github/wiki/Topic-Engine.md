@@ -75,8 +75,10 @@ neither is used outside this package's own tests today.
 
 ## Segmenter
 
-`topics.NewSegmenter(executor provider.ModelExecutor, embedder provider.Embedder,
-cfg HysteresisConfig) (Segmenter, error)` builds the engine that produces real
+`topics.NewSegmenterWith(classifier topics.Classifier, embedder provider.Embedder,
+cfg HysteresisConfig) (Segmenter, error)` builds the engine (the classifier comes from
+`topics.NewClassifier(executor)`, built once and shared with the AutoThreader so the
+window's opening turn is classified exactly once) that produces real
 `[]Boundary` predictions from a `[]Turn` window. It combines four
 components:
 
@@ -107,7 +109,8 @@ components:
    max depth evicts the oldest entry rather than growing unbounded.
 
 ```go
-seg, err := topics.NewSegmenter(executor, embedder, topics.HysteresisConfig{
+classifier := topics.NewClassifier(executor)
+seg, err := topics.NewSegmenterWith(classifier, embedder, topics.HysteresisConfig{
     Threshold: 0.5, // normalized cosine distance, must be > 0
     Window:    2,   // confirmation window length, in transitions
 })
@@ -309,9 +312,10 @@ three dependencies are `Reassign`'s: `Reassign` is a method on the same
 `AutoThreader`, not a separate service, because it operates the same
 `ThreadStore` against the same taxonomy that `Route` does.
 `NewDefaultAutoThreader(executor, embedder, cfg, store, taxonomy,
-exemplars, publisher, clock)` is the production constructor: it calls
-`NewSegmenter` (segmenter_core.go) and wires the result in, so a real
-caller never has to build a `Segmenter` by hand.
+exemplars, publisher, clock)` is the production constructor: it builds one
+`Classifier`, calls `NewSegmenterWith` (segmenter_core.go) with it and hands the
+same classifier to the AutoThreader, so a real caller never builds a `Segmenter`
+by hand and the opening turn is never classified twice.
 
 ### TaxonomyConfig (taxonomy.go)
 

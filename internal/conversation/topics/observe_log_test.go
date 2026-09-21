@@ -248,7 +248,7 @@ func TestObserveLoggerObserveModeErrorPaths(t *testing.T) {
 // every label to the empty TopicType, which validateTopicType refuses.
 func mustEmptyTaxonomyThreader(t *testing.T) *AutoThreader {
 	t.Helper()
-	at, err := NewAutoThreader(codeBoundarySegmenter(), newFakeThreadStore(), NewTaxonomyConfig(nil, TopicType("")),
+	at, err := NewAutoThreader(codeBoundarySegmenter(), &fakeClassifier{}, newFakeThreadStore(), NewTaxonomyConfig(nil, TopicType("")),
 		mustExemplarStore(t, storetest.NewMemStore()), &fakePublisher{}, newFixedClock())
 	if err != nil {
 		t.Fatalf("NewAutoThreader: %v", err)

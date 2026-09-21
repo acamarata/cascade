@@ -1,13 +1,15 @@
 // Package topics (auto_thread_test.go): Purpose: AutoThreader.Route's
 // boundary-to-thread routing, new-topic creation, taxonomy-label mapping,
-// boundary-list validation, re-delivery idempotence, Segmenter/ThreadStore
-// error propagation, and NewDefaultAutoThreader's real NewSegmenter wiring.
-// fakeSegmenter is this file's own double; fakeThreadStore comes from
-// thread_store_test.go, fixedClock from exemplar_store_test.go,
-// fakePublisher from reassign_test.go, and
+// boundary-list validation, re-delivery idempotence, Segmenter/Classifier/
+// ThreadStore error propagation, and NewDefaultAutoThreader's real
+// NewSegmenter wiring. fakeSegmenter and fakeClassifier are this file's own
+// doubles; fakeThreadStore comes from thread_store_test.go, fixedClock from
+// exemplar_store_test.go, fakePublisher from reassign_test.go, and
 // fakeClassifyExecutor/fakeEmbedder/turnsN/validCfg from
 // segmenter_core_test.go, all in this same package. The error-propagation
 // and constructor-refusal tests are in auto_thread_errors_test.go.
+// fakeClassifier's opener-labelling behavior is proven in
+// auto_thread_opener_test.go.
 package topics
 
 import (
@@ -40,17 +42,44 @@ func (f *fakeSegmenter) Segment(_ context.Context, turns []Turn) ([]Boundary, er
 
 var _ Segmenter = (*fakeSegmenter)(nil)
 
+// fakeClassifier is a deterministic Classifier double: it returns a
+// caller-configured label (or error) for whatever turn it is asked to
+// classify, and records the turn and call count so a test can assert
+// AutoThreader classified the window's real opening turn, not a fabricated
+// one. The zero value returns label "" (a classifier abstention) and
+// records nothing else, so every test that does not care about opener
+// classification gets the pre-D5 fallback behavior unchanged (taxonomy.go's
+// Resolve maps "" to Fallback exactly as it always did).
+type fakeClassifier struct {
+	label string
+	err   error
+	calls int
+	got   Turn
+}
+
+func (f *fakeClassifier) Classify(_ context.Context, turn Turn) (string, error) {
+	f.calls++
+	f.got = turn
+	if f.err != nil {
+		return "", f.err
+	}
+	return f.label, nil
+}
+
+var _ Classifier = (*fakeClassifier)(nil)
+
 func testTaxonomy() TaxonomyConfig {
 	return NewTaxonomyConfig(map[string]TopicType{"code": TopicType("code-topic")}, TopicType("fallback"))
 }
 
 // mustAutoThreader wires a ready AutoThreader over seg and store with this
-// package's standard test taxonomy, a real MemStore-backed ExemplarStore,
-// and fixed clock - the shape every test here needs, so the constructor's
-// six dependencies are named once rather than at each call site.
+// package's standard test taxonomy, an abstaining fakeClassifier (label ""
+// - see its own doc for why), a real MemStore-backed ExemplarStore, and
+// fixed clock - the shape every test here needs, so the constructor's seven
+// dependencies are named once rather than at each call site.
 func mustAutoThreader(t *testing.T, seg Segmenter, store ThreadStore) *AutoThreader {
 	t.Helper()
-	at, err := NewAutoThreader(seg, store, testTaxonomy(),
+	at, err := NewAutoThreader(seg, &fakeClassifier{}, store, testTaxonomy(),
 		mustExemplarStore(t, storetest.NewMemStore()), &fakePublisher{}, newFixedClock())
 	if err != nil {
 		t.Fatalf("NewAutoThreader: %v", err)
@@ -213,7 +242,7 @@ func TestAutoThreaderRouteRefusesBadBoundaries(t *testing.T) {
 // refused before anything is filed, rather than silently rewritten.
 func TestAutoThreaderRouteRefusesUnusableTopicType(t *testing.T) {
 	store := newFakeThreadStore()
-	at, err := NewAutoThreader(&fakeSegmenter{}, store, NewTaxonomyConfig(nil, TopicType("")),
+	at, err := NewAutoThreader(&fakeSegmenter{}, &fakeClassifier{}, store, NewTaxonomyConfig(nil, TopicType("")),
 		mustExemplarStore(t, storetest.NewMemStore()), &fakePublisher{}, newFixedClock())
 	if err != nil {
 		t.Fatalf("NewAutoThreader: %v", err)

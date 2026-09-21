@@ -184,7 +184,7 @@ func scoreCorpus(t *testing.T, corpus Corpus, seg Segmenter) EvalResult {
 // doubles.
 func newSyntheticSegmenter(t *testing.T) Segmenter {
 	t.Helper()
-	seg, err := NewSegmenter(keywordClassifier{}, onehotEmbedder{}, HysteresisConfig{Threshold: 0.5, Window: 2})
+	seg, err := newTestSegmenter(keywordClassifier{}, onehotEmbedder{}, HysteresisConfig{Threshold: 0.5, Window: 2})
 	if err != nil {
 		t.Fatalf("NewSegmenter: %v", err)
 	}

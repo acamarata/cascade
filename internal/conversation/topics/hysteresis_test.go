@@ -88,7 +88,7 @@ func segmentIndices(t *testing.T, window int, labels []string, vectors [][]float
 	t.Helper()
 	exec := &fakeClassifyExecutor{labels: labels}
 	emb := &fakeEmbedder{vectors: vectors}
-	s, err := NewSegmenter(exec, emb, HysteresisConfig{Threshold: 0.5, Window: window})
+	s, err := newTestSegmenter(exec, emb, HysteresisConfig{Threshold: 0.5, Window: window})
 	if err != nil {
 		t.Fatalf("NewSegmenter: %v", err)
 	}

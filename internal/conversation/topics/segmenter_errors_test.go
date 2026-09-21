@@ -20,7 +20,7 @@ import (
 func TestSegmenter_ClassifierErrorPropagates(t *testing.T) {
 	wantErr := cascade.New(cascade.KindUnavailable, "classify lane down")
 	exec := &fakeClassifyExecutor{err: wantErr}
-	s, _ := NewSegmenter(exec, &fakeEmbedder{vectors: [][]float32{{1, 0}}}, validCfg())
+	s, _ := newTestSegmenter(exec, &fakeEmbedder{vectors: [][]float32{{1, 0}}}, validCfg())
 	_, err := s.Segment(context.Background(), turnsN(1))
 	if !cascade.HasKind(err, cascade.KindUnavailable) {
 		t.Fatalf("classifier error: got %v, want KindUnavailable preserved", err)
@@ -31,7 +31,7 @@ func TestSegmenter_ClassifierErrorPropagates(t *testing.T) {
 func TestSegmenter_EmbedderErrorPropagates(t *testing.T) {
 	wantErr := cascade.New(cascade.KindTimeout, "embed lane timed out")
 	emb := &fakeEmbedder{err: wantErr}
-	s, _ := NewSegmenter(&fakeClassifyExecutor{labels: []string{"A"}}, emb, validCfg())
+	s, _ := newTestSegmenter(&fakeClassifyExecutor{labels: []string{"A"}}, emb, validCfg())
 	_, err := s.Segment(context.Background(), turnsN(1))
 	if !cascade.HasKind(err, cascade.KindTimeout) {
 		t.Fatalf("embedder error: got %v, want KindTimeout preserved", err)
@@ -55,7 +55,7 @@ func TestSegmenter_EmbedBatchContractViolations(t *testing.T) {
 	}
 	for name, emb := range cases {
 		t.Run(name, func(t *testing.T) {
-			s, _ := NewSegmenter(&fakeClassifyExecutor{labels: []string{"A", "B"}}, emb, validCfg())
+			s, _ := newTestSegmenter(&fakeClassifyExecutor{labels: []string{"A", "B"}}, emb, validCfg())
 			bounds, err := s.Segment(context.Background(), turnsN(2))
 			if !cascade.HasKind(err, cascade.KindInvalidInput) {
 				t.Fatalf("%s: got (%v, %v), want KindInvalidInput", name, bounds, err)
@@ -73,7 +73,7 @@ func TestSegmenter_EmbedBatchContractViolations(t *testing.T) {
 // at that turn while reporting success.
 func TestSegmenter_ZeroNormEmbeddingIsAnError(t *testing.T) {
 	emb := &fakeEmbedder{vectors: [][]float32{{0, 0}, {1, 0}}}
-	s, _ := NewSegmenter(&fakeClassifyExecutor{labels: []string{"A", "B"}}, emb, validCfg())
+	s, _ := newTestSegmenter(&fakeClassifyExecutor{labels: []string{"A", "B"}}, emb, validCfg())
 	bounds, err := s.Segment(context.Background(), turnsN(2))
 	if !cascade.HasKind(err, cascade.KindInvalidInput) {
 		t.Fatalf("zero-norm embedding: got (%v, %v), want KindInvalidInput", bounds, err)
@@ -85,7 +85,7 @@ func TestSegmenter_ZeroNormEmbeddingIsAnError(t *testing.T) {
 
 func TestSegmenter_EmptyClassifyLabelPropagates(t *testing.T) {
 	exec := &fakeClassifyExecutor{labels: []string{"   "}}
-	s, _ := NewSegmenter(exec, &fakeEmbedder{vectors: [][]float32{{1, 0}}}, validCfg())
+	s, _ := newTestSegmenter(exec, &fakeEmbedder{vectors: [][]float32{{1, 0}}}, validCfg())
 	_, err := s.Segment(context.Background(), turnsN(1))
 	if !cascade.HasKind(err, cascade.KindIntegrity) {
 		t.Fatalf("empty classify label: got %v, want KindIntegrity", err)

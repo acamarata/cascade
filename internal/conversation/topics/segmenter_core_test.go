@@ -15,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -86,10 +87,24 @@ func (f *fakeEmbedder) Embed(_ context.Context, _ []provider.EmbedInput) ([]prov
 	return out, nil
 }
 
+// turnsN returns n turns with DISTINCT text (P1-E21-W5-S46-T5 D6, scope
+// deviation - see the ticket's narrow-fix report): before D6, every turn
+// here shared the literal text "turn text", which was harmless because
+// nothing cached on turn content. D6 gives cheapLaneClassifier
+// (segmenter_types.go) a bounded per-instance memo cache keyed by
+// turn.Text, so identical text across turns in ONE window would collapse
+// classifyAll's "one classify call per turn" contract (segmenter_core.go)
+// into a single dispatch reused for every turn - not the cross-call reuse
+// D6 targets (segmenterImpl.classifyAll's own pass classifying turn 0,
+// followed by AutoThreader.classifyOpener reclassifying the SAME turn 0
+// value again). Distinct text per turn removes the accidental collision
+// while every existing assertion in this package is indifferent to the
+// literal text (only turn COUNT, POSITION, and the fake doubles' labels/
+// vectors are asserted anywhere in this package).
 func turnsN(n int) []Turn {
 	turns := make([]Turn, n)
 	for i := range turns {
-		turns[i] = Turn{Speaker: "a", Text: "turn text"}
+		turns[i] = Turn{Speaker: "a", Text: "turn text " + strconv.Itoa(i)}
 	}
 	return turns
 }
@@ -133,22 +148,22 @@ func TestSegmenter_NewRejectsInvalidDependencies(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if _, err := NewSegmenter(c.exec, c.embedder, c.cfg); !cascade.HasKind(err, cascade.KindInvalidInput) {
-				t.Fatalf("NewSegmenter(%s) error = %v, want KindInvalidInput", c.name, err)
+			if _, err := newTestSegmenter(c.exec, c.embedder, c.cfg); !cascade.HasKind(err, cascade.KindInvalidInput) {
+				t.Fatalf("newTestSegmenter(%s) error = %v, want KindInvalidInput", c.name, err)
 			}
 		})
 	}
 }
 
 func TestSegmenter_NewAcceptsValidDependencies(t *testing.T) {
-	s, err := NewSegmenter(&fakeClassifyExecutor{}, &fakeEmbedder{}, validCfg())
+	s, err := newTestSegmenter(&fakeClassifyExecutor{}, &fakeEmbedder{}, validCfg())
 	if err != nil || s == nil {
 		t.Fatalf("NewSegmenter valid deps: got (%v, %v), want a usable Segmenter", s, err)
 	}
 }
 
 func TestSegmenter_NilContextAndEmptyTurns(t *testing.T) {
-	s, _ := NewSegmenter(&fakeClassifyExecutor{}, &fakeEmbedder{}, validCfg())
+	s, _ := newTestSegmenter(&fakeClassifyExecutor{}, &fakeEmbedder{}, validCfg())
 	if _, err := s.Segment(nil, turnsN(1)); !cascade.HasKind(err, cascade.KindInvalidInput) { //nolint:staticcheck
 		t.Fatalf("nil ctx: error = %v, want KindInvalidInput", err)
 	}
@@ -163,7 +178,7 @@ func TestSegmenter_NilContextAndEmptyTurns(t *testing.T) {
 func TestSegmenter_NoBoundaryWhenTopicStable(t *testing.T) {
 	exec := &fakeClassifyExecutor{labels: []string{"A", "A", "A", "A"}}
 	emb := &fakeEmbedder{vectors: [][]float32{{1, 0}, {1, 0}, {1, 0}, {1, 0}}}
-	s, _ := NewSegmenter(exec, emb, validCfg())
+	s, _ := newTestSegmenter(exec, emb, validCfg())
 	bounds, err := s.Segment(context.Background(), turnsN(4))
 	if err != nil || len(bounds) != 0 {
 		t.Fatalf("stable topic: got (%v, %v), want (nil boundaries, nil error)", bounds, err)
@@ -190,7 +205,7 @@ func TestSegmenter_StackBoundsAcrossManyCommits(t *testing.T) {
 	}
 	exec := &fakeClassifyExecutor{labels: labels}
 	emb := &fakeEmbedder{vectors: vectors}
-	s, _ := NewSegmenter(exec, emb, HysteresisConfig{Threshold: 0.5, Window: 1})
+	s, _ := newTestSegmenter(exec, emb, HysteresisConfig{Threshold: 0.5, Window: 1})
 	bounds, err := s.Segment(context.Background(), turnsN(n))
 	if err != nil {
 		t.Fatalf("many distinct topics past stack depth: unexpected error %v", err)
@@ -206,7 +221,7 @@ func TestSegmenter_ContextCanceledMidLoop(t *testing.T) {
 	defer cancel()
 	exec := &fakeClassifyExecutor{labels: []string{"A", "A"}, cancelAfter: 1, cancel: cancel}
 	emb := &fakeEmbedder{vectors: [][]float32{{1, 0}, {1, 0}}}
-	s, _ := NewSegmenter(exec, emb, validCfg())
+	s, _ := newTestSegmenter(exec, emb, validCfg())
 	_, err := s.Segment(ctx, turnsN(2))
 	if !cascade.HasKind(err, cascade.KindCanceled) {
 		t.Fatalf("mid-loop cancellation: got %v, want KindCanceled", err)
@@ -231,7 +246,7 @@ func TestSegmenter_DeadlineExceededMapsToTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 0)
 	defer cancel()
 	exec := &fakeClassifyExecutor{labels: []string{"A"}}
-	s, _ := NewSegmenter(exec, &fakeEmbedder{vectors: [][]float32{{1, 0}}}, validCfg())
+	s, _ := newTestSegmenter(exec, &fakeEmbedder{vectors: [][]float32{{1, 0}}}, validCfg())
 	_, err := s.Segment(ctx, turnsN(1))
 	if !cascade.HasKind(err, cascade.KindTimeout) {
 		t.Fatalf("expired deadline: got %v, want KindTimeout", err)
@@ -258,7 +273,7 @@ func TestSegmenterPlatformParity(t *testing.T) {
 	t.Logf("topics segmenter platform parity: GOOS=%s GOARCH=%s", runtime.GOOS, runtime.GOARCH)
 	exec := &fakeClassifyExecutor{labels: []string{"a", "b"}}
 	emb := &fakeEmbedder{vectors: [][]float32{{1, 0}, {0, 1}}}
-	s, err := NewSegmenter(exec, emb, HysteresisConfig{Threshold: 0.1, Window: 1})
+	s, err := newTestSegmenter(exec, emb, HysteresisConfig{Threshold: 0.1, Window: 1})
 	if err != nil {
 		t.Fatalf("NewSegmenter: %v", err)
 	}

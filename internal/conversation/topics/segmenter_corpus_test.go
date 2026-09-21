@@ -107,7 +107,7 @@ func scoreRealCorpus(t *testing.T, corpus Corpus, fixtures map[string]corpusFixt
 		if err != nil {
 			t.Fatalf("record %q: %v", rec.ID, err)
 		}
-		seg, err := NewSegmenter(&replayClassifier{labels: classifyFixture(t, rec, fx)}, emb,
+		seg, err := newTestSegmenter(&replayClassifier{labels: classifyFixture(t, rec, fx)}, emb,
 			HysteresisConfig{Threshold: 0.3, Window: 2})
 		if err != nil {
 			t.Fatalf("record %q: NewSegmenter: %v", rec.ID, err)

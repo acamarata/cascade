@@ -21,7 +21,7 @@ import (
 func TestSegmenterBoundaryNamesTheFirstTurnOfTheNewSegment(t *testing.T) {
 	exec := &fakeClassifyExecutor{labels: cleanChangeLabels}
 	emb := &fakeEmbedder{vectors: cleanChangeVectors}
-	s, err := NewSegmenter(exec, emb, validCfg())
+	s, err := newTestSegmenter(exec, emb, validCfg())
 	if err != nil {
 		t.Fatalf("NewSegmenter: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestSegmenterBoundariesScoreAgainstACorpusRecord(t *testing.T) {
 		Boundaries:  []int{2},
 		TopicLabels: map[int]string{0: "A", 1: "A", 2: "B", 3: "B"},
 	}
-	s, err := NewSegmenter(&fakeClassifyExecutor{labels: cleanChangeLabels},
+	s, err := newTestSegmenter(&fakeClassifyExecutor{labels: cleanChangeLabels},
 		&fakeEmbedder{vectors: cleanChangeVectors}, validCfg())
 	if err != nil {
 		t.Fatalf("NewSegmenter: %v", err)

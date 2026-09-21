@@ -28,7 +28,7 @@ import (
 func newTestReassigner(t *testing.T, store ThreadStore, pub MisfileEventPublisher) (*AutoThreader, *ExemplarStore) {
 	t.Helper()
 	es := mustExemplarStore(t, storetest.NewMemStore())
-	at, err := NewAutoThreader(&fakeSegmenter{}, store, testTaxonomy(), es, pub, newFixedClock())
+	at, err := NewAutoThreader(&fakeSegmenter{}, &fakeClassifier{}, store, testTaxonomy(), es, pub, newFixedClock())
 	if err != nil {
 		t.Fatalf("NewAutoThreader: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestReassignExemplarAddErrorPropagatesAndSkipsPublish(t *testing.T) {
 	// own message, not errors.Is: the error is constructed fresh inside
 	// refusingStore, so there is no identity to compare against, and a
 	// Kind-only match would pass for any KindUnavailable error.
-	at, err := NewAutoThreader(&fakeSegmenter{}, store, testTaxonomy(),
+	at, err := NewAutoThreader(&fakeSegmenter{}, &fakeClassifier{}, store, testTaxonomy(),
 		mustExemplarStore(t, refusingStore{}), pub, newFixedClock())
 	if err != nil {
 		t.Fatalf("NewAutoThreader: %v", err)
@@ -236,7 +236,7 @@ func TestTopicsPlatformParity(t *testing.T) {
 	pub := &fakePublisher{}
 	es := mustExemplarStore(t, storetest.NewMemStore())
 	at, err := NewAutoThreader(&fakeSegmenter{boundaries: []Boundary{{TurnIndex: 1, Label: "code"}}},
-		store, testTaxonomy(), es, pub, newFixedClock())
+		&fakeClassifier{}, store, testTaxonomy(), es, pub, newFixedClock())
 	if err != nil {
 		t.Fatalf("NewAutoThreader: %v", err)
 	}

@@ -1,9 +1,20 @@
-// Purpose: segmenterImpl, NewSegmenter, and the Segment pipeline that
-//   drives the four-component engine: batch-embeds every turn and derives
-//   the per-transition distance-spike map (component 2), classifies each
-//   turn on the cheap lane (component 1), then walks the transitions
-//   asking the hysteresis filter (component 3) which candidates commit,
-//   keeping the current topic on the bounded stack (component 4).
+// Purpose: segmenterImpl, NewSegmenter/NewSegmenterWith, and the Segment
+//   pipeline that drives the four-component engine: batch-embeds every turn
+//   and derives the per-transition distance-spike map (component 2),
+//   classifies each turn on the cheap lane (component 1) through
+//   cheapLaneClassifier (the Classifier interface's production
+//   implementation, segmenter_types.go), then walks the transitions asking
+//   the hysteresis filter (component 3) which candidates commit, keeping
+//   the current topic on the bounded stack (component 4).
+//   cheapLaneClassifier/NewClassifier (P1-E21-W5-S46-T5 D5) are also
+//   AutoThreader's classify seam for its window opener (auto_thread.go) -
+//   one implementation, not two that could drift. ONE SHARED INSTANCE
+//   (P1-E21-W5-S46-T5 D6, 2026-09-21): NewSegmenterWith is now the real
+//   constructor, taking an already-built Classifier so a composition root
+//   can hand the identical instance to both NewSegmenterWith and
+//   NewAutoThreader (auto_thread.go's NewDefaultAutoThreader) - see
+//   NewSegmenterWith's own doc for why, and cheapLaneClassifier's bounded
+//   memo cache for why sharing costs no extra dispatch.
 // Inputs: a provider.ModelExecutor (the sole model.execute door, K/S-22.T1
 //   - injected as the interface, never internal/conductor.Executor
 //   directly, the same seam internal/context.Summarizer already uses), a
@@ -29,9 +40,7 @@ package topics
 
 import (
 	"context"
-	"fmt"
 	"math"
-	"strings"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -40,22 +49,26 @@ import (
 // segmenterImpl is the concrete Segmenter. Build one with NewSegmenter; the
 // zero value is not usable (a nil executor or embedder can never dispatch).
 type segmenterImpl struct {
-	executor   provider.ModelExecutor
+	classifier Classifier
 	embedder   provider.Embedder
 	hysteresis HysteresisConfig
 }
 
 var _ Segmenter = (*segmenterImpl)(nil)
 
-// NewSegmenter validates its three required dependencies and returns a
-// ready Segmenter. executor and embedder must be non-nil, and cfg must
-// pass HysteresisConfig.Validate - a partially-configured segmenter (no
-// dispatch door, no vector source, or a threshold/window that could never
-// decide anything) is refused at construction rather than failing
-// confusingly on the first Segment call.
-func NewSegmenter(executor provider.ModelExecutor, embedder provider.Embedder, cfg HysteresisConfig) (Segmenter, error) {
-	if executor == nil {
-		return nil, errSegmenterNilExecutor()
+// NewSegmenterWith is the real constructor (P1-E21-W5-S46-T5 D6): it takes
+// an already-built Classifier, rather than a raw executor, so a composition
+// root can construct ONE Classifier and hand the identical instance to both
+// this function and NewAutoThreader (auto_thread.go) - the fix for the
+// double-dispatch-per-opener defect the confirming review (C2) found in the
+// two-instances shape NewSegmenter's own doc used to describe. classifier
+// and embedder must be non-nil, and cfg must pass HysteresisConfig.Validate
+// - a partially-configured segmenter (no dispatch door, no vector source,
+// or a threshold/window that could never decide anything) is refused at
+// construction rather than failing confusingly on the first Segment call.
+func NewSegmenterWith(classifier Classifier, embedder provider.Embedder, cfg HysteresisConfig) (Segmenter, error) {
+	if classifier == nil {
+		return nil, cascade.New(cascade.KindInvalidInput, "topics: NewSegmenterWith: Classifier must not be nil")
 	}
 	if embedder == nil {
 		return nil, errSegmenterNilEmbedder()
@@ -63,7 +76,7 @@ func NewSegmenter(executor provider.ModelExecutor, embedder provider.Embedder, c
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	return &segmenterImpl{executor: executor, embedder: embedder, hysteresis: cfg}, nil
+	return &segmenterImpl{classifier: classifier, embedder: embedder, hysteresis: cfg}, nil
 }
 
 // Segment implements the Segmenter interface (segmenter_types.go). It runs
@@ -157,7 +170,7 @@ func (s *segmenterImpl) classifyAll(ctx context.Context, turns []Turn) ([]string
 		if cErr := ctx.Err(); cErr != nil {
 			return nil, errSegmenterContext(cErr)
 		}
-		label, err := s.classify(ctx, turn)
+		label, err := s.classifier.Classify(ctx, turn)
 		if err != nil {
 			return nil, err
 		}
@@ -193,44 +206,6 @@ func commitBoundaries(labels []string, spikes []bool, filter *hysteresisFilter) 
 		stack.Push(topicID(labels[i]))
 	}
 	return boundaries
-}
-
-// classify dispatches one cheap-lane classify call for turn and returns
-// its trimmed label. An empty label (a provider that answered with only
-// whitespace) is a KindIntegrity failure, not a valid empty topic.
-func (s *segmenterImpl) classify(ctx context.Context, turn Turn) (string, error) {
-	req, err := s.buildClassifyRequest(turn)
-	if err != nil {
-		return "", err
-	}
-	resp, err := s.executor.Execute(ctx, req)
-	if err != nil {
-		return "", errSegmenterDependency(err, "topics: segment: classify dispatch failed")
-	}
-	label := strings.TrimSpace(resp.Output)
-	if label == "" {
-		return "", errSegmenterEmptyLabel()
-	}
-	return label, nil
-}
-
-// buildClassifyRequest builds the ModelRequest one classify() call
-// dispatches: task_class "classify", the §5.16 row's advisory Requirements,
-// and no Policy/Sensitivity override (see this file's header comment).
-func (s *segmenterImpl) buildClassifyRequest(turn Turn) (provider.ModelRequest, error) {
-	id, err := cascade.NewID()
-	if err != nil {
-		return provider.ModelRequest{}, cascade.Wrap(cascade.KindInternal, err, "topics: segment: minting task id")
-	}
-	return provider.ModelRequest{
-		TaskID:    "topics-segmenter-" + string(id),
-		TaskClass: classifyTaskClass,
-		Inputs:    []provider.ChatMessage{{Role: "user", Content: fmt.Sprintf(classifyPrompt, turn.Text)}},
-		Requirements: provider.Requirements{
-			Reasoning: classifyReasoning,
-			Context:   classifyContextTokens,
-		},
-	}, nil
 }
 
 // cosineDistance returns 1-cosineSimilarity(a, b), the turn-to-turn
