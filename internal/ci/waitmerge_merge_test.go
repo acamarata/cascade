@@ -162,6 +162,7 @@ func grantedFixture(t *testing.T) (*mergeFixture, MergeOptions) {
 // MUTATION TARGET: deleting authorize's `outcome.Verdict != VerdictAllow`
 // check makes this test call fakeMergeCaller.Call and turn red.
 func TestMergeOnGreen_RefusesWithoutGrant(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
 	f := newMergeFixture(t)
 	_, err := MergeOnGreen(context.Background(), f.deps(), baseMergeOptions(), passedWait("acamarata", "cascade", "deadbeef"))
 	if !cascade.HasKind(err, cascade.KindPolicyDenied) {
@@ -175,6 +176,7 @@ func TestMergeOnGreen_RefusesWithoutGrant(t *testing.T) {
 
 // TestMergeOnGreen_SucceedsWithGrant proves the positive path.
 func TestMergeOnGreen_SucceedsWithGrant(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
 	f, opts := grantedFixture(t)
 	f.caller.resp = []byte(`{"sha":"cafef00d","merged":true,"message":""}`)
 
@@ -202,6 +204,7 @@ func TestMergeOnGreen_SucceedsWithGrant(t *testing.T) {
 // red -- MergeOnGreen would proceed to Evaluate using a wait that resolved
 // for a different revision.
 func TestMergeOnGreen_RebindRefusesStaleRef(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
 	f := newMergeFixture(t)
 	_, err := MergeOnGreen(context.Background(), f.deps(), baseMergeOptions(), passedWait("acamarata", "cascade", "some-other-sha"))
 	if !cascade.HasKind(err, cascade.KindConflict) {
@@ -216,6 +219,7 @@ func TestMergeOnGreen_RebindRefusesStaleRef(t *testing.T) {
 // never resolved green, and one carrying no head SHA to re-check against,
 // are both refused before any evaluation.
 func TestMergeOnGreen_RefusesUnresolvedOrHeadlessWait(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
 	f := newMergeFixture(t)
 	cases := []WaitResult{
 		{Owner: "acamarata", Repo: "cascade", Ref: "deadbeef"},
@@ -232,6 +236,7 @@ func TestMergeOnGreen_RefusesUnresolvedOrHeadlessWait(t *testing.T) {
 // TestMergeOnGreen_CallerErrorPropagates proves a plugin-host transport
 // failure surfaces as a typed error rather than a discarded/silent one.
 func TestMergeOnGreen_CallerErrorPropagates(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
 	f, opts := grantedFixture(t)
 	f.caller.err = cascade.New(cascade.KindUnavailable, "transport down")
 
@@ -244,6 +249,7 @@ func TestMergeOnGreen_CallerErrorPropagates(t *testing.T) {
 // TestMergeOnGreen_NotMergedRefuses proves a {"merged":false} response
 // (GitHub declined the merge) is refused, never reported as success.
 func TestMergeOnGreen_NotMergedRefuses(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
 	f, opts := grantedFixture(t)
 	f.caller.resp = []byte(`{"sha":"","merged":false,"message":"the branch moved"}`)
 
@@ -256,6 +262,7 @@ func TestMergeOnGreen_NotMergedRefuses(t *testing.T) {
 // TestMergeOnGreen_MalformedResponseRefuses proves an undecodable response
 // body is refused (KindIntegrity), never treated as a silent success.
 func TestMergeOnGreen_MalformedResponseRefuses(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
 	f, opts := grantedFixture(t)
 	f.caller.resp = []byte(`not json`)
 

@@ -15,6 +15,7 @@ import (
 	"errors"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -26,7 +27,13 @@ func absentLookPath(string) (string, error) { return "", exec.ErrNotFound }
 
 func TestExecRunner_RunsInTheDirectoryItIsGiven(t *testing.T) {
 	dir := t.TempDir()
-	out, err := execRunner{}.Run(context.Background(), dir, "sh", []string{"-c", "pwd"}, 5*time.Second)
+	// The shell that prints its own cwd natively: sh's pwd on windows is an
+	// MSYS path (/c/Users/...), which is not the directory the child got.
+	bin, args := "sh", []string{"-c", "pwd"}
+	if runtime.GOOS == "windows" {
+		bin, args = "cmd", []string{"/c", "cd"}
+	}
+	out, err := execRunner{}.Run(context.Background(), dir, bin, args, 5*time.Second)
 	if err != nil {
 		t.Fatalf("execRunner.Run(pwd) err = %v, want nil (is /bin/sh on PATH?)", err)
 	}

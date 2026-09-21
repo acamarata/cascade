@@ -24,6 +24,8 @@
 package nself
 
 import (
+	"errors"
+	"os"
 	"os/exec"
 	"syscall"
 
@@ -45,10 +47,15 @@ func setProcessGroup(cmd *exec.Cmd) {
 // killProcessGroup kills the probe and refuses, typed, to claim it reaped
 // the tree. See this file's doc comment for why.
 func killProcessGroup(cmd *exec.Cmd) error {
-	if cmd.Process == nil {
+	if cmd.Process == nil || cmd.ProcessState != nil {
+		// Never started, or already waited for: there is nothing left to
+		// kill, which is the same success unix reports as ESRCH.
 		return nil
 	}
 	if err := cmd.Process.Kill(); err != nil {
+		if errors.Is(err, os.ErrProcessDone) {
+			return nil
+		}
 		return cascade.Wrap(cascade.KindUnavailable, err, "nself: killing the timed-out probe")
 	}
 	return cascade.New(cascade.KindUnsupported,

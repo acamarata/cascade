@@ -88,6 +88,7 @@ func TestWaitOnGreen_PlatformGateRunsBeforeAnyPoll(t *testing.T) {
 // aborts rather than being retried to the deadline (it is KindUnavailable,
 // the same kind a 502 carries).
 func TestWaitOnGreen_NeverPayRefusalAbortsBeforeAnyRequest(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
 	cases := []struct {
 		name   string
 		routes RouteResolver
@@ -120,6 +121,7 @@ func TestWaitOnGreen_NeverPayRefusalAbortsBeforeAnyRequest(t *testing.T) {
 // half and the review's finding 7 input: ONE api.github.com 502 must not
 // end a 30-minute wait.
 func TestWaitOnGreen_TransientPollErrorIsRetriedWithBackoff(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
 	inner := &fakeDoer{responses: map[string]HTTPResponse{
 		waitRunsURL:   {Status: 200, Body: waitRunsBody("completed", "success")},
 		waitJobsURL(): {Status: 200, Body: waitJobsBody("build", "completed", "success")},
@@ -179,6 +181,7 @@ func TestWaitOnGreen_TerminalPollErrorAborts(t *testing.T) {
 // mode (see TestEvaluateChecks_ExplicitRequiredSetStillNeedsTheRunItself),
 // so an in_progress run here would correctly run to the timeout.
 func TestWaitOnGreen_ExplicitRequiredChecksAreHonored(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
 	doer := &fakeDoer{responses: map[string]HTTPResponse{
 		waitRunsURL:   {Status: 200, Body: waitRunsBody("completed", "success")},
 		waitJobsURL(): {Status: 200, Body: waitJobsBody("build", "completed", "success")},

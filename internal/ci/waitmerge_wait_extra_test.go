@@ -109,6 +109,7 @@ func (d *countingTransientDoer) Do(context.Context, HTTPRequest) (HTTPResponse, 
 // top of waitLoop makes this run forever (the backoff caps at 2m and never
 // stops on its own).
 func TestWaitOnGreen_RetriesNeverOutlastTheDeadline(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
 	doer := &countingTransientDoer{}
 	clock := runtime.NewFixedClock(time.Unix(0, 0))
 	sleeper := &recordingSleeper{clock: clock}

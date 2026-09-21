@@ -26,6 +26,7 @@ import (
 // MUTATION TARGET (c): pointing mergeEvalRequest's Capability back at
 // MergeCapability makes this test merge on the human grant and turn red.
 func TestMergeOnGreen_HumanMergeGrantDoesNotAuthorizeUnattendedMerge(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
 	f := newMergeFixture(t)
 	subject := testSubjectForMerge()
 	f.grant(t, subject, MergeCapability)
@@ -64,6 +65,7 @@ func TestMergeOnGreen_HumanMergeGrantDoesNotAuthorizeUnattendedMerge(t *testing.
 // MUTATION TARGET: deleting authorize's `outcome.Level != policy.L3` guard
 // turns this green -- the merge would proceed at L1.
 func TestMergeOnGreen_ClassifiesL3(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
 	// First: the shipped registration really is L3.
 	f := newMergeFixture(t)
 	outcome, err := f.engine.Evaluate(context.Background(), mergeEvalRequest(baseMergeOptions()))
@@ -102,6 +104,7 @@ func TestMergeOnGreen_ClassifiesL3(t *testing.T) {
 // MUTATION TARGET (d): moving the pre-call record to after callMerge turns
 // this red, because the only policy.decide row would then be absent.
 func TestMergeOnGreen_AuditsTheDecisionBeforeTheCall(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
 	f, opts := grantedFixture(t)
 	f.caller.err = cascade.New(cascade.KindUnavailable, "killed mid-dispatch")
 	// Observed INSIDE Call: a kill here must already have left a record.
@@ -127,6 +130,7 @@ func TestMergeOnGreen_AuditsTheDecisionBeforeTheCall(t *testing.T) {
 // TestMergeOnGreen_AuditsTheCompletedMerge proves the success half of the
 // same pair: the decision, then what actually happened.
 func TestMergeOnGreen_AuditsTheCompletedMerge(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
 	f, opts := grantedFixture(t)
 	f.caller.resp = []byte(`{"sha":"cafef00d","merged":true,"message":""}`)
 	if _, err := MergeOnGreen(context.Background(), f.deps(), opts, passedWait(opts.Owner, opts.Repo, opts.Ref)); err != nil {
@@ -169,6 +173,7 @@ func TestMergeOnGreen_DataClassAboveTheDestinationCeilingIsDenied(t *testing.T) 
 //
 // MUTATION TARGET (f): deleting the recheckHead call turns this green.
 func TestMergeOnGreen_RefusesWhenTheHeadMoved(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
 	f, opts := grantedFixture(t)
 	f.caller.resp = []byte(`{"sha":"cafef00d","merged":true,"message":""}`)
 	f.headSHA = "0ddba11" // the branch moved after the wait resolved
@@ -189,6 +194,7 @@ func TestMergeOnGreen_RefusesWhenTheHeadMoved(t *testing.T) {
 // TestMergeOnGreen_RefusesWhenTheHeadCannotBeReRead proves the fetcher's
 // own failure is a refusal, not an assumption that the ref stood still.
 func TestMergeOnGreen_RefusesWhenTheHeadCannotBeReRead(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
 	f, opts := grantedFixture(t)
 	f.headSHAErr = cascade.New(cascade.KindUnavailable, "304 Not Modified")
 
