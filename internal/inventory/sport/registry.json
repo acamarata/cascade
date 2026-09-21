@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T10:47:26Z",
+  "generated_at": "2026-09-21T12:29:38Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -10619,6 +10619,56 @@
           "status": "ADD",
           "ticket": "P1-E20-W5-S43-T4",
           "raw": "internal.conversation.thread-id (ADD) — P1-E20-W5-S43-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.conversation/acceptance",
+      "sites": [
+        {
+          "file": "internal/conversation/acceptance_harness_test.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T5",
+          "raw": "internal.conversation/acceptance (ADDED, tests-only) (P1-E20-W5-S44-T5)."
+        },
+        {
+          "file": "internal/conversation/acceptance_journal_test.go",
+          "line": 37,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T5",
+          "raw": "internal.conversation/acceptance (ADDED, tests-only) (P1-E20-W5-S44-T5)."
+        },
+        {
+          "file": "internal/conversation/acceptance_livemirror_test.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T5",
+          "raw": "internal.conversation/acceptance (ADDED, tests-only) (P1-E20-W5-S44-T5)."
+        },
+        {
+          "file": "internal/conversation/acceptance_pagination_test.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T5",
+          "raw": "internal.conversation/acceptance (ADDED, tests-only) (P1-E20-W5-S44-T5)."
+        },
+        {
+          "file": "internal/conversation/acceptance_privacy_test.go",
+          "line": 41,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T5",
+          "raw": "internal.conversation/acceptance (ADDED, tests-only) (P1-E20-W5-S44-T5)."
+        },
+        {
+          "file": "internal/conversation/acceptance_scrub_test.go",
+          "line": 50,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T5",
+          "raw": "internal.conversation/acceptance (ADDED, tests-only) (P1-E20-W5-S44-T5)."
         }
       ],
       "statuses": [
@@ -27708,7 +27758,7 @@
       ]
     }
   ],
-  "total_sites": 2599,
+  "total_sites": 2605,
   "unspecified_count": 121,
   "multi_status_count": 61
 }
