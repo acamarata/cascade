@@ -117,6 +117,30 @@ type ReviewResponse struct {
 
 // ReviewProvider is the contract a plugin providing CR-A/B/C review must
 // implement.
+//
+// IMPLEMENTATION NOTE (added by P1-E25-W5-S52-T4; the interface itself is
+// O/S-33.T1's). Cascade's own DEFAULT implementation is the native adversarial
+// reviewer in internal/review, mounted as the `cascade-review` builtin plugin
+// (plugins/review) and wired in internal/plugins/review_wiring.go. Three
+// things a caller of this interface should know about it, documented in full in
+// docs/review.md:
+//
+//   - ReviewRequest.Context is the carrier for the AMD-20260916/6 review
+//     checklist (DIMENSION: / CHECK: lines, or a `checks:` list). The native
+//     reviewer answers every dimension and refuses to credit a required check
+//     that carries no command plus exit code.
+//   - ReviewRequest.Diff must be a unified diff whose headers name paths
+//     (`diff --git a/X b/X`, `diff --git X Y`, or a `--- old`/`+++ new` pair).
+//     The native reviewer REFUSES an artifact it cannot attribute to paths,
+//     including the "full file contents, for a new file" form Diff's own doc
+//     comment above allows: without paths it cannot apply the R-21.191
+//     exclusion filter, and it fails closed rather than dispatch unfiltered
+//     content. Pass a new file as a diff against /dev/null. This divergence
+//     from the doc comment is a recorded contract contradiction, not a bug to
+//     be silently reconciled.
+//   - ReviewResponse carries only Findings and Approved, so CR-C's arbitration
+//     verdict and dissent cannot cross this ABI. internal/review.CRC is the
+//     documented in-binary entry point for them; the ABI gap is filed.
 type ReviewProvider interface {
 	// Review performs req.Level's review over req.Diff and returns every
 	// finding plus an overall verdict.
