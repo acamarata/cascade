@@ -1,0 +1,47 @@
+{
+  "provenance": {
+    "source": "P1-E21-W5-S45-T3 full_desc and T0 ruling R-14.63, both quoting the same default label set",
+    "captured_by": "transcribed by hand from the ruling and contract text (no tool; the set is prose in those documents)",
+    "captured_on": "2026-09-20",
+    "why": "Core ships NO label set (R-14.63): the labels below are the ones the cascade-pa plugin injects through its own plugin config. Recording them here as data, with the expectations they must produce, is what makes the taxonomy test a check on the mechanism against a real caller's table rather than a lookup of a literal the test itself just wrote."
+  },
+  "fallback": "unclassified",
+  "labels": {
+    "general": "general",
+    "code": "code",
+    "memory": "memory",
+    "task": "task"
+  },
+  "expectations": [
+    {
+      "label": "code",
+      "topic": "code",
+      "why": "declared in the injected set, so it resolves to its canonical topic"
+    },
+    {
+      "label": "memory",
+      "topic": "memory",
+      "why": "second declared label, so one mapped row cannot pass by accident"
+    },
+    {
+      "label": "CODE",
+      "topic": "unclassified",
+      "why": "Resolve is case-sensitive: a classifier's casing is never normalised at this layer, so a differently-cased label is simply unmapped"
+    },
+    {
+      "label": "code ",
+      "topic": "unclassified",
+      "why": "no trimming here either - Boundary.Label arrives already trimmed (segmenter_types.go), so a trailing space means the classifier produced a different label"
+    },
+    {
+      "label": "",
+      "topic": "unclassified",
+      "why": "segment zero carries no label at all (auto_thread.go), and the empty string is deliberately not a special case"
+    },
+    {
+      "label": "chit-chat",
+      "topic": "unclassified",
+      "why": "a plausible label this caller never declared"
+    }
+  ]
+}

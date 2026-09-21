@@ -211,9 +211,204 @@ score as misses. The per-turn assignment surface itself belongs to
 P1-E21-W5-S45-T3. See `testdata/README.md` for what makes the fixture
 synthetic and why nothing in it reads the ground-truth labels.
 
+## Auto-thread routing, taxonomy, and exemplars (P1-E21-W5-S45-T3)
+
+Four sub-systems sit between the segmenter above and the conversation
+domain: `AutoThreader` routes segmented turns into threads, `TaxonomyConfig`
+resolves a raw classifier label to a canonical topic, `ExemplarStore`
+persists per-topic examples for future few-shot classification, and
+`Reassign` corrects a misfiled turn.
+
+### ThreadStore (thread_store.go)
+
+`ThreadStore` is the seam `AutoThreader.Route` and `Reassign` depend on. It
+stays an interface so both can be exercised against a double with no
+database (R-14.64), but the interface is not the only thing that ships:
+`NewConversationThreadStore(store, clock)` is the real implementation, and
+`thread_store_conversation_test.go` drives it against a real
+modernc-sqlite `conversation.Store`. The composition root wires it at
+startup; `internal/build/testonly-allow.json` names the ticket expected to
+make that call.
+
+The three methods:
+
+- `CreateOrSelect(ctx, topicType) (ThreadID, error)` - the same `topicType`
+  always returns the same `ThreadID`.
+- `AppendTurn(ctx, threadID, turn) error` - `turn` is a `ThreadTurn`: the
+  segmenter-side `Turn` plus the content-addressed `TurnID` its caller
+  computed with `NewTopicTurnID`. Identity is the caller's, exactly as
+  `internal/conversation.Turn`'s own `ID` field is (set via `NewTurnID`,
+  never handed back by the store), which is why this returns a bare error.
+  **Appending a turn whose id the thread already holds is a no-op**, not an
+  error - that is what makes a re-delivered window idempotent.
+- `MoveTurn(ctx, threadID, turnID, newType) error` - reassigns an existing
+  turn, or refuses with a typed error naming what the backing domain
+  cannot do (see § Reassign).
+
+`NewTopicTurnID(threadID, index, turn)` is the turn's content address:
+identity is `(thread, index within the routed window, speaker, text)`.
+Re-delivering the same window is therefore a no-op, while a
+differently-aligned window that repeats a turn at a different index is a
+different turn - this package has no cross-window turn identity to consult,
+and collapsing genuinely repeated turns (the same short reply twice) would
+lose real data. The text is hashed into an opaque digest and never appears
+in a log line, an error message, or a metric label.
+
+**The real implementation's two documented limits.** `CreateOrSelect`
+resolves a deterministic `"topic:<topic_type>"` thread id and probes
+`GetThread` so an unreachable store is refused at selection time; the
+thread ROW is written by the first `AppendTurn` (the conversation domain
+exposes no create-thread call - its own `store.go` records that gap, and
+its `AppendTurn` ensures the thread on first use). `MoveTurn` refuses with
+`cascade.KindUnsupported` naming the missing primitive: conversation turn
+rows are append-only with content-addressed ids and the domain offers no
+move, so the only alternatives would be raw SQL against another domain's
+tables or reporting a move that did not happen. The gap is filed for the
+owner rather than papered over.
+
+### AutoThreader.Route (auto_thread.go)
+
+`Route(ctx, turns)` calls its `Segmenter`, then partitions `turns` at each
+`Boundary.TurnIndex` (segmenter_core.go). Each partition's classifier label
+is resolved through `TaxonomyConfig.Resolve` to a `TopicType`, which
+selects (or creates) a thread via `ThreadStore.CreateOrSelect`, and every
+turn in the partition is appended to that thread. **The window's first
+partition (turns before the first reported `Boundary`) has no classifier
+label at all** - `Segment`'s own contract never reports a boundary at
+index 0 - so `Route` resolves it with the empty string, which
+`TaxonomyConfig.Resolve` already treats like any other unmapped label (its
+configured fallback), rather than inventing a separate "unclassified" case.
+
+Three rules the implementation holds to:
+
+- **An empty window short-circuits before the `Segmenter` is called.**
+  There is nothing to segment, so a classify/embed round trip to be told so
+  would be waste.
+- **A boundary list that cannot describe a partition is refused.** A
+  `TurnIndex` that is negative, zero, repeated, out of order, or at/past the
+  end of the window returns a typed `cascade.KindInvalidInput` error naming
+  the offending index - never a panic on the slice expression, and never an
+  empty segment (which would create a thread no turn was filed under).
+- **Routing the same window twice files N turns, not 2N.** Each turn's id
+  is its content address at its window index, and `AppendTurn` is a no-op
+  for an id the thread already holds.
+
+A resolved `TopicType` also crosses the key-space boundary before anything
+is filed: non-empty, at most 64 bytes, letters/digits/`.`/`_`/`-`/`:` only,
+refused with `KindInvalidInput` rather than silently rewritten.
+
+`NewAutoThreader(segmenter, store, taxonomy, exemplars, publisher, clock)`
+takes an already-built `Segmenter` for testability (R-14.64). The last
+three dependencies are `Reassign`'s: `Reassign` is a method on the same
+`AutoThreader`, not a separate service, because it operates the same
+`ThreadStore` against the same taxonomy that `Route` does.
+`NewDefaultAutoThreader(executor, embedder, cfg, store, taxonomy,
+exemplars, publisher, clock)` is the production constructor: it calls
+`NewSegmenter` (segmenter_core.go) and wires the result in, so a real
+caller never has to build a `Segmenter` by hand.
+
+### TaxonomyConfig (taxonomy.go)
+
+Mechanism only, per R-14.63: `NewTaxonomyConfig(labels, fallback)` takes a
+caller-supplied `map[string]TopicType` and a fallback `TopicType`.
+`Resolve(label)` returns the mapped type or the fallback for anything
+unmapped, including the empty string - never a panic, never an error. Core
+ships **no built-in label set** and no `[topics.taxonomy]` config section;
+cascade-pa injects its own defaults (`general`, `code`, `memory`, `task`)
+through its own plugin config (`[plugins.<name>]`, 08-INIT-CONFIG-SPEC §3).
+`TopicType` is an open string type, not a closed enum - the set of topics
+this package will ever see is whatever a caller's labels and fallback name.
+
+### ExemplarStore (exemplar_store.go)
+
+A bounded per-topic FIFO of `Turn` exemplars, for few-shot injection into a
+cheap-lane classify call. `Add(ctx, topicType, turn)` appends the newest
+exemplar and evicts the oldest once the configured depth (default 20,
+`NewExemplarStore`'s `maxDepth <= 0` falls back to this) would otherwise be
+exceeded. `Exemplars(ctx, topicType)` returns the current slice, oldest
+first, or `nil` for a topic with none yet. `topicType` crosses the same
+key-space boundary `Route` applies.
+
+**Exemplar ids carry no clock.** `exemplar_id` is a content address over
+the turn's own hash and its topic, so a retried or repeated `Add` of the
+same turn converges on one record - `Add` of an id the topic already holds
+is a no-op, enforced in code, matching the `PRIMARY KEY ("exemplar_id")` in
+this table's reference migration. `created_at` still records when the
+exemplar was first observed; that is data about the record, not part of its
+identity.
+
+**No consumer is scheduled for `Exemplars` yet.** The cheap-lane classifier
+that would take few-shot exemplars shipped in S-45.T2, which does not read
+them. The read side's owner is filed for the owner rather than assumed.
+
+Persisted through the B/S-02 `pkg/provider.Store` key-value abstraction -
+never direct SQL - as one JSON-encoded bounded slice per topic, under key
+`"topic_exemplars/<topic_type>"` in the `retrieval` domain namespace
+(`internal/storage.DomainRetrieval`). `Store.Put`'s own create-or-overwrite
+semantics are what makes the first write idempotent; there is no separate
+schema-init call. `internal/retrieval/migrations/0020_topic_exemplars.sql`
+is a reference-only rendering of the conceptual row shape (never executed
+by any code path), extended with `speaker`/`text` columns beyond the
+contract's four named ones, since `Exemplars` must return real `Turn`
+content for few-shot use. `embedding_ref` is always empty in this ticket -
+no `Embedder` is wired into `ExemplarStore`'s constructor - an honestly
+empty column, never a fabricated reference.
+
+### Reassign (reassign.go)
+
+`AutoThreader.Reassign(ctx, threadID, turnID, turn, currentTopicType,
+newTopicType)` corrects a misfiled turn: it moves the turn
+(`ThreadStore.MoveTurn`), records `turn` as a fresh exemplar for
+`newTopicType` (`ExemplarStore.Add`), and publishes a `MisfileEvent`. A
+no-op reassignment (`newTopicType == currentTopicType`) returns a typed
+`cascade.KindConflict` error before touching the store, the exemplar set,
+or the bus. Any dependency failure stops the sequence immediately: a
+failed move never adds an exemplar for a move that did not happen, and a
+failed exemplar write never publishes an event overstating what was
+recorded. An unusable target `TopicType` is refused before the move.
+
+`Reassign` is a method on `AutoThreader`, not a `Reassigner` service with
+its own constructor: it drives the same `ThreadStore` against the same
+taxonomy `Route` does, and a second type over identical dependencies would
+have been a parallel object graph for nothing. The `turn` and
+`currentTopicType` parameters are two additions to the ticket's own literal
+signature, both recorded for the owner: nothing else can supply
+`ExemplarStore.Add`'s required `Turn`, and `ThreadStore` has no per-turn
+lookup to ask a turn's current topic from.
+
+**Against the real store, `MoveTurn` refuses** (see § ThreadStore): the
+conversation domain has no turn-move primitive, so the correction path is
+proven end to end against the `ThreadStore` double and the missing
+primitive is filed for the owner rather than faked.
+
+**Audit event mechanism.** "Emits a typed misfile audit event to the audit
+domain" is not `internal/audit.Writer.Append`: `audit.Kind` is a CLOSED
+14-member enum (T0 ruling R-21.235), and none of the fourteen
+(`policy.*`, `approval.*`, `config.reload`, `elevation.*`, `secrets.*`,
+`vault.access`) names a topic-classification correction. The real seam is
+`internal/events.EventKind`, documented there as deliberately open so
+independently-owned producers can mint their own values - the same shape
+`internal/audit`'s own `EventKindRecorded` already uses. `Reassign`
+publishes `EventKindMisfileReassigned` (`"topics.misfile_reassigned"`)
+into the audit domain's namespace via the injected `MisfileEventPublisher`
+seam (shaped exactly like `internal/events.Bus.Publish`, so a real `*Bus`
+satisfies it with no adapter code). The JSON payload is `MisfileEvent`:
+
+```json
+{
+  "thread_id": "...",
+  "turn_id": "...",
+  "from_topic_type": "general",
+  "to_topic_type": "code",
+  "reassigned_at": 1758000000
+}
+```
+
 ## Platform support
 
 The package is pure Go with no CGO and no OS-specific code path.
-`TestSegmenterPlatformParity` (`segmenter_core_test.go`) is the explicit,
-CI-asserted per-platform result Art.5 requires: the same named test runs
-to a pass on the macOS, Linux, and Windows CI matrix.
+`TestSegmenterPlatformParity` (`segmenter_core_test.go`) and
+`TestTopicsPlatformParity` (`reassign_test.go`, covering AutoThreader,
+TaxonomyConfig, ExemplarStore, and Reassign together) are the explicit,
+CI-asserted per-platform results Art.5 requires: both run to a pass on the
+macOS, Linux, and Windows CI matrix.

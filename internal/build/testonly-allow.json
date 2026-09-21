@@ -1417,11 +1417,31 @@
     "symbol": "internal/plugins/resolver.NewIntentResolver"
   },
   {
-    "caller_site": "internal/conversation/topics/auto_thread.go",
-    "expected_caller": "P1-E21-W5-S45-T3 \"Implement auto-thread routing, taxonomy, exemplar store\" -- its files_scope.add lists internal/conversation/topics/auto_thread.go, and its own full_desc names the call directly: AutoThreader's constructor accepts a Segmenter and Route(ctx, turns) calls Segmenter.Segment(ctx, turns) before mapping each Boundary's Label through TaxonomyConfig.Resolve. Retire this entry once that file lands and calls NewSegmenter to build the Segmenter it wires in.",
-    "reason": "P1-E21-W5-S45-T2 builds the complete four-component segmenter (cheap-lane classify, embedding-distance boundary detection, hysteresis filter, bounded topic stack) fully tested end to end: unit tests for every branch (the four hysteresis scenarios with explicit expected boundary indices, a Window-mutation pair proving the filter is consulted, stack bounds, empty turns, nil ctx, cancellation and deadline mapping, embed-batch-contract and zero-norm refusals, classifier/embedder error propagation by cause identity) plus a synthetic-corpus harness that runs the real Segment/Evaluate/AssertFloors path untagged and is proven able to fail, and the tagged corpus harness (segmenter_corpus_test.go, build tag topics_corpus) that skips pending the owner-supplied corpus P1-E21-W5-S45-T1 already documented as absent. This ticket's own contract explicitly defers the composition-root caller: 'Do not add CLI surfaces, taxonomy defaults, or observe-log behavior here; those are S-45.T3 and S-45.T4.' NewSegmenter (segmenter_core.go) is the constructor S-45.T3's AutoThreader wires a Segmenter through; until that ticket lands, NewSegmenter is exercised only by this ticket's own tests.",
-    "retire_ticket": "P1-E21-W5-S45-T3",
-    "added_by_ticket": "P1-E21-W5-S45-T2",
-    "symbol": "internal/conversation/topics.NewSegmenter"
+    "caller_site": "plugins/cascade-pa/cmd/topics_cli.go",
+    "expected_caller": "P1-E21-W5-S46-T4 \"Add topics and threads CLI surfaces\": its files_scope.add lists plugins/cascade-pa/cmd/topics_cli.go, the first surface that composes the topic engine (auto-threader over the real segmenter, the taxonomy config, the exemplar store and the conversation-backed thread store) for an operator. Retire this entry in that change.",
+    "reason": "P1-E21-W5-S45-T3 builds the label-to-topic-type mapping the auto-threader resolves segments through. The consumer that constructs it for a running binary is the S-46.T4 CLI; nothing earlier composes the topic engine.",
+    "retire_ticket": "P1-E21-W5-S46-T4",
+    "symbol": "internal/conversation/topics.NewTaxonomyConfig"
+  },
+  {
+    "caller_site": "plugins/cascade-pa/cmd/topics_cli.go",
+    "expected_caller": "P1-E21-W5-S46-T4 \"Add topics and threads CLI surfaces\": its files_scope.add lists plugins/cascade-pa/cmd/topics_cli.go, the first surface that composes the topic engine (auto-threader over the real segmenter, the taxonomy config, the exemplar store and the conversation-backed thread store) for an operator. Retire this entry in that change.",
+    "reason": "P1-E21-W5-S45-T3 builds the auto-threader that calls the real segmenter (retiring NewSegmenter's own exemption) and files each segment into a topic thread. No production composition root constructs it until the S-46.T4 CLI surface lands.",
+    "retire_ticket": "P1-E21-W5-S46-T4",
+    "symbol": "internal/conversation/topics.NewDefaultAutoThreader"
+  },
+  {
+    "caller_site": "plugins/cascade-pa/cmd/topics_cli.go",
+    "expected_caller": "P1-E21-W5-S46-T4 \"Add topics and threads CLI surfaces\": its files_scope.add lists plugins/cascade-pa/cmd/topics_cli.go, the first surface that composes the topic engine (auto-threader over the real segmenter, the taxonomy config, the exemplar store and the conversation-backed thread store) for an operator. Retire this entry in that change.",
+    "reason": "P1-E21-W5-S45-T3 builds the exemplar store over the provider.Store seam. Its writer is Reassign (a method on the auto-threader); its reader has no scheduled owner, which a planning notice records. Construction for a running binary happens in the S-46.T4 CLI surface.",
+    "retire_ticket": "P1-E21-W5-S46-T4",
+    "symbol": "internal/conversation/topics.NewExemplarStore"
+  },
+  {
+    "caller_site": "plugins/cascade-pa/cmd/topics_cli.go",
+    "expected_caller": "P1-E21-W5-S46-T4 \"Add topics and threads CLI surfaces\": its files_scope.add lists plugins/cascade-pa/cmd/topics_cli.go, the first surface that composes the topic engine (auto-threader over the real segmenter, the taxonomy config, the exemplar store and the conversation-backed thread store) for an operator. Retire this entry in that change.",
+    "reason": "P1-E21-W5-S45-T3 ships the real ThreadStore over the conversation store, as the acceptance criteria require, so the interface is not implementation-free. The composition root that wires it into the default binary is the S-46.T4 CLI surface.",
+    "retire_ticket": "P1-E21-W5-S46-T4",
+    "symbol": "internal/conversation/topics.NewConversationThreadStore"
   }
 ]
