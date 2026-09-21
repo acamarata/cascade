@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T05:16:35Z",
+  "generated_at": "2026-09-21T06:50:12Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -169,6 +169,20 @@
       ]
     },
     {
+      "name": "CallbackNonceStore",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/callback.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "CallbackNonceStore/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "CanBridge",
       "sites": [
         {
@@ -194,6 +208,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "CodeDigest",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/paircode_key.go",
+          "line": 24,
+          "status": "CHANGE",
+          "raw": "CodeDigest/CHANGED"
+        }
+      ],
+      "statuses": [
+        "CHANGE"
       ]
     },
     {
@@ -313,6 +341,20 @@
       ]
     },
     {
+      "name": "DeviceRegistrar",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/binding.go",
+          "line": 32,
+          "status": "ADD",
+          "raw": "DeviceRegistrar/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "Dialer",
       "sites": [
         {
@@ -369,6 +411,20 @@
           "line": 67,
           "status": "ADD",
           "raw": "EGRESS_REGISTRY: ADD · EGRESS_INTERCEPTOR: ADD ·"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "EgressGate",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/client.go",
+          "line": 32,
+          "status": "ADD",
+          "raw": "EgressGate/ADDED"
         }
       ],
       "statuses": [
@@ -801,6 +857,34 @@
       ]
     },
     {
+      "name": "IsStateConflict",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/concurrency.go",
+          "line": 33,
+          "status": "ADD",
+          "raw": "IsStateConflict/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "IssueCode",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/pairing.go",
+          "line": 52,
+          "status": "ADD",
+          "raw": "IssueCode/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "K12Preset",
       "sites": [
         {
@@ -896,6 +980,20 @@
           "line": 6,
           "status": "ADD",
           "raw": "MemoryRegistry/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "Message",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/wire.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "Message/ADDED"
         }
       ],
       "statuses": [
@@ -1560,6 +1658,20 @@
       ]
     },
     {
+      "name": "SensitivityTier",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/bridge_policy.go",
+          "line": 26,
+          "status": "ADD",
+          "raw": "SensitivityTier/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "SequenceStore",
       "sites": [
         {
@@ -1623,6 +1735,20 @@
           "line": 7,
           "status": "ADD",
           "raw": "StoreGrants/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "SubjectState",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/state.go",
+          "line": 36,
+          "status": "ADD",
+          "raw": "SubjectState/ADDED"
         }
       ],
       "statuses": [
@@ -9022,6 +9148,101 @@
       ]
     },
     {
+      "name": "internal.bridge.MigrationSet",
+      "sites": [
+        {
+          "file": "internal/bridge/domain.go",
+          "line": 35,
+          "status": "ADD",
+          "raw": "internal.bridge.MigrationSet/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.bridge.NewFirewall",
+      "sites": [
+        {
+          "file": "internal/bridge/firewall.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "internal.bridge.NewFirewall/ADDED (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.bridge.NewFirewall/TESTED",
+      "sites": [
+        {
+          "file": "internal/bridge/firewall_test.go",
+          "line": 12,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "internal.bridge.NewFirewall/TESTED (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.bridge.Store",
+      "sites": [
+        {
+          "file": "internal/bridge/cas.go",
+          "line": 30,
+          "status": "CHANGE",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "internal.bridge.Store/CHANGED (compare-and-swap) — P1-E23-W5-S48-T1."
+        },
+        {
+          "file": "internal/bridge/domain.go",
+          "line": 35,
+          "status": "ADD",
+          "raw": "internal.bridge.Store/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD",
+        "CHANGE"
+      ]
+    },
+    {
+      "name": "internal.bridge.Store/TESTED",
+      "sites": [
+        {
+          "file": "internal/bridge/cas_test.go",
+          "line": 13,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "internal.bridge.Store/TESTED (compare-and-swap) — P1-E23-W5-S48-T1."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.bridge.Store/TESTED, internal.bridge.MigrationSet/TESTED",
+      "sites": [
+        {
+          "file": "internal/bridge/domain_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "internal.bridge.Store/TESTED, internal.bridge.MigrationSet/TESTED"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal.build.CheckCountsDrift",
       "sites": [
         {
@@ -14613,6 +14834,36 @@
       ]
     },
     {
+      "name": "internal/daemon:bridge-subsystem",
+      "sites": [
+        {
+          "file": "internal/daemon/subsystem_bridge.go",
+          "line": 34,
+          "status": "ADD",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "internal/daemon:bridge-subsystem (ADD) — P1-E23-W5-S48-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/daemon:bridge-subsystem/TESTED",
+      "sites": [
+        {
+          "file": "internal/daemon/subsystem_bridge_test.go",
+          "line": 13,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "internal/daemon:bridge-subsystem/TESTED (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/daemon:node-upgrade-rpc",
       "sites": [
         {
@@ -17642,6 +17893,154 @@
       ]
     },
     {
+      "name": "internal/plugins:cascadepa-bridge-client",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_client.go",
+          "line": 35,
+          "status": "ADD",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "internal/plugins:cascadepa-bridge-client (ADD) — P1-E23-W5-S48-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-bridge-deps",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_deps.go",
+          "line": 59,
+          "status": "ADD",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "internal/plugins:cascadepa-bridge-deps (ADD) — P1-E23-W5-S48-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-bridge-deps/TESTED",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_deps_test.go",
+          "line": 12,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "internal/plugins:cascadepa-bridge-deps/TESTED (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-bridge-events",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_events.go",
+          "line": 46,
+          "status": "ADD",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "internal/plugins:cascadepa-bridge-events (ADD) — P1-E23-W5-S48-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-bridge-events/TESTED",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_events_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "internal/plugins:cascadepa-bridge-events/TESTED,"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-bridge-failpaths/TESTED",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_failpaths_test.go",
+          "line": 16,
+          "status": "",
+          "raw": "internal/plugins:cascadepa-bridge-failpaths/TESTED"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-bridge-fixtures/TEST",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_fixtures_test.go",
+          "line": 15,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "internal/plugins:cascadepa-bridge-fixtures/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-bridge-state",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_state.go",
+          "line": 39,
+          "status": "ADD",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "internal/plugins:cascadepa-bridge-state (ADD) — P1-E23-W5-S48-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-bridge-wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_wiring.go",
+          "line": 58,
+          "status": "ADD",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "internal/plugins:cascadepa-bridge-wiring (ADD) — P1-E23-W5-S48-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-bridge-wiring/TESTED",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_wiring_test.go",
+          "line": 16,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "internal/plugins:cascadepa-bridge-wiring/TESTED (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/plugins:cascadepa-review-wiring",
       "sites": [
         {
@@ -19569,6 +19968,34 @@
       ]
     },
     {
+      "name": "internal/secrets TestEgressClassBridgeRegistered",
+      "sites": [
+        {
+          "file": "internal/secrets/classes_test.go",
+          "line": 29,
+          "status": "ADD",
+          "raw": "internal/secrets TestEgressClassBridgeRegistered/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/secrets TestRedTeamBridgeClass*",
+      "sites": [
+        {
+          "file": "internal/secrets/red_team_test.go",
+          "line": 30,
+          "status": "ADD",
+          "raw": "internal/secrets TestRedTeamBridgeClass*/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/secrets VaultEnvImport",
       "sites": [
         {
@@ -20990,6 +21417,20 @@
       ]
     },
     {
+      "name": "methodAllowed",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/apicall.go",
+          "line": 26,
+          "status": "ADD",
+          "raw": "methodAllowed/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "migration/v1",
       "sites": [
         {
@@ -22139,6 +22580,561 @@
       ]
     },
     {
+      "name": "plugins/cascade-pa BindingStore",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/binding.go",
+          "line": 32,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa BindingStore/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa BridgeState",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/state.go",
+          "line": 36,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa BridgeState/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa CallbackNonce",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/callback.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa CallbackNonce/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa DerivePairCodeKey",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/paircode_key.go",
+          "line": 24,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa DerivePairCodeKey/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa DerivePairCodeKey/TESTED, CodeDigest/TESTED",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/paircode_key_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "plugins/cascade-pa DerivePairCodeKey/TESTED, CodeDigest/TESTED"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa ElevationPolicy",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/bridge_policy.go",
+          "line": 26,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa ElevationPolicy/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa PairCodeStore",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/pairing.go",
+          "line": 52,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa PairCodeStore/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa binding-tests/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/binding_test.go",
+          "line": 7,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa binding-tests/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa bridge-policy-tests/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/bridge_policy_test.go",
+          "line": 7,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa bridge-policy-tests/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa bridge-test-fakes/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/bridge_helpers_test.go",
+          "line": 10,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa bridge-test-fakes/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa callback-tests/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/callback_test.go",
+          "line": 6,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa callback-tests/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa mutate/TESTED",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/retry_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa mutate/TESTED (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa pairing-tests/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/pairing_test.go",
+          "line": 5,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa pairing-tests/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa state-tests/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/state_test.go",
+          "line": 6,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa state-tests/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa subjectLocks",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/concurrency.go",
+          "line": 33,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa subjectLocks/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa subjectLocks/TESTED, PairCodeStore/TESTED",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/concurrency_test.go",
+          "line": 16,
+          "status": "",
+          "raw": "plugins/cascade-pa subjectLocks/TESTED, PairCodeStore/TESTED"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/doc.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa/telegram (ADD) — P1-E23-W5-S48-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram BotClient",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/client.go",
+          "line": 32,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa/telegram BotClient/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram FuzzTelegramUpdate",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/fuzz_test.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa/telegram FuzzTelegramUpdate/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram NewModule",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/assemble.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa/telegram NewModule/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram TelegramModule",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/module.go",
+          "line": 32,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa/telegram TelegramModule/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram Update",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/wire.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa/telegram Update/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram apicall-tests/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/apicall_test.go",
+          "line": 11,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa/telegram apicall-tests/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram assemble-tests/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/assemble_test.go",
+          "line": 12,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa/telegram assemble-tests/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram client-send-tests/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/client_send_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram client-send-tests/TEST"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram client-tests/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/client_test.go",
+          "line": 7,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa/telegram client-tests/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram httpDoer",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/apicall.go",
+          "line": 26,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa/telegram httpDoer/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram httpPoster",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/transport.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa/telegram httpPoster/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram integration-tests/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/module_integration_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram integration-tests/TEST"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram module-tests/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/module_test.go",
+          "line": 9,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa/telegram module-tests/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram pairCoordinator",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/pairing.go",
+          "line": 28,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa/telegram pairCoordinator/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram pairing-tests/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/pairing_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa/telegram pairing-tests/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram platform-gate/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/module_unix_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa/telegram platform-gate/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram platformBridgeRefusal",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/module_unix.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa/telegram platformBridgeRefusal/ADDED"
+        },
+        {
+          "file": "plugins/cascade-pa/telegram/module_windows.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa/telegram platformBridgeRefusal/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram test-fakes/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/helpers_test.go",
+          "line": 14,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa/telegram test-fakes/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram test-rig/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/rig_test.go",
+          "line": 7,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa/telegram test-rig/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram windows-tier-2-refusal/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/module_windows_test.go",
+          "line": 14,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram windows-tier-2-refusal/TEST"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram wire-tests/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/wire_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa/telegram wire-tests/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "plugins/cascade-pa:cmd:chat",
       "sites": [
         {
@@ -22215,6 +23211,21 @@
       ],
       "statuses": [
         "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa:cmd:pair",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/cmd/pair.go",
+          "line": 35,
+          "status": "ADD",
+          "ticket": "P1-E23-W5-S48-T1",
+          "raw": "plugins/cascade-pa:cmd:pair (ADD) — P1-E23-W5-S48-T1."
+        }
+      ],
+      "statuses": [
         "ADD"
       ]
     },
@@ -26087,7 +27098,7 @@
       ]
     }
   ],
-  "total_sites": 2474,
-  "unspecified_count": 84,
-  "multi_status_count": 52
+  "total_sites": 2545,
+  "unspecified_count": 114,
+  "multi_status_count": 53
 }
