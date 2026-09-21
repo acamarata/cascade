@@ -187,10 +187,81 @@ daemon that refuses to reopen the database it just wrote.
 row at all, and the result says so rather than claiming an application
 that never happened.
 
+## `cascade recall what`
+
+`recall what <query>` (P1-E22-W5-S47-T1, R-14.65/66; rpc `recall.what`,
+`internal/retrieval/recallwhat*.go`) fuses the domains this build can scope —
+files and memory; the conversation leg is excluded until threads carry a
+scope reference and is reported as an unavailable domain — into one ranked,
+cited answer. Unlike
+the bare `recall` command it takes **only** the positional query: there
+is no `--scope`, `--corpus`, `--k` or `--cite` flag (07-CLI-COMMAND-TREE
+§recall ratifies none). The session scope is resolved by the daemon from
+this process's working directory (`context/scope.ResolveSessionScope`,
+E/S-08.T4) — the CLI asserts nothing about its own scope.
+
+```
+$ cascade recall what "why did the retry policy change"
+```
+
+**Domains and their trust/privacy handling:**
+
+- **files** — reuses `internal/retrieval/recall.Service` whole: the same
+  scope filter, RRF fusion and citation set as the bare command.
+- **memory** — the memory projection's indexed read model
+  (`internal/memory.ProjectionJob.SearchIncludingExpired`), narrowed to
+  the resolved scope by `ScopeRef` equality. This leg calls the
+  `...IncludingExpired` variant rather than plain `Search` deliberately: a
+  row past its TTL is still a candidate here (see R-16.7 demotion below),
+  where the bare `recall` command's own leg would exclude it outright. A
+  superseded or expired `MemoryEntry` never ranks above the entry that
+  supersedes it, or above a non-expired peer — demoted, not excluded,
+  reordering only, no rescoring (`recallwhat_filter.go`'s
+  `demoteSupersededAndExpired`, pinned against a golden fixture at
+  `internal/retrieval/testdata/v1-goldens/recallwhat_ranking.json`).
+- **conversation** — **unconditionally excluded.** `conversation.Thread`
+  carries no `ScopeRef` field and `conversation.SearchFilter` carries only
+  `ThreadID`/`Limit`, so this leg has no server-side column to narrow a
+  search by. Running it unscoped would leak a thread across project
+  boundaries — reproduced directly: a public thread created under one
+  project, returned to a `recall.what` caller whose cwd resolves to a
+  different project — so instead the leg never runs at all:
+  `SearchTurns`/`ThreadPrivacy`/`ListSegments` are never called, and every
+  response carries `Errors["conversation"]` (`KindUnavailable`,
+  "the conversation domain cannot be narrowed to a session scope")
+  regardless of any given thread's role, tier, or trust. A widening ticket
+  to add `ScopeRef` to `Thread` and `SearchFilter` is tracked separately;
+  the leg is restored there, not before.
+
+**Two unconditional exclusion rules**, both enforced by the real egress
+boundary (`internal/hooks/egress.Engine`, class `recall-what`,
+`EgressClassRecallWhat`) rather than by anything the caller asserts about
+itself: (1) content tagged `TrustUntrustedSource` (a tool-authored
+conversation turn, or a file the corpus model tags untrusted) never
+appears in a `recall.what` answer. (2) a conversation thread whose own
+privacy tier the egress class does not admit (it admits only
+`internal`/`public`) is excluded — currently unreachable in practice since
+the conversation leg above never runs at all, but tested and kept ready
+for the day that leg is restored. Every outbound field — snippet, path,
+memory key, the rendered citation block, and each per-domain error
+string — transits the same boundary before it reaches the wire, so a
+vaulted or credential-shaped value cannot leak through any of them
+(H/S-16.T1).
+
+`Withheld` counts rows an authorization or privacy decision dropped.
+`Truncated` is a **separate** count for rows dropped only because there
+were more than the result cap — the CLI reports the two with different
+wording ("excluded by scope or privacy policy" vs. "not shown (result
+cap)"), never conflating a privacy exclusion with a plain overflow.
+
+Domain-unavailable errors (an index or store this build could not reach)
+degrade to a partial answer: the human table reports a count
+("N domain(s) unavailable"), `--json` carries the per-domain detail in
+`errors`.
+
 ## Not here
 
-- `recall what` (the fused turns/threads/memories/files surface) and the
-  `cascade what` hidden alias belong to V/S-47 (§D-21 strike).
+- The `cascade what` hidden alias is deferred to V/S-47.T5.
 - The `[retrieval]` config surface belongs to F/S-12.T4.
 - The mirrored MCP tool `cascade_recall_query` is not exposed yet: the
   MCP tool table is sourced from plugin manifests

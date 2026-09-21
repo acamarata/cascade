@@ -130,6 +130,31 @@ const (
 	// the separate local-file/argv-disclosure risk runner.go's gitAuthEnv
 	// addresses (D3).
 	EgressClassWikiGitPush EgressClass = "wiki-git-push"
+	// EgressClassRecallWhat is the recall.what RPC response path
+	// (P1-E22-W5-S47-T1, H/S-16.T1): every conversation snippet, memory
+	// body, file path, and domain error string the fused cross-domain
+	// recall answer carries transits this class immediately before it is
+	// written to the wire, so the substitution pass runs on the actual
+	// bytes leaving the process rather than on a hand-rolled detector
+	// call the boundary could forget. It is its own class, distinct from
+	// EgressClassMCP (the tool-protocol response path): recall.what is a
+	// plain internal/rpc method, not an MCP tool response, and this
+	// package's own rule is that two subsystems answering to different
+	// owners never share a class. AllowedTiers admits only
+	// {internal, public}, the same narrowing EgressClassBridge uses: a
+	// thread or record classified local-only is refused here rather than
+	// silently substituted, which is the mechanism that replaces the
+	// caller-declared-tier trust problem this ticket's adversarial review
+	// found (a caller cannot assert its way past a local-only exclusion
+	// it does not control).
+	//
+	// SCOPE NOTE: this class did not exist before this ticket and this
+	// file is outside T-1's files_scope; adding it here is a recorded,
+	// minimal scope deviation — the alternative (reusing EgressClassMCP)
+	// would have been exactly the class-sharing mistake this package's
+	// header warns against, and skipping real egress enforcement is what
+	// the adversarial review rejected the previous draft for.
+	EgressClassRecallWhat EgressClass = "recall-what"
 )
 
 // defaultClasses is the registration table. It is a slice of pairs rather
@@ -160,6 +185,11 @@ var defaultClasses = []struct {
 		Owner:        "P1-E25-W5-S52-T2",
 	}},
 	{EgressClassWikiGitPush, InterceptConfig{Enabled: true, Owner: "P1-E25-W5-S51-T6"}},
+	{EgressClassRecallWhat, InterceptConfig{
+		Enabled: true, AllowRestricted: false,
+		AllowedTiers: []SensitivityTier{TierInternal, TierPublic},
+		Owner:        "P1-E22-W5-S47-T1",
+	}},
 }
 
 // defaultRegistry holds the classes this build ships with. It is package

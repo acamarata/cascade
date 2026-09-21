@@ -414,3 +414,126 @@ contract, the one that builds it. The four
 `NewDigestCompiler`, `DefaultAwayConfig`, `ReplayState`) say so plainly and
 are parked at `P1-E37-W8-S73-T2`, the nearest inbox surface, until planning
 forges a real owner in response to the PCI.
+
+## Fused cross-domain recall (`recall.what`, `internal/retrieval/recallwhat*.go`)
+
+`recall.what` (P1-E22-W5-S47-T1, R-14.65/66) is the multi-domain answer to
+one query: files, memory, conversation turns and threads, fused into a
+single ranked, cited response. It is a composition on top of three
+existing surfaces (Epic F's retrieval index, Epic G's memory store, Epic T's
+conversation store), not a new index of its own.
+
+### Scope resolution (E/S-08.T4)
+
+Every `recall.what` call resolves the caller's `scope.SessionScope`
+server-side, at the composition root
+(`cmd/cascade/daemon_unix_recall_what.go`), through the SAME resolver
+`context.scope.show` uses: `context/scope.ResolveSessionScope`, over the
+persisted deny-by-default scope graph (`scope.GraphStore`). A caller may
+still send a `scope` field on the wire, but it is only ever CHECKED against
+the resolution, never trusted on its own — a mismatch is refused with
+`KindInvalidInput` (`internal/retrieval/recallwhat_scope.go`). This is
+deliberately the same posture F/S-11.T1's `fusion.ScopeFilter` documents
+for the bare `recall` command: "there is exactly one scope-enforcement
+mechanism... and it runs BEFORE any leg does."
+
+The resolved scope reference narrows the files leg (passed through to
+`recall.Service`'s own `fusion.ScopeFilter`) and the memory leg
+(`IndexedRecord.ScopeRef` equality). The conversation leg cannot be
+narrowed this way at all: `conversation.Thread` carries no `ScopeRef`
+field, and `conversation.SearchFilter` carries only `ThreadID`/`Limit` — no
+scope column exists to check. A caller-side confirming review reproduced
+the leak this would otherwise cause (a public thread created under one
+project, reachable from a `cascade recall what` call whose cwd resolves to
+a different project), so the leg does not run unscoped: **it is
+unconditionally excluded**. Every `recall.what` call gets
+`Errors["conversation"] = "recall.what: the conversation domain cannot be
+narrowed to a session scope"` (`KindUnavailable`), and no conversation row
+ever reaches a response, regardless of the thread's own privacy tier or
+the turn's role — `SearchTurns`/`ThreadPrivacy`/`ListSegments` are never
+even called. This is a per-request refusal, not "leg absent": a build with
+no conversation store configured at all reports the leg simply not
+configured (no error), a different signal. A widening ticket is tracked
+(PCI, repo `cascade`, type `planning`) to add a `ScopeRef` to `Thread` and
+`SearchFilter` and restore the leg once one exists.
+
+### Multi-domain fan-out and RRF merge
+
+`RecallWhatService.Query` fans out to three domain legs concurrently
+(bounded by a local semaphore, `maxParallelLegs` — no Conductor governor
+transit, R-14.66), each producing an `rrf.RankedList`. One leg's failure
+never fails the whole query: it is recorded per-domain in `Errors` and the
+answer degrades to whatever domains did answer (`KindUnavailable` only
+when every domain failed). The three lists are merged by the same
+`internal/retrieval/rrf.FuseWith` reciprocal-rank-fusion pass every other
+fusion path in this tree calls — no second ranking algorithm.
+
+### TRUST and privacy filtering — the real egress boundary, not a caller claim
+
+Two exclusion rules run on the fused rows before they are described,
+`internal/retrieval/recallwhat_filter.go`:
+
+1. **Untrusted-source content is excluded unconditionally.** A
+   `corpus.TrustUntrustedSource` row (an externally-sourced file, or a
+   tool-authored conversation turn) never reaches a `recall.what` answer,
+   regardless of who is asking. This is deliberately tighter than "excluded
+   from a privileged caller": the caller-declared-tier version of this
+   rule was the exact finding of an adversarial review of this surface's
+   first draft (a caller could assert its way past the exclusion by
+   claiming a permissive tier), so the rework removed the caller-supplied
+   tier from the wire entirely and made the rule unconditional instead.
+2. **A conversation thread whose own privacy tier the real egress class
+   does not admit is excluded.** The decision is taken by
+   `internal/hooks/egress.Engine.InterceptClass` against a dedicated class,
+   `EgressClassRecallWhat` (`internal/hooks/egress/classes.go`), configured
+   to admit only `internal`/`public` tiers — never local-only or restricted,
+   for any caller. The SAME `InterceptClass` call also performs the
+   exact-value substitution pass (H/S-16.T1), so exclusion and redaction
+   are one call, not two mechanisms that could disagree. **This rule is
+   presently unreachable in production**, since the conversation leg is
+   itself excluded upstream (the scope-resolution section above) — it
+   stays in place, tested directly against `filterFusedResults`, so the
+   moment a future ticket restores the leg, tier exclusion and redaction
+   are already correct rather than silently missing.
+
+Every outbound string — snippet, path, the chunk id ("memory key"), each
+domain's error text, and the rendered citation footnote block — transits
+`InterceptClass` at `TierInternal` (the tier the class is always
+configured to admit) before it reaches the wire
+(`internal/retrieval/recallwhat_redact.go`). A refusal there fails the
+whole request rather than silently omitting one field, because a refusal
+on an always-admitted tier means the firewall itself is unavailable, not
+that one row is sensitive.
+
+The files leg's own citations (`recall.Service`'s `authorize()` +
+`citations.Assemble` pass, already run against the real `ScopeFilter`) are
+reused verbatim rather than re-derived; a file row that leg's own
+authorization withheld is never re-admitted here.
+
+### R-16.7: superseded and expired memory ranks below its peers
+
+The memory leg carries `Supersedes` and `ExpiresAt` through from
+`MemoryEntry` into the projection's read model
+(`internal/memory.IndexedRecord`, extended by this ticket). After fusion,
+`demoteSupersededAndExpired` reorders the RRF output as two stable
+partitions: an expired entry sinks below every non-expired peer, and a
+superseded entry is reinserted immediately after the entry that supersedes
+it — nothing is re-scored, only reordered. A golden fixture
+(`internal/retrieval/testdata/v1-goldens/recallwhat_ranking.json`) pins the
+expected order against a hand-traced scenario.
+
+This depends on the memory leg actually being HANDED an expired row to
+demote in the first place. `ProjectionJob`'s ordinary `Search` excludes an
+expired row outright (the same rule the bare `cascade recall` surface
+needs — a row past its TTL should not surface there at all), which means
+`recall.what`'s memory leg cannot call `Search` and still deliver this
+section's own demotion contract: there would never be an expired candidate
+to demote. The memory leg therefore calls a second, narrower method,
+`ProjectionJob.SearchIncludingExpired` — identical to `Search` except it
+does not apply the TTL filter (a genuinely retired/tombstoned row is still
+excluded either way; expiry and retirement are different facts). Adding
+this method changed `IndexedRecord`'s effective field set requirements
+(the `Supersedes` field above already had), so `internal/memory.schema.go`'s
+`ProjectionVersion` moved from 1 to 2 — a version a stored row was written
+under is a version whose rows must be rebuilt, never compared byte-for-byte
+against a different layout's assumptions.

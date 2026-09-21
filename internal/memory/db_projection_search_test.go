@@ -84,6 +84,57 @@ func TestSearch_ExpiredRecordIsNotReturned(t *testing.T) {
 	assertHits(t, f, "pelicans")
 }
 
+// TestSearchIncludingExpired_ReturnsPastExpiryRowButNeverRetired is D6/Q6's
+// test for the new bounded option: Search still excludes an expired row
+// (mirroring TestSearch_ExpiredRecordIsNotReturned above), but
+// SearchIncludingExpired returns it -- and a genuinely retired row (the
+// file removed, not merely TTL'd) stays excluded from BOTH, since
+// retirement and expiry are different facts (schema.go's Expired doc).
+func TestSearchIncludingExpired_ReturnsPastExpiryRowButNeverRetired(t *testing.T) {
+	f := newProjection(t)
+	ctx := context.Background()
+	expiring := validEntry()
+	expiring.Name, expiring.Body, expiring.Description = "alpha", "body pelicans\n", "first"
+	expiring.ExpiresAt = ptrTime(fixedNow.Add(time.Hour))
+	if err := f.files.Write(ctx, expiring); err != nil {
+		t.Fatalf("Write(expiring): %v", err)
+	}
+	retiring := validEntry()
+	retiring.Name, retiring.Body, retiring.Description = "beta", "body pelicans too\n", "second"
+	if err := f.files.Write(ctx, retiring); err != nil {
+		t.Fatalf("Write(retiring): %v", err)
+	}
+	mustRun(t, f)
+
+	// Retire "beta" by deleting the file and re-running, then advance the
+	// clock past "alpha"'s TTL. Now the tree holds one live record and
+	// two rows the projection has seen: one expired, one retired.
+	if err := f.files.Delete(ctx, KindProject, "beta"); err != nil {
+		t.Fatalf("Delete(beta): %v", err)
+	}
+	mustRun(t, f)
+	f.clock.advance(2 * time.Hour)
+
+	got, err := f.job.Search(ctx, "pelicans", 0)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("Search returned %d rows past TTL, want 0: %+v", len(got), got)
+	}
+
+	got, err = f.job.SearchIncludingExpired(ctx, "pelicans", 0)
+	if err != nil {
+		t.Fatalf("SearchIncludingExpired: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "project/alpha" {
+		t.Fatalf("SearchIncludingExpired = %+v, want exactly the expired project/alpha row (beta stays retired)", got)
+	}
+	if !got[0].Expired(fixedNow.Add(2 * time.Hour)) {
+		t.Fatalf("the row SearchIncludingExpired returned does not report itself expired: %+v", got[0])
+	}
+}
+
 func TestSearch_CorruptRowRefusesRatherThanShortening(t *testing.T) {
 	f := newProjection(t)
 	writeEntry(t, f, "alpha", "body pelicans\n", "first")

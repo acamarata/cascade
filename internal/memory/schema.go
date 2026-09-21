@@ -51,7 +51,16 @@ import (
 // serves a shape nothing understands. A mismatch between this constant
 // and the version stamped in the store triggers a full rebuild, which is
 // always safe: the files hold everything needed to rebuild.
-const ProjectionVersion = 1
+//
+// 1 -> 2 (P1-E22-W5-S47-T1, D6/Q6): IndexedRecord gained the Supersedes
+// field (rowFor now copies MemoryEntry.Supersedes through) so the
+// recall-what fusion service has R-16.7's supersede reference to demote
+// against. A row written under version 1 has no Supersedes value at all
+// (the JSON field is simply absent, decoding to ""), which is
+// indistinguishable from a genuinely un-superseding version-2 row unless
+// the stamp forces a rebuild -- exactly the failure mode this constant
+// exists to prevent.
+const ProjectionVersion = 2
 
 // projectionNamespace is the pkg/provider.Store scoping argument every key
 // below is written under: the ratified memory domain from R-14.5's closed
@@ -139,6 +148,13 @@ type IndexedRecord struct {
 	UpdatedAtUnixNano int64 `json:"updated_at_unix_nano"`
 	// ExpiresAtUnixNano is the record's TTL, or nil for no TTL.
 	ExpiresAtUnixNano *int64 `json:"expires_at_unix_nano,omitempty"`
+	// Supersedes optionally names the record this one replaces, as the
+	// same "<kind>/<name>" reference MemoryEntry.Supersedes carries
+	// (types.go). Copied through unvalidated: the file store already
+	// validated the reference shape when the record was written, and a
+	// row that has drifted from its file is corrected by re-running the
+	// projection, never by re-validating a derived field here.
+	Supersedes string `json:"supersedes,omitempty"`
 	// Confidence is the record's stated confidence in [0,1].
 	Confidence float64 `json:"confidence"`
 	// Deleted marks a row whose record is gone from the files (tombstoned
@@ -159,6 +175,17 @@ type IndexedRecord struct {
 	Tokens []string `json:"tokens,omitempty"`
 }
 
+// Expired reports whether this row's TTL has passed as of instant at. A
+// row with no TTL (ExpiresAtUnixNano nil) never expires. Split out of
+// Visible (P1-E22-W5-S47-T1, D6/Q6) so a caller that needs to tell
+// "expired" apart from "retired" -- the recall-what fusion service, which
+// demotes an expired row rather than excluding it outright (R-16.7) -- has
+// a name for exactly that check, instead of re-deriving it from the
+// negation of Visible.
+func (r IndexedRecord) Expired(at time.Time) bool {
+	return r.ExpiresAtUnixNano != nil && !time.Unix(0, *r.ExpiresAtUnixNano).UTC().After(at)
+}
+
 // Visible reports whether a query may return this row at instant at. A
 // retired record and an expired one are both invisible. This is the only
 // place a query narrows a result set, and it narrows: no field here can
@@ -167,10 +194,7 @@ func (r IndexedRecord) Visible(at time.Time) bool {
 	if r.Deleted {
 		return false
 	}
-	if r.ExpiresAtUnixNano != nil && !time.Unix(0, *r.ExpiresAtUnixNano).UTC().After(at) {
-		return false
-	}
-	return true
+	return !r.Expired(at)
 }
 
 // encodeRow marshals a row. Field order is the struct's, fixed at compile

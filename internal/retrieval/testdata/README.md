@@ -114,3 +114,25 @@ this module: `internal/events`, `internal/rpc`, `internal/mcp`,
 `internal/events/scheduler`) puts every corpus under the shared location
 instead, so `FuzzChunk` follows the tree rather than the contract text
 here.
+
+## recall.what fixtures (P1-E22-W5-S47-T1)
+
+- **`recallwhat_ranking.json`** — the R-16.7 golden `TestDemoteSupersededAndExpired`
+  asserts against: a hand-traced fused order across three domains and the
+  exact order `demoteSupersededAndExpired` must produce (an expired memory
+  entry sinks below every non-expired peer; a superseded entry never ranks
+  above its superseder). `expected_order` is hand-derived from the
+  implementation's own documented algorithm, not captured from a test run,
+  so the golden cannot pass by agreeing with itself. Tool: n/a (hand-authored
+  ranking scenario, not harvested content); date: 2026-09-21.
+- **`v1_graphrag_p08.json`** — negative-space fixture evidence per this
+  ticket's SPEC-SALVAGE note: v1's §P08 GraphRAG layer plan, harvested
+  verbatim from `acamarata/cascade-v1` (archived, read-only per
+  `.claude/planning/p1/ARCHIVE-MAP.md` item 2), local archive clone
+  `../cascade-v1/.claude/planning/p9/16-round4-expansion.md`, section 8.
+  Records what v1 planned (entity/relation extraction, graph-aware
+  retrieval blended into RRF) so a future P2 GraphRAG ticket has the exact
+  scope text to compare against — this ticket's own `recall.what` fusion
+  implements none of it (flat RRF over three domains' already-ranked
+  lists, no graph). Tool: n/a, real source file copied verbatim from the
+  archive clone; date: 2026-09-21.

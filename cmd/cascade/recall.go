@@ -5,7 +5,8 @@
 //	that reaches the daemon through the Go IPC client SDK
 //	(internal/client, never a hand-rolled JSON-RPC request — .golangci.yml's
 //	cmd-rpc-server-boundary depguard rule), the flag surface, and the
-//	rendering.
+//	rendering. `recall what <query>` (V/S-47.T1) mounts here but is
+//	implemented in recall_what.go, its own file (300-line cap).
 //
 // Inputs: cobra args/flags; a recallDeps injected at construction so no
 //
@@ -25,7 +26,7 @@
 //	mapped exit code. Nothing about a withheld result is ever printed
 //	beyond the count the daemon already reduced it to.
 //
-// SPORT: cmd.cascade.cmd.recall (ADD, per T-3 sport_updates).
+// SPORT: cmd.cascade.cmd.recall (ADD, per T-3); `what` mount ADD, S-47.T1.
 package main
 
 import (
@@ -149,6 +150,7 @@ func newRecallCmd(deps recallDeps) *cobra.Command {
 	// `recall index rebuild|verify|migrate|update` (F/S-11.T4), mounted on
 	// this same parent per 06 §5 rule 3's implied intra-sprint order.
 	cmd.AddCommand(newRecallIndexCmd(deps))
+	cmd.AddCommand(newRecallWhatCmd(deps)) // `recall what <q>` (V/S-47.T1), recall_what.go
 	return cmd
 }
 

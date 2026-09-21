@@ -54,8 +54,14 @@ func scanKeys(ctx context.Context, kv provider.Store, prefix string) ([]string, 
 // records the caller never asked to see. Results are ordered by record id,
 // so the same query over the same projection returns the same order on any
 // machine. at judges each row's TTL and comes from the caller's clock.
+//
+// includeExpired (P1-E22-W5-S47-T1, D6/Q6) is the bounded escape hatch a
+// caller that wants to DEMOTE rather than EXCLUDE an expired row (R-16.7's
+// ranking rule) must ask for explicitly: a Deleted (retired/tombstoned)
+// row is never returned either way -- expiry and retirement are different
+// facts, and only the first is something a caller may choose to see past.
 func searchIndex(
-	ctx context.Context, kv provider.Store, query string, at time.Time, limit int,
+	ctx context.Context, kv provider.Store, query string, at time.Time, limit int, includeExpired bool,
 ) ([]IndexedRecord, error) {
 	tokens := tokenize(query)
 	if len(tokens) == 0 {
@@ -71,7 +77,10 @@ func searchIndex(
 		if rerr != nil {
 			return nil, rerr
 		}
-		if !found || !row.Visible(at) {
+		if !found || row.Deleted {
+			continue
+		}
+		if !includeExpired && row.Expired(at) {
 			continue
 		}
 		out = append(out, row)

@@ -1,0 +1,15 @@
+{
+  "description": "R-16.7 golden: a hand-computed fused order across three domains, and the exact order demoteSupersededAndExpired must produce. memory:project/c is expired and must sink below every non-expired peer regardless of score; memory:project/b supersedes memory:project/a and must never rank below it. file:x carries neither flag and keeps its relative position. Expected order is hand-traced against the implementation's own documented algorithm (partition expired to the end, then reinsert each superseded entry immediately after its superseder), not copied from a test run.",
+  "fused_order": [
+    {"chunk_id": "memory:project/c", "score": 0.95, "supersedes": "", "expired": true},
+    {"chunk_id": "memory:project/a", "score": 0.90, "supersedes": "", "expired": false},
+    {"chunk_id": "memory:project/b", "score": 0.80, "supersedes": "memory:project/a", "expired": false},
+    {"chunk_id": "file:x", "score": 0.50, "supersedes": "", "expired": false}
+  ],
+  "expected_order": [
+    "memory:project/b",
+    "memory:project/a",
+    "file:x",
+    "memory:project/c"
+  ]
+}

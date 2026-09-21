@@ -46,6 +46,12 @@ func NewRegistry() *Registry {
 // internal/fleet/sessions/rpc.go's own CONTRACT DEVIATION note for why).
 // cmd/cascade/plugin_rpc.go's wirePluginSearchHandler (P1-E24-W5-S50-T2)
 // binds "plugin.search" the same way, from registerDBPathHandlers.
+// internal/retrieval.RecallWhatHandler.Register
+// (P1-E22-W5-S47-T1) binds "recall.what" the same way; D1 landed its
+// composition-root call site at cmd/cascade/daemon_unix_recall_what.go
+// (service construction) plus a one-line hook in
+// cmd/cascade/daemon_unix_memory_recall.go (the actual Register call,
+// which must run from a cmd-rpc-server-boundary-exempt file).
 //
 // Registering the same method twice
 // overwrites the prior binding — the daemon composition root is the only

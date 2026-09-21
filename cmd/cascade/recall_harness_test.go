@@ -124,10 +124,13 @@ func reencode(v, out any) error {
 func (h *recallHarness) run(t *testing.T, args ...string) (string, string, error) {
 	t.Helper()
 	cmd := newRecallCmd(h.deps(t))
-	// The global flags recallWriter reads live on the root in production;
-	// declare the same four here so the command under test sees exactly
-	// the flag set it sees when mounted.
-	flags := cmd.Flags()
+	// The global flags recallWriter reads live on the root in production,
+	// as PERSISTENT flags every subcommand inherits (root.go). Declared
+	// the same way here — PersistentFlags, not Flags — so a child
+	// subcommand under test (`recall what`) sees them too, exactly as it
+	// does when mounted on the real root; a plain Flags() declaration is
+	// local to this node alone and invisible to a dispatched child.
+	flags := cmd.PersistentFlags()
 	flags.Bool("json", false, "")
 	flags.Bool("quiet", false, "")
 	flags.Bool("verbose", false, "")

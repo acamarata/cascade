@@ -63,14 +63,12 @@ type ProjectionResult struct {
 // ProjectionJob projects the file-backed memory store into the memory
 // domain's key-value namespace.
 //
-// The projection is derived state. It can be corrupted, truncated, or
-// deleted outright, and a run rebuilds it from the files alone; nothing it
-// holds is needed to reconstruct a record. A record the file store refuses
-// to read (a damaged file, or a format version this build does not know)
-// is refused here too, and any row it previously had is withdrawn, so the
-// index can never serve content the store itself will not return. One such
-// record costs exactly its own row: the run continues, and the refusal is
-// reported in ProjectionResult.Failures.
+// The projection is derived state: corrupted, truncated, or deleted
+// outright, a run rebuilds it from the files alone. A record the file
+// store refuses to read is refused here too and any row it previously had
+// is withdrawn, so the index can never serve content the store itself will
+// not return; the run continues and the refusal lands in
+// ProjectionResult.Failures.
 type ProjectionJob struct {
 	files    MemoryStore
 	kv       provider.Store
@@ -80,13 +78,9 @@ type ProjectionJob struct {
 }
 
 // NewProjectionJob returns a job projecting files into kv, taking its
-// timestamps from clk.
-//
-// vectors and embedder are the vector leg and are optional: when either is
-// nil the run projects rows and postings only, which is what a profile
-// with no embedding provider configured must still be able to do. Passing
-// one without the other is treated as no vector leg, because half of it
-// would write vectors nothing can query or query an index nothing fills.
+// timestamps from clk. vectors and embedder are the vector leg and are
+// optional: when either is nil the run projects rows and postings only.
+// Passing one without the other is treated as no vector leg.
 func NewProjectionJob(
 	files MemoryStore, kv provider.Store,
 	embedder provider.Embedder, vectors provider.VectorStore, clk Clock,
@@ -132,14 +126,21 @@ func (j *ProjectionJob) Rebuild(ctx context.Context) (ProjectionResult, error) {
 }
 
 // Search returns the projected records matching query, most useful as the
-// fast path a recall surface takes instead of re-reading every file.
-//
-// A hit is a pointer, not an authority: the row's body is what the file
-// said when it was last projected, and the file wins on any disagreement.
+// fast path a recall surface takes instead of re-reading every file. A
+// hit is a pointer, not an authority: the row's body is what the file said
+// when it was last projected, and the file wins on any disagreement.
 // Retired and expired records are excluded, judged against the injected
 // clock, so the index never returns a record the store itself would not.
 func (j *ProjectionJob) Search(ctx context.Context, query string, limit int) ([]IndexedRecord, error) {
-	return searchIndex(ctx, j.kv, query, j.clock.Now().UTC(), limit)
+	return searchIndex(ctx, j.kv, query, j.clock.Now().UTC(), limit, false)
+}
+
+// SearchIncludingExpired is Search, except an expired row is returned
+// rather than dropped (D6/Q6): for a ranking pass that DEMOTES an expired
+// row (R-16.7) rather than excluding it, which needs the row in hand. A
+// retired (Deleted) row is still never returned either way.
+func (j *ProjectionJob) SearchIncludingExpired(ctx context.Context, query string, limit int) ([]IndexedRecord, error) {
+	return searchIndex(ctx, j.kv, query, j.clock.Now().UTC(), limit, true)
 }
 
 // project walks every kind and projects it. rebuilt is carried through to
@@ -248,7 +249,7 @@ func rowFor(e MemoryEntry, now time.Time) IndexedRecord {
 		ID: recordID(e.Kind, e.Name), Name: e.Name, Kind: e.Kind,
 		Description: e.Description, Body: e.Body,
 		Origin: e.Provenance.Origin, SessionID: e.Provenance.SessionID,
-		ScopeRef: e.ScopeRef, ContentHash: e.BodyHash(),
+		ScopeRef: e.ScopeRef, ContentHash: e.BodyHash(), Supersedes: e.Supersedes,
 		CreatedAtUnixNano: e.Provenance.CreatedAt.UTC().UnixNano(),
 		UpdatedAtUnixNano: e.Provenance.UpdatedAt.UTC().UnixNano(),
 		Confidence:        e.Confidence, IndexedAtUnixNano: now.UnixNano(),

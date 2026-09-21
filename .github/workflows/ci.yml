@@ -123,6 +123,38 @@ jobs:
             }
           done
 
+      # P1-E22-W5-S47-T1 (D6/Q8): internal/integration's own two files
+      # (context_scope_test.go, recall_what_test.go — both `!windows &&
+      # integration`) never ran under -tags=integration anywhere in this
+      # file either, the exact same "green and proved nothing" defect the
+      # conversation step above exists to catch: the whole PACKAGE was
+      # unreachable from CI, so recall.what's real-daemon/real-socket proof
+      # (TestRecallWhatRealCounterparts, TestRecallWhatRealCounterparts_WiringProof)
+      # never executed, and context_scope_test.go's pre-existing pair
+      # (TestContextScopeRealCounterparts, TestContextScopeRealCounterparts_WiringProof)
+      # rides along — it was equally unreachable and is rescued by the same
+      # fix. Same platform gate as the conversation step (both files are
+      # `!windows`), same explicit EXECUTED+PASS assertion per named test.
+      - name: go test -tags=integration ./internal/integration/ (TestContextScopeRealCounterparts, TestContextScopeRealCounterparts_WiringProof, TestRecallWhatRealCounterparts, TestRecallWhatRealCounterparts_WiringProof)
+        if: matrix.goos != 'windows'
+        run: |
+          set -o pipefail
+          go test -tags=integration -count=1 -race ./internal/integration/ -v 2>&1 | tee /tmp/integration-integration.log
+          if grep -q 'no tests to run' /tmp/integration-integration.log; then
+            echo "::error::internal/integration -tags=integration run reported [no tests to run] -- the named checks were not selected."
+            exit 1
+          fi
+          for name in TestContextScopeRealCounterparts TestContextScopeRealCounterparts_WiringProof TestRecallWhatRealCounterparts TestRecallWhatRealCounterparts_WiringProof; do
+            grep -q -- "=== RUN   ${name}" /tmp/integration-integration.log || {
+              echo "::error::${name} did not execute (no '=== RUN' line). A skipped or filtered-out named check cannot close this job's obligation."
+              exit 1
+            }
+            grep -q -- "--- PASS: ${name}" /tmp/integration-integration.log || {
+              echo "::error::${name} did not pass."
+              exit 1
+            }
+          done
+
   # The darwin/amd64 stand-in for the retired macos-13 matrix entry (see
   # the ART.5.1 DEVIATION note above). It runs on the arm64 macOS runner and
   # cross-compiles, so it proves the whole tree BUILDS and VETS for darwin

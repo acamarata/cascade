@@ -1,0 +1,8 @@
+{
+  "source": "acamarata/cascade-v1 (archived, read-only per .claude/planning/p1/ARCHIVE-MAP.md item 2), local archive clone ../cascade-v1/.claude/planning/p9/16-round4-expansion.md",
+  "tool": "n/a — real source file copied verbatim from the archive clone",
+  "date": "2026-09-21",
+  "section": "8. P08 — GraphRAG layer",
+  "input": "8. P08 — GraphRAG layer: entity/relation extraction over personal corpus, community\n   summaries, graph-aware retrieval blended into RRF.\n   Accept: multi-hop personal queries (\"who did I meet through X\") answered from graph\n   paths on fixture corpus; extraction runs on GF/local lanes only.",
+  "negative_space_note": "P08 describes v1's planned entity/relation graph layer, blended into RRF for multi-hop queries. This ticket's recall.what fusion does NOT implement any of that: it fuses flat, already-ranked domain lists (files, turns, memories) via plain RRF, with no entity/relation extraction, no community summaries, and no graph traversal. That surface is P2-deferred (05-PEWS-PLAN-W4-W6.md §Epic-V, GraphRAG deferred). This fixture exists so a future P2 GraphRAG ticket has the exact v1 scope text to compare its own acceptance criteria against, and so this ticket's own scope boundary is recorded as data rather than as an unverifiable claim in prose."
+}

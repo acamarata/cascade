@@ -32,5 +32,18 @@ func registerMemoryAndRecall(
 	bus *events.Bus, store provider.Store, memoryAdmin *memory.AdminHandler,
 ) error {
 	registerMemoryHandler(registry, paths, clock, bus, memoryAdmin)
-	return registerRecallHandler(registry, paths, bus, store)
+	if err := registerRecallHandler(registry, paths, bus, store); err != nil {
+		return err
+	}
+	// recall.what (D1, P1-E22-W5-S47-T1): buildRecallWhatHandler
+	// (daemon_unix_recall_what.go) does not import internal/rpc, so the
+	// actual Register call is here, in this cmd-rpc-server-boundary-exempt
+	// file — build-lane-rules item 17/19's documented pattern for a
+	// composition root split across a sibling wiring file.
+	whatHandler, err := buildRecallWhatHandler(paths, clock, bus, store)
+	if err != nil {
+		return err
+	}
+	whatHandler.Register(registry)
+	return nil
 }

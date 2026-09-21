@@ -94,12 +94,49 @@ func TestIndexedRecordVisible(t *testing.T) {
 	}
 }
 
+// TestIndexedRecordExpired pins Expired as the standalone TTL check Visible
+// is now built from (D6/Q6): unlike Visible, a Deleted row with no TTL is
+// NOT reported expired -- retirement and expiry are different facts, and a
+// caller that wants "is this row's TTL past" must get that answer
+// regardless of whether the row is also retired.
+func TestIndexedRecordExpired(t *testing.T) {
+	at := fixedNow
+	past := at.Add(-time.Hour).UnixNano()
+	future := at.Add(time.Hour).UnixNano()
+
+	if (IndexedRecord{ID: "project/a"}).Expired(at) {
+		t.Fatal("a row with no TTL is reported expired")
+	}
+	if !(IndexedRecord{ID: "project/a", ExpiresAtUnixNano: &past}).Expired(at) {
+		t.Fatal("a past-ExpiresAt row is not reported expired")
+	}
+	if (IndexedRecord{ID: "project/a", ExpiresAtUnixNano: &future}).Expired(at) {
+		t.Fatal("a future-ExpiresAt row is reported expired")
+	}
+	if (IndexedRecord{ID: "project/a", Deleted: true, ExpiresAtUnixNano: &future}).Expired(at) {
+		t.Fatal("Expired must judge the TTL only, not Deleted")
+	}
+}
+
+// TestProjectionVersionIsTwo pins D6/Q6's version bump: the Supersedes
+// field IndexedRecord gained (TestRowForCarriesSupersedesAndExpiry, this
+// file) is an IndexedRecord field-set change, and this file's own doc rule
+// on ProjectionVersion (above the constant) requires exactly that to bump
+// it. A future field-set change that forgets to bump this constant makes a
+// version-1 row (Supersedes absent, decoding to "") indistinguishable from
+// a genuinely non-superseding version-2 row -- this test is the tripwire.
+func TestProjectionVersionIsTwo(t *testing.T) {
+	if ProjectionVersion != 2 {
+		t.Fatalf("ProjectionVersion = %d, want 2 (IndexedRecord.Supersedes was added without a version bump)", ProjectionVersion)
+	}
+}
+
 func TestRowCodecRoundTrip(t *testing.T) {
 	exp := fixedNow.Add(time.Hour).UnixNano()
 	want := IndexedRecord{
 		ID: "project/a-record", Name: "a-record", Kind: KindProject,
 		Description: "d", Body: "b", Origin: OriginSession, SessionID: "s-1",
-		ScopeRef: "global", ContentHash: HashBody("b"),
+		ScopeRef: "global", ContentHash: HashBody("b"), Supersedes: "project/old",
 		CreatedAtUnixNano: fixedNow.UnixNano(), UpdatedAtUnixNano: fixedNow.UnixNano(),
 		ExpiresAtUnixNano: &exp, Confidence: 0.5,
 		IndexedAtUnixNano: fixedNow.UnixNano(), EmbedModel: "m", Tokens: []string{"b", "d"},
@@ -117,6 +154,9 @@ func TestRowCodecRoundTrip(t *testing.T) {
 	}
 	if got.ExpiresAtUnixNano == nil || *got.ExpiresAtUnixNano != exp {
 		t.Fatalf("round trip lost the TTL: %+v", got.ExpiresAtUnixNano)
+	}
+	if got.Supersedes != "project/old" {
+		t.Fatalf("round trip lost Supersedes: got %q", got.Supersedes)
 	}
 	again, err := encodeRow(got)
 	if err != nil {
@@ -136,6 +176,25 @@ func TestDecodeRowRefusesGarbage(t *testing.T) {
 	}
 	if !cascade.HasKind(err, cascade.KindIntegrity) {
 		t.Fatalf("decodeRow error kind = %v, want KindIntegrity", err)
+	}
+}
+
+// TestRowForCarriesSupersedesAndExpiry pins the read model's own R-16.7
+// fields: rowFor must copy Supersedes and ExpiresAt from the source
+// record unchanged, since a projection that dropped either would leave
+// the S-47.T1 recall-what demotion pass with nothing to demote against.
+func TestRowForCarriesSupersedesAndExpiry(t *testing.T) {
+	exp := fixedNow.Add(time.Hour)
+	e := MemoryEntry{
+		Name: "a", Kind: KindProject, Supersedes: "project/old", ExpiresAt: &exp,
+		Provenance: Provenance{CreatedAt: fixedNow, UpdatedAt: fixedNow},
+	}
+	row := rowFor(e, fixedNow)
+	if row.Supersedes != "project/old" {
+		t.Fatalf("rowFor dropped Supersedes: got %q", row.Supersedes)
+	}
+	if row.ExpiresAtUnixNano == nil || *row.ExpiresAtUnixNano != exp.UTC().UnixNano() {
+		t.Fatalf("rowFor dropped ExpiresAt: got %v", row.ExpiresAtUnixNano)
 	}
 }
 
