@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T13:27:52Z",
+  "generated_at": "2026-09-21T13:31:12Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -18663,6 +18663,21 @@
       ]
     },
     {
+      "name": "internal/plugins:cascadepa-bridge-coverage/TEST",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_coverage_test.go",
+          "line": 26,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T3",
+          "raw": "internal/plugins:cascadepa-bridge-coverage/TEST (P1-E23-W5-S48-T3)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/plugins:cascadepa-bridge-deps",
       "sites": [
         {
@@ -18770,7 +18785,7 @@
       "sites": [
         {
           "file": "internal/plugins/cascadepa_bridge_wiring.go",
-          "line": 59,
+          "line": 65,
           "status": "ADD",
           "ticket": "P1-E23-W5-S48-T1",
           "raw": "internal/plugins:cascadepa-bridge-wiring (ADD) — P1-E23-W5-S48-T1."
@@ -23646,11 +23661,39 @@
       ]
     },
     {
+      "name": "plugins/cascade-pa/telegram QuarantineEvent",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/quarantine.go",
+          "line": 23,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa/telegram QuarantineEvent/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram SecretScanner",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/refuse.go",
+          "line": 43,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa/telegram SecretScanner/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/cascade-pa/telegram TelegramModule",
       "sites": [
         {
           "file": "plugins/cascade-pa/telegram/module.go",
-          "line": 32,
+          "line": 30,
           "status": "ADD",
           "raw": "plugins/cascade-pa/telegram TelegramModule/ADDED"
         }
@@ -23794,7 +23837,7 @@
       "sites": [
         {
           "file": "plugins/cascade-pa/telegram/pairing.go",
-          "line": 28,
+          "line": 31,
           "status": "ADD",
           "raw": "plugins/cascade-pa/telegram pairCoordinator/ADDED"
         }
@@ -23851,6 +23894,36 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram quarantine-tests/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/quarantine_test.go",
+          "line": 9,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T3",
+          "raw": "plugins/cascade-pa/telegram quarantine-tests/TEST (P1-E23-W5-S48-T3)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram refuse-tests/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/refuse_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E23-W5-S48-T3",
+          "raw": "plugins/cascade-pa/telegram refuse-tests/TEST (P1-E23-W5-S48-T3)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -28068,7 +28141,7 @@
       ]
     }
   ],
-  "total_sites": 2630,
-  "unspecified_count": 123,
+  "total_sites": 2635,
+  "unspecified_count": 126,
   "multi_status_count": 62
 }
