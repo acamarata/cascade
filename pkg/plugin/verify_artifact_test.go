@@ -49,14 +49,26 @@ func TestVerifyArtifact_NonHexChecksumRefused(t *testing.T) {
 	}
 }
 
-func TestEd25519Verifier_VerifyArtifact_ChecksumOnly(t *testing.T) {
+// TestEd25519Verifier_VerifyArtifact_EmptySignatureRefused is the S-50.T8
+// rework fix (adversarial CR FIX-4): an entry with a MATCHING checksum but
+// an empty Signature must still be refused — a checksum alone proves the
+// bytes were not corrupted in transit, never that the registry's key
+// actually signed them. An earlier revision of VerifyArtifact treated an
+// empty Signature as "nothing to check" and returned nil here; this test
+// pins the corrected, fail-closed behavior so that regression cannot
+// silently return.
+func TestEd25519Verifier_VerifyArtifact_EmptySignatureRefused(t *testing.T) {
 	data := []byte("artifact bytes")
 	sum := sha256.Sum256(data)
 	entry := plugin.RegistryVersionEntry{Checksum: hex.EncodeToString(sum[:])}
 
 	v := realVerifier(t)
-	if err := v.VerifyArtifact(context.Background(), data, entry); err != nil {
-		t.Fatalf("VerifyArtifact(checksum only): %v", err)
+	err := v.VerifyArtifact(context.Background(), data, entry)
+	if err == nil {
+		t.Fatal("VerifyArtifact(matching checksum, empty signature) = nil, want a refusal")
+	}
+	if !cascade.HasKind(err, cascade.KindPolicyDenied) {
+		t.Fatalf("VerifyArtifact(empty signature) error = %v, want KindPolicyDenied", err)
 	}
 }
 

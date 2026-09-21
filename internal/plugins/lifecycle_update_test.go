@@ -9,6 +9,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/plugin"
 )
 
 // updatedManifest is builtinManifest (lifecycle_add_test.go) bumped to a
@@ -34,6 +35,20 @@ runtime = "builtin"
 requires = ["net.http"]
 `
 
+// updateProcessTierManifest bumps ONLY the runtime tier (builtin -> process),
+// with the identical (empty) requires set updatedManifest carries —
+// isolating the S-50.T8 rework's runtime-tier elevation gate
+// (updateRequiresElevation) from the grant-expansion one, so a regression
+// in either check cannot hide behind the other.
+const updateProcessTierManifest = `
+id = "demo"
+name = "Demo"
+schema = "cascade.plugin/v2"
+version = "1.1.0"
+host_version = ">=2.0.0"
+runtime = "process"
+`
+
 // alwaysFailHandshaker always reports a handshake failure, driving
 // UpdatePlugin's rollback path.
 type alwaysFailHandshaker struct{ err error }
@@ -49,10 +64,16 @@ func (alwaysErrRegistry) LatestVersion(context.Context, string) (string, error) 
 	return "", errors.New("registry: connection refused")
 }
 
+// seedInstalled seeds "demo" at RuntimeMode builtin — every manifest
+// constant in this file that is NOT updateProcessTierManifest itself installs
+// at "builtin", matching what a real prior `plugin add`/`plugin update`
+// would have recorded; seeding an empty RuntimeMode here would make every
+// existing (same-tier) test below spuriously look like a tier CHANGE
+// under updateRequiresElevation's now-stricter check.
 func seedInstalled(t *testing.T, store *storetest.MemStore, version string, grants []string) {
 	t.Helper()
 	if err := SaveMetadata(context.Background(), store, PluginMetadata{
-		Name: "demo", InstalledVersion: version, Enabled: true, Grants: grants,
+		Name: "demo", InstalledVersion: version, Enabled: true, Grants: grants, RuntimeMode: plugin.RuntimeBuiltin,
 	}); err != nil {
 		t.Fatalf("seedInstalled: %v", err)
 	}
@@ -128,6 +149,38 @@ func TestPluginUpdate_GrantExpansionRequiresElevation(t *testing.T) {
 		t.Fatal("grant-expanding update with no daemon succeeded, want the daemon-required refusal")
 	} else if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindUnavailable {
 		t.Fatalf("daemonless update error kind = %v (ok=%v), want KindUnavailable", kind, ok)
+	}
+}
+
+// TestPluginUpdate_RuntimeTierChangeRequiresElevation is the S-50.T8
+// rework fix (adversarial CR FIX-3): a candidate that changes ONLY the
+// runtime tier (builtin -> process), with an UNCHANGED (empty) grant set,
+// must be elevated exactly like a grant expansion — before this fix,
+// grantsExpand(nil, nil) was false and the update committed silently.
+func TestPluginUpdate_RuntimeTierChangeRequiresElevation(t *testing.T) {
+	ctx := context.Background()
+	store := storetest.NewMemStore()
+	seedInstalled(t, store, "1.0.0", nil) // RuntimeMode builtin (seedInstalled's default).
+
+	res, err := UpdatePlugin(ctx, store, nil, alwaysFailHandshaker{}, []byte(updateProcessTierManifest), "", nil, true /* daemonAvailable */)
+	if err != nil {
+		t.Fatalf("runtime-tier-changing update with a daemon available: %v", err)
+	}
+	if res.Outcome != UpdateOutcomeElevationRequired {
+		t.Fatalf("Outcome = %v, want UpdateOutcomeElevationRequired (builtin->process is elevated even with an unchanged grant set)", res.Outcome)
+	}
+	rec, _, _ := LoadMetadata(ctx, store, "demo")
+	if rec.InstalledVersion != "1.0.0" {
+		t.Fatalf("prior record changed while runtime-tier elevation was pending: %+v", rec)
+	}
+	if rec.RuntimeMode != plugin.RuntimeBuiltin {
+		t.Fatalf("prior record's RuntimeMode changed while elevation was pending: %v", rec.RuntimeMode)
+	}
+
+	if _, err := UpdatePlugin(ctx, store, nil, nil, []byte(updateProcessTierManifest), "", nil, false /* daemonAvailable */); err == nil {
+		t.Fatal("runtime-tier-changing update with no daemon succeeded, want the daemon-required refusal")
+	} else if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindUnavailable {
+		t.Fatalf("daemonless runtime-tier-change error kind = %v (ok=%v), want KindUnavailable", kind, ok)
 	}
 }
 

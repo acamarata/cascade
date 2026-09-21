@@ -78,9 +78,13 @@ type UpdateResult struct {
 // version, exactly like AddPlugin's equivalent parameters. registry and
 // handshaker may be nil (see their doc comments for the resulting
 // behavior). daemonAvailable is AddPlugin's identical parameter: when the
-// candidate manifest expands the current grant set and daemonAvailable is
-// false, UpdatePlugin refuses with ErrDaemonRequiredForElevatedPluginOp
-// before touching the store (D/S-07.T4).
+// candidate manifest requires elevation — a grant-set expansion OR a
+// runtime-tier change, per updateRequiresElevation — and daemonAvailable
+// is false, UpdatePlugin refuses with ErrDaemonRequiredForElevatedPluginOp
+// before touching the store (D/S-07.T4). This is the ONE commit path
+// every caller — the O/S-32.T4 --from flow and the X/S-50.T8 registry-
+// driven flow alike — funnels through; neither caller ever writes a
+// PluginMetadata record itself (S-50.T8 rework, adversarial CR FIX-1/2).
 //
 // Rollback mechanics: this function commits the new PluginMetadata record
 // ONLY after handshaker.Handshake succeeds (or handshaker is nil, in which
@@ -105,12 +109,12 @@ func UpdatePlugin(ctx context.Context, store provider.Store, registry RegistryVe
 		}
 	}
 
-	existing, _, err := LoadMetadata(ctx, store, m.ID)
+	existing, existingOK, err := LoadMetadata(ctx, store, m.ID)
 	if err != nil {
 		return UpdateResult{}, err
 	}
 
-	if grantsExpand(existing.Grants, m.Requires) {
+	if updateRequiresElevation(m, existing, existingOK) {
 		if !daemonAvailable {
 			return UpdateResult{}, ErrDaemonRequiredForElevatedPluginOp("update")
 		}
@@ -135,6 +139,34 @@ func UpdatePlugin(ctx context.Context, store provider.Store, registry RegistryVe
 		return UpdateResult{}, err
 	}
 	return UpdateResult{Outcome: UpdateOutcomeUpdated, RegistryNotice: notice, Manifest: m, Metadata: rec}, nil
+}
+
+// updateRequiresElevation is the update-side counterpart to
+// lifecycle_add.go's addRequiresElevation, extended by the S-50.T8 rework
+// pass's own bug fix (adversarial CR FIX-3, PCI filed against this file):
+// the ORIGINAL check here consulted grantsExpand alone, unlike
+// addRequiresElevation, which also treats a RuntimeMode change as
+// elevated. That asymmetry let a candidate manifest change an EXISTING
+// installed plugin's runtime tier (builtin, process, wasm, or remote —
+// not merely "to process") with NO grant expansion at all, on a host with
+// no daemon configured, and never trigger elevation: a signed registry
+// entry could move a sandboxed plugin into a supervised child process (or
+// any other tier) with zero consent. ANY change to RuntimeMode — not only
+// a move specifically TO RuntimeProcess — is elevated when existingOK: the
+// installed tier is itself a security boundary an operator chose, and no
+// tier change is a silent, unconsented step. existingOK gates the
+// comparison to an ACTUAL prior install (LoadMetadata's own ok result):
+// with no prior record, existing's zero-valued RuntimeMode is not a real
+// tier to compare against, so only grantsExpand's own "any non-empty
+// Requires on a fresh record is itself an expansion" rule applies — the
+// identical, pre-existing behavior for that path (see
+// TestUpdatePluginPropagatesStoreFailures, which calls UpdatePlugin
+// against an empty store on purpose).
+func updateRequiresElevation(m plugin.Manifest, existing PluginMetadata, existingOK bool) bool {
+	if existingOK && m.Runtime != existing.RuntimeMode {
+		return true
+	}
+	return grantsExpand(existing.Grants, m.Requires)
 }
 
 // registryUnavailableNotice is the exact §5.19 graceful-notice text.

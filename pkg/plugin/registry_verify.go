@@ -12,11 +12,16 @@ package plugin
 // Constraints: fail closed on every path — empty signature, malformed
 //   base64, wrong-length signature, wrong-length public key, and a
 //   signature that does not verify all refuse (12-QUALITY-CONSTITUTION.md
-//   Art.1, Art.3). Entries are decoded from the ORIGINAL json.RawMessage
-//   the signature was computed over, not re-marshaled first, closing the
-//   re-encoding-drift gap a naive "unmarshal then re-marshal to verify"
-//   implementation would open.
-// SPORT: pkg/plugin registry-client (ADD) — P1-E24-W5-S50-T1.
+//   Art.1, Art.3), for BOTH VerifyIndex's index-level signature and
+//   VerifyArtifact's per-artifact signature (S-50.T8 rework, FIX-4: an
+//   artifact entry with an empty Signature is refused, KindPolicyDenied,
+//   never treated as "no signature to check" the way an earlier revision
+//   of this method did). Entries are decoded from the ORIGINAL
+//   json.RawMessage the signature was computed over, not re-marshaled
+//   first, closing the re-encoding-drift gap a naive "unmarshal then
+//   re-marshal to verify" implementation would open.
+// SPORT: pkg/plugin registry-client (ADD) — P1-E24-W5-S50-T1; VerifyArtifact
+//   empty-signature fix — P1-E24-W5-S50-T8.
 
 import (
 	"context"
@@ -96,14 +101,20 @@ func (v Ed25519Verifier) VerifyIndex(_ context.Context, data []byte) (RegistryIn
 
 // VerifyArtifact implements RegistryVerifier: it checks data's SHA-256
 // digest against entry.Checksum via VerifyArtifact (the exported
-// standalone helper), then, if entry carries a non-empty Signature, also
-// verifies that signature against data with the same public key.
+// standalone helper), then ALWAYS also verifies an Ed25519 signature
+// against data with the same public key — an entry with an empty
+// Signature is REFUSED (KindPolicyDenied), never treated as "nothing to
+// check" (S-50.T8 rework, adversarial CR FIX-4: the prior empty-signature
+// pass let a checksum-only-matching, never-actually-signed artifact
+// install; a checksum alone proves integrity of a download, not
+// authenticity of its publisher — only the signature does that, and this
+// method's whole purpose is to verify BOTH).
 func (v Ed25519Verifier) VerifyArtifact(_ context.Context, data []byte, entry RegistryVersionEntry) error {
 	if err := VerifyArtifact(entry, data); err != nil {
 		return err
 	}
 	if entry.Signature == "" {
-		return nil
+		return cascade.New(cascade.KindPolicyDenied, ErrSignatureInvalid.Msg+": artifact entry has no signature")
 	}
 	if len(v.PublicKey) != ed25519.PublicKeySize {
 		return cascade.Newf(cascade.KindIntegrity, "%s: verifier public key is %d bytes, want %d", ErrSignatureInvalid.Msg, len(v.PublicKey), ed25519.PublicKeySize)

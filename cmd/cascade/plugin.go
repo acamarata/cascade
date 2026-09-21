@@ -40,6 +40,7 @@ import (
 	"github.com/acamarata/cascade/internal/plugins"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/plugin"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -61,6 +62,19 @@ type pluginDeps struct {
 	// this package's no-network-unit-lane gate (Art.7.2) never sees a
 	// "net"/"net/http" import in a _test.go file.
 	SearchCall func(ctx context.Context, q string) ([]pluginSearchEntry, error)
+	// UpdateRegistryClient resolves the *plugin.RegistryClient the
+	// registry-driven `plugin update [name]` path uses (X/S-50.T8). nil in
+	// production, where runPluginUpdateFromRegistry instead calls
+	// productionUpdateRegistryClient (plugin_update_registry.go), which
+	// applies the SAME daemon-configured discipline D9 established for
+	// `plugin search`: a daemon CONFIGURED for this process refuses rather
+	// than silently making a local network call (no "plugin.update"
+	// registry-check RPC method exists yet to route through instead — a
+	// real, disclosed gap, not a silent bypass). Tests inject a fake
+	// constructor here rather than a socket, so this package's no-network
+	// -unit-lane gate (Art.7.2) never sees a "net"/"net/http" import in a
+	// _test.go file.
+	UpdateRegistryClient func(ctx context.Context) (*plugin.RegistryClient, error)
 }
 
 // productionPluginDeps is the real environment.

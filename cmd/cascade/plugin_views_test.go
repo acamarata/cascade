@@ -245,9 +245,15 @@ func updateRefusalCases(t *testing.T) []updateRefusalCase {
 			wantErr: cascade.KindInvalidInput,
 		},
 		{
-			name:    "a missing --from is refused",
+			// X/S-50.T8: omitting --from no longer refuses outright — it
+			// routes to the registry-driven path instead (plugin_update_
+			// registry.go). This process's testPluginDeps has no
+			// [registry] configured and no daemon configured, so that
+			// path itself refuses, naming the actual gap rather than the
+			// pre-T8 "--from is required" wording.
+			name:    "a missing --from with no registry configured is refused",
 			args:    []string{"some-plugin"},
-			wantIn:  "--from <path> is required",
+			wantIn:  "[registry].url is not configured",
 			wantErr: cascade.KindInvalidInput,
 		},
 		{
@@ -267,7 +273,7 @@ func TestRunPluginUpdate_Refusals(t *testing.T) {
 	deps := testPluginDeps(t)
 	for _, tc := range updateRefusalCases(t) {
 		t.Run(tc.name, func(t *testing.T) {
-			err := runPluginUpdate(updateCmdWithFrom(t, tc.from), deps, tc.args, "", tc.all)
+			err := runPluginUpdate(updateCmdWithFrom(t, tc.from), deps, tc.args, "", tc.all, false, nil)
 			if err == nil {
 				t.Fatal("runPluginUpdate succeeded, want a refusal")
 			}
