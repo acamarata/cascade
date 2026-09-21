@@ -1,0 +1,4 @@
+input: "The staging box holds OPENAI_API_KEY=sk-Canary0000AAAA1111BBBB2222CCCC3333 and nothing else.\n"
+canary: "sk-Canary0000AAAA1111BBBB2222CCCC3333"
+expected_tag: "<apikey>OPENAI_API_KEY</apikey>"
+expected_output: "The staging box holds OPENAI_API_KEY=<apikey>OPENAI_API_KEY</apikey> and nothing else.\n"

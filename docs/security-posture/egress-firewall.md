@@ -122,3 +122,78 @@ message and that dispatch was never reached. Three mutations -- letting
 `local-only` through to external lanes, classifying unresolved lanes as
 external, and dropping the thread id from the refusal -- each turn the
 suite red.
+
+## Conversation scrub pipeline
+
+A different boundary from the two above: this one runs on `chat.append_turn`,
+before a turn's segments are ever committed to `Store` or mirrored over SSE,
+not at lane selection or on the outbound-substitution path. It is
+`internal/conversation/scrub.go`'s four phases, over H/S-15's real
+components -- `secrets.Detector.ScanCertain` (detect),
+`secrets.QuarantineStore.Put` (quarantine), `secrets.Broker.SetRename`
+(vault), `secrets.Rewriter.Rewrite` followed by a residual re-scan (rewrite)
+-- and it is a DIFFERENT thing from the `Substitutor` seam sse.go's own
+ordering comment names: substitution rewrites the SSE echo of already-stored
+content; the scrub pipeline decides what gets stored in the first place.
+
+**What it does.** `Adapter.handleAppendTurn` calls `scrubSegments`
+immediately after decoding a turn's segments, before either the journal
+write or the plain `Store.AppendTurn`/`AppendSegment` path, and before
+`emitTurnAppended`'s SSE mirror. Detection is TURN-SCOPED: the segments are
+joined in order and scanned once, so a credential split across two segments
+cannot hide in the seam -- and a span that straddles a boundary refuses the
+turn rather than being rewritten across two stored rows. The remaining
+phases are ordered across the whole turn: every hit is quarantined
+(`QuarantineStore.Put`, one entry per hit) before the first vault write,
+every hit's bytes are stored (`Broker.Set` with `SetRename`, so an
+operator's existing entry is never overwritten and two same-named hits get
+two entries) before the first rewrite, and each segment is then rewritten so
+every hit becomes its typed tag (`<apikey>NAME</apikey>`, secrets/tags.go's
+grammar) where NAME is the name the vault ACTUALLY used -- so the tag is a
+working reference to the entry holding that span. The output is re-scanned,
+per segment and once over the rejoined turn, for anything the detector would
+still flag. Only then do the quarantine entries get released
+(`ReleasePromoted`).
+
+**Fail closed, all the way.** Any failure -- a straddling span, the
+quarantine ledger's own write, the vault's `Set`, the rewrite, or a residual
+match after it -- refuses the whole `chat.append_turn` call. Nothing partial
+is ever committed: the turn is refused before `Store.AppendTurn` is even
+called, so there is no rollback to reason about. A turn refused AFTER the
+vault phase leaves an inert vault entry: nothing references it (no tag
+reached storage and no turn was forwarded), and the append-only quarantine
+ledger still carries the live entry recording the detection, which is the
+record of what happened. Each refusal also publishes a
+`security.scrub_divergence` event on the same `EventBus` the SSE mirror
+uses, on its own `security` namespace, naming which phase failed and a
+static reason string -- never turn content.
+
+**The blast radius of a certain hit, stated plainly (CR-C).** A value the
+scrub writes into the vault does not stay inside this one turn. It becomes a
+vault entry, and the egress substitution pass described at the top of this
+page replaces vault values SYSTEM-WIDE in outbound content. So a
+false-positive certain hit -- an ordinary string the detector was confident
+about -- will thereafter be substituted out of outbound payloads wherever it
+appears, not only in the conversation that produced it. The only limiter
+today is `ScanCertain`'s confidence threshold: there is no allow-list, no
+operator confirmation step in this path, and no scoping of a vaulted value
+to the thread it came from. That is a deliberate fail-closed trade (a missed
+secret is worse than an over-substituted string), and it is the property to
+revisit if the detector's precision ever drops.
+
+**What this does not yet do.** `NewDefaultScrubPipelineOverVault` is wired
+into `cmd/cascade/chat_wiring.go` (the daemon's real chat.* composition root)
+over a custody the composition root SELECTS AND INJECTS, under the same
+`vaultService` label `cascade vault` reads, so a real deployed daemon does
+scrub. (The custody is a parameter because selecting one inside that wiring
+reached the operator's real OS keychain from every test that ran it, where
+the repository's keychain gate could not see it.) But
+Phase 1's contract line ("on detector error: quarantine + divergence")
+names a failure mode the real `secrets.Detector.Scan`/`ScanCertain`
+cannot produce: both are pure, total functions with no error return.
+What Phase 1 actually fails on, and what its error handling is written
+against, is its own quarantine-ledger write. No production segmenter
+(U/S-45.T2) exists anywhere in this tree yet to receive a post-scrub
+turn; the ordering this page describes against "a future segmenter" is
+proven with a test-only stand-in fed from the same post-scrub bytes
+`Store` received, not a real call site.

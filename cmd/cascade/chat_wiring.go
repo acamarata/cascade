@@ -25,8 +25,10 @@
 // CLI's real round trip reaching a registry that had never heard of the
 // method (R-14.284).
 //
-// Inputs: the RPC registry, the event bus, the clock, and the path
-// provider siting cascade.db.
+// Inputs: the RPC registry, the event bus, the clock, the path provider
+// siting cascade.db, and the SECRET CUSTODY the scrub pipeline's vault is
+// built on — injected, never selected here (see the function's own doc
+// comment for why that parameter exists).
 // Outputs: chat.append_turn, chat.get_thread and chat.list_threads bound
 // on the registry.
 // Constraints: the mode passed to the adapter is the DAEMON mode, never
@@ -51,6 +53,7 @@ import (
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -61,7 +64,22 @@ import (
 // registerContextEngineHandlers and wireConductorExpand: the schema is
 // already applied by openRuntimeStore, and threading one raw *sql.DB
 // through every namespace is a larger change than any one of them owns.
-func wireChatHandlers(ctx context.Context, registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock, bus *events.Bus) error {
+//
+// WHY custody IS A PARAMETER. This function used to select the secret
+// custody itself (`secrets.SelectCustody` with a service label and a data
+// dir, through a helper in internal/conversation). On a host with a
+// working OS keychain that is the OPERATOR'S REAL keychain — and the only
+// test that runs this wiring, TestP1ChatPlatformBoundary, therefore wrote
+// a probe item into it on every run. internal/build's
+// TestNoTestReachesTheRealKeychain could not see that: it reads test
+// files for SelectCustody calls, and this one was two indirections away
+// in non-test code. So the seam is injected: the daemon composition root
+// passes the real selection, every test passes a ForceFileVault custody
+// over a temp dir, and there is no path from here to a platform backend
+// at all. A nil custody is refused by secrets.NewBroker rather than
+// skipping the scrub pipeline.
+func wireChatHandlers(ctx context.Context, registry *rpc.Registry, paths runtime.PathProvider,
+	clock runtime.Clock, bus *events.Bus, custody secrets.Custody) error {
 	if err := os.MkdirAll(paths.DataDir(), 0o700); err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "daemon: chat: create data dir")
 	}
@@ -97,7 +115,33 @@ func wireChatHandlers(ctx context.Context, registry *rpc.Registry, paths runtime
 		// is greppable and testable rather than a bare literal.
 		chatDaemonMode,
 	)
+	if err := attachScrubPipeline(adapter, paths, clock, bus, custody); err != nil {
+		_ = db.Close()
+		return err
+	}
 	adapter.RegisterHandlers(registry)
+	return nil
+}
+
+// attachScrubPipeline builds the P1-E20-W5-S44-T1 scrub pipeline over the
+// injected custody and this daemon's own data directory — so a turn's
+// secret lands in the one vault an operator already knows to look in, not
+// a second, invisible one — and wires it onto adapter.
+//
+// A construction failure is returned, never silently skipped: shipping
+// without a scrub pipeline on this path is the R-14.283 gap this ticket
+// closes. Split out of wireChatHandlers for Art.10.3's 50-line cap.
+func attachScrubPipeline(adapter *conversation.Adapter, paths runtime.PathProvider,
+	clock runtime.Clock, bus *events.Bus, custody secrets.Custody) error {
+	vault, err := secrets.NewBroker(custody, nil)
+	if err != nil {
+		return err
+	}
+	scrub, err := conversation.NewDefaultScrubPipelineOverVault(paths.DataDir(), clock, vault, bus)
+	if err != nil {
+		return err
+	}
+	adapter.SetScrub(scrub)
 	return nil
 }
 

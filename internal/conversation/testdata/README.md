@@ -58,3 +58,51 @@ reaches an error's message text.
   integration test is the fixture: it is Art.2's "real counterpart",
   captured fresh on every CI run rather than checked in once and drifting
   from the code that produces it.
+
+## Scrub pipeline fixture provenance (P1-E20-W5-S44-T1)
+
+`v1-goldens/scrub/single_span.golden` and `multi_span.golden` are byte-for-byte
+copies of `input`/`canaries`/`expected_output` from (`expected_tag` is not
+in the corpus; it is derived from the corpus's `expected_output` and
+`hits[].name` and written here so the golden test can assert it)
+`internal/testdata/secrets/goldens/single_span.yaml`
+and `multi_span.yaml` -- the H/S-15.T3 secret-detector's own golden corpus,
+already proven against the real `secrets.Detector`/`secrets.Rewriter` by
+`internal/secrets/goldenfixture_test.go`. Copied with a Python byte-comparison
+(`input` field identical, verified, not retyped by hand) rather than re-authored,
+per Art.2 and ARCHIVE-MAP.md's "copy bytes, never source" rule.
+
+`expected_output` is copied, not authored: it is the corpus's own recorded
+rewrite of that input, so `scrub_test.go` asserts the pipeline's result
+against the fixture rather than against a literal a test retyped.
+`scrub_golden_test.go`'s loader reads it, and `assertGoldenOutput` is the
+only place an expected value comes from.
+
+Two fixtures are DERIVED IN THE TEST from the corpus canary rather than
+added as files, and each says so at its use site:
+`TestScrubVault_TwoHitsOneSuggestedName` (scrub_vault_test.go) builds a
+second value by changing the canary's body counter, because no corpus
+fixture carries two hits the detector names identically; and
+`testScrubStraddlesSegments` (scrub_refusal_test.go) splits
+`single_span.golden`'s own input inside its canary, because no corpus
+fixture is a multi-segment turn. Neither invents a credential shape: both
+are the corpus's own bytes, cut or re-numbered.
+
+`cmd/cascade/chat_wiring_custody_test.go` reads
+`internal/testdata/secrets/goldens/single_span.yaml` directly for the same
+reason -- that package has no access to this one's testdata, and restating
+a credential-shaped literal in a public repo is what the corpus exists to
+avoid.
+
+The directory name says `v1-goldens` because that is what this ticket's
+files_scope names; the actual source is this repository's OWN live H/S-15.T3
+corpus (captured 2026-09-05 per that corpus's own README), not the archived v1
+tree -- a live, currently-tested corpus is Art.2's stronger "real counterpart"
+than a frozen v1 snapshot would be, and reusing it means scrub.go's fixtures can
+never drift from the detector/rewriter that actually processes them.
+
+`testScrubRewriteRefusal` (scrub_refusal_test.go) additionally harvests the exact
+literal `"wifi password: 7Kq2mZx9PLw4Rt6VbN3sQe8Hj1Cd5Fg0"` from
+`internal/secrets/detector_test.go`'s `TestNamedEntropyIsCorroborated` -- a real,
+already-proven case of a corroborated high-entropy span with no `TagFor`
+mapping, which is what makes the real `secrets.Rewriter` refuse it.

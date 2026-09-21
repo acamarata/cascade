@@ -22,12 +22,9 @@ import (
 	"testing"
 
 	"github.com/acamarata/cascade/internal/conversation"
-	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/fleet/resume"
 	"github.com/acamarata/cascade/internal/rpc"
-	"github.com/acamarata/cascade/internal/runtime"
 	cascadeinit "github.com/acamarata/cascade/internal/runtime/init"
-	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -51,25 +48,6 @@ func TestP1ChatPlatformBoundary(t *testing.T) {
 			t.Fatalf("chat registers under %q, the embedded mode; the SSE mirror would never fire", chatDaemonMode)
 		}
 	})
-}
-
-// chatRegistryForTest runs the real wiring over a throwaway data dir.
-func chatRegistryForTest(t *testing.T) *rpc.Registry {
-	t.Helper()
-	clock := runtime.NewSystemClock()
-	registry := rpc.NewRegistry()
-	bus := events.New(storetest.NewMemStore(), clock)
-	// shortCascadeHome, not t.TempDir(): wireChatHandlers holds its sqlite
-	// handle for the daemon process's lifetime by design (see its header),
-	// and Windows will not delete an open file — t.TempDir()'s cleanup
-	// FAILED THIS TEST on the windows/amd64 lane of run 35515465618, the
-	// first run in which that lane compiled at all. This helper's RemoveAll
-	// is best-effort; the OS reclaims the directory.
-	err := wireChatHandlers(context.Background(), registry, fakeDaemonPaths{root: shortCascadeHome(t)}, clock, bus)
-	if err != nil {
-		t.Fatalf("wireChatHandlers on this platform: %v", err)
-	}
-	return registry
 }
 
 // assertChatMethodBound fails only on -32601: nothing answered at all.

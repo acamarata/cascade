@@ -58,6 +58,7 @@ import (
 	"github.com/acamarata/cascade/internal/plugins"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/internal/storage"
 	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -84,7 +85,16 @@ func registerDBPathHandlers(
 	// It registers even when store is nil, because it does not use the
 	// shared store at all — and because a chat surface that silently did
 	// not register is precisely the defect this wiring closed (R-14.284).
-	if err := wireChatHandlers(ctx, registry, paths, clock, bus); err != nil {
+	// The chat scrub pipeline's vault custody is selected HERE, in the
+	// composition root, and handed to wireChatHandlers — see that
+	// function's doc comment for why it must not select one itself. The
+	// service label is vault.go's, so a scrubbed turn's secret lands in
+	// the same vault `cascade vault` reads.
+	custody, err := secrets.SelectCustody(secrets.Config{Service: vaultService, Dir: paths.DataDir()})
+	if err != nil {
+		return err
+	}
+	if err := wireChatHandlers(ctx, registry, paths, clock, bus, custody); err != nil {
 		return err
 	}
 	return wirePluginAddHandler(registry, clock, store, dbPath)

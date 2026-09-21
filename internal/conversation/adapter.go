@@ -61,7 +61,8 @@ type Adapter struct {
 	subst   Substitutor
 	clock   Clock
 	mode    string
-	journal JournalStore // optional; nil means "journal.go's write path is not wired here" -- see SetJournal
+	journal JournalStore  // optional; nil means "journal.go's write path is not wired here" -- see SetJournal
+	scrub   ScrubPipeline // optional; nil is scrub.go's documented passthrough -- see SetScrub
 }
 
 // NewAdapter returns an Adapter dispatching to store, mirroring appended
@@ -81,6 +82,10 @@ func NewAdapter(store Store, bus EventBus, subst Substitutor, clock Clock, mode 
 func (a *Adapter) SetJournal(js JournalStore) {
 	a.journal = js
 }
+
+// SetScrub wires p (scrub.go's S-44.T1 pipeline) into handleAppendTurn.
+// Nil is scrub.go's documented passthrough, matching SetJournal above.
+func (a *Adapter) SetScrub(p ScrubPipeline) { a.scrub = p }
 
 // RegisterHandlers binds this adapter's three methods onto registry. See
 // this file's CONTRACT DEVIATION note for the composition-root call site.
@@ -140,6 +145,9 @@ func (a *Adapter) handleAppendTurn(ctx context.Context, raw json.RawMessage) (an
 
 	segments, err := decodeSegments(params.Segments, turn.ID, now)
 	if err != nil {
+		return nil, err
+	}
+	if segments, err = a.scrubSegments(ctx, segments); err != nil { // S-44.T1: before journal/store/SSE
 		return nil, err
 	}
 

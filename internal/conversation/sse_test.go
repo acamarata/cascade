@@ -25,17 +25,34 @@ func TestRefuseSSEOnEmbedded(t *testing.T) {
 	}
 }
 
-// fakeBus records every published payload for assertion; it never blocks.
+// busEvent is one recorded publish: the topic it went out on as well as
+// its payload, so a test can assert WHICH event fired rather than only
+// that something did.
+type busEvent struct {
+	Namespace string
+	Kind      events.EventKind
+	Source    string
+	Payload   []byte
+}
+
+// fakeBus is a FAKE event bus -- it records what was published instead of
+// writing to a real events.Bus log, and it never blocks. It stands in for
+// the bus, deliberately: these tests assert what the producer emits, and
+// a real bus would add its own storage to every one of them. The
+// collaborators whose BEHAVIOUR is under test (store, detector,
+// quarantine store, broker, rewriter) are the real ones.
 type fakeBus struct {
 	published [][]byte
+	events    []busEvent
 	failWith  error
 }
 
-func (f *fakeBus) Publish(_ context.Context, _ string, _ events.EventKind, _ string, payload []byte) (events.Event, error) {
+func (f *fakeBus) Publish(_ context.Context, ns string, kind events.EventKind, source string, payload []byte) (events.Event, error) {
 	if f.failWith != nil {
 		return events.Event{}, f.failWith
 	}
 	f.published = append(f.published, payload)
+	f.events = append(f.events, busEvent{Namespace: ns, Kind: kind, Source: source, Payload: payload})
 	return events.Event{Seq: uint64(len(f.published))}, nil
 }
 

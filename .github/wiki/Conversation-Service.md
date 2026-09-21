@@ -104,3 +104,55 @@ and reads as looser than it was created.
 `Adapter.SetThreadPrivacy` / `Adapter.ThreadPrivacy` are the Go surface.
 Enforcement is the conductor's -- see the security posture note on
 [thread privacy modes](https://github.com/acamarata/cascade/blob/main/docs/security-posture/egress-firewall.md).
+
+## Secret scrub pipeline
+
+Every `chat.append_turn` passes through a scrub before anything is kept.
+Four phases run in order over the WHOLE TURN, and all of them finish before
+the journal write, the store write, or the SSE echo:
+
+1. **Detect** — the turn's segments are joined, in order, and scanned by the
+   secret detector at its certain-confidence threshold. Detection is
+   turn-scoped, not per segment, so a credential split across two segments
+   cannot hide in the seam.
+2. **Quarantine** — every hit is recorded in the append-only quarantine
+   ledger (the same one `cascade vault quarantine list` reads). The ledger
+   records the class, the location and a keyed fingerprint; it never records
+   the value.
+3. **Vault** — every hit's actual bytes are stored in the vault, and the
+   vault reports which name they landed under. A name already in use is
+   never overwritten: the entry gets the next free suffix, so an operator's
+   existing `OPENAI_API_KEY` survives a chat turn that mentions one, and two
+   secrets in a single turn that the detector names identically become two
+   entries.
+4. **Rewrite** — each segment is rewritten so every span becomes its typed
+   tag (`<apikey>NAME</apikey>`), where NAME is the name the vault actually
+   used, so the tag is a working reference to that entry. The output is then
+   re-scanned, per segment and once over the rejoined turn; anything the
+   detector would still flag is a fatal error.
+
+Only after all four succeed are the quarantine entries released as promoted
+and the rewritten segments handed on.
+
+**Turn scope has one visible consequence.** The segments are joined with no
+separator bytes, because a separator is invented content that can both hide
+a credential split across a boundary and manufacture a pattern that is not
+in the turn. The detector derives a suggested name from the characters
+immediately before a hit, and across a boundary those characters belong to
+the previous segment — so a segment that ends mid-word can change the vault
+name this turn's secret lands under. The tag still names the entry the value
+is really in, and no content is exposed that the turn did not already carry.
+
+**Refusals fail closed.** A straddling span, a quarantine-ledger write
+failure, a vault refusal, a rewrite error and a residual match all refuse
+the whole call. Nothing partial is committed — the refusal happens before
+`Store.AppendTurn` is reached, so there is no rollback to reason about — and
+a turn refused after the vault phase leaves an INERT vault entry: nothing
+references it, and the quarantine ledger still carries the live entry that
+records the detection. Every refusal also publishes a
+`security.scrub_divergence` event on the `security` namespace, carrying the
+phase that refused and a static reason, never turn content.
+
+**What the SSE echo carries.** The echo is emitted from the SCRUBBED
+segments, so a client sees the typed tags and never the raw value. A turn
+that is refused produces no echo at all — only the divergence event.

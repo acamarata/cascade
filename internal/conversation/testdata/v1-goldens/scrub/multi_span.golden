@@ -1,0 +1,6 @@
+input: "OPENAI_API_KEY=sk-Canary0000AAAA1111BBBB2222CCCC3333\nAuthorization header token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjYW5hcnkifQ.Canary9999ZZZZ8888YYYY7777XXXX\nDATABASE_URL=postgres://appuser:Canary4444Pw@db.internal.example:5432/appdb\n"
+canaries:
+  - "sk-Canary0000AAAA1111BBBB2222CCCC3333"
+  - "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjYW5hcnkifQ.Canary9999ZZZZ8888YYYY7777XXXX"
+  - "postgres://appuser:Canary4444Pw@db.internal.example:5432/appdb"
+expected_output: "OPENAI_API_KEY=<apikey>OPENAI_API_KEY</apikey>\nAuthorization header token <token>AUTHORIZATION_HEADER_TOKEN</token>\nDATABASE_URL=<connstr>CONNECTION_STRING</connstr>\n"
