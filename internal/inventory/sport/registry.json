@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T18:20:06Z",
+  "generated_at": "2026-09-21T19:06:57Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4244,6 +4244,12 @@
           "status": "ADD",
           "ticket": "P1-E22-W5-S47-T1",
           "raw": "cmd/cascade/daemon (ADD, P1-E22-W5-S47-T1, D1)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_recall_what_test.go",
+          "line": 21,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGED — ci-fix11, conversationLegAdapter)."
         },
         {
           "file": "cmd/cascade/daemon_unix_recovery_test.go",
@@ -13130,10 +13136,16 @@
       "sites": [
         {
           "file": "internal/retrieval/recallwhat.go",
-          "line": 40,
+          "line": 44,
           "status": "ADD",
           "ticket": "P1-E22-W5-S47-T1",
           "raw": "internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1)."
+        },
+        {
+          "file": "internal/retrieval/recallwhat_conv.go",
+          "line": 28,
+          "status": "CHANGE",
+          "raw": "internal.retrieval.RecallWhatService/CHANGED (ci-fix11: broke"
         },
         {
           "file": "internal/retrieval/recallwhat_egress.go",
@@ -28972,7 +28984,7 @@
       ]
     }
   ],
-  "total_sites": 2717,
+  "total_sites": 2719,
   "unspecified_count": 130,
   "multi_status_count": 69
 }
