@@ -132,6 +132,7 @@ func mountSubcommands(root *cobra.Command) {
 	mountBackupCmd(root)
 	mountMemoryCmd(root)
 	mountRecallCmd(root)
+	mountWhatCmd(root) // hidden `cascade what <q>` alias for `recall what` (V/S-47.T5)
 	mountContextCmd(root)
 	mountApprovalCmd(root)
 	mountPluginCmd(root)

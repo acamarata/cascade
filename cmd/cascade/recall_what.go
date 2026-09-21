@@ -47,9 +47,14 @@ func newRecallWhatCmd(deps recallDeps) *cobra.Command {
 			"The session scope is resolved by the daemon from this process's\n" +
 			"working directory (E/S-08.T4); there is no --scope flag here, unlike\n" +
 			"the bare `cascade recall` command — 07-CLI-COMMAND-TREE §recall\n" +
-			"ratifies no flag beyond the positional query for this subcommand.",
+			"ratifies no flag beyond the positional query for this subcommand.\n\n" +
+			"`cascade what <query>` is a hidden top-level alias for this exact\n" +
+			"command (07-CLI-COMMAND-TREE §note-2, owner ergonomics): same query,\n" +
+			"same output, same exit codes — it does not appear in `cascade --help`\n" +
+			"or shell completions.",
 		Example: "  cascade recall what \"why did the retry policy change\"\n" +
-			"  cascade recall what \"retry policy\" --json",
+			"  cascade recall what \"retry policy\" --json\n" +
+			"  cascade what \"retry policy\"  # hidden alias, identical output",
 		Args: usageArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			getwd := deps.Getwd

@@ -259,9 +259,25 @@ degrade to a partial answer: the human table reports a count
 ("N domain(s) unavailable"), `--json` carries the per-domain detail in
 `errors`.
 
+## Hidden alias
+
+`cascade what <query>` (P1-E22-W5-S47-T5, 07-CLI-COMMAND-TREE §note-2:
+"`cascade what` kept as hidden alias of `recall what` (owner ergonomics)")
+is a hidden top-level alias for `cascade recall what <query>` — it does
+not appear in `cascade --help` or shell completions, but resolves
+identically. It is built from the exact same command constructor
+(`newRecallWhatCmd`, `cmd/cascade/recall_what.go`) as `recall what`
+itself, not a second implementation, so the two can never drift: same
+positional-query-only flag set, same RPC method, same rendering, same
+exit codes (pinned by `cmd/cascade/what_test.go`'s
+`TestWhatAliasParity`).
+
+```
+$ cascade what "why did the retry policy change"
+```
+
 ## Not here
 
-- The `cascade what` hidden alias is deferred to V/S-47.T5.
 - The `[retrieval]` config surface belongs to F/S-12.T4.
 - The mirrored MCP tool `cascade_recall_query` is not exposed yet: the
   MCP tool table is sourced from plugin manifests
