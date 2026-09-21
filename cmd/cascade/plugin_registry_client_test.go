@@ -45,7 +45,10 @@ func TestBuildPluginRegistryClientConfigured(t *testing.T) {
 	dir := t.TempDir()
 	keyPath := filepath.Join(dir, "registry.pub")
 	writePluginRegistryPubkeyFixture(t, keyPath)
-	writePluginRegistryConfig(t, dir, "[registry]\nurl = \"https://registry.example\"\npubkey_path = \""+keyPath+"\"\n")
+	// A TOML literal string ('...') carries a windows path verbatim; a basic
+	// string would read its backslashes as escapes and the config would not
+	// parse (the windows lane proved it).
+	writePluginRegistryConfig(t, dir, "[registry]\nurl = \"https://registry.example\"\npubkey_path = '"+keyPath+"'\n")
 	client, warning := buildPluginRegistryClient(context.Background(), fakeDaemonPaths{root: dir}, runtime.NewSystemClock())
 	if client == nil {
 		t.Fatalf("url+valid pubkey: client = nil, warning = %q, want a real client", warning)

@@ -226,7 +226,11 @@ func TestPluginSearchEmbeddedFallback(t *testing.T) {
 // — closer to the daemon's real startup shape than a nil store would be,
 // with no live network or real daemon process.
 func TestRegisterDBPathHandlersWiresPluginSearch(t *testing.T) {
-	dir := t.TempDir()
+	// shortCascadeHome, not t.TempDir(): registerDBPathHandlers opens the
+	// chat namespace's own connection to cascade.db with no closer (the
+	// daemon holds it for its lifetime), and on windows t.TempDir()'s
+	// cleanup fails on the open handle. Same choice as the chat wiring tests.
+	dir := shortCascadeHome(t)
 	paths := fakeDaemonPaths{root: dir}
 	clock := runtime.NewSystemClock()
 	store := storetest.NewMemStore()
