@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T12:29:38Z",
+  "generated_at": "2026-09-21T13:01:10Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3951,6 +3951,19 @@
           "raw": "cmd/cascade/daemon (ADD — schema ceiling coverage invariant)."
         },
         {
+          "file": "cmd/cascade/daemon_unix_ci_attention.go",
+          "line": 40,
+          "status": "ADD",
+          "raw": "cmd/cascade/daemon (ADD)"
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_ci_attention_test.go",
+          "line": 19,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T4",
+          "raw": "cmd/cascade/daemon (TEST) -- P1-E25-W5-S51-T4."
+        },
+        {
           "file": "cmd/cascade/daemon_unix_cmd_test.go",
           "line": 19,
           "status": "ADD",
@@ -5085,6 +5098,29 @@
           "status": "",
           "ticket": "P1-E25-W5-S51-T3",
           "raw": "cmd/cascade:github-ci-verbs (TESTED) -- P1-E25-W5-S51-T3."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade:github-ci-watch-verbs",
+      "sites": [
+        {
+          "file": "cmd/cascade/github_ci_watch_cmd.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T4",
+          "raw": "cmd/cascade:github-ci-watch-verbs (ADD) -- P1-E25-W5-S51-T4."
+        },
+        {
+          "file": "cmd/cascade/github_ci_watch_cmd_test.go",
+          "line": 14,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T4",
+          "raw": "cmd/cascade:github-ci-watch-verbs (TEST) -- P1-E25-W5-S51-T4."
         }
       ],
       "statuses": [
@@ -9402,6 +9438,42 @@
       ]
     },
     {
+      "name": "internal.ci",
+      "sites": [
+        {
+          "file": "internal/ci/attention_candidate_test.go",
+          "line": 9,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T4",
+          "raw": "internal.ci (TEST) -- P1-E25-W5-S51-T4."
+        },
+        {
+          "file": "internal/ci/attention_queue_test.go",
+          "line": 16,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T4",
+          "raw": "internal.ci (TEST) -- P1-E25-W5-S51-T4."
+        },
+        {
+          "file": "internal/ci/attention_subscribe_test.go",
+          "line": 19,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T4",
+          "raw": "internal.ci (TEST) -- P1-E25-W5-S51-T4."
+        },
+        {
+          "file": "internal/ci/attention_test.go",
+          "line": 10,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T4",
+          "raw": "internal.ci (TEST) -- P1-E25-W5-S51-T4."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal.ci.AllowedEnv",
       "sites": [
         {
@@ -9725,6 +9797,20 @@
       ]
     },
     {
+      "name": "internal.ci.NewCIDataClassChecker",
+      "sites": [
+        {
+          "file": "internal/ci/attention_push.go",
+          "line": 33,
+          "status": "ADD",
+          "raw": "internal.ci.NewCIDataClassChecker/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.ci.ReserveLocalRun",
       "sites": [
         {
@@ -9750,6 +9836,48 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "internal.ci.RouteCIResults",
+      "sites": [
+        {
+          "file": "internal/ci/attention_subscribe.go",
+          "line": 42,
+          "status": "ADD",
+          "raw": "internal.ci.RouteCIResults/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.RouteCIResults/WIRED",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_ci_attention.go",
+          "line": 40,
+          "status": "",
+          "raw": "internal.ci.RouteCIResults/WIRED"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.RouteFailure",
+      "sites": [
+        {
+          "file": "internal/ci/attention.go",
+          "line": 48,
+          "status": "ADD",
+          "raw": "internal.ci.RouteFailure/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -9779,6 +9907,34 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "internal.ci.RouteWaitFailure",
+      "sites": [
+        {
+          "file": "internal/ci/attention.go",
+          "line": 48,
+          "status": "ADD",
+          "raw": "internal.ci.RouteWaitFailure/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.Router",
+      "sites": [
+        {
+          "file": "internal/ci/attention_push.go",
+          "line": 33,
+          "status": "ADD",
+          "raw": "internal.ci.Router/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -9994,6 +10150,20 @@
           "line": 38,
           "status": "ADD",
           "raw": "internal.ci.WaitOptions/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.WatchSource",
+      "sites": [
+        {
+          "file": "internal/ci/attention_subscribe.go",
+          "line": 42,
+          "status": "ADD",
+          "raw": "internal.ci.WatchSource/ADDED"
         }
       ],
       "statuses": [
@@ -13212,6 +13382,20 @@
       ]
     },
     {
+      "name": "internal.runtime.WriteCIWatchEntries",
+      "sites": [
+        {
+          "file": "internal/runtime/config_ci_watch_write.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "internal.runtime.WriteCIWatchEntries/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.runtime.parseCIPolicySection",
       "sites": [
         {
@@ -13219,6 +13403,20 @@
           "line": 28,
           "status": "ADD",
           "raw": "internal.runtime.parseCIPolicySection/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.runtime.parseCIWatchSection",
+      "sites": [
+        {
+          "file": "internal/runtime/config_ci_watch.go",
+          "line": 28,
+          "status": "ADD",
+          "raw": "internal.runtime.parseCIWatchSection/ADDED"
         }
       ],
       "statuses": [
@@ -24232,7 +24430,7 @@
       "sites": [
         {
           "file": "plugins/github/main.go",
-          "line": 46,
+          "line": 52,
           "status": "ADD",
           "ticket": "P1-E25-W5-S51-T1",
           "raw": "plugins/github (ADD) — P1-E25-W5-S51-T1; github-ci-wait/"
@@ -27758,7 +27956,7 @@
       ]
     }
   ],
-  "total_sites": 2605,
-  "unspecified_count": 121,
-  "multi_status_count": 61
+  "total_sites": 2622,
+  "unspecified_count": 123,
+  "multi_status_count": 62
 }
