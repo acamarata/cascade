@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T07:00:08Z",
+  "generated_at": "2026-09-21T07:24:30Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -18090,7 +18090,7 @@
       "sites": [
         {
           "file": "internal/plugins/cascadepa_bridge_wiring.go",
-          "line": 58,
+          "line": 59,
           "status": "ADD",
           "ticket": "P1-E23-W5-S48-T1",
           "raw": "internal/plugins:cascadepa-bridge-wiring (ADD) — P1-E23-W5-S48-T1."
