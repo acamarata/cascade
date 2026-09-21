@@ -85,6 +85,11 @@ func bootCapabilities() []policy.Capability {
 	// would be withheld for a reason that has nothing to do with the
 	// operator's grants — and `cascade policy grant memory.write` would
 	// have nothing to grant against.
+	// The GitHub CI capabilities (P1-E25-W5-S51-T3) are registered here for
+	// the same reason: `cascade github ci merge-on-green` is an L3 action
+	// whose rung comes from its capability's registered class (R-14.211),
+	// and an operator must be able to grant it by name.
+	caps = append(caps, githubCICapabilities()...)
 	return append(caps, mcpToolCapabilities()...)
 }
 

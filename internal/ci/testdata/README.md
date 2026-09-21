@@ -63,3 +63,33 @@ value is handled by the same branch as a value GitHub adds after this capture.
 
 Re-capture with the same `gh api` calls listed above and update the version and
 date in the table. Do not edit the JSON by hand for any reason.
+
+## Cross-reference: P1-E25-W5-S51-T3 (wait-on-green / merge-on-green)
+
+This ticket's contract requires the merge-on-green integration test to use a
+provenance-stamped fixture drawn from T1's `plugins/github/testdata/`. That
+directory's captured set (`repos.get.json`, `repos.list.json`, `issues.list.json`,
+`prs.list.json`, `error.404.json` — see its own README) covers repos/issues/prs
+list-and-get, but **no `prs.merge` response was ever captured**: T1's plugin
+implements the merge tool (`plugins/github/tools/prs.go`'s `MergeResult`/
+`DecodeMergeResult`) but its own testdata set never exercised it against a real
+API response.
+
+`internal/ci/waitmerge_merge_test.go` therefore cannot draw a real merge fixture
+from `plugins/github/testdata/` — none exists, and that directory is outside
+this ticket's `files_scope` regardless (only `internal/ci/testdata/` is listed).
+Its merge-response assertions use an inline JSON literal matching the documented
+wire shape (`plugins/github/tools.MergeResult`: `sha`/`merged`/`message`) instead.
+This is a disclosed Art.2 deviation, not a silent one: capturing a real
+`POST .../pulls/{n}/merge` response needs an actual PR merge against a live repo,
+which is out of scope for a hermetic test run and for this ticket's file scope.
+A follow-up ticket that owns `plugins/github/testdata/` should capture one and
+land it there; this file will gain a `prs.merge` fixture note once it exists.
+
+The inline literal is therefore HAND-AUTHORED, and that is stated here rather
+than implied: `{"sha":"cafef00d","merged":true,"message":""}` (and its
+`"merged":false` sibling) were written from `plugins/github/tools.MergeResult`'s
+json tags, not captured from `api.github.com`. Nothing in `internal/ci` presents
+it as a recorded fixture. The wire shape it asserts is the only thing it can
+prove; that GitHub really answers in that shape is proven by T1's own decoder
+against T1's captures, and by nothing here.

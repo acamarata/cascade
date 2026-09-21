@@ -87,6 +87,39 @@ decodes into the same struct via `ParseManifest` (`pkg/plugin/loader.go`),
 which uses strict decoding — an unrecognized top-level key is itself a
 parse rejection (`ErrCodeParse`), not a silently ignored field.
 
+### `provides.commands[].name` is the command PATH
+
+`CommandSpec` has no path or segments field, so the nesting of a
+plugin-contributed CLI verb comes from its name. The host splits the name into
+segments, and those segments ARE the command path under `cascade`:
+
+| `name` | mounts as |
+|---|---|
+| `github-repos` | `cascade github repos` |
+| `github-ci-wait` | `cascade github ci wait` |
+| `github.ci.merge-on-green` | `cascade github ci merge-on-green` |
+
+The separator is `.` when the name contains one, and `-` otherwise. Use the
+dot form whenever a segment must itself contain a hyphen: under the hyphen
+rule, `github-ci-merge-on-green` would mount five levels deep
+(`cascade github ci merge on green`), which is not what you meant. The dot
+form is the same namespacing convention `provides.tools[].name` already uses.
+
+Two further rules, both fail-closed:
+
+- **An empty segment mounts nothing.** `-wait`, `github--wait` and
+  `github..ci` cannot name a command path, so the host declines to guess one.
+- **The first segment is your plugin's user-facing noun, and it must not
+  collide with a host command.** It need not equal your manifest `id`
+  (`cascade-github`'s noun is `github`). A plugin whose first segment collides
+  with an existing `cascade` command does NOT shadow it: none of that
+  plugin's verbs mount, and the plugin appears in `cascade --help` under its
+  manifest `id` as a command that refuses with the reason. Rename the verb.
+
+The mount lives in `cmd/cascade/plugin_process_mount.go` for process-tier
+plugins and in `cmd/cascade/plugin_namespaces.go` (via
+`BuiltinRegistry.NewCobraCommand`) for builtin ones.
+
 ## 2. Runtime tier selection
 
 `Runtime` selects one of four `RuntimeMode` values:

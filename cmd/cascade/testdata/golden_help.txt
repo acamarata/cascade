@@ -16,6 +16,7 @@ Available Commands:
   daemon         Manage the cascade daemon process
   doctor         Diagnose the local cascade installation
   fleet          Inspect the local fleet of harness sessions
+  github         Commands contributed by the cascade-github plugin
   help           Help about any command
   init           Set cascade up on this machine
   mcp            Serve the policy-filtered MCP tool registry

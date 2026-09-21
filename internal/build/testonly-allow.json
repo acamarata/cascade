@@ -28,13 +28,6 @@
     "symbol": "internal/bench.RegisteredBudgets"
   },
   {
-    "caller_site": "internal/daemon/ci_wire.go",
-    "expected_caller": "the same future internal/daemon/ci_wire.go, once it constructs a live internal/ci.Client and registers its poll as a scheduler Runnable; retire this entry once that lands",
-    "reason": "P1-E25-W5-S51-T2: same as ApplyMigrationSchema above -- the polling Client has no scheduler wiring yet",
-    "retire_ticket": "P1-E25-W5-S51-T2",
-    "symbol": "internal/ci.NewClient"
-  },
-  {
     "caller_site": "internal/conductor/flow.go",
     "expected_caller": "P1-E29-W6-S60-T2 (typed job templates for six work kinds, including adversarial), which depends on this ticket and will call Consensus once per round to aggregate reviewer verdicts; retire this entry once it lands",
     "reason": "Same P1-E11-W3-S23-T6 scope constraint as ParseVerdict above: the adversarial-verify-N caller that aggregates N reviewers' verdicts via Consensus is W6 Epics AC/AD and is not yet built. Every branch (weighted share, high-price veto, exact-0.5 tie, empty-quorum typed error) is exercised directly by flow_test.go.",
@@ -936,13 +929,6 @@
     "reason": "The four data classes are one ordered ladder; layer 0 compares a request's class against the destination's ceiling, and the comparison is only correct if every rung exists in order. The two middle rungs are named by no caller yet because the lane privacy policy that carries a ceiling other than the two ends has not landed. Omitting them would leave a ladder with a hole in it, which is a worse defect than an unreferenced constant.",
     "retire_ticket": "S-77.T4",
     "symbol": "internal/policy.DataClassConfidential"
-  },
-  {
-    "caller_site": "internal/policy/lane_privacy.go",
-    "expected_caller": "the lane privacy policy that sets a lane's max data class (22-PEWS-PLAN-W9-EXECUTIVE-ECONOMY.md Epic AN S-77.T4)",
-    "reason": "The four data classes are one ordered ladder; layer 0 compares a request's class against the destination's ceiling, and the comparison is only correct if every rung exists in order. The two middle rungs are named by no caller yet because the lane privacy policy that carries a ceiling other than the two ends has not landed. Omitting them would leave a ladder with a hole in it, which is a worse defect than an unreferenced constant.",
-    "retire_ticket": "S-77.T4",
-    "symbol": "internal/policy.DataClassInternal"
   },
   {
     "caller_site": "internal/policy/authorize_middleware.go",

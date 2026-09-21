@@ -166,6 +166,67 @@ runs into the `ci_results` domain. That path now asks the same resolver
 before it spends a request, and refuses to poll Actions for a repository the
 policy routes local.
 
+## CI wait-on-green / merge-on-green (P1-E25-W5-S51-T3)
+
+`cascade github ci wait` and `cascade github ci merge-on-green` (07-CLI-
+COMMAND-TREE §github, note 5) are plugin-contributed `github` nouns, per
+R-14.76, not `cascade-github` **tools**: the underlying logic
+(`internal/ci/waitmerge_wait.go`, `internal/ci/waitmerge_merge.go`) is host-
+side core code, never a call into this process. Full command reference:
+`docs/cli-reference/github-ci.md`.
+
+- **wait-on-green** polls `internal/ci`'s own S-51.T2 `Client` (the same
+  poller `ci status` reads from) — never a call into this plugin process —
+  for every required, non-skipped check on a repo+ref, until all report
+  `success`, one reports `failure`/`cancelled`/`timed_out` (immediate
+  refusal), one reports an unrecognized conclusion (fail-closed, 06 §5.20),
+  or the configured timeout (default 30m) expires.
+- **merge-on-green** is L3 (external side effect, 06 §5.15): it classifies
+  through the real `internal/policy.Engine` and refuses without an explicit
+  grant on `cascade-github.prs.merge_on_green` — a capability DISTINCT from
+  `cascade-github.prs.merge`, so a grant issued so a human could merge one PR
+  never silently authorizes an unattended loop. Both are registered
+  `external_side_effect` by the host's own composition root
+  (`cmd/cascade/daemon_unix_policy.go`'s `bootCapabilities`), which is what
+  puts the action on the L3 rung. The decision is audited (`policy.decide`)
+  either way, and on an allow verdict the record is written BEFORE the
+  irreversible call, with a `policy.route` record after it saying what
+  actually happened. The request declares its data class and the
+  destination's ceiling (`internal`), so policy layer 0 really runs:
+  confidential or secret material cannot travel to GitHub through this verb.
+  Immediately before merging, the ref's head SHA is re-read and compared with
+  the SHA that went green; a ref that moved is refused. Only then does it
+  dispatch `cascade-github.prs.merge` — the ONE call this feature makes into
+  this process — through the real plugin-host call path
+  (`internal/plugins/ci_waitmerge_wiring.go`, R-21.270): a JSON-RPC request
+  over the O/S-31.T3 `ProcessRuntime` `Handle`'s stdio transport, never
+  `model.execute`. `--yes` is mandatory.
+- **Windows tier-2**: `cascade github ci wait` and `cascade github ci
+  merge-on-green` both consult the daemon-absent gate before any poll, and on
+  Windows that gate refuses (`internal/ci/waitmerge_windows.go`) with a
+  non-zero exit. It is a build-tag pair, never a runtime branch, asserted
+  natively on the `windows/amd64` lane.
+- **Mounted**: both verbs are reachable in the shipped binary. The process
+  tier has its own mount (`cmd/cascade/plugin_process_mount.go`), which maps a
+  manifest command name to a command path — `github-ci-wait` →
+  `cascade github ci wait`, `github.ci.merge-on-green` →
+  `cascade github ci merge-on-green` (the nesting rule is documented in
+  `.github/wiki/Plugin-Author-Guide.md`). `github-repos`, `github-issues` and
+  `github-prs` mount through the same path.
+- **Honest gap (what a user gets today)**: `cascade github ci wait` works — it
+  needs a token in `CASCADE_GITHUB_TOKEN`, `GITHUB_TOKEN` or `GH_TOKEN`,
+  because this plugin's vault-stored token belongs to a process only the host
+  can launch, and it cannot. `cascade github ci merge-on-green` therefore
+  refuses with a typed `unavailable` error naming that same missing
+  trust-elevation path: every process-tier launch is refused at
+  `process.ProcessRuntime.Launch`'s trust gate
+  (`internal/plugins/dispatch.go`'s `ProvisionElevated`), so there is no
+  running plugin process to dispatch `prs.merge` through. The three T1 verbs
+  refuse for exactly the same reason. Nothing here pretends otherwise.
+- **Not wired**: `cascade doctor` does not report the Windows tier-2 status of
+  these verbs. The contract asks for that probe; `cmd/cascade/doctor*.go` is
+  outside this ticket's file scope, so it is recorded rather than claimed.
+
 ## Build and test
 
 ```bash

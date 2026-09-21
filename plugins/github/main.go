@@ -32,7 +32,23 @@
 //	own API calls is the one the exchange just returned, held in memory
 //	for the life of the process and never logged.
 //
-// SPORT: plugins/github (ADD) — P1-E25-W5-S51-T1.
+//	P1-E25-W5-S51-T3's `github-ci-wait`/`github.ci.merge-on-green` manifest
+//	commands need NO new dispatch code here: wait-on-green polls
+//	api.github.com through the HOST's own internal/ci.Client (never this
+//	process), and merge-on-green's ONLY call into this process is
+//	"cascade-github.prs.merge" — already reachable through the tool-prefix
+//	branch in dispatch, below, since T1 registered it. The host-side
+//	orchestration (poll loop, L3 classify, deny-list, grant check,
+//	audit) lives in internal/ci/waitmerge_{wait,merge}.go and the
+//	internal/plugins/ci_waitmerge_wiring.go bridge — never in this
+//	process, per Art.10.2 (this file may not import internal/**).
+//
+// SPORT: plugins/github (ADD) — P1-E25-W5-S51-T1; github-ci-wait/
+//
+//	github.ci.merge-on-green manifest commands (CHANGE) — P1-E25-W5-S51-T3.
+//	Both are MOUNTED by the host's process-tier command mount
+//	(cmd/cascade/plugin_process_mount.go); the dotted name is what lets
+//	`merge-on-green` stay one path segment.
 package main
 
 import (

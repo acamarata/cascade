@@ -96,6 +96,20 @@ description = "List, open, comment on or close GitHub issues."
 name = "github-prs"
 description = "List, open, merge or request review on GitHub pull requests."
 
+[[provides.commands]]
+name = "github-ci-wait"
+description = "Block until every required GitHub Actions check for a repo+ref reports success (P1-E25-W5-S51-T3)."
+
+# The DOT form of the mount-path rule (see .github/wiki/Plugin-Author-Guide.md
+# and cmd/cascade/plugin_process_mount.go): segments are separated by ".", so
+# the leaf verb may itself contain hyphens. The hyphen form used by the four
+# commands above cannot express `merge-on-green` as ONE segment -- it would
+# mount five levels deep -- and 07-CLI-COMMAND-TREE contracts
+# `cascade github ci merge-on-green`.
+[[provides.commands]]
+name = "github.ci.merge-on-green"
+description = "Merge a pull request once its required checks are green, gated by an explicit merge-on-green policy grant (L3, P1-E25-W5-S51-T3)."
+
 [[permissions]]
 name = "network"
 description = "Reach api.github.com, and no other host, to call the GitHub REST API."

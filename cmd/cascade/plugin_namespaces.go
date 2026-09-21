@@ -53,13 +53,21 @@ import (
 // mounting them would invent CLI surface the command tree never ratified.
 var pluginNamespaces = []string{"pbd"}
 
-// mountPluginNamespaceCmds attaches each namespace in pluginNamespaces.
+// mountPluginNamespaceCmds attaches each namespace in pluginNamespaces,
+// then the PROCESS-runtime plugins' own commands.
+//
+// The second call is here, not in root.go's mountSubcommands, because
+// root.go is at Art.10.3's 300-line cap: this function is already the
+// "mount the plugin-contributed surface" step of the composition, and the
+// process tier is the other half of it (plugin_process_mount.go's header
+// records why that half did not exist).
 func mountPluginNamespaceCmds(root *cobra.Command) {
 	registry := &plugins.BuiltinRegistry{}
 	loadErr := registry.Load()
 	for _, id := range pluginNamespaces {
 		root.AddCommand(pluginNamespaceCmd(registry, id, loadErr))
 	}
+	mountProcessPluginCmds(root)
 }
 
 // pluginNamespaceCmd builds one namespace's parent command.
