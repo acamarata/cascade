@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T02:50:16Z",
+  "generated_at": "2026-09-21T02:51:54Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5497,10 +5497,10 @@
       "sites": [
         {
           "file": "internal/context/composer_config.go",
-          "line": 13,
+          "line": 23,
           "status": "ADD",
           "ticket": "T-1",
-          "raw": "context-engine/composer-config (ADD, per T-1 sport_updates)."
+          "raw": "context-engine/composer-config (ADD, per T-1 sport_updates;"
         }
       ],
       "statuses": [
@@ -5512,10 +5512,10 @@
       "sites": [
         {
           "file": "internal/context/composer_core.go",
-          "line": 19,
+          "line": 28,
           "status": "ADD",
           "ticket": "T-1",
-          "raw": "context-engine/composer-core (ADD, per T-1 sport_updates)."
+          "raw": "context-engine/composer-core (ADD, per T-1 sport_updates;"
         }
       ],
       "statuses": [
@@ -5527,10 +5527,10 @@
       "sites": [
         {
           "file": "internal/context/composer_errors.go",
-          "line": 15,
+          "line": 21,
           "status": "ADD",
           "ticket": "T-1",
-          "raw": "context-engine/composer-errors (ADD, per T-1 sport_updates)."
+          "raw": "context-engine/composer-errors (ADD, per T-1 sport_updates;"
         }
       ],
       "statuses": [
@@ -5557,10 +5557,10 @@
       "sites": [
         {
           "file": "internal/context/composer_types.go",
-          "line": 18,
+          "line": 23,
           "status": "ADD",
           "ticket": "T-1",
-          "raw": "context-engine/composer-types (ADD, per T-1 sport_updates)."
+          "raw": "context-engine/composer-types (ADD, per T-1 sport_updates;"
         }
       ],
       "statuses": [
@@ -5628,6 +5628,156 @@
           "status": "ADD",
           "ticket": "T-2",
           "raw": "context-engine/merge-model (ADD, per T-2 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/pipeline",
+      "sites": [
+        {
+          "file": "internal/context/pipeline.go",
+          "line": 54,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T3",
+          "raw": "context-engine/pipeline (ADD, P1-E21-W5-S46-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/pipeline-compose",
+      "sites": [
+        {
+          "file": "internal/context/pipeline_compose.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T3",
+          "raw": "context-engine/pipeline-compose (ADD, P1-E21-W5-S46-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/pipeline-compose-tests",
+      "sites": [
+        {
+          "file": "internal/context/pipeline_compose_test.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T3",
+          "raw": "context-engine/pipeline-compose-tests (ADD, P1-E21-W5-S46-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/pipeline-degrade-tests",
+      "sites": [
+        {
+          "file": "internal/context/pipeline_degrade_test.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T3",
+          "raw": "context-engine/pipeline-degrade-tests (ADD, P1-E21-W5-S46-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/pipeline-lane-fixture",
+      "sites": [
+        {
+          "file": "internal/context/pipeline_lanefixture_test.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T3",
+          "raw": "context-engine/pipeline-lane-fixture (ADD, P1-E21-W5-S46-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/pipeline-lane-tests",
+      "sites": [
+        {
+          "file": "internal/context/pipeline_lane_test.go",
+          "line": 32,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T3",
+          "raw": "context-engine/pipeline-lane-tests (ADD, P1-E21-W5-S46-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/pipeline-segment",
+      "sites": [
+        {
+          "file": "internal/context/pipeline_segment.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T3",
+          "raw": "context-engine/pipeline-segment (ADD, P1-E21-W5-S46-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/pipeline-tests",
+      "sites": [
+        {
+          "file": "internal/context/pipeline_test.go",
+          "line": 27,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T3",
+          "raw": "context-engine/pipeline-tests (ADD, P1-E21-W5-S46-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/pipeline-transform",
+      "sites": [
+        {
+          "file": "internal/context/pipeline_transform.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T3",
+          "raw": "context-engine/pipeline-transform (ADD, P1-E21-W5-S46-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/pipeline-transform-tests",
+      "sites": [
+        {
+          "file": "internal/context/pipeline_transform_test.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T3",
+          "raw": "context-engine/pipeline-transform-tests (ADD, P1-E21-W5-S46-T3)."
         }
       ],
       "statuses": [
@@ -25653,7 +25803,7 @@
       ]
     }
   ],
-  "total_sites": 2444,
+  "total_sites": 2454,
   "unspecified_count": 84,
   "multi_status_count": 51
 }
