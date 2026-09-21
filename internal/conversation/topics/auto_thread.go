@@ -33,6 +33,15 @@
 //   at its window index (NewTopicTurnID), and ThreadStore.AppendTurn is
 //   documented as a no-op for an id already in the thread, so routing the
 //   same window twice files N turns, not 2N.
+//
+//   ONE ROUTING DERIVATION. plan below is the pipeline's single routing
+//   decision - segment, partition, resolve, validate - and it is shared,
+//   not mirrored: Route calls it and then files each planned segment, while
+//   ObserveLogger.Observe (observe_log.go) calls the SAME method and only
+//   reports what it returned. Nothing may re-derive any of those four
+//   steps; a filter, merge or re-ordering step added to plan reaches both
+//   callers at once, and observe_pin_test.go fails if the two ever
+//   disagree about one window.
 // SPORT: internal/conversation/topics auto-thread (ADD) (P1-E21-W5-S45-T3).
 
 package topics
@@ -152,9 +161,45 @@ func buildSegments(turnCount int, boundaries []Boundary) ([]routeSegment, error)
 	return append(segs, routeSegment{start: start, end: turnCount, label: label}), nil
 }
 
-// Route scans turns for topic boundaries, resolves each resulting
-// partition's topic via a.taxonomy, and files the partition's turns into
-// the a.store thread that topic selects.
+// plannedSegment is one partition of a planned route: the routeSegment
+// buildSegments derived, plus the TopicType its label resolved to, already
+// validated. plan produces these; fileSegment consumes one.
+type plannedSegment struct {
+	seg       routeSegment
+	topicType TopicType
+}
+
+// plan is the routing decision itself, with nothing applied: segment the
+// window, partition it, resolve each partition's topic through a.taxonomy,
+// and refuse a resolved topic that could not be a safe key. It touches the
+// Segmenter and the taxonomy only - never a.store - so a caller that must
+// not mutate anything (ObserveLogger.Observe) can run the real decision.
+//
+// The boundary list comes back alongside the plan because observe mode's
+// event reports the boundaries themselves, not only the segments they
+// partition the window into. Every dependency error is returned unmodified.
+func (a *AutoThreader) plan(ctx context.Context, turns []Turn) ([]plannedSegment, []Boundary, error) {
+	boundaries, err := a.segmenter.Segment(ctx, turns)
+	if err != nil {
+		return nil, nil, err
+	}
+	segs, err := buildSegments(len(turns), boundaries)
+	if err != nil {
+		return nil, nil, err
+	}
+	planned := make([]plannedSegment, 0, len(segs))
+	for _, seg := range segs {
+		topicType := a.taxonomy.Resolve(seg.label)
+		if err := validateTopicType(topicType); err != nil {
+			return nil, nil, err
+		}
+		planned = append(planned, plannedSegment{seg: seg, topicType: topicType})
+	}
+	return planned, boundaries, nil
+}
+
+// Route plans the window (plan above) and files each planned partition's
+// turns into the a.store thread its topic selects.
 //
 // An empty window short-circuits BEFORE the Segmenter is called: there is
 // nothing to segment, so spending a classify/embed round trip to be told so
@@ -166,17 +211,13 @@ func (a *AutoThreader) Route(ctx context.Context, turns []Turn) ([]ThreadID, err
 	if len(turns) == 0 {
 		return nil, nil
 	}
-	boundaries, err := a.segmenter.Segment(ctx, turns)
+	planned, _, err := a.plan(ctx, turns)
 	if err != nil {
 		return nil, err
 	}
-	segs, err := buildSegments(len(turns), boundaries)
-	if err != nil {
-		return nil, err
-	}
-	threadIDs := make([]ThreadID, 0, len(segs))
-	for _, seg := range segs {
-		threadID, fileErr := a.fileSegment(ctx, turns, seg)
+	threadIDs := make([]ThreadID, 0, len(planned))
+	for _, p := range planned {
+		threadID, fileErr := a.fileSegment(ctx, turns, p)
 		if fileErr != nil {
 			return nil, fileErr
 		}
@@ -185,20 +226,16 @@ func (a *AutoThreader) Route(ctx context.Context, turns []Turn) ([]ThreadID, err
 	return threadIDs, nil
 }
 
-// fileSegment resolves seg's topic, selects its thread, and appends every
-// turn in the partition. Each turn's id is computed here, from its own
-// window index, which is what makes a re-delivered window idempotent (see
-// NewTopicTurnID).
-func (a *AutoThreader) fileSegment(ctx context.Context, turns []Turn, seg routeSegment) (ThreadID, error) {
-	topicType := a.taxonomy.Resolve(seg.label)
-	if err := validateTopicType(topicType); err != nil {
-		return "", err
-	}
-	threadID, err := a.store.CreateOrSelect(ctx, topicType)
+// fileSegment selects the thread p's already-resolved topic owns and
+// appends every turn in the partition. Each turn's id is computed here,
+// from its own window index, which is what makes a re-delivered window
+// idempotent (see NewTopicTurnID).
+func (a *AutoThreader) fileSegment(ctx context.Context, turns []Turn, p plannedSegment) (ThreadID, error) {
+	threadID, err := a.store.CreateOrSelect(ctx, p.topicType)
 	if err != nil {
 		return "", err
 	}
-	for i := seg.start; i < seg.end; i++ {
+	for i := p.seg.start; i < p.seg.end; i++ {
 		turn := ThreadTurn{ID: NewTopicTurnID(threadID, i, turns[i]), Turn: turns[i]}
 		if err := a.store.AppendTurn(ctx, threadID, turn); err != nil {
 			return "", err

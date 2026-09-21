@@ -35,6 +35,7 @@ type fakeThreadStore struct {
 	moves   []moveCall
 
 	createErr error
+	lookupErr error
 	appendErr error
 	moveErr   error
 
@@ -60,6 +61,20 @@ func (f *fakeThreadStore) CreateOrSelect(_ context.Context, topicType TopicType)
 	id := ThreadID(fmt.Sprintf("thread-%d", f.threadSeq))
 	f.threads[topicType] = id
 	return id, nil
+}
+
+// LookupThread is CreateOrSelect's read-only half over the same map, so a
+// proposal read out of this double is byte-identical to the id
+// CreateOrSelect hands back for the same topic - which is exactly what
+// observe_pin_test.go compares.
+func (f *fakeThreadStore) LookupThread(_ context.Context, topicType TopicType) (ThreadID, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.lookupErr != nil {
+		return "", false, f.lookupErr
+	}
+	id, ok := f.threads[topicType]
+	return id, ok, nil
 }
 
 func (f *fakeThreadStore) AppendTurn(_ context.Context, threadID ThreadID, turn ThreadTurn) error {

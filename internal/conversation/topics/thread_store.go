@@ -91,6 +91,18 @@ type ThreadStore interface {
 	// error, never a zero-value ThreadID mistaken for a real one.
 	CreateOrSelect(ctx context.Context, topicType TopicType) (ThreadID, error)
 
+	// LookupThread reports which thread owns topicType WITHOUT creating
+	// one: (id, true, nil) when a thread for that topic already exists,
+	// ("", false, nil) when none does, and a typed error when the backing
+	// store cannot answer - the same failure CreateOrSelect would have
+	// raised, never a false "none". This is the read-only half of
+	// CreateOrSelect, for a caller that must report what routing WOULD do
+	// without performing it (ObserveLogger.Observe, observe_log.go). An
+	// implementation MUST return the same ThreadID CreateOrSelect would
+	// return for that topic; a proposal derived any other way would name a
+	// thread the pipeline does not use.
+	LookupThread(ctx context.Context, topicType TopicType) (ThreadID, bool, error)
+
 	// AppendTurn records turn as the next turn in threadID. A turn whose
 	// ID is already present in threadID is a no-op, not an error: the
 	// same window delivered twice must not double-file its turns.
@@ -161,6 +173,31 @@ func (s *conversationThreadStore) CreateOrSelect(ctx context.Context, topicType 
 		return "", err
 	}
 	return id, nil
+}
+
+// LookupThread answers CreateOrSelect's question without the create half:
+// the thread id is the same deterministic value CreateOrSelect computes, and
+// the conversation domain's GetThread already distinguishes "no such
+// thread" (found false, nil error) from "cannot answer" (a typed error), so
+// this method reports the first as ("", false, nil) and propagates the
+// second unchanged. A topic whose thread row does not exist yet is the
+// normal case before the first AppendTurn writes it.
+func (s *conversationThreadStore) LookupThread(ctx context.Context, topicType TopicType) (ThreadID, bool, error) {
+	if ctx == nil {
+		return "", false, cascade.New(cascade.KindInvalidInput, "topics: LookupThread: ctx must not be nil")
+	}
+	if err := validateTopicType(topicType); err != nil {
+		return "", false, err
+	}
+	id := ThreadID(topicThreadIDPrefix + string(topicType))
+	_, found, err := s.store.GetThread(ctx, string(id))
+	if err != nil {
+		return "", false, err
+	}
+	if !found {
+		return "", false, nil
+	}
+	return id, true, nil
 }
 
 // AppendTurn files turn into threadID as a conversation turn plus one text

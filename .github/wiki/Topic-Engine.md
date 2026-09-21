@@ -230,10 +230,16 @@ modernc-sqlite `conversation.Store`. The composition root wires it at
 startup; `internal/build/testonly-allow.json` names the ticket expected to
 make that call.
 
-The three methods:
+The four methods:
 
 - `CreateOrSelect(ctx, topicType) (ThreadID, error)` - the same `topicType`
   always returns the same `ThreadID`.
+- `LookupThread(ctx, topicType) (ThreadID, bool, error)` - the read-only half
+  of `CreateOrSelect`, added by S-45.T4: it reports the id of the thread that
+  already owns `topicType` (and `false` when none does) without creating one,
+  for a caller that must say what routing *would* do without doing it. An
+  implementation must return the same id `CreateOrSelect` would; a store that
+  cannot answer returns the same typed error, never a false "none".
 - `AppendTurn(ctx, threadID, turn) error` - `turn` is a `ThreadTurn`: the
   segmenter-side `Turn` plus the content-addressed `TurnID` its caller
   computed with `NewTopicTurnID`. Identity is the caller's, exactly as
@@ -404,11 +410,125 @@ satisfies it with no adapter code). The JSON payload is `MisfileEvent`:
 }
 ```
 
+## Observe-log mode (P1-E21-W5-S45-T4)
+
+`ObserveLogger` (`observe_log.go`, with the first-use window itself in
+`observe_state.go`) wraps an `AutoThreader` with a 7-day gate: for the first
+week after the topic engine's first real use, calling `Observe` instead of
+`Route` records what the pipeline *would* have done without touching a
+single conversation thread. New users are not guaranteed onto a
+well-calibrated segmenter on day one - `Observe` buys the engine a week of
+real transcripts before its boundary decisions are allowed to reorganize
+anyone's threads.
+
+**`Observe(ctx, turns) (ObserveResult, error)`** branches on elapsed time
+since `first_use_at`:
+
+- **Apply mode** (elapsed >= 7\*24h): delegates transparently to
+  `AutoThreader.Route` - same thread ids, same errors, no audit event. The
+  result carries `Observed: false` and `ThreadIDs`.
+- **Observe mode** (elapsed < 7\*24h): never calls `Route` and never writes
+  through the `ThreadStore`. The result carries `Observed: true` and one
+  `Proposal` per planned segment.
+- An empty `turns` window is a no-op before either path runs, and before any
+  store read: the result is the zero `ObserveResult`. The `Observed` flag is
+  what tells a caller "observed, and there was nothing to propose" apart from
+  "the window is closed" and "there was nothing to route".
+
+**One routing decision, not two.** Observe mode does not re-derive routing.
+`AutoThreader.plan` (`auto_thread.go`) is the pipeline's single planning
+step - segment, partition, resolve each partition's topic through the
+`TaxonomyConfig`, validate it - and `Route` and `Observe` both call that same
+method. Whatever `plan` does, both modes do.
+
+**Where a proposed thread id comes from.** A `ThreadID` is opaque: only the
+`ThreadStore` implementation knows what shape it mints. So observe mode asks
+the store rather than guessing, through `LookupThread(ctx, topicType)`, the
+read-only half of `CreateOrSelect`:
+
+- a topic that already has a thread yields that thread's **real id**, and
+  `Proposal.Existing` is true - it is the id `Route` returns for that topic
+  against that store, which `observe_pin_test.go` asserts by running both
+  over the same window and comparing;
+- a topic with no thread yet yields the marker `would_create:<topic_type>`
+  with `Existing` false, never a fabricated id;
+- a store that cannot answer fails the `Observe` call, exactly as
+  `CreateOrSelect`'s failure fails apply mode. Observe mode never reports a
+  routing success the pipeline would not have had.
+
+**`first_use_at` persistence.** One record for the whole engine, not one per
+topic: the schema's `{topic_type, first_use_at}` shape stores a single row
+(`topic_type` fixed to the constant `"engine"`) under a B/S-02
+`provider.Store` key - the `retrieval` domain, key `topic_observe_state`
+(R-16.63 addendum). `Observe`'s first call reads the row; present, it caches
+the stored value; absent, it claims the row for the current `Clock` time with
+a **conditional create** inside the store's own transaction
+(`Tx.CompareAndSwap` with a nil `old`). Two instances racing on a fresh store
+therefore cannot both write: the loser sees `KindConflict`, re-reads, and
+adopts the winner's value, so `first_use_at` is set once and never moved
+forward. The in-process cache likewise never overwrites itself, so a second
+`Observe` on the same instance touches no store at all.
+
+**`IsObserving() (bool, error)`** reports the current gate state for
+doctor/status surfaces: true iff `first_use_at` is set and less than 7\*24h
+has elapsed. It takes no `context.Context` (its literal call shape), so its
+fallback read - when nothing has called `Observe` on this instance yet - uses
+`context.Background()`. An **absent** row is not a failure: it is the
+contract's "no `Observe` call has occurred", and reports `(false, nil)`. A
+store that cannot answer (`KindUnavailable`) and a row that will not decode
+(`KindIntegrity`) report `(false, err)`: the gate state is then *unknown*,
+and a caller must not read that `false` as "apply mode is fine".
+
+**Audit event schema**, published as `EventKindTopicObserve`
+(`"topics.observe_log"`) into the audit domain's namespace via the injected
+`AuditPublisher` seam (shaped like `internal/events.Bus.Publish`, matching
+`Reassign`'s own `MisfileEventPublisher` precedent - see below). A failed
+publish fails the `Observe` call: the event is observe mode's only product.
+
+```json
+{
+  "event": "topic_observe",
+  "proposed_boundaries": [{"turn_index": 1, "topic_type": "code-topic"}],
+  "proposed_thread_ids": ["would_create:fallback", "topic:code-topic"],
+  "observed_at": "2026-09-21T00:00:00Z",
+  "elapsed_days": 3
+}
+```
+
+`proposed_thread_ids` mixes real ids and `would_create:` markers exactly as
+the store answered. `observed_at` is the observation time from the injected
+clock (RFC3339), not `first_use_at`; `elapsed_days` is fractional days, not
+hours.
+
+Carries no turn content: `topic_type` values are caller-configured labels,
+and every `proposed_thread_ids` entry is either a store-issued id or a marker
+derived from one such label, so the event never widens the exposure of
+conversation text (the same PRIVACY posture `NewTopicTurnID` and
+`MisfileEvent` already document).
+
+**Transition to apply mode is automatic** - there is no toggle, no config
+flag, and no operator action: the next `Observe` call after the 7-day window
+elapses simply routes for real.
+
+**Not wired yet.** Nothing in this tree composes a running `AutoThreader`, so
+nothing constructs a running `ObserveLogger` either; the per-turn composition
+root for the topic engine is unowned. S-46.T4 adds read-only `--topics` /
+`--threads` CLI handlers over the conversation-service RPC and constructs
+neither type, so it will not by itself retire the `NewObserveLogger` entry in
+`internal/build/testonly-allow.json`. That entry is parked, with its reason
+stating exactly that, pending the planner's disposition of the S-45.T3 and
+S-45.T4 PCIs. CLI surfaces for observe-log status are out of this ticket's
+scope; doctor and status surfaces call `IsObserving()` directly once a
+composition root exists.
+
+
 ## Platform support
 
 The package is pure Go with no CGO and no OS-specific code path.
-`TestSegmenterPlatformParity` (`segmenter_core_test.go`) and
+`TestSegmenterPlatformParity` (`segmenter_core_test.go`),
 `TestTopicsPlatformParity` (`reassign_test.go`, covering AutoThreader,
-TaxonomyConfig, ExemplarStore, and Reassign together) are the explicit,
-CI-asserted per-platform results Art.5 requires: both run to a pass on the
-macOS, Linux, and Windows CI matrix.
+TaxonomyConfig, ExemplarStore, and Reassign together), and
+`TestObservePlatformParity` (`observe_mode_test.go`, covering ObserveLogger
+through both modes) are the explicit, CI-asserted per-platform results
+Art.5 requires: all three run to a pass on the macOS, Linux, and Windows
+CI matrix.

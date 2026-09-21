@@ -239,3 +239,49 @@ func TestRouteTwiceOverRealStoreFilesEachTurnOnce(t *testing.T) {
 			len(filed), len(turns), len(turns))
 	}
 }
+
+// TestConversationThreadStoreLookupThread is the read-only half against the
+// real backing domain: a topic with no thread row reports "none" without
+// creating one, and after a turn is filed the same call reports the SAME id
+// CreateOrSelect hands back - the identity observe mode's proposals rest on.
+func TestConversationThreadStoreLookupThread(t *testing.T) {
+	ts, backing := newRealThreadStore(t)
+	ctx := context.Background()
+	if id, found, err := ts.LookupThread(ctx, TopicType("code")); err != nil || found || id != "" {
+		t.Fatalf("LookupThread before any turn: (id=%q, found=%v, err=%v), want (\"\", false, nil)", id, found, err)
+	}
+	threads, err := backing.ListThreads(ctx)
+	if err != nil {
+		t.Fatalf("ListThreads: %v", err)
+	}
+	if len(threads) != 0 {
+		t.Fatalf("ListThreads = %+v after LookupThread, want none: a lookup must never create a thread", threads)
+	}
+
+	selected, err := ts.CreateOrSelect(ctx, TopicType("code"))
+	if err != nil {
+		t.Fatalf("CreateOrSelect: %v", err)
+	}
+	turn := Turn{Speaker: string(conversation.RoleUser), Text: "the thread row is written by the first append"}
+	if err := ts.AppendTurn(ctx, selected, ThreadTurn{ID: NewTopicTurnID(selected, 0, turn), Turn: turn}); err != nil {
+		t.Fatalf("AppendTurn: %v", err)
+	}
+	got, found, err := ts.LookupThread(ctx, TopicType("code"))
+	if err != nil || !found {
+		t.Fatalf("LookupThread after a filed turn: (found=%v, err=%v), want (true, nil)", found, err)
+	}
+	if got != selected {
+		t.Fatalf("LookupThread = %q, want CreateOrSelect's own %q", got, selected)
+	}
+}
+
+func TestConversationThreadStoreLookupThreadGuards(t *testing.T) {
+	ts, _ := newRealThreadStore(t)
+	//nolint:staticcheck // deliberate nil ctx to prove the guard fires
+	if _, _, err := ts.LookupThread(nil, TopicType("code")); !cascade.HasKind(err, cascade.KindInvalidInput) {
+		t.Fatalf("LookupThread(nil ctx) error = %v, want KindInvalidInput", err)
+	}
+	if _, _, err := ts.LookupThread(context.Background(), TopicType("")); !cascade.HasKind(err, cascade.KindInvalidInput) {
+		t.Fatalf("LookupThread(empty topic) error = %v, want KindInvalidInput", err)
+	}
+}
