@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-20T23:50:09Z",
+  "generated_at": "2026-09-21T00:07:08Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -20085,6 +20085,20 @@
       ]
     },
     {
+      "name": "nodes.heartbeat-loop",
+      "sites": [
+        {
+          "file": "internal/nodes/heartbeat_loop_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "nodes.heartbeat-loop (TEST) — split 2026-09-21."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "pkg.plugin.Storage",
       "sites": [
         {
@@ -24947,7 +24961,7 @@
       ]
     }
   ],
-  "total_sites": 2390,
-  "unspecified_count": 70,
+  "total_sites": 2391,
+  "unspecified_count": 71,
   "multi_status_count": 49
 }
