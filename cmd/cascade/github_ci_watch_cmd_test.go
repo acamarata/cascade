@@ -42,6 +42,7 @@ func watchTestConfig(t *testing.T) string {
 }
 
 func TestGitHubCIWatchAddListRemove_RoundTrip(t *testing.T) {
+	skipWhenTheDaemonIsRefusedHere(t)
 	watchTestConfig(t)
 
 	add := newGitHubCIWatchAddCmd()
@@ -91,6 +92,7 @@ func TestGitHubCIWatchAddListRemove_RoundTrip(t *testing.T) {
 // same repo UPDATES the entry (branch/workflow) rather than appending a
 // duplicate.
 func TestGitHubCIWatchAdd_IsIdempotentOnRepo(t *testing.T) {
+	skipWhenTheDaemonIsRefusedHere(t)
 	watchTestConfig(t)
 
 	first := newGitHubCIWatchAddCmd()
@@ -148,6 +150,7 @@ func TestGitHubCIWatchRemove_AbsentRepoIsANoOp(t *testing.T) {
 // surfaces through the cobra RunE, not just the runtime package's own
 // direct-call tests.
 func TestGitHubCIWatchAdd_RefusesAnArrayOfTablesConfig(t *testing.T) {
+	skipWhenTheDaemonIsRefusedHere(t)
 	path := watchTestConfig(t)
 	if err := os.WriteFile(path, []byte("[[ci.watch]]\nrepo = \"a/b\"\n"), 0o600); err != nil {
 		t.Fatalf("seeding config: %v", err)
@@ -169,6 +172,7 @@ func TestGitHubCIWatchAdd_RefusesAnArrayOfTablesConfig(t *testing.T) {
 // is a no-op on a tier-1 (non-Windows) host -- the only platform this
 // suite runs on.
 func TestProbeAttentionDaemonAvailable_NilOnThisPlatform(t *testing.T) {
+	skipWhenTheDaemonIsRefusedHere(t)
 	if err := probeAttentionDaemonAvailable(); err != nil {
 		t.Fatalf("probeAttentionDaemonAvailable() = %v, want nil on this (non-Windows) host", err)
 	}
@@ -179,6 +183,7 @@ func TestProbeAttentionDaemonAvailable_NilOnThisPlatform(t *testing.T) {
 // hostMergeOnGreen's policy engine uses) succeeds and yields a usable
 // pusher, closed here BEFORE t.TempDir's own cleanup (Art.7.1).
 func TestOpenAttentionPusher_OpensAndClosesOverATempDirStore(t *testing.T) {
+	skipWhenTheDaemonIsRefusedHere(t)
 	watchTestConfig(t)
 
 	pusher, closeStore, err := openAttentionPusher([]string{"acamarata/*"})
@@ -209,6 +214,7 @@ func TestNewCIAttentionPusher_NilStoreIsATypedError(t *testing.T) {
 // result/error untouched. An invalid WaitDeps (no Client) is deterministic
 // and offline -- ci.WaitOnGreen refuses before any network attempt.
 func TestWaitAndRoute_ReturnsWaitOnGreensErrorAndNeverPanics(t *testing.T) {
+	skipWhenTheDaemonIsRefusedHere(t)
 	_, err := waitAndRoute(context.Background(), ci.WaitDeps{},
 		ci.WaitOptions{Owner: "acamarata", Repo: "cascade", Ref: "main"})
 	if !cascade.HasKind(err, cascade.KindInvalidInput) {
@@ -250,6 +256,7 @@ func TestRouteWaitFailureToAttention_IgnoresNonRoutableErrors(t *testing.T) {
 // TempDir supervision store -- reopened here to verify, the same way
 // daemon_unix_ci_attention_test.go's wiring proof verifies the bus path.
 func TestRouteWaitFailureToAttention_RoutesAMatchingFailureIntoTheRealStore(t *testing.T) {
+	skipWhenTheDaemonIsRefusedHere(t)
 	path := watchTestConfig(t)
 	if err := os.WriteFile(path, []byte(`ci.watch = [{repo = "acamarata/cascade"}]`+"\n"), 0o600); err != nil {
 		t.Fatalf("seeding config: %v", err)
