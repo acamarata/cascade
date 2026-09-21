@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T09:17:18Z",
+  "generated_at": "2026-09-21T09:34:55Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -18599,6 +18599,29 @@
       ]
     },
     {
+      "name": "internal/plugins:nself-wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/nself_wiring.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T2",
+          "raw": "internal/plugins:nself-wiring (ADD) — P1-E25-W5-S52-T2."
+        },
+        {
+          "file": "internal/plugins/nself_wiring_test.go",
+          "line": 9,
+          "status": "",
+          "ticket": "P1-E25-W5-S52-T2",
+          "raw": "internal/plugins:nself-wiring (TEST) — P1-E25-W5-S52-T2."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins:review-wiring",
       "sites": [
         {
@@ -24429,6 +24452,131 @@
       ]
     },
     {
+      "name": "plugins/nself detect",
+      "sites": [
+        {
+          "file": "plugins/nself/detect.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T2",
+          "raw": "plugins/nself detect (ADD) — P1-E25-W5-S52-T2."
+        },
+        {
+          "file": "plugins/nself/detect_realfs_test.go",
+          "line": 22,
+          "status": "",
+          "ticket": "P1-E25-W5-S52-T2",
+          "raw": "plugins/nself detect (TEST) — P1-E25-W5-S52-T2."
+        },
+        {
+          "file": "plugins/nself/detect_test.go",
+          "line": 10,
+          "status": "",
+          "ticket": "P1-E25-W5-S52-T2",
+          "raw": "plugins/nself detect (TEST) — P1-E25-W5-S52-T2."
+        },
+        {
+          "file": "plugins/nself/detector_test.go",
+          "line": 9,
+          "status": "",
+          "ticket": "P1-E25-W5-S52-T2",
+          "raw": "plugins/nself detect (TEST) — P1-E25-W5-S52-T2."
+        },
+        {
+          "file": "plugins/nself/exec_unix.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T2",
+          "raw": "plugins/nself detect (ADD) — P1-E25-W5-S52-T2."
+        },
+        {
+          "file": "plugins/nself/exec_windows.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T2",
+          "raw": "plugins/nself detect (ADD) — P1-E25-W5-S52-T2."
+        },
+        {
+          "file": "plugins/nself/probe.go",
+          "line": 27,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T2",
+          "raw": "plugins/nself detect (ADD) — P1-E25-W5-S52-T2."
+        },
+        {
+          "file": "plugins/nself/probe_test.go",
+          "line": 9,
+          "status": "",
+          "ticket": "P1-E25-W5-S52-T2",
+          "raw": "plugins/nself detect (TEST) — P1-E25-W5-S52-T2."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/nself doctor",
+      "sites": [
+        {
+          "file": "plugins/nself/doctor.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T2",
+          "raw": "plugins/nself doctor (ADD) — P1-E25-W5-S52-T2."
+        },
+        {
+          "file": "plugins/nself/doctor_test.go",
+          "line": 9,
+          "status": "",
+          "ticket": "P1-E25-W5-S52-T2",
+          "raw": "plugins/nself doctor (TEST) — P1-E25-W5-S52-T2."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/nself entity",
+      "sites": [
+        {
+          "file": "plugins/nself/payload.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T2",
+          "raw": "plugins/nself entity (ADD) — P1-E25-W5-S52-T2."
+        },
+        {
+          "file": "plugins/nself/payload_test.go",
+          "line": 15,
+          "status": "",
+          "ticket": "P1-E25-W5-S52-T2",
+          "raw": "plugins/nself entity (TEST) — P1-E25-W5-S52-T2."
+        },
+        {
+          "file": "plugins/nself/plugin.go",
+          "line": 51,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T2",
+          "raw": "plugins/nself entity (ADD) — P1-E25-W5-S52-T2."
+        },
+        {
+          "file": "plugins/nself/plugin_test.go",
+          "line": 15,
+          "status": "",
+          "ticket": "P1-E25-W5-S52-T2",
+          "raw": "plugins/nself entity (TEST) — P1-E25-W5-S52-T2."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/opencode",
       "sites": [
         {
@@ -27524,7 +27672,7 @@
       ]
     }
   ],
-  "total_sites": 2579,
+  "total_sites": 2595,
   "unspecified_count": 121,
-  "multi_status_count": 57
+  "multi_status_count": 61
 }
