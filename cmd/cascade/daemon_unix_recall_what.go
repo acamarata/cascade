@@ -119,7 +119,13 @@ func recallWhatFilesLeg(paths runtime.PathProvider, bus *events.Bus, store provi
 
 // recallWhatConversationLeg opens its own sqlite connection to
 // cascade.db, applies the conversation schema (idempotent after
-// wireChatHandlers' own apply), and returns a real conversation.Store.
+// wireChatHandlers' own apply), and returns a real conversation.Store
+// wrapped in conversationLegAdapter -- internal/retrieval's
+// RecallWhatConversationLeg speaks retrieval-owned types (D1cycle fix:
+// retrieval must never import internal/conversation, see
+// internal/retrieval/recallwhat_conv.go's header), so this composition
+// root, which is free to import both packages, is where the two type
+// systems meet.
 func recallWhatConversationLeg(clock runtime.Clock, paths runtime.PathProvider) (retrieval.RecallWhatConversationLeg, error) {
 	db, err := openSecondaryCascadeDB(paths, "recall.what: conversation leg")
 	if err != nil {
@@ -131,7 +137,56 @@ func recallWhatConversationLeg(clock runtime.Clock, paths runtime.PathProvider) 
 		_ = db.Close()
 		return nil, err
 	}
-	return conversation.NewStore(db), nil
+	return conversationLegAdapter{store: conversation.NewStore(db)}, nil
+}
+
+// conversationLegSource is the minimal conversation.Store surface
+// conversationLegAdapter reads -- narrower than the full Store interface
+// so a test can satisfy it with a fake carrying only these three
+// methods; conversation.Store satisfies it with no changes.
+type conversationLegSource interface {
+	SearchTurns(ctx context.Context, query string, filter conversation.SearchFilter) ([]conversation.TurnMatch, error)
+	ListSegments(ctx context.Context, turnID string) ([]conversation.Segment, error)
+	ThreadPrivacy(ctx context.Context, threadID string) (provider.SensitivityTier, error)
+}
+
+// conversationLegAdapter adapts a conversationLegSource (a real
+// conversation.Store in production) to retrieval.RecallWhatConversationLeg's
+// retrieval-owned types -- the D1cycle fix's composition-root half.
+type conversationLegAdapter struct{ store conversationLegSource }
+
+// SearchTurns implements retrieval.RecallWhatConversationLeg.
+func (a conversationLegAdapter) SearchTurns(ctx context.Context, query string, filter retrieval.RecallWhatSearchFilter) ([]retrieval.RecallWhatTurnMatch, error) {
+	matches, err := a.store.SearchTurns(ctx, query, conversation.SearchFilter{ThreadID: filter.ThreadID, Limit: filter.Limit})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]retrieval.RecallWhatTurnMatch, len(matches))
+	for i, m := range matches {
+		out[i] = retrieval.RecallWhatTurnMatch{
+			Turn: retrieval.RecallWhatTurn{ID: m.Turn.ID, ThreadID: m.Turn.ThreadID, Role: string(m.Turn.Role)},
+			Rank: m.Rank,
+		}
+	}
+	return out, nil
+}
+
+// ListSegments implements retrieval.RecallWhatConversationLeg.
+func (a conversationLegAdapter) ListSegments(ctx context.Context, turnID string) ([]retrieval.RecallWhatSegment, error) {
+	segs, err := a.store.ListSegments(ctx, turnID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]retrieval.RecallWhatSegment, len(segs))
+	for i, s := range segs {
+		out[i] = retrieval.RecallWhatSegment{Content: s.Content}
+	}
+	return out, nil
+}
+
+// ThreadPrivacy implements retrieval.RecallWhatConversationLeg.
+func (a conversationLegAdapter) ThreadPrivacy(ctx context.Context, threadID string) (provider.SensitivityTier, error) {
+	return a.store.ThreadPrivacy(ctx, threadID)
 }
 
 // recallWhatScopeResolver opens its own sqlite connection to cascade.db,

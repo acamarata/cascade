@@ -35,7 +35,11 @@
 // conversationOutcome (recallwhat_legs.go) answers a typed KindUnavailable
 // error that lands in Errors["conversation"] and never searches. The
 // widening ticket (ScopeRef on Thread + SearchFilter) is PCI
-// s47t1-conversation-scope-ref-missing; the leg is restored there.
+// s47t1-conversation-scope-ref-missing; the leg is restored there. The
+// conversation leg's interface (RecallWhatConversationLeg,
+// recallwhat_conv.go) speaks retrieval-owned types, never
+// internal/conversation's own -- this package does not import
+// internal/conversation (see recallwhat_conv.go's header for why).
 //
 // SPORT: internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1).
 
@@ -46,7 +50,6 @@ import (
 	"strings"
 
 	"github.com/acamarata/cascade/internal/context/scope"
-	"github.com/acamarata/cascade/internal/conversation"
 	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/retrieval/citations"
 	"github.com/acamarata/cascade/internal/retrieval/corpus"
@@ -91,13 +94,11 @@ type RecallWhatFilesLeg interface {
 	Query(ctx context.Context, req recall.Request) (recall.Response, error)
 }
 
-// RecallWhatConversationLeg is the turns/threads domain: the three
-// conversation.Store methods read here. conversation.Store satisfies it.
-type RecallWhatConversationLeg interface {
-	SearchTurns(ctx context.Context, query string, filter conversation.SearchFilter) ([]conversation.TurnMatch, error)
-	ListSegments(ctx context.Context, turnID string) ([]conversation.Segment, error)
-	ThreadPrivacy(ctx context.Context, threadID string) (provider.SensitivityTier, error)
-}
+// RecallWhatConversationLeg (retrieval-owned types, recallwhat_conv.go)
+// is the turns/threads domain. A real conversation.Store is adapted to it
+// at the composition root (cmd/cascade/daemon_unix_recall_what.go) --
+// this package must never import internal/conversation directly
+// (recallwhat_conv.go's header explains why).
 
 // RecallWhatMemoryLeg is the memory domain: the projection's own indexed
 // read model (D2 -- the closed-ticket generator refuses to retire the

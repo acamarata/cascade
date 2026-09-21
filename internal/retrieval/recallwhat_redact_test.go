@@ -16,7 +16,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/acamarata/cascade/internal/conversation"
 	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -51,7 +50,7 @@ func mustMarshal(t *testing.T, v any) string {
 // TestFilterFusedResults_SecretSnippetRedactedRowSurvives).
 func TestAKIALeak_ConversationSnippet(t *testing.T) {
 	files, conv, mem := baselineLegs()
-	conv.segs["t1"] = []conversation.Segment{{Content: "my key is " + akiaSecret + " keep it secret"}}
+	conv.segs["t1"] = []RecallWhatSegment{{Content: "my key is " + akiaSecret + " keep it secret"}}
 	svc := newBaselineService(t, files, conv, mem)
 	resp, err := svc.Query(context.Background(), RecallWhatRequest{Query: "hello"})
 	if err != nil {
@@ -162,11 +161,11 @@ func TestAKIALeak_DomainError(t *testing.T) {
 // ones). Failing input: a project-B public thread's turn, queried by a
 // project-A-scoped caller.
 func TestConversationLeg_ExcludedRegardlessOfRoleOrTier(t *testing.T) {
-	for _, role := range []conversation.Role{conversation.RoleUser, conversation.RoleTool} {
-		t.Run(string(role), func(t *testing.T) {
+	for _, role := range []string{"user", "tool"} {
+		t.Run(role, func(t *testing.T) {
 			files, conv, mem := baselineLegs()
-			conv.matches = []conversation.TurnMatch{
-				{Turn: conversation.Turn{ID: "t1", ThreadID: "th-project-b", Role: role}, Rank: 1},
+			conv.matches = []RecallWhatTurnMatch{
+				{Turn: RecallWhatTurn{ID: "t1", ThreadID: "th-project-b", Role: role}, Rank: 1},
 			}
 			conv.tiers["th-project-b"] = provider.SensitivityPublic
 			svc := newBaselineService(t, files, conv, mem) // resolves to "proj1" ("project A")

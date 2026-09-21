@@ -49,39 +49,11 @@ func TestConductorExecute_RealSocket_NonMethodNotFound(t *testing.T) {
 	registry := rpc.NewRegistry()
 	manifest := NewManifest(nil, clock)
 	auditWriter := audit.New(storetest.NewMemStore(), clock, nil)
-	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, nil, auditWriter, clock); err != nil {
+	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, nil, auditWriter, clock, ConductorSecurity{}, ConductorAccounting{}); err != nil {
 		t.Fatalf("RegisterConductorExecuteHandler: %v", err)
 	}
 
-	srv := NewRPCServer(registry, nil)
-	signals := make(chan os.Signal, 1)
-	ready := make(chan struct{})
-	done := make(chan error, 1)
-	go func() {
-		done <- Run(context.Background(), RunOptions{
-			Settings: Settings{SocketPath: socketPath, ShutdownGrace: 2 * time.Second},
-			PIDPath:  pidPath,
-			Clock:    clock,
-			Signals:  signals,
-			Ready:    ready,
-			Server:   srv,
-		})
-	}()
-	select {
-	case <-ready:
-	case err := <-done:
-		t.Fatalf("Run exited before becoming ready: %v", err)
-	case <-time.After(10 * time.Second):
-		t.Fatal("Run never became ready")
-	}
-	t.Cleanup(func() {
-		signals <- os.Interrupt
-		select {
-		case <-done:
-		case <-time.After(10 * time.Second):
-			t.Fatal("Run did not return after a termination signal")
-		}
-	})
+	runRealSocketDaemon(t, NewRPCServer(registry, nil), socketPath, pidPath, clock)
 
 	client := &http.Client{Transport: &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -115,4 +87,39 @@ func TestConductorExecute_RealSocket_NonMethodNotFound(t *testing.T) {
 	if !strings.Contains(envelope.Error.Message, "conductor.execute: executor unavailable") {
 		t.Errorf("conductor.execute error = %q, want it to name the real ErrConstructionFailed reason", envelope.Error.Message)
 	}
+}
+
+// runRealSocketDaemon starts Run on a real unix socket, waits until it is
+// ready, and registers the termination-signal cleanup, so the test above
+// stays within the 50-line function cap while driving the real server.
+func runRealSocketDaemon(t *testing.T, srv *http.Server, socketPath, pidPath string, clock runtime.Clock) {
+	t.Helper()
+	signals := make(chan os.Signal, 1)
+	ready := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- Run(context.Background(), RunOptions{
+			Settings: Settings{SocketPath: socketPath, ShutdownGrace: 2 * time.Second},
+			PIDPath:  pidPath,
+			Clock:    clock,
+			Signals:  signals,
+			Ready:    ready,
+			Server:   srv,
+		})
+	}()
+	select {
+	case <-ready:
+	case err := <-done:
+		t.Fatalf("Run exited before becoming ready: %v", err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("Run never became ready")
+	}
+	t.Cleanup(func() {
+		signals <- os.Interrupt
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Fatal("Run did not return after a termination signal")
+		}
+	})
 }

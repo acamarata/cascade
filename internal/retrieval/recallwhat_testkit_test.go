@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/context/scope"
-	"github.com/acamarata/cascade/internal/conversation"
 	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/retrieval/citations"
@@ -36,17 +35,17 @@ func (f *fakeFilesLeg) Query(context.Context, recall.Request) (recall.Response, 
 }
 
 type fakeConvLeg struct {
-	matches   []conversation.TurnMatch
-	segs      map[string][]conversation.Segment
+	matches   []RecallWhatTurnMatch
+	segs      map[string][]RecallWhatSegment
 	tiers     map[string]provider.SensitivityTier
 	searchErr error
 	tierErr   error
 }
 
-func (f *fakeConvLeg) SearchTurns(context.Context, string, conversation.SearchFilter) ([]conversation.TurnMatch, error) {
+func (f *fakeConvLeg) SearchTurns(context.Context, string, RecallWhatSearchFilter) ([]RecallWhatTurnMatch, error) {
 	return f.matches, f.searchErr
 }
-func (f *fakeConvLeg) ListSegments(_ context.Context, turnID string) ([]conversation.Segment, error) {
+func (f *fakeConvLeg) ListSegments(_ context.Context, turnID string) ([]RecallWhatSegment, error) {
 	return f.segs[turnID], nil
 }
 func (f *fakeConvLeg) ThreadPrivacy(_ context.Context, threadID string) (provider.SensitivityTier, error) {
@@ -131,8 +130,8 @@ func baselineLegs() (*fakeFilesLeg, *fakeConvLeg, *fakeMemoryLeg) {
 		},
 	}}
 	conv := &fakeConvLeg{
-		matches: []conversation.TurnMatch{{Turn: conversation.Turn{ID: "t1", ThreadID: "th1", Role: conversation.RoleUser}, Rank: 1}},
-		segs:    map[string][]conversation.Segment{"t1": {{Content: "hello world"}}},
+		matches: []RecallWhatTurnMatch{{Turn: RecallWhatTurn{ID: "t1", ThreadID: "th1", Role: "user"}, Rank: 1}},
+		segs:    map[string][]RecallWhatSegment{"t1": {{Content: "hello world"}}},
 		tiers:   map[string]provider.SensitivityTier{"th1": provider.SensitivityPublic},
 	}
 	mem := &fakeMemoryLeg{rows: []memory.IndexedRecord{
