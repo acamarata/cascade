@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T07:24:30Z",
+  "generated_at": "2026-09-21T09:17:18Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5047,6 +5047,52 @@
       ]
     },
     {
+      "name": "cmd/cascade:github-ci-doer",
+      "sites": [
+        {
+          "file": "cmd/cascade/github_ci_doer.go",
+          "line": 37,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "cmd/cascade:github-ci-doer (ADD) -- P1-E25-W5-S51-T3."
+        },
+        {
+          "file": "cmd/cascade/github_ci_doer_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "cmd/cascade:github-ci-doer (TESTED) -- P1-E25-W5-S51-T3."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade:github-ci-verbs",
+      "sites": [
+        {
+          "file": "cmd/cascade/github_ci_cmd.go",
+          "line": 33,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "cmd/cascade:github-ci-verbs (ADD) -- P1-E25-W5-S51-T3."
+        },
+        {
+          "file": "cmd/cascade/github_ci_cmd_test.go",
+          "line": 10,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "cmd/cascade:github-ci-verbs (TESTED) -- P1-E25-W5-S51-T3."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade:harness-watch",
       "sites": [
         {
@@ -5103,6 +5149,29 @@
         }
       ],
       "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade:plugin-process-mount",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_process_mount.go",
+          "line": 53,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "cmd/cascade:plugin-process-mount (ADD) -- P1-E25-W5-S51-T3."
+        },
+        {
+          "file": "cmd/cascade/plugin_process_mount_test.go",
+          "line": 7,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "cmd/cascade:plugin-process-mount (TESTED) -- P1-E25-W5-S51-T3."
+        }
+      ],
+      "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -9442,6 +9511,20 @@
       ]
     },
     {
+      "name": "internal.ci.ClientHeadSHA",
+      "sites": [
+        {
+          "file": "internal/ci/waitmerge_deps.go",
+          "line": 34,
+          "status": "ADD",
+          "raw": "internal.ci.ClientHeadSHA/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.ci.Deps",
       "sites": [
         {
@@ -9510,6 +9593,77 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.MergeOnGreen",
+      "sites": [
+        {
+          "file": "internal/ci/waitmerge_dispatch.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "internal.ci.MergeOnGreen/ADDED (P1-E25-W5-S51-T3)."
+        },
+        {
+          "file": "internal/ci/waitmerge_merge.go",
+          "line": 41,
+          "status": "ADD",
+          "raw": "internal.ci.MergeOnGreen/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.MergeOnGreen/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/waitmerge_merge_gates_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "internal.ci.MergeOnGreen/TESTED (P1-E25-W5-S51-T3)."
+        },
+        {
+          "file": "internal/ci/waitmerge_merge_test.go",
+          "line": 10,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "internal.ci.MergeOnGreen/TESTED (P1-E25-W5-S51-T3)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.MergeOptions",
+      "sites": [
+        {
+          "file": "internal/ci/waitmerge_merge.go",
+          "line": 41,
+          "status": "ADD",
+          "raw": "internal.ci.MergeOptions/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.MergeOptions/TESTED, internal.ci.MergeDeps/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/waitmerge_merge_validate_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal.ci.MergeOptions/TESTED, internal.ci.MergeDeps/TESTED"
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -9755,6 +9909,121 @@
       ]
     },
     {
+      "name": "internal.ci.WaitDepsFromEnv",
+      "sites": [
+        {
+          "file": "internal/ci/waitmerge_deps.go",
+          "line": 34,
+          "status": "ADD",
+          "raw": "internal.ci.WaitDepsFromEnv/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.WaitDepsFromEnv/TESTED, internal.ci.ClientHeadSHA/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/waitmerge_deps_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal.ci.WaitDepsFromEnv/TESTED, internal.ci.ClientHeadSHA/TESTED"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.WaitOnGreen",
+      "sites": [
+        {
+          "file": "internal/ci/waitmerge_wait.go",
+          "line": 38,
+          "status": "ADD",
+          "raw": "internal.ci.WaitOnGreen/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.WaitOnGreen/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/waitmerge_wait_extra_test.go",
+          "line": 7,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "internal.ci.WaitOnGreen/TESTED (P1-E25-W5-S51-T3)."
+        },
+        {
+          "file": "internal/ci/waitmerge_wait_paths_test.go",
+          "line": 5,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "internal.ci.WaitOnGreen/TESTED (P1-E25-W5-S51-T3)."
+        },
+        {
+          "file": "internal/ci/waitmerge_wait_test.go",
+          "line": 5,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "internal.ci.WaitOnGreen/TESTED (P1-E25-W5-S51-T3)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.WaitOptions",
+      "sites": [
+        {
+          "file": "internal/ci/waitmerge_wait.go",
+          "line": 38,
+          "status": "ADD",
+          "raw": "internal.ci.WaitOptions/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.evaluateChecks",
+      "sites": [
+        {
+          "file": "internal/ci/waitmerge_checks.go",
+          "line": 29,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "internal.ci.evaluateChecks/ADDED (P1-E25-W5-S51-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.evaluateChecks/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/waitmerge_checks_test.go",
+          "line": 5,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "internal.ci.evaluateChecks/TESTED (P1-E25-W5-S51-T3)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal.ci.killProcessGroup",
       "sites": [
         {
@@ -9891,6 +10160,43 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.waitDaemonAbsentRefusal",
+      "sites": [
+        {
+          "file": "internal/ci/waitmerge_unix.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "internal.ci.waitDaemonAbsentRefusal/ADDED (P1-E25-W5-S51-T3)."
+        },
+        {
+          "file": "internal/ci/waitmerge_windows.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "internal.ci.waitDaemonAbsentRefusal/ADDED (P1-E25-W5-S51-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.waitDaemonAbsentRefusal/TEST",
+      "sites": [
+        {
+          "file": "internal/ci/waitmerge_windows_test.go",
+          "line": 13,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "internal.ci.waitDaemonAbsentRefusal/TEST (P1-E25-W5-S51-T3)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -17278,6 +17584,51 @@
       ]
     },
     {
+      "name": "internal/plugins ci-waitmerge-wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/ci_waitmerge_wiring.go",
+          "line": 30,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "internal/plugins ci-waitmerge-wiring/ADDED (P1-E25-W5-S51-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins ci-waitmerge-wiring/TESTED",
+      "sites": [
+        {
+          "file": "internal/plugins/ci_waitmerge_wiring_test.go",
+          "line": 9,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "internal/plugins ci-waitmerge-wiring/TESTED (P1-E25-W5-S51-T3)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins coverage-margin tests",
+      "sites": [
+        {
+          "file": "internal/plugins/coverage_margin_test.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "internal/plugins coverage-margin tests (ADD) -- P1-E25-W5-S51-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins cross-harness adapter conformance",
       "sites": [
         {
@@ -23772,10 +24123,10 @@
       "sites": [
         {
           "file": "plugins/github/main.go",
-          "line": 35,
+          "line": 46,
           "status": "ADD",
           "ticket": "P1-E25-W5-S51-T1",
-          "raw": "plugins/github (ADD) — P1-E25-W5-S51-T1."
+          "raw": "plugins/github (ADD) — P1-E25-W5-S51-T1; github-ci-wait/"
         }
       ],
       "statuses": [
@@ -27173,7 +27524,7 @@
       ]
     }
   ],
-  "total_sites": 2551,
-  "unspecified_count": 114,
-  "multi_status_count": 54
+  "total_sites": 2579,
+  "unspecified_count": 121,
+  "multi_status_count": 57
 }
