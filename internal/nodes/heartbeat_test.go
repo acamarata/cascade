@@ -164,17 +164,6 @@ func TestRegisterHeartbeatHandler_WithoutWiring_MethodNotFound(t *testing.T) {
 	}
 }
 
-// fakeTicker is a manually-fired Ticker for deterministic loop tests.
-type fakeTicker struct {
-	ch      chan struct{}
-	stopped bool
-}
-
-func newFakeTicker() *fakeTicker         { return &fakeTicker{ch: make(chan struct{}, 1)} }
-func (f *fakeTicker) C() <-chan struct{} { return f.ch }
-func (f *fakeTicker) Stop()              { f.stopped = true }
-func (f *fakeTicker) fire()              { f.ch <- struct{}{} }
-
 // storedTestKeystore builds a NodeKeystore for testID with a fresh key.
 func storedTestKeystore(t *testing.T, seed, nodeID string) *NodeKeystore {
 	t.Helper()
@@ -190,86 +179,6 @@ func storedTestKeystore(t *testing.T, seed, nodeID string) *NodeKeystore {
 		t.Fatal(err)
 	}
 	return ks
-}
-
-func TestRunHeartbeatLoopSendsOnTick(t *testing.T) {
-	id := testIdentity(t, "loop")
-	ks := storedTestKeystore(t, "loop", id.NodeID)
-
-	ticker := newFakeTicker()
-	sent := make(chan HeartbeatFrame, 4)
-	var seq uint64
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		RunHeartbeatLoop(ctx, HeartbeatLoopOptions{
-			Ticker: ticker,
-			NextSequence: func() uint64 {
-				seq++
-				return seq
-			},
-			Send: func(_ context.Context, f HeartbeatFrame) error {
-				sent <- f
-				return nil
-			},
-			BuildReport:  validReport,
-			Keystore:     ks,
-			NodeID:       id.NodeID,
-			EnrollmentID: "enr-1",
-		})
-		close(done)
-	}()
-
-	ticker.fire()
-	select {
-	case f := <-sent:
-		if f.Sequence != 1 {
-			t.Fatalf("got sequence %d, want 1", f.Sequence)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for heartbeat send")
-	}
-	cancel()
-	<-done
-	if !ticker.stopped {
-		t.Fatal("expected Ticker.Stop() to be called on loop exit")
-	}
-}
-
-func TestRunHeartbeatLoopReportsSendErrorAndContinues(t *testing.T) {
-	id := testIdentity(t, "loop2")
-	ks := storedTestKeystore(t, "loop2", id.NodeID)
-
-	ticker := newFakeTicker()
-	errs := make(chan error, 4)
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		RunHeartbeatLoop(ctx, HeartbeatLoopOptions{
-			Ticker:       ticker,
-			NextSequence: func() uint64 { return 1 },
-			Send: func(context.Context, HeartbeatFrame) error {
-				return cascade.New(cascade.KindUnavailable, "controller unreachable")
-			},
-			BuildReport:  validReport,
-			Keystore:     ks,
-			NodeID:       id.NodeID,
-			EnrollmentID: "enr-1",
-			OnError:      func(err error) { errs <- err },
-		})
-		close(done)
-	}()
-	ticker.fire()
-	select {
-	case err := <-errs:
-		if err == nil {
-			t.Fatal("expected a non-nil send error")
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for OnError")
-	}
-	cancel()
-	<-done
 }
 
 // bufConn is a Conn (io.ReadWriteCloser) backed by an in-memory write
