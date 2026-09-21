@@ -24,8 +24,13 @@ func fakeStat(want string) StatFunc {
 
 func alwaysNotFoundStat(string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 
+// testRepoRoot is the fake checkout every BuildRunnerConfig test names. It is
+// spelled through filepath so the production filepath.Join(repoRoot, "go.mod")
+// matches the fake stat on Windows too (a literal "/repo/go.mod" never did).
+var testRepoRoot = filepath.FromSlash("/repo")
+
 func TestBuildRunnerConfig_GoDefaults(t *testing.T) {
-	cfg, err := BuildRunnerConfig(LocalConfig{}, "/repo", fakeStat("/repo/go.mod"), nil)
+	cfg, err := BuildRunnerConfig(LocalConfig{}, testRepoRoot, fakeStat(filepath.Join(testRepoRoot, "go.mod")), nil)
 	if err != nil {
 		t.Fatalf("BuildRunnerConfig: %v", err)
 	}
@@ -45,7 +50,7 @@ func TestBuildRunnerConfig_GoDefaults(t *testing.T) {
 
 func TestBuildRunnerConfig_ExplicitOverridesDefaults(t *testing.T) {
 	local := LocalConfig{Lint: []string{"custom-lint"}, Test: []string{"custom-test"}, Build: []string{"custom-build"}, TimeoutSeconds: 45}
-	cfg, err := BuildRunnerConfig(local, "/repo", fakeStat("/repo/go.mod"), nil)
+	cfg, err := BuildRunnerConfig(local, testRepoRoot, fakeStat(filepath.Join(testRepoRoot, "go.mod")), nil)
 	if err != nil {
 		t.Fatalf("BuildRunnerConfig: %v", err)
 	}
@@ -60,7 +65,7 @@ func TestBuildRunnerConfig_ExplicitOverridesDefaults(t *testing.T) {
 
 func TestBuildRunnerConfig_PartialOverrideFillsRestFromDetection(t *testing.T) {
 	local := LocalConfig{Lint: []string{"custom-lint"}}
-	cfg, err := BuildRunnerConfig(local, "/repo", fakeStat("/repo/go.mod"), nil)
+	cfg, err := BuildRunnerConfig(local, testRepoRoot, fakeStat(filepath.Join(testRepoRoot, "go.mod")), nil)
 	if err != nil {
 		t.Fatalf("BuildRunnerConfig: %v", err)
 	}
@@ -76,7 +81,7 @@ func TestBuildRunnerConfig_PartialOverrideFillsRestFromDetection(t *testing.T) {
 // no go.mod and no [ci.local] commands at all is a hard error, never an
 // empty step list silently accepted as "nothing to run".
 func TestBuildRunnerConfig_UnknownRepoTypeFailsClosed(t *testing.T) {
-	_, err := BuildRunnerConfig(LocalConfig{}, "/repo", alwaysNotFoundStat, nil)
+	_, err := BuildRunnerConfig(LocalConfig{}, testRepoRoot, alwaysNotFoundStat, nil)
 	if err == nil {
 		t.Fatal("expected an error for an unrecognized repo type with no [ci.local] commands")
 	}
@@ -88,7 +93,7 @@ func TestBuildRunnerConfig_UnknownRepoTypeFailsClosed(t *testing.T) {
 // fallback, never a gate on top of an already-complete configuration.
 func TestBuildRunnerConfig_UnknownRepoTypeButFullyConfigured(t *testing.T) {
 	local := LocalConfig{Lint: []string{"l"}, Test: []string{"t"}, Build: []string{"b"}}
-	cfg, err := BuildRunnerConfig(local, "/repo", alwaysNotFoundStat, nil)
+	cfg, err := BuildRunnerConfig(local, testRepoRoot, alwaysNotFoundStat, nil)
 	if err != nil {
 		t.Fatalf("BuildRunnerConfig: %v", err)
 	}
@@ -126,7 +131,7 @@ func TestBuildRunnerConfig_EnvIsAllowlisted(t *testing.T) {
 		EnvKeys: []string{"MY_BUILD_FLAG"},
 	}
 	environ := []string{"PATH=/bin", "GITHUB_TOKEN=ghp-secret", "MY_BUILD_FLAG=on"}
-	cfg, err := BuildRunnerConfig(local, "/repo", alwaysNotFoundStat, environ)
+	cfg, err := BuildRunnerConfig(local, testRepoRoot, alwaysNotFoundStat, environ)
 	if err != nil {
 		t.Fatalf("BuildRunnerConfig: %v", err)
 	}

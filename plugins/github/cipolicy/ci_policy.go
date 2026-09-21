@@ -28,6 +28,7 @@
 // Constraints: no network call, no subprocess, no clock -- a pure local
 // decision (06-FORGE-SPEC §5.15, no risk class).
 // SPORT: plugins.github.cipolicy.ResolveCIPolicy/ADDED (P1-E25-W5-S51-T5).
+
 package cipolicy
 
 import (

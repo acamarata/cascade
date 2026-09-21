@@ -42,7 +42,7 @@ import (
 // SPORT: internal/plugins:ci-policy-wiring (ADD) -- P1-E25-W5-S51-T5.
 
 func init() {
-	ci.SetRouteResolver(newCIRouteResolver(loadCIPolicyConfig, githubTokenConfigured))
+	ci.SetRouteResolver(newCIRouteResolver(loadCIPolicyConfig, tokenProbeWith(secrets.SelectCustody)))
 }
 
 // ciPolicyConfigLoader reads the operator's private-repo patterns.
@@ -97,8 +97,19 @@ func loadCIPolicyConfig(ctx context.Context) ([]string, error) {
 	return cfg.CIPolicy.PrivateRepos, nil
 }
 
-// githubTokenConfigured reports whether the cascade-github plugin's OAuth
-// token is in the vault.
+// tokenProbeWith binds a custody selector into the tokenProbe shape
+// newCIRouteResolver takes; init passes the production selector.
+func tokenProbeWith(selectCustody custodySelector) tokenProbe {
+	return func(ctx context.Context) bool { return tokenConfiguredWith(ctx, selectCustody) }
+}
+
+// custodySelector is secrets.SelectCustody's shape, injected so the probe
+// below can be proven against a file vault in a temp dir: the production
+// selector reaches the OS keychain on darwin, which no test may touch.
+type custodySelector func(secrets.Config) (secrets.Custody, error)
+
+// tokenConfiguredWith reports whether the cascade-github plugin's OAuth
+// token is in the vault the selector answers with.
 //
 // It reads the vault's NAME INDEX (Custody.List), never a secret value:
 // presence is the whole question, and on darwin List resolves one index
@@ -106,12 +117,12 @@ func loadCIPolicyConfig(ctx context.Context) ([]string, error) {
 // from turning a non-interactive command into a prompt (06 §5.8). Any
 // failure -- no custody backend, an unreadable store -- reports false, for
 // the reason this file's header states.
-func githubTokenConfigured(ctx context.Context) bool {
+func tokenConfiguredWith(ctx context.Context, selectCustody custodySelector) bool {
 	paths, err := runtime.NewDefaultPathProvider()
 	if err != nil {
 		return false
 	}
-	custody, err := secrets.SelectCustody(secrets.Config{
+	custody, err := selectCustody(secrets.Config{
 		Service: secrets.DefaultVaultService, Dir: paths.DataDir(),
 	})
 	if err != nil {
