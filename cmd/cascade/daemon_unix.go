@@ -92,6 +92,7 @@ func platformDaemonRun(ctx context.Context, deps daemonDeps) error {
 		return err
 	}
 	defer cleanupBackground()
+	wireCascadePAInstallHostDeps(store, pol.Queue, pol.Registry) // P1-E24-W5-S50-T4 (D1/D2)
 
 	server, manifest, connections, err := buildRPCServer(bus, deps.Clock, logProvider.Logger(), settings, paths, memoryAdmin, store,
 		withPolicyHandlers(pol),

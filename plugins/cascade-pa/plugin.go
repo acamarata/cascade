@@ -67,6 +67,7 @@ import (
 	"sync"
 
 	"github.com/acamarata/cascade/pkg/plugin"
+	"github.com/acamarata/cascade/plugins/cascade-pa/install"
 	"github.com/acamarata/cascade/plugins/cascade-pa/tools"
 )
 
@@ -104,8 +105,23 @@ func manifest() plugin.Manifest {
 		// missing from this list is absent from every harness no matter
 		// what DispatchTool can service. Built FROM the tools package
 		// rather than repeating its constants, so the list a harness sees
-		// and the list Dispatch routes cannot drift.
-		Provides: plugin.Provides{Tools: toolSpecs()},
+		// and the list Dispatch routes cannot drift. Intents declares the
+		// one natural-language capability this plugin serves
+		// (P1-E24-W5-S50-T4, round-1 adversarial CR fix item 6): without
+		// this entry nothing tells a caller cascade-pa can satisfy
+		// install.IntentName at all, even though commands.go's own
+		// DispatchIntent already routes it (see that file's own doc
+		// comment) -- a manifest declaration with no route would be a
+		// dangling promise, and a route with no declaration is the gap
+		// this closes.
+		Provides: plugin.Provides{
+			Tools: toolSpecs(),
+			Intents: []plugin.IntentSpec{{
+				Name: install.IntentName,
+				Description: "Resolve, propose, confirm and install a plugin inline from a conversation " +
+					"turn (propose -> confirm -> deterministic install -> resume).",
+			}},
+		},
 	}
 }
 

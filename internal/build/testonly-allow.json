@@ -1400,13 +1400,6 @@
     "symbol": "internal/conductor.ContextWithThreadPrivacy"
   },
   {
-    "caller_site": "internal/plugins/cascadepa_install_wiring.go",
-    "expected_caller": "P1-E24-W5-S50-T4 \"Conversational install: propose, confirm, install, resume\" -- 31-CONTINUOUS-BUILD-GUIDE.md's S50T4 alias maps the ticket's historical pa.go wording to plugins/cascade-pa/plugin.go and commands.go plus this planned internal/plugins/cascadepa_install_wiring.go host seam (guide 31 line 48 authorizes that planned file). That flow's propose step is exactly a resolver.NewIntentResolver().Resolve(ctx, installed, verifiedIndex, intent) call mapping an unmet intent to candidate plugins before proposing one to the user, per this ticket's own full_desc (\"consumed first by the conversational install flow\"). Retire this entry once that file lands and calls NewIntentResolver.",
-    "reason": "P1-E24-W5-S50-T3 builds the Resolver interface (pkg/plugin/intents.go, exempt from this gate -- pkg is the public SDK surface) and its internal/plugins/resolver implementation, fully tested end to end (installed-first, registry ranking, ambiguity, fail-closed) via resolver_test.go, resolver_ranking_test.go and FuzzIntentResolve. No composition-root file wires internal/plugins/resolver.NewIntentResolver into a live command path yet, and none can today: S-50.T2 (`cascade plugin search`) is itself unbuilt -- there is no cmd/cascade/plugin_search.go in the tree -- and even once it lands it is query-ranking over RegistryClient.Search, not intent binding, so it would not call this symbol. Search answers \"what matches these words\"; the resolver answers \"which plugin provides this intent\". S-50.T4's host seam is the ticket's own documented first consumer, verified absent in the tree at dispatch time.",
-    "retire_ticket": "P1-E24-W5-S50-T4",
-    "symbol": "internal/plugins/resolver.NewIntentResolver"
-  },
-  {
     "added_by_ticket": "P1-E21-W5-S46-T3",
     "caller_site": "internal/conversation/reply.go",
     "expected_caller": "the chat reply pipeline landed by P1-E45-W10-S89-T6, whose files_scope adds internal/conversation/reply.go: it is the first production composition that builds a Composer at all (internal/context.NewComposer, exempted above for the same reason). Whether it attaches a pre-assembly stage, and which kind (classify or segment), is that ticket's own choice -- this entry claims no obligation on it. Retire this entry when it attaches one, or record the remaining gap there.",

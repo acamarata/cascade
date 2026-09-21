@@ -89,3 +89,39 @@ path is not a separate, lighter-weight commit path.
 A local-manifest candidate (bypassing the registry) is still available via
 `--from <path>`; see [`docs/cli-reference/plugin.md`](../../docs/cli-reference/plugin.md)
 for both forms in full.
+
+## Conversational install
+
+cascade-pa declares the `cascade.install_flow` intent, which walks an
+unresolved intent (e.g. "install the thing that does X") through four
+ordered phases:
+
+1. **Propose** — the intent resolver picks the one matching plugin (an
+   already-installed candidate, or a registry entry) and echoes a proposal
+   — name, version, declared permissions, runtime — as a real conversation
+   turn, before anything is installed.
+2. **Confirm** — the proposal is queued as an L2 (workspace-mutation) ask
+   through the same approval queue the CLI/RPC approval surface drives.
+   Approving or declining is a human decision made through that surface,
+   not a free-text chat reply.
+3. **Install** — on approval, the SAME deterministic install path `cascade
+   plugin add` uses: checksum- and signature-verified artifact fetch,
+   permission-diff confirmation, and (for a process-tier or
+   grant-expanding candidate) the local elevation flow. The chat
+   confirmation from step 2 never substitutes for elevation — a candidate
+   that needs it is refused until a genuine nonce → local-auth → signed
+   attestation round trip succeeds.
+4. **Resume** — once the plugin is installed (or was already installed and
+   enabled), the original intent resumes.
+
+**`CASCADE_NO_INPUT=1`** skips the Confirm step entirely and auto-declines
+with a clear error — it never auto-accepts (matching every other
+non-interactive `cascade` command's contract).
+
+**Idempotency**: re-triggering the same intent against an already-installed,
+already-enabled plugin skips the install step and resumes immediately —
+a safe no-op, not a second install attempt.
+
+Declining, an install failure, or an unapproved elevation all stop before
+the intent resumes — a failed or declined install never leaves the
+original agent action waiting on a plugin that was not actually installed.

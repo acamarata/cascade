@@ -5,17 +5,19 @@ package cascadepa
 //   mount point's dispatch target (18-T0-RULINGS-R16.md R-16.55): it builds
 //   a real, fully-flagged *cobra.Command from this plugin's own cmd
 //   subpackage and executes it against the raw args the host's mounted
-//   cobra.Command passes through. cascade-pa provides no tools or intents
-//   in this ticket, so DispatchTool/DispatchIntent return typed
-//   not-found errors rather than panicking or silently succeeding
-//   (Art.1 — no stubs that fake success).
+//   cobra.Command passes through. DispatchIntent routes the one intent
+//   this plugin provides (cascade.install_flow, P1-E24-W5-S50-T4) to
+//   plugins/cascade-pa/install; every other tool/intent/command name is
+//   still a typed not-found error rather than a panic or a
+//   silently-succeeding stub (Art.1 — no stubs that fake success).
 // Inputs: a command/tool/intent name plus its raw argument bytes or
 //   string slice, exactly as plugin.BuiltinHandlers requires.
 // Outputs: RunCommand's real chat behavior (one-shot or TUI, per
-//   cmd.NewChatCommand); typed cascade.KindNotFound errors for anything
-//   this plugin does not provide.
-// Constraints: pkg/plugin and pkg/cascade only besides this plugin's own
-//   cmd subpackage (Art.10.2).
+//   cmd.NewChatCommand); install.DispatchIntent's result for
+//   cascade.install_flow; typed cascade.KindNotFound errors for anything
+//   else this plugin does not provide.
+// Constraints: pkg/plugin, pkg/cascade, and this plugin's own cmd and
+//   install subpackages only (Art.10.2).
 // SPORT: plugins/cascade-pa:cmd:chat (ADD) — P1-E20-W5-S43-T3.
 
 import (
@@ -26,6 +28,7 @@ import (
 
 	"github.com/acamarata/cascade/pkg/cascade"
 	pacmd "github.com/acamarata/cascade/plugins/cascade-pa/cmd"
+	"github.com/acamarata/cascade/plugins/cascade-pa/install"
 )
 
 // InChatHandler is one command this plugin recognizes inside a live chat
@@ -100,8 +103,13 @@ func (handlers) DispatchTool(ctx context.Context, name string, input []byte) ([]
 	return activeDispatcher().Dispatch(ctx, name, input)
 }
 
-// DispatchIntent: cascade-pa provides no intents in this ticket.
-func (handlers) DispatchIntent(_ context.Context, name string, _ []byte) ([]byte, error) {
+// DispatchIntent routes the cascade.install_flow intent (P1-E24-W5-S50-T4)
+// to the install package's own bridge; every other name is a typed
+// not-found error, matching this method's prior "no intents" contract.
+func (handlers) DispatchIntent(ctx context.Context, name string, input []byte) ([]byte, error) {
+	if name == install.IntentName {
+		return install.DispatchIntent(ctx, name, input)
+	}
 	return nil, cascade.New(cascade.KindNotFound, fmt.Sprintf("cascade-pa: unknown intent %q", name))
 }
 
