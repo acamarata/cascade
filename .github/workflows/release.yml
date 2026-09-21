@@ -68,7 +68,9 @@ jobs:
           install-only: true
 
       - name: Install syft (SBOM generator)
-        run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+        # Pinned: an unversioned install resolves github.com/anchore/syft/releases/latest,
+        # which answered HTTP 504 on two consecutive runs (16c4dab, 5fd800b).
+        run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin v1.52.0
 
       - name: goreleaser check
         run: goreleaser check
@@ -106,7 +108,9 @@ jobs:
           install-only: true
 
       - name: Install syft (SBOM generator)
-        run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+        # Pinned: an unversioned install resolves github.com/anchore/syft/releases/latest,
+        # which answered HTTP 504 on two consecutive runs (16c4dab, 5fd800b).
+        run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin v1.52.0
 
       - name: Install minisign
         run: sudo apt-get update && sudo apt-get install -y minisign
