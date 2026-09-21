@@ -155,3 +155,68 @@ decision.
 leaves its sensitivity tier unset, which resolves to `restricted`. The thread's
 own privacy mode is applied by the router's first filter, from the request
 context, on every selection. The summarizer cannot widen it.
+
+## Pre-/post-assembly pipeline stages
+
+The composer optionally runs two more passes around its own assembly pass,
+distinct from rolling-summary substitution above: a pre-assembly stage, run
+once over the caller's slots before assembly begins, and a post-assembly
+stage, run once over the assembled context before the result is returned.
+Neither is attached by default; a caller opts in per stage.
+
+| Stage | When it runs | What it does | Task class | §5.16 lane affinity |
+|---|---|---|---|---|
+| Pre-assembly, classify | before assembly | labels every slot | `classify` | cheapest/free |
+| Pre-assembly, segment | before assembly | splits over-long slots | `segment` | cheapest/free |
+| Post-assembly, summarize | after assembly | condenses the assembly | `summarize` | cheap |
+
+A caller attaches at most one pre-assembly stage, in one of its two kinds,
+and at most one post-assembly stage. Each declares a fixed task class that
+never varies with input.
+
+**Each stage transforms the composition.** The classify stage dispatches one
+request over the slots and writes a category label onto each of them, which
+the composer carries onto every slot in its result. The segment stage
+dispatches one request and replaces each slot longer than its equal share of
+the input with the parts the model's offsets cut it into, so the assembly
+loop composes the split slots rather than the original ones. The summarize
+stage dispatches one request over the assembled context and, when the answer
+comes back genuinely shorter, the composer replaces the assembled content
+with it and re-measures the token accounting, so the bounded-context
+invariant still describes what it returns. This post-assembly pass is
+unrelated to the rolling summarizer above, which substitutes for one
+oversized slot during assembly instead.
+
+**A response that does not honor its protocol is declined, not guessed at.**
+Each stage states its response format in its own prompt and parses exactly
+that: one label per slot, one offset line per slot, or a condensation
+shorter than the input. A response that arrives in some other shape, or one
+whose condensation is not smaller, leaves the working set exactly as it
+arrived. Nothing is partially applied.
+
+**A stage that cannot run never fails the composition.** A dispatch failure,
+a router refusal, no eligible lane, a declined response, or a condensation
+the composer cannot measure all degrade to plain assembly: the caller gets
+the result it would have got with no stage attached, and one degrade event
+records the stage, its task class, a fixed reason and the failure's kind. A
+caller that asked for context is never handed an error because a free lane
+was busy. There is also no retry on a stronger lane: spending expensive-lane
+capacity is exactly what pinning these stages to cheap lanes prevents.
+
+**Determinism.** The assembly loop itself is deterministic, and attaching a
+stage bounds that determinism by the stage's model, exactly as attaching a
+rolling summarizer already bounds it on the overflow path. A caller that
+needs a byte-identical assembly across runs attaches neither, which is the
+default.
+
+**Cheap-lane routing and inherited sensitivity** work exactly as described
+for rolling summaries above: each stage names its task class and nothing
+else about the lane, and every request it builds declares no policy and
+leaves sensitivity unset so the thread's own privacy mode, applied by the
+router, is never widened.
+
+**What the reply pipeline may attach.** Nothing in the shipping binary
+attaches a stage yet. The first production composition is the chat reply
+pipeline; whether it attaches a pre-assembly stage, which kind, and whether
+it condenses afterwards are that surface's own decisions, and the composer
+behaves identically with none, one or both attached.

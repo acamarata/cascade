@@ -9,14 +9,24 @@ import "context"
 // Inputs: a non-nil ctx, a positive budget, and an ordered []Slot.
 // Outputs: a ComposedResult whose TokensUsed never exceeds Budget, or one
 //   of composer_errors.go's typed errors.
-// Constraints: DETERMINISM (this ticket's own hard rule) -- a slot either
+// Constraints: DETERMINISM of the assembly loop itself -- a slot either
 //   fits whole, is replaced whole by a SummarizerGetter substitute that
 //   fits, or is dropped whole; there is no character-level truncation
-//   step, so the only sources of variation are the injected TokenCounter
-//   and SummarizerGetter, both of which this package's contract requires
-//   to be deterministic for a fixed input. Compose calls no model.execute
-//   path directly (NOT this ticket: the rolling summarizer itself, T2).
-// SPORT: context-engine/composer-core (ADD, per T-1 sport_updates).
+//   step, so the only sources of variation among SURVIVING slots are the
+//   injected TokenCounter and SummarizerGetter, both of which this
+//   package's contract requires to be deterministic for a fixed input.
+//   P1-E21-W5-S46-T3 adds the two optional PipelineStage hooks, which DO
+//   call model.execute (pipeline.go) and DO transform content: an attached
+//   pre-stage decides which slots the loop below even sees, and an
+//   attached post-stage can replace the assembled content. So with a stage
+//   attached, determinism is bounded by that stage's model, exactly as it
+//   is already bounded by the SummarizerGetter's model on the overflow
+//   path -- a caller that needs a byte-identical assembly across runs
+//   attaches neither, which is the default. What the hooks never do is
+//   turn a successful composition into a failure: a stage that cannot run
+//   degrades to plain assembly plus a StageDegradedEvent.
+// SPORT: context-engine/composer-core (ADD, per T-1 sport_updates;
+//   pre-/post-PipelineStage hooks ADD, P1-E21-W5-S46-T3).
 
 // Compose fills slots, in the caller's declared priority order, into a
 // ComposedResult bounded by budget.
@@ -38,6 +48,26 @@ import "context"
 // answer -- exactly what this ticket's invariant forbids. This mirrors
 // fillTier's existing precedent in this package (assembly.go) for the
 // same underlying problem.
+//
+// PIPELINE STAGES (P1-E21-W5-S46-T3): when the Composer has a preStage
+// attached (SetPreStage, composer_config.go), Compose runs it first and
+// assembles the slots it hands back -- labelled, or split into more slots
+// than the caller supplied. When it has a postStage attached
+// (SetPostStage), Compose runs it last over the assembled text and, if it
+// returns a shorter condensation, replaces the assembled content with it
+// and re-measures the token accounting so the invariant above still holds
+// on what this method returns.
+//
+// A stage that cannot run NEVER fails the composition: Compose returns the
+// un-staged assembly and publishes one StageDegradedEvent saying so
+// (pipeline_compose.go). Cheap-lane capacity is a best-effort convenience,
+// and a caller that asked for context must not be handed an error because
+// a free lane was busy.
+//
+// Neither stage runs when slots is entirely empty: the ZeroSlotsEvent
+// early return above already covers that case, and dispatching a stage
+// over nothing to classify, segment or condense would be a wasted
+// model.execute call.
 func (c *Composer) Compose(ctx context.Context, budget int, slots []Slot) (ComposedResult, error) {
 	if ctx == nil {
 		return ComposedResult{}, errComposerNilContext()
@@ -49,6 +79,20 @@ func (c *Composer) Compose(ctx context.Context, budget int, slots []Slot) (Compo
 		return ComposedResult{Budget: budget, ZeroSlots: &ZeroSlotsEvent{}}, nil
 	}
 
+	staged := c.runPreStage(ctx, slots)
+	result, err := c.assembleSlots(ctx, budget, staged)
+	if err != nil {
+		return ComposedResult{}, err
+	}
+	return c.runPostStage(ctx, result), nil
+}
+
+// assembleSlots runs the main per-slot fit/overflow/drop loop -- the body
+// Compose itself ran before P1-E21-W5-S46-T3, split into its own method
+// so Compose stays under Art.10.3's 50-line function cap once the pre-/
+// post-stage hooks are added around it. Behavior is unchanged from
+// before the split.
+func (c *Composer) assembleSlots(ctx context.Context, budget int, slots []Slot) (ComposedResult, error) {
 	result := ComposedResult{Budget: budget}
 	remaining := budget
 
@@ -62,7 +106,8 @@ func (c *Composer) Compose(ctx context.Context, budget int, slots []Slot) (Compo
 		}
 		if n0 <= remaining {
 			result.Slots = append(result.Slots, ComposedSlot{
-				Kind: slot.Kind, Label: slot.Label, Content: slot.Content, Tokens: n0,
+				Kind: slot.Kind, Label: slot.Label, ClassLabel: slot.ClassLabel,
+				Content: slot.Content, Tokens: n0,
 			})
 			result.TokensUsed += n0
 			remaining -= n0
@@ -110,7 +155,8 @@ func (c *Composer) resolveOverflow(ctx context.Context, slot Slot, remaining int
 		return nil, dropEvent(slot, "summarizer substitute still exceeds remaining budget"), nil
 	}
 	return &ComposedSlot{
-		Kind: slot.Kind, Label: slot.Label, Content: sub.Content, Tokens: n1, Summarized: true,
+		Kind: slot.Kind, Label: slot.Label, ClassLabel: slot.ClassLabel,
+		Content: sub.Content, Tokens: n1, Summarized: true,
 	}, nil, nil
 }
 

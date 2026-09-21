@@ -1429,5 +1429,21 @@
     "reason": "P1-E21-W5-S45-T3 ships the real ThreadStore over the conversation store, as the acceptance criteria require, so the interface is not implementation-free. The composition root that wires it into the default binary is the S-46.T4 CLI surface.",
     "retire_ticket": "P1-E21-W5-S46-T4",
     "symbol": "internal/conversation/topics.NewConversationThreadStore"
+  },
+  {
+    "added_by_ticket": "P1-E21-W5-S46-T3",
+    "caller_site": "internal/conversation/reply.go",
+    "expected_caller": "the chat reply pipeline landed by P1-E45-W10-S89-T6, whose files_scope adds internal/conversation/reply.go: it is the first production composition that builds a Composer at all (internal/context.NewComposer, exempted above for the same reason). Whether it attaches a pre-assembly stage, and which kind (classify or segment), is that ticket's own choice -- this entry claims no obligation on it. Retire this entry when it attaches one, or record the remaining gap there.",
+    "reason": "P1-E21-W5-S46-T3 ships the pre-assembly PipelineStage Compose runs over the caller's slots (pipeline_compose.go's runPreStage, covered by pipeline_compose_test.go and pipeline_lane_test.go) as a standalone, fully-tested unit in both kinds. Its files_scope is limited to internal/context/pipeline*.go and composer_*.go and includes no composition-root file, matching NewComposer/NewSummarizer's identical situation.",
+    "retire_ticket": "P1-E45-W10-S89-T6",
+    "symbol": "internal/context.NewPreStage"
+  },
+  {
+    "added_by_ticket": "P1-E21-W5-S46-T3",
+    "caller_site": "internal/conversation/reply.go",
+    "expected_caller": "the same chat reply pipeline named in internal/context.NewPreStage's entry above (P1-E45-W10-S89-T6, whose files_scope adds internal/conversation/reply.go). Whether it attaches a post-assembly condensation pass is that ticket's own choice; retire this entry when it does, or record the remaining gap there.",
+    "reason": "Same shape as internal/context.NewPreStage directly above, for the post-assembly hook (task class \"summarize\", §5.16 LaneAffinity \"cheap\"): pipeline_compose.go's runPostStage runs it whenever a Composer has one attached, and pipeline_compose_test.go plus pipeline_lane_test.go cover the wiring, but nothing constructs one for a running binary until the reply pipeline lands.",
+    "retire_ticket": "P1-E45-W10-S89-T6",
+    "symbol": "internal/context.NewSummarizeStage"
   }
 ]
