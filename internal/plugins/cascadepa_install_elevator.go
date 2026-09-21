@@ -46,6 +46,7 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	goruntime "runtime"
 	"time"
 
 	"github.com/acamarata/cascade/internal/elevation"
@@ -206,7 +207,16 @@ func installElevationArgs(req install.ElevationRequest) json.RawMessage {
 // issueInstallChallenge calls gate once with no attestation to obtain the
 // ELEVATION_REQUIRED nonce, mirroring backup_elevation.go's
 // issueBackupChallenge exactly (that function is unexported in a
-// different package, cmd/cascade, hence duplicated here).
+// different package, cmd/cascade, hence duplicated here) -- including its
+// Windows tier-2 disambiguation, fixed here for the identical reason it was
+// fixed there (P1-E19-W4-S42-T3): on Windows, platformElevationRefusal
+// (internal/rpc/elevation_windows.go) ALWAYS returns ELEVATION_REQUIRED
+// with no nonce, by design -- elevation is unsupported on Windows
+// (tier-2), and internal/rpc/elevation_flow_windows_test.go asserts this
+// exact nonce-less shape is the canonical Windows behavior, preempting the
+// real attestation flow before it ever runs. Reporting that as a
+// cascade.KindIntegrity violation mislabels correct, by-design behavior;
+// only a non-Windows empty nonce is a genuine upstream bug.
 func issueInstallChallenge(ctx context.Context, gate rpc.HandlerFunc, args json.RawMessage) (string, error) {
 	_, err := gate(ctx, args)
 	rpcErr, ok := err.(*rpc.ErrorObject)
@@ -223,7 +233,13 @@ func issueInstallChallenge(ctx context.Context, gate rpc.HandlerFunc, args json.
 	var challenge struct {
 		Nonce string `json:"nonce"`
 	}
-	if merr := json.Unmarshal(data, &challenge); merr != nil || challenge.Nonce == "" {
+	if merr := json.Unmarshal(data, &challenge); merr != nil {
+		return "", cascade.New(cascade.KindIntegrity, "cascade-pa install: elevation challenge has no nonce")
+	}
+	if challenge.Nonce == "" {
+		if goruntime.GOOS == "windows" {
+			return "", elevation.ErrWindowsTier2()
+		}
 		return "", cascade.New(cascade.KindIntegrity, "cascade-pa install: elevation challenge has no nonce")
 	}
 	return challenge.Nonce, nil
