@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T21:02:10Z",
+  "generated_at": "2026-09-21T21:34:51Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -24526,6 +24526,56 @@
       ]
     },
     {
+      "name": "plugins/cascade-pa/install:acceptance",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/install/acceptance_x_elevation_test.go",
+          "line": 33,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T7",
+          "raw": "plugins/cascade-pa/install:acceptance (ADD) -- P1-E24-W5-S50-T7."
+        },
+        {
+          "file": "plugins/cascade-pa/install/acceptance_x_errors_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T7",
+          "raw": "plugins/cascade-pa/install:acceptance (ADD) -- P1-E24-W5-S50-T7."
+        },
+        {
+          "file": "plugins/cascade-pa/install/acceptance_x_fakes_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T7",
+          "raw": "plugins/cascade-pa/install:acceptance (ADD) -- P1-E24-W5-S50-T7."
+        },
+        {
+          "file": "plugins/cascade-pa/install/acceptance_x_idempotent_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T7",
+          "raw": "plugins/cascade-pa/install:acceptance (ADD) -- P1-E24-W5-S50-T7."
+        },
+        {
+          "file": "plugins/cascade-pa/install/acceptance_x_installer_test.go",
+          "line": 38,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T7",
+          "raw": "plugins/cascade-pa/install:acceptance (ADD) -- P1-E24-W5-S50-T7."
+        },
+        {
+          "file": "plugins/cascade-pa/install/acceptance_x_test.go",
+          "line": 58,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T7",
+          "raw": "plugins/cascade-pa/install:acceptance (ADD) -- P1-E24-W5-S50-T7."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/cascade-pa/telegram",
       "sites": [
         {
@@ -29307,7 +29357,7 @@
       ]
     }
   ],
-  "total_sites": 2760,
+  "total_sites": 2766,
   "unspecified_count": 130,
   "multi_status_count": 72
 }
