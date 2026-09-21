@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T13:57:48Z",
+  "generated_at": "2026-09-21T14:55:01Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2272,7 +2272,7 @@
       "sites": [
         {
           "file": "cmd/cascade/plugin.go",
-          "line": 21,
+          "line": 22,
           "status": "ADD",
           "ticket": "P1-E15-W4-S32-T4",
           "raw": "cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4)."
@@ -2332,6 +2332,56 @@
           "status": "ADD",
           "ticket": "P1-E15-W4-S32-T4",
           "raw": "cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cli/plugin-search",
+      "sites": [
+        {
+          "file": "cmd/cascade/init_cmd_catalog_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T2",
+          "raw": "cli/plugin-search/ADD (P1-E24-W5-S50-T2, D12,"
+        },
+        {
+          "file": "cmd/cascade/plugin_registry_client.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T2",
+          "raw": "cli/plugin-search/ADD (P1-E24-W5-S50-T2)."
+        },
+        {
+          "file": "cmd/cascade/plugin_registry_client_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T2",
+          "raw": "cli/plugin-search/ADD (P1-E24-W5-S50-T2)."
+        },
+        {
+          "file": "cmd/cascade/plugin_search.go",
+          "line": 71,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T2",
+          "raw": "cli/plugin-search/ADD (P1-E24-W5-S50-T2)."
+        },
+        {
+          "file": "cmd/cascade/plugin_search_catalog_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T2",
+          "raw": "cli/plugin-search/ADD (P1-E24-W5-S50-T2)."
+        },
+        {
+          "file": "cmd/cascade/plugin_search_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T2",
+          "raw": "cli/plugin-search/ADD (P1-E24-W5-S50-T2)."
         }
       ],
       "statuses": [
@@ -6504,6 +6554,28 @@
           "line": 49,
           "status": "ADD",
           "raw": "placeholder: doctor/redact (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "doctor/registry-pubkey",
+      "sites": [
+        {
+          "file": "internal/doctor/registry_pubkey.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T2",
+          "raw": "doctor/registry-pubkey (ADD, P1-E24-W5-S50-T2)."
+        },
+        {
+          "file": "internal/doctor/registry_pubkey_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T2",
+          "raw": "doctor/registry-pubkey (ADD, P1-E24-W5-S50-T2)."
         }
       ],
       "statuses": [
@@ -16514,6 +16586,21 @@
           "line": 13,
           "status": "ADD",
           "raw": "internal/mcp/coretools elevated exclusion (ADD tests) —"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/mcp/coretools plugin-search",
+      "sites": [
+        {
+          "file": "internal/mcp/coretools/specs_plugins.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T2",
+          "raw": "internal/mcp/coretools plugin-search (ADD) — P1-E24-W5-S50-T2."
         }
       ],
       "statuses": [
@@ -27628,6 +27715,28 @@
       ]
     },
     {
+      "name": "runtime/config-registry",
+      "sites": [
+        {
+          "file": "internal/runtime/config_registry.go",
+          "line": 50,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T2",
+          "raw": "runtime/config-registry (ADD, P1-E24-W5-S50-T2)."
+        },
+        {
+          "file": "internal/runtime/config_registry_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E24-W5-S50-T2",
+          "raw": "runtime/config-registry (ADD, P1-E24-W5-S50-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "runtime/config-telemetry",
       "sites": [
         {
@@ -28316,7 +28425,7 @@
       ]
     }
   ],
-  "total_sites": 2652,
+  "total_sites": 2663,
   "unspecified_count": 127,
   "multi_status_count": 65
 }
