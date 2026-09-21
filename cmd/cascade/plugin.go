@@ -1,8 +1,9 @@
-// Purpose: `cascade plugin` (07-CLI-COMMAND-TREE §cascade plugin, minus
-// `search`, which belongs to X/S-50) — the cobra mount plus the two
-// read-only verbs, list and info. add/enable/disable/remove/perms/update
-// each get their own sibling file under this package's established
-// 300-line-cap split convention (approval.go/approval_standing.go).
+// Purpose: `cascade plugin` (07-CLI-COMMAND-TREE §cascade plugin) — the
+// cobra mount plus the two read-only verbs, list and info. `search`
+// (X/S-50.T2) mounts here too but lives in its own sibling file,
+// plugin_search.go; add/enable/disable/remove/perms/update each get their
+// own sibling file under this package's established 300-line-cap split
+// convention (approval.go/approval_standing.go).
 //
 // Inputs: cobra flags plus an injected pluginDeps, so no test touches a
 // real socket, a real filesystem outside t.TempDir, or the real
@@ -53,6 +54,13 @@ type pluginDeps struct {
 	DialContext func(ctx context.Context, socketPath string) (net.Conn, error)
 	Getenv      runtime.Getenv
 	Stdin       func() []byte // reads one confirmation line; nil in production, real in tests
+	// SearchCall answers "plugin.search" for `plugin search` (X/S-50.T2).
+	// nil in production, where pluginSearchCaller instead runs the daemon
+	// round trip (when reachable) or the local fail-closed catalog decision
+	// (when not, D3); tests inject a fake here rather than a socket, so
+	// this package's no-network-unit-lane gate (Art.7.2) never sees a
+	// "net"/"net/http" import in a _test.go file.
+	SearchCall func(ctx context.Context, q string) ([]pluginSearchEntry, error)
 }
 
 // productionPluginDeps is the real environment.
@@ -85,6 +93,7 @@ func newPluginCmd(deps pluginDeps) *cobra.Command {
 	pluginCmd.AddCommand(newPluginAddCmd(deps))
 	pluginCmd.AddCommand(newPluginPermsCmd(deps))
 	pluginCmd.AddCommand(newPluginUpdateCmd(deps))
+	pluginCmd.AddCommand(newPluginSearchCmd(deps))
 	return pluginCmd
 }
 

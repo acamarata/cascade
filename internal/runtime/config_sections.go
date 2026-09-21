@@ -42,6 +42,9 @@ type configSections struct {
 	// ciWatch is the ci.watch key (P1-E25-W5-S51-T4), same deviation as
 	// fleetAccounts above -- see config_ci_watch.go.
 	ciWatch ciWatchSection
+	// registry is the [registry] block (P1-E24-W5-S50-T2, R-14.75), same
+	// deviation as fleetAccounts above -- see config_registry.go.
+	registry registrySection
 }
 
 // parseConfigSections runs each section parser in turn, returning on the
@@ -81,6 +84,9 @@ func parseConfigSections(tree map[string]interface{}, warn func(string, ...inter
 		return configSections{}, err
 	}
 	if s.ciWatch, err = parseCIWatchSection(tree); err != nil {
+		return configSections{}, err
+	}
+	if s.registry, err = parseRegistrySection(tree); err != nil {
 		return configSections{}, err
 	}
 	return s, nil

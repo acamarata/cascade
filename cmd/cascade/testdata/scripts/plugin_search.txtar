@@ -1,0 +1,49 @@
+# plugin_search.txtar
+#
+# testscript: executable
+#
+# `cascade plugin search` with NO daemon running and NO network (D3,
+# P1-E24-W5-S50-T2). script_test.go's TestScript driver runs these `exec`
+# lines in process against the REAL root command tree, under a fresh
+# CASCADE_HOME/HOME per script -- probeDaemonlessAndAttach (root.go)
+# really dials that HOME's socket, finds nothing listening, and attaches
+# Embedded=true, so pluginSearchCaller (plugin_search.go) takes the LOCAL
+# fail-closed catalog path (buildPluginRegistryClient sees no config.toml
+# at all -> "not configured" -> pluginCatalogSearch answers from the
+# builtin set alone). This is the SAME decision function `plugin search`'s
+# daemon RPC handler and MCP tool run (D2/D4) — see plugin_search_catalog_
+# test.go's TestPluginCatalogSearch* for the registry-configured branches,
+# which need a real Ed25519 keypair and stay Go unit tests (Art.7.2 bans
+# "net"/"net/http" from this in-process, no-network lane; the ONE scenario
+# that genuinely needs network, the signed httptest.Server fixture, is
+# excused the same way for the identical reason).
+#
+# Every builtin plugin this binary ships is a real, load-bearing fact of
+# THIS build (plugin_builtins.go's builtinPluginRows) — asserting
+# "cascade-claude" by name would break the moment that plugin's ID
+# changed, so this script asserts structure (a NAME/VERSION/RUNTIME/
+# DESCRIPTION table, a nonzero row) rather than a specific plugin name,
+# except for the browse/no-match contrast, which needs at least one row
+# that is guaranteed present.
+
+# Browse (no argument): every registered builtin plugin, as a table.
+exec cascade plugin search
+stdout 'NAME\s+VERSION\s+RUNTIME\s+DESCRIPTION'
+
+# Query match: cascade-pa is a builtin plugin ID this build always ships
+# (cmd/cascade/init_cmd_test.go's own TestTheCatalogComesFromTheLiveRegistry
+# asserts cascade-claude/cascade-codex/cascade-opencode the same way), so
+# a substring of its own name must match it.
+exec cascade plugin search cascade-pa
+stdout 'cascade-pa'
+
+# No-match: a query no builtin name, description or tag could ever
+# contain. Exit 0 — this is success, not a refusal.
+exec cascade plugin search nonexistent-plugin-search-query-xyz
+stdout 'NAME\s+VERSION\s+RUNTIME\s+DESCRIPTION'
+! stdout 'cascade-'
+
+# --json: a valid, parseable envelope; still finds cascade-pa.
+exec cascade --json plugin search cascade-pa
+stdout '"ok":\s*true'
+stdout '"cascade-pa"'

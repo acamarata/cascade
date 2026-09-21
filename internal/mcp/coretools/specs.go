@@ -42,6 +42,9 @@ const (
 	CapabilityMemoryRead = "memory.read"
 	// CapabilityMemoryWrite covers writes and retirements in that store.
 	CapabilityMemoryWrite = "memory.write"
+	// CapabilityPluginsRead covers reads of the plugin registry catalog
+	// (P1-E24-W5-S50-T2).
+	CapabilityPluginsRead = "plugins.read"
 )
 
 // Spec is one first-party MCP tool.
@@ -120,7 +123,8 @@ func boolean(description string) map[string]any {
 func Specs() []Spec {
 	out := retrievalSpecs()
 	out = append(out, contextSpecs()...)
-	return append(out, memorySpecs()...)
+	out = append(out, memorySpecs()...)
+	return append(out, pluginSpecs()...)
 }
 
 // retrievalSpecs are the tools over the retrieval engine. Split from

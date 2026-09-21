@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	cascadecontext "github.com/acamarata/cascade/internal/context"
+	cascaderuntime "github.com/acamarata/cascade/internal/runtime"
 	cascadeinit "github.com/acamarata/cascade/internal/runtime/init"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -73,7 +74,11 @@ func TestCheckFoundWorkExitsThree(t *testing.T) {
 // step 4: the rows are the plugins this build actually registers, so a
 // checklist can never offer one it cannot install.
 func TestTheCatalogComesFromTheLiveRegistry(t *testing.T) {
-	entries := initPluginCatalog{}.Entries()
+	// Real Paths/Clock (P1-E24-W5-S50-T2, D2): Entries() now also
+	// consults [registry] via buildPluginRegistryClient, which needs a
+	// resolvable PathProvider even when (as here) no config.toml exists —
+	// an absent file is "not configured", not an error (config_registry.go).
+	entries := initPluginCatalog{paths: fakeDaemonPaths{root: t.TempDir()}, clock: cascaderuntime.NewSystemClock()}.Entries()
 	if len(entries) == 0 {
 		t.Fatal("the live registry produced no catalog rows")
 	}

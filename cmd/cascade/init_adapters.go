@@ -16,7 +16,7 @@ import (
 	"os"
 	"sort"
 
-	"github.com/acamarata/cascade/internal/plugins"
+	"github.com/acamarata/cascade/internal/runtime"
 	cascadeinit "github.com/acamarata/cascade/internal/runtime/init"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/plugins/claude"
@@ -84,38 +84,60 @@ func (initHarnessWirer) Wire(ctx context.Context, kind, cwd string) error {
 }
 
 // initPluginCatalog renders step 4's checklist from the LIVE builtin
-// registry.
+// registry, plus — when a verified registry index is configured
+// (R-14.93, P1-E24-W5-S50-T2) — registry-sourced rows alongside it,
+// through pluginCatalogSearch, the SAME function `plugin search`'s daemon
+// RPC handler calls (plugin_search.go, D2). Neither surface re-implements
+// the fail-closed decision.
 //
 // Not from a list written here: a checklist offering a plugin this build
 // does not register would install nothing and report success, which is
 // the Article-1 failure this surface is most exposed to. A build that
 // grows a plugin gets a catalog row for free; one that loses a plugin
 // loses the row.
-type initPluginCatalog struct{}
+type initPluginCatalog struct {
+	paths runtime.PathProvider
+	clock runtime.Clock
+}
 
 var _ cascadeinit.Catalog = initPluginCatalog{}
 
-// Entries lists every registered builtin plugin.
-func (initPluginCatalog) Entries() []cascadeinit.CatalogEntry {
-	reg := &plugins.BuiltinRegistry{}
-	if err := reg.Load(); err != nil {
-		// A registry that will not load contributes no rows rather than
-		// invented ones. The wizard states an empty catalog plainly, and
-		// `cascade plugin list` is where a load failure is diagnosed.
+// Entries lists every registered builtin plugin, plus any verified
+// registry entries (R-14.93). A registry row is never pre-checked
+// (DefaultOn=false): it is a discovered, opt-in offering, unlike a
+// builtin, which is always compiled in and always active.
+func (c initPluginCatalog) Entries() []cascadeinit.CatalogEntry {
+	ctx := context.Background()
+	client, _ := buildPluginRegistryClient(ctx, c.paths, c.clock) // a warning here is redundant with registry_pubkey's doctor finding
+	rows, err := pluginCatalogSearch(ctx, client, "")
+	if err != nil {
+		// Neither population contributes rows rather than invented ones
+		// — same discipline the old builtin-only load-failure path used.
 		return nil
 	}
-	registered := reg.List()
-	out := make([]cascadeinit.CatalogEntry, 0, len(registered))
-	for _, r := range registered {
-		// The checkbox is keyed on the manifest ID, because that is what
-		// every other surface names a plugin by; the display name is the
-		// row's description. A cascade.plugin/v2 manifest carries no
-		// top-level description field, so the row says the plugin's own
-		// name rather than a sentence invented here.
+	return catalogEntriesFromRows(rows)
+}
+
+// catalogEntriesFromRows maps pluginCatalogSearch's rows onto the
+// wizard's CatalogEntry shape (D12, s50t2-t0-decisions-2.txt): a
+// registry-sourced row (fromRegistry=true) renders DefaultOn=false — a
+// discovered, opt-in offering, per R-14.93 — while a builtin row
+// (fromRegistry=false, always compiled in and always active) renders
+// DefaultOn=true. Split out of Entries() so this mapping is directly
+// testable against synthetic rows standing in for the verified-registry
+// state, without a live or fake HTTP registry fetch (Art.7.2's
+// no-network unit lane forbids one in this file's test) —
+// init_cmd_test.go's TestInitPluginCatalogMapsRegistryRows exercises it
+// directly; TestTheCatalogComesFromTheLiveRegistry (same file) still
+// proves Entries() itself, but only ever ran the unconfigured-registry
+// state through it.
+func catalogEntriesFromRows(rows []pluginSearchEntry) []cascadeinit.CatalogEntry {
+	out := make([]cascadeinit.CatalogEntry, 0, len(rows))
+	for _, r := range rows {
 		out = append(out, cascadeinit.CatalogEntry{
-			Name:        r.Manifest.ID,
-			Description: r.Manifest.Name,
-			DefaultOn:   true,
+			Name:        r.Name,
+			Description: r.Description,
+			DefaultOn:   !r.fromRegistry,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })

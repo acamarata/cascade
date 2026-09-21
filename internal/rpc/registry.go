@@ -44,6 +44,8 @@ func NewRegistry() *Registry {
 // fleet.sessions.list through exactly this generic Register call — no
 // method-specific code belongs here, by design (see registry_test.go and
 // internal/fleet/sessions/rpc.go's own CONTRACT DEVIATION note for why).
+// cmd/cascade/plugin_rpc.go's wirePluginSearchHandler (P1-E24-W5-S50-T2)
+// binds "plugin.search" the same way, from registerDBPathHandlers.
 //
 // Registering the same method twice
 // overwrites the prior binding — the daemon composition root is the only

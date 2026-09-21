@@ -52,6 +52,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -106,7 +107,34 @@ func registerDBPathHandlers(
 	// surface, and the one that needs a process with a lifetime: see
 	// wireCascadePABridge below.
 	wireCascadePABridge(ctx, registry, manifest, paths, clock, bus)
+	// plugin.search (X/S-50.T2, SCOPE DEVIATION: this call is the only
+	// line this ticket adds outside its own declared files_scope, added
+	// here per the ticket's own §5 fallback -- "put it where the existing
+	// plugin.* handlers live" -- because that is where every other
+	// plugin.* method is wired onto the daemon's real composition root.
+	// wirePluginSearchHandler itself, and everything it calls, lives in
+	// plugin_search.go (in files_scope.add). It needs no store/db, so it
+	// registers unconditionally rather than behind the `if store == nil`
+	// guard wirePluginAddHandler uses just above.
+	wirePluginSearchHandler(ctx, registry, paths, clock)
 	return wirePluginAddHandler(registry, clock, store, dbPath)
+}
+
+// wirePluginSearchHandler registers "plugin.search" on registry, over a
+// RegistryClient built ONCE, here, at wiring time (D6) — never rebuilt
+// per call. Called from registerDBPathHandlers above (the daemon) and
+// mcp_tools.go's registerMCPToolMethods (the MCP tool process). Lives
+// here, not in plugin_search.go (D11): this file carries the
+// cmd-rpc-server-boundary exemption (registers, never dials);
+// plugin_search.go does not and must not import internal/rpc —
+// pluginSearchRPCHandler there returns an unnamed func value, converted
+// implicitly on assignment to Register below.
+func wirePluginSearchHandler(ctx context.Context, registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock) {
+	client, warning := buildPluginRegistryClient(ctx, paths, clock)
+	if warning != "" {
+		slog.Default().Warn(warning)
+	}
+	registry.Register("plugin.search", pluginSearchRPCHandler(client))
 }
 
 // wireCascadePABridge mounts Epic W's Telegram bridge on this daemon: the poll

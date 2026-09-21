@@ -833,6 +833,16 @@
       "name": "cascade_memory_search",
       "rpc_method": "memory.recall",
       "capability": "memory.read"
+    },
+    {
+      "v1_name": "NEW-IN-V2:cascade_plugin_search",
+      "v1_description": "(no v1 ancestor -- the plugin registry, Epic X, is new in v2; P1-E24-W5-S50-T2)",
+      "v1_input_schema": {},
+      "status": "registered",
+      "name": "cascade_plugin_search",
+      "rpc_method": "plugin.search",
+      "capability": "plugins.read",
+      "alias": ""
     }
   ]
 }

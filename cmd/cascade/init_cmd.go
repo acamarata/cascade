@@ -229,7 +229,7 @@ func productionInitDeps(cmd *cobra.Command, paths runtime.PathProvider) (cascade
 		Prompt:      initPrompter(cmd, f),
 		Detector:    initHarnessDetector(),
 		Wirer:       initHarnessWirer{},
-		Catalog:     initPluginCatalog{},
+		Catalog:     initPluginCatalog{paths: paths, clock: runtime.NewSystemClock()},
 		Service:     initServiceInstaller{paths: paths},
 		Enroller:    initHelperEnroller{},
 		Doctor:      initDoctorRunner{paths: paths},

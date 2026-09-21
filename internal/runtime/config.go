@@ -146,6 +146,9 @@ type Config struct {
 	// CIWatch is the ci.watch key (P1-E25-W5-S51-T4); hot (see
 	// config_ci_watch.go).
 	CIWatch ciWatchSection
+	// Registry is the [registry] block (P1-E24-W5-S50-T2, R-14.75); hot
+	// (see config_registry.go's header on PubkeyPath's empty default).
+	Registry registrySection
 	// Extra holds every top-level section other than schema_version,
 	// runtime, and elevation, exactly as decoded from the file: valid
 	// future 08 §3 sections preserved for round-tripping, never
@@ -189,6 +192,7 @@ func (c *Config) EffectiveEntries() []EffectiveEntry {
 	values["elevation.helper_pubkey"] = c.Elevation.HelperPubkey
 	values["widget.show_project_names"] = c.Widget.ShowProjectNames
 	values["plugins.enable_remote_runtime"] = c.Plugins.EnableRemoteRuntime
+	addRegistryEffectiveEntries(c.Registry, values)
 	flattenTree(c.Extra, "", values)
 
 	entries := make([]EffectiveEntry, 0, len(values))
@@ -287,6 +291,7 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 		CIPolicy:      sec.ciPolicy,
 		CILocal:       sec.ciLocal,
 		CIWatch:       sec.ciWatch,
+		Registry:      sec.registry,
 		Extra:         extraSections(tree),
 		sources:       sources,
 		rawTree:       tree,

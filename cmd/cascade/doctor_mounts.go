@@ -87,6 +87,13 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	// so from the user's side a degraded hydration and a session with no
 	// context worth injecting look identical.
 	reg.Register(hydration.NewCheck(hydrationCountFor(paths, clock), clock))
+	// registry_pubkey (P1-E24-W5-S50-T2, D1): the SAME loadDoctorConfig
+	// this file's other config-backed checks (fusionProviderFor) already
+	// use, adapted to doctor.RegistryPubkeyProvider's narrower interface.
+	// A config that will not load answers a nil provider, which the check
+	// itself reports as StatusError rather than a fusion-style verdict
+	// nothing measured.
+	reg.Register(doctor.NewRegistryPubkeyCheck(registryPubkeyProviderFor(ctx, paths)))
 	checks, err := secretsDoctorChecks(ctx, paths, clock)
 	if err != nil {
 		return nil, err
@@ -123,6 +130,25 @@ func fusionProviderFor(ctx context.Context, paths runtime.PathProvider) doctor.F
 // point every other command uses.
 func loadDoctorConfig(ctx context.Context, paths runtime.PathProvider) (*runtime.Config, error) {
 	return runtime.Load(ctx, runtime.LoadOptions{Path: paths.ConfigPath()})
+}
+
+// registryPubkeyConfigProvider adapts *runtime.Config's [registry] fields
+// to doctor's narrow RegistryPubkeyProvider (P1-E24-W5-S50-T2).
+type registryPubkeyConfigProvider struct {
+	url, pubkeyPath string
+}
+
+func (p registryPubkeyConfigProvider) RegistryURL() string        { return p.url }
+func (p registryPubkeyConfigProvider) RegistryPubkeyPath() string { return p.pubkeyPath }
+
+// registryPubkeyProviderFor loads config and adapts it, mirroring
+// fusionProviderFor's own nil-on-load-failure discipline above.
+func registryPubkeyProviderFor(ctx context.Context, paths runtime.PathProvider) doctor.RegistryPubkeyProvider {
+	cfg, err := loadDoctorConfig(ctx, paths)
+	if err != nil {
+		return nil
+	}
+	return registryPubkeyConfigProvider{url: cfg.Registry.URL, pubkeyPath: cfg.Registry.PubkeyPath}
 }
 
 // newDoctorCustody opens the custody backend the vault checks probe. It

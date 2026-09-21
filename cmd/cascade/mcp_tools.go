@@ -78,6 +78,13 @@ func mcpToolCapabilities() []policy.Capability {
 			// which is for build and test work that leaves no record.
 			DefaultPolicy: policy.ClassWorkspaceMutation,
 		},
+		{
+			Name: coretools.CapabilityPluginsRead,
+			Desc: "search the plugin registry catalog",
+			// ClassRead: a catalog search changes nothing, the same
+			// reasoning as CapabilityMemoryRead above.
+			DefaultPolicy: policy.ClassRead,
+		},
 	}
 }
 
@@ -133,6 +140,11 @@ func registerMCPToolMethods(ctx context.Context, registry *rpc.Registry, paths r
 	if closer, err := registerMCPRecall(ctx, registry, paths); err == nil {
 		closers = append(closers, closer)
 	}
+	// plugin.search (P1-E24-W5-S50-T2, D4): the SAME wiring function the
+	// daemon's own composition root calls (plugin_rpc.go's
+	// registerDBPathHandlers), so the MCP tool and `cascade plugin search`
+	// dispatch through identical logic. It needs no store/db closer.
+	wirePluginSearchHandler(ctx, registry, paths, clock)
 	return closers
 }
 
