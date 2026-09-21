@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T00:07:08Z",
+  "generated_at": "2026-09-21T00:32:56Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3210,6 +3210,21 @@
       ]
     },
     {
+      "name": "cmd/cascade chat custody injection",
+      "sites": [
+        {
+          "file": "cmd/cascade/chat_wiring_custody_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T1",
+          "raw": "cmd/cascade chat custody injection (ADD) -- P1-E20-W5-S44-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade chat platform boundary",
       "sites": [
         {
@@ -3229,7 +3244,7 @@
       "sites": [
         {
           "file": "cmd/cascade/chat_wiring.go",
-          "line": 40,
+          "line": 42,
           "status": "ADD",
           "ticket": "P1-E20-W5-S43-T5",
           "raw": "cmd/cascade chat wiring (ADD) — P1-E20-W5-S43-T5; platform tag"
@@ -9305,6 +9320,77 @@
       ]
     },
     {
+      "name": "internal.conversation.scrub",
+      "sites": [
+        {
+          "file": "internal/conversation/scrub.go",
+          "line": 47,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T1",
+          "raw": "internal.conversation.scrub/ADDED (P1-E20-W5-S44-T1)."
+        },
+        {
+          "file": "internal/conversation/scrub_error_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T1",
+          "raw": "internal.conversation.scrub/ADDED (tests) (P1-E20-W5-S44-T1)."
+        },
+        {
+          "file": "internal/conversation/scrub_golden_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T1",
+          "raw": "internal.conversation.scrub/ADDED (tests) (P1-E20-W5-S44-T1)."
+        },
+        {
+          "file": "internal/conversation/scrub_phases.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T1",
+          "raw": "internal.conversation.scrub/ADDED (P1-E20-W5-S44-T1)."
+        },
+        {
+          "file": "internal/conversation/scrub_property_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T1",
+          "raw": "internal.conversation.scrub/ADDED (tests) (P1-E20-W5-S44-T1)."
+        },
+        {
+          "file": "internal/conversation/scrub_refusal_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T1",
+          "raw": "internal.conversation.scrub/ADDED (tests) (P1-E20-W5-S44-T1)."
+        },
+        {
+          "file": "internal/conversation/scrub_scope.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T1",
+          "raw": "internal.conversation.scrub/ADDED (P1-E20-W5-S44-T1)."
+        },
+        {
+          "file": "internal/conversation/scrub_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T1",
+          "raw": "internal.conversation.scrub/ADDED (tests) (P1-E20-W5-S44-T1)."
+        },
+        {
+          "file": "internal/conversation/scrub_vault_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E20-W5-S44-T1",
+          "raw": "internal.conversation.scrub/ADDED (tests) (P1-E20-W5-S44-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.conversation.search",
       "sites": [
         {
@@ -9366,6 +9452,12 @@
       "name": "internal.conversation.store",
       "sites": [
         {
+          "file": "internal/conversation/failure_paths_test.go",
+          "line": 10,
+          "status": "CHANGE",
+          "raw": "internal.conversation.store (CHANGED -- failure-path tests)"
+        },
+        {
           "file": "internal/conversation/store.go",
           "line": 15,
           "status": "ADD",
@@ -9381,7 +9473,8 @@
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -24961,7 +25054,7 @@
       ]
     }
   ],
-  "total_sites": 2391,
+  "total_sites": 2402,
   "unspecified_count": 71,
-  "multi_status_count": 49
+  "multi_status_count": 50
 }
