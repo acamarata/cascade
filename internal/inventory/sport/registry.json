@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T09:56:55Z",
+  "generated_at": "2026-09-21T10:47:26Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -14425,7 +14425,7 @@
       "sites": [
         {
           "file": "internal/conversation/topics/auto_thread.go",
-          "line": 36,
+          "line": 45,
           "status": "ADD",
           "ticket": "P1-E21-W5-S45-T3",
           "raw": "internal/conversation/topics auto-thread (ADD) (P1-E21-W5-S45-T3)."
@@ -14458,6 +14458,28 @@
           "status": "ADD",
           "ticket": "P1-E21-W5-S45-T3",
           "raw": "internal/conversation/topics exemplar-store (ADD) (P1-E21-W5-S45-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/conversation/topics observe-logger",
+      "sites": [
+        {
+          "file": "internal/conversation/topics/observe_log.go",
+          "line": 45,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S45-T4",
+          "raw": "internal/conversation/topics observe-logger (ADD) (P1-E21-W5-S45-T4)."
+        },
+        {
+          "file": "internal/conversation/topics/observe_state.go",
+          "line": 36,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S45-T4",
+          "raw": "internal/conversation/topics observe-logger (ADD) (P1-E21-W5-S45-T4)."
         }
       ],
       "statuses": [
@@ -27686,7 +27708,7 @@
       ]
     }
   ],
-  "total_sites": 2597,
+  "total_sites": 2599,
   "unspecified_count": 121,
   "multi_status_count": 61
 }
