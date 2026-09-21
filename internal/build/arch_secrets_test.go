@@ -140,9 +140,20 @@ var unelevatedReadAllowlist = map[string][]string{
 	// The outbound firewall's value source. internal/mcp binds it to the
 	// egress engine on the response path; cmd/cascade may bind one for a
 	// process that builds its own engine.
+	//
+	// internal/bridge holds the same exemption for the same argument, added
+	// deliberately by P1-E23-W5-S48-T1: Epic W's bridge classes are an
+	// outbound firewall on the daemon's own path with no operator present, so
+	// an attestation prompt per intercepted message is not a control anybody
+	// can answer, and a firewall that cannot read the vault cannot redact
+	// what is in it. The grant is scoped to internal/bridge — one small,
+	// single-purpose package that exists to hold the bridge's host-side
+	// resources — rather than to internal/plugins, which builds the adapter
+	// but never names the reader.
 	"NewEgressVault(": {
 		filepath.Join("internal", "secrets"),
 		filepath.Join("internal", "mcp"),
+		filepath.Join("internal", "bridge"),
 		filepath.Join("cmd", "cascade"),
 	},
 }

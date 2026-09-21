@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "result": [
+    {
+      "update_id": 900000002,
+      "message": {
+        "message_id": 43,
+        "from": {
+          "id": 555000111,
+          "is_bot": false,
+          "first_name": "Test",
+          "username": "cascade_test_user"
+        },
+        "chat": {
+          "id": 555000111,
+          "type": "private"
+        },
+        "date": 1758300060,
+        "text": "/pair 7ZQK3M9F"
+      }
+    }
+  ]
+}

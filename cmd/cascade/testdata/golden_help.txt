@@ -21,6 +21,7 @@ Available Commands:
   mcp            Serve the policy-filtered MCP tool registry
   memory         Remember, recall and forget memory records
   node           Manage this machine's participation in the node fleet
+  pa             Personal-assistant bridge commands (Telegram, WhatsApp)
   pbd            PBD Engine
   plugin         Manage the plugin lifecycle: install, inspect, and remove
   policy         Explain and inspect policy decisions

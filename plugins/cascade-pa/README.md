@@ -108,3 +108,125 @@ operator.
 from a real MCP client — the client launched the server itself and called two
 of these tools. See that directory's README for provenance and for why the
 fixture is a capture rather than something written here.
+
+## The Telegram bridge module (opt-in, off by default)
+
+`plugins/cascade-pa/telegram/` is an **opt-in module**, not a feature of this
+plugin. Nothing in a stock installation polls Telegram, nothing dials
+`api.telegram.org`, and no document here claims otherwise. Two independent
+gates have to be opened, by hand, before a single byte moves.
+
+### Gate 1 — the module flag
+
+The module reads a cascade-pa module manifest under the data directory:
+
+```toml
+# $CASCADE_HOME/data/plugins/cascade-pa/manifest.toml
+[modules.telegram]
+enabled = true
+bot_token_vault_key = "cascade-pa.telegram.bot_token"   # optional; this is the default
+```
+
+With the file absent — the shipped state — the module is off and
+`readTelegramModuleConfig` says so without touching anything else. There is no
+environment variable and no `config.toml` key that turns it on.
+
+### Gate 2 — the bot token, from the vault, under a standing grant
+
+```bash
+cascade vault set cascade-pa.telegram.bot_token     # paste the BotFather token
+cascade vault grant cascade-pa.telegram.bot_token   # the daemon has no human to prompt
+```
+
+The token is read through `Broker.GetGranted` — the headless daemon's only
+sanctioned read path (R-14.243). No grant means no token means no module. The
+token itself never becomes an identity: the bridge keys everything (the durable
+row, the device record, the pairing confirmation) on `SubjectFromToken`, a
+SHA-256 digest of it.
+
+### Where the module runs
+
+**In the daemon.** `cascade daemon start` assembles the bridge, starts the
+long-poll goroutine as a tracked subsystem, and stops it on the daemon's
+shutdown drain. `cascade daemon status` names it (`cascade-pa.bridge`) whether it
+is running, disabled or failed, so "my bot is not answering" has an answer
+without reading any code.
+
+No CLI command runs a poll loop. An earlier draft started the module from
+`cascade pa pair`, whose process exits when the command returns — the long poll
+died before its first 30-second `getUpdates` came back, so a `/pair <code>` typed
+into Telegram reached nothing. Issuance goes the other way now: the CLI asks the
+daemon.
+
+### Pairing a Telegram account
+
+```bash
+cascade daemon start                # the bridge polls only while the daemon runs
+cascade pa pair                     # asks the daemon for a code: pa.pair_code
+cascade pa pair --json
+```
+
+With no daemon running the command says so (`daemon not running or unreachable`)
+rather than printing a code, because a code minted outside the daemon could never
+be verified: the stored digest is HMAC-SHA256 under a key derived from the bot
+token, and the daemon is the only process that holds it.
+
+Then send `/pair <code>` to the bot from Telegram. On success the bot replies
+`paired: <subject>` and that Telegram user id is on the binding's allowlist.
+
+- **One use, 10 minutes, 8 Crockford base32 characters** (R-16.37, verbatim).
+- **The stored digest is keyed, not a bare hash.** 8 Crockford characters is 40
+  bits, which a bare SHA-256 gives up to brute force well inside the 10-minute
+  TTL; the key is derived from the bot token (HKDF-SHA256) and never persisted,
+  so read access to `cascade.db` alone recovers nothing and verifies nothing.
+- **A code is issued only for the bridge this daemon runs.** Name another subject
+  and the command refuses by name — issuing one would look like a working command
+  and fail silently in Telegram ten minutes later.
+- **Five wrong codes burn the outstanding code** and record a
+  `bridge.pair_lockout` event on the daemon's event journal. The counter is
+  durable, so restarting the daemon does not reset it.
+- **A code is redeemable only while the bot is unbound.** On a bound bot a
+  non-allowlisted sender gets the same `not paired` reply whether or not the
+  message is `/pair …`, and nothing is consumed or counted — a stranger can
+  neither burn the owner's code nor tell a bound bot from an unbound one.
+- The binding is a **paired-device record, not a node enrollment**: it invokes
+  no enrollment elevation gate, carries no public key, and therefore satisfies
+  no node-dispatch gate and no sync gate.
+
+### What a paired bot can do today (and what it cannot)
+
+Pairing works end to end. **Ordinary chat does not yet.** A message from an
+allowlisted sender passes every admission gate and then reaches a placeholder
+route that RECORDS it — one `bridge.message_unrouted` event on the daemon's
+journal, naming W/S-48.T2 — and answers nothing. W/S-48.T2 replaces that route
+with the real chat forwarder. Until it lands, do not expect a reply to anything
+but `/pair`.
+
+### What the bridge refuses
+
+| Inbound | Answer |
+|---|---|
+| any update on an unbound bot | `not paired`, dropped, no handler runs |
+| a sender not on the allowlist | `not paired`, dropped |
+| photo, document, voice, video, sticker, location | `media not supported over the bridge`, and **never downloaded** — the module has no `getFile` method at all, and its transport refuses any Bot API method outside `getUpdates`/`sendMessage`/`answerCallbackQuery` |
+| an elevated verb (`/enroll`, `/node upgrade`, …) | refused, on the text path and the callback path alike. The classification comes from the host's canonical §5.14 table, never from a list kept in the plugin |
+| a replayed `update_id` | processed exactly once; the offset and a bounded window of seen ids are durable, so a restart does not replay Telegram's 24h of unacknowledged updates |
+
+Every inbound message is stamped `Origin = bridge-telegram` and
+`Untrusted = true` at the decode boundary, and there is no setter that clears
+either field.
+
+### Outbound
+
+Every outbound body — replies, refusals, callback answers — crosses the
+`bridge` egress class (`internal/hooks/egress`, `AllowRestricted: false`,
+`AllowedTiers: {internal, public}`) before it reaches the transport, and what is
+posted is the firewall's **output**. Restricted and local-only content cannot
+leave over the bridge, and a stored vault value that reached a reply string is
+substituted on the way out.
+
+### Windows
+
+Windows tier-2 has no daemon, so every Epic W bridge surface refuses with
+`bridge requires the daemon (Windows tier-2)` (R-16.60a). The module makes no
+"runs headless on Windows" claim.

@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"update_id\":1,\"message\":{\"message_id\":,\"from\":{\"id\":\"not-a-number\"")

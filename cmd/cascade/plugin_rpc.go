@@ -52,6 +52,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
@@ -74,7 +78,8 @@ import (
 // and relocated here (rather than left inline in daemon_unix_run.go)
 // purely to keep that file under Art.10.3's 300-line file cap.
 func registerDBPathHandlers(
-	ctx context.Context, registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock,
+	ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest,
+	paths runtime.PathProvider, clock runtime.Clock,
 	bus *events.Bus, store provider.Store, dbPath string,
 ) error {
 	if err := daemon.RegisterRecallIndexHandler(registry, paths, clock, store, dbPath); err != nil {
@@ -97,7 +102,90 @@ func registerDBPathHandlers(
 	if err := wireChatHandlers(ctx, registry, paths, clock, bus, custody); err != nil {
 		return err
 	}
+	// The cascade-pa TELEGRAM BRIDGE — the other half of this plugin's daemon
+	// surface, and the one that needs a process with a lifetime: see
+	// wireCascadePABridge below.
+	wireCascadePABridge(ctx, registry, manifest, paths, clock, bus)
 	return wirePluginAddHandler(registry, clock, store, dbPath)
+}
+
+// wireCascadePABridge mounts Epic W's Telegram bridge on this daemon: the poll
+// goroutine as a tracked subsystem, its drain on shutdown, and pa.pair_code so
+// `cascade pa pair` issues codes through the process that verifies them.
+//
+// It never fails the daemon's startup. A bridge that cannot be assembled at all
+// (an unreadable data directory, a malformed module manifest) is recorded as a
+// FAILED subsystem and the daemon continues; a bridge that is merely not
+// enabled — the shipped state — is recorded as disabled. Refusing to start the
+// daemon because an opt-in chat bridge is misconfigured would trade a missing
+// convenience for a dead host.
+//
+// The custody selection is made HERE, in the composition root, and handed in:
+// a bridge that selected its own could not be exercised without reaching the
+// operator's real keychain (R-14.206), the same reason wireChatHandlers takes
+// its custody as a parameter.
+//
+// WHY THE POLL CONTEXT IS SIGNAL-DERIVED (disclosed, with the follow-up named).
+// buildRPCServer is handed no run context — every namespace above it is
+// registered under context.Background() — and threading Run's context through
+// its signature would touch every existing call site and test, which is the
+// same disclosed tradeoff this file's header already carries for dbPath. The
+// bridge needs a context that really ENDS, or its drain would never run, so it
+// derives one from the signals daemon.Run itself shuts down on (SIGTERM is
+// exactly what `cascade daemon stop` sends, lifecycle_unix_stop.go). Go fans a
+// signal out to every registered subscriber, so this does not take the signal
+// away from Run's own handler. Cancelling the ctx passed in works too, which is
+// what the internal/daemon tests drive; threading the real run context remains
+// the cleaner end state.
+func wireCascadePABridge(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest,
+	paths runtime.PathProvider, clock runtime.Clock, bus *events.Bus) {
+	if manifest == nil {
+		return
+	}
+	rt, err := plugins.NewCascadePABridge(ctx, plugins.BridgeDeps{
+		DataDir: paths.DataDir(),
+		Vault:   plugins.BridgeVaultConfig(paths.DataDir()),
+		Clock:   clock,
+		Events:  bus,
+	})
+	if err != nil {
+		manifest.RegisterBridgeModule(ctx, registry, daemon.BridgeSubsystem{DisabledReason: err.Error()})
+		return
+	}
+	if rt.Start == nil {
+		// Not enabled: no poll to stop, so no signal subscription is taken out
+		// at all. pa.pair_code is still registered, and answers with the
+		// runtime's own typed refusal naming what is missing.
+		manifest.RegisterBridgeModule(ctx, registry, daemon.BridgeSubsystem{
+			IssueCode: bridgePairCodeIssuer(rt), DisabledReason: rt.DisabledReason,
+		})
+		return
+	}
+	pollCtx, releaseSignals := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	manifest.RegisterBridgeModule(pollCtx, registry, daemon.BridgeSubsystem{
+		Start: rt.Start,
+		// releaseSignals runs after the drain, so the subscription lives
+		// exactly as long as the poll it exists to stop.
+		Stop:      func(c context.Context) error { defer releaseSignals(); return rt.Stop(c) },
+		IssueCode: bridgePairCodeIssuer(rt),
+	})
+}
+
+// bridgePairCodeIssuer adapts the plugin runtime's issuance closure onto the
+// daemon's wire result. The RFC3339 rendering happens here, at the boundary,
+// so neither side carries the other's formatting choice.
+func bridgePairCodeIssuer(rt *plugins.BridgeRuntime) func(context.Context, string) (daemon.BridgePairCodeResult, error) {
+	return func(ctx context.Context, subject string) (daemon.BridgePairCodeResult, error) {
+		res, err := rt.IssueCode(ctx, subject)
+		if err != nil {
+			return daemon.BridgePairCodeResult{}, err
+		}
+		return daemon.BridgePairCodeResult{
+			Code:      res.Code,
+			Subject:   res.Subject,
+			ExpiresAt: res.ExpiresAt.UTC().Format(time.RFC3339),
+		}, nil
+	}
 }
 
 // pluginAddRPCResult mirrors plugin_add.go's pluginAddView field-for-

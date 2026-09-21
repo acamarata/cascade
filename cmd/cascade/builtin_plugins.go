@@ -57,11 +57,32 @@ import (
 	pacmd "github.com/acamarata/cascade/plugins/cascade-pa/cmd"
 )
 
-// mountChatCmd attaches `cascade chat` directly under root, matching
-// mountConfigCmd/mountDaemonCmd's own pattern for every other reserved
-// core noun.
+// mountChatCmd attaches cascade-pa's two root-level surfaces: `cascade chat`
+// (directly under root, matching mountConfigCmd/mountDaemonCmd's pattern for
+// every other reserved core noun) and the `pa` namespace that carries
+// `cascade pa pair`.
+//
+// The function keeps its name because root.go's mountSubcommands calls it and
+// root.go is AT the 300-line cap (Art.10.3), so adding a second mount call
+// there is not available; adding the second command here is. The `pa`
+// namespace is built below rather than through mountPluginNamespaceCmds'
+// registry path because that path keys on the manifest id ("cascade-pa") and
+// would spell the command `cascade cascade-pa pair`, while R-14.71's §D-21
+// COMMANDS mount names `cascade pa pair`.
 func mountChatCmd(root *cobra.Command) {
 	cmd := pacmd.NewChatCommand()
 	guardUnknownSubcommands(cmd)
 	root.AddCommand(cmd)
+	root.AddCommand(newPaNamespaceCmd())
+}
+
+// newPaNamespaceCmd builds `cascade pa` with its pairing verb attached.
+func newPaNamespaceCmd() *cobra.Command {
+	pa := &cobra.Command{
+		Use:   "pa",
+		Short: "Personal-assistant bridge commands (Telegram, WhatsApp)",
+	}
+	pa.AddCommand(pacmd.NewPairCommand())
+	guardUnknownSubcommands(pa)
+	return pa
 }

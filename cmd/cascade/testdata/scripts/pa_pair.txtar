@@ -1,0 +1,52 @@
+# pa_pair.txtar
+#
+# testscript: executable
+#
+# `cascade pa pair` — the issuance half of Epic W's bridge pairing flow
+# (P1-E23-W5-S48-T1, R-14.71's §D-21 COMMANDS mount, RPC pa.pair_code). Run in
+# process by TestScript (script_test.go) against the REAL composition root, so
+# what this asserts is what an operator's own shell would see.
+#
+# WHAT THIS SCRIPT CAN AND CANNOT PROVE. Issuance is a DAEMON verb: the code is
+# minted by the process that verifies it, because the code's stored digest is
+# keyed from the bot token (internal/daemon/subsystem_bridge.go,
+# internal/plugins/cascadepa_bridge_wiring.go). A script runs no daemon, so what
+# it proves is the command surface: that `pa pair` is mounted, that it never
+# prompts, that its argument handling refuses more than one subject, and that
+# with no daemon listening it says so HONESTLY instead of printing a code nothing
+# could verify. The issue-and-redeem round trip is proved where it happens, over
+# the real store: internal/plugins TestBridgeIssuance_IsRedeemableThroughTheSame-
+# DurableRow, and the daemon subsystem's own tests.
+#
+# SCOPE DEVIATION, RECORDED: the ticket's files_scope names these scripts at
+# plugins/cascade-pa/cmd/testscript/*.txtar. Nothing globs that directory —
+# cmd/cascade/script_test.go globs cmd/cascade/testdata/scripts/*.txtar and runs
+# only files carrying the header marker above. Written here so they RUN; a check
+# spelled against an inert file passes by naming nothing (R-14.268).
+
+# With no daemon on this script's own CASCADE_HOME, the command reports the
+# transport honestly and names the verb it could not reach.
+! exec cascade pa pair tg-scripttest
+stderr 'pa\.pair_code'
+stderr 'daemon not running or unreachable'
+
+# It never invents a code to print, and it never prompts.
+! stdout 'pairing code'
+! stdout '[0-9A-HJKMNP-TV-Z]{8}'
+! stdout '[Cc]ontinue\?'
+
+# --json fails the same way: a machine-readable envelope is never fabricated.
+! exec cascade pa pair --json tg-scripttest
+! stdout '"code"'
+stderr 'daemon not running or unreachable'
+
+# Omitting the subject is legal at the command surface — the DAEMON decides which
+# bridge it runs — so the refusal is still the transport's, not an argument's.
+! exec cascade pa pair
+stderr 'daemon not running or unreachable'
+
+# More than one positional argument is refused rather than ignored, and that
+# refusal comes from the command itself, before any transport is attempted.
+! exec cascade pa pair tg-one tg-two
+stderr 'accepts at most 1 arg'
+! stderr 'daemon not running'

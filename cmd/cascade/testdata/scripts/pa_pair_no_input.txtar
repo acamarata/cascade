@@ -1,0 +1,33 @@
+# pa_pair_no_input.txtar
+#
+# testscript: executable
+#
+# CASCADE_NO_INPUT=1 against `cascade pa pair` (R-14.71: "nothing about issuance
+# is interactive, so no prompt is ever raised under CASCADE_NO_INPUT"). The claim
+# is only worth anything if the non-interactive lane is exercised, so this script
+# runs the same commands with the variable set and asserts the SAME behaviour —
+# not merely that the exit status matched.
+#
+# See pa_pair.txtar's header for the recorded files_scope path deviation and for
+# why a script asserts the command surface rather than a live pairing.
+
+env CASCADE_NO_INPUT=1
+
+# The variable changes nothing: same transport refusal, no prompt, no mention of
+# the variable itself. A refusal naming CASCADE_NO_INPUT would mean this command
+# had grown a prompt.
+! exec cascade pa pair tg-noinput
+stderr 'daemon not running or unreachable'
+! stderr 'CASCADE_NO_INPUT'
+! stdout 'CASCADE_NO_INPUT'
+! stdout 'pairing code'
+
+# --json behaves identically under the variable.
+! exec cascade pa pair --json tg-noinput
+stderr 'daemon not running or unreachable'
+! stderr 'CASCADE_NO_INPUT'
+
+# And the argument refusal is still the command's own, still not a prompt.
+! exec cascade pa pair tg-one tg-two
+stderr 'accepts at most 1 arg'
+! stderr 'CASCADE_NO_INPUT'

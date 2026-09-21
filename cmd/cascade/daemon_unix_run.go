@@ -168,7 +168,7 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	// namespaces unregistered rather than reaching into a store that does
 	// not exist.
 	dbPath := filepath.Join(paths.DataDir(), "cascade.db")
-	if err := registerDBPathHandlers(context.Background(), registry, paths, clock, bus, store, dbPath); err != nil {
+	if err := registerDBPathHandlers(context.Background(), registry, manifest, paths, clock, bus, store, dbPath); err != nil {
 		return nil, nil, nil, err
 	}
 

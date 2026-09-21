@@ -54,6 +54,21 @@ const (
 	// refuses local-only/restricted records before a byte reaches this
 	// class, so this class itself stays as strict as every other default.
 	EgressClassSync EgressClass = "sync"
+	// EgressClassBridge is the personal-assistant bridge's outbound leg
+	// (P1-E23-W5-S48-T1, R-21.227): every Telegram getUpdates poll and
+	// sendMessage call this ticket's plugins/cascade-pa/telegram module
+	// makes transits this class, resolved through the C/S-05.T7 host
+	// services handle before the first network call. AllowRestricted is
+	// NOT set and AllowedTiers admits only {internal, public}: a
+	// local-only or restricted thread can never reach the bridge (that
+	// refusal is W/S-48.T2's chat-parity gate, enforced upstream of this
+	// class). This entry carries no net scopes of its own — the exact
+	// host this module dials (api.telegram.org) is enforced at the HTTP
+	// call site (plugins/cascade-pa/telegram/apicall.go's httpDoer, over
+	// transport.go's poster), not
+	// by this registry, matching EgressClassSync/EgressClassNodeDispatch's
+	// identical convention below.
+	EgressClassBridge EgressClass = "bridge"
 	// EgressClassNodeDispatch is the remote node-dispatch leg (§D-30,
 	// P1-E17-W4-S37-T2, 06 §5.17): every byte the controller ships to an
 	// enrolled node transits it — git refs on the push/fetch legs, RPC
@@ -84,6 +99,11 @@ var defaultClasses = []struct {
 	{EgressClassPluginRemote, InterceptConfig{Enabled: false, Owner: "O/S-33.T4"}},
 	{EgressClassRegistryFetch, InterceptConfig{Enabled: true, Owner: "X/S-50.T1"}},
 	{EgressClassCIPoll, InterceptConfig{Enabled: true, Owner: "P1-E25-W5-S51-T2"}},
+	{EgressClassBridge, InterceptConfig{
+		Enabled: true, AllowRestricted: false,
+		AllowedTiers: []SensitivityTier{TierInternal, TierPublic},
+		Owner:        "P1-E23-W5-S48-T1",
+	}},
 }
 
 // defaultRegistry holds the classes this build ships with. It is package

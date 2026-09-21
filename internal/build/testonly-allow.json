@@ -1445,5 +1445,29 @@
     "reason": "Same shape as internal/context.NewPreStage directly above, for the post-assembly hook (task class \"summarize\", §5.16 LaneAffinity \"cheap\"): pipeline_compose.go's runPostStage runs it whenever a Composer has one attached, and pipeline_compose_test.go plus pipeline_lane_test.go cover the wiring, but nothing constructs one for a running binary until the reply pipeline lands.",
     "retire_ticket": "P1-E45-W10-S89-T6",
     "symbol": "internal/context.NewSummarizeStage"
+  },
+  {
+    "added_by_ticket": "P1-E23-W5-S48-T1",
+    "caller_site": "plugins/cascade-pa/telegram/egress.go",
+    "expected_caller": "W/S-48.T2's telegram/egress.go chat-parity gate, which refuses a local-only or restricted thread over the bridge and therefore names these tiers; retire this entry when that file lands",
+    "reason": "P1-E23-W5-S48-T1 owns the plugin-facing sensitivity-tier set the bridge declares content under, and pins each value to internal/hooks/egress's own string (bridge_policy_test.go) so the host adapter stays a cast rather than a translation table that could disagree. Production on this ticket declares only TierInternal: every message the module itself sends is an operational reply. The other tiers are the ones a CONSUMER names -- W/S-48.T2's chat-parity gate refuses a local-only or restricted thread over the bridge, and its own telegram/egress.go is the file that will read them. Deleting them and having T2 re-add them would churn an exported set the bridge-class red-team suite already asserts against.",
+    "retire_ticket": "P1-E23-W5-S48-T2",
+    "symbol": "plugins/cascade-pa.TierLocalOnly"
+  },
+  {
+    "added_by_ticket": "P1-E23-W5-S48-T1",
+    "caller_site": "plugins/cascade-pa/telegram/egress.go",
+    "expected_caller": "W/S-48.T2's telegram/egress.go chat-parity gate, which refuses a local-only or restricted thread over the bridge and therefore names these tiers; retire this entry when that file lands",
+    "reason": "P1-E23-W5-S48-T1 owns the plugin-facing sensitivity-tier set the bridge declares content under, and pins each value to internal/hooks/egress's own string (bridge_policy_test.go) so the host adapter stays a cast rather than a translation table that could disagree. Production on this ticket declares only TierInternal: every message the module itself sends is an operational reply. The other tiers are the ones a CONSUMER names -- W/S-48.T2's chat-parity gate refuses a local-only or restricted thread over the bridge, and its own telegram/egress.go is the file that will read them. Deleting them and having T2 re-add them would churn an exported set the bridge-class red-team suite already asserts against.",
+    "retire_ticket": "P1-E23-W5-S48-T2",
+    "symbol": "plugins/cascade-pa.TierRestricted"
+  },
+  {
+    "added_by_ticket": "P1-E23-W5-S48-T1",
+    "caller_site": "plugins/cascade-pa/telegram/egress.go",
+    "expected_caller": "W/S-48.T2's telegram/egress.go chat-parity gate, which refuses a local-only or restricted thread over the bridge and therefore names these tiers; retire this entry when that file lands",
+    "reason": "P1-E23-W5-S48-T1 owns the plugin-facing sensitivity-tier set the bridge declares content under, and pins each value to internal/hooks/egress's own string (bridge_policy_test.go) so the host adapter stays a cast rather than a translation table that could disagree. Production on this ticket declares only TierInternal: every message the module itself sends is an operational reply. The other tiers are the ones a CONSUMER names -- W/S-48.T2's chat-parity gate refuses a local-only or restricted thread over the bridge, and its own telegram/egress.go is the file that will read them. Deleting them and having T2 re-add them would churn an exported set the bridge-class red-team suite already asserts against.",
+    "retire_ticket": "P1-E23-W5-S48-T2",
+    "symbol": "plugins/cascade-pa.TierPublic"
   }
 ]

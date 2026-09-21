@@ -1,0 +1,34 @@
+{
+  "ok": true,
+  "result": [
+    {
+      "update_id": 900000004,
+      "callback_query": {
+        "id": "4382bfdwdsb323b2d9",
+        "from": {
+          "id": 555000111,
+          "is_bot": false,
+          "first_name": "Test",
+          "username": "cascade_test_user"
+        },
+        "message": {
+          "message_id": 44,
+          "from": {
+            "id": 555000222,
+            "is_bot": true,
+            "first_name": "Cascade Test Bot",
+            "username": "cascade_test_bot"
+          },
+          "chat": {
+            "id": 555000111,
+            "type": "private"
+          },
+          "date": 1758300120,
+          "text": "Approve request req-7f3a?"
+        },
+        "chat_instance": "-1234567890123456789",
+        "data": "approve:req-7f3a"
+      }
+    }
+  ]
+}

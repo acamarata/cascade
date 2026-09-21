@@ -1,0 +1,37 @@
+# cascade-pa plugin manifest (cascade.plugin/v2).
+#
+# Documentation/authoring artifact matching plugin.go's in-code Manifest
+# value (pkg/plugin.RegisterBuiltin reads the Go struct, not this file —
+# see plugins/claude/manifest.toml's identical doc comment for the same
+# precedent). This ticket (P1-E23-W5-S48-T1) adds the file; it does not
+# add a "pair" entry to plugin.go's own manifest() Go value, because
+# plugin.go is outside this ticket's files_scope (not listed under add
+# or change) and "chat" already established the precedent that a
+# cascade-pa CLI surface can be real and shipped without a matching
+# Provides.Commands entry — see plugin.go's own CONTRACT CORRECTION doc
+# comment. `pa pair`'s cobra command is real
+# (plugins/cascade-pa/cmd/pair.go); mounting it on `cascade pa` is a
+# composition-root action this ticket's scope does not reach (see that
+# file's doc comment for the exact recorded deviation, mirroring
+# cmd/chat.go's own).
+
+id = "cascade-pa"
+name = "Cascade Personal Assistant"
+schema = "cascade.plugin/v2"
+version = "0.1.0"
+host_version = ">=0.1.0"
+runtime = "builtin"
+
+[[provides.commands]]
+name = "pair"
+description = "Issue a one-use, 10-minute pairing code for a bridge module (Telegram, WhatsApp) to bind a Q-identity."
+
+# The telegram bridge MODULE is default-off: its presence in this
+# manifest is documentation of the flag it is gated behind, never a
+# claim that it runs. Activation requires BOTH telegram.enabled=true AND
+# a bot_token vault key — absence of either means the module is not in
+# cascade-pa's active module set (this ticket's acceptance criteria).
+[modules.telegram]
+enabled = false
+bot_token_vault_key = "cascade-pa.telegram.bot_token"
+description = "Opt-in Telegram long-poll bridge with Q-identity pairing. OFF by default; this file documents the flag, it does not flip it."
