@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T14:55:01Z",
+  "generated_at": "2026-09-21T15:11:31Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5230,6 +5230,29 @@
           "status": "",
           "ticket": "P1-E25-W5-S51-T4",
           "raw": "cmd/cascade:github-ci-watch-verbs (TEST) -- P1-E25-W5-S51-T4."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade:github-wiki-verbs",
+      "sites": [
+        {
+          "file": "cmd/cascade/github_wiki_cmd.go",
+          "line": 36,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "cmd/cascade:github-wiki-verbs (ADD) -- P1-E25-W5-S51-T6."
+        },
+        {
+          "file": "cmd/cascade/github_wiki_cmd_test.go",
+          "line": 13,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "cmd/cascade:github-wiki-verbs (TESTED) -- P1-E25-W5-S51-T6."
         }
       ],
       "statuses": [
@@ -18474,6 +18497,43 @@
       ]
     },
     {
+      "name": "internal/plugins wiki-wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/wiki_wiring.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "internal/plugins wiki-wiring/ADDED (P1-E25-W5-S51-T6)."
+        },
+        {
+          "file": "internal/plugins/wiki_wiring.go",
+          "line": 90,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "internal/plugins wiki-wiring/ADDED (P1-E25-W5-S51-T6)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins wiki-wiring/TESTED",
+      "sites": [
+        {
+          "file": "internal/plugins/wiki_wiring_test.go",
+          "line": 10,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "internal/plugins wiki-wiring/TESTED (P1-E25-W5-S51-T6)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/plugins/host capability-boundary",
       "sites": [
         {
@@ -24810,7 +24870,7 @@
       "sites": [
         {
           "file": "plugins/github/main.go",
-          "line": 52,
+          "line": 62,
           "status": "ADD",
           "ticket": "P1-E25-W5-S51-T1",
           "raw": "plugins/github (ADD) — P1-E25-W5-S51-T1; github-ci-wait/"
@@ -25086,6 +25146,161 @@
       ]
     },
     {
+      "name": "plugins/github/wiki:confirm",
+      "sites": [
+        {
+          "file": "plugins/github/wiki/confirm.go",
+          "line": 29,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "plugins/github/wiki:confirm (ADD) — P1-E25-W5-S51-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github/wiki:drift",
+      "sites": [
+        {
+          "file": "plugins/github/wiki/drift.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "plugins/github/wiki:drift (ADD) — P1-E25-W5-S51-T6."
+        },
+        {
+          "file": "plugins/github/wiki/drift_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "plugins/github/wiki:drift (ADD) — P1-E25-W5-S51-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github/wiki:filetree",
+      "sites": [
+        {
+          "file": "plugins/github/wiki/filetree.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "plugins/github/wiki:filetree (ADD) — P1-E25-W5-S51-T6."
+        },
+        {
+          "file": "plugins/github/wiki/filetree_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "plugins/github/wiki:filetree (ADD) — P1-E25-W5-S51-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github/wiki:runner",
+      "sites": [
+        {
+          "file": "plugins/github/wiki/runner.go",
+          "line": 39,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "plugins/github/wiki:runner (ADD) — P1-E25-W5-S51-T6."
+        },
+        {
+          "file": "plugins/github/wiki/runner_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "plugins/github/wiki:runner (ADD) — P1-E25-W5-S51-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github/wiki:sync",
+      "sites": [
+        {
+          "file": "plugins/github/wiki/sync.go",
+          "line": 35,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "plugins/github/wiki:sync (ADD) — P1-E25-W5-S51-T6."
+        },
+        {
+          "file": "plugins/github/wiki/sync_conflict_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "plugins/github/wiki:sync (ADD) — P1-E25-W5-S51-T6."
+        },
+        {
+          "file": "plugins/github/wiki/sync_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "plugins/github/wiki:sync (ADD) — P1-E25-W5-S51-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github/wiki:test-helpers",
+      "sites": [
+        {
+          "file": "plugins/github/wiki/helpers_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "plugins/github/wiki:test-helpers (ADD) — P1-E25-W5-S51-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github/wiki:visibility",
+      "sites": [
+        {
+          "file": "plugins/github/wiki/visibility.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "plugins/github/wiki:visibility (ADD) — P1-E25-W5-S51-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github/wiki:workflow-template",
+      "sites": [
+        {
+          "file": "plugins/github/wiki/workflow_template_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "plugins/github/wiki:workflow-template (ADD) — P1-E25-W5-S51-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/github:auth-flow",
       "sites": [
         {
@@ -25101,6 +25316,21 @@
       ]
     },
     {
+      "name": "plugins/github:token-env",
+      "sites": [
+        {
+          "file": "plugins/github/token_env.go",
+          "line": 30,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "plugins/github:token-env (ADD) — P1-E25-W5-S51-T6."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/github:transport",
       "sites": [
         {
@@ -25109,6 +25339,28 @@
           "status": "ADD",
           "ticket": "P1-E25-W5-S51-T1",
           "raw": "plugins/github:transport (ADD) — P1-E25-W5-S51-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/github:wiki-cmd",
+      "sites": [
+        {
+          "file": "plugins/github/wiki_cmd.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "plugins/github:wiki-cmd (ADD) — P1-E25-W5-S51-T6."
+        },
+        {
+          "file": "plugins/github/wiki_cmd_test.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T6",
+          "raw": "plugins/github:wiki-cmd (ADD) — P1-E25-W5-S51-T6."
         }
       ],
       "statuses": [
@@ -28425,7 +28677,7 @@
       ]
     }
   ],
-  "total_sites": 2663,
-  "unspecified_count": 127,
-  "multi_status_count": 65
+  "total_sites": 2684,
+  "unspecified_count": 128,
+  "multi_status_count": 66
 }
