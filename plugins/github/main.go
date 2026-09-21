@@ -43,12 +43,19 @@
 //	internal/plugins/ci_waitmerge_wiring.go bridge — never in this
 //	process, per Art.10.2 (this file may not import internal/**).
 //
+//	P1-E25-W5-S51-T4's `github-ci-watch-add|list|remove` manifest commands
+//	likewise need NO new dispatch code here: they read/write [ci.watch] in
+//	config.toml and push to the R/S-39.T1 attention queue, both entirely
+//	host-side (cmd/cascade/github_ci_watch_cmd.go) — this plugin process is
+//	never launched to serve them.
+//
 // SPORT: plugins/github (ADD) — P1-E25-W5-S51-T1; github-ci-wait/
 //
-//	github.ci.merge-on-green manifest commands (CHANGE) — P1-E25-W5-S51-T3.
-//	Both are MOUNTED by the host's process-tier command mount
-//	(cmd/cascade/plugin_process_mount.go); the dotted name is what lets
-//	`merge-on-green` stay one path segment.
+//	github.ci.merge-on-green manifest commands (CHANGE) — P1-E25-W5-S51-T3;
+//	github-ci-watch-add|list|remove manifest commands (CHANGE) —
+//	P1-E25-W5-S51-T4. All are MOUNTED by the host's process-tier command
+//	mount (cmd/cascade/plugin_process_mount.go); the dotted name is what
+//	lets `merge-on-green` stay one path segment.
 package main
 
 import (

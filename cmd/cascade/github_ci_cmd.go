@@ -68,15 +68,6 @@ func productionGitHubCIBridge() githubCIBridge {
 	return githubCIBridge{Wait: hostWaitOnGreen, Merge: hostMergeOnGreen}
 }
 
-// hostedProcessVerbs is plugin_process_mount.go's host-implementation map.
-func hostedProcessVerbs() map[string]func() *cobra.Command {
-	bridge := productionGitHubCIBridge()
-	return map[string]func() *cobra.Command{
-		"github-ci-wait":           func() *cobra.Command { return newGitHubCIWaitCmd(bridge) },
-		"github.ci.merge-on-green": func() *cobra.Command { return newGitHubCIMergeOnGreenCmd(bridge) },
-	}
-}
-
 // githubCIFlags are the flags both verbs share, plus the two merge-only
 // ones. Declared once so the two commands cannot drift apart.
 type githubCIFlags struct {
@@ -198,13 +189,15 @@ func (f *githubCIFlags) mergeOptions() (ci.MergeOptions, error) {
 	}, nil
 }
 
-// hostWaitOnGreen is the production Wait bridge.
+// hostWaitOnGreen is the production Wait bridge. On a genuine CI-conclusion
+// failure it also routes to the R/S-39.T1 attention queue for any matching
+// P1-E25-W5-S51-T4 [ci.watch] entry -- see github_ci_watch_cmd.go.
 func hostWaitOnGreen(ctx context.Context, opts ci.WaitOptions) (ci.WaitResult, error) {
 	deps, err := ci.WaitDepsFromEnv(newGitHubTokenDoer, os.Getenv, runtime.NewSystemClock())
 	if err != nil {
 		return ci.WaitResult{}, err
 	}
-	return ci.WaitOnGreen(ctx, deps, opts)
+	return waitAndRoute(ctx, deps, opts)
 }
 
 // hostMergeOnGreen is the production Merge bridge: the plugin-host
@@ -224,7 +217,7 @@ func hostMergeOnGreen(ctx context.Context, opts ci.MergeOptions) (ci.MergeResult
 		return ci.MergeResult{}, err
 	}
 	defer closeStore()
-	wait, err := ci.WaitOnGreen(ctx, waitDeps, ci.WaitOptions{Owner: opts.Owner, Repo: opts.Repo, Ref: opts.Ref})
+	wait, err := waitAndRoute(ctx, waitDeps, ci.WaitOptions{Owner: opts.Owner, Repo: opts.Repo, Ref: opts.Ref})
 	if err != nil {
 		return ci.MergeResult{}, err
 	}

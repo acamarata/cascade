@@ -532,13 +532,6 @@
     "symbol": "internal/fleet/supervision.NewSubscription"
   },
   {
-    "caller_site": "internal/fleet/supervision/routing.go",
-    "expected_caller": "a future cross-scope escalation producer (e.g. a supervisor forwarding a global-critical item), calling RoutePush instead of Store.Push directly",
-    "reason": "P1-E18-W4-S39-T1 ships the R-21.157(b) addressed-push authorization path fully implemented and tested (routing_test.go covers every refusal leg plus the allow path against a real GraphStore/fake GrantChecker), but its only caller would be a cross-scope push producer -- no subsystem in this tree currently addresses a push to a scope other than its own origin (this ticket's own subscriber, subscribe.go, always pushes same-scope). RoutePush is ready for the first such producer.",
-    "retire_ticket": "P1-E18-W4-S39-T1",
-    "symbol": "internal/fleet/supervision.RoutePush"
-  },
-  {
     "caller_site": "internal/fleet/sessions/poll.go",
     "expected_caller": "the sessions domain's poll loop (the ticket after P1-E12-W3-S24-T2 in Epic L that owns session/harness tracking), which calls NewTailer per watched transcript and drives Next() in a loop",
     "reason": "P1-E12-W3-S24-T2 builds the rotation-safe transcript tailer itself; the ticket's own contract text names its caller as 'T3, sessions domain' and explicitly scopes the poll loop that drives Next() out of this ticket. No composition root constructs a Tailer yet.",
@@ -1421,34 +1414,6 @@
     "symbol": "internal/plugins/resolver.NewIntentResolver"
   },
   {
-    "caller_site": "plugins/cascade-pa/cmd/topics_cli.go",
-    "expected_caller": "P1-E21-W5-S46-T4 \"Add topics and threads CLI surfaces\": its files_scope.add lists plugins/cascade-pa/cmd/topics_cli.go, the first surface that composes the topic engine (auto-threader over the real segmenter, the taxonomy config, the exemplar store and the conversation-backed thread store) for an operator. Retire this entry in that change.",
-    "reason": "P1-E21-W5-S45-T3 builds the label-to-topic-type mapping the auto-threader resolves segments through. The consumer that constructs it for a running binary is the S-46.T4 CLI; nothing earlier composes the topic engine.",
-    "retire_ticket": "P1-E21-W5-S46-T4",
-    "symbol": "internal/conversation/topics.NewTaxonomyConfig"
-  },
-  {
-    "caller_site": "plugins/cascade-pa/cmd/topics_cli.go",
-    "expected_caller": "P1-E21-W5-S46-T4 \"Add topics and threads CLI surfaces\": its files_scope.add lists plugins/cascade-pa/cmd/topics_cli.go, the first surface that composes the topic engine (auto-threader over the real segmenter, the taxonomy config, the exemplar store and the conversation-backed thread store) for an operator. Retire this entry in that change.",
-    "reason": "P1-E21-W5-S45-T3 builds the auto-threader that calls the real segmenter (retiring NewSegmenter's own exemption) and files each segment into a topic thread. No production composition root constructs it until the S-46.T4 CLI surface lands.",
-    "retire_ticket": "P1-E21-W5-S46-T4",
-    "symbol": "internal/conversation/topics.NewDefaultAutoThreader"
-  },
-  {
-    "caller_site": "plugins/cascade-pa/cmd/topics_cli.go",
-    "expected_caller": "P1-E21-W5-S46-T4 \"Add topics and threads CLI surfaces\": its files_scope.add lists plugins/cascade-pa/cmd/topics_cli.go, the first surface that composes the topic engine (auto-threader over the real segmenter, the taxonomy config, the exemplar store and the conversation-backed thread store) for an operator. Retire this entry in that change.",
-    "reason": "P1-E21-W5-S45-T3 builds the exemplar store over the provider.Store seam. Its writer is Reassign (a method on the auto-threader); its reader has no scheduled owner, which a planning notice records. Construction for a running binary happens in the S-46.T4 CLI surface.",
-    "retire_ticket": "P1-E21-W5-S46-T4",
-    "symbol": "internal/conversation/topics.NewExemplarStore"
-  },
-  {
-    "caller_site": "plugins/cascade-pa/cmd/topics_cli.go",
-    "expected_caller": "P1-E21-W5-S46-T4 \"Add topics and threads CLI surfaces\": its files_scope.add lists plugins/cascade-pa/cmd/topics_cli.go, the first surface that composes the topic engine (auto-threader over the real segmenter, the taxonomy config, the exemplar store and the conversation-backed thread store) for an operator. Retire this entry in that change.",
-    "reason": "P1-E21-W5-S45-T3 ships the real ThreadStore over the conversation store, as the acceptance criteria require, so the interface is not implementation-free. The composition root that wires it into the default binary is the S-46.T4 CLI surface.",
-    "retire_ticket": "P1-E21-W5-S46-T4",
-    "symbol": "internal/conversation/topics.NewConversationThreadStore"
-  },
-  {
     "added_by_ticket": "P1-E21-W5-S46-T3",
     "caller_site": "internal/conversation/reply.go",
     "expected_caller": "the chat reply pipeline landed by P1-E45-W10-S89-T6, whose files_scope adds internal/conversation/reply.go: it is the first production composition that builds a Composer at all (internal/context.NewComposer, exempted above for the same reason). Whether it attaches a pre-assembly stage, and which kind (classify or segment), is that ticket's own choice -- this entry claims no obligation on it. Retire this entry when it attaches one, or record the remaining gap there.",
@@ -1487,13 +1452,5 @@
     "reason": "P1-E23-W5-S48-T1 owns the plugin-facing sensitivity-tier set the bridge declares content under, and pins each value to internal/hooks/egress's own string (bridge_policy_test.go) so the host adapter stays a cast rather than a translation table that could disagree. Production on this ticket declares only TierInternal: every message the module itself sends is an operational reply. The other tiers are the ones a CONSUMER names -- W/S-48.T2's chat-parity gate refuses a local-only or restricted thread over the bridge, and its own telegram/egress.go is the file that will read them. Deleting them and having T2 re-add them would churn an exported set the bridge-class red-team suite already asserts against.",
     "retire_ticket": "P1-E23-W5-S48-T2",
     "symbol": "plugins/cascade-pa.TierPublic"
-  },
-  {
-    "added_by_ticket": "P1-E21-W5-S45-T4",
-    "caller_site": "plugins/cascade-pa/cmd/topics_cli.go",
-    "expected_caller": "P1-E21-W5-S46-T4 \"Add topics and threads CLI surfaces\": its files_scope.add lists plugins/cascade-pa/cmd/topics_cli.go, the same pointer NewDefaultAutoThreader, NewTaxonomyConfig, NewExemplarStore and NewConversationThreadStore's identical exemptions carry. That contract constructs no AutoThreader and no ObserveLogger, so retiring this entry needs a composition root the planner has not yet named: retire it there, alongside those four, and not before.",
-    "reason": "P1-E21-W5-S45-T4 builds ObserveLogger, the 7-day observe-log gate that wraps AutoThreader.Route. Nothing in this tree composes a running AutoThreader, so nothing can construct a running ObserveLogger either. This entry is PARKED, not justified: the named retire ticket P1-E21-W5-S46-T4 does list plugins/cascade-pa/cmd/topics_cli.go in files_scope.add, but its full_desc builds read-only --topics/--threads/--thread handlers over the conversation-service RPC and constructs neither AutoThreader nor ObserveLogger, so that ticket will not by itself retire this entry. The per-turn composition root for the topic engine is unowned. The pointer is kept only because it is the plan's current composition pointer for all four sibling topics exemptions, and the S-45.T3 PCI already asks the planner to name the real root; parked pending that disposition and the S-45.T4 PCI. NewObserveLogger is built to be wired at whatever root the planner names, unchanged.",
-    "retire_ticket": "P1-E21-W5-S46-T4",
-    "symbol": "internal/conversation/topics.NewObserveLogger"
   }
 ]

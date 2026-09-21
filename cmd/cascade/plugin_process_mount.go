@@ -91,6 +91,18 @@ func processPluginCommands() []processPluginCommand {
 			Description: "Merge a pull request once its required checks are green, gated by an explicit " +
 				"merge-on-green policy grant (L3, P1-E25-W5-S51-T3).",
 		},
+		{
+			Name:        "github-ci-watch-add",
+			Description: "Watch a repository's CI results, routing failures to the attention queue (P1-E25-W5-S51-T4).",
+		},
+		{
+			Name:        "github-ci-watch-list",
+			Description: "List configured [ci.watch] entries (P1-E25-W5-S51-T4).",
+		},
+		{
+			Name:        "github-ci-watch-remove",
+			Description: "Stop watching a repository's CI results (P1-E25-W5-S51-T4).",
+		},
 	}
 	out := make([]processPluginCommand, 0, len(specs))
 	for _, s := range specs {

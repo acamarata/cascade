@@ -128,11 +128,97 @@ turns a manifest command name into a command path:
 | `github-prs` | `cascade github prs` |
 | `github-ci-wait` | `cascade github ci wait` |
 | `github.ci.merge-on-green` | `cascade github ci merge-on-green` |
+| `github-ci-watch-add` | `cascade github ci watch add` |
+| `github-ci-watch-list` | `cascade github ci watch list` |
+| `github-ci-watch-remove` | `cascade github ci watch remove` |
 
 Segments are separated by `.` when the name contains one (so a leaf verb may
 itself contain hyphens) and by `-` otherwise. The rule is documented for
-plugin authors in `.github/wiki/Plugin-Author-Guide.md`. The two `ci` verbs
-are HOST-implemented (`cmd/cascade/github_ci_cmd.go`): their `RunE` reaches
-`internal/ci`, never the plugin process. The three T1 verbs have no host
-implementation, so they return the same typed process-tier refusal
-`merge-on-green` does.
+plugin authors in `.github/wiki/Plugin-Author-Guide.md`. The `ci wait`/`ci
+merge-on-green`/`ci watch add|list|remove` verbs are all HOST-implemented
+(`cmd/cascade/github_ci_cmd.go`, `cmd/cascade/github_ci_watch_cmd.go`): their
+`RunE` reaches `internal/ci`/`internal/runtime`, never the plugin process.
+The three T1 verbs have no host implementation, so they return the same
+typed process-tier refusal `merge-on-green` does.
+
+## `cascade github ci watch add|list|remove`
+
+Watches a repository's CI results, routing real failure conclusions
+(`failure`/`cancelled`/`timed_out` — never a wait-loop timeout or a context
+cancellation) observed by `cascade github ci wait` into the
+`fleet.attention` queue, visible via `cascade fleet attention list`.
+
+```
+cascade github ci watch add <owner/repo> [--branch <glob>] [--workflow <glob>]
+cascade github ci watch list
+cascade github ci watch remove <owner/repo>
+```
+
+| Flag | Meaning |
+|---|---|
+| `--branch` | only route failures on branches matching this glob (`path.Match` semantics); default: every branch |
+| `--workflow` | only route failures of workflows whose NAME matches this glob (`path.Match`); default: every workflow. Job names are never matched here — they appear in the routed entry's `failed_jobs` |
+
+**Idempotent**: `add` on an already-watched repo updates its branch/workflow
+filters (exit 0, delta reported) rather than creating a second entry;
+`remove` of an unwatched repo exits 0 reporting a no-op.
+
+**Persistence**: entries live in `config.toml`'s `ci.watch` key — a single
+array of inline tables, e.g. `ci.watch = [{repo = "acamarata/cascade",
+branch = "main", workflow = "build-*"}]` — a hot-reloadable key (`[ci.watch]`
+is not in `hotreload.go`'s cold-sections list, matching `[ci.policy]`/
+`[ci.local]`'s own precedent).
+
+**How a failure reaches the queue**: two producers, one core
+(`internal/ci.RouteFailure`).
+
+1. `cascade github ci wait` AND `cascade github ci merge-on-green` both go
+   through the single `waitAndRoute` hook, which calls
+   `internal/ci.RouteWaitFailure` on every result. It routes ONLY when
+   `WaitOnGreen`'s error carries `KindConflict` — its own taxonomy for "the
+   RUN concluded something other than success" — never on a wait-loop
+   timeout (`KindTimeout`) or context cancellation (`KindCanceled`), neither
+   of which is itself a CI conclusion.
+2. `internal/ci.RouteCIResults` subscribes to the `ci_results` event-bus
+   namespace and routes every completed-run event that failed. It is
+   implemented and tested against a real event bus but not yet STARTED: the
+   daemon composition root has no daemon-lifetime context to cancel it with
+   (recorded in `internal/build/testonly-allow.json`).
+
+**The routing decision is the RUN's conclusion**, not a per-job one: any
+conclusion other than `success` routes (so a `startup_failure` run with zero
+jobs, and a `failure` run whose jobs are all success/skipped, both route),
+and an unrecognised conclusion routes fail-closed rather than being dropped.
+A run that has not concluded never routes.
+
+On a match one item is queued, whose `source_ref` is the run's identity
+`ci:<owner>/<repo>:<run_id>` — also the queue's dedup key, so one item per
+failed run no matter how many times it is observed. The full detail (repo,
+ref, run_id, conclusion, sorted `failed_jobs`, the computed
+`https://github.com/<repo>/actions/runs/<run_id>` link and the
+`cascade://ci/<owner>/<repo>/runs/<run_id>` deep link) is returned to the
+caller and readable from the `ci_run`/`ci_job` rows for the same `run_id`.
+A repo listed in `[ci.policy.repos].private` is filed at PROJECT scope
+rather than global, and the push runs through `supervision.RoutePush` so the
+data-class check applies. Routing is best-effort observability: a routing
+failure is logged and never changes the verb's own exit code.
+
+**Windows tier-2**: `watch add` refuses through `ci.PlatformRefusal`, the
+same build-tag-split verdict `wait`'s own gate consults (never a runtime
+branch), and without opening the runtime store as a probe side effect;
+`list`/`remove` stay available everywhere (plain config-file operations, no
+daemon dependency).
+
+**A hand-written `[[ci.watch]]` array-of-tables header** loads (both TOML
+shapes decode identically) but cannot be updated by the line-oriented
+writer: `watch add` then refuses with a typed `KindInvalidInput` error
+naming the supported `watch = [{...}]` inline form and leaves the file
+untouched.
+
+**Honest gaps**: no `fleet.attention.push` RPC method exists yet (only
+`list`/`get`/`ack` are registered), so the production pusher opens the same
+runtime store `merge-on-green`'s policy engine already opens directly from
+the CLI process rather than dialing the daemon; the `ci_results` subscriber
+is not started by any composition root yet; `cascade doctor` does not yet
+report `watch add`'s Windows tier-2 status. Full accounting in
+`internal/ci/attention.go`'s header note and `plugins/github/README.md`.

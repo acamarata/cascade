@@ -136,3 +136,33 @@ func TestWaitOnGreen_RetriesNeverOutlastTheDeadline(t *testing.T) {
 		t.Fatalf("elapsed = %s, want 70s -- the retries overran the 1m deadline by one backoff, never more", got)
 	}
 }
+
+// TestWaitOnGreen_FailingResultCarriesWorkflowNameAndConclusion proves
+// decide() stamps the RUN's own Conclusion and WorkflowName onto the
+// WaitResult it returns even on the failure path -- P1-E25-W5-S51-T4's
+// routing decision (attention.go) reads both fields off exactly this
+// result. MUTATION TARGET: blanking waitmerge_wait.go's decide() assignment
+// `Conclusion: run.Conclusion, WorkflowName: run.Name` (replacing it with
+// ConclusionNone/"") leaves the returned error kind unchanged -- only these
+// two fields go silently empty.
+func TestWaitOnGreen_FailingResultCarriesWorkflowNameAndConclusion(t *testing.T) {
+	skipWhenWaitIsRefusedHere(t)
+	doer := &fakeDoer{responses: map[string]HTTPResponse{
+		waitRunsURL:   {Status: 200, Body: waitRunsBody("completed", "cancelled")},
+		waitJobsURL(): {Status: 200, Body: waitJobsBody("build", "completed", "cancelled")},
+	}}
+	clock := runtime.NewFixedClock(time.Unix(0, 0))
+	sleeper := &fakeSleepLog{clock: clock}
+	deps := waitTestDeps(t, doer, clock, sleeper.sleep)
+
+	result, err := WaitOnGreen(context.Background(), deps, WaitOptions{Owner: "acamarata", Repo: "cascade", Ref: "main"})
+	if !cascade.HasKind(err, cascade.KindConflict) {
+		t.Fatalf("err = %v, want KindConflict", err)
+	}
+	if result.WorkflowName != "ci" {
+		t.Errorf("result.WorkflowName = %q, want %q (run.Name)", result.WorkflowName, "ci")
+	}
+	if result.Conclusion != ConclusionCancelled {
+		t.Errorf("result.Conclusion = %q, want %q (run.Conclusion)", result.Conclusion, ConclusionCancelled)
+	}
+}

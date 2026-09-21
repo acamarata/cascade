@@ -106,7 +106,7 @@ func wireHotReload(paths runtime.PathProvider, clock runtime.Clock, getenv runti
 // it already started, so a caller that gets a non-nil error never needs
 // to guess what, if anything, it must still tear down.
 func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, deps daemonDeps, cfg *runtime.Config, store provider.Store, rawDB *sql.DB, bus *events.Bus, logProvider *runtime.LogProvider) (*memory.AdminHandler, *policyWiring, func(), error) {
-	_, watcher, err := wireHotReload(paths, deps.Clock, deps.Getenv, deps.Environ, cfg, store, bus, logProvider)
+	hr, watcher, err := wireHotReload(paths, deps.Clock, deps.Getenv, deps.Environ, cfg, store, bus, logProvider)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -161,10 +161,18 @@ func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, d
 		return nil, nil, nil, err
 	}
 
+	// The ci_results attention subscriber (P1-E25-W5-S51-T4). Same
+	// child-context posture as metricsCtx/schedCtx above: ctx itself is
+	// not guaranteed canceled when daemon.Run returns, so this gets its
+	// own cancel folded into the cleanup func below.
+	ciCtx, ciCancel := context.WithCancel(ctx)
+	wireCIAttentionSubscription(ciCtx, ciWatchSourceFromReloader(hr), store, deps.Clock, bus, cfg.CIPolicy.PrivateRepos, logProvider.Logger())
+
 	return admin, pol, func() {
 		watcher.Stop()
 		metricsCancel()
 		schedCancel()
+		ciCancel()
 		schedCleanup(context.Background())
 	}, nil
 }

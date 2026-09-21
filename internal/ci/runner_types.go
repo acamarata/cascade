@@ -80,6 +80,12 @@ type RunnerConfig struct {
 	// os.Environ().
 	Env            []string
 	TimeoutPerStep time.Duration
+	// OwnerRepo is the checkout's "owner/repo" identity, already resolved
+	// by run_cmd.go for the never-pay guard and carried here so the
+	// completed-run EVENT can name a repository a [ci.watch] entry can
+	// match (P1-E25-W5-S51-T4). Empty when the checkout has no parseable
+	// git origin; nothing re-resolves it.
+	OwnerRepo string
 }
 
 // RunResult is one completed (or halted) local-gate run.

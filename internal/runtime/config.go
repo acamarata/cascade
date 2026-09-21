@@ -143,6 +143,9 @@ type Config struct {
 	// CILocal is the [ci.local] block (P1-E25-W5-S51-T5); hot (see
 	// config_ci.go).
 	CILocal ciLocalSection
+	// CIWatch is the ci.watch key (P1-E25-W5-S51-T4); hot (see
+	// config_ci_watch.go).
+	CIWatch ciWatchSection
 	// Extra holds every top-level section other than schema_version,
 	// runtime, and elevation, exactly as decoded from the file: valid
 	// future 08 §3 sections preserved for round-tripping, never
@@ -283,6 +286,7 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 		Plugins:       sec.plugins,
 		CIPolicy:      sec.ciPolicy,
 		CILocal:       sec.ciLocal,
+		CIWatch:       sec.ciWatch,
 		Extra:         extraSections(tree),
 		sources:       sources,
 		rawTree:       tree,

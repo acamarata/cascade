@@ -139,7 +139,7 @@ func Execute(ctx context.Context, deps Deps, cfg RunnerConfig, runID, repoID int
 	if err := deps.writeResult(ctx, result, repoName); err != nil {
 		return result, err
 	}
-	deps.publishCompleted(ctx, result)
+	deps.publishCompleted(ctx, result, cfg.OwnerRepo)
 	return result, nil
 }
 
@@ -164,12 +164,13 @@ func (d Deps) appendJournal(ctx context.Context, entityID string, kind journal.K
 // publishCompleted publishes EventKindRunCompleted, doing nothing when no
 // Events bus was injected (same optional-side-effect reasoning as
 // appendJournal).
-func (d Deps) publishCompleted(ctx context.Context, result RunResult) {
+func (d Deps) publishCompleted(ctx context.Context, result RunResult, ownerRepo string) {
 	if d.Events == nil {
 		return
 	}
 	payload, err := json.Marshal(runCompletedPayload{
-		RunID: result.RunID, RepoID: result.RepoID, Passed: result.Passed(), FailedStep: result.FailedStep,
+		RunID: result.RunID, RepoID: result.RepoID, Repo: ownerRepo,
+		Passed: result.Passed(), FailedStep: result.FailedStep,
 	})
 	if err != nil {
 		return
@@ -179,8 +180,16 @@ func (d Deps) publishCompleted(ctx context.Context, result RunResult) {
 
 // runCompletedPayload is EventKindRunCompleted's wire payload.
 type runCompletedPayload struct {
-	RunID      int64    `json:"run_id"`
-	RepoID     int64    `json:"repo_id"`
+	RunID  int64 `json:"run_id"`
+	RepoID int64 `json:"repo_id"`
+	// Repo is the run's "owner/repo" identity, taken from
+	// RunnerConfig.OwnerRepo (run_cmd.go resolves it from the checkout's
+	// git origin for the never-pay guard, so no second resolution is
+	// performed here). It is what a ci_results SUBSCRIBER matches against
+	// [ci.watch] entries, which are owner/repo globs -- without it the
+	// event names no repository any watch could match. Empty when the
+	// checkout has no parseable origin remote.
+	Repo       string   `json:"repo,omitempty"`
 	Passed     bool     `json:"passed"`
 	FailedStep StepKind `json:"failed_step,omitempty"`
 }

@@ -110,6 +110,18 @@ description = "Block until every required GitHub Actions check for a repo+ref re
 name = "github.ci.merge-on-green"
 description = "Merge a pull request once its required checks are green, gated by an explicit merge-on-green policy grant (L3, P1-E25-W5-S51-T3)."
 
+[[provides.commands]]
+name = "github-ci-watch-add"
+description = "Watch a repository's CI results, routing failures to the attention queue (P1-E25-W5-S51-T4)."
+
+[[provides.commands]]
+name = "github-ci-watch-list"
+description = "List configured [ci.watch] entries (P1-E25-W5-S51-T4)."
+
+[[provides.commands]]
+name = "github-ci-watch-remove"
+description = "Stop watching a repository's CI results (P1-E25-W5-S51-T4)."
+
 [[permissions]]
 name = "network"
 description = "Reach api.github.com, and no other host, to call the GitHub REST API."

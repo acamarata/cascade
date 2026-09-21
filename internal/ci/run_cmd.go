@@ -105,7 +105,11 @@ func runCIRun(cmd *cobra.Command, deps CmdDeps, flags ciRunFlags) error {
 	// The policy gate comes BEFORE any store is opened or any step runs:
 	// a repository whose CI belongs on hosted Actions must not have a
 	// local run recorded against it at all.
-	if err := guardLocalRun(ctx, deps.Routes, ownerRepoFor(ctx, rcfg)); err != nil {
+	// The same resolved identity feeds the never-pay guard AND the
+	// completed-run event a [ci.watch] subscriber matches against
+	// (P1-E25-W5-S51-T4) -- resolved once, never twice.
+	rcfg.OwnerRepo = ownerRepoFor(ctx, rcfg)
+	if err := guardLocalRun(ctx, deps.Routes, rcfg.OwnerRepo); err != nil {
 		return err
 	}
 

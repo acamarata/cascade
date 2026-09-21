@@ -13,6 +13,7 @@ package ci
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -95,6 +96,7 @@ func TestExecute_AllStepsPass(t *testing.T) {
 	}}
 	deps := newTestDeps(t, exec)
 	cfg := stepsInOrder(map[StepKind]string{StepLint: "lint-cmd", StepTest: "test-cmd", StepBuild: "build-cmd"})
+	cfg.OwnerRepo = "acamarata/cascade"
 	ctx := context.Background()
 
 	result, err := Execute(ctx, deps, cfg, 1001, 2001, "myrepo")
@@ -121,6 +123,13 @@ func TestExecute_AllStepsPass(t *testing.T) {
 	}
 	if len(published) != 1 || published[0].Kind != EventKindRunCompleted {
 		t.Fatalf("Replay = %+v, want exactly one EventKindRunCompleted event", published)
+	}
+	var payload runCompletedPayload
+	if err := json.Unmarshal(published[0].Payload, &payload); err != nil {
+		t.Fatalf("unmarshal ci.run.completed payload: %v", err)
+	}
+	if payload.Repo != cfg.OwnerRepo {
+		t.Errorf("payload.Repo = %q, want %q (RunnerConfig.OwnerRepo)", payload.Repo, cfg.OwnerRepo)
 	}
 }
 

@@ -153,9 +153,19 @@ type WaitResult struct {
 	HeadSHA     string
 	// Passed is true only on a successful, all-green return. MergeOnGreen's
 	// rebindCheck refuses a WaitResult with Passed=false.
-	Passed  bool
-	Checks  []CheckStatus
-	Elapsed time.Duration
+	Passed bool
+	// Conclusion is the RUN's own conclusion as normalize.go resolved it
+	// -- the value evaluateChecks raises KindConflict on when it is
+	// anything but success, and the value P1-E25-W5-S51-T4's routing
+	// decision reads (internal/ci/attention.go). ConclusionNone means the
+	// run had not concluded when this result was produced.
+	Conclusion RunConclusion
+	// WorkflowName is the ACTIONS WORKFLOW name (normalize.go's Run.Name)
+	// -- the subject a [ci.watch] `workflow` glob matches against. Job
+	// names live in Checks, never here.
+	WorkflowName string
+	Checks       []CheckStatus
+	Elapsed      time.Duration
 }
 
 // waitPlatformRefusal is the platform gate BOTH verbs consult before any
@@ -241,6 +251,7 @@ func (d WaitDeps) decide(opts WaitOptions, run Run, jobs []Job, start time.Time)
 	result := WaitResult{
 		Owner: opts.Owner, Repo: opts.Repo, Ref: opts.Ref,
 		RunID: run.RunID, HeadSHA: run.HeadSHA, Checks: checks,
+		Conclusion: run.Conclusion, WorkflowName: run.Name,
 	}
 	if err != nil {
 		return result, false, err

@@ -227,6 +227,82 @@ side core code, never a call into this process. Full command reference:
   these verbs. The contract asks for that probe; `cmd/cascade/doctor*.go` is
   outside this ticket's file scope, so it is recorded rather than claimed.
 
+## CI failure-to-attention routing (P1-E25-W5-S51-T4)
+
+`cascade github ci watch add|list|remove` (07-CLI-COMMAND-TREE §github) are
+plugin-contributed `github` nouns, like `ci wait`/`ci merge-on-green` above —
+the underlying logic (`internal/ci/attention.go`, `internal/runtime/
+config_ci_watch*.go`) is host-side core code, never a call into this
+process.
+
+- **What it does**: `cascade github ci watch add <owner/repo> [--branch
+  <glob>] [--workflow <glob>]` records a `[ci.watch]` config entry. Every
+  `cascade github ci wait` invocation that observes a real CI conclusion
+  (`failure`, `cancelled` or `timed_out` — never a wait-loop timeout or a
+  context cancellation, which are not CI conclusions) checks the observed
+  repo/ref/failing-job-name against every configured watch (glob matching via
+  `path.Match`, never a hand-rolled substring check); a match pushes one
+  entry into the `fleet.attention` queue (`internal/fleet/supervision`),
+  carrying repo, ref, run_id, conclusion, the failing job names/conclusions,
+  and a computed `https://github.com/<repo>/actions/runs/<run_id>` link —
+  visible via `cascade fleet attention list`.
+- **Idempotent**: a second `add` for the same repo updates the existing
+  entry's branch/workflow filters (exit 0, delta reported) rather than
+  creating a duplicate watch; `remove` of a repo that is not watched is a
+  successful no-op.
+- **Glob semantics**: `--branch`/`--workflow` are optional; omitted, they
+  match every branch/workflow. The workflow glob matches the ACTIONS
+  WORKFLOW name (`WaitResult.WorkflowName`, from the normalized run's own
+  `Name`), never a job name — a job name only ever appears in the routed
+  entry's `failed_jobs` list.
+- **Windows tier-2**: `cascade github ci watch add` refuses via the same
+  build-tag-split store opener (`cmd/cascade/mcp_tools_unix.go` /
+  `mcp_tools_windows.go`) `merge-on-green`'s policy engine already uses,
+  never a runtime branch. `list`/`remove` stay available everywhere — they
+  are plain config-file reads/writes with no daemon dependency of their own.
+- **Honest gaps**:
+  - There are TWO producers, both real, both feeding one routing core
+    (`internal/ci.RouteFailure`). `internal/ci/attention_subscribe.go`'s
+    `RouteCIResults` is the `ci_results` event-bus subscriber over
+    `internal/ci/runner.go`'s `EventKindRunCompleted`, tested against a real
+    `internal/events.Bus`; it is not STARTED yet, because the daemon
+    composition root that would run it has no daemon-lifetime context to
+    cancel it with — the identical gap `internal/daemon/attention_rpc.go`
+    already records for `supervision.NewSubscription`, recorded the same way
+    in `internal/build/testonly-allow.json`. The operator-driven producer
+    IS wired and reachable: `cascade github ci wait` and `merge-on-green`
+    both route through the single `waitAndRoute` hook in
+    `cmd/cascade/github_ci_watch_cmd.go`. A local run's event carries no
+    GitHub ref and no Actions URL, so those fields are left EMPTY for it
+    rather than invented.
+  - `internal/fleet/supervision/rpc.go` registers only
+    `fleet.attention.list/get/ack` — there is no `fleet.attention.push` RPC
+    method, and the attention queue is documented daemon-owned with no
+    embedded/offline equivalent. The production pusher therefore opens the
+    same runtime store `merge-on-green`'s policy engine already opens
+    directly from the CLI process, wrapped with `daemon.NewAttentionStore` —
+    the same constructor the daemon's own RPC registration uses. No new
+    architecture; an existing opener is reused for a second domain.
+  - `AttentionItem` (R/S-39.T1) carries no structured payload field, so the
+    queued item's `SourceRef` is the run's IDENTITY — `ci:<owner>/<repo>:<run_id>`
+    — which is also the store's `(Kind, SourceRef)` dedup key: one item per
+    failed run, however the failed-job set or job order changes between two
+    observations of it. The full detail (conclusion, failed jobs, run URL,
+    deep link) is returned to the caller on the routing result and remains
+    readable from the `ci_run`/`ci_job` rows keyed by the same `run_id`; it
+    is deliberately NOT stuffed into the dedup key.
+  - A repository listed in `[ci.policy.repos].private` is filed at PROJECT
+    scope keyed by the repo, never in a global-scope item, and the push runs
+    through `supervision.RoutePush` so the data-class check refuses a
+    global-scope item naming a private repo.
+  - A hand-written `[[ci.watch]]` array-of-tables header loads (both TOML
+    shapes decode identically) but cannot be updated by the line-oriented
+    writer; `watch add` then refuses with a typed error naming the supported
+    `watch = [{...}]` inline form, and leaves the file untouched.
+  - `cascade doctor` does not report the Windows tier-2 status of `watch
+    add` (the same gap `ci wait`/`merge-on-green`'s own README section
+    records; `cmd/cascade/doctor*.go` is outside this ticket's file scope).
+
 ## Build and test
 
 ```bash
