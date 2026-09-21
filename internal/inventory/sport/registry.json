@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T13:01:10Z",
+  "generated_at": "2026-09-21T13:27:52Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5208,6 +5208,51 @@
       ],
       "statuses": [
         "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade:review-mount",
+      "sites": [
+        {
+          "file": "cmd/cascade/review_mount.go",
+          "line": 40,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T5",
+          "raw": "cmd/cascade:review-mount (ADD) -- FIX P1-E25-W5-S52-T5 (D1, D3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade:review-mount-test",
+      "sites": [
+        {
+          "file": "cmd/cascade/review_mount_test.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T5",
+          "raw": "cmd/cascade:review-mount-test (ADD) -- FIX P1-E25-W5-S52-T5 (D2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade:review-rpc-test",
+      "sites": [
+        {
+          "file": "cmd/cascade/review_rpc_test.go",
+          "line": 29,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T5",
+          "raw": "cmd/cascade:review-rpc-test (ADD) -- FIX P1-E25-W5-S52-T5 (D3)."
+        }
+      ],
+      "statuses": [
         "ADD"
       ]
     },
@@ -25443,10 +25488,77 @@
       "sites": [
         {
           "file": "plugins/review/plugin.go",
-          "line": 32,
+          "line": 42,
           "status": "ADD",
           "ticket": "P1-E25-W5-S52-T4",
-          "raw": "plugins/review entity (ADD) -- P1-E25-W5-S52-T4."
+          "raw": "plugins/review entity (ADD) -- P1-E25-W5-S52-T4; cmd/CommandSpec"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/review:cmd",
+      "sites": [
+        {
+          "file": "plugins/review/cmd.go",
+          "line": 55,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T5",
+          "raw": "plugins/review:cmd (ADD) — P1-E25-W5-S52-T5."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/review:cmd_render",
+      "sites": [
+        {
+          "file": "plugins/review/cmd_render.go",
+          "line": 30,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T5",
+          "raw": "plugins/review:cmd_render (ADD) — P1-E25-W5-S52-T5."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/review:cmd_render_test",
+      "sites": [
+        {
+          "file": "plugins/review/cmd_render_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T5",
+          "raw": "plugins/review:cmd_render_test (ADD) -- FIX P1-E25-W5-S52-T5 (D4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/review:cmd_test",
+      "sites": [
+        {
+          "file": "plugins/review/cmd_edgecases_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T5",
+          "raw": "plugins/review:cmd_test (ADD) -- P1-E25-W5-S52-T5."
+        },
+        {
+          "file": "plugins/review/cmd_test.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S52-T5",
+          "raw": "plugins/review:cmd_test (ADD) -- P1-E25-W5-S52-T5."
         }
       ],
       "statuses": [
@@ -27956,7 +28068,7 @@
       ]
     }
   ],
-  "total_sites": 2622,
+  "total_sites": 2630,
   "unspecified_count": 123,
   "multi_status_count": 62
 }
