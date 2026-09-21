@@ -1,0 +1,4 @@
+go test fuzz v1
+string("subproces\xff")
+string("password=hunter2")
+string("redi&://000@000")

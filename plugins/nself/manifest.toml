@@ -1,0 +1,45 @@
+# cascade-nself plugin manifest (cascade.plugin/v2).
+#
+# Documentation/authoring artifact matching plugin.go's in-code Manifest
+# value (pkg/plugin.RegisterBuiltin reads the Go struct, not this file, for
+# a compile-time builtin -- see plugins/review/manifest.toml and
+# plugins/claude/manifest.toml for the same precedent). plugin_test.go
+# parses THIS file through the real loader and asserts it agrees with
+# manifest().
+#
+# RUNTIME-TIER NOTE: the ticket that specced this plugin (P1-E25-W5-S52-T2)
+# describes it as `runtime = "process"`, `trust_tier = "trusted"`. Neither
+# field exists in the real cascade.plugin/v2 schema (pkg/plugin.Manifest has
+# no trust_tier or net_scopes field), and no composition root in this tree
+# can launch a RuntimeProcess manifest today (internal/plugins/dispatch.go's
+# ProvisionElevated refuses every process-tier install, because no code path
+# marks a manifest trusted). T0 ruled `runtime = "builtin"` as the floor and
+# recorded the security downgrade it represents; plugin.go's package doc
+# quotes both sides in full.
+#
+# PERMISSIONS NOTE: the ticket also names a `network` permission, for the
+# server-profile backends a handshake would resolve. No handshake runs at
+# this floor and this plugin dials nothing, so declaring `network` would
+# request a capability it never uses. It is omitted rather than requested
+# "just in case".
+
+id = "cascade-nself"
+name = "Cascade nSelf"
+schema = "cascade.plugin/v2"
+version = "0.1.0"
+host_version = ">=0.1.0"
+runtime = "builtin"
+
+requires = ["subprocess_exec"]
+
+[[provides.tools]]
+name = "nself_project_info"
+description = "Report whether a directory is an nself-managed project, and whether the nself CLI is reachable."
+
+[[provides.tools]]
+name = "nself_add_cascade"
+description = "Refuses: the nself handshake verb and the host config-apply seam this would need do not exist yet."
+
+[[permissions]]
+name = "subprocess_exec"
+description = "Run one bounded, read-only nself status probe as a local subprocess in the scanned directory."

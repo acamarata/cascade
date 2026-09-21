@@ -107,10 +107,12 @@ func TestBuiltinRegistry_List(t *testing.T) {
 	// It grows only when a real plugin is added and wired: cascade-claude
 	// joined here with P1-E16-W4-S34-T1, cascade-review with
 	// P1-E25-W5-S52-T4 (review_wiring.go's init() imports plugins/review),
-	// and this assertion failing on that change is the registry proving the
-	// new plugin actually reaches plugin.Builtins() rather than being built
-	// and left unreachable.
-	wantIDs := []string{"cascade-claude", "cascade-codex", "cascade-opencode", "cascade-pa", "cascade-review", "example-builtin"}
+	// and cascade-nself with P1-E25-W5-S52-T2 (nself_wiring.go imports
+	// plugins/nself to bind the real egress engine), and this assertion
+	// failing on that change is the registry proving the new plugin actually
+	// reaches plugin.Builtins() rather than being built and left
+	// unreachable.
+	wantIDs := []string{"cascade-claude", "cascade-codex", "cascade-nself", "cascade-opencode", "cascade-pa", "cascade-review", "example-builtin"}
 	if len(list) != len(wantIDs) {
 		t.Fatalf("List() len = %d, want %d (%v)", len(list), len(wantIDs), wantIDs)
 	}
