@@ -1,14 +1,16 @@
 # The native adversarial reviewer (`cascade-review`)
 
-Cascade ships its own code reviewer. It is a builtin plugin, disabled by
-default, backed by the `internal/review` engine; every review runs as a
-conductor dispatch through the daemon's `conductor.execute` door, never as a
-direct provider call.
+Cascade ships its own code reviewer. It is a builtin plugin backed by the
+`internal/review` engine; every review runs as a conductor dispatch through
+the daemon's `conductor.execute` door, never as a direct provider call.
 
 - Engine: `internal/review/`
-- Plugin skin: `plugins/review/` (manifest plus the registration shim)
+- Plugin skin: `plugins/review/` (manifest, registration shim, `cmd.go`'s
+  `review` cobra command)
 - Composition root: `internal/plugins/review_wiring.go`
 - ABI: `pkg/provider.ReviewProvider`
+- CLI: `cascade review` — see § CLI below and
+  [`docs/cli-reference/review.md`](cli-reference/review.md)
 
 ## The three CR levels
 
@@ -218,8 +220,45 @@ cannot cross that ABI, and `internal/review.CRC` is the documented
 caller-facing entry point for them (`CRCReport`). The ABI gap is filed rather
 than papered over.
 
+## CLI: `cascade review`
+
+P1-E25-W5-S52-T5 adds the command. Full reference:
+[`docs/cli-reference/review.md`](cli-reference/review.md).
+
+```
+cascade review [--diff <file|-|pr-ref>] [--pr <ref>] [--level A|B|C] [--json]
+```
+
+`--diff` takes a unified diff — a file path, or `-` for stdin. `--level`
+selects CR-A/CR-B/CR-C (default B). `--json` emits a versioned envelope
+(`{"version":1,"findings":[...]}`) instead of the human
+ranked-finding-list text; every finding field maps straight onto
+`pkg/provider.ReviewFinding`. Every input is a flag — there is no
+interactive prompt, so `CASCADE_NO_INPUT=1` changes nothing (06-FORGE-SPEC
+§5.8's automation-parity criterion is met structurally).
+
+`--pr` (`owner/repo#number`) is format-validated for real, but its diff is
+not fetched: `plugins/review` cannot import `internal/ci` (Art.10.2 — no
+host bridge exists for this yet), and `internal/ci`'s only egress class
+(`ci-poll`) is scoped to Actions run/job polling, not a PR-diff fetch.
+Passing a well-formed `--pr` refuses with a typed error naming both
+reasons — resolve the PR to a diff yourself and pass `--diff`.
+
+The command dispatches straight to the injected `reviewProvider` seam
+(`plugins/review/plugin.go`, wired to the real `internal/review.Provider` by
+`internal/plugins/review_wiring.go`'s `init()`) — the same `conductor.execute`
+door `cascade run` uses, so a sensitivity refusal or a dial failure reaches
+the CLI as the identical typed error, non-zero exit, never downgraded. The
+daemon JSON-RPC method `plugin.review.review` reaches the same seam via
+`plugin.go`'s exported `Review()` (`cmd/cascade/review_mount.go`).
+
 ## Opt-in
 
-`cascade-review` is registered in the builtin registry and **disabled by
-default**: the manifest declares no commands, so a fresh binary mounts no
-`review` noun. P1-E25-W5-S52-T5 adds the command.
+`cascade-review` is registered in the builtin registry. The manifest
+declares the `review` command (`provides.commands = ["review"]`,
+`rpc_method = "plugin.review.review"`, P1-E25-W5-S52-T5, R-16.58):
+`plugins/review/plugin.go`'s `RunCommand` dispatches it for real, and
+`cascade review` IS mounted as a top-level noun on the shipped binary's
+cobra root (`cmd/cascade/review_mount.go`'s `mountReviewCmd`, called from
+`root.go`'s `mountSubcommands`) — closing the composition-root deviation an
+earlier build left open; see that file's own header comment.

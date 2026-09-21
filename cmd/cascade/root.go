@@ -24,10 +24,6 @@ import (
 	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
-
-	// Blank import: reaches cascade-review's compile-time registration
-	// (P1-E25-W5-S52-T4). OPT-IN -- no CommandSpec yet, mounts no noun.
-	_ "github.com/acamarata/cascade/plugins/review"
 )
 
 // daemonlessProbeTimeout bounds the socket-probe dial PersistentPreRunE
@@ -146,6 +142,7 @@ func mountSubcommands(root *cobra.Command) {
 	mountNodeCmd(root)
 	mountSyncCmd(root)
 	mountChatCmd(root)
+	mountReviewCmd(root)
 	mountRunCmd(root)
 	mountPluginNamespaceCmds(root)
 	mountCICmd(root)

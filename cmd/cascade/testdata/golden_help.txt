@@ -28,6 +28,7 @@ Available Commands:
   policy         Explain and inspect policy decisions
   provider       Register and manage model providers
   recall         Search the retrieval index and print cited results
+  review         Run a CR-A/CR-B/CR-C adversarial code review over a diff
   run            Dispatch a one-shot or streaming model task through the conductor
   status         One-shot summary of the running daemon
   sync           Replicate domains between this device and its peers

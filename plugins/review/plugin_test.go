@@ -33,17 +33,24 @@ func TestPluginIsRegisteredWithTheHost(t *testing.T) {
 	t.Fatalf("%s is not in plugin.Builtins(); the init() registration never ran", pluginID)
 }
 
-// TestOptInDisabledByDefault_NoCommands proves the ticket's own opt-in
-// acceptance criterion: this plugin declares no CommandSpec yet (T5 adds
-// one), so a fresh binary mounts no `review` noun. Symbol-split assertion:
-// every engine symbol lives under internal/review, never here -- proved by
-// this file's own package boundary (plugins/review imports pkg/plugin and
-// pkg/provider only; internal/review is unreachable from it, enforced by
-// the depguard plugins-providers-boundary rule at compile time).
-func TestOptInDisabledByDefault_NoCommands(t *testing.T) {
+// TestReviewCommandIsDeclaredExactlyOnce proves P1-E25-W5-S52-T5's own
+// acceptance criterion: the manifest declares exactly one CommandSpec,
+// named "review" (R-16.58) -- superseding this file's former
+// TestOptInDisabledByDefault_NoCommands (T4 shipped with zero commands
+// deliberately, per that test's own doc comment: "P1-E25-W5-S52-T5 owns
+// adding the review CommandSpec, not this ticket" -- this is that
+// addition landing). Symbol-split assertion unchanged: every engine symbol
+// lives under internal/review, never here -- proved by this file's own
+// package boundary (plugins/review imports pkg/plugin and pkg/provider
+// only; internal/review is unreachable from it, enforced by the depguard
+// plugins-providers-boundary rule at compile time).
+func TestReviewCommandIsDeclaredExactlyOnce(t *testing.T) {
 	m := manifest()
-	if len(m.Provides.Commands) != 0 {
-		t.Fatalf("manifest declares %d commands, want 0: P1-E25-W5-S52-T5 owns adding the \"review\" CommandSpec, not this ticket", len(m.Provides.Commands))
+	if len(m.Provides.Commands) != 1 {
+		t.Fatalf("manifest declares %d commands, want exactly 1 (\"review\")", len(m.Provides.Commands))
+	}
+	if got := m.Provides.Commands[0].Name; got != "review" {
+		t.Fatalf("manifest's one command is named %q, want \"review\"", got)
 	}
 }
 
@@ -83,11 +90,13 @@ func TestDispatchToolAndIntentAreRealRefusals(t *testing.T) {
 	}
 }
 
-// TestRunCommandRejectsUnknownName proves RunCommand refuses every name --
-// this plugin declares no commands yet (T5's job).
+// TestRunCommandRejectsUnknownName proves RunCommand refuses every name
+// except "review" (P1-E25-W5-S52-T5 declared exactly that one command;
+// see cmd_test.go for RunCommand("review", ...)'s own real-dispatch
+// coverage).
 func TestRunCommandRejectsUnknownName(t *testing.T) {
-	if err := (handlers{}).RunCommand(context.Background(), "review", []string{"--diff", "-"}); err == nil {
-		t.Error("RunCommand(\"review\", ...) returned nil error: this plugin declares no commands yet")
+	if err := (handlers{}).RunCommand(context.Background(), "not-a-real-command", nil); err == nil {
+		t.Error("RunCommand(\"not-a-real-command\", ...) returned nil error: this plugin declares one command, \"review\"")
 	}
 }
 

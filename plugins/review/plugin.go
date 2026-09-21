@@ -11,25 +11,37 @@
 //
 // Purpose: register cascade-review with the host's compile-time builtin
 //
-//	registry (C/S-05.T7, R-16.58), disabled by default (no CommandSpec is
-//	declared yet -- P1-E25-W5-S52-T5 adds one), and expose the injectable
-//	ReviewProvider seam internal/plugins/review_wiring.go wires to the
-//	real internal/review engine at process boot.
+//	registry (C/S-05.T7, R-16.58) and expose the injectable ReviewProvider
+//	seam internal/plugins/review_wiring.go wires to the real internal/review
+//	engine at process boot. P1-E25-W5-S52-T5 (cmd.go) adds the "review"
+//	CommandSpec declared in manifest() below plus RunCommand's real
+//	dispatch to it. FIX (T0 decisions D1/D3, 2026-09-21, superseding the
+//	REWORK verdict's BLOCK 1/MAJOR 2): `cascade review` IS now mounted as
+//	a top-level noun -- cmd/cascade/review_mount.go's mountReviewCmd, the
+//	one root.AddCommand call this package's own files_scope could not
+//	reach, called from root.go's mountSubcommands alongside mountChatCmd.
+//	That same new file also registers the daemon JSON-RPC method
+//	"plugin.review.review" against the SAME reviewProvider seam below,
+//	through the exported Review() wrapper this fix adds.
 //
-// Inputs: none at import time; RunCommand's arguments once T5 declares a
+// Inputs: none at import time; RunCommand's "review" case takes the raw
 //
-//	command for this plugin to dispatch.
+//	argument vector a caller (the builtin registry's NewCobraCommand, or a
+//	direct RunCommand call) passes through.
 //
-// Outputs: a plugin.BuiltinRegistration reachable from plugin.Builtins();
+// Outputs: a plugin.BuiltinRegistration reachable from plugin.Builtins(),
 //
-//	the reviewProvider seam, ready for review_wiring.go's init() to
-//	overwrite via SetReviewProvider.
+//	now declaring the "review" CommandSpec; the reviewProvider seam, ready
+//	for review_wiring.go's init() to overwrite via SetReviewProvider; and
+//	RunCommand("review", args)'s real execution of cmd.go's NewReviewCommand.
 //
 // Constraints: imports pkg/plugin and pkg/provider only, never internal/**
 //
 //	(Art.10.2, plugins-providers-boundary depguard rule).
 //
-// SPORT: plugins/review entity (ADD) -- P1-E25-W5-S52-T4.
+// SPORT: plugins/review entity (ADD) -- P1-E25-W5-S52-T4; cmd/CommandSpec
+// (ADD) -- P1-E25-W5-S52-T5; Review() export + RPCMethod (ADD) -- FIX
+// P1-E25-W5-S52-T5 (D3).
 package review
 
 import (
@@ -52,9 +64,16 @@ func init() {
 }
 
 // manifest returns this plugin's cascade.plugin/v2 manifest, kept
-// byte-for-byte consistent with manifest.toml. Provides is intentionally
-// empty -- see manifest.toml's own header comment: P1-E25-W5-S52-T5 adds
-// the "review" CommandSpec.
+// byte-for-byte consistent with manifest.toml. Provides.Commands declares
+// exactly one command, "review" (P1-E25-W5-S52-T5, R-16.58): the
+// C/S-05.T7 builtin registry's NewCobraCommand("cascade-review","review")
+// now returns a real command whose RunE dispatches into RunCommand below.
+// RPCMethod is the literal "plugin.review.review" (07-CLI-COMMAND-TREE
+// §review's "rpc: plugin.review.* pattern", T0 ruling 2026-09-21 D3) --
+// NOT BuiltinRegistry.RPCMethodName's generic "plugin.<pluginID>.
+// <commandName>" shape, which would derive "plugin.cascade-review.review"
+// instead; cmd/cascade/review_mount.go registers the literal value this
+// field names, on the SAME reviewProvider seam, through Review() below.
 func manifest() plugin.Manifest {
 	return plugin.Manifest{
 		ID:          pluginID,
@@ -63,6 +82,15 @@ func manifest() plugin.Manifest {
 		Version:     "0.1.0",
 		HostVersion: ">=0.1.0",
 		Runtime:     plugin.RuntimeBuiltin,
+		Provides: plugin.Provides{
+			Commands: []plugin.CommandSpec{
+				{
+					Name:        "review",
+					Description: "Run a CR-A/CR-B/CR-C adversarial code review over a diff.",
+					RPCMethod:   "plugin.review.review",
+				},
+			},
+		},
 	}
 }
 
@@ -82,6 +110,16 @@ func SetReviewProvider(p provider.ReviewProvider) error {
 	}
 	reviewProvider = p
 	return nil
+}
+
+// Review dispatches ctx/req to the active reviewProvider seam -- the exact
+// same package-level variable cmd.go's runReview and RunCommand's cobra
+// dispatch read from, never a second construction. Exported so
+// cmd/cascade/review_mount.go's daemon JSON-RPC handler for
+// "plugin.review.review" (D3) can reach it without duplicating cmd.go's
+// flag-parsing/validation logic, which stays CLI-only.
+func Review(ctx context.Context, req provider.ReviewRequest) (provider.ReviewResponse, error) {
+	return reviewProvider.Review(ctx, req)
 }
 
 // unwiredReviewProvider is reviewProvider's default: every method reports,
@@ -114,11 +152,19 @@ func (handlers) DispatchIntent(_ context.Context, name string, _ []byte) ([]byte
 	return nil, fmt.Errorf("cascade-review: no such intent %q: this plugin declares no intents", name)
 }
 
-// RunCommand: cascade-review declares no commands yet (manifest.Provides
-// is empty -- P1-E25-W5-S52-T5 adds the "review" CommandSpec and this
-// method's real dispatch to reviewProvider.Review). Every name is
-// therefore a genuine "unknown command", not a stub standing in for a
-// missing implementation.
-func (handlers) RunCommand(_ context.Context, name string, _ []string) error {
-	return fmt.Errorf("cascade-review: unknown command %q: this plugin declares no commands yet (P1-E25-W5-S52-T5)", name)
+// RunCommand services the "review" CommandSpec (P1-E25-W5-S52-T5): it
+// builds a fresh *cobra.Command from NewReviewCommand (cmd.go — which owns
+// the --diff/--pr/--level/--json flag surface), sets args as its raw
+// argument vector, and executes it, matching
+// plugins/cascade-pa/commands.go's handlers.RunCommand precedent exactly
+// (pacmd.NewChatCommand(); c.SetArgs(args); c.ExecuteContext(ctx)). Any
+// other name is a genuine "unknown command" refusal -- this plugin
+// declares exactly one.
+func (handlers) RunCommand(ctx context.Context, name string, args []string) error {
+	if name != "review" {
+		return fmt.Errorf("cascade-review: unknown command %q: this plugin declares one command, \"review\"", name)
+	}
+	c := NewReviewCommand()
+	c.SetArgs(args)
+	return c.ExecuteContext(ctx)
 }

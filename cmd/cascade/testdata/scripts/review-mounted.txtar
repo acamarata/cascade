@@ -1,0 +1,51 @@
+# review-mounted.txtar
+#
+# testscript: executable
+#
+# `cascade review` mount proof (P1-E25-W5-S52-T5 REWORK fix, BLOCK 1). The
+# adversarial review's own reproduction was exactly this: `cascade --help`
+# never listed `review`, and `cascade review --diff x --level A` exited 2
+# with "unknown flag: --diff" -- cobra treating "review" as an unmatched
+# arg to root, not a subcommand, because nothing had called
+# root.AddCommand on it. Run in process by TestScript (script_test.go)
+# against the REAL newRootCmd() tree -- the same composition the shipped
+# binary builds (root.go's mountSubcommands calls mountReviewCmd,
+# cmd/cascade/review_mount.go) -- so what this proves is what an
+# operator's own shell would see, not a synthetic tree built only for a
+# test.
+#
+# SCOPE: only the two assertions that hold regardless of which
+# provider.ReviewProvider is currently installed live here -- this
+# driver's own directive set (env/exec/stdout/stderr, script_test.go) has
+# no hook to swap plugins/review's package-level reviewProvider seam
+# around one exec line, and by the time this test runs, root.go's real
+# import chain (internal/plugins, transitively, via builtin_plugins.go)
+# has already wired the REAL provider, which would try to dial a daemon
+# socket this test environment does not have. The "exits 0 with findings"
+# and "an unconfigured provider refuses" assertions D2 also names live in
+# review_mount_test.go instead, where SetReviewProvider can be swapped
+# deterministically before each exec.
+
+# The noun is mounted: --help reaches cmd.go's real Long/flag surface,
+# not root's own "unknown command" refusal.
+exec cascade review --help
+stdout 'native adversarial reviewer'
+stdout '--diff'
+stdout '--pr'
+stdout '--level'
+stdout '--json'
+
+# No --diff or --pr: the real validateReviewFlags refusal (KindInvalidInput
+# text), not cobra's own unmatched-arg error -- proving dispatch reaches
+# cmd.go's RunE, not merely that help text renders.
+! exec cascade review
+stderr 'one of --diff or --pr is required'
+
+# --diff and --pr together: the same validator's other branch.
+! exec cascade review --diff x --pr y
+stderr '--diff and --pr are mutually exclusive'
+
+# A stray positional argument is refused (cobra.NoArgs), same as every
+# other mounted command's guardUnknownSubcommands/Args discipline.
+! exec cascade review extra-arg
+stderr 'unknown command'

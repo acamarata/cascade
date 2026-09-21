@@ -6,13 +6,15 @@
 # plugins/examples/example-builtin for the same precedent). Kept
 # byte-for-byte consistent with manifest() in plugin.go.
 #
-# provides.commands is intentionally EMPTY here: P1-E25-W5-S52-T4 (this
-# ticket) registers the engine and the plugin skin; P1-E25-W5-S52-T5 adds
-# the "review" CommandSpec that mounts `cascade review` on the cobra root.
-# Until then this plugin is registered (reachable from plugin.Builtins())
-# but contributes no CLI/RPC surface -- 02-TARGET-STRUCTURE's first-party
-# catalog pins cascade-review as opt-in, and a fresh binary genuinely
-# mounts no `review` noun.
+# provides.commands declares "review" (P1-E25-W5-S52-T5, R-16.58): the
+# C/S-05.T7 builtin registry's NewCobraCommand("cascade-review","review")
+# now returns a real, non-stub command (plugin.go's RunCommand dispatches
+# it to cmd.go's NewReviewCommand). `cascade review` is mounted as a
+# TOP-LEVEL noun on the shipped binary's cobra root by
+# cmd/cascade/review_mount.go's mountReviewCmd (T0 decision D1,
+# 2026-09-21, closing the REWORK verdict's BLOCK 1). rpc_method names the
+# daemon JSON-RPC method the same file registers (D3), dispatching to the
+# same reviewProvider seam via plugin.go's exported Review().
 
 id = "cascade-review"
 name = "Cascade Review"
@@ -20,3 +22,8 @@ schema = "cascade.plugin/v2"
 version = "0.1.0"
 host_version = ">=0.1.0"
 runtime = "builtin"
+
+[[provides.commands]]
+name = "review"
+description = "Run a CR-A/CR-B/CR-C adversarial code review over a diff."
+rpc_method = "plugin.review.review"

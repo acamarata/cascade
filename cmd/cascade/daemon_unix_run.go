@@ -171,6 +171,7 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	if err := registerDBPathHandlers(context.Background(), registry, manifest, paths, clock, bus, store, dbPath); err != nil {
 		return nil, nil, nil, err
 	}
+	registry.Register(reviewRPCMethod, reviewRPCHandler) // plugin.review.review, D3; handler in review_mount.go
 
 	if err := applyServerOptions(registry, opts); err != nil {
 		return nil, nil, nil, err
