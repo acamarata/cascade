@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T20:08:08Z",
+  "generated_at": "2026-09-21T20:30:02Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3104,6 +3104,35 @@
           "status": "ADD",
           "ticket": "P1-E22-W5-S47-T1",
           "raw": "cmd.cascade.cmd.recall.what (ADD, P1-E22-W5-S47-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd.cascade.cmd.what",
+      "sites": [
+        {
+          "file": "cmd/cascade/what.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T5",
+          "raw": "cmd.cascade.cmd.what (ADD, P1-E22-W5-S47-T5)."
+        },
+        {
+          "file": "cmd/cascade/what_parity_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T5",
+          "raw": "cmd.cascade.cmd.what (ADD, P1-E22-W5-S47-T5)."
+        },
+        {
+          "file": "cmd/cascade/what_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T5",
+          "raw": "cmd.cascade.cmd.what (ADD, P1-E22-W5-S47-T5)."
         }
       ],
       "statuses": [
@@ -29257,7 +29286,7 @@
       ]
     }
   ],
-  "total_sites": 2754,
+  "total_sites": 2757,
   "unspecified_count": 130,
   "multi_status_count": 72
 }
