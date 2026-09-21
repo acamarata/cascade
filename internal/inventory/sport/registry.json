@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T13:31:12Z",
+  "generated_at": "2026-09-21T13:33:00Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3082,6 +3082,21 @@
           "line": 6,
           "status": "",
           "raw": "cmd.cascade.fleet-watch/TEST (fleet watch render path)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd.cascade.githubCIWatch/TESTED",
+      "sites": [
+        {
+          "file": "cmd/cascade/github_ci_watch_platform_test.go",
+          "line": 9,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T4",
+          "raw": "cmd.cascade.githubCIWatch/TESTED (P1-E25-W5-S51-T4)."
         }
       ],
       "statuses": [
@@ -28141,7 +28156,7 @@
       ]
     }
   ],
-  "total_sites": 2635,
-  "unspecified_count": 126,
+  "total_sites": 2636,
+  "unspecified_count": 127,
   "multi_status_count": 62
 }
