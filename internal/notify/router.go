@@ -56,6 +56,13 @@ var sourceKindMapping = map[events.EventKind]sourceMapping{
 
 // NotificationRouter decodes notification-class events off an
 // events.Subscription and enqueues them for dispatch.
+//
+// P1-E23-W5-S49-T2 CHANGE: the router exposes away-mode accumulation
+// (SetAccumulate / DrainAccumulated) but does NOT own it — the buffer and
+// its gate live on queueSet (dispatch.go), the single choke point every
+// producer reaches, so Notifier.Deliver's direct producer path is gated by
+// exactly the same switch as a bus-decoded event. These methods are the
+// away controller's handle on that gate.
 type NotificationRouter struct {
 	queues *queueSet
 	clock  runtime.Clock
@@ -119,4 +126,46 @@ func (r *NotificationRouter) handle(ev events.Event) {
 		Timestamp:     r.clock.Now(),
 	}
 	r.queues.enqueue(n)
+}
+
+// SetAccumulate switches every producer between immediate fan-out (false)
+// and away-mode accumulation (true). Switching from true to false does NOT
+// itself flush the buffer — DrainAccumulated is the only way accumulated
+// notifications leave it, so a caller that flips accumulation off without
+// draining first has them waiting for the next explicit drain.
+func (r *NotificationRouter) SetAccumulate(accumulate bool) {
+	r.queues.setAccumulate(accumulate)
+}
+
+// Accumulating reports whether notifications are currently being buffered
+// instead of queued for dispatch.
+func (r *NotificationRouter) Accumulating() bool {
+	return r.queues.isAccumulating()
+}
+
+// DrainAccumulated atomically returns every notification buffered while
+// accumulation was on, in priority order (Urgent, High, Normal, Low;
+// stable within a priority so arrival order is preserved), and clears the
+// buffer. It does not change the accumulation flag itself.
+func (r *NotificationRouter) DrainAccumulated() []Notification {
+	return r.queues.drainAccumulated()
+}
+
+// reclassifyAccumulated sets Priority to Urgent on every still-buffered
+// notification whose ID or CorrelationID equals matchID and returns how
+// many it changed. Package-private: only away.go's stall-escalation path
+// calls it, and it reports 0 rather than pretending a match.
+func (r *NotificationRouter) reclassifyAccumulated(matchID string) int {
+	return r.queues.reclassifyAccumulated(matchID)
+}
+
+// requeue returns n to the NORMAL per-priority queues, bypassing the
+// accumulation gate. digest.go calls it for every drained original no
+// delivered digest represented (no-silent-discard): re-queued items keep
+// their own priority, class, scope and expiry and are gated by
+// ScopeDeliveryPredicate again at the next ordinary Drain, never
+// re-widened. Bypassing the gate is the point — a re-queue must land in
+// the queue it is being returned to, not back into the buffer it just left.
+func (r *NotificationRouter) requeue(n Notification) {
+	r.queues.enqueueNow(n)
 }

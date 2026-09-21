@@ -224,3 +224,193 @@ before a record is discoverable by id, so a withheld record never leaks
 through existence. A producer that needs pending-across-restart semantics
 owns its own durable table and re-`Deliver`s on daemon start; this
 package makes no durability claim.
+
+## Away mode and return digest (`internal/notify`)
+
+Status: `P1-E23-W5-S49-T2`. Ticket contract:
+`.claude/planning/p1/phase/epics/E-W/waves/W-5/sprints/S-49/tickets/T-2.yaml`.
+Extends the router above (S-49.T1) with an away-mode state machine
+(`AwayController`, `away.go`/`away_config.go`/`away_signals.go`), the
+accumulation gate (`accumulate.go`) and a per-session return digest
+(`DigestCompiler`, `digest.go`). The full `files_scope` deviation is declared
+at the end of this section.
+
+### Signals: two injected interfaces, no invented wire format
+
+`AwayController` consumes exactly two upstream signals, both as narrow
+injected interfaces:
+
+| Interface | Question it answers | Real implementation |
+|---|---|---|
+| `PresenceSource` | when was the OPERATOR last active | arrives with the wiring ticket |
+| `AdmissionIdleSource` | is the MACHINE side idle (`Inflight()==0 && QueueDepth()==0`) | `*governor.AdmissionController`, compile-time asserted |
+| `StallSource` | which accumulated notification is stalled | arrives with the wiring ticket |
+
+The contract names four upstream symbols that do not exist in this tree:
+`supervision.Subscribe`, event Kind `attention.idle`,
+`AdmissionController.IdleState()`, and a `supervision.stalled` payload
+carrying the stalled notification's id. The nearest real signals answer
+different questions, so they are not substitutes: `Inflight()==0 &&
+QueueDepth()==0` means the governor has no work, which is machine
+idleness, and a session-change event is neither necessary nor sufficient
+for presence (a long single-session compile emits none while the operator
+is present; a cron-driven session change at 03:00 emits one while the
+operator is asleep). This package therefore decodes **no** event Kind for
+presence or stalls and presents no proxy as presence. The contradiction is
+filed as a PCI; the production implementations of `PresenceSource` and
+`StallSource` land with the wiring ticket that constructs the controller.
+
+### State machine and the sustained-idle window
+
+`Active` -> `AwayPending` (presence idle past `away_threshold`) -> `Away`
+(the machine side also idle for a full window) -> `Active` (operator
+activity). `Tick` is the periodic driver: it drains stall notices, reads
+`PresenceSource`, and advances the machine. `HandleEvent` takes a pushed
+`ActivityEvent` for a root that learns of activity as it happens.
+
+**Sustained** means both signals held for the WHOLE threshold window, not
+at one sampling instant: every admission-busy sample restarts the window,
+so a machine busy through the window and idle at the exact Tick instant
+does not produce `Away`. Only operator activity leaves `Away`; machine
+business never does.
+
+Every state transition, its accumulation flip and its journal append happen
+inside **one** critical section. A concurrent `Tick` and `HandleEvent`
+therefore cannot interleave into `Active` with accumulation still on (a
+permanent notification blackhole, since only an `Away -> Active` edge turns
+it off), and cannot journal `KindAck` before its own `KindIntent`.
+
+### Accumulation: gated at the single producer choke point
+
+The accumulation buffer and its gate live on `queueSet` (fields in
+`dispatch.go`, methods in `accumulate.go`), not on the router, because
+`queueSet.enqueue` is the one call **every** producer reaches: the bus-decode
+path (`NotificationRouter.handle`), the direct producer path
+(`Notifier.Deliver`) and `Dispatcher.Drain`'s own retry re-queue. A producer
+calling `Deliver` at 02:00 while the operator is away is accumulated exactly
+like a bus event, and appears in the return digest.
+`router.SetAccumulate` / `DrainAccumulated` are the away controller's handle
+on that gate. Two callers deliberately bypass it: `router.requeue` (a
+re-queue must land in the queue it is being returned to) and
+`Notifier.DeliverNow` (a closed episode's return digest must not be buffered
+into the next episode and reduced to a count inside that episode's digest).
+
+Stall notices are consumed **only while `Away`, inside the controller's own
+lock**. The source's contract delivers each notice exactly once, so draining
+it while `Active` — with no accumulation buffer to apply it to — would
+destroy it; AC#3 obliges reclassification only while `Away`, so a notice
+arriving outside it is left pending for the next away episode instead.
+Consuming and applying under the same lock the return transition holds also
+means a concurrent return cannot land between the two and drop the notice
+with only a WARN. A `StallNotice` naming an accumulated notification
+reclassifies it to `PriorityUrgent` in place; a notice matching nothing is
+WARNed, never counted as handled. Like `PresenceSource`, the source is
+therefore called under that lock: a re-entrant implementation deadlocks
+rather than corrupting the buffer.
+
+### Return digest: addressed per session
+
+On `Away -> Active` the controller flips accumulation off, **drains the
+buffer inside that same critical section**, journals the return, and then
+calls `DigestCompiler.CompileDrained` with that snapshot, which builds **one
+digest per candidate SESSION** (registrations are deduplicated by session id: two
+surfaces on one session are one session). `ScopeDeliveryPredicate` runs
+first for each session, so a digest counts only what that session was
+already eligible to receive; everything else contributes an opaque
+`withheld` count with no title, scope name, correlation id or DeepLink.
+DeepLinks are carried only for in-scope Urgent items, capped by
+`digest_urgent_deeplinks`.
+
+Each digest is `Class addressed`, `TargetSession` that session,
+`Visibility private`, `Priority Urgent`, `OriginScope` the controller node,
+`CorrelationID` the away-episode id, `ExpiresAt` unset. Addressing is what
+makes the per-session filtering mean anything: a `global-critical` digest
+is deliverable to every session by the predicate's own rule, so a digest
+built for one project's session while carrying its DeepLinks would reach
+another project's session — the cross-scope leak R-21.227 exists to
+forbid. The fix needs no new `Notification` field and no `scope.go` change:
+`addressed` + `TargetSession` already reaches exactly one session through
+the ordinary predicate.
+
+An **empty** drain delivers no digest at all: with nothing accumulated and
+nothing withheld there is no summary to give, and a Priority-Urgent "no
+notifications while away" per session on every quiet return is noise.
+
+The snapshot is what makes the digest survive an immediate re-entry. Read
+after the unlock instead, a concurrent `Tick` pair that re-enters `Away`
+turns the gate back on, and a compiler consulting the live gate then refuses
+the digest of an episode that has **already returned** — AC#4 failing with
+nothing but an ERROR log. `CompileDrained` therefore ignores the gate and
+delivers through `DeliverNow`. The bare `Compile` entry point, for a caller
+that has not snapshotted, still refuses (typed error, nothing drained) while
+accumulation is on: the live buffer belongs to an open episode, so draining
+it would take another episode's items and summarise an episode that has not
+returned. With no `DigestCompiler` wired at all, the drained snapshot is
+re-queued into the normal queues rather than discarded.
+
+### No silent discard
+
+An accumulated item leaves the buffer for good only when a digest that
+**actually delivered** counted it. Everything else is re-queued into the
+normal per-priority queues, unchanged in priority, class, scope and expiry:
+
+| Situation | Outcome |
+|---|---|
+| item in a delivered digest's scope | represented; not re-queued (no double count) |
+| item withheld from every registered session | re-queued; the `withheld` count reports it, it does not consume it |
+| one session's digest fails, another's succeeds | only the items no delivered digest represented are re-queued |
+| every digest fails, or no session is registered | every drained item is re-queued |
+
+### Journal and resume
+
+Away-entry and Active-return are journaled via `M/S-27.T1`'s entity journal
+as a `KindIntent`/`KindAck` pair sharing the away-episode id as
+`OperationID`, entity id = the local node identity. `ReplayState` returns a
+`ReplayResult`, and `NewAwayControllerFrom` installs it: a replayed `Away`
+state resumes accumulating **before the first Tick** and keeps the
+pre-restart episode id, so the eventual return writes its `KindAck` against
+the episode the pre-restart `KindIntent` opened. Two kills leave two open
+episodes, so the **last** unmatched `KindIntent` wins; returning the first
+would resurrect a stale episode forever. A replayed `Away` with no episode
+id is refused and downgraded to `Active` — an episode that can never be
+closed must not resume accumulating.
+
+The journal records state transitions, not buffer contents, so a resumed
+episode starts with an empty accumulation buffer and its digest summarises
+only post-restart notifications. That is a recorded limit, not an oversight.
+
+### Configuration
+
+`AwayConfig` holds `away_threshold` (duration, default `30m`) and
+`digest_urgent_deeplinks` (int, default `10`), both hot keys. `Validate`
+is the validate-before-apply step (08 §3) and is proven on the struct; no
+TOML loader in this tree reads a `[notify]` section yet for either this
+ticket's keys or S-49.T1's own `Config`, so the loading half belongs to the
+wiring ticket.
+
+### `files_scope` deviation (declared once, here)
+
+The ticket's `files_scope` lists four added files (`away.go`, `digest.go`,
+`away_test.go`, `digest_test.go`) and one changed (`router.go`). The shipped
+change is wider, and every extra file is a split or a named change rather
+than new scope:
+
+| File | Why it exists |
+|---|---|
+| `away_config.go` | `AwayController`'s injected seams (`AwayDeps`, `AwayConfig`, the three source interfaces, `ReplayState`) — split so `away.go` stays under the 300-line cap |
+| `away_signals.go` | the same controller's collaborator-facing halves (stall drain, digest hand-off, journal append) — same reason |
+| `accumulate.go` | `queueSet`'s accumulation-buffer methods, split out of `dispatch.go` (which was at 299 lines, so the next edit there would have reddened the cap) |
+| `notifier.go` | `Notifier` (`Deliver` + this ticket's `DeliverNow`), split out of `inbox.go` for the same reason; `inbox.go` keeps the consumer surface |
+| `dispatch.go` | changed under the T0 ruling that moved the accumulation gate to the single producer choke point (`queueSet.enqueue`) |
+| `inbox.go` | changed by the `notifier.go` split only |
+| `away_accumulate_test.go`, `away_concurrency_test.go`, `away_fixture_test.go`, `away_replay_test.go`, `away_signals_test.go`, `digest_requeue_test.go` | test splits of `away_test.go` / `digest_test.go`, each under the same cap |
+
+### Not yet wired to a composition root
+
+`internal/notify` has zero production callers anywhere in the tree, and **no
+P1 ticket owns away-mode wiring**: `AwayController` appears in exactly one
+contract, the one that builds it. The four
+`internal/build/testonly-allow.json` entries (`NewAwayController`,
+`NewDigestCompiler`, `DefaultAwayConfig`, `ReplayState`) say so plainly and
+are parked at `P1-E37-W8-S73-T2`, the nearest inbox surface, until planning
+forges a real owner in response to the PCI.

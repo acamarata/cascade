@@ -21,6 +21,17 @@
 //	queue drops the newest Notification with a slog WARN rather than
 //	blocking the enqueuing goroutine.
 //
+// P1-E23-W5-S49-T2 CHANGE (T0 ruling, files_scope += dispatch.go):
+//
+//	queueSet also owns the away-mode accumulation buffer, because
+//	queueSet.enqueue is the single choke point EVERY producer reaches —
+//	router.go's bus-decode path, Notifier.Deliver (inbox.go) and Drain's
+//	own retry re-queue. Gating above it would leave a 02:00
+//	Notifier.Deliver dispatched to an absent operator and absent from the
+//	return digest. The buffer's own methods live in accumulate.go so that
+//	addition does not push this file past Art.10.3's 300-line cap; only the
+//	three fields below and enqueueNow remain here.
+//
 // SPORT: internal.notify.Dispatcher/ADDED, internal.notify.Config/ADDED
 //
 //	(P1-E23-W5-S49-T1).
@@ -65,10 +76,15 @@ func DefaultConfig() Config {
 // priorityOrder is the fixed drain order: Urgent, High, Normal, Low.
 var priorityOrder = [4]Priority{PriorityUrgent, PriorityHigh, PriorityNormal, PriorityLow}
 
-// queueSet holds one buffered channel per Priority.
+// queueSet holds one buffered channel per Priority plus the away-mode
+// accumulation buffer every producer is gated by (S-49.T2).
 type queueSet struct {
 	queues [4]chan Notification
 	log    *slog.Logger
+
+	accumMu      sync.Mutex
+	accumulating bool
+	accumBuf     []Notification
 }
 
 func newQueueSet(cfg Config, log *slog.Logger) *queueSet {
@@ -83,11 +99,14 @@ func newQueueSet(cfg Config, log *slog.Logger) *queueSet {
 	}
 }
 
-// enqueue places n on its priority's queue, or on Low's queue when n
+// enqueueNow places n on its priority's queue, or on Low's queue when n
 // carries an invalid Priority (fail closed toward the least-urgent lane,
 // never dropped silently). A full queue drops n with a slog WARN rather
-// than blocking the caller.
-func (q *queueSet) enqueue(n Notification) {
+// than blocking the caller. It bypasses the accumulation gate, for the one
+// caller that must not re-accumulate: the digest's re-queue of an
+// unrepresented original (router.requeue) is by definition a return to the
+// NORMAL queue.
+func (q *queueSet) enqueueNow(n Notification) {
 	p := n.Priority
 	if !p.Valid() {
 		p = PriorityLow

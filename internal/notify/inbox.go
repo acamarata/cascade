@@ -1,18 +1,19 @@
-// Purpose: the R-16.60b producer and consumer APIs: Notifier.Deliver (the
+// Purpose: the R-16.60b CONSUMER API — Inbox.List/Read/Ack/Expire, the query
 //
-//	direct producer entry point used by CI fan-out, delegation results,
-//	and future callers) and Inbox.List/Read/Ack/Expire (the query
-//	surface AK/S-73.T2 and the MCP inbox tools consume).
+//	surface AK/S-73.T2 and the MCP inbox tools consume, plus the typed
+//	results it answers with. The matching producer API (Notifier.Deliver /
+//	DeliverNow) lives in notifier.go.
 //
-// Inputs: Deliver takes a caller-populated Notification; List/Read/Ack
+// Inputs: List/Read/Ack take a SessionScopeRef identifying the querying
 //
-//	take a SessionScopeRef identifying the querying session.
+//	session; record/recordWithheld/recordExpired take the dispatch loop's
+//	fan-out outcome.
 //
-// Outputs: Deliver assigns Timestamp from the injected clock and enqueues
+// Outputs: List/Read/Ack apply ScopeDeliveryPredicate and Visibility first,
 //
-//	by priority, returning a typed error for missing required scope
-//	fields; List/Read/Ack apply ScopeDeliveryPredicate and Visibility
-//	first, so a withheld record is never discoverable by id.
+//	so a withheld record is never discoverable by id; List also returns
+//	Counts, which reports withheld and expired records the querying session
+//	cannot see individually.
 //
 // Constraints: R-21.227 — the Inbox is a PROJECTION over its producers'
 //
@@ -22,9 +23,7 @@
 //	owner for executive decision packets: AP/S-81.T3, out of this
 //	ticket's scope). No documentation here claims durability (Art.1.3).
 //
-// SPORT: internal.notify.Notifier/ADDED, internal.notify.Inbox/ADDED
-//
-//	(P1-E23-W5-S49-T1).
+// SPORT: internal.notify.Inbox/ADDED (P1-E23-W5-S49-T1).
 
 package notify
 
@@ -33,7 +32,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -243,48 +241,4 @@ func (ib *Inbox) Expire(now time.Time) int {
 		}
 	}
 	return swept
-}
-
-// Notifier is the R-16.60b direct producer entry point: Deliver validates
-// the R-16.5 scope fields, assigns Timestamp from the injected clock, and
-// enqueues by priority — the same path event-bus-decoded notifications
-// take (router.go).
-type Notifier struct {
-	queues *queueSet
-	clock  runtime.Clock
-}
-
-// NewNotifier returns a Notifier enqueueing into queues, timestamping with
-// clock.
-func NewNotifier(queues *queueSet, clock runtime.Clock) *Notifier {
-	return &Notifier{queues: queues, clock: clock}
-}
-
-// Deliver validates n's required scope fields for its resolved Class,
-// assigns Timestamp, and enqueues n by Priority. It returns
-// errMissingScopeFields for an Addressed Notification with no
-// TargetSession, or a Scoped Notification with neither OriginScope nor
-// TargetScope set.
-func (nf *Notifier) Deliver(ctx context.Context, n Notification) error {
-	if err := ctx.Err(); err != nil {
-		return cascade.Wrap(cascade.KindCanceled, err, "notify: Deliver canceled")
-	}
-	class := n.Class.Resolve()
-	switch class {
-	case ClassAddressed:
-		if n.TargetSession == "" {
-			return errMissingScopeFields
-		}
-	case ClassScoped:
-		if n.OriginScope == "" && n.TargetScope == "" {
-			return errMissingScopeFields
-		}
-	case ClassGlobalCritical, classUnresolvable:
-		// GlobalCritical needs no scope fields; classUnresolvable is
-		// listed only because Resolve()'s return type still enumerates
-		// it — Resolve() never actually produces it here.
-	}
-	n.Timestamp = nf.clock.Now()
-	nf.queues.enqueue(n)
-	return nil
 }
