@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T09:34:55Z",
+  "generated_at": "2026-09-21T09:56:55Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -9954,6 +9954,13 @@
       "name": "internal.ci.WaitOnGreen/TESTED",
       "sites": [
         {
+          "file": "internal/ci/waitmerge_platform_test.go",
+          "line": 9,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "internal.ci.WaitOnGreen/TESTED (P1-E25-W5-S51-T3)."
+        },
+        {
           "file": "internal/ci/waitmerge_wait_extra_test.go",
           "line": 7,
           "status": "",
@@ -10187,6 +10194,13 @@
     {
       "name": "internal.ci.waitDaemonAbsentRefusal/TEST",
       "sites": [
+        {
+          "file": "internal/ci/waitmerge_unix_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T3",
+          "raw": "internal.ci.waitDaemonAbsentRefusal/TEST (P1-E25-W5-S51-T3)."
+        },
         {
           "file": "internal/ci/waitmerge_windows_test.go",
           "line": 13,
@@ -27672,7 +27686,7 @@
       ]
     }
   ],
-  "total_sites": 2595,
+  "total_sites": 2597,
   "unspecified_count": 121,
   "multi_status_count": 61
 }
