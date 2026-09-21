@@ -13,6 +13,13 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
+// loopWait bounds every wait on the loop's OWN work (report build plus an
+// Ed25519 signature through the keystore). Two consecutive race-lane runs
+// (35545822346, 35546665155) crossed a 2s budget at 6.2s and 4.6s on a
+// loaded runner, one per test in this file. The budget only matters when a
+// test is already failing, so it is generous rather than tight.
+const loopWait = 30 * time.Second
+
 // fakeTicker is a manually-fired Ticker for deterministic loop tests.
 type fakeTicker struct {
 	ch      chan struct{}
@@ -72,7 +79,7 @@ func TestRunHeartbeatLoopSendsOnTick(t *testing.T) {
 		}
 	case err := <-loopErr:
 		t.Fatalf("heartbeat loop reported an error instead of sending: %v", err)
-	case <-time.After(30 * time.Second):
+	case <-time.After(loopWait):
 		t.Fatal("timed out waiting for heartbeat send")
 	}
 	cancel()
@@ -111,7 +118,7 @@ func TestRunHeartbeatLoopReportsSendErrorAndContinues(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected a non-nil send error")
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(loopWait):
 		t.Fatal("timed out waiting for OnError")
 	}
 	cancel()
