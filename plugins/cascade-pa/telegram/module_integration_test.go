@@ -11,6 +11,7 @@ package telegram
 
 import (
 	"context"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -20,6 +21,9 @@ import (
 )
 
 func TestTelegramModule_StartStopDrain(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Start is refused on Windows tier-2; module_windows_test.go proves the refusal")
+	}
 	rig := newDefaultRig(t)
 	rig.doer.push(mustReadTestdata(t, "getupdates_text.json"), nil)
 	if err := rig.module.Start(context.Background()); err != nil {

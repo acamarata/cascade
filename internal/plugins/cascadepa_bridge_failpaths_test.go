@@ -142,6 +142,7 @@ func TestBridgeStateAdapter_TranslatesACompareAndSwapConflict(t *testing.T) {
 	if err != nil {
 		t.Fatalf("openBridgeState: %v", err)
 	}
+	closeBridgeState(t, state)
 	if err := state.Save(ctx, cascadepa.SubjectState{Subject: "tg-cas", AllowedFrom: []string{"111"}}); err != nil {
 		t.Fatalf("first Save: %v", err)
 	}

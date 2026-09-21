@@ -155,6 +155,7 @@ func TestNewCascadePABridge_BothGatesPass(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewCascadePABridge: %v", err)
 	}
+	closeBridgeRuntime(t, rt)
 	if rt.Start == nil || rt.Stop == nil || rt.IssueCode == nil {
 		t.Fatalf("the daemon was handed an incomplete subsystem: %+v", rt)
 	}
@@ -187,6 +188,7 @@ func TestBridgeIssuance_IsRedeemableThroughTheSameDurableRow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewCascadePABridge: %v", err)
 	}
+	closeBridgeRuntime(t, rt)
 	res, err := rt.IssueCode(ctx, "")
 	if err != nil {
 		t.Fatalf("IssueCode: %v", err)
@@ -201,6 +203,7 @@ func TestBridgeIssuance_IsRedeemableThroughTheSameDurableRow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("openBridgeState: %v", err)
 	}
+	closeBridgeState(t, state)
 	key, err := cascadepa.DerivePairCodeKey(syntheticBotToken)
 	if err != nil {
 		t.Fatalf("DerivePairCodeKey: %v", err)
@@ -243,6 +246,7 @@ func TestBridgeIssuance_RefusesAForeignSubject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewCascadePABridge: %v", err)
 	}
+	closeBridgeRuntime(t, rt)
 	_, err = rt.IssueCode(ctx, "tg-somebody-elses-bot")
 	if err == nil {
 		t.Fatal("a code was issued for a subject this daemon runs no bridge for")

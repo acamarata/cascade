@@ -3,6 +3,7 @@ package plugins
 import (
 	"context"
 	"crypto/rand"
+	"io"
 	"time"
 
 	"github.com/acamarata/cascade/internal/runtime"
@@ -194,11 +195,37 @@ func enabledBridge(ctx context.Context, deps BridgeDeps, token string) (*BridgeR
 	return &BridgeRuntime{
 		Subject:   subject,
 		Start:     module.Start,
-		Stop:      module.Stop,
+		Stop:      closeStateAfterStop(module.Stop, state),
 		IssueCode: bridgeIssuer(stores, deps.Clock, subject),
 		sink:      journal,
 		Routes:    routes,
 	}, nil
+}
+
+// closeStateAfterStop wraps stop so the durable state openBridgeState opened
+// is released once the module has actually drained, not before. The daemon
+// reaches this through internal/daemon/subsystem_bridge.go's drainBridge,
+// which already blocks until stop returns; leaving the handle open past that
+// point is the exact defect Windows CI surfaces first, because it refuses to
+// remove a temp directory that still holds cascade.db open.
+//
+// state is typed cascadepa.BridgeState (the plugin-facing seam, which does
+// not know it is SQLite); only the adapter openBridgeState actually returns
+// implements io.Closer, so a state built some other way (a test double) is
+// left alone rather than assumed closeable.
+func closeStateAfterStop(stop func(context.Context) error, state cascadepa.BridgeState) func(context.Context) error {
+	closer, ok := state.(io.Closer)
+	if !ok {
+		return stop
+	}
+	return func(ctx context.Context) error {
+		stopErr := stop(ctx)
+		closeErr := closer.Close()
+		if stopErr != nil {
+			return stopErr
+		}
+		return closeErr
+	}
 }
 
 // bridgeIssuer builds the pa.pair_code implementation for a CONFIGURED bridge.

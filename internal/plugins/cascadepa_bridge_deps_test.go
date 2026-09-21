@@ -255,6 +255,7 @@ func TestOpenBridgeState_RoundTripsThroughSQLite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("openBridgeState: %v", err)
 	}
+	closeBridgeState(t, state)
 	want := cascadepa.SubjectState{
 		Subject: "tg-abc", TrustTier: "paired-device", AllowedFrom: []string{"111"},
 		CodeDigest: mustCodeDigest(t, "ABCDEFGH"), WrongAttempts: 2,

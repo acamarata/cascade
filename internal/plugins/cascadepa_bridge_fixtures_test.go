@@ -17,6 +17,7 @@ package plugins
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -109,4 +110,65 @@ func enabledBridgeDeps(t *testing.T) (BridgeDeps, *recordingBus, string) {
 		Clock:   runtime.NewSystemClock(),
 		Events:  bus,
 	}, bus, dataDir
+}
+
+// closeBridgeState registers state's Close (when it has one) via t.Cleanup,
+// so a database handle a test opened directly through openBridgeState never
+// outlives the test. Windows refuses to remove a TempDir that still holds
+// cascade.db open, and t.TempDir()'s own cleanup runs with no chance to
+// retry — the handle has to already be gone by then. A state built some
+// other way (a test double with no Close) is left alone.
+func closeBridgeState(t *testing.T, state cascadepa.BridgeState) {
+	t.Helper()
+	closer, ok := state.(io.Closer)
+	if !ok {
+		return
+	}
+	t.Cleanup(func() {
+		if err := closer.Close(); err != nil {
+			t.Errorf("close bridge state: %v", err)
+		}
+	})
+}
+
+// closeBridgeRuntime registers rt.Stop via t.Cleanup, so the state
+// NewCascadePABridge opened inside enabledBridge is closed even when a test
+// never calls Start (Stop on an unstarted module is a no-op per
+// TestBridgeStop_DrainsAnUnstartedModule) and never calls Stop itself.
+func closeBridgeRuntime(t *testing.T, rt *BridgeRuntime) {
+	t.Helper()
+	if rt == nil || rt.Stop == nil {
+		return
+	}
+	t.Cleanup(func() {
+		if err := rt.Stop(context.Background()); err != nil {
+			t.Errorf("stop bridge runtime: %v", err)
+		}
+	})
+}
+
+// TestNewCascadePABridge_StopClosesTheDurableState proves the drain actually
+// closes the handle openBridgeState opened, not just stops the poll: rt.Stop
+// is exactly what internal/daemon/subsystem_bridge.go's drainBridge calls, so
+// a second, independent Open of the SAME cascade.db succeeding right after
+// Stop returns is the production path working, not a fixture's assumption
+// about it.
+func TestNewCascadePABridge_StopClosesTheDurableState(t *testing.T) {
+	ctx := context.Background()
+	deps, _, dataDir := enabledBridgeDeps(t)
+	rt, err := NewCascadePABridge(ctx, deps)
+	if err != nil {
+		t.Fatalf("NewCascadePABridge: %v", err)
+	}
+	if err := rt.Stop(ctx); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	state, err := openBridgeState(ctx, dataDir)
+	if err != nil {
+		t.Fatalf("openBridgeState after Stop: %v", err)
+	}
+	closeBridgeState(t, state)
+	if err := state.Save(ctx, cascadepa.SubjectState{Subject: "tg-after-stop"}); err != nil {
+		t.Fatalf("Save after Stop: %v", err)
+	}
 }

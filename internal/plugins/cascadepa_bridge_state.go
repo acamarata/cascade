@@ -54,13 +54,29 @@ func openBridgeState(ctx context.Context, dataDir string) (cascadepa.BridgeState
 		_ = db.Close()
 		return nil, err
 	}
-	return bridgeStateAdapter{store: bridge.NewStore(db)}, nil
+	return bridgeStateAdapter{store: bridge.NewStore(db), db: db}, nil
 }
 
 // bridgeStateAdapter maps internal/bridge's row type onto the plugin-facing
-// cascadepa.BridgeState.
+// cascadepa.BridgeState. It also implements io.Closer over the *sql.DB
+// openBridgeState opened: cascadepa.BridgeState itself carries no Close (the
+// plugin-facing seam must not know it is SQLite), so the production owner
+// closes it through this narrower, adapter-local contract instead — see
+// enabledBridge in cascadepa_bridge_wiring.go, which type-asserts for it.
 type bridgeStateAdapter struct {
 	store *bridge.Store
+	db    *sql.DB
+}
+
+// Close releases the database handle. Windows refuses to remove a temp
+// directory that still holds an open cascade.db, so every caller that opens
+// state — production, through the bridge's drain, and every test — must
+// eventually reach this.
+func (a bridgeStateAdapter) Close() error {
+	if a.db == nil {
+		return nil
+	}
+	return a.db.Close()
 }
 
 func (a bridgeStateAdapter) Load(ctx context.Context, subject string) (cascadepa.SubjectState, bool, error) {

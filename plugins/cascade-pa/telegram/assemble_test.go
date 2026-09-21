@@ -13,6 +13,7 @@ package telegram
 
 import (
 	"context"
+	"runtime"
 	"testing"
 	"time"
 
@@ -27,6 +28,9 @@ func TestNewModule_AssemblesAndNeverDials(t *testing.T) {
 	}
 	if module.subject != SubjectFromToken(syntheticToken) {
 		t.Fatalf("module subject = %q, want the token digest", module.subject)
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("Start is refused on Windows tier-2; module_windows_test.go proves the refusal")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
