@@ -53,6 +53,12 @@ import (
 //     admitted message reaches a handler that RECORDS it as unrouted; without
 //     that, an admitted message was dropped inside the module with no trace
 //     anywhere, which is indistinguishable from a refusal.
+//   - THE REAL SECRET SCANNER IS BOUND HERE (T0 D1, P1-E23-W5-S48-T3).
+//     bridgeSecretScanner wraps the SAME *secrets.Detector construction
+//     dispatch.go:171 uses; without this wiring the module's own unwired
+//     default REFUSES every message (cascadepa_bridge_deps.go, refuse.go) —
+//     so a missing wiring line here is a fail-closed regression, not a
+//     fail-open one.
 //   - internal/plugins is the ONE package allowed to import both internal/**
 //     and plugins/** (Art.10.2) — see cascadepa_tools_wiring.go's precedent.
 //
@@ -116,6 +122,11 @@ type BridgeRuntime struct {
 	// RECORDING sink and not the plugin's discarding default (AC#16). It is
 	// evidence of one line of this file, not a collaborator anybody calls.
 	sink telegram.LockoutSink
+	// scanner is the SecretScanner this wiring built and handed to the
+	// module, kept so the wiring test can assert that production passes a
+	// REAL, detector-backed scanner and not the plugin's refusing-only
+	// default (T0 D1, P1-E23-W5-S48-T3) — evidence, like sink above.
+	scanner telegram.SecretScanner
 	// Routes names the telegram handler kinds this wiring actually registered
 	// on the module, filled by the same loop that registers them. It is the
 	// wiring's own evidence: a module with no route drops every admitted
@@ -181,9 +192,13 @@ func enabledBridge(ctx context.Context, deps BridgeDeps, token string) (*BridgeR
 	if err != nil {
 		return nil, err
 	}
+	scanner, err := newBridgeSecretScanner()
+	if err != nil {
+		return nil, err
+	}
 	stores := cascadepa.NewStores(deps.Clock, newBridgeDeviceRegistrar(deps.DataDir), state, pairKey)
 	journal := newBridgeJournal(deps.Events)
-	module := telegram.NewModule(token, nil, gate, bridgeElevationPolicy{}, stores, journal)
+	module := telegram.NewModule(token, nil, gate, bridgeElevationPolicy{}, stores, journal, scanner, journal)
 	// BOTH transports get a route NOW, so an admitted message is recorded
 	// rather than dropped inside the module with no trace. W/S-48.T2 replaces
 	// these with the real chat forwarder (plugins/cascade-pa/telegram/chat.go).
@@ -198,6 +213,7 @@ func enabledBridge(ctx context.Context, deps BridgeDeps, token string) (*BridgeR
 		Stop:      closeStateAfterStop(module.Stop, state),
 		IssueCode: bridgeIssuer(stores, deps.Clock, subject),
 		sink:      journal,
+		scanner:   scanner,
 		Routes:    routes,
 	}, nil
 }

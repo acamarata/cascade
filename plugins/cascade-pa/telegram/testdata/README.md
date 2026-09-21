@@ -57,3 +57,13 @@ their envelopes stripped (the fuzz target decodes a single `Update` object, not
 the `getUpdates` envelope — see `fuzz_test.go`). `seed-malformed` is a
 deliberately truncated JSON fragment exercising the decoder's never-panics
 guarantee on adversarial input.
+
+## No new fixtures for P1-E23-W5-S48-T3
+
+The bridge secret-refusal ticket (R-21.203/R-21.105) adds no decoder and no
+parser: the H/S-16 credential-value detector consumes text this package's
+existing `Update` decoder already produces. There is therefore no new
+`FuzzXxx` target and no new fixture here — `refuse_test.go` and
+`quarantine_test.go` drive the refusal and quarantine gate directly against
+an injected `SecretScanner`/`QuarantineSink`, over the same synthetic,
+obviously-fake witness strings this file's Identifiers section describes.

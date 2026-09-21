@@ -59,7 +59,14 @@ func newRig(t *testing.T, clock cascadepa.PairClock, reg cascadepa.DeviceRegistr
 	client.sleep = sleep
 	sink := &recordingSink{}
 	pairer := newPairCoordinator(stores.Pairing, stores.Binding, sink, clock)
-	module := NewTelegramModule(testSubject, client, stores.Binding, pairer, policy)
+	module := NewTelegramModule(testSubject, client, stores.Binding, pairer, policy, clock)
+	// A permissive default scanner (detects nothing): the rig's whole point
+	// is exercising dispatch, and T0 D1's unwired default now REFUSES every
+	// message, which would turn every existing dispatch test in this
+	// package into a refusal test. Tests that specifically want the
+	// unconfigured fail-closed behavior set rig.module.secretScanner = nil
+	// themselves (see refuse_test.go's TestBridgeOrdinaryTextAdmitted).
+	module.secretScanner = fakeSecretScanner{}
 	return &testRig{module: module, doer: doer, gate: gate, state: state, stores: stores, sink: sink}
 }
 

@@ -176,6 +176,18 @@ func TestNewCascadePABridge_BothGatesPass(t *testing.T) {
 	if _, isJournal := rt.sink.(*bridgeJournal); !isJournal {
 		t.Fatalf("the lockout sink is %T, want the bus-backed journal", rt.sink)
 	}
+	// T0 D1: production hands the module a REAL, detector-backed scanner,
+	// proving the H/S-16 detector is reachable through THIS construction.
+	sc, ok := rt.scanner.(bridgeSecretScanner)
+	if !ok {
+		t.Fatalf("scanner = %T, want the real bridgeSecretScanner adapter", rt.scanner)
+	}
+	if !sc.Scan([]byte("AKIA7YQ2XPLM4RZV6WTB")).Detected {
+		t.Fatal("the real detector did not flag a witness AWS-key-shaped string")
+	}
+	if sc.Scan([]byte("ordinary prose, nothing secret here")).Detected {
+		t.Fatal("the real detector flagged ordinary prose")
+	}
 }
 
 // TestBridgeIssuance_IsRedeemableThroughTheSameDurableRow is the property the

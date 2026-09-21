@@ -60,6 +60,16 @@ const (
 	// admission gate and still had nowhere to go, because no chat route is
 	// registered yet (W/S-48.T2 registers the real one).
 	EventKindBridgeMessageUnrouted events.EventKind = "bridge.message_unrouted"
+	// EventKindBridgeSecretQuarantined records a R-21.105 quarantine: a
+	// secret-shaped bridge message, or an outbound write attempt, refused
+	// by refuse.go's gate (P1-E23-W5-S48-T3). Its value is
+	// telegram.QuarantineKind itself — the ONE contract value
+	// quarantine.go declares — never a second, independently-typed
+	// literal that could drift from it (confirming CR, 2026-09-21: an
+	// earlier draft published "bridge.secret_quarantined", an underscore
+	// variant of the dotted "bridge.secret.quarantined" the ticket's AC
+	// and every doc name).
+	EventKindBridgeSecretQuarantined events.EventKind = telegram.QuarantineKind
 )
 
 // unroutedDetail is the operator-facing explanation the unrouted record
@@ -154,6 +164,29 @@ func (j *bridgeJournal) publish(ctx context.Context, kind events.EventKind, payl
 	_, _ = j.bus.Publish(context.WithoutCancel(ctx), bridgeEventNamespace, kind, bridgeEventSource, payload)
 }
 
+// marshalQuarantineEvent is json.Marshal, indirected so a test can drive
+// EmitQuarantine's error branch: QuarantineEvent's real fields are plain
+// strings and a time.Time, so a real populated value can never fail to
+// encode, and that branch would otherwise be permanently dead code.
+var marshalQuarantineEvent = json.Marshal
+
+// EmitQuarantine implements telegram.QuarantineSink over the bus: it maps
+// telegram.QuarantineKind onto the real, typed EventKind above (the same
+// translation EmitLockout already performs for LockoutEvent) and
+// republishes QuarantineEvent's own already-safe fields verbatim — this
+// adds no field TestQuarantinePayloadHasNoCredentialRef has not already
+// checked (P1-E23-W5-S48-T3).
+func (j *bridgeJournal) EmitQuarantine(ctx context.Context, e telegram.QuarantineEvent) {
+	payload, err := marshalQuarantineEvent(e)
+	if err != nil {
+		return
+	}
+	j.publish(ctx, EventKindBridgeSecretQuarantined, payload)
+}
+
 // compile-time proof the journal really is the sink the plugin declares, so a
 // signature change on either side fails here rather than at the wiring site.
-var _ telegram.LockoutSink = (*bridgeJournal)(nil)
+var (
+	_ telegram.LockoutSink    = (*bridgeJournal)(nil)
+	_ telegram.QuarantineSink = (*bridgeJournal)(nil)
+)

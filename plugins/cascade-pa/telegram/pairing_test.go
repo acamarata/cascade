@@ -48,7 +48,11 @@ func TestPairCoordinator_ConfirmationNamesTheDigestNotTheToken(t *testing.T) {
 	doer := &fakeDoer{}
 	client := NewBotClient(subject, doer, &tierGate{}, stores.Updates)
 	pairer := newPairCoordinator(stores.Pairing, stores.Binding, nil, clock)
-	module := NewTelegramModule(subject, client, stores.Binding, pairer, nodeVerbPolicy())
+	module := NewTelegramModule(subject, client, stores.Binding, pairer, nodeVerbPolicy(), clock)
+	// A direct construction, not the rig: needs the SAME permissive default
+	// rig_test.go installs, or T0 D1's unwired fail-closed scanner refuses
+	// the "/pair <code>" text below before pairing ever runs.
+	module.secretScanner = fakeSecretScanner{}
 
 	ctx := context.Background()
 	code, err := stores.Pairing.IssueCode(ctx, fixedEntropy(), subject)
@@ -236,7 +240,13 @@ func TestPairCoordinator_VerifierErrorReportsPairingFailed(t *testing.T) {
 	doer := &fakeDoer{}
 	client := NewBotClient(testSubject, doer, &tierGate{}, stores.Updates)
 	pairer := newPairCoordinator(stores.Pairing, stores.Binding, nil, clock)
-	pairer.handlePairCommand(context.Background(), client, testSubject, 999, "111", "ABCDEFGH")
+	// D5: handlePairCommand now takes the module (say routes through
+	// guardOutbound), not a bare *BotClient. A permissive scanner keeps this
+	// unrelated, pre-existing test's assertion (the verifier's OWN error
+	// branch) from tripping T0 D1's unwired fail-closed default instead.
+	module := NewTelegramModule(testSubject, client, stores.Binding, pairer, nodeVerbPolicy(), clock)
+	module.secretScanner = fakeSecretScanner{}
+	pairer.handlePairCommand(context.Background(), module, testSubject, 999, "111", "ABCDEFGH")
 	if got := lastSent(t, doer); got != replyPairingFailed {
 		t.Fatalf("reply = %q, want %q", got, replyPairingFailed)
 	}

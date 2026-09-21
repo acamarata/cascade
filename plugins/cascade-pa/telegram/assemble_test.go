@@ -22,7 +22,12 @@ import (
 
 func TestNewModule_AssemblesAndNeverDials(t *testing.T) {
 	stores := cascadepa.NewStores(fixedTestClock{t0()}, &okRegistrar{}, newMemState(), testPairKey(t))
-	module := NewModule(syntheticToken, nil, nil, nodeVerbPolicy(), stores, nil)
+	// secretScanner/quarantine are nil here deliberately: Start is given an
+	// already-cancelled ctx (see this file's header) so the poll loop never
+	// dispatches, meaning the fail-closed scanner default (T0 D1) is never
+	// exercised on this path — this test is NewModule's assembly proof, not
+	// a dispatch test (see refuse_test.go for those).
+	module := NewModule(syntheticToken, nil, nil, nodeVerbPolicy(), stores, nil, nil, nil)
 	if module == nil {
 		t.Fatal("NewModule returned nil")
 	}
@@ -41,6 +46,40 @@ func TestNewModule_AssemblesAndNeverDials(t *testing.T) {
 	defer stopCancel()
 	if err := module.Stop(stopCtx); err != nil {
 		t.Fatalf("Stop: %v", err)
+	}
+}
+
+// TestNewModule_WiresScannerAndQuarantineForDispatch is the production-path
+// proof the confirming review's mutation exposed: NewModule is this
+// package's ONE front door (this file's own header), and nothing else ever
+// builds a module through it and dispatches. Assemble one with a fake
+// scanner and a recording sink — exactly the shapes a real host wires —
+// dispatch the witness secret, and assert BOTH the refusal and that
+// exactly one quarantine event reaches the sink NewModule wired in.
+// Deleting assemble.go's `module.secretScanner = secretScanner` drops the
+// event count to 0 (the unwired default has nothing to quarantine, only a
+// missing capability — ErrNoSecretScanner); deleting its
+// `module.quarantine = quarantine` twin drops it to 0 too, since nothing
+// was ever handed to the sink this test reads. Either mutation turns this
+// red without touching the refusal assertion at all.
+func TestNewModule_WiresScannerAndQuarantineForDispatch(t *testing.T) {
+	stores := cascadepa.NewStores(fixedTestClock{t0()}, &okRegistrar{}, newMemState(), testPairKey(t))
+	scanner := secretScannerFor(witnessSecretText, "api-key")
+	sink := &recordingQuarantineSink{}
+	module := NewModule(syntheticToken, nil, nil, nodeVerbPolicy(), stores, nil, scanner, sink)
+
+	called := false
+	module.RegisterHandler(HandlerText, func(context.Context, InboundMessage) error {
+		called = true
+		return nil
+	})
+	module.dispatch(context.Background(), textUpdate(1, 111, 111, witnessSecretText))
+
+	if called {
+		t.Fatal("a handler ran for a secret-shaped message assembled through NewModule")
+	}
+	if len(sink.events) != 1 {
+		t.Fatalf("quarantine events on the sink NewModule wired = %d, want 1", len(sink.events))
 	}
 }
 

@@ -95,6 +95,40 @@ func TestBridgeJournal_RecordsALockout(t *testing.T) {
 	}
 }
 
+// TestBridgeJournal_RecordsAQuarantine is T0 D1(d): the typed
+// bridge.secret_quarantined event reaches a real sink in production, not
+// only a recording fake in a test, and republishes QuarantineEvent's own
+// fields — no new field, no message content.
+func TestBridgeJournal_RecordsAQuarantine(t *testing.T) {
+	bus := newRecordingBus()
+	at := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
+	newBridgeJournal(bus).EmitQuarantine(context.Background(), telegram.QuarantineEvent{
+		ExposureID: "exp-abc", Namespace: "api-key", Origin: "inbound-text",
+		ChatKind: "private", At: at, Severity: "refused",
+	})
+	got := bus.events()
+	if len(got) != 1 {
+		t.Fatalf("recorded %d events, want 1", len(got))
+	}
+	if string(got[0].kind) != telegram.QuarantineKind || got[0].namespace != bridgeEventNamespace {
+		t.Fatalf("recorded %+v, want kind %q", got[0], telegram.QuarantineKind)
+	}
+	var body telegram.QuarantineEvent
+	if err := json.Unmarshal([]byte(got[0].payload), &body); err != nil {
+		t.Fatalf("payload is not decodable JSON: %v", err)
+	}
+	if body.ExposureID != "exp-abc" || body.Namespace != "api-key" || body.Origin != "inbound-text" {
+		t.Fatalf("payload = %+v", body)
+	}
+}
+
+// TestBridgeJournal_QuarantineIsANoopWithNoBus mirrors EmitLockout's own
+// no-discarding-default precedent (this file's header): a nil-bus journal
+// must not panic.
+func TestBridgeJournal_QuarantineIsANoopWithNoBus(_ *testing.T) {
+	(&bridgeJournal{}).EmitQuarantine(context.Background(), telegram.QuarantineEvent{})
+}
+
 // TestBridgeJournal_RecordsAnUnroutedMessage is D13's visible drop: until the
 // chat route lands, an admitted message produces a record naming the ticket that
 // will route it, and carries NO message content.

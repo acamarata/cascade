@@ -133,6 +133,38 @@ reports the three reasons a tool can be missing — `withheld` (no grant),
 `unservable` (no such method here), `deferred` (no surface yet) — because a
 bare list cannot answer "why is my tool not here?".
 
+## A module that bridges to an external channel: never let a secret transit it
+
+Any module relaying messages to/from a system this plugin package does not
+control (Telegram, Slack, email, SMS — anything outside this host's own
+authenticated CLI/RPC surface) must refuse credential material in EITHER
+direction, at decode and before every outbound write. See
+`plugins/cascade-pa/telegram/refuse.go` (P1-E23-W5-S48-T3) for the reference
+implementation. The pattern:
+
+1. **A package-local scanning seam, never a local regex.** Define a small
+   interface over the shape you need — a bool, or a bool plus a safe string
+   — never a type from `internal/secrets` itself (`plugins/**` may not
+   import `internal/**`). The host composition root binds the real H/S-16
+   detector behind it, translating its typed result into your interface's
+   plain types.
+2. **The unwired default REFUSES.** Mirror `EgressGate`'s
+   `unconfiguredEgressGate`: a missing capability refuses every call, never
+   admits one — a module that fails open the moment its composition-root
+   wiring is missing is exactly the defect R-21.203/T3 closes.
+3. **Scan before anything else.** The check runs before any pairing,
+   allowlist or binding lookup, so a message from an unpaired or unknown
+   sender is still scanned — a privilege check must never be a way to dodge
+   the content gate.
+4. **One outbound choke point.** Every send path — reply, answer, and any
+   other place the module composes outbound text — routes through the SAME
+   gate function; a second path that calls the transport directly is a
+   bypass, not a convenience.
+5. **Quarantine the refusal, never the value.** Publish one typed event with
+   an opaque, random identifier and only safe metadata (which gate, what
+   kind of chat, when) — never the matched text, a hash of it, or a
+   reference a public surface could resolve back to the secret (R-21.105).
+
 ## RPC naming convention
 
 A plugin's `provides.commands[]` entries mount under a JSON-RPC method

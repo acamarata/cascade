@@ -109,7 +109,12 @@ func pairingSurvivesRestart(t *testing.T) {
 	doer := &fakeDoer{}
 	client := NewBotClient(testSubject, doer, &tierGate{}, first.Updates)
 	pairer := newPairCoordinator(first.Pairing, first.Binding, nil, clock)
-	module := NewTelegramModule(testSubject, client, first.Binding, pairer, nodeVerbPolicy())
+	module := NewTelegramModule(testSubject, client, first.Binding, pairer, nodeVerbPolicy(), clock)
+	// This test predates T0 D1 (P1-E23-W5-S48-T3): it constructs the module
+	// directly rather than through the rig, so it needs the SAME permissive
+	// default rig_test.go installs, or the unwired fail-closed scanner would
+	// refuse the "/pair <code>" text this test dispatches below.
+	module.secretScanner = fakeSecretScanner{}
 	module.dispatch(ctx, textUpdate(1, 111, 111, "/pair "+code))
 	if got := lastSent(t, doer); !strings.HasPrefix(got, replyPaired) {
 		t.Fatalf("pairing reply = %q, want the %q confirmation", got, replyPaired)
@@ -242,7 +247,12 @@ func TestPairingRepliesAreTheGatesOutput(t *testing.T) {
 	gate := &rewritingGate{}
 	client := NewBotClient(testSubject, doer, gate, stores.Updates)
 	pairer := newPairCoordinator(stores.Pairing, stores.Binding, &recordingSink{}, clock)
-	module := NewTelegramModule(testSubject, client, stores.Binding, pairer, nodeVerbPolicy())
+	module := NewTelegramModule(testSubject, client, stores.Binding, pairer, nodeVerbPolicy(), clock)
+	// See pairingSurvivesRestart's identical comment: a direct construction
+	// needs the rig's permissive default so T0 D1's unwired fail-closed
+	// scanner does not refuse these (non-credential-shaped) pairing replies
+	// before the egress gate this test asserts on ever sees them.
+	module.secretScanner = fakeSecretScanner{}
 
 	// A wrong candidate (the refusal reply) and then the right one (the
 	// confirmation reply): both go out through the pairing path's say().

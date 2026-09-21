@@ -47,11 +47,22 @@ func SubjectFromToken(token string) string {
 // constructing httpPoster/httpDoer/BotClient/pairCoordinator/TelegramModule,
 // which is what keeps each of those off the test-only gate with a single real
 // production caller (internal/plugins/cascadepa_bridge_wiring.go).
+//
+// secretScanner/quarantine back the R-21.203/R-21.105 refusal gate
+// (refuse.go, quarantine.go); a nil scanner resolves to the fail-closed
+// refusingSecretScanner default (T0 D1) rather than to admitting every
+// message, so a caller that forgets it refuses instead of leaking. A nil
+// quarantine does not change that refusal — it makes publishQuarantine
+// report ErrNoQuarantineSink instead of silently dropping the record.
 func NewModule(token string, httpClient *http.Client, egress EgressGate,
-	elevation cascadepa.ElevationPolicy, stores *cascadepa.Stores, sink LockoutSink) *TelegramModule {
+	elevation cascadepa.ElevationPolicy, stores *cascadepa.Stores, sink LockoutSink,
+	secretScanner SecretScanner, quarantine QuarantineSink) *TelegramModule {
 	subject := SubjectFromToken(token)
 	doer := newAPIDoer(token, newHTTPPoster(httpClient))
 	client := NewBotClient(subject, doer, egress, stores.Updates)
 	pairer := newPairCoordinator(stores.Pairing, stores.Binding, sink, stores.Clock)
-	return NewTelegramModule(subject, client, stores.Binding, pairer, elevation)
+	module := NewTelegramModule(subject, client, stores.Binding, pairer, elevation, stores.Clock)
+	module.secretScanner = secretScanner
+	module.quarantine = quarantine
+	return module
 }

@@ -201,6 +201,46 @@ func newBridgeEgressGateFor(cfg secrets.Config) (telegram.EgressGate, error) {
 	return NewBridgeEgressGate(engine), nil
 }
 
+// bridgeSecretScanner adapts *secrets.Detector to telegram.SecretScanner,
+// built from the SAME construction dispatch.go:171 uses for the
+// plugin-storage gate (secrets.NewDetector over DefaultRegistry/
+// DefaultDetectionConfig) — one detector configuration, not two. Class
+// crosses the plugins/** boundary as a plain string: the typed
+// internal/secrets.Class can never reach telegram.SecretScanOutcome
+// (that package may not import internal/**), so this is the one place
+// the translation can happen at all.
+type bridgeSecretScanner struct {
+	d *secrets.Detector
+}
+
+// Scan implements telegram.SecretScanner over ScanCertain — the
+// precision-first leg (internal/runtime/initconfig/load.go's own
+// SecretScanner takes the identical leg for its own refusal).
+func (s bridgeSecretScanner) Scan(content []byte) telegram.SecretScanOutcome {
+	hits := s.d.ScanCertain(content)
+	if len(hits) == 0 {
+		return telegram.SecretScanOutcome{}
+	}
+	return telegram.SecretScanOutcome{Detected: true, Class: string(hits[0].Class)}
+}
+
+// newDetectorFn is secrets.NewDetector, indirected so a test can force
+// newBridgeSecretScanner's otherwise-dead error branch (DefaultRegistry/
+// DefaultDetectionConfig never fail for real).
+var newDetectorFn = secrets.NewDetector
+
+// newBridgeSecretScanner builds the production scanner, identically to
+// dispatch.go:171's detector construction — one configuration serving
+// both the plugin-storage gate and the bridge's message gate.
+func newBridgeSecretScanner() (bridgeSecretScanner, error) {
+	d, err := newDetectorFn(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
+	if err != nil {
+		return bridgeSecretScanner{}, cascade.Wrap(cascade.KindInternal, err,
+			"cascade-pa bridge: build the secret-value detector")
+	}
+	return bridgeSecretScanner{d: d}, nil
+}
+
 // bridgeElevationPolicy answers the bridge's elevated-verb question from the
 // canonical §5.14 table.
 type bridgeElevationPolicy struct{}

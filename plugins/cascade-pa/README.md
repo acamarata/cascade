@@ -211,10 +211,31 @@ but `/pair`.
 | photo, document, voice, video, sticker, location | `media not supported over the bridge`, and **never downloaded** — the module has no `getFile` method at all, and its transport refuses any Bot API method outside `getUpdates`/`sendMessage`/`answerCallbackQuery` |
 | an elevated verb (`/enroll`, `/node upgrade`, …) | refused, on the text path and the callback path alike. The classification comes from the host's canonical §5.14 table, never from a list kept in the plugin |
 | a replayed `update_id` | processed exactly once; the offset and a bounded window of seen ids are durable, so a restart does not replay Telegram's 24h of unacknowledged updates |
+| a secret-shaped message (either transport, either direction) | refused BEFORE any pairing/binding lookup, persistence or handler dispatch — see below |
 
 Every inbound message is stamped `Origin = bridge-telegram` and
 `Untrusted = true` at the decode boundary, and there is no setter that clears
 either field.
+
+### The bridge never carries a secret, in either direction (R-21.203)
+
+The bridge secret-reveal flow does not exist: no code path fetches a vault
+value for bridge delivery, and `cascade vault get` over a bridge is not a
+command. Every inbound message — text and callback data alike — passes the
+H/S-16 credential-value detector before any persistence, prompt construction
+or handler dispatch, and it runs BEFORE pairing/allowlist lookups too, so an
+unpaired sender or a secret-shaped `/pair <token>` attempt is refused just
+the same. Nothing about a refused message — not its content, not a hash, not
+a fingerprint — is stored. Text about to be SENT is re-scanned before the
+transport is ever called, so a credential-shaped reply is refused and
+replaced with the same fixed, value-free warning. A refusal publishes one
+`bridge.secret.quarantined` event carrying an opaque, random `exposure_id`
+plus safe metadata (the matched credential class, which gate refused, the
+chat kind, a timestamp) — never the value, a hash of it, or a vault
+reference. An unwired scanner refuses every message (fail-closed default);
+production always wires the real detector
+(`internal/plugins/cascadepa_bridge_deps.go`). Finish the credential entry
+locally: `cascade vault set`, or the local authenticated approval surface.
 
 ### Outbound
 
@@ -223,7 +244,9 @@ Every outbound body — replies, refusals, callback answers — crosses the
 `AllowedTiers: {internal, public}`) before it reaches the transport, and what is
 posted is the firewall's **output**. Restricted and local-only content cannot
 leave over the bridge, and a stored vault value that reached a reply string is
-substituted on the way out.
+substituted on the way out. The R-21.203 secret-value gate above runs
+FIRST, on every outbound path (reply, answer, and the pairing flow's say),
+before the egress firewall ever sees the text.
 
 ### Windows
 

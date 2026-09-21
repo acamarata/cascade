@@ -5,29 +5,27 @@
 //   coordinator, and the host's cascadepa.ElevationPolicy.
 //
 // Outputs: Start/Stop manage the poll goroutine; dispatch enforces, IN
-//   ORDER: pairing/allowlist (fail-closed), media refusal (§R-21.227),
-//   elevated-verb refusal (§5.14 LOCAL-ONLY), then Origin/Untrusted
-//   stamping — IDENTICALLY on the text path and the callback path.
+//   ORDER: the R-21.203/R-21.105 secret-value refusal (refuse.go, BEFORE any
+//   pairing/binding lookup — D4), pairing/allowlist (fail-closed), media
+//   refusal (§R-21.227), elevated-verb refusal (§5.14 LOCAL-ONLY), then
+//   Origin/Untrusted stamping — IDENTICALLY on the text path and callback
+//   path.
 //
-// Constraints, each of them a defect this file was rewritten to close:
-//   - ONE GATE, TWO TRANSPORTS. dispatchCallback used to apply neither the
-//     media check nor the elevated-verb check, so `{"callback_query":{"data":
-//     "/enroll worker-3"}}` reached a handler while the byte-identical text
-//     message was refused. Both paths now call the same guard helpers.
+// Constraints, each a defect this file was rewritten to close:
+//   - ONE GATE, TWO TRANSPORTS. Every content gate (secret-value, media,
+//     elevated-verb) applies identically on dispatchMessage and
+//     dispatchCallback; a callback used to skip checks its byte-identical
+//     text sibling enforced.
 //   - CLASSIFICATION IS THE HOST'S. The elevated-verb decision comes from
 //     cascadepa.RefusesElevated over the policy the host injects, never from
 //     a prefix list kept here (see cascadepa/bridge_policy.go).
 //   - A CODE IS REDEEMABLE ONLY WHILE UNBOUND (T0 D5). On a bound bot a
 //     non-allowlisted sender gets the same "not paired" reply whether or not
-//     the text is "/pair <code>", and nothing is consumed or counted — so a
-//     stranger cannot burn the owner's outstanding code in five messages,
-//     and cannot tell a bound bot from an unbound one. (D5's "dropped" and
-//     AC#17's "answered 'not paired' and dropped" are reconciled the only
-//     way that keeps the two cases indistinguishable: the same reply as any
-//     stranger message, with no pairing side effect.)
+//     the text is "/pair <code>", and nothing is consumed or counted — a
+//     stranger cannot burn the owner's outstanding code, and cannot tell a
+//     bound bot from an unbound one.
 //   - STOP'S CANCELLATION REACHES EVERYTHING. dispatch takes the poll
-//     goroutine's ctx; the earlier draft started each dispatch from
-//     context.Background(), so Stop cancelled the fetch and nothing else.
+//     goroutine's ctx, so Stop's cancellation reaches every handler/reply.
 //
 // SPORT: plugins/cascade-pa/telegram TelegramModule/ADDED,
 //   InboundMessage/ADDED (P1-E23-W5-S48-T1).
@@ -105,6 +103,16 @@ type TelegramModule struct {
 	pairer    *pairCoordinator
 	elevation cascadepa.ElevationPolicy
 	handlers  map[string]Handler
+	// clock backs quarantine.go's now() (T0 D8): required, never
+	// m.pairer.clock — a nil pairer must not panic minting a timestamp.
+	clock cascadepa.PairClock
+
+	// secretScanner/quarantine back R-21.203/R-21.105's refusal gate
+	// (refuse.go, quarantine.go); nil by default — scanner() substitutes
+	// the fail-closed refusingSecretScanner; a nil quarantine makes
+	// publishQuarantine report ErrNoQuarantineSink rather than discard.
+	secretScanner SecretScanner
+	quarantine    QuarantineSink
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
@@ -113,13 +121,14 @@ type TelegramModule struct {
 
 // NewTelegramModule constructs a module for subject (the bridge instance
 // identity IssueCode/Bind key on). A nil elevation policy resolves to the
-// refuse-everything default.
+// refuse-everything default. clock is required (T0 D8): see quarantine.go.
 func NewTelegramModule(subject string, client *BotClient, binding *cascadepa.BindingStore,
-	pairer *pairCoordinator, elevation cascadepa.ElevationPolicy) *TelegramModule {
+	pairer *pairCoordinator, elevation cascadepa.ElevationPolicy, clock cascadepa.PairClock) *TelegramModule {
 	return &TelegramModule{
 		subject: subject, client: client, binding: binding, pairer: pairer,
 		elevation: cascadepa.ElevationOrRefuseAll(elevation),
 		handlers:  make(map[string]Handler),
+		clock:     clock,
 	}
 }
 
@@ -191,9 +200,14 @@ func (m *TelegramModule) dispatch(ctx context.Context, u Update) {
 	}
 }
 
-// dispatchMessage gates one Message Update.
+// dispatchMessage gates one Message Update. The secret-value scan (D4) runs
+// FIRST, before any pairing/binding lookup.
 func (m *TelegramModule) dispatchMessage(ctx context.Context, u Update) {
 	msg := u.Message
+	if refused, outcome, unconfigured := m.refusesSecret(msg.Text); refused {
+		m.refuseInboundText(ctx, msg, outcome, unconfigured)
+		return
+	}
 	if msg.From == nil {
 		// A channel post or anonymous-admin message carries no From: there
 		// is no sender identity to pair or allowlist, so there is nothing to
@@ -203,7 +217,7 @@ func (m *TelegramModule) dispatchMessage(ctx context.Context, u Update) {
 	senderID := strconv.FormatInt(msg.From.ID, 10)
 	bound, err := m.binding.Bound(ctx, m.subject)
 	if err != nil {
-		m.reply(ctx, msg.Chat.ID, replyNotPaired)
+		m.reply(ctx, msg.Chat.ID, chatKindOf(msg), replyNotPaired)
 		return
 	}
 	if !bound {
@@ -214,11 +228,11 @@ func (m *TelegramModule) dispatchMessage(ctx context.Context, u Update) {
 	if err != nil || !allowed {
 		// Identical to a stranger's plain text, /pair included: no code is
 		// consumed and no attempt is counted (T0 D5).
-		m.reply(ctx, msg.Chat.ID, replyNotPaired)
+		m.reply(ctx, msg.Chat.ID, chatKindOf(msg), replyNotPaired)
 		return
 	}
 	if _, isPair := isPairCommand(msg.Text); isPair {
-		m.reply(ctx, msg.Chat.ID, replyAlreadyPaired)
+		m.reply(ctx, msg.Chat.ID, chatKindOf(msg), replyAlreadyPaired)
 		return
 	}
 	m.admitMessage(ctx, u, msg)
@@ -228,24 +242,24 @@ func (m *TelegramModule) dispatchMessage(ctx context.Context, u Update) {
 // "/pair <code>" attempt is verified, everything else is refused.
 func (m *TelegramModule) dispatchUnbound(ctx context.Context, msg *Message, senderID string) {
 	if code, isPair := isPairCommand(msg.Text); isPair {
-		m.pairer.handlePairCommand(ctx, m.client, m.subject, msg.Chat.ID, senderID, code)
+		m.pairer.handlePairCommand(ctx, m, m.subject, msg.Chat.ID, senderID, code)
 		return
 	}
-	m.reply(ctx, msg.Chat.ID, replyNotPaired)
+	m.reply(ctx, msg.Chat.ID, chatKindOf(msg), replyNotPaired)
 }
 
-// admitMessage runs the content gates on an allowlisted sender's message and
-// hands it to the text handler if they pass.
+// admitMessage runs the remaining content gates (secret-value already ran,
+// at the top of dispatchMessage) and hands off to the text handler.
 func (m *TelegramModule) admitMessage(ctx context.Context, u Update, msg *Message) {
 	if msg.HasRefusedMedia() {
-		m.reply(ctx, msg.Chat.ID, replyMediaRefused)
+		m.reply(ctx, msg.Chat.ID, chatKindOf(msg), replyMediaRefused)
 		return
 	}
 	// commandShaped=false: a message's text is a verb only when it carries a
 	// leading slash, which VerbCandidates detects itself. Ordinary prose must
 	// stay dispatchable.
 	if cascadepa.RefusesElevated(m.elevation, msg.Text, false) {
-		m.reply(ctx, msg.Chat.ID, errElevationOverBridge.Error())
+		m.reply(ctx, msg.Chat.ID, chatKindOf(msg), errElevationOverBridge.Error())
 		return
 	}
 	if h := m.handler(HandlerText); h != nil {
@@ -253,25 +267,29 @@ func (m *TelegramModule) admitMessage(ctx context.Context, u Update, msg *Messag
 	}
 }
 
-// dispatchCallback gates one CallbackQuery Update through the SAME checks
-// the text path applies, answered over answerCallbackQuery because a
-// callback carries no chat to send into.
+// dispatchCallback is dispatchMessage's callback twin (ONE GATE, TWO
+// TRANSPORTS), answered over answerCallbackQuery. The secret-value scan
+// runs FIRST, before the allowlist lookup (D4).
 func (m *TelegramModule) dispatchCallback(ctx context.Context, u Update) {
 	cq := u.CallbackQuery
+	if refused, outcome, unconfigured := m.refusesSecret(cq.Data); refused {
+		m.refuseInboundCallback(ctx, cq, outcome, unconfigured)
+		return
+	}
 	senderID := strconv.FormatInt(cq.From.ID, 10)
 	allowed, err := m.binding.IsAllowed(ctx, m.subject, senderID)
 	if err != nil || !allowed {
-		m.answer(ctx, cq.ID, replyNotPaired)
+		m.answer(ctx, cq.ID, chatKindOf(cq.Message), replyNotPaired)
 		return
 	}
 	if cq.Message != nil && cq.Message.HasRefusedMedia() {
-		m.answer(ctx, cq.ID, replyMediaRefused)
+		m.answer(ctx, cq.ID, chatKindOf(cq.Message), replyMediaRefused)
 		return
 	}
 	// commandShaped=true: a callback's data is always machine-generated
 	// command data, so it is classified even without a leading slash.
 	if cascadepa.RefusesElevated(m.elevation, cq.Data, true) {
-		m.answer(ctx, cq.ID, errElevationOverBridge.Error())
+		m.answer(ctx, cq.ID, chatKindOf(cq.Message), errElevationOverBridge.Error())
 		return
 	}
 	if h := m.handler(HandlerCallbackQuery); h != nil {
@@ -279,14 +297,4 @@ func (m *TelegramModule) dispatchCallback(ctx context.Context, u Update) {
 	}
 }
 
-// reply sends one operational message. Every module-generated reply is
-// declared TierInternal and still crosses the firewall, which is what
-// redacts a stored secret that reached a reply string by any route.
-func (m *TelegramModule) reply(ctx context.Context, chatID int64, text string) {
-	_ = m.client.SendMessage(ctx, chatID, cascadepa.TierInternal, text)
-}
-
-// answer answers one callback, gated identically to reply.
-func (m *TelegramModule) answer(ctx context.Context, callbackID, text string) {
-	_ = m.client.AnswerCallbackQuery(ctx, callbackID, cascadepa.TierInternal, text)
-}
+// reply and answer live in refuse.go, beside guardOutbound (Art.10).

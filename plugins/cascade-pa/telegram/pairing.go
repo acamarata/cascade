@@ -24,6 +24,9 @@
 //     that reached this module, which assemble.go derives as a digest of the
 //     bot token; there is no path here that could print a token, and none
 //     that reflects operator-supplied text back into a message.
+//   - EVERY REPLY CROSSES THE SAME OUTBOUND GATE (T0 D5). say() sends through
+//     module.reply, not a bare BotClient — the identical R-21.203 refusal
+//     gate and egress firewall reply/answer apply elsewhere in this package.
 //
 // SPORT: plugins/cascade-pa/telegram pairCoordinator/ADDED,
 //   LockoutEvent/ADDED (P1-E23-W5-S48-T1).
@@ -103,35 +106,44 @@ func newPairCoordinator(codes *cascadepa.PairCodeStore, binding *cascadepa.Bindi
 // handlePairCommand verifies candidate against subject's outstanding code. It
 // is the ONLY call site that may write a binding, and it does so on exactly
 // one outcome: PairOutcome.Bound with a successful Bind.
-func (p *pairCoordinator) handlePairCommand(ctx context.Context, client *BotClient,
+//
+// module (not a bare *BotClient) is what every reply routes through (D5): a
+// pairing reply is an outbound bridge write like any other, so it crosses
+// the SAME R-21.203 refusal gate reply/answer apply (refuse.go's
+// guardOutbound), not a second path that calls the transport directly.
+func (p *pairCoordinator) handlePairCommand(ctx context.Context, module *TelegramModule,
 	subject string, chatID int64, senderID, candidate string) {
 	outcome, err := p.codes.VerifyAndConsume(ctx, subject, candidate)
 	if err != nil {
-		p.say(ctx, client, chatID, replyPairingFailed)
+		p.say(ctx, module, chatID, replyPairingFailed)
 		return
 	}
 	switch {
 	case outcome.Bound:
-		p.bind(ctx, client, subject, chatID, senderID)
+		p.bind(ctx, module, subject, chatID, senderID)
 	case outcome.LockedOut:
 		p.sink.EmitLockout(ctx, LockoutEvent{Subject: subject, At: p.clock.Now()})
-		p.say(ctx, client, chatID, replyPairingFailed)
+		p.say(ctx, module, chatID, replyPairingFailed)
 	default:
-		p.say(ctx, client, chatID, replyPairingFailed)
+		p.say(ctx, module, chatID, replyPairingFailed)
 	}
 }
 
 // bind writes the binding and confirms it, or reports the failure honestly.
-func (p *pairCoordinator) bind(ctx context.Context, client *BotClient, subject string, chatID int64, senderID string) {
+func (p *pairCoordinator) bind(ctx context.Context, module *TelegramModule, subject string, chatID int64, senderID string) {
 	if _, err := p.binding.Bind(ctx, subject, senderID); err != nil {
-		p.say(ctx, client, chatID, replyPairingFailed)
+		p.say(ctx, module, chatID, replyPairingFailed)
 		return
 	}
-	p.say(ctx, client, chatID, replyPaired+subject)
+	p.say(ctx, module, chatID, replyPaired+subject)
 }
 
-// say sends one pairing-flow reply through the egress gate, declared
-// TierInternal like every other operational message.
-func (p *pairCoordinator) say(ctx context.Context, client *BotClient, chatID int64, text string) {
-	_ = client.SendMessage(ctx, chatID, cascadepa.TierInternal, text)
+// say sends one pairing-flow reply through module.reply — the SAME
+// R-21.203 outbound gate (guardOutbound) and egress firewall every other
+// reply in this package applies (D5). chatKind is "" here: a pairing
+// reply's text is always one of the two fixed strings above, never
+// credential-shaped, so no outbound quarantine event is expected on this
+// path in production.
+func (p *pairCoordinator) say(ctx context.Context, module *TelegramModule, chatID int64, text string) {
+	module.reply(ctx, chatID, "", text)
 }

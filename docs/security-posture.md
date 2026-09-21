@@ -160,6 +160,66 @@ the vault write succeeds.
 released. A quarantine with no way out is data loss, so recovery is part of the
 feature rather than an afterthought.
 
+### Bridge secret refusal
+
+**The reveal flow is struck.** An earlier design fetched a vault value,
+delivered it once over a bridge (e.g. Telegram), then deleted the message and
+ran an escalation timer. That design is withdrawn (R-21.203): a delete call
+removes a message from the provider's servers, but it cannot un-transmit it
+through bridge infrastructure, provider logs, push notifications or client
+caches — and in a group or channel every member already received it. No
+secret value transits a bridge, in either direction, ever.
+
+**Inbound refusal at decode.** Every inbound bridge message — on every
+transport a bridge module exposes, text and callback data alike — passes the
+credential-value detector before any persistence, prompt construction or
+handler dispatch. A secret-shaped message is refused at decode: its content is
+never stored, no hash or fingerprint of it is stored, and it never reaches a
+conversation thread, the notify inbox or any agent-visible context. The
+sender gets one fixed, value-free reply: it names no vault key, no namespace
+value and no matched substring, and it points at the local remediation path
+below. Detector failure is fail closed — a scan that could not be performed
+refuses the message rather than passing it through.
+
+**Outbound refusal.** A bridge lane is never a vault read path. Reading a
+value over a bridge (`cascade vault get` from a chat) does not exist as a
+command; and independently, text about to be sent through a bridge module's
+reply path is re-scanned before the transport is called, so credential-shaped
+outbound content is refused and replaced with the same value-free warning
+rather than reaching the wire.
+
+**Quarantine event, not a value.** Every refusal publishes one typed event
+(`bridge.secret.quarantined`) carrying an opaque, random per-exposure
+identifier plus safe-to-log metadata (the credential class matched, which
+gate refused, the chat kind, a timestamp, a fixed severity) — never a vault
+key reference, a credential reference, the message body or a digest of the
+value. The identifier resolves to nothing on any public surface; recovering
+what it refers to is an elevated administrative lookup, not something this
+event itself carries.
+
+**Local-only remediation.** The warning tells the operator to finish the
+credential entry locally: `cascade vault set`, or the local authenticated
+approval surface. Neither path changes with this feature.
+
+**Composition.** The Telegram module's refusal and quarantine mechanics
+(`plugins/cascade-pa/telegram/refuse.go`, `quarantine.go`) hold no detection
+logic of their own — `plugins/**` never imports `internal/**` (R-14.69), so
+the module scans through a package-local `SecretScanner`/`QuarantineSink`
+seam. `internal/plugins/cascadepa_bridge_deps.go` binds the real H/S-16
+detector behind it (the same construction the plugin-storage gate uses) and
+`cascadepa_bridge_wiring.go` wires both it and the real event journal into
+every module the daemon starts — the same shape the bridge's outbound
+firewall (`EgressGate`) already uses. An unwired scanner is a defensive
+floor, not a production state: it refuses every message rather than
+admitting one, mirroring the outbound firewall's own unconfigured default.
+An unwired quarantine sink does not change that refusal — the scanner's
+decision is already final by the time a quarantine event would publish —
+but it no longer discards the record silently either: `publishQuarantine`
+reports the typed `ErrNoQuarantineSink` instead, naming exactly what went
+unrecorded. Production always wires a real sink alongside the real
+scanner, so either default is a floor nothing in the shipped daemon
+actually reaches.
+
 ## The egress firewall
 
 Egress is the last boundary. Whatever the firewall misses leaves the machine,
