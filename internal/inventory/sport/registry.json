@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T06:50:12Z",
+  "generated_at": "2026-09-21T07:00:08Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -11772,13 +11772,64 @@
       ]
     },
     {
+      "name": "internal.notify.AwayConfig",
+      "sites": [
+        {
+          "file": "internal/notify/away_config.go",
+          "line": 30,
+          "status": "ADD",
+          "raw": "internal.notify.AwayConfig/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.notify.AwayController",
+      "sites": [
+        {
+          "file": "internal/notify/away.go",
+          "line": 51,
+          "status": "ADD",
+          "ticket": "P1-E23-W5-S49-T2",
+          "raw": "internal.notify.AwayController/ADDED (P1-E23-W5-S49-T2)."
+        },
+        {
+          "file": "internal/notify/away_signals.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E23-W5-S49-T2",
+          "raw": "internal.notify.AwayController/ADDED (P1-E23-W5-S49-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.notify.Config",
       "sites": [
         {
           "file": "internal/notify/dispatch.go",
-          "line": 24,
+          "line": 35,
           "status": "ADD",
           "raw": "internal.notify.Config/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.notify.DigestCompiler",
+      "sites": [
+        {
+          "file": "internal/notify/digest.go",
+          "line": 42,
+          "status": "ADD",
+          "ticket": "P1-E23-W5-S49-T2",
+          "raw": "internal.notify.DigestCompiler/ADDED (P1-E23-W5-S49-T2)."
         }
       ],
       "statuses": [
@@ -11789,14 +11840,22 @@
       "name": "internal.notify.Dispatcher",
       "sites": [
         {
+          "file": "internal/notify/accumulate.go",
+          "line": 31,
+          "status": "CHANGE",
+          "ticket": "P1-E23-W5-S49-T2",
+          "raw": "internal.notify.Dispatcher/CHANGED (P1-E23-W5-S49-T2)."
+        },
+        {
           "file": "internal/notify/dispatch.go",
-          "line": 24,
+          "line": 35,
           "status": "ADD",
           "raw": "internal.notify.Dispatcher/ADDED"
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -11804,9 +11863,10 @@
       "sites": [
         {
           "file": "internal/notify/inbox.go",
-          "line": 25,
+          "line": 26,
           "status": "ADD",
-          "raw": "internal.notify.Inbox/ADDED"
+          "ticket": "P1-E23-W5-S49-T1",
+          "raw": "internal.notify.Inbox/ADDED (P1-E23-W5-S49-T1)."
         }
       ],
       "statuses": [
@@ -11847,10 +11907,25 @@
       "name": "internal.notify.Notifier",
       "sites": [
         {
-          "file": "internal/notify/inbox.go",
-          "line": 25,
+          "file": "internal/notify/notifier.go",
+          "line": 21,
           "status": "ADD",
-          "raw": "internal.notify.Notifier/ADDED"
+          "ticket": "P1-E23-W5-S49-T1",
+          "raw": "internal.notify.Notifier/ADDED (P1-E23-W5-S49-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.notify.PresenceSource",
+      "sites": [
+        {
+          "file": "internal/notify/away_config.go",
+          "line": 30,
+          "status": "ADD",
+          "raw": "internal.notify.PresenceSource/ADDED"
         }
       ],
       "statuses": [
@@ -27098,7 +27173,7 @@
       ]
     }
   ],
-  "total_sites": 2545,
+  "total_sites": 2551,
   "unspecified_count": 114,
-  "multi_status_count": 53
+  "multi_status_count": 54
 }
