@@ -45,6 +45,22 @@
 // SPORT: plugins/cascade-pa:cmd:chat (ADD) — P1-E20-W5-S43-T3; manifest
 //
 //	command entry REMOVED — FIX-manifest-collision-and-conductor-seam.
+//
+// U/S-46.T4 CONTRACT NOTE (recorded, not silently skipped): that ticket's
+// full_desc asks to "declare chat.topics_list and chat.threads_list in
+// cascade-pa's §D-21 COMMANDS declaration and register them in
+// plugins/cascade-pa/plugin.go via the builtin plugin host services".
+// This manifest adds no Provides.Commands entry for them, for the same
+// reason the comment block above gives for "chat" itself: --topics,
+// --threads, and --thread <slug> are FLAGS of the already-reserved "chat"
+// verb (rule R5, reservedCommandNames — pkg/plugin/validate.go), not new
+// CLI verbs a CommandSpec could name, and chat.* is the CORE RPC
+// namespace 07-CLI-COMMAND-TREE.md pins to the `chat` command (rpc:
+// chat.*), registered by internal/conversation/adapter.go — outside this
+// package's importable boundary (Art.10.2) and outside U/S-46.T4's
+// files_scope. The real implementation lives in cmd/topics_cli.go's own
+// TopicsThreadsClient seam, mirroring cmd/chat.go's Client precedent; see
+// that file's header for the full gap record.
 package cascadepa
 
 import (

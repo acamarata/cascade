@@ -28,7 +28,6 @@ import (
 	"fmt"
 	goruntime "runtime"
 	"strings"
-	"sync"
 
 	"github.com/spf13/cobra"
 
@@ -63,83 +62,6 @@ type OneShotResult struct {
 	Content  string
 }
 
-// Client is the seam over the daemon's chat adapter (T2's
-// internal/conversation.Adapter, reached over the unix socket via
-// internal/client): OneShot performs a single non-streaming turn (used by
-// one-shot mode); Stream performs the same turn but delivers the response
-// incrementally over the returned channel (used by TUI mode). Both take a
-// context so a caller can cancel a live request (Ctrl-C mid-stream).
-type Client interface {
-	// OneShot sends req and returns the complete reply, or a typed
-	// cascade error (KindUnavailable when the daemon cannot be reached,
-	// KindNotFound when req.Thread does not exist, KindInvalidInput for a
-	// malformed request).
-	OneShot(ctx context.Context, req OneShotRequest) (OneShotResult, error)
-	// Stream sends req and delivers the reply incrementally: tokens on
-	// the first channel (closed when the stream ends normally), a single
-	// terminal error (or nil) on the second channel once the first
-	// closes. Canceling ctx aborts the stream; Stream must still close
-	// both channels promptly in that case rather than leaking the
-	// goroutine that feeds them.
-	Stream(ctx context.Context, req OneShotRequest) (<-chan string, <-chan error)
-}
-
-// unconfiguredClient is the default Client: every call fails with a typed,
-// actionable KindUnavailable error naming the missing wiring. This is not
-// a stub standing in for unfinished work (Art.1) — it is the correct,
-// deliberate behavior of a real binary that has not called SetClient, and
-// its error is exactly what the daemon-unreachable acceptance criterion
-// requires: never a blank screen, a hang, or a silent retry loop.
-type unconfiguredClient struct{}
-
-// errClientUnconfigured is the shared error unconfiguredClient returns.
-var errClientUnconfigured = cascade.New(cascade.KindUnavailable,
-	"cascade chat: no daemon adapter is wired into this binary; "+
-		"start the daemon with `cascade daemon run` and ensure cascade-pa's "+
-		"client wiring is configured")
-
-func (unconfiguredClient) OneShot(context.Context, OneShotRequest) (OneShotResult, error) {
-	return OneShotResult{}, errClientUnconfigured
-}
-
-func (unconfiguredClient) Stream(context.Context, OneShotRequest) (<-chan string, <-chan error) {
-	tokens := make(chan string)
-	errs := make(chan error, 1)
-	close(tokens)
-	errs <- errClientUnconfigured
-	close(errs)
-	return tokens, errs
-}
-
-// clientState guards the package-level Client seam so SetClient is safe
-// under concurrent registration/test use.
-var clientState struct {
-	mu sync.RWMutex
-	c  Client
-}
-
-// SetClient injects the real Client implementation. Intended to be called
-// exactly once, by the composition root, before any `cascade chat`
-// invocation — see this file's package doc comment for why that call site
-// is a recorded, out-of-scope deviation in this ticket. Tests call it
-// directly to inject a fake.
-func SetClient(c Client) {
-	clientState.mu.Lock()
-	clientState.c = c
-	clientState.mu.Unlock()
-}
-
-// activeClient returns the configured Client, or unconfiguredClient{} if
-// SetClient has never been called.
-func activeClient() Client {
-	clientState.mu.RLock()
-	defer clientState.mu.RUnlock()
-	if clientState.c == nil {
-		return unconfiguredClient{}
-	}
-	return clientState.c
-}
-
 // errChatWindowsTUIRefusal is TUI mode's unconditional Windows tier-2
 // refusal (06-FORGE-SPEC.md §2): Windows tier-2 has no PTY contract this
 // package can rely on, so TUI mode refuses before touching the Client at
@@ -170,6 +92,12 @@ type chatOptions struct {
 	// the daemon applies whether or not this command says so.
 	private   bool
 	localOnly bool
+	// topics/threads/page/pageSize: U/S-46.T4 listing surfaces. They
+	// bypass the Client above entirely; see topics_cli.go.
+	topics   bool
+	threads  bool
+	page     int
+	pageSize int
 }
 
 // NewChatCommand builds the `chat` cobra command cascade-pa's commands.go
@@ -206,6 +134,10 @@ func NewChatCommand() *cobra.Command {
 		"create the thread restricted: its content may not ride a lane whose destination cannot be resolved")
 	c.Flags().BoolVar(&opts.localOnly, "local-only", false,
 		"create the thread local-only: its content may never leave this machine")
+	c.Flags().BoolVar(&opts.topics, "topics", false, "list active topics with thread counts, then exit")
+	c.Flags().BoolVar(&opts.threads, "threads", false, "list threads (title, slug, message count), paginated, then exit")
+	c.Flags().IntVar(&opts.page, "page", 1, "--threads: page number (1-based)")
+	c.Flags().IntVar(&opts.pageSize, "page-size", 20, "--threads: threads per page")
 	return c
 }
 
@@ -216,6 +148,38 @@ func runChat(cc *cobra.Command, opts chatOptions, lookupEnv envLookup) error {
 	ctx := cc.Context()
 	if ctx == nil {
 		ctx = context.Background()
+	}
+
+	// U/S-46.T4: --topics/--threads are read-only, TTY-independent
+	// listing surfaces; run before CASCADE_NO_INPUT/TUI logic so neither
+	// blocks them (automation parity).
+	if opts.topics {
+		return runTopicsList(ctx, cc, opts.json)
+	}
+	if opts.threads {
+		return runThreadsList(ctx, cc, opts.json, opts.page, opts.pageSize)
+	}
+
+	// --thread <slug> with no prompt is "open" mode: validate the slug
+	// first. --json prints the summary and exits. Non-interactive parity
+	// (06-FORGE-SPEC §5.8): CASCADE_NO_INPUT=1 or the absence of a real
+	// TTY prints the same summary as plain text and exits 0 -- only a
+	// real TTY with neither flag falls through to the TUI below.
+	if opts.thread != "" && opts.prompt == "" {
+		summary, err := openThread(ctx, opts.thread)
+		if err != nil {
+			return err
+		}
+		if opts.json {
+			return writeThreadSummary(cc, summary)
+		}
+		noInput := false
+		if v, ok := lookupEnv("CASCADE_NO_INPUT"); ok && v == "1" {
+			noInput = true
+		}
+		if noInput || !isRealTTY(cc.InOrStdin()) {
+			return writeThreadSummaryText(cc, summary)
+		}
 	}
 
 	if opts.prompt == "" {

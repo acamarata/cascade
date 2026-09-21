@@ -50,6 +50,7 @@ import (
 	"path/filepath"
 
 	"github.com/acamarata/cascade/internal/conversation"
+	"github.com/acamarata/cascade/internal/conversation/topics"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -99,8 +100,9 @@ func wireChatHandlers(ctx context.Context, registry *rpc.Registry, paths runtime
 		_ = db.Close()
 		return err
 	}
+	store := conversation.NewStore(db)
 	adapter := conversation.NewAdapter(
-		conversation.NewStore(db),
+		store,
 		bus,
 		// No substitutor. The egress substitution pass belongs on the
 		// path where content LEAVES the machine; the SSE mirror is a
@@ -120,6 +122,31 @@ func wireChatHandlers(ctx context.Context, registry *rpc.Registry, paths runtime
 		return err
 	}
 	adapter.RegisterHandlers(registry)
+	// Topic engine hook (U/S-46.T4 D2): wired into the adapter before any
+	// chat.append_turn request can reach it, so handleAppendTurn's
+	// finishAppend (internal/conversation/adapter_topics.go) always has a
+	// non-nil TopicObserver to call. See chat_topics_engine.go's own
+	// header for why this composes to a typed "not configured" engine in
+	// every build of this tree today, and exactly what it is ready for
+	// once that changes.
+	topicEngine, err := newChatTopicEngine(store, clock, bus, paths)
+	if err != nil {
+		_ = db.Close()
+		return err
+	}
+	adapter.SetTopicObserver(topicEngine)
+	// chat.topics_list / chat.threads_list (U/S-46.T4): the real topic
+	// engine's ThreadStore over this SAME conversation.Store -- see
+	// internal/conversation/topics/rpc.go's header for why this
+	// registration cannot live beside adapter.go's own (an import cycle)
+	// and is instead composed here, alongside it, matching every other
+	// chat.* method's real call site.
+	topicsHandlers, err := topics.NewRPCHandlers(store, clock)
+	if err != nil {
+		_ = db.Close()
+		return err
+	}
+	topicsHandlers.RegisterHandlers(registry)
 	return nil
 }
 

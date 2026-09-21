@@ -40,6 +40,13 @@ type appendTurnResult struct {
 	ThreadID string `json:"thread_id"`
 	TurnID   string `json:"turn_id"`
 	Seq      int64  `json:"seq"`
+	// TopicWarning is set by finishAppend (adapter_topics.go, P1-E21-
+	// W5-S46-T4 D2) when the wired TopicObserver reported a problem.
+	// Empty means either the topic engine observed this turn with
+	// nothing to report, or no observer is wired at all (observeTopics
+	// returns "" without a store round trip in that case). Never a
+	// reason to fail the call: the turn above is already durably stored.
+	TopicWarning string `json:"topic_warning,omitempty"`
 }
 
 func decodeAppendTurnParams(raw json.RawMessage) (appendTurnParams, error) {

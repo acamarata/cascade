@@ -72,6 +72,11 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	// enrolled" - an unreadable subject is never silently OK.
 	reg.Register(nodes.NewHealthCheck(nodesRecordStoreFor(paths, clock), clock, 0))
 	reg.Register(targets.NewRcloneDoctorCheck(nil)) // backup (P1-E19-W4-S41-T3)
+	// chat_topics_engine (P1-E21-W5-S46-T4 D2): shares chat_topics_
+	// engine.go's own resolver functions with wireChatHandlers' real
+	// composition, so this report and the running daemon's behaviour
+	// never disagree about whether turns are being segmented.
+	reg.Register(newChatTopicsDoctorCheck(paths))
 	// harness (P1-E16-W4-S35-T3): which coding harnesses are installed and
 	// whether the instruction files cascade generates for them are current.
 	// It is the check `doctor --harness` narrows to.

@@ -63,6 +63,7 @@ type Adapter struct {
 	mode    string
 	journal JournalStore  // optional; nil means "journal.go's write path is not wired here" -- see SetJournal
 	scrub   ScrubPipeline // optional; nil is scrub.go's documented passthrough -- see SetScrub
+	topics  TopicObserver // optional; nil means "no topic engine composed" -- see SetTopicObserver (adapter_topics.go)
 }
 
 // NewAdapter returns an Adapter dispatching to store, mirroring appended
@@ -178,11 +179,11 @@ func (a *Adapter) handleAppendTurn(ctx context.Context, raw json.RawMessage) (an
 		if cascade.HasKind(err, cascade.KindUnsupported) {
 			// Windows tier-2 embedded mode: the ticket's documented,
 			// tested non-failure -- the turn is already committed above.
-			return appendTurnResult{ThreadID: turn.ThreadID, TurnID: turn.ID, Seq: turn.Seq}, nil
+			return a.finishAppend(ctx, turn, segments), nil
 		}
 		return nil, err
 	}
-	return appendTurnResult{ThreadID: turn.ThreadID, TurnID: turn.ID, Seq: turn.Seq}, nil
+	return a.finishAppend(ctx, turn, segments), nil
 }
 
 // getThreadParams is chat.get_thread's wire request shape.
@@ -258,43 +259,4 @@ func (a *Adapter) handleListThreads(ctx context.Context, raw json.RawMessage) (a
 		return nil, err
 	}
 	return listThreadsResult{Threads: threads}, nil
-}
-
-// handleSearch is chat.search: the FTS5 index, over the wire.
-//
-// WHY THIS EXISTS. S-44.T3 built SearchTurns, PruneTurns and thread
-// archival into this package and stopped at its boundary: nothing outside
-// internal/conversation called any of them, so the FTS5 index this ticket
-// created could not be reached by a running program, and
-// cascade_cpa_search went on running the plain store scan the index was
-// written to replace. A capability with no caller is not a feature
-// (R-14.283).
-//
-// The rank is REPORTED AS A SCORE, negated. SQLite's bm25() is
-// lower-is-better and returns negative values; a field named "score" is
-// read higher-is-better by everything that consumes one. Negating is a
-// monotonic relabelling of SQLite's own number — it invents no ranking.
-func (a *Adapter) handleSearch(ctx context.Context, raw json.RawMessage) (any, error) {
-	p, err := decodeSearchParams(raw)
-	if err != nil {
-		return nil, err
-	}
-	matches, err := a.store.SearchTurns(ctx, p.Query, SearchFilter{ThreadID: p.ThreadID, Limit: p.Limit})
-	if err != nil {
-		return nil, err
-	}
-	out := make([]searchResultWire, 0, len(matches))
-	for _, m := range matches {
-		segs, segErr := a.store.ListSegments(ctx, m.Turn.ID)
-		if segErr != nil {
-			return nil, segErr
-		}
-		out = append(out, searchResultWire{
-			ThreadID: m.Turn.ThreadID,
-			TurnID:   m.Turn.ID,
-			Content:  joinSegmentContent(segs),
-			Score:    -m.Rank,
-		})
-	}
-	return searchResultSet{Results: out}, nil
 }
