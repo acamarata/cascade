@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T00:32:56Z",
+  "generated_at": "2026-09-21T01:17:06Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -13199,6 +13199,21 @@
       ]
     },
     {
+      "name": "internal/conversation/topics auto-thread",
+      "sites": [
+        {
+          "file": "internal/conversation/topics/auto_thread.go",
+          "line": 36,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S45-T3",
+          "raw": "internal/conversation/topics auto-thread (ADD) (P1-E21-W5-S45-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/conversation/topics corpus+eval-harness",
       "sites": [
         {
@@ -13206,6 +13221,36 @@
           "line": 43,
           "status": "ADD",
           "raw": "internal/conversation/topics corpus+eval-harness (ADD)"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/conversation/topics exemplar-store",
+      "sites": [
+        {
+          "file": "internal/conversation/topics/exemplar_store.go",
+          "line": 29,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S45-T3",
+          "raw": "internal/conversation/topics exemplar-store (ADD) (P1-E21-W5-S45-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/conversation/topics reassign",
+      "sites": [
+        {
+          "file": "internal/conversation/topics/reassign.go",
+          "line": 47,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S45-T3",
+          "raw": "internal/conversation/topics reassign (ADD) (P1-E21-W5-S45-T3)."
         }
       ],
       "statuses": [
@@ -13277,6 +13322,36 @@
           "status": "ADD",
           "ticket": "P1-E21-W5-S45-T2",
           "raw": "internal/conversation/topics segmenter (ADD) (P1-E21-W5-S45-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/conversation/topics taxonomy",
+      "sites": [
+        {
+          "file": "internal/conversation/topics/taxonomy.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S45-T3",
+          "raw": "internal/conversation/topics taxonomy (ADD) (P1-E21-W5-S45-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/conversation/topics thread-store",
+      "sites": [
+        {
+          "file": "internal/conversation/topics/thread_store.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S45-T3",
+          "raw": "internal/conversation/topics thread-store (ADD) (P1-E21-W5-S45-T3)."
         }
       ],
       "statuses": [
@@ -25054,7 +25129,7 @@
       ]
     }
   ],
-  "total_sites": 2402,
+  "total_sites": 2407,
   "unspecified_count": 71,
   "multi_status_count": 50
 }
