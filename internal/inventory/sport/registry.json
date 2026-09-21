@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T13:33:00Z",
+  "generated_at": "2026-09-21T13:57:48Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3389,6 +3389,50 @@
           "status": "ADD",
           "ticket": "P1-E45-W10-S88-T2",
           "raw": "cmd/cascade chat platform boundary (ADD) — P1-E45-W10-S88-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade chat topics doctor check",
+      "sites": [
+        {
+          "file": "cmd/cascade/chat_topics_doctor.go",
+          "line": 27,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T4",
+          "raw": "cmd/cascade chat topics doctor check (ADD) -- P1-E21-W5-S46-T4 D2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade chat topics engine",
+      "sites": [
+        {
+          "file": "cmd/cascade/chat_topics_engine.go",
+          "line": 35,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T4",
+          "raw": "cmd/cascade chat topics engine (ADD) -- P1-E21-W5-S46-T4 D2."
+        },
+        {
+          "file": "cmd/cascade/chat_topics_engine_e2e_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T4",
+          "raw": "cmd/cascade chat topics engine (ADD tests) -- P1-E21-W5-S46-T4 D2."
+        },
+        {
+          "file": "cmd/cascade/chat_topics_engine_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T4",
+          "raw": "cmd/cascade chat topics engine (ADD tests) -- P1-E21-W5-S46-T4 D2."
         }
       ],
       "statuses": [
@@ -10482,11 +10526,29 @@
           "raw": "internal.conversation.adapter (CHANGED — thread minting,"
         },
         {
+          "file": "internal/conversation/adapter_search.go",
+          "line": 8,
+          "status": "CHANGE",
+          "raw": "internal.conversation.adapter (CHANGED -- search handler split,"
+        },
+        {
           "file": "internal/conversation/adapter_test.go",
           "line": 7,
           "status": "ADD",
           "ticket": "P1-E20-W5-S43-T2",
           "raw": "internal.conversation.adapter/ADDED (tests) (P1-E20-W5-S43-T2)."
+        },
+        {
+          "file": "internal/conversation/adapter_topics.go",
+          "line": 22,
+          "status": "CHANGE",
+          "raw": "internal.conversation.adapter (CHANGED -- topic engine hook,"
+        },
+        {
+          "file": "internal/conversation/adapter_topics_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal.conversation.adapter (ADD tests -- topic engine hook,"
         },
         {
           "file": "internal/conversation/adapter_wire.go",
@@ -14810,6 +14872,36 @@
       ]
     },
     {
+      "name": "internal/conversation/topics rpc",
+      "sites": [
+        {
+          "file": "internal/conversation/topics/rpc.go",
+          "line": 48,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T4",
+          "raw": "internal/conversation/topics rpc (ADD) (P1-E21-W5-S46-T4)."
+        },
+        {
+          "file": "internal/conversation/topics/rpc_order_test.go",
+          "line": 30,
+          "status": "",
+          "ticket": "P1-E21-W5-S46-T4",
+          "raw": "internal/conversation/topics rpc (TEST) (P1-E21-W5-S46-T4, FIX"
+        },
+        {
+          "file": "internal/conversation/topics/rpc_test.go",
+          "line": 17,
+          "status": "",
+          "ticket": "P1-E21-W5-S46-T4",
+          "raw": "internal/conversation/topics rpc (TEST) (P1-E21-W5-S46-T4)."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/conversation/topics segmenter",
       "sites": [
         {
@@ -18894,6 +18986,29 @@
           "status": "",
           "ticket": "P1-E20-W5-S43-T4",
           "raw": "internal/plugins:cascadepa-tools-wiring (TEST) — P1-E20-W5-S43-T4."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-topics-wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_topics_wiring.go",
+          "line": 43,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T4",
+          "raw": "internal/plugins:cascadepa-topics-wiring (ADD) -- P1-E21-W5-S46-T4."
+        },
+        {
+          "file": "internal/plugins/cascadepa_topics_wiring_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E21-W5-S46-T4",
+          "raw": "internal/plugins:cascadepa-topics-wiring (TEST) -- P1-E21-W5-S46-T4."
         }
       ],
       "statuses": [
@@ -23306,6 +23421,43 @@
       ]
     },
     {
+      "name": "plugin.cascade-pa:cmd:chat",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/cmd/chat_tty.go",
+          "line": 10,
+          "status": "CHANGE",
+          "ticket": "P1-E21-W5-S46-T4",
+          "raw": "plugin.cascade-pa:cmd:chat (CHANGE) -- P1-E21-W5-S46-T4."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
+      ]
+    },
+    {
+      "name": "plugin.cascade-pa:topics-cli",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/cmd/topics_cli.go",
+          "line": 39,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T4",
+          "raw": "plugin.cascade-pa:topics-cli (ADD) -- P1-E21-W5-S46-T4."
+        },
+        {
+          "file": "plugins/cascade-pa/cmd/topics_cli_test.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E21-W5-S46-T4",
+          "raw": "plugin.cascade-pa:topics-cli (ADD) — P1-E21-W5-S46-T4."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins.github.TokenKey/TESTED",
       "sites": [
         {
@@ -24011,6 +24163,13 @@
           "raw": "plugins/cascade-pa:cmd:chat (ADD) — P1-E20-W5-S43-T3."
         },
         {
+          "file": "plugins/cascade-pa/cmd/chat_client.go",
+          "line": 14,
+          "status": "CHANGE",
+          "ticket": "P1-E21-W5-S46-T4",
+          "raw": "plugins/cascade-pa:cmd:chat (CHANGE) — P1-E21-W5-S46-T4."
+        },
+        {
           "file": "plugins/cascade-pa/cmd/chat_refusal_nonwindows_test.go",
           "line": 18,
           "status": "ADD",
@@ -24054,7 +24213,8 @@
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -28156,7 +28316,7 @@
       ]
     }
   ],
-  "total_sites": 2636,
+  "total_sites": 2652,
   "unspecified_count": 127,
-  "multi_status_count": 62
+  "multi_status_count": 65
 }
