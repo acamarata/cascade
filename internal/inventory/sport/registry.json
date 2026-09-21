@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T02:51:54Z",
+  "generated_at": "2026-09-21T03:13:37Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -17755,6 +17755,12 @@
           "raw": "internal/plugins:ci-policy-wiring (ADD) -- P1-E25-W5-S51-T5."
         },
         {
+          "file": "internal/plugins/ci_policy_wiring_env_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/plugins:ci-policy-wiring (TESTED)."
+        },
+        {
           "file": "internal/plugins/ci_policy_wiring_test.go",
           "line": 5,
           "status": "",
@@ -25803,7 +25809,7 @@
       ]
     }
   ],
-  "total_sites": 2454,
+  "total_sites": 2455,
   "unspecified_count": 84,
   "multi_status_count": 51
 }
