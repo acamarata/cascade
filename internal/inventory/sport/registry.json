@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-21T01:17:06Z",
+  "generated_at": "2026-09-21T02:50:16Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1833,6 +1833,21 @@
           "line": 13,
           "status": "",
           "raw": "bundle subcommand."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "ci.poll-guard",
+      "sites": [
+        {
+          "file": "internal/ci/poll_guard_test.go",
+          "line": 16,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "ci.poll-guard (TEST) -- P1-E25-W5-S51-T5."
         }
       ],
       "statuses": [
@@ -8947,11 +8962,71 @@
       ]
     },
     {
+      "name": "internal.ci.AllowedEnv",
+      "sites": [
+        {
+          "file": "internal/ci/runner_env.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "internal.ci.AllowedEnv/ADDED (P1-E25-W5-S51-T5)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.AllowedEnv/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/runner_env_test.go",
+          "line": 3,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "internal.ci.AllowedEnv/TESTED (P1-E25-W5-S51-T5)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.BuildRunnerConfig",
+      "sites": [
+        {
+          "file": "internal/ci/runner_config.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "internal.ci.BuildRunnerConfig/ADDED (P1-E25-W5-S51-T5)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.BuildRunnerConfig/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/runner_config_test.go",
+          "line": 4,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "internal.ci.BuildRunnerConfig/TESTED (P1-E25-W5-S51-T5)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal.ci.Client",
       "sites": [
         {
           "file": "internal/ci/poll.go",
-          "line": 31,
+          "line": 35,
           "status": "ADD",
           "raw": "internal.ci.Client/ADDED"
         }
@@ -8965,7 +9040,7 @@
       "sites": [
         {
           "file": "internal/ci/poll.go",
-          "line": 31,
+          "line": 35,
           "status": "ADD",
           "raw": "internal.ci.Client.PollRuns/ADDED"
         }
@@ -8996,11 +9071,82 @@
       ]
     },
     {
+      "name": "internal.ci.Deps",
+      "sites": [
+        {
+          "file": "internal/ci/runner.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal.ci.Deps/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.Execute",
+      "sites": [
+        {
+          "file": "internal/ci/runner.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal.ci.Execute/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.Execute/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/runner_test.go",
+          "line": 11,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "internal.ci.Execute/TESTED (P1-E25-W5-S51-T5)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.Executor",
+      "sites": [
+        {
+          "file": "internal/ci/runner_exec.go",
+          "line": 31,
+          "status": "ADD",
+          "raw": "internal.ci.Executor/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.LocalRepoID",
+      "sites": [
+        {
+          "file": "internal/ci/runner_ids.go",
+          "line": 29,
+          "status": "ADD",
+          "raw": "internal.ci.LocalRepoID/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.ci.MigrationSet",
       "sites": [
         {
           "file": "internal/ci/domain.go",
-          "line": 45,
+          "line": 49,
           "status": "ADD",
           "raw": "internal.ci.MigrationSet/ADDED"
         }
@@ -9024,13 +9170,265 @@
       ]
     },
     {
+      "name": "internal.ci.NewCICmd",
+      "sites": [
+        {
+          "file": "internal/ci/runner_cmd.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "internal.ci.NewCICmd/ADDED (P1-E25-W5-S51-T5)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.NewCICmd/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/runner_cmd_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "internal.ci.NewCICmd/TESTED (P1-E25-W5-S51-T5)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.ReserveLocalRun",
+      "sites": [
+        {
+          "file": "internal/ci/runner_ids.go",
+          "line": 29,
+          "status": "ADD",
+          "raw": "internal.ci.ReserveLocalRun/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.ReserveLocalRun/TESTED, internal.ci.LocalRepoID/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/runner_ids_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal.ci.ReserveLocalRun/TESTED, internal.ci.LocalRepoID/TESTED"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.RouteResolver",
+      "sites": [
+        {
+          "file": "internal/ci/route.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "internal.ci.RouteResolver/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.RouteResolver/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/route_test.go",
+          "line": 9,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "internal.ci.RouteResolver/TESTED (P1-E25-W5-S51-T5)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.RunnerStep",
+      "sites": [
+        {
+          "file": "internal/ci/runner_types.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal.ci.RunnerStep/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.SetRouteResolver",
+      "sites": [
+        {
+          "file": "internal/ci/route.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "internal.ci.SetRouteResolver/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.ShellExecutor",
+      "sites": [
+        {
+          "file": "internal/ci/runner_exec.go",
+          "line": 31,
+          "status": "ADD",
+          "raw": "internal.ci.ShellExecutor/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.ShellExecutor/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/runner_exec_test.go",
+          "line": 9,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "internal.ci.ShellExecutor/TESTED (P1-E25-W5-S51-T5)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.StepResult",
+      "sites": [
+        {
+          "file": "internal/ci/runner_types.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal.ci.StepResult/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.StepResult/TESTED, internal.ci.RunResult/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/runner_types_test.go",
+          "line": 2,
+          "status": "",
+          "raw": "internal.ci.StepResult/TESTED, internal.ci.RunResult/TESTED"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal.ci.Upsert",
       "sites": [
         {
           "file": "internal/ci/domain.go",
-          "line": 45,
+          "line": 49,
           "status": "ADD",
           "raw": "internal.ci.Upsert/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.UpsertRunSource",
+      "sites": [
+        {
+          "file": "internal/ci/domain_source.go",
+          "line": 27,
+          "status": "ADD",
+          "raw": "internal.ci.UpsertRunSource/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.UpsertRunSource/TESTED, internal.ci.runSource/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/domain_source_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal.ci.UpsertRunSource/TESTED, internal.ci.runSource/TESTED,"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.killProcessGroup",
+      "sites": [
+        {
+          "file": "internal/ci/runner_exec_unix.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "internal.ci.killProcessGroup/ADDED (P1-E25-W5-S51-T5)."
+        },
+        {
+          "file": "internal/ci/runner_exec_windows.go",
+          "line": 29,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "internal.ci.killProcessGroup/ADDED (P1-E25-W5-S51-T5)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.killProcessGroup/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/runner_exec_pgid_test.go",
+          "line": 14,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "internal.ci.killProcessGroup/TESTED (P1-E25-W5-S51-T5)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.newCIStatusCmd",
+      "sites": [
+        {
+          "file": "internal/ci/status_cmd.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "internal.ci.newCIStatusCmd/ADDED (P1-E25-W5-S51-T5)."
         }
       ],
       "statuses": [
@@ -9078,6 +9476,50 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "internal.ci.runCIRun",
+      "sites": [
+        {
+          "file": "internal/ci/run_cmd.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "internal.ci.runCIRun/ADDED (P1-E25-W5-S51-T5)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.runResultView",
+      "sites": [
+        {
+          "file": "internal/ci/runner_view.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "internal.ci.runResultView/ADDED (P1-E25-W5-S51-T5)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.runSource",
+      "sites": [
+        {
+          "file": "internal/ci/domain_source.go",
+          "line": 27,
+          "status": "ADD",
+          "raw": "internal.ci.runSource/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -11947,6 +12389,20 @@
           "status": "ADD",
           "ticket": "P1-E29-W6-S60-T1",
           "raw": "internal.rpc.SSEHandler/ADDED job/lease topics (P1-E29-W6-S60-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.runtime.parseCIPolicySection",
+      "sites": [
+        {
+          "file": "internal/runtime/config_ci.go",
+          "line": 28,
+          "status": "ADD",
+          "raw": "internal.runtime.parseCIPolicySection/ADDED"
         }
       ],
       "statuses": [
@@ -17139,6 +17595,29 @@
       ]
     },
     {
+      "name": "internal/plugins:ci-policy-wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/ci_policy_wiring.go",
+          "line": 42,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "internal/plugins:ci-policy-wiring (ADD) -- P1-E25-W5-S51-T5."
+        },
+        {
+          "file": "internal/plugins/ci_policy_wiring_test.go",
+          "line": 5,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "internal/plugins:ci-policy-wiring (TESTED) -- P1-E25-W5-S51-T5."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/policy ApprovalError",
       "sites": [
         {
@@ -21159,6 +21638,51 @@
       ]
     },
     {
+      "name": "plugins.github.TokenKey/TESTED",
+      "sites": [
+        {
+          "file": "plugins/github/ci_policy_test.go",
+          "line": 16,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "plugins.github.TokenKey/TESTED (P1-E25-W5-S51-T5)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins.github.cipolicy.ResolveCIPolicy",
+      "sites": [
+        {
+          "file": "plugins/github/cipolicy/ci_policy.go",
+          "line": 30,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "plugins.github.cipolicy.ResolveCIPolicy/ADDED (P1-E25-W5-S51-T5)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins.github.cipolicy.ResolveCIPolicy/TESTED",
+      "sites": [
+        {
+          "file": "plugins/github/cipolicy/ci_policy_test.go",
+          "line": 4,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T5",
+          "raw": "plugins.github.cipolicy.ResolveCIPolicy/TESTED (P1-E25-W5-S51-T5)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "plugins.pbd.NewEventsHandler",
       "sites": [
         {
@@ -25129,7 +25653,7 @@
       ]
     }
   ],
-  "total_sites": 2407,
-  "unspecified_count": 71,
-  "multi_status_count": 50
+  "total_sites": 2444,
+  "unspecified_count": 84,
+  "multi_status_count": 51
 }
