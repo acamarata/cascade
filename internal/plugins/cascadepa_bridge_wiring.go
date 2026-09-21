@@ -186,15 +186,15 @@ func enabledBridge(ctx context.Context, deps BridgeDeps, token string) (*BridgeR
 	}
 	pairKey, err := cascadepa.DerivePairCodeKey(token)
 	if err != nil {
-		return nil, err
+		return nil, closeStateOnError(state, err)
 	}
 	gate, err := newBridgeEgressGateFor(deps.Vault)
 	if err != nil {
-		return nil, err
+		return nil, closeStateOnError(state, err)
 	}
 	scanner, err := newBridgeSecretScanner()
 	if err != nil {
-		return nil, err
+		return nil, closeStateOnError(state, err)
 	}
 	stores := cascadepa.NewStores(deps.Clock, newBridgeDeviceRegistrar(deps.DataDir), state, pairKey)
 	journal := newBridgeJournal(deps.Events)
@@ -216,6 +216,22 @@ func enabledBridge(ctx context.Context, deps BridgeDeps, token string) (*BridgeR
 		scanner:   scanner,
 		Routes:    routes,
 	}, nil
+}
+
+// closeStateOnError releases the durable state when a later assembly step
+// refuses, so a construction error never leaves the SQLite file open: the
+// windows lane cannot remove a TempDir while a handle is held, and a real
+// daemon would hold the exclusive lock across a retry. The original error
+// is returned unchanged; a close failure is folded in as context.
+func closeStateOnError(state cascadepa.BridgeState, err error) error {
+	closer, ok := state.(io.Closer)
+	if !ok {
+		return err
+	}
+	if closeErr := closer.Close(); closeErr != nil {
+		return cascade.Wrapf(cascade.KindUnavailable, err, "cascade-pa bridge: assembly failed and closing the state also failed: %v", closeErr)
+	}
+	return err
 }
 
 // closeStateAfterStop wraps stop so the durable state openBridgeState opened
