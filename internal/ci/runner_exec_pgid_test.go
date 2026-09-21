@@ -8,7 +8,8 @@
 //
 // This is a REAL sub-process test with a REAL orphan probe: the grandchild
 // writes its own pid, and after the step returns the test asks the kernel
-// whether that pid still exists (signal 0). Nothing here is faked --
+// whether that pid still exists (signal 0, polled: a killed process may be
+// a zombie for a moment). Nothing here is faked --
 // asserting on a recorded call could not distinguish a killed tree from a
 // surviving one.
 // SPORT: internal.ci.killProcessGroup/TESTED (P1-E25-W5-S51-T5).
@@ -54,7 +55,7 @@ func TestShellExecutor_TimeoutKillsTheWholeTree(t *testing.T) {
 	}
 
 	pid := readGrandchildPID(t, pidFile)
-	if processAlive(pid) {
+	if !processGone(pid, 2*time.Second) {
 		// Do not leave the machine with an orphan even when the assertion
 		// fails: the whole point of the test is that this pid should be
 		// gone, so reap it before reporting.
@@ -85,10 +86,39 @@ func readGrandchildPID(t *testing.T, pidFile string) int {
 	}
 }
 
-// processAlive reports whether pid still exists, via signal 0 -- the
-// standard existence probe, which delivers nothing and only reports
-// whether the target could be signalled. ESRCH means gone.
-func processAlive(pid int) bool {
-	err := syscall.Kill(pid, 0)
-	return !errors.Is(err, syscall.ESRCH)
+// processGone polls signal 0 -- the standard existence probe, which
+// delivers nothing and only reports whether the target could be signalled
+// -- until pid is gone or wait elapses. The poll is not optional: SIGKILL
+// is delivered asynchronously, and a killed grandchild that was reparented
+// when its shell died sits in ZOMBIE state until its new parent reaps it,
+// which on a CI runner (linux/arm64, 2026-09-21) was long enough for a
+// one-shot probe to read a dead process as a survivor. A zombie can run
+// nothing, so it counts as gone; Linux exposes that as state Z.
+func processGone(pid int, wait time.Duration) bool {
+	deadline := time.Now().Add(wait)
+	for {
+		if errors.Is(syscall.Kill(pid, 0), syscall.ESRCH) || isZombie(pid) {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// isZombie reads the process state from /proc on Linux; elsewhere /proc is
+// absent and the answer is false, so only the ESRCH probe decides there.
+func isZombie(pid int) bool {
+	raw, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return false
+	}
+	// The state field follows the ")" that closes the comm field.
+	stat := string(raw)
+	i := strings.LastIndex(stat, ")")
+	if i < 0 || i+2 >= len(stat) {
+		return false
+	}
+	return stat[i+2] == 'Z'
 }
