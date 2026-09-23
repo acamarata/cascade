@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-23T06:11:43Z",
+  "generated_at": "2026-09-23T10:01:49Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -10976,6 +10976,40 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.setShellCmdLine",
+      "sites": [
+        {
+          "file": "internal/ci/shellcmdline_unix.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal.ci.setShellCmdLine/ADDED."
+        },
+        {
+          "file": "internal/ci/shellcmdline_windows.go",
+          "line": 31,
+          "status": "ADD",
+          "raw": "internal.ci.setShellCmdLine/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.setShellCmdLine/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/shellcmdline_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "internal.ci.setShellCmdLine/TESTED."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -30082,7 +30116,7 @@
       ]
     }
   ],
-  "total_sites": 2823,
-  "unspecified_count": 142,
+  "total_sites": 2826,
+  "unspecified_count": 143,
   "multi_status_count": 77
 }
