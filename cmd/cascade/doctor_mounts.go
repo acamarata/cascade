@@ -81,6 +81,11 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	// whether the instruction files cascade generates for them are current.
 	// It is the check `doctor --harness` narrows to.
 	reg.Register(cascadecontext.NewHarnessCheck(productionHarnessDetector(), productionHarnessDrift()))
+	// completion-gate-hooks (P1-E32-W6-S66-T1, CR-B D4): FAIL when the CC
+	// harness IS installed but its settings file does not yet name the
+	// completion-gate hook's RPC method; OK when no harness is installed
+	// at all. doctor_mounts_completion.go.
+	reg.Register(productionCompletionGateCheck())
 	// context-hydration (P1-E16-W4-S34-T4): counts the degraded-hydration
 	// events the prompt hook publishes. It is the only place a degraded
 	// hydration becomes visible at all -- the hook fails OPEN by design,

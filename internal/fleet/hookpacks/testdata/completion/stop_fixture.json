@@ -1,6 +1,13 @@
 {
-  "job_id": "job_01J9EXAMPLE0000000000001",
-  "task_id": "",
-  "session_id": "ses_01J9EXAMPLE0000000000001",
-  "event_type": "Stop"
+  "session_id": "00000000-0000-0000-0000-000000000000",
+  "transcript_path": "/redacted/transcript_path",
+  "cwd": "/redacted/cwd",
+  "scratchpad_dir": "/redacted/scratchpad_dir",
+  "prompt_id": "00000000-0000-0000-0000-000000000000",
+  "permission_mode": "bypassPermissions",
+  "hook_event_name": "Stop",
+  "stop_hook_active": false,
+  "last_assistant_message": "ok",
+  "background_tasks": [],
+  "session_crons": []
 }

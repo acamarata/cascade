@@ -80,18 +80,31 @@ const MethodCompletionCheck = "fleet.sessions.completion_check"
 // config-reading composition root never needs to touch this file again.
 const defaultCompletionTimeout = 10 * time.Second
 
-// completionDeniedNamespace/EventCompletionDenied are this file's own
-// journaled-denial record (Art.10.6: "every Deny writes a journaled
-// reason record"). internal/fleet/journal's Kind enum is closed at eight
-// members with no member for a policy-hook denial (R-21.216), so this
-// uses the SAME durable, replayable events.Bus mechanism handler.go's
-// publishJob already relies on for its own audit trail -- Replay(ctx,
-// namespace, 0) reads the persisted row back, not merely a subscription.
-const completionDeniedNamespace = "hookpacks.completion"
+// gateNamespace/EventGateDenied/EventGateTimeout mirror
+// internal/jobs.completionGateNamespace/EventGateDenied and the new
+// jobs.EventGateTimeout EXACTLY (string-for-string) rather than importing
+// internal/jobs (a real, proven import cycle -- internal/rpc/jobs.go's
+// own header; hookpacks sits on the same side of it). stall.go (the
+// R-16.73 stall detector these feed) already carries this exact
+// duplication for the identical reason -- see its gateDeniedNamespace/
+// gateDeniedKind. CR-B Q1/D2 (binding): this file's OWN denials (unknown
+// job id, nil gate, a non-timeout gate error, a real policy denial
+// surfaced verbatim) previously journaled under a self-invented
+// "hookpacks.completion" namespace the stall detector never subscribes
+// to. They now publish EventGateDenied on gateNamespace, exactly as a
+// jobs.CompletionPolicy.Transition denial does (completion.go's cp.deny).
+// A timeout is not itself a policy denial the counting rule was designed
+// for, so it publishes EventGateTimeout instead (R-16.74: "... and a
+// jobs.gate.timeout event").
+const (
+	gateNamespace                     = "jobs.gate"
+	EventGateDenied  events.EventKind = "jobs.gate.denied"
+	EventGateTimeout events.EventKind = "jobs.gate.timeout"
+)
 
-// EventCompletionDenied is published exactly once per Deny response,
-// carrying completionDenialRecord.
-const EventCompletionDenied events.EventKind = "hookpacks.completion.denied"
+// completionCheckTimedOutReason is handleCompletionHook's exact timeout
+// deny reason, and the sentinel recordDenial uses to pick EventGateTimeout.
+const completionCheckTimedOutReason = "completion check timed out"
 
 // CompletionHookPayload is the completion-gate hook's own wire shape:
 // which harness event fired (TaskCompleted or Stop), the harness's own
@@ -100,11 +113,15 @@ const EventCompletionDenied events.EventKind = "hookpacks.completion.denied"
 // pkg/provider.driverEnvAllowlistBase) but an ordinary human session
 // never does -- an empty JobID/TaskID is the expected, non-error shape
 // for the latter (completion_scope.go's ResolveJobID).
+//
+// StopHookActive mirrors the real native Stop payload's field (capture:
+// testdata/completion/stop_fixture.json); changes no decision below.
 type CompletionHookPayload struct {
-	JobID     string        `json:"job_id"`
-	TaskID    string        `json:"task_id"`
-	SessionID string        `json:"session_id"`
-	EventType HookEventType `json:"event_type"`
+	JobID          string        `json:"job_id"`
+	TaskID         string        `json:"task_id"`
+	SessionID      string        `json:"session_id"`
+	EventType      HookEventType `json:"event_type"`
+	StopHookActive bool          `json:"stop_hook_active,omitempty"`
 }
 
 // CompletionHookResponse is handleCompletionHook's outcome. The zero
@@ -165,8 +182,7 @@ func handleCompletionHook(ctx context.Context, payload CompletionHookPayload, ga
 		return CompletionHookResponse{}
 	}
 	if err != nil {
-		// Job-scoped (payload named a job) but the id does not resolve
-		// to a real job: fail closed.
+		// Job-scoped but the id does not resolve to a real job: fail closed.
 		return CompletionHookResponse{Deny: true, Reason: fmt.Sprintf("unknown job id %q", jobID)}
 	}
 	if gate == nil {
@@ -177,7 +193,7 @@ func handleCompletionHook(ctx context.Context, payload CompletionHookPayload, ga
 	defer cancel()
 	ok, reason, gateErr := gate.CompletionCheck(checkCtx, jobID)
 	if checkCtx.Err() == context.DeadlineExceeded {
-		return CompletionHookResponse{Deny: true, Reason: "completion check timed out"}
+		return CompletionHookResponse{Deny: true, Reason: completionCheckTimedOutReason}
 	}
 	if gateErr != nil {
 		return CompletionHookResponse{Deny: true, Reason: gateErr.Error()}
@@ -191,49 +207,45 @@ func handleCompletionHook(ctx context.Context, payload CompletionHookPayload, ga
 	return CompletionHookResponse{}
 }
 
-// completionDenialRecord is EventCompletionDenied's payload shape: the
-// job id, which hook event triggered the check, the verbatim deny
-// reason, and the instant it was recorded.
+// completionDenialRecord is EventGateDenied/EventGateTimeout's payload: a
+// superset of internal/jobs.gateDeniedWirePayload's {job_id, session_id,
+// ticket_id, reason, attempt} (byte-compatible field names/types, so the
+// stall detector's default json.Unmarshal "ignore unknown fields" reads
+// this identically to a Transition denial) plus this package's own
+// pre-existing HookEvent/TimestampMs audit fields. Attempt is always 0:
+// the hook layer has no retry-attempt counter of its own.
 type completionDenialRecord struct {
 	JobID       string        `json:"job_id"`
+	SessionID   string        `json:"session_id"`
+	TicketID    string        `json:"ticket_id"`
+	Attempt     int           `json:"attempt"`
 	HookEvent   HookEventType `json:"hook_event"`
 	Reason      string        `json:"reason"`
 	TimestampMs int64         `json:"timestamp_ms"`
 }
 
-// recordDenial best-effort publishes one completionDenialRecord. A nil
-// bus or a Publish failure are both swallowed for the identical reason
-// handler.go's publishJob documents: journaling a denial must never be
-// the reason a denial response itself fails to return.
+// recordDenial best-effort publishes one completionDenialRecord on
+// EventGateDenied, or EventGateTimeout when reason is the exact timeout
+// sentinel (completionCheckTimedOutReason). A nil bus or a Publish
+// failure are both swallowed for the identical reason handler.go's
+// publishJob documents: journaling a denial must never be the reason a
+// denial response itself fails to return.
 func recordDenial(ctx context.Context, bus *events.Bus, payload CompletionHookPayload, jobID, reason string, clock runtime.Clock) {
 	if bus == nil {
 		return
 	}
 	raw, err := json.Marshal(completionDenialRecord{
-		JobID: jobID, HookEvent: payload.EventType, Reason: reason, TimestampMs: clock.Now().UnixMilli(),
+		JobID: jobID, SessionID: payload.SessionID, TicketID: payload.TaskID,
+		HookEvent: payload.EventType, Reason: reason, TimestampMs: clock.Now().UnixMilli(),
 	})
 	if err != nil {
 		return
 	}
-	_, _ = bus.Publish(ctx, completionDeniedNamespace, EventCompletionDenied, "hookpacks:completion-gate", raw)
-}
-
-// completionHookCommand builds one event's synchronous command template:
-// a curl call that WAITS for the daemon's response (unlike
-// sessionsPackCommand's fire-and-forget `|| true`) and translates a deny
-// response into the harness's own blocking contract (a non-zero exit with
-// the reason on stderr). $CASCADE_JOB_ID/$CASCADE_TICKET_ID/
-// $CASCADE_SESSION_ID are the real environment a Cascade-dispatched
-// driver inherits (pkg/provider.driverEnvAllowlistBase); an ordinary
-// human session simply leaves them unset, which is the unscoped case
-// completion_scope.go documents.
-func completionHookCommand(evt HookEventType) string {
-	return `r=$(curl -s -m 10 --unix-socket ` + socketPlaceholder +
-		` -X POST http://cascade.sock/rpc -H "Content-Type: application/json"` +
-		` -d '{"jsonrpc":"2.0","id":1,"method":"` + MethodCompletionCheck +
-		`","params":{"event_type":"` + string(evt) + `","session_id":"'"$CASCADE_SESSION_ID"'",` +
-		`"job_id":"'"$CASCADE_JOB_ID"'","task_id":"'"$CASCADE_TICKET_ID"'"}}' 2>/dev/null); ` +
-		`case "$r" in *'"deny":true'*) echo "$r" | sed -n 's/.*"reason":"\([^"]*\)".*/\1/p' >&2; exit 2;; esac; exit 0`
+	kind := EventGateDenied
+	if reason == completionCheckTimedOutReason {
+		kind = EventGateTimeout
+	}
+	_, _ = bus.Publish(ctx, gateNamespace, kind, "hookpacks:completion-gate", raw)
 }
 
 // RegisterCompletionHookPack builds and registers the "completion-gate"
@@ -253,8 +265,8 @@ func RegisterCompletionHookPack(reg *HookRegistry, gate PolicyGate, resolver Job
 	reg.RegisterPack("completion-gate", HookPack{
 		Name: "completion-gate",
 		Descriptors: []HookDescriptor{
-			{EventType: EventTaskCompleted, Matcher: "", CommandTemplate: completionHookCommand(EventTaskCompleted)},
-			{EventType: EventStop, Matcher: "", CommandTemplate: completionHookCommand(EventStop)},
+			{EventType: EventTaskCompleted, Matcher: "", CommandTemplate: completionHookCommand(EventTaskCompleted, defaultCompletionTimeout)},
+			{EventType: EventStop, Matcher: "", CommandTemplate: completionHookCommand(EventStop, defaultCompletionTimeout)},
 		},
 	})
 	return nil

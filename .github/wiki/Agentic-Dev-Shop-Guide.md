@@ -52,3 +52,76 @@ elevation, once that denylist mechanism ships (Epic AI).
 See `docs/cli/run.md` for the `cascade run --task` help text, generated from
 `cmd/cascade/run.go`'s cobra Long/Example text, which states the same
 task-class support inline at the CLI.
+
+## Completion gate
+
+`internal/fleet/hookpacks`'s `"completion-gate"` pack (`RegisterCompletionHookPack`,
+`completion_gate.go`) turns the harness's own `TaskCompleted` and `Stop` lifecycle
+hooks into a live call against `policy.completion_check` — the R-16.12 binding that
+an agent's own "I'm done" claim is evidence, never the completion decision itself.
+The rendered hook command posts to the daemon's `fleet.sessions.completion_check`
+JSON-RPC method and waits (unlike the fire-and-forget hydration/session hooks
+below), so a denial reaches the harness synchronously as a non-zero exit carrying
+the real deny reason on stderr.
+
+At daemon startup (`cmd/cascade/hooks.go`'s `wireCompletionHookPack`) the pack is
+bound to a real `*jobs.CompletionPolicy` (`internal/jobs`, `P1-E29-W6-S60-T3`) —
+the same completion-gate engine and evidence ledger `Jobs-DAG-Leases.md`'s own
+"Completion gate and evidence ledger" section documents. Every outcome but a clean
+pass is a denial:
+
+- the policy's own check fails (missing evidence, an out-of-scope footprint, an
+  expired approval, a checkpoint mismatch) — the real reason string, verbatim;
+- the check does not finish inside `completion_timeout` (10s by default, no
+  `[fleet.hooks]` config section exists yet to change it) — `"completion check
+  timed out"`;
+- the daemon-side payload cannot be parsed, or names a job id no row backs.
+
+This is the opposite default direction from the best-effort hydration/session
+hooks `internal/fleet/hookpacks/handler.go` registers for `R-16.6`: those fail
+OPEN (a slow or unreachable daemon must never block an ordinary tool call, so
+their rendered command ends `|| true`). The completion gate fails CLOSED in every
+direction once it applies — see the next section for exactly when it applies.
+
+## Completion gate scope
+
+The completion-gate hook is installed into the **user's own** CC harness
+configuration, so it fires on every session that harness runs — not only sessions
+Cascade itself dispatched. A global fail-closed default would deny an ordinary
+human's task completions whenever the daemon happens to be down, mid-upgrade, or
+simply busy. R-21.176 resolves this by having the hook decide **scope** before it
+ever forms an opinion (`internal/fleet/hookpacks/completion_scope.go`'s
+`ResolveJobID`):
+
+- **No job id in the payload** — an ordinary human session, the common case (a
+  Cascade-dispatched driver's environment carries `CASCADE_JOB_ID`;
+  `pkg/provider.driverEnvAllowlistBase` — a human session simply never sets it).
+  The hook allows with **no opinion**: `policy.completion_check` is never called,
+  and nothing is journaled as a denial.
+- **A job id is present but the resolver cannot be reached** (the daemon is
+  unreachable, or its store is unavailable) — scope itself cannot be established.
+  This is **also** no-opinion, never a denial: an unreachable daemon must not
+  block a human's completion just because a stray `CASCADE_JOB_ID` happened to be
+  set in the environment.
+- **A job id is present and resolves** — job-scoped. From here the fail-closed
+  path applies unconditionally: a real policy denial or an unknown job id (the
+  id was presented but no row backs it) both deny and publish `jobs.gate.denied`
+  — the SAME event `internal/jobs.CompletionPolicy.Transition`'s own denials
+  publish, so `internal/fleet/supervision`'s stall detector (R-16.73) sees a
+  hook-level denial exactly as it sees a policy one. A timeout instead
+  publishes `jobs.gate.timeout`. Every denial's journaled record (job id,
+  session id, hook event, reason, timestamp) is written before the response
+  returns.
+
+Because an unreachable daemon on a job-scoped completion is legitimately
+concerning (an active job cannot be gated at all until the daemon answers) without
+being a denial, `cascade doctor`'s `CompletionGateDoctorCheck`
+(`internal/fleet/hookpacks/doctor_check.go`) reports `StatusWarn` when its
+injected `LivenessProbe` finds the daemon unreachable while a job is active, in
+addition to its unconditional `StatusError` when the `"completion-gate"` pack
+itself is not registered for both `TaskCompleted` and `Stop`. As of this writing
+the check is built and tested but not yet mounted into `cascade doctor`'s own
+process-local registry (a real architecture gap: `cascade doctor` runs as its own
+fresh process and never observes the live daemon's `hookpacks.DefaultRegistry`
+state — tracked as an `UNOWNED` `internal/build/testonly-allow.json` entry naming
+`cmd/cascade/doctor_completion_gate.go` pending that design).

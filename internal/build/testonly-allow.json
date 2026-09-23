@@ -462,13 +462,6 @@
     "symbol": "internal/fleet/governor.Recommend"
   },
   {
-    "caller_site": "cmd/cascade/doctor_completion_gate.go",
-    "expected_caller": "a new cmd/cascade/doctor_completion_gate.go, once the live-vs-persisted-state design question above is decided; retire this entry once it lands",
-    "reason": "P1-E32-W6-S66-T1 ships the R-16.47/R-21.176 completion-gate doctor.Check, fully implemented and tested (StatusError when the pack is missing, StatusWarn when a LivenessProbe reports the daemon unreachable while a job is active). Mounting it into cmd/cascade/doctor_mounts.go's productionCheckRegistry as written would always report StatusError: `cascade doctor` runs as its own fresh process (doctor_mounts.go's own doc comment: a fresh *CheckRegistry per invocation) and never runs wireCompletionHookPack, so hookpacks.DefaultRegistry inside that process never gains the completion-gate entry the live daemon registers -- a real architecture gap, not a files_scope one: `cascade doctor` needs a way to observe the LIVE DAEMON's own registration state (a status RPC field, or a persisted install marker) rather than reading this CLI invocation's own separate in-process singleton. That decision is unresolved and belongs to a new file, not an edit to the existing doctor_mounts.go.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/fleet/hookpacks.NewCompletionGateDoctorCheck"
-  },
-  {
     "caller_site": "cmd/cascade/daemon_unix_run.go",
     "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, alongside the other registerXxxHandler calls, once a sessions.Store and an *events.Bus are already composed there for P1-E12-W3-S24-T3's own RegisterHandlers call; retire this entry once it is called there",
     "reason": "Binds fleet.sessions.hook_event to an *rpc.Registry. Every landed precedent for registering a daemon RPC method (context.scope.show, memory.*, recall.*, fleet.sessions.list per P1-E12-W3-S24-T3's own identical entry above) is called from cmd/cascade/daemon_unix_run.go's buildRPCServer, which this ticket's files_scope does not include (files_scope.change lists cmd/cascade/root.go, which is pure cobra-tree wiring per its own doc comment and carries no RPC composition of any kind, and internal/rpc/registry.go, which is a fully generic name->HandlerFunc map with no method-specific code). RegisterHookEventHandler itself is exercised end-to-end against a real *rpc.Registry and a real sessions.Store (handler_test.go): every R-16.48 mapping-table event, malformed params, unknown harness, timestamp-out-of-range, unknown-event-type drop, domain-error propagation, the planted-credential canary, and the Windows tier-2 refusal.",

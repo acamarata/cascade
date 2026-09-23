@@ -109,7 +109,7 @@ func TestCompletionHook_JobScopedDenyVerbatimReason(t *testing.T) {
 	if !resp.Deny || resp.Reason != "missing evidence: build" {
 		t.Fatalf("deny = %+v, want Deny=true Reason=%q verbatim", resp, "missing evidence: build")
 	}
-	assertRecord(t, bus, clock, "job-1", "missing evidence: build")
+	assertRecord(t, bus, clock, "job-1", "missing evidence: build", hookpacks.EventGateDenied)
 }
 
 func TestCompletionHook_Timeout(t *testing.T) {
@@ -118,7 +118,7 @@ func TestCompletionHook_Timeout(t *testing.T) {
 	if !resp.Deny || resp.Reason != "completion check timed out" {
 		t.Fatalf("timeout deny = %+v, want Deny=true Reason=%q", resp, "completion check timed out")
 	}
-	assertRecord(t, bus, clock, "job-1", "completion check timed out")
+	assertRecord(t, bus, clock, "job-1", "completion check timed out", hookpacks.EventGateTimeout)
 }
 
 func TestCompletionHook_MalformedJSONDeniesNoPanic(t *testing.T) {
@@ -139,7 +139,7 @@ func TestCompletionHook_UnknownJobIDDenies(t *testing.T) {
 	if !resp.Deny || !strings.Contains(resp.Reason, "ghost-job") {
 		t.Fatalf("unknown job id = %+v, want a Deny naming ghost-job", resp)
 	}
-	assertRecord(t, bus, clock, "ghost-job", resp.Reason)
+	assertRecord(t, bus, clock, "ghost-job", resp.Reason, hookpacks.EventGateDenied)
 }
 
 func TestCompletionHook_GateErrDenies(t *testing.T) {
@@ -157,11 +157,14 @@ func TestCompletionHook_NilGateDenies(t *testing.T) {
 	}
 }
 
-// TestCompletionHook_RealFixtures parses the real captured (Art.2 gap
-// disclosed, testdata/completion/README.md) TaskCompleted/Stop fixtures
-// and drives both an accept and a deny through the real dispatch path.
+// TestCompletionHook_RealFixtures parses the TaskCompleted fixture (still
+// self-authored, README.md's D3 disclosure) and drives accept/deny
+// through the real dispatch path. stop_fixture.json is now the REAL
+// captured native Stop payload (a wider shape than CompletionHookPayload)
+// exercised at the shell layer instead: completion_hook_command_test.go's
+// TestCompletionHookCommand_StopHookActiveNeverBypassesFailClosed.
 func TestCompletionHook_RealFixtures(t *testing.T) {
-	for _, name := range []string{"task_completed_fixture.json", "stop_fixture.json"} {
+	for _, name := range []string{"task_completed_fixture.json"} {
 		raw, err := os.ReadFile("testdata/completion/" + name)
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
@@ -227,9 +230,14 @@ func dispatchCompletion(t *testing.T, registry *rpc.Registry, p hookpacks.Comple
 	return resp
 }
 
-func assertRecord(t *testing.T, bus *events.Bus, clock *testkit.FrozenClock, jobID, reason string) {
+// assertRecord replays the REAL "jobs.gate" namespace (D2: the same
+// namespace/event kinds internal/jobs.CompletionPolicy.Transition's own
+// cp.deny and internal/fleet/supervision's stall detector use, never the
+// self-invented "hookpacks.completion" this ticket's CR-B rework
+// removed) and asserts the last record's job id, reason and kind.
+func assertRecord(t *testing.T, bus *events.Bus, clock *testkit.FrozenClock, jobID, reason string, wantKind events.EventKind) {
 	t.Helper()
-	evts, err := bus.Replay(context.Background(), "hookpacks.completion", 0)
+	evts, err := bus.Replay(context.Background(), "jobs.gate", 0)
 	if err != nil {
 		t.Fatalf("Replay: %v", err)
 	}
@@ -237,8 +245,12 @@ func assertRecord(t *testing.T, bus *events.Bus, clock *testkit.FrozenClock, job
 		t.Fatalf("no journaled denial record found in the bus's own store, want one for job %q", jobID)
 	}
 	last := evts[len(evts)-1]
+	if last.Kind != wantKind {
+		t.Fatalf("journaled event kind = %q, want %q", last.Kind, wantKind)
+	}
 	var rec struct {
 		JobID       string `json:"job_id"`
+		SessionID   string `json:"session_id"`
 		Reason      string `json:"reason"`
 		TimestampMs int64  `json:"timestamp_ms"`
 	}
@@ -255,7 +267,7 @@ func assertRecord(t *testing.T, bus *events.Bus, clock *testkit.FrozenClock, job
 
 func assertNoRecord(t *testing.T, bus *events.Bus, _ *testkit.FrozenClock) {
 	t.Helper()
-	evts, err := bus.Replay(context.Background(), "hookpacks.completion", 0)
+	evts, err := bus.Replay(context.Background(), "jobs.gate", 0)
 	if err != nil {
 		t.Fatalf("Replay: %v", err)
 	}
