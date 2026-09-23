@@ -44,11 +44,17 @@ package install_test
 //   tool surface at all, mounted or not. cmd/cascade/plugin_process_mount.go
 //   (P1-E25-W5-S51-T3) closed the analogous gap for CLI verbs (cascade
 //   github ...) but that is a compiled-in cobra mount, not a live-list or
-//   MCP-surface seam. TestAcceptance_X_LinkGitHub therefore proves the
-//   flow through the real elevation broker and the real, CURRENT refusal
-//   at the process-tier trust gate: the quality constitution (Art.1, Art.2
-//   §1) forbids a stand-in host or a fabricated success, so the suite
-//   asserts exactly what the real tree does and records the shortfall.
+//   MCP-surface seam. The completed-ceremony proof of that real, CURRENT
+//   refusal at the process-tier trust gate (the quality constitution's
+//   Art.1/Art.2 §1 forbid a stand-in host or a fabricated success) is
+//   architecturally unreachable on Windows -- platformElevationRefusal
+//   (internal/rpc/elevation_windows.go) preempts the attestation ceremony
+//   with a nonce-less refusal before it ever completes (ci-fix12's same
+//   finding for cascadepa_install_elevator.go) -- so it lives in
+//   acceptance_x_posix_test.go (`!windows`); acceptance_x_windows_test.go
+//   proves the Windows-side clean tier-2 refusal instead (ci-fix13).
+//   TestAcceptance_X_LinkGitHub below covers only the no-broker-at-all
+//   case, which needs no ceremony and runs on every platform.
 //   TestAcceptance_X_AlreadyInstalled below reaches a genuine successful
 //   resume (its candidate is pre-recorded as already-installed, the one
 //   path plugins.AddPlugin's own idempotency short-circuit satisfies
@@ -66,9 +72,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/acamarata/cascade/internal/plugins"
 	"github.com/acamarata/cascade/internal/plugins/resolver"
-	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/plugin"
 	"github.com/acamarata/cascade/plugins/cascade-pa/install"
 )
@@ -123,19 +127,17 @@ func acceptRealArtifact(t *testing.T) []byte {
 	return data
 }
 
-// TestAcceptance_X_LinkGitHub drives the real end-to-end flow for a
-// fresh cascade-github install: resolve -> propose -> confirm -> elevate
-// -> the real, current process-tier refusal (see this file's HONEST GAP
-// header). Two subtests separate "no broker at all" (R-14.72's literal
-// requirement) from "a genuine broker satisfied the elevation step" --
-// each factored into its own top-level helper (funlen: 50-line cap).
+// TestAcceptance_X_LinkGitHub drives R-14.72's literal "no broker at all"
+// case: the elevation-required probe fires once and the run refuses,
+// never retrying. The "a genuine broker satisfied the elevation step"
+// case needs a completed attestation ceremony that is architecturally
+// unreachable on Windows (this file's HONEST GAP header), so it is a
+// separate, platform-split test: acceptance_x_posix_test.go (`!windows`)
+// and acceptance_x_windows_test.go (`windows`).
 func TestAcceptance_X_LinkGitHub(t *testing.T) {
 	artifact := acceptRealArtifact(t)
 	t.Run("BrokerWithheld_InstallRefused", func(t *testing.T) {
 		acceptLinkGitHubBrokerWithheld(t, artifact)
-	})
-	t.Run("BrokerSatisfied_RealProcessTierGateRefuses", func(t *testing.T) {
-		acceptLinkGitHubBrokerSatisfied(t, artifact)
 	})
 }
 
@@ -163,67 +165,5 @@ func acceptLinkGitHubBrokerWithheld(t *testing.T, artifact []byte) {
 	}
 	if bus.has(install.EventConversationResume) {
 		t.Fatal("EventConversationResume published with the broker withheld")
-	}
-}
-
-// acceptLinkGitHubBrokerSatisfied drives the real D/S-07.T6 elevation
-// broker to a genuine, verified approval, then proves the real
-// process-tier trust gate (dispatch.go's ProvisionElevated) is what
-// refuses the retried install -- see this file's HONEST GAP header.
-func acceptLinkGitHubBrokerSatisfied(t *testing.T, artifact []byte) {
-	ctx := context.Background()
-	idx := acceptVerifiedIndex(t)
-	installer := newAcceptRegistryInstaller(t, acceptVerifier(), artifact)
-	confirm := &acceptConfirm{outcome: install.ConfirmYes}
-	bus := &acceptBus{}
-	elevator := newAcceptElevator(t)
-	f := install.NewFlow(install.Deps{Resolver: resolver.NewIntentResolver(), Confirm: confirm,
-		Install: installer, Elevate: elevator, Events: bus})
-
-	result, err := f.Run(ctx, install.RunRequest{Intent: acceptIntent, Index: idx, ThreadID: "acceptance-x-thread"})
-	if err == nil {
-		t.Fatal("Run() = nil error, want the real process-tier trust-gate refusal (dispatch.go's documented gap)")
-	}
-	if result.Resumed {
-		t.Fatal("Resumed = true, want no resume after the real refusal")
-	}
-	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindPolicyDenied {
-		t.Fatalf("error kind = %v (ok=%v), want KindPolicyDenied (ProvisionElevated's untrusted-tier refusal)", kind, ok)
-	}
-	if bus.events[0].Kind != install.EventInstallProposal {
-		t.Fatalf("first event = %v, want EventInstallProposal before any install side effect (CLIENT-LOCAL ECHO)", bus.events[0])
-	}
-	if confirm.calls != 1 {
-		t.Fatalf("Confirm.Confirm called %d times, want exactly 1", confirm.calls)
-	}
-	if !bus.has(install.EventElevationRequired) {
-		t.Fatal("events missing EventElevationRequired -- cascade-github is process-tier and must require elevation")
-	}
-	acceptAssertWitnessedRetry(t, installer, bus)
-}
-
-// acceptAssertWitnessedRetry is R-14.72's proof: the elevation step must
-// occur BEFORE the process-tier install proceeds. Exactly two Add calls,
-// the first carrying no witness (the probe that discovered
-// AddOutcomeElevationRequired) and the second carrying a witness
-// VerifyElevationWitness minted only after the real attestation verified
-// -- a caller that merely asserts "elevated" can never produce
-// Witness.Valid() == true (elevation.go's own contract).
-func acceptAssertWitnessedRetry(t *testing.T, installer *acceptRegistryInstaller, bus *acceptBus) {
-	if len(installer.calls) != 2 {
-		t.Fatalf("Installer.Add called %d times, want exactly 2 (probe, then the witnessed retry)", len(installer.calls))
-	}
-	if installer.calls[0].Witness.Valid() {
-		t.Fatal("the FIRST Add call already carried a valid witness -- elevation must not precede the probe that discovers it is required")
-	}
-	if !installer.calls[1].Witness.Valid() {
-		t.Fatal("the SECOND Add call carries no valid witness -- the real elevation broker's approval never reached the retried install")
-	}
-	last := bus.events[len(bus.events)-1]
-	if last.Kind != install.EventInstallFailed || last.Failed == nil || last.Failed.Reason != cascade.KindPolicyDenied {
-		t.Fatalf("last event = %v, want EventInstallFailed{Reason: KindPolicyDenied}", last)
-	}
-	if _, ok, err := plugins.LoadMetadata(context.Background(), installer.store, "cascade-github"); err != nil || ok {
-		t.Fatalf("LoadMetadata(cascade-github) = (ok=%v, err=%v), want ok=false -- the process-tier refusal must leave zero installed-metadata record (no fabricated 'live' plugin)", ok, err)
 	}
 }

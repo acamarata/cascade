@@ -37,6 +37,7 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	goruntime "runtime"
 	"testing"
 	"time"
 
@@ -173,7 +174,16 @@ func acceptIssueChallenge(ctx context.Context, gate rpc.HandlerFunc, args json.R
 	var challenge struct {
 		Nonce string `json:"nonce"`
 	}
-	if merr := json.Unmarshal(data, &challenge); merr != nil || challenge.Nonce == "" {
+	if merr := json.Unmarshal(data, &challenge); merr != nil {
+		return "", cascade.New(cascade.KindIntegrity, "acceptance elevator: elevation challenge has no nonce")
+	}
+	if challenge.Nonce == "" {
+		// On Windows, platformElevationRefusal (internal/rpc/elevation_windows.go)
+		// ALWAYS answers with a nonce-less ELEVATION_REQUIRED by design (ci-fix12);
+		// only a non-Windows empty nonce is a genuine upstream bug.
+		if goruntime.GOOS == "windows" {
+			return "", elevation.ErrWindowsTier2()
+		}
 		return "", cascade.New(cascade.KindIntegrity, "acceptance elevator: elevation challenge has no nonce")
 	}
 	return challenge.Nonce, nil
