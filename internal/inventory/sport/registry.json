@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-23T00:11:11Z",
+  "generated_at": "2026-09-23T01:57:47Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -19278,10 +19278,10 @@
       "sites": [
         {
           "file": "internal/plugins/cascadepa_bridge_chat_wiring.go",
-          "line": 63,
+          "line": 83,
           "status": "ADD",
           "ticket": "P1-E23-W5-S48-T2",
-          "raw": "internal/plugins:cascadepa-bridge-chat-wiring (ADD) — P1-E23-W5-S48-T2."
+          "raw": "internal/plugins:cascadepa-bridge-chat-wiring (ADD) — P1-E23-W5-S48-T2; ci-fix14."
         },
         {
           "file": "internal/plugins/cascadepa_bridge_chat_wiring_test.go",
