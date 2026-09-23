@@ -135,6 +135,64 @@ func TestSearchIncludingExpired_ReturnsPastExpiryRowButNeverRetired(t *testing.T
 	}
 }
 
+// TestProjectionSearch_ScopeAppliedBeforeLimit is P1-E07-W5-S92-T1's test
+// for the scope-before-k fix (PCI s47t1-memory-scope-after-k): more
+// out-of-scope records than the limit are written with names that sort
+// AHEAD of the one in-scope record in raw id order, so a limit applied
+// BEFORE scope narrowing would fill the whole window with out-of-scope
+// rows and never reach the in-scope one. SearchInScope must still return
+// it, and SearchInScope("", ...)-equivalent unscoped Search must keep
+// finding everything, proving the new parameter changed nothing for an
+// existing caller.
+func TestProjectionSearch_ScopeAppliedBeforeLimit(t *testing.T) {
+	f := newProjection(t)
+	for _, name := range []string{"a1", "a2", "a3", "a4"} {
+		writeEntryInScope(t, f, name, "shared term", "other-scope")
+	}
+	writeEntryInScope(t, f, "z-target", "shared term", "proj1")
+	mustRun(t, f)
+	ctx := context.Background()
+
+	const limit = 3 // fewer than the 4 out-of-scope rows ranked ahead of z-target
+	hits, err := f.job.SearchInScope(ctx, "shared", "proj1", limit)
+	if err != nil {
+		t.Fatalf("SearchInScope: %v", err)
+	}
+	if len(hits) != 1 || hits[0].ID != "project/z-target" {
+		t.Fatalf("SearchInScope(proj1, limit=%d) = %+v, want exactly project/z-target despite 4 out-of-scope rows ranked ahead of it", limit, hits)
+	}
+
+	// An unresolved scope (empty ref, filter still active) matches
+	// NOTHING -- fail-closed, never widened to "everything".
+	hits, err = f.job.SearchInScope(ctx, "shared", "", limit)
+	if err != nil {
+		t.Fatalf("SearchInScope(empty scope): %v", err)
+	}
+	if len(hits) != 0 {
+		t.Fatalf("SearchInScope(empty scope) = %+v, want zero hits", hits)
+	}
+
+	// The unscoped Search is unchanged: all five records still match.
+	hits, err = f.job.Search(ctx, "shared", 0)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(hits) != 5 {
+		t.Fatalf("Search(unscoped) returned %d hits, want 5", len(hits))
+	}
+}
+
+// writeEntryInScope is writeEntry with an explicit ScopeRef, for tests
+// that need more than one scope in the same projection.
+func writeEntryInScope(t *testing.T, f *projectionFixture, name, body, scopeRef string) {
+	t.Helper()
+	e := validEntry()
+	e.Name, e.Body, e.Description, e.ScopeRef = name, body, name, scopeRef
+	if err := f.files.Write(context.Background(), e); err != nil {
+		t.Fatalf("writing %s: %v", name, err)
+	}
+}
+
 func TestSearch_CorruptRowRefusesRatherThanShortening(t *testing.T) {
 	f := newProjection(t)
 	writeEntry(t, f, "alpha", "body pelicans\n", "first")

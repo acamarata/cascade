@@ -283,6 +283,24 @@ own record: the run continues over the rest of the store and names what it
 could not project, in the same spirit as a listing that parses nothing so
 one bad file cannot make a whole kind unlistable.
 
+### Running in production
+
+A projection nothing runs indexes nothing: the daemon runs
+`ProjectionJob.Run` once immediately at start and then every 60 seconds
+(`memoryProjectionInterval`, `cmd/cascade/daemon_unix_memory_projection.go`)
+until the daemon's own run context ends, wired from
+`wireBackgroundSubsystems` (`cmd/cascade/daemon_unix_reload.go`) over the
+SAME `provider.Store` handle the rest of the daemon uses -- no second
+SQLite connection is opened for it. `Run` already rebuilds on its own when
+the stored layout version does not match this build's `ProjectionVersion`,
+so the loop never has to decide between running and rebuilding.
+
+A failed run is logged at WARN with the partial `ProjectionResult`'s
+counts and retried on the next tick; it never panics the daemon. The
+projection is derived state, so a stalled run means a query sees a stale
+index, not a crashed process -- exactly the same failure mode a corrupted
+or deleted projection already recovers from on the next successful run.
+
 ### Recall integration
 
 A hit is a pointer, not an authority. The body stored in a row is what the
@@ -293,6 +311,17 @@ written alongside them answer similarity queries, so a memory record takes
 part in hybrid recall from the moment it is written. Ranked results are
 ordered deterministically, so the same query over the same store returns
 the same answer on any machine.
+
+`recall.what`'s memory leg narrows to the caller's resolved scope INSIDE
+the projection's own search (`SearchInScope`/`SearchInScopeIncludingExpired`),
+before the `k` cap truncates the result set, not after fetching `k` rows
+and filtering them. Narrowing after the cap can lose an in-scope row
+ranked behind more than `k` out-of-scope rows -- a recall-quality gap, not
+a leak, since an out-of-scope row was never actually returned either way.
+The caller's own post-fusion check stays in place regardless, as a second,
+fail-closed line of defense: the projection's own narrowing is never
+trusted to be the only thing standing between an out-of-scope row and the
+caller.
 
 ## SOUL store
 

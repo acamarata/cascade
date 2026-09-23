@@ -125,23 +125,13 @@ func (j *ProjectionJob) Rebuild(ctx context.Context) (ProjectionResult, error) {
 	return res, nil
 }
 
-// Search returns the projected records matching query, most useful as the
-// fast path a recall surface takes instead of re-reading every file. A
-// hit is a pointer, not an authority: the row's body is what the file said
-// when it was last projected, and the file wins on any disagreement.
-// Retired and expired records are excluded, judged against the injected
-// clock, so the index never returns a record the store itself would not.
-func (j *ProjectionJob) Search(ctx context.Context, query string, limit int) ([]IndexedRecord, error) {
-	return searchIndex(ctx, j.kv, query, j.clock.Now().UTC(), limit, false)
-}
-
-// SearchIncludingExpired is Search, except an expired row is returned
-// rather than dropped (D6/Q6): for a ranking pass that DEMOTES an expired
-// row (R-16.7) rather than excluding it, which needs the row in hand. A
-// retired (Deleted) row is still never returned either way.
-func (j *ProjectionJob) SearchIncludingExpired(ctx context.Context, query string, limit int) ([]IndexedRecord, error) {
-	return searchIndex(ctx, j.kv, query, j.clock.Now().UTC(), limit, true)
-}
+// Search, SearchIncludingExpired, SearchInScope and
+// SearchInScopeIncludingExpired -- the projection's query surface -- live
+// in db_projection_search.go along with searchIndex and the scopeFilter it
+// narrows by (P1-E07-W5-S92-T1: moved here, and the scope-before-limit
+// change made, purely to keep this file and db_projection_store.go inside
+// the 300-line cap; same split reason as db_projection_store.go's own
+// header, one file over).
 
 // project walks every kind and projects it. rebuilt is carried through to
 // the result so a caller can tell a patched run from a rebuilt one.

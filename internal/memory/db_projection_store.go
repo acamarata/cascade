@@ -45,51 +45,9 @@ func scanKeys(ctx context.Context, kv provider.Store, prefix string) ([]string, 
 	return out, nil
 }
 
-// searchIndex answers a full-text query from the postings.
-//
-// A record matches when it carries EVERY token of the query (conjunctive),
-// which is the reading that cannot return more than the caller asked for.
-// An empty query matches nothing rather than everything: a query that
-// widened to "all records" when its terms tokenized away would disclose
-// records the caller never asked to see. Results are ordered by record id,
-// so the same query over the same projection returns the same order on any
-// machine. at judges each row's TTL and comes from the caller's clock.
-//
-// includeExpired (P1-E22-W5-S47-T1, D6/Q6) is the bounded escape hatch a
-// caller that wants to DEMOTE rather than EXCLUDE an expired row (R-16.7's
-// ranking rule) must ask for explicitly: a Deleted (retired/tombstoned)
-// row is never returned either way -- expiry and retirement are different
-// facts, and only the first is something a caller may choose to see past.
-func searchIndex(
-	ctx context.Context, kv provider.Store, query string, at time.Time, limit int, includeExpired bool,
-) ([]IndexedRecord, error) {
-	tokens := tokenize(query)
-	if len(tokens) == 0 {
-		return nil, nil
-	}
-	ids, err := matchingIDs(ctx, kv, tokens)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]IndexedRecord, 0, len(ids))
-	for _, id := range ids {
-		row, found, rerr := readRow(ctx, kv, id)
-		if rerr != nil {
-			return nil, rerr
-		}
-		if !found || row.Deleted {
-			continue
-		}
-		if !includeExpired && row.Expired(at) {
-			continue
-		}
-		out = append(out, row)
-		if limit > 0 && len(out) == limit {
-			break
-		}
-	}
-	return out, nil
-}
+// searchIndex, the scope-narrowed full-text query over the postings, moved
+// to db_projection_search.go (P1-E07-W5-S92-T1, cap-driven split -- see
+// that file's header).
 
 // matchingIDs returns the sorted record ids carrying every token.
 func matchingIDs(ctx context.Context, kv provider.Store, tokens []string) ([]string, error) {

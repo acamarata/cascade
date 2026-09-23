@@ -57,7 +57,14 @@ type fakeMemoryLeg struct {
 	err  error
 }
 
-func (f *fakeMemoryLeg) SearchIncludingExpired(context.Context, string, int) ([]memory.IndexedRecord, error) {
+// SearchInScopeIncludingExpired ignores the scopeRef argument: every test
+// using this fake relies on memoryOutcome's own post-filter
+// (recallwhat_filter.go's fail-closed r.ScopeRef != req.Scope check) to
+// prove scoping, the same way it did before P1-E07-W5-S92-T1 moved the
+// filter earlier in the real *memory.ProjectionJob -- the scope-BEFORE-cap
+// behaviour itself is proven against a real ProjectionJob in
+// recallwhat_memoryleg_test.go, not against this fake.
+func (f *fakeMemoryLeg) SearchInScopeIncludingExpired(context.Context, string, string, int) ([]memory.IndexedRecord, error) {
 	return f.rows, f.err
 }
 

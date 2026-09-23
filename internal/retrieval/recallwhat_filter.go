@@ -39,8 +39,14 @@ import (
 	"github.com/acamarata/cascade/internal/retrieval/rrf"
 )
 
-// memoryOutcome queries the memory projection's indexed read model (D2)
-// and narrows to req.Scope (equality, R-16.7). Trust stays TrustTrusted
+// memoryOutcome queries the memory projection's indexed read model (D2),
+// narrowed to req.Scope BEFORE the projection's own k cap applies
+// (P1-E07-W5-S92-T1, PCI s47t1-memory-scope-after-k) rather than after
+// fetching k rows and filtering: the old order could lose an in-scope row
+// ranked past k by more out-of-scope rows. The equality check below stays
+// as a second, fail-closed line of defense (R-16.7) -- never trusting the
+// projection's own narrowing alone to be the only thing standing between
+// an out-of-scope row and the caller. Trust stays TrustTrusted
 // unconditionally: memory has no external-import path (Origin is
 // session|file|harness, all first-party, types.go), so there is no
 // record-derived signal that would ever justify tagging one
@@ -51,10 +57,12 @@ func (s *RecallWhatService) memoryOutcome(ctx context.Context, req RecallWhatReq
 	if s.memory == nil {
 		return whatLegOutcome{domain: DomainMemory}
 	}
-	// SearchIncludingExpired, not Search (D6/Q6): an expired row must
-	// reach this leg so demoteSupersededAndExpired below has a row to
-	// demote against, rather than the projection silently excluding it.
-	rows, err := s.memory.SearchIncludingExpired(ctx, req.Query, k)
+	// SearchInScopeIncludingExpired, not SearchIncludingExpired (D6/Q6 +
+	// P1-E07-W5-S92-T1): an expired row must still reach this leg so
+	// demoteSupersededAndExpired below has a row to demote against, and
+	// req.Scope narrows the projection's own search before its k cap
+	// applies rather than after.
+	rows, err := s.memory.SearchInScopeIncludingExpired(ctx, req.Query, req.Scope, k)
 	if err != nil {
 		return whatLegOutcome{domain: DomainMemory, err: err, configured: true}
 	}
@@ -66,7 +74,11 @@ func (s *RecallWhatService) memoryOutcome(ctx context.Context, req RecallWhatReq
 		// An EXPIRED row is still a candidate: R-16.7 demotes it below
 		// its non-expired peers (demoteSupersededAndExpired), it does
 		// not exclude it outright -- so expiry is carried as a flag
-		// here, not folded into the same skip Deleted uses.
+		// here, not folded into the same skip Deleted uses. The scope
+		// check is now redundant with the projection's own pre-limit
+		// filter in the common case, and stays anyway (fail-closed,
+		// R-16.7): a bug in one layer must not be the only thing
+		// standing between an out-of-scope row and the caller.
 		if r.Deleted || r.ScopeRef != req.Scope {
 			continue
 		}

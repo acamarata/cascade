@@ -105,11 +105,16 @@ type RecallWhatFilesLeg interface {
 // NewProjectionJob allow entry while nothing production calls it, and
 // Handler.Recall-as-search is a file scan, not the indexed read model the
 // contract pre-seeded). *memory.ProjectionJob satisfies it with no
-// adapter. SearchIncludingExpired, not Search, is the method this leg
-// calls (D6/Q6): R-16.7 demotes an expired MemoryEntry rather than
-// excluding it, which needs the row in hand to demote against.
+// adapter. SearchInScopeIncludingExpired, not SearchIncludingExpired, is
+// the method this leg calls (P1-E07-W5-S92-T1, PCI
+// s47t1-memory-scope-after-k): the resolved scope narrows the projection's
+// own search BEFORE its k cap applies, so an in-scope row ranked past k by
+// more out-of-scope rows is never lost the way a post-fetch filter would
+// lose it. Including expired rows (D6/Q6) is still required: R-16.7
+// demotes an expired MemoryEntry rather than excluding it, which needs the
+// row in hand to demote against.
 type RecallWhatMemoryLeg interface {
-	SearchIncludingExpired(ctx context.Context, query string, limit int) ([]memory.IndexedRecord, error)
+	SearchInScopeIncludingExpired(ctx context.Context, query, scopeRef string, limit int) ([]memory.IndexedRecord, error)
 }
 
 // RecallWhatRequest is one recall.what query, after decoding off the

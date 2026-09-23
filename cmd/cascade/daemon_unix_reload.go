@@ -97,8 +97,9 @@ func wireHotReload(paths runtime.PathProvider, clock runtime.Clock, getenv runti
 	return hr, watcher, nil
 }
 
-// wireBackgroundSubsystems wires both hot reload (wireHotReload) and the
-// retention scheduler (startScheduler) and folds their independent
+// wireBackgroundSubsystems wires hot reload (wireHotReload), the retention
+// scheduler (startScheduler) and the memory projection loop
+// (startMemoryProjection, P1-E07-W5-S92-T1) and folds their independent
 // shutdown steps into one cleanup func — split out of platformDaemonRun
 // under Art.10.3's 50-line function cap (R-14.175 wiring pushed it past
 // the cap; this is a cap-driven split of composition-root glue, not a
@@ -168,11 +169,19 @@ func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, d
 	ciCtx, ciCancel := context.WithCancel(ctx)
 	wireCIAttentionSubscription(ciCtx, ciWatchSourceFromReloader(hr), store, deps.Clock, bus, cfg.CIPolicy.PrivateRepos, logProvider.Logger())
 
+	// The memory projection background loop (P1-E07-W5-S92-T1). Same
+	// child-context posture as metricsCtx/schedCtx/ciCtx above, and the
+	// SAME runtime store every other subsystem here already holds -- no
+	// second sqlite handle is opened for it.
+	memProjCtx, memProjCancel := context.WithCancel(ctx)
+	startMemoryProjection(memProjCtx, paths, store, deps.Clock, logProvider.Logger())
+
 	return admin, pol, func() {
 		watcher.Stop()
 		metricsCancel()
 		schedCancel()
 		ciCancel()
+		memProjCancel()
 		schedCleanup(context.Background())
 	}, nil
 }
