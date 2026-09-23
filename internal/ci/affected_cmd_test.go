@@ -12,7 +12,8 @@ import (
 func TestAffectedTargets_AffectedCmdPresent(t *testing.T) {
 	// sed rather than a sh loop: the command runs under cmd.exe on Windows, where
 	// the CI runner provides sed alongside cat (TestAffectedCmd_StdinProtocol).
-	cfg := Config{AffectedCmd: `sed "s/^/target:/"`}
+	// No ^ or & in the expression: cmd.exe treats both as special characters.
+	cfg := Config{AffectedCmd: `sed "s/\(.*\)/target:\1/"`}
 	targets, err := affectedTargets(context.Background(), t.TempDir(), "rust", cfg, []string{"src/lib.rs", "src/main.rs"})
 	if err != nil {
 		t.Fatalf("affectedTargets: %v", err)
