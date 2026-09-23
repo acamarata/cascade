@@ -58,12 +58,22 @@ type ProcessLivenessProbe interface {
 // refuses with ErrLeaseFenced and raises exactly one attention item
 // (idempotent on (kind, source_ref) = (stall, this lease's entity id),
 // the same rule step 6's expiry attention uses) through m's sink, if any.
+//
+// R-14.300 (register A1-115, original obligation HOW 10/R-21.193): a
+// lease whose State is released or expired_orphaned is refused even when
+// the PRESENTED epoch numerically equals the STORED epoch -- Release
+// (lease.go) never advances the epoch when it retires a lease, so an
+// epoch-only comparison would let a former holder keep acting as if it
+// still held the lease after an explicit release. This state check never
+// advances the epoch itself; only a fresh Acquire grant or a
+// confirmed-dead Reclaim does that (this file's own Constraints above).
 func (m *LeaseManager) Fence(ctx context.Context, repoID, scopeGlob string, epoch int64) error {
 	lease, ok, err := m.store.GetLease(ctx, repoID, scopeGlob)
 	if err != nil {
 		return err
 	}
-	if !ok || lease.Epoch != epoch {
+	fenced := !ok || lease.Epoch != epoch || lease.State == LeaseReleased || lease.State == LeaseExpiredOrphaned
+	if fenced {
 		if m.sink != nil {
 			if sinkErr := m.sink.fenced(ctx, repoID, scopeGlob, epoch); sinkErr != nil {
 				return sinkErr

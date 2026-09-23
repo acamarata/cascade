@@ -817,14 +817,17 @@ states of the same job, and the review evidence is appended between the
 reviewing admission and the final transition.
 
 `GateSetForRiskClass(RiskClassLow)` resolves to the verbatim
-`{format, static, targeted_verification}` table row. Note that
-`evidenceKindsForGateSet` (`completion_errors.go`) has no evidence-kind
-mapping for any of those three gate items — only `build`/`lint`/
-`targeted_tests`/`code_review`/`adversarial_review` map to an
-`EvidenceKind` — so `CompletionPolicy.Transition`'s completeness check
-does not actually require lint/tests/review evidence at Low; the
-acceptance test appends and queries them anyway because Path 1's own
-steps call for it, not because the gate demands it.
+`{format, static, targeted_verification}` table row. `evidenceKindsForGateSet`
+(`completion_errors.go`) maps `format`/`static` to `EvidenceLint` and
+`targeted_verification` to `EvidenceTests` (de-duplicated, first-seen
+order: `[lint, tests]`) — fixed by AMD-20260922/F1-3 after
+`TestCompletionLowRiskRefusesWithoutEvidence`
+(`completion_lowrisk_test.go`) proved the pre-fix table left the entire
+Low gate set unmapped, so `CompletionPolicy.Transition` accepted a
+Low-risk job with an EMPTY ledger (a real fail-open defect, not merely
+an untested corner). Every `RiskClass`'s required `EvidenceKind` set is
+now non-empty and a superset of the class below it
+(`TestEvidenceKindsNonEmptyForEveryRiskClass`).
 
 ### Contending-lease admission order
 
@@ -838,23 +841,91 @@ in one batch, ordered priority-descending then id-ascending (not FIFO —
 the lower-priority node was seeded first). The higher-priority winner is
 then driven through a real `Acquire` into `running`.
 
-### Kill-9 resume and real-socket RPC: not yet an acceptance path
+### Kill-9 resume over a real daemon (`acceptance_resume_integration_test.go`)
 
-Two legs of the full DAG lifecycle acceptance story are not exercised
-end-to-end yet:
+`RegisterScheduler` (`internal/daemon/subsystems_scheduler.go`, DEFECT-
+scheduler-resume-never-called's fix) wires `Scheduler.Resume` into the
+real daemon's startup path (`cmd/cascade/daemon_unix_scheduler_dag.go`'s
+`wireJobScheduler`, called from `buildRPCServer` BEFORE the socket ever
+listens) — a real restart genuinely re-enters a stale `running` job at
+`leased`, over the SAME `cascade.db` the job.\*/lease.\* RPC surface
+reads. Per R-14.313's consolidated rewrite this test — like Path 4 — is
+`//go:build integration` (Paths 1/3 stay untagged/in-process); its
+`TestMain` builds the real, source-built `cascade` binary once, shared
+with Path 4 in the same test binary.
 
-- **Kill-9 resume over a real daemon.** `testkit.SpawnDaemon` does not
-  exist anywhere in the tree; `scheduler_resume_kill9_test.go` already
-  documents this and substitutes a real self-exec subprocess plus
-  `Scheduler.Resume` against the on-disk journal. No daemon startup path
-  calls `Scheduler.Resume` today — `cmd/cascade/daemon_unix_jobs_rpc.go`
-  wires job.\*/lease.\* RPC handlers over a fresh in-process
-  `Store`/`LeaseManager` on every daemon start, with no journal replay.
-- **job.list/lease.list over a real unix socket.** `internal/build/
-  hygiene.go`'s `NoNetworkUnitTestScanFile` gate forbids `net`/`net/http`
-  imports in any untagged `_test.go` file; a real socket dial requires
-  the `integration` build tag, which this ticket's own `checks:` list
-  does not pass to its `-run TestAcceptance` invocation.
+`TestAcceptancePath2KillResume` runs a six-step choreography. It first
+spawns the daemon once and stops it with an ORDERLY `syscall.SIGTERM`,
+so the daemon's OWN startup creates/migrates `cascade.db` (never this
+suite's own schema helpers as the primary creation step). With no daemon
+alive it then seeds job(running) + lease(held) + worktree + one lint
+evidence row + one `journal.KindCheckpoint` entry through the real
+package APIs, where the SEEDING `LeaseManager` is built on a
+`runtime.NewFixedClock` already past `DefaultLeaseDefaults`' TTL+grace
+threshold — so `Acquire`'s own `IssuedAt: m.clock.Now().Unix()` writes
+an ALREADY-STALE value at grant time, never a post-hoc mutation of a
+granted lease's `IssuedAt`. It spawns the REAL daemon, sends it a REAL
+`syscall.SIGKILL` (R-16.68c — never a context cancel, never an
+in-process teardown), and restarts the identical binary:
 
-Both are tracked as open work — see `internal/jobs/testdata/README.md`'s
-acceptance-suite section and the ticket's BLOCKED journal.
+```mermaid
+sequenceDiagram
+    participant T as Test process
+    participant D0 as cascade daemon run (prime)
+    participant D1 as cascade daemon run (spawn, killed)
+    participant D2 as cascade daemon run (restart)
+    T->>D0: spawn (creates/migrates cascade.db)
+    T->>D0: SIGTERM (orderly)
+    T->>T: seed job(running) + lease(held, ALREADY STALE) + worktree + lint evidence + journal checkpoint
+    T->>D1: spawn (real child process)
+    T->>D1: SIGKILL (real syscall, real exit)
+    T->>D2: spawn (SAME binary, SAME cascade.db)
+    D2->>D2: startup Resume: lease stale -> job re-enters leased
+    T->>D2: job.show over the real socket -> leased, 1 evidence record
+    T->>D2: SIGTERM (orderly)
+    T->>T: drive leased->running->verifying->reviewing->accepted directly
+    T->>T: assert ledger Cursor == 3 (no duplicate from resume)
+```
+
+`Resume` is never mocked: it runs for real, in the real restarted
+binary, over real on-disk state that genuinely satisfies its real
+staleness check. The post-restart `leased` state (and evidence count,
+which has no RPC surface of its own) is asserted while that daemon is
+still up — state via a real `job.show` call over the socket, evidence
+count via a direct read-back — mirroring
+`TestBuildRPCServer_ResumesStaleRunningJobAtLeased`'s own read-back
+pattern (`cmd/cascade/daemon_unix_scheduler_resume_test.go`) for the
+part with no RPC surface. "`leased -> running` after restart" is
+explicitly NOT proven by any W6 production path (owned by
+P1-E41-W9-S79-T4, register A1-288); the remaining
+`leased->running->...->accepted` lifecycle is driven directly against
+the store/ledger/policy after the SIGTERM stop, the SAME "no persisted
+per-repo DAG coordinator exists yet" pattern `acceptance_path1_test.go`
+already establishes.
+
+### job.list/lease.list over a real unix socket (`acceptance_rpc_integration_test.go`)
+
+`internal/build/hygiene.go`'s `NoNetworkUnitTestScanFile` gate forbids
+`net`/`net/http` imports in any untagged `_test.go` file, and a real
+unix-socket dial has no lower-level standard-library primitive outside
+that package — so this file carries `//go:build integration` and the
+ticket's own `checks:` list runs it together with Path 2 in ONE combined
+line (`-tags integration -run
+'^(TestAcceptancePath2KillResume|TestAcceptancePath4RPCSpotCheck)$'`).
+`TestAcceptancePath4RPCSpotCheck` drives a job to `accepted` and
+releases its lease over its own home's `cascade.db`, spawns the real
+daemon, and dials `job.list(state:accepted)`/`lease.list` over its REAL
+socket with a real `http.Client` (the exact dial pattern
+`cmd/cascade/daemon_unix_journal_integration_test.go` already
+establishes): the accepted job comes back, and zero leases remain
+active.
+
+### Released-holder fencing (R-14.300, AMD-20260922/C1)
+
+`Fence` (`lease_fence.go`) refuses a lease whose state is `released` or
+`expired_orphaned` even when the PRESENTED epoch numerically equals the
+STORED epoch — `Release` never advances the epoch it retires, so an
+epoch-only fence would let a former holder keep acting as if it still
+held the lease. `TestAcceptanceReleasedHolderFenced` proves both
+`ProducerAuthz.Authorize` (evidence append) and `WorktreeManager.Snapshot`
+are refused for a released holder presenting its original epoch.

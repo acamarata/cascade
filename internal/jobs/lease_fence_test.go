@@ -129,6 +129,74 @@ func TestLeaseReclaimDeadPgidAdvancesEpoch(t *testing.T) {
 	}
 }
 
+// TestLeaseFenceRefusesReleased proves R-14.300/AMD-20260922/C1: once a
+// lease is explicitly released, Fence refuses its former holder even
+// though Release (lease.go) never advanced the epoch -- the presented
+// epoch is still the SAME one Acquire granted, so only the new state
+// check (not the epoch check) can catch this.
+func TestLeaseFenceRefusesReleased(t *testing.T) {
+	m, _, _ := newTestLeaseManager(t)
+	ctx := context.Background()
+	granted, err := m.Acquire(ctx, "repo-1", "internal/jobs/**", "job-a")
+	if err != nil || !granted.Granted {
+		t.Fatalf("Acquire: %+v, %v", granted, err)
+	}
+	if err := m.Release(ctx, "repo-1", granted.Lease.ScopeGlob, granted.Lease.Epoch); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+	stored, ok, err := m.store.GetLease(ctx, "repo-1", granted.Lease.ScopeGlob)
+	if err != nil || !ok {
+		t.Fatalf("GetLease after release: ok=%v err=%v", ok, err)
+	}
+	if stored.Epoch != granted.Lease.Epoch {
+		t.Fatalf("Release changed the epoch: got %d, want unchanged %d", stored.Epoch, granted.Lease.Epoch)
+	}
+	if stored.State != LeaseReleased {
+		t.Fatalf("stored.State = %v, want released", stored.State)
+	}
+	// The former holder presents its ORIGINAL, still-numerically-equal
+	// epoch: an epoch-only fence would let this through.
+	if err := m.Fence(ctx, "repo-1", granted.Lease.ScopeGlob, granted.Lease.Epoch); err == nil {
+		t.Fatal("Fence against a released lease at its original epoch = nil error, want ErrLeaseFenced")
+	}
+}
+
+// TestLeaseFenceRefusesOrphaned proves the expired_orphaned half of
+// R-14.300/AMD-20260922/C1 using the SAME technique: present the
+// lease's CURRENT (post-reclaim) epoch, which numerically matches the
+// stored row, and prove only the state check refuses it.
+func TestLeaseFenceRefusesOrphaned(t *testing.T) {
+	m, clock, store := newTestLeaseManager(t)
+	ctx := context.Background()
+	granted, err := m.Acquire(ctx, "repo-1", "internal/jobs/**", "job-a")
+	if err != nil || !granted.Granted {
+		t.Fatalf("Acquire: %+v, %v", granted, err)
+	}
+	if err := store.PutJob(ctx, baseJob("job-a")); err != nil {
+		t.Fatalf("PutJob: %v", err)
+	}
+	if err := store.PutExecution(ctx, Execution{ID: "exec-1", JobID: "job-a", Attempt: 1, State: ExecutionRunning, PGID: 4242}); err != nil {
+		t.Fatalf("PutExecution: %v", err)
+	}
+	deadline := granted.Lease.IssuedAt + granted.Lease.TTLSeconds + m.defaults.ExpiryGraceSeconds
+	clock.Advance(secondsUntil(clock, deadline+1))
+	if _, err := m.SweepExpired(ctx); err != nil {
+		t.Fatalf("SweepExpired: %v", err)
+	}
+	reclaimed, err := m.Reclaim(ctx, "repo-1", granted.Lease.ScopeGlob, fakeLivenessProbe{alive: false})
+	if err != nil {
+		t.Fatalf("Reclaim: %v", err)
+	}
+	if reclaimed.State != LeaseExpiredOrphaned {
+		t.Fatalf("reclaimed.State = %v, want expired_orphaned", reclaimed.State)
+	}
+	// reclaimed.Epoch is the CURRENT stored epoch -- an epoch-only fence
+	// would accept it.
+	if err := m.Fence(ctx, "repo-1", granted.Lease.ScopeGlob, reclaimed.Epoch); err == nil {
+		t.Fatal("Fence against an expired_orphaned lease at its current epoch = nil error, want ErrLeaseFenced")
+	}
+}
+
 // TestLeaseReclaimNoOpOnNonExpiredLease proves Reclaim is a no-op
 // against a held (never expired) lease -- the reclaim path must never
 // touch a live grant.

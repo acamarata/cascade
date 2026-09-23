@@ -13,6 +13,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/fleet/journal"
 	"github.com/acamarata/cascade/internal/jobs"
 )
 
@@ -29,6 +30,7 @@ func TestAcceptancePath1HappyPath(t *testing.T) {
 	if err := rig.store.PutExecution(ctx, jobs.Execution{ID: "exec-" + node.ID, JobID: node.ID, Attempt: 1, State: jobs.ExecutionRunning}); err != nil {
 		t.Fatalf("PutExecution: %v", err)
 	}
+	appendPath1JobJournalEntry(ctx, t, rig, node.ID)
 
 	appendPass(t, rig, node.ID, acquired, jobs.EvidenceLint, "idem-lint-1")
 	appendPass(t, rig, node.ID, acquired, jobs.EvidenceTests, "idem-tests-1")
@@ -45,6 +47,45 @@ func TestAcceptancePath1HappyPath(t *testing.T) {
 		if err != nil || rec.Outcome != jobs.OutcomePass {
 			t.Fatalf("Query(%s) = %+v, err=%v, want outcome=pass", kind, rec, err)
 		}
+	}
+
+	assertPath1JournalEntries(t, rig, node.ID, acquired)
+}
+
+// appendPath1JobJournalEntry writes one job-keyed journal entry through
+// the SAME real journal.Store WorktreeManager.Create already writes a
+// worktree-keyed one into (assertPath1JournalEntries reads both back):
+// the ticket's acceptance criteria names both as distinct facts to
+// prove, and no production call path appends one keyed by the job id
+// itself (lease_events.go's leaseEventSink, the one production path
+// that could, is wired with a nil sink both here and in
+// cmd/cascade/daemon_unix_jobs_rpc.go -- not yet connected anywhere
+// real), so this test appends it directly, the same pattern
+// acceptance_resume_integration_rig_test.go's Path 2 seeding already
+// establishes for its own job-keyed checkpoint entry.
+func appendPath1JobJournalEntry(ctx context.Context, t *testing.T, rig *acceptanceRig, jobID string) {
+	t.Helper()
+	if _, err := rig.journal.Append(ctx, jobID, journal.KindCheckpoint, "path1-running", []byte(`{"state":"running"}`)); err != nil {
+		t.Fatalf("append job journal entry: %v", err)
+	}
+}
+
+// assertPath1JournalEntries proves the acceptance criteria's ">=1 job
+// journal entry plus >=1 worktree journal entry exist": the job-keyed
+// entry appended above, and the worktree-keyed entry
+// WorktreeManager.Create's own appendWorktreeJournal wrote automatically
+// during leaseAndWorktree, both replayed back from the SAME real
+// journal.Store.
+func assertPath1JournalEntries(t *testing.T, rig *acceptanceRig, jobID string, lease jobs.ResourceLease) {
+	t.Helper()
+	jobEntries, err := rig.journal.Replay(rig.ctx, jobID, journal.Cursor{}, nil)
+	if err != nil || len(jobEntries) < 1 {
+		t.Fatalf("Replay(job %s) = %d entries, err=%v, want >=1", jobID, len(jobEntries), err)
+	}
+	worktreeEntityID := "lease:acceptance-repo:" + lease.ScopeGlob
+	wtEntries, err := rig.journal.Replay(rig.ctx, worktreeEntityID, journal.Cursor{}, nil)
+	if err != nil || len(wtEntries) < 1 {
+		t.Fatalf("Replay(worktree %s) = %d entries, err=%v, want >=1 (WorktreeManager.Create's appendWorktreeJournal)", worktreeEntityID, len(wtEntries), err)
 	}
 }
 

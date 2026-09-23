@@ -110,6 +110,13 @@ type acceptanceRig struct {
 	clock    runtime.Clock
 	repoRoot string
 	ctx      context.Context
+	// journal is the SAME M/S-27.T1 journal.Store wired into worktree
+	// (WorktreeManager.Create's own appendWorktreeJournal writes to it
+	// automatically) -- exposed so Path 1 can also append and read back
+	// a job-keyed entry, proving both the ">=1 job journal entry" and
+	// ">=1 worktree journal entry" acceptance criteria against the SAME
+	// real store, never a second private one.
+	journal *journal.SQLiteStore
 }
 
 const acceptanceEngineID = "acceptance-engine"
@@ -132,15 +139,7 @@ func newAcceptanceRig(t *testing.T) *acceptanceRig {
 	t.Cleanup(func() { _ = db.Close() })
 
 	clock := runtime.NewFixedClock(time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC))
-	if err := jobs.ApplyJobsSchema(context.Background(), db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
-		t.Fatalf("ApplyJobsSchema: %v", err)
-	}
-	if err := jobs.ApplyOutboxSchema(context.Background(), db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
-		t.Fatalf("ApplyOutboxSchema: %v", err)
-	}
-	if err := jobs.ApplyEvidenceSchema(context.Background(), db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
-		t.Fatalf("ApplyEvidenceSchema: %v", err)
-	}
+	applyAcceptanceSchemas(t, db, clock)
 	store := jobs.NewStore(db)
 
 	leases := jobs.NewLeaseManager(store, clock, func() bool { return true }, jobs.DefaultLeaseDefaults(), nil)
@@ -166,6 +165,23 @@ func newAcceptanceRig(t *testing.T) *acceptanceRig {
 	return &acceptanceRig{
 		store: store, leases: leases, worktree: worktree, ledger: ledger, policy: policy,
 		clock: clock, repoRoot: realGitRepo(t), ctx: nodes.WithRole(context.Background(), nodes.RoleController),
+		journal: journalStore,
+	}
+}
+
+// applyAcceptanceSchemas applies the real jobs+outbox+evidence schema to
+// db -- split out of newAcceptanceRig purely to keep it under the
+// 50-line cap.
+func applyAcceptanceSchemas(t *testing.T, db *sql.DB, clock runtime.Clock) {
+	t.Helper()
+	if err := jobs.ApplyJobsSchema(context.Background(), db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
+		t.Fatalf("ApplyJobsSchema: %v", err)
+	}
+	if err := jobs.ApplyOutboxSchema(context.Background(), db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
+		t.Fatalf("ApplyOutboxSchema: %v", err)
+	}
+	if err := jobs.ApplyEvidenceSchema(context.Background(), db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
+		t.Fatalf("ApplyEvidenceSchema: %v", err)
 	}
 }
 
@@ -199,5 +215,60 @@ func sessionScope(root string) scope.SessionScope {
 	return scope.SessionScope{
 		Kind:       scope.ScopeKindGeneral,
 		Repository: &scope.RepositoryRecord{RootPath: root},
+	}
+}
+
+// TestAcceptanceReleasedHolderFenced proves R-14.300/AMD-20260922/C1 at
+// the acceptance level: once a lease is explicitly released, its former
+// holder's evidence append (ProducerAuthz.Authorize, routed through
+// EvidenceLedger.Append) and worktree Snapshot are BOTH refused by the
+// real Fence check -- even though it still presents the epoch it was
+// originally granted (Release, lease.go, never advances the epoch, so
+// only Fence's state check protects a released holder).
+func TestAcceptanceReleasedHolderFenced(t *testing.T) {
+	rig := newAcceptanceRig(t)
+	ctx := rig.ctx
+
+	const jobID = "job-released-fence"
+	if err := rig.store.PutJob(ctx, jobs.Job{
+		ID: jobID, State: jobs.JobStatePending, MutableScope: "docs/**",
+		RiskClass: string(jobs.RiskClassLow), MinTaskClass: "code",
+		ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal,
+	}); err != nil {
+		t.Fatalf("seed job: %v", err)
+	}
+	acquired, err := rig.leases.Acquire(ctx, "acceptance-repo", "docs/**", jobID)
+	if err != nil || !acquired.Granted {
+		t.Fatalf("Acquire: %+v, %v", acquired, err)
+	}
+	if _, err := rig.worktree.Create(ctx, acquired.Lease, rig.repoRoot); err != nil {
+		t.Fatalf("worktree Create: %v", err)
+	}
+	t.Cleanup(func() { _ = rig.worktree.Remove(context.Background(), acquired.Lease) })
+	if err := rig.store.PutExecution(ctx, jobs.Execution{ID: "exec-" + jobID, JobID: jobID, Attempt: 1, State: jobs.ExecutionRunning}); err != nil {
+		t.Fatalf("PutExecution: %v", err)
+	}
+
+	// Release while the epoch is still the SAME one Acquire granted.
+	if err := rig.leases.Release(ctx, "acceptance-repo", "docs/**", acquired.Lease.Epoch); err != nil {
+		t.Fatalf("Release: %v", err)
+	}
+
+	// The released holder presents its ORIGINAL, still-numerically-equal
+	// epoch: an epoch-only fence would let both calls below through.
+	rec := jobs.EvidenceRecord{
+		JobID: jobID, Kind: jobs.EvidenceLint, ProducerCapability: jobs.ProducerControllerRun,
+		AttemptID: "exec-" + jobID, AttestorIdentity: "daemon:acceptance",
+		Outcome: jobs.OutcomePass, IdempotencyKey: "idem-released-1",
+	}
+	auth := jobs.AppendAuthorization{
+		ExecutionID: "exec-" + jobID, LeaseRepoID: acquired.Lease.RepoID,
+		LeaseScopeGlob: acquired.Lease.ScopeGlob, LeaseEpoch: acquired.Lease.Epoch,
+	}
+	if _, err := rig.ledger.Append(ctx, rec, auth); err == nil {
+		t.Fatal("Append after release = nil error, want refused (released holder fenced)")
+	}
+	if _, err := rig.worktree.Snapshot(ctx, rig.leases.Fence, acquired.Lease, acquired.Lease.Epoch, nil); err == nil {
+		t.Fatal("Snapshot after release = nil error, want refused (released holder fenced)")
 	}
 }

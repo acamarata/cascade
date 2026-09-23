@@ -47,33 +47,61 @@ func ApprovalScopeAction(jobID, treeHash, policyVersion string) string {
 
 // evidenceKindsForGateSet maps a RiskClass's GateItem set to the
 // EvidenceKinds completion.go's completeness check requires a passing
-// row for. Only five of the seven EvidenceKinds have a corresponding
-// GateItem in riskgates.go's table (GateHumanApproval maps to the
-// separate Critical-class approval check, not to completeness; nothing
-// maps to EvidenceCIAttestation until AF/S-65.T4 wires it) -- this is a
-// documented gap-filling mapping, same posture as model.go's own
-// DataClass/EvidenceKind precedent, since no ticket owns a GateItem->
-// EvidenceKind table yet.
+// row for. GateHumanApproval maps to the separate Critical-class
+// approval check, not to completeness; nothing maps to
+// EvidenceCIAttestation until AF/S-65.T4 wires it; GateIntegrationChecks/
+// GateIndependentQA/GateAffectedFullIntegration/GateCleanNodeVerification/
+// GateRollbackEvidence/GateReleaseGate have no EvidenceKind counterpart
+// yet either -- a documented gap-filling mapping, same posture as
+// model.go's own DataClass/EvidenceKind precedent, since no ticket owns a
+// full GateItem->EvidenceKind table yet.
+//
+// AMD-20260922/F1-3 (R-14.303 item 3, register A1-136): before this fix,
+// the entire Low gate set (GateFormat, GateStatic,
+// GateTargetedVerification) had NO mapping, so CompletionPolicy.Transition
+// accepted a Low-risk job with zero evidence rows -- a fail-open defect
+// (TestCompletionLowRiskRefusesWithoutEvidence reproduces it RED against
+// the unfixed table). GateFormat and GateStatic both discharge the format/
+// static gates via one lint run, so both map to EvidenceLint;
+// GateTargetedVerification maps to EvidenceTests. The returned slice is
+// de-duplicated in first-seen order (Low's own order:
+// [EvidenceLint, EvidenceTests]); every other mapping below is unchanged.
 func evidenceKindsForGateSet(gates GateSet) []EvidenceKind {
 	has := make(map[GateItem]bool, len(gates))
 	for _, g := range gates {
 		has[g] = true
 	}
+	seen := make(map[EvidenceKind]bool, 4)
 	var out []EvidenceKind
+	add := func(k EvidenceKind) {
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, k)
+		}
+	}
+	if has[GateFormat] {
+		add(EvidenceLint)
+	}
+	if has[GateStatic] {
+		add(EvidenceLint)
+	}
+	if has[GateTargetedVerification] {
+		add(EvidenceTests)
+	}
 	if has[GateBuild] {
-		out = append(out, EvidenceBuild)
+		add(EvidenceBuild)
 	}
 	if has[GateLint] {
-		out = append(out, EvidenceLint)
+		add(EvidenceLint)
 	}
 	if has[GateTargetedTests] {
-		out = append(out, EvidenceTests)
+		add(EvidenceTests)
 	}
 	if has[GateCodeReview] {
-		out = append(out, EvidenceReview)
+		add(EvidenceReview)
 	}
 	if has[GateAdversarialReview] {
-		out = append(out, EvidenceAdversarial)
+		add(EvidenceAdversarial)
 	}
 	return out
 }

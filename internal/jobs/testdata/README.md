@@ -137,18 +137,93 @@ hand-authored executor double, no synthetic gate-set table. Both were
 verified RED (a deliberately broken assertion, real failure output) then
 GREEN, and pass under `-race`.
 
-Paths 2 (kill -9 mid-DAG via a real daemon process, over its real
-socket) and 4 (job.list/lease.list over a real unix socket) are NOT
-implemented in this suite. See
-`.claude/planning/p1/phase/journals/BLOCKED-P1-E29-W6-S60-T4.md` for the
-full accounting: `testkit.SpawnDaemon` does not exist anywhere in the
-tree (S-59.T5's own kill9 test already documents this and uses a
-self-exec subprocess idiom instead); no daemon startup path resumes jobs
-DAG state from the on-disk journal (`cmd/cascade/daemon_unix_jobs_rpc.go`
-wires job.*/lease.* RPC handlers over a fresh in-process Store/
-LeaseManager but never calls `Scheduler.Resume`); and a real unix-socket
-RPC dial requires importing `net`/`net/http`, which
-`internal/build/hygiene.go`'s `NoNetworkUnitTestScanFile` gate forbids in
-any `_test.go` file lacking the `integration` build tag -- a tag this
-ticket's own `checks:` list does not carry on its `-run TestAcceptance`
-invocation.
+Paths 2 (kill -9 mid-DAG via a real daemon process) and 4 (job.list/
+lease.list over a real unix socket) are now implemented per R-14.313's
+consolidated rewrite (AMD-20260922/F3-12/F3-13/F3-14, AMD-20260923/Z1-9),
+after the two real production gaps the original BLOCKED journal recorded
+were independently closed by other tickets landing in this same crunch:
+`internal/daemon/subsystems_scheduler.go`'s `RegisterScheduler` (DEFECT-
+scheduler-resume-never-called's fix) now wires `Scheduler.Resume` into
+the real daemon's startup path
+(`cmd/cascade/daemon_unix_scheduler_dag.go`'s `wireJobScheduler`, called
+from `buildRPCServer`, BEFORE the socket ever listens), so a restart of
+the real binary genuinely re-enters a stale `running` job at `leased`
+-- proven live by `cascade status`'s own
+`subsystem:jobs.scheduler running (... "resume ran")` detail line. Both
+paths are `//go:build integration` (Path 1/3 stay untagged/in-process)
+and share ONE test binary: `TestMain` (`acceptance_resume_integration_
+test.go`) builds the real, source-built `cascade` binary once.
+
+- **Path 2** (`acceptance_resume_integration_test.go` +
+  `acceptance_resume_integration_rig_test.go`, the latter a declared
+  300-line-cap split): `TestAcceptancePath2KillResume` runs a six-step
+  choreography. (1) spawn the daemon once and SIGTERM it (an orderly
+  stop) so its OWN startup creates/migrates `{CASCADE_HOME}/data/
+  cascade.db` -- never this suite's own schema helpers as the primary
+  creation step. (2) with NO daemon alive, seed job(running) +
+  lease(held) + worktree + one lint `EvidenceRecord` + one
+  `journal.KindCheckpoint` entry (`"s60t4-seed"`,
+  `{"state":"running"}`) through the real `jobs.Store`/`LeaseManager`/
+  `WorktreeManager`/`EvidenceLedger`, where the SEEDING `LeaseManager`
+  is built on a `runtime.NewFixedClock` already past
+  `DefaultLeaseDefaults`' TTL+grace threshold, so `Acquire`'s own
+  `IssuedAt: m.clock.Now().Unix()` (`lease_query.go`'s `acquireInTx`)
+  writes an ALREADY-STALE value at grant time -- no post-hoc mutation of
+  a granted lease's `IssuedAt` column. (3) spawn the REAL daemon and
+  send it a REAL `syscall.SIGKILL` (R-16.68c: never a context cancel).
+  (4) restart the SAME binary over the SAME home; `Resume` is never
+  mocked -- it runs for real, over real on-disk state that genuinely
+  satisfies its real staleness check -- and the result is asserted
+  `leased`, with exactly one evidence record, over the REAL unix socket
+  (`job.show`; the evidence-record count has no RPC surface of its own,
+  so it is checked directly, immediately alongside the `job.show` call).
+  (5) SIGTERM that daemon (orderly, not another kill). (6) reopen the
+  store directly and drive `leased->running->verifying->reviewing->
+  accepted`, the SAME "no persisted per-repo DAG coordinator exists yet"
+  pattern `acceptance_path1_test.go` already establishes
+  (`internal/daemon/subsystems_scheduler.go`'s own disclosed CONTRACT
+  DEVIATION note); the evidence ledger's `Cursor` (max seq == row count,
+  an append-only chain) is asserted at exactly 3 -- no duplicate
+  introduced by the resume. "`leased -> running` after restart" is
+  explicitly NOT proven by any W6 production path and is owned by
+  P1-E41-W9-S79-T4 (register A1-288); step (6) drives that transition
+  directly against the package API instead.
+- **Path 4** (`acceptance_rpc_integration_test.go`, `//go:build
+  integration`): `TestAcceptancePath4RPCSpotCheck` drives a second job
+  to `accepted` and releases its lease over its own `t.TempDir()` home's
+  `cascade.db`, spawns the real daemon, and dials `job.list`/
+  `lease.list` over its REAL unix socket with a real `http.Client` (the
+  exact dial pattern `cmd/cascade/daemon_unix_journal_integration_test.go`
+  already establishes) -- never calling either RPC handler in-process.
+  This file carries the `integration` build tag because a real
+  unix-socket dial has no lower-level primitive outside package `net`,
+  which `internal/build/hygiene.go`'s `NoNetworkUnitTestScanFile` gate
+  forbids in an untagged `_test.go` file; the ticket's own `checks:`
+  list runs it together with Path 2 in ONE combined `-tags integration
+  -run '^(TestAcceptancePath2KillResume|TestAcceptancePath4RPCSpotCheck)$'`
+  line.
+
+## R-14.300 (AMD-20260922/C1) fenced-holder provenance
+
+`TestLeaseFenceRefusesReleased`/`TestLeaseFenceRefusesOrphaned`
+(`lease_fence_test.go`) and `TestAcceptanceReleasedHolderFenced`
+(`acceptance_test.go`) all present a lease's numerically-UNCHANGED epoch
+after `Release`/`Reclaim` (`Release`, `lease.go`, never advances the
+epoch it retires) to prove `Fence`'s new state check -- not the epoch
+check -- is what refuses a released/orphaned holder's evidence append
+(`ProducerAuthz.Authorize`) and worktree `Snapshot`. Real counterpart:
+the same `newTestLeaseManager`/real-sqlite-file rig this package's
+existing lease tests already establish (see this file's own "Lease
+model" section above).
+
+## AMD-20260922/F1-3 Low-risk completion-gate provenance
+
+`TestCompletionLowRiskRefusesWithoutEvidence`/
+`TestEvidenceKindsNonEmptyForEveryRiskClass`
+(`completion_lowrisk_test.go`) drive the real `CompletionPolicy` over the
+real `newCompletionFixture(t, RiskClassLow)` rig `completion_test.go`
+already establishes, with a real docs/**-only `ActualFootprint` (an
+EMPTY footprint classifies `RiskClassNormal`, the baseline default, per
+`classifyFootprint`'s own doc comment -- not a permissive Low -- which
+would escalate a Low-planned job before ever reaching the completeness
+check these tests target).
