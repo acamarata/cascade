@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-23T02:27:33Z",
+  "generated_at": "2026-09-23T02:46:47Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -576,6 +576,13 @@
           "raw": "G/memory-db-projection (ADD, P1-E07-W2-S13-T2)."
         },
         {
+          "file": "internal/memory/db_projection_search.go",
+          "line": 24,
+          "status": "CHANGE",
+          "ticket": "P1-E07-W5-S92-T1",
+          "raw": "G/memory-db-projection (CHANGED, P1-E07-W5-S92-T1)."
+        },
+        {
           "file": "internal/memory/db_projection_store.go",
           "line": 16,
           "status": "ADD",
@@ -591,7 +598,8 @@
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -3656,6 +3664,27 @@
           "status": "ADD",
           "ticket": "P1-E11-W3-S23-T7",
           "raw": "cmd/cascade daemon usage wiring (ADD) — P1-E11-W3-S23-T7."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade daemon_unix_memory_projection.go",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_memory_projection.go",
+          "line": 37,
+          "status": "ADD",
+          "raw": "cmd/cascade daemon_unix_memory_projection.go [ADD]; memory"
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_memory_projection_test.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E07-W5-S92-T1",
+          "raw": "cmd/cascade daemon_unix_memory_projection.go [ADD] (P1-E07-W5-S92-T1)."
         }
       ],
       "statuses": [
@@ -13294,10 +13323,10 @@
         },
         {
           "file": "internal/retrieval/recallwhat_memoryleg_test.go",
-          "line": 8,
+          "line": 10,
           "status": "ADD",
           "ticket": "P1-E22-W5-S47-T1",
-          "raw": "internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1)."
+          "raw": "internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1);"
         },
         {
           "file": "internal/retrieval/recallwhat_redact.go",
@@ -29807,7 +29836,7 @@
       ]
     }
   ],
-  "total_sites": 2801,
+  "total_sites": 2804,
   "unspecified_count": 141,
-  "multi_status_count": 76
+  "multi_status_count": 77
 }
