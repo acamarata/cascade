@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-23T03:16:42Z",
+  "generated_at": "2026-09-23T04:46:27Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -9932,6 +9932,20 @@
       ]
     },
     {
+      "name": "internal.ci.AffectedStatus",
+      "sites": [
+        {
+          "file": "internal/ci/selection.go",
+          "line": 30,
+          "status": "ADD",
+          "raw": "internal.ci.AffectedStatus/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.ci.AllowedEnv",
       "sites": [
         {
@@ -9989,6 +10003,34 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "internal.ci.CIRequirement",
+      "sites": [
+        {
+          "file": "internal/ci/requirements.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "internal.ci.CIRequirement/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.ChangedPaths",
+      "sites": [
+        {
+          "file": "internal/ci/affected.go",
+          "line": 23,
+          "status": "ADD",
+          "raw": "internal.ci.ChangedPaths/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -10055,6 +10097,21 @@
       ]
     },
     {
+      "name": "internal.ci.ConfigFromRuntime",
+      "sites": [
+        {
+          "file": "internal/ci/config_runtime.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E32-W6-S65-T1",
+          "raw": "internal.ci.ConfigFromRuntime/ADDED (P1-E32-W6-S65-T1, final-confirm round 3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.ci.Deps",
       "sites": [
         {
@@ -10062,6 +10119,35 @@
           "line": 18,
           "status": "ADD",
           "raw": "internal.ci.Deps/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.ErrAffectedCmdFailed",
+      "sites": [
+        {
+          "file": "internal/ci/affected_cmd.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E32-W6-S65-T1",
+          "raw": "internal.ci.ErrAffectedCmdFailed/ADDED (P1-E32-W6-S65-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.ErrBaseCommitUnknown",
+      "sites": [
+        {
+          "file": "internal/ci/affected.go",
+          "line": 23,
+          "status": "ADD",
+          "raw": "internal.ci.ErrBaseCommitUnknown/ADDED"
         }
       ],
       "statuses": [
@@ -10262,6 +10348,20 @@
           "line": 33,
           "status": "ADD",
           "raw": "internal.ci.NewCIDataClassChecker/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.RequirementKind",
+      "sites": [
+        {
+          "file": "internal/ci/requirements.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "internal.ci.RequirementKind/ADDED"
         }
       ],
       "statuses": [
@@ -10481,6 +10581,20 @@
       ]
     },
     {
+      "name": "internal.ci.TargetSelection",
+      "sites": [
+        {
+          "file": "internal/ci/selection.go",
+          "line": 30,
+          "status": "ADD",
+          "raw": "internal.ci.TargetSelection/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.ci.Upsert",
       "sites": [
         {
@@ -10629,6 +10743,21 @@
       ]
     },
     {
+      "name": "internal.ci.changedOwningPackages",
+      "sites": [
+        {
+          "file": "internal/ci/affected_go_mapping.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E32-W6-S65-T1",
+          "raw": "internal.ci.changedOwningPackages/ADDED (P1-E32-W6-S65-T1, fixed)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.ci.evaluateChecks",
       "sites": [
         {
@@ -10747,6 +10876,36 @@
           "line": 9,
           "status": "",
           "raw": "internal.ci.normalizeActionsRuns/TESTED,"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.parseImportGraph",
+      "sites": [
+        {
+          "file": "internal/ci/affected_go.go",
+          "line": 38,
+          "status": "ADD",
+          "ticket": "P1-E32-W6-S65-T1",
+          "raw": "internal.ci.parseImportGraph/ADDED (P1-E32-W6-S65-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.parseImportGraph/FUZZED",
+      "sites": [
+        {
+          "file": "internal/ci/affected_fuzz_test.go",
+          "line": 7,
+          "status": "",
+          "ticket": "P1-E32-W6-S65-T1",
+          "raw": "internal.ci.parseImportGraph/FUZZED (P1-E32-W6-S65-T1)."
         }
       ],
       "statuses": [
@@ -13971,6 +14130,21 @@
           "line": 21,
           "status": "ADD",
           "raw": "internal.runtime.WriteCIWatchEntries/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.runtime.assembleConfig",
+      "sites": [
+        {
+          "file": "internal/runtime/config_sections.go",
+          "line": 109,
+          "status": "ADD",
+          "ticket": "P1-E32-W6-S65-T1",
+          "raw": "internal.runtime.assembleConfig/ADDED (P1-E32-W6-S65-T1, fix round 2)."
         }
       ],
       "statuses": [
@@ -29886,7 +30060,7 @@
       ]
     }
   ],
-  "total_sites": 2809,
-  "unspecified_count": 141,
+  "total_sites": 2821,
+  "unspecified_count": 142,
   "multi_status_count": 77
 }
