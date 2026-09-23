@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-23T03:00:40Z",
+  "generated_at": "2026-09-23T03:16:42Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4598,6 +4598,18 @@
           "raw": "cmd/cascade/doctor (ADD - counts subcommand)."
         },
         {
+          "file": "cmd/cascade/doctor_mounts_completion.go",
+          "line": 33,
+          "status": "",
+          "raw": "cmd/cascade/doctor (CompletionGateDoctorCheck mount), CR-B D4."
+        },
+        {
+          "file": "cmd/cascade/doctor_mounts_completion_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "cmd/cascade/doctor (CompletionGateDoctorCheck mount tests), CR-B D4."
+        },
+        {
           "file": "cmd/cascade/doctor_mounts_hydration.go",
           "line": 5,
           "status": "ADD",
@@ -4626,6 +4638,7 @@
         }
       ],
       "statuses": [
+        "",
         "ADD",
         "CHANGE"
       ]
@@ -8125,6 +8138,21 @@
       ]
     },
     {
+      "name": "fleet/hookpacks.EventGateDenied/EventGateTimeout",
+      "sites": [
+        {
+          "file": "internal/fleet/hookpacks/completion_gate_stall_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E32-W6-S66-T1",
+          "raw": "fleet/hookpacks.EventGateDenied/EventGateTimeout/ADD (P1-E32-W6-S66-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "fleet/hookpacks.HookRegistry",
       "sites": [
         {
@@ -8185,6 +8213,28 @@
           "status": "ADD",
           "ticket": "P1-E12-W3-S24-T4",
           "raw": "fleet/hookpacks.RegisterHookEventHandler/ADDED (P1-E12-W3-S24-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/hookpacks.completionHookCommand",
+      "sites": [
+        {
+          "file": "internal/fleet/hookpacks/completion_hook_command.go",
+          "line": 39,
+          "status": "ADD",
+          "ticket": "P1-E32-W6-S66-T1",
+          "raw": "fleet/hookpacks.completionHookCommand/ADD (P1-E32-W6-S66-T1)."
+        },
+        {
+          "file": "internal/fleet/hookpacks/completion_hook_command_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E32-W6-S66-T1",
+          "raw": "fleet/hookpacks.completionHookCommand/ADD (P1-E32-W6-S66-T1)."
         }
       ],
       "statuses": [
@@ -29836,7 +29886,7 @@
       ]
     }
   ],
-  "total_sites": 2804,
+  "total_sites": 2809,
   "unspecified_count": 141,
   "multi_status_count": 77
 }
