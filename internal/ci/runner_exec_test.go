@@ -156,7 +156,9 @@ func exitCommand(code int) string {
 
 func sleepCommand(seconds int) string {
 	if goruntime.GOOS == "windows" {
-		return "timeout /T " + strconv.Itoa(seconds)
+		// `timeout /T` exits at once when stdin is redirected (no console on CI);
+		// ping waits ~1s per echo with no console needed.
+		return "ping -n " + strconv.Itoa(seconds+1) + " 127.0.0.1 >NUL"
 	}
 	return "sleep " + strconv.Itoa(seconds)
 }

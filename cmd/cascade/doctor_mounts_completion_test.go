@@ -12,6 +12,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/doctor"
@@ -51,6 +52,9 @@ func TestProductionCompletionGateCheck_OKWhenNoHarnessInstalled(t *testing.T) {
 // the real FAIL case: the settings file EXISTS (the harness IS installed)
 // but does not name the completion-gate hook's RPC method.
 func TestProductionCompletionGateCheck_FailsWhenAbsentFromSettings(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("the harness integration refuses on Windows tier-2 (plugins/claude.hostPathsFor), so no settings file is ever read there")
+	}
 	settingsPath := completionGateFakeHome(t)
 	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
