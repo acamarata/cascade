@@ -10,7 +10,9 @@ import (
 // configured affected_cmd returns its stdout lines as Targets, via a
 // real shell subprocess reading the changed-path list off stdin.
 func TestAffectedTargets_AffectedCmdPresent(t *testing.T) {
-	cfg := Config{AffectedCmd: `while IFS= read -r line; do echo "target:$line"; done`}
+	// sed rather than a sh loop: the command runs under cmd.exe on Windows, where
+	// the CI runner provides sed alongside cat (TestAffectedCmd_StdinProtocol).
+	cfg := Config{AffectedCmd: `sed "s/^/target:/"`}
 	targets, err := affectedTargets(context.Background(), t.TempDir(), "rust", cfg, []string{"src/lib.rs", "src/main.rs"})
 	if err != nil {
 		t.Fatalf("affectedTargets: %v", err)
