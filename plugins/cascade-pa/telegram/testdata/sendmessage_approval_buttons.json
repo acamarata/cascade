@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "result": {
+    "message_id": 44,
+    "from": {
+      "id": 900000005,
+      "is_bot": true,
+      "first_name": "cascade",
+      "username": "cascade_test_bot"
+    },
+    "chat": {
+      "id": 555000111,
+      "type": "private"
+    },
+    "date": 1758300010,
+    "text": "cascade: an action is awaiting your approval"
+  }
+}

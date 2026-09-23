@@ -6,8 +6,7 @@ package telegram
 //   unpaired update is dispatched — plus the R-21.210 callback nonce this ticket
 //   produces for W/S-48.T4 to consume.
 //
-// SPORT: plugins/cascade-pa/telegram integration-tests/TEST
-//   (P1-E23-W5-S48-T1).
+// SPORT: plugins/cascade-pa/telegram integration-tests/TEST (P1-E23-W5-S48-T1).
 
 import (
 	"context"
@@ -163,12 +162,16 @@ func pairingEgressPrecedesAPIUse(t *testing.T) {
 	}
 }
 
-// TestCallbackNonceBinding proves the R-21.210 store this ticket produces and
-// W/S-48.T4 consumes, INCLUDING the verdict field the review found unbound.
+// TestCallbackNonceBinding proves the R-21.210 store this ticket produces
+// and W/S-48.T4 consumes redeems exactly once, and that the verdict a
+// redemption acts on always comes back as the STORED record's own
+// AllowedVerdict — never something a claim asserts (CallbackClaim carries
+// no Verdict field; callback.go's header explains why it and the digest
+// left the wire, T0 D1, W/S-48.T4 rework).
 func TestCallbackNonceBinding(t *testing.T) {
 	store := cascadepa.NewCallbackNonceStore()
 	nonce := cascadepa.CallbackNonce{
-		Nonce: "n1", RequestID: "r1", ActionDigest: "d1", BridgeInstance: testSubject,
+		Nonce: "n1", RequestID: "r1", BridgeInstance: testSubject,
 		PairedSubjectID: "111", ChatID: "111", MessageID: "7",
 		ExpiresAt: t0().Add(5 * time.Minute), AllowedVerdict: true,
 	}
@@ -176,27 +179,34 @@ func TestCallbackNonceBinding(t *testing.T) {
 		t.Fatalf("Store: %v", err)
 	}
 	claim := cascadepa.CallbackClaim{
-		Nonce: "n1", RequestID: "r1", ActionDigest: "d1", BridgeInstance: testSubject,
-		PairedSubjectID: "111", ChatID: "111", MessageID: "7", Verdict: true,
+		Nonce: "n1", RequestID: "r1", BridgeInstance: testSubject,
+		PairedSubjectID: "111", ChatID: "111", MessageID: "7",
 	}
-	if _, ok := store.Consume(claim, t0()); !ok {
+	got, ok := store.Consume(claim, t0())
+	if !ok {
 		t.Fatal("Consume(exact match) = false")
+	}
+	if !got.AllowedVerdict {
+		t.Errorf("Consume returned AllowedVerdict=%v, want the stored true", got.AllowedVerdict)
 	}
 	if _, ok := store.Consume(claim, t0()); ok {
 		t.Fatal("a nonce was consumed twice")
 	}
 
-	// The bypass the review found: a nonce minted for verdict=false consumed
-	// by a callback claiming approval.
+	// A deny-only nonce comes back with its own AllowedVerdict=false.
 	denyOnly := nonce
 	denyOnly.Nonce, denyOnly.AllowedVerdict = "n2", false
 	if err := store.Store(denyOnly); err != nil {
 		t.Fatalf("Store: %v", err)
 	}
-	approveClaim := claim
-	approveClaim.Nonce, approveClaim.Verdict = "n2", true
-	if _, ok := store.Consume(approveClaim, t0()); ok {
-		t.Fatal("a deny-only nonce authorised an approval")
+	denyClaim := claim
+	denyClaim.Nonce = "n2"
+	got2, ok := store.Consume(denyClaim, t0())
+	if !ok {
+		t.Fatal("Consume(deny-only, exact match) = false")
+	}
+	if got2.AllowedVerdict {
+		t.Error("a deny-only nonce came back with AllowedVerdict=true")
 	}
 }
 

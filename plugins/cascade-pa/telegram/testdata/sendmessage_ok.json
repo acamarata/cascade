@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "result": {
+    "message_id": 43,
+    "from": {
+      "id": 900000005,
+      "is_bot": true,
+      "first_name": "cascade",
+      "username": "cascade_test_bot"
+    },
+    "chat": {
+      "id": 555000111,
+      "type": "private"
+    },
+    "date": 1758300005,
+    "text": "message recorded (thread bridge-telegram:555000111, turn turn-1); no assistant reply is available yet"
+  }
+}

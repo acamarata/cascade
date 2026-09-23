@@ -129,40 +129,6 @@ func TestBridgeJournal_QuarantineIsANoopWithNoBus(_ *testing.T) {
 	(&bridgeJournal{}).EmitQuarantine(context.Background(), telegram.QuarantineEvent{})
 }
 
-// TestBridgeJournal_RecordsAnUnroutedMessage is D13's visible drop: until the
-// chat route lands, an admitted message produces a record naming the ticket that
-// will route it, and carries NO message content.
-func TestBridgeJournal_RecordsAnUnroutedMessage(t *testing.T) {
-	bus := newRecordingBus()
-	journal := newBridgeJournal(bus)
-	handler := journal.unroutedHandler(telegram.HandlerText)
-	const secretish = "my bank password is hunter2"
-	err := handler(context.Background(), telegram.InboundMessage{
-		Update: telegram.Update{UpdateID: 900000007, Message: &telegram.Message{
-			MessageID: 5, Chat: telegram.Chat{ID: 4242, Type: "private"}, Text: secretish,
-		}},
-		Origin: telegram.OriginBridgeTelegram, Untrusted: true,
-	})
-	if err != nil {
-		t.Fatalf("the unrouted handler failed the dispatch: %v", err)
-	}
-	got := bus.events()
-	if len(got) != 1 {
-		t.Fatalf("recorded %d events, want 1: an admitted message was dropped silently", len(got))
-	}
-	if got[0].kind != EventKindBridgeMessageUnrouted || got[0].source != bridgeEventSource {
-		t.Fatalf("recorded %+v", got[0])
-	}
-	if strings.Contains(got[0].payload, secretish) || strings.Contains(got[0].payload, "hunter2") {
-		t.Fatalf("the record carries the sender's own text: %s", got[0].payload)
-	}
-	for _, want := range []string{"900000007", telegram.HandlerText, "S-48.T2", "chat:4242"} {
-		if !strings.Contains(got[0].payload, want) {
-			t.Fatalf("the record is missing %q: %s", want, got[0].payload)
-		}
-	}
-}
-
 // TestBridgeJournal_RecordsUnderACancelledRequest: a lockout that happened must
 // not go unrecorded because the daemon was shutting down while it was refused.
 func TestBridgeJournal_RecordsUnderACancelledRequest(t *testing.T) {
@@ -177,16 +143,16 @@ func TestBridgeJournal_RecordsUnderACancelledRequest(t *testing.T) {
 
 // TestBridgeJournal_APublishFailureNeverFailsTheDispatch: losing a journal line
 // must not change a decision — least of all into admitting something.
+// EmitLockout has no return value, so "never fails the dispatch" means it must
+// not panic even when the bus itself errors.
 func TestBridgeJournal_APublishFailureNeverFailsTheDispatch(t *testing.T) {
 	bus := newRecordingBus()
 	bus.fail = errors.New("test: the bus is down")
 	journal := newBridgeJournal(bus)
-	if err := journal.unroutedHandler(telegram.HandlerCallbackQuery)(context.Background(),
-		telegram.InboundMessage{Update: telegram.Update{UpdateID: 1,
-			CallbackQuery: &telegram.CallbackQuery{ID: "cb-9"}}}); err != nil {
-		t.Fatalf("a failed publish failed the dispatch: %v", err)
-	}
 	journal.EmitLockout(context.Background(), telegram.LockoutEvent{Subject: "tg-abc"})
+	if len(bus.events()) != 0 {
+		t.Fatal("a failing publish still recorded an event")
+	}
 }
 
 // fakePairDoer is one canned pa.pair_code round trip.
@@ -268,33 +234,12 @@ func TestPairClient_PathFailurePropagates(t *testing.T) {
 	}
 }
 
-// TestBridgeJournal_CorrelationOfEveryUpdateShape: a record never carries an
-// empty correlation field, which would read as a value that got lost.
-func TestBridgeJournal_CorrelationOfEveryUpdateShape(t *testing.T) {
-	for name, tc := range map[string]struct {
-		msg  telegram.InboundMessage
-		want string
-	}{
-		"message":  {telegram.InboundMessage{Update: telegram.Update{Message: &telegram.Message{Chat: telegram.Chat{ID: 7}}}}, "chat:7"},
-		"callback": {telegram.InboundMessage{Update: telegram.Update{CallbackQuery: &telegram.CallbackQuery{ID: "cb-3"}}}, "callback:cb-3"},
-		"neither":  {telegram.InboundMessage{Update: telegram.Update{UpdateID: 9}}, "unknown"},
-	} {
-		if got := correlationOf(tc.msg); got != tc.want {
-			t.Errorf("%s: correlationOf = %q, want %q", name, got, tc.want)
-		}
-	}
-}
-
 // TestBridgeJournal_NilJournalAndNilBusAreNoOps: the recorder must never be the
 // thing that panics a dispatch. Production refuses a nil bus at the composition
 // root (NewCascadePABridge), so this is the defence for that guard, not a
 // licence to wire one.
-func TestBridgeJournal_NilJournalAndNilBusAreNoOps(t *testing.T) {
+func TestBridgeJournal_NilJournalAndNilBusAreNoOps(_ *testing.T) {
 	var nilJournal *bridgeJournal
 	nilJournal.EmitLockout(context.Background(), telegram.LockoutEvent{Subject: "tg-abc"})
 	newBridgeJournal(nil).EmitLockout(context.Background(), telegram.LockoutEvent{Subject: "tg-abc"})
-	if err := newBridgeJournal(nil).unroutedHandler(telegram.HandlerText)(context.Background(),
-		telegram.InboundMessage{Update: telegram.Update{UpdateID: 1}}); err != nil {
-		t.Fatalf("a journal with no bus failed the dispatch: %v", err)
-	}
 }

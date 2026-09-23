@@ -32,6 +32,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/plugins"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -93,6 +94,7 @@ func platformDaemonRun(ctx context.Context, deps daemonDeps) error {
 	}
 	defer cleanupBackground()
 	wireCascadePAInstallHostDeps(store, pol.Queue, pol.Registry) // P1-E24-W5-S50-T4 (D1/D2)
+	plugins.SetBridgeApprovalQueue(pol.Queue)                    // P1-E23-W5-S48-T4 FIX-0
 
 	server, manifest, connections, err := buildRPCServer(bus, deps.Clock, logProvider.Logger(), settings, paths, memoryAdmin, store,
 		withPolicyHandlers(pol),

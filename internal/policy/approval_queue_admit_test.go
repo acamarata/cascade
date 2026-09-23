@@ -1,9 +1,12 @@
 // Purpose: the admission refusals and the §5.24 remote-approvable payload
 // — the elevation-class and deny-list local-only refusals, the malformed
-// request paths, the verified params digest, and the three-field
-// GetPending struct.
+// request paths, the verified params digest, and the GetPending struct
+// (RequestID/Summary/ExpiresAt/ActionClass, the last added by R-21.230,
+// P1-E23-W5-S48-T4).
 //
-// SPORT: internal/policy PendingEntry/ADDED (P1-E09-W2-S18-T3).
+// SPORT: internal/policy PendingEntry/ADDED (P1-E09-W2-S18-T3);
+//
+//	PendingEntry.ActionClass/ADDED (P1-E23-W5-S48-T4).
 package policy
 
 import (
@@ -22,10 +25,13 @@ import (
 // --- the remote-approvable payload ---------------------------------------
 
 // TestGetPendingPayloadIsolation is the §5.24 assertion: the struct any
-// caller receives has exactly three fields, and none of them is the token,
-// the nonce or the action hash. It is written STRUCTURALLY, over the type
-// itself, because a value-level check would pass the day somebody adds a
-// field and leaves it empty in this one case.
+// caller receives has exactly the four bridge-safe fields R-21.230 names,
+// and none of them is the token, the nonce or the action hash. It is
+// written STRUCTURALLY, over the type itself, because a value-level check
+// would pass the day somebody adds a field and leaves it empty in this one
+// case. ActionClass joined the allow-list in P1-E23-W5-S48-T4: it is
+// non-secret routing metadata (RemoteApprovabilityMatrix.CanBridge's own
+// input), not a fifth kind of thing this struct was built to keep out.
 func TestGetPendingPayloadIsolation(t *testing.T) {
 	ctx := context.Background()
 	f := newApprovalFixture(t)
@@ -41,9 +47,13 @@ func TestGetPendingPayloadIsolation(t *testing.T) {
 	if pending[0].RequestID != res.RequestID || pending[0].Summary != res.Summary {
 		t.Errorf("pending entry = %+v, want the queued request id and summary", pending[0])
 	}
+	if pending[0].ActionClass != ClassWorkspaceMutation {
+		t.Errorf("pending entry ActionClass = %s, want %s (approvalCap()'s own DefaultPolicy)",
+			pending[0].ActionClass, ClassWorkspaceMutation)
+	}
 
 	typ := reflect.TypeOf(PendingEntry{})
-	want := []string{"RequestID", "Summary", "ExpiresAt"}
+	want := []string{"RequestID", "Summary", "ExpiresAt", "ActionClass"}
 	if typ.NumField() != len(want) {
 		t.Fatalf("PendingEntry has %d fields, want exactly %d (%v) — every field here can cross a bridge",
 			typ.NumField(), len(want), want)
@@ -62,6 +72,9 @@ func TestGetPendingPayloadIsolation(t *testing.T) {
 		t.Errorf("audit kinds = %v, want an %s row", f.sink.kinds(), audit.KindApprovalEnqueue)
 	}
 }
+
+// TestGetPendingActionClassFailsClosedWhenCapabilityIsGone lives in
+// approval_queue_class_test.go (Art.10.3's 300-line cap).
 
 // TestGetPendingOrderingIsStable proves the payload order is admission
 // order and not map order, so a surface renders the same list every time.

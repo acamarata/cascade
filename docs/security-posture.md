@@ -296,6 +296,13 @@ substituted bytes.
 | `backup-target` | enabled, admits restricted | a remote backup destination |
 | `plugin-remote` | disabled until the remote-runtime key is set | the remote plugin runtime |
 | `registry-fetch` | enabled | the plugin registry fetch |
+| `bridge` | enabled, `AllowedTiers` {internal, public} | the cascade-pa bridge's outbound leg |
+
+Net-scope enforcement for `bridge` is the O/S-31.T4 plugin-host capability
+path over the manifest's declared net grants, not this registry: this class
+carries no net scopes of its own, and the exact host it dials
+(`api.telegram.org`) is enforced at the HTTP transport, matching
+`sync`/`node-dispatch`'s identical convention.
 
 Telemetry egress is deferred. Nothing in this documentation, the command help or
 the readme claims it is active, and the class refuses every call.
@@ -350,11 +357,13 @@ single-use ledger in the audit domain, which records the token's nonce. The two
 responsibilities stay apart on purpose: a stateless verifier can run anywhere,
 and only the controller can spend.
 
-**Bridges carry a request id and nothing else.** When an approval decision is
-taken on another device, what crosses the bridge is the request id alone. The
-token, the nonce, the verb and the parameter digest all stay on the controller,
-which looks the request up and verifies it locally. The projection is a struct
-with one field, so widening the token cannot widen what a bridge sees.
+**Bridges carry a request id, and one opaque nonce, and nothing else.** When
+an approval decision is taken on another device, what crosses the bridge is
+the request id and a server-minted, one-use callback nonce — never the token,
+never the action's own nonce, never the parameter digest. The nonce binds the
+tap to the exact context it was shown in (see Bridge Inline-Button Approvals,
+below); the token itself stays on the controller, which looks the request up
+and verifies it locally.
 
 **Local-only actions.** The bridge-approvable set is ask-tier actions at risk
 L1-L2 and nothing else. Every elevated verb (vault get and rotate, approval and
@@ -397,6 +406,150 @@ exactly one caller wins, and the winner writes a stable execution id before
 anything is dispatched. Executors de-duplicate on that id. A process killed
 between the consume and the run recovers by re-driving the same execution id:
 the consume is never lost, and a second execution is never issued.
+
+## Bridge Inline-Button Approvals
+
+A bridge (Telegram, today) may surface a pending approval as an inline button.
+Tapping it is the remote half of the decision the sections above describe —
+and it is gated at least as hard as the local one, never less.
+
+**The order, and every step refuses.** A callback_query tap runs five gates in
+this exact order, and a failure at any one of them stops the rest cold:
+
+1. **Sender authorization.** `callback_query.from.id` must be on the CURRENT
+   paired-device binding for this bridge instance. A stranger's tap, a
+   non-owner tap in a group chat, and a tap that arrives after a re-pairing
+   changed who is bound each refuse here, before anything else is even
+   looked up, with one fixed reply and a typed `bridge.approval.unauthorized`
+   event.
+2. **Message-envelope presence, then callback nonce resolution and atomic
+   consumption.** A callback with no message envelope (Bot API >= 7.0's
+   `inaccessible_message` case) refuses outright, before the nonce is even
+   touched. Otherwise, the button carries a server-minted, one-use nonce
+   (the wire is `"<request_id>|<nonce>"`, R-21.210's contract verbatim —
+   the request id and the nonce, and nothing else); the nonce is bound to
+   the LIVE callback's own bridge instance, paired subject id, chat id and
+   message id, and Consume compares all of those, PLUS its own key and
+   expiry, before deciding. A MISMATCH REFUSES AND LEAVES THE NONCE — a
+   stale or wrong-context tap does not burn a legitimate approval — only a
+   genuine match consumes it. A forwarded button, a stale callback, a
+   replayed nonce and a guessed request id all fail this comparison and are
+   indistinguishable from each other to the sender. The action's own digest
+   and the verdict do NOT travel on the wire: the digest stays server-held
+   (a follow-up ticket ties it to redemption's own re-hash), and the
+   verdict a redemption acts on is read back from the CONSUMED nonce
+   record's own AllowedVerdict, never claimed by the tap.
+3. **Server-side lookup.** The request id resolves through the same
+   FOUR-field approval queue projection every surface uses (request id,
+   summary, expiry, and the entry's own action class — the class is
+   non-secret routing metadata, never a token, nonce or digest). An id that
+   does not resolve gets the same fixed reply a forged signature gets (next
+   point) — the bridge is never an oracle for "does this request exist".
+4. **The remote-approvability gate.** The resolved action's class is checked
+   against the same allow-list `Approval tokens` describes: ask-tier L1-L2
+   only. This step performs no classification of its own — it reads the
+   class the queue already assigned and asks the one allow-list function
+   whether it may be decided remotely. A forbidden class gets its own,
+   distinct reply.
+5. **Redemption.** An approve tap and a reject tap both submit the request id
+   alone to the SAME verb a local `cascade approval grant`/`deny` would use.
+   Neither the nonce nor a digest nor a token is part of this call — see
+   "Today's honest limit" below for what `approval.grant` actually does with
+   that request id today.
+
+**One generic reply for a forged or expired signature, and it is not an
+accident.** A tampered or forged token and an unresolvable request id
+produce the exact same bytes back to the sender: no field, key, token state
+or failing check is named, because naming one would make the bridge a
+verification oracle. Expiry and replay at the REDEMPTION layer (as opposed to
+signature-level expiry) keep their own distinct, actionable replies — those
+say something true about the request's own lifecycle, not about how a
+credential failed.
+
+**Today's honest limit.** `approval.grant` is itself gated by the SAME
+elevated-verb machinery every other elevated verb uses: a fresh local
+attestation is required IN ADDITION to a signed token, by design — a token
+proves someone approved the action; the attestation proves a human is
+present now, confirming this one. No production attestation helper and no
+production approval-signing key source exist in this tree yet (both absences
+are themselves fail-closed, not an oversight — see `cmd/cascade/daemon_unix_policy.go`),
+so an approve tap is refused TWICE over: the bridge submits the request id
+alone (no `signed_token` — there is none to load, since nothing on this path
+mints or holds one), which `approval.grant`'s own params check would refuse
+on its own; before that refusal is even reached, the elevation guard refuses
+first, since no attestation source is enrolled. No stand-in ever reports a
+redemption that did not happen. A reject tap has no such gate —
+`approval.deny` is not elevation-class — and redeems for real today.
+
+**The producer side: how a button gets sent at all (P1-E23-W5-S48-T4).**
+Everything above is what happens once a tap arrives; nothing arrives unless
+something first sends the message. That leg runs in the opposite direction,
+gated the same way:
+
+1. **`RemoteApprovabilityMatrix.CanBridgeVerb` runs FIRST, before anything is
+   projected or handed to a sender.** A freshly admitted pending entry is
+   checked on TWO axes, not one: its class against the SAME allow-list the
+   inbound gate (step 4 above) reads, AND its own capability name against the
+   §5.14 elevation-class verb list — a non-bridgeable class, an unknown
+   class, an elevation-class verb (e.g. `policy.set`), and the invalid zero
+   class all refuse identically, and on a refusal nothing is minted and no
+   message is sent (`internal/policy/bridge_leg.go`'s `BridgeLeg.Dispatch`).
+   The verb check exists because the class test alone cannot see that a verb
+   is local-only: a capability whose registered class happens to be
+   bridgeable would otherwise notify a remote surface about an action §5.14
+   reserves for same-machine authorization.
+2. **Only a bare request id ever crosses out of `internal/policy`.**
+   `BridgePayload` projects the entry down to one field (`BridgeRef`); the
+   summary, the expiry, the action class and every secret stay behind.
+3. **Pairing gates the send, not just the tap.** An unpaired (or never seen)
+   bridge subject gets nothing minted and nothing sent — the same
+   fail-closed posture as an unauthorized tap, applied before any network
+   call.
+4. **One message, two independently minted nonces.** For each currently
+   paired recipient, the sender mints a fresh one-use callback nonce PER
+   BUTTON (`AllowedVerdict` true for Approve, false for Deny) through the
+   SAME W/S-48.T1 `CallbackNonceStore` the inbound gate consumes from, sends
+   the message, and only THEN stores each nonce — bound to the chat and
+   message id Telegram's own response returns, never to a guessed or
+   pre-assigned one. A failed send leaves no orphan nonce behind.
+5. **The outbound text names nothing.** No summary, no expiry, no request id
+   appears in the message body — only in `callback_data`, which Telegram
+   never displays to the user. This mirrors the inbound side's "the bridge is
+   never a verification oracle" posture, extended to what a producer is
+   willing to say out loud.
+
+The producer is wired into the queue's own admission path (a freshly
+admitted, non-deduplicated entry notifies `ApprovalQueueConfig.Bridge`,
+`internal/policy/approval_queue_enqueue.go`'s `notifyBridge`) rather than a
+poll: there was no other pending-entry event to hook, so this ticket added
+one. The composition adapter that turns a real Telegram `BotClient` into a
+producer leg lives at `internal/plugins/cascadepa_bridge_send_wiring.go`.
+
+**The leg reaches the running daemon's queue, live (FIX-0).** The queue
+cannot take its bridge at construction time (`policy.NewApprovalQueue`,
+`cmd/cascade/daemon_unix_policy.go`): the bridge's own subject, durable
+state, callback-nonce store and Telegram client are assembled LATER, inside
+`enabledBridge` (`internal/plugins/cascadepa_bridge_wiring.go`), from a
+different call path (`cmd/cascade/plugin_rpc.go`'s `wireCascadePABridge`,
+inside `buildRPCServer`) that starts after `wirePolicy` has already returned.
+`StoreApprovals.SetBridge` (`internal/policy/approval_queue.go`) arms an
+ALREADY-BUILT queue after the fact instead: the composition root injects the
+daemon's one running queue into `internal/plugins`
+(`plugins.SetBridgeApprovalQueue`, called from `cmd/cascade/daemon_unix.go`
+beside the identical `wireCascadePAInstallHostDeps` precedent) before the
+bridge is assembled, and `plugins.WireApprovalBridge(rt)` — the single call
+`wireCascadePABridge` makes once `rt` is real — calls `SetBridge` with the
+leg `enabledBridge` just built. `SetBridge` refuses a nil notifier and a
+second call; neither refusal is fatal to daemon startup, since a bridge with
+nothing armed still runs, it just notifies nobody.
+
+**The notification never runs on the enqueuer's own goroutine.** The queue
+calls `Dispatch` synchronously, on the RPC caller's own `ctx`, from inside
+`Enqueue`. `WireApprovalBridge` wraps the leg in `asyncBridgeNotifier`
+(`internal/plugins/cascadepa_bridge_send_wiring.go`) before arming the
+queue, so the real send runs on a detached goroutine bounded by its own
+30-second timeout instead: a slow or hung Telegram call delays nothing but
+itself, never the Enqueue RPC that just admitted the action.
 
 ## Clipboard fallback
 

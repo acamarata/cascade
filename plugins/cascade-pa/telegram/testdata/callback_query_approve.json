@@ -1,0 +1,26 @@
+{
+  "id": "900000101",
+  "from": {
+    "id": 555000111,
+    "is_bot": false,
+    "first_name": "Cascade",
+    "username": "cascade_test_user"
+  },
+  "message": {
+    "message_id": 42,
+    "from": {
+      "id": 900000005,
+      "is_bot": true,
+      "first_name": "Cascade PA",
+      "username": "cascade_test_bot"
+    },
+    "chat": {
+      "id": 555000111,
+      "type": "private"
+    },
+    "date": 1758000000,
+    "text": "Approve workspace.write on /repo/a.txt? Expires in 5 minutes."
+  },
+  "chat_instance": "4382bfdwdsb323b2d9",
+  "data": "01J8ZC5W2K4F6H8M0P2R4T6V8X|01J8ZC5W2K4F6H8M0P2R4T6V9Y"
+}

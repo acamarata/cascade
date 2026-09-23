@@ -172,3 +172,37 @@ func TestNewCascadePABridge_StopClosesTheDurableState(t *testing.T) {
 		t.Fatalf("Save after Stop: %v", err)
 	}
 }
+
+// TestNewCascadePABridge_FillsApprovalBridgeOnlyWhenEnabled proves the
+// BridgeRuntime.ApprovalBridge field enabledBridge sets (FIX-0's producer
+// leg, cascadepa_bridge_wiring.go's `ApprovalBridge: approvalLeg`) is
+// actually reachable through the real constructor, not just asserted by a
+// hand-built literal: a granted-token bridge must fill it, and a disabled
+// bridge must leave it nil rather than a caller getting a half-armed value.
+// Falsifiable: delete the `ApprovalBridge: approvalLeg` field assignment from
+// enabledBridge's returned *BridgeRuntime and the first assertion below goes
+// red (S-48.T4 producer confirming review, FLAG-A).
+func TestNewCascadePABridge_FillsApprovalBridgeOnlyWhenEnabled(t *testing.T) {
+	ctx := context.Background()
+	deps, _, _ := enabledBridgeDeps(t)
+	rt, err := NewCascadePABridge(ctx, deps)
+	if err != nil {
+		t.Fatalf("NewCascadePABridge (enabled): %v", err)
+	}
+	closeBridgeRuntime(t, rt)
+	if rt.ApprovalBridge == nil {
+		t.Fatal("a granted-token bridge left ApprovalBridge nil; WireApprovalBridge has nothing to arm")
+	}
+
+	dataDir := filepath.Join(bridgeTestRoot(t), "data")
+	disabled, err := NewCascadePABridge(ctx, BridgeDeps{
+		DataDir: dataDir, Vault: bridgeTestVaultConfig(dataDir),
+		Clock: runtime.NewSystemClock(), Events: newRecordingBus(),
+	})
+	if err != nil {
+		t.Fatalf("NewCascadePABridge (disabled): %v", err)
+	}
+	if disabled.ApprovalBridge != nil {
+		t.Fatal("a disabled bridge produced a non-nil ApprovalBridge")
+	}
+}

@@ -155,6 +155,10 @@ func (q *StoreApprovals) Enqueue(ctx context.Context, req EnqueueRequest) (Enque
 		return EnqueueResult{}, err
 	}
 	q.record(ctx, enqueueKind(res.Deduplicated), entry, "queued")
+	// notifyBridge (bridge_leg.go, P1-E23-W5-S48-T4 D4) is the §5.24
+	// producer leg's own pending-entry event; its result is deliberately
+	// discarded here — see that method's doc comment.
+	q.notifyBridge(ctx, res, entry)
 	return res, nil
 }
 

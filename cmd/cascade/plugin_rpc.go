@@ -189,6 +189,7 @@ func wireCascadePABridge(ctx context.Context, registry *rpc.Registry, manifest *
 		})
 		return
 	}
+	plugins.WireApprovalBridge(rt) // FLAG-0: arm the running approval queue
 	pollCtx, releaseSignals := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	manifest.RegisterBridgeModule(pollCtx, registry, daemon.BridgeSubsystem{
 		Start: rt.Start,

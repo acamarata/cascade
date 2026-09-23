@@ -217,6 +217,56 @@ Every inbound message is stamped `Origin = bridge-telegram` and
 `Untrusted = true` at the decode boundary, and there is no setter that clears
 either field.
 
+### Telegram inline-button approvals (P1-E23-W5-S48-T4)
+
+A pending §5.24 approval may be surfaced as a Telegram inline button. Tapping
+it is the remote half of the same decision `cascade approval grant`/`deny`
+makes locally, and it is gated at least as hard — never less.
+
+**The wire.** `callback_data` is `"<request_id>|<nonce>"`, at most 64 bytes
+(Telegram's own ceiling — R-21.210's contract verbatim). No verdict word and
+no action digest travel: which decision a tap makes is a property of WHICH
+one-use nonce it presents — the producer (below) mints one per button — and
+the digest stays server-held. Putting either on the wire was tried and
+reverted — an adversarial review found both checked against values the same
+untrusted payload supplied, which buys nothing.
+
+**The order**, and every step refuses: (1) sender authorization — the tap's
+`from.id` must be on the CURRENT paired-device binding; (2) the nonce is
+resolved and consumed, matching every live field (request id, bridge
+instance, paired subject, chat, message) BEFORE it is deleted — a mismatch
+refuses and LEAVES the nonce for a correct retry, only a match consumes it;
+(3) server-side lookup and the host's own remote-approvability gate; (4)
+redemption — `approval.grant` (approve) or `approval.deny` (reject), called
+with the request id alone, the verb decided by the CONSUMED nonce's own
+recorded verdict, never by anything the wire carried.
+
+**Today's honest limit.** `approval.grant` is elevation-class and no
+production attestation source or approval-signing key exists in this tree
+yet (both absences are fail-closed by design — see
+`cmd/cascade/daemon_unix_policy.go`), so an approve tap is refused twice
+over: once for having no `signed_token` at all, and once by the elevation
+gate itself, before that first refusal is even reached. A reject tap is not
+elevation-class and redeems for real today. See `docs/security-posture.md`
+§ Bridge Inline-Button Approvals for the full contract, and
+`docs/cli-reference/approval.md` for the CLI-side equivalent.
+
+**The producer** (`plugins/cascade-pa/telegram/approval_send.go`) is the
+other half: `RemoteApprovabilityMatrix.CanBridgeVerb` runs before anything is
+minted or sent (a non-bridgeable class, an unknown class, a §5.14
+elevation-class verb, or an unpaired subject all send nothing), then it
+mints a fresh one-use nonce per button, sends the message, and only stores
+each nonce afterward, bound to the chat and message id Telegram's own
+response returns — never a guessed one. The outbound text is fixed and names
+no summary, expiry or request id. It is driven by the running daemon's real
+approval queue's own admission event (`internal/policy/approval_queue_enqueue.go`'s
+`notifyBridge`, armed via `StoreApprovals.SetBridge` from
+`cmd/cascade/plugin_rpc.go`'s `wireCascadePABridge` once the bridge's real
+collaborators exist — see `docs/security-posture.md` § "The leg reaches the
+running daemon's queue, live"), not a poll, and the notification itself runs
+off the admitting caller's own goroutine so a slow Telegram call never
+delays the RPC that just queued the action.
+
 ### The bridge never carries a secret, in either direction (R-21.203)
 
 The bridge secret-reveal flow does not exist: no code path fetches a vault
@@ -247,6 +297,28 @@ leave over the bridge, and a stored vault value that reached a reply string is
 substituted on the way out. The R-21.203 secret-value gate above runs
 FIRST, on every outbound path (reply, answer, and the pairing flow's say),
 before the egress firewall ever sees the text.
+
+### Bridge privacy modes (P1-E23-W5-S48-T2)
+
+Chat parity — forwarding an admitted Telegram message into the real
+`chat.append_turn` conversation, and replying — is gated by the thread's own
+§5.16 privacy mode, not a bridge-local setting. The thread id is
+`bridge-telegram:<chat id>`; its tier comes from that thread's own privacy
+row, and an unmarked thread reads **restricted** (fail-closed: absence is
+never treated as permissive). On an internal or public thread the bridge
+forwards the message and replies. On a local-only or restricted thread, or
+when the tier cannot be resolved at all, the bridge refuses BEFORE any
+content leaves the process — unresolvable follows the same path as
+local-only:
+
+- local-only: `"thread is local-only, cannot bridge"`
+- restricted: `"thread is restricted, cannot bridge"`
+
+Each refusal publishes exactly one `bridge.refused` event
+(`thread_id`, `resolved_tier`, `reason`, `correlation_id`) and never the
+message content. There is no bridge-side thread-creation path — a thread
+only becomes internal or public because an operator opted it in from the
+local CLI, never because a message arrived over Telegram.
 
 ### Windows
 

@@ -64,28 +64,57 @@ type DecisionOutcome struct {
 	Err error
 }
 
-// GetPending implements ApprovalQueue. It returns three fields per entry
-// and nothing else: no token, no nonce, no action hash, on any code path,
-// for any caller, bridge paths included (§5.24).
+// GetPending implements ApprovalQueue. It returns the bridge-safe fields
+// per entry and nothing else: no token, no nonce, no action hash, on any
+// code path, for any caller, bridge paths included (§5.24). ActionClass
+// (R-21.230) is resolved per entry, outside the queue's own lock, from the
+// SAME registered capability revalidate() already re-reads at redemption —
+// never a second, independently-guessed classification.
 func (q *StoreApprovals) GetPending(ctx context.Context) ([]PendingEntry, error) {
 	if q == nil {
 		return nil, cascade.New(cascade.KindInvalidInput, "policy: nil approval queue")
 	}
 	q.mu.Lock()
 	q.pruneLocked(q.cfg.Clock.Now().UTC())
-	out := make([]PendingEntry, 0, len(q.order))
+	type row struct {
+		requestID, summary, capability string
+		expires                        time.Time
+	}
+	rows := make([]row, 0, len(q.order))
 	for _, id := range q.order {
 		e, ok := q.entries[id]
 		if !ok || e.state != ApprovalPending {
 			continue
 		}
-		out = append(out, PendingEntry{
-			RequestID: e.requestID, Summary: e.summary, ExpiresAt: e.expires,
-		})
+		rows = append(rows, row{requestID: e.requestID, summary: e.summary, capability: e.capability, expires: e.expires})
 	}
 	q.mu.Unlock()
+	out := make([]PendingEntry, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, PendingEntry{
+			RequestID: r.requestID, Summary: r.summary, ExpiresAt: r.expires,
+			ActionClass: q.classOf(ctx, r.capability),
+		})
+	}
 	q.recordExpired(ctx)
 	return out, nil
+}
+
+// classOf resolves capability's action class through the SAME registry
+// Lookup revalidate() uses, outside the queue's own mutex (Lookup is a
+// caller-owned seam and must never run under q.mu). A capability that no
+// longer resolves (de-registered since Enqueue) reads as the invalid zero
+// value, which RemoteApprovabilityMatrix.CanBridge already refuses —
+// fail-closed, never a permissive guess.
+func (q *StoreApprovals) classOf(ctx context.Context, capability string) ActionClass {
+	if q.cfg.Registry == nil {
+		return ActionClass(0)
+	}
+	reg, err := q.cfg.Registry.Lookup(ctx, capability)
+	if err != nil {
+		return ActionClass(0)
+	}
+	return reg.Class()
 }
 
 // Decide implements ApprovalQueue, one element at a time and in the order

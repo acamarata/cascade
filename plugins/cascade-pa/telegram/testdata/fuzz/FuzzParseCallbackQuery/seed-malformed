@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"id\":\"900000103\",\"from\":{\"id\":555000111,\"is_bot\":false,\"first_name\":")

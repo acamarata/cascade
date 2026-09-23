@@ -213,3 +213,68 @@ func (unconfiguredDeviceRegistrar) RegisterPairedDevice(
 ) (string, error) {
 	return "", ErrNoDeviceRegistrar
 }
+
+// PendingApproval is the bridge-safe projection of one queued approval
+// (P1-E23-W5-S48-T4): the §5.24 GetPending fields, plus the HOST's own
+// RemoteApprovabilityMatrix.CanBridge verdict for the entry's action
+// class. Bridgeable is computed by the host composition root, which is
+// the only place allowed to import internal/policy (Art.10.2) and call
+// the real matrix; this package never re-derives or guesses it
+// (R-16.60c). No token, nonce or action/params digest ever reaches this
+// struct.
+type PendingApproval struct {
+	RequestID  string
+	Summary    string
+	ExpiresAt  time.Time
+	Bridgeable bool
+}
+
+// ApprovalService is what the bridge's inline-button handler is given:
+// server-side lookup and server-side redemption of an §5.24 approval. The
+// host implements it over internal/policy's approval.show / approval.grant
+// / approval.deny verbs (Art.10.2); this package cannot import
+// internal/policy directly, so it never sees a signed token, a nonce or an
+// action/params digest — those are fetched and submitted entirely on the
+// host side (R-21.230).
+type ApprovalService interface {
+	// ShowPending resolves requestID server-side, or refuses (unknown,
+	// expired, or the request/queue verb itself unavailable). Bridgeable
+	// is the host's own CanBridge verdict.
+	ShowPending(ctx context.Context, requestID string) (PendingApproval, error)
+	// Grant redeems requestID as an approval. The signed token is loaded
+	// and submitted entirely by the host (R-21.230); this call carries no
+	// token bytes because this package never holds any.
+	Grant(ctx context.Context, requestID string) error
+	// Deny records a refusal for requestID.
+	Deny(ctx context.Context, requestID string) error
+}
+
+// ErrNoApprovalService is the fail-closed refusal an unwired host gets:
+// every ShowPending/Grant/Deny call refuses rather than being answered by
+// a permissive default.
+var ErrNoApprovalService = cascade.New(cascade.KindUnavailable,
+	"cascade-pa: no approval service is wired; the bridge refuses every approval decision")
+
+type unconfiguredApprovalService struct{}
+
+func (unconfiguredApprovalService) ShowPending(context.Context, string) (PendingApproval, error) {
+	return PendingApproval{}, ErrNoApprovalService
+}
+
+func (unconfiguredApprovalService) Grant(context.Context, string) error {
+	return ErrNoApprovalService
+}
+
+func (unconfiguredApprovalService) Deny(context.Context, string) error {
+	return ErrNoApprovalService
+}
+
+// ApprovalServiceOrRefuseAll substitutes the fail-closed default for a nil
+// service, mirroring ElevationOrRefuseAll's and NewBindingStore's own
+// nil-resolves-to-refusing-default shape.
+func ApprovalServiceOrRefuseAll(s ApprovalService) ApprovalService {
+	if s == nil {
+		return unconfiguredApprovalService{}
+	}
+	return s
+}

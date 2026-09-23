@@ -3,15 +3,18 @@ package plugins
 import (
 	"context"
 	"encoding/json"
-	"strconv"
 
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/plugins/cascade-pa/telegram"
 )
 
-// Purpose (this file): the bridge's JOURNAL — where a pairing lockout and an
-//   admitted-but-unroutable message are recorded, so neither is a thing that
-//   happens silently on a real host.
+// Purpose (this file): the bridge's JOURNAL — where a pairing lockout, a
+//   quarantined secret and an unauthorized approval attempt are recorded, so
+//   none of them is a thing that happens silently on a real host. (The
+//   unroutedHandler/EventKindBridgeMessageUnrouted "nothing is wired yet"
+//   placeholder this file held before W/S-48.T2's chat route landed is
+//   removed: NewCascadePABridgeChatHandler is the real HandlerText
+//   registration now, so an admitted message always has somewhere to go.)
 //
 // WHY THE EVENT BUS AND NOT internal/audit (recorded, not papered over).
 //   internal/audit is the tree's other candidate and the better long-term home,
@@ -28,8 +31,8 @@ import (
 //   follow-up; it is named in this ticket's journal rather than assumed.
 //
 // Inputs: the daemon's live *events.Bus (as the narrow Publisher seam below).
-// Outputs: one persisted event per lockout and per unroutable admitted
-//   message.
+// Outputs: one persisted event per lockout, quarantine, and unauthorized
+//   approval attempt.
 //
 // Constraints:
 //   - NO MESSAGE CONTENT IN A PAYLOAD. A bridge message is untrusted,
@@ -51,15 +54,11 @@ const bridgeEventNamespace = "bridge"
 // bridgeEventSource identifies the publisher on the bus.
 const bridgeEventSource = "cascade-pa/telegram"
 
-// The two kinds this file publishes.
+// The three kinds this file publishes.
 const (
 	// EventKindBridgePairLockout records the attempt that burned a pairing
 	// code under R-16.37's five-wrong-candidate ceiling.
 	EventKindBridgePairLockout events.EventKind = "bridge.pair_lockout"
-	// EventKindBridgeMessageUnrouted records a message that passed every
-	// admission gate and still had nowhere to go, because no chat route is
-	// registered yet (W/S-48.T2 registers the real one).
-	EventKindBridgeMessageUnrouted events.EventKind = "bridge.message_unrouted"
 	// EventKindBridgeSecretQuarantined records a R-21.105 quarantine: a
 	// secret-shaped bridge message, or an outbound write attempt, refused
 	// by refuse.go's gate (P1-E23-W5-S48-T3). Its value is
@@ -70,12 +69,13 @@ const (
 	// variant of the dotted "bridge.secret.quarantined" the ticket's AC
 	// and every doc name).
 	EventKindBridgeSecretQuarantined events.EventKind = telegram.QuarantineKind
+	// EventKindBridgeApprovalUnauthorized records R-21.210's STEP 0
+	// rejection: a callback_query.from.id that does not match the
+	// current paired-device binding (P1-E23-W5-S48-T4). Its value is
+	// telegram.ApprovalUnauthorizedKind itself, for the identical reason
+	// EventKindBridgeSecretQuarantined above takes telegram.QuarantineKind.
+	EventKindBridgeApprovalUnauthorized events.EventKind = telegram.ApprovalUnauthorizedKind
 )
-
-// unroutedDetail is the operator-facing explanation the unrouted record
-// carries. It names the ticket that closes the gap, so the record answers
-// "why did my message do nothing" without anybody reading this file.
-const unroutedDetail = "bridge: message admitted, no chat route registered (S-48.T2)"
 
 // BridgeEventPublisher is the journal seam. *events.Bus satisfies it; it is
 // declared narrowly here so the bridge's recorders can be driven by a test
@@ -112,48 +112,6 @@ func (j *bridgeJournal) EmitLockout(ctx context.Context, e telegram.LockoutEvent
 	j.publish(ctx, EventKindBridgePairLockout, payload)
 }
 
-// unroutedHandler is the telegram.Handler the composition root registers for
-// BOTH transports until W/S-48.T2's chat route lands.
-//
-// It exists so that "admitted and then nothing happened" is a recorded fact
-// rather than an invisible one: without a registered handler the module drops
-// an admitted message at its dispatch site, which is indistinguishable from a
-// refusal to everybody outside the process.
-func (j *bridgeJournal) unroutedHandler(kind string) telegram.Handler {
-	return func(ctx context.Context, msg telegram.InboundMessage) error {
-		payload, err := json.Marshal(struct {
-			ChatRef  string `json:"chat_ref"`
-			UpdateID string `json:"update_id"`
-			Handler  string `json:"handler_kind"`
-			Origin   string `json:"origin"`
-			Detail   string `json:"detail"`
-		}{
-			ChatRef: correlationOf(msg), UpdateID: strconv.FormatInt(msg.Update.UpdateID, 10),
-			Handler: kind, Origin: msg.Origin, Detail: unroutedDetail,
-		})
-		if err != nil {
-			return nil
-		}
-		j.publish(ctx, EventKindBridgeMessageUnrouted, payload)
-		return nil
-	}
-}
-
-// correlationOf reports the chat or callback the update arrived on, as a
-// correlation id. It is NOT the message text and not the sender's name: an id is
-// enough to line the record up against a bot's own logs. An update that is
-// neither reads "unknown" rather than an empty field, so a record never looks
-// like it lost a value it never had.
-func correlationOf(msg telegram.InboundMessage) string {
-	if msg.Update.Message != nil {
-		return "chat:" + strconv.FormatInt(msg.Update.Message.Chat.ID, 10)
-	}
-	if msg.Update.CallbackQuery != nil {
-		return "callback:" + msg.Update.CallbackQuery.ID
-	}
-	return "unknown"
-}
-
 // publish writes one record. WithoutCancel, so a shutdown mid-refusal still
 // records what happened; the error is deliberately not propagated into a
 // dispatch decision (see this file's header).
@@ -184,9 +142,28 @@ func (j *bridgeJournal) EmitQuarantine(ctx context.Context, e telegram.Quarantin
 	j.publish(ctx, EventKindBridgeSecretQuarantined, payload)
 }
 
+// marshalApprovalUnauthorizedEvent is json.Marshal, indirected for the same
+// dead-branch reason marshalQuarantineEvent is: ApprovalUnauthorizedEvent's
+// real fields are plain strings and a time.Time, so a real populated value
+// can never fail to encode.
+var marshalApprovalUnauthorizedEvent = json.Marshal
+
+// EmitApprovalUnauthorized implements telegram.ApprovalEventSink over the
+// bus: it maps telegram.ApprovalUnauthorizedKind onto the real, typed
+// EventKind above and republishes the event's own already-safe fields
+// verbatim (P1-E23-W5-S48-T4).
+func (j *bridgeJournal) EmitApprovalUnauthorized(ctx context.Context, e telegram.ApprovalUnauthorizedEvent) {
+	payload, err := marshalApprovalUnauthorizedEvent(e)
+	if err != nil {
+		return
+	}
+	j.publish(ctx, EventKindBridgeApprovalUnauthorized, payload)
+}
+
 // compile-time proof the journal really is the sink the plugin declares, so a
 // signature change on either side fails here rather than at the wiring site.
 var (
-	_ telegram.LockoutSink    = (*bridgeJournal)(nil)
-	_ telegram.QuarantineSink = (*bridgeJournal)(nil)
+	_ telegram.LockoutSink       = (*bridgeJournal)(nil)
+	_ telegram.QuarantineSink    = (*bridgeJournal)(nil)
+	_ telegram.ApprovalEventSink = (*bridgeJournal)(nil)
 )

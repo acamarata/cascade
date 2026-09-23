@@ -17,11 +17,15 @@
 //
 //	Verdict — its iota starts at 1, so an entry whose state was never set
 //	does not read as approved. PendingEntry is the §5.24 remote-approvable
-//	payload and carries three fields: adding a fourth is a security change,
-//	not a convenience, because everything this struct holds can cross a
-//	bridge. The rung an approver saw therefore lives INSIDE Summary rather
-//	than beside it, so the string displayed to a human is the same string a
-//	decision is checked against.
+//	payload: every field on it is deliberately safe to cross a bridge, which
+//	is what makes adding one a security change, not a convenience. The rung
+//	an approver saw therefore lives INSIDE Summary rather than beside it, so
+//	the string displayed to a human is the same string a decision is checked
+//	against. ActionClass (R-21.230, P1-E23-W5-S48-T4) is the one addition
+//	past the original three fields: it is non-secret routing metadata (the
+//	registered capability's own class), not a token, nonce or digest, and it
+//	exists so RemoteApprovabilityMatrix.CanBridge has something to gate on
+//	without a second, re-derived classifier living anywhere else.
 //
 // SPORT: internal/policy ApprovalState/ADDED, ApprovalToken/ADDED,
 //
@@ -145,11 +149,12 @@ type ApprovalRecorder interface {
 }
 
 // PendingEntry is the ONLY shape the queue hands any caller, bridge paths
-// included (§5.24). It carries three fields and there is no method on it
-// that reaches the rest of the entry: the token, the nonce and the action
-// hash stay in daemon memory, and a bridge carries the request id alone.
+// included (§5.24). There is no method on it that reaches the rest of the
+// entry: the token, the nonce and the action hash stay in daemon memory,
+// and a bridge carries the request id (plus, per R-21.230, the non-secret
+// ActionClass a gate can check) rather than the entry itself.
 //
-// The rung the approver saw is inside Summary, not a fourth field, so the
+// The rung the approver saw is inside Summary, not a separate field, so the
 // string a surface displays IS the thing a decision is checked against.
 type PendingEntry struct {
 	// RequestID identifies the queued action.
@@ -158,4 +163,11 @@ type PendingEntry struct {
 	Summary string `json:"action_summary"`
 	// ExpiresAt is when the approval stops being redeemable.
 	ExpiresAt time.Time `json:"exp"`
+	// ActionClass is the entry's own action class (R-21.230, 21-T0-RULINGS-R21.md
+	// §G.3): non-secret routing metadata, resolved from the registered
+	// capability's own class (GetPending), never a token, nonce or action/params
+	// digest. It exists so a remote caller (a bridge) can ask
+	// RemoteApprovabilityMatrix.CanBridge(entry.ActionClass) without a second,
+	// re-derived classifier: this is still the queue's one class, not a new one.
+	ActionClass ActionClass `json:"action_class"`
 }

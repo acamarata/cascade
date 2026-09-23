@@ -3,9 +3,10 @@ package plugins
 import (
 	"context"
 	"crypto/rand"
-	"io"
 	"time"
 
+	"github.com/acamarata/cascade/internal/client"
+	"github.com/acamarata/cascade/internal/policy"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -128,11 +129,15 @@ type BridgeRuntime struct {
 	// default (T0 D1, P1-E23-W5-S48-T3) — evidence, like sink above.
 	scanner telegram.SecretScanner
 	// Routes names the telegram handler kinds this wiring actually registered
-	// on the module, filled by the same loop that registers them. It is the
+	// on the module: HandlerText (the S-48.T2 chat bridge registers itself
+	// inside NewCascadePABridgeChatHandler) and HandlerCallbackQuery (the
+	// S-48.T4 approval handler registered right after it). It is the
 	// wiring's own evidence: a module with no route drops every admitted
 	// message inside itself, which nothing outside the process can see, so
 	// "which routes did the composition root mount" has to be assertable.
 	Routes []string
+	// ApprovalBridge is the §5.24 producer leg (FIX-0); WireApprovalBridge arms it.
+	ApprovalBridge policy.BridgeNotifier
 }
 
 // NewCascadePABridge assembles the bridge for deps.DataDir.
@@ -199,66 +204,43 @@ func enabledBridge(ctx context.Context, deps BridgeDeps, token string) (*BridgeR
 	stores := cascadepa.NewStores(deps.Clock, newBridgeDeviceRegistrar(deps.DataDir), state, pairKey)
 	journal := newBridgeJournal(deps.Events)
 	module := telegram.NewModule(token, nil, gate, bridgeElevationPolicy{}, stores, journal, scanner, journal)
-	// BOTH transports get a route NOW, so an admitted message is recorded
-	// rather than dropped inside the module with no trace. W/S-48.T2 replaces
-	// these with the real chat forwarder (plugins/cascade-pa/telegram/chat.go).
-	routes := []string{telegram.HandlerText, telegram.HandlerCallbackQuery}
-	for _, kind := range routes {
-		module.RegisterHandler(kind, journal.unroutedHandler(kind))
-	}
 	subject := telegram.SubjectFromToken(token)
-	return &BridgeRuntime{
+	// FIX-0: the §5.24 producer leg (WireApprovalBridge arms it).
+	approvalLeg, err := newApprovalBridgeLeg(subject, state, stores.Callback, module.Client(), deps.Clock)
+	if err != nil {
+		return nil, closeStateOnError(state, err)
+	}
+	// HandlerText: the S-48.T2 chat bridge (registers itself); HandlerCallbackQuery: S-48.T4's approval flow.
+	if _, err := NewCascadePABridgeChatHandler(ctx, ChatWiringDeps{DataDir: deps.DataDir, Events: deps.Events}, module, stores.Binding, subject, deps.Clock); err != nil {
+		return nil, closeStateOnError(state, err)
+	}
+	module.RegisterHandler(telegram.HandlerCallbackQuery, telegram.NewApprovalHandler(telegram.ApprovalHandlerDeps{
 		Subject:   subject,
-		Start:     module.Start,
-		Stop:      closeStateAfterStop(module.Stop, state),
-		IssueCode: bridgeIssuer(stores, deps.Clock, subject),
-		sink:      journal,
-		scanner:   scanner,
-		Routes:    routes,
+		Binding:   stores.Binding,
+		Callbacks: stores.Callback,
+		Approvals: newTelegramApprovalService(client.UnixDialer, telegramApprovalClientTimeout, runtime.NewDefaultPathProvider),
+		Events:    journal,
+		Clock:     deps.Clock,
+		Answer:    module.Answer,
+	}))
+	routes := []string{telegram.HandlerText, telegram.HandlerCallbackQuery}
+	return &BridgeRuntime{
+		Subject:        subject,
+		Start:          module.Start,
+		Stop:           closeStateAfterStop(module.Stop, state),
+		IssueCode:      bridgeIssuer(stores, deps.Clock, subject),
+		sink:           journal,
+		scanner:        scanner,
+		Routes:         routes,
+		ApprovalBridge: approvalLeg,
 	}, nil
 }
 
-// closeStateOnError releases the durable state when a later assembly step
-// refuses, so a construction error never leaves the SQLite file open: the
-// windows lane cannot remove a TempDir while a handle is held, and a real
-// daemon would hold the exclusive lock across a retry. The original error
-// is returned unchanged; a close failure is folded in as context.
-func closeStateOnError(state cascadepa.BridgeState, err error) error {
-	closer, ok := state.(io.Closer)
-	if !ok {
-		return err
-	}
-	if closeErr := closer.Close(); closeErr != nil {
-		return cascade.Wrapf(cascade.KindUnavailable, err, "cascade-pa bridge: assembly failed and closing the state also failed: %v", closeErr)
-	}
-	return err
-}
-
-// closeStateAfterStop wraps stop so the durable state openBridgeState opened
-// is released once the module has actually drained, not before. The daemon
-// reaches this through internal/daemon/subsystem_bridge.go's drainBridge,
-// which already blocks until stop returns; leaving the handle open past that
-// point is the exact defect Windows CI surfaces first, because it refuses to
-// remove a temp directory that still holds cascade.db open.
-//
-// state is typed cascadepa.BridgeState (the plugin-facing seam, which does
-// not know it is SQLite); only the adapter openBridgeState actually returns
-// implements io.Closer, so a state built some other way (a test double) is
-// left alone rather than assumed closeable.
-func closeStateAfterStop(stop func(context.Context) error, state cascadepa.BridgeState) func(context.Context) error {
-	closer, ok := state.(io.Closer)
-	if !ok {
-		return stop
-	}
-	return func(ctx context.Context) error {
-		stopErr := stop(ctx)
-		closeErr := closer.Close()
-		if stopErr != nil {
-			return stopErr
-		}
-		return closeErr
-	}
-}
+// closeStateOnError and closeStateAfterStop (the durable-state close helpers
+// this file's enabledBridge and BridgeRuntime.Stop use) live in the sibling
+// file cascadepa_bridge_state_close.go — moved there to keep this file under
+// the 300-line cap (P1-E23-W5-S48-T4 producer fix, mechanical split, no
+// behaviour change).
 
 // bridgeIssuer builds the pa.pair_code implementation for a CONFIGURED bridge.
 //

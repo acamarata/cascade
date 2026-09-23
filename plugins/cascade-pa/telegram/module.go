@@ -297,4 +297,4 @@ func (m *TelegramModule) dispatchCallback(ctx context.Context, u Update) {
 	}
 }
 
-// reply and answer live in refuse.go, beside guardOutbound (Art.10).
+// reply/answer live in refuse.go; exported Answer lives in approval_auth.go.

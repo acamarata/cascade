@@ -115,6 +115,14 @@ type ApprovalQueueConfig struct {
 	// Minter mints tokens. Optional; a crypto/rand minter is used when it
 	// is absent.
 	Minter TokenMinter
+	// Bridge, when set, is notified once per freshly admitted entry so the
+	// §5.24 producer leg (bridge_leg.go, P1-E23-W5-S48-T4) can attempt to
+	// send it across a bridge. Optional: a queue with no bridge still
+	// enforces every admission rule, it just never notifies anything
+	// remote. This is the queue's "pending-entry event" — there was none
+	// before this field, so a poll of GetPending was the only other
+	// option, and D4's ruling names this hook as the honest alternative.
+	Bridge BridgeNotifier
 }
 
 // approvalEntry is one queued action, in daemon memory only.
@@ -204,6 +212,33 @@ func NewApprovalQueue(cfg ApprovalQueueConfig) (*StoreApprovals, error) {
 		ledger:  ledger,
 		entries: map[string]*approvalEntry{},
 	}, nil
+}
+
+// SetBridge wires a BridgeNotifier into an already-constructed queue, for
+// the composition root that cannot supply cfg.Bridge at NewApprovalQueue
+// time because the bridge sender's own collaborators (a plugin's chat
+// state, its callback store, its client) are not ready until later in
+// startup (cmd/cascade/daemon_unix_policy.go, P1-E23-W5-S48-T4 FIX-0).
+//
+// A nil notifier is refused: the whole point of calling this is to arm
+// notification, and a silent no-op would leave the queue looking wired
+// while notifyBridge keeps returning early. A second call is refused too
+// — the queue does not pick a winner between two bridges, and a caller
+// that means to replace one should build a new queue instead.
+func (q *StoreApprovals) SetBridge(b BridgeNotifier) error {
+	if q == nil {
+		return cascade.New(cascade.KindInvalidInput, "policy: nil approval queue")
+	}
+	if b == nil {
+		return cascade.New(cascade.KindInvalidInput, "policy: SetBridge requires a non-nil notifier")
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.cfg.Bridge != nil {
+		return cascade.New(cascade.KindConflict, "policy: a bridge is already wired")
+	}
+	q.cfg.Bridge = b
+	return nil
 }
 
 // resolveBatching fills in the 08 §3 defaults for an unset value and
