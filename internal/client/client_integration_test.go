@@ -25,8 +25,10 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/daemon"
+	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -206,5 +208,93 @@ func TestClient_Do_MalformedResponse(t *testing.T) {
 	}
 	if !cascade.HasKind(err, cascade.KindInternal) {
 		t.Errorf("err = %v, want KindInternal", err)
+	}
+}
+
+// guardTestEventKind is the one event kind this test's own bus namespace
+// subscribes to (mirrors stream_integration_test.go's testEventKind).
+const guardTestEventKind = events.EventKind("client_guard_test.event")
+
+func knownGuardTestEventKind(k events.EventKind) bool { return k == guardTestEventKind }
+
+// startGuardTestServer builds the real rpc.Handler/SSE pipeline
+// TestCLIClientPassesLocalRequestGuard exercises, registering t.Cleanup
+// for the temp dir, bus and server, and returns the socket path plus bus.
+func startGuardTestServer(t *testing.T) (sockPath string, bus *events.Bus) {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "clientguard")
+	if err != nil {
+		t.Fatalf("mkdir temp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	sockPath = filepath.Join(dir, "d.sock")
+	clock := runtime.NewSystemClock()
+	bus = events.New(storetest.NewMemStore(), clock)
+	t.Cleanup(func() { _ = bus.Close() })
+	sse := rpc.NewSSEHandler(bus, "client-guard-ns", knownGuardTestEventKind, clock)
+	provider := daemon.NewStatusProvider(clock, time.Now(), sockPath, nil, nil)
+	registry := rpc.NewRegistry()
+	registry.Register(daemon.StatusMethod, provider.Handler())
+
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	srv := &http.Server{Handler: rpc.NewHandlerWithSSE(registry, sse), ConnContext: rpc.ConnContext}
+	go func() { _ = srv.Serve(ln) }()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(ctx)
+	})
+	return sockPath, bus
+}
+
+// TestCLIClientPassesLocalRequestGuard proves the production
+// internal/client Client.Status POST and an event stream through the same
+// client both succeed against the REAL rpc.NewHandlerWithSSE pipeline
+// once internal/rpc's local request guard (request_guard.go,
+// P1-E04-W6-S146-T1) runs in front of both routes — this is the
+// production caller's own request shape (Host "unix" from unixBaseURL,
+// Content-Type "application/json" set by exchange(), no Origin/Sec-Fetch
+// headers), so both calls must clear the guard unchanged.
+func TestCLIClientPassesLocalRequestGuard(t *testing.T) {
+	sockPath, bus := startGuardTestServer(t)
+
+	dial := func(ctx context.Context, p string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", p)
+	}
+
+	c := New(sockPath, dial, 10*time.Second)
+	res, statusErr := c.Status(context.Background())
+	if statusErr != nil {
+		t.Fatalf("Status: unexpected error through the local request guard: %v", statusErr)
+	}
+	if res.Health != "ok" {
+		t.Errorf("Health = %q, want %q", res.Health, "ok")
+	}
+
+	sc := newStreamClient(sockPath, dial)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ch, closeFn, openErr := sc.open(ctx, "", "")
+	if openErr != nil {
+		t.Fatalf("open: unexpected error through the local request guard: %v", openErr)
+	}
+	defer closeFn()
+
+	if _, pubErr := bus.Publish(ctx, "client-guard-ns", guardTestEventKind, "src", []byte("hello")); pubErr != nil {
+		t.Fatalf("Publish: %v", pubErr)
+	}
+	select {
+	case ev, ok := <-ch:
+		if !ok {
+			t.Fatal("event channel closed before an event arrived")
+		}
+		if ev.Data == "" {
+			t.Error("event Data is empty")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for the published event through the local request guard")
 	}
 }

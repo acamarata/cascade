@@ -3,7 +3,47 @@
 The daemon exposes two routes over one HTTP/1.1 server bound to a local
 unix socket: `POST /rpc` for JSON-RPC 2.0 calls, and `GET /events` for a
 Server-Sent Events (SSE) stream of daemon events. Both routes run behind
-the same peer-UID ownership check: only the socket owner may connect.
+the same local request guard, described below: only the socket owner may
+connect, and only from a request shaped like a first-party local client.
+
+## Local request guard
+
+`internal/rpc`'s `guardLocalRequest` (`request_guard.go`) runs for both
+`POST /rpc` and `GET /events`, before any JSON-RPC parse, SSE subscription
+or handshake. It checks, in order:
+
+1. **Owner-only.** The connection's peer credential (resolved once per
+   accepted connection by `ConnContext`, the same mechanism both routes
+   have always used) must resolve and its UID must equal the daemon's own
+   UID. An unresolved peer credential or a non-owner UID is refused —
+   fail-closed, never "unknown means allow."
+2. **No browser shape.** The request must not carry any marker of having
+   reached the socket from a browser rather than a first-party local
+   client: an `Origin` header (any value, including the literal `"null"`
+   browsers send for opaque origins); a `Sec-Fetch-Site` or
+   `Sec-Fetch-Mode` header (browsers send these on same-origin and
+   no-cors requests too, where `Origin` can be absent); a `Host` header
+   other than exactly `unix` or `cascade.sock` (the two values every
+   first-party client sends today — the CLI SDK, hook packs, the node
+   heartbeat tunnel sender, and the macOS widget's `Network.framework`
+   transport all send one of these two, never `localhost`, which is what
+   a browser reaching a loopback TCP bridge, e.g. `ssh -L`/`socat`, or a
+   DNS-rebinding page would send instead); or, on a `POST`, a
+   `Content-Type` that does not parse to media type `application/json`
+   (absent, unparsable, `text/plain`, form or multipart data all refuse —
+   a parameter such as `charset=utf-8` is accepted).
+
+A refused request receives a plain HTTP `403` with a fixed body —
+`forbidden: socket peer is not the daemon owner` or `forbidden:
+browser-shaped request refused` — never a JSON-RPC error envelope and
+never an echo of anything from the request itself. Nothing past the guard
+runs for a refused request: no body read, no JSON-RPC `Parse`, no SSE
+subscription, no `text/event-stream` header.
+
+This guard covers the local unix socket only (the daemon's own socket and
+`cascade mcp serve --socket`'s dedicated socket both run the same
+`internal/rpc.Handler`/`ConnContext` pipeline). A remote (network)
+listener is out of scope here; see the remote-transport work for that.
 
 ## POST /rpc
 

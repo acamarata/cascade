@@ -177,17 +177,23 @@ func TestSSEHandler_DeliveryError_ClosesStream(t *testing.T) {
 
 // TestHandler_NewHandlerWithSSE_MountsGETEvents proves handler.go's mount
 // point actually dispatches a real GET /events request to the SSEHandler
-// it was built with, alongside the POST /rpc route T3 already tests.
+// it was built with, alongside the POST /rpc route T3 already tests. It
+// carries the owner peer credential and Host "unix" so it clears
+// request_guard.go's guardLocalRequest (P1-E04-W6-S146-T1) the same way a
+// first-party client does — this test proves the mount point, not the
+// guard, which request_guard_test.go covers on its own.
 func TestHandler_NewHandlerWithSSE_MountsGETEvents(t *testing.T) {
+	withOwnerUID(t, 501)
 	bus, clock := newTestBus()
 	t.Cleanup(func() { _ = bus.Close() })
 	sse := NewSSEHandler(bus, "ns", knownAB, clock)
 	h := NewHandlerWithSSE(NewRegistry(), sse)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctxWithPeerCred(501, true))
 	defer cancel()
 	w := newSyncRecorder()
 	req := httptest.NewRequest("GET", EventsPath, nil).WithContext(ctx)
+	req.Host = "unix"
 	done := make(chan struct{})
 	go func() { h.ServeHTTP(w, req); close(done) }()
 	waitFor(t, func() bool { _, _, wrote := w.snapshot(); return wrote })

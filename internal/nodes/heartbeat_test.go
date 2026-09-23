@@ -207,3 +207,23 @@ func TestNewTunnelHeartbeatSender_RoundTrip(t *testing.T) {
 		t.Fatal("expected a request to be written to the tunnel conn")
 	}
 }
+
+// TestNewTunnelHeartbeatSender_SetsJSONContentType proves the sink sets
+// Content-Type: application/json on the wire (P1-E04-W6-S146-T1) —
+// internal/rpc's local request guard refuses a POST whose Content-Type
+// does not parse to application/json as browser-shaped, and this sender
+// was the one first-party caller that sent none. A raw byte check on the
+// written request (no net/http import needed) proves the header line
+// actually reached the wire, not just some in-memory request value.
+func TestNewTunnelHeartbeatSender_SetsJSONContentType(t *testing.T) {
+	body := `{"jsonrpc":"2.0","id":1,"result":{"node_id":"n"}}`
+	resp := fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n%s", len(body), body)
+	conn := &bufConn{resp: bytes.NewReader([]byte(resp))}
+	sender := NewTunnelHeartbeatSender(func(context.Context) (Conn, error) { return conn, nil })
+	if err := sender(context.Background(), HeartbeatFrame{NodeID: "n", EnrollmentID: "e", Sequence: 1}); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	if !bytes.Contains(conn.written.Bytes(), []byte("Content-Type: application/json\r\n")) {
+		t.Fatalf("written request must carry the Content-Type header line, got:\n%s", conn.written.String())
+	}
+}

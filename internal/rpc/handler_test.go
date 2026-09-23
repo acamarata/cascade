@@ -35,8 +35,14 @@ func newTestHandler() (*Handler, *Registry) {
 	return NewHandler(reg), reg
 }
 
+// doRPC sends body as a POST to RPCPath. It sets Host "unix" and
+// Content-Type "application/json" so every caller keeps its pre-guard
+// meaning (request_guard.go, P1-E04-W6-S146-T1, refuses a foreign Host or
+// a non-JSON POST before any of these tests' assertions would run).
 func doRPC(ctx context.Context, h *Handler, body string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest("POST", RPCPath, strings.NewReader(body)).WithContext(ctx)
+	req.Host = "unix"
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return rec

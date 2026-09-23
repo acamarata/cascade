@@ -262,6 +262,12 @@ func NewTunnelHeartbeatSender(dial func(ctx context.Context) (Conn, error)) Hear
 			return cascade.Wrap(cascade.KindInternal, err, "nodes: heartbeat request build failed")
 		}
 		req.ContentLength = int64(len(body))
+		// Set explicitly (P1-E04-W6-S146-T1): every other first-party
+		// client already sends this, and internal/rpc's local request
+		// guard (request_guard.go) refuses any POST whose Content-Type
+		// does not parse to "application/json" as browser-shaped, before
+		// this frame would ever reach node.heartbeat's handler.
+		req.Header.Set("Content-Type", "application/json")
 		if err := req.Write(conn); err != nil {
 			return cascade.Wrap(cascade.KindUnavailable, err, "nodes: heartbeat send over tunnel failed")
 		}

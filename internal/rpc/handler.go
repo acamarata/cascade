@@ -74,26 +74,29 @@ func NewHandlerWithSSE(registry *Registry, sse *SSEHandler) *Handler {
 	return &Handler{registry: registry, sse: sse}
 }
 
-// ServeHTTP implements http.Handler. POST RPCPath follows this ticket's
-// contract order: UID check (via ConnContext) -> HTTP 403 before the
-// JSON-RPC layer -> Parse -> version-skew check -> elevation middleware
-// (inside Registry.Dispatch's middleware chain) -> handler dispatch. GET
-// EventsPath delegates to h.sse, which runs its own UID-independent SSE
-// handshake (the SSE bridge has no elevation/version-skew concerns of its
-// own — it is a read-only event tail).
+// ServeHTTP implements http.Handler. Routing comes first: a path/method
+// pair other than POST RPCPath or GET EventsPath is a 404, exactly as
+// before this ticket, and guardLocalRequest never runs for it. Both
+// recognized routes then run through guardLocalRequest (request_guard.go,
+// P1-E04-W6-S146-T1) BEFORE any SSE dispatch, body read or JSON-RPC parse
+// — GET /events used to reach h.sse before any owner check at all
+// (R-14.312), which this ticket closes; POST RPCPath's inline UID check
+// is replaced by the same guard rather than duplicated. POST RPCPath then
+// follows its existing contract order: Parse -> version-skew check ->
+// elevation middleware (inside Registry.Dispatch's middleware chain) ->
+// handler dispatch.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if h.sse != nil && r.URL.Path == EventsPath && r.Method == http.MethodGet {
-		h.sse.ServeHTTP(w, r)
-		return
-	}
-	if r.URL.Path != RPCPath || r.Method != http.MethodPost {
+	isEvents := h.sse != nil && r.URL.Path == EventsPath && r.Method == http.MethodGet
+	isRPC := r.URL.Path == RPCPath && r.Method == http.MethodPost
+	if !isEvents && !isRPC {
 		http.NotFound(w, r)
 		return
 	}
-
-	cred, _ := r.Context().Value(peerCredKey{}).(peerCred)
-	if !cred.ok || cred.uid != ownerUID() {
-		http.Error(w, "forbidden: socket peer is not the daemon owner", http.StatusForbidden)
+	if !guardLocalRequest(w, r) {
+		return
+	}
+	if isEvents {
+		h.sse.ServeHTTP(w, r)
 		return
 	}
 

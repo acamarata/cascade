@@ -147,7 +147,15 @@ func serveSocketReal(ctx context.Context, paths runtime.PathProvider, tools *mcp
 		return cascade.Wrap(cascade.KindUnavailable, err, "cascade mcp serve --socket: listen failed")
 	}
 	defer func() { _ = ln.Close() }()
-	srv := &http.Server{Handler: rpc.NewHandler(registry)}
+	// ConnContext is required (P1-E04-W6-S146-T1): without it,
+	// rpc.Handler's ConnContext-derived peerCred is never resolved for any
+	// connection, so guardLocalRequest (request_guard.go) refuses every
+	// request fail-closed — correct in direction, but this socket was
+	// meant to serve its owner, not refuse them. Wiring the same
+	// peer-credential resolver the daemon socket uses (handler.go's
+	// ConnContext) makes this socket apply the identical owner-UID and
+	// browser-shaped-request guard, never a laxer one.
+	srv := &http.Server{Handler: rpc.NewHandler(registry), ConnContext: rpc.ConnContext}
 	go func() {
 		<-ctx.Done()
 		_ = srv.Close()
