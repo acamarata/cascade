@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-23T10:01:49Z",
+  "generated_at": "2026-09-23T11:36:00Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -22794,6 +22794,27 @@
           "raw": "jobs/acceptance/ADD (P1-E29-W6-S60-T4)."
         },
         {
+          "file": "internal/jobs/acceptance_resume_integration_rig_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T4",
+          "raw": "jobs/acceptance/ADD (P1-E29-W6-S60-T4)."
+        },
+        {
+          "file": "internal/jobs/acceptance_resume_integration_test.go",
+          "line": 42,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T4",
+          "raw": "jobs/acceptance/ADD (P1-E29-W6-S60-T4)."
+        },
+        {
+          "file": "internal/jobs/acceptance_rpc_integration_test.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E29-W6-S60-T4",
+          "raw": "jobs/acceptance/ADD (P1-E29-W6-S60-T4)."
+        },
+        {
           "file": "internal/jobs/acceptance_test.go",
           "line": 24,
           "status": "ADD",
@@ -22881,6 +22902,21 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "jobs/completion-gate/FIX",
+      "sites": [
+        {
+          "file": "internal/jobs/completion_lowrisk_test.go",
+          "line": 27,
+          "status": "",
+          "ticket": "P1-E29-W6-S60-T4",
+          "raw": "jobs/completion-gate/FIX (AMD-20260922/F1-3, P1-E29-W6-S60-T4)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -30116,7 +30152,7 @@
       ]
     }
   ],
-  "total_sites": 2826,
-  "unspecified_count": 143,
+  "total_sites": 2830,
+  "unspecified_count": 144,
   "multi_status_count": 77
 }
