@@ -53,8 +53,9 @@ func (l ReviewCRLevel) Valid() bool {
 type ReviewRequest struct {
 	// Level is the requested review tier.
 	Level ReviewCRLevel
-	// Diff is the unified diff (or full file contents, for a new file)
-	// under review.
+	// Diff is the unified diff under review; pass a new file as a diff
+	// against /dev/null. Full file contents are refused
+	// (ErrUnrecognisedArtifactFormat).
 	Diff string
 	// Context is free-text background the caller supplies: the ticket or
 	// task description, acceptance criteria, or anything else a reviewer
@@ -131,13 +132,10 @@ type ReviewResponse struct {
 //     that carries no command plus exit code.
 //   - ReviewRequest.Diff must be a unified diff whose headers name paths
 //     (`diff --git a/X b/X`, `diff --git X Y`, or a `--- old`/`+++ new` pair).
-//     The native reviewer REFUSES an artifact it cannot attribute to paths,
-//     including the "full file contents, for a new file" form Diff's own doc
-//     comment above allows: without paths it cannot apply the R-21.191
-//     exclusion filter, and it fails closed rather than dispatch unfiltered
-//     content. Pass a new file as a diff against /dev/null. This divergence
-//     from the doc comment is a recorded contract contradiction, not a bug to
-//     be silently reconciled.
+//     The native reviewer REFUSES an artifact it cannot attribute to paths:
+//     without paths it cannot apply the R-21.191 exclusion filter, and it
+//     fails closed rather than dispatch unfiltered content. Pass a new file
+//     as a diff against /dev/null.
 //   - ReviewResponse carries only Findings and Approved, so CR-C's arbitration
 //     verdict and dissent cannot cross this ABI. internal/review.CRC is the
 //     documented in-binary entry point for them; the ABI gap is filed.

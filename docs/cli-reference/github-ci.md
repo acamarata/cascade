@@ -89,9 +89,11 @@ over the O/S-31.T3 `ProcessRuntime` `Handle`'s stdio transport — never
 
 `cascade github ci wait`'s poll loop needs no daemon, but on Windows it
 still refuses with a documented, typed error rather than attempting to run.
-A `cascade doctor` probe for that tier-2 status is **not wired** (the same
-wording `plugins/github/README.md` uses); adding it to `internal/doctor` is
-a follow-up, not part of this ticket.
+`cascade doctor`'s `ci_tier2` check (`cmd/cascade/doctor_ci_tier2.go`,
+P1-E25-W5-S97-T1) reports this: `StatusOK` on every platform, since the
+refusal itself is specified behaviour, not a fault — on Windows its detail
+names both `cascade github ci wait` and `cascade github ci watch add` as
+needing the daemon.
 
 ## What merge-on-green does today
 
@@ -219,6 +221,7 @@ untouched.
 `list`/`get`/`ack` are registered), so the production pusher opens the same
 runtime store `merge-on-green`'s policy engine already opens directly from
 the CLI process rather than dialing the daemon; the `ci_results` subscriber
-is not started by any composition root yet; `cascade doctor` does not yet
-report `watch add`'s Windows tier-2 status. Full accounting in
+is not started by any composition root yet. `cascade doctor`'s `ci_tier2`
+check now reports `watch add`'s Windows tier-2 status alongside `wait`'s
+(see "Windows tier-2" above). Full accounting in
 `internal/ci/attention.go`'s header note and `plugins/github/README.md`.

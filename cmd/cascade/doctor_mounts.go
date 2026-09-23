@@ -26,6 +26,7 @@ package main
 import (
 	"context"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 
 	"github.com/acamarata/cascade/internal/backup/targets"
@@ -99,6 +100,11 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	// itself reports as StatusError rather than a fusion-style verdict
 	// nothing measured.
 	reg.Register(doctor.NewRegistryPubkeyCheck(registryPubkeyProviderFor(ctx, paths)))
+	// ci_tier2 (P1-E25-W5-S97-T1, R-14.297 items 2/3/6): reports the
+	// Windows tier-2 (no-daemon) refusal of `cascade github ci wait` and
+	// `cascade github ci watch add` — informational (StatusOK) on every
+	// platform, since the refusal itself is specified behaviour.
+	reg.Register(ciTier2Check{goos: goruntime.GOOS})
 	checks, err := secretsDoctorChecks(ctx, paths, clock)
 	if err != nil {
 		return nil, err
