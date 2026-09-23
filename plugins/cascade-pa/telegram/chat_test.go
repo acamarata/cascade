@@ -1,7 +1,5 @@
-// Purpose (this file): TelegramBridge's behavior — the §5.16 privacy
-//   matrix (REFUSE local-only/restricted/unresolvable, ALLOW
-//   internal/public), the S-48.T1/T3 gate-ordering integration, Untrusted/
-//   Origin propagation (R-21.227), and the ChatBridge lifecycle methods.
+// Purpose (this file): TelegramBridge's behavior — the §5.16 privacy matrix (REFUSE local-only/restricted/
+//   unresolvable, ALLOW internal/public), S-48.T1/T3 gate ordering, Untrusted/Origin (R-21.227), lifecycle.
 //
 // SPORT: plugins/cascade-pa/telegram TestBridgePrivacy*/TEST, TestInboundMessageUntrustedOrigin/TEST (P1-E23-W5-S48-T2).
 
@@ -18,8 +16,7 @@ import (
 	cascadepa "github.com/acamarata/cascade/plugins/cascade-pa"
 )
 
-// bridgeRig is a testRig (rig_test.go) plus a TelegramBridge wired over
-// fake ChatService/ThreadPrivacyResolver/DivergenceSink seams.
+// bridgeRig is a testRig (rig_test.go) plus a TelegramBridge over fake ChatService/ThreadPrivacyResolver/DivergenceSink seams.
 type bridgeRig struct {
 	*testRig
 	bridge     *TelegramBridge
@@ -232,6 +229,9 @@ func TestChatBridge_Send(t *testing.T) {
 		}
 	})
 	t.Run("resolves tier and sends", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Send is refused on Windows tier-2; TestBridgeWindowsTierTwoRefusal_Send proves that path")
+		}
 		r := newBridgeRig(t)
 		threadID := threadIDForChat(9008)
 		r.privacy.set(threadID, cascadepa.TierPublic)

@@ -152,13 +152,17 @@ func (s *Scheduler) Close(ctx context.Context) error {
 	markDone := s.doneOnce
 	s.mu.Unlock()
 
+	// Done is closed only AFTER the lease release lands: Done's contract is
+	// "the lock is released", and a waiter that saw Done before Release
+	// finished could race a second owner's Activate into KindConflict.
+	var err error
+	if s.lock != nil {
+		err = s.lock.Release(ctx)
+	}
 	if markDone != nil {
 		markDone()
 	}
-	if s.lock == nil {
-		return nil
-	}
-	return s.lock.Release(ctx)
+	return err
 }
 
 // cloneRunnables returns a snapshot copy of runnables so Activate's
