@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-23T01:57:47Z",
+  "generated_at": "2026-09-23T02:27:33Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -8723,7 +8723,7 @@
       "sites": [
         {
           "file": "plugins/cascade-pa/telegram/chat.go",
-          "line": 34,
+          "line": 32,
           "status": "ADD",
           "ticket": "P1-E23-W5-S48-T2",
           "raw": "handleInbound/ADDED (P1-E23-W5-S48-T2)."
@@ -24971,7 +24971,7 @@
       "sites": [
         {
           "file": "plugins/cascade-pa/telegram/chat.go",
-          "line": 34,
+          "line": 32,
           "status": "ADD",
           "raw": "plugins/cascade-pa/telegram TelegramBridge/ADDED"
         }
@@ -25003,6 +25003,20 @@
           "status": "",
           "ticket": "P1-E23-W5-S48-T2",
           "raw": "plugins/cascade-pa/telegram TestBridgePrivacy*/TEST, TestInboundMessageUntrustedOrigin/TEST (P1-E23-W5-S48-T2)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram TestChatBridge_Send_SecretRefused/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/chat_send_refusal_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram TestChatBridge_Send_SecretRefused/TEST"
         }
       ],
       "statuses": [
@@ -25363,7 +25377,7 @@
       "sites": [
         {
           "file": "plugins/cascade-pa/telegram/chat_windows_test.go",
-          "line": 14,
+          "line": 18,
           "status": "",
           "raw": "plugins/cascade-pa/telegram windows-tier-2-refusal/TEST"
         },
@@ -29793,7 +29807,7 @@
       ]
     }
   ],
-  "total_sites": 2800,
-  "unspecified_count": 140,
+  "total_sites": 2801,
+  "unspecified_count": 141,
   "multi_status_count": 76
 }
