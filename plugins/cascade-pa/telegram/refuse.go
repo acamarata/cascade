@@ -102,6 +102,14 @@ func (m *TelegramModule) scanner() SecretScanner {
 var ErrNoSecretScanner = cascade.New(cascade.KindPolicyDenied,
 	"cascade-pa/telegram: no bridge secret scanner is wired; every message refuses")
 
+// errSendBodyRefused is TelegramBridge.Send's typed refusal when
+// guardOutboundChecked swapped body for the value-free notice. Send must
+// surface that as failure — the nil a swap-and-deliver would otherwise
+// return let a caller believe a refused body was delivered (S-49.T4 Q1,
+// the S-48.T2 CR gap this ticket fixes).
+var errSendBodyRefused = cascade.New(cascade.KindPolicyDenied,
+	"cascade-pa/telegram: Send refused the body at the outbound secret gate; no content was delivered")
+
 // replyBridgeSecretRefused is the ONE reply every refusal in this file
 // produces, inbound or outbound. It is value-free by construction: fixed
 // text with no interpolation, so it can never carry a key name, a
@@ -154,23 +162,35 @@ func (m *TelegramModule) refuseInboundCallback(ctx context.Context, cq *Callback
 // letting the caller's text reach the transport. chatKind is the caller's
 // best available context for the quarantine record (R-21.105/D9).
 //
+// reply/answer always send SOMETHING (the swapped text still reaches the
+// chat), so they have never needed the refusal flag guardOutboundChecked
+// carries — this is that call with the flag dropped.
+func (m *TelegramModule) guardOutbound(ctx context.Context, text, chatKind string) string {
+	safe, _ := m.guardOutboundChecked(ctx, text, chatKind)
+	return safe
+}
+
+// guardOutboundChecked is guardOutbound plus the refusal decision itself,
+// for a caller (Send) that must not treat "the body was swapped for the
+// notice" as success (S-49.T4 Q1).
+//
 // The equality check is not an optimization: without it, the unconfigured
 // default (which flags EVERY text, D1) would re-flag
 // replyBridgeSecretRefused itself when refuseInboundText/
 // refuseInboundCallback send it, attempting a second, spurious quarantine
 // publish for a message that was never sent to begin with.
-func (m *TelegramModule) guardOutbound(ctx context.Context, text, chatKind string) string {
+func (m *TelegramModule) guardOutboundChecked(ctx context.Context, text, chatKind string) (safe string, refused bool) {
 	if text == replyBridgeSecretRefused {
-		return text
+		return text, false
 	}
-	refused, outcome, unconfigured := m.refusesSecret(text)
-	if !refused {
-		return text
+	wasRefused, outcome, unconfigured := m.refusesSecret(text)
+	if !wasRefused {
+		return text, false
 	}
 	if unconfigured == nil {
 		_ = m.publishQuarantine(ctx, quarantineOriginOutbound, chatKind, outcome)
 	}
-	return replyBridgeSecretRefused
+	return replyBridgeSecretRefused, true
 }
 
 // reply sends one operational message. Every module-generated reply is

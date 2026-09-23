@@ -6,9 +6,9 @@
 //   crossing the SAME registered egress class (§5.17) SendMessage enforces.
 //
 // Inputs: a *TelegramModule already carrying the S-48.T1/T3 dispatch gates
-//   (pairing, elevated-verb, secret-scan ran BEFORE this handler, per
-//   module.go's admitMessage), a *cascadepa.BindingStore for Paired(), and
-//   the three host-mediated seams egress.go declares.
+//   (pairing/elevated-verb/secret-scan ran before this handler, per
+//   admitMessage), a *cascadepa.BindingStore for Paired(), and egress.go's
+//   three host-mediated seams.
 //
 // Outputs: chat.append_turn calls, sendMessage replies (a refusal, or the
 //   honest "recorded, no reply generator yet" disclosure — replyText),
@@ -16,18 +16,16 @@
 //   composition root drives.
 //
 // Constraints:
-//   - THE REAL ENGINE DECIDES, NOT A TIER SWITCH HERE. handleInbound
-//     probes b.module.client's own EgressGate with the resolved tier and
-//     nil content — the same "capability/tier-only probe" shape
-//     BotClient.fetchOne already uses (client.go) — so ALLOW/REFUSE comes
-//     from the real, already-registered class, never a re-derived
-//     local-only/restricted comparison (LANE-RULES §5).
-//   - SAME PACKAGE, REAL HELPERS. b.module.reply/guardOutbound/now/
-//     client/egress are unexported TelegramModule/BotClient members this
-//     file reaches because it is package telegram, not a reimplementation.
-//     A refusal reply reuses reply() (fixed TierInternal, matching every
-//     other module refusal); an ALLOW reply needs the THREAD's resolved
-//     tier, so it calls guardOutbound then client.SendMessage directly.
+//   - THE REAL ENGINE DECIDES, NOT A TIER SWITCH HERE. handleInbound probes
+//     b.module.client's own EgressGate with the resolved tier and nil
+//     content (BotClient.fetchOne's own probe shape, client.go), so
+//     ALLOW/REFUSE is never a re-derived local-only/restricted comparison.
+//   - SAME PACKAGE, REAL HELPERS. b.module.reply/guardOutbound/
+//     guardOutboundChecked/now/client/egress are unexported
+//     TelegramModule/BotClient members this file reaches directly (package
+//     telegram), not a reimplementation. A refusal reply reuses reply()
+//     (fixed TierInternal); an ALLOW reply needs the THREAD's resolved
+//     tier, so it guards then calls client.SendMessage directly.
 //   - NO ASSISTANT REPLY EXISTS. replyText mirrors errReplyGenerationUnavailable
 //     (cascadepa_wiring.go): nothing generates one yet, so this discloses that honestly (Art.1).
 //
@@ -68,9 +66,8 @@ const drainPollInterval = 5 * time.Millisecond
 
 // TelegramBridge implements cascadepa.ChatBridge over a *TelegramModule.
 // The stutter (telegram.TelegramBridge) is deliberate, matching
-// TelegramModule's own precedent (module.go): this package names every
-// Telegram-specific type with the platform prefix rather than leaving it
-// implicit in the package name.
+// TelegramModule (module.go): every Telegram-specific type gets the
+// platform prefix rather than an implicit package name.
 //
 //nolint:revive // deliberate stutter, matches TelegramModule (module.go)
 type TelegramBridge struct {
@@ -98,10 +95,9 @@ var _ cascadepa.ChatBridge = (*TelegramBridge)(nil)
 
 // NewTelegramBridge builds a ChatBridge over module and registers this
 // bridge's forward handler as module's HandlerText — the ONE call site
-// that turns "admitted message" into "chat parity", replacing whatever
-// HandlerText the host previously registered (the last RegisterHandler
-// call for a kind wins, module.go's own map-assignment semantics). A nil
-// chat/privacy/divergence resolves to its fail-closed default (egress.go).
+// turning "admitted message" into "chat parity" (last RegisterHandler for a
+// kind wins, module.go's map-assignment semantics). A nil chat/privacy/
+// divergence resolves to its fail-closed default (egress.go).
 func NewTelegramBridge(module *TelegramModule, binding *cascadepa.BindingStore, subject string,
 	chat ChatService, privacy ThreadPrivacyResolver, divergence DivergenceSink) *TelegramBridge {
 	b := &TelegramBridge{
@@ -131,10 +127,9 @@ func (b *TelegramBridge) Stop(ctx context.Context) error {
 }
 
 // Drain waits until no handleInbound call is in flight, or until ctx ends
-// first. It does not cancel anything (see this type's own
-// cascadepa.ChatBridge doc comment), and it polls rather than blocks — see
-// this file's drainPollInterval doc comment for why inFlight is an atomic
-// counter and not a sync.WaitGroup.
+// first. It does not cancel anything (see cascadepa.ChatBridge's own doc
+// comment), and it polls rather than blocks — see drainPollInterval's doc
+// comment for why inFlight is an atomic counter, not a sync.WaitGroup.
 func (b *TelegramBridge) Drain(ctx context.Context) error {
 	if b.inFlight.Load() == 0 {
 		return nil
@@ -178,10 +173,16 @@ func (b *TelegramBridge) RefusalReport() []cascadepa.RefusalRecord {
 }
 
 // Send delivers body into the chat threadID maps to, at threadID's own
-// resolved tier — never a caller-declared one. A threadID this bridge did
-// not mint refuses by name; the outbound gate is the SAME guardOutbound +
-// client.SendMessage path forward uses for an ALLOW-path reply.
+// resolved tier — never a caller-declared one. Windows tier-2 refuses
+// before any IO (R-16.60a, matching Start); an unmapped threadID refuses
+// by name; a secret-shaped body refuses typed (S-49.T4 Q1) rather than
+// silently delivering the swapped notice and reporting nil. An ALLOW body
+// crosses the SAME guardOutboundChecked + client.SendMessage path forward
+// uses for its reply.
 func (b *TelegramBridge) Send(ctx context.Context, threadID string, body []byte) error {
+	if refusal := platformBridgeRefusal(); refusal != nil {
+		return refusal
+	}
 	chatID, ok := chatIDForThread(threadID)
 	if !ok {
 		return cascade.Newf(cascade.KindNotFound,
@@ -191,7 +192,10 @@ func (b *TelegramBridge) Send(ctx context.Context, threadID string, body []byte)
 	if perr != nil {
 		tier = cascadepa.TierLocalOnly
 	}
-	text := b.module.guardOutbound(ctx, string(body), "")
+	text, refused := b.module.guardOutboundChecked(ctx, string(body), "")
+	if refused {
+		return errSendBodyRefused
+	}
 	return b.module.client.SendMessage(ctx, chatID, tier, text)
 }
 
@@ -214,9 +218,8 @@ func (b *TelegramBridge) handleInbound(ctx context.Context, msg InboundMessage) 
 		tier = cascadepa.TierLocalOnly // §5.16 fail-closed: unresolvable follows local-only
 	}
 
-	// THE REAL DECISION (see this file's header): a nil-content probe
-	// through the already-registered egress class, mirroring
-	// BotClient.fetchOne's own capability probe.
+	// THE REAL DECISION (this file's header): a nil-content probe through
+	// the already-registered egress class (BotClient.fetchOne's own shape).
 	if _, err := b.module.client.egress.Guard(ctx, tier, nil); err != nil {
 		b.refuse(ctx, m.Chat.ID, threadID, tier, corrID, chatKind)
 		return nil
@@ -239,14 +242,11 @@ func (b *TelegramBridge) refuse(ctx context.Context, chatID int64, threadID stri
 	b.module.reply(ctx, chatID, chatKind, reason)
 }
 
-// forward appends msg's text as a "user" turn (chat parity) and replies
-// with the honest disclosure (or a recorded-but-unreachable notice on a
-// ChatService failure), then delivers onto Receive's channel. It refuses,
-// before any side effect, an InboundMessage whose Origin does not match
-// this adapter's own constant or whose Untrusted flag is unset (R-21.227's
-// never-clearable marker; delivered messages pin Untrusted to the literal
-// true below, never msg's own field) — the ONE place a telegram.InboundMessage
-// becomes a cascadepa.InboundMessage.
+// forward appends msg's text as a "user" turn (chat parity), replies with
+// the honest disclosure (or a recorded-but-unreachable notice on a
+// ChatService failure), then delivers onto Receive's channel — the ONE
+// place InboundMessage becomes cascadepa.InboundMessage. It refuses first
+// when Origin/Untrusted don't match (R-21.227: delivered turns pin Untrusted true).
 func (b *TelegramBridge) forward(ctx context.Context, msg InboundMessage, m *Message,
 	threadID string, tier cascadepa.SensitivityTier, chatKind string) error {
 	if msg.Origin != OriginBridgeTelegram || !msg.Untrusted {
