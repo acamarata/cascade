@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-23T04:46:27Z",
+  "generated_at": "2026-09-23T06:11:43Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3685,6 +3685,28 @@
           "status": "ADD",
           "ticket": "P1-E07-W5-S92-T1",
           "raw": "cmd/cascade daemon_unix_memory_projection.go [ADD] (P1-E07-W5-S92-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade doctor_ci_tier2.go",
+      "sites": [
+        {
+          "file": "cmd/cascade/doctor_ci_tier2.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S97-T1",
+          "raw": "cmd/cascade doctor_ci_tier2.go (ADD) — P1-E25-W5-S97-T1."
+        },
+        {
+          "file": "cmd/cascade/doctor_ci_tier2_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S97-T1",
+          "raw": "cmd/cascade doctor_ci_tier2.go (ADD) — P1-E25-W5-S97-T1."
         }
       ],
       "statuses": [
@@ -30060,7 +30082,7 @@
       ]
     }
   ],
-  "total_sites": 2821,
+  "total_sites": 2823,
   "unspecified_count": 142,
   "multi_status_count": 77
 }
