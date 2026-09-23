@@ -39,10 +39,14 @@ func (allowAllGate) RouteAction(context.Context, routing.Action) (policy.Verdict
 // newTestStoreWithDB is newTestStore (domain_test.go) plus the raw *sql.DB
 // handle, for tests that verify tombstone rows directly against the
 // table rather than trusting PruneResult's own count alone.
+//
+// The DSN skips journal fsyncs (see openTestDB): the database is
+// single-connection, single-process and discarded at cleanup.
 func newTestStoreWithDB(t *testing.T) (Store, *sql.DB) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "retention-test.db")
-	db, err := sql.Open("sqlite", path)
+	dsn := path + "?_journal_mode=MEMORY&_synchronous=OFF"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

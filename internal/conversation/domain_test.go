@@ -33,10 +33,16 @@ func newTestClock() migrate.Clock {
 
 // openTestDB opens a REAL modernc-sqlite database file under t.TempDir()
 // (Art.2: a real counterpart, never an in-memory self-authored double).
+//
+// The DSN turns off journal fsyncs (_journal_mode=MEMORY, _synchronous=OFF).
+// Schema setup otherwise fsyncs on every statement, which cost 3-5s per test
+// on Windows runners. That is safe only here: each test database is
+// single-connection, single-process and discarded at cleanup.
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "conversation-test.db")
-	db, err := sql.Open("sqlite", path)
+	dsn := path + "?_journal_mode=MEMORY&_synchronous=OFF"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		t.Fatalf("open test db: %v", err)
 	}

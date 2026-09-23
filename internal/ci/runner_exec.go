@@ -128,6 +128,12 @@ func runViaShell(ctx context.Context, bin, flag string, req ExecRequest) ExecRes
 	cmd := exec.CommandContext(runCtx, bin, flag, req.Command)
 	cmd.Dir = req.WorkDir
 	cmd.Env = stepEnv(req.Env)
+	if bin == "cmd" {
+		// Go's default windows argv escaping mangles an embedded quote in
+		// req.Command before cmd.exe ever sees it -- see
+		// shellcmdline_windows.go's setShellCmdLine doc comment.
+		setShellCmdLine(cmd, req.Command)
+	}
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

@@ -55,6 +55,13 @@ func affectedCmdTargets(ctx context.Context, worktreeRoot, command string, chang
 	bin, flag := shellForAffectedCmd(goruntime.GOOS)
 	cmd := exec.CommandContext(runCtx, bin, flag, command)
 	cmd.Dir = worktreeRoot
+	if bin == "cmd" {
+		// Go's default windows argv escaping mangles an embedded quote
+		// (e.g. a sed expression) before cmd.exe ever sees it --
+		// shellcmdline_windows.go's setShellCmdLine replaces the command
+		// line with the literal text instead.
+		setShellCmdLine(cmd, command)
+	}
 	cmd.Stdin = strings.NewReader(strings.Join(changed, "\n") + "\n")
 
 	var stdout, stderr bytes.Buffer
