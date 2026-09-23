@@ -1,0 +1,1 @@
+sample fixture data for pkg/a's own tests -- never itself a buildable Go package

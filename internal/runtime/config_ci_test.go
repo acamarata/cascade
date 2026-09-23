@@ -185,3 +185,33 @@ func TestCIConfigLocalEnvRejectsBlankName(t *testing.T) {
 		t.Fatal("expected an error for a blank [ci.local].env name")
 	}
 }
+
+// TestConfigCIAffectedCmd proves [ci].affected_cmd registers via Load
+// (P1-E32-W6-S65-T1, fix round 2, R-21.173): absent means "not
+// configured" (empty string, no error), an explicit value is kept
+// VERBATIM (no shell tokenizing), and a non-string value is a typed
+// LOAD-time error naming the key.
+func TestConfigCIAffectedCmd(t *testing.T) {
+	cfg, err := loadCITestConfig(t, "")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.AffectedCmd != "" {
+		t.Errorf("AffectedCmd = %q, want empty (not configured)", cfg.AffectedCmd)
+	}
+
+	cfg, err = loadCITestConfig(t, "[ci]\naffected_cmd = \"scripts/affected.sh --format json\"\n")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	want := "scripts/affected.sh --format json"
+	if cfg.AffectedCmd != want {
+		t.Errorf("AffectedCmd = %q, want %q", cfg.AffectedCmd, want)
+	}
+
+	if _, err := loadCITestConfig(t, "[ci]\naffected_cmd = 1\n"); err == nil {
+		t.Fatal("expected an error for a non-string ci.affected_cmd")
+	} else if !strings.Contains(err.Error(), "ci.affected_cmd") {
+		t.Errorf("error = %q, want it to name ci.affected_cmd", err.Error())
+	}
+}

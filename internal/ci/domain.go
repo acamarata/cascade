@@ -50,6 +50,12 @@
 //
 //	(P1-E25-W5-S51-T2). internal.ci.UpsertRunSource/ADDED,
 //	internal.ci.runSource/ADDED (P1-E25-W5-S51-T5).
+//	internal.ci.CIRequirement/ADDED, internal.ci.RequirementModel/ADDED,
+//	internal.ci.RequirementModel.Affected/ADDED, internal.ci.SelectTargets/ADDED
+//	(P1-E32-W6-S65-T1) -- the CI requirement model and affected-target
+//	computation live in requirements.go/affected*.go/selection.go, siblings
+//	of this file in the same package; this domain.go carries no schema
+//	change for them (no new table, R-16.71/R-21.173).
 package ci
 
 import (

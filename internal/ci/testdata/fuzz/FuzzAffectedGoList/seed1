@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("example.com/fixture/pkg/a|\nexample.com/fixture/pkg/b|example.com/fixture/pkg/a,fmt\n")

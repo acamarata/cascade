@@ -1,0 +1,1 @@
+a non-Go file living directly inside pkg/b's own package directory -- an embed-source stand-in

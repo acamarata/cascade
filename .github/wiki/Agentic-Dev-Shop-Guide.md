@@ -125,3 +125,48 @@ process-local registry (a real architecture gap: `cascade doctor` runs as its ow
 fresh process and never observes the live daemon's `hookpacks.DefaultRegistry`
 state — tracked as an `UNOWNED` `internal/build/testonly-allow.json` entry naming
 `cmd/cascade/doctor_completion_gate.go` pending that design).
+
+## CI requirement model
+
+`internal/ci`'s `RequirementModel` (`requirements.go`) is the one CI
+requirement model in the tree (R-16.71): a `CIRequirement` records which of
+seven check classes — Format, Lint, Compile, Unit, Integration, Architecture,
+Security — a given invocation must run. Its zero value is deliberately
+fail-closed: an all-false `CIRequirement{}` is read by `Requires` as
+`AllRequired`, never as "nothing required", so a forgotten or zeroed field
+can never silently skip a check.
+
+**Affected-target computation** (`affected.go`/`affected_go.go`/
+`affected_cmd.go`) narrows a `CIRequirementPlan`'s `Targets` to the packages
+a change set actually touches:
+
+- **Go stack** — a real `go list` subprocess builds the worktree's direct
+  import graph in one call (production imports AND `_test.go` import edges
+  — `.Imports`/`.TestImports`/`.XTestImports` all fold into the same
+  per-package edge list, so a package imported only by another package's
+  test file is still selected), then `Affected` walks the reverse of that
+  graph from each changed file's real (also `go list`-resolved) owning
+  package to collect every transitively-affected local package. Every
+  changed path resolves to a target or forces the full fallback below —
+  see `.github/wiki/CI-and-Attestation.md § Target selection` for the exact
+  fail-closed mapping table (go.mod/go.sum/vendor/deleted packages/testdata).
+- **Any other stack** — the operator-configured `[ci].affected_cmd` runs
+  through the platform shell with the changed-path list on its stdin (one
+  path per line) and its stdout lines become target names.
+- **Fallback** — an unrecognised stack, or a non-Go stack with no
+  `affected_cmd` configured, returns `[]Target{TargetAll}`: conservative
+  correct, never a false skip.
+
+**Target selection** (`selection.go`, R-21.173) is layered on top:
+`SelectTargets(ctx, m RequirementModel, changed, candidateTreeHash,
+riskClass)` calls `m.Affected`, then forces `Selection=full`
+(`[]Target{TargetAll}`) whenever the affected set could not be computed
+(including the independent guard against a producer bug or misconfiguration
+that returns an empty set for a non-empty change list — see the wiki page
+below), is stale against the caller's candidate tree hash (compared to the
+worktree's own real `git rev-parse HEAD^{tree}`), or the risk class is
+High/Critical — `Selection=affected` with the real target list is returned
+only for Low/Normal risk with a fresh, concrete set. Streaming CI dispatch
+may run against a partial affected set; acceptance always re-runs through
+this same decision function, never a re-derived copy of it. Full detail:
+`.github/wiki/CI-and-Attestation.md`.

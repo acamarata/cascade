@@ -1408,5 +1408,26 @@
     "reason": "P1-E23-W5-S48-T2 (this ticket) declares OriginBridgeWhatsApp in plugins/cascade-pa/bridge.go alongside OriginBridgeTelegram so the closed two-member Origin vocabulary is proven and documented in one place (R-21.227's own text names both origins), matching the ticket's own InboundMessage contract. Only the Telegram adapter exists in P1; W/S-49.T3 is the WhatsApp adapter and its own files_scope.add lists plugins/cascade-pa/whatsapp/bridge.go, which does not exist yet. Deleting the constant now and having T3 re-add it would churn the Origin vocabulary bridge.go's own compile-time InboundMessage tests already assert against (bridge_test.go's TestInboundMessage_UntrustedIsNeverClearedByThisType).",
     "retire_ticket": "P1-E23-W5-S49-T3",
     "symbol": "plugins/cascade-pa.OriginBridgeWhatsApp"
+  },
+  {
+    "symbol": "internal/ci.ChangedPaths",
+    "caller_site": "internal/ci/stream.go",
+    "expected_caller": "AF/S-65.T2's streaming CI dispatcher (internal/ci/stream.go, named in T2's own files_scope, not yet built), which threads the AC/S-59.T1 execution record's baseCommit into ChangedPaths to produce the changed-path list this ticket's Affected/SelectTargets consume; retire this entry once that lands.",
+    "reason": "P1-E32-W6-S65-T1 defines RequirementModel.Affected/SelectTargets and the ChangedPaths helper they depend on as the ONE requirement model in the tree (R-16.71), fully implemented and tested against a real `git diff --name-only` subprocess, but this ticket's own files_scope and full_desc name T2 (streaming dispatch) and T3 (executor resolution) as the consumers -- no production composition root exists yet to call ChangedPaths.",
+    "retire_ticket": "P1-E32-W6-S65-T2"
+  },
+  {
+    "symbol": "internal/ci.SelectTargets",
+    "caller_site": "internal/ci/stream.go",
+    "expected_caller": "AF/S-65.T2's streaming CI dispatcher (internal/ci/stream.go, named in T2's own files_scope, not yet built), which calls SelectTargets to resolve Selection/Targets per R-21.173 and threads the result into a CIRequirementPlan for T3's executor resolution and S-65.T4's attestation payload; retire this entry once that lands.",
+    "reason": "P1-E32-W6-S65-T1 defines SelectTargets as the ONE selection decision in the tree (R-21.173), fully implemented and tested (every branch: uncomputable/stale/High/Critical/fresh-Low/fresh-Normal, plus the D2 empty-set guard and the confirm-round-2 error-propagation contract), but this ticket's own spec_refs/execution_guidance name S65T2/S65T4 as the consumers, not this ticket -- no production composition root exists yet to call it.",
+    "retire_ticket": "P1-E32-W6-S65-T2"
+  },
+  {
+    "symbol": "internal/ci.ConfigFromRuntime",
+    "caller_site": "internal/daemon/subsystems_ci.go",
+    "expected_caller": "AF/S-65.T2's own contract text (T-2.yaml): 'internal/daemon/subsystems_ci.go NewCISubsystem constructs the ONE ci Dispatcher' -- the daemon composition root that builds a RequirementModel (and therefore its Config) from the loaded runtime.Config for the streaming dispatcher; not yet built. Retire this entry once that lands.",
+    "reason": "Final-confirm round 3: this ticket's own AC ('internal/ci/affected_cmd.go reads it from there, not from an unsourced field') requires a real production path from internal/runtime's parsed [ci].affected_cmd into internal/ci.Config.AffectedCmd. ConfigFromRuntime (config_runtime.go) is that ONE mapping, fully implemented and tested end-to-end against a real affected_cmd subprocess (TestConfigFromRuntime_AffectedCmdEndToEnd), but T-3.yaml:35 names S-65.T1 as the sole owner of [ci].affected_cmd registration while the only production CALLER of a fully-wired RequirementModel is S-65.T2's daemon composition layer -- no ticket in S-65 builds internal/daemon/subsystems_ci.go before T2. This is a planning contradiction (T-3.yaml:35 vs. the only real caller living in T2's scope) flagged for T0 to file as a PCI (slug ci-affectedcmd-ownership-t1-vs-t2, type planning), not filed by this fix lane per LANE-RULES.",
+    "retire_ticket": "P1-E32-W6-S65-T2"
   }
 ]

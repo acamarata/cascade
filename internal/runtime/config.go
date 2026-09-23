@@ -146,6 +146,9 @@ type Config struct {
 	// CIWatch is the ci.watch key (P1-E25-W5-S51-T4); hot (see
 	// config_ci_watch.go).
 	CIWatch ciWatchSection
+	// AffectedCmd is [ci].affected_cmd (P1-E32-W6-S65-T1, fix round 2,
+	// R-21.173); hot (see config_ci.go). Empty means "not configured".
+	AffectedCmd string
 	// Registry is the [registry] block (P1-E24-W5-S50-T2, R-14.75); hot
 	// (see config_registry.go's header on PubkeyPath's empty default).
 	Registry registrySection
@@ -277,23 +280,5 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 	}
 	sources["runtime.profile"] = profSource
 
-	return &Config{
-		SchemaVersion: schemaVersionOf(tree),
-		Runtime:       runtimeSection{Profile: profile},
-		Elevation:     sec.elevation,
-		Logging:       sec.logging,
-		Retrieval:     sec.retrieval,
-		FusionEnabled: sec.fusionEnabled,
-		FleetAccounts: sec.fleetAccounts,
-		Economics:     sec.economics,
-		Widget:        sec.widget,
-		Plugins:       sec.plugins,
-		CIPolicy:      sec.ciPolicy,
-		CILocal:       sec.ciLocal,
-		CIWatch:       sec.ciWatch,
-		Registry:      sec.registry,
-		Extra:         extraSections(tree),
-		sources:       sources,
-		rawTree:       tree,
-	}, nil
+	return assembleConfig(sec, schemaVersionOf(tree), profile, tree, sources), nil
 }

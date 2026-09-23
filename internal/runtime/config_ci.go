@@ -27,7 +27,9 @@
 // discipline of naming every default explicitly.
 // SPORT: internal.runtime.parseCIPolicySection/ADDED,
 //
-//	internal.runtime.parseCILocalSection/ADDED (P1-E25-W5-S51-T5).
+//	internal.runtime.parseCILocalSection/ADDED (P1-E25-W5-S51-T5),
+//	internal.runtime.parseCIAffectedCmdField/ADDED (P1-E32-W6-S65-T1,
+//	fix round 2, AMD-20260922/F7-7, R-21.173).
 
 package runtime
 
@@ -243,6 +245,33 @@ func ciEnvKeys(localTree map[string]interface{}) ([]string, error) {
 		keys = append(keys, strings.TrimSpace(s))
 	}
 	return keys, nil
+}
+
+// parseCIAffectedCmdField type-checks the `[ci].affected_cmd` key
+// (08-INIT-CONFIG-SPEC.md §3's `[ci]` row, AMD-20260922/F7-7 amendment,
+// R-21.173) -- a single top-level string sibling of `ci.watch`
+// (config_ci_watch.go) and `[ci.policy]`/`[ci.local]` above, not a
+// nested table. Absent or blank means "not configured": internal/ci's
+// own non-Go-stack Affected dispatch (affected.go's affectedTargets)
+// then falls back to the conservative TargetAll for any stack without a
+// configured command. A present value is kept VERBATIM -- no shell
+// tokenizing/parsing happens here, matching [ci.local]'s own lint/test/
+// build command strings; internal/ci/affected_cmd.go is the one place
+// that ever passes it to a shell, as a single command string.
+func parseCIAffectedCmdField(tree map[string]interface{}) (string, error) {
+	ciTree, ok := tree["ci"].(map[string]interface{})
+	if !ok {
+		return "", nil
+	}
+	raw, present := ciTree["affected_cmd"]
+	if !present {
+		return "", nil
+	}
+	s, ok := raw.(string)
+	if !ok {
+		return "", &ConfigError{Field: "ci.affected_cmd", Reason: "must be a string"}
+	}
+	return s, nil
 }
 
 // nestedTable reads tree[a][b] as a map, tolerating either level being

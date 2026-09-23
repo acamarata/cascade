@@ -39,6 +39,10 @@ type configSections struct {
 	// config_ci.go.
 	ciPolicy ciPolicySection
 	ciLocal  ciLocalSection
+	// affectedCmd is the [ci].affected_cmd key (P1-E32-W6-S65-T1, fix
+	// round 2, R-21.173), same deviation as fleetAccounts above -- see
+	// config_ci.go's parseCIAffectedCmdField.
+	affectedCmd string
 	// ciWatch is the ci.watch key (P1-E25-W5-S51-T4), same deviation as
 	// fleetAccounts above -- see config_ci_watch.go.
 	ciWatch ciWatchSection
@@ -83,6 +87,9 @@ func parseConfigSections(tree map[string]interface{}, warn func(string, ...inter
 	if s.ciLocal, err = parseCILocalSection(tree); err != nil {
 		return configSections{}, err
 	}
+	if s.affectedCmd, err = parseCIAffectedCmdField(tree); err != nil {
+		return configSections{}, err
+	}
 	if s.ciWatch, err = parseCIWatchSection(tree); err != nil {
 		return configSections{}, err
 	}
@@ -90,4 +97,35 @@ func parseConfigSections(tree map[string]interface{}, warn func(string, ...inter
 		return configSections{}, err
 	}
 	return s, nil
+}
+
+// assembleConfig builds the final *Config from every parsed section, the
+// resolved profile, and the raw upgraded tree -- factored out of Load's
+// own struct-literal return (config.go) for the same 300-line-cap reason
+// parseConfigSections itself was extracted for (R-14.204): adding
+// P1-E32-W6-S65-T1's AffectedCmd field (the [ci].affected_cmd key,
+// R-21.173, fix round 2) to that literal would have pushed config.go
+// past Art.10.3's cap.
+// SPORT: internal.runtime.assembleConfig/ADDED (P1-E32-W6-S65-T1, fix round 2).
+func assembleConfig(sec configSections, schemaVersion int, profile Profile, tree map[string]interface{}, sources map[string]ConfigSource) *Config {
+	return &Config{
+		SchemaVersion: schemaVersion,
+		Runtime:       runtimeSection{Profile: profile},
+		Elevation:     sec.elevation,
+		Logging:       sec.logging,
+		Retrieval:     sec.retrieval,
+		FusionEnabled: sec.fusionEnabled,
+		FleetAccounts: sec.fleetAccounts,
+		Economics:     sec.economics,
+		Widget:        sec.widget,
+		Plugins:       sec.plugins,
+		CIPolicy:      sec.ciPolicy,
+		CILocal:       sec.ciLocal,
+		CIWatch:       sec.ciWatch,
+		AffectedCmd:   sec.affectedCmd,
+		Registry:      sec.registry,
+		Extra:         extraSections(tree),
+		sources:       sources,
+		rawTree:       tree,
+	}
 }
