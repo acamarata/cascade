@@ -79,6 +79,43 @@ func (a bridgeStateAdapter) Close() error {
 	return a.db.Close()
 }
 
+// sqlDB exposes the adapter's own *sql.DB so a same-package caller that needs
+// a SECOND schema applied on the SAME cascade.db connection (today: the
+// chat-parity thread-privacy resolver, cascadepa_bridge_chat_wiring.go) can
+// reuse this one handle instead of opening its own. Unexported: this is a
+// same-package composition seam, not part of the cascadepa.BridgeState
+// contract cascadepa.NewStores depends on.
+func (a bridgeStateAdapter) sqlDB() *sql.DB { return a.db }
+
+// bridgeSQLDBOwner is satisfied by bridgeStateAdapter (see sqlDB above).
+type bridgeSQLDBOwner interface{ sqlDB() *sql.DB }
+
+// bridgeStateSQLDB extracts the reusable *sql.DB from a cascadepa.BridgeState
+// built by openBridgeState, so the composition root can hand it to
+// NewCascadePABridgeChatHandler instead of that constructor opening a SECOND
+// connection to cascade.db — one connection, one owner, closed only by
+// BridgeRuntime.Stop (closeStateAfterStop). Returns (nil, false) for a state
+// that does not own one (a test double, e.g. fakeNonCloserState); the caller
+// decides whether that is fatal.
+func bridgeStateSQLDB(state cascadepa.BridgeState) (*sql.DB, bool) {
+	owner, ok := state.(bridgeSQLDBOwner)
+	if !ok {
+		return nil, false
+	}
+	return owner.sqlDB(), true
+}
+
+// requireBridgeStateSQLDB is bridgeStateSQLDB with the "no reusable
+// connection" case turned into the error enabledBridge closes state over —
+// split out so enabledBridge's own body stays under Art.10.3's 50-line cap.
+func requireBridgeStateSQLDB(state cascadepa.BridgeState) (*sql.DB, error) {
+	db, ok := bridgeStateSQLDB(state)
+	if !ok {
+		return nil, cascade.New(cascade.KindUnavailable, "cascade-pa bridge: durable state has no reusable sqlite connection")
+	}
+	return db, nil
+}
+
 func (a bridgeStateAdapter) Load(ctx context.Context, subject string) (cascadepa.SubjectState, bool, error) {
 	row, ok, err := a.store.Load(ctx, subject)
 	if err != nil || !ok {

@@ -97,7 +97,8 @@ func TestBridgeThreadPrivacyResolver_RealStoreRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	clock := newBridgeTestClock()
 
-	resolver, err := newBridgeThreadPrivacyResolver(ctx, dataDir, clock)
+	db := openTestConversationDB(t, dataDir)
+	resolver, err := newBridgeThreadPrivacyResolver(ctx, db, dataDir, clock)
 	if err != nil {
 		t.Fatalf("newBridgeThreadPrivacyResolver: %v", err)
 	}
@@ -126,8 +127,28 @@ func TestBridgeThreadPrivacyResolver_RealStoreRoundTrip(t *testing.T) {
 
 func TestBridgeThreadPrivacyResolver_UnwritableDataDirRefuses(t *testing.T) {
 	bad := "/nonexistent-cascade-test-dir/sub"
-	if _, err := newBridgeThreadPrivacyResolver(context.Background(), bad, newBridgeTestClock()); err == nil {
+	db := openTestConversationDB(t, t.TempDir())
+	if _, err := newBridgeThreadPrivacyResolver(context.Background(), db, bad, newBridgeTestClock()); err == nil {
 		t.Fatal("newBridgeThreadPrivacyResolver over an unwritable directory succeeded")
+	}
+}
+
+// TestBridgeThreadPrivacyResolver_NilDBRefuses proves the contract: a nil
+// connection is always refused with KindInvalidInput, never silently
+// accepted. newBridgeThreadPrivacyResolver's own early guard is the FIRST
+// line of defense (fails fast, names the bridge-specific requirement);
+// ApplyConversationSchema (internal/conversation/domain.go) also refuses a
+// nil db on its own, so this test verifies the caller-visible contract
+// rather than which of the two layers fires — removing the early guard
+// alone does not turn this red, since the fallback still refuses with the
+// same Kind (verified during ci-fix14's mutation pass).
+func TestBridgeThreadPrivacyResolver_NilDBRefuses(t *testing.T) {
+	_, err := newBridgeThreadPrivacyResolver(context.Background(), nil, t.TempDir(), newBridgeTestClock())
+	if err == nil {
+		t.Fatal("newBridgeThreadPrivacyResolver with a nil db succeeded")
+	}
+	if !cascade.HasKind(err, cascade.KindInvalidInput) {
+		t.Fatalf("newBridgeThreadPrivacyResolver err = %v, want KindInvalidInput", err)
 	}
 }
 
@@ -211,6 +232,10 @@ func TestNewCascadePABridgeChatHandler_Constructs(t *testing.T) {
 		t.Fatalf("openBridgeState: %v", err)
 	}
 	closeBridgeState(t, state)
+	stateDB, ok := bridgeStateSQLDB(state)
+	if !ok {
+		t.Fatal("bridgeStateSQLDB: state does not expose a reusable sqlite connection")
+	}
 	pairKey, err := cascadepa.DerivePairCodeKey(syntheticBotToken)
 	if err != nil {
 		t.Fatalf("DerivePairCodeKey: %v", err)
@@ -219,7 +244,7 @@ func TestNewCascadePABridgeChatHandler_Constructs(t *testing.T) {
 	module := telegram.NewModule(syntheticBotToken, nil, nil, bridgeElevationPolicy{}, stores, nil, nil, nil)
 
 	bridge, err := NewCascadePABridgeChatHandler(ctx,
-		ChatWiringDeps{DataDir: dataDir, Events: bus}, module, stores.Binding, "tg-test", deps.Clock)
+		ChatWiringDeps{DataDir: dataDir, DB: stateDB, Events: bus}, module, stores.Binding, "tg-test", deps.Clock)
 	if err != nil {
 		t.Fatalf("NewCascadePABridgeChatHandler: %v", err)
 	}
@@ -252,8 +277,9 @@ func TestNewCascadePABridgeChatHandler_EmptyDataDirRefuses(t *testing.T) {
 // newBridgeThreadPrivacyResolver's own direct test above.
 func TestNewCascadePABridgeChatHandler_UnwritableDataDirPropagates(t *testing.T) {
 	bad := "/nonexistent-cascade-test-dir/sub"
+	db := openTestConversationDB(t, t.TempDir())
 	_, err := NewCascadePABridgeChatHandler(context.Background(),
-		ChatWiringDeps{DataDir: bad}, nil, nil, "tg-test", newBridgeTestClock())
+		ChatWiringDeps{DataDir: bad, DB: db}, nil, nil, "tg-test", newBridgeTestClock())
 	if err == nil {
 		t.Fatal("NewCascadePABridgeChatHandler over an unwritable DataDir succeeded")
 	}

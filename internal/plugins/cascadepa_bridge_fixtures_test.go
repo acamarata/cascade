@@ -16,6 +16,7 @@ package plugins
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"io"
 	"os"
@@ -131,6 +132,27 @@ func closeBridgeState(t *testing.T, state cascadepa.BridgeState) {
 	})
 }
 
+// openTestConversationDB opens a fresh sqlite connection at
+// dataDir/cascade.db and closes it via t.Cleanup — the test-owned stand-in
+// for the connection production reuses from openBridgeState's
+// bridgeStateSQLDB (ci-fix14), so a test exercising
+// newBridgeThreadPrivacyResolver or NewCascadePABridgeChatHandler directly
+// never leaves a Windows-unremovable handle behind.
+func openTestConversationDB(t *testing.T, dataDir string) *sql.DB {
+	t.Helper()
+	dbPath := filepath.Join(dataDir, "cascade.db")
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?_busy_timeout=5000")
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close test conversation db: %v", err)
+		}
+	})
+	return db
+}
+
 // closeBridgeRuntime registers rt.Stop via t.Cleanup, so the state
 // NewCascadePABridge opened inside enabledBridge is closed even when a test
 // never calls Start (Stop on an unstarted module is a no-op per
@@ -204,5 +226,34 @@ func TestNewCascadePABridge_FillsApprovalBridgeOnlyWhenEnabled(t *testing.T) {
 	}
 	if disabled.ApprovalBridge != nil {
 		t.Fatal("a disabled bridge produced a non-nil ApprovalBridge")
+	}
+}
+
+// TestBridgeThreadPrivacyResolver_UsesTheGivenConnection is ci-fix14's
+// sharpest falsifiable proof: the resolver must operate over the EXACT db
+// passed in, never a separate one it opens for itself. Closing db out from
+// under the resolver has to break it too. Mutation: reintroduce the old
+// sql.Open inside newBridgeThreadPrivacyResolver (ignoring the db
+// parameter) and this goes red — ThreadPrivacy would still succeed on its
+// own untouched connection.
+func TestBridgeThreadPrivacyResolver_UsesTheGivenConnection(t *testing.T) {
+	dataDir := t.TempDir()
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(dataDir, "cascade.db")+"?_busy_timeout=5000")
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+
+	resolver, err := newBridgeThreadPrivacyResolver(ctx, db, dataDir, newBridgeTestClock())
+	if err != nil {
+		t.Fatalf("newBridgeThreadPrivacyResolver: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("db.Close: %v", err)
+	}
+
+	if _, err := resolver.ThreadPrivacy(ctx, "t1"); err == nil {
+		t.Fatal("ThreadPrivacy succeeded after the caller's own db was closed; " +
+			"the resolver must share that exact connection, not one it opened itself")
 	}
 }

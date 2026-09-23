@@ -38,12 +38,15 @@ import (
 //     _ = chatBridge
 //   (NewTelegramBridge's own constructor performs the RegisterHandler call).
 //
-// Inputs: the daemon's data directory (cascade.db lives at DataDir/cascade.db,
-//   the SAME path cmd/cascade/chat_wiring.go opens — see that file's own
-//   header for why a second sqlite connection to it is this tree's
-//   established pattern, not a new one), the bridge's BridgeEventPublisher,
-//   the already-constructed *telegram.TelegramModule/BindingStore/subject,
-//   and a clock.
+// Inputs: the daemon's data directory (cascade.db lives at DataDir/cascade.db;
+//   ThreadPrivacy still applies its own migration set the way
+//   registerContextEngineHandlers/wireConductorExpand and
+//   cmd/cascade/chat_wiring.go's wireChatHandlers apply theirs — a namespace
+//   of its own on the shared file, not a shared table), the bridge's
+//   BridgeEventPublisher, the OWNING *sql.DB connection openBridgeState
+//   already opened (ChatWiringDeps.DB — see ci-fix14 below for why this is a
+//   parameter, not a second sql.Open), the already-constructed
+//   *telegram.TelegramModule/BindingStore/subject, and a clock.
 //
 // Outputs: a *telegram.TelegramBridge whose HandlerText is already wired.
 //
@@ -52,21 +55,47 @@ import (
 //     chat.append_turn/get_thread/list_threads/search only (S-43.T2); there
 //     is no wire method for ThreadPrivacy. Adding one is that ticket's
 //     files_scope, not this one's, so bridgeThreadPrivacyResolver reads it
-//     the way registerContextEngineHandlers/wireConductorExpand already do
-//     for their own namespaces: a second connection to the same cascade.db.
+//     directly over conversation.Store instead.
 //   - THE CHAT SERVICE REUSES cascadePAClient'S OWN WIRE CODE.
 //     bridgeChatService is the identical chat.append_turn round trip
 //     cascadePAClient.OneShot (cascadepa_wiring.go) makes for `cascade
 //     chat`, over the SAME appendTurnParams/rpcDoer/pathResolver types —
 //     one RPC client shape, not two.
+//   - ONE CONNECTION, ONE OWNER (ci-fix14, 2026-09-22). This file used to
+//     open its OWN second *sql.DB to cascade.db inside
+//     newBridgeThreadPrivacyResolver and never closed it: nothing in
+//     enabledBridge or BridgeRuntime.Stop held a reference to it, so every
+//     bridge construction leaked a sqlite handle for the life of the
+//     process. On POSIX that leak was invisible (an idle connection does
+//     not block anything); on windows/amd64 CI it made every bridge test's
+//     t.TempDir() cleanup fail with "The process cannot access the file
+//     because it is being used by another process" on cascade.db. The fix
+//     is not a shorter TempDir path — it is that this file no longer owns
+//     any connection at all: ChatWiringDeps.DB is the SAME *sql.DB
+//     enabledBridge's openBridgeState already opened (bridgeStateSQLDB,
+//     cascadepa_bridge_state.go), so the ONE close in
+//     BridgeRuntime.Stop (closeStateAfterStop, cascadepa_bridge_state_close.go)
+//     already releases it. A caller that is not enabledBridge (a test
+//     exercising this file directly) opens and t.Cleanup-closes its own
+//     *sql.DB — see cascadepa_bridge_fixtures_test.go's
+//     openTestConversationDB.
 //
-// SPORT: internal/plugins:cascadepa-bridge-chat-wiring (ADD) — P1-E23-W5-S48-T2.
+// SPORT: internal/plugins:cascadepa-bridge-chat-wiring (ADD) — P1-E23-W5-S48-T2; ci-fix14.
 
 // ChatWiringDeps is what NewCascadePABridgeChatHandler needs beyond the
 // already-constructed module/binding/subject.
 type ChatWiringDeps struct {
 	// DataDir is the daemon's data directory (matches BridgeDeps.DataDir).
+	// Still required with DB set: ApplyConversationSchema's dbPath/backupDir
+	// arguments are derived from it.
 	DataDir string
+	// DB is the OWNING *sql.DB connection to DataDir/cascade.db — in
+	// production, the SAME connection enabledBridge's openBridgeState
+	// already opened (bridgeStateSQLDB). This constructor applies the
+	// conversation schema on it but never opens or closes it: ownership,
+	// and the eventual Close, belong entirely to the caller (see this
+	// file's header, ci-fix14). Required.
+	DB *sql.DB
 	// Events is the bridge's journal bus (matches BridgeDeps.Events).
 	Events BridgeEventPublisher
 }
@@ -118,23 +147,30 @@ func (c bridgeChatService) AppendTurn(ctx context.Context, threadID, role, text 
 var _ telegram.ChatService = bridgeChatService{}
 
 // bridgeThreadPrivacyResolver resolves a bridge thread's §5.16 tier by
-// reading conversation_thread_privacy over its own sqlite connection to
-// cascade.db — see this file's header for why no RPC method exists yet.
+// reading conversation_thread_privacy over cascade.db — see this file's
+// header for why no RPC method exists yet, and for why db is a connection
+// this type borrows rather than owns.
 type bridgeThreadPrivacyResolver struct {
 	store conversation.Store
 }
 
+// newBridgeThreadPrivacyResolver applies the conversation schema onto db —
+// an ALREADY-OPEN connection the caller owns (production: enabledBridge's
+// state.sqlDB(); a direct test: its own t.Cleanup-closed handle, see
+// openTestConversationDB) — and wraps it in a conversation.Store. It never
+// opens or closes db itself (ci-fix14: the previous version did both, and
+// closed it on nothing but its own schema-apply error, which is the leak
+// windows/amd64 CI's TempDir cleanup caught).
 func newBridgeThreadPrivacyResolver(
-	ctx context.Context, dataDir string, clock migrate.Clock,
+	ctx context.Context, db *sql.DB, dataDir string, clock migrate.Clock,
 ) (bridgeThreadPrivacyResolver, error) {
-	dbPath := filepath.Join(dataDir, "cascade.db")
-	db, err := sql.Open("sqlite", "file:"+dbPath+"?_busy_timeout=5000")
-	if err != nil {
-		return bridgeThreadPrivacyResolver{}, cascade.Wrap(cascade.KindUnavailable, err, "cascade-pa bridge: open cascade.db")
+	if db == nil {
+		return bridgeThreadPrivacyResolver{}, cascade.New(cascade.KindInvalidInput,
+			"cascade-pa bridge: chat wiring requires a reusable sqlite connection")
 	}
+	dbPath := filepath.Join(dataDir, "cascade.db")
 	if err := conversation.ApplyConversationSchema(
 		ctx, db, migrate.SQLiteEmitter{}, clock, dbPath, filepath.Join(dataDir, "backups")); err != nil {
-		_ = db.Close()
 		return bridgeThreadPrivacyResolver{}, err
 	}
 	return bridgeThreadPrivacyResolver{store: conversation.NewStore(db)}, nil
@@ -210,7 +246,7 @@ func NewCascadePABridgeChatHandler(ctx context.Context, deps ChatWiringDeps,
 	if deps.DataDir == "" {
 		return nil, cascade.New(cascade.KindInvalidInput, "cascade-pa bridge: chat wiring requires a data directory")
 	}
-	privacy, err := newBridgeThreadPrivacyResolver(ctx, deps.DataDir, clock)
+	privacy, err := newBridgeThreadPrivacyResolver(ctx, deps.DB, deps.DataDir, clock)
 	if err != nil {
 		return nil, err
 	}

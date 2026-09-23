@@ -189,6 +189,12 @@ func enabledBridge(ctx context.Context, deps BridgeDeps, token string) (*BridgeR
 	if err != nil {
 		return nil, err
 	}
+	// ci-fix14: the chat-parity resolver below reuses THIS connection rather
+	// than opening a second one (closed only via closeStateAfterStop).
+	stateDB, err := requireBridgeStateSQLDB(state)
+	if err != nil {
+		return nil, closeStateOnError(state, err)
+	}
 	pairKey, err := cascadepa.DerivePairCodeKey(token)
 	if err != nil {
 		return nil, closeStateOnError(state, err)
@@ -211,18 +217,12 @@ func enabledBridge(ctx context.Context, deps BridgeDeps, token string) (*BridgeR
 		return nil, closeStateOnError(state, err)
 	}
 	// HandlerText: the S-48.T2 chat bridge (registers itself); HandlerCallbackQuery: S-48.T4's approval flow.
-	if _, err := NewCascadePABridgeChatHandler(ctx, ChatWiringDeps{DataDir: deps.DataDir, Events: deps.Events}, module, stores.Binding, subject, deps.Clock); err != nil {
+	if _, err := NewCascadePABridgeChatHandler(ctx,
+		ChatWiringDeps{DataDir: deps.DataDir, DB: stateDB, Events: deps.Events},
+		module, stores.Binding, subject, deps.Clock); err != nil {
 		return nil, closeStateOnError(state, err)
 	}
-	module.RegisterHandler(telegram.HandlerCallbackQuery, telegram.NewApprovalHandler(telegram.ApprovalHandlerDeps{
-		Subject:   subject,
-		Binding:   stores.Binding,
-		Callbacks: stores.Callback,
-		Approvals: newTelegramApprovalService(client.UnixDialer, telegramApprovalClientTimeout, runtime.NewDefaultPathProvider),
-		Events:    journal,
-		Clock:     deps.Clock,
-		Answer:    module.Answer,
-	}))
+	wireApprovalHandler(module, subject, stores, journal, deps.Clock)
 	routes := []string{telegram.HandlerText, telegram.HandlerCallbackQuery}
 	return &BridgeRuntime{
 		Subject:        subject,
@@ -234,6 +234,22 @@ func enabledBridge(ctx context.Context, deps BridgeDeps, token string) (*BridgeR
 		Routes:         routes,
 		ApprovalBridge: approvalLeg,
 	}, nil
+}
+
+// wireApprovalHandler registers HandlerCallbackQuery (the S-48.T4 approval
+// flow) on module. Split out of enabledBridge to keep that function under
+// Art.10.3's 50-line cap (mechanical split, no behaviour change).
+func wireApprovalHandler(module *telegram.TelegramModule, subject string,
+	stores *cascadepa.Stores, journal *bridgeJournal, clock cascadepa.PairClock) {
+	module.RegisterHandler(telegram.HandlerCallbackQuery, telegram.NewApprovalHandler(telegram.ApprovalHandlerDeps{
+		Subject:   subject,
+		Binding:   stores.Binding,
+		Callbacks: stores.Callback,
+		Approvals: newTelegramApprovalService(client.UnixDialer, telegramApprovalClientTimeout, runtime.NewDefaultPathProvider),
+		Events:    journal,
+		Clock:     clock,
+		Answer:    module.Answer,
+	}))
 }
 
 // closeStateOnError and closeStateAfterStop (the durable-state close helpers
