@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-23T00:09:24Z",
+  "generated_at": "2026-09-23T00:11:11Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -24812,14 +24812,29 @@
           "raw": "plugins/cascade-pa/install:acceptance (ADD) -- P1-E24-W5-S50-T7."
         },
         {
+          "file": "plugins/cascade-pa/install/acceptance_x_posix_test.go",
+          "line": 22,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T7",
+          "raw": "plugins/cascade-pa/install:acceptance (TEST) -- P1-E24-W5-S50-T7"
+        },
+        {
           "file": "plugins/cascade-pa/install/acceptance_x_test.go",
-          "line": 58,
+          "line": 64,
           "status": "ADD",
           "ticket": "P1-E24-W5-S50-T7",
           "raw": "plugins/cascade-pa/install:acceptance (ADD) -- P1-E24-W5-S50-T7."
+        },
+        {
+          "file": "plugins/cascade-pa/install/acceptance_x_windows_test.go",
+          "line": 20,
+          "status": "",
+          "ticket": "P1-E24-W5-S50-T7",
+          "raw": "plugins/cascade-pa/install:acceptance (TEST) -- P1-E24-W5-S50-T7"
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -29778,7 +29793,7 @@
       ]
     }
   ],
-  "total_sites": 2798,
+  "total_sites": 2800,
   "unspecified_count": 140,
-  "multi_status_count": 75
+  "multi_status_count": 76
 }
