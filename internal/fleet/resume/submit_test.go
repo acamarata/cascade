@@ -28,15 +28,15 @@ func seedFanOutCursor(t *testing.T, store journal.Store, taskID string, legs int
 	if err != nil {
 		t.Fatalf("marshal cursor: %v", err)
 	}
-	if _, err := store.Append(ctx, taskID, journal.KindResumeCursor, "cursor-op", cursorPayload); err != nil {
+	if _, err := store.Append(ctx, FanOutEntity(taskID), journal.KindResumeCursor, "cursor-op", cursorPayload); err != nil {
 		t.Fatalf("seed cursor: %v", err)
 	}
 	for _, idx := range completedIdx {
-		done, err := json.Marshal(legPayload{LegIndex: idx, JobID: "job-" + itoa(uint64(idx)), Attempt: 1})
+		done, err := json.Marshal(legPayload{LegIndex: idx, JobID: "job-" + itoa(uint64(idx)), Attempt: 1, Outcome: conductor.LegOutcomeOK})
 		if err != nil {
 			t.Fatalf("marshal leg: %v", err)
 		}
-		if _, err := store.Append(ctx, taskID, journal.KindFanOutLegDone, "leg-done-"+itoa(uint64(idx)), done); err != nil {
+		if _, err := store.Append(ctx, FanOutEntity(taskID), journal.KindFanOutLegDone, "leg-done-"+itoa(uint64(idx)), done); err != nil {
 			t.Fatalf("seed leg done: %v", err)
 		}
 	}

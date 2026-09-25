@@ -261,7 +261,7 @@ func TestUsage_FanOutParentWritesNoRow(t *testing.T) {
 	exec.SetUsageStore(store)
 
 	const n = 3
-	parent, err := exec.ExecuteFanOutResponse(context.Background(), validReq(), n, nil, passthroughPermit, &spyJournal{})
+	parent, err := exec.ExecuteFanOutResponse(context.Background(), "fo-1", validReq(), n, nil, passthroughPermit, &spyJournal{}, newMemLegStore())
 	if err != nil {
 		t.Fatalf("ExecuteFanOutResponse: %v", err)
 	}

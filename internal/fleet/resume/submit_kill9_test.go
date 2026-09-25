@@ -46,7 +46,7 @@ func TestResumeKillHelperProcess(_ *testing.T) {
 	store := journal.New(driver, testkit.NewFrozenClock(testInstant), journal.DefaultNamespace)
 	req, _ := json.Marshal(provider.ModelRequest{TaskID: "killed-task", Inputs: []provider.ChatMessage{{Role: "user", Content: "hi"}}})
 	cursorPayload, _ := json.Marshal(resumeCursorPayload{T: "cursor", TaskID: "killed-task", Legs: 2, Request: req})
-	if _, err := store.Append(ctx, "killed-task", journal.KindResumeCursor, "cursor-op", cursorPayload); err != nil {
+	if _, err := store.Append(ctx, FanOutEntity("killed-task"), journal.KindResumeCursor, "cursor-op", cursorPayload); err != nil {
 		_, _ = os.Stdout.WriteString("SEED_FAILED\n")
 		return
 	}
@@ -54,13 +54,13 @@ func TestResumeKillHelperProcess(_ *testing.T) {
 	// fanout_leg_done never will — this process is about to be SIGKILLed
 	// mid-write, before it can append that entry or run any deferred
 	// cleanup (driver.Close, in particular, never runs).
-	done0, _ := json.Marshal(legPayload{LegIndex: 0, JobID: "job-0", Attempt: 1})
-	if _, err := store.Append(ctx, "killed-task", journal.KindFanOutLegDone, "leg-done-0", done0); err != nil {
+	done0, _ := json.Marshal(legPayload{LegIndex: 0, JobID: "job-0", Attempt: 1, Outcome: conductor.LegOutcomeOK})
+	if _, err := store.Append(ctx, FanOutEntity("killed-task"), journal.KindFanOutLegDone, "leg-done-0", done0); err != nil {
 		_, _ = os.Stdout.WriteString("SEED_FAILED\n")
 		return
 	}
 	started1, _ := json.Marshal(legPayload{LegIndex: 1, Attempt: 1})
-	if _, err := store.Append(ctx, "killed-task", journal.KindFanOutLegStarted, "leg-started-1", started1); err != nil {
+	if _, err := store.Append(ctx, FanOutEntity("killed-task"), journal.KindFanOutLegStarted, "leg-started-1", started1); err != nil {
 		_, _ = os.Stdout.WriteString("SEED_FAILED\n")
 		return
 	}
@@ -114,7 +114,7 @@ func TestResumeKill9FanOut(t *testing.T) {
 		t.Fatalf("second Run: %v", err)
 	}
 	for _, o := range report2.Outcomes {
-		if o.EntityID == "killed-task" {
+		if o.EntityID == FanOutEntity("killed-task") {
 			t.Fatalf("second Run re-surfaced killed-task = %+v, want it absent (idempotent: fully done, no re-dispatch)", o)
 		}
 	}
@@ -182,9 +182,10 @@ func journalingFanOut(calls *[]fakeFanOutCall) FanOutFunc {
 				resp[i] = provider.ModelResponse{JobID: jobID}
 				continue
 			}
-			_ = appender.AppendLeg(ctx, "fanout_leg_started", req.TaskID, i, nil)
+			attempt, _ := appender.AppendLeg(ctx, "fanout_leg_started", req.TaskID, i, nil)
 			jobID := "job-" + itoa(uint64(i))
-			_ = appender.AppendLeg(ctx, "fanout_leg_done", req.TaskID, i, map[string]string{"job_id": jobID})
+			_, _ = appender.AppendLeg(ctx, "fanout_leg_done", req.TaskID, i, map[string]string{"job_id": jobID,
+				"attempt": itoa(attempt), "outcome": conductor.LegOutcomeOK, "result_key": conductor.LegResultKey(req.TaskID, i)})
 			resp[i] = provider.ModelResponse{JobID: conductor.JobID(jobID)}
 		}
 		return resp, nil
@@ -263,7 +264,7 @@ func TestResumeUpgradeInPlace(t *testing.T) {
 		t.Fatalf("Run after restart: %v", err)
 	}
 	for _, o := range report.Outcomes {
-		if o.EntityID == "t-upgrade" && o.Classification != ClassResumable {
+		if o.EntityID == FanOutEntity("t-upgrade") && o.Classification != ClassResumable {
 			t.Fatalf("post-upgrade outcome = %+v, want ClassResumable (surviving cursor re-submitted)", o)
 		}
 	}

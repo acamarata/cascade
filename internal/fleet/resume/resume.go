@@ -192,8 +192,8 @@ func passthroughPermit(ctx context.Context, fn func(context.Context) error) erro
 // KindFanOutLegStarted/Done entries FanOut's completed-map skip needs).
 type noopAppender struct{}
 
-func (noopAppender) AppendLeg(context.Context, string, string, int, map[string]string) error {
-	return nil
+func (noopAppender) AppendLeg(context.Context, string, string, int, map[string]string) (uint64, error) {
+	return 0, nil
 }
 
 // Run scans every entity in the journal, classifies it, re-submits every

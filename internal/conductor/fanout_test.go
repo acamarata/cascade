@@ -18,24 +18,32 @@ func passthroughPermit(ctx context.Context, fn func(context.Context) error) erro
 	return fn(ctx)
 }
 
-// spyJournal records every AppendLeg call for assertion.
+// spyJournal records every AppendLeg call for assertion. A start's
+// attempt is 1 + that leg's prior starts; failOn/failErr inject an append
+// error for one kind (fanout_results_test.go).
 type spyJournal struct {
 	mu      sync.Mutex
 	entries []spyJournalEntry
+	starts  map[string]uint64
+	failOn  string
+	failErr error
 }
 
 type spyJournalEntry struct {
 	kind     string
-	taskID   string
+	fanoutID string
 	legIndex int
 	fields   map[string]string
 }
 
-func (s *spyJournal) AppendLeg(_ context.Context, kind, taskID string, legIndex int, fields map[string]string) error {
+func (s *spyJournal) AppendLeg(_ context.Context, kind, fanoutID string, legIndex int, fields map[string]string) (uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.entries = append(s.entries, spyJournalEntry{kind: kind, taskID: taskID, legIndex: legIndex, fields: fields})
-	return nil
+	if s.failOn == kind {
+		return 0, s.failErr
+	}
+	s.entries = append(s.entries, spyJournalEntry{kind: kind, fanoutID: fanoutID, legIndex: legIndex, fields: fields})
+	return s.attemptFor(kind, fanoutID, legIndex, fields), nil
 }
 
 func (s *spyJournal) count(kind string) int {
@@ -69,7 +77,7 @@ func countingExec(t *testing.T) (func(context.Context, provider.ModelRequest) (p
 func TestFanOut_AllSuccess(t *testing.T) {
 	exec, calls := countingExec(t)
 	j := &spyJournal{}
-	results, err := FanOut(context.Background(), fanoutReq(), 4, nil, passthroughPermit, j, exec)
+	results, err := FanOut(context.Background(), "fo-1", fanoutReq(), 4, nil, passthroughPermit, j, newMemLegStore(), allowAll, exec)
 	if err != nil {
 		t.Fatalf("FanOut: %v", err)
 	}
@@ -88,7 +96,7 @@ func TestFanOut_FirstLegError_AllDrained(t *testing.T) {
 		return provider.ModelResponse{}, errors.New("boom")
 	}
 	j := &spyJournal{}
-	_, err := FanOut(context.Background(), fanoutReq(), 5, nil, passthroughPermit, j, exec)
+	_, err := FanOut(context.Background(), "fo-1", fanoutReq(), 5, nil, passthroughPermit, j, newMemLegStore(), allowAll, exec)
 	if err == nil {
 		t.Fatal("FanOut: want error, got nil")
 	}
@@ -109,7 +117,7 @@ func TestFanOut_CtxCancelledBeforeAdmit(t *testing.T) {
 		return provider.ModelResponse{}, nil
 	}
 	j := &spyJournal{}
-	_, err := FanOut(ctx, fanoutReq(), 3, nil, passthroughPermit, j, exec)
+	_, err := FanOut(ctx, "fo-1", fanoutReq(), 3, nil, passthroughPermit, j, newMemLegStore(), allowAll, exec)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("FanOut: err = %v, want context.Canceled", err)
 	}
@@ -128,7 +136,7 @@ func TestFanOut_CtxCancelledAfterDispatch(t *testing.T) {
 		return provider.ModelResponse{JobID: "job"}, nil
 	}
 	j := &spyJournal{}
-	_, err := FanOut(ctx, fanoutReq(), 2, nil, passthroughPermit, j, exec)
+	_, err := FanOut(ctx, "fo-1", fanoutReq(), 2, nil, passthroughPermit, j, newMemLegStore(), allowAll, exec)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("FanOut: err = %v, want context.Canceled", err)
 	}
@@ -141,7 +149,7 @@ func TestFanOut_NegativeN_InvalidRequest(t *testing.T) {
 		return provider.ModelResponse{}, nil
 	}
 	j := &spyJournal{}
-	_, err := FanOut(context.Background(), fanoutReq(), -1, nil, passthroughPermit, j, exec)
+	_, err := FanOut(context.Background(), "fo-1", fanoutReq(), -1, nil, passthroughPermit, j, newMemLegStore(), allowAll, exec)
 	if err != ErrInvalidRequest {
 		t.Fatalf("FanOut(n=-1): err = %v, want ErrInvalidRequest", err)
 	}
@@ -166,7 +174,7 @@ func TestFanOut_NoAdmitCalled(t *testing.T) {
 		return provider.ModelResponse{JobID: "job"}, nil
 	}
 	j := &spyJournal{}
-	if _, err := FanOut(context.Background(), fanoutReq(), 3, nil, permit, j, exec); err != nil {
+	if _, err := FanOut(context.Background(), "fo-1", fanoutReq(), 3, nil, permit, j, newMemLegStore(), allowAll, exec); err != nil {
 		t.Fatalf("FanOut: %v", err)
 	}
 	if atomic.LoadInt32(&permitCalls) != 3 {
@@ -178,7 +186,10 @@ func TestFanOut_ResumeSkipsCompletedLegs(t *testing.T) {
 	exec, calls := countingExec(t)
 	j := &spyJournal{}
 	completed := map[int]JobID{0: "job-0", 2: "job-2"}
-	results, err := FanOut(context.Background(), fanoutReq(), 3, completed, passthroughPermit, j, exec)
+	store := newMemLegStore()
+	seedLegRecord(t, store, "fo-1", fanoutReq(), 0, provider.ModelResponse{JobID: "job-0"})
+	seedLegRecord(t, store, "fo-1", fanoutReq(), 2, provider.ModelResponse{JobID: "job-2"})
+	results, err := FanOut(context.Background(), "fo-1", fanoutReq(), 3, completed, passthroughPermit, j, store, allowAll, exec)
 	if err != nil {
 		t.Fatalf("FanOut: %v", err)
 	}
@@ -196,7 +207,7 @@ func TestFanOut_ResumeSkipsCompletedLegs(t *testing.T) {
 func TestFanOut_JournalLegEntries(t *testing.T) {
 	exec, _ := countingExec(t)
 	j := &spyJournal{}
-	if _, err := FanOut(context.Background(), fanoutReq(), 3, nil, passthroughPermit, j, exec); err != nil {
+	if _, err := FanOut(context.Background(), "fo-1", fanoutReq(), 3, nil, passthroughPermit, j, newMemLegStore(), allowAll, exec); err != nil {
 		t.Fatalf("FanOut: %v", err)
 	}
 	if j.count("fanout_leg_started") != 3 {
@@ -234,7 +245,8 @@ func TestFanOut_WithPermitError_LegOnly(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			ch <- dispatchLeg(context.Background(), fanoutReq(), idx, nil, legPermit(idx), j, exec)
+			run := &fanOutRun{fanoutID: "fo-1", req: fanoutReq(), withPermit: legPermit(idx), journal: j, results: newMemLegStore(), authorize: allowAll, exec: exec}
+			ch <- run.dispatchLeg(context.Background(), idx)
 		}(i)
 	}
 	wg.Wait()
@@ -268,7 +280,7 @@ func TestFanOut_ParentPermitReleasedBeforeLegs(t *testing.T) {
 	// admission state.
 	exec, calls := countingExec(t)
 	j := &spyJournal{}
-	if _, err := FanOut(context.Background(), fanoutReq(), 2, nil, passthroughPermit, j, exec); err != nil {
+	if _, err := FanOut(context.Background(), "fo-1", fanoutReq(), 2, nil, passthroughPermit, j, newMemLegStore(), allowAll, exec); err != nil {
 		t.Fatalf("FanOut: %v", err)
 	}
 	if atomic.LoadInt32(calls) != 2 {
