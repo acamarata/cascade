@@ -12,6 +12,7 @@ package build
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -149,5 +150,95 @@ func TestTrackedDeadSurfaceCount_Arithmetic(t *testing.T) {
 	orphaned := []OrphanedAllowEntry{{Symbol: "internal/b.Three", RetireTicket: "P1-E01-W1-S01-T1", CallerSite: "z.go"}}
 	if got := TrackedDeadSurfaceCount(allow, orphaned); got != 3 {
 		t.Fatalf("TrackedDeadSurfaceCount = %d, want 3 (2 UNOWNED + 1 orphaned)", got)
+	}
+}
+
+// TestCapRow_MissingCallerSiteIsOrphan: a capability-keyed row stands for a
+// retire ticket that was already closed, so the orphan predicate treats it as
+// closed: its caller_site going missing is flagged at once, with no closed
+// manifest entry needed. The same row with an existing caller_site is not.
+func TestCapRow_MissingCallerSiteIsOrphan(t *testing.T) {
+	root := t.TempDir()
+	writeFileT(t, filepath.Join(root, "internal", "widget", "wired.go"), "package widget\n")
+	capRow := func(symbol, site string) TestOnlyAllowEntry {
+		e := orphanFixtureEntry(symbol, "cap:fixture-gates", site, "")
+		e.Expires = "P9-FIX-03"
+		return e
+	}
+	allow := map[string]TestOnlyAllowEntry{
+		"internal/b.CapOrphan":  capRow("internal/b.CapOrphan", "internal/b/never.go"),
+		"internal/widget.Wired": capRow("internal/widget.Wired", "internal/widget/wired.go"),
+		"internal/c.Open":       orphanFixtureEntry("internal/c.Open", "P9-FIX-01", "internal/c/never.go", ""),
+	}
+	got := FindOrphanedAllowEntries(root, allow, map[string]bool{"P9-FIX-02": true})
+	if len(got) != 1 || got[0].Symbol != "internal/b.CapOrphan" || got[0].RetireTicket != "cap:fixture-gates" {
+		t.Fatalf("FindOrphanedAllowEntries = %+v, want exactly [internal/b.CapOrphan]", got)
+	}
+	if n := TrackedDeadSurfaceCount(allow, got); n != 1 {
+		t.Fatalf("TrackedDeadSurfaceCount = %d, want 1: a cap row counts only through the orphan predicate", n)
+	}
+}
+
+// TestLoadKnownTicketIDs_FailsLoud: the known list gets the manifest's own
+// fail-loud rules. A missing file, malformed JSON, or a manifest without a
+// populated known list is an error, never an empty set that refuses nothing.
+func TestLoadKnownTicketIDs_FailsLoud(t *testing.T) {
+	dir := t.TempDir()
+	// Each body trips exactly one refusal, named by want, so no guard can
+	// hide behind another.
+	cases := map[string]struct{ body, want string }{
+		"malformed json":       {"{not json", "parsing"},
+		"no known key":         {`{"tickets":[]}`, "no known ticket list"},
+		"empty known":          {`{"tickets":[],"known":[]}`, "no known ticket list"},
+		"closed but not known": {`{"tickets":["P9-FIX-02"],"known":["P9-FIX-01"]}`, "not as known"},
+	}
+	for name, c := range cases {
+		p := filepath.Join(dir, strings.ReplaceAll(name, " ", "-")+".json")
+		writeFileT(t, p, c.body)
+		if _, err := LoadKnownTicketIDs(p); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: err = %v, want a refusal naming %q", name, err, c.want)
+		}
+	}
+	if _, err := LoadKnownTicketIDs(filepath.Join(dir, "missing.json")); err == nil {
+		t.Error("missing file: expected an error")
+	}
+	p := filepath.Join(dir, "ok.json")
+	writeFileT(t, p, `{"tickets":["P9-FIX-02"],"known":["P9-FIX-01","P9-FIX-02"]}`)
+	got, err := LoadKnownTicketIDs(p)
+	if err != nil || len(got) != 2 || !got["P9-FIX-01"] || !got["P9-FIX-02"] {
+		t.Fatalf("control: LoadKnownTicketIDs = %v, %v, want both ids", got, err)
+	}
+}
+
+// TestLoadCapabilityIDs_FailsLoud: a missing, empty or malformed capability
+// list is an error; otherwise every cap row would be checked against nothing.
+func TestLoadCapabilityIDs_FailsLoud(t *testing.T) {
+	dir := t.TempDir()
+	cases := map[string]string{"empty": "", "blank lines": "\n\n", "not an id": "cap:ok\nfleet-sessions\n"}
+	for name, body := range cases {
+		p := filepath.Join(dir, strings.ReplaceAll(name, " ", "-")+".txt")
+		writeFileT(t, p, body)
+		if _, err := LoadCapabilityIDs(p); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+	if _, err := LoadCapabilityIDs(filepath.Join(dir, "missing.txt")); err == nil {
+		t.Error("missing file: expected an error")
+	}
+	p := filepath.Join(dir, "ok.txt")
+	writeFileT(t, p, "cap:fixture-gates\ncap:fixture-other\n")
+	got, err := LoadCapabilityIDs(p)
+	if err != nil || len(got) != 2 || !got["cap:fixture-gates"] {
+		t.Fatalf("control: LoadCapabilityIDs = %v, %v", got, err)
+	}
+}
+
+// TestLoadClosedTicketManifest_MissingFileNamesNoPrivatePath: the missing-file
+// error says the tracked manifest is the only closure source and names no path
+// outside the repository's tracked tree.
+func TestLoadClosedTicketManifest_MissingFileNamesNoPrivatePath(t *testing.T) {
+	_, err := LoadClosedTicketManifest(filepath.Join(t.TempDir(), "missing.json"))
+	if err == nil || !strings.Contains(err.Error(), "only closure source") || strings.Contains(err.Error(), ".claude") {
+		t.Fatalf("missing-manifest error = %v", err)
 	}
 }

@@ -53,11 +53,10 @@ type TestOnlyAllowEntry struct {
 	// Caller names what is expected to call it, so the entry can be
 	// retired deliberately rather than forgotten. Required.
 	Caller string `json:"expected_caller"`
-	// RetireTicket is the ticket id that will wire this symbol, e.g.
-	// "P1-E17-W4-S36-T2" or the short form "E-08.T4". The literal value
-	// "UnownedTicket" ("UNOWNED") is accepted for a legacy entry whose
-	// text names no ticket; see UnownedTicketCount. Required, and
-	// validated against ticketIDPattern.
+	// RetireTicket is the exemption key (retireKeyPattern): a plan ticket id
+	// "P<phase>-<EPIC>-<nn>" the closed manifest lists as known; a capability
+	// id "cap:<name>" for a row whose ticket already closed, with Expires; or
+	// UnownedTicket. Legacy ids are refused; CheckRetireKeys checks membership.
 	RetireTicket string `json:"retire_ticket"`
 	// CallerSite is a repo-relative path to the non-test .go file
 	// expected to reference Symbol. Required. CheckCallerSitesWired
@@ -66,32 +65,31 @@ type TestOnlyAllowEntry struct {
 	// already be wired, or the promise was false.
 	CallerSite string `json:"caller_site"`
 	// AddedByTicket names the ticket whose lane wrote this entry, so a
-	// self-referential exemption (an entry naming its own author as the
-	// ticket that will retire it, a closed loop by construction) can be
-	// refused mechanically. Optional and forward-only: it was added after
-	// the 227 legacy entries already existed, none of which record their
-	// own provenance, and back-filling it from git history is not sound
-	// (this tree's commit subjects do not carry ticket ids, verified
-	// against 200 real commits). Empty means "provenance not recorded";
-	// FindSelfReferentialAllowEntries skips those rather than guessing.
-	// When set, it is validated against ticketIDPattern like RetireTicket.
+	// self-referential exemption (its own author named as the ticket that
+	// will retire it) can be refused mechanically. Optional and
+	// forward-only; empty means "provenance not recorded" and
+	// FindSelfReferentialAllowEntries skips it. When set, a known plan id.
 	AddedByTicket string `json:"added_by_ticket,omitempty"`
+	// Expires names the plan ticket whose closure expires a cap row: once
+	// the manifest lists it closed, the row fails (CheckRetireKeys).
+	// Required on a cap row, refused on any other.
+	Expires string `json:"expires,omitempty"`
 }
 
 // UnownedTicket is the literal RetireTicket value for a legacy exemption
-// whose reason names no ticket. It is accepted so migrating an entry never
-// requires inventing an owner that does not exist, but every use of it is
-// counted (UnownedTicketCount) against a checked-in baseline
-// (testdata/testonly-unowned-baseline.txt) so the count can be visible and
-// frozen without being retired in one sitting.
+// whose reason names no ticket. Every use is counted (UnownedTicketCount)
+// against the shrink-only testdata/testonly-unowned-baseline.txt.
 const UnownedTicket = "UNOWNED"
 
-// ticketIDPattern accepts the ticket-id shapes this tree actually uses in
-// tracked Go comments and SPORT lines: the full form
-// "P1-E17-W4-S36-T2" and the short form "E-08.T4" or "S-08.T4". Anything
-// else is rejected rather than silently accepted, so a typo cannot pass as
-// an exemption.
-var ticketIDPattern = regexp.MustCompile(`^(P1-E\d{1,3}-W\d{1,2}-S\d{1,3}-T\d{1,3}|[ES]-\d{1,3}\.T\d{1,3})$`)
+// retireKeyPattern accepts a plan ticket id or a capability id, matched as
+// written so a padded key cannot slip past IsCapKey.
+var retireKeyPattern = regexp.MustCompile(`^(P\d+-[A-Z]{2,5}-\d{2,3}|cap:[a-z0-9-]+)$`)
+
+// pewttIDPattern is a plan ticket id alone: Expires and AddedByTicket.
+var pewttIDPattern = regexp.MustCompile(`^P\d+-[A-Z]{2,5}-\d{2,3}$`)
+
+// IsCapKey reports whether a retire key is a capability id.
+func IsCapKey(key string) bool { return strings.HasPrefix(key, "cap:") }
 
 // LoadTestOnlyAllowList reads the allow list from path. A missing file is
 // an empty list, not an error: having no exemptions is the stricter state
@@ -127,18 +125,27 @@ func LoadTestOnlyAllowList(path string) (map[string]TestOnlyAllowEntry, error) {
 	return out, nil
 }
 
-// validateTicketAndCallerSite enforces the falsifiable half of an entry:
-// a real ticket shape (or the counted UnownedTicket escape hatch) and a
-// caller_site path that could plausibly exist one day. It never accesses
-// the filesystem; CheckCallerSitesWired does that.
+// validateTicketAndCallerSite enforces the falsifiable half of an entry: a
+// key of a known shape (or the counted UnownedTicket escape hatch), an
+// Expires exactly where the key is a capability, and a caller_site path that
+// could plausibly exist one day. It never accesses the filesystem;
+// CheckCallerSitesWired does that, and CheckRetireKeys checks membership.
 func validateTicketAndCallerSite(e TestOnlyAllowEntry) error {
-	ticket := strings.TrimSpace(e.RetireTicket)
-	if ticket == "" {
+	ticket := e.RetireTicket
+	if strings.TrimSpace(ticket) == "" {
 		return fmt.Errorf("test-only gate: %s names no retire_ticket", e.Symbol)
 	}
-	if ticket != UnownedTicket && !ticketIDPattern.MatchString(ticket) {
-		return fmt.Errorf("test-only gate: %s has retire_ticket %q, which matches neither a ticket id "+
-			"nor the literal %q", e.Symbol, ticket, UnownedTicket)
+	if ticket != UnownedTicket && !retireKeyPattern.MatchString(ticket) {
+		return fmt.Errorf("test-only gate: %s has retire_ticket %q, which is neither a plan ticket id, "+
+			"a capability id, nor the literal %q", e.Symbol, ticket, UnownedTicket)
+	}
+	if IsCapKey(ticket) && !pewttIDPattern.MatchString(e.Expires) {
+		return fmt.Errorf("test-only gate: %s is keyed %q and needs expires set to a plan ticket id, got %q",
+			e.Symbol, ticket, e.Expires)
+	}
+	if !IsCapKey(ticket) && e.Expires != "" {
+		return fmt.Errorf("test-only gate: %s sets expires %q, which only a capability-keyed row may carry",
+			e.Symbol, e.Expires)
 	}
 	site := strings.TrimSpace(e.CallerSite)
 	if site == "" {
@@ -150,9 +157,9 @@ func validateTicketAndCallerSite(e TestOnlyAllowEntry) error {
 	if strings.HasPrefix(site, "/") || strings.Contains(site, "..") {
 		return fmt.Errorf("test-only gate: %s has caller_site %q, which must be a repo-relative path", e.Symbol, site)
 	}
-	if added := strings.TrimSpace(e.AddedByTicket); added != "" && !ticketIDPattern.MatchString(added) {
-		return fmt.Errorf("test-only gate: %s has added_by_ticket %q, which matches no known ticket id shape",
-			e.Symbol, added)
+	if e.AddedByTicket != "" && !pewttIDPattern.MatchString(e.AddedByTicket) {
+		return fmt.Errorf("test-only gate: %s has added_by_ticket %q, which is not a plan ticket id",
+			e.Symbol, e.AddedByTicket)
 	}
 	return nil
 }
@@ -165,6 +172,19 @@ func UnownedTicketCount(allow map[string]TestOnlyAllowEntry) int {
 	n := 0
 	for _, e := range allow {
 		if e.RetireTicket == UnownedTicket {
+			n++
+		}
+	}
+	return n
+}
+
+// CapKeyedCount returns how many entries in allow are keyed by a capability
+// id. Like UnownedTicketCount it is compared against a shrink-only baseline
+// (testdata/testonly-capkeyed-baseline.txt): cap rows are closed debt.
+func CapKeyedCount(allow map[string]TestOnlyAllowEntry) int {
+	n := 0
+	for _, e := range allow {
+		if IsCapKey(e.RetireTicket) {
 			n++
 		}
 	}
@@ -273,9 +293,6 @@ func ScanTestOnlySymbols(moduleRoot, modulePath string, roots []string) ([]TestO
 		return nil, err
 	}
 
-	// The collector already ignores a declaration's own identifier (it
-	// compares against declPos), so a symbol that is declared and never
-	// called does not count as used by shipping. Nothing to correct here.
-
+	// The collector ignores a declaration's own identifier (declPos).
 	return FindTestOnlySymbols(declared, usedByShipping, usedByTests), nil
 }

@@ -25,13 +25,13 @@ func validEntry(symbol string) TestOnlyAllowEntry {
 		Symbol:       symbol,
 		Reason:       "the wiring ticket has not landed yet",
 		Caller:       "the composition root",
-		RetireTicket: "P1-E17-W4-S36-T2",
+		RetireTicket: fixtureOpenTicket,
 		CallerSite:   "internal/alpha/caller.go",
 	}
 }
 
 // TestValidateTicketAndCallerSiteTable drives every rejection of the
-// falsifiable half of an entry, plus the three accepted ticket shapes.
+// falsifiable half of an entry, plus the two accepted plain key shapes.
 func TestValidateTicketAndCallerSiteTable(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -39,16 +39,17 @@ func TestValidateTicketAndCallerSiteTable(t *testing.T) {
 		site    string
 		wantErr bool
 	}{
-		{"full-form ticket is accepted", "P1-E17-W4-S36-T2", "internal/alpha/caller.go", false},
-		{"short-form ticket is accepted", "E-08.T4", "internal/alpha/caller.go", false},
+		{"plan ticket id is accepted", fixtureOpenTicket, "internal/alpha/caller.go", false},
+		{"legacy full-form ticket is refused", "P1-E17-W4-S36-T2", "internal/alpha/caller.go", true},
+		{"legacy short-form ticket is refused", "E-08.T4", "internal/alpha/caller.go", true},
 		{"unowned literal is accepted", UnownedTicket, "internal/alpha/caller.go", false},
 		{"missing retire_ticket", "", "internal/alpha/caller.go", true},
 		{"free-text retire_ticket", "someday", "internal/alpha/caller.go", true},
-		{"missing caller_site", "P1-E17-W4-S36-T2", "", true},
-		{"test-file caller_site", "P1-E17-W4-S36-T2", "internal/alpha/caller_test.go", true},
-		{"non-go caller_site", "P1-E17-W4-S36-T2", "internal/alpha/notes.txt", true},
-		{"absolute caller_site", "P1-E17-W4-S36-T2", "/elsewhere/caller.go", true},
-		{"dot-dot caller_site", "P1-E17-W4-S36-T2", "internal/../caller.go", true},
+		{"missing caller_site", fixtureOpenTicket, "", true},
+		{"test-file caller_site", fixtureOpenTicket, "internal/alpha/caller_test.go", true},
+		{"non-go caller_site", fixtureOpenTicket, "internal/alpha/notes.txt", true},
+		{"absolute caller_site", fixtureOpenTicket, "/elsewhere/caller.go", true},
+		{"dot-dot caller_site", fixtureOpenTicket, "internal/../caller.go", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -81,7 +82,7 @@ func TestLoadTestOnlyAllowListRefusalPaths(t *testing.T) {
 		t.Error("malformed JSON must be rejected")
 	}
 
-	writeFileT(t, path, `[{"symbol":"","reason":"r","expected_caller":"c","retire_ticket":"P1-E17-W4-S36-T2","caller_site":"internal/alpha/caller.go"}]`)
+	writeFileT(t, path, `[{"symbol":"","reason":"r","expected_caller":"c","retire_ticket":"P9-FIX-01","caller_site":"internal/alpha/caller.go"}]`)
 	if _, err := LoadTestOnlyAllowList(path); err == nil || !strings.Contains(err.Error(), "no symbol") {
 		t.Errorf("an entry without a symbol must be rejected, got %v", err)
 	}
@@ -91,7 +92,7 @@ func TestLoadTestOnlyAllowListRefusalPaths(t *testing.T) {
 		t.Errorf("the loader must surface the ticket validation refusal, got %v", err)
 	}
 
-	writeFileT(t, path, `[{"symbol":"internal/alpha.Hook","reason":"r","expected_caller":"c","retire_ticket":"P1-E17-W4-S36-T2","caller_site":"internal/alpha/caller.go"}]`)
+	writeFileT(t, path, `[{"symbol":"internal/alpha.Hook","reason":"r","expected_caller":"c","retire_ticket":"P9-FIX-01","caller_site":"internal/alpha/caller.go"}]`)
 	got, err := LoadTestOnlyAllowList(path)
 	if err != nil || len(got) != 1 {
 		t.Fatalf("the well-formed control must load, got %v, %d entries", err, len(got))

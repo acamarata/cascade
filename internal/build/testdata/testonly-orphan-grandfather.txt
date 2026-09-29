@@ -12,14 +12,8 @@
 internal/bench.Gate
 internal/bench.ParseBenchOutput
 internal/bench.RegisteredBudgets
-internal/ci.ApplyMigrationSchema
-internal/ci.NewClient
-internal/ci.Upsert
-internal/conductor.ApplyUsageMigrationSchema
 internal/conductor.NewDaemonRouter
 internal/conductor.NewDefaultProductionSpawnHook
-internal/conductor.NewUsageStore
-internal/conversation.NewAdapter
 internal/coverage.BuildCoverageMatrix
 internal/coverage.GapReport
 internal/coverage.LoadDeferrals
@@ -70,3 +64,10 @@ plugins/pbd/internal/pews.CarryForward
 plugins/pbd/internal/pews.Convert
 plugins/pbd/internal/pews.DecodeLifecyclePayload
 providers/embeddings.NewProviderEmbedder
+# Added by the exemption re-key: closed rows whose legacy key was not an exact manifest match, now keyed cap:.
+internal/fleet.NewHeadroomPublisher
+internal/fleet/governor.Recommend
+internal/jobs.MarkEffect
+internal/nodes.HasCapability
+internal/nodes.LivenessUnavailable
+providers/embeddings/bgem3.New
