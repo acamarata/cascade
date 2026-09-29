@@ -200,3 +200,50 @@ func TestClaimAttemptTransientConflictKeepsSlot(t *testing.T) {
 		}
 	})
 }
+
+// TestScanEntityRefusesFanOutCursorInWrongEntity seeds a well-formed
+// fan-out cursor under a plain task entity next to a correctly placed one.
+// scanEntity must refuse the misplaced one with ErrUnrecognizedShape (by
+// identity and message: errors.Is compares Kind only), Run must not
+// dispatch it, and the correctly placed one must still resume.
+func TestScanEntityRefusesFanOutCursorInWrongEntity(t *testing.T) {
+	store, _, _ := newRealStore(t)
+	ctx := context.Background()
+	req, _ := json.Marshal(provider.ModelRequest{TaskID: "t-misplaced", TaskClass: "chat", Inputs: []provider.ChatMessage{{Role: "user", Content: "hi"}}})
+	cursor, _ := json.Marshal(resumeCursorPayload{T: "cursor", TaskID: "t-misplaced", Legs: 1, Request: req})
+	if _, err := store.Append(ctx, "t-misplaced", journal.KindResumeCursor, "cursor-op", cursor); err != nil {
+		t.Fatalf("seed misplaced cursor: %v", err)
+	}
+	seedFanOutCursor(t, store, "t-placed", 1)
+
+	var calls []fakeFanOutCall
+	mgr, err := New(store, fakeFanOut(&calls, []provider.ModelResponse{{JobID: "job-0"}}, nil), nil, nil, nil, nil, "darwin")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	cur, attention, err := mgr.scanEntity(ctx, "t-misplaced")
+	if cur != nil || attention != nil || err != ErrUnrecognizedShape || err.Error() != ErrUnrecognizedShape.Error() {
+		t.Fatalf("scanEntity(misplaced) = (%+v, %+v, %v), want (nil, nil, ErrUnrecognizedShape)", cur, attention, err)
+	}
+
+	report, err := mgr.Run(ctx)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	byEntity := map[string]Outcome{}
+	for _, o := range report.Outcomes {
+		byEntity[o.EntityID] = o
+	}
+	bad := byEntity["t-misplaced"]
+	if len(report.Outcomes) != 2 || bad.Classification != ClassTerminal || bad.LegsDispatched != 0 || bad.Err != ErrUnrecognizedShape {
+		t.Fatalf("Outcomes = %+v, want the misplaced entity terminal with ErrUnrecognizedShape and no legs dispatched", report.Outcomes)
+	}
+	good := byEntity[FanOutEntity("t-placed")]
+	if good.Classification != ClassResumable || good.Err != nil || good.LegsDispatched != 1 {
+		t.Fatalf("placed fan-out outcome = %+v, want resumable with 1 leg dispatched", good)
+	}
+	if len(calls) != 1 || calls[0].req.TaskID != "t-placed" {
+		t.Fatalf("fanOut calls = %+v, want exactly one, for the placed fan-out only", calls)
+	}
+}
