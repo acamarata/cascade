@@ -45,7 +45,7 @@ func TestDefaultPermitAndAppender_UsedWhenNilSupplied(t *testing.T) {
 		if permitErr != nil {
 			t.Fatalf("default withPermit: %v", permitErr)
 		}
-		if _, err := appender.AppendLeg(ctx, "fanout_leg_started", "t-default-seams", 0, nil); err != nil {
+		if _, err := appender.AppendLeg(ctx, "fanout_leg_done", "t-default-seams", 0, map[string]string{"attempt": "1", "outcome": conductor.LegOutcomeFailedRetryable}); err != nil {
 			t.Fatalf("default appender.AppendLeg: %v", err)
 		}
 		return []provider.ModelResponse{{JobID: "job-0"}}, nil

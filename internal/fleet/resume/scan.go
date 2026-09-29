@@ -145,7 +145,7 @@ func classifyFanOut(entries []journal.Entry) (*resumeCursor, error) {
 	if err := json.Unmarshal(latest.Request, &req); err != nil {
 		return nil, ErrUnrecognizedShape
 	}
-	completed, err := legOutcomes(entries, latest.Legs)
+	completed, err := legOutcomes(entries)
 	if err != nil {
 		return nil, err
 	}
@@ -156,25 +156,20 @@ func classifyFanOut(entries []journal.Entry) (*resumeCursor, error) {
 }
 
 // legOutcomes decides a fan-out cursor from its leg entries: any
-// failed_terminal leg is ErrLegTerminal (terminal); any leg in [0, legs)
-// with maxLegStarts starts and no ok done is ErrLegAttemptsExhausted
-// (unknown outcome); otherwise it returns the ok legs.
-func legOutcomes(entries []journal.Entry, legs int) (map[int]conductor.JobID, error) {
+// failed_terminal leg is ErrLegTerminal (terminal); otherwise it returns
+// the ok legs. A leg at the start cap with no ok done is NOT decided here:
+// the journal cannot tell a crash after its LegResult was stored from one
+// before, so the cursor stays resumable and the dispatch path decides it -
+// conductor.FanOut replays a matching stored record through AuthorizeFn
+// (zero provider calls, the missing done appended) and otherwise its start
+// is refused with ErrLegAttemptsExhausted (unknown outcome), never sent.
+func legOutcomes(entries []journal.Entry) (map[int]conductor.JobID, error) {
 	completed, terminal, err := completedLegs(entries)
 	if err != nil {
 		return nil, err
 	}
 	if terminal {
 		return nil, ErrLegTerminal
-	}
-	starts, err := legStartCounts(entries)
-	if err != nil {
-		return nil, err
-	}
-	for leg := 0; leg < legs; leg++ {
-		if _, ok := completed[leg]; !ok && starts[leg] >= maxLegStarts {
-			return nil, ErrLegAttemptsExhausted
-		}
 	}
 	return completed, nil
 }
@@ -202,25 +197,6 @@ func completedLegs(entries []journal.Entry) (map[int]conductor.JobID, bool, erro
 		}
 	}
 	return out, terminal, nil
-}
-
-// legStartCounts counts KindFanOutLegStarted entries per leg index. The
-// entries come from Replay, whose (kind, operation_id) dedupe never hides
-// a start written by AppendLeg: every start carries its own attempt in
-// its operation id. An undecodable start payload fails closed.
-func legStartCounts(entries []journal.Entry) (map[int]int, error) {
-	counts := make(map[int]int)
-	for _, e := range entries {
-		if e.Kind != journal.KindFanOutLegStarted {
-			continue
-		}
-		var p legPayload
-		if err := json.Unmarshal(e.Payload, &p); err != nil {
-			return nil, ErrUnrecognizedShape
-		}
-		counts[p.LegIndex]++
-	}
-	return counts, nil
 }
 
 // classifyIntent implements the generic (non fan-out) Intent/Ack path. It

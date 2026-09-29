@@ -43,8 +43,9 @@ type WithPermitFn func(ctx context.Context, fn func(context.Context) error) erro
 // JournalAppender is the injected journal seam a fan-out dispatch writes
 // leg-lifecycle entries through (the fleet journal's KindFanOutLegStarted
 // and KindFanOutLegDone). AppendLeg returns the leg attempt the entry was
-// recorded under: for fanout_leg_started the journal assigns it (1 + the
-// leg's prior starts) and refuses a leg whose start cap is spent; for
+// recorded under: for fanout_leg_started the journal allocates it (a
+// durable attempt unique across every writer, at most three raw starts per
+// leg) and refuses a leg whose start cap is spent; for
 // fanout_leg_done fields["attempt"] names the start it closes. nil is a
 // construction error, never a silent no-op.
 type JournalAppender interface {

@@ -107,31 +107,6 @@ func TestDeleteTaskRemovesRecords(t *testing.T) {
 	}
 }
 
-func TestLegAdapterAttemptCap(t *testing.T) {
-	a, js, _ := newAdapter(t)
-	ctx := context.Background()
-	for want := uint64(1); want <= maxLegStarts; want++ {
-		got, err := a.AppendLeg(ctx, "fanout_leg_started", "fo-c", 0, map[string]string{"request_digest": "d"})
-		if err != nil || got != want {
-			t.Fatalf("start %d = (%d, %v), want attempt %d", want, got, err, want)
-		}
-	}
-	if _, err := a.AppendLeg(ctx, "fanout_leg_started", "fo-c", 0, nil); err != ErrLegAttemptsExhausted {
-		t.Fatalf("fourth start = %v, want ErrLegAttemptsExhausted", err)
-	}
-	if got, err := a.AppendLeg(ctx, "fanout_leg_started", "fo-c", 1, nil); err != nil || got != 1 {
-		t.Fatalf("other leg's first start = (%d, %v), want 1", got, err)
-	}
-	entries, _ := js.Replay(ctx, FanOutEntity("fo-c"), journal.Cursor{EntityID: FanOutEntity("fo-c")}, nil)
-	if len(entries) != 4 {
-		t.Fatalf("entries = %d, want 4 (three starts of leg 0, one of leg 1; the refused start wrote nothing)", len(entries))
-	}
-	_, _, err := classify(append([]journal.Entry{cursorEntry(t, 2)}, entries...))
-	if err != ErrLegAttemptsExhausted || !cascade.HasKind(err, cascade.KindConflict) {
-		t.Fatalf("classify(leg 0 at the cap) = %v, want ErrLegAttemptsExhausted (unknown outcome)", err)
-	}
-}
-
 func TestLegAdapterRecordIntegrity(t *testing.T) {
 	a, _, raw := newAdapter(t)
 	ctx := context.Background()
@@ -235,21 +210,68 @@ func (f *failDoneStore) Append(ctx context.Context, id string, k journal.Kind, o
 	return f.Store.Append(ctx, id, k, op, p)
 }
 
-func TestLegAdapterCrashWindowReplays(t *testing.T) {
-	js, raw, _ := newRealStore(t)
+// capFixture journals a one-leg fan-out cursor and prior starts of leg 0,
+// then, when crash is set, runs the leg once more through an adapter whose
+// done append fails: the crash window after PutLegResult.
+func capFixture(t *testing.T, id string, prior int, crash bool) (*journalAppenderAdapter, journal.Store, *int32) {
+	t.Helper()
+	a, js, raw := newAdapter(t)
+	ctx, c, calls := context.Background(), cursorEntry(t, 1), new(int32)
+	if _, err := js.Append(ctx, FanOutEntity(id), c.Kind, "cursor", c.Payload); err != nil {
+		t.Fatalf("seed cursor: %v", err)
+	}
+	for i := 0; i < prior; i++ {
+		if _, err := a.AppendLeg(ctx, "fanout_leg_started", id, 0, nil); err != nil {
+			t.Fatalf("seed start %d: %v", i+1, err)
+		}
+	}
 	crashing, _ := newLegAdapter(&failDoneStore{Store: js, armed: true}, raw)
-	var calls int32
-	if _, err := conductor.FanOut(context.Background(), "fo-w", legReq(), 1, nil, permitAll, crashing, crashing, allowAll, countingExec(&calls)); err == nil {
-		t.Fatal("run 1: want the injected done-append error returned")
+	if _, err := conductor.FanOut(ctx, id, legReq(), 1, nil, permitAll, crashing, crashing, allowAll, countingExec(calls)); crash && err == nil {
+		t.Fatal("crash run: want the injected done-append error returned")
 	}
-	resumed, _ := newLegAdapter(js, raw)
-	out, err := conductor.FanOut(context.Background(), "fo-w", legReq(), 1, nil, permitAll, resumed, resumed, allowAll, countingExec(&calls))
-	if err != nil || calls != 1 || out[0].Output != secretOutput {
-		t.Fatalf("run 2 = (%v, %v), provider calls = %d; want the stored output with zero new calls", out, err, calls)
+	return a, js, calls
+}
+
+// legFanOut is the resume seam over the real conductor.FanOut and a
+// store-backed adapter, counting AuthorizeFn calls.
+func legFanOut(id string, a *journalAppenderAdapter, authz, calls *int32) FanOutFunc {
+	return func(ctx context.Context, req provider.ModelRequest, n int, done map[int]conductor.JobID, permit conductor.WithPermitFn, _ conductor.JournalAppender) ([]provider.ModelResponse, error) {
+		authorize := func(context.Context, provider.ModelRequest) error { atomic.AddInt32(authz, 1); return nil }
+		return conductor.FanOut(ctx, id, req, n, done, permit, a, a, authorize, countingExec(calls))
 	}
-	entries, _ := js.Replay(context.Background(), FanOutEntity("fo-w"), journal.Cursor{EntityID: FanOutEntity("fo-w")}, nil)
-	completed, _, _ := completedLegs(entries)
-	if _, ok := completed[0]; !ok || len(entries) != 2 {
-		t.Fatalf("entries = %d, completed = %v; want one start and the appended ok done", len(entries), completed)
+}
+
+func TestLegResultRecoveredAtAttemptCap(t *testing.T) {
+	ctx := context.Background()
+	for _, prior := range []int{0, 2} { // the crash on attempt 1, and on attempt 3 (the cap)
+		a, js, calls := capFixture(t, "fo-cap", prior, true)
+		if rec, ok, err := a.GetLegResult(ctx, "fo-cap", 0); err != nil || !ok || rec.Attempt != uint64(prior)+1 {
+			t.Fatalf("prior %d: record = (%+v, %v, %v), want attempt %d stored", prior, rec, ok, err, prior+1)
+		}
+		var authz int32
+		mgr, _ := New(js, legFanOut("fo-cap", a, &authz, calls), nil, nil, nil, nil, "darwin")
+		report, err := mgr.Run(ctx)
+		if err != nil || len(report.Outcomes) != 1 || report.Outcomes[0].Err != nil || *calls != 1 || authz != 1 {
+			t.Fatalf("prior %d: Run = (%+v, %v), provider calls %d, authorize %d; want replay, no new call, one authorize", prior, report, err, *calls, authz)
+		}
+		entries, _ := js.Replay(ctx, FanOutEntity("fo-cap"), journal.Cursor{EntityID: FanOutEntity("fo-cap")}, []journal.Kind{journal.KindFanOutLegDone})
+		var p legPayload
+		if len(entries) != 1 || json.Unmarshal(entries[0].Payload, &p) != nil || p.Outcome != conductor.LegOutcomeOK || p.Attempt != uint64(prior)+1 {
+			t.Fatalf("prior %d: done entries = %+v, want one ok done for attempt %d", prior, entries, prior+1)
+		}
+		if again, err := mgr.Run(ctx); err != nil || len(again.Outcomes) != 0 {
+			t.Fatalf("prior %d: second Run = (%+v, %v), want the fan-out complete", prior, again, err)
+		}
+	}
+	a, js, calls := capFixture(t, "fo-lost", 3, false) // three starts, no record
+	var authz int32
+	mgr, _ := New(js, legFanOut("fo-lost", a, &authz, calls), nil, nil, nil, nil, "darwin")
+	report, err := mgr.Run(ctx)
+	if err != nil || len(report.Outcomes) != 1 || report.Outcomes[0].Err != ErrLegAttemptsExhausted || *calls != 0 || authz != 0 {
+		t.Fatalf("Run = (%+v, %v), calls %d, authorize %d; want ErrLegAttemptsExhausted and no dispatch", report, err, *calls, authz)
+	}
+	starts, _ := js.Replay(ctx, FanOutEntity("fo-lost"), journal.Cursor{EntityID: FanOutEntity("fo-lost")}, []journal.Kind{journal.KindFanOutLegStarted})
+	if got := report.Outcomes[0].Err.Error(); !strings.Contains(got, "outcome unknown, never dispatched again") || len(starts) != 3 {
+		t.Fatalf("outcome %q, starts %d; want the unknown-outcome refusal and still three starts", got, len(starts))
 	}
 }

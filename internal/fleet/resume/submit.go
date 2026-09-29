@@ -58,8 +58,8 @@ func (m *Manager) resubmit(ctx context.Context, cursor resumeCursor) (int, error
 // TASK level: one attempt number covers the whole re-submission call, and
 // a newer concurrent resume of the SAME task supersedes every leg of an
 // older one together, not leg-by-leg. Each leg's own journal entries carry
-// the per-leg attempt contract:fanout-leg-results defines (1 + the leg's
-// prior starts, capped at 3; see AppendLeg), not this task-level number.
+// the per-leg attempt contract:fanout-leg-results defines (a durable slot
+// per raw start, capped at 3; see AppendLeg), not this task-level number.
 func (m *Manager) resubmitFanOut(ctx context.Context, cursor resumeCursor) (int, error) {
 	actionID := FanOutEntity(cursor.TaskID)
 	myAttempt, err := m.claimAttempt(ctx, cursor.TaskID, actionID)
@@ -163,17 +163,18 @@ func (m *Manager) journalDiscard(ctx context.Context, taskID, actionID string, m
 }
 
 // legAppender adapts this Manager's journal into conductor.JournalAppender
-// for one resubmitFanOut call. It is journal-only: its LegResultStore
-// methods refuse (ErrLegStoreUnset), because the Manager holds no
-// provider.Store.
+// for one resubmitFanOut call. It is journal-only: a leg start and its
+// LegResultStore methods refuse (ErrLegStoreUnset), because the Manager
+// holds no provider.Store to allocate attempts or keep records in; a
+// FanOutFunc dispatching real legs brings a newLegAdapter.
 func (m *Manager) legAppender() conductor.JournalAppender {
 	return &journalAppenderAdapter{journal: m.journal}
 }
 
 // AppendLeg writes one leg entry into the journal entity
 // FanOutEntity(fanoutID) under operation id
-// <fanoutID>#<leg>#<attempt>#<kind>. A start's attempt is 1 + the leg's
-// prior starts, refused with ErrLegAttemptsExhausted at the cap; a done
+// <fanoutID>#<leg>#<attempt>#<kind>. A start's attempt is the durable slot
+// claimAttempt allocates, refused with ErrLegAttemptsExhausted at the cap; a done
 // entry closes the attempt fields["attempt"] names and must carry a known
 // outcome (an ok outcome also its canonical result_key).
 func (a *journalAppenderAdapter) AppendLeg(ctx context.Context, kind string, fanoutID string, legIndex int, fields map[string]string) (uint64, error) {
@@ -194,26 +195,19 @@ func (a *journalAppenderAdapter) AppendLeg(ctx context.Context, kind string, fan
 	return p.Attempt, a.appendLegEntry(ctx, fanoutID, k, p)
 }
 
-// appendStarted counts the leg's prior starts and appends the next one,
-// serialized so two starts can never share an attempt (and so an
-// operation id), which keeps Replay's (kind, operation_id) dedupe from
-// hiding a start.
+// appendStarted claims the leg's next durable attempt slot, then appends
+// the start under it. Slots are unique across every adapter over the same
+// store, so two starts never share an attempt (or an operation id), and
+// Replay's (kind, operation_id) dedupe never hides a start. A crash after
+// the claim and before the append still spends the slot: the cap counts
+// raw starts, never fewer.
 func (a *journalAppenderAdapter) appendStarted(ctx context.Context, fanoutID string, legIndex int, digest string) (uint64, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	entries, err := a.journal.Replay(ctx, FanOutEntity(fanoutID), journal.Cursor{EntityID: FanOutEntity(fanoutID)}, []journal.Kind{journal.KindFanOutLegStarted})
+	attempt, err := a.claimAttempt(ctx, fanoutID, legIndex, digest)
 	if err != nil {
 		return 0, err
 	}
-	starts, err := legStartCounts(entries)
-	if err != nil {
-		return 0, err
-	}
-	if starts[legIndex] >= maxLegStarts {
-		return 0, ErrLegAttemptsExhausted
-	}
-	p := legPayload{LegIndex: legIndex, Attempt: uint64(starts[legIndex]) + 1, RequestDigest: digest}
-	return p.Attempt, a.appendLegEntry(ctx, fanoutID, journal.KindFanOutLegStarted, p)
+	p := legPayload{LegIndex: legIndex, Attempt: attempt, RequestDigest: digest}
+	return attempt, a.appendLegEntry(ctx, fanoutID, journal.KindFanOutLegStarted, p)
 }
 
 // appendLegEntry encodes p and appends it under its operation id.

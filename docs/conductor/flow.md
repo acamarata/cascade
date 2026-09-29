@@ -105,10 +105,13 @@ Per leg:
    (Output, Usage, JobID) returned, with no provider call. A leg with a
    record and no `fanout_leg_done` entry (a crash between the record write
    and the done append) gets the missing done entry appended.
-2. **Dispatch.** Otherwise `fanout_leg_started` is appended (the journal
-   assigns the attempt, 1 + the leg's prior starts, and refuses a fourth
-   start), the leg runs through `withPermit` and `Execute`, and on success
-   the `LegResult` is written create-only BEFORE `fanout_leg_done`
+2. **Dispatch.** Otherwise `fanout_leg_started` is appended. Its attempt
+   is a create-only slot in the daemon store (namespace
+   `conductor.fanout.attempts`, key `<fanoutID>#<leg>#<attempt>`), so every
+   writer sharing the store, in one process or across a restart, gets a
+   unique attempt; a fourth raw start is refused. The leg runs through
+   `withPermit` and `Execute`, and on success the `LegResult` is written
+   create-only BEFORE `fanout_leg_done`
    `{leg_index, job_id, attempt, outcome: "ok", result_key, request_digest}`.
    A failure appends `fanout_leg_done` with outcome `failed_terminal` (a
    policy, sensitivity, classifier or invalid-input refusal) or
@@ -116,9 +119,14 @@ Per leg:
 
 Every `AppendLeg` and `LegResultStore` error is returned as the leg's
 error. Journal payloads carry the result key and the digest, never model
-output. The resume scan counts only outcome `ok` as completed, treats a
-`failed_terminal` leg as terminal, and classifies a leg with three starts
-and no `ok` done as unknown outcome; such a leg is never dispatched again.
+output. The resume scan counts only outcome `ok` as completed and treats a
+`failed_terminal` leg as terminal. A leg with three starts and no `ok` done
+is not decided by the scan, because the journal alone cannot tell whether
+its result was stored before a crash. The re-dispatch decides it: a
+matching stored record is replayed through `AuthorizeFn` with no provider
+call and its missing done appended; with no record the start is refused
+(`ErrLegAttemptsExhausted`, unknown outcome) and the leg is never sent
+again.
 
 Records live in namespace `conductor.fanout.legs` under
 `<fanoutID>#<legIndex>` as version-1 JSON carrying the leg request's

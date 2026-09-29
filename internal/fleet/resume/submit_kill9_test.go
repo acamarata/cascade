@@ -95,7 +95,11 @@ func TestResumeKill9FanOut(t *testing.T) {
 	store := journal.New(driver, testkit.NewFrozenClock(testInstant), journal.DefaultNamespace)
 
 	var calls []fakeFanOutCall
-	mgr, err := New(store, journalingFanOut(&calls), nil, nil, nil, nil, "darwin")
+	legs, err := newLegAdapter(store, driver)
+	if err != nil {
+		t.Fatalf("newLegAdapter: %v", err)
+	}
+	mgr, err := New(store, journalingFanOut(&calls, legs), nil, nil, nil, nil, "darwin")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -166,15 +170,15 @@ func spawnAndKillHelper(t *testing.T, path string) {
 }
 
 // journalingFanOut is a FanOutFunc test double that journals each leg it
-// actually dispatches through the real appender argument, mirroring what
+// actually dispatches through the store-backed legs adapter, mirroring what
 // conductor.FanOut's own dispatchLeg does in production (fanout.go) —
 // needed so a SECOND Run can observe a leg's completion and correctly
 // classify the task as fully done (idempotence). The bare fakeFanOut
 // helper ignores the appender entirely, which would make a "nothing left
 // to resume" assertion true for the wrong reason: not because resume is
 // idempotent, but because the test double never recorded the effect.
-func journalingFanOut(calls *[]fakeFanOutCall) FanOutFunc {
-	return func(ctx context.Context, req provider.ModelRequest, n int, completed map[int]conductor.JobID, _ conductor.WithPermitFn, appender conductor.JournalAppender) ([]provider.ModelResponse, error) {
+func journalingFanOut(calls *[]fakeFanOutCall, legs conductor.JournalAppender) FanOutFunc {
+	return func(ctx context.Context, req provider.ModelRequest, n int, completed map[int]conductor.JobID, _ conductor.WithPermitFn, _ conductor.JournalAppender) ([]provider.ModelResponse, error) {
 		*calls = append(*calls, fakeFanOutCall{req: req, n: n, completed: completed})
 		resp := make([]provider.ModelResponse, n)
 		for i := 0; i < n; i++ {
@@ -182,10 +186,15 @@ func journalingFanOut(calls *[]fakeFanOutCall) FanOutFunc {
 				resp[i] = provider.ModelResponse{JobID: jobID}
 				continue
 			}
-			attempt, _ := appender.AppendLeg(ctx, "fanout_leg_started", req.TaskID, i, nil)
+			attempt, err := legs.AppendLeg(ctx, "fanout_leg_started", req.TaskID, i, nil)
+			if err != nil {
+				return nil, err
+			}
 			jobID := "job-" + itoa(uint64(i))
-			_, _ = appender.AppendLeg(ctx, "fanout_leg_done", req.TaskID, i, map[string]string{"job_id": jobID,
-				"attempt": itoa(attempt), "outcome": conductor.LegOutcomeOK, "result_key": conductor.LegResultKey(req.TaskID, i)})
+			if _, err := legs.AppendLeg(ctx, "fanout_leg_done", req.TaskID, i, map[string]string{"job_id": jobID,
+				"attempt": itoa(attempt), "outcome": conductor.LegOutcomeOK, "result_key": conductor.LegResultKey(req.TaskID, i)}); err != nil {
+				return nil, err
+			}
 			resp[i] = provider.ModelResponse{JobID: conductor.JobID(jobID)}
 		}
 		return resp, nil

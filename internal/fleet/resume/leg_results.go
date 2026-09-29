@@ -3,7 +3,9 @@
 //   entity FanOutEntity(fanoutID), per-leg attempts, the 3-start cap) and
 //   conductor.LegResultStore (version-1 records, create-only, in namespace
 //   conductor.fanout.legs under <fanoutID>#<legIndex>) over the
-//   provider.Store the journal wraps, passed explicitly.
+//   provider.Store the journal wraps, passed explicitly. A start's attempt
+//   is a create-only slot in that store, so every adapter sharing it
+//   allocates from one durable sequence.
 // Inputs: a journal.Store and a provider.Store (both required for the
 //   LegResultStore role).
 // Outputs: leg attempts, stored LegResults, or typed errors.
@@ -20,7 +22,6 @@ import (
 	"encoding/json"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/fleet/journal"
@@ -31,6 +32,9 @@ import (
 const (
 	// legResultsNamespace holds every stored LegResult record.
 	legResultsNamespace = "conductor.fanout.legs"
+	// legAttemptsNamespace holds one create-only slot per raw leg start,
+	// keyed <fanoutID>#<legIndex>#<attempt>. Slots are never deleted.
+	legAttemptsNamespace = "conductor.fanout.attempts"
 	// legResultVersion is the only record version this package reads.
 	legResultVersion = 1
 	// maxLegStarts is the per-leg start cap: a leg with this many starts
@@ -55,7 +59,6 @@ var ErrLegStoreUnset = cascade.New(cascade.KindInvalidInput, "resume: fan-out le
 type journalAppenderAdapter struct {
 	journal journal.Store
 	store   provider.Store
-	mu      sync.Mutex // serializes a start's count-then-append
 }
 
 var (
@@ -102,6 +105,35 @@ func (a *journalAppenderAdapter) PutLegResult(ctx context.Context, r conductor.L
 		return tx.CompareAndSwap(ctx, legResultsNamespace, key, nil, data)
 	})
 	return rewrap(err, "resume: storing fan-out leg result "+key+" (create-only)")
+}
+
+// claimAttempt allocates a leg start's attempt: the first of slots
+// 1..maxLegStarts it creates (CompareAndSwap from absent) is its own, so
+// two adapters, or two processes, over one store never share an attempt
+// and at most maxLegStarts raw starts ever succeed. With every slot taken
+// it refuses with ErrLegAttemptsExhausted. A journal-only adapter refuses:
+// an attempt it could not claim durably would not be unique.
+func (a *journalAppenderAdapter) claimAttempt(ctx context.Context, fanoutID string, legIndex int, digest string) (uint64, error) {
+	if a.store == nil {
+		return 0, ErrLegStoreUnset
+	}
+	data, err := json.Marshal(legPayload{LegIndex: legIndex, RequestDigest: digest})
+	if err != nil {
+		return 0, cascade.Wrap(cascade.KindInternal, err, "resume: encoding leg attempt slot")
+	}
+	for attempt := uint64(1); attempt <= maxLegStarts; attempt++ {
+		key := conductor.LegResultKey(fanoutID, legIndex) + "#" + itoa(attempt)
+		err := a.store.Tx(ctx, func(ctx context.Context, tx provider.Tx) error {
+			return tx.CompareAndSwap(ctx, legAttemptsNamespace, key, nil, data)
+		})
+		if err == nil {
+			return attempt, nil
+		}
+		if !cascade.HasKind(err, cascade.KindConflict) {
+			return 0, rewrap(err, "resume: claiming fan-out leg attempt "+key)
+		}
+	}
+	return 0, ErrLegAttemptsExhausted
 }
 
 // GetLegResult reads one record. An absent key is (zero, false, nil); an
