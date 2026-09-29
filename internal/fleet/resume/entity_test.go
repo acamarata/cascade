@@ -1,6 +1,7 @@
 // Purpose: FanOutEntity and its inverse round-trip, and the inverse
 //   refuses every non-fan-out entity id; per-leg attempts of one fan-out
-//   entity stay unique and capped across adapters sharing one store.
+//   entity stay unique and capped across adapters sharing one store, and a
+//   conflict that leaves a slot absent neither skips it nor spends the cap.
 // SPORT: internal.fleet.resume.ResumeManager/CHANGE (tests) (P1-CORE-18).
 
 package resume
@@ -10,12 +11,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/fleet/journal"
 	"github.com/acamarata/cascade/internal/testkit"
+	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -37,26 +42,32 @@ func TestFanOutEntityRoundTrip(t *testing.T) {
 	}
 }
 
-// startBarrier holds the first two start-count reads of a leg until both
-// have read, forcing the interleaving where a per-adapter lock lets two
-// adapters see the same count. An allocation that never counts through
-// Replay never waits here.
-type startBarrier struct {
-	journal.Store
+// slotBarrier wraps the provider.Store adapters allocate from. The first
+// two plain Gets of an attempt-1 slot wait until both have read, so a
+// claim that reads a slot and then writes it outside one CompareAndSwap
+// lets both contenders see it absent and both take attempt 1. A create-only
+// claim only reads a slot after losing it, so the barrier cannot change it.
+type slotBarrier struct {
+	provider.Store
+	t     *testing.T
 	reads atomic.Int32
 	ready chan struct{}
 }
 
-func (b *startBarrier) Replay(ctx context.Context, id string, c journal.Cursor, k []journal.Kind) ([]journal.Entry, error) {
-	entries, err := b.Store.Replay(ctx, id, c, k)
-	if len(k) == 1 && k[0] == journal.KindFanOutLegStarted {
+func (b *slotBarrier) Get(ctx context.Context, ns, key string) ([]byte, error) {
+	v, err := b.Store.Get(ctx, ns, key)
+	if ns == legAttemptsNamespace && strings.HasSuffix(key, "#1") {
 		if n := b.reads.Add(1); n == 2 {
 			close(b.ready)
 		} else if n < 2 {
-			<-b.ready
+			select {
+			case <-b.ready:
+			case <-time.After(10 * time.Second):
+				b.t.Error("slot barrier: no second contender read slot 1")
+			}
 		}
 	}
-	return entries, err
+	return v, err
 }
 
 // rawStarts counts every stored fanout_leg_started entry of id's entity,
@@ -84,9 +95,9 @@ func rawStarts(t *testing.T, raw provider.Store, id string) int {
 func TestConcurrentAdaptersShareAttemptCap(t *testing.T) {
 	_, js, raw := newAdapter(t)
 	ctx := context.Background()
-	b := &startBarrier{Store: js, ready: make(chan struct{})}
-	a1, _ := newLegAdapter(b, raw)
-	a2, _ := newLegAdapter(b, raw)
+	b := &slotBarrier{Store: raw, t: t, ready: make(chan struct{})}
+	a1, _ := newLegAdapter(js, b)
+	a2, _ := newLegAdapter(js, b)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	var got []uint64
@@ -120,4 +131,72 @@ func TestConcurrentAdaptersShareAttemptCap(t *testing.T) {
 	if n, err := restarted.AppendLeg(ctx, "fanout_leg_started", "fo-cc", 1, nil); err != nil || n != 1 || rawStarts(t, raw, "fo-cc") != 4 {
 		t.Fatalf("other leg's first start = (%d, %v), want 1 and four raw starts in all", n, err)
 	}
+}
+
+// flakyStore fails the next n Tx calls with a KindConflict that writes
+// nothing, as a lock or busy conflict would, leaving the slot absent.
+type flakyStore struct {
+	provider.Store
+	n atomic.Int32
+}
+
+var errTransient = cascade.New(cascade.KindConflict, "test: transient store conflict")
+
+func (f *flakyStore) Tx(ctx context.Context, fn func(context.Context, provider.Tx) error) error {
+	if f.n.Add(-1) >= 0 {
+		return errTransient
+	}
+	return f.Store.Tx(ctx, fn)
+}
+
+// attemptSlots lists fo-tc leg 0's stored attempt slots.
+func attemptSlots(t *testing.T, raw provider.Store) string {
+	t.Helper()
+	var keys []string
+	for n := 1; n <= maxLegStarts; n++ {
+		key := conductor.LegResultKey("fo-tc", 0) + "#" + itoa(uint64(n))
+		if _, err := raw.Get(context.Background(), legAttemptsNamespace, key); err == nil {
+			keys = append(keys, key)
+		} else if !cascade.HasKind(err, cascade.KindNotFound) {
+			t.Fatalf("read slot %s: %v", key, err)
+		}
+	}
+	return fmt.Sprint(keys)
+}
+
+func TestClaimAttemptTransientConflictKeepsSlot(t *testing.T) {
+	ctx := context.Background()
+	start := func(taken bool, conflicts int32) (*flakyStore, provider.Store, uint64, error) {
+		_, js, raw := newAdapter(t)
+		if taken {
+			if err := raw.Put(ctx, legAttemptsNamespace, conductor.LegResultKey("fo-tc", 0)+"#1", []byte("{}")); err != nil {
+				t.Fatalf("seed slot 1: %v", err)
+			}
+		}
+		f := &flakyStore{Store: raw}
+		f.n.Store(conflicts)
+		a, _ := newLegAdapter(js, f)
+		n, err := a.AppendLeg(ctx, "fanout_leg_started", "fo-tc", 0, map[string]string{"request_digest": "d"})
+		return f, raw, n, err
+	}
+	t.Run("one transient conflict keeps slot 1", func(t *testing.T) {
+		if _, raw, n, err := start(false, 1); err != nil || n != 1 || attemptSlots(t, raw) != "[fo-tc#0#1]" || rawStarts(t, raw, "fo-tc") != 1 {
+			t.Fatalf("after one transient conflict: attempt (%d, %v), slots %s, raw starts %d; want 1, [fo-tc#0#1], 1", n, err, attemptSlots(t, raw), rawStarts(t, raw, "fo-tc"))
+		}
+	})
+	t.Run("persistent conflicts fail closed with the store error", func(t *testing.T) {
+		_, raw, n, err := start(false, 1000)
+		if err == nil || err == ErrLegAttemptsExhausted || err.Error() == ErrLegAttemptsExhausted.Error() ||
+			!strings.Contains(err.Error(), errTransient.Error()) || n != 0 {
+			t.Fatalf("persistent transient conflicts = (%d, %v), want the store error, not ErrLegAttemptsExhausted", n, err)
+		}
+		if attemptSlots(t, raw) != "[]" || rawStarts(t, raw, "fo-tc") != 0 {
+			t.Fatalf("persistent conflicts stored slots %s and %d raw starts, want none", attemptSlots(t, raw), rawStarts(t, raw, "fo-tc"))
+		}
+	})
+	t.Run("a taken slot advances past a transient conflict on the next", func(t *testing.T) {
+		if _, raw, n, err := start(true, 2); err != nil || n != 2 || attemptSlots(t, raw) != "[fo-tc#0#1 fo-tc#0#2]" || rawStarts(t, raw, "fo-tc") != 1 {
+			t.Fatalf("taken slot 1: attempt (%d, %v), slots %s, raw starts %d; want 2, both slots, 1", n, err, attemptSlots(t, raw), rawStarts(t, raw, "fo-tc"))
+		}
+	})
 }

@@ -40,6 +40,9 @@ const (
 	// maxLegStarts is the per-leg start cap: a leg with this many starts
 	// and no ok done is never dispatched again (unknown outcome).
 	maxLegStarts = 3
+	// slotConflictRetries bounds the retries of one attempt slot after a
+	// conflict that left it absent.
+	slotConflictRetries = 3
 )
 
 // ErrLegAttemptsExhausted refuses a fourth start of a leg with no ok
@@ -110,9 +113,10 @@ func (a *journalAppenderAdapter) PutLegResult(ctx context.Context, r conductor.L
 // claimAttempt allocates a leg start's attempt: the first of slots
 // 1..maxLegStarts it creates (CompareAndSwap from absent) is its own, so
 // two adapters, or two processes, over one store never share an attempt
-// and at most maxLegStarts raw starts ever succeed. With every slot taken
-// it refuses with ErrLegAttemptsExhausted. A journal-only adapter refuses:
-// an attempt it could not claim durably would not be unique.
+// and at most maxLegStarts raw starts ever succeed. It moves past a slot
+// only when that slot is stored; with every slot stored it refuses with
+// ErrLegAttemptsExhausted. A journal-only adapter refuses: an attempt it
+// could not claim durably would not be unique.
 func (a *journalAppenderAdapter) claimAttempt(ctx context.Context, fanoutID string, legIndex int, digest string) (uint64, error) {
 	if a.store == nil {
 		return 0, ErrLegStoreUnset
@@ -122,18 +126,44 @@ func (a *journalAppenderAdapter) claimAttempt(ctx context.Context, fanoutID stri
 		return 0, cascade.Wrap(cascade.KindInternal, err, "resume: encoding leg attempt slot")
 	}
 	for attempt := uint64(1); attempt <= maxLegStarts; attempt++ {
-		key := conductor.LegResultKey(fanoutID, legIndex) + "#" + itoa(attempt)
-		err := a.store.Tx(ctx, func(ctx context.Context, tx provider.Tx) error {
-			return tx.CompareAndSwap(ctx, legAttemptsNamespace, key, nil, data)
-		})
-		if err == nil {
-			return attempt, nil
+		claimed, err := a.claimSlot(ctx, conductor.LegResultKey(fanoutID, legIndex)+"#"+itoa(attempt), data)
+		if err != nil {
+			return 0, err
 		}
-		if !cascade.HasKind(err, cascade.KindConflict) {
-			return 0, rewrap(err, "resume: claiming fan-out leg attempt "+key)
+		if claimed {
+			return attempt, nil
 		}
 	}
 	return 0, ErrLegAttemptsExhausted
+}
+
+// claimSlot creates key create-only: true when this call created it,
+// false when the slot is stored (another start holds it). A conflict
+// that leaves the slot absent (a lock or busy conflict, not a taken
+// slot) is retried up to slotConflictRetries times, then its error is
+// returned: a slot is never skipped and the cap is never reported
+// without every slot stored.
+func (a *journalAppenderAdapter) claimSlot(ctx context.Context, key string, data []byte) (bool, error) {
+	var err error
+	for try := 0; try <= slotConflictRetries; try++ {
+		err = a.store.Tx(ctx, func(ctx context.Context, tx provider.Tx) error {
+			return tx.CompareAndSwap(ctx, legAttemptsNamespace, key, nil, data)
+		})
+		if err == nil {
+			return true, nil
+		}
+		if !cascade.HasKind(err, cascade.KindConflict) {
+			return false, rewrap(err, "resume: claiming fan-out leg attempt "+key)
+		}
+		_, getErr := a.store.Get(ctx, legAttemptsNamespace, key)
+		if getErr == nil {
+			return false, nil
+		}
+		if !cascade.HasKind(getErr, cascade.KindNotFound) {
+			return false, rewrap(getErr, "resume: reading fan-out leg attempt slot "+key)
+		}
+	}
+	return false, rewrap(err, "resume: claiming fan-out leg attempt "+key+" (conflict with the slot still absent)")
 }
 
 // GetLegResult reads one record. An absent key is (zero, false, nil); an
