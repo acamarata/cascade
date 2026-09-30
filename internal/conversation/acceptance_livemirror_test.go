@@ -28,7 +28,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -45,27 +44,6 @@ import (
 	"github.com/acamarata/cascade/internal/storage/storetest"
 )
 
-// acceptanceShortTempDir mirrors sse_integration_test.go's shortTempDirIT:
-// sockaddr_un.sun_path is short enough (~104 bytes on darwin) that
-// t.TempDir()'s long, test-name-embedding path can overflow it.
-func acceptanceShortTempDir(t *testing.T) string {
-	t.Helper()
-	dir, err := os.MkdirTemp("", "accim")
-	if err != nil {
-		t.Fatalf("acceptanceShortTempDir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	return dir
-}
-
-func acceptanceUnixHTTPClient(socketPath string) *http.Client {
-	dial := func(ctx context.Context, _, _ string) (net.Conn, error) {
-		var d net.Dialer
-		return d.DialContext(ctx, "unix", socketPath)
-	}
-	return &http.Client{Transport: &http.Transport{DialContext: dial}}
-}
-
 // acceptanceLiveMirrorHarness starts a REAL daemon.Run instance over a
 // REAL unix socket, real Adapter handlers, and a real SSE handler --
 // generalized from sse_integration_test.go for both directions.
@@ -80,7 +58,7 @@ type acceptanceLiveMirrorHarness struct {
 // Publish calls while the SSE handler stays on the unwrapped real bus.
 func newAcceptanceLiveMirrorHarness(t *testing.T, wrapBus func(EventBus) EventBus) acceptanceLiveMirrorHarness {
 	t.Helper()
-	dir := acceptanceShortTempDir(t)
+	dir := shortTempDirIT(t)
 	socketPath := filepath.Join(dir, "conv.sock")
 	pidPath := filepath.Join(t.TempDir(), "daemon.pid")
 	clock := runtime.NewSystemClock()
@@ -119,7 +97,7 @@ func newAcceptanceLiveMirrorHarness(t *testing.T, wrapBus func(EventBus) EventBu
 			t.Fatal("daemon.Run did not return after a termination signal")
 		}
 	})
-	return acceptanceLiveMirrorHarness{socketPath: socketPath, httpClient: acceptanceUnixHTTPClient(socketPath), done: done}
+	return acceptanceLiveMirrorHarness{socketPath: socketPath, httpClient: unixHTTPClientIT(socketPath), done: done}
 }
 
 // firstCallGatedEventBus wraps a real EventBus and, for exactly its FIRST
@@ -166,135 +144,145 @@ func TestAcceptanceLiveMirror(t *testing.T) {
 	h := newAcceptanceLiveMirrorHarness(t, func(bus EventBus) EventBus { gate.real = bus; return gate })
 
 	t.Run("core_rpc_append_arrives_on_the_sse_stream_before_the_rpc_response", func(t *testing.T) {
-		sseResp, err := h.httpClient.Get("http://unix" + rpc.EventsPath)
-		if err != nil {
-			t.Fatalf("GET %s over the real socket: %v", rpc.EventsPath, err)
-		}
-		t.Cleanup(func() { _ = sseResp.Body.Close() })
-		reader := bufio.NewReader(sseResp.Body)
-		// echoLine carries the raw "data:" line for decoding below.
-		echoLine := make(chan string, 1)
-		go func() {
-			deadline := time.Now().Add(10 * time.Second)
-			for time.Now().Before(deadline) {
-				line, rerr := reader.ReadString('\n')
-				if rerr != nil {
-					return
-				}
-				if strings.HasPrefix(line, "data:") {
-					echoLine <- line
-					return
-				}
-			}
-		}()
-		// POST runs in its own goroutine: Publish is about to be gated
-		// below, so a synchronous handler must not block this goroutine.
-		body := []byte(`{"jsonrpc":"2.0","method":"chat.append_turn","id":"lm1","params":{"thread_id":"th-lm-dir1","role":"user","segments":[{"kind":"text","content":"direction one"}]}}`)
-		postDone := make(chan acceptancePostResult, 1)
-		go func() {
-			resp, perr := h.httpClient.Post("http://unix"+rpc.RPCPath, "application/json", bytes.NewReader(body))
-			postDone <- acceptancePostResult{resp: resp, err: perr}
-		}()
-		// CLIENT-LOCAL ECHO ordering: not a "whichever fires first" race
-		// (a goroutine reaching Publish can beat a socket round trip
-		// regardless of correctness). Hold Publish blocked for a bounded
-		// window and confirm no response arrives: a synchronous handler
-		// cannot respond while blocked inside this call (never a false
-		// failure); a fire-and-forget mutation decouples the response
-		// from the block, so it arrives well inside the window instead.
-		select {
-		case <-gate.entered:
-		case r := <-postDone:
-			t.Fatalf("CLIENT-LOCAL ECHO ordering violated: RPC response (err=%v) arrived before the handler entered emitTurnAppended's Publish call -- the emit is not synchronous", r.err)
-		case <-time.After(5 * time.Second):
-			t.Fatal("emitTurnAppended's Publish was never entered within 5s -- the SSE mirror handler may not be wired")
-		}
-		select {
-		case r := <-postDone:
-			t.Fatalf("CLIENT-LOCAL ECHO ordering violated: RPC response (err=%v) arrived while Publish was still deliberately blocked -- the emit raced ahead of the response", r.err)
-		case <-time.After(300 * time.Millisecond):
-		}
-		close(gate.release) // let Publish, the handler, and the response proceed
-		var pr acceptancePostResult
-		select {
-		case pr = <-postDone:
-		case <-time.After(10 * time.Second):
-			t.Fatal("chat.append_turn's RPC response never arrived after releasing the gated Publish call")
-		}
-		if pr.err != nil {
-			t.Fatalf("POST %s over the real socket: %v", rpc.RPCPath, pr.err)
-		}
-		resp := pr.resp
-		t.Cleanup(func() { _ = resp.Body.Close() })
-		// Decode the actual SSE "data:" wire line; check ThreadID/content.
-		var rawLine string
-		select {
-		case rawLine = <-echoLine:
-		case <-time.After(10 * time.Second):
-			t.Fatal("SSE echo for the core-RPC-appended turn never arrived within 10s")
-		}
-		var sseEnvelope struct {
-			Payload string `json:"payload"`
-		}
-		trimmed := strings.TrimSpace(strings.TrimPrefix(rawLine, "data:"))
-		if err := json.Unmarshal([]byte(trimmed), &sseEnvelope); err != nil {
-			t.Fatalf("decode SSE data: envelope: %v (line=%q)", err, rawLine)
-		}
-		ssePayloadBytes, err := base64.StdEncoding.DecodeString(sseEnvelope.Payload)
-		if err != nil {
-			t.Fatalf("base64-decode SSE envelope payload: %v", err)
-		}
-		var ssePayload turnAppendedPayload
-		if err := json.Unmarshal(ssePayloadBytes, &ssePayload); err != nil {
-			t.Fatalf("decode SSE turnAppendedPayload: %v", err)
-		}
-		if ssePayload.Turn.ThreadID != "th-lm-dir1" {
-			t.Fatalf("SSE payload thread id = %q, want %q", ssePayload.Turn.ThreadID, "th-lm-dir1")
-		}
-		if len(ssePayload.Segments) != 1 || ssePayload.Segments[0].Content != "direction one" {
-			t.Fatalf("SSE payload segments = %+v, want exactly one segment with content %q", ssePayload.Segments, "direction one")
-		}
-		var envelope struct {
-			Result json.RawMessage `json:"result"`
-			Error  any             `json:"error"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
-			t.Fatalf("decode JSON-RPC response: %v", err)
-		}
-		if envelope.Error != nil {
-			t.Fatalf("chat.append_turn JSON-RPC error: %+v", envelope.Error)
-		}
+		acceptanceCoreAppendOnSSE(t, h, gate)
 	})
-
 	t.Run("cascade_pa_surface_append_appears_at_the_core_rpc_poll_path", func(t *testing.T) {
-		// internal/client, the same transport cascadePAClient.rpcClient() builds.
-		c := client.New(h.socketPath, client.UnixDialer, 5*time.Second)
-		ctx := context.Background()
-		var appendResult appendTurnResult
-		params := acceptanceClientAppendParams{
-			ThreadID: "th-lm-dir2", Role: "user",
-			Segments: []acceptanceClientAppendSegment{{Kind: "text", Content: "direction two, via the cascade-pa transport"}},
-		}
-		if err := c.Do(ctx, MethodAppendTurn, params, &appendResult); err != nil {
-			t.Fatalf("cascade-pa-surface append (real unix-socket client, conversation.MethodAppendTurn): %v", err)
-		}
-		if appendResult.ThreadID != "th-lm-dir2" || appendResult.TurnID == "" {
-			t.Fatalf("append result = %+v, want a non-empty thread/turn id", appendResult)
-		}
-		// chat.get_thread over the same real socket/client -- the poll path.
-		var polled getThreadResult
-		if err := c.Do(ctx, MethodGetThread, getThreadParams{ThreadID: "th-lm-dir2"}, &polled); err != nil {
-			t.Fatalf("chat.get_thread poll: %v", err)
-		}
-		if len(polled.Turns) != 1 {
-			t.Fatalf("chat.get_thread poll returned %d turns, want 1: the cascade-pa-surface append did not appear at the core RPC poll path", len(polled.Turns))
-		}
-		got := polled.Turns[0]
-		if got.Turn.ID != appendResult.TurnID {
-			t.Fatalf("polled turn id = %q, want %q (the id the cascade-pa-surface append reported)", got.Turn.ID, appendResult.TurnID)
-		}
-		if len(got.Segments) != 1 || got.Segments[0].Content != "direction two, via the cascade-pa transport" {
-			t.Fatalf("polled segments = %+v, want the exact content the cascade-pa-surface append sent", got.Segments)
-		}
+		acceptancePAAppendOnPoll(t, h)
 	})
+}
+
+// acceptanceSSEEchoReader opens the SSE stream and returns a channel that
+// receives the first raw "data:" line.
+func acceptanceSSEEchoReader(t *testing.T, h acceptanceLiveMirrorHarness) <-chan string {
+	t.Helper()
+	sseResp, err := h.httpClient.Get("http://unix" + rpc.EventsPath)
+	if err != nil {
+		t.Fatalf("GET %s over the real socket: %v", rpc.EventsPath, err)
+	}
+	t.Cleanup(func() { _ = sseResp.Body.Close() })
+	reader := bufio.NewReader(sseResp.Body)
+	// echoLine carries the raw "data:" line for decoding below.
+	echoLine := make(chan string, 1)
+	go func() {
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			line, rerr := reader.ReadString('\n')
+			if rerr != nil {
+				return
+			}
+			if strings.HasPrefix(line, "data:") {
+				echoLine <- line
+				return
+			}
+		}
+	}()
+	return echoLine
+}
+
+// acceptanceAssertSSEEcho waits for the SSE data line, decodes the wire
+// envelope and checks the turn's thread id and content.
+func acceptanceAssertSSEEcho(t *testing.T, echoLine <-chan string) {
+	t.Helper()
+	var rawLine string
+	select {
+	case rawLine = <-echoLine:
+	case <-time.After(10 * time.Second):
+		t.Fatal("SSE echo for the core-RPC-appended turn never arrived within 10s")
+	}
+	var sseEnvelope struct {
+		Payload string `json:"payload"`
+	}
+	trimmed := strings.TrimSpace(strings.TrimPrefix(rawLine, "data:"))
+	if err := json.Unmarshal([]byte(trimmed), &sseEnvelope); err != nil {
+		t.Fatalf("decode SSE data: envelope: %v (line=%q)", err, rawLine)
+	}
+	ssePayloadBytes, err := base64.StdEncoding.DecodeString(sseEnvelope.Payload)
+	if err != nil {
+		t.Fatalf("base64-decode SSE envelope payload: %v", err)
+	}
+	var ssePayload turnAppendedPayload
+	if err := json.Unmarshal(ssePayloadBytes, &ssePayload); err != nil {
+		t.Fatalf("decode SSE turnAppendedPayload: %v", err)
+	}
+	if ssePayload.Turn.ThreadID != "th-lm-dir1" {
+		t.Fatalf("SSE payload thread id = %q, want %q", ssePayload.Turn.ThreadID, "th-lm-dir1")
+	}
+	if len(ssePayload.Segments) != 1 || ssePayload.Segments[0].Content != "direction one" {
+		t.Fatalf("SSE payload segments = %+v, want exactly one segment with content %q", ssePayload.Segments, "direction one")
+	}
+}
+
+// acceptanceCoreAppendOnSSE is direction one: a core RPC append arrives on
+// the SSE stream before the RPC response does.
+func acceptanceCoreAppendOnSSE(t *testing.T, h acceptanceLiveMirrorHarness, gate *firstCallGatedEventBus) {
+	t.Helper()
+	echoLine := acceptanceSSEEchoReader(t, h)
+	// POST runs in its own goroutine: Publish is about to be gated
+	// below, so a synchronous handler must not block this goroutine.
+	body := []byte(`{"jsonrpc":"2.0","method":"chat.append_turn","id":"lm1","params":{"thread_id":"th-lm-dir1","role":"user","segments":[{"kind":"text","content":"direction one"}]}}`)
+	postDone := make(chan acceptancePostResult, 1)
+	go func() {
+		resp, perr := h.httpClient.Post("http://unix"+rpc.RPCPath, "application/json", bytes.NewReader(body))
+		postDone <- acceptancePostResult{resp: resp, err: perr}
+	}()
+	acceptanceAssertPublishGated(t, gate, postDone)
+	close(gate.release) // let Publish, the handler, and the response proceed
+	var pr acceptancePostResult
+	select {
+	case pr = <-postDone:
+	case <-time.After(10 * time.Second):
+		t.Fatal("chat.append_turn's RPC response never arrived after releasing the gated Publish call")
+	}
+	if pr.err != nil {
+		t.Fatalf("POST %s over the real socket: %v", rpc.RPCPath, pr.err)
+	}
+	resp := pr.resp
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	// Decode the actual SSE "data:" wire line; check ThreadID/content.
+	acceptanceAssertSSEEcho(t, echoLine)
+	var envelope struct {
+		Result json.RawMessage `json:"result"`
+		Error  any             `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+		t.Fatalf("decode JSON-RPC response: %v", err)
+	}
+	if envelope.Error != nil {
+		t.Fatalf("chat.append_turn JSON-RPC error: %+v", envelope.Error)
+	}
+}
+
+// acceptancePAAppendOnPoll is direction two: an append through the
+// cascade-pa transport appears at the core RPC poll path.
+func acceptancePAAppendOnPoll(t *testing.T, h acceptanceLiveMirrorHarness) {
+	t.Helper()
+	// internal/client, the same transport cascadePAClient.rpcClient() builds.
+	c := client.New(h.socketPath, client.UnixDialer, 5*time.Second)
+	ctx := context.Background()
+	var appendResult appendTurnResult
+	params := acceptanceClientAppendParams{
+		ThreadID: "th-lm-dir2", Role: "user",
+		Segments: []acceptanceClientAppendSegment{{Kind: "text", Content: "direction two, via the cascade-pa transport"}},
+	}
+	if err := c.Do(ctx, MethodAppendTurn, params, &appendResult); err != nil {
+		t.Fatalf("cascade-pa-surface append (real unix-socket client, conversation.MethodAppendTurn): %v", err)
+	}
+	if appendResult.ThreadID != "th-lm-dir2" || appendResult.TurnID == "" {
+		t.Fatalf("append result = %+v, want a non-empty thread/turn id", appendResult)
+	}
+	// chat.get_thread over the same real socket/client -- the poll path.
+	var polled getThreadResult
+	if err := c.Do(ctx, MethodGetThread, getThreadParams{ThreadID: "th-lm-dir2"}, &polled); err != nil {
+		t.Fatalf("chat.get_thread poll: %v", err)
+	}
+	if len(polled.Turns) != 1 {
+		t.Fatalf("chat.get_thread poll returned %d turns, want 1: the cascade-pa-surface append did not appear at the core RPC poll path", len(polled.Turns))
+	}
+	got := polled.Turns[0]
+	if got.Turn.ID != appendResult.TurnID {
+		t.Fatalf("polled turn id = %q, want %q (the id the cascade-pa-surface append reported)", got.Turn.ID, appendResult.TurnID)
+	}
+	if len(got.Segments) != 1 || got.Segments[0].Content != "direction two, via the cascade-pa transport" {
+		t.Fatalf("polled segments = %+v, want the exact content the cascade-pa-surface append sent", got.Segments)
+	}
 }

@@ -33,37 +33,11 @@ func TestRegistryIntegration(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "cascade.db")
 	ctx := context.Background()
-	dialect := migrate.SQLiteEmitter{}
 	clock := fakeClock{t: newTestClock().t}
 
-	writeDB, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		t.Fatalf("open write db: %v", err)
-	}
-	if err := ApplyMigrationSchema(ctx, writeDB, dialect, clock, dbPath, filepath.Join(dir, "backups")); err != nil {
-		t.Fatalf("ApplyMigrationSchema: %v", err)
-	}
-	writeReg := NewRegistry(writeDB, clock)
-
-	rec := sampleProvider("integration-anthropic")
-	if err := writeReg.UpsertProvider(ctx, rec); err != nil {
-		t.Fatalf("UpsertProvider: %v", err)
-	}
 	pool := "integration-pool"
-	for _, name := range []string{"integration-a", "integration-b", "integration-c"} {
-		if err := writeReg.UpsertProvider(ctx, sampleProvider(name)); err != nil {
-			t.Fatalf("UpsertProvider(%s): %v", name, err)
-		}
-		if err := writeReg.UpsertLane(ctx, LaneRecord{
-			LaneName: name, ProviderName: name, PoolMembership: pool,
-			Capacity: CapacityAPICredit, State: LaneStateAvailable,
-		}); err != nil {
-			t.Fatalf("UpsertLane(%s): %v", name, err)
-		}
-	}
-	if err := writeDB.Close(); err != nil {
-		t.Fatalf("close write db: %v", err)
-	}
+	rec := sampleProvider("integration-anthropic")
+	seedIntegrationDB(ctx, t, dbPath, dir, clock, rec, pool)
 
 	// Reopen: a fresh *sql.DB handle on the SAME file, never the one
 	// that wrote the data.
@@ -96,5 +70,39 @@ func TestRegistryIntegration(t *testing.T) {
 	}
 	if picked != "integration-a" {
 		t.Fatalf("AdvancePoolIndex after reopen picked %q, want integration-a", picked)
+	}
+}
+
+// seedIntegrationDB writes rec plus three pooled lanes to a fresh file-backed
+// database at dbPath, then closes the writing handle so every later read must
+// come from disk.
+func seedIntegrationDB(ctx context.Context, t *testing.T, dbPath, dir string, clock fakeClock, rec ProviderRecord, pool string) {
+	t.Helper()
+	dialect := migrate.SQLiteEmitter{}
+	writeDB, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open write db: %v", err)
+	}
+	if err := ApplyMigrationSchema(ctx, writeDB, dialect, clock, dbPath, filepath.Join(dir, "backups")); err != nil {
+		t.Fatalf("ApplyMigrationSchema: %v", err)
+	}
+	writeReg := NewRegistry(writeDB, clock)
+
+	if err := writeReg.UpsertProvider(ctx, rec); err != nil {
+		t.Fatalf("UpsertProvider: %v", err)
+	}
+	for _, name := range []string{"integration-a", "integration-b", "integration-c"} {
+		if err := writeReg.UpsertProvider(ctx, sampleProvider(name)); err != nil {
+			t.Fatalf("UpsertProvider(%s): %v", name, err)
+		}
+		if err := writeReg.UpsertLane(ctx, LaneRecord{
+			LaneName: name, ProviderName: name, PoolMembership: pool,
+			Capacity: CapacityAPICredit, State: LaneStateAvailable,
+		}); err != nil {
+			t.Fatalf("UpsertLane(%s): %v", name, err)
+		}
+	}
+	if err := writeDB.Close(); err != nil {
+		t.Fatalf("close write db: %v", err)
 	}
 }

@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,6 +28,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/retrieval"
 	"github.com/acamarata/cascade/internal/retrieval/corpus"
 	"github.com/acamarata/cascade/internal/retrieval/recall"
@@ -52,6 +52,41 @@ func TestRecallQueryFusesRealHitsOverTheLiveDaemon(t *testing.T) {
 	root := t.TempDir()
 	paths := fakeMemoryPaths{root: root}
 	clock := runtime.SystemClock{}
+	driver, c := seedRecallStore(t, paths)
+
+	bus := events.New(storetest.NewMemStore(), clock)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	settings := daemon.Settings{SocketPath: filepath.Join(sockDir, "daemon.sock")}
+	server, _, _, err := buildRPCServer(bus, clock, logger, settings, paths, nil, driver)
+	if err != nil {
+		t.Fatalf("buildRPCServer: %v", err)
+	}
+	server.ReadHeaderTimeout = 5 * time.Second
+	serveOnSocketIT(t, server, settings.SocketPath)
+
+	deps := recallDeps{
+		Paths:   fakeMemoryPaths{root: sockDir},
+		Getenv:  func(string) string { return "" },
+		Environ: func() []string { return nil },
+		Call:    clientRecallCall,
+	}
+	out, err := runRecallAgainstDaemon(t, deps, "reciprocal rank fusion", "--scope", string(c.ScopeRef))
+	if err != nil {
+		t.Fatalf("recall.query over the live daemon: %v\noutput:\n%s", err, out)
+	}
+	if strings.Contains(out, "no results") {
+		t.Fatalf("real content was indexed but the daemon reported no results:\n%s", out)
+	}
+	if !strings.Contains(out, c.ID) {
+		t.Fatalf("output does not name the indexed corpus %q:\n%s", c.ID, out)
+	}
+}
+
+// seedRecallStore opens the daemon's sqlite store under paths, writes one real
+// chunk through the production write path and writes the matching catalog
+// entry, returning the driver and the corpus.
+func seedRecallStore(t *testing.T, paths fakeMemoryPaths) (*sqlite.Driver, corpus.Corpus) {
+	t.Helper()
 	if err := os.MkdirAll(paths.DataDir(), 0o700); err != nil {
 		t.Fatalf("create data dir: %v", err)
 	}
@@ -97,40 +132,25 @@ func TestRecallQueryFusesRealHitsOverTheLiveDaemon(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(indexDir, recall.CatalogFileName), raw, 0o600); err != nil {
 		t.Fatalf("write catalog: %v", err)
 	}
+	return driver, c
+}
 
-	bus := events.New(storetest.NewMemStore(), clock)
-	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	settings := daemon.Settings{SocketPath: filepath.Join(sockDir, "daemon.sock")}
-	server, _, _, err := buildRPCServer(bus, clock, logger, settings, paths, nil, driver)
-	if err != nil {
-		t.Fatalf("buildRPCServer: %v", err)
-	}
-	ln, err := net.Listen("unix", settings.SocketPath)
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	server.ReadHeaderTimeout = 5 * time.Second
-	go func() { _ = server.Serve(ln) }()
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = server.Shutdown(ctx)
-	})
+// seedBelowCandidate observes one below-threshold candidate named "below" into
+// the ledger under base.
+func seedBelowCandidate(t *testing.T, base string) {
+	t.Helper()
+	clock := runtime.SystemClock{}
+	ledger := memory.NewFileCandidateLedger(base, memory.NewFileStore(base, clock), clock, nil)
 
-	deps := recallDeps{
-		Paths:   fakeMemoryPaths{root: sockDir},
-		Getenv:  func(string) string { return "" },
-		Environ: func() []string { return nil },
-		Call:    clientRecallCall,
+	draft := func(name string) memory.MemoryEntry {
+		return memory.MemoryEntry{
+			Name: name, Kind: memory.KindProject, Description: "d", Body: "b\n",
+			ScopeRef: "global", Confidence: 0.5,
+			Provenance: memory.Provenance{Origin: memory.OriginSession, SessionID: "s-1"},
+		}
 	}
-	out, err := runRecallAgainstDaemon(t, deps, "reciprocal rank fusion", "--scope", string(c.ScopeRef))
-	if err != nil {
-		t.Fatalf("recall.query over the live daemon: %v\noutput:\n%s", err, out)
-	}
-	if strings.Contains(out, "no results") {
-		t.Fatalf("real content was indexed but the daemon reported no results:\n%s", out)
-	}
-	if !strings.Contains(out, c.ID) {
-		t.Fatalf("output does not name the indexed corpus %q:\n%s", c.ID, out)
+	if _, err := ledger.Observe(context.Background(),
+		memory.Observation{SessionID: "s-1", Draft: draft("below")}); err != nil {
+		t.Fatalf("seeding a candidate: %v", err)
 	}
 }

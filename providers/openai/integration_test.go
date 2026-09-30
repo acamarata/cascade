@@ -75,39 +75,50 @@ func TestOpenAICompatDriverLiveAPI(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	t.Run("chat", func(t *testing.T) {
-		resp, err := d.Chat(ctx, provider.ChatRequest{
-			Messages:        []provider.ChatMessage{{Role: "user", Content: "Reply with exactly one word: pong"}},
-			MaxOutputTokens: 8,
-		})
-		if err != nil {
-			t.Fatalf("Chat: %v", err)
-		}
-		if resp.Message.Content == "" {
-			t.Fatal("Chat: empty content from a real endpoint")
-		}
-	})
+	t.Run("chat", func(t *testing.T) { liveChat(ctx, t, d) })
+	t.Run("stream", func(t *testing.T) { liveStream(ctx, t, d) })
+}
 
-	t.Run("stream", func(t *testing.T) {
-		var deltas int
-		var sawDone bool
-		err := d.Stream(ctx, provider.ChatRequest{
-			Messages:        []provider.ChatMessage{{Role: "user", Content: "Count from one to three."}},
-			MaxOutputTokens: 32,
-		}, func(ev provider.StreamEvent) error {
-			switch ev.Kind {
-			case provider.StreamEventDelta:
-				deltas++
-			case provider.StreamEventDone:
-				sawDone = true
-			}
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("Stream: %v", err)
-		}
-		if deltas == 0 || !sawDone {
-			t.Fatalf("Stream: deltas=%d sawDone=%v against a real endpoint", deltas, sawDone)
-		}
+// liveChat asserts a real endpoint answers a one-word chat with content.
+func liveChat(ctx context.Context, t *testing.T, d *Driver) {
+	t.Helper()
+	resp, err := d.Chat(ctx, provider.ChatRequest{
+		Messages:        []provider.ChatMessage{{Role: "user", Content: "Reply with exactly one word: pong"}},
+		MaxOutputTokens: 8,
 	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if resp.Message.Content == "" {
+		t.Fatal("Chat: empty content from a real endpoint")
+	}
+}
+
+// liveStream asserts a real endpoint streams at least one delta and a done.
+func liveStream(ctx context.Context, t *testing.T, d *Driver) {
+	t.Helper()
+	var deltas int
+	var sawDone bool
+	err := d.Stream(ctx, provider.ChatRequest{
+		Messages:        []provider.ChatMessage{{Role: "user", Content: "Count from one to three."}},
+		MaxOutputTokens: 32,
+	}, func(ev provider.StreamEvent) error {
+		switch ev.Kind {
+		case provider.StreamEventDelta:
+			deltas++
+		case provider.StreamEventDone:
+			sawDone = true
+		case provider.StreamEventUnknown:
+		case provider.StreamEventToolCall:
+		case provider.StreamEventUsage:
+		case provider.StreamEventError:
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Stream: %v", err)
+	}
+	if deltas == 0 || !sawDone {
+		t.Fatalf("Stream: deltas=%d sawDone=%v against a real endpoint", deltas, sawDone)
+	}
 }

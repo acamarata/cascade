@@ -125,7 +125,11 @@ verify = true
 func (e env) runWithKey(t *testing.T, key string, args ...string) (string, int) {
 	t.Helper()
 	t.Setenv(keyEnvVar, key)
-	defer os.Unsetenv(keyEnvVar)
+	defer func() {
+		if err := os.Unsetenv(keyEnvVar); err != nil {
+			t.Errorf("Unsetenv %s: %v", keyEnvVar, err)
+		}
+	}()
 	return e.runEnv(t, append(e.environ(), keyEnvVar+"="+key), args...)
 }
 

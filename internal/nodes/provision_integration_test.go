@@ -29,6 +29,52 @@ import (
 // as the current user, so `cascade version`/`sha256sum`/`mv` all run for
 // real against a real filesystem.
 func TestProvisionRealSSHD(t *testing.T) {
+	dialer, verify, target := loopbackProvisionRig(t)
+
+	installDir := t.TempDir()
+	installPath := filepath.Join(installDir, "cascade")
+	// Seed a "previously installed" fake binary that prints a shape
+	// matching cmd/cascade/version.go's real "cascade version X" output,
+	// so queryInstalledVersion's real remote exec is exercised too.
+	fakeBinary := "#!/bin/sh\necho 'cascade version v2.4.0'\n"
+	if err := os.WriteFile(installPath, []byte(fakeBinary), 0o755); err != nil {
+		t.Fatalf("seed fake binary: %v", err)
+	}
+
+	artifact, pub := realMinisignArtifact(t, "v2.5.0")
+
+	verifyFor := func(Target) HostKeyVerifier { return verify }
+	result, err := Provision(context.Background(), target, artifact, ProvisionDeps{
+		Dialer: dialer, VerifyFor: verifyFor,
+		PublicKey: pub, InstallPath: installPath,
+	})
+	if err != nil {
+		t.Fatalf("Provision: %v", err)
+	}
+	if !result.Installed || result.PreviousVersion != "v2.4.0" || result.NewVersion != "v2.5.0" {
+		t.Fatalf("result = %+v", result)
+	}
+	assertInstalledArtifact(t, installPath, artifact)
+
+	// Idempotent re-run: the "installed" version now matches the
+	// artifact's own version (its content, not "cascade version" output,
+	// since the artifact bytes are opaque test fixture bytes, not a real
+	// binary) -- run Provision again against the SAME already-installed
+	// content and confirm it does not error a second time.
+	result2, err := Provision(context.Background(), target, artifact, ProvisionDeps{
+		Dialer: dialer, VerifyFor: verifyFor,
+		PublicKey: pub, InstallPath: installPath,
+	})
+	if err != nil {
+		t.Fatalf("second Provision run: %v", err)
+	}
+	_ = result2 // the installed artifact is opaque bytes, not a real `version`-printing binary, so this run re-installs (same content); asserting no error is this test's real-counterpart proof
+}
+
+// loopbackProvisionRig spawns a loopback sshd and returns the real ssh
+// dialer, a host-key verifier pinned to that sshd, and its target.
+func loopbackProvisionRig(t *testing.T) (ExecDialer, HostKeyVerifier, Target) {
+	t.Helper()
 	u, err := user.Current()
 	if err != nil {
 		t.Skipf("cannot resolve current user: %v", err)
@@ -50,31 +96,14 @@ func TestProvisionRealSSHD(t *testing.T) {
 		}
 		return nil
 	}
-
-	installDir := t.TempDir()
-	installPath := filepath.Join(installDir, "cascade")
-	// Seed a "previously installed" fake binary that prints a shape
-	// matching cmd/cascade/version.go's real "cascade version X" output,
-	// so queryInstalledVersion's real remote exec is exercised too.
-	fakeBinary := "#!/bin/sh\necho 'cascade version v2.4.0'\n"
-	if err := os.WriteFile(installPath, []byte(fakeBinary), 0o755); err != nil {
-		t.Fatalf("seed fake binary: %v", err)
-	}
-
-	artifact, pub := realMinisignArtifact(t, "v2.5.0")
 	target := Target{NodeID: "loopback", User: u.Username, Addr: "127.0.0.1:" + strconv.Itoa(port)}
+	return dialer, verify, target
+}
 
-	verifyFor := func(Target) HostKeyVerifier { return verify }
-	result, err := Provision(context.Background(), target, artifact, ProvisionDeps{
-		Dialer: dialer, VerifyFor: verifyFor,
-		PublicKey: pub, InstallPath: installPath,
-	})
-	if err != nil {
-		t.Fatalf("Provision: %v", err)
-	}
-	if !result.Installed || result.PreviousVersion != "v2.4.0" || result.NewVersion != "v2.5.0" {
-		t.Fatalf("result = %+v", result)
-	}
+// assertInstalledArtifact requires the installed file to match the verified
+// artifact and be executable.
+func assertInstalledArtifact(t *testing.T, installPath string, artifact Artifact) {
+	t.Helper()
 	installed, err := os.ReadFile(installPath)
 	if err != nil {
 		t.Fatalf("read installed binary: %v", err)
@@ -89,20 +118,6 @@ func TestProvisionRealSSHD(t *testing.T) {
 	if info.Mode()&0o111 == 0 {
 		t.Fatal("installed binary is not executable")
 	}
-
-	// Idempotent re-run: the "installed" version now matches the
-	// artifact's own version (its content, not "cascade version" output,
-	// since the artifact bytes are opaque test fixture bytes, not a real
-	// binary) -- run Provision again against the SAME already-installed
-	// content and confirm it does not error a second time.
-	result2, err := Provision(context.Background(), target, artifact, ProvisionDeps{
-		Dialer: dialer, VerifyFor: verifyFor,
-		PublicKey: pub, InstallPath: installPath,
-	})
-	if err != nil {
-		t.Fatalf("second Provision run: %v", err)
-	}
-	_ = result2 // the installed artifact is opaque bytes, not a real `version`-printing binary, so this run re-installs (same content); asserting no error is this test's real-counterpart proof
 }
 
 // realMinisignArtifact signs data with the REAL minisign CLI (found on

@@ -237,20 +237,7 @@ func TestMemoryCLIIsNonInteractive(t *testing.T) {
 func TestMemoryReviewCLIEndToEnd(t *testing.T) {
 	deps, storeRoot := startMemoryDaemon(t)
 	base := filepath.Join(storeRoot, "memory")
-	clock := runtime.SystemClock{}
-	ledger := memory.NewFileCandidateLedger(base, memory.NewFileStore(base, clock), clock, nil)
-
-	draft := func(name string) memory.MemoryEntry {
-		return memory.MemoryEntry{
-			Name: name, Kind: memory.KindProject, Description: "d", Body: "b\n",
-			ScopeRef: "global", Confidence: 0.5,
-			Provenance: memory.Provenance{Origin: memory.OriginSession, SessionID: "s-1"},
-		}
-	}
-	if _, err := ledger.Observe(context.Background(),
-		memory.Observation{SessionID: "s-1", Draft: draft("below")}); err != nil {
-		t.Fatalf("seeding a candidate: %v", err)
-	}
+	seedBelowCandidate(t, base)
 
 	out, err := runMemory(t, deps, "review")
 	if err != nil {

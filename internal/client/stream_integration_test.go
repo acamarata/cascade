@@ -78,7 +78,7 @@ func TestStreamClient_Open_ReceivesRealEvent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	events_, closeFn, err := sc.open(ctx, "", "")
+	evCh, closeFn, err := sc.open(ctx, "", "")
 	if err != nil {
 		t.Fatalf("open: unexpected error: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestStreamClient_Open_ReceivesRealEvent(t *testing.T) {
 	}
 
 	select {
-	case ev, ok := <-events_:
+	case ev, ok := <-evCh:
 		if !ok {
 			t.Fatal("event channel closed before an event arrived")
 		}

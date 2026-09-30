@@ -36,7 +36,11 @@ func TestNetTransport_RealRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
-	defer body.Close()
+	defer func() {
+		if cerr := body.Close(); cerr != nil {
+			t.Errorf("body.Close: %v", cerr)
+		}
+	}()
 
 	if status != http.StatusTeapot {
 		t.Fatalf("status = %d, want %d", status, http.StatusTeapot)
@@ -91,7 +95,11 @@ func TestOpenAIDoer_RealRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Do: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			t.Errorf("resp.Body.Close: %v", cerr)
+		}
+	}()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("StatusCode = %d, want 200", resp.StatusCode)
 	}

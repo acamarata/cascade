@@ -85,10 +85,9 @@ type errFromServer string
 
 func (e errFromServer) Error() string { return string(e) }
 
-// realSocketDoor serves conductor.execute and job.cancel over a real unix
-// socket and records what each received.
-func realSocketDoor(t *testing.T, seen *provider.ModelRequest, cancelled *string) provider.RPCCaller {
-	t.Helper()
+// doorMux answers conductor.execute and job.cancel and records what each
+// received.
+func doorMux(seen *provider.ModelRequest, cancelled *string) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/rpc", func(w http.ResponseWriter, r *http.Request) {
 		var call struct {
@@ -119,6 +118,14 @@ func realSocketDoor(t *testing.T, seen *provider.ModelRequest, cancelled *string
 			})
 		}
 	})
+	return mux
+}
+
+// realSocketDoor serves conductor.execute and job.cancel over a real unix
+// socket and records what each received.
+func realSocketDoor(t *testing.T, seen *provider.ModelRequest, cancelled *string) provider.RPCCaller {
+	t.Helper()
+	mux := doorMux(seen, cancelled)
 
 	// A short base dir: a unix socket path is capped near 104 bytes.
 	dir, err := os.MkdirTemp("/tmp", "pbd")

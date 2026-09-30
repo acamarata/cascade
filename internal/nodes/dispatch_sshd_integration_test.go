@@ -95,20 +95,50 @@ func dispatchOverTunnel(t *testing.T, remoteSock, method, params string) map[str
 // (journals/RULING-dispatch-direction-reverse-tunnel.md): the node dials
 // out, so the verbs it calls are mounted on the CONTROLLER.
 func TestDispatchRealSSHD(t *testing.T) {
-	ks, err := NewNodeKeystoreForTest(t)
-	if err != nil {
-		t.Fatalf("keystore: %v", err)
-	}
-	ident, priv, err := GenerateIdentity(rand.Reader)
-	if err != nil {
-		t.Fatalf("generate identity: %v", err)
-	}
-	if err := ks.Store(context.Background(), ident.NodeID, priv); err != nil {
-		t.Fatalf("store key: %v", err)
-	}
+	ks, ident := storedTestIdentity(t)
 
-	// The controller's own RPC endpoint, carrying the dispatch verbs.
 	rendezvous := NewRendezvous()
+	ln, sockDir := startDispatchController(t, rendezvous)
+
+	port, fp := spawnLoopbackSSHD(t, ident.PubKey)
+	target := Target{NodeID: "real-node", User: currentUser(t), Addr: "127.0.0.1:" + strconv.Itoa(port)}
+	kh := NewKnownHosts(newMemKnownHostsBackend())
+	if err := kh.Pin(target.knownHostsKey(), fp, false); err != nil {
+		t.Fatalf("seed pin: %v", err)
+	}
+	remoteSock := filepath.Join(sockDir, "n.sock")
+	tun := newTunnel(TunnelConfig{
+		Target: target, Dialer: NewSSHDialer(ks, ident.NodeID, ident.PubKey, 5*time.Second),
+		KnownHosts: kh, Sleeper: &fakeSleeper{},
+		RemoteSocketPath: remoteSock,
+		LocalDial: func(ctx context.Context) (Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "unix", ln.Addr().String())
+		},
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go tun.run(ctx)
+
+	waitTunnelUp(t, tun)
+	// TunnelUp means the SSH session is established, not that sshd has
+	// finished creating the forwarded socket on the remote side. The two
+	// are separate events and the gap widens on a loaded machine: under
+	// `-race` with the rest of the package running, the first call here
+	// failed with "no such file or directory" for n.sock. Wait for the
+	// carrier to actually carry before asserting anything over it.
+	waitForRemoteSocket(t, remoteSock)
+
+	assertClaimRoundTrip(t, rendezvous, remoteSock)
+
+	assertStaleReportRefused(t, remoteSock)
+}
+
+// startDispatchController serves the dispatch verbs on a unix socket with
+// ConnContext set, exactly as the composition root does, and returns the
+// listener and its short base dir.
+func startDispatchController(t *testing.T, rendezvous *Rendezvous) (net.Listener, string) {
+	t.Helper()
+	// The controller's own RPC endpoint, carrying the dispatch verbs.
 	reg := rpc.NewRegistry()
 	RegisterDispatchNodeHandlers(reg, rendezvous)
 	registry := &ServeRegistry{reg: reg}
@@ -134,26 +164,12 @@ func TestDispatchRealSSHD(t *testing.T) {
 	}
 	go func() { _ = controller.Serve(ln) }()
 	t.Cleanup(func() { _ = controller.Close() })
+	return ln, sockDir
+}
 
-	port, fp := spawnLoopbackSSHD(t, ident.PubKey)
-	target := Target{NodeID: "real-node", User: currentUser(t), Addr: "127.0.0.1:" + strconv.Itoa(port)}
-	kh := NewKnownHosts(newMemKnownHostsBackend())
-	if err := kh.Pin(target.knownHostsKey(), fp, false); err != nil {
-		t.Fatalf("seed pin: %v", err)
-	}
-	remoteSock := filepath.Join(sockDir, "n.sock")
-	tun := newTunnel(TunnelConfig{
-		Target: target, Dialer: NewSSHDialer(ks, ident.NodeID, ident.PubKey, 5*time.Second),
-		KnownHosts: kh, Sleeper: &fakeSleeper{},
-		RemoteSocketPath: remoteSock,
-		LocalDial: func(ctx context.Context) (Conn, error) {
-			return (&net.Dialer{}).DialContext(ctx, "unix", ln.Addr().String())
-		},
-	})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go tun.run(ctx)
-
+// waitTunnelUp polls until the tunnel is up or fails the test.
+func waitTunnelUp(t *testing.T, tun *Tunnel) {
+	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for tun.State() != TunnelUp && time.Now().Before(deadline) {
 		time.Sleep(50 * time.Millisecond)
@@ -161,14 +177,48 @@ func TestDispatchRealSSHD(t *testing.T) {
 	if tun.State() != TunnelUp {
 		t.Fatalf("tunnel never reached TunnelUp against the real sshd (state=%v)", tun.State())
 	}
-	// TunnelUp means the SSH session is established, not that sshd has
-	// finished creating the forwarded socket on the remote side. The two
-	// are separate events and the gap widens on a loaded machine: under
-	// `-race` with the rest of the package running, the first call here
-	// failed with "no such file or directory" for n.sock. Wait for the
-	// carrier to actually carry before asserting anything over it.
-	waitForRemoteSocket(t, remoteSock)
+}
 
+// assertStaleReportRefused sends a report from a superseded attempt over the
+// real tunnel and requires it be refused.
+func assertStaleReportRefused(t *testing.T, remoteSock string) {
+	t.Helper()
+	// And a report from a SUPERSEDED attempt is refused over the wire too,
+	// so fencing holds across the real transport and not only in-process.
+	frame := DispatchFrame{DispatchID: "d-ssh", Attempt: 6, NodeID: "real-node", Outcome: OutcomeSucceeded}
+	frame.SignatureB64 = base64.StdEncoding.EncodeToString([]byte("unused-here"))
+	encoded, err := json.Marshal(frame)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := dispatchOverTunnel(t, remoteSock, DispatchReportMethod, string(encoded))
+	if stale["error"] == nil {
+		t.Fatalf("a superseded report was accepted over the real tunnel: %v", stale)
+	}
+}
+
+// storedTestIdentity generates a node identity and stores its private key in a
+// fresh test keystore.
+func storedTestIdentity(t *testing.T) (*NodeKeystore, Identity) {
+	t.Helper()
+	ks, err := NewNodeKeystoreForTest(t)
+	if err != nil {
+		t.Fatalf("keystore: %v", err)
+	}
+	ident, priv, err := GenerateIdentity(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate identity: %v", err)
+	}
+	if err := ks.Store(context.Background(), ident.NodeID, priv); err != nil {
+		t.Fatalf("store key: %v", err)
+	}
+	return ks, ident
+}
+
+// assertClaimRoundTrip proves an empty claim is refused, then that a placed
+// attempt is claimed, over the real tunnel.
+func assertClaimRoundTrip(t *testing.T, rendezvous *Rendezvous, remoteSock string) {
+	t.Helper()
 	// A claim for a node with nothing placed on it is refused, over the
 	// real wire, as a typed error rather than an empty success.
 	refused := dispatchOverTunnel(t, remoteSock, DispatchClaimMethod, `{"node_id":"real-node"}`)
@@ -188,18 +238,5 @@ func TestDispatchRealSSHD(t *testing.T) {
 	}
 	if result["dispatch_id"] != "d-ssh" || result["branch"] != "dispatch/d-ssh/7" {
 		t.Fatalf("claimed %v, want the attempt that was placed on this node", result)
-	}
-
-	// And a report from a SUPERSEDED attempt is refused over the wire too,
-	// so fencing holds across the real transport and not only in-process.
-	frame := DispatchFrame{DispatchID: "d-ssh", Attempt: 6, NodeID: "real-node", Outcome: OutcomeSucceeded}
-	frame.SignatureB64 = base64.StdEncoding.EncodeToString([]byte("unused-here"))
-	encoded, err := json.Marshal(frame)
-	if err != nil {
-		t.Fatal(err)
-	}
-	stale := dispatchOverTunnel(t, remoteSock, DispatchReportMethod, string(encoded))
-	if stale["error"] == nil {
-		t.Fatalf("a superseded report was accepted over the real tunnel: %v", stale)
 	}
 }

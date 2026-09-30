@@ -59,16 +59,16 @@ func (c *realSoulChatClient) Show(ctx context.Context) (SoulChatView, error) {
 	if err := c.rpc.Do(ctx, memory.MethodSoulShow, struct{}{}, &res); err != nil {
 		return SoulChatView{}, err
 	}
-	return SoulChatView{Body: res.Body, Schema: res.Schema, Version: res.Version, Diverged: res.Diverged}, nil
+	return SoulChatView(res), nil
 }
 
 func (c *realSoulChatClient) Edit(ctx context.Context, doc SoulChatDocument) (SoulChatEditResult, error) {
 	var res wireSoulEditResult
-	params := wireSoulEditParams{Body: doc.Body, Schema: doc.Schema}
+	params := wireSoulEditParams(doc)
 	if err := c.rpc.Do(ctx, memory.MethodSoulEdit, params, &res); err != nil {
 		return SoulChatEditResult{}, err
 	}
-	return SoulChatEditResult{Version: res.Version}, nil
+	return SoulChatEditResult(res), nil
 }
 
 // startSoulDaemon serves the real memory.soul.* namespace over a real unix

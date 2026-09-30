@@ -55,6 +55,13 @@ func TestSupervisorRPCRoundTrip(t *testing.T) {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
 
+	assertSupervisorSnapshot(t, resp)
+}
+
+// assertSupervisorSnapshot decodes the snapshot envelope from resp and checks
+// its schema version and that it is populated.
+func assertSupervisorSnapshot(t *testing.T, resp *http.Response) {
+	t.Helper()
 	var env ResponseEnvelope
 	if decErr := json.NewDecoder(resp.Body).Decode(&env); decErr != nil {
 		t.Fatalf("decode: %v", decErr)

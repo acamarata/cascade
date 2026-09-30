@@ -44,6 +44,56 @@ import (
 // and a second, resumed transfer starting at chunk N completes it without
 // re-sending or silently dropping the first N.
 func TestSyncChunkedTransferRealSSHD(t *testing.T) {
+	ctx := context.Background()
+	session := dialLoopbackSession(ctx, t)
+	defer func() { _ = session.Close() }()
+
+	remoteDir := t.TempDir() // shared fs (loopback = same machine): the "remote" path
+	remotePath := filepath.Join(remoteDir, "sync-stream.bin")
+
+	payload := bytes.Repeat([]byte("cascade real-sshd chunked transfer payload; "), 200)
+	const chunkSize = 512
+	const streamID = uint64(4242)
+	total := chunkCount(len(payload), chunkSize)
+
+	// Interrupt after 3 chunks: encode the whole stream locally, then keep
+	// only the first three frames (offset found by re-decoding).
+	partial := sendChunks(ctx, t, payload, chunkSize, streamID, total, 0, "SendStream (full, before truncation)")
+	interruptOffset := frameBoundaryAfter(t, partial, 2)
+	firstPart := partial[:interruptOffset]
+	writeAndCheckRemoteSize(ctx, t, session, remotePath, firstPart)
+
+	// Locally decode what "arrived" (mirrors the receiver reading the
+	// remote file back) to find the resume point: durable-received count.
+	received, rerr := ReceiveStream(ctx, bytes.NewReader(firstPart), streamID, 0, func(uint64, uint64, []byte) error { return nil })
+	if rerr == nil {
+		t.Fatal("expected the partial stream (3 of more chunks) to end with an error, not complete")
+	}
+	if received != 3 {
+		t.Fatalf("received = %d, want 3 (the interruption point)", received)
+	}
+
+	// Resume: send the REMAINING chunks [3, total) and let the real sshd
+	// assemble them.
+	rest := sendChunks(ctx, t, payload, chunkSize, streamID, total, received, "resumed SendStream")
+	assembled := assembleOnRemote(ctx, t, session, remotePath, rest)
+
+	full, finalReceived, ferr := ReceiveBytes(ctx, bytes.NewReader(assembled), streamID, 0)
+	if ferr != nil {
+		t.Fatalf("ReceiveBytes on assembled real-sshd stream: %v", ferr)
+	}
+	if finalReceived != total {
+		t.Fatalf("finalReceived = %d, want %d", finalReceived, total)
+	}
+	if !bytes.Equal(full, payload) {
+		t.Fatal("payload reassembled from the real sshd round trip does not match the original")
+	}
+}
+
+// dialLoopbackSession spawns a loopback sshd and dials it through nodes'
+// production ssh transport, pinning the host key fingerprint.
+func dialLoopbackSession(ctx context.Context, t *testing.T) nodes.ExecSession {
+	t.Helper()
 	u, err := user.Current()
 	if err != nil {
 		t.Skipf("cannot resolve current user: %v", err)
@@ -66,40 +116,30 @@ func TestSyncChunkedTransferRealSSHD(t *testing.T) {
 		return nil
 	}
 	target := nodes.Target{NodeID: "loopback", User: u.Username, Addr: "127.0.0.1:" + strconv.Itoa(port)}
-
-	ctx := context.Background()
 	session, err := dialer.Dial(ctx, target, verify)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
-	defer func() { _ = session.Close() }()
+	return session
+}
 
-	remoteDir := t.TempDir() // shared fs (loopback = same machine): the "remote" path
-	remotePath := filepath.Join(remoteDir, "sync-stream.bin")
-
-	payload := bytes.Repeat([]byte("cascade real-sshd chunked transfer payload; "), 200)
-	const chunkSize = 512
-	const streamID = uint64(4242)
-	total := chunkCount(len(payload), chunkSize)
-
-	// Interrupt after 3 chunks: encode only [0,3) locally, ship that
-	// partial frame stream to the remote file over the real ssh
-	// connection, and confirm (via a REAL remote `wc -c`) that exactly
-	// that many bytes landed — nothing more, nothing silently completed.
-	// SendStream over a bytes.Buffer never errors before Total is
-	// exhausted; the interruption is simulated below by truncating what
-	// it wrote to exactly the first three frames.
-	var partial bytes.Buffer
-	if err := SendStream(ctx, &partial, streamID, total, 0, func(seq uint64) ([]byte, error) {
+// sendChunks encodes chunks [from, total) of payload into a buffer and
+// returns the bytes; label prefixes the failure message.
+func sendChunks(ctx context.Context, t *testing.T, payload []byte, chunkSize int, streamID, total, from uint64, label string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := SendStream(ctx, &buf, streamID, total, from, func(seq uint64) ([]byte, error) {
 		return chunkPayloadAt(payload, chunkSize, seq), nil
 	}); err != nil {
-		t.Fatalf("SendStream (full, before truncation): %v", err)
+		t.Fatalf("%s: %v", label, err)
 	}
-	// Truncate to the first 3 encoded frames worth of bytes by re-decoding
-	// locally to find the byte offset after chunk index 2.
-	interruptOffset := frameBoundaryAfter(t, partial.Bytes(), 2)
-	firstPart := partial.Bytes()[:interruptOffset]
+	return buf.Bytes()
+}
 
+// writeAndCheckRemoteSize ships firstPart to the remote file and confirms via
+// a REAL remote `wc -c` that exactly that many bytes landed.
+func writeAndCheckRemoteSize(ctx context.Context, t *testing.T, session nodes.ExecSession, remotePath string, firstPart []byte) {
+	t.Helper()
 	if err := session.WriteFile(ctx, remotePath, firstPart); err != nil {
 		t.Fatalf("WriteFile (interrupted partial): %v", err)
 	}
@@ -110,29 +150,14 @@ func TestSyncChunkedTransferRealSSHD(t *testing.T) {
 	if got := strings.TrimSpace(string(out)); got != strconv.Itoa(len(firstPart)) {
 		t.Fatalf("remote partial file size = %q, want %d", got, len(firstPart))
 	}
+}
 
-	// Locally decode what "arrived" (mirrors the receiver reading the
-	// remote file back) to find the resume point: durable-received count.
-	received, rerr := ReceiveStream(ctx, bytes.NewReader(firstPart), streamID, 0, func(uint64, uint64, []byte) error { return nil })
-	if rerr == nil {
-		t.Fatal("expected the partial stream (3 of more chunks) to end with an error, not complete")
-	}
-	if received != 3 {
-		t.Fatalf("received = %d, want 3 (the interruption point)", received)
-	}
-
-	// Resume: send the REMAINING chunks [3, total) to a second remote
-	// file, then have the real sshd concatenate them (a real remote
-	// command, not local Go), and read the assembled bytes back through
-	// one more real remote `cat`.
-	var rest bytes.Buffer
-	if err := SendStream(ctx, &rest, streamID, total, received, func(seq uint64) ([]byte, error) {
-		return chunkPayloadAt(payload, chunkSize, seq), nil
-	}); err != nil {
-		t.Fatalf("resumed SendStream: %v", err)
-	}
+// assembleOnRemote writes the resume tail beside remotePath, has the real
+// sshd concatenate both, and reads the assembled bytes back via `cat`.
+func assembleOnRemote(ctx context.Context, t *testing.T, session nodes.ExecSession, remotePath string, rest []byte) []byte {
+	t.Helper()
 	restPath := remotePath + ".rest"
-	if err := session.WriteFile(ctx, restPath, rest.Bytes()); err != nil {
+	if err := session.WriteFile(ctx, restPath, rest); err != nil {
 		t.Fatalf("WriteFile (resume tail): %v", err)
 	}
 	assembledPath := remotePath + ".assembled"
@@ -143,17 +168,7 @@ func TestSyncChunkedTransferRealSSHD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Output(cat assembled): %v", err)
 	}
-
-	full, finalReceived, ferr := ReceiveBytes(ctx, bytes.NewReader(assembled), streamID, 0)
-	if ferr != nil {
-		t.Fatalf("ReceiveBytes on assembled real-sshd stream: %v", ferr)
-	}
-	if finalReceived != total {
-		t.Fatalf("finalReceived = %d, want %d", finalReceived, total)
-	}
-	if !bytes.Equal(full, payload) {
-		t.Fatal("payload reassembled from the real sshd round trip does not match the original")
-	}
+	return assembled
 }
 
 func chunkPayloadAt(payload []byte, chunkSize int, seq uint64) []byte {
@@ -174,7 +189,6 @@ func frameBoundaryAfter(t *testing.T, raw []byte, lastSeq uint64) int {
 	r := bytes.NewReader(raw)
 	offset := 0
 	for seq := uint64(0); ; seq++ {
-		before := len(raw) - r.Len()
 		c, err := Decode(r)
 		if err != nil {
 			t.Fatalf("frameBoundaryAfter: Decode: %v", err)
@@ -183,7 +197,6 @@ func frameBoundaryAfter(t *testing.T, raw []byte, lastSeq uint64) int {
 			t.Fatalf("frameBoundaryAfter: unexpected seq %d at position %d", c.Seq, seq)
 		}
 		after := len(raw) - r.Len()
-		_ = before
 		offset = after
 		if seq == lastSeq {
 			return offset

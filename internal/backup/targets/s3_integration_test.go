@@ -54,24 +54,30 @@ func TestTargetS3RealEndpoint(t *testing.T) {
 		t.Fatalf("real MinIO round trip = %q, want %q", got, want)
 	}
 
-	keys, err := tgt.List(ctx, "integration/")
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	found := false
-	for _, k := range keys {
-		if k == "integration/roundtrip" {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("List(integration/) = %v, want to contain integration/roundtrip", keys)
-	}
+	assertS3ListContains(ctx, t, tgt, "integration/", "integration/roundtrip")
 
 	if err := tgt.Delete(ctx, "integration/roundtrip"); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 	if _, err := tgt.Get(ctx, "integration/roundtrip"); err == nil {
 		t.Fatal("Get after Delete against real MinIO returned nil error")
+	}
+}
+
+// assertS3ListContains fails unless List(prefix) returns key.
+func assertS3ListContains(ctx context.Context, t *testing.T, tgt *targets.S3Target, prefix, key string) {
+	t.Helper()
+	keys, err := tgt.List(ctx, prefix)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	found := false
+	for _, k := range keys {
+		if k == key {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("List(%s) = %v, want to contain %s", prefix, keys, key)
 	}
 }

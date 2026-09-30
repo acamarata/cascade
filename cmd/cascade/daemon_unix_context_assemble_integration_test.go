@@ -17,8 +17,11 @@ package main
 // SPORT: cmd/cascade/daemon (CHANGED, E/S-09.T2).
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,6 +30,7 @@ import (
 	"github.com/acamarata/cascade/internal/client"
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage/storetest"
 )
@@ -54,16 +58,7 @@ func TestBuildRPCServer_ContextSliceShowReachableOverRealSocket(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(sockDir) })
 	sockPath := filepath.Join(sockDir, "d.sock")
-	ln, err := net.Listen("unix", sockPath)
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	go func() { _ = srv.Serve(ln) }()
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = srv.Shutdown(ctx)
-	})
+	serveOnSocketIT(t, srv, sockPath)
 
 	dial := func(ctx context.Context, _ string) (net.Conn, error) {
 		var d net.Dialer
@@ -91,4 +86,66 @@ func TestBuildRPCServer_ContextSliceShowReachableOverRealSocket(t *testing.T) {
 			t.Fatalf("context.slice over the real socket: %v", err)
 		}
 	})
+}
+
+// serveOnSocketIT serves srv on a real unix socket at sockPath and shuts it
+// down (5s grace) at test cleanup.
+func serveOnSocketIT(t *testing.T, srv *http.Server, sockPath string) {
+	t.Helper()
+	ln, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	go func() { _ = srv.Serve(ln) }()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(ctx)
+	})
+}
+
+// realSocketHTTPClientIT returns an HTTP client that dials the unix socket at
+// sockPath for every request.
+func realSocketHTTPClientIT(sockPath string) *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, "unix", sockPath)
+			},
+		},
+		Timeout: 10 * time.Second,
+	}
+}
+
+// postRPCIT marshals req, POSTs it to the RPC path over client, requires a 200
+// status and decodes the JSON body into out.
+func postRPCIT(t *testing.T, client *http.Client, req map[string]any, out any) {
+	t.Helper()
+	body, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	resp, err := client.Post("http://unix"+rpc.RPCPath, "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST %s over the real socket: %v", rpc.RPCPath, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST %s -> %d, want 200", rpc.RPCPath, resp.StatusCode)
+	}
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+}
+
+// mkdirTempIT makes a short temp dir (unix socket paths cap near 104 bytes)
+// and removes it at cleanup.
+func mkdirTempIT(t *testing.T, prefix string) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", prefix)
+	if err != nil {
+		t.Fatalf("temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
 }

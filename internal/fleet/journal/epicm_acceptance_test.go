@@ -182,6 +182,15 @@ func TestEpicMAcceptance(t *testing.T) {
 		}
 	}
 
+	assertReplayReadOnly(ctx, t, jc, entity, replayed)
+
+	assertEnvelopeMatchesEntries(t, shown)
+}
+
+// assertReplayReadOnly proves Replay and Show never mutate the journal:
+// repeating either returns the same entries as before.
+func assertReplayReadOnly(ctx context.Context, t *testing.T, jc *journal.Client, entity string, replayed []journal.Entry) {
+	t.Helper()
 	// Step 5 (read-only proof): Replay must never mutate the journal it
 	// reads. Calling it again, and calling Show again, must return the
 	// exact same entries — no re-execution, no re-sequencing, no side
@@ -200,7 +209,12 @@ func TestEpicMAcceptance(t *testing.T) {
 	if len(shownAgain) != 3 {
 		t.Fatalf("second Show returned %d entries, want 3 (Replay must not have appended anything)", len(shownAgain))
 	}
+}
 
+// assertEnvelopeMatchesEntries checks that shown marshals into the versioned
+// envelope with valid schema and matching fields.
+func assertEnvelopeMatchesEntries(t *testing.T, shown []journal.Entry) {
+	t.Helper()
 	// Step 6 (daemon/RPC/entry-field half — see this file's COVERAGE
 	// SPLIT note for the CLI --json invocation itself): the real
 	// entries this daemon returned marshal into the D/S-06.T5 versioned

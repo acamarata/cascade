@@ -104,24 +104,7 @@ func TestOAuthPKCEFixture(t *testing.T) {
 	}
 	// The "browser": follow the authorization URL's redirect_uri back to the
 	// loopback listener, exactly as a real browser would.
-	broker.open = func(ctx context.Context, rawURL string) error {
-		parsed, perr := url.Parse(rawURL)
-		if perr != nil {
-			return perr
-		}
-		authQuery = parsed.Query()
-		assertAuthorizationRequestMatchesFixture(t, authQuery, fixture)
-		callback := parsed.Query().Get("redirect_uri") + "?code=fixture-code&state=" + parsed.Query().Get("state")
-		req, rerr := http.NewRequestWithContext(ctx, http.MethodGet, callback, nil)
-		if rerr != nil {
-			return rerr
-		}
-		resp, derr := http.DefaultClient.Do(req)
-		if derr != nil {
-			return derr
-		}
-		return resp.Body.Close()
-	}
+	broker.open = followRedirectToLoopback(t, fixture, &authQuery)
 
 	rec, err := broker.Start(context.Background())
 	if err != nil {
@@ -132,6 +115,31 @@ func TestOAuthPKCEFixture(t *testing.T) {
 	}
 	if rec.RefreshRef == "" {
 		t.Fatal("the fixture's refresh token was not stored")
+	}
+}
+
+// followRedirectToLoopback is the fake browser: it records the authorization
+// query, asserts it against the fixture, then follows redirect_uri back to the
+// loopback listener with the fixture code and the same state.
+func followRedirectToLoopback(t *testing.T, fixture pkceFixture, authQuery *map[string][]string) browserOpener {
+	t.Helper()
+	return func(ctx context.Context, rawURL string) error {
+		parsed, perr := url.Parse(rawURL)
+		if perr != nil {
+			return perr
+		}
+		*authQuery = parsed.Query()
+		assertAuthorizationRequestMatchesFixture(t, *authQuery, fixture)
+		callback := parsed.Query().Get("redirect_uri") + "?code=fixture-code&state=" + parsed.Query().Get("state")
+		req, rerr := http.NewRequestWithContext(ctx, http.MethodGet, callback, nil)
+		if rerr != nil {
+			return rerr
+		}
+		resp, derr := http.DefaultClient.Do(req)
+		if derr != nil {
+			return derr
+		}
+		return resp.Body.Close()
 	}
 }
 

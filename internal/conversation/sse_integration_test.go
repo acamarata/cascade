@@ -77,6 +77,45 @@ func unixHTTPClientIT(socketPath string) *http.Client {
 // turn must be observable on a subscribed real SSE stream before this
 // test reads the JSON-RPC response confirming that same append.
 func TestClientLocalEcho_RealSocket_EchoPrecedesResponse(t *testing.T) {
+	socketPath := startEchoDaemonIT(t)
+	client := unixHTTPClientIT(socketPath)
+
+	echoArrived := sseEchoArrivedIT(t, client)
+
+	body := []byte(`{"jsonrpc":"2.0","method":"chat.append_turn","id":"1","params":{"thread_id":"th1","role":"user","segments":[{"kind":"text","content":"hi"}]}}`)
+	resp, err := client.Post("http://unix"+rpc.RPCPath, "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST %s over the real socket: %v", rpc.RPCPath, err)
+	}
+	t.Cleanup(func() { _ = resp.Body.Close() })
+
+	// This is the ordering assertion: block on the SSE echo BEFORE
+	// decoding the RPC response body, with a bounded select (never a
+	// bare <-ch) so a real regression hangs the test with a clear
+	// message instead of forever.
+	select {
+	case <-echoArrived:
+	case <-time.After(10 * time.Second):
+		t.Fatal("SSE echo for the appended turn never arrived within 10s")
+	}
+
+	var envelope struct {
+		Result json.RawMessage `json:"result"`
+		Error  any             `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+		t.Fatalf("decode JSON-RPC response: %v", err)
+	}
+	if envelope.Error != nil {
+		t.Fatalf("chat.append_turn JSON-RPC error: %+v", envelope.Error)
+	}
+}
+
+// startEchoDaemonIT runs the real daemon over a real unix socket with the
+// conversation adapter and SSE handler, stops it at cleanup, and returns the
+// socket path.
+func startEchoDaemonIT(t *testing.T) string {
+	t.Helper()
 	dir := shortTempDirIT(t)
 	socketPath := filepath.Join(dir, "conv.sock")
 	pidPath := filepath.Join(t.TempDir(), "daemon.pid")
@@ -119,9 +158,13 @@ func TestClientLocalEcho_RealSocket_EchoPrecedesResponse(t *testing.T) {
 			t.Fatal("daemon.Run did not return after a termination signal")
 		}
 	})
+	return socketPath
+}
 
-	client := unixHTTPClientIT(socketPath)
-
+// sseEchoArrivedIT subscribes to the SSE stream and returns a channel closed
+// when the first "data:" line arrives.
+func sseEchoArrivedIT(t *testing.T, client *http.Client) <-chan struct{} {
+	t.Helper()
 	sseResp, err := client.Get("http://unix" + rpc.EventsPath)
 	if err != nil {
 		t.Fatalf("GET %s over the real socket: %v", rpc.EventsPath, err)
@@ -146,32 +189,25 @@ func TestClientLocalEcho_RealSocket_EchoPrecedesResponse(t *testing.T) {
 			}
 		}
 	}()
+	return echoArrived
+}
 
-	body := []byte(`{"jsonrpc":"2.0","method":"chat.append_turn","id":"1","params":{"thread_id":"th1","role":"user","segments":[{"kind":"text","content":"hi"}]}}`)
-	resp, err := client.Post("http://unix"+rpc.RPCPath, "application/json", bytes.NewReader(body))
-	if err != nil {
-		t.Fatalf("POST %s over the real socket: %v", rpc.RPCPath, err)
-	}
-	t.Cleanup(func() { _ = resp.Body.Close() })
-
-	// This is the ordering assertion: block on the SSE echo BEFORE
-	// decoding the RPC response body, with a bounded select (never a
-	// bare <-ch) so a real regression hangs the test with a clear
-	// message instead of forever.
+// acceptanceAssertPublishGated holds Publish blocked for a bounded window and
+// confirms no RPC response arrives: a synchronous handler cannot respond while
+// blocked inside the call (never a false failure); a fire-and-forget mutation
+// decouples the response from the block, so it arrives well inside the window.
+func acceptanceAssertPublishGated(t *testing.T, gate *firstCallGatedEventBus, postDone <-chan acceptancePostResult) {
+	t.Helper()
 	select {
-	case <-echoArrived:
-	case <-time.After(10 * time.Second):
-		t.Fatal("SSE echo for the appended turn never arrived within 10s")
+	case <-gate.entered:
+	case r := <-postDone:
+		t.Fatalf("CLIENT-LOCAL ECHO ordering violated: RPC response (err=%v) arrived before the handler entered emitTurnAppended's Publish call -- the emit is not synchronous", r.err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("emitTurnAppended's Publish was never entered within 5s -- the SSE mirror handler may not be wired")
 	}
-
-	var envelope struct {
-		Result json.RawMessage `json:"result"`
-		Error  any             `json:"error"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
-		t.Fatalf("decode JSON-RPC response: %v", err)
-	}
-	if envelope.Error != nil {
-		t.Fatalf("chat.append_turn JSON-RPC error: %+v", envelope.Error)
+	select {
+	case r := <-postDone:
+		t.Fatalf("CLIENT-LOCAL ECHO ordering violated: RPC response (err=%v) arrived while Publish was still deliberately blocked -- the emit raced ahead of the response", r.err)
+	case <-time.After(300 * time.Millisecond):
 	}
 }

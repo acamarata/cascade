@@ -75,9 +75,7 @@ func (c *realReviewChatClient) List(ctx context.Context) (ReviewChatListing, err
 	}
 	out := ReviewChatListing{}
 	for _, p := range res.Pending {
-		out.Pending = append(out.Pending, ReviewChatCandidate{
-			ID: p.ID, Kind: p.Kind, Sessions: p.Sessions, RefCount: p.RefCount,
-		})
+		out.Pending = append(out.Pending, ReviewChatCandidate(p))
 	}
 	return out, nil
 }
@@ -88,7 +86,7 @@ func (c *realReviewChatClient) Act(ctx context.Context, id, action string) (Revi
 	if err := c.rpc.Do(ctx, review.MethodReviewAct, params, &res); err != nil {
 		return ReviewChatActResult{}, err
 	}
-	return ReviewChatActResult{Action: res.Action, Changed: res.Changed}, nil
+	return ReviewChatActResult(res), nil
 }
 
 func (c *realReviewChatClient) Forget(ctx context.Context, id string) (ReviewChatForgetResult, error) {
@@ -96,7 +94,7 @@ func (c *realReviewChatClient) Forget(ctx context.Context, id string) (ReviewCha
 	if err := c.rpc.Do(ctx, memory.MethodForget, wireForgetParams{ID: id}, &res); err != nil {
 		return ReviewChatForgetResult{}, err
 	}
-	return ReviewChatForgetResult{Forgotten: res.Forgotten}, nil
+	return ReviewChatForgetResult(res), nil
 }
 
 // reviewDaemonFixture bundles the live socket client with the store base,

@@ -156,18 +156,7 @@ func TestStreamRealSSE(t *testing.T) {
 	// Subscribe) is what makes this ordering deterministic rather than a
 	// race.
 	proceed := make(chan struct{})
-	deps.prov.streamFn = func(ctx context.Context, _ provider.ChatRequest, sink provider.StreamSink) error {
-		select {
-		case <-proceed:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-		if err := sink(provider.StreamEvent{Kind: provider.StreamEventDelta, Delta: "hi"}); err != nil {
-			return err
-		}
-		<-ctx.Done()
-		return ctx.Err()
-	}
+	deps.prov.streamFn = gatedDeltaStream(proceed)
 
 	client, teardown := startRealSSEDaemon(t, exec)
 	defer teardown()
@@ -200,15 +189,7 @@ func TestStreamRealSSE(t *testing.T) {
 
 	sse := newSSEReader(resp.Body)
 	lines := sse.next(t, 1)
-	if !strings.Contains(string(decodeSSEPayload(t, lines[0])), `"delta"`) {
-		t.Fatalf("first SSE payload = %q, want a delta-kind payload", decodeSSEPayload(t, lines[0]))
-	}
-	if !strings.Contains(lines[0], "job:"+string(id)) {
-		t.Fatalf("first SSE line = %q, want it tagged with job:%s", lines[0], id)
-	}
-	if strings.Contains(lines[0], string(other)) {
-		t.Fatalf("subscription for job %s observed the other job's id %s in its envelope - event bleed", id, other)
-	}
+	assertDeltaLine(t, lines[0], id, other)
 
 	cancelFn()
 	drainStream(t, ch)
@@ -217,6 +198,32 @@ func TestStreamRealSSE(t *testing.T) {
 		t.Fatalf("second SSE payload = %q, want the cancelled terminal event", decodeSSEPayload(t, lines[0]))
 	}
 
+	assertJobCancelOverRPC(t, client, id)
+
+	otherCancel()
+	drainStream(t, otherCh)
+}
+
+// gatedDeltaStream returns a provider stream that waits for proceed, sends one
+// delta, then blocks until its context is cancelled.
+func gatedDeltaStream(proceed <-chan struct{}) func(context.Context, provider.ChatRequest, provider.StreamSink) error {
+	return func(ctx context.Context, _ provider.ChatRequest, sink provider.StreamSink) error {
+		select {
+		case <-proceed:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		if err := sink(provider.StreamEvent{Kind: provider.StreamEventDelta, Delta: "hi"}); err != nil {
+			return err
+		}
+		<-ctx.Done()
+		return ctx.Err()
+	}
+}
+
+// assertJobCancelOverRPC issues job.cancel over a real POST /rpc exchange.
+func assertJobCancelOverRPC(t *testing.T, client *http.Client, id JobID) {
+	t.Helper()
 	// job.cancel over a real POST /rpc exchange, on the already-terminal
 	// job: idempotent success, no error.
 	rpcBody := strings.NewReader(`{"jsonrpc":"2.0","id":"1","method":"job.cancel","params":{"job_id":"` + string(id) + `"}}`)
@@ -228,7 +235,19 @@ func TestStreamRealSSE(t *testing.T) {
 	if rpcResp.StatusCode != http.StatusOK {
 		t.Fatalf("job.cancel over the wire returned status %d, want 200", rpcResp.StatusCode)
 	}
+}
 
-	otherCancel()
-	drainStream(t, otherCh)
+// assertDeltaLine requires line to be a delta-kind event tagged with this job
+// and free of the other job's id.
+func assertDeltaLine(t *testing.T, line string, id, other JobID) {
+	t.Helper()
+	if !strings.Contains(string(decodeSSEPayload(t, line)), `"delta"`) {
+		t.Fatalf("first SSE payload = %q, want a delta-kind payload", decodeSSEPayload(t, line))
+	}
+	if !strings.Contains(line, "job:"+string(id)) {
+		t.Fatalf("first SSE line = %q, want it tagged with job:%s", line, id)
+	}
+	if strings.Contains(line, string(other)) {
+		t.Fatalf("subscription for job %s observed the other job's id %s in its envelope - event bleed", id, other)
+	}
 }
