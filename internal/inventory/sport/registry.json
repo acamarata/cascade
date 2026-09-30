@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T02:33:41Z",
+  "generated_at": "2026-09-30T03:07:02Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4390,6 +4390,13 @@
           "raw": "cmd/cascade/daemon (ADD)."
         },
         {
+          "file": "cmd/cascade/daemon_unix_run_fleet_test.go",
+          "line": 32,
+          "status": "",
+          "ticket": "T-1",
+          "raw": "cmd/cascade/daemon (coverage-only addition for T-1's own"
+        },
+        {
           "file": "cmd/cascade/daemon_unix_run_fleetjobs.go",
           "line": 9,
           "status": "CHANGE",
@@ -4730,6 +4737,12 @@
           "raw": "cmd/cascade/fleet (CHANGE, coverage-only)."
         },
         {
+          "file": "cmd/cascade/fleet_daemon_smoke_test.go",
+          "line": 28,
+          "status": "",
+          "raw": "cmd/cascade/fleet (coverage-only addition, closes Epic R's"
+        },
+        {
           "file": "cmd/cascade/fleet_journal.go",
           "line": 37,
           "status": "CHANGE",
@@ -4765,6 +4778,7 @@
         }
       ],
       "statuses": [
+        "",
         "ADD",
         "CHANGE"
       ]
@@ -5513,9 +5527,16 @@
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T1",
           "raw": "cmd/cascade:harness-watch (ADD) — P1-E16-W4-S34-T1."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_harness_watch_test.go",
+          "line": 18,
+          "status": "",
+          "raw": "cmd/cascade:harness-watch (coverage-only addition)."
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -11552,6 +11573,20 @@
       ]
     },
     {
+      "name": "internal.daemon.RegisterFleetSessionsHandler",
+      "sites": [
+        {
+          "file": "internal/daemon/fleet_sessions_rpc_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal.daemon.RegisterFleetSessionsHandler/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.events.Bus",
       "sites": [
         {
@@ -14214,6 +14249,28 @@
       ]
     },
     {
+      "name": "internal.rpc.SSEMux",
+      "sites": [
+        {
+          "file": "internal/rpc/sse_mux.go",
+          "line": 34,
+          "status": "ADD",
+          "ticket": "P1-E12-W6-S121-T1",
+          "raw": "internal.rpc.SSEMux/ADDED (P1-E12-W6-S121-T1)."
+        },
+        {
+          "file": "internal/rpc/sse_mux_test.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E12-W6-S121-T1",
+          "raw": "internal.rpc.SSEMux/ADDED (P1-E12-W6-S121-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.runtime.WriteCIWatchEntries",
       "sites": [
         {
@@ -16022,6 +16079,13 @@
           "status": "ADD",
           "ticket": "P1-E41-W9-S79-T2",
           "raw": "internal/daemon (ADD, T0-daemon-composition-root, P1-E41-W9-S79-T2)."
+        },
+        {
+          "file": "internal/daemon/fleet_sessions_rpc.go",
+          "line": 28,
+          "status": "ADD",
+          "ticket": "P1-E12-W6-S121-T1",
+          "raw": "internal/daemon (ADD, P1-E12-W6-S121-T1)."
         },
         {
           "file": "internal/daemon/git_marker.go",
@@ -30267,7 +30331,7 @@
       ]
     }
   ],
-  "total_sites": 2842,
+  "total_sites": 2849,
   "unspecified_count": 146,
-  "multi_status_count": 79
+  "multi_status_count": 80
 }
