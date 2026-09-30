@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T01:08:06Z",
+  "generated_at": "2026-09-30T01:42:00Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -14981,6 +14981,12 @@
           "raw": "internal.storage.storetest/ADDED (P1-E02-W1-S02-T1)."
         },
         {
+          "file": "internal/storage/storetest/concurrent_cas.go",
+          "line": 5,
+          "status": "CHANGE",
+          "raw": "internal.storage.storetest/CHANGED (P1-SEC-37)."
+        },
+        {
           "file": "internal/storage/storetest/doubles_queue_test.go",
           "line": 17,
           "status": "ADD",
@@ -15031,7 +15037,8 @@
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -28207,6 +28214,12 @@
           "raw": "providers.postgres.Store/CHANGED (P1-E17-W4-S38-T4 — the"
         },
         {
+          "file": "providers/postgres/postgres_cas_test.go",
+          "line": 7,
+          "status": "CHANGE",
+          "raw": "providers.postgres.Store/CHANGED (P1-SEC-37)."
+        },
+        {
           "file": "providers/postgres/postgres_errors.go",
           "line": 30,
           "status": "CHANGE",
@@ -30187,7 +30200,7 @@
       ]
     }
   ],
-  "total_sites": 2833,
+  "total_sites": 2835,
   "unspecified_count": 144,
-  "multi_status_count": 77
+  "multi_status_count": 78
 }
