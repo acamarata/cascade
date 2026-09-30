@@ -25,12 +25,13 @@ package governor
 //	across the vendored source. The real equivalent is the "vm.loadavg"
 //	sysctl (struct loadavg: three fixed-point uint32 loads scaled by a
 //	trailing int64 fscale), read here via unix.SysctlRaw and decoded by
-//	parseDarwinLoadavg. Memory-used is likewise not a single sysctl on
-//	darwin without a Mach host_statistics64 call, which R-14.44 forbids;
-//	this collector approximates it as MemTotalBytes minus free pages
-//	(vm.page_free_count * hw.pagesize), which — like the CPU fraction —
-//	does not distinguish cached/purgeable pages from truly free ones and
-//	is documented as approximate for the same reason.
+//	parseDarwinLoadavg. Used memory follows the kernel's own pressure
+//	figure: used% = 100 - kern.memorystatus_level, so MemTotalBytes =
+//	hw.memsize and MemUsedBytes = hw.memsize * (100 - level) / 100.
+//	Counting free, speculative and purgeable pages instead reads inactive
+//	and file-backed pages as used and puts a healthy host near 99%. A
+//	failed sysctl, a value that is not 4 or 8 bytes wide, a level above
+//	100 or a zero hw.memsize is a KindUnavailable error, never a guess.
 //
 // SPORT: internal/fleet/governor.Sampler (ADD, per T-1 sport_updates).
 
@@ -90,28 +91,52 @@ func collectMetrics() (ResourceSnapshot, error) {
 	}, nil
 }
 
-// darwinMemoryBytes reads total physical memory and approximates used
-// memory as total minus free pages (vm.page_free_count * hw.pagesize) —
-// see the file-level CONTRACT DEVIATION note for why this is an
-// approximation rather than a precise accounting.
+// darwinMemoryBytes reads live memory sysctls through darwinMemoryFrom.
 func darwinMemoryBytes() (total, used uint64, err error) {
-	total, err = unix.SysctlUint64("hw.memsize")
+	return darwinMemoryFrom(darwinSysctlCount)
+}
+
+// darwinSysctlCount reads an integer sysctl through darwinSysctlValue.
+// A failed read is KindUnavailable: the sample is refused.
+func darwinSysctlCount(name string) (uint64, error) {
+	raw, err := unix.SysctlRaw(name)
 	if err != nil {
-		return 0, 0, cascade.Wrap(cascade.KindUnavailable, err, "governor: sysctl hw.memsize")
+		return 0, cascade.Wrap(cascade.KindUnavailable, err, "governor: sysctl "+name)
 	}
-	freePages, err := unix.SysctlUint32("vm.page_free_count")
+	return darwinSysctlValue(name, raw)
+}
+
+// darwinSysctlValue decodes a little-endian integer sysctl value of 4 or
+// 8 bytes (widths differ by counter and OS release). Any other width is
+// a failed read (KindUnavailable), never a partial or zero value.
+func darwinSysctlValue(name string, raw []byte) (uint64, error) {
+	switch len(raw) {
+	case 4:
+		return uint64(leUint32(raw)), nil
+	case 8:
+		return leUint64(raw), nil
+	}
+	return 0, cascade.Newf(cascade.KindUnavailable, "governor: sysctl %s has %d-byte value", name, len(raw))
+}
+
+// darwinMemoryFrom derives memory use from the kernel's pressure level
+// over an injected sysctl reader: used = hw.memsize * (100 -
+// kern.memorystatus_level) / 100. A failed read, a zero hw.memsize or a
+// level above 100 is a KindUnavailable error and the caller publishes
+// nothing.
+func darwinMemoryFrom(sysctl func(string) (uint64, error)) (total, used uint64, err error) {
+	total, err = sysctl("hw.memsize")
+	if err != nil || total == 0 {
+		return 0, 0, cascade.Wrapf(cascade.KindUnavailable, err, "governor: sysctl hw.memsize unavailable (total %d)", total)
+	}
+	level, err := sysctl("kern.memorystatus_level")
 	if err != nil {
-		return 0, 0, cascade.Wrap(cascade.KindUnavailable, err, "governor: sysctl vm.page_free_count")
+		return 0, 0, cascade.Wrap(cascade.KindUnavailable, err, "governor: sysctl kern.memorystatus_level")
 	}
-	pageSize, err := unix.SysctlUint32("hw.pagesize")
-	if err != nil {
-		return 0, 0, cascade.Wrap(cascade.KindUnavailable, err, "governor: sysctl hw.pagesize")
+	if level > 100 {
+		return 0, 0, cascade.Newf(cascade.KindUnavailable, "governor: kern.memorystatus_level %d is above 100", level)
 	}
-	freeBytes := uint64(freePages) * uint64(pageSize)
-	if total > freeBytes {
-		used = total - freeBytes
-	}
-	return total, used, nil
+	return total, total * (100 - level) / 100, nil
 }
 
 // parseDarwinSwapusage decodes struct xsw_usage's leading three uint64

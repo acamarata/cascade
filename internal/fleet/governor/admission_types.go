@@ -78,6 +78,10 @@ type AdmissionConfig struct {
 	// admission is queued rather than granted immediately. Zero or
 	// negative defaults to DefaultSwapThreshold.
 	SwapThreshold float64
+	// MemThreshold is the fraction of physical memory in use (0-1) above
+	// which new admission is queued. Zero or negative defaults to
+	// DefaultMemThreshold.
+	MemThreshold float64
 	// RepoPath is the repository this controller instance's compile-lock
 	// ceiling scopes to. Canonicalized via filepath.Clean before use.
 	RepoPath string
@@ -96,6 +100,8 @@ const (
 	DefaultCompileClassCap = 1
 	// DefaultSwapThreshold is AdmissionConfig.SwapThreshold's default.
 	DefaultSwapThreshold = 0.50
+	// DefaultMemThreshold is AdmissionConfig.MemThreshold's default.
+	DefaultMemThreshold = 0.90
 )
 
 // ThrottleStage is the throttle ladder's discrete pressure stage
@@ -284,15 +290,4 @@ func requestPriority(req AdmissionRequest) int {
 		return PriorityDefault
 	}
 	return req.Priority
-}
-
-// swapFraction reports snap's swap-used fraction, treating a zero-total
-// snapshot (Windows tier-2, ErrUnsupportedPlatform) as 0 rather than NaN -
-// a documented, conservative degrade distinct from AdmissionController's
-// fail-closed path for a missing Sampler entirely.
-func swapFraction(snap ResourceSnapshot) float64 {
-	if snap.SwapTotalBytes == 0 {
-		return 0
-	}
-	return float64(snap.SwapUsedBytes) / float64(snap.SwapTotalBytes)
 }

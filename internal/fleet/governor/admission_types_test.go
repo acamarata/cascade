@@ -161,7 +161,15 @@ func newTestSampler(snap ResourceSnapshot) *Sampler {
 	return s
 }
 
+// newTestController builds a controller over a fresh sample. The legacy
+// callers pass an empty snapshot meaning "healthy host", so a snapshot
+// without a memory total gains explicit healthy memory (4 of 16 GiB used)
+// here; production refuses a real empty snapshot (admission_signal_test.go
+// drives that through newSignalRig, never through this fixture).
 func newTestController(cfg AdmissionConfig, snap ResourceSnapshot) *AdmissionController {
+	if snap.MemTotalBytes == 0 {
+		snap.MemTotalBytes, snap.MemUsedBytes = 16<<30, 4<<30
+	}
 	return NewAdmissionController(newTestSampler(snap), cfg, runtime.NewFixedClock(time.Unix(0, 0)))
 }
 

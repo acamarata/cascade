@@ -1,24 +1,12 @@
 package governor
 
-// Purpose: Sampler's test suite. Value-assertion tests drive tick()
+// Purpose: Sampler's test suite. Value tests drive tick() directly with a
+// fake clock and collector; wiring tests drive Start/Stop through a fake
+// Ticker and the afterTick hook, never a sleep (Art.7.3). The fuzz targets
+// run the untagged parsers on every host.
 //
-//	directly (the production per-tick unit of work) with a fake clock and
-//	a fake collector — never a real sleep (R-14.136, Art.7.3). A separate
-//	goroutine-wiring test drives the real Start/Stop path through a fake
-//	Ticker, synchronized via the afterTick test hook rather than polling
-//	or sleeping. FuzzParseProcStat and FuzzParseProcMeminfo exercise the
-//	untagged parsers directly so they run and fuzz on every host,
-//	regardless of which platform's collectMetrics is actually compiled in.
-//
-// Constraints: this file is deliberately untagged (no //go:build line) so
-//
-//	it compiles and runs on every platform, per the file-level note in
-//	sampler.go. It must therefore never reference a platform-tagged
-//	symbol (parseDarwinSwapusage, cpuFractionFromDelta, etc.) — only the
-//	universal collectMetrics() seam, which resolves to whichever
-//	platform file the build actually includes.
-//
-// SPORT: internal/fleet/governor.Sampler (ADD, per T-1 sport_updates).
+// Constraints: untagged, so it never references a platform-tagged symbol,
+// only the collectMetrics() seam.
 
 import (
 	"bytes"
@@ -175,6 +163,29 @@ func TestSamplerStartStopIdempotent(t *testing.T) {
 	s.Stop() // idempotent: must not panic or block
 }
 
+// TestSamplerStopFailsQueuedWaiters: Stop refuses every queued waiter
+// with ErrDraining itself, and no later Admit or tick grants a permit.
+func TestSamplerStopFailsQueuedWaiters(t *testing.T) {
+	r := newSignalRig(t, AdmissionConfig{MaxInflight: 4, QueueCap: 4})
+	r.set(memSnap(95), nil) // over MemThreshold: requests queue
+	r.step(t, time.Second)
+	waiters := []<-chan admissionResult{
+		enqueueAndWait(context.Background(), t, r.ac, AdmissionRequest{}),
+		enqueueAndWait(context.Background(), t, r.ac, AdmissionRequest{Priority: 5}),
+	}
+	r.s.Stop()
+	for i, w := range waiters {
+		if got := awaitResult(t, w); got.err != error(ErrDraining) || got.permit.state != nil {
+			t.Fatalf("waiter %d after Stop = %+v, want ErrDraining itself and no permit", i, got)
+		}
+	}
+	assertEmpty(t, r.ac)
+	r.set(memSnap(10), nil) // headroom returns, but the sampler is stopped
+	r.s.tick()
+	assertSentinel(t, admitOnce(r.ac), ErrDraining, "draining")
+	assertEmpty(t, r.ac)
+}
+
 func TestPeriodForHz(t *testing.T) {
 	cases := []struct {
 		name string
@@ -235,9 +246,14 @@ func TestParseProcMeminfo(t *testing.T) {
 // TestCollectMetricsSmoke exercises the real per-platform collectMetrics
 // seam directly. On darwin and linux this must succeed with plausible
 // bounds; on any platform it must never panic, and any error it does
-// return must be ErrUnsupportedPlatform (the only documented refusal).
+// return must be ErrUnsupportedPlatform. Linux refuses until it has a CPU
+// baseline and the jiffy counters have moved, so the read is repeated
+// (bounded by count, never by sleeping) while that refusal persists.
 func TestCollectMetricsSmoke(t *testing.T) {
 	snap, err := collectMetrics()
+	for i := 0; i < 1_000_000 && err != nil && strings.Contains(err.Error(), "cpu baseline pending"); i++ {
+		snap, err = collectMetrics()
+	}
 	if err != nil {
 		if !errors.Is(err, ErrUnsupportedPlatform) {
 			t.Fatalf("collectMetrics error = %v, want nil or ErrUnsupportedPlatform", err)

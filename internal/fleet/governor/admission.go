@@ -7,13 +7,12 @@
 // snapshot read fresh per decision and an injected runtime.Clock (Art.7.3
 // - no bare time.Now).
 //
-// FAIL CLOSED: a nil Sampler refuses every Admit rather than admitting
-// blind. A zero-total snapshot (Windows tier-2) is a DIFFERENT, documented
-// case: it contributes a 0 swap fraction (conservative allow on that axis
-// only), never a refusal, because it is a known platform limitation, not
-// a missing signal. Lock order: admission -> compile lock -> lease
-// (R-21.215) - Admit never blocks holding the compile-lock registry's
-// mutex; Release never blocks.
+// FAIL CLOSED: a nil Sampler refuses every Admit, and every decision
+// first classifies the snapshot (ClassifySignal, admission_signal.go): a
+// stale or signal-less snapshot refuses immediately with nothing queued,
+// and queued waiters are refused when the signal is lost. Lock order:
+// admission -> compile lock -> lease - Admit never blocks
+// holding the compile-lock registry's mutex; Release never blocks.
 //
 // SPORT: internal/fleet/governor.AdmissionController (ADD, T-2).
 package governor
@@ -21,7 +20,6 @@ package governor
 import (
 	"container/heap"
 	"context"
-	"math"
 	"sync"
 	"sync/atomic"
 
@@ -69,25 +67,38 @@ func NewAdmissionController(sampler *Sampler, cfg AdmissionConfig, clk runtime.C
 	if cfg.SwapThreshold <= 0 {
 		cfg.SwapThreshold = DefaultSwapThreshold
 	}
+	if cfg.MemThreshold <= 0 {
+		cfg.MemThreshold = DefaultMemThreshold
+	}
 	if clk == nil {
 		clk = runtime.NewSystemClock()
 	}
-	return &AdmissionController{
+	ac := &AdmissionController{
 		cfg:      cfg,
 		sampler:  sampler,
 		clk:      clk,
 		registry: NewCompileLockRegistry(),
 	}
+	if sampler != nil {
+		sampler.addHooks(ac.reevaluate, ac.samplerStopped)
+	}
+	return ac
 }
 
 // Admit requests admission for req: under headroom it returns a Permit
 // immediately, over headroom it blocks until dequeued or ctx is
-// cancelled. Fails closed (nothing queued) when there is no Sampler to
-// read - admitting blind is worse than refusing.
+// cancelled. Fails closed (nothing queued) without a Sampler, or when the
+// snapshot is stale (ErrStaleResourceSignal) or has no memory signal
+// (ErrNoResourceSignal) - admitting blind is worse than refusing.
 func (ac *AdmissionController) Admit(ctx context.Context, req AdmissionRequest) (Permit, error) {
 	if ac.sampler == nil {
 		return Permit{}, cascade.New(cascade.KindUnavailable,
 			"governor: admission controller has no resource sampler; refusing to admit blind")
+	}
+	snap, now, period := ac.signalInputs()
+	posture := ClassifySignal(snap, now, period)
+	if err := signalRefusal(posture, snap, now); err != nil {
+		return Permit{}, err
 	}
 	stage := ac.stage()
 	if stage == StageHalt {
@@ -95,13 +106,13 @@ func (ac *AdmissionController) Admit(ctx context.Context, req AdmissionRequest) 
 	}
 	req.Priority = requestPriority(req)
 	effMax := ac.effectiveMaxInflight(stage)
-	swapFrac := swapFraction(ac.sampler.Snapshot())
+	headroom := ac.resourceHeadroom(posture, snap)
 	ac.mu.Lock()
 	if ac.draining {
 		ac.mu.Unlock()
 		return Permit{}, ErrDraining
 	}
-	if ac.canAdmitLocked(req, effMax, swapFrac) {
+	if ac.canAdmitLocked(req, effMax, headroom) {
 		permit := ac.grantLocked(req)
 		ac.mu.Unlock()
 		return permit, nil
@@ -130,13 +141,14 @@ func (ac *AdmissionController) effectiveMaxInflight(stage ThrottleStage) int {
 	return ac.cfg.MaxInflight
 }
 
-// canAdmitLocked reports whether req fits effMax, the swap threshold, and
-// (if CompileLock) the compile-class ceiling. Callers must hold ac.mu.
-func (ac *AdmissionController) canAdmitLocked(req AdmissionRequest, effMax int, swapFrac float64) bool {
+// canAdmitLocked reports whether req fits effMax, the resource headroom
+// (resourceHeadroom), and (if CompileLock) the compile-class ceiling.
+// Callers must hold ac.mu.
+func (ac *AdmissionController) canAdmitLocked(req AdmissionRequest, effMax int, headroom bool) bool {
 	if ac.inflight+requestWeight(req) > effMax {
 		return false
 	}
-	if swapFrac > ac.cfg.SwapThreshold {
+	if !headroom {
 		return false
 	}
 	if req.CompileLock && ac.registry.Count(ac.cfg.RepoPath) >= ac.cfg.CompileClassCap {
@@ -231,19 +243,22 @@ func (ac *AdmissionController) release(weight int) {
 
 // drainQueueLocked admits waiters in strict priority order while stage
 // and headroom allow it, stopping at the first head item that does not
-// fit (skipping it would break ordering). Callers hold ac.mu.
+// fit (skipping it would break ordering). A stale or signal-less snapshot
+// grants nothing and refuses every waiter. Callers hold ac.mu.
 func (ac *AdmissionController) drainQueueLocked() {
 	for ac.queue.Len() > 0 {
+		snap, now, period := ac.signalInputs()
+		posture := ClassifySignal(snap, now, period)
+		if err := signalRefusal(posture, snap, now); err != nil {
+			ac.refuseQueueLocked(err)
+			return
+		}
 		stage := ac.stage()
 		if stage == StageHalt {
 			return
 		}
 		head := ac.queue[0]
-		snap := ResourceSnapshot{}
-		if ac.sampler != nil {
-			snap = ac.sampler.Snapshot()
-		}
-		if !ac.canAdmitLocked(head.req, ac.effectiveMaxInflight(stage), swapFraction(snap)) {
+		if !ac.canAdmitLocked(head.req, ac.effectiveMaxInflight(stage), ac.resourceHeadroom(posture, snap)) {
 			return
 		}
 		heap.Pop(&ac.queue)
@@ -257,10 +272,7 @@ func (ac *AdmissionController) drainQueueLocked() {
 func (ac *AdmissionController) Drain(ctx context.Context) error {
 	ac.mu.Lock()
 	ac.draining = true
-	for ac.queue.Len() > 0 {
-		w := heap.Pop(&ac.queue).(*admissionWaiter)
-		w.resultCh <- admissionResult{err: ErrDraining}
-	}
+	ac.refuseQueueLocked(ErrDraining)
 	if ac.inflight == 0 {
 		ac.mu.Unlock()
 		return nil
@@ -275,26 +287,4 @@ func (ac *AdmissionController) Drain(ctx context.Context) error {
 		return cascade.Wrap(cascade.KindCanceled, ctx.Err(),
 			"governor: drain canceled before in-flight work finished")
 	}
-}
-
-// Pressure returns max(inflight/MaxInflight, queueDepth/QueueCap,
-// swapUsedFraction), the metric S-26.T3's ladder consumes. A zero-total
-// (or nil-Sampler) snapshot contributes 0, never NaN.
-func (ac *AdmissionController) Pressure() float64 {
-	ac.mu.Lock()
-	inflight := ac.inflight
-	queueDepth := ac.queue.Len()
-	ac.mu.Unlock()
-	var snap ResourceSnapshot
-	if ac.sampler != nil {
-		snap = ac.sampler.Snapshot()
-	}
-	inflightRatio, queueRatio := 0.0, 0.0
-	if ac.cfg.MaxInflight > 0 {
-		inflightRatio = float64(inflight) / float64(ac.cfg.MaxInflight)
-	}
-	if ac.cfg.QueueCap > 0 {
-		queueRatio = float64(queueDepth) / float64(ac.cfg.QueueCap)
-	}
-	return math.Max(inflightRatio, math.Max(queueRatio, swapFraction(snap)))
 }

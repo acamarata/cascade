@@ -15,17 +15,11 @@ package journal
 //
 // Outputs: sealed Entry values, or a pkg/cascade taxonomy error.
 //
-// CONTRACT DEVIATION (naming, recorded, not papered over). The contract's
-// task text names the struct "JournalEntry" and the interface
-// "JournalStore". golangci-lint's revive analyzer (the CI lint wall this
-// ticket must pass with zero exceptions) flags both as stuttering exported
-// names once qualified from outside the package (journal.JournalEntry,
-// journal.JournalStore) and refuses them. This package therefore exports
-// Entry and Store instead, and names the concrete SQLite-backed
-// implementation SQLiteStore so it does not collide with the Store
-// interface name. Every field, method, and JSON tag the contract specifies
-// is unchanged; only the two exported type names differ from the contract
-// text.
+// CONTRACT DEVIATION (naming, recorded, not papered over). The contract
+// names "JournalEntry" and "JournalStore"; revive rejects both as
+// stuttering (journal.JournalEntry), so this package exports Entry and
+// Store and names the SQLite-backed implementation SQLiteStore. Every
+// field, method, and JSON tag the contract specifies is unchanged.
 //
 // CONTRACT DEVIATION (domain registration, recorded, not papered over).
 // The contract also says the
@@ -44,23 +38,16 @@ package journal
 // own CONTRACT DEVIATION note does for the identical "no new DomainID"
 // situation.
 //
-// Recovery scope: "on open, the store scans backwards from the tail" is
-// written for a single physical log file. This package's storage is a
-// namespaced key-value table shared across every entity, so recoverEntity
-// runs the equivalent check per entity, lazily, the first time that
-// entity is touched through a given SQLiteStore instance (Append, Replay, or an
-// explicit Recover call) rather than eagerly for every entity at
-// construction time — there is no way to enumerate "every entity this
-// SQLiteStore will ever see" up front. Within one entity's log, the scan is
-// forward (lowest sequence first) rather than backward, because the two
-// directions agree exactly when corruption is confined to the tail:
-// Append writes each entry and its head pointer inside the same
-// transaction (commitEntryTx), so a genuinely torn write from this
-// package's own code is impossible — SQLite's transaction atomicity
-// already prevents it. The scan instead defends against external
-// corruption (bit rot, a manually damaged file), which is exactly what
-// this ticket's crash-injection tests simulate by writing malformed bytes
-// directly to the store, bypassing Append.
+// Recovery scope: "scan backwards from the tail on open" is written for
+// one log file. Storage here is a namespaced key-value table shared by
+// every entity, so recoverEntity runs per entity, lazily, the first time
+// an entity is touched through a SQLiteStore (Append, Replay, Recover);
+// entities cannot be enumerated up front. The scan runs forward, which
+// agrees with backward when corruption is confined to the tail: Append
+// writes entry and head in one transaction (commitEntryTx), so a torn
+// write from this package is impossible. The scan defends against
+// external corruption (bit rot, a damaged file), which the crash-injection
+// tests simulate by writing malformed bytes directly, bypassing Append.
 //
 // SPORT: internal.fleet.journal.Store/ADDED (P1-E13-W3-S27-T1).
 
@@ -119,7 +106,7 @@ type SQLiteStore struct {
 
 	mu          sync.Mutex
 	recovered   map[string]TruncationReport
-	entityLocks sync.Map // map[string]*sync.Mutex, one per entity ID
+	entityLocks entityLocks
 }
 
 // New returns a SQLiteStore persisting through store under namespace (pass
@@ -127,7 +114,8 @@ type SQLiteStore struct {
 // stamping every entry from clock. Pass runtime.NewSystemClock() in
 // production and a frozen clock in tests.
 func New(store provider.Store, clock runtime.Clock, namespace string) *SQLiteStore {
-	return &SQLiteStore{store: store, clock: clock, namespace: namespace, recovered: make(map[string]TruncationReport)}
+	return &SQLiteStore{store: store, clock: clock, namespace: namespace, recovered: make(map[string]TruncationReport),
+		entityLocks: entityLocks{m: make(map[string]*refMutex)}}
 }
 
 // Recover runs entityID's torn-tail scan if it has not already run on this
@@ -146,16 +134,56 @@ func (s *SQLiteStore) Recover(ctx context.Context, entityID string) (TruncationR
 // be using.
 func (s *SQLiteStore) Close() error { return nil }
 
-// lockFor returns the per-entity mutex Append serializes through. The
-// SQLite write-executor already allows only one Tx in flight for the whole
-// process, but that alone does not stop two concurrent goroutines from
-// each reading the same not-yet-advanced head before either commits; this
-// lock is what makes "seq is allocated monotonically per entity" true for
-// concurrent callers within one process rather than merely within one
-// transaction. Different entities never contend for the same lock.
-func (s *SQLiteStore) lockFor(entityID string) *sync.Mutex {
-	v, _ := s.entityLocks.LoadOrStore(entityID, &sync.Mutex{})
-	return v.(*sync.Mutex)
+// lockFor returns the per-entity lock Append serializes through: one Tx
+// in flight does not stop two goroutines reading the same head, so this
+// lock keeps per-entity seq allocation monotonic.
+func (s *SQLiteStore) lockFor(entityID string) *entityLock {
+	return &entityLock{set: &s.entityLocks, id: entityID}
+}
+
+// entityLocks is a refcounted per-entity mutex map. A reference is taken
+// under mu before blocking on the entity mutex, and the entry is deleted
+// only when no holder or waiter remains, so the map stays bounded and
+// two callers for one entity always share one mutex.
+type entityLocks struct {
+	mu sync.Mutex
+	m  map[string]*refMutex
+}
+
+type refMutex struct {
+	mu   sync.Mutex
+	refs int // holders plus waiters; guarded by entityLocks.mu
+}
+
+type entityLock struct { // single-use Lock/Unlock handle for one entity
+	set *entityLocks
+	id  string
+	rm  *refMutex
+}
+
+// Lock references id's entry (creating it), then takes its mutex.
+func (l *entityLock) Lock() {
+	l.set.mu.Lock()
+	rm, ok := l.set.m[l.id]
+	if !ok {
+		rm = &refMutex{}
+		l.set.m[l.id] = rm
+	}
+	rm.refs++
+	l.set.mu.Unlock()
+	rm.mu.Lock()
+	l.rm = rm
+}
+
+// Unlock drops the mutex and the reference; the last one deletes the entry.
+func (l *entityLock) Unlock() {
+	l.rm.mu.Unlock()
+	l.set.mu.Lock()
+	l.rm.refs--
+	if l.rm.refs == 0 {
+		delete(l.set.m, l.id)
+	}
+	l.set.mu.Unlock()
 }
 
 // Append seals a new entry as entityID's next sequence number and commits

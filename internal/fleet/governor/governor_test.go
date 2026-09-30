@@ -12,6 +12,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -217,5 +218,40 @@ step_down_dwell = "-1s"
 	if ladder.StepDownDwell != 0 {
 		t.Fatalf("ladder.StepDownDwell = %v, want 0 (negative override flattened to explicit no-dwell "+
 			"by NormalizeLadderConfig, called exactly once)", ladder.StepDownDwell)
+	}
+}
+
+// TestGovernorLoadMemThresholdOverlay: [governor.admission] mem_threshold
+// overlays AdmissionConfig.MemThreshold; absent, the preset's zero stays
+// and NewAdmissionController resolves it to DefaultMemThreshold.
+func TestGovernorLoadMemThresholdOverlay(t *testing.T) {
+	snap := ResourceSnapshot{MemTotalBytes: 32 << 30}
+	set := writeGovernorTOML(t, t.TempDir(), "[governor.admission]\nmem_threshold = 0.75\n")
+	admission, _, err := Load(context.Background(), set, snap)
+	if err != nil || admission.MemThreshold != 0.75 {
+		t.Fatalf("Load(mem_threshold=0.75) = %v, %v; want 0.75, nil", admission.MemThreshold, err)
+	}
+	absent, _, err := Load(context.Background(), filepath.Join(t.TempDir(), "none.toml"), snap)
+	if err != nil || absent.MemThreshold != 0 {
+		t.Fatalf("Load(absent).MemThreshold = %v, %v; want 0 (unset), nil", absent.MemThreshold, err)
+	}
+}
+
+// TestAdmissionRequestFieldsUnchanged pins AdmissionRequest's base field
+// set: every original field keeps its name and type. New fields may be
+// added; a removal or retype fails.
+func TestAdmissionRequestFieldsUnchanged(t *testing.T) {
+	base := map[string]reflect.Type{
+		"Kind":        reflect.TypeOf(""),
+		"Weight":      reflect.TypeOf(0),
+		"CompileLock": reflect.TypeOf(false),
+		"Priority":    reflect.TypeOf(0),
+	}
+	rt := reflect.TypeOf(AdmissionRequest{})
+	for name, want := range base {
+		f, ok := rt.FieldByName(name)
+		if !ok || f.Type != want {
+			t.Errorf("AdmissionRequest.%s missing or retyped (got %v), want %v", name, f.Type, want)
+		}
 	}
 }

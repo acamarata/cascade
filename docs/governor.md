@@ -173,3 +173,80 @@ The ladder's `Stage` is installed as the `AdmissionController`'s
 `ErrThrottled` with nothing queued; `StageCritical` halves the controller's
 effective `MaxInflight` (integer division, floor 1); `StageWarn` and
 `StageNormal` leave admission unchanged.
+
+## Admission signal
+
+Every `AdmissionController.Admit` decision, and every queue drain, first
+classifies the newest sampler snapshot with `ClassifySignal(snap, now,
+period)`. `now` is the controller's injected clock and `period` is
+`Sampler.Period()` (1 / the effective sampler rate). The rows are checked in
+this order:
+
+| Posture | When | Admission |
+|---|---|---|
+| `stale` | `SampledAt` is zero, or the sample is older than `StaleAfterPeriods` (3) periods | Refused: `ErrStaleResourceSignal`, message `posture=stale age=...` |
+| `no-signal` | `MemTotalBytes` is 0, whatever the swap total | Refused: `ErrNoResourceSignal`, message `posture=no-signal` |
+| `memory-only` | memory total present, `SwapTotalBytes` is 0 | Queues while `MemUsed/MemTotal > MemThreshold` |
+| `swap+memory` | both totals present | Queues while either fraction exceeds its threshold |
+
+A sample exactly `StaleAfterPeriods` periods old is still fresh; one
+nanosecond older is stale. `AdmissionController.Posture()` reports the
+current posture and the snapshot's `SampledAt`.
+
+### Refusals
+
+Both sentinels are `KindUnavailable`. That is the same kind `ErrDraining`
+carries, and `errors.Is` on a cascade error compares only the kind, so
+`errors.Is(err, ErrDraining)` is also true for a signal refusal. Use
+`IsDraining(err)` and `IsSignalRefusal(err)` instead: they match the
+sentinel itself anywhere in the error chain. A refusal returns before
+anything is queued: `Inflight()` and `QueueDepth()` are unchanged. Pressure
+(memory or swap over threshold) still queues rather than refuses.
+
+The sampler runs the controller's re-evaluation hook after every tick,
+successful or failed. A waiter queued under pressure is granted when a later
+sample shows headroom, and refused with the matching sentinel on the first
+tick that finds the posture `stale` or `no-signal`, with no new `Admit`
+call. A drain never grants under a stale or signal-less snapshot.
+
+Wake latency is bounded by ticks, not by the staleness window. A sample
+exactly `StaleAfterPeriods` periods old is still fresh, so when the
+collector starts failing, the waiter is refused on the tick after that one:
+the worst case is `StaleAfterPeriods + 1` periods (4 seconds at the default
+1 Hz).
+
+`Sampler.Stop` runs the controller's stop hook: every queued waiter is
+refused with `ErrDraining` and the controller stops admitting (later `Admit`
+calls return `ErrDraining`). A stopped sampler never strands a waiter.
+
+### Memory threshold
+
+`AdmissionConfig.MemThreshold` (0-1) defaults to `DefaultMemThreshold`
+(0.90) when zero or negative. `[governor.admission] mem_threshold` overlays
+it, as `swap_threshold` overlays `SwapThreshold`.
+
+### Swap-only rule
+
+A snapshot with swap but no memory total is `no-signal`. Swap use alone says
+nothing about memory headroom, so admitting on it would admit blind. A
+swap-less host with a memory reading is `memory-only` and is gated on memory.
+
+### Missing readings are never zero
+
+The sampler publishes nothing for a period whose collection failed, so the
+last snapshot ages into `stale` instead of being trusted forever.
+
+- Linux: the first `/proc/stat` read and any counter regression return
+  `ErrCPUBaselinePending`, and so does a read whose idle delta exceeds its
+  total delta. A `/proc/meminfo` whose `MemTotal` or `MemAvailable` is
+  missing, empty or unparseable, a zero `MemTotal`, or a `MemAvailable`
+  above `MemTotal` returns a `KindUnavailable` error. CPU is never reported
+  as 0 for lack of a baseline.
+- Darwin: used memory follows the kernel's pressure level. Used percent is
+  `100 - kern.memorystatus_level`, so `MemTotalBytes` is `hw.memsize` and
+  `MemUsedBytes` is `hw.memsize * (100 - level) / 100`. This matches the free
+  percentage `memory_pressure -Q` prints. A failed sysctl, a value that is not
+  4 or 8 bytes wide, a level above 100 or a zero `hw.memsize` is a
+  `KindUnavailable` error, and nothing is published.
+- Windows (tier 2): the collector always returns `ErrUnsupportedPlatform`,
+  so nothing is published and admission refuses as `stale`.

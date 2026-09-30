@@ -25,14 +25,10 @@
 // the ladder forward once its budget is spent (TestEscalationLadderAdvancesOnAttemptExhaustion).
 //
 // CONCURRENCY. Advance's read-decide-execute-append sequence is not
-// atomic at the journal layer by itself (two goroutines could both Replay
-// the same last event before either Appends its successor), so this file
-// serializes Advance per entity with its own lock (mirrors
-// journal.SQLiteStore.lockFor), independent of and in addition to the
-// JournalStore's own per-entity write serialization. This is what makes
-// "the human rung's side effect fires exactly once" and "attempt counts
-// never double-count" hold under concurrent Advance calls for the same
-// entity, not merely under sequential ones.
+// atomic at the journal layer, so Advance is serialized per entity by its
+// own refcounted lock (ladderLocks), on top of the journal's own write
+// serialization. That keeps "the human rung fires once" and "attempts
+// never double-count" true under concurrent Advance calls.
 //
 // SPORT: internal/fleet/governor.EscalationLadder (ADD, per T-3
 //
@@ -62,7 +58,7 @@ type EscalationLadder struct {
 	policy     EscalationPolicy
 	clock      runtime.Clock
 
-	entityLocks sync.Map // map[string]*sync.Mutex, one per entity ID
+	entityLocks ladderLocks
 }
 
 // NewEscalationLadder builds an EscalationLadder that reads and writes
@@ -83,6 +79,8 @@ func NewEscalationLadder(j journal.Store, confidence ConfidenceProvider, retryer
 		notifier:   notifier,
 		policy:     policy,
 		clock:      clk,
+
+		entityLocks: ladderLocks{m: make(map[string]*ladderRefMutex)},
 	}
 }
 
@@ -103,9 +101,7 @@ func (l *EscalationLadder) Advance(ctx context.Context, entityID string) error {
 	if entityID == "" {
 		return ErrEscalationInvalidInput
 	}
-	lock := l.lockFor(entityID)
-	lock.Lock()
-	defer lock.Unlock()
+	defer l.entityLocks.acquire(entityID)()
 
 	last, err := l.lastEvent(ctx, entityID)
 	if err != nil {
@@ -266,12 +262,39 @@ func (l *EscalationLadder) appendEvent(ctx context.Context, event EscalationEven
 	return nil
 }
 
-// lockFor returns the per-entity mutex Advance serializes through, so two
-// concurrent Advance calls for the same entity cannot both read the same
-// last event and each independently decide to advance (which would either
-// double-execute a rung's seam or silently drop one caller's transition).
-// Different entities never contend for the same lock.
-func (l *EscalationLadder) lockFor(entityID string) *sync.Mutex {
-	v, _ := l.entityLocks.LoadOrStore(entityID, &sync.Mutex{})
-	return v.(*sync.Mutex)
+// ladderLocks serializes Advance per entity, so two concurrent calls for
+// one entity cannot both read the same last event and each advance. It is
+// refcounted: a reference is taken under mu before blocking on the entity
+// mutex, and the entry is deleted only when no holder or waiter remains,
+// so the map does not grow with every entity ever escalated.
+type ladderLocks struct {
+	mu sync.Mutex
+	m  map[string]*ladderRefMutex
+}
+
+type ladderRefMutex struct {
+	mu   sync.Mutex
+	refs int // holders plus waiters; guarded by ladderLocks.mu
+}
+
+// acquire locks id's mutex and returns the matching release.
+func (ll *ladderLocks) acquire(id string) (release func()) {
+	ll.mu.Lock()
+	rm, ok := ll.m[id]
+	if !ok {
+		rm = &ladderRefMutex{}
+		ll.m[id] = rm
+	}
+	rm.refs++
+	ll.mu.Unlock()
+	rm.mu.Lock()
+	return func() {
+		rm.mu.Unlock()
+		ll.mu.Lock()
+		rm.refs--
+		if rm.refs == 0 {
+			delete(ll.m, id)
+		}
+		ll.mu.Unlock()
+	}
 }

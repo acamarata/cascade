@@ -1,36 +1,23 @@
 // Package governor holds the fleet resource governor's shared
-// low-frequency host-resource sampler (P1-E13-W3-S26-T1). It has no
-// admission or throttle logic of its own; S-26.T2's admission controller
-// and S-26.T3's throttle ladder both read the same Sampler snapshot so no
-// two subsystems issue independent syscalls against the host.
+// low-frequency host-resource sampler. The admission controller and the
+// throttle ladder read the same Sampler snapshot, so no two subsystems
+// issue independent syscalls against the host.
 //
-// Purpose: define ResourceSnapshot, SamplerConfig, and Sampler — a
+// Purpose: ResourceSnapshot, SamplerConfig, and Sampler, a goroutine that
+// polls host metrics at most 1Hz and publishes a lock-free snapshot.
 //
-//	background goroutine that polls platform-specific host metrics at a
-//	rate capped at 1Hz when idle and publishes them as a lock-free atomic
-//	snapshot.
+// Inputs: a SamplerConfig ([governor].sampler_hz), an injected Clock
+// (SampledAt; no bare time.Now), an injected Ticker (never a real sleep in
+// a test), and an optional *slog.Logger (nil discards).
 //
-// Inputs: a SamplerConfig ([governor].sampler_hz, 08-INIT-CONFIG-SPEC §3,
+// Outputs: Snapshot() returns the newest successfully collected
+// ResourceSnapshot; a failed collection logs at warn and publishes nothing,
+// so the retained snapshot ages into stale (admission_signal.go).
 //
-//	R-14.42), an injected runtime.Clock (SampledAt, R-14.11 — no bare
-//	time.Now), an injected runtime.Ticker (pacing, matching the
-//	internal/events/scheduler and internal/runtime periodic-emitter
-//	pattern — never a real sleep in a test), and an optional *slog.Logger
-//	(nil discards, matching internal/daemon.NewManifest's convention).
-//
-// Outputs: Snapshot() returns the most recent successfully collected
-//
-//	ResourceSnapshot; a collection failure logs at warn and retains the
-//	previous good value rather than publishing a zeroed one.
-//
-// Constraints: no CGO anywhere in this package; metrics come from
-//
-//	golang.org/x/sys/unix sysctls (darwin) or /proc file reads (linux).
-//	collectMetrics() is declared once per platform file under a matching
-//	//go:build tag; the pure text-parsing helpers those platform
-//	collectors call (parseProcStat, parseProcMeminfo) live in this
-//	UNTAGGED file specifically so they compile and fuzz on every host,
-//	including one that lacks their platform's actual collector.
+// Constraints: no CGO; darwin reads sysctls, linux reads /proc.
+// collectMetrics() is declared once per platform file under a matching
+// build tag; the pure parsers live in this UNTAGGED file so they compile
+// and fuzz on every host.
 //
 // SPORT: internal/fleet/governor.Sampler (ADD, per T-1 sport_updates).
 package governor
@@ -59,15 +46,12 @@ const DefaultSamplerHz = 1.0
 // "at most 1Hz", not "exactly 1Hz".
 const MaxSamplerHz = 1.0
 
-// ErrUnsupportedPlatform is the sentinel collectMetrics returns on a
-// platform the sampler does not yet collect real metrics on (windows,
-// tier-2 per the contract). Callers must handle it rather than treat it
-// as a transient collection failure: retrying will not help.
+// ErrUnsupportedPlatform is what collectMetrics returns on a platform with
+// no real collector (windows, tier-2); retrying will not help.
 var ErrUnsupportedPlatform = cascade.New(cascade.KindUnsupported, "governor: resource sampling not supported on this platform")
 
-// ResourceSnapshot is one point-in-time read of host resource state. It is
-// value-typed so callers always get an independent copy from Snapshot,
-// never a reference into the sampler's internal state.
+// ResourceSnapshot is one point-in-time read of host resource state,
+// value-typed so every Snapshot caller gets an independent copy.
 type ResourceSnapshot struct {
 	// CPUFraction is fractional CPU utilization in [0, 1]. Its precision
 	// is platform-dependent and documented per collector (see
@@ -85,8 +69,7 @@ type ResourceSnapshot struct {
 	// (runtime.NumGoroutine()).
 	Goroutines int `json:"goroutines"`
 	// SampledAt is when this snapshot was collected, per the sampler's
-	// injected Clock — never the platform collector's own wall-clock
-	// read (Art.7.3 determinism).
+	// injected Clock (Art.7.3); zero means never sampled.
 	SampledAt time.Time `json:"sampled_at"`
 }
 
@@ -99,9 +82,8 @@ type SamplerConfig struct {
 }
 
 // PeriodForHz converts a configured rate into a tick interval, applying
-// SamplerConfig's default-and-clamp rule. Production composition roots use
-// it to size the runtime.Ticker they hand to NewSampler; it is exported so
-// that wiring never has to re-derive the same arithmetic.
+// SamplerConfig's default-and-clamp rule; composition roots size the
+// runtime.Ticker they hand to NewSampler with it.
 func PeriodForHz(hz float64) time.Duration {
 	switch {
 	case hz <= 0:
@@ -112,49 +94,66 @@ func PeriodForHz(hz float64) time.Duration {
 	return time.Duration(float64(time.Second) / hz)
 }
 
-// Sampler runs a single background goroutine that polls collectMetrics on
-// each tick from the injected runtime.Ticker and publishes the result as a
-// lock-free atomic value. The zero value is not usable; construct with
-// NewSampler.
+// Sampler polls collectMetrics on each tick of the injected Ticker and
+// publishes the result atomically. Construct with NewSampler.
 type Sampler struct {
 	clk     runtime.Clock
 	ticker  runtime.Ticker
 	log     *slog.Logger
 	collect func() (ResourceSnapshot, error)
+	period  time.Duration
 
 	snap atomic.Value // holds ResourceSnapshot
 
 	mu     sync.Mutex
 	cancel context.CancelFunc
+	// tickHooks run after EVERY tick, successful or failed, before
+	// afterTick; stopHooks run on Stop. NewAdmissionController registers
+	// its queue re-evaluation and its queue refusal here, so a waiter
+	// learns of signal loss or a stopped sampler without a new Admit call.
+	tickHooks, stopHooks []func()
 
-	// afterTick is a test-only hook invoked once per tick, after the
-	// snapshot store (or the warn-log, on a collection failure). Always
-	// nil in production; it exists solely so a test driving Sampler
-	// through Start's real goroutine (rather than calling tick directly)
-	// has a deterministic, non-sleep signal that one full tick cycle has
-	// completed (R-14.136 — no sleeps as synchronization).
+	// afterTick is a test-only hook (nil in production) invoked last in
+	// every tick: a non-sleep signal that one full tick cycle completed.
 	afterTick func()
 }
 
-// NewSampler builds a Sampler. A nil clk falls back to
-// runtime.NewSystemClock(); a nil ticker falls back to
-// runtime.NewSystemTicker(PeriodForHz(cfg.MaxHz)) — tests should always
-// inject a fake Ticker instead of relying on this fallback, matching
-// R-14.136. A nil log discards collection-failure warnings, mirroring
-// internal/daemon.NewManifest's convention.
+// NewSampler builds a Sampler. A nil clk falls back to the system clock
+// and a nil ticker to runtime.NewSystemTicker(PeriodForHz(cfg.MaxHz));
+// tests always inject fakes. A nil log discards warnings.
 func NewSampler(cfg SamplerConfig, clk runtime.Clock, ticker runtime.Ticker, log *slog.Logger) *Sampler {
 	if clk == nil {
 		clk = runtime.NewSystemClock()
 	}
+	period := PeriodForHz(cfg.MaxHz)
 	if ticker == nil {
-		ticker = runtime.NewSystemTicker(PeriodForHz(cfg.MaxHz))
+		ticker = runtime.NewSystemTicker(period)
 	}
 	return &Sampler{
 		clk:     clk,
 		ticker:  ticker,
 		log:     log,
 		collect: collectMetrics,
+		period:  period,
 	}
+}
+
+// Period is the sampler's tick interval: 1 / the effective (defaulted and
+// clamped) MaxHz. Admission's staleness window is measured in it.
+func (s *Sampler) Period() time.Duration {
+	if s.period <= 0 {
+		return PeriodForHz(0)
+	}
+	return s.period
+}
+
+// addHooks registers onTick to run after every tick and onStop to run on
+// Stop (see tickHooks).
+func (s *Sampler) addHooks(onTick, onStop func()) {
+	s.mu.Lock()
+	s.tickHooks = append(s.tickHooks, onTick)
+	s.stopHooks = append(s.stopHooks, onStop)
+	s.mu.Unlock()
 }
 
 // Start launches the sampler's background goroutine, which ticks until ctx
@@ -168,22 +167,25 @@ func (s *Sampler) Start(ctx context.Context) {
 	go s.run(runCtx)
 }
 
-// Stop cancels the sampler's run loop. Safe to call more than once, and
-// safe to call before Start (a no-op in that case): context.CancelFunc is
-// itself idempotent, so no extra guard is needed here.
+// Stop cancels the sampler's run loop, then runs the stop hooks outside
+// s.mu: a stopped sampler never reports again, so the admission controller
+// refuses its queued waiters instead of stranding them. Safe to call more
+// than once, and before Start.
 func (s *Sampler) Stop() {
 	s.mu.Lock()
-	cancel := s.cancel
+	cancel, hooks := s.cancel, append([]func(){}, s.stopHooks...)
 	s.mu.Unlock()
 	if cancel != nil {
 		cancel()
 	}
+	for _, h := range hooks {
+		h()
+	}
 }
 
-// Snapshot returns the most recently collected ResourceSnapshot. It never
-// blocks on the sampler's goroutine and is safe to call concurrently from
-// any number of readers. Before the first successful tick it returns the
-// zero ResourceSnapshot.
+// Snapshot returns the most recently collected ResourceSnapshot without
+// blocking; safe for concurrent readers. Before the first successful tick
+// it returns the zero ResourceSnapshot (zero SampledAt: stale).
 func (s *Sampler) Snapshot() ResourceSnapshot {
 	v := s.snap.Load()
 	if v == nil {
@@ -205,23 +207,33 @@ func (s *Sampler) run(ctx context.Context) {
 	}
 }
 
-// tick collects one sample. On failure it logs at warn and returns without
-// touching the published snapshot, so Snapshot() keeps reporting the last
-// good value rather than a zeroed one.
+// tick collects one sample. On failure it logs at warn and publishes
+// nothing: the previous snapshot keeps its old SampledAt, so readers see it
+// age into staleness rather than a zeroed or refreshed value. Either way
+// the tick hooks run afterwards.
 func (s *Sampler) tick() {
+	defer s.runTickHooks()
 	snap, err := s.collect()
 	if err != nil {
 		if s.log != nil {
 			s.log.Warn("governor: resource sample collection failed", "error", err)
-		}
-		if s.afterTick != nil {
-			s.afterTick()
 		}
 		return
 	}
 	snap.Goroutines = goruntime.NumGoroutine()
 	snap.SampledAt = s.clk.Now()
 	s.snap.Store(snap)
+}
+
+// runTickHooks runs the registered tick hooks, then the test-only
+// afterTick, outside s.mu.
+func (s *Sampler) runTickHooks() {
+	s.mu.Lock()
+	hooks := append([]func(){}, s.tickHooks...)
+	s.mu.Unlock()
+	for _, h := range hooks {
+		h()
+	}
 	if s.afterTick != nil {
 		s.afterTick()
 	}
@@ -258,9 +270,9 @@ func parseProcStat(data []byte) (idle, total uint64, err error) {
 // parseProcMeminfo extracts MemTotal, MemAvailable, SwapTotal, and
 // SwapFree (in bytes, converted from the file's kB units) from
 // /proc/meminfo's raw content. Unrecognized or malformed lines are
-// skipped rather than treated as errors, so a kernel that adds or reorders
-// fields never breaks collection, and FuzzParseProcMeminfo can never drive
-// it to a panic — arbitrary bytes simply yield zero values.
+// skipped, so arbitrary bytes yield zero values and never a panic
+// (FuzzParseProcMeminfo); the linux collector validates MemTotal and
+// MemAvailable separately (meminfoMemory).
 func parseProcMeminfo(data []byte) (memTotalBytes, memAvailBytes, swapTotalBytes, swapFreeBytes uint64) {
 	for _, line := range strings.Split(string(data), "\n") {
 		fields := strings.Fields(line)

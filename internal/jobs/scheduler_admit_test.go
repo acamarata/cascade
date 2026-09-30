@@ -11,8 +11,11 @@ package jobs
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/acamarata/cascade/internal/fleet/governor"
+	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 func node(id string, priority int, scope ...string) DagNode {
@@ -131,5 +134,56 @@ func TestAdmit_MalformedScopeRecordsErrorAndSkipsNode(t *testing.T) {
 	}
 	if len(delta.LeasesToAcquire) != 0 {
 		t.Fatalf("LeasesToAcquire = %#v, want empty", delta.LeasesToAcquire)
+	}
+}
+
+// inertTicker never ticks, so a Sampler built on it never publishes a
+// sample and its controller refuses for a stale signal.
+type inertTicker struct{}
+
+func (inertTicker) C() <-chan struct{} { return nil }
+func (inertTicker) Stop()              {}
+
+// splitGovernor routes the higher-priority node to refuse and every other
+// node to a plain grant, counting calls.
+func splitGovernor(refuse GovernorFn, calls *int) GovernorFn {
+	return func(ctx context.Context, req governor.AdmissionRequest) (governor.Permit, error) {
+		*calls++
+		if req.Priority == 10 {
+			return refuse(ctx, req)
+		}
+		return governor.Permit{}, nil
+	}
+}
+
+func TestAdmitSkipsRefusedNodeGrantsHealthy(t *testing.T) {
+	clk := runtime.NewFixedClock(time.Unix(1_700_000_000, 0))
+	nilSampler := governor.NewAdmissionController(nil, governor.AdmissionConfig{}, clk)
+	unsampled := governor.NewAdmissionController(
+		governor.NewSampler(governor.SamplerConfig{}, clk, inertTicker{}, nil), governor.AdmissionConfig{}, clk)
+	noSignal := func(context.Context, governor.AdmissionRequest) (governor.Permit, error) {
+		return governor.Permit{}, cascade.Wrapf(cascade.KindUnavailable, governor.ErrNoResourceSignal, "posture=no-signal")
+	}
+	cases := map[string]GovernorFn{"nil sampler": nilSampler.Admit, "stale signal": unsampled.Admit, "no signal": noSignal}
+	for name, refuse := range cases {
+		t.Run(name, func(t *testing.T) {
+			dag := ExecutionDag{Nodes: []DagNode{node("blind", 10, "a/**"), node("healthy", 1, "b/**")}}
+			var calls int
+			delta := NewScheduler(nil).Advance(controllerCtx(), dag, LeaseAcquired{}, nil, nil, splitGovernor(refuse, &calls))
+			if calls != 2 {
+				t.Fatalf("governor calls = %d, want 2: the refused node must not stop the batch", calls)
+			}
+			if len(delta.Errors) != 1 || governor.IsDraining(delta.Errors[0]) {
+				t.Fatalf("Errors = %v, want exactly the blind node's non-draining refusal", delta.Errors)
+			}
+			if len(delta.LeasesToAcquire) != 1 || delta.LeasesToAcquire[0].JobID != "healthy" {
+				t.Fatalf("LeasesToAcquire = %#v, want exactly one grant, on healthy", delta.LeasesToAcquire)
+			}
+			for _, l := range delta.LeasesToAcquire {
+				if l.JobID == "blind" {
+					t.Fatalf("blind node was granted: %#v", l)
+				}
+			}
+		})
 	}
 }

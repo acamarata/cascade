@@ -51,7 +51,12 @@ func (s *Scheduler) admitNodes(ctx context.Context, dag ExecutionDag, jobStates 
 		permit, err := governorFn(ctx, governor.AdmissionRequest{Kind: "job", Weight: 1, Priority: n.Priority})
 		if err != nil {
 			delta.Errors = append(delta.Errors, err)
-			if errors.Is(err, governor.ErrQueueFull) || errors.Is(err, governor.ErrDraining) {
+			// A signal refusal (or a controller with no sampler) blinds only
+			// this node: skip it and keep admitting the batch.
+			if governor.IsSignalRefusal(err) {
+				continue
+			}
+			if errors.Is(err, governor.ErrQueueFull) || governor.IsDraining(err) {
 				break
 			}
 			continue

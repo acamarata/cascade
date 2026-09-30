@@ -8,6 +8,8 @@ package governor
 //	conflated by a caller.
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -51,4 +53,53 @@ func TestAdmissionExhaustionVsRefusalDistinguishable(t *testing.T) {
 	if !errors.Is(ErrQueueFull, ErrQueueFull) {
 		t.Fatal("ErrQueueFull must be Is-equivalent to itself")
 	}
+}
+
+// helperCases are the errors both identity helpers are checked against:
+// every KindUnavailable sentinel bare and wrapped (by cascade and by the
+// standard library), a fresh error of the same Kind, and nil.
+func helperCases() map[string]error {
+	cases := map[string]error{
+		"fresh KindUnavailable": cascade.New(cascade.KindUnavailable, "governor: something else"),
+		"nil":                   nil,
+	}
+	sentinels := map[string]*cascade.Error{
+		"ErrDraining":            ErrDraining,
+		"ErrNoResourceSignal":    ErrNoResourceSignal,
+		"ErrStaleResourceSignal": ErrStaleResourceSignal,
+	}
+	for name, s := range sentinels {
+		cases[name] = s
+		cases[name+" wrapped"] = cascade.Wrapf(cascade.KindUnavailable, s, "posture=x")
+		cases[name+" fmt-wrapped"] = fmt.Errorf("outer: %w", cascade.Wrap(cascade.KindUnavailable, s, "inner"))
+		cases[name+" joined"] = errors.Join(errors.New("other"), s)
+	}
+	return cases
+}
+
+func assertHelper(t *testing.T, helper func(error) bool, name string, own ...string) {
+	t.Helper()
+	cases := helperCases()
+	for label, err := range cases {
+		want := false
+		for _, o := range own {
+			if strings.HasPrefix(label, o) {
+				want = true
+			}
+		}
+		if got := helper(err); got != want {
+			t.Errorf("%s(%s) = %v, want %v", name, label, got, want)
+		}
+	}
+	if !errors.Is(ErrDraining, ErrStaleResourceSignal) {
+		t.Fatal("precondition: errors.Is compares Kind only, so it cannot tell these sentinels apart")
+	}
+}
+
+func TestIsDrainingComparesSentinelIdentity(t *testing.T) {
+	assertHelper(t, IsDraining, "IsDraining", "ErrDraining")
+}
+
+func TestIsSignalRefusalComparesSentinelIdentity(t *testing.T) {
+	assertHelper(t, IsSignalRefusal, "IsSignalRefusal", "ErrNoResourceSignal", "ErrStaleResourceSignal")
 }

@@ -87,6 +87,7 @@ type governorAdmissionTOML struct {
 	MaxInflight     int     `toml:"max_inflight"`
 	CompileClassCap int     `toml:"compile_class_cap"`
 	SwapThreshold   float64 `toml:"swap_threshold"`
+	MemThreshold    float64 `toml:"mem_threshold"`
 }
 
 // governorLadderTOML is [governor.ladder]. StepDownDwell is decoded as a
@@ -206,6 +207,9 @@ func applyAdmissionOverrides(base AdmissionConfig, overlay governorAdmissionTOML
 	}
 	if overlay.SwapThreshold > 0 {
 		base.SwapThreshold = overlay.SwapThreshold
+	}
+	if overlay.MemThreshold > 0 {
+		base.MemThreshold = overlay.MemThreshold
 	}
 	return base
 }

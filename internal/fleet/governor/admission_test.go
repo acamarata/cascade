@@ -136,26 +136,38 @@ func TestAdmissionControllerNeverKills(t *testing.T) {
 	}
 }
 
+// TestAdmissionWindowsFallback: windows' collector always returns
+// ErrUnsupportedPlatform, so nothing is ever published and Admit refuses
+// as stale instead of admitting on a zero-total snapshot.
 func TestAdmissionWindowsFallback(t *testing.T) {
-	// A zero-total snapshot is exactly what Sampler.Snapshot() reports on
-	// an unsupported platform (tick() never stores on collection error).
-	ac := newTestController(AdmissionConfig{MaxInflight: 1, QueueCap: 4, SwapThreshold: 0.01}, ResourceSnapshot{})
-	permit, err := ac.Admit(context.Background(), AdmissionRequest{})
-	if err != nil {
-		t.Fatalf("Admit against a zero-total snapshot = %v, want nil (conservative allow on the swap axis)", err)
-	}
-	defer permit.Release()
+	r := newSignalRig(t, AdmissionConfig{MaxInflight: 1, QueueCap: 4})
+	r.set(ResourceSnapshot{}, ErrUnsupportedPlatform)
+	r.step(t, time.Second)
+	assertSentinel(t, admitOnce(r.ac), ErrStaleResourceSignal, "posture=stale age=never-sampled")
+	assertEmpty(t, r.ac)
+}
 
-	// The swap axis is not gating, but MaxInflight still is: a second
-	// request must still queue rather than being admitted unconditionally.
-	res := enqueueAndWait(context.Background(), t, ac, AdmissionRequest{})
-	if ac.QueueDepth() != 1 {
-		t.Fatal("a second request over MaxInflight was admitted despite the zero-total snapshot: fallback is not unconditional allow")
+func TestClassifySignalTable(t *testing.T) {
+	now, period := time.Unix(50_000, 0), time.Second
+	edge := now.Add(-StaleAfterPeriods * period)
+	at := func(s ResourceSnapshot, ts time.Time) ResourceSnapshot { s.SampledAt = ts; return s }
+	rows := []struct {
+		name string
+		snap ResourceSnapshot
+		want SignalPosture
+	}{
+		{"zero SampledAt", bothSnap(10, 10), PostureStale},
+		{"exactly StaleAfterPeriods old", at(bothSnap(10, 10), edge), PostureSwapAndMemory},
+		{"one ns past the window", at(bothSnap(10, 10), edge.Add(-time.Nanosecond)), PostureStale},
+		{"no memory and no swap", at(ResourceSnapshot{}, now), PostureNoSignal},
+		{"swap only", at(ResourceSnapshot{SwapTotalBytes: 1 << 30, SwapUsedBytes: 1}, now), PostureNoSignal},
+		{"memory only", at(memSnap(10), now), PostureMemoryOnly},
+		{"memory and swap", at(bothSnap(10, 10), now), PostureSwapAndMemory},
 	}
-	permit.Release()
-	got := <-res
-	if got.err == nil {
-		got.permit.Release()
+	for _, row := range rows {
+		if got := ClassifySignal(row.snap, now, period); got != row.want {
+			t.Errorf("%s: ClassifySignal = %q, want %q", row.name, got, row.want)
+		}
 	}
 }
 
