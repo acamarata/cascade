@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T07:07:17Z",
+  "generated_at": "2026-09-30T08:04:48Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -22384,7 +22384,7 @@
         },
         {
           "file": "internal/secrets/custody_darwin.go",
-          "line": 19,
+          "line": 13,
           "status": "ADD",
           "raw": "internal/secrets Custody/ADDED (darwin keychain)."
         },
