@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T05:01:01Z",
+  "generated_at": "2026-09-30T05:52:43Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -27593,6 +27593,44 @@
       ]
     },
     {
+      "name": "plugins/pbd lifecycle_appendif",
+      "sites": [
+        {
+          "file": "plugins/pbd/lifecycle_appendif.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "plugins/pbd lifecycle_appendif (ADD) — P1-PBD-07."
+        },
+        {
+          "file": "plugins/pbd/lifecycle_appendif_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "plugins/pbd lifecycle_appendif (ADD) — P1-PBD-07."
+        },
+        {
+          "file": "plugins/pbd/lifecycle_cas_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "plugins/pbd lifecycle_appendif (ADD) — P1-PBD-07."
+        },
+        {
+          "file": "plugins/pbd/lifecycle_lock_unix.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "plugins/pbd lifecycle_appendif (ADD) — P1-PBD-07."
+        },
+        {
+          "file": "plugins/pbd/lifecycle_lock_windows.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "plugins/pbd lifecycle_appendif (ADD) — P1-PBD-07."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/pbd lint",
       "sites": [
         {
@@ -27852,13 +27890,34 @@
           "status": "ADD",
           "ticket": "P1-E14-W3-S30-T1",
           "raw": "plugins/pbd/internal/pews lifecycle (ADD) — P1-E14-W3-S30-T1."
-        },
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/pbd/internal/pews lifecycle_apply",
+      "sites": [
         {
-          "file": "plugins/pbd/internal/pews/lifecycle_test.go",
-          "line": 7,
+          "file": "plugins/pbd/internal/pews/lifecycle_apply.go",
+          "line": 9,
           "status": "ADD",
-          "ticket": "P1-E14-W3-S30-T1",
-          "raw": "plugins/pbd/internal/pews lifecycle (ADD) — P1-E14-W3-S30-T1."
+          "raw": "plugins/pbd/internal/pews lifecycle_apply (ADD) — P1-PBD-07."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/pbd/internal/pews lifecycle_cas",
+      "sites": [
+        {
+          "file": "plugins/pbd/internal/pews/lifecycle_cas.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "plugins/pbd/internal/pews lifecycle_cas (ADD) — P1-PBD-07."
         }
       ],
       "statuses": [
@@ -30641,7 +30700,7 @@
       ]
     }
   ],
-  "total_sites": 2879,
+  "total_sites": 2885,
   "unspecified_count": 152,
   "multi_status_count": 83
 }
