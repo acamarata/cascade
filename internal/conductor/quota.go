@@ -209,7 +209,8 @@ func toInt64(v interface{}) (int64, bool) {
 }
 
 // QuotaPolicy holds the runtime spill/quota state for one resolved
-// [conductor.quota] configuration: the ordered spill list and each lane's
+// [conductor.quota] configuration: the ordered spill list, per-lane
+// admission ceilings over a rolling CeilingWindow, and each lane's
 // rate-limit window. The zero value is not usable; construct with
 // NewQuotaPolicy. QuotaPolicy holds no Store dependency (see the package
 // doc comment) -- it orders lanes and emits bus events, never persists.
@@ -217,6 +218,10 @@ type QuotaPolicy struct {
 	clock Clock
 	mu    sync.Mutex
 	order []LaneID
+	// ceilings maps lane to max admissions within CeilingWindow.
+	ceilings map[LaneID]int64
+	// admissions tracks timestamps of granted admissions per lane.
+	admissions map[LaneID][]time.Time
 	// limitedUntil records, per lane, the clock time a 429/exhaustion
 	// window clears. A lane absent from this map has no active window.
 	limitedUntil map[LaneID]time.Time
@@ -233,17 +238,10 @@ type QuotaPolicy struct {
 // see quota.go's QuotaPolicy.window doc comment).
 const defaultRateLimitWindow = 60 * time.Second
 
-// NewQuotaPolicy returns a QuotaPolicy over cfg's spill order, stamping
-// every window from clk (never a bare time.Now).
+// NewQuotaPolicy returns a QuotaPolicy over cfg's spill order and
+// ceiling overrides, stamping every window from clk (never a bare time.Now).
 func NewQuotaPolicy(cfg QuotaConfig, clk Clock) *QuotaPolicy {
-	order := make([]LaneID, len(cfg.SpillOrder))
-	copy(order, cfg.SpillOrder)
-	return &QuotaPolicy{
-		clock:        clk,
-		order:        order,
-		limitedUntil: make(map[LaneID]time.Time),
-		window:       defaultRateLimitWindow,
-	}
+	return newQuotaPolicyWithCeilings(cfg, clk)
 }
 
 // SpillOrderConfigured reports whether the operator configured a spill
@@ -257,13 +255,14 @@ func (p *QuotaPolicy) SpillOrderConfigured() bool {
 }
 
 // NextLane returns the first lane in spill_order that is neither in
-// excluded nor currently within an active rate-limit window, or
-// ErrAllLanesExhausted if none qualifies. NextLane is an ORDERING
-// function over a candidate set the caller has already produced
-// (R-21.264): it does not itself evaluate capability, sensitivity, health
-// or cost -- that filtering is P1-E11-W3-S22-T2's Router, the sole
-// permitted caller (quota_arch_test.go asserts no other call site
-// exists).
+// excluded, rate-limited, nor at its configured ceiling, or
+// ErrAllLanesExhausted if none qualifies. NextLane records the admission of
+// the lane it returns in the same critical section as selection.
+// NextLane is an ORDERING function over a candidate set the caller has
+// already produced (R-21.264): it does not itself evaluate capability,
+// sensitivity, health or cost -- that filtering is P1-E11-W3-S22-T2's
+// Router, the sole permitted caller (quota_arch_test.go asserts no other
+// call site exists).
 func (p *QuotaPolicy) NextLane(ctx context.Context, excluded []LaneID) (LaneID, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
@@ -276,6 +275,7 @@ func (p *QuotaPolicy) NextLane(ctx context.Context, excluded []LaneID) (LaneID, 
 	for _, id := range excluded {
 		excludeSet[id] = true
 	}
+	var ceilingSkipped []LaneID
 	for _, lane := range p.order {
 		if excludeSet[lane] {
 			continue
@@ -283,7 +283,15 @@ func (p *QuotaPolicy) NextLane(ctx context.Context, excluded []LaneID) (LaneID, 
 		if until, limited := p.limitedUntil[lane]; limited && now.Before(until) {
 			continue
 		}
+		if !p.canAdmitLocked(lane, now) {
+			ceilingSkipped = append(ceilingSkipped, lane)
+			continue
+		}
+		p.recordAdmissionLocked(lane, now)
 		return lane, nil
+	}
+	if len(ceilingSkipped) > 0 {
+		return "", exhaustedWithCeilings(ceilingSkipped)
 	}
 	return "", ErrAllLanesExhausted
 }

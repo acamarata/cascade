@@ -20,7 +20,9 @@ package conductor
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -80,6 +82,9 @@ func filterQuota(ctx context.Context, quota QuotaSpiller, allLanes, cands []lane
 	// a broken one. An order the operator DID configure still decides.
 	// (R-14.245.)
 	if sp, ok := quota.(spillOrderReporter); ok && !sp.SpillOrderConfigured() {
+		if adm, ok := quota.(laneAdmitter); ok {
+			return filterQuotaUnconfigured(adm, cands, flags)
+		}
 		flags = append(flags, "quota:unconfigured-spill-order")
 		return cands[0], flags, nil
 	}
@@ -97,6 +102,38 @@ func filterQuota(ctx context.Context, quota QuotaSpiller, allLanes, cands []lane
 	// already produced - an invariant violation in the excluded-set
 	// construction above, never a lane to dispatch to.
 	return laneCandidate{}, flags, ErrAllProvidersEvicted
+}
+
+// filterQuotaUnconfigured selects the first candidate whose AdmitLane succeeds
+// when no spill order is configured (AUD-030). If every candidate is at its
+// ceiling, it returns ErrAllLanesExhausted naming the skipped lanes.
+func filterQuotaUnconfigured(adm laneAdmitter, cands []laneCandidate, flags []string) (laneCandidate, []string, error) {
+	var ceilingSkipped []string
+	for _, c := range cands {
+		lane := LaneID(c.lane.LaneName)
+		// Identity, not errors.Is -- cascade
+		// sentinels of the same Kind (KindQuotaExhausted) are otherwise
+		// indistinguishable, and AdmitLane returns ErrLaneCeilingReached
+		// unwrapped, so pointer identity is exact here.
+		if err := adm.AdmitLane(lane); err == nil {
+			flags = append(flags, "quota:unconfigured-spill-order")
+			return c, flags, nil
+		} else if err == ErrLaneCeilingReached {
+			ceilingSkipped = append(ceilingSkipped, string(lane))
+		}
+	}
+	if len(ceilingSkipped) > 0 {
+		return laneCandidate{}, flags, cascade.Wrapf(cascade.KindQuotaExhausted, ErrAllLanesExhausted,
+			"conductor: quota: every lane in the candidate set is excluded, rate-limited, or ceiling reached (ceiling reached for: %s)",
+			strings.Join(ceilingSkipped, ", "))
+	}
+	return laneCandidate{}, flags, ErrAllLanesExhausted
+}
+
+// laneAdmitter is the optional capability a spiller exposes to admit a lane
+// under configured quota ceilings (AUD-030).
+type laneAdmitter interface {
+	AdmitLane(lane LaneID) error
 }
 
 // spillOrderReporter is the optional capability a spiller exposes to say
