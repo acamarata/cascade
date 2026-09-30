@@ -63,7 +63,10 @@ func TestShellExecutor_CommandNotFound(t *testing.T) {
 }
 
 // TestShellExecutor_Timeout proves a command exceeding its timeout is
-// killed and reported as TimedOut, never left to hang the caller.
+// killed and reported as TimedOut, never left to hang the caller, and that
+// the whole tree was reaped: GroupKillErr is nil, and t.TempDir's cleanup
+// (which fails on windows while a survivor still has the directory as its
+// current directory) is the second signal.
 func TestShellExecutor_Timeout(t *testing.T) {
 	res := ShellExecutor{}.Run(context.Background(), stepReq(t, sleepCommand(5), 50*time.Millisecond))
 	if !res.TimedOut {
@@ -71,6 +74,9 @@ func TestShellExecutor_Timeout(t *testing.T) {
 	}
 	if res.StartErr != nil {
 		t.Errorf("a timeout must not also report a StartErr: %v", res.StartErr)
+	}
+	if res.GroupKillErr != nil {
+		t.Errorf("a timed-out step's tree must be reaped, got GroupKillErr: %v", res.GroupKillErr)
 	}
 }
 

@@ -147,10 +147,11 @@ Each step gets `timeout_seconds` of its own. On expiry:
 - **macOS, Linux** — the step runs in its own process group and the whole
   group is killed, so a command that backgrounded work (`make test &`, a
   dev server, a forking harness) does not leave survivors behind.
-- **Windows** — the step's shell is started as its own process group
-  leader and is killed, but there is no portable whole-tree reap here, so
-  the result carries a typed warning saying a backgrounded grandchild may
-  still be running. That limitation is reported, not hidden.
+- **Windows** — the step runs in a Job Object, and the whole tree is
+  killed and waited for before the result is returned. The job also kills
+  every remaining process when it closes, so on Windows no background
+  child outlives the step (unlike macOS and Linux, where a background
+  child of a cleanly exited step keeps running).
 
 On both platforms the run itself is bounded: a surviving process holding
 the step's output pipes cannot keep the command waiting past its deadline.

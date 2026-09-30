@@ -17,9 +17,10 @@
 // waits for the output pipes to close, a surviving grandchild holding
 // those pipes keeps Run blocked past the timeout it was supposed to
 // enforce. Two mechanisms fix that together: the child is started in its
-// own process group and the GROUP is signalled (runner_exec_unix.go), and
-// cmd.WaitDelay bounds how long Wait will wait for the pipes after the
-// process is gone.
+// own process group and the GROUP is signalled (runner_exec_unix.go; on
+// windows the step runs in a Job Object that is terminated and waited for,
+// runner_exec_windows.go), and cmd.WaitDelay bounds how long Wait will
+// wait for the pipes after the process is gone.
 //
 // Inputs: an ExecRequest (working directory, command string interpreted by
 // the platform shell, environment, timeout).
@@ -88,11 +89,11 @@ type ExecResult struct {
 	// StartErr is non-nil only when the command could not be started at
 	// all (e.g. the shell or the named program is absent from PATH).
 	StartErr error
-	// GroupKillErr is non-nil when the deadline fired but this platform
-	// could not reap the step's whole process tree -- see
-	// runner_exec_windows.go. It is reported rather than hidden: the step
-	// is still a failure either way, but an operator deserves to know a
-	// grandchild may have outlived it.
+	// GroupKillErr is non-nil when the deadline fired but the step's whole
+	// process tree could not be reaped (a unix group signal failed, or a
+	// windows job still had members after its reap rounds). It is
+	// reported rather than hidden: the step is still a failure either way,
+	// but an operator deserves to know a grandchild may have outlived it.
 	GroupKillErr error
 }
 
@@ -121,11 +122,53 @@ func (ShellExecutor) Run(ctx context.Context, req ExecRequest) ExecResult {
 // goruntime.GOOS-derived) so runner_exec_test.go can prove the StartErr
 // path -- a shell binary genuinely absent from PATH -- deterministically,
 // without needing to sabotage the real "sh"/"cmd" this process has.
+//
+// The step's process tree is created before Start and released on return
+// (on windows a Job Object whose close kills any survivor); the started
+// child is attached to it before it runs. An attach failure has already
+// killed the child, so it is reported as a StartErr once Wait reaps it.
 func runViaShell(ctx context.Context, bin, flag string, req ExecRequest) ExecResult {
 	runCtx, cancel := context.WithTimeout(ctx, req.Timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(runCtx, bin, flag, req.Command)
+	var stdout, stderr bytes.Buffer
+	cmd := shellCommand(runCtx, bin, flag, req, &stdout, &stderr)
+
+	tree, err := newProcessTree()
+	if err != nil {
+		return startFailure(err, req.Command, "", "")
+	}
+	defer tree.close()
+
+	// The tree kill replaces CommandContext's default Cancel (which sends
+	// Kill to the shell alone), and WaitDelay stops a surviving pipe holder
+	// from outlasting the deadline. Both are set before Start so the
+	// deadline cannot fire against a half-configured command. os/exec's
+	// Wait does not return before Cancel has returned, so a timed-out Run
+	// returns only after the whole tree is gone.
+	var killErr error
+	setProcessGroup(cmd)
+	cmd.Cancel = func() error {
+		killErr = tree.kill(cmd)
+		return killErr
+	}
+	cmd.WaitDelay = pipeDrainGrace
+
+	if err := cmd.Start(); err != nil {
+		return mapResult(runCtx, err, killErr, req.Command, &stdout, &stderr)
+	}
+	if err := tree.attach(cmd); err != nil {
+		_ = cmd.Wait()
+		return startFailure(err, req.Command, stdout.String(), stderr.String())
+	}
+	err = cmd.Wait()
+	return mapResult(runCtx, err, killErr, req.Command, &stdout, &stderr)
+}
+
+// shellCommand builds the step's command: explicit Dir, explicitly built
+// Env, and captured output.
+func shellCommand(ctx context.Context, bin, flag string, req ExecRequest, stdout, stderr *bytes.Buffer) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, bin, flag, req.Command)
 	cmd.Dir = req.WorkDir
 	cmd.Env = stepEnv(req.Env)
 	if bin == "cmd" {
@@ -134,26 +177,16 @@ func runViaShell(ctx context.Context, bin, flag string, req ExecRequest) ExecRes
 		// shellcmdline_windows.go's setShellCmdLine doc comment.
 		setShellCmdLine(cmd, req.Command)
 	}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	return cmd
+}
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	// The group kill replaces CommandContext's default Cancel (which sends
-	// Kill to the shell alone), and WaitDelay stops a surviving pipe holder
-	// from outlasting the deadline. Both are set before Start so the
-	// deadline cannot fire against a half-configured command.
-	var killErr error
-	setProcessGroup(cmd)
-	cmd.Cancel = func() error {
-		killErr = killProcessGroup(cmd)
-		return killErr
-	}
-	cmd.WaitDelay = pipeDrainGrace
-
-	err := cmd.Run()
+// mapResult turns Start/Wait's outcome into an ExecResult: a deadline is
+// TimedOut (with the tree kill's error), an exit error is its exit code,
+// and anything else is a StartErr.
+func mapResult(runCtx context.Context, err, killErr error, command string, stdout, stderr *bytes.Buffer) ExecResult {
 	res := ExecResult{Stdout: stdout.String(), Stderr: stderr.String()}
-
 	if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
 		res.TimedOut = true
 		res.ExitCode = -1
@@ -168,9 +201,17 @@ func runViaShell(ctx context.Context, bin, flag string, req ExecRequest) ExecRes
 		res.ExitCode = exitErr.ExitCode()
 		return res
 	}
-	res.StartErr = cascade.Wrapf(cascade.KindUnavailable, err, "ci: starting command %q", req.Command)
-	res.ExitCode = -1
-	return res
+	return startFailure(err, command, res.Stdout, res.Stderr)
+}
+
+// startFailure is the ExecResult of a step that never ran confined.
+func startFailure(err error, command, stdout, stderr string) ExecResult {
+	return ExecResult{
+		Stdout:   stdout,
+		Stderr:   stderr,
+		ExitCode: -1,
+		StartErr: cascade.Wrapf(cascade.KindUnavailable, err, "ci: starting command %q", command),
+	}
 }
 
 // stepEnv returns the environment a step runs with. A caller-supplied Env
