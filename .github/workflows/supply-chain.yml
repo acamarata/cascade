@@ -47,9 +47,16 @@ jobs:
           go-version-file: go.mod
 
       - name: Install govulncheck
-        # govulncheck stays on @latest deliberately: the point of this lane is a
-        # current vulnerability database, and the tool and DB ship together.
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        # Pinned to an exact module version (m14), never a floating tag: an
+        # unpinned install is an unreviewed supply-chain input like any other tool in
+        # this repo's CI (P1-SHIP-14/AUD-041). The vulnerability DATABASE
+        # govulncheck queries is still fetched live at run time from
+        # vuln.go.dev on every run — that residual is accepted by design (the
+        # scan is only useful against a current database) and is recorded,
+        # with its review trigger, in docs/security-posture/supply-chain-risks.md.
+        # Version + provenance captured in
+        # .claude/evidence/P1-SHIP-14/provenance/.
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
 
       - name: govulncheck ./...
         run: govulncheck ./...

@@ -6,10 +6,20 @@
 #
 # Runs the conventional-commit checker and the personal-identifier sweep
 # (internal/build/commits.go, internal/build/sweep.go) over the outgoing
-# commit range before letting a push through. Both checks fail closed:
-# a missing/unreadable identifier-pattern source blocks the push, it is
-# never treated as "nothing configured, skip" (12-QUALITY-CONSTITUTION.md
-# Art.1; PRI hard rule 3).
+# commit range before letting a push through.
+#
+# The conventional-commit check fails closed unconditionally.
+#
+# The identifier sweep's pattern SOURCE FILE is a single canonical
+# out-of-repo path (P1-SHIP-14 / P1-GWY re-forge G2 decision: one canonical
+# private pattern file, never an in-repo source — see this file's
+# `patterns_file` default below). Because that file is per-developer-machine
+# local state, not something every checkout can be expected to have, the
+# sweep runs when the file exists and is a documented no-op when it does
+# not — it never blocks a push merely for the file's absence. (This is
+# narrower than the fail-closed default LoadPatterns itself still enforces
+# once given a path: an unreadable or empty pattern source at an EXISTING
+# path still fails closed, per internal/build/sweep.go's package doc.)
 #
 # Git pre-push protocol: invoked as `pre-push <remote-name> <remote-url>`
 # with one "local-ref local-sha remote-ref remote-sha" line per pushed ref
@@ -60,12 +70,35 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     status=1
   fi
 
-  patterns_file="${CASCADE_IDENTIFIER_PATTERNS_FILE:-$repo_root/.claude/hygiene/identifier-patterns.txt}"
-  if ! CASCADE_HYGIENE_RUN=1 CASCADE_IDENTIFIER_PATTERNS_FILE="$patterns_file" \
-      CASCADE_HYGIENE_SWEEP_RANGE="$range" \
-      go_cmd test -run '^TestIdentifierSweepGate_Live$' ./internal/build/ -v </dev/null; then
-    echo "pre-push hygiene: identifier sweep FAILED for ${range}" >&2
-    status=1
+  # Canonical, out-of-repo default (P1-SHIP-14 / P1-GWY re-forge G2): never
+  # an in-repo path, even a gitignored one. Only an UNSET variable falling
+  # back to that default, when the default itself is absent, is a skip —
+  # "no per-developer-machine state configured at all" is a documented
+  # no-op. An EXPLICIT CASCADE_IDENTIFIER_PATTERNS_FILE that points at a
+  # missing path is a misconfiguration, not an absence, and must fail
+  # closed (C11: unknown is never permission) rather than silently skip.
+  # "Set" means set at all: an EMPTY value (VAR=) is set-but-missing and
+  # fails too, so the test is ${VAR+set}, never ${VAR:-}.
+  if [ -n "${CASCADE_IDENTIFIER_PATTERNS_FILE+set}" ]; then
+    patterns_file="$CASCADE_IDENTIFIER_PATTERNS_FILE"
+    if [ ! -f "$patterns_file" ]; then
+      echo "pre-push hygiene: CASCADE_IDENTIFIER_PATTERNS_FILE is set to '${patterns_file}', but that file does not exist — refusing to silently skip the identifier sweep" >&2
+      status=1
+      continue
+    fi
+  else
+    patterns_file="$HOME/.claude/cascade-hygiene/identifier-patterns.txt"
+  fi
+
+  if [ -f "$patterns_file" ]; then
+    if ! CASCADE_HYGIENE_RUN=1 CASCADE_IDENTIFIER_PATTERNS_FILE="$patterns_file" \
+        CASCADE_HYGIENE_SWEEP_RANGE="$range" \
+        go_cmd test -run '^TestIdentifierSweepGate_Live$' ./internal/build/ -v </dev/null; then
+      echo "pre-push hygiene: identifier sweep FAILED for ${range}" >&2
+      status=1
+    fi
+  else
+    echo "pre-push hygiene: identifier sweep skipped (no pattern file at ${patterns_file})" >&2
   fi
 done
 

@@ -68,9 +68,22 @@ jobs:
           install-only: true
 
       - name: Install syft (SBOM generator)
-        # Pinned: an unversioned install resolves github.com/anchore/syft/releases/latest,
-        # which answered HTTP 504 on two consecutive runs (16c4dab, 5fd800b).
-        run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin v1.52.0
+        # Pinned to an exact release asset, verified against its published
+        # sha256 before extraction — never a script fetched from a branch ref
+        # (P1-SHIP-14/AUD-041: the prior `.../main/install.sh | sh` resolved
+        # whatever anchore/syft's default branch currently holds). The
+        # checksum literal below is copied verbatim from syft's own v1.52.0
+        # release checksums file (syft_1.52.0_checksums.txt), never computed
+        # from a download in this run; provenance captured in
+        # .claude/evidence/P1-SHIP-14/provenance/.
+        run: |
+          set -eu
+          curl -sSfL -o /tmp/syft.tar.gz \
+            https://github.com/anchore/syft/releases/download/v1.52.0/syft_1.52.0_linux_amd64.tar.gz
+          echo "caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d  /tmp/syft.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/syft.tar.gz -C /tmp syft
+          install -m 0755 /tmp/syft /usr/local/bin/syft
+          rm -f /tmp/syft.tar.gz /tmp/syft
 
       - name: goreleaser check
         run: goreleaser check
@@ -108,9 +121,22 @@ jobs:
           install-only: true
 
       - name: Install syft (SBOM generator)
-        # Pinned: an unversioned install resolves github.com/anchore/syft/releases/latest,
-        # which answered HTTP 504 on two consecutive runs (16c4dab, 5fd800b).
-        run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin v1.52.0
+        # Pinned to an exact release asset, verified against its published
+        # sha256 before extraction — never a script fetched from a branch ref
+        # (P1-SHIP-14/AUD-041: the prior `.../main/install.sh | sh` resolved
+        # whatever anchore/syft's default branch currently holds). The
+        # checksum literal below is copied verbatim from syft's own v1.52.0
+        # release checksums file (syft_1.52.0_checksums.txt), never computed
+        # from a download in this run; provenance captured in
+        # .claude/evidence/P1-SHIP-14/provenance/.
+        run: |
+          set -eu
+          curl -sSfL -o /tmp/syft.tar.gz \
+            https://github.com/anchore/syft/releases/download/v1.52.0/syft_1.52.0_linux_amd64.tar.gz
+          echo "caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d  /tmp/syft.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/syft.tar.gz -C /tmp syft
+          install -m 0755 /tmp/syft /usr/local/bin/syft
+          rm -f /tmp/syft.tar.gz /tmp/syft
 
       - name: Install minisign
         run: sudo apt-get update && sudo apt-get install -y minisign
