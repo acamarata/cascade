@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T10:10:58Z",
+  "generated_at": "2026-09-30T11:07:56Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -23983,6 +23983,80 @@
       ]
     },
     {
+      "name": "migration/sweep",
+      "sites": [
+        {
+          "file": "internal/migration/sweep/cli.go",
+          "line": 5,
+          "status": "",
+          "raw": "migration/sweep: term-file resolver rewrite."
+        },
+        {
+          "file": "internal/migration/sweep/liveanchor_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "migration/sweep: term-file resolver rewrite."
+        },
+        {
+          "file": "internal/migration/sweep/realtree_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "migration/sweep: term-file resolver rewrite."
+        },
+        {
+          "file": "internal/migration/sweep/resolver.go",
+          "line": 16,
+          "status": "",
+          "raw": "migration/sweep: term-file resolver rewrite."
+        },
+        {
+          "file": "internal/migration/sweep/resolver_test.go",
+          "line": 3,
+          "status": "",
+          "raw": "migration/sweep: term-file resolver rewrite."
+        },
+        {
+          "file": "internal/migration/sweep/sweep.go",
+          "line": 36,
+          "status": "",
+          "raw": "migration/sweep: term-file resolver rewrite."
+        },
+        {
+          "file": "internal/migration/sweep/sweep_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "migration/sweep: term-file resolver rewrite."
+        },
+        {
+          "file": "internal/migration/sweep/walk.go",
+          "line": 6,
+          "status": "",
+          "raw": "migration/sweep: term-file resolver rewrite."
+        },
+        {
+          "file": "internal/migration/sweep/walk_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "migration/sweep: term-file resolver rewrite."
+        },
+        {
+          "file": "internal/migration/sweep/writer.go",
+          "line": 16,
+          "status": "",
+          "raw": "migration/sweep: term-file resolver rewrite."
+        },
+        {
+          "file": "internal/migration/sweep/writer_test.go",
+          "line": 3,
+          "status": "",
+          "raw": "migration/sweep: term-file resolver rewrite."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "migration/v1",
       "sites": [
         {
@@ -30733,7 +30807,7 @@
       ]
     }
   ],
-  "total_sites": 2889,
-  "unspecified_count": 153,
+  "total_sites": 2900,
+  "unspecified_count": 154,
   "multi_status_count": 83
 }
