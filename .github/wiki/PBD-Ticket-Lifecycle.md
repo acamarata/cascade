@@ -63,6 +63,55 @@ append-only YAML sidecar (`lifecycle-journal.yaml`, sibling to
 entity's entries through the transition table to derive its current
 state — the only way state is ever known.
 
+## Atomic transitions (P1-PBD-07)
+
+A plain `Append` has no sequence check: two concurrent `claim` calls —
+two goroutines in one process, or two processes sharing a tree root —
+could both replay `unclaimed` and both win. `FileJournalStore.AppendIf`
+(`plugins/pbd/lifecycle_appendif.go`) closes that race with a locked
+compare-and-append:
+
+- It holds one exclusive advisory lock on `<root>/lifecycle-journal.lock`
+  across load, the sequence compare, and save (`golang.org/x/sys/unix`
+  `Flock(LOCK_EX)` blocking on unix, `LockFileEx` blocking on windows —
+  `plugins/pbd/lifecycle_lock_unix.go`/`lifecycle_lock_windows.go`).
+  Contenders queue for the lock rather than failing, so the sequence
+  compare — not scheduling luck — decides the single winner.
+- A mismatched `expectedSeq` (the entity's live entry count at the time of
+  the compare) refuses `KindConflict` and leaves the file bytes
+  untouched.
+- A repeated `operation_id` for the same entity+event returns the
+  existing entry and appends nothing; the same `operation_id` against a
+  *different* event refuses `KindConflict` rather than silently replaying
+  onto a new transition.
+
+`pews.CASAppender` is the seam: `AppendIf(ctx, entityID, expectedSeq,
+event, operationID, payload) (JournalEntry, error)`. `applyEvent`
+(`plugins/pbd/internal/pews/lifecycle_apply.go`) routes `claim` — the one
+event where a plain `Append` races, since every other event only ever
+runs against an already-claimed, single-owner ticket — through
+`applyClaim`, which replays the entity **once** and derives both the
+transition-legality check and `AppendIf`'s `expectedSeq` from that same
+snapshot. Two independent `Replay` calls (one for the legality check, a
+second later for `expectedSeq`) would reopen the race: a concurrent
+winner's append could land between them, pairing a stale "unclaimed ->
+claimed is legal" verdict with a freshly re-read (now matching, now
+wrong) `expectedSeq` — this exact bug was caught RED by
+`TestClaimConcurrentSingleWinner` during this ticket's own development
+(two winners, two journal entries) before the single-snapshot fix landed;
+see `.claude/evidence/P1-PBD-07/naive-impl-red.log`. A store that does
+not implement `CASAppender` is refused `KindUnsupported` for `claim`
+before any append; `step`/`cr`/`qa`/`done` are unaffected and keep
+today's plain-`Append` behaviour.
+
+Proven by: `TestClaimConcurrentSingleWinner` (sixteen goroutines, one
+winner), `TestClaimCrossProcessSingleWinner` (two re-exec'd subprocesses
+sharing one journal root, one winner), `TestLifecycleOperationIdempotent`,
+`TestAppendIfStaleSequenceConflicts`, `TestAppendIfLockErrors`, and
+`TestClaimRefusesStoreWithoutCAS` (`plugins/pbd/lifecycle_cas_test.go`,
+`plugins/pbd/lifecycle_appendif_test.go`,
+`plugins/pbd/internal/pews/lifecycle_test.go`).
+
 ## Local checks
 
 ```
@@ -70,6 +119,8 @@ go test ./plugins/pbd/internal/pews -run '^TestTicketLifecycle'
 go test ./plugins/pbd -run '^TestTicketLifecycleCommands$'
 go test ./plugins/pbd -run '^TestTicketLifecycleRealJSONRPCCounterpart$'
 go test ./plugins/pbd/... -run '^TestTicketLifecyclePlatformParity$'
+go test -race -count=2 -shuffle=on -run '^(TestClaimConcurrentSingleWinner|TestClaimCrossProcessSingleWinner|TestLifecycleOperationIdempotent|TestAppendIfStaleSequenceConflicts|TestAppendIfLockErrors)$' ./plugins/pbd/
+go test -race -run '^TestClaimRefusesStoreWithoutCAS$' ./plugins/pbd/internal/pews/
 go test -race ./plugins/pbd/...
 go vet ./plugins/pbd/...
 ```

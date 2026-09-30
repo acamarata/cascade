@@ -154,6 +154,17 @@ func CurrentState(ctx context.Context, js JournalStore, entityID string) (Lifecy
 	if err != nil {
 		return "", err
 	}
+	return deriveState(entityID, entries)
+}
+
+// deriveState is CurrentState's pure transition-table walk, split out so
+// applyEvent (lifecycle_apply.go) can derive a state from the SAME Replay
+// snapshot it also uses for AppendIf's expectedSeq — a second, independent
+// Replay call there would open a TOCTOU window: entries could change
+// between the two reads, so a legality check on one snapshot would let an
+// append proceed on another, stale-but-matching count (proven RED by this
+// ticket's mutation evidence).
+func deriveState(entityID string, entries []JournalEntry) (LifecycleState, error) {
 	state := StateUnclaimed
 	for _, e := range entries {
 		if !e.Event.Valid() {
@@ -219,32 +230,6 @@ func encodeLifecyclePayload(p LifecyclePayload) (json.RawMessage, error) {
 		return nil, cascade.Wrap(cascade.KindInternal, err, "pews: encoding lifecycle payload")
 	}
 	return data, nil
-}
-
-// applyEvent is Claim/Step/RecordCR/RecordQA/Done's shared core: refuses a
-// nil tree, unknown ticket id, or Claim on a draft phase (RequireBuildable,
-// draft.go — retiring its prior test-only status, N/S-30's expected
-// caller), replays current state, checks the transition, then appends.
-func applyEvent(ctx context.Context, tree *Tree, js JournalStore, ticketID, operationID string, event LifecycleEvent, payload json.RawMessage) (JournalEntry, error) {
-	if tree == nil {
-		return JournalEntry{}, cascade.New(cascade.KindInvalidInput, "pews: cannot apply a lifecycle event to a nil tree")
-	}
-	if _, err := findTicket(tree, ticketID); err != nil {
-		return JournalEntry{}, err
-	}
-	if event == EventClaim {
-		if err := RequireBuildable(tree); err != nil {
-			return JournalEntry{}, err
-		}
-	}
-	current, err := CurrentState(ctx, js, ticketID)
-	if err != nil {
-		return JournalEntry{}, err
-	}
-	if _, terr := nextLifecycleState(current, event); terr != nil {
-		return JournalEntry{}, terr
-	}
-	return js.Append(ctx, ticketID, event, operationID, payload)
 }
 
 // Claim records StateUnclaimed -> StateClaimed for ticketID.

@@ -1,23 +1,19 @@
-// Purpose: lifecycle.go's required unit tests — TestTicketLifecycle proves
-// the transition table against the spec (claim -> step -> cr -> qa ->
-// done, multiple step/cr/qa passes allowed, every illegal pair refused
-// with KindConflict, an unparseable/unknown event refused with
-// KindInvalidInput, CR/QA level carried through without inventing one,
-// Claim refused against a draft phase, and CurrentState is pure replay).
-// SPORT: plugins/pbd/internal/pews lifecycle (ADD) — P1-E14-W3-S30-T1.
+// Purpose: lifecycle.go's required unit tests — the transition table against
+// the spec, illegal-transition refusals, level carriage, draft refusal, and
+// (P1-PBD-07) the CASAppender seam's KindUnsupported refusal. SPORT: plugins/pbd/internal/pews lifecycle (ADD) — P1-E14-W3-S30-T1.
 package pews
 
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// fakeJournalStore is an in-memory JournalStore: deterministic, no clock,
-// no network — exactly what a unit test needs (Art.7).
+// fakeJournalStore is an in-memory JournalStore (Art.7): deterministic, no clock, no network.
 type fakeJournalStore struct {
 	mu      sync.Mutex
 	entries map[string][]JournalEntry
@@ -46,8 +42,31 @@ func (s *fakeJournalStore) Replay(_ context.Context, entityID string) ([]Journal
 	return out, nil
 }
 
-// brokenReplayStore always fails Replay, proving CurrentState propagates
-// a journal failure as an error rather than defaulting to StateUnclaimed.
+// AppendIf implements CASAppender in-memory, mu-serialized (single process only; real atomicity is FileJournalStore's).
+func (s *fakeJournalStore) AppendIf(_ context.Context, entityID string, expectedSeq int, event LifecycleEvent, operationID string, payload json.RawMessage) (JournalEntry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	existing := s.entries[entityID]
+	for _, e := range existing {
+		if e.OperationID != operationID {
+			continue
+		}
+		if e.Event != event {
+			return JournalEntry{}, cascade.Newf(cascade.KindConflict, "fakeJournalStore: operation_id %q already recorded event %q, not %q", operationID, e.Event, event)
+		}
+		return e, nil
+	}
+	if len(existing) != expectedSeq {
+		return JournalEntry{}, cascade.Newf(cascade.KindConflict, "fakeJournalStore: entity %q: expected seq %d, have %d", entityID, expectedSeq, len(existing))
+	}
+	e := JournalEntry{EntityID: entityID, Seq: uint64(len(existing)) + 1, Event: event, OperationID: operationID, Payload: payload}
+	s.entries[entityID] = append(existing, e)
+	return e, nil
+}
+
+var _ CASAppender = (*fakeJournalStore)(nil)
+
+// brokenReplayStore always fails Replay (CurrentState must propagate it).
 type brokenReplayStore struct{}
 
 func (brokenReplayStore) Append(context.Context, string, LifecycleEvent, string, json.RawMessage) (JournalEntry, error) {
@@ -68,10 +87,7 @@ func TestTicketLifecycle(t *testing.T) {
 	t.Run("illegal transitions refuse with KindConflict", testLifecycleIllegalTransitions)
 	t.Run("unknown/unparseable event refuses with KindInvalidInput", testLifecycleUnknownEvent)
 	t.Run("cr/qa level carried through without inventing one", testLifecycleLevelCarriage)
-	t.Run("claim refuses against a draft phase", testLifecycleDraftRefusal)
-	t.Run("unknown ticket id refuses with KindNotFound", testLifecycleUnknownTicket)
-	t.Run("nil tree refuses with KindInvalidInput", testLifecycleNilTree)
-	t.Run("a journal failure propagates as an error", testLifecycleJournalFailure)
+	t.Run("edge cases: draft/unknown-ticket/nil-tree/broken-journal", testLifecycleEdgeCases)
 }
 
 func testLifecycleHappyPath(t *testing.T) {
@@ -80,23 +96,21 @@ func testLifecycleHappyPath(t *testing.T) {
 	js := newFakeJournalStore()
 	id := tree.Tickets[0].Ticket.ID
 
-	if _, err := Claim(ctx, tree, js, id, "op-1"); err != nil {
-		t.Fatalf("Claim: %v", err)
+	steps := []struct {
+		name string
+		run  func() (JournalEntry, error)
+	}{
+		{"Claim", func() (JournalEntry, error) { return Claim(ctx, tree, js, id, "op-1") }},
+		{"Step", func() (JournalEntry, error) { return Step(ctx, tree, js, id, "op-2", "wrote the code") }},
+		{"second Step", func() (JournalEntry, error) { return Step(ctx, tree, js, id, "op-3", "wrote tests") }},
+		{"RecordCR(A)", func() (JournalEntry, error) { return RecordCR(ctx, tree, js, id, "op-4", CRLevelA) }},
+		{"RecordCR(B)", func() (JournalEntry, error) { return RecordCR(ctx, tree, js, id, "op-5", CRLevelB) }},
+		{"RecordQA", func() (JournalEntry, error) { return RecordQA(ctx, tree, js, id, "op-6", QALevelB) }},
 	}
-	if _, err := Step(ctx, tree, js, id, "op-2", "wrote the code"); err != nil {
-		t.Fatalf("Step: %v", err)
-	}
-	if _, err := Step(ctx, tree, js, id, "op-3", "wrote tests"); err != nil {
-		t.Fatalf("second Step: %v", err)
-	}
-	if _, err := RecordCR(ctx, tree, js, id, "op-4", CRLevelA); err != nil {
-		t.Fatalf("RecordCR(A): %v", err)
-	}
-	if _, err := RecordCR(ctx, tree, js, id, "op-5", CRLevelB); err != nil {
-		t.Fatalf("RecordCR(B): %v", err)
-	}
-	if _, err := RecordQA(ctx, tree, js, id, "op-6", QALevelB); err != nil {
-		t.Fatalf("RecordQA: %v", err)
+	for _, s := range steps {
+		if _, err := s.run(); err != nil {
+			t.Fatalf("%s: %v", s.name, err)
+		}
 	}
 	entry, err := Done(ctx, tree, js, id, "op-7")
 	if err != nil {
@@ -145,11 +159,10 @@ func testLifecycleIllegalTransitions(t *testing.T) {
 }
 
 func testLifecycleUnknownEvent(t *testing.T) {
-	if _, err := ParseLifecycleEvent("bogus"); !cascade.HasKind(err, cascade.KindInvalidInput) {
-		t.Errorf("ParseLifecycleEvent(bogus): err = %v, want KindInvalidInput", err)
-	}
-	if _, err := ParseLifecycleEvent(""); !cascade.HasKind(err, cascade.KindInvalidInput) {
-		t.Errorf("ParseLifecycleEvent(empty): err = %v, want KindInvalidInput", err)
+	for _, s := range []string{"bogus", ""} {
+		if _, err := ParseLifecycleEvent(s); !cascade.HasKind(err, cascade.KindInvalidInput) {
+			t.Errorf("ParseLifecycleEvent(%q): err = %v, want KindInvalidInput", s, err)
+		}
 	}
 	ctx := context.Background()
 	js := newFakeJournalStore()
@@ -191,38 +204,35 @@ func testLifecycleLevelCarriage(t *testing.T) {
 	}
 }
 
-func testLifecycleDraftRefusal(t *testing.T) {
+// testLifecycleEdgeCases covers draft-phase refusal, an unknown ticket id, a
+// nil tree, and a broken journal — four distinct Claim refusals, one per row, each asserted by Kind alone (a table, not four near-identical funcs).
+func testLifecycleEdgeCases(t *testing.T) {
 	ctx := context.Background()
-	tree := lifecycleFixtureTree()
-	tree.Draft = true
-	if _, err := Claim(ctx, tree, newFakeJournalStore(), tree.Tickets[0].Ticket.ID, "op"); !cascade.HasKind(err, cascade.KindConflict) {
-		t.Errorf("Claim(draft): err = %v, want KindConflict", err)
+	fixture := lifecycleFixtureTree()
+	draft := lifecycleFixtureTree()
+	draft.Draft = true
+	cases := []struct {
+		name string
+		tree *Tree
+		js   JournalStore
+		id   string
+		want cascade.Kind
+	}{
+		{"draft phase", draft, newFakeJournalStore(), draft.Tickets[0].Ticket.ID, cascade.KindConflict},
+		{"unknown ticket id", fixture, newFakeJournalStore(), "no-such-id", cascade.KindNotFound},
+		{"nil tree", nil, newFakeJournalStore(), "x", cascade.KindInvalidInput},
+		{"broken journal", fixture, brokenReplayStore{}, fixture.Tickets[0].Ticket.ID, cascade.KindUnavailable},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if _, err := Claim(ctx, c.tree, c.js, c.id, "op"); !cascade.HasKind(err, c.want) {
+				t.Errorf("Claim: err = %v, want %v", err, c.want)
+			}
+		})
 	}
 }
 
-func testLifecycleUnknownTicket(t *testing.T) {
-	ctx := context.Background()
-	if _, err := Claim(ctx, lifecycleFixtureTree(), newFakeJournalStore(), "no-such-id", "op"); !cascade.HasKind(err, cascade.KindNotFound) {
-		t.Errorf("Claim(unknown id): err = %v, want KindNotFound", err)
-	}
-}
-
-func testLifecycleNilTree(t *testing.T) {
-	if _, err := Claim(context.Background(), nil, newFakeJournalStore(), "x", "op"); !cascade.HasKind(err, cascade.KindInvalidInput) {
-		t.Errorf("Claim(nil tree): err = %v, want KindInvalidInput", err)
-	}
-}
-
-func testLifecycleJournalFailure(t *testing.T) {
-	ctx := context.Background()
-	tree := lifecycleFixtureTree()
-	if _, err := Claim(ctx, tree, brokenReplayStore{}, tree.Tickets[0].Ticket.ID, "op"); !cascade.HasKind(err, cascade.KindUnavailable) {
-		t.Errorf("Claim(broken journal): err = %v, want KindUnavailable", err)
-	}
-}
-
-// mustClaimAndStep advances id through claim+step so a CR/QA-focused test
-// can start from StateStep.
+// mustClaimAndStep advances id through claim+step (CR/QA tests start here).
 func mustClaimAndStep(ctx context.Context, t *testing.T, tree *Tree, js JournalStore, id string) {
 	t.Helper()
 	if _, err := Claim(ctx, tree, js, id, "setup-claim"); err != nil {
@@ -233,15 +243,9 @@ func mustClaimAndStep(ctx context.Context, t *testing.T, tree *Tree, js JournalS
 	}
 }
 
-// TestTicketLifecyclePlatformParity is Art.5's proof: lifecycle.go
-// touches nothing platform-conditional (in-memory maps and the
-// standard-library time/context/json packages only — its own persistence
-// is FileJournalStore, plugins/pbd/lifecycle.go, whose own paths are
-// already cross-platform elsewhere in this repo), so there is no
-// unsupported-platform branch to assert a refusal for. This test reruns
-// the full claim-through-done happy path unconditionally: a real
-// divergence on any CI-matrix platform would fail it there, not pass
-// silently.
+// TestTicketLifecyclePlatformParity is Art.5's proof: lifecycle.go touches
+// nothing platform-conditional, so this reruns the happy path
+// unconditionally rather than asserting an unsupported-platform refusal.
 func TestTicketLifecyclePlatformParity(t *testing.T) {
 	testLifecycleHappyPath(t)
 }
@@ -252,15 +256,45 @@ func TestLifecycleStateAndEventValid(t *testing.T) {
 			t.Errorf("state %q reports invalid", s)
 		}
 	}
-	if LifecycleState("bogus").Valid() {
-		t.Error("unknown state reports valid")
-	}
 	for _, e := range lifecycleEvents {
 		if !e.Valid() {
 			t.Errorf("event %q reports invalid", e)
 		}
 	}
-	if LifecycleEvent("bogus").Valid() {
-		t.Error("unknown event reports valid")
+	if LifecycleState("bogus").Valid() || LifecycleEvent("bogus").Valid() {
+		t.Error("unknown state/event reports valid")
+	}
+}
+
+// nonCASJournalStore forwards Append/Replay only — never AppendIf — so it does NOT implement CASAppender (proves Claim's KindUnsupported refusal).
+type nonCASJournalStore struct{ inner *fakeJournalStore }
+
+func (s nonCASJournalStore) Append(ctx context.Context, id string, e LifecycleEvent, op string, p json.RawMessage) (JournalEntry, error) {
+	return s.inner.Append(ctx, id, e, op, p)
+}
+func (s nonCASJournalStore) Replay(ctx context.Context, id string) ([]JournalEntry, error) {
+	return s.inner.Replay(ctx, id)
+}
+
+// TestClaimRefusesStoreWithoutCAS is acceptance[4].
+func TestClaimRefusesStoreWithoutCAS(t *testing.T) {
+	ctx := context.Background()
+	tree := lifecycleFixtureTree()
+	id := tree.Tickets[0].Ticket.ID
+	js := nonCASJournalStore{inner: newFakeJournalStore()}
+
+	_, claimErr := Claim(ctx, tree, js, id, "op-claim")
+	wantMsg := fmt.Sprintf("pews: claim requires a journal store implementing CASAppender, got %T", js)
+	if cerr, ok := claimErr.(*cascade.Error); !ok || cerr.Kind != cascade.KindUnsupported || cerr.Msg != wantMsg {
+		t.Fatalf("Claim(no CASAppender): err = %v, want Kind=KindUnsupported Msg=%q", claimErr, wantMsg)
+	}
+	if entries, _ := js.Replay(ctx, id); len(entries) != 0 {
+		t.Fatalf("Replay = %+v, want empty (refused before any append)", entries)
+	}
+	if _, err := js.Append(ctx, id, EventClaim, "seed-claim", nil); err != nil {
+		t.Fatalf("seeding claim entry: %v", err)
+	}
+	if _, err := Step(ctx, tree, js, id, "op-step", ""); err != nil {
+		t.Errorf("Step(no CASAppender store): err = %v, want nil", err)
 	}
 }
