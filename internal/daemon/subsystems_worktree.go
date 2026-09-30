@@ -93,9 +93,18 @@ const worktreeSweepSubsystem = "jobs.worktree.sweep"
 // RegisterWorktreeSweep -- out of this ticket's files_scope. See
 // subsystems_worktree.go's RegisterWorktreeManager for the companion
 // event-wiring call site, split out purely for the 300-line cap.
-func (m *Manifest) RegisterWorktreeSweep(ctx context.Context, store *jobs.Store, j journal.Store, attn *supervision.Store, probe jobs.ProcessLivenessProbe) (*jobs.WorktreeManager, jobs.SweepResult, error) {
+//
+// fence is required and passed straight to jobs.NewWorktreeManager
+// (production: the daemon's (*jobs.LeaseManager).Fence); a nil fence is
+// recorded as Failed and returns KindInvalidInput with no manager, so no
+// wiring can build an unfenced worktree Create.
+func (m *Manifest) RegisterWorktreeSweep(ctx context.Context, store *jobs.Store, j journal.Store, attn *supervision.Store, probe jobs.ProcessLivenessProbe, fence jobs.FenceFunc) (*jobs.WorktreeManager, jobs.SweepResult, error) {
 	m.Register(worktreeSweepSubsystem)
-	wt := jobs.NewWorktreeManager(store, j, attn, probe)
+	wt, err := jobs.NewWorktreeManager(store, j, attn, probe, fence)
+	if err != nil {
+		m.Failed(worktreeSweepSubsystem, err.Error())
+		return nil, jobs.SweepResult{}, err
+	}
 	result, err := wt.Sweep(ctx)
 	if err != nil {
 		m.Failed(worktreeSweepSubsystem, err.Error())

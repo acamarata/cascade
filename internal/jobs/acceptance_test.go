@@ -147,7 +147,10 @@ func newAcceptanceRig(t *testing.T) *acceptanceRig {
 
 	wtStore := storetest.NewMemStore()
 	journalStore := journal.New(wtStore, clock, journal.DefaultNamespace)
-	worktree := jobs.NewWorktreeManager(store, journalStore, nil, nil)
+	worktree, err := jobs.NewWorktreeManager(store, journalStore, nil, nil, leases.Fence)
+	if err != nil {
+		t.Fatalf("NewWorktreeManager: %v", err)
+	}
 
 	authz := jobs.NewProducerAuthz(store, func() bool { return true }, leases)
 	writer := audit.New(storetest.NewMemStore(), clock, nil)

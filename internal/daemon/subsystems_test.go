@@ -94,7 +94,7 @@ func TestDaemonSubsystems_WorktreeSweepWiredAtStartup(t *testing.T) {
 	store := newDaemonTestJobsStore(t)
 	repo := newDaemonTestGitRepo(t)
 	ctx := context.Background()
-	fixtureWt := jobs.NewWorktreeManager(store, nil, nil, fakeProbe{alive: false})
+	fixtureWt := newDaemonWorktreeManager(t, store, permissiveFixtureFence)
 
 	lease := jobs.ResourceLease{RepoID: repo, ScopeGlob: "**", Holder: "job-sweep", Epoch: 1, State: jobs.LeaseReleased}
 	if err := store.PutLease(ctx, lease); err != nil {
@@ -106,7 +106,7 @@ func TestDaemonSubsystems_WorktreeSweepWiredAtStartup(t *testing.T) {
 	}
 
 	m := NewManifest(nil, runtime.NewSystemClock())
-	_, result, err := m.RegisterWorktreeSweep(ctx, store, nil, nil, fakeProbe{alive: false})
+	_, result, err := m.RegisterWorktreeSweep(ctx, store, nil, nil, fakeProbe{alive: false}, daemonLeaseFence(store))
 	if err != nil {
 		t.Fatalf("RegisterWorktreeSweep: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestDaemonSubsystems_WorktreeManagerAcquiredWiresRealCreate(t *testing.T) {
 	store := newDaemonTestJobsStore(t)
 	repo := newDaemonTestGitRepo(t)
 	bus := events.New(storetest.NewMemStore(), runtime.NewSystemClock())
-	wt := jobs.NewWorktreeManager(store, nil, nil, fakeProbe{alive: false})
+	wt := newDaemonWorktreeManager(t, store, daemonLeaseFence(store))
 
 	lease := jobs.ResourceLease{RepoID: repo, ScopeGlob: "**", Holder: "job-evt", Epoch: 1, State: jobs.LeaseHeld}
 	ctx := context.Background()

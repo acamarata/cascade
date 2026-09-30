@@ -62,7 +62,7 @@ func newTestGitRepo(t *testing.T) string {
 func newTestWorktreeManager(t *testing.T) (*WorktreeManager, *Store) {
 	t.Helper()
 	store := newTestStore(t)
-	return NewWorktreeManager(store, nil, nil, fakeLivenessProbe{alive: false}), store
+	return mustNewWorktreeManager(t, store, nil, nil, fakeLivenessProbe{alive: false}, alwaysFencedOK), store
 }
 
 func mustPutLease(t *testing.T, store *Store, l ResourceLease) {

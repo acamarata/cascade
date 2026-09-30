@@ -71,7 +71,10 @@ func openPath2Rig(t *testing.T, dbPath string, clock runtime.Clock) *path2Rig {
 	leases := jobs.NewLeaseManager(store, clock, func() bool { return true }, jobs.DefaultLeaseDefaults(), nil)
 	jobs.WireLeaseRelease(store, leases)
 	journalStore := journal.New(storetest.NewMemStore(), clock, journal.DefaultNamespace)
-	worktree := jobs.NewWorktreeManager(store, journalStore, nil, nil)
+	worktree, err := jobs.NewWorktreeManager(store, journalStore, nil, nil, leases.Fence)
+	if err != nil {
+		t.Fatalf("NewWorktreeManager: %v", err)
+	}
 	authz := jobs.NewProducerAuthz(store, func() bool { return true }, leases)
 	writer := audit.New(storetest.NewMemStore(), clock, nil)
 	ledger, err := jobs.NewEvidenceLedger(store, clock, writer, authz)

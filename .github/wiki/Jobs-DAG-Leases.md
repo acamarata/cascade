@@ -156,14 +156,50 @@ isolated working tree at the R-16.37 constants verbatim: root
 `<repo>/.cascade/worktrees/job-<id>`, branch `job/<id>`, where `<id>` is
 the lease-holding job id (`ResourceLease.Holder`).
 
-**Create/converge.** `Create(lease, repoRoot)` runs `git worktree add
-<path> -b <branch>` and persists a `Worktree` row (`{lease ref, repo,
-path, branch}`, S-59.T1's model) — or, if a row for the SAME lease
-already resolves to a path still on disk, returns it as-is with no
-second `add` and no error (daemon-restart/resume safety).
+**Create: fenced, intent first.** `NewWorktreeManager` requires a
+`FenceFunc` (production passes `(*LeaseManager).Fence`); a nil fence
+returns `KindInvalidInput` and no manager, and `RegisterWorktreeSweep`
+takes and passes the same fence, so no wiring can build an unfenced
+`Create`. `Create(lease, repoRoot)` runs in this order:
 
-**Remove.** `Remove(lease)` runs `git status --porcelain` on the
-per-lease path first: a dirty tree refuses with a typed error NAMING the
+1. validate the holder and repo root;
+2. `Fence(repoID, scope, lease.Epoch)`: a released or `expired_orphaned`
+   lease, a stale epoch, or a missing lease row refuses with
+   `ErrLeaseFenced` before any row is read or any git command runs.
+   `FenceFunc` sees only the lease key and epoch, so `Create` then reads
+   the stored lease and refuses `ErrLeaseFenced` when it names a
+   different holder (the current epoch under a forged holder name);
+3. converge only on the holder's OWN path
+   (`<repo>/.cascade/worktrees/job-<holder>`) when its row exists and the
+   path is on disk. A row at another path belongs to a previous holder:
+   if that tree still exists, `Create` refuses `KindConflict` and never
+   returns it (the next sweep reconciles it); if it is only a pending
+   row, it is dropped;
+4. write the worktree row (the intent row), journal `KindIntent`;
+5. `git worktree add <path> -b job/<holder>` (or, on a pending retry
+   whose branch already exists, `git worktree add <path> job/<holder>`);
+6. `Fence` again. A lease lost during the add is compensated: `git
+   worktree remove <path>` (never `--force`), the job branch deleted only
+   when this call created it and it carries no commits of its own, then
+   the row deleted; `Create` returns `ErrLeaseFenced`;
+7. journal `KindAck`.
+
+**Pending rows.** A row whose path does not exist is pending (intent
+written, tree not yet added, e.g. a crash between steps 4 and 5).
+`Create` for the same lease and holder retries the add; `Remove` deletes
+the row without running git; `Snapshot` refuses `KindNotFound`; the
+sweep deletes it when its lease is not live (released,
+`expired_orphaned`, or missing). Crash stand-ins under
+`internal/jobs/testdata/git-crash-standins/` exec the real git and
+SIGKILL the Create process before and after the add; recovery (Sweep,
+then Create) leaves git's job worktrees equal to the rows exactly.
+
+**Remove.** `Remove(lease)` acts only on `lease.Holder`'s own path, the
+same guard `Snapshot` uses: when the lease key's row sits at another
+holder's path (a previous holder's late release after a new holder took
+the key), `Remove` is a no-op and returns nil, so the event loop keeps
+running and the current holder's tree and row stay. It runs `git status
+--porcelain` on the per-lease path first: a dirty tree refuses with a typed error NAMING the
 path, never a silent force. Only a verified-clean tree is actually
 removed (`git worktree remove <path>` + row delete).
 
@@ -197,6 +233,28 @@ once per repo this pass actually removed or quarantined something in
 (including a row whose directory already vanished outside this manager,
 clearing whichever stale admin metadata that leaves behind). A second
 sweep over an unchanged state returns zero deltas by construction.
+
+**Previous holders and reconciliation (P1-CORE-06).** A row whose path
+names a job other than its lease's current holder is that previous
+holder's orphan even while the lease is live: the sweep removes it when
+clean or quarantines it when dirty, gated on the previous holder's pgid
+exactly as above. After the row pass the sweep runs `git worktree list
+--porcelain` in every repository any row names and handles each job
+worktree under `.cascade/worktrees/` that has NO row: clean ones are
+removed and their `job/<id>` branch is deleted only when every commit on
+it is reachable from another branch, tag or remote (`git rev-list
+--count refs/heads/job/<id> --not --exclude=job/<id> --branches --tags
+--remotes` is 0); dirty ones are quarantined. Locked entries and entries
+whose job has a live pgid are left alone. A repository with no row at
+all is outside this pass, since only rows name repository roots.
+
+Neither pass removes or quarantines a tree whose HEAD commit no ref
+contains (`git rev-list --count HEAD --not --branches --tags --remotes`
+run inside the tree is non-zero), which in practice means a detached
+HEAD carrying its own commits. Removal, and quarantine's admin detach,
+would drop the tree's HEAD, the only pointer to that commit. Such a tree
+and its row are left in place for the operator. A tree on a branch
+passes, since removal keeps the branch.
 
 **Quarantine, never delete, a dirty orphan (R-21.140/R-21.177).** A
 released, dead-pgid orphan whose tree is DIRTY is MOVED (never deleted)

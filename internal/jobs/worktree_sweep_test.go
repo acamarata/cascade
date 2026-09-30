@@ -110,7 +110,7 @@ func TestWorktreeSweepQuarantinesReleasedDirtyDeadPGIDOrphan(t *testing.T) {
 
 func TestWorktreeSweepLeavesLivePGIDUntouched(t *testing.T) {
 	store := newTestStore(t)
-	wm := NewWorktreeManager(store, nil, nil, fakeLivenessProbe{alive: true})
+	wm := mustNewWorktreeManager(t, store, nil, nil, fakeLivenessProbe{alive: true}, alwaysFencedOK)
 	_, lease, w := newSweepFixture(t, wm, store, LeaseReleased, "job-live", 4242)
 	if err := os.WriteFile(filepath.Join(w.Path, "untracked.txt"), []byte("dirty"), 0o644); err != nil {
 		t.Fatalf("dirty file: %v", err)

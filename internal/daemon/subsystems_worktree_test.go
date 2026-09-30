@@ -19,6 +19,10 @@ package daemon
 // guaranteed to fail decode, so the coverage no longer depends on
 // goroutine scheduling.
 //
+// P1-CORE-06 adds the fence requirement: RegisterWorktreeSweep refuses a
+// nil fence, and an acquired event for a released lease reaches the real
+// fenced Create through the composition root and creates nothing.
+//
 // SPORT: internal/daemon (ADD, P1-E29-W6-S59-T3 coverage follow-up).
 
 import (
@@ -33,7 +37,84 @@ import (
 	"github.com/acamarata/cascade/internal/jobs"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage/storetest"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
+
+// daemonLeaseFence returns the real (*jobs.LeaseManager).Fence over store,
+// the fence production wiring passes.
+func daemonLeaseFence(store *jobs.Store) jobs.FenceFunc {
+	return jobs.NewLeaseManager(store, runtime.NewSystemClock(), func() bool { return true }, jobs.DefaultLeaseDefaults(), nil).Fence
+}
+
+// permissiveFixtureFence never refuses. Only fixture setup uses it, to
+// build a worktree under a lease the test then treats as an orphan.
+func permissiveFixtureFence(context.Context, string, string, int64) error { return nil }
+
+// newDaemonWorktreeManager constructs a jobs.WorktreeManager with fence,
+// failing the test on a constructor error.
+func newDaemonWorktreeManager(t *testing.T, store *jobs.Store, fence jobs.FenceFunc) *jobs.WorktreeManager {
+	t.Helper()
+	wt, err := jobs.NewWorktreeManager(store, nil, nil, fakeProbe{alive: false}, fence)
+	if err != nil {
+		t.Fatalf("NewWorktreeManager: %v", err)
+	}
+	return wt
+}
+
+// TestRegisterWorktreeSweepRequiresFence proves the composition-root call
+// cannot build an unfenced manager: a nil fence returns KindInvalidInput,
+// no manager, and records the sweep subsystem as failed.
+func TestRegisterWorktreeSweepRequiresFence(t *testing.T) {
+	store := newDaemonTestJobsStore(t)
+	m := NewManifest(nil, runtime.NewSystemClock())
+	wt, _, err := m.RegisterWorktreeSweep(context.Background(), store, nil, nil, fakeProbe{alive: false}, nil)
+	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindInvalidInput {
+		t.Fatalf("RegisterWorktreeSweep(nil fence) err = %v, want KindInvalidInput", err)
+	}
+	if wt != nil {
+		t.Fatal("RegisterWorktreeSweep(nil fence) returned a manager")
+	}
+	for _, s := range m.Snapshot() {
+		if s.Name == worktreeSweepSubsystem && s.State != SubsystemError {
+			t.Fatalf("sweep subsystem state = %v, want SubsystemError", s.State)
+		}
+	}
+}
+
+// TestDaemonSubsystems_WorktreeManagerFencedAcquireCreatesNothing drives
+// an acquired event for a RELEASED lease through RegisterWorktreeManager:
+// the real fenced Create refuses, so no worktree directory and no row
+// exist afterwards, and the refusal surfaces as the subsystem's error.
+func TestDaemonSubsystems_WorktreeManagerFencedAcquireCreatesNothing(t *testing.T) {
+	store := newDaemonTestJobsStore(t)
+	repo := newDaemonTestGitRepo(t)
+	bus := events.New(storetest.NewMemStore(), runtime.NewSystemClock())
+	wt := newDaemonWorktreeManager(t, store, daemonLeaseFence(store))
+	lease := jobs.ResourceLease{RepoID: repo, ScopeGlob: "**", Holder: "job-fenced", Epoch: 1, State: jobs.LeaseReleased}
+	ctx := context.Background()
+	if err := store.PutLease(ctx, lease); err != nil {
+		t.Fatalf("PutLease: %v", err)
+	}
+	runCtx, cancel := context.WithCancel(context.Background())
+	m := NewManifest(nil, runtime.NewSystemClock())
+	t.Cleanup(func() {
+		cancel()
+		m.Wait()
+	})
+	if err := m.RegisterWorktreeManager(runCtx, bus, wt, nil, "fenced-cursor"); err != nil {
+		t.Fatalf("RegisterWorktreeManager: %v", err)
+	}
+	publishAcquired(ctx, t, bus, lease)
+	assertSubsystemState(t, m, SubsystemError)
+
+	path := filepath.Join(repo, ".cascade", "worktrees", "job-"+lease.Holder)
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("fenced acquire created %q (stat err=%v)", path, err)
+	}
+	if _, ok, err := store.GetWorktree(ctx, path); err != nil || ok {
+		t.Fatalf("fenced acquire left a worktree row: ok=%v err=%v", ok, err)
+	}
+}
 
 // TestDaemonSubsystems_WorktreeManagerNilResolveRootDefaultsToIdentity
 // proves the nil-resolveRoot branch actually installs
@@ -44,7 +125,7 @@ func TestDaemonSubsystems_WorktreeManagerNilResolveRootDefaultsToIdentity(t *tes
 	store := newDaemonTestJobsStore(t)
 	repo := newDaemonTestGitRepo(t)
 	bus := events.New(storetest.NewMemStore(), runtime.NewSystemClock())
-	wt := jobs.NewWorktreeManager(store, nil, nil, fakeProbe{alive: false})
+	wt := newDaemonWorktreeManager(t, store, daemonLeaseFence(store))
 
 	lease := jobs.ResourceLease{RepoID: repo, ScopeGlob: "**", Holder: "job-nil-resolver", Epoch: 1, State: jobs.LeaseHeld}
 	ctx := context.Background()
@@ -80,7 +161,7 @@ func TestDaemonSubsystems_WorktreeManagerNilResolveRootDefaultsToIdentity(t *tes
 func TestDaemonSubsystems_WorktreeManagerSubscribeConflictReportsFailed(t *testing.T) {
 	store := newDaemonTestJobsStore(t)
 	bus := events.New(storetest.NewMemStore(), runtime.NewSystemClock())
-	wt := jobs.NewWorktreeManager(store, nil, nil, fakeProbe{alive: false})
+	wt := newDaemonWorktreeManager(t, store, daemonLeaseFence(store))
 
 	ctx := context.Background()
 	held, err := bus.Subscribe(ctx, jobs.LeaseEventNamespace, "conflict-cursor", 1)
@@ -106,7 +187,7 @@ func TestDaemonSubsystems_WorktreeManagerSubscribeConflictReportsFailed(t *testi
 func TestDaemonSubsystems_WorktreeManagerRunErrorReportsFailed(t *testing.T) {
 	store := newDaemonTestJobsStore(t)
 	bus := events.New(storetest.NewMemStore(), runtime.NewSystemClock())
-	wt := jobs.NewWorktreeManager(store, nil, nil, fakeProbe{alive: false})
+	wt := newDaemonWorktreeManager(t, store, daemonLeaseFence(store))
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	m := NewManifest(nil, runtime.NewSystemClock())

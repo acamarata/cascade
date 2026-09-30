@@ -39,7 +39,7 @@ func newTestQuarantineManager(t *testing.T) (*WorktreeManager, *Store, journal.S
 		n.Add(1)
 		return "attn-quarantine-1"
 	}, 0)
-	wm := NewWorktreeManager(store, j, attn, fakeLivenessProbe{alive: false})
+	wm := mustNewWorktreeManager(t, store, j, attn, fakeLivenessProbe{alive: false}, alwaysFencedOK)
 	return wm, store, j, attn
 }
 

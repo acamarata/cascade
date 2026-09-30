@@ -51,6 +51,7 @@ package jobs
 
 import (
 	"context"
+	"os"
 	"strings"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -62,6 +63,23 @@ import (
 // no dependency edge onto lease.go/lease_fence.go beyond the one call.
 type FenceFunc func(ctx context.Context, repoID, scopeGlob string, epoch int64) error
 
+// requireStoredHolder refuses lease when the stored lease row names a
+// different holder. FenceFunc sees only the lease key and epoch, so a
+// caller presenting the current epoch under another job's name would pass
+// it; this closes that gap with ErrLeaseFenced. A missing row is left to
+// the fence, which already refuses "no such lease".
+func requireStoredHolder(ctx context.Context, s *Store, lease ResourceLease) error {
+	stored, ok, err := s.GetLease(ctx, lease.RepoID, lease.ScopeGlob)
+	if err != nil {
+		return err
+	}
+	if ok && stored.Holder != lease.Holder {
+		return cascade.Wrapf(cascade.KindConflict, ErrLeaseFenced,
+			"jobs: holder %q is not lease %s/%s's holder", lease.Holder, lease.RepoID, lease.ScopeGlob)
+	}
+	return nil
+}
+
 // SnapshotResult is one immutable candidate snapshot: a content-addressed
 // git tree hash stamped with the lease epoch it was taken under.
 type SnapshotResult struct {
@@ -72,20 +90,28 @@ type SnapshotResult struct {
 // Snapshot takes an immutable, content-addressed candidate snapshot of
 // lease's worktree at epoch, including only selectedUntracked's paths
 // among whatever untracked files exist. A stale epoch (fence returns
-// ErrLeaseFenced) refuses the snapshot before any git command runs.
+// ErrLeaseFenced) refuses the snapshot before any git command runs. A nil
+// fence falls back to the manager's own required fence, never to no
+// fence. A pending row (path absent) or a row at another holder's path
+// refuses KindNotFound: there is no tree of this holder's to snapshot.
 func (m *WorktreeManager) Snapshot(ctx context.Context, fence FenceFunc, lease ResourceLease, epoch int64, selectedUntracked []string) (SnapshotResult, error) {
-	if fence != nil {
-		if err := fence(ctx, lease.RepoID, lease.ScopeGlob, epoch); err != nil {
-			return SnapshotResult{}, err
-		}
+	if fence == nil {
+		fence = m.fence
 	}
-	row, ok, err := worktreeRowForLease(ctx, m.store, lease.RepoID, lease.ScopeGlob)
+	if err := fence(ctx, lease.RepoID, lease.ScopeGlob, epoch); err != nil {
+		return SnapshotResult{}, err
+	}
+	row, ok, err := activeWorktreeRowForLease(ctx, m.store, lease.RepoID, lease.ScopeGlob)
 	if err != nil {
 		return SnapshotResult{}, err
 	}
-	if !ok {
+	if !ok || row.Path != jobWorktreeDir(row.Repo, lease.Holder) {
 		return SnapshotResult{}, cascade.Newf(cascade.KindNotFound,
-			"jobs: no worktree on record for lease %s/%s", lease.RepoID, lease.ScopeGlob)
+			"jobs: no worktree on record for lease %s/%s holder %s", lease.RepoID, lease.ScopeGlob, lease.Holder)
+	}
+	if _, statErr := os.Stat(row.Path); statErr != nil {
+		return SnapshotResult{}, cascade.Newf(cascade.KindNotFound,
+			"jobs: worktree %q for lease %s/%s is pending (intent recorded, tree absent)", row.Path, lease.RepoID, lease.ScopeGlob)
 	}
 
 	if len(selectedUntracked) > 0 {

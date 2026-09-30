@@ -91,6 +91,7 @@ type WorktreeManager struct {
 	journal   journal.Store        // may be nil: no journal integration (unit tests)
 	attention *supervision.Store   // may be nil: no attention-queue integration (unit tests)
 	probe     ProcessLivenessProbe // never nil; defaults to the real per-platform probe
+	fence     FenceFunc            // never nil: every Create is fenced (C16)
 }
 
 // NewWorktreeManager constructs a WorktreeManager over store, shelling out
@@ -98,8 +99,14 @@ type WorktreeManager struct {
 // respective integrations (unit tests). A nil probe defaults to
 // NewProcessLivenessProbe() (lease_fence_unix.go/lease_fence_windows.go's
 // real per-platform signal/handle check) — pass a fake probe in sweep
-// tests for deterministic pgid-liveness outcomes.
-func NewWorktreeManager(store *Store, j journal.Store, attn *supervision.Store, probe ProcessLivenessProbe) *WorktreeManager {
+// tests for deterministic pgid-liveness outcomes. fence is REQUIRED
+// (production passes (*LeaseManager).Fence): a nil fence refuses with
+// KindInvalidInput and no manager, so no composition root can build an
+// unfenced Create.
+func NewWorktreeManager(store *Store, j journal.Store, attn *supervision.Store, probe ProcessLivenessProbe, fence FenceFunc) (*WorktreeManager, error) {
+	if fence == nil {
+		return nil, cascade.New(cascade.KindInvalidInput, "jobs: worktree manager requires a lease fence")
+	}
 	if probe == nil {
 		probe = NewProcessLivenessProbe()
 	}
@@ -111,7 +118,8 @@ func NewWorktreeManager(store *Store, j journal.Store, attn *supervision.Store, 
 		journal:   j,
 		attention: attn,
 		probe:     probe,
-	}
+		fence:     fence,
+	}, nil
 }
 
 // withGitBinary returns a copy of m shelling out to bin instead of the
@@ -123,59 +131,127 @@ func (m *WorktreeManager) withGitBinary(bin string) *WorktreeManager {
 }
 
 // Create ensures lease.Holder owns exactly one worktree under repoRoot at
-// the R-16.37 constants, converging on an existing live worktree for the
-// same lease (no second `git worktree add`, no error) rather than
-// re-adding it.
+// the R-16.37 constants. Order (C16, intent before effect): validate,
+// fence, refuse a holder the stored lease does not name, converge only on
+// the holder's OWN path, write the intent row, `git worktree add`, fence
+// again (compensating on failure), journal ack. Nothing is returned and
+// no git command runs before the first fence and the holder check.
 func (m *WorktreeManager) Create(ctx context.Context, lease ResourceLease, repoRoot string) (Worktree, error) {
 	if lease.Holder == "" || repoRoot == "" {
 		return Worktree{}, cascade.New(cascade.KindInvalidInput, "jobs: worktree create requires a lease holder and a repo root")
 	}
-	if existing, ok, err := m.convergedWorktree(ctx, lease); err != nil {
-		return Worktree{}, err
-	} else if ok {
-		return existing, nil
-	}
-
-	path := jobWorktreeDir(repoRoot, lease.Holder)
-	branch := jobBranch(lease.Holder)
-	if _, err := m.runGitAdmin(ctx, repoRoot, repoRoot, "worktree", "add", path, "-b", branch); err != nil {
+	if err := m.fence(ctx, lease.RepoID, lease.ScopeGlob, lease.Epoch); err != nil {
 		return Worktree{}, err
 	}
-
-	w := Worktree{Path: path, LeaseRepoID: lease.RepoID, LeaseScopeGlob: lease.ScopeGlob, Repo: repoRoot, Branch: branch}
+	if err := requireStoredHolder(ctx, m.store, lease); err != nil {
+		return Worktree{}, err
+	}
+	w := Worktree{
+		Path: jobWorktreeDir(repoRoot, lease.Holder), LeaseRepoID: lease.RepoID, LeaseScopeGlob: lease.ScopeGlob,
+		Repo: repoRoot, Branch: jobBranch(lease.Holder),
+	}
+	if existing, ok, err := m.convergedWorktree(ctx, w); err != nil || ok {
+		return existing, err
+	}
 	if err := m.store.PutWorktree(ctx, w); err != nil {
 		return Worktree{}, err
 	}
-	if err := m.appendWorktreeJournal(ctx, lease, journal.KindIntent, "created", w); err != nil {
+	if err := m.appendWorktreeJournal(ctx, lease, journal.KindIntent, "create", w); err != nil {
+		return Worktree{}, err
+	}
+	createdBranch, err := m.addWorktree(ctx, w)
+	if err != nil {
+		// The add failed before any effect git reports; the intent row
+		// would otherwise stay pending forever.
+		_ = deleteWorktreeRow(ctx, m.store, w.Path)
+		return Worktree{}, err
+	}
+	if err := m.fence(ctx, lease.RepoID, lease.ScopeGlob, lease.Epoch); err != nil {
+		return Worktree{}, m.compensateCreate(ctx, w, createdBranch, err)
+	}
+	if err := m.appendWorktreeJournal(ctx, lease, journal.KindAck, "created", w); err != nil {
 		return Worktree{}, err
 	}
 	return w, nil
 }
 
-// convergedWorktree reports the existing worktree row for lease, IFF one
-// is on record AND its path still exists on disk.
-func (m *WorktreeManager) convergedWorktree(ctx context.Context, lease ResourceLease) (Worktree, bool, error) {
-	row, ok, err := worktreeRowForLease(ctx, m.store, lease.RepoID, lease.ScopeGlob)
+// convergedWorktree resolves the lease key's existing row against want
+// (the holder's own path). ok is true only when the row IS want's path
+// and that path exists. A row at want's path that is missing on disk is
+// a pending intent: Create retries the add. A row at ANOTHER path belongs
+// to a previous holder: a live one refuses (KindConflict, Sweep reconciles
+// it), a pending one is dropped since no tree backs it.
+func (m *WorktreeManager) convergedWorktree(ctx context.Context, want Worktree) (Worktree, bool, error) {
+	row, ok, err := activeWorktreeRowForLease(ctx, m.store, want.LeaseRepoID, want.LeaseScopeGlob)
 	if err != nil || !ok {
 		return Worktree{}, false, err
 	}
-	if _, statErr := os.Stat(row.Path); statErr != nil {
-		return Worktree{}, false, nil
+	_, statErr := os.Stat(row.Path)
+	if row.Path != want.Path {
+		if statErr == nil {
+			return Worktree{}, false, cascade.Newf(cascade.KindConflict,
+				"jobs: lease %s/%s still has a previous holder's worktree at %q; the sweep must reconcile it first",
+				want.LeaseRepoID, want.LeaseScopeGlob, row.Path)
+		}
+		return Worktree{}, false, deleteWorktreeRow(ctx, m.store, row.Path)
+	}
+	if statErr != nil {
+		return Worktree{}, false, nil // pending intent row: retry the add
 	}
 	return row, true, nil
 }
 
+// addWorktree runs `git worktree add` for w, creating w.Branch unless a
+// pending retry finds it already present. createdBranch reports whether
+// THIS call created the branch (compensation deletes only that one).
+func (m *WorktreeManager) addWorktree(ctx context.Context, w Worktree) (createdBranch bool, err error) {
+	refs, err := m.git.run(ctx, w.Repo, "for-each-ref", "--format=%(refname)", "refs/heads/"+w.Branch)
+	if err != nil {
+		return false, err
+	}
+	if strings.TrimSpace(refs) != "" {
+		_, err = m.runGitAdmin(ctx, w.Repo, w.Repo, "worktree", "add", w.Path, w.Branch)
+		return false, err
+	}
+	_, err = m.runGitAdmin(ctx, w.Repo, w.Repo, "worktree", "add", w.Path, "-b", w.Branch)
+	return err == nil, err
+}
+
+// compensateCreate undoes a just-added worktree whose post-add fence
+// failed: `git worktree remove` (never --force), the branch only when this
+// Create made it and it carries no commits of its own, then the intent
+// row. It returns fenceErr unchanged on success; if a step fails the row
+// stays for the sweep and the returned error still wraps fenceErr.
+func (m *WorktreeManager) compensateCreate(ctx context.Context, w Worktree, createdBranch bool, fenceErr error) error {
+	if _, err := m.runGitAdmin(ctx, w.Repo, w.Repo, "worktree", "remove", w.Path); err != nil {
+		return cascade.Wrapf(cascade.KindConflict, fenceErr, "jobs: fenced after add; removing %q failed (%v), left for the sweep", w.Path, err)
+	}
+	if createdBranch {
+		if _, err := m.deleteBranchIfNoOwnCommits(ctx, w.Repo, w.Branch); err != nil {
+			return cascade.Wrapf(cascade.KindConflict, fenceErr, "jobs: fenced after add; deleting branch %q failed (%v)", w.Branch, err)
+		}
+	}
+	if err := deleteWorktreeRow(ctx, m.store, w.Path); err != nil {
+		return cascade.Wrapf(cascade.KindConflict, fenceErr, "jobs: fenced after add; deleting row %q failed (%v)", w.Path, err)
+	}
+	return fenceErr
+}
+
 // Remove removes lease's worktree: `git worktree remove <path>` plus row
-// delete. A dirty tree at the per-lease path refuses with a typed error
-// naming the path — Remove never force-deletes; only the sweep's
+// delete. It acts only on lease.Holder's OWN path (the guard Snapshot
+// uses): a row at another holder's path is a no-op, so a previous
+// holder's late release never touches the current holder's tree. A
+// pending row (intent written, path absent) is deleted without running
+// git. A dirty tree at the per-lease path refuses with a typed
+// error naming the path — Remove never force-deletes; only the sweep's
 // quarantine path (worktree_quarantine.go) does, and only post-move.
 func (m *WorktreeManager) Remove(ctx context.Context, lease ResourceLease) error {
-	row, ok, err := worktreeRowForLease(ctx, m.store, lease.RepoID, lease.ScopeGlob)
+	row, ok, err := activeWorktreeRowForLease(ctx, m.store, lease.RepoID, lease.ScopeGlob)
 	if err != nil {
 		return err
 	}
-	if !ok {
-		return nil // nothing to remove: converge-safe no-op
+	if !ok || row.Path != jobWorktreeDir(row.Repo, lease.Holder) {
+		return nil // nothing of this holder's to remove: converge-safe no-op
 	}
 	if _, statErr := os.Stat(row.Path); statErr != nil {
 		return deleteWorktreeRow(ctx, m.store, row.Path)
