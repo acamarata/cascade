@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T08:04:48Z",
+  "generated_at": "2026-09-30T10:10:58Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -25907,6 +25907,12 @@
       "name": "plugins/cascade-pa/telegram client-tests/TEST",
       "sites": [
         {
+          "file": "plugins/cascade-pa/telegram/client_pollcancel_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram client-tests/TEST (P1-CPA-19)."
+        },
+        {
           "file": "plugins/cascade-pa/telegram/client_test.go",
           "line": 7,
           "status": "",
@@ -30727,7 +30733,7 @@
       ]
     }
   ],
-  "total_sites": 2888,
+  "total_sites": 2889,
   "unspecified_count": 153,
   "multi_status_count": 83
 }
