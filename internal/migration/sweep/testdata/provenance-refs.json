@@ -1,0 +1,169 @@
+{
+  "refs": [
+    {
+      "path": "internal/daemon/status.go",
+      "term": "socket_path",
+      "reason": "live v2 status field: the json tag of the daemon's `cascade status` wire response (StatusResponse.SocketPath), not the v1 config key; must not be retired"
+    },
+    {
+      "path": "cmd/cascade/status.go",
+      "term": "socket_path",
+      "reason": "live v2 status field: the human `cascade status` table row printing the daemon's bound socket, not the v1 config key; must not be retired"
+    },
+    {
+      "path": "cmd/cascade/status_test.go",
+      "term": "socket_path",
+      "reason": "live v2 status field: test fixtures and assertions for the `cascade status` wire response, not the v1 config key"
+    },
+    {
+      "path": "cmd/cascade/status_integration_test.go",
+      "term": "socket_path",
+      "reason": "live v2 status field: integration test decoding the `cascade status` JSON envelope, not the v1 config key"
+    },
+    {
+      "path": "docs/releases/alpha2-dogfood.md",
+      "term": "socket_path",
+      "reason": "live v2 status field: captured `cascade status` output from a v2 dogfood run, not the v1 config key"
+    },
+    {
+      "path": "docs/waves/w2-gate-report.md",
+      "term": "socket_path",
+      "reason": "live v2 status field: gate report naming the fields `cascade status` reported, not the v1 config key"
+    },
+    {
+      "path": "cmd/cascade/migrate.go",
+      "term": "cascade-v1",
+      "reason": "help example path for `cascade migrate v1 --from ../cascade-v1`, not a v1 dependency"
+    },
+    {
+      "path": "internal/conductor/flow.go",
+      "term": "cascade-v1",
+      "reason": "design-provenance comment citing v1 flow.rs as read-only corroborating evidence (ARCHIVE-MAP SPEC-SALVAGE)"
+    },
+    {
+      "path": "internal/conductor/flow.go",
+      "term": "SPEC-SALVAGE",
+      "reason": "the same design-provenance comment names the ARCHIVE-MAP SPEC-SALVAGE disposition it cites, not a live salvage TODO"
+    },
+    {
+      "path": "internal/retrieval/eval/types.go",
+      "term": "cascade-v1",
+      "reason": "comment citing the v1 baseline fixture path as evaluation provenance, not an import or runtime dependency"
+    },
+    {
+      "path": "internal/context/merge_golden_test.go",
+      "term": "cascade-v1",
+      "reason": "test comment citing the v1 tier-distinction test as design provenance for the golden fixture"
+    },
+    {
+      "path": "README.md",
+      "term": "cascade-v1",
+      "reason": "history note linking the read-only v1 archive repository; no code, build or runtime reference to v1"
+    },
+    {
+      "path": "docs/TELEMETRY.md",
+      "term": "cascade telemetry",
+      "reason": "states that v2 has no `cascade telemetry` verb (the key is reached through `cascade config`); records the absence, not a v1 dependency"
+    },
+    {
+      "path": "plugins/claude/README.md",
+      "term": "cascade harness",
+      "reason": "states that no `cascade harness install|uninstall` verb exists in v2; records the absence, not a v1 dependency"
+    },
+    {
+      "path": "plugins/claude/plugin.go",
+      "term": "cascade harness",
+      "reason": "package comment stating that no `cascade harness install|uninstall` verb exists in v2; no code path, not a v1 dependency"
+    },
+    {
+      "path": "plugins/claude/plugin_test.go",
+      "term": "cascade harness",
+      "reason": "test comment for TestNoHarnessInstallCommand, which pins that no `cascade harness uninstall` verb exists; not a v1 dependency"
+    },
+    {
+      "path": "providers/redis/cache.go",
+      "term": "cascade:cache",
+      "reason": "live v2 Redis key namespace constant cacheKeyPrefix (\"cascade:cache:\"); a name collision with the v1 `cache` command, not a v1 dependency"
+    },
+    {
+      "path": "internal/runtime/config_retrieval_fusion_test.go",
+      "term": "chunk_size",
+      "reason": "negative fixture in TestRetrievalConfigFailsClosed: v2 refuses retrieval.chunk_size as an unknown key; the hit proves the key is absent from v2, not a dependency on it"
+    },
+    {
+      "path": "internal/migration/v1/accounts_map.go",
+      "term": "gfp",
+      "reason": "v1 accounts-registry family value that the v2 `cascade migrate v1` accounts importer (mapV1Driver) translates to the Gemini driver; importer input vocabulary, not the v1 [gfp] config section and not a runtime path"
+    },
+    {
+      "path": "internal/migration/v1/accounts_map.go",
+      "term": "zai",
+      "reason": "v1 accounts-registry family value that the v2 `cascade migrate v1` accounts importer (mapV1Driver) refuses to map; importer input vocabulary, not the v1 [quota.zai] config section and not a runtime path"
+    },
+    {
+      "path": "internal/providers/intake/types.go",
+      "term": "zai",
+      "reason": "comment naming the z.ai vendor as a speaker of the openai-compat protocol (DriverOpenAICompat); a vendor name, not the v1 [quota.zai] config key"
+    },
+    {
+      "path": "providers/openai/auth.go",
+      "term": "zai",
+      "reason": "comments naming the z.ai vendor's captured error-envelope shape for the v2 openai-compat driver; a vendor name, not the v1 [quota.zai] config key"
+    },
+    {
+      "path": "providers/openai/openai.go",
+      "term": "zai",
+      "reason": "package doc and rate-limit note naming the z.ai vendor served by the v2 openai-compat driver; a vendor name, not the v1 [quota.zai] config key"
+    },
+    {
+      "path": "providers/openai/integration_test.go",
+      "term": "zai",
+      "reason": "live-lane test comment naming a z.ai endpoint as a valid openai-compat target; a vendor name, not the v1 [quota.zai] config key"
+    },
+    {
+      "path": "providers/openai/openai_test.go",
+      "term": "zai",
+      "reason": "captured z.ai 401 body fixture for the v2 openai-compat error mapping; a vendor name, not the v1 [quota.zai] config key"
+    },
+    {
+      "path": "docs/harness-conventions.md",
+      "term": "generate-instructions",
+      "reason": "live v2 marker: documents the managed-block delimiters `<!-- cascade:generate-instructions ... -->` that v2 writes today (markerOpenPrefix/markerClose in internal/context/harness_gen.go); renaming them would break every generated instruction file, so the hit is not a v1 dependency and must not be retired"
+    },
+    {
+      "path": "internal/context/harness_gen.go",
+      "term": "generate-instructions",
+      "reason": "live v2 marker: the markerOpenPrefix/markerClose constants v2 uses to write and find the managed instruction block (read by gen_cc_sections.go and harness_gen.go at runtime); a live v2 format string, not a v1 code path; must not be retired"
+    },
+    {
+      "path": "internal/migration/instruction_regen_apply_test.go",
+      "term": "generate-instructions",
+      "reason": "live v2 marker: test fixture holding a v2 managed block delimited by the live markerOpenPrefix/markerClose strings; not a v1 dependency"
+    },
+    {
+      "path": "internal/migration/instruction_regen_test.go",
+      "term": "generate-instructions",
+      "reason": "live v2 marker: expected v2 output of instruction regeneration, delimited by the live markerOpenPrefix/markerClose strings; not a v1 dependency"
+    },
+    {
+      "path": "plugins/opencode/opencode_test.go",
+      "term": "generate-instructions",
+      "reason": "live v2 marker: asserts the opencode golden carries the live v2 managed-block marker (markerOpenPrefix); not a v1 dependency"
+    },
+    {
+      "path": "internal/context/gen_cc.go",
+      "term": "generate_instructions",
+      "reason": "live v2 marker: design-provenance comment citing v1 generate_instructions/cc.rs as the source of the header format the live v2 managed block (markerOpenPrefix) keeps; no v1 code path; must not be retired"
+    },
+    {
+      "path": "internal/context/gen_cc_sections.go",
+      "term": "generate_instructions",
+      "reason": "live v2 marker: design-provenance comment citing v1 generate_instructions/cc.rs for the header wording rendered inside the live v2 managed block (markerOpenPrefix, used at runtime in this file); no v1 code path; must not be retired"
+    },
+    {
+      "path": "internal/context/harness_gen.go",
+      "term": "generate_instructions",
+      "reason": "live v2 marker: design-provenance comment citing v1 generate_instructions/cc.rs as the origin of the verbatim marker string held by the live markerOpenPrefix constant beside it; no v1 code path; must not be retired"
+    }
+  ]
+}

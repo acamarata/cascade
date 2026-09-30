@@ -1,0 +1,1103 @@
+{
+  "v1_source": "cc36b544585d6ae3d897e9e7c7babcbe0831e974",
+  "terms": [
+    {
+      "term": "cascade resolve",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `resolve` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:resolve",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `resolve` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade search",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `search` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:search",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `search` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade index",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `index` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:index",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `index` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade harvest",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `harvest` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:harvest",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `harvest` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade hook",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `hook` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:hook",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `hook` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade link",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `link` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:link",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `link` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade unlink",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `unlink` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:unlink",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `unlink` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "migrate-keys",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `migrate-keys`"
+    },
+    {
+      "term": "migrate_keys",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `migrate-keys`"
+    },
+    {
+      "term": "cascade import",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `import` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:import",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `import` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade restore",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `restore` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:restore",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `restore` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade snapshot",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `snapshot` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:snapshot",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `snapshot` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade template",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `template` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:template",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `template` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "generate-instructions",
+      "class": "command",
+      "replacement": [
+        "internal/context/harness_gen.go"
+      ],
+      "anchor": "markerOpenPrefix",
+      "state": "done",
+      "note": "v1 command `generate-instructions`; v2 generates the managed instruction block in internal/context/harness_gen.go (surfaced by `cascade context sync`)"
+    },
+    {
+      "term": "generate_instructions",
+      "class": "command",
+      "replacement": [
+        "internal/context/harness_gen.go"
+      ],
+      "anchor": "markerOpenPrefix",
+      "state": "done",
+      "note": "v1 command `generate-instructions`; v2 generates the managed instruction block in internal/context/harness_gen.go (surfaced by `cascade context sync`)"
+    },
+    {
+      "term": "setup-oc",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `setup-oc`"
+    },
+    {
+      "term": "setup_oc",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `setup-oc`"
+    },
+    {
+      "term": "cascade dispatch",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `dispatch` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:dispatch",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `dispatch` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "monitor-oc",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `monitor-oc`"
+    },
+    {
+      "term": "monitor_oc",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `monitor-oc`"
+    },
+    {
+      "term": "cascade harness",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `harness` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:harness",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `harness` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade ping",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `ping` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:ping",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `ping` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade cache",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `cache` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:cache",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `cache` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade rollback",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `rollback` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:rollback",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `rollback` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade update",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `update` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:update",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `update` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade folder",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `folder` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:folder",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `folder` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade verify",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `verify` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:verify",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `verify` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "ceo",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `ceo`"
+    },
+    {
+      "term": "cascade check",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `check` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:check",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `check` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade health",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `health` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:health",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `health` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "ccapi",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `ccapi`"
+    },
+    {
+      "term": "cascade configure",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `configure` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:configure",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `configure` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade wizard",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `wizard` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:wizard",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `wizard` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade build",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `build` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:build",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `build` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade telemetry",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `telemetry` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:telemetry",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `telemetry` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade export",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `export` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:export",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `export` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade security",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `security` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:security",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `security` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade sentry",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `sentry` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:sentry",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `sentry` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "nsentry",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `nsentry`"
+    },
+    {
+      "term": "cascade conductor",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `conductor` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:conductor",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `conductor` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade ram",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `ram` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:ram",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `ram` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade continuity",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `continuity` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "cascade:continuity",
+      "class": "command",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 command `continuity` (kebab is a dict word: phrase form only)"
+    },
+    {
+      "term": "active_tiers",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "ai_folder",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "auto_max",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "batch_size",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "cc_api_proxy",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "chunk_cache_capacity",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "chunk_overlap",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "chunk_size",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "classify_requests",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "claude_max",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "claude_max_hourly_token_limit",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "compress_context",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "cooldown_secs",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "debounce_ms",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "enabled_tools",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "event_queue_size",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "exclude_paths",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "five_hour_token_limit",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "five_hour_usd_limit",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "gfp",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "idle_timeout_secs",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "index_dir",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "index_paths",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "inject_context",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "interval_secs",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "log_format",
+      "class": "config_key",
+      "replacement": [
+        "internal/migration/v1/config_translate.go"
+      ],
+      "anchor": "mapLogFormat",
+      "state": "done",
+      "note": "translated by internal/migration/v1 config translator"
+    },
+    {
+      "term": "log_level",
+      "class": "config_key",
+      "replacement": [
+        "internal/migration/v1/config_translate.go"
+      ],
+      "anchor": "mapLogLevel",
+      "state": "done",
+      "note": "translated by internal/migration/v1 config translator"
+    },
+    {
+      "term": "max_cascade_size_bytes",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "max_connections",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "max_context_tokens",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "max_keys_per_account",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "max_parallel",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "max_retries",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "max_snapshots",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "model_preference",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "model_window_cap_pct",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "monthly_usd_limit",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "multi_vec",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "oc_go",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "oc_go_hourly_usd_limit",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "oc_go_monthly_usd_limit",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "personal_dir",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "plugin_dir",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "poll_interval_secs",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "project_poller",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "project_roots",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "projects_dirs",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "prompts_per_5h",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "proxy_url",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "quota_poller",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "request_timeout_secs",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "rerank_top_k",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "retention_days",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "shard_count",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "socket_path",
+      "class": "config_key",
+      "replacement": [
+        "internal/migration/v1/config_translate.go"
+      ],
+      "anchor": "\"daemon.socket_path\"",
+      "state": "done",
+      "note": "v1 [daemon].socket_path, translated to daemon.socket by the internal/migration/v1 config translator (case \"daemon.socket_path\")"
+    },
+    {
+      "term": "timeout_secs",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "top_k",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "watch_global_cascade",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "watch_projects",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "weekly_token_limit",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "zai",
+      "class": "config_key",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "v1 config key"
+    },
+    {
+      "term": "cascade-v1",
+      "class": "marker",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "design-provenance citation marker; resolved via provenance-refs.json exact (path,term) matches"
+    },
+    {
+      "term": "SPEC-SALVAGE",
+      "class": "marker",
+      "replacement": [],
+      "anchor": "",
+      "state": "",
+      "note": "design-provenance disposition marker; resolved via provenance-refs.json exact (path,term) matches"
+    }
+  ]
+}

@@ -52,6 +52,7 @@
   "internal/memory/forget": { "tier": "core", "floor": 85.0, "baseline": 90.1 },
   "internal/memory/review": { "tier": "core", "floor": 85.0, "baseline": 95.0 },
   "internal/migration": { "tier": "core", "floor": 85.0, "baseline": 90.0 },
+  "internal/migration/sweep": { "tier": "core", "floor": 85.0, "baseline": 89.9 },
   "internal/migration/v1": { "tier": "core", "floor": 85.0, "baseline": 91.7 },
   "internal/nodes": { "tier": "core", "floor": 85.0, "baseline": 90.1 },
   "internal/notify": { "tier": "core", "floor": 85.0, "baseline": 92.2 },
