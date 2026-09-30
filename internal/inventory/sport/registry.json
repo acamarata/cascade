@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T02:02:14Z",
+  "generated_at": "2026-09-30T02:33:41Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -16244,7 +16244,7 @@
         },
         {
           "file": "internal/daemon/subsystems_worktree_test.go",
-          "line": 22,
+          "line": 26,
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T3",
           "raw": "internal/daemon (ADD, P1-E29-W6-S59-T3 coverage follow-up)."
@@ -23530,11 +23530,23 @@
           "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
         },
         {
+          "file": "internal/jobs/worktree_crash_test.go",
+          "line": 14,
+          "status": "",
+          "raw": "jobs/worktree-manager (P1-CORE-06)."
+        },
+        {
           "file": "internal/jobs/worktree_events.go",
           "line": 40,
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T3",
           "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
+        },
+        {
+          "file": "internal/jobs/worktree_fence_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "jobs/worktree-manager (P1-CORE-06)."
         },
         {
           "file": "internal/jobs/worktree_list.go",
@@ -23572,6 +23584,18 @@
           "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
         },
         {
+          "file": "internal/jobs/worktree_reconcile.go",
+          "line": 27,
+          "status": "",
+          "raw": "jobs/worktree-manager (P1-CORE-06)."
+        },
+        {
+          "file": "internal/jobs/worktree_reconcile_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "jobs/worktree-manager (P1-CORE-06)."
+        },
+        {
           "file": "internal/jobs/worktree_snapshot.go",
           "line": 50,
           "status": "ADD",
@@ -23594,10 +23618,10 @@
         },
         {
           "file": "internal/jobs/worktree_sweep.go",
-          "line": 30,
+          "line": 32,
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T3",
-          "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
+          "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3; P1-CORE-06)."
         },
         {
           "file": "internal/jobs/worktree_sweep_test.go",
@@ -23622,6 +23646,7 @@
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -30242,7 +30267,7 @@
       ]
     }
   ],
-  "total_sites": 2838,
+  "total_sites": 2842,
   "unspecified_count": 146,
-  "multi_status_count": 78
+  "multi_status_count": 79
 }
