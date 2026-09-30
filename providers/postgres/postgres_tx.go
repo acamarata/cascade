@@ -63,30 +63,34 @@ func (t *driverTx) Delete(_ context.Context, namespace, key string) error {
 	return nil
 }
 
-// CompareAndSwap writes newValue under key in namespace only if the
-// current stored value equals old byte-for-byte (nil old means "must not
-// currently exist"). The read-compare-write happens inside this
-// transaction's *sql.Tx; Postgres's row-level locking on the SELECT ...
-// (implicit in the plain read here, matched by the fact that any
-// concurrent writer to the same row blocks on this transaction's later
-// write until commit/rollback) combined with never returning a false
-// "no conflict" is what makes this a REAL conflict detector rather than a
-// generic error: TestStoreCASConflict (storetest/store_suite.go) asserts
-// both the typed cascade.KindConflict AND that the stored value is left
-// exactly as it was before the attempted swap.
+// CompareAndSwap atomically writes newValue only if old matches byte-for-byte;
+// nil old means the key must be absent. INSERT ON CONFLICT DO NOTHING guards
+// creates, and a conditional UPDATE guards swaps. PostgreSQL rechecks the
+// predicate after waiting for a concurrent writer. Exactly one affected row
+// means success; zero rows means KindConflict and leaves the value unchanged.
+// The recheck-after-wait behavior is READ COMMITTED's EvalPlanQual; under
+// REPEATABLE READ or SERIALIZABLE a losing concurrent writer instead gets a
+// 40001 serialization failure from the database, which wrapDBError maps to
+// this same KindConflict.
 func (t *driverTx) CompareAndSwap(_ context.Context, namespace, key string, old, newValue []byte) error {
-	current, err := getValue(t.ctx, t.sqlTx, namespace, key)
-	switch {
-	case err != nil && !cascade.HasKind(err, cascade.KindNotFound):
-		return err
-	case err != nil: // KindNotFound
-		if old != nil {
-			return cascade.Newf(cascade.KindConflict, "postgres: cas %s/%s: key absent, want old=%q", namespace, key, old)
-		}
-	case old == nil:
-		return cascade.Newf(cascade.KindConflict, "postgres: cas %s/%s: key already exists", namespace, key)
-	case string(current) != string(old):
-		return cascade.Newf(cascade.KindConflict, "postgres: cas %s/%s: stored value differs from old", namespace, key)
+	var result sql.Result
+	var err error
+	if old == nil {
+		result, err = t.sqlTx.ExecContext(t.ctx, `INSERT INTO kv (namespace, key, value) VALUES ($1, $2, $3)
+			ON CONFLICT (namespace, key) DO NOTHING`, namespace, key, newValue)
+	} else {
+		result, err = t.sqlTx.ExecContext(t.ctx, `UPDATE kv SET value = $3
+			WHERE namespace = $1 AND key = $2 AND value = $4`, namespace, key, newValue, old)
 	}
-	return t.Put(t.ctx, namespace, key, newValue)
+	if err != nil {
+		return wrapDBError(err, "postgres: cas %s/%s", namespace, key)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return wrapDBError(err, "postgres: cas row count %s/%s", namespace, key)
+	}
+	if affected != 1 {
+		return cascade.Newf(cascade.KindConflict, "postgres: cas %s/%s: comparison failed", namespace, key)
+	}
+	return nil
 }

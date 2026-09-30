@@ -27,6 +27,8 @@ func RunStoreTests(t *testing.T, newStore StoreFactory) {
 	t.Run("TxRollsBackOnError", func(t *testing.T) { testStoreTxRollback(t, newStore(t)) })
 	t.Run("TxCompareAndSwap", func(t *testing.T) { testStoreCAS(t, newStore(t)) })
 	t.Run("TxCompareAndSwapConflict", func(t *testing.T) { testStoreCASConflict(t, newStore(t)) })
+	t.Run("TxCompareAndSwapEmptyOld", func(t *testing.T) { testStoreCASEmptyOld(t, newStore(t)) })
+	RunConcurrentCAS(t, newStore)
 }
 
 func testStorePutGetDelete(t *testing.T, s provider.Store) {
@@ -143,4 +145,44 @@ func testStoreCASConflict(t *testing.T, s provider.Store) {
 	got, err := s.Get(ctx, "ns", "cas-conflict")
 	requireNoError(t, err, "Get after CAS conflict")
 	requireBytesEqual(t, got, []byte("current"), "Get after CAS conflict (want unchanged)")
+}
+
+// testStoreCASEmptyOld proves the driver treats a non-nil, zero-length old
+// (want "the stored value equals empty bytes") as distinct from a nil old
+// (want "the key is absent"). A driver that collapses the two checks (e.g.
+// "len(old) == 0" instead of "old == nil") would create over an absent key
+// on the first case below and would wrongly accept the second.
+func testStoreCASEmptyOld(t *testing.T, s provider.Store) {
+	t.Helper()
+	ctx := testContext(t)
+
+	// Absent key, old = []byte{} (non-nil, empty): the key is absent, not
+	// "equal to empty bytes", so this must conflict and create nothing.
+	err := s.Tx(ctx, func(ctx context.Context, tx provider.Tx) error {
+		return tx.CompareAndSwap(ctx, "ns", "cas-empty-absent", []byte{}, []byte("created"))
+	})
+	requireErrorKind(t, err, cascade.KindConflict, "CompareAndSwap(absent key, old=[]byte{})")
+	_, err = s.Get(ctx, "ns", "cas-empty-absent")
+	requireErrorKind(t, err, cascade.KindNotFound, "Get after CompareAndSwap(absent key, old=[]byte{}) (want still absent)")
+
+	// Stored value is []byte{}. old = nil ("must be absent") must conflict:
+	// the key exists, even though its value happens to be empty.
+	requireNoError(t, s.Put(ctx, "ns", "cas-empty-stored", []byte{}), "Put empty value")
+	err = s.Tx(ctx, func(ctx context.Context, tx provider.Tx) error {
+		return tx.CompareAndSwap(ctx, "ns", "cas-empty-stored", nil, []byte("nil-old"))
+	})
+	requireErrorKind(t, err, cascade.KindConflict, "CompareAndSwap(stored=[]byte{}, old=nil)")
+	got, err := s.Get(ctx, "ns", "cas-empty-stored")
+	requireNoError(t, err, "Get after CompareAndSwap(stored=[]byte{}, old=nil)")
+	requireBytesEqual(t, got, []byte{}, "Get after CompareAndSwap(stored=[]byte{}, old=nil) (want unchanged)")
+
+	// Stored value is []byte{}. old = []byte{} matches byte-for-byte, so
+	// this must succeed and the store must hold the new value.
+	err = s.Tx(ctx, func(ctx context.Context, tx provider.Tx) error {
+		return tx.CompareAndSwap(ctx, "ns", "cas-empty-stored", []byte{}, []byte("replaced"))
+	})
+	requireNoError(t, err, "CompareAndSwap(stored=[]byte{}, old=[]byte{})")
+	got, err = s.Get(ctx, "ns", "cas-empty-stored")
+	requireNoError(t, err, "Get after CompareAndSwap(stored=[]byte{}, old=[]byte{})")
+	requireBytesEqual(t, got, []byte("replaced"), "Get after CompareAndSwap(stored=[]byte{}, old=[]byte{}) (want replaced)")
 }
