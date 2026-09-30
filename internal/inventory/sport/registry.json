@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T06:37:31Z",
+  "generated_at": "2026-09-30T07:07:17Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -15405,6 +15405,13 @@
           "raw": "internal/build (CHANGE, per T-4 sport_updates)."
         },
         {
+          "file": "internal/build/coveragegate_baseline_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "T-2",
+          "raw": "internal/build (ADD, per T-2 sport_updates)."
+        },
+        {
           "file": "internal/build/coveragegate_completeness_test.go",
           "line": 10,
           "status": "ADD",
@@ -30720,7 +30727,7 @@
       ]
     }
   ],
-  "total_sites": 2887,
+  "total_sites": 2888,
   "unspecified_count": 153,
   "multi_status_count": 83
 }
