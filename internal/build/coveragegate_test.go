@@ -80,30 +80,7 @@ func TestCoverageGate_Live(t *testing.T) {
 		t.Skipf("coverage gate: set %s to a coverage.out path to run this check (see .github/workflows/ci.yml coverage-gate job)", CoverageProfileEnvVar)
 	}
 	root := coverageModuleRoot(t)
-
-	// R-14.194: a Go test binary runs with its working directory set to the
-	// package directory, not the module root, so a RELATIVE profile path
-	// resolves against internal/build and misses a profile written at the
-	// root. ci.yml's coverage-gate job passes exactly such a relative path
-	// ("coverage.out", extracted to the workspace root by download-artifact),
-	// as does every developer following the .cover/ convention Art.7 asks
-	// for. Resolve relative paths against the module root so the gate reads
-	// the file the caller meant, rather than failing on a path that looks
-	// correct from where it was typed.
-	resolved := profilePath
-	if !filepath.IsAbs(resolved) {
-		resolved = filepath.Join(root, profilePath)
-	}
-
-	data, err := os.ReadFile(resolved)
-	if err != nil {
-		t.Fatalf("coverage gate: reading profile %s (resolved to %s): %v", profilePath, resolved, err)
-	}
-	profile, err := ParseCoverageProfile(data)
-	if err != nil {
-		t.Fatalf("coverage gate: parsing generated profile: %v", err)
-	}
-	stripped := coverageStripAll(profile)
+	stripped := coverageLoadLiveProfile(t, root, profilePath)
 	baseline := coverageLoadBaseline(t, root)
 
 	// R-14.239: a composition root (`package main`) takes the CLI floor
@@ -124,9 +101,36 @@ func TestCoverageGate_Live(t *testing.T) {
 		t.Fatalf("coverage gate: discovering expected packages: %v", err)
 	}
 	v = append(v, CheckCompleteness(stripped, expected)...)
+	// AUD-040: a package present in the profile but never given a baseline
+	// entry ratchets against nothing, forever — CheckBaselineCompleteness
+	// closes that gap the same way CheckCompleteness closes the
+	// missing-from-profile gap above.
+	v = append(v, CheckBaselineCompleteness(stripped, baseline)...)
 	if len(v) != 0 {
 		t.Fatalf("coverage gate: %d violation(s) against the real tree: %+v", len(v), v)
 	}
+}
+
+// coverageLoadLiveProfile reads and parses profilePath (resolved against
+// root when relative — R-14.194: a Go test binary's working directory is
+// its own package directory, not the module root, so a relative path like
+// ci.yml's "coverage.out" would otherwise miss a profile written at the
+// root), returning it module-prefix-stripped.
+func coverageLoadLiveProfile(t *testing.T, root, profilePath string) map[string]*CoverageStats {
+	t.Helper()
+	resolved := profilePath
+	if !filepath.IsAbs(resolved) {
+		resolved = filepath.Join(root, profilePath)
+	}
+	data, err := os.ReadFile(resolved)
+	if err != nil {
+		t.Fatalf("coverage gate: reading profile %s (resolved to %s): %v", profilePath, resolved, err)
+	}
+	profile, err := ParseCoverageProfile(data)
+	if err != nil {
+		t.Fatalf("coverage gate: parsing generated profile: %v", err)
+	}
+	return coverageStripAll(profile)
 }
 
 func coverageFixtureDir(t *testing.T) string {
@@ -211,7 +215,15 @@ func TestCoverageGate_SeededRatchetDropRed(t *testing.T) {
 	if !found {
 		t.Fatalf("coverage gate: expected an internal/build ratchet violation, got %+v", v)
 	}
+
+	// AUD-040 extension: the ratchet must protect a package this ticket
+	// baselined too, not just the 11 hand-curated entries that predate it.
+	testCoverageRatchetDropOnNewBaselineEntry(t, baseline, roots)
 }
+
+// testCoverageRatchetDropOnNewBaselineEntry, coverageOriginalEleven and
+// coverageNonOriginalElevenTarget live in coveragegate_baseline_test.go
+// (same package; Art.10.3's 300-line cap moved them there).
 
 // TestCoverageGate_ZeroStatementPackagesAreSkipped proves a package with
 // no shippable statements yet (a doc.go-only placeholder) never produces a

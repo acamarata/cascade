@@ -2,21 +2,22 @@
 // from P1-E01-W1-S01-T8 (12-QUALITY-CONSTITUTION.md Art.4): per-package-
 // class statement floors, plus a per-package ratchet against a committed
 // baseline so CI fails if coverage DROPS for any package, even above its
-// floor. It consumes the coverage PROFILE the A-T4 coverage lane already
-// produces (`go test -covermode=atomic -coverprofile=coverage.out ./...`)
-// — this gate does not run tests itself.
+// floor. It consumes the coverage PROFILE (`go test -covermode=atomic
+// -coverprofile=coverage.out ./...`); it does not run tests itself.
+//
+// Baseline completeness: every profiled package with statements needs a
+// baseline entry (CheckBaselineCompleteness). New entries come only from
+// the generator (`go run ./internal/build/gen/coveragebaseline --profile
+// coverage.out --add-missing`), which never edits an existing entry and
+// always re-renders the file canonically (FormatBaselineJSON).
 //
 // # Statements only — branches are a named, honest gap
 //
-// Art.4's table has both a Statements and a Branches column. Go's stdlib
-// coverage tooling (`go test -cover`, the profile format parsed here) is
-// STATEMENT coverage only; it has no branch-coverage mode, and this repo
-// has adopted no separate branch-coverage tool (docs/developer/quality-
-// gates.md records this as a known gap, not a silent claim of compliance).
-// This gate therefore enforces the Statements column only. Claiming to
-// enforce a Branches floor with a tool that cannot measure branches would
-// be exactly the kind of gate that looks correct and enforces nothing —
-// the lesson this ticket exists to avoid — so the gap is named instead.
+// Art.4's table has Statements and Branches columns. Go's coverage tooling
+// is statement-only and this repo has no branch tool (docs/developer/
+// quality-gates.md records the gap). This gate enforces the Statements
+// column only; claiming a Branches floor it cannot measure would be a gate
+// that enforces nothing, so the gap is named instead.
 //
 // # Tier mapping
 //
@@ -262,8 +263,8 @@ type CoverageViolation struct {
 // modulePrefix stripped by the caller — see coveragegate_test.go's
 // stripModulePrefix) against each package's Art.4 tier floor and its
 // baseline entry. A package present in profile but absent from baseline is
-// NOT a violation by itself (a brand-new package has no prior baseline to
-// ratchet against) but IS still floor-checked. A package with zero total
+// floor-checked here; its missing baseline entry is reported separately by
+// CheckBaselineCompleteness, which fails the gate. A package with zero total
 // statements (no shippable logic yet — a doc.go placeholder) is skipped
 // entirely: there is nothing to measure, and Art.4 floors govern shipped
 // behavior, not empty packages.
