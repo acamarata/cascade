@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T05:52:43Z",
+  "generated_at": "2026-09-30T06:37:31Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -10911,6 +10911,12 @@
       "name": "internal.ci.jobTree/TESTED",
       "sites": [
         {
+          "file": "internal/ci/runner_exec_jobtree_race_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "internal.ci.jobTree/TESTED."
+        },
+        {
           "file": "internal/ci/runner_exec_jobtree_test.go",
           "line": 6,
           "status": "",
@@ -11115,6 +11121,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.runViaShell/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/runner_exec_attach_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal.ci.runViaShell/TESTED."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -30700,7 +30720,7 @@
       ]
     }
   ],
-  "total_sites": 2885,
-  "unspecified_count": 152,
+  "total_sites": 2887,
+  "unspecified_count": 153,
   "multi_status_count": 83
 }
