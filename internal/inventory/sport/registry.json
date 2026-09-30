@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T03:56:29Z",
+  "generated_at": "2026-09-30T04:46:00Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -10280,7 +10280,7 @@
       "sites": [
         {
           "file": "internal/ci/runner_exec.go",
-          "line": 31,
+          "line": 32,
           "status": "ADD",
           "raw": "internal.ci.Executor/ADDED"
         }
@@ -10620,7 +10620,7 @@
       "sites": [
         {
           "file": "internal/ci/runner_exec.go",
-          "line": 31,
+          "line": 32,
           "status": "ADD",
           "raw": "internal.ci.ShellExecutor/ADDED"
         }
@@ -10880,18 +10880,39 @@
       ]
     },
     {
+      "name": "internal.ci.jobTree",
+      "sites": [
+        {
+          "file": "internal/ci/runner_exec_tree.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "internal.ci.jobTree/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.jobTree/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/runner_exec_jobtree_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal.ci.jobTree/TESTED."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal.ci.killProcessGroup",
       "sites": [
         {
           "file": "internal/ci/runner_exec_unix.go",
           "line": 17,
-          "status": "ADD",
-          "ticket": "P1-E25-W5-S51-T5",
-          "raw": "internal.ci.killProcessGroup/ADDED (P1-E25-W5-S51-T5)."
-        },
-        {
-          "file": "internal/ci/runner_exec_windows.go",
-          "line": 29,
           "status": "ADD",
           "ticket": "P1-E25-W5-S51-T5",
           "raw": "internal.ci.killProcessGroup/ADDED (P1-E25-W5-S51-T5)."
@@ -10998,6 +11019,40 @@
           "status": "",
           "ticket": "P1-E32-W6-S65-T1",
           "raw": "internal.ci.parseImportGraph/FUZZED (P1-E32-W6-S65-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.processTree",
+      "sites": [
+        {
+          "file": "internal/ci/runner_exec_tree_other.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal.ci.processTree/ADDED."
+        },
+        {
+          "file": "internal/ci/runner_exec_windows.go",
+          "line": 26,
+          "status": "ADD",
+          "raw": "internal.ci.processTree/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.processTree/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/runner_exec_windows_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal.ci.processTree/TESTED."
         }
       ],
       "statuses": [
@@ -11124,6 +11179,48 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "internal.ci.waitTreeGone",
+      "sites": [
+        {
+          "file": "internal/ci/runner_exec_tree.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "internal.ci.waitTreeGone/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.waitTreeGone/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/runner_exec_tree_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "internal.ci.waitTreeGone/TESTED."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.winJob",
+      "sites": [
+        {
+          "file": "internal/ci/runner_exec_windows.go",
+          "line": 26,
+          "status": "ADD",
+          "raw": "internal.ci.winJob/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -30319,7 +30416,7 @@
       ]
     }
   ],
-  "total_sites": 2846,
-  "unspecified_count": 148,
+  "total_sites": 2853,
+  "unspecified_count": 151,
   "multi_status_count": 80
 }
