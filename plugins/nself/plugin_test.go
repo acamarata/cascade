@@ -150,30 +150,19 @@ func TestMCPToolRegistry_ProjectInfoTransitsTheFirewall(t *testing.T) {
 	}
 }
 
-// TestDispatchTool_AddCascadeRefusesWithOneTypedError pins the floor: the
-// tool names BOTH missing prerequisites and attempts nothing.
-func TestDispatchTool_AddCascadeRefusesWithOneTypedError(t *testing.T) {
-	runner := &recordingRunner{out: []byte(`{}`)}
-	withSeams(t, runner, fixedLocator{path: "/opt/bin/nself"})
+// TestDispatchTool_AddCascadeRefusesOnNonNselfProject pins that the tool
+// path answers a non-nself directory with a typed KindNotFound refusal
+// (no version/config probes are attempted — detection runs first).
+func TestDispatchTool_AddCascadeRefusesOnNonNselfProject(t *testing.T) {
+	runner := &recordingRunner{err: &binaryAbsentError{Binary: nselfBinary, GOOS: "test"}}
+	withSeams(t, runner, fixedLocator{err: errors.New("absent")})
 
 	_, err := handlers{}.DispatchTool(context.Background(), toolAddCascade, rootDirInput(t, t.TempDir()))
 	if err == nil {
-		t.Fatal("DispatchTool(nself_add_cascade) = nil error, want the typed refusal")
+		t.Fatal("DispatchTool(nself_add_cascade) over a non-nself dir = nil error, want KindNotFound")
 	}
-	if !errors.Is(err, errAddCascadeUnavailable) {
-		t.Fatalf("err = %v, want it to wrap errAddCascadeUnavailable (identity, not just a Kind)", err)
-	}
-	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindUnsupported {
-		t.Fatalf("cascade.KindOf(err) = (%v, %v), want (KindUnsupported, true)", kind, ok)
-	}
-	msg := err.Error()
-	for _, want := range []string{"add cascade", "config"} {
-		if !strings.Contains(msg, want) {
-			t.Errorf("refusal message = %q, want it to name the missing prerequisite %q", msg, want)
-		}
-	}
-	if runner.calls != 0 {
-		t.Fatalf("the refusal forked %d subprocesses, want 0", runner.calls)
+	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindNotFound {
+		t.Fatalf("cascade.KindOf(err) = (%v, %v), want (KindNotFound, true)", kind, ok)
 	}
 }
 

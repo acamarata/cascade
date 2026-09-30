@@ -7,21 +7,18 @@
 # parses THIS file through the real loader and asserts it agrees with
 # manifest().
 #
-# RUNTIME-TIER NOTE: the ticket that specced this plugin (P1-E25-W5-S52-T2)
-# describes it as `runtime = "process"`, `trust_tier = "trusted"`. Neither
-# field exists in the real cascade.plugin/v2 schema (pkg/plugin.Manifest has
-# no trust_tier or net_scopes field), and no composition root in this tree
-# can launch a RuntimeProcess manifest today (internal/plugins/dispatch.go's
-# ProvisionElevated refuses every process-tier install, because no code path
-# marks a manifest trusted). T0 ruled `runtime = "builtin"` as the floor and
-# recorded the security downgrade it represents; plugin.go's package doc
-# quotes both sides in full.
+# RUNTIME-TIER NOTE (unchanged by P1-E25-W5-S103-T1): the ticket that
+# specced this plugin (P1-E25-W5-S52-T2) describes it as `runtime =
+# "process"`, `trust_tier = "trusted"`. Neither field exists in the real
+# cascade.plugin/v2 schema (pkg/plugin.Manifest has no trust_tier or
+# net_scopes field), and no composition root in this tree can launch a
+# RuntimeProcess manifest today. T0 ruled `runtime = "builtin"` as the
+# floor and recorded the security downgrade it represents; plugin.go's
+# package doc quotes both sides in full.
 #
-# PERMISSIONS NOTE: the ticket also names a `network` permission, for the
-# server-profile backends a handshake would resolve. No handshake runs at
-# this floor and this plugin dials nothing, so declaring `network` would
-# request a capability it never uses. It is omitted rather than requested
-# "just in case".
+# PERMISSIONS NOTE: no `network` permission is declared -- the handshake
+# dials nothing (it forks the local nself CLI only; the config it proposes
+# and applies is descriptors, never a live network probe).
 
 id = "cascade-nself"
 name = "Cascade nSelf"
@@ -38,8 +35,12 @@ description = "Report whether a directory is an nself-managed project, and wheth
 
 [[provides.tools]]
 name = "nself_add_cascade"
-description = "Refuses: the nself handshake verb and the host config-apply seam this would need do not exist yet."
+description = "Propose the cascade server-profile diff for an nSelf project; writes nothing. Apply it with `cascade nself handshake`."
+
+[[provides.commands]]
+name = "handshake"
+description = "Apply the cascade server-profile diff for an nSelf project (writes config.toml)."
 
 [[permissions]]
 name = "subprocess_exec"
-description = "Run one bounded, read-only nself status probe as a local subprocess in the scanned directory."
+description = "Run bounded, read-only nself version/config/status probes as a local subprocess in the scanned directory."

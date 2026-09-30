@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"VERSION\":\"9.9.9\"}")

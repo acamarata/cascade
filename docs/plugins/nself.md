@@ -4,21 +4,50 @@ Package: `plugins/nself` · Manifest id: `cascade-nself` · Runtime: `builtin`
 
 Reports whether a directory is an nself-managed project and whether the
 `nself` CLI is reachable. It never becomes a core dependency: `internal/`
-and `pkg/` import zero symbols from `plugins/nself` except the one
-composition root that wires it (`internal/plugins/nself_wiring.go`).
+and `pkg/` import zero symbols from `plugins/nself` except the composition roots for egress and config application
+(`internal/plugins/nself_wiring.go`, `internal/plugins/nself_config_wiring.go`).
 
-**This plugin does less than its ticket described, deliberately.** The two
-`nself` verbs the contract was written against do not exist in the CLI it
-was built against, and the host seam it was meant to write config through
-does not exist either. Both absences were probed, not assumed; both are
-recorded in `plugins/nself/testdata/README.md`, and the plugin refuses
-rather than pretending.
+### From an nSelf project (`cascade nself handshake`)
 
-| Contract said | Reality (nself v1.3.5, probed read-only 2026-09-21) |
-|---|---|
-| detect with `nself project status --json` | no `project` verb: `unknown command "project"` |
-| handshake with `nself add cascade` | `nself add <name>` installs a registry plugin; no JSON, no server profile |
-| write the profile through `C-S05.T8` config verbs | `internal/runtime/config_write.go` validates dotted paths; no diff-apply seam exists |
+`cascade-nself` (the `cascade nself` noun) proposes the server-profile
+config for a workspace that is an [nSelf](https://github.com/nself-org)
+project: it reads `nself version --json` and `nself config get <KEY>`
+for `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_EXTENSIONS`,
+`REDIS_ENABLED`, `REDIS_PORT`, `MINIO_ENABLED`, `MINIO_PORT` and
+`S3_BUCKET` — descriptors only, never a credential — and proposes them
+under `[plugins.cascade-nself]`.
+
+- `nself_add_cascade` (the MCP tool, reachable by a model or agent) always
+  PROPOSES: it returns the diff and writes nothing.
+- `cascade nself handshake [--dir <path>] [--json]` (the human-invoked CLI
+  command) APPLIES it through `internal/runtime`'s
+  `ConfigWriter.ApplyDiff` — an all-or-nothing, ownership-tracked write
+  (see `docs/cli-reference/config.md` § diff-apply and managed keys).
+- `runtime.profile` is set to `"server"` only when every required
+  `CASCADE_STORAGE_*` env-ref (`POSTGRES_DSN`, `REDIS_URL`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_KEY_ID`, `S3_SECRET`) already
+  resolves in the invoking environment (`CASCADE_STORAGE_PGVECTOR_DSN` is
+  optional — it falls back to `CASCADE_STORAGE_POSTGRES_DSN`); otherwise
+  the handshake reports `pending-env` and names the missing env-ref
+  NAMES, never a value. When `CASCADE_STORAGE_POSTGRES_DSN` is missing,
+  `dsn_shape` gives the shape to export, placeholders unfilled:
+  `postgres://` followed by `<user>:<password>@` and
+  `<postgres_host>:<postgres_port>/<postgres_db>` (no spaces between parts).
+- A project value that looks like a credential (a URL with userinfo, a
+  secret-named pair, a token, a key split by whitespace or hidden by a
+  zero-width character) or that the
+  config writer would refuse is never proposed or written; the response
+  lists its config path under `withheld`. The handshake screens every value
+  with the same check `cascade config set` runs and refuses to run when no
+  screen is bound.
+- `project_dir` is always recorded as an absolute path, whatever `--dir`
+  was given.
+- A `runtime.profile` the operator already set by hand is left alone, and
+  the handshake output says so ("runtime.profile is user-set;
+  cascade-nself left it unchanged"); a user edit to any proposed key is
+  never overwritten.
+
+Provenance for the exact verbs and their real output:
+`plugins/nself/testdata/README.md`.
 
 > **Runtime-tier note.** The plugin was specced as `runtime = "process"`,
 > `trust_tier = "trusted"`. Neither field exists in the real
@@ -33,7 +62,7 @@ rather than pretending.
 | Tool | Behaviour |
 |---|---|
 | `nself_project_info` | answers the detection question; never fails because a directory turned out not to be a project |
-| `nself_add_cascade` | returns ONE typed refusal (`KindUnsupported`) naming both missing prerequisites, and attempts nothing |
+| `nself_add_cascade` | proposes the handshake diff and writes nothing |
 
 ## Detection heuristic
 
@@ -86,20 +115,21 @@ marker scan is the primary signal and is unaffected.
 }
 ```
 
-No byte of the subprocess's own stdout or stderr ever reaches a response:
+Project-info responses omit the subprocess's stdout and stderr:
 `nself status` prints service state that can name a database URL. Two
 independent layers keep it that way — the payload is BUILT from code-chosen
 constants, a boolean, a directory path and this plugin's own error text;
 and every string field is then passed through a credential scrub that
 replaces anything shaped like a URL with userinfo or a secret-named
 key/value pair. The scrub runs whatever the egress firewall would have
-done.
+done. Handshake responses include the selected descriptor values only
+after credential screening, and every response string passes the same scrub.
 
 ## Config fields written
 
-**None.** There is no config write at this floor, because there is no
-handshake to write and no apply seam to write through. When a config
-diff-apply verb lands, the ticket that builds it wires its own caller.
+Descriptors are written under `[plugins.cascade-nself]`, with ownership
+recorded by full dotted path in `managed`. The CLI sets `runtime.profile`
+when the required storage env-refs resolve. User edits are skipped.
 
 ## Windows
 
@@ -120,11 +150,3 @@ Every response transits the `nself-backend` egress class
 refuses any class other than `nself-backend`. With nothing bound — a build
 without that wiring, or an operator who disabled the class — the plugin
 **refuses to emit** rather than passing bytes through unfiltered.
-
-## Undone documentation item
-
-The ticket's second docs item ("Plugin author guide: reference cascade-nself
-as the canonical example of soft-default wiring via the config-write API")
-is **not landed**, and cannot be: there is no soft-default config wiring
-here to be canonical about. It stays open for the ticket that builds the
-config-apply seam.

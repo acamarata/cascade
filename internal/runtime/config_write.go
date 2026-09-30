@@ -154,6 +154,18 @@ func ResolveDottedPath(dotted string) ([]string, error) {
 			return segments, nil
 		}
 	}
+	// A key namespaced under a plugin owner ([plugins.<name>].* per
+	// 08-INIT-CONFIG-SPEC.md §3's opaque per-manifest table) is always
+	// accepted without being individually listed: this registry validates
+	// dotted-path SYNTAX and the shape of the sections this ticket family
+	// owns, never a plugin's own opaque config shape (that is the owning
+	// plugin's job — e.g. internal/runtime/config_diff.go's ApplyDiff for
+	// cascade-nself, P1-E25-W5-S103-T1). "plugins.<name>" alone (two
+	// segments, no key under the owner table) is still unknown: there is
+	// nothing to set at a bare owner table.
+	if len(segments) >= 3 && segments[0] == "plugins" {
+		return segments, nil
+	}
 	return nil, &DottedPathError{Path: dotted, Reason: "unknown config key", Suggestion: nearestKnownKey(dotted)}
 }
 
@@ -238,11 +250,13 @@ func ParseTomlLiteral(raw string) (interface{}, error) {
 	if trimmed == "" {
 		return nil, &LiteralError{Raw: raw, Hint: "empty value; use a TOML literal like true, 42, 1.5, \"text\", or [\"a\",\"b\"]"}
 	}
-	var holder struct {
-		V interface{} `toml:"v"`
-	}
+	holder := map[string]interface{}{}
 	if err := toml.Unmarshal([]byte("v = "+trimmed), &holder); err != nil {
 		return nil, &LiteralError{Raw: raw, Hint: "not a valid TOML literal (bool/int/float/quoted string/array); wrap bare strings in double quotes"}
 	}
-	return holder.V, nil
+	value, ok := holder["v"]
+	if !ok || len(holder) != 1 {
+		return nil, &LiteralError{Raw: raw, Hint: "must be exactly one TOML value; trailing keys or tables are refused"}
+	}
+	return value, nil
 }

@@ -91,3 +91,28 @@ func TestAnUnloadableNamespaceRefusesRatherThanVanishing(t *testing.T) {
 		t.Errorf("err = %v, want KindUnavailable for an unregistered namespace", err)
 	}
 }
+
+// TestNselfNounMountsHandshake proves the noun-map deviation
+// (pluginNamespaceNouns: "nself" -> "cascade-nself") actually reaches the
+// shipping tree, and that its command has cobra flag parsing disabled
+// (--dir/--json are the handshake's own argument tokens, not cobra flags).
+func TestNselfNounMountsHandshake(t *testing.T) {
+	globalFlags = GlobalFlags{}
+	root := newRootCmd()
+
+	cmd, _, err := root.Find([]string{"nself", "handshake"})
+	if err != nil {
+		t.Fatalf("the shipping tree has no \"nself handshake\": %v", err)
+	}
+	if got := cmd.CommandPath(); got != "cascade nself handshake" {
+		t.Fatalf("Find([nself handshake]) resolved to %q; the command is not actually mounted", got)
+	}
+	if !cmd.DisableFlagParsing {
+		t.Error("cascade nself handshake: DisableFlagParsing = false, want true (--dir/--json are parsed by the handler)")
+	}
+
+	nounCmd, _, err := root.Find([]string{"nself"})
+	if err != nil || nounCmd.Use != "nself" {
+		t.Fatalf("root.Find([nself]) = %v (%v), want the nself namespace mounted by its noun, not cascade-nself", nounCmd, err)
+	}
+}

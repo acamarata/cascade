@@ -260,3 +260,69 @@ enable` / `cascade plugin disable`. Two rules apply:
   plugin did not move.
 
 `--check` prints the same plan and performs none of it.
+
+## Diff-apply and managed keys (`ConfigWriter.ApplyDiff`)
+
+`cascade config set`/`unset` write ONE key at a time. A plugin that needs
+to propose several related keys at once (the first example, and as of
+P1-E25-W5-S103-T1 the only one, is `cascade nself handshake` —
+`docs/plugins/nself.md` § From an nSelf project) uses a different, batch seam:
+`internal/runtime`'s `ConfigWriter.ApplyDiff`.
+
+- **Canonical values only.** `set` and ApplyDiff share one literal
+  validator: a value must parse as exactly ONE TOML value, and what is
+  written is a canonical single-line re-encoding of that value, never the
+  text you typed. `'server'  # note` is written as `"server"`; a literal
+  with anything after the value (a second key, a `[table]` header on the
+  next line) is refused with an invalid-literal error and nothing is
+  written.
+- **All-or-nothing.** Every entry in the batch is vetted first. The WHOLE
+  batch is refused, and nothing is written, when any entry:
+  - targets a guarded family (`elevation`, `policy`, `secrets`, `sync`,
+    `nodes`, `conductor`, `agents`);
+  - targets `[plugins]` outside the applying plugin's own
+    `[plugins.<owner>]` table (another plugin's table, or a bare
+    `[plugins]` key such as `enable_remote_runtime`);
+  - targets `[plugins.<owner>].managed` directly (only ApplyDiff writes it);
+  - repeats a path already in the same batch;
+  - carries a secret-shaped value or inline-table key (the same check
+    `set` runs, also run on each whitespace-separated part after invisible
+    characters such as a zero-width space or a variation selector are
+    removed, so a key split by a space, a tab, NBSP or an invisible
+    character is refused) or a URL with userinfo
+    (`postgres://user:password@host/...`). At a key whose name ends in
+    `_dir` or `_path` (such as `project_dir`), a clean absolute path is not
+    treated as an opaque token for its length alone, but a path segment
+    starting with a known token prefix is refused; at any other key the
+    full check applies;
+  - would leave the file looser than it is now (CompareSecurity), or would
+    change any key the batch did not name.
+- **Ownership.** Every key ApplyDiff actually writes is recorded, in the
+  same write, under the applying plugin's table as one inline table keyed
+  by the full dotted path:
+
+  ```toml
+  [plugins.cascade-nself]
+  managed = {"plugins.cascade-nself.postgres_db" = "\"app\"", "runtime.profile" = "\"server\""}
+  ```
+
+  This is how a second handshake tells "a value I wrote last time, safe to
+  update" apart from "a value the operator set by hand, never touch".
+- **`overridable = true`: a user edit is never rewritten.** If the current
+  value differs from the entry AND differs from what `managed` recorded,
+  the key is **skipped** with reason `user-set`. The operator's edit wins
+  every time. It is never an error; that one key just does not change.
+- Per entry, the outcome is exactly one of:
+  - **Applied**: the key was absent, or its current value matches the
+    plugin's own previously recorded value (`managed`).
+  - **Unchanged**: the current value already equals the proposed one.
+  - **Skipped** (`user-set`): the operator's own value is left alone.
+- Authority, loosening, duplicate-path, secret-value and table-size
+  refusals from ApplyDiff return `KindPolicyDenied`.
+- Each `[plugins.<name>]` table is opaque to cascade and is bounded at
+  64 KiB (its TOML encoding). A file with a bigger one fails to load, and
+  `set`/ApplyDiff refuse to produce one.
+
+`cascade nself handshake --json` prints exactly this shape:
+`{status, applied[], unchanged[], skipped[], withheld[], missing_env[],
+dsn_shape, restart_required, note}`.

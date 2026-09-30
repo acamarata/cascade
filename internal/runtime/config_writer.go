@@ -7,7 +7,9 @@ package runtime
 //	(config_write_secrets.go), the structure-preserving line editor
 //	(toml_edit.go/toml_edit_scanner.go), Validate, and the atomic write.
 //	Split out of toml_edit.go per R-14.117/Art.10.3 (300-line file cap):
-//	behaviour-preserving relocation only, no logic change.
+//	behaviour-preserving relocation only, no logic change. P1-E25-W5-S103-T1
+//	then routed Set through canonicalLiteral (config_literal.go) and the
+//	[plugins] table bound: the caller's raw literal text is never written.
 //
 // Inputs: a dotted key and a literal-value string (Set), or a dotted key
 //
@@ -26,7 +28,6 @@ package runtime
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -58,17 +59,16 @@ func (r *WriteSetResult) String() string {
 	return fmt.Sprintf("%s = %v", r.KeyPath, r.Value)
 }
 
-// Set validates literalRaw as a TOML literal, refuses a secret-shaped
-// value, resolves dotted against the known-key registry, applies the
-// structure-preserving edit, decodes and Validates the result, and
-// (only on success) writes it atomically to w.Path. On any failure disk
-// is left exactly as it was.
+// Set validates literalRaw as exactly one TOML value (canonicalLiteral,
+// shared with ApplyDiff), refuses a secret-shaped value, resolves dotted
+// against the known-key registry, writes the value's canonical encoding
+// (never the caller's raw text, which could carry trailing tables),
+// decodes and Validates the result and bounds the opaque plugin tables,
+// and (only on success) writes it atomically to w.Path. On any failure
+// disk is left exactly as it was.
 func (w *ConfigWriter) Set(dotted, literalRaw string) (*WriteSetResult, error) {
-	value, err := ParseTomlLiteral(literalRaw)
+	value, canonical, err := vetLiteral(dotted, literalRaw)
 	if err != nil {
-		return nil, err
-	}
-	if err := checkLiteralForSecrets(dotted, value); err != nil {
 		return nil, err
 	}
 	if _, err := ResolveDottedPath(dotted); err != nil {
@@ -79,7 +79,7 @@ func (w *ConfigWriter) Set(dotted, literalRaw string) (*WriteSetResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	edited, err := SetKeyLine(src, dotted, strings.TrimSpace(literalRaw))
+	edited, err := SetKeyLine(src, dotted, canonical)
 	if err != nil {
 		return nil, err
 	}
@@ -88,6 +88,9 @@ func (w *ConfigWriter) Set(dotted, literalRaw string) (*WriteSetResult, error) {
 		return nil, err
 	}
 	if err := Validate(tree); err != nil {
+		return nil, err
+	}
+	if _, err := parsePluginsSection(tree); err != nil {
 		return nil, err
 	}
 	if err := writeBytesAtomic(w.Path, edited); err != nil {
