@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T04:46:00Z",
+  "generated_at": "2026-09-30T05:01:01Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1200,6 +1200,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "P1-PLG-01 config-diff-apply",
+      "sites": [
+        {
+          "file": "internal/plugins/nself_config_wiring.go",
+          "line": 5,
+          "status": "",
+          "raw": "P1-PLG-01 config-diff-apply."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -20423,6 +20437,13 @@
       "name": "internal/plugins:nself-wiring",
       "sites": [
         {
+          "file": "internal/plugins/nself_config_wiring_test.go",
+          "line": 10,
+          "status": "",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "internal/plugins:nself-wiring (TEST) — P1-E25-W5-S103-T1."
+        },
+        {
           "file": "internal/plugins/nself_wiring.go",
           "line": 31,
           "status": "ADD",
@@ -21880,6 +21901,112 @@
       "statuses": [
         "ADD",
         "CHANGE"
+      ]
+    },
+    {
+      "name": "internal/runtime config_diff.go",
+      "sites": [
+        {
+          "file": "internal/runtime/config_diff.go",
+          "line": 21,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "internal/runtime config_diff.go (ADD) — P1-E25-W5-S103-T1."
+        },
+        {
+          "file": "internal/runtime/config_diff_guard_test.go",
+          "line": 11,
+          "status": "",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "internal/runtime config_diff.go (TEST) — P1-E25-W5-S103-T1."
+        },
+        {
+          "file": "internal/runtime/config_diff_keytype_test.go",
+          "line": 16,
+          "status": "",
+          "raw": "internal/runtime config_diff.go (TEST) — P1-PLG-01."
+        },
+        {
+          "file": "internal/runtime/config_diff_loosening_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "internal/runtime config_diff.go (ADD) — P1-E25-W5-S103-T1."
+        },
+        {
+          "file": "internal/runtime/config_diff_screen_test.go",
+          "line": 14,
+          "status": "",
+          "raw": "internal/runtime config_diff.go (TEST) — P1-PLG-01."
+        },
+        {
+          "file": "internal/runtime/config_diff_split_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "internal/runtime config_diff.go (TEST) — P1-PLG-01."
+        },
+        {
+          "file": "internal/runtime/config_diff_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "internal/runtime config_diff.go (ADD) — P1-E25-W5-S103-T1."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/runtime config_diff.go family",
+      "sites": [
+        {
+          "file": "internal/runtime/config_diff_compose.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "internal/runtime config_diff.go family (ADD) — P1-E25-W5-S103-T1."
+        },
+        {
+          "file": "internal/runtime/config_diff_screen.go",
+          "line": 22,
+          "status": "ADD",
+          "raw": "internal/runtime config_diff.go family (ADD) — P1-PLG-01."
+        },
+        {
+          "file": "internal/runtime/config_diff_vet.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "internal/runtime config_diff.go family (ADD) — P1-E25-W5-S103-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/runtime config_literal.go",
+      "sites": [
+        {
+          "file": "internal/runtime/config_literal.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "internal/runtime config_literal.go (ADD) — P1-E25-W5-S103-T1."
+        },
+        {
+          "file": "internal/runtime/config_literal_test.go",
+          "line": 9,
+          "status": "",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "internal/runtime config_literal.go (TEST) — P1-E25-W5-S103-T1."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
       ]
     },
     {
@@ -27086,6 +27213,28 @@
       ]
     },
     {
+      "name": "plugins/nself config",
+      "sites": [
+        {
+          "file": "plugins/nself/config.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "plugins/nself config (ADD) — P1-E25-W5-S103-T1."
+        },
+        {
+          "file": "plugins/nself/config_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "plugins/nself config (ADD) — P1-E25-W5-S103-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/nself detect",
       "sites": [
         {
@@ -27192,10 +27341,10 @@
         },
         {
           "file": "plugins/nself/plugin.go",
-          "line": 51,
-          "status": "ADD",
-          "ticket": "P1-E25-W5-S52-T2",
-          "raw": "plugins/nself entity (ADD) — P1-E25-W5-S52-T2."
+          "line": 40,
+          "status": "CHANGE",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "plugins/nself entity (CHANGE) — P1-E25-W5-S103-T1."
         },
         {
           "file": "plugins/nself/plugin_test.go",
@@ -27203,6 +27352,82 @@
           "status": "",
           "ticket": "P1-E25-W5-S52-T2",
           "raw": "plugins/nself entity (TEST) — P1-E25-W5-S52-T2."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD",
+        "CHANGE"
+      ]
+    },
+    {
+      "name": "plugins/nself handshake",
+      "sites": [
+        {
+          "file": "plugins/nself/handshake.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "plugins/nself handshake (ADD) — P1-E25-W5-S103-T1."
+        },
+        {
+          "file": "plugins/nself/handshake_apply_test.go",
+          "line": 13,
+          "status": "",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "plugins/nself handshake (TEST) — P1-E25-W5-S103-T1."
+        },
+        {
+          "file": "plugins/nself/handshake_entries.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "plugins/nself handshake (ADD) — P1-E25-W5-S103-T1."
+        },
+        {
+          "file": "plugins/nself/handshake_keytype_test.go",
+          "line": 15,
+          "status": "",
+          "raw": "plugins/nself handshake (TEST) — P1-PLG-01."
+        },
+        {
+          "file": "plugins/nself/handshake_screen_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "plugins/nself handshake (TEST) — P1-PLG-01."
+        },
+        {
+          "file": "plugins/nself/handshake_security_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "plugins/nself handshake (TEST) — P1-E25-W5-S103-T1."
+        },
+        {
+          "file": "plugins/nself/handshake_split_test.go",
+          "line": 13,
+          "status": "",
+          "raw": "plugins/nself handshake (TEST) — P1-PLG-01."
+        },
+        {
+          "file": "plugins/nself/handshake_test.go",
+          "line": 13,
+          "status": "",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "plugins/nself handshake (TEST) — P1-E25-W5-S103-T1."
+        },
+        {
+          "file": "plugins/nself/handshake_transcript_test.go",
+          "line": 9,
+          "status": "",
+          "ticket": "P1-E25-W5-S103-T1",
+          "raw": "plugins/nself handshake (TEST) — P1-E25-W5-S103-T1."
+        },
+        {
+          "file": "plugins/nself/handshake_unicode_test.go",
+          "line": 14,
+          "status": "",
+          "raw": "plugins/nself handshake (TEST) — P1-PLG-01."
         }
       ],
       "statuses": [
@@ -29695,7 +29920,7 @@
       "sites": [
         {
           "file": "internal/runtime/config_plugins.go",
-          "line": 37,
+          "line": 38,
           "status": "ADD",
           "ticket": "P1-E15-W4-S33-T4",
           "raw": "runtime/config-plugins (ADD, P1-E15-W4-S33-T4)."
@@ -30181,7 +30406,7 @@
       "sites": [
         {
           "file": "internal/runtime/config_writer.go",
-          "line": 25,
+          "line": 27,
           "status": "ADD",
           "ticket": "T-8",
           "raw": "runtime/toml-edit-engine (ADD, placeholder per T-8 sport_updates)."
@@ -30416,7 +30641,7 @@
       ]
     }
   ],
-  "total_sites": 2853,
-  "unspecified_count": 151,
-  "multi_status_count": 80
+  "total_sites": 2879,
+  "unspecified_count": 152,
+  "multi_status_count": 83
 }
