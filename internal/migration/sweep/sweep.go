@@ -70,14 +70,20 @@ var validClasses = map[string]bool{"command": true, "config_key": true, "marker"
 // validStates is the closed set of Term.State values.
 var validStates = map[string]bool{"": true, "done": true, "planned": true}
 
-// validReplacementPath refuses an absolute path, a ".." component, or any
-// path routed through .claude or testdata — a replacement is always a
-// real, tracked, non-fixture v2 source file.
+// validReplacementPath refuses an absolute or rooted path, a volume-qualified
+// path, a ".." component, or any path routed through .claude or testdata — a
+// replacement is always a real, tracked, non-fixture v2 source file.
+//
+// filepath.IsAbs alone is not enough: on windows "/etc/passwd", `\x` and
+// "C:x" are all non-absolute, so rooted and volume forms are refused
+// explicitly, and components are split on both separators on every OS.
 func validReplacementPath(p string) bool {
-	if p == "" || filepath.IsAbs(p) {
+	if p == "" || filepath.IsAbs(p) || filepath.VolumeName(p) != "" ||
+		strings.HasPrefix(p, "/") || strings.HasPrefix(p, `\`) ||
+		(len(p) >= 2 && p[1] == ':') {
 		return false
 	}
-	for _, part := range strings.Split(filepath.ToSlash(p), "/") {
+	for _, part := range strings.FieldsFunc(p, func(r rune) bool { return r == '/' || r == '\\' }) {
 		if part == ".." || part == ".claude" || part == "testdata" {
 			return false
 		}
