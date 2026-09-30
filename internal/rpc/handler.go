@@ -49,10 +49,13 @@ var ownerUID = osGetuid
 // Handler is the JSON-RPC 2.0 http.Handler: UID gate, then Parse, then
 // SkewCheck, then Registry.Dispatch, wrapped in ResponseEnvelope. It also
 // mounts GET EventsPath -> sse (D/S-06.T4) alongside POST RPCPath, when an
-// SSEHandler is supplied — see NewHandlerWithSSE.
+// sse handler is supplied — see NewHandlerWithSSE. sse is any
+// http.Handler (P1-E12-W6-S121-T1), so the daemon can mount the
+// topic-dispatching SSEMux (sse_mux.go) as well as a plain *SSEHandler;
+// both a nil and a *SSEHandler value still satisfy it unchanged.
 type Handler struct {
 	registry *Registry
-	sse      *SSEHandler
+	sse      http.Handler
 }
 
 // NewHandler builds a Handler dispatching through registry, with no SSE
@@ -65,12 +68,10 @@ func NewHandler(registry *Registry) *Handler {
 // NewHandlerWithSSE builds a Handler that also serves GET EventsPath
 // through sse, alongside POST RPCPath — this ticket's "mount GET /events
 // -> SSEHandler alongside POST /rpc on the existing HTTP mux" contract.
-// The daemon composition root (internal/daemon/daemon.go, out of this
-// ticket's files_scope) still constructs the *events.Bus and *SSEHandler
-// and switches NewRPCServer from NewHandler to this constructor; see this
-// ticket's completion report for why that wiring step could not land
-// here.
-func NewHandlerWithSSE(registry *Registry, sse *SSEHandler) *Handler {
+// sse is any http.Handler (see the Handler type comment above),
+// so the daemon composition root can mount either a plain *SSEHandler or
+// a topic-dispatching *SSEMux without a second constructor.
+func NewHandlerWithSSE(registry *Registry, sse http.Handler) *Handler {
 	return &Handler{registry: registry, sse: sse}
 }
 

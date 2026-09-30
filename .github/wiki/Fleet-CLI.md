@@ -1,13 +1,33 @@
 # Fleet CLI
 
 The `cascade fleet` command group inspects the local fleet: harness
-sessions (`fleet sessions`) and an entity's durable journal (`fleet
-journal show|replay`).
+sessions (`fleet sessions`), a live dashboard (`fleet top`), and an
+entity's durable journal (`fleet journal show|replay`).
 
 > This page currently documents `fleet journal show|replay` (P1-E13-W3-
-> S27-T4). `fleet sessions` ships in the same command group; see its own
-> `--help` output and `cmd/cascade/fleet.go`/`fleet_watch.go` for its
-> flags until this page is extended to cover it.
+> S27-T4) and daemon mode below (P1-E12-W6-S121-T1). `fleet sessions`'s
+> and `fleet top`'s remaining flags ship in the same command group; see
+> their own `--help` output and `cmd/cascade/fleet.go`/`fleet_watch.go`/
+> `fleet_top.go` until this page is extended to cover every flag.
+
+## Daemon mode: `fleet sessions [--watch]` and `fleet top`
+
+Against a running daemon (`cascade daemon run`), `cascade fleet sessions`
+(one-shot) and `cascade fleet top` both read `fleet.sessions.list` — the
+daemon's real fleet-sessions RPC method, registered on the daemon's own
+`*rpc.Registry` at startup. `cascade fleet sessions --watch` and the
+harness watch both subscribe to `GET /events?topic=fleet.sessions`, the
+daemon's SSE endpoint's `fleet.sessions` topic: a topic-dispatching mux
+(`internal/rpc.SSEMux`) in front of that endpoint first refuses (HTTP
+403) a peer that is not the daemon owner or a browser-shaped request,
+then routes a request with no topic to the daemon-wide event stream and
+a request with exactly one `topic=fleet.sessions` to the sessions SSE
+stream. Any other topic, an empty or repeated `topic`, or a malformed
+query is refused (HTTP 400) before either stream's own subscribe logic
+runs; an unrecognized topic is never served the wrong stream. Windows tier-2 (no daemon at all)
+and a socket that is not reachable both produce a typed refusal, never a
+panic; `fleet sessions` (one-shot only, not `--watch`) additionally falls
+back to a live embedded read with no daemon at all.
 
 ## `cascade fleet journal show <entity>`
 

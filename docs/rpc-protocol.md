@@ -58,6 +58,47 @@ version-skew check before dispatch.
 Bridges an internal event bus to a subscribed client over Server-Sent
 Events, per the W3C Server-Sent Events Living Standard.
 
+### Topic dispatch
+
+`GET /events` is a topic-dispatching mux (`internal/rpc.SSEMux`), keyed by
+the `topic` query parameter:
+
+```
+GET /events                       # no topic -> the daemon-wide stream below
+GET /events?topic=fleet.sessions  # -> the fleet.sessions SSE stream
+```
+
+Before any of this, the request passes the same local-request guard as
+`POST /rpc`: a peer that is not the daemon owner, or a browser-shaped
+request (an `Origin`, `Sec-Fetch-Site` or `Sec-Fetch-Mode` header, a non-socket `Host`), gets
+HTTP 403 and no topic is ever looked at.
+
+A request whose query string carries no key naming a topic parameter, by
+any casing or padding, serves the daemon-wide stream this section
+documents; an unrelated query key belonging to that stream (`filter`,
+below) or to a caller's own convention is none of this mux's business
+and does not change that. A request with exactly one `topic` value,
+under the byte-exact key `topic`, that names a registered stream, byte
+for byte after percent-decoding (today: `fleet.sessions`, the fleet
+sessions domain's own `event`/`data`/`id`/`retry` SSE format; see the
+Fleet CLI wiki page), serves that stream instead, with its own filter
+and format rules. **Everything else is refused with HTTP 400 before
+either stream's subscribe logic runs**: an unknown topic, a repeated
+`topic` parameter (`?topic=fleet.sessions&topic=x`, in either order), an
+empty value (`?topic=`), a query string that does not parse strictly (a
+bad `%` escape or a `;` separator), and any key that only *looks* like
+`topic` rather than being it — a case variant (`Topic`, `TOPIC`), a
+padded one (`+topic` or `%20topic`, which decode to a leading space), or
+a second such key alongside the real one (`?topic=fleet.sessions&Topic=x`).
+A topic the mux does not recognize, or a topic key it cannot resolve to
+exactly one value, is never served the daemon-wide stream. The 400 body
+is a JSON-RPC-shaped envelope (`{"jsonrpc", "error": {"code", "message",
+"data": {"kind": "invalid-input"}}, ...}`), the same shape `POST /rpc`
+errors use, with a `message` drawn from a small fixed set of strings —
+it never echoes the query string or any topic value back to the caller,
+so a hostile or oversized topic never reaches whatever reads the
+refusal.
+
 ### Request
 
 ```
@@ -65,7 +106,10 @@ GET /events?filter=<comma-separated-event-types>
 Last-Event-ID: <opaque-resume-token>
 ```
 
-Both the query parameter and the header are optional.
+Both the query parameter and the header are optional (and apply to the
+daemon-wide stream above; a topic-routed stream may define its own query
+parameters — `fleet.sessions` currently defines none beyond `topic`
+itself).
 
 **filter**: a comma-separated list of event type names. Whitespace around
 each name is trimmed. An empty or absent filter subscribes to every event

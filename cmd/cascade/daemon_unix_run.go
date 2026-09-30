@@ -33,6 +33,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/fleet/sessions"
 	"github.com/acamarata/cascade/internal/mcp"
 	"github.com/acamarata/cascade/internal/mcp/coretools"
 	"github.com/acamarata/cascade/internal/mcp/transport"
@@ -70,125 +71,116 @@ func (a *runtimeEventBusAdapter) Publish(ctx context.Context, namespace, kind, s
 // runtime.StoreDomainRegistry's doc comment for why no such registry
 // existed anywhere in the tree before now.
 
-// buildRPCServer constructs the daemon's real IPC server: POST /rpc
-// through an rpc.Registry carrying the MCP dispatcher and the status.get
-// handler (D/S-07.T1), and GET /events through an SSEHandler bound to bus.
-//
-// The SSE handler binds to exactly ONE bus namespace, "daemon". This is
-// the disclosed limitation internal/rpc/sse.go's package doc names
-// (Bus.Subscribe fans in one namespace, never across namespaces). "daemon"
-// is the only namespace anything publishes to at this composition root
-// today: internal/daemon/upgrade.go's UpgradeManager publishes
-// EventKindShutdownRequested there (its own eventNamespace constant,
-// unexported and equal to "daemon"; repeated as a literal here rather
-// than imported, since that file is out of scope for this change). A
-// future addition of another namespace's producer decides its own SSE
-// binding or a real cross-namespace fan-in; that is not invented here.
-//
-// buildRPCServer also returns the *daemon.Manifest and the active-
-// connection *int64 it built the status.get handler against. The caller
-// (platformDaemonRun) MUST pass both of these same values on as
-// RunOptions.Manifest and RunOptions.Connections, so status.get reads
-// Run's real, live subsystem states and connection count rather than a
-// second, disconnected copy: this ticket's contract calls this out by
-// name ("assemble every field from live daemon state... no mock or
-// placeholder return", D/S-07.T1). registerStatusHandler below is the
-// composition-root wiring this closes: without it, status.get would exist,
-// be tested, and be unreachable from a live daemon, exactly the pattern
-// R-14.166 named and forbade going forward.
+// buildRPCServer constructs the daemon's real IPC server: POST /rpc and
+// GET /events, both assembled by buildDaemonRegistry.
 func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, settings daemon.Settings, paths runtime.PathProvider, memoryAdmin *memory.AdminHandler, store provider.Store, opts ...rpcServerOption) (*http.Server, *daemon.Manifest, *int64, error) {
-	knownEventKind := rpc.CombineKnownEventKind(func(kind events.EventKind) bool {
-		return kind == daemon.EventKindShutdownRequested
-	}, rpc.KnownJobLeaseEventKind, rpc.KnownSupervisorEventKind, daemon.KnownStatusWidgetEventKind)
-	sse := rpc.NewSSEHandler(bus, "daemon", knownEventKind, clock)
+	registry, manifest, connections, eventsHandler, err := buildDaemonRegistry(bus, clock, logger, settings, paths, memoryAdmin, store, opts...)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return daemon.NewRPCServer(registry, eventsHandler), manifest, connections, nil
+}
 
+// buildDaemonRegistry does buildRPCServer's composition-root work: the
+// POST /rpc *rpc.Registry (status.get, every domain namespace, then the
+// MCP dispatcher) and the GET /events handler (buildFleetSessionsEventsMux).
+// It returns the registry itself, not only an *http.Server, so the
+// composition-root tests dispatch in-process without a socket (see
+// daemon_unix_run_fleet_test.go). The *daemon.Manifest and connection
+// counter MUST be passed on by platformDaemonRun as RunOptions.Manifest/
+// Connections, so status.get reads Run's real live state (D/S-07.T1,
+// R-14.166).
+func buildDaemonRegistry(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, settings daemon.Settings, paths runtime.PathProvider, memoryAdmin *memory.AdminHandler, store provider.Store, opts ...rpcServerOption) (*rpc.Registry, *daemon.Manifest, *int64, http.Handler, error) {
 	registry := rpc.NewRegistry()
 	manifest, connections := registerStatusHandler(registry, clock, logger, settings)
-	// Register the MCP dispatcher on the daemon's own socket. Without this
-	// the transport exists, is tested, and is reachable only through the
-	// separate socket the mcp command binds for itself, which is not the
-	// socket a client connecting to the daemon uses. The tool registry
-	// applies its own exposure filter, so registering the method here does
-	// not widen what a caller can reach.
-	// The MCP dispatcher is registered LAST, after every namespace it
-	// exposes, so coretools.Registrations sees the finished method table:
-	// a tool whose method is not yet bound registers nothing at all, and
-	// registering the dispatcher here would have exposed exactly zero
-	// first-party tools (P1-E16-W4-S34-T2).
+	// The MCP dispatcher is registered on the daemon's own socket (the one
+	// clients dial, not the mcp command's separate one), and LAST, so
+	// coretools.Registrations sees the finished method table: registered
+	// earlier it would expose zero first-party tools (P1-E16-W4-S34-T2).
+	// The tool registry applies its own exposure filter.
 	registerSocketMCP := func() error {
 		return transport.RegisterSocketMCP(registry,
 			mcp.NewServer(daemonMCPToolRegistry(registry, mcpFilterFromOptions(opts))))
 	}
+	if err := registerDaemonNamespaces(registry, manifest, bus, clock, paths, memoryAdmin, store, settings, opts); err != nil {
+		return nil, nil, nil, nil, err
+	}
+	if err := wireFleetSessionsAndCompletion(registry, store, clock, bus, paths, registerSocketMCP); err != nil {
+		return nil, nil, nil, nil, err
+	}
+	return registry, manifest, connections, buildFleetSessionsEventsMux(bus, clock), nil
+}
 
-	// The memory.* namespace (G/S-13.T3) and the recall.* namespace
-	// (F/S-11.T3). Registered here for the same reason status.get is: a
-	// handler the composition root never mounts is a subsystem that ships
-	// built, tested and unreachable. Grouped into one call to keep
-	// buildRPCServer under Art.10.3's 50-line cap, the same reason
-	// registerDBPathHandlers below is factored out.
+// registerDaemonNamespaces mounts every domain namespace between status.get
+// and the fleet/MCP tail, in dependency order. A handler the composition
+// root never mounts ships built, tested and unreachable, so each lives
+// here; each group is its own helper to keep functions under Art.10.3's
+// 50-line cap.
+func registerDaemonNamespaces(registry *rpc.Registry, manifest *daemon.Manifest, bus *events.Bus, clock runtime.Clock, paths runtime.PathProvider, memoryAdmin *memory.AdminHandler, store provider.Store, settings daemon.Settings, opts []rpcServerOption) error {
+	// memory.* (G/S-13.T3) and recall.* (F/S-11.T3).
 	if err := registerMemoryAndRecall(registry, paths, clock, bus, store, memoryAdmin); err != nil {
-		return nil, nil, nil, err
+		return err
 	}
-
-	// context.scope.show (E/S-08.T4) and context.slice/context.show
-	// (E/S-09.T2) — see registerContextEngineHandlers below for why each
-	// owns a second sqlite connection instead of threading rawDB in.
+	// context.* (E/S-08.T4, E/S-09.T2): see registerContextEngineHandlers.
 	if err := registerContextEngineHandlers(registry, paths, clock, bus); err != nil {
-		return nil, nil, nil, err
+		return err
 	}
-
-	// conductor.execute (R-16.80) and jobs.reachability (R-16.80), the
-	// same treatment: see daemon_unix_conductor.go's header comment.
-	// Placed after registerContextEngineHandlers because WireReachability's
-	// ApplyGraphSchema requires context.scope's ApplyScopeSchema to have
-	// already created its foreign-key target in this same cascade.db.
+	// conductor.execute and jobs.reachability (R-16.80); after the context
+	// handlers because ApplyGraphSchema needs ApplyScopeSchema's foreign-key
+	// target in the same cascade.db (daemon_unix_conductor.go).
 	if err := wireConductorAndReachability(context.Background(), registry, manifest, paths, clock, store, nodeTunnelLookup(opts)); err != nil {
-		return nil, nil, nil, err
+		return err
 	}
-
-	// The background subsystems this daemon supervises: the DAG scheduler
-	// and cascade-claude's session watch. Grouped into one call to keep
-	// buildRPCServer under Art.10.3's 50-line cap, the same reason
-	// registerDBPathHandlers below is factored out.
+	// Supervised background subsystems: the DAG scheduler and
+	// cascade-claude's session watch.
 	if err := wireSupervisedSubsystems(context.Background(), manifest, bus, clock, paths, store, settings); err != nil {
-		return nil, nil, nil, err
+		return err
 	}
-
-	// conductor.expand (R-21.68), the AQ-owned row of the same conductor.*
-	// manifest: see daemon_unix_evidence.go's header comment.
+	// conductor.expand (R-21.68): see daemon_unix_evidence.go.
 	if err := wireConductorExpand(context.Background(), registry, paths, clock); err != nil {
-		return nil, nil, nil, err
+		return err
 	}
-
-	// recall.index.* (F/S-11.T4) and plugin.add (D/S-07.T4, R-16.80 gate
-	// closure), both registered over their own second sqlite connection
-	// to the same dbPath — factored into registerDBPathHandlers purely to
-	// keep this function under Art.10.3's 50-line cap. A nil store (some
-	// existing test harnesses' minimal buildRPCServer calls) leaves both
-	// namespaces unregistered rather than reaching into a store that does
-	// not exist.
+	// recall.index.* (F/S-11.T4) and plugin.add (D/S-07.T4), each over its
+	// own second sqlite connection to dbPath; a nil store leaves both
+	// unregistered.
 	dbPath := filepath.Join(paths.DataDir(), "cascade.db")
 	if err := registerDBPathHandlers(context.Background(), registry, manifest, paths, clock, bus, store, dbPath); err != nil {
-		return nil, nil, nil, err
+		return err
 	}
 	registry.Register(reviewRPCMethod, reviewRPCHandler) // plugin.review.review, D3; handler in review_mount.go
-
 	if err := applyServerOptions(registry, opts); err != nil {
-		return nil, nil, nil, err
+		return err
 	}
-	if err := wireFleetNodeAndJobHandlers(registry, store, clock, bus, paths, settings); err != nil {
-		return nil, nil, nil, err
-	}
-	// fleet.sessions.completion_check (AF/S-66.T1, R-16.16/R-21.176): see
-	// cmd/cascade/hooks.go's header comment for why this call site lives
-	// here rather than in this ticket's own files_scope.
+	return wireFleetNodeAndJobHandlers(registry, store, clock, bus, paths, settings)
+}
+
+// wireFleetSessionsAndCompletion registers fleet.sessions.list (see
+// internal/daemon/fleet_sessions_rpc.go), the completion-gate hook pack
+// (its call site lives here: see cmd/cascade/hooks.go's header), and last
+// the socket MCP dispatcher.
+func wireFleetSessionsAndCompletion(registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider, registerSocketMCP func() error) error {
+	daemon.RegisterFleetSessionsHandler(registry, store, clock, bus)
 	if err := wireCompletionHookPack(context.Background(), registry, store, clock, bus, paths); err != nil {
-		return nil, nil, nil, err
+		return err
 	}
-	if err := registerSocketMCP(); err != nil {
-		return nil, nil, nil, err
-	}
-	return daemon.NewRPCServer(registry, sse), manifest, connections, nil
+	return registerSocketMCP()
+}
+
+// buildFleetSessionsEventsMux builds the GET rpc.EventsPath handler: a
+// topic-dispatching *rpc.SSEMux whose default (no-topic) leg is the
+// daemon-wide SSEHandler and whose one topic is fleet.sessions. The
+// default leg binds exactly ONE bus namespace, "daemon" (the limitation
+// internal/rpc/sse.go's package doc names): the only namespace this
+// composition root publishes daemon-wide events to (upgrade.go's
+// EventKindShutdownRequested, plus the job-lease, supervisor and
+// status-widget kinds). FAIL-CLOSED: any other topic shape is refused by
+// the mux, never served the default stream (internal/rpc/sse_mux.go).
+func buildFleetSessionsEventsMux(bus *events.Bus, clock runtime.Clock) *rpc.SSEMux {
+	knownEventKind := rpc.CombineKnownEventKind(func(kind events.EventKind) bool {
+		return kind == daemon.EventKindShutdownRequested
+	}, rpc.KnownJobLeaseEventKind, rpc.KnownSupervisorEventKind, daemon.KnownStatusWidgetEventKind)
+	sse := rpc.NewSSEHandler(bus, "daemon", knownEventKind, clock)
+	return rpc.NewSSEMux(sse).WithTopic(sessions.Topic, sessions.NewSSEHandler(bus, clock))
 }
 
 // mcpFilterFromOptions builds the capability filter the daemon's MCP tool

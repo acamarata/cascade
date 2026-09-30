@@ -513,20 +513,6 @@
     "symbol": "internal/fleet/journal.AllKinds"
   },
   {
-    "caller_site": "cmd/cascade/daemon_unix_run.go",
-    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, once it is restructured to mount fleet.sessions's SSE stream (e.g. topic-dispatching wrapper or a second route); retire this entry then",
-    "reason": "Builds the GET /events?topic=fleet.sessions handler. The daemon's mux (cmd/cascade/daemon_unix_run.go's buildRPCServer, out of this ticket's files_scope) currently mounts exactly one SSEHandler at the fixed rpc.EventsPath bound to the \"daemon\" namespace (internal/rpc.NewSSEHandler); mounting a second handler at the same literal path would panic on ServeMux's duplicate-pattern check. This ticket's SSEHandler is a complete, independently tested http.Handler (event/data/id/retry wire format, topic validation, heartbeat, clean disconnect, Windows tier-2 refusal, plus a real-socket curl-based integration test) ready for whichever ticket restructures the mux to dispatch by topic or mounts a second route. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/fleet/sessions.NewSSEHandler"
-  },
-  {
-    "caller_site": "cmd/cascade/daemon_unix_run.go",
-    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, alongside the other registerXxxHandler calls; retire this entry once it is called there",
-    "reason": "Binds fleet.sessions.list to an *rpc.Registry. Every landed precedent for registering a daemon RPC method (context.scope.show, memory.*, recall.*) is called from cmd/cascade/daemon_unix_run.go's buildRPCServer, which this ticket's files_scope does not include. RegisterHandlers itself is exercised end-to-end against a real rpc.Registry (rpc_test.go: happy path, empty params, and the unknown-filter-field refusal). No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/fleet/sessions.RegisterHandlers"
-  },
-  {
     "caller_site": "internal/fleet/sessions/confidence.go",
     "expected_caller": "no production caller is expected to name SignalUnknown explicitly, by design (see reason); confidence_test.go exercises it directly to prove an explicit zero-value Signal contributes zero weight. Retire this entry only if a future caller needs to construct one explicitly.",
     "reason": "P1-E12-W3-S25-T1's SignalKind zero value: production code (confidence.go's Weigh, statemachine.go's buildSignals) relies on SignalUnknown being the zero value and the fail-closed default for any unrecognized kind, but never spells the identifier out by name - buildSignals only ever constructs the six named, non-zero SignalKinds. The identifier exists so callers (and this ticket's own tests) have a documented name for the sentinel rather than a bare 0, per this file's godoc requirement (every exported symbol needs a comment) on a type whose zero value is meaningful.",

@@ -249,7 +249,11 @@ func classifyPID(rec pidRecord, ok bool, prober ProcessProber) livenessState {
 // lifecycle_unix.go's accept loop used to close every connection
 // immediately instead of ever reaching this server; that gap is closed
 // now.
-func NewRPCServer(registry *rpc.Registry, sse *rpc.SSEHandler) *http.Server {
+//
+// sse is an http.Handler (P1-E12-W6-S121-T1): the daemon composition root
+// mounts a topic-dispatching *rpc.SSEMux at rpc.EventsPath; existing
+// callers passing nil or a *rpc.SSEHandler satisfy it unchanged.
+func NewRPCServer(registry *rpc.Registry, sse http.Handler) *http.Server {
 	var handler http.Handler
 	if sse != nil {
 		handler = rpc.NewHandlerWithSSE(registry, sse)
