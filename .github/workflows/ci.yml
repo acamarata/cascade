@@ -571,14 +571,21 @@ jobs:
     # this job's live-server cases.
     #
     # MinIO runs as a plain `docker run` step, NOT a GitHub Actions
-    # `services:` container: services literally cannot pass a custom
-    # command to the container (verified by probe, not assumed — a bare
-    # `minio/minio` with no command prints usage and exits immediately,
-    # so it needs `server /data` as its command, which `services:` has
-    # no field for). A `docker run` step gives that command directly.
-    # MinIO also does not pre-create a bucket on boot (unlike the
-    # Postgres/Redis images above), so a bucket-creation step runs next,
-    # using the minio/mc image against the server's published port.
+    # `services:` container: services cannot pass a custom command to the
+    # container, and the server needs `server <dir>` as its command. A
+    # `docker run` step gives that command directly.
+    #
+    # MinIO does not pre-create a bucket on boot. The Go tests create it
+    # themselves (providers/s3/bucket_setup_test.go) with the same S3
+    # client the driver uses, and any setup error fails the tests; it
+    # never skips them. There is no client container and no shell inside
+    # any container: the old shell-based setup step once exited 0 while
+    # creating nothing.
+    #
+    # FAIL-CLOSED end to end: the pull, the readiness check and the
+    # bucket setup each fail the job with a message, and the counted gate
+    # below fails it unless all five named live tests printed PASS and
+    # nothing printed SKIP.
     name: s3-storetest-under-docker (required)
     runs-on: ubuntu-latest
     steps:
@@ -588,48 +595,32 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # IMAGES COME FROM quay.io, NOT Docker Hub. An anonymous Docker Hub
-      # pull from a GitHub-hosted runner is rate-limited and was refused
-      # outright ("pull access denied for minio/minio ... may require
-      # docker login"), which failed this lane on its first real CI run
-      # while passing locally, where the image was already cached. MinIO
-      # publishes the same images to quay.io, which needs no login.
+      # THE SERVER IMAGE COMES FROM cgr.dev, PINNED BY DIGEST. The upstream
+      # registry now refuses anonymous pulls on both of its hosts, which
+      # turned this lane red; cgr.dev serves this image anonymously.
       #
-      # Tags are PINNED, not :latest: a lane that proves a driver against
-      # a real server is worthless if the server silently changes
-      # underneath it, and a floating tag also makes a green run
-      # unreproducible later.
+      # Pinned by digest only, never by tag and never :latest: a lane that
+      # proves a driver against a real server is worthless if the server
+      # silently changes underneath it, and a floating reference also makes
+      # a green run unreproducible later. The digest is the multi-arch
+      # index digest. The image runs as a non-root user with no /data, so
+      # the data dir is /tmp/data.
+      - name: pull minio server image
+        run: |
+          set -euo pipefail
+          docker pull cgr.dev/chainguard/minio@sha256:71674988a1c7ddd5724928633199152b11e4ddefd6c6ce2d60772ff4a8f22ca9
+
       - name: start minio server
         run: |
+          set -euo pipefail
           docker run -d --name cascade-ci-minio -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-            quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
-          for i in $(seq 1 30); do
+            cgr.dev/chainguard/minio@sha256:71674988a1c7ddd5724928633199152b11e4ddefd6c6ce2d60772ff4a8f22ca9 server /tmp/data
+          for _ in $(seq 1 30); do
             curl -sf http://localhost:9000/minio/health/live && break
             sleep 1
           done
-
-      # ONE container, and it VERIFIES rather than assumes. Two separate
-      # `docker run --rm` invocations cannot work here for a reason that is
-      # easy to miss: `mc alias set` writes the alias into the CONTAINER's
-      # own config, which --rm then throws away, so the second container
-      # had no alias to resolve. The image's ENTRYPOINT is already `mc`, so
-      # passing `mc ...` as the command made it `mc mc ...` as well.
-      #
-      # Both bugs were invisible until now: the Docker Hub pull was being
-      # denied before this step could run at all. Once it ran, it produced
-      # NO output and exited 0 while creating nothing, and the failure
-      # surfaced far away as "bucket does not exist" inside the tests. The
-      # closing `mc ls` is there so a setup step that silently does nothing
-      # can never again report success.
-      - name: create minio test bucket
-        run: |
-          docker run --rm --network host --entrypoint sh \
-            quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z -ec '
-              mc alias set localminio http://localhost:9000 minioadmin minioadmin
-              mc mb --ignore-existing localminio/cascade-test-bucket
-              mc ls localminio/cascade-test-bucket
-            '
+          curl -sf http://localhost:9000/minio/health/live || { echo "::error::minio server never reported ready"; docker logs cascade-ci-minio; exit 1; }
 
       - name: go test -tags=integration ./providers/s3/...
         env:
@@ -637,7 +628,23 @@ jobs:
           CASCADE_TEST_S3_BUCKET: cascade-test-bucket
           CASCADE_TEST_S3_ACCESS_KEY: minioadmin
           CASCADE_TEST_S3_SECRET_KEY: minioadmin
-        run: go test -tags=integration -count=1 -race ./providers/s3/... -v
+        run: |
+          set -o pipefail; go test -tags=integration -count=1 -race ./providers/s3/... -v 2>&1 | tee s3-test.log
+
+      # A green `go test` is not enough on its own: a test that skipped
+      # also exits 0. This gate counts the five named live tests' top-level
+      # PASS lines and any top-level SKIP line in the log above.
+      - name: counted gate (5 named live tests PASS, 0 SKIP)
+        run: |
+          set +e
+          pass=$(grep -cE '^--- PASS: (TestS3BlobStoretestUnderDocker|TestOpen_UnreachableServer_Real|TestOpen_MissingBucket_Real|TestEnsureTestBucket|TestEnsureTestBucket_FailurePath)( \([0-9.]+s\))$' s3-test.log)
+          skip=$(grep -c "^--- SKIP" s3-test.log)
+          set -e
+          echo "counted gate: pass=${pass:-missing} (want 5) skip=${skip:-missing} (want 0)"
+          if [ "${pass:-}" != "5" ] || [ "${skip:-}" != "0" ]; then
+            echo "::error::s3 counted gate failed: pass=${pass:-missing} skip=${skip:-missing}"
+            exit 1
+          fi
 
       - name: stop minio server
         if: always()

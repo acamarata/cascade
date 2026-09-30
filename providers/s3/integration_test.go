@@ -10,9 +10,10 @@
 // Inputs: CASCADE_TEST_S3_ENDPOINT, CASCADE_TEST_S3_BUCKET,
 //
 //	CASCADE_TEST_S3_ACCESS_KEY, CASCADE_TEST_S3_SECRET_KEY — a real
-//	reachable S3-compatible server and a bucket that already exists on
-//	it (see testdata/README.md for the exact docker invocation this
-//	lane expects).
+//	reachable S3-compatible server. The bucket is created by
+//	requireLaneBucket (bucket_setup_test.go) when absent (see
+//	testdata/README.md for the exact docker invocation this lane
+//	expects).
 //
 // Constraints: go:build integration only — no "postgres" or "s3" tag,
 //
@@ -36,12 +37,13 @@ import (
 	"github.com/acamarata/cascade/providers/s3"
 )
 
-// realS3Config reads the four env-refs this lane needs, skipping the test
-// if any is unset.
+// realS3Config holds the four env-refs this lane needs.
 type realS3Config struct {
 	endpoint, bucket, accessKey, secretKey string
 }
 
+// realS3 reads the env-refs, skipping only when one is unset, then sets
+// up the lane bucket and fails (never skips) when that setup fails.
 func realS3(t *testing.T) realS3Config {
 	t.Helper()
 	cfg := realS3Config{
@@ -51,8 +53,11 @@ func realS3(t *testing.T) realS3Config {
 		secretKey: os.Getenv("CASCADE_TEST_S3_SECRET_KEY"),
 	}
 	if cfg.endpoint == "" || cfg.bucket == "" || cfg.accessKey == "" || cfg.secretKey == "" {
+		// Local runs without a server only. The CI lane sets all four and
+		// its counted gate fails the job on any SKIP line.
 		t.Skip("CASCADE_TEST_S3_ENDPOINT/_BUCKET/_ACCESS_KEY/_SECRET_KEY not all set — this lane requires a real reachable S3-compatible server")
 	}
+	requireLaneBucket(t, cfg)
 	return cfg
 }
 
