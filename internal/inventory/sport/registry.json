@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T03:07:02Z",
+  "generated_at": "2026-09-30T03:35:59Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5890,6 +5890,26 @@
       ]
     },
     {
+      "name": "conductor.quota/AUD-030",
+      "sites": [
+        {
+          "file": "internal/conductor/quota_ceiling.go",
+          "line": 5,
+          "status": "",
+          "raw": "conductor.quota/AUD-030 (P1-CAP-14)."
+        },
+        {
+          "file": "internal/conductor/quota_ceiling_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "conductor.quota/AUD-030 (P1-CAP-14)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "conductor.router",
       "sites": [
         {
@@ -5952,6 +5972,20 @@
       ],
       "statuses": [
         "CHANGE"
+      ]
+    },
+    {
+      "name": "conductor.router/AUD-030",
+      "sites": [
+        {
+          "file": "internal/conductor/filters_dispatch_ceiling_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "conductor.router/AUD-030 (P1-CAP-14)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -30331,7 +30365,7 @@
       ]
     }
   ],
-  "total_sites": 2849,
-  "unspecified_count": 146,
+  "total_sites": 2852,
+  "unspecified_count": 148,
   "multi_status_count": 80
 }
