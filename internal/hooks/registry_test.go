@@ -24,6 +24,7 @@ import (
 func TestRegistry_Register_PluginCall_HappyPath(t *testing.T) {
 	r := hooks.NewRegistry()
 	got, err := r.Register(hooks.HookConfig{
+		Namespace:    "jobs",
 		Trigger:      "plugin.registered",
 		ActionType:   hooks.ActionTypePluginCall,
 		ActionParams: map[string]string{"plugin": "p1"},
@@ -42,6 +43,7 @@ func TestRegistry_Register_PluginCall_HappyPath(t *testing.T) {
 func TestRegistry_Register_AgentNote_HappyPath(t *testing.T) {
 	r := hooks.NewRegistry()
 	got, err := r.Register(hooks.HookConfig{
+		Namespace:    "jobs",
 		ID:           "my-note-hook",
 		Trigger:      "scheduler.tick",
 		ActionType:   hooks.ActionTypeAgentNote,
@@ -63,6 +65,7 @@ func TestRegistry_Register_AgentNote_HappyPath(t *testing.T) {
 func TestHooksShellActionRegistrationPermitted(t *testing.T) {
 	r := hooks.NewRegistry()
 	got, err := r.Register(hooks.HookConfig{
+		Namespace:    "jobs",
 		Trigger:      "plugin.registered",
 		ActionType:   hooks.ActionTypeShell,
 		ActionParams: map[string]string{hooks.ShellCommandParam: "echo hi"},
@@ -81,6 +84,7 @@ func TestHooksShellActionRegistrationPermitted(t *testing.T) {
 func TestRegistry_Register_UnknownActionType_Refused(t *testing.T) {
 	r := hooks.NewRegistry()
 	_, err := r.Register(hooks.HookConfig{
+		Namespace:  "jobs",
 		Trigger:    "plugin.registered",
 		ActionType: hooks.ActionType("carrier-pigeon"),
 	})
@@ -92,7 +96,7 @@ func TestRegistry_Register_UnknownActionType_Refused(t *testing.T) {
 
 func TestRegistry_Register_EmptyTrigger_Refused(t *testing.T) {
 	r := hooks.NewRegistry()
-	_, err := r.Register(hooks.HookConfig{ActionType: hooks.ActionTypePluginCall})
+	_, err := r.Register(hooks.HookConfig{Namespace: "jobs", ActionType: hooks.ActionTypePluginCall})
 	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindInvalidInput {
 		t.Fatalf("Register(empty trigger) error = %v, want KindInvalidInput", err)
 	}
@@ -101,6 +105,7 @@ func TestRegistry_Register_EmptyTrigger_Refused(t *testing.T) {
 func TestRegistry_Register_ReservedAuditTrigger_Refused(t *testing.T) {
 	r := hooks.NewRegistry()
 	_, err := r.Register(hooks.HookConfig{
+		Namespace:  "jobs",
 		Trigger:    string(hooks.EventKindHookFire),
 		ActionType: hooks.ActionTypePluginCall,
 	})
@@ -111,7 +116,7 @@ func TestRegistry_Register_ReservedAuditTrigger_Refused(t *testing.T) {
 
 func TestRegistry_Register_DuplicateID_Conflict(t *testing.T) {
 	r := hooks.NewRegistry()
-	cfg := hooks.HookConfig{ID: "dup", Trigger: "t1", ActionType: hooks.ActionTypePluginCall}
+	cfg := hooks.HookConfig{Namespace: "jobs", ID: "dup", Trigger: "t1", ActionType: hooks.ActionTypePluginCall}
 	if _, err := r.Register(cfg); err != nil {
 		t.Fatalf("first Register: %v", err)
 	}
@@ -123,7 +128,7 @@ func TestRegistry_Register_DuplicateID_Conflict(t *testing.T) {
 
 func TestRegistry_Deregister(t *testing.T) {
 	r := hooks.NewRegistry()
-	cfg, err := r.Register(hooks.HookConfig{Trigger: "t1", ActionType: hooks.ActionTypePluginCall})
+	cfg, err := r.Register(hooks.HookConfig{Namespace: "jobs", Trigger: "t1", ActionType: hooks.ActionTypePluginCall})
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -145,22 +150,22 @@ func TestRegistry_Deregister_NotFound(t *testing.T) {
 
 func TestRegistry_MatchTriggers_HitAndMiss(t *testing.T) {
 	r := hooks.NewRegistry()
-	if _, err := r.Register(hooks.HookConfig{ID: "a", Trigger: "hit", ActionType: hooks.ActionTypePluginCall}); err != nil {
+	if _, err := r.Register(hooks.HookConfig{Namespace: "jobs", ID: "a", Trigger: "hit", ActionType: hooks.ActionTypePluginCall}); err != nil {
 		t.Fatalf("Register a: %v", err)
 	}
-	if _, err := r.Register(hooks.HookConfig{ID: "b", Trigger: "hit", ActionType: hooks.ActionTypeAgentNote}); err != nil {
+	if _, err := r.Register(hooks.HookConfig{Namespace: "jobs", ID: "b", Trigger: "hit", ActionType: hooks.ActionTypeAgentNote}); err != nil {
 		t.Fatalf("Register b: %v", err)
 	}
-	if _, err := r.Register(hooks.HookConfig{ID: "c", Trigger: "miss-me", ActionType: hooks.ActionTypePluginCall}); err != nil {
+	if _, err := r.Register(hooks.HookConfig{Namespace: "jobs", ID: "c", Trigger: "miss-me", ActionType: hooks.ActionTypePluginCall}); err != nil {
 		t.Fatalf("Register c: %v", err)
 	}
 
-	hits := r.MatchTriggers("hit")
+	hits := r.MatchTriggers("jobs", "hit")
 	if len(hits) != 2 || hits[0].ID != "a" || hits[1].ID != "b" {
 		t.Fatalf("MatchTriggers(hit) = %+v, want [a b] sorted", hits)
 	}
 
-	misses := r.MatchTriggers("no-such-trigger")
+	misses := r.MatchTriggers("jobs", "no-such-trigger")
 	if len(misses) != 0 {
 		t.Fatalf("MatchTriggers(no-such-trigger) = %+v, want empty", misses)
 	}
@@ -177,6 +182,7 @@ func TestRegistry_ConcurrentRegisterDeregister(t *testing.T) {
 			// DeriveHookID gives each a distinct ID — Register must never
 			// fail here with -race clean concurrent access.
 			cfg, err := r.Register(hooks.HookConfig{
+				Namespace:  "jobs",
 				Trigger:    "concurrent",
 				ActionType: hooks.ActionTypePluginCall,
 				ActionParams: map[string]string{
@@ -193,8 +199,50 @@ func TestRegistry_ConcurrentRegisterDeregister(t *testing.T) {
 		}(i)
 	}
 	_ = r.List()
-	_ = r.MatchTriggers("concurrent")
+	_ = r.MatchTriggers("jobs", "concurrent")
 	wg.Wait()
+}
+
+// TestRegistry_Register_RefusesBadNamespace refuses an empty, malformed or
+// audit namespace and stores nothing.
+func TestRegistry_Register_RefusesBadNamespace(t *testing.T) {
+	r := hooks.NewRegistry()
+	for _, ns := range []string{"", "Jobs", "9jobs", "jobs/gate", hooks.AuditNamespace} {
+		_, err := r.Register(hooks.HookConfig{Namespace: ns, Trigger: "t", ActionType: hooks.ActionTypePluginCall})
+		if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindInvalidInput ||
+			!strings.Contains(err.Error(), "hooks: register: namespace") {
+			t.Fatalf("Register(namespace %q) = %v, want KindInvalidInput", ns, err)
+		}
+	}
+	if len(r.List()) != 0 {
+		t.Fatal("a hook with a bad namespace was stored")
+	}
+}
+
+// TestRegistry_NamespacesAndScopedMatch proves Namespaces is sorted and
+// distinct and MatchTriggers never crosses namespaces.
+func TestRegistry_NamespacesAndScopedMatch(t *testing.T) {
+	r := hooks.NewRegistry()
+	for _, c := range []hooks.HookConfig{
+		{ID: "a", Namespace: "jobs.gate", Trigger: "k", ActionType: hooks.ActionTypePluginCall},
+		{ID: "b", Namespace: "daemon", Trigger: "k", ActionType: hooks.ActionTypePluginCall},
+		{ID: "c", Namespace: "daemon", Trigger: "other", ActionType: hooks.ActionTypeAgentNote},
+	} {
+		if _, err := r.Register(c); err != nil {
+			t.Fatalf("Register(%s): %v", c.ID, err)
+		}
+	}
+	if got := strings.Join(r.Namespaces(), ","); got != "daemon,jobs.gate" {
+		t.Fatalf("Namespaces = %q", got)
+	}
+	if got := r.MatchTriggers("daemon", "k"); len(got) != 1 || got[0].ID != "b" {
+		t.Fatalf("MatchTriggers(daemon,k) = %+v", got)
+	}
+	listed := r.List()
+	listed[0].Namespace = "mutated"
+	if r.List()[0].Namespace == "mutated" {
+		t.Fatal("List returned the stored value, not a copy")
+	}
 }
 
 // assertActionNotPermitted asserts err is the package's action-not-

@@ -1,94 +1,49 @@
 // Package hooks implements the internal hooks engine: it dispatches
 // configured actions in response to typed events on the daemon's event
-// bus (internal/events, C/S-04.T3), auditing every fire outcome.
+// bus (internal/events), auditing every fire outcome.
 //
-// Purpose: fire configured hook actions when their trigger matches an
+// Purpose: fire configured hook actions when an event of a hook's trigger
 //
-//	incoming bus event, restricted at W1 to exactly two action types
-//	(plugin-call, agent-note); shell and any unrecognised type are
-//	refused, permanently at this wave — shell lands only via I/S-18.T5's
-//	policy-routed risk ladder (04-PEWS-PLAN-W1-W3.md §Epic C S-05.T1).
+//	kind lands on the namespace the hook names, through a runner table
+//	keyed by action type (plugin-call and agent-note in P1; shell only
+//	through ShellRunner, never the table).
 //
-// Inputs: HookConfig values (from config.toml's [hooks] section,
+// Inputs: the [[hooks]] config section (ParseHooksSection, config.go),
 //
-//	08-INIT-CONFIG-SPEC.md §3 — parsing/loading is composition-root work,
-//	out of this ticket's scope) registered via Registry.Register, and
-//	typed events pulled from an internal/events.Bus subscription.
+//	registered into a Registry, and typed events from one bus subscription
+//	per namespace the registry names (subscriptions.go).
 //
-// Outputs: for plugin-call and agent-note hooks whose trigger matches an
+// Outputs: for every fire attempt exactly one HookFire, published on the
 //
-//	event, an action dispatched through the injected PluginDispatcher or
-//	NoteWriter seam; for every fire attempt (success, dispatch error,
-//	timeout, panic, or defense-in-depth refusal) exactly one HookFire
-//	event published to the event bus (audit.go) carrying a hash of the
-//	action's params, never the params themselves.
+//	hooks audit namespace and kept in the recent-fires ring, carrying the
+//	hash of the post-egress (tagged) params and never the params.
 //
 // Constraints:
 //
-//   - Action-type restriction (R-14.9, this ticket's full_desc): the
-//     registry refuses shell/unknown at Register time, and the dispatcher
-//     independently refuses shell/unknown again immediately before any
-//     inner call — defense-in-depth against a hook that somehow bypassed
-//     registration validation (e.g. a future config-reload path that
-//     skips Register).
+//   - Pipeline order per fire (dispatcher.go): runnable check, fire budget
+//     (budget.go), egress pass, policy routing with routing.OriginHook
+//     (shell_route.go), the dispatch-time rehydration seam, the runner,
+//     scrub, zero, one HookFire. No action type runs without an allow
+//     verdict; the seam never sees raw configured params and a runner never
+//     sees anything but the seam's output.
 //
-//   - Bounded execution: internal/events' delivery guarantee is
-//     AT-LEAST-ONCE — Publish never blocks, and a crash between event
-//     landing and cursor commit redelivers. This package inherits both
-//     halves of that contract: (a) a hook's action MUST be safe to run
-//     twice for the same logical event (this package does not de-
-//     duplicate; PluginDispatcher/NoteWriter implementations are
-//     responsible for their own idempotency if their side effect is not
-//     naturally idempotent — see dispatcher.go); (b) dispatchHook bounds
-//     every action by an injected timeout via context.WithTimeout AND a
-//     buffered result channel, so a hook whose action ignores context
-//     cancellation entirely and blocks forever cannot hang the dispatch
-//     loop — the loop moves on and audits result_code=timeout without
-//     waiting for the abandoned goroutine (see dispatcher.go's package
-//     comment for the full mechanism and its accepted goroutine-leak
-//     trade-off).
+//   - Loops: a hook may not trigger on the audit kind or listen on the
+//     audit namespace. Longer cycles are bounded by lineage (chain depth
+//     4, 32 fires per root event) over the bus's in-memory cause table,
+//     and loops that drop the runner's context by a 32-per-60s per-hook
+//     backstop on the injected clock. Both are memory only: a restart
+//     resets them.
 //
-//   - Re-entrancy: the dispatcher hard-excludes its own audit EventKind
-//     (EventKindHookFire) from ever being matched as a trigger — both the
-//     registry (Register refuses a HookConfig whose Trigger names it) and
-//     the dispatcher (handleEvent skips it defensively even if a hook
-//     were registered some other way) — which rules out the most direct
-//     self-loop (a hook that fires on its own audit trail). It does NOT
-//     and cannot rule out a longer cycle across independently-triggered
-//     hooks (hook A's plugin-call causes some plugin to publish an event
-//     that matches hook B's trigger, whose action causes an event
-//     matching A's trigger again): PluginDispatcher and NoteWriter are
-//     opaque injected interfaces with no real implementation yet in this
-//     ticket, so this package has no visibility into what a dispatched
-//     action ultimately publishes. Bounding that class of cycle (call-
-//     depth tracking, a per-event hook-fire budget) is unimplemented and
-//     explicitly out of scope here — stated plainly per Art.1 rather than
-//     silently assumed away.
+//   - Delivery is at least once, as internal/events is. A redelivered
+//     (hook, event) pair inside one process is recorded as duplicate and
+//     not run; across a restart it may run again, so runners key their own
+//     idempotency on the Fire identity.
 //
-//   - Art.1 (anti-stub): agent-note actions have NO real consumer yet —
-//     G/S-13 (the journal/memory domain NoteWriter is meant to wire to)
-//     has not shipped. NoteWriter is a real, fully-specified interface
-//     with a real dispatch path in this package; what does not exist yet
-//     is a production implementation of it. The only implementations in
-//     this tree are the composition root's future wiring (not this
-//     ticket) and test fakes confined to _test.go, exactly as
-//     PluginDispatcher is real-but-unwired pending C/S-05.T7.
+//   - Every action is bounded by ActionTimeout even when it ignores its
+//     context; the abandoned goroutine is a bounded, accepted leak.
 //
-//   - context.Context is the first argument on every crossing function;
-//     Timestamp is stamped exclusively from an injected runtime.Clock
-//     (never a bare time.Now — 02-TARGET-STRUCTURE.md §v1.1, forbidigo).
-//
-//   - Every external seam (PluginDispatcher, NoteWriter, the event bus)
-//     is an injected interface, never a concrete import from a sibling
-//     internal/ package (Art.10.2 import-boundary) — this package imports
-//     internal/events (the bus itself, C/S-04.T3, already landed and a
-//     direct dependency per the contract) and internal/runtime (Clock,
-//     LooksLikeSecret) but never internal/plugins or a memory/journal
-//     package directly.
-//
-// SPORT: internal.hooks.Registry/ADDED, internal.hooks.Dispatcher/ADDED,
-//
-//	internal.hooks.HookFire/ADDED (P1-E03-W1-S05-T1; placeholder per this
-//	ticket's sport_updates — master lists undefined until N/S-28.T1's
-//	taxonomy projector exists).
+//   - Every external seam (PluginDispatcher, NoteWriter, ShellRunner,
+//     ActionRouter, Interceptor, the rehydration seam) is injected; this
+//     package never imports internal/plugins, internal/secrets or a memory
+//     package in non-test code.
 package hooks

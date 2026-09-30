@@ -18,16 +18,13 @@
 package hooks
 
 import (
-	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
-	"time"
 )
 
 func TestRedactSecrets_StripsKnownSecretShapedValue(t *testing.T) {
-	secret := "sk-abcdefghijklmnopqrstuvwxyz0123456789"
+	secret := "sk-" + "abcdefghijklmnopqrstuvwxyz0123456789"
 	msg := fmt.Sprintf("plugin call failed: invalid key %s supplied", secret)
 	params := map[string]string{"api_key": secret}
 
@@ -74,79 +71,62 @@ func containsSubstring(s, substr string) bool {
 	return len(substr) == 0
 }
 
-// TestEmitAudit_NeverCarriesRawActionParams proves HookFire's wire payload
-// carries ParamsHash only — the raw ActionParams map is never marshaled
-// into the audit event at all, regardless of whether any value looks
-// secret-shaped. This is audit.go's structural guarantee, distinct from
-// (and stronger than) the ErrMsg-redaction heuristic.
+// TestEmitAudit_NeverCarriesRawActionParams proves the recorded HookFire
+// carries the tagged params hash only: the raw configured value never
+// reaches the payload, and the hash is not the raw params' hash.
 func TestEmitAudit_NeverCarriesRawActionParams(t *testing.T) {
-	secret := "AKIA1234567890ABCDEF"
-	hook := HookConfig{
-		ID:           "h1",
-		Trigger:      "t",
-		ActionType:   ActionTypePluginCall,
-		ActionParams: map[string]string{"aws_key": secret},
+	secret := "AKIA" + "1234567890ABCDEF"
+	r := newRig(t)
+	r.build(nil)
+	sub := r.audit()
+	hook := HookConfig{ID: "h1", Namespace: "jobs", Trigger: "t", ActionType: ActionTypePluginCall,
+		ActionParams: map[string]string{"aws_key": secret}}
+	st := &seamState{}
+	st.setTagged(map[string]string{"aws_key": "<tag>"})
+	st.finish()
+	_, _ = r.d.record(hook, Fire{Hook: hook, Namespace: "jobs"}, hookOutcome{result: ResultSuccess}, st)
+	fire, ev := nextFire(t, sub)
+	if containsSubstring(string(ev.Payload), secret) {
+		t.Fatalf("audit payload contains the raw secret value: %s", ev.Payload)
 	}
-	bus, clock := testBus(t)
-
-	d := &Dispatcher{bus: bus, clock: clock, auditNamespace: "audit"}
-
-	ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
-	defer done()
-	sub, err := bus.Subscribe(ctx, "audit", "raw-params-check", 4)
-	if err != nil {
-		t.Fatalf("Subscribe: %v", err)
-	}
-
-	d.emitAudit(hook, hookOutcome{result: ResultSuccess})
-
-	select {
-	case ev := <-sub.Events:
-		if containsSubstring(string(ev.Payload), secret) {
-			t.Fatalf("audit payload contains the raw secret value: %s", ev.Payload)
-		}
-		var fire HookFire
-		if err := json.Unmarshal(ev.Payload, &fire); err != nil {
-			t.Fatalf("decode HookFire: %v", err)
-		}
-		if fire.ParamsHash == "" {
-			t.Fatal("ParamsHash is empty")
-		}
-	case <-ctx.Done():
-		t.Fatal("timed out waiting for audit event")
+	if fire.ParamsHash != paramsHash(map[string]string{"aws_key": "<tag>"}) || fire.ParamsHash == paramsHash(hook.ActionParams) {
+		t.Fatalf("ParamsHash = %q, want the tagged params hash", fire.ParamsHash)
 	}
 }
 
-// TestEmitAudit_RedactsSecretInErrMsg proves a dispatch error whose text
-// echoes back a secret-shaped action_param value is redacted before the
-// HookFire reaches the bus.
+// TestEmitAudit_RedactsSecretInErrMsg proves a runner error echoing a
+// secret-shaped configured value is redacted before the HookFire exists.
 func TestEmitAudit_RedactsSecretInErrMsg(t *testing.T) {
-	secret := "ghp_abcdefghijklmnopqrstuvwxyz0123456789"
-	hook := HookConfig{
-		ID:           "h2",
-		Trigger:      "t",
-		ActionType:   ActionTypePluginCall,
-		ActionParams: map[string]string{"token": secret},
+	secret := "ghp_" + "abcdefghijklmnopqrstuvwxyz0123456789"
+	r := newRig(t)
+	r.build(nil)
+	sub := r.audit()
+	hook := HookConfig{ID: "h2", Namespace: "jobs", Trigger: "t", ActionType: ActionTypePluginCall,
+		ActionParams: map[string]string{"token": secret}}
+	_, err := r.d.record(hook, Fire{Hook: hook}, hookOutcome{result: ResultError,
+		err: errors.New("upstream rejected token " + secret)}, nil)
+	_, ev := nextFire(t, sub)
+	if containsSubstring(string(ev.Payload), secret) || containsSubstring(err.Error(), secret) {
+		t.Fatalf("the secret leaked: payload %s err %v", ev.Payload, err)
 	}
-	bus, clock := testBus(t)
-
-	d := &Dispatcher{bus: bus, clock: clock, auditNamespace: "audit"}
-
-	ctx, done := context.WithTimeout(context.Background(), 3*time.Second)
-	defer done()
-	sub, err := bus.Subscribe(ctx, "audit", "errmsg-redact-check", 4)
-	if err != nil {
-		t.Fatalf("Subscribe: %v", err)
+	if fires := r.d.Fires(); len(fires) != 1 || containsSubstring(fires[0].ErrMsg, secret) {
+		t.Fatalf("fires ring = %+v", fires)
 	}
+}
 
-	d.emitAudit(hook, hookOutcome{result: ResultError, err: errors.New("upstream rejected token " + secret)})
-
-	select {
-	case ev := <-sub.Events:
-		if containsSubstring(string(ev.Payload), secret) {
-			t.Fatalf("audit payload leaks the secret via ErrMsg: %s", ev.Payload)
-		}
-	case <-ctx.Done():
-		t.Fatal("timed out waiting for audit event")
+// TestScrubCatchesAFragmentOfARehydratedValue proves a plaintext quoted
+// without the text around it in its param is still replaced.
+func TestScrubCatchesAFragmentOfARehydratedValue(t *testing.T) {
+	tagged := map[string]string{"auth": "Bearer <apikey>TOKEN</apikey>", "same": "x", "empty": ""}
+	plain := map[string]string{"auth": "Bearer s3cr3t-" + "fragment", "same": "x", "empty": "", "added": "extra-" + "plain"}
+	err := scrubError(errors.New("rejected s3cr3t-fragment and extra-plain"), scrubPairs(tagged, plain), nil)
+	if containsSubstring(err.Error(), "s3cr3t-fragment") || containsSubstring(err.Error(), "extra-plain") {
+		t.Fatalf("scrubbed error still carries plaintext: %v", err)
+	}
+	if !containsSubstring(err.Error(), "<apikey>TOKEN</apikey>") || !containsSubstring(err.Error(), "[REDACTED]") {
+		t.Fatalf("scrubbed error lacks the tag or marker: %v", err)
+	}
+	if scrubError(nil, nil, nil) != nil {
+		t.Fatal("scrubError(nil) is not nil")
 	}
 }

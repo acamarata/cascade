@@ -34,52 +34,33 @@ func (r *recordingDispatcher) DispatchPluginCall(_ context.Context, _ string, pa
 
 // TestDispatcherSubstitutesActionParamsOnTheRealPath publishes a real
 // event on a real bus, lets the real dispatcher match and fire, and
-// asserts the plugin seam never sees the stored secret.
+// asserts the rehydration seam and the plugin seam never see the stored
+// secret when the seam hands the tagged params on unchanged.
 func TestDispatcherSubstitutesActionParamsOnTheRealPath(t *testing.T) {
 	const secret = "correct-horse-battery-staple"
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	bus, clock := testBus(t)
+	r := newRig(t)
 	engine := testEngine(t, map[string][]byte{"WIFI_PASSWORD": []byte(secret)})
-	token, err := egress.DefaultRegistry().Capability(egress.EgressClassHook)
-	if err != nil {
-		t.Fatalf("Capability(hook): %v", err)
-	}
 	seam := &recordingDispatcher{params: make(chan map[string]string, 1)}
-
-	reg := NewRegistry()
-	hook := HookConfig{
-		Trigger:      "deploy.finished",
-		ActionType:   ActionTypePluginCall,
-		ActionParams: map[string]string{"credential": secret, "endpoint": "https://example.invalid"},
-	}
-	if _, err := reg.Register(hook); err != nil {
-		t.Fatalf("Register: %v", err)
-	}
-
-	d, err := NewDispatcher(DispatcherConfig{
-		Registry: reg, Bus: bus, Clock: clock,
-		Egress: engine, EgressToken: token,
-		PluginDispatcher: seam, NoteWriter: &fakeNoteWriter{},
-		ActionTimeout: 3 * time.Second, TriggerNamespace: "triggers",
-		AuditNamespace: "audit", CursorName: "dispatcher", SubscribeBuffer: 8,
+	r.register(HookConfig{Namespace: "deploy", Trigger: "deploy.finished", ActionType: ActionTypePluginCall,
+		ActionParams: map[string]string{"credential": secret, "endpoint": "https://example.invalid"}})
+	r.build(func(c *DispatcherConfig) {
+		c.Egress = engine
+		c.Runners[ActionTypePluginCall] = PluginCallRunner(seam)
 	})
-	if err != nil {
-		t.Fatalf("NewDispatcher: %v", err)
-	}
-	go func() { _ = d.Run(ctx) }()
-
-	if _, err := bus.Publish(ctx, "triggers", events.EventKind("deploy.finished"), "deploy-1", []byte("{}")); err != nil {
+	r.start()
+	if _, err := r.bus.Publish(context.Background(), "deploy", events.EventKind("deploy.finished"), "deploy-1", []byte("{}")); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
-
 	select {
 	case got := <-seam.params:
 		assertSeamParams(t, got, secret)
-	case <-ctx.Done():
+	case <-time.After(5 * time.Second):
 		t.Fatal("the dispatcher never reached the plugin seam")
 	}
+	if calls := r.seam.count(); calls != 1 {
+		t.Fatalf("rehydration seam calls = %d, want 1", calls)
+	}
+	assertSeamParams(t, r.seam.calls[0], secret)
 }
 
 // assertSeamParams checks what the plugin seam was handed.
@@ -105,39 +86,21 @@ func (failingInterceptor) Intercept(context.Context, egress.Capability, egress.S
 }
 
 // TestDispatcherRefusesWhenTheFirewallCannotRun proves the fail-closed
-// rule at the dispatcher: when substitution cannot run, the action is
-// refused and the seam is never called at all.
+// rule: when substitution cannot run, the action is refused with an empty
+// params hash and neither the router, the seam nor a runner is reached.
 func TestDispatcherRefusesWhenTheFirewallCannotRun(t *testing.T) {
-	for _, tc := range []struct {
-		name       string
-		actionType ActionType
-	}{{"plugin-call", ActionTypePluginCall}, {"agent-note", ActionTypeAgentNote}} {
-		t.Run(tc.name, func(t *testing.T) {
-			bus, clock := testBus(t)
-			token, err := egress.DefaultRegistry().Capability(egress.EgressClassHook)
-			if err != nil {
-				t.Fatalf("Capability(hook): %v", err)
+	for _, actionType := range []ActionType{ActionTypePluginCall, ActionTypeAgentNote} {
+		t.Run(string(actionType), func(t *testing.T) {
+			r := newRig(t)
+			r.build(func(c *DispatcherConfig) { c.Egress = failingInterceptor{} })
+			hook := HookConfig{ID: "h", Namespace: "jobs", Trigger: "t", ActionType: actionType,
+				ActionParams: map[string]string{"a": "b"}}
+			fire, _ := r.d.dispatchHook(context.Background(), hook, "jobs", 1)
+			if fire.ResultCode != ResultRefused || fire.ParamsHash != "" {
+				t.Fatalf("fire = %+v, want refused with no params hash", fire)
 			}
-			pd := &fakePluginDispatcher{}
-			nw := &fakeNoteWriter{}
-			d, err := NewDispatcher(DispatcherConfig{
-				Registry: NewRegistry(), Bus: bus, Clock: clock,
-				Egress: failingInterceptor{}, EgressToken: token,
-				PluginDispatcher: pd, NoteWriter: nw,
-				ActionTimeout: time.Second, TriggerNamespace: "triggers",
-				AuditNamespace: "audit", CursorName: "dispatcher", SubscribeBuffer: 8,
-			})
-			if err != nil {
-				t.Fatalf("NewDispatcher: %v", err)
-			}
-			outcome := d.runAction(context.Background(), HookConfig{
-				ID: "h", ActionType: tc.actionType, ActionParams: map[string]string{"a": "b"},
-			})
-			if outcome.result != ResultRefused {
-				t.Fatalf("result = %q, want %q", outcome.result, ResultRefused)
-			}
-			if len(pd.calls) != 0 || len(nw.calls) != 0 {
-				t.Fatal("the action seam was reached despite a firewall failure")
+			if r.plugin.count()+r.note.count() != 0 || r.seam.count() != 0 || r.router.count() != 0 {
+				t.Fatal("a stage after the firewall was reached despite its failure")
 			}
 		})
 	}

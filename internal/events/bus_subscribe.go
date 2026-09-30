@@ -76,6 +76,21 @@ func (s *Subscription) Unsubscribe() error {
 // subscriptions sharing one cursor would race each other's commits, which
 // this package refuses rather than silently corrupting either.
 func (b *Bus) Subscribe(ctx context.Context, namespace, cursorName string, bufferSize int) (*Subscription, error) {
+	return b.subscribe(ctx, namespace, cursorName, bufferSize, false)
+}
+
+// SubscribeFromHead is Subscribe for a consumer that must never see
+// history it was not configured for: a cursorName that has never committed
+// is first committed at the namespace's current head, under the same lock
+// Publish takes, so delivery starts with the first event published after
+// this call. A cursor that has committed resumes exactly as Subscribe does,
+// so a restarted consumer still receives its backlog.
+func (b *Bus) SubscribeFromHead(ctx context.Context, namespace, cursorName string, bufferSize int) (*Subscription, error) {
+	return b.subscribe(ctx, namespace, cursorName, bufferSize, true)
+}
+
+// subscribe implements Subscribe and SubscribeFromHead.
+func (b *Bus) subscribe(ctx context.Context, namespace, cursorName string, bufferSize int, fromHead bool) (*Subscription, error) {
 	b.mu.Lock()
 	if b.closed {
 		b.mu.Unlock()
@@ -92,7 +107,7 @@ func (b *Bus) Subscribe(ctx context.Context, namespace, cursorName string, buffe
 			"events: namespace %q cursor %q already has an active subscription", namespace, cursorName)
 	}
 
-	start, err := loadCursor(ctx, b.store, namespace, cursorName)
+	start, err := b.startCursorLocked(ctx, log, namespace, cursorName, fromHead)
 	if err != nil {
 		b.mu.Unlock()
 		return nil, err
@@ -119,6 +134,26 @@ func (b *Bus) Subscribe(ctx context.Context, namespace, cursorName string, buffe
 		namespace: namespace,
 		name:      cursorName,
 	}, nil
+}
+
+// startCursorLocked returns the Seq delivery resumes after. With fromHead,
+// a never-committed cursor is committed at log's head first. Caller MUST
+// hold b.mu.
+func (b *Bus) startCursorLocked(ctx context.Context, log *namespaceLog, namespace, cursorName string, fromHead bool) (uint64, error) {
+	if !fromHead {
+		return loadCursor(ctx, b.store, namespace, cursorName)
+	}
+	_, err := b.store.Get(ctx, namespace, cursorKey(cursorName))
+	if err == nil {
+		return loadCursor(ctx, b.store, namespace, cursorName)
+	}
+	if !cascade.HasKind(err, cascade.KindNotFound) {
+		return 0, cascade.Wrapf(cascade.KindUnavailable, err, "events: loading cursor %q in namespace %q", cursorName, namespace)
+	}
+	if err := commitCursor(ctx, b.store, namespace, cursorName, log.nextSeq); err != nil {
+		return 0, err
+	}
+	return log.nextSeq, nil
 }
 
 // Unsubscribe stops namespace's cursorName subscription: it signals the

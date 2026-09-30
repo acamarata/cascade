@@ -647,13 +647,6 @@
     "symbol": "internal/hooks.NewDispatcher"
   },
   {
-    "caller_site": "cmd/cascade/daemon_unix_run.go",
-    "expected_caller": "the daemon run path, once hooks are dispatched",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/hooks.NewRegistry"
-  },
-  {
     "caller_site": "plugins/pbd/plan_compile.go",
     "expected_caller": "AH/S-70.T1's acceptance ticket, which exercises the compiler end to end from a live plugins/pbd caller",
     "reason": "AH/S-69.T3's own contract text names this as a pure PEWS 17-field-to-PlanInput compiler whose live plugins/pbd caller is an explicit downstream integration point outside this ticket's scope (\"not in scope: ... wiring a live plugins/pbd caller to this function\"); the party holding a decoded PEWS ticket that will build a PEWSContract and call this does not exist yet. Real and fully tested (pews_compiler_test.go) against the real TicketInput/PlanInput/GateSet shapes it produces.",
@@ -1489,5 +1482,33 @@
     "expected_caller": "AF/S-65.T2's own contract text (T-2.yaml): 'internal/daemon/subsystems_ci.go NewCISubsystem constructs the ONE ci Dispatcher' -- the daemon composition root that builds a RequirementModel (and therefore its Config) from the loaded runtime.Config for the streaming dispatcher; not yet built. Retire this entry once that lands.",
     "reason": "Final-confirm round 3: this ticket's own AC ('internal/ci/affected_cmd.go reads it from there, not from an unsourced field') requires a real production path from internal/runtime's parsed [ci].affected_cmd into internal/ci.Config.AffectedCmd. ConfigFromRuntime (config_runtime.go) is that ONE mapping, fully implemented and tested end-to-end against a real affected_cmd subprocess (TestConfigFromRuntime_AffectedCmdEndToEnd), but T-3.yaml:35 names S-65.T1 as the sole owner of [ci].affected_cmd registration while the only production CALLER of a fully-wired RequirementModel is S-65.T2's daemon composition layer -- no ticket in S-65 builds internal/daemon/subsystems_ci.go before T2. This is a planning contradiction (T-3.yaml:35 vs. the only real caller living in T2's scope) flagged for T0 to file as a PCI (slug ci-affectedcmd-ownership-t1-vs-t2, type planning), not filed by this fix lane per LANE-RULES.",
     "retire_ticket": "P1-CI-01"
+  },
+  {
+    "caller_site": "cmd/cascade/daemon_unix_hooks.go",
+    "expected_caller": "P1-SUP-02's daemon composition, which decodes config.toml's [[hooks]] value and calls ParseHooksSection with the built Dispatcher's Runnable predicate before registering the result",
+    "reason": "P1-SUP-01 ships the strict [[hooks]] section parser in the engine library only; the packet prohibits any cmd/cascade edit (composition is P1-SUP-02), so its only callers at this tip are internal/hooks tests (config_test.go, reload_test.go).",
+    "retire_ticket": "P1-SUP-02",
+    "symbol": "internal/hooks.ParseHooksSection"
+  },
+  {
+    "caller_site": "cmd/cascade/daemon_unix_hooks.go",
+    "expected_caller": "P1-SUP-02's daemon composition, which calls WatchReload before its initial hook build and runs the returned ReloadWatch alongside the Dispatcher",
+    "reason": "P1-SUP-01 ships hot reload in the engine library only; composition is P1-SUP-02 and cmd/cascade is prohibited here, so reload_test.go is the only caller at this tip.",
+    "retire_ticket": "P1-SUP-02",
+    "symbol": "internal/hooks.WatchReload"
+  },
+  {
+    "caller_site": "cmd/cascade/daemon_unix_hooks.go",
+    "expected_caller": "P1-SUP-02's daemon composition, which builds the runner table with PluginCallRunner over the plugin registry's dispatcher",
+    "reason": "The runner-table constructor for plugin-call ships with the engine; the table is assembled at the composition root, which is P1-SUP-02's scope, so only internal/hooks tests call it at this tip.",
+    "retire_ticket": "P1-SUP-02",
+    "symbol": "internal/hooks.PluginCallRunner"
+  },
+  {
+    "caller_site": "cmd/cascade/daemon_unix_hooks.go",
+    "expected_caller": "P1-SUP-02's daemon composition, which builds the runner table with AgentNoteRunner over the journal note writer",
+    "reason": "The runner-table constructor for agent-note ships with the engine; the table is assembled at the composition root, which is P1-SUP-02's scope, so only internal/hooks tests call it at this tip.",
+    "retire_ticket": "P1-SUP-02",
+    "symbol": "internal/hooks.AgentNoteRunner"
   }
 ]

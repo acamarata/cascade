@@ -124,6 +124,7 @@ type Bus struct {
 
 	mu     sync.Mutex
 	logs   map[string]*namespaceLog
+	causes causeTable
 	closed bool
 }
 
@@ -141,7 +142,9 @@ func New(store provider.Store, clock runtime.Clock) *Bus {
 
 // Publish appends an Event of the given kind, source, and payload to
 // namespace's log and returns the persisted Event (with its assigned Seq
-// and Timestamp filled in). Publish returns a cascade.KindUnavailable
+// and Timestamp filled in). When ctx carries a Cause (WithCause), Publish
+// records it in memory for the new event (cause.go); the persisted record
+// is unchanged. Publish returns a cascade.KindUnavailable
 // error, never a swallowed one, if the underlying Store write fails or if
 // the Bus has been Closed.
 func (b *Bus) Publish(ctx context.Context, namespace string, kind EventKind, source string, payload []byte) (Event, error) {
@@ -167,6 +170,9 @@ func (b *Bus) Publish(ctx context.Context, namespace string, kind EventKind, sou
 		return Event{}, cascade.Wrapf(cascade.KindUnavailable, err, "events: publishing to namespace %q", namespace)
 	}
 	log.nextSeq = ev.Seq
+	if c, ok := CauseFrom(ctx); ok {
+		b.causes.record(causeKey{namespace: namespace, seq: ev.Seq}, c)
+	}
 
 	close(log.wake)
 	log.wake = make(chan struct{})
@@ -220,4 +226,26 @@ func recoverMaxSeq(ctx context.Context, store provider.Store, namespace string) 
 		return 0, cascade.Wrapf(cascade.KindUnavailable, iterErr, "events: recovering sequence for namespace %q", namespace)
 	}
 	return maxSeq, nil
+}
+
+// ResetCursorToHead commits cursorName's cursor in namespace at the
+// namespace's current head, so the next Subscribe under that name delivers
+// only events published after this call. It refuses with KindConflict
+// while cursorName has an active subscription in namespace: moving a live
+// cursor would race its delivery loop's own commits.
+func (b *Bus) ResetCursorToHead(ctx context.Context, namespace, cursorName string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		return cascade.New(cascade.KindUnavailable, "events: ResetCursorToHead called after Close")
+	}
+	log, err := b.namespaceLogLocked(ctx, namespace)
+	if err != nil {
+		return err
+	}
+	if _, active := log.subs[cursorName]; active {
+		return cascade.Newf(cascade.KindConflict,
+			"events: namespace %q cursor %q has an active subscription and cannot be reset", namespace, cursorName)
+	}
+	return commitCursor(ctx, b.store, namespace, cursorName, log.nextSeq)
 }

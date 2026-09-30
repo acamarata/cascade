@@ -14,7 +14,7 @@ import (
 
 // Purpose: the HookConfig TOML schema, the HookFire audit-event struct,
 //
-//	the action-type interfaces (PluginDispatcher, NoteWriter), and the
+//	the runner seams (PluginDispatcher, NoteWriter), and the
 //	action-type refusal error this package returns for an unrecognised
 //	action type.
 //
@@ -43,25 +43,27 @@ import (
 type ActionType string
 
 const (
-	// ActionTypePluginCall invokes a plugin tool or intent via the
-	// injected PluginDispatcher. Permitted at W1.
+	// ActionTypePluginCall invokes a plugin tool through the runner table
+	// entry PluginCallRunner builds.
 	ActionTypePluginCall ActionType = "plugin-call"
-	// ActionTypeAgentNote writes a structured note via the injected
-	// NoteWriter. Permitted at W1.
+	// ActionTypeAgentNote writes a structured note through the runner
+	// table entry AgentNoteRunner builds.
 	ActionTypeAgentNote ActionType = "agent-note"
-	// ActionTypeShell runs a shell command. It is registrable, and every
-	// dispatch of one is routed through the policy engine first
-	// (shell_route.go). Plugin-call and agent-note are NOT routed: they
-	// are pre-approved at load time, and what they may do is decided by
-	// the injected dispatcher rather than by command text.
+	// ActionTypeShell runs a shell command. It never enters the runner
+	// table: it runs only through a dispatcher built with a ShellRunner
+	// and a shell capability (shell_route.go), and a dispatcher without
+	// them reports it unrunnable, so the parser refuses it at load.
 	ActionTypeShell ActionType = "shell"
 )
 
-// permittedActionTypes is the registrable set. Anything not in it —
-// including the empty string — is refused by Registry.Register. Shell
-// joined the set once policy routing existed to gate it; it is the
-// dispatch-time routing decision, not registration, that says whether any
-// particular shell action may run.
+// Every action type, shell included, is routed through the policy engine
+// with routing.OriginHook before it runs (dispatcher.go); no type is
+// pre-approved at load time.
+
+// permittedActionTypes is the set Registry.Register recognises. Anything
+// else, including the empty string, is refused. Recognised is not the
+// same as runnable: the dispatcher's runner table decides that
+// (Dispatcher.Runnable), and ParseHooksSection loads only runnable types.
 var permittedActionTypes = map[ActionType]bool{
 	ActionTypePluginCall: true,
 	ActionTypeAgentNote:  true,
@@ -78,21 +80,25 @@ type HookConfig struct {
 	// is derived deterministically via DeriveHookID so hook identity
 	// survives a daemon restart without requiring the config author to
 	// hand-assign one.
-	ID string `toml:"id"`
+	ID string `toml:"id" json:"id"`
+	// Namespace is the event-bus namespace the hook listens on. It is
+	// required: event kinds live in many namespaces, and the dispatcher
+	// holds one subscription per namespace its hooks name.
+	Namespace string `toml:"namespace" json:"namespace"`
 	// Trigger is the event-kind string this hook fires on. Matching is
 	// exact-string against internal/events.Event.Kind (dispatcher.go);
 	// no wildcard or pattern syntax is defined at W1.
-	Trigger string `toml:"trigger"`
+	Trigger string `toml:"trigger" json:"trigger"`
 	// ActionType selects plugin-call or agent-note (or, for hooks a
 	// misconfigured file names, shell or anything else — refused, never
 	// silently coerced).
-	ActionType ActionType `toml:"action_type"`
+	ActionType ActionType `toml:"action_type" json:"action_type"`
 	// ActionParams is the action's opaque parameter bag. Interpreting
 	// reserved keys (e.g. which plugin, which tool) is the injected
 	// PluginDispatcher/NoteWriter implementation's responsibility, not
 	// this package's — this package only hashes it for the audit trail
 	// (paramsHash) and never inspects individual keys itself.
-	ActionParams map[string]string `toml:"action_params"`
+	ActionParams map[string]string `toml:"action_params" json:"action_params,omitempty"`
 }
 
 // ResultCode is the outcome recorded on a HookFire audit event.
@@ -117,58 +123,57 @@ const (
 	// should already have refused it), an egress-firewall refusal, or a
 	// policy-routing deny for a shell action.
 	ResultRefused ResultCode = "refused"
+	// ResultBudget reports that a lineage or rate budget refused the fire
+	// before anything ran (budget.go).
+	ResultBudget ResultCode = "budget"
+	// ResultRehydrate reports that the rehydration seam failed, so the
+	// runner was never called.
+	ResultRehydrate ResultCode = "rehydrate"
+	// ResultDuplicate is reserved for a fire the dispatcher recognises as
+	// a redelivery of one it already ran.
+	ResultDuplicate ResultCode = "duplicate"
 )
 
 // HookFire is the audit record published to the event bus for every fire
-// attempt — success, error, panic, timeout, or refusal — never omitted
-// (audit.go's deferred emit covers every one of these paths, including
-// panic). ErrMsg is redacted before publication if it contains the
-// literal value of any of the hook's own action_params that looks
-// secret-shaped (audit.go, redactSecrets) — Payload never carries the raw
-// ActionParams themselves, only ParamsHash, so the hash is the only
-// params-derived field that reaches the bus unconditionally.
+// attempt (success, error, panic, timeout, refusal, ask, budget,
+// rehydrate), never omitted. ParamsHash is the hash of the post-egress
+// (tagged) params, empty when the egress pass did not produce any. ErrMsg
+// has every rehydrated value replaced by its tag, and every secret-shaped
+// config value redacted, before the record is stored, published or ringed
+// (audit.go). The raw params are never carried.
 type HookFire struct {
 	HookID     string     `json:"hook_id"`
+	Namespace  string     `json:"namespace"`
 	Trigger    string     `json:"trigger"`
 	ActionType ActionType `json:"action_type"`
+	EventSeq   uint64     `json:"event_seq"`
+	Depth      int        `json:"depth"`
 	ParamsHash string     `json:"params_hash"`
 	ResultCode ResultCode `json:"result_code"`
 	ErrMsg     string     `json:"err_msg,omitempty"`
 	Ts         time.Time  `json:"ts"`
 }
 
-// PluginDispatcher is the injected seam a plugin-call action dispatches
-// through. The composition root wires the concrete implementation to
-// C/S-05.T7's plugin registry; this package depends on the interface only
-// so it never imports internal/plugins (Art.10.2). Implementations decide
-// how to interpret params (e.g. which key names the plugin id / tool) —
-// this package passes action_params through verbatim.
+// PluginDispatcher is the seam PluginCallRunner calls. The composition
+// root wires the concrete implementation over the plugin registry; this
+// package depends on the interface only, so it never imports
+// internal/plugins. params are the rehydrated params for this fire.
 //
-// Idempotency: because internal/events delivers AT-LEAST-ONCE, a given
-// hook fire may invoke DispatchPluginCall twice for the same logical
-// event. This package performs no de-duplication. An implementation whose
-// plugin call is not naturally idempotent (e.g. "increment a counter"
-// rather than "set a value") must implement its own idempotency guard
-// (e.g. keyed on hookID + the event's Seq, which dispatcher.go does not
-// currently thread through — a forward note for whichever ticket wires
-// the concrete implementation).
+// Idempotency: internal/events delivers at least once, so one logical
+// event may reach DispatchPluginCall twice. An implementation whose call
+// is not naturally idempotent keys its own guard on the Fire identity the
+// runner receives (hook id, namespace, event seq).
 type PluginDispatcher interface {
 	// DispatchPluginCall invokes the plugin action a hook configures.
-	// hookID identifies the firing hook (for the implementation's own
-	// logging/idempotency use); params is the hook's action_params
-	// verbatim.
 	DispatchPluginCall(ctx context.Context, hookID string, params map[string]string) error
 }
 
-// NoteWriter is the injected seam an agent-note action dispatches
-// through. The composition root wires the concrete implementation to the
-// journal/memory domain once G/S-13 ships — NO production implementation
-// exists yet anywhere in this tree (Art.1: stated plainly, not left
-// implicit). The same at-least-once/idempotency note on PluginDispatcher
-// applies here identically.
+// NoteWriter is the seam AgentNoteRunner calls. No production
+// implementation exists in this tree yet; the composition root wires one
+// once the journal domain ships. The idempotency note on PluginDispatcher
+// applies identically.
 type NoteWriter interface {
-	// WriteAgentNote writes a structured note. hookID identifies the
-	// firing hook; params is the hook's action_params verbatim.
+	// WriteAgentNote writes a structured note for the firing hook.
 	WriteAgentNote(ctx context.Context, hookID string, params map[string]string) error
 }
 
@@ -227,10 +232,10 @@ func paramsHash(params map[string]string) string {
 // DeriveHookID returns the deterministic slug a hook's ID defaults to
 // when its config omits one, so identity is stable across daemon
 // restarts for two config files that declare the same
-// trigger+action_type+params (full_desc task 1's requirement).
-func DeriveHookID(trigger string, actionType ActionType, params map[string]string) string {
+// namespace+trigger+action_type+params.
+func DeriveHookID(namespace, trigger string, actionType ActionType, params map[string]string) string {
 	hash := paramsHash(params)
-	return fmt.Sprintf("%s-%s-%s", slugify(trigger), slugify(string(actionType)), hash[:12])
+	return fmt.Sprintf("%s-%s-%s-%s", slugify(namespace), slugify(trigger), slugify(string(actionType)), hash[:12])
 }
 
 // slugify lower-cases s and replaces every run of characters outside

@@ -1,285 +1,269 @@
-// Purpose: Dispatcher coverage, part 1/2 (dispatcher_timeout_test.go is
+// Purpose: the shared dispatcher test rig (a real bus over a MemStore, a
 //
-//	part 2/2 — an R-14.117 same-package split of what was originally one
-//	file, purely to satisfy Art.10.3's 300-line cap; the split is
-//	behaviour-preserving, moved code only, no rewrites) — shell-action
-//	dispatch refusal (defense-in-depth, exercised white-box since a
-//	HookConfig carrying ActionTypeShell can never reach the dispatcher
-//	via Registry.Register, which already refuses it — this file
-//	constructs one directly and drives Dispatcher.runAction to prove the
-//	SECOND guard), and audit-on-fire for success/dispatch-error. Shared
-//	fixtures (fakes, testBus, awaitAuditFire, newTestDispatcher) live
-//	here and are used by both files via the shared package hooks
-//	white-box test binary.
+//	frozen clock, recording runners, a recording rehydration seam and an
+//	allow-by-default router) plus the basic fire and audit tests.
 //
-// Inputs: a real *events.Bus over storetest.NewMemStore() (Art.7.1 — no
+// Constraints: white-box (package hooks). Waits are channel receives
 //
-//	filesystem use, so no t.TempDir() is needed; MemStore never touches
-//	disk) and a testkit.FrozenClock, per this repo's established events
-//	package test convention (internal/events/bus_test.go).
-//
-// Constraints: white-box (package hooks, not hooks_test) — the shell
-//
-//	dispatch-refusal test needs runAction directly, since Register (the
-//	only path an external caller has to populate a Registry) already
-//	refuses shell before a Dispatcher ever sees it. No test in either
-//	split file uses time.Sleep for synchronisation (R-14.136/Art.11) —
-//	every wait is a channel receive, except the one short, explicit
-//	ActionTimeout in dispatcher_timeout_test.go's
-//	TestDispatcher_BlockingHook_TimesOutAndSurvives, which IS the feature
-//	under test, not a sleep standing in for synchronisation.
-//
-// SPORT: internal.hooks.Dispatcher/ADDED (tests, split 1/2)
-//
-//	(P1-E03-W1-S05-T1).
+//	bounded by a context; the only explicit durations are action timeouts
+//	under test and the bounded "nothing else arrives" windows.
 package hooks
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/policy"
 	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/internal/testkit"
-	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// fakePluginDispatcher is a test-only PluginDispatcher. FORWARD NOTE: the
-// real implementation is wired by C/S-05.T7's plugin registry
-// (composition-root work, not this ticket) — see hooks.go's
-// PluginDispatcher doc.
-type fakePluginDispatcher struct {
-	calls   []string
-	err     error
-	block   bool // if true, DispatchPluginCall never returns
-	blocked chan struct{}
+// fakeRunner records every fire and the params it was handed. onRun, when
+// set, runs inside RunAction with the runner's own context.
+type fakeRunner struct {
+	mu     sync.Mutex
+	fires  []Fire
+	params []map[string]string
+	err    error
+	panics bool
+	block  chan struct{}
+	order  *callOrder
+	onRun  func(ctx context.Context, fire Fire, params map[string]string) error
 }
 
-func (f *fakePluginDispatcher) DispatchPluginCall(_ context.Context, hookID string, _ map[string]string) error {
-	f.calls = append(f.calls, hookID)
-	if f.block {
-		if f.blocked != nil {
-			close(f.blocked)
-		}
-		select {} // deliberately ignores ctx cancellation: proves the
-		// dispatcher bounds a hook that never returns, not just one that
-		// respects context.
+func (r *fakeRunner) RunAction(ctx context.Context, fire Fire, params map[string]string) error {
+	r.mu.Lock()
+	r.fires = append(r.fires, fire)
+	r.params = append(r.params, cloneParams(params))
+	onRun, err := r.onRun, r.err
+	r.mu.Unlock()
+	r.order.add("run")
+	if r.panics {
+		panic("fakeRunner: deliberate test panic")
 	}
-	return f.err
-}
-
-// fakeNoteWriter is a test-only NoteWriter. FORWARD NOTE: NO production
-// implementation exists anywhere in this tree yet — it is wired once
-// G/S-13 (the journal/memory domain) ships. See hooks.go's NoteWriter doc.
-type fakeNoteWriter struct {
-	calls []string
-	err   error
-	panic bool
-}
-
-func (f *fakeNoteWriter) WriteAgentNote(_ context.Context, hookID string, _ map[string]string) error {
-	f.calls = append(f.calls, hookID)
-	if f.panic {
-		panic("fakeNoteWriter: deliberate test panic")
+	if r.block != nil {
+		close(r.block)
+		select {} // ignores ctx on purpose: the dispatcher must bound it anyway
 	}
-	return f.err
+	if onRun != nil {
+		return onRun(ctx, fire, params)
+	}
+	return err
 }
 
-// testBus builds a real, in-memory-backed events.Bus and a frozen clock
-// for a dispatcher test.
-func testBus(t *testing.T) (*events.Bus, *testkit.FrozenClock) {
+func (r *fakeRunner) count() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.fires)
+}
+
+func (r *fakeRunner) snapshot() ([]Fire, []map[string]string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]Fire(nil), r.fires...), append([]map[string]string(nil), r.params...)
+}
+
+// fakeSeam is a recording rehydration seam. transform maps tagged to plain
+// (identity copy when nil); zeros counts zero() calls.
+type fakeSeam struct {
+	mu        sync.Mutex
+	calls     []map[string]string
+	transform func(map[string]string) map[string]string
+	err       error
+	order     *callOrder
+	zeros     atomic.Int32
+}
+
+func (s *fakeSeam) seam(_ context.Context, _ Fire, tagged map[string]string) (map[string]string, func(), error) {
+	s.mu.Lock()
+	s.calls = append(s.calls, cloneParams(tagged))
+	transform, err := s.transform, s.err
+	s.mu.Unlock()
+	s.order.add("seam")
+	plain := cloneParams(tagged)
+	if transform != nil {
+		plain = transform(tagged)
+	}
+	return plain, func() { s.zeros.Add(1) }, err
+}
+
+func (s *fakeSeam) count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.calls)
+}
+
+// rig is one dispatcher under test.
+type rig struct {
+	t      *testing.T
+	bus    *events.Bus
+	clock  *testkit.FrozenClock
+	store  *storetest.MemStore
+	state  *storetest.MemStore
+	reg    *Registry
+	router *stubRouter
+	seam   *fakeSeam
+	plugin *fakeRunner
+	note   *fakeRunner
+	egress Interceptor
+	d      *Dispatcher
+}
+
+func newRig(t *testing.T) *rig {
 	t.Helper()
+	store := storetest.NewMemStore()
 	clock := testkit.NewFrozenClock(time.Unix(1_700_000_000, 0))
-	bus := events.New(storetest.NewMemStore(), clock)
+	bus := events.New(store, clock)
 	t.Cleanup(func() { _ = bus.Close() })
-	return bus, clock
-}
-
-// awaitAuditFire reads from an audit subscription's Events channel until
-// it sees a HookFire for wantHookID or ctx is done. t leads the parameter
-// list per Go's *testing.T-first test-helper convention, which takes
-// precedence over context-as-first-arg for helpers of this kind.
-//
-//nolint:revive // t-first is the idiomatic test-helper signature, not a context-ordering bug
-func awaitAuditFire(t *testing.T, ctx context.Context, sub *events.Subscription, wantHookID string) HookFire {
-	t.Helper()
-	for {
-		select {
-		case ev, ok := <-sub.Events:
-			if !ok {
-				t.Fatalf("audit subscription closed before a HookFire for %q arrived", wantHookID)
-			}
-			var fire HookFire
-			if err := json.Unmarshal(ev.Payload, &fire); err != nil {
-				t.Fatalf("decode HookFire: %v", err)
-			}
-			if fire.HookID == wantHookID {
-				return fire
-			}
-		case <-ctx.Done():
-			t.Fatalf("timed out waiting for a HookFire for %q", wantHookID)
-		}
+	return &rig{
+		t: t, bus: bus, clock: clock, store: store, state: storetest.NewMemStore(), reg: NewRegistry(),
+		router: &stubRouter{verdict: policy.VerdictAllow}, seam: &fakeSeam{},
+		plugin: &fakeRunner{}, note: &fakeRunner{},
 	}
 }
 
-func newTestDispatcher(t *testing.T, reg *Registry, bus *events.Bus, clock *testkit.FrozenClock, pd PluginDispatcher, nw NoteWriter, timeout time.Duration) *Dispatcher {
-	t.Helper()
-	fw, tok := testFirewall(t)
-	d, err := NewDispatcher(DispatcherConfig{
-		Registry:         reg,
-		Bus:              bus,
-		Clock:            clock,
-		Egress:           fw,
-		EgressToken:      tok,
-		PluginDispatcher: pd,
-		NoteWriter:       nw,
-		ActionTimeout:    timeout,
-		TriggerNamespace: "triggers",
-		AuditNamespace:   "audit",
-		CursorName:       "dispatcher",
-		SubscribeBuffer:  8,
-	})
+// config is a complete, valid DispatcherConfig for the rig.
+func (r *rig) config() DispatcherConfig {
+	fw, tok := testFirewall(r.t)
+	if r.egress != nil {
+		fw = r.egress
+	}
+	return DispatcherConfig{
+		Registry: r.reg, Bus: r.bus, Clock: r.clock, Egress: fw, EgressToken: tok,
+		Runners:            map[ActionType]ActionRunner{ActionTypePluginCall: r.plugin, ActionTypeAgentNote: r.note},
+		ActionCapabilities: map[ActionType]string{ActionTypePluginCall: "hooks.plugin", ActionTypeAgentNote: "hooks.note"},
+		Rehydrate:          r.seam.seam, Router: r.router,
+		RouteSubject: policy.Subject{Kind: policy.SubjectAgent, ID: "hooks"}, State: r.state,
+		ActionTimeout: 3 * time.Second, AuditNamespace: AuditNamespace, CursorPrefix: "hooks:", SubscribeBuffer: 64,
+	}
+}
+
+// build constructs the dispatcher from cfg (the rig's config when nil).
+func (r *rig) build(mutate func(*DispatcherConfig)) *Dispatcher {
+	r.t.Helper()
+	cfg := r.config()
+	if mutate != nil {
+		mutate(&cfg)
+	}
+	d, err := NewDispatcher(cfg)
 	if err != nil {
-		t.Fatalf("NewDispatcher: %v", err)
+		r.t.Fatalf("NewDispatcher: %v", err)
 	}
+	r.d = d
 	return d
 }
 
-// TestHooksShellActionDispatchRefused proves the fail-closed leg of the
-// routed shell path: a dispatcher with NO policy router wired refuses
-// every shell action outright, before either injected action interface is
-// called. There is no configuration in which an unrouted shell action
-// runs. The second half proves an unrecognised action type takes the
-// identical refusal path.
-func TestHooksShellActionDispatchRefused(t *testing.T) {
-	pd := &fakePluginDispatcher{}
-	nw := &fakeNoteWriter{}
-	d := &Dispatcher{
-		pluginDispatcher: pd,
-		noteWriter:       nw,
+func (r *rig) register(cfg HookConfig) HookConfig {
+	r.t.Helper()
+	got, err := r.reg.Register(cfg)
+	if err != nil {
+		r.t.Fatalf("Register: %v", err)
 	}
+	return got
+}
 
-	outcome := d.runAction(context.Background(), HookConfig{
-		ID:         "shell-hook",
-		Trigger:    "t",
-		ActionType: ActionTypeShell,
-	})
-	if outcome.result != ResultRefused {
-		t.Fatalf("result = %q, want refused", outcome.result)
+// start runs the dispatcher: subscriptions exist when start returns, so a
+// publish right after it is never lost to the head-of-namespace start.
+func (r *rig) start() {
+	r.t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	errs, err := r.d.start(ctx)
+	if err != nil {
+		cancel()
+		r.t.Fatalf("start: %v", err)
 	}
-	if outcome.err == nil {
-		t.Fatal("outcome.err is nil, want the action-not-permitted error")
-	}
-	if kind, ok := cascade.KindOf(outcome.err); !ok || kind != cascade.KindPolicyDenied {
-		t.Fatalf("outcome.err kind mismatch: %v", outcome.err)
-	}
-	if len(pd.calls) != 0 || len(nw.calls) != 0 {
-		t.Fatalf("PluginDispatcher/NoteWriter were called: pd=%v nw=%v, want neither called", pd.calls, nw.calls)
-	}
+	done := make(chan struct{})
+	go func() { defer close(done); _ = r.d.serve(ctx, errs) }()
+	r.t.Cleanup(func() { cancel(); <-done })
+}
 
-	// Unknown, never-registrable action type takes the identical path.
-	pd2 := &fakePluginDispatcher{}
-	nw2 := &fakeNoteWriter{}
-	d2 := &Dispatcher{pluginDispatcher: pd2, noteWriter: nw2}
-	outcome2 := d2.runAction(context.Background(), HookConfig{ID: "unknown-hook", Trigger: "t", ActionType: ActionType("carrier-pigeon")})
-	if outcome2.result != ResultRefused {
-		t.Fatalf("result = %q, want refused for unknown action type", outcome2.result)
+func (r *rig) publish(ns, kind string) events.Event {
+	r.t.Helper()
+	ev, err := r.bus.Publish(context.Background(), ns, events.EventKind(kind), "test", nil)
+	if err != nil {
+		r.t.Fatalf("Publish: %v", err)
 	}
-	if len(pd2.calls) != 0 || len(nw2.calls) != 0 {
-		t.Fatal("unknown action type reached an injected dispatcher")
+	return ev
+}
+
+// audit subscribes to the hooks audit namespace from its first event.
+func (r *rig) audit() *events.Subscription {
+	r.t.Helper()
+	sub, err := r.bus.Subscribe(context.Background(), AuditNamespace, "observer-"+r.t.Name(), 256)
+	if err != nil {
+		r.t.Fatalf("Subscribe(audit): %v", err)
+	}
+	return sub
+}
+
+// nextFire returns the next HookFire on sub, failing after 5s.
+func nextFire(t *testing.T, sub *events.Subscription) (HookFire, events.Event) {
+	t.Helper()
+	select {
+	case ev, ok := <-sub.Events:
+		if !ok {
+			t.Fatal("audit subscription closed")
+		}
+		var fire HookFire
+		if err := json.Unmarshal(ev.Payload, &fire); err != nil {
+			t.Fatalf("decode HookFire: %v", err)
+		}
+		return fire, ev
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for a HookFire")
+	}
+	return HookFire{}, events.Event{}
+}
+
+// noMoreFires asserts nothing else reaches sub inside a short window.
+func noMoreFires(t *testing.T, sub *events.Subscription) {
+	t.Helper()
+	select {
+	case ev := <-sub.Events:
+		t.Fatalf("unexpected extra audit event: %s", ev.Payload)
+	case <-time.After(150 * time.Millisecond):
 	}
 }
 
+// TestHooksAuditEventEmittedOnFire proves a matched plugin-call fires,
+// reaches its runner once, and records one success with the event identity.
 func TestHooksAuditEventEmittedOnFire(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	bus, clock := testBus(t)
-
-	reg := NewRegistry()
-	cfg, err := reg.Register(HookConfig{
-		ID:           "plugin-hook",
-		Trigger:      "plugin.registered",
-		ActionType:   ActionTypePluginCall,
-		ActionParams: map[string]string{"plugin": "p1"},
-	})
-	if err != nil {
-		t.Fatalf("Register: %v", err)
+	r := newRig(t)
+	cfg := r.register(HookConfig{ID: "p", Namespace: "plugins", Trigger: "plugin.registered",
+		ActionType: ActionTypePluginCall, ActionParams: map[string]string{"plugin": "p1"}})
+	r.build(nil)
+	sub := r.audit()
+	r.start()
+	ev := r.publish("plugins", "plugin.registered")
+	fire, _ := nextFire(t, sub)
+	if fire.HookID != cfg.ID || fire.ResultCode != ResultSuccess || fire.Namespace != "plugins" ||
+		fire.EventSeq != ev.Seq || fire.Depth != 0 || fire.ParamsHash == "" || fire.Ts.IsZero() {
+		t.Fatalf("fire = %+v", fire)
 	}
-
-	pd := &fakePluginDispatcher{}
-	d := newTestDispatcher(t, reg, bus, clock, pd, &fakeNoteWriter{}, time.Second)
-
-	auditSub, err := bus.Subscribe(ctx, "audit", "test-observer", 8)
-	if err != nil {
-		t.Fatalf("Subscribe(audit): %v", err)
-	}
-
-	runCtx, runCancel := context.WithCancel(ctx)
-	defer runCancel()
-	go func() { _ = d.Run(runCtx) }()
-
-	if _, err := bus.Publish(ctx, "triggers", "plugin.registered", "test", nil); err != nil {
-		t.Fatalf("Publish: %v", err)
-	}
-
-	fire := awaitAuditFire(t, ctx, auditSub, cfg.ID)
-	if fire.ResultCode != ResultSuccess {
-		t.Fatalf("ResultCode = %q, want success", fire.ResultCode)
-	}
-	if fire.Trigger != "plugin.registered" || fire.ActionType != ActionTypePluginCall {
-		t.Fatalf("fire = %+v, unexpected trigger/action_type", fire)
-	}
-	if fire.ParamsHash == "" {
-		t.Fatal("ParamsHash is empty")
-	}
-	if fire.Ts.IsZero() {
-		t.Fatal("Ts is zero")
-	}
-	if len(pd.calls) != 1 || pd.calls[0] != cfg.ID {
-		t.Fatalf("PluginDispatcher calls = %v, want [%s]", pd.calls, cfg.ID)
+	if r.plugin.count() != 1 || r.note.count() != 0 {
+		t.Fatalf("runner counts plugin=%d note=%d, want 1/0", r.plugin.count(), r.note.count())
 	}
 }
 
+// TestHooksAuditEventEmittedOnDispatchError proves a runner error is
+// recorded as error with its message.
 func TestHooksAuditEventEmittedOnDispatchError(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	bus, clock := testBus(t)
-
-	reg := NewRegistry()
-	cfg, err := reg.Register(HookConfig{
-		ID:         "note-hook-err",
-		Trigger:    "scheduler.tick",
-		ActionType: ActionTypeAgentNote,
-	})
-	if err != nil {
-		t.Fatalf("Register: %v", err)
-	}
-
-	wantErr := errors.New("journal unavailable")
-	nw := &fakeNoteWriter{err: wantErr}
-	d := newTestDispatcher(t, reg, bus, clock, &fakePluginDispatcher{}, nw, time.Second)
-
-	auditSub, err := bus.Subscribe(ctx, "audit", "test-observer", 8)
-	if err != nil {
-		t.Fatalf("Subscribe(audit): %v", err)
-	}
-
-	runCtx, runCancel := context.WithCancel(ctx)
-	defer runCancel()
-	go func() { _ = d.Run(runCtx) }()
-
-	if _, err := bus.Publish(ctx, "triggers", "scheduler.tick", "test", nil); err != nil {
-		t.Fatalf("Publish: %v", err)
-	}
-
-	fire := awaitAuditFire(t, ctx, auditSub, cfg.ID)
-	if fire.ResultCode != ResultError {
-		t.Fatalf("ResultCode = %q, want error", fire.ResultCode)
-	}
-	if fire.ErrMsg == "" {
-		t.Fatal("ErrMsg empty on a dispatch-error fire")
+	r := newRig(t)
+	r.note.err = errors.New("journal unavailable")
+	r.register(HookConfig{ID: "n", Namespace: "scheduler", Trigger: "tick", ActionType: ActionTypeAgentNote})
+	r.build(nil)
+	sub := r.audit()
+	r.start()
+	r.publish("scheduler", "tick")
+	fire, _ := nextFire(t, sub)
+	if fire.ResultCode != ResultError || !strings.Contains(fire.ErrMsg, "journal unavailable") {
+		t.Fatalf("fire = %+v, want error with the runner's message", fire)
 	}
 }

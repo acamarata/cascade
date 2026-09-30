@@ -10,11 +10,10 @@ import (
 
 // Purpose: the hook registry — validates and stores HookConfig values,
 //
-//	refusing any unrecognised action_type BEFORE a hook is stored. The
-//	W1 shell refusal that used to live here is gone: shell actions are
-//	registrable and are gated per dispatch by the policy engine
-//	(shell_route.go), which is where a shell action's permission question
-//	is actually answerable.
+//	refusing a bad namespace or an unrecognised action_type BEFORE a hook
+//	is stored. Whether a recognised type can run is the dispatcher's
+//	question (Dispatcher.Runnable), asked at load by ParseHooksSection
+//	and again at every dispatch.
 //
 // Inputs: HookConfig values from Register's caller (composition-root
 //
@@ -22,10 +21,10 @@ import (
 //
 // Outputs: the stored/derived HookConfig on success; a
 //
-//	cascade.KindPolicyDenied error (HookActionNotPermittedCode) for
-//	shell/unknown action types, cascade.KindInvalidInput for a missing
-//	trigger or the reserved hooks-audit trigger, cascade.KindConflict for
-//	a duplicate explicit ID.
+//	cascade.KindPolicyDenied error (HookActionNotPermittedCode) for an
+//	unknown action type, cascade.KindInvalidInput for a bad namespace, a
+//	missing trigger or the reserved hooks-audit trigger,
+//	cascade.KindConflict for a duplicate explicit ID.
 //
 // Constraints: thread-safe (sync.RWMutex) — Register/Deregister/List/
 //
@@ -52,20 +51,21 @@ func NewRegistry() *Registry {
 // DeriveHookID first if the caller left it empty) and returns the stored
 // HookConfig. Validation, in order:
 //
-//  1. cfg.Trigger must be non-empty and must not name the package's own
-//     audit EventKind (EventKindHookFire) — refusing that trigger up
-//     front is this package's first re-entrancy guard (doc.go): a hook
-//     can never be configured to fire on its own audit trail.
-//  2. cfg.ActionType must be one of the three permitted types. Any other
-//     value — including the empty string — is refused with
-//     newActionNotPermittedError (HookActionNotPermittedCode). A shell
-//     hook registers here and is routed through the policy engine at
-//     every dispatch.
-//  3. A non-empty explicit cfg.ID must not already be registered.
+//  1. cfg.Namespace must be a valid hook namespace and never the audit
+//     namespace (namespaceProblem, config.go).
+//  2. cfg.Trigger must be non-empty and must not name the package's own
+//     audit EventKind (EventKindHookFire): a hook can never be configured
+//     to fire on its own audit trail.
+//  3. cfg.ActionType must be a recognised type (permittedActionTypes).
+//     Whether it can RUN is the dispatcher's question (Runnable), asked
+//     again at every dispatch.
+//  4. A non-empty explicit cfg.ID must not already be registered.
 //
-// A rejected hook is NEVER stored — Register returns before touching the
-// map on any validation failure.
+// A rejected hook is NEVER stored. The stored copy owns its params map.
 func (r *Registry) Register(cfg HookConfig) (HookConfig, error) {
+	if problem := namespaceProblem(cfg.Namespace); problem != "" {
+		return HookConfig{}, cascade.Newf(cascade.KindInvalidInput, "hooks: register: namespace %s", problem)
+	}
 	if cfg.Trigger == "" {
 		return HookConfig{}, cascade.New(cascade.KindInvalidInput, "hooks: register: trigger must not be empty")
 	}
@@ -81,8 +81,9 @@ func (r *Registry) Register(cfg HookConfig) (HookConfig, error) {
 	}
 
 	if cfg.ID == "" {
-		cfg.ID = DeriveHookID(cfg.Trigger, cfg.ActionType, cfg.ActionParams)
+		cfg.ID = DeriveHookID(cfg.Namespace, cfg.Trigger, cfg.ActionType, cfg.ActionParams)
 	}
+	cfg.ActionParams = cloneParams(cfg.ActionParams)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -105,33 +106,103 @@ func (r *Registry) Deregister(id string) error {
 	return nil
 }
 
-// List returns every currently-registered hook, sorted by ID.
+// List returns a copy of every currently-registered hook, sorted by ID.
 func (r *Registry) List() []HookConfig {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make([]HookConfig, 0, len(r.hooks))
 	for _, cfg := range r.hooks {
+		cfg.ActionParams = cloneParams(cfg.ActionParams)
 		out = append(out, cfg)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
 }
 
-// MatchTriggers returns every registered hook whose Trigger equals
-// trigger exactly, sorted by ID. An empty result is not an error — the
-// dispatcher's handling of "no match" (silent no-op, no audit) lives in
-// dispatcher.go, not here.
-func (r *Registry) MatchTriggers(trigger string) []HookConfig {
+// MatchTriggers returns every registered hook listening on namespace whose
+// Trigger equals kind exactly, sorted by ID. An empty result is not an
+// error.
+func (r *Registry) MatchTriggers(namespace, kind string) []HookConfig {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var out []HookConfig
 	for _, cfg := range r.hooks {
-		if cfg.Trigger == trigger {
+		if cfg.Namespace == namespace && cfg.Trigger == kind {
 			out = append(out, cfg)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
+}
+
+// Namespaces returns the distinct namespaces the registered hooks listen
+// on, sorted. The dispatcher holds one subscription per entry.
+func (r *Registry) Namespaces() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	seen := make(map[string]bool)
+	var out []string
+	for _, cfg := range r.hooks {
+		if !seen[cfg.Namespace] {
+			seen[cfg.Namespace] = true
+			out = append(out, cfg.Namespace)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// cloneParams returns an independent copy of params (nil stays nil).
+func cloneParams(params map[string]string) map[string]string {
+	if params == nil {
+		return nil
+	}
+	out := make(map[string]string, len(params))
+	for k, v := range params {
+		out[k] = v
+	}
+	return out
+}
+
+// symmetricDifference returns the sorted names in exactly one of a and b.
+func symmetricDifference(a, b []string) []string {
+	count := make(map[string]int)
+	for _, ns := range union(a, nil) {
+		count[ns]++
+	}
+	for _, ns := range union(b, nil) {
+		count[ns]++
+	}
+	var out []string
+	for ns, n := range count {
+		if n == 1 {
+			out = append(out, ns)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// union returns the sorted distinct names in a and b.
+func union(a, b []string) []string {
+	var out []string
+	for _, ns := range append(append([]string(nil), a...), b...) {
+		if !contains(out, ns) {
+			out = append(out, ns)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// contains reports whether set holds ns.
+func contains(set []string, ns string) bool {
+	for _, s := range set {
+		if s == ns {
+			return true
+		}
+	}
+	return false
 }
 
 // EventKindHookFire is declared here (rather than audit.go) so

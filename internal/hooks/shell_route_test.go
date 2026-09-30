@@ -14,8 +14,9 @@ package hooks
 import (
 	"context"
 	"errors"
+	"strings"
+	"sync"
 	"testing"
-	"time"
 
 	"github.com/acamarata/cascade/internal/events/routing"
 	"github.com/acamarata/cascade/internal/policy"
@@ -23,76 +24,89 @@ import (
 )
 
 // stubRouter returns one fixed verdict and records every action it saw.
+// order, when set, receives "route" on each call so a test can check the
+// router ran before the rehydration seam.
 type stubRouter struct {
+	mu      sync.Mutex
 	verdict policy.Verdict
 	err     error
 	seen    []routing.Action
+	order   *callOrder
 }
 
 func (s *stubRouter) RouteAction(_ context.Context, action routing.Action) (policy.Verdict, policy.Trace, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.seen = append(s.seen, action)
+	s.order.add("route")
 	return s.verdict, policy.Trace{}, s.err
 }
 
-// fakeShellRunner is a test-only ShellRunner. FORWARD NOTE: no production
-// implementation exists anywhere in this tree yet, on the same terms as
-// NoteWriter.
+func (s *stubRouter) count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.seen)
+}
+
+func (s *stubRouter) actions() []routing.Action {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]routing.Action(nil), s.seen...)
+}
+
+// callOrder records stage names across goroutines; a nil *callOrder
+// records nothing.
+type callOrder struct {
+	mu    sync.Mutex
+	names []string
+}
+
+func (o *callOrder) add(name string) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.names = append(o.names, name)
+}
+
+// fakeShellRunner is a test-only ShellRunner. No production implementation
+// exists anywhere in this tree yet.
 type fakeShellRunner struct {
+	mu    sync.Mutex
 	calls []string
+	cmds  []string
 	err   error
 }
 
-func (f *fakeShellRunner) RunShell(_ context.Context, hookID, _ string, _ map[string]string) error {
+func (f *fakeShellRunner) RunShell(_ context.Context, hookID, command string, _ map[string]string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.calls = append(f.calls, hookID)
+	f.cmds = append(f.cmds, command)
 	return f.err
 }
 
-func routedShellDispatcher(t *testing.T, reg *Registry, router ActionRouter, sh ShellRunner) *Dispatcher {
-	t.Helper()
-	bus, clock := testBus(t)
-	fw, tok := testFirewall(t)
-	d, err := NewDispatcher(DispatcherConfig{
-		Registry: reg, Bus: bus, Clock: clock, Egress: fw, EgressToken: tok,
-		PluginDispatcher: &fakePluginDispatcher{}, NoteWriter: &fakeNoteWriter{},
-		Router: router, ShellRunner: sh,
-		RouteSubject:    policy.Subject{Kind: policy.SubjectAgent, ID: "hooks"},
-		ShellCapability: "hooks.shell",
-		ActionTimeout:   time.Second, TriggerNamespace: "triggers",
-		AuditNamespace: "audit", CursorName: "dispatcher", SubscribeBuffer: 8,
-	})
-	if err != nil {
-		t.Fatalf("NewDispatcher: %v", err)
-	}
-	return d
+func (f *fakeShellRunner) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.calls)
 }
 
-// fireShellHook registers a shell hook, publishes its trigger on the real
-// bus, runs the dispatcher, and returns the HookFire audit record.
-func fireShellHook(t *testing.T, router ActionRouter, sh ShellRunner) HookFire {
+// fireShellHook registers a shell hook on a dispatcher wired with router
+// and sh, publishes its trigger on the real bus, and returns the HookFire.
+func fireShellHook(t *testing.T, router *stubRouter, sh *fakeShellRunner) HookFire {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	reg := NewRegistry()
-	cfg, err := reg.Register(HookConfig{
-		ID: "shell-hook", Trigger: "plugin.registered", ActionType: ActionTypeShell,
-		ActionParams: map[string]string{ShellCommandParam: "cat notes.txt"},
-	})
-	if err != nil {
-		t.Fatalf("Register: %v", err)
-	}
-	d := routedShellDispatcher(t, reg, router, sh)
-	sub, err := d.bus.Subscribe(ctx, "audit", "test-observer", 8)
-	if err != nil {
-		t.Fatalf("Subscribe(audit): %v", err)
-	}
-	runCtx, runCancel := context.WithCancel(ctx)
-	defer runCancel()
-	go func() { _ = d.Run(runCtx) }()
-	if _, err := d.bus.Publish(ctx, "triggers", "plugin.registered", "test", nil); err != nil {
-		t.Fatalf("Publish: %v", err)
-	}
-	return awaitAuditFire(t, ctx, sub, cfg.ID)
+	r := newRig(t)
+	r.router = router
+	r.register(HookConfig{ID: "shell-hook", Namespace: "plugins", Trigger: "plugin.registered",
+		ActionType: ActionTypeShell, ActionParams: map[string]string{ShellCommandParam: "cat notes.txt"}})
+	r.build(func(c *DispatcherConfig) { c.ShellRunner, c.ShellCapability = sh, "hooks.shell" })
+	sub := r.audit()
+	r.start()
+	r.publish("plugins", "plugin.registered")
+	fire, _ := nextFire(t, sub)
+	return fire
 }
 
 // TestHookShellActionAllow proves an allowed shell action reaches the
@@ -104,14 +118,15 @@ func TestHookShellActionAllow(t *testing.T) {
 	if fire.ResultCode != ResultSuccess {
 		t.Fatalf("ResultCode = %q, want success", fire.ResultCode)
 	}
-	if len(sh.calls) != 1 {
-		t.Fatalf("ShellRunner calls = %v, want the action dispatched once", sh.calls)
+	if sh.count() != 1 || sh.cmds[0] != "cat notes.txt" {
+		t.Fatalf("ShellRunner calls = %v %v, want the action dispatched once", sh.calls, sh.cmds)
 	}
-	if len(router.seen) != 1 {
-		t.Fatalf("router saw %d actions, want exactly 1", len(router.seen))
+	if router.count() != 1 {
+		t.Fatalf("router saw %d actions, want exactly 1", router.count())
 	}
-	got := router.seen[0]
-	if got.Origin != routing.OriginHook || got.Ref != "shell-hook" || got.Command != "cat notes.txt" {
+	got := router.actions()[0]
+	if got.Origin != routing.OriginHook || got.Ref != "shell-hook" || got.Command != "cat notes.txt" ||
+		got.Capability != "hooks.shell" {
 		t.Fatalf("routed action = %+v, want the hook's origin, ref and command", got)
 	}
 }
@@ -127,7 +142,7 @@ func TestHookShellActionDeny(t *testing.T) {
 	if fire.ResultCode != ResultRefused {
 		t.Fatalf("ResultCode = %q, want refused", fire.ResultCode)
 	}
-	if len(sh.calls) != 0 {
+	if sh.count() != 0 {
 		t.Fatalf("ShellRunner was called on a deny: %v", sh.calls)
 	}
 	if fire.ErrMsg == "" {
@@ -144,7 +159,7 @@ func TestHookShellActionAsk(t *testing.T) {
 	if fire.ResultCode != ResultAsk {
 		t.Fatalf("ResultCode = %q, want ask", fire.ResultCode)
 	}
-	if len(sh.calls) != 0 {
+	if sh.count() != 0 {
 		t.Fatalf("ShellRunner was called on an ask: %v", sh.calls)
 	}
 }
@@ -158,7 +173,7 @@ func TestHookShellActionRouterError(t *testing.T) {
 	if fire.ResultCode != ResultRefused {
 		t.Fatalf("ResultCode = %q, want refused", fire.ResultCode)
 	}
-	if len(sh.calls) != 0 {
+	if sh.count() != 0 {
 		t.Fatalf("ShellRunner was called after a routing failure: %v", sh.calls)
 	}
 }
@@ -172,7 +187,7 @@ func TestHookShellActionAllowWithError(t *testing.T) {
 	if fire.ResultCode != ResultRefused {
 		t.Fatalf("ResultCode = %q, want refused", fire.ResultCode)
 	}
-	if len(sh.calls) != 0 {
+	if sh.count() != 0 {
 		t.Fatalf("ShellRunner ran on an unrecordable allow: %v", sh.calls)
 	}
 }
@@ -181,56 +196,33 @@ func TestHookShellActionAllowWithError(t *testing.T) {
 // parameter is refused rather than run with an empty command, which the
 // classifier could not have reasoned about.
 func TestHookShellActionMissingCommand(t *testing.T) {
-	router := &stubRouter{verdict: policy.VerdictAllow}
+	r := newRig(t)
 	sh := &fakeShellRunner{}
-	d := routedShellDispatcher(t, NewRegistry(), router, sh)
-	outcome := d.runAction(context.Background(), HookConfig{ID: "no-cmd", ActionType: ActionTypeShell})
-	if outcome.result != ResultRefused || outcome.err == nil {
-		t.Fatalf("outcome = %+v, want a refusal", outcome)
+	r.build(func(c *DispatcherConfig) { c.ShellRunner, c.ShellCapability = sh, "hooks.shell" })
+	fire, _ := r.d.dispatchHook(context.Background(), HookConfig{ID: "no-cmd", Namespace: "jobs", ActionType: ActionTypeShell}, "jobs", 1)
+	if fire.ResultCode != ResultRefused || fire.ErrMsg == "" {
+		t.Fatalf("fire = %+v, want a refusal", fire)
 	}
-	if len(router.seen) != 0 {
-		t.Fatal("an action with no command text reached the policy engine")
-	}
-}
-
-// TestHookShellActionPluginCallBypasses proves plugin-call and agent-note
-// are NOT routed: they are pre-approved at load time, so the router must
-// see nothing when one fires.
-func TestHookShellActionPluginCallBypasses(t *testing.T) {
-	router := &stubRouter{verdict: policy.VerdictDeny}
-	d := routedShellDispatcher(t, NewRegistry(), router, &fakeShellRunner{})
-	for _, actionType := range []ActionType{ActionTypePluginCall, ActionTypeAgentNote} {
-		outcome := d.runAction(context.Background(), HookConfig{ID: "pre-approved", ActionType: actionType})
-		if outcome.result != ResultSuccess {
-			t.Fatalf("%s: result = %q, want success", actionType, outcome.result)
-		}
-	}
-	if len(router.seen) != 0 {
-		t.Fatalf("pre-approved action types reached the router: %+v", router.seen)
+	if r.router.count() != 0 || sh.count() != 0 {
+		t.Fatal("an action with no command text reached the policy engine or the runner")
 	}
 }
 
-// TestNewDispatcherRefusesHalfWiredRouting proves a router with no runner
-// or no capability is refused at construction rather than at the first
-// shell action.
-func TestNewDispatcherRefusesHalfWiredRouting(t *testing.T) {
-	bus, clock := testBus(t)
-	fw, tok := testFirewall(t)
-	base := DispatcherConfig{
-		Registry: NewRegistry(), Bus: bus, Clock: clock, Egress: fw, EgressToken: tok,
-		PluginDispatcher: &fakePluginDispatcher{}, NoteWriter: &fakeNoteWriter{},
-		Router: &stubRouter{}, ShellRunner: &fakeShellRunner{}, ShellCapability: "hooks.shell",
-		ActionTimeout: time.Second, TriggerNamespace: "triggers",
-		AuditNamespace: "audit", CursorName: "dispatcher", SubscribeBuffer: 8,
+// TestShellUnrunnableWithoutShellRunner proves a dispatcher with no
+// ShellRunner reports shell unrunnable and refuses a smuggled shell hook
+// at dispatch before routing.
+func TestShellUnrunnableWithoutShellRunner(t *testing.T) {
+	r := newRig(t)
+	r.build(nil)
+	if r.d.Runnable(ActionTypeShell) {
+		t.Fatal("shell runnable on a dispatcher with no ShellRunner")
 	}
-	noRunner := base
-	noRunner.ShellRunner = nil
-	if _, err := NewDispatcher(noRunner); err == nil {
-		t.Fatal("dispatcher built with a router and no shell runner")
+	fire, err := r.d.dispatchHook(context.Background(), HookConfig{ID: "sh", Namespace: "jobs", ActionType: ActionTypeShell,
+		ActionParams: map[string]string{ShellCommandParam: "ls"}}, "jobs", 1)
+	if fire.ResultCode != ResultRefused || !strings.Contains(err.Error(), HookActionNotPermittedCode) {
+		t.Fatalf("fire = %+v err = %v", fire, err)
 	}
-	noCap := base
-	noCap.ShellCapability = ""
-	if _, err := NewDispatcher(noCap); err == nil {
-		t.Fatal("dispatcher built with a router and no capability")
+	if r.router.count() != 0 || r.seam.count() != 0 {
+		t.Fatal("an unrunnable shell hook reached routing or the seam")
 	}
 }

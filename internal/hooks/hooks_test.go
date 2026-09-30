@@ -23,8 +23,8 @@ import (
 
 func TestDeriveHookID_DeterministicAcrossCalls(t *testing.T) {
 	params := map[string]string{"plugin": "p1", "tool": "search"}
-	id1 := hooks.DeriveHookID("plugin.registered", hooks.ActionTypePluginCall, params)
-	id2 := hooks.DeriveHookID("plugin.registered", hooks.ActionTypePluginCall, params)
+	id1 := hooks.DeriveHookID("plugins", "plugin.registered", hooks.ActionTypePluginCall, params)
+	id2 := hooks.DeriveHookID("plugins", "plugin.registered", hooks.ActionTypePluginCall, params)
 	if id1 != id2 {
 		t.Fatalf("DeriveHookID not deterministic: %q != %q", id1, id2)
 	}
@@ -39,23 +39,33 @@ func TestDeriveHookID_DeterministicRegardlessOfMapOrder(t *testing.T) {
 	// this proves paramsHash sorts keys rather than depending on it.
 	a := map[string]string{"z": "1", "a": "2", "m": "3"}
 	b := map[string]string{"m": "3", "z": "1", "a": "2"}
-	idA := hooks.DeriveHookID("t", hooks.ActionTypeAgentNote, a)
-	idB := hooks.DeriveHookID("t", hooks.ActionTypeAgentNote, b)
+	idA := hooks.DeriveHookID("jobs", "t", hooks.ActionTypeAgentNote, a)
+	idB := hooks.DeriveHookID("jobs", "t", hooks.ActionTypeAgentNote, b)
 	if idA != idB {
 		t.Fatalf("DeriveHookID depends on map order: %q != %q", idA, idB)
 	}
 }
 
 func TestDeriveHookID_DifferentParamsDifferentID(t *testing.T) {
-	id1 := hooks.DeriveHookID("t", hooks.ActionTypePluginCall, map[string]string{"k": "v1"})
-	id2 := hooks.DeriveHookID("t", hooks.ActionTypePluginCall, map[string]string{"k": "v2"})
+	id1 := hooks.DeriveHookID("jobs", "t", hooks.ActionTypePluginCall, map[string]string{"k": "v1"})
+	id2 := hooks.DeriveHookID("jobs", "t", hooks.ActionTypePluginCall, map[string]string{"k": "v2"})
 	if id1 == id2 {
 		t.Fatalf("DeriveHookID collided for different params: both %q", id1)
 	}
 }
 
+// TestDeriveHookID_NamespaceSeparatesIdentity proves two hooks that differ
+// only by namespace never share an id.
+func TestDeriveHookID_NamespaceSeparatesIdentity(t *testing.T) {
+	a := hooks.DeriveHookID("jobs", "t", hooks.ActionTypePluginCall, nil)
+	b := hooks.DeriveHookID("daemon", "t", hooks.ActionTypePluginCall, nil)
+	if a == b {
+		t.Fatalf("namespace did not change the derived id: %q", a)
+	}
+}
+
 func TestDeriveHookID_NeverEmptyForOddTrigger(t *testing.T) {
-	id := hooks.DeriveHookID("!!!", hooks.ActionTypePluginCall, nil)
+	id := hooks.DeriveHookID("jobs", "!!!", hooks.ActionTypePluginCall, nil)
 	if id == "" {
 		t.Fatal("DeriveHookID returned empty string for a fully non-alphanumeric trigger")
 	}
@@ -64,7 +74,10 @@ func TestDeriveHookID_NeverEmptyForOddTrigger(t *testing.T) {
 func TestHookFire_JSONRoundTrip(t *testing.T) {
 	fire := hooks.HookFire{
 		HookID:     "h1",
+		Namespace:  "plugins",
 		Trigger:    "plugin.registered",
+		EventSeq:   42,
+		Depth:      3,
 		ActionType: hooks.ActionTypePluginCall,
 		ParamsHash: "deadbeef",
 		ResultCode: hooks.ResultSuccess,

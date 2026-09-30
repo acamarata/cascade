@@ -3,83 +3,186 @@ package hooks
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"strings"
+	"sync"
 
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// Purpose: task 5 — the deferred audit emit. Every fire outcome
+// Purpose: turning one fire's outcome into its single HookFire: scrub,
 //
-//	dispatchHook produces (success, error, panic, timeout, refused) is
-//	turned into a HookFire and published to the event bus here; this is
-//	the single call site that does so, so "every fire is audited" is
-//	enforced by construction (there is exactly one path from an outcome
-//	to a publish) rather than by convention.
+//	store in the fires ring, publish to the hooks audit namespace. This is
+//	the one call site that does so, so "every fire is audited" holds by
+//	construction.
 //
-// Inputs: a HookConfig and the hookOutcome dispatchHook computed for it.
+// Inputs: the hook, its Fire, the outcome, and the fire's seamState (the
 //
-// Outputs: one events.Bus.Publish call per invocation, namespace
+//	tagged params and the rehydrated values, when the pipeline got that
+//	far).
 //
-//	d.auditNamespace, kind EventKindHookFire, payload a JSON-encoded
-//	HookFire.
+// Outputs: one HookFire published on AuditNamespace, one ring entry, and
 //
-// Constraints: SECURITY — audit.go is where a hook's own action_params
+//	the scrubbed error dispatchHook returns.
 //
-//	could otherwise leak into the audit trail, because ErrMsg is
-//	free-form text sourced from whatever error runAction's inner call
-//	returned (a PluginDispatcher/NoteWriter implementation the caller
-//	does not control the wording of). This package cannot inspect
-//	arbitrary downstream error text for every possible secret shape, but
-//	it CAN check the one thing it knows for certain might appear
-//	verbatim in that text: the hook's OWN action_params values. redactErr
-//	therefore checks each action_params value against
-//	runtime.LooksLikeSecret (the same heuristic `cascade config
-//	set`/`edit` already screens with, internal/runtime/
-//	config_write_secrets.go) and, for every value that looks
-//	secret-shaped, replaces every literal occurrence of it inside ErrMsg
-//	with "[REDACTED]" before publication — belt-and-braces alongside the
-//	structural fact that HookFire never carries the raw ActionParams map
-//	at all, only ParamsHash. This does not (and cannot) catch a secret
-//	value that does NOT look secret-shaped, or a secret introduced by the
-//	downstream implementation from some source other than this hook's own
-//	params — stated plainly, not silently assumed complete.
+// Constraints: SECURITY. Every non-empty rehydrated value is replaced by
 //
-// SPORT: internal.hooks.HookFire/ADDED (audit path) (P1-E03-W1-S05-T1).
+//	its tag in the error text before the record exists, on every path;
+//	secret-shaped configured values are redacted as a second pass. The
+//	record carries the tagged params hash, never params. The seam's zero
+//	func runs exactly once per fire (seamState.finish).
 
-// emitAudit builds and publishes the HookFire record for one dispatch
-// attempt. Publish errors (a Store failure, or the bus having been
-// closed) are deliberately swallowed here rather than propagated: audit.go
-// is itself the last stop after a hook fire, called from dispatchHook
-// which returns nothing — there is no caller left to hand a publish
-// failure to, and panicking the dispatch loop over an audit-plumbing
-// failure would be strictly worse than losing one audit record. A bus
-// Publish failure of this kind is itself the kind of operational
-// condition internal/events' own KindUnavailable error exists to
-// surface through its OTHER callers (e.g. a health check); it is not
-// silently invisible system-wide, only invisible to this one caller.
-func (d *Dispatcher) emitAudit(hook HookConfig, outcome hookOutcome) {
-	fire := HookFire{
-		HookID:     hook.ID,
-		Trigger:    hook.Trigger,
-		ActionType: hook.ActionType,
-		ParamsHash: paramsHash(hook.ActionParams),
-		ResultCode: outcome.result,
-		Ts:         d.clock.Now(),
-	}
-	if outcome.err != nil {
-		fire.ErrMsg = redactSecrets(outcome.err.Error(), hook.ActionParams)
-	}
+// seamState is what one fire's pipeline goroutine hands back to
+// dispatchHook, which may have stopped waiting for it (timeout). Guarded by
+// mu because the abandoned goroutine can still write after finish.
+type seamState struct {
+	mu       sync.Mutex
+	tagged   map[string]string
+	pairs    []scrubPair
+	zero     func()
+	finished bool
+}
 
-	payload, err := json.Marshal(fire)
+// setTagged records the post-egress params.
+func (s *seamState) setTagged(tagged map[string]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tagged = tagged
+}
+
+// setPlain records the seam's output for scrubbing and takes ownership of
+// zero. If dispatchHook already finished (timeout), zero runs now.
+func (s *seamState) setPlain(plain map[string]string, zero func()) {
+	s.mu.Lock()
+	s.pairs = scrubPairs(s.tagged, plain)
+	if !s.finished {
+		s.zero = zero
+		s.mu.Unlock()
+		return
+	}
+	s.mu.Unlock()
+	if zero != nil {
+		zero()
+	}
+}
+
+// finish marks the fire done and runs the seam's zero, if one is held.
+func (s *seamState) finish() {
+	s.mu.Lock()
+	s.finished = true
+	zero := s.zero
+	s.zero = nil
+	s.mu.Unlock()
+	if zero != nil {
+		zero()
+	}
+}
+
+// mayInvoke reports whether the runner may still be called: false once
+// finish ran, so an abandoned pipeline never calls it after its fire ended.
+func (s *seamState) mayInvoke() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.finished
+}
+
+// snapshot returns the tagged params and the scrub pairs.
+func (s *seamState) snapshot() (map[string]string, []scrubPair) {
+	if s == nil {
+		return nil, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.tagged, s.pairs
+}
+
+// record builds, scrubs, rings and publishes the fire's HookFire and
+// returns it with the scrubbed error. Publish errors are swallowed: there
+// is no caller left to hand them to, and the ring still holds the record.
+func (d *Dispatcher) record(hook HookConfig, fire Fire, outcome hookOutcome, st *seamState) (HookFire, error) {
+	tagged, pairs := st.snapshot()
+	rec := HookFire{
+		HookID: hook.ID, Namespace: fire.Namespace, Trigger: hook.Trigger, ActionType: hook.ActionType,
+		EventSeq: fire.EventSeq, Depth: fire.Chain.Depth, ResultCode: outcome.result, Ts: d.clock.Now(),
+	}
+	if tagged != nil {
+		rec.ParamsHash = paramsHash(tagged)
+	}
+	err := scrubError(outcome.err, pairs, hook.ActionParams)
 	if err != nil {
-		// A HookFire value is always JSON-marshalable (string/time
-		// fields only) — this branch exists only so a future field
-		// addition that breaks that invariant fails loudly in CI rather
-		// than silently dropping every audit record.
+		rec.ErrMsg = err.Error()
+	}
+	d.fires.add(rec)
+	payload, merr := json.Marshal(rec)
+	if merr != nil {
 		payload = []byte(`{"marshal_error":true}`)
 	}
-
 	_, _ = d.bus.Publish(context.Background(), d.auditNamespace, EventKindHookFire, hook.ID, payload)
+	return rec, err
+}
+
+// scrubPair is one plaintext string and the text that replaces it.
+type scrubPair struct{ plain, tag string }
+
+// scrubPairs pairs every non-empty rehydrated value with its tag (the
+// tagged value under the same key, or a redaction marker when the seam
+// added a key), plus the differing middle of the two so a plaintext
+// fragment quoted without its surrounding text is caught too. Longest
+// first, so a fragment never splits a longer match.
+func scrubPairs(tagged, plain map[string]string) []scrubPair {
+	var out []scrubPair
+	for k, p := range plain {
+		if p == "" {
+			continue
+		}
+		tag, ok := tagged[k]
+		if !ok {
+			tag = redactedMarker
+		}
+		if p == tag {
+			continue
+		}
+		out = append(out, scrubPair{plain: p, tag: tag})
+		if mp, mt := differingMiddle(p, tag); mp != "" && mp != p {
+			out = append(out, scrubPair{plain: mp, tag: mt})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return len(out[i].plain) > len(out[j].plain) })
+	return out
+}
+
+// differingMiddle strips the common prefix and suffix of a and b.
+func differingMiddle(a, b string) (string, string) {
+	i := 0
+	for i < len(a) && i < len(b) && a[i] == b[i] {
+		i++
+	}
+	j := 0
+	for j < len(a)-i && j < len(b)-i && a[len(a)-1-j] == b[len(b)-1-j] {
+		j++
+	}
+	return a[i : len(a)-j], b[i : len(b)-j]
+}
+
+// redactedMarker replaces a secret with no tag to stand in for it.
+const redactedMarker = "[REDACTED]"
+
+// scrubError returns err with every scrub pair replaced and every
+// secret-shaped configured value redacted, keeping err's cascade Kind.
+func scrubError(err error, pairs []scrubPair, config map[string]string) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	for _, p := range pairs {
+		msg = strings.ReplaceAll(msg, p.plain, p.tag)
+	}
+	msg = redactSecrets(msg, config)
+	if kind, ok := cascade.KindOf(err); ok {
+		return cascade.New(kind, strings.TrimPrefix(msg, kind.String()+": "))
+	}
+	return cascade.New(cascade.KindInternal, msg)
 }
 
 // redactSecrets returns msg with every literal occurrence of a
@@ -91,7 +194,7 @@ func redactSecrets(msg string, params map[string]string) string {
 			continue
 		}
 		if bad, _ := runtime.LooksLikeSecret(v); bad {
-			msg = strings.ReplaceAll(msg, v, "[REDACTED]")
+			msg = strings.ReplaceAll(msg, v, redactedMarker)
 		}
 	}
 	return msg

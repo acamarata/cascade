@@ -1,24 +1,26 @@
 package hooks
 
-// Purpose: the shell action's policy gate. Every shell action a hook
+// Purpose: the policy gate every action passes before the rehydration seam
 //
-//	fires is routed through the one authorization middleware before it
-//	runs, and refused whenever routing does not return an allow.
+//	and its runner. Every action type, shell included, is routed through
+//	the one authorization middleware with routing.OriginHook and refused
+//	whenever routing does not return an allow.
 //
-// Inputs: the firing HookConfig, the injected ActionRouter, the injected
+// Inputs: the Fire, its post-egress (tagged) params, the injected
 //
-//	ShellRunner, and the routing subject/capability the dispatcher was
-//	built with.
+//	ActionRouter, and the routing subject and per-type capability the
+//	dispatcher was built with.
 //
-// Outputs: a hookOutcome — success, error, ask (dispatch suppressed,
+// Outputs: nothing on an allow; otherwise a hookOutcome, ask (not run,
 //
 //	approval filed by the evaluator) or refused.
 //
-// Constraints: fail closed. A dispatcher with no router refuses every
+// Constraints: fail closed. A routing call that errors refuses; an ask
 //
-//	shell action; a routing call that errors refuses; an ask does not
-//	dispatch. There is no configuration in which a shell action runs
-//	without an allow verdict.
+//	does not dispatch; an allow returned with an error refuses. The routed
+//	command and params hash are built from tagged params only, so the
+//	router's audit row never sees a credential. Shell never enters the
+//	runner table; it runs through ShellRunner (Dispatcher.invoke).
 //
 // SPORT: internal.hooks.ShellRunner/ADDED, internal.hooks.ActionRouter/ADDED
 //
@@ -54,78 +56,56 @@ type ActionRouter interface {
 
 // ShellRunner executes a shell action that routing allowed. The
 // composition root wires the concrete implementation; this package
-// depends on the interface only, exactly as it does for plugin-call and
-// agent-note. NO production implementation exists yet anywhere in this
-// tree, which is stated here rather than left implicit (Art.1).
+// depends on the interface only. NO production implementation exists yet
+// anywhere in this tree, which is stated here rather than left implicit.
 type ShellRunner interface {
-	// RunShell runs command on behalf of hookID with params. hookID
-	// identifies the firing hook; params is the hook's action_params
-	// after the egress firewall has substituted them.
+	// RunShell runs command on behalf of hookID with params. command and
+	// params are the rehydration seam's output for this fire.
 	RunShell(ctx context.Context, hookID string, command string, params map[string]string) error
 }
 
-// runShellAction routes hook's shell action and dispatches it only on an
-// allow. It is called from runAction's ActionTypeShell arm.
-func (d *Dispatcher) runShellAction(ctx context.Context, hook HookConfig) hookOutcome {
-	if d.router == nil || d.shellRunner == nil {
-		return hookOutcome{result: ResultRefused, err: cascade.Newf(cascade.KindPolicyDenied,
-			"hooks: shell action %q cannot run: no policy routing is wired (%s)",
-			hook.ID, HookActionNotPermittedCode)}
+// routeAction asks the router whether fire may run. It returns ok=true
+// only on a clean allow; otherwise the outcome to record.
+func (d *Dispatcher) routeAction(ctx context.Context, fire Fire, tagged map[string]string) (hookOutcome, bool) {
+	hook := fire.Hook
+	capability := d.capabilities[hook.ActionType]
+	if hook.ActionType == ActionTypeShell {
+		capability = d.shellCapability
+		if tagged[ShellCommandParam] == "" {
+			return hookOutcome{result: ResultRefused, err: cascade.Newf(cascade.KindInvalidInput,
+				"hooks: shell action %q has no %q parameter to classify (%s)",
+				hook.ID, ShellCommandParam, HookActionNotPermittedCode)}, false
+		}
 	}
-	command := hook.ActionParams[ShellCommandParam]
-	if command == "" {
-		return hookOutcome{result: ResultRefused, err: cascade.Newf(cascade.KindInvalidInput,
-			"hooks: shell action %q has no %q parameter to classify (%s)",
-			hook.ID, ShellCommandParam, HookActionNotPermittedCode)}
-	}
-
 	verdict, _, err := d.router.RouteAction(ctx, routing.Action{
 		Subject:    d.routeSubject,
-		Capability: d.shellCapability,
+		Capability: capability,
 		Verb:       string(EventKindHookFire),
-		Command:    command,
-		Params:     []byte(paramsHash(hook.ActionParams)),
+		Command:    routeCommand(hook.ActionType, tagged),
+		Params:     []byte(paramsHash(tagged)),
 		Origin:     routing.OriginHook,
 		Ref:        hook.ID,
-		Summary:    "hook " + hook.ID + " shell action",
+		Summary:    "hook " + hook.ID + " " + string(hook.ActionType) + " action",
 	})
-	switch verdict {
-	case policy.VerdictAllow:
-		if err != nil {
-			return hookOutcome{result: ResultRefused, err: err}
-		}
-		return d.dispatchShell(ctx, hook, command)
-	case policy.VerdictAsk:
+	switch {
+	case verdict == policy.VerdictAllow && err == nil:
+		return hookOutcome{}, true
+	case verdict == policy.VerdictAsk && err == nil:
 		return hookOutcome{result: ResultAsk, err: cascade.Newf(cascade.KindPolicyDenied,
-			"hooks: shell action %q is awaiting approval and was not dispatched (%s)",
-			hook.ID, HookActionNotPermittedCode)}
-	case policy.VerdictDeny:
-		return hookOutcome{result: ResultRefused, err: shellRouteError(hook.ID, err)}
+			"hooks: %s action %q is awaiting approval and was not dispatched (%s)",
+			hook.ActionType, hook.ID, HookActionNotPermittedCode)}, false
 	default:
-		return hookOutcome{result: ResultRefused, err: shellRouteError(hook.ID, err)}
+		return hookOutcome{result: ResultRefused, err: routeRefusal(hook, err)}, false
 	}
 }
 
-// shellRouteError returns the refusal for a non-allow routing result,
+// routeRefusal returns the refusal for a non-allow routing result,
 // preserving the router's own typed error when it gave one and refusing
 // anyway when it did not.
-func shellRouteError(hookID string, err error) error {
+func routeRefusal(hook HookConfig, err error) error {
 	if err != nil {
 		return err
 	}
 	return cascade.Newf(cascade.KindPolicyDenied,
-		"hooks: shell action %q was not authorized (%s)", hookID, HookActionNotPermittedCode)
-}
-
-// dispatchShell runs an allowed shell action through the egress firewall
-// and the injected runner, on the same terms as every other action type.
-func (d *Dispatcher) dispatchShell(ctx context.Context, hook HookConfig, command string) hookOutcome {
-	params, ferr := interceptParams(ctx, d.firewall, d.egressToken, hook.ActionParams)
-	if ferr != nil {
-		return hookOutcome{result: ResultRefused, err: ferr}
-	}
-	if err := d.shellRunner.RunShell(ctx, hook.ID, command, params); err != nil {
-		return hookOutcome{result: ResultError, err: err}
-	}
-	return hookOutcome{result: ResultSuccess}
+		"hooks: %s action %q was not authorized (%s)", hook.ActionType, hook.ID, HookActionNotPermittedCode)
 }

@@ -2,283 +2,296 @@ package hooks
 
 import (
 	"context"
-	"fmt"
+	"sync"
 	"time"
 
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/policy"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
-// Purpose: the event-bus subscriber and action dispatcher — task 3
+// Purpose: the action dispatcher. For every matched hook: runnable check,
 //
-//	(subscribe, match, enqueue) and task 4 (dispatch plugin-call/
-//	agent-note, route shell through the policy engine, refuse anything
-//	unrecognised).
+//	budget, egress pass, policy routing, rehydration seam, runner, scrub,
+//	zero, and exactly one HookFire.
 //
-// Inputs: a *Registry, a *events.Bus subscription, an injected
+// Inputs: a *Registry, a *events.Bus, the runner table, the rehydration
 //
-//	PluginDispatcher/NoteWriter pair, a runtime.Clock, and an action
-//	timeout.
+//	seam, the policy router, a runtime.Clock and an action timeout.
 //
-// Outputs: exactly one HookFire audit publish (via audit.go) per matched
+// Outputs: exactly one HookFire per matched hook per event (audit.go).
 //
-//	hook per event, covering success/error/panic/timeout/refused.
+// Constraints: no action type runs without an allow verdict; the seam runs
 //
-// Constraints: dispatchHook must never let one hook's action block the
-//
-//	dispatch loop past the configured timeout, even if that action
-//	ignores context cancellation and blocks forever — see dispatchHook's
-//	comment for the exact mechanism. Non-matching events, and the
-//	package's own EventKindHookFire audit events, are discarded silently
-//	(no audit, no dispatch).
-//
-// SPORT: internal.hooks.Dispatcher/ADDED (P1-E03-W1-S05-T1).
+//	after egress and routing and before the runner; one hook's action never
+//	blocks the loop past ActionTimeout, even when it ignores its context,
+//	and a timed-out fire starts no later stage.
+//	Subscriptions, Run and Swap live in subscriptions.go.
 
-// Dispatcher subscribes to a namespace on an events.Bus, matches incoming
-// events against a Registry's hooks by exact trigger string, and
-// dispatches each match's action. The zero value is not usable; construct
-// with NewDispatcher.
+// Dispatcher matches bus events against a Registry's hooks and dispatches
+// each match. The zero value is not usable; construct with NewDispatcher.
 type Dispatcher struct {
-	registry         *Registry
-	bus              *events.Bus
-	clock            runtime.Clock
-	firewall         Interceptor
-	egressToken      egress.Capability
-	pluginDispatcher PluginDispatcher
-	noteWriter       NoteWriter
-	router           ActionRouter
-	shellRunner      ShellRunner
-	routeSubject     policy.Subject
-	shellCapability  string
-	actionTimeout    time.Duration
-	triggerNamespace string
-	auditNamespace   string
-	cursorName       string
-	subscribeBuffer  int
+	bus             *events.Bus
+	clock           runtime.Clock
+	firewall        Interceptor
+	egressToken     egress.Capability
+	runners         map[ActionType]ActionRunner
+	capabilities    map[ActionType]string
+	rehydrate       RehydrateFunc
+	router          ActionRouter
+	shellRunner     ShellRunner
+	routeSubject    policy.Subject
+	shellCapability string
+	state           provider.Store
+	actionTimeout   time.Duration
+	auditNamespace  string
+	cursorPrefix    string
+	subscribeBuffer int
+
+	mu       sync.RWMutex
+	registry *Registry
+
+	swapMu  sync.Mutex
+	running bool
+	runCtx  context.Context //nolint:containedctx // the live Run's context, handed to namespace consumers Swap starts
+	subs    map[string]*nsSub
+	errs    chan error
+
+	budget *budget
+	fires  fireLog
 }
 
 // DispatcherConfig configures NewDispatcher. Every field is required
-// (Art.1: this package invents no numeric or namespace defaults — the
-// composition root, which knows the real config, supplies them all).
+// except ShellRunner and ShellCapability, which come as a pair: without
+// them shell is unrunnable. This package invents no defaults.
 type DispatcherConfig struct {
-	Registry *Registry
-	Bus      *events.Bus
-	Clock    runtime.Clock
-	// Egress is the outbound firewall every dispatched action's
-	// parameters pass through. It is required: the composition root owns
-	// the vault and the detector, and a dispatcher built without it would
-	// hand operator-configured parameters straight across a process
-	// boundary.
-	Egress Interceptor
-	// EgressToken is the capability the registry issued for
-	// EgressClassHook. It is required for the same reason Egress is: the
-	// zero capability names no class and is refused.
-	EgressToken      egress.Capability
-	PluginDispatcher PluginDispatcher
-	NoteWriter       NoteWriter
-	// Router is the policy-routing seam every shell action is gated on.
-	// It is OPTIONAL only in the sense that a dispatcher built without
-	// one refuses every shell action: there is no configuration in which
-	// a shell action runs unrouted (shell_route.go).
-	Router ActionRouter
-	// ShellRunner executes an allowed shell action. Required whenever
-	// Router is set, and useless without it.
-	ShellRunner ShellRunner
-	// RouteSubject is the principal shell actions are evaluated as, and
-	// ShellCapability the registered capability they need. Both are
-	// required whenever Router is set: the evaluator refuses a subject
-	// that names nobody and a capability that is not registered.
-	RouteSubject     policy.Subject
-	ShellCapability  string
-	ActionTimeout    time.Duration
-	TriggerNamespace string
-	AuditNamespace   string
-	CursorName       string
-	SubscribeBuffer  int
+	Registry    *Registry
+	Bus         *events.Bus
+	Clock       runtime.Clock
+	Egress      Interceptor
+	EgressToken egress.Capability
+	// Runners is the runner table: one ActionRunner per runnable
+	// non-shell action type. An ActionTypeShell key is refused.
+	Runners map[ActionType]ActionRunner
+	// ActionCapabilities names the registered policy capability each
+	// Runners key is routed under; a missing entry is refused.
+	ActionCapabilities map[ActionType]string
+	// Rehydrate is the dispatch-time rehydration seam. Required.
+	Rehydrate RehydrateFunc
+	// Router routes every action; RouteSubject is the principal it is
+	// evaluated as. Both required.
+	Router          ActionRouter
+	RouteSubject    policy.Subject
+	ShellRunner     ShellRunner
+	ShellCapability string
+	// State persists the configured namespace set (subscriptions.go).
+	State           provider.Store
+	ActionTimeout   time.Duration
+	AuditNamespace  string
+	CursorPrefix    string
+	SubscribeBuffer int
 }
 
 // NewDispatcher validates cfg and returns a ready-to-use Dispatcher.
 func NewDispatcher(cfg DispatcherConfig) (*Dispatcher, error) {
-	switch {
-	case cfg.Registry == nil:
-		return nil, fmt.Errorf("hooks: dispatcher: Registry is required")
-	case cfg.Bus == nil:
-		return nil, fmt.Errorf("hooks: dispatcher: Bus is required")
-	case cfg.Clock == nil:
-		return nil, fmt.Errorf("hooks: dispatcher: Clock is required")
-	case cfg.Egress == nil:
-		return nil, fmt.Errorf("hooks: dispatcher: Egress is required")
-	case cfg.EgressToken.Class() != egress.EgressClassHook:
-		return nil, fmt.Errorf("hooks: dispatcher: EgressToken must be the capability for %q",
-			string(egress.EgressClassHook))
-	case cfg.PluginDispatcher == nil:
-		return nil, fmt.Errorf("hooks: dispatcher: PluginDispatcher is required")
-	case cfg.NoteWriter == nil:
-		return nil, fmt.Errorf("hooks: dispatcher: NoteWriter is required")
-	case cfg.Router != nil && cfg.ShellRunner == nil:
-		return nil, fmt.Errorf("hooks: dispatcher: ShellRunner is required when Router is set")
-	case cfg.Router != nil && cfg.ShellCapability == "":
-		return nil, fmt.Errorf("hooks: dispatcher: ShellCapability is required when Router is set")
-	case cfg.ActionTimeout <= 0:
-		return nil, fmt.Errorf("hooks: dispatcher: ActionTimeout must be positive")
-	case cfg.TriggerNamespace == "":
-		return nil, fmt.Errorf("hooks: dispatcher: TriggerNamespace is required")
-	case cfg.AuditNamespace == "":
-		return nil, fmt.Errorf("hooks: dispatcher: AuditNamespace is required")
-	case cfg.CursorName == "":
-		return nil, fmt.Errorf("hooks: dispatcher: CursorName is required")
-	case cfg.SubscribeBuffer <= 0:
-		return nil, fmt.Errorf("hooks: dispatcher: SubscribeBuffer must be positive")
+	if err := validateDispatcherConfig(cfg); err != nil {
+		return nil, err
 	}
-	return &Dispatcher{
-		registry:         cfg.Registry,
-		bus:              cfg.Bus,
-		clock:            cfg.Clock,
-		firewall:         cfg.Egress,
-		egressToken:      cfg.EgressToken,
-		pluginDispatcher: cfg.PluginDispatcher,
-		noteWriter:       cfg.NoteWriter,
-		router:           cfg.Router,
-		shellRunner:      cfg.ShellRunner,
-		routeSubject:     cfg.RouteSubject,
-		shellCapability:  cfg.ShellCapability,
-		actionTimeout:    cfg.ActionTimeout,
-		triggerNamespace: cfg.TriggerNamespace,
-		auditNamespace:   cfg.AuditNamespace,
-		cursorName:       cfg.CursorName,
-		subscribeBuffer:  cfg.SubscribeBuffer,
-	}, nil
+	d := &Dispatcher{
+		bus: cfg.Bus, clock: cfg.Clock, firewall: cfg.Egress, egressToken: cfg.EgressToken,
+		runners: make(map[ActionType]ActionRunner, len(cfg.Runners)), capabilities: make(map[ActionType]string),
+		rehydrate: cfg.Rehydrate, router: cfg.Router, shellRunner: cfg.ShellRunner,
+		routeSubject: cfg.RouteSubject, shellCapability: cfg.ShellCapability, state: cfg.State,
+		actionTimeout: cfg.ActionTimeout, auditNamespace: cfg.AuditNamespace,
+		cursorPrefix: cfg.CursorPrefix, subscribeBuffer: cfg.SubscribeBuffer,
+		registry: cfg.Registry, budget: newBudget(),
+	}
+	for t, r := range cfg.Runners {
+		d.runners[t] = r
+		d.capabilities[t] = cfg.ActionCapabilities[t]
+	}
+	return d, nil
 }
 
-// Run subscribes to the dispatcher's trigger namespace/cursor and
-// processes events until ctx is canceled or the subscription reports a
-// fatal error. Run is intended to be called once, from its own
-// goroutine, by the composition root.
-func (d *Dispatcher) Run(ctx context.Context) error {
-	sub, err := d.bus.Subscribe(ctx, d.triggerNamespace, d.cursorName, d.subscribeBuffer)
-	if err != nil {
-		return err
+// validateDispatcherConfig refuses a config missing anything it needs.
+func validateDispatcherConfig(cfg DispatcherConfig) error {
+	checks := []struct {
+		bad  bool
+		what string
+	}{
+		{cfg.Registry == nil, "Registry is required"},
+		{cfg.Bus == nil, "Bus is required"},
+		{cfg.Clock == nil, "Clock is required"},
+		{cfg.Egress == nil, "Egress is required"},
+		{cfg.EgressToken.Class() != egress.EgressClassHook, "EgressToken must be the hook egress capability"},
+		{len(cfg.Runners) == 0, "Runners must not be empty"},
+		{cfg.Rehydrate == nil, "Rehydrate is required"},
+		{cfg.Router == nil, "Router is required: every action is routed"},
+		{cfg.RouteSubject.Validate() != nil, "RouteSubject must name a subject"},
+		{(cfg.ShellRunner == nil) != (cfg.ShellCapability == ""), "ShellRunner and ShellCapability come as a pair"},
+		{cfg.State == nil, "State is required"},
+		{cfg.ActionTimeout <= 0, "ActionTimeout must be positive"},
+		{cfg.AuditNamespace != AuditNamespace, "AuditNamespace must be " + AuditNamespace},
+		{cfg.CursorPrefix == "", "CursorPrefix is required"},
+		{cfg.SubscribeBuffer <= 0, "SubscribeBuffer must be positive"},
 	}
-	defer func() { _ = sub.Unsubscribe() }()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case err := <-sub.Errs:
-			return err
-		case ev, ok := <-sub.Events:
-			if !ok {
-				return nil
-			}
-			d.handleEvent(ctx, ev)
+	for _, c := range checks {
+		if c.bad {
+			return cascade.New(cascade.KindInvalidInput, "hooks: dispatcher: "+c.what)
 		}
 	}
+	return validateRunnerTable(cfg.Runners, cfg.ActionCapabilities)
 }
 
-// handleEvent matches ev against the registry and dispatches every match.
-// A non-matching event, and ev.Kind == EventKindHookFire (this package's
-// own audit trail — the direct-self-loop guard described in doc.go), are
-// both discarded silently: no dispatch, no audit event.
-func (d *Dispatcher) handleEvent(ctx context.Context, ev events.Event) {
+// validateRunnerTable refuses a shell entry, a nil runner, a runner with no
+// capability, and a capability with no runner.
+func validateRunnerTable(runners map[ActionType]ActionRunner, caps map[ActionType]string) error {
+	for t, r := range runners {
+		switch {
+		case t == ActionTypeShell:
+			return cascade.New(cascade.KindInvalidInput, "hooks: dispatcher: shell never enters the runner table")
+		case r == nil:
+			return cascade.Newf(cascade.KindInvalidInput, "hooks: dispatcher: runner for %q is nil", t)
+		case caps[t] == "":
+			return cascade.Newf(cascade.KindInvalidInput, "hooks: dispatcher: no capability for %q", t)
+		}
+	}
+	for t := range caps {
+		if _, ok := runners[t]; !ok {
+			return cascade.Newf(cascade.KindInvalidInput, "hooks: dispatcher: capability for %q has no runner", t)
+		}
+	}
+	return nil
+}
+
+// Runnable reports whether t can run on this dispatcher: a runner-table
+// key, or shell only when a ShellRunner and its capability are wired.
+func (d *Dispatcher) Runnable(t ActionType) bool {
+	if t == ActionTypeShell {
+		return d.shellRunner != nil && d.shellCapability != ""
+	}
+	_, ok := d.runners[t]
+	return ok
+}
+
+// currentRegistry returns the registry in force.
+func (d *Dispatcher) currentRegistry() *Registry {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.registry
+}
+
+// handleEvent dispatches every hook on ns matching ev. The package's own
+// audit kind never matches (defense-in-depth; Register refuses it too).
+func (d *Dispatcher) handleEvent(ctx context.Context, ns string, ev events.Event) {
 	if ev.Kind == EventKindHookFire {
 		return
 	}
-	matches := d.registry.MatchTriggers(string(ev.Kind))
-	for _, hook := range matches {
-		d.dispatchHook(ctx, hook)
+	for _, hook := range d.currentRegistry().MatchTriggers(ns, string(ev.Kind)) {
+		_, _ = d.dispatchHook(ctx, hook, ns, ev.Seq)
 	}
 }
 
-// hookOutcome is runAction's return shape, folded into a HookFire by
-// dispatchHook.
+// hookOutcome is one attempt's result before it is folded into a HookFire.
 type hookOutcome struct {
 	result ResultCode
 	err    error
 }
 
-// dispatchHook runs hook's action bounded by the dispatcher's
-// actionTimeout and emits exactly one HookFire audit record for the
-// attempt, then returns.
-//
-// Bounding mechanism (this is the "must not hang the system" guarantee):
-// runAction executes in its own goroutine and sends its outcome on
-// resultCh, which is BUFFERED (capacity 1) so that send can never block —
-// even if nobody is listening by the time it happens. dispatchHook itself
-// waits on a select between that channel and ctx's deadline (derived from
-// actionTimeout). If the action's own goroutine is still blocked inside
-// PluginDispatcher/NoteWriter when the deadline fires — including a hook
-// that ignores ctx entirely and blocks forever, e.g. `select {}` — the
-// select's ctx.Done() branch wins, dispatchHook synthesizes a
-// ResultTimeout outcome itself, audits it, and RETURNS immediately: the
-// caller (handleEvent's loop, and therefore Run's whole event loop) is
-// never blocked longer than actionTimeout by any single hook, regardless
-// of what that hook's action actually does. The abandoned goroutine is
-// not and cannot be killed (Go has no such primitive); if the action
-// later does return, its outcome lands in resultCh with nobody left to
-// read it and is silently discarded — a bounded, accepted goroutine leak
-// per fire, never a second audit emission for the same fire (audit
-// emission happens exactly once, in this function, not in the goroutine).
-func (d *Dispatcher) dispatchHook(parentCtx context.Context, hook HookConfig) {
-	ctx, cancel := context.WithTimeout(parentCtx, d.actionTimeout)
+// dispatchHook runs one fire and records exactly one HookFire, returning
+// it and the scrubbed error. The pipeline after the budget runs in its own
+// goroutine; dispatchHook waits for it or for ActionTimeout, whichever is
+// first, so a hook that ignores its context cannot hold the loop. An
+// abandoned goroutine's late result lands in a buffered channel nobody
+// reads and is never audited twice.
+func (d *Dispatcher) dispatchHook(parent context.Context, hook HookConfig, ns string, seq uint64) (HookFire, error) {
+	fire := Fire{Hook: hook, Namespace: ns, EventSeq: seq}
+	fire.Hook.ActionParams = nil
+	if !d.Runnable(hook.ActionType) {
+		return d.record(hook, fire, hookOutcome{result: ResultRefused, err: newActionNotPermittedError(hook.ActionType)}, nil)
+	}
+	fire.Chain = chainFor(d.bus, ns, seq)
+	if code, err := d.budget.admit(hook.ID, ns, seq, fire.Chain, d.clock.Now()); err != nil {
+		return d.record(hook, fire, hookOutcome{result: code, err: err}, nil)
+	}
+	ctx, cancel := context.WithTimeout(events.WithCause(parent, fire.Chain), d.actionTimeout)
 	defer cancel()
-
+	st := &seamState{}
 	resultCh := make(chan hookOutcome, 1)
-	go func() {
-		resultCh <- d.runAction(ctx, hook)
-	}()
+	go func() { resultCh <- d.runAction(ctx, fire, hook.ActionParams, st) }()
 
 	var outcome hookOutcome
 	select {
 	case outcome = <-resultCh:
 	case <-ctx.Done():
-		outcome = hookOutcome{result: ResultTimeout, err: fmt.Errorf("hooks: action timed out after %s", d.actionTimeout)}
+		outcome = d.timedOut()
 	}
-
-	d.emitAudit(hook, outcome)
+	st.finish()
+	return d.record(hook, fire, outcome, st)
 }
 
-// runAction performs exactly one hook's inner action call, recovering
-// from a panic in that call (or in this function's own switch — belt and
-// braces) so a panicking hook can never crash Run's goroutine, let alone
-// the process. It is the SECOND, defense-in-depth action-type check
-// (task 4): even a HookConfig whose ActionType somehow reached this point
-// as shell or unknown — Registry.Register should already have refused it
-// — is refused here too, before either injected interface is ever
-// called.
-func (d *Dispatcher) runAction(ctx context.Context, hook HookConfig) (outcome hookOutcome) {
+// timedOut is the outcome of a fire whose ActionTimeout (or parent
+// context) ended before the pipeline did.
+func (d *Dispatcher) timedOut() hookOutcome {
+	return hookOutcome{result: ResultTimeout,
+		err: cascade.Newf(cascade.KindTimeout, "hooks: action timed out after %s", d.actionTimeout)}
+}
+
+// runAction is the pipeline after the budget: egress pass, routing,
+// rehydration seam, runner. A panic anywhere in it is recovered and
+// recorded by its type only: its value may quote plaintext. A stage that
+// observes the timeout starts nothing later; the runner may start at most
+// at the timeout boundary, so a timeout record means outcome unknown.
+func (d *Dispatcher) runAction(ctx context.Context, fire Fire, raw map[string]string, st *seamState) (outcome hookOutcome) {
 	defer func() {
 		if r := recover(); r != nil {
-			outcome = hookOutcome{result: ResultPanic, err: fmt.Errorf("hooks: panic in action: %v", r)}
+			outcome = hookOutcome{result: ResultPanic, err: cascade.Newf(cascade.KindInternal, "hooks: panic in action (%T)", r)}
 		}
 	}()
-
-	switch hook.ActionType {
-	case ActionTypePluginCall:
-		params, ferr := interceptParams(ctx, d.firewall, d.egressToken, hook.ActionParams)
-		if ferr != nil {
-			return hookOutcome{result: ResultRefused, err: ferr}
-		}
-		if err := d.pluginDispatcher.DispatchPluginCall(ctx, hook.ID, params); err != nil {
-			return hookOutcome{result: ResultError, err: err}
-		}
-		return hookOutcome{result: ResultSuccess}
-	case ActionTypeAgentNote:
-		params, ferr := interceptParams(ctx, d.firewall, d.egressToken, hook.ActionParams)
-		if ferr != nil {
-			return hookOutcome{result: ResultRefused, err: ferr}
-		}
-		if err := d.noteWriter.WriteAgentNote(ctx, hook.ID, params); err != nil {
-			return hookOutcome{result: ResultError, err: err}
-		}
-		return hookOutcome{result: ResultSuccess}
-	case ActionTypeShell:
-		// Routed, never categorical: shell_route.go asks the policy
-		// engine and refuses whenever it cannot get an allow.
-		return d.runShellAction(ctx, hook)
-	default:
-		return hookOutcome{result: ResultRefused, err: newActionNotPermittedError(hook.ActionType)}
+	tagged, err := interceptParams(ctx, d.firewall, d.egressToken, raw)
+	if err != nil {
+		return hookOutcome{result: ResultRefused, err: err}
 	}
+	st.setTagged(tagged)
+	if refused, ok := d.routeAction(ctx, fire, tagged); !ok {
+		return refused
+	}
+	if ctx.Err() != nil {
+		return d.timedOut()
+	}
+	plain, zero, err := d.rehydrate(ctx, fire, cloneParams(tagged))
+	st.setPlain(plain, zero)
+	if err != nil {
+		return hookOutcome{result: ResultRehydrate, err: seamFailure(err)}
+	}
+	if ctx.Err() != nil || !st.mayInvoke() {
+		return d.timedOut()
+	}
+	if err := d.invoke(ctx, fire, plain); err != nil {
+		return hookOutcome{result: ResultError, err: err}
+	}
+	return hookOutcome{result: ResultSuccess}
+}
+
+// seamFailure is the recorded error for a failed seam: its Kind and a
+// fixed text. The seam's own text may quote plaintext it never returned,
+// which no scrub pair could catch, so it is never recorded.
+func seamFailure(err error) error {
+	kind, ok := cascade.KindOf(err)
+	if !ok {
+		kind = cascade.KindInternal
+	}
+	return cascade.New(kind, "hooks: rehydration seam failed")
+}
+
+// invoke calls the runner for fire's type: ShellRunner for shell, the
+// runner table for everything else.
+func (d *Dispatcher) invoke(ctx context.Context, fire Fire, plain map[string]string) error {
+	if fire.Hook.ActionType == ActionTypeShell {
+		return d.shellRunner.RunShell(ctx, fire.Hook.ID, plain[ShellCommandParam], plain)
+	}
+	return d.runners[fire.Hook.ActionType].RunAction(ctx, fire, plain)
 }

@@ -1,297 +1,209 @@
-// Purpose: R-14.117 split of dispatcher_test.go (Art.10.3's 300-line cap
+// Purpose: dispatcher bounds and construction: panic and timeout outcomes,
 //
-//	— behaviour-preserving, moved code only, no rewrites): trigger-miss
-//	no-op, NewDispatcher's full required-field validation (error-path
-//	coverage per Art.3 DoD), Run's Subscribe-error propagation,
-//	zero-registered-hooks no-op, and the blocking-hook timeout/survival
-//	proof. Shares dispatcher_test.go's package-level fixtures (fakes,
-//	testBus, awaitAuditFire, newTestDispatcher) via the shared package
-//	hooks white-box test binary — no duplication.
-//
-// SPORT: internal.hooks.Dispatcher/ADDED (tests, split 2/2)
-//
-//	(P1-E03-W1-S05-T1).
+//	trigger misses, config validation, Run error propagation, and a hook
+//	that blocks forever never wedging the loop, and a timed-out fire never
+//	reaching a later stage.
 package hooks
 
 import (
 	"context"
-	"github.com/acamarata/cascade/internal/hooks/egress"
 	"testing"
 	"time"
 
-	"github.com/acamarata/cascade/internal/events"
-	"github.com/acamarata/cascade/internal/testkit"
+	"github.com/acamarata/cascade/internal/events/routing"
+	"github.com/acamarata/cascade/internal/hooks/egress"
+	"github.com/acamarata/cascade/internal/policy"
 )
 
-func TestHooksAuditEventEmittedOnPanic(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	bus, clock := testBus(t)
-
-	reg := NewRegistry()
-	cfg, err := reg.Register(HookConfig{
-		ID:         "note-hook-panic",
-		Trigger:    "scheduler.tick",
-		ActionType: ActionTypeAgentNote,
-	})
-	if err != nil {
-		t.Fatalf("Register: %v", err)
-	}
-
-	nw := &fakeNoteWriter{panic: true}
-	d := newTestDispatcher(t, reg, bus, clock, &fakePluginDispatcher{}, nw, time.Second)
-
-	auditSub, err := bus.Subscribe(ctx, "audit", "test-observer", 8)
-	if err != nil {
-		t.Fatalf("Subscribe(audit): %v", err)
-	}
-
-	runCtx, runCancel := context.WithCancel(ctx)
-	defer runCancel()
-	go func() { _ = d.Run(runCtx) }()
-
-	if _, err := bus.Publish(ctx, "triggers", "scheduler.tick", "test", nil); err != nil {
-		t.Fatalf("Publish: %v", err)
-	}
-
-	fire := awaitAuditFire(t, ctx, auditSub, cfg.ID)
-	if fire.ResultCode != ResultPanic {
-		t.Fatalf("ResultCode = %q, want panic", fire.ResultCode)
-	}
-	if fire.ErrMsg == "" {
-		t.Fatal("ErrMsg empty on a panic fire")
+// TestDispatcher_PanickingHook_AuditsPanic proves a panicking runner is
+// recovered and recorded as panic.
+func TestDispatcher_PanickingHook_AuditsPanic(t *testing.T) {
+	r := newRig(t)
+	r.note.panics = true
+	r.register(HookConfig{ID: "boom", Namespace: "scheduler", Trigger: "tick", ActionType: ActionTypeAgentNote})
+	r.build(nil)
+	sub := r.audit()
+	r.start()
+	r.publish("scheduler", "tick")
+	if fire, _ := nextFire(t, sub); fire.ResultCode != ResultPanic || fire.ErrMsg == "" {
+		t.Fatalf("fire = %+v, want panic with a message", fire)
 	}
 }
 
+// TestDispatcher_TriggerMatching_Miss_NoAudit proves a non-matching kind,
+// and a matching kind on a namespace no hook names, dispatch nothing.
 func TestDispatcher_TriggerMatching_Miss_NoAudit(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	bus, clock := testBus(t)
-
-	reg := NewRegistry()
-	if _, err := reg.Register(HookConfig{ID: "h", Trigger: "wanted", ActionType: ActionTypePluginCall}); err != nil {
-		t.Fatalf("Register: %v", err)
+	r := newRig(t)
+	r.register(HookConfig{ID: "h", Namespace: "jobs", Trigger: "wanted", ActionType: ActionTypePluginCall})
+	r.build(nil)
+	sub := r.audit()
+	r.start()
+	r.publish("jobs", "unwanted")
+	r.publish("other", "wanted")
+	r.publish("jobs", "wanted")
+	if fire, _ := nextFire(t, sub); fire.HookID != "h" || fire.ResultCode != ResultSuccess {
+		t.Fatalf("fire = %+v", fire)
 	}
-	pd := &fakePluginDispatcher{}
-	d := newTestDispatcher(t, reg, bus, clock, pd, &fakeNoteWriter{}, time.Second)
-
-	runCtx, runCancel := context.WithCancel(ctx)
-	defer runCancel()
-	go func() { _ = d.Run(runCtx) }()
-
-	if _, err := bus.Publish(ctx, "triggers", "unwanted", "test", nil); err != nil {
-		t.Fatalf("Publish: %v", err)
-	}
-	if _, err := bus.Publish(ctx, "triggers", "wanted", "test", nil); err != nil {
-		t.Fatalf("Publish: %v", err)
-	}
-
-	auditSub, err := bus.Subscribe(ctx, "audit", "observer2", 8)
-	if err != nil {
-		t.Fatalf("Subscribe(audit): %v", err)
-	}
-	awaitAuditFire(t, ctx, auditSub, "h")
-
-	if len(pd.calls) != 1 {
-		t.Fatalf("PluginDispatcher calls = %v, want exactly 1 (the miss must not have dispatched)", pd.calls)
+	noMoreFires(t, sub)
+	if r.plugin.count() != 1 {
+		t.Fatalf("runner count = %d, want 1", r.plugin.count())
 	}
 }
 
-// TestNewDispatcher_ValidatesEveryRequiredField is the ERROR-PATH coverage
-// for DispatcherConfig validation (Art.3 DoD: happy-path-only is a
-// blocking CR-A finding) — each required field, omitted alone, must
-// refuse construction.
+// TestNewDispatcher_ValidatesEveryRequiredField refuses construction with
+// each required field broken alone.
 func TestNewDispatcher_ValidatesEveryRequiredField(t *testing.T) {
-	bus, clock := testBus(t)
-	base := func() DispatcherConfig {
-		fw, tok := testFirewall(t)
-		return DispatcherConfig{
-			Registry:         NewRegistry(),
-			Bus:              bus,
-			Clock:            clock,
-			Egress:           fw,
-			EgressToken:      tok,
-			PluginDispatcher: &fakePluginDispatcher{},
-			NoteWriter:       &fakeNoteWriter{},
-			ActionTimeout:    time.Second,
-			TriggerNamespace: "triggers",
-			AuditNamespace:   "audit",
-			CursorName:       "dispatcher",
-			SubscribeBuffer:  8,
-		}
+	r := newRig(t)
+	cases := map[string]func(*DispatcherConfig){
+		"Registry":        func(c *DispatcherConfig) { c.Registry = nil },
+		"Bus":             func(c *DispatcherConfig) { c.Bus = nil },
+		"Clock":           func(c *DispatcherConfig) { c.Clock = nil },
+		"Egress":          func(c *DispatcherConfig) { c.Egress = nil },
+		"EgressToken":     func(c *DispatcherConfig) { c.EgressToken = egress.Capability{} },
+		"Runners empty":   func(c *DispatcherConfig) { c.Runners = nil },
+		"Router":          func(c *DispatcherConfig) { c.Router = nil },
+		"RouteSubject":    func(c *DispatcherConfig) { c.RouteSubject = policy.Subject{} },
+		"State":           func(c *DispatcherConfig) { c.State = nil },
+		"ActionTimeout":   func(c *DispatcherConfig) { c.ActionTimeout = 0 },
+		"AuditNamespace":  func(c *DispatcherConfig) { c.AuditNamespace = "audit" },
+		"CursorPrefix":    func(c *DispatcherConfig) { c.CursorPrefix = "" },
+		"SubscribeBuffer": func(c *DispatcherConfig) { c.SubscribeBuffer = 0 },
+		"shell runner key": func(c *DispatcherConfig) {
+			c.Runners[ActionTypeShell] = &fakeRunner{}
+			c.ActionCapabilities[ActionTypeShell] = "hooks.shell"
+		},
+		"nil runner":           func(c *DispatcherConfig) { c.Runners[ActionTypeAgentNote] = nil },
+		"PluginCallRunner nil": func(c *DispatcherConfig) { c.Runners[ActionTypePluginCall] = PluginCallRunner(nil) },
+		"AgentNoteRunner nil":  func(c *DispatcherConfig) { c.Runners[ActionTypeAgentNote] = AgentNoteRunner(nil) },
+		"missing capability":   func(c *DispatcherConfig) { delete(c.ActionCapabilities, ActionTypeAgentNote) },
+		"capability no runner": func(c *DispatcherConfig) { c.ActionCapabilities["extra"] = "x" },
+		"shell half wired":     func(c *DispatcherConfig) { c.ShellCapability = "hooks.shell" },
+		"shell runner no cap":  func(c *DispatcherConfig) { c.ShellRunner = &fakeShellRunner{} },
 	}
-
-	cases := []struct {
-		name   string
-		mutate func(*DispatcherConfig)
-	}{
-		{"missing Registry", func(c *DispatcherConfig) { c.Registry = nil }},
-		{"missing Bus", func(c *DispatcherConfig) { c.Bus = nil }},
-		{"missing Clock", func(c *DispatcherConfig) { c.Clock = nil }},
-		{"missing Egress", func(c *DispatcherConfig) { c.Egress = nil }},
-		{"zero EgressToken", func(c *DispatcherConfig) { c.EgressToken = egress.Capability{} }},
-		{"missing PluginDispatcher", func(c *DispatcherConfig) { c.PluginDispatcher = nil }},
-		{"missing NoteWriter", func(c *DispatcherConfig) { c.NoteWriter = nil }},
-		{"non-positive ActionTimeout", func(c *DispatcherConfig) { c.ActionTimeout = 0 }},
-		{"missing TriggerNamespace", func(c *DispatcherConfig) { c.TriggerNamespace = "" }},
-		{"missing AuditNamespace", func(c *DispatcherConfig) { c.AuditNamespace = "" }},
-		{"missing CursorName", func(c *DispatcherConfig) { c.CursorName = "" }},
-		{"non-positive SubscribeBuffer", func(c *DispatcherConfig) { c.SubscribeBuffer = 0 }},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := base()
-			tc.mutate(&cfg)
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			cfg := r.config()
+			mutate(&cfg)
 			if _, err := NewDispatcher(cfg); err == nil {
-				t.Fatalf("NewDispatcher(%s) = nil error, want a validation error", tc.name)
+				t.Fatalf("NewDispatcher accepted a config with %s broken", name)
 			}
 		})
 	}
-
-	if _, err := NewDispatcher(base()); err != nil {
-		t.Fatalf("NewDispatcher(fully populated) = %v, want nil", err)
+	if _, err := NewDispatcher(r.config()); err != nil {
+		t.Fatalf("NewDispatcher(valid) = %v", err)
 	}
 }
 
-// TestDispatcher_Run_SubscribeError proves Run propagates a Subscribe
-// failure (here: a duplicate active subscription under the same cursor
-// name, events.Bus's own documented KindConflict case) rather than
-// silently swallowing it.
+// TestDispatcher_Run_SubscribeError proves Run propagates a subscription
+// it cannot take (the cursor is held elsewhere) and a second concurrent
+// Run is refused.
 func TestDispatcher_Run_SubscribeError(t *testing.T) {
+	r := newRig(t)
+	r.register(HookConfig{ID: "h", Namespace: "jobs", Trigger: "k", ActionType: ActionTypePluginCall})
+	r.build(nil)
+	held, err := r.bus.Subscribe(context.Background(), "jobs", "hooks:jobs", 1)
+	if err != nil {
+		t.Fatalf("Subscribe(holder): %v", err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	bus, clock := testBus(t)
-
-	// Hold the cursor name Run itself will try to use, so its own
-	// Subscribe call collides.
-	held, err := bus.Subscribe(ctx, "triggers", "dispatcher", 1)
-	if err != nil {
-		t.Fatalf("Subscribe (holder): %v", err)
+	if err := r.d.Run(ctx); err == nil {
+		t.Fatal("Run returned nil for a held cursor")
 	}
-	defer func() { _ = held.Unsubscribe() }()
-
-	reg := NewRegistry()
-	d := newTestDispatcher(t, reg, bus, clock, &fakePluginDispatcher{}, &fakeNoteWriter{}, time.Second)
-
-	if err := d.Run(ctx); err == nil {
-		t.Fatal("Run returned nil error for a colliding Subscribe, want the propagated error")
+	_ = held.Unsubscribe()
+	r.start()
+	if err := r.d.Run(ctx); err == nil {
+		t.Fatal("a second concurrent Run was accepted")
 	}
 }
 
+// TestDispatcher_ZeroHooks_NoOp proves an empty registry runs, dispatches
+// nothing and exits cleanly on cancel.
 func TestDispatcher_ZeroHooks_NoOp(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	bus, clock := testBus(t)
-
-	reg := NewRegistry()
-	pd := &fakePluginDispatcher{}
-	nw := &fakeNoteWriter{}
-	d := newTestDispatcher(t, reg, bus, clock, pd, nw, time.Second)
-
-	runCtx, runCancel := context.WithCancel(ctx)
-	defer runCancel()
+	r := newRig(t)
+	r.build(nil)
+	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- d.Run(runCtx) }()
-
-	if _, err := bus.Publish(ctx, "triggers", "anything", "test", nil); err != nil {
-		t.Fatalf("Publish: %v", err)
-	}
-
-	runCancel()
+	go func() { done <- r.d.Run(ctx) }()
+	r.publish("jobs", "anything")
+	cancel()
 	select {
 	case err := <-done:
 		if err != nil {
-			t.Fatalf("Run returned error: %v", err)
+			t.Fatalf("Run = %v", err)
 		}
-	case <-ctx.Done():
-		t.Fatal("Run did not exit after cancellation")
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not exit after cancel")
 	}
-	if len(pd.calls) != 0 || len(nw.calls) != 0 {
-		t.Fatalf("zero-hook registry dispatched an action: pd=%v nw=%v", pd.calls, nw.calls)
+	if r.plugin.count()+r.note.count() != 0 {
+		t.Fatal("an empty registry dispatched")
 	}
 }
 
-// TestDispatcher_BlockingHook_TimesOutAndSurvives is the ticket's central
-// requirement: a hook whose action blocks forever, ignoring ctx
-// cancellation entirely, must not hang the dispatch engine. ActionTimeout
-// here is a short, EXPLICIT duration that IS the feature under test — the
-// dispatcher's own bound — not a sleep standing in for synchronisation
-// (R-14.136 targets the latter). The test avoids any raw time.Sleep: it
-// synchronises on fakePluginDispatcher.blocked (closed the instant the
-// fake goroutine enters its permanent block) before asserting anything,
-// and otherwise only waits on channel receives bounded by the outer ctx.
+// TestDispatcher_BlockingHook_TimesOutAndSurvives proves a hook that
+// blocks forever, ignoring its context, is recorded as timeout and the
+// loop keeps dispatching.
 func TestDispatcher_BlockingHook_TimesOutAndSurvives(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	bus, clock, reg, blockingCfg, liveCfg := setUpBlockingHookFixture(t)
-
-	pd := &fakePluginDispatcher{block: true, blocked: make(chan struct{})}
-	nw := &fakeNoteWriter{}
-	const shortTimeout = 30 * time.Millisecond
-	d := newTestDispatcher(t, reg, bus, clock, pd, nw, shortTimeout)
-
-	auditSub, err := bus.Subscribe(ctx, "audit", "observer3", 8)
-	if err != nil {
-		t.Fatalf("Subscribe(audit): %v", err)
+	r := newRig(t)
+	r.plugin.block = make(chan struct{})
+	r.register(HookConfig{ID: "blocker", Namespace: "jobs", Trigger: "a", ActionType: ActionTypePluginCall})
+	r.register(HookConfig{ID: "alive", Namespace: "jobs", Trigger: "b", ActionType: ActionTypeAgentNote})
+	r.build(func(c *DispatcherConfig) { c.ActionTimeout = 30 * time.Millisecond })
+	sub := r.audit()
+	r.start()
+	r.publish("jobs", "a")
+	<-r.plugin.block
+	if fire, _ := nextFire(t, sub); fire.HookID != "blocker" || fire.ResultCode != ResultTimeout {
+		t.Fatalf("fire = %+v, want blocker timeout", fire)
 	}
-
-	runCtx, runCancel := context.WithCancel(ctx)
-	defer runCancel()
-	go func() { _ = d.Run(runCtx) }()
-
-	if _, err := bus.Publish(ctx, "triggers", "plugin.registered", "test", nil); err != nil {
-		t.Fatalf("Publish: %v", err)
-	}
-
-	select {
-	case <-pd.blocked:
-	case <-ctx.Done():
-		t.Fatal("blocking action never started")
-	}
-
-	fire := awaitAuditFire(t, ctx, auditSub, blockingCfg.ID)
-	if fire.ResultCode != ResultTimeout {
-		t.Fatalf("ResultCode = %q, want timeout", fire.ResultCode)
-	}
-
-	// The engine must still be alive: a second, unrelated trigger fires
-	// its own hook normally.
-	if _, err := bus.Publish(ctx, "triggers", "scheduler.tick", "test", nil); err != nil {
-		t.Fatalf("Publish: %v", err)
-	}
-	liveFire := awaitAuditFire(t, ctx, auditSub, liveCfg.ID)
-	if liveFire.ResultCode != ResultSuccess {
-		t.Fatalf("live hook ResultCode = %q, want success (engine must have survived the blocker)", liveFire.ResultCode)
+	r.publish("jobs", "b")
+	if fire, _ := nextFire(t, sub); fire.HookID != "alive" || fire.ResultCode != ResultSuccess {
+		t.Fatalf("fire = %+v, want the live hook to succeed", fire)
 	}
 }
 
-// setUpBlockingHookFixture registers the two hooks
-// TestDispatcher_BlockingHook_TimesOutAndSurvives needs — the permanently
-// blocking one and a second, well-behaved one on a different trigger that
-// proves the engine kept processing events after the blocker's timeout,
-// rather than the whole Run loop having wedged. Split out purely to keep
-// the test function itself under Art.10.3's 50-line cap.
-func setUpBlockingHookFixture(t *testing.T) (bus *events.Bus, clock *testkit.FrozenClock, reg *Registry, blockingCfg, liveCfg HookConfig) {
-	t.Helper()
-	bus, clock = testBus(t)
-	reg = NewRegistry()
+// gatedRouter is the rig's router held at a gate, then signalling done.
+type gatedRouter struct {
+	*stubRouter
+	gate, done chan struct{}
+}
 
-	var err error
-	blockingCfg, err = reg.Register(HookConfig{
-		ID:         "blocker",
-		Trigger:    "plugin.registered",
-		ActionType: ActionTypePluginCall,
-	})
-	if err != nil {
-		t.Fatalf("Register(blocker): %v", err)
+func (g gatedRouter) RouteAction(ctx context.Context, a routing.Action) (policy.Verdict, policy.Trace, error) {
+	defer close(g.done)
+	<-g.gate
+	return g.stubRouter.RouteAction(ctx, a)
+}
+
+// TestTimedOutFireNeverReachesLaterStages proves a router or seam that
+// outlives ActionTimeout ends the fire as timeout and the abandoned
+// pipeline never calls a later stage: no seam after a late router, no
+// runner after a late seam.
+func TestTimedOutFireNeverReachesLaterStages(t *testing.T) {
+	for _, stage := range []string{"router", "seam"} {
+		t.Run(stage, func(t *testing.T) {
+			r := newRig(t)
+			gate, done := make(chan struct{}), make(chan struct{})
+			r.build(func(c *DispatcherConfig) {
+				c.ActionTimeout = 30 * time.Millisecond
+				if stage == "router" {
+					c.Router = gatedRouter{stubRouter: r.router, gate: gate, done: done}
+					return
+				}
+				c.Rehydrate = func(ctx context.Context, f Fire, tagged map[string]string) (map[string]string, func(), error) {
+					defer close(done)
+					<-gate
+					return r.seam.seam(ctx, f, tagged)
+				}
+			})
+			fire, _ := r.d.dispatchHook(context.Background(), credHook, "jobs", 1)
+			close(gate)
+			<-done
+			time.Sleep(200 * time.Millisecond) // the abandoned pipeline's remaining steps
+			seamCalls := r.seam.count()
+			if fire.ResultCode != ResultTimeout || r.plugin.count() != 0 || (stage == "router" && seamCalls != 0) {
+				t.Fatalf("result %q, runner calls %d, seam calls %d; want timeout and no later stage",
+					fire.ResultCode, r.plugin.count(), seamCalls)
+			}
+		})
 	}
-	liveCfg, err = reg.Register(HookConfig{
-		ID:         "still-alive",
-		Trigger:    "scheduler.tick",
-		ActionType: ActionTypeAgentNote,
-	})
-	if err != nil {
-		t.Fatalf("Register(still-alive): %v", err)
-	}
-	return bus, clock, reg, blockingCfg, liveCfg
 }
