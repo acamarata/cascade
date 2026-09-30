@@ -1,0 +1,350 @@
+[
+  {
+    "key": ".github/docs/p1/platform-baseline-repair.md|path|cc2d3510b2c7|1",
+    "file": ".github/docs/p1/platform-baseline-repair.md",
+    "rule": "path",
+    "detail": "unresolved repo path: cmd/cascade/daemon_unix_chat.go"
+  },
+  {
+    "key": ".github/wiki/Agentic-Dev-Shop-Guide.md|claim|b6bc7b085a56|1",
+    "file": ".github/wiki/Agentic-Dev-Shop-Guide.md",
+    "rule": "claim",
+    "detail": "stale-claim phrase: not yet mounted"
+  },
+  {
+    "key": ".github/wiki/Agentic-Dev-Shop-Guide.md|path|b856cc0c9201|1",
+    "file": ".github/wiki/Agentic-Dev-Shop-Guide.md",
+    "rule": "path",
+    "detail": "unresolved repo path: pkg/provider.driverEnvAllowlistBase"
+  },
+  {
+    "key": ".github/wiki/Agentic-Dev-Shop-Guide.md|path|c1c47f00c56e|1",
+    "file": ".github/wiki/Agentic-Dev-Shop-Guide.md",
+    "rule": "path",
+    "detail": "unresolved repo path: docs/cli/run.md"
+  },
+  {
+    "key": ".github/wiki/Agentic-Dev-Shop-Guide.md|path|f201eb9aa655|1",
+    "file": ".github/wiki/Agentic-Dev-Shop-Guide.md",
+    "rule": "path",
+    "detail": "unresolved repo path: cmd/cascade/doctor_completion_gate.go"
+  },
+  {
+    "key": ".github/wiki/CI-Gates.md|symbol|6d6a4866e0ef|1",
+    "file": ".github/wiki/CI-Gates.md",
+    "rule": "symbol",
+    "detail": "unresolved symbol: internal/bench.TestBudgetRegistry"
+  },
+  {
+    "key": ".github/wiki/Fleet-CLI.md|link|8941e654ce64|1",
+    "file": ".github/wiki/Fleet-CLI.md",
+    "rule": "link",
+    "detail": "link target not tracked: .github/wiki/cli-output-contract.md"
+  },
+  {
+    "key": ".github/wiki/Home.md|index|4367559e71c3|1",
+    "file": ".github/wiki/Home.md",
+    "rule": "index",
+    "detail": "missing index page: .github/wiki/Home.md"
+  },
+  {
+    "key": ".github/wiki/Jobs-DAG-Leases.md|path|3490dce763dd|1",
+    "file": ".github/wiki/Jobs-DAG-Leases.md",
+    "rule": "path",
+    "detail": "unresolved repo path: plugins/providers"
+  },
+  {
+    "key": ".github/wiki/Jobs-DAG-Leases.md|path|7ef09ae86620|1",
+    "file": ".github/wiki/Jobs-DAG-Leases.md",
+    "rule": "path",
+    "detail": "unresolved repo path: internal/runtime/config"
+  },
+  {
+    "key": ".github/wiki/PBD-Engine.md|path|a3ae18b3a401|1",
+    "file": ".github/wiki/PBD-Engine.md",
+    "rule": "path",
+    "detail": "unresolved repo path: internal/pews"
+  },
+  {
+    "key": ".github/wiki/PBD-Status-Board.md|path|0cdff1e16acf|1",
+    "file": ".github/wiki/PBD-Status-Board.md",
+    "rule": "path",
+    "detail": "unresolved repo path: internal/pews"
+  },
+  {
+    "key": ".github/wiki/PBD-Status-Board.md|symbol|16243ba1d46a|1",
+    "file": ".github/wiki/PBD-Status-Board.md",
+    "rule": "symbol",
+    "detail": "unresolved package directory: internal/pews"
+  },
+  {
+    "key": ".github/wiki/PBD-Status-Board.md|symbol|3a3cbf675c63|1",
+    "file": ".github/wiki/PBD-Status-Board.md",
+    "rule": "symbol",
+    "detail": "unresolved package directory: internal/pews"
+  },
+  {
+    "key": ".github/wiki/PBD-Ticket-Lifecycle.md|path|c191427e4174|1",
+    "file": ".github/wiki/PBD-Ticket-Lifecycle.md",
+    "rule": "path",
+    "detail": "unresolved repo path: internal/pews/lifecycle_test.go"
+  },
+  {
+    "key": ".github/wiki/PBD-Ticket-Lifecycle.md|symbol|04e4ff3b9179|1",
+    "file": ".github/wiki/PBD-Ticket-Lifecycle.md",
+    "rule": "symbol",
+    "detail": "unresolved package directory: internal/pews"
+  },
+  {
+    "key": ".github/wiki/PBD-Ticket-Lifecycle.md|symbol|8b97eb7186a1|1",
+    "file": ".github/wiki/PBD-Ticket-Lifecycle.md",
+    "rule": "symbol",
+    "detail": "unresolved package directory: internal/pews"
+  },
+  {
+    "key": ".github/wiki/PBD-Ticket-Lifecycle.md|symbol|9a4ff6d0e015|1",
+    "file": ".github/wiki/PBD-Ticket-Lifecycle.md",
+    "rule": "symbol",
+    "detail": "unresolved symbol: internal/fleet/journal.Store.Append"
+  },
+  {
+    "key": ".github/wiki/Topic-Engine.md|path|48863ffa62aa|1",
+    "file": ".github/wiki/Topic-Engine.md",
+    "rule": "path",
+    "detail": "unresolved repo path: internal/retrieval/migrations/0020_topic_exemplars.sql"
+  },
+  {
+    "key": ".github/wiki/Topic-Engine.md|symbol|8c2064a9e469|1",
+    "file": ".github/wiki/Topic-Engine.md",
+    "rule": "symbol",
+    "detail": "unresolved symbol: internal/audit.Writer.Append"
+  },
+  {
+    "key": "docs/TELEMETRY.md|claim|863939c35821|1",
+    "file": "docs/TELEMETRY.md",
+    "rule": "claim",
+    "detail": "stale-claim phrase: Until that lands"
+  },
+  {
+    "key": "docs/architecture.md|claim|3b05f3ecee7c|1",
+    "file": "docs/architecture.md",
+    "rule": "claim",
+    "detail": "stale-claim phrase: Not yet wired"
+  },
+  {
+    "key": "docs/architecture.md|path|e25f1332a91b|1",
+    "file": "docs/architecture.md",
+    "rule": "path",
+    "detail": "unresolved repo path: internal/memory.schema.go"
+  },
+  {
+    "key": "docs/backup.md|claim|e94860a9c098|1",
+    "file": "docs/backup.md",
+    "rule": "claim",
+    "detail": "stale-claim phrase: Until that lands"
+  },
+  {
+    "key": "docs/cli-output-contract.md|path|d2c7ebc9bb47|1",
+    "file": "docs/cli-output-contract.md",
+    "rule": "path",
+    "detail": "unresolved repo path: internal/output.ExitCode(err)"
+  },
+  {
+    "key": "docs/cli-reference.md|claim|d84897adf247|1",
+    "file": "docs/cli-reference.md",
+    "rule": "claim",
+    "detail": "stale-claim phrase: is the seed of"
+  },
+  {
+    "key": "docs/cli-reference.md|claim|d84897adf247|2",
+    "file": "docs/cli-reference.md",
+    "rule": "claim",
+    "detail": "stale-claim phrase: will later"
+  },
+  {
+    "key": "docs/cli-reference/approval.md|path|dcb69d4cd34e|1",
+    "file": "docs/cli-reference/approval.md",
+    "rule": "path",
+    "detail": "unresolved repo path: docs/cli/approval.md"
+  },
+  {
+    "key": "docs/cli-reference/github-ci.md|claim|a3cfca5f05e9|1",
+    "file": "docs/cli-reference/github-ci.md",
+    "rule": "claim",
+    "detail": "stale-claim phrase: not yet wired"
+  },
+  {
+    "key": "docs/cli-reference/recall.md|path|680966a3a9ed|1",
+    "file": "docs/cli-reference/recall.md",
+    "rule": "path",
+    "detail": "unresolved repo path: internal/mcp.NewToolRegistry(plugin.Builtins)"
+  },
+  {
+    "key": "docs/config-reference.md|claim|46b13ff7c825|1",
+    "file": "docs/config-reference.md",
+    "rule": "claim",
+    "detail": "stale-claim phrase: Until that lands"
+  },
+  {
+    "key": "docs/config-reference.md|claim|c74150a3e3f2|1",
+    "file": "docs/config-reference.md",
+    "rule": "claim",
+    "detail": "stale-claim phrase: awaiting their owning"
+  },
+  {
+    "key": "docs/developer/ci.md|path|c66417c82af3|1",
+    "file": "docs/developer/ci.md",
+    "rule": "path",
+    "detail": "unresolved repo path: pkg/somepkg/testdata/fuzz/"
+  },
+  {
+    "key": "docs/developer/ci.md|test|af3800be4ac7|1",
+    "file": "docs/developer/ci.md",
+    "rule": "test",
+    "detail": "no test/fuzz/benchmark/example named FuzzXxx"
+  },
+  {
+    "key": "docs/developer/ci.md|test|e5851cb67505|1",
+    "file": "docs/developer/ci.md",
+    "rule": "test",
+    "detail": "no test/fuzz/benchmark/example named FuzzXxx"
+  },
+  {
+    "key": "docs/developer/ci.md|test|fd1766d6b3bb|1",
+    "file": "docs/developer/ci.md",
+    "rule": "test",
+    "detail": "no test/fuzz/benchmark/example named FuzzXxx"
+  },
+  {
+    "key": "docs/developer/lint-wall.md|test|23e16ad62413|1",
+    "file": "docs/developer/lint-wall.md",
+    "rule": "test",
+    "detail": "no test/fuzz/benchmark/example named TestXxx_SeededViolationRed"
+  },
+  {
+    "key": "docs/developer/lint-wall.md|test|aaaa3659365e|1",
+    "file": "docs/developer/lint-wall.md",
+    "rule": "test",
+    "detail": "no test/fuzz/benchmark/example named TestXxx_RealTreeGreen"
+  },
+  {
+    "key": "docs/developer/release.md|claim|b56cf83864fd|1",
+    "file": "docs/developer/release.md",
+    "rule": "claim",
+    "detail": "stale-claim phrase: not yet wired"
+  },
+  {
+    "key": "docs/developer/runtime-bootstrap.md|path|5bd711b6c287|1",
+    "file": "docs/developer/runtime-bootstrap.md",
+    "rule": "path",
+    "detail": "unresolved repo path: pkg/clock"
+  },
+  {
+    "key": "docs/developer/runtime-bootstrap.md|path|9c495d1f8f17|1",
+    "file": "docs/developer/runtime-bootstrap.md",
+    "rule": "path",
+    "detail": "unresolved repo path: internal/runtime.loggingRotation.Enabled()"
+  },
+  {
+    "key": "docs/developer/runtime-bootstrap.md|symbol|edfd6713855e|1",
+    "file": "docs/developer/runtime-bootstrap.md",
+    "rule": "symbol",
+    "detail": "unresolved symbol: internal/runtime.Config.Logging"
+  },
+  {
+    "key": "docs/developer/versioning/crash-reporting.md|claim|80f7ab38b44f|1",
+    "file": "docs/developer/versioning/crash-reporting.md",
+    "rule": "claim",
+    "detail": "stale-claim phrase: Until that ticket lands"
+  },
+  {
+    "key": "docs/plugin-author-guide.md|claim|c1b3a6234a5d|1",
+    "file": "docs/plugin-author-guide.md",
+    "rule": "claim",
+    "detail": "stale-claim phrase: not yet built"
+  },
+  {
+    "key": "docs/plugin-author-guide.md|path|0008c20f316b|1",
+    "file": "docs/plugin-author-guide.md",
+    "rule": "path",
+    "detail": "unresolved repo path: internal/plugins.BuiltinRegistry.Grants(id)"
+  },
+  {
+    "key": "docs/plugins/nself.md|symbol|b65f00062169|1",
+    "file": "docs/plugins/nself.md",
+    "rule": "symbol",
+    "detail": "unresolved package directory: cmd"
+  },
+  {
+    "key": "docs/quickstart/README.md|index|5704c0170078|1",
+    "file": "docs/quickstart/README.md",
+    "rule": "index",
+    "detail": "missing index page: docs/quickstart/README.md"
+  },
+  {
+    "key": "docs/reference/nodes.md|claim|f17548728cfd|1",
+    "file": "docs/reference/nodes.md",
+    "rule": "claim",
+    "detail": "stale-claim phrase: not yet built"
+  },
+  {
+    "key": "docs/reference/nodes.md|path|ce7308842241|1",
+    "file": "docs/reference/nodes.md",
+    "rule": "path",
+    "detail": "unresolved repo path: internal/nodes/testdata/minisign/README.md"
+  },
+  {
+    "key": "docs/review.md|path|3e96ae225f9f|1",
+    "file": "docs/review.md",
+    "rule": "path",
+    "detail": "unresolved repo path: internal/generated/x.go"
+  },
+  {
+    "key": "docs/review.md|path|43bf1ed39319|1",
+    "file": "docs/review.md",
+    "rule": "path",
+    "detail": "unresolved repo path: internal/codegen/generated_api.go"
+  },
+  {
+    "key": "docs/review.md|path|45505757d202|1",
+    "file": "docs/review.md",
+    "rule": "path",
+    "detail": "unresolved repo path: docs/AGENTS.md.tmpl"
+  },
+  {
+    "key": "docs/review.md|symbol|293596ade3a3|1",
+    "file": "docs/review.md",
+    "rule": "symbol",
+    "detail": "unresolved symbol: pkg/provider.ReviewRequest.Diff"
+  },
+  {
+    "key": "docs/security-posture.md|claim|ba78c942ad68|1",
+    "file": "docs/security-posture.md",
+    "rule": "claim",
+    "detail": "stale-claim phrase: not yet wired"
+  },
+  {
+    "key": "docs/security-posture.md|index|a1c963fdc689|1",
+    "file": "docs/security-posture.md",
+    "rule": "index",
+    "detail": "unlinked page: docs/security-posture/egress-firewall.md"
+  },
+  {
+    "key": "docs/security-posture.md|symbol|e839c44beece|1",
+    "file": "docs/security-posture.md",
+    "rule": "symbol",
+    "detail": "unresolved package directory: plugins"
+  },
+  {
+    "key": "docs/security-posture/egress-firewall.md|claim|ddfa52e788bd|1",
+    "file": "docs/security-posture/egress-firewall.md",
+    "rule": "claim",
+    "detail": "stale-claim phrase: Until that lands"
+  },
+  {
+    "key": "docs/security-posture/egress-firewall.md|symbol|8e297836880b|1",
+    "file": "docs/security-posture/egress-firewall.md",
+    "rule": "symbol",
+    "detail": "unresolved package directory: pkg/bridge"
+  }
+]

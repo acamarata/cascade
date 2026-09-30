@@ -8,6 +8,7 @@
   "internal/bridge": { "tier": "core", "floor": 85.0, "baseline": 96.3 },
   "internal/build": { "tier": "core", "floor": 85.0, "baseline": 90.0 },
   "internal/build/gen/coveragebaseline": { "tier": "core", "floor": 85.0, "baseline": 86.8 },
+  "internal/build/gen/doctruth": { "tier": "core", "floor": 85.0, "baseline": 89.2 },
   "internal/buildinfo": { "tier": "core", "floor": 85.0, "baseline": 100.0 },
   "internal/ci": { "tier": "core", "floor": 85.0, "baseline": 91.8 },
   "internal/client": { "tier": "core", "floor": 85.0, "baseline": 90.9 },

@@ -4,6 +4,8 @@ This file is the threat model, firewall description and injection-boundary
 reference for cascade. It is created and owned by the security-documentation
 ticket in the release epic; other tickets seed the section they implement.
 
+See also [supply-chain tooling: pins and accepted residuals](security-posture/supply-chain-risks.md).
+
 ## Vault backends
 
 Cascade's secret vault stores values through one custody backend, chosen at
