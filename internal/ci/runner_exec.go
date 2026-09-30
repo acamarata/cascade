@@ -118,6 +118,11 @@ func (ShellExecutor) Run(ctx context.Context, req ExecRequest) ExecResult {
 	return runViaShell(ctx, bin, flag, req)
 }
 
+// attachStep attaches a started step to its process tree. It is a
+// variable only so a test can inject an attach failure; production
+// code never reassigns it.
+var attachStep = func(t processTree, cmd *exec.Cmd) error { return t.attach(cmd) }
+
 // runViaShell is Run's testable core: bin/flag are parameters (not always
 // goruntime.GOOS-derived) so runner_exec_test.go can prove the StartErr
 // path -- a shell binary genuinely absent from PATH -- deterministically,
@@ -157,7 +162,7 @@ func runViaShell(ctx context.Context, bin, flag string, req ExecRequest) ExecRes
 	if err := cmd.Start(); err != nil {
 		return mapResult(runCtx, err, killErr, req.Command, &stdout, &stderr)
 	}
-	if err := tree.attach(cmd); err != nil {
+	if err := attachStep(tree, cmd); err != nil {
 		_ = cmd.Wait()
 		return startFailure(err, req.Command, stdout.String(), stderr.String())
 	}
