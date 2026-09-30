@@ -13,6 +13,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -26,6 +27,7 @@ import (
 	cascaderuntime "github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/internal/storage/storetest"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // recordingRunner stands in for the external-program runner every platform
@@ -225,15 +227,25 @@ func TestSelectingCustodyHereWouldReachTheSecurityTool(t *testing.T) {
 		t.Fatalf("seed a resolvable keychain path: %v", err)
 	}
 	rec := &recordingRunner{keychain: fakeKeychain}
-	if _, err := secrets.SelectCustody(secrets.Config{
+	// Every call succeeds, including the find that follows the probe's
+	// delete: the recorder says the probe item is STILL stored. The probe
+	// cannot prove its cleanup, so SelectCustody refuses. (The not-found
+	// answer that lets it succeed is a secrets-internal error type a
+	// caller-side fake cannot construct; internal/secrets covers that path.)
+	_, err := secrets.SelectCustody(secrets.Config{
 		Service: "cascade-chat-wiring-old-shape",
 		Dir:     dir,
 		Runner:  rec.run,
-	}); err != nil {
-		t.Fatalf("SelectCustody: %v", err)
+	})
+	var ce *cascade.Error
+	if err != secrets.ErrProbeCleanupFailed || !errors.As(err, &ce) {
+		t.Fatalf("SelectCustody error = %v, want ErrProbeCleanupFailed by identity", err)
+	}
+	if ce.Kind != cascade.KindUnavailable || ce.Msg != "platform keychain probe could not clean up; custody refused" {
+		t.Fatalf("refusal kind/message = %v / %q", ce.Kind, ce.Msg)
 	}
 	joined := strings.Join(rec.recorded(), "\n")
-	for _, want := range []string{"add-generic-password", "delete-generic-password"} {
+	for _, want := range []string{"add-generic-password", "delete-generic-password", "find-generic-password"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("the old call shape did not invoke %s; recorded: %v", want, rec.recorded())
 		}

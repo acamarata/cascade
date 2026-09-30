@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T07:44:31Z",
+  "generated_at": "2026-09-30T08:00:26Z",
   "tickets": [
     "P1-BLD-01",
     "P1-BLD-02",
@@ -21,7 +21,9 @@
     "P1-CORE-06",
     "P1-PBD-07",
     "P1-PLG-01",
+    "P1-SEC-28",
     "P1-SEC-37",
+    "P1-SHIP-13",
     "P1-SHIP-14",
     "P1-SHIP-19",
     "P1-SUP-01"

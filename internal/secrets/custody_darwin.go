@@ -1,20 +1,14 @@
 //go:build darwin
 
 // Purpose: the macOS custody backend - generic passwords in the login
-//
-//	keychain, reached by running /usr/bin/security as a subprocess.
-//
+// keychain, reached by running /usr/bin/security as a subprocess.
 // Inputs: a Config carrying the keychain service label and (in tests) an
-//
-//	injected command runner.
-//
+// injected command runner.
 // Outputs: a Custody backed by the real user keychain.
 // Constraints: no CGO and no Security.framework linkage, so this backend
-//
-//	survives the CGO_ENABLED=0 release build that every shipped binary is
-//	made with. Secret values reach /usr/bin/security as hex through -X
-//	rather than as plaintext argv, so a value never appears in the
-//	process table; nothing here logs, and no error carries a value.
+// survives the CGO_ENABLED=0 release build. Secret values reach
+// /usr/bin/security as hex through -X, never as plaintext argv; nothing
+// here logs, and no error carries a value.
 //
 // SPORT: internal/secrets Custody/ADDED (darwin keychain).
 
@@ -27,6 +21,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -76,19 +71,14 @@ func (k *keychainCustody) Name() string { return darwinCustodyName }
 // resolveKeychain returns the explicit path of the user's default
 // keychain, or an error when none resolves.
 //
-// R-14.260, after an incident: /usr/bin/security raises a GUI modal
-// ("A keychain cannot be found to store ...") whenever it is asked to
-// write and no default keychain resolves on the search list. A redirected
-// HOME has no search list -- which is every fake-home test, the Art.7.1
-// redirected-HOME lane, a daemon under a service account, and a fresh
-// machine account before first login. A modal appeared on a real desktop
-// and hung a whole test package.
-//
-// So this package never relies on the search list. The path is resolved
-// once, checked to exist, and passed as the trailing keychain argument to
-// every security call. With no path resolved nothing is invoked at all:
-// custody reports unavailable and SelectCustody lands on the encrypted
-// file vault. There is no code path from here to a dialog.
+// R-14.260: /usr/bin/security raises a GUI modal whenever it is asked to
+// write and no default keychain resolves on the search list, which is the
+// case under any redirected HOME (fake-home tests, service accounts, a
+// fresh account before first login); one hung a whole test package. So the
+// path is resolved once, checked to exist, and passed as the trailing
+// keychain argument to every security call. With no path nothing is
+// invoked: custody reports unavailable and SelectCustody lands on the
+// encrypted file vault. There is no code path from here to a dialog.
 func (k *keychainCustody) resolveKeychain(ctx context.Context) (string, error) {
 	k.once.Do(func() {
 		if k.configured != "" {
@@ -118,33 +108,75 @@ func (k *keychainCustody) resolveKeychain(ctx context.Context) (string, error) {
 	return k.keychainPath, k.keychainErr
 }
 
-// Available reports whether this backend can hold a secret, by resolving
-// the keychain it would write into.
-//
-// It used to run `security list-keychains`, which succeeds on a host where
-// Set fails: with HOME pointed anywhere but the logged-in user's home,
-// list-keychains still finds the System keychain and exits 0 while a write
-// has no user keychain to go into. SelectCustody gates a write on this
-// answer, so it chose a keychain it could not write to and never reached
-// the file vault (R-14.258 Finding 6).
-//
-// It then, briefly, probed by WRITING -- a probe should exercise the
-// capability it gates -- and that is what raised the modal. The write
-// still happens, but only into a path already proven to resolve and
-// exist, which is the state in which security has nothing to ask about.
-func (k *keychainCustody) Available() bool {
-	ctx := context.Background()
+// Available reports whether this backend can hold a secret (probe says why
+// not), by WRITING into a keychain proven to exist: list-keychains passes
+// where writes fail (R-14.258 F6); an unresolved write prompts (R-14.260).
+func (k *keychainCustody) Available() bool { return k.probe(context.Background()) == nil }
+
+// probeTimeout bounds one probe, retry included.
+const probeTimeout = 2 * time.Second
+
+// probe writes the probe item and removes it. A failed write is a plain
+// unavailable (nothing was written; a locked or headless keychain keeps its
+// file-vault fallback). A write whose item cannot be proven gone is
+// ErrProbeCleanupFailed: that keychain works, so SelectCustody refuses.
+func (k *keychainCustody) probe(parent context.Context) error {
+	ctx, cancel := context.WithTimeout(parent, probeTimeout)
+	defer cancel()
 	keychain, err := k.resolveKeychain(ctx)
 	if err != nil {
-		return false
+		return err
 	}
 	_, setErr := k.run(ctx, securityBin, "add-generic-password",
 		"-a", availabilityProbeAccount, "-s", k.service, "-U", "-X", hex.EncodeToString([]byte{0}), keychain)
-	// Deferred in spirit: the delete runs whether or not the write
-	// reported success, so a probe can never accumulate.
-	_, _ = k.run(ctx, securityBin, "delete-generic-password",
+	// Cleanup runs even after a failed write, so a probe never accumulates.
+	cleanErr := k.removeProbe(ctx, keychain)
+	switch {
+	case setErr != nil:
+		return ErrCustodyUnavailable(darwinCustodyName, redactRunner(setErr))
+	case cleanErr != nil:
+		return ErrProbeCleanupFailed
+	}
+	return nil
+}
+
+// removeProbe deletes the probe item, retrying exactly once with the same
+// identity, then confirms it is gone. Only a genuine not-found is absence.
+func (k *keychainCustody) removeProbe(ctx context.Context, keychain string) error {
+	del := []string{"delete-generic-password", "-a", availabilityProbeAccount, "-s", k.service, keychain}
+	_, err := k.run(ctx, securityBin, del...)
+	if err != nil && !probeAbsent(err) {
+		_, err = k.run(ctx, securityBin, del...)
+	}
+	if err != nil && !probeAbsent(err) {
+		return err
+	}
+	// Checked even after a clean delete; find without -w reads no value.
+	_, err = k.run(ctx, securityBin, "find-generic-password",
 		"-a", availabilityProbeAccount, "-s", k.service, keychain)
-	return setErr == nil
+	switch {
+	case err == nil:
+		return errors.New("the probe item is still stored")
+	case probeAbsent(err):
+		return nil
+	}
+	return err
+}
+
+// probeAbsent is isKeychainNotFound minus any stderr that also reports a
+// denial: a refusal quoting the not-found phrase is not proof of absence.
+func probeAbsent(err error) bool {
+	var re *runnerError
+	if !isKeychainNotFound(err) || !errors.As(err, &re) {
+		return false
+	}
+	text := strings.ToLower(re.stderr)
+	for _, denial := range []string{"not allowed", "not permitted", "denied", "permission", "locked", "passphrase"} {
+		if strings.Contains(text, denial) {
+			return false
+		}
+	}
+	return true
 }
 
 // availabilityProbeAccount is the account the probe writes and deletes. It
