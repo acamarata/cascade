@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T03:35:59Z",
+  "generated_at": "2026-09-30T03:56:29Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -12363,42 +12363,9 @@
       "sites": [
         {
           "file": "internal/hooks/shell_route.go",
-          "line": 23,
+          "line": 25,
           "status": "ADD",
           "raw": "internal.hooks.ActionRouter/ADDED"
-        }
-      ],
-      "statuses": [
-        "ADD"
-      ]
-    },
-    {
-      "name": "internal.hooks.Dispatcher",
-      "sites": [
-        {
-          "file": "internal/hooks/dispatcher.go",
-          "line": 37,
-          "status": "ADD",
-          "ticket": "P1-E03-W1-S05-T1",
-          "raw": "internal.hooks.Dispatcher/ADDED (P1-E03-W1-S05-T1)."
-        },
-        {
-          "file": "internal/hooks/dispatcher_test.go",
-          "line": 32,
-          "status": "ADD",
-          "raw": "internal.hooks.Dispatcher/ADDED (tests, split 1/2)"
-        },
-        {
-          "file": "internal/hooks/dispatcher_timeout_test.go",
-          "line": 11,
-          "status": "ADD",
-          "raw": "internal.hooks.Dispatcher/ADDED (tests, split 2/2)"
-        },
-        {
-          "file": "internal/hooks/doc.go",
-          "line": 89,
-          "status": "ADD",
-          "raw": "internal.hooks.Dispatcher/ADDED"
         }
       ],
       "statuses": [
@@ -12429,13 +12396,6 @@
       "name": "internal.hooks.HookFire",
       "sites": [
         {
-          "file": "internal/hooks/audit.go",
-          "line": 47,
-          "status": "ADD",
-          "ticket": "P1-E03-W1-S05-T1",
-          "raw": "internal.hooks.HookFire/ADDED (audit path) (P1-E03-W1-S05-T1)."
-        },
-        {
           "file": "internal/hooks/audit_test.go",
           "line": 15,
           "status": "ADD",
@@ -12462,14 +12422,8 @@
       "name": "internal.hooks.Registry",
       "sites": [
         {
-          "file": "internal/hooks/doc.go",
-          "line": 89,
-          "status": "ADD",
-          "raw": "internal.hooks.Registry/ADDED"
-        },
-        {
           "file": "internal/hooks/registry.go",
-          "line": 37,
+          "line": 36,
           "status": "ADD",
           "ticket": "P1-E03-W1-S05-T1",
           "raw": "internal.hooks.Registry/ADDED (P1-E03-W1-S05-T1)."
@@ -12491,7 +12445,7 @@
       "sites": [
         {
           "file": "internal/hooks/shell_route.go",
-          "line": 23,
+          "line": 25,
           "status": "ADD",
           "raw": "internal.hooks.ShellRunner/ADDED"
         }
@@ -30365,7 +30319,7 @@
       ]
     }
   ],
-  "total_sites": 2852,
+  "total_sites": 2846,
   "unspecified_count": 148,
   "multi_status_count": 80
 }
