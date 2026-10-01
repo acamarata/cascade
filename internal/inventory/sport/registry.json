@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-30T12:22:15Z",
+  "generated_at": "2026-10-01T19:15:53Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -15011,10 +15011,21 @@
       "sites": [
         {
           "file": "internal/storage/queue/ack.go",
-          "line": 5,
-          "status": "ADD",
-          "ticket": "P1-E02-W1-S02-T4",
-          "raw": "internal.storage.queue.Queue/ADDED (P1-E02-W1-S02-T4)."
+          "line": 11,
+          "status": "CHANGE",
+          "raw": "internal.storage.queue.Queue/CHANGED."
+        },
+        {
+          "file": "internal/storage/queue/ack_fence_test.go",
+          "line": 6,
+          "status": "CHANGE",
+          "raw": "internal.storage.queue.Queue/CHANGED."
+        },
+        {
+          "file": "internal/storage/queue/corruption_test.go",
+          "line": 13,
+          "status": "CHANGE",
+          "raw": "internal.storage.queue.Queue/CHANGED."
         },
         {
           "file": "internal/storage/queue/envelope.go",
@@ -15024,6 +15035,30 @@
           "raw": "internal.storage.queue.Queue/ADDED (P1-E02-W1-S02-T4)."
         },
         {
+          "file": "internal/storage/queue/expiry_test.go",
+          "line": 6,
+          "status": "CHANGE",
+          "raw": "internal.storage.queue.Queue/CHANGED."
+        },
+        {
+          "file": "internal/storage/queue/export_test.go",
+          "line": 7,
+          "status": "CHANGE",
+          "raw": "internal.storage.queue.Queue/CHANGED."
+        },
+        {
+          "file": "internal/storage/queue/fault_matrix_test.go",
+          "line": 8,
+          "status": "CHANGE",
+          "raw": "internal.storage.queue.Queue/CHANGED."
+        },
+        {
+          "file": "internal/storage/queue/fault_test.go",
+          "line": 6,
+          "status": "CHANGE",
+          "raw": "internal.storage.queue.Queue/CHANGED."
+        },
+        {
           "file": "internal/storage/queue/ids.go",
           "line": 13,
           "status": "ADD",
@@ -15031,11 +15066,16 @@
           "raw": "internal.storage.queue.Queue/ADDED (P1-E02-W1-S02-T4)."
         },
         {
+          "file": "internal/storage/queue/persistence.go",
+          "line": 20,
+          "status": "CHANGE",
+          "raw": "internal.storage.queue.Queue/CHANGED."
+        },
+        {
           "file": "internal/storage/queue/queue.go",
-          "line": 45,
-          "status": "ADD",
-          "ticket": "P1-E02-W1-S02-T4",
-          "raw": "internal.storage.queue.Queue/ADDED (P1-E02-W1-S02-T4)."
+          "line": 36,
+          "status": "CHANGE",
+          "raw": "internal.storage.queue.Queue/CHANGED."
         },
         {
           "file": "internal/storage/queue/queue_test.go",
@@ -15045,15 +15085,33 @@
           "raw": "internal.storage.queue.Queue/ADDED (P1-E02-W1-S02-T4)."
         },
         {
+          "file": "internal/storage/queue/recovery_test.go",
+          "line": 5,
+          "status": "CHANGE",
+          "raw": "internal.storage.queue.Queue/CHANGED."
+        },
+        {
+          "file": "internal/storage/queue/retry_fault_test.go",
+          "line": 8,
+          "status": "CHANGE",
+          "raw": "internal.storage.queue.Queue/CHANGED."
+        },
+        {
           "file": "internal/storage/queue/state.go",
-          "line": 15,
-          "status": "ADD",
-          "ticket": "P1-E02-W1-S02-T4",
-          "raw": "internal.storage.queue.Queue/ADDED (P1-E02-W1-S02-T4)."
+          "line": 16,
+          "status": "CHANGE",
+          "raw": "internal.storage.queue.Queue/CHANGED."
+        },
+        {
+          "file": "internal/storage/queue/twoprocess_test.go",
+          "line": 13,
+          "status": "CHANGE",
+          "raw": "internal.storage.queue.Queue/CHANGED."
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -30800,7 +30858,7 @@
       ]
     }
   ],
-  "total_sites": 2899,
+  "total_sites": 2909,
   "unspecified_count": 154,
-  "multi_status_count": 83
+  "multi_status_count": 84
 }
