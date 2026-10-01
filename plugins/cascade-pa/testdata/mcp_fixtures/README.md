@@ -19,7 +19,7 @@ paraphrase and spoke a dialect no client understood.
 
 | | |
 |---|---|
-| **Tool** | Claude Code (`clientInfo.name` = `claude-code`) |
+| **Tool** | mcp-client-a (`clientInfo.name` = `claude-code`) |
 | **Version** | 2.1.273 (`clientInfo.version`, as the client reported it) |
 | **Date** | 2026-09-20 |
 | **Protocol** | `2025-11-25`, as negotiated in the captured `initialize` |
@@ -55,3 +55,5 @@ recorded rather than inventing a third.
 The capture was scanned before it was committed: it contains no filesystem
 paths, usernames, email addresses or credentials. The thread and turn ids in
 it were minted by the throwaway daemon for this session and refer to nothing.
+
+Scrubbed 2026-09-29: private identifiers replaced by neutral synthetic values (identity fields, account and lane ids, client and host names); values replaced, shapes unchanged.

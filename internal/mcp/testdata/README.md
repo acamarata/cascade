@@ -3,7 +3,7 @@
 ## The goldens are real, and that is the whole point
 
 `goldens/claude-code/2.1.273/` holds an MCP session captured from the
-**installed Claude Code 2.1.273** driving the built `cascade` binary, with
+**installed mcp-client-a 2.1.273** driving the built `cascade` binary, with
 `cascade mcp serve --stdio --capture <dir>`. Captured 2026-09-16.
 
 | File | What it is |
@@ -72,3 +72,5 @@ claude -p --mcp-config <file> "list the cascade tools"
 Copy `<dir>/{in,out}.jsonl` into a directory named for the client version.
 Never hand-edit a golden: if the bytes changed, either the server changed
 or the client did, and both are things a person should look at.
+
+Scrubbed 2026-09-29: private identifiers replaced by neutral synthetic values (identity fields, account and lane ids, client and host names); values replaced, shapes unchanged.

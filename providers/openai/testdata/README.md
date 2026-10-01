@@ -28,7 +28,7 @@ curl -s -D - https://api.deepseek.com/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"deepseek-chat","messages":[{"role":"user","content":"hi"}]}'
 
-curl -s -D - https://api.z.ai/api/paas/v4/chat/completions \
+curl -s -D - https://api.example.invalid/api/paas/v4/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"glm-4","messages":[{"role":"user","content":"hi"}]}'
 ```
@@ -85,3 +85,5 @@ required by this ticket's files_scope, its content is the corpus encoding,
 not raw JSON) seeded from the real captured OpenAI 401 body above, so the
 very first fuzz run exercises the decoder against a real vendor wire shape
 before any mutation.
+
+Scrubbed 2026-09-29: private identifiers replaced by neutral synthetic values (identity fields, account and lane ids, client and host names); values replaced, shapes unchanged.

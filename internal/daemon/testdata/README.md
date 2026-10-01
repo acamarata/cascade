@@ -13,7 +13,7 @@ citation. Field set copied verbatim from
 and `seven_day_opus` to exercise the v1 fallback rule
 `UsageRow.swift`'s `weekUtil` documents (`seven_day_opus?.utilization ??
 seven_day?.utilization` — the opus-specific weekly window wins when
-present). `gfp-pool` represents the pool case with `quota_opaque: true`
+present). `account-a` represents the pool case with `quota_opaque: true`
 and no `email`.
 
 `internal/fleet/capacity/widget_test.go`'s `TestWidgetComposeV1GoldenParity`
@@ -49,3 +49,5 @@ reason: `Registry.Dispatch` is the real production entry point either
 way, so this still satisfies Art.2's "real counterpart, not a mock"
 requirement, just not the full unix-socket round trip in this particular
 test file.
+
+Scrubbed 2026-09-29: private identifiers replaced by neutral synthetic values (identity fields, account and lane ids, client and host names); values replaced, shapes unchanged.
