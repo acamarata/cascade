@@ -175,9 +175,11 @@ func TestUnavailableTaskReader(t *testing.T) {
 }
 
 // TestSamplerGovernorReader_RealSamplerTick drives a real
-// *governor.Sampler through one deterministic tick (a fake Ticker, never
-// a real sleep) and proves SamplerGovernorReader reports it as
-// Available with the sampled fields once the tick has landed.
+// *governor.Sampler with a fake Ticker and proves SamplerGovernorReader
+// reports it as Available with the sampled fields once a tick has landed.
+// On linux the first tick only records the /proc/stat CPU baseline (and a
+// tick inside the same jiffy is still pending), so the test keeps ticking
+// until a snapshot lands rather than assuming the first tick is enough.
 func TestSamplerGovernorReader_RealSamplerTick(t *testing.T) {
 	if goruntime.GOOS == "windows" {
 		t.Skip("governor.collectMetrics returns ErrUnsupportedPlatform on windows tier-2")
@@ -188,14 +190,14 @@ func TestSamplerGovernorReader_RealSamplerTick(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sampler.Start(ctx)
-	ticker.Tick(ctx)
 
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
+		ticker.Tick(ctx)
 		if !sampler.Snapshot().SampledAt.IsZero() {
 			break
 		}
-		time.Sleep(time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 	}
 	sampler.Stop()
 
