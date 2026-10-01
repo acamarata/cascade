@@ -4,27 +4,18 @@
 // provider.Store persistence layer (T1's Store family — local Queue stays
 // under internal/storage/ per R-14.6).
 //
-// Durability split: a message's body (payload + attempt counter) is
-// persisted through Store under the "msg:" key prefix (or "dlq:" once
-// dead-lettered — the ticket's required DLQ key prefix), so it survives
-// independently of any one Queue instance. Ordering and claim state (which
-// IDs are ready, which are inflight and under which receipt) live only in
-// memory, tracked per namespace (state.go) — a design trade-off documented
-// on namespaceState's own doc comment, accepted because every acceptance
-// criterion for this ticket operates within one Queue instance's lifetime.
-//
-// Atomic claim: Dequeue and Ack/Nack are all serialized through one mutex
-// (mirroring storetest.MemStore's own documented choice: correctness over
-// intra-instance parallelism), which is what makes claiming a message
-// atomic — two concurrent Dequeue calls can never claim the same ready
-// message, because the second one's ready-queue pop cannot observe the
-// first's until the first has released the lock. The ticket text also
-// calls for the Store's own conditional-update (CAS) path; this driver
-// uses Store.Put (already namespace+key exclusive under this Queue's own
-// mutex) for message-body writes, since the mutex is what actually
-// prevents concurrent claims — CAS underneath it would only guard against
-// a second, unrelated Store writer touching the same key, which nothing in
-// this driver's design does.
+// Durability: every field that decides a message's
+// fate — ready/claimed state, attempt count, receipt and visibility
+// deadline, not merely its payload — is ONE Store value per message
+// (persistence.go's record), and every transition (claim, Ack, Nack, DLQ
+// move) is exactly one Store.Tx whose writes are CompareAndSwap-fenced on
+// the record's prior bytes (a cascade.KindConflict aborts the Tx and the
+// caller retries or moves on; no transition spans two Tx calls).
+// A new Queue instance reconstructs ready/inflight ordering for a
+// namespace by scanning Store on that namespace's first touch
+// (state.go's namespaceLocked -> persistence.go's recoverNamespace), so
+// restart, an interrupted transition, and two concurrent instances over
+// one Store all behave per the acceptance criteria below.
 //
 // Purpose: concrete internal/storage/queue implementation of
 //
@@ -42,10 +33,11 @@
 //	time.Now (Clock injection only, per pkg/provider/queue.go's own
 //	constraint note).
 //
-// SPORT: internal.storage.queue.Queue/ADDED (P1-E02-W1-S02-T4).
+// SPORT: internal.storage.queue.Queue/CHANGED.
 package queue
 
 import (
+	"bytes"
 	"context"
 	"sync"
 	"sync/atomic"
@@ -97,7 +89,8 @@ type Queue struct {
 // visibility timeouts and DLQ deadlines against clock, and bounded by cfg.
 // Pass runtime.NewSystemClock() in production and a testkit.FrozenClock
 // (or any structurally identical Clock) in tests — Queue never reads the
-// wall clock itself.
+// wall clock itself. New performs no I/O; a namespace's persisted state is
+// recovered from store lazily, the first time that namespace is touched.
 func New(store provider.Store, clock runtime.Clock, cfg Config) *Queue {
 	return &Queue{
 		store: store,
@@ -120,8 +113,11 @@ func (q *Queue) Enqueue(ctx context.Context, namespace string, payload []byte) (
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	st := q.namespaceLocked(namespace)
-	if q.cfg.Capacity > 0 && len(st.ready)+st.inflightCount() >= q.cfg.Capacity {
+	st, err := q.namespaceLocked(ctx, namespace)
+	if err != nil {
+		return "", err
+	}
+	if q.cfg.Capacity > 0 && len(st.ready)+len(st.receipts) >= q.cfg.Capacity {
 		return "", cascade.Newf(cascade.KindQuotaExhausted, "queue.Enqueue: namespace %q at capacity %d", namespace, q.cfg.Capacity)
 	}
 
@@ -129,9 +125,13 @@ func (q *Queue) Enqueue(ctx context.Context, namespace string, payload []byte) (
 	if err != nil {
 		return "", err
 	}
-	if err := q.store.Put(ctx, namespace, msgKey(id), encodeEnvelope(0, payload)); err != nil {
+	newBytes := encodeRecord(record{payload: payload})
+	if err := q.store.Tx(ctx, func(ctx context.Context, tx provider.Tx) error {
+		return tx.CompareAndSwap(ctx, namespace, msgKey(id), nil, newBytes)
+	}); err != nil {
 		return "", cascade.Wrapf(cascade.KindUnavailable, err, "queue.Enqueue: namespace %q", namespace)
 	}
+	st.records[id] = &trackedRecord{knownBytes: newBytes, payload: payload}
 	st.ready = append(st.ready, id)
 	return id, nil
 }
@@ -141,63 +141,104 @@ func (q *Queue) Dequeue(ctx context.Context, namespace string, visibilityTimeout
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	st := q.namespaceLocked(namespace)
+	st, err := q.namespaceLocked(ctx, namespace)
+	if err != nil {
+		return nil, err
+	}
 	st.sweepExpiredLocked(q.clock.Now())
 
 	for len(st.ready) > 0 {
 		id := st.ready[0]
 		st.ready = st.ready[1:]
+		tr := st.records[id]
 
-		raw, err := q.store.Get(ctx, namespace, msgKey(id))
-		if err != nil {
-			return nil, cascade.Wrapf(cascade.KindUnavailable, err, "queue.Dequeue: reading message %q in namespace %q", id, namespace)
-		}
-		attempts, payload, decErr := decodeEnvelope(raw)
-		if decErr != nil {
-			return nil, decErr
-		}
-
-		if q.cfg.MaxAttempts > 0 && attempts >= uint32(q.cfg.MaxAttempts) {
-			if err := q.deadLetterLocked(ctx, namespace, id, attempts, payload); err != nil {
-				return nil, err
+		if q.cfg.MaxAttempts > 0 && tr.attempts >= uint32(q.cfg.MaxAttempts) {
+			_, dlqErr := q.deadLetterLocked(ctx, namespace, id, tr)
+			if dlqErr != nil {
+				st.ready = append([]string{id}, st.ready...) // Tx rolled back: still live, still reachable
+				return nil, dlqErr
 			}
+			delete(st.records, id) // won: dead-lettered; lost: another instance already moved it
 			continue
 		}
 
-		msg, err := q.claimLocked(ctx, namespace, st, id, attempts, payload, visibilityTimeout)
-		if err != nil {
-			return nil, err
+		msg, won, claimErr := q.claimLocked(ctx, namespace, st, id, tr, visibilityTimeout)
+		if claimErr != nil {
+			st.ready = append([]string{id}, st.ready...)
+			return nil, claimErr
+		}
+		if !won {
+			delete(st.records, id) // lost the CAS race: another instance holds it now
+			continue
 		}
 		return msg, nil
 	}
 	return nil, nil
 }
 
-// claimLocked persists id's incremented attempt count, records a fresh
-// in-memory claim for it, and returns the Message to hand back to the
-// caller. Caller MUST hold q.mu.
-func (q *Queue) claimLocked(ctx context.Context, namespace string, st *namespaceState, id string, attempts uint32, payload []byte, visibilityTimeout time.Duration) (*provider.Message, error) {
-	newAttempts := attempts + 1
-	if err := q.store.Put(ctx, namespace, msgKey(id), encodeEnvelope(newAttempts, payload)); err != nil {
-		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "queue.Dequeue: recording attempt for message %q in namespace %q", id, namespace)
-	}
+// claimLocked attempts to claim id via ONE Store.Tx, CAS-fenced on tr's
+// prior known bytes (no transition spans two Tx calls). won is
+// false (with a nil error) when the CAS lost to a concurrent claimant —
+// id is no longer this Queue instance's to track, not a failure. The
+// receipt is generated before the Tx opens and committed only if the Tx
+// succeeds, per the "generate a receipt before committing its
+// claim" step. Caller MUST hold q.mu.
+func (q *Queue) claimLocked(ctx context.Context, namespace string, st *namespaceState, id string, tr *trackedRecord, visibilityTimeout time.Duration) (msg *provider.Message, won bool, err error) {
 	receipt, err := generateReceipt()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	st.claimMessage(id, receipt, q.clock.Now().Add(visibilityTimeout))
-	return &provider.Message{ID: id, Payload: payload, Receipt: receipt}, nil
+	newRec := record{claimed: true, attempts: tr.attempts + 1, receipt: receipt, deadline: q.clock.Now().Add(visibilityTimeout), payload: tr.payload}
+	newBytes := encodeRecord(newRec)
+
+	txErr := q.store.Tx(ctx, func(ctx context.Context, tx provider.Tx) error {
+		return tx.CompareAndSwap(ctx, namespace, msgKey(id), tr.knownBytes, newBytes)
+	})
+	switch {
+	case txErr == nil:
+		tr.knownBytes, tr.attempts, tr.claimed, tr.receipt, tr.deadline = newBytes, newRec.attempts, true, receipt, newRec.deadline
+		st.receipts[receipt] = id
+		return &provider.Message{ID: id, Payload: tr.payload, Receipt: receipt}, true, nil
+	case cascade.HasKind(txErr, cascade.KindConflict):
+		return nil, false, nil
+	default:
+		return nil, false, cascade.Wrapf(cascade.KindUnavailable, txErr, "queue.Dequeue: claiming message %q in namespace %q", id, namespace)
+	}
 }
 
-// deadLetterLocked moves id's record from the live "msg:" key to the
-// "dlq:" key, permanently removing it from redelivery. Caller MUST hold
-// q.mu.
-func (q *Queue) deadLetterLocked(ctx context.Context, namespace, id string, attempts uint32, payload []byte) error {
-	if err := q.store.Put(ctx, namespace, dlqKey(id), encodeEnvelope(attempts, payload)); err != nil {
-		return cascade.Wrapf(cascade.KindUnavailable, err, "queue.Dequeue: dead-lettering message %q in namespace %q", id, namespace)
+// deadLetterLocked moves id from its live "msg:" key to "dlq:" in ONE
+// Store.Tx: the dead-letter record is CAS-created (old=nil) and the live
+// record is removed via the delete-fencing pattern (tx.Get, a
+// byte comparison against tr's prior known bytes, then tx.Delete — Tx has
+// no conditional delete). won is false (nil error) when the fencing
+// comparison lost to a concurrent transition — id was already claimed or
+// dead-lettered elsewhere, not a failure here. Caller MUST hold q.mu.
+func (q *Queue) deadLetterLocked(ctx context.Context, namespace, id string, tr *trackedRecord) (won bool, err error) {
+	dlqBytes := encodeRecord(record{attempts: tr.attempts, payload: tr.payload})
+	lostRace := false
+	txErr := q.store.Tx(ctx, func(ctx context.Context, tx provider.Tx) error {
+		if err := tx.CompareAndSwap(ctx, namespace, dlqKey(id), nil, dlqBytes); err != nil {
+			return err
+		}
+		cur, getErr := tx.Get(ctx, namespace, msgKey(id))
+		switch {
+		case getErr != nil && cascade.HasKind(getErr, cascade.KindNotFound):
+			lostRace = true
+			return cascade.Newf(cascade.KindConflict, "queue: dead-lettering %q in namespace %q: live record already gone", id, namespace)
+		case getErr != nil:
+			return getErr
+		case !bytes.Equal(cur, tr.knownBytes):
+			lostRace = true
+			return cascade.Newf(cascade.KindConflict, "queue: dead-lettering %q in namespace %q: live record changed", id, namespace)
+		}
+		return tx.Delete(ctx, namespace, msgKey(id))
+	})
+	switch {
+	case txErr == nil:
+		return true, nil
+	case lostRace:
+		return false, nil
+	default:
+		return false, cascade.Wrapf(cascade.KindUnavailable, txErr, "queue.Dequeue: dead-lettering message %q in namespace %q", id, namespace)
 	}
-	if err := q.store.Delete(ctx, namespace, msgKey(id)); err != nil {
-		return cascade.Wrapf(cascade.KindUnavailable, err, "queue.Dequeue: removing live record for dead-lettered message %q in namespace %q", id, namespace)
-	}
-	return nil
 }

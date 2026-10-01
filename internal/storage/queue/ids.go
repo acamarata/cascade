@@ -18,10 +18,19 @@ import (
 	cryptorand "crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"sync/atomic"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
+
+// receiptEntropy is the entropy source generateReceipt reads from.
+// Production code always leaves this at cryptorand.Reader; export_test.go's
+// SetReceiptEntropyForTest is the only thing that ever swaps it, so
+// TestP1QueueStorageFaults can fault-inject a receipt-generation failure
+// (a real, if rare, failure mode: an exhausted entropy pool) without
+// touching claimLocked's control flow.
+var receiptEntropy = cryptorand.Reader
 
 // idSuffixBytes is how many random bytes follow the monotonic sequence in
 // a generated message ID, to keep IDs collision-free across Queue
@@ -47,7 +56,7 @@ func generateID(seq *atomic.Uint64) (string, error) {
 // previously issued receipt with overwhelming probability.
 func generateReceipt() (string, error) {
 	b := make([]byte, receiptBytes)
-	if _, err := cryptorand.Read(b); err != nil {
+	if _, err := io.ReadFull(receiptEntropy, b); err != nil {
 		return "", cascade.Wrap(cascade.KindInternal, err, "queue: generating receipt")
 	}
 	return hex.EncodeToString(b), nil

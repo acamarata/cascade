@@ -1,100 +1,111 @@
 // Purpose: the in-memory per-namespace ordering/claim-tracking state
-//   Queue's exported methods (queue.go, ack.go) operate on. Message BODIES
-//   (payload + attempt count) are the durable Store-backed truth
-//   (envelope.go); this file's structures only track which IDs are
-//   currently ready, which are claimed (inflight) and by which receipt,
-//   and expire stale claims — none of it survives a process restart, by
-//   design (a restart finds every namespace's state empty and simply never
-//   redelivers messages a prior process had claimed; reconstructing
-//   in-flight state from Store on startup is out of this ticket's scope
-//   and does not affect any acceptance criterion, all of which operate
-//   within one Queue instance's lifetime).
+//   Queue's exported methods (queue.go, ack.go) operate on, plus
+//   the "prior bytes" baseline every Store.Tx
+//   transition CAS/delete-fences against. A trackedRecord's knownBytes is
+//   this Queue instance's belief about what is currently persisted at its
+//   Store key, updated ONLY after a transition's Store.Tx has actually
+//   committed, never before -- the exact ordering fix for the audit's
+//   "retry must not become accidentally stale while the body is
+//   stranded" finding: a failed Store operation must not first mutate
+//   in-memory reachability. persistence.go populates this state from
+//   Store the first time a Queue instance touches a namespace (recovery);
+//   nothing in this file reads or writes Store directly.
 // Constraints: no bare time.Now (all deadline comparisons take clock.Now()
 //   from the caller, an injected runtime.Clock); not goroutine-safe on its
-//   own — Queue's mutex (queue.go) serializes every access.
-// SPORT: internal.storage.queue.Queue/ADDED (P1-E02-W1-S02-T4).
+//   own -- Queue's mutex (queue.go) serializes every access.
+// SPORT: internal.storage.queue.Queue/CHANGED.
 
 package queue
 
 import (
+	"context"
 	"sort"
 	"time"
 )
 
-// claim describes one currently-inflight (Dequeued but not yet Acked or
-// Nacked) message.
-type claim struct {
-	receipt  string
-	deadline time.Time
+// trackedRecord is everything namespaceState remembers about one message
+// id: its logical claim state, the exact bytes this Queue instance
+// believes Store currently holds for it (knownBytes -- every later
+// transition's CAS/delete-fencing "prior bytes"), and enough decoded
+// fields (attempts, payload, receipt, deadline) to build the next
+// transition's bytes without a redundant Store.Get.
+type trackedRecord struct {
+	knownBytes []byte
+	attempts   uint32
+	payload    []byte
+	claimed    bool
+	receipt    string    // valid iff claimed
+	deadline   time.Time // valid iff claimed
 }
 
-// namespaceState is one namespace's ordering and claim-tracking state.
+// namespaceState is one namespace's ordering and claim-tracking state,
+// populated once per Queue instance by persistence.go's recoverNamespace.
 type namespaceState struct {
-	ready    []string         // FIFO order of message IDs available to claim
-	inflight map[string]claim // message ID -> its current claim
-	receipts map[string]string
+	ready    []string                  // FIFO order of ready (or expired-claimed) ids
+	records  map[string]*trackedRecord // every id this Queue instance currently tracks
+	receipts map[string]string         // receipt -> id, for currently-claimed ids only
 }
 
 func newNamespaceState() *namespaceState {
 	return &namespaceState{
-		inflight: make(map[string]claim),
+		records:  make(map[string]*trackedRecord),
 		receipts: make(map[string]string),
 	}
 }
 
-// namespaceLocked returns (creating if absent) ns's tracking state. Caller
-// MUST hold Queue.mu.
-func (q *Queue) namespaceLocked(ns string) *namespaceState {
-	st, ok := q.ns[ns]
-	if !ok {
-		st = newNamespaceState()
-		q.ns[ns] = st
+// namespaceLocked returns ns's tracking state, recovering it from Store
+// (persistence.go's recoverNamespace) the first time this Queue instance
+// touches ns. Caller MUST hold Queue.mu.
+func (q *Queue) namespaceLocked(ctx context.Context, ns string) (*namespaceState, error) {
+	if st, ok := q.ns[ns]; ok {
+		return st, nil
 	}
-	return st
-}
-
-// claimMessage records id as newly claimed under a fresh receipt with the
-// given deadline, replacing any prior claim on id (there should never be
-// one — a message is only ever claimed while it is not already inflight).
-func (st *namespaceState) claimMessage(id, receipt string, deadline time.Time) {
-	st.inflight[id] = claim{receipt: receipt, deadline: deadline}
-	st.receipts[receipt] = id
-}
-
-// releaseClaim drops id's current claim (if any) from both tracking maps
-// and reports the receipt that was released, so the caller can decide
-// whether to requeue id.
-func (st *namespaceState) releaseClaim(id string) {
-	cl, ok := st.inflight[id]
-	if !ok {
-		return
+	st, err := recoverNamespace(ctx, q.store, q.clock, ns)
+	if err != nil {
+		return nil, err
 	}
-	delete(st.inflight, id)
-	delete(st.receipts, cl.receipt)
+	q.ns[ns] = st
+	return st, nil
 }
 
-// sweepExpiredLocked moves every inflight message in ns whose deadline has
-// passed as of now back onto the ready queue, releasing its stale claim.
-// Caller MUST hold Queue.mu.
+// trackRecovered records one record recoverNamespace decoded (or
+// migrated) for id, in Scan's key order: a claimed record whose deadline
+// has not yet passed as of now goes to inflight tracking; everything else
+// (never claimed, or a claim whose deadline already passed while this
+// process was down) becomes ready, preserving Scan's key order -- which
+// is original enqueue order (persistence.go's own doc comment).
+func (st *namespaceState) trackRecovered(id string, rec record, knownBytes []byte, now time.Time) {
+	tr := &trackedRecord{knownBytes: knownBytes, attempts: rec.attempts, payload: rec.payload}
+	if rec.claimed && now.Before(rec.deadline) {
+		tr.claimed = true
+		tr.receipt = rec.receipt
+		tr.deadline = rec.deadline
+		st.receipts[rec.receipt] = id
+	} else {
+		st.ready = append(st.ready, id)
+	}
+	st.records[id] = tr
+}
+
+// sweepExpiredLocked moves every tracked record in ns whose claim deadline
+// has passed as of now back onto the ready queue, without touching Store
+// -- knownBytes still (correctly) reflects the claimed record Store
+// actually holds; the next successful claim CAS-overwrites it from
+// exactly those bytes. Caller MUST hold Queue.mu.
 func (st *namespaceState) sweepExpiredLocked(now time.Time) {
 	var expired []string
-	for id, cl := range st.inflight {
-		if !now.Before(cl.deadline) {
+	for id, tr := range st.records {
+		if tr.claimed && !now.Before(tr.deadline) {
 			expired = append(expired, id)
 		}
 	}
 	// Map iteration order is randomized; sort so requeue order is
-	// deterministic across runs (Art.11 forbids flaky gates), even though
-	// the current callers only ever have zero or one expired claim at a
-	// time.
+	// deterministic across runs (a flaky gate is not allowed).
 	sort.Strings(expired)
 	for _, id := range expired {
-		st.releaseClaim(id)
+		tr := st.records[id]
+		delete(st.receipts, tr.receipt)
+		tr.claimed = false
 		st.ready = append(st.ready, id)
 	}
-}
-
-// inflightCount reports how many messages are currently claimed.
-func (st *namespaceState) inflightCount() int {
-	return len(st.inflight)
 }
