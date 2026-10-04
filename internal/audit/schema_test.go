@@ -3,16 +3,26 @@ package audit
 // Purpose: the schema half of the package's tests, the closed event-kind
 //   enum asserted against the ratified list rather than against itself,
 //   record sealing and hash verification, fail-closed event validation,
-//   and ULID shape.
+//   ULID shape, effect fields sealed in the hash, and a log written by
+//   the pre-effect code (testdata/pre-effect-log, captured at f688c0b)
+//   still verifying byte for byte.
 // Constraints: Art.7.1 (nothing outside t.TempDir), Art.7.3 (no wall
 //   clock in a test's expectations).
 // SPORT: internal.audit.Record/ADDED (tests) (P1-E09-W2-S18-T2).
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/acamarata/cascade/internal/storage/storetest"
+	"github.com/acamarata/cascade/internal/testkit"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -22,7 +32,8 @@ import (
 // secrets.quarantine_flush, vault.access)"), kept separate from AllKinds so
 // the assertion below compares the code against the spec instead of against
 // itself. That separation is what caught the shortfall: I/S-18.T2 shipped
-// eleven and this transcription had been trimmed to match it.
+// eleven and this transcription had been trimmed to match it. The
+// fifteenth, effect.external, is P1-SEC-33's one amendment of the set.
 var ratifiedKinds = []string{
 	"policy.decide", "policy.route",
 	"approval.enqueue", "approval.dedup", "approval.expire",
@@ -30,6 +41,7 @@ var ratifiedKinds = []string{
 	"approval.grant", "approval.deny",
 	"elevation.attempt", "elevation.grant", "elevation.deny",
 	"secrets.clipboard_write", "secrets.quarantine_flush", "vault.access",
+	"effect.external",
 }
 
 func TestAuditKindEnumIsClosed(t *testing.T) {
@@ -170,5 +182,116 @@ func TestAuditRecordTime(t *testing.T) {
 	rec := Record{TSUnixNano: time.Unix(1_700_000_000, 500).UnixNano()}
 	if got := rec.Time(); got.UnixNano() != rec.TSUnixNano {
 		t.Fatalf("Time() = %v, want the recorded instant", got)
+	}
+}
+
+func TestEffectFieldsAreSealed(t *testing.T) {
+	for field, edit := range map[string][2]string{
+		"effect_phase": {`"effect_phase":"intent"`, `"effect_phase":"confirmed"`},
+		"effect_key":   {`"effect_key":"evidence.commit:e-1"`, `"effect_key":"evidence.commit:e-2"`},
+	} {
+		t.Run(field, func(t *testing.T) {
+			ctx := context.Background()
+			store := storetest.NewMemStore()
+			el, log := newEffectLog(t, store)
+			if _, err := log.Append(ctx, sampleEvent(1)); err != nil {
+				t.Fatalf("Append: %v", err)
+			}
+			h, err := el.BeginEffect(ctx, effectReq("evidence.commit:e-1"))
+			if err != nil {
+				t.Fatalf("BeginEffect: %v", err)
+			}
+			raw, err := store.Get(ctx, namespace, recordKey(h.IntentSeq))
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			if !bytes.Contains(raw, []byte(edit[0])) {
+				t.Fatalf("stored record does not persist %s: %s", edit[0], raw)
+			}
+			if err := store.Put(ctx, namespace, recordKey(h.IntentSeq),
+				bytes.Replace(raw, []byte(edit[0]), []byte(edit[1]), 1)); err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+			err = log.Verify(ctx)
+			requireSentinel(t, err, ErrTampered)
+			if want := fmt.Sprintf("record %d (", h.IntentSeq); !strings.Contains(err.Error(), want) {
+				t.Fatalf("Verify error %q does not name sequence %d", err, h.IntentSeq)
+			}
+			_, _, serr := el.EffectState(ctx, "evidence.commit:e-1")
+			requireSentinel(t, serr, ErrTampered)
+		})
+	}
+}
+
+// preEffectFixture is testdata/pre-effect-log/log.json: the raw audit
+// namespace rows a log written by the f688c0b code left behind.
+type preEffectFixture struct {
+	Namespace string            `json:"namespace"`
+	Rows      map[string]string `json:"rows"`
+}
+
+func TestPreEffectRecordsVerify(t *testing.T) {
+	ctx := context.Background()
+	data, err := os.ReadFile(filepath.Join("testdata", "pre-effect-log", "log.json"))
+	if err != nil {
+		t.Fatalf("reading fixture: %v", err)
+	}
+	var fx preEffectFixture
+	if err := json.Unmarshal(data, &fx); err != nil || fx.Namespace != namespace {
+		t.Fatalf("fixture: namespace %q, %v", fx.Namespace, err)
+	}
+	store := storetest.NewMemStore()
+	records := 0
+	for k, v := range fx.Rows {
+		if err := store.Put(ctx, fx.Namespace, k, []byte(v)); err != nil {
+			t.Fatalf("Put %s: %v", k, err)
+		}
+		if !strings.HasPrefix(k, recordPrefix) {
+			continue
+		}
+		records++
+		rec, derr := decodeRecord([]byte(v))
+		if derr != nil {
+			t.Fatalf("fixture record %s no longer verifies: %v", k, derr)
+		}
+		again, merr := json.Marshal(rec)
+		if merr != nil || !bytes.Equal(again, []byte(v)) || rec.EffectKey != "" || rec.EffectPhase != "" {
+			t.Fatalf("fixture record %s re-encodes as %s (%v), want its stored bytes unchanged", k, again, merr)
+		}
+	}
+	if records != 5 {
+		t.Fatalf("fixture holds %d records, want 5", records)
+	}
+	log := New(store, testkit.NewFrozenClock(testInstant), nil)
+	if err := log.Verify(ctx); err != nil {
+		t.Fatalf("Verify over the pre-effect log: %v", err)
+	}
+	if rec, err := log.Append(ctx, sampleEvent(6)); err != nil || rec.Seq != 6 {
+		t.Fatalf("Append after the fixture = seq %d, %v; want 6", rec.Seq, err)
+	}
+	if err := log.Verify(ctx); err != nil {
+		t.Fatalf("Verify after appending to the pre-effect log: %v", err)
+	}
+}
+
+func TestEffectRecordShapeRefused(t *testing.T) {
+	base := Event{Kind: KindExternalEffect, Actor: "agent:test", Action: "x"}
+	for _, bad := range [][2]string{{"k:1", ""}, {"", "intent"}, {"k:1", "done"}, {"k/1", "intent"}} {
+		ev := base
+		ev.EffectKey, ev.EffectPhase = bad[0], bad[1]
+		requireSentinel(t, validateEvent(ev), ErrInvalidEvent)
+	}
+	intent := Record{Seq: 1, Event: Event{EffectKey: "k:1", EffectPhase: "intent"}}
+	confirmed := Record{Seq: 2, Event: Event{EffectKey: "k:1", EffectPhase: "confirmed"}}
+	for name, recs := range map[string][]Record{
+		"two intents":          {intent, {Seq: 2, Event: intent.Event}},
+		"terminal, no intent":  {confirmed},
+		"two terminal records": {intent, confirmed, {Seq: 3, Event: confirmed.Event}},
+	} {
+		_, _, err := replayEffects(recs)
+		if err == nil {
+			t.Fatalf("replayEffects accepted %s", name)
+		}
+		requireSentinel(t, err, ErrTampered)
 	}
 }

@@ -1,6 +1,6 @@
 package audit
 
-// Purpose: the audit domain's on-record schema, the CLOSED fourteen-value
+// Purpose: the audit domain's on-record schema, the CLOSED fifteen-value
 //   event-kind enum, the caller-supplied Event, the sealed Record that is
 //   written, the key layout inside the audit domain namespace, and the
 //   hash chain that makes a later alteration detectable rather than
@@ -11,7 +11,7 @@ package audit
 //   pkg/cascade taxonomy error.
 // Constraints: pure functions only, no clock, no I/O, no randomness
 //   beyond newID's crypto/rand draw. Validation FAILS CLOSED: an event
-//   kind outside the fourteen, a non-JSON explain body, or a control
+//   kind outside the fifteen, a non-JSON explain body, or a control
 //   character in a field is refused, never stored "best effort".
 //
 //   CONTRACT DEVIATION (recorded, not papered over). The contract for
@@ -43,13 +43,13 @@ import (
 
 // Kind is the closed set of auditable event kinds. It is a defined string
 // type so a typo is a compile-time mismatch rather than a row nothing can
-// ever query for. The set is CLOSED at the fourteen values below: a
-// consumer needing a twelfth amends this package's contract instead of
+// ever query for. The set is CLOSED at the fifteen values below: a
+// consumer needing another amends this package's contract instead of
 // minting one at a call site, which is why Append refuses an unknown kind
 // outright.
 type Kind string
 
-// The fourteen ratified event kinds (R-21.235).
+// The ratified event kinds: R-21.235's fourteen plus effect.external.
 const (
 	KindPolicyDecide     Kind = "policy.decide"
 	KindPolicyRoute      Kind = "policy.route"
@@ -71,6 +71,12 @@ const (
 	KindSecretsClipboardWrite  Kind = "secrets.clipboard_write"
 	KindSecretsQuarantineFlush Kind = "secrets.quarantine_flush"
 	KindVaultAccess            Kind = "vault.access"
+
+	// KindExternalEffect is the one effect kind (P1-SEC-33): the intent and
+	// terminal records an EffectLog writes for an external effect whose site
+	// has no domain kind of its own. It amends R-21.235's closed set once;
+	// a site with a domain kind keeps using that kind for its effect records.
+	KindExternalEffect Kind = "effect.external"
 )
 
 // AllKinds is the enum in a stable, documented order. Ranging over this
@@ -82,6 +88,7 @@ var AllKinds = []Kind{
 	KindApprovalGrant, KindApprovalDeny,
 	KindElevationAttempt, KindElevationGrant, KindElevationDeny,
 	KindSecretsClipboardWrite, KindSecretsQuarantineFlush, KindVaultAccess,
+	KindExternalEffect,
 }
 
 // validKinds is the membership set Valid consults, built once from
@@ -94,14 +101,14 @@ var validKinds = func() map[Kind]bool {
 	return m
 }()
 
-// Valid reports whether k is one of the fourteen ratified kinds. Anything
+// Valid reports whether k is one of the fifteen ratified kinds. Anything
 // else, including the empty Kind, is invalid.
 func (k Kind) Valid() bool { return validKinds[k] }
 
 // Domain sentinels. Each names one refusal precisely and wraps exactly one
 // Kind from pkg/cascade's frozen fourteen; none is invented here.
 var (
-	// ErrUnknownKind is returned for an event kind outside the fourteen.
+	// ErrUnknownKind is returned for an event kind outside the fifteen.
 	ErrUnknownKind = cascade.New(cascade.KindInvalidInput, "audit: unknown event kind")
 	// ErrInvalidEvent is returned for an otherwise malformed event.
 	ErrInvalidEvent = cascade.New(cascade.KindInvalidInput, "audit: invalid event")
@@ -140,6 +147,9 @@ const (
 	recordPrefix = "rec:"
 	indexPrefix  = "idx:"
 	headKey      = "head"
+	// effectPrefix holds the effect index (effect.go): one row per effect
+	// key, written in the same transaction as the record it describes.
+	effectPrefix = "eff:"
 )
 
 // seqDigits zero-pads a sequence number wide enough that lexical key order
@@ -149,6 +159,7 @@ const seqDigits = 20
 
 func recordKey(seq uint64) string { return fmt.Sprintf("%s%0*d", recordPrefix, seqDigits, seq) }
 func indexKey(id string) string   { return indexPrefix + id }
+func effectKey(key string) string { return effectPrefix + key }
 
 // maxFieldBytes bounds every free-text record field. An audit record is an
 // index into what happened, not a place to park a payload, and an
@@ -164,7 +175,7 @@ const maxFieldBytes = 512
 // record "these were the parameters" without recording the parameters:
 // hash them with HashParams and store the digest.
 type Event struct {
-	// Kind is one of the fourteen ratified kinds.
+	// Kind is one of the fifteen ratified kinds.
 	Kind Kind `json:"kind"`
 	// Actor names who or what took the action (a user id, a plugin id,
 	// "scheduler").
@@ -192,6 +203,14 @@ type Event struct {
 	PolicySnapshot json.RawMessage `json:"policy_snapshot,omitempty"`
 	// Outcome is what actually happened after the decision.
 	Outcome string `json:"outcome,omitempty"`
+	// EffectKey and EffectPhase mark an effect record (effect.go). Only
+	// EffectLog sets them; Append refuses an Event that carries either.
+	// They are declared last and omitted when empty, so every record
+	// written before they existed encodes, and therefore hashes, exactly
+	// as it did (testdata/pre-effect-log). Being ordinary fields, they are
+	// sealed in the record hash like every other.
+	EffectKey   string `json:"effect_key,omitempty"`
+	EffectPhase string `json:"effect_phase,omitempty"`
 }
 
 // Record is one sealed entry in the log: an Event plus the identity,
@@ -223,4 +242,39 @@ func (r Record) Time() time.Time { return time.Unix(0, r.TSUnixNano).UTC() }
 func HashParams(params []byte) string {
 	sum := blake3.Sum256(params)
 	return hex.EncodeToString(sum[:])
+}
+
+// stamped records seq as the row's own write: the intent's sequence for an
+// intent row, the terminal's for any other.
+func (r effectRow) stamped(seq uint64) effectRow {
+	if r.Phase == EffectIntent {
+		r.IntentSeq = seq
+	} else {
+		r.TerminalSeq = seq
+	}
+	return r
+}
+
+// replayEffects rebuilds, from effect records in sequence order, the index
+// rows their writes must have left, plus each key's intent record. A
+// second intent for a key, or a terminal record with no open intent, is
+// something no write path produces, so it is reported as tampering.
+func replayEffects(recs []Record) (map[string]effectRow, map[string]Record, error) {
+	rows, intents := map[string]effectRow{}, map[string]Record{}
+	for _, rec := range recs {
+		key, phase := rec.EffectKey, EffectPhase(rec.EffectPhase)
+		cur, begun := rows[key]
+		switch {
+		case key == "":
+			continue
+		case phase == EffectIntent && !begun:
+			rows[key], intents[key] = effectRow{Phase: EffectIntent, IntentSeq: rec.Seq}, rec
+		case phase != EffectIntent && begun && cur.Phase == EffectIntent:
+			rows[key] = effectRow{Phase: phase, IntentSeq: cur.IntentSeq, TerminalSeq: rec.Seq}
+		default:
+			return nil, nil, cascade.Wrapf(cascade.KindIntegrity, ErrTampered,
+				"record %d (%s for %q) does not follow from the records before it", rec.Seq, phase, key)
+		}
+	}
+	return rows, intents, nil
 }

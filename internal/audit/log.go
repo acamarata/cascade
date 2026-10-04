@@ -103,6 +103,9 @@ func New(store provider.Store, clock runtime.Clock, bus Publisher) *Log {
 // in the log; retrying would append a second copy of the same event. The
 // error says so.
 func (l *Log) Append(ctx context.Context, event Event) (Record, error) {
+	if err := refuseEffectFields(event); err != nil {
+		return Record{}, err
+	}
 	if err := l.redactEvent(ctx, &event); err != nil {
 		return Record{}, err
 	}

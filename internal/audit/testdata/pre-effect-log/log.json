@@ -1,0 +1,17 @@
+{
+  "namespace": "audit",
+  "provenance": "written by the internal/audit code at f688c0b (Log.Append over storetest.MemStore, frozen clock 2023-11-14T22:13:20Z +1s per record); rows are the audit namespace's raw stored values",
+  "rows": {
+    "head": "{\"seq\":5,\"hash\":\"b1e89bb9601249da1d8442a97d012f0335e8447ddfaf5054988743200206e464\"}",
+    "idx:01HF7YAT00ZAZSK0QXWGVV8715": "1",
+    "idx:01HF7YATZ8J196M77H0MZ3CC4A": "2",
+    "idx:01HF7YAVYG6MVS25SJGMXKRNPG": "3",
+    "idx:01HF7YAWXRG1TA9C6C5WV0KZ12": "4",
+    "idx:01HF7YAXX0TKCW0A8NXGJD8P3S": "5",
+    "rec:00000000000000000001": "{\"seq\":1,\"id\":\"01HF7YAT00ZAZSK0QXWGVV8715\",\"ts_unix_nano\":1700000000000000000,\"kind\":\"policy.decide\",\"actor\":\"user\",\"action\":\"fs.read\",\"params_hash\":\"17762fddd969a453925d65717ac3eea21320b66b54342fde15128d6caf21215f\",\"risk_level\":\"low\",\"verdict\":\"allow\",\"explain\":{\"profile\":\"default\"},\"policy_snapshot\":{\"rules\":[\"read\"]},\"outcome\":\"ok\",\"hash\":\"7a5596264a965a5e725b91d0f7cd038c69d7fd8cbbef990edf07bb8cdfa326a3\"}",
+    "rec:00000000000000000002": "{\"seq\":2,\"id\":\"01HF7YATZ8J196M77H0MZ3CC4A\",\"ts_unix_nano\":1700000001000000000,\"kind\":\"approval.enqueue\",\"actor\":\"agent:a1\",\"action\":\"shell.exec\",\"verdict\":\"ask\",\"prev_hash\":\"7a5596264a965a5e725b91d0f7cd038c69d7fd8cbbef990edf07bb8cdfa326a3\",\"hash\":\"5a4b19193bdd8101c3eca6cb27969d43dcaafd6a26b9bebf0458f43c7e335d76\"}",
+    "rec:00000000000000000003": "{\"seq\":3,\"id\":\"01HF7YAVYG6MVS25SJGMXKRNPG\",\"ts_unix_nano\":1700000002000000000,\"kind\":\"approval.grant\",\"actor\":\"user\",\"action\":\"approval.grant\",\"explain\":{\"request_id\":\"r-1\"},\"outcome\":\"granted\",\"prev_hash\":\"5a4b19193bdd8101c3eca6cb27969d43dcaafd6a26b9bebf0458f43c7e335d76\",\"hash\":\"efb12ec1cc6e65f8987ea15cc3c7260a43121d17a612315d2b86e8865927bda0\"}",
+    "rec:00000000000000000004": "{\"seq\":4,\"id\":\"01HF7YAWXRG1TA9C6C5WV0KZ12\",\"ts_unix_nano\":1700000003000000000,\"kind\":\"config.reload\",\"actor\":\"daemon\",\"action\":\"config.reload\",\"prev_hash\":\"efb12ec1cc6e65f8987ea15cc3c7260a43121d17a612315d2b86e8865927bda0\",\"hash\":\"34a95ad41db6da1e0c2c0af100d13542fd2d86ea6a0f805a782139186b444175\"}",
+    "rec:00000000000000000005": "{\"seq\":5,\"id\":\"01HF7YAXX0TKCW0A8NXGJD8P3S\",\"ts_unix_nano\":1700000004000000000,\"kind\":\"vault.access\",\"actor\":\"plugin:x\",\"action\":\"vault.get\",\"risk_level\":\"high\",\"verdict\":\"deny\",\"prev_hash\":\"34a95ad41db6da1e0c2c0af100d13542fd2d86ea6a0f805a782139186b444175\",\"hash\":\"b1e89bb9601249da1d8442a97d012f0335e8447ddfaf5054988743200206e464\"}"
+  }
+}

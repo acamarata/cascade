@@ -1510,5 +1510,13 @@
     "reason": "The runner-table constructor for agent-note ships with the engine; the table is assembled at the composition root, which is P1-SUP-02's scope, so only internal/hooks tests call it at this tip.",
     "retire_ticket": "P1-SUP-02",
     "symbol": "internal/hooks.AgentNoteRunner"
+  },
+  {
+    "added_by_ticket": "P1-SEC-33",
+    "caller_site": "cmd/cascade/audit_log.go",
+    "expected_caller": "cmd/cascade/audit_log.go, where openEffectLog calls audit.NewEffectLog per the P1-SEC-06 contract; retire this entry when that lands",
+    "reason": "NewEffectLog is the constructor of the audit effect recorder. This ticket ships the library only; every external-effect site that consumes it lands later and reaches it through openEffectLog (P1-SEC-06). Exercised by internal/audit/effect_test.go, effect_index_test.go and effect_crash_test.go over memstore and real SQLite, including a re-exec crash test.",
+    "retire_ticket": "P1-SEC-06",
+    "symbol": "internal/audit.NewEffectLog"
   }
 ]
