@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-04T22:24:18Z",
+  "generated_at": "2026-10-04T22:47:03Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4567,6 +4567,18 @@
           "raw": "cmd/cascade/daemon (composition surface tests, P1-CORE-01)."
         },
         {
+          "file": "cmd/cascade/conductor_fanout_crash_test.go",
+          "line": 9,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGE, P1-CORE-19)."
+        },
+        {
+          "file": "cmd/cascade/conductor_fanout_integration_test.go",
+          "line": 11,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGE, P1-CORE-19)."
+        },
+        {
           "file": "cmd/cascade/daemon.go",
           "line": 33,
           "status": "ADD",
@@ -5571,10 +5583,9 @@
       "sites": [
         {
           "file": "cmd/cascade/run.go",
-          "line": 34,
-          "status": "ADD",
-          "ticket": "P1-E11-W3-S23-T1",
-          "raw": "cmd/cascade/run (ADD, P1-E11-W3-S23-T1/T3)."
+          "line": 12,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/run (CHANGE, P1-CORE-19)."
         },
         {
           "file": "cmd/cascade/run_exec.go",
@@ -5597,6 +5608,12 @@
           "raw": "cmd/cascade/run (ADD, P1-E11-W3-S23-T1/T3 sport_updates)."
         },
         {
+          "file": "cmd/cascade/run_fanout_test.go",
+          "line": 8,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/run (CHANGE, P1-CORE-19)."
+        },
+        {
           "file": "cmd/cascade/run_fuzz_test.go",
           "line": 8,
           "status": "ADD",
@@ -5613,7 +5630,8 @@
       ],
       "statuses": [
         "",
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -6236,6 +6254,18 @@
           "line": 5,
           "status": "CHANGE",
           "raw": "conductor.fanout/CHANGE (tests) (P1-CORE-18)."
+        },
+        {
+          "file": "internal/conductor/leg_budget.go",
+          "line": 12,
+          "status": "CHANGE",
+          "raw": "conductor.fanout/CHANGE (P1-CORE-19)."
+        },
+        {
+          "file": "internal/conductor/leg_budget_test.go",
+          "line": 6,
+          "status": "CHANGE",
+          "raw": "conductor.fanout/CHANGE (P1-CORE-19)."
         }
       ],
       "statuses": [
@@ -12714,6 +12744,46 @@
       ]
     },
     {
+      "name": "internal.fleet.resume.Claims",
+      "sites": [
+        {
+          "file": "internal/fleet/resume/claims.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal.fleet.resume.Claims/ADDED (P1-CORE-19)."
+        },
+        {
+          "file": "internal/fleet/resume/claims_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "internal.fleet.resume.Claims/ADDED (P1-CORE-19)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.fleet.resume.FanOutStore",
+      "sites": [
+        {
+          "file": "internal/fleet/resume/cursor_write.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal.fleet.resume.FanOutStore/ADDED (P1-CORE-19)."
+        },
+        {
+          "file": "internal/fleet/resume/cursor_write_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "internal.fleet.resume.FanOutStore/ADDED (P1-CORE-19)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.fleet.resume.ResumeManager",
       "sites": [
         {
@@ -12790,10 +12860,9 @@
         },
         {
           "file": "internal/fleet/resume/scan.go",
-          "line": 12,
-          "status": "ADD",
-          "ticket": "P1-E13-W3-S27-T2",
-          "raw": "internal.fleet.resume.ResumeManager/ADDED (P1-E13-W3-S27-T2)."
+          "line": 11,
+          "status": "CHANGE",
+          "raw": "internal.fleet.resume.ResumeManager/CHANGE (P1-CORE-19)."
         },
         {
           "file": "internal/fleet/resume/scan_test.go",
@@ -12827,6 +12896,26 @@
       "statuses": [
         "ADD",
         "CHANGE"
+      ]
+    },
+    {
+      "name": "internal.fleet.resume.Sweep",
+      "sites": [
+        {
+          "file": "internal/fleet/resume/sweep.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal.fleet.resume.Sweep/ADDED (P1-CORE-19)."
+        },
+        {
+          "file": "internal/fleet/resume/sweep_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal.fleet.resume.Sweep/ADDED (P1-CORE-19)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -16551,6 +16640,24 @@
           "line": 33,
           "status": "ADD",
           "raw": "internal/daemon (ADD, R-16.80; CHANGE, DEFECT-conductor-execute-"
+        },
+        {
+          "file": "internal/daemon/conductor_execute_fanout.go",
+          "line": 19,
+          "status": "CHANGE",
+          "raw": "internal/daemon (CHANGE, P1-CORE-19)."
+        },
+        {
+          "file": "internal/daemon/conductor_execute_fanout_test.go",
+          "line": 11,
+          "status": "CHANGE",
+          "raw": "internal/daemon (CHANGE, P1-CORE-19)."
+        },
+        {
+          "file": "internal/daemon/conductor_execute_fanout_unit_test.go",
+          "line": 6,
+          "status": "CHANGE",
+          "raw": "internal/daemon (CHANGE, P1-CORE-19; P1-BF-R99)."
         },
         {
           "file": "internal/daemon/conductor_execute_integration_test.go",
@@ -31387,7 +31494,7 @@
       ]
     }
   ],
-  "total_sites": 2990,
+  "total_sites": 3004,
   "unspecified_count": 158,
   "multi_status_count": 86
 }
