@@ -152,6 +152,9 @@ type Config struct {
 	// Registry is the [registry] block (P1-E24-W5-S50-T2, R-14.75); hot
 	// (see config_registry.go's header on PubkeyPath's empty default).
 	Registry registrySection
+	// Learn is the [learn.retention] block (P1-E31-W6-S64-T1, R-21.162);
+	// hot -- "learn" is not in hotreload.go's coldSections.
+	Learn learnSection
 	// Extra holds every top-level section other than schema_version,
 	// runtime, and elevation, exactly as decoded from the file: valid
 	// future 08 §3 sections preserved for round-tripping, never

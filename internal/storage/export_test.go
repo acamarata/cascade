@@ -17,9 +17,13 @@ import (
 	"context"
 	"database/sql"
 	"os"
+	"strings"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/conductor"
+	"github.com/acamarata/cascade/internal/learn"
 	"github.com/acamarata/cascade/internal/storage"
+	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/internal/testkit"
 )
 
@@ -130,4 +134,89 @@ func FuzzImportRecord(f *testing.F) {
 		stream.Write(line)
 		_, _ = storage.Import(context.Background(), db, storage.DomainContext, &stream, storage.ImportOpts{})
 	})
+}
+
+// telemetryCanaryJobID is a distinctive marker planted into a REAL
+// jobs_telemetry_outcomes row -- if Export's output ever contained it,
+// that would prove the exclusion failed (P1-E31-W6-S64-T1, R-21.162).
+const telemetryCanaryJobID = "telemetry-export-canary-job-id"
+
+// reservationCanaryID is planted into a jobs_reservation row for the same
+// purpose. jobs_reservation is the one reservation ledger (R1 F-5,
+// P1-CAP-08); that ticket has not landed a migration for it yet, so this
+// helper creates the table by raw SQL, the same shape-by-convention
+// pattern export.go's own header documents for the kv table and
+// domains.go's bootstrapLedgerTable -- proving Export's structural
+// exclusion never depends on which ticket's migration actually built the
+// table.
+func seedJobsReservationRow(t *testing.T, db *sql.DB, id string) {
+	t.Helper()
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS jobs_reservation (id TEXT PRIMARY KEY)`); err != nil {
+		t.Fatalf("create jobs_reservation: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO jobs_reservation (id) VALUES (?)`, id); err != nil {
+		t.Fatalf("seed jobs_reservation: %v", err)
+	}
+}
+
+// TestExportExcludesTelemetryTables seeds a real jobs_telemetry_outcomes
+// row (via the actual learn migration, not a hand-built table), a
+// jobs_reservation row, plus an ordinary kv row under the same jobs
+// domain, then asserts Export's output carries the kv row but never the
+// telemetry or reservation rows.
+func TestExportExcludesTelemetryTables(t *testing.T) {
+	db := bootstrappedTestDB(t)
+	ctx := context.Background()
+	clock := testkit.NewFrozenClock(exportTestClock)
+
+	if err := learn.ApplyLearnSchema(ctx, db, migrate.SQLiteEmitter{}, clock); err != nil {
+		t.Fatalf("ApplyLearnSchema: %v", err)
+	}
+	// jobs_usage: Record's cost/quota join reads it (R-16.52); this
+	// ticket's own production caller for the writer/reconciler is
+	// re-homed to P1-CAP-09 (packet constraints), so this test applies
+	// the schema directly, as its own composition root, exactly as
+	// registerLearnJobs would in production.
+	if err := conductor.ApplyUsageMigrationSchema(ctx, db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
+		t.Fatalf("ApplyUsageMigrationSchema: %v", err)
+	}
+	w := learn.NewSQLiteOutcomeWriter(db, clock)
+	o := learn.TelemetryOutcome{
+		JobID: telemetryCanaryJobID, TaskClass: "code", RepoID: "r1", Language: learn.LanguageGo,
+		Component: "c1", RiskClass: "normal", LaneTier: "t1", NodeID: "n1", ScopeRef: "s1",
+		FinalOutcome: learn.OutcomeAccepted,
+	}
+	if err := w.Record(ctx, o); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	const reservationCanaryID = "reservation-export-canary-id"
+	seedJobsReservationRow(t, db, reservationCanaryID)
+	seedKVRow(t, db, string(storage.DomainJobs), "ordinary-key", []byte("ordinary-value"))
+
+	var buf bytes.Buffer
+	if err := storage.Export(ctx, db, storage.DomainJobs, &buf); err != nil {
+		t.Fatalf("Export: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "ordinary-key") {
+		t.Error("Export dropped the ordinary kv row too -- the exclusion is over-broad")
+	}
+	if strings.Contains(out, telemetryCanaryJobID) {
+		t.Error("Export output contains the telemetry canary job_id -- exclusion failed")
+	}
+	if strings.Contains(out, reservationCanaryID) {
+		t.Error("Export output contains the reservation canary id -- exclusion failed")
+	}
+
+	want := map[string]bool{"jobs_telemetry_outcomes": false, "jobs_telemetry_finding": false, "jobs_reservation": false}
+	for _, table := range storage.JobsDomainExcludedTables() {
+		if _, ok := want[table]; ok {
+			want[table] = true
+		}
+	}
+	for table, seen := range want {
+		if !seen {
+			t.Errorf("JobsDomainExcludedTables() is missing %q", table)
+		}
+	}
 }

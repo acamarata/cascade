@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/acamarata/cascade/internal/buildinfo"
@@ -220,9 +221,12 @@ func Export(ctx context.Context, db *sql.DB, domain DomainID, w io.Writer) error
 }
 
 // exportDomainRows streams every kv row for domain, in key order, as
-// exportRow lines. Split from Export to keep Export itself well under
-// Art.10.3's 50-line function cap.
+// exportRow lines (split from Export for the 50-line cap). A source table
+// on the domain's excluded list is never read.
 func exportDomainRows(ctx context.Context, tx *sql.Tx, domain DomainID, w io.Writer) error {
+	if exportExcluded(domain, exportKVTable) {
+		return nil
+	}
 	exists, err := kvTableExists(ctx, tx)
 	if err != nil {
 		return cascade.Wrapf(cascade.KindUnavailable, err, "storage: export check kv table for domain %s", domain)
@@ -254,6 +258,26 @@ func exportDomainRows(ctx context.Context, tx *sql.Tx, domain DomainID, w io.Wri
 		return cascade.Wrapf(cascade.KindUnavailable, err, "storage: export iterate kv rows for domain %s", domain)
 	}
 	return nil
+}
+
+// jobsDomainExcludedTables is R-21.162's excluded-table list for the jobs
+// domain (its telemetry tables and the one reservation ledger). Export
+// derives its excluded set from it through exportExcluded.
+var jobsDomainExcludedTables = []string{
+	"jobs_telemetry_outcomes", "jobs_telemetry_finding", "jobs_reservation",
+}
+
+// JobsDomainExcludedTables returns a copy of the jobs domain's excluded table names.
+func JobsDomainExcludedTables() []string {
+	out := make([]string, len(jobsDomainExcludedTables))
+	copy(out, jobsDomainExcludedTables)
+	return out
+}
+
+// exportExcluded reports whether Export must not read table for domain;
+// the jobs domain's set is JobsDomainExcludedTables (R-21.162).
+func exportExcluded(domain DomainID, table string) bool {
+	return domain == DomainJobs && slices.Contains(JobsDomainExcludedTables(), table)
 }
 
 // writeJSONLine marshals v as compact JSON and writes it followed by a

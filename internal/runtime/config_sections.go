@@ -49,6 +49,9 @@ type configSections struct {
 	// registry is the [registry] block (P1-E24-W5-S50-T2, R-14.75), same
 	// deviation as fleetAccounts above -- see config_registry.go.
 	registry registrySection
+	// learn is the [learn.retention] block (P1-E31-W6-S64-T1), same
+	// deviation as fleetAccounts above -- see config_learn.go.
+	learn learnSection
 }
 
 // parseConfigSections runs each section parser in turn, returning on the
@@ -96,6 +99,9 @@ func parseConfigSections(tree map[string]interface{}, warn func(string, ...inter
 	if s.registry, err = parseRegistrySection(tree); err != nil {
 		return configSections{}, err
 	}
+	if s.learn, err = parseLearnSection(tree); err != nil {
+		return configSections{}, err
+	}
 	return s, nil
 }
 
@@ -124,6 +130,7 @@ func assembleConfig(sec configSections, schemaVersion int, profile Profile, tree
 		CIWatch:       sec.ciWatch,
 		AffectedCmd:   sec.affectedCmd,
 		Registry:      sec.registry,
+		Learn:         sec.learn,
 		Extra:         extraSections(tree),
 		sources:       sources,
 		rawTree:       tree,

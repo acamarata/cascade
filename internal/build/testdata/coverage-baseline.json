@@ -45,6 +45,7 @@
   "internal/inventory/gen": { "tier": "core", "floor": 85.0, "baseline": 100.0 },
   "internal/inventory/sport": { "tier": "core", "floor": 85.0, "baseline": 89.1 },
   "internal/jobs": { "tier": "core", "floor": 85.0, "baseline": 85.3 },
+  "internal/learn": { "tier": "core", "floor": 85.0, "baseline": 90.4 },
   "internal/mcp": { "tier": "core", "floor": 85.0, "baseline": 85.0 },
   "internal/mcp/coretools": { "tier": "core", "floor": 85.0, "baseline": 94.7 },
   "internal/mcp/transport": { "tier": "core", "floor": 85.0, "baseline": 87.2 },
