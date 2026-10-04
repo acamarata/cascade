@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-04T20:40:54Z",
+  "generated_at": "2026-10-04T22:24:18Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -27872,10 +27872,22 @@
       "sites": [
         {
           "file": "plugins/nself/detect.go",
-          "line": 24,
+          "line": 25,
           "status": "ADD",
           "ticket": "P1-E25-W5-S52-T2",
           "raw": "plugins/nself detect (ADD) — P1-E25-W5-S52-T2."
+        },
+        {
+          "file": "plugins/nself/detect_init_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "plugins/nself detect (TEST) — P1-PLG-13."
+        },
+        {
+          "file": "plugins/nself/detect_markers.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "plugins/nself detect (ADD) — P1-PLG-13."
         },
         {
           "file": "plugins/nself/detect_realfs_test.go",
@@ -31375,7 +31387,7 @@
       ]
     }
   ],
-  "total_sites": 2988,
+  "total_sites": 2990,
   "unspecified_count": 158,
   "multi_status_count": 86
 }
