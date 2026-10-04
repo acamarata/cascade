@@ -222,12 +222,13 @@ type LoadOptions struct {
 	Environ func() []string
 	// Warn receives a formatted message for every unknown key found
 	// inside a section this ticket owns (warn-and-preserve, never a hard
-	// error). A nil Warn discards messages.
+	// error). A nil Warn sends each formatted message to the default slog
+	// logger at warn level; messages are never discarded.
 	Warn func(format string, args ...interface{})
 }
 
 // loadOptionDefaults resolves opts' optional accessors to their
-// production fallbacks (os.Getenv, os.Environ, a no-op warn sink),
+// production fallbacks (os.Getenv, os.Environ, the default slog logger),
 // factored out of Load to keep it under Art.10.3's 50-line function cap.
 func loadOptionDefaults(opts LoadOptions) (Getenv, func() []string, func(string, ...interface{})) {
 	getenv := opts.Getenv
@@ -240,7 +241,7 @@ func loadOptionDefaults(opts LoadOptions) (Getenv, func() []string, func(string,
 	}
 	warn := opts.Warn
 	if warn == nil {
-		warn = func(string, ...interface{}) {}
+		warn = slogWarn
 	}
 	return getenv, environ, warn
 }
@@ -258,13 +259,13 @@ func Load(ctx context.Context, opts LoadOptions) (*Config, error) {
 
 	getenv, environ, warn := loadOptionDefaults(opts)
 
-	tree, sources, err := readAndUpgradeTree(opts.Path)
+	tree, sources, err := readAndUpgradeTree(opts.Path, warn)
 	if err != nil {
 		return nil, err
 	}
 
 	// Generic CASCADE_<SECTION>__<KEY> env overrides.
-	for k, v := range collectEnvOverrides(environ()) {
+	for k, v := range collectEnvOverrides(environ(), warn) {
 		treeSet(tree, k, v)
 		sources[k] = SourceEnv
 	}

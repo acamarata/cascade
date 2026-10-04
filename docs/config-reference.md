@@ -315,3 +315,68 @@ with the values the docs describe.
 running daemon uses is the one it started with. A change takes effect on
 the next registration pass — a daemon restart, or the next
 `cascade context harness sync`.
+
+## Path resolution, env overrides and file permissions
+
+**Path resolution failure.** Every `cascade config` verb (get, list,
+validate, set, unset, edit, reload, path) refuses to run when the config
+path cannot be resolved, for example with `HOME`, `USERPROFILE` and
+`CASCADE_HOME` all unset. The error is `unavailable`, it names the
+resolution error, and no default value is printed. `runtime.Load` itself
+still reads an empty `Path` as "no file" for callers that mean it (tests,
+zero-config use); the refusal sits at the resolution seam.
+
+**Env override warnings.** Generic `CASCADE_<SECTION>__<KEY>` overrides
+send at most one message per variable to `LoadOptions.Warn`, naming the
+variable and never its value. When conditions stack (an unknown key with an
+unquoted value, or a collision where one value is unquoted) they share that
+one message. The conditions:
+
+- the value is not a TOML literal and was used as a plain string (for
+  example `CASCADE_LOGGING__LEVEL=debug`; quote it, `"debug"`, to silence it);
+- the key is not a known config key (the override is still applied);
+- two variables lowercase to the same key (`CASCADE_FOO__BAR` and
+  `CASCADE_FOO__bar`). Key names are lowercased, and that normalization is
+  the contract. The last variable name in sorted order wins, so the result
+  no longer depends on environment order.
+
+Each Load reports to its own `Warn`; there is no shared callback.
+Dedicated variables (`CASCADE_HOME`, `CASCADE_CONFIG`, `CASCADE_SOCKET`,
+`CASCADE_PROFILE`, `CASCADE_NO_INPUT`, `CASCADE_YES`, `CASCADE_TELEMETRY`,
+`CASCADE_MINISIGN_PUBKEY`, `CASCADE_GITHUB_TOKEN`, `CASCADE_INIT_*`) are
+reserved and never treated as overrides; a test keeps that list in step
+with the names the code reads, and every env read whose name is not a
+compile-time constant must be declared with the names it reads.
+
+**File permission policy (unix).** `Load` and `runtime.CheckConfigPermissions`
+share one classifier:
+
+| Condition | Load | Check level |
+|---|---|---|
+| world-writable file (`o+w`) | refused, `permission_denied` | refuse |
+| owned by neither root nor the running user | refused | refuse |
+| parent directory world-writable without the sticky bit, or owned by another user | refused | refuse |
+| group-writable file (0660) | loads, one warning | warn |
+| world-readable file (0644) | loads silently | warn (doctor only) |
+| otherwise, or no file | loads | ok |
+
+Refusals name the path, the mode or owner and the fix: `chmod 600 <file>`,
+`chown $(id -u) <file>`, or `chmod o-w <dir>`. cascade never changes the
+file itself. uid 0 is accepted as an owner. `cascade config validate`
+applies the same policy and never reports a refused file as valid.
+
+A symlinked config.toml is judged by the file it resolves to, that
+file's own directory and the directory holding every link in the chain
+(another user who can write a link's directory can retarget it; a chain of
+more than 40 links is refused), and messages name both the link and its
+target. Every link on the chain must itself be owned by root or the running
+user: in a sticky directory only a link's owner can replace it, so a link
+owned by another user is refused, naming that link (fix: `chown -h $(id -u)
+<link>`). The file is opened once: its mode and owner come from that open descriptor, and
+Load parses the bytes read from it, so a file swapped in after the check is
+never the one loaded.
+
+The group-writable warning is a reviewable default: a shared deployment
+that needs a group-writable config accepts the warning rather than a
+refusal. On windows the check reports `not_checked` (NTFS ACLs are not
+modelled by mode bits) and Load neither refuses nor warns.

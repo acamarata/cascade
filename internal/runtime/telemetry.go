@@ -94,7 +94,7 @@ func ResolveTelemetryConfig(tree map[string]interface{}, environ func() []string
 	}
 
 	if environ != nil {
-		if raw, ok := collectEnvOverrides(environ())["telemetry.enabled"]; ok {
+		if raw, ok := collectEnvOverrides(environ(), nil)["telemetry.enabled"]; ok {
 			if b, ok := raw.(bool); ok && !b {
 				cfg.Enabled = false
 			}

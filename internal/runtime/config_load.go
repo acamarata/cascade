@@ -2,7 +2,7 @@ package runtime
 
 import (
 	"fmt"
-	"os"
+	"log/slog"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -58,7 +58,12 @@ import (
 // (toml_edit.go's SetKeyLine), never through toml.Marshal. This file
 // intentionally no longer contains a toml.Marshal-based write path for
 // that future ticket to accidentally reuse.
-func readAndUpgradeTree(path string) (map[string]interface{}, map[string]ConfigSource, error) {
+//
+// The file is opened once and read from the descriptor that passed the
+// shared permission policy (config_perm.go): unsafe files are refused with
+// KindPermissionDenied, and a group-writable one sends one message to warn
+// (nil discards).
+func readAndUpgradeTree(path string, warn func(string, ...interface{})) (map[string]interface{}, map[string]ConfigSource, error) {
 	tree := map[string]interface{}{}
 	sources := map[string]ConfigSource{}
 	if path == "" {
@@ -66,19 +71,18 @@ func readAndUpgradeTree(path string) (map[string]interface{}, map[string]ConfigS
 		return tree, sources, nil
 	}
 
-	data, err := os.ReadFile(path)
+	data, found, err := readConfigChecked(path, warn)
 	switch {
-	case err == nil:
-		if decErr := toml.Unmarshal(data, &tree); decErr != nil {
-			return nil, nil, &ConfigError{Reason: fmt.Sprintf("malformed TOML in %s: %v", path, decErr)}
-		}
-		markSources(tree, "", sources, SourceFile)
-	case os.IsNotExist(err):
+	case err != nil:
+		return nil, nil, err
+	case !found:
 		tree["schema_version"] = int64(CurrentSchemaVersion)
 		return tree, sources, nil
-	default:
-		return nil, nil, fmt.Errorf("runtime: read config %s: %w", path, err)
 	}
+	if decErr := toml.Unmarshal(data, &tree); decErr != nil {
+		return nil, nil, &ConfigError{Reason: fmt.Sprintf("malformed TOML in %s: %v", path, decErr)}
+	}
+	markSources(tree, "", sources, SourceFile)
 
 	if _, err := UpgradeSchema(tree); err != nil {
 		return nil, nil, err
@@ -158,4 +162,12 @@ func extraSections(tree map[string]interface{}) map[string]interface{} {
 		}
 	}
 	return extra
+}
+
+// slogWarn is Load's warn sink when LoadOptions.Warn is nil: it formats
+// the printf-style message itself and logs it as one message with no
+// attributes. slog.Default() is resolved at call time; assigning
+// slog.Default().Warn directly would read the arguments as key/value pairs.
+func slogWarn(format string, args ...interface{}) {
+	slog.Default().Warn(fmt.Sprintf(format, args...))
 }

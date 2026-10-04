@@ -32,7 +32,11 @@ func newSetCmd(deps Deps) *cobra.Command {
 			if err != nil {
 				return cascade.Wrap(cascade.KindInvalidInput, err, "config set")
 			}
-			w := &runtime.ConfigWriter{Path: deps.Paths.ConfigPath()}
+			path := deps.Paths.ConfigPath()
+			if err := checkConfigPerm(cmd, path); err != nil {
+				return err // an unsafe or uninspectable config is never written
+			}
+			w := &runtime.ConfigWriter{Path: path}
 			res, err := w.Set(key, value)
 			if err != nil {
 				return classifySetError(key, err)
