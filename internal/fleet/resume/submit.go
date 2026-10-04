@@ -61,8 +61,9 @@ func (m *Manager) resubmit(ctx context.Context, cursor resumeCursor) (int, error
 // the per-leg attempt contract:fanout-leg-results defines (a durable slot
 // per raw start, capped at 3; see AppendLeg), not this task-level number.
 func (m *Manager) resubmitFanOut(ctx context.Context, cursor resumeCursor) (int, error) {
-	actionID := FanOutEntity(cursor.TaskID)
-	myAttempt, err := m.claimAttempt(ctx, cursor.TaskID, actionID)
+	entity := FanOutEntity(cursor.FanOutID)
+	actionID := entity
+	myAttempt, err := m.claimAttempt(ctx, entity, actionID)
 	if err != nil {
 		return 0, err
 	}
@@ -73,12 +74,12 @@ func (m *Manager) resubmitFanOut(ctx context.Context, cursor resumeCursor) (int,
 		return 0, dispatchErr
 	}
 
-	latest, err := m.latestAttempt(ctx, cursor.TaskID, actionID)
+	latest, err := m.latestAttempt(ctx, entity, actionID)
 	if err != nil {
 		return dispatched, err
 	}
 	if latest > myAttempt {
-		_ = m.journalDiscard(ctx, cursor.TaskID, actionID, myAttempt, latest)
+		_ = m.journalDiscard(ctx, entity, actionID, myAttempt, latest)
 		return 0, ErrStaleAttempt
 	}
 	return dispatched, nil
@@ -106,13 +107,13 @@ func (m *Manager) resubmitIntent(ctx context.Context, cursor resumeCursor) error
 	return err
 }
 
-// claimAttempt appends a fencing marker for taskID/actionID and returns
+// claimAttempt appends a fencing marker for entityID/actionID and returns
 // the sequence number Append allocated. The journal's own per-entity,
 // transactionally-serialized Append (store.go's per-entity lock) already
 // gives concurrent callers distinct, strictly increasing Seq values for
 // the same entity, so Seq itself IS R-21.221's fencing attempt number —
 // no second counter is invented.
-func (m *Manager) claimAttempt(ctx context.Context, taskID, actionID string) (uint64, error) {
+func (m *Manager) claimAttempt(ctx context.Context, entityID, actionID string) (uint64, error) {
 	opID, err := cascade.NewID()
 	if err != nil {
 		return 0, cascade.Wrap(cascade.KindInternal, err, "resume: minting fence operation id")
@@ -121,7 +122,7 @@ func (m *Manager) claimAttempt(ctx context.Context, taskID, actionID string) (ui
 	if err != nil {
 		return 0, cascade.Wrap(cascade.KindInternal, err, "resume: encoding fence marker")
 	}
-	e, err := m.journal.Append(ctx, taskID, journal.KindResumeCursor, string(opID), payload)
+	e, err := m.journal.Append(ctx, entityID, journal.KindResumeCursor, string(opID), payload)
 	if err != nil {
 		return 0, err
 	}
@@ -129,10 +130,10 @@ func (m *Manager) claimAttempt(ctx context.Context, taskID, actionID string) (ui
 }
 
 // latestAttempt returns the highest Seq any fence marker for
-// {taskID, actionID} has reached, including markers claimed after
+// {entityID, actionID} has reached, including markers claimed after
 // myAttempt (a concurrent, newer resume of the same task).
-func (m *Manager) latestAttempt(ctx context.Context, taskID, actionID string) (uint64, error) {
-	entries, err := m.journal.Replay(ctx, taskID, journal.Cursor{EntityID: taskID, Seq: 0}, []journal.Kind{journal.KindResumeCursor})
+func (m *Manager) latestAttempt(ctx context.Context, entityID, actionID string) (uint64, error) {
+	entries, err := m.journal.Replay(ctx, entityID, journal.Cursor{EntityID: entityID, Seq: 0}, []journal.Kind{journal.KindResumeCursor})
 	if err != nil {
 		return 0, err
 	}
@@ -153,12 +154,12 @@ func (m *Manager) latestAttempt(ctx context.Context, taskID, actionID string) (u
 // latest and discarded — R-21.221's "stale-attempt results are journaled
 // and discarded, never applied", as an Ack entry so a reader scanning for
 // open intents never mistakes the discard for outstanding work.
-func (m *Manager) journalDiscard(ctx context.Context, taskID, actionID string, myAttempt, latest uint64) error {
+func (m *Manager) journalDiscard(ctx context.Context, entityID, actionID string, myAttempt, latest uint64) error {
 	payload, err := json.Marshal(map[string]uint64{"discarded_attempt": myAttempt, "superseded_by": latest})
 	if err != nil {
 		return cascade.Wrap(cascade.KindInternal, err, "resume: encoding discard record")
 	}
-	_, err = m.journal.Append(ctx, taskID, journal.KindAck, "discard:"+actionID+":"+itoa(myAttempt), payload)
+	_, err = m.journal.Append(ctx, entityID, journal.KindAck, "discard:"+actionID+":"+itoa(myAttempt), payload)
 	return err
 }
 

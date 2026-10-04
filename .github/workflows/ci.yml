@@ -122,6 +122,24 @@ jobs:
               exit 1
             }
           done
+      # Durable conductor.execute fan-out: real socket, recorded provider and
+      # killed-child crash sites need the integration tag (hygiene no-net gate).
+      - name: go test -tags=integration ./cmd/cascade/ ./internal/daemon/ (durable fan-out)
+        if: matrix.goos != 'windows'
+        run: |
+          set -o pipefail
+          go test -tags=integration -race -count=1 ./cmd/cascade/ ./internal/daemon/ \
+            -run '^(TestConductorExecuteFanOutDurable|TestConductorExecuteFanOutRespectsBudget|TestConductorExecuteFanOutPolicyRefusal|TestConductorExecuteFanOutCursorFirst|TestConductorExecuteFanOutSameTaskIDIsolated|TestConductorExecuteFanOutUnwiredRefuses|TestConductorExecuteFanOutClientCancelFinalizes|TestConductorExecuteFanOutIDCollisionRefuses|TestConductorExecuteFanOutReattach|TestConductorExecuteFanOutReattachAttemptCap|TestConductorExecuteFanOutBounds|TestFanOutFinalizeSurvivesCancel|TestConductorExecuteFanOutReattachWhileLiveRefuses|TestConductorExecuteFanOutReattachForeignEntity|TestConductorExecuteFanOutEchoesRequestID|TestConductorExecuteFanOutSweepVsLiveHandler|TestFanOutProducerCrashAfterCursor|TestFanOutProducerCrashAfterRequestRecord|TestFanOutProducerCrashAfterLastDone|TestFanOutProducerCrashBeforeDelete|TestConductorRegistrationStoresHandlerFanOut)$' -v 2>&1 | tee /tmp/fanout-integration.log
+          if grep -q 'no tests to run' /tmp/fanout-integration.log; then
+            echo "::error::durable fan-out -tags=integration run reported [no tests to run]"
+            exit 1
+          fi
+          for name in $(echo 'TestConductorExecuteFanOutDurable|TestConductorExecuteFanOutRespectsBudget|TestConductorExecuteFanOutPolicyRefusal|TestConductorExecuteFanOutCursorFirst|TestConductorExecuteFanOutSameTaskIDIsolated|TestConductorExecuteFanOutUnwiredRefuses|TestConductorExecuteFanOutClientCancelFinalizes|TestConductorExecuteFanOutIDCollisionRefuses|TestConductorExecuteFanOutReattach|TestConductorExecuteFanOutReattachAttemptCap|TestConductorExecuteFanOutBounds|TestFanOutFinalizeSurvivesCancel|TestConductorExecuteFanOutReattachWhileLiveRefuses|TestConductorExecuteFanOutReattachForeignEntity|TestConductorExecuteFanOutEchoesRequestID|TestConductorExecuteFanOutSweepVsLiveHandler|TestFanOutProducerCrashAfterCursor|TestFanOutProducerCrashAfterRequestRecord|TestFanOutProducerCrashAfterLastDone|TestFanOutProducerCrashBeforeDelete|TestConductorRegistrationStoresHandlerFanOut' | tr '|' ' '); do
+            grep -q -- "--- PASS: ${name} " /tmp/fanout-integration.log || {
+              echo "::error::${name} did not run and pass."
+              exit 1
+            }
+          done
 
       # P1-E22-W5-S47-T1 (D6/Q8): internal/integration's own two files
       # (context_scope_test.go, recall_what_test.go — both `!windows &&

@@ -136,3 +136,41 @@ list`'s `cost` column:
 | `N model(s) priced` | N models have a per-token price |
 
 A spend report that comes out at zero is read against that column.
+
+## Durable fan-out dispatch
+
+`conductor.execute` with `fan_out` between 2 and 16 (`conductor.MaxFanOut`)
+runs a durable fan-out. A larger value, or a malformed `request_id`, is
+refused as invalid input before anything is written.
+
+1. The parent request passes the executor's door check (validation,
+   classifier, sensitivity, policy) first. A refused prompt is never stored.
+2. The fan-out id is the client's `request_id` (the 26-character Crockford
+   id form) or a freshly minted id. The id is claimed in the daemon's
+   in-flight table; a second call for a claimed id gets `conflict`
+   ("fan-out in progress") and makes no provider call.
+3. A new fan-out writes its resume cursor (journal entity
+   `fanout:<id>`, seq 1: ids, leg count, request digest and key, never the
+   prompt), then the request record, then dispatches every leg through the
+   one executor. Each leg holds a slot of the daemon's leg budget
+   (`DefaultFanOutLegBudget`, 4 concurrent legs) for the length of its
+   call.
+4. On every return after the cursor, the call writes a final marker
+   (`delivered`, `terminal`, `failed`, `cancelled` or `unknown_outcome`)
+   and deletes the request record and every stored leg result. The finalize
+   runs detached from the caller's context, bounded to 5 seconds.
+
+### Re-attach
+
+A repeat call with the same `request_id` re-attaches when the fan-out is
+not final: legs already done are replayed after a fresh door check, missing
+legs are dispatched, and the caller gets the full response. A changed prompt
+is refused with `conflict`. A leg that already has three starts and no
+result ends the fan-out as `unknown_outcome` with no provider call.
+
+### Retention
+
+`resume.Scan` (daemon start) classifies fan-outs and dispatches nothing.
+`resume.Sweep` deletes the records of any fan-out whose last journal entry
+is older than the record ttl, writing an `expired` marker when it has none.
+Both only touch `fanout:<id>` entities whose first entry is this cursor.

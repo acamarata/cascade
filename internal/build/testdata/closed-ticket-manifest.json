@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-04T22:14:53Z",
+  "generated_at": "2026-10-04T22:25:51Z",
   "tickets": [
     "P1-BLD-01",
     "P1-BLD-02",
@@ -25,6 +25,7 @@
     "P1-CORE-06",
     "P1-CORE-16",
     "P1-CORE-18",
+    "P1-CORE-19",
     "P1-CPA-19",
     "P1-DOC-07",
     "P1-GWY-11",
@@ -33,7 +34,6 @@
     "P1-MIG-07",
     "P1-PBD-07",
     "P1-PLG-01",
-    "P1-PLG-13",
     "P1-SEC-28",
     "P1-SEC-33",
     "P1-SEC-37",

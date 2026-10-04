@@ -1,24 +1,25 @@
-// Purpose: the read-only classification scan (task 2 of the ticket): for
-//   one entity, decide Resumable/Terminal/UnknownOutcome without any side
-//   effect, and build the resumeCursor a Resumable entity's re-submission
-//   needs.
-// Inputs: an entityID and this package's journal.Store.
-// Outputs: (*resumeCursor, *AttentionItem, error) — cursor is nil when
-//   there is nothing to resume (including "fully completed"); error is
-//   nil exactly when classification succeeded, whatever its result.
-// Constraints: read-only (Recover's torn-tail repair is the one exception
-//   journal.Store itself already performs and documents as recovery, not
-//   scan side-effect); fail-closed on anything not explicitly recognized.
-// SPORT: internal.fleet.resume.ResumeManager/ADDED (P1-E13-W3-S27-T2).
+// Purpose: fan-out and intent classification. scanEntity (the journal-only
+//   Manager's read-only classifier) decides Resumable/Terminal/Unknown for
+//   one entity; Scan (contract:fanout-producer) classifies every in-scope
+//   fan-out over the daemon store, loading the request from its record.
+// Inputs: an entityID and a journal.Store (Manager); FanOutDeps (Scan).
+// Outputs: scanEntity: (*resumeCursor, *AttentionItem, error); Scan: one
+//   FanOutScan per in-scope fan-out.
+// Constraints: Scan dispatches nothing and writes only terminal markers and
+//   record deletes; it never touches an entity outside its scope (sweep.go).
+//   Fail-closed on anything not explicitly recognized.
+// SPORT: internal.fleet.resume.ResumeManager/CHANGE (P1-CORE-19).
 
 package resume
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/fleet/journal"
+	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -35,7 +36,7 @@ const (
 // payload-contract section.
 type resumeCursor struct {
 	TaskID    string
-	FanOutID  string // cursorFanOut only: FanOutIDFromEntity of the entity
+	FanOutID  string // cursorFanOut only: the cursor fanout_id (= the entity id)
 	Kind      cursorKind
 	Request   provider.ModelRequest   // cursorFanOut only
 	Legs      int                     // cursorFanOut only
@@ -43,17 +44,20 @@ type resumeCursor struct {
 	ActionID  string                  // cursorIntent only
 }
 
-// resumeCursorPayload is the KindResumeCursor wire shape this package
-// writes when it observes (or itself would need to describe) a fan-out
-// task's resumable state. T discriminates it from fenceMarker, which also
-// rides KindResumeCursor (see submit.go); both payloads share the kind
-// because R-21.216's enum is closed at eight members and neither shape
-// warrants a ninth.
+// resumeCursorPayload is the KindResumeCursor wire shape of a fan-out's
+// cursor, written once at seq 1 of FanOutEntity(fanout_id) by
+// FanOutStore.WriteCursor (cursor_write.go). It carries ids, the leg count
+// and the request record's digest and key, never request content. T
+// discriminates it from fenceMarker, which also rides KindResumeCursor
+// (see submit.go); both share the kind because R-21.216's enum is closed
+// at eight members and neither shape warrants a ninth.
 type resumeCursorPayload struct {
-	T       string          `json:"t"` // "cursor"
-	TaskID  string          `json:"task_id"`
-	Legs    int             `json:"legs"`
-	Request json.RawMessage `json:"request"`
+	T             string `json:"t"` // "cursor"
+	FanOutID      string `json:"fanout_id"`
+	TaskID        string `json:"task_id"`
+	Legs          int    `json:"legs"`
+	RequestDigest string `json:"request_digest"`
+	RequestKey    string `json:"request_key"`
 }
 
 // legPayload is the KindFanOutLegStarted/KindFanOutLegDone wire shape the
@@ -101,10 +105,9 @@ func (m *Manager) scanEntity(ctx context.Context, entityID string) (*resumeCurso
 	// A fan-out's leg entries live in FanOutEntity(fanoutID); a fan-out
 	// cursor in any other entity is not a shape this package resumes.
 	id, ok := FanOutIDFromEntity(entityID)
-	if !ok {
+	if !ok || cur.FanOutID != id {
 		return nil, nil, ErrUnrecognizedShape
 	}
-	cur.FanOutID = id
 	return cur, attention, nil
 }
 
@@ -141,8 +144,7 @@ func classifyFanOut(entries []journal.Entry) (*resumeCursor, error) {
 	if latest == nil {
 		return nil, nil
 	}
-	var req provider.ModelRequest
-	if err := json.Unmarshal(latest.Request, &req); err != nil {
+	if latest.FanOutID == "" || latest.Legs < 1 {
 		return nil, ErrUnrecognizedShape
 	}
 	completed, err := legOutcomes(entries)
@@ -152,7 +154,12 @@ func classifyFanOut(entries []journal.Entry) (*resumeCursor, error) {
 	if len(completed) >= latest.Legs {
 		return nil, nil // every leg already done: nothing to resume
 	}
-	return &resumeCursor{TaskID: latest.TaskID, Kind: cursorFanOut, Request: req, Legs: latest.Legs, Completed: completed}, nil
+	// The request content lives only in the request record, which this
+	// journal-only Manager cannot read: its FanOutFunc gets the TaskID
+	// template, and the store-backed Scan (sweep.go) is the classifier
+	// that loads the record.
+	return &resumeCursor{TaskID: latest.TaskID, FanOutID: latest.FanOutID, Kind: cursorFanOut,
+		Request: provider.ModelRequest{TaskID: latest.TaskID}, Legs: latest.Legs, Completed: completed}, nil
 }
 
 // legOutcomes decides a fan-out cursor from its leg entries: any
@@ -231,19 +238,62 @@ func classifyIntent(entries []journal.Entry) (*resumeCursor, error) {
 	return &resumeCursor{TaskID: p.TaskID, Kind: cursorIntent, ActionID: p.ActionID}, nil
 }
 
-// itoa avoids importing strconv solely for one call site in this file's
-// doc-facing Reason string (kept trivial and allocation-light on
-// purpose).
-func itoa(v uint64) string {
-	if v == 0 {
-		return "0"
+// Scan classifies every in-scope fan-out (see sweep.go) and dispatches
+// nothing: it writes only terminal markers and record deletes. A claimed
+// (busy) fan-out is skipped. A nil collaborator is ErrConstructionFailed.
+func Scan(ctx context.Context, deps FanOutDeps) ([]FanOutScan, error) {
+	js, err := deps.journal()
+	if err != nil {
+		return nil, err
 	}
-	var buf [20]byte
-	i := len(buf)
-	for v > 0 {
-		i--
-		buf[i] = byte('0' + v%10)
-		v /= 10
+	entities, err := js.ListEntities(ctx)
+	if err != nil {
+		return nil, cascade.Wrap(cascade.KindUnavailable, err, "resume: listing journal entities for the scan")
 	}
-	return string(buf[i:])
+	var out []FanOutScan
+	for _, entity := range entities {
+		if id, ok := FanOutIDFromEntity(entity); ok {
+			if v, keep := scanFanOut(ctx, js, deps, id); keep {
+				out = append(out, v)
+			}
+		}
+	}
+	return out, nil
+}
+
+// scanFanOut classifies one fan-out under its claim. keep is false for a
+// busy or foreign entity, which is left untouched.
+func scanFanOut(ctx context.Context, js journal.Store, deps FanOutDeps, id string) (FanOutScan, bool) {
+	if !deps.Claims.TryClaim(id) {
+		return FanOutScan{}, false
+	}
+	defer deps.Claims.Release(id)
+	st, err := loadState(ctx, js, id)
+	if err != nil {
+		return FanOutScan{FanOutID: id, Class: FanOutTerminal, Err: err}, true
+	}
+	if !st.Ours {
+		return FanOutScan{}, false
+	}
+	v := FanOutScan{FanOutID: id}
+	if st.Final != "" {
+		v.Class, v.Err = FanOutFinalMarked, deleteRecords(ctx, js, deps.Store, id)
+		return v, true
+	}
+	req, found, err := getRequest(ctx, deps.Store, id)
+	switch {
+	case err != nil:
+		v.Class, v.Err = FanOutTerminal, err
+	case !found || st.Terminal:
+		cause := ErrRequestRecordMissing
+		if found {
+			cause = ErrLegTerminal
+		}
+		v.Class, v.Err = FanOutTerminal, errors.Join(cause, finalize(ctx, js, deps.Store, id, OutcomeTerminal))
+	case len(st.Completed) >= st.Cursor.Legs:
+		v.Class, v.Request = FanOutCompleteUndelivered, req
+	default:
+		v.Class, v.Request = FanOutResumable, req
+	}
+	return v, true
 }

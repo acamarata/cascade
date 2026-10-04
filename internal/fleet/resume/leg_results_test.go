@@ -155,14 +155,9 @@ func TestLegAdapterRejectsBadDone(t *testing.T) {
 	}
 }
 
-func cursorEntry(t *testing.T, legs int) journal.Entry {
+func cursorEntry(t *testing.T, id string, legs int) journal.Entry {
 	t.Helper()
-	req, _ := json.Marshal(legReq())
-	p, err := json.Marshal(resumeCursorPayload{T: "cursor", TaskID: "client-task", Legs: legs, Request: req})
-	if err != nil {
-		t.Fatalf("cursor: %v", err)
-	}
-	return journal.Entry{Kind: journal.KindResumeCursor, Payload: p}
+	return journal.Entry{Kind: journal.KindResumeCursor, Payload: cursorPayloadFor(t, id, legReq().TaskID, legs)}
 }
 
 func doneEntry(leg int, outcome string) journal.Entry {
@@ -171,19 +166,19 @@ func doneEntry(leg int, outcome string) journal.Entry {
 }
 
 func TestClassifyFanOutLegOutcomes(t *testing.T) {
-	cur, _, err := classify([]journal.Entry{cursorEntry(t, 3), doneEntry(0, "ok"), doneEntry(1, "failed_retryable"), doneEntry(2, "")})
+	cur, _, err := classify([]journal.Entry{cursorEntry(t, "fo-t", 3), doneEntry(0, "ok"), doneEntry(1, "failed_retryable"), doneEntry(2, "")})
 	if err != nil || cur == nil || len(cur.Completed) != 1 {
 		t.Fatalf("classify = (%+v, %v), want resumable with only the ok leg completed", cur, err)
 	}
 	if _, ok := cur.Completed[0]; !ok {
 		t.Fatalf("completed = %v, want leg 0", cur.Completed)
 	}
-	_, _, err = classify([]journal.Entry{cursorEntry(t, 2), doneEntry(0, "ok"), doneEntry(1, "failed_terminal")})
+	_, _, err = classify([]journal.Entry{cursorEntry(t, "fo-t", 2), doneEntry(0, "ok"), doneEntry(1, "failed_terminal")})
 	if err != ErrLegTerminal {
 		t.Fatalf("classify(failed_terminal) = %v, want ErrLegTerminal", err)
 	}
 	store, _, _ := newRealStore(t)
-	for i, e := range []journal.Entry{cursorEntry(t, 1), doneEntry(0, "failed_terminal")} {
+	for i, e := range []journal.Entry{cursorEntry(t, "fo-t", 1), doneEntry(0, "failed_terminal")} {
 		if _, err := store.Append(context.Background(), FanOutEntity("fo-t"), e.Kind, "op-"+itoa(uint64(i)), e.Payload); err != nil {
 			t.Fatalf("seed: %v", err)
 		}
@@ -216,7 +211,7 @@ func (f *failDoneStore) Append(ctx context.Context, id string, k journal.Kind, o
 func capFixture(t *testing.T, id string, prior int, crash bool) (*journalAppenderAdapter, journal.Store, *int32) {
 	t.Helper()
 	a, js, raw := newAdapter(t)
-	ctx, c, calls := context.Background(), cursorEntry(t, 1), new(int32)
+	ctx, c, calls := context.Background(), cursorEntry(t, id, 1), new(int32)
 	if _, err := js.Append(ctx, FanOutEntity(id), c.Kind, "cursor", c.Payload); err != nil {
 		t.Fatalf("seed cursor: %v", err)
 	}
@@ -226,7 +221,7 @@ func capFixture(t *testing.T, id string, prior int, crash bool) (*journalAppende
 		}
 	}
 	crashing, _ := newLegAdapter(&failDoneStore{Store: js, armed: true}, raw)
-	if _, err := conductor.FanOut(ctx, id, legReq(), 1, nil, permitAll, crashing, crashing, allowAll, countingExec(calls)); crash && err == nil {
+	if _, err := conductor.FanOut(ctx, id, provider.ModelRequest{TaskID: legReq().TaskID}, 1, nil, permitAll, crashing, crashing, allowAll, countingExec(calls)); crash && err == nil {
 		t.Fatal("crash run: want the injected done-append error returned")
 	}
 	return a, js, calls

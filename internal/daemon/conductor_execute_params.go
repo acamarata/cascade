@@ -4,7 +4,7 @@ package daemon
 //   into pkg/provider.ModelRequest, split out of conductor_execute.go to
 //   stay under Art.10.3's 300-line cap. Mirrors cmd/cascade/run.go:169-188's
 //   runRequestParams field-for-field (task_id/task_class/inputs/
-//   requirements/sensitivity/fan_out) - that struct cannot be imported
+//   requirements/sensitivity/fan_out/request_id) - that struct cannot be imported
 //   here (cmd/cascade is package main), so its wire shape is duplicated,
 //   not its Go type.
 // Inputs: the raw JSON-RPC params for "conductor.execute".
@@ -17,6 +17,7 @@ package daemon
 // SPORT: internal/daemon (ADD, R-16.80).
 
 import (
+	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
 )
@@ -29,6 +30,25 @@ type conductorExecuteParams struct {
 	Requirements provider.Requirements     `json:"requirements"`
 	Sensitivity  string                    `json:"sensitivity"`
 	FanOut       int                       `json:"fan_out,omitempty"`
+	// RequestID is the client's optional fan-out id (fan_out >= 2 only):
+	// a repeat call with the same id re-attaches to that fan-out.
+	RequestID string `json:"request_id,omitempty"`
+}
+
+// validateFanOut checks a fan-out call's bound and request_id before any
+// authorization or write: 2 <= fan_out <= conductor.MaxFanOut, and a
+// request_id, when present, in the exact cascade.ParseID form.
+func (p conductorExecuteParams) validateFanOut() error {
+	if p.FanOut > conductor.MaxFanOut {
+		return cascade.Newf(cascade.KindInvalidInput, "conductor.execute: fan_out %d exceeds the maximum of %d", p.FanOut, conductor.MaxFanOut)
+	}
+	if p.RequestID == "" {
+		return nil
+	}
+	if _, err := cascade.ParseID(p.RequestID); err != nil {
+		return cascade.Wrap(cascade.KindInvalidInput, err, "conductor.execute: request_id")
+	}
+	return nil
 }
 
 // conductorExecuteMessage mirrors cmd/cascade/run.go's runChatMessage.

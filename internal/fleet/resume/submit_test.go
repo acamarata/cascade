@@ -20,14 +20,7 @@ import (
 func seedFanOutCursor(t *testing.T, store journal.Store, taskID string, legs int, completedIdx ...int) {
 	t.Helper()
 	ctx := context.Background()
-	req, err := json.Marshal(provider.ModelRequest{TaskID: taskID, TaskClass: "chat", Inputs: []provider.ChatMessage{{Role: "user", Content: "hi"}}})
-	if err != nil {
-		t.Fatalf("marshal request: %v", err)
-	}
-	cursorPayload, err := json.Marshal(resumeCursorPayload{T: "cursor", TaskID: taskID, Legs: legs, Request: req})
-	if err != nil {
-		t.Fatalf("marshal cursor: %v", err)
-	}
+	cursorPayload := cursorPayloadFor(t, taskID, taskID, legs)
 	if _, err := store.Append(ctx, FanOutEntity(taskID), journal.KindResumeCursor, "cursor-op", cursorPayload); err != nil {
 		t.Fatalf("seed cursor: %v", err)
 	}
@@ -93,7 +86,7 @@ func TestResumeFencedAttemptRejectsStale(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	cursor := resumeCursor{TaskID: "t-race", Kind: cursorFanOut, Request: provider.ModelRequest{TaskID: "t-race", Inputs: []provider.ChatMessage{{Role: "user", Content: "hi"}}}, Legs: 1, Completed: map[int]conductor.JobID{}}
+	cursor := resumeCursor{TaskID: "t-race", FanOutID: "t-race", Kind: cursorFanOut, Request: provider.ModelRequest{TaskID: "t-race"}, Legs: 1, Completed: map[int]conductor.JobID{}}
 
 	type result struct {
 		dispatched int
@@ -108,7 +101,7 @@ func TestResumeFencedAttemptRejectsStale(t *testing.T) {
 	<-blockCh
 	// A second, "newer" resumer claims a fresher attempt for the SAME
 	// task while the first call's fan-out dispatch is still in flight.
-	if _, err := mgr.claimAttempt(ctx, "t-race", "fanout:t-race"); err != nil {
+	if _, err := mgr.claimAttempt(ctx, FanOutEntity("t-race"), FanOutEntity("t-race")); err != nil {
 		t.Fatalf("claimAttempt (concurrent): %v", err)
 	}
 	close(proceedCh)
@@ -131,7 +124,7 @@ func assertStaleAttemptDiscarded(ctx context.Context, t *testing.T, store journa
 	if res.dispatched != 0 {
 		t.Fatalf("stale result reported %d legs dispatched, want 0 (discarded, never applied)", res.dispatched)
 	}
-	discards, err := store.Replay(ctx, "t-race", journal.Cursor{EntityID: "t-race", Seq: 0}, []journal.Kind{journal.KindAck})
+	discards, err := store.Replay(ctx, FanOutEntity("t-race"), journal.Cursor{EntityID: FanOutEntity("t-race"), Seq: 0}, []journal.Kind{journal.KindAck})
 	if err != nil {
 		t.Fatalf("Replay for discard record: %v", err)
 	}
