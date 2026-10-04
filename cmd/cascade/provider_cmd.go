@@ -42,18 +42,15 @@ type providerDeps struct {
 	ReadStdin    func() ([]byte, error)
 	StdinIsPiped func() bool
 	Doer         intake.Doer
-	// Registry, when non-nil, overrides the durable-store resolution
-	// runProviderAdd otherwise performs (openProviderStorage + a
-	// registryAdapter over providers.db, the SAME file list/remove/
-	// health/usage open) -- the fix for the disclosed add/list split. A
-	// test substitutes an isolated intake.Registry (e.g. MemoryRegistry)
-	// to avoid touching disk; production leaves this nil.
+	// Registry, when non-nil, replaces the durable providers.db registry
+	// (resolveProviderRegistry). Production leaves it nil.
 	Registry intake.Registry
-	// HealthHTTPDoer is the transport `cascade provider test`'s
-	// reachability prober (provider_health_cmd.go's
-	// httpReachabilityProber) uses. Nil resolves to a real *http.Client
-	// in production; a test substitutes a fake implementation so
-	// TestProviderTest_* never opens a real socket (Art.7.2).
+	// NewOAuthBroker, when non-nil, replaces secrets.NewOAuthBroker so a
+	// test drives the OAuth path without a browser. Production leaves it nil.
+	NewOAuthBroker func(provider.ProviderOAuthConfig, secrets.OAuthDeps) (provider.OAuthBroker, error)
+	// HealthHTTPDoer is `provider test`'s reachability transport
+	// (httpReachabilityProber). Nil means a real *http.Client; tests
+	// substitute a fake so TestProviderTest_* opens no socket (Art.7.2).
 	HealthHTTPDoer httpDoer
 }
 
@@ -90,15 +87,14 @@ func newProviderCmd(deps providerDeps) *cobra.Command {
 		Annotations: map[string]string{"local": "true"},
 	}
 	cmd.AddCommand(newProviderAddCmd(deps))
+	cmd.AddCommand(newProviderReauthCmd(deps))
 	mountProviderQueryCmds(cmd, deps)
 	return cmd
 }
 
 // providerAddFlags holds one invocation's flag values.
 type providerAddFlags struct {
-	key      bool
-	keyEnv   string
-	oauth    bool
+	credentialFlags
 	baseURL  string
 	kind     string
 	noVerify bool
@@ -146,7 +142,7 @@ func newProviderAddCmd(deps providerDeps) *cobra.Command {
 // writing through resolveProviderRegistry's registry -- the fix for the
 // disclosed add/list split (provider_registry_adapter.go's header comment).
 func runProviderAdd(cmd *cobra.Command, deps providerDeps, name string, flags providerAddFlags) error {
-	req, err := buildAddRequest(cmd, deps, name, flags)
+	req, err := buildAddRequest(deps, name, flags)
 	if err != nil {
 		return err
 	}
@@ -185,49 +181,72 @@ func resolveProviderRegistry(ctx context.Context, deps providerDeps) (intake.Reg
 	return newRegistryAdapter(store.Registry), store.Close, nil
 }
 
-// buildAddRequest resolves the mutually-exclusive credential flags into an
-// intake.AddRequest, reading a --key value from stdin per vault.go's rule
-// that a credential is never a positional argument.
-func buildAddRequest(cmd *cobra.Command, deps providerDeps, name string, flags providerAddFlags) (intake.AddRequest, error) {
-	req := intake.AddRequest{
-		Name: name, BaseURL: flags.baseURL, Kind: intake.DriverKind(flags.kind),
+// buildAddRequest resolves the credential flags (resolveCredentialFlags,
+// shared with `provider reauth`) into an intake.AddRequest.
+func buildAddRequest(deps providerDeps, name string, flags providerAddFlags) (intake.AddRequest, error) {
+	mode, keyValue, keyEnv, err := resolveCredentialFlags(deps, "provider add", flags.credentialFlags, false)
+	if err != nil {
+		return intake.AddRequest{}, err
+	}
+	return intake.AddRequest{
+		Name: name, Credential: mode, KeyValue: keyValue, KeyEnvVar: keyEnv,
+		BaseURL: flags.baseURL, Kind: intake.DriverKind(flags.kind),
 		NoVerify: flags.noVerify, Pool: flags.pool,
-	}
+	}, nil
+}
+
+// credentialFlags is the credential-source trio add and reauth share.
+type credentialFlags struct {
+	key    bool
+	keyEnv string
+	oauth  bool
+}
+
+// resolveCredentialFlags maps exactly one set credential flag to its intake
+// mode (--key reads stdin, never argv); verb prefixes every refusal. With
+// flagless, no flag at all yields CredentialUnset and reads nothing.
+func resolveCredentialFlags(deps providerDeps, verb string, f credentialFlags, flagless bool) (intake.CredentialMode, []byte, string, error) {
 	set := 0
-	if flags.key {
-		set++
+	for _, on := range []bool{f.key, f.keyEnv != "", f.oauth} {
+		if on {
+			set++
+		}
 	}
-	if flags.keyEnv != "" {
-		set++
-	}
-	if flags.oauth {
-		set++
+	if set == 0 && flagless {
+		return intake.CredentialUnset, nil, "", nil
 	}
 	if set != 1 {
-		return intake.AddRequest{}, cascade.New(cascade.KindInvalidInput,
-			"provider add: exactly one of --key, --key-env or --oauth is required")
+		return intake.CredentialUnset, nil, "", cascade.Newf(cascade.KindInvalidInput, "%s: %s of --key, --key-env or --oauth",
+			verb, map[bool]string{false: "pass exactly one", true: "pass at most one"}[flagless])
 	}
 	switch {
-	case flags.key:
-		piped := deps.StdinIsPiped == nil || deps.StdinIsPiped()
-		if deps.Getenv != nil && deps.Getenv("CASCADE_NO_INPUT") == "1" && !piped {
-			return intake.AddRequest{}, cascade.Wrap(cascade.KindUnavailable, intake.ErrNoInputInteractive,
-				"provider add: --key would block on an interactive TTY, which CASCADE_NO_INPUT=1 forbids; use --key-env instead")
-		}
-		raw, err := deps.ReadStdin()
-		if err != nil {
-			return intake.AddRequest{}, cascade.Wrap(cascade.KindInvalidInput, err, "provider add: reading --key from stdin")
-		}
-		req.Credential = intake.CredentialKey
-		req.KeyValue = trimValue(raw)
-	case flags.keyEnv != "":
-		req.Credential = intake.CredentialKeyEnv
-		req.KeyEnvVar = strings.TrimSpace(flags.keyEnv)
+	case f.key:
+		v, err := readKeyFlagValue(deps, verb)
+		return intake.CredentialKey, v, "", err
+	case f.keyEnv != "":
+		return intake.CredentialKeyEnv, nil, strings.TrimSpace(f.keyEnv), nil
 	default:
-		req.Credential = intake.CredentialOAuth
+		return intake.CredentialOAuth, nil, "", nil
 	}
-	_ = cmd
-	return req, nil
+}
+
+// readKeyFlagValue reads --key from stdin, refusing a TTY under CASCADE_NO_INPUT=1
+// and an empty value (parity with --key-env: never overwrite a working key).
+func readKeyFlagValue(deps providerDeps, verb string) ([]byte, error) {
+	piped := deps.StdinIsPiped == nil || deps.StdinIsPiped()
+	if deps.Getenv != nil && deps.Getenv("CASCADE_NO_INPUT") == "1" && !piped {
+		return nil, cascade.Wrap(cascade.KindUnavailable, intake.ErrNoInputInteractive,
+			verb+": --key would block on an interactive TTY, which CASCADE_NO_INPUT=1 forbids; use --key-env instead")
+	}
+	raw, err := deps.ReadStdin()
+	if err != nil {
+		return nil, cascade.Wrap(cascade.KindInvalidInput, err, verb+": reading --key from stdin")
+	}
+	v := trimValue(raw)
+	if strings.TrimSpace(string(v)) == "" {
+		return nil, cascade.New(cascade.KindInvalidInput, verb+": the value --key read from stdin is empty")
+	}
+	return v, nil
 }
 
 // buildIntakeDeps wires the production intake.Deps: a real vault broker
@@ -246,16 +265,16 @@ func buildIntakeDeps(deps providerDeps, reg intake.Registry) (intake.Deps, error
 	if err != nil {
 		return intake.Deps{}, err
 	}
-	return intake.Deps{
-		Doer:     deps.Doer,
-		Clock:    intakeClockAdapter{runtime.NewSystemClock()},
-		Vault:    broker,
-		Egress:   engine,
-		Registry: reg,
-		NewOAuthBroker: func(cfg provider.ProviderOAuthConfig, oa secrets.OAuthDeps) (provider.OAuthBroker, error) {
+	newOAuth := deps.NewOAuthBroker
+	if newOAuth == nil {
+		newOAuth = func(cfg provider.ProviderOAuthConfig, oa secrets.OAuthDeps) (provider.OAuthBroker, error) {
 			return secrets.NewOAuthBroker(cfg, oa)
-		},
-		Getenv: deps.Getenv,
+		}
+	}
+	return intake.Deps{
+		Doer: deps.Doer, Clock: intakeClockAdapter{runtime.NewSystemClock()},
+		Vault: broker, Egress: engine, Registry: reg,
+		NewOAuthBroker: newOAuth, Getenv: deps.Getenv,
 	}, nil
 }
 
