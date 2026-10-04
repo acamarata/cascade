@@ -6,6 +6,8 @@ ticket in the release epic; other tickets seed the section they implement.
 
 See also [supply-chain tooling: pins and accepted residuals](security-posture/supply-chain-risks.md).
 
+See also [effect records: intent before, outcome after](security-posture/effect-records.md).
+
 ## Vault backends
 
 Cascade's secret vault stores values through one custody backend, chosen at

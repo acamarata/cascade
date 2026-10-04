@@ -101,7 +101,73 @@ func validateEvent(e Event) error {
 	if err := validateJSON("explain", e.Explain); err != nil {
 		return err
 	}
-	return validateJSON("policy_snapshot", e.PolicySnapshot)
+	if err := validateJSON("policy_snapshot", e.PolicySnapshot); err != nil {
+		return err
+	}
+	return validateEffectFields(e)
+}
+
+// maxEffectKeyBytes bounds an effect key. Keys are caller-derived and
+// deterministic ("approval.grant:<request_id>"), never a payload.
+const maxEffectKeyBytes = 128
+
+// refuseEffectFields is Append's guard: only EffectLog writes effect
+// records, so a plain Append carrying either effect field is refused
+// outright. Without it a caller could forge a terminal record for a key,
+// or an intent the index knows nothing about.
+func refuseEffectFields(e Event) error {
+	if e.EffectKey != "" || e.EffectPhase != "" {
+		return cascade.Wrapf(cascade.KindInvalidInput, ErrInvalidEvent,
+			"effect_key and effect_phase are written only by EffectLog, never by Append")
+	}
+	return nil
+}
+
+// validateEffectFields accepts an ordinary record (both fields empty) or
+// an effect record (a valid key and one of the four phases). One without
+// the other is refused.
+func validateEffectFields(e Event) error {
+	if e.EffectKey == "" && e.EffectPhase == "" {
+		return nil
+	}
+	if err := validateEffectKey(e.EffectKey); err != nil {
+		return err
+	}
+	if EffectPhase(e.EffectPhase).valid() {
+		return nil
+	}
+	return cascade.Wrapf(cascade.KindInvalidInput, ErrInvalidEvent,
+		"effect phase %q is not one of intent, confirmed, failed, unknown-outcome", e.EffectPhase)
+}
+
+// valid reports whether p is one of the four phases.
+func (p EffectPhase) valid() bool {
+	switch p {
+	case EffectIntent, EffectConfirmed, EffectFailed, EffectUnknown:
+		return true
+	}
+	return false
+}
+
+// validateEffectKey enforces 1..128 bytes of [A-Za-z0-9:._-]. The set
+// excludes "/" and every control or space character, so a key can never
+// reach outside its own "eff:" index row or forge structure where it is
+// rendered.
+func validateEffectKey(key string) error {
+	if key == "" || len(key) > maxEffectKeyBytes {
+		return cascade.Wrapf(cascade.KindInvalidInput, ErrInvalidEvent,
+			"effect key is %d bytes, want 1 to %d", len(key), maxEffectKeyBytes)
+	}
+	for i := 0; i < len(key); i++ {
+		c := key[i]
+		ok := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' ||
+			c == ':' || c == '.' || c == '_' || c == '-'
+		if !ok {
+			return cascade.Wrapf(cascade.KindInvalidInput, ErrInvalidEvent,
+				"effect key has byte 0x%02x at offset %d; allowed: A-Z a-z 0-9 : . _ -", c, i)
+		}
+	}
+	return nil
 }
 
 // validateField bounds one free-text field and refuses control characters,
@@ -166,4 +232,65 @@ func newID(now time.Time) (string, error) {
 	}
 	out[pos] = crockford[acc&0x1f]
 	return string(out), nil
+}
+
+// effectRow is the stored "eff:<key>" index row (effect.go).
+type effectRow struct {
+	Phase       EffectPhase `json:"phase"`
+	IntentSeq   uint64      `json:"intent_seq"`
+	TerminalSeq uint64      `json:"terminal_seq"`
+}
+
+func encodeRow(r effectRow) ([]byte, error) {
+	b, err := json.Marshal(r)
+	if err != nil {
+		return nil, cascade.Wrap(cascade.KindInternal, err, "audit: encoding effect row")
+	}
+	return b, nil
+}
+
+// decodeRow refuses a row that does not parse or whose shape no write
+// path produces: an intent row carries no terminal sequence, a terminal
+// row always does.
+func decodeRow(data []byte) (effectRow, error) {
+	var r effectRow
+	if err := json.Unmarshal(data, &r); err != nil {
+		return effectRow{}, cascade.Wrapf(cascade.KindIntegrity, ErrTampered, "effect row is not decodable: %v", err)
+	}
+	if r.IntentSeq == 0 || !r.Phase.valid() || (r.Phase == EffectIntent) != (r.TerminalSeq == 0) {
+		return effectRow{}, cascade.Wrapf(cascade.KindIntegrity, ErrTampered, "effect row %s is malformed", data)
+	}
+	return r, nil
+}
+
+// checkEffectRecord confirms a verified record is the one an index row
+// names for key: right sequence, right key, right phase.
+func checkEffectRecord(rec Record, key string, phase EffectPhase, seq uint64) error {
+	if rec.Seq != seq || rec.EffectKey != key || rec.EffectPhase != string(phase) {
+		return cascade.Wrapf(cascade.KindIntegrity, ErrTampered,
+			"effect index for %q names record %d as %s, but that record does not match", key, seq, phase)
+	}
+	return nil
+}
+
+// conflictAs maps a CAS conflict to sentinel; other errors pass through.
+func conflictAs(err error, sentinel *cascade.Error, key string) error {
+	if err != nil && cascade.HasKind(err, cascade.KindConflict) {
+		return cascade.Wrapf(cascade.KindConflict, sentinel, "key %q", key)
+	}
+	return err
+}
+
+// encodeCommit encodes an effect row, a sealed record and the head
+// pointer naming that record.
+func encodeCommit(row effectRow, rec Record) (rowData, data, headData []byte, err error) {
+	if rowData, err = json.Marshal(row); err == nil {
+		if data, err = json.Marshal(rec); err == nil {
+			headData, err = json.Marshal(head{Seq: rec.Seq, Hash: rec.Hash})
+		}
+	}
+	if err != nil {
+		return nil, nil, nil, cascade.Wrap(cascade.KindInternal, err, "audit: encoding effect record")
+	}
+	return rowData, data, headData, nil
 }
