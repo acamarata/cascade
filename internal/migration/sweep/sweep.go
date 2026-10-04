@@ -41,6 +41,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -77,6 +78,7 @@ var validStates = map[string]bool{"": true, "done": true, "planned": true}
 // filepath.IsAbs alone is not enough: on windows "/etc/passwd", `\x` and
 // "C:x" are all non-absolute, so rooted and volume forms are refused
 // explicitly, and components are split on both separators on every OS.
+// Each component must then pass validComponent.
 func validReplacementPath(p string) bool {
 	if p == "" || filepath.IsAbs(p) || filepath.VolumeName(p) != "" ||
 		strings.HasPrefix(p, "/") || strings.HasPrefix(p, `\`) ||
@@ -84,7 +86,54 @@ func validReplacementPath(p string) bool {
 		return false
 	}
 	for _, part := range strings.FieldsFunc(p, func(r rune) bool { return r == '/' || r == '\\' }) {
-		if part == ".." || part == ".claude" || part == "testdata" {
+		if !validComponent(part) {
+			return false
+		}
+	}
+	return true
+}
+
+// componentChars is the closed alphabet of a replacement-path component.
+// Anything outside it is refused before any other rule runs: ':' (NTFS
+// alternate streams), '~' (8.3 short names), spaces, '$' and every
+// non-ASCII rune, so no Unicode folding or normalization question arises.
+var componentChars = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+
+// protectedComponents are the directory names a replacement may never pass
+// through, compared case-insensitively after trailing dots and spaces are
+// trimmed (case-insensitive filesystems and windows name normalization
+// would otherwise reach them through ".CLAUDE" or ".claude.").
+var protectedComponents = []string{"..", ".claude", "testdata"}
+
+// reservedDeviceNames are the windows device names that open a device, not
+// a file, whatever their case or extension.
+var reservedDeviceNames = []string{
+	"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$",
+	"COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+	"LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+}
+
+// validComponent is fail-closed: a component passes only when it is made of
+// componentChars, is not only dots, names no protected directory after
+// folding and trimming, and does not name a reserved device before its
+// first '.'.
+func validComponent(part string) bool {
+	if !componentChars.MatchString(part) {
+		return false
+	}
+	trimmed := strings.TrimRight(part, ". ")
+	if trimmed == "" {
+		return false
+	}
+	for _, name := range protectedComponents {
+		if part == name || strings.EqualFold(trimmed, name) {
+			return false
+		}
+	}
+	stem, _, _ := strings.Cut(part, ".")
+	stem = strings.TrimRight(stem, " ")
+	for _, name := range reservedDeviceNames {
+		if strings.EqualFold(stem, name) {
 			return false
 		}
 	}
