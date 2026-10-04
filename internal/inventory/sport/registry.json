@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-04T16:41:11Z",
+  "generated_at": "2026-10-04T18:25:12Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3692,6 +3692,46 @@
       ]
     },
     {
+      "name": "cmd/cascade composition root",
+      "sites": [
+        {
+          "file": "cmd/cascade/compose_cli.go",
+          "line": 14,
+          "status": "",
+          "raw": "cmd/cascade composition root — CLI registrations (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/compose_daemon.go",
+          "line": 24,
+          "status": "",
+          "raw": "cmd/cascade composition root — daemon registrations (P1-CORE-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade composition root tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/compose_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "cmd/cascade composition root tests (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/wire_registration_test.go",
+          "line": 13,
+          "status": "",
+          "raw": "cmd/cascade composition root tests (P1-CORE-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd/cascade daemon chat wiring",
       "sites": [
         {
@@ -3718,6 +3758,98 @@
       ],
       "statuses": [
         "CHANGE"
+      ]
+    },
+    {
+      "name": "cmd/cascade daemon registrations",
+      "sites": [
+        {
+          "file": "cmd/cascade/wire_completion_gate.go",
+          "line": 4,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/wire_conductor.go",
+          "line": 4,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/wire_conductor_expand.go",
+          "line": 4,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/wire_context_engine.go",
+          "line": 4,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/wire_db_path_handlers.go",
+          "line": 4,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/wire_fleet_node_jobs.go",
+          "line": 4,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/wire_fleet_sessions.go",
+          "line": 4,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/wire_fleet_sessions_events.go",
+          "line": 4,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/wire_mcp.go",
+          "line": 4,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/wire_memory_recall.go",
+          "line": 4,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/wire_options.go",
+          "line": 4,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/wire_review_rpc.go",
+          "line": 4,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/wire_status.go",
+          "line": 4,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/wire_supervised.go",
+          "line": 4,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -3988,14 +4120,183 @@
       "name": "cmd/cascade root mounts",
       "sites": [
         {
+          "file": "cmd/cascade/mount_approval.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_backup.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_chat.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_ci.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_completion.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_config.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_context.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_daemon.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_doctor.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_elevate_helper.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_fleet.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_init.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_mcp.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_memory.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_migrate.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_node.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_plugin.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_plugin_namespaces.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_policy.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_provider.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_recall.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_review.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_run.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_status.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_sync.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_vault.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_version.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_what.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
           "file": "cmd/cascade/root_mounts.go",
-          "line": 9,
-          "status": "ADD",
-          "raw": "cmd/cascade root mounts (ADD, file-cap split) —"
+          "line": 6,
+          "status": "",
+          "ticket": "P1-E17-W4-S38-T3",
+          "raw": "cmd/cascade root mounts (P1-E17-W4-S38-T3, P1-CORE-01)."
         }
       ],
       "statuses": [
-        "ADD"
+        ""
       ]
     },
     {
@@ -4241,6 +4542,12 @@
     {
       "name": "cmd/cascade/daemon",
       "sites": [
+        {
+          "file": "cmd/cascade/compose_daemon_test.go",
+          "line": 15,
+          "status": "",
+          "raw": "cmd/cascade/daemon (composition surface tests, P1-CORE-01)."
+        },
         {
           "file": "cmd/cascade/daemon.go",
           "line": 33,
@@ -31013,7 +31320,7 @@
       ]
     }
   ],
-  "total_sites": 2933,
-  "unspecified_count": 154,
+  "total_sites": 2980,
+  "unspecified_count": 158,
   "multi_status_count": 86
 }
