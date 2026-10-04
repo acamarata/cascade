@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-04T19:31:29Z",
+  "generated_at": "2026-10-04T20:40:54Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1144,6 +1144,12 @@
           "raw": "OAUTH_BROKER: ADD (internal/secrets PKCE core)."
         },
         {
+          "file": "internal/secrets/oauth_realidp_integration_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "OAUTH_BROKER: ADD (real-IdP integration tests)."
+        },
+        {
           "file": "internal/secrets/oauth_refresh.go",
           "line": 18,
           "status": "ADD",
@@ -1192,10 +1198,22 @@
           "raw": "OAUTH_BROKER: ADD (internal/secrets OAuth transport seams)."
         },
         {
+          "file": "internal/secrets/oauth_transport_edges_integration_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "OAUTH_BROKER: ADD (transport edge tests)."
+        },
+        {
           "file": "internal/secrets/oauth_transport_test.go",
           "line": 16,
           "status": "ADD",
           "raw": "OAUTH_BROKER: ADD (integration tests)."
+        },
+        {
+          "file": "internal/secrets/oauth_transport_unit_test.go",
+          "line": 4,
+          "status": "ADD",
+          "raw": "OAUTH_BROKER: ADD (transport edge tests, default lane)."
         }
       ],
       "statuses": [
@@ -19685,17 +19703,16 @@
       "sites": [
         {
           "file": "internal/plugins/dispatch_remote.go",
-          "line": 25,
+          "line": 26,
           "status": "ADD",
           "ticket": "P1-E15-W4-S33-T4",
           "raw": "internal/plugins dispatch-remote (ADD) — P1-E15-W4-S33-T4."
         },
         {
           "file": "internal/plugins/dispatch_remote_integration_test.go",
-          "line": 21,
+          "line": 15,
           "status": "ADD",
-          "ticket": "P1-E15-W4-S33-T4",
-          "raw": "internal/plugins dispatch-remote (ADD) — P1-E15-W4-S33-T4."
+          "raw": "internal/plugins dispatch-remote (ADD)."
         },
         {
           "file": "internal/plugins/dispatch_remote_test.go",
@@ -31358,7 +31375,7 @@
       ]
     }
   ],
-  "total_sites": 2985,
+  "total_sites": 2988,
   "unspecified_count": 158,
   "multi_status_count": 86
 }
