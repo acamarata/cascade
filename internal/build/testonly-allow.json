@@ -1532,5 +1532,26 @@
     "reason": "P1-CORE-19 provides the fan-out retention sweep (contract:fanout-producer); P1-CORE-15 registers it, using the Claims table and store this ticket's composition-root hunk builds.",
     "retire_ticket": "P1-CORE-15",
     "symbol": "internal/fleet/resume.Sweep"
+  },
+  {
+    "caller_site": "internal/learn/migration.go",
+    "expected_caller": "P1-CAP-09's daemon composition root (cmd/cascade/daemon_unix_scheduler.go), the ticket the packet re-homes the learn-outcome-reconcile/learn-retention scheduler wiring to, since the write_scope for that wiring is prohibited to this ticket and shares daemon_unix_scheduler.go with P1-CORE-05",
+    "reason": "P1-CAP-02's ported WIP included a daemon wiring file (cmd/cascade/daemon_unix_learn_jobs.go) that called ApplyLearnSchema from a real composition root; the packet's own constraints/prohibited sections require that file DROPPED here (a grandfathered lane may not wait on non-grandfathered P1-CORE-05; forge rule 3) and re-homed to P1-CAP-09. Until P1-CAP-09 ships, only internal/learn's own tests and internal/storage/export_test.go's TestExportExcludesTelemetryTables (a scoped test composition root, not production) call this.",
+    "retire_ticket": "P1-CAP-09",
+    "symbol": "internal/learn.ApplyLearnSchema"
+  },
+  {
+    "caller_site": "internal/learn/outcome.go",
+    "expected_caller": "P1-CAP-09's daemon composition root, same as ApplyLearnSchema above (registerLearnJobs' learn-outcome-reconcile runnable is this constructor's real caller)",
+    "reason": "Same DROPPED/re-homed daemon wiring file as ApplyLearnSchema above; OutcomeReconciler.Reconcile (test-only reachable today) is this writer's only in-tree driver.",
+    "retire_ticket": "P1-CAP-09",
+    "symbol": "internal/learn.NewSQLiteOutcomeWriter"
+  },
+  {
+    "caller_site": "internal/learn/finding.go",
+    "expected_caller": "cmd/cascade/wire_learn.go (P1-LRN-05), which composes the store, feed, detector and router; P1-LRN-02's FindingFeed receives a FindingWriter (NewFindingFeed(db, ledger, w FindingWriter)) and does not build one",
+    "reason": "PCI s64t1-findingwriter-owner-is-s71t2, settled at CR: legacy P1-E35-W7-S71-T2 is carried to P1-LRN-02, whose outputs take the writer as a parameter; the non-test construction lands in P1-LRN-05's daemon composition (plan/p1/epics/LRN/tickets.yaml P1-LRN-05 objective). Wiring it to a fabricated/synthetic signal instead would violate the same no-fabricated-data rule this ticket enforces for outcome.go's HONEST GAP fields.",
+    "retire_ticket": "P1-LRN-05",
+    "symbol": "internal/learn.NewSQLiteFindingWriter"
   }
 ]
