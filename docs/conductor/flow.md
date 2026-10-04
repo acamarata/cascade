@@ -77,3 +77,67 @@ primitives is P1-E29-W6-S60-T2 (typed job templates for six work kinds,
 including `adversarial`), which depends on this ticket and has not yet
 landed. The three symbols are recorded in
 `internal/build/testonly-allow.json` against that ticket until it lands.
+
+## Fan-out legs: outcomes, persisted results, re-authorized replay, retention
+
+`FanOut`, `Executor.ExecuteFanOut` and `Executor.ExecuteFanOutResponse`
+(`internal/conductor/fanout.go`) take a per-call fan-out id and explicit
+collaborators: a `WithPermitFn`, a `JournalAppender`, a `LegResultStore`
+and (for `FanOut`) an `AuthorizeFn`. `ExecuteFanOut` passes the executor's
+own `Authorize`, the same readiness, validation, classifier, sensitivity
+and policy step `Execute` runs, with a refusal audited through the
+executor's audit writer. A nil collaborator or an empty fan-out id returns
+`ErrConstructionFailed` before any dispatch; an id containing `#` or NUL is
+refused as invalid input. The fan-out id keys the journal entity
+(`resume.FanOutEntity(id)` = `fanout:<id>`), the leg operation ids
+(`<id>#<leg>#<attempt>#<kind>`) and the stored records, and salts the leg
+request digest. Leg requests keep the client `TaskID`, so audit and usage
+attribution are unchanged.
+
+Per leg:
+
+1. **Replay.** A leg in `completed`, or with a stored record, is a replay.
+   The record must exist (`KindNotFound` otherwise) and belong to this exact
+   leg request: its digest, fan-out id and leg index must match
+   (`KindConflict` otherwise). The leg request then passes `AuthorizeFn`
+   again. A refusal is returned, no stored byte is released and the record
+   is not touched. Only after authorize passes is the stored `Response`
+   (Output, Usage, JobID) returned, with no provider call. A leg with a
+   record and no `fanout_leg_done` entry (a crash between the record write
+   and the done append) gets the missing done entry appended.
+2. **Dispatch.** Otherwise `fanout_leg_started` is appended. Its attempt
+   is a create-only slot in the daemon store (namespace
+   `conductor.fanout.attempts`, key `<fanoutID>#<leg>#<attempt>`), so every
+   writer sharing the store, in one process or across a restart, gets a
+   unique attempt; a fourth raw start is refused. The leg runs through
+   `withPermit` and `Execute`, and on success the `LegResult` is written
+   create-only BEFORE `fanout_leg_done`
+   `{leg_index, job_id, attempt, outcome: "ok", result_key, request_digest}`.
+   A failure appends `fanout_leg_done` with outcome `failed_terminal` (a
+   policy, sensitivity, classifier or invalid-input refusal) or
+   `failed_retryable` (anything else) and stores nothing.
+
+Every `AppendLeg` and `LegResultStore` error is returned as the leg's
+error. Journal payloads carry the result key and the digest, never model
+output. The resume scan counts only outcome `ok` as completed and treats a
+`failed_terminal` leg as terminal. A leg with three starts and no `ok` done
+is not decided by the scan, because the journal alone cannot tell whether
+its result was stored before a crash. The re-dispatch decides it: a
+matching stored record is replayed through `AuthorizeFn` with no provider
+call and its missing done appended; with no record the start is refused
+(`ErrLegAttemptsExhausted`, unknown outcome) and the leg is never sent
+again.
+
+Records live in namespace `conductor.fanout.legs` under
+`<fanoutID>#<legIndex>` as version-1 JSON carrying the leg request's
+`Sensitivity`. `DeleteTask(fanoutID)` removes that fan-out's records and
+nothing of another fan-out. Model legs are at-least-once: a leg that
+started and never finished before a crash may be sent again, bounded by
+the three-start cap.
+
+Wiring status: the fleet adapter that implements `JournalAppender` and
+`LegResultStore` over the daemon store is in
+`internal/fleet/resume/leg_results.go` and `submit.go`. The daemon's
+`conductor.execute` fan-out path that mints the fan-out id, calls it and
+applies `DeleteTask` per outcome is not built yet (P1-CORE-19); until then
+no production caller persists leg output.

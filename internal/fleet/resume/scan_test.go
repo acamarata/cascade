@@ -123,7 +123,7 @@ func TestResumePartialCheckpoint(t *testing.T) {
 func TestClassify_FanOutFullyCompleted_NothingToResume(t *testing.T) {
 	req, _ := json.Marshal(provider.ModelRequest{TaskID: "t1", TaskClass: "chat", Inputs: []provider.ChatMessage{{Role: "user", Content: "hi"}}})
 	cursorPayload, _ := json.Marshal(resumeCursorPayload{T: "cursor", TaskID: "t1", Legs: 1, Request: req})
-	donePayload, _ := json.Marshal(legPayload{LegIndex: 0, JobID: "job-1", Attempt: 1})
+	donePayload, _ := json.Marshal(legPayload{LegIndex: 0, JobID: "job-1", Attempt: 1, Outcome: "ok"})
 	entries := []journal.Entry{
 		{EntityID: "t1", Seq: 1, Kind: journal.KindResumeCursor, Payload: cursorPayload},
 		{EntityID: "t1", Seq: 2, Kind: journal.KindFanOutLegDone, Payload: donePayload},

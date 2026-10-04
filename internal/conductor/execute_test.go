@@ -231,7 +231,7 @@ func TestExecute_FanOutParentResponseShape(t *testing.T) {
 		t.Fatalf("NewExecutor: %v", err)
 	}
 	req := validReq()
-	results, err := exec.ExecuteFanOut(context.Background(), req, 2, nil, passthroughPermit, &spyJournal{})
+	results, err := exec.ExecuteFanOut(context.Background(), "fo-1", req, 2, nil, passthroughPermit, &spyJournal{}, newMemLegStore())
 	if err != nil {
 		t.Fatalf("ExecuteFanOut: %v", err)
 	}
@@ -261,7 +261,7 @@ func TestExecute_FanOutParentResponseShape_Assembled(t *testing.T) {
 		t.Fatalf("NewExecutor: %v", err)
 	}
 	req := validReq()
-	parent, err := exec.ExecuteFanOutResponse(context.Background(), req, 3, nil, passthroughPermit, &spyJournal{})
+	parent, err := exec.ExecuteFanOutResponse(context.Background(), "fo-1", req, 3, nil, passthroughPermit, &spyJournal{}, newMemLegStore())
 	if err != nil {
 		t.Fatalf("ExecuteFanOutResponse: %v", err)
 	}
