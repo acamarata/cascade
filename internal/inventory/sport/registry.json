@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-04T22:47:03Z",
+  "generated_at": "2026-10-04T23:48:05Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -7356,6 +7356,20 @@
       ]
     },
     {
+      "name": "domain:jobs/jobs_telemetry_outcomes, jobs_telemetry_finding",
+      "sites": [
+        {
+          "file": "internal/learn/migration.go",
+          "line": 14,
+          "status": "",
+          "raw": "domain:jobs/jobs_telemetry_outcomes, jobs_telemetry_finding —"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "event:MemoryWeeklyDigest",
       "sites": [
         {
@@ -13472,6 +13486,135 @@
       ]
     },
     {
+      "name": "internal.learn.FindingWriter",
+      "sites": [
+        {
+          "file": "internal/learn/finding.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S64-T1",
+          "raw": "internal.learn.FindingWriter/ADDED (P1-E31-W6-S64-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.OutcomeReconciler",
+      "sites": [
+        {
+          "file": "internal/learn/reconcile.go",
+          "line": 24,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S64-T1",
+          "raw": "internal.learn.OutcomeReconciler/ADDED (P1-E31-W6-S64-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.OutcomeWriter",
+      "sites": [
+        {
+          "file": "internal/learn/outcome.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal.learn.OutcomeWriter/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.RegisterRetentionTable",
+      "sites": [
+        {
+          "file": "internal/learn/retention_registry.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "internal.learn.RegisterRetentionTable/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.RetentionSweep",
+      "sites": [
+        {
+          "file": "internal/learn/retention.go",
+          "line": 23,
+          "status": "ADD",
+          "raw": "internal.learn.RetentionSweep/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.TelemetryOutcome",
+      "sites": [
+        {
+          "file": "internal/learn/outcome.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal.learn.TelemetryOutcome/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.credentialShaped",
+      "sites": [
+        {
+          "file": "internal/learn/credential.go",
+          "line": 26,
+          "status": "ADD",
+          "raw": "internal.learn.credentialShaped/ADDED (P1-CAP-02)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.validateIdentifyingColumns",
+      "sites": [
+        {
+          "file": "internal/learn/validate.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "internal.learn.validateIdentifyingColumns/ADDED (P1-CAP-02)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.validateOutcomeAllowlist",
+      "sites": [
+        {
+          "file": "internal/learn/allowlist.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S64-T1",
+          "raw": "internal.learn.validateOutcomeAllowlist/ADDED (P1-E31-W6-S64-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.mcp.ResponseMarshaler/COVERED",
       "sites": [
         {
@@ -14973,7 +15116,7 @@
       "sites": [
         {
           "file": "internal/runtime/config_sections.go",
-          "line": 109,
+          "line": 115,
           "status": "ADD",
           "ticket": "P1-E32-W6-S65-T1",
           "raw": "internal.runtime.assembleConfig/ADDED (P1-E32-W6-S65-T1, fix round 2)."
@@ -15019,6 +15162,27 @@
           "line": 12,
           "status": "ADD",
           "raw": "internal.runtime.parseConfigSections/ADDED (T0, R-14.201)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.runtime.parseLearnSection",
+      "sites": [
+        {
+          "file": "internal/runtime/config_learn.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S64-T1",
+          "raw": "internal.runtime.parseLearnSection/ADDED (P1-E31-W6-S64-T1)."
+        },
+        {
+          "file": "internal/runtime/config_learn_test.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal.runtime.parseLearnSection/ADDED (test coverage)."
         }
       ],
       "statuses": [
@@ -15229,7 +15393,7 @@
       "sites": [
         {
           "file": "internal/storage/export.go",
-          "line": 59,
+          "line": 60,
           "status": "ADD",
           "raw": "internal.storage.export.Export/ADDED"
         },
@@ -24587,6 +24751,266 @@
       ]
     },
     {
+      "name": "learn/allowlist",
+      "sites": [
+        {
+          "file": "internal/learn/allowlist_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S64-T1",
+          "raw": "learn/allowlist/ADD (P1-E31-W6-S64-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "learn/credential",
+      "sites": [
+        {
+          "file": "internal/learn/credential_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "learn/credential/ADD (P1-CAP-02)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "learn/credential-concat",
+      "sites": [
+        {
+          "file": "internal/learn/credential_concat_test.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "learn/credential-concat/ADD (P1-CAP-02)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "learn/credential-failclosed",
+      "sites": [
+        {
+          "file": "internal/learn/credential_failclosed_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "learn/credential-failclosed/ADD (P1-CAP-02)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "learn/credential-mixed",
+      "sites": [
+        {
+          "file": "internal/learn/credential_mixed_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "learn/credential-mixed/ADD (P1-CAP-02)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "learn/doc",
+      "sites": [
+        {
+          "file": "internal/learn/doc_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S64-T1",
+          "raw": "learn/doc/ADD (P1-E31-W6-S64-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "learn/finding",
+      "sites": [
+        {
+          "file": "internal/learn/finding_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S64-T1",
+          "raw": "learn/finding/ADD (P1-E31-W6-S64-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "learn/leak",
+      "sites": [
+        {
+          "file": "internal/learn/leak_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S64-T1",
+          "raw": "learn/leak/ADD (P1-E31-W6-S64-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "learn/migration",
+      "sites": [
+        {
+          "file": "internal/learn/migration_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S64-T1",
+          "raw": "learn/migration/ADD (P1-E31-W6-S64-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "learn/opaque",
+      "sites": [
+        {
+          "file": "internal/learn/opaque_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "learn/opaque/ADD (P1-CAP-02)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "learn/outcome",
+      "sites": [
+        {
+          "file": "internal/learn/outcome_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S64-T1",
+          "raw": "learn/outcome/ADD (P1-E31-W6-S64-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "learn/reconcile",
+      "sites": [
+        {
+          "file": "internal/learn/reconcile_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S64-T1",
+          "raw": "learn/reconcile/ADD (P1-E31-W6-S64-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "learn/reconcile-refusal",
+      "sites": [
+        {
+          "file": "internal/learn/reconcile_refusal_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "learn/reconcile-refusal/ADD (P1-CAP-02)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "learn/retention",
+      "sites": [
+        {
+          "file": "internal/learn/retention_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E31-W6-S64-T1",
+          "raw": "learn/retention/ADD (P1-E31-W6-S64-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "learn/retention-children",
+      "sites": [
+        {
+          "file": "internal/learn/retention_children_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "learn/retention-children/ADD (P1-CAP-02)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "learn/retention-fkguard",
+      "sites": [
+        {
+          "file": "internal/learn/retention_fkguard_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "learn/retention-fkguard/ADD (P1-CAP-02)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "learn/roundtrip",
+      "sites": [
+        {
+          "file": "internal/learn/roundtrip_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "learn/roundtrip/ADD (P1-CAP-02)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "learn/validate",
+      "sites": [
+        {
+          "file": "internal/learn/validate_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "learn/validate/ADD (P1-CAP-02)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "memory/import-batch",
       "sites": [
         {
@@ -24858,6 +25282,21 @@
           "line": 6,
           "status": "",
           "raw": "nodes.heartbeat-loop (TEST) — split 2026-09-21."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "package:internal/learn",
+      "sites": [
+        {
+          "file": "internal/learn/doc.go",
+          "line": 51,
+          "status": "",
+          "ticket": "P1-E31-W6-S64-T1",
+          "raw": "package:internal/learn — new (P1-E31-W6-S64-T1)."
         }
       ],
       "statuses": [
@@ -31494,7 +31933,7 @@
       ]
     }
   ],
-  "total_sites": 3004,
-  "unspecified_count": 158,
+  "total_sites": 3035,
+  "unspecified_count": 160,
   "multi_status_count": 86
 }
