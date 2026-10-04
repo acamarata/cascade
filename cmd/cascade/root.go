@@ -113,42 +113,6 @@ func newRootCmd() *cobra.Command {
 	return root
 }
 
-// mountSubcommands attaches every command group to root. It is a separate
-// function only so newRootCmd stays inside the 50-line cap as the tree
-// grows; the list itself is the composition, and it stays in one place so
-// there is exactly one tree the binary, the tests and the golden help
-// fixture all see.
-func mountSubcommands(root *cobra.Command) {
-	mountInitCmd(root)
-	root.AddCommand(newVersionCmd())
-	root.AddCommand(newCompletionCmd(root))
-	mountConfigCmd(root)
-	mountDaemonCmd(root)
-	mountMCPCmd(root)
-	mountStatusCmd(root)
-	mountDoctorCmd(root)
-	mountElevateHelperCmd(root)
-	mountVaultCmd(root)
-	mountBackupCmd(root)
-	mountMemoryCmd(root)
-	mountRecallCmd(root)
-	mountWhatCmd(root) // hidden `cascade what <q>` alias for `recall what` (V/S-47.T5)
-	mountContextCmd(root)
-	mountApprovalCmd(root)
-	mountPluginCmd(root)
-	mountPolicyCmd(root)
-	mountProviderCmd(root)
-	mountMigrateCmd(root)
-	mountFleetCmd(root)
-	mountNodeCmd(root)
-	mountSyncCmd(root)
-	mountChatCmd(root)
-	mountReviewCmd(root)
-	mountRunCmd(root)
-	mountPluginNamespaceCmds(root)
-	mountCICmd(root)
-}
-
 // mountCICmd attaches the `ci` command tree (P1-E25-W5-S51-T5, R-16.31 --
 // a CORE noun, never a github-plugin verb). It lives here, not in a
 // cmd/cascade/ci.go file, because internal/ci.NewCICmd already carries
@@ -243,26 +207,20 @@ func guardUnknownSubcommands(cmd *cobra.Command) {
 // path-resolution failure skips the probe and returns ctx unchanged;
 // DaemonlessStateFrom's ok=false then means "unknown," never a guess.
 //
-// The warning is suppressed for `cascade daemon run` itself (isDaemonRunCmd):
-// that command's own socket has not opened yet at the instant this probe
-// dials it, so "daemon not running" is always true about the invocation the
-// user just ran and reads as a startup failure rather than the accurate
-// pre-bind snapshot it is. No other command's socket is ever the one this
-// probe is dialing on behalf of, so every other command keeps the warning.
-//
-// It is also suppressed for `cascade run` (isRunCmd), for a different
-// reason: that command has no embedded fallback at all (run_exec.go's
-// fetchRun refuses outright when daemonless, the way approval.go refuses),
-// so telling the user it is "running in embedded (daemonless) mode" would
-// be false, not merely premature (DEFECT-cli-surfaces-promise-embedded-
-// mode.md).
+// The warning is suppressed (embeddedWarningAnnotation) for `cascade daemon
+// run`: its own socket has not opened yet when this probe dials it, so "daemon
+// not running" is true of the invocation itself and reads as a startup failure.
+// It is also suppressed for `cascade run` and `cascade status`, which have no
+// embedded fallback (they refuse outright when daemonless), so announcing
+// embedded mode would be false, not merely premature
+// (DEFECT-cli-surfaces-promise-embedded-mode.md). Every other command keeps it.
 func probeDaemonlessAndAttach(ctx context.Context, cmd *cobra.Command) context.Context {
 	paths, err := runtime.NewDefaultPathProvider()
 	if err != nil {
 		return ctx
 	}
 	st := runtime.ProbeDaemonless(paths.SocketPath(), daemonlessProbeTimeout, nil)
-	if st.Embedded && !globalFlags.Quiet && !isDaemonRunCmd(cmd) && !isRunCmd(cmd) && !isStatusCmd(cmd) {
+	if st.Embedded && !globalFlags.Quiet && !embeddedWarningSuppressed(cmd) {
 		w := output.NewDefault(globalFlags.JSON, globalFlags.Quiet, globalFlags.Verbose, noColorFlag)
 		if st.ProbeErr != nil {
 			w.Warn("daemon liveness undecidable (%v); running in embedded (daemonless) mode", st.ProbeErr)
@@ -273,26 +231,32 @@ func probeDaemonlessAndAttach(ctx context.Context, cmd *cobra.Command) context.C
 	return runtime.WithDaemonlessState(ctx, st)
 }
 
-// isDaemonRunCmd reports whether cmd is `cascade daemon run` specifically,
-// by full command path — not just the leaf name "run", which other command
-// groups could plausibly reuse.
-func isDaemonRunCmd(cmd *cobra.Command) bool {
-	return cmd != nil && cmd.CommandPath() == "cascade daemon run"
+// embeddedWarningAnnotation marks a command that must not announce embedded
+// (daemonless) mode: `daemon run`, `run` and `status` (see
+// probeDaemonlessAndAttach). A child inherits it.
+const embeddedWarningAnnotation = "cascade.embedded-warning"
+
+// suppressEmbeddedWarning marks the command at path under root with
+// embeddedWarningAnnotation. It is called from the mount_<noun>.go that owns
+// the command, so the decision lives with the command, not in a path string.
+func suppressEmbeddedWarning(root *cobra.Command, path ...string) {
+	c, _, err := root.Find(path)
+	if err != nil || c == root {
+		return
+	}
+	if c.Annotations == nil {
+		c.Annotations = map[string]string{}
+	}
+	c.Annotations[embeddedWarningAnnotation] = "suppress"
 }
 
-// isStatusCmd reports whether cmd is `cascade status`, suppressed for the
-// same reason as isRunCmd: status refuses outright when daemonless, because
-// version, pid, uptime and connection count are all live snapshots of the
-// daemon process and have no honest embedded answer. Announcing embedded
-// mode and then refusing contradicts itself, which is the whole point of
-// DEFECT-cli-surfaces-promise-embedded-mode.md.
-func isStatusCmd(cmd *cobra.Command) bool {
-	return cmd != nil && cmd.CommandPath() == "cascade status"
-}
-
-// isRunCmd reports whether cmd is `cascade run` specifically, by full
-// command path - not just the leaf name "run", which other command groups
-// (daemon run included) already reuse.
-func isRunCmd(cmd *cobra.Command) bool {
-	return cmd != nil && cmd.CommandPath() == "cascade run"
+// embeddedWarningSuppressed reports whether cmd or an ancestor carries
+// embeddedWarningAnnotation.
+func embeddedWarningSuppressed(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c.Annotations[embeddedWarningAnnotation] == "suppress" {
+			return true
+		}
+	}
+	return false
 }

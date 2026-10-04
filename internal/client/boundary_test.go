@@ -95,6 +95,12 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// cmd-rpc-server-boundary exemption list; the two must be edited
 	// together.
 	"daemon_unix_run_options.go": true,
+	// compose_daemon.go: a pure move of platformDaemonRun's body into
+	// composeDaemon, the composition root's registration core. It REGISTERS
+	// on the daemon's own registry and SSE mux and never dials the daemon.
+	// This map mirrors .golangci.yml's cmd-rpc-server-boundary exemption
+	// list; the two must be edited together.
+	"compose_daemon.go": true,
 	// chat_wiring.go (P1-E20-W5-S43-T5; renamed from daemon_unix_chat.go
 	// and de-tagged by P1-E45-W10-S88-T2): the composition-root call
 	// site that REGISTERS chat.append_turn/get_thread/list_threads on the

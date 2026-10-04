@@ -38,73 +38,61 @@ import (
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
-// platformDaemonRun runs the daemon in the foreground. This is the
-// production composition root: it opens the real on-disk Store every
-// other subsystem here shares, runs the crash-recovery scan with a real
-// DomainRegistry, and hands the daemon a real *http.Server (POST /rpc,
-// GET /events) and a real UpgradeManager instead of leaving those three
-// seams unreachable.
+// composeDaemon builds everything the daemon needs before it serves. This is
+// the production composition root: it opens the real on-disk Store every other
+// subsystem shares, runs the crash-recovery scan with a real DomainRegistry,
+// and hands daemon.Run a real *http.Server (POST /rpc, GET /events) and, for a
+// released build, a real UpgradeManager. The cleanups it returns run in
+// reverse order, also when it returns an error.
 //
-// This calls runtime.Scan directly rather than runtime.Bootstrap: Bootstrap
-// resolves its own PathProvider from Getenv/HomeDir internally, which
-// would silently stop honoring deps.Paths, this file's existing (and
-// every test's) injection seam for "where is CASCADE_HOME". deps.Paths is
-// not always Getenv/HomeDir-derived (fakeDaemonPaths in tests is not), so
-// switching to Bootstrap here would make daemon.go's daemonDeps.Paths
-// field a lie for the run path specifically, and, worse, a test whose
-// Getenv/HomeDir are not both faked would resolve against the REAL home
-// directory instead of its intended t.TempDir(). Scan is the exact
-// function Bootstrap itself calls for the recovery step; calling it
-// directly keeps deps.Paths as the single source of truth for every
-// platformDaemon* function in this file, and still runs the real
-// production recovery path.
-func platformDaemonRun(ctx context.Context, deps daemonDeps) error {
+// It calls runtime.Scan directly rather than runtime.Bootstrap: Bootstrap
+// resolves its own PathProvider from Getenv/HomeDir, which would silently stop
+// honoring deps.Paths, the injection seam for "where is CASCADE_HOME" that
+// every platformDaemon* function and test shares (see docs/developer/
+// runtime-bootstrap.md).
+func composeDaemon(ctx context.Context, deps daemonDeps, observe registryObserver) (daemon.RunOptions, []func(), error) {
+	var cleanups []func()
 	cfg, paths, settings, err := loadDaemonConfig(ctx, deps)
 	if err != nil {
-		return err
+		return daemon.RunOptions{}, cleanups, err
 	}
 	logProvider, err := runtime.NewLogProvider(cfg.Logging, paths, deps.Clock)
 	if err != nil {
-		return err
+		return daemon.RunOptions{}, cleanups, err
 	}
-	defer func() { _ = logProvider.Close() }()
+	cleanups = append(cleanups, func() { _ = logProvider.Close() })
 
 	store, rawDB, closeStore, err := openRuntimeStore(ctx, paths, deps.Clock)
 	if err != nil {
-		return err
+		return daemon.RunOptions{}, cleanups, err
 	}
-	defer closeStore()
+	cleanups = append(cleanups, closeStore)
 
 	bus := events.New(store, deps.Clock)
 	if err := runRecoveryScan(ctx, paths, settings, deps, logProvider, bus, store); err != nil {
-		return err
+		return daemon.RunOptions{}, cleanups, err
 	}
-	// M/S-27.T2: crash/upgrade-in-place resume, over the SAME store,
-	// before this daemon accepts any RPC connection. See
-	// daemon_resume.go's own doc comment for the disclosed
-	// conductor.Executor gap wireResumeScan's FanOutFunc surfaces rather
-	// than papering over.
+	// M/S-27.T2: crash/upgrade-in-place resume over the same store, before any
+	// RPC connection (daemon_resume.go names the disclosed Executor gap).
 	if _, err := wireResumeScan(ctx, store, deps.Clock); err != nil {
-		return err
+		return daemon.RunOptions{}, cleanups, err
 	}
 
 	memoryAdmin, pol, cleanupBackground, err := wireBackgroundSubsystems(ctx, paths, deps, cfg, store, rawDB, bus, logProvider)
 	if err != nil {
-		return err
+		return daemon.RunOptions{}, cleanups, err
 	}
-	defer cleanupBackground()
+	cleanups = append(cleanups, cleanupBackground)
 	wireCascadePAInstallHostDeps(store, pol.Queue, pol.Registry) // P1-E24-W5-S50-T4 (D1/D2)
 	plugins.SetBridgeApprovalQueue(pol.Queue)                    // P1-E23-W5-S48-T4 FIX-0
 
+	// withNodePlacement hands the placement engine its connection source: the
+	// controller-side tunnel registry this process holds (P1-E17-W4-S37-T1).
 	server, manifest, connections, err := buildRPCServer(bus, deps.Clock, logProvider.Logger(), settings, paths, memoryAdmin, store,
-		withPolicyHandlers(pol),
-		withStatusWidgetHandler(store, deps.Clock, bus, paths, cfg.Widget.ShowProjectNames),
-		// The controller-side tunnel registry this same process holds
-		// (daemon.go's startNodeTunnelService) is the placement engine's
-		// connection source — P1-E17-W4-S37-T1.
-		withNodePlacement(deps.NodeTunnels))
+		withPolicyHandlers(pol), withStatusWidgetHandler(store, deps.Clock, bus, paths, cfg.Widget.ShowProjectNames),
+		withNodePlacement(deps.NodeTunnels), withDaemonRuntime(cfg, rawDB, pol, logProvider, deps), withRegistryObserver(observe))
 	if err != nil {
-		return err
+		return daemon.RunOptions{}, cleanups, err
 	}
 
 	opts := daemon.RunOptions{
@@ -118,7 +106,27 @@ func platformDaemonRun(ctx context.Context, deps daemonDeps) error {
 		Connections: connections,
 	}
 	wireUpgrade(&opts, deps, store, bus, logProvider.Logger())
+	return opts, cleanups, nil
+}
+
+// platformDaemonRun composes the daemon (composeDaemon) and serves it
+// (daemon.Run), running every cleanup composeDaemon registered, in reverse
+// order, whether it returned an error or not.
+func platformDaemonRun(ctx context.Context, deps daemonDeps) error {
+	opts, cleanups, err := composeDaemon(ctx, deps, nil)
+	defer runCleanupsLIFO(cleanups)
+	if err != nil {
+		return err
+	}
 	return daemon.Run(ctx, opts)
+}
+
+// runCleanupsLIFO runs cleanups in reverse registration order, the order the
+// deferred calls they replace would have run in.
+func runCleanupsLIFO(cleanups []func()) {
+	for i := len(cleanups) - 1; i >= 0; i-- {
+		cleanups[i]()
+	}
 }
 
 // wireUpgrade sets opts.Upgrade/Executable/Args from a real UpgradeManager,

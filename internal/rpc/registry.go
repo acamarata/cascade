@@ -3,6 +3,7 @@ package rpc
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"sync"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -83,6 +84,21 @@ func (r *Registry) Registered(method string) bool {
 	defer r.mu.RUnlock()
 	_, ok := r.handlers[method]
 	return ok
+}
+
+// Methods returns every registered method name, sorted. It reads the live
+// handler table, so names registered after Use (or built dynamically, such as
+// plugin methods) appear too. The daemon composition root reports its count
+// in the rpc-registry manifest detail, and the surface tests record the set.
+func (r *Registry) Methods() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	names := make([]string, 0, len(r.handlers))
+	for name := range r.handlers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // Dispatch resolves req.Method, chains the registered middleware around it

@@ -35,7 +35,7 @@ func TestProbeDaemonlessAndAttach_RunCmdNoSpuriousWarning(t *testing.T) {
 	globalFlags = GlobalFlags{}
 
 	root := &cobra.Command{Use: "cascade"}
-	runCmd := &cobra.Command{Use: "run"}
+	runCmd := &cobra.Command{Use: "run", Annotations: map[string]string{embeddedWarningAnnotation: "suppress"}}
 	root.AddCommand(runCmd)
 
 	out := captureRealStderr(t, func() {
@@ -59,7 +59,7 @@ func TestProbeDaemonlessAndAttach_StatusCmdNoSpuriousWarning(t *testing.T) {
 	globalFlags = GlobalFlags{}
 
 	root := &cobra.Command{Use: "cascade"}
-	statusCmd := &cobra.Command{Use: "status"}
+	statusCmd := &cobra.Command{Use: "status", Annotations: map[string]string{embeddedWarningAnnotation: "suppress"}}
 	root.AddCommand(statusCmd)
 
 	out := captureRealStderr(t, func() {

@@ -24,6 +24,8 @@
 package main
 
 import (
+	"database/sql"
+
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/mcp/coretools"
@@ -55,6 +57,40 @@ type rpcServerOption struct {
 	// because a daemon with policy handlers and a daemon with a policy
 	// engine are the same daemon.
 	policyEngine coretools.Evaluator
+	// observe, when non-nil, is handed the finished registry and events mux
+	// once wiring completes. It registers nothing and is the one seam that
+	// lets the composition tests read what composeDaemon built.
+	observe registryObserver
+	// runtime carries the values composeDaemon holds that registrations read
+	// through daemonWiring.Deps. The zero value (a test-built server) is valid.
+	runtime *daemonRuntime
+}
+
+// registryObserver receives the finished RPC registry and GET /events mux.
+type registryObserver func(registry *rpc.Registry, events *rpc.SSEMux)
+
+// withDaemonRuntime hands composeDaemon's held values to the registrations as
+// daemonWiring.Deps.
+func withDaemonRuntime(cfg *runtime.Config, rawDB *sql.DB, pol *policyWiring, logProvider *runtime.LogProvider, deps daemonDeps) rpcServerOption {
+	return rpcServerOption{runtime: &daemonRuntime{Config: cfg, RawDB: rawDB, Policy: pol, LogProvider: logProvider, Daemon: deps}}
+}
+
+// daemonRuntimeFromOptions returns the last runtime an option supplied, or the
+// zero value when none did.
+func daemonRuntimeFromOptions(opts []rpcServerOption) daemonRuntime {
+	var rt daemonRuntime
+	for _, opt := range opts {
+		if opt.runtime != nil {
+			rt = *opt.runtime
+		}
+	}
+	return rt
+}
+
+// withRegistryObserver hands the finished registry and events mux to observe.
+// A nil observe contributes nothing, which is every production call.
+func withRegistryObserver(observe registryObserver) rpcServerOption {
+	return rpcServerOption{observe: observe}
 }
 
 // withPolicyHandlers registers the approval/policy method set built by
