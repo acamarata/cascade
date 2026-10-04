@@ -31,8 +31,9 @@ package config
 // SPORT: cmd/cascade/config (ADD, placeholder per T-8 sport_updates).
 
 import (
-	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 
 	"github.com/spf13/cobra"
 
@@ -68,7 +69,27 @@ func NewConfigCmd(deps Deps) *cobra.Command {
 	root.AddCommand(newEditCmd(deps))
 	root.AddCommand(newReloadCmd(deps))
 	root.AddCommand(newPathCmd(deps))
+	requireResolvedPath(root, deps)
 	return root
+}
+
+// requireResolvedPath makes every config verb refuse to run when the config
+// path could not be resolved, so no verb (read, write or path) proceeds on
+// an empty path. It wraps each verb's RunE rather than adding a
+// PersistentPreRunE, which would displace the root command's own hook.
+func requireResolvedPath(root *cobra.Command, deps Deps) {
+	for _, sub := range root.Commands() {
+		run := sub.RunE
+		if run == nil {
+			continue
+		}
+		sub.RunE = func(cmd *cobra.Command, args []string) error {
+			if _, err := configPath(deps); err != nil {
+				return err
+			}
+			return run(cmd, args)
+		}
+	}
 }
 
 // outputWriter builds an internal/output.Writer bound to cmd's own
@@ -85,17 +106,48 @@ func outputWriter(cmd *cobra.Command) *output.Writer {
 	return output.New(cmd.OutOrStdout(), cmd.OutOrStderr(), jsonOut, quiet, verbose, noColor)
 }
 
+// pathResolveErrer is implemented by a PathProvider adapter that defers
+// resolution (cmd/cascade's lazyPaths) and can say why it failed.
+type pathResolveErrer interface{ ResolveErr() error }
+
+// configPath returns the config.toml location, or a KindUnavailable error
+// when path resolution failed. An empty path is never passed on: Load reads
+// "" as "no file", which would silently serve defaults for a machine whose
+// home directory cannot be resolved.
+func configPath(deps Deps) (string, error) {
+	if r, ok := deps.Paths.(pathResolveErrer); ok {
+		if err := r.ResolveErr(); err != nil {
+			return "", cascade.Wrap(cascade.KindUnavailable, err, "cannot resolve the config path; set CASCADE_HOME or HOME")
+		}
+	}
+	path := deps.Paths.ConfigPath()
+	if path == "" {
+		return "", cascade.New(cascade.KindUnavailable, "cannot resolve the config path; set CASCADE_HOME or HOME")
+	}
+	return path, nil
+}
+
 // loadConfig loads the current config.toml through the exact same Load
 // entry point the daemon and every other CLI command use (single
 // resolution model, 08 §2).
-func loadConfig(ctx context.Context, deps Deps) (*runtime.Config, error) {
+func loadConfig(cmd *cobra.Command, deps Deps) (*runtime.Config, error) {
+	path, err := configPath(deps)
+	if err != nil {
+		return nil, err
+	}
 	opts := runtime.LoadOptions{
-		Path:    deps.Paths.ConfigPath(),
+		Path:    path,
 		Getenv:  deps.Getenv,
 		Environ: deps.Environ,
+		// Load's own warnings (group-writable config, env override fallbacks)
+		// reach the operator on stderr instead of being discarded.
+		Warn: outputWriter(cmd).Warn,
 	}
-	cfg, err := runtime.Load(ctx, opts)
+	cfg, err := runtime.Load(cmd.Context(), opts)
 	if err != nil {
+		if _, typed := cascade.KindOf(err); typed {
+			return nil, err // keep the taxonomy kind (for example permission_denied)
+		}
 		return nil, cascade.Wrap(cascade.KindInvalidInput, err, "load config.toml")
 	}
 	return cfg, nil
@@ -107,7 +159,7 @@ func newGetCmd(deps Deps) *cobra.Command {
 		Short: "Print one config key's resolved (effective) value",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig(cmd.Context(), deps)
+			cfg, err := loadConfig(cmd, deps)
 			if err != nil {
 				return err
 			}
@@ -133,7 +185,7 @@ func newListCmd(deps Deps) *cobra.Command {
 		Short: "List every config key (--effective: merged view with per-key source)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := loadConfig(cmd.Context(), deps)
+			cfg, err := loadConfig(cmd, deps)
 			if err != nil {
 				return err
 			}
@@ -160,7 +212,7 @@ func newValidateCmd(deps Deps) *cobra.Command {
 		Short: "Validate config.toml without applying it",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			tree, err := readConfigTree(deps)
+			tree, err := readConfigTree(cmd, deps)
 			if err != nil {
 				return err
 			}
@@ -196,12 +248,42 @@ func newPathCmd(deps Deps) *cobra.Command {
 // would otherwise choke on before Validate ever ran; readRawTree
 // surfaces that decode error with the same taxonomy kind as any other
 // validation failure).
-func readConfigTree(deps Deps) (map[string]interface{}, error) {
-	tree, err := runtime.DecodeConfigFile(deps.Paths.ConfigPath())
+func readConfigTree(cmd *cobra.Command, deps Deps) (map[string]interface{}, error) {
+	path, err := configPath(deps)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkConfigPerm(cmd, path); err != nil {
+		return nil, err
+	}
+	tree, err := runtime.DecodeConfigFile(path)
 	if err != nil {
 		return nil, cascade.Wrap(cascade.KindInvalidInput, err, "config.toml is invalid")
 	}
 	return tree, nil
+}
+
+// checkConfigPerm applies Load's permission policy to validate and set,
+// fail-closed: an inspection error stops the verb (KindPermissionDenied or
+// KindUnavailable, naming the stat error), a refusal is KindPermissionDenied
+// with the finding's reason, a warning goes to stderr, ok/not_checked pass.
+func checkConfigPerm(cmd *cobra.Command, path string) error {
+	perm, err := runtime.CheckConfigPermissions(path)
+	if err != nil {
+		kind := cascade.KindUnavailable
+		if errors.Is(err, fs.ErrPermission) {
+			kind = cascade.KindPermissionDenied
+		}
+		return cascade.Wrap(kind, err, "inspect config.toml")
+	}
+	switch perm.Level {
+	case runtime.ConfigPermRefuse:
+		return cascade.New(cascade.KindPermissionDenied, perm.Reason)
+	case runtime.ConfigPermWarn:
+		outputWriter(cmd).Warn("%s", perm.Reason)
+	case runtime.ConfigPermOK, runtime.ConfigPermNotChecked:
+	}
+	return nil
 }
 
 // getResultString renders a runtime.EffectiveEntry as "key = value

@@ -17,7 +17,7 @@ import (
 func TestTelemetryDefaultOff(t *testing.T) {
 	dir := t.TempDir()
 	path := writeConfigFile(t, dir, "schema_version = 1\n")
-	tree, _, err := readAndUpgradeTree(path)
+	tree, _, err := readAndUpgradeTree(path, nil)
 	if err != nil {
 		t.Fatalf("readAndUpgradeTree: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestTelemetryDefaultOff(t *testing.T) {
 func testTelemetryNamedVarForceDisables(t *testing.T) {
 	dir := t.TempDir()
 	path := writeConfigFile(t, dir, "[telemetry]\nenabled = true\n")
-	tree, _, err := readAndUpgradeTree(path)
+	tree, _, err := readAndUpgradeTree(path, nil)
 	if err != nil {
 		t.Fatalf("readAndUpgradeTree: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestTelemetryHardDisableNeverForceEnable(t *testing.T) {
 	t.Run("generic override narrows true to false", func(t *testing.T) {
 		dir := t.TempDir()
 		path := writeConfigFile(t, dir, "[telemetry]\nenabled = true\n")
-		tree, _, err := readAndUpgradeTree(path)
+		tree, _, err := readAndUpgradeTree(path, nil)
 		if err != nil {
 			t.Fatalf("readAndUpgradeTree: %v", err)
 		}
@@ -87,7 +87,7 @@ func TestTelemetryHardDisableNeverForceEnable(t *testing.T) {
 	t.Run("generic override widen to true is refused", func(t *testing.T) {
 		dir := t.TempDir()
 		path := writeConfigFile(t, dir, "schema_version = 1\n")
-		tree, _, err := readAndUpgradeTree(path)
+		tree, _, err := readAndUpgradeTree(path, nil)
 		if err != nil {
 			t.Fatalf("readAndUpgradeTree: %v", err)
 		}
@@ -107,7 +107,7 @@ func TestTelemetryHardDisableNeverForceEnable(t *testing.T) {
 func TestTelemetryConfigRejectsInvalidValues(t *testing.T) {
 	dir := t.TempDir()
 	path := writeConfigFile(t, dir, "[telemetry]\nenabled = \"yes\"\n")
-	tree, _, err := readAndUpgradeTree(path)
+	tree, _, err := readAndUpgradeTree(path, nil)
 	if err != nil {
 		t.Fatalf("readAndUpgradeTree: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestTelemetryConfigRejectsInvalidValues(t *testing.T) {
 func TestTelemetryConfig_UnknownKeyWarnsAndPreserves(t *testing.T) {
 	dir := t.TempDir()
 	path := writeConfigFile(t, dir, "[telemetry]\nsample_rate = 1\n")
-	tree, _, err := readAndUpgradeTree(path)
+	tree, _, err := readAndUpgradeTree(path, nil)
 	if err != nil {
 		t.Fatalf("readAndUpgradeTree: %v", err)
 	}

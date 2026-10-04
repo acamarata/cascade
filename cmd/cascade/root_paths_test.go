@@ -17,9 +17,11 @@ package main
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // TestLazyPaths_ResolvedHome asserts every accessor derives its path from
@@ -111,5 +113,43 @@ func TestLazyPaths_HomeResolutionFails(t *testing.T) {
 	}
 	if got := p.StorageRoot("local"); got != "" {
 		t.Errorf("StorageRoot() = %q, want empty string when home resolution fails", got)
+	}
+}
+
+// blankHomeEnv makes home resolution fail on every platform.
+func blankHomeEnv(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{"CASCADE_HOME", "CASCADE_CONFIG", "CASCADE_SOCKET", "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH"} {
+		t.Setenv(k, "")
+	}
+}
+
+// TestLazyPaths_ResolveErr asserts ResolveErr names the cause on failure
+// and is nil when resolution succeeds.
+func TestLazyPaths_ResolveErr(t *testing.T) {
+	t.Setenv("CASCADE_HOME", t.TempDir())
+	if err := (lazyPaths{}).ResolveErr(); err != nil {
+		t.Errorf("ResolveErr() = %v with a resolvable CASCADE_HOME, want nil", err)
+	}
+	blankHomeEnv(t)
+	if err := (lazyPaths{}).ResolveErr(); err == nil || !strings.Contains(err.Error(), "resolve home directory") {
+		t.Errorf("ResolveErr() = %v, want an error naming the home-directory resolution", err)
+	}
+}
+
+// TestConfigGetRefusesUnresolvedPathOnRealRoot runs the mounted `config get`
+// with HOME, USERPROFILE and CASCADE_HOME unset: it must exit with the
+// KindUnavailable code and print no default value.
+func TestConfigGetRefusesUnresolvedPathOnRealRoot(t *testing.T) {
+	blankHomeEnv(t)
+	out, err := execRoot(t, "config", "get", "logging.level")
+	if err == nil {
+		t.Fatalf("config get succeeded with an unresolvable home; output=%q", out)
+	}
+	if got := cascade.ExitCode(err); got != cascade.ExitUnavailable {
+		t.Errorf("exit code = %d, want %d (err: %v)", got, cascade.ExitUnavailable, err)
+	}
+	if strings.Contains(out, "logging.level =") {
+		t.Errorf("output %q carries a default value", out)
 	}
 }

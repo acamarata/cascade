@@ -23,8 +23,8 @@ import "github.com/acamarata/cascade/internal/runtime"
 
 // lazyPaths defers NewDefaultPathProvider to first use, so constructing the
 // command tree never touches the environment. Each accessor resolves on
-// demand and returns the zero value if resolution fails; the config commands
-// validate the paths they receive and report the failure themselves.
+// demand and returns the zero value if resolution fails; ResolveErr says why,
+// and the config commands refuse to run on a failed resolution.
 type lazyPaths struct{}
 
 func (lazyPaths) resolve() runtime.PathProvider {
@@ -33,6 +33,15 @@ func (lazyPaths) resolve() runtime.PathProvider {
 		return nil
 	}
 	return p
+}
+
+// ResolveErr reports why path resolution fails (nil when it succeeds), so a
+// caller that gets "" from an accessor can name the cause instead of
+// guessing. Commands that must not proceed on a failed resolution (the
+// config commands) check it before using any path.
+func (lazyPaths) ResolveErr() error {
+	_, err := runtime.NewDefaultPathProvider()
+	return err
 }
 
 func (l lazyPaths) get(f func(runtime.PathProvider) string) string {
