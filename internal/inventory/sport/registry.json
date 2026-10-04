@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-04T18:25:12Z",
+  "generated_at": "2026-10-04T19:31:29Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -9322,6 +9322,44 @@
       ]
     },
     {
+      "name": "internal.audit.EffectLog",
+      "sites": [
+        {
+          "file": "internal/audit/effect.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal.audit.EffectLog/ADDED (P1-SEC-33)."
+        },
+        {
+          "file": "internal/audit/effect_crash_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal.audit.EffectLog/ADDED (tests) (P1-SEC-33)."
+        },
+        {
+          "file": "internal/audit/effect_index_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal.audit.EffectLog/ADDED (tests) (P1-SEC-33)."
+        },
+        {
+          "file": "internal/audit/effect_postgres_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal.audit.EffectLog/ADDED (tests) (P1-SEC-33)."
+        },
+        {
+          "file": "internal/audit/effect_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "internal.audit.EffectLog/ADDED (tests) (P1-SEC-33)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.audit.Log",
       "sites": [
         {
@@ -9397,7 +9435,7 @@
         },
         {
           "file": "internal/audit/schema_test.go",
-          "line": 9,
+          "line": 11,
           "status": "ADD",
           "ticket": "P1-E09-W2-S18-T2",
           "raw": "internal.audit.Record/ADDED (tests) (P1-E09-W2-S18-T2)."
@@ -31320,7 +31358,7 @@
       ]
     }
   ],
-  "total_sites": 2980,
+  "total_sites": 2985,
   "unspecified_count": 158,
   "multi_status_count": 86
 }
