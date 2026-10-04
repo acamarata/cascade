@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-01T19:15:53Z",
+  "generated_at": "2026-10-04T15:13:02Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5819,10 +5819,16 @@
       "sites": [
         {
           "file": "internal/conductor/fanout.go",
-          "line": 19,
-          "status": "ADD",
+          "line": 23,
+          "status": "CHANGE",
           "ticket": "P1-E11-W3-S23-T2",
-          "raw": "conductor.fanout/ADD (P1-E11-W3-S23-T2)."
+          "raw": "conductor.fanout/CHANGE (P1-E11-W3-S23-T2; P1-CORE-18)."
+        },
+        {
+          "file": "internal/conductor/fanout_crash_test.go",
+          "line": 7,
+          "status": "CHANGE",
+          "raw": "conductor.fanout/CHANGE (tests) (P1-CORE-18)."
         },
         {
           "file": "internal/conductor/fanout_fields_test.go",
@@ -5830,10 +5836,23 @@
           "status": "ADD",
           "ticket": "P1-E11-W3-S23-T2",
           "raw": "conductor.fanout/ADD (P1-E11-W3-S23-T2, T0 unblock)."
+        },
+        {
+          "file": "internal/conductor/fanout_results.go",
+          "line": 12,
+          "status": "CHANGE",
+          "raw": "conductor.fanout/CHANGE (P1-CORE-18)."
+        },
+        {
+          "file": "internal/conductor/fanout_results_test.go",
+          "line": 5,
+          "status": "CHANGE",
+          "raw": "conductor.fanout/CHANGE (tests) (P1-CORE-18)."
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -12286,6 +12305,36 @@
           "raw": "internal.fleet.resume.ResumeManager/ADDED (P1-E13-W3-S27-T2)."
         },
         {
+          "file": "internal/fleet/resume/entity.go",
+          "line": 8,
+          "status": "CHANGE",
+          "raw": "internal.fleet.resume.ResumeManager/CHANGE (P1-CORE-18)."
+        },
+        {
+          "file": "internal/fleet/resume/entity_test.go",
+          "line": 5,
+          "status": "CHANGE",
+          "raw": "internal.fleet.resume.ResumeManager/CHANGE (tests) (P1-CORE-18)."
+        },
+        {
+          "file": "internal/fleet/resume/leg_results.go",
+          "line": 16,
+          "status": "CHANGE",
+          "raw": "internal.fleet.resume.ResumeManager/CHANGE (P1-CORE-18)."
+        },
+        {
+          "file": "internal/fleet/resume/leg_results_errors_test.go",
+          "line": 5,
+          "status": "CHANGE",
+          "raw": "internal.fleet.resume.ResumeManager/CHANGE (tests) (P1-CORE-18)."
+        },
+        {
+          "file": "internal/fleet/resume/leg_results_test.go",
+          "line": 7,
+          "status": "CHANGE",
+          "raw": "internal.fleet.resume.ResumeManager/CHANGE (tests) (P1-CORE-18)."
+        },
+        {
           "file": "internal/fleet/resume/platform_windows.go",
           "line": 16,
           "status": "ADD",
@@ -12350,7 +12399,8 @@
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -30858,7 +30908,7 @@
       ]
     }
   ],
-  "total_sites": 2909,
+  "total_sites": 2917,
   "unspecified_count": 154,
-  "multi_status_count": 84
+  "multi_status_count": 86
 }
