@@ -17,6 +17,7 @@ package secrets
 
 import (
 	"context"
+	"io"
 	"net/url"
 	"runtime"
 	"strings"
@@ -27,7 +28,7 @@ import (
 )
 
 func TestLoopbackListenerReceivesTheRedirectAndAnswersWithoutEchoingIt(t *testing.T) {
-	listener, err := listenLoopback(context.Background())
+	listener, err := loopbackFactoryFor(testOAuthConfig().RedirectURI)(context.Background())
 	if err != nil {
 		t.Fatalf("listenLoopback: %v", err)
 	}
@@ -36,31 +37,39 @@ func TestLoopbackListenerReceivesTheRedirectAndAnswersWithoutEchoingIt(t *testin
 	if port == "" || port == "0" {
 		t.Fatalf("no ephemeral port was bound (got %q)", port)
 	}
+	// The production client, so no net/http import is needed here.
+	client := newHTTPExchanger().(*httpExchanger).client
+	callback := "http://127.0.0.1:" + port + "/callback?"
 
-	got := make(chan string, 1)
-	go func() {
-		q, waitErr := listener.Wait(context.Background())
-		if waitErr != nil {
-			t.Errorf("Wait: %v", waitErr)
-		}
-		got <- q
-	}()
+	// A POST to the redirect path is refused and must not take the slot:
+	// if it did, Wait below would return its query instead of the GET's.
+	post, err := client.Post(callback+"code=posted&state=posted", "application/x-www-form-urlencoded", strings.NewReader(""))
+	if err != nil {
+		t.Fatalf("POST to the listener: %v", err)
+	}
+	_ = post.Body.Close()
+	if post.StatusCode != 404 {
+		t.Fatalf("a POST to the redirect path answered HTTP %d, want 404", post.StatusCode)
+	}
 
 	const query = "code=" + canaryCode + "&state=some-state"
-	body, status, err := newHTTPExchanger().Exchange(context.Background(),
-		"http://127.0.0.1:"+port+"/callback?"+query, url.Values{})
+	resp, err := client.Get(callback + query)
 	if err != nil {
-		t.Fatalf("driving the listener: %v", err)
+		t.Fatalf("GET to the listener: %v", err)
 	}
-	if status != 200 {
-		t.Fatalf("the listener answered HTTP %d", status)
+	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatalf("the listener answered HTTP %d (read err %v)", resp.StatusCode, err)
 	}
 	assertNoCanary(t, "the callback page cascade serves to the browser", string(body))
 	if !strings.Contains(string(body), "close this tab") {
 		t.Fatalf("the callback page is not the expected prose: %q", body)
 	}
-	if received := <-got; received != query {
-		t.Fatalf("Wait returned %q, want %q", received, query)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if received, werr := listener.Wait(ctx); werr != nil || received != query {
+		t.Fatalf("Wait returned %q (err %v), want %q", received, werr, query)
 	}
 }
 

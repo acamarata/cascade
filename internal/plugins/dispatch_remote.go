@@ -9,7 +9,8 @@
 // cannot (BOUNDARY NOTE, internal/plugins/remote/remote.go's package
 // doc) — which is exactly why this glue lives here and not there.
 //
-// Inputs: none at package scope; newDispatchRemoteInterceptor is called
+// Inputs: none at package scope; newDispatchRemoteInterceptor (the
+// default-registry wrapper around newDispatchRemoteInterceptorFrom) is called
 // once per RuntimeRemote ProvisionElevated call that needs one built
 // (the caller may also inject its own via remoteIntercept and skip this
 // entirely — production wiring for a live credential-store-backed vault
@@ -80,16 +81,26 @@ func (a dispatchRemoteInterceptor) Intercept(ctx context.Context, content []byte
 	return a.engine.Intercept(ctx, a.token, dispatchRemoteTier, content)
 }
 
-// newDispatchRemoteInterceptor builds the production Interceptor:
-// acquires the real egress.Capability for EgressClassPluginRemote from
-// the process-wide default registry (this is what proves the class is
-// disabled unless an operator has separately re-registered or enabled
-// it — Capability() itself refuses a disabled class, per
-// egress.Registry.Capability's own contract), binds it to a real
-// secrets.Detector (the same construction provisionStorageDomain already
-// uses in this file), and an intentionally empty vault.
+// newDispatchRemoteInterceptor builds the production Interceptor over the
+// process-wide default registry, where EgressClassPluginRemote is
+// registered disabled: the call refuses with ErrClassDisabled before any
+// handshake byte exists.
 func newDispatchRemoteInterceptor() (remote.Interceptor, error) {
-	token, err := egress.DefaultRegistry().Capability(egress.EgressClassPluginRemote)
+	return newDispatchRemoteInterceptorFrom(egress.DefaultRegistry())
+}
+
+// newDispatchRemoteInterceptorFrom builds the Interceptor over reg: it
+// acquires the real egress.Capability for EgressClassPluginRemote from reg
+// (Capability() itself refuses a disabled or unknown class, per
+// egress.Registry.Capability's own contract), binds it to a real
+// secrets.Detector, and an intentionally empty vault. The engine checks
+// the SAME registry the capability came from, so a caller cannot pair a
+// token from one registry with the policy of another.
+func newDispatchRemoteInterceptorFrom(reg *egress.Registry) (remote.Interceptor, error) {
+	if reg == nil {
+		return nil, cascade.New(cascade.KindInvalidInput, "plugin: the remote-handshake interceptor needs an egress registry")
+	}
+	token, err := reg.Capability(egress.EgressClassPluginRemote)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +108,7 @@ func newDispatchRemoteInterceptor() (remote.Interceptor, error) {
 	if err != nil {
 		return nil, cascade.Wrap(cascade.KindInternal, err, "plugin: build remote-handshake secret detector")
 	}
-	engine, err := egress.NewEngine(egress.DefaultRegistry(), dispatchRemoteEmptyVault{}, detector)
+	engine, err := egress.NewEngine(reg, dispatchRemoteEmptyVault{}, detector)
 	if err != nil {
 		return nil, cascade.Wrap(cascade.KindInternal, err, "plugin: build remote-handshake egress engine")
 	}
