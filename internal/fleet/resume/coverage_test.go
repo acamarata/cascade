@@ -45,7 +45,7 @@ func TestDefaultPermitAndAppender_UsedWhenNilSupplied(t *testing.T) {
 		if permitErr != nil {
 			t.Fatalf("default withPermit: %v", permitErr)
 		}
-		if err := appender.AppendLeg(ctx, "fanout_leg_started", "t-default-seams", 0, nil); err != nil {
+		if _, err := appender.AppendLeg(ctx, "fanout_leg_done", "t-default-seams", 0, map[string]string{"attempt": "1", "outcome": conductor.LegOutcomeFailedRetryable}); err != nil {
 			t.Fatalf("default appender.AppendLeg: %v", err)
 		}
 		return []provider.ModelResponse{{JobID: "job-0"}}, nil
@@ -94,8 +94,8 @@ func (b *recordingBus) Publish(_ context.Context, _, kind, _ string, payload []b
 
 func TestJournalAppenderAdapter_UnrecognizedKindRefused(t *testing.T) {
 	store, _, _ := newRealStore(t)
-	adapter := journalAppenderAdapter{journal: store, taskID: "t", attempt: 1}
-	err := adapter.AppendLeg(context.Background(), "not-a-real-kind", "t", 0, nil)
+	adapter := &journalAppenderAdapter{journal: store}
+	_, err := adapter.AppendLeg(context.Background(), "not-a-real-kind", "t", 0, nil)
 	if !cascade.HasKind(err, cascade.KindInvalidInput) {
 		t.Fatalf("AppendLeg(unrecognized kind) = %v, want KindInvalidInput", err)
 	}

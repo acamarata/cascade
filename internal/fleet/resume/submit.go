@@ -18,6 +18,7 @@ package resume
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/fleet/journal"
@@ -56,19 +57,17 @@ func (m *Manager) resubmit(ctx context.Context, cursor resumeCursor) (int, error
 // resume-side wiring only. This package therefore fences at the
 // TASK level: one attempt number covers the whole re-submission call, and
 // a newer concurrent resume of the SAME task supersedes every leg of an
-// older one together, not leg-by-leg. Every individual leg's own journal
-// entry still carries that task-level attempt (via fencedAppender below),
-// satisfying clause C's "the journal append carries the attempt"
-// literally, even though "reject a result whose attempt is older" is
-// enforced once per task rather than once per leg.
+// older one together, not leg-by-leg. Each leg's own journal entries carry
+// the per-leg attempt contract:fanout-leg-results defines (a durable slot
+// per raw start, capped at 3; see AppendLeg), not this task-level number.
 func (m *Manager) resubmitFanOut(ctx context.Context, cursor resumeCursor) (int, error) {
-	actionID := "fanout:" + cursor.TaskID
+	actionID := FanOutEntity(cursor.TaskID)
 	myAttempt, err := m.claimAttempt(ctx, cursor.TaskID, actionID)
 	if err != nil {
 		return 0, err
 	}
 
-	_, dispatchErr := m.fanOut(ctx, cursor.Request, cursor.Legs, cursor.Completed, m.withPermit, m.fencedAppender(cursor.TaskID, myAttempt))
+	_, dispatchErr := m.fanOut(ctx, cursor.Request, cursor.Legs, cursor.Completed, m.withPermit, m.legAppender())
 	dispatched := cursor.Legs - len(cursor.Completed)
 	if dispatchErr != nil {
 		return 0, dispatchErr
@@ -163,35 +162,86 @@ func (m *Manager) journalDiscard(ctx context.Context, taskID, actionID string, m
 	return err
 }
 
-// fencedAppender adapts this Manager's journal into conductor.JournalAppender
-// for one resubmitFanOut call, stamping every leg entry with attempt —
-// the first production caller of this seam (K/S-23.T2's FanOut has had
-// none until this ticket).
-func (m *Manager) fencedAppender(taskID string, attempt uint64) conductor.JournalAppender {
-	return journalAppenderAdapter{journal: m.journal, taskID: taskID, attempt: attempt}
+// legAppender adapts this Manager's journal into conductor.JournalAppender
+// for one resubmitFanOut call. It is journal-only: a leg start and its
+// LegResultStore methods refuse (ErrLegStoreUnset), because the Manager
+// holds no provider.Store to allocate attempts or keep records in; a
+// FanOutFunc dispatching real legs brings a newLegAdapter.
+func (m *Manager) legAppender() conductor.JournalAppender {
+	return &journalAppenderAdapter{journal: m.journal}
 }
 
-// journalAppenderAdapter implements conductor.JournalAppender by
-// translating FanOut's (kind string, taskID, legIndex, fields) call shape
-// into a real journal.Append with this package's legPayload.
-type journalAppenderAdapter struct {
-	journal journal.Store
-	taskID  string
-	attempt uint64
-}
-
-func (a journalAppenderAdapter) AppendLeg(ctx context.Context, kind string, taskID string, legIndex int, fields map[string]string) error {
+// AppendLeg writes one leg entry into the journal entity
+// FanOutEntity(fanoutID) under operation id
+// <fanoutID>#<leg>#<attempt>#<kind>. A start's attempt is the durable slot
+// claimAttempt allocates, refused with ErrLegAttemptsExhausted at the cap; a done
+// entry closes the attempt fields["attempt"] names and must carry a known
+// outcome (an ok outcome also its canonical result_key).
+func (a *journalAppenderAdapter) AppendLeg(ctx context.Context, kind string, fanoutID string, legIndex int, fields map[string]string) (uint64, error) {
 	k, ok := legKind(kind)
 	if !ok {
-		return cascade.Newf(cascade.KindInvalidInput, "resume: unrecognized fan-out leg journal kind %q", kind)
+		return 0, cascade.Newf(cascade.KindInvalidInput, "resume: unrecognized fan-out leg journal kind %q", kind)
 	}
-	payload, err := json.Marshal(legPayload{LegIndex: legIndex, JobID: fields["job_id"], Attempt: a.attempt})
+	if !validFanOutID(fanoutID) || legIndex < 0 {
+		return 0, cascade.Newf(cascade.KindInvalidInput, "resume: invalid fan-out leg %q#%d", fanoutID, legIndex)
+	}
+	if k == journal.KindFanOutLegStarted {
+		return a.appendStarted(ctx, fanoutID, legIndex, fields["request_digest"])
+	}
+	p, err := donePayload(fanoutID, legIndex, fields)
+	if err != nil {
+		return 0, err
+	}
+	return p.Attempt, a.appendLegEntry(ctx, fanoutID, k, p)
+}
+
+// appendStarted claims the leg's next durable attempt slot, then appends
+// the start under it. Slots are unique across every adapter over the same
+// store, so two starts never share an attempt (or an operation id), and
+// Replay's (kind, operation_id) dedupe never hides a start. A crash after
+// the claim and before the append still spends the slot: the cap counts
+// raw starts, never fewer.
+func (a *journalAppenderAdapter) appendStarted(ctx context.Context, fanoutID string, legIndex int, digest string) (uint64, error) {
+	attempt, err := a.claimAttempt(ctx, fanoutID, legIndex, digest)
+	if err != nil {
+		return 0, err
+	}
+	p := legPayload{LegIndex: legIndex, Attempt: attempt, RequestDigest: digest}
+	return attempt, a.appendLegEntry(ctx, fanoutID, journal.KindFanOutLegStarted, p)
+}
+
+// appendLegEntry encodes p and appends it under its operation id.
+func (a *journalAppenderAdapter) appendLegEntry(ctx context.Context, fanoutID string, k journal.Kind, p legPayload) error {
+	payload, err := json.Marshal(p)
 	if err != nil {
 		return cascade.Wrap(cascade.KindInternal, err, "resume: encoding leg payload")
 	}
-	opID := taskID + "#" + itoa(uint64(legIndex)) + "#" + itoa(a.attempt) + "#" + string(k)
-	_, err = a.journal.Append(ctx, taskID, k, opID, payload)
+	opID := fanoutID + "#" + itoa(uint64(p.LegIndex)) + "#" + itoa(p.Attempt) + "#" + string(k)
+	_, err = a.journal.Append(ctx, FanOutEntity(fanoutID), k, opID, payload)
 	return err
+}
+
+// donePayload validates and builds a done entry's payload.
+func donePayload(fanoutID string, legIndex int, fields map[string]string) (legPayload, error) {
+	attempt, err := strconv.ParseUint(fields["attempt"], 10, 64)
+	if err != nil || attempt == 0 {
+		return legPayload{}, cascade.Newf(cascade.KindInvalidInput, "resume: fan-out leg done entry needs attempt >= 1, got %q", fields["attempt"])
+	}
+	p := legPayload{LegIndex: legIndex, JobID: fields["job_id"], Attempt: attempt, Outcome: fields["outcome"],
+		ResultKey: fields["result_key"], RequestDigest: fields["request_digest"]}
+	switch p.Outcome {
+	case conductor.LegOutcomeOK:
+		if p.ResultKey != conductor.LegResultKey(fanoutID, legIndex) {
+			return legPayload{}, cascade.Newf(cascade.KindInvalidInput, "resume: ok leg done entry has result_key %q, want %q", p.ResultKey, conductor.LegResultKey(fanoutID, legIndex))
+		}
+	case conductor.LegOutcomeFailedTerminal, conductor.LegOutcomeFailedRetryable:
+		if p.ResultKey != "" {
+			return legPayload{}, cascade.New(cascade.KindInvalidInput, "resume: a failed leg done entry must not name a result")
+		}
+	default:
+		return legPayload{}, cascade.Newf(cascade.KindInvalidInput, "resume: unrecognized fan-out leg outcome %q", p.Outcome)
+	}
+	return p, nil
 }
 
 // legKind maps FanOut's string kind constants (fanout.go's own literal

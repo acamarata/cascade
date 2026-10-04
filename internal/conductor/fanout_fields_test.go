@@ -34,7 +34,7 @@ func TestFanOut_LegFanOutResetToOne(t *testing.T) {
 		return provider.ModelResponse{JobID: "job"}, nil
 	}
 	j := &spyJournal{}
-	if _, err := FanOut(context.Background(), req, 3, nil, passthroughPermit, j, exec); err != nil {
+	if _, err := FanOut(context.Background(), "fo-1", req, 3, nil, passthroughPermit, j, newMemLegStore(), allowAll, exec); err != nil {
 		t.Fatalf("FanOut: %v", err)
 	}
 	if len(seen) != 3 {
@@ -63,7 +63,7 @@ func TestFanOut_PerLegReservationCleared(t *testing.T) {
 		return provider.ModelResponse{JobID: "job"}, nil
 	}
 	j := &spyJournal{}
-	if _, err := FanOut(context.Background(), req, 2, nil, passthroughPermit, j, exec); err != nil {
+	if _, err := FanOut(context.Background(), "fo-1", req, 2, nil, passthroughPermit, j, newMemLegStore(), allowAll, exec); err != nil {
 		t.Fatalf("FanOut: %v", err)
 	}
 	if len(seen) != 2 {

@@ -35,6 +35,7 @@ const (
 // payload-contract section.
 type resumeCursor struct {
 	TaskID    string
+	FanOutID  string // cursorFanOut only: FanOutIDFromEntity of the entity
 	Kind      cursorKind
 	Request   provider.ModelRequest   // cursorFanOut only
 	Legs      int                     // cursorFanOut only
@@ -56,11 +57,16 @@ type resumeCursorPayload struct {
 }
 
 // legPayload is the KindFanOutLegStarted/KindFanOutLegDone wire shape the
-// journalAppenderAdapter (submit.go) writes on FanOut's behalf.
+// journalAppenderAdapter (submit.go) writes on FanOut's behalf. A done
+// entry carries its outcome and, for ok, the result key; the digest binds
+// the leg request. It never carries Response content.
 type legPayload struct {
-	LegIndex int    `json:"leg_index"`
-	JobID    string `json:"job_id,omitempty"`
-	Attempt  uint64 `json:"attempt"`
+	LegIndex      int    `json:"leg_index"`
+	JobID         string `json:"job_id,omitempty"`
+	Attempt       uint64 `json:"attempt"`
+	Outcome       string `json:"outcome,omitempty"`
+	ResultKey     string `json:"result_key,omitempty"`
+	RequestDigest string `json:"request_digest,omitempty"`
 }
 
 // intentPayload is the KindIntent/KindAck wire shape for a generic (non
@@ -88,7 +94,18 @@ func (m *Manager) scanEntity(ctx context.Context, entityID string) (*resumeCurso
 	if err != nil {
 		return nil, nil, err
 	}
-	return classify(entries)
+	cur, attention, err := classify(entries)
+	if err != nil || cur == nil || cur.Kind != cursorFanOut {
+		return cur, attention, err
+	}
+	// A fan-out's leg entries live in FanOutEntity(fanoutID); a fan-out
+	// cursor in any other entity is not a shape this package resumes.
+	id, ok := FanOutIDFromEntity(entityID)
+	if !ok {
+		return nil, nil, ErrUnrecognizedShape
+	}
+	cur.FanOutID = id
+	return cur, attention, nil
 }
 
 // classify implements the decision table doc.go's package comment
@@ -128,28 +145,58 @@ func classifyFanOut(entries []journal.Entry) (*resumeCursor, error) {
 	if err := json.Unmarshal(latest.Request, &req); err != nil {
 		return nil, ErrUnrecognizedShape
 	}
-	completed := completedLegs(entries)
+	completed, err := legOutcomes(entries)
+	if err != nil {
+		return nil, err
+	}
 	if len(completed) >= latest.Legs {
 		return nil, nil // every leg already done: nothing to resume
 	}
 	return &resumeCursor{TaskID: latest.TaskID, Kind: cursorFanOut, Request: req, Legs: latest.Legs, Completed: completed}, nil
 }
 
-// completedLegs builds the R-21.214 completed map from every
-// KindFanOutLegDone entry's legPayload, keyed by leg index.
-func completedLegs(entries []journal.Entry) map[int]conductor.JobID {
+// legOutcomes decides a fan-out cursor from its leg entries: any
+// failed_terminal leg is ErrLegTerminal (terminal); otherwise it returns
+// the ok legs. A leg at the start cap with no ok done is NOT decided here:
+// the journal cannot tell a crash after its LegResult was stored from one
+// before, so the cursor stays resumable and the dispatch path decides it -
+// conductor.FanOut replays a matching stored record through AuthorizeFn
+// (zero provider calls, the missing done appended) and otherwise its start
+// is refused with ErrLegAttemptsExhausted (unknown outcome), never sent.
+func legOutcomes(entries []journal.Entry) (map[int]conductor.JobID, error) {
+	completed, terminal, err := completedLegs(entries)
+	if err != nil {
+		return nil, err
+	}
+	if terminal {
+		return nil, ErrLegTerminal
+	}
+	return completed, nil
+}
+
+// completedLegs builds the R-21.214 completed map from the
+// KindFanOutLegDone entries whose outcome is ok - only those; a failed or
+// outcome-less done never counts as completed. terminal reports a
+// failed_terminal done. An undecodable leg payload fails closed.
+func completedLegs(entries []journal.Entry) (map[int]conductor.JobID, bool, error) {
 	out := make(map[int]conductor.JobID)
+	terminal := false
 	for _, e := range entries {
 		if e.Kind != journal.KindFanOutLegDone {
 			continue
 		}
 		var p legPayload
 		if err := json.Unmarshal(e.Payload, &p); err != nil {
-			continue
+			return nil, false, ErrUnrecognizedShape
 		}
-		out[p.LegIndex] = conductor.JobID(p.JobID)
+		switch p.Outcome {
+		case conductor.LegOutcomeOK:
+			out[p.LegIndex] = conductor.JobID(p.JobID)
+		case conductor.LegOutcomeFailedTerminal:
+			terminal = true
+		}
 	}
-	return out
+	return out, terminal, nil
 }
 
 // classifyIntent implements the generic (non fan-out) Intent/Ack path. It

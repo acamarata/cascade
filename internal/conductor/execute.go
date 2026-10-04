@@ -274,9 +274,23 @@ func validateRequest(req provider.ModelRequest) error {
 // daemon_unix.go/daemon_unix_run.go already use in this tree).
 
 // ExecuteFanOut dispatches n legs of req through FanOut (fanout.go),
-// R-21.214, using e.Execute as every leg's exec function. withPermit and
-// journal are per-call parameters, not Executor fields: ExecutorConfig
-// (pipeline.go) is outside this ticket's files_scope, see the journal.
-func (e *Executor) ExecuteFanOut(ctx context.Context, req provider.ModelRequest, n int, completed map[int]JobID, withPermit WithPermitFn, journal JournalAppender) ([]provider.ModelResponse, error) {
-	return FanOut(ctx, req, n, completed, withPermit, journal, e.Execute)
+// R-21.214: e.Execute is every leg's exec function and e.Authorize the
+// replay door. withPermit, journal and results are explicit per-call
+// parameters; nil is ErrConstructionFailed, never a silent skip.
+func (e *Executor) ExecuteFanOut(ctx context.Context, fanoutID string, req provider.ModelRequest, n int, completed map[int]JobID, withPermit WithPermitFn, journal JournalAppender, results LegResultStore) ([]provider.ModelResponse, error) {
+	return FanOut(ctx, fanoutID, req, n, completed, withPermit, journal, results, e.Authorize, e.Execute)
+}
+
+// Authorize is the door check Execute runs (readiness, then authorize:
+// validation, classifier, sensitivity, policy) as an AuthorizeFn, with a
+// refusal audited through the executor's audit writer. No provider call.
+func (e *Executor) Authorize(ctx context.Context, req provider.ModelRequest) error {
+	if err := e.pipeline.Ready(); err != nil {
+		return err
+	}
+	tier, err := e.authorize(ctx, req)
+	if err != nil {
+		e.auditRefusal(ctx, req, tier, err)
+	}
+	return err
 }
