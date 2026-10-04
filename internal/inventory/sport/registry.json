@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-04T16:16:12Z",
+  "generated_at": "2026-10-04T16:25:57Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2089,6 +2089,57 @@
           "status": "ADD",
           "ticket": "P1-E10-W4-S87-T1",
           "raw": "cli.provider.add:lane (ADD) — P1-E10-W4-S87-T1 (Art.9, W3 gate)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cli.provider.reauth",
+      "sites": [
+        {
+          "file": "cmd/cascade/provider_reauth.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "cli.provider.reauth/ADD (P1-WID-01)."
+        },
+        {
+          "file": "cmd/cascade/provider_reauth_flagless_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "cli.provider.reauth/ADD (P1-WID-01)."
+        },
+        {
+          "file": "cmd/cascade/provider_reauth_test.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "cli.provider.reauth/ADD (P1-WID-01)."
+        },
+        {
+          "file": "internal/providers/intake/reauth.go",
+          "line": 28,
+          "status": "ADD",
+          "raw": "cli.provider.reauth/ADD (P1-WID-01)."
+        },
+        {
+          "file": "internal/providers/intake/reauth_mode.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "cli.provider.reauth/ADD (P1-WID-01)."
+        },
+        {
+          "file": "internal/providers/intake/reauth_mode_test.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "cli.provider.reauth/ADD (P1-WID-01)."
+        },
+        {
+          "file": "internal/providers/intake/reauth_test.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E38-W8-S123-T1",
+          "raw": "cli.provider.reauth/ADD (P1-E38-W8-S123-T1)."
         }
       ],
       "statuses": [
@@ -30962,7 +31013,7 @@
       ]
     }
   ],
-  "total_sites": 2926,
+  "total_sites": 2933,
   "unspecified_count": 154,
   "multi_status_count": 86
 }
