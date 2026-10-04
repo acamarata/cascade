@@ -156,6 +156,39 @@ it, and every directory under the home directory false-positived through
 `$HOME/.nself` as a result. Both are now pinned red-first by
 `detect_test.go`.
 
+## Fresh init (provenance for the second marker branch, 2026-10-04)
+
+`nself init --non-interactive --name cascadefixture` (nself 1.3.5, commit
+`ff0ba27b`, run in an empty directory with a throwaway HOME) wrote exactly
+this, and no file inside `.nself/`:
+
+| Path | Kind |
+|---|---|
+| `.nself/` | directory, EMPTY |
+| `.env` | file (mode 0600) |
+| `.env.example` | file |
+| `.env.secrets` | file (mode 0600) |
+| `.gitignore` | file |
+
+None of `projectFiles` exists in that `.nself/`, so the five-artefact rule
+alone refuses a project nself itself just created. nself's own rule for "this
+directory is a project" is the four-file list at cli
+`internal/config/helpers_unknown_vars.go:218`:
+
+```
+var projectMarkerFiles = []string{".env", ".env.dev", ".env.staging", ".env.prod"}
+```
+
+`detect.go` therefore also accepts a `.nself` directory whose PARENT holds one
+of those four files (as a file, not a directory). `.env.secrets`,
+`.env.local` and `.env.example` do not count, matching nself's exclusion of
+the never-committed layers. A `.env` with no `.nself` beside it never counts,
+and `$HOME/.nself` is still refused by path before either rule runs. The
+`.backend/` monorepo shape nself also checks is out of scope (detection runs on
+the directory the handshake names). Pinned by `detect_init_test.go` (fake
+trees) and `TestDetectFreshInitRealFS` in `detect_realfs_test.go` (this listing
+materialised with `os` calls under `t.TempDir()`).
+
 ## Fuzz corpora
 
 Package-local per R-21.266 (`<pkg>/testdata/fuzz/<FuzzName>/`):

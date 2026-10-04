@@ -1,7 +1,8 @@
 // Purpose (this file): project detection at the honest floor — an
 //
 //	ancestor scan for a REAL nself project marker (a `.nself` DIRECTORY
-//	holding a file nself itself writes), bounded at the repository root or
+//	holding a file nself itself writes, or sitting beside a project file
+//	nself's own rule names), bounded at the repository root or
 //	the home directory, then (only on a miss) the bounded subprocess probe
 //	probe.go runs INSIDE the scanned directory. Detection never fails: a
 //	workspace that is not an nself project is an ordinary answer, not an
@@ -196,8 +197,8 @@ func (d *detector) detectOnce(ctx context.Context) result {
 // directory that holds one of projectFiles, plus the first stat failure it
 // saw. The walk stops AT the home directory (exclusive — the home
 // directory's own `.nself` is nself's global state directory, never a
-// project) and at the first repository root it examines, whichever comes
-// first.
+// project; matched by identity, see isHomeDir) and at the first repository
+// root it examines, whichever comes first.
 func scanAncestors(fsys statFS, start, home string) (markerDir string, firstStatErr error) {
 	dir := filepath.Clean(start)
 	if dir == "" || dir == "." {
@@ -208,7 +209,7 @@ func scanAncestors(fsys statFS, start, home string) (markerDir string, firstStat
 		homeDir = filepath.Clean(home)
 	}
 	for range maxAncestorLevels {
-		if homeDir != "" && dir == homeDir {
+		if isHomeDir(fsys, dir, homeDir) {
 			return "", firstStatErr
 		}
 		found, err := projectMarkerAt(fsys, dir, homeDir)
@@ -225,29 +226,6 @@ func scanAncestors(fsys statFS, start, home string) (markerDir string, firstStat
 		dir = parent
 	}
 	return "", firstStatErr
-}
-
-// projectMarkerAt reports whether dir holds a `.nself` DIRECTORY that
-// holds one of projectFiles. The home directory's own marker is refused
-// outright, before any stat, so no content there can ever make it match.
-func projectMarkerAt(fsys statFS, dir, homeDir string) (bool, error) {
-	candidate := filepath.Join(dir, markerDirName)
-	if homeDir != "" && candidate == filepath.Join(homeDir, markerDirName) {
-		return false, nil
-	}
-	exists, isDir, err := fsys.Stat(candidate)
-	if err != nil || !exists || !isDir {
-		return false, err
-	}
-	var firstSeen error
-	for _, name := range projectFiles {
-		ok, _, ferr := fsys.Stat(filepath.Join(candidate, name))
-		firstSeen = firstErr(firstSeen, ferr)
-		if ok {
-			return true, firstSeen
-		}
-	}
-	return false, firstSeen
 }
 
 // isVCSRoot reports whether dir carries a VCS directory.

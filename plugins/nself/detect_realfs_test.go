@@ -26,6 +26,7 @@ package nself
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -113,5 +114,63 @@ func probeEmptyRootFromProjectCwd(t *testing.T) {
 	}
 	if res.ProbeErr == nil {
 		t.Fatal("Detect(/tmp/empty) ProbeErr = nil, want the typed outcome of a probe that ran there")
+	}
+}
+
+// freshInitListing is the directory listing `nself init --non-interactive`
+// 1.3.5 produced on 2026-10-04 (testdata/README.md § fresh init): an EMPTY
+// `.nself/` directory and four files.
+var freshInitListing = []string{".env", ".env.example", ".env.secrets", ".gitignore"}
+
+// materializeFreshInit writes freshInitListing under dir with real os calls,
+// skipping the names in omit.
+func materializeFreshInit(t *testing.T, dir string, omit ...string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dir, markerDirName), 0o750); err != nil {
+		t.Fatalf("mkdir %s: %v", markerDirName, err)
+	}
+	skip := map[string]bool{}
+	for _, name := range omit {
+		skip[name] = true
+	}
+	for _, name := range freshInitListing {
+		if skip[name] {
+			continue
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("# fixture\n"), 0o600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+}
+
+// TestDetectFreshInitRealFS materialises the recorded fresh-init listing on
+// the real filesystem under t.TempDir() (hermetic: HOME and the probe are
+// injected) and runs the real os.Stat scan. With the `.env` it detects;
+// without it, the same tree does not.
+func TestDetectFreshInitRealFS(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("CASCADE_HOME", t.TempDir())
+	probe := &recordingRunner{err: os.ErrNotExist}
+
+	with := t.TempDir()
+	materializeFreshInit(t, with)
+	d := &detector{fs: osStatFS{}, runner: probe, binary: nselfBinary, rootDir: with, homeDir: home}
+	got := d.Detect(context.Background())
+	if want := filepath.Join(with, markerDirName); !got.Detected || got.Method != "marker-dir" || got.MarkerPath != want {
+		t.Fatalf("Detect(fresh init on disk) = %+v, want marker-dir at %s", got, want)
+	}
+
+	without := t.TempDir()
+	materializeFreshInit(t, without, ".env")
+	// A .git at this root bounds the walk, so no ancestor of the temp root
+	// can flip the answer.
+	if err := os.MkdirAll(filepath.Join(without, vcsDirName), 0o750); err != nil {
+		t.Fatalf("mkdir %s: %v", vcsDirName, err)
+	}
+	d = &detector{fs: osStatFS{}, runner: probe, binary: nselfBinary, rootDir: without, homeDir: home}
+	if got := d.Detect(context.Background()); got.Detected || got.Method != "none" {
+		t.Fatalf("Detect(fresh init without .env) = %+v, want not detected", got)
 	}
 }
