@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-04T15:27:47Z",
+  "generated_at": "2026-10-04T16:16:12Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4132,6 +4132,18 @@
           "status": "ADD",
           "ticket": "T-8",
           "raw": "cmd/cascade/config (ADD, placeholder per T-8 sport_updates)."
+        },
+        {
+          "file": "cmd/cascade/config/config_paths_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "cmd/cascade/config (ADD, P1-CORE-16)."
+        },
+        {
+          "file": "cmd/cascade/config/config_perm_verbs_test.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "cmd/cascade/config (ADD, P1-CORE-16)."
         }
       ],
       "statuses": [
@@ -30078,7 +30090,7 @@
         },
         {
           "file": "internal/runtime/config_env.go",
-          "line": 22,
+          "line": 23,
           "status": "ADD",
           "ticket": "T-1",
           "raw": "runtime/config (ADD, placeholder per T-1 sport_updates)."
@@ -30089,6 +30101,12 @@
           "status": "ADD",
           "ticket": "T-1",
           "raw": "runtime/config (ADD, placeholder per T-1 sport_updates)."
+        },
+        {
+          "file": "internal/runtime/config_env_warn_test.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "runtime/config (ADD, P1-CORE-16)."
         },
         {
           "file": "internal/runtime/config_handlers.go",
@@ -30126,11 +30144,47 @@
           "raw": "runtime/config (ADD, placeholder per T-1 sport_updates)."
         },
         {
+          "file": "internal/runtime/config_perm.go",
+          "line": 31,
+          "status": "ADD",
+          "raw": "runtime/config (ADD, P1-CORE-16)."
+        },
+        {
+          "file": "internal/runtime/config_perm_test.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "runtime/config (ADD, P1-CORE-16)."
+        },
+        {
+          "file": "internal/runtime/config_perm_unix.go",
+          "line": 29,
+          "status": "ADD",
+          "raw": "runtime/config (ADD, P1-CORE-16)."
+        },
+        {
+          "file": "internal/runtime/config_perm_windows.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "runtime/config (ADD, P1-CORE-16)."
+        },
+        {
+          "file": "internal/runtime/config_reserved_env_test.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "runtime/config (ADD, P1-CORE-16)."
+        },
+        {
           "file": "internal/runtime/config_test.go",
           "line": 27,
           "status": "ADD",
           "ticket": "T-1",
           "raw": "runtime/config (ADD, placeholder per T-1 sport_updates)."
+        },
+        {
+          "file": "internal/runtime/export_test.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "runtime/config (ADD, P1-CORE-16)."
         }
       ],
       "statuses": [
@@ -30908,7 +30962,7 @@
       ]
     }
   ],
-  "total_sites": 2917,
+  "total_sites": 2926,
   "unspecified_count": 154,
   "multi_status_count": 86
 }
