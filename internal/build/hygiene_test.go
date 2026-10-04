@@ -1,10 +1,15 @@
 package build
 
 import (
+	"bytes"
+	"go/build"
+	"go/build/constraint"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -178,5 +183,85 @@ func TestNoNetworkUnitTest_IntegrationTagEscapes(t *testing.T) {
 	}
 	if len(v) != 0 {
 		t.Fatalf("no-network gate: expected zero violations for the integration-tagged file, got %+v", v)
+	}
+}
+
+// TestHygieneIntegrationTagNegationRefused proves the tag check evaluates
+// the constraint instead of matching the word: a file only escapes the
+// no-network gate when its constraint is false whenever the integration
+// tag is unset.
+func TestHygieneIntegrationTagNegationRefused(t *testing.T) {
+	dir := filepath.Join(hygieneModuleRoot(t), "internal", "build", "testdata", "hygiene")
+	cases := map[string]bool{ // fixture -> want a violation
+		"negated_integration_test.go":     true,
+		"plus_build_negated.txt":          true,
+		"integration_or_linux_test.go":    true,
+		"short_circuit_test.go":           true,
+		"many_tags_test.go":               true,
+		"integration_not_windows_test.go": false,
+		"header_then_integration_test.go": false,
+	}
+	for name, wantViolation := range cases {
+		v, err := NoNetworkUnitTestScanFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if got := len(v) == 1 && v[0].Import == "net"; got != wantViolation || (!wantViolation && len(v) != 0) {
+			t.Errorf("%s: violations %+v, want violation=%v", name, v, wantViolation)
+		}
+	}
+	if hygieneHasIntegrationTag([]byte("package fixture\n")) {
+		t.Error("an unconstrained file counted as integration-tagged")
+	}
+}
+
+// TestHygieneConstraintHeaderFollowsGoBuild pins the header rules to go/build
+// itself: a //go:build line wins over +build lines, and a //go:build inside a
+// block comment is no constraint. go/build's MatchFile with no tags is the
+// oracle: each fixture builds in the default lane, so its net import must be
+// flagged.
+func TestHygieneConstraintHeaderFollowsGoBuild(t *testing.T) {
+	dir := filepath.Join(hygieneModuleRoot(t), "internal", "build", "testdata", "hygiene")
+	for _, name := range []string{"plus_then_gobuild_negated.txt", "block_commented_gobuild_test.go"} {
+		src, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		oracle := build.Default
+		oracle.BuildTags = nil
+		oracle.OpenFile = func(string) (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(src)), nil }
+		if builds, merr := oracle.MatchFile(dir, "oracle_test.go"); merr != nil || !builds {
+			t.Fatalf("%s: go/build MatchFile (no tags) = %v, %v; the fixture must build untagged", name, builds, merr)
+		}
+		v, err := NoNetworkUnitTestScanFile(filepath.Join(dir, name))
+		if err != nil || len(v) != 1 || v[0].Import != "net" {
+			t.Errorf("%s: violations %+v (err %v), want the net import flagged", name, v, err)
+		}
+	}
+}
+
+// TestHygieneTagCapFailsClosed asserts the tag-count cap's own verdict and
+// reason: a constraint that really needs the integration tag, but names more
+// tags than the gate enumerates, is judged untagged. The same shape within
+// the cap is tagged, so the refusal comes from the cap alone.
+func TestHygieneTagCapFailsClosed(t *testing.T) {
+	for n, want := range map[int]bool{2: true, 17: false} {
+		tags := make([]string, n)
+		for i := range tags {
+			tags[i] = "t" + strconv.Itoa(i+1)
+		}
+		line := "//go:build integration && (" + strings.Join(tags, " || ") + ")"
+		expr, err := constraint.Parse(line)
+		if err != nil {
+			t.Fatalf("parse %q: %v", line, err)
+		}
+		needs, reason := hygieneNeedsIntegration(expr, line)
+		wantReason := ""
+		if !want {
+			wantReason = hygieneTooManyTags
+		}
+		if needs != want || reason != wantReason {
+			t.Errorf("%d tags: verdict %v reason %q, want %v %q", n, needs, reason, want, wantReason)
+		}
 	}
 }

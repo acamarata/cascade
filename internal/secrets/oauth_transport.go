@@ -50,6 +50,17 @@ const maxTokenResponseBytes = 1 << 20
 // exchangeTimeout bounds one token-endpoint round trip.
 const exchangeTimeout = 30 * time.Second
 
+// Transport refusals. Unexported sentinels so a caller in this package can
+// test the exact condition; the taxonomy Kind carries the control flow.
+var (
+	// errOAuthRedirectRefused: the endpoint answered 3xx. Following it
+	// would re-send the form (code verifier, refresh token) to wherever
+	// the Location header points.
+	errOAuthRedirectRefused = errors.New("secrets: the OAuth endpoint answered with a redirect, which cascade does not follow")
+	// errOAuthResponseTooLarge: the body passed maxTokenResponseBytes.
+	errOAuthResponseTooLarge = errors.New("secrets: the OAuth endpoint response exceeds the size cap")
+)
+
 // defaultEntropy is the production entropy source.
 func defaultEntropy() io.Reader { return rand.Reader }
 
@@ -59,16 +70,23 @@ func defaultLookupEnv(key string) (string, bool) { return os.LookupEnv(key) }
 // NewOAuthBroker builds the production broker: a real loopback listener, a
 // real HTTPS token client, and the platform browser opener.
 func NewOAuthBroker(cfg provider.ProviderOAuthConfig, deps OAuthDeps) (*OAuthBroker, error) {
-	return newOAuthBroker(cfg, deps, newHTTPExchanger(), listenLoopback, openSystemBrowser)
+	return newOAuthBroker(cfg, deps, newHTTPExchanger(), loopbackFactoryFor(cfg.RedirectURI), openSystemBrowser)
 }
 
 // newHTTPExchanger builds the production token client. Split from
 // NewOAuthBroker so a test can drive the REAL exchanger without importing
 // net/http itself - the same discipline internal/client's transport tests
 // use to cover their production dialer in the default unit lane.
+//
+// CheckRedirect returns http.ErrUseLastResponse, so the client never
+// follows a redirect: a 307/308 would re-POST the refresh token or code
+// verifier to the Location target. Exchange then refuses the 3xx itself.
 func newHTTPExchanger() tokenExchanger {
-	return &httpExchanger{client: &http.Client{Timeout: exchangeTimeout}}
+	return &httpExchanger{client: &http.Client{Timeout: exchangeTimeout, CheckRedirect: refuseRedirect}}
 }
+
+// refuseRedirect is the client's CheckRedirect: no redirect is followed.
+func refuseRedirect(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 
 // httpExchanger is the production tokenExchanger.
 type httpExchanger struct {
@@ -91,40 +109,76 @@ func (e *httpExchanger) Exchange(ctx context.Context, endpoint string, form url.
 		return nil, 0, cascade.Wrap(cascade.KindUnavailable, err, "secrets: the OAuth endpoint could not be reached")
 	}
 	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxTokenResponseBytes))
+	if resp.StatusCode >= 300 && resp.StatusCode <= 399 {
+		return nil, resp.StatusCode, cascade.Wrapf(cascade.KindUnavailable, errOAuthRedirectRefused,
+			"secrets: the OAuth endpoint answered HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxTokenResponseBytes+1))
 	if err != nil {
 		return nil, resp.StatusCode, cascade.Wrap(cascade.KindUnavailable, err, "secrets: the OAuth response body could not be read")
+	}
+	if len(body) > maxTokenResponseBytes {
+		clear(body)
+		return nil, resp.StatusCode, cascade.Wrapf(cascade.KindIntegrity, errOAuthResponseTooLarge,
+			"secrets: the OAuth endpoint response is larger than %d bytes", maxTokenResponseBytes)
 	}
 	return body, resp.StatusCode, nil
 }
 
 // loopbackListener is the production callbackListener: one bound ephemeral
-// port and one buffered slot for the redirect's query string.
+// port, the one path it answers, and one buffered slot for the redirect's
+// query string.
 type loopbackListener struct {
 	listener net.Listener
 	server   *http.Server
+	path     string
 	queries  chan string
 	closed   chan struct{}
 }
 
-// listenLoopback binds 127.0.0.1:0 and serves the redirect endpoint. The
-// port is OS-assigned: a fixed port is squattable, and a squatted callback
-// port receives the authorization code.
-func listenLoopback(ctx context.Context) (callbackListener, error) {
+// loopbackFactoryFor returns the listener factory for a provider's redirect
+// URI. The path comes from that provider's own configured redirect URI (the
+// same one RedirectURIForPort sends to the IdP), so each broker answers
+// exactly the path it registered. An empty path is the root, which is what a
+// browser requests for "http://127.0.0.1:<port>".
+func loopbackFactoryFor(redirectURI string) listenerFactory {
+	path := "/"
+	if u, err := url.Parse(redirectURI); err == nil && u.Path != "" {
+		path = u.Path
+	}
+	return func(ctx context.Context) (callbackListener, error) { return listenLoopbackAt(ctx, path) }
+}
+
+// listenLoopback binds a listener that answers NO path: every request gets
+// 404 and nothing reaches Wait. Fail-closed for callers that only need a
+// bound port; the broker always goes through loopbackFactoryFor.
+func listenLoopback(ctx context.Context) (callbackListener, error) { return listenLoopbackAt(ctx, "") }
+
+// listenLoopbackAt binds 127.0.0.1:0 and serves the redirect endpoint at
+// path. The port is OS-assigned: a fixed port is squattable, and a squatted
+// callback port receives the authorization code.
+func listenLoopbackAt(ctx context.Context, path string) (callbackListener, error) {
 	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", provider.LoopbackHost+":0")
 	if err != nil {
 		return nil, cascade.Wrap(cascade.KindUnavailable, err, "secrets: could not bind a loopback port for the OAuth callback")
 	}
-	l := &loopbackListener{listener: listener, queries: make(chan string, 1), closed: make(chan struct{})}
+	l := &loopbackListener{listener: listener, path: path, queries: make(chan string, 1), closed: make(chan struct{})}
 	l.server = &http.Server{Handler: http.HandlerFunc(l.handle), ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = l.server.Serve(listener) }()
 	return l, nil
 }
 
 // handle records the first redirect's query string and answers the browser
-// with fixed prose. The response body never echoes the query: the browser
-// tab, its history, and any screenshot of it must not carry the code.
+// with fixed prose. Only a GET on the redirect path counts: anything else
+// (a favicon fetch, a probe, a POST from a hostile page) gets 404 and
+// leaves the slot untouched, so it cannot displace the real callback. The
+// response body never echoes the query: the browser tab, its history, and
+// any screenshot of it must not carry the code.
 func (l *loopbackListener) handle(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet || r.URL.Path != l.path {
+		http.NotFound(w, r)
+		return
+	}
 	select {
 	case l.queries <- r.URL.RawQuery:
 	default:

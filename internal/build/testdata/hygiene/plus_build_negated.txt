@@ -1,0 +1,11 @@
+// +build !integration
+
+// Package fixture (plus_build_negated.txt; not .go, because gofmt would add a go:build line) is a no-network gate constraint fixture.
+package fixture
+
+import (
+	"net"
+	"testing"
+)
+
+func TestFixture(t *testing.T) { _ = net.IPv4len }

@@ -1,83 +1,48 @@
-// Package build (this file) implements the three static/structural halves
-// of the Article-7 test-hygiene gate from P1-E01-W1-S01-T8
-// (12-QUALITY-CONSTITUTION.md Art.7): the no-sleep-as-synchronization lint
-// (Art.7.3), the no-network-unit-lane convention check (Art.7.2), and the
-// pure assertion primitives the redirected-HOME + clean-tree CI step
-// (Art.7.1) consumes. Running the ENTIRE suite under a redirected HOME is
-// itself a CI STEP (ci.yml), not something this package does to itself —
-// a nested `go test ./...` launched as a child of a `go test` process
-// already running was probed directly (this ticket's coveragegate.go) and
-// hangs on shared build-cache lock contention past a 5-minute timeout.
-// Every live check in this file follows the same env-var-gated pattern
-// coveragegate.go's TestCoverageGate_Live and commits.go/sweep.go's
-// TestConventionalCommitGate_Live/TestIdentifierSweepGate_Live already
-// establish: skipped locally, run for real only in the CI step that has
-// already produced what it needs to assert against.
+// Package build (this file) implements the static halves of the Article-7
+// test-hygiene gate (quality constitution Art.7): the no-sleep-as-
+// synchronization lint (Art.7.3), the no-network-unit-lane check (Art.7.2),
+// and the pure assertions the redirected-HOME + clean-tree CI step (Art.7.1)
+// consumes. Running the whole suite under a redirected HOME is a CI step, not
+// something this package does to itself: a nested `go test ./...` under a
+// running `go test` hangs on build-cache lock contention (probed for
+// coveragegate.go). Live checks follow coveragegate.go's env-gated pattern:
+// skipped locally, run for real only in the CI step.
 //
 // # Art.7.2's honest scope
 //
-// "No network calls" in unit tests is not fully provable by static
-// analysis: a legitimate unit test using net/http/httptest dials a
-// LOCAL, in-process server and, depending on the exact call shape, may be
-// indistinguishable from a real outbound call to an AST-only scanner. This
-// gate enforces the narrower, PRECISELY provable half of Art.7.2 instead
-// of a fragile approximation of the broader one: an untagged _test.go file
-// (the DEFAULT unit lane every CI job runs without `-tags integration`)
-// may not import "net" or "net/http" at all — real network I/O and
-// httptest-based local-server tests alike require one of those imports, so
-// forcing BOTH kinds behind the `integration` build tag is a real,
-// enforceable rule, even though it is stricter than Art.7.2's literal
-// text (an httptest-only test would need the tag too). This trade-off —
-// simple and honest over precise and fragile — is recorded here
-// deliberately, per this ticket's core lesson: a heuristic call-site
-// matcher that tries to distinguish "http.Get(realURL)" from
-// "http.Get(server.URL)" cannot be proven correct by inspection alone, and
-// a wrong permissive heuristic is worse than an honest, slightly
-// over-broad rule. Revisiting this if/when the repo gains its first
-// httptest-based unit test is future work, named here rather than
-// papered over. No file in the repo trips this today (verified by the
-// real-tree test).
+// "No network calls" is not provable by static analysis: an httptest unit
+// test dials a local server and can look exactly like a real outbound call.
+// The gate enforces the provable, stricter half instead: an untagged _test.go
+// file (the default lane) may not import "net" or "net/http" at all, so real
+// network I/O and httptest servers alike sit behind the integration build
+// tag. A call-site heuristic cannot be proven correct, and a wrong permissive
+// one is worse than an honest, over-broad rule.
 package build
 
 import (
 	"go/ast"
+	"go/build/constraint"
 	"go/parser"
 	"go/token"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // hygieneSleepAllowedPrefixes are module-relative directory prefixes where
-// time.Sleep is the sanctioned synchronization primitive (Art.7.3's
-// "allowlisted sync code" carve-out) — retry/backoff loops in the sync
-// domain legitimately sleep between attempts. Empty today (internal/sync
-// holds only a doc.go placeholder); the prefix is pre-declared so the
-// first real sync ticket does not have to touch this gate to unblock
-// itself.
+// time.Sleep is sanctioned (Art.7.3's "allowlisted sync code"): retry and
+// backoff loops in the sync domain sleep between attempts. Pre-declared so
+// the first real sync code does not have to touch this gate.
 var hygieneSleepAllowedPrefixes = []string{"internal/sync/"}
 
-// hygieneSleepAllowedFiles is a narrow, individually-justified exemption
-// list for pre-existing files this ticket found already using a
-// documented, bounded time.Sleep OUTSIDE hygieneSleepAllowedPrefixes and
-// outside this ticket's own files_scope (so this ticket cannot add a
-// CASCADE-ALLOW escape comment to the file itself — that file belongs to a
-// concurrently dispatched ticket per this ticket's HARD CONSTRAINTS).
-// Probing this gate against the real tree found exactly one:
-//
-//   - internal/storage/storetest/queue_suite.go: pollForRedelivery() sleeps
-//     a fixed time.Millisecond per iteration inside a hard-capped
-//     maxPollAttempts loop; the function's own doc comment already argues
-//     this stays deterministic under -shuffle and needs no injected
-//     Clock. This reads as the legitimate case Art.7.3's carve-out exists
-//     for (a bounded poll, not an unbounded synchronization sleep masking
-//     a race), but the file's owner should adopt a
-//     `// CASCADE-ALLOW: <ticket-id> <reason>` comment in-file once it is
-//     next in scope, at which point this hardcoded entry should be
-//     removed — recorded here rather than silently relaxing the gate for
-//     everything, and rather than papering over a real, out-of-scope
-//     finding.
+// hygieneSleepAllowedFiles exempts individually justified files with a
+// bounded time.Sleep outside hygieneSleepAllowedPrefixes. The one entry:
+// storetest/queue_suite.go's pollForRedelivery sleeps 1ms per iteration of
+// a hard-capped loop (a bounded poll, not a sleep masking a race); it should
+// move to an in-file CASCADE-ALLOW comment and leave this list.
 var hygieneSleepAllowedFiles = map[string]bool{
 	"internal/storage/storetest/queue_suite.go": true,
 }
@@ -104,12 +69,9 @@ func hygieneIsSleepAllowed(relPath string) bool {
 }
 
 // NoSleepScanFile parses one Go source file and reports every time.Sleep
-// call reached through the file's own "time" import (resolved through
-// whatever local alias it declares — the same alias-resolution this
-// package's clockgate.go and boundary_test.go already establish for
-// exactly this reason: forbidigo has no rule for Sleep at all, so this
-// gate is the ONLY line of enforcement and must not be text-matchable-
-// evadable from day one).
+// call reached through the file's own "time" import, whatever alias it
+// declares (as clockgate.go resolves them): forbidigo has no Sleep rule, so
+// this gate is the only enforcement and must not be evadable by an alias.
 func NoSleepScanFile(path string) ([]HygieneSleepViolation, error) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, path, nil, 0)
@@ -127,13 +89,9 @@ func NoSleepScanFile(path string) ([]HygieneSleepViolation, error) {
 		case imp.Name == nil:
 			aliasToPkg["time"] = "time"
 		case imp.Name.Name == "_", imp.Name.Name == ".":
-			// Blank import: nothing to call. Dot-import of "time" makes
-			// Sleep(...) unqualified — out of THIS selector-based scan's
-			// reach by construction, same documented limitation
-			// boundary_test.go states for its own denied calls; "time"
-			// dot-imported is vanishingly rare and not the evasion this
-			// gate exists to close (that is the clock gate's job for
-			// Now/Since, which DOES reject time dot-imports outright).
+			// Blank import: nothing to call. A dot-import makes Sleep
+			// unqualified, out of this selector scan's reach (the limit
+			// boundary_test.go states too); the clock gate rejects it.
 		default:
 			aliasToPkg[imp.Name.Name] = "time"
 		}
@@ -170,23 +128,80 @@ type HygieneNetworkImportViolation struct {
 	Import string
 }
 
-// hygieneHasIntegrationTag reports whether src carries a
-// "//go:build integration" (or the legacy "// +build integration")
-// constraint anywhere in its build-constraint comment block.
+// hygieneTooManyTags: a constraint naming more than 16 words is judged
+// untagged (too many to enumerate, so the gate fails closed).
+const hygieneTooManyTags = "too many build tags to enumerate"
+
+// hygieneHasIntegrationTag reports whether src's build constraint keeps the
+// file out of the default lane. It reads the header as go/build does, but
+// stops at the first line that is not blank or a // comment (a //go:build in
+// a /* */ block is no constraint); a //go:build line wins over +build lines,
+// which count only above a blank line; two //go:build lines fail closed.
 func hygieneHasIntegrationTag(src []byte) bool {
+	var goBuild string
+	var plus, pending []string
 	for _, line := range strings.Split(string(src), "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "package ") {
-			break
-		}
-		if strings.HasPrefix(trimmed, "//go:build") && strings.Contains(trimmed, "integration") {
-			return true
-		}
-		if strings.HasPrefix(trimmed, "// +build") && strings.Contains(trimmed, "integration") {
-			return true
+		switch t := strings.TrimSpace(line); {
+		case t == "":
+			plus, pending = append(plus, pending...), nil
+		case !strings.HasPrefix(t, "//"):
+			return hygieneJudge(goBuild, plus)
+		case constraint.IsGoBuild(t) && goBuild != "":
+			return false
+		case constraint.IsGoBuild(t):
+			goBuild = t
+		case constraint.IsPlusBuild(t):
+			pending = append(pending, t)
 		}
 	}
-	return false
+	return hygieneJudge(goBuild, plus)
+}
+
+// hygieneJudge is true only when the header's constraint (the //go:build
+// line, else the AND of the +build lines) is false for EVERY setting of its
+// other tags while "integration" is unset.
+func hygieneJudge(goBuild string, plus []string) bool {
+	if goBuild != "" {
+		plus = []string{goBuild}
+	}
+	var expr constraint.Expr
+	for _, line := range plus {
+		x, err := constraint.Parse(line)
+		if err != nil {
+			return false
+		}
+		if expr != nil {
+			x = &constraint.AndExpr{X: expr, Y: x}
+		}
+		expr = x
+	}
+	if expr == nil {
+		return false
+	}
+	needs, _ := hygieneNeedsIntegration(expr, strings.Join(plus, " "))
+	return needs
+}
+
+// hygieneNeedsIntegration enumerates every setting of the words on line
+// (a superset of expr's tags; Eval short-circuits, so it cannot list them)
+// with integration unset; any true evaluation builds the file in the
+// default lane. The reason is empty when the file needs the tag.
+func hygieneNeedsIntegration(expr constraint.Expr, line string) (bool, string) {
+	words := strings.FieldsFunc(line, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != '.'
+	})
+	if len(words) > 16 {
+		return false, hygieneTooManyTags
+	}
+	for mask := 0; mask < 1<<len(words); mask++ {
+		if expr.Eval(func(tag string) bool {
+			i := slices.Index(words, tag)
+			return tag != "integration" && i >= 0 && mask&(1<<i) != 0
+		}) {
+			return false, "builds without the integration tag"
+		}
+	}
+	return true, ""
 }
 
 // NoNetworkUnitTestScanFile checks one _test.go file: if it does not carry
@@ -218,12 +233,9 @@ func NoNetworkUnitTestScanFile(path string) ([]HygieneNetworkImportViolation, er
 }
 
 // HomeDirEntries returns the base names of every entry directly under dir
-// (non-recursive is deliberate: even one stray top-level entry proves a
-// test wrote somewhere under $HOME, which is exactly what Art.7.1 forbids
-// — this function's job is to report what is there, not to judge which
-// entry is "the important one"). A missing dir is reported as zero
-// entries, never an error: a redirected-HOME dir that was never created is
-// trivially untouched.
+// (non-recursive: one stray top-level entry already proves a test wrote
+// under $HOME, which Art.7.1 forbids). A missing dir is zero entries, never
+// an error: a redirected HOME that was never created is untouched.
 func HomeDirEntries(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -249,14 +261,10 @@ func GitStatusPorcelain(root string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// AssertGitStatusUnchanged is Art.7.1's actual "clean tree ... after the
-// suite" assertion: NOT that git status is empty (a repo mid-development
-// legitimately has uncommitted work; asserting emptiness would fail on
-// every active ticket by construction), but that the test suite left the
-// tree in EXACTLY the state it found it — a before/after snapshot
-// comparison. Line order is not significant (a suite run cannot reorder
-// git's own output deterministically across environments), so both
-// snapshots are line-sorted before comparing.
+// AssertGitStatusUnchanged is Art.7.1's "clean tree after the suite"
+// assertion: not that git status is empty (work in progress is legitimate),
+// but that the suite left the tree exactly as it found it. Line order is not
+// significant, so both snapshots are line-sorted before comparing.
 func AssertGitStatusUnchanged(before, after string) (ok bool, diff string) {
 	beforeLines := hygieneSortedLines(before)
 	afterLines := hygieneSortedLines(after)
@@ -286,12 +294,6 @@ func hygieneSortedLines(s string) []string {
 			out = append(out, l)
 		}
 	}
-	// Insertion sort is fine at this scale (a git status line count is
-	// always small) and avoids importing "sort" for a two-caller helper.
-	for i := 1; i < len(out); i++ {
-		for j := i; j > 0 && out[j-1] > out[j]; j-- {
-			out[j-1], out[j] = out[j], out[j-1]
-		}
-	}
+	slices.Sort(out)
 	return out
 }
