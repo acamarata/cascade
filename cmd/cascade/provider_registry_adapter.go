@@ -39,9 +39,9 @@ import (
 // ProviderRecord.Pool string. Folding intake's --pool flag onto the lane
 // model (or adding the fields to registry.ProviderRecord) needs its own
 // decision and is out of this fix's scope; ListPool below is therefore an
-// honest stub (always empty) rather than a silent half-implementation, and
-// --pool's PoolIndex is not persisted through this adapter. Nothing in
-// this ticket's required properties exercises --pool.
+// honest stub (always empty) rather than a silent half-implementation.
+// --pool is persisted on the provider's lane (provider_lane.go), and
+// GetProvider reads Pool/PoolIndex back from that lane (S-123.T1).
 type registryAdapter struct {
 	reg *registry.Registry
 }
@@ -69,13 +69,33 @@ func (a registryAdapter) UpsertProvider(ctx context.Context, rec intake.Provider
 // GetProvider implements intake.Registry, translating the durable record
 // back to intake's shape. Errors pass through unchanged -- registry.
 // GetProvider already returns a KindNotFound-tagged error for a missing
-// name, matching intake.Registry's own contract.
+// name, matching intake.Registry's own contract. Pool/PoolIndex are read
+// back from the provider's own lane (P1-E38-W8-S123-T1): without them a
+// read-modify-write (provider reauth) re-upserts the lane under the bare
+// name, leaving a second lane beside the pooled one.
 func (a registryAdapter) GetProvider(ctx context.Context, name string) (intake.ProviderRecord, error) {
 	rec, err := a.reg.GetProvider(ctx, name)
 	if err != nil {
 		return intake.ProviderRecord{}, err
 	}
-	return fromRegistryRecord(rec), nil
+	out := fromRegistryRecord(rec)
+	lanes, err := a.reg.ListLanes(ctx)
+	if err != nil {
+		return intake.ProviderRecord{}, err
+	}
+	out.Pool, out.PoolIndex = poolMembershipFor(lanes, name)
+	return out, nil
+}
+
+// poolMembershipFor returns the pool and index of name's pooled lane (the
+// one laneNameFor names "<pool>/<name>"), or ("", 0) for a standalone one.
+func poolMembershipFor(lanes []registry.LaneRecord, name string) (string, int) {
+	for _, l := range lanes {
+		if l.ProviderName == name && l.PoolMembership != "" && l.LaneName == l.PoolMembership+"/"+name {
+			return l.PoolMembership, l.PoolIndex
+		}
+	}
+	return "", 0
 }
 
 // ListPool implements intake.Registry. See this file's header comment:
@@ -119,8 +139,8 @@ func mergeIntakeOntoRegistryRecord(ctx context.Context, reg *registry.Registry, 
 }
 
 // fromRegistryRecord translates a durable record back to intake's shape.
-// Pool/PoolIndex/VerifySkipped have no registry-side counterpart (see this
-// file's header comment) and read back as their zero values.
+// Pool/PoolIndex live on the lane, not the record (GetProvider fills them);
+// VerifySkipped has no registry-side counterpart and reads back false.
 func fromRegistryRecord(rec registry.ProviderRecord) intake.ProviderRecord {
 	return intake.ProviderRecord{
 		Name:                 rec.Name,

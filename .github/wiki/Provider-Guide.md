@@ -92,6 +92,37 @@ reach storage.
 `--no-verify` skips the live micro-verify call and records a warning
 instead of a hard failure — useful for offline setup, never the default.
 
+### Re-authorizing an existing provider
+
+`cascade provider reauth <name> [--key | --key-env VAR | --oauth] [--no-verify]`
+swaps the credential of a registered provider without re-registering it. It
+refuses a name that was never added and tells you to run `cascade provider add`
+first.
+
+- It skips the shape probe and model enumeration: the stored driver,
+  endpoint and model list are used as they are.
+- It runs the micro-verify first. Only when that passes does it write the new
+  key and update the record's `auth_ref`, auth type and `updated_at` in place.
+  Every other field, including pool membership, is unchanged, and no second
+  record or lane is created.
+- A failed verify writes nothing. An empty `--key` value is refused (so is an
+  empty `--key-env` variable), for `provider add` as well as `reauth`.
+- `--oauth` is refused before the browser flow when the OAuth family does not
+  match the record's driver, and under `CASCADE_NO_INPUT=1`.
+- With no credential flag (the form the status widget launches), an OAuth
+  record runs the OAuth flow. A key record is refused with the remedy
+  `--key-env VAR` (or `--key` on stdin): the flagless form never reads a key
+  from the terminal. A record with an empty or unknown auth type is refused.
+  Under `CASCADE_NO_INPUT=1` the flagless form is always a hard error.
+- Reauth stores no lane state itself. Like `provider add`, a verified reauth
+  marks the provider's lane `available`, `--no-verify` marks it `unknown`, and
+  a failed verify leaves the lane as it was.
+
+```sh
+cascade provider reauth myclaude --key-env MY_NEW_KEY
+cascade provider reauth anthropic-main
+```
+
 ## 4. Key-pool lanes
 
 A key-pool lane groups several credentials for the same provider behind

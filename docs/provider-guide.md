@@ -165,6 +165,67 @@ Do not cache an access token in the driver. The broker reads the vault on every
 `AccessToken` call precisely so that a revoked grant cannot be papered over by
 something a driver is still holding.
 
+## Re-authorizing a provider: `provider reauth`
+
+```sh
+cascade provider reauth <name> [--key | --key-env VAR | --oauth] [--no-verify]
+```
+
+`cascade provider reauth <name>` replaces the credential of a provider that is
+already registered. It takes the same credential sources as `provider add`:
+`--key` (stdin), `--key-env <VAR>`, or `--oauth`, plus `--no-verify`. An unknown
+name is refused with a not-found error that tells you to run `cascade provider
+add` first; reauth never creates a record.
+
+What it does, in order:
+
+1. Reads the existing record. Its driver, endpoint and model list are
+   authoritative, so reauth skips the shape probe and model enumeration.
+2. Resolves the new credential without writing it. An empty `--key` value and
+   an unset or empty `--key-env` variable are refused.
+3. Runs the live micro-verify against the record's endpoint (its base-url
+   override, or the driver default) and first known model, unless
+   `--no-verify` is set.
+4. Only after the verify passes, writes the key under `provider.<name>.key`
+   and updates the record in place. `auth_ref`, the auth type, the
+   verify-skipped flag and `updated_at` change. The driver, endpoint, models,
+   capabilities, pool membership and `created_at` do not. A pooled provider
+   keeps its one `<pool>/<name>` lane and its pool index.
+
+A failed verify changes nothing: the stored key and the record stay exactly as
+they were. With `--oauth`, the broker stores the newly authorized token set
+under its own vault reference when the flow completes, and the record's
+`auth_ref` points at it. Switching from a key to OAuth leaves the old
+`provider.<name>.key` entry in the vault; the record just stops referencing
+it. `--oauth` is refused before any browser flow starts when the OAuth family
+the name selects (anthropic or gemini) is not the record's driver, and under
+`CASCADE_NO_INPUT=1` it is a hard error that names `--key` and `--key-env`.
+
+### The flagless form
+
+`cascade provider reauth <name>` with no credential flag is the form the
+status widget launches. The mode comes from the stored record:
+
+| Stored auth | Result |
+|---|---|
+| `oauth` | runs the OAuth flow, exactly as `--oauth` |
+| `key` | refused (invalid input) with the remedy `cascade provider reauth <name> --key-env VAR`, or `--key` with the value on stdin |
+| empty or unknown | refused (invalid input); pass a credential flag |
+
+The flagless form never reads a key from the terminal. Every refusal happens
+before stdin is read and before any credential store is opened, and changes
+nothing. Under `CASCADE_NO_INPUT=1` the flagless form is a hard error for any
+record, with no fallback to another mode.
+
+### Lane state
+
+Reauth itself stores no lane state and no auth-required flag. The provider's
+lane is written the same way `provider add` writes it, from the record reauth
+saves: a verified reauth marks the lane `available`, a reauth with
+`--no-verify` marks it `unknown`, and a failed verify writes nothing, so the
+lane keeps whatever state it had. The credential value never appears in
+arguments, output, logs, events or error text.
+
 ## Known gaps
 
 - The recorded PKCE fixture
