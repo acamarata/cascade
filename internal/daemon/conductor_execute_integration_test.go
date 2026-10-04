@@ -49,7 +49,7 @@ func TestConductorExecute_RealSocket_NonMethodNotFound(t *testing.T) {
 	registry := rpc.NewRegistry()
 	manifest := NewManifest(nil, clock)
 	auditWriter := audit.New(storetest.NewMemStore(), clock, nil)
-	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, nil, auditWriter, clock, ConductorSecurity{}, ConductorAccounting{}); err != nil {
+	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, nil, auditWriter, clock, ConductorSecurity{}, ConductorAccounting{}, ConductorFanOut{}); err != nil {
 		t.Fatalf("RegisterConductorExecuteHandler: %v", err)
 	}
 

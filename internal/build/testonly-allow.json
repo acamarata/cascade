@@ -1518,5 +1518,19 @@
     "reason": "NewEffectLog is the constructor of the audit effect recorder. This ticket ships the library only; every external-effect site that consumes it lands later and reaches it through openEffectLog (P1-SEC-06). Exercised by internal/audit/effect_test.go, effect_index_test.go and effect_crash_test.go over memstore and real SQLite, including a re-exec crash test.",
     "retire_ticket": "P1-SEC-06",
     "symbol": "internal/audit.NewEffectLog"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_resume.go",
+    "expected_caller": "P1-CORE-15's resume registration: Scan before the socket serves (classify-only) and Sweep at startup and every fanout_sweep_interval as Manifest.GoSupervised(\"fanout-sweep\"), with the Claims table and leg budget carried on daemon.ConductorFanOut",
+    "reason": "P1-CORE-19 owns the fan-out cursor decode, classification and retention backstop (contract:fanout-producer); the startup and periodic registration that calls them is P1-CORE-15's wire_resume.go, which depends on this ticket.",
+    "retire_ticket": "P1-CORE-15",
+    "symbol": "internal/fleet/resume.Scan"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_resume.go",
+    "expected_caller": "P1-CORE-15's resume registration: Sweep at startup and every fanout_sweep_interval with fanout_record_ttl, as Manifest.GoSupervised(\"fanout-sweep\")",
+    "reason": "P1-CORE-19 provides the fan-out retention sweep (contract:fanout-producer); P1-CORE-15 registers it, using the Claims table and store this ticket's composition-root hunk builds.",
+    "retire_ticket": "P1-CORE-15",
+    "symbol": "internal/fleet/resume.Sweep"
   }
 ]

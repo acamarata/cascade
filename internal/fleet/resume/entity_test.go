@@ -209,8 +209,7 @@ func TestClaimAttemptTransientConflictKeepsSlot(t *testing.T) {
 func TestScanEntityRefusesFanOutCursorInWrongEntity(t *testing.T) {
 	store, _, _ := newRealStore(t)
 	ctx := context.Background()
-	req, _ := json.Marshal(provider.ModelRequest{TaskID: "t-misplaced", TaskClass: "chat", Inputs: []provider.ChatMessage{{Role: "user", Content: "hi"}}})
-	cursor, _ := json.Marshal(resumeCursorPayload{T: "cursor", TaskID: "t-misplaced", Legs: 1, Request: req})
+	cursor := cursorPayloadFor(t, "t-misplaced", "t-misplaced", 1)
 	if _, err := store.Append(ctx, "t-misplaced", journal.KindResumeCursor, "cursor-op", cursor); err != nil {
 		t.Fatalf("seed misplaced cursor: %v", err)
 	}

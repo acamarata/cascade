@@ -14,6 +14,7 @@ package resume
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -121,8 +122,7 @@ func TestResumePartialCheckpoint(t *testing.T) {
 }
 
 func TestClassify_FanOutFullyCompleted_NothingToResume(t *testing.T) {
-	req, _ := json.Marshal(provider.ModelRequest{TaskID: "t1", TaskClass: "chat", Inputs: []provider.ChatMessage{{Role: "user", Content: "hi"}}})
-	cursorPayload, _ := json.Marshal(resumeCursorPayload{T: "cursor", TaskID: "t1", Legs: 1, Request: req})
+	cursorPayload := cursorPayloadFor(t, "t1", "t1", 1)
 	donePayload, _ := json.Marshal(legPayload{LegIndex: 0, JobID: "job-1", Attempt: 1, Outcome: "ok"})
 	entries := []journal.Entry{
 		{EntityID: "t1", Seq: 1, Kind: journal.KindResumeCursor, Payload: cursorPayload},
@@ -135,12 +135,9 @@ func TestClassify_FanOutFullyCompleted_NothingToResume(t *testing.T) {
 }
 
 func TestClassify_FanOutUndecodableRequest_UnrecognizedShape(t *testing.T) {
-	// A JSON array is well-formed JSON (so the outer resumeCursorPayload
-	// marshals fine) but cannot unmarshal into provider.ModelRequest (a
-	// struct) — the shape json.Unmarshal genuinely rejects, unlike a
-	// non-JSON literal, which would break the OUTER envelope's own
-	// marshal before this test ever reaches classifyFanOut's decode.
-	cursorPayload, _ := json.Marshal(resumeCursorPayload{T: "cursor", TaskID: "t1", Legs: 2, Request: json.RawMessage(`[1,2,3]`)})
+	// A "cursor" with no fanout_id and no legs is not a shape the writer
+	// (encodeCursor) can produce: classifyFanOut must fail closed on it.
+	cursorPayload, _ := json.Marshal(resumeCursorPayload{T: "cursor", TaskID: "t1"})
 	entries := []journal.Entry{{EntityID: "t1", Seq: 1, Kind: journal.KindResumeCursor, Payload: cursorPayload}}
 	_, _, err := classify(entries)
 	if err != ErrUnrecognizedShape {
@@ -212,4 +209,49 @@ func TestResumeIdempotentActionsOnlyRequeued(t *testing.T) {
 	if len(entries) != 2 {
 		t.Fatalf("Intent entries after re-queue = %d, want 2 (original + fresh re-queue)", len(entries))
 	}
+}
+
+func TestScanResumableFromRequestRecord(t *testing.T) {
+	f, ctx := newFanFixture(t), context.Background()
+	f.seed(t, "res", 3, true, 0)
+	f.seed(t, "norec", 2, false)
+	f.seed(t, "done", 1, true)
+	if err := appendFinal(ctx, f.fs.journal, "done", OutcomeDelivered); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Scan(ctx, f.deps)
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	by := map[string]FanOutScan{}
+	for _, v := range got {
+		by[v.FanOutID] = v
+	}
+	if r := by["res"]; r.Class != FanOutResumable || len(r.Request.Inputs) != 1 || r.Request.Inputs[0].Content != "hi" || r.Err != nil {
+		t.Fatalf("res = %+v, want Resumable with the request loaded from its record", r)
+	}
+	if n := by["norec"]; n.Class != FanOutTerminal || !errors.Is(n.Err, ErrRequestRecordMissing) || f.state(t, "norec").Final != OutcomeTerminal || f.records(t, "norec") != 0 {
+		t.Fatalf("norec = %+v marker %q, want Terminal with ErrRequestRecordMissing, a terminal marker, no records", n, f.state(t, "norec").Final)
+	}
+	if !holdsSentinel(by["norec"].Err, ErrRequestRecordMissing) {
+		t.Fatal("norec error does not carry ErrRequestRecordMissing by identity")
+	}
+	if d := by["done"]; d.Class != FanOutFinalMarked || f.records(t, "done") != 0 {
+		t.Fatalf("done = %+v, want FinalMarked (skipped for resume) with residue deleted", d)
+	}
+}
+
+// holdsSentinel reports target by identity in err's (joined) chain.
+func holdsSentinel(err, target error) bool {
+	if err == target { //nolint:errorlint // identity is the point
+		return true
+	}
+	if j, ok := err.(interface{ Unwrap() []error }); ok { //nolint:errorlint // walking by hand
+		for _, e := range j.Unwrap() {
+			if holdsSentinel(e, target) {
+				return true
+			}
+		}
+	}
+	return false
 }

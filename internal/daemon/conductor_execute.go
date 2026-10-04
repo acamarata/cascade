@@ -93,6 +93,7 @@ func RegisterConductorExecuteHandler(
 	clock conductor.Clock,
 	security ConductorSecurity,
 	accounting ConductorAccounting,
+	fanOut ConductorFanOut,
 	routerOpts ...conductor.RouterOption,
 ) error {
 	router, err := manifest.RegisterConductorRouter(reg, quota, clock, routerOpts...)
@@ -114,8 +115,8 @@ func RegisterConductorExecuteHandler(
 		return nil
 	}
 	accounting.wire(exec)
-	manifest.Started(conductorExecutorSubsystem, "executor constructed; "+accounting.summary())
-	registry.Register(ConductorExecuteMethod, conductorExecuteHandler(exec))
+	manifest.Started(conductorExecutorSubsystem, "executor constructed; "+accounting.summary()+"; "+fanOut.summary())
+	registry.Register(ConductorExecuteMethod, conductorExecuteHandler(exec, fanOutRunner{exec: exec, cfg: fanOut}))
 	conductor.RegisterHandlers(registry, exec)
 	return nil
 }
@@ -129,24 +130,16 @@ func conductorExecuteUnavailableHandler(cerr error) rpc.HandlerFunc {
 	}
 }
 
-// conductorExecuteHandler decodes the wire params cmd/cascade/run.go:169
-// (runRequestParams) freezes into a provider.ModelRequest and dispatches
-// it through exec.Execute. The wire shape is duplicated here rather than
-// imported: cmd/cascade is package main and this package cannot import it
-// (mirrors internal/conductor/cancel.go's jobCancelParams, decoded
-// independently of pkg/provider.Client's own wrapper types for the same
-// reason).
-//
-// KNOWN GAP, disclosed rather than papered over: a params.FanOut > 1
-// request is not routed through exec.ExecuteFanOut here - that call needs
-// a WithPermitFn/JournalAppender this composition root does not build yet
-// (a separate, larger gap than R-16.80's connector fix). It is dispatched
-// as an ordinary single Execute, which is honest today only because
-// exec.Execute itself cannot yet be reached in production (nil
-// Resolver -> ErrConstructionFailed, see RegisterConductorExecuteHandler);
-// wiring ExecuteFanOut is left for the ticket that builds those two
-// collaborators.
-func conductorExecuteHandler(exec *conductor.Executor) rpc.HandlerFunc {
+// conductorExecuteHandler decodes the wire params cmd/cascade/run.go
+// (runRequestParams) freezes into a provider.ModelRequest. fan_out <= 1
+// dispatches through exec.Execute; 2 <= fan_out <= conductor.MaxFanOut
+// goes through the durable fan-out branch (conductor_execute_fanout.go),
+// whose legs still pass Executor.Execute's door checks. The wire shape is
+// duplicated here rather than imported: cmd/cascade is package main and
+// this package cannot import it (mirrors internal/conductor/cancel.go's
+// jobCancelParams, decoded independently of pkg/provider.Client's own
+// wrapper types for the same reason).
+func conductorExecuteHandler(exec *conductor.Executor, fanOut fanOutRunner) rpc.HandlerFunc {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var wire conductorExecuteParams
 		if len(raw) > 0 {
@@ -158,7 +151,13 @@ func conductorExecuteHandler(exec *conductor.Executor) rpc.HandlerFunc {
 		if err != nil {
 			return nil, err
 		}
-		return exec.Execute(ctx, req)
+		if wire.FanOut <= 1 {
+			return exec.Execute(ctx, req)
+		}
+		if err := wire.validateFanOut(); err != nil {
+			return nil, err
+		}
+		return fanOut.serve(ctx, wire.RequestID, req)
 	}
 }
 

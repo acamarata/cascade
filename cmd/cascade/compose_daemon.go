@@ -75,6 +75,9 @@ type daemonWiring struct {
 	MemoryAdmin *memory.AdminHandler
 	Opts        []rpcServerOption
 	Deps        daemonRuntime
+	// ConductorFanOut is the conductor registration's one per-daemon fan-out
+	// (leg budget and claim table), read by the resume registration.
+	ConductorFanOut daemon.ConductorFanOut
 }
 
 // daemonRuntime is everything platformDaemonRun holds beyond daemonWiring's

@@ -44,8 +44,7 @@ func TestResumeKillHelperProcess(_ *testing.T) {
 		return
 	}
 	store := journal.New(driver, testkit.NewFrozenClock(testInstant), journal.DefaultNamespace)
-	req, _ := json.Marshal(provider.ModelRequest{TaskID: "killed-task", Inputs: []provider.ChatMessage{{Role: "user", Content: "hi"}}})
-	cursorPayload, _ := json.Marshal(resumeCursorPayload{T: "cursor", TaskID: "killed-task", Legs: 2, Request: req})
+	cursorPayload, _ := encodeCursor(FanOutCursor{FanOutID: "killed-task", TaskID: "killed-task", Legs: 2})
 	if _, err := store.Append(ctx, FanOutEntity("killed-task"), journal.KindResumeCursor, "cursor-op", cursorPayload); err != nil {
 		_, _ = os.Stdout.WriteString("SEED_FAILED\n")
 		return

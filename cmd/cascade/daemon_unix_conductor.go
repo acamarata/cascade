@@ -54,14 +54,15 @@ import (
 // both R-16.80 connectors. A nil store leaves both unregistered (see this
 // file's header comment); any other failure is propagated, matching every
 // sibling registerXHandler's own error-propagation convention.
-func wireConductorAndReachability(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest, paths runtime.PathProvider, clock runtime.Clock, store provider.Store, tunnels nodes.TunnelStateLookup) error {
+func wireConductorAndReachability(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest, paths runtime.PathProvider, clock runtime.Clock, store provider.Store, tunnels nodes.TunnelStateLookup) (daemon.ConductorFanOut, error) {
 	if store == nil {
-		return nil
+		return daemon.ConductorFanOut{}, nil
 	}
-	if err := wireConductorExecute(ctx, registry, manifest, paths, clock, store, tunnels); err != nil {
-		return err
+	fanOut, err := wireConductorExecute(ctx, registry, manifest, paths, clock, store, tunnels)
+	if err != nil {
+		return fanOut, err
 	}
-	return daemon.WireReachability(ctx, manifest, paths, clock)
+	return fanOut, daemon.WireReachability(ctx, manifest, paths, clock)
 }
 
 // wireConductorExecute opens the same durable providers.db `provider
@@ -85,40 +86,44 @@ func wireConductorAndReachability(ctx context.Context, registry *rpc.Registry, m
 // unchanged from before: a typed KindUnavailable naming the key, refused
 // at the true credential boundary per request, never a prompt from a
 // process with nobody to answer it.
-func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest, paths runtime.PathProvider, clock runtime.Clock, store provider.Store, tunnels nodes.TunnelStateLookup) error {
+func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest, paths runtime.PathProvider, clock runtime.Clock, store provider.Store, tunnels nodes.TunnelStateLookup) (daemon.ConductorFanOut, error) {
 	regDB, err := openMigratedDB(ctx, filepath.Join(paths.DataDir(), providerRegistryDBFile),
 		func(ctx context.Context, db *sql.DB) error {
 			return providerregistry.ApplyMigrationSchema(ctx, db, migrate.SQLiteEmitter{}, clock, "", "")
 		})
 	if err != nil {
-		return err
+		return daemon.ConductorFanOut{}, err
 	}
 	reg := providerregistry.NewRegistry(regDB, clock)
 	reader := providerregistry.NewReader(reg)
 	cfg, _, err := conductor.ParseQuotaConfig(nil)
 	if err != nil {
-		return err
+		return daemon.ConductorFanOut{}, err
 	}
 	quota := conductor.NewQuotaPolicy(cfg, clock)
 	auditWriter := audit.New(store, clock, nil)
 	credentials, cerr := daemonCredentialSource(paths)
 	if cerr != nil {
-		return cerr
+		return daemon.ConductorFanOut{}, cerr
 	}
 	resolver, err := providerdispatch.NewResolver(reg, credentials, clock, providertransport.NewHTTPTransport(&http.Client{}))
 	if err != nil {
-		return err
+		return daemon.ConductorFanOut{}, err
 	}
 	security, serr := conductorSecurity(paths)
 	if serr != nil {
-		return serr
+		return daemon.ConductorFanOut{}, serr
 	}
 	accounting, aerr := wireConductorAccounting(ctx, paths, clock, reg)
 	if aerr != nil {
-		return aerr
+		return daemon.ConductorFanOut{}, aerr
 	}
-	return daemon.RegisterConductorExecuteHandler(registry, manifest, reader, quota, resolver, auditWriter, clock,
-		security, accounting,
+	// Durable fan-out over the daemon store itself (no second connection):
+	// one leg budget and one claim table per daemon, returned so the
+	// registration stores this same value for the resume registration.
+	fanOut := daemon.NewConductorFanOut(store, clock)
+	return fanOut, daemon.RegisterConductorExecuteHandler(registry, manifest, reader, quota, resolver, auditWriter, clock,
+		security, accounting, fanOut,
 		conductor.NodePlacement(nodes.Engine{Tunnels: tunnels}, nodeRecordStore(paths, clock)))
 }
 
