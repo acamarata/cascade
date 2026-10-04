@@ -207,3 +207,90 @@ nil `*Runtime` or nil `Log` is a safe no-op). It is the startup-sequence
 anchor later tickets (S-05.T3, S-05.T4) extend by wiring in additional
 `change:` entries. They must not construct `PathProvider`, `Config`, or
 `LogProvider` themselves.
+
+## Composition root: registrations
+
+`cmd/cascade` is the one place that wires subsystems together. It does not
+keep hand-edited lists. Two registration lists replace them, and the roots
+only iterate.
+
+**CLI nouns.** One file per root command, `cmd/cascade/mount_<noun>.go`,
+holding one call:
+
+```go
+var _ = registerRootMount(rootMount{Name: "noun", Order: 10, Mount: mountNounCmd})
+```
+
+`mountSubcommands` (`root_mounts.go`) mounts every registration sorted by
+`(Order, Name)` and nothing else. Adding a noun never edits `root.go` or
+`root_mounts.go`.
+
+**Daemon subsystems.** One file per subsystem, `cmd/cascade/wire_<subsystem>.go`
+(`//go:build !windows`), holding one call:
+
+```go
+var _ = registerDaemonWiring(daemonRegistration{Name: "x", Phase: phaseLate, Order: 40,
+	Wire: func(w *daemonWiring) error { return registerX(w.Registry, w.Paths) }})
+```
+
+`buildDaemonRegistry` creates the registry and the events mux, then
+`runDaemonWiring` runs the registrations sorted by `(Phase, Order, Name)`. It
+stops at the first error and returns it wrapped with the entry name, so a
+failed subsystem is named and nothing after it runs. Adding a subsystem never
+edits `daemon_unix_run.go`.
+
+| Phase | Value | Holds |
+|---|---|---|
+| `phaseMiddleware` | 100 | empty; the elevation middleware lands here |
+| `phaseCore` | 200 | `status.get` (builds the manifest and connection counter) |
+| `phaseNamespaces` | 300 | memory, recall, context |
+| `phaseConductor` | 400 | conductor, reachability |
+| `phaseSupervised` | 500 | scheduler, session watch |
+| `phaseLate` | 600 | expand, db-path handlers, review |
+| `phaseOptions` | 700 | the options composeDaemon passes (policy, status widget) |
+| `phaseFleet` | 800 | fleet, node, job, sessions, completion gate |
+| `phaseEventTopics` | 850 | topics on `GET /events` |
+| `phaseMCPLast` | 900 | the MCP dispatcher; exactly one, so it sees the finished method table |
+
+Rules the tests enforce: a duplicate `Name`, a duplicate `(Phase, Order)` or a
+second `phaseMCPLast` entry fails `TestCompositionRegistrationsUnique`; no
+`mount*`/`new*Cmd` call may appear in `root.go` or `mountSubcommands`, and no
+`register*`/`wire*`/`daemon.Register*` call in `buildDaemonRegistry`.
+
+**Deps growth rule.** `daemonWiring.Deps` carries what `composeDaemon` holds
+that a subsystem may need (config, raw database, policy wiring, log provider,
+the daemon deps). A subsystem that needs a new such value reads it from
+`w.Deps`; adding the field is a single-hunk edit of `compose_daemon.go`. Do not
+add an `rpcServerOption` for a value `Deps` already carries.
+
+**What stays outside.** `composeDaemon` (`daemon_unix.go`) still performs the
+pre-serve work: config load, store, recovery scan, resume scan, background
+subsystems, cascade-pa host deps, the bridge approval queue and the upgrade
+wiring. `platformDaemonRun` is `composeDaemon` plus `daemon.Run`. The doctor
+check registry is also still a hand-kept list. Both are recorded debt
+(DEBT-ARCH-11 is narrowed, not resolved).
+
+**Surface goldens.** `testdata/golden_root_nouns.txt` (every root command,
+hidden ones included, with aliases) and `testdata/daemon_rpc_methods.golden`
+(every method on the registry `composeDaemon` builds) are generated. Never edit
+them by hand. After the final rebase, regenerate and commit:
+
+```sh
+CASCADE_TESTKIT_UPDATE_GOLDEN=1 go test -count=1 \
+  -run '^(TestGoldenRootNouns|TestDaemonRPCMethodSet)$' ./cmd/cascade/
+```
+
+The update switch refuses to run when `CI` is set.
+
+**Surface record.** `TestDaemonWiringSurface` records methods, manifest
+subsystems with state, event topics, the non-nil `RunOptions` fields and the MCP
+tool names. It writes the record to the file named by `CASCADE_SURFACE_RECORD`.
+Upgrade fields exist only for a non-dev build hash, so record with:
+
+```sh
+CASCADE_SURFACE_RECORD=/tmp/sets.txt go test -count=1 \
+  -ldflags '-X github.com/acamarata/cascade/internal/daemon.buildHash=surface-test' \
+  -run '^TestDaemonWiringSurface$' ./cmd/cascade/
+```
+
+Run it only that way, never in a whole-package run with a non-dev hash.

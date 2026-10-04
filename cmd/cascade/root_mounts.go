@@ -1,17 +1,16 @@
-// Purpose: two of root.go's per-noun mount helpers, moved here when
+// Purpose: the root mount iteration (mountSubcommands) and the `mcp` and
 //
-//	mounting the `sync` noun (P1-E17-W4-S38-T3) pushed root.go to 301
-//	lines — one over Art.10.3's file cap. A mechanical relocation: the
-//	composition list itself stays in root.go's mountSubcommands, so there
-//	is still exactly one tree the binary, the tests and the golden help
-//	fixture all see.
+//	`daemon` mount helpers. mountSubcommands moved here from root.go
+//	(S-178) and now only iterates the registrations in mount_<noun>.go.
 //
-// SPORT: cmd/cascade root mounts (ADD, file-cap split) —
-//
-//	P1-E17-W4-S38-T3.
+// SPORT: cmd/cascade root mounts (P1-E17-W4-S38-T3, P1-CORE-01).
 package main
 
-import "github.com/spf13/cobra"
+import (
+	"sort"
+
+	"github.com/spf13/cobra"
+)
 
 // mountMCPCmd attaches the `mcp` command tree (D/S-06.T6), following
 // mountDaemonCmd's exact pattern.
@@ -31,4 +30,21 @@ func mountDaemonCmd(root *cobra.Command) {
 	cmd := newDaemonCmd(productionDaemonDeps())
 	guardUnknownSubcommands(cmd)
 	root.AddCommand(cmd)
+}
+
+// mountSubcommands attaches every registered command group to root, sorted by
+// (Order, Name). The registrations (mount_<noun>.go) are the composition; this
+// function holds no noun and is the only place that iterates them, so there is
+// exactly one tree the binary, the tests and the golden help all see.
+func mountSubcommands(root *cobra.Command) {
+	mounts := append([]rootMount(nil), rootMounts...)
+	sort.SliceStable(mounts, func(i, j int) bool {
+		if mounts[i].Order != mounts[j].Order {
+			return mounts[i].Order < mounts[j].Order
+		}
+		return mounts[i].Name < mounts[j].Name
+	})
+	for _, m := range mounts {
+		m.Mount(root)
+	}
 }

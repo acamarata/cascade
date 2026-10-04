@@ -85,9 +85,9 @@ func TestDaemonUnixBridgeQueueInjectionPrecedesRPCServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse daemon_unix.go: %v", err)
 	}
-	fn := findFuncDecl(file, "platformDaemonRun")
+	fn := findFuncDecl(file, "composeDaemon")
 	if fn == nil {
-		t.Fatal("daemon_unix.go declares no platformDaemonRun function")
+		t.Fatal("daemon_unix.go declares no composeDaemon function")
 	}
 	calls := orderedTopLevelCalls(fn.Body)
 
@@ -105,10 +105,10 @@ func TestDaemonUnixBridgeQueueInjectionPrecedesRPCServer(t *testing.T) {
 		}
 	}
 	if injectIdx == -1 {
-		t.Fatal("platformDaemonRun no longer calls plugins.SetBridgeApprovalQueue")
+		t.Fatal("composeDaemon no longer calls plugins.SetBridgeApprovalQueue")
 	}
 	if serverIdx == -1 {
-		t.Fatal("platformDaemonRun no longer calls buildRPCServer")
+		t.Fatal("composeDaemon no longer calls buildRPCServer")
 	}
 	if injectIdx > serverIdx {
 		t.Fatalf("plugins.SetBridgeApprovalQueue is called AFTER buildRPCServer (call order %v); "+

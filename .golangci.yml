@@ -140,6 +140,11 @@ linters:
             - "!**/cmd/cascade/daemon_unix_run.go"
             - "!**/cmd/cascade/daemon_unix_run_memory.go"
             - "!**/cmd/cascade/daemon_unix_handlers.go"
+            # compose_daemon.go earns its exemption by name: it is the composition
+            # root's registration core (daemonWiring, runDaemonWiring), built over
+            # the daemon's own *rpc.Registry and *rpc.SSEMux, and never dials the
+            # daemon (P1-CORE-01).
+            - "!**/cmd/cascade/compose_daemon.go"
             # daemon_unix_conductor.go earns its exemption by name, per this
             # rule's own comment above: it is a new COMPOSITION-ROOT file, not a
             # hand-rolled client. It is called only from buildRPCServer, it
