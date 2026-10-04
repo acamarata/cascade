@@ -105,28 +105,49 @@ func (f *fixture) runCaptured(filesPath string, args ...string) (int, string) {
 
 // --- LoadTermFile ---
 
+// termFileRefusalCases maps a case name to a term file body LoadTermFile
+// must refuse; an empty body means the file is never written.
+func termFileRefusalCases() map[string]string {
+	return map[string]string{
+		"missing":                         "",
+		"malformed":                       "{not json",
+		"empty list":                      `{"terms":[]}`,
+		"blank term":                      `{"terms":[{"term":"  ","class":"command","replacement":[],"state":""}]}`,
+		"bad class":                       `{"terms":[{"term":"x","class":"nope","replacement":[],"state":""}]}`,
+		"duplicate term":                  `{"terms":[{"term":"x","class":"command","replacement":[],"state":""},{"term":"x","class":"marker","replacement":[],"state":""}]}`,
+		"state-replacement mismatch":      `{"terms":[{"term":"x","class":"command","replacement":["a.go"],"state":""}]}`,
+		"done without anchor":             `{"terms":[{"term":"x","class":"command","replacement":["a.go"],"anchor":"","state":"done"}]}`,
+		"absolute replacement path":       `{"terms":[{"term":"x","class":"command","replacement":["/etc/passwd"],"anchor":"a","state":"done"}]}`,
+		"dotdot replacement path":         `{"terms":[{"term":"x","class":"command","replacement":["../a.go"],"anchor":"a","state":"done"}]}`,
+		"rooted backslash path":           `{"terms":[{"term":"x","class":"command","replacement":["\\x.go"],"anchor":"a","state":"done"}]}`,
+		"drive relative path":             `{"terms":[{"term":"x","class":"command","replacement":["C:x.go"],"anchor":"a","state":"done"}]}`,
+		"drive absolute path":             `{"terms":[{"term":"x","class":"command","replacement":["C:\\x.go"],"anchor":"a","state":"done"}]}`,
+		"backslash dotdot path":           `{"terms":[{"term":"x","class":"command","replacement":["..\\a.go"],"anchor":"a","state":"done"}]}`,
+		"claude replacement path":         `{"terms":[{"term":"x","class":"command","replacement":[".claude/a.go"],"anchor":"a","state":"done"}]}`,
+		"testdata replacement path":       `{"terms":[{"term":"x","class":"command","replacement":["internal/x/testdata/a.go"],"anchor":"a","state":"done"}]}`,
+		"marker with replacement":         `{"terms":[{"term":"x","class":"marker","replacement":["a.go"],"anchor":"a","state":"done"}]}`,
+		"upper claude dir":                `{"terms":[{"term":"x","class":"command","replacement":[".CLAUDE/x"],"anchor":"a","state":"done"}]}`,
+		"mixed case testdata dir":         `{"terms":[{"term":"x","class":"command","replacement":["TestData/x"],"anchor":"a","state":"done"}]}`,
+		"trailing dot claude dir":         `{"terms":[{"term":"x","class":"command","replacement":[".claude./x"],"anchor":"a","state":"done"}]}`,
+		"trailing space testdata dir":     `{"terms":[{"term":"x","class":"command","replacement":["testdata /x"],"anchor":"a","state":"done"}]}`,
+		"ntfs stream claude dir":          `{"terms":[{"term":"x","class":"command","replacement":[".claude::$INDEX_ALLOCATION/x"],"anchor":"a","state":"done"}]}`,
+		"short name claude dir":           `{"terms":[{"term":"x","class":"command","replacement":["CLAUDE~1/x"],"anchor":"a","state":"done"}]}`,
+		"long s testdata dir":             `{"terms":[{"term":"x","class":"command","replacement":["teſtdata/x"],"anchor":"a","state":"done"}]}`,
+		"console device":                  `{"terms":[{"term":"x","class":"command","replacement":["CON"],"anchor":"a","state":"done"}]}`,
+		"null device with extension":      `{"terms":[{"term":"x","class":"command","replacement":["nul.txt"],"anchor":"a","state":"done"}]}`,
+		"null device with two extensions": `{"terms":[{"term":"x","class":"command","replacement":["nul.tar.gz"],"anchor":"a","state":"done"}]}`,
+		"auxiliary device dir":            `{"terms":[{"term":"x","class":"command","replacement":["internal/aux/x.go"],"anchor":"a","state":"done"}]}`,
+		"console input device":            `{"terms":[{"term":"x","class":"command","replacement":["CONIN$"],"anchor":"a","state":"done"}]}`,
+		"serial port device":              `{"terms":[{"term":"x","class":"command","replacement":["COM1"],"anchor":"a","state":"done"}]}`,
+		"cyrillic lookalike testdata dir": `{"terms":[{"term":"x","class":"command","replacement":["testdatа/x"],"anchor":"a","state":"done"}]}`,
+		"dots only component":             `{"terms":[{"term":"x","class":"command","replacement":[".../x"],"anchor":"a","state":"done"}]}`,
+		"inner space component":           `{"terms":[{"term":"x","class":"command","replacement":["a b/x"],"anchor":"a","state":"done"}]}`,
+	}
+}
+
 func TestLoadTermFile_ValidatesShapeAndFailsClosed(t *testing.T) {
 	dir := t.TempDir()
-	cases := map[string]string{
-		"missing":                    "",
-		"malformed":                  "{not json",
-		"empty list":                 `{"terms":[]}`,
-		"blank term":                 `{"terms":[{"term":"  ","class":"command","replacement":[],"state":""}]}`,
-		"bad class":                  `{"terms":[{"term":"x","class":"nope","replacement":[],"state":""}]}`,
-		"duplicate term":             `{"terms":[{"term":"x","class":"command","replacement":[],"state":""},{"term":"x","class":"marker","replacement":[],"state":""}]}`,
-		"state-replacement mismatch": `{"terms":[{"term":"x","class":"command","replacement":["a.go"],"state":""}]}`,
-		"done without anchor":        `{"terms":[{"term":"x","class":"command","replacement":["a.go"],"anchor":"","state":"done"}]}`,
-		"absolute replacement path":  `{"terms":[{"term":"x","class":"command","replacement":["/etc/passwd"],"anchor":"a","state":"done"}]}`,
-		"dotdot replacement path":    `{"terms":[{"term":"x","class":"command","replacement":["../a.go"],"anchor":"a","state":"done"}]}`,
-		"rooted backslash path":      `{"terms":[{"term":"x","class":"command","replacement":["\\x.go"],"anchor":"a","state":"done"}]}`,
-		"drive relative path":        `{"terms":[{"term":"x","class":"command","replacement":["C:x.go"],"anchor":"a","state":"done"}]}`,
-		"drive absolute path":        `{"terms":[{"term":"x","class":"command","replacement":["C:\\x.go"],"anchor":"a","state":"done"}]}`,
-		"backslash dotdot path":      `{"terms":[{"term":"x","class":"command","replacement":["..\\a.go"],"anchor":"a","state":"done"}]}`,
-		"claude replacement path":    `{"terms":[{"term":"x","class":"command","replacement":[".claude/a.go"],"anchor":"a","state":"done"}]}`,
-		"testdata replacement path":  `{"terms":[{"term":"x","class":"command","replacement":["internal/x/testdata/a.go"],"anchor":"a","state":"done"}]}`,
-		"marker with replacement":    `{"terms":[{"term":"x","class":"marker","replacement":["a.go"],"anchor":"a","state":"done"}]}`,
-	}
-	for name, content := range cases {
+	for name, content := range termFileRefusalCases() {
 		t.Run(name, func(t *testing.T) {
 			p := filepath.Join(dir, name+".json")
 			if content != "" {
@@ -150,6 +171,19 @@ func TestLoadTermFile_ParsesValidTerms(t *testing.T) {
 	terms, err := LoadTermFile(p)
 	if err != nil || len(terms) != 1 || terms[0].Term != "zz-fixture-marker" {
 		t.Fatalf("terms=%v err=%v", terms, err)
+	}
+}
+
+// TestLoadTermFile_AcceptsPlainRepoPath: the component rules refuse only
+// what they name; an ordinary mixed-case path with '_' and '-' still loads.
+func TestLoadTermFile_AcceptsPlainRepoPath(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "terms.json")
+	body := `{"terms":[{"term":"x","class":"command","replacement":["internal/Foo_Bar-1.go"],"anchor":"a","state":"done"}]}`
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if terms, err := LoadTermFile(p); err != nil || len(terms) != 1 {
+		t.Fatalf("terms=%v err=%v, want the plain repo path accepted", terms, err)
 	}
 }
 
