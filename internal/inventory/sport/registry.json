@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-04T23:48:05Z",
+  "generated_at": "2026-10-05T00:34:05Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1991,7 +1991,7 @@
         },
         {
           "file": "internal/testkit/golden.go",
-          "line": 24,
+          "line": 26,
           "status": "ADD",
           "ticket": "T-4",
           "raw": "build/testkit (ADD, placeholder per T-4 sport_updates)."
@@ -6767,7 +6767,7 @@
       "sites": [
         {
           "file": "internal/context/harness_gen.go",
-          "line": 24,
+          "line": 27,
           "status": "ADD",
           "ticket": "T-3",
           "raw": "context-engine/harness-gen-interface (ADD, per T-3 sport_updates)."
@@ -10092,7 +10092,7 @@
       "sites": [
         {
           "file": "internal/backup/targets/fs.go",
-          "line": 14,
+          "line": 15,
           "status": "ADD",
           "ticket": "P1-E19-W4-S41-T3",
           "raw": "internal.backup.targets.fs/ADDED (P1-E19-W4-S41-T3)."
@@ -19394,7 +19394,7 @@
       "sites": [
         {
           "file": "internal/nodes/action_log.go",
-          "line": 32,
+          "line": 33,
           "status": "ADD",
           "ticket": "P1-E17-W4-S37-T2",
           "raw": "internal/nodes:action-log (ADD) — P1-E17-W4-S37-T2."
@@ -30998,6 +30998,44 @@
       ]
     },
     {
+      "name": "runtime/atomic-file-write",
+      "sites": [
+        {
+          "file": "internal/runtime/atomic_write.go",
+          "line": 28,
+          "status": "ADD",
+          "raw": "runtime/atomic-file-write (ADD, P1-CORE-08)."
+        },
+        {
+          "file": "internal/runtime/atomic_write_kill_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "runtime/atomic-file-write (ADD, P1-CORE-08)."
+        },
+        {
+          "file": "internal/runtime/atomic_write_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "runtime/atomic-file-write (ADD, P1-CORE-08)."
+        },
+        {
+          "file": "internal/runtime/atomic_write_unix.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "runtime/atomic-file-write (ADD, P1-CORE-08)."
+        },
+        {
+          "file": "internal/runtime/atomic_write_windows.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "runtime/atomic-file-write (ADD, P1-CORE-08)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "runtime/boot-baseline-check",
       "sites": [
         {
@@ -31933,7 +31971,7 @@
       ]
     }
   ],
-  "total_sites": 3035,
+  "total_sites": 3040,
   "unspecified_count": 160,
   "multi_status_count": 86
 }
