@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -153,7 +154,7 @@ func writeBaselineFile(repoRoot string, entries []baselineEntry) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return cascade.Wrap(cascade.KindInternal, err, "doctruth: creating baseline directory")
 	}
-	if err := os.WriteFile(path, marshalBaseline(entries), 0o644); err != nil {
+	if err := runtime.WriteFileAtomic(path, marshalBaseline(entries), 0o644); err != nil {
 		return cascade.Wrap(cascade.KindInternal, err, "doctruth: writing baseline")
 	}
 	return nil

@@ -215,11 +215,17 @@ func (initStorageProbe) Probe(_ context.Context, path string, mayCreate bool) er
 			return err
 		}
 	}
-	probe := filepath.Join(target, ".cascade-init-probe")
-	if err := os.WriteFile(probe, []byte("probe\n"), 0o600); err != nil {
+	f, err := os.CreateTemp(target, ".cascade-init-probe-*") // unique: never truncates a file
+	if err != nil {
 		return cascade.Wrapf(cascade.KindUnavailable, err, "write to %s", target)
 	}
-	return os.Remove(probe)
+	_, werr := f.Write([]byte("probe\n"))
+	for _, e := range []error{werr, f.Close(), os.Remove(f.Name())} { // close before remove
+		if e != nil {
+			return cascade.Wrapf(cascade.KindUnavailable, e, "write to %s", target)
+		}
+	}
+	return nil
 }
 
 // nearestExisting walks up from path to the first directory that exists.

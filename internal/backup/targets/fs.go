@@ -6,8 +6,9 @@
 // Inputs: a root directory (NewFSTarget) plus a key/reader per call.
 // Outputs: real files under root, laid out exactly as
 // internal/backup/repo.go's key prefixes name them.
-// Constraints: every write is temp-file-then-rename so a crash mid-write
-// never leaves a partially-written object visible to a concurrent Get;
+// Constraints: every write goes through runtime.WriteReaderAtomic
+// (temp, fsync, rename, directory fsync) so a crash mid-write never leaves
+// a partially-written object visible to a concurrent Get;
 // every key is resolved and bounds-checked against root before any path
 // operation, so a key can never escape it.
 //
@@ -24,10 +25,13 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// tmpFilePrefix marks a not-yet-renamed write so List never surfaces one.
+// tmpFilePrefix marked a not-yet-renamed write before writes moved to
+// runtime.WriteReaderAtomic; List still skips one a crash left behind,
+// alongside the helper's own temp names (runtime.IsAtomicTempName).
 const tmpFilePrefix = ".fs-target-tmp-"
 
 // FSTarget is the local-filesystem-root Target driver. The zero value is
@@ -79,31 +83,11 @@ func (t *FSTarget) Put(ctx context.Context, key string, r io.Reader) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "targets: fs: creating parent directory")
 	}
-	return writeAtomic(dir, full, r)
-}
-
-// writeAtomic streams r into a temp file under dir, then renames it onto
-// full, so a reader never observes a partially-written object.
-func writeAtomic(dir, full string, r io.Reader) error {
-	tmp, err := os.CreateTemp(dir, tmpFilePrefix+"*")
-	if err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "targets: fs: creating temp file")
-	}
-	tmpName := tmp.Name()
-	if _, err := io.Copy(tmp, r); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpName)
-		return cascade.Wrap(cascade.KindUnavailable, err, "targets: fs: writing content")
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpName)
-		return cascade.Wrap(cascade.KindUnavailable, err, "targets: fs: closing temp file")
-	}
-	if err := os.Rename(tmpName, full); err != nil {
-		_ = os.Remove(tmpName)
-		return cascade.Wrap(cascade.KindUnavailable, err, "targets: fs: renaming into place")
-	}
-	return nil
+	// runtime.WriteReaderAtomic streams r into a temp file beside full,
+	// fsyncs it, renames it into place and fsyncs dir: a reader never
+	// observes a partial object and a crash never publishes one. 0600
+	// matches the owner-only mode objects have always had.
+	return runtime.WriteReaderAtomic(full, r, 0o600)
 }
 
 // Get implements Target.
@@ -136,7 +120,7 @@ func (t *FSTarget) List(ctx context.Context, prefix string) ([]string, error) {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || strings.HasPrefix(d.Name(), tmpFilePrefix) {
+		if d.IsDir() || strings.HasPrefix(d.Name(), tmpFilePrefix) || runtime.IsAtomicTempName(d.Name()) {
 			return nil
 		}
 		rel, rerr := filepath.Rel(t.root, path)

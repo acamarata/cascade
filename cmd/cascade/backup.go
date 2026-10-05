@@ -83,7 +83,7 @@ func productionBackupDeps() backupDeps {
 		Clock:       clock,
 		Getenv:      os.Getenv,
 		ReadFile:    os.ReadFile,
-		WriteFile:   os.WriteFile,
+		WriteFile:   runtime.WriteFileAtomic,
 		NewVault: func(proof backup.ElevationProof) (*secrets.Broker, error) {
 			custody, err := vaultDeps.NewCustody()
 			if err != nil {

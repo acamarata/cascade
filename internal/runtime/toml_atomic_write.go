@@ -9,11 +9,11 @@ package runtime
 // Inputs: a target path and, for the write side, the bytes to write.
 // Outputs: the read bytes (or nil for a missing file), or a crash-safe
 //   write with disk left exactly as it was on any failure.
-// Constraints: writeBytesAtomic is the ONLY atomic-write implementation
-//   in this ticket's surface — cmd/cascade/config calls WriteBytesAtomic
-//   rather than reimplementing the temp-file-in-same-dir + rename
-//   pattern a second time, which is precisely how blocking fix 2's
-//   Windows path-separator bug (dirOf hardcoding '/') drifted into two
+// Constraints: the implementation lives in atomic_write.go
+//   (contract:atomic-file-write); writeBytesAtomic and WriteBytesAtomic
+//   only delegate to it, so the temp-file-in-same-dir + rename pattern is
+//   never reimplemented, which is precisely how blocking fix 2's Windows
+//   path-separator bug (dirOf hardcoding '/') drifted into two
 //   independently-broken copies in the first place.
 // SPORT: runtime/toml-edit-engine (ADD, placeholder per T-8 sport_updates).
 
@@ -37,44 +37,25 @@ func readOptionalFile(path string) ([]byte, error) {
 	return nil, err
 }
 
-// writeBytesAtomic writes data to path via a temp-file-in-same-dir +
-// rename, so a crash mid-write leaves either the untouched original or
-// nothing at the temp path, never a truncated config.toml (R-14.106
-// precedent). This is the ONE atomic-write primitive every write verb in
-// this package uses (config_writer.go's ConfigWriter.Set/Unset); it is
-// also exported as WriteBytesAtomic for cmd/cascade/config, so a second,
-// divergent implementation is never written across the package boundary
-// — see WriteBytesAtomic's doc comment (R-14 CR fix, P1-E03-W1-S05-T8,
-// blocking fix 2).
+// writeBytesAtomic is the config tree's name for the one atomic-write
+// primitive: WriteFileAtomic (atomic_write.go) with mode 0600, so a crash
+// mid-write leaves either the untouched original or the new file, never a
+// truncated config.toml (R-14.106 precedent). config_writer.go's
+// ConfigWriter.Set/Unset and the other config write verbs call it.
 func writeBytesAtomic(path string, data []byte) error {
-	dir := dirOf(path)
-	if dir != "" {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			return err
-		}
-	}
-	tmp, err := os.CreateTemp(dir, ".config-*.toml.tmp")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-	defer func() { _ = os.Remove(tmpPath) }()
-
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpPath, path)
+	return WriteBytesAtomic(path, data)
 }
 
-// WriteBytesAtomic is writeBytesAtomic exported for cmd/cascade/config
-// (internal/runtime's atomic-write primitive, reused rather than
-// reimplemented — see writeBytesAtomic's doc comment).
+// WriteBytesAtomic is WriteFileAtomic(path, data, 0o600): the owner-only
+// atomic write its existing callers rely on. It also keeps the one thing
+// it always did that WriteFileAtomic deliberately does not: it creates a
+// missing parent directory (0700) first, which the config, trust-store and
+// node-record callers depend on for a fresh home. Its signature and
+// default mode are fixed; a caller that needs another mode calls
+// WriteFileAtomic directly. The body is writeOwnerOnlyAtomic in
+// atomic_write.go: this file only forwards.
 func WriteBytesAtomic(path string, data []byte) error {
-	return writeBytesAtomic(path, data)
+	return writeOwnerOnlyAtomic(path, data)
 }
 
 // dirOf returns the directory portion of path via filepath.Dir.

@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -199,33 +200,8 @@ func SaveState(home string, state State) error {
 	if err := os.MkdirAll(home, 0o750); err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "cascade init: create the cascade home")
 	}
-	return writeAtomic(StatePath(home), append(raw, '\n'))
-}
-
-// writeAtomic performs the tmpfile + fsync + rename.
-func writeAtomic(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp*")
-	if err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "cascade init: create the journal's temp file")
-	}
-	tmpName := tmp.Name()
-	defer func() { _ = os.Remove(tmpName) }() // no-op once the rename succeeds
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return cascade.Wrap(cascade.KindUnavailable, err, "cascade init: write the journal")
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return cascade.Wrap(cascade.KindUnavailable, err, "cascade init: flush the journal to disk")
-	}
-	if err := tmp.Close(); err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "cascade init: close the journal's temp file")
-	}
-	if err := os.Chmod(tmpName, 0o600); err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "cascade init: set the journal's mode")
-	}
-	if err := os.Rename(tmpName, path); err != nil {
+	// runtime.WriteFileAtomic: temp, fsync, 0600, rename, directory fsync.
+	if err := runtime.WriteFileAtomic(StatePath(home), append(raw, '\n'), 0o600); err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "cascade init: replace the journal")
 	}
 	return nil

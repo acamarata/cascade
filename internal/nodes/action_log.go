@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -95,17 +96,12 @@ func (l *FileActionLog) Complete(_ context.Context, actionID string, outcome Dis
 		return cascade.Newf(cascade.KindNotFound,
 			"nodes: action %s was completed without ever being reserved", actionID)
 	}
-	f, err := os.CreateTemp(l.dir, ".complete-*")
+	encoded, err := json.Marshal(actionState{ActionID: actionID, Outcome: outcome})
 	if err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "nodes: completing an action")
+		return cascade.Wrap(cascade.KindInternal, err, "nodes: encoding an action outcome")
 	}
-	tmp := f.Name()
-	if err := writeAndSync(f, actionState{ActionID: actionID, Outcome: outcome}); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
+	// runtime.WriteFileAtomic: temp, fsync, 0600, rename, directory fsync.
+	if err := runtime.WriteFileAtomic(path, encoded, 0o600); err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "nodes: committing an action outcome")
 	}
 	return nil

@@ -34,6 +34,7 @@ import (
 
 	"github.com/zeebo/blake3"
 
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -129,9 +130,10 @@ func AppendStagedChunk(stagingDir string, addr ContentAddress, seq, total uint64
 // mismatch the staged bytes are discarded (removed) and destPath is never
 // created — the interrupted-or-corrupt case can therefore never commit
 // truncated bytes under a valid-looking content address. On success the
-// admission is one atomic os.Rename (same filesystem), matching
-// provision.go's mv-f precedent: destPath either does not exist, or
-// exists complete — never partially written.
+// verified bytes are published through runtime.WriteFileAtomic (temp in
+// destPath's directory, fsync, rename, directory fsync) and the staged
+// file is removed: destPath either does not exist, or exists complete —
+// never partially written.
 func AdmitBlob(stagingDir string, addr ContentAddress, destPath string) error {
 	tmpPath, cursorPath := stagingPaths(stagingDir, addr)
 	data, err := os.ReadFile(tmpPath)
@@ -147,33 +149,25 @@ func AdmitBlob(stagingDir string, addr ContentAddress, destPath string) error {
 	if err := os.MkdirAll(filepath.Dir(destPath), 0o700); err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "sync: create blob dest dir")
 	}
-	if err := os.Rename(tmpPath, destPath); err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "sync: atomic blob admission rename failed")
+	if err := runtime.WriteFileAtomic(destPath, data, 0o600); err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "sync: atomic blob admission failed")
 	}
+	_ = os.Remove(tmpPath)
 	_ = os.Remove(cursorPath)
 	return nil
 }
 
+// writeCursor publishes the sidecar cursor through runtime.WriteFileAtomic
+// (temp, fsync, rename, directory fsync), so a crash leaves the previous
+// cursor or the new one, never a torn one, and the advance is durable
+// before AppendStagedChunk returns.
 func writeCursor(path string, cur stagingCursor) error {
 	raw, err := json.Marshal(cur)
 	if err != nil {
 		return cascade.Wrap(cascade.KindInternal, err, "sync: encode staging cursor")
 	}
-	if err := os.WriteFile(path, raw, 0o600); err != nil {
+	if err := runtime.WriteFileAtomic(path, raw, 0o600); err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "sync: write staging cursor")
-	}
-	// Reopen for a durability fsync. This MUST be a writable handle: on
-	// windows, FlushFileBuffers (what (*os.File).Sync calls) requires the
-	// handle to hold GENERIC_WRITE, and a read-only os.Open handle fails
-	// Sync with "Access is denied" -- fsync on a read-only fd is a no-op
-	// success on POSIX, which is why this was invisible outside windows CI.
-	f, err := os.OpenFile(path, os.O_WRONLY, 0o600)
-	if err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "sync: reopen staging cursor for fsync")
-	}
-	defer func() { _ = f.Close() }()
-	if err := f.Sync(); err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "sync: fsync staging cursor")
 	}
 	return nil
 }

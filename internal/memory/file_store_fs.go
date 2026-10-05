@@ -17,6 +17,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/acamarata/cascade/internal/runtime"
 )
 
 // dirPerm and filePerm are the permissions the store creates with. Memory
@@ -89,60 +91,17 @@ func (osFS) ReadDirNames(dir string) ([]string, error) {
 	return names, nil
 }
 
-// WriteAtomic writes data to path via a temporary file in path's OWN
-// directory followed by a rename, the same primitive internal/runtime's
-// writeBytesAtomic established for the config tree and for the reason its
-// comment records: the temp file must share a directory with the target,
-// because a rename across volumes is not atomic anywhere and on Windows
-// may be refused outright. Deriving the directory with filepath.Dir rather
-// than by searching for '/' is part of that same fix, which is why this
-// implementation matches rather than invents.
-//
-// Rename replaces an existing file on every platform this repo targets
-// (POSIX rename, and MoveFileEx with replace-existing on Windows, which is
-// what the Go runtime issues). It is that same-directory replacement that
-// is atomic; a rename in general is not, which is why the temp file is
-// never placed in the system temp directory.
-//
-// The data is flushed to stable storage before the rename, so a crash
-// cannot leave the rename durable while the bytes it published are not.
-// The containing directory is deliberately not also synced: opening a
-// directory for sync is not portable to Windows, and an honest comment is
-// better than a platform-split for the last increment of durability.
+// WriteAtomic writes data to path through runtime.WriteFileAtomic, the one
+// atomic-write implementation (contract:atomic-file-write): a temp file in
+// path's own directory, flushed, given filePerm, renamed over the target,
+// then the directory synced. A crash leaves the old file or the new one,
+// never a torn one. The parent directory is created with the store's own
+// dirPerm first, so the helper never picks the directory mode.
 func (osFS) WriteAtomic(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, dirPerm); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), dirPerm); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".memory-*.md.tmp")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-	defer func() { _ = os.Remove(tmpPath) }()
-
-	if err := writeAndSync(tmp, data); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmpPath, filePerm); err != nil {
-		return err
-	}
-	return os.Rename(tmpPath, path)
-}
-
-// writeAndSync writes data to f, flushes it to stable storage, and closes
-// it, reporting the first failure. Split out so WriteAtomic stays inside
-// the 50-line limit.
-func writeAndSync(f *os.File, data []byte) error {
-	if _, err := f.Write(data); err != nil {
-		_ = f.Close()
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		_ = f.Close()
-		return err
-	}
-	return f.Close()
+	return runtime.WriteFileAtomic(path, data, filePerm)
 }
 
 // isNotExist reports whether err means "no such file". It tests the

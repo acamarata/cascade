@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/acamarata/cascade/internal/runtime"
 )
 
 // Purpose: load-and-compare helper for golden-fixture tests, plus a guarded
@@ -77,7 +79,7 @@ func Golden(t testing.TB, name string, got []byte) []byte {
 			t.Fatalf("testkit: creating golden dir for %q: %v", path, err)
 			return nil
 		}
-		if err := os.WriteFile(path, got, 0o644); err != nil {
+		if err := runtime.WriteFileAtomic(path, got, 0o644); err != nil {
 			t.Fatalf("testkit: writing golden %q: %v", path, err)
 			return nil
 		}
