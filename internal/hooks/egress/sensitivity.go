@@ -13,8 +13,9 @@ import "github.com/acamarata/cascade/pkg/cascade"
 //	internal    admitted on any enabled class.
 //	public      admitted always.
 //
-// An unset or unrecognised tier resolves to restricted before the matrix
-// runs, so the permissive answer is never the default one. AllowedTiers,
+// An unset tier is the zero value, restricted, so the permissive answer is
+// never the default one. A value above TierPublic is refused outright
+// (matrixVerdict's range guard), whatever the class admits. AllowedTiers,
 // when the registrant supplied it, narrows the verdict further and can
 // only ever refuse.
 //
@@ -22,7 +23,7 @@ import "github.com/acamarata/cascade/pkg/cascade"
 // class before it gets here, and duplicating that check would give two
 // places to change it.
 func SensitivityPass(class EgressClass, cfg InterceptConfig, tier SensitivityTier) error {
-	resolved := tier.Resolve()
+	resolved := ResolveTier(tier)
 	if err := matrixVerdict(class, cfg, tier, resolved); err != nil {
 		return err
 	}
@@ -32,8 +33,14 @@ func SensitivityPass(class EgressClass, cfg InterceptConfig, tier SensitivityTie
 	return nil
 }
 
-// matrixVerdict applies the four-case matrix.
+// matrixVerdict applies the four-case matrix. Its first check refuses a
+// declared value above TierPublic explicitly, so an out-of-range tier is
+// refused on this site's own guard rather than on whatever ResolveTier
+// happens to map it to.
 func matrixVerdict(class EgressClass, cfg InterceptConfig, declared, resolved SensitivityTier) error {
+	if declared > TierPublic {
+		return sensitivityViolation(class, cfg, declared, resolved, "out-of-range tier")
+	}
 	switch resolved {
 	case TierLocalOnly:
 		if !cfg.AllowLocalOnly {
@@ -46,12 +53,6 @@ func matrixVerdict(class EgressClass, cfg InterceptConfig, declared, resolved Se
 				"the class was not registered to admit restricted content")
 		}
 	case TierInternal, TierPublic:
-	case TierUnset:
-		// Unreachable: Resolve maps the unset tier to restricted before
-		// this switch runs. It is named rather than folded into default
-		// so the exhaustiveness check proves every declared tier was
-		// considered here, and it refuses rather than falls through.
-		return sensitivityViolation(class, cfg, declared, resolved, "the unset tier reached the matrix unresolved")
 	default:
 		return sensitivityViolation(class, cfg, declared, resolved, "unrecognised tier")
 	}
@@ -80,5 +81,5 @@ func tierListed(allowed []SensitivityTier, resolved SensitivityTier) bool {
 func sensitivityViolation(class EgressClass, cfg InterceptConfig, declared, resolved SensitivityTier, why string) error {
 	return cascade.Wrapf(cascade.KindPolicyDenied, ErrSensitivityViolation,
 		"egress: class %q (owner %s) refused tier %q (resolved %q): %s",
-		string(class), cfg.Owner, string(declared), string(resolved), why)
+		string(class), cfg.Owner, declared.String(), resolved.String(), why)
 }

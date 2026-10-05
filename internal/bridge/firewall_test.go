@@ -46,7 +46,7 @@ func TestNewFirewall_EnforcesTheBridgeClassTierMatrix(t *testing.T) {
 		t.Fatalf("NewFirewall: %v", err)
 	}
 	ctx := context.Background()
-	for _, tier := range []egress.SensitivityTier{egress.TierRestricted, egress.TierLocalOnly, egress.TierUnset} {
+	for _, tier := range []egress.SensitivityTier{egress.TierRestricted, egress.TierLocalOnly, egress.SensitivityTier(9)} {
 		if _, err := engine.InterceptClass(ctx, egress.EgressClassBridge, tier, []byte("exfiltration")); err == nil {
 			t.Fatalf("tier %q was admitted onto the bridge class", tier)
 		}

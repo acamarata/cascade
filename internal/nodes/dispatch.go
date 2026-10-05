@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // Purpose (this file): the dispatch orchestration core — the attempt
@@ -29,13 +31,13 @@ import (
 // AdmitDispatch reports whether work at this sensitivity may be shipped to
 // a node at this trust tier.
 //
-// Sensitivity and its three values are declared by placement_trust.go
-// (S-37.T1), which also owns ResolveSensitivity — the fail-closed
-// normalizer that maps an unrecognized raw string to the MOST restrictive
-// class. This function is the second half of that pair: the normalizer
-// turns what it cannot identify into the safest class, and this refuses
-// what it still cannot identify at all. Neither is redundant, and neither
-// re-declares the type.
+// The work sensitivity is provider.SensitivityTier; placement_trust.go
+// (S-37.T1) owns decodeWireSensitivity — the fail-closed wire decoder that
+// maps an unrecognized raw string to the MOST restrictive tier. This
+// function is the second half of that pair: the decoder turns what it
+// cannot identify into the safest tier, and this refuses what it still
+// cannot identify at all (a value above SensitivityPublic). Neither is
+// redundant, and neither re-declares the type.
 //
 // The rank comparison is NOT reimplemented here: it goes through
 // trust.Satisfies, which is R-21.220's single source of truth for what a
@@ -50,26 +52,26 @@ import (
 //     is the second, independent refusal after placement's, so a caller
 //     that bypassed placement still cannot ship local-only work.
 //   - restricted requires a tier clearing GateRestricted.
-//   - an unrecognized sensitivity or an unrecognized tier is REFUSED
-//     rather than read as normal. An unresolvable tier is exactly where
+//   - an out-of-range sensitivity or an unrecognized tier is REFUSED
+//     rather than read as internal. An unresolvable tier is exactly where
 //     guessing is most likely to be wrong and most costly to be wrong
 //     about.
-func AdmitDispatch(work Sensitivity, nodeTier Tier) error {
+func AdmitDispatch(work provider.SensitivityTier, nodeTier Tier) error {
 	if _, ok := Rank(nodeTier); !ok {
 		return errUnresolvableTrust(string(nodeTier))
 	}
 	switch work {
-	case SensitivityLocalOnly:
+	case provider.SensitivityLocalOnly:
 		return errLocalOnlyNeverShips()
-	case SensitivityRestricted:
+	case provider.SensitivityRestricted:
 		if !Satisfies(nodeTier, GateRestricted) {
 			return errRestrictedNeedsTrust(string(nodeTier))
 		}
 		return nil
-	case SensitivityNormal:
+	case provider.SensitivityInternal, provider.SensitivityPublic:
 		return nil
 	default:
-		return errUnresolvableSensitivity(string(work))
+		return errUnresolvableSensitivity(work.String())
 	}
 }
 

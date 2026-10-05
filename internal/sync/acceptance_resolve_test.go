@@ -18,6 +18,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/storage"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -151,7 +152,7 @@ func TestACursorNeverRegressesAcrossTheDrill(t *testing.T) {
 	for i := range 3 {
 		recs := []Record{{
 			Domain: domain, Subkind: subkind, ID: "rec-" + string(rune('a'+i)),
-			Tier: "internal", Payload: []byte("p"),
+			Tier: egress.TierInternal, Payload: []byte("p"),
 		}}
 		cur, err := peer.engine.SendBatch(ctx, discardWriter{}, domain, subkind, recs, uint64(i+1), 0)
 		if err != nil {

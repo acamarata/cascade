@@ -28,12 +28,10 @@ func TestSensitivityPassMatrix(t *testing.T) {
 		{TierInternal, true, true, true},
 		{TierPublic, false, false, true},
 		{TierPublic, true, true, true},
-		// Unset and unknown resolve to restricted, so they follow the
-		// restricted row exactly: refused unless AllowRestricted.
-		{TierUnset, false, false, false},
-		{TierUnset, true, false, true},
-		{SensitivityTier("confidential"), false, false, false},
-		{SensitivityTier("confidential"), true, false, true},
+		// A value above SensitivityPublic is out of range: refused even
+		// when both admission flags are set.
+		{SensitivityTier(9), false, false, false},
+		{SensitivityTier(9), true, true, false},
 	}
 	for _, tc := range cases {
 		cfg := InterceptConfig{
@@ -45,16 +43,16 @@ func TestSensitivityPassMatrix(t *testing.T) {
 		err := SensitivityPass("test.class", cfg, tc.tier)
 		if tc.admit && err != nil {
 			t.Errorf("tier %q restricted=%v localOnly=%v: got %v, want admitted",
-				string(tc.tier), tc.allowRestricted, tc.allowLocalOnly, err)
+				tc.tier.String(), tc.allowRestricted, tc.allowLocalOnly, err)
 		}
 		if !tc.admit {
 			if err == nil {
 				t.Errorf("tier %q restricted=%v localOnly=%v: admitted, want refused",
-					string(tc.tier), tc.allowRestricted, tc.allowLocalOnly)
+					tc.tier.String(), tc.allowRestricted, tc.allowLocalOnly)
 				continue
 			}
 			if !errors.Is(err, ErrSensitivityViolation) {
-				t.Errorf("tier %q: got %v, want ErrSensitivityViolation", string(tc.tier), err)
+				t.Errorf("tier %q: got %v, want ErrSensitivityViolation", tc.tier.String(), err)
 			}
 		}
 	}
@@ -99,16 +97,17 @@ func TestSensitivityPassAllowedTiersNarrows(t *testing.T) {
 	}
 }
 
-// TestSensitivityTierResolve pins the fail-closed resolution rule.
+// TestSensitivityTierResolve pins the fail-closed resolution rule: a
+// known tier resolves to itself and an out-of-range value to local-only.
 func TestSensitivityTierResolve(t *testing.T) {
-	for _, tier := range knownTiers {
-		if got := tier.Resolve(); got != tier {
-			t.Errorf("Resolve(%q) = %q, want itself", string(tier), string(got))
+	for _, tier := range []SensitivityTier{TierLocalOnly, TierRestricted, TierInternal, TierPublic} {
+		if got := ResolveTier(tier); got != tier {
+			t.Errorf("ResolveTier(%s) = %s, want itself", tier, got)
 		}
 	}
-	for _, tier := range []SensitivityTier{TierUnset, "LOCAL-ONLY", "public ", "unknown"} {
-		if got := tier.Resolve(); got != TierRestricted {
-			t.Errorf("Resolve(%q) = %q, want restricted", string(tier), string(got))
+	for _, tier := range []SensitivityTier{4, 9, 255} {
+		if got := ResolveTier(tier); got != TierLocalOnly {
+			t.Errorf("ResolveTier(%d) = %s, want local-only", uint8(tier), got)
 		}
 	}
 }

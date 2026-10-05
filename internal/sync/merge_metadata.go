@@ -53,24 +53,29 @@ func MergeMetadataOnly(
 func admissible(journal *ConflictJournal, dc DomainClass, side map[string]Record) map[string]Record {
 	out := make(map[string]Record, len(side))
 	for id, rec := range side {
-		switch rec.Tier.Resolve() {
+		if rec.Tier > egress.TierPublic {
+			// Out of range: refused on this site's own guard, the most
+			// restrictive outcome, whatever ResolveTier would map it to.
+			refuseReplication(journal, dc, id, rec, "the record's sensitivity tier is out of range")
+			continue
+		}
+		switch rec.Tier {
 		case egress.TierPublic, egress.TierInternal:
 			out[id] = rec
-		case egress.TierUnset:
-			// Unreachable: Resolve never returns unset. Named so a change
-			// to the tier set fails to compile here rather than falling
-			// through to the permissive branch.
-			out[id] = rec
 		case egress.TierLocalOnly, egress.TierRestricted:
-			journal.Record(Conflict{
-				Domain: string(dc.Domain), Subkind: dc.Subkind,
-				Strategy: StrategyMetadataOnly, RecordID: id,
-				Loser:      sideOf(rec),
-				Resolution: ResolutionRefused,
-				Detail: "the record's own sensitivity tier forbids replication; " +
-					"it stays on the device that holds it",
-			})
+			refuseReplication(journal, dc, id, rec, "the record's own sensitivity tier forbids replication")
 		}
 	}
 	return out
+}
+
+// refuseReplication journals one record admissible refused, naming why.
+func refuseReplication(journal *ConflictJournal, dc DomainClass, id string, rec Record, why string) {
+	journal.Record(Conflict{
+		Domain: string(dc.Domain), Subkind: dc.Subkind,
+		Strategy: StrategyMetadataOnly, RecordID: id,
+		Loser:      sideOf(rec),
+		Resolution: ResolutionRefused,
+		Detail:     why + "; it stays on the device that holds it",
+	})
 }

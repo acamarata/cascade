@@ -69,7 +69,7 @@ func injectConflict(t *testing.T, a, b *acceptancePeer, d injectedDomain) {
 // (acceptance_security_test.go) precisely so this default cannot mask
 // them.
 func sendable(rec Record) Record {
-	if rec.Tier == "" {
+	if rec.Tier == egress.TierRestricted {
 		rec.Tier = egress.TierInternal
 	}
 	if len(rec.Payload) == 0 {

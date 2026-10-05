@@ -18,6 +18,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // TestTheZeroValueAttemptRegisterStillFences pins the contract that makes
@@ -61,7 +63,7 @@ func TestAPushFailureStopsTheDispatchBeforeTheNodeIsCalled(t *testing.T) {
 		DispatchID:  "d1",
 		Head:        head,
 		Work:        Action{ID: "a1"},
-		Sensitivity: SensitivityNormal,
+		Sensitivity: provider.SensitivityInternal,
 	})
 	if err == nil {
 		t.Fatal("a dispatch whose branch could not be pushed reported success")
@@ -136,7 +138,7 @@ func TestAFetchFailureAfterASuccessfulRunIsNotSuccess(t *testing.T) {
 		DispatchID:  "d1",
 		Head:        head,
 		Work:        Action{ID: "a1"},
-		Sensitivity: SensitivityNormal,
+		Sensitivity: provider.SensitivityInternal,
 	})
 	if err == nil {
 		t.Fatalf("a dispatch whose results could not be read reported success: %+v", out)

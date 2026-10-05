@@ -3,6 +3,8 @@ package nodes
 import (
 	"context"
 	"time"
+
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // Purpose (this file): the ship sequence itself — admit, mint the attempt,
@@ -58,7 +60,7 @@ type ShipRequest struct {
 	// Work is the action being dispatched.
 	Work Action
 	// Sensitivity is the work's resolved class.
-	Sensitivity Sensitivity
+	Sensitivity provider.SensitivityTier
 	// Payload is the work description the node receives. It is checked
 	// for static key material before anything ships.
 	Payload []byte

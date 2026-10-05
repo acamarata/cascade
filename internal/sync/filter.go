@@ -71,7 +71,11 @@ func Admit(rec Record) AdmitResult {
 	if dc.Class == ClassLocalOnly {
 		return AdmitResult{Admitted: false, Reason: "domain-local-only"}
 	}
-	tier := rec.Tier.Resolve()
+	tier := rec.Tier
+	if tier > egress.TierPublic {
+		// Out of range: refused as local-only on this site's own guard.
+		return AdmitResult{Admitted: false, Reason: "sensitivity-local-only"}
+	}
 	if tier == egress.TierLocalOnly {
 		return AdmitResult{Admitted: false, Reason: "sensitivity-local-only"}
 	}

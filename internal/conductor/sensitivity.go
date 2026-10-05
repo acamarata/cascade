@@ -86,14 +86,13 @@ func SubstitutionMiddleware(ctx context.Context, sub EgressSubstitutor, cls egre
 	return out, nil
 }
 
-// tierToEgress converts the SDK's provider.SensitivityTier to
-// internal/hooks/egress's string-keyed SensitivityTier. The two types'
-// String()/literal values are identical by construction
-// (restricted/local-only/internal/public); an invalid provider tier
-// resolves to the fail-closed String() value, which egress's own Resolve
-// narrows to TierRestricted regardless.
+// tierToEgress hands the SDK's provider.SensitivityTier to
+// internal/hooks/egress. egress.SensitivityTier is an alias of the same
+// type, so this is the identity: no name table, no conversion. A value
+// outside the four tiers stays out of range here, and egress.ResolveTier
+// and the egress matrix treat it as local-only and refuse it.
 func tierToEgress(t provider.SensitivityTier) egress.SensitivityTier {
-	return egress.SensitivityTier(t.String())
+	return t
 }
 
 // substituteInputs transits req.Inputs through SubstitutionMiddleware

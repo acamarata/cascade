@@ -37,6 +37,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // realNode is one running `cascade node serve` process and its home.
@@ -244,7 +246,7 @@ func assertKillRequeue(t *testing.T, lossErr error) {
 	plan, err := PlanRequeue(context.Background(), deps, RequeueRequest{
 		DispatchID: "d-kill", LostNodeID: "killed",
 		Action:      Action{ID: "kill-lane-action", Idempotent: true},
-		Requirement: Requirement{Capabilities: []string{"docker"}, Sensitivity: SensitivityNormal},
+		Requirement: Requirement{Capabilities: []string{"docker"}, Sensitivity: provider.SensitivityInternal},
 		EntityID:    "job-kill",
 	}, signal)
 	if err != nil {

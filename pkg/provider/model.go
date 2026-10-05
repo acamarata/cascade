@@ -8,13 +8,8 @@
 // Inputs: none at this layer - these are data shapes, not behavior.
 // Outputs: none.
 // Constraints: pkg/provider imports nothing from internal/ (Art.10.2).
-//   SensitivityTier's zero value MUST read as SensitivityRestricted
-//   (R-21.264; 06-FORGE-SPEC.md §5.16's fail-closed rule: "unset, unknown,
-//   or unresolvable inherit => restricted") even though the normative
-//   ordering local-only > restricted > internal > public ranks
-//   SensitivityLocalOnly as textually more restrictive - local-only names
-//   an explicit, narrow placement (controller machine only) that must
-//   never be a silent default, so it is declared after the zero value.
+//   SensitivityTier itself lives in sensitivity.go (contract:
+//   sensitivity-tier), with its zero-value and closed-parse rules.
 //   `type JobID string` is declared exactly once, here; internal/conductor
 //   aliases it (`type JobID = provider.JobID`, R-21.281) rather than
 //   redeclaring it.
@@ -28,75 +23,6 @@ import "context"
 // streaming, and eventual job.cancel. Declared once here (R-21.281);
 // internal/conductor aliases this type rather than redeclaring it.
 type JobID string
-
-// SensitivityTier is the normative data-sensitivity enum a ModelRequest
-// carries (06-FORGE-SPEC.md §5.16, ordered most to least restrictive:
-// local-only > restricted > internal > public). The zero value is
-// SensitivityRestricted, not SensitivityLocalOnly, so an unset field fails
-// closed to "restricted" rather than silently to the even-narrower
-// local-only placement (see this file's header comment).
-type SensitivityTier uint8
-
-// The four SensitivityTier members. Declaration order fixes each member's
-// numeric value; sensitivityRank (below) carries the separate normative
-// restrictiveness ordering, which does not follow this declaration order.
-const (
-	// SensitivityRestricted is the zero value and the fail-closed default.
-	SensitivityRestricted SensitivityTier = iota
-	// SensitivityLocalOnly never leaves the controller machine: no
-	// external lane, no bridge, no node dispatch, no sync beyond the
-	// owning device. Textually the most restrictive member, but never the
-	// default (it requires an explicit caller opt-in).
-	SensitivityLocalOnly
-	// SensitivityInternal permits normal routing across configured lanes
-	// with no public exposure.
-	SensitivityInternal
-	// SensitivityPublic carries no confidentiality constraint.
-	SensitivityPublic
-)
-
-// sensitivityNames is indexed by SensitivityTier value; String uses it in
-// place of a switch so the exhaustive linter never applies here.
-var sensitivityNames = [...]string{"restricted", "local-only", "internal", "public"}
-
-// sensitivityRank carries the normative restrictiveness ordering (local-only
-// > restricted > internal > public), independent of each member's
-// declaration-order numeric value. Higher ranks are more restrictive.
-var sensitivityRank = [...]int{2, 3, 1, 0}
-
-// Valid reports whether t is one of the four declared SensitivityTier
-// members.
-func (t SensitivityTier) Valid() bool {
-	return t <= SensitivityPublic
-}
-
-// String returns the tier's stable lowercase-hyphenated name, or
-// "invalid-sensitivity-tier" for a value outside the declared set.
-func (t SensitivityTier) String() string {
-	if !t.Valid() {
-		return "invalid-sensitivity-tier"
-	}
-	return sensitivityNames[t]
-}
-
-// MoreRestrictiveThan reports whether t is strictly more restrictive than
-// other under the normative ordering local-only > restricted > internal >
-// public - the ranking a caller uses to decide whether resolving "inherit"
-// or narrowing a tier is ever a widening (a LOOSENING per §5.14, forbidden
-// outside an elevation flow). An invalid tier ranks as maximally
-// restrictive, so a corrupt value never silently reads as permissive.
-func (t SensitivityTier) MoreRestrictiveThan(other SensitivityTier) bool {
-	return t.rank() > other.rank()
-}
-
-// rank returns t's normative restrictiveness rank (higher = more
-// restrictive), defaulting invalid values to the most restrictive rank.
-func (t SensitivityTier) rank() int {
-	if !t.Valid() {
-		return len(sensitivityRank)
-	}
-	return sensitivityRank[t]
-}
 
 // Requirements is the model.execute requirements triple (02-TARGET-
 // STRUCTURE.md §key contracts): reasoning depth, minimum context window,

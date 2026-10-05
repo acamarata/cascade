@@ -42,7 +42,7 @@ func (f *fakeThreadPrivacy) ThreadPrivacy(_ context.Context, threadID string) (c
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.err != nil {
-		return "", f.err
+		return 0, f.err
 	}
 	if tier, ok := f.tiers[threadID]; ok {
 		return tier, nil
@@ -141,7 +141,7 @@ func TestRefusalReasonForTier(t *testing.T) {
 		// An unresolvable tier (§5.16) is mapped to TierLocalOnly by the
 		// caller before this function ever runs; any other unrecognized
 		// value falls through to the same fail-closed local-only text.
-		{cascadepa.SensitivityTier("unresolvable"), reasonThreadLocalOnly},
+		{cascadepa.SensitivityTier(9), reasonThreadLocalOnly},
 	}
 	for _, c := range cases {
 		if got := refusalReasonForTier(c.tier); got != c.want {

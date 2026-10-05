@@ -28,24 +28,30 @@
 
 package cascadepa
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/acamarata/cascade/pkg/provider"
+)
 
 // SensitivityTier is the egress classification a bridge adapter declares
-// for content it is about to send. The values are the exact strings
-// internal/hooks/egress's own SensitivityTier uses, so the host adapter is
-// a cast and not a translation table that could disagree.
-type SensitivityTier string
+// for content it is about to send. It is an alias of
+// provider.SensitivityTier, the same type internal/hooks/egress aliases, so
+// the host adapter passes it through with no translation table that could
+// disagree.
+type SensitivityTier = provider.SensitivityTier
 
+// The four tiers a bridge adapter may declare.
 const (
 	// TierLocalOnly is content that must never leave the machine.
-	TierLocalOnly SensitivityTier = "local-only"
+	TierLocalOnly = provider.SensitivityLocalOnly
 	// TierRestricted is content only a class registered AllowRestricted
-	// may carry. The bridge class is not one.
-	TierRestricted SensitivityTier = "restricted"
+	// may carry. The bridge class is not one. It is the zero value.
+	TierRestricted = provider.SensitivityRestricted
 	// TierInternal is the tier the bridge's own operational replies carry.
-	TierInternal SensitivityTier = "internal"
+	TierInternal = provider.SensitivityInternal
 	// TierPublic is content admitted always.
-	TierPublic SensitivityTier = "public"
+	TierPublic = provider.SensitivityPublic
 )
 
 // ElevationPolicy answers whether a verb name is an elevated verb. The host
