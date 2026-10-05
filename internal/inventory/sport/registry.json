@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05T19:37:30Z",
+  "generated_at": "2026-10-05T20:31:51Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -236,6 +236,20 @@
       ],
       "statuses": [
         "CHANGE"
+      ]
+    },
+    {
+      "name": "ConfigStore.List",
+      "sites": [
+        {
+          "file": "internal/learn/config_store_read.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "ConfigStore.List/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -5040,6 +5054,12 @@
           "raw": "cmd/cascade/daemon (ADD, per T-2 sport_updates; R-14.117 sibling"
         },
         {
+          "file": "cmd/cascade/daemon_upgrade_wire_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "cmd/cascade/daemon (upgrade wiring)."
+        },
+        {
           "file": "cmd/cascade/daemon_windows.go",
           "line": 11,
           "status": "ADD",
@@ -6965,6 +6985,54 @@
       ]
     },
     {
+      "name": "context-engine/generation-check",
+      "sites": [
+        {
+          "file": "internal/context/generate/check.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "context-engine/generation-check (ADD, P1-GEN-05)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/generation-manifest",
+      "sites": [
+        {
+          "file": "internal/context/generate/doc.go",
+          "line": 22,
+          "status": "ADD",
+          "raw": "context-engine/generation-manifest (ADD, P1-GEN-05)."
+        },
+        {
+          "file": "internal/context/generate/manifest.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "context-engine/generation-manifest (ADD, P1-GEN-05)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/generation-verify",
+      "sites": [
+        {
+          "file": "internal/context/generate/verify.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "context-engine/generation-verify (ADD, P1-GEN-05)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "context-engine/harness-gen",
       "sites": [
         {
@@ -7002,6 +7070,26 @@
       ]
     },
     {
+      "name": "context-engine/managed-blocks",
+      "sites": [
+        {
+          "file": "internal/context/generate/managed.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "context-engine/managed-blocks (ADD, P1-GEN-05)."
+        },
+        {
+          "file": "internal/context/generate/managed_guard.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "context-engine/managed-blocks (ADD, P1-GEN-05)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "context-engine/merge-model",
       "sites": [
         {
@@ -7010,6 +7098,46 @@
           "status": "ADD",
           "ticket": "T-2",
           "raw": "context-engine/merge-model (ADD, per T-2 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/never-destroy-writer",
+      "sites": [
+        {
+          "file": "internal/context/generate/merge.go",
+          "line": 22,
+          "status": "ADD",
+          "raw": "context-engine/never-destroy-writer (ADD, P1-GEN-05)."
+        },
+        {
+          "file": "internal/context/generate/merge_block.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "context-engine/never-destroy-writer (ADD, P1-GEN-05)."
+        },
+        {
+          "file": "internal/context/generate/merge_publish.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "context-engine/never-destroy-writer (ADD, P1-GEN-05)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/path-confinement",
+      "sites": [
+        {
+          "file": "internal/context/generate/confine.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "context-engine/path-confinement (ADD, P1-GEN-05)."
         }
       ],
       "statuses": [
@@ -7623,6 +7751,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "domain:jobs/jobs_learned_config, jobs_learned_config_submission",
+      "sites": [
+        {
+          "file": "internal/learn/migration_config.go",
+          "line": 13,
+          "status": "",
+          "raw": "domain:jobs/jobs_learned_config, jobs_learned_config_submission,"
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -10986,17 +11128,31 @@
       ]
     },
     {
-      "name": "internal.ci.ChangedPaths",
+      "name": "internal.ci.CandidateSnapshot",
       "sites": [
         {
-          "file": "internal/ci/affected.go",
-          "line": 23,
+          "file": "internal/ci/stream_types.go",
+          "line": 18,
           "status": "ADD",
-          "raw": "internal.ci.ChangedPaths/ADDED"
+          "raw": "internal.ci.CandidateSnapshot/ADDED"
         }
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.CheckpointIDFor/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/stream_types_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "internal.ci.CheckpointIDFor/TESTED (P1-CI-01)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -11092,6 +11248,134 @@
       ]
     },
     {
+      "name": "internal.ci.Dispatcher",
+      "sites": [
+        {
+          "file": "internal/ci/stream.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "internal.ci.Dispatcher/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.Dispatcher.Checkpoint/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/stream_crash_atomic_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal.ci.Dispatcher.Checkpoint/TESTED (P1-CI-01)."
+        },
+        {
+          "file": "internal/ci/stream_plan_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal.ci.Dispatcher.Checkpoint/TESTED (P1-CI-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.Dispatcher.Dispatch",
+      "sites": [
+        {
+          "file": "internal/ci/stream_dispatch.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "internal.ci.Dispatcher.Dispatch/ADDED (P1-CI-01)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.Dispatcher.Dispatch/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/stream_dispatch_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal.ci.Dispatcher.Dispatch/TESTED (P1-CI-01)."
+        },
+        {
+          "file": "internal/ci/stream_events_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal.ci.Dispatcher.Dispatch/TESTED (P1-CI-01)."
+        },
+        {
+          "file": "internal/ci/stream_refence_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal.ci.Dispatcher.Dispatch/TESTED (P1-CI-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.Dispatcher.Resume",
+      "sites": [
+        {
+          "file": "internal/ci/stream_resume.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal.ci.Dispatcher.Resume/ADDED (P1-CI-01)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.Dispatcher.Resume/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/stream_crash_inject_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal.ci.Dispatcher.Resume/TESTED (P1-CI-01)."
+        },
+        {
+          "file": "internal/ci/stream_crash_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "internal.ci.Dispatcher.Resume/TESTED (P1-CI-01)."
+        },
+        {
+          "file": "internal/ci/stream_resume_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal.ci.Dispatcher.Resume/TESTED (P1-CI-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.Dispatcher/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/stream_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal.ci.Dispatcher/TESTED (P1-CI-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal.ci.ErrAffectedCmdFailed",
       "sites": [
         {
@@ -11111,9 +11395,10 @@
       "sites": [
         {
           "file": "internal/ci/affected.go",
-          "line": 23,
+          "line": 24,
           "status": "ADD",
-          "raw": "internal.ci.ErrBaseCommitUnknown/ADDED"
+          "ticket": "P1-E32-W6-S65-T1",
+          "raw": "internal.ci.ErrBaseCommitUnknown/ADDED (P1-E32-W6-S65-T1)."
         }
       ],
       "statuses": [
@@ -11157,6 +11442,20 @@
           "line": 32,
           "status": "ADD",
           "raw": "internal.ci.Executor/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.JobRef",
+      "sites": [
+        {
+          "file": "internal/ci/stream_types.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal.ci.JobRef/ADDED"
         }
       ],
       "statuses": [
@@ -11318,6 +11617,48 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.NewDispatcher",
+      "sites": [
+        {
+          "file": "internal/ci/stream.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "internal.ci.NewDispatcher/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.NewLocalSubJobExecutor",
+      "sites": [
+        {
+          "file": "internal/ci/stream_local.go",
+          "line": 26,
+          "status": "ADD",
+          "raw": "internal.ci.NewLocalSubJobExecutor/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.NewLocalSubJobExecutor/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/stream_local_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal.ci.NewLocalSubJobExecutor/TESTED (P1-CI-01)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -11603,6 +11944,20 @@
       ]
     },
     {
+      "name": "internal.ci.UpsertRunSourceStream/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/domain_stream_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal.ci.UpsertRunSourceStream/TESTED,"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal.ci.WaitDepsFromEnv",
       "sites": [
         {
@@ -11724,6 +12079,80 @@
       ]
     },
     {
+      "name": "internal.ci.ci_stream_attempt",
+      "sites": [
+        {
+          "file": "internal/ci/stream_attempt.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal.ci.ci_stream_attempt/ADDED (P1-CI-01)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.ci_stream_attempt/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/stream_attempt_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal.ci.ci_stream_attempt/TESTED (P1-CI-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.cleanRoomEnv",
+      "sites": [
+        {
+          "file": "internal/ci/stream_cleanroom.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal.ci.cleanRoomEnv/ADDED (P1-CI-01)."
+        },
+        {
+          "file": "internal/ci/stream_telemetry.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal.ci.cleanRoomEnv/ADDED (P1-CI-01)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.cleanRoomEnv/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/stream_cleanroom_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal.ci.cleanRoomEnv/TESTED (P1-CI-01)."
+        },
+        {
+          "file": "internal/ci/stream_quiettemp_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "internal.ci.cleanRoomEnv/TESTED (P1-CI-01)."
+        },
+        {
+          "file": "internal/ci/stream_telemetry_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal.ci.cleanRoomEnv/TESTED (P1-CI-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal.ci.evaluateChecks",
       "sites": [
         {
@@ -11747,6 +12176,34 @@
           "status": "",
           "ticket": "P1-E25-W5-S51-T3",
           "raw": "internal.ci.evaluateChecks/TESTED (P1-E25-W5-S51-T3)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.fence",
+      "sites": [
+        {
+          "file": "internal/ci/stream_fence.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal.ci.fence/ADDED (P1-CI-01)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.fence/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/stream_fence_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal.ci.fence/TESTED (P1-CI-01)."
         }
       ],
       "statuses": [
@@ -11792,10 +12249,10 @@
       "sites": [
         {
           "file": "internal/ci/runner_exec_unix.go",
-          "line": 17,
+          "line": 18,
           "status": "ADD",
           "ticket": "P1-E25-W5-S51-T5",
-          "raw": "internal.ci.killProcessGroup/ADDED (P1-E25-W5-S51-T5)."
+          "raw": "internal.ci.killProcessGroup/ADDED (P1-E25-W5-S51-T5); thin caller of pkg/procgroup (CHANGE) — P1-PLG-09."
         }
       ],
       "statuses": [
@@ -11869,6 +12326,34 @@
           "line": 9,
           "status": "",
           "raw": "internal.ci.normalizeActionsRuns/TESTED,"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.ci.outbox",
+      "sites": [
+        {
+          "file": "internal/ci/stream_outbox.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "internal.ci.outbox/ADDED (P1-CI-01)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.outbox/TESTED",
+      "sites": [
+        {
+          "file": "internal/ci/stream_outbox_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal.ci.outbox/TESTED (P1-CI-01)."
         }
       ],
       "statuses": [
@@ -13891,6 +14376,153 @@
       ]
     },
     {
+      "name": "internal.learn.Aggregator",
+      "sites": [
+        {
+          "file": "internal/learn/aggregate.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "internal.learn.Aggregator/ADDED (P1-CAP-03)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.Aggregator/TESTED, internal.learn.EnsureAggregateSalt/TESTED",
+      "sites": [
+        {
+          "file": "internal/learn/aggregate_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal.learn.Aggregator/TESTED, internal.learn.EnsureAggregateSalt/TESTED (P1-CAP-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.learn.ClassifyChange",
+      "sites": [
+        {
+          "file": "internal/learn/classify.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal.learn.ClassifyChange/ADDED (P1-LRN-01)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.ConfigStore",
+      "sites": [
+        {
+          "file": "internal/learn/config_store.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "internal.learn.ConfigStore/ADDED (P1-LRN-01)."
+        },
+        {
+          "file": "internal/learn/config_store_guards_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal.learn.ConfigStore."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.ConfigStore.Get",
+      "sites": [
+        {
+          "file": "internal/learn/config_store_read.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal.learn.ConfigStore.Get/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.ConfigStore.RevertToVersion",
+      "sites": [
+        {
+          "file": "internal/learn/config_store_versions.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal.learn.ConfigStore.RevertToVersion/ADDED (P1-LRN-01)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.ConfigTier",
+      "sites": [
+        {
+          "file": "internal/learn/config.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal.learn.ConfigTier/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.DenyRules",
+      "sites": [
+        {
+          "file": "internal/learn/denylist.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal.learn.DenyRules/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.EnsureAggregateSalt",
+      "sites": [
+        {
+          "file": "internal/learn/aggregate_salt.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "internal.learn.EnsureAggregateSalt/ADDED (P1-CAP-03)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.EnsureAggregateSalt/TESTED",
+      "sites": [
+        {
+          "file": "internal/learn/aggregate_salt_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal.learn.EnsureAggregateSalt/TESTED (P1-CAP-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal.learn.FindingWriter",
       "sites": [
         {
@@ -13903,6 +14535,62 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.LearnedConfig",
+      "sites": [
+        {
+          "file": "internal/learn/config.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal.learn.LearnedConfig/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.MatchDenylist",
+      "sites": [
+        {
+          "file": "internal/learn/denylist.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal.learn.MatchDenylist/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.ObservationWriter",
+      "sites": [
+        {
+          "file": "internal/learn/observation.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal.learn.ObservationWriter/ADDED (P1-CAP-03)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.ObservationWriter/TESTED",
+      "sites": [
+        {
+          "file": "internal/learn/observation_concurrent_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal.learn.ObservationWriter/TESTED (P1-CAP-03)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -13935,6 +14623,34 @@
       ]
     },
     {
+      "name": "internal.learn.Posterior",
+      "sites": [
+        {
+          "file": "internal/learn/score.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal.learn.Posterior/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.Posterior/TESTED, internal.learn.observationFor/TESTED",
+      "sites": [
+        {
+          "file": "internal/learn/observation_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal.learn.Posterior/TESTED, internal.learn.observationFor/TESTED (P1-CAP-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal.learn.RegisterRetentionTable",
       "sites": [
         {
@@ -13942,6 +14658,20 @@
           "line": 19,
           "status": "ADD",
           "raw": "internal.learn.RegisterRetentionTable/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.ResolveTarget",
+      "sites": [
+        {
+          "file": "internal/learn/target.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "internal.learn.ResolveTarget/ADDED"
         }
       ],
       "statuses": [
@@ -13963,6 +14693,116 @@
       ]
     },
     {
+      "name": "internal.learn.SQLiteCapabilityScorer",
+      "sites": [
+        {
+          "file": "internal/learn/score.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal.learn.SQLiteCapabilityScorer/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.SQLiteCapabilityScorer/TESTED",
+      "sites": [
+        {
+          "file": "internal/learn/score_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal.learn.SQLiteCapabilityScorer/TESTED (P1-CAP-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.learn.SQLiteEstimateSource",
+      "sites": [
+        {
+          "file": "internal/learn/estimate.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal.learn.SQLiteEstimateSource/ADDED (P1-CAP-03)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.SQLiteEstimateSource/TESTED",
+      "sites": [
+        {
+          "file": "internal/learn/estimate_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal.learn.SQLiteEstimateSource/TESTED (P1-CAP-03)."
+        },
+        {
+          "file": "internal/learn/index_plan_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal.learn.SQLiteEstimateSource/TESTED (P1-CAP-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.learn.SQLiteSchedulerDecisionWriter/TESTED",
+      "sites": [
+        {
+          "file": "internal/learn/scheduler_decision_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal.learn.SQLiteSchedulerDecisionWriter/TESTED (P1-CAP-03)."
+        },
+        {
+          "file": "internal/learn/scheduler_decision_validate_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal.learn.SQLiteSchedulerDecisionWriter/TESTED (P1-CAP-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.learn.SchedulerDecisionWriter",
+      "sites": [
+        {
+          "file": "internal/learn/scheduler_decision.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "internal.learn.SchedulerDecisionWriter/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.Targets",
+      "sites": [
+        {
+          "file": "internal/learn/target.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "internal.learn.Targets/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.learn.TelemetryOutcome",
       "sites": [
         {
@@ -13977,6 +14817,20 @@
       ]
     },
     {
+      "name": "internal.learn.ValidateNoIdentifiers",
+      "sites": [
+        {
+          "file": "internal/learn/privacy.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal.learn.ValidateNoIdentifiers/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.learn.credentialShaped",
       "sites": [
         {
@@ -13984,6 +14838,48 @@
           "line": 26,
           "status": "ADD",
           "raw": "internal.learn.credentialShaped/ADDED (P1-CAP-02)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.decayWeight",
+      "sites": [
+        {
+          "file": "internal/learn/decay.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal.learn.decayWeight/ADDED (P1-CAP-03)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.decayWeight/TESTED",
+      "sites": [
+        {
+          "file": "internal/learn/decay_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal.learn.decayWeight/TESTED (P1-CAP-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal.learn.targetRegistry",
+      "sites": [
+        {
+          "file": "internal/learn/target_registry.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal.learn.targetRegistry/ADDED (P1-LRN-01)."
         }
       ],
       "statuses": [
@@ -17438,7 +18334,13 @@
         },
         {
           "file": "internal/daemon/lifecycle_unix.go",
-          "line": 29,
+          "line": 30,
+          "status": "CHANGE",
+          "raw": "internal/daemon (CHANGE)."
+        },
+        {
+          "file": "internal/daemon/lifecycle_unix_handoff.go",
+          "line": 10,
           "status": "CHANGE",
           "raw": "internal/daemon (CHANGE)."
         },
@@ -17460,6 +18362,12 @@
           "line": 12,
           "status": "ADD",
           "raw": "internal/daemon (ADD)."
+        },
+        {
+          "file": "internal/daemon/lifecycle_unix_signal_test.go",
+          "line": 12,
+          "status": "CHANGE",
+          "raw": "internal/daemon (CHANGED, explicit upgrade hand-off)."
         },
         {
           "file": "internal/daemon/lifecycle_unix_start.go",
@@ -17683,7 +18591,7 @@
         },
         {
           "file": "internal/daemon/upgrade.go",
-          "line": 30,
+          "line": 32,
           "status": "ADD",
           "ticket": "T-5",
           "raw": "internal/daemon (ADD, DaemonUpgradeManager entity, per T-5"
@@ -17713,6 +18621,12 @@
           "line": 12,
           "status": "CHANGE",
           "raw": "internal/daemon (CHANGED, upgrade relaunch join)."
+        },
+        {
+          "file": "internal/daemon/upgrade_relaunch_integration_test.go",
+          "line": 13,
+          "status": "CHANGE",
+          "raw": "internal/daemon (CHANGED, explicit upgrade hand-off)."
         },
         {
           "file": "internal/daemon/upgrade_run_test.go",
@@ -20551,10 +21465,10 @@
       "sites": [
         {
           "file": "internal/plugins/lifecycle_manage.go",
-          "line": 8,
+          "line": 12,
           "status": "ADD",
           "ticket": "P1-E15-W4-S32-T4",
-          "raw": "internal/plugins lifecycle-manage/ADD — P1-E15-W4-S32-T4."
+          "raw": "internal/plugins lifecycle-manage/ADD — P1-E15-W4-S32-T4; teardown deadline (CHANGE) — P1-PLG-09."
         }
       ],
       "statuses": [
@@ -20831,6 +21745,27 @@
       ]
     },
     {
+      "name": "internal/plugins/process close",
+      "sites": [
+        {
+          "file": "internal/plugins/process/close.go",
+          "line": 24,
+          "status": "ADD",
+          "raw": "internal/plugins/process close (ADD) — P1-PLG-09."
+        },
+        {
+          "file": "internal/plugins/process/close_test.go",
+          "line": 15,
+          "status": "",
+          "raw": "internal/plugins/process close (TEST) — P1-PLG-09."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins/process handshake",
       "sites": [
         {
@@ -20853,7 +21788,7 @@
           "line": 22,
           "status": "ADD",
           "ticket": "P1-E15-W4-S31-T4",
-          "raw": "internal/plugins/process host-call-dispatch (ADD) — P1-E15-W4-S31-T4."
+          "raw": "internal/plugins/process host-call-dispatch (ADD) — P1-E15-W4-S31-T4; per-transport consumer (CHANGE) — P1-PLG-09."
         }
       ],
       "statuses": [
@@ -20864,14 +21799,21 @@
       "name": "internal/plugins/process lifetime",
       "sites": [
         {
+          "file": "internal/plugins/process/lifecycle_fake_test.go",
+          "line": 15,
+          "status": "",
+          "raw": "internal/plugins/process lifetime (TEST) — P1-PLG-09."
+        },
+        {
           "file": "internal/plugins/process/lifetime.go",
-          "line": 27,
+          "line": 35,
           "status": "ADD",
           "ticket": "P1-E15-W4-S31-T3",
-          "raw": "internal/plugins/process lifetime (ADD) — P1-E15-W4-S31-T3."
+          "raw": "internal/plugins/process lifetime (ADD) — P1-E15-W4-S31-T3; lifetime-bound respawn (CHANGE) — P1-PLG-09."
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -20883,7 +21825,7 @@
           "line": 22,
           "status": "ADD",
           "ticket": "P1-E15-W4-S31-T3",
-          "raw": "internal/plugins/process restart (ADD) — P1-E15-W4-S31-T3."
+          "raw": "internal/plugins/process restart (ADD) — P1-E15-W4-S31-T3; Handle lifecycle fields (CHANGE) — P1-PLG-09."
         }
       ],
       "statuses": [
@@ -20898,7 +21840,7 @@
           "line": 22,
           "status": "ADD",
           "ticket": "P1-E15-W4-S31-T3",
-          "raw": "internal/plugins/process runtime (ADD) — P1-E15-W4-S31-T3; host-call dispatch (CHANGE) — P1-E15-W4-S31-T4."
+          "raw": "internal/plugins/process runtime (ADD) — P1-E15-W4-S31-T3; host-call dispatch (CHANGE) — P1-E15-W4-S31-T4;"
         }
       ],
       "statuses": [
@@ -20928,7 +21870,7 @@
           "line": 21,
           "status": "ADD",
           "ticket": "P1-E15-W4-S31-T3",
-          "raw": "internal/plugins/process transport (ADD) — P1-E15-W4-S31-T3."
+          "raw": "internal/plugins/process transport (ADD) — P1-E15-W4-S31-T3; single-parse routeFrame (CHANGE) — P1-PLG-09."
         }
       ],
       "statuses": [
@@ -20943,7 +21885,7 @@
           "line": 40,
           "status": "ADD",
           "ticket": "P1-E15-W4-S31-T3",
-          "raw": "internal/plugins/process types (ADD) — P1-E15-W4-S31-T3."
+          "raw": "internal/plugins/process types (ADD) — P1-E15-W4-S31-T3; Commander.Signal + Manifest.Env (CHANGE) — P1-PLG-09."
         }
       ],
       "statuses": [
@@ -24856,7 +25798,7 @@
         },
         {
           "file": "internal/jobs/lease_fence.go",
-          "line": 31,
+          "line": 35,
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T2",
           "raw": "jobs/lease-model (ADD, P1-E29-W6-S59-T2)."
@@ -24876,10 +25818,16 @@
         },
         {
           "file": "internal/jobs/lease_fence_windows.go",
-          "line": 23,
+          "line": 32,
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T2",
           "raw": "jobs/lease-model (ADD, P1-E29-W6-S59-T2)."
+        },
+        {
+          "file": "internal/jobs/lease_fence_winverdict.go",
+          "line": 21,
+          "status": "",
+          "raw": "jobs/lease-model."
         },
         {
           "file": "internal/jobs/lease_query.go",
@@ -25192,6 +26140,18 @@
           "raw": "jobs/scheduler-outbox/ADD (P1-E29-W6-S59-T5)."
         },
         {
+          "file": "internal/jobs/outbox_query.go",
+          "line": 23,
+          "status": "ADD",
+          "raw": "jobs/scheduler-outbox/ADD (P1-CI-01)."
+        },
+        {
+          "file": "internal/jobs/outbox_query_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "jobs/scheduler-outbox/ADD (tests) (P1-CI-01)."
+        },
+        {
           "file": "internal/jobs/outbox_test.go",
           "line": 10,
           "status": "ADD",
@@ -25399,6 +26359,90 @@
       ]
     },
     {
+      "name": "learn/classify_test",
+      "sites": [
+        {
+          "file": "internal/learn/classify_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "learn/classify_test (P1-LRN-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "learn/config_store_refusals_test",
+      "sites": [
+        {
+          "file": "internal/learn/config_store_refusals_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "learn/config_store_refusals_test (P1-LRN-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "learn/config_store_status_test",
+      "sites": [
+        {
+          "file": "internal/learn/config_store_status_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "learn/config_store_status_test (P1-LRN-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "learn/config_store_test",
+      "sites": [
+        {
+          "file": "internal/learn/config_store_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "learn/config_store_test (P1-LRN-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "learn/config_store_writer_test",
+      "sites": [
+        {
+          "file": "internal/learn/config_store_writer_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "learn/config_store_writer_test."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "learn/config_test",
+      "sites": [
+        {
+          "file": "internal/learn/config_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "learn/config_test (P1-LRN-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "learn/credential",
       "sites": [
         {
@@ -25452,6 +26496,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "learn/denylist_test",
+      "sites": [
+        {
+          "file": "internal/learn/denylist_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "learn/denylist_test (P1-LRN-01)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -25515,6 +26573,20 @@
       ]
     },
     {
+      "name": "learn/migration_config_test",
+      "sites": [
+        {
+          "file": "internal/learn/migration_config_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "learn/migration_config_test (P1-LRN-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "learn/opaque",
       "sites": [
         {
@@ -25541,6 +26613,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "learn/privacy_test",
+      "sites": [
+        {
+          "file": "internal/learn/privacy_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "learn/privacy_test (P1-LRN-01)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -25630,6 +26716,20 @@
       ]
     },
     {
+      "name": "learn/target_test",
+      "sites": [
+        {
+          "file": "internal/learn/target_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "learn/target_test (P1-LRN-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "learn/validate",
       "sites": [
         {
@@ -25666,6 +26766,152 @@
           "line": 26,
           "status": "ADD",
           "raw": "methodAllowed/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "migration golden-tripwire contract",
+      "sites": [
+        {
+          "file": "internal/migration/migrate_cmd.go",
+          "line": 142,
+          "status": "",
+          "raw": "migration golden-tripwire contract."
+        },
+        {
+          "file": "internal/migration/tripwire/digest.go",
+          "line": 4,
+          "status": "",
+          "raw": "migration golden-tripwire contract."
+        },
+        {
+          "file": "internal/migration/tripwire/verify.go",
+          "line": 27,
+          "status": "",
+          "raw": "migration golden-tripwire contract."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "migration golden-tripwire contract; shared with sweep and harvester",
+      "sites": [
+        {
+          "file": "internal/migration/tripwire/module.go",
+          "line": 12,
+          "status": "",
+          "raw": "migration golden-tripwire contract; shared with sweep and harvester."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "migration/golden",
+      "sites": [
+        {
+          "file": "internal/migration/golden/cli.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S54-T3",
+          "raw": "migration/golden/ADD (P1-E26-W10-S54-T3)."
+        },
+        {
+          "file": "internal/migration/golden/golden.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S54-T3",
+          "raw": "migration/golden/ADD (P1-E26-W10-S54-T3)."
+        },
+        {
+          "file": "internal/migration/golden/guard.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S54-T3",
+          "raw": "migration/golden/ADD (P1-E26-W10-S54-T3)."
+        },
+        {
+          "file": "internal/migration/golden/harvest.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S54-T3",
+          "raw": "migration/golden/ADD (P1-E26-W10-S54-T3)."
+        },
+        {
+          "file": "internal/migration/golden/harvest_accounts.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S54-T3",
+          "raw": "migration/golden/ADD (P1-E26-W10-S54-T3)."
+        },
+        {
+          "file": "internal/migration/golden/harvest_config.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S54-T3",
+          "raw": "migration/golden/ADD (P1-E26-W10-S54-T3)."
+        },
+        {
+          "file": "internal/migration/golden/harvest_memory.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S54-T3",
+          "raw": "migration/golden/ADD (P1-E26-W10-S54-T3)."
+        },
+        {
+          "file": "internal/migration/golden/harvest_vault.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S54-T3",
+          "raw": "migration/golden/ADD (P1-E26-W10-S54-T3)."
+        },
+        {
+          "file": "internal/migration/golden/pin.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S54-T3",
+          "raw": "migration/golden/ADD (P1-E26-W10-S54-T3)."
+        },
+        {
+          "file": "internal/migration/golden/readme.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S54-T3",
+          "raw": "migration/golden/ADD (P1-E26-W10-S54-T3)."
+        },
+        {
+          "file": "internal/migration/golden/record.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S54-T3",
+          "raw": "migration/golden/ADD (P1-E26-W10-S54-T3)."
+        },
+        {
+          "file": "internal/migration/golden/redact_allowlist.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S54-T3",
+          "raw": "migration/golden/ADD (P1-E26-W10-S54-T3)."
+        },
+        {
+          "file": "internal/migration/golden/redact_fields.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S54-T3",
+          "raw": "migration/golden/ADD (P1-E26-W10-S54-T3)."
+        },
+        {
+          "file": "internal/migration/golden/write.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E26-W10-S54-T3",
+          "raw": "migration/golden/ADD (P1-E26-W10-S54-T3)."
         }
       ],
       "statuses": [
@@ -26909,6 +28155,63 @@
         }
       ],
       "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "pkg/procgroup",
+      "sites": [
+        {
+          "file": "pkg/procgroup/attr_linux.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "pkg/procgroup (ADD) — P1-PLG-09."
+        },
+        {
+          "file": "pkg/procgroup/attr_other.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "pkg/procgroup (ADD) — P1-PLG-09."
+        },
+        {
+          "file": "pkg/procgroup/doc.go",
+          "line": 23,
+          "status": "ADD",
+          "raw": "pkg/procgroup (ADD) — P1-PLG-09."
+        },
+        {
+          "file": "pkg/procgroup/example_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "pkg/procgroup (TEST) — P1-PLG-09."
+        },
+        {
+          "file": "pkg/procgroup/procgroup_test.go",
+          "line": 14,
+          "status": "",
+          "raw": "pkg/procgroup (TEST) — P1-PLG-09."
+        },
+        {
+          "file": "pkg/procgroup/procgroup_windows.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "pkg/procgroup (ADD) — P1-PLG-09."
+        },
+        {
+          "file": "pkg/procgroup/procgroup_windows_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "pkg/procgroup (TEST) — P1-PLG-09."
+        },
+        {
+          "file": "pkg/procgroup/signal_unix.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "pkg/procgroup (ADD) — P1-PLG-09."
+        }
+      ],
+      "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -29131,17 +30434,17 @@
         },
         {
           "file": "plugins/nself/exec_unix.go",
-          "line": 22,
+          "line": 25,
           "status": "ADD",
           "ticket": "P1-E25-W5-S52-T2",
-          "raw": "plugins/nself detect (ADD) — P1-E25-W5-S52-T2."
+          "raw": "plugins/nself detect (ADD) — P1-E25-W5-S52-T2; procgroup caller + reaped guard (CHANGE) — P1-PLG-09."
         },
         {
           "file": "plugins/nself/exec_windows.go",
-          "line": 22,
+          "line": 26,
           "status": "ADD",
           "ticket": "P1-E25-W5-S52-T2",
-          "raw": "plugins/nself detect (ADD) — P1-E25-W5-S52-T2."
+          "raw": "plugins/nself detect (ADD) — P1-E25-W5-S52-T2; kill seam (CHANGE) — P1-PLG-09."
         },
         {
           "file": "plugins/nself/probe.go",
@@ -30016,6 +31319,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "process lifecycle regression tests",
+      "sites": [
+        {
+          "file": "internal/plugins/process/close_group_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "process lifecycle regression tests."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -32714,7 +34031,7 @@
       ]
     }
   ],
-  "total_sites": 3137,
-  "unspecified_count": 166,
-  "multi_status_count": 94
+  "total_sites": 3256,
+  "unspecified_count": 199,
+  "multi_status_count": 98
 }
