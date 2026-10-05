@@ -40,6 +40,7 @@ func TestCredentialFailClosedBranches(t *testing.T) {
 		{"empty-table", nil},
 		{"nil-expr", []secrets.Pattern{{Class: secrets.ClassBase64JSON, Name: "no-expr"}}},
 	}
+	db := newTestOutcomeDB(t) // refusals never write: one db serves both branches
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			swapCredentialPatterns(t, tc.table)
@@ -49,7 +50,6 @@ func TestCredentialFailClosedBranches(t *testing.T) {
 			if credentialShaped("") {
 				t.Errorf("%s: the empty value is flagged", tc.name)
 			}
-			db := newTestOutcomeDB(t)
 			err := NewSQLiteOutcomeWriter(db, newTestClock()).Record(context.Background(), baseOutcome("job-ok-after"))
 			if !cascade.HasKind(err, cascade.KindInvalidInput) {
 				t.Errorf("%s: Record did not refuse with KindInvalidInput: %v", tc.name, err)

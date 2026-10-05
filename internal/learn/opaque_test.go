@@ -18,11 +18,12 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// assertRefusedNoRows records o and requires a value-free KindInvalidInput
-// refusal that leaves both telemetry tables empty.
-func assertRefusedNoRows(t *testing.T, name, value string, o TelemetryOutcome) {
+// assertRefusedNoRows records o on db and requires a value-free
+// KindInvalidInput refusal that leaves both telemetry tables empty. db is
+// shared across the refusal cases of one test: a refusal never writes, so
+// the empty-table check holds for every case (R111).
+func assertRefusedNoRows(t *testing.T, db *sql.DB, name, value string, o TelemetryOutcome) {
 	t.Helper()
-	db := newTestOutcomeDB(t)
 	err := NewSQLiteOutcomeWriter(db, newTestClock()).Record(context.Background(), o)
 	if err == nil || !cascade.HasKind(err, cascade.KindInvalidInput) {
 		t.Errorf("%s: err = %v, want a KindInvalidInput refusal", name, err)
@@ -40,14 +41,14 @@ func assertRefusedNoRows(t *testing.T, name, value string, o TelemetryOutcome) {
 // name, IP address or client path in ScopeRef is refused before any SQL; an
 // opaque scope id stores and reads back byte-identical.
 func TestScopeRefOpaqueRule(t *testing.T) {
+	db := newTestOutcomeDB(t)
 	for _, v := range []string{
 		"person@example.com", "https://example.com/x", "/Users/name/notes", "~/notes",
 		`C:\Users\name`, "10.1.2.3", "fe80::1", "clients/acme/contract.md", "build.example.com",
 		"alice%40example%2Ecom",
 	} {
-		assertRefusedNoRows(t, "ScopeRef "+v, v, withField("ScopeRef", v))
+		assertRefusedNoRows(t, db, "ScopeRef "+v, v, withField("ScopeRef", v))
 	}
-	db := newTestOutcomeDB(t)
 	o := baseOutcome("job-opaque-scope")
 	o.ScopeRef = "scope-" + digestID("clients/acme/contract.md")
 	if err := NewSQLiteOutcomeWriter(db, newTestClock()).Record(context.Background(), o); err != nil {
@@ -65,9 +66,10 @@ func TestScopeRefOpaqueRule(t *testing.T) {
 // TestLabelsRefuseHostAndAddress: a host name or IPv4 address in any label
 // column is refused and stores nothing.
 func TestLabelsRefuseHostAndAddress(t *testing.T) {
+	db := newTestOutcomeDB(t)
 	for _, field := range []string{"TaskClass", "RiskClass", "LaneTier", "RetrievalStrategy", "Component"} {
 		for _, v := range []string{"a.example.com", "10.1.2.3"} {
-			assertRefusedNoRows(t, field+" "+v, v, withField(field, v))
+			assertRefusedNoRows(t, db, field+" "+v, v, withField(field, v))
 		}
 	}
 }
