@@ -1,9 +1,9 @@
 package learn
 
-// Purpose: the learn package's own migration set — two tables inside the
+// Purpose: the learn package's own migration set — four tables inside the
 //   EXISTING jobs domain (table prefix jobs_), under an independent SetID
-//   so P1-E31-W6-S64-T2 can append its own steps and raise the same set
-//   to SchemaVersion 2 without colliding with internal/jobs' own "jobs"
+//   so later tickets append steps and raise the same set (SchemaVersion 2
+//   here) without colliding with internal/jobs' own "jobs"
 //   set or internal/conductor's "conductor-usage" set (R-16.77: the
 //   ledger is keyed by (SetID, schema_version), so two sets sharing a
 //   version number is not a conflict).
@@ -12,7 +12,8 @@ package learn
 // Constraints: R-14.306(a) — Go MigrationStep values only, no numbered
 //   .sql file and no migrate.Builder (neither exists in this tree).
 // SPORT: domain:jobs/jobs_telemetry_outcomes, jobs_telemetry_finding —
-//   new tables under SetID learn v1 (P1-E31-W6-S64-T1).
+//   new tables under SetID learn v1 (P1-E31-W6-S64-T1);
+//   jobs_capability_score_observations, jobs_scheduler_decisions — v2 (P1-CAP-03).
 
 import (
 	"context"
@@ -32,24 +33,125 @@ const (
 )
 
 // learnSetID / learnSchemaVersion: see this file's header SetID doc
-// comment. P1-E31-W6-S64-T2 appends its own steps and raises
-// learnSchemaVersion to 2 in a later change to this same set.
+// comment. SchemaVersion 2 (P1-CAP-03) appends the capability-score and
+// scheduler-decision tables after the version-1 steps; the ledger re-runs
+// every step at the new version (CREATE ... IF NOT EXISTS), so a database
+// already at version 1 upgrades by applying the set again.
 const (
 	learnSetID         = "learn"
-	learnSchemaVersion = 1
+	learnSchemaVersion = 2
 )
 
-// MigrationSet is the learn package's two-table schema.
-func MigrationSet() migrate.MigrationSet {
+// Table names the version-2 steps create (jobs_ prefix, same domain).
+const (
+	tableCapabilityScore   = "jobs_capability_score_observations"
+	tableSchedulerDecision = "jobs_scheduler_decisions"
+)
+
+// MigrationSet is the learn package's schema at the current SchemaVersion.
+func MigrationSet() migrate.MigrationSet { return migrationSetAt(learnSchemaVersion) }
+
+// migrationSetAt builds the set as it stood at version (1 or 2): the only
+// composite literal of this SetID, so tests can build a genuine version-1
+// database and upgrade it with MigrationSet.
+func migrationSetAt(version int) migrate.MigrationSet {
+	steps := learnStepsV1()
+	if version >= 2 {
+		steps = append(steps, learnStepsV2()...)
+	}
+	return migrate.MigrationSet{
+		SetID:         learnSetID,
+		SchemaVersion: version,
+		ReaderCeiling: version,
+		Steps:         steps,
+	}
+}
+
+// learnStepsV1 is the P1-CAP-02 step list, unchanged and first in every
+// later version so the ledger's checksum prefix check still matches.
+func learnStepsV1() []migrate.MigrationStep {
 	steps := []migrate.MigrationStep{telemetryOutcomesTableStep()}
 	idxSteps := telemetryOutcomeIndexSteps()
 	steps = append(steps, idxSteps[:]...)
-	steps = append(steps, telemetryFindingTableStep())
-	return migrate.MigrationSet{
-		SetID:         learnSetID,
-		SchemaVersion: learnSchemaVersion,
-		ReaderCeiling: learnSchemaVersion,
-		Steps:         steps,
+	return append(steps, telemetryFindingTableStep())
+}
+
+// learnStepsV2 is the P1-CAP-03 step list: the observation table with its
+// unique key, then the decision table with its indices, then two read-path
+// indices for the scorer and estimate source: outcomes by (repo_id,
+// created_at) and decisions by (selected_tier, task_class, decided_at). The
+// outcomes table is the P1-CAP-02 one; an index on it is a V2 step because V1
+// is frozen. Later fields of a decision go in a child table
+// jobs_scheduler_decision_<name> keyed by decision_id at a higher version
+// (the DSL has no ALTER).
+func learnStepsV2() []migrate.MigrationStep {
+	return []migrate.MigrationStep{
+		capabilityScoreTableStep(),
+		learnIndexStep("idx_jobs_capability_score_key", tableCapabilityScore, true, "scope_key", "task_class", "tier"),
+		schedulerDecisionTableStep(),
+		learnIndexStep("idx_jobs_scheduler_decisions_job_id", tableSchedulerDecision, false, "job_id"),
+		learnIndexStep("idx_jobs_scheduler_decisions_execution_id", tableSchedulerDecision, false, "execution_id"),
+		learnIndexStep("idx_jobs_scheduler_decisions_decided_at", tableSchedulerDecision, false, "decided_at"),
+		learnIndexStep("idx_jobs_telemetry_outcomes_repo_created", tableTelemetryOutcomes, false, "repo_id", "created_at"),
+		learnIndexStep("idx_jobs_scheduler_decisions_tier_class", tableSchedulerDecision, false, "selected_tier", "task_class", "decided_at"),
+	}
+}
+
+func learnIndexStep(name, table string, unique bool, cols ...string) migrate.MigrationStep {
+	return migrate.MigrationStep{
+		Kind:  migrate.StepCreateIndex,
+		Index: &migrate.IndexDef{Name: name, Table: table, Columns: cols, Unique: unique},
+	}
+}
+
+// capabilityScoreTableStep: one decayed (alpha, beta) mass per (scope_key,
+// task_class, tier). alpha and beta hold OBSERVED successes and failures
+// only (decayed to last_updated); the prior is added at read time.
+func capabilityScoreTableStep() migrate.MigrationStep {
+	return migrate.MigrationStep{
+		Kind:        migrate.StepCreateTable,
+		Description: "jobs_capability_score_observations: decayed Beta mass per (scope_key, task_class, tier) (R-16.37)",
+		Table: &migrate.TableDef{
+			Name: tableCapabilityScore,
+			Columns: []migrate.ColumnDef{
+				{Name: "id", Type: migrate.TypeInteger, PrimaryKey: true, AutoIncrement: true, NotNull: true},
+				{Name: "scope_key", Type: migrate.TypeText, NotNull: true},
+				{Name: "task_class", Type: migrate.TypeText, NotNull: true},
+				{Name: "tier", Type: migrate.TypeText, NotNull: true},
+				{Name: "alpha", Type: migrate.TypeReal, NotNull: true},
+				{Name: "beta", Type: migrate.TypeReal, NotNull: true},
+				{Name: "observation_count", Type: migrate.TypeInteger, NotNull: true},
+				{Name: "last_updated", Type: migrate.TypeInteger, NotNull: true},
+			},
+		},
+	}
+}
+
+// schedulerDecisionTableStep: one immutable row per dispatch decision, over
+// ids, closed enums and numbers only (R-21.167: no Explain() text, no free
+// text column). id is the caller-minted TEXT id the lease can return.
+func schedulerDecisionTableStep() migrate.MigrationStep {
+	return migrate.MigrationStep{
+		Kind:        migrate.StepCreateTable,
+		Description: "jobs_scheduler_decisions: one immutable dispatch decision row (R-21.167)",
+		Table: &migrate.TableDef{
+			Name: tableSchedulerDecision,
+			Columns: []migrate.ColumnDef{
+				{Name: "id", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
+				{Name: "job_id", Type: migrate.TypeText, NotNull: true},
+				{Name: "execution_id", Type: migrate.TypeText, NotNull: true},
+				{Name: "task_class", Type: migrate.TypeText, NotNull: true},
+				{Name: "selected_tier", Type: migrate.TypeText, NotNull: true},
+				{Name: "selected_lane_id", Type: migrate.TypeText, NotNull: true},
+				{Name: "selected_node_id", Type: migrate.TypeText, NotNull: true},
+				{Name: "score_at_selection", Type: migrate.TypeReal, NotNull: true},
+				{Name: "fallback_level", Type: migrate.TypeText, NotNull: true},
+				{Name: "jump_rule_fired", Type: migrate.TypeInteger, NotNull: true},
+				{Name: "jump_reason_code", Type: migrate.TypeText, NotNull: true},
+				{Name: "reserve_tier0_flag", Type: migrate.TypeInteger, NotNull: true},
+				{Name: "decided_at", Type: migrate.TypeInteger, NotNull: true},
+			},
+		},
 	}
 }
 

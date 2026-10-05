@@ -58,6 +58,7 @@ type OutcomeWriter interface {
 type SQLiteOutcomeWriter struct {
 	db    *sql.DB
 	clock runtime.Clock
+	obs   ObservationWriter // nil: outcomes are recorded without feeding the capability scorer
 }
 
 // NewSQLiteOutcomeWriter persists through db, stamping created_at via clock.
@@ -65,10 +66,22 @@ func NewSQLiteOutcomeWriter(db *sql.DB, clock runtime.Clock) *SQLiteOutcomeWrite
 	return &SQLiteOutcomeWriter{db: db, clock: clock}
 }
 
+// WithObservationWriter makes every newly recorded terminal outcome also
+// feed ow (P1-CAP-03), once per job, and returns w.
+func (w *SQLiteOutcomeWriter) WithObservationWriter(ow ObservationWriter) *SQLiteOutcomeWriter {
+	w.obs = ow
+	return w
+}
+
 var _ OutcomeWriter = (*SQLiteOutcomeWriter)(nil)
 
 // Record inserts one jobs_telemetry_outcomes row for o.JobID (idempotent
-// by job_id). cost_tokens/quota_units come from the per-job jobs_usage
+// by job_id) and, when an ObservationWriter is attached, observes it once
+// for the newly inserted row: (repo:<RepoID>, TaskClass, LaneTier) with
+// success = accepted. A repeat Record for a recorded job inserts nothing and
+// observes nothing, so a reconcile pass never double counts; an outcome that
+// names no scored cell (observationFor) is recorded but not observed. A
+// Record that fails before the insert observes nothing. cost_tokens/quota_units come from the per-job jobs_usage
 // row (R-16.52); no row yet is zero, not a blocked write. The stored
 // job_id is storedJobID(o.JobID); the usage join and the outcome_class
 // update use the raw id, which is what jobs_usage is keyed by.
@@ -87,8 +100,14 @@ func (w *SQLiteOutcomeWriter) Record(ctx context.Context, o TelemetryOutcome) er
 	o.CostTokens, o.QuotaUnits = costTokens, quotaUnits
 	o.JobID = storedJobID(rawJobID)
 
-	if err := w.insertOutcome(ctx, o); err != nil {
+	inserted, err := w.insertOutcome(ctx, o)
+	if err != nil {
 		return err
+	}
+	if inserted {
+		if err := w.observe(ctx, o); err != nil {
+			return err
+		}
 	}
 	err = conductor.NewUsageStore(w.db).UpdateOutcomeClass(ctx, conductor.JobID(rawJobID), string(o.FinalOutcome))
 	// ErrUsageRecordNotFound is non-fatal: Executor's usage-store has no
@@ -101,13 +120,26 @@ func (w *SQLiteOutcomeWriter) Record(ctx context.Context, o TelemetryOutcome) er
 	return nil
 }
 
-// insertOutcome issues the INSERT, split from Record for the 50-line cap.
-func (w *SQLiteOutcomeWriter) insertOutcome(ctx context.Context, o TelemetryOutcome) error {
+// observe feeds the attached ObservationWriter for a newly inserted outcome.
+func (w *SQLiteOutcomeWriter) observe(ctx context.Context, o TelemetryOutcome) error {
+	if w.obs == nil {
+		return nil
+	}
+	scope, tc, tier, success, ok := observationFor(o)
+	if !ok {
+		return nil
+	}
+	return w.obs.Observe(ctx, scope, tc, tier, success)
+}
+
+// insertOutcome issues the INSERT, split from Record for the 50-line cap,
+// and reports whether a new row was written (false: job_id already recorded).
+func (w *SQLiteOutcomeWriter) insertOutcome(ctx context.Context, o TelemetryOutcome) (bool, error) {
 	var rollbackAt any
 	if o.RollbackAt != nil {
 		rollbackAt = o.RollbackAt.UTC().Unix()
 	}
-	_, err := w.db.ExecContext(ctx, `
+	res, err := w.db.ExecContext(ctx, `
 		INSERT INTO `+tableTelemetryOutcomes+`
 			(job_id, task_class, repo_id, language, component, risk_class, lane_tier, node_id, scope_ref,
 			 context_size_tokens, retrieval_strategy, duration_ms, queue_time_ms, retry_count,
@@ -121,9 +153,13 @@ func (w *SQLiteOutcomeWriter) insertOutcome(ctx context.Context, o TelemetryOutc
 		o.CostTokens, o.QuotaUnits, w.clock.Now().UTC().Unix(),
 	)
 	if err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "learn: insert jobs_telemetry_outcomes row")
+		return false, cascade.Wrap(cascade.KindUnavailable, err, "learn: insert jobs_telemetry_outcomes row")
 	}
-	return nil
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, cascade.Wrap(cascade.KindUnavailable, err, "learn: count inserted jobs_telemetry_outcomes rows")
+	}
+	return n == 1, nil
 }
 
 // readUsageJoin reads jobs_usage for jobID (R-16.52): cost_tokens =

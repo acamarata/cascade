@@ -213,14 +213,43 @@ func TestMigrationCreatesTables(t *testing.T) {
 	}
 }
 
+// TestMigrationIdempotent: MigrationSet (SchemaVersion 2) applies twice with
+// nil, and on top of a SchemaVersion 1 database (the P1-CAP-02 shape) twice
+// with nil, leaving the ledger at version 2, every v2 index present and no
+// free-text column on jobs_scheduler_decisions.
 func TestMigrationIdempotent(t *testing.T) {
-	db := openTestDB(t)
 	ctx := context.Background()
-	if err := ApplyLearnSchema(ctx, db, migrate.SQLiteEmitter{}, newTestClock()); err != nil {
-		t.Fatalf("first ApplyLearnSchema: %v", err)
+	fresh, upgraded := openTestDB(t), openTestDB(t)
+	v1 := migrate.ApplyConfig{DB: upgraded, Dialect: migrate.SQLiteEmitter{}, Clock: newTestClock()}
+	if err := migrate.Apply(ctx, v1, migrationSetAt(1)); err != nil {
+		t.Fatalf("apply SchemaVersion 1: %v", err)
 	}
-	if err := ApplyLearnSchema(ctx, db, migrate.SQLiteEmitter{}, newTestClock()); err != nil {
-		t.Fatalf("second ApplyLearnSchema: %v", err)
+	if got := MigrationSet().SchemaVersion; got != 2 {
+		t.Fatalf("MigrationSet().SchemaVersion = %d, want 2", got)
+	}
+	for name, db := range map[string]*sql.DB{"fresh": fresh, "over version 1": upgraded} {
+		for pass := 1; pass <= 2; pass++ {
+			if err := ApplyLearnSchema(ctx, db, migrate.SQLiteEmitter{}, newTestClock()); err != nil {
+				t.Fatalf("%s: ApplyLearnSchema pass %d: %v", name, pass, err)
+			}
+		}
+		var top int
+		if err := db.QueryRowContext(ctx, `SELECT MAX(schema_version) FROM applied_migrations WHERE set_id = ?`, learnSetID).Scan(&top); err != nil || top != 2 {
+			t.Errorf("%s: ledger top version = %d (err %v), want 2", name, top, err)
+		}
+		for _, idx := range []string{"idx_jobs_capability_score_key", "idx_jobs_scheduler_decisions_job_id",
+			"idx_jobs_scheduler_decisions_execution_id", "idx_jobs_scheduler_decisions_decided_at",
+			"idx_jobs_telemetry_outcomes_repo_created", "idx_jobs_scheduler_decisions_tier_class"} {
+			var found string
+			if err := db.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='index' AND name=?`, idx).Scan(&found); err != nil {
+				t.Errorf("%s: index %s missing: %v", name, idx, err)
+			}
+		}
+		for _, c := range tableColumns(t, db, tableSchedulerDecision) {
+			if freeTextColumn.MatchString(c) {
+				t.Errorf("%s: jobs_scheduler_decisions column %q matches the free-text pattern", name, c)
+			}
+		}
 	}
 }
 
