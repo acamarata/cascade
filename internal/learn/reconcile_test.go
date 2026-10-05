@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/acamarata/cascade/internal/jobs"
-	"github.com/acamarata/cascade/internal/storage/migrate"
 )
 
 // baseJobForReconcile returns a minimally-valid terminal jobs.Job, mirroring
@@ -28,15 +27,7 @@ func baseJobForReconcile(id string) jobs.Job {
 
 func newTestJobsStore(t *testing.T) *jobs.Store {
 	t.Helper()
-	db := openTestDB(t)
-	ctx := context.Background()
-	if err := jobs.ApplyJobsSchema(ctx, db, migrate.SQLiteEmitter{}, newTestClock(), "", ""); err != nil {
-		t.Fatalf("ApplyJobsSchema: %v", err)
-	}
-	if err := ApplyLearnSchema(ctx, db, migrate.SQLiteEmitter{}, newTestClock()); err != nil {
-		t.Fatalf("ApplyLearnSchema: %v", err)
-	}
-	return jobs.NewStore(db)
+	return jobs.NewStore(openMigratedDB(t, tmplJobs))
 }
 
 // recordingWriter counts Record calls per job_id, so a second Reconcile
@@ -100,13 +91,9 @@ func TestOutcomeReconcilerRealWriterIdempotent(t *testing.T) {
 	j.State = jobs.JobStateAccepted
 	// One db carrying both the jobs schema and the learn schema, so the
 	// SAME connection backs both the Store the reconciler lists from and
-	// the SQLiteOutcomeWriter it records through (newTestOutcomeDB
-	// already applies the learn schema; this test additionally applies
-	// the jobs schema against that same db).
-	db := newTestOutcomeDB(t)
-	if err := jobs.ApplyJobsSchema(ctx, db, migrate.SQLiteEmitter{}, newTestClock(), "", ""); err != nil {
-		t.Fatalf("ApplyJobsSchema: %v", err)
-	}
+	// the SQLiteOutcomeWriter it records through (the learn, usage and
+	// jobs schemas, migrated once and copied).
+	db := openMigratedDB(t, tmplOutcomeJobs)
 	store := jobs.NewStore(db)
 	if err := store.PutJob(ctx, j); err != nil {
 		t.Fatalf("PutJob: %v", err)

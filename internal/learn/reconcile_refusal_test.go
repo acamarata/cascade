@@ -15,7 +15,6 @@ import (
 	"testing"
 
 	"github.com/acamarata/cascade/internal/jobs"
-	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -24,9 +23,6 @@ import (
 func seedBadJobs(t *testing.T, db *sql.DB, aws, slack string) *jobs.Store {
 	t.Helper()
 	ctx := context.Background()
-	if err := jobs.ApplyJobsSchema(ctx, db, migrate.SQLiteEmitter{}, newTestClock(), "", ""); err != nil {
-		t.Fatalf("ApplyJobsSchema: %v", err)
-	}
 	store := jobs.NewStore(db)
 	put := func(id string, edit func(*jobs.Job)) {
 		j := baseJobForReconcile(id)
@@ -54,7 +50,7 @@ func TestReconcileNeverWedgesOnOneBadJob(t *testing.T) {
 	ctx := context.Background()
 	canaries := registryCanaries()
 	slack, aws := canaries["api-slack"], canaries["api-aws"]
-	db := newTestOutcomeDB(t)
+	db := openMigratedDB(t, tmplOutcomeJobs)
 	store := seedBadJobs(t, db, aws, slack)
 
 	rec := OutcomeReconciler{Store: store, Writer: NewSQLiteOutcomeWriter(db, newTestClock())}

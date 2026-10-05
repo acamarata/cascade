@@ -17,22 +17,14 @@ import (
 
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/jobs"
-	"github.com/acamarata/cascade/internal/storage/migrate"
 )
 
 // newTestOutcomeDB opens a real db with both the learn schema and the
-// conductor jobs_usage schema applied (R-16.52's join target).
+// conductor jobs_usage schema applied (R-16.52's join target): a copy of the
+// once-migrated template (see migration_test.go).
 func newTestOutcomeDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db := openTestDB(t)
-	ctx := context.Background()
-	if err := ApplyLearnSchema(ctx, db, migrate.SQLiteEmitter{}, newTestClock()); err != nil {
-		t.Fatalf("ApplyLearnSchema: %v", err)
-	}
-	if err := conductor.ApplyUsageMigrationSchema(ctx, db, migrate.SQLiteEmitter{}, newTestClock(), "", ""); err != nil {
-		t.Fatalf("ApplyUsageMigrationSchema: %v", err)
-	}
-	return db
+	return openMigratedDB(t, tmplOutcome)
 }
 
 func baseOutcome(jobID string) TelemetryOutcome {
