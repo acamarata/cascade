@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05T06:46:12Z",
+  "generated_at": "2026-10-05T07:04:27Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1301,7 +1301,7 @@
       "sites": [
         {
           "file": "internal/secrets/quarantine.go",
-          "line": 24,
+          "line": 12,
           "status": "ADD",
           "raw": "QUARANTINE_STORE: ADD (internal/secrets.QuarantineStore,"
         },
