@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05T21:25:55Z",
+  "generated_at": "2026-10-05T22:00:02Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4029,20 +4029,6 @@
       ]
     },
     {
-      "name": "cmd/cascade elevation-keystore",
-      "sites": [
-        {
-          "file": "cmd/cascade/elevation_keystore.go",
-          "line": 15,
-          "status": "ADD",
-          "raw": "cmd/cascade elevation-keystore/ADD — P1-W3-01 (W-3 gate, Art.9)."
-        }
-      ],
-      "statuses": [
-        "ADD"
-      ]
-    },
-    {
       "name": "cmd/cascade init",
       "sites": [
         {
@@ -5109,6 +5095,48 @@
         "",
         "ADD",
         "CHANGE"
+      ]
+    },
+    {
+      "name": "cmd/cascade/daemon learn job verification",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_learn_jobs_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "cmd/cascade/daemon learn job verification."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade/daemon learn job wiring",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_learn_jobs.go",
+          "line": 7,
+          "status": "",
+          "raw": "cmd/cascade/daemon learn job wiring."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade/daemon learn outcome composition",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_learn_jobs.go",
+          "line": 84,
+          "status": "",
+          "raw": "cmd/cascade/daemon learn outcome composition."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -19096,25 +19124,11 @@
       ]
     },
     {
-      "name": "internal/elevation file-keystore",
-      "sites": [
-        {
-          "file": "internal/elevation/keystore_file.go",
-          "line": 34,
-          "status": "ADD",
-          "raw": "internal/elevation file-keystore/ADD — P1-W3-01 (W-3 gate, Art.9)."
-        }
-      ],
-      "statuses": [
-        "ADD"
-      ]
-    },
-    {
       "name": "internal/elevation file-keystore tests",
       "sites": [
         {
           "file": "internal/elevation/keystore_file_test.go",
-          "line": 17,
+          "line": 19,
           "status": "ADD",
           "raw": "internal/elevation file-keystore tests (ADD) — P1-W3-01."
         }
@@ -19147,34 +19161,6 @@
           "status": "ADD",
           "ticket": "P1-E04-W1-S07-T6",
           "raw": "internal/elevation keystore tests/ADDED (P1-E04-W1-S07-T6)."
-        }
-      ],
-      "statuses": [
-        "ADD"
-      ]
-    },
-    {
-      "name": "internal/elevation keystore-select",
-      "sites": [
-        {
-          "file": "internal/elevation/keystore_select.go",
-          "line": 9,
-          "status": "ADD",
-          "raw": "internal/elevation keystore-select/ADD — P1-W3-01 (W-3 gate)."
-        }
-      ],
-      "statuses": [
-        "ADD"
-      ]
-    },
-    {
-      "name": "internal/elevation keystore-select tests",
-      "sites": [
-        {
-          "file": "internal/elevation/keystore_select_test.go",
-          "line": 22,
-          "status": "ADD",
-          "raw": "internal/elevation keystore-select tests/ADD — coverage (cov/elevation)."
         }
       ],
       "statuses": [
@@ -26927,6 +26913,46 @@
       ]
     },
     {
+      "name": "migration end-to-end acceptance",
+      "sites": [
+        {
+          "file": "internal/migration/epic_z_assertions_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "migration end-to-end acceptance."
+        },
+        {
+          "file": "internal/migration/epic_z_harness_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "migration end-to-end acceptance."
+        },
+        {
+          "file": "internal/migration/epic_z_migrate_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "migration end-to-end acceptance."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "migration fixture acceptance",
+      "sites": [
+        {
+          "file": "internal/migration/epic_z_fixture_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "migration fixture acceptance."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "migration golden-tripwire contract",
       "sites": [
         {
@@ -34192,7 +34218,7 @@
       ]
     }
   ],
-  "total_sites": 3279,
-  "unspecified_count": 199,
+  "total_sites": 3282,
+  "unspecified_count": 204,
   "multi_status_count": 103
 }
