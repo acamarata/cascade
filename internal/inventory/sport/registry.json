@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05T07:54:24Z",
+  "generated_at": "2026-10-05T08:22:18Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -17028,7 +17028,7 @@
         },
         {
           "file": "internal/daemon/daemon_socket_test.go",
-          "line": 14,
+          "line": 11,
           "status": "ADD",
           "ticket": "T-2",
           "raw": "internal/daemon (ADD, per T-2 sport_updates)."
@@ -17125,7 +17125,7 @@
         },
         {
           "file": "internal/daemon/lifecycle_unix.go",
-          "line": 28,
+          "line": 29,
           "status": "CHANGE",
           "raw": "internal/daemon (CHANGE)."
         },
@@ -22850,6 +22850,50 @@
           "status": "ADD",
           "ticket": "P1-E17-W4-S38-T3",
           "raw": "internal/rpc elevation verbs (ADD) — P1-E17-W4-S38-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/runtime",
+      "sites": [
+        {
+          "file": "internal/runtime/socket_lock_unix.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "internal/runtime (ADD)."
+        },
+        {
+          "file": "internal/runtime/socket_lock_unix_test.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal/runtime (ADD)."
+        },
+        {
+          "file": "internal/runtime/socket_unix.go",
+          "line": 30,
+          "status": "ADD",
+          "raw": "internal/runtime (ADD)."
+        },
+        {
+          "file": "internal/runtime/socket_unix_test.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal/runtime (ADD)."
+        },
+        {
+          "file": "internal/runtime/socket_unix_unit_test.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "internal/runtime (ADD)."
+        },
+        {
+          "file": "internal/runtime/socket_windows.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal/runtime (ADD)."
         }
       ],
       "statuses": [
@@ -31871,6 +31915,12 @@
           "raw": "runtime/recovery (ADD)."
         },
         {
+          "file": "internal/runtime/recovery_socket_test.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "runtime/recovery (ADD)."
+        },
+        {
           "file": "internal/runtime/recovery_windows_test.go",
           "line": 12,
           "status": "ADD",
@@ -32165,7 +32215,7 @@
       ]
     }
   ],
-  "total_sites": 3065,
+  "total_sites": 3072,
   "unspecified_count": 160,
   "multi_status_count": 90
 }
