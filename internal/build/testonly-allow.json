@@ -1605,5 +1605,19 @@
     "reason": "A plain data shape for a discovery finding awaiting approval (R-21.163). Its own producer (discovery.go) was explicitly deferred by P1-E36-W7-S72-T1's journal, and its consumer (the AI/S-71 proposal store, R-21.161) had not landed as of this ticket. Building either here would either fabricate a producer with nothing to discover, or create the second competing proposal store R-21.161 forbids.",
     "retire_ticket": "P1-NODE-14",
     "symbol": "internal/nodes.PendingCandidate"
+  },
+  {
+    "caller_site": "internal/fleet/capacity/tier_selector.go",
+    "expected_caller": "NewTierPolicySelector projects the snapshot and eligible lanes before calling SelectTier.",
+    "reason": "The tier projection contract precedes the fleet selector that consumes it.",
+    "retire_ticket": "P1-CAP-04",
+    "symbol": "internal/fleet/capacity.ProjectTiers"
+  },
+  {
+    "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
+    "expected_caller": "FleetRuntime merges registered agent lanes into capacity snapshots using AgentLaneSlots.",
+    "reason": "The agent lane projection precedes the runtime registration and snapshot composition.",
+    "retire_ticket": "P1-CAP-05",
+    "symbol": "internal/fleet/capacity.AgentLaneSlots"
   }
 ]
