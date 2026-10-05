@@ -261,17 +261,16 @@ non-empty reason. The gate fails on:
   `cmd/cascade/main.go` and `internal/runtime/atomic_write.go`.
 
 There is no escape comment and no `nolint`. The gate itself accepts any
-well-formed row with a matching reference; what pins the list to two rows is
+well-formed row with a matching reference; what pins the list is
 `TestNoBareFileWrites_Live`, which compares it with a fixed owned set and
-fails on a third row or a missing owned row (a new exemption means editing
-that set in the same reviewed change). Today the list holds two rows:
+fails on an extra row or a missing owned row (a new exemption means editing
+that set in the same reviewed change). Today the list holds one row:
 `internal/elevation/keystore_file.go` `fileKeystore.GenerateKey`
-(P1-SEC-00) and `internal/secrets/quarantine.go`
-`QuarantineStore.loadOrCreateKey` (P1-CORE-17). Both owners move their key
-write to `runtime.CreateFileAtomic` and delete the row.
+(P1-SEC-00). Its owner moves that key write to `runtime.CreateFileAtomic`
+and deletes the row; the quarantine key already uses it.
 
-Tests: `TestNoBareFileWrites_Live` (real tree GREEN with exactly the two rows;
-`TestAtomicWriteOwnedRows_RejectsExtraRow` proves a third row fails),
+Tests: `TestNoBareFileWrites_Live` (real tree GREEN with exactly the owned row;
+`TestAtomicWriteOwnedRows_RejectsExtraRow` proves an extra row fails),
 `TestNoBareFileWrites_Seeded` (one RED case per defect above, plus a
 method value and a dot-import), and `TestNoBareFileWrites_SeededCleanControl`
 (a clean fixture stays GREEN). Not gated: `os.Create` and `O_TRUNC` opens,
