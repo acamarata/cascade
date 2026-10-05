@@ -184,6 +184,11 @@
       "path": "internal/learn/denylist_test.go",
       "term": "retention_days",
       "reason": "example field path in the denylist rule-order table (backup.retention_days maps to its deny rule index); a learned-config denylist probe path, not a v1 config dependency"
+    },
+    {
+      "path": "internal/integration/capmap/probe_helpers_test.go",
+      "term": "socket_path",
+      "reason": "JSON field tag of the live v2 status.get reply decoded by the capability-map probe (SocketPath string, tag socket_path); a v2 wire field name, not a dependency on the v1 socket_path config key"
     }
   ]
 }
