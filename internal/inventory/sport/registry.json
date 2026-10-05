@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05T04:03:43Z",
+  "generated_at": "2026-10-05T04:16:01Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2135,6 +2135,12 @@
           "raw": "cli.provider.reauth/ADD (P1-WID-01)."
         },
         {
+          "file": "cmd/cascade/provider_reauth_lane_test.go",
+          "line": 14,
+          "status": "CHANGE",
+          "raw": "cli.provider.reauth (CHANGE, P1-WID-11)."
+        },
+        {
           "file": "cmd/cascade/provider_reauth_test.go",
           "line": 12,
           "status": "ADD",
@@ -2167,7 +2173,8 @@
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -3747,6 +3754,20 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "cmd/cascade daemon",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_conductor_lane_test.go",
+          "line": 16,
+          "status": "CHANGE",
+          "raw": "cmd/cascade daemon (CHANGE, P1-WID-11)."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
       ]
     },
     {
@@ -22374,13 +22395,13 @@
       "sites": [
         {
           "file": "internal/providers/dispatch/build.go",
-          "line": 26,
+          "line": 28,
           "status": "ADD",
           "raw": "internal/providers/dispatch (ADD, DEFECT-conductor-execute-"
         },
         {
           "file": "internal/providers/dispatch/resolver.go",
-          "line": 39,
+          "line": 41,
           "status": "ADD",
           "raw": "internal/providers/dispatch (ADD, DEFECT-conductor-execute-"
         }
@@ -22413,6 +22434,62 @@
           "status": "ADD",
           "ticket": "P1-E10-W4-S87-T1",
           "raw": "internal/providers/dispatch credentials tests (ADD) — P1-E10-W4-S87-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/providers/dispatch lane_outcome",
+      "sites": [
+        {
+          "file": "internal/providers/dispatch/lane_outcome.go",
+          "line": 28,
+          "status": "ADD",
+          "raw": "internal/providers/dispatch lane_outcome/ADD (P1-WID-11)."
+        },
+        {
+          "file": "internal/providers/dispatch/lane_outcome_classify.go",
+          "line": 29,
+          "status": "ADD",
+          "raw": "internal/providers/dispatch lane_outcome/ADD (P1-WID-11)."
+        },
+        {
+          "file": "internal/providers/dispatch/lane_outcome_classify_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal/providers/dispatch lane_outcome/ADD (P1-WID-11)."
+        },
+        {
+          "file": "internal/providers/dispatch/lane_outcome_fakes_test.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal/providers/dispatch lane_outcome/ADD (P1-WID-11)."
+        },
+        {
+          "file": "internal/providers/dispatch/lane_outcome_record.go",
+          "line": 27,
+          "status": "ADD",
+          "raw": "internal/providers/dispatch lane_outcome/ADD (P1-WID-11)."
+        },
+        {
+          "file": "internal/providers/dispatch/lane_outcome_safety_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal/providers/dispatch lane_outcome/ADD (P1-WID-11)."
+        },
+        {
+          "file": "internal/providers/dispatch/lane_outcome_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal/providers/dispatch lane_outcome/ADD (P1-WID-11)."
+        },
+        {
+          "file": "internal/providers/dispatch/lane_outcome_verbs_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal/providers/dispatch lane_outcome/ADD (P1-WID-11)."
         }
       ],
       "statuses": [
@@ -32047,7 +32124,7 @@
       ]
     }
   ],
-  "total_sites": 3051,
+  "total_sites": 3061,
   "unspecified_count": 160,
-  "multi_status_count": 88
+  "multi_status_count": 89
 }
