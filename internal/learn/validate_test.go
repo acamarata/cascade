@@ -58,9 +58,9 @@ func TestIdentifyingValuesRefusedBeforeStore(t *testing.T) {
 		{"ScopeRef", long(65)},
 		{"RepoID", long(65)},
 	}
+	db := newTestOutcomeDB(t) // refusals never write: one db serves every case
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%s_%d", tc.field, i), func(t *testing.T) {
-			db := newTestOutcomeDB(t)
 			err := NewSQLiteOutcomeWriter(db, newTestClock()).Record(context.Background(), withField(tc.field, tc.value))
 			if err == nil {
 				t.Fatalf("%s accepted an identifying or over-long value", tc.field)

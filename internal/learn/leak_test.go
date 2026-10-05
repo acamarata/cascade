@@ -140,9 +140,9 @@ func TestCredentialCanaryEveryStringField(t *testing.T) {
 		"ScopeRef":          func(o *TelemetryOutcome) { o.ScopeRef = credentialCanary },
 		"RetrievalStrategy": func(o *TelemetryOutcome) { o.RetrievalStrategy = credentialCanary },
 	}
+	db := newTestOutcomeDB(t) // refusals never write: one db serves every field
+	w := NewSQLiteOutcomeWriter(db, newTestClock())
 	for name, mutate := range fields {
-		db := newTestOutcomeDB(t)
-		w := NewSQLiteOutcomeWriter(db, newTestClock())
 		o := baseOutcome("job-canary-" + name)
 		mutate(&o)
 		if err := w.Record(context.Background(), o); err == nil {

@@ -14,6 +14,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -75,6 +76,19 @@ func outcomeStringFields() []string {
 	return out
 }
 
+// seededCredentialDB opens one migrated file db holding the single seeded
+// outcome the refusal tests compare against. Refused records never write, so
+// every canary case can share it (R111).
+func seededCredentialDB(t *testing.T) (*sql.DB, *SQLiteOutcomeWriter) {
+	t.Helper()
+	db := newTestOutcomeDB(t)
+	w := NewSQLiteOutcomeWriter(db, newTestClock())
+	if err := w.Record(context.Background(), baseOutcome("job-cred-seed")); err != nil {
+		t.Fatalf("seed outcome: %v", err)
+	}
+	return db, w
+}
+
 // TestCredentialCanaryEveryRegistryClass: each registry-class canary in each
 // outcome string field and each finding string field is refused, the stored
 // rows stay exactly the one seeded outcome, and the canary appears in no
@@ -84,13 +98,9 @@ func TestCredentialCanaryEveryRegistryClass(t *testing.T) {
 	if len(fields) != 11 {
 		t.Fatalf("outcome string fields = %d (%v), want 11", len(fields), fields)
 	}
+	db, w := seededCredentialDB(t)
+	ctx := context.Background()
 	for class, canary := range registryCanaries() {
-		db := newTestOutcomeDB(t)
-		ctx := context.Background()
-		w := NewSQLiteOutcomeWriter(db, newTestClock())
-		if err := w.Record(ctx, baseOutcome("job-cred-seed")); err != nil {
-			t.Fatalf("seed outcome: %v", err)
-		}
 		for _, field := range fields {
 			err := w.Record(ctx, withField(field, canary))
 			if !cascade.HasKind(err, cascade.KindInvalidInput) {
@@ -116,7 +126,7 @@ func TestCredentialCanaryEveryRegistryClass(t *testing.T) {
 		}
 		assertCanaryInNoColumn(t, db, class, canary)
 	}
-	assertMaskedCanaryRowsRefused(t)
+	assertMaskedCanaryRowsRefused(t, db, w)
 }
 
 // maskedCanaryRows returns credential values whose registry hit an earlier,
@@ -136,17 +146,12 @@ func maskedCanaryRows() []struct{ field, canary, value string } {
 // assertMaskedCanaryRowsRefused: each masked row is flagged by the gate
 // itself, refused by Record, leaves only the seeded outcome, and the canary
 // is in no error and no column.
-func assertMaskedCanaryRowsRefused(t *testing.T) {
+func assertMaskedCanaryRowsRefused(t *testing.T, db *sql.DB, w *SQLiteOutcomeWriter) {
 	t.Helper()
+	ctx := context.Background()
 	for _, row := range maskedCanaryRows() {
 		if !credentialShaped(row.value) {
 			t.Errorf("masked %s row: the gate does not flag it", row.field)
-		}
-		db := newTestOutcomeDB(t)
-		ctx := context.Background()
-		w := NewSQLiteOutcomeWriter(db, newTestClock())
-		if err := w.Record(ctx, baseOutcome("job-cred-seed")); err != nil {
-			t.Fatalf("seed outcome: %v", err)
 		}
 		err := w.Record(ctx, withField(row.field, row.value))
 		if !cascade.HasKind(err, cascade.KindInvalidInput) {
@@ -178,17 +183,31 @@ func TestCredentialGateAcceptsOpaqueIDs(t *testing.T) {
 	}
 	fields := []string{"JobID", "RepoID", "NodeID", "TaskClass", "RiskClass",
 		"LaneTier", "RetrievalStrategy", "Component", "ScopeRef"}
-	for _, id := range ids {
+	// One migrated file db for all cases; each case carries its own JobID
+	// (job_id is UNIQUE) so every one of the len(ids)*len(fields) accepts is
+	// a distinct row.
+	db := newTestOutcomeDB(t)
+	w := NewSQLiteOutcomeWriter(db, newTestClock())
+	accepts := 0
+	for i, id := range ids {
 		if credentialShaped(id) {
 			t.Errorf("opaque id %q flagged as a credential", id)
 		}
-		for _, field := range fields {
-			db := newTestOutcomeDB(t)
+		for j, field := range fields {
 			o := withField(field, id)
-			if err := NewSQLiteOutcomeWriter(db, newTestClock()).Record(context.Background(), o); err != nil {
-				t.Errorf("opaque id %q in %s refused: %v", id, field, err)
+			if field != "JobID" {
+				o.JobID = fmt.Sprintf("job-opaque-%d-%d", i, j)
 			}
+			if err := w.Record(context.Background(), o); err != nil {
+				t.Errorf("opaque id %q in %s refused: %v", id, field, err)
+				continue
+			}
+			accepts++
 		}
+	}
+	t.Logf("opaque-id accepts: %d, stored rows: %d", accepts, telemetryRowCount(t, db))
+	if want := len(ids) * len(fields); accepts != want || telemetryRowCount(t, db) != want {
+		t.Errorf("accepts = %d, rows = %d, want %d of each", accepts, telemetryRowCount(t, db), want)
 	}
 }
 
