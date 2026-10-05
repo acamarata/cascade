@@ -11,7 +11,7 @@ import (
 
 // Purpose: versioned JSONL line decoder for the cc and codex transcript
 //   formats, dispatching on each harness's own discriminant version
-//   signal per docs/adrs/ADR-E09T6-harness-transcript-stability.md.
+//   signal per docs/adrs/ADR-harness-transcript-stability.md.
 // Inputs: one transcript line's raw bytes and its 1-based line number.
 // Outputs: a rawEvent (never returned to callers — redact.go reduces it
 //   to the allowlisted Record) or a *ParseError.

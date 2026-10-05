@@ -43,20 +43,20 @@ func (r InventoryGapReport) String() string {
 // BuildCoverageMatrix resolves every row in rows against tickets and
 // deferrals: a citation extracted from the row's text (ExtractCitations)
 // either matches a known ticket id in tickets, matches a known deferral
-// id in deferrals, or resolves against root's real epic tree via
+// id in deferrals, or resolves against planningTree's real epic tree via
 // ResolveTicketCitation for a ticket id that ExtractCitations found but
 // LoadTicketTree's snapshot did not carry (e.g. a caller passed a partial
-// ticket slice in a test) — the live gate always passes the same root
-// and the same LoadTicketTree result, so this fallback exists for
+// ticket slice in a test) — the live gate always passes the same planning
+// tree and the same LoadTicketTree result, so this fallback exists for
 // correctness under a partial slice, not as its primary path.
 //
 // A row with no extractable citation at all is a gap outright; no
 // network, no fuzzy matching, no partial credit.
-func BuildCoverageMatrix(root string, rows []InventoryRow, tickets []TicketRecord, deferrals []DeferralEntry) ([]RowCoverage, error) {
+func BuildCoverageMatrix(planningTree string, rows []InventoryRow, tickets []TicketRecord, deferrals []DeferralEntry) ([]RowCoverage, error) {
 	// tickets is accepted (and required non-empty by the live gate's own
 	// LoadTicketTree call) so a caller cannot pass an inventory-only
 	// view and get a matrix that never even tried to resolve a ticket;
-	// resolution itself walks root directly (ResolveTicketCitation),
+	// resolution itself walks planningTree directly (ResolveTicketCitation),
 	// which is the source of truth tickets was snapshotted from.
 	if len(tickets) == 0 {
 		return nil, fmt.Errorf("coverage: BuildCoverageMatrix called with zero tickets (fail closed)")
@@ -74,7 +74,7 @@ func BuildCoverageMatrix(root string, rows []InventoryRow, tickets []TicketRecor
 				cov.Deferrals = append(cov.Deferrals, citation)
 				continue
 			}
-			resolved, err := ResolveTicketCitation(root, citation)
+			resolved, err := ResolveTicketCitation(planningTree, citation)
 			if err != nil {
 				return nil, err
 			}

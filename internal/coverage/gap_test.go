@@ -20,7 +20,7 @@ import (
 // is not.
 func TestCoverageMatrix_SeededGap(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, ".claude", "planning", "p1", "phase", "epics",
+	writeFile(t, filepath.Join(root, "phase", "epics",
 		"E-K", "waves", "W-3", "sprints", "S-23", "tickets", "T-6.yaml"), "id: P1-E11-W3-S23-T6\n")
 
 	rows := []InventoryRow{
@@ -57,7 +57,7 @@ func TestCoverageMatrix_SeededGap(t *testing.T) {
 
 func TestCoverageMatrix_CleanIsEmpty(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, ".claude", "planning", "p1", "phase", "epics",
+	writeFile(t, filepath.Join(root, "phase", "epics",
 		"E-K", "waves", "W-3", "sprints", "S-23", "tickets", "T-6.yaml"), "id: P1-E11-W3-S23-T6\n")
 	rows := []InventoryRow{{Section: "S", Index: 1, Text: "| x | CORE (K/S-23.T6) |"}}
 	tickets := []TicketRecord{{ID: "P1-E11-W3-S23-T6", Path: "irrelevant"}}
@@ -78,21 +78,31 @@ func TestBuildCoverageMatrix_ZeroTicketsFailsClosed(t *testing.T) {
 
 // --- Live tree ------------------------------------------------------------
 
-// TestInventoryCoverage_RealTree is the live gate: it runs only when
-// .claude/planning/p1/phase exists locally (R-14.85 — the planning tree
-// is gitignored, so public CI never has it and must not fail here for a
-// reason that is not a real gap). It asserts the inventory itself is
-// non-empty (LoadInventory's own fail-closed law already refuses an
-// empty file, restated here as an explicit assertion so a future refactor
-// cannot silently drop it) and reports every unresolved row without
-// hiding the count.
+// planningTreeEnv names the environment variable that points the live check
+// at a planning tree: the directory holding phase/ and the feature
+// inventory document. Nothing here knows where that tree lives.
+const planningTreeEnv = "CASCADE_PLANNING_TREE"
+
+// TestInventoryCoverage_RealTree is a local-only diagnostic. It runs only
+// when CASCADE_PLANNING_TREE names a planning tree; unset (public CI, a
+// clone without one), it skips with a printed reason. A skip is not
+// evidence: no acceptance or gate relies on this test, and the fixture
+// tests above (t.TempDir roots) carry the coverage. When it runs, it
+// asserts the inventory itself is non-empty (LoadInventory's own
+// fail-closed law already refuses an empty file, restated here as an
+// explicit assertion so a future refactor cannot silently drop it) and
+// reports every unresolved row without hiding the count.
 func TestInventoryCoverage_RealTree(t *testing.T) {
-	root := findModuleRoot(t)
-	phaseDir := filepath.Join(root, ".claude", "planning", "p1", "phase")
-	if _, err := os.Stat(phaseDir); err != nil {
-		t.Skip("`.claude/planning/p1/phase` absent (public CI or a clone without the planning tree); live inventory-coverage check not runnable")
+	tree := os.Getenv(planningTreeEnv)
+	if tree == "" {
+		t.Skip(planningTreeEnv + " is unset: local-only inventory-coverage diagnostic not run (not evidence)")
 	}
-	rows, err := LoadInventory(filepath.Join(root, ".claude", "planning", "p1", "01-FEATURE-INVENTORY.md"))
+	root := findModuleRoot(t)
+	phaseDir := filepath.Join(tree, "phase")
+	if _, err := os.Stat(phaseDir); err != nil {
+		t.Fatalf("%s=%q has no phase directory: %v", planningTreeEnv, tree, err)
+	}
+	rows, err := LoadInventory(filepath.Join(tree, "01-FEATURE-INVENTORY.md"))
 	if err != nil {
 		t.Fatalf("LoadInventory: %v", err)
 	}
@@ -107,7 +117,7 @@ func TestInventoryCoverage_RealTree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadDeferrals: %v", err)
 	}
-	coverage, err := BuildCoverageMatrix(root, rows, tickets, deferrals)
+	coverage, err := BuildCoverageMatrix(tree, rows, tickets, deferrals)
 	if err != nil {
 		t.Fatalf("BuildCoverageMatrix: %v", err)
 	}

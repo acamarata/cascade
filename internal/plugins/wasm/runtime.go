@@ -22,7 +22,7 @@ import (
 //	builds a single wazero.Runtime with the host module registered once
 //	(host functions read their per-call dependencies from ctx, not from
 //	captured state), and Dispatch instantiates a fresh, anonymous
-//	api.Module for every call — the ADR-N-S30-T6 spike's concurrency
+//	api.Module for every call — the host-ABI parity spike's concurrency
 //	constraint (fixed memory offsets unsafe across concurrent in-flight
 //	calls on one instance) is satisfied structurally: no two calls ever
 //	share an instance.

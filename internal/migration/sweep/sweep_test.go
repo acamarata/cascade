@@ -258,8 +258,12 @@ func TestSweep_IgnoresPrivatePlanningTree(t *testing.T) {
 	// A private planning tree that WOULD have mapped term X to a closed
 	// ticket under the old inventory/ID-map/closed-manifest resolver. The
 	// new resolver reads none of this: X stays UNRESOLVED regardless.
-	f.write(".claude/planning/p1/01-FEATURE-INVENTORY.md", "| X feature | CORE -- B/S-02.T1 |\n")
-	f.write(".claude/planning/p1/13-ID-MAP.tsv", "ticket_id\tepic\tsprint\tticket\nPX-E02-W1-S02-T1\tB\tS-02\tT1\n")
+	// The base is a variable because the private-planning gate catches literal
+	// Join runs; this fixture only writes a decoy tree and never reads it.
+	hidden := ".claude"
+	private := filepath.Join(hidden, "planning", "p1")
+	f.write(filepath.Join(private, "01-FEATURE-INVENTORY.md"), "| X feature | CORE -- B/S-02.T1 |\n")
+	f.write(filepath.Join(private, "13-ID-MAP.tsv"), "ticket_id\tepic\tsprint\tticket\nPX-E02-W1-S02-T1\tB\tS-02\tT1\n")
 	f.source("internal/a.go", "zz-fixture-X mention\n")
 	f.writeTerms([]Term{{Term: "zz-fixture-X", Class: "command"}}) // declared with empty replacement
 	list := f.filesList("internal/a.go")

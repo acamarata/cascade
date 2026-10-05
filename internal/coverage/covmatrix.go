@@ -14,12 +14,13 @@
 //
 // Inputs: 01-FEATURE-INVENTORY.md (a markdown file with one or more
 // "| feature | disposition |" tables), the ticket tree under
-// .claude/planning/p1/phase/epics (one YAML file per ticket, each with a
+// <planning tree>/phase/epics (one YAML file per ticket, each with a
 // top-level "id:" line), and deferrals.yaml (a YAML list under a
-// top-level "deferrals:" key). All three live under the gitignored
-// .claude/ tree — CI never sees them, so any lane that depends on this
-// package runs local-only (R-14.85); see doc comments on the *_Live test
-// for the exact guard.
+// top-level "deferrals:" key). The planning tree is always an explicit
+// input: product code names no private path (Constitution C6). The live
+// check reads it from CASCADE_PLANNING_TREE and is a local-only
+// diagnostic; CI never sees a planning tree, and the fixture tests
+// (t.TempDir roots) carry the coverage.
 //
 // Outputs: a CoverageMatrix mapping each inventory row to the ticket
 // citations and/or deferral ids it resolves against, plus an
@@ -176,16 +177,18 @@ func ExtractCitations(text string) []string {
 }
 
 // ResolveTicketCitation reports whether a "LETTERS/S-N.TM" citation
-// resolves to a real ticket file under root's epics tree. It never
+// resolves to a real ticket file under planningTree's phase/epics tree
+// (planningTree is the directory that holds phase/ and the inventory
+// document; the caller supplies it, nothing is defaulted). It never
 // assumes the shape is valid: a citation whose epic/sprint/ticket does
 // not exist in the tree resolves to false, not an error — an unresolved
 // citation is exactly what a gap report exists to name.
-func ResolveTicketCitation(root, citation string) (bool, error) {
+func ResolveTicketCitation(planningTree, citation string) (bool, error) {
 	m := citationExpr.FindStringSubmatch(citation)
 	if m == nil {
 		return false, nil
 	}
-	pattern := filepath.Join(root, ".claude", "planning", "p1", "phase", "epics",
+	pattern := filepath.Join(planningTree, "phase", "epics",
 		"E-"+m[1], "waves", "*", "sprints", "S-"+m[2], "tickets", "T-"+m[3]+".yaml")
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
@@ -240,7 +243,7 @@ func LoadTicketTree(root string) ([]TicketRecord, error) {
 	return out, nil
 }
 
-// DeferralEntry is one .claude/planning/p1/phase/deferrals.yaml row. The
+// DeferralEntry is one phase/deferrals.yaml row of a planning tree. The
 // schema, verbatim from the live file's header: id (slug), source
 // (owning ticket or doc), ruling (R-nn.n), what (capability text),
 // reenter (re-entry point).

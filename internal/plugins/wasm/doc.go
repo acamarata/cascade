@@ -39,8 +39,9 @@
 //
 //	The wire protocol below (envelope/result, fixed request/response
 //	scratch offsets in the module's own linear memory) matches the
-//	O/S-30.T6 spike's proven design exactly (ADR-N-S30-T6): all three
-//	runtimes passed the same 21-subtest conformance suite against it. The
+//	O/S-30.T6 spike's proven design exactly
+//	(docs/adrs/ADR-plugin-host-abi-parity.md): all three runtimes passed
+//	the same 21-subtest conformance suite against it. The
 //	spike also found ONE real constraint this package must honor: fixed
 //	offsets are unsafe for concurrent in-flight calls against the SAME
 //	module instance. This package resolves it structurally, not by

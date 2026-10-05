@@ -1,7 +1,7 @@
 // Package tailer streams redacted transcript records from the on-disk
 // JSONL transcripts the cc and codex coding harnesses write during a
 // session, following each file safely across rotation (rename+reopen) and
-// truncation. See docs/adrs/ADR-E09T6-harness-transcript-stability.md for
+// truncation. See docs/adrs/ADR-harness-transcript-stability.md for
 // the field-stability evidence this package's dispatch logic is built on,
 // and redact.go for the R-21.152 first-boundary redaction every Record
 // passes through before a caller ever sees it.
