@@ -9,7 +9,6 @@
 package main
 
 import (
-	"log/slog"
 	"path/filepath"
 
 	"github.com/acamarata/cascade/internal/daemon"
@@ -23,12 +22,14 @@ import (
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
-func registerStatusHandler(registry *rpc.Registry, clock runtime.Clock, logger *slog.Logger, settings daemon.Settings) (*daemon.Manifest, *int64) {
-	manifest := daemon.NewManifest(logger, clock)
+// registerStatusHandler registers status.get over manifest, the daemon's
+// one Manifest (composeDaemon creates it before any supervised goroutine
+// starts), and returns the active-connection counter RunOptions shares.
+func registerStatusHandler(registry *rpc.Registry, clock runtime.Clock, manifest *daemon.Manifest, settings daemon.Settings) *int64 {
 	connections := new(int64)
 	provider := daemon.NewStatusProvider(clock, clock.Now(), settings.SocketPath, connections, manifest)
 	registry.Register(daemon.StatusMethod, provider.Handler())
-	return manifest, connections
+	return connections
 }
 
 // relaunchExecArgs builds RunOptions.Args: the argv UpgradeManager's

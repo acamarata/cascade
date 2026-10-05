@@ -86,6 +86,11 @@ type UpgradeManager struct {
 	Store  provider.Store // optional: nil disables the resume-leg cursor
 	Events *events.Bus    // optional: nil disables ShutdownRequested
 	Logger *slog.Logger
+	// BeforeRelaunch, when non-nil, runs after Drain and before Relaunch.
+	// The daemon sets it to cancel its run context and join its supervised
+	// goroutines, bounded by the drain grace, so no goroutine of the old
+	// image is mid-write when exec replaces it. nil keeps the old order.
+	BeforeRelaunch func(ctx context.Context)
 
 	draining atomic.Bool
 }
@@ -220,6 +225,9 @@ func (m *UpgradeManager) AttemptUpgrade(ctx context.Context, binaryPath string, 
 	}
 	m.logInfo("daemon: upgrade: skew detected, draining", "binary", binaryPath)
 	_ = m.Drain(ctx, ln, tracker, grace)
+	if m.BeforeRelaunch != nil {
+		m.BeforeRelaunch(ctx)
+	}
 	if relErr := m.Relaunch(binaryPath, args, env); relErr != nil {
 		m.logWarn("daemon: upgrade: relaunch failed, falling back to normal shutdown", "error", relErr.Error())
 		return false, relErr

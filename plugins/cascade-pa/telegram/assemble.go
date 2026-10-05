@@ -41,6 +41,11 @@ func SubjectFromToken(token string) string {
 	return "tg-" + hex.EncodeToString(sum[:])[:subjectDigestChars]
 }
 
+// HTTPClient is the bot API client type NewModule takes. It is an alias, so
+// any *http.Client is one; it exists so a host outside the egress allow-list
+// can carry a client through its own types without importing net/http.
+type HTTPClient = http.Client
+
 // NewModule assembles a ready module for the bot behind token.
 //
 // It is the one front door: a host calls this rather than separately
@@ -54,7 +59,7 @@ func SubjectFromToken(token string) string {
 // message, so a caller that forgets it refuses instead of leaking. A nil
 // quarantine does not change that refusal — it makes publishQuarantine
 // report ErrNoQuarantineSink instead of silently dropping the record.
-func NewModule(token string, httpClient *http.Client, egress EgressGate,
+func NewModule(token string, httpClient *HTTPClient, egress EgressGate,
 	elevation cascadepa.ElevationPolicy, stores *cascadepa.Stores, sink LockoutSink,
 	secretScanner SecretScanner, quarantine QuarantineSink) *TelegramModule {
 	subject := SubjectFromToken(token)

@@ -47,10 +47,15 @@ import (
 	"log/slog"
 
 	"github.com/acamarata/cascade/internal/ci"
+	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/provider"
 )
+
+// ciAttentionSubsystem is the manifest name the ci_results subscriber runs
+// under.
+const ciAttentionSubsystem = "ci.attention-subscriber"
 
 // ciAttentionSubscriberCursor is this subscriber's durable cursor name,
 // distinct from fleetMetricsCursor and schedulerCursorName -- Bus.Subscribe
@@ -87,7 +92,7 @@ func ciWatchSourceFromReloader(hr *runtime.HotReloader) ci.WatchSource {
 // store, without constructing wireBackgroundSubsystems' full
 // daemonDeps/cfg/LogProvider scaffolding.
 func wireCIAttentionSubscription(
-	ctx context.Context, watches ci.WatchSource, store provider.Store, clock runtime.Clock,
+	ctx context.Context, manifest *daemon.Manifest, watches ci.WatchSource, store provider.Store, clock runtime.Clock,
 	bus *events.Bus, privateRepos []string, logger *slog.Logger,
 ) {
 	if bus == nil {
@@ -103,10 +108,12 @@ func wireCIAttentionSubscription(
 		logger.Error("ci attention: ci_results subscription unavailable", "error", err)
 		return
 	}
-	go func() {
+	manifest.GoSupervised(ctx, ciAttentionSubsystem, "routing ci_results to attention", func(ctx context.Context) error {
 		defer func() { _ = sub.Unsubscribe() }()
-		if runErr := ci.RouteCIResults(ctx, sub, watches, pusher); runErr != nil {
-			logger.Error("ci attention: ci_results stream ended", "error", runErr)
+		if runErr := ci.RouteCIResults(ctx, sub, watches, pusher); runErr != nil && ctx.Err() == nil {
+			return runErr
 		}
-	}()
+		// A cancelled run context is the clean stop, not a stream failure.
+		return nil
+	})
 }

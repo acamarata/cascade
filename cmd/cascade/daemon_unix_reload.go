@@ -36,6 +36,7 @@ import (
 	"log/slog"
 
 	"github.com/acamarata/cascade/internal/context/hydration"
+	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/plugins"
@@ -106,7 +107,7 @@ func wireHotReload(paths runtime.PathProvider, clock runtime.Clock, getenv runti
 // new concern). On a startScheduler failure this also stops the watcher
 // it already started, so a caller that gets a non-nil error never needs
 // to guess what, if anything, it must still tear down.
-func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, deps daemonDeps, cfg *runtime.Config, store provider.Store, rawDB *sql.DB, bus *events.Bus, logProvider *runtime.LogProvider) (*memory.AdminHandler, *policyWiring, func(), error) {
+func wireBackgroundSubsystems(ctx context.Context, manifest *daemon.Manifest, paths runtime.PathProvider, deps daemonDeps, cfg *runtime.Config, store provider.Store, rawDB *sql.DB, bus *events.Bus, logProvider *runtime.LogProvider) (*memory.AdminHandler, *policyWiring, func(), error) {
 	hr, watcher, err := wireHotReload(paths, deps.Clock, deps.Getenv, deps.Environ, cfg, store, bus, logProvider)
 	if err != nil {
 		return nil, nil, nil, err
@@ -150,11 +151,11 @@ func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, d
 	// counter is observability, and refusing to start a daemon over one
 	// would trade a working system for a complete graph.
 	metricsCtx, metricsCancel := context.WithCancel(ctx)
-	startFleetMetricsConsumer(metricsCtx, bus, logProvider.Logger())
+	startFleetMetricsConsumer(metricsCtx, manifest, bus, logProvider.Logger())
 
 	schedCtx, schedCancel := context.WithCancel(ctx)
 	_, admin, schedCleanup, err := startScheduler(
-		schedCtx, store, rawDB, paths, cfg, deps.Clock, bus, logProvider.Logger(), pol.Router)
+		schedCtx, manifest, store, rawDB, paths, cfg, deps.Clock, bus, logProvider.Logger(), pol.Router)
 	if err != nil {
 		metricsCancel()
 		schedCancel()
@@ -167,14 +168,14 @@ func wireBackgroundSubsystems(ctx context.Context, paths runtime.PathProvider, d
 	// not guaranteed canceled when daemon.Run returns, so this gets its
 	// own cancel folded into the cleanup func below.
 	ciCtx, ciCancel := context.WithCancel(ctx)
-	wireCIAttentionSubscription(ciCtx, ciWatchSourceFromReloader(hr), store, deps.Clock, bus, cfg.CIPolicy.PrivateRepos, logProvider.Logger())
+	wireCIAttentionSubscription(ciCtx, manifest, ciWatchSourceFromReloader(hr), store, deps.Clock, bus, cfg.CIPolicy.PrivateRepos, logProvider.Logger())
 
 	// The memory projection background loop (P1-E07-W5-S92-T1). Same
 	// child-context posture as metricsCtx/schedCtx/ciCtx above, and the
 	// SAME runtime store every other subsystem here already holds -- no
 	// second sqlite handle is opened for it.
 	memProjCtx, memProjCancel := context.WithCancel(ctx)
-	startMemoryProjection(memProjCtx, paths, store, deps.Clock, logProvider.Logger())
+	startMemoryProjection(memProjCtx, manifest, paths, store, deps.Clock, logProvider.Logger())
 
 	return admin, pol, func() {
 		watcher.Stop()

@@ -41,7 +41,7 @@ func TestStartScheduler_VerificationJobPresentInRunningScheduler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wirePolicy: %v", err)
 	}
-	sched, _, cleanup, err := startScheduler(ctx, store, rawDB, paths, nil, clock, bus, logger, policyWiring.Router)
+	sched, _, cleanup, err := startScheduler(ctx, testManifest(), store, rawDB, paths, nil, clock, bus, logger, policyWiring.Router)
 	if err != nil {
 		t.Fatalf("startScheduler: %v", err)
 	}

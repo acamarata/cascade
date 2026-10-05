@@ -7,6 +7,6 @@ package main
 var _ = registerDaemonWiring(daemonRegistration{
 	Name: "fleet-node-jobs", Phase: phaseFleet, Order: 1,
 	Wire: func(w *daemonWiring) error {
-		return wireFleetNodeAndJobHandlers(w.Registry, w.Store, w.Clock, w.Bus, w.Paths, w.Settings)
+		return wireFleetNodeAndJobHandlers(w.Ctx, w.Registry, w.Store, w.Clock, w.Bus, w.Paths, w.Settings)
 	},
 })

@@ -39,6 +39,7 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/backup"
+	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/events/scheduler"
 	"github.com/acamarata/cascade/internal/fleet/supervision"
@@ -59,6 +60,10 @@ const schedulerNamespace = "daemon-scheduler"
 // choosing; five minutes comfortably exceeds schedulerTickInterval so a
 // live daemon always renews its lease before it would lapse).
 const schedulerLeaseTTL = 5 * time.Minute
+
+// schedulerLoopSubsystem is the manifest name the RunLoop goroutine runs
+// under.
+const schedulerLoopSubsystem = "events.scheduler-loop"
 
 // schedulerTickInterval is how often RunLoop calls Tick. Retention's own
 // jobs fire at most weekly (retention_register.go's retentionInterval),
@@ -88,7 +93,7 @@ func newSchedulerOwnerID() (string, error) {
 // caller is expected to have already cancelled ctx (or its parent)
 // before calling cleanup, matching every other platformDaemonRun
 // subsystem's shutdown order.
-func startScheduler(ctx context.Context, store provider.Store, rawDB *sql.DB, paths runtime.PathProvider, cfg *runtime.Config, clock runtime.Clock, bus *events.Bus, logger *slog.Logger, gate scheduler.ActionGate) (*scheduler.Scheduler, *memory.AdminHandler, func(context.Context), error) {
+func startScheduler(ctx context.Context, manifest *daemon.Manifest, store provider.Store, rawDB *sql.DB, paths runtime.PathProvider, cfg *runtime.Config, clock runtime.Clock, bus *events.Bus, logger *slog.Logger, gate scheduler.ActionGate) (*scheduler.Scheduler, *memory.AdminHandler, func(context.Context), error) {
 	ownerID, err := newSchedulerOwnerID()
 	if err != nil {
 		return nil, nil, nil, err
@@ -151,12 +156,13 @@ func startScheduler(ctx context.Context, store provider.Store, rawDB *sql.DB, pa
 	}
 
 	loopDone := make(chan struct{})
-	go func() {
+	manifest.GoSupervised(ctx, schedulerLoopSubsystem, "ticking retention and memory jobs", func(ctx context.Context) error {
 		defer close(loopDone)
 		scheduler.RunLoop(ctx, sched, runtime.NewSystemTicker(schedulerTickInterval), func(err error) {
 			logger.Error("scheduler tick failed", "error", err)
 		})
-	}()
+		return nil
+	})
 
 	cleanup := func(closeCtx context.Context) {
 		<-loopDone

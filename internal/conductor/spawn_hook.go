@@ -156,16 +156,33 @@ func (e *Executor) trySpawn(req provider.ModelRequest, sel provider.Selection) {
 // production will exercise once a future ticket threads real
 // ExecutionMode/PID data through. A full semaphore channel increments the
 // drop counter and returns without blocking; otherwise hook runs on its
-// own goroutine, off the caller.
+// own goroutine, off the caller. A panicking hook is recovered: the slot is
+// still freed and spawnHookPanics counts it, because a registry
+// notification must never take the daemon down.
 func (e *Executor) enqueueSpawn(rec sessions.SpawnRecord) {
 	select {
 	case e.spawnSem <- struct{}{}:
 		go func() {
 			defer func() { <-e.spawnSem }()
+			defer recoverSpawnHook()
 			e.spawnHook(rec)
 		}()
 	default:
 		atomic.AddInt64(&e.spawnDrops, 1)
+	}
+}
+
+// spawnHookPanics counts spawn-hook panics enqueueSpawn recovered, across
+// every Executor in the process. It is package-level because Executor's
+// struct lives in execute.go; no production path sets a hook yet, so a
+// non-zero value is a defect signal, not a metric.
+var spawnHookPanics atomic.Int64
+
+// recoverSpawnHook is enqueueSpawn's deferred guard: it swallows a hook
+// panic and counts it.
+func recoverSpawnHook() {
+	if recover() != nil {
+		spawnHookPanics.Add(1)
 	}
 }
 

@@ -10,6 +10,6 @@ var _ = registerDaemonWiring(daemonRegistration{
 	Name: "db-path-handlers", Phase: phaseLate, Order: 20,
 	Wire: func(w *daemonWiring) error {
 		dbPath := filepath.Join(w.Paths.DataDir(), "cascade.db")
-		return registerDBPathHandlers(w.Ctx, w.Registry, w.Manifest, w.Paths, w.Clock, w.Bus, w.Store, dbPath)
+		return registerDBPathHandlers(w.Ctx, w.Registry, w.Manifest, w.Paths, w.Clock, w.Bus, w.Store, dbPath, bridgeHTTPClientFrom(w.Opts))
 	},
 })

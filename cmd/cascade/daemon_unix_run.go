@@ -89,11 +89,11 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 // as RunOptions.Manifest/Connections, so status.get reads Run's real live
 // state (D/S-07.T1, R-14.166).
 func buildDaemonRegistry(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, settings daemon.Settings, paths runtime.PathProvider, memoryAdmin *memory.AdminHandler, store provider.Store, opts ...rpcServerOption) (*rpc.Registry, *daemon.Manifest, *int64, http.Handler, error) {
-	w := &daemonWiring{
+	w := seedWiringFromOptions(&daemonWiring{
 		Ctx: context.Background(), Registry: rpc.NewRegistry(), Events: newDaemonEventsMux(bus, clock),
 		Bus: bus, Clock: clock, Logger: logger, Settings: settings, Paths: paths, Store: store,
 		MemoryAdmin: memoryAdmin, Opts: opts, Deps: daemonRuntimeFromOptions(opts),
-	}
+	})
 	if err := runDaemonWiring(w); err != nil {
 		return nil, nil, nil, nil, err
 	}

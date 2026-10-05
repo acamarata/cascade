@@ -53,10 +53,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log/slog"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
+	"net/http"
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
@@ -81,7 +78,7 @@ import (
 func registerDBPathHandlers(
 	ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest,
 	paths runtime.PathProvider, clock runtime.Clock,
-	bus *events.Bus, store provider.Store, dbPath string,
+	bus *events.Bus, store provider.Store, dbPath string, bridgeHTTP *http.Client,
 ) error {
 	if err := daemon.RegisterRecallIndexHandler(registry, paths, clock, store, dbPath); err != nil {
 		return err
@@ -96,7 +93,7 @@ func registerDBPathHandlers(
 	// function's doc comment for why it must not select one itself. The
 	// service label is vault.go's, so a scrubbed turn's secret lands in
 	// the same vault `cascade vault` reads.
-	custody, err := secrets.SelectCustody(secrets.Config{Service: vaultService, Dir: paths.DataDir()})
+	custody, err := secrets.SelectCustody(daemonCustodyConfig(custodySiteChat, secrets.Config{Service: vaultService, Dir: paths.DataDir()}))
 	if err != nil {
 		return err
 	}
@@ -106,7 +103,7 @@ func registerDBPathHandlers(
 	// The cascade-pa TELEGRAM BRIDGE — the other half of this plugin's daemon
 	// surface, and the one that needs a process with a lifetime: see
 	// wireCascadePABridge below.
-	wireCascadePABridge(ctx, registry, manifest, paths, clock, bus)
+	wireCascadePABridge(ctx, registry, manifest, paths, clock, bus, bridgeHTTP)
 	// plugin.search (X/S-50.T2, SCOPE DEVIATION: this call is the only
 	// line this ticket adds outside its own declared files_scope, added
 	// here per the ticket's own §5 fallback -- "put it where the existing
@@ -153,68 +150,40 @@ func wirePluginSearchHandler(ctx context.Context, registry *rpc.Registry, paths 
 // operator's real keychain (R-14.206), the same reason wireChatHandlers takes
 // its custody as a parameter.
 //
-// WHY THE POLL CONTEXT IS SIGNAL-DERIVED (disclosed, with the follow-up named).
-// buildRPCServer is handed no run context — every namespace above it is
-// registered under context.Background() — and threading Run's context through
-// its signature would touch every existing call site and test, which is the
-// same disclosed tradeoff this file's header already carries for dbPath. The
-// bridge needs a context that really ENDS, or its drain would never run, so it
-// derives one from the signals daemon.Run itself shuts down on (SIGTERM is
-// exactly what `cascade daemon stop` sends, lifecycle_unix_stop.go). Go fans a
-// signal out to every registered subscriber, so this does not take the signal
-// away from Run's own handler. Cancelling the ctx passed in works too, which is
-// what the internal/daemon tests drive; threading the real run context remains
-// the cleaner end state.
+// The poll runs under ctx, the daemon's run context. composeDaemon cancels it
+// before it joins the supervised goroutines, which ends the poll and lets the
+// tracked drain return before the store closes. httpClient is the bot API
+// client withBridgeTransport supplied, or nil (the telegram default).
 func wireCascadePABridge(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest,
-	paths runtime.PathProvider, clock runtime.Clock, bus *events.Bus) {
+	paths runtime.PathProvider, clock runtime.Clock, bus *events.Bus, httpClient *http.Client) {
 	if manifest == nil {
 		return
 	}
 	rt, err := plugins.NewCascadePABridge(ctx, plugins.BridgeDeps{
-		DataDir: paths.DataDir(),
-		Vault:   plugins.BridgeVaultConfig(paths.DataDir()),
-		Clock:   clock,
-		Events:  bus,
+		DataDir:    paths.DataDir(),
+		Vault:      daemonCustodyConfig(custodySiteBridge, plugins.BridgeVaultConfig(paths.DataDir())),
+		Clock:      clock,
+		Events:     bus,
+		HTTPClient: httpClient,
 	})
 	if err != nil {
 		manifest.RegisterBridgeModule(ctx, registry, daemon.BridgeSubsystem{DisabledReason: err.Error()})
 		return
 	}
 	if rt.Start == nil {
-		// Not enabled: no poll to stop, so no signal subscription is taken out
-		// at all. pa.pair_code is still registered, and answers with the
-		// runtime's own typed refusal naming what is missing.
+		// Not enabled: no poll to stop. pa.pair_code is still registered, and
+		// answers with the runtime's own typed refusal naming what is missing.
 		manifest.RegisterBridgeModule(ctx, registry, daemon.BridgeSubsystem{
 			IssueCode: bridgePairCodeIssuer(rt), DisabledReason: rt.DisabledReason,
 		})
 		return
 	}
 	plugins.WireApprovalBridge(rt) // FLAG-0: arm the running approval queue
-	pollCtx, releaseSignals := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	manifest.RegisterBridgeModule(pollCtx, registry, daemon.BridgeSubsystem{
-		Start: rt.Start,
-		// releaseSignals runs after the drain, so the subscription lives
-		// exactly as long as the poll it exists to stop.
-		Stop:      func(c context.Context) error { defer releaseSignals(); return rt.Stop(c) },
+	manifest.RegisterBridgeModule(ctx, registry, daemon.BridgeSubsystem{
+		Start:     rt.Start,
+		Stop:      rt.Stop,
 		IssueCode: bridgePairCodeIssuer(rt),
 	})
-}
-
-// bridgePairCodeIssuer adapts the plugin runtime's issuance closure onto the
-// daemon's wire result. The RFC3339 rendering happens here, at the boundary,
-// so neither side carries the other's formatting choice.
-func bridgePairCodeIssuer(rt *plugins.BridgeRuntime) func(context.Context, string) (daemon.BridgePairCodeResult, error) {
-	return func(ctx context.Context, subject string) (daemon.BridgePairCodeResult, error) {
-		res, err := rt.IssueCode(ctx, subject)
-		if err != nil {
-			return daemon.BridgePairCodeResult{}, err
-		}
-		return daemon.BridgePairCodeResult{
-			Code:      res.Code,
-			Subject:   res.Subject,
-			ExpiresAt: res.ExpiresAt.UTC().Format(time.RFC3339),
-		}, nil
-	}
 }
 
 // pluginAddRPCResult mirrors plugin_add.go's pluginAddView field-for-
