@@ -33,15 +33,11 @@ import (
 // resetting it, so a re-add never clobbers registry-only fields (health,
 // tier, account kind, demotion count) that intake itself does not own.
 //
-// KNOWN GAP, disclosed rather than forced: registry.ProviderRecord has no
-// Pool/PoolIndex field -- pool membership in the durable registry lives on
-// LaneRecord (lanes.go), a different shape than intake's simple
-// ProviderRecord.Pool string. Folding intake's --pool flag onto the lane
-// model (or adding the fields to registry.ProviderRecord) needs its own
-// decision and is out of this fix's scope; ListPool below is therefore an
-// honest stub (always empty) rather than a silent half-implementation.
-// --pool is persisted on the provider's lane (provider_lane.go), and
-// GetProvider reads Pool/PoolIndex back from that lane (S-123.T1).
+// Pool membership: registry.ProviderRecord has no Pool/PoolIndex field;
+// the durable registry keeps membership on the provider's lane (lanes.go).
+// --pool is persisted on that lane (provider_lane.go), and GetProvider and
+// ListPool read Pool/PoolIndex back from it, so intake's join index sees
+// every member's real index.
 type registryAdapter struct {
 	reg *registry.Registry
 }
@@ -98,11 +94,30 @@ func poolMembershipFor(lanes []registry.LaneRecord, name string) (string, int) {
 	return "", 0
 }
 
-// ListPool implements intake.Registry. See this file's header comment:
-// pool membership has no home on registry.ProviderRecord yet, so this is
-// an honest, documented stub rather than a fabricated result.
-func (a registryAdapter) ListPool(context.Context, string) ([]intake.ProviderRecord, error) {
-	return nil, nil
+// ListPool implements intake.Registry: every provider whose own pooled
+// lane (the one poolMembershipFor recognises) belongs to pool, in name
+// order (registry.ListPool orders by provider_name), with Pool/PoolIndex
+// read from that lane. Any read error is returned, never an empty list:
+// intake would hand out an index a member already holds.
+func (a registryAdapter) ListPool(ctx context.Context, pool string) ([]intake.ProviderRecord, error) {
+	lanes, err := a.reg.ListPool(ctx, pool)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]intake.ProviderRecord, 0, len(lanes))
+	for _, l := range lanes {
+		if l.LaneName != pool+"/"+l.ProviderName {
+			continue
+		}
+		rec, err := a.reg.GetProvider(ctx, l.ProviderName)
+		if err != nil {
+			return nil, err
+		}
+		member := fromRegistryRecord(rec)
+		member.Pool, member.PoolIndex = l.PoolMembership, l.PoolIndex
+		out = append(out, member)
+	}
+	return out, nil
 }
 
 // mergeIntakeOntoRegistryRecord builds the registry.ProviderRecord
