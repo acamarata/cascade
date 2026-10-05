@@ -260,11 +260,11 @@ func exportDomainRows(ctx context.Context, tx *sql.Tx, domain DomainID, w io.Wri
 	return nil
 }
 
-// jobsDomainExcludedTables is R-21.162's excluded-table list for the jobs
-// domain (its telemetry tables and the one reservation ledger). Export
-// derives its excluded set from it through exportExcluded.
+// jobsDomainExcludedTables is the jobs domain's R-21.162 excluded set (telemetry, the reservation
+// ledger and the learned-config tables); Export derives its exclusion from it via exportExcluded.
 var jobsDomainExcludedTables = []string{
 	"jobs_telemetry_outcomes", "jobs_telemetry_finding", "jobs_reservation",
+	"jobs_learned_config", "jobs_learned_config_submission", "jobs_learned_config_version",
 }
 
 // JobsDomainExcludedTables returns a copy of the jobs domain's excluded table names.

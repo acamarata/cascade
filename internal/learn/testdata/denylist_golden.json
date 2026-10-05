@@ -1,0 +1,269 @@
+{
+  "provenance": "P1-LRN-01 packet outputs: the ordered deny rule table (Index Area Matcher; first match wins). example is a concrete key whose first matching rule is that row.",
+  "rules": [
+    {
+      "index": 0,
+      "area": "auth_rules",
+      "matcher": "policy.auth.*",
+      "example": "policy.auth.mode"
+    },
+    {
+      "index": 1,
+      "area": "auth_rules",
+      "matcher": "policy.autonomy_profile",
+      "example": "policy.autonomy_profile"
+    },
+    {
+      "index": 2,
+      "area": "auth_rules",
+      "matcher": "policy.deny_list.*",
+      "example": "policy.deny_list.rm"
+    },
+    {
+      "index": 3,
+      "area": "approval_rules",
+      "matcher": "policy.approval_batch_window_s",
+      "example": "policy.approval_batch_window_s"
+    },
+    {
+      "index": 4,
+      "area": "approval_rules",
+      "matcher": "policy.approval_batch_cap",
+      "example": "policy.approval_batch_cap"
+    },
+    {
+      "index": 5,
+      "area": "approval_rules",
+      "matcher": "grants.*",
+      "example": "grants.ci-mirror"
+    },
+    {
+      "index": 6,
+      "area": "destructive_permissions",
+      "matcher": "policy.destructive.*",
+      "example": "policy.destructive.allow"
+    },
+    {
+      "index": 7,
+      "area": "auth_rules",
+      "matcher": "policy.*",
+      "example": "policy.other_key"
+    },
+    {
+      "index": 8,
+      "area": "secret_access",
+      "matcher": "secrets.*",
+      "example": "secrets.keychain_backend"
+    },
+    {
+      "index": 9,
+      "area": "secret_access",
+      "matcher": "vault.*",
+      "example": "vault.backend"
+    },
+    {
+      "index": 10,
+      "area": "trust_roots",
+      "matcher": "elevation.*",
+      "example": "elevation.helper_pubkey"
+    },
+    {
+      "index": 11,
+      "area": "trust_roots",
+      "matcher": "trust.*",
+      "example": "trust.anchor"
+    },
+    {
+      "index": 12,
+      "area": "trust_roots",
+      "matcher": "nodes.trust_tier",
+      "example": "nodes.trust_tier"
+    },
+    {
+      "index": 13,
+      "area": "trust_roots",
+      "matcher": "registry.pubkey_path",
+      "example": "registry.pubkey_path"
+    },
+    {
+      "index": 14,
+      "area": "mandatory_security_gates",
+      "matcher": "jobs.gates.*",
+      "example": "jobs.gates.high"
+    },
+    {
+      "index": 15,
+      "area": "mandatory_security_gates",
+      "matcher": "jobs.risk.*",
+      "example": "jobs.risk.class"
+    },
+    {
+      "index": 16,
+      "area": "mandatory_security_gates",
+      "matcher": "ci.policy.*",
+      "example": "ci.policy.required"
+    },
+    {
+      "index": 17,
+      "area": "minimum_verification",
+      "matcher": "ci.requirements.*",
+      "example": "ci.requirements.kinds"
+    },
+    {
+      "index": 18,
+      "area": "minimum_verification",
+      "matcher": "ci.attestation.*",
+      "example": "ci.attestation.high"
+    },
+    {
+      "index": 19,
+      "area": "minimum_verification",
+      "matcher": "review.*",
+      "example": "review.min_reviewers"
+    },
+    {
+      "index": 20,
+      "area": "minimum_verification",
+      "matcher": "pbd.*",
+      "example": "pbd.verify"
+    },
+    {
+      "index": 21,
+      "area": "provider_compliance_flags",
+      "matcher": "providers.compliance.*",
+      "example": "providers.compliance.flag-a"
+    },
+    {
+      "index": 22,
+      "area": "model_authoring_capability",
+      "matcher": "providers.capabilities.authoring",
+      "example": "providers.capabilities.authoring"
+    },
+    {
+      "index": 23,
+      "area": "egress_rules",
+      "matcher": "egress.*",
+      "example": "egress.allow"
+    },
+    {
+      "index": 24,
+      "area": "egress_rules",
+      "matcher": "hooks.egress.*",
+      "example": "hooks.egress.allow"
+    },
+    {
+      "index": 25,
+      "area": "egress_rules",
+      "matcher": "agents.egress.*",
+      "example": "agents.egress.harness-x.class"
+    },
+    {
+      "index": 26,
+      "area": "egress_rules",
+      "matcher": "ci.mirror_remote",
+      "example": "ci.mirror_remote"
+    },
+    {
+      "index": 27,
+      "area": "egress_rules",
+      "matcher": "gateways.*.base_url",
+      "example": "gateways.acct-a.base_url"
+    },
+    {
+      "index": 28,
+      "area": "egress_rules",
+      "matcher": "gateways.*.header",
+      "example": "gateways.acct-a.header"
+    },
+    {
+      "index": 29,
+      "area": "egress_rules",
+      "matcher": "registry.url",
+      "example": "registry.url"
+    },
+    {
+      "index": 30,
+      "area": "egress_rules",
+      "matcher": "telemetry.*",
+      "example": "telemetry.enabled"
+    },
+    {
+      "index": 31,
+      "area": "egress_rules",
+      "matcher": "sync.*",
+      "example": "sync.class"
+    },
+    {
+      "index": 32,
+      "area": "execution_authority",
+      "matcher": "gateways.*",
+      "example": "gateways.acct-a.credential_helper"
+    },
+    {
+      "index": 33,
+      "area": "execution_authority",
+      "matcher": "agents.auth.*.gateway",
+      "example": "agents.auth.harness-x.gateway"
+    },
+    {
+      "index": 34,
+      "area": "execution_authority",
+      "matcher": "ci.toolchain_versions",
+      "example": "ci.toolchain_versions"
+    },
+    {
+      "index": 35,
+      "area": "execution_authority",
+      "matcher": "nodes.repos.*",
+      "example": "nodes.repos.repo-a"
+    },
+    {
+      "index": 36,
+      "area": "execution_authority",
+      "matcher": "fabric.class.*",
+      "example": "fabric.class.trusted"
+    },
+    {
+      "index": 37,
+      "area": "execution_authority",
+      "matcher": "plugins.*",
+      "example": "plugins.enable"
+    },
+    {
+      "index": 38,
+      "area": "execution_authority",
+      "matcher": "fleet.harness_binary",
+      "example": "fleet.harness_binary"
+    },
+    {
+      "index": 39,
+      "area": "execution_authority",
+      "matcher": "conductor.retry.*",
+      "example": "conductor.retry.max_attempts"
+    },
+    {
+      "index": 40,
+      "area": "execution_authority",
+      "matcher": "conductor.degrade_after",
+      "example": "conductor.degrade_after"
+    },
+    {
+      "index": 41,
+      "area": "execution_authority",
+      "matcher": "context.generation.*",
+      "example": "context.generation.policy"
+    },
+    {
+      "index": 42,
+      "area": "execution_authority",
+      "matcher": "harness.*",
+      "example": "harness.binary"
+    },
+    {
+      "index": 43,
+      "area": "backup_guarantees",
+      "matcher": "backup.*",
+      "example": "backup.retention_days"
+    }
+  ]
+}

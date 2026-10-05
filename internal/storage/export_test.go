@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -208,15 +209,68 @@ func TestExportExcludesTelemetryTables(t *testing.T) {
 		t.Error("Export output contains the reservation canary id -- exclusion failed")
 	}
 
-	want := map[string]bool{"jobs_telemetry_outcomes": false, "jobs_telemetry_finding": false, "jobs_reservation": false}
-	for _, table := range storage.JobsDomainExcludedTables() {
-		if _, ok := want[table]; ok {
-			want[table] = true
-		}
-	}
-	for table, seen := range want {
-		if !seen {
+	assertExcludedTables(t, "jobs_telemetry_outcomes", "jobs_telemetry_finding", "jobs_reservation")
+}
+
+// assertExcludedTables fails for each name JobsDomainExcludedTables lacks.
+func assertExcludedTables(t *testing.T, names ...string) {
+	t.Helper()
+	got := storage.JobsDomainExcludedTables()
+	for _, table := range names {
+		if !slices.Contains(got, table) {
 			t.Errorf("JobsDomainExcludedTables() is missing %q", table)
 		}
+	}
+}
+
+// TestExportExcludesLearnedConfigTables stores a learned config (all three
+// learned-config tables carry a row, through the real migration and store)
+// and asserts Export's jobs-domain output carries the kv row but none of
+// them, and that the excluded list names all six tables.
+func TestExportExcludesLearnedConfigTables(t *testing.T) {
+	db := bootstrappedTestDB(t)
+	ctx := context.Background()
+	clock := testkit.NewFrozenClock(exportTestClock)
+	if err := migrate.Apply(ctx, migrate.ApplyConfig{DB: db, Dialect: migrate.SQLiteEmitter{}, Clock: clock},
+		learn.ConfigMigrationSet()); err != nil {
+		t.Fatalf("apply learn-config: %v", err)
+	}
+	store, err := learn.NewConfigStore(db, clock)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+	const canary = "export-canary-label"
+	c, err := store.Submit(ctx, learn.Submission{
+		Source: learn.SourceRef{Kind: learn.SourceDetector, ID: "det-01"}, Target: "ci.local_timeout",
+		Label: canary, Confidence: 0.5, Change: learn.Change{Op: learn.OpSet, Path: "ci.local.timeout_seconds", Value: "120"},
+		Evidence: []learn.EvidenceRef{{Kind: "telemetry_outcome", ID: "ev-01"}},
+	})
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if err := store.UpdateStatus(ctx, c.ID, learn.StatusPending, learn.StatusApplied); err != nil {
+		t.Fatalf("UpdateStatus: %v", err)
+	}
+	if _, err := store.AppendVersion(ctx, c.ID, "120", nil, "applier-1"); err != nil {
+		t.Fatalf("AppendVersion: %v", err)
+	}
+	seedKVRow(t, db, string(storage.DomainJobs), "ordinary-key", []byte("ordinary-value"))
+	var buf bytes.Buffer
+	if err := storage.Export(ctx, db, storage.DomainJobs, &buf); err != nil {
+		t.Fatalf("Export: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "ordinary-key") {
+		t.Error("Export dropped the ordinary kv row too -- the exclusion is over-broad")
+	}
+	for _, leak := range []string{canary, c.ID, "applier-1"} {
+		if strings.Contains(out, leak) {
+			t.Errorf("Export output carries learned-config data %q", leak)
+		}
+	}
+	assertExcludedTables(t, "jobs_telemetry_outcomes", "jobs_telemetry_finding", "jobs_reservation",
+		"jobs_learned_config", "jobs_learned_config_submission", "jobs_learned_config_version")
+	if n := len(storage.JobsDomainExcludedTables()); n != 6 {
+		t.Errorf("JobsDomainExcludedTables() has %d names, want 6", n)
 	}
 }

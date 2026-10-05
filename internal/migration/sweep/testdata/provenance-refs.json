@@ -169,6 +169,21 @@
       "path": "internal/context/tier_test.go",
       "term": "generate-instructions",
       "reason": "live v2 marker: the test pins the verbatim marker string held by the live markerOpenPrefix constant, which internal/context/gen_cc_sections.go and harness_gen.go use in production; not a v1 code path; must not be retired"
+    },
+    {
+      "path": "internal/learn/classify_test.go",
+      "term": "chunk_size",
+      "reason": "negative case in the learned-config classifier tests: retrieval.chunk_size is asserted NOT to be a learned-config target (it is refused as unregistered); the hit proves the v1 key is absent from v2, not a dependency on it"
+    },
+    {
+      "path": "internal/learn/target_test.go",
+      "term": "chunk_size",
+      "reason": "negative case in the target registry tests: a golden row named retrieval.chunk_size must fail the registry match and resolve to not-found; the hit proves the v1 key is not a v2 target, not a dependency on it"
+    },
+    {
+      "path": "internal/learn/denylist_test.go",
+      "term": "retention_days",
+      "reason": "example field path in the denylist rule-order table (backup.retention_days maps to its deny rule index); a learned-config denylist probe path, not a v1 config dependency"
     }
   ]
 }

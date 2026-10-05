@@ -1,0 +1,61 @@
+{
+  "provenance": "P1-LRN-01 acceptance[12]: synthetic identifying values (reserved .invalid hosts, synthetic paths); each must be refused by ValidateNoIdentifiers.",
+  "refused": [
+    {
+      "name": "email",
+      "value": "someone@host-a.invalid"
+    },
+    {
+      "name": "ssh_url",
+      "value": "ssh://git@host-a.invalid/org-a/repo-a.git"
+    },
+    {
+      "name": "scp_ssh",
+      "value": "git@host-a.invalid:org-a/repo-a.git"
+    },
+    {
+      "name": "https_url",
+      "value": "https://host-a.invalid/org-a/repo-a"
+    },
+    {
+      "name": "hostname",
+      "value": "build-01.host-a.invalid"
+    },
+    {
+      "name": "ipv4",
+      "value": "192.0.2.10"
+    },
+    {
+      "name": "posix_absolute_path",
+      "value": "/srv/work/repo-a"
+    },
+    {
+      "name": "home_path",
+      "value": "~/work/repo-a"
+    },
+    {
+      "name": "windows_drive_path",
+      "value": "C:\\work\\repo-a"
+    },
+    {
+      "name": "unc_path",
+      "value": "\\\\share-a\\work\\repo-a"
+    },
+    {
+      "name": "embedded_in_command",
+      "value": "go test /srv/work/repo-a/..."
+    }
+  ],
+  "clean": [
+    "src-01",
+    "ev_123",
+    "repo-a",
+    "lane-7",
+    "0.5",
+    "120",
+    "[\"lane-a\", \"lane-b\"]",
+    "\"go vet ./...\"",
+    "telemetry_outcome",
+    ""
+  ]
+}

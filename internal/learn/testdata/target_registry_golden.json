@@ -1,0 +1,264 @@
+{
+  "provenance": "P1-LRN-01 acceptance[1]: four safe rows, one behavioral row, twelve security rows (one per area, paths = that area's deny matchers in rule order) and three aliases. Append-only: P2 adds rows here in the same reviewed change; an id is never removed, reused or repointed.",
+  "targets": [
+    {
+      "id": "retrieval.fusion_weights",
+      "paths": [
+        "retrieval.fusion.weights.*"
+      ],
+      "tier": "safe",
+      "areas": [],
+      "shape": "numeric_bounded",
+      "bound": {
+        "min": 0,
+        "max": 1
+      },
+      "direction": "not_a_limit"
+    },
+    {
+      "id": "retrieval.fusion_k",
+      "paths": [
+        "retrieval.fusion.k"
+      ],
+      "tier": "safe",
+      "areas": [],
+      "shape": "numeric_bounded",
+      "bound": {
+        "min": 1,
+        "max": 200
+      },
+      "direction": "not_a_limit"
+    },
+    {
+      "id": "ci.local_timeout",
+      "paths": [
+        "ci.local.timeout_seconds"
+      ],
+      "tier": "safe",
+      "areas": [],
+      "shape": "numeric_bounded",
+      "bound": {
+        "min": 60,
+        "max": 300
+      },
+      "direction": "lower_is_stricter"
+    },
+    {
+      "id": "conductor.lane_order",
+      "paths": [
+        "conductor.lane_order"
+      ],
+      "tier": "safe",
+      "areas": [],
+      "shape": "reorder_only",
+      "bound": null,
+      "direction": "not_a_limit"
+    },
+    {
+      "id": "ci.local_steps",
+      "paths": [
+        "ci.local.lint",
+        "ci.local.test",
+        "ci.local.build"
+      ],
+      "tier": "behavioral",
+      "areas": [],
+      "shape": "add_only",
+      "bound": null,
+      "direction": "not_a_limit"
+    },
+    {
+      "id": "auth.rules",
+      "paths": [
+        "policy.auth.*",
+        "policy.autonomy_profile",
+        "policy.deny_list.*",
+        "policy.*"
+      ],
+      "tier": "security",
+      "areas": [
+        "auth_rules"
+      ],
+      "shape": "denied",
+      "bound": null,
+      "direction": "not_a_limit"
+    },
+    {
+      "id": "secret.access",
+      "paths": [
+        "secrets.*",
+        "vault.*"
+      ],
+      "tier": "security",
+      "areas": [
+        "secret_access"
+      ],
+      "shape": "denied",
+      "bound": null,
+      "direction": "not_a_limit"
+    },
+    {
+      "id": "destructive.permissions",
+      "paths": [
+        "policy.destructive.*"
+      ],
+      "tier": "security",
+      "areas": [
+        "destructive_permissions"
+      ],
+      "shape": "denied",
+      "bound": null,
+      "direction": "not_a_limit"
+    },
+    {
+      "id": "trust.roots",
+      "paths": [
+        "elevation.*",
+        "trust.*",
+        "nodes.trust_tier",
+        "registry.pubkey_path"
+      ],
+      "tier": "security",
+      "areas": [
+        "trust_roots"
+      ],
+      "shape": "denied",
+      "bound": null,
+      "direction": "not_a_limit"
+    },
+    {
+      "id": "mandatory.security_gates",
+      "paths": [
+        "jobs.gates.*",
+        "jobs.risk.*",
+        "ci.policy.*"
+      ],
+      "tier": "security",
+      "areas": [
+        "mandatory_security_gates"
+      ],
+      "shape": "denied",
+      "bound": null,
+      "direction": "not_a_limit"
+    },
+    {
+      "id": "provider.compliance_flags",
+      "paths": [
+        "providers.compliance.*"
+      ],
+      "tier": "security",
+      "areas": [
+        "provider_compliance_flags"
+      ],
+      "shape": "denied",
+      "bound": null,
+      "direction": "not_a_limit"
+    },
+    {
+      "id": "model.authoring_capability",
+      "paths": [
+        "providers.capabilities.authoring"
+      ],
+      "tier": "security",
+      "areas": [
+        "model_authoring_capability"
+      ],
+      "shape": "denied",
+      "bound": null,
+      "direction": "not_a_limit"
+    },
+    {
+      "id": "egress.rules",
+      "paths": [
+        "egress.*",
+        "hooks.egress.*",
+        "agents.egress.*",
+        "ci.mirror_remote",
+        "gateways.*.base_url",
+        "gateways.*.header",
+        "registry.url",
+        "telemetry.*",
+        "sync.*"
+      ],
+      "tier": "security",
+      "areas": [
+        "egress_rules"
+      ],
+      "shape": "denied",
+      "bound": null,
+      "direction": "not_a_limit"
+    },
+    {
+      "id": "approval.rules",
+      "paths": [
+        "policy.approval_batch_window_s",
+        "policy.approval_batch_cap",
+        "grants.*"
+      ],
+      "tier": "security",
+      "areas": [
+        "approval_rules"
+      ],
+      "shape": "denied",
+      "bound": null,
+      "direction": "not_a_limit"
+    },
+    {
+      "id": "minimum.verification",
+      "paths": [
+        "ci.requirements.*",
+        "ci.attestation.*",
+        "review.*",
+        "pbd.*"
+      ],
+      "tier": "security",
+      "areas": [
+        "minimum_verification"
+      ],
+      "shape": "denied",
+      "bound": null,
+      "direction": "not_a_limit"
+    },
+    {
+      "id": "backup.guarantees",
+      "paths": [
+        "backup.*"
+      ],
+      "tier": "security",
+      "areas": [
+        "backup_guarantees"
+      ],
+      "shape": "denied",
+      "bound": null,
+      "direction": "not_a_limit"
+    },
+    {
+      "id": "execution.authority",
+      "paths": [
+        "gateways.*",
+        "agents.auth.*.gateway",
+        "ci.toolchain_versions",
+        "nodes.repos.*",
+        "fabric.class.*",
+        "plugins.*",
+        "fleet.harness_binary",
+        "conductor.retry.*",
+        "conductor.degrade_after",
+        "context.generation.*",
+        "harness.*"
+      ],
+      "tier": "security",
+      "areas": [
+        "execution_authority"
+      ],
+      "shape": "denied",
+      "bound": null,
+      "direction": "not_a_limit"
+    }
+  ],
+  "aliases": {
+    "retrieval.weights": "retrieval.fusion_weights",
+    "ci.steps": "ci.local_steps",
+    "auth_rules": "auth.rules"
+  }
+}
