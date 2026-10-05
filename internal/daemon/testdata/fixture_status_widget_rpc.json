@@ -5,12 +5,100 @@
     "method": "status.widget"
   },
   "result": {
-    "active_jobs_count": 0,
-    "attention_count": 0,
-    "generated_at": "2026-09-13T12:00:00Z",
-    "nodes": [],
+    "active_jobs_count": 2,
+    "attention_count": 1,
+    "generated_at": "2026-10-05T12:00:00Z",
+    "nodes": [
+      {
+        "id": "node-0001",
+        "presence": "reachable",
+        "reachable": true,
+        "trust_tier": "worker-trusted"
+      }
+    ],
     "projects": [],
-    "rows": [],
+    "rows": [
+      {
+        "five_hour": {
+          "resets_in": null,
+          "utilization_pct": null
+        },
+        "kind": "profile",
+        "label": "acct-a-pool",
+        "reauth_required": true,
+        "ref": "acct-a-pool",
+        "seven_day": {
+          "resets_in": null,
+          "utilization_pct": null
+        },
+        "state": "auth-required",
+        "updated_at": "2026-10-05T12:00:00Z"
+      },
+      {
+        "five_hour": {
+          "resets_in": 7200000000000,
+          "utilization_pct": null
+        },
+        "kind": "profile",
+        "label": "acct-b-limit",
+        "reauth_required": false,
+        "ref": "acct-b-limit",
+        "seven_day": {
+          "resets_in": null,
+          "utilization_pct": null
+        },
+        "state": "exhausted",
+        "updated_at": "2026-10-05T12:00:00Z"
+      },
+      {
+        "five_hour": {
+          "resets_in": null,
+          "utilization_pct": null
+        },
+        "kind": "profile",
+        "label": "acct-c-ok",
+        "reauth_required": false,
+        "ref": "acct-c-ok",
+        "seven_day": {
+          "resets_in": null,
+          "utilization_pct": null
+        },
+        "state": "available",
+        "updated_at": "2026-10-05T12:00:00Z"
+      },
+      {
+        "five_hour": {
+          "resets_in": null,
+          "utilization_pct": null
+        },
+        "kind": "profile",
+        "label": "acct-d-nolane",
+        "reauth_required": false,
+        "ref": "acct-d-nolane",
+        "seven_day": {
+          "resets_in": null,
+          "utilization_pct": null
+        },
+        "state": "unknown",
+        "updated_at": "2026-10-05T12:00:00Z"
+      },
+      {
+        "five_hour": {
+          "resets_in": null,
+          "utilization_pct": null
+        },
+        "kind": "profile",
+        "label": "redacted",
+        "reauth_required": false,
+        "ref": "ref-b4c9a289323b",
+        "seven_day": {
+          "resets_in": null,
+          "utilization_pct": null
+        },
+        "state": "available",
+        "updated_at": "2026-10-05T12:00:00Z"
+      }
+    ],
     "seq": 0
   }
 }

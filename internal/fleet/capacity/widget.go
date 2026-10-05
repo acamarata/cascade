@@ -93,38 +93,97 @@ type WidgetSnapshot struct {
 }
 
 // windowUnknown reports whether w carries no real percentage source
-// (snapshot.go's WindowUtilizationUnknown sentinel) — the never-fabricate
+// (snapshot.go's WindowUtilizationUnknown sentinel) - the never-fabricate
 // check every WidgetWindow mapping below shares.
 func windowUnknown(w Window) bool {
 	return w.UtilizationPct == WindowUtilizationUnknown
 }
 
-// widgetWindow maps one Window to a *WidgetWindow, nil fields (not a
-// fabricated zero) when w carries no real source.
+// widgetWindow maps one Window to a *WidgetWindow. Each field is
+// independent: UtilizationPct is nil (not a fabricated zero) when w carries
+// no percentage source, and ResetsIn is nil when w carries no reset (zero
+// means none). A reset on a window with no percentage source is kept - the
+// first version dropped it with the percentage (P1-WID-08, widget.go
+// :104-111), so a key provider never showed when it recovers.
 func widgetWindow(w Window) *WidgetWindow {
-	if windowUnknown(w) {
-		return &WidgetWindow{}
+	out := &WidgetWindow{}
+	if !windowUnknown(w) {
+		pct := w.UtilizationPct
+		out.UtilizationPct = &pct
 	}
-	pct := w.UtilizationPct
-	resets := w.ResetsIn
-	return &WidgetWindow{UtilizationPct: &pct, ResetsIn: &resets}
+	if w.ResetsIn > 0 {
+		resets := w.ResetsIn
+		out.ResetsIn = &resets
+	}
+	return out
 }
 
-// widgetRowFromSlot maps one ProviderSlot to one WidgetRow. Label has no
-// friendlier display-name source than the profile ref itself today (no
-// nickname/display-name field exists on ProviderSlot) — Compose sets it
-// to ref verbatim, an honest default Redact (widget_redact.go) may still
-// override for the project/scope label rule.
-func widgetRowFromSlot(ref string, slot ProviderSlot) WidgetRow {
+// windowBucket returns the bucket whose window the row shows: the bucket
+// that drives the provider's aggregate state (the one in slot.State; the
+// first in canonical order when several share it, preferring one that
+// carries a reset). A provider whose state is unknown shows no windows - an
+// unknown row has no source to read them from, and an expired slot (stale
+// read) must not keep showing its last reset.
+func windowBucket(slot ProviderSlot) (Bucket, bool) {
+	if slot.State == StateUnknown {
+		return Bucket{}, false
+	}
+	var first *Bucket
+	for _, kind := range bucketOrder {
+		b, ok := slot.Buckets[kind]
+		if !ok || b.State != slot.State {
+			continue
+		}
+		if b.FiveHour.ResetsIn > 0 {
+			return b, true
+		}
+		if first == nil {
+			c := b
+			first = &c
+		}
+	}
+	if first == nil {
+		return Bucket{}, false
+	}
+	return *first, true
+}
+
+// rebaseReset returns the time left until the reset a bucket recorded at
+// readAt (readAt + w.ResetsIn), measured from generatedAt, or zero when that
+// instant has passed. ResetsIn is relative to the read, and a row is
+// composed later than it was read, so the figure is re-derived here rather
+// than served stale.
+func rebaseReset(w Window, readAt, generatedAt time.Time) time.Duration {
+	if w.ResetsIn <= 0 {
+		return 0
+	}
+	left := readAt.Add(w.ResetsIn).Sub(generatedAt)
+	if left <= 0 {
+		return 0
+	}
+	return left
+}
+
+// widgetRowFromSlot maps one ProviderSlot to one WidgetRow. name is the
+// registry provider name: Ref is its opaque WidgetRef, Label the name
+// itself (Redact scrubs a PII-shaped label to "redacted"; the registry has
+// no friendlier display field). The windows come from windowBucket; only
+// the five-hour window carries a reset (the lane's ResetEstimate minus
+// generatedAt, null once past) and the seven-day window never does until a
+// per-window source exists (P1-TOP-13). UpdatedAt is the slot's own read
+// time, never generatedAt, so a row whose reads fail ages.
+func widgetRowFromSlot(name string, slot ProviderSlot, generatedAt time.Time) WidgetRow {
 	fiveHour := Window{UtilizationPct: WindowUtilizationUnknown}
 	sevenDay := Window{UtilizationPct: WindowUtilizationUnknown}
-	if b, ok := slot.Buckets[BucketInteractiveUsage]; ok {
+	if b, ok := windowBucket(slot); ok {
 		fiveHour = b.FiveHour
+		fiveHour.ResetsIn = rebaseReset(b.FiveHour, slot.UpdatedAt, generatedAt)
 		sevenDay = b.SevenDay
+		sevenDay.ResetsIn = 0
 	}
 	return WidgetRow{
-		Ref:            ref,
-		Label:          ref,
+		Ref:            WidgetRef(name),
+		Label:          name,
 		Kind:           "profile",
 		FiveHour:       widgetWindow(fiveHour),
 		SevenDay:       widgetWindow(sevenDay),
@@ -160,7 +219,7 @@ func sortedKeys[V any](m map[string]V) []string {
 func Compose(snap FleetSnapshot, attentionCount int, activeJobsCount *int, generatedAt time.Time, seq uint64) WidgetSnapshot {
 	rows := make([]WidgetRow, 0, len(snap.Providers))
 	for _, ref := range sortedKeys(snap.Providers) {
-		rows = append(rows, widgetRowFromSlot(ref, snap.Providers[ref]))
+		rows = append(rows, widgetRowFromSlot(ref, snap.Providers[ref], generatedAt))
 	}
 
 	nodeSummaries := make([]NodePresenceSummary, 0, len(snap.Nodes))

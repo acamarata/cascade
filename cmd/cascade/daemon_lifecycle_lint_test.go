@@ -53,8 +53,6 @@ var backgroundAllow = []lifecycleEntry{
 	{lifecycleSite{"internal/daemon/context_scope.go", "RegisterContextScopeHandler", "scope.ApplyScopeSchema"}, 1, lintOwner, "startup-only schema apply"},
 	{lifecycleSite{"internal/daemon/fleet_mode_rpc.go", "RegisterFleetModeHandler", "economics.ApplyMigrationSchema"}, 1, lintOwner, "startup-only schema apply"},
 	{lifecycleSite{"internal/daemon/quota_rpc.go", "RegisterFleetQuotaHandler", "topology.ApplyMigrationSchema"}, 1, lintOwner, "startup-only schema apply"},
-	{lifecycleSite{"internal/daemon/status_widget.go", "RegisterStatusWidgetHandler", "openWidgetJobsStore"}, 1, lintOwner, "open at registration"},
-	{lifecycleSite{"internal/daemon/status_widget.go", "RegisterStatusWidgetHandler", "emitStatusWidgetChanged"}, 1, "P1-WID-08", "run-time emit residue that ticket removes"},
 	{lifecycleSite{"internal/daemon/lifecycle_unix_serve.go", "shutdownRPCServer", "context.WithTimeout"}, 1, lintOwner, "grace must outlive the cancelled ctx"},
 	{lifecycleSite{"internal/daemon/subsystems.go", "Manifest.logf", "m.log.Log"}, 1, lintOwner, "logging has no request ctx"},
 }
@@ -258,6 +256,8 @@ func seededLifecycleRegressions(t *testing.T, bg, gos map[lifecycleSite]int) {
 	seeds := []struct{ name, rel, src string }{
 		{"second Background in wireBackgroundSubsystems", "cmd/cascade/daemon_unix_reload.go", "package main\nfunc wireBackgroundSubsystems() { schedCleanup(context.Background()) }\n"},
 		{"Background back in wireJobRPC's call", "cmd/cascade/daemon_unix_run_fleetjobs.go", "package main\nfunc wireJobRPCHandlers() { wireJobRPC(context.Background(), nil) }\n"},
+		{"Background back at the status widget's run-time emit", "internal/daemon/status_widget.go", "package daemon\nfunc RegisterStatusWidgetHandler() { emitStatusWidgetChanged(context.Background(), nil, nil) }\n"},
+		{"Background back in the status widget's jobs open", "internal/daemon/status_widget.go", "package daemon\nfunc RegisterStatusWidgetHandler() { openWidgetJobsStore(context.Background(), nil, nil) }\n"},
 		{"bare go in daemon_unix_metrics.go", "cmd/cascade/daemon_unix_metrics.go", "package main\nfunc startFleetMetricsConsumer() { go func() {}() }\n"},
 	}
 	for _, s := range seeds {

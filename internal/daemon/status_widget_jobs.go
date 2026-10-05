@@ -74,12 +74,11 @@ func countActiveJobs(ctx context.Context, store widgetJobsCounter) (int, error) 
 
 // openWidgetJobsStore opens the daemon's own second connection to
 // cascade.db (see this file's header), applies the jobs domain's schemas,
-// and returns an activeJobsCount closure plus a closer the caller must
-// invoke on shutdown (RegisterStatusWidgetHandler's caller today does not
-// track per-registration close hooks either — see
-// daemon_unix_scheduler_dag.go's wireJobScheduler's identical disclosed
-// gap: "lives for the daemon process's lifetime and is reclaimed on
-// process exit").
+// and returns an activeJobsCount closure plus a closer. The composition
+// root (cmd/cascade/wire_status_widget.go) closes it through
+// StatusWidgetDeps.Close when the supervised refresh loop ends, so the
+// handle is released before the daemon store closes. ctx is the daemon run
+// context.
 func openWidgetJobsStore(ctx context.Context, paths runtime.PathProvider, clock runtime.Clock) (func(context.Context) (*int, error), func() error, error) {
 	dbPath := filepath.Join(paths.DataDir(), "cascade.db")
 	db, err := sql.Open("sqlite", "file:"+dbPath)

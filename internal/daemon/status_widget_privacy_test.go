@@ -58,6 +58,14 @@ func TestStatusWidgetNoPII(t *testing.T) {
 	}
 	body := string(raw)
 
+	snap, ok := result.(capacity.WidgetSnapshot)
+	if !ok || len(snap.Rows) != 1 {
+		t.Fatalf("result = %T %+v, want one row", result, result)
+	}
+	if got := snap.Rows[0]; got.Ref != capacity.WidgetRef("user@example.com") || !strings.HasPrefix(got.Ref, "ref-") || len(got.Ref) != 16 || got.Label != "redacted" {
+		t.Errorf("email-named row ref %q label %q, want ref-<12 hex> and \"redacted\"", got.Ref, got.Label)
+	}
+
 	for _, forbidden := range []string{
 		"user@example.com",
 		"/Users/alice/.cascade/node1",

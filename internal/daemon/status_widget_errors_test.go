@@ -77,19 +77,20 @@ func TestResolveWidgetScope_ExplicitScope(t *testing.T) {
 	}
 }
 
-// TestCapacitySnapshot_ProviderSourceError proves UpdateProviders' error
-// return is propagated, not swallowed.
+// TestCapacitySnapshot_ProviderSourceError proves UpdateProviders' error is
+// propagated for a source that has never been read (a source that failed
+// after a success is served stale: TestStatusWidgetUpdatedAtAgesOnReadError).
 func TestCapacitySnapshot_ProviderSourceError(t *testing.T) {
 	_, deps := setupStatusWidget(t, nil)
 	deps.providerSrc = erroringProviderSource{}
-	if _, err := deps.capacitySnapshot(context.Background()); err == nil {
+	if _, _, err := deps.capacitySnapshot(context.Background()); err == nil {
 		t.Fatal("capacitySnapshot with an erroring providerSrc: want an error, got nil")
 	}
 }
 
 // TestStatusWidgetHandler_BuildSnapshotError drives the RPC dispatch path
-// with an erroring nodeSrc, proving THREE links in one real request:
-// capacitySnapshot's UpdateNodes error branch, buildSnapshot's error
+// with a nodeSrc that has never read, proving THREE links in one real
+// request: capacitySnapshot's UpdateNodes error branch, buildSnapshot's error
 // propagation, and statusWidgetHandler's own error return.
 func TestStatusWidgetHandler_BuildSnapshotError(t *testing.T) {
 	reg, deps := setupStatusWidget(t, nil)
@@ -145,7 +146,7 @@ func TestKnownStatusWidgetEventKind(t *testing.T) {
 func TestEmitStatusWidgetChanged_NilBusIsGuarded(t *testing.T) {
 	_, deps := setupStatusWidget(t, nil)
 	before := deps.seq.Load()
-	emitStatusWidgetChanged(context.Background(), deps, nil, nil)
+	emitStatusWidgetChanged(context.Background(), deps, nil)
 	if got := deps.seq.Load(); got != before {
 		t.Errorf("seq = %d after a nil-bus emit, want unchanged %d (nil-bus guard must return first)", got, before)
 	}
@@ -158,7 +159,7 @@ func TestEmitStatusWidgetChanged_CapacitySnapshotErrorSkipsPublish(t *testing.T)
 	_, deps := setupStatusWidget(t, nil)
 	deps.nodeSrc = erroringNodeSource{}
 	spy := &spyEventBus{}
-	emitStatusWidgetChanged(context.Background(), deps, spy, nil)
+	emitStatusWidgetChanged(context.Background(), deps, spy)
 	if spy.published {
 		t.Error("Publish called despite a capacitySnapshot error")
 	}
@@ -168,18 +169,17 @@ func TestEmitStatusWidgetChanged_CapacitySnapshotErrorSkipsPublish(t *testing.T)
 }
 
 // TestEmitStatusWidgetChanged_ComposeFromErrorSkipsPublish proves
-// composeFrom's error branch (a fixed, non-nil preSnap skips
-// capacitySnapshot entirely, isolating this from the nodeSrc test above)
-// also returns before publishing.
+// composeFrom's error branch (an erroring jobs counter, with sources that
+// read fine) also returns before publishing or advancing seq.
 func TestEmitStatusWidgetChanged_ComposeFromErrorSkipsPublish(t *testing.T) {
 	_, deps := setupStatusWidget(t, nil)
 	deps.activeJobsCount = func(context.Context) (*int, error) {
 		return nil, cascade.New(cascade.KindUnavailable, "forced failure")
 	}
 	spy := &spyEventBus{}
-	emitStatusWidgetChanged(context.Background(), deps, spy, &capacity.FleetSnapshot{})
-	if spy.published {
-		t.Error("Publish called despite a composeFrom error")
+	emitStatusWidgetChanged(context.Background(), deps, spy)
+	if spy.published || deps.seq.Load() != 0 {
+		t.Errorf("published=%v seq=%d despite a composeFrom error, want neither", spy.published, deps.seq.Load())
 	}
 }
 
@@ -189,7 +189,7 @@ func TestEmitStatusWidgetChanged_ComposeFromErrorSkipsPublish(t *testing.T) {
 func TestRegisterStatusWidgetHandler_NilStore(t *testing.T) {
 	reg := rpc.NewRegistry()
 	clock := runtime.NewFixedClock(time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC))
-	deps, err := RegisterStatusWidgetHandler(reg, nil, clock, nil, fakePaths{root: t.TempDir()}, func() bool { return false })
+	deps, err := RegisterStatusWidgetHandler(context.Background(), reg, nil, nil, clock, nil, fakePaths{root: t.TempDir()}, func() bool { return false })
 	if err != nil {
 		t.Fatalf("RegisterStatusWidgetHandler(nil store): %v", err)
 	}
@@ -216,7 +216,7 @@ func TestRegisterStatusWidgetHandler_JobsStoreOpenError(t *testing.T) {
 	reg := rpc.NewRegistry()
 
 	store := storetest.NewMemStore()
-	deps, err := RegisterStatusWidgetHandler(reg, store, clock, nil, paths, func() bool { return false })
+	deps, err := RegisterStatusWidgetHandler(context.Background(), reg, store, nil, clock, nil, paths, func() bool { return false })
 	if err == nil {
 		t.Fatal("RegisterStatusWidgetHandler over an unusable DataDir: want an error, got nil")
 	}
@@ -229,7 +229,7 @@ func TestRegisterStatusWidgetHandler_JobsStoreOpenError(t *testing.T) {
 // bus==nil registration branch actually wires a real, invokable onPush
 // closure (not a no-op left uncalled): a real attention Push through
 // deps.attention triggers attentionForwardBus.Publish -> onPush ->
-// emitStatusWidgetChanged(ctx, deps, nil, nil), which must hit the
+// emitStatusWidgetChanged(ctx, deps, nil), which must hit the
 // nil-bus guard and leave seq unchanged.
 func TestRegisterStatusWidgetHandler_NilBusPushDoesNotAdvanceSeq(t *testing.T) {
 	_, deps := setupStatusWidget(t, nil)

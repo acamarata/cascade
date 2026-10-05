@@ -61,50 +61,87 @@ func worstState(states []State) State {
 	return worst
 }
 
+// bucketOrder is the canonical bucket order buildProviderSlot walks, and the
+// order the widget breaks ties in.
+var bucketOrder = []registry.CapacityBucket{BucketInteractiveUsage, BucketAgentSDKCredit, BucketAPICredit}
+
 // buildProviderSlot composes rec's ProviderSlot from its own lanes only
 // (never another provider's data - the ticket's "derive each figure from
 // its own source of truth" rule). Each of the three canonical BucketKinds
-// gets its own worst-case-aggregated State; a bucket with zero
-// matching lanes is StateUnknown (no source for it at all).
+// gets its own worst-case-aggregated State and its own reset estimate; a
+// bucket with zero matching lanes is reported StateUnknown in Buckets (the
+// map keeps all three keys) but takes no part in the provider's aggregate:
+// the slot's State is the worst state over the NON-EMPTY buckets, and
+// StateUnknown only when the provider has no lane at all (see the note below).
+//
+// ROOT CAUSE NOTE (R9 F-3, C14). The first version took
+// worstState over all three buckets, so an empty bucket (unknown, rank 1)
+// outranked available (rank 0) and every healthy one-lane provider read
+// "unknown". It also kept ONE running reset estimate across the bucket loop
+// and copied it into both windows of every bucket, so a bucket's windows
+// carried another bucket's estimate and a five-hour estimate was shown as a
+// seven-day reset (a fabricated figure). Now the estimate is per bucket,
+// comes only from the lanes in that bucket's worst state, and lands in the
+// five-hour window alone; the seven-day window has no reset source yet
+// (P1-TOP-13), so its ResetsIn stays zero.
+//
+// UpdatedAt is the instant of this read. A caller that keeps the slot when a
+// later read fails therefore keeps an aging UpdatedAt (compositor.go).
 func buildProviderSlot(rec registry.ProviderRecord, lanes []registry.LaneRecord, now time.Time) ProviderSlot {
 	byBucket := map[registry.CapacityBucket][]registry.LaneRecord{}
 	for _, l := range lanes {
 		byBucket[l.Capacity] = append(byBucket[l.Capacity], l)
 	}
 
-	buckets := make(map[BucketKind]Bucket, 3)
+	buckets := make(map[BucketKind]Bucket, len(bucketOrder))
 	var reauth bool
-	var resetEstimate time.Time
-	var allStates []State
-	for _, kind := range []registry.CapacityBucket{BucketInteractiveUsage, BucketAgentSDKCredit, BucketAPICredit} {
-		lanesForBucket := byBucket[kind]
-		states := make([]State, 0, len(lanesForBucket))
-		for _, l := range lanesForBucket {
-			states = append(states, l.State)
-			if l.State == StateAuthRequired {
-				reauth = true
-			}
-			if l.ResetEstimate.After(resetEstimate) {
-				resetEstimate = l.ResetEstimate
-			}
+	var slotReset time.Time
+	var populated []State
+	for _, kind := range bucketOrder {
+		bucketLanes := byBucket[kind]
+		b, reset := buildBucket(bucketLanes, now)
+		buckets[kind] = b
+		if len(bucketLanes) == 0 {
+			continue
 		}
-		state := worstState(states)
-		allStates = append(allStates, state)
-		buckets[kind] = Bucket{
-			State:    state,
-			FiveHour: Window{UtilizationPct: WindowUtilizationUnknown, ResetsIn: resetsIn(resetEstimate, now)},
-			SevenDay: Window{UtilizationPct: WindowUtilizationUnknown, ResetsIn: resetsIn(resetEstimate, now)},
+		populated = append(populated, b.State)
+		reauth = reauth || b.State == StateAuthRequired
+		if reset.After(slotReset) {
+			slotReset = reset
 		}
 	}
 
 	return ProviderSlot{
 		ProfileRef:     rec.Name,
 		Buckets:        buckets,
-		State:          worstState(allStates),
-		ResetEstimate:  resetEstimate,
+		State:          worstState(populated),
+		ResetEstimate:  slotReset,
 		ReauthRequired: reauth,
 		UpdatedAt:      now,
 	}
+}
+
+// buildBucket aggregates one bucket's lanes: its worst State and the latest
+// ResetEstimate among the lanes in that worst state (a reset on a lane that
+// is not what degrades the bucket says nothing about when the bucket
+// recovers). No lanes yields StateUnknown and the zero time.
+func buildBucket(lanes []registry.LaneRecord, now time.Time) (Bucket, time.Time) {
+	states := make([]State, 0, len(lanes))
+	for _, l := range lanes {
+		states = append(states, l.State)
+	}
+	worst := worstState(states)
+	var reset time.Time
+	for _, l := range lanes {
+		if l.State == worst && l.ResetEstimate.After(reset) {
+			reset = l.ResetEstimate
+		}
+	}
+	return Bucket{
+		State:    worst,
+		FiveHour: Window{UtilizationPct: WindowUtilizationUnknown, ResetsIn: resetsIn(reset, now)},
+		SevenDay: Window{UtilizationPct: WindowUtilizationUnknown},
+	}, reset
 }
 
 // resetsIn returns max(0, at-now) - never a negative duration for an

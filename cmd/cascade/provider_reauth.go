@@ -83,6 +83,10 @@ func newProviderReauthCmd(deps providerDeps) *cobra.Command {
 // SAME durable registry `provider add` writes through, and runs Reauth. The
 // flagless form resolves its mode first, so every refusal precedes custody.
 func runProviderReauth(cmd *cobra.Command, deps providerDeps, name string, flags providerReauthFlags) error {
+	name, err := resolveReauthTarget(cmd.Context(), deps, name) // a widget ref names one provider (P1-WID-08)
+	if err != nil {
+		return err
+	}
 	req, err := buildReauthRequest(deps, name, flags)
 	if err != nil {
 		return err

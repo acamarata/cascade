@@ -102,7 +102,7 @@ func composeDaemon(ctx context.Context, deps daemonDeps, observe registryObserve
 	// controller-side tunnel registry this process holds (P1-E17-W4-S37-T1).
 	server, _, connections, err := buildRPCServer(bus, deps.Clock, logProvider.Logger(), settings, paths, memoryAdmin, store,
 		withRunContext(runCtx), withManifest(manifest),
-		withPolicyHandlers(pol), withStatusWidgetHandler(store, deps.Clock, bus, paths, cfg.Widget.ShowProjectNames),
+		withPolicyHandlers(pol),
 		withNodePlacement(deps.NodeTunnels), withDaemonRuntime(cfg, rawDB, pol, logProvider, deps), withRegistryObserver(observe))
 	if err != nil {
 		return daemon.RunOptions{}, cleanups, err

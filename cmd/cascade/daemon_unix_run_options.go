@@ -7,8 +7,7 @@
 //
 // Inputs: whatever collaborator each constructor is handed (a policy
 //
-//	wiring, the status-widget dependencies, the controller-side tunnel
-//	registry).
+//	wiring, the controller-side tunnel registry).
 //
 // Outputs: an rpcServerOption carrying a registration, a collaborator, or
 //
@@ -29,13 +28,11 @@ import (
 	"net/http"
 
 	"github.com/acamarata/cascade/internal/daemon"
-	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/mcp/coretools"
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
-	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // rpcServerOption is one further registration buildRPCServer applies to
@@ -208,24 +205,6 @@ func withNodePlacement(tunnels *nodes.Manager) rpcServerOption {
 	return rpcServerOption{nodeTunnels: func(nodeID string) nodes.TunnelState {
 		state, _ := tunnels.State(nodeID)
 		return state
-	}}
-}
-
-// withStatusWidgetHandler registers status.widget (P1-E38-W8-S74-T1) the
-// same optional-registration way withPolicyHandlers does — added as an
-// rpcServerOption rather than a new wireFleetAndNodeHandlers parameter so
-// this ticket touches none of that function's other call sites (its own
-// tests included), matching R-16.79's "smallest real change, not a
-// signature ripple" precedent. showProjectNames is read once, at daemon
-// startup, from the already-loaded *runtime.Config
-// (platformDaemonRun's own cfg) — see status_widget.go's own doc comment
-// for why no live config-reload subscription reaches this composition
-// path today (the same disclosed gap [logging]'s hot keys are the one
-// exception to, via LogProvider.SetLevel/Reconfigure).
-func withStatusWidgetHandler(store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider, showProjectNames bool) rpcServerOption {
-	return rpcServerOption{register: func(registry *rpc.Registry) error {
-		_, err := daemon.RegisterStatusWidgetHandler(registry, store, clock, bus, paths, func() bool { return showProjectNames })
-		return err
 	}}
 }
 

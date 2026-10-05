@@ -15,8 +15,9 @@
 // returns nothing, and that file's PII tag is a classification label, not
 // a detector). The five families are matched by pattern, not by an
 // allowlist of known-bad values, so a value this ticket's test fixture
-// never anticipated is still caught. A Ref field that matches any pattern
-// is replaced by a short deterministic hash of itself (stable across
+// never anticipated is still caught. A Ref field that matches any pattern,
+// or that leaves the widget charset (WidgetRef below), is replaced by a
+// short deterministic hash of itself (stable across
 // calls with the same input, and structurally incapable of carrying the
 // original PII) rather than a partial in-place scrub, which could leave a
 // PII fragment behind or break Ref's opaque-stable-id contract. A Label
@@ -66,15 +67,23 @@ func containsPII(s string) bool {
 	return false
 }
 
-// sanitizeRef returns ref unchanged unless it matches a PII pattern, in
-// which case it returns a short, stable, non-reversible replacement
-// (never the raw value, never a value that changes call to call for the
-// same input).
-func sanitizeRef(ref string) string {
-	if !containsPII(ref) {
-		return ref
+// widgetRefPattern is the charset and length every unhashed WidgetRef holds:
+// 1 to 64 of letters, digits, dot, underscore and hyphen.
+var widgetRefPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+
+// WidgetRef returns the opaque, stable ref the widget feed carries for a
+// provider name (and for a node id or project ref): the name itself when it
+// matches widgetRefPattern and no PII family, else "ref-" plus the first 12
+// hex digits of sha256(name). The hash is deterministic and not reversible,
+// so a ref never carries an email, host or path into the App Group file or
+// a lock-screen snapshot (R-21.162, R-21.200). `cascade provider reauth`
+// resolves such a ref back to one provider by computing the same function
+// over the registry it opens (P1-WID-08); this is the one copy of the rule.
+func WidgetRef(name string) string {
+	if widgetRefPattern.MatchString(name) && !containsPII(name) {
+		return name
 	}
-	sum := sha256.Sum256([]byte(ref))
+	sum := sha256.Sum256([]byte(name))
 	return "ref-" + hex.EncodeToString(sum[:])[:12]
 }
 
@@ -108,20 +117,20 @@ func Redact(snap WidgetSnapshot, showProjectNames bool) WidgetSnapshot {
 	out := snap
 	out.Rows = make([]WidgetRow, len(snap.Rows))
 	for i, r := range snap.Rows {
-		r.Ref = sanitizeRef(r.Ref)
+		r.Ref = WidgetRef(r.Ref)
 		r.Label = sanitizeLabel(r.Label)
 		out.Rows[i] = r
 	}
 
 	out.Nodes = make([]NodePresenceSummary, len(snap.Nodes))
 	for i, n := range snap.Nodes {
-		n.ID = sanitizeRef(n.ID)
+		n.ID = WidgetRef(n.ID)
 		out.Nodes[i] = n
 	}
 
 	out.Projects = make([]ProjectRow, len(snap.Projects))
 	for i, p := range snap.Projects {
-		p.Ref = sanitizeRef(p.Ref)
+		p.Ref = WidgetRef(p.Ref)
 		if !showProjectNames {
 			p.Label = neutralProjectLabel(i)
 		}
