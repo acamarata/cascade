@@ -24,7 +24,9 @@
 // Outputs: a live provider.ModelProvider (the correct providers/*
 //
 //	driver, matched to the registry's DriverKind, its BaseURL and
-//	Selection.Model wired as the driver's default), or a taxonomy error.
+//	Selection.Model wired as the driver's default, wrapped so each call
+//	records its outcome on the lane - lane_outcome.go), or a taxonomy
+//	error.
 //
 // Constraints: never reads, invents, hardcodes or defaults a credential.
 //
@@ -43,6 +45,8 @@ package dispatch
 
 import (
 	"context"
+	"log/slog"
+	"sync"
 
 	"github.com/acamarata/cascade/internal/providers/registry"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -75,6 +79,10 @@ type CredentialSource interface {
 type RegistryLookup interface {
 	ListLanes(ctx context.Context) ([]registry.LaneRecord, error)
 	GetProvider(ctx context.Context, name string) (registry.ProviderRecord, error)
+	// UpsertLane is the lane write the outcome decorator records a call's
+	// result through (lane_outcome.go); the existing registry.UpsertLane,
+	// no second writer.
+	UpsertLane(ctx context.Context, rec registry.LaneRecord) error
 }
 
 // Resolver is the production conductor.ProviderResolver. The zero value
@@ -91,6 +99,11 @@ type Resolver struct {
 	// so no test in this package needs to import "net/http" (the default
 	// unit lane forbids it - internal/build/hygiene.go).
 	transport transport.Transport
+	// log receives the recorder's one warning line; laneMu serialises the
+	// outcome decorators' read-modify-write of a lane row within this
+	// process (lane_outcome_record.go).
+	log    *slog.Logger
+	laneMu sync.Mutex
 }
 
 // NewResolver builds a Resolver. credentials may be nil: every
@@ -109,7 +122,7 @@ func NewResolver(lookup RegistryLookup, credentials CredentialSource, clock runt
 	if transport == nil {
 		return nil, cascade.New(cascade.KindInvalidInput, "dispatch: transport must not be nil")
 	}
-	return &Resolver{lookup: lookup, credentials: credentials, clock: clock, transport: transport}, nil
+	return &Resolver{lookup: lookup, credentials: credentials, clock: clock, transport: transport, log: slog.Default()}, nil
 }
 
 var _ interface {
@@ -146,7 +159,7 @@ func (r *Resolver) Resolve(ctx context.Context, sel provider.Selection) (provide
 		return nil, cascade.Newf(cascade.KindUnavailable,
 			"dispatch: provider %q requires credential %q, no credential source is configured at this composition root", rec.Name, rec.AuthRef)
 	}
-	return r.build(rec, sel.Model)
+	return r.build(lane, rec, sel.Model)
 }
 
 // findLane returns the LaneRecord named laneID, or KindNotFound. A

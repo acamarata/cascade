@@ -219,12 +219,66 @@ record, with no fallback to another mode.
 
 ### Lane state
 
-Reauth itself stores no lane state and no auth-required flag. The provider's
-lane is written the same way `provider add` writes it, from the record reauth
-saves: a verified reauth marks the lane `available`, a reauth with
-`--no-verify` marks it `unknown`, and a failed verify writes nothing, so the
-lane keeps whatever state it had. The credential value never appears in
-arguments, output, logs, events or error text.
+A lane's state has two writers, and both write what they observed.
+
+**`provider add` and `provider reauth` (intake).** Reauth itself stores no lane
+state and no auth-required flag. The provider's lane is written the same way
+`provider add` writes it, from the record reauth saves: a verified reauth marks
+the lane `available`, a reauth with `--no-verify` marks it `unknown`, and a
+failed verify writes nothing, so the lane keeps whatever state it had. A
+verified reauth is therefore what clears an `auth-required` row.
+
+**Provider calls (dispatch).** Every provider the conductor's resolver builds
+is wrapped so that each call records its outcome on that provider's lane. The
+evidence is the driver's own returned error kind, together with proof that an
+HTTP response reached the transport on that call. There is no second status
+table: each driver already maps its vendor's statuses to a kind.
+
+| Driver returned | A response was seen | Lane becomes |
+|---|---|---|
+| success | yes | `available`, reset estimate cleared |
+| `permission-denied` | yes | `auth-required`, no reset estimate |
+| `quota-exhausted` | yes | `exhausted`, reset estimate from `Retry-After` (below) |
+| `capability-denied` | yes | unchanged |
+| any other kind (`unavailable`, `invalid-input`, `timeout`, `canceled`, ...) | yes | unchanged |
+| anything | no | unchanged |
+
+"No response seen" covers a refusal before any HTTP call (no standing grant, an
+empty resolved key) and a transport error. A local credential refusal can
+return `permission-denied` and still never writes `auth-required`. The same
+rule keeps a Gemini 403 (billing disabled or a quarantined domain, typed
+`capability-denied`) from touching an available lane, while a Gemini 400 that
+carries an invalid-key envelope (typed `permission-denied`) does amber it. For a
+stream, the outcome is recorded when the stream ends or fails.
+
+`Retry-After` is the only reset hint read. It must be plain delta-seconds (ASCII
+digits). The estimate is the call's time plus that many seconds, never more than
+7 days ahead: any value of 7 days or more, including one too large for 64 bits,
+becomes exactly 7 days. A missing, empty, signed, fractional or HTTP-date value,
+and any vendor-specific reset header, gives no estimate. The recorder keeps the
+response status and `Retry-After` and nothing else; request headers and bodies,
+where the credential travels, are never read or logged.
+
+A write happens only when the state or the estimate would change, and it
+changes only those two fields: the lane's name, provider, pool, weight,
+capacity and model filter are written back as read. A failed write is logged
+with the lane name and the error and never changes what the caller receives.
+
+Semantics are last-observed, and three consequences are worth knowing:
+
+- A 401 from a call that began with the old key can land after a verified
+  reauth and put the row back to `auth-required`. The next successful call
+  clears it.
+- `exhausted` stays until the next call after its reset passes; until then the
+  feed shows no countdown for a lane whose estimate is already past.
+- The write is a read-modify-write of the lane row and writes back the pool
+  index it read. That is latent while nothing in production advances the pool
+  index (`AdvancePoolIndex` has no production caller); whoever adds one must
+  make the two writers agree (a note for the conductor work that adds pool advancement).
+
+OAuth providers do not dispatch yet, so every row this path can turn amber
+belongs to a key provider. The credential value never appears in arguments,
+output, logs, events or error text.
 
 ## Known gaps
 

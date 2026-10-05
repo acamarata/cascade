@@ -1,0 +1,5 @@
+{
+  "provenance": "BYTE COPY of the in-tree literal openaiLive401 at providers/openai/openai_test.go:60 (shortened vendor message; the full text is in providers/openai/testdata/fuzz/.../seed_response.json). Not a live capture made for this ticket: no provider was called. No Retry-After header is carried.",
+  "status": 401,
+  "body": "{\"error\":{\"message\":\"You didn't provide an API key.\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":null}}"
+}

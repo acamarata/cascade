@@ -103,8 +103,9 @@ func callgraphEdgesInPath(fset *token.FileSet, path, rel string, allowed map[str
 	vars := seamProviderVars(file, alias)
 	inConductor := strings.HasPrefix(rel, "internal"+string(filepath.Separator)+"conductor"+string(filepath.Separator))
 	var out []string
+	exempt := seamExemptFuncs(file, vars, rel)
 	for _, e := range callgraphEdgesInFile(file, vars) {
-		if inConductor && allowed[e.caller] {
+		if exempt[e.caller] || (inConductor && allowed[e.caller]) {
 			continue
 		}
 		out = append(out, rel+": "+e.caller+" -> ModelProvider."+e.verb)

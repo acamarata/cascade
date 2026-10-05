@@ -108,9 +108,10 @@ func seamRightmostIdent(expr ast.Expr) (string, bool) {
 // found in file on a receiver name in vars.
 func seamFindViolations(file *ast.File, vars map[string]bool, fset *token.FileSet, relPath string) []string {
 	var found []string
+	exempt := seamExemptCalls(file, vars, relPath)
 	ast.Inspect(file, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
-		if !ok {
+		if !ok || exempt[call] {
 			return true
 		}
 		sel, ok := call.Fun.(*ast.SelectorExpr)
