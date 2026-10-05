@@ -1,7 +1,6 @@
-// Purpose: closes the coverage gap on defaults and small pure helpers
-//   the other test files' scenarios do not happen to exercise: the
-//   default WithPermitFn/JournalAppender New supplies when a caller
-//   passes none, Classification.String, and the event-bus publish path.
+// Purpose: closes the coverage gap on small pure helpers the other test
+//   files' scenarios do not happen to exercise: requeue's per-kind switch,
+//   Classification.String, and the event-bus publish path.
 // SPORT: internal.fleet.resume.ResumeManager/ADDED (tests) (P1-E13-W3-S27-T2).
 
 package resume
@@ -10,9 +9,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/pkg/cascade"
-	"github.com/acamarata/cascade/pkg/provider"
 )
 
 func TestClassificationString(t *testing.T) {
@@ -29,37 +26,26 @@ func TestClassificationString(t *testing.T) {
 	}
 }
 
-// TestDefaultPermitAndAppender_UsedWhenNilSupplied drives a resumable
-// fan-out cursor through a Manager built with withPermit=nil and
-// appender=nil (New's defaulting path), and has the fanOut double call
-// both seams directly — proving passthroughPermit runs fn and
-// noopAppender.AppendLeg is a genuine no-op, neither a nil-panic.
-func TestDefaultPermitAndAppender_UsedWhenNilSupplied(t *testing.T) {
+// TestRequeueByKind: a fan-out cursor is left alone (nothing appended to
+// any entity), an intent is re-queued, and an unknown kind fails closed.
+func TestRequeueByKind(t *testing.T) {
 	store, _, _ := newRealStore(t)
-	seedFanOutCursor(t, store, "t-default-seams", 1)
-
-	ran := false
-	fo := func(ctx context.Context, _ provider.ModelRequest, _ int, _ map[int]conductor.JobID, withPermit conductor.WithPermitFn, appender conductor.JournalAppender) ([]provider.ModelResponse, error) {
-		ran = true
-		permitErr := withPermit(ctx, func(context.Context) error { return nil })
-		if permitErr != nil {
-			t.Fatalf("default withPermit: %v", permitErr)
-		}
-		if _, err := appender.AppendLeg(ctx, "fanout_leg_done", "t-default-seams", 0, map[string]string{"attempt": "1", "outcome": conductor.LegOutcomeFailedRetryable}); err != nil {
-			t.Fatalf("default appender.AppendLeg: %v", err)
-		}
-		return []provider.ModelResponse{{JobID: "job-0"}}, nil
-	}
-
-	mgr, err := New(store, fo, nil, nil, nil, nil, "darwin")
+	ctx := context.Background()
+	mgr, err := New(store, nil, nil, "darwin")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if _, err := mgr.Run(context.Background()); err != nil {
-		t.Fatalf("Run: %v", err)
+	if err := mgr.requeue(ctx, resumeCursor{TaskID: "t-fan", FanOutID: "t-fan", Kind: cursorFanOut, Legs: 2}); err != nil {
+		t.Fatalf("requeue(fan-out) = %v, want nil", err)
 	}
-	if !ran {
-		t.Fatal("fanOut never ran through the default withPermit/appender seams")
+	if ents, _ := store.ListEntities(ctx); len(ents) != 0 {
+		t.Fatalf("requeue(fan-out) wrote entities %v, want none", ents)
+	}
+	if err := mgr.requeue(ctx, resumeCursor{TaskID: "t-int", Kind: cursorIntent, ActionID: "a"}); err != nil || entryCount(t, store, "t-int") != 1 {
+		t.Fatalf("requeue(intent) = %v, entries %d; want nil and one re-queued intent", err, entryCount(t, store, "t-int"))
+	}
+	if err := mgr.requeue(ctx, resumeCursor{Kind: cursorKind(99)}); err != ErrUnrecognizedShape { //nolint:errorlint // identity
+		t.Fatalf("requeue(unknown kind) = %v, want ErrUnrecognizedShape", err)
 	}
 }
 
@@ -72,8 +58,7 @@ func TestPublish_NilBusIsNoop(_ *testing.T) {
 func TestPublish_WithBusPublishesTypedEvent(t *testing.T) {
 	bus := &recordingBus{}
 	store, _, _ := newRealStore(t)
-	var calls []fakeFanOutCall
-	mgr, err := New(store, fakeFanOut(&calls, nil, nil), nil, nil, nil, bus, "darwin")
+	mgr, err := New(store, nil, bus, "darwin")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

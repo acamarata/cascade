@@ -187,7 +187,8 @@ func openLocked(ctx context.Context, path string, unlock func() error, migrator 
 	if err != nil {
 		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "sqlite: open read pool %s", path)
 	}
-	writeDB, err := sql.Open("sqlite", dsn)
+	// IMMEDIATE: a write tx takes the lock at BEGIN, so busy_timeout covers a second connection's write.
+	writeDB, err := sql.Open("sqlite", dsn+"&_txlock=immediate")
 	if err != nil {
 		_ = readDB.Close()
 		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "sqlite: open write connection %s", path)

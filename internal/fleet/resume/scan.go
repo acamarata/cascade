@@ -155,9 +155,8 @@ func classifyFanOut(entries []journal.Entry) (*resumeCursor, error) {
 		return nil, nil // every leg already done: nothing to resume
 	}
 	// The request content lives only in the request record, which this
-	// journal-only Manager cannot read: its FanOutFunc gets the TaskID
-	// template, and the store-backed Scan (sweep.go) is the classifier
-	// that loads the record.
+	// journal-only Manager cannot read and never needs: it classifies and
+	// dispatches nothing. The store-backed Scan loads the record.
 	return &resumeCursor{TaskID: latest.TaskID, FanOutID: latest.FanOutID, Kind: cursorFanOut,
 		Request: provider.ModelRequest{TaskID: latest.TaskID}, Legs: latest.Legs, Completed: completed}, nil
 }

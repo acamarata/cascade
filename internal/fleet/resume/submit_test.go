@@ -1,9 +1,9 @@
-// Purpose: tasks 3-4's re-submission proofs: completed-leg skip
-//   (R-21.214) and fenced/deduplicated dispatch (R-21.221). The kill -9
-//   fan-out and upgrade-in-place integration tests live in
-//   submit_kill9_test.go (R-14.117 authorized split, Art.10.3's
-//   300-line-per-file cap).
-// SPORT: internal.fleet.resume.ResumeManager/ADDED (tests) (P1-E13-W3-S27-T2).
+// Purpose: task 3 narrowed by EPIC Decision 12: a resumable fan-out cursor
+//   is classified and never re-dispatched (no completed-leg replay, no
+//   fence marker), including a journal that still holds a fence marker an
+//   earlier version wrote. The kill -9 fan-out and upgrade-in-place tests
+//   live in submit_kill9_test.go (R-14.117 authorized split).
+// SPORT: internal.fleet.resume.ResumeManager/CHANGE (tests) (P1-CORE-15).
 
 package resume
 
@@ -14,7 +14,6 @@ import (
 
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/fleet/journal"
-	"github.com/acamarata/cascade/pkg/provider"
 )
 
 func seedFanOutCursor(t *testing.T, store journal.Store, taskID string, legs int, completedIdx ...int) {
@@ -35,12 +34,10 @@ func seedFanOutCursor(t *testing.T, store journal.Store, taskID string, legs int
 	}
 }
 
-func TestResumeSkipsCompletedFanOutLegs(t *testing.T) {
+func TestResumeFanOutCursorClassifiedNotDispatched(t *testing.T) {
 	store, _, _ := newRealStore(t)
 	seedFanOutCursor(t, store, "t-3legs", 3, 0, 1) // legs 0,1 done; leg 2 unfinished
-
-	var calls []fakeFanOutCall
-	mgr, err := New(store, fakeFanOut(&calls, []provider.ModelResponse{{JobID: "job-0"}, {JobID: "job-1"}, {JobID: "job-2"}}, nil), nil, nil, nil, nil, "darwin")
+	mgr, err := New(store, nil, nil, "darwin")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -48,87 +45,29 @@ func TestResumeSkipsCompletedFanOutLegs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if len(calls) != 1 {
-		t.Fatalf("fanOut called %d times, want exactly 1 (completed legs skipped, R-21.214)", len(calls))
-	}
-	if len(calls[0].completed) != 2 {
-		t.Fatalf("completed map = %+v, want 2 entries (legs 0 and 1)", calls[0].completed)
-	}
-	if _, ok := calls[0].completed[0]; !ok {
-		t.Error("completed map missing leg 0")
-	}
-	if _, ok := calls[0].completed[1]; !ok {
-		t.Error("completed map missing leg 1")
-	}
-	if len(report.Outcomes) != 1 || report.Outcomes[0].LegsDispatched != 1 {
-		t.Fatalf("Outcomes = %+v, want LegsDispatched=1 (only leg 2 unfinished)", report.Outcomes)
-	}
+	assertClassifiedOnly(t, store, report, FanOutEntity("t-3legs"), 3)
 }
 
-func TestResumeFencedAttemptRejectsStale(t *testing.T) {
+// TestResumeLegacyFenceMarkerIgnored: a fence marker an earlier version
+// appended rides KindResumeCursor; classification skips it and Run still
+// appends nothing.
+func TestResumeLegacyFenceMarkerIgnored(t *testing.T) {
 	store, _, _ := newRealStore(t)
-	ctx := context.Background()
-	seedFanOutCursor(t, store, "t-race", 1)
-
-	blockCh := make(chan struct{})
-	proceedCh := make(chan struct{})
-	first := true
-	fo := func(_ context.Context, _ provider.ModelRequest, _ int, _ map[int]conductor.JobID, _ conductor.WithPermitFn, _ conductor.JournalAppender) ([]provider.ModelResponse, error) {
-		if first {
-			first = false
-			close(blockCh)
-			<-proceedCh // wait until the "concurrent, newer" claim has landed
-		}
-		return []provider.ModelResponse{{JobID: "job-0"}}, nil
+	seedFanOutCursor(t, store, "t-fenced", 2)
+	fence, err := json.Marshal(fenceMarker{T: "fence", ActionID: FanOutEntity("t-fenced")})
+	if err != nil {
+		t.Fatal(err)
 	}
-	mgr, err := New(store, fo, nil, nil, nil, nil, "darwin")
+	if _, err := store.Append(context.Background(), FanOutEntity("t-fenced"), journal.KindResumeCursor, "legacy-fence", fence); err != nil {
+		t.Fatalf("seed fence: %v", err)
+	}
+	mgr, err := New(store, nil, nil, "darwin")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-
-	cursor := resumeCursor{TaskID: "t-race", FanOutID: "t-race", Kind: cursorFanOut, Request: provider.ModelRequest{TaskID: "t-race"}, Legs: 1, Completed: map[int]conductor.JobID{}}
-
-	type result struct {
-		dispatched int
-		err        error
-	}
-	resCh := make(chan result, 1)
-	go func() {
-		d, err := mgr.resubmit(ctx, cursor)
-		resCh <- result{d, err}
-	}()
-
-	<-blockCh
-	// A second, "newer" resumer claims a fresher attempt for the SAME
-	// task while the first call's fan-out dispatch is still in flight.
-	if _, err := mgr.claimAttempt(ctx, FanOutEntity("t-race"), FanOutEntity("t-race")); err != nil {
-		t.Fatalf("claimAttempt (concurrent): %v", err)
-	}
-	close(proceedCh)
-
-	assertStaleAttemptDiscarded(ctx, t, store, <-resCh)
-}
-
-// assertStaleAttemptDiscarded is split out of
-// TestResumeFencedAttemptRejectsStale to stay under the 50-line function
-// cap (funlen): it checks the superseded attempt's own result and that
-// exactly one discard record landed in the journal.
-func assertStaleAttemptDiscarded(ctx context.Context, t *testing.T, store journal.Store, res struct {
-	dispatched int
-	err        error
-}) {
-	t.Helper()
-	if res.err != ErrStaleAttempt {
-		t.Fatalf("first resubmit's result = (%d, %v), want (0, ErrStaleAttempt)", res.dispatched, res.err)
-	}
-	if res.dispatched != 0 {
-		t.Fatalf("stale result reported %d legs dispatched, want 0 (discarded, never applied)", res.dispatched)
-	}
-	discards, err := store.Replay(ctx, FanOutEntity("t-race"), journal.Cursor{EntityID: FanOutEntity("t-race"), Seq: 0}, []journal.Kind{journal.KindAck})
+	report, err := mgr.Run(context.Background())
 	if err != nil {
-		t.Fatalf("Replay for discard record: %v", err)
+		t.Fatalf("Run: %v", err)
 	}
-	if len(discards) != 1 {
-		t.Fatalf("Ack (discard) entries = %d, want 1 (stale result journaled and discarded)", len(discards))
-	}
+	assertClassifiedOnly(t, store, report, FanOutEntity("t-fenced"), 2)
 }

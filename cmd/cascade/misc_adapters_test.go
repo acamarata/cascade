@@ -1,8 +1,8 @@
 // Purpose: unit coverage for a handful of small composition-root
 //
 //	functions that shipped with zero direct test callers:
-//	productionStdinIsPiped (vault_quarantine.go), unavailableFanOut
-//	(daemon_resume.go), productionElevationPrecondition (daemon.go),
+//	productionStdinIsPiped (vault_quarantine.go),
+//	productionElevationPrecondition (daemon.go),
 //	clientRecallCall/clientMemoryCall (recall.go/memory.go), and
 //	realHTTPDoer.Get's request-construction refusal (provider_usage_cmd.go).
 //	Each is exercised directly rather than through the CLI command tree
@@ -16,9 +16,6 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
-
-	"github.com/acamarata/cascade/pkg/cascade"
-	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // TestProductionStdinIsPiped_Idempotent proves the real os.Stdin.Stat
@@ -32,17 +29,6 @@ func TestProductionStdinIsPiped_Idempotent(t *testing.T) {
 	second := productionStdinIsPiped()
 	if first != second {
 		t.Errorf("productionStdinIsPiped() = %v then %v, want a stable answer across calls", first, second)
-	}
-}
-
-// TestUnavailableFanOut_RefusesWithKindUnavailable proves the disclosed
-// gap this seam documents: until a real conductor.Executor is wired,
-// every call refuses with KindUnavailable rather than returning a
-// fabricated response.
-func TestUnavailableFanOut_RefusesWithKindUnavailable(t *testing.T) {
-	_, err := unavailableFanOut(context.Background(), provider.ModelRequest{}, 0, nil, nil, nil)
-	if !isCLIKind(err, cascade.KindUnavailable) {
-		t.Fatalf("unavailableFanOut() = %v, want KindUnavailable", err)
 	}
 }
 

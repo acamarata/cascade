@@ -66,6 +66,7 @@ var knownConfigKeys = []string{
 	"schema_version",
 	"runtime.profile", "runtime.home", "runtime.data_dir",
 	"daemon.socket", "daemon.shutdown_grace",
+	"daemon.fanout_record_ttl", "daemon.fanout_sweep_interval",
 	"logging.level", "logging.format",
 	"logging.rotation.max_size_mb", "logging.rotation.max_files",
 	"storage.driver",

@@ -1,15 +1,15 @@
 // Purpose: ResumeManager's construction, its top-level Run orchestration,
 //   and the taxonomy sentinels/report shapes the rest of the package
 //   returns through it.
-// Inputs: a journal.Store, a FanOutFunc (production: Executor.ExecuteFanOut),
-//   the two conductor-shaped seams FanOut itself needs (WithPermitFn,
-//   JournalAppender), an injected runtime.Clock, and an optional
+// Inputs: a journal.Store, an injected runtime.Clock, and an optional
 //   runtime.EventBus for surfacing terminal/unknown-outcome/attention
 //   items.
 // Outputs: a Report summarizing every entity the scan touched, or a
 //   pkg/cascade taxonomy error if the scan itself could not run at all.
 // Constraints: no bare time.Now (Clock only); Run never panics; a Windows
 //   GOOS refuses before touching the journal at all (platform_windows.go).
+//   Run never dispatches a fan-out: a fan-out cursor is classified only, and
+//   its client re-attaches with its request_id (EPIC Decision 12).
 // SPORT: internal.fleet.resume.ResumeManager/ADDED (P1-E13-W3-S27-T2).
 
 package resume
@@ -18,11 +18,9 @@ import (
 	"context"
 	goruntime "runtime"
 
-	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/fleet/journal"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
-	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // Classification is the fail-closed outcome the scan assigns to one
@@ -71,12 +69,8 @@ type AttentionItem struct {
 type Outcome struct {
 	EntityID       string
 	Classification Classification
-	// LegsDispatched counts the exec calls a resumable fan-out cursor's
-	// re-submission actually made (completed legs are skipped, R-21.214).
-	LegsDispatched int
 	// Err carries the typed A-T7 error for Terminal/UnknownOutcome, and a
-	// dispatch failure for a Resumable cursor whose re-submission itself
-	// failed.
+	// re-queue failure for a Resumable intent whose re-queue append failed.
 	Err error
 }
 
@@ -89,18 +83,14 @@ type Report struct {
 	Attention []AttentionItem
 }
 
-// FanOutFunc is the injected re-dispatch seam, satisfied in production by
-// (*conductor.Executor).ExecuteFanOut. Kept as a function type rather than
-// an interface so a test double needs no struct.
-type FanOutFunc func(ctx context.Context, req provider.ModelRequest, n int, completed map[int]conductor.JobID, withPermit conductor.WithPermitFn, journal conductor.JournalAppender) ([]provider.ModelResponse, error)
-
 // ErrWindowsUnsupported is Windows tier-2's typed refusal: the daemon
 // service this package resumes for does not exist on Windows at all
 // (D/S-07.T4's headless one-shot path never runs a resumable daemon).
 var ErrWindowsUnsupported = cascade.New(cascade.KindUnsupported, "resume: the cascade daemon (and therefore crash/upgrade resume) does not exist on Windows; use the headless one-shot commands instead")
 
-// ErrConstructionFailed reports a nil required dependency at New.
-var ErrConstructionFailed = cascade.New(cascade.KindInvalidInput, "resume: construction requires a non-nil Journal and FanOut")
+// ErrConstructionFailed reports a nil required collaborator: New's journal,
+// or a FanOutDeps field Scan and Sweep need.
+var ErrConstructionFailed = cascade.New(cascade.KindInvalidInput, "resume: construction requires every collaborator to be non-nil")
 
 // ErrTruncatedTail reports that the journal store's own recovery scan
 // found and removed a torn tail for an entity — a partial checkpoint,
@@ -118,38 +108,23 @@ var ErrUnrecognizedShape = cascade.New(cascade.KindInvalidInput, "resume: entity
 // for reconciliation, never auto-replayed.
 var ErrAmbiguousOutcome = cascade.New(cascade.KindConflict, "resume: unacknowledged action is not declared idempotent; held for reconciliation")
 
-// ErrStaleAttempt reports that a re-dispatch's result arrived after a
-// newer attempt for the same {task_id, leg_index} had already been
-// fenced in; the result is journaled and discarded, never applied
-// (R-21.221).
-var ErrStaleAttempt = cascade.New(cascade.KindConflict, "resume: dispatch result superseded by a newer fencing attempt")
-
 // Manager is the ResumeManager. The zero value is not usable; build one
 // with New.
 type Manager struct {
-	journal    journal.Store
-	fanOut     FanOutFunc
-	withPermit conductor.WithPermitFn
-	appender   conductor.JournalAppender
-	clock      runtime.Clock
-	bus        runtime.EventBus // optional; nil means "no event surfaced"
-	goos       string
+	journal journal.Store
+	clock   runtime.Clock
+	bus     runtime.EventBus // optional; nil means "no event surfaced"
+	goos    string
 }
 
-// New builds a Manager. journal and fanOut are required; withPermit and
-// appender default to permissive/no-op doubles suitable for a caller that
-// has no admission seam yet wired (never nil-panics inside FanOut); bus is
-// optional. goos selects the platform-refusal check (pass runtime.GOOS in
-// production, a literal in tests) — see platform_windows.go.
-func New(journalStore journal.Store, fanOut FanOutFunc, withPermit conductor.WithPermitFn, appender conductor.JournalAppender, clock runtime.Clock, bus runtime.EventBus, goos string) (*Manager, error) {
-	if journalStore == nil || fanOut == nil {
+// New builds a Manager. journal is required; clock defaults to the system
+// clock and bus is optional. goos selects the platform-refusal check (pass
+// runtime.GOOS in production, a literal in tests) — see
+// platform_windows.go. The Manager holds no dispatch seam: it classifies
+// fan-out cursors and re-queues idempotent intents, nothing else.
+func New(journalStore journal.Store, clock runtime.Clock, bus runtime.EventBus, goos string) (*Manager, error) {
+	if journalStore == nil {
 		return nil, ErrConstructionFailed
-	}
-	if withPermit == nil {
-		withPermit = passthroughPermit
-	}
-	if appender == nil {
-		appender = noopAppender{}
 	}
 	if clock == nil {
 		clock = runtime.SystemClock{}
@@ -157,7 +132,7 @@ func New(journalStore journal.Store, fanOut FanOutFunc, withPermit conductor.Wit
 	if goos == "" {
 		goos = goruntime.GOOS
 	}
-	return &Manager{journal: journalStore, fanOut: fanOut, withPermit: withPermit, appender: appender, clock: clock, bus: bus, goos: goos}, nil
+	return &Manager{journal: journalStore, clock: clock, bus: bus, goos: goos}, nil
 }
 
 // RefuseOnGOOS reports ErrWindowsUnsupported when goos is "windows", nil
@@ -177,30 +152,13 @@ func RefuseOnGOOS(goos string) error {
 	return nil
 }
 
-// passthroughPermit is the default WithPermitFn when a caller supplies
-// none: it runs fn without taking any admission permit. Production always
-// supplies the real reservation-pipeline seam (R-21.122); this default
-// exists only so New never has to reject a caller that has not wired
-// admission yet.
-func passthroughPermit(ctx context.Context, fn func(context.Context) error) error { return fn(ctx) }
-
-// noopAppender is the default JournalAppender when a caller supplies
-// none. AppendLeg is a genuine no-op (not a stub masquerading as success):
-// a caller that passes nil is explicitly choosing not to journal
-// individually-dispatched fan-out legs through this seam a second time
-// (this package's own submit.go already journals the resume-level
-// KindFanOutLegStarted/Done entries FanOut's completed-map skip needs).
-type noopAppender struct{}
-
-func (noopAppender) AppendLeg(context.Context, string, string, int, map[string]string) (uint64, error) {
-	return 0, nil
-}
-
-// Run scans every entity in the journal, classifies it, re-submits every
-// resumable fan-out cursor, and returns a Report. On Windows it refuses
-// immediately without touching the journal (Art.5 platform tier-2). An
-// empty journal (no entities at all) returns Report{ColdStart: true} and a
-// nil error — not a failure.
+// Run scans every entity in the journal, classifies it, re-queues every
+// resumable idempotent intent, and returns a Report. A resumable fan-out
+// cursor is reported Resumable and left untouched: nothing is dispatched
+// without a caller, and the client re-attaches with its request_id. On
+// Windows it refuses immediately without touching the journal (Art.5
+// platform tier-2). An empty journal (no entities at all) returns
+// Report{ColdStart: true} and a nil error — not a failure.
 func (m *Manager) Run(ctx context.Context) (Report, error) {
 	if err := RefuseOnGOOS(m.goos); err != nil {
 		return Report{}, err
@@ -226,9 +184,10 @@ func (m *Manager) Run(ctx context.Context) (Report, error) {
 	return report, nil
 }
 
-// runOne scans and, if resumable, re-submits exactly one entity, and
-// publishes a typed A-T7 event for any non-nil outcome error (never a
-// silent drop, per the ticket's acceptance criterion). hasOutcome is
+// runOne scans exactly one entity, re-queues it when it is a resumable
+// intent (a fan-out cursor is classified only), and publishes a typed A-T7
+// event for any non-nil outcome error (never a silent drop, per the
+// ticket's acceptance criterion). hasOutcome is
 // false only for an entity with nothing open to report at all (fully
 // completed, or no recognized cursor present) — kept out of Report.Outcomes
 // so a large journal's quiescent entities do not drown the ones that
@@ -249,8 +208,8 @@ func (m *Manager) runOne(ctx context.Context, entityID string) (outcome Outcome,
 		return Outcome{}, nil, false
 	}
 
-	dispatched, submitErr := m.resubmit(ctx, *cursor)
-	outcome = Outcome{EntityID: entityID, Classification: ClassResumable, LegsDispatched: dispatched, Err: submitErr}
+	submitErr := m.requeue(ctx, *cursor)
+	outcome = Outcome{EntityID: entityID, Classification: ClassResumable, Err: submitErr}
 	if submitErr != nil {
 		m.publish(ctx, outcome)
 	}

@@ -108,6 +108,50 @@ On Windows, this whole scan is skipped: the daemon socket probe is
 unix-socket only, and the daemon itself is not supported on Windows. See
 [Windows](#windows) below.
 
+### Fan-out cursors
+
+A `conductor.execute` call with `fan_out` of 2 or more writes a cursor, a
+request record and one result per finished leg to the daemon store, so a
+crash mid-call loses nothing that already ran. The daemon never
+re-dispatches such a call on its own. Nobody is waiting for that output,
+and a provider call without a caller only costs money.
+
+At startup, before the socket serves, the daemon classifies every fan-out
+cursor and dispatches nothing. A cursor with every leg recorded, or one
+that is still resumable, is kept for its client. `status.get` reports
+subsystem `fanout-resume` as started with detail `pending N`, where N
+counts those kept cursors. A cursor that cannot resume (no request record,
+or a leg the policy refused) is finalized and its records are deleted.
+
+Recovery is the client's re-attach. `cascade run` prints the request id
+to stderr before it sends a fan-out. After a crash, run the same command
+again with `--resume <request_id>`: the daemon re-authorizes each stored
+leg before returning it, runs only the legs that never finished, and
+delivers all of them to that caller. A leg started three times without an
+ok outcome is never sent again; the re-attach then ends with an
+`unknown_outcome` refusal.
+
+A fan-out nobody re-attaches to is expired by the `fanout-sweep`
+subsystem, which runs at startup and then on a fixed interval. Once the
+last journal entry of a fan-out is older than the record ttl, the sweep
+writes an `expired` marker and deletes its records, still without a
+provider call. Both values live in `[daemon]`:
+
+```toml
+[daemon]
+fanout_record_ttl = "24h"     # default 24h
+fanout_sweep_interval = "1h"  # default 1h
+```
+
+Each takes a Go duration string or a number of seconds, and must be
+positive. A malformed value stops the daemon from starting. With no
+daemon store (some test builds) `fanout-resume` is reported as skipped
+with `no daemon store`. If the conductor's executor could not be built,
+it is skipped with `pending (executor unavailable)`: nothing is
+classified or marked at startup, and the daemon keeps serving. The
+`fanout-sweep` still runs whenever the claim table and journal were
+built, so unattached fan-outs still expire at `fanout_record_ttl`.
+
 ## Artifact classes
 
 The scan checks three kinds of leftover state, in this order.

@@ -1,6 +1,8 @@
 // Purpose: the kill -9 fan-out integration test and the upgrade-in-place
 //   test — split out of submit_test.go under R-14.117's authorized-split
-//   allowance (Art.10.3's 300-line-per-file cap).
+//   allowance (Art.10.3's 300-line-per-file cap). Both now prove the
+//   classify-only rule (EPIC Decision 12): a surviving fan-out cursor is
+//   reported Resumable and nothing is appended or dispatched for it.
 // Constraints: Art.7.1; TestResumeKillHelperProcess is re-executed as a
 //   SEPARATE OS PROCESS (providers/sqlite/lock_crossprocess_test.go's own
 //   established pattern) — never called directly by `go test` itself.
@@ -20,7 +22,6 @@ import (
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/fleet/journal"
 	"github.com/acamarata/cascade/internal/testkit"
-	"github.com/acamarata/cascade/pkg/provider"
 	"github.com/acamarata/cascade/providers/sqlite"
 )
 
@@ -93,33 +94,19 @@ func TestResumeKill9FanOut(t *testing.T) {
 	defer func() { _ = driver.Close() }()
 	store := journal.New(driver, testkit.NewFrozenClock(testInstant), journal.DefaultNamespace)
 
-	var calls []fakeFanOutCall
-	legs, err := newLegAdapter(store, driver)
-	if err != nil {
-		t.Fatalf("newLegAdapter: %v", err)
-	}
-	mgr, err := New(store, journalingFanOut(&calls, legs), nil, nil, nil, nil, "darwin")
+	mgr, err := New(store, nil, nil, "darwin")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	report, err := mgr.Run(context.Background())
-	if err != nil {
-		t.Fatalf("Run after kill -9: %v", err)
-	}
-	assertKilledTaskResumedOnce(t, report, calls)
-
-	// Idempotent resume: running it again must not double-dispatch. The
-	// cursor is now fully done as far as this test's fake exec reports
-	// (both legs have a fanout_leg_done entry after the first Run), so a
-	// second Run finds nothing left to resume for this task.
-	report2, err := mgr.Run(context.Background())
-	if err != nil {
-		t.Fatalf("second Run: %v", err)
-	}
-	for _, o := range report2.Outcomes {
-		if o.EntityID == FanOutEntity("killed-task") {
-			t.Fatalf("second Run re-surfaced killed-task = %+v, want it absent (idempotent: fully done, no re-dispatch)", o)
+	// Resume classifies the surviving cursor and dispatches nothing, so a
+	// second Run (a second restart with no re-attach) sees the identical
+	// journal and the identical verdict: no double dispatch, no drop.
+	for run := 1; run <= 2; run++ {
+		report, err := mgr.Run(context.Background())
+		if err != nil {
+			t.Fatalf("Run %d after kill -9: %v", run, err)
 		}
+		assertClassifiedOnly(t, store, report, FanOutEntity("killed-task"), 3)
 	}
 }
 
@@ -168,55 +155,19 @@ func spawnAndKillHelper(t *testing.T, path string) {
 	_ = cmd.Wait() // reap
 }
 
-// journalingFanOut is a FanOutFunc test double that journals each leg it
-// actually dispatches through the store-backed legs adapter, mirroring what
-// conductor.FanOut's own dispatchLeg does in production (fanout.go) —
-// needed so a SECOND Run can observe a leg's completion and correctly
-// classify the task as fully done (idempotence). The bare fakeFanOut
-// helper ignores the appender entirely, which would make a "nothing left
-// to resume" assertion true for the wrong reason: not because resume is
-// idempotent, but because the test double never recorded the effect.
-func journalingFanOut(calls *[]fakeFanOutCall, legs conductor.JournalAppender) FanOutFunc {
-	return func(ctx context.Context, req provider.ModelRequest, n int, completed map[int]conductor.JobID, _ conductor.WithPermitFn, _ conductor.JournalAppender) ([]provider.ModelResponse, error) {
-		*calls = append(*calls, fakeFanOutCall{req: req, n: n, completed: completed})
-		resp := make([]provider.ModelResponse, n)
-		for i := 0; i < n; i++ {
-			if jobID, ok := completed[i]; ok {
-				resp[i] = provider.ModelResponse{JobID: jobID}
-				continue
-			}
-			attempt, err := legs.AppendLeg(ctx, "fanout_leg_started", req.TaskID, i, nil)
-			if err != nil {
-				return nil, err
-			}
-			jobID := "job-" + itoa(uint64(i))
-			if _, err := legs.AppendLeg(ctx, "fanout_leg_done", req.TaskID, i, map[string]string{"job_id": jobID,
-				"attempt": itoa(attempt), "outcome": conductor.LegOutcomeOK, "result_key": conductor.LegResultKey(req.TaskID, i)}); err != nil {
-				return nil, err
-			}
-			resp[i] = provider.ModelResponse{JobID: conductor.JobID(jobID)}
-		}
-		return resp, nil
-	}
-}
-
-// assertKilledTaskResumedOnce checks the post-kill Run's outcome for the
-// killed-task cursor: resumed, exactly one skipped-and-one-dispatched
-// fanOut call.
-func assertKilledTaskResumedOnce(t *testing.T, report Report, calls []fakeFanOutCall) {
+// assertClassifiedOnly checks that report holds exactly one outcome, entity
+// Resumable with no error, and that entity still replays want entries: no
+// fence marker, no leg entry, nothing dispatched.
+func assertClassifiedOnly(t *testing.T, store journal.Store, report Report, entity string, want int) {
 	t.Helper()
 	if len(report.Outcomes) != 1 {
-		t.Fatalf("Outcomes = %+v, want exactly 1 (the killed-task cursor)", report.Outcomes)
+		t.Fatalf("Outcomes = %+v, want exactly 1 (%s)", report.Outcomes, entity)
 	}
-	got := report.Outcomes[0]
-	if got.Classification != ClassResumable {
-		t.Fatalf("Outcome = %+v, want ClassResumable (zero silent drops)", got)
+	if got := report.Outcomes[0]; got.EntityID != entity || got.Classification != ClassResumable || got.Err != nil {
+		t.Fatalf("Outcome = %+v, want %s ClassResumable with no error (zero silent drops)", got, entity)
 	}
-	if got.LegsDispatched != 1 {
-		t.Fatalf("LegsDispatched = %d, want 1 (leg 0 already done and skipped, only leg 1 re-dispatched)", got.LegsDispatched)
-	}
-	if len(calls) != 1 || len(calls[0].completed) != 1 {
-		t.Fatalf("fanOut calls = %+v, want 1 call with leg 0 in the completed map", calls)
+	if n := entryCount(t, store, entity); n != want {
+		t.Fatalf("%s replays %d entries after Run, want %d (classify-only: nothing appended or dispatched)", entity, n, want)
 	}
 }
 
@@ -236,17 +187,15 @@ func TestResumeUpgradeInPlace(t *testing.T) {
 	store1 := journal.New(driver1, testkit.NewFrozenClock(testInstant), journal.DefaultNamespace)
 	seedFanOutCursor(t, store1, "t-upgrade", 2, 0)
 
-	var calls []fakeFanOutCall
-	mgr1, err := New(store1, fakeFanOut(&calls, []provider.ModelResponse{{JobID: "job-1"}}, nil), nil, nil, nil, nil, "darwin")
+	mgr1, err := New(store1, nil, nil, "darwin")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if _, err := mgr1.Run(ctx); err != nil {
+	report, err := mgr1.Run(ctx)
+	if err != nil {
 		t.Fatalf("Run before restart: %v", err)
 	}
-	if len(calls) != 1 {
-		t.Fatalf("fanOut calls before restart = %d, want 1", len(calls))
-	}
+	assertClassifiedOnly(t, store1, report, FanOutEntity("t-upgrade"), 2)
 
 	// Drain: the pre-upgrade process closes its store cleanly (D/S-07.T5's
 	// drain, unlike TestResumeKill9FanOut's SIGKILL) and the new-version
@@ -262,21 +211,13 @@ func TestResumeUpgradeInPlace(t *testing.T) {
 	defer func() { _ = driver2.Close() }()
 	store2 := journal.New(driver2, testkit.NewFrozenClock(testInstant), journal.DefaultNamespace)
 
-	var calls2 []fakeFanOutCall
-	mgr2, err := New(store2, fakeFanOut(&calls2, []provider.ModelResponse{{JobID: "job-2"}}, nil), nil, nil, nil, nil, "darwin")
+	mgr2, err := New(store2, nil, nil, "darwin")
 	if err != nil {
 		t.Fatalf("New after restart: %v", err)
 	}
-	report, err := mgr2.Run(ctx)
+	report, err = mgr2.Run(ctx)
 	if err != nil {
 		t.Fatalf("Run after restart: %v", err)
 	}
-	for _, o := range report.Outcomes {
-		if o.EntityID == FanOutEntity("t-upgrade") && o.Classification != ClassResumable {
-			t.Fatalf("post-upgrade outcome = %+v, want ClassResumable (surviving cursor re-submitted)", o)
-		}
-	}
-	if len(calls2) != 1 {
-		t.Fatalf("fanOut calls after restart = %d, want 1 (surviving cursor re-submitted)", len(calls2))
-	}
+	assertClassifiedOnly(t, store2, report, FanOutEntity("t-upgrade"), 2)
 }

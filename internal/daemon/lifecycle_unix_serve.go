@@ -13,22 +13,47 @@ package daemon
 // Outputs: a real, serving http.Server over the daemon socket; a done
 //   channel that closes once Serve returns; a shutdown sequence that
 //   never leaves a connection open past Run's return.
-// Constraints: no bare time.Now/After/Tick/Sleep (none needed here:
-//   context.WithTimeout is a duration, not a wall-clock read). Every
+// Constraints: no bare time.Now/After/Tick/Sleep (context.WithTimeout and
+//   the drain timer/ticker are durations, not wall-clock reads). Every
 //   accepted connection is closed exactly once: drainRefusingListener
 //   closes a during-drain connection itself and never hands it to Serve;
 //   every other connection's close is driven by http.Server itself
-//   (graceful during Shutdown, forced by the trailing Close).
-// SPORT: internal/daemon (CHANGE).
+//   (graceful during Shutdown, forced by the trailing Close). After the
+//   Close, shutdownRPCServer waits (bounded) for the handlers it just
+//   cancelled, so Run never closes the store under a running handler.
+// SPORT: internal/daemon (CHANGE, P1-CORE-15 P1-BF-R138).
 
 import (
 	"context"
 	"log/slog"
 	"net"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"time"
 )
+
+// cancelledHandlerBound caps how long shutdownRPCServer waits, after the
+// force-close, for the handlers whose requests it cancelled (a fan-out's
+// detached finalize is itself bounded at 5s).
+const cancelledHandlerBound = 10 * time.Second
+
+// inflightHandlers maps each *http.Server serveRPC serves to its count of
+// running handlers; shutdownRPCServer drains and removes the entry.
+var inflightHandlers sync.Map
+
+// countingHandler counts h's running ServeHTTP calls in n.
+type countingHandler struct {
+	h http.Handler
+	n *int64
+}
+
+// ServeHTTP runs h with the call counted for its whole duration.
+func (c countingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	atomic.AddInt64(c.n, 1)
+	defer atomic.AddInt64(c.n, -1)
+	c.h.ServeHTTP(w, r)
+}
 
 // drainRefusingListener wraps ln so a connection accepted while upgrade is
 // mid-Drain is refused with ErrDraining (closed, logged, never handed to
@@ -70,8 +95,16 @@ func (l *drainRefusingListener) Accept() (net.Conn, error) {
 // a naive per-Accept counter, which the prior placeholder accept loop
 // could get away with only because it closed every connection immediately.
 // The returned channel closes once Serve returns (ln closed or srv shut
-// down).
+// down). srv's handler is wrapped so its running calls are counted for
+// shutdownRPCServer.
 func serveRPC(ln net.Listener, srv *http.Server, active *int64) <-chan struct{} {
+	inner := srv.Handler
+	if inner == nil {
+		inner = http.DefaultServeMux
+	}
+	running := new(int64)
+	srv.Handler = countingHandler{h: inner, n: running}
+	inflightHandlers.Store(srv, running)
 	srv.ConnState = func(_ net.Conn, state http.ConnState) {
 		switch state {
 		case http.StateNew:
@@ -99,9 +132,35 @@ func serveRPC(ln net.Listener, srv *http.Server, active *int64) <-chan struct{} 
 // with connections still open. A grace of zero is valid (some tests use it
 // deliberately): Shutdown then returns almost
 // immediately via its already-expired deadline and Close does the rest.
+// Close cancels every in-flight request but does not wait for its handler,
+// so it then waits up to cancelledHandlerBound for those handlers to
+// return (a fan-out finalizes its marker in that window) before Run goes
+// on to close the store.
 func shutdownRPCServer(srv *http.Server, grace time.Duration) {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), grace)
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
 	_ = srv.Close()
+	waitCancelledHandlers(srv, cancelledHandlerBound)
+}
+
+// waitCancelledHandlers polls srv's running-handler count until it reaches
+// zero or bound elapses. A server serveRPC never served has no count.
+func waitCancelledHandlers(srv *http.Server, bound time.Duration) {
+	v, ok := inflightHandlers.LoadAndDelete(srv)
+	if !ok {
+		return
+	}
+	running := v.(*int64)
+	deadline := time.NewTimer(bound)
+	defer deadline.Stop()
+	tick := time.NewTicker(5 * time.Millisecond)
+	defer tick.Stop()
+	for atomic.LoadInt64(running) > 0 {
+		select {
+		case <-deadline.C:
+			return
+		case <-tick.C:
+		}
+	}
 }

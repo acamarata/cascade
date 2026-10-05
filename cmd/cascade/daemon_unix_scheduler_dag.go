@@ -67,8 +67,7 @@ import (
 const schedulerCursorName = "jobs-scheduler"
 
 // schedulerResumeHeartbeatInterval is Resume's heartbeatInterval argument.
-// DISCLOSED GAP (matches wireResumeScan's unavailableFanOut precedent in
-// daemon_resume.go): AF/S-65.T2, the ticket that owns writing
+// DISCLOSED GAP: AF/S-65.T2, the ticket that owns writing
 // execution.heartbeat_at, has no production writer anywhere in this tree
 // yet (grep across internal/jobs for a heartbeat_at UPDATE outside tests
 // returns nothing) — 0 disables reapHeartbeats outright

@@ -2,8 +2,11 @@
 //   and SWEEP): Sweep deletes the records of every in-scope fan-out whose
 //   last journal entry is older than the ttl (writing an "expired" marker
 //   when none exists), removes the residue a crash left between a final
-//   marker and its deletes, and reaps request records with no entity. It
-//   also holds the per-fan-out state reader Scan, Sweep and the producer
+//   marker and its deletes, and reaps request records with no entity. The
+//   records are the leg results, the conductor.fanout.attempts slots (all
+//   of them once the final marker is read back; before that only a
+//   finished leg's, DeleteTask) and the request record.
+//   It also holds the per-fan-out state reader Scan, Sweep and the producer
 //   share.
 // Inputs: FanOutDeps (daemon store, head reader, claim table, clock), the
 //   sweep instant and the ttl.
@@ -200,12 +203,39 @@ func sweepOne(ctx context.Context, js journal.Store, deps FanOutDeps, id string,
 	}
 	switch {
 	case st.Final != "":
-		return false, deleteRecords(ctx, js, deps.Store, id)
+		return false, deleteFinalized(ctx, js, deps.Store, id)
 	case now.Sub(st.Last) <= ttl:
 		return false, nil
 	default:
 		return true, finalize(ctx, js, deps.Store, id, OutcomeExpired)
 	}
+}
+
+// deleteFinalized removes the records of a fan-out whose final marker was
+// read back. A final fan-out never starts a leg again (the producer
+// refuses it), so every conductor.fanout.attempts slot goes in one
+// transaction whatever the leg result (R13 as widened); deleteRecords then
+// removes the results and the request record. A store error leaves every
+// slot and is returned (fails closed).
+func deleteFinalized(ctx context.Context, js journal.Store, store provider.Store, id string) error {
+	keys, err := listPrefix(ctx, store, legAttemptsNamespace, id+"#")
+	if err != nil {
+		return err
+	}
+	if len(keys) > 0 { // no write transaction when no slot is left
+		err = store.Tx(ctx, func(ctx context.Context, tx provider.Tx) error {
+			for _, key := range keys {
+				if err := tx.Delete(ctx, legAttemptsNamespace, key); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return rewrap(err, "resume: deleting the attempt slots of final fan-out "+id)
+		}
+	}
+	return deleteRecords(ctx, js, store, id)
 }
 
 // reapOrphanRequests deletes a request record with key K only when
@@ -237,7 +267,12 @@ func reapOne(ctx context.Context, deps FanOutDeps, key string) error {
 
 // listKeys lists every key of namespace.
 func listKeys(ctx context.Context, store provider.Store, namespace string) ([]string, error) {
-	it, err := store.Scan(ctx, namespace, "")
+	return listPrefix(ctx, store, namespace, "")
+}
+
+// listPrefix lists every key of namespace that starts with prefix.
+func listPrefix(ctx context.Context, store provider.Store, namespace, prefix string) ([]string, error) {
+	it, err := store.Scan(ctx, namespace, prefix)
 	if err != nil {
 		return nil, rewrap(err, "resume: listing "+namespace)
 	}

@@ -80,8 +80,8 @@ func composeDaemon(ctx context.Context, deps daemonDeps, observe registryObserve
 	if err := runRecoveryScan(ctx, paths, settings, deps, logProvider, bus, store); err != nil {
 		return daemon.RunOptions{}, cleanups, err
 	}
-	// M/S-27.T2: crash/upgrade-in-place resume over the same store, before any
-	// RPC connection (daemon_resume.go names the disclosed Executor gap).
+	// M/S-27.T2: resume scan before any RPC connection; dispatches nothing
+	// (fan-out cursors: the fanout-resume registration, wire_resume.go).
 	if _, err := wireResumeScan(ctx, store, deps.Clock); err != nil {
 		return daemon.RunOptions{}, cleanups, err
 	}

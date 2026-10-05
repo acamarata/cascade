@@ -1,5 +1,6 @@
 // Purpose: construction validation, cold start, and the Windows tier-2
-//   refusal (tasks 1, 6, 7's cold-start leg).
+//   refusal (tasks 1, 6, 7's cold-start leg); entryCount, the journal
+//   length check the classify-only tests use to prove nothing was written.
 // Constraints: Art.7.1 (t.TempDir only); no bare time.Now (testkit.FrozenClock).
 // SPORT: internal.fleet.resume.ResumeManager/ADDED (tests) (P1-E13-W3-S27-T2).
 
@@ -12,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/fleet/journal"
 	"github.com/acamarata/cascade/internal/testkit"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -38,19 +38,16 @@ func newRealStore(t *testing.T) (journal.Store, provider.Store, string) {
 	return journal.New(driver, testkit.NewFrozenClock(testInstant), journal.DefaultNamespace), driver, path
 }
 
-// fakeFanOut is the test double for FanOutFunc: it records every call and
-// returns preset legs/err, without touching any real provider.
-func fakeFanOut(calls *[]fakeFanOutCall, legs []provider.ModelResponse, err error) FanOutFunc {
-	return func(_ context.Context, req provider.ModelRequest, n int, completed map[int]conductor.JobID, _ conductor.WithPermitFn, _ conductor.JournalAppender) ([]provider.ModelResponse, error) {
-		*calls = append(*calls, fakeFanOutCall{req: req, n: n, completed: completed})
-		return legs, err
+// entryCount returns how many journal entries entity holds: a classify-only
+// Run that dispatched nothing leaves every fan-out entity's count unchanged
+// (no fence marker, no leg entry).
+func entryCount(t *testing.T, store journal.Store, entity string) int {
+	t.Helper()
+	es, err := store.Replay(context.Background(), entity, journal.Cursor{EntityID: entity}, nil)
+	if err != nil {
+		t.Fatalf("Replay(%s): %v", entity, err)
 	}
-}
-
-type fakeFanOutCall struct {
-	req       provider.ModelRequest
-	n         int
-	completed map[int]conductor.JobID
+	return len(es)
 }
 
 // poisonStore fails t.Fatal if ANY method is called — used to prove the
@@ -79,26 +76,19 @@ func (p poisonStore) Recover(context.Context, string) (journal.TruncationReport,
 }
 func (p poisonStore) Close() error { return nil }
 
-func TestNew_RequiresJournalAndFanOut(t *testing.T) {
+func TestNew_RequiresJournal(t *testing.T) {
 	store, _, _ := newRealStore(t)
-	var calls []fakeFanOutCall
-	fo := fakeFanOut(&calls, nil, nil)
-
-	if _, err := New(nil, fo, nil, nil, nil, nil, "darwin"); !cascade.HasKind(err, cascade.KindInvalidInput) {
-		t.Fatalf("New(nil journal, ...) = %v, want KindInvalidInput", err)
+	if _, err := New(nil, nil, nil, "darwin"); err != ErrConstructionFailed || err.Error() != ErrConstructionFailed.Error() { //nolint:errorlint // identity: errors.Is compares Kind only
+		t.Fatalf("New(nil journal) = %v, want ErrConstructionFailed", err)
 	}
-	if _, err := New(store, nil, nil, nil, nil, nil, "darwin"); !cascade.HasKind(err, cascade.KindInvalidInput) {
-		t.Fatalf("New(journal, nil fanOut, ...) = %v, want KindInvalidInput", err)
-	}
-	if _, err := New(store, fo, nil, nil, nil, nil, "darwin"); err != nil {
-		t.Fatalf("New with only required deps: %v, want nil", err)
+	if _, err := New(store, nil, nil, "darwin"); err != nil {
+		t.Fatalf("New with only the journal: %v, want nil", err)
 	}
 }
 
 func TestResumeColdStart(t *testing.T) {
 	store, _, _ := newRealStore(t)
-	var calls []fakeFanOutCall
-	mgr, err := New(store, fakeFanOut(&calls, nil, nil), nil, nil, nil, nil, "darwin")
+	mgr, err := New(store, nil, nil, "darwin")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -109,23 +99,19 @@ func TestResumeColdStart(t *testing.T) {
 	if !report.ColdStart {
 		t.Fatalf("Report.ColdStart = false, want true on an empty journal")
 	}
-	if len(calls) != 0 {
-		t.Fatalf("fanOut called %d times on a cold start, want 0", len(calls))
+	if ents, _ := store.ListEntities(context.Background()); len(ents) != 0 {
+		t.Fatalf("cold start wrote entities %v, want none", ents)
 	}
 }
 
 func TestResumeWindowsTier2Refusal(t *testing.T) {
-	var calls []fakeFanOutCall
-	mgr, err := New(poisonStore{t: t}, fakeFanOut(&calls, nil, nil), nil, nil, nil, nil, "windows")
+	mgr, err := New(poisonStore{t: t}, nil, nil, "windows")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	_, err = mgr.Run(context.Background())
 	if !cascade.HasKind(err, cascade.KindUnsupported) {
 		t.Fatalf("Run on windows = %v, want KindUnsupported", err)
-	}
-	if len(calls) != 0 {
-		t.Fatalf("fanOut called on the windows refusal path, want 0 calls")
 	}
 }
 

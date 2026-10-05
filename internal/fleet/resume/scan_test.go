@@ -76,8 +76,7 @@ func TestResumeUnknownKindFailClosed(t *testing.T) {
 	seedCorruptEntry(t, raw, "task-unknown-kind")
 	store := journal.New(raw, testkit.NewFrozenClock(testInstant), journal.DefaultNamespace)
 
-	var calls []fakeFanOutCall
-	mgr, err := New(store, fakeFanOut(&calls, nil, nil), nil, nil, nil, nil, "darwin")
+	mgr, err := New(store, nil, nil, "darwin")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -91,8 +90,8 @@ func TestResumeUnknownKindFailClosed(t *testing.T) {
 	if report.Outcomes[0].Err == nil {
 		t.Fatal("Terminal outcome carries a nil error, want a typed error")
 	}
-	if len(calls) != 0 {
-		t.Fatalf("fanOut called for an unrecognized-kind cursor, want 0 calls (never promoted to resumable)")
+	if n := entryCount(t, store, "task-unknown-kind"); n != 1 {
+		t.Fatalf("the unrecognized-kind entity replays %d entries, want 1 (the surviving seq-1 entry; nothing re-queued)", n)
 	}
 }
 
@@ -101,8 +100,7 @@ func TestResumePartialCheckpoint(t *testing.T) {
 	seedCorruptEntry(t, raw, "task-torn-tail")
 	store := journal.New(raw, testkit.NewFrozenClock(testInstant), journal.DefaultNamespace)
 
-	var calls []fakeFanOutCall
-	mgr, err := New(store, fakeFanOut(&calls, nil, nil), nil, nil, nil, nil, "darwin")
+	mgr, err := New(store, nil, nil, "darwin")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -153,8 +151,7 @@ func TestResumeAmbiguousOutcomeHeld(t *testing.T) {
 		t.Fatalf("seed intent: %v", err)
 	}
 
-	var calls []fakeFanOutCall
-	mgr, err := New(store, fakeFanOut(&calls, nil, nil), nil, nil, nil, nil, "darwin")
+	mgr, err := New(store, nil, nil, "darwin")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -189,8 +186,7 @@ func TestResumeIdempotentActionsOnlyRequeued(t *testing.T) {
 		t.Fatalf("seed intent: %v", err)
 	}
 
-	var calls []fakeFanOutCall
-	mgr, err := New(store, fakeFanOut(&calls, nil, nil), nil, nil, nil, nil, "darwin")
+	mgr, err := New(store, nil, nil, "darwin")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

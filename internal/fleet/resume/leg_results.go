@@ -12,8 +12,8 @@
 // Constraints: journal payloads carry the result key and the digest,
 //   never Response content; every store error is returned; a record is
 //   written create-only and never rewritten; DeleteTask removes one
-//   fan-out's records and nothing else.
-// SPORT: internal.fleet.resume.ResumeManager/CHANGE (P1-CORE-18).
+//   fan-out's records, and a finished leg's attempt slots, and nothing else.
+// SPORT: internal.fleet.resume.ResumeManager/CHANGE (P1-CORE-15).
 
 package resume
 
@@ -33,7 +33,8 @@ const (
 	// legResultsNamespace holds every stored LegResult record.
 	legResultsNamespace = "conductor.fanout.legs"
 	// legAttemptsNamespace holds one create-only slot per raw leg start,
-	// keyed <fanoutID>#<legIndex>#<attempt>. Slots are never deleted.
+	// keyed <fanoutID>#<legIndex>#<attempt>. A leg's slots are deleted only
+	// together with its stored result (DeleteTask), never while it can start.
 	legAttemptsNamespace = "conductor.fanout.attempts"
 	// legResultVersion is the only record version this package reads.
 	legResultVersion = 1
@@ -193,7 +194,9 @@ func (a *journalAppenderAdapter) GetLegResult(ctx context.Context, fanoutID stri
 
 // DeleteTask removes every <fanoutID>#<n> record and nothing else: a key
 // whose remainder after "<fanoutID>#" is not a canonical leg index (for
-// example another fan-out "<fanoutID>#x#0") is left alone.
+// example another fan-out "<fanoutID>#x#0") is left alone. Each leg with a
+// stored result or an attempt slot goes through deleteLeg, so a finished
+// leg's slots go before its record and an unfinished leg keeps its slots.
 func (a *journalAppenderAdapter) DeleteTask(ctx context.Context, fanoutID string) error {
 	if a.store == nil {
 		return ErrLegStoreUnset
@@ -201,41 +204,78 @@ func (a *journalAppenderAdapter) DeleteTask(ctx context.Context, fanoutID string
 	if !validFanOutID(fanoutID) {
 		return cascade.Newf(cascade.KindInvalidInput, "resume: invalid fan-out id %q for DeleteTask", fanoutID)
 	}
-	keys, err := a.taskKeys(ctx, fanoutID)
-	if err != nil {
-		return err
+	legs := map[int]bool{}
+	for _, ns := range []string{legResultsNamespace, legAttemptsNamespace} {
+		if err := a.legIndexes(ctx, ns, fanoutID, legs); err != nil {
+			return err
+		}
 	}
-	for _, key := range keys {
-		if err := a.store.Delete(ctx, legResultsNamespace, key); err != nil {
-			return rewrap(err, "resume: deleting fan-out leg result "+key)
+	for leg := range legs {
+		if err := a.deleteLeg(ctx, conductor.LegResultKey(fanoutID, leg)); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-// taskKeys lists fanoutID's own record keys.
-func (a *journalAppenderAdapter) taskKeys(ctx context.Context, fanoutID string) ([]string, error) {
-	prefix := fanoutID + "#"
-	it, err := a.store.Scan(ctx, legResultsNamespace, prefix)
-	if err != nil {
-		return nil, rewrap(err, "resume: listing fan-out leg results of "+fanoutID)
+// deleteLeg deletes one leg's attempt slots 1..maxLegStarts and then its
+// result (R13 retention order). The slots go in one transaction that first
+// reads the result: a result is stored only after the leg's call returned,
+// so the leg is replayed and never starts again. An absent result is a leg
+// that can still start, and nothing is deleted. A read or delete error
+// rolls the slot transaction back, every slot in place. A failed result
+// delete leaves a replayable result and no slot; the next sweep finishes.
+func (a *journalAppenderAdapter) deleteLeg(ctx context.Context, key string) error {
+	inFlight := false
+	err := a.store.Tx(ctx, func(ctx context.Context, tx provider.Tx) error {
+		if _, err := tx.Get(ctx, legResultsNamespace, key); err != nil {
+			inFlight = cascade.HasKind(err, cascade.KindNotFound)
+			return err
+		}
+		for attempt := uint64(1); attempt <= maxLegStarts; attempt++ {
+			if err := tx.Delete(ctx, legAttemptsNamespace, key+"#"+itoa(attempt)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	switch {
+	case inFlight:
+		return nil // keep the slots that enforce the start cap
+	case err != nil:
+		return rewrap(err, "resume: deleting the attempt slots of fan-out leg "+key)
 	}
-	var keys []string
+	return rewrap(a.store.Delete(ctx, legResultsNamespace, key), "resume: deleting fan-out leg result "+key)
+}
+
+// legIndexes adds to into the leg index of every key of namespace that
+// belongs to fanoutID: "<fanoutID>#<n>" for results,
+// "<fanoutID>#<n>#<attempt>" for attempt slots, n canonical.
+func (a *journalAppenderAdapter) legIndexes(ctx context.Context, namespace, fanoutID string, into map[int]bool) error {
+	prefix := fanoutID + "#"
+	label := "fan-out leg results"
+	if namespace == legAttemptsNamespace {
+		label = "fan-out leg attempt slots"
+	}
+	it, err := a.store.Scan(ctx, namespace, prefix)
+	if err != nil {
+		return rewrap(err, "resume: listing "+label+" of "+fanoutID)
+	}
 	for it.Next(ctx) {
 		rest := strings.TrimPrefix(it.Key(), prefix)
+		if namespace == legAttemptsNamespace {
+			rest, _, _ = strings.Cut(rest, "#")
+		}
 		if n, convErr := strconv.Atoi(rest); convErr == nil && n >= 0 && strconv.Itoa(n) == rest {
-			keys = append(keys, it.Key())
+			into[n] = true
 		}
 	}
 	iterErr := it.Err()
 	closeErr := it.Close()
 	if iterErr != nil {
-		return nil, rewrap(iterErr, "resume: listing fan-out leg results of "+fanoutID)
+		return rewrap(iterErr, "resume: listing "+label+" of "+fanoutID)
 	}
-	if closeErr != nil {
-		return nil, rewrap(closeErr, "resume: closing the fan-out leg result listing")
-	}
-	return keys, nil
+	return rewrap(closeErr, "resume: closing the "+strings.TrimSuffix(label, "s")+" listing")
 }
 
 // validFanOutID mirrors the conductor's rule: non-empty, and no '#' or
