@@ -190,16 +190,34 @@ A malformed identifier, a duplicate, or a learn-owned table with no
 such column (`jobs_telemetry_finding` has no time column) refuses
 with `KindInvalidInput`. A table registered by age that has a foreign
 key to `jobs_telemetry_outcomes` refuses the first sweep the same way,
-before any delete, and the error names `RegisterRetentionChild`. The `learn-retention` runnable this drives is
-not registered on a live daemon scheduler in this release; that wiring,
-and the matching `learn-outcome-reconcile` runnable, land with the
-ticket that owns the daemon's scheduler composition root. Until then
-`RetentionSweep` and `OutcomeReconciler` are tested code with no
-production caller.
+before any delete, and the error names `RegisterRetentionChild`.
 
 | Key | Type | Default | Reload class |
 |---|---|---|---|
 | `learn.retention.max_age_days` | int | `90` | hot |
+
+## Daemon jobs
+
+The daemon applies the learn migration set before scheduling either job
+on its existing scheduler, before activation. A migration error refuses
+startup. The jobs and usage schemas are also applied before reconciliation.
+
+- `learn-outcome-reconcile` runs every minute (`@every 1m0s`). It records
+  one outcome per accepted, rejected, cancelled or failed job, regardless
+  of which path committed that state. Repeated reconciliation adds no
+  duplicate outcome rows, including after the store is reopened on restart.
+- `learn-retention` runs daily (`@every 24h0m0s`). Each run reads
+  `[learn.retention].max_age_days` from configuration again, so a hot edit
+  applies on the next run. Successful sweeps publish `learn.retention.swept`
+  in the `learn` event namespace with a `rows_deleted` count, including zero.
+  Event encoding or publication errors fail the scheduled run after the sweep
+  has committed its deletions. A daemon configured without a bus skips publication.
+
+The reconciler's outcome writer is composed with the SQLite capability
+observation writer. Jobs currently carry neither repo identity nor lane
+tier, so their neutral `unknown` values produce an outcome without an
+observation row or an error. End-to-end observation enrichment remains
+tracked as DEBT-PROC-49.
 
 ## Capability scoring and scheduler decisions
 
@@ -303,6 +321,7 @@ jobs routed there, one row per job. With no rows, or when the database
 cannot be read, it returns the cold start: queue wait 0 and a 5 minute
 duration, the same for every tier.
 
-None of this writes configuration or proposes policy. These types have
-no production caller until the ticket that wires the fleet composition
-root lands.
+Capability scoring does not write configuration or propose policy.
+The daemon composes the outcome observation writer as described above.
+Fleet scoring, aggregation and estimate adapters still await their fleet
+composition root.

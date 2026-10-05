@@ -151,6 +151,9 @@ func startScheduler(ctx context.Context, manifest *daemon.Manifest, store provid
 	if _, err := backup.RegisterConfiguredVerificationJobs(ctx, sched, store, schedulerNamespace, clock, nil, os.Getenv, attnStore); err != nil {
 		return nil, nil, nil, err
 	}
+	if err := registerLearnJobs(ctx, sched, rawDB, paths, clock, bus); err != nil {
+		return nil, nil, nil, err
+	}
 	if _, err := sched.Activate(ctx); err != nil {
 		return nil, nil, nil, err
 	}
