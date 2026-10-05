@@ -20,9 +20,10 @@
 //	a row it has started retiring cannot be adopted (claimExpiry). Before
 //	any recovery or teardown, the row is fenced in the database: its
 //	owner_epoch moves to this epoch only while epoch, heartbeat and state
-//	are as listed, so a row another process adopted, renewed or claimed
-//	since the listing is skipped, and a later Adopt by that process is
-//	refused (the row is no longer its epoch). A
+//	are as listed, and heartbeat_at is refreshed in the same write, so a
+//	row another process adopted, renewed or claimed since the listing is
+//	skipped. A later listing also skips this fresh fence while teardown runs,
+//	and a later Adopt by the previous owner is refused.
 //	recovery lookup error leaves the row as it is and is counted and
 //	returned, never treated as success.
 //
@@ -153,7 +154,9 @@ func (rv *Reserver) ExpireStale(ctx context.Context, interval time.Duration) (in
 
 // claimExpiry marks r as being retired unless this process holds it,
 // another ExpireStale of this process is already retiring it, or the
-// database fence fails. Adopt checks the same mark under the same mutex,
+// database fence fails. The fence refreshes heartbeat_at atomically with
+// its owner_epoch move, so other processes skip it while teardown runs.
+// Adopt checks the same mark under the same mutex,
 // so an in-process Adopt either lands first (the row is tracked and
 // skipped here) or is refused; another process is ordered by the fence.
 func (rv *Reserver) claimExpiry(ctx context.Context, r Reservation) (bool, error) {
@@ -162,7 +165,7 @@ func (rv *Reserver) claimExpiry(ctx context.Context, r Reservation) (bool, error
 	if _, busy := rv.expiring[r.ID]; busy || rv.isTracked(r.ID) {
 		return false, nil
 	}
-	fenced, err := rv.store.fenceStale(ctx, r, rv.ownerEpoch)
+	fenced, err := rv.store.fenceStale(ctx, r, rv.ownerEpoch, rv.clock.Now().Unix())
 	if err != nil || !fenced {
 		return false, err
 	}
@@ -170,12 +173,12 @@ func (rv *Reserver) claimExpiry(ctx context.Context, r Reservation) (bool, error
 	return true, nil
 }
 
-// fenceStale claims r's row for retirement by this epoch: owner_epoch
-// moves to epoch only while owner_epoch, heartbeat_at and state are still
-// the values r was listed with. false means the row changed since.
-func (s *ReservationStore) fenceStale(ctx context.Context, r Reservation, epoch string) (bool, error) {
-	res, err := s.db.ExecContext(ctx, `UPDATE `+tableReservation+` SET owner_epoch = ? WHERE id = ? AND owner_epoch = ? AND heartbeat_at = ? AND state = ?`,
-		epoch, r.ID, r.OwnerEpoch, r.HeartbeatAt, string(r.State))
+// fenceStale claims r for retirement, refreshing heartbeat_at in the same
+// compare-and-set that moves owner_epoch. The fresh heartbeat makes later
+// sweep listings skip this teardown; false means the row changed since r.
+func (s *ReservationStore) fenceStale(ctx context.Context, r Reservation, epoch string, now int64) (bool, error) {
+	res, err := s.db.ExecContext(ctx, `UPDATE `+tableReservation+` SET owner_epoch = ?, heartbeat_at = ? WHERE id = ? AND owner_epoch = ? AND heartbeat_at = ? AND state = ?`,
+		epoch, now, r.ID, r.OwnerEpoch, r.HeartbeatAt, string(r.State))
 	if err != nil {
 		return false, cascade.Wrap(cascade.KindUnavailable, err, "economics: fence stale reservation")
 	}

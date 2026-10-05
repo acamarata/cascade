@@ -3,15 +3,17 @@
 //	renews heartbeat_at and the repo leases of every held id; a lease
 //	the lease table refuses as Conflict (fenced, or past ttl plus grace)
 //	means the reservation is lost, so it is torn down, dropped from the
-//	in-memory set and reported through the attention seam. Adopt claims
-//	a row for this process.
+//	in-memory set and reported through the attention seam. A reservation
+//	fenced by another process is untracked without renewal or teardown.
+//	Adopt claims a row for this process.
 //
 // Inputs: the in-memory set, the RenewLeases and RaiseAttention seams.
 // Outputs: Heartbeat, Adopt.
 // Constraints: Heartbeat processes every id and never blocks on one. Its
 //
 //	error is non-nil only when a heartbeat_at write, the retirement
-//	write of a lost reservation, or a RaiseAttention call fails; a lease
+//	write of a lost reservation, or a RaiseAttention call fails; a fenced
+//	reservation is untracked without an error, and a lease
 //	refusal is counted, never returned, and a renewal that failed for
 //	another reason is left out of renewed.
 //
@@ -29,15 +31,20 @@ import (
 )
 
 // Heartbeat renews every reservation this process holds and retires the
-// ones whose leases were lost. renewed counts rows whose heartbeat and
-// leases were renewed; lostLeases counts rows retired as lost. A row
+// ones whose leases were lost. A row fenced by another process is
+// untracked without renewal, teardown or error. renewed counts rows whose
+// heartbeat and leases were renewed; lostLeases counts rows retired as lost. A row
 // whose lease renewal failed with any other kind is in neither count: it
 // stays held and tracked and the next tick retries it.
 func (rv *Reserver) Heartbeat(ctx context.Context) (renewed, lostLeases int, err error) {
 	var errs []error
 	for _, id := range rv.trackedIDs() {
-		leases, ok, werr := rv.store.touchHeartbeat(ctx, id, rv.clock.Now().Unix())
+		leases, ok, werr := rv.store.touchHeartbeat(ctx, id, rv.ownerEpoch, rv.clock.Now().Unix())
 		if werr != nil {
+			if hasReservationFencedIdentity(werr) {
+				rv.untrack(id)
+				continue
+			}
 			errs = append(errs, werr)
 			continue
 		}
@@ -110,13 +117,26 @@ func (rv *Reserver) Adopt(ctx context.Context, id string) error {
 	return nil
 }
 
-// touchHeartbeat writes heartbeat_at on an active row and returns its
-// lease ids; ok is false when the row is terminal or missing.
-func (s *ReservationStore) touchHeartbeat(ctx context.Context, id string, now int64) (leases []string, ok bool, err error) {
+// hasReservationFencedIdentity checks the sentinel itself, not its Kind:
+// cascade.Error.Is deliberately considers all errors of a Kind equal.
+func hasReservationFencedIdentity(err error) bool {
+	for err != nil {
+		if err == ErrReservationFenced {
+			return true
+		}
+		err = errors.Unwrap(err)
+	}
+	return false
+}
+
+// touchHeartbeat writes heartbeat_at only for the active row's current
+// owner epoch and returns its lease ids. A competing fence is a typed
+// refusal; terminal or missing rows still return ok=false without error.
+func (s *ReservationStore) touchHeartbeat(ctx context.Context, id, epoch string, now int64) (leases []string, ok bool, err error) {
 	var raw string
-	err = s.db.QueryRowContext(ctx, `UPDATE `+tableReservation+` SET heartbeat_at = ? WHERE id = ? AND state IN `+activeStates+` RETURNING lease_ids_json`, now, id).Scan(&raw)
+	err = s.db.QueryRowContext(ctx, `UPDATE `+tableReservation+` SET heartbeat_at = ? WHERE id = ? AND owner_epoch = ? AND state IN `+activeStates+` RETURNING lease_ids_json`, now, id, epoch).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, false, nil
+		return s.classifyUnmatchedHeartbeat(ctx, id, epoch)
 	}
 	if err != nil {
 		return nil, false, cascade.Wrap(cascade.KindUnavailable, err, "economics: write heartbeat")
@@ -125,6 +145,20 @@ func (s *ReservationStore) touchHeartbeat(ctx context.Context, id string, now in
 		return nil, false, cascade.Wrap(cascade.KindIntegrity, err, "economics: decode lease_ids")
 	}
 	return leases, true, nil
+}
+
+func (s *ReservationStore) classifyUnmatchedHeartbeat(ctx context.Context, id, epoch string) ([]string, bool, error) {
+	got, ok, err := s.Get(ctx, id)
+	if err != nil {
+		return nil, false, cascade.Wrap(cascade.KindUnavailable, err, "economics: write heartbeat")
+	}
+	if !ok || got.State.Terminal() {
+		return nil, false, nil
+	}
+	if got.OwnerEpoch != epoch {
+		return nil, false, cascade.Wrapf(cascade.KindConflict, ErrReservationFenced, "economics: reservation %q is fenced by epoch %q", id, got.OwnerEpoch)
+	}
+	return nil, false, cascade.Newf(cascade.KindUnavailable, "economics: heartbeat of %q matched no row", id)
 }
 
 // adoptEpoch rewrites owner_epoch from -> to with a fresh heartbeat on an

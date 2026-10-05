@@ -196,7 +196,7 @@ var concurrentClaims = []concurrentClaim{
 		return err
 	}, "epoch-B", 5000},
 	{"heartbeat", func(ctx context.Context, s *ReservationStore, id string) error {
-		_, ok, err := s.touchHeartbeat(ctx, id, 7000)
+		_, ok, err := s.touchHeartbeat(ctx, id, "epoch-1", 7000)
 		if err == nil && !ok {
 			err = errors.New("touchHeartbeat matched no row")
 		}

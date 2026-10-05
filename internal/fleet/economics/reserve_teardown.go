@@ -14,9 +14,10 @@
 //	cancellation, so a cancelled caller cannot strand a lease. ROLLBACK
 //	POLICY: a clean teardown returns the ORIGINAL triggering error
 //	unchanged; a failing teardown returns errors.Join(trigger, teardown
-//	error), so neither is swallowed. The terminal state is written only
-//	through the store's transition (rolled_back where the table allows
-//	it, released from committed, the one legal terminal move there).
+//	error), so neither is swallowed. Retirement claims the legal terminal
+//	state by comparing both state and owner epoch before any compensation.
+//	A lost claim or storage error permits no teardown. Successful teardown
+//	persists progress separately without changing placement or liveness.
 //	No compensation is retried: a failed one keeps its handle (the
 //	worktree id or lease ids) on the terminal row for an operator, and
 //	Sweep and ExpireStale never revisit a terminal row.
@@ -78,18 +79,47 @@ func terminalFor(s ReservationState) ReservationState {
 	return ReservationReleased
 }
 
-// retire tears r down and moves it to to, removing it from the in-memory
-// set. The returned error joins every compensation and persistence
-// failure; the row is returned as persisted.
+// retire claims r's terminal state before tearing it down, removing it
+// from the in-memory set. Only the state-and-owner claim winner performs
+// compensation. Errors join compensation and persistence failures.
 func (rv *Reserver) retire(ctx context.Context, r Reservation, to ReservationState) (Reservation, error) {
 	ctx = context.WithoutCancel(ctx)
 	defer rv.untrack(r.ID)
+	if err := rv.store.claimRetirement(ctx, r, to); err != nil {
+		return Reservation{}, err
+	}
+	r.State = to
 	r, rbErr := rv.teardown(ctx, r)
-	stored, err := rv.store.transitionRow(ctx, r, to)
-	if err != nil {
+	if err := rv.store.Replace(ctx, r); err != nil {
 		return Reservation{}, errors.Join(rbErr, err)
 	}
-	return stored, rbErr
+	stored, err := rv.mustGet(ctx, r.ID)
+	return stored, errors.Join(rbErr, err)
+}
+
+// claimRetirement atomically reserves a legal terminal move for the
+// snapshot's owner. A concurrent fence or state transition refuses the
+// claim before side effects; retained handles survive a crash or failure.
+func (s *ReservationStore) claimRetirement(ctx context.Context, r Reservation, to ReservationState) error {
+	if !to.Terminal() || !TransitionAllowed(r.State, to) {
+		return cascade.Wrapf(cascade.KindConflict, ErrReservationTransition, "%s -> %s", r.State, to)
+	}
+	if s.beforeWrite != nil {
+		s.beforeWrite(ctx, r.ID)
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE `+tableReservation+` SET state = ? WHERE id = ? AND state = ? AND owner_epoch = ?`,
+		string(to), r.ID, string(r.State), r.OwnerEpoch)
+	if err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "economics: claim reservation retirement")
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "economics: claim reservation retirement")
+	}
+	if n != 1 {
+		return cascade.Wrapf(cascade.KindConflict, ErrReservationTransition, "reservation %q state or owner changed before retirement", r.ID)
+	}
+	return nil
 }
 
 // failAndRollback retires r to its rollback state and returns triggerErr

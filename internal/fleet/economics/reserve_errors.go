@@ -38,4 +38,7 @@ var (
 	// ErrConcurrentDaemon is returned by Sweep when another daemon is live
 	// on the same home: nothing is swept or written.
 	ErrConcurrentDaemon = cascade.New(cascade.KindConflict, "economics: another daemon is live on this home")
+	// ErrReservationFenced is returned when a reservation's owner epoch
+	// changed before its heartbeat could be renewed.
+	ErrReservationFenced = cascade.New(cascade.KindConflict, "economics: reservation fenced by another process")
 )
