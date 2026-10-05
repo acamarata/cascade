@@ -82,12 +82,16 @@ func (f *fileVaultCustody) Name() string { return fileVaultName }
 // Available reports whether the vault directory is writable. It probes
 // rather than assuming: a read-only or missing directory must select no
 // backend at all rather than a vault that silently drops writes.
+//
+// The probe is a uniquely named os.CreateTemp file (0600), closed and
+// removed, so it can never truncate or replace an existing file.
 func (f *fileVaultCustody) Available() bool {
-	probe := filepath.Join(f.dir, ".cascade-vault-probe")
-	if err := os.WriteFile(probe, []byte{}, fileVaultFilePerm); err != nil {
+	probe, err := os.CreateTemp(f.dir, ".cascade-vault-probe-*")
+	if err != nil {
 		return false
 	}
-	return os.Remove(probe) == nil
+	closeErr := probe.Close()
+	return os.Remove(probe.Name()) == nil && closeErr == nil
 }
 
 // loadOrCreateKey reads the vault key file, creating it with 32 bytes of

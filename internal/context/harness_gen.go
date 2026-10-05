@@ -3,10 +3,13 @@ package context
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -138,7 +141,7 @@ func WriteHarnessFile(path string, f HarnessFile, policy WritePolicy) (WriteResu
 	existing, err := os.ReadFile(path) //nolint:gosec // path is composed by the caller from discovered tier roots.
 	switch {
 	case os.IsNotExist(err):
-		if err := writeFileAtomic(path, f.Content); err != nil {
+		if err := createFileAtomic(path, f.Content); err != nil {
 			return WriteResult{}, err
 		}
 		res.Action = ActionCreated
@@ -251,35 +254,47 @@ func bodyDigest(body string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// writeFileAtomic writes data to path through a temporary file in the same
-// directory, so an interrupted run leaves either the old file or the new
-// one, never half of either.
+// writeFileAtomic replaces path with data through runtime.WriteFileAtomic
+// (0644, like the hand-authored files beside it): never half a file.
 func writeFileAtomic(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return wrapTierFSErr(err, "create directory "+dir)
+	if err := ensureHarnessDir(path); err != nil {
+		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".cascade-harness-*")
+	return classifyHarnessWrite(runtime.WriteFileAtomic(path, data, 0o644), "replace "+path)
+}
+
+// createFileAtomic publishes data only if path is still absent; a file that
+// appeared since WriteHarnessFile looked is never clobbered (KindConflict).
+func createFileAtomic(path string, data []byte) error {
+	if err := ensureHarnessDir(path); err != nil {
+		return err
+	}
+	created, err := runtime.CreateFileAtomic(path, data, 0o644)
 	if err != nil {
-		return wrapTierFSErr(err, "create temporary file in "+dir)
+		return classifyHarnessWrite(err, "create "+path)
 	}
-	tmpName := tmp.Name()
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpName)
-		return wrapTierFSErr(err, "write "+path)
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpName)
-		return wrapTierFSErr(err, "close "+path)
-	}
-	if err := os.Chmod(tmpName, 0o644); err != nil {
-		_ = os.Remove(tmpName)
-		return wrapTierFSErr(err, "set mode on "+path)
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		_ = os.Remove(tmpName)
-		return wrapTierFSErr(err, "replace "+path)
+	if !created {
+		return cascade.Newf(cascade.KindConflict, "context: %s appeared while cascade was creating it; rerun to merge into it", path)
 	}
 	return nil
+}
+
+// ensureHarnessDir creates path's directory with the harness tree's mode.
+func ensureHarnessDir(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return wrapTierFSErr(err, "create directory "+filepath.Dir(path))
+	}
+	return nil
+}
+
+// classifyHarnessWrite is wrapTierFSErr for a helper error, whose wrap
+// os.IsPermission cannot see through.
+func classifyHarnessWrite(err error, msg string) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, fs.ErrPermission) {
+		return cascade.Wrap(cascade.KindPermissionDenied, err, "context: "+msg)
+	}
+	return cascade.Wrap(cascade.KindUnavailable, err, "context: "+msg)
 }

@@ -284,7 +284,7 @@ func TestListSkipsUnrelatedFiles(t *testing.T) {
 		t.Fatalf("Write: %v", err)
 	}
 	dir := filepath.Join(base, "project")
-	for _, junk := range []string{"notes.txt", ".memory-123.md.tmp", "no-extension", "a-record.md.tombstone.bak"} {
+	for _, junk := range []string{"notes.txt", ".memory-123.md.tmp", ".a-record.md.123456.tmp", "no-extension", "a-record.md.tombstone.bak"} {
 		if err := os.WriteFile(filepath.Join(dir, junk), nil, 0o600); err != nil {
 			t.Fatalf("writing %s: %v", junk, err)
 		}

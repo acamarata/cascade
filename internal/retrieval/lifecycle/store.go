@@ -32,6 +32,7 @@ import (
 	"github.com/acamarata/cascade/internal/retrieval/corpus"
 	"github.com/acamarata/cascade/internal/retrieval/fusion"
 	"github.com/acamarata/cascade/internal/retrieval/recall"
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
 )
@@ -254,8 +255,9 @@ func writeMarker(ctx context.Context, store provider.Store, hash string, now tim
 }
 
 // writeCatalogFrom serializes plan's corpora/records to the catalog
-// document at m.catalogPath, atomically (write to a temp file, then
-// rename) so a concurrent reader never observes a half-written document.
+// document at m.catalogPath through runtime.WriteFileAtomic (temp, fsync,
+// rename, directory fsync) so a concurrent reader never observes a
+// half-written document and a crash never publishes one.
 func (m *Manager) writeCatalogFrom(plan sourcePlan) error {
 	doc := recall.CatalogDoc{Version: recall.CatalogVersion, Corpora: plan.corpora, Records: plan.records}
 	if doc.Corpora == nil {
@@ -271,11 +273,7 @@ func (m *Manager) writeCatalogFrom(plan sourcePlan) error {
 	if err := os.MkdirAll(filepath.Dir(m.catalogPath), 0o700); err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "lifecycle: create catalog directory")
 	}
-	tmp := m.catalogPath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil { //nolint:gosec // catalog is not secret content
-		return cascade.Wrap(cascade.KindUnavailable, err, "lifecycle: write catalog")
-	}
-	if err := os.Rename(tmp, m.catalogPath); err != nil {
+	if err := runtime.WriteFileAtomic(m.catalogPath, data, 0o600); err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "lifecycle: publish catalog")
 	}
 	return nil

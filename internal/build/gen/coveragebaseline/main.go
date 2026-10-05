@@ -36,6 +36,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/build"
 	"github.com/acamarata/cascade/internal/output"
+	"github.com/acamarata/cascade/internal/runtime"
 )
 
 // coverageModulePath is this module's import path — a profile's package
@@ -165,7 +166,7 @@ func run(root, profilePath string, addMissing bool) ([]string, error) {
 
 	updated, added := build.AddMissingBaselineEntries(existing, profile, roots)
 	if addMissing {
-		if err := os.WriteFile(baselinePath, build.FormatBaselineJSON(updated), 0o644); err != nil { //nolint:gosec // generated artifact, not a secret
+		if err := runtime.WriteFileAtomic(baselinePath, build.FormatBaselineJSON(updated), 0o644); err != nil {
 			return nil, fmt.Errorf("coveragebaseline: writing %s: %w", baselinePath, err)
 		}
 	}

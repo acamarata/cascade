@@ -122,8 +122,8 @@ type pidRecord struct {
 	StartedAt time.Time `json:"started_at"`
 }
 
-// writePIDFile atomically-enough (single os.WriteFile call) writes rec to
-// path with 0600 permissions — matching the socket's own 0600 requirement,
+// writePIDFile atomically writes rec to path with 0600 permissions through
+// runtime.WriteFileAtomic (temp, fsync, rename, directory fsync) — matching the socket's own 0600 requirement,
 // since the pidfile also names a live PID an unprivileged local attacker
 // could otherwise probe.
 func writePIDFile(path string, rec pidRecord) error {
@@ -131,7 +131,7 @@ func writePIDFile(path string, rec pidRecord) error {
 	if err != nil {
 		return cascade.Wrap(cascade.KindInternal, err, "encode pidfile")
 	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	if err := runtime.WriteFileAtomic(path, data, 0o600); err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "write pidfile")
 	}
 	return nil

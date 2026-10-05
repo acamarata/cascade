@@ -30,10 +30,13 @@ package service
 
 import (
 	"bytes"
+	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -165,7 +168,9 @@ func writeManagedFile(path string, content []byte, isManaged func([]byte) bool) 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // service-manager directories are conventionally world-readable
 		return existed, false, wrapFSError(err, "create service unit directory")
 	}
-	if err := os.WriteFile(path, content, 0o644); err != nil { //nolint:gosec // unit files are conventionally world-readable, matching real launchd/systemd units
+	// Unit files are conventionally world-readable, matching real
+	// launchd/systemd units, hence 0644.
+	if err := runtime.WriteFileAtomic(path, content, 0o644); err != nil {
 		return existed, false, wrapFSError(err, "write service unit")
 	}
 	return existed, false, nil
@@ -187,7 +192,7 @@ func removeManagedFile(path string) error {
 // every platform test exercises), everything else KindUnavailable (a
 // transient/local dependency — the filesystem — was not usable).
 func wrapFSError(err error, msg string) error {
-	if os.IsPermission(err) {
+	if errors.Is(err, fs.ErrPermission) { // sees through runtime.WriteFileAtomic's wrap
 		return cascade.Wrap(cascade.KindPermissionDenied, err, msg)
 	}
 	return cascade.Wrap(cascade.KindUnavailable, err, msg)

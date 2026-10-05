@@ -25,6 +25,7 @@ those first for the sibling gates this document does not repeat.
 | Dead-code gate | Art.10.5 | `deadcode.go`, `deadcode_scan.go` | `testdata/seeded-violations/deadcode/` |
 | Godoc + Example gate | Art.10.6 | `deadcode_godoc.go` | `testdata/seeded-violations/godoc/` |
 | Flake quarantine registry | Art.7.5 / Art.6 | `flakes.go` | `testdata/seeded-violations/flakes/`, `flake-registry.json` |
+| Atomic-write gate | contract:atomic-file-write | `atomicwritegate.go` | `testdata/seeded-violations/atomicwrite/`, `atomicwrite-exemptions.tsv` |
 
 Every gate follows the established pattern (`docs/developer/lint-wall.md`):
 pure scanning/parsing logic in a non-test `.go` file, `_test.go` walks the
@@ -228,6 +229,53 @@ non-past `YYYY-MM-DD` expiry: an EXPIRED entry is itself a violation, the
 "retried away forever" failure Art.7.5 exists to prevent. `IsQuarantined`
 lets a future test runner consult the registry before treating a failure
 as blocking.
+
+## Atomic-write gate (contract:atomic-file-write)
+
+`os.WriteFile` and `ioutil.WriteFile` truncate the target before they
+write, so a crash leaves an empty or torn file. State goes through
+`internal/runtime`'s `WriteFileAtomic` family instead (`docs/storage.md`,
+Durable file writes). The gate parses every non-test Go file under `cmd/`
+and `internal/`, resolves each file's imports (aliases included) and
+counts every `os.WriteFile` or `ioutil.WriteFile` selector, so a call, a
+function value (`WriteFile: os.WriteFile`) and an aliased import all
+count. A dot-import of `os` or `io/ioutil` is itself a violation, since
+it cannot be gated.
+
+The only allowed references are rows of the owned exemption list
+`internal/build/testdata/atomicwrite-exemptions.tsv`. Its header is
+the five tab-separated columns `file`, `symbol`, `count`, `owner`,
+`reason`, in that order; a row names
+the file, the enclosing func or method (`Type.Method`), the exact number
+of references in it, an owner matching `^P\d+-[A-Z]{2,5}-\d{2,3}$` and a
+non-empty reason. The gate fails on:
+
+- a reference no row covers, or a row whose count differs from the
+  references found in that symbol;
+- a stale row whose file or symbol no longer holds a reference, so an
+  owner must delete its row in the same change that removes its write;
+- a missing or unreadable list, a wrong header, a wrong column count, a
+  duplicate (file, symbol), an `UNOWNED` or malformed owner, an empty
+  reason;
+- a live walk that parsed fewer than 500 files or never visited
+  `cmd/cascade/main.go` and `internal/runtime/atomic_write.go`.
+
+There is no escape comment and no `nolint`. The gate itself accepts any
+well-formed row with a matching reference; what pins the list to two rows is
+`TestNoBareFileWrites_Live`, which compares it with a fixed owned set and
+fails on a third row or a missing owned row (a new exemption means editing
+that set in the same reviewed change). Today the list holds two rows:
+`internal/elevation/keystore_file.go` `fileKeystore.GenerateKey`
+(P1-SEC-00) and `internal/secrets/quarantine.go`
+`QuarantineStore.loadOrCreateKey` (P1-CORE-17). Both owners move their key
+write to `runtime.CreateFileAtomic` and delete the row.
+
+Tests: `TestNoBareFileWrites_Live` (real tree GREEN with exactly the two rows;
+`TestAtomicWriteOwnedRows_RejectsExtraRow` proves a third row fails),
+`TestNoBareFileWrites_Seeded` (one RED case per defect above, plus a
+method value and a dot-import), and `TestNoBareFileWrites_SeededCleanControl`
+(a clean fixture stays GREEN). Not gated: `os.Create` and `O_TRUNC` opens,
+and `pkg/` and `plugins/`.
 
 ## Verifying locally
 

@@ -208,3 +208,65 @@ plain job step rather than a `services:` container, since MinIO needs a
 `server /data` command argument GitHub Actions services cannot supply).
 None of these run against a hand-rolled fake — Art.2's real-counterpart
 rule for an external wire contract.
+
+## Durable file writes
+
+Every state file Cascade writes under `cmd/` and `internal/` goes through one
+helper family in `internal/runtime/atomic_write.go`:
+
+| Function | Use |
+|---|---|
+| `WriteFileAtomic(path, data, perm)` | replace a file with exactly `perm` |
+| `WriteReaderAtomic(path, r, perm)` | the same, streaming from a reader (backup FS target) |
+| `CreateFileAtomic(path, data, perm)` | publish only when nothing is at `path`; returns `created` |
+| `WriteBytesAtomic(path, data)` | `WriteFileAtomic` with `0600`, and it creates a missing parent directory (`0700`) |
+
+How a write works: `os.CreateTemp` makes a temp file in the target's own
+directory (mode `0600` at creation, so no reader ever sees wider bits),
+the data is written and fsynced, `File.Chmod(perm)` sets the final mode
+(the umask never narrows it), the file is closed and renamed over the
+target. `CreateFileAtomic` hard-links the temp file into place instead,
+so of two racing callers exactly one gets `created=true` and the other's
+bytes never replace the file. On unix the directory is then fsynced so the
+rename itself survives a power cut; a failing directory fsync is an error,
+never skipped.
+
+A crash at any point leaves the old file or the new one, never a torn or
+empty file (`TestWriteFileAtomicSurvivesSIGKILL` kills a writer 50 times
+and checks; the same loop with `os.WriteFile` tears). A failure returns a
+`KindUnavailable` error naming the path. An error before the file is
+published leaves the target as it was with no temp file behind. A
+directory-sync error after the rename means the new file is already in
+place but its durability is unconfirmed; `CreateFileAtomic` can return
+`(true, err)` in that case. `WriteFileAtomic` does not create directories,
+the same as `os.WriteFile`. Temp names start with `.` and end in `.tmp`;
+`runtime.IsAtomicTempName` lets a directory lister skip one left by a crash.
+
+Modes the migrated writers keep: pidfile `0600`, service unit `0644`,
+generated inventory and baseline files `0644`, migration sweep outputs
+`0644`, harness files (`internal/context/harness_gen.go`) `0644`, golden
+files (`internal/testkit/golden.go`) `0644`; the other migrated writers
+use `0600`.
+
+Symlinks and special targets: the temp file lives in the target's
+directory, so a symlink at the target is replaced by a regular file and the
+link's own target is not written (`backup export --out` and `backup key
+--out` used to write through the link). An `--out` of `/dev/stdout` or a
+FIFO is refused, since no temp file can be created beside it.
+
+Windows: there is no portable directory fsync, so that step is a no-op
+(NTFS journals the rename). Modes map to the read-only attribute only;
+`CreateFileAtomic` puts a read-only attribute back after removing the temp
+link, because the removal clears it on the shared file. Replacing an
+existing read-only file with `WriteFileAtomic` fails on windows.
+`CreateFileAtomic` needs hard-link support in the target directory.
+
+What is not gated: the atomic-write gate
+(`docs/developer/quality-gates.md`) denies only `os.WriteFile` and
+`ioutil.WriteFile`. Other truncating opens (`os.Create`,
+`os.OpenFile(..., O_TRUNC)`) are not gated, and `pkg/` and `plugins/` are
+outside the scan (they may not import `internal/runtime`). Two key writes
+are still bare, each on the gate's owned exemption list until its owning
+ticket moves it to `CreateFileAtomic`: the elevation device key
+(`internal/elevation/keystore_file.go`) and the quarantine key
+(`internal/secrets/quarantine.go`).

@@ -64,7 +64,7 @@ func writeCounts(w *output.Writer, root string, clock runtime.Clock) error {
 		return err
 	}
 	outPath := root + "/internal/inventory/counts.json"
-	if err := os.WriteFile(outPath, data, 0o644); err != nil { //nolint:gosec // generated artifact, not a secret
+	if err := runtime.WriteFileAtomic(outPath, data, 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", outPath, err)
 	}
 	w.Println("wrote", outPath)
@@ -78,7 +78,7 @@ func writeRegistry(w *output.Writer, root string, clock runtime.Clock) error {
 		return err
 	}
 	outPath := root + "/internal/inventory/sport/registry.json"
-	if err := os.WriteFile(outPath, data, 0o644); err != nil { //nolint:gosec // generated artifact, not a secret
+	if err := runtime.WriteFileAtomic(outPath, data, 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", outPath, err)
 	}
 	w.Println("wrote", outPath)
