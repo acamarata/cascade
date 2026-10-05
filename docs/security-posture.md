@@ -5,6 +5,7 @@ reference for cascade. It is created and owned by the security-documentation
 ticket in the release epic; other tickets seed the section they implement.
 
 See also [supply-chain tooling: pins and accepted residuals](security-posture/supply-chain-risks.md).
+See also [driver egress proxy: advisory routing for external agent drivers](security-posture/driver-egress-proxy.md).
 
 See also [effect records: intent before, outcome after](security-posture/effect-records.md).
 

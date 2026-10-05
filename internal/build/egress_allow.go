@@ -40,6 +40,7 @@ var EgressNetNormative = []EgressAllowEntry{
 	{"internal/nodes", "node dispatch transport"},
 	{"internal/sync", "the sync engine"},
 	{"plugins/*", "bridge plugins reach their own services"},
+	{"internal/providers/agents/egressproxy", "the per-spawn loopback CONNECT proxy an external agent driver is routed through; it dials only exact allow-listed destinations"},
 }
 
 // EgressNetNotYetMigrated is what the tree holds today outside the

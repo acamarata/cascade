@@ -25,6 +25,7 @@ var egressNetSpec = []string{
 	"internal/nodes",
 	"internal/sync",
 	"plugins/*",
+	"internal/providers/agents/egressproxy",
 }
 
 // egressExecSpec is the process-spawn list the ruling names. It has one

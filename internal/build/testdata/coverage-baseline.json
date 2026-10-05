@@ -67,6 +67,7 @@
   "internal/plugins/resolver": { "tier": "core", "floor": 85.0, "baseline": 98.4 },
   "internal/plugins/wasm": { "tier": "core", "floor": 85.0, "baseline": 92.4 },
   "internal/policy": { "tier": "security", "floor": 90.0, "baseline": 95.2 },
+  "internal/providers/agents/egressproxy": { "tier": "core", "floor": 85.0, "baseline": 91.0 },
   "internal/providers/dispatch": { "tier": "core", "floor": 85.0, "baseline": 97.7 },
   "internal/providers/health": { "tier": "core", "floor": 85.0, "baseline": 94.8 },
   "internal/providers/intake": { "tier": "core", "floor": 85.0, "baseline": 90.8 },
