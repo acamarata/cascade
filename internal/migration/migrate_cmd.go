@@ -22,9 +22,12 @@ package migration
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/acamarata/cascade/internal/migration/tripwire"
 	migrationv1 "github.com/acamarata/cascade/internal/migration/v1"
+	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -46,6 +49,9 @@ type ImporterFactory func(ctx context.Context, domain migrationv1.Domain) (migra
 
 // MigrateV1Options configures one MigrateV1 call.
 type MigrateV1Options struct {
+	// Warn and WorkDir enable the source-checkout fixture warning.
+	Warn    *output.Writer
+	WorkDir string
 	// SourceRoot is the v1 home directory to import from.
 	SourceRoot string
 	// DryRun computes every domain's delta without writing the ledger or
@@ -92,6 +98,11 @@ func MigrateV1(ctx context.Context, ledger *LedgerStore, factory ImporterFactory
 	if err := validateSourceRoot(opts.SourceRoot); err != nil {
 		return report, err
 	}
+	if opts.DryRun {
+		warnTripwire(opts)
+	} else {
+		defer warnTripwire(opts)
+	}
 
 	if !opts.DryRun {
 		proceed, decideErr := decideMigrateProceed(opts)
@@ -123,6 +134,23 @@ func MigrateV1(ctx context.Context, ledger *LedgerStore, factory ImporterFactory
 		return report, cascade.Wrapf(kind, firstErr, "cascade migrate v1: one or more domains failed")
 	}
 	return report, nil
+}
+
+// warnTripwire checks source fixtures without changing the migration result.
+// Inputs: optional writer and working directory. Outputs: one stderr warning on
+// stale checksums. Constraints: checkout only, no age threshold or fixture writes.
+// SPORT: migration golden-tripwire contract.
+func warnTripwire(opts MigrateV1Options) {
+	if opts.Warn == nil || opts.WorkDir == "" {
+		return
+	}
+	root, ok := tripwire.ModuleRoot(opts.WorkDir)
+	if !ok {
+		return
+	}
+	if _, err := tripwire.VerifyTripwire(root, filepath.Join(root, "internal/migration/testdata/golden-checksums.sha256")); err != nil {
+		opts.Warn.Warn("%s", strings.ReplaceAll(err.Error(), "\n", " "))
+	}
 }
 
 // validateSourceRoot refuses a missing or unreadable v1 directory before

@@ -137,7 +137,10 @@ func runMigrateV1(cmd *cobra.Command, deps migrateDeps, flags migrateFlags) erro
 	if getenv == nil {
 		getenv = os.Getenv
 	}
+	workDir, _ := os.Getwd()
 	opts := migration.MigrateV1Options{
+		Warn:       migrateOutputWriter(cmd),
+		WorkDir:    workDir,
 		SourceRoot: flags.sourceRoot,
 		DryRun:     flags.dryRun,
 		Yes:        flags.yes,
@@ -186,7 +189,7 @@ func migrateOutputWriter(cmd *cobra.Command) *output.Writer {
 	quiet, _ := cmd.Flags().GetBool("quiet")
 	verbose, _ := cmd.Flags().GetBool("verbose")
 	noColor, _ := cmd.Flags().GetBool("no-color")
-	return output.New(cmd.OutOrStdout(), cmd.OutOrStderr(), jsonOut, quiet, verbose, noColor)
+	return output.New(cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonOut, quiet, verbose, noColor)
 }
 
 // migrateReportView renders migration.MigrateV1Report for both --json

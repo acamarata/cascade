@@ -1,0 +1,14 @@
+# Harvester format version: 1
+# Generation command: python3 - (checksum regeneration block in docs/migration-guide.md)
+55f66b976250877fd4034e16fc273eff39a9c6f7ae365d769b00774e723ec5f8  internal/memory/testdata/v1-goldens/migration/README.md
+0b67908e13098750ca5de8dfeb6ee55c9a71c5267d7b4835619becf0324ebd6c  internal/memory/testdata/v1-goldens/migration/memory-0b67908e13098750.json
+2ade924f8dc84e46ce95b2a32642a8fcebab17fe3f9b991c357c1b54716b033d  internal/memory/testdata/v1-goldens/migration/memory-2ade924f8dc84e46.json
+2cd2220b2fe369efea0ebb840899494aaf901bec72351231e1b10976242a87fa  internal/memory/testdata/v1-goldens/migration/memory-2cd2220b2fe369ef.json
+3cc262e8f33d730c9f0b44ffd99b2ed9e0f211878d39dd554c743c542fe203ee  internal/memory/testdata/v1-goldens/migration/memory-3cc262e8f33d730c.json
+ea899d55ed3262e94cd52bdffb05df3d75026e3c71998526c6d6826a9d1c34b6  internal/providers/registry/testdata/v1-goldens/migration/README.md
+f3a2f3c205905867efe147f9683c3d16014e3d65d5e48631bf48c11bfb8f0994  internal/providers/registry/testdata/v1-goldens/migration/accounts-f3a2f3c205905867.json
+c5d76d18ec993ac710441304598b7e3c1535bff5a21b9c823972499adc1a2ad2  internal/runtime/testdata/v1-goldens/migration/README.md
+d3bb71783db122de8a10cd8f47ce56d174fef52ba01323c1c5c82b2cb7c5e8d4  internal/runtime/testdata/v1-goldens/migration/config-d3bb71783db122de.json
+a1de56a1c7ca4026e3d733d487f84c15e3010d16f789eda9b99e7428599bc819  internal/runtime/testdata/v1-goldens/migration/config-refusal-a1de56a1c7ca4026.json
+6675fe0b598557f949267b9670da76d25d172696dc287205733bdc0f255cbd93  internal/secrets/testdata/v1-goldens/migration/README.md
+af82898c4386091b619428dc7c4098b9b838d714483e68a220770eb2f2562680  internal/secrets/testdata/v1-goldens/migration/vault-af82898c4386091b.json

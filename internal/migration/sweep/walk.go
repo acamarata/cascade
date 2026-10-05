@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/acamarata/cascade/internal/migration/tripwire"
 )
 
 // readFilesList reads pathArg (a NUL-separated `git ls-files -z` dump, "-"
@@ -161,14 +163,8 @@ func repoRoot() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("sweep: resolving working directory: %w", err)
 	}
-	for {
-		if _, statErr := os.Stat(filepath.Join(dir, "go.mod")); statErr == nil {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("sweep: no go.mod found walking up from %s", dir)
-		}
-		dir = parent
+	if root, ok := tripwire.ModuleRoot(dir); ok {
+		return root, nil
 	}
+	return "", fmt.Errorf("sweep: no cascade go.mod found walking up from %s", dir)
 }

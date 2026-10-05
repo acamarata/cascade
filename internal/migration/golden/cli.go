@@ -15,8 +15,8 @@ import (
 	"flag"
 	"io"
 	"os"
-	"path/filepath"
 
+	"github.com/acamarata/cascade/internal/migration/tripwire"
 	v1 "github.com/acamarata/cascade/internal/migration/v1"
 	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -83,16 +83,10 @@ func findModuleRoot() (string, error) {
 	if err != nil {
 		return "", cascade.Wrap(cascade.KindUnavailable, err, "golden harvest: resolve the working directory")
 	}
-	for {
-		if info, statErr := os.Stat(filepath.Join(dir, "go.mod")); statErr == nil && info.Mode().IsRegular() {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", cascade.New(cascade.KindNotFound, "golden harvest: no go.mod above the working directory")
-		}
-		dir = parent
+	if root, ok := tripwire.ModuleRoot(dir); ok {
+		return root, nil
 	}
+	return "", cascade.New(cascade.KindNotFound, "golden harvest: no cascade go.mod above the working directory")
 }
 
 func main() {

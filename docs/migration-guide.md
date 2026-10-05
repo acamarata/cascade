@@ -123,6 +123,53 @@ accepted divergence is recorded in that directory's `divergence-ledger.yaml`
 with the query, the missing or surplus hashes, and the rationale; an
 unratified divergence fails the check rather than passing silently.
 
+## Golden fixtures and the checksum tripwire
+
+From a source checkout, harvest migration fixtures with
+`go run -p 4 ./internal/migration/golden`. Review the resulting bytes and
+provenance before refreshing `internal/migration/testdata/golden-checksums.sha256`.
+The checksum set covers all files, including provenance READMEs, under the
+four `testdata/v1-goldens/migration/` directories. Historical fixtures and
+README rows retained by the harvester remain covered; they are not pruned
+or silently ignored.
+
+Run this checksum regeneration block from the module root after review:
+
+```sh
+python3 - <<'PY'
+from pathlib import Path
+from hashlib import sha256
+roots = [Path('internal') / base / 'testdata/v1-goldens/migration'
+         for base in ('memory', 'secrets', 'providers/registry', 'runtime')]
+paths = []
+for root in roots:
+    assert root.is_dir() and not root.is_symlink(), root
+    for path in root.rglob('*'):
+        assert not path.is_symlink(), path
+        if path.is_file():
+            paths.append(path)
+assert paths, 'empty golden fixture set'
+header = '# Harvester format version: 1\n'
+header += '# Generation command: python3 - (checksum regeneration block in docs/migration-guide.md)\n'
+rows = [f'{sha256(p.read_bytes()).hexdigest()}  {p.as_posix()}\n'
+        for p in sorted(paths)]
+Path('internal/migration/testdata/golden-checksums.sha256').write_text(
+    header + ''.join(rows), encoding='utf-8', newline='\n')
+PY
+```
+
+`TestTripwireStable` runs without build tags and fails with the changed,
+added or missing paths. An empty or missing checksum set also fails.
+Paths use slash separators; checksums cover raw bytes, so renames and
+line-ending changes count. Symlinks and roots outside the module are refused.
+
+Inside this source module, `cascade migrate v1 --dry-run` checks before
+the first importer; an actual import checks afterward. A stale checksum
+reference produces one stderr warning naming the files and leaves the
+migration result and exit code unchanged. Current checksums produce no
+warning. Staleness means a checksum difference, not elapsed time. Outside
+the source module, including a checkout of another module, no check runs.
+
 ## Legacy pointer sweep
 
 A separate, local-only engineering tool — `internal/migration/sweep`, never a
