@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -60,7 +61,8 @@ func (f *fakeCommander) Start() error {
 	return nil
 }
 
-func (f *fakeCommander) Wait() error { return <-f.waitErr }
+func (f *fakeCommander) Wait() error            { return <-f.waitErr }
+func (f *fakeCommander) Signal(os.Signal) error { return nil } // exits only on stdin EOF, as before
 
 func (f *fakeCommander) respond() {
 	scanner := bufio.NewScanner(f.stdinR)

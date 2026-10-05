@@ -24,7 +24,15 @@
 //	only the lifetime context for exactly this reason; performHandshake
 //	keeps the bounded one.
 //
-// SPORT: internal/plugins/process lifetime (ADD) — P1-E15-W4-S31-T3.
+//	Two contexts hang off a Handle. lifetimeCtx is the caller's: every
+//	child (initial and respawned) is built from it, so its end SIGKILLs
+//	the child's process group. lifetime() is runCtx, derived from it and
+//	also ended by Close: backoff, respawn handshakes and host-call
+//	consumers run under it. Close ends runCtx first and signals the child
+//	itself, so the child gets its SIGTERM grace instead of the instant
+//	SIGKILL its own context would deliver.
+//
+// SPORT: internal/plugins/process lifetime (ADD) — P1-E15-W4-S31-T3; lifetime-bound respawn (CHANGE) — P1-PLG-09.
 
 package process
 
@@ -76,6 +84,11 @@ func (h *Handle) awaitReadsDone() {
 	h.mu.RLock()
 	t := h.transport
 	h.mu.RUnlock()
+	awaitDrained(t)
+}
+
+// awaitDrained waits, at most DrainGrace, for t's reads to finish.
+func awaitDrained(t *Transport) {
 	if t == nil {
 		return
 	}
@@ -87,13 +100,91 @@ func (h *Handle) awaitReadsDone() {
 	}
 }
 
-// lifetime returns h's process-lifetime context, defaulting to
-// context.Background for a Handle built without one (every test
-// constructing a Handle literal): a zero lifetime must mean "not
-// bounded", never a nil context that panics on the next spawn.
+// lifetime returns h's run context (see this file's Constraints), falling
+// back to the caller's lifetime and then to context.Background for a
+// Handle built without one (every test constructing a Handle literal): a
+// zero lifetime must mean "not bounded", never a nil context that panics.
 func (h *Handle) lifetime() context.Context {
+	if h.runCtx != nil {
+		return h.runCtx
+	}
+	return h.childCtx()
+}
+
+// childCtx is the context every child of h is built from: the caller's
+// lifetime, never runCtx (see this file's Constraints).
+func (h *Handle) childCtx() context.Context {
 	if h.lifetimeCtx == nil {
 		return context.Background()
 	}
 	return h.lifetimeCtx
+}
+
+// respawnOrFail runs one respawn for the monitor. A failed attempt yields
+// failedWaiter (an immediate synthetic exit) so the restart count still
+// advances; an ended lifetime then stops the loop on its next check.
+func (rt *ProcessRuntime) respawnOrFail(manifest Manifest, h *Handle) (Waiter, chan struct{}) {
+	next, reaped, err := rt.respawn(manifest, h)
+	if err != nil {
+		return failedWaiter{}, nil
+	}
+	return next, reaped
+}
+
+// respawn attempts one relaunch: a fresh Commander, a handshake bounded by
+// h.lifetime(), and (on success) an atomic install as h's current child.
+// It starts nothing once the lifetime has ended, and a child that won the
+// race against Close is killed and reaped here rather than left running.
+func (rt *ProcessRuntime) respawn(manifest Manifest, h *Handle) (Commander, chan struct{}, error) {
+	life := h.lifetime()
+	if err := life.Err(); err != nil {
+		return nil, nil, cascade.Wrapf(cascade.KindUnavailable, err, "process: plugin %q lifetime ended; not respawning", manifest.Name)
+	}
+	startupCtx, cancel := context.WithTimeout(life, rt.resolvedStartupTimeout())
+	defer cancel()
+	cmd, transport, err := rt.spawnOne(h.childCtx(), manifest)
+	if err != nil {
+		return nil, nil, err
+	}
+	ack, err := performHandshake(startupCtx, transport, manifest.Name, manifest.minProtocolVersion())
+	var reaped chan struct{}
+	if err == nil {
+		reaped, err = h.install(cmd, transport, ack)
+	}
+	if err != nil {
+		grace := h.stopGrace
+		if life.Err() != nil {
+			grace = 0
+		}
+		abandonChild(cmd, transport, grace)
+		return nil, nil, err
+	}
+	go rt.consumeHostCalls(life, transport)
+	return cmd, reaped, nil
+}
+
+// install makes cmd and t h's current child, unless the lifetime ended
+// first. It holds h.mu across the check and the swap, and Close ends the
+// lifetime under the same lock, so a child is either installed before
+// Close reads h.cmd or refused here.
+func (h *Handle) install(cmd Commander, t *Transport, ack HelloAckMsg) (chan struct{}, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if err := h.lifetime().Err(); err != nil {
+		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "process: plugin %q closed during respawn", h.Manifest.Name)
+	}
+	h.Ack, h.transport, h.cmd = ack, t, cmd
+	h.reaped = make(chan struct{})
+	return h.reaped, nil
+}
+
+// failedWaiter is used when a respawn attempt itself fails before a
+// process could even be started: it reports an immediate exit so the
+// monitor loop's restart-count accounting still advances toward the
+// budget rather than spinning without ever reaching state-invalid.
+type failedWaiter struct{}
+
+// Wait reports the synthetic exit for a respawn that never started.
+func (failedWaiter) Wait() error {
+	return cascade.New(cascade.KindUnavailable, "process: respawn attempt failed before the process started")
 }

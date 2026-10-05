@@ -18,7 +18,7 @@
 //	bare time.Now/After; per-call timeout composes onto the caller's ctx
 //	with context.WithTimeout, which is not itself a forbidden identifier.
 //
-// SPORT: internal/plugins/process transport (ADD) — P1-E15-W4-S31-T3.
+// SPORT: internal/plugins/process transport (ADD) — P1-E15-W4-S31-T3; single-parse routeFrame (CHANGE) — P1-PLG-09.
 
 package process
 
@@ -63,6 +63,27 @@ type Transport struct {
 	// completed."
 	done    chan struct{}
 	readErr chan error
+	// decode is routeFrame's one decode of a frame; nil means
+	// decodeEnvelope. A field (not a package variable) so a test can count
+	// calls on its own Transport without racing any other read loop.
+	decode func(line []byte, env *frameEnvelope) error
+}
+
+// frameEnvelope is every field a frame may carry, so routeFrame decodes
+// each frame exactly once and builds the Notification or Response from
+// the result instead of re-parsing the line.
+type frameEnvelope struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      *uint64         `json:"id"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params,omitempty"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *RPCError       `json:"error,omitempty"`
+}
+
+// decodeEnvelope is the production frame decoder.
+func decodeEnvelope(line []byte, env *frameEnvelope) error {
+	return json.Unmarshal(line, env)
 }
 
 // NewTransport builds a Transport over w (the plugin's stdin) and r (its
@@ -113,27 +134,26 @@ func (t *Transport) readLoop(r io.Reader) {
 	t.finishReading(scanner.Err())
 }
 
-// routeFrame decodes one frame and delivers it as a Response (if a
-// pending call claims its ID) or a Notification (otherwise).
+// routeFrame decodes one frame, once, and delivers it as a Response (an
+// ID and no method: the reply to a host Call, if one is pending) or a
+// Notification (a nonempty method). Invalid JSON-RPC versions are dropped.
 func (t *Transport) routeFrame(line []byte) {
-	var probe struct {
-		ID     *uint64 `json:"id"`
-		Method string  `json:"method"`
+	decode := t.decode
+	if decode == nil {
+		decode = decodeEnvelope
 	}
-	if err := json.Unmarshal(line, &probe); err != nil {
+	var env frameEnvelope
+	if decode(line, &env) != nil || env.JSONRPC != "2.0" {
 		return
 	}
-	if probe.ID == nil || probe.Method != "" {
-		var n Notification
-		if json.Unmarshal(line, &n) == nil {
-			t.notifications <- n
+	if env.ID == nil || env.Method != "" {
+		if env.Method == "" {
+			return
 		}
+		t.notifications <- Notification{JSONRPC: env.JSONRPC, Method: env.Method, Params: env.Params}
 		return
 	}
-	var resp Response
-	if json.Unmarshal(line, &resp) != nil {
-		return
-	}
+	resp := Response{JSONRPC: env.JSONRPC, ID: *env.ID, Result: env.Result, Error: env.Error}
 	t.mu.Lock()
 	pc, ok := t.pending[resp.ID]
 	if ok {

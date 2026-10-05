@@ -5,11 +5,16 @@
 // into a same-package sibling file rather than crowding the file that owns
 // the record type.
 //
-// SPORT: internal/plugins lifecycle-manage/ADD — P1-E15-W4-S32-T4.
+// Teardown runs under TeardownDeadline: a teardown that never returns (a
+// plugin that ignores the drain) fails the remove with KindUnavailable and
+// the metadata record is kept, rather than blocking `remove` forever.
+//
+// SPORT: internal/plugins lifecycle-manage/ADD — P1-E15-W4-S32-T4; teardown deadline (CHANGE) — P1-PLG-09.
 package plugins
 
 import (
 	"context"
+	"time"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -25,6 +30,11 @@ type ProcessTeardown interface {
 	// Teardown drains name's in-flight calls and runs its uninstall hook.
 	Teardown(ctx context.Context, name string) error
 }
+
+// TeardownDeadline bounds how long RemovePlugin waits for a teardown. A
+// variable only so a test can shorten it; production code never assigns
+// it.
+var TeardownDeadline = 10 * time.Second
 
 // SetEnabled toggles name's Enabled flag and reports the record's state
 // AFTER the change, so a caller can print "before -> after" without a
@@ -69,7 +79,7 @@ func RemovePlugin(ctx context.Context, store provider.Store, teardown ProcessTea
 		return PluginMetadata{}, cascade.Newf(cascade.KindNotFound, "plugin: %q is not installed", name)
 	}
 	if teardown != nil {
-		if err := teardown.Teardown(ctx, name); err != nil {
+		if err := runTeardown(ctx, teardown, name); err != nil {
 			return PluginMetadata{}, err
 		}
 	}
@@ -77,4 +87,22 @@ func RemovePlugin(ctx context.Context, store provider.Store, teardown ProcessTea
 		return PluginMetadata{}, err
 	}
 	return rec, nil
+}
+
+// runTeardown runs teardown under TeardownDeadline. The teardown gets the
+// bounded context, and RemovePlugin returns at the deadline even if the
+// teardown ignores that context.
+func runTeardown(ctx context.Context, teardown ProcessTeardown, name string) error {
+	deadline := TeardownDeadline
+	tctx, cancel := context.WithTimeout(ctx, deadline)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- teardown.Teardown(tctx, name) }()
+	select {
+	case err := <-done:
+		return err
+	case <-tctx.Done():
+		return cascade.Wrapf(cascade.KindUnavailable, tctx.Err(),
+			"plugin: %q teardown did not finish within %s; the record is kept", name, deadline)
+	}
 }

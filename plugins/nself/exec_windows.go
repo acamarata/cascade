@@ -18,8 +18,12 @@
 //	TYPED and surfaced rather than pretended away; cmd.WaitDelay still
 //	guarantees the probe returns.
 //
-// Inputs/Outputs/Constraints: as exec_unix.go, minus the group reap.
-// SPORT: plugins/nself detect (ADD) — P1-E25-W5-S52-T2.
+// Inputs/Outputs/Constraints: as exec_unix.go, minus the group reap. The
+//
+//	reaped guard is the same: a command already waited for is never
+//	killed (R134), and deliverGroupKill is the same test seam.
+//
+// SPORT: plugins/nself detect (ADD) — P1-E25-W5-S52-T2; kill seam (CHANGE) — P1-PLG-09.
 
 package nself
 
@@ -36,6 +40,18 @@ import (
 // inlined so the flag is readable without a Win32 reference.
 const createNewProcessGroup = 0x00000200
 
+// deliverGroupKill sends the kill once killProcessGroup has decided one is
+// due: on windows the child alone, since there is no group signal. It is a
+// variable only so a test can prove no kill is sent for a reaped command;
+// production code never reassigns it.
+var deliverGroupKill = func(cmd *exec.Cmd) error { return cmd.Process.Kill() }
+
+// leaderWaited reports whether p was already waited for, asking p itself
+// rather than racing Wait's write of cmd.ProcessState (see exec_unix.go).
+func leaderWaited(p *os.Process) bool {
+	return errors.Is(p.Signal(syscall.Signal(0)), os.ErrProcessDone)
+}
+
 // setProcessGroup starts the command as its own process-group leader.
 func setProcessGroup(cmd *exec.Cmd) {
 	if cmd.SysProcAttr == nil {
@@ -47,12 +63,12 @@ func setProcessGroup(cmd *exec.Cmd) {
 // killProcessGroup kills the probe and refuses, typed, to claim it reaped
 // the tree. See this file's doc comment for why.
 func killProcessGroup(cmd *exec.Cmd) error {
-	if cmd.Process == nil || cmd.ProcessState != nil {
+	if cmd.Process == nil || cmd.ProcessState != nil || leaderWaited(cmd.Process) {
 		// Never started, or already waited for: there is nothing left to
 		// kill, which is the same success unix reports as ESRCH.
 		return nil
 	}
-	if err := cmd.Process.Kill(); err != nil {
+	if err := deliverGroupKill(cmd); err != nil {
 		if errors.Is(err, os.ErrProcessDone) {
 			return nil
 		}

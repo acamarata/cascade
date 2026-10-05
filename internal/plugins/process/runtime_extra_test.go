@@ -7,6 +7,10 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -187,3 +191,109 @@ func (failingCommander) StdinPipe() (io.WriteCloser, error) {
 func (failingCommander) StdoutPipe() (io.ReadCloser, error) { return nil, nil }
 func (failingCommander) Start() error                       { return nil }
 func (failingCommander) Wait() error                        { return nil }
+func (failingCommander) Signal(os.Signal) error             { return nil }
+
+// TestLaunchChildGetsOnlyManifestEnv: the parent holds a principal token,
+// a provider key and a canary; the real child (and its respawn) sees
+// exactly Manifest.Env and nothing else, and an empty Env is an empty
+// environment. A factory that leaves cmd.Env nil inherits all three.
+func TestLaunchChildGetsOnlyManifestEnv(t *testing.T) {
+	bin := buildLifecyclePlugin(t)
+	secrets := map[string]string{
+		"CASCADE_PRINCIPAL_TOKEN": "cpt-" + "canary-0001",
+		"ANTHROPIC_API_KEY":       "sk-" + "ant-" + "canary-0002",
+		"PLG09_PARENT_CANARY":     "parent-" + "only-0003",
+	}
+	for k, v := range secrets {
+		t.Setenv(k, v)
+	}
+	for _, tc := range []struct {
+		name string
+		env  []string
+	}{{"listed", []string{"ALPHA=1", "BETA=two words"}}, {"empty", nil}} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			rt := newRealRuntime()
+			rt.Restart = RestartPolicy{MaxAttempts: 1, InitialBackoff: time.Millisecond}
+			launchReal(context.Background(), t, rt, bin, tc.env, "-dir", dir, "-crash-first", filepath.Join(dir, "crashed"))
+			for _, got := range readEnvFiles(t, dir, 2) { // the first child and its respawn
+				want := slices.Sorted(slices.Values(tc.env))
+				if !slices.Equal(got, want) {
+					// Names only: on a regression the child holds the test
+					// runner's real environment, and its values (CI tokens
+					// included) must never reach a log.
+					t.Fatalf("child environment names = %q, want exactly Manifest.Env's %q", envNames(got), envNames(want))
+				}
+				for _, v := range secrets {
+					if strings.Contains(strings.Join(got, "\n"), v) {
+						t.Fatalf("parent secret %q reached the child", v)
+					}
+				}
+			}
+		})
+	}
+}
+
+// envNames returns the KEY part of each KEY=VALUE entry.
+func envNames(entries []string) []string {
+	out := make([]string, len(entries))
+	for i, e := range entries {
+		out[i], _, _ = strings.Cut(e, "=")
+	}
+	return out
+}
+
+// readEnvFiles waits for n env-<pid> files in dir and returns each one's
+// sorted entries.
+func readEnvFiles(t *testing.T, dir string, n int) [][]string {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		paths, _ := filepath.Glob(filepath.Join(dir, "env-*"))
+		if len(paths) >= n {
+			var out [][]string
+			for _, p := range paths {
+				raw, err := os.ReadFile(p)
+				if err != nil {
+					t.Fatalf("read %s: %v", p, err)
+				}
+				var entries []string
+				if len(raw) > 0 {
+					entries = strings.Split(string(raw), "\n")
+				}
+				out = append(out, slices.Sorted(slices.Values(entries)))
+			}
+			return out
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("found %d env files in %s, want %d (did the respawn happen?)", len(paths), dir, n)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// TestHandleAlive: true while the real child runs, false once it exits on
+// its own (stdin EOF, no respawn), and false after Close.
+func TestHandleAlive(t *testing.T) {
+	bin := buildLifecyclePlugin(t)
+	exits := launchReal(context.Background(), t, newRealRuntime(), bin, nil)
+	if !exits.Alive() {
+		t.Fatal("Alive() = false right after Launch")
+	}
+	exits.mu.RLock()
+	tr := exits.transport
+	exits.mu.RUnlock()
+	_ = tr.Close() // stdin EOF: the plugin exits by itself
+	awaitTrue(t, "Alive() to turn false after the child exited", func() bool { return !exits.Alive() })
+
+	closing := launchReal(context.Background(), t, newRealRuntime(), bin, nil)
+	if !closing.Alive() {
+		t.Fatal("Alive() = false right after Launch (second handle)")
+	}
+	if err := closing.Close(context.Background()); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if closing.Alive() {
+		t.Fatal("Alive() = true after Close")
+	}
+}

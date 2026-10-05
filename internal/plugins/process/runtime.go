@@ -19,7 +19,8 @@
 //	plugin-process STDIO class (H/S-16.T1) idempotently, and gates spawn
 //	on trust tier, so a non-trusted manifest never reaches os/exec.
 //
-// SPORT: internal/plugins/process runtime (ADD) — P1-E15-W4-S31-T3; host-call dispatch (CHANGE) — P1-E15-W4-S31-T4.
+// SPORT: internal/plugins/process runtime (ADD) — P1-E15-W4-S31-T3; host-call dispatch (CHANGE) — P1-E15-W4-S31-T4;
+// closed child env, lifetime-bound monitor (CHANGE) — P1-PLG-09.
 
 package process
 
@@ -29,32 +30,22 @@ import (
 	"io"
 	"os/exec"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// Commander is the seam onto a started child process, satisfied by
-// *exec.Cmd. Decoupling from os/exec directly lets Launch's trusted-tier
-// gate be tested without an exec.Cmd ever being constructed, and lets a
-// crash/restart test drive a fake process.
-type Commander interface {
-	StdinPipe() (io.WriteCloser, error)
-	StdoutPipe() (io.ReadCloser, error)
-	Start() error
-	Wait() error
-}
-
-// CommandFactory builds the Commander Launch starts for manifest. The
-// production default builds a real *exec.Cmd; a test supplies a fake to
-// assert Launch never calls it for a non-trusted manifest.
-type CommandFactory func(ctx context.Context, m Manifest) Commander
-
 // defaultCommandFactory is the production CommandFactory: a real
-// os/exec.CommandContext. internal/plugins/process is the one allowlisted
-// os/exec importer (internal/build/egress_allow.go).
+// os/exec.CommandContext in its own process group (execCommander, close.go).
+// internal/plugins/process is the one allowlisted os/exec importer
+// (internal/build/egress_allow.go). The child's environment is exactly
+// m.Env: a non-nil copy, because os/exec reads a nil Env as "inherit the
+// daemon's whole environment", provider keys and principal token included.
 func defaultCommandFactory(ctx context.Context, m Manifest) Commander {
-	return exec.CommandContext(ctx, m.Command, m.Args...)
+	cmd := exec.CommandContext(ctx, m.Command, m.Args...)
+	cmd.Env = append([]string{}, m.Env...)
+	return newExecCommander(cmd)
 }
 
 // ProcessRuntime is the execution host for trusted-tier process plugins.
@@ -93,6 +84,9 @@ type ProcessRuntime struct {
 	// DefaultCallTimeout.
 	StartupTimeout    time.Duration
 	CapabilityChecker HostCapabilityChecker // plugin capability boundary (hostcalls.go); nil is unwired
+	// StopGrace is how long Handle.Close waits after SIGTERM before it
+	// SIGKILLs the plugin's process group. Zero uses DefaultStopGrace.
+	StopGrace time.Duration
 	// commandFactory builds the Commander Launch starts. Defaults to
 	// defaultCommandFactory; a test overrides it.
 	commandFactory CommandFactory
@@ -202,35 +196,50 @@ func (rt *ProcessRuntime) spawnAndHandshake(lifetimeCtx, startupCtx context.Cont
 	if err != nil {
 		return nil, err
 	}
+	runCtx, runCancel := context.WithCancel(lifetimeCtx)
 	h := &Handle{
 		Manifest: manifest, transport: transport, state: &stateBox{},
-		tail: newStderrTailer(64), lifetimeCtx: lifetimeCtx,
+		tail: newStderrTailer(64), lifetimeCtx: lifetimeCtx, runCtx: runCtx, runCancel: runCancel,
+		cmd: cmd, reaped: make(chan struct{}), monitorDone: make(chan struct{}), stopGrace: rt.resolvedStopGrace(),
 	}
 	h.Ack, err = performHandshake(startupCtx, transport, manifest.Name, manifest.minProtocolVersion())
 	if err != nil {
-		_ = transport.Close()
-		_ = cmd.Wait()
+		runCancel()
+		abandonChild(cmd, transport, h.stopGrace)
 		return nil, err
 	}
 	go rt.monitor(cmd, manifest, h)
-	go rt.consumeHostCalls(context.Background(), h)
+	go rt.consumeHostCalls(h.lifetime(), transport)
 	return h, nil
 }
 
 // monitor waits for the process to exit, restarts it per rt.Restart up
-// to the attempt budget, and on exhaustion marks h state-invalid. It
-// loops on the running Commander until either a restart succeeds and
-// replaces h's transport, or the budget is exhausted.
+// to the attempt budget, and on exhaustion marks h state-invalid. Every
+// wait is bound to h.lifetime(): once Close or the lifetime's owner ends
+// it, a backoff returns at once and no respawn happens. monitorDone closes
+// when the loop ends, after the last child it started was reaped.
 func (rt *ProcessRuntime) monitor(cmd Waiter, manifest Manifest, h *Handle) {
+	defer close(h.monitorDone)
 	policy := rt.Restart.resolved()
-	current := cmd
+	current, reaped := cmd, h.reaped
 	for {
 		// The plugin's stdout must be fully read BEFORE Wait: os/exec
 		// closes that pipe once Wait sees the command exit, so waiting
 		// first silently discards whatever the plugin wrote on its way out
 		// -- including a host call it made and is entitled to have handled.
 		h.awaitReadsDone()
+		// The leader is unreaped (a zombie at worst), so its pgid is
+		// still reserved: this reuse-safe kill ends members that outlived it.
+		if c, ok := current.(Commander); ok {
+			_ = c.Signal(syscall.SIGKILL)
+		}
 		exitCode := waitExitCode(current)
+		if reaped != nil {
+			close(reaped)
+		}
+		if h.lifetime().Err() != nil {
+			return // closed, or the owner ended the lifetime: an exit, not a crash
+		}
 		restarts := h.state.incrementRestart()
 		final := restarts > policy.MaxAttempts
 		rt.reportCrash(manifest, exitCode, restarts, final, h)
@@ -238,13 +247,8 @@ func (rt *ProcessRuntime) monitor(cmd Waiter, manifest Manifest, h *Handle) {
 			h.state.markInvalid()
 			return
 		}
-		backoffSleep(context.Background(), policy.backoffFor(restarts))
-		next, err := rt.respawn(manifest, h)
-		if err != nil {
-			current = failedWaiter{}
-			continue
-		}
-		current = next
+		backoffSleep(h.lifetime(), policy.backoffFor(restarts))
+		current, reaped = rt.respawnOrFail(manifest, h)
 	}
 }
 
@@ -257,37 +261,4 @@ func (rt *ProcessRuntime) reportCrash(manifest Manifest, exitCode, restarts int,
 		PluginName: manifest.Name, ExitCode: exitCode, StderrTail: h.tail.snapshot(),
 		RestartCount: restarts, Final: final,
 	})
-}
-
-// respawn attempts one relaunch: a fresh Commander, handshake, and (on
-// success) an atomic swap of h's transport. The returned Commander is
-// what the monitor loop waits on next.
-func (rt *ProcessRuntime) respawn(manifest Manifest, h *Handle) (Commander, error) {
-	startupCtx, cancel := context.WithTimeout(context.Background(), rt.resolvedStartupTimeout())
-	defer cancel()
-	cmd, transport, err := rt.spawnOne(h.lifetime(), manifest)
-	if err != nil {
-		return nil, err
-	}
-	ack, err := performHandshake(startupCtx, transport, manifest.Name, manifest.minProtocolVersion())
-	if err != nil {
-		_ = transport.Close()
-		_ = cmd.Wait()
-		return nil, err
-	}
-	h.Ack = ack
-	h.swapTransport(transport)
-	go rt.consumeHostCalls(context.Background(), h)
-	return cmd, nil
-}
-
-// failedWaiter is used when a respawn attempt itself fails before a
-// process could even be started: it reports an immediate exit so the
-// monitor loop's restart-count accounting still advances toward the
-// budget rather than spinning without ever reaching state-invalid.
-type failedWaiter struct{}
-
-// Wait reports the synthetic exit for a respawn that never started.
-func (failedWaiter) Wait() error {
-	return cascade.New(cascade.KindUnavailable, "process: respawn attempt failed before the process started")
 }

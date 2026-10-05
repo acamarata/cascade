@@ -3,7 +3,9 @@ package plugins
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -119,5 +121,40 @@ func TestRemovePlugin_UnknownPluginRefused(t *testing.T) {
 	store := storetest.NewMemStore()
 	if _, err := RemovePlugin(ctx, store, nil, "ghost"); err == nil {
 		t.Fatal("RemovePlugin on an unknown plugin succeeded, want KindNotFound")
+	}
+}
+
+// blockingTeardown never returns on its own: it ignores its context, the
+// way a plugin that ignores the drain would.
+type blockingTeardown struct{ release chan struct{} }
+
+func (b blockingTeardown) Teardown(context.Context, string) error {
+	<-b.release
+	return nil
+}
+
+func TestRemovePluginTeardownDeadline(t *testing.T) {
+	ctx := context.Background()
+	store := storetest.NewMemStore()
+	if err := SaveMetadata(ctx, store, PluginMetadata{Name: "demo"}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	prev := TeardownDeadline
+	TeardownDeadline = 50 * time.Millisecond
+	t.Cleanup(func() { TeardownDeadline = prev })
+	td := blockingTeardown{release: make(chan struct{})}
+	t.Cleanup(func() { close(td.release) })
+
+	start := time.Now()
+	_, err := RemovePlugin(ctx, store, td, "demo")
+	elapsed := time.Since(start)
+	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindUnavailable || !strings.Contains(err.Error(), `"demo"`) {
+		t.Fatalf("RemovePlugin(blocking teardown) = %v, want KindUnavailable naming the plugin", err)
+	}
+	if elapsed < TeardownDeadline || elapsed > 5*time.Second {
+		t.Fatalf("RemovePlugin returned after %v, want at the %v deadline", elapsed, TeardownDeadline)
+	}
+	if _, ok, _ := LoadMetadata(ctx, store, "demo"); !ok {
+		t.Fatal("metadata record deleted although the teardown timed out")
 	}
 }

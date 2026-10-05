@@ -12,18 +12,19 @@
 // when the group could not be signalled for a reason other than "it is
 // already gone".
 // Constraints: Setpgid makes the child its own group leader, so its pgid
-// equals its pid and syscall.Kill(-pid) reaches the whole tree. This is
-// why the kill uses the negative pid rather than cmd.Process.Kill.
-// SPORT: internal.ci.killProcessGroup/ADDED (P1-E25-W5-S51-T5).
+// equals its pid and a signal to that group reaches the whole tree. This
+// is why the kill goes through pkg/procgroup rather than cmd.Process.Kill;
+// pkg/procgroup is the one place in the tree that signals a group.
+// SPORT: internal.ci.killProcessGroup/ADDED (P1-E25-W5-S51-T5); thin caller of pkg/procgroup (CHANGE) — P1-PLG-09.
 
 package ci
 
 import (
-	"errors"
 	"os/exec"
 	"syscall"
 
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/procgroup"
 )
 
 // setProcessGroup puts the command in a new process group of its own.
@@ -45,10 +46,7 @@ func killProcessGroup(cmd *exec.Cmd) error {
 	if cmd.Process == nil {
 		return nil
 	}
-	if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); err != nil {
-		if errors.Is(err, syscall.ESRCH) {
-			return nil
-		}
+	if err := procgroup.Signal(cmd.Process.Pid, syscall.SIGKILL); err != nil {
 		return cascade.Wrapf(cascade.KindUnavailable, err,
 			"ci: killing the step's process group (pgid %d)", cmd.Process.Pid)
 	}

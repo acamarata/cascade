@@ -19,7 +19,7 @@
 //	consumeHostCalls's doc comment for the transport-layer gap this
 //	works within (P1-E15-W4-S31-T4's journal quotes it in full).
 //
-// SPORT: internal/plugins/process host-call-dispatch (ADD) — P1-E15-W4-S31-T4.
+// SPORT: internal/plugins/process host-call-dispatch (ADD) — P1-E15-W4-S31-T4; per-transport consumer (CHANGE) — P1-PLG-09.
 
 package process
 
@@ -68,10 +68,14 @@ var hostGenericCapability = map[string]string{
 	"host_tool_register": "host.tool_register",
 }
 
-// consumeHostCalls drains h's plugin-initiated notifications for the
-// life of its current transport and checks every recognized host-ABI
-// call against rt.CapabilityChecker before anything else happens with
-// it.
+// consumeHostCalls drains t's plugin-initiated notifications until t's
+// reads finish and checks every recognized host-ABI call against
+// rt.CapabilityChecker before anything else happens with it. It is handed
+// the transport it serves (never reading h.transport later, when a
+// respawn may already have swapped it), so each live transport has
+// exactly one consumer. ctx is the Handle's lifetime(); the loop keeps
+// draining after ctx ends, because a consumer that stopped early would
+// block the transport's read loop and with it the monitor's reap.
 //
 // It is the process runtime's ONLY plugin-to-host call path today:
 // transport.go's routeFrame correlates a plugin REQUEST's id with the
@@ -84,10 +88,7 @@ var hostGenericCapability = map[string]string{
 // list. This loop enforces the capability boundary on the one channel
 // that reaches the host today; the ticket journal quotes both sides of
 // this contradiction.
-func (rt *ProcessRuntime) consumeHostCalls(ctx context.Context, h *Handle) {
-	h.mu.RLock()
-	t := h.transport
-	h.mu.RUnlock()
+func (rt *ProcessRuntime) consumeHostCalls(ctx context.Context, t *Transport) {
 	for n := range t.Notifications() {
 		rt.checkHostCall(ctx, n)
 	}

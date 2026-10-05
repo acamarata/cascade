@@ -37,13 +37,15 @@
 //	(same underlying values, distinct named types). See the ticket
 //	journal for the contract-vs-tree contradiction this resolves.
 //
-// SPORT: internal/plugins/process types (ADD) — P1-E15-W4-S31-T3.
+// SPORT: internal/plugins/process types (ADD) — P1-E15-W4-S31-T3; Commander.Signal + Manifest.Env (CHANGE) — P1-PLG-09.
 package process
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"os"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -113,6 +115,25 @@ type EgressInterceptor interface {
 	InterceptClass(ctx context.Context, class EgressClass, tier SensitivityTier, content []byte) ([]byte, error)
 }
 
+// Commander is the seam onto a started child process. The production
+// adapter is execCommander (close.go) over a real *exec.Cmd. Decoupling
+// from os/exec lets Launch's trusted-tier gate be tested without an
+// exec.Cmd ever being constructed, and lets a crash/restart test drive a
+// fake process. Signal signals the child's whole process group, never the
+// child alone (P1-PLG-09).
+type Commander interface {
+	StdinPipe() (io.WriteCloser, error)
+	StdoutPipe() (io.ReadCloser, error)
+	Start() error
+	Wait() error
+	Signal(sig os.Signal) error
+}
+
+// CommandFactory builds the Commander Launch starts for manifest. The
+// production default builds a real *exec.Cmd; a test supplies a fake to
+// assert Launch never calls it for a non-trusted manifest.
+type CommandFactory func(ctx context.Context, m Manifest) Commander
+
 // PluginProtocolVersion is the plugin RPC protocol version this host
 // speaks and the minimum it accepts from a plugin, absent a manifest
 // override. A plugin reporting a lower version fails the handshake.
@@ -147,6 +168,11 @@ type Manifest struct {
 	Command string
 	// Args are the command's arguments.
 	Args []string
+	// Env is the child's whole environment, as KEY=VALUE entries. It is a
+	// closed allowlist: nothing from the daemon's own environment (provider
+	// keys, CASCADE_PRINCIPAL_TOKEN) is inherited, and an empty Env starts
+	// the child with an empty environment.
+	Env []string
 	// MinProtocolVersion, if set, overrides PluginProtocolVersion as the
 	// minimum version this host accepts from the plugin.
 	MinProtocolVersion string

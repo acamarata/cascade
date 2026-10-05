@@ -19,7 +19,7 @@
 //	time.Sleep call. State reads/writes are mutex-guarded so Handle's
 //	call path and the monitor goroutine never race.
 //
-// SPORT: internal/plugins/process restart (ADD) — P1-E15-W4-S31-T3.
+// SPORT: internal/plugins/process restart (ADD) — P1-E15-W4-S31-T3; Handle lifecycle fields (CHANGE) — P1-PLG-09.
 
 package process
 
@@ -220,6 +220,19 @@ type Handle struct {
 	// call that owns the lifetime has returned — and it must never be
 	// the handshake's bounded context (lifetime.go's Constraints).
 	lifetimeCtx context.Context
+	// runCtx is derived from lifetimeCtx and also ended by Close (via
+	// runCancel); lifetime() returns it (lifetime.go's Constraints).
+	runCtx    context.Context
+	runCancel context.CancelFunc
+	// cmd is the current child and reaped closes once the monitor's Wait
+	// on it returned; both are swapped together under mu by a respawn.
+	cmd    Commander
+	reaped chan struct{}
+	// monitorDone closes when the crash monitor's loop ends.
+	monitorDone chan struct{}
+	stopGrace   time.Duration
+	closeOnce   sync.Once
+	closeErr    error
 }
 
 // Call performs one JSON-RPC round trip through the current transport. A
@@ -242,14 +255,6 @@ func (h *Handle) State() string {
 		return "invalid"
 	}
 	return "running"
-}
-
-// swapTransport installs t as the transport future Call invocations use,
-// following a successful restart.
-func (h *Handle) swapTransport(t *Transport) {
-	h.mu.Lock()
-	h.transport = t
-	h.mu.Unlock()
 }
 
 // restartCountSnapshot reads the current restart count without mutating

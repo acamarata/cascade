@@ -4,6 +4,9 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"testing"
 	"time"
@@ -183,3 +186,100 @@ func TestTransportCloseNonCloserWriter(t *testing.T) {
 type nonCloserWriter struct{}
 
 func (nonCloserWriter) Write(p []byte) (int, error) { return len(p), nil }
+
+// TestRouteFrameParsesOnce: every frame shape is decoded exactly once (a
+// counter over the Transport's envelope decoder) and still routed as
+// before; and routeFrame's body holds no other decode a counter could
+// miss (no Unmarshal call, one decode call).
+func TestRouteFrameParsesOnce(t *testing.T) {
+	var decodes int
+	tr := &Transport{
+		pending: make(map[uint64]*pendingCall), notifications: make(chan Notification, 4),
+		decode: func(line []byte, env *frameEnvelope) error { decodes++; return decodeEnvelope(line, env) },
+	}
+	pc := &pendingCall{resp: make(chan Response, 1)}
+	tr.pending[5] = pc
+	frames := []string{
+		`{"jsonrpc":"2.0","id":5,"result":{"ok":true},"error":{"code":3,"message":"m"}}`,
+		`{"jsonrpc":"2.0","method":"host_log","params":{"k":"v"}}`,
+		`{"jsonrpc":"2.0","id":9,"method":"host_secret_ref","params":{"key":"x"}}`,
+		`not json`,
+	}
+	for _, f := range frames {
+		tr.routeFrame([]byte(f))
+	}
+	if decodes != len(frames) {
+		t.Fatalf("decoder ran %d times for %d frames, want exactly once per frame", decodes, len(frames))
+	}
+	resp := <-pc.resp
+	if resp.ID != 5 || string(resp.Result) != `{"ok":true}` || resp.Error == nil || resp.Error.Code != 3 {
+		t.Fatalf("response = %+v, want id 5 with its result and error", resp)
+	}
+	for _, want := range []string{"host_log", "host_secret_ref"} {
+		n := <-tr.notifications
+		if n.Method != want || n.JSONRPC != "2.0" || len(n.Params) == 0 {
+			t.Fatalf("notification = %+v, want method %q with params", n, want)
+		}
+	}
+	if len(tr.notifications) != 0 {
+		t.Fatal("the malformed frame was delivered")
+	}
+	assertRouteFrameDecodesOnce(t)
+}
+
+func TestRouteFrameDropsInvalidEnvelope(t *testing.T) {
+	for _, frame := range []string{
+		`null`, `{}`, `{"jsonrpc":"2.0"}`, `{"jsonrpc":"2.0","method":""}`,
+		`{"method":"host_log"}`, `{"jsonrpc":"1.0","method":"host_log"}`,
+		`{"id":5,"result":true}`, `{"jsonrpc":"1.0","id":5,"result":true}`,
+	} {
+		t.Run(frame, func(t *testing.T) {
+			pc := &pendingCall{resp: make(chan Response, 1)}
+			tr := &Transport{pending: map[uint64]*pendingCall{5: pc}, notifications: make(chan Notification, 1)}
+			tr.routeFrame([]byte(frame))
+			if len(tr.notifications) != 0 || len(pc.resp) != 0 || tr.pending[5] != pc {
+				t.Fatal("invalid envelope delivered or removed a pending call")
+			}
+		})
+	}
+}
+
+// assertRouteFrameDecodesOnce checks transport.go's routeFrame body: one
+// call through decode and no Unmarshal anywhere in it.
+func assertRouteFrameDecodesOnce(t *testing.T) {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), "transport.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parse transport.go: %v", err)
+	}
+	var body *ast.BlockStmt
+	for _, d := range file.Decls {
+		if fn, ok := d.(*ast.FuncDecl); ok && fn.Name.Name == "routeFrame" {
+			body = fn.Body
+		}
+	}
+	if body == nil {
+		t.Fatal("routeFrame not found in transport.go")
+	}
+	decodeCalls := 0
+	ast.Inspect(body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		switch fn := call.Fun.(type) {
+		case *ast.Ident:
+			if fn.Name == "decode" {
+				decodeCalls++
+			}
+		case *ast.SelectorExpr:
+			if fn.Sel.Name == "Unmarshal" {
+				t.Errorf("routeFrame calls %s.Unmarshal: a second parse of the frame", fn.X)
+			}
+		}
+		return true
+	})
+	if decodeCalls != 1 {
+		t.Fatalf("routeFrame calls decode %d times, want 1", decodeCalls)
+	}
+}

@@ -173,22 +173,42 @@ func TestTypedProbeErrors_MessagesNameTheirPayload(t *testing.T) {
 }
 
 // TestKillProcessGroup_NoProcessAndAlreadyGone covers the two outcomes that
-// are not failures: nothing was started, and the group exited between the
-// deadline and the signal (ESRCH). The remaining branch — a signal refused
-// for another reason, EPERM — is NOT covered here on purpose: every way to
-// provoke it from a test signals a process group this test does not own.
+// are not failures: nothing was started, and the command was already
+// waited for. The second must send NO signal at all (R134): a reaped
+// leader's pid, and so its pgid, can be reused by an unrelated group, and
+// signalling it is how this test once failed with EPERM under whole-tree
+// load. The positive control proves the counting seam is the real kill
+// path, so a zero count is evidence rather than an unwired probe.
 func TestKillProcessGroup_NoProcessAndAlreadyGone(t *testing.T) {
+	var kills int
+	prod := deliverGroupKill
+	deliverGroupKill = func(*exec.Cmd) error { kills++; return nil }
+	t.Cleanup(func() { deliverGroupKill = prod })
+
 	if err := killProcessGroup(&exec.Cmd{}); err != nil {
 		t.Errorf("killProcessGroup(not started) = %v, want nil", err)
 	}
-	// A process that has already been waited for: its pid is reaped, so the
-	// group signal reports ESRCH, which is success.
 	cmd := exec.Command("sh", "-c", "exit 0")
 	setProcessGroup(cmd)
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("seed process: %v", err)
 	}
 	if err := killProcessGroup(cmd); err != nil {
-		t.Errorf("killProcessGroup(already exited) = %v, want nil (ESRCH is success)", err)
+		t.Errorf("killProcessGroup(already waited for) = %v, want nil", err)
+	}
+	if kills != 0 {
+		t.Fatalf("killProcessGroup sent %d kill(s) for a not-started or reaped command, want 0 (R134)", kills)
+	}
+
+	live := exec.Command("sh", "-c", "sleep 30")
+	setProcessGroup(live)
+	if err := live.Start(); err != nil {
+		t.Fatalf("start live process: %v", err)
+	}
+	_ = killProcessGroup(live) // windows also returns its typed KindUnsupported here
+	_ = live.Process.Kill()
+	_ = live.Wait()
+	if kills != 1 {
+		t.Fatalf("killProcessGroup(live) sent %d kill(s), want 1: the counting seam is not the real kill path", kills)
 	}
 }

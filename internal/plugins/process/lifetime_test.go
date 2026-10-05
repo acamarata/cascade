@@ -8,6 +8,8 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -102,6 +104,7 @@ func newDrainCommander() *drainCommander {
 func (c *drainCommander) StdinPipe() (io.WriteCloser, error) { return c.stdinW, nil }
 func (c *drainCommander) StdoutPipe() (io.ReadCloser, error) { return c.stdoutR, nil }
 func (c *drainCommander) Wait() error                        { close(c.waitEntered); return nil }
+func (c *drainCommander) Signal(os.Signal) error             { return nil }
 
 // Start answers the handshake and nothing else; the test drives every
 // later frame itself.
@@ -179,5 +182,30 @@ func TestMonitorReadsPluginOutputBeforeReapingIt(t *testing.T) {
 	case <-cmd.waitEntered:
 	case <-time.After(30 * time.Second):
 		t.Fatal("the monitor never reaped the process after its stdout reached EOF")
+	}
+}
+
+// TestLifetimeCancelKillsGroup: ending the lifetime a plugin was launched
+// under (daemon shutdown) kills the child AND the grandchild it forked,
+// because the command's Cancel signals the process group, and the monitor
+// then stops instead of respawning.
+func TestLifetimeCancelKillsGroup(t *testing.T) {
+	bin := buildLifecyclePlugin(t)
+	dir := t.TempDir()
+	rt := newRealRuntime()
+	rt.Restart = RestartPolicy{MaxAttempts: 3, InitialBackoff: time.Millisecond}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h := launchReal(ctx, t, rt, bin, nil, "-grandchild", "-dir", dir)
+	pid := childPid(t, h)
+	gpid := readPidFile(t, filepath.Join(dir, "grandchild.pid"))
+
+	cancel()
+	awaitGone(t, "process group after the lifetime ended", pid, gpid)
+	if !waitFor(context.Background(), h.monitorDone, 5*time.Second) {
+		t.Fatal("monitor still running after the lifetime ended")
+	}
+	if !closed(h.reaped) {
+		t.Fatal("the killed child was never reaped")
 	}
 }
