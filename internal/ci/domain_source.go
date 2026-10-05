@@ -38,6 +38,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // SourceGitHubActions and SourceLocal are the two producers a ci_run row
@@ -179,4 +180,87 @@ func ListRuns(ctx context.Context, db *sql.DB, limit int) ([]RunSummary, error) 
 		return nil, cascade.Wrap(cascade.KindUnavailable, err, "ci: iterating run rows")
 	}
 	return out, nil
+}
+
+// runStreamTableStep defines ci_run_stream: one marker row per run that a
+// streaming checkpoint dispatched (P1-CI-01). A new table, not a column on
+// ci_run_source, for the same reason domain_source.go's own header gives
+// (the migrate DSL is CREATE-only). An absent row means via_stream=false.
+func runStreamTableStep() migrate.MigrationStep {
+	return migrate.MigrationStep{
+		Kind:        migrate.StepCreateTable,
+		Description: "ci_run_stream: runs dispatched by a streaming checkpoint, with their sensitivity tier and checkpoint id",
+		Table: &migrate.TableDef{
+			Name: tableRunStream,
+			Columns: []migrate.ColumnDef{
+				{Name: "run_id", Type: migrate.TypeInteger, PrimaryKey: true, NotNull: true},
+				{Name: "repo_id", Type: migrate.TypeInteger, PrimaryKey: true, NotNull: true},
+				{Name: "via_stream", Type: migrate.TypeInteger, NotNull: true},
+				{Name: "sensitivity", Type: migrate.TypeText, NotNull: true},
+				{Name: "checkpoint_id", Type: migrate.TypeText, NotNull: true},
+			},
+		},
+	}
+}
+
+// UpsertRunSourceStream records, in ONE transaction, which producer wrote
+// (runID, repoID)'s ci_run row (exactly UpsertRunSource's ci_run_source
+// write) and the stream marker: whether a streaming checkpoint dispatched
+// it, the data tier that travelled with the job and the checkpoint id. A
+// tier outside the closed set refuses, so a corrupt value is never stored
+// as if it were a real classification.
+func UpsertRunSourceStream(ctx context.Context, db *sql.DB, runID, repoID int64, source string, viaStream bool,
+	sensitivity provider.SensitivityTier, checkpointID string) error {
+	if source != SourceGitHubActions && source != SourceLocal {
+		return cascade.Newf(cascade.KindInvalidInput, "ci: UpsertRunSourceStream: unrecognised source %q", source)
+	}
+	if !sensitivity.Valid() {
+		return cascade.New(cascade.KindInvalidInput, "ci: UpsertRunSourceStream: invalid sensitivity tier")
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return cascade.Wrapf(cascade.KindUnavailable, err, "ci: begin run source %d/%d", runID, repoID)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO `+tableRunSource+` (run_id, repo_id, source)
+		VALUES (?, ?, ?)
+		ON CONFLICT(run_id, repo_id) DO UPDATE SET source=excluded.source`,
+		runID, repoID, source); err != nil {
+		return cascade.Wrapf(cascade.KindUnavailable, err, "ci: upsert run source %d/%d", runID, repoID)
+	}
+	via := 0
+	if viaStream {
+		via = 1
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO `+tableRunStream+` (run_id, repo_id, via_stream, sensitivity, checkpoint_id)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(run_id, repo_id) DO UPDATE SET
+			via_stream=excluded.via_stream, sensitivity=excluded.sensitivity, checkpoint_id=excluded.checkpoint_id`,
+		runID, repoID, via, sensitivity.String(), checkpointID); err != nil {
+		return cascade.Wrapf(cascade.KindUnavailable, err, "ci: upsert run stream %d/%d", runID, repoID)
+	}
+	if err := tx.Commit(); err != nil {
+		return cascade.Wrapf(cascade.KindUnavailable, err, "ci: commit run source %d/%d", runID, repoID)
+	}
+	return nil
+}
+
+// RunViaStream reports whether (runID, repoID) was dispatched by a
+// streaming checkpoint. An absent ci_run_stream row, which every run
+// UpsertRunSource wrote and every GitHub Actions run, reads as false.
+func RunViaStream(ctx context.Context, db *sql.DB, runID, repoID int64) (bool, error) {
+	var via sql.NullInt64
+	err := db.QueryRowContext(ctx, `
+		SELECT s.via_stream FROM `+tableRunSource+` r
+		LEFT JOIN `+tableRunStream+` s ON s.run_id = r.run_id AND s.repo_id = r.repo_id
+		WHERE r.run_id = ? AND r.repo_id = ?`, runID, repoID).Scan(&via)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, cascade.Wrapf(cascade.KindUnavailable, err, "ci: reading run stream flag %d/%d", runID, repoID)
+	}
+	return via.Valid && via.Int64 == 1, nil
 }

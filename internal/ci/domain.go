@@ -83,13 +83,17 @@ const (
 	// internal/conversation/archive.go's identical precedent for the
 	// same DSL gap).
 	tableRunSource = "ci_run_source"
+	// tableRunStream is the P1-CI-01 marker table for runs a streaming
+	// checkpoint dispatched (domain_source.go's runStreamTableStep).
+	tableRunStream = "ci_run_stream"
 )
 
 // ciSchemaVersion is this package's MigrationSet target version -- the
 // next unused slot in the single global sequence. Bumped 8 -> 9 by
-// P1-E25-W5-S51-T5 to add tableRunSource (domain_source.go); see this
+// P1-E25-W5-S51-T5 to add tableRunSource (domain_source.go) and 9 -> 10
+// by P1-CI-01 to add tableRunStream and tableStreamAttempt; see this
 // file's SCHEMA VERSION doc comment.
-const ciSchemaVersion = 9
+const ciSchemaVersion = 10
 
 // SchemaVersion is ciSchemaVersion exported for a future composition
 // root's reader-ceiling max(), matching every sibling package's own
@@ -115,6 +119,8 @@ func MigrationSet() migrate.MigrationSet {
 			jobTableStep(),
 			stepTableStep(),
 			sourceTableStep(),
+			runStreamTableStep(),
+			attemptTableStep(),
 		},
 	}
 }
@@ -198,32 +204,43 @@ func ApplyMigrationSchema(ctx context.Context, db *sql.DB, dialect migrate.Diale
 	}, MigrationSet())
 }
 
-// Upsert idempotently writes one Run and its Jobs/Steps: overlapping
-// polling passes over the same run produce no duplicate rows, keyed on
-// (run_id, repo_id) for ci_run and on the job/step's own primary key for
-// the other two tables. A single call is not wrapped in an explicit
-// transaction across all three tables (matching internal/providers/
-// registry's own per-statement CRUD pattern) -- each statement is itself
-// atomic and idempotent, so a partial failure leaves no row half-written,
-// only some rows not-yet-written, which the next polling pass repairs.
+// Upsert idempotently writes one Run and its Jobs/Steps in ONE transaction:
+// overlapping polling passes over the same run produce no duplicate rows
+// (keyed on (run_id, repo_id) for ci_run and on the job/step's own primary
+// key for the other two), and a failure or a crash part-way leaves none of
+// the three tables changed. A run therefore never reads as completed with
+// a job but without its step rows.
 func Upsert(ctx context.Context, db *sql.DB, run Run, jobs []Job, steps []Step) error {
-	if err := upsertRun(ctx, db, run); err != nil {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return cascade.Wrapf(cascade.KindUnavailable, err, "ci: begin upsert of run %d/%d", run.RunID, run.RepoID)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := upsertRun(ctx, tx, run); err != nil {
 		return err
 	}
 	for _, j := range jobs {
-		if err := upsertJob(ctx, db, j); err != nil {
+		if err := upsertJob(ctx, tx, j); err != nil {
 			return err
 		}
 	}
 	for _, s := range steps {
-		if err := upsertStep(ctx, db, s); err != nil {
+		if err := upsertStep(ctx, tx, s); err != nil {
 			return err
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		return cascade.Wrapf(cascade.KindUnavailable, err, "ci: commit upsert of run %d/%d", run.RunID, run.RepoID)
 	}
 	return nil
 }
 
-func upsertRun(ctx context.Context, db *sql.DB, r Run) error {
+// execer is the write surface the three upsert helpers share (a *sql.Tx).
+type execer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
+func upsertRun(ctx context.Context, db execer, r Run) error {
 	_, err := db.ExecContext(ctx, `
 		INSERT INTO `+tableRun+` (run_id, repo_id, name, head_branch, head_sha, status, conclusion, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -238,7 +255,7 @@ func upsertRun(ctx context.Context, db *sql.DB, r Run) error {
 	return nil
 }
 
-func upsertJob(ctx context.Context, db *sql.DB, j Job) error {
+func upsertJob(ctx context.Context, db execer, j Job) error {
 	_, err := db.ExecContext(ctx, `
 		INSERT INTO `+tableJob+` (job_id, run_id, name, status, conclusion, started_at, finished_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -252,7 +269,7 @@ func upsertJob(ctx context.Context, db *sql.DB, j Job) error {
 	return nil
 }
 
-func upsertStep(ctx context.Context, db *sql.DB, s Step) error {
+func upsertStep(ctx context.Context, db execer, s Step) error {
 	_, err := db.ExecContext(ctx, `
 		INSERT INTO `+tableStep+` (job_id, number, name, status, conclusion, started_at, finished_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)

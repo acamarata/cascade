@@ -65,13 +65,17 @@ type stepJournalPayload struct {
 
 // Deps carries every external input Execute needs. DB, Clock, and Exec are
 // required; Events and Journal are optional (nil disables that one side
-// effect, never the ci_results write itself).
+// effect, never the ci_results write itself). ViaStream marks the run as
+// dispatched by a streaming checkpoint: its ci.run.completed event carries
+// via_stream=true so a subscriber never routes the same result twice (the
+// dedup half of S-66.T3). `cascade ci run` leaves it false.
 type Deps struct {
-	DB      *sql.DB
-	Events  *events.Bus
-	Journal JournalStore
-	Clock   runtime.Clock
-	Exec    Executor
+	DB        *sql.DB
+	Events    *events.Bus
+	Journal   JournalStore
+	Clock     runtime.Clock
+	Exec      Executor
+	ViaStream bool
 }
 
 // journalEntityID names one local run's journal entity, matching
@@ -170,7 +174,7 @@ func (d Deps) publishCompleted(ctx context.Context, result RunResult, ownerRepo 
 	}
 	payload, err := json.Marshal(runCompletedPayload{
 		RunID: result.RunID, RepoID: result.RepoID, Repo: ownerRepo,
-		Passed: result.Passed(), FailedStep: result.FailedStep,
+		Passed: result.Passed(), FailedStep: result.FailedStep, ViaStream: d.ViaStream,
 	})
 	if err != nil {
 		return
@@ -192,6 +196,9 @@ type runCompletedPayload struct {
 	Repo       string   `json:"repo,omitempty"`
 	Passed     bool     `json:"passed"`
 	FailedStep StepKind `json:"failed_step,omitempty"`
+	// ViaStream is true for a run a streaming checkpoint dispatched and
+	// false for a `cascade ci run` run (Deps.ViaStream).
+	ViaStream bool `json:"via_stream"`
 }
 
 // writeResult persists result to the ci_results domain: one ci_run row

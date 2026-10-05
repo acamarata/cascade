@@ -41,7 +41,7 @@ func TestAffectedTargets_UnknownStackReturnsFullSet(t *testing.T) {
 
 // newGitRepo creates a real git repository in t.TempDir(), commits
 // initialContent under name, and returns the repo root and that first
-// commit's hash -- ChangedPaths/currentTreeHash tests drive the REAL
+// commit's hash -- ChangedPathsTree/currentTreeHash tests drive the REAL
 // git binary against it (Art.2: no test double for the git path either).
 func newGitRepo(t *testing.T, name, initialContent string) (root, firstCommit string) {
 	t.Helper()
@@ -80,68 +80,115 @@ func gitOutput(t *testing.T, dir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// TestChangedPaths_RealGitDiffSubprocess proves ChangedPaths reports a
-// real committed change via a real `git diff --name-only` subprocess.
-func TestChangedPaths_RealGitDiffSubprocess(t *testing.T) {
+// treeOf returns the tree object of rev in root, read from the object store.
+func treeOf(t *testing.T, root, rev string) string {
+	t.Helper()
+	return gitOutput(t, root, "rev-parse", rev+"^{tree}")
+}
+
+// TestChangedPathsTree_RealGitDiffSubprocess proves ChangedPathsTree reports
+// a real committed change via a real `git diff-tree` subprocess.
+func TestChangedPathsTree_RealGitDiffSubprocess(t *testing.T) {
 	root, base := newGitRepo(t, "a.txt", "one")
 	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("two"), 0o644); err != nil {
 		t.Fatalf("rewriting a.txt: %v", err)
 	}
 	runGit(t, root, "commit", "-q", "-a", "-m", "second")
 
-	changed, err := ChangedPaths(context.Background(), root, base)
+	changed, err := ChangedPathsTree(context.Background(), root, base, treeOf(t, root, "HEAD"))
 	if err != nil {
-		t.Fatalf("ChangedPaths: %v", err)
+		t.Fatalf("ChangedPathsTree: %v", err)
 	}
 	if len(changed) != 1 || changed[0] != "a.txt" {
-		t.Fatalf("ChangedPaths = %v, want [a.txt]", changed)
+		t.Fatalf("ChangedPathsTree = %v, want [a.txt]", changed)
 	}
 }
 
-// TestChangedPaths_NoChangesReturnsEmptyNotNil proves a no-op diff
-// (base == HEAD) returns []string{}, not nil.
-func TestChangedPaths_NoChangesReturnsEmptyNotNil(t *testing.T) {
+// TestChangedPathsTree_NoChangesReturnsEmptyNotNil proves a no-op diff
+// (base's tree == tree) returns []string{}, not nil.
+func TestChangedPathsTree_NoChangesReturnsEmptyNotNil(t *testing.T) {
 	root, base := newGitRepo(t, "a.txt", "one")
-	changed, err := ChangedPaths(context.Background(), root, base)
+	changed, err := ChangedPathsTree(context.Background(), root, base, treeOf(t, root, base))
 	if err != nil {
-		t.Fatalf("ChangedPaths: %v", err)
+		t.Fatalf("ChangedPathsTree: %v", err)
 	}
 	if changed == nil {
-		t.Fatal("ChangedPaths returned nil, want []string{}")
+		t.Fatal("ChangedPathsTree returned nil, want []string{}")
 	}
 	if len(changed) != 0 {
-		t.Fatalf("ChangedPaths = %v, want empty", changed)
+		t.Fatalf("ChangedPathsTree = %v, want empty", changed)
 	}
 }
 
-// TestChangedPaths_MissingBaseCommit proves a blank baseCommit is
+// TestChangedPathsTree_IgnoresLaterCommitsAndStagedEdits proves the answer
+// is bound to the given tree: a commit made afterwards that reverts the
+// change, and an edit staged afterwards, do not alter it. The two positive
+// controls show the same repository does report those states when asked.
+func TestChangedPathsTree_IgnoresLaterCommitsAndStagedEdits(t *testing.T) {
+	root, base := newGitRepo(t, "a.txt", "one")
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("two"), 0o644); err != nil {
+		t.Fatalf("rewriting a.txt: %v", err)
+	}
+	runGit(t, root, "commit", "-q", "-a", "-m", "second")
+	captured := treeOf(t, root, "HEAD")
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("one"), 0o644); err != nil {
+		t.Fatalf("reverting a.txt: %v", err)
+	}
+	runGit(t, root, "commit", "-q", "-a", "-m", "revert")
+	if err := os.WriteFile(filepath.Join(root, "staged.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("staged.txt: %v", err)
+	}
+	runGit(t, root, "add", "staged.txt")
+
+	got, err := ChangedPathsTree(context.Background(), root, base, captured)
+	if err != nil || len(got) != 1 || got[0] != "a.txt" {
+		t.Fatalf("ChangedPathsTree(captured) = %v, %v; want [a.txt]", got, err)
+	}
+	head, err := ChangedPathsTree(context.Background(), root, base, treeOf(t, root, "HEAD"))
+	if err != nil || len(head) != 0 {
+		t.Fatalf("positive control: the reverted HEAD tree must differ from the captured one; got %v, %v", head, err)
+	}
+	index := gitOutput(t, root, "write-tree")
+	staged, err := ChangedPathsTree(context.Background(), root, base, index)
+	if err != nil || len(staged) != 1 || staged[0] != "staged.txt" {
+		t.Fatalf("positive control: the index tree must show the staged path; got %v, %v", staged, err)
+	}
+}
+
+// TestChangedPathsTree_MissingBaseCommit proves a blank baseCommit is
 // refused before any subprocess runs.
-func TestChangedPaths_MissingBaseCommit(t *testing.T) {
-	root, _ := newGitRepo(t, "a.txt", "one")
-	_, err := ChangedPaths(context.Background(), root, "   ")
+func TestChangedPathsTree_MissingBaseCommit(t *testing.T) {
+	root, first := newGitRepo(t, "a.txt", "one")
+	_, err := ChangedPathsTree(context.Background(), root, "   ", treeOf(t, root, first))
 	if !errors.Is(err, ErrBaseCommitUnknown) {
-		t.Fatalf("ChangedPaths(blank base) error = %v, want ErrBaseCommitUnknown", err)
+		t.Fatalf("ChangedPathsTree(blank base) error = %v, want ErrBaseCommitUnknown", err)
 	}
 }
 
-// TestChangedPaths_UnsafeBaseCommitRejectedBeforeSubprocess proves a
-// baseCommit carrying shell-unsafe characters is refused by the argv
-// allowlist rather than ever reaching exec.Command.
-func TestChangedPaths_UnsafeBaseCommitRejectedBeforeSubprocess(t *testing.T) {
-	root, _ := newGitRepo(t, "a.txt", "one")
-	_, err := ChangedPaths(context.Background(), root, "abc; rm -rf /")
-	if !errors.Is(err, ErrBaseCommitUnknown) {
-		t.Fatalf("ChangedPaths(unsafe base) error = %v, want ErrBaseCommitUnknown", err)
+// TestChangedPathsTree_UnsafeInputsRejectedBeforeSubprocess proves a
+// baseCommit carrying shell-unsafe characters or a leading dash, and a tree
+// that is not an object id, are refused by the argv allowlist rather than
+// ever reaching exec.Command.
+func TestChangedPathsTree_UnsafeInputsRejectedBeforeSubprocess(t *testing.T) {
+	root, first := newGitRepo(t, "a.txt", "one")
+	tree := treeOf(t, root, first)
+	for _, base := range []string{"abc; rm -rf /", "--output=/tmp/x"} {
+		if _, err := ChangedPathsTree(context.Background(), root, base, tree); !errors.Is(err, ErrBaseCommitUnknown) {
+			t.Fatalf("ChangedPathsTree(base %q) error = %v, want ErrBaseCommitUnknown", base, err)
+		}
+	}
+	if _, err := ChangedPathsTree(context.Background(), root, first, "HEAD; true"); !errors.Is(err, ErrBaseCommitUnknown) {
+		t.Fatalf("ChangedPathsTree(unsafe tree) error = %v, want ErrBaseCommitUnknown", err)
 	}
 }
 
-// TestChangedPaths_UnknownRevisionRejectedByGit proves a syntactically
+// TestChangedPathsTree_UnknownRevisionRejectedByGit proves a syntactically
 // safe but nonexistent baseCommit is still refused as ErrBaseCommitUnknown
 // -- git's own real refusal, not a hand-authored check.
-func TestChangedPaths_UnknownRevisionRejectedByGit(t *testing.T) {
-	root, _ := newGitRepo(t, "a.txt", "one")
-	_, err := ChangedPaths(context.Background(), root, "0000000000000000000000000000000000000000")
+func TestChangedPathsTree_UnknownRevisionRejectedByGit(t *testing.T) {
+	root, first := newGitRepo(t, "a.txt", "one")
+	_, err := ChangedPathsTree(context.Background(), root, "0000000000000000000000000000000000000000", treeOf(t, root, first))
 	if !errors.Is(err, ErrBaseCommitUnknown) {
-		t.Fatalf("ChangedPaths(unknown revision) error = %v, want ErrBaseCommitUnknown", err)
+		t.Fatalf("ChangedPathsTree(unknown revision) error = %v, want ErrBaseCommitUnknown", err)
 	}
 }

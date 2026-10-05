@@ -21,6 +21,7 @@ import (
 	"github.com/acamarata/cascade/internal/fleet/journal"
 	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/internal/storage/storetest"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // fakeExecutor is a scripted Executor: command string -> ExecResult,
@@ -208,8 +209,30 @@ func TestExecute_JournalsStartAndResult(t *testing.T) {
 }
 
 func TestExecute_RequiresDeps(t *testing.T) {
-	if _, err := Execute(context.Background(), Deps{}, RunnerConfig{}, 1, 2, "x"); err == nil {
-		t.Fatal("expected an error for an empty Deps")
+	deps := newTestDeps(t, &fakeExecutor{})
+	for field, remove := range map[string]func(*Deps){
+		"DB":       func(d *Deps) { d.DB = nil },
+		"Clock":    func(d *Deps) { d.Clock = nil },
+		"Executor": func(d *Deps) { d.Exec = nil },
+	} {
+		t.Run(field, func(t *testing.T) {
+			bad := deps
+			remove(&bad)
+			_, err := Execute(context.Background(), bad, RunnerConfig{}, 1, 2, "x")
+			assertStreamError(t, err, cascade.KindInvalidInput, "requires a non-nil "+field)
+		})
+	}
+}
+
+func TestStepConclusionDistinguishesTimeout(t *testing.T) {
+	for _, tc := range []struct {
+		result StepResult
+		want   RunConclusion
+	}{{StepResult{}, ConclusionSuccess}, {StepResult{ExitCode: 1}, ConclusionFailure},
+		{StepResult{TimedOut: true}, ConclusionTimedOut}} {
+		if got := stepConclusion(tc.result); got != tc.want {
+			t.Fatalf("stepConclusion(%+v) = %s, want %s", tc.result, got, tc.want)
+		}
 	}
 }
 

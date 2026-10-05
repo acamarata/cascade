@@ -1,14 +1,15 @@
 // Purpose (this file): Affected's dispatch across the Go-stack path
 // (affected_go.go), the generic [ci].affected_cmd path (affected_cmd.go),
-// and the conservative TargetAll fallback; plus ChangedPaths, the real
-// `git diff --name-only` subprocess AC/S-59.T1's execution record feeds
-// baseCommit into.
+// and the conservative TargetAll fallback; plus ChangedPathsTree, the real
+// `git diff-tree --name-only` subprocess the streaming dispatcher feeds
+// the lease's base commit and the checkpoint tree into (P1-CI-01; it
+// replaced the live-HEAD diff ChangedPaths of P1-E32-W6-S65-T1).
 //
 // Inputs: worktreeRoot, a stack identifier string ("go" is the one
 // recognised value -- anything else, including "", is "unrecognised"),
 // a Config (only AffectedCmd matters here), and an already-computed
-// changed-path list (ChangedPaths' own output, or a caller-supplied list
-// in a test).
+// changed-path list (ChangedPathsTree's own output, or a caller-supplied
+// list in a test).
 // Outputs: the minimal []Target set whose transitive inputs include at
 // least one changed path, or []Target{TargetAll} when that cannot be
 // computed -- conservative-correct, never a false skip (06 §5.20).
@@ -20,9 +21,8 @@
 // compares Kind only, so a plain wrapped sentinel is what lets a caller's
 // errors.Is(err, ErrBaseCommitUnknown) mean THIS failure specifically,
 // not any KindInvalidInput error (lesson_errors_is_compares_kind_only).
-// SPORT: internal.ci.ChangedPaths/ADDED, internal.ci.ErrBaseCommitUnknown/ADDED
-//
-//	(P1-E32-W6-S65-T1).
+// SPORT: internal.ci.ErrBaseCommitUnknown/ADDED (P1-E32-W6-S65-T1).
+// internal.ci.ChangedPathsTree/ADDED (P1-CI-01).
 
 package ci
 
@@ -56,29 +56,41 @@ var ErrBaseCommitUnknown = errors.New("ci: base commit is missing or invalid")
 // depending on git's own error-message shape to classify the input.
 var baseCommitPattern = regexp.MustCompile(`^[A-Za-z0-9._/+-]+$`)
 
-// ChangedPaths returns the paths that differ between baseCommit and
-// worktreeRoot's current HEAD, via a real `git diff --name-only
-// <baseCommit>..HEAD` subprocess run inside worktreeRoot. A missing or
-// invalid baseCommit -- blank, unsafe, or a value git refuses to resolve
-// -- returns ErrBaseCommitUnknown rather than a raw git failure or a
-// panic. The result is never nil: zero changed paths is []string{}.
-func ChangedPaths(ctx context.Context, worktreeRoot, baseCommit string) ([]string, error) {
+// ChangedPathsTree returns the paths that differ between baseCommit and the
+// tree object tree, via a real `git diff-tree -r --name-only` subprocess
+// run in repoRoot (P1-CI-01, R18 B1). Both sides are read from the object
+// store: never the worktree index and never the live HEAD, so a path staged
+// or committed after the checkpoint cannot change the answer. A missing,
+// unsafe or unresolvable baseCommit, or a tree that is not an object id,
+// returns ErrBaseCommitUnknown rather than a raw git failure. The result is
+// never nil: zero changed paths is []string{}.
+func ChangedPathsTree(ctx context.Context, repoRoot, baseCommit, tree string) ([]string, error) {
 	trimmed := strings.TrimSpace(baseCommit)
-	if trimmed == "" || !baseCommitPattern.MatchString(trimmed) {
+	if trimmed == "" || strings.HasPrefix(trimmed, "-") || !baseCommitPattern.MatchString(trimmed) {
 		return nil, cascade.Wrapf(cascade.KindInvalidInput, ErrBaseCommitUnknown,
 			"ci: base commit %q is missing or invalid", baseCommit)
 	}
-	cmd := exec.CommandContext(ctx, "git", "diff", "--name-only", trimmed+"..HEAD")
-	cmd.Dir = worktreeRoot
+	if !objectIDPattern.MatchString(tree) {
+		return nil, cascade.Wrapf(cascade.KindInvalidInput, ErrBaseCommitUnknown,
+			"ci: tree %q is not an object id", tree)
+	}
+	cmd := exec.CommandContext(ctx, "git", "diff-tree", "-r", "--name-only", "--no-renames", "-z", trimmed, tree)
+	cmd.Dir = repoRoot
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		return nil, cascade.Wrapf(cascade.KindInvalidInput, errors.Join(ErrBaseCommitUnknown, err),
-			"ci: base commit %q could not be diffed against HEAD in %q: %s",
-			trimmed, worktreeRoot, strings.TrimSpace(stderr.String()))
+			"ci: base commit %q could not be diffed against tree %s in %q: %s",
+			trimmed, tree, repoRoot, strings.TrimSpace(stderr.String()))
 	}
-	return splitNonEmptyLines(stdout.String()), nil
+	out := []string{}
+	for _, p := range strings.Split(stdout.String(), "\x00") {
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out, nil
 }
 
 // affectedTargets is Affected's dispatch core. RequirementModel.Affected

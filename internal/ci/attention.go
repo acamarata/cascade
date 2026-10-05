@@ -196,6 +196,7 @@ func attentionSourceRef(c AttentionCandidate) string {
 // signature matches *supervision.Store.Push exactly; production passes
 // ci.Router (attention_push.go), which routes the same call through
 // supervision.RoutePush so the data-class check runs.
+// Implementations must be safe for concurrent use.
 type AttentionPusher interface {
 	Push(ctx context.Context, item supervision.AttentionItem) (supervision.AttentionItem, error)
 }

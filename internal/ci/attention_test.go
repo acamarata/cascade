@@ -12,6 +12,7 @@ package ci
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/context/scope"
@@ -26,6 +27,7 @@ import (
 // recorded slice, so the Existing/Acked probe is exercised on the fake
 // path as well as against the real Store (attention_queue_test.go).
 type fakePusher struct {
+	mu       sync.Mutex
 	pushed   []supervision.AttentionItem
 	failWith error
 	// notify, when non-nil, receives every accepted push. The bus
@@ -36,6 +38,8 @@ type fakePusher struct {
 }
 
 func (f *fakePusher) Push(_ context.Context, item supervision.AttentionItem) (supervision.AttentionItem, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.failWith != nil {
 		return supervision.AttentionItem{}, f.failWith
 	}
@@ -55,6 +59,8 @@ func (f *fakePusher) Push(_ context.Context, item supervision.AttentionItem) (su
 func (f *fakePusher) ListInScopes(
 	_ context.Context, scopes []supervision.ScopeRef, _ supervision.Filter,
 ) ([]supervision.AttentionItem, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	var out []supervision.AttentionItem
 	for _, item := range f.pushed {
 		for _, s := range scopes {
