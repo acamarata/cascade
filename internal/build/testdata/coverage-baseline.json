@@ -14,6 +14,7 @@
   "internal/client": { "tier": "core", "floor": 85.0, "baseline": 90.9 },
   "internal/conductor": { "tier": "core", "floor": 85.0, "baseline": 91.5 },
   "internal/context": { "tier": "core", "floor": 85.0, "baseline": 93.5 },
+  "internal/context/generate": { "tier": "core", "floor": 85.0, "baseline": 91.6 },
   "internal/context/hydration": { "tier": "core", "floor": 85.0, "baseline": 91.8 },
   "internal/context/scope": { "tier": "core", "floor": 85.0, "baseline": 87.6 },
   "internal/conversation": { "tier": "core", "floor": 85.0, "baseline": 91.7 },
