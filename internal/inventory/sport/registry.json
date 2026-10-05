@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05T00:34:05Z",
+  "generated_at": "2026-10-05T00:52:29Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2092,6 +2092,12 @@
           "status": "ADD",
           "ticket": "P1-E10-W3-S20-T1",
           "raw": "cli.provider.add/ADD (P1-E10-W3-S20-T1 follow-up)."
+        },
+        {
+          "file": "cmd/cascade/provider_registry_adapter_test.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "cli.provider.add/ADD (pool membership)."
         }
       ],
       "statuses": [
@@ -3548,12 +3554,6 @@
         {
           "file": "cmd/cascade/profile_server_stub_test.go",
           "line": 7,
-          "status": "ADD",
-          "raw": "cmd/cascade (ADD, coverage-floor fix)."
-        },
-        {
-          "file": "cmd/cascade/provider_registry_adapter_test.go",
-          "line": 6,
           "status": "ADD",
           "raw": "cmd/cascade (ADD, coverage-floor fix)."
         },
@@ -22364,6 +22364,20 @@
       ]
     },
     {
+      "name": "internal/providers/dispatch rotation tests",
+      "sites": [
+        {
+          "file": "internal/providers/dispatch/rotation_test.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal/providers/dispatch rotation tests (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/providers/intake credential redaction",
       "sites": [
         {
@@ -29470,6 +29484,12 @@
           "raw": "provider.intake/ADD (P1-E10-W3-S20-T1)."
         },
         {
+          "file": "internal/providers/intake/pool.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "provider.intake/ADD."
+        },
+        {
           "file": "internal/providers/intake/transport.go",
           "line": 18,
           "status": "ADD",
@@ -31971,7 +31991,7 @@
       ]
     }
   ],
-  "total_sites": 3040,
+  "total_sites": 3042,
   "unspecified_count": 160,
   "multi_status_count": 86
 }
