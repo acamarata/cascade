@@ -14,7 +14,7 @@ path, in place, from their permanent home:
 - `internal/context/testdata/transcripts/codex-sample-redacted.jsonl`
 - `internal/context/testdata/transcripts/opencode-sample-redacted.jsonl`
   (not used by this package's tailer — opencode has no transcript file;
-  see docs/adrs/ADR-E09T6-harness-transcript-stability.md)
+  see docs/adrs/ADR-harness-transcript-stability.md)
 
 Full provenance (tool, version, capture date, what was redacted and why)
 is documented in `internal/context/testdata/transcripts/README.md`, per

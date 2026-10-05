@@ -1,8 +1,7 @@
 // Package coverage (this file): unit tests over synthetic fixtures
-// (always run, including in public CI) plus the guarded live-tree
-// assertion, which only runs when .claude/planning/p1/phase exists
-// locally (R-14.85 — the planning tree is gitignored and CI never sees
-// it).
+// (always run, including in public CI). Planning-tree fixtures are
+// t.TempDir roots; the live-tree diagnostic lives in gap_test.go and is
+// local-only.
 package coverage
 
 import (
@@ -161,7 +160,7 @@ func TestExtractCitations(t *testing.T) {
 
 func TestResolveTicketCitation(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, ".claude", "planning", "p1", "phase", "epics",
+	writeFile(t, filepath.Join(root, "phase", "epics",
 		"E-K", "waves", "W-3", "sprints", "S-23", "tickets", "T-6.yaml"), "id: P1-E11-W3-S23-T6\n")
 
 	resolved, err := ResolveTicketCitation(root, "K/S-23.T6")

@@ -2,7 +2,7 @@
 
 Redacted samples of the on-disk transcript formats produced by three coding
 harnesses: CC, codex, and opencode. Captured to support the stability
-analysis in `docs/adrs/ADR-E09T6-harness-transcript-stability.md`. This
+analysis in `docs/adrs/ADR-harness-transcript-stability.md`. This
 directory is the permanent home of these fixtures per the ticket's
 fixture-home note; they are not moved or duplicated when the parser they
 inform (L/S-24.T2) is built — that parser reads these files directly.

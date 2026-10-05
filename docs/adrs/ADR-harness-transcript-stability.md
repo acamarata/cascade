@@ -1,4 +1,4 @@
-# ADR-E09T6: Harness transcript format stability
+# ADR: Harness transcript format stability
 
 - Status: Accepted (spike finding)
 - Ticket: P1-E05-W2-S09-T6 (Art.12 risk spike, no dep on and no scope claim
