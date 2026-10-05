@@ -40,7 +40,8 @@ func TestInstallElevator_NoInputRefusesBeforeTouchingKeystore(t *testing.T) {
 	touched := false
 	ks := newFakeElevationKeystore(t)
 	e, _ := newTestInstallElevator(t, ks, func(string) string { return "1" })
-	e.keystore = func(string) elevation.ElevationKeystore { touched = true; return ks }
+	selected := e.keystore
+	e.keystore = func(dir string) elevation.Custody { touched = true; return selected(dir) }
 	res, err := e.Elevate(context.Background(), testElevationRequest())
 	if err == nil {
 		t.Fatal("Elevate: err = nil, want a CASCADE_NO_INPUT refusal")
@@ -127,26 +128,14 @@ func TestInstallElevator_WrongEnrolledKeyRefuses(t *testing.T) {
 	}
 }
 
-// TestInstallElevator_BuildKeystoreDefault_UsesRealSelectKeystore drives
-// buildKeystore's REAL default (e.keystore == nil): elevation.SelectKeystore
-// only probes fileKeyExists + IsAvailable, no prompt, no write, so it is
-// safe to call directly on a TempDir (round-1 CR fix item 10).
-func TestInstallElevator_BuildKeystoreDefault_UsesRealSelectKeystore(t *testing.T) {
-	dir := t.TempDir()
-	e := newInstallElevator(func() (runtime.PathProvider, error) { return tempDataPathProvider{dir: dir}, nil },
-		testkit.NewFrozenClock(fixedInstallTestTime), func(string) string { return "" })
-	ks := e.buildKeystore(dir)
-	if ks == nil {
-		t.Fatal("buildKeystore(dir) = nil, want the real elevation.SelectKeystore result")
-	}
-	if ks.Tier() == "" {
-		t.Error("Tier() = \"\", want a real StorageTier name from the platform probe")
+// TestInstallElevator_InjectedCustody uses an isolated source without host probes.
+func TestInstallElevator_InjectedCustody(t *testing.T) {
+	e, dir := newTestInstallElevator(t, newFakeElevationKeystore(t), func(string) string { return "" })
+	if c := e.buildKeystore(dir); c.Tier() != elevation.CustodyPlatform {
+		t.Fatalf("tier=%s", c.Tier())
 	}
 }
 
-// TestInstallElevator_BuildTrustBackendDefault_UsesRealFileBackend drives
-// buildTrustBackend's REAL default (e.trustBackend == nil): a real, empty
-// (unenrolled) file-backed trust store over a TempDir.
 func TestInstallElevator_BuildTrustBackendDefault_UsesRealFileBackend(t *testing.T) {
 	dir := t.TempDir()
 	e := newInstallElevator(func() (runtime.PathProvider, error) { return tempDataPathProvider{dir: dir}, nil },
@@ -158,5 +147,27 @@ func TestInstallElevator_BuildTrustBackendDefault_UsesRealFileBackend(t *testing
 	store := elevation.NewElevationTrustStore(backend, testkit.NewFrozenClock(fixedInstallTestTime))
 	if _, err := store.GetPubKey(); err == nil {
 		t.Fatal("GetPubKey on a fresh, unenrolled real file backend: err = nil, want the not-found refusal")
+	}
+}
+
+type countingInstallKey struct {
+	*fakeElevationKeystore
+	signs int
+}
+
+func (k *countingInstallKey) Sign(p []byte) ([]byte, error) {
+	k.signs++
+	return k.fakeElevationKeystore.Sign(p)
+}
+
+func TestInstallElevatorRefusesFileTier(t *testing.T) {
+	ks := &countingInstallKey{fakeElevationKeystore: newFakeElevationKeystore(t)}
+	e, dir := newTestInstallElevator(t, ks, func(string) string { return "" })
+	enroll(t, ks, dir)
+	sel := elevation.Selector{DataDir: dir, Sources: []elevation.CustodySource{{Tier: elevation.CustodyFile, Name: "file", Open: func(string) (elevation.ElevationKeystore, bool) { return ks, true }}}}
+	e.keystore = func(string) elevation.Custody { return sel.Select() }
+	res, err := e.Elevate(t.Context(), testElevationRequest())
+	if tier, ok := elevation.CustodyTierOf(err); !ok || tier != elevation.CustodyFile || res.Approved || ks.signs != 0 {
+		t.Fatalf("file refusal=%v approved=%v", err, res.Approved)
 	}
 }

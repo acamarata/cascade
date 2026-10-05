@@ -42,7 +42,7 @@ import (
 // Both dependencies are constructed lazily, per invocation: building the
 // command tree must never probe the platform keystore.
 type elevationGate struct {
-	newKeystore     func() elevation.ElevationKeystore
+	newKeystore     func() elevation.Custody
 	newTrustBackend func() elevation.Backend
 	clock           elevation.Clock
 	getenv          runtime.Getenv
@@ -50,7 +50,7 @@ type elevationGate struct {
 
 // newElevationGate builds the production gate.
 func newElevationGate(
-	newKeystore func() elevation.ElevationKeystore,
+	newKeystore func() elevation.Custody,
 	newTrustBackend func() elevation.Backend,
 	clock elevation.Clock,
 	getenv runtime.Getenv,
@@ -65,6 +65,12 @@ func newElevationGate(
 // CASCADE_NO_INPUT=1 (which forbids the local-presence prompt the flow
 // needs) are all "cannot prove local presence", never "proceed".
 func (g *elevationGate) Authorize(_ context.Context, verb string) error {
+	if g.newKeystore == nil {
+		return policy.ErrElevationRequired(verb, false, false)
+	}
+	if _, err := g.newKeystore().Signer(); err != nil {
+		return err
+	}
 	if g.getenv != nil && g.getenv("CASCADE_NO_INPUT") == "1" {
 		return cascade.Newf(cascade.KindElevationRequired,
 			"vault: %s needs local presence and CASCADE_NO_INPUT=1 forbids prompting for it", verb)
@@ -80,9 +86,7 @@ func (g *elevationGate) Authorize(_ context.Context, verb string) error {
 // this gate cannot construct reports false, so the policy layer refuses.
 func (g *elevationGate) preconditions() (enrolled, available bool) {
 	if g.newKeystore != nil {
-		if ks := g.newKeystore(); ks != nil {
-			available = ks.IsAvailable()
-		}
+		available = g.newKeystore().Tier().SatisfiesElevation()
 	}
 	if g.newTrustBackend != nil {
 		if backend := g.newTrustBackend(); backend != nil {

@@ -33,7 +33,7 @@ func TestElevationMiddleware_Windows_RefusesEvenWithValidAttestation(t *testing.
 		handlerCalled = true
 		return "db-password", nil
 	}
-	mw := ElevationMiddleware(ledger, trust, clock)
+	mw := ElevationMiddleware(ElevationDeps{Ledger: ledger, Trust: trust, Clock: clock, Custody: func() (string, bool) { return "platform", true }})
 	wrapped := mw("vault.get", handler)
 
 	// A first, unattested call must refuse too - but with the platform

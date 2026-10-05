@@ -36,8 +36,11 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
+	"reflect"
+	goruntime "runtime"
 	"time"
 
 	"github.com/acamarata/cascade/internal/runtime"
@@ -172,7 +175,8 @@ func (s *ElevationTrustStore) IsEnrolled() bool {
 
 // fileBackend is the production Backend: one JSON file under dir.
 type fileBackend struct {
-	path string
+	path  string
+	owner func(os.FileInfo) bool
 }
 
 // NewFileBackend returns a Backend that persists its record at
@@ -182,11 +186,27 @@ func NewFileBackend(dataDir string) Backend {
 }
 
 func (b fileBackend) Load() (TrustRecord, bool, error) {
-	data, err := os.ReadFile(b.path)
+	f, err := os.Open(b.path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return TrustRecord{}, false, nil
 		}
+		return TrustRecord{}, false, err
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		return TrustRecord{}, false, err
+	}
+	owner := b.owner
+	if owner == nil {
+		owner = trustOwner
+	}
+	if goruntime.GOOS != "windows" && (info.Mode().Perm() != 0600 || !owner(info)) {
+		return TrustRecord{}, false, cascade.New(cascade.KindIntegrity, "elevation: trust record requires mode 0600 and current owner")
+	}
+	data, err := io.ReadAll(f)
+	if err != nil {
 		return TrustRecord{}, false, err
 	}
 	var rec TrustRecord
@@ -206,4 +226,12 @@ func (b fileBackend) Save(rec TrustRecord) error {
 		return err
 	}
 	return runtime.WriteBytesAtomic(b.path, data)
+}
+func trustOwner(info os.FileInfo) bool {
+	stat := reflect.ValueOf(info.Sys())
+	if stat.Kind() != reflect.Pointer || stat.IsNil() {
+		return false
+	}
+	uid := stat.Elem().FieldByName("Uid")
+	return uid.IsValid() && uid.CanUint() && uid.Uint() == uint64(os.Geteuid())
 }

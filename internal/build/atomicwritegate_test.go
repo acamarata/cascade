@@ -45,9 +45,9 @@ func TestNoBareFileWrites_Live(t *testing.T) {
 	if len(rowProblems) != 0 {
 		t.Fatalf("exemption list: %v", rowProblems)
 	}
-	// Guard the absence check against an empty walk: the gate saw real
-	// writes, and every one of them sits under a row.
-	if scan.files < 500 || len(scan.hits) == 0 {
+	// Guard the absence check against an empty walk. After the final
+	// exemption retires, a complete scan correctly finds zero bare writes.
+	if scan.files < 500 {
 		t.Fatalf("live scan parsed %d files with %d WriteFile references; the walk proves nothing", scan.files, len(scan.hits))
 	}
 	if problems := checkAtomicWriteOwnedRows(rows); len(problems) != 0 {
@@ -59,9 +59,7 @@ func TestNoBareFileWrites_Live(t *testing.T) {
 // atomicWriteOwnedRows is the only exemption set the gate may carry: the
 // key write its owning ticket still has to move to
 // runtime.CreateFileAtomic. Another row needs this list edited with it.
-var atomicWriteOwnedRows = map[[3]string]bool{
-	{"internal/elevation/keystore_file.go", "fileKeystore.GenerateKey", "P1-SEC-00"}: true,
-}
+var atomicWriteOwnedRows = map[[3]string]bool{}
 
 // checkAtomicWriteOwnedRows reports every row outside the owned set and
 // every owned row that is missing, so the live list must equal the set.
@@ -89,23 +87,12 @@ func checkAtomicWriteOwnedRows(rows []atomicWriteRow) []string {
 // fail: the owned row passes, an extra row fails, and a dropped owned row
 // fails.
 func TestAtomicWriteOwnedRows_RejectsExtraRow(t *testing.T) {
-	owned := []atomicWriteRow{
-		{File: "internal/elevation/keystore_file.go", Symbol: "fileKeystore.GenerateKey", Owner: "P1-SEC-00", Count: 1},
+	if problems := checkAtomicWriteOwnedRows(nil); len(problems) != 0 {
+		t.Fatalf("empty exemption set: %v", problems)
 	}
-	if problems := checkAtomicWriteOwnedRows(owned); len(problems) != 0 {
-		t.Fatalf("the owned row must pass, got %v", problems)
-	}
-	extra := append(append([]atomicWriteRow{}, owned...), atomicWriteRow{File: "internal/a/a.go", Symbol: "Save", Owner: "P1-CORE-99", Count: 1})
-	if problems := checkAtomicWriteOwnedRows(extra); len(problems) != 1 || !strings.Contains(problems[0], "unexpected exemption row internal/a/a.go Save") {
-		t.Fatalf("an extra row must fail on that row alone, got %v", problems)
-	}
-	if problems := checkAtomicWriteOwnedRows(owned[:0]); len(problems) != 1 || !strings.Contains(problems[0], "owned row missing: internal/elevation/keystore_file.go") {
-		t.Fatalf("a dropped owned row must fail, got %v", problems)
-	}
-	// Same file and symbol under a different owner is a different row.
-	swapped := []atomicWriteRow{{File: owned[0].File, Symbol: owned[0].Symbol, Owner: "P1-CORE-98", Count: 1}}
-	if problems := checkAtomicWriteOwnedRows(swapped); len(problems) != 2 {
-		t.Fatalf("a re-owned row must fail as one extra and one missing, got %v", problems)
+	extra := []atomicWriteRow{{File: "internal/elevation/keystore_file.go", Symbol: "fileKeystore.GenerateKey", Owner: "retired", Count: 1}}
+	if problems := checkAtomicWriteOwnedRows(extra); len(problems) != 1 {
+		t.Fatalf("retired exemption accepted: %v", problems)
 	}
 }
 

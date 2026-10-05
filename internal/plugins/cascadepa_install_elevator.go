@@ -43,7 +43,6 @@ package plugins
 
 import (
 	"context"
-	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	goruntime "runtime"
@@ -81,7 +80,7 @@ type installElevator struct {
 	getenv       func(string) string
 	ledger       *rpc.NonceLedger
 
-	keystore     func(dataDir string) elevation.ElevationKeystore
+	keystore     func(dataDir string) elevation.Custody
 	trustBackend func(dataDir string) elevation.Backend
 }
 
@@ -101,29 +100,20 @@ func (e *installElevator) Elevate(ctx context.Context, req install.ElevationRequ
 	}
 	dataDir := paths.DataDir()
 
-	ks := e.buildKeystore(dataDir)
-	if ks.Tier() == elevation.TierWindowsTier2 {
-		return install.ElevationResult{}, elevation.ErrWindowsTier2()
-	}
-
-	trustStore := elevation.NewElevationTrustStore(e.buildTrustBackend(dataDir), e.clock)
-	pubB64, err := trustStore.GetPubKey()
+	custody := e.buildKeystore(dataDir)
+	ks, err := custody.Signer()
 	if err != nil {
 		return install.ElevationResult{}, err
 	}
-	fingerprint, err := elevation.Fingerprint(pubB64)
+	fingerprint, pub, err := elevation.BoundTrust(custody, e.buildTrustBackend(dataDir), e.clock)
 	if err != nil {
 		return install.ElevationResult{}, err
 	}
-	pubBytes, err := base64.StdEncoding.DecodeString(pubB64)
-	if err != nil || len(pubBytes) != ed25519.PublicKeySize {
-		return install.ElevationResult{}, cascade.New(cascade.KindIntegrity, "cascade-pa install: enrolled elevation public key is invalid")
-	}
-	trust := rpc.MapTrustStore{fingerprint: ed25519.PublicKey(pubBytes)}
+	trust := rpc.MapTrustStore{fingerprint: pub}
 
 	args := installElevationArgs(req)
 	next := func(context.Context, json.RawMessage) (any, error) { return "approved", nil }
-	gate := rpc.ElevationMiddleware(e.ledger, trust, e.clock)(installElevationMethod, next)
+	gate := rpc.ElevationMiddleware(rpc.ElevationDeps{Ledger: e.ledger, Trust: trust, Clock: e.clock, Custody: func() (string, bool) { return string(custody.Tier()), custody.Tier().SatisfiesElevation() }})(installElevationMethod, next)
 
 	nonce, err := issueInstallChallenge(ctx, gate, args)
 	if err != nil {
@@ -150,11 +140,11 @@ func (e *installElevator) Elevate(ctx context.Context, req install.ElevationRequ
 	return install.ElevationResult{Approved: true, Witness: witness}, nil
 }
 
-func (e *installElevator) buildKeystore(dataDir string) elevation.ElevationKeystore {
+func (e *installElevator) buildKeystore(dataDir string) elevation.Custody {
 	if e.keystore != nil {
 		return e.keystore(dataDir)
 	}
-	return elevation.SelectKeystore(dataDir)
+	return elevation.SelectCustody(dataDir)
 }
 
 func (e *installElevator) buildTrustBackend(dataDir string) elevation.Backend {

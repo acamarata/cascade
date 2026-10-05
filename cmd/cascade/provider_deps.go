@@ -46,7 +46,7 @@ func providerDepsFor(paths runtime.PathProvider) providerDeps {
 			return secrets.SelectCustody(secrets.Config{Service: vaultService, Dir: dir})
 		},
 		Gate: newElevationGate(
-			productionKeystore,
+			productionCustody,
 			func() elevation.Backend { return elevation.NewFileBackend(paths.DataDir()) },
 			runtime.NewSystemClock(), getenv,
 		),

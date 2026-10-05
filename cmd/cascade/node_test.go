@@ -46,7 +46,7 @@ func (fakeEnrolledBackend) Save(elevation.TrustRecord) error { return nil }
 func allowingGate(env map[string]string) *elevationGate {
 	getenv := func(k string) string { return env[k] }
 	return newElevationGate(
-		func() elevation.ElevationKeystore { return fakeAvailableKeystore{} },
+		(elevation.Selector{Sources: []elevation.CustodySource{{Tier: elevation.CustodyPlatform, Name: "test", Open: func(string) (elevation.ElevationKeystore, bool) { return fakeAvailableKeystore{}, true }}}}).Select,
 		func() elevation.Backend { return fakeEnrolledBackend{} },
 		runtime.NewFixedClock(time.Now()), getenv,
 	)

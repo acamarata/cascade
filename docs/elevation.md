@@ -1,103 +1,34 @@
 # Elevation
 
-Some verbs change what cascade is allowed to do rather than what it is
-doing: enabling remote elevation, turning on the remote plugin runtime,
-widening a policy or sensitivity tier, purging data on uninstall. Those
-verbs are *elevated*. They require an attestation signed by a key enrolled
-on the device, produced only after the device owner authenticates.
+Elevated verbs require custody that proves local presence. The selector ranks sources by their registered custody tier, independently of the keystore's storage label or registration order.
 
-This page states what that protection is and, just as importantly, what it
-is not.
+| Custody | Elevation |
+| --- | --- |
+| platform | Allowed through the protected platform source |
+| presence | Allowed through a registered presence source |
+| file | Refused in release builds; signing exists only with the `devkeys` build tag |
+| none | Refused |
 
-## Read this first: elevation is unavailable in the standard release binaries
+A file key that reports an OS keychain storage label remains file custody. An existing file key never outranks an available platform or presence source. Enrollment never falls back to file storage after a protected source fails.
 
-The published release artifacts are built with cgo disabled. Both
-hardware-assisted keystores need cgo:
+## Release availability
 
-- macOS keychain access needs the Security and LocalAuthentication
-  frameworks.
-- Linux authentication needs PAM, and is additionally behind a `pam` build
-  tag.
+The cgo-free macOS and Linux release builds refuse elevated operations until a protected helper or presence source is available. Linux PAM and keyring storage do not qualify as platform custody: the stored key can be read without authentication. Windows remains tier 2 and refuses elevation.
 
-Neither is compiled into a cgo-free binary. What ships instead is a
-fallback keystore that refuses every operation: it reports itself
-unavailable, and key generation, public-key retrieval and signing all
-return an unavailable error.
+Custody refusals use `KindUnsupported`, JSON-RPC code `-32012`, and data containing `reason: ELEVATION_CUSTODY_TIER` and the selected tier. They do not issue a challenge or run an elevated handler. The read-only custody report exposes the selected tier, source, enrollment and binding status; doctor integration is separate.
 
-The practical consequence is that **a standard release binary cannot enroll
-a key and cannot sign an attestation, so no elevated verb can be
-authorized.** Elevated verbs refuse. Non-elevated verbs are unaffected.
+## Enrollment and stale file keys
 
-This is deliberate in one respect and a real limitation in another. The
-fallback refuses rather than quietly writing a signing key to a file, so
-nothing weaker than advertised is shipped and no one is told they have
-local authentication when they do not. But the feature genuinely does not
-work in the artifact most people install.
+The enrolled public key must equal the selected custody key. A swapped trust record refuses. On POSIX, trust records must have mode `0600` and belong to the effective user.
 
-To use elevation today, build from source with cgo enabled, and on Linux
-with the `pam` tag and PAM headers present:
+When a protected source becomes available, an old enrollment bound to `elevation.key` requires explicit replacement:
 
-```bash
-CGO_ENABLED=1 go build ./cmd/cascade                   # macOS
-CGO_ENABLED=1 go build -tags pam ./cmd/cascade         # Linux
+```text
+cascade elevate-helper --enroll --replace-file-tier
 ```
 
-Windows is not supported: elevated verbs refuse there by design.
+Replacement is allowed only when the old trust record matches the file key. It stores the new trust record before removing the stale key. A record for an unrelated key remains untouched.
 
-## What the key protection actually is
+## Signing
 
-The signing key is Ed25519. On macOS it is generated in Go and its private
-half is stored in the keychain behind an access control that requires
-device-owner presence, restricted to this device and available only while
-the device is unlocked. It is never written in plaintext, and never stored
-in cascade's own configuration or secret storage.
-
-**The key is not hardware-bound.** Apple's Secure Enclave generates only
-P-256 keys and cannot hold an Ed25519 key, and the attestation format is
-verified with Ed25519. A hardware-backed Ed25519 signing operation is
-therefore not available from Apple's public APIs. The key is generated in
-software, and its material is present in process memory when it is created
-and each time it signs.
-
-That is a weaker guarantee than a key that never leaves a secure element.
-An attacker who can execute code as your user at the moment you approve a
-signature is in a meaningfully better position than they would be against
-hardware-held key material. The operating system still gates access, and
-approval still requires your presence, so this is far from no protection.
-It is simply not the protection that the phrase "hardware-backed" would
-imply, which is why this page does not use it.
-
-## Trust on first use
-
-The daemon records the fingerprint of the first key enrolled on the device.
-
-A later enrollment presenting a *different* key is refused, not accepted
-and not silently substituted. That refusal is the entire value of the
-scheme: without it, anyone able to run the enrollment step could replace
-the trusted key with their own and mint valid attestations from then on.
-
-If the legitimate key is genuinely lost, recovery means removing the
-existing trust record deliberately, not overwriting it by accident.
-
-## Authentication and signing are one step
-
-Authentication and signing happen in the same call, and no authentication
-result is stored between calls. There is no window in which a prior
-approval can be reused for a later signature.
-
-Each attestation is bound to one request, one action, and one nonce, and
-expires five minutes after it is issued. A nonce is single-use: consuming
-it twice fails, including under concurrent attempts. An attestation issued
-for one method or one set of parameters is rejected against another.
-
-## When a check cannot decide
-
-Every check refuses when it cannot prove the safe case. An unparseable
-request, an unrecognised value, a missing enrollment, a fingerprint
-mismatch, an unavailable keystore: each one refuses rather than proceeding.
-
-The reason is narrow and worth stating. A check that returns "allowed" for
-input it could not read hands an attacker a bypass, because the attacker
-picks the input. Refusing on unclear input costs a legitimate user one
-authorization prompt on a malformed request. Allowing it costs the user the
-protection.
+Authentication and signing share one operation. Attestations bind the request, action and nonce and expire after five minutes. Nonces are single use. The `devkeys` tag permits file signing for development; it does not prove local presence and is unsuitable for release artifacts.

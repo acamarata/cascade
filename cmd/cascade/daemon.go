@@ -249,24 +249,23 @@ func loadDaemonConfig(ctx context.Context, deps daemonDeps) (*runtime.Config, ru
 
 // productionElevationPrecondition wires the real §D-24 daemonless
 // elevation precondition check (internal/policy.IsDaemonlessElevationAllowed's
-// two bool inputs) against internal/elevation's real platform keystore
-// and TOFU trust store. This is the composition-root half of the seam
-// internal/runtime.ElevationPrecondition documents: internal/elevation
-// imports internal/runtime (ElevationTrustStore's Clock/Backend types), so
-// internal/runtime cannot import internal/elevation back — only cmd/,
-// which imports both, can close this wiring. A resolution failure (paths
+// two bool inputs) against custody and the trust store. A resolution failure (paths
 // unavailable) fails closed: both preconditions report false, matching
 // R-14.163's "cannot prove available" default the same way
 // internal/runtime.DaemonlessElevationPrecondition already does for a nil
 // function.
 func productionElevationPrecondition(paths runtime.PathProvider) runtime.ElevationPrecondition {
+	return custodyElevationPrecondition(paths, elevation.SelectCustody)
+}
+
+func custodyElevationPrecondition(paths runtime.PathProvider, selectCustody func(string) elevation.Custody) runtime.ElevationPrecondition {
 	return func() (helperEnrolled, authenticatorAvailable bool) {
 		if paths == nil || paths.DataDir() == "" {
 			return false, false
 		}
-		ks := productionKeystore()
+		custody := selectCustody(paths.DataDir())
 		trust := elevation.NewElevationTrustStore(elevation.NewFileBackend(paths.DataDir()), runtime.SystemClock{})
-		return trust.IsEnrolled(), ks.IsAvailable()
+		return trust.IsEnrolled(), custody.Tier().SatisfiesElevation()
 	}
 }
 

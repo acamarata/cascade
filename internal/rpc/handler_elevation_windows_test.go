@@ -28,7 +28,7 @@ func TestHandler_Windows_ElevationDeniedHasNoNonce(t *testing.T) {
 	clock := runtime.NewFixedClock(time.Unix(3000, 0))
 	ledger := NewNonceLedger(clock)
 	trust := MapTrustStore{}
-	reg.Use(ElevationMiddleware(ledger, trust, clock))
+	reg.Use(ElevationMiddleware(ElevationDeps{Ledger: ledger, Trust: trust, Clock: clock, Custody: func() (string, bool) { return "platform", true }}))
 
 	rec := doRPC(ctxWithPeerCred(501, true), h, `{"jsonrpc":"2.0","method":"vault.get","id":1}`)
 	var env ResponseEnvelope

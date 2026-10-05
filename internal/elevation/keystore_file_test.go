@@ -1,3 +1,5 @@
+//go:build devkeys
+
 package elevation
 
 import (
@@ -158,25 +160,6 @@ func TestTheFileTierAlwaysNamesItself(t *testing.T) {
 // asserts the OUTCOME an operator can observe — whichever keystore is
 // returned reports a tier, and on a host with no platform keystore that
 // tier is the file one.
-func TestSelectKeystoreNeverDowngradesSilently(t *testing.T) {
-	dir := t.TempDir()
-	got := SelectKeystore(dir)
-	if NewKeystore().IsAvailable() {
-		if got.Tier() == TierFile {
-			t.Error("a host with a platform keystore was downgraded to the file tier")
-		}
-		return
-	}
-	if got.Tier() != TierFile {
-		t.Errorf("Tier() = %q on a host with no platform keystore, want %q", got.Tier(), TierFile)
-	}
-	// With no directory there is nothing to fall back TO, so the platform
-	// keystore's own honest refusal is returned rather than a file keystore
-	// that cannot store anything.
-	if SelectKeystore("").Tier() == TierFile {
-		t.Error("a file keystore was selected with no directory to put a key in")
-	}
-}
 
 // TestAKeystoreWithNowhereToWriteRefuses is the failure mode that would be
 // worst if it were silent: a keystore constructed with no data directory
@@ -237,8 +220,3 @@ func TestPubKeyB64DistinguishesUnenrolledFromDamaged(t *testing.T) {
 // than only on hosts with no platform keystore: with no directory there is
 // nothing to fall back TO, so returning a file keystore would hand the
 // caller one that cannot store anything and would only fail later.
-func TestSelectKeystoreNeverReturnsAFileTierWithNoDirectory(t *testing.T) {
-	if got := SelectKeystore("").Tier(); got == TierFile {
-		t.Errorf("Tier() = %q with no directory, want the platform keystore's own tier", got)
-	}
-}

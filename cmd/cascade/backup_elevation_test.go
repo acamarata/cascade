@@ -11,6 +11,7 @@ package main
 import (
 	"crypto/ed25519"
 	"encoding/base64"
+	"os"
 	"strings"
 	"testing"
 
@@ -27,6 +28,7 @@ import (
 // only ever used against the daemonless policy check, never real
 // cryptographic verification.
 type signingKeystore struct {
+	dir  string
 	priv ed25519.PrivateKey
 	pub  ed25519.PublicKey
 }
@@ -37,7 +39,11 @@ func newSigningKeystore(t *testing.T) signingKeystore {
 	if err != nil {
 		t.Fatalf("ed25519.GenerateKey: %v", err)
 	}
-	return signingKeystore{priv: priv, pub: pub}
+	dir := t.TempDir()
+	for _, name := range []string{"HOME", "USERPROFILE", "CASCADE_HOME"} {
+		t.Setenv(name, dir)
+	}
+	return signingKeystore{dir: dir, priv: priv, pub: pub}
 }
 
 func (k signingKeystore) GenerateKey() error { return nil }
@@ -68,7 +74,7 @@ func (enrolledSigningBackend) Save(elevation.TrustRecord) error { return nil }
 // newBackupAuthorizer with, minus the real Keychain/PAM probe.
 func testElevateHelperDeps(ks elevation.ElevationKeystore, backend elevation.Backend, env map[string]string) elevateHelperDeps {
 	return elevateHelperDeps{
-		Keystore:     func() elevation.ElevationKeystore { return ks },
+		Keystore:     (elevation.Selector{DataDir: os.Getenv("CASCADE_HOME"), Sources: []elevation.CustodySource{{Tier: elevation.CustodyPlatform, Name: "test", Open: func(string) (elevation.ElevationKeystore, bool) { return ks, ks.Tier() != elevation.TierWindowsTier2 }}}}).Select,
 		TrustBackend: func() elevation.Backend { return backend },
 		Clock:        runtime.NewSystemClock(),
 		Getenv:       func(k string) string { return env[k] },
@@ -153,5 +159,22 @@ func TestBackupAuthorizerRejectsUnenrolledKey(t *testing.T) {
 	_, err := authorize(t.Context(), cmd, "backup.create", []byte(`{"target":"t"}`), true)
 	if err == nil {
 		t.Fatal("an attestation signed by a key other than the enrolled one was accepted")
+	}
+}
+
+type refusingFileKey struct {
+	signingKeystore
+	signs int
+}
+
+func (k *refusingFileKey) Sign(p []byte) ([]byte, error) { k.signs++; return k.signingKeystore.Sign(p) }
+func TestBackupAuthorizerRefusesFileTier(t *testing.T) {
+	k := &refusingFileKey{signingKeystore: newSigningKeystore(t)}
+	pub, _ := k.PubKeyB64()
+	deps := testElevateHelperDeps(k, enrolledSigningBackend{pubKeyB64: pub}, nil)
+	deps.Keystore = testCustody(t, k, elevation.CustodyFile)
+	_, err := newBackupAuthorizer(deps)(t.Context(), &cobra.Command{}, "backup.create", []byte("{}"), true)
+	if tier, ok := elevation.CustodyTierOf(err); !ok || tier != elevation.CustodyFile || k.signs != 0 {
+		t.Fatalf("refusal=%v signs=%d", err, k.signs)
 	}
 }

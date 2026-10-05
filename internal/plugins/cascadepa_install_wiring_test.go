@@ -22,7 +22,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/acamarata/cascade/internal/elevation"
 	"github.com/acamarata/cascade/internal/plugins/resolver"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/testkit"
@@ -216,7 +215,8 @@ func TestEndToEnd_UnapprovedElevationRefused(t *testing.T) {
 	// A real Elevator over a real, but UNENROLLED, TempDir trust store: no
 	// enroll() call was ever made, so GetPubKey fails closed.
 	elevator := newInstallElevator(resolvePaths, clock, func(string) string { return "" })
-	elevator.keystore = func(string) elevation.ElevationKeystore { return newFakeElevationKeystore(t) }
+	fixture, _ := newTestInstallElevator(t, newFakeElevationKeystore(t), func(string) string { return "" })
+	elevator.keystore = fixture.keystore
 
 	f := install.NewFlow(install.Deps{
 		Resolver: resolver.NewIntentResolver(),

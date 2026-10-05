@@ -66,7 +66,11 @@ func newTestInstallElevator(t *testing.T, ks elevation.ElevationKeystore, getenv
 	dir := t.TempDir()
 	e := newInstallElevator(func() (runtime.PathProvider, error) { return tempDataPathProvider{dir: dir}, nil },
 		testkit.NewFrozenClock(fixedInstallTestTime), getenv)
-	e.keystore = func(string) elevation.ElevationKeystore { return ks }
+	for _, name := range []string{"HOME", "USERPROFILE", "CASCADE_HOME"} {
+		t.Setenv(name, dir)
+	}
+	sel := elevation.Selector{DataDir: dir, Sources: []elevation.CustodySource{{Tier: elevation.CustodyPlatform, Name: "test", Open: func(string) (elevation.ElevationKeystore, bool) { return ks, ks.Tier() != elevation.TierWindowsTier2 }}}}
+	e.keystore = func(string) elevation.Custody { return sel.Select() }
 	return e, dir
 }
 

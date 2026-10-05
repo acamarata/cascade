@@ -70,7 +70,19 @@ func newAcceptElevator(t *testing.T) *acceptElevator {
 	t.Helper()
 	dir := t.TempDir()
 	clock := testkit.NewFrozenClock(fixedAcceptTestTime)
-	ks := elevation.NewFileKeystore(dir)
+	for _, name := range []string{"HOME", "USERPROFILE", "CASCADE_HOME"} {
+		t.Setenv(name, dir)
+	}
+	_, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := acceptCustodyKey{priv: priv}
+	c := (elevation.Selector{DataDir: dir, Sources: []elevation.CustodySource{{Tier: elevation.CustodyPlatform, Name: "test", Open: func(string) (elevation.ElevationKeystore, bool) { return key, true }}}}).Select()
+	ks, err := c.Signer()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := ks.GenerateKey(); err != nil {
 		t.Fatalf("newAcceptElevator: GenerateKey: %v", err)
 	}
@@ -103,7 +115,7 @@ func (e *acceptElevator) Elevate(ctx context.Context, req install.ElevationReque
 
 	args := acceptElevationArgs(req)
 	next := func(context.Context, json.RawMessage) (any, error) { return "approved", nil }
-	gate := rpc.ElevationMiddleware(e.ledger, trust, e.clock)(acceptElevationMethod, next)
+	gate := rpc.ElevationMiddleware(rpc.ElevationDeps{Ledger: e.ledger, Trust: trust, Clock: e.clock, Custody: func() (string, bool) { return "platform", true }})(acceptElevationMethod, next)
 
 	nonce, err := acceptIssueChallenge(ctx, gate, args)
 	if err != nil {
@@ -246,3 +258,13 @@ func acceptSignedFields(a rpc.Attestation) []byte {
 	}
 	return b
 }
+
+type acceptCustodyKey struct{ priv ed25519.PrivateKey }
+
+func (k acceptCustodyKey) GenerateKey() error { return nil }
+func (k acceptCustodyKey) PubKeyB64() (string, error) {
+	return base64.StdEncoding.EncodeToString(k.priv.Public().(ed25519.PublicKey)), nil
+}
+func (k acceptCustodyKey) Sign(p []byte) ([]byte, error) { return ed25519.Sign(k.priv, p), nil }
+func (k acceptCustodyKey) IsAvailable() bool             { return true }
+func (k acceptCustodyKey) Tier() elevation.StorageTier   { return elevation.TierOSKeychain }

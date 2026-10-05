@@ -67,12 +67,17 @@ func (f *fakeCmdKeystore) Sign(payload []byte) ([]byte, error) {
 
 func newTestDeps(t *testing.T, ks elevation.ElevationKeystore, getenv runtime.Getenv) elevateHelperDeps {
 	t.Helper()
-	backend := elevation.NewFileBackend(t.TempDir())
+	dir := t.TempDir()
+	for _, name := range []string{"HOME", "USERPROFILE", "CASCADE_HOME"} {
+		t.Setenv(name, dir)
+	}
+	backend := elevation.NewFileBackend(dir)
 	if getenv == nil {
 		getenv = func(string) string { return "" }
 	}
 	return elevateHelperDeps{
-		Keystore:     func() elevation.ElevationKeystore { return ks },
+		Keystore:     testCustody(t, ks, elevation.CustodyPlatform),
+		DataDir:      func() string { return dir },
 		TrustBackend: func() elevation.Backend { return backend },
 		Clock:        runtime.NewFixedClock(time.Unix(1_700_000_000, 0)),
 		Getenv:       getenv,
@@ -278,13 +283,14 @@ func signRealAttestation(t *testing.T, requestID, actionHash string) (rpc.Attest
 // joins a path) so this is safe without touching the real Keychain or
 // triggering an auth prompt.
 func TestProductionElevateHelperDeps_ConstructsRealBackends(t *testing.T) {
+	for _, name := range []string{"HOME", "USERPROFILE", "CASCADE_HOME"} {
+		t.Setenv(name, t.TempDir())
+	}
 	deps := productionElevateHelperDeps()
 	if deps.Keystore == nil || deps.TrustBackend == nil || deps.Clock == nil || deps.Getenv == nil {
 		t.Fatal("productionElevateHelperDeps left a field nil")
 	}
-	if ks := deps.Keystore(); ks == nil {
-		t.Fatal("Keystore() returned nil")
-	}
+
 	if tb := deps.TrustBackend(); tb == nil {
 		t.Fatal("TrustBackend() returned nil")
 	}

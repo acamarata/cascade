@@ -9,7 +9,6 @@ package main
 
 import (
 	"context"
-	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	goruntime "runtime"
@@ -56,14 +55,7 @@ func backupKeystore(deps elevateHelperDeps) (elevation.ElevationKeystore, error)
 	if deps.Keystore == nil {
 		return nil, cascade.New(cascade.KindUnavailable, "backup: no elevation keystore is configured")
 	}
-	ks := deps.Keystore()
-	if ks == nil {
-		return nil, cascade.New(cascade.KindUnavailable, "backup: elevation keystore is unavailable")
-	}
-	if ks.Tier() == elevation.TierWindowsTier2 {
-		return nil, elevation.ErrWindowsTier2()
-	}
-	return ks, nil
+	return deps.Keystore().Signer()
 }
 
 func confirmBackupOperation(cmd *cobra.Command, deps elevateHelperDeps, method string, yes bool) error {
@@ -90,20 +82,11 @@ func backupTrustStore(deps elevateHelperDeps) (rpc.TrustStore, error) {
 	if deps.TrustBackend == nil {
 		return nil, cascade.New(cascade.KindUnavailable, "backup: no elevation trust store is configured")
 	}
-	store := elevation.NewElevationTrustStore(deps.TrustBackend(), deps.Clock)
-	encoded, err := store.GetPubKey()
+	fingerprint, key, err := elevation.BoundTrust(deps.Keystore(), deps.TrustBackend(), deps.Clock)
 	if err != nil {
 		return nil, err
 	}
-	key, err := base64.StdEncoding.DecodeString(encoded)
-	if err != nil || len(key) != ed25519.PublicKeySize {
-		return nil, cascade.New(cascade.KindIntegrity, "backup: enrolled elevation public key is invalid")
-	}
-	fingerprint, err := elevation.Fingerprint(encoded)
-	if err != nil {
-		return nil, err
-	}
-	return rpc.MapTrustStore{fingerprint: ed25519.PublicKey(key)}, nil
+	return rpc.MapTrustStore{fingerprint: key}, nil
 }
 
 func attestBackupOperation(ctx context.Context, deps elevateHelperDeps, ks elevation.ElevationKeystore, trust rpc.TrustStore, method string, params json.RawMessage) (backup.ElevationProof, error) {
@@ -111,7 +94,7 @@ func attestBackupOperation(ctx context.Context, deps elevateHelperDeps, ks eleva
 	next := func(_ context.Context, _ json.RawMessage) (any, error) {
 		return backup.ElevationProof("verified"), nil
 	}
-	gate := rpc.ElevationMiddleware(ledger, trust, deps.Clock)(method, next)
+	gate := rpc.ElevationMiddleware(rpc.ElevationDeps{Ledger: ledger, Trust: trust, Clock: deps.Clock, Custody: func() (string, bool) { c := deps.Keystore(); return string(c.Tier()), c.Tier().SatisfiesElevation() }})(method, next)
 	nonce, err := issueBackupChallenge(ctx, gate, params)
 	if err != nil {
 		return "", err

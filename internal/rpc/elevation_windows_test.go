@@ -38,7 +38,7 @@ func TestElevationMiddleware_WindowsAlwaysRefuses(t *testing.T) {
 		handlerCalled = true
 		return "should not run", nil
 	}
-	mw := ElevationMiddleware(ledger, MapTrustStore{}, nil)
+	mw := ElevationMiddleware(ElevationDeps{Ledger: ledger, Trust: MapTrustStore{}, Clock: nil, Custody: func() (string, bool) { return "platform", true }})
 	_, err := mw("vault.get", handler)(context.Background(), nil)
 	if err == nil {
 		t.Fatal("expected ELEVATION_REQUIRED refusal on Windows")

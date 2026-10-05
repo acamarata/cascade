@@ -30,7 +30,7 @@ func TestRegisterHandlers_Windows_DispatchRefusesElevation(t *testing.T) {
 	clock := runtime.NewFixedClock(time.Unix(5000, 0))
 	trust := rpc.MapTrustStore{}
 	ledger := rpc.NewNonceLedger(clock)
-	reg.Use(rpc.ElevationMiddleware(ledger, trust, clock))
+	reg.Use(rpc.ElevationMiddleware(rpc.ElevationDeps{Ledger: ledger, Trust: trust, Clock: clock, Custody: func() (string, bool) { return "platform", true }}))
 	RegisterHandlers(reg, h.deps, nil)
 
 	result, errObj := reg.Dispatch(context.Background(), &rpc.Request{Method: "node.enroll", Params: rawArgs})

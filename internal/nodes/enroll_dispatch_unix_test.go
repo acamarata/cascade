@@ -49,7 +49,7 @@ func TestRegisterHandlers_EndToEndThroughDispatch(t *testing.T) {
 	helperPub, helperPriv := genHelperKey(t)
 	trust := rpc.MapTrustStore{"helper-fp": helperPub}
 	ledger := rpc.NewNonceLedger(clock)
-	reg.Use(rpc.ElevationMiddleware(ledger, trust, clock))
+	reg.Use(rpc.ElevationMiddleware(rpc.ElevationDeps{Ledger: ledger, Trust: trust, Clock: clock, Custody: func() (string, bool) { return "platform", true }}))
 	RegisterHandlers(reg, h.deps, nil)
 
 	// First call: no attestation -> ELEVATION_REQUIRED.

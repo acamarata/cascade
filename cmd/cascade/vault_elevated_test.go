@@ -78,7 +78,7 @@ func TestVaultCLIGetElevationRequiredMessageCasing(t *testing.T) {
 		t.Fatalf("set: %v", err)
 	}
 	deps.Gate = newElevationGate(
-		func() elevation.ElevationKeystore { return unavailableKeystore{} },
+		testCustody(t, availableKeystore{}, elevation.CustodyPlatform),
 		func() elevation.Backend { return emptyBackend{} },
 		runtime.NewSystemClock(),
 		func(string) string { return "" },
@@ -142,9 +142,9 @@ func TestElevationGateFailsClosed(t *testing.T) {
 	cases := map[string]*elevationGate{
 		"no keystore and no trust": newElevationGate(nil, nil, clock, func(string) string { return "" }),
 		"keystore returns nil": newElevationGate(
-			func() elevation.ElevationKeystore { return nil }, nil, clock, func(string) string { return "" }),
+			testCustody(t, nil, elevation.CustodyPlatform), nil, clock, func(string) string { return "" }),
 		"no input allowed": newElevationGate(
-			func() elevation.ElevationKeystore { return availableKeystore{} },
+			testCustody(t, availableKeystore{}, elevation.CustodyPlatform),
 			func() elevation.Backend { return enrolledBackend{} },
 			clock,
 			func(k string) string {
@@ -154,11 +154,11 @@ func TestElevationGateFailsClosed(t *testing.T) {
 				return ""
 			}),
 		"enrolled but no authenticator": newElevationGate(
-			func() elevation.ElevationKeystore { return unavailableKeystore{} },
+			testCustody(t, unavailableKeystore{}, elevation.CustodyPlatform),
 			func() elevation.Backend { return enrolledBackend{} },
 			clock, func(string) string { return "" }),
 		"authenticator but not enrolled": newElevationGate(
-			func() elevation.ElevationKeystore { return availableKeystore{} },
+			testCustody(t, availableKeystore{}, elevation.CustodyPlatform),
 			func() elevation.Backend { return emptyBackend{} },
 			clock, func(string) string { return "" }),
 	}
@@ -176,7 +176,7 @@ func TestElevationGateFailsClosed(t *testing.T) {
 // would pass against a gate that is simply broken.
 func TestElevationGateAllowsWhenBothPreconditionsHold(t *testing.T) {
 	gate := newElevationGate(
-		func() elevation.ElevationKeystore { return availableKeystore{} },
+		testCustody(t, availableKeystore{}, elevation.CustodyPlatform),
 		func() elevation.Backend { return enrolledBackend{} },
 		runtime.NewSystemClock(),
 		func(string) string { return "" },
@@ -221,3 +221,13 @@ func (emptyBackend) Load() (elevation.TrustRecord, bool, error) {
 	return elevation.TrustRecord{}, false, nil
 }
 func (emptyBackend) Save(elevation.TrustRecord) error { return nil }
+func TestVaultGateRefusesOnFileTier(t *testing.T) {
+	k := &refusingFileKey{signingKeystore: newSigningKeystore(t)}
+	gate := newElevationGate(testCustody(t, k, elevation.CustodyFile), func() elevation.Backend { return enrolledBackend{} }, runtime.NewSystemClock(), func(string) string { return "" })
+	for _, verb := range []string{"vault.get", "vault.rotate", "vault.grant", "node.enroll", "node.remove", "provider.add"} {
+		err := gate.Authorize(t.Context(), verb)
+		if tier, ok := elevation.CustodyTierOf(err); !ok || tier != elevation.CustodyFile || k.signs != 0 {
+			t.Fatalf("%s: %v signs=%d", verb, err, k.signs)
+		}
+	}
+}

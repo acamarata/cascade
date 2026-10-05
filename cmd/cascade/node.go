@@ -76,7 +76,7 @@ func productionNodeCLIDeps() nodeCLIDeps {
 		Paths: paths,
 		Clock: cruntime.SystemClock{},
 		Gate: newElevationGate(
-			productionKeystore,
+			productionCustody,
 			func() elevation.Backend { return elevation.NewFileBackend(paths.DataDir()) },
 			cruntime.NewSystemClock(), getenv,
 		),

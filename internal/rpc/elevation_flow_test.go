@@ -64,7 +64,7 @@ func TestElevationMiddleware_FullRoundTripWithAttestation(t *testing.T) {
 		_ = json.Unmarshal(params, &m)
 		return m["target"], nil
 	}
-	mw := ElevationMiddleware(ledger, trust, clock)
+	mw := ElevationMiddleware(ElevationDeps{Ledger: ledger, Trust: trust, Clock: clock, Custody: func() (string, bool) { return "platform", true }})
 	wrapped := mw("vault.get", handler)
 
 	originalArgs := json.RawMessage(`{"target":"db-password"}`)

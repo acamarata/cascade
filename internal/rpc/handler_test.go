@@ -128,7 +128,7 @@ func TestHandler_NonElevatedMethodPassesThroughElevationMiddleware(t *testing.T)
 		return "ok", nil
 	})
 	clock := runtime.NewFixedClock(time.Unix(3000, 0))
-	reg.Use(ElevationMiddleware(NewNonceLedger(clock), MapTrustStore{}, clock))
+	reg.Use(ElevationMiddleware(ElevationDeps{Ledger: NewNonceLedger(clock), Trust: MapTrustStore{}, Clock: clock, Custody: func() (string, bool) { return "platform", true }}))
 
 	rec := doRPC(ctxWithPeerCred(501, true), h, `{"jsonrpc":"2.0","method":"status.get","id":1}`)
 	var env ResponseEnvelope
