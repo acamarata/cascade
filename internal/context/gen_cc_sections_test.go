@@ -77,10 +77,10 @@ func TestRenderTierBlockExcludesAndAnnounces(t *testing.T) {
 // bare header would be indistinguishable from a tier that went missing.
 func TestRenderTierBlockWhollyUnrenderableTierStillEmits(t *testing.T) {
 	sections := []MergedSection{
-		{Content: "Preamble mentioning " + canaryPath, Role: TierPRI},
-		{Heading: "Keys", Content: "## Keys\n\n" + canaryToken, Role: TierPRI},
+		{Content: "Preamble mentioning " + canaryPath, Role: TierPRC},
+		{Heading: "Keys", Content: "## Keys\n\n" + canaryToken, Role: TierPRC},
 	}
-	block := renderTierBlock(TierPRI, sections)
+	block := renderTierBlock(TierPRC, sections)
 
 	for _, canary := range []string{canaryPath, canaryToken} {
 		if strings.Contains(block, canary) {
@@ -96,7 +96,7 @@ func TestRenderTierBlockWhollyUnrenderableTierStillEmits(t *testing.T) {
 	if !strings.Contains(block, `"Keys"`) {
 		t.Error("the excluded heading is not named")
 	}
-	if !strings.Contains(block, "## Cascade Context — PRI Tier") {
+	if !strings.Contains(block, "## Cascade Context — PRC Tier") {
 		t.Error("the tier header is missing, so the file does not say which tier it belongs to")
 	}
 }
@@ -121,8 +121,8 @@ func TestRenderTierBlockNeverLeaksAnyCanary(t *testing.T) {
 // depends on: the digest in the marker line always describes the body under
 // it, so an untouched block never reads as hand-edited.
 func TestRenderTierBlockDigestMatchesBody(t *testing.T) {
-	block := renderTierBlock(TierASI, []MergedSection{
-		{Heading: "A", Content: "## A\n\nbody", Role: TierASI},
+	block := renderTierBlock(TierAPC, []MergedSection{
+		{Heading: "A", Content: "## A\n\nbody", Role: TierAPC},
 	})
 	if !managedBlockIntact(block) {
 		t.Fatal("a freshly rendered block does not verify against its own digest")
@@ -141,13 +141,13 @@ func TestRenderTierBlockDigestMatchesBody(t *testing.T) {
 func TestGroupByRoleIsOrdinalOrdered(t *testing.T) {
 	mc := MergedContext{Sections: []MergedSection{
 		{Heading: "a", Role: TierGCI, Ordinal: 0},
-		{Heading: "b", Role: TierASI, Ordinal: 1},
-		{Heading: "c", Role: TierPPI, Ordinal: 2},
-		{Heading: "d", Role: TierPRI, Ordinal: 3},
-		{Heading: "e", Role: TierPAI, Ordinal: 4},
+		{Heading: "b", Role: TierAPC, Ordinal: 1},
+		{Heading: "c", Role: TierPPC, Ordinal: 2},
+		{Heading: "d", Role: TierPRC, Ordinal: 3},
+		{Heading: "e", Role: TierPAC, Ordinal: 4},
 		{Heading: "f", Role: TierGCI, Ordinal: 0},
 	}}
-	want := []TierRole{TierGCI, TierASI, TierPPI, TierPRI, TierPAI}
+	want := []TierRole{TierGCI, TierAPC, TierPPC, TierPRC, TierPAC}
 	for i := 0; i < 50; i++ {
 		roles, buckets := groupByRole(mc)
 		if len(roles) != len(want) {

@@ -1,7 +1,7 @@
 # Cross-harness instruction-file conventions
 
 Cascade's context engine (`internal/context`) merges a project's five-tier
-instruction cascade (GCI/ASI/PPI/PRI/PAI, see `docs/architecture.md`) and
+instruction cascade (GCI/APC/PPC/PRC/PAC, see `docs/architecture.md`) and
 renders it into the files each supported coding harness reads. This
 document is the reference for what gets written, where, and why. The
 end-to-end proof that this pipeline works is
@@ -39,7 +39,7 @@ Every generated file obeys three rules, enforced by
 `internal/context/roundtrip_test.go`:
 
 - **Tier ordinal ordering.** Tiers are emitted most general first: GCI,
-  then ASI, then PPI, then PRI, then PAI. A harness that only reads part of
+  then APC, then PPC, then PRC, then PAC. A harness that only reads part of
   the cascade (see § 1's reach note below) still receives whatever it does
   read in this order.
 - **Byte stability.** The same `MergedContext` renders identical bytes on
@@ -55,11 +55,26 @@ Every generated file obeys three rules, enforced by
 A harness's own directory walk decides how much of the cascade it actually
 reads. codex and opencode were both captured reading the global tier plus
 everything from the git root down to the working directory, but NOT the
-tiers above the git root (ASI, and PPI when distinct from ASI). The
+tiers above the git root (APC, and PPC when distinct from APC). The
 generator still renders every tier that contributed content; which tiers a
 given harness's own file-discovery walk will find is a property of that
 harness, not of the generator, and is recorded per-harness in
 `internal/context/testdata/README.md`.
+
+### Tier names and discovery
+
+The tiers, most general first, are GCI > APC > PPC > PRC > PAC. Roles are
+anchored on the git root, never on walk position: PRC is the git root (or the
+working directory when there is no repository), PPC and APC are its parent and
+grandparent, GCI is HOME, and PAC is every directory strictly below the root
+down to the working directory that holds `.cascade/CASCADE.md`, nearest to the
+working directory last. Only the PAC role repeats. The retired labels ASI,
+PPI, PRI and PAI survive only as import labels, mapped by role in a test helper; no
+production code reads or renders them. A tier file is read only when it is a regular file (never a symlink) of
+at most 1 MiB; a larger file is treated as absent and reported as a finding. A
+failed `git` call is classified `not_repo` (silent), `git_unavailable` or
+`git_permission`; the last two surface as findings on the PRC record. Every
+generated instruction block points at `cascade mcp serve --stdio`.
 
 ## 3. The managed-block contract and byte stability
 

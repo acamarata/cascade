@@ -89,7 +89,7 @@ type harnessDirs struct {
 	//
 	// A suffix rather than the whole name because this repository is
 	// public and carries no downstream product identifiers in tracked
-	// text (PRI hard rule 3, gate-enforced). The convention is stated in
+	// text (PRC hard rule 3, gate-enforced). The convention is stated in
 	// full on OverrideVarFor, so nothing about the resulting name is
 	// hidden from a reader — it is derived in the open rather than
 	// spelled out.

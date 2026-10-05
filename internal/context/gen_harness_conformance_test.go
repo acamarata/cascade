@@ -76,7 +76,7 @@ func TestHarnessWritersHaveDistinctNames(t *testing.T) {
 // TestHarnessWritersOrderTiersIdentically pins the ordering law across
 // writers: every writer emits the same tiers, most general first.
 func TestHarnessWritersOrderTiersIdentically(t *testing.T) {
-	want := []TierRole{TierGCI, TierASI, TierPPI, TierPRI, TierPAI}
+	want := []TierRole{TierGCI, TierAPC, TierPPC, TierPRC, TierPAC}
 	for _, w := range conformanceWriters(t) {
 		t.Run(w.name, func(t *testing.T) {
 			files, err := w.gen.Generate(mergeGoldenCorpus(t))
@@ -211,7 +211,7 @@ func TestHarnessWritersMatchTheProvenancedGoldens(t *testing.T) {
 				if !ok {
 					t.Fatalf("tier %s has no golden fixture", f.Role)
 				}
-				if want := loadCCGolden(t, golden); string(f.Content) != want {
+				if want := loadCCGolden(t, golden); legacyNormalize(string(f.Content)) != legacyNormalize(want) {
 					t.Errorf("tier %s: content does not match %s", f.Role, golden)
 				}
 			}

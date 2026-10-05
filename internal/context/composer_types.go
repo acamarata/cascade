@@ -37,7 +37,7 @@ type SlotKind uint8
 const (
 	_ SlotKind = iota // 0 is deliberately not a valid SlotKind
 
-	// SlotKindTier is tier-instruction content (GCI..PAI, S-08/S-09).
+	// SlotKindTier is tier-instruction content (GCI..PAC, S-08/S-09).
 	SlotKindTier
 	// SlotKindMemory is memory/SOUL-store content (G/S-13, G/S-14).
 	SlotKindMemory

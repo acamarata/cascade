@@ -1,8 +1,8 @@
 === role=gci name=.config/opencode/AGENTS.md
-<!-- cascade:generate-instructions digest=sha256:c71d7f9ba7f2daae5655ba7845dc7e3c7d0356ac0f810ee71515841e6d4f4885 -->
+<!-- cascade:generate-instructions digest=sha256:689c4b16f8309306be3b02a8be5ec6a5d627abf8050422f8026193b5c4673c18 -->
 ## Cascade Context — GCI Tier (Global Cascade Instructions)
 
-**MCP server:** `stdio: cascade mcp stdio`
+**MCP server:** `stdio: cascade mcp serve --stdio`
 
 Call `cascade.search` before responding to queries about this project.
 Call `cascade.context_slice` to retrieve relevant context from the RAG index.
@@ -13,11 +13,11 @@ If the cascade MCP tools are unavailable, run `cascade recall` and `cascade cont
 Short sentences.
 
 <!-- /cascade:generate-instructions -->
-=== role=pri name=AGENTS.md
-<!-- cascade:generate-instructions digest=sha256:77ba86093bbdcd917047e45d409823f44671044d0458db42196734b023dca058 -->
-## Cascade Context — PRI Tier (Per-Repo Instructions)
+=== role=prc name=AGENTS.md
+<!-- cascade:generate-instructions digest=sha256:a903ce51f473466e34864d5e46cacc24ff58b3903764ff7176a5a6fd630a7575 -->
+## Cascade Context — PRC Tier (Per-Repo Instructions)
 
-**MCP server:** `stdio: cascade mcp stdio`
+**MCP server:** `stdio: cascade mcp serve --stdio`
 
 Call `cascade.search` before responding to queries about this project.
 Call `cascade.context_slice` to retrieve relevant context from the RAG index.

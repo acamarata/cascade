@@ -103,10 +103,10 @@ func refusedOrdinalCases() []validateCase {
 			name: "descending ordinals are refused",
 			mc: MergedContext{
 				Sections: []MergedSection{
-					{Heading: "A", Content: "## A", Role: TierPRI, Ordinal: 3},
+					{Heading: "A", Content: "## A", Role: TierPRC, Ordinal: 3},
 					{Heading: "B", Content: "## B", Role: TierGCI, Ordinal: 0},
 				},
-				Provenance: map[string]TierRole{"A": TierPRI, "B": TierGCI},
+				Provenance: map[string]TierRole{"A": TierPRC, "B": TierGCI},
 			},
 			wantErr: true,
 		},
@@ -121,7 +121,7 @@ func refusedOrdinalCases() []validateCase {
 		{
 			name: "heading carried by the losing tier is refused",
 			mc: MergedContext{
-				Sections:   []MergedSection{{Heading: "A", Content: "## A", Role: TierPRI, Ordinal: 3}},
+				Sections:   []MergedSection{{Heading: "A", Content: "## A", Role: TierPRC, Ordinal: 3}},
 				Provenance: map[string]TierRole{"A": TierGCI},
 			},
 			wantErr: true,
@@ -152,7 +152,7 @@ func TestValidateMergedContext(t *testing.T) {
 // the validator instead of only the validator being tested.
 func TestGenerateRefusesEveryInvalidContext(t *testing.T) {
 	bad := MergedContext{
-		Sections:   []MergedSection{{Heading: "A", Content: "## A", Role: TierPRI, Ordinal: 3}},
+		Sections:   []MergedSection{{Heading: "A", Content: "## A", Role: TierPRC, Ordinal: 3}},
 		Provenance: map[string]TierRole{"A": TierGCI},
 	}
 	files, err := (&CCInstructionWriter{}).Generate(bad)

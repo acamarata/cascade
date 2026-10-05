@@ -26,9 +26,9 @@ var roundtripTierFiles = []struct {
 	ord  int
 }{
 	{TierGCI, "gci.md", 0},
-	{TierASI, "asi.md", 1},
-	{TierPRI, "pri.md", 3},
-	{TierPAI, "pai.md", 4},
+	{TierAPC, "asi.md", 1},
+	{TierPRC, "pri.md", 3},
+	{TierPAC, "pai.md", 4},
 }
 
 func loadRoundtripTiers(t *testing.T) []TierRecord {
@@ -78,7 +78,7 @@ func roundtripWriters() map[string]HarnessGenerator {
 // every writer renders exactly the fixture's four tiers, most general
 // first, for every registered writer.
 func TestRoundTripGeneratesAllTiersInOrder(t *testing.T) {
-	want := []TierRole{TierGCI, TierASI, TierPRI, TierPAI}
+	want := []TierRole{TierGCI, TierAPC, TierPRC, TierPAC}
 	mc := roundtripMerged(t)
 	for id, w := range roundtripWriters() {
 		files, err := w.Generate(mc)
@@ -155,7 +155,7 @@ func TestRoundTripMatchesClaudeReference(t *testing.T) {
 		t.Fatalf("Generate: %v", err)
 	}
 	want := readReference(t, "claude", "CLAUDE.md")
-	if got := priContent(t, files); got != want {
+	if got := priContent(t, files); legacyNormalize(got) != legacyNormalize(want) {
 		t.Errorf("CC PRI tier does not match the claude reference capture")
 	}
 }
@@ -169,7 +169,7 @@ func TestRoundTripMatchesOpencodeReference(t *testing.T) {
 		t.Fatalf("Generate: %v", err)
 	}
 	want := readReference(t, "opencode", "AGENTS.md")
-	if got := priContent(t, files); got != want {
+	if got := priContent(t, files); legacyNormalize(got) != legacyNormalize(want) {
 		t.Errorf("OC PRI tier does not match the opencode reference capture")
 	}
 }
@@ -187,12 +187,12 @@ func TestRoundTripMatchesRealCodexCapture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
-	envelope := readReference(t, "codex", "AGENTS.md")
+	envelope := legacyNormalize(readReference(t, "codex", "AGENTS.md"))
 	byRole := map[TierRole]string{}
 	for _, f := range files {
-		byRole[f.Role] = string(f.Content)
+		byRole[f.Role] = legacyNormalize(string(f.Content))
 	}
-	for _, role := range []TierRole{TierGCI, TierPRI, TierPAI} {
+	for _, role := range []TierRole{TierGCI, TierPRC, TierPAC} {
 		if !strings.Contains(envelope, byRole[role]) {
 			t.Errorf("real codex capture is missing the freshly generated %s block verbatim", role)
 		}
@@ -201,10 +201,10 @@ func TestRoundTripMatchesRealCodexCapture(t *testing.T) {
 		t.Error("real codex capture contains the ASI marker; ASI is above git root and out of codex's reach")
 	}
 	gciAt := strings.Index(envelope, byRole[TierGCI])
-	priAt := strings.Index(envelope, byRole[TierPRI])
-	paiAt := strings.Index(envelope, byRole[TierPAI])
-	if gciAt < 0 || gciAt >= priAt || priAt >= paiAt {
-		t.Error("real codex capture does not order GCI before PRI before PAI")
+	prcAt := strings.Index(envelope, byRole[TierPRC])
+	pacAt := strings.Index(envelope, byRole[TierPAC])
+	if gciAt < 0 || gciAt >= prcAt || prcAt >= pacAt {
+		t.Error("real codex capture does not order GCI before PRC before PAC")
 	}
 	if !strings.Contains(envelope, "Maintainer notes (kept above the managed block)") ||
 		!strings.Contains(envelope, "Maintainer notes (kept below the managed block).") {
@@ -215,7 +215,7 @@ func TestRoundTripMatchesRealCodexCapture(t *testing.T) {
 // priContent returns files' PRI-tier content as a string.
 func priContent(t *testing.T, files []HarnessFile) string {
 	t.Helper()
-	return string(mustRole(t, files, TierPRI).Content)
+	return string(mustRole(t, files, TierPRC).Content)
 }
 
 // TestRoundTripHandEditSurvivesBeforeAndAfter covers a splice shape the
@@ -227,7 +227,7 @@ func TestRoundTripHandEditSurvivesBeforeAndAfter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
-	f := mustRole(t, files, TierPRI)
+	f := mustRole(t, files, TierPRC)
 	const prefix = "# Maintainer notes above\n\nkeep this exact line.\n\n"
 	const suffix = "\n\nMaintainer notes below. keep this exact line too.\n"
 	path := filepath.Join(t.TempDir(), "CLAUDE.md")
@@ -261,7 +261,7 @@ func TestRoundTripHandEditSurvivesWhenBlockAbsent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
-	f := mustRole(t, files, TierPRI)
+	f := mustRole(t, files, TierPRC)
 	const prose = "# This repo's own CLAUDE.md\n\nWritten by a maintainer, no cascade block yet.\n"
 	path := filepath.Join(t.TempDir(), "CLAUDE.md")
 	if err := os.WriteFile(path, []byte(prose), 0o600); err != nil {

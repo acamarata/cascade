@@ -64,7 +64,7 @@ type MergedSection struct {
 //
 // Emission order is most-general-first — every section a tier contributes is
 // emitted at that tier's position, tiers in ascending ordinal (GCI first,
-// PAI last) — so a reader meets the general rules before the specific ones.
+// PAC last) — so a reader meets the general rules before the specific ones.
 // Sections is the ONLY ordered output; Provenance is a lookup table and must
 // never be iterated to produce output, because Go map iteration order is
 // randomized and doing so would make the merge non-deterministic.
@@ -86,7 +86,7 @@ type MergedContext struct {
 //
 // The HIGHER tier wins: the LOWEST ordinal (furthest from the working
 // directory, highest authority — GCI is ordinal 0) wins a same-heading
-// conflict. Higher ordinals (closer to the working directory — PAI is
+// conflict. Higher ordinals (closer to the working directory — PAC is
 // highest) ADD sections that no higher tier defined, but never override a
 // higher tier's content. Within one record, a heading repeated later is a
 // duplicate of the earlier one and the earlier (lower) position wins; the

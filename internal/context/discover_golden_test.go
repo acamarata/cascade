@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // TestDiscoverGolden runs every harvested v1-goldens/scenario-*.json
@@ -116,7 +119,143 @@ func renderExpect(expect []goldenExpect) string {
 		if e.Present {
 			dir = e.Dir
 		}
-		fmt.Fprintf(&b, "%s present=%t dir=%q\n", e.Role, e.Present, dir)
+		role := e.Role // harvested fixtures carry the retired labels: map by role
+		if r, ok := legacyTierName(role); ok {
+			role = r.String()
+		}
+		fmt.Fprintf(&b, "%s present=%t dir=%q\n", role, e.Present, dir)
 	}
 	return b.String()
+}
+
+// TestDiscoverNonDirCascadeEntryAbsent: a `.cascade` that is a regular file or
+// a FIFO, at the repo root or a middle PAC dir, leaves that tier Absent with
+// no finding and no error, and never stalls the walk or hides other tiers.
+func TestDiscoverNonDirCascadeEntryAbsent(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("FIFOs are a POSIX feature")
+	}
+	kinds := map[string]func(*testing.T, string){
+		"file": func(t *testing.T, p string) {
+			if err := os.WriteFile(p, []byte("not a dir"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"fifo": mkfifo,
+	}
+	for _, at := range []string{"root", "mid"} {
+		for kind, plant := range kinds {
+			t.Run(at+"/"+kind, func(t *testing.T) { checkNonDirCascade(t, at == "root", plant) })
+		}
+	}
+}
+
+// checkNonDirCascade plants the non-directory .cascade at the repo root (or
+// the middle dir), seeds real tiers elsewhere, and asserts the outcome.
+func checkNonDirCascade(t *testing.T, atRoot bool, plant func(*testing.T, string)) {
+	root := resolvedTempDir(t)
+	repo := filepath.Join(root, "repo")
+	mid, cwd := filepath.Join(repo, "a"), filepath.Join(repo, "a", "b")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, repo, "init", "-q")
+	bad, kept := mid, repo
+	if atRoot {
+		bad, kept = repo, mid
+	}
+	plantTier(t, kept, "kept")
+	plantTier(t, cwd, "leaf")
+	plant(t, filepath.Join(bad, tierDirName))
+
+	var records []TierRecord
+	var err error
+	if !returnsWithin(t, "Discover", func() {
+		records, err = Discover(context.Background(), cwd, fixedHome(filepath.Join(root, "home")))
+	}) {
+		return
+	}
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	seen := map[string]TierRecord{}
+	for _, r := range records {
+		seen[r.Dir] = r
+	}
+	// A middle dir with no readable tier file gets no record at all
+	// (chainBelowRoot); the root always gets an Absent one.
+	r, ok := seen[bad]
+	if !ok && atRoot {
+		t.Errorf("no record for the repo root %s", bad)
+	}
+	if ok && (!r.Absent || r.Content != "" || r.Findings != nil) {
+		t.Errorf("tier at %s = %+v, want Absent with no finding", bad, r)
+	}
+	if r := seen[kept]; r.Absent || r.Content != "kept" {
+		t.Errorf("tier at %s = %+v, want the seeded content kept", kept, r)
+	}
+	if r := seen[cwd]; r.Absent || r.Content != "leaf" {
+		t.Errorf("cwd tier = %+v, want the seeded content leaf", r)
+	}
+}
+
+func skipNoSymlinkOrRoot(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs POSIX permissions and a non-root user")
+	}
+}
+
+func TestLoadTierFileAbsentUnderRealDir(t *testing.T) {
+	dir := resolvedTempDir(t)
+	if err := os.Mkdir(filepath.Join(dir, tierDirName), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rec, err := loadTier(TierPRC, dir, 3)
+	want := TierRecord{Role: TierPRC, Ordinal: 3, Dir: dir, Path: filepath.Join(dir, tierDirName, tierFileName), Absent: true}
+	if err != nil || rec.Absent != want.Absent || rec.Path != want.Path || rec.Content != "" || len(rec.Findings) != 0 {
+		t.Fatalf("loadTier = %+v, %v; want %+v with no error", rec, err, want)
+	}
+}
+
+func TestLoadTierUnreadableTierFileIsPermissionDenied(t *testing.T) {
+	skipNoSymlinkOrRoot(t)
+	root := resolvedTempDir(t)
+	repo := filepath.Join(root, "repo")
+	plantTier(t, repo, "x")
+	runGit(t, repo, "init", "-q")
+	td := filepath.Join(repo, tierDirName)
+	if err := os.Chmod(td, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(td, 0o755) })
+	path := filepath.Join(td, tierFileName)
+	wantMsg := "context: stat tier file " + path
+	_, err := loadTier(TierPRC, repo, 3)
+	if !cascade.HasKind(err, cascade.KindPermissionDenied) || err == nil || !strings.Contains(err.Error(), wantMsg) {
+		t.Fatalf("loadTier = %v, want KindPermissionDenied containing %q", err, wantMsg)
+	}
+	_, err = Discover(context.Background(), repo, fixedHome(filepath.Join(root, "home")))
+	if !cascade.HasKind(err, cascade.KindPermissionDenied) || err == nil || !strings.Contains(err.Error(), wantMsg) {
+		t.Fatalf("Discover = %v, want the same KindPermissionDenied containing %q", err, wantMsg)
+	}
+}
+
+func TestLoadTierSwappedForAnotherFileAbsent(t *testing.T) {
+	dir := resolvedTempDir(t)
+	plantTier(t, dir, "original")
+	afterTierLstat = func(path string) {
+		other := path + ".new"
+		if err := os.WriteFile(other, []byte("replacement"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(other, path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() { afterTierLstat = func(string) {} })
+	rec, err := loadTier(TierPRC, dir, 3)
+	if err != nil || !rec.Absent || rec.Content != "" || len(rec.Findings) != 0 {
+		t.Fatalf("loadTier = %+v, %v; want Absent, unread, no findings", rec, err)
+	}
 }

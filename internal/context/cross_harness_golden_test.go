@@ -67,7 +67,7 @@ func TestCrossHarnessGoldenCorpus(t *testing.T) {
 // people, and a bare integer would make a role rename invisible in a diff.
 func roleSlug(role TierRole) string {
 	for name, r := range map[string]TierRole{
-		"gci": TierGCI, "asi": TierASI, "ppi": TierPPI, "pri": TierPRI, "pai": TierPAI,
+		"gci": TierGCI, "apc": TierAPC, "ppc": TierPPC, "prc": TierPRC, "pac": TierPAC,
 	} {
 		if r == role {
 			return name

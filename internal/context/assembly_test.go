@@ -96,7 +96,7 @@ func TestAssembleExactBudgetBoundaryNoError(t *testing.T) {
 
 func TestAssembleOneTokenOverBoundaryTailTruncatesSecondSection(t *testing.T) {
 	first := MergedSection{Heading: "A", Content: strings.Repeat("a", 5), Role: TierGCI, Ordinal: 0}
-	second := MergedSection{Heading: "B", Content: strings.Repeat("b", 5), Role: TierPAI, Ordinal: 4}
+	second := MergedSection{Heading: "B", Content: strings.Repeat("b", 5), Role: TierPAC, Ordinal: 4}
 	asm, err := Assemble(context.Background(), AssembleInput{
 		Scope: validScope(), Merged: mergedWith(first, second), Counter: byteLenCounter{},
 		Budget: provider.BudgetConfig{MaxTokens: 9}, // first (5) fits; first+second (10) is one over 9
@@ -114,7 +114,7 @@ func TestAssembleOneTokenOverBoundaryTailTruncatesSecondSection(t *testing.T) {
 
 func TestAssembleTierOrderPrecedenceGCISurvivesOverPAI(t *testing.T) {
 	gci := MergedSection{Heading: "Rules", Content: strings.Repeat("g", 8), Role: TierGCI, Ordinal: 0}
-	pai := MergedSection{Heading: "App", Content: strings.Repeat("p", 8), Role: TierPAI, Ordinal: 4}
+	pai := MergedSection{Heading: "App", Content: strings.Repeat("p", 8), Role: TierPAC, Ordinal: 4}
 	asm, err := Assemble(context.Background(), AssembleInput{
 		Scope: validScope(), Merged: mergedWith(gci, pai), Counter: byteLenCounter{},
 		Budget: provider.BudgetConfig{MaxTokens: 8}, // only room for one section
@@ -212,7 +212,7 @@ func TestAssembleRetrievalRequiresResolverWhenRankedIsNonEmpty(t *testing.T) {
 
 func TestAssembleTierPreambleDropDetail(t *testing.T) {
 	first := MergedSection{Heading: "Rules", Content: strings.Repeat("a", 5), Role: TierGCI, Ordinal: 0}
-	preamble := MergedSection{Heading: "", Content: strings.Repeat("b", 5), Role: TierASI, Ordinal: 1}
+	preamble := MergedSection{Heading: "", Content: strings.Repeat("b", 5), Role: TierAPC, Ordinal: 1}
 	asm, err := Assemble(context.Background(), AssembleInput{
 		Scope: validScope(), Merged: mergedWith(first, preamble), Counter: byteLenCounter{},
 		Budget: provider.BudgetConfig{MaxTokens: 5},

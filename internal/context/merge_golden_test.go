@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -19,10 +20,10 @@ var goldenTierFiles = []struct {
 	file string
 }{
 	{TierGCI, "tier-gci.md"},
-	{TierASI, "tier-asi.md"},
-	{TierPPI, "tier-ppi.md"},
-	{TierPRI, "tier-pri.md"},
-	{TierPAI, "tier-pai.md"},
+	{TierAPC, "tier-asi.md"},
+	{TierPPC, "tier-ppi.md"},
+	{TierPRC, "tier-pri.md"},
+	{TierPAC, "tier-pai.md"},
 }
 
 // loadGoldenTiers reads the harvested corpus into the []TierRecord shape
@@ -79,6 +80,21 @@ func renderMerge(merged MergedContext, tiers []TierRecord) string {
 	return b.String()
 }
 
+var (
+	mergeLineRe = regexp.MustCompile(`(?m)^(\d+ )(ASI|PPI|PRI|PAI)( )`)
+	wonByRe     = regexp.MustCompile(`(?m)(-> won by )(ASI|PPI|PRI|PAI)$`)
+)
+
+// legacyMergeRoles maps the retired role labels in the harvested merge
+// listing ("<ordinal> <ROLE> ..." lines and "-> won by <ROLE>" tails)
+// through legacyTierName; it changes nothing else.
+func legacyMergeRoles(s string) string {
+	s = relabel(mergeLineRe, s)
+	return wonByRe.ReplaceAllStringFunc(s, func(m string) string {
+		return "-> won by " + legacyRole(strings.TrimPrefix(m, "-> won by "))
+	})
+}
+
 // stripGoldenComments removes the golden file's leading "#" commentary and
 // its blank separator so the comparison is over data lines only.
 func stripGoldenComments(raw string) string {
@@ -106,7 +122,7 @@ func TestMergeGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading golden: %v", err)
 	}
-	want := stripGoldenComments(string(raw))
+	want := legacyMergeRoles(stripGoldenComments(string(raw)))
 	got := renderMerge(merged, tiers)
 	if got != want {
 		t.Errorf("merge golden mismatch\n--- want ---\n%s--- got ---\n%s", want, got)
@@ -243,7 +259,7 @@ func TestMergeGoldenHeadingsAreExactMatches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MergeTiers() error = %v", err)
 	}
-	for heading, want := range map[string]TierRole{"Master Lists": TierPPI, "Master List": TierPRI} {
+	for heading, want := range map[string]TierRole{"Master Lists": TierPPC, "Master List": TierPRC} {
 		if got, ok := merged.Provenance[heading]; !ok || got != want {
 			t.Errorf("Provenance[%q] = %v (present=%t), want %v", heading, got, ok, want)
 		}

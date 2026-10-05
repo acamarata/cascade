@@ -22,7 +22,7 @@ import (
 // mcpServerRef is the MCP server reference the header points at. It is a
 // transport spelling, not a path: nothing here may carry a directory from
 // the machine that ran the generator.
-const mcpServerRef = "stdio: cascade mcp stdio"
+const mcpServerRef = "stdio: cascade mcp serve --stdio"
 
 // cliFallbackLine is the single v2 delta from v1's harvested header
 // (R-16.43). v1's post-mortem found the MCP server could be dead while the

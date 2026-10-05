@@ -27,7 +27,7 @@ import (
 // never depends on this repo's own real tier files or git root.
 func styleRecords(dir, style string) []cascadecontext.TierRecord {
 	return []cascadecontext.TierRecord{{
-		Role: cascadecontext.TierPRI, Ordinal: 0, Dir: dir,
+		Role: cascadecontext.TierPRC, Ordinal: 0, Dir: dir,
 		Path:    filepath.Join(dir, ".cascade", "CASCADE.md"),
 		Content: "## Style\n\n" + style + "\n",
 	}}
@@ -39,9 +39,9 @@ func styleRecords(dir, style string) []cascadecontext.TierRecord {
 // counterpart, not a hand-typed guess) and pinned here because the
 // managed-block digest is a content hash with no clock or randomness
 // (Art.7.3), so it never changes for this fixed input.
-const wantFreshCLAUDEmd = "<!-- cascade:generate-instructions digest=sha256:2685b1cce720933cc0da48bd66c91972504a6f863dbd05f3d64e59e5cde35eb0 -->\n" +
-	"## Cascade Context — PRI Tier (Per-Repo Instructions)\n\n" +
-	"**MCP server:** `stdio: cascade mcp stdio`\n\n" +
+const wantFreshCLAUDEmd = "<!-- cascade:generate-instructions digest=sha256:2db95a45296fda07c572888f388661abb38cacb8193d4eaddf224fea6f42f40b -->\n" +
+	"## Cascade Context — PRC Tier (Per-Repo Instructions)\n\n" +
+	"**MCP server:** `stdio: cascade mcp serve --stdio`\n\n" +
 	"Call `cascade.search` before responding to queries about this project.\n" +
 	"Call `cascade.context_slice` to retrieve relevant context from the RAG index.\n" +
 	"If the cascade MCP tools are unavailable, run `cascade recall` and `cascade context slice` through Bash instead.\n\n" +
@@ -58,7 +58,7 @@ func TestDriftReportRed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MergeTiers: %v", err)
 	}
-	roots := map[cascadecontext.TierRole]string{cascadecontext.TierPRI: dir}
+	roots := map[cascadecontext.TierRole]string{cascadecontext.TierPRC: dir}
 	entries, err := driftEntriesForProject(mc, roots)
 	if err != nil {
 		t.Fatalf("driftEntriesForProject: %v", err)
@@ -105,7 +105,7 @@ func TestDriftReportGreen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MergeTiers: %v", err)
 	}
-	roots := map[cascadecontext.TierRole]string{cascadecontext.TierPRI: dir}
+	roots := map[cascadecontext.TierRole]string{cascadecontext.TierPRC: dir}
 	entries, err := driftEntriesForProject(mc, roots)
 	if err != nil {
 		t.Fatalf("driftEntriesForProject: %v", err)

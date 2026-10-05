@@ -23,7 +23,7 @@ import "github.com/acamarata/cascade/pkg/cascade"
 type SlotKind string
 
 const (
-	// SlotTier is the instruction-tier slot (GCI..PAI content).
+	// SlotTier is the instruction-tier slot (GCI..PAC content).
 	SlotTier SlotKind = "tier"
 	// SlotRetrieval is the retrieval slot (fused, cited chunks).
 	SlotRetrieval SlotKind = "retrieval"
@@ -33,7 +33,7 @@ const (
 
 // TierBlock is one surviving instruction-tier section, flattened to the
 // fields a caller needs to render it. Role is the tier's short display name
-// (e.g. "GCI", "PAI") rather than a typed TierRole, since pkg/provider
+// (e.g. "GCI", "PAC") rather than a typed TierRole, since pkg/provider
 // cannot import internal/context.
 type TierBlock struct {
 	Heading string
@@ -92,7 +92,7 @@ type DroppedItem struct {
 // demonstration of reading one.
 type ContextAssembly struct {
 	// Tier holds the surviving instruction-tier blocks, most-authoritative
-	// first (GCI before PAI).
+	// first (GCI before PAC).
 	Tier []TierBlock
 	// Retrieval holds the surviving retrieval-slot chunks, best-ranked
 	// first.

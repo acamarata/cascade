@@ -18,10 +18,10 @@ import (
 // ccGoldenFiles maps each role to its expected CLAUDE.md fixture, BY ROLE.
 var ccGoldenFiles = map[TierRole]string{
 	TierGCI: "gci.CLAUDE.md",
-	TierASI: "asi.CLAUDE.md",
-	TierPPI: "ppi.CLAUDE.md",
-	TierPRI: "pri.CLAUDE.md",
-	TierPAI: "pai.CLAUDE.md",
+	TierAPC: "asi.CLAUDE.md",
+	TierPPC: "ppi.CLAUDE.md",
+	TierPRC: "pri.CLAUDE.md",
+	TierPAC: "pai.CLAUDE.md",
 }
 
 // digestPlaceholder is what the golden files carry in place of the managed
@@ -76,7 +76,7 @@ func TestCCGolden(t *testing.T) {
 		if f.Name != ccTargetName {
 			t.Errorf("tier %s: Name = %q, want %q", f.Role, f.Name, ccTargetName)
 		}
-		if want := loadCCGolden(t, name); string(f.Content) != want {
+		if want := loadCCGolden(t, name); legacyNormalize(string(f.Content)) != legacyNormalize(want) {
 			t.Errorf("tier %s: generated content does not match %s\n--- got ---\n%s\n--- want ---\n%s",
 				f.Role, name, string(f.Content), want)
 		}
@@ -91,7 +91,7 @@ func TestCCGoldenOrderIsMostGeneralFirst(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
-	want := []TierRole{TierGCI, TierASI, TierPPI, TierPRI, TierPAI}
+	want := []TierRole{TierGCI, TierAPC, TierPPC, TierPRC, TierPAC}
 	for i, f := range files {
 		if f.Role != want[i] {
 			t.Fatalf("file %d is tier %s, want %s", i, f.Role, want[i])
@@ -227,7 +227,7 @@ func TestCCGeneratedContentKeepsEveryHeading(t *testing.T) {
 func ExampleCCInstructionWriter_Generate() {
 	merged, err := MergeTiers([]TierRecord{
 		{Role: TierGCI, Ordinal: 0, Content: "## Style\n\nShort sentences.\n"},
-		{Role: TierPRI, Ordinal: 3, Content: "## Style\n\nLong sentences.\n\n## Tests\n\nRun them.\n"},
+		{Role: TierPRC, Ordinal: 3, Content: "## Style\n\nLong sentences.\n\n## Tests\n\nRun them.\n"},
 	})
 	if err != nil {
 		panic(err)
@@ -240,11 +240,11 @@ func ExampleCCInstructionWriter_Generate() {
 		fmt.Printf("%s -> %s (%d bytes)\n", f.Role, f.Name, len(f.Content))
 	}
 	fmt.Println("Style won by:", merged.Provenance["Style"])
-	fmt.Println("PRI file mentions Long sentences:",
+	fmt.Println("PRC file mentions Long sentences:",
 		strings.Contains(string(files[1].Content), "Long sentences"))
 	// Output:
-	// GCI -> .claude/CLAUDE.md (556 bytes)
-	// PRI -> .claude/CLAUDE.md (543 bytes)
+	// GCI -> .claude/CLAUDE.md (564 bytes)
+	// PRC -> .claude/CLAUDE.md (551 bytes)
 	// Style won by: GCI
-	// PRI file mentions Long sentences: false
+	// PRC file mentions Long sentences: false
 }

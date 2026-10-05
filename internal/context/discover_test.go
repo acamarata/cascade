@@ -53,8 +53,8 @@ func TestTierRole(t *testing.T) {
 		role TierRole
 		want string
 	}{
-		{TierGCI, "GCI"}, {TierASI, "ASI"}, {TierPPI, "PPI"},
-		{TierPRI, "PRI"}, {TierPAI, "PAI"}, {TierRole(0), "invalid-tier"}, {TierRole(99), "invalid-tier"},
+		{TierGCI, "GCI"}, {TierAPC, "APC"}, {TierPPC, "PPC"},
+		{TierPRC, "PRC"}, {TierPAC, "PAC"}, {TierRole(0), "invalid-tier"}, {TierRole(99), "invalid-tier"},
 	}
 	for _, c := range cases {
 		if got := c.role.String(); got != c.want {
@@ -65,7 +65,7 @@ func TestTierRole(t *testing.T) {
 		t.Error("zero/out-of-range TierRole must be invalid")
 	}
 	got := allTierRoles()
-	want := []TierRole{TierGCI, TierASI, TierPPI, TierPRI, TierPAI}
+	want := []TierRole{TierGCI, TierAPC, TierPPC, TierPRC, TierPAC}
 	if len(got) != len(want) {
 		t.Fatalf("allTierRoles() has %d members, want %d", len(got), len(want))
 	}
@@ -87,14 +87,14 @@ func TestDiscoverGitRoot(t *testing.T) {
 			t.Fatal(err)
 		}
 		runGit(t, filepath.Join(root, "repo"), "init", "-q")
-		if got, want := gitRoot(context.Background(), repo), filepath.Join(root, "repo"); got != want {
-			t.Errorf("gitRoot() = %q, want %q", got, want)
+		if got, f := gitRoot(context.Background(), repo); got != filepath.Join(root, "repo") || f != "" {
+			t.Errorf("gitRoot() = %q finding %q, want the repo root and no finding", got, f)
 		}
 	})
 	t.Run("not inside a repo falls back to cwd", func(t *testing.T) {
 		dir := resolvedTempDir(t)
-		if got := gitRoot(context.Background(), dir); got != dir {
-			t.Errorf("gitRoot() = %q, want fallback %q", got, dir)
+		if got, f := gitRoot(context.Background(), dir); got != dir || f != "" {
+			t.Errorf("gitRoot() = %q finding %q, want fallback %q and no finding", got, f, dir)
 		}
 	})
 }
@@ -106,8 +106,8 @@ func TestDiscoverGitBinaryAbsent(t *testing.T) {
 		t.Skip("git still resolvable with an empty PATH on this platform; cannot exercise the absent-binary path")
 	}
 	dir := resolvedTempDir(t)
-	if got := gitRoot(context.Background(), dir); got != dir {
-		t.Errorf("gitRoot() with git absent = %q, want fallback %q", got, dir)
+	if got, f := gitRoot(context.Background(), dir); got != dir || f != FindingGitUnavailable {
+		t.Errorf("gitRoot() with git absent = %q finding %q, want fallback %q and git_unavailable", got, f, dir)
 	}
 }
 
@@ -126,8 +126,8 @@ func TestDiscoverEmptyCwd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
-	if pri := records[TierPRI-1]; pri.Dir != dir {
-		t.Errorf("PRI.Dir = %q, want the chdir'd cwd %q", pri.Dir, dir)
+	if pri := records[TierPRC-1]; pri.Dir != dir {
+		t.Errorf("PRC.Dir = %q, want the chdir'd cwd %q", pri.Dir, dir)
 	}
 }
 
@@ -137,8 +137,8 @@ func TestDiscoverAbsentTierFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
-	if pri := records[TierPRI-1]; !pri.Absent || pri.Content != "" {
-		t.Errorf("PRI = %+v, want Absent=true Content=\"\"", pri)
+	if pri := records[TierPRC-1]; !pri.Absent || pri.Content != "" {
+		t.Errorf("PRC = %+v, want Absent=true Content=\"\"", pri)
 	}
 }
 
@@ -153,11 +153,11 @@ func TestDiscoverHomeBoundary(t *testing.T) {
 	for _, d := range dirs {
 		byRole[d.role] = d
 	}
-	if byRole[TierPPI].dir != "" {
-		t.Errorf("PPI (== HOME) must be absent, got dir=%q", byRole[TierPPI].dir)
+	if byRole[TierPPC].dir != "" {
+		t.Errorf("PPC (== HOME) must be absent, got dir=%q", byRole[TierPPC].dir)
 	}
-	if byRole[TierASI].dir != "" {
-		t.Errorf("ASI (overshoots past HOME) must be absent, got dir=%q", byRole[TierASI].dir)
+	if byRole[TierAPC].dir != "" {
+		t.Errorf("APC (overshoots past HOME) must be absent, got dir=%q", byRole[TierAPC].dir)
 	}
 	if byRole[TierGCI].dir != root {
 		t.Errorf("GCI must still be HOME, got dir=%q", byRole[TierGCI].dir)
@@ -180,7 +180,7 @@ func TestLoadTierSymlinkNotFollowed(t *testing.T) {
 	if err := os.Symlink(decoy, filepath.Join(td, tierFileName)); err != nil {
 		t.Fatal(err)
 	}
-	rec, err := loadTier(TierPRI, filepath.Join(root, "repo"), 3)
+	rec, err := loadTier(TierPRC, filepath.Join(root, "repo"), 3)
 	if err != nil {
 		t.Fatalf("loadTier() error = %v", err)
 	}
@@ -195,7 +195,7 @@ func TestLoadTierFileIsDirectory(t *testing.T) {
 	if err := os.MkdirAll(tierPath, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	rec, err := loadTier(TierPRI, filepath.Join(root, "repo"), 3)
+	rec, err := loadTier(TierPRC, filepath.Join(root, "repo"), 3)
 	if err != nil {
 		t.Fatalf("loadTier() error = %v", err)
 	}
@@ -222,7 +222,7 @@ func TestLoadTierPermissionDenied(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(file, 0o644) })
 
-	_, err := loadTier(TierPRI, filepath.Join(root, "repo"), 3)
+	_, err := loadTier(TierPRC, filepath.Join(root, "repo"), 3)
 	if err == nil {
 		t.Fatal("loadTier() with an unreadable file: want an error, got nil")
 	}

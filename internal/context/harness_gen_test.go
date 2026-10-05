@@ -64,7 +64,7 @@ func TestWriteHarnessFileCreatesThenLeavesAlone(t *testing.T) {
 // anything.
 func TestWriteHarnessFileIdempotentAcrossManyRuns(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "CLAUDE.md")
-	f := ccFile(t, TierPRI, "Tests", "Run them.")
+	f := ccFile(t, TierPRC, "Tests", "Run them.")
 	for i := 0; i < 10; i++ {
 		if _, err := WriteHarnessFile(path, f, RefuseIfEdited); err != nil {
 			t.Fatalf("run %d: %v", i, err)
@@ -93,7 +93,7 @@ func TestWriteHarnessFileAppendsToHandAuthoredFile(t *testing.T) {
 		t.Fatalf("seeding: %v", err)
 	}
 
-	res, err := WriteHarnessFile(path, ccFile(t, TierPPI, "Style", "Short."), RefuseIfEdited)
+	res, err := WriteHarnessFile(path, ccFile(t, TierPPC, "Style", "Short."), RefuseIfEdited)
 	if err != nil {
 		t.Fatalf("append: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestWriteHarnessFileAppendsToHandAuthoredFile(t *testing.T) {
 	}
 
 	// A second run must replace the block in place, not append another.
-	if _, err := WriteHarnessFile(path, ccFile(t, TierPPI, "Style", "Short."), RefuseIfEdited); err != nil {
+	if _, err := WriteHarnessFile(path, ccFile(t, TierPPC, "Style", "Short."), RefuseIfEdited); err != nil {
 		t.Fatalf("second append: %v", err)
 	}
 	again, err := os.ReadFile(path)

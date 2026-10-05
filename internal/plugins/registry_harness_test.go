@@ -99,7 +99,7 @@ func TestResolveHarnessFiles_GenerateError(t *testing.T) {
 // for a tier discovery gave no directory is REFUSED with a clear error,
 // never silently dropped or written to a wrong/empty path. A non-git
 // t.TempDir() with no strictly-nested child directory always resolves
-// TierPAI to "" (cwd == the PRI anchor, so pai never gets a candidate —
+// TierPAC to "" (cwd == the PRI anchor, so pai never gets a candidate —
 // see internal/context/discover.go's tierDirs), which is exactly the
 // resolved-directory-less role this asserts against.
 func TestResolveHarnessFiles_MissingRoot(t *testing.T) {
@@ -107,11 +107,11 @@ func TestResolveHarnessFiles_MissingRoot(t *testing.T) {
 	writeTierFile(t, dir, "# Repo Instructions\n\nContent.\n")
 
 	gen := fakeHarnessGen{files: []casctx.HarnessFile{
-		{Name: "x.md", Content: []byte("y"), Role: casctx.TierPAI},
+		{Name: "x.md", Content: []byte("y"), Role: casctx.TierPAC},
 	}}
 	_, err := resolveHarnessFiles(context.Background(), dir, gen)
 	if err == nil {
-		t.Fatal("resolveHarnessFiles(...) error = nil, want non-nil (TierPAI has no resolved directory here)")
+		t.Fatal("resolveHarnessFiles(...) error = nil, want non-nil (TierPAC has no resolved directory here)")
 	}
 }
 

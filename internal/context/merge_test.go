@@ -16,7 +16,7 @@ import (
 // here INDEPENDENTLY of tier.go's iota block and of MergeTiers' behaviour on
 // purpose: a precedence test that derives its expectation from the code it
 // checks passes just as happily with the order inverted.
-var specPrecedenceOrder = []TierRole{TierGCI, TierASI, TierPPI, TierPRI, TierPAI}
+var specPrecedenceOrder = []TierRole{TierGCI, TierAPC, TierPPC, TierPRC, TierPAC}
 
 // rec builds a present TierRecord at the given ordinal.
 func rec(role TierRole, ordinal int, content string) TierRecord {
@@ -69,7 +69,7 @@ func TestMergePrecedenceMatchesSpecOrder(t *testing.T) {
 func TestMergeLowerTierAddsButNeverOverrides(t *testing.T) {
 	merged, err := MergeTiers([]TierRecord{
 		rec(TierGCI, 0, "## Shared\ngci body\n"),
-		rec(TierPAI, 4, "## Shared\npai body\n## App Only\napp body\n"),
+		rec(TierPAC, 4, "## Shared\npai body\n## App Only\napp body\n"),
 	})
 	if err != nil {
 		t.Fatalf("MergeTiers() error = %v", err)
@@ -77,7 +77,7 @@ func TestMergeLowerTierAddsButNeverOverrides(t *testing.T) {
 	if got := winnerOf(t, merged, "Shared"); got != TierGCI {
 		t.Errorf("Shared won by %s, want GCI", got)
 	}
-	if got := winnerOf(t, merged, "App Only"); got != TierPAI {
+	if got := winnerOf(t, merged, "App Only"); got != TierPAC {
 		t.Errorf("App Only won by %s, want PAI", got)
 	}
 	if len(merged.Sections) != 2 || merged.Sections[0].Heading != "Shared" || merged.Sections[1].Heading != "App Only" {
@@ -94,7 +94,7 @@ func TestMergeLowerTierAddsButNeverOverrides(t *testing.T) {
 func TestMergeEmptySectionDiffersFromAbsentSection(t *testing.T) {
 	defined, err := MergeTiers([]TierRecord{
 		rec(TierGCI, 0, "## Rule\n"),
-		rec(TierPRI, 3, "## Rule\nrepo body\n"),
+		rec(TierPRC, 3, "## Rule\nrepo body\n"),
 	})
 	if err != nil {
 		t.Fatalf("MergeTiers() error = %v", err)
@@ -108,12 +108,12 @@ func TestMergeEmptySectionDiffersFromAbsentSection(t *testing.T) {
 
 	omitted, err := MergeTiers([]TierRecord{
 		rec(TierGCI, 0, "## Other\ngci body\n"),
-		rec(TierPRI, 3, "## Rule\nrepo body\n"),
+		rec(TierPRC, 3, "## Rule\nrepo body\n"),
 	})
 	if err != nil {
 		t.Fatalf("MergeTiers() error = %v", err)
 	}
-	if got := winnerOf(t, omitted, "Rule"); got != TierPRI {
+	if got := winnerOf(t, omitted, "Rule"); got != TierPRC {
 		t.Errorf("an unmentioned heading must fall through to the lower tier; got %s", got)
 	}
 }
@@ -123,7 +123,7 @@ func TestMergeEmptySectionDiffersFromAbsentSection(t *testing.T) {
 // position, earliest wins, and it is not a cross-tier conflict.
 func TestMergeWithinRecordDuplicateHeadingLowerPositionWins(t *testing.T) {
 	merged, err := MergeTiers([]TierRecord{
-		rec(TierPPI, 2, "## Rule\nfirst occurrence\n## Rule\nsecond occurrence\n"),
+		rec(TierPPC, 2, "## Rule\nfirst occurrence\n## Rule\nsecond occurrence\n"),
 	})
 	if err != nil {
 		t.Fatalf("MergeTiers() error = %v", err)
@@ -142,7 +142,7 @@ func TestMergeWithinRecordDuplicateHeadingLowerPositionWins(t *testing.T) {
 func TestMergePreamblesFromEveryTierSurvive(t *testing.T) {
 	merged, err := MergeTiers([]TierRecord{
 		rec(TierGCI, 0, "# GCI title\nintro\n## Rule\ngci\n"),
-		rec(TierPAI, 4, "# PAI title\nintro\n## Rule\npai\n"),
+		rec(TierPAC, 4, "# PAI title\nintro\n## Rule\npai\n"),
 	})
 	if err != nil {
 		t.Fatalf("MergeTiers() error = %v", err)
@@ -153,7 +153,7 @@ func TestMergePreamblesFromEveryTierSurvive(t *testing.T) {
 			preambles = append(preambles, s.Role)
 		}
 	}
-	if len(preambles) != 2 || preambles[0] != TierGCI || preambles[1] != TierPAI {
+	if len(preambles) != 2 || preambles[0] != TierGCI || preambles[1] != TierPAC {
 		t.Fatalf("preamble roles = %v, want [GCI PAI]", preambles)
 	}
 	if _, keyed := merged.Provenance[""]; keyed {
@@ -168,7 +168,7 @@ func TestMergePreamblesFromEveryTierSurvive(t *testing.T) {
 // never wrote.
 func TestMergeQuotedHeadingInsideFenceIsNotABoundary(t *testing.T) {
 	merged, err := MergeTiers([]TierRecord{
-		rec(TierPRI, 3, "## Real\nbefore\n```md\n## Quoted\nexample\n```\nafter\n"),
+		rec(TierPRC, 3, "## Real\nbefore\n```md\n## Quoted\nexample\n```\nafter\n"),
 	})
 	if err != nil {
 		t.Fatalf("MergeTiers() error = %v", err)
@@ -189,7 +189,7 @@ func TestMergeEmptyAndAllAbsent(t *testing.T) {
 	cases := map[string][]TierRecord{
 		"nil":        nil,
 		"empty":      {},
-		"all_absent": {{Role: TierGCI, Ordinal: 0, Absent: true}, {Role: TierPRI, Ordinal: 3, Absent: true}},
+		"all_absent": {{Role: TierGCI, Ordinal: 0, Absent: true}, {Role: TierPRC, Ordinal: 3, Absent: true}},
 	}
 	for name, tiers := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -209,7 +209,7 @@ func TestMergeEmptyAndAllAbsent(t *testing.T) {
 
 // TestMergeSingleTier: one tier merges to exactly its own sections.
 func TestMergeSingleTier(t *testing.T) {
-	merged, err := MergeTiers([]TierRecord{rec(TierPRI, 3, "## A\na\n## B\nb\n")})
+	merged, err := MergeTiers([]TierRecord{rec(TierPRC, 3, "## A\na\n## B\nb\n")})
 	if err != nil {
 		t.Fatalf("MergeTiers() error = %v", err)
 	}
@@ -225,15 +225,15 @@ func TestMergeSingleTier(t *testing.T) {
 func TestMergeFailsClosedOnMalformedInput(t *testing.T) {
 	good := rec(TierGCI, 0, "## Rule\ngci\n")
 	cases := map[string][]TierRecord{
-		"out_of_order_ordinals": {rec(TierASI, 3, "## A\n"), rec(TierPRI, 1, "## B\n")},
-		"repeated_ordinal":      {rec(TierASI, 1, "## A\n"), rec(TierPRI, 1, "## B\n")},
+		"out_of_order_ordinals": {rec(TierAPC, 3, "## A\n"), rec(TierPRC, 1, "## B\n")},
+		"repeated_ordinal":      {rec(TierAPC, 1, "## A\n"), rec(TierPRC, 1, "## B\n")},
 		"negative_ordinal":      {rec(TierGCI, -1, "## A\n")},
-		"repeated_role":         {rec(TierPRI, 1, "## A\n"), rec(TierPRI, 2, "## B\n")},
+		"repeated_role":         {rec(TierPRC, 1, "## A\n"), rec(TierPRC, 2, "## B\n")},
 		"zero_role":             {{Role: TierRole(0), Ordinal: 0}},
 		"out_of_range_role":     {{Role: TierRole(9), Ordinal: 0}},
-		"absent_with_content":   {good, {Role: TierPRI, Ordinal: 3, Absent: true, Content: "## Rule\n"}},
-		"invalid_utf8":          {good, rec(TierPRI, 3, "## Rule\n\xff\xfe not text\n")},
-		"nul_byte":              {good, rec(TierPRI, 3, "## Rule\nbo\x00dy\n")},
+		"absent_with_content":   {good, {Role: TierPRC, Ordinal: 3, Absent: true, Content: "## Rule\n"}},
+		"invalid_utf8":          {good, rec(TierPRC, 3, "## Rule\n\xff\xfe not text\n")},
+		"nul_byte":              {good, rec(TierPRC, 3, "## Rule\nbo\x00dy\n")},
 	}
 	for name, tiers := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -257,7 +257,7 @@ func TestMergeFailsClosedOnMalformedInput(t *testing.T) {
 func ExampleMergeTiers() {
 	merged, err := MergeTiers([]TierRecord{
 		{Role: TierGCI, Ordinal: 0, Content: "## Style\nno em dashes\n"},
-		{Role: TierPRI, Ordinal: 3, Content: "## Style\nem dashes are fine\n## Tests\nrun go test\n"},
+		{Role: TierPRC, Ordinal: 3, Content: "## Style\nem dashes are fine\n## Tests\nrun go test\n"},
 	})
 	if err != nil {
 		panic(err)
@@ -267,5 +267,5 @@ func ExampleMergeTiers() {
 	}
 	// Output:
 	// Style <- GCI
-	// Tests <- PRI
+	// Tests <- PRC
 }
