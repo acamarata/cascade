@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-09-12T19:28:30.278005+00:00",
+  "accounts": [
+    {
+      "id": "example-acc1",
+      "family": "openai",
+      "subscription": "openai-pro",
+      "access_methods": ["codex-cli"],
+      "role": "pooled",
+      "exhaustion_priority": 50,
+      "models": ["gpt-5.5", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.4-mini"],
+      "cli_available": false,
+      "key_count": 0,
+      "notes": "REDACTED"
+    }
+  ],
+  "model_matrix": [
+    {
+      "model_id": "gpt-5.5",
+      "available_via": [{"account_id": "example-acc1", "method": "codex-cli"}],
+      "best_for": ["bulk-execution", "background"],
+      "tier": "T2",
+      "family": "openai",
+      "notes": "REDACTED"
+    }
+  ]
+}

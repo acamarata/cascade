@@ -101,6 +101,12 @@ writes.
 
 ## Recall index rebuild and golden parity
 
+After a successful non-dry `cascade migrate v1 --from <home> --yes`, the
+command rebuilds the recall index over migrated memory and prints its verify
+report after the import report. Rebuild or verification failure exits non-zero;
+completed import ledger rows remain done. Re-running retries the rebuild while
+completed domains are skipped. A dry run never rebuilds the index.
+
 After memory content lands in its v2 destination, `internal/migration/v1`'s
 `RebuildIndex` re-runs the same chunk/FTS5/vector index build the retrieval
 system's own `recall index rebuild` verb uses (F/S-10 chunking, F/S-11 write
@@ -169,6 +175,39 @@ reference produces one stderr warning naming the files and leaves the
 migration result and exit code unchanged. Current checksums produce no
 warning. Staleness means a checksum difference, not elapsed time. Outside
 the source module, including a checkout of another module, no check runs.
+
+## End-to-end migration check
+
+From the module root, run:
+
+```console
+go test -p 4 -tags integration -count=1 -v ./internal/migration/ -run '^(TestEpicZMigration|TestEpicZMigration_RawRedactedRefuses)$'
+```
+
+The test builds the CLI once and materializes the committed dot-free
+`internal/migration/testdata/v1-home` fixture under a temporary home. Its
+README records the source files and checksums. Vault names are synthetic;
+the successful derivative replaces redacted values with logged NONSECRET
+placeholders only in the temporary copy. The raw fixture must be refused.
+
+Before any CLI step, a read-only custody guard requires an unresolved default
+keychain on macOS, or a disabled session bus with no runtime bus on Linux.
+An unsupported or uncertain result fails before any step runs. HOME,
+USERPROFILE, CASCADE_HOME and all XDG directories point into temporary paths.
+The subsequent doctor custody check must report the file-vault backend.
+Every doctor outcome must be `ok`, except fresh-home `warn` results for
+`completion-gate-hooks`, `hook-events`, `provider_health` and `subsystem_census`.
+The test accepts exit 0, or exit 5 with only those warnings. Any other outcome,
+warning name or exit code fails the check.
+
+The sequence checks dry-run counts, empty domain destinations and ledger,
+then full import counts, completed ledger rows, exact vault contents and a
+healthy recall rebuild. Config records source keys and planned changes
+separately: the additional change is exactly `schema_version`. The account
+absence check reads `provider_records` in the actual `providers.db` store;
+initializing empty database schemas during dry run is allowed. It then runs
+doctor, context sync with `--check` over a temporary fixture project, and the
+golden checksum tripwire. Committed fixture hashes must remain unchanged.
 
 ## Legacy pointer sweep
 

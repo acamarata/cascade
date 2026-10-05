@@ -58,14 +58,15 @@ type migrateFlags struct {
 // providerDeps pattern: a test substitutes every field so no test opens a
 // real cascade.db, reads the real environment, or drives a real terminal.
 type migrateDeps struct {
-	Factory    migration.ImporterFactory
-	OpenLedger func(ctx context.Context) (*migration.LedgerStore, func() error, error)
-	Getenv     func(string) string
+	Factory      migration.ImporterFactory
+	OpenLedger   func(ctx context.Context) (*migration.LedgerStore, func() error, error)
+	Getenv       func(string) string
+	RebuildIndex func(context.Context) (migrationv1.RebuildIndexResult, error)
 }
 
 // productionMigrateDeps builds migrateDeps against the real environment.
 func productionMigrateDeps() migrateDeps {
-	return migrateDeps{Factory: productionMigrateFactory, OpenLedger: productionOpenLedger, Getenv: os.Getenv}
+	return migrateDeps{Factory: productionMigrateFactory, OpenLedger: productionOpenLedger, Getenv: os.Getenv, RebuildIndex: productionRebuildRecallIndex}
 }
 
 // mountMigrateCmd attaches the top-level `migrate` command, following
@@ -131,8 +132,12 @@ func runMigrateV1(cmd *cobra.Command, deps migrateDeps, flags migrateFlags) erro
 	if err != nil {
 		return err
 	}
-	defer func() { _ = closeLedger() }()
-
+	ledgerOpen := true
+	defer func() {
+		if ledgerOpen {
+			_ = closeLedger()
+		}
+	}()
 	getenv := deps.Getenv
 	if getenv == nil {
 		getenv = os.Getenv
@@ -151,7 +156,11 @@ func runMigrateV1(cmd *cobra.Command, deps migrateDeps, flags migrateFlags) erro
 	if writeErr := migrateOutputWriter(cmd).Result(migrateReportView{report}); writeErr != nil {
 		return writeErr
 	}
-	return runErr
+	if runErr != nil || flags.dryRun {
+		return runErr
+	}
+	ledgerOpen = false
+	return finishMigrationRecall(cmd, deps.RebuildIndex, closeLedger)
 }
 
 // noteDaemonLiveness prints an informational note when a live daemon is
