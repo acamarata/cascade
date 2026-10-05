@@ -2,26 +2,35 @@
 //
 //	refusal, structural parseability of the rendered configuration entry
 //	(this ticket's CONTRACT DEVIATION on the missing settings-file
-//	fixture, see renderer.go's header), and the daemon-absent-is-fast-
-//	and-non-fatal property of the rendered command itself.
+//	fixture, see renderer.go's header), and the bounded, non-gating shape
+//	of the sessions pack's rendered commands. The socket-substitution cases
+//	use a local template pack: the sessions pack's commands resolve the
+//	daemon socket at hook time and carry no placeholder.
 //
 // SPORT: fleet/hookpacks (ADD, per T-4 sport_updates).
 package hookpacks_test
 
 import (
-	"context"
 	"encoding/json"
-	"os/exec"
-	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/acamarata/cascade/internal/fleet/hookpacks"
 )
 
+// socketTemplatePack is a two-descriptor pack whose commands carry the socket
+// placeholder, so the renderer's substitution is exercised independently of
+// any shipped pack.
+func socketTemplatePack() hookpacks.HookPack {
+	tmpl := "probe --unix-socket {{CASCADE_SOCKET_PATH}} http://cascade.sock/rpc"
+	return hookpacks.HookPack{Name: "socket-template", Descriptors: []hookpacks.HookDescriptor{
+		{EventType: hookpacks.EventStop, CommandTemplate: tmpl},
+		{EventType: hookpacks.EventPreToolUse, CommandTemplate: tmpl},
+	}}
+}
+
 func TestRenderer_SubstitutesSocketPathForEveryDescriptor(t *testing.T) {
-	pack := hookpacks.SessionsPack()
+	pack := socketTemplatePack()
 	rendered, err := pack.Render("/tmp/cascade-test.sock")
 	if err != nil {
 		t.Fatalf("Render: %v", err)
@@ -53,18 +62,18 @@ func TestRenderer_SubstitutesSocketPathForEveryDescriptor(t *testing.T) {
 }
 
 func TestRenderer_EmptySocketPathRefused(t *testing.T) {
-	pack := hookpacks.SessionsPack()
+	pack := socketTemplatePack()
 	if _, err := pack.Render(""); err == nil {
 		t.Fatal("Render(\"\") should refuse with ErrEmptySocketPath")
 	}
 }
 
-// TestRenderer_CommandCarriesBoundedTimeoutAndNeverFails asserts,
-// structurally (no subprocess needed, always runs), that every rendered
-// command carries a bounded curl timeout and an unconditional success
-// suffix — the two properties that make it non-blocking and non-fatal
-// to its host regardless of whether a real daemon is reachable.
-func TestRenderer_CommandCarriesBoundedTimeoutAndNeverFails(t *testing.T) {
+// TestRenderer_SessionsCommandsAreBoundedAndNonGating asserts, structurally,
+// that every rendered sessions command is the hook-event command with the
+// harness-side timeout stated, and that none can fail its host through shell
+// plumbing: the command itself exits 0 on every path (proved against a live
+// daemon in cmd/cascade), so the template adds no `|| true` and no exit code.
+func TestRenderer_SessionsCommandsAreBoundedAndNonGating(t *testing.T) {
 	pack := hookpacks.SessionsPack()
 	rendered, err := pack.Render("/tmp/cascade-test.sock")
 	if err != nil {
@@ -72,77 +81,21 @@ func TestRenderer_CommandCarriesBoundedTimeoutAndNeverFails(t *testing.T) {
 	}
 	for i, raw := range rendered {
 		var entry struct {
-			Hooks []struct{ Command string } `json:"hooks"`
+			Hooks []struct {
+				Command string `json:"command"`
+				Timeout int    `json:"timeout"`
+			} `json:"hooks"`
 		}
 		if err := json.Unmarshal(raw, &entry); err != nil {
 			t.Fatalf("entry %d: %v", i, err)
 		}
-		cmd := entry.Hooks[0].Command
-		if !strings.Contains(cmd, "-m 1") {
-			t.Fatalf("entry %d command = %q, want a bounded curl -m timeout", i, cmd)
+		hook := entry.Hooks[0]
+		want := "cascade fleet sessions hook-event " + string(pack.Descriptors[i].EventType)
+		if hook.Command != want {
+			t.Fatalf("entry %d command = %q, want %q", i, hook.Command, want)
 		}
-		if !strings.HasSuffix(strings.TrimSpace(cmd), "|| true") {
-			t.Fatalf("entry %d command = %q, want an unconditional \"|| true\" success suffix", i, cmd)
+		if hook.Timeout != hookpacks.SessionsHookTimeoutSeconds {
+			t.Fatalf("entry %d timeout = %d, want %d", i, hook.Timeout, hookpacks.SessionsHookTimeoutSeconds)
 		}
-	}
-}
-
-// TestRenderer_DaemonAbsentFastAndNonFatal actually runs one rendered
-// command against a socket path that names no live listener and proves
-// it returns quickly with exit 0 — the property this ticket's
-// non-negotiables call the one that matters most, since "no daemon
-// running" is the common case in the field (it is the PERMANENT case on
-// windows: internal/mcp/transport/socket_windows.go refuses the unix
-// socket transport outright, so a windows install never has a listener
-// for this command to find). It skips cleanly when curl is unavailable
-// rather than failing the whole package on an environment gap.
-//
-// The "fast" ceiling is platform-calibrated, not a single POSIX-derived
-// constant applied everywhere. On POSIX, connect() to a unix socket path
-// with no listener fails in well under a millisecond, so curl's own
-// "-m 1" bound (types.go's sessionsPackCommand) is never actually
-// exercised and 3x that bound is a generous, still-tight ceiling. On
-// windows there is no unix-socket listener EVER (tier-2, see above), and
-// the OS-level connection-refused round trip for that case measured
-// consistently over curl's requested bound in CI (observed 4.1133074s,
-// roughly 4x the "-m 1" request) — a real, repeatable platform network-
-// stack characteristic, not a race or a flake, so it gets its own,
-// still-tight ceiling rather than inheriting the POSIX one.
-func TestRenderer_DaemonAbsentFastAndNonFatal(t *testing.T) {
-	if _, err := exec.LookPath("curl"); err != nil {
-		t.Skip("curl not available in this environment")
-	}
-	pack := hookpacks.SessionsPack()
-	rendered, err := pack.Render("/tmp/cascade-hookpacks-no-such-socket.sock")
-	if err != nil {
-		t.Fatalf("Render: %v", err)
-	}
-	var entry struct {
-		Hooks []struct{ Command string } `json:"hooks"`
-	}
-	if err := json.Unmarshal(rendered[0], &entry); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-
-	maxElapsed, ctxBound := 3*time.Second, 5*time.Second
-	if runtime.GOOS == "windows" {
-		maxElapsed, ctxBound = 8*time.Second, 12*time.Second
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), ctxBound)
-	defer cancel()
-	start := time.Now()
-	cmd := exec.CommandContext(ctx, "sh", "-c", entry.Hooks[0].Command)
-	runErr := cmd.Run()
-	elapsed := time.Since(start)
-
-	if ctx.Err() != nil {
-		t.Fatalf("rendered command did not return within the test's bounded timeout: %v", ctx.Err())
-	}
-	if elapsed > maxElapsed {
-		t.Fatalf("rendered command took %s against an absent daemon, want well under this platform's bound (%s)", elapsed, maxElapsed)
-	}
-	if runErr != nil {
-		t.Fatalf("rendered command exited non-zero (%v) with no daemon present; it must never fail its host", runErr)
 	}
 }

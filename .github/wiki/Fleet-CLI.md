@@ -2,7 +2,8 @@
 
 The `cascade fleet` command group inspects the local fleet: harness
 sessions (`fleet sessions`), a live dashboard (`fleet top`), and an
-entity's durable journal (`fleet journal show|replay`).
+entity's durable journal (`fleet journal show|replay`). A hidden
+`fleet sessions hook-event` command registers live sessions from hooks.
 
 > This page currently documents `fleet journal show|replay` (P1-E13-W3-
 > S27-T4) and daemon mode below (P1-E12-W6-S121-T1). `fleet sessions`'s
@@ -120,6 +121,48 @@ rather than omitting the field, so a reader can always distinguish "this
 lane's health is not yet known" (a lookup that returns nothing) from "an
 all-zero reading" (a field that is present and reads 0) at the response
 shape level.
+
+## Live session registration: `fleet sessions hook-event <Event>`
+
+A hidden command that registers and tracks a live harness session. The
+cascade-claude hook pack (`sessions`, hook pack version 2) installs it for
+exactly five harness hook events:
+
+| Event | Effect on the stored session |
+|---|---|
+| `SessionStart` | creates the session, state `active` |
+| `PreToolUse`, `PostToolUse` | touch it (last tool time, tool count) |
+| `Stop` | moves it to `idle` |
+| `SessionEnd` | moves it to `closed` |
+
+Each installed hook runs `cascade fleet sessions hook-event <Event>` with a
+5 second harness-side timeout. The command reads the harness's own hook JSON
+from stdin (at most 1 MiB), takes `session_id` and `hook_event_name` from it
+(other fields are ignored), and posts one `fleet.sessions.hook_event` to the
+daemon through the client SDK with a 1 second deadline. The daemon socket is
+resolved when the hook runs, the same way every other `cascade` command
+resolves it. The recorded harness name is `claude-code` and the PID is the
+hook process's parent.
+
+The command sends nothing when the event argument is not one of the five,
+stdin is empty or not a JSON object, `hook_event_name` differs from the
+argument, or `session_id` does not match `^[A-Za-z0-9_-]{1,128}$`.
+
+It never blocks the harness:
+
+- It exits 0 on every path and never 2.
+- Stdout is always empty.
+- A failed delivery (no daemon, or a daemon that refuses the event) prints
+  one line on stderr, `cascade: fleet session hook not delivered: <kind>`.
+  A refused input prints nothing.
+
+`cascade fleet sessions` (and `--json`) then lists the registered session.
+A daemon that does not serve `fleet.sessions.hook_event` answers every
+delivery with an error, so nothing is registered and the stderr line names
+the kind.
+
+The fixtures behind the five events are real captures; their provenance is
+in `internal/fleet/hookpacks/testdata/README.md`.
 
 ## Hidden alias
 

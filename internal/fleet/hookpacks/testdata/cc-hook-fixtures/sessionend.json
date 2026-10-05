@@ -4,10 +4,6 @@
   "cwd": "/private/tmp/ccapture/proj",
   "scratchpad_dir": "/tmp/ccapture/scratch/6fab1b60-b545-4cbb-9c39-0b51b24c5db6/scratchpad",
   "prompt_id": "0e19520f-02b5-4813-a0ba-398e4e5ffac1",
-  "permission_mode": "bypassPermissions",
-  "hook_event_name": "Stop",
-  "stop_hook_active": false,
-  "last_assistant_message": "done",
-  "background_tasks": [],
-  "session_crons": []
+  "hook_event_name": "SessionEnd",
+  "reason": "other"
 }

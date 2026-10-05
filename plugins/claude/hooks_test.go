@@ -194,3 +194,58 @@ func TestSetHookPackRendererAcceptsARealRenderer(t *testing.T) {
 		t.Fatalf("SetHookPackRenderer: %v", err)
 	}
 }
+
+// TestHookPackReinstallOnVersionBump proves the version-2 bump re-installs an
+// old pack: an install stamped "1" that carries the legacy curl hooks is
+// rewritten with the five-event hook-event pack and re-stamped "2", and the
+// install then converges.
+func TestHookPackReinstallOnVersionBump(t *testing.T) {
+	if HookPackVersion != "2" {
+		t.Fatalf("HookPackVersion = %q, want %q", HookPackVersion, "2")
+	}
+	paths := tempPaths(t)
+	configPath := filepath.Join(paths.HookConfig, hookPackFile)
+	versionPath := filepath.Join(paths.HookConfig, hookPackVersionFile)
+	legacy := `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"curl -s -m 1 --unix-socket /run/c.sock http://cascade.sock/rpc"}]}]}}`
+	if err := os.MkdirAll(paths.HookConfig, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for path, body := range map[string]string{configPath: legacy, versionPath: "1"} {
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shipped, err := os.ReadFile(filepath.Join("hookpacks", "sessions.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	withRenderer(t, func(string) ([]byte, error) { return shipped, nil })
+
+	results, err := installHookPackAt(paths, "/run/c.sock")
+	if err != nil {
+		t.Fatalf("install over a version-1 pack: %v", err)
+	}
+	if !results[0].Changed || !results[1].Changed {
+		t.Fatalf("results = %+v, want both the config and the version rewritten", results)
+	}
+	stamp, err := os.ReadFile(versionPath) //nolint:gosec // test-local temp path.
+	if err != nil || string(stamp) != "2" {
+		t.Fatalf("version file = %q, %v; want %q", stamp, err, "2")
+	}
+	config, err := os.ReadFile(configPath) //nolint:gosec // test-local temp path.
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(config), "curl") || string(config) == legacy {
+		t.Fatalf("the version-1 config survived the bump:\n%s", config)
+	}
+	for _, event := range []string{"SessionStart", "PreToolUse", "PostToolUse", "Stop", "SessionEnd"} {
+		if !strings.Contains(string(config), "cascade fleet sessions hook-event "+event) {
+			t.Errorf("the reinstalled config has no hook-event %s command", event)
+		}
+	}
+	again, err := installHookPackAt(paths, "/run/c.sock")
+	if err != nil || again[0].Changed || again[1].Changed {
+		t.Fatalf("second install = %+v, %v; want no change", again, err)
+	}
+}

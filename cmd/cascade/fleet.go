@@ -158,6 +158,8 @@ func newFleetSessionsCmd(deps fleetSessionsDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&watch, "watch", false, "stream live session changes (requires a running daemon)")
+	// hook-event (P1-CORE-14): hidden; installed by the sessions hook pack.
+	cmd.AddCommand(newSessionsHookEventCmd(deps, productionSessionHookEnv()))
 	return cmd
 }
 
