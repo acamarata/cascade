@@ -23,7 +23,11 @@ package jobs
 //
 // Constraints: a LIVE pgid is never preempted -- Reclaim leaves the row
 //
-//	in expired_unconfirmed and the contender stays queued. The epoch
+//	in expired_unconfirmed and the contender stays queued. Reclaim is
+//	fail-closed: a nil probe is a wiring bug refused with
+//	ErrNilLivenessProbe before any row is read or written, and a holder
+//	with no recorded pgid (no execution row, or the pgid 0 sentinel) is
+//	never fenced and the probe is never called. The epoch
 //	advances ONLY inside a confirmed-dead Reclaim or a fresh Acquire
 //	grant, never inside Fence itself (a fence never advances the epoch
 //	it is validating against).
@@ -41,6 +45,11 @@ import (
 // stall-release co-ownership) when the caller's presented epoch does not
 // match the lease's current stored epoch.
 var ErrLeaseFenced = cascade.New(cascade.KindConflict, "jobs: lease epoch fence mismatch")
+
+// ErrNilLivenessProbe is returned by Reclaim and ReclaimAll when the
+// caller passes a nil ProcessLivenessProbe. A nil probe is a wiring bug,
+// so both refuse before touching any lease row.
+var ErrNilLivenessProbe = cascade.New(cascade.KindInternal, "jobs: reclaim needs a liveness probe")
 
 // ProcessLivenessProbe abstracts "is this recorded pgid still a live
 // process" so Reclaim's tests are deterministic (a fake probe) while
@@ -92,7 +101,16 @@ func (m *LeaseManager) Fence(ctx context.Context, repoID, scopeGlob string, epoc
 // Contending() excludes expired_orphaned -- so a queued caller's next
 // Acquire succeeds). A LIVE pgid changes nothing: the row stays
 // expired_unconfirmed and the contender stays queued.
+//
+// Fail-closed: a nil probe returns (ResourceLease{}, ErrNilLivenessProbe)
+// before the transaction, so no row is read or written and no epoch
+// advances. A holder with no recorded pgid (no execution row, or pgid 0)
+// leaves the row unchanged, expired_unconfirmed at the same epoch,
+// without calling the probe. Only probe.IsAlive(pgid) == false fences.
 func (m *LeaseManager) Reclaim(ctx context.Context, repoID, scopeGlob string, probe ProcessLivenessProbe) (ResourceLease, error) {
+	if probe == nil {
+		return ResourceLease{}, ErrNilLivenessProbe
+	}
 	var result ResourceLease
 	txErr := m.store.withTx(ctx, func(tx *sql.Tx) error {
 		lease, ok, err := getLeaseTx(ctx, tx, repoID, scopeGlob)
@@ -107,8 +125,7 @@ func (m *LeaseManager) Reclaim(ctx context.Context, repoID, scopeGlob string, pr
 		if err != nil {
 			return err
 		}
-		alive := havePGID && probe != nil && probe.IsAlive(pgid)
-		if alive {
+		if !havePGID || probe.IsAlive(pgid) {
 			result = lease
 			return nil
 		}
@@ -137,7 +154,12 @@ func (m *LeaseManager) Reclaim(ctx context.Context, repoID, scopeGlob string, pr
 
 // ReclaimAll runs Reclaim over every currently expired_unconfirmed lease
 // across every repo -- the daemon-start sweep R-21.177 describes.
+// A nil probe returns (nil, ErrNilLivenessProbe) before any lease is
+// listed.
 func (m *LeaseManager) ReclaimAll(ctx context.Context, probe ProcessLivenessProbe) ([]ResourceLease, error) {
+	if probe == nil {
+		return nil, ErrNilLivenessProbe
+	}
 	rows, err := m.store.db.QueryContext(ctx,
 		`SELECT repo_id, scope_glob FROM `+tableResourceLease+` WHERE state = ?`, string(LeaseExpiredUnconfirmed))
 	if err != nil {
