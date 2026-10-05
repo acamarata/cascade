@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05T05:03:25Z",
+  "generated_at": "2026-10-05T06:46:12Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5365,6 +5365,33 @@
       ]
     },
     {
+      "name": "cmd/cascade/fleet-sessions-hook",
+      "sites": [
+        {
+          "file": "cmd/cascade/fleet_sessions_hook.go",
+          "line": 32,
+          "status": "ADD",
+          "raw": "cmd/cascade/fleet-sessions-hook (ADD) — P1-CORE-14."
+        },
+        {
+          "file": "cmd/cascade/fleet_sessions_hook_test.go",
+          "line": 16,
+          "status": "",
+          "raw": "cmd/cascade/fleet-sessions-hook (coverage for P1-CORE-14)."
+        },
+        {
+          "file": "cmd/cascade/fleet_sessions_lifecycle_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "cmd/cascade/fleet-sessions-hook (coverage for P1-CORE-14)."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade/fleet-top-cli",
       "sites": [
         {
@@ -8684,7 +8711,7 @@
         },
         {
           "file": "internal/fleet/hookpacks/renderer_test.go",
-          "line": 8,
+          "line": 10,
           "status": "ADD",
           "ticket": "T-4",
           "raw": "fleet/hookpacks (ADD, per T-4 sport_updates)."
@@ -8698,7 +8725,7 @@
         },
         {
           "file": "internal/fleet/hookpacks/types_test.go",
-          "line": 6,
+          "line": 7,
           "status": "ADD",
           "ticket": "T-4",
           "raw": "fleet/hookpacks (ADD, per T-4 sport_updates)."
@@ -32124,7 +32151,7 @@
       ]
     }
   ],
-  "total_sites": 3061,
+  "total_sites": 3064,
   "unspecified_count": 160,
-  "multi_status_count": 89
+  "multi_status_count": 90
 }
