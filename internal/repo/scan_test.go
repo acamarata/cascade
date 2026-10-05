@@ -16,7 +16,9 @@ import (
 	"strings"
 	"testing"
 
+	cascadecontext "github.com/acamarata/cascade/internal/context"
 	"github.com/acamarata/cascade/internal/context/scope"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 func realGitRoot(ctx context.Context, cwd string) string {
@@ -71,11 +73,12 @@ func newScanDeps(t *testing.T) (ScanDeps, *scope.GraphStore) {
 	db := openTestDB(t)
 	graph := scope.NewGraphStore(db)
 	return ScanDeps{
-		Store:     NewStore(db),
-		Graph:     graph,
-		GitRoot:   realGitRoot,
-		RemoteURL: realRemoteURL,
-		Clock:     fixedScanClock{v: 1700000000},
+		Store:        NewStore(db),
+		Graph:        graph,
+		GitRoot:      realGitRoot,
+		RemoteURL:    realRemoteURL,
+		Clock:        fixedScanClock{v: 1700000000},
+		GitCommonDir: cascadecontext.GitCommonDir,
 	}, graph
 }
 
@@ -139,8 +142,8 @@ func TestResolveRepositoryGraphError(t *testing.T) {
 	db := openTestDB(t)
 	graph := scope.NewGraphStore(db)
 	_ = db.Close()
-	deps := ScanDeps{Store: NewStore(db), Graph: graph, GitRoot: realGitRoot, RemoteURL: realRemoteURL, Clock: fixedScanClock{}}
-	if _, err := resolveRepository(context.Background(), deps, "/tmp/x"); err == nil {
+	deps := ScanDeps{Store: NewStore(db), Graph: graph, GitRoot: realGitRoot, RemoteURL: realRemoteURL, Clock: fixedScanClock{}, GitCommonDir: cascadecontext.GitCommonDir}
+	if _, err := resolveRepository(context.Background(), deps, newRealGitRepo(t)); err == nil {
 		t.Fatal("resolveRepository against a closed db: want error, got nil")
 	}
 }
@@ -156,6 +159,7 @@ func TestValidateScanDepsEachField(t *testing.T) {
 	full := ScanDeps{
 		Store: NewStore(db), Graph: scope.NewGraphStore(db),
 		GitRoot: realGitRoot, RemoteURL: realRemoteURL, Clock: fixedScanClock{},
+		GitCommonDir: cascadecontext.GitCommonDir,
 	}
 	cases := []struct {
 		name string
@@ -166,6 +170,7 @@ func TestValidateScanDepsEachField(t *testing.T) {
 		{"nilGitRoot", func() ScanDeps { d := full; d.GitRoot = nil; return d }()},
 		{"nilRemoteURL", func() ScanDeps { d := full; d.RemoteURL = nil; return d }()},
 		{"nilClock", func() ScanDeps { d := full; d.Clock = nil; return d }()},
+		{"nilGitCommonDir", func() ScanDeps { d := full; d.GitCommonDir = nil; return d }()},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -214,18 +219,30 @@ func TestResolveMembershipUnresolvedRepo(t *testing.T) {
 	}
 }
 
-func TestHashPathAndRepositoryIDDeterministic(t *testing.T) {
-	first := hashPath("/a/b")
-	second := hashPath("/a/b")
-	if first != second {
-		t.Error("hashPath is not deterministic")
+// TestScanRefusesNilGitCommonDir proves GitCommonDir is required:
+// Scan returns KindInvalidInput naming GitCommonDir and writes nothing.
+func TestScanRefusesNilGitCommonDir(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
 	}
-	idFirst := repositoryID("r", "h")
-	idSecond := repositoryID("r", "h")
-	if idFirst != idSecond {
-		t.Error("repositoryID is not deterministic")
+	dir := newRealGitRepo(t)
+	deps, graph := newScanDeps(t)
+	deps.GitCommonDir = nil
+
+	_, err := Scan(context.Background(), deps, dir)
+	if err == nil {
+		t.Fatal("Scan with nil GitCommonDir: want error, got nil")
 	}
-	if repositoryID("r1", "h") == repositoryID("r2", "h") {
-		t.Error("repositoryID collided for different remotes")
+	if !cascade.HasKind(err, cascade.KindInvalidInput) {
+		t.Errorf("err = %v, want KindInvalidInput", err)
+	}
+	if !strings.Contains(err.Error(), "GitCommonDir") {
+		t.Errorf("error %q does not name GitCommonDir", err)
+	}
+	if _, ok, gerr := graph.RepositoryForRoot(context.Background(), dir); gerr != nil || ok {
+		t.Errorf("RepositoryForRoot after refused Scan = ok %v err %v, want no row", ok, gerr)
+	}
+	if all, lerr := deps.Store.List(context.Background()); lerr != nil || len(all) != 0 {
+		t.Errorf("Store.List after refused Scan = %d rows err %v, want 0", len(all), lerr)
 	}
 }

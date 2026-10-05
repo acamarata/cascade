@@ -25,8 +25,6 @@ package repo
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"path/filepath"
 
 	"github.com/acamarata/cascade/internal/context/scope"
@@ -56,6 +54,11 @@ type ScanDeps struct {
 	GitRoot   GitRootFunc
 	RemoteURL RemoteURLFunc
 	Clock     Clock
+	// GitCommonDir is required: it routes repository identity through
+	// scope.GraphStore.EnsureRepository, the one writer of
+	// context_repository rows. production passes
+	// internal/context.GitCommonDir.
+	GitCommonDir scope.GitCommonDirFunc
 }
 
 func validateScanDeps(deps ScanDeps) error {
@@ -70,6 +73,8 @@ func validateScanDeps(deps ScanDeps) error {
 		return cascade.New(cascade.KindInvalidInput, "repo: Scan requires a non-nil RemoteURL")
 	case deps.Clock == nil:
 		return cascade.New(cascade.KindInvalidInput, "repo: Scan requires a non-nil Clock")
+	case deps.GitCommonDir == nil:
+		return cascade.New(cascade.KindInvalidInput, "repo: Scan requires a non-nil GitCommonDir")
 	}
 	return nil
 }
@@ -140,28 +145,18 @@ func Scan(ctx context.Context, deps ScanDeps, cwd string) (Inventory, error) {
 	return inv, nil
 }
 
-// resolveRepository looks up the repository already bound to absRoot in
-// the scope graph, or registers a new one deterministically identified by
-// remote+path-hash (never a random id -- that would break the
-// determinism guarantee on a tree the scope graph has not seen yet).
+// resolveRepository binds absRoot to its repository row through
+// scope.GraphStore.EnsureRepository, which resolves the CanonicalRepoRoot
+// first so a linked worktree or a symlinked path of
+// one repository binds to one id. EnsureRepository is the only writer of
+// context_repository rows; this package derives no id itself.
 func resolveRepository(ctx context.Context, deps ScanDeps, absRoot string) (RepositoryRef, error) {
-	if existing, ok, err := deps.Graph.RepositoryForRoot(ctx, absRoot); err != nil {
-		return RepositoryRef{}, err
-	} else if ok {
-		return RepositoryRef{ID: existing.ID, Remote: existing.Remote, PathHash: existing.PathHash}, nil
-	}
-
 	remote := deps.RemoteURL(ctx, absRoot)
-	pathHash := hashPath(absRoot)
-	id := repositoryID(remote, pathHash)
-
-	if err := deps.Graph.PutRepository(ctx, scope.RepositoryRecord{ID: id, Remote: remote, PathHash: pathHash}); err != nil {
+	rec, err := deps.Graph.EnsureRepository(ctx, absRoot, remote, deps.GitCommonDir)
+	if err != nil {
 		return RepositoryRef{}, err
 	}
-	if err := deps.Graph.PutRepoPath(ctx, scope.RepoPathRecord{RootPath: absRoot, RepositoryID: id}); err != nil {
-		return RepositoryRef{}, err
-	}
-	return RepositoryRef{ID: id, Remote: remote, PathHash: pathHash}, nil
+	return RepositoryRef{ID: rec.ID, Remote: rec.Remote, PathHash: rec.PathHash}, nil
 }
 
 // resolveMembership reads the scope graph's parent chain for repo as a
@@ -178,21 +173,4 @@ func resolveMembership(ctx context.Context, deps ScanDeps, repo RepositoryRef) (
 		out = append(out, MembershipRef{Kind: string(p.Kind), ID: p.ID})
 	}
 	return out, nil
-}
-
-// hashPath returns a deterministic hex digest of a clean absolute path.
-// Never includes the path itself in a stored record beyond this digest --
-// the digest is what R-16.3's "path hash" names, not a reversible
-// encoding.
-func hashPath(absRoot string) string {
-	sum := sha256.Sum256([]byte(absRoot))
-	return hex.EncodeToString(sum[:])
-}
-
-// repositoryID derives a deterministic repository id from remote+path
-// hash, so the same tree scanned twice (with no prior scope-graph row)
-// still produces the same id both times.
-func repositoryID(remote, pathHash string) string {
-	sum := sha256.Sum256([]byte(remote + "\x00" + pathHash))
-	return hex.EncodeToString(sum[:16])
 }
