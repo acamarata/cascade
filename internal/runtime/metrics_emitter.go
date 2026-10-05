@@ -50,14 +50,20 @@ type systemTicker struct {
 	t    *time.Ticker
 	c    chan struct{}
 	stop chan struct{}
+	done chan struct{}
+	exit func()
 	once sync.Once
 }
+
+// systemTickerExitHook is captured at construction; nil in production.
+var systemTickerExitHook func()
 
 // NewSystemTicker returns the production Ticker, firing every d (d must be
 // positive). Only production entrypoints (bootstrap.go and above) should
 // call this; tests must inject a fake Ticker instead.
 func NewSystemTicker(d time.Duration) Ticker {
-	st := &systemTicker{t: time.NewTicker(d), c: make(chan struct{}), stop: make(chan struct{})}
+	st := &systemTicker{t: time.NewTicker(d), c: make(chan struct{}), stop: make(chan struct{}),
+		done: make(chan struct{}), exit: systemTickerExitHook}
 	go st.pump()
 	return st
 }
@@ -66,6 +72,10 @@ func NewSystemTicker(d time.Duration) Ticker {
 // the emitter from time.Time so it never touches a wall-clock value
 // directly. It exits when Stop closes st.stop.
 func (st *systemTicker) pump() {
+	defer close(st.done)
+	if st.exit != nil {
+		defer st.exit()
+	}
 	for {
 		select {
 		case <-st.t.C:
@@ -83,13 +93,14 @@ func (st *systemTicker) pump() {
 // C returns the tick channel.
 func (st *systemTicker) C() <-chan struct{} { return st.c }
 
-// Stop stops the underlying time.Ticker and the pump goroutine. Safe to
-// call more than once.
+// Stop stops the underlying time.Ticker and joins the pump goroutine.
+// Safe to call concurrently or more than once.
 func (st *systemTicker) Stop() {
 	st.once.Do(func() {
 		st.t.Stop()
 		close(st.stop)
 	})
+	<-st.done
 }
 
 // EventBus is the minimal publish surface the periodic emitter needs.
