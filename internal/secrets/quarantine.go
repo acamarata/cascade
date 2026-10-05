@@ -1,25 +1,13 @@
-// Purpose: the quarantine store - the local, append-only ledger of what
-//
-//	the detector flagged, why, and what happened to it afterwards.
-//
-// Inputs: a DetectionHit and a caller-supplied source reference. NEVER
-//
-//	the flagged bytes: Put's signature has no parameter that could carry
-//	a value, which is what makes "the quarantine store leaked a secret"
-//	a compile error rather than a code-review finding.
-//
-// Outputs: QuarantineEntry records under <dir>/quarantine.jsonl (0600),
-//
-//	and a deterministic id for each.
-//
-// Constraints: APPEND-ONLY and REVERSIBLE. Delete appends a release
-//
-//	record rather than rewriting history, so "what was quarantined, and
-//	what became of it" is always answerable. A quarantine with no way out
-//	is data loss, so every entry has exactly two exits - promoted into
-//	the vault, or released as a false positive - and both are recorded.
-//	No network, no clock of its own (one is injected), no map iteration
-//	in any output.
+// Purpose: the quarantine store - the local, append-only ledger of what the
+// detector flagged, why, and what happened to it afterwards.
+// Inputs: a DetectionHit and a source reference. NEVER the flagged bytes: Put
+// has no parameter that could carry a value, so a leak is a compile error.
+// Outputs: QuarantineEntry records in <dir>/quarantine.jsonl (0600), an id
+// each, and the fingerprint key <dir>/quarantine.key (0600).
+// Constraints: APPEND-ONLY and REVERSIBLE. Delete appends a release record, so
+// "what was quarantined, and what became of it" is always answerable; every
+// entry has two recorded exits (promoted into the vault, or released as a
+// false positive). No network, an injected clock, no map iteration in output.
 //
 // SPORT: QUARANTINE_STORE: ADD (internal/secrets.QuarantineStore,
 //
@@ -31,33 +19,40 @@ import (
 	cryptorand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/zeebo/blake3"
 
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // Clock is the injected time source (02-TARGET-STRUCTURE §v1.1: no bare
 // time.Now in domain logic). It is structurally identical to
 // internal/runtime.Clock, which cmd/cascade passes in; declaring it here
-// keeps internal/secrets' import set to pkg/cascade plus the standard
-// library, the property arch_secrets_test.go guards.
+// keeps the store's constructor signature free of internal/runtime types.
 type Clock interface {
 	// Now returns the current time.
 	Now() time.Time
 }
 
 // quarantineLogName and quarantineKeyName are the two files the store
-// owns inside its directory.
+// owns inside its directory; quarantineKeyBytes is the key file's only
+// accepted length.
 const (
-	quarantineLogName = "quarantine.jsonl"
-	quarantineKeyName = "quarantine.key"
-	fingerprintBytes  = 16
+	quarantineLogName  = "quarantine.jsonl"
+	quarantineKeyName  = "quarantine.key"
+	quarantineKeyBytes = 32
+	fingerprintBytes   = 16
+	// quarantineKeyRecovery ends every key refusal: the recovery step, never the key.
+	quarantineKeyRecovery = "it was left untouched. To recover, confirm no quarantined fingerprints are needed, " +
+		"move the file aside, and open the store again to create a new key"
 )
 
 // Release reasons recorded on a Delete, so the ledger says what happened
@@ -116,6 +111,9 @@ type QuarantineStore struct {
 	clock Clock
 	mu    sync.Mutex
 	key   []byte
+	// keyCreated: this open published the key (CreateFileAtomic created=true).
+	// Test-observable only: no behaviour may depend on it.
+	keyCreated bool
 }
 
 // NewQuarantineStore opens (or creates) the store under dir. The
@@ -133,41 +131,107 @@ func NewQuarantineStore(dir string, clock Clock) (*QuarantineStore, error) {
 		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "secrets: could not create the quarantine directory %s", dir)
 	}
 	store := &QuarantineStore{dir: dir, clock: clock}
-	key, err := store.loadOrCreateKey()
+	key, created, err := store.loadOrCreateKey()
 	if err != nil {
 		return nil, err
 	}
-	store.key = key
+	store.key, store.keyCreated = key, created
 	return store, nil
 }
 
 // logPath is the ledger file's path.
 func (q *QuarantineStore) logPath() string { return filepath.Join(q.dir, quarantineLogName) }
 
-// loadOrCreateKey reads the store's fingerprint key, generating one on
-// first use. crypto/rand only, imported under the cryptorand alias the
-// rest of the tree uses (internal/audit/record.go, internal/storage/
-// queue/ids.go): Art.7.3's forbidigo rule matches the selector TEXT
-// "rand.Read", so the alias is what tells the reader, and the linter,
-// that this is the CSPRNG and not unseeded math/rand.
-func (q *QuarantineStore) loadOrCreateKey() ([]byte, error) {
+// loadOrCreateKey reads the fingerprint key, creating it on first use from
+// crypto/rand (cryptorand alias: the CSPRNG, per Art.7.3's forbidigo rule)
+// via runtime.CreateFileAtomic (0600, exclusive): one opener creates it, the
+// rest re-read it through the same checked reader. Never regenerated.
+func (q *QuarantineStore) loadOrCreateKey() (key []byte, created bool, err error) {
 	path := filepath.Join(q.dir, quarantineKeyName)
-	existing, err := os.ReadFile(path) //nolint:gosec // path is derived from the caller's own data dir
-	if err == nil && len(existing) == 32 {
-		return existing, nil
+	key, absent, err := readQuarantineKey(path)
+	if !absent {
+		return key, false, err
 	}
-	if err != nil && !os.IsNotExist(err) {
-		return nil, cascade.Wrap(cascade.KindUnavailable, err, "secrets: could not read the quarantine key")
+	fresh := make([]byte, quarantineKeyBytes)
+	if _, rerr := cryptorand.Read(fresh); rerr != nil {
+		return nil, false, cascade.Wrap(cascade.KindInternal, rerr, "secrets: could not generate a quarantine key")
 	}
-	key := make([]byte, 32)
-	if _, rerr := cryptorand.Read(key); rerr != nil {
-		return nil, cascade.Wrap(cascade.KindInternal, rerr, "secrets: could not generate a quarantine key")
+	created, err = runtime.CreateFileAtomic(path, fresh, 0o600)
+	if err != nil {
+		return nil, false, cascade.Wrap(cascade.KindUnavailable, err, "secrets: could not create the quarantine key")
 	}
-	if werr := os.WriteFile(path, key, 0o600); werr != nil {
-		return nil, cascade.Wrap(cascade.KindUnavailable, werr, "secrets: could not write the quarantine key")
+	if created {
+		return fresh, true, nil
 	}
-	return key, nil
+	key, absent, err = readQuarantineKey(path)
+	if absent {
+		return nil, false, cascade.Newf(cascade.KindUnavailable, "secrets: the quarantine key %s vanished after another opener created it", path)
+	}
+	if err != nil {
+		kind, _ := cascade.KindOf(err)
+		return nil, false, cascade.Wrap(kind, err, "secrets: the quarantine key another opener created is unusable")
+	}
+	return key, false, nil
 }
+
+// readQuarantineKey reads the key at path; absent is true only when nothing
+// is there. A non-regular file (symlink, dangling or not, FIFO, directory,
+// device, socket) is refused before any open with KindIntegrity, not a
+// retryable kind, since an operator must move it aside: a FIFO cannot block
+// and a link cannot point the key at a wider-mode file elsewhere.
+func readQuarantineKey(path string) (key []byte, absent bool, err error) {
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return nil, true, nil
+	}
+	if err != nil {
+		return nil, false, cascade.Wrapf(cascade.KindUnavailable, err, "secrets: could not stat the quarantine key %s", path)
+	}
+	if !info.Mode().IsRegular() {
+		name, ok := keyPathTypes[info.Mode().Type()]
+		if !ok {
+			name = "special file"
+		}
+		return nil, false, cascade.Newf(cascade.KindIntegrity, "secrets: the quarantine key path %s is a %s, not a regular file; %s",
+			path, name, quarantineKeyRecovery)
+	}
+	key, err = readCheckedKey(path, info)
+	return key, false, err
+}
+
+// readCheckedKey opens path non-blocking and refuses unless the opened file is
+// the regular file checked describes (unix: Lstat dev/inode, so any swap is refused;
+// Windows reloads the path id at compare time: a re-pointed link is refused, a
+// swapped-in regular file is not). Length != 32 is KindIntegrity, never bytes.
+func readCheckedKey(path string, checked os.FileInfo) ([]byte, error) {
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0) //nolint:gosec // fixed name under the caller's data dir
+	if err != nil {
+		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "secrets: could not open the quarantine key %s", path)
+	}
+	defer func() { _ = f.Close() }()
+	opened, err := f.Stat()
+	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(checked, opened) {
+		return nil, cascade.Wrapf(cascade.KindIntegrity, err, "secrets: the opened quarantine key %s is not the regular file "+
+			"checked a moment before (swapped, or unconfirmable); %s", path, quarantineKeyRecovery)
+	}
+	key, err := readBoundedKey(f)
+	if err != nil {
+		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "secrets: could not read the quarantine key %s", path)
+	}
+	if len(key) == quarantineKeyBytes {
+		return key, nil
+	}
+	return nil, cascade.Newf(cascade.KindIntegrity, "secrets: the quarantine key %s holds %d bytes, want %d; %s",
+		path, max(opened.Size(), int64(len(key))), quarantineKeyBytes, quarantineKeyRecovery)
+}
+
+// readBoundedKey reads at most one byte past a key: enough to refuse a longer file unread.
+func readBoundedKey(r io.Reader) ([]byte, error) {
+	return io.ReadAll(io.LimitReader(r, quarantineKeyBytes+1))
+}
+
+// keyPathTypes names the non-regular types a key refusal reports by name.
+var keyPathTypes = map[os.FileMode]string{os.ModeSymlink: "symbolic link", os.ModeDir: "directory", os.ModeNamedPipe: "named pipe"}
 
 // fingerprint returns the keyed, truncated digest of value: BLAKE3 over
 // the store key followed by the value. A prefix construction is sound
@@ -183,10 +247,8 @@ func (q *QuarantineStore) fingerprint(value []byte) string {
 
 // Put records hit against sourceRef and returns the stored entry.
 //
-// value is the flagged bytes, used ONLY to compute the keyed fingerprint;
-// it is never written, logged, or retained after this call returns. The
-// caller may pass nil, which yields an entry with an empty fingerprint
-// and no other difference.
+// value is the flagged bytes, used ONLY for the keyed fingerprint and never
+// written, logged or retained; nil yields an empty fingerprint, nothing else.
 func (q *QuarantineStore) Put(hit DetectionHit, sourceRef string, value []byte) (QuarantineEntry, error) {
 	if hit.SuggestedName == "" {
 		return QuarantineEntry{}, cascade.New(cascade.KindInvalidInput,

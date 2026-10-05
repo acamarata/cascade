@@ -1,3 +1,2 @@
 file	symbol	count	owner	reason
 internal/elevation/keystore_file.go	fileKeystore.GenerateKey	1	P1-SEC-00	device key written with os.WriteFile; P1-SEC-00 moves it to runtime.CreateFileAtomic (0600) and deletes this row
-internal/secrets/quarantine.go	QuarantineStore.loadOrCreateKey	1	P1-CORE-17	quarantine key written with os.WriteFile; P1-CORE-17 moves it to runtime.CreateFileAtomic and deletes this row
