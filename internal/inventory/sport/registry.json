@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05T20:31:51Z",
+  "generated_at": "2026-10-05T21:25:55Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2153,6 +2153,18 @@
           "raw": "cli.provider.reauth (CHANGE, P1-WID-11)."
         },
         {
+          "file": "cmd/cascade/provider_reauth_ref.go",
+          "line": 21,
+          "status": "CHANGE",
+          "raw": "cli.provider.reauth (CHANGE, P1-WID-08)."
+        },
+        {
+          "file": "cmd/cascade/provider_reauth_ref_test.go",
+          "line": 20,
+          "status": "",
+          "raw": "cli.provider.reauth (tests, P1-WID-08)."
+        },
+        {
           "file": "cmd/cascade/provider_reauth_test.go",
           "line": 12,
           "status": "ADD",
@@ -2185,6 +2197,7 @@
         }
       ],
       "statuses": [
+        "",
         "ADD",
         "CHANGE"
       ]
@@ -3899,6 +3912,24 @@
           "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
         },
         {
+          "file": "cmd/cascade/wire_status_widget.go",
+          "line": 30,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-WID-08)."
+        },
+        {
+          "file": "cmd/cascade/wire_status_widget_fixture_test.go",
+          "line": 14,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (tests, P1-WID-08)."
+        },
+        {
+          "file": "cmd/cascade/wire_status_widget_test.go",
+          "line": 22,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (tests, P1-WID-08)."
+        },
+        {
           "file": "cmd/cascade/wire_supervised.go",
           "line": 4,
           "status": "",
@@ -4954,7 +4985,7 @@
         },
         {
           "file": "cmd/cascade/daemon_unix_run_options.go",
-          "line": 23,
+          "line": 22,
           "status": "CHANGE",
           "ticket": "P1-E17-W4-S37-T1",
           "raw": "cmd/cascade/daemon (CHG) — P1-E17-W4-S37-T1."
@@ -5401,6 +5432,45 @@
         }
       ],
       "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/fleet-completion-check",
+      "sites": [
+        {
+          "file": "cmd/cascade/fleet_completion_check.go",
+          "line": 32,
+          "status": "ADD",
+          "raw": "cmd/cascade/fleet-completion-check (ADD, P1-CI-09)."
+        },
+        {
+          "file": "cmd/cascade/fleet_completion_check_gate_test.go",
+          "line": 13,
+          "status": "",
+          "raw": "cmd/cascade/fleet-completion-check (coverage for P1-CI-09)."
+        },
+        {
+          "file": "cmd/cascade/fleet_completion_check_helpers_test.go",
+          "line": 13,
+          "status": "",
+          "raw": "cmd/cascade/fleet-completion-check (coverage for P1-CI-09)."
+        },
+        {
+          "file": "cmd/cascade/fleet_completion_check_test.go",
+          "line": 15,
+          "status": "",
+          "raw": "cmd/cascade/fleet-completion-check (coverage for P1-CI-09)."
+        },
+        {
+          "file": "cmd/cascade/fleet_completion_check_unit_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "cmd/cascade/fleet-completion-check (coverage for P1-CI-09)."
+        }
+      ],
+      "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -7578,10 +7648,10 @@
       "sites": [
         {
           "file": "internal/daemon/status_widget.go",
-          "line": 44,
+          "line": 25,
           "status": "ADD",
           "ticket": "P1-E38-W8-S74-T1",
-          "raw": "daemon.status_widget (ADD, P1-E38-W8-S74-T1)."
+          "raw": "daemon.status_widget (ADD, P1-E38-W8-S74-T1; CHANGE, P1-WID-08)."
         },
         {
           "file": "internal/daemon/status_widget_errors_test.go",
@@ -7590,16 +7660,53 @@
           "raw": "daemon.status_widget (coverage follow-up)."
         },
         {
+          "file": "internal/daemon/status_widget_harness_test.go",
+          "line": 15,
+          "status": "",
+          "raw": "daemon.status_widget (tests, P1-WID-08)."
+        },
+        {
+          "file": "internal/daemon/status_widget_key.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "daemon.status_widget (ADD, P1-WID-08)."
+        },
+        {
+          "file": "internal/daemon/status_widget_key_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "daemon.status_widget (tests, P1-WID-08)."
+        },
+        {
           "file": "internal/daemon/status_widget_peeruid_integration_test.go",
           "line": 41,
           "status": "ADD",
           "ticket": "P1-E38-W8-S74-T1",
           "raw": "daemon.status_widget (ADD, P1-E38-W8-S74-T1)."
+        },
+        {
+          "file": "internal/daemon/status_widget_refresh_test.go",
+          "line": 16,
+          "status": "",
+          "raw": "daemon.status_widget (tests, P1-WID-08)."
+        },
+        {
+          "file": "internal/daemon/status_widget_sources.go",
+          "line": 18,
+          "status": "CHANGE",
+          "raw": "daemon.status_widget (CHANGE, P1-WID-08)."
+        },
+        {
+          "file": "internal/daemon/status_widget_sse_integration_test.go",
+          "line": 21,
+          "status": "",
+          "raw": "daemon.status_widget (tests, P1-WID-08)."
         }
       ],
       "statuses": [
         "",
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -7618,14 +7725,28 @@
       ]
     },
     {
+      "name": "daemon.status_widget.refresh",
+      "sites": [
+        {
+          "file": "internal/daemon/status_widget_refresh.go",
+          "line": 24,
+          "status": "ADD",
+          "raw": "daemon.status_widget.refresh (ADD, P1-WID-08)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "daemon.status_widget.sse",
       "sites": [
         {
           "file": "internal/daemon/status_widget_sse.go",
-          "line": 45,
+          "line": 31,
           "status": "ADD",
           "ticket": "P1-E38-W8-S74-T1",
-          "raw": "daemon.status_widget.sse (ADD, P1-E38-W8-S74-T1)."
+          "raw": "daemon.status_widget.sse (ADD, P1-E38-W8-S74-T1; CHANGE, P1-WID-08)."
         }
       ],
       "statuses": [
@@ -8045,6 +8166,12 @@
       "name": "fleet.capacity.policy",
       "sites": [
         {
+          "file": "internal/fleet/capacity/agent_lanes.go",
+          "line": 4,
+          "status": "",
+          "raw": "fleet.capacity.policy."
+        },
+        {
           "file": "internal/fleet/capacity/errors.go",
           "line": 9,
           "status": "ADD",
@@ -8087,6 +8214,12 @@
           "raw": "fleet.capacity.policy (ADD, P1-E31-W6-S63-T2)."
         },
         {
+          "file": "internal/fleet/capacity/projection.go",
+          "line": 4,
+          "status": "",
+          "raw": "fleet.capacity.policy."
+        },
+        {
           "file": "internal/fleet/capacity/tier_policy.go",
           "line": 18,
           "status": "ADD",
@@ -8102,6 +8235,7 @@
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -8182,6 +8316,12 @@
           "raw": "fleet.capacity.snapshot (compositor helpers, ADD, per T-1"
         },
         {
+          "file": "internal/fleet/capacity/compositor_build_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "fleet.capacity.snapshot (tests, P1-WID-08)."
+        },
+        {
           "file": "internal/fleet/capacity/diff.go",
           "line": 10,
           "status": "ADD",
@@ -8197,6 +8337,7 @@
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -8212,7 +8353,7 @@
         },
         {
           "file": "internal/fleet/capacity/widget_redact.go",
-          "line": 26,
+          "line": 27,
           "status": "ADD",
           "ticket": "P1-E38-W8-S74-T1",
           "raw": "fleet.capacity.widget (ADD, Redact half, P1-E38-W8-S74-T1)."
@@ -8996,7 +9137,7 @@
         },
         {
           "file": "internal/fleet/economics/reserve_heartbeat.go",
-          "line": 18,
+          "line": 20,
           "status": "ADD",
           "raw": "fleet/economics/reservation/ADD."
         },
@@ -9040,13 +9181,19 @@
         },
         {
           "file": "internal/fleet/economics/reserve_sweep.go",
-          "line": 29,
+          "line": 30,
           "status": "ADD",
           "raw": "fleet/economics/reservation/ADD."
         },
         {
           "file": "internal/fleet/economics/reserve_teardown.go",
-          "line": 24,
+          "line": 25,
+          "status": "ADD",
+          "raw": "fleet/economics/reservation/ADD."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_teardown_owner_test.go",
+          "line": 8,
           "status": "ADD",
           "raw": "fleet/economics/reservation/ADD."
         },
@@ -9294,17 +9441,17 @@
       "sites": [
         {
           "file": "internal/fleet/hookpacks/completion_hook_command.go",
-          "line": 39,
+          "line": 40,
           "status": "ADD",
           "ticket": "P1-E32-W6-S66-T1",
-          "raw": "fleet/hookpacks.completionHookCommand/ADD (P1-E32-W6-S66-T1)."
+          "raw": "fleet/hookpacks.completionHookCommand/ADD (P1-E32-W6-S66-T1)"
         },
         {
           "file": "internal/fleet/hookpacks/completion_hook_command_test.go",
-          "line": 13,
+          "line": 16,
           "status": "ADD",
           "ticket": "P1-E32-W6-S66-T1",
-          "raw": "fleet/hookpacks.completionHookCommand/ADD (P1-E32-W6-S66-T1)."
+          "raw": "fleet/hookpacks.completionHookCommand/ADD (P1-E32-W6-S66-T1)"
         }
       ],
       "statuses": [
@@ -10683,6 +10830,12 @@
           "raw": "internal.backup.targets.s3/ADDED (P1-E19-W4-S41-T3)."
         },
         {
+          "file": "internal/backup/targets/s3_redact_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal.backup.targets.s3."
+        },
+        {
           "file": "internal/backup/targets/s3_test.go",
           "line": 9,
           "status": "ADD",
@@ -10691,6 +10844,7 @@
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -20446,7 +20600,7 @@
       "sites": [
         {
           "file": "internal/nodes/ticker.go",
-          "line": 13,
+          "line": 12,
           "status": "",
           "raw": "internal/nodes Ticker/MOVED, NewSystemTicker/MOVED"
         }
@@ -32093,6 +32247,12 @@
           "raw": "providers.s3/ADDED (P1-E17-W4-S38-T7)."
         },
         {
+          "file": "providers/s3/s3_new_error_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "providers.s3."
+        },
+        {
           "file": "providers/s3/s3_test.go",
           "line": 15,
           "status": "ADD",
@@ -32101,6 +32261,7 @@
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -34031,7 +34192,7 @@
       ]
     }
   ],
-  "total_sites": 3256,
+  "total_sites": 3279,
   "unspecified_count": 199,
-  "multi_status_count": 98
+  "multi_status_count": 103
 }
