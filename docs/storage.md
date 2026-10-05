@@ -94,6 +94,34 @@ profile is now a real driver (Art.1.4), never a stub.
 - Metadata filtering: `provider.VectorQuery.Filter` is applied server-side
   via JSONB containment (`metadata @> filter::jsonb`); an empty filter
   matches every row.
+- Credential failure modes (`pgvector_conn.go`): `Open` classifies a
+  connection failure and never echoes a credential.
+
+  | Failure | Kind |
+  |---|---|
+  | wrong password (`28P01`) or missing privilege (`42501`) | `cascade.KindPermissionDenied` |
+  | malformed DSN (pgx `ParseConfigError`) | `cascade.KindInvalidInput` |
+  | unreachable server, timeout, anything else | `cascade.KindUnavailable` |
+
+  The message carries `redactDSN(dsn)` only: a postgres URL keeps scheme,
+  user, host and path, shows the password as `xxxxx` and drops the query
+  (pgx also reads `password=` there). A key=value DSN, a DSN pgx cannot
+  parse, or a rendering that still holds a secret prints `<redacted-dsn>`.
+  The raw pgx error never enters the chain. pgx v5.10.0 echoes the
+  password in `ParseConfigError` text for some DSN shapes, and its
+  `ConnectError` exports the `Config` with the password. The cause is the
+  driver text only when it holds no DSN secret; otherwise it is withheld.
+  The secret set covers every password the DSN spells, as written and
+  decoded: URL userinfo (whole and its password), each `password=` and
+  `sslpassword=` query value, each key=value `password`/`sslpassword`
+  token with its quotes and backslash escapes (and decoded the way pgx and
+  libpq each read it), plus `PGPASSWORD`, `PGSSLPASSWORD` and the
+  passfile. A pooled reconnect error after `Open` is checked against the
+  same set; when pgx cannot parse the DSN the set is unknown and the text
+  is withheld. The cause unwraps to `context.Canceled` or
+  `context.DeadlineExceeded` only. A refused password is never retried on
+  another host: pgx stops at `28P01`. Unlike this driver,
+  `providers/postgres` still reports a malformed DSN as `KindUnavailable`.
 
 ### Redis Cache + Queue drivers (`providers/redis`)
 
@@ -265,8 +293,7 @@ What is not gated: the atomic-write gate
 (`docs/developer/quality-gates.md`) denies only `os.WriteFile` and
 `ioutil.WriteFile`. Other truncating opens (`os.Create`,
 `os.OpenFile(..., O_TRUNC)`) are not gated, and `pkg/` and `plugins/` are
-outside the scan (they may not import `internal/runtime`). Two key writes
-are still bare, each on the gate's owned exemption list until its owning
-ticket moves it to `CreateFileAtomic`: the elevation device key
-(`internal/elevation/keystore_file.go`) and the quarantine key
-(`internal/secrets/quarantine.go`).
+outside the scan (they may not import `internal/runtime`). One key write
+is still bare, on the gate's owned exemption list until its owning ticket
+moves it to `CreateFileAtomic`: the elevation device key
+(`internal/elevation/keystore_file.go`).

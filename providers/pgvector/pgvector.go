@@ -40,11 +40,10 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" database/sql driver
 
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
-
-	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" database/sql driver
 )
 
 // schemaDDL creates the namespace-scoped vectors table. The embedding
@@ -69,7 +68,8 @@ var ErrExtensionMissing = cascade.New(cascade.KindUnsupported, "pgvector: extens
 
 // Driver is the real pgvector provider.VectorStore implementation.
 type Driver struct {
-	db *sql.DB
+	db      *sql.DB
+	secrets *secretSet // dsnSecrets of the opened DSN; nil when pgx cannot parse it
 }
 
 // Open dials dsn, verifies the connection, and ensures the pgvector
@@ -77,7 +77,9 @@ type Driver struct {
 // EXISTS vector`). If the extension cannot be created — most commonly
 // because the server binary was never built with pgvector — Open refuses
 // with ErrExtensionMissing rather than returning a Driver that would
-// silently fail every subsequent call. The caller MUST call Close when
+// silently fail every subsequent call. A failure to reach or log in to the
+// server is classified by wrapConnError, and no error Open returns carries
+// a DSN credential in its text or chain. The caller MUST call Close when
 // done.
 func Open(ctx context.Context, dsn string) (*Driver, error) {
 	if dsn == "" {
@@ -85,21 +87,22 @@ func Open(ctx context.Context, dsn string) (*Driver, error) {
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
-		return nil, cascade.Wrap(cascade.KindUnavailable, err, "pgvector: open")
+		return nil, wrapConnError(err, dsn, "pgvector: open")
 	}
+	secrets, _ := dsnSecrets(dsn)
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
-		return nil, cascade.Wrap(cascade.KindUnavailable, err, "pgvector: connect")
+		return nil, wrapConnError(err, dsn, "pgvector: connect")
 	}
-	if err := ensureExtension(ctx, db); err != nil {
+	if err := ensureExtension(ctx, db, secrets); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
 	if _, err := db.ExecContext(ctx, schemaDDL); err != nil {
 		_ = db.Close()
-		return nil, wrapDBError(err, "pgvector: schema init")
+		return nil, wrapDBError(err, secrets, "pgvector: schema init")
 	}
-	return &Driver{db: db}, nil
+	return &Driver{db: db, secrets: newSecretSet(secrets)}, nil
 }
 
 // ensureExtension installs the pgvector extension if it is not already
@@ -107,9 +110,9 @@ func Open(ctx context.Context, dsn string) (*Driver, error) {
 // when the server cannot satisfy CREATE EXTENSION — e.g. the extension's
 // control file is absent from the server's install, or the role lacks
 // privilege. Never falls back to any non-vector behavior.
-func ensureExtension(ctx context.Context, db *sql.DB) error {
+func ensureExtension(ctx context.Context, db *sql.DB, secrets []string) error {
 	if _, err := db.ExecContext(ctx, `CREATE EXTENSION IF NOT EXISTS vector`); err != nil {
-		return cascade.Wrap(cascade.KindUnsupported, errors.Join(ErrExtensionMissing, err),
+		return cascade.Wrap(cascade.KindUnsupported, errors.Join(ErrExtensionMissing, detachConnError(err, secrets)),
 			"pgvector: CREATE EXTENSION vector failed — the server may not have pgvector installed")
 	}
 	return nil
@@ -123,36 +126,12 @@ func (d *Driver) Close() error {
 	return nil
 }
 
-// String identifies this driver in logs/diagnostics.
-func (d *Driver) String() string { return "pgvector.Driver" }
+// String identifies this driver in logs/diagnostics. The value receiver
+// covers a Driver value as well as a *Driver.
+func (Driver) String() string { return "pgvector.Driver" }
 
-// classifyPgError mirrors providers/postgres's classifier (kept local:
-// providers/** packages do not share code across driver boundaries per
-// 02-TARGET-STRUCTURE's provider-directory isolation — each driver owns
-// its full error-mapping surface).
-func classifyPgError(err error) cascade.Kind {
-	var pgErr *pgconn.PgError
-	if !errors.As(err, &pgErr) {
-		return cascade.KindUnavailable
-	}
-	switch pgErr.Code {
-	case "23505", "23514", "40001": // unique/check violation, serialization failure
-		return cascade.KindConflict
-	case "23503", "23502", "22P02", "22000": // FK/not-null violation, invalid text representation,
-		// data exception (pgvector's own "different vector dimensions" refusal
-		// surfaces as SQLSTATE 22000 — a caller-side dimensionality mismatch,
-		// not a backend unavailability).
-		return cascade.KindInvalidInput
-	case "28P01", "42501": // invalid password, insufficient privilege
-		return cascade.KindPermissionDenied
-	default:
-		return cascade.KindUnavailable
-	}
-}
-
-func wrapDBError(err error, format string, args ...any) error {
-	return cascade.Wrapf(classifyPgError(err), err, format, args...)
-}
+// GoString is the %#v form: a safe summary, never the secret set.
+func (Driver) GoString() string { return "pgvector.Driver{}" }
 
 // Upsert writes each Vector into namespace via a per-row INSERT ...
 // ON CONFLICT DO UPDATE, all inside one transaction so a partial batch
@@ -163,7 +142,7 @@ func wrapDBError(err error, format string, args ...any) error {
 func (d *Driver) Upsert(ctx context.Context, namespace string, vectors []provider.Vector) error {
 	tx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
-		return wrapDBError(err, "pgvector: begin upsert")
+		return wrapDBError(err, d.secrets.list(), "pgvector: begin upsert")
 	}
 	for _, v := range vectors {
 		meta, err := metadataJSON(v.Metadata)
@@ -177,11 +156,11 @@ func (d *Driver) Upsert(ctx context.Context, namespace string, vectors []provide
 			namespace, v.ID, vectorLiteral(v.Values), meta)
 		if err != nil {
 			_ = tx.Rollback()
-			return wrapDBError(err, "pgvector: upsert %s/%s", namespace, v.ID)
+			return wrapDBError(err, d.secrets.list(), "pgvector: upsert %s/%s", namespace, v.ID)
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return wrapDBError(err, "pgvector: commit upsert")
+		return wrapDBError(err, d.secrets.list(), "pgvector: commit upsert")
 	}
 	return nil
 }
@@ -201,7 +180,7 @@ func (d *Driver) Query(ctx context.Context, namespace string, req provider.Vecto
 		ORDER BY embedding <=> $2::vector LIMIT $3`,
 		namespace, vectorLiteral(req.Values), req.TopK, filterJSON)
 	if err != nil {
-		return nil, wrapDBError(err, "pgvector: query %s", namespace)
+		return nil, wrapDBError(err, d.secrets.list(), "pgvector: query %s", namespace)
 	}
 	defer func() { _ = rows.Close() }()
 	var out []provider.VectorMatch
@@ -217,7 +196,7 @@ func (d *Driver) Query(ctx context.Context, namespace string, req provider.Vecto
 		out = append(out, m)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, wrapDBError(err, "pgvector: query rows %s", namespace)
+		return nil, wrapDBError(err, d.secrets.list(), "pgvector: query rows %s", namespace)
 	}
 	return out, nil
 }
@@ -227,7 +206,7 @@ func (d *Driver) Query(ctx context.Context, namespace string, req provider.Vecto
 func (d *Driver) Delete(ctx context.Context, namespace string, ids []string) error {
 	for _, id := range ids {
 		if _, err := d.db.ExecContext(ctx, `DELETE FROM vectors WHERE namespace = $1 AND id = $2`, namespace, id); err != nil {
-			return wrapDBError(err, "pgvector: delete %s/%s", namespace, id)
+			return wrapDBError(err, d.secrets.list(), "pgvector: delete %s/%s", namespace, id)
 		}
 	}
 	return nil
@@ -238,7 +217,7 @@ func (d *Driver) Count(ctx context.Context, namespace string) (int, error) {
 	var n int
 	err := d.db.QueryRowContext(ctx, `SELECT count(*) FROM vectors WHERE namespace = $1`, namespace).Scan(&n)
 	if err != nil {
-		return 0, wrapDBError(err, "pgvector: count %s", namespace)
+		return 0, wrapDBError(err, d.secrets.list(), "pgvector: count %s", namespace)
 	}
 	return n, nil
 }
@@ -248,7 +227,7 @@ func (d *Driver) Count(ctx context.Context, namespace string) (int, error) {
 func (d *Driver) Namespaces(ctx context.Context) ([]string, error) {
 	rows, err := d.db.QueryContext(ctx, `SELECT DISTINCT namespace FROM vectors ORDER BY namespace`)
 	if err != nil {
-		return nil, wrapDBError(err, "pgvector: namespaces")
+		return nil, wrapDBError(err, d.secrets.list(), "pgvector: namespaces")
 	}
 	defer func() { _ = rows.Close() }()
 	var out []string
@@ -260,9 +239,33 @@ func (d *Driver) Namespaces(ctx context.Context) ([]string, error) {
 		out = append(out, ns)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, wrapDBError(err, "pgvector: namespaces rows")
+		return nil, wrapDBError(err, d.secrets.list(), "pgvector: namespaces rows")
 	}
 	return out, nil
 }
 
 var _ provider.VectorStore = (*Driver)(nil)
+
+// classifyPgError mirrors providers/postgres's classifier (kept local:
+// providers/** packages do not share code across driver boundaries, so
+// each driver owns its full error-mapping surface). It reads only the
+// SQLSTATE code of a *pgconn.PgError in the chain.
+func classifyPgError(err error) cascade.Kind {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return cascade.KindUnavailable
+	}
+	switch pgErr.Code {
+	case "23505", "23514", "40001": // unique/check violation, serialization failure
+		return cascade.KindConflict
+	case "23503", "23502", "22P02", "22000": // FK/not-null violation, invalid text representation,
+		// data exception (pgvector's own "different vector dimensions" refusal
+		// surfaces as SQLSTATE 22000: a caller-side dimensionality mismatch,
+		// not a backend unavailability).
+		return cascade.KindInvalidInput
+	case "28P01", "42501": // invalid password, insufficient privilege
+		return cascade.KindPermissionDenied
+	default:
+		return cascade.KindUnavailable
+	}
+}

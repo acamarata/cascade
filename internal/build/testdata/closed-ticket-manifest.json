@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05T06:51:11Z",
+  "generated_at": "2026-10-05T07:23:22Z",
   "tickets": [
     "P1-BLD-01",
     "P1-BLD-02",
@@ -28,8 +28,8 @@
     "P1-CORE-05",
     "P1-CORE-06",
     "P1-CORE-08",
+    "P1-CORE-14",
     "P1-CORE-16",
-    "P1-CORE-17",
     "P1-CORE-18",
     "P1-CORE-19",
     "P1-CPA-19",
@@ -38,11 +38,13 @@
     "P1-MIG-01",
     "P1-MIG-06",
     "P1-MIG-07",
+    "P1-NODE-19",
     "P1-PBD-07",
     "P1-PLG-01",
     "P1-PLG-13",
     "P1-SEC-16",
     "P1-SEC-28",
+    "P1-SEC-29",
     "P1-SEC-33",
     "P1-SEC-37",
     "P1-SEC-44",
@@ -50,7 +52,8 @@
     "P1-SHIP-14",
     "P1-SHIP-19",
     "P1-SUP-01",
-    "P1-WID-01"
+    "P1-WID-01",
+    "P1-WID-11"
   ],
   "known": [
     "P1-AGT-01",
