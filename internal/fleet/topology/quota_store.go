@@ -26,6 +26,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 
 	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -92,9 +93,16 @@ const quotaBucketColumns = "domain_id, dimension, name, bucket_limit, remaining_
 
 // UpsertBucket reconciles one observation into sessions_quota_bucket,
 // upserting by (domain_id, dimension) -- the ONLY writer this table has.
-// b must pass NewBucket's validation.
+// b must pass NewBucket's validation, and dimension must belong to the
+// closed set of the domain's stored kind (config_quota_domain.kind, read
+// on the same handle): a missing domain is ErrTopologyNotFound and a
+// foreign dimension is ErrTopologyInvariant, so no reader ever meets a
+// bucket its domain kind cannot have.
 func (s *QuotaStore) UpsertBucket(ctx context.Context, domainID DomainID, dimension string, b Bucket) error {
 	if _, err := NewBucket(b); err != nil {
+		return err
+	}
+	if err := s.checkDimension(ctx, domainID, dimension); err != nil {
 		return err
 	}
 	_, err := s.db.ExecContext(ctx, `
@@ -113,6 +121,23 @@ ON CONFLICT(domain_id, dimension) DO UPDATE SET
 		string(b.LimitScopeID), b.CapacityObserved, b.CommittedSinceObservation, b.WindowID, b.Version)
 	if err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "topology: upsert quota bucket")
+	}
+	return nil
+}
+
+// checkDimension reads domainID's stored kind and refuses a dimension
+// outside that kind's closed set.
+func (s *QuotaStore) checkDimension(ctx context.Context, domainID DomainID, dimension string) error {
+	var kind string
+	err := s.db.QueryRowContext(ctx, `SELECT kind FROM `+tableQuotaDomain+` WHERE id = ?`, string(domainID)).Scan(&kind)
+	if errors.Is(err, sql.ErrNoRows) {
+		return newNotFoundErr("quota_domain", string(domainID))
+	}
+	if err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "topology: read quota domain kind")
+	}
+	if !ValidDimensionName(QuotaDomainKind(kind), dimension) {
+		return newInvariantErr("quota_bucket", dimension, "dimension name is not permitted for domain kind "+kind)
 	}
 	return nil
 }

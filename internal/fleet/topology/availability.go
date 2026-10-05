@@ -23,13 +23,16 @@ package topology
 
 import "time"
 
-// ReservationState is the closed held|committed vocabulary a
-// ReservationEstimate carries.
+// ReservationState is the closed held|parked|committed vocabulary a
+// ReservationEstimate carries: the three states in which a reservation
+// still holds its estimate against the scope.
 type ReservationState string
 
-// The two closed ReservationState members.
+// The three closed ReservationState members. A parked reservation holds
+// no permit but keeps its quota estimate, so it still counts.
 const (
 	ReservationHeld      ReservationState = "held"
+	ReservationParked    ReservationState = "parked"
 	ReservationCommitted ReservationState = "committed"
 )
 
@@ -45,7 +48,7 @@ type ReservationEstimate struct {
 }
 
 // Available returns capacityObserved - committedSinceObservation - the
-// sum of every held or committed reservation's Estimate on (scope,
+// sum of every held, parked or committed reservation's Estimate on (scope,
 // dimension) in rs, per R-21.114. now is accepted for a future expiry-
 // aware accounting pass; this ticket's formula does not time-filter rs
 // (a reservation's own terminal-state transition, not elapsed time,
@@ -59,7 +62,7 @@ func Available(scope LimitScopeID, dimension string, capacityObserved, committed
 		if r.LimitScopeID != scope || r.Dimension != dimension {
 			continue
 		}
-		if r.State != ReservationHeld && r.State != ReservationCommitted {
+		if r.State != ReservationHeld && r.State != ReservationParked && r.State != ReservationCommitted {
 			continue
 		}
 		committed += r.Estimate

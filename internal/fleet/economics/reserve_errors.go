@@ -32,4 +32,10 @@ var (
 	// errors.Is(err, ErrReservationRollback) after a partial-failure
 	// rollback.
 	ErrReservationRollback = cascade.New(cascade.KindInternal, "economics: reservation rollback reported one or more errors")
+	// ErrProjectShareExceeded is returned when a project would hold more
+	// than its share of the domain's barrier bucket.
+	ErrProjectShareExceeded = cascade.New(cascade.KindQuotaExhausted, "economics: project quota share exceeded")
+	// ErrConcurrentDaemon is returned by Sweep when another daemon is live
+	// on the same home: nothing is swept or written.
+	ErrConcurrentDaemon = cascade.New(cascade.KindConflict, "economics: another daemon is live on this home")
 )

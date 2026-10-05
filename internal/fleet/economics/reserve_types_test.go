@@ -1,6 +1,11 @@
 package economics
 
-import "testing"
+import (
+	"reflect"
+	"sort"
+	"strings"
+	"testing"
+)
 
 func TestParseReservationState(t *testing.T) {
 	cases := []struct {
@@ -96,4 +101,39 @@ func TestReservationStateTerminal(t *testing.T) {
 	if ReservationHeld.Terminal() || ReservationParked.Terminal() || ReservationCommitted.Terminal() {
 		t.Error("held/parked/committed must not be terminal")
 	}
+}
+
+// TestReservationRecordShape pins the ledger row's field set: the
+// ledger fields plus the placement fields and the persisted resume
+// inputs (repo id, scope globs), and nothing else; the enum parsers still
+// fail closed and the transition matrix is covered above.
+func TestReservationRecordShape(t *testing.T) {
+	want := []string{
+		"ID", "JobID", "ProjectID", "LaneID", "DomainID", "ScopeID", "Kind", "Estimate", "Actual",
+		"ActualSource", "BasePrice", "PriceTableVersion", "ScarceUnits", "PermitID", "WorktreeID",
+		"LeaseIDs", "Steps", "State", "OwnerEpoch", "HeartbeatAt", "ExpiresAt", "Created",
+		"ExecutionID", "NodeID", "SelectedTier", "Sensitivity", "DecisionID", "RepoID", "ScopeGlobs",
+	}
+	typ := reflect.TypeOf(Reservation{})
+	got := make([]string, 0, typ.NumField())
+	for i := 0; i < typ.NumField(); i++ {
+		got = append(got, typ.Field(i).Name)
+	}
+	sort.Strings(got)
+	sort.Strings(want)
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("Reservation fields = %v, want exactly %v", got, want)
+	}
+	if f, _ := typ.FieldByName("ScopeGlobs"); f.Type.String() != "[]string" {
+		t.Errorf("ScopeGlobs type = %s, want []string", f.Type)
+	}
+	for _, bad := range []string{"", "bogus", "HELD"} {
+		if _, err := ParseReservationState(bad); !hasIdentity(err, ErrUnknownReservationState) {
+			t.Errorf("ParseReservationState(%q) = %v, want ErrUnknownReservationState", bad, err)
+		}
+		if _, err := ParseReservationKind(bad); !hasIdentity(err, ErrUnknownReservationKind) {
+			t.Errorf("ParseReservationKind(%q) = %v, want ErrUnknownReservationKind", bad, err)
+		}
+	}
+	TestReservationStateTransitionMatrix(t)
 }

@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/fleet/governor"
+	"github.com/acamarata/cascade/internal/fleet/topology"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // callRecorder is a race-safe ordered call log every stub seam in this
@@ -34,90 +37,97 @@ func (r *callRecorder) snapshot() []string {
 
 // reserverFixture bundles a Reserver over a real test db with every seam
 // stubbed to record its call and, by default, succeed. Tests override
-// individual seam funcs (via the returned struct's exported fields
-// before constructing the Reserver, or by re-deriving) to inject
-// failures at a specific step.
+// individual f.seams fields before calling f.reserver.
 type reserverFixture struct {
 	store     *ReservationStore
 	rec       *callRecorder
+	clock     *stepClock
 	capacity  int64
 	committed int64
+	seams     ReserverSeams
+}
 
-	buckets          DomainBucketsFn
-	permit           PermitFn
-	acquireLeases    AcquireLeasesFn
-	releaseLeases    ReleaseLeasesFn
-	allocateWorktree AllocateWorktreeFn
-	removeWorktree   RemoveWorktreeFn
-	validateLeases   ValidateLeasesFn
+// fixtureBuckets is the default Buckets seam: one api_project domain on
+// scope-1 whose rpm/tpm/rpd buckets each hold f.capacity.
+func (f *reserverFixture) fixtureBuckets(_ context.Context, _ string) (topology.QuotaDomainKind, topology.LimitScopeID, map[string]topology.Bucket, error) {
+	out := make(map[string]topology.Bucket, 3)
+	for _, dim := range []string{topology.DimensionRPM, topology.DimensionTPM, topology.DimensionRPD} {
+		out[dim] = topology.Bucket{Name: dim, Limit: f.capacity, LimitScopeID: "scope-1", CapacityObserved: f.capacity, CommittedSinceObservation: f.committed}
+	}
+	return topology.QuotaDomainAPIProject, "scope-1", out, nil
 }
 
 func newReserverFixture(t *testing.T, capacity int64) *reserverFixture {
 	t.Helper()
-	f := &reserverFixture{store: newReservationTestStore(t), rec: &callRecorder{}, capacity: capacity}
-	f.buckets = func(_ context.Context, _ string) (map[string]Bucket, error) {
-		return map[string]Bucket{"combined": {CapacityObserved: f.capacity, CommittedSinceObservation: f.committed}}, nil
-	}
-	f.permit = func(_ context.Context, _ governor.AdmissionRequest) (governor.Permit, error) {
-		f.rec.record("permit")
-		return governor.Permit{}, nil
-	}
-	f.acquireLeases = func(_ context.Context, _ string, _ []string) ([]string, error) {
-		f.rec.record("acquire_leases")
-		return []string{"lease-1", "lease-2"}, nil
-	}
-	f.releaseLeases = func(_ context.Context, _ []string) error {
-		f.rec.record("release_leases")
-		return nil
-	}
-	f.allocateWorktree = func(_ context.Context, _ string) (string, error) {
-		f.rec.record("allocate_worktree")
-		return "worktree-1", nil
-	}
-	f.removeWorktree = func(_ context.Context, _ string) error {
-		f.rec.record("remove_worktree")
-		return nil
-	}
-	f.validateLeases = func(_ context.Context, _ string, leaseIDs []string) ([]string, error) {
-		return leaseIDs, nil
+	f := &reserverFixture{store: newReservationTestStore(t), rec: &callRecorder{}, clock: newStepClock(), capacity: capacity}
+	f.seams = ReserverSeams{
+		Buckets:         f.fixtureBuckets,
+		ReserveFraction: func(context.Context, string) (float64, error) { return 0, nil },
+		Projects:        &ActiveProjectCount{},
+		Permit: func(context.Context, governor.AdmissionRequest) (governor.Permit, error) {
+			f.rec.record("permit")
+			return governor.Permit{}, nil
+		},
+		AcquireLeases: func(context.Context, string, string, []string) ([]string, error) {
+			f.rec.record("acquire_leases")
+			return []string{"lease-1", "lease-2"}, nil
+		},
+		ReleaseLeases: func(context.Context, []string) error { f.rec.record("release_leases"); return nil },
+		AllocateWorktree: func(context.Context, string) (string, error) {
+			f.rec.record("allocate_worktree")
+			return "worktree-1", nil
+		},
+		RemoveWorktree: func(context.Context, string) error { f.rec.record("remove_worktree"); return nil },
+		ValidateLeases: func(_ context.Context, _ string, ids []string) ([]string, error) { return ids, nil },
+		RenewLeases:    func(context.Context, []string) error { return nil },
+		FindLeases:     func(context.Context, string, string, []string) ([]string, error) { return nil, nil },
+		FindWorktree:   func(context.Context, string) (string, bool, error) { return "", false, nil },
+		RaiseAttention: func(_ context.Context, _, reason string) error { f.rec.record("attention:" + reason); return nil },
 	}
 	return f
 }
 
-func (f *reserverFixture) reserver(t *testing.T) *Reserver {
+func (f *reserverFixture) reserverWithEpoch(t *testing.T, epoch string) *Reserver {
 	t.Helper()
-	rv, err := NewReserver(f.store, newTestClock(), "epoch-1", f.buckets, f.permit,
-		f.acquireLeases, f.releaseLeases, f.allocateWorktree, f.removeWorktree, f.validateLeases)
+	rv, err := NewReserver(f.store, f.clock, epoch, f.seams)
 	if err != nil {
 		t.Fatalf("NewReserver: %v", err)
 	}
 	return rv
 }
 
+func (f *reserverFixture) reserver(t *testing.T) *Reserver {
+	t.Helper()
+	return f.reserverWithEpoch(t, "epoch-1")
+}
+
 func TestNewReserverRefusesNilSeams(t *testing.T) {
 	f := newReserverFixture(t, 1000)
-	cases := []struct {
-		name   string
-		mutate func(*reserverFixture)
-	}{
-		{"store", func(_ *reserverFixture) {}}, // handled separately below
-		{"buckets", func(f *reserverFixture) { f.buckets = nil }},
-		{"permit", func(f *reserverFixture) { f.permit = nil }},
-		{"acquireLeases", func(f *reserverFixture) { f.acquireLeases = nil }},
-		{"releaseLeases", func(f *reserverFixture) { f.releaseLeases = nil }},
-		{"allocateWorktree", func(f *reserverFixture) { f.allocateWorktree = nil }},
-		{"removeWorktree", func(f *reserverFixture) { f.removeWorktree = nil }},
-		{"validateLeases", func(f *reserverFixture) { f.validateLeases = nil }},
-	}
-	if _, err := NewReserver(nil, newTestClock(), "epoch-1", f.buckets, f.permit, f.acquireLeases, f.releaseLeases, f.allocateWorktree, f.removeWorktree, f.validateLeases); err == nil {
+	if _, err := NewReserver(nil, f.clock, "epoch-1", f.seams); err == nil {
 		t.Error("NewReserver(nil store) = nil error, want error")
 	}
-	for _, c := range cases[1:] {
-		fx := newReserverFixture(t, 1000)
-		c.mutate(fx)
-		_, err := NewReserver(fx.store, newTestClock(), "epoch-1", fx.buckets, fx.permit, fx.acquireLeases, fx.releaseLeases, fx.allocateWorktree, fx.removeWorktree, fx.validateLeases)
+	if _, err := NewReserver(f.store, f.clock, "", f.seams); err == nil {
+		t.Error("NewReserver(empty epoch) = nil error, want error")
+	}
+	cases := map[string]func(*ReserverSeams){
+		"Buckets": func(s *ReserverSeams) { s.Buckets = nil }, "RenewLeases": func(s *ReserverSeams) { s.RenewLeases = nil },
+		"Permit": func(s *ReserverSeams) { s.Permit = nil }, "AcquireLeases": func(s *ReserverSeams) { s.AcquireLeases = nil },
+		"ReleaseLeases": func(s *ReserverSeams) { s.ReleaseLeases = nil }, "AllocateWorktree": func(s *ReserverSeams) { s.AllocateWorktree = nil },
+		"RemoveWorktree": func(s *ReserverSeams) { s.RemoveWorktree = nil }, "ValidateLeases": func(s *ReserverSeams) { s.ValidateLeases = nil },
+		"ReserveFraction": func(s *ReserverSeams) { s.ReserveFraction = nil }, "Projects": func(s *ReserverSeams) { s.Projects = nil },
+		"FindLeases": func(s *ReserverSeams) { s.FindLeases = nil }, "FindWorktree": func(s *ReserverSeams) { s.FindWorktree = nil },
+		"RaiseAttention": func(s *ReserverSeams) { s.RaiseAttention = nil },
+	}
+	for name, mutate := range cases {
+		s := f.seams
+		mutate(&s)
+		_, err := NewReserver(f.store, f.clock, "epoch-1", s)
 		if err == nil {
-			t.Errorf("NewReserver(nil %s) = nil error, want error", c.name)
+			t.Errorf("NewReserver(nil %s) = nil error, want KindInvalidInput", name)
+			continue
+		}
+		if !isKindInvalidInput(err) || !strings.Contains(err.Error(), name) {
+			t.Errorf("NewReserver(nil %s) = %v, want KindInvalidInput naming the seam", name, err)
 		}
 	}
 }
@@ -129,35 +139,23 @@ func TestReserveHappyPathInteractive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reserve: %v", err)
 	}
-	if r.State != ReservationHeld {
-		t.Errorf("state = %s, want held", r.State)
+	if r.State != ReservationHeld || len(r.LeaseIDs) != 2 || r.WorktreeID != "worktree-1" || r.ScopeID != "scope-1" {
+		t.Errorf("Reserve = %+v, want held with leases, worktree and derived scope-1", r)
 	}
-	if len(r.LeaseIDs) != 2 || r.WorktreeID != "worktree-1" {
-		t.Errorf("Reserve did not persist lease_ids/worktree_id: %+v", r)
-	}
-	if got := f.rec.snapshot(); len(got) != 2 || got[0] != "acquire_leases" || got[1] != "allocate_worktree" {
+	if got := f.rec.snapshot(); fmt.Sprint(got) != "[acquire_leases allocate_worktree]" {
 		t.Errorf("call order = %v, want [acquire_leases allocate_worktree]", got)
 	}
 	if len(r.Steps) != 3 {
 		t.Fatalf("Steps = %+v, want exactly 3 (quota, leases, worktree)", r.Steps)
 	}
-	for _, want := range []StepName{StepQuota, StepLeases, StepWorktree} {
-		found := false
-		for _, s := range r.Steps {
-			if s.Step == want && s.State == StepAcquired {
-				found = true
-			}
-		}
-		if !found {
-			t.Errorf("Steps missing acquired %s: %+v", want, r.Steps)
+	for i, want := range []StepName{StepQuota, StepLeases, StepWorktree} {
+		if r.Steps[i].Step != want || r.Steps[i].State != StepAcquired {
+			t.Errorf("Steps[%d] = %+v, want acquired %s", i, r.Steps[i], want)
 		}
 	}
 	stored, ok, err := f.store.Get(t.Context(), r.ID)
-	if err != nil || !ok {
-		t.Fatalf("Get: %v %v", ok, err)
-	}
-	if stored.State != ReservationHeld {
-		t.Errorf("persisted state = %s, want held", stored.State)
+	if err != nil || !ok || stored.State != ReservationHeld || stored.RepoID != "repo-1" || fmt.Sprint(stored.ScopeGlobs) != "[**]" {
+		t.Errorf("persisted = %+v ok=%v err=%v, want held with repo_id and scope_globs", stored, ok, err)
 	}
 }
 
@@ -171,11 +169,8 @@ func TestReserveBatchSkipsLeasesAndWorktree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reserve: %v", err)
 	}
-	if len(r.LeaseIDs) != 0 || r.WorktreeID != "" {
-		t.Errorf("batch reservation acquired leases/worktree: %+v", r)
-	}
-	if got := f.rec.snapshot(); len(got) != 0 {
-		t.Errorf("batch reservation invoked seams: %v, want none", got)
+	if len(r.LeaseIDs) != 0 || r.WorktreeID != "" || len(f.rec.snapshot()) != 0 {
+		t.Errorf("batch reservation acquired leases/worktree: %+v calls=%v", r, f.rec.snapshot())
 	}
 	if r.ExpiresAt == 0 {
 		t.Error("batch reservation ExpiresAt not set (want 24h expiry)")
@@ -187,95 +182,98 @@ func TestReserveBatchRejectsScopeGlobs(t *testing.T) {
 	rv := f.reserver(t)
 	req := baseReserveRequest()
 	req.Kind = ReservationBatch
-	req.ScopeGlobs = []string{"**"}
-	if _, err := rv.Reserve(t.Context(), req); err == nil {
-		t.Error("Reserve(batch with ScopeGlobs) = nil error, want typed error")
+	if _, err := rv.Reserve(t.Context(), req); !isKindInvalidInput(err) {
+		t.Errorf("Reserve(batch with ScopeGlobs) = %v, want KindInvalidInput", err)
 	}
 }
 
 // TestReserveFailureAtQuotaRollsBackNothingAcquired proves the FIRST
-// failure point (admission) rolls back with zero acquisitions attempted
-// -- the "no residue" case: leases and worktree seams are never called,
-// and the row ends rolled_back.
+// failure point (admission) rolls back with zero acquisitions attempted.
 func TestReserveFailureAtQuotaRollsBackNothingAcquired(t *testing.T) {
 	f := newReserverFixture(t, 1) // capacity far below any real estimate
 	rv := f.reserver(t)
 	r, err := rv.Reserve(t.Context(), baseReserveRequest())
-	if err == nil {
-		t.Fatal("Reserve over capacity = nil error, want ErrQuotaUnavailable")
-	}
-	if !errors.Is(err, ErrQuotaUnavailable) {
-		t.Errorf("err = %v, want ErrQuotaUnavailable", err)
-	}
+	requireSentinel(t, err, ErrQuotaUnavailable)
 	if r.State != ReservationRolledBack {
 		t.Errorf("state = %s, want rolled_back", r.State)
 	}
 	if got := f.rec.snapshot(); len(got) != 0 {
 		t.Errorf("call order = %v, want none (nothing acquired before quota check)", got)
 	}
-	if len(r.LeaseIDs) != 0 || r.WorktreeID != "" {
-		t.Errorf("rolled-back row carries residue: %+v", r)
+	stored, ok, getErr := f.store.Get(t.Context(), r.ID)
+	if getErr != nil || !ok || stored.State != ReservationRolledBack {
+		t.Errorf("row after failed admission = %+v ok=%v err=%v, want a persisted rolled_back row", stored, ok, getErr)
 	}
 }
 
-// TestReserveFailureAtLeasesRollsBack injects a failure at the SECOND
-// pipeline step (leases). Nothing was acquired before it, so the
-// reverse chain has nothing to compensate; worktree is never attempted.
+// TestReserveFailureAtLeasesRollsBack injects a failure at the leases
+// step; worktree is never attempted.
 func TestReserveFailureAtLeasesRollsBack(t *testing.T) {
 	f := newReserverFixture(t, 100000)
 	injected := errors.New("lease acquisition failed")
-	f.acquireLeases = func(_ context.Context, _ string, _ []string) ([]string, error) {
+	f.seams.AcquireLeases = func(context.Context, string, string, []string) ([]string, error) {
 		f.rec.record("acquire_leases")
 		return nil, injected
 	}
 	rv := f.reserver(t)
 	r, err := rv.Reserve(t.Context(), baseReserveRequest())
-	if !errors.Is(err, injected) {
+	if !hasIdentity(err, injected) {
 		t.Errorf("err = %v, want wrapping %v", err, injected)
 	}
 	if r.State != ReservationRolledBack {
 		t.Errorf("state = %s, want rolled_back", r.State)
 	}
-	if got := f.rec.snapshot(); len(got) != 1 || got[0] != "acquire_leases" {
+	if got := f.rec.snapshot(); fmt.Sprint(got) != "[acquire_leases]" {
 		t.Errorf("call order = %v, want [acquire_leases] only (worktree never attempted)", got)
 	}
 }
 
-// TestReserveFailureAtWorktreeRollsBackLeasesInReverseOrder is the
-// dedicated per-step test for the THIRD pipeline step: leases succeed,
-// worktree allocation fails. The reverse chain must release the leases
-// that WERE acquired (removeWorktree is never called, since no worktree
-// was ever allocated) and the row must read rolled_back.
+// TestReserveFailureAtWorktreeRollsBackLeasesInReverseOrder: leases
+// succeed, worktree allocation fails; the leases are released and the
+// row reads rolled_back with the compensation recorded.
 func TestReserveFailureAtWorktreeRollsBackLeasesInReverseOrder(t *testing.T) {
 	f := newReserverFixture(t, 100000)
 	injected := errors.New("worktree allocation failed")
-	f.allocateWorktree = func(_ context.Context, _ string) (string, error) {
+	f.seams.AllocateWorktree = func(context.Context, string) (string, error) {
 		f.rec.record("allocate_worktree")
 		return "", injected
 	}
 	rv := f.reserver(t)
 	r, err := rv.Reserve(t.Context(), baseReserveRequest())
-	if !errors.Is(err, injected) {
+	if !hasIdentity(err, injected) {
 		t.Errorf("err = %v, want wrapping %v", err, injected)
 	}
-	if r.State != ReservationRolledBack {
-		t.Errorf("state = %s, want rolled_back", r.State)
+	if r.State != ReservationRolledBack || len(r.LeaseIDs) != 0 {
+		t.Errorf("row = %+v, want rolled_back with no lease ids", r)
 	}
-	want := []string{"acquire_leases", "allocate_worktree", "release_leases"}
-	if got := f.rec.snapshot(); fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Errorf("call order = %v, want %v (remove_worktree must NOT appear -- nothing was allocated)", got, want)
+	if got := f.rec.snapshot(); fmt.Sprint(got) != "[acquire_leases allocate_worktree release_leases]" {
+		t.Errorf("call order = %v, want leases released and no remove_worktree", got)
 	}
-	if len(r.LeaseIDs) != 0 {
-		t.Errorf("rolled-back row still carries lease_ids: %+v", r)
+	if s := findStep(r, StepLeases); s.State != StepCompensated {
+		t.Errorf("leases step = %+v, want compensated", s)
 	}
-	// Step ledger must record the compensation.
-	found := false
-	for _, s := range r.Steps {
-		if s.Step == StepLeases && s.State == StepCompensated {
-			found = true
+}
+
+// TestReserveRefusesEmptyLeaseSet: a lease seam that returns no id for
+// non-empty globs is refused and rolled back, never recorded as held.
+func TestReserveRefusesEmptyLeaseSet(t *testing.T) {
+	f := newReserverFixture(t, 100000)
+	f.seams.AcquireLeases = func(context.Context, string, string, []string) ([]string, error) { return nil, nil }
+	r, err := f.reserver(t).Reserve(t.Context(), baseReserveRequest())
+	if !cascade.HasKind(err, cascade.KindInternal) || !strings.Contains(err.Error(), "no lease id") || r.State != ReservationRolledBack {
+		t.Fatalf("Reserve with an empty lease set = %+v, %v, want rolled_back and KindInternal", r, err)
+	}
+	if calls := f.rec.snapshot(); len(calls) != 0 {
+		t.Fatalf("worktree step ran after an empty lease set: %v", calls)
+	}
+}
+
+// findStep returns the last ledger entry for name.
+func findStep(r Reservation, name StepName) Step {
+	for i := len(r.Steps) - 1; i >= 0; i-- {
+		if r.Steps[i].Step == name {
+			return r.Steps[i]
 		}
 	}
-	if !found {
-		t.Errorf("steps ledger missing compensated leases step: %+v", r.Steps)
-	}
+	return Step{}
 }

@@ -11,8 +11,18 @@ import (
 func newQuotaTestStore(t *testing.T) *QuotaStore {
 	t.Helper()
 	db := openRealSQLiteFile(t)
-	if err := ApplyMigrationSchema(context.Background(), db, migrate.SQLiteEmitter{}, newTestClock(), "", ""); err != nil {
+	ctx := context.Background()
+	if err := ApplyMigrationSchema(ctx, db, migrate.SQLiteEmitter{}, newTestClock(), "", ""); err != nil {
 		t.Fatalf("ApplyMigrationSchema: %v", err)
+	}
+	// The bucket writer validates dimensions against the stored domain
+	// kind, so every fixture seeds its domain through the Store first.
+	store := NewStore(db)
+	if err := store.UpsertAccount(ctx, Account{ID: "acct-1", Provider: "prov-a", Billing: BillingInfo{Kind: BillingAPI}, Role: AccountRoleWorkforce}); err != nil {
+		t.Fatalf("UpsertAccount: %v", err)
+	}
+	if err := store.UpsertQuotaDomain(ctx, QuotaDomain{ID: "dom-1", AccountRef: "acct-1", Kind: QuotaDomainAPIProject, BillingTier: BillingTierPaid}); err != nil {
+		t.Fatalf("UpsertQuotaDomain: %v", err)
 	}
 	return NewQuotaStore(db)
 }

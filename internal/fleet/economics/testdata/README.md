@@ -35,3 +35,11 @@ themselves are separately pinned as exact literals in
 `shadow_price_test.go`'s `TestReserveBarrierBoundaries` /
 `TestReserveBarrierAbsoluteFloor`, hand-derived from the R-21.31/R-21.118
 formulas, not copied from any other file.
+
+`goldens/tokens_out_defaults.json` holds the nine per-task-class default
+output-token counts `TokensOutDefault` returns (classify, segment,
+summarize, extract, chat, code, reason, review, arbitrate). It is authored
+by hand from the reservation estimate rules, not captured from a provider:
+the numbers are policy defaults, not an observation of any counterpart.
+`reserve_estimate_test.go` checks the table in `reserve_estimate.go`
+against it row by row, so a changed default must change both.

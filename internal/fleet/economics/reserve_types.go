@@ -1,32 +1,30 @@
 // Purpose: the R-21.35 (as amended by R-21.82/.97/.114/.115/.121/.122/.129)
 //
-//	Reservation record, its two closed enums (ReservationState,
+//	Reservation record -- the one reservation ledger row Fleet leases are
+//	created on -- its two closed enums (ReservationState,
 //	ReservationKind) with fail-closed parsers, the legal transition
-//	table, the step-ledger entry shape and the seven func-typed
-//	injection seams reserve.go's pipeline calls through.
+//	table, the step-ledger entry shape and ReserveRequest. The seams the
+//	Reserver calls through live in reserve_ledger.go.
 //
 // Inputs: none at this layer -- this file declares vocabulary only.
 // Outputs: Reservation, Estimate, Actual, Step, the two enums and their
 //
-//	Parse functions, and the Reserver's seam function types.
+//	Parse functions, ReserveRequest.
 //
 // Constraints: no bare time.Now (Art.7.3 -- every timestamp field is set
 //
 //	by a caller reading the injected Clock); neither enum has a
 //	permissive zero value (06 Sec5.15); this package imports no jobs
-//	package (Art.10.2) -- the lease and worktree acquisition steps arrive
-//	as func-typed seams instead.
+//	package. The row carries its placement (NodeID,
+//	SelectedTier, Sensitivity, DecisionID, written by Bind) and the
+//	inputs recovery and resume need (RepoID, ScopeGlobs), so nothing is
+//	read back from an ephemeral request after a restart.
 //
 // SPORT: fleet/economics/reservation/ADD (P1-E41-W9-S79-T4).
 
 package economics
 
-import (
-	"context"
-
-	"github.com/acamarata/cascade/internal/fleet/governor"
-	"github.com/acamarata/cascade/pkg/cascade"
-)
+import "github.com/acamarata/cascade/pkg/cascade"
 
 // ReservationState is the closed R-21.122 reservation lifecycle
 // vocabulary. The zero value is intentionally not a member.
@@ -158,10 +156,9 @@ const (
 	ActualSourceEstimated ActualSource = "estimated"
 )
 
-// StepName is one of the R-21.97 ledger's acquisition steps. The permit
-// step is deferred to the ticket that builds reserve_permit.go's
-// WithPermit (R-21.122 -- the permit is taken per adapter call, never
-// inside Reserve, so this package's own pipeline never appends one).
+// StepName is one of the step ledger's acquisition steps. There is no
+// permit step: the permit is taken per adapter call by WithPermit
+// (see reserve_permit.go), never inside Reserve.
 type StepName string
 
 // The three StepName members this package's pipeline appends, in
@@ -175,18 +172,22 @@ const (
 // StepState is one ledger Step's own lifecycle.
 type StepState string
 
-// The three declared StepState members.
+// The four declared StepState members. StepNotRun is written only by
+// RecoverSteps, when the re-query proves a pending step's effect never
+// happened.
 const (
 	StepPending     StepState = "pending"
 	StepAcquired    StepState = "acquired"
 	StepCompensated StepState = "compensated"
+	StepNotRun      StepState = "not_run"
 )
 
-// Step is one R-21.97 step-ledger entry: the reservation-derived
-// idempotency key `<reservation id>:<step>` is written BEFORE the
-// acquisition it describes, so a crash between an acquisition and the
-// persistence of its handle is always recoverable by re-querying the
-// subsystem for that same key.
+// Step is one step-ledger entry, written BEFORE the acquisition
+// it describes and keyed `<reservation id>:<step>`. A crash between an
+// acquisition and the persistence of its handle is recoverable because
+// RecoverSteps re-queries the subsystem by the inputs the row persists
+// (repo_id, job_id, scope_globs for leases; the recorded lease id for
+// the worktree).
 type Step struct {
 	Step           StepName  `json:"step"`
 	IdempotencyKey string    `json:"idempotency_key"`
@@ -195,14 +196,17 @@ type Step struct {
 }
 
 // Reservation is the R-21.35 ledger row: the single record that makes
-// the quota/leases/worktree/permit acquisitions one atomic unit.
+// the quota/leases/worktree acquisitions one atomic unit.
 type Reservation struct {
 	ID                string           `json:"id"`
+	ExecutionID       string           `json:"execution_id"`
 	JobID             string           `json:"job_id"`
 	ProjectID         string           `json:"project_id"`
 	LaneID            string           `json:"lane_id"`
 	DomainID          string           `json:"domain_id"`
 	ScopeID           string           `json:"scope_id"`
+	RepoID            string           `json:"repo_id"`
+	ScopeGlobs        []string         `json:"scope_globs"`
 	Kind              ReservationKind  `json:"kind"`
 	Estimate          Estimate         `json:"estimate"`
 	Actual            Actual           `json:"actual"`
@@ -219,16 +223,25 @@ type Reservation struct {
 	HeartbeatAt       int64            `json:"heartbeat_at"`
 	ExpiresAt         int64            `json:"expires_at"`
 	Created           int64            `json:"created"`
+	NodeID            string           `json:"node_id"`
+	SelectedTier      string           `json:"selected_tier"`
+	Sensitivity       string           `json:"sensitivity"`
+	DecisionID        string           `json:"decision_id"`
 }
 
 // ReserveRequest is Reserve's argument: everything the pipeline needs to
-// persist the held row and drive the acquisition chain.
+// persist the held row and drive the acquisition chain. ExecutionID is
+// required (unique per row); JobID and RepoID are required only when
+// ScopeGlobs is non-empty. ScopeID is derived from the domain by the
+// Reserver; a caller that sets it must name that same scope.
 type ReserveRequest struct {
+	ExecutionID  string
 	JobID        string
 	ProjectID    string
 	LaneID       string
 	DomainID     string
 	ScopeID      string
+	RepoID       string
 	Kind         ReservationKind
 	Estimate     Estimate
 	BasePrice    float64
@@ -236,44 +249,3 @@ type ReserveRequest struct {
 	Priority     int
 	AllowReserve bool
 }
-
-// DomainBucketsFn resolves a domain's dimension buckets for the
-// admission check. Bound at the composition root to
-// topology.Store-backed lookups; this package performs no bucket
-// counter mutation of its own (R-21.114).
-type DomainBucketsFn func(ctx context.Context, domainID string) (map[string]Bucket, error)
-
-// Bucket is the subset of topology.Bucket the admission check needs,
-// declared locally so this package imports topology for identifier
-// types only, per the ticket's IMPORT DIRECTION note.
-type Bucket struct {
-	CapacityObserved          int64
-	CommittedSinceObservation int64
-}
-
-// PermitFn is the ONE R-16.64 admission API this package calls: given an
-// AdmissionRequest it returns a Permit (or a typed error). Reserve
-// itself never calls PermitFn (R-21.122 -- the permit is taken
-// immediately before each adapter call, by WithPermit); NewReserver
-// still refuses construction with a nil PermitFn so a future WithPermit
-// caller can rely on it being present.
-type PermitFn func(ctx context.Context, req governor.AdmissionRequest) (governor.Permit, error)
-
-// AcquireLeasesFn acquires the AC/S-59.T2 leases scopeGlobs names for
-// jobID, returning the acquired lease ids.
-type AcquireLeasesFn func(ctx context.Context, jobID string, scopeGlobs []string) ([]string, error)
-
-// ReleaseLeasesFn releases previously acquired leases by id.
-type ReleaseLeasesFn func(ctx context.Context, leaseIDs []string) error
-
-// AllocateWorktreeFn allocates the AC/S-59.T3 worktree bound to leaseID,
-// returning the worktree id.
-type AllocateWorktreeFn func(ctx context.Context, leaseID string) (string, error)
-
-// RemoveWorktreeFn removes a previously allocated worktree by id.
-type RemoveWorktreeFn func(ctx context.Context, worktreeID string) error
-
-// ValidateLeasesFn validates each checkpointed lease id against the
-// AC/S-59.T2 lease table on resume, returning the subset still valid
-// (holder job id AND expiry both match).
-type ValidateLeasesFn func(ctx context.Context, jobID string, leaseIDs []string) (valid []string, err error)

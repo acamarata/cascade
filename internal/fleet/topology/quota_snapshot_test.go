@@ -82,10 +82,12 @@ func TestTakeQuotaSnapshotAppendsRow(t *testing.T) {
 func TestTakeQuotaSnapshotRejectsDimensionOutsideKind(t *testing.T) {
 	ctx := context.Background()
 	s := newQuotaTestStore(t)
-	// weekly is valid for shared_pool, never for api_project.
-	b := Bucket{Name: DimensionWeekly, Limit: 10, RemainingFraction: 0.5, Window: BucketWindowWeek, Source: SourceCLIObservation, Confidence: 0.5, LimitScopeID: "scope:acct-1", CapacityObserved: UnobservedCapacity}
-	if err := s.UpsertBucket(ctx, "dom-1", DimensionWeekly, b); err != nil {
-		t.Fatalf("seed UpsertBucket: %v", err)
+	// weekly is valid for shared_pool, never for api_project. The writer
+	// now refuses it, so this read-side defence is proven by the one raw
+	// INSERT the suite allows: the only way to store a foreign dimension.
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO `+tableQuotaBucket+` (`+quotaBucketColumns+`)
+VALUES ('dom-1', 'weekly', 'weekly', 10, 0.5, NULL, 'week', 'cli-observation', 0.5, NULL, 'scope:acct-1', -1, 0, '', 0)`); err != nil {
+		t.Fatalf("store a foreign dimension: %v", err)
 	}
 	domain := QuotaDomain{ID: "dom-1", AccountRef: "acct-1", Kind: QuotaDomainAPIProject}
 	if _, err := TakeQuotaSnapshot(ctx, s, []QuotaDomain{domain}, time.Now()); !errors.Is(err, ErrTopologyInvariant) {
