@@ -128,11 +128,11 @@ func NewS3Target(ctx context.Context, cfg S3Config, engine *egress.Engine) (*S3T
 		Region: "us-east-1",
 	})
 	if err != nil {
-		return nil, cascade.Wrap(cascade.KindInvalidInput, err, "targets: s3: constructing client")
+		return nil, cascade.New(cascade.KindInvalidInput, "targets: s3: constructing client")
 	}
 	exists, err := client.BucketExists(ctx, cfg.Bucket)
 	if err != nil {
-		return nil, cascade.Wrapf(classifyS3Err(err), err, "targets: s3: connecting to %s", redactS3Endpoint(cfg.Endpoint))
+		return nil, cascade.Newf(classifyS3Err(err), "targets: s3: connecting to %s", redactS3Endpoint(cfg.Endpoint))
 	}
 	if !exists {
 		return nil, cascade.Newf(cascade.KindNotFound, "targets: s3: bucket %q does not exist or is not accessible", cfg.Bucket)
@@ -158,14 +158,32 @@ func parseS3Endpoint(endpointURL string) (host string, secure bool, err error) {
 	}
 }
 
-// redactS3Endpoint returns endpointURL with any userinfo stripped, or a
-// fixed placeholder if it does not even parse.
+// redactS3Endpoint strips userinfo, query and fragment. Ambiguous URLs or
+// credentials repeated in the retained host/path fail closed.
 func redactS3Endpoint(endpointURL string) string {
 	u, err := url.Parse(endpointURL)
-	if err != nil {
+	_, authority, hasAuthority := strings.Cut(endpointURL, "://")
+	end := strings.IndexAny(authority, "/?#")
+	if err != nil || !hasAuthority || u.Host == "" ||
+		(end >= 0 && strings.LastIndexByte(authority, '@') > end) {
 		return "s3://<redacted>"
 	}
-	return u.Redacted()
+	out := (&url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path}).String()
+	values := u.Query()
+	if u.User != nil {
+		values.Add("", u.User.Username())
+		if password, set := u.User.Password(); set {
+			values.Add("", password)
+		}
+	}
+	for _, entries := range values {
+		for _, value := range entries {
+			if value != "" && (strings.Contains(out, value) || strings.Contains(u.Host+u.Path, value)) {
+				return "s3://<redacted>"
+			}
+		}
+	}
+	return out
 }
 
 // classifyS3Err reports the taxonomy Kind that best fits an S3 API
@@ -219,7 +237,7 @@ func (t *S3Target) Put(ctx context.Context, key string, r io.Reader) error {
 	}
 	_, err = t.client.PutObject(ctx, t.bucket, key, bytes.NewReader(out), int64(len(out)), minio.PutObjectOptions{})
 	if err != nil {
-		return cascade.Wrapf(classifyS3Err(err), err, "targets: s3: put %q", key)
+		return cascade.Newf(classifyS3Err(err), "targets: s3: put %q", key)
 	}
 	return nil
 }
@@ -231,7 +249,7 @@ func (t *S3Target) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 	}
 	obj, err := t.client.GetObject(ctx, t.bucket, key, minio.GetObjectOptions{})
 	if err != nil {
-		return nil, cascade.Wrapf(classifyS3Err(err), err, "targets: s3: get %q", key)
+		return nil, cascade.Newf(classifyS3Err(err), "targets: s3: get %q", key)
 	}
 	// GetObject is lazy: Stat now so a missing key surfaces here, not on
 	// the caller's first Read.
@@ -240,7 +258,7 @@ func (t *S3Target) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 		if s3ErrCode(err) == "NoSuchKey" {
 			return nil, cascade.Newf(cascade.KindNotFound, "targets: s3: %q not found", key)
 		}
-		return nil, cascade.Wrapf(classifyS3Err(err), err, "targets: s3: get %q", key)
+		return nil, cascade.Newf(classifyS3Err(err), "targets: s3: get %q", key)
 	}
 	return obj, nil
 }
@@ -254,7 +272,7 @@ func (t *S3Target) List(ctx context.Context, prefix string) ([]string, error) {
 	var out []string
 	for obj := range t.client.ListObjects(ctx, t.bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
 		if obj.Err != nil {
-			return nil, cascade.Wrapf(classifyS3Err(obj.Err), obj.Err, "targets: s3: listing %q", prefix)
+			return nil, cascade.Newf(classifyS3Err(obj.Err), "targets: s3: listing %q", prefix)
 		}
 		out = append(out, obj.Key)
 	}
@@ -268,7 +286,7 @@ func (t *S3Target) Delete(ctx context.Context, key string) error {
 		return ctxErr(err)
 	}
 	if err := t.client.RemoveObject(ctx, t.bucket, key, minio.RemoveObjectOptions{}); err != nil {
-		return cascade.Wrapf(classifyS3Err(err), err, "targets: s3: delete %q", key)
+		return cascade.Newf(classifyS3Err(err), "targets: s3: delete %q", key)
 	}
 	return nil
 }

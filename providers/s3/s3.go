@@ -88,7 +88,7 @@ func Open(ctx context.Context, endpointURL, bucket, accessKeyID, secretAccessKey
 		Region: "us-east-1",
 	})
 	if err != nil {
-		return nil, cascade.Wrap(cascade.KindInvalidInput, err, "s3.Open: constructing client")
+		return nil, cascade.New(cascade.KindInvalidInput, "s3.Open: constructing client")
 	}
 	exists, err := client.BucketExists(ctx, bucket)
 	if err != nil {
@@ -181,7 +181,7 @@ func classifyErr(err error) cascade.Kind {
 // alone is still redacted defensively, matching providers/postgres's
 // wrapConnError/providers/redis's wrapConnError).
 func wrapConnError(err error, endpointURL, msg string) error {
-	return cascade.Wrapf(classifyErr(err), err, "%s %s", msg, redactEndpoint(endpointURL))
+	return cascade.Newf(classifyErr(err), "%s %s", msg, redactEndpoint(endpointURL))
 }
 
 // endpointSchemes are the endpoint URL schemes parseEndpoint accepts;
