@@ -184,20 +184,6 @@
     "symbol": "internal/doctor.NewMCPIntegrationCheck"
   },
   {
-    "caller_site": "cmd/cascade/doctor.go",
-    "expected_caller": "productionCheckRegistry in cmd/cascade/doctor.go, in the SAME change that lands a real SubsystemStateProvider",
-    "reason": "The subsystem_census check takes a SubsystemStateProvider. Nothing in the tree implements DeclaredSubsystems/RunningSubsystems, so the doctor command cannot mount this check against a real data source yet. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/doctor.NewSubsystemCensusCheck"
-  },
-  {
-    "caller_site": "internal/notify/bridge.go",
-    "expected_caller": "NOT OWNED BY ANY P1 TICKET: nothing adds internal/notify/bridge.go, and P1-E23-W5-S49-T2 does not add it either -- its files_scope is away.go/digest.go/router.go plus dispatch.go per the T0 accumulation-gate ruling, and no bridge adapter is in it. The retire_ticket was re-pointed from P1-E23-W5-S49-T2 to P1-E37-W8-S73-T2 (T0-authorised, recorded as a declared deviation) so the entry does not orphan at this ticket's close; PCI s49t2-away-mode-contradictions asks planning to name the real owner of the bridge encoder.",
-    "reason": "EncodeNotificationPayload landed with the router under P1-E23-W5-S49-T1. The bridge adapter that encodes for a real channel is explicitly out of that ticket and lands in S-49.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "retire_ticket": "P1-HRN-06",
-    "symbol": "internal/events.EncodeNotificationPayload"
-  },
-  {
     "caller_site": "internal/plugins/registration.go",
     "expected_caller": "the plugin registration path",
     "reason": "An event kind defined ahead of the plugin registration path that will publish it. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
@@ -309,27 +295,6 @@
     "symbol": "internal/fleet/census.NewCollector"
   },
   {
-    "caller_site": "internal/fleet/economics/reserve_actual.go",
-    "expected_caller": "reserve_actual.go's Reconcile, once built, on receiving a real adapter usage report",
-    "reason": "The ActualSource enum's second member is exercised by reserve_store_test.go's round-trip proof, but the only production writer of a `reported` value is Reconcile (reserve_actual.go, R-21.121), which is explicitly out of this ticket's delivered scope this pass -- the store persists whatever ActualSource it is given, but nothing yet sets it to `reported`.",
-    "retire_ticket": "P1-CAP-08",
-    "symbol": "internal/fleet/economics.ActualSourceReported"
-  },
-  {
-    "caller_site": "internal/fleet/economics/tables_override.go",
-    "expected_caller": "the AO/S-79.T4 dispatch path's config-to-Tables resolution step",
-    "reason": "Same gap as NewTables directly above: ApplyOverrides merges the decoded [fleet.economics] block onto the base table, but the composition root that reads internal/runtime.Config.Economics and calls it is AO/S-79.T3/T4's scope, explicitly excluded from this ticket (NOT IN SCOPE: eligibility, correlation, ranking, atomic reservation).",
-    "retire_ticket": "P1-CAP-08",
-    "symbol": "internal/fleet/economics.ApplyOverrides"
-  },
-  {
-    "caller_site": "internal/daemon/subsystems_reservation.go",
-    "expected_caller": "the same future internal/daemon/subsystems_reservation.go, beside ApplyJobsSchema's own registration",
-    "reason": "The jobs_reservation MigrationSet is fully implemented and tested (table creation, all four indexes, idempotent re-apply), but no composition root calls it yet because the daemon-start wiring is the same deferred portion of P1-E41-W9-S79-T4 noted on NewReservationStore.",
-    "retire_ticket": "P1-CAP-08",
-    "symbol": "internal/fleet/economics.ApplyReservationSchema"
-  },
-  {
     "caller_site": "internal/daemon/economics_wiring.go",
     "expected_caller": "AO/S-79's scheduler, which clamps a configured AccountPolicy's fraction caps against the live weekly_model_fraction bucket before evaluating executive-role eligibility",
     "reason": "P1-E41-W9-S80-T1 ships the R-21.34 published-cap clamp, fully implemented and tested (TestClampFractionCaps). Its caller is AO/S-79's scheduler, which reads the weekly_model_fraction bucket produced by this same ticket's WindowAccountant and clamps the configured fraction caps before the executive-eligibility check -- out of this ticket's files_scope.",
@@ -343,13 +308,6 @@
     "reason": "P1-E41-W9-S80-T1 ships the R-21.34/R-21.45 executive-overflow derivation, fully implemented and tested (TestEffectiveLaneClassExecutiveOverflow). P1-E41-W9-S79-T1 (pressure/shadow-price/reserve-barrier) landed shadow_price.go taking BasePrice as a caller-supplied field on ShadowPriceInput, never deriving it from a Lane/Account pair itself (06-FORGE-SPEC S5.1 -- that ticket's own contract names no such call). The real caller is AO/S-79.T3's ranking pass (rank.go), which resolves each candidate lane's EFFECTIVE class before building the ShadowPriceInput it hands to ShadowPrice.",
     "retire_ticket": "P1-TOP-08",
     "symbol": "internal/fleet/economics.EffectiveLaneClass"
-  },
-  {
-    "caller_site": "internal/conductor/execute_reserve.go",
-    "expected_caller": "a future internal/conductor/execute_reserve.go split out of execute.go's dispatch door, building the Estimate for its ReserveRequest before calling economics.Reserve",
-    "reason": "The R-21.35/R-21.50 token estimate is fully implemented and golden-tested, but its caller is the dispatch path that hydrates a context and builds a ReserveRequest before calling Reserve -- internal/conductor/execute.go's dispatch door, which this pass's deferred wiring did not reach.",
-    "retire_ticket": "P1-CAP-08",
-    "symbol": "internal/fleet/economics.EstimateFor"
   },
   {
     "caller_site": "internal/fleet/economics/eligibility.go",
@@ -380,61 +338,12 @@
     "symbol": "internal/fleet/economics.Modes"
   },
   {
-    "caller_site": "internal/daemon/subsystems_reservation.go",
-    "expected_caller": "a new internal/daemon/subsystems_reservation.go, mirroring the existing subsystems_scheduler.go/subsystems_worktree.go per-subsystem split, once P1-E41-W9-S79-T4's wiring tasks land",
-    "reason": "Same gap as NewReserver: the ReservationStore is fully implemented and tested over a real modernc-sqlite db, but the composition root that opens the jobs-domain database and constructs the live store (mirroring internal/jobs.NewStore's own daemon-start precedent) has not been wired yet.",
-    "retire_ticket": "P1-CAP-08",
-    "symbol": "internal/fleet/economics.NewReservationStore"
-  },
-  {
-    "caller_site": "internal/jobs/scheduler_reserve.go",
-    "expected_caller": "a new internal/jobs/scheduler_reserve.go, mirroring scheduler_admit.go's own file-per-concern split, which will hold the live *economics.Reserver once this ticket's wiring tasks land",
-    "reason": "P1-E41-W9-S79-T4 ships the full atomic-reservation pipeline (reserve.go/reserve_teardown.go) fully implemented and tested, including the partial-failure rollback and concurrency proofs, but this same ticket's own wiring work -- internal/jobs/scheduler_admit.go replacing its per-node Admit with economics.Reserve, and the internal/conductor ModelRequest.ReservationID / execute.go dispatch-door / fanout.go WithPermitFn changes -- was not completed in this pass. The construction call site therefore does not exist yet.",
-    "retire_ticket": "P1-CAP-08",
-    "symbol": "internal/fleet/economics.NewReserver"
-  },
-  {
-    "caller_site": "internal/fleet/economics/tables_override.go",
-    "expected_caller": "the AO/S-79.T4 dispatch path's config-to-Tables resolution step",
-    "reason": "P1-E41-W9-S79-T2 ships Tables as an immutable snapshot type consumed by ApplyOverrides. Its real production caller is the daemon composition root that resolves the live [fleet.economics] overrides before a dispatch decision, which is AO/S-79.T3/T4's scope (this ticket's own NOT IN SCOPE section names both), not T2's.",
-    "retire_ticket": "P1-CAP-08",
-    "symbol": "internal/fleet/economics.NewTables"
-  },
-  {
     "caller_site": "internal/daemon/economics_wiring.go",
     "expected_caller": "AO/S-79's scarcity scheduler composition root, which constructs one WindowAccountant per subscription_window domain and calls Buckets on each accounting pass",
     "reason": "P1-E41-W9-S80-T1 ships WindowAccountant, the subscription-window bucket accountant, fully implemented and tested against a real modernc/sqlite topology+usage store pair. Its constructor's real caller is the scarcity scheduler / periodic accounting job that owns a live topology.Store, topology.QuotaStore and provider.UsageReader triple at daemon runtime -- that composition-root wiring belongs to AO/S-79's scheduler tickets, out of this ticket's files_scope (internal/fleet/economics and internal/runtime config only).",
     "retire_ticket": "cap:fleet-sessions",
     "expires": "P1-EXIT-07",
     "symbol": "internal/fleet/economics.NewWindowAccountant"
-  },
-  {
-    "caller_site": "internal/daemon/reservation_rpc.go",
-    "expected_caller": "the same future internal/daemon/reservation_rpc.go, decoding a wire reservation kind",
-    "reason": "Same situation as ParseReservationState: fully implemented and tested, but its caller is the same deferred reservation RPC/CLI surface.",
-    "retire_ticket": "P1-CAP-08",
-    "symbol": "internal/fleet/economics.ParseReservationKind"
-  },
-  {
-    "caller_site": "internal/daemon/reservation_rpc.go",
-    "expected_caller": "a future internal/daemon/reservation_rpc.go, mirroring quota_rpc.go's own per-surface split, decoding a wire reservation state",
-    "reason": "The fail-closed parser is fully implemented and table-tested against the full transition matrix, but its only intended caller is the reservation RPC/CLI surface (`cascade fleet reservation ...` or an equivalent daemon RPC), which is out of this ticket's files_scope and not part of this pass.",
-    "retire_ticket": "P1-CAP-08",
-    "symbol": "internal/fleet/economics.ParseReservationState"
-  },
-  {
-    "caller_site": "cmd/cascade/daemon_unix_reservation.go",
-    "expected_caller": "a future cmd/cascade/daemon_unix_reservation.go split out of daemon_unix_run.go's runtimeReaderCeiling computation, alongside jobs.SchemaVersion and topology.SchemaVersion",
-    "reason": "Exported for a future composition root's reader-ceiling max(), matching topology.SchemaVersion's and jobs.SchemaVersion's own already-landed precedent (jobs.SchemaVersion carries an identical testonly-allow entry). No composition root computes that max yet.",
-    "retire_ticket": "P1-CAP-08",
-    "symbol": "internal/fleet/economics.ReservationSchemaVersion"
-  },
-  {
-    "caller_site": "internal/fleet/economics/reserve_availability.go",
-    "expected_caller": "AO/S-79.T4's project-quota-share division, which reads ReserveAdjustedRemaining(barrier, reserve) as its numerator",
-    "reason": "P1-E41-W9-S80-T1 ships the R-21.131 project-share input (reserve-adjusted remaining), fully implemented and tested. The division and ErrProjectShareExceeded refusal that consume it are explicitly owned by AO/S-79.T4, not this ticket -- this ticket ships only the input.",
-    "retire_ticket": "P1-CAP-08",
-    "symbol": "internal/fleet/economics.ReserveAdjustedRemaining"
   },
   {
     "caller_site": "internal/daemon/economics_wiring.go",
@@ -498,13 +407,6 @@
     "symbol": "internal/fleet/hookpacks.RegisterHookEventHandler"
   },
   {
-    "caller_site": "cmd/cascade/doctor.go",
-    "expected_caller": "a future `cascade doctor` or `cascade fleet` diagnostics surface that reports dropped-hook-event counts; retire this entry once one reads it",
-    "reason": "Exposes dispatch's unknown-event-type drop counter (incremented when a HookPayload's event_type is outside ParseHookEventType's closed set) for diagnostics. No composition root wires a status/doctor surface to read fleet counters of this shape yet; the counter itself is exercised directly by handler_test.go's TestHookRPCHandler_UnknownEventTypeDroppedNotError, which proves the drop-not-error contract by observing it increment. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/fleet/hookpacks.UnknownEventCount"
-  },
-  {
     "caller_site": "internal/fleet/governor/escalation_wiring.go",
     "expected_caller": "the escalation ladder (P1-E13-W3-S27-T3), which reads back a subset of kinds via Replay's kinds filter and will assert its own filter list against AllKinds()",
     "reason": "Exported for the same reason pkg/cascade.AllKinds and internal/audit.AllKinds are: a closed enum needs one place a consumer (or a test elsewhere in the tree) can range over every member without hardcoding the list. No such external consumer exists yet because nothing outside this package reads journal.Kind values yet.",
@@ -529,14 +431,6 @@
     "symbol": "internal/fleet/supervision.NewAttentionCheck"
   },
   {
-    "caller_site": "internal/daemon/stall_detector.go",
-    "expected_caller": "a new internal/daemon/stall_detector.go, once the Retryer/ContextEnricher seams and a daemon-lifetime context for Run/RunPoll are available (the same daemon-lifetime-context gap NewSubscription's own entry above records); retire this entry once it lands",
-    "reason": "P1-E18-W4-S39-T5 ships the stall detector fully implemented and tested (progress tracking, R-16.73 signal normalization and the 3-in-30-minute gate-denied rule, the full Retry/Context/SupervisorTask/Human escalation walk against a real governor.EscalationLadder, idempotency, and recovery cancellation), and this ticket's NewDetector call already retires the prior internal/fleet/governor.NewEscalationLadder exemption by giving it a real, non-test caller. The daemon composition root that would construct a live *Detector from the daemon's own bus, journal.Store, and the S-26.T2/retrieval-context Retryer/ContextEnricher seams is out of this ticket's files_scope (internal/fleet/supervision/* only).",
-    "retire_ticket": "cap:fleet-sessions",
-    "expires": "P1-EXIT-07",
-    "symbol": "internal/fleet/supervision.NewDetector"
-  },
-  {
     "caller_site": "internal/daemon/attention_subscription.go",
     "expected_caller": "a new internal/daemon/attention_subscription.go, once buildRPCServer threads a daemon-lifetime context through (touches nine call sites, out of this ticket's scope)",
     "reason": "P1-E18-W4-S39-T1 ships the fleet.sessions.changed subscriber (subscribe.go) fully implemented and tested against a real *events.Bus (subscribe_test.go fires a real event and asserts delivery). internal/daemon/attention_rpc.go registers the RPC handlers over a real Store but does not start Run: buildRPCServer (its only call site) has no daemon-lifetime context to cancel it with, and threading one through touches nine call sites (the production one plus eight cmd/cascade integration tests) outside this ticket's files_scope.",
@@ -551,13 +445,6 @@
     "retire_ticket": "cap:fleet-sessions",
     "expires": "P1-EXIT-07",
     "symbol": "internal/fleet/tailer.NewTailer"
-  },
-  {
-    "caller_site": "internal/jobs/quota_reservation.go",
-    "expected_caller": "AO/S-79.T4's reservation-first dispatch path, which reads the jobs-domain reservation rows and calls Available before granting a new reservation",
-    "reason": "P1-E40-W9-S77-T3 (R-21.114) ships Available as a pure function of a scope, a dimension, the absolute counters and a slice of ReservationEstimate -- it deliberately takes no store reference, which is what makes 'no dispatch path mutates quota_bucket' structural. The reservation ROW itself lives in the jobs domain and is inserted by AO/S-79.T4, which is the ticket that will actually call Available against a live reservation set at dispatch time. Fully implemented and pinned against testdata/availability.golden.json (TestAvailableDerivedFromReservations).",
-    "retire_ticket": "P1-CAP-08",
-    "symbol": "internal/fleet/topology.Available"
   },
   {
     "caller_site": "internal/jobs/fleet_reconcile.go",
@@ -590,13 +477,6 @@
     "symbol": "internal/fleet/topology.ExecutiveModelFractionSoft"
   },
   {
-    "caller_site": "internal/jobs/quota_reservation.go",
-    "expected_caller": "AO/S-79.T4's reservation-first dispatch path, which checks GaugeReservable against the domain's current concurrent-request/enqueued-token gauges before admitting a new batch reservation",
-    "reason": "P1-E40-W9-S77-T3 (R-21.116) ships GaugeReservable, the batch-gauge eligibility check ('reservable iff gauge + estimate <= limit'). Its caller is the same future dispatch path Available and Reservable feed (AO/S-79.T4), which reads QuotaDomain.Batch's live gauge state before admitting a new concurrent request or enqueued-token reservation. Fully implemented and tested (TestGaugeReservable).",
-    "retire_ticket": "P1-CAP-08",
-    "symbol": "internal/fleet/topology.GaugeReservable"
-  },
-  {
     "caller_site": "internal/jobs/fleet_reconcile.go",
     "expected_caller": "P1-E40-W9-S77-T5's six-hour reconcile job, which merges every source's observation of one bucket before calling UpsertBucket with the reconciled result",
     "reason": "P1-E40-W9-S77-T3 (R-21.26) ships Merge, the source-precedence reconciliation of two observations of the SAME bucket. This ticket's own UpsertBucket persists one observation at a time (upsert by domain_id, dimension) and does not itself combine multiple concurrently-arriving sources -- that reconciliation belongs to R-21.28's six-hour discovery/reconcile job, which observes a domain from more than one source (provider-status polling and a CLI probe) in the same pass and must not let a stale provider-status reading silently overwrite a fresher cli-observation. Fully implemented and pinned against testdata/source_ladder_merge.golden.json (TestSourceLadderMerge).",
@@ -623,13 +503,6 @@
     "reason": "P1-E40-W9-S77-T3 (R-21.109) ships Select, the highest-precedence non-expired observation among several. Like Merge above, its caller is R-21.28's six-hour discovery/reconcile job, which is the only place multiple observations of one bucket are ever collected together before a single reconciled write.",
     "retire_ticket": "P1-TOP-06",
     "symbol": "internal/fleet/topology.Select"
-  },
-  {
-    "caller_site": "internal/jobs/quota_reservation.go",
-    "expected_caller": "AO/S-79.T4's reservation-first dispatch path, which maintains the timestamped consumption log for rpm/tpm and calls SlidingWindowSum to compute rolling pressure",
-    "reason": "P1-E40-W9-S77-T3 (R-21.109) ships SlidingWindowSum, the rolling-window (rpm/tpm) timestamped-consumption sum. Its caller is AO/S-79.T4's dispatch path, which records each request's timestamped consumption and sums the trailing window before computing pressure for a rolling dimension -- this ticket ships the formula and its test (TestSlidingWindowSumOnlyCountsWithinWindow) but not the consumption event log that future ticket owns.",
-    "retire_ticket": "P1-CAP-08",
-    "symbol": "internal/fleet/topology.SlidingWindowSum"
   },
   {
     "caller_site": "internal/jobs/scheduler_config.go",
@@ -1131,20 +1004,6 @@
   },
   {
     "caller_site": "internal/retrieval/eval/verb.go",
-    "expected_caller": "a future retrieval-eval maintenance verb, if 07-CLI-COMMAND-TREE.md is ever amended to add one; until then this is deliberately CI-invoked infrastructure",
-    "reason": "internal/retrieval/eval is R-16.9's CI-only evaluation harness: 07-CLI-COMMAND-TREE.md ratifies no retrieval-eval verb, so this ticket adds no CLI/RPC/MCP/daemon surface by its own boundary ruling. The harness's only consumer is its own CI-gate test suite (TestFusionGate, TestV1August2026Baseline, TestRecordedRealEmbedderFixture) and internal/runtime's/internal/doctor's cross-package TestRetrievalFusionEnabledDefault/TestRetrievalFusionGateNote checks. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/retrieval/eval.LoadCorpus"
-  },
-  {
-    "caller_site": "internal/retrieval/eval/verb.go",
-    "expected_caller": "same as internal/retrieval/eval.LoadCorpus",
-    "reason": "Same CI-only harness as LoadCorpus in this file; loads the known-item and semantic/paraphrase query-set fixtures the gate measures against. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/retrieval/eval.LoadQuerySet"
-  },
-  {
-    "caller_site": "internal/retrieval/eval/verb.go",
     "expected_caller": "same as internal/retrieval/eval.LoadCorpus",
     "reason": "Same CI-only harness as LoadCorpus in this file; loads the provenance-stamped recorded-embedder fixture the vector leg replays. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
     "retire_ticket": "UNOWNED",
@@ -1192,13 +1051,6 @@
     "reason": "Deliberate and documented: cmd/cascade/daemon_unix.go calls runtime.Scan directly and explains why in a comment at its call site. Listed for visibility, not as a defect. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
     "retire_ticket": "UNOWNED",
     "symbol": "internal/runtime.Bootstrap"
-  },
-  {
-    "caller_site": "cmd/cascade/daemon_logs.go",
-    "expected_caller": "the daemon logs command",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/runtime.DaemonLogsHandler"
   },
   {
     "caller_site": "cmd/cascade/daemon_unix_run.go",
@@ -1303,13 +1155,6 @@
     "reason": "Determinism seam for export, unused until export has a command. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
     "retire_ticket": "UNOWNED",
     "symbol": "internal/storage.SetExportClock"
-  },
-  {
-    "caller_site": "cmd/cascade/doctor.go",
-    "expected_caller": "the storage doctor.Check adapter, registered from productionCheckRegistry in cmd/cascade/doctor.go once storage exposes one",
-    "reason": "Adapting this into a doctor.Check needs a live *sql.DB, which the doctor command has no handle on: nothing in cmd/ opens the storage database, and the adapter itself belongs in internal/storage, not in the CLI layer. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/storage.StorageHealthCheck"
   },
   {
     "caller_site": "internal/storage/composition.go",
@@ -1520,20 +1365,6 @@
     "symbol": "internal/audit.NewEffectLog"
   },
   {
-    "caller_site": "cmd/cascade/wire_resume.go",
-    "expected_caller": "P1-CORE-15's resume registration: Scan before the socket serves (classify-only) and Sweep at startup and every fanout_sweep_interval as Manifest.GoSupervised(\"fanout-sweep\"), with the Claims table and leg budget carried on daemon.ConductorFanOut",
-    "reason": "P1-CORE-19 owns the fan-out cursor decode, classification and retention backstop (contract:fanout-producer); the startup and periodic registration that calls them is P1-CORE-15's wire_resume.go, which depends on this ticket.",
-    "retire_ticket": "P1-CORE-15",
-    "symbol": "internal/fleet/resume.Scan"
-  },
-  {
-    "caller_site": "cmd/cascade/wire_resume.go",
-    "expected_caller": "P1-CORE-15's resume registration: Sweep at startup and every fanout_sweep_interval with fanout_record_ttl, as Manifest.GoSupervised(\"fanout-sweep\")",
-    "reason": "P1-CORE-19 provides the fan-out retention sweep (contract:fanout-producer); P1-CORE-15 registers it, using the Claims table and store this ticket's composition-root hunk builds.",
-    "retire_ticket": "P1-CORE-15",
-    "symbol": "internal/fleet/resume.Sweep"
-  },
-  {
     "caller_site": "internal/learn/migration.go",
     "expected_caller": "P1-CAP-09's daemon composition root (cmd/cascade/daemon_unix_scheduler.go), the ticket the packet re-homes the learn-outcome-reconcile/learn-retention scheduler wiring to, since the write_scope for that wiring is prohibited to this ticket and shares daemon_unix_scheduler.go with P1-CORE-05",
     "reason": "P1-CAP-02's ported WIP included a daemon wiring file (cmd/cascade/daemon_unix_learn_jobs.go) that called ApplyLearnSchema from a real composition root; the packet's own constraints/prohibited sections require that file DROPPED here (a grandfathered lane may not wait on non-grandfathered P1-CORE-05; forge rule 3) and re-homed to P1-CAP-09. Until P1-CAP-09 ships, only internal/learn's own tests and internal/storage/export_test.go's TestExportExcludesTelemetryTables (a scoped test composition root, not production) call this.",
@@ -1553,5 +1384,148 @@
     "reason": "PCI s64t1-findingwriter-owner-is-s71t2, settled at CR: legacy P1-E35-W7-S71-T2 is carried to P1-LRN-02, whose outputs take the writer as a parameter; the non-test construction lands in P1-LRN-05's daemon composition (plan/p1/epics/LRN/tickets.yaml P1-LRN-05 objective). Wiring it to a fabricated/synthetic signal instead would violate the same no-fabricated-data rule this ticket enforces for outcome.go's HONEST GAP fields.",
     "retire_ticket": "P1-LRN-05",
     "symbol": "internal/learn.NewSQLiteFindingWriter"
+  },
+  {
+    "caller_site": "cmd/cascade/repo_cmd.go",
+    "expected_caller": "cmd/cascade/repo_cmd.go, which P1-E33-W7-S67-T2 constructs: it supplies context.GitCommonDir as ScanDeps.GitCommonDir when it mounts repo.Scan; retire this entry when that lands",
+    "reason": "GitCommonDir is the one production implementation of internal/context/scope.GitCommonDirFunc, injected by scope.CanonicalRepoRoot/EnsureRepository and by ScanDeps.GitCommonDir (internal/repo/scan.go), which is now required, but repo.Scan has no production caller yet, so no composition root assigns context.GitCommonDir as the concrete value. Fully exercised by internal/context/git_common_dir_test.go's TestGitCommonDirRealRepo against a real git binary.",
+    "retire_ticket": "P1-GEN-02",
+    "symbol": "internal/context.GitCommonDir"
+  },
+  {
+    "caller_site": "cmd/cascade/repo_cmd.go",
+    "expected_caller": "cmd/cascade/repo_cmd.go, which P1-E33-W7-S67-T2 constructs: it supplies context.GitRemoteURL as ScanDeps.RemoteURL (the repository registrar also consumes it); retire this entry when that lands",
+    "reason": "GitRemoteURL is the one production repo.RemoteURLFunc, but the repository registrar that consumes it has not landed, so no production call site assigns it yet. Fully exercised by internal/context/git_remote_url_test.go's TestGitRemoteURLRealRepo against a real git binary.",
+    "retire_ticket": "P1-GEN-02",
+    "symbol": "internal/context.GitRemoteURL"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_stall.go",
+    "expected_caller": "P1-SUP-04's daemon composition (cmd/cascade/wire_stall.go), which builds the detector from the journal, the session store, the attention store, the one approval queue adapter and the [fleet.supervision] threshold, then runs Run and RunPoll under the daemon run context",
+    "reason": "P1-SUP-03 ships the stall-supervision rung library only; the packet prohibits any cmd/cascade or internal/daemon edit (composition is P1-SUP-04), so internal/fleet/supervision tests are the only callers at this tip.",
+    "retire_ticket": "P1-SUP-04",
+    "symbol": "internal/fleet/supervision.NewStallDetector"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_stall.go",
+    "expected_caller": "P1-SUP-04's daemon composition (cmd/cascade/wire_stall.go), which opens the directive queue over the daemon store and shares it between the rungs and the context.slice drain",
+    "reason": "P1-SUP-03 ships the stall-supervision rung library only; the packet prohibits any cmd/cascade or internal/daemon edit (composition is P1-SUP-04), so internal/fleet/supervision tests are the only callers at this tip.",
+    "retire_ticket": "P1-SUP-04",
+    "symbol": "internal/fleet/supervision.NewDirectiveStore"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_stall.go",
+    "expected_caller": "P1-SUP-04's daemon composition (cmd/cascade/wire_stall.go), which wraps the daemon event bus as the detector's StallPublisher",
+    "reason": "P1-SUP-03 ships the stall-supervision rung library only; the packet prohibits any cmd/cascade or internal/daemon edit (composition is P1-SUP-04), so internal/fleet/supervision tests are the only callers at this tip.",
+    "retire_ticket": "P1-SUP-04",
+    "symbol": "internal/fleet/supervision.NewBusStallPublisher"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_stall.go",
+    "expected_caller": "P1-SUP-04's daemon composition (cmd/cascade/wire_stall.go), which reads [fleet.supervision].stall_threshold from the decoded config at start",
+    "reason": "P1-SUP-03 ships the stall-supervision rung library only; the packet prohibits any cmd/cascade or internal/daemon edit (composition is P1-SUP-04), so internal/fleet/supervision tests are the only callers at this tip.",
+    "retire_ticket": "P1-SUP-04",
+    "symbol": "internal/fleet/supervision.ParseStallThreshold"
+  },
+  {
+    "added_by_ticket": "P1-SEC-13",
+    "caller_site": "internal/providers/agents/proxy.go",
+    "expected_caller": "internal/providers/agents/proxy.go StartSpawnProxy, which starts one proxy per driver spawn and puts Env() in the child environment",
+    "reason": "contract:driver-egress-proxy ships the per-spawn proxy package complete and tested, but its consumer is the daemon-side spawn composition that P1-AGT-13 builds (StartSpawnProxy over [agents.egress.<driver-id>], ProxyJournal bound to the redacting audit log); this ticket's write_scope forbids the AGT shim files, so no shipping caller exists yet. Start is the per-spawn constructor that composition calls once per driver spawn.",
+    "retire_ticket": "P1-AGT-13",
+    "symbol": "internal/providers/agents/egressproxy.Start"
+  },
+  {
+    "added_by_ticket": "P1-SEC-13",
+    "caller_site": "internal/providers/agents/proxy.go",
+    "expected_caller": "internal/providers/agents/proxy.go StartSpawnProxy, passing ProductionDial() as Options.Dial",
+    "reason": "contract:driver-egress-proxy ships the per-spawn proxy package complete and tested, but its consumer is the daemon-side spawn composition that P1-AGT-13 builds (StartSpawnProxy over [agents.egress.<driver-id>], ProxyJournal bound to the redacting audit log); this ticket's write_scope forbids the AGT shim files, so no shipping caller exists yet. ProductionDial is the guarded upstream dialer that composition passes as Options.Dial.",
+    "retire_ticket": "P1-AGT-13",
+    "symbol": "internal/providers/agents/egressproxy.ProductionDial"
+  },
+  {
+    "added_by_ticket": "P1-SEC-13",
+    "caller_site": "cmd/cascade/guarded_extractors.go",
+    "expected_caller": "cmd/cascade/guarded_extractors.go, where the guarded extractors parse the operator allow lists from runtime.Config.Extra",
+    "reason": "contract:driver-egress-proxy ships the per-spawn proxy package complete and tested, but its consumer is the guarded extractors that P1-SEC-36 builds, which parse the operator allow lists; this ticket's write_scope forbids those files, so no shipping caller exists yet. ParseEgressAllowlists reads the cold [agents.egress.<driver-id>] tables from runtime.Config.Extra for them.",
+    "retire_ticket": "P1-SEC-36",
+    "symbol": "internal/providers/agents/egressproxy.ParseEgressAllowlists"
+  },
+  {
+    "caller_site": "internal/daemon/subsystems_fleet_reservation.go",
+    "expected_caller": "a new internal/jobs/scheduler_reserve.go, mirroring scheduler_admit.go's own file-per-concern split, which will hold the live *economics.Reserver once this ticket's wiring tasks land",
+    "reason": "P1-E41-W9-S79-T4 ships the full atomic-reservation pipeline (reserve.go/reserve_teardown.go) fully implemented and tested, including the partial-failure rollback and concurrency proofs, but this same ticket's own wiring work -- internal/jobs/scheduler_admit.go replacing its per-node Admit with economics.Reserve, and the internal/conductor ModelRequest.ReservationID / execute.go dispatch-door / fanout.go WithPermitFn changes -- was not completed in this pass. The construction call site therefore does not exist yet.",
+    "retire_ticket": "P1-CAP-10",
+    "symbol": "internal/fleet/economics.NewReserver"
+  },
+  {
+    "caller_site": "internal/daemon/subsystems_fleet_reservation.go",
+    "expected_caller": "a new internal/daemon/subsystems_reservation.go, mirroring the existing subsystems_scheduler.go/subsystems_worktree.go per-subsystem split, once P1-E41-W9-S79-T4's wiring tasks land",
+    "reason": "Same gap as NewReserver: the ReservationStore is fully implemented and tested over a real modernc-sqlite db, but the composition root that opens the jobs-domain database and constructs the live store (mirroring internal/jobs.NewStore's own daemon-start precedent) has not been wired yet.",
+    "retire_ticket": "P1-CAP-10",
+    "symbol": "internal/fleet/economics.NewReservationStore"
+  },
+  {
+    "caller_site": "internal/daemon/subsystems_fleet_reservation.go",
+    "expected_caller": "the same future internal/daemon/subsystems_reservation.go, beside ApplyJobsSchema's own registration",
+    "reason": "The jobs_reservation MigrationSet is fully implemented and tested (table creation, all four indexes, idempotent re-apply), but no composition root calls it yet because the daemon-start wiring is the same deferred portion of P1-E41-W9-S79-T4 noted on NewReservationStore.",
+    "retire_ticket": "P1-CAP-10",
+    "symbol": "internal/fleet/economics.ApplyReservationSchema"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_fleet_dispatch.go",
+    "expected_caller": "a future internal/conductor/execute_reserve.go split out of execute.go's dispatch door, building the Estimate for its ReserveRequest before calling economics.Reserve",
+    "reason": "The R-21.35/R-21.50 token estimate is fully implemented and golden-tested, but its caller is the dispatch path that hydrates a context and builds a ReserveRequest before calling Reserve -- internal/conductor/execute.go's dispatch door, which this pass's deferred wiring did not reach.",
+    "retire_ticket": "P1-TOP-04",
+    "symbol": "internal/fleet/economics.EstimateFor"
+  },
+  {
+    "caller_site": "cmd/cascade/daemon_unix_reservation.go",
+    "expected_caller": "P2 route (R68): reader-ceiling / reservation inspect surface / rolling+batch admission dims",
+    "reason": "Exported for a future composition root's reader-ceiling max(), matching topology.SchemaVersion's and jobs.SchemaVersion's own already-landed precedent (jobs.SchemaVersion carries an identical testonly-allow entry). No composition root computes that max yet.",
+    "retire_ticket": "UNOWNED",
+    "symbol": "internal/fleet/economics.ReservationSchemaVersion"
+  },
+  {
+    "caller_site": "internal/daemon/reservation_rpc.go",
+    "expected_caller": "P2 route (R68): reader-ceiling / reservation inspect surface / rolling+batch admission dims",
+    "reason": "Same situation as ParseReservationState: fully implemented and tested, but its caller is the same deferred reservation RPC/CLI surface.",
+    "retire_ticket": "UNOWNED",
+    "symbol": "internal/fleet/economics.ParseReservationKind"
+  },
+  {
+    "caller_site": "internal/daemon/reservation_rpc.go",
+    "expected_caller": "P2 route (R68): reader-ceiling / reservation inspect surface / rolling+batch admission dims",
+    "reason": "The fail-closed parser is fully implemented and table-tested against the full transition matrix, but its only intended caller is the reservation RPC/CLI surface (`cascade fleet reservation ...` or an equivalent daemon RPC), which is out of this ticket's files_scope and not part of this pass.",
+    "retire_ticket": "UNOWNED",
+    "symbol": "internal/fleet/economics.ParseReservationState"
+  },
+  {
+    "caller_site": "internal/jobs/quota_reservation.go",
+    "expected_caller": "P2 route (R68): reader-ceiling / reservation inspect surface / rolling+batch admission dims",
+    "reason": "P1-E40-W9-S77-T3 (R-21.116) ships GaugeReservable, the batch-gauge eligibility check ('reservable iff gauge + estimate <= limit'). Its caller is the same future dispatch path Available and Reservable feed (AO/S-79.T4), which reads QuotaDomain.Batch's live gauge state before admitting a new concurrent request or enqueued-token reservation. Fully implemented and tested (TestGaugeReservable).",
+    "retire_ticket": "UNOWNED",
+    "symbol": "internal/fleet/topology.GaugeReservable"
+  },
+  {
+    "caller_site": "internal/jobs/quota_reservation.go",
+    "expected_caller": "P2 route (R68): reader-ceiling / reservation inspect surface / rolling+batch admission dims",
+    "reason": "P1-E40-W9-S77-T3 (R-21.109) ships SlidingWindowSum, the rolling-window (rpm/tpm) timestamped-consumption sum. Its caller is AO/S-79.T4's dispatch path, which records each request's timestamped consumption and sums the trailing window before computing pressure for a rolling dimension -- this ticket ships the formula and its test (TestSlidingWindowSumOnlyCountsWithinWindow) but not the consumption event log that future ticket owns.",
+    "retire_ticket": "UNOWNED",
+    "symbol": "internal/fleet/topology.SlidingWindowSum"
+  },
+  {
+    "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
+    "expected_caller": "the AO/S-79.T4 dispatch path's config-to-Tables resolution step",
+    "reason": "Same gap as NewTables directly above: ApplyOverrides merges the decoded [fleet.economics] block onto the base table, but the composition root that reads internal/runtime.Config.Economics and calls it is AO/S-79.T3/T4's scope, explicitly excluded from this ticket (NOT IN SCOPE: eligibility, correlation, ranking, atomic reservation).",
+    "retire_ticket": "P1-TOP-09",
+    "symbol": "internal/fleet/economics.ApplyOverrides"
+  },
+  {
+    "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
+    "expected_caller": "the AO/S-79.T4 dispatch path's config-to-Tables resolution step",
+    "reason": "P1-E41-W9-S79-T2 ships Tables as an immutable snapshot type consumed by ApplyOverrides. Its real production caller is the daemon composition root that resolves the live [fleet.economics] overrides before a dispatch decision, which is AO/S-79.T3/T4's scope (this ticket's own NOT IN SCOPE section names both), not T2's.",
+    "retire_ticket": "P1-TOP-09",
+    "symbol": "internal/fleet/economics.NewTables"
   }
 ]
