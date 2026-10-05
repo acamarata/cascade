@@ -604,13 +604,6 @@
     "symbol": "internal/migration/v1.NewParityChecker"
   },
   {
-    "caller_site": "cmd/cascade/migrate_recall_index.go",
-    "expected_caller": "a new cmd/cascade/migrate_recall_index.go, split out the way doctor_recall_index.go already is, calling RebuildIndex from runMigrateV1 after the S-53.T1 importers complete; retire this entry once a ticket adds that file and call",
-    "reason": "P1-E26-W10-S53-T2 builds the real F/S-10+F/S-11 recall-index rebuild over migrated content, composed exactly like cmd/cascade/doctor_recall_index.go's buildRecallIndexManager (same cascade.db path, same lifecycle.Manager, same git-tree-hash pattern). The sprint's own CLI command (cmd/cascade/migrate.go, P1-E26-W10-S53-T4) already landed in e72e15d and depends only on S-53.T1 and P1-E02-W1-S02-T3, never on this ticket, and this ticket's files_scope covers only internal/migration/v1/* plus docs/migration-guide.md, not cmd/cascade/migrate.go. RebuildIndex is fully implemented and tested end to end (TestRebuildIndex, TestRebuildIndex_Idempotent, TestRebuildIndex_EmptyRoot) against a real sqlite-backed FTS5 index; only its call site is missing.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/migration/v1.RebuildIndex"
-  },
-  {
     "caller_site": "internal/nodes/presence_cancel.go",
     "expected_caller": "the presence-aware stall/cancellation path a forward ticket builds once W9 reservations, AC/S-59 leases and worktrees each expose their own release function",
     "reason": "The R-21.197 one-transaction release seam this ticket's contract requires (a job whose node went unavailable, when canceled, releases its W9 reservation, AC lease and worktree together). No ticket in this tree has yet built the real reservation/lease/worktree types this seam composes - AH/S-70.T3 builds the analogous gate-denied stall/release path but for a different trigger. This function is real, tested (TestCancelReleasesReservationLeaseWorktree/TestCancelInFlightRunsAllDespiteOneFailure), and ready to compose whichever ticket lands those release functions first. (caller_site corrected during the AC/S-59.T5 x T3 merge-fix: internal/jobs/scheduler.go now exists and never called this symbol -- the earlier promise could not come true.)",
@@ -1308,20 +1301,6 @@
     "symbol": "internal/audit.NewEffectLog"
   },
   {
-    "caller_site": "internal/learn/migration.go",
-    "expected_caller": "P1-CAP-09's daemon composition root (cmd/cascade/daemon_unix_scheduler.go), the ticket the packet re-homes the learn-outcome-reconcile/learn-retention scheduler wiring to, since the write_scope for that wiring is prohibited to this ticket and shares daemon_unix_scheduler.go with P1-CORE-05",
-    "reason": "P1-CAP-02's ported WIP included a daemon wiring file (cmd/cascade/daemon_unix_learn_jobs.go) that called ApplyLearnSchema from a real composition root; the packet's own constraints/prohibited sections require that file DROPPED here (a grandfathered lane may not wait on non-grandfathered P1-CORE-05; forge rule 3) and re-homed to P1-CAP-09. Until P1-CAP-09 ships, only internal/learn's own tests and internal/storage/export_test.go's TestExportExcludesTelemetryTables (a scoped test composition root, not production) call this.",
-    "retire_ticket": "P1-CAP-09",
-    "symbol": "internal/learn.ApplyLearnSchema"
-  },
-  {
-    "caller_site": "internal/learn/outcome.go",
-    "expected_caller": "P1-CAP-09's daemon composition root, same as ApplyLearnSchema above (registerLearnJobs' learn-outcome-reconcile runnable is this constructor's real caller)",
-    "reason": "Same DROPPED/re-homed daemon wiring file as ApplyLearnSchema above; OutcomeReconciler.Reconcile (test-only reachable today) is this writer's only in-tree driver.",
-    "retire_ticket": "P1-CAP-09",
-    "symbol": "internal/learn.NewSQLiteOutcomeWriter"
-  },
-  {
     "caller_site": "internal/learn/finding.go",
     "expected_caller": "cmd/cascade/wire_learn.go (P1-LRN-05), which composes the store, feed, detector and router; P1-LRN-02's FindingFeed receives a FindingWriter (NewFindingFeed(db, ledger, w FindingWriter)) and does not build one",
     "reason": "PCI s64t1-findingwriter-owner-is-s71t2, settled at CR: legacy P1-E35-W7-S71-T2 is carried to P1-LRN-02, whose outputs take the writer as a parameter; the non-test construction lands in P1-LRN-05's daemon composition (plan/p1/epics/LRN/tickets.yaml P1-LRN-05 objective). Wiring it to a fabricated/synthetic signal instead would violate the same no-fabricated-data rule this ticket enforces for outcome.go's HONEST GAP fields.",
@@ -1511,13 +1490,6 @@
   },
   {
     "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
-    "expected_caller": "P1-CAP-04's capacity port adapter, which passes For(scopeKey) to the tier policy, and the OutcomeWriter composition that attaches the scorer as its ObservationWriter",
-    "reason": "The scorer (contract:capability-scorer) is consumed through capacity ports by P1-CAP-04; no production composition exists yet.",
-    "retire_ticket": "P1-CAP-05",
-    "symbol": "internal/learn.NewSQLiteCapabilityScorer"
-  },
-  {
-    "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
     "expected_caller": "The fleet composition root that injects the production EstimateSource into capacity.NewTierPolicy",
     "reason": "The production EstimateSource is provided here; the TierPolicy is constructed with it in the wiring ticket.",
     "retire_ticket": "P1-CAP-05",
@@ -1619,5 +1591,13 @@
     "reason": "The agent lane projection precedes the runtime registration and snapshot composition.",
     "retire_ticket": "P1-CAP-05",
     "symbol": "internal/fleet/capacity.AgentLaneSlots"
+  },
+  {
+    "added_by_ticket": "P1-SEC-00",
+    "caller_site": "cmd/cascade/doctor_mounts_security.go",
+    "expected_caller": "newElevationCustodyDoctorCheck calls CustodyReport when mounting the elevation_custody check",
+    "reason": "Read-only custody report is implemented here; the security doctor mount is owned by the following ticket.",
+    "retire_ticket": "P1-SEC-12",
+    "symbol": "internal/elevation.CustodyReport"
   }
 ]
