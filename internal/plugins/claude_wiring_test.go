@@ -115,8 +115,11 @@ func TestClaudeHookRendererIsWired(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the wired renderer returned an error: %v", err)
 	}
-	if !strings.Contains(string(rendered), "/run/cascade.sock") {
-		t.Fatalf("the rendered config does not carry the socket it was rendered for:\n%s", rendered)
+	// The sessions pack's commands resolve the daemon socket themselves at
+	// hook time, so the socket is no longer rendered into them; the wired
+	// registry's own output is the proof instead.
+	if !strings.Contains(string(rendered), "cascade fleet sessions hook-event SessionStart") {
+		t.Fatalf("the rendered config does not carry the registry's sessions pack:\n%s", rendered)
 	}
 }
 

@@ -31,7 +31,8 @@ package hookpacks
 type HookEventType string
 
 const (
-	// EventSessionStart reports a new harness session beginning.
+	// EventSessionStart reports a new harness session beginning. Captured
+	// with a real fixture (testdata/cc-hook-fixtures/sessionstart.json).
 	EventSessionStart HookEventType = "SessionStart"
 	// EventInstructionsLoaded reports the harness finished loading its
 	// project/session instructions.
@@ -65,7 +66,8 @@ const (
 	EventPreCompact HookEventType = "PreCompact"
 	// EventPostCompact reports a context compaction finishing.
 	EventPostCompact HookEventType = "PostCompact"
-	// EventSessionEnd reports a harness session ending.
+	// EventSessionEnd reports a harness session ending. Captured with a
+	// real fixture (testdata/cc-hook-fixtures/sessionend.json).
 	EventSessionEnd HookEventType = "SessionEnd"
 )
 
@@ -147,38 +149,51 @@ type HookPayload struct {
 	TimestampMs int64 `json:"timestamp_ms"`
 }
 
-// sessionsPackCommand builds one event's command template: a curl call
-// against the daemon's unix socket with a short timeout, always
-// exiting 0 (`|| true`) so a slow, absent, or wedged daemon never blocks
-// or fails the harness's own hook chain — the property this ticket's
-// non-negotiables call out as the one that matters most. Actual
-// harness-supplied field substitution (session id, pid, account) is
-// P/S-34.T1's install-step concern (full_desc: "this ticket delivers
-// the DATA STRUCTURES... only"); this template's params object carries
-// only the literal, always-known event_type so it is runnable and
-// testable as it stands.
-func sessionsPackCommand(evt HookEventType) string {
-	return `curl -s -m 1 --unix-socket ` + socketPlaceholder +
-		` -X POST http://cascade.sock/rpc -H "Content-Type: application/json"` +
-		` -d '{"jsonrpc":"2.0","id":1,"method":"` + string(MethodHookEvent) +
-		`","params":{"event_type":"` + string(evt) + `"}}' >/dev/null 2>&1 || true`
+// SessionsHookTimeoutSeconds is the harness-side bound on one sessions-pack
+// hook, in the harness's own units. The hook command bounds its daemon call
+// at one second itself; this is what stops a hook that hangs below that
+// (a wedged syscall, a stalled disk) from holding the harness's hook chain.
+const SessionsHookTimeoutSeconds = 5
+
+// SessionsHookCommand is the command prefix every sessions-pack descriptor
+// installs; the event name follows it. `cascade` by name, resolved through
+// PATH at hook time, never a path into a source or build tree. The command
+// reads the harness's native hook JSON on stdin, which is the only place
+// the harness session id exists, and forwards it to the daemon; a fixed
+// body (the curl template this replaced) could not carry it.
+const SessionsHookCommand = "cascade fleet sessions hook-event"
+
+// sessionsHookEvents is the closed, ordered set of events the sessions pack
+// installs. Each is backed by a captured fixture
+// (testdata/cc-hook-fixtures/<event>.json, provenance in testdata/README.md).
+var sessionsHookEvents = []HookEventType{
+	EventSessionStart, EventPreToolUse, EventPostToolUse, EventStop, EventSessionEnd,
 }
 
-// SessionsPack returns this ticket's own "sessions" HookPack: one
-// descriptor per event type backed by a real captured fixture
-// (testdata/cc-hook-fixtures/*.json) — PreToolUse, PostToolUse, and
-// Stop. Per HOW step 1/6, "No event type is supported without a
-// captured fixture": SubagentStop and PreCompact are handler.go dispatch
-// targets (the R-16.48 mapping table must handle them regardless) but
-// are not installed by this pack, since no fixture for either was
-// captured this run (testdata/README.md).
+// SessionsHookEvents returns the events the sessions pack installs, in
+// install order. The slice is a copy; the hook-event command validates its
+// event argument against it.
+func SessionsHookEvents() []HookEventType {
+	return append([]HookEventType(nil), sessionsHookEvents...)
+}
+
+// SessionsPack returns the "sessions" HookPack: one descriptor per event in
+// SessionsHookEvents, each running `cascade fleet sessions hook-event
+// <Event>`. Per the rule that no event type is supported without a
+// captured fixture, SubagentStop, PreCompact and the rest are dispatch
+// targets in handler.go but are not installed here.
+//
+// The command is non-gating: it exits 0 on every path and never 2, so a
+// sessions hook can never block a tool call.
 func SessionsPack() HookPack {
-	return HookPack{
-		Name: "sessions",
-		Descriptors: []HookDescriptor{
-			{EventType: EventPreToolUse, Matcher: "", CommandTemplate: sessionsPackCommand(EventPreToolUse)},
-			{EventType: EventPostToolUse, Matcher: "", CommandTemplate: sessionsPackCommand(EventPostToolUse)},
-			{EventType: EventStop, Matcher: "", CommandTemplate: sessionsPackCommand(EventStop)},
-		},
+	descriptors := make([]HookDescriptor, 0, len(sessionsHookEvents))
+	for _, evt := range sessionsHookEvents {
+		descriptors = append(descriptors, HookDescriptor{
+			EventType:       evt,
+			Matcher:         "",
+			CommandTemplate: SessionsHookCommand + " " + string(evt),
+			TimeoutSeconds:  SessionsHookTimeoutSeconds,
+		})
 	}
+	return HookPack{Name: "sessions", Descriptors: descriptors}
 }

@@ -22,7 +22,11 @@ import (
 // stays readable after install — the forward requirement R-21.77 places on
 // this ticket, so AP/S-81.T4's later startup handshake can carry a real
 // pack_version. This ticket adds no handshake and no child accounting.
-const HookPackVersion = "1"
+//
+// Version 2 replaces the sessions pack's fixed-body curl hooks with the
+// `cascade fleet sessions hook-event <Event>` command on five events, so an
+// install stamped "1" is stale and is rewritten on the next install.
+const HookPackVersion = "2"
 
 // hookPackFile is the installed union config's basename under HookConfig.
 const hookPackFile = packName + ".json"

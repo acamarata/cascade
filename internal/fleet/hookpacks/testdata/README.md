@@ -1,59 +1,72 @@
 # testdata/cc-hook-fixtures provenance
 
-Tool: the harness's native hook input schema.
-Version: schema as documented/observed by this ticket's builder at build
-time; no version string was captured because no live session was
-available (see the gap note below).
-Date captured: 2026-09-07 (authored, not live-captured; see below).
+Every file in `cc-hook-fixtures/` is a live capture of the harness's own
+native hook input, taken from one real non-interactive run. Nothing here was
+authored from knowledge of the schema. The earlier hand-authored
+`pretooluse.json`, `posttooluse.json` and `stop.json` were replaced by the
+captures below, because a fixture set for one session needs one session id.
 
-## Art.2 gap (recorded, not papered over)
+## Provenance table
 
-The three fixtures in this directory (`pretooluse.json`, `posttooluse.json`,
-`stop.json`) were authored from this builder's own direct, first-hand
-knowledge of the real native hook-input JSON schema (`session_id`,
-`transcript_path`, `cwd`, `hook_event_name`, plus event-specific
-`tool_name`/`tool_input`/`tool_response`/`stop_hook_active` fields) —
-this is a genuinely real, externally-known schema, not an invented
-dialect. It is NOT a live capture: this builder run had no interactive
-harness session available to run and record real hook invocations
-against, so there is no session transcript, tool version string, or
-timestamp of a real invocation to cite as provenance. This is filed as
-an Art.2 defect: a future ticket (or the next build pass with a live
-session available) should replace these three files with an actual
-captured transcript and update this provenance block with the real
-tool/version/date.
+`TestSessionsPackInstallsFiveCapturedEvents` reads this table: every
+descriptor in `SessionsPack()` must have a fixture file named here with a
+client version and a capture date.
 
-## Two distinct JSON shapes in this package — read before editing
+| Fixture | Client version | Captured | Event |
+|---|---|---|---|
+| sessionstart.json | 2.1.273 | 2026-10-04 | SessionStart |
+| pretooluse.json | 2.1.273 | 2026-10-04 | PreToolUse |
+| posttooluse.json | 2.1.273 | 2026-10-04 | PostToolUse |
+| stop.json | 2.1.273 | 2026-10-04 | Stop |
+| sessionend.json | 2.1.273 | 2026-10-04 | SessionEnd |
 
-The fixtures above capture the harness's own NATIVE hook-input shape,
-which is NOT the shape internal/fleet/hookpacks.HookPayload decodes.
-HookPayload (types.go) is this daemon's own synthesized JSON-RPC params
-shape — exactly six fields (harness, event_type, session_id, pid,
-account, timestamp_ms) — that a rendered hook command is expected to
-construct FROM the native fields above (plus config-supplied harness/
-account/pid) before it ever reaches the daemon. Decoding a native
-fixture directly as a HookPayload would fail
-(json.Decoder.DisallowUnknownFields rejects `transcript_path`, `cwd`,
-`tool_input`, etc.) — that failure is intentional: it is exactly the
-allowlist boundary this ticket's redaction requirement describes.
-Never widen HookPayload to accept the native shape's extra fields.
+## How they were captured
 
-## Event types attempted per R-16.6, not present in this run
+- Tool: the first-party harness client, version 2.1.273.
+- Run: a throwaway project directory whose `.claude/settings.json` installed
+  one project-scoped command hook for each of the five events; each hook
+  command wrote its stdin verbatim to its own file.
+- Command: `claude -p "Use the Bash tool to run exactly: echo cascade-capture
+  . Then reply with the single word done." --model haiku --allowedTools Bash`
+  run inside that directory, once. All five events fired in that single
+  session, so the five files share one `session_id`.
+- Edits after capture: only three path-valued fields were rewritten, by
+  string replacement, to neutral placeholders (`transcript_path`, `cwd`,
+  `scratchpad_dir`), so no personal home path or account directory is
+  committed. Every other field is the client's own value, re-indented with
+  two spaces. The `session_id` is the random identifier the client
+  generated for the throwaway session.
+- Not committed: the session transcript the `transcript_path` field names.
 
-No live session was available (see the gap above), so no attempt beyond
-authoring the three fixtures above was possible this run. Every other
-member of the R-16.48 mapping table's event set — SessionStart,
-InstructionsLoaded, UserPromptSubmit, PostToolBatch, SubagentStart,
-SubagentStop, TaskCreated, TaskCompleted, WorktreeCreate,
-WorktreeRemove, PreCompact, PostCompact, SessionEnd — is therefore
-listed here as **not-emitted-by-this-harness-version** (an asserted absence
-from this capture attempt, not a claim the real harness never emits
-them): handler.go's dispatch table still handles every one of them by
-symbol (R-16.48 requires the table to be complete regardless of fixture
-coverage), and hookpacks.SessionsPack only installs descriptors for the
-three types actually backed by a fixture here (PreToolUse, PostToolUse,
-Stop), per this ticket's own rule that no event type is supported
-without a captured fixture.
+## What the captures show
+
+- All five events carry `session_id` and `hook_event_name`.
+- `SessionStart` carries `source` and no `prompt_id`; `SessionEnd` carries
+  `reason`. Both are new relative to the earlier fixtures.
+- The client adds fields between releases (`scratchpad_dir`, `tool_use_id`,
+  `last_assistant_message`, `background_tasks`, `session_crons`), which is
+  why the `hook-event` command decodes only `session_id` and
+  `hook_event_name` and ignores the rest.
+
+## Two distinct JSON shapes in this package, read before editing
+
+The fixtures capture the harness's own NATIVE hook-input shape, which is
+NOT the shape `internal/fleet/hookpacks.HookPayload` decodes. `HookPayload`
+(types.go) is this daemon's own synthesized JSON-RPC params shape: exactly
+six fields (harness, event_type, session_id, pid, account, timestamp_ms)
+that `cascade fleet sessions hook-event` constructs FROM the native fields
+above before anything reaches the daemon. Decoding a native fixture
+directly as a `HookPayload` fails (`DisallowUnknownFields` rejects
+`transcript_path`, `cwd`, `tool_input` and the rest); that failure is the
+allowlist boundary the redaction requirement describes. Never widen
+`HookPayload` to accept the native shape's extra fields.
+
+## Event types not captured
+
+The R-16.48 dispatch table in handler.go handles sixteen event types by
+symbol. Only the five above are captured, and `SessionsPack()` installs
+exactly those five. Every other event type is not installed until a
+capture backs it.
 
 ## Fuzz corpus
 

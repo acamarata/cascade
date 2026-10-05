@@ -81,8 +81,8 @@ func TestHookPackRegistry_DefaultRegistryHasSessionsPack(t *testing.T) {
 	for _, p := range hookpacks.DefaultRegistry.Packs() {
 		if p.Name == "sessions" {
 			found = true
-			if len(p.Descriptors) != 3 {
-				t.Fatalf("sessions pack has %d descriptors, want 3", len(p.Descriptors))
+			if len(p.Descriptors) != 5 {
+				t.Fatalf("sessions pack has %d descriptors, want 5", len(p.Descriptors))
 			}
 		}
 	}
