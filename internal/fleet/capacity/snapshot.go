@@ -41,9 +41,11 @@ package capacity
 import (
 	"time"
 
+	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/fleet/topology"
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/providers/registry"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // State is registry.LaneState under the ticket's requested name -
@@ -134,12 +136,17 @@ type Bucket struct {
 
 // ProviderSlot is one provider's aggregated capacity view.
 type ProviderSlot struct {
-	ProfileRef     string                `json:"profile_ref"`
-	Buckets        map[BucketKind]Bucket `json:"buckets"`
-	State          State                 `json:"state"`
-	ResetEstimate  time.Time             `json:"reset_estimate"`
-	ReauthRequired bool                  `json:"reauth_required"`
-	UpdatedAt      time.Time             `json:"updated_at"`
+	// Lane metadata is absent on aggregate provider slots to preserve their wire bytes.
+	LaneID         conductor.LaneID           `json:"lane_id,omitempty"`
+	Posture        provider.CompliancePosture `json:"posture,omitzero"`
+	Tier           Tier                       `json:"tier,omitempty"`
+	LaneType       conductor.LaneType         `json:"lane_type,omitempty"`
+	ProfileRef     string                     `json:"profile_ref"`
+	Buckets        map[BucketKind]Bucket      `json:"buckets"`
+	State          State                      `json:"state"`
+	ResetEstimate  time.Time                  `json:"reset_estimate"`
+	ReauthRequired bool                       `json:"reauth_required"`
+	UpdatedAt      time.Time                  `json:"updated_at"`
 }
 
 // NodeSlot is one node's aggregated presence/capacity view.
@@ -173,11 +180,13 @@ type TaskCapabilityRow struct {
 // only when a material change occurs (diff.go's Diff), for SSE client
 // dedup.
 type FleetSnapshot struct {
-	GeneratedAt      time.Time               `json:"generated_at"`
-	Seq              uint64                  `json:"seq"`
-	Providers        map[string]ProviderSlot `json:"providers"`
-	Nodes            map[string]NodeSlot     `json:"nodes"`
-	TaskCapabilities []TaskCapabilityRow     `json:"task_capabilities"`
+	GeneratedAt time.Time               `json:"generated_at"`
+	Seq         uint64                  `json:"seq"`
+	Providers   map[string]ProviderSlot `json:"providers"`
+	// Lanes contains the registry's individual lanes for tier projection.
+	Lanes            map[conductor.LaneID]ProviderSlot `json:"lanes,omitempty"`
+	Nodes            map[string]NodeSlot               `json:"nodes"`
+	TaskCapabilities []TaskCapabilityRow               `json:"task_capabilities"`
 	// Quota is the R-21.26 quota-domain snapshot (S-77.T3's
 	// fleet.quota.snapshot payload), embedded ADDITIVELY: every
 	// pre-existing field and JSON name above is unchanged, and an older

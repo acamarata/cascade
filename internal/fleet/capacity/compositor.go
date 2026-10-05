@@ -42,9 +42,11 @@ package capacity
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"time"
 
+	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/fleet/governor"
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/providers/registry"
@@ -86,6 +88,7 @@ type Compositor struct {
 	ttl   time.Duration
 
 	providers  map[string]ProviderSlot
+	lanes      map[conductor.LaneID]ProviderSlot
 	nodes      map[string]NodeSlot
 	selfNodeID string
 	seq        uint64
@@ -143,9 +146,11 @@ func (c *Compositor) UpdateProviders(ctx context.Context, src ProviderSource) er
 	for _, rec := range recs {
 		next[rec.Name] = buildProviderSlot(rec, byProvider[rec.Name], now)
 	}
+	nextLanes := buildLaneSlots(ctx, src, recs, byProvider, now)
 
 	c.mu.Lock()
 	c.providers = next
+	c.lanes = nextLanes
 	c.mu.Unlock()
 	c.notify()
 	return nil
@@ -253,9 +258,16 @@ func (c *Compositor) buildSnapshotLocked() FleetSnapshot {
 	for name, slot := range c.providers {
 		providers[name] = expireProviderSlot(slot, now, c.ttl)
 	}
+	laneSlots := make(map[conductor.LaneID]ProviderSlot, len(c.lanes))
+	for id, slot := range c.lanes {
+		slot = cloneProviderSlot(slot)
+		slot.Posture.AuthModes = slices.Clone(slot.Posture.AuthModes)
+		slot.Posture.AutomationModes = slices.Clone(slot.Posture.AutomationModes)
+		laneSlots[id] = expireProviderSlot(slot, now, c.ttl)
+	}
 	nodeSlots := make(map[string]NodeSlot, len(c.nodes))
 	for id, slot := range c.nodes {
 		nodeSlots[id] = expireNodeSlot(slot, now, c.ttl)
 	}
-	return FleetSnapshot{GeneratedAt: now, Providers: providers, Nodes: nodeSlots}
+	return FleetSnapshot{GeneratedAt: now, Providers: providers, Lanes: laneSlots, Nodes: nodeSlots}
 }

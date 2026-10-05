@@ -24,10 +24,13 @@
 package capacity
 
 import (
+	"context"
 	"time"
 
+	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/providers/registry"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // bucketRank orders State by severity for worst-case aggregation
@@ -64,6 +67,49 @@ func worstState(states []State) State {
 // bucketOrder is the canonical bucket order buildProviderSlot walks, and the
 // order the widget breaks ties in.
 var bucketOrder = []registry.CapacityBucket{BucketInteractiveUsage, BucketAgentSDKCredit, BucketAPICredit}
+
+// registryTier projects the registry's advisory vocabulary into policy tiers.
+func registryTier(tier registry.Tier) Tier {
+	switch tier {
+	case registry.TierStrongest, registry.TierStrong:
+		return TierZero
+	case registry.TierMid:
+		return TierOne
+	case registry.TierCheap, registry.TierCheapest, registry.TierFree:
+		return TierTwo
+	default:
+		return ""
+	}
+}
+
+// buildLaneSlots reuses the router's Reader conversion and the one lane
+// classifier. Sources without that conversion, or failed reads, stay unresolved.
+// Aggregate provider slots remain untouched; each lane gets its own state.
+func buildLaneSlots(ctx context.Context, src ProviderSource, recs []registry.ProviderRecord,
+	byProvider map[string][]registry.LaneRecord, now time.Time) map[conductor.LaneID]ProviderSlot {
+	var reader *registry.Reader
+	if reg, ok := src.(*registry.Registry); ok && reg != nil {
+		reader = registry.NewReader(reg)
+	}
+	out := make(map[conductor.LaneID]ProviderSlot)
+	for _, rec := range recs {
+		info := provider.ProviderInfo{}
+		if reader != nil {
+			if resolved, err := reader.GetProvider(ctx, rec.Name); err == nil {
+				info = resolved
+			}
+		}
+		for _, lane := range byProvider[rec.Name] {
+			slot := buildProviderSlot(rec, []registry.LaneRecord{lane}, now)
+			slot.LaneID = conductor.LaneID(lane.LaneName)
+			slot.Posture = rec.Capabilities.CompliancePosture
+			slot.Tier = registryTier(rec.Tier)
+			slot.LaneType = conductor.ClassifyLane(info)
+			out[slot.LaneID] = slot
+		}
+	}
+	return out
+}
 
 // buildProviderSlot composes rec's ProviderSlot from its own lanes only
 // (never another provider's data - the ticket's "derive each figure from
