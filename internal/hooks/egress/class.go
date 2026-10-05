@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // EgressClass names one outbound destination kind. The name repeats the
@@ -23,44 +24,37 @@ type EgressClass string
 // content it is about to send. It is never derived from the bytes and
 // never carried on a context: a []byte declares nothing about itself, and
 // a value that can be forgotten by dropping a context is not a
-// classification.
-type SensitivityTier string
+// classification. It is an alias of provider.SensitivityTier, the one
+// canonical tier type (contract:sensitivity-tier), so there is no
+// conversion table between the two and no second parse.
+type SensitivityTier = provider.SensitivityTier
 
-// The four tiers, plus the unset zero value. There is deliberately no
-// permissive zero value: TierUnset resolves to restricted, so a caller
-// that forgets to classify gets the strict answer rather than the
-// convenient one.
+// The four tiers. There is deliberately no permissive zero value: the zero
+// value is TierRestricted, so a caller that forgets to classify gets the
+// strict answer rather than the convenient one.
 const (
-	// TierUnset is the zero value. It resolves to TierRestricted.
-	TierUnset SensitivityTier = ""
 	// TierLocalOnly is content that must not leave the machine at all
 	// unless the destination class was registered to admit it.
-	TierLocalOnly SensitivityTier = "local-only"
+	TierLocalOnly = provider.SensitivityLocalOnly
 	// TierRestricted is content admitted only by classes whose
-	// registrant set AllowRestricted.
-	TierRestricted SensitivityTier = "restricted"
+	// registrant set AllowRestricted. It is the zero value.
+	TierRestricted = provider.SensitivityRestricted
 	// TierInternal is content admitted by any enabled class.
-	TierInternal SensitivityTier = "internal"
+	TierInternal = provider.SensitivityInternal
 	// TierPublic is content admitted always.
-	TierPublic SensitivityTier = "public"
+	TierPublic = provider.SensitivityPublic
 )
 
-// knownTiers is the fixed, ordered tier set. Ordered rather than a map so
-// that resolution and the gate tables cannot depend on map order.
-var knownTiers = []SensitivityTier{TierLocalOnly, TierRestricted, TierInternal, TierPublic}
-
-// Resolve returns the tier the policy actually applies. An unset tier and
-// any tier this build does not know both resolve to TierRestricted: an
-// unrecognised classification is a classification this code cannot
-// reason about, and guessing "probably fine" at the last boundary is the
-// failure mode this package exists to remove.
-func (t SensitivityTier) Resolve() SensitivityTier {
-	for _, known := range knownTiers {
-		if t == known {
-			return t
-		}
+// ResolveTier returns the tier the policy actually applies. A declared
+// tier resolves to itself; a value above TierPublic is not a tier this
+// build can reason about and resolves to TierLocalOnly, the narrowest
+// member. (A function, not a method: methods cannot be declared on an
+// alias of another package's type.)
+func ResolveTier(t SensitivityTier) SensitivityTier {
+	if !t.Valid() {
+		return TierLocalOnly
 	}
-	return TierRestricted
+	return t
 }
 
 // InterceptConfig is what a registrant declares about one class.

@@ -1,5 +1,7 @@
 package nodes
 
+import "github.com/acamarata/cascade/pkg/provider"
+
 // Purpose: decide which enrolled nodes are ELIGIBLE to run a unit of work,
 //
 //	given its requirement set and the fleet's current state.
@@ -32,9 +34,9 @@ type Requirement struct {
 	// of a node's capabilities; it does not bypass any other filter.
 	Capabilities []string
 	// Sensitivity is the work's resolved sensitivity. The zero value is
-	// deliberately not "no restriction": see Sensitivity's own doc, it
-	// resolves most restrictively.
-	Sensitivity Sensitivity
+	// deliberately not "no restriction": it is SensitivityRestricted, the
+	// system-wide fail-closed default.
+	Sensitivity provider.SensitivityTier
 }
 
 // Candidate pairs an enrolled node's record with the capability report it

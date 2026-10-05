@@ -1,0 +1,3 @@
+internal/fixture: internal/nodes.Requirement literal without Sensitivity
+internal/fixture: internal/nodes.ShipRequest literal without Sensitivity
+internal/fixture: internal/nodes.RequeueRequest literal without Requirement

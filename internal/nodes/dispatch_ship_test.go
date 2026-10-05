@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // Purpose (this file): the ship sequence's ORDER, which is the security
@@ -98,7 +99,7 @@ func TestShipDeliversAndReturnsTheResultCommit(t *testing.T) {
 		DispatchID:  "d1",
 		Head:        head,
 		Work:        Action{ID: "a1"},
-		Sensitivity: SensitivityNormal,
+		Sensitivity: provider.SensitivityInternal,
 	})
 	if err != nil {
 		t.Fatalf("Ship: %v", err)
@@ -126,7 +127,7 @@ func TestAnInadmissibleDispatchCostsNoEgress(t *testing.T) {
 		DispatchID:  "d1",
 		Head:        head,
 		Work:        Action{ID: "a1"},
-		Sensitivity: SensitivityLocalOnly,
+		Sensitivity: provider.SensitivityLocalOnly,
 	})
 	if err == nil {
 		t.Fatal("local-only work was shipped")
@@ -150,7 +151,7 @@ func TestAStaticKeyInThePayloadIsRefusedBeforeShipping(t *testing.T) {
 		DispatchID:  "d1",
 		Head:        head,
 		Work:        Action{ID: "a1"},
-		Sensitivity: SensitivityNormal,
+		Sensitivity: provider.SensitivityInternal,
 		Payload:     []byte(`{"env":{"OPENAI_API_KEY":"sk-livekeymaterial"}}`),
 	})
 	if err == nil {
@@ -172,7 +173,7 @@ func TestACallFailureIsADroppedTunnelNotAnUnreachableNode(t *testing.T) {
 	caller.err = errors.New("connection reset")
 
 	_, err := Ship(context.Background(), deps, rec, ShipRequest{
-		DispatchID: "d1", Head: head, Work: Action{ID: "a1"}, Sensitivity: SensitivityNormal,
+		DispatchID: "d1", Head: head, Work: Action{ID: "a1"}, Sensitivity: provider.SensitivityInternal,
 	})
 	if err == nil {
 		t.Fatal("a failed node call reported success")
@@ -192,7 +193,7 @@ func TestASupersededFrameIsRefusedOnTheShipPath(t *testing.T) {
 	_ = caller
 
 	_, err := Ship(context.Background(), deps, rec, ShipRequest{
-		DispatchID: "d1", Head: head, Work: Action{ID: "a1"}, Sensitivity: SensitivityNormal,
+		DispatchID: "d1", Head: head, Work: Action{ID: "a1"}, Sensitivity: provider.SensitivityInternal,
 	})
 	if err == nil {
 		t.Fatal("a frame from a superseded attempt was accepted")
@@ -211,7 +212,7 @@ func TestARefusedDuplicateIsReportedAsAConflict(t *testing.T) {
 	})
 
 	_, err := Ship(context.Background(), deps, rec, ShipRequest{
-		DispatchID: "d1", Head: head, Work: Action{ID: "a1"}, Sensitivity: SensitivityNormal,
+		DispatchID: "d1", Head: head, Work: Action{ID: "a1"}, Sensitivity: provider.SensitivityInternal,
 	})
 	if err == nil {
 		t.Fatal("a refused duplicate reported success")
@@ -229,7 +230,7 @@ func TestAnAcknowledgedButUnfinishedDispatchHoldsNonIdempotentWork(t *testing.T)
 	})
 
 	_, err := Ship(context.Background(), deps, rec, ShipRequest{
-		DispatchID: "d1", Head: head, Work: Action{ID: "a1"}, Sensitivity: SensitivityNormal,
+		DispatchID: "d1", Head: head, Work: Action{ID: "a1"}, Sensitivity: provider.SensitivityInternal,
 	})
 	if err == nil {
 		t.Fatal("an acknowledged-but-unfinished non-idempotent dispatch was reported as done")
@@ -244,7 +245,7 @@ func TestAnAcknowledgedButUnfinishedDispatchHoldsNonIdempotentWork(t *testing.T)
 func TestShipRefusesWhenUnwired(t *testing.T) {
 	rec, _ := enrolledDispatchNode(t)
 	_, err := Ship(context.Background(), ShipDeps{}, rec, ShipRequest{
-		DispatchID: "d1", Work: Action{ID: "a1"}, Sensitivity: SensitivityNormal,
+		DispatchID: "d1", Work: Action{ID: "a1"}, Sensitivity: provider.SensitivityInternal,
 	})
 	if err == nil {
 		t.Fatal("an unwired dispatch path shipped")

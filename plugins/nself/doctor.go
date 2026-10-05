@@ -39,6 +39,7 @@ import (
 	goruntime "runtime"
 
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // EgressClass is this package's local view of an egress-inventory class
@@ -53,14 +54,14 @@ type EgressClass string
 // time rather than trusting this comment.
 const EgressClassNselfBackend EgressClass = "nself-backend"
 
-// SensitivityTier mirrors internal/hooks/egress.SensitivityTier's string
-// constants.
-type SensitivityTier string
+// SensitivityTier is an alias of provider.SensitivityTier, the same type
+// internal/hooks/egress aliases, so the wiring passes it through unchanged.
+type SensitivityTier = provider.SensitivityTier
 
 // TierInternal is the tier this plugin's responses declare: the content
 // stays on the operator's own machine, crossing only the daemon-to-MCP
 // client boundary.
-const TierInternal SensitivityTier = "internal"
+const TierInternal = provider.SensitivityInternal
 
 // EgressInterceptor is the firewall seam this plugin's tool-response path
 // transits. internal/plugins/nself_wiring.go binds the REAL

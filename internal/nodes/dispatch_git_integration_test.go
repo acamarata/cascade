@@ -26,6 +26,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // bareRemote initialises a real bare repository to push to and fetch from.
@@ -56,7 +58,7 @@ func realGitDispatch(t *testing.T, deps ShipDeps, rec DeviceRecord, head string)
 		DispatchID:  "d-real",
 		Head:        head,
 		Work:        Action{ID: "a-real"},
-		Sensitivity: SensitivityNormal,
+		Sensitivity: provider.SensitivityInternal,
 	})
 }
 

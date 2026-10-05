@@ -49,9 +49,9 @@ func (r *Registry) Register(class EgressClass, cfg InterceptConfig) error {
 			"egress: class %q must name the ticket that owns it", string(class))
 	}
 	for _, tier := range cfg.AllowedTiers {
-		if tier.Resolve() != tier {
+		if tier > TierPublic {
 			return cascade.Newf(cascade.KindInvalidInput,
-				"egress: class %q lists unknown tier %q", string(class), string(tier))
+				"egress: class %q lists out-of-range tier %d", string(class), uint8(tier))
 		}
 	}
 	r.mu.Lock()

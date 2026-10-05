@@ -234,10 +234,10 @@ func (b *TelegramBridge) refuse(ctx context.Context, chatID int64, threadID stri
 	reason := refusalReasonForTier(tier)
 	at := b.module.now()
 	b.recordRefusal(cascadepa.RefusalRecord{
-		ThreadID: threadID, ResolvedTier: string(tier), Reason: reason, CorrelationID: corrID, At: at,
+		ThreadID: threadID, ResolvedTier: tier.String(), Reason: reason, CorrelationID: corrID, At: at,
 	})
 	b.divergence.EmitRefused(ctx, RefusalEvent{
-		ThreadID: threadID, ResolvedTier: string(tier), Reason: reason, CorrelationID: corrID, At: at,
+		ThreadID: threadID, ResolvedTier: tier.String(), Reason: reason, CorrelationID: corrID, At: at,
 	})
 	b.module.reply(ctx, chatID, chatKind, reason)
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage/storetest"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // requeueFixture is one daemon's worth of real recovery collaborators.
@@ -118,7 +119,7 @@ func requeueRequest() nodes.RequeueRequest {
 	return nodes.RequeueRequest{
 		DispatchID: "d-e2e", LostNodeID: "lost",
 		Action:      nodes.Action{ID: "a-1", Idempotent: true},
-		Requirement: nodes.Requirement{Sensitivity: nodes.SensitivityNormal},
+		Requirement: nodes.Requirement{Sensitivity: provider.SensitivityInternal},
 		EntityID:    "job-e2e",
 	}
 }

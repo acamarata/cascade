@@ -54,11 +54,15 @@ func Eligible(rec Record, tier nodes.Tier) EligibilityVerdict {
 	if !EligibleForTier(rec.Domain, rec.Subkind, tier) {
 		return EligibilityVerdict{Reason: "tier-not-permitted"}
 	}
-	switch rec.Tier.Resolve() {
-	case egress.TierPublic, egress.TierInternal, egress.TierUnset:
-		// Nothing further to check. TierUnset is unreachable — Resolve
-		// never returns it — and is named so a change to the tier set
-		// fails to compile here rather than reaching the default.
+	if rec.Tier > egress.TierPublic {
+		// Out of range: not a tier this build can reason about. Refused
+		// as local-only on this site's own guard, so the refusal does not
+		// depend on what some other function maps the value to.
+		return EligibilityVerdict{Reason: "sensitivity-local-only"}
+	}
+	switch rec.Tier {
+	case egress.TierPublic, egress.TierInternal:
+		// Nothing further to check.
 	case egress.TierLocalOnly:
 		return EligibilityVerdict{Reason: "sensitivity-local-only"}
 	case egress.TierRestricted:

@@ -37,8 +37,15 @@ var runTaskClasses = []string{
 	"segment", "summarize", "extract", "chat",
 }
 
-// runSensitivityTiers are the §5.16 tier names ("" means restricted).
-var runSensitivityTiers = []string{"local-only", "restricted", "internal", "public"}
+// runSensitivityNames lists the §5.16 tier names in member order, read from
+// provider.SensitivityTier itself so the CLI keeps no second name table.
+func runSensitivityNames() []string {
+	var names []string
+	for t := provider.SensitivityRestricted; t.Valid(); t++ {
+		names = append(names, t.String())
+	}
+	return names
+}
 
 // runDialTimeout bounds the blocking conductor.execute round trip.
 const runDialTimeout = 30 * time.Second
@@ -116,7 +123,7 @@ func newRunCmd(deps runDeps) *cobra.Command {
 	f := cmd.Flags()
 	f.StringVar(&flags.Task, "task", "", "task class: "+strings.Join(runTaskClasses, "|")+" (required)")
 	f.StringToStringVar(&flags.Require, "require", nil, "repeatable k=v requirement (reasoning|context|structured)")
-	f.StringVar(&flags.Sensitivity, "sensitivity", "", "sensitivity tier: "+strings.Join(runSensitivityTiers, "|"))
+	f.StringVar(&flags.Sensitivity, "sensitivity", "", "sensitivity tier: "+strings.Join(runSensitivityNames(), "|")+" (default restricted)")
 	f.IntVar(&flags.FanOut, "fan-out", 0, "dispatch N parallel legs")
 	f.BoolVar(&flags.Stream, "stream", false, "stream the response over GET /events")
 	f.BoolVar(&flags.DryRun, "dry-run", false, "log the request without dispatching to any provider")
@@ -141,17 +148,15 @@ func validateTaskClass(task string) error {
 	return cascade.Newf(cascade.KindInvalidInput, "cascade run: --task %q is not a valid task class (valid: %s)", task, strings.Join(runTaskClasses, ", "))
 }
 
-// validateSensitivity refuses an unknown non-empty tier name.
+// validateSensitivity checks --sensitivity with provider.ParseSensitivityTier,
+// the one closed parser, and refuses on its error. It keeps no default of
+// its own: the parser alone decides that "" is restricted and that any
+// other unrecognised name is refused.
 func validateSensitivity(tier string) error {
-	if tier == "" {
-		return nil
+	if _, err := provider.ParseSensitivityTier(tier); err != nil {
+		return cascade.Wrapf(cascade.KindInvalidInput, err, "cascade run: --sensitivity %q is not a valid tier (valid: %s)", tier, strings.Join(runSensitivityNames(), ", "))
 	}
-	for _, t := range runSensitivityTiers {
-		if tier == t {
-			return nil
-		}
-	}
-	return cascade.Newf(cascade.KindInvalidInput, "cascade run: --sensitivity %q is not a valid tier (valid: %s)", tier, strings.Join(runSensitivityTiers, ", "))
+	return nil
 }
 
 // runRequestParams is the conductor.execute JSON-RPC params wire shape.

@@ -16,72 +16,40 @@
 // Constraints: exactly the two values the plan names, no third state that
 // silently means "probably fine". The zero value is deliberately invalid,
 // so a TrustLevel that was never set fails Valid and is treated as
-// untrusted by every fail-closed reader. Ordering is by trustworthiness so
-// a record can never be more trusted than the corpus it came from.
+// untrusted by every fail-closed reader. Combination is a fail-closed join
+// so a record can never be more trusted than the corpus it came from.
 //
 // SPORT: internal.retrieval.corpus.TrustLevel/ADDED.
 
 package corpus
 
+import "github.com/acamarata/cascade/pkg/provider"
+
 // TrustLevel is the provenance classification of a corpus source and of
-// every record carved from it.
+// every record carved from it. It is an alias of provider.Provenance, the
+// one canonical untrusted-provenance type (contract:untrusted-provenance),
+// so its stored json:"trust" spelling is the provider string unchanged.
 //
 // The two values are the whole dimension. There is no "unknown" member:
 // an unset or unrecognized level is not a third classification, it is a
 // value that failed to classify, and every reader in this package resolves
 // such a value to TrustUntrustedSource rather than to TrustTrusted.
-type TrustLevel string
+type TrustLevel = provider.Provenance
 
+// The two trust levels, aliases of the provider members.
 const (
-	// TrustTrusted marks content whose origin the user established: their
-	// own instruction tiers, their own notes, a repository they own.
-	// Instructions found in trusted content may be acted on, subject to
-	// whatever policy the consumer applies on top.
-	TrustTrusted TrustLevel = "trusted"
-
-	// TrustUntrustedSource marks content that arrived from somewhere the
-	// user did not vouch for: a fetched page, a third-party dependency's
-	// documentation, a pasted transcript, a shared corpus from another
-	// scope. Text carrying this tag is data. It is never an instruction,
-	// and the auto-advance ceiling refuses to advance on it.
-	TrustUntrustedSource TrustLevel = "untrusted-source"
+	// TrustTrusted marks content whose origin the user established.
+	TrustTrusted = provider.ProvenanceTrusted
+	// TrustUntrustedSource marks content from a source the user did not
+	// vouch for; text carrying it is data, never an instruction.
+	TrustUntrustedSource = provider.ProvenanceUntrustedSource
 )
-
-// Valid reports whether t is one of the two defined levels. Anything else,
-// including the zero value, is not a level.
-func (t TrustLevel) Valid() bool {
-	return t == TrustTrusted || t == TrustUntrustedSource
-}
-
-// String returns the stored spelling of t, or "invalid" for a value that
-// is not a defined level. It never invents a spelling for an unknown
-// value, because a plausible-looking spelling is how an unknown value ends
-// up round-tripping as a real one.
-func (t TrustLevel) String() string {
-	if !t.Valid() {
-		return "invalid"
-	}
-	return string(t)
-}
-
-// trustRank orders the levels from least to most trusted so restrictive
-// combination (leastTrust) is a plain comparison. An invalid value ranks
-// below the lowest defined level, which is what makes an unreadable trust
-// tag resolve to untrusted rather than to trusted.
-func trustRank(t TrustLevel) int {
-	switch t {
-	case TrustUntrustedSource:
-		return 1
-	case TrustTrusted:
-		return 2
-	default:
-		return 0
-	}
-}
 
 // resolveTrust returns the effective trust of a record given its own tag
 // and its corpus's tag: the LESS trusted of the two, with an unset or
 // unrecognized value on either side collapsing to TrustUntrustedSource.
+// It is provider.JoinProvenance over the pair, so this package keeps no
+// ranking table of its own.
 //
 // A record cannot out-rank its corpus. A corpus classified
 // untrusted-source cannot contain a record that surfaces as trusted, no
@@ -89,11 +57,5 @@ func trustRank(t TrustLevel) int {
 // from that source. This is the propagation the untrusted-tag test
 // asserts.
 func resolveTrust(record, corpusLevel TrustLevel) TrustLevel {
-	if !record.Valid() || !corpusLevel.Valid() {
-		return TrustUntrustedSource
-	}
-	if trustRank(record) <= trustRank(corpusLevel) {
-		return record
-	}
-	return corpusLevel
+	return provider.JoinProvenance(record, corpusLevel)
 }

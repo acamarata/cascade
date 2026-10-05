@@ -75,8 +75,8 @@ func TestPrivacyOverwriteIsLastWriteWins(t *testing.T) {
 	}
 }
 
-// TestPrivacyParseSensitivityTier covers the name decoder, including the
-// §5.16 rule that anything unrecognised is restricted.
+// TestPrivacyParseSensitivityTier covers the name decoder: empty is the
+// restricted zero value and anything unrecognised is local-only (R136).
 func TestPrivacyParseSensitivityTier(t *testing.T) {
 	for _, tc := range []struct {
 		in   string
@@ -87,8 +87,8 @@ func TestPrivacyParseSensitivityTier(t *testing.T) {
 		{"internal", provider.SensitivityInternal},
 		{"public", provider.SensitivityPublic},
 		{"", provider.SensitivityRestricted},
-		{"LOCAL-ONLY", provider.SensitivityRestricted},
-		{"nonsense", provider.SensitivityRestricted},
+		{"LOCAL-ONLY", provider.SensitivityLocalOnly},
+		{"nonsense", provider.SensitivityLocalOnly},
 	} {
 		if got := ParseSensitivityTier(tc.in); got != tc.want {
 			t.Errorf("ParseSensitivityTier(%q) = %s, want %s", tc.in, got, tc.want)
@@ -220,7 +220,7 @@ func TestPrivacyFailClosedBranches(t *testing.T) {
 		}
 	})
 
-	t.Run("a stored value that is not a tier name reads as restricted", func(t *testing.T) {
+	t.Run("a stored value that is not a tier name reads as local-only", func(t *testing.T) {
 		// Written past the typed setter on purpose: this is the
 		// hand-edited or corrupted row, which is exactly the case where
 		// reading wide would be worst.
@@ -233,8 +233,8 @@ func TestPrivacyFailClosedBranches(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ThreadPrivacy: %v", err)
 		}
-		if got != provider.SensitivityRestricted {
-			t.Fatalf("ThreadPrivacy on a corrupt row = %s, want restricted", got)
+		if got != provider.SensitivityLocalOnly {
+			t.Fatalf("ThreadPrivacy on a corrupt row = %s, want local-only", got)
 		}
 	})
 }

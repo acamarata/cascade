@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // placementCase is one row of the decision table in
@@ -98,7 +99,7 @@ func TestPlacementEligibility_DecisionTable(t *testing.T) {
 
 			got, err := engine.Eligible(Requirement{
 				Capabilities: tc.Requirement.Capabilities,
-				Sensitivity:  Sensitivity(tc.Requirement.Sensitivity),
+				Sensitivity:  decodeWireSensitivity(tc.Requirement.Sensitivity),
 			}, candidates)
 
 			if len(tc.Eligible) == 0 {
@@ -150,7 +151,7 @@ func assertIDs(t *testing.T, got []DeviceRecord, want []string, rule string) {
 // consults a clock, a counter or ambient state.
 func TestPlacementIsPure(t *testing.T) {
 	engine := Engine{Tunnels: func(string) TunnelState { return TunnelUp }}
-	req := Requirement{Capabilities: []string{"browser"}, Sensitivity: SensitivityNormal}
+	req := Requirement{Capabilities: []string{"browser"}, Sensitivity: provider.SensitivityInternal}
 	candidates := []Candidate{
 		{
 			Record: DeviceRecord{NodeID: "n1", Tier: TierWorkerTrusted, Presence: PresenceReachable},
@@ -177,7 +178,7 @@ func TestPlacementIsPure(t *testing.T) {
 func TestPlacementNeverFallsBackToTheController(t *testing.T) {
 	engine := Engine{Tunnels: func(string) TunnelState { return TunnelUp }}
 	got, err := engine.Eligible(
-		Requirement{Sensitivity: SensitivityLocalOnly},
+		Requirement{Sensitivity: provider.SensitivityLocalOnly},
 		[]Candidate{{Record: DeviceRecord{NodeID: "n1", Tier: TierController, Presence: PresenceReachable}}},
 	)
 	if err == nil {
@@ -194,7 +195,7 @@ func TestPlacementNeverFallsBackToTheController(t *testing.T) {
 func TestPlacementWithoutAConnectionSourcePlacesNothing(t *testing.T) {
 	var engine Engine // no Tunnels lookup
 	_, err := engine.Eligible(
-		Requirement{Sensitivity: SensitivityNormal},
+		Requirement{Sensitivity: provider.SensitivityInternal},
 		[]Candidate{{Record: DeviceRecord{NodeID: "n1", Tier: TierWorkerTrusted, Presence: PresenceReachable}}},
 	)
 	if err == nil {
@@ -234,14 +235,14 @@ func TestCandidatesFromGivesAnUnheardNodeNothing(t *testing.T) {
 	unheard := DeviceRecord{NodeID: "n1", Tier: TierWorkerTrusted, Presence: PresenceReachable}
 	engine := Engine{Tunnels: func(string) TunnelState { return TunnelUp }}
 
-	req := Requirement{Capabilities: []string{"browser"}, Sensitivity: SensitivityNormal}
+	req := Requirement{Capabilities: []string{"browser"}, Sensitivity: provider.SensitivityInternal}
 	if _, err := engine.Eligible(req, CandidatesFrom([]DeviceRecord{unheard})); err == nil {
 		t.Fatal("a node that has never reported a capability satisfied a capability requirement")
 	}
 	// The same node IS placeable for work that requires no capability:
 	// the refusal above must come from the empty report, not from the
 	// record being unheard-of in some broader sense.
-	if _, err := engine.Eligible(Requirement{Sensitivity: SensitivityNormal}, CandidatesFrom([]DeviceRecord{unheard})); err != nil {
+	if _, err := engine.Eligible(Requirement{Sensitivity: provider.SensitivityInternal}, CandidatesFrom([]DeviceRecord{unheard})); err != nil {
 		t.Fatalf("a node with no capability requirement was refused: %v", err)
 	}
 }

@@ -3,6 +3,8 @@ package nodes
 import (
 	"strings"
 	"testing"
+
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // upEngine is an Engine whose every node reports an up tunnel, so a test
@@ -149,7 +151,7 @@ func TestFleetStateReportsDrainFirst(t *testing.T) {
 // they are values a record can really carry, and a filter written as
 // "not unavailable" would place all three of the non-reachable ones.
 func TestPlacementLivenessThreeState(t *testing.T) {
-	req := Requirement{Sensitivity: SensitivityNormal}
+	req := Requirement{Sensitivity: provider.SensitivityInternal}
 	for _, presence := range []Presence{PresenceUnknown, PresenceUnavailable, PresenceRemoteViaRoute, ""} {
 		rec := DeviceRecord{NodeID: "n1", Tier: TierWorkerTrusted, Presence: presence}
 		eligible, err := upEngine().Eligible(req, []Candidate{{Record: rec}})

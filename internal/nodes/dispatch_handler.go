@@ -119,7 +119,7 @@ func RegisterDispatchHandler(registry *rpc.Registry, resolve dispatchHandlerDeps
 			DispatchID:   req.DispatchID,
 			Head:         req.Head,
 			Work:         Action{ID: req.ActionID, Idempotent: req.Idempotent},
-			Sensitivity:  Sensitivity(req.Sensitivity),
+			Sensitivity:  decodeWireSensitivity(req.Sensitivity),
 			Payload:      req.Payload,
 			Capabilities: req.Capabilities,
 			EntityID:     req.EntityID,

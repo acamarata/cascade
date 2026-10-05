@@ -183,9 +183,9 @@ func newBridgeThreadPrivacyResolver(
 func (r bridgeThreadPrivacyResolver) ThreadPrivacy(ctx context.Context, threadID string) (cascadepa.SensitivityTier, error) {
 	tier, err := r.store.ThreadPrivacy(ctx, threadID)
 	if err != nil {
-		return "", err
+		return cascadepa.TierLocalOnly, err
 	}
-	return cascadepa.SensitivityTier(tier.String()), nil
+	return tier, nil
 }
 
 var _ telegram.ThreadPrivacyResolver = bridgeThreadPrivacyResolver{}

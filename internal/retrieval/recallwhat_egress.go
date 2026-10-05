@@ -40,13 +40,12 @@ type EgressSubstitutor interface {
 
 var _ EgressSubstitutor = (*egress.Engine)(nil)
 
-// egressTierFor converts a provider.SensitivityTier to its egress package
-// twin by name (client.go:73's own rule: the wire and every cross-package
-// boundary decode sensitivity as the tier's String() name, never its
-// numeric encoding — the two enums are declared in different packages for
-// different reasons and must never be compared as raw integers).
+// egressTierFor hands a provider.SensitivityTier to the egress boundary.
+// egress.SensitivityTier is an alias of the same type, so this is the
+// identity. A value outside the four tiers stays out of range, and egress
+// treats it as local-only and refuses it.
 func egressTierFor(t provider.SensitivityTier) egress.SensitivityTier {
-	return egress.SensitivityTier(t.String())
+	return t
 }
 
 // substituteField runs one outbound string through the egress boundary at

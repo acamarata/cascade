@@ -12,8 +12,8 @@ package daemon
 //   unparseable sensitivity name.
 // Constraints: sensitivity arrives as the tier's String() name (never the
 //   raw numeric encoding) per run.go's own CONTRACT DEVIATION note;
-//   parseSensitivityTier is the sole parser, built from provider's own
-//   exported tier constants rather than a second, driftable name table.
+//   parseSensitivityTier delegates to provider.ParseSensitivityTier, the
+//   one closed parser, and refuses on its error - no local name table.
 // SPORT: internal/daemon (ADD, R-16.80).
 
 import (
@@ -77,29 +77,16 @@ func (p conductorExecuteParams) toModelRequest() (provider.ModelRequest, error) 
 	}, nil
 }
 
-// sensitivityTiers lists every declared provider.SensitivityTier member,
-// used to parse a wire name back into its tier without a second,
-// driftable string table (provider.SensitivityTier.String() is the only
-// source of truth this file reads).
-var sensitivityTiers = []provider.SensitivityTier{
-	provider.SensitivityRestricted,
-	provider.SensitivityLocalOnly,
-	provider.SensitivityInternal,
-	provider.SensitivityPublic,
-}
-
-// parseSensitivityTier parses name (a SensitivityTier.String() value) back
-// into its tier. An empty name resolves to SensitivityRestricted, matching
-// ModelRequest's own documented fail-closed zero value. An unrecognized
-// name is a KindInvalidInput error, never a silent fallback.
+// parseSensitivityTier parses name (a SensitivityTier.String() value)
+// through provider.ParseSensitivityTier. An empty name is the documented
+// zero value, SensitivityRestricted. An unrecognised name is refused with
+// KindInvalidInput naming it; no ModelRequest is built from it, and the
+// tier returned beside the error is the parser's local-only, so even a
+// caller that dropped the error would hold the narrowest tier.
 func parseSensitivityTier(name string) (provider.SensitivityTier, error) {
-	if name == "" {
-		return provider.SensitivityRestricted, nil
+	tier, err := provider.ParseSensitivityTier(name)
+	if err != nil {
+		return tier, cascade.Wrap(cascade.KindInvalidInput, err, "conductor.execute: sensitivity")
 	}
-	for _, t := range sensitivityTiers {
-		if t.String() == name {
-			return t, nil
-		}
-	}
-	return 0, cascade.Newf(cascade.KindInvalidInput, "conductor.execute: unknown sensitivity %q", name)
+	return tier, nil
 }
