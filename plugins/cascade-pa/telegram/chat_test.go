@@ -62,7 +62,7 @@ func TestBridgePrivacy_RefusalMatrix(t *testing.T) {
 	}{
 		{"local-only", true, cascadepa.TierLocalOnly, nil, reasonThreadLocalOnly, cascadepa.TierLocalOnly},
 		{"restricted", true, cascadepa.TierRestricted, nil, reasonThreadRestricted, cascadepa.TierRestricted},
-		{"unresolvable", false, "", errTestGateClosed, reasonThreadLocalOnly, cascadepa.TierLocalOnly},
+		{"unresolvable", false, cascadepa.SensitivityTier(0), errTestGateClosed, reasonThreadLocalOnly, cascadepa.TierLocalOnly},
 	}
 	for i, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -89,7 +89,7 @@ func TestBridgePrivacy_RefusalMatrix(t *testing.T) {
 				t.Fatal("refusal reply carries the original message content")
 			}
 			events := r.divergence.snapshot()
-			if len(events) != 1 || events[0].ResolvedTier != string(c.wantTier) || events[0].ThreadID != threadID {
+			if len(events) != 1 || events[0].ResolvedTier != c.wantTier.String() || events[0].ThreadID != threadID {
 				t.Fatalf("divergence events = %+v, want one bridge.refused for %s/%s", events, threadID, c.wantTier)
 			}
 			if got := r.bridge.RefusalReport(); len(got) != 1 || got[0].Reason != c.wantReason {

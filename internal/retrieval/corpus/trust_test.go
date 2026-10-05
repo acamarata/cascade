@@ -1,6 +1,11 @@
 package corpus
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/acamarata/cascade/pkg/provider"
+)
 
 // TestTrustLevel_SpelledExactlyAsThePlanNamesThem pins the two values
 // against the spelling the phase plan uses ("trusted | untrusted-source"),
@@ -85,16 +90,74 @@ func TestResolveTrust_FailsClosed(t *testing.T) {
 	}
 }
 
-// TestTrustRank_OrdersLeastTrustedFirst pins the ordering resolveTrust
-// depends on, including the below-everything rank an unrecognized value
-// gets. If an unknown value ever ranked above untrusted-source, the
-// less-trusted-wins comparison would start preferring it.
-func TestTrustRank_OrdersLeastTrustedFirst(t *testing.T) {
-	if trustRank("nonsense") >= trustRank(TrustUntrustedSource) {
-		t.Error("an unrecognized trust value must rank below untrusted-source")
+// TestFormerParseSitesFailClosed is this package's row of the former-
+// parse-site table: resolveTrust. An unknown and an empty tag on either
+// side yield untrusted-source, the most restrictive outcome; restoring a
+// local ranking that let an unknown value outrank untrusted-source turns
+// it red.
+func TestFormerParseSitesFailClosed(t *testing.T) {
+	t.Run("corpus_resolveTrust", func(t *testing.T) {
+		for _, odd := range []TrustLevel{"", "Trusted", "trusted ", "verified"} {
+			if got := resolveTrust(odd, TrustTrusted); got != TrustUntrustedSource {
+				t.Errorf("resolveTrust(%q, trusted) = %q, want untrusted-source", string(odd), string(got))
+			}
+			if got := resolveTrust(TrustTrusted, odd); got != TrustUntrustedSource {
+				t.Errorf("resolveTrust(trusted, %q) = %q, want untrusted-source", string(odd), string(got))
+			}
+		}
+	})
+}
+
+// TestTrustLevelIsTheProviderType pins the alias as type identity: a
+// provider.Provenance IS a TrustLevel, and the constants are the same
+// values, so there is no conversion anywhere between the two.
+func TestTrustLevelIsTheProviderType(t *testing.T) {
+	passThrough := func(p provider.Provenance) TrustLevel { return p } // compiles only for an alias
+	if passThrough(TrustTrusted) != provider.ProvenanceTrusted || TrustUntrustedSource != provider.ProvenanceUntrustedSource {
+		t.Fatal("corpus trust constants are not the provider provenance members")
 	}
-	if trustRank(TrustUntrustedSource) >= trustRank(TrustTrusted) {
-		t.Error("untrusted-source must rank below trusted")
+}
+
+// TestValidateCorpusKind_FailsClosed keeps the corpus-kind check closed the
+// same way trust is: the registered kinds pass, and an empty, near or
+// unknown kind is refused rather than read as an empty corpus.
+func TestValidateCorpusKind_FailsClosed(t *testing.T) {
+	for _, kind := range []string{CorpusIDCode, CorpusIDGraph} {
+		if err := ValidateCorpusKind(kind); err != nil {
+			t.Fatalf("ValidateCorpusKind(%q) = %v, want nil", kind, err)
+		}
+	}
+	for _, kind := range []string{"", "Code", "docs"} {
+		if err := ValidateCorpusKind(kind); err == nil {
+			t.Fatalf("ValidateCorpusKind(%q) accepted an unregistered kind", kind)
+		}
+	}
+}
+
+// Persisted corpus encodings: json.Marshal output at f688c0b, when
+// TrustLevel was its own string type (evidence run4/fixtures-provenance.txt).
+const (
+	persistedCorpus = `{"id":"docs","scope_ref":"project:one","privacy":"project","visibility":"scope-local","trust":"trusted"}`
+	persistedRecord = `{"id":"docs/readme.md#1","corpus_id":"docs","scope_ref":"project:one","privacy":"project","visibility":"scope-local","trust":"untrusted-source"}`
+)
+
+// TestPersistedSensitivityFormsUnchanged is this package's persisted-form
+// row: the json:"trust" field of a stored Corpus and Record decodes to the
+// same level and re-encodes byte-identical under the alias.
+func TestPersistedSensitivityFormsUnchanged(t *testing.T) {
+	var c Corpus
+	if err := json.Unmarshal([]byte(persistedCorpus), &c); err != nil || c.Trust != TrustTrusted {
+		t.Fatalf("decode corpus = %+v, %v; want trust trusted", c, err)
+	}
+	var r Record
+	if err := json.Unmarshal([]byte(persistedRecord), &r); err != nil || r.Trust != TrustUntrustedSource {
+		t.Fatalf("decode record = %+v, %v; want trust untrusted-source", r, err)
+	}
+	for raw, v := range map[string]any{persistedCorpus: c, persistedRecord: r} {
+		out, err := json.Marshal(v)
+		if err != nil || string(out) != raw {
+			t.Fatalf("re-encode:\n got %s (%v)\nwant %s", out, err, raw)
+		}
 	}
 }
 

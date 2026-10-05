@@ -46,6 +46,7 @@ import (
 	"errors"
 
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // EgressClass is this package's own view of an egress-inventory class
@@ -64,25 +65,22 @@ const EgressClassPluginProcess EgressClass = "plugin-process"
 // H/S-16.T1 inventory's Owner convention.
 const pluginProcessEgressOwner = "O/S-31.T3"
 
-// SensitivityTier is this package's own view of the egress firewall's
-// classification a caller declares for outbound content. The values
-// match internal/hooks/egress.SensitivityTier's string constants
-// exactly, so a composition-root adapter's conversion is a plain string
-// cast, not a lookup table.
-type SensitivityTier string
+// SensitivityTier is the egress firewall's classification a caller
+// declares for outbound content: an alias of provider.SensitivityTier, the
+// same type internal/hooks/egress aliases, so a composition-root adapter
+// passes it through with no conversion or lookup table.
+type SensitivityTier = provider.SensitivityTier
 
-// The tiers InterceptClass callers may declare. TierInternal is what
-// this package's own stdio substitution call uses (see runtime.go): the
-// bytes cross a process boundary on the operator's own machine, which is
-// internal, not public, and the class is registered without
+// The tiers InterceptClass callers in this package declare. TierInternal is
+// what this package's own stdio substitution call uses (see runtime.go):
+// the bytes cross a process boundary on the operator's own machine, which
+// is internal, not public, and the class is registered without
 // AllowRestricted so a restricted classification would simply refuse.
-// internal/hooks/egress additionally defines TierRestricted and
-// TierLocalOnly; this package omits both because nothing here ever
-// declares stdio content at either tier — a composition-root adapter
-// converts by matching string value, not by exhausting this set.
 const (
-	TierInternal SensitivityTier = "internal"
-	TierPublic   SensitivityTier = "public"
+	// TierInternal is stdio content crossing the local process boundary.
+	TierInternal = provider.SensitivityInternal
+	// TierPublic is content with no confidentiality constraint.
+	TierPublic = provider.SensitivityPublic
 )
 
 // EgressRegistrationConfig is this package's own view of the policy a

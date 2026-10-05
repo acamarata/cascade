@@ -39,8 +39,8 @@ func TestParseSensitivityTier_UnknownFailsClosed(t *testing.T) {
 	if err == nil {
 		t.Fatalf("parseSensitivityTier(\"nonexistent-tier\") = %v, nil, want a KindInvalidInput error", tier)
 	}
-	if tier > provider.SensitivityRestricted {
-		t.Fatalf("parseSensitivityTier on unknown input returned tier %v, want the zero (most restrictive) value on the error path", tier)
+	if tier != provider.SensitivityLocalOnly {
+		t.Fatalf("parseSensitivityTier on unknown input returned tier %v, want local-only (the most restrictive tier) on the error path", tier)
 	}
 	if !cascade.HasKind(err, cascade.KindInvalidInput) {
 		t.Errorf("parseSensitivityTier error kind: got %v, want KindInvalidInput", err)

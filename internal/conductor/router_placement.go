@@ -116,19 +116,15 @@ func (r *DefaultRouter) consultPlacement(req provider.ModelRequest, flags []stri
 // reason internal/nodes' ResolveSensitivity does: an unresolvable
 // classification is the case where guessing wrong leaks work off the
 // controller machine.
-func placementSensitivity(req provider.ModelRequest) nodes.Sensitivity {
+func placementSensitivity(req provider.ModelRequest) provider.SensitivityTier {
 	if !req.Policy.ExternalAllowed {
-		return nodes.SensitivityLocalOnly
+		return provider.SensitivityLocalOnly
 	}
 	switch req.Sensitivity {
-	case provider.SensitivityLocalOnly:
-		return nodes.SensitivityLocalOnly
-	case provider.SensitivityRestricted:
-		return nodes.SensitivityRestricted
-	case provider.SensitivityInternal, provider.SensitivityPublic:
-		return nodes.SensitivityNormal
+	case provider.SensitivityLocalOnly, provider.SensitivityRestricted, provider.SensitivityInternal, provider.SensitivityPublic:
+		return req.Sensitivity
 	default:
-		return nodes.SensitivityLocalOnly
+		return provider.SensitivityLocalOnly
 	}
 }
 

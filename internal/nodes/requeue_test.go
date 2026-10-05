@@ -11,6 +11,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // recordingFiler captures held outcomes instead of filing them anywhere.
@@ -64,7 +66,7 @@ func idempotentWork() RequeueRequest {
 		DispatchID:  "d1",
 		LostNodeID:  "lost",
 		Action:      Action{ID: "a1", Idempotent: true},
-		Requirement: Requirement{Capabilities: []string{"docker"}, Sensitivity: SensitivityNormal},
+		Requirement: Requirement{Capabilities: []string{"docker"}, Sensitivity: provider.SensitivityInternal},
 		EntityID:    "job-7",
 	}
 }
@@ -160,13 +162,13 @@ func TestRequeueNeverBypassesAFilter(t *testing.T) {
 		{"trust tier", Candidate{
 			Record: DeviceRecord{NodeID: "spare", Tier: TierPairedDevice, Presence: PresenceReachable},
 			Report: CapabilityReport{Capabilities: []string{"docker"}},
-		}, Requirement{Capabilities: []string{"docker"}, Sensitivity: SensitivityRestricted}},
+		}, Requirement{Capabilities: []string{"docker"}, Sensitivity: provider.SensitivityRestricted}},
 		{"capability", healthyNode("spare"),
-			Requirement{Capabilities: []string{"browser"}, Sensitivity: SensitivityNormal}},
+			Requirement{Capabilities: []string{"browser"}, Sensitivity: provider.SensitivityInternal}},
 		{"liveness", Candidate{
 			Record: DeviceRecord{NodeID: "spare", Tier: TierWorkerTrusted, Presence: PresenceUnknown},
 			Report: CapabilityReport{Capabilities: []string{"docker"}},
-		}, Requirement{Capabilities: []string{"docker"}, Sensitivity: SensitivityNormal}},
+		}, Requirement{Capabilities: []string{"docker"}, Sensitivity: provider.SensitivityInternal}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			deps, _ := requeueHarness(t)
@@ -187,7 +189,7 @@ func TestRequeueNeverBypassesAFilter(t *testing.T) {
 func TestLocalOnlyWorkIsNeverRequeuedToANode(t *testing.T) {
 	deps, _ := requeueHarness(t)
 	req := idempotentWork()
-	req.Requirement = Requirement{Sensitivity: SensitivityLocalOnly}
+	req.Requirement = Requirement{Sensitivity: provider.SensitivityLocalOnly}
 
 	plan, err := PlanRequeue(context.Background(), deps, req, LossTunnel)
 	if err == nil {

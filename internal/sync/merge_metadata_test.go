@@ -38,7 +38,7 @@ func arec(id string, tier egress.SensitivityTier, revision uint64, node string) 
 func TestARecordThatMustNotLeaveIsRefusedAndJournaled(t *testing.T) {
 	dc := accountsDomain(t)
 	for _, tier := range []egress.SensitivityTier{egress.TierLocalOnly, egress.TierRestricted} {
-		t.Run(string(tier), func(t *testing.T) {
+		t.Run(tier.String(), func(t *testing.T) {
 			journal := &ConflictJournal{}
 			merged := MergeMetadataOnly(journal, dc,
 				map[string]Record{"keep": arec("keep", egress.TierInternal, 1, "server")},

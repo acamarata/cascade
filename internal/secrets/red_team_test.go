@@ -160,7 +160,7 @@ func TestRedTeamBridgeClass_LocalOnlyContentRefusedOnTheSendPath(t *testing.T) {
 func TestRedTeamBridgeClass_UnclassifiedContentRefusedOnTheSendPath(t *testing.T) {
 	client, doer := redTeamBridge(t)
 	if err := client.SendMessage(context.Background(), 555000111,
-		cascadepa.SensitivityTier(""), "unclassified content"); err == nil {
+		cascadepa.SensitivityTier(0), "unclassified content"); err == nil {
 		t.Fatal("unclassified content was admitted onto the Telegram send path")
 	}
 	if len(doer.methods) != 0 {

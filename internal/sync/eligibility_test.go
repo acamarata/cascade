@@ -90,7 +90,7 @@ func TestRestrictedNeedsWorkerTrusted(t *testing.T) {
 func TestNoGateEverWidens(t *testing.T) {
 	tiers := []nodes.Tier{nodes.TierController, nodes.TierWorkerTrusted, nodes.TierPairedDevice, nodes.Tier("")}
 	sensitivities := []egress.SensitivityTier{
-		egress.TierPublic, egress.TierInternal, egress.TierRestricted, egress.TierLocalOnly, egress.SensitivityTier(""),
+		egress.TierPublic, egress.TierInternal, egress.TierRestricted, egress.TierLocalOnly, egress.SensitivityTier(9),
 	}
 	for _, dc := range AllCoreClasses() {
 		for _, tier := range tiers {
@@ -102,7 +102,7 @@ func TestNoGateEverWidens(t *testing.T) {
 				if !EligibleForTier(dc.Domain, dc.Subkind, tier) {
 					t.Errorf("%s/%s to %q: eligible despite the tier table refusing it", dc.Domain, dc.Subkind, tier)
 				}
-				if r := sens.Resolve(); r == egress.TierLocalOnly {
+				if r := egress.ResolveTier(sens); r == egress.TierLocalOnly {
 					t.Errorf("%s/%s to %q: a local-only record was eligible", dc.Domain, dc.Subkind, tier)
 				}
 			}
@@ -111,12 +111,25 @@ func TestNoGateEverWidens(t *testing.T) {
 }
 
 // TestTheZeroSensitivityResolvesRestrictively is the fail-closed default
-// on the record side: a record whose tier nobody set must not be treated
-// as public.
+// on the record side: a record whose tier nobody set holds the zero value,
+// restricted, and must not be treated as public. The shipped table permits
+// paired devices nothing, which would refuse first, so the test opens
+// config to them for its duration: only the restricted gate can then
+// refuse. A public record is the control; tier 9 is the separate
+// out-of-range case.
 func TestTheZeroSensitivityResolvesRestrictively(t *testing.T) {
+	saved := tierDomains[nodes.TierPairedDevice]
+	tierDomains[nodes.TierPairedDevice] = map[string]struct{}{"config": {}}
+	t.Cleanup(func() { tierDomains[nodes.TierPairedDevice] = saved })
 	rec := syncable()
-	rec.Tier = egress.SensitivityTier("")
-	if got := Eligible(rec, nodes.TierPairedDevice); got.Eligible {
-		t.Error("a record with no sensitivity set reached a paired device")
+	var unset egress.SensitivityTier
+	for _, tc := range []struct {
+		tier   egress.SensitivityTier
+		reason string
+	}{{egress.TierPublic, ""}, {unset, "sensitivity-restricted"}, {egress.SensitivityTier(9), "sensitivity-local-only"}} {
+		rec.Tier = tc.tier
+		if got := Eligible(rec, nodes.TierPairedDevice); got.Eligible != (tc.reason == "") || got.Reason != tc.reason {
+			t.Errorf("tier %d to a paired device = %+v, want reason %q", uint8(tc.tier), got, tc.reason)
+		}
 	}
 }

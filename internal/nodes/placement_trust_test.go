@@ -1,8 +1,11 @@
 package nodes
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // TestResolveSensitivityFailsClosed pins the rule that decides where
@@ -11,20 +14,20 @@ import (
 // resolve to local-only, because guessing the other way sends work the
 // system could not classify onto a remote machine.
 func TestResolveSensitivityFailsClosed(t *testing.T) {
-	known := map[string]Sensitivity{
-		"local-only": SensitivityLocalOnly,
-		"restricted": SensitivityRestricted,
-		"normal":     SensitivityNormal,
+	known := map[string]provider.SensitivityTier{
+		"local-only": provider.SensitivityLocalOnly,
+		"restricted": provider.SensitivityRestricted,
+		"normal":     provider.SensitivityInternal,
 	}
 	for raw, want := range known {
-		if got := ResolveSensitivity(raw); got != want {
-			t.Errorf("ResolveSensitivity(%q) = %q, want %q", raw, got, want)
+		if got := decodeWireSensitivity(raw); got != want {
+			t.Errorf("decodeWireSensitivity(%q) = %q, want %q", raw, got, want)
 		}
 	}
 
 	for _, raw := range []string{"", " ", "Normal", "NORMAL", "public", "internal", "unknown", "0"} {
-		if got := ResolveSensitivity(raw); got != SensitivityLocalOnly {
-			t.Errorf("ResolveSensitivity(%q) = %q, want it to fail closed to %q", raw, got, SensitivityLocalOnly)
+		if got := decodeWireSensitivity(raw); got != provider.SensitivityLocalOnly {
+			t.Errorf("decodeWireSensitivity(%q) = %q, want it to fail closed to %q", raw, got, provider.SensitivityLocalOnly)
 		}
 	}
 }
@@ -40,7 +43,7 @@ func TestResolveSensitivityFailsClosed(t *testing.T) {
 // mislabelled or tampered record routes local-only work off the box.
 func TestLocalOnlyWorkExcludesEveryTier(t *testing.T) {
 	for _, tier := range []Tier{TierController, TierWorkerTrusted, TierPairedDevice, "", "made-up"} {
-		reason, detail, excluded := excludedByTrust(SensitivityLocalOnly, tier)
+		reason, detail, excluded := excludedByTrust(provider.SensitivityLocalOnly, tier)
 		if !excluded {
 			t.Errorf("local-only work was allowed on a node with tier %q", tier)
 			continue
@@ -62,12 +65,12 @@ func TestRestrictedWorkNeedsWorkerTrusted(t *testing.T) {
 	refused := []Tier{TierPairedDevice, "", "made-up"}
 
 	for _, tier := range allowed {
-		if _, _, excluded := excludedByTrust(SensitivityRestricted, tier); excluded {
+		if _, _, excluded := excludedByTrust(provider.SensitivityRestricted, tier); excluded {
 			t.Errorf("restricted work was refused on tier %q, which outranks worker-trusted", tier)
 		}
 	}
 	for _, tier := range refused {
-		reason, detail, excluded := excludedByTrust(SensitivityRestricted, tier)
+		reason, detail, excluded := excludedByTrust(provider.SensitivityRestricted, tier)
 		if !excluded {
 			t.Errorf("restricted work was allowed on tier %q", tier)
 			continue
@@ -87,12 +90,12 @@ func TestRestrictedWorkNeedsWorkerTrusted(t *testing.T) {
 // refused even for work with no tier rule of its own.
 func TestNormalWorkStillRefusesAnUnrecognizedTier(t *testing.T) {
 	for _, tier := range []Tier{TierController, TierWorkerTrusted, TierPairedDevice} {
-		if _, _, excluded := excludedByTrust(SensitivityNormal, tier); excluded {
+		if _, _, excluded := excludedByTrust(provider.SensitivityInternal, tier); excluded {
 			t.Errorf("normal work was refused on the recognized tier %q", tier)
 		}
 	}
 	for _, tier := range []Tier{"", "made-up", "Controller"} {
-		reason, detail, excluded := excludedByTrust(SensitivityNormal, tier)
+		reason, detail, excluded := excludedByTrust(provider.SensitivityInternal, tier)
 		if !excluded {
 			t.Errorf("normal work was allowed on the unrecognized tier %q", tier)
 			continue
@@ -128,7 +131,7 @@ func TestTierNameRendersTheUnsetTier(t *testing.T) {
 // tier. An implementation that ranked by declaration order, or that
 // treated an unranked tier as zero, would place the wrong one.
 func TestPlacementPairedDeviceFailsRestricted(t *testing.T) {
-	req := Requirement{Capabilities: []string{"browser"}, Sensitivity: SensitivityRestricted}
+	req := Requirement{Capabilities: []string{"browser"}, Sensitivity: provider.SensitivityRestricted}
 	node := func(id string, tier Tier) Candidate {
 		return Candidate{
 			Record: DeviceRecord{NodeID: id, Tier: tier, Presence: PresenceReachable},
@@ -147,5 +150,79 @@ func TestPlacementPairedDeviceFailsRestricted(t *testing.T) {
 
 	if _, err := engine.Eligible(req, []Candidate{node("paired", TierPairedDevice)}); err == nil {
 		t.Fatal("restricted work was placed on a paired device")
+	}
+}
+
+// TestFormerParseSitesFailClosed is this package's row of the former-parse-
+// site table: the node.dispatch wire decode. An unknown and an empty wire
+// value decode to local-only, and local-only work is excluded from every
+// candidate, so the most restrictive outcome holds end to end.
+func TestFormerParseSitesFailClosed(t *testing.T) {
+	t.Run("nodes_wire_decode", func(t *testing.T) {
+		for _, raw := range []string{"", "secret", "RESTRICTED ", "internal", "public"} {
+			got := decodeWireSensitivity(raw)
+			if got != provider.SensitivityLocalOnly {
+				t.Fatalf("decodeWireSensitivity(%q) = %v, want local-only", raw, got)
+			}
+			if _, _, excluded := excludedByTrust(got, TierWorkerTrusted); !excluded {
+				t.Fatalf("wire %q reached a worker-trusted node", raw)
+			}
+		}
+	})
+}
+
+// persistedDispatch is json.Marshal(DispatchRequest{...}) at f688c0b with
+// the given wire sensitivity (evidence run4/fixtures-provenance.txt).
+func persistedDispatch(wire string) string {
+	return `{"dispatch_id":"d1","node_id":"n1","head":"abc","action_id":"a1","idempotent":true,"sensitivity":"` +
+		wire + `","credential":"none"}`
+}
+
+// TestPersistedSensitivityFormsUnchanged is this package's persisted-form
+// row: node.dispatch requests in each f688c0b wire spelling, "normal"
+// included, decode to the right tier, re-encode through the wire codec,
+// and marshal back byte-identical.
+func TestPersistedSensitivityFormsUnchanged(t *testing.T) {
+	for wire, want := range map[string]provider.SensitivityTier{
+		"local-only": provider.SensitivityLocalOnly,
+		"restricted": provider.SensitivityRestricted,
+		"normal":     provider.SensitivityInternal,
+	} {
+		raw := persistedDispatch(wire)
+		req, err := decodeDispatchRequest(json.RawMessage(raw))
+		if err != nil {
+			t.Fatalf("decode %s: %v", raw, err)
+		}
+		tier := decodeWireSensitivity(req.Sensitivity)
+		if tier != want {
+			t.Fatalf("wire %q decoded to %v, want %v", wire, tier, want)
+		}
+		req.Sensitivity = encodeWireSensitivity(tier)
+		out, err := json.Marshal(req)
+		if err != nil || string(out) != raw {
+			t.Fatalf("re-encode:\n got %s (%v)\nwant %s", out, err, raw)
+		}
+	}
+	if got := encodeWireSensitivity(provider.SensitivityPublic); got != "normal" {
+		t.Fatalf("public encodes as %q, want normal", got)
+	}
+	if got := encodeWireSensitivity(provider.SensitivityTier(9)); got != "local-only" {
+		t.Fatalf("an out-of-range tier encodes as %q, want local-only", got)
+	}
+}
+
+// TestTierOutOfRangeRefused is this package's [R115b] row: a value above
+// SensitivityPublic is excluded from every candidate, including the
+// controller-tier record that clears every gate, exactly like local-only
+// work. Removing the default branch's exclusion turns it red.
+func TestTierOutOfRangeRefused(t *testing.T) {
+	for _, tier := range []Tier{TierController, TierWorkerTrusted, TierPairedDevice} {
+		reason, detail, excluded := excludedByTrust(provider.SensitivityTier(9), tier)
+		if !excluded || reason != ReasonLocalOnlyWork {
+			t.Fatalf("sensitivity 9 on %q: excluded=%v reason=%q, want excluded as local-only", tier, excluded, reason)
+		}
+		if !strings.Contains(detail, "is not a tier") {
+			t.Fatalf("detail %q must say the value is not a tier", detail)
+		}
 	}
 }

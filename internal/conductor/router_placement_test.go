@@ -157,14 +157,14 @@ func TestPlacementSensitivityFailsClosed(t *testing.T) {
 		name     string
 		tier     provider.SensitivityTier
 		external bool
-		want     nodes.Sensitivity
+		want     provider.SensitivityTier
 	}{
-		{"internal is normal", provider.SensitivityInternal, true, nodes.SensitivityNormal},
-		{"public is normal", provider.SensitivityPublic, true, nodes.SensitivityNormal},
-		{"restricted stays restricted", provider.SensitivityRestricted, true, nodes.SensitivityRestricted},
-		{"local-only stays local-only", provider.SensitivityLocalOnly, true, nodes.SensitivityLocalOnly},
-		{"an unknown tier resolves local-only", provider.SensitivityTier(99), true, nodes.SensitivityLocalOnly},
-		{"external forbidden overrides public", provider.SensitivityPublic, false, nodes.SensitivityLocalOnly},
+		{"internal stays internal", provider.SensitivityInternal, true, provider.SensitivityInternal},
+		{"public stays public", provider.SensitivityPublic, true, provider.SensitivityPublic},
+		{"restricted stays restricted", provider.SensitivityRestricted, true, provider.SensitivityRestricted},
+		{"local-only stays local-only", provider.SensitivityLocalOnly, true, provider.SensitivityLocalOnly},
+		{"an unknown tier resolves local-only", provider.SensitivityTier(99), true, provider.SensitivityLocalOnly},
+		{"external forbidden overrides public", provider.SensitivityPublic, false, provider.SensitivityLocalOnly},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := provider.ModelRequest{Sensitivity: tc.tier}

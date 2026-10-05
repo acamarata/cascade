@@ -124,8 +124,8 @@ func TestSensitivityTierValuesMatchTheEgressStrings(t *testing.T) {
 		TierInternal:   "internal",
 		TierPublic:     "public",
 	} {
-		if string(tier) != want {
-			t.Fatalf("tier %q must equal %q (internal/hooks/egress/class.go)", string(tier), want)
+		if tier.String() != want {
+			t.Fatalf("tier %q must equal %q (internal/hooks/egress/class.go)", tier.String(), want)
 		}
 	}
 }

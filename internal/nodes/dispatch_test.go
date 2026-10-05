@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // Purpose (this file): the dispatch admission and fencing rules — what may
@@ -20,7 +21,7 @@ import (
 // the test cannot pass merely because the tier under test was too low.
 func TestLocalOnlyWorkIsNeverDispatched(t *testing.T) {
 	for _, tier := range []Tier{TierController, TierWorkerTrusted, TierPairedDevice} {
-		err := AdmitDispatch(SensitivityLocalOnly, tier)
+		err := AdmitDispatch(provider.SensitivityLocalOnly, tier)
 		if err == nil {
 			t.Errorf("local-only work was admitted to a %q node", tier)
 			continue
@@ -39,7 +40,7 @@ func TestRestrictedWorkNeedsARestrictedGateTier(t *testing.T) {
 		TierWorkerTrusted: true,
 		TierPairedDevice:  false,
 	} {
-		err := AdmitDispatch(SensitivityRestricted, tier)
+		err := AdmitDispatch(provider.SensitivityRestricted, tier)
 		if wantAdmitted && err != nil {
 			t.Errorf("tier %q was refused restricted work: %v", tier, err)
 		}
@@ -54,16 +55,16 @@ func TestRestrictedWorkNeedsARestrictedGateTier(t *testing.T) {
 // corrupted record or a value from a newer build would otherwise silently
 // admit work the operator never granted.
 func TestUnresolvableTiersFailClosed(t *testing.T) {
-	if err := AdmitDispatch(SensitivityNormal, Tier("")); err == nil {
+	if err := AdmitDispatch(provider.SensitivityInternal, Tier("")); err == nil {
 		t.Error("an empty node tier was admitted")
 	}
-	if err := AdmitDispatch(SensitivityNormal, Tier("supervisor")); err == nil {
+	if err := AdmitDispatch(provider.SensitivityInternal, Tier("supervisor")); err == nil {
 		t.Error("an unrecognized node tier was admitted")
 	}
-	if err := AdmitDispatch(Sensitivity("secret-ish"), TierController); err == nil {
+	if err := AdmitDispatch(decodeWireSensitivity("secret-ish"), TierController); err == nil {
 		t.Error("an unrecognized work sensitivity was admitted")
 	}
-	if err := AdmitDispatch(Sensitivity(""), TierController); err == nil {
+	if err := AdmitDispatch(decodeWireSensitivity(""), TierController); err == nil {
 		t.Error("an empty work sensitivity was admitted")
 	}
 }
@@ -72,7 +73,7 @@ func TestUnresolvableTiersFailClosed(t *testing.T) {
 // refusing everything — the assertion that keeps the others honest.
 func TestNormalWorkGoesToAnyKnownTier(t *testing.T) {
 	for _, tier := range []Tier{TierController, TierWorkerTrusted, TierPairedDevice} {
-		if err := AdmitDispatch(SensitivityNormal, tier); err != nil {
+		if err := AdmitDispatch(provider.SensitivityInternal, tier); err != nil {
 			t.Errorf("normal work was refused a %q node: %v", tier, err)
 		}
 	}

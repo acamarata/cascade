@@ -10,6 +10,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // recoveryHarness pairs a ship harness with a recovery one, sharing the
@@ -44,7 +46,7 @@ func recoveryRequest(head string) ShipRequest {
 		DispatchID:   "d1",
 		Head:         head,
 		Work:         Action{ID: "a1", Idempotent: true},
-		Sensitivity:  SensitivityNormal,
+		Sensitivity:  provider.SensitivityInternal,
 		Capabilities: []string{"docker"},
 		EntityID:     "job-7",
 	}

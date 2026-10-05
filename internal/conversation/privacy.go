@@ -118,9 +118,11 @@ func (s *conversationStore) SetThreadPrivacy(ctx context.Context, threadID strin
 // missing thread is not a routing permission. The refusal a caller needs
 // for a bad id comes from the operation it is actually attempting.
 //
-// A row whose stored text is not a tier name also reads as restricted. A
-// corrupt or hand-edited value is exactly the case where guessing wide
-// would be worst.
+// A stored row reads through provider.ParseSensitivityTier, the one closed
+// parser. A row whose text is not a tier name reads as LOCAL-ONLY, the
+// narrowest tier: a corrupt or hand-edited value is exactly the case where
+// guessing wide would be worst, and restricted still permits external
+// lanes. An empty stored value is the documented zero value, restricted.
 func (s *conversationStore) ThreadPrivacy(ctx context.Context, threadID string) (provider.SensitivityTier, error) {
 	var name string
 	err := s.db.QueryRowContext(ctx,
@@ -132,27 +134,27 @@ func (s *conversationStore) ThreadPrivacy(ctx context.Context, threadID string) 
 		return provider.SensitivityRestricted,
 			cascade.Wrap(cascade.KindUnavailable, err, "conversation: read thread privacy mode")
 	}
-	return ParseSensitivityTier(name), nil
+	// The parse error is deliberately not returned: the tier it comes with
+	// is local-only, and a corrupt row has no caller left to refuse, so the
+	// narrowest routing answer is the useful one.
+	tier, _ := provider.ParseSensitivityTier(name)
+	return tier, nil
 }
 
-// ParseSensitivityTier maps a stored or caller-supplied tier name to its
-// tier, FAIL-CLOSED: anything unset, unknown, misspelled or
-// differently-cased resolves to restricted (§5.16).
+// ParseSensitivityTier maps a tier name to its tier through the closed
+// provider.ParseSensitivityTier (the one name table). The empty name is the
+// restricted zero value; any name that does not parse is local-only, the
+// narrowest tier, so a caller that cannot refuse never widens.
 //
-// There is exactly one direction an unrecognised value may resolve in and
-// it is the narrow one. A typo that widened a tier would be silent until
-// the content had already left the machine.
+// It is NOT the stored-row reader: ThreadPrivacy parses rows itself.
+// applyAppendPrivacy calls this only after the closed parser has accepted
+// the name.
 func ParseSensitivityTier(name string) provider.SensitivityTier {
-	switch name {
-	case provider.SensitivityLocalOnly.String():
+	tier, err := provider.ParseSensitivityTier(name)
+	if err != nil {
 		return provider.SensitivityLocalOnly
-	case provider.SensitivityInternal.String():
-		return provider.SensitivityInternal
-	case provider.SensitivityPublic.String():
-		return provider.SensitivityPublic
-	default:
-		return provider.SensitivityRestricted
 	}
+	return tier
 }
 
 // SetThreadPrivacy exposes Store.SetThreadPrivacy through the adapter.
@@ -185,11 +187,10 @@ func (a *Adapter) applyAppendPrivacy(ctx context.Context, threadID, mode string,
 	// fail-closed rule is about an ABSENT mode; a caller that sent
 	// "local_only" sent a mode, and silently storing restricted would
 	// WIDEN what it asked for — restricted permits external lanes and
-	// local-only does not. ParseSensitivityTier keeps its coercion for
-	// reading a value already in the store, where a corrupt row has no
-	// caller left to refuse.
-	if !validSensitivityTierName(mode) {
-		return cascade.Newf(cascade.KindInvalidInput,
+	// local-only does not. The closed parser is the check: its error is
+	// the refusal.
+	if _, err := provider.ParseSensitivityTier(mode); err != nil {
+		return cascade.Wrapf(cascade.KindInvalidInput, err,
 			"%s: %q is not a sensitivity tier; expected one of local-only, restricted, internal, public",
 			MethodAppendTurn, mode)
 	}
@@ -220,15 +221,4 @@ func (a *Adapter) resolveAppendThread(ctx context.Context, params appendTurnPara
 		return "", err
 	}
 	return threadID, nil
-}
-
-// validSensitivityTierName reports whether name is one of the four §5.16
-// tier names exactly, so a misspelling is refused rather than widened.
-func validSensitivityTierName(name string) bool {
-	switch name {
-	case "local-only", "restricted", "internal", "public":
-		return true
-	default:
-		return false
-	}
 }

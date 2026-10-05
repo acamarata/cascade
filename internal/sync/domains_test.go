@@ -90,7 +90,7 @@ func TestPluginClassAcceptsDeclaredClasses(t *testing.T) {
 
 func TestAllCoreClassesSensitivityTiersResolve(t *testing.T) {
 	for _, dc := range AllCoreClasses() {
-		if dc.Sensitivity.Resolve() == egress.TierUnset {
+		if egress.ResolveTier(dc.Sensitivity) != dc.Sensitivity {
 			t.Fatalf("domain class %+v carries an unresolved sensitivity tier", dc)
 		}
 	}

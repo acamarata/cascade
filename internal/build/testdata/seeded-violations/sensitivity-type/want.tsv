@@ -1,0 +1,12 @@
+dataclass	internal/fixture.DataClass (name)
+tier-consts	internal/fixture.Tier (const values)
+plugins-trust	plugins/fixture.TrustLevel (name)
+providers-int	providers/fixture.Sensitivity (name)
+redefined-tier	internal/fixture.Level (defined over pkg/provider.SensitivityTier)
+exempt-elsewhere	internal/fixture.SensitiveClass (name)
+alias-string	internal/fixture.Level (const values)
+alias-chain	internal/fixture.Base (const values)
+alias-defined	internal/fixture.Tier (const values)
+conversion-consts	internal/fixture.Tier (const values)
+paren-type	internal/fixture.Tier (const values)
+out-of-scope	

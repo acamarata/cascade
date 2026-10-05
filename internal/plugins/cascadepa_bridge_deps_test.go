@@ -144,7 +144,7 @@ func TestBridgeEgressGate_EnforcesTheClassAndSubstitutes(t *testing.T) {
 		}
 	}
 	// The unset tier resolves to restricted and must refuse too.
-	if _, err := gate.Guard(ctx, cascadepa.SensitivityTier(""), []byte("unclassified")); err == nil {
+	if _, err := gate.Guard(ctx, cascadepa.SensitivityTier(0), []byte("unclassified")); err == nil {
 		t.Fatal("unclassified content was admitted")
 	}
 	for _, tier := range []cascadepa.SensitivityTier{cascadepa.TierInternal, cascadepa.TierPublic} {

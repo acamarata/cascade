@@ -18,7 +18,7 @@ func TestRegistryRefusesUnknownAndDuplicate(t *testing.T) {
 	if err := r.Register("a.class", InterceptConfig{Enabled: true}); err == nil {
 		t.Fatal("a class with no owner was accepted")
 	}
-	bad := InterceptConfig{Enabled: true, Owner: "t", AllowedTiers: []SensitivityTier{"secret"}}
+	bad := InterceptConfig{Enabled: true, Owner: "t", AllowedTiers: []SensitivityTier{SensitivityTier(9)}}
 	if err := r.Register("b.class", bad); err == nil {
 		t.Fatal("a class listing an unknown tier was accepted")
 	}

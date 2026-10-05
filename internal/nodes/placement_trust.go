@@ -1,5 +1,7 @@
 package nodes
 
+import "github.com/acamarata/cascade/pkg/provider"
+
 // Purpose: the trust-tier half of the placement decision — whether a node's
 //
 //	tier may run work of a given sensitivity at all.
@@ -9,44 +11,53 @@ package nodes
 // Constraints: fail-closed in both directions. An unresolvable sensitivity
 //
 //	resolves to the most restrictive value, and an unrecognized tier clears
-//	nothing. Neither is ever treated as permissive.
+//	nothing. Neither is ever treated as permissive. The work sensitivity is
+//	provider.SensitivityTier (contract:sensitivity-tier); this package keeps
+//	only the WIRE codec for its legacy three-word vocabulary, whose bytes
+//	(json:"sensitivity" on DispatchRequest) are unchanged.
 //
 // SPORT: internal/nodes placement trust filter (ADD) — P1-E17-W4-S37-T1.
 
-// Sensitivity is the placement-relevant classification of a unit of work.
-//
-// The zero value is deliberately NOT "unrestricted": an empty or
-// unrecognized sensitivity resolves to SensitivityLocalOnly, the most
-// restrictive value, so work whose classification could not be determined
-// never leaves the controller machine by default.
-type Sensitivity string
-
+// Wire spellings of the node.dispatch sensitivity field. "normal" is this
+// wire's single word for work with no tier rule of its own.
 const (
-	// SensitivityLocalOnly is work that must run on the controller machine
-	// itself. It is never eligible on any enrolled node.
-	SensitivityLocalOnly Sensitivity = "local-only"
-	// SensitivityRestricted is work that may run on a node whose tier is at
-	// least worker-trusted.
-	SensitivityRestricted Sensitivity = "restricted"
-	// SensitivityNormal is work with no tier restriction of its own; every
-	// other placement filter still applies.
-	SensitivityNormal Sensitivity = "normal"
+	wireLocalOnly  = "local-only"
+	wireRestricted = "restricted"
+	wireNormal     = "normal"
 )
 
-// ResolveSensitivity maps a raw classification string to a Sensitivity,
-// resolving anything it does not recognize — including the empty string —
-// to SensitivityLocalOnly.
-//
-// This is the fail-closed rule stated as code rather than left to each
-// caller: a classification that could not be resolved is the case where
-// guessing wrong leaks work off the controller machine, so it resolves the
-// way that cannot.
-func ResolveSensitivity(raw string) Sensitivity {
-	switch Sensitivity(raw) {
-	case SensitivityLocalOnly, SensitivityRestricted, SensitivityNormal:
-		return Sensitivity(raw)
+// decodeWireSensitivity maps a node.dispatch wire sensitivity to its tier:
+// "local-only" and "restricted" to themselves, "normal" to
+// SensitivityInternal, and anything else - including the empty string and
+// every other spelling - to SensitivityLocalOnly, so work whose
+// classification could not be read never leaves the controller machine.
+func decodeWireSensitivity(raw string) provider.SensitivityTier {
+	switch raw {
+	case wireLocalOnly:
+		return provider.SensitivityLocalOnly
+	case wireRestricted:
+		return provider.SensitivityRestricted
+	case wireNormal:
+		return provider.SensitivityInternal
 	default:
-		return SensitivityLocalOnly
+		return provider.SensitivityLocalOnly
+	}
+}
+
+// encodeWireSensitivity is decodeWireSensitivity's inverse for the wire:
+// SensitivityInternal and SensitivityPublic both encode as "normal" (the
+// wire has no finer word), restricted as "restricted", and local-only or
+// any out-of-range value as "local-only".
+func encodeWireSensitivity(t provider.SensitivityTier) string {
+	switch t {
+	case provider.SensitivityRestricted:
+		return wireRestricted
+	case provider.SensitivityInternal, provider.SensitivityPublic:
+		return wireNormal
+	case provider.SensitivityLocalOnly:
+		return wireLocalOnly
+	default:
+		return wireLocalOnly
 	}
 }
 
@@ -62,29 +73,29 @@ func ResolveSensitivity(raw string) Sensitivity {
 // Routing local-only work to a remote node because its stored tier read
 // "controller" is exactly the leak the classification exists to prevent, so
 // local-only work excludes every candidate unconditionally.
-func excludedByTrust(sensitivity Sensitivity, tier Tier) (reason ExclusionReason, detail string, excluded bool) {
-	switch ResolveSensitivity(string(sensitivity)) {
-	case SensitivityLocalOnly:
+func excludedByTrust(sensitivity provider.SensitivityTier, tier Tier) (reason ExclusionReason, detail string, excluded bool) {
+	switch sensitivity {
+	case provider.SensitivityLocalOnly:
 		return ReasonLocalOnlyWork, "work is local-only: the controller machine is the only place it may run", true
-	case SensitivityRestricted:
+	case provider.SensitivityRestricted:
 		if !Satisfies(tier, GateRestricted) {
 			return ReasonTierTooLow, "trust_tier " + tierName(tier) + " is below worker-trusted", true
 		}
 		return "", "", false
-	case SensitivityNormal:
-		// Falls through to the shared tier check below: normal work
-		// imposes no rule of its own, but an unrecognized tier still
-		// clears nothing.
-		fallthrough
-	default:
-		// SensitivityNormal imposes no tier rule of its own, but an
-		// unrecognized tier still clears nothing: Rank fails closed, and a
-		// record carrying a tier this build does not know is a record whose
-		// authorization cannot be reasoned about.
+	case provider.SensitivityInternal, provider.SensitivityPublic:
+		// Internal and public work impose no tier rule of their own, but
+		// an unrecognized tier still clears nothing: Rank fails closed, and
+		// a record carrying a tier this build does not know is a record
+		// whose authorization cannot be reasoned about.
 		if _, ok := Rank(tier); !ok {
 			return ReasonTierTooLow, "trust_tier " + tierName(tier) + " is not a recognized tier", true
 		}
 		return "", "", false
+	default:
+		// A value above SensitivityPublic is not a tier. It is excluded
+		// exactly like local-only work: a classification this build cannot
+		// read is the case where guessing wrong leaks work off the box.
+		return ReasonLocalOnlyWork, "work sensitivity " + sensitivity.String() + " is not a tier: it stays on the controller machine", true
 	}
 }
 
