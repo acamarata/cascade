@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05T03:00:58Z",
+  "generated_at": "2026-10-05T03:27:41Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -869,7 +869,7 @@
       "sites": [
         {
           "file": "internal/coverage/covmatrix.go",
-          "line": 46,
+          "line": 47,
           "status": "ADD",
           "raw": "INVENTORY_COVERAGE_MATRIX: ADD (internal/coverage, pre-push tooling)."
         }
@@ -14196,7 +14196,7 @@
       "sites": [
         {
           "file": "internal/plugins/wasm/doc.go",
-          "line": 51,
+          "line": 52,
           "status": "ADD",
           "raw": "internal.plugins.wasm.Runtime/ADDED"
         }
