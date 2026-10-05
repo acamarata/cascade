@@ -13,6 +13,7 @@ package secrets
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,6 +39,9 @@ const (
 // removes the item first, because a real not-found means it is gone.
 // keepItem makes a delete report success while the item stays. findStderr,
 // when set, makes every find fail with that stderr, whatever is stored.
+// block[sub] makes that subcommand wait for ctx.Done and then fail the way
+// a killed process does; once ctx is done, every other call fails so too
+// (blockCtxErr returns ctx.Err() instead, the other shape exec can give).
 type probeScript struct {
 	fake         *fakeSecurity
 	deleteStderr []string
@@ -47,6 +51,8 @@ type probeScript struct {
 	idents       [][2]string // (-a, -s) of every set and delete
 	deadlines    []time.Time
 	noDeadline   int
+	block        map[string]bool
+	blockCtxErr  bool
 }
 
 func newProbeScript(deleteStderr ...string) *probeScript {
@@ -58,6 +64,13 @@ func (p *probeScript) run(ctx context.Context, name string, args ...string) ([]b
 		p.deadlines = append(p.deadlines, dl)
 	} else {
 		p.noDeadline++
+	}
+	if p.block[args[0]] || len(p.block) > 0 && ctx.Err() != nil {
+		<-ctx.Done()
+		if p.blockCtxErr {
+			return nil, &runnerError{err: ctx.Err()}
+		}
+		return nil, &runnerError{err: errors.New("signal: killed")}
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, &runnerError{err: err}
@@ -108,7 +121,7 @@ func requireCleanupRefusal(t *testing.T, kc *keychainCustody, p *probeScript) in
 	err := kc.probe(context.Background())
 	dels := p.dels
 	requireProbeCleanupFailed(t, err)
-	if _, present := p.fake.items[availabilityProbeAccount]; !present {
+	if len(probeItems(p.fake)) == 0 {
 		t.Fatal("scenario broken: the probe item is gone, so a refusal proves nothing")
 	}
 	if kc.Available() {
@@ -142,9 +155,11 @@ func TestAvailableCleanupRetryBounded(t *testing.T) {
 	if p.sets != 1 || p.dels != 2 {
 		t.Fatalf("runner saw %d sets and %d deletes, want exactly 1 and 2", p.sets, p.dels)
 	}
+	// All idents of the one probe share one nonce account and the service.
+	nonce := p.idents[0][0]
 	for _, id := range p.idents {
-		if id != [2]string{availabilityProbeAccount, "cascade-probe-cleanup-test"} {
-			t.Fatalf("a probe call used identity %v, not the probe's own", id)
+		if id != [2]string{nonce, "cascade-probe-cleanup-test"} || !strings.HasPrefix(nonce, availabilityProbeAccount+".") {
+			t.Fatal("a probe call used another identity than the probe's one nonce account")
 		}
 	}
 }
@@ -157,7 +172,7 @@ func TestAvailableCleanupRetrySucceeds(t *testing.T) {
 	if p.sets != 1 || p.dels != 2 {
 		t.Fatalf("runner saw %d sets and %d deletes, want 1 and 2", p.sets, p.dels)
 	}
-	if _, present := p.fake.items[availabilityProbeAccount]; present {
+	if len(probeItems(p.fake)) != 0 {
 		t.Fatal("the probe item survived a probe that reported available")
 	}
 }
@@ -248,8 +263,8 @@ func TestAvailableHonoursCancellation(t *testing.T) {
 	cancel()
 	cancelled := newProbeScript()
 	err := scriptedKeychain(t, cancelled).probe(ctx)
-	if err == nil {
-		t.Fatal("a cancelled probe reported available")
+	if err == nil || err == ErrProbeTimeout {
+		t.Fatalf("a cancelled probe returned %v, want a plain unavailable (a cancel is not a deadline)", err)
 	}
 	if cancelled.sets != 0 || len(cancelled.fake.items) != 0 {
 		t.Fatalf("a cancelled probe still wrote: %d sets, items %v", cancelled.sets, cancelled.fake.items)

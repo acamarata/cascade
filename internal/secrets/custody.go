@@ -163,8 +163,9 @@ const availabilityProbeName = "CASCADE_AVAILABILITY_PROBE"
 
 // SelectCustody picks the custody backend for this host: the platform
 // backend when it is available, otherwise the encrypted file vault. It
-// never returns a nil Custody with a nil error. One reason never falls back:
-// a platform probe that wrote and could not clean up (ErrProbeCleanupFailed).
+// never returns a nil Custody with a nil error. Two reasons never fall back:
+// a platform probe that wrote and could not clean up (ErrProbeCleanupFailed)
+// and one that hit its deadline (ErrProbeTimeout).
 //
 // Selection is explicit, not silent: the returned Custody's Name() reports
 // which backend answered, and the broker surfaces it, so a host that fell
@@ -182,7 +183,7 @@ func SelectCustody(cfg Config) (Custody, error) {
 			switch perr := probePlatform(plat); perr {
 			case nil:
 				return plat, nil
-			case ErrProbeCleanupFailed:
+			case ErrProbeCleanupFailed, ErrProbeTimeout:
 				// Identity, not errors.Is: that compares Kind only, and a
 				// plain unavailable must still reach the file vault.
 				return nil, perr
@@ -269,14 +270,6 @@ func ErrCustodyUnavailable(backend string, cause error) error {
 	}
 	return cascade.Wrapf(cascade.KindUnavailable, cause, "secrets: the %s custody backend is not available on this host", backend)
 }
-
-// ErrProbeCleanupFailed is the platform probe's refusal when it wrote its
-// probe item and could not prove the item removed. KindUnavailable, and a
-// refusal rather than a reason to fall back: the keychain accepted a write,
-// so moving new secrets to the weaker file vault would lower custody on a
-// host whose keychain works. It carries no account, service or value.
-var ErrProbeCleanupFailed = cascade.New(cascade.KindUnavailable,
-	"platform keychain probe could not clean up; custody refused")
 
 // ErrNoCustodyAvailable reports that neither a platform backend nor the
 // encrypted file vault could be opened. KindUnavailable, and deliberately

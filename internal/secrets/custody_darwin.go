@@ -21,7 +21,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 )
 
 const (
@@ -44,10 +43,12 @@ type keychainCustody struct {
 	// the default lookup and its existence check entirely.
 	configured string
 
-	// The resolved keychain, computed once. Every security call passes it
-	// as the trailing keychain argument, so none of them consults the
-	// search list and none of them can raise a dialog (R-14.260).
-	once         sync.Once
+	// The resolved keychain, memoized under mu once resolved is set. Every
+	// security call passes it as the trailing keychain argument, so none
+	// of them consults the search list and none can raise a dialog
+	// (R-14.260).
+	mu           sync.Mutex
+	resolved     bool
 	keychainPath string
 	keychainErr  error
 }
@@ -80,109 +81,54 @@ func (k *keychainCustody) Name() string { return darwinCustodyName }
 // invoked: custody reports unavailable and SelectCustody lands on the
 // encrypted file vault. There is no code path from here to a dialog.
 func (k *keychainCustody) resolveKeychain(ctx context.Context) (string, error) {
-	k.once.Do(func() {
-		if k.configured != "" {
-			k.keychainPath = k.configured
-			return
-		}
-		out, err := k.run(ctx, securityBin, "default-keychain", "-d", "user")
-		if err != nil {
-			k.keychainErr = ErrCustodyUnavailable(darwinCustodyName, redactRunner(err))
-			return
-		}
-		path := strings.Trim(strings.TrimSpace(string(out)), `"`)
-		if path == "" {
-			k.keychainErr = ErrCustodyUnavailable(darwinCustodyName,
-				errors.New("no default user keychain is configured"))
-			return
-		}
-		if k.stat != nil {
-			if _, statErr := k.stat(path); statErr != nil {
-				k.keychainErr = ErrCustodyUnavailable(darwinCustodyName,
-					errors.New("the default user keychain does not exist"))
-				return
-			}
-		}
-		k.keychainPath = path
-	})
+	k.mu.Lock()
+	if k.resolved {
+		defer k.mu.Unlock()
+		return k.keychainPath, k.keychainErr
+	}
+	k.mu.Unlock()
+	path, err := k.lookupKeychain(ctx)
+	if err != nil && ctx.Err() != nil {
+		// A failure seen past a deadline or cancellation proves nothing
+		// about the keychain, so it is never cached: the next call resolves
+		// again instead of reading an expired answer as unavailable.
+		return "", err
+	}
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if !k.resolved {
+		k.keychainPath, k.keychainErr, k.resolved = path, err, true
+	}
 	return k.keychainPath, k.keychainErr
+}
+
+// lookupKeychain runs the default-keychain lookup resolveKeychain memoizes.
+func (k *keychainCustody) lookupKeychain(ctx context.Context) (string, error) {
+	if k.configured != "" {
+		return k.configured, nil
+	}
+	out, err := k.run(ctx, securityBin, "default-keychain", "-d", "user")
+	if err != nil {
+		return "", ErrCustodyUnavailable(darwinCustodyName, redactRunner(err))
+	}
+	path := strings.Trim(strings.TrimSpace(string(out)), `"`)
+	if path == "" {
+		return "", ErrCustodyUnavailable(darwinCustodyName,
+			errors.New("no default user keychain is configured"))
+	}
+	if k.stat != nil {
+		if _, statErr := k.stat(path); statErr != nil {
+			return "", ErrCustodyUnavailable(darwinCustodyName,
+				errors.New("the default user keychain does not exist"))
+		}
+	}
+	return path, nil
 }
 
 // Available reports whether this backend can hold a secret (probe says why
 // not), by WRITING into a keychain proven to exist: list-keychains passes
 // where writes fail (R-14.258 F6); an unresolved write prompts (R-14.260).
 func (k *keychainCustody) Available() bool { return k.probe(context.Background()) == nil }
-
-// probeTimeout bounds one probe, retry included.
-const probeTimeout = 2 * time.Second
-
-// probe writes the probe item and removes it. A failed write is a plain
-// unavailable (nothing was written; a locked or headless keychain keeps its
-// file-vault fallback). A write whose item cannot be proven gone is
-// ErrProbeCleanupFailed: that keychain works, so SelectCustody refuses.
-func (k *keychainCustody) probe(parent context.Context) error {
-	ctx, cancel := context.WithTimeout(parent, probeTimeout)
-	defer cancel()
-	keychain, err := k.resolveKeychain(ctx)
-	if err != nil {
-		return err
-	}
-	_, setErr := k.run(ctx, securityBin, "add-generic-password",
-		"-a", availabilityProbeAccount, "-s", k.service, "-U", "-X", hex.EncodeToString([]byte{0}), keychain)
-	// Cleanup runs even after a failed write, so a probe never accumulates.
-	cleanErr := k.removeProbe(ctx, keychain)
-	switch {
-	case setErr != nil:
-		return ErrCustodyUnavailable(darwinCustodyName, redactRunner(setErr))
-	case cleanErr != nil:
-		return ErrProbeCleanupFailed
-	}
-	return nil
-}
-
-// removeProbe deletes the probe item, retrying exactly once with the same
-// identity, then confirms it is gone. Only a genuine not-found is absence.
-func (k *keychainCustody) removeProbe(ctx context.Context, keychain string) error {
-	del := []string{"delete-generic-password", "-a", availabilityProbeAccount, "-s", k.service, keychain}
-	_, err := k.run(ctx, securityBin, del...)
-	if err != nil && !probeAbsent(err) {
-		_, err = k.run(ctx, securityBin, del...)
-	}
-	if err != nil && !probeAbsent(err) {
-		return err
-	}
-	// Checked even after a clean delete; find without -w reads no value.
-	_, err = k.run(ctx, securityBin, "find-generic-password",
-		"-a", availabilityProbeAccount, "-s", k.service, keychain)
-	switch {
-	case err == nil:
-		return errors.New("the probe item is still stored")
-	case probeAbsent(err):
-		return nil
-	}
-	return err
-}
-
-// probeAbsent is isKeychainNotFound minus any stderr that also reports a
-// denial: a refusal quoting the not-found phrase is not proof of absence.
-func probeAbsent(err error) bool {
-	var re *runnerError
-	if !isKeychainNotFound(err) || !errors.As(err, &re) {
-		return false
-	}
-	text := strings.ToLower(re.stderr)
-	for _, denial := range []string{"not allowed", "not permitted", "denied", "permission", "locked", "passphrase"} {
-		if strings.Contains(text, denial) {
-			return false
-		}
-	}
-	return true
-}
-
-// availabilityProbeAccount is the account the probe writes and deletes. It
-// is namespaced like every other entry, so one left behind by a killed
-// process is visible to List and removable by the normal verbs.
-const availabilityProbeAccount = keychainAccountPrefix + availabilityProbeName
 
 func (k *keychainCustody) account(name string) string { return keychainAccountPrefix + name }
 

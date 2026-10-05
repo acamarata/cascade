@@ -128,7 +128,7 @@ func TestTheProbeLeavesNoItemBehind(t *testing.T) {
 	if !kc.Available() {
 		t.Fatal("Available() = false with a working security tool")
 	}
-	if _, present := fake.items[availabilityProbeAccount]; present {
+	if len(probeItems(fake)) != 0 {
 		t.Error("the availability probe's entry survived the probe")
 	}
 }
