@@ -64,13 +64,23 @@ func (d Deps) validate() error {
 	return nil
 }
 
-// Add is the command's single entry point: resolve credential -> probe ->
-// enumerate -> verify -> upsert -> pool join.
+// Add is the command's single entry point: pool membership (pool.go) ->
+// resolve credential -> probe -> enumerate -> verify -> upsert. Membership
+// is settled first, so a conflict or a registry read failure refuses
+// before any credential is stored or any provider is called.
 func Add(ctx context.Context, deps Deps, req AddRequest) (AddResult, error) {
 	if err := deps.validate(); err != nil {
 		return AddResult{}, err
 	}
 	if err := req.Validate(); err != nil {
+		return AddResult{}, err
+	}
+	existing, found, err := priorRecord(ctx, deps.Registry, req.Name)
+	if err != nil {
+		return AddResult{}, err
+	}
+	pool, poolIndex, err := membershipFor(ctx, deps.Registry, req.Name, req.Pool, existing, found)
+	if err != nil {
 		return AddResult{}, err
 	}
 	cred, driverHint, authType, authRef, err := resolveCredential(ctx, deps, req)
@@ -88,20 +98,14 @@ func Add(ctx context.Context, deps Deps, req AddRequest) (AddResult, error) {
 		return AddResult{}, verr
 	}
 	now := deps.Clock.Now()
-	existing, getErr := deps.Registry.GetProvider(ctx, req.Name)
-	status := "converged"
-	created := now
-	if getErr == nil {
-		status = "updated"
-		created = existing.CreatedAt
+	status, created := "converged", now
+	if found {
+		status, created = "updated", existing.CreatedAt
 	}
 	record := ProviderRecord{
 		Name: req.Name, Driver: kind, BaseURL: req.BaseURL, Auth: authType, AuthRef: authRef,
 		KnownModels: models, Capabilities: unknownCapabilities(), CapabilitiesProbedAt: now,
-		Pool: req.Pool, VerifySkipped: req.NoVerify, CreatedAt: created, UpdatedAt: now,
-	}
-	if req.Pool != "" {
-		record.PoolIndex = poolJoinIndex(ctx, deps.Registry, req.Pool)
+		Pool: pool, PoolIndex: poolIndex, VerifySkipped: req.NoVerify, CreatedAt: created, UpdatedAt: now,
 	}
 	if err := deps.Registry.UpsertProvider(ctx, record); err != nil {
 		return AddResult{}, err
@@ -122,16 +126,6 @@ func firstOrEmpty(models []string) string {
 		return ""
 	}
 	return models[0]
-}
-
-// poolJoinIndex advances pool's round-robin index for a MemoryRegistry, or
-// returns 0 for any other Registry implementation (a future S-20.T2
-// registry owns its own pool-index rebalancing on join).
-func poolJoinIndex(_ context.Context, reg Registry, pool string) int {
-	if mr, ok := reg.(*MemoryRegistry); ok {
-		return mr.nextPoolIndex(pool)
-	}
-	return 0
 }
 
 // resolveCredential resolves req's credential source to a live value, a

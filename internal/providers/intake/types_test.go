@@ -2,11 +2,16 @@ package intake
 
 import (
 	"context"
+	"database/sql"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/acamarata/cascade/internal/providers/registry"
+	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/pkg/cascade"
+	_ "modernc.org/sqlite" // registers the "sqlite" database/sql driver for the durable stub
 )
 
 func TestDriverKindValid(t *testing.T) {
@@ -105,33 +110,145 @@ func TestMemoryRegistryNextPoolIndexAdvances(t *testing.T) {
 	}
 }
 
-func TestPoolJoinIndexUsesMemoryRegistry(t *testing.T) {
-	reg := NewMemoryRegistry()
+// TestPoolJoinIndexDistinctOnDurableRegistry adds three members of pool p
+// through Add over a durable, non-MemoryRegistry store: indices {0,1,2},
+// read back from storage, an existing member keeps its own index, and a
+// join after a removal takes max+1 rather than the member count.
+func TestPoolJoinIndexDistinctOnDurableRegistry(t *testing.T) {
 	ctx := context.Background()
-	if got := poolJoinIndex(ctx, reg, "gf"); got != 0 {
-		t.Fatalf("expected the first join to get index 0, got %d", got)
+	deps, _ := testDeps(t, anthropicSuccessDoer(t))
+	reg := newStubRegistry(t)
+	deps.Registry = reg
+	for _, name := range []string{"c", "a", "b"} {
+		req := AddRequest{Name: name, Credential: CredentialKey, KeyValue: []byte("sk-ant-test-value"), Pool: "p"}
+		if _, err := Add(ctx, deps, req); err != nil {
+			t.Fatalf("Add %s: %v", name, err)
+		}
 	}
-	if got := poolJoinIndex(ctx, reg, "gf"); got != 1 {
-		t.Fatalf("expected the second join to advance to index 1, got %d", got)
+	members, err := reg.ListPool(ctx, "p")
+	got := map[string]int{}
+	for _, m := range members {
+		got[m.Name] = m.PoolIndex
+	}
+	if err != nil || len(members) != 3 || got["c"] != 0 || got["a"] != 1 || got["b"] != 2 {
+		t.Fatalf("stored pool = %+v (err %v), want c:0 a:1 b:2", members, err)
+	}
+	if idx, err := poolJoinIndex(ctx, reg, "p", "a"); err != nil || idx != 1 {
+		t.Fatalf("existing member a: index %d (err %v), want its own index 1", idx, err)
+	}
+	keep, err := Add(ctx, deps, AddRequest{Name: "a", Credential: CredentialKey, KeyValue: []byte("sk-ant-test-value")})
+	if err != nil || keep.Record.Pool != "p" || keep.Record.PoolIndex != 1 {
+		t.Fatalf("re-add without pool: %+v (err %v), want pool p index 1", keep.Record, err)
+	}
+	if _, err := Add(ctx, deps, AddRequest{Name: "a", Credential: CredentialKey, KeyValue: []byte("sk-ant-test-value"), Pool: "q"}); !cascade.HasKind(err, cascade.KindConflict) {
+		t.Fatalf("re-add into pool q: %v, want KindConflict", err)
+	}
+	// Gap: removing c (index 0) leaves {a:1,b:2}; d takes max+1 = 3, not the
+	// count 2 that collides with b. The first member of an empty pool gets 0.
+	if err := reg.reg.DeleteProvider(ctx, "c"); err != nil {
+		t.Fatalf("delete c: %v", err)
+	}
+	for pool, want := range map[string]int{"p": 3, "empty": 0} {
+		rec, err := Add(ctx, deps, AddRequest{Name: "d-" + pool, Credential: CredentialKey, KeyValue: []byte("sk-ant-test-value"), Pool: pool})
+		if err != nil || rec.Record.PoolIndex != want {
+			t.Fatalf("new member of pool %s: %+v (err %v), want index %d", pool, rec.Record, err, want)
+		}
 	}
 }
 
-func TestPoolJoinIndexNonMemoryRegistryReturnsZero(t *testing.T) {
-	if got := poolJoinIndex(context.Background(), stubRegistry{}, "gf"); got != 0 {
-		t.Fatalf("expected a non-MemoryRegistry to return 0, got %d", got)
+// TestPoolJoinIndexReadFailureRefusesAdd is the fail-closed half: a
+// GetProvider or ListPool failure refuses Add with that same error, before
+// any credential is stored and with nothing written to the registry.
+func TestPoolJoinIndexReadFailureRefusesAdd(t *testing.T) {
+	for _, field := range []string{"get", "list"} {
+		ctx := context.Background()
+		deps, custody := testDeps(t, anthropicSuccessDoer(t))
+		reg := newStubRegistry(t)
+		boom := cascade.New(cascade.KindUnavailable, "stub: "+field+" failed")
+		if field == "get" {
+			reg.getErr = boom
+		} else {
+			reg.listErr = boom
+		}
+		deps.Registry = reg
+		req := AddRequest{Name: "a", Credential: CredentialKey, KeyValue: []byte("sk-ant-test-value"), Pool: "p"}
+		_, err := Add(ctx, deps, req)
+		lanes, lerr := reg.reg.ListLanes(ctx)
+		if err != boom || err.Error() != boom.Error() || lerr != nil || len(lanes) != 0 || len(custody.setCall) != 0 {
+			t.Fatalf("%s failure: err %v, lanes %+v (%v), vault writes %v; want the stub error and no writes",
+				field, err, lanes, lerr, custody.setCall)
+		}
 	}
 }
 
-// stubRegistry is a minimal Registry the future S-20.T2 domain will
-// replace; it exists only to prove poolJoinIndex degrades gracefully for
-// any Registry implementation that is not this ticket's MemoryRegistry.
-type stubRegistry struct{}
-
-func (stubRegistry) UpsertProvider(context.Context, ProviderRecord) error { return nil }
-func (stubRegistry) GetProvider(context.Context, string) (ProviderRecord, error) {
-	return ProviderRecord{}, cascade.New(cascade.KindNotFound, "stub")
+// stubRegistry is a Registry that is not a MemoryRegistry: it keeps pool
+// membership in the durable providers registry over t.TempDir, on lanes
+// named "<pool>/<name>" as the CLI's adapter does. getErr/listErr, when
+// set, make GetProvider/ListPool fail.
+type stubRegistry struct {
+	reg             *registry.Registry
+	getErr, listErr error
 }
-func (stubRegistry) ListPool(context.Context, string) ([]ProviderRecord, error) { return nil, nil }
+
+// newStubRegistry opens and migrates a providers.db under t.TempDir().
+func newStubRegistry(t *testing.T) *stubRegistry {
+	t.Helper()
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "providers.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	clk := fixedClock{now: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)}
+	if err := registry.ApplyMigrationSchema(context.Background(), db, migrate.SQLiteEmitter{}, clk, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	return &stubRegistry{reg: registry.NewRegistry(db, clk)}
+}
+
+func (s *stubRegistry) UpsertProvider(ctx context.Context, rec ProviderRecord) error {
+	if err := s.reg.UpsertProvider(ctx, registry.ProviderRecord{
+		Name: rec.Name, Driver: registry.DriverKind(rec.Driver), Auth: registry.AuthType(rec.Auth),
+		AuthRef: registry.VaultKeyRef(rec.AuthRef), AccountKind: registry.AccountPersonal,
+		Tier: registry.TierMid, HealthStatus: registry.HealthUnknown,
+	}); err != nil {
+		return err
+	}
+	return s.reg.UpsertLane(ctx, registry.LaneRecord{
+		LaneName: rec.Pool + "/" + rec.Name, ProviderName: rec.Name, Weight: 1, PoolMembership: rec.Pool,
+		PoolIndex: rec.PoolIndex, Capacity: registry.CapacityAPICredit, State: registry.LaneStateUnknown,
+	})
+}
+
+func (s *stubRegistry) GetProvider(ctx context.Context, name string) (ProviderRecord, error) {
+	if s.getErr != nil {
+		return ProviderRecord{}, s.getErr
+	}
+	lanes, err := s.reg.ListLanes(ctx)
+	if err != nil {
+		return ProviderRecord{}, err
+	}
+	for _, l := range lanes {
+		if l.ProviderName == name {
+			return ProviderRecord{Name: name, Pool: l.PoolMembership, PoolIndex: l.PoolIndex}, nil
+		}
+	}
+	return ProviderRecord{}, cascade.Newf(cascade.KindNotFound, "stub: no provider %q", name)
+}
+
+func (s *stubRegistry) ListPool(ctx context.Context, pool string) ([]ProviderRecord, error) {
+	if s.listErr != nil {
+		return nil, s.listErr
+	}
+	lanes, err := s.reg.ListPool(ctx, pool)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ProviderRecord, 0, len(lanes))
+	for _, l := range lanes {
+		out = append(out, ProviderRecord{Name: l.ProviderName, Pool: l.PoolMembership, PoolIndex: l.PoolIndex})
+	}
+	return out, nil
+}
 
 func TestOAuthClockAdapterDelegatesToClock(t *testing.T) {
 	want := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
