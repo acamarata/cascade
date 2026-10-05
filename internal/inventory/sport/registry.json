@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05T07:21:13Z",
+  "generated_at": "2026-10-05T07:38:07Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -30068,6 +30068,20 @@
       ]
     },
     {
+      "name": "providers.pgvector.wrapConnError",
+      "sites": [
+        {
+          "file": "providers/pgvector/pgvector_conn.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "providers.pgvector.wrapConnError/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "providers.postgres.Store",
       "sites": [
         {
@@ -32151,7 +32165,7 @@
       ]
     }
   ],
-  "total_sites": 3064,
+  "total_sites": 3065,
   "unspecified_count": 160,
   "multi_status_count": 90
 }
