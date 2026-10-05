@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05T02:05:37Z",
+  "generated_at": "2026-10-05T02:45:20Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4047,10 +4047,17 @@
           "status": "ADD",
           "ticket": "P1-E15-W4-S32-T4",
           "raw": "cmd/cascade plugin.add handler (ADD) — P1-E15-W4-S32-T4"
+        },
+        {
+          "file": "cmd/cascade/plugin_rpc_bridge.go",
+          "line": 15,
+          "status": "CHANGE",
+          "raw": "cmd/cascade plugin.add handler (CHANGED, custody hook split)."
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -4366,6 +4373,12 @@
       "name": "cmd/cascade test-support",
       "sites": [
         {
+          "file": "cmd/cascade/daemon_test_custody_test.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "cmd/cascade test-support (ADD, daemon custody hook)."
+        },
+        {
           "file": "cmd/cascade/init_db_path_test.go",
           "line": 7,
           "status": "ADD",
@@ -4586,6 +4599,12 @@
           "raw": "cmd/cascade/daemon (ADD, per T-2 sport_updates; CHANGE, per"
         },
         {
+          "file": "cmd/cascade/daemon_lifecycle_lint_test.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "cmd/cascade/daemon (ADD, lifecycle lint)."
+        },
+        {
           "file": "cmd/cascade/daemon_resume.go",
           "line": 29,
           "status": "ADD",
@@ -4804,6 +4823,12 @@
           "raw": "cmd/cascade/daemon (ADD)."
         },
         {
+          "file": "cmd/cascade/daemon_unix_run_ctx_test.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "cmd/cascade/daemon (ADD, run-context tests)."
+        },
+        {
           "file": "cmd/cascade/daemon_unix_run_fleet_test.go",
           "line": 32,
           "status": "",
@@ -4876,6 +4901,12 @@
           "raw": "cmd/cascade/daemon (CHANGED — P1-E19-W4-S42-T4 wiring verification)."
         },
         {
+          "file": "cmd/cascade/daemon_unix_shutdown_test.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "cmd/cascade/daemon (ADD, shutdown-order tests)."
+        },
+        {
           "file": "cmd/cascade/daemon_unix_socket_integration_test.go",
           "line": 16,
           "status": "",
@@ -4898,6 +4929,12 @@
           "line": 13,
           "status": "CHANGE",
           "raw": "cmd/cascade/daemon (CHANGED — R-14.175 migrator/Bootstrap"
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_supervise.go",
+          "line": 20,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGED, run-context join and helper split)."
         },
         {
           "file": "cmd/cascade/daemon_unix_supervision.go",
@@ -6559,6 +6596,12 @@
           "raw": "conductor/spawn-hook/ADD (P1-E12-W3-S25-T3)."
         },
         {
+          "file": "internal/conductor/spawn_hook_panic_test.go",
+          "line": 7,
+          "status": "CHANGE",
+          "raw": "conductor/spawn-hook (CHANGED, panic recovery)."
+        },
+        {
           "file": "internal/conductor/spawn_hook_test.go",
           "line": 13,
           "status": "ADD",
@@ -6567,7 +6610,8 @@
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -17178,9 +17222,15 @@
         },
         {
           "file": "internal/daemon/subsystems_goroutines.go",
-          "line": 17,
-          "status": "ADD",
-          "raw": "internal/daemon (ADD, subsystem goroutine join)."
+          "line": 23,
+          "status": "CHANGE",
+          "raw": "internal/daemon (CHANGED, supervised goroutines and run-context join)."
+        },
+        {
+          "file": "internal/daemon/subsystems_goroutines_test.go",
+          "line": 12,
+          "status": "CHANGE",
+          "raw": "internal/daemon (CHANGED, supervised goroutines)."
         },
         {
           "file": "internal/daemon/subsystems_router_test.go",
@@ -17284,6 +17334,12 @@
           "status": "ADD",
           "ticket": "T-5",
           "raw": "internal/daemon (ADD, per T-5 sport_updates)."
+        },
+        {
+          "file": "internal/daemon/upgrade_join_test.go",
+          "line": 12,
+          "status": "CHANGE",
+          "raw": "internal/daemon (CHANGED, upgrade relaunch join)."
         },
         {
           "file": "internal/daemon/upgrade_run_test.go",
@@ -31991,7 +32047,7 @@
       ]
     }
   ],
-  "total_sites": 3042,
+  "total_sites": 3051,
   "unspecified_count": 160,
-  "multi_status_count": 86
+  "multi_status_count": 88
 }
