@@ -112,12 +112,9 @@ func execRootDoctor(t *testing.T, deps doctorDeps, args ...string) (string, erro
 func TestDoctorIsMountedOnRoot(t *testing.T) {
 	// Art.7.1: this test drives the REAL production doctor deps, which
 	// resolve the data directory from $HOME and CREATE it (the quarantine
-	// store mkdirs $HOME/.cascade/data/quarantine). Without this
-	// redirection the test wrote into the operator's own ~/.cascade on
-	// every run, and into CI's redirected HOME, which is what the
-	// redirected-HOME job caught. Pointing HOME at t.TempDir() keeps the
-	// reachability proof intact -- the real root, the real deps, the real
-	// path resolution -- while leaving nothing behind.
+	// store mkdirs $HOME/.cascade/data/quarantine). HOME in t.TempDir()
+	// keeps the proof real (real root, deps, path resolution) and leaves
+	// nothing behind in the operator's or CI's HOME.
 	t.Setenv("HOME", t.TempDir())
 
 	globalFlags = GlobalFlags{}
@@ -127,9 +124,12 @@ func TestDoctorIsMountedOnRoot(t *testing.T) {
 		t.Fatalf("doctor is not mounted on the root command: found=%v err=%v", found.Name(), err)
 	}
 
+	// No daemon runs here, so the daemon-state checks warn (a daemon that
+	// does not answer is never a pass) and the run exits non-zero; anything
+	// worse than warnings on a healthy installation is still a defect.
 	got, err := execRoot(t, "doctor")
-	if err != nil {
-		t.Fatalf("cascade doctor returned an error on a healthy installation: %v", err)
+	if err != nil && !strings.Contains(err.Error(), "outcome warn") {
+		t.Fatalf("cascade doctor reported more than warnings on a healthy installation: %v", err)
 	}
 	if !strings.Contains(got, "doctor_selfcheck") {
 		t.Errorf("doctor output does not name the registered self check\noutput:\n%s", got)

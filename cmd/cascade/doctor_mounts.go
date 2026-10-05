@@ -86,7 +86,8 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	// harness IS installed but its settings file does not yet name the
 	// completion-gate hook's RPC method; OK when no harness is installed
 	// at all. doctor_mounts_completion.go.
-	reg.Register(productionCompletionGateCheck())
+	status := daemonStatusSourceFor(paths)
+	reg.Register(productionCompletionGateCheck(paths, status))
 	// context-hydration (P1-E16-W4-S34-T4): counts the degraded-hydration
 	// events the prompt hook publishes. It is the only place a degraded
 	// hydration becomes visible at all -- the hook fails OPEN by design,
@@ -105,6 +106,16 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	// `cascade github ci watch add` — informational (StatusOK) on every
 	// platform, since the refusal itself is specified behaviour.
 	reg.Register(ciTier2Check{goos: goruntime.GOOS})
+	// Daemon-state checks (doctor_daemon_state.go), each answered from the
+	// one status.get the run asks for, and each a warning, never a pass,
+	// when no daemon answers: the subsystem census, dropped hook events,
+	// and the storage probe that only `doctor --storage` runs.
+	reg.Register(newCensusDoctorCheck(doctor.NewSubsystemCensusCheck(statusCensus{status: status}), status))
+	reg.Register(newHookEventsDoctorCheck(status))
+	reg.Register(newStorageDoctorCheck(paths, status))
+	// config-permissions (doctor_config_perm.go): config.toml under the
+	// same permission policy Load enforces.
+	reg.Register(newConfigPermissionsDoctorCheck(paths))
 	checks, err := secretsDoctorChecks(ctx, paths, clock)
 	if err != nil {
 		return nil, err
@@ -222,64 +233,4 @@ func configuredVaultKeys(ctx context.Context, paths runtime.PathProvider) []stri
 		}
 	}
 	return secrets.VaultRefsIn(b.String())
-}
-
-// providerHealthSourceFor returns the production doctor.ProviderHealthSource.
-// paths is accepted for signature symmetry with this file's other
-// providerFor helpers; the adapter resolves the real environment paths
-// via productionProviderDeps(), the same composition root `cascade
-// provider add` already uses.
-func providerHealthSourceFor(paths runtime.PathProvider) doctor.ProviderHealthSource {
-	return providerHealthSourceAdapter{paths: paths}
-}
-
-// ListProviderHealth implements doctor.ProviderHealthSource.
-func (a providerHealthSourceAdapter) ListProviderHealth(ctx context.Context) ([]doctor.ProviderHealthRow, error) {
-	deps := productionProviderDeps()
-	if a.paths != nil {
-		// providerDepsFor, NOT a field reassignment: NewCustody and Gate
-		// capture the PathProvider in closures, so overwriting deps.Paths
-		// alone would leave those two still resolving the real home.
-		deps = providerDepsFor(a.paths)
-	}
-	store, err := openProviderStorage(ctx, deps)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = store.Close() }()
-
-	recs, err := store.Registry.ListProviders(ctx)
-	if err != nil {
-		return nil, err
-	}
-	rows := make([]doctor.ProviderHealthRow, len(recs))
-	for i, rec := range recs {
-		rows[i] = doctor.ProviderHealthRow{Name: rec.Name, Status: string(rec.HealthStatus)}
-	}
-	return rows, nil
-}
-
-// RecoverProviderHealth implements doctor.ProviderHealthSource.
-func (providerHealthSourceAdapter) RecoverProviderHealth(ctx context.Context, name string) (bool, error) {
-	store, err := openProviderStorage(ctx, productionProviderDeps())
-	if err != nil {
-		return false, err
-	}
-	defer func() { _ = store.Close() }()
-	return store.Health.RecoverProbe(ctx, name)
-}
-
-// nodesRecordStoreFor opens the file-backed device record store that
-// `node serve` writes heartbeats into. It returns nil ON PURPOSE when the
-// data directory cannot be resolved: nodes.HealthCheck reports a nil store
-// as StatusError, which is the honest answer for "the records that decide
-// this could not be located". Inventing an empty store here would print
-// "no nodes enrolled" for an installation whose nodes are simply
-// unreadable, which is the one wrong answer a fleet check can give.
-func nodesRecordStoreFor(paths runtime.PathProvider, clock runtime.Clock) *nodes.RecordStore {
-	dataDir := paths.DataDir()
-	if dataDir == "" {
-		return nil
-	}
-	return nodes.NewRecordStore(nodes.NewFileRecordBackend(dataDir), clock)
 }

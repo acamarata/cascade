@@ -68,9 +68,6 @@ var DoctorMountExemptions = map[string]string{
 	"NewMCPIntegrationCheck": "takes a HarnessDiscoverer; no production implementation of that interface exists " +
 		"in the tree, and satisfying it with a hand-written stand-in would put a check in the report that probes " +
 		"nothing. Mounts in productionCheckRegistry in the SAME change that lands a real HarnessDiscoverer.",
-	"NewSubsystemCensusCheck": "takes a SubsystemStateProvider; nothing in the tree implements " +
-		"DeclaredSubsystems/RunningSubsystems, so there is no live state to compare a manifest against. Mounts in " +
-		"productionCheckRegistry in the SAME change that lands a real SubsystemStateProvider.",
 	"NewAttentionCheck": "takes a *supervision.Store; the daemon composition root that constructs a production " +
 		"Store (internal/build/testonly-allow.json's internal/fleet/supervision.NewStore entry, P1-E18-W4-S39-T1) " +
 		"does not exist yet, so there is no live store to check. Mounts in productionCheckRegistry in the SAME " +

@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/buildinfo"
+	"github.com/acamarata/cascade/internal/fleet/hookpacks"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -64,6 +65,20 @@ type StatusResponse struct {
 	// suppressed, only Health's verdict changed). Omitted from the JSON
 	// envelope when empty (nil-manifest test path).
 	Subsystems []SubsystemStatus `json:"subsystems,omitempty"`
+	// Hooks is the hook-pack health block. Always present: a zero count
+	// is a measurement ("nothing dropped"), not an absent field.
+	Hooks StatusHookFields `json:"hooks"`
+}
+
+// StatusHookFields is StatusResponse.Hooks's shape.
+type StatusHookFields struct {
+	// UnknownEventDrops counts hook events whose type this daemon does not
+	// recognise (hookpacks.UnknownEventCount). The hook handler drops them
+	// without failing the harness, so this counter is the only place a
+	// harness newer than the daemon becomes visible. It is read in the
+	// daemon process, where the handler increments it, and counts since
+	// that process started.
+	UnknownEventDrops int64 `json:"unknown_event_drops"`
 }
 
 // StatusDaemonFields is StatusResponse.Daemon's shape.
@@ -140,6 +155,7 @@ func (p *StatusProvider) Handler() rpc.HandlerFunc {
 			},
 			Health:     p.health(),
 			Subsystems: p.subsystems(),
+			Hooks:      StatusHookFields{UnknownEventDrops: hookpacks.UnknownEventCount()},
 		}, nil
 	}
 }

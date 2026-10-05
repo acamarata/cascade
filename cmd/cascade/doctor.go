@@ -96,6 +96,9 @@ type doctorFlags struct {
 	// second code path: the check runs identically either way, and
 	// doctor's exit-code semantics are whatever that one check reports.
 	harness bool
+	// storage narrows the run to the storage check, which the default
+	// report leaves out. Like harness it is a filter over the one registry.
+	storage bool
 }
 
 // newDoctorCmd builds the `doctor` command and its `bundle` subcommand.
@@ -118,6 +121,8 @@ func newDoctorCmd(deps doctorDeps) *cobra.Command {
 		"attempt to remediate every fixable check that reports a problem")
 	cmd.Flags().BoolVar(&f.harness, "harness", false,
 		"run only the coding-harness detection and instruction-drift check")
+	cmd.Flags().BoolVar(&f.storage, "storage", false,
+		"run only the storage health probes (left out of the default report)")
 	cmd.AddCommand(newDoctorBundleCmd(deps))
 	cmd.AddCommand(newDoctorCountsCmd(deps))
 	cmd.AddCommand(newDoctorSportCmd(deps))
@@ -150,7 +155,7 @@ func executeChecks(ctx context.Context, deps doctorDeps, f *doctorFlags) (doctor
 	if err != nil {
 		return doctor.RunReport{}, err
 	}
-	checks := reg.List()
+	checks := withoutStorageCheck(reg.List())
 	if f.firstRun {
 		checks = reg.FirstRun()
 	}
@@ -159,6 +164,11 @@ func executeChecks(ctx context.Context, deps doctorDeps, f *doctorFlags) (doctor
 		// either way rather than an empty run whose meaning depends on
 		// flag order.
 		checks = onlyHarnessCheck(reg)
+	}
+	if f.storage {
+		// Narrowed after --harness, so --storage always means the storage
+		// check alone.
+		checks = onlyStorageCheck(reg)
 	}
 	if len(checks) == 0 {
 		// An empty run reports OutcomeOK, which would render as a silent

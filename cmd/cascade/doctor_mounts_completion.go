@@ -34,17 +34,81 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/acamarata/cascade/internal/fleet/hookpacks"
+	"github.com/acamarata/cascade/internal/jobs"
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/plugins/claude"
 )
 
-// productionCompletionGateCheck builds the mounted doctor.Check.
-func productionCompletionGateCheck() *hookpacks.CompletionGateDoctorCheck {
-	return hookpacks.NewCompletionGateDoctorCheck(installedCompletionGateRegistry(), nil)
+// productionCompletionGateCheck builds the mounted doctor.Check. Its
+// LivenessProbe is completionGateLivenessProbe, so the check also warns when
+// the daemon is down while a job is active.
+func productionCompletionGateCheck(paths runtime.PathProvider, status daemonStatusSource) *hookpacks.CompletionGateDoctorCheck {
+	return hookpacks.NewCompletionGateDoctorCheck(installedCompletionGateRegistry(), completionGateLivenessProbe(paths, status))
+}
+
+// activeJobStates are the job states in which a completion check can be
+// pending: leased, running, verifying, reviewing and cancelling.
+var activeJobStates = []jobs.JobState{
+	jobs.JobStateLeased, jobs.JobStateRunning, jobs.JobStateVerifying, jobs.JobStateReviewing, jobs.JobStateCancelling,
+}
+
+// completionGateLivenessProbe answers hookpacks.LivenessProbe. A status.get
+// answer means the daemon is reachable and no job question arises
+// (true, false, nil). With no answer it reads the jobs database read-only:
+// any active job, or a database it cannot read, is (false, true, nil), so the
+// check warns; no database file at all is (false, false, nil), a machine
+// where nothing has ever run.
+func completionGateLivenessProbe(paths runtime.PathProvider, status daemonStatusSource) hookpacks.LivenessProbe {
+	return func(ctx context.Context) (bool, bool, error) {
+		if _, err := status(ctx); err == nil {
+			return true, false, nil
+		}
+		return false, jobActiveInDatabase(ctx, paths.DataDir()), nil
+	}
+}
+
+// jobsReadOnlyDSN is the DSN the probe opens cascade.db with: mode=ro, so
+// the probe can neither write a row nor apply a schema.
+func jobsReadOnlyDSN(dbPath string) string {
+	return "file:" + dbPath + "?mode=ro&_busy_timeout=5000"
+}
+
+// jobActiveInDatabase reports whether cascade.db under dataDir holds a job in
+// an active state. It is true when the database cannot be read (an unknown
+// is not a pass) and false only when the file does not exist or no job is
+// active.
+func jobActiveInDatabase(ctx context.Context, dataDir string) bool {
+	if dataDir == "" {
+		return true
+	}
+	dbPath := filepath.Join(dataDir, "cascade.db")
+	if _, err := os.Stat(dbPath); errors.Is(err, fs.ErrNotExist) {
+		return false
+	} else if err != nil {
+		return true
+	}
+	db, err := sql.Open("sqlite", jobsReadOnlyDSN(dbPath))
+	if err != nil {
+		return true
+	}
+	defer func() { _ = db.Close() }()
+	store := jobs.NewStore(db)
+	for _, state := range activeJobStates {
+		rows, _, err := store.ListJobs(ctx, jobs.JobFilter{State: state, Limit: 1})
+		if err != nil || len(rows) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // installedCompletionGateRegistry builds a throwaway local HookRegistry

@@ -1,17 +1,15 @@
 # `cascade daemon`
 
-Skeleton reference for the `daemon` noun (07-CLI-COMMAND-TREE.md §daemon).
-D/S-06.T2 (daemon lifecycle sprint, same wave) owns the cobra mount for
-`run` / `start` / `stop` / `restart` / `status` / `install` / `uninstall`.
-This page documents the one subcommand this ticket
-(P1-E03-W1-S04-T2) implements ahead of that: `logs`.
+Reference for the `daemon` noun (07-CLI-COMMAND-TREE.md §daemon). The
+lifecycle verbs `run`, `start`, `stop`, `restart`, `status`, `install` and
+`uninstall` are mounted next to `logs`, which this page documents.
 
 ## `cascade daemon logs [-f]`
 
 Reads the single log file every daemon subsystem writes to
 (`internal/runtime.LogFilePath`, under `PathProvider.LogDir()`) and
 prints it to stdout. **Does not require a live daemon process**: the
-handler reads the file directly; if the daemon has never run, it prints
+command reads the file directly; if the daemon has never run, it prints
 a diagnostic to stderr and exits cleanly rather than erroring.
 
 ```
@@ -21,33 +19,42 @@ $ cascade daemon logs
 ```
 
 `-f` (follow) keeps streaming new lines as they are appended, polling via
-`os.Stat` (no inotify/FSEvents dependency; R-14.115: no new module
-dependency for this ticket), until interrupted:
+`os.Stat` (no inotify/FSEvents dependency), until interrupted:
 
 ```
 $ cascade daemon logs -f
 ...
 ```
 
-If the log file disappears while following (log directory removed,
-rotated out from under the reader, ...), the handler prints a diagnostic
-to stderr and exits cleanly; this is not treated as a failure.
+Following survives a log rotation. When the active file is renamed away
+and a fresh one is created at the same path, the command prints a
+`rotated out from under the reader` diagnostic to stderr and carries on
+with the new file, reading it from its first line, so every line of the
+rotated-in file appears and later lines keep arriving. Rotation is a
+rename followed by a create, so the path is briefly absent; the poll loop
+waits a few intervals before it calls the file deleted.
 
-Output contract (D/S-06.T5): log content goes to **stdout**; diagnostics
-(missing file, disappeared file) go to **stderr**.
+If the log file is deleted and does not come back, the command prints a
+`disappeared` diagnostic to stderr and exits cleanly; this is not treated
+as a failure. Interrupting the command (Ctrl-C) also exits cleanly.
 
-### Implementation status
+Output contract: log content goes to **stdout**; diagnostics
+(missing file, disappeared file, rotation) go to **stderr**. The command
+never prints the "running in embedded (daemonless) mode" notice: reading a
+file has no embedded fallback to announce.
 
-`internal/runtime.DaemonLogsHandler` is the real, fully implemented
-capability behind this subcommand and is unit-tested directly against a
-log file path, independent of any CLI layer. Only the cobra command
-mounting onto `cascade daemon logs` is deferred
-(`// CASCADE-ALLOW: P1-E03-W1-S04-T2`, 06-FORGE-SPEC §5.19 allowed-fail
-pattern); it is not reachable from the built binary until D/S-06.T2
-adds the `daemon` noun's cobra subtree. `run` / `start` / `stop` /
-`restart` / `status` / `install` / `uninstall` are D/S-06.T2's surface
-entirely; nothing behind them exists yet.
+`internal/runtime.DaemonLogsHandler` holds the read and follow logic and is
+unit-tested directly against a log file path. The command wraps it in a loop
+that re-runs the handler after a rotation.
 
 See also `../developer/runtime-bootstrap.md` §Logging for how the log
 file this command reads is produced (slog JSON handler + size-based
 rotation, wired into `internal/runtime.Bootstrap`).
+
+## Config errors at startup
+
+`cascade daemon run` (and `start`, `stop`, `restart`, `status`) load
+`config.toml` first. A load error keeps its own kind: a config file that
+the permission policy refuses exits as `permission_denied`, not as
+`invalid_input`. Only an error with no kind of its own, such as malformed
+TOML, is classified `invalid_input`. See `config.md` for the policy.

@@ -8,12 +8,18 @@ package daemon
 
 import (
 	"context"
+	"encoding/json"
 	"os"
+	goruntime "runtime"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/acamarata/cascade/internal/fleet/hookpacks"
+	"github.com/acamarata/cascade/internal/fleet/sessions"
+	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -245,5 +251,48 @@ func TestStatusMethod_MatchesTheWireNameInTheSpec(t *testing.T) {
 	if StatusMethod != wireName {
 		t.Errorf("StatusMethod = %q, want %q; this is a wire contract and renaming it breaks external callers",
 			StatusMethod, wireName)
+	}
+}
+
+// TestStatusReportsHookPackState sends a real hook event of an unknown type
+// through the real hook handler, then reads status.get off the same
+// registry: the dropped-event count must arrive on the wire as
+// hooks.unknown_event_drops and track the live counter (one more than
+// before the event), not a value fixed at construction.
+func TestStatusReportsHookPackState(t *testing.T) {
+	clock := runtime.NewFixedClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	reg := rpc.NewRegistry()
+	store := sessions.New(storetest.NewMemStore(), clock, nil)
+	if err := hookpacks.RegisterHookEventHandler(reg, store, nil, clock); err != nil {
+		if goruntime.GOOS == "windows" {
+			t.Skip("the hook handler refuses on windows tier-2")
+		}
+		t.Fatalf("RegisterHookEventHandler: %v", err)
+	}
+	reg.Register(StatusMethod, NewStatusProvider(clock, clock.Now(), "/tmp/d.sock", nil, nil).Handler())
+	statusDrops := func() int64 {
+		res, errObj := reg.Dispatch(context.Background(), &rpc.Request{Method: StatusMethod})
+		if errObj != nil {
+			t.Fatalf("status.get: %+v", errObj)
+		}
+		raw, _ := json.Marshal(res)
+		var wire struct {
+			Hooks struct {
+				Drops *int64 `json:"unknown_event_drops"`
+			} `json:"hooks"`
+		}
+		if err := json.Unmarshal(raw, &wire); err != nil || wire.Hooks.Drops == nil {
+			t.Fatalf("status.get result %s lacks hooks.unknown_event_drops (err=%v)", raw, err)
+		}
+		return *wire.Hooks.Drops
+	}
+	before := statusDrops()
+	payload, _ := json.Marshal(hookpacks.HookPayload{Harness: "test-harness",
+		EventType: hookpacks.HookEventType("SomeFutureEvent"), SessionID: "s1", TimestampMs: clock.Now().UnixMilli()})
+	if _, errObj := reg.Dispatch(context.Background(), &rpc.Request{Method: hookpacks.MethodHookEvent, Params: payload}); errObj != nil {
+		t.Fatalf("unknown event type must be dropped, not refused: %+v", errObj)
+	}
+	if got := statusDrops(); got != before+1 {
+		t.Fatalf("hooks.unknown_event_drops = %d after one dropped event, want %d", got, before+1)
 	}
 }

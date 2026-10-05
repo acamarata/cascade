@@ -10,12 +10,17 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	goruntime "runtime"
+	"strings"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/doctor"
+	"github.com/acamarata/cascade/internal/jobs"
+	"github.com/acamarata/cascade/internal/storage/migrate"
 )
 
 // completionGateFakeHome points HOME (plugins/claude's own hostEnvFixture
@@ -39,7 +44,7 @@ func completionGateFakeHome(t *testing.T) string {
 // harnessResult).
 func TestProductionCompletionGateCheck_OKWhenNoHarnessInstalled(t *testing.T) {
 	completionGateFakeHome(t)
-	res, err := productionCompletionGateCheck().Run(context.Background())
+	res, err := productionCompletionGateCheck(doctorTestPaths(t), unreachableStatus).Run(context.Background())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -62,7 +67,7 @@ func TestProductionCompletionGateCheck_FailsWhenAbsentFromSettings(t *testing.T)
 	if err := os.WriteFile(settingsPath, []byte(`{"hooks":{}}`), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	res, err := productionCompletionGateCheck().Run(context.Background())
+	res, err := productionCompletionGateCheck(doctorTestPaths(t), unreachableStatus).Run(context.Background())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -80,7 +85,7 @@ func TestProductionCompletionGateCheck_OKWhenPresentInSettings(t *testing.T) {
 	if err := os.WriteFile(settingsPath, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	res, err := productionCompletionGateCheck().Run(context.Background())
+	res, err := productionCompletionGateCheck(doctorTestPaths(t), unreachableStatus).Run(context.Background())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -105,4 +110,97 @@ func TestProductionRegistryMountsCompletionGateCheck(t *testing.T) {
 		}
 	}
 	t.Fatal("completion-gate-hooks is not registered on the real productionCheckRegistry")
+}
+
+// seedJobsDB writes a cascade.db with the jobs schema and one job in state
+// under a fresh data directory, closes it, and returns the directory.
+func seedJobsDB(t *testing.T, state jobs.JobState) string {
+	t.Helper()
+	dir := t.TempDir()
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "cascade.db"))
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	if err := jobs.ApplyJobsSchema(context.Background(), db, migrate.SQLiteEmitter{}, doctorTestClock(), "", ""); err != nil {
+		t.Fatalf("ApplyJobsSchema: %v", err)
+	}
+	err = jobs.NewStore(db).PutJob(context.Background(), jobs.Job{ID: "job-1", State: state, CreatedAt: 1, UpdatedAt: 1,
+		ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal})
+	if err != nil {
+		t.Fatalf("PutJob: %v", err)
+	}
+	return dir
+}
+
+// gateOver runs the mounted completion-gate check over dataDir and status
+// with no harness installed (so the registration leg is OK).
+func gateOver(t *testing.T, dataDir string, status daemonStatusSource) doctor.CheckResult {
+	t.Helper()
+	completionGateFakeHome(t)
+	res, err := productionCompletionGateCheck(fixedDataDirPaths{dataDir: dataDir}, status).Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	return res
+}
+
+// TestCompletionGateProbeDaemonDownActiveJobWarns: no daemon answers and a
+// job is in each active state: warn. A terminal job and a machine with no
+// database at all are the controls that must stay OK.
+func TestCompletionGateProbeDaemonDownActiveJobWarns(t *testing.T) {
+	for _, state := range activeJobStates {
+		if res := gateOver(t, seedJobsDB(t, state), unreachableStatus); res.Status != doctor.StatusWarn {
+			t.Errorf("daemon down with a %s job = %+v, want StatusWarn", state, res)
+		}
+	}
+	if res := gateOver(t, seedJobsDB(t, jobs.JobStateAccepted), unreachableStatus); res.Status != doctor.StatusOK {
+		t.Errorf("daemon down with only a terminal job = %+v, want StatusOK", res)
+	}
+	if res := gateOver(t, t.TempDir(), unreachableStatus); res.Status != doctor.StatusOK {
+		t.Errorf("daemon down with no database = %+v, want StatusOK", res)
+	}
+}
+
+// TestCompletionGateProbeDaemonUpIsOK: a daemon that answers status.get is
+// reachable, whatever the jobs database holds, and the probe never opens it.
+func TestCompletionGateProbeDaemonUpIsOK(t *testing.T) {
+	dir := seedJobsDB(t, jobs.JobStateRunning)
+	if res := gateOver(t, dir, statusOf(daemon.StatusResponse{})); res.Status != doctor.StatusOK {
+		t.Fatalf("daemon up with a running job = %+v, want StatusOK", res)
+	}
+	reachable, active, err := completionGateLivenessProbe(fixedDataDirPaths{dataDir: dir}, statusOf(daemon.StatusResponse{}))(context.Background())
+	if !reachable || active || err != nil {
+		t.Fatalf("probe with the daemon up = (%v, %v, %v), want (true, false, nil)", reachable, active, err)
+	}
+}
+
+// TestCompletionGateProbeUnreadableJobsWarns: a database whose jobs cannot be
+// read is an unknown, which warns. The probe opens read-only: it neither
+// applies the jobs schema nor leaves anything behind.
+func TestCompletionGateProbeUnreadableJobsWarns(t *testing.T) {
+	if dsn := jobsReadOnlyDSN("/x/cascade.db"); !strings.Contains(dsn, "mode=ro") {
+		t.Fatalf("probe DSN = %q, want mode=ro", dsn)
+	}
+	dir := t.TempDir()
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "cascade.db"))
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	if _, err := db.Exec(`CREATE TABLE unrelated (x INTEGER)`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	_ = db.Close()
+	if res := gateOver(t, dir, unreachableStatus); res.Status != doctor.StatusWarn {
+		t.Fatalf("daemon down over a database with no jobs table = %+v, want StatusWarn", res)
+	}
+	check, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "cascade.db")+"?mode=ro")
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer func() { _ = check.Close() }()
+	var n int
+	if err := check.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name = 'job'`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("the probe applied a jobs schema (job tables = %d, err = %v); it must open read-only", n, err)
+	}
 }

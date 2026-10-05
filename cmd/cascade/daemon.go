@@ -111,6 +111,7 @@ func newDaemonCmd(deps daemonDeps) *cobra.Command {
 	root.AddCommand(newDaemonStatusCmd(deps))
 	root.AddCommand(newDaemonInstallCmd(deps))
 	root.AddCommand(newDaemonUninstallCmd(deps))
+	root.AddCommand(newDaemonLogsCmd(deps))
 	return root
 }
 
@@ -211,9 +212,8 @@ func newDaemonStatusCmd(deps daemonDeps) *cobra.Command {
 
 // outputWriter builds an internal/output.Writer bound to cmd's own streams
 // and the standard --json/-q/-v/--no-color flags, matching cmd/cascade/
-// config's outputWriter exactly (both read the same persistent root flags;
-// duplicated rather than shared because that helper is unexported in
-// package config and this file lives in package main).
+// config's outputWriter (duplicated: that helper is unexported in package
+// config and this file lives in package main).
 func outputWriter(cmd *cobra.Command) *output.Writer {
 	jsonOut, _ := cmd.Flags().GetBool("json")
 	quiet, _ := cmd.Flags().GetBool("quiet")
@@ -222,11 +222,9 @@ func outputWriter(cmd *cobra.Command) *output.Writer {
 	return output.New(cmd.OutOrStdout(), cmd.OutOrStderr(), jsonOut, quiet, verbose, noColor)
 }
 
-// loadDaemonConfig loads config.toml through the same runtime.Load entry
-// point every other CLI command uses (single resolution model, 08 §2) and
-// resolves this ticket's [daemon] Settings against it — socket and
-// shutdown_grace sourced from the config loader, never hardcoded, per this
-// ticket's contract.
+// loadDaemonConfig loads config.toml through runtime.Load, as every CLI
+// command does (single resolution model, 08 §2), and resolves the [daemon]
+// Settings (socket, shutdown_grace) from it, never hardcoded.
 func loadDaemonConfig(ctx context.Context, deps daemonDeps) (*runtime.Config, runtime.PathProvider, daemon.Settings, error) {
 	paths := deps.Paths
 	cfg, err := runtime.Load(ctx, runtime.LoadOptions{
@@ -235,7 +233,12 @@ func loadDaemonConfig(ctx context.Context, deps daemonDeps) (*runtime.Config, ru
 		Environ: deps.Environ,
 	})
 	if err != nil {
-		return nil, nil, daemon.Settings{}, cascade.Wrap(cascade.KindInvalidInput, err, "load config.toml")
+		// A Kind already on the error (a refused config file is
+		// permission_denied) is kept; only an untyped one is classified.
+		if _, typed := cascade.KindOf(err); !typed {
+			err = cascade.Wrap(cascade.KindInvalidInput, err, "load config.toml")
+		}
+		return nil, nil, daemon.Settings{}, err
 	}
 	settings, err := daemon.ResolveSettings(cfg, paths)
 	if err != nil {

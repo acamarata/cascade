@@ -190,6 +190,23 @@ extra subscription): `supervisor.attention_added`,
 `internal/rpc/testdata/supervisor-sse-fixture.ndjson` for a captured
 example of all four.
 
+## status.get
+
+`status.get` returns a one-shot snapshot of the daemon process: `version`,
+`daemon` (process id, uptime, connection count and socket), `health`, and
+`subsystems`. It also carries a `hooks` block:
+
+```json
+{"hooks": {"unknown_event_drops": 0}}
+```
+
+`hooks.unknown_event_drops` is the number of hook events the daemon dropped
+because their event type is not one it recognises. The hook handler drops
+those events without failing the harness, so this counter is the only place
+a harness newer than the daemon shows up. It is always present, counts since
+the daemon process started, and `cascade doctor` turns a non-zero value into
+a `hook-events` warning.
+
 ## status.widget and status.widget_changed
 
 `status.widget` is implemented in `internal/daemon` (`status_widget.go`,
