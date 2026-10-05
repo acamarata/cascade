@@ -44,11 +44,10 @@ var ErrLeaseFenced = cascade.New(cascade.KindConflict, "jobs: lease epoch fence 
 
 // ProcessLivenessProbe abstracts "is this recorded pgid still a live
 // process" so Reclaim's tests are deterministic (a fake probe) while
-// production wires the real signal-0/handle check. 0 or a negative pgid
-// is never alive by construction -- a probe implementation need not
-// special-case it, but Reclaim checks it first regardless so a caller
-// that supplies a nil probe for a job with no recorded pgid still gets a
-// deterministic "not alive" rather than a nil-pointer panic.
+// production wires the real signal-0/handle check. false means confirmed
+// dead. An implementation returns true for any pgid it cannot probe (0,
+// negative, or outside the platform pid range), because unknown must
+// never read as dead. Callers never fence or sweep on true.
 type ProcessLivenessProbe interface {
 	IsAlive(pgid int64) bool
 }

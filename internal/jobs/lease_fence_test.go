@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"fmt"
 	"testing"
 )
 
@@ -213,5 +214,49 @@ func TestLeaseReclaimNoOpOnNonExpiredLease(t *testing.T) {
 	}
 	if result.State != LeaseHeld || result.Epoch != granted.Lease.Epoch {
 		t.Errorf("Reclaim touched a held lease: %+v", result)
+	}
+}
+
+// TestLeaseReclaimInvalidPgidNeverFences proves Reclaim never fences a
+// holder whose recorded pgid the real probe cannot address: a negative
+// pgid and one beyond every platform pid range both read as alive, so
+// the lease stays expired_unconfirmed at its epoch and the contender
+// stays queued.
+func TestLeaseReclaimInvalidPgidNeverFences(t *testing.T) {
+	for _, pgid := range []int64{-1, 1<<32 + 1} {
+		t.Run(fmt.Sprint(pgid), func(t *testing.T) {
+			m, clock, store := newTestLeaseManager(t)
+			ctx := context.Background()
+			granted, err := m.Acquire(ctx, "repo-1", "internal/jobs/**", "job-a")
+			if err != nil || !granted.Granted {
+				t.Fatalf("Acquire: %+v, %v", granted, err)
+			}
+			if err := store.PutJob(ctx, baseJob("job-a")); err != nil {
+				t.Fatalf("PutJob: %v", err)
+			}
+			if err := store.PutExecution(ctx, Execution{ID: "exec-1", JobID: "job-a", Attempt: 1, State: ExecutionRunning, PGID: pgid}); err != nil {
+				t.Fatalf("PutExecution(pgid %d): %v", pgid, err)
+			}
+			deadline := granted.Lease.IssuedAt + granted.Lease.TTLSeconds + m.defaults.ExpiryGraceSeconds
+			clock.Advance(secondsUntil(clock, deadline+1))
+			if _, err := m.SweepExpired(ctx); err != nil {
+				t.Fatalf("SweepExpired: %v", err)
+			}
+			reclaimed, err := m.Reclaim(ctx, "repo-1", granted.Lease.ScopeGlob, NewProcessLivenessProbe())
+			if err != nil {
+				t.Fatalf("Reclaim: %v", err)
+			}
+			if reclaimed.State != LeaseExpiredUnconfirmed || reclaimed.Epoch != granted.Lease.Epoch {
+				t.Fatalf("Reclaim(pgid %d) = state %v epoch %d, want expired_unconfirmed at unchanged epoch %d",
+					pgid, reclaimed.State, reclaimed.Epoch, granted.Lease.Epoch)
+			}
+			blocked, err := m.Acquire(ctx, "repo-1", "internal/jobs/**", "job-b")
+			if err != nil {
+				t.Fatalf("Acquire job-b: %v", err)
+			}
+			if blocked.Granted {
+				t.Fatalf("Acquire job-b granted against pgid %d holder, want queued", pgid)
+			}
+		})
 	}
 }

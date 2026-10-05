@@ -16,11 +16,17 @@ package jobs
 // Constraints: never dereferences a zero/invalid handle; OpenProcess
 //
 //	failing (already exited, or never existed) means "not alive", never
-//	a panic.
+//	a panic. A pgid <= 0 or above math.MaxUint32 cannot name a Windows
+//	process id (it would truncate to another pid), so the probe cannot
+//	confirm death and reports alive: unknown must never read as dead.
 //
 // SPORT: jobs/lease-model (ADD, P1-E29-W6-S59-T2).
 
-import "golang.org/x/sys/windows"
+import (
+	"math"
+
+	"golang.org/x/sys/windows"
+)
 
 // windowsLivenessProbe is the zero-value-usable production
 // ProcessLivenessProbe for this platform.
@@ -31,10 +37,12 @@ type windowsLivenessProbe struct{}
 func NewProcessLivenessProbe() ProcessLivenessProbe { return windowsLivenessProbe{} }
 
 // IsAlive opens pgid (as a Windows pid) with query-limited rights and
-// checks GetExitCodeProcess for STILL_ACTIVE.
+// checks GetExitCodeProcess for STILL_ACTIVE. A pgid <= 0 or above
+// math.MaxUint32 is not a pid this probe can address, so it returns true
+// (never dead) without opening anything.
 func (windowsLivenessProbe) IsAlive(pgid int64) bool {
-	if pgid <= 0 {
-		return false
+	if pgid <= 0 || pgid > math.MaxUint32 {
+		return true
 	}
 	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pgid))
 	if err != nil {
