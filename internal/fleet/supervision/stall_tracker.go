@@ -99,6 +99,28 @@ func (t *ProgressTracker) Touch(sessionID string) {
 	t.lastSeen[sessionID] = t.clock.Now().UnixMilli()
 }
 
+// TouchAt records sessionID's progress at instant at (unix millis) and
+// reports whether that moved its progress mark forward. A mark never moves
+// backward, so a replayed older record changes nothing; the first
+// observation of a session always counts.
+func (t *ProgressTracker) TouchAt(sessionID string, at int64) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if cur, ok := t.lastSeen[sessionID]; ok && cur >= at {
+		return false
+	}
+	t.lastSeen[sessionID] = at
+	return true
+}
+
+// Unwatch stops tracking sessionID: it no longer appears in Watched and
+// reads as ProgressUnknown until it is touched again.
+func (t *ProgressTracker) Unwatch(sessionID string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.lastSeen, sessionID)
+}
+
 // MarkSourceUnavailable reports that this tracker's event source (the
 // fleet.sessions.changed subscription) is no longer delivering. Every
 // Status/Confidence call reports ProgressUnknown until MarkSourceAvailable.

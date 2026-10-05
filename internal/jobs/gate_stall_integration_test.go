@@ -109,6 +109,21 @@ func denyOnce(t *testing.T, cp *CompletionPolicy, job Job, sessionID string) {
 	}
 }
 
+// waitDetectorAlive blocks until det has subscribed to the bus (Alive), for at
+// most 5 seconds. Run subscribes from the head of the stream, so a denial
+// published before the subscription exists is lost; every test waits here
+// after starting Run and before it publishes.
+func waitDetectorAlive(t *testing.T, det *supervision.Detector) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !det.Alive() {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for the stall detector to subscribe")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 // TestGateDeniedLiveStallDetector is the exact name the ticket's checks
 // list runs (-run '^TestGateDeniedLiveStallDetector$').
 func TestGateDeniedLiveStallDetector(t *testing.T) {
@@ -122,6 +137,7 @@ func TestGateDeniedLiveStallDetector(t *testing.T) {
 	defer cancel()
 	runErrCh := make(chan error, 1)
 	go func() { runErrCh <- det.Run(ctx, bus) }()
+	waitDetectorAlive(t, det)
 
 	// Three real denials for the SAME session/job, all within the
 	// 30-minute window (the frozen clock never advances), must fire
@@ -157,6 +173,7 @@ func TestGateDeniedLiveStallDetectorTwoInWindowDoesNotFire(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() { _ = det.Run(ctx, bus) }()
+	waitDetectorAlive(t, det)
 
 	denyOnce(t, cp, job, "sess-gate-2")
 	denyOnce(t, cp, job, "sess-gate-2")

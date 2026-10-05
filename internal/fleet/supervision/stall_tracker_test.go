@@ -162,3 +162,38 @@ func TestWatchedReportsTouchedSessions(t *testing.T) {
 		t.Fatalf("Watched() = %v, want 2 entries", got)
 	}
 }
+
+// TestTouchAtNeverMovesBackward proves a replayed older mark changes
+// nothing and is reported as no new progress.
+func TestTouchAtNeverMovesBackward(t *testing.T) {
+	clock := runtime.NewFixedClock(time.Now())
+	tr := NewProgressTracker(clock, time.Minute)
+	now := clock.Now().UnixMilli()
+	if !tr.TouchAt("s1", now) {
+		t.Fatal("first observation must count as progress")
+	}
+	if tr.TouchAt("s1", now-1000) || tr.TouchAt("s1", now) {
+		t.Error("an older or equal mark was reported as progress")
+	}
+	if _, since := tr.Status("s1"); since != now {
+		t.Errorf("mark = %d, want %d (unchanged)", since, now)
+	}
+	if !tr.TouchAt("s1", now+1) {
+		t.Error("a newer mark must count as progress")
+	}
+}
+
+// TestUnwatchRemovesSession proves Unwatch drops a session from Watched
+// and that it reads unknown until touched again.
+func TestUnwatchRemovesSession(t *testing.T) {
+	tr := NewProgressTracker(runtime.NewFixedClock(time.Now()), time.Minute)
+	tr.Touch("s1")
+	tr.Touch("s2")
+	tr.Unwatch("s1")
+	if got := tr.Watched(); len(got) != 1 || got[0] != "s2" {
+		t.Fatalf("Watched = %v, want [s2]", got)
+	}
+	if status, _ := tr.Status("s1"); status != ProgressUnknown {
+		t.Errorf("unwatched status = %v, want unknown", status)
+	}
+}

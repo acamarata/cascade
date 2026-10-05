@@ -20,7 +20,6 @@ package supervision
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -29,7 +28,6 @@ import (
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/fleet/governor"
 	"github.com/acamarata/cascade/internal/fleet/journal"
-	"github.com/acamarata/cascade/internal/fleet/sessions"
 	"github.com/acamarata/cascade/internal/runtime"
 )
 
@@ -60,15 +58,33 @@ type gateDeniedPayload struct {
 }
 
 // Detector is the stall detector. The zero value is not usable;
-// construct with NewDetector.
+// construct with NewDetector (legacy seams) or NewStallDetector (real
+// rungs, publisher, session-store watch rule).
 type Detector struct {
-	tracker *ProgressTracker
-	ladder  *governor.EscalationLadder
-	clock   runtime.Clock
-	alive   atomic.Bool
+	tracker   *ProgressTracker
+	ladder    *governor.EscalationLadder
+	clock     runtime.Clock
+	rungDelay time.Duration
+	alive     atomic.Bool
 
-	mu   sync.Mutex
-	last map[string]StallEvent // sessionID -> most recent StallEvent
+	// Set only by NewStallDetector, before the detector is shared. A nil
+	// pub or sessions disables episode publishing or the session watch
+	// rule respectively; requireAlive makes Poll refuse while Run is not
+	// subscribed.
+	pub          StallPublisher
+	sessions     SessionLookup
+	requireAlive bool
+
+	pubMu sync.Mutex // serializes the once-per-episode publish
+	mu    sync.Mutex
+	last  map[string]StallEvent // sessionID -> most recent StallEvent
+	// published marks episodes whose supervision.stalled went out;
+	// advanced is the clock instant of each session's last Advance;
+	// epoch counts each session's ended episodes, so a stall record built
+	// before an episode ended is recognised as stale.
+	published map[string]bool
+	advanced  map[string]time.Time
+	epoch     map[string]uint64
 }
 
 // Alive reports whether Run's delivery loop is currently subscribed —
@@ -91,9 +107,13 @@ func NewDetector(j journal.Store, retryer governor.Retryer, enricher governor.Co
 		clock = runtime.NewSystemClock()
 	}
 	d := &Detector{
-		tracker: NewProgressTracker(clock, threshold),
-		clock:   clock,
-		last:    make(map[string]StallEvent),
+		tracker:   NewProgressTracker(clock, threshold),
+		clock:     clock,
+		rungDelay: policy.RungDelay,
+		last:      make(map[string]StallEvent),
+		published: make(map[string]bool),
+		advanced:  make(map[string]time.Time),
+		epoch:     make(map[string]uint64),
 	}
 	supervisor := &stallSupervisor{store: store, lookup: d.lookupStallEvent}
 	notifier := &stallNotifier{requester: requester, lookup: d.lookupStallEvent}
@@ -116,35 +136,63 @@ func (d *Detector) lookupStallEvent(sessionID string) (StallEvent, bool) {
 	return ev, ok
 }
 
-// recordAndAdvance stores ev as sessionID's most recent StallEvent and
-// invokes the escalation ladder. Advance is itself idempotent (per-entity
-// terminal guard, escalation.go) and itself cancels an in-flight
-// escalation once ProgressTracker.Confidence reports the session
-// recovered — that is Touch's own effect on the very next Advance call,
-// requiring no explicit cancellation here.
-func (d *Detector) recordAndAdvance(ctx context.Context, ev StallEvent) error {
+// recordAndAdvance stores ev as sessionID's most recent StallEvent,
+// publishes the episode's supervision.stalled once, and invokes the
+// escalation ladder. Advance is itself idempotent (per-entity terminal
+// guard, escalation.go) and itself cancels an in-flight escalation once
+// ProgressTracker.Confidence reports the session recovered — that is
+// Touch's own effect on the very next Advance call. A failed publish never
+// blocks the advance; it is returned alongside the advance outcome and
+// retried by the next call. epoch is the session's episodeEpoch read
+// before ev was built: if the episode has ended since, ev is stale and
+// nothing is recorded, published or advanced.
+func (d *Detector) recordAndAdvance(ctx context.Context, ev StallEvent, epoch uint64) error {
 	d.mu.Lock()
+	if d.epoch[ev.SessionID] != epoch {
+		d.mu.Unlock()
+		return nil
+	}
 	d.last[ev.SessionID] = ev
 	d.mu.Unlock()
-	return d.ladder.Advance(ctx, ev.SessionID)
+	pubErr := d.publishOnce(ctx, ev, epoch)
+	err := d.ladder.Advance(ctx, ev.SessionID)
+	d.mu.Lock()
+	if d.epoch[ev.SessionID] == epoch {
+		d.advanced[ev.SessionID] = d.clock.Now()
+	}
+	d.mu.Unlock()
+	switch {
+	case pubErr == nil:
+		return err
+	case err == nil:
+		return pubErr
+	}
+	return errors.Join(err, pubErr)
 }
 
 // Touch records progress for sessionID, per L/S-24.T3's session event
-// stream. A session that resumes activity before the human rung fires
-// recovers via ProgressTracker.Confidence on the next Advance call.
+// stream, and ends its stall episode. A session that resumes activity
+// before the human rung fires recovers via ProgressTracker.Confidence on
+// the next Advance call.
 func (d *Detector) Touch(sessionID string) {
 	d.tracker.Touch(sessionID)
+	d.endEpisode(sessionID)
 }
 
 // Observe processes one normalized StallSignal (R-16.73): a blocked
 // signal escalates immediately; a gate-denied signal escalates only once
 // ProgressTracker.RecordGateDenied reports the 3-in-30-minute rule has
 // fired for its job id. An invalid signal is refused and never
-// escalates.
+// escalates. When the detector has a session lookup, a signal for an
+// unknown or unwatched (idle, closed, ...) session is ignored.
 func (d *Detector) Observe(ctx context.Context, sig StallSignal) error {
 	if err := sig.Validate(); err != nil {
 		return err
 	}
+	if ok, err := d.sessionWatched(ctx, sig.SessionID); err != nil || !ok {
+		return err
+	}
+	epoch := d.episodeEpoch(sig.SessionID)
 	now := sig.At
 	if sig.Kind == SignalGateDenied {
 		if !d.tracker.RecordGateDenied(sig.JobID, now) {
@@ -152,124 +200,69 @@ func (d *Detector) Observe(ctx context.Context, sig StallSignal) error {
 		}
 	}
 	ev := StallEvent{SessionID: sig.SessionID, StallKind: signalToStallKind(sig.Kind), StalledSince: now}
-	return d.recordAndAdvance(ctx, ev)
+	return d.recordAndAdvance(ctx, ev, epoch)
 }
 
 // Poll classifies every tracked session against the idle threshold and,
 // for each currently stalled or unknown one, records a StallEvent and
-// invokes the escalation ladder. A ProgressUnknown session (the event
-// source is unavailable — "could not tell") still escalates, fail-closed,
-// but is recorded with StallKindUnknown rather than StallKindIdle, so the
-// distinction survives into whatever the supervisor-task/human rungs
-// show a person.
+// invokes the escalation ladder, at most once per policy.RungDelay per
+// session. A ProgressUnknown session (the event source is unavailable —
+// "could not tell") still escalates, fail-closed, but is recorded with
+// StallKindUnknown rather than StallKindIdle, so the distinction survives
+// into whatever the supervisor-task/human rungs show a person.
+//
+// A detector built by NewStallDetector refuses to poll while its Run loop
+// is not subscribed: a dead subscription means "could not tell", and that
+// must not mass-escalate every session.
 //
 // A per-session escalation outcome (EscalationExhausted, a rung failure)
 // never stops the loop from reaching the remaining sessions; Poll
 // reports only the first error that is NEITHER of those two expected
-// outcomes, after every tracked session has been considered.
+// outcomes (matched by sentinel identity, not Kind), after every tracked
+// session has been considered.
 func (d *Detector) Poll(ctx context.Context) error {
-	now := d.clock.Now().UnixMilli()
+	if d.requireAlive && !d.Alive() {
+		return errPollNotAlive
+	}
+	now := d.clock.Now()
 	var firstErr error
 	for _, sessionID := range d.tracker.Watched() {
-		status, since := d.tracker.Status(sessionID)
-		var ev StallEvent
-		switch status {
-		case ProgressHealthy:
+		ev, epoch, ok := d.pollEvent(sessionID, now)
+		if !ok {
 			continue
-		case ProgressStalled:
-			ev = StallEvent{SessionID: sessionID, StallKind: StallKindIdle, StalledSince: since, ElapsedSeconds: (now - since) / 1000}
-		case ProgressUnknown:
-			ev = StallEvent{SessionID: sessionID, StallKind: StallKindUnknown}
-		default:
-			ev = StallEvent{SessionID: sessionID, StallKind: StallKindUnknown}
 		}
-		err := d.recordAndAdvance(ctx, ev)
-		if err != nil && !errors.Is(err, governor.EscalationExhausted) && !errors.Is(err, governor.ErrEscalationRungFailed) && firstErr == nil {
+		if err := d.recordAndAdvance(ctx, ev, epoch); err != nil && !isExpectedEscalation(err) && firstErr == nil {
 			firstErr = err
 		}
 	}
 	return firstErr
 }
 
-// Run drives the detector's two bus subscriptions until ctx is done. It
-// marks the tracker's source unavailable for the duration of either
-// subscribe call failing or either subscription's Errs firing, mirroring
-// subscribe.go's Subscription.Run shape (bounded selects only, never an
-// unguarded receive).
-func (d *Detector) Run(ctx context.Context, bus SubscriberBus) error {
-	sessSub, err := bus.Subscribe(ctx, sessionsChangedNamespace, stallCursorName, stallSubscribeBuffer)
-	if err != nil {
-		d.tracker.MarkSourceUnavailable()
-		return err
+// pollEvent builds sessionID's StallEvent for this Poll, or reports false
+// when the session is healthy or its RungDelay has not yet elapsed. It also
+// returns the session's episode epoch, read before the tracker status, for
+// recordAndAdvance's staleness check.
+func (d *Detector) pollEvent(sessionID string, now time.Time) (StallEvent, uint64, bool) {
+	epoch := d.episodeEpoch(sessionID)
+	status, since := d.tracker.Status(sessionID)
+	if status == ProgressHealthy || !d.rungDue(sessionID, now) {
+		return StallEvent{}, epoch, false
 	}
-	defer func() { _ = sessSub.Unsubscribe() }()
-	gateSub, err := bus.Subscribe(ctx, gateDeniedNamespace, gateCursorName, stallSubscribeBuffer)
-	if err != nil {
-		d.tracker.MarkSourceUnavailable()
-		return err
+	if status == ProgressStalled {
+		return StallEvent{SessionID: sessionID, StallKind: StallKindIdle, StalledSince: since, ElapsedSeconds: (now.UnixMilli() - since) / 1000}, epoch, true
 	}
-	defer func() { _ = gateSub.Unsubscribe() }()
-	d.tracker.MarkSourceAvailable()
-	d.alive.Store(true)
-	defer d.alive.Store(false)
-	defer d.tracker.MarkSourceUnavailable()
-
-	for {
-		select {
-		case ev, open := <-sessSub.Events:
-			if !open {
-				return nil
-			}
-			d.handleSession(ctx, ev)
-		case ev, open := <-gateSub.Events:
-			if !open {
-				return nil
-			}
-			d.handleGate(ctx, ev)
-		case <-sessSub.Errs:
-			return nil
-		case <-gateSub.Errs:
-			return nil
-		case <-ctx.Done():
-			return nil
-		}
-	}
+	return StallEvent{SessionID: sessionID, StallKind: StallKindUnknown}, epoch, true
 }
 
-// handleSession decodes ev as a sessions.SessionRecord: any record
-// touches progress, and a Blocked state additionally observes a
-// SignalBlocked. A malformed payload is swallowed (best-effort, matching
-// subscribe.go's identical rationale) rather than aborting the whole
-// subscription over one bad event.
-func (d *Detector) handleSession(ctx context.Context, ev events.Event) {
-	if ev.Kind != sessionsChangedKind {
-		return
+// rungDue reports whether sessionID may be advanced again at now.
+func (d *Detector) rungDue(sessionID string, now time.Time) bool {
+	if d.rungDelay <= 0 {
+		return true
 	}
-	var rec sessions.SessionRecord
-	if err := json.Unmarshal(ev.Payload, &rec); err != nil {
-		return
-	}
-	d.Touch(rec.SessionID)
-	if state, ok := sessions.ParseSessionState(rec.State); ok && state == sessions.StateBlocked {
-		_ = d.Observe(ctx, StallSignal{Kind: SignalBlocked, SessionID: rec.SessionID, At: d.clock.Now().UnixMilli()})
-	}
-}
-
-// handleGate decodes ev as a gateDeniedPayload and observes a
-// SignalGateDenied. A malformed payload is swallowed, matching
-// handleSession's rationale.
-func (d *Detector) handleGate(ctx context.Context, ev events.Event) {
-	if ev.Kind != gateDeniedKind {
-		return
-	}
-	var payload gateDeniedPayload
-	if err := json.Unmarshal(ev.Payload, &payload); err != nil {
-		return
-	}
-	if payload.JobID == "" || payload.SessionID == "" {
-		return
-	}
-	_ = d.Observe(ctx, StallSignal{Kind: SignalGateDenied, SessionID: payload.SessionID, JobID: payload.JobID, At: d.clock.Now().UnixMilli()})
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	at, ok := d.advanced[sessionID]
+	return !ok || now.Sub(at) >= d.rungDelay
 }
 
 // RunPoll drives Poll on every tick from the injected runtime.Ticker,
