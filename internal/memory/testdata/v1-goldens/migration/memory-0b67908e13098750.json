@@ -1,0 +1,31 @@
+{
+  "body": "# Codebase Patterns\n\nConventions specific to this repo. Read before implementing anything new.\n\n---\n\n## Error handling\n\nThis library never throws for invalid input unless the input is structurally wrong\n(wrong type, missing required field). Out-of-range values return a typed error object:\n\n```typescript\ntype Result<T> = { ok: true; value: T } | { ok: false; error: string };\n```\n\nCallers check `result.ok` before using `result.value`. This keeps the API usable in\ncontexts where try/catch is awkward (React event handlers, Promise chains, etc.).\n\n---\n\n## Exports\n\nOnly `src/index.ts` exports are public API. Everything else is internal.\n\nDo not export types that are only used internally. If a type needs to cross a function\nboundary inside the library, keep it in the narrowest file scope that works.\n\nNamed exports only — no default exports. This makes tree-shaking predictable and\nprevents the `import Foo from` vs `import { Foo } from` inconsistency.\n\n---\n\n## File naming\n\n- TypeScript source: `kebab-case.ts`\n- Test files: `kebab-case.test.ts` (in `test/`, mirroring `src/`)\n- No `.spec.ts`, no `.test.js`\n\n---\n\n## Comments\n\nFunction-level JSDoc for every exported symbol. Format:\n\n```typescript\n/**\n * Brief one-line description of what this does.\n *\n * @param input - Description of the parameter.\n * @returns Description of the return value.\n * @throws {TypeError} When input is not a string. (Include only if actually thrown.)\n *\n * @example\n * const result = myFunction(\"example\");\n */\n```\n\nInline comments explain why, not what. If the code needs a comment to explain what it\ndoes, rewrite the code to be self-explanatory first.\n\n---\n\n## Versioning\n\nPublic API follows semantic versioning. Breaking changes to any exported symbol\nrequire a major version bump, even if the change looks \"minor\" in terms of lines changed.\n\nWhen in doubt whether a change is breaking, check: can existing callers continue to\nuse the old call signature without modification? If yes, it is not breaking.\n",
+  "changes": [
+    {
+      "content_hash": "208b964c14bef4c0f58879d9fc497a8806670b4a587c29b379de3fc0a3caa7ce",
+      "operation": "create",
+      "source": "memory/patterns.md",
+      "target": "project/patterns"
+    }
+  ],
+  "domain": "memory",
+  "format_version": "1",
+  "frontmatter": {
+    "commit_sha": "REDACTED",
+    "confidence": "1",
+    "content_hash": "208b964c14bef4c0f58879d9fc497a8806670b4a587c29b379de3fc0a3caa7ce",
+    "created_at": "2026-09-12T00:00:00Z",
+    "description": "Codebase Patterns",
+    "expires_at": "REDACTED",
+    "format": "1",
+    "kind": "project",
+    "name": "patterns",
+    "origin": "file",
+    "scope_ref": "migration:v1",
+    "session_id": "v1:.cascade/memory/patterns.md",
+    "supersedes": "REDACTED",
+    "updated_at": "2026-09-12T00:00:00Z"
+  },
+  "input": "memory/patterns.md",
+  "input_digest": "cebc25bc841f4b47b0fabb1c84ebaae780cd47585ad0f594d817bafba8f94705"
+}

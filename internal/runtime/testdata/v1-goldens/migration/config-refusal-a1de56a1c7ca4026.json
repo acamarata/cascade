@@ -1,0 +1,14 @@
+{
+  "domain": "config",
+  "error": "invalid-input: migration v1 config: unknown keys quarantined; destination was not written: invalid-input: migration v1: unknown input",
+  "format_version": "1",
+  "input": "config/daemon-integration.toml",
+  "input_digest": "9bf2c75a43ccf1c2e9a67810b907397c76bf390c291f9fdfec706d33478b808b",
+  "refused_key_paths": [
+    "project_poller.enabled",
+    "project_poller.interval_secs",
+    "quota_poller.enabled",
+    "quota_poller.interval_secs",
+    "watcher.debounce_ms"
+  ]
+}

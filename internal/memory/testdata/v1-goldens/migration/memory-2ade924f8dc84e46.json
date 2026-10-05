@@ -1,0 +1,31 @@
+{
+  "body": "---\nname: REDACTED\ndescription: REDACTED\ntype: feedback\n---\nREDACTED\n",
+  "changes": [
+    {
+      "content_hash": "2148f3bc2ef5436f93485ca824598bc08fe2de0341fd90fb9b806d75758d83c6",
+      "operation": "create",
+      "source": "memory/feedback-redacted.md",
+      "target": "feedback/feedback-redacted"
+    }
+  ],
+  "domain": "memory",
+  "format_version": "1",
+  "frontmatter": {
+    "commit_sha": "REDACTED",
+    "confidence": "1",
+    "content_hash": "2148f3bc2ef5436f93485ca824598bc08fe2de0341fd90fb9b806d75758d83c6",
+    "created_at": "2026-09-12T00:00:00Z",
+    "description": "REDACTED",
+    "expires_at": "REDACTED",
+    "format": "1",
+    "kind": "feedback",
+    "name": "feedback-redacted",
+    "origin": "file",
+    "scope_ref": "migration:v1",
+    "session_id": "v1:.cascade/memory/feedback-redacted.md",
+    "supersedes": "REDACTED",
+    "updated_at": "2026-09-12T00:00:00Z"
+  },
+  "input": "memory/feedback-redacted.md",
+  "input_digest": "71e9031d890263315dec9939cea2aca5ca21151ad2b25e8ed865d7c804d11880"
+}

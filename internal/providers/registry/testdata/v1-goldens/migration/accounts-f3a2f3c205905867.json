@@ -1,0 +1,61 @@
+{
+  "changes": [
+    {
+      "content_hash": "REDACTED",
+      "operation": "create",
+      "source": "accounts/accounts.json",
+      "target": "ACCOUNT-1"
+    }
+  ],
+  "domain": "accounts",
+  "format_version": "1",
+  "input": "accounts/accounts.json",
+  "input_digest": "b4c0b0e9f8cbebcc63ecf1cf524d63f075cffaeb2bda134f8cc4f2ef7af1b842",
+  "journal": [
+    {
+      "code": "accounts.metadata",
+      "detail": "REDACTED",
+      "source": "accounts/accounts.json#REDACTED"
+    },
+    {
+      "code": "accounts.model-matrix",
+      "detail": "REDACTED",
+      "source": "accounts/accounts.json"
+    }
+  ],
+  "providers": [
+    {
+      "AccountKind": "shared",
+      "Auth": "oauth",
+      "AuthRef": "NAME-1",
+      "BaseURL": "REDACTED",
+      "Capabilities": "REDACTED",
+      "CapabilitiesProbedAt": "REDACTED",
+      "Cost": "REDACTED",
+      "CreatedAt": "REDACTED",
+      "DemotionCount": "REDACTED",
+      "Driver": "openai-compat",
+      "HealthCheckedAt": "REDACTED",
+      "HealthStatus": "REDACTED",
+      "KnownModels": [
+        "gpt-5.5",
+        "gpt-5.6-terra",
+        "gpt-5.6-sol",
+        "gpt-5.6-luna",
+        "gpt-5.4-mini"
+      ],
+      "Name": "ACCOUNT-1",
+      "Tier": "strong",
+      "UpdatedAt": "REDACTED"
+    }
+  ],
+  "reauth": [
+    {
+      "account": "ACCOUNT-1",
+      "driver": "REDACTED",
+      "methods": [
+        "REDACTED"
+      ]
+    }
+  ]
+}

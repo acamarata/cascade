@@ -1,0 +1,31 @@
+{
+  "body": "# Technical Decisions\n\nOne entry per decision. Newest at the top.\n\n---\n\n## 2026-05-15: Zero runtime dependencies\n\n**Decision:** Ship with zero runtime dependencies.\n\n**Why:** This is a utility library. Every runtime dependency becomes a transitive\ndependency for every downstream user. Keeping the dep tree empty reduces install size,\nremoves vulnerability surface, and eliminates version conflict risk.\n\n**Alternatives considered:**\n- Using lodash for utility functions: rejected — the functions needed are small enough\n  to implement inline, and adding lodash adds ~70KB to user bundle.\n- Using a date library for timestamp handling: rejected — `Date` is sufficient for\n  the ISO 8601 strings this library works with.\n\n**Revisit trigger:** If we need a non-trivial algorithm that would take >200 lines to\nimplement correctly (e.g., a cryptographic primitive), reconsider.\n\n---\n\n## 2026-04-28: tsup for build tooling\n\n**Decision:** Use tsup to produce dual CJS+ESM output.\n\n**Why:** tsup handles the CJS/ESM split without manual rollup configuration. Produces\n`dist/index.mjs`, `dist/index.cjs`, and `dist/index.d.ts` from a single config line.\nThe exports map in package.json then lets bundlers and Node pick the right format.\n\n**Alternatives considered:**\n- Raw tsc: doesn't handle CJS/ESM split without extra tooling.\n- esbuild directly: more control but more configuration — tsup wraps esbuild anyway.\n- Rollup: mature but verbose config for a simple library.\n\n---\n\n## 2026-04-20: Node built-in test runner over Jest/Vitest\n\n**Decision:** Use `node --test` (Node built-in) instead of Jest or Vitest.\n\n**Why:** No additional dependency. The built-in runner handles async, assertions, and\nsubtests for the test surface this library has. Jest and Vitest add hundreds of KB\nand a transform step for no benefit in a zero-framework library.\n\n**Constraint:** Requires Node 20+. The CI matrix starts at Node 20, so this is fine.\n",
+  "changes": [
+    {
+      "content_hash": "e5945c1633cb1abcbbe924efff2a167675bd588d5a782d7c55fdd47ec12969cd",
+      "operation": "create",
+      "source": "memory/decisions.md",
+      "target": "project/decisions"
+    }
+  ],
+  "domain": "memory",
+  "format_version": "1",
+  "frontmatter": {
+    "commit_sha": "REDACTED",
+    "confidence": "1",
+    "content_hash": "e5945c1633cb1abcbbe924efff2a167675bd588d5a782d7c55fdd47ec12969cd",
+    "created_at": "2026-09-12T00:00:00Z",
+    "description": "Technical Decisions",
+    "expires_at": "REDACTED",
+    "format": "1",
+    "kind": "project",
+    "name": "decisions",
+    "origin": "file",
+    "scope_ref": "migration:v1",
+    "session_id": "v1:.cascade/memory/decisions.md",
+    "supersedes": "REDACTED",
+    "updated_at": "2026-09-12T00:00:00Z"
+  },
+  "input": "memory/decisions.md",
+  "input_digest": "566e2341ab1cd5aa4f78380c4c7c5b4b52c2b474f202dae4b7e6608ba1c99d05"
+}

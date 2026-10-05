@@ -1,0 +1,31 @@
+{
+  "body": "# Lessons Learned\n\nGotchas and mistakes discovered during development. Read before working on related areas.\n\n---\n\n## 2026-05-18: ESM/CJS exports map order matters\n\n**Context:** Consumer using `require()` was getting the ESM bundle instead of CJS.\n\n**Root cause:** The exports map had `\"import\"` before `\"require\"`. Some bundlers and\nNode versions process the first matching condition, and bundlers running in CJS mode\nmatched `\"import\"` first due to a bug in their resolver.\n\n**Fix:** Put `\"types\"` first, then `\"import\"`, then `\"require\"`. The flat exports shape\n(not nested `import.types`/`require.types`) resolves correctly in all tested toolchains.\n\n**Correct shape:**\n```json\n\".\": {\n  \"types\": \"./dist/index.d.ts\",\n  \"import\": \"./dist/index.mjs\",\n  \"require\": \"./dist/index.cjs\"\n}\n```\n\n---\n\n## 2026-05-02: `pnpm pack --dry-run` vs `npm pack --dry-run`\n\n**Context:** CI was passing but the published package was missing `dist/` files.\n\n**Root cause:** `pnpm pack --dry-run` showed the right files, but the actual `npm publish`\nran a fresh build that didn't output to the path listed in `files`. The `prepack` script\nwas not set.\n\n**Fix:** Add `\"prepack\": \"pnpm run build\"` to package.json scripts. This ensures\n`dist/` is always fresh before packing, regardless of local build state.\n\n---\n\n## 2026-04-30: TypeScript declaration maps vs .d.ts.map\n\n**Context:** IDE \"go to source\" was jumping to dist/index.d.ts instead of src/index.ts.\n\n**Root cause:** tsup was generating `.d.ts` files but not `.d.ts.map` source maps.\n\n**Fix:** Add `dts: { resolve: true }` in tsup.config.ts. This generates both `.d.ts`\nand `.d.ts.map`, letting IDEs navigate to the TypeScript source.\n",
+  "changes": [
+    {
+      "content_hash": "12ca047976e3ab38bc323cfddb583e7ed7f44168f4cc1e083c098d024e89d7c6",
+      "operation": "create",
+      "source": "memory/lessons.md",
+      "target": "project/lessons"
+    }
+  ],
+  "domain": "memory",
+  "format_version": "1",
+  "frontmatter": {
+    "commit_sha": "REDACTED",
+    "confidence": "1",
+    "content_hash": "12ca047976e3ab38bc323cfddb583e7ed7f44168f4cc1e083c098d024e89d7c6",
+    "created_at": "2026-09-12T00:00:00Z",
+    "description": "Lessons Learned",
+    "expires_at": "REDACTED",
+    "format": "1",
+    "kind": "project",
+    "name": "lessons",
+    "origin": "file",
+    "scope_ref": "migration:v1",
+    "session_id": "v1:.cascade/memory/lessons.md",
+    "supersedes": "REDACTED",
+    "updated_at": "2026-09-12T00:00:00Z"
+  },
+  "input": "memory/lessons.md",
+  "input_digest": "b7a09d30839564b450e3e23904f259c674a2033e1d9a6ea89e73a3d06b23e8dc"
+}

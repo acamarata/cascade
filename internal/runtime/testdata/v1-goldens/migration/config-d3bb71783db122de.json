@@ -1,0 +1,24 @@
+{
+  "changes": [
+    {
+      "content_hash": "REDACTED",
+      "operation": "create",
+      "source": "config/daemon-known.toml#schema_version",
+      "target": "schema_version"
+    },
+    {
+      "content_hash": "REDACTED",
+      "operation": "create",
+      "source": "config/daemon-known.toml#daemon.log_level",
+      "target": "logging.level"
+    }
+  ],
+  "config": {
+    "logging.level": "info",
+    "schema_version": 1
+  },
+  "domain": "config",
+  "format_version": "1",
+  "input": "config/daemon-known.toml",
+  "input_digest": "b4456f17174cf631b200e0b798e1842ec51b8796d5f192dcf93ae75b73d5e30f"
+}
