@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05T09:41:43Z",
+  "generated_at": "2026-10-05T19:37:30Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -294,6 +294,18 @@
           "line": 22,
           "status": "CHANGE",
           "raw": "DOCTOR_SECRETS_REGISTRATION: CHANGE (cmd/cascade doctor mounts)."
+        },
+        {
+          "file": "cmd/cascade/doctor_mounts_sources.go",
+          "line": 14,
+          "status": "CHANGE",
+          "raw": "DOCTOR_SECRETS_REGISTRATION: CHANGE (cmd/cascade doctor sources)."
+        },
+        {
+          "file": "cmd/cascade/doctor_mounts_sources_test.go",
+          "line": 5,
+          "status": "CHANGE",
+          "raw": "DOCTOR_SECRETS_REGISTRATION: CHANGE (tests)."
         },
         {
           "file": "cmd/cascade/doctor_mounts_test.go",
@@ -1901,20 +1913,6 @@
           "line": 7,
           "status": "ADD",
           "raw": "Verdict/ADDED"
-        }
-      ],
-      "statuses": [
-        "ADD"
-      ]
-    },
-    {
-      "name": "VerifyMinisign",
-      "sites": [
-        {
-          "file": "internal/nodes/minisign.go",
-          "line": 28,
-          "status": "ADD",
-          "raw": "VerifyMinisign/ADDED"
         }
       ],
       "statuses": [
@@ -3869,6 +3867,12 @@
           "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
         },
         {
+          "file": "cmd/cascade/wire_resume.go",
+          "line": 26,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-CORE-15)."
+        },
+        {
           "file": "cmd/cascade/wire_review_rpc.go",
           "line": 4,
           "status": "",
@@ -4626,11 +4630,76 @@
           "raw": "cmd/cascade/daemon (ADD, lifecycle lint)."
         },
         {
+          "file": "cmd/cascade/daemon_logs.go",
+          "line": 26,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGE, daemon logs mount)."
+        },
+        {
+          "file": "cmd/cascade/daemon_logs_test.go",
+          "line": 7,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGE, daemon logs tests)."
+        },
+        {
           "file": "cmd/cascade/daemon_resume.go",
-          "line": 29,
-          "status": "ADD",
-          "ticket": "T-2",
-          "raw": "cmd/cascade/daemon (ADD, per T-2 sport_updates)."
+          "line": 19,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGE, P1-CORE-15)."
+        },
+        {
+          "file": "cmd/cascade/daemon_resume_child_test.go",
+          "line": 17,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGE, P1-CORE-15)."
+        },
+        {
+          "file": "cmd/cascade/daemon_resume_cli_test.go",
+          "line": 8,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGE, P1-CORE-15)."
+        },
+        {
+          "file": "cmd/cascade/daemon_resume_crash_test.go",
+          "line": 12,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGE, P1-CORE-15)."
+        },
+        {
+          "file": "cmd/cascade/daemon_resume_guard_test.go",
+          "line": 16,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGE, P1-CORE-15)."
+        },
+        {
+          "file": "cmd/cascade/daemon_resume_harness_test.go",
+          "line": 18,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGE, P1-CORE-15)."
+        },
+        {
+          "file": "cmd/cascade/daemon_resume_reattach_test.go",
+          "line": 11,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGE, P1-CORE-15)."
+        },
+        {
+          "file": "cmd/cascade/daemon_resume_sites_test.go",
+          "line": 12,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGE, P1-CORE-15)."
+        },
+        {
+          "file": "cmd/cascade/daemon_resume_sweep_test.go",
+          "line": 11,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGE, P1-CORE-15)."
+        },
+        {
+          "file": "cmd/cascade/daemon_resume_wire_test.go",
+          "line": 15,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGE, P1-CORE-15)."
         },
         {
           "file": "cmd/cascade/daemon_service.go",
@@ -5080,6 +5149,18 @@
           "raw": "cmd/cascade/doctor (ADD) - doctor command"
         },
         {
+          "file": "cmd/cascade/doctor_config_perm.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "cmd/cascade/doctor (ADD, config-permissions mount)."
+        },
+        {
+          "file": "cmd/cascade/doctor_config_perm_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "cmd/cascade/doctor (ADD, config-permissions tests)."
+        },
+        {
           "file": "cmd/cascade/doctor_confirm.go",
           "line": 9,
           "status": "CHANGE",
@@ -5097,6 +5178,18 @@
           "line": 10,
           "status": "ADD",
           "raw": "cmd/cascade/doctor (ADD - counts subcommand)."
+        },
+        {
+          "file": "cmd/cascade/doctor_daemon_state.go",
+          "line": 23,
+          "status": "ADD",
+          "raw": "cmd/cascade/doctor (ADD, daemon-state checks)."
+        },
+        {
+          "file": "cmd/cascade/doctor_daemon_state_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "cmd/cascade/doctor (ADD, daemon-state check tests)."
         },
         {
           "file": "cmd/cascade/doctor_mounts_completion.go",
@@ -6836,13 +6929,38 @@
       "sites": [
         {
           "file": "internal/context/discover.go",
-          "line": 28,
+          "line": 26,
           "status": "ADD",
           "ticket": "T-1",
           "raw": "context-engine/discovery (ADD, per T-1 sport_updates)."
+        },
+        {
+          "file": "internal/context/discover_git.go",
+          "line": 17,
+          "status": "",
+          "raw": "context-engine/discovery."
+        },
+        {
+          "file": "internal/context/discover_load.go",
+          "line": 19,
+          "status": "",
+          "raw": "context-engine/discovery."
+        },
+        {
+          "file": "internal/context/discover_open_other.go",
+          "line": 10,
+          "status": "",
+          "raw": "context-engine/discovery."
+        },
+        {
+          "file": "internal/context/discover_open_unix.go",
+          "line": 15,
+          "status": "",
+          "raw": "context-engine/discovery."
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -7214,6 +7332,38 @@
       ]
     },
     {
+      "name": "context/repo-identity",
+      "sites": [
+        {
+          "file": "internal/context/git_common_dir.go",
+          "line": 33,
+          "status": "ADD",
+          "raw": "context/repo-identity/ADD."
+        },
+        {
+          "file": "internal/context/git_remote_url.go",
+          "line": 22,
+          "status": "ADD",
+          "raw": "context/repo-identity/ADD."
+        },
+        {
+          "file": "internal/context/scope/canonical_root.go",
+          "line": 31,
+          "status": "ADD",
+          "raw": "context/repo-identity/ADD."
+        },
+        {
+          "file": "internal/context/scope/ensure_repository.go",
+          "line": 34,
+          "status": "ADD",
+          "raw": "context/repo-identity/ADD."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "context/scope-graph",
       "sites": [
         {
@@ -7258,7 +7408,7 @@
       "sites": [
         {
           "file": "internal/context/scope/doc.go",
-          "line": 31,
+          "line": 62,
           "status": "",
           "raw": "context/scope-model + context/scope-graph +"
         }
@@ -7279,6 +7429,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "contract:driver-egress-proxy",
+      "sites": [
+        {
+          "file": "internal/providers/agents/egressproxy/destination.go",
+          "line": 16,
+          "status": "",
+          "raw": "contract:driver-egress-proxy (cap:egress-policy, cap:agent-drivers)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -8353,6 +8517,13 @@
           "raw": "fleet.supervision.stall/ADDED (P1-E18-W4-S39-T5)."
         },
         {
+          "file": "internal/fleet/supervision/stall_run.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E18-W4-S39-T5",
+          "raw": "fleet.supervision.stall/ADDED (P1-E18-W4-S39-T5)."
+        },
+        {
           "file": "internal/fleet/supervision/stall_tracker.go",
           "line": 19,
           "status": "ADD",
@@ -8365,6 +8536,44 @@
           "status": "ADD",
           "ticket": "P1-E18-W4-S39-T5",
           "raw": "fleet.supervision.stall/ADDED (P1-E18-W4-S39-T5)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.supervision.stall-rungs",
+      "sites": [
+        {
+          "file": "internal/fleet/supervision/directives.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "fleet.supervision.stall-rungs/ADDED (P1-SUP-03)."
+        },
+        {
+          "file": "internal/fleet/supervision/stall_compose.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "fleet.supervision.stall-rungs/ADDED (P1-SUP-03)."
+        },
+        {
+          "file": "internal/fleet/supervision/stall_config.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "fleet.supervision.stall-rungs/ADDED (P1-SUP-03)."
+        },
+        {
+          "file": "internal/fleet/supervision/stall_publish.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "fleet.supervision.stall-rungs/ADDED (P1-SUP-03)."
+        },
+        {
+          "file": "internal/fleet/supervision/stall_rungs.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "fleet.supervision.stall-rungs/ADDED (P1-SUP-03)."
         }
       ],
       "statuses": [
@@ -8595,10 +8804,33 @@
       "sites": [
         {
           "file": "internal/fleet/economics/reserve.go",
-          "line": 22,
+          "line": 18,
           "status": "ADD",
-          "ticket": "P1-E41-W9-S79-T4",
-          "raw": "fleet/economics/reservation/ADD (P1-E41-W9-S79-T4)."
+          "raw": "fleet/economics/reservation/ADD."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_actual.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "fleet/economics/reservation/ADD."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_availability.go",
+          "line": 24,
+          "status": "ADD",
+          "raw": "fleet/economics/reservation/ADD."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_bind.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "fleet/economics/reservation/ADD."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_cascade.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "fleet/economics/reservation/ADD."
         },
         {
           "file": "internal/fleet/economics/reserve_errors.go",
@@ -8616,14 +8848,31 @@
         },
         {
           "file": "internal/fleet/economics/reserve_fixtures_test.go",
-          "line": 7,
+          "line": 10,
           "status": "ADD",
-          "ticket": "P1-E41-W9-S79-T4",
-          "raw": "fleet/economics/reservation/ADD (P1-E41-W9-S79-T4)."
+          "raw": "fleet/economics/reservation/ADD."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_heartbeat.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "fleet/economics/reservation/ADD."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_ledger.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "fleet/economics/reservation/ADD."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_ledger_crash_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "fleet/economics/reservation/ADD."
         },
         {
           "file": "internal/fleet/economics/reserve_migration.go",
-          "line": 15,
+          "line": 21,
           "status": "ADD",
           "ticket": "P1-E41-W9-S79-T4",
           "raw": "fleet/economics/reservation/ADD (P1-E41-W9-S79-T4)."
@@ -8636,25 +8885,41 @@
           "raw": "fleet/economics/reservation/ADD (P1-E41-W9-S79-T4)."
         },
         {
-          "file": "internal/fleet/economics/reserve_store.go",
+          "file": "internal/fleet/economics/reserve_resume.go",
           "line": 19,
           "status": "ADD",
-          "ticket": "P1-E41-W9-S79-T4",
-          "raw": "fleet/economics/reservation/ADD (P1-E41-W9-S79-T4)."
+          "raw": "fleet/economics/reservation/ADD."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_store.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "fleet/economics/reservation/ADD."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_sweep.go",
+          "line": 29,
+          "status": "ADD",
+          "raw": "fleet/economics/reservation/ADD."
         },
         {
           "file": "internal/fleet/economics/reserve_teardown.go",
-          "line": 19,
+          "line": 24,
+          "status": "ADD",
+          "raw": "fleet/economics/reservation/ADD."
+        },
+        {
+          "file": "internal/fleet/economics/reserve_types.go",
+          "line": 23,
           "status": "ADD",
           "ticket": "P1-E41-W9-S79-T4",
           "raw": "fleet/economics/reservation/ADD (P1-E41-W9-S79-T4)."
         },
         {
-          "file": "internal/fleet/economics/reserve_types.go",
-          "line": 20,
+          "file": "internal/fleet/economics/reserve_units.go",
+          "line": 16,
           "status": "ADD",
-          "ticket": "P1-E41-W9-S79-T4",
-          "raw": "fleet/economics/reservation/ADD (P1-E41-W9-S79-T4)."
+          "raw": "fleet/economics/reservation/ADD."
         }
       ],
       "statuses": [
@@ -12915,14 +13180,14 @@
       "sites": [
         {
           "file": "internal/fleet/resume/coverage_test.go",
-          "line": 5,
+          "line": 4,
           "status": "ADD",
           "ticket": "P1-E13-W3-S27-T2",
           "raw": "internal.fleet.resume.ResumeManager/ADDED (tests) (P1-E13-W3-S27-T2)."
         },
         {
           "file": "internal/fleet/resume/doc.go",
-          "line": 50,
+          "line": 54,
           "status": "ADD",
           "ticket": "P1-E13-W3-S27-T2",
           "raw": "internal.fleet.resume.ResumeManager/ADDED (P1-E13-W3-S27-T2)."
@@ -12943,7 +13208,7 @@
           "file": "internal/fleet/resume/leg_results.go",
           "line": 16,
           "status": "CHANGE",
-          "raw": "internal.fleet.resume.ResumeManager/CHANGE (P1-CORE-18)."
+          "raw": "internal.fleet.resume.ResumeManager/CHANGE (P1-CORE-15)."
         },
         {
           "file": "internal/fleet/resume/leg_results_errors_test.go",
@@ -12980,7 +13245,7 @@
         },
         {
           "file": "internal/fleet/resume/resume_test.go",
-          "line": 4,
+          "line": 5,
           "status": "ADD",
           "ticket": "P1-E13-W3-S27-T2",
           "raw": "internal.fleet.resume.ResumeManager/ADDED (tests) (P1-E13-W3-S27-T2)."
@@ -13000,14 +13265,13 @@
         },
         {
           "file": "internal/fleet/resume/submit.go",
-          "line": 14,
-          "status": "ADD",
-          "ticket": "P1-E13-W3-S27-T2",
-          "raw": "internal.fleet.resume.ResumeManager/ADDED (P1-E13-W3-S27-T2)."
+          "line": 9,
+          "status": "CHANGE",
+          "raw": "internal.fleet.resume.ResumeManager/CHANGE (P1-CORE-15)."
         },
         {
           "file": "internal/fleet/resume/submit_kill9_test.go",
-          "line": 7,
+          "line": 9,
           "status": "ADD",
           "ticket": "P1-E13-W3-S27-T2",
           "raw": "internal.fleet.resume.ResumeManager/ADDED (tests) (P1-E13-W3-S27-T2)."
@@ -13015,9 +13279,8 @@
         {
           "file": "internal/fleet/resume/submit_test.go",
           "line": 6,
-          "status": "ADD",
-          "ticket": "P1-E13-W3-S27-T2",
-          "raw": "internal.fleet.resume.ResumeManager/ADDED (tests) (P1-E13-W3-S27-T2)."
+          "status": "CHANGE",
+          "raw": "internal.fleet.resume.ResumeManager/CHANGE (tests) (P1-CORE-15)."
         }
       ],
       "statuses": [
@@ -13030,19 +13293,20 @@
       "sites": [
         {
           "file": "internal/fleet/resume/sweep.go",
-          "line": 16,
+          "line": 19,
           "status": "ADD",
           "raw": "internal.fleet.resume.Sweep/ADDED (P1-CORE-19)."
         },
         {
           "file": "internal/fleet/resume/sweep_test.go",
-          "line": 7,
-          "status": "ADD",
-          "raw": "internal.fleet.resume.Sweep/ADDED (P1-CORE-19)."
+          "line": 8,
+          "status": "CHANGE",
+          "raw": "internal.fleet.resume.Sweep/CHANGE (P1-CORE-15)."
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -17187,9 +17451,9 @@
         },
         {
           "file": "internal/daemon/lifecycle_unix_serve.go",
-          "line": 22,
+          "line": 24,
           "status": "CHANGE",
-          "raw": "internal/daemon (CHANGE)."
+          "raw": "internal/daemon (CHANGE, P1-CORE-15 P1-BF-R138)."
         },
         {
           "file": "internal/daemon/lifecycle_unix_serve_integration_test.go",
@@ -17288,6 +17552,18 @@
           "status": "CHANGE",
           "ticket": "P1-E17-W4-S37-T2",
           "raw": "internal/daemon (CHANGED, P1-E17-W4-S37-T2 settings split)."
+        },
+        {
+          "file": "internal/daemon/settings_resume.go",
+          "line": 10,
+          "status": "CHANGE",
+          "raw": "internal/daemon (CHANGE, P1-CORE-15)."
+        },
+        {
+          "file": "internal/daemon/settings_resume_test.go",
+          "line": 4,
+          "status": "CHANGE",
+          "raw": "internal/daemon (CHANGE, P1-CORE-15)."
         },
         {
           "file": "internal/daemon/status.go",
@@ -18732,6 +19008,76 @@
       ]
     },
     {
+      "name": "internal/minisign Signature/MOVED, Verify/MOVED",
+      "sites": [
+        {
+          "file": "internal/minisign/minisign.go",
+          "line": 28,
+          "status": "",
+          "raw": "internal/minisign Signature/MOVED, Verify/MOVED"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/minisign TestNoSecondMinisignCodec",
+      "sites": [
+        {
+          "file": "internal/minisign/nocodec_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal/minisign TestNoSecondMinisignCodec"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/minisign TestVerify_FailureNamesReason",
+      "sites": [
+        {
+          "file": "internal/minisign/verify_reasons_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "internal/minisign TestVerify_FailureNamesReason"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/minisign TestVersionVerifyRealMinisign",
+      "sites": [
+        {
+          "file": "internal/minisign/minisign_integration_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "internal/minisign TestVersionVerifyRealMinisign"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/minisign realArtifact",
+      "sites": [
+        {
+          "file": "internal/minisign/realcli_integration_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/minisign realArtifact"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/nodes",
       "sites": [
         {
@@ -18886,20 +19232,6 @@
           "status": "ADD",
           "ticket": "P1-E17-W4-S36-T2",
           "raw": "internal/nodes Liveness/ADDED (P1-E17-W4-S36-T2)."
-        }
-      ],
-      "statuses": [
-        "ADD"
-      ]
-    },
-    {
-      "name": "internal/nodes MinisignSignature",
-      "sites": [
-        {
-          "file": "internal/nodes/minisign.go",
-          "line": 28,
-          "status": "ADD",
-          "raw": "internal/nodes MinisignSignature/ADDED"
         }
       ],
       "statuses": [
@@ -19189,21 +19521,6 @@
           "status": "",
           "ticket": "P1-E17-W4-S36-T3",
           "raw": "internal/nodes TestTunnelRealSSHD (P1-E17-W4-S36-T3)."
-        }
-      ],
-      "statuses": [
-        ""
-      ]
-    },
-    {
-      "name": "internal/nodes TestVersionVerifyRealMinisign",
-      "sites": [
-        {
-          "file": "internal/nodes/minisign_integration_test.go",
-          "line": 11,
-          "status": "",
-          "ticket": "P1-E17-W4-S36-T5",
-          "raw": "internal/nodes TestVersionVerifyRealMinisign (P1-E17-W4-S36-T5)."
         }
       ],
       "statuses": [
@@ -23499,6 +23816,12 @@
       "name": "internal/secrets Custody availability probe",
       "sites": [
         {
+          "file": "internal/secrets/custody_darwin_probe.go",
+          "line": 16,
+          "status": "",
+          "raw": "internal/secrets Custody availability probe (P1-SEC-28, P1-SEC-42)."
+        },
+        {
           "file": "internal/secrets/custody_darwin_probe_test.go",
           "line": 12,
           "status": "ADD",
@@ -23507,7 +23830,22 @@
         }
       ],
       "statuses": [
+        "",
         "ADD"
+      ]
+    },
+    {
+      "name": "internal/secrets Custody probe refusals",
+      "sites": [
+        {
+          "file": "internal/secrets/custody_probe_errors.go",
+          "line": 9,
+          "status": "",
+          "raw": "internal/secrets Custody probe refusals (P1-SEC-28, P1-SEC-42)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -24525,20 +24863,20 @@
         },
         {
           "file": "internal/jobs/lease_fence_unix.go",
-          "line": 28,
+          "line": 33,
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T2",
           "raw": "jobs/lease-model (ADD, P1-E29-W6-S59-T2)."
         },
         {
           "file": "internal/jobs/lease_fence_unix_test.go",
-          "line": 17,
+          "line": 19,
           "status": "",
           "raw": "jobs/lease-model (FIX, coverage floor restoration)."
         },
         {
           "file": "internal/jobs/lease_fence_windows.go",
-          "line": 21,
+          "line": 23,
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T2",
           "raw": "jobs/lease-model (ADD, P1-E29-W6-S59-T2)."
@@ -30137,6 +30475,20 @@
       ]
     },
     {
+      "name": "providers.internal.dsnredact",
+      "sites": [
+        {
+          "file": "providers/internal/dsnredact/dsnredact.go",
+          "line": 24,
+          "status": "ADD",
+          "raw": "providers.internal.dsnredact/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "providers.localvector.FlatVectorStore",
       "sites": [
         {
@@ -30233,13 +30585,13 @@
       "sites": [
         {
           "file": "providers/pgvector/pgvector_conn.go",
-          "line": 20,
-          "status": "ADD",
-          "raw": "providers.pgvector.wrapConnError/ADDED."
+          "line": 19,
+          "status": "CHANGE",
+          "raw": "providers.pgvector.wrapConnError/CHANGED."
         }
       ],
       "statuses": [
-        "ADD"
+        "CHANGE"
       ]
     },
     {
@@ -30267,14 +30619,14 @@
         },
         {
           "file": "providers/postgres/postgres_errors.go",
-          "line": 30,
+          "line": 28,
           "status": "CHANGE",
           "ticket": "P1-E17-W4-S38-T4",
           "raw": "providers.postgres.Store/CHANGED (P1-E17-W4-S38-T4)."
         },
         {
           "file": "providers/postgres/postgres_errors_test.go",
-          "line": 7,
+          "line": 8,
           "status": "CHANGE",
           "ticket": "P1-E17-W4-S38-T4",
           "raw": "providers.postgres.Store/CHANGED (P1-E17-W4-S38-T4)."
@@ -30345,7 +30697,7 @@
         },
         {
           "file": "providers/redis/redis.go",
-          "line": 30,
+          "line": 31,
           "status": "ADD",
           "ticket": "P1-E17-W4-S38-T6",
           "raw": "providers.redis/ADDED (P1-E17-W4-S38-T6)."
@@ -31185,6 +31537,12 @@
           "raw": "placeholder: retrieval/evaluation (ADD, P1-E06-W2-S12-T6)."
         },
         {
+          "file": "internal/retrieval/eval/pairsweep_test.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "placeholder: retrieval/evaluation (ADD, P1-GWY-12)."
+        },
+        {
           "file": "internal/retrieval/eval/types.go",
           "line": 19,
           "status": "ADD",
@@ -31197,6 +31555,30 @@
           "status": "ADD",
           "ticket": "P1-E06-W2-S12-T6",
           "raw": "placeholder: retrieval/evaluation (ADD, P1-E06-W2-S12-T6)."
+        },
+        {
+          "file": "internal/retrieval/eval/vectorizer/cmd/regen/main.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "placeholder: retrieval/evaluation (ADD, P1-GWY-12)."
+        },
+        {
+          "file": "internal/retrieval/eval/vectorizer/cmd/regen/main_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "placeholder: retrieval/evaluation (ADD, P1-GWY-12)."
+        },
+        {
+          "file": "internal/retrieval/eval/vectorizer/vectorizer.go",
+          "line": 42,
+          "status": "ADD",
+          "raw": "placeholder: retrieval/evaluation (ADD, P1-GWY-12)."
+        },
+        {
+          "file": "internal/retrieval/eval/vectorizer/vectorizer_test.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "placeholder: retrieval/evaluation (ADD, P1-GWY-12)."
         }
       ],
       "statuses": [
@@ -32332,7 +32714,7 @@
       ]
     }
   ],
-  "total_sites": 3082,
-  "unspecified_count": 160,
-  "multi_status_count": 91
+  "total_sites": 3137,
+  "unspecified_count": 166,
+  "multi_status_count": 94
 }
