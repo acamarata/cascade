@@ -1,0 +1,75 @@
+# Vocabulary for the term-count vectorizer behind recorded/real-embedder.jsonl.
+# One term per line; line order is dimension order; '#' lines are comments.
+# A term is a lower-case run of letters, digits and underscores.
+#
+# Recovery (2026-10-04): the generator that wrote the 2026-09-06 recording was
+# never committed. Each dimension of that recording is a token count plus a
+# 0.01 smoothing constant, so the term of dimension d is a token whose count
+# profile over the 30 recorded texts equals column d. Where more than one token
+# shares a profile the term below is the lexicographically smallest alphabetic
+# token (4 letters or more) not already used by an earlier dimension; where no
+# token of the texts has the profile the dimension is vacant (a placeholder that
+# no text contains). Any choice within a tied set reproduces the recorded
+# vectors for the unchanged texts; the choice is a representative, not a claim
+# about the original wording.
+above
+review
+opencode
+model
+vacant04
+cheapest
+room
+product
+thesis
+confident
+go
+vacant11
+migration
+vacant13
+flatted
+modules
+node
+package
+port
+archive
+adversarial
+accumulate
+repository
+claude
+code
+hook
+hooks
+settings
+json
+directory
+session
+vacant31
+absolute
+conductor
+flow
+fallback
+retry
+retried
+skeptic
+failure
+vacant40
+firewall
+executor
+advisor
+lane
+embed
+estate
+database
+provider
+usage
+daemon
+index
+memory
+target
+hygiene
+build
+stale
+lock
+feature
+additionalcontext
+axis

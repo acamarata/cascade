@@ -77,6 +77,8 @@
   "internal/retrieval/corpus": { "tier": "core", "floor": 85.0, "baseline": 97.7 },
   "internal/retrieval/embed": { "tier": "core", "floor": 85.0, "baseline": 95.8 },
   "internal/retrieval/eval": { "tier": "core", "floor": 85.0, "baseline": 90.6 },
+  "internal/retrieval/eval/vectorizer": { "tier": "core", "floor": 85.0, "baseline": 95.1 },
+  "internal/retrieval/eval/vectorizer/cmd/regen": { "tier": "core", "floor": 85.0, "baseline": 92.5 },
   "internal/retrieval/fusion": { "tier": "core", "floor": 85.0, "baseline": 97.6 },
   "internal/retrieval/lifecycle": { "tier": "core", "floor": 85.0, "baseline": 86.8 },
   "internal/retrieval/recall": { "tier": "core", "floor": 85.0, "baseline": 94.2 },

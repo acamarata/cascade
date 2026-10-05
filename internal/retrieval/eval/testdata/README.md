@@ -2,9 +2,14 @@
 
 ## corpus.jsonl (6 documents)
 
-Real files copied verbatim from `acamarata/cascade-v1` (archived, read-only
+Real files copied from `acamarata/cascade-v1` (archived, read-only
 per `.claude/planning/p1/ARCHIVE-MAP.md`), harvested from the local archive
-clone `../cascade-v1/` on 2026-09-06:
+clone `../cascade-v1/` on 2026-09-06. Two of them, `docs/FABLE-FULL-REVIEW-PROMPT.md`
+and `docs/cc-compat-matrix.md`, are not byte-for-byte copies: on 2026-10-04 every
+product-name phrase that the repository's private-identifier sweep denies was
+replaced by the neutral phrase `Agent CLI` (scrub class: product-name phrase in
+quoted document text; the matched values are deliberately not recorded here).
+Document ids, field sets and every other line are unchanged:
 
 `docs/FABLE-FULL-REVIEW-PROMPT.md`, `docs/adr/ADR-P8-001-no-go-migration.md`,
 `docs/cc-compat-matrix.md`, `docs/conductor-flow-contract.md`,
@@ -56,20 +61,46 @@ than shipping an honest gap, or (b) standing up the post-P1 sidecar
 artifact, which is out of this ticket's scope and depends on work that has
 not landed.
 
-What is recorded instead: a deterministic term-count vectorizer
-(`eval-harness-hashed-bow`, an internal one-off generation script, not
-shipped code) over a curated 62-term vocabulary drawn from the six corpus
-documents' real subject matter, applied to every document, known-item
-query, and semantic/paraphrase query text used by this ticket's fixtures.
-It is a real, describable, deterministic algorithm — not a mock that
-ignores its input — but it is NOT a trained embedding model, and no claim
-in this package or its docs states otherwise. `tool` in the fixture's JSON
-says exactly this. Because the algorithm is lexical (word counts), it
-shares FTS5's blind spot for paraphrases that reuse few of a document's
-own words, so `FusionDefaultGate` measuring FAIL over
-`semantic-paraphrase-queries.jsonl` is an expected, honest outcome of this
-fixture's real limits, not a defect in the gate logic — see the ticket
-journal for the measured verdict.
+What is recorded instead: the output of a committed, deterministic
+term-count vectorizer (a lexical bag of words, not a trained model) applied
+to every corpus document, known-item query and semantic/paraphrase query
+text. Because the algorithm is lexical (word counts), it shares FTS5's
+blind spot for paraphrases that reuse few of a document's own words, so
+`FusionDefaultGate` measuring FAIL over `semantic-paraphrase-queries.jsonl`
+would be an honest outcome of this fixture's real limits, not a defect in
+the gate logic. `tool` in the fixture's JSON says exactly this.
+
+### Provenance record
+
+| Item | Value |
+|---|---|
+| Generator | `internal/retrieval/eval/vectorizer/cmd/regen` (package `internal/retrieval/eval/vectorizer`; its doc comment is the method specification) |
+| Vocabulary | `internal/retrieval/eval/vectorizer/vocabulary.txt`, 61 terms, SHA-256 `d2a19e09c99ca2e94594516df1bbe671a0f9b809c2e314a9f619c14bf5cccad6` (also written into the recording's `tool` field) |
+| Tokenizer | lower-case the text; a token is a maximal run of letters, digits and underscores; every other rune separates tokens |
+| Vector | one component per vocabulary term: the number of tokens equal to the term, plus a 0.01 smoothing constant, as float32 |
+| Record order | corpus documents, then known-item queries, then semantic/paraphrase queries, each text once, in order of first appearance |
+| Version, date | `1.1.0`, `2026-10-04` (the regeneration date, passed as a flag; the generator never reads the clock) |
+| Regenerate | from the repository root: `go run ./internal/retrieval/eval/vectorizer/cmd/regen -date 2026-10-04` rewrites this file and nothing else |
+
+The file is the generator's output byte for byte (`TestRegenIsReproducible`
+regenerates it twice into temp directories and compares both to this file).
+It is never edited by hand: a corpus or query change is followed by a
+regeneration, and a text key is never changed over an old vector.
+
+History. The first recording (2026-09-06, version 1.0.0, tool
+`eval-harness-hashed-bow`) came from a generator script that was never
+committed, and its `tool` string claimed a 62-term vocabulary while its
+vectors had 61 dimensions. This generator was rebuilt from that recording:
+each dimension is a token count plus 0.01, so a term of dimension d is a
+token whose count over the 30 recorded texts equals column d. Where several
+tokens share a count profile (or no token does) the vocabulary header says
+how the representative term was chosen; five dimensions never fire on any
+recorded text and carry inert `vacantNN` placeholders. Result of the
+comparison, run before the corpus scrub: the committed generator reproduced
+all 30 records of the 2026-09-06 recording byte for byte (only `tool` and
+`version` differ). After the scrub the 28 records whose texts did not change
+still equal the 2026-09-06 records; the 2 records of the scrubbed documents
+changed in exactly the two dimensions that count the removed phrase.
 
 Loader note: despite the `.jsonl` extension (required verbatim by this
 ticket's `files_scope`), the file is one JSON document, not
