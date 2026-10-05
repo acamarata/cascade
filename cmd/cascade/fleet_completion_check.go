@@ -131,7 +131,7 @@ func runCompletionCheck(cmd *cobra.Command, deps fleetSessionsDeps, event, socke
 	var reply completionCheckReply
 	c := client.New(socket, client.DialFunc(deps.DialContext), budget)
 	if err := c.Do(ctx, hookpacks.MethodCompletionCheck, payload, &reply); err != nil {
-		return completionRefusal("request failed (" + completionErrorKind(err) + ")")
+		return completionRefusal("request failed (" + completionErrorKind(err) + "): " + err.Error())
 	}
 	return completionVerdict(reply)
 }
