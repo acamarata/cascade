@@ -1,0 +1,5 @@
+{
+  "provenance": "TRANSCRIBED, NOT CAPTURED. Copied from providers/gemini/testdata/error_403_5xx_recorded.json (case forbidden_billing_disabled), which its own provenance field and providers/gemini/testdata/README.md state was transcribed from the documented google.rpc.Status error envelope on 2026-09-06; no live 403 was recorded. The gemini driver maps it to KindCapabilityDenied (billing, not credential).",
+  "status": 403,
+  "body": "{\"error\":{\"code\":403,\"message\":\"the caller's project has billing disabled\",\"status\":\"PERMISSION_DENIED\"}}"
+}

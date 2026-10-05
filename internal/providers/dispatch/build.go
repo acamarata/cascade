@@ -9,7 +9,9 @@
 //
 //	and the Selection's resolved model name.
 //
-// Outputs: a live provider.ModelProvider, or KindUnsupported for a
+// Outputs: a live provider.ModelProvider (the real driver inside the
+//
+//	lane-outcome decorator, lane_outcome.go), or KindUnsupported for a
 //
 //	DriverKind this composition root has no driver for yet
 //	(registry.DriverLocalLLM: no providers/localllm package exists in
@@ -45,12 +47,28 @@ import (
 // Selection.Model reaches the driver through today - execute.go's own
 // toChatRequest never sets ChatRequest.Model, a separate, already
 // disclosed gap this ticket's files_scope does not include).
-func (r *Resolver) build(rec registry.ProviderRecord, model string) (provider.ModelProvider, error) {
+//
+// The driver sends through an observing Transport and is returned inside
+// the lane-outcome decorator (lane_outcome.go), so every call it makes
+// records its outcome on the lane. The decorator's Unwrap returns the
+// real driver.
+func (r *Resolver) build(lane registry.LaneRecord, rec registry.ProviderRecord, model string) (provider.ModelProvider, error) {
+	driver, err := r.newDriver(rec, model, observingTransport{inner: r.transport})
+	if err != nil {
+		return nil, err
+	}
+	recorder := &laneRecorder{lookup: r.lookup, lane: lane.LaneName, clock: r.clock, log: r.log, mu: &r.laneMu}
+	return &laneOutcomeProvider{inner: driver, rec: recorder}, nil
+}
+
+// newDriver is the DriverKind switch: one real providers/* constructor per
+// kind, every one sending through tr.
+func (r *Resolver) newDriver(rec registry.ProviderRecord, model string, tr transport.Transport) (provider.ModelProvider, error) {
 	switch rec.Driver {
 	case registry.DriverAnthropic:
 		return anthropic.New(anthropic.Config{
 			BaseURL: rec.BaseURL,
-			Doer:    transport.AnthropicDoer{Transport: r.transport},
+			Doer:    transport.AnthropicDoer{Transport: tr},
 			Clock:   r.clock,
 			Auth: anthropic.AuthConfig{
 				Mode:     anthropic.AuthModeKey,
@@ -62,7 +80,7 @@ func (r *Resolver) build(rec registry.ProviderRecord, model string) (provider.Mo
 	case registry.DriverGemini:
 		return gemini.New(gemini.Config{
 			BaseURL: rec.BaseURL,
-			Doer:    transport.GeminiDoer{Transport: r.transport},
+			Doer:    transport.GeminiDoer{Transport: tr},
 			Clock:   r.clock,
 			Auth: gemini.AuthConfig{
 				Mode:     gemini.AuthModeKey,
@@ -74,7 +92,7 @@ func (r *Resolver) build(rec registry.ProviderRecord, model string) (provider.Mo
 	case registry.DriverOllama:
 		return ollama.New(ollama.Config{
 			BaseURL:          rec.BaseURL,
-			Doer:             transport.OllamaDoer{Transport: r.transport},
+			Doer:             transport.OllamaDoer{Transport: tr},
 			Clock:            r.clock,
 			TokenRef:         rec.AuthRef.String(),
 			Resolver:         r.credentials,
@@ -85,7 +103,7 @@ func (r *Resolver) build(rec registry.ProviderRecord, model string) (provider.Mo
 			BaseURL:          rec.BaseURL,
 			KeyRef:           rec.AuthRef.String(),
 			Resolver:         r.credentials,
-			HTTPClient:       transport.OpenAIDoer{Transport: r.transport},
+			HTTPClient:       transport.OpenAIDoer{Transport: tr},
 			Clock:            r.clock,
 			DefaultChatModel: model,
 		})

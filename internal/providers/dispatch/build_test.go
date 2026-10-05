@@ -13,10 +13,25 @@ import (
 	"github.com/acamarata/cascade/providers/openai"
 )
 
+// unwrapped asserts got is the lane-outcome decorator and returns the
+// provider it wraps. A bare driver (no wrapping) fails here.
+func unwrapped(t *testing.T, got provider.ModelProvider) provider.ModelProvider {
+	t.Helper()
+	if _, ok := got.(*laneOutcomeProvider); !ok {
+		t.Fatalf("got %T, want the lane-outcome decorator", got)
+	}
+	u, ok := got.(interface{ Unwrap() provider.ModelProvider })
+	if !ok {
+		t.Fatalf("%T has no Unwrap() provider.ModelProvider", got)
+	}
+	return u.Unwrap()
+}
+
 // TestResolve_BuildsRealDriverPerKind proves Resolve is a genuine adapter,
 // not a fabricated success dressed up as one (Art.1): given a
-// CredentialSource, it returns the actual providers/* driver type the
-// registry's DriverKind names, for every kind this tree implements.
+// CredentialSource, it returns the lane-outcome decorator around the
+// actual providers/* driver type the registry's DriverKind names, for every
+// kind this tree implements.
 func TestResolve_BuildsRealDriverPerKind(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -60,7 +75,7 @@ func TestResolve_BuildsRealDriverPerKind(t *testing.T) {
 			if got == nil {
 				t.Fatal("Resolve returned a nil ModelProvider with no error")
 			}
-			tc.check(t, got)
+			tc.check(t, unwrapped(t, got))
 		})
 	}
 }

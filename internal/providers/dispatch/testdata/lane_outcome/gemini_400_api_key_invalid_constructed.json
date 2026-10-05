@@ -1,0 +1,5 @@
+{
+  "provenance": "CONSTRUCTED, NOT CAPTURED. Built for this test from the invalid-API-key shape providers/gemini/testdata/README.md documents (HTTP 400, error message containing \"API key not valid\", the google.rpc.Status envelope). The gemini driver maps a 400 carrying that envelope to KindPermissionDenied (a dead key).",
+  "status": 400,
+  "body": "{\"error\":{\"code\":400,\"message\":\"API key not valid. Please pass a valid API key.\",\"status\":\"INVALID_ARGUMENT\"}}"
+}
