@@ -40,6 +40,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/providers/internal/dsnredact"
 )
 
 // Conn is the shared, live S3 connection the BlobStore driver in this
@@ -183,19 +184,17 @@ func wrapConnError(err error, endpointURL, msg string) error {
 	return cascade.Wrapf(classifyErr(err), err, "%s %s", msg, redactEndpoint(endpointURL))
 }
 
-// redactedEndpointPlaceholder stands in for a URL net/url cannot parse at
-// all.
-const redactedEndpointPlaceholder = "s3://<redacted>"
+// endpointSchemes are the endpoint URL schemes parseEndpoint accepts;
+// dsnredact renders only these and masks anything else whole.
+var endpointSchemes = []string{"http", "https"}
 
-// redactEndpoint returns endpointURL with any userinfo removed via
-// net/url.URL.Redacted() — this package never places a credential in the
-// endpoint URL itself, but every other driver in this module redacts its
-// connection string before it can reach an error message, and this keeps
-// that invariant true here too regardless of what a caller passes.
+// redactEndpoint renders endpointURL through providers/internal/dsnredact,
+// the one redactor every driver in this module shares: the userinfo
+// password shows as xxxxx, the query and fragment are dropped, and a URL
+// it cannot render safely (unparseable, no "scheme://", an '@' past the
+// authority, another scheme) gives the <redacted-dsn> placeholder. This
+// package never places a credential in the endpoint URL itself; this keeps
+// the invariant true whatever a caller passes.
 func redactEndpoint(endpointURL string) string {
-	u, err := url.Parse(endpointURL)
-	if err != nil {
-		return redactedEndpointPlaceholder
-	}
-	return u.Redacted()
+	return dsnredact.RedactURL(endpointURL, endpointSchemes...)
 }

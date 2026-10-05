@@ -68,10 +68,12 @@ profile is now a real driver (Art.1.4), never a stub.
 - Error mapping: every native Postgres SQLSTATE code is classified into
   the `pkg/cascade` taxonomy (`postgres_errors.go`) — never a generic
   "unavailable" for a conflict, permission, or quota failure.
-- Credential custody: a DSN's password is never echoed into a log, metric
-  label, or error message. `redactDSN` uses `net/url.URL.Redacted()` (the
-  standard-library redaction path) and falls back to a fixed placeholder
-  for a DSN that fails to parse at all.
+- Credential custody: no DSN password reaches a log, metric label or error
+  message. `providers/internal/dsnredact`, the one shared redactor, drops
+  the query and masks the password. Key=value, unparseable and ambiguous
+  DSNs (an `@` past the first `/`, `?` or `#`) and unsafe `providers/redis`
+  URLs print `<redacted-dsn>`. Driver text is withheld when it holds a
+  secret, the DSN is ambiguous or unparseable, or a reconnect fails.
 
 ### pgvector VectorStore driver (`providers/pgvector`)
 
@@ -103,24 +105,25 @@ profile is now a real driver (Art.1.4), never a stub.
   | malformed DSN (pgx `ParseConfigError`) | `cascade.KindInvalidInput` |
   | unreachable server, timeout, anything else | `cascade.KindUnavailable` |
 
-  The message carries `redactDSN(dsn)` only: a postgres URL keeps scheme,
-  user, host and path, shows the password as `xxxxx` and drops the query
-  (pgx also reads `password=` there). A key=value DSN, a DSN pgx cannot
-  parse, or a rendering that still holds a secret prints `<redacted-dsn>`.
-  The raw pgx error never enters the chain. pgx v5.10.0 echoes the
-  password in `ParseConfigError` text for some DSN shapes, and its
-  `ConnectError` exports the `Config` with the password. The cause is the
-  driver text only when it holds no DSN secret; otherwise it is withheld.
+  The message carries only the `providers/internal/dsnredact` rendering: a
+  postgres URL keeps scheme, user, host and path, shows the password as
+  `xxxxx` and drops the query (pgx also reads `password=` there). A
+  key=value DSN, a DSN pgx cannot parse, an ambiguous URL or a rendering
+  that still holds a secret prints `<redacted-dsn>`. The raw pgx error
+  never enters the chain. pgx v5.10.0 echoes the password in
+  `ParseConfigError` text for some DSN shapes, and its `ConnectError`
+  exports the `Config` with the password. The cause is the driver text
+  only when it holds no DSN secret; otherwise it is withheld.
   The secret set covers every password the DSN spells, as written and
   decoded: URL userinfo (whole and its password), each `password=` and
   `sslpassword=` query value, each key=value `password`/`sslpassword`
   token with its quotes and backslash escapes (and decoded the way pgx and
   libpq each read it), plus `PGPASSWORD`, `PGSSLPASSWORD` and the
   passfile. A pooled reconnect error after `Open` is checked against the
-  same set; when pgx cannot parse the DSN the set is unknown and the text
-  is withheld. The cause unwraps to `context.Canceled` or
-  `context.DeadlineExceeded` only. A refused password is never retried on
-  another host: pgx stops at `28P01`. Unlike this driver,
+  same set; when pgx cannot parse the DSN, or it is ambiguous, the set is
+  unknown and the text is withheld. The cause unwraps to `context.Canceled`
+  or `context.DeadlineExceeded` only. A refused password is never retried
+  on another host: pgx stops at `28P01`. Unlike this driver,
   `providers/postgres` still reports a malformed DSN as `KindUnavailable`.
 
 ### Redis Cache + Queue drivers (`providers/redis`)

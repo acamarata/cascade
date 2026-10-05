@@ -24,8 +24,9 @@
 //
 // Constraints: providers/** imports pkg/** only, never internal/**
 //
-//	(Art.10.2); no CGO (06 §2); every credential-bearing value is
-//	redacted before it can reach an error message (redactURL).
+//	(Art.10.2; providers/internal/** is providers-private and allowed);
+//	no CGO (06 §2); every credential-bearing value is redacted by
+//	providers/internal/dsnredact before it can reach an error message.
 //
 // SPORT: providers.redis/ADDED (P1-E17-W4-S38-T6).
 package redis
@@ -34,13 +35,17 @@ import (
 	"context"
 	"errors"
 	"net"
-	"net/url"
 	"strings"
 
 	goredis "github.com/redis/go-redis/v9"
 
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/providers/internal/dsnredact"
 )
+
+// urlSchemes are the URL schemes go-redis's ParseURL accepts; dsnredact
+// renders only these and masks anything else whole.
+var urlSchemes = []string{"redis", "rediss", "unix"}
 
 // Conn is the shared, live Redis connection both the Cache and Queue
 // drivers in this package wrap. The zero value is not usable; construct
@@ -55,13 +60,15 @@ type Conn struct {
 // a URL go-redis cannot parse, or a server that fails to answer PING (down,
 // wrong credentials, wrong port) all return a typed, fail-closed
 // *cascade.Error — never a *Conn a caller could mistake for a working one.
+// A parse failure keeps no cause: net/url's parse error quotes the whole
+// URL, password included.
 func Open(ctx context.Context, rawURL string) (*Conn, error) {
 	if strings.TrimSpace(rawURL) == "" {
 		return nil, cascade.New(cascade.KindInvalidInput, "redis.Open: url must not be empty")
 	}
 	opts, err := goredis.ParseURL(rawURL)
 	if err != nil {
-		return nil, cascade.Wrap(cascade.KindInvalidInput, err, "redis.Open: parsing url")
+		return nil, cascade.New(cascade.KindInvalidInput, "redis.Open: parsing url "+dsnredact.RedactURL(rawURL, urlSchemes...))
 	}
 	rdb := goredis.NewClient(opts)
 	if err := rdb.Ping(ctx).Err(); err != nil {
@@ -124,25 +131,16 @@ func isAuthError(err error) bool {
 }
 
 // wrapConnError wraps a connection-establishment error (Open's Ping),
-// taking rawURL only to compute its redacted form for the message — the
-// raw URL itself is never interpolated (08 §2's credential-custody rule
-// extended to error messages, matching providers/postgres's wrapConnError).
+// taking rawURL only for dsnredact's redacted rendering: userinfo and any
+// password or sslpassword query value never reach the message (08 §2's
+// credential-custody rule extended to error messages). go-redis's dial and
+// auth errors carry the address but not the userinfo or query, so for a
+// URL that renders the cause is kept. The Kind is classified on the raw
+// error first; then dsnredact.URLCause swaps the cause for a withheld
+// stand-in when the URL does not render or the text holds a secret: an
+// '@' past the authority (an unescaped '#' in the password after a
+// numeric head) makes the dial address print the password's head.
 func wrapConnError(err error, rawURL, msg string) error {
-	return cascade.Wrapf(classifyErr(err), err, "%s %s", msg, redactURL(rawURL))
-}
-
-// redactedURLPlaceholder stands in for a URL net/url cannot parse at all,
-// so an unparseable (and therefore unpredictable-shape) URL still cannot
-// leak a credential fragment into an error message.
-const redactedURLPlaceholder = "redis://<redacted>"
-
-// redactURL returns rawURL with any userinfo password replaced via the
-// standard-library net/url.URL.Redacted() method, matching
-// providers/postgres/postgres_errors.go's redactDSN.
-func redactURL(rawURL string) string {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return redactedURLPlaceholder
-	}
-	return u.Redacted()
+	kind := classifyErr(err)
+	return cascade.Wrapf(kind, dsnredact.URLCause(err, rawURL, urlSchemes...), "%s %s", msg, dsnredact.RedactURL(rawURL, urlSchemes...))
 }

@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/acamarata/cascade/providers/internal/dsnredact"
 )
 
 // formatHolder embeds a Driver both exported and unexported, the two ways
@@ -23,9 +25,9 @@ type formatHolder struct {
 func TestDriverFormattingNeverPrintsSecrets(t *testing.T) {
 	isolatePGEnv(t)
 	dsn := "postgres://u:" + canary() + "@127.0.0.1:1/db"
-	forms, ok := dsnSecrets(dsn)
+	forms, ok := dsnredact.Secrets(dsn)
 	if !ok || len(forms) == 0 {
-		t.Fatal("dsnSecrets did not parse the fixture DSN")
+		t.Fatal("dsnredact.Secrets did not parse the fixture DSN")
 	}
 	d := &Driver{secrets: newSecretSet(forms)}
 	subjects := map[string]any{

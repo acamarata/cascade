@@ -4,10 +4,10 @@
 //
 //	the taxonomy Kind that best describes its real cause, following
 //	providers/sqlite/errors.go's exact pattern (classify by structured
-//	error code, never by string-matching the message). Also carries
-//	redactDSN, the credential-redaction path this package uses on every
-//	error that might otherwise echo a DSN's password (A/S-01.T7,
-//	08 §2 secret-custody rule extended to error messages).
+//	error code, never by string-matching the message). Connection errors
+//	go through providers/internal/dsnredact, the one DSN redactor, so no
+//	error echoes a DSN's password (A/S-01.T7, 08 §2 secret-custody rule
+//	extended to error messages).
 //
 // Inputs: classifyPgError(err) — an error returned by database/sql against
 //
@@ -21,11 +21,9 @@
 // Constraints: classification reads ONLY the Postgres SQLSTATE code via
 //
 //	errors.As + jackc/pgconn's *PgError.Code, never the error string.
-//	redactDSN never returns a substring of the input that could contain a
-//	password — it parses via net/url and calls URL.Redacted (the
-//	standard-library redaction path used across the Go ecosystem for
-//	exactly this problem), falling back to a fixed placeholder for a DSN
-//	net/url cannot parse at all, so a malformed DSN still leaks nothing.
+//	This package holds no redactor of its own: dsnredact renders the DSN
+//	(fail closed to a placeholder) and keeps the raw pgx error out of the
+//	chain.
 //
 // SPORT: providers.postgres.Store/CHANGED (P1-E17-W4-S38-T4).
 
@@ -33,11 +31,11 @@ package postgres
 
 import (
 	"errors"
-	"net/url"
 
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/providers/internal/dsnredact"
 )
 
 // SQLSTATE class/code prefixes this package distinguishes. Full list:
@@ -84,39 +82,19 @@ func classifyPgError(err error) cascade.Kind {
 }
 
 // wrapDBError wraps err as a *cascade.Error under classifyPgError's Kind.
-// Never includes a DSN — callers pass only static context (namespace/key
-// are safe: they are not credentials).
+// Never includes a DSN: callers pass only static context (namespace/key
+// are safe: they are not credentials). A pgx connection-stage error from
+// a pooled reconnect is detached first (dsnredact.Detach with no secret
+// set, so its text is withheld): its Config and ConnString never reach a
+// caller through the chain.
 func wrapDBError(err error, format string, args ...any) error {
-	return cascade.Wrapf(classifyPgError(err), err, format, args...)
+	return cascade.Wrapf(classifyPgError(err), dsnredact.Detach(err, nil), format, args...)
 }
 
-// wrapConnError wraps a connection-establishment error (Open/Ping), taking
-// dsn ONLY to compute its redacted form for the message — the raw dsn
-// itself is never interpolated. A dial/auth failure at this stage
-// virtually never carries a *pgconn.PgError (the exchange did not
-// complete), so this always classifies as KindUnavailable except the one
-// case classifyPgError already distinguishes (bad password after a
-// completed auth handshake, sqlstateInvalidPassword -> KindPermissionDenied).
+// wrapConnError wraps a connection-establishment error (Open/Ping) through
+// dsnredact.WrapConn under classifyPgError's Kind. dsn only names what the
+// message and cause must not carry; the raw driver error never enters the
+// returned chain.
 func wrapConnError(err error, dsn, format string, args ...any) error {
-	kind := classifyPgError(err)
-	msg := append(append([]any{}, args...), redactDSN(dsn))
-	return cascade.Wrapf(kind, err, format+" %s", msg...)
-}
-
-// redactedDSNPlaceholder stands in for a DSN net/url cannot parse at all,
-// so an unparseable (and therefore unpredictable-shape) DSN still cannot
-// leak a credential fragment into an error message.
-const redactedDSNPlaceholder = "postgres://<redacted>"
-
-// redactDSN returns dsn with any userinfo password replaced, using the
-// standard-library net/url.URL.Redacted() method — the idiomatic Go path
-// for exactly this problem, already in this module's dependency graph via
-// net/url (stdlib, no new dependency). A dsn that fails to parse as a URL
-// returns the fixed placeholder rather than any fragment of the input.
-func redactDSN(dsn string) string {
-	u, err := url.Parse(dsn)
-	if err != nil {
-		return redactedDSNPlaceholder
-	}
-	return u.Redacted()
+	return dsnredact.WrapConn(err, dsn, classifyPgError(err), format, args...)
 }

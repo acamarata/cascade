@@ -33,11 +33,11 @@
 //
 //	Kind is chosen by postgres_errors.go's classifier — never a raw
 //	fmt.Errorf, and never one that echoes the DSN's credentials (see
-//	redactDSN in postgres_errors.go and TestOpen_ErrorNeverLeaksDSN).
+//	providers/internal/dsnredact and TestOpen_ErrorNeverLeaksDSN).
 //
 // Constraints: providers/** may import pkg/** only, never internal/**
 //
-//	(Art.10.2). Pure Go, no CGO. Every identifier this package places in
+//	(Art.10.2); providers/internal/** is providers-private and allowed. Pure Go, no CGO. Every identifier this package places in
 //	a query is either a fixed literal baked into this file or bound as a
 //	placeholder parameter — never string-concatenated from a caller-
 //	supplied namespace or key (SQL-injection surface, see
@@ -54,6 +54,7 @@ import (
 
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
+	"github.com/acamarata/cascade/providers/internal/dsnredact"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" database/sql driver
 )
@@ -89,14 +90,35 @@ const schemaDDL = `CREATE TABLE IF NOT EXISTS kv (
 // single-write-connection constraint — Postgres's MVCC handles concurrent
 // writers natively, so every method uses the pool directly.
 type Driver struct {
-	db  *sql.DB
-	dsn string // retained ONLY for String()'s redacted label; never logged raw
+	db    *sql.DB
+	label *dsnLabel // the DSN's redacted rendering, for String() only
+}
+
+// redacted is what every fmt verb prints for a dsnLabel.
+const redacted = "[redacted]"
+
+// dsnLabel holds the opened DSN only as dsnredact.Redact rendered it. It
+// sits behind a pointer with String and GoString, so formatting a Driver
+// (value or pointer, any verb) never prints a DSN: the pointer prints as
+// an address and the label itself as [redacted].
+type dsnLabel struct{ text string }
+
+// String keeps the label out of %v, %+v and %s.
+func (dsnLabel) String() string { return redacted }
+
+// GoString keeps the label out of %#v.
+func (dsnLabel) GoString() string { return redacted }
+
+// newDriver returns a Driver over db that keeps only dsn's redacted
+// rendering; the raw DSN is not retained.
+func newDriver(db *sql.DB, dsn string) *Driver {
+	return &Driver{db: db, label: &dsnLabel{text: dsnredact.Redact(dsn)}}
 }
 
 // Open dials dsn, verifies the connection with a Ping, creates the base kv
 // schema, runs the optional injected Migrator, and returns a ready Driver.
 // The caller MUST call Close when done. A malformed or unreachable dsn
-// never appears in the returned error's message (see redactDSN).
+// never appears in the returned error's message or chain (dsnredact).
 func Open(ctx context.Context, dsn string, opts ...Option) (*Driver, error) {
 	if dsn == "" {
 		return nil, cascade.New(cascade.KindInvalidInput, "postgres: dsn is required")
@@ -127,7 +149,7 @@ func Open(ctx context.Context, dsn string, opts ...Option) (*Driver, error) {
 		}
 	}
 
-	return &Driver{db: db, dsn: dsn}, nil
+	return newDriver(db, dsn), nil
 }
 
 // Close closes the connection pool. Close is idempotent (database/sql's
@@ -140,7 +162,13 @@ func (d *Driver) Close() error {
 }
 
 // String identifies this driver in logs/diagnostics WITHOUT the DSN's
-// credentials — see redactDSN in postgres_errors.go.
-func (d *Driver) String() string { return "postgres.Driver(" + redactDSN(d.dsn) + ")" }
+// credentials: it shows the rendering dsnredact.Redact made at Open. A
+// Driver not built by newDriver has no label and shows the placeholder.
+func (d *Driver) String() string {
+	if d == nil || d.label == nil {
+		return "postgres.Driver(<redacted-dsn>)"
+	}
+	return "postgres.Driver(" + d.label.text + ")"
+}
 
 var _ provider.Store = (*Driver)(nil)

@@ -1,8 +1,9 @@
 //go:build postgres
 
-// Purpose: unit tests for classifyPgError, wrapDBError/wrapConnError, and
+// Purpose: unit tests for classifyPgError and wrapDBError/wrapConnError —
 //
-//	redactDSN — no live server needed.
+//	no live server needed. DSN redaction is dsnredact's (see
+//	postgres_errors_redact_test.go for this package's adversarial run).
 //
 // SPORT: providers.postgres.Store/CHANGED (P1-E17-W4-S38-T4).
 package postgres
@@ -57,28 +58,6 @@ func TestWrapDBError_CarriesKind(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "ns/k") {
 		t.Fatalf("wrapDBError message = %v, want it to contain the formatted context", err)
-	}
-}
-
-func TestRedactDSN(t *testing.T) {
-	cases := []struct {
-		dsn      string
-		wantHide string
-	}{
-		{"postgres://user:hunter2@localhost:5432/db?sslmode=disable", "hunter2"},
-		{"postgres://user:another-secret@host/db", "another-secret"},
-	}
-	for _, c := range cases {
-		got := redactDSN(c.dsn)
-		if strings.Contains(got, c.wantHide) {
-			t.Errorf("redactDSN(%q) = %q, still contains the password %q", c.dsn, got, c.wantHide)
-		}
-	}
-	// A DSN net/url cannot parse at all must still never echo any of its
-	// own content.
-	malformed := "postgres://[::not-a-valid-host/db"
-	if got := redactDSN(malformed); got != redactedDSNPlaceholder {
-		t.Errorf("redactDSN(malformed) = %q, want the fixed placeholder %q", got, redactedDSNPlaceholder)
 	}
 }
 

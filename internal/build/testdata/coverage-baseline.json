@@ -127,6 +127,7 @@
   "providers/embeddings/bgem3": { "tier": "plugins", "floor": 80.0, "baseline": 95.5 },
   "providers/fs": { "tier": "plugins", "floor": 80.0, "baseline": 90.2 },
   "providers/gemini": { "tier": "plugins", "floor": 80.0, "baseline": 81.9 },
+  "providers/internal/dsnredact": { "tier": "plugins", "floor": 80.0, "baseline": 100.0 },
   "providers/localvector": { "tier": "plugins", "floor": 80.0, "baseline": 87.0 },
   "providers/ollama": { "tier": "plugins", "floor": 80.0, "baseline": 84.8 },
   "providers/openai": { "tier": "plugins", "floor": 80.0, "baseline": 84.3 },

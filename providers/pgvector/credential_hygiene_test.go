@@ -1,15 +1,17 @@
 //go:build postgres
 
 // Purpose: unit proof that pgvector refuses bad credentials without echoing
-// them: wrapConnError's classification, redactDSN, the reconnect detach, and
+// them: wrapConnError's classification, dsnredact.Redact, the reconnect detach, and
 // adversarial DSNs run through Open, real pgx errors (nothing is dialed) and
 // synthetic errors echoing each password spelling. Canaries never print.
 package pgvector
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/providers/internal/dsnredact"
 )
 
 // canary returns the acceptance password, assembled at run time.
@@ -46,7 +49,7 @@ func chainTexts(err error) []string {
 		if e == nil {
 			continue
 		}
-		texts = append(texts, e.Error(), fmt.Sprintf("%+v", e))
+		texts = append(texts, e.Error(), fmt.Sprintf("%+v", e), fmt.Sprintf("%#v", e))
 		switch u := e.(type) {
 		case interface{ Unwrap() []error }:
 			stack = append(stack, u.Unwrap()...)
@@ -83,69 +86,52 @@ func assertNoLeak(t *testing.T, name string, err error, forbidden []string) {
 	}
 }
 
-// advCase is one adversarial DSN and the values no error text may hold.
+// advCase is one row of the shared adversarial table
+// (providers/internal/dsnredact/testdata/dsn-forms.json): a DSN, the
+// values no error text may hold, and whether its password only contains
+// the canary.
 type advCase struct {
-	name, dsn string
-	forbid    []string
+	Name     string   `json:"name"`
+	DSN      string   `json:"dsn"`
+	Forbid   []string `json:"forbid"`
+	Fragment bool     `json:"fragment"`
 }
 
-// advCases builds the adversarial DSNs around the canary password c. The four rows before empty-password hold a value pgx never sends, so only one guard in dsnSecrets covers it.
-func advCases(c string) []advCase {
+// advCases reads the shared table and expands its tokens around the
+// canary c (the token set is documented in the table's _comment). Every
+// row's forbidden list ends with its own DSN.
+func advCases(t *testing.T, c string) []advCase {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", "internal", "dsnredact", "testdata", "dsn-forms.json"))
+	var doc struct {
+		Forms []advCase `json:"forms"`
+	}
+	if err != nil || json.Unmarshal(raw, &doc) != nil || len(doc.Forms) < 38 {
+		t.Fatalf("shared DSN table: read err=%v rows=%d, want at least 38", err, len(doc.Forms))
+	}
 	pct := ""
 	for i := range len(c) {
 		pct += fmt.Sprintf("%%%02X", c[i])
 	}
-	hostPw, dbPw := strings.Join([]string{"cvh", "0st"}, ""), strings.Join([]string{"cvd", "bname"}, "")
-	part := strings.ReplaceAll(c, "c", "%63")        // partly %-encoded, as written in the DSN
-	bsl, bslDec := c[:2]+`\ `+c[2:], c[:2]+" "+c[2:] // key=value backslash-escaped space
-	quo, quoDec := c[:2]+`\'`+c[2:], c[:2]+"'"+c[2:] // key=value escaped quote inside quotes
-	pw1, pw2 := c+"1", c+"2"                         // userinfo and query passwords that differ
-	base := "postgres://u@localhost/db?sslmode=disable"
-	cs := []advCase{
-		{"url-userinfo", "postgres://u:" + c + "@localhost:5432/db?sslmode=disable", []string{c, "u:" + c}},
-		{"url-malformed", "postgres://u:" + c + "@[::1", []string{c, "u:" + c}},
-		{"url-query-password", "postgres://u@localhost/db?sslmode=disable&password=" + c, []string{c}},
-		{"url-query-password-bad-port", "postgres://u@localhost:99x/db?password=" + c, []string{c}},
-		{"url-percent-encoded", "postgres://u:" + pct + "@localhost/db?sslmode=disable", []string{c, pct}},
-		{"url-bad-escape", "postgres://u:" + c + "%zz@localhost/db", []string{c}},
-		{"url-colon-in-password", "postgres://u:" + c + ":" + c + "@[::1", []string{c}},
-		{"kv-plain", "host=localhost user=u password=" + c + " dbname=db sslmode=disable", []string{c}},
-		{"kv-spaced-equals", "host=localhost port=bad user=u password = " + c + " dbname=db", []string{c}},
-		{"kv-spaced-equals-valid", "host=localhost user=u password = " + c + " dbname=db sslmode=disable", []string{c}},
-		{"kv-quoted-spaces", "host=localhost user=u password='" + c + " x y' dbname=db sslmode=disable", []string{c, c + " x y"}},
-		{"kv-quoted-bad-port", "host=localhost port=bad password='" + c + " x y'", []string{c}},
-		{"password-is-host", "postgres://u:" + hostPw + "@" + hostPw + ".invalid/db?sslmode=disable", []string{hostPw}},
-		{"password-in-dbname", "host=localhost user=u password=" + dbPw + " dbname=" + dbPw + "x sslmode=disable", []string{dbPw}},
-		{"url-userinfo-raw-escapes", "postgres://u:" + part + "@localhost/db?sslmode=disable", []string{c, part, "u:" + part}},
-		{"url-userinfo-and-query-differ", "postgres://u:" + pw1 + "@localhost/db?sslmode=disable&password=" + pw2, []string{pw1, pw2, "u:" + pw1}},
-		{"url-query-raw-escapes", "postgres://u@localhost/db?sslmode=disable&password=" + part, []string{c, part}},
-		{"url-query-two-passwords", "postgres://u@localhost/db?password=" + pw1 + "&password=" + pw2 + "&sslmode=disable", []string{pw1, pw2}},
-		{"url-sslpassword", "postgres://u@localhost/db?sslmode=disable&sslpassword=" + part, []string{c, part}},
-		{"kv-backslash-space", "host=localhost user=u password=" + bsl + " dbname=db sslmode=disable", []string{bsl, bslDec}},
-		{"kv-quoted-escaped-quote", "host=localhost user=u password='" + quo + "' dbname=db sslmode=disable", []string{quo, "'" + quo + "'", quoDec}},
-		{"kv-sslpassword", "host=localhost user=u sslpassword='" + bsl + "' password=" + pw1 + " sslmode=disable", []string{bsl, bslDec, pw1}},
-		{"kv-password-query-mark", "host=localhost user=u password=" + c + "?x sslmode=disable", []string{c, c + "?x"}},
-		{"url-query-escaped-key", base + "&password=" + pw1 + "&%70assword=" + pw2, []string{pw1, pw2}},
-		{"url-query-plus-and-percent", base + "&password=" + pw1 + "&password=" + c + "+x&password=%73" + c[1:] + "+*", []string{pw1, c + " x", c + "+*"}},
-		{"url-slash-password-is-port", "postgres://u:4242/" + c + "@localhost/db?sslmode=disable", []string{"4242/" + c}},
-		{"kv-surrounding-space", "  host=localhost user=u sslmode=disable  ", []string{"host=localhost user=u sslmode=disable"}},
-		{"empty-password", "postgres://u:@localhost/db?sslmode=disable", nil},
-		{"garbage", "not a dsn " + c, []string{c}},
+	r := strings.NewReplacer("{c}", c, "{c1}", c[1:], "{pct}", pct, "{part}", strings.ReplaceAll(c, "c", "%63"),
+		"{bsl}", c[:2]+`\ `+c[2:], "{bslDec}", c[:2]+" "+c[2:], "{quo}", c[:2]+`\'`+c[2:], "{quoDec}", c[:2]+"'"+c[2:],
+		"{pw1}", c+"1", "{pw2}", c+"2", "{hostPw}", "cvh"+"0st", "{dbPw}", "cvd"+"bname")
+	for i := range doc.Forms {
+		f := &doc.Forms[i]
+		f.DSN = r.Replace(f.DSN)
+		for j := range f.Forbid {
+			f.Forbid[j] = r.Replace(f.Forbid[j])
+		}
+		f.Forbid = append(f.Forbid, f.DSN)
 	}
-	for i := range cs {
-		cs[i].forbid = append(cs[i].forbid, cs[i].dsn)
-	}
-	return cs
+	return doc.Forms
 }
-
-// canaryFragment names the cases whose password only contains the canary.
-var canaryFragment = map[string]bool{"url-colon-in-password": true, "kv-quoted-spaces": true, "kv-quoted-bad-port": true, "kv-password-query-mark": true}
 
 // echoes lists the spellings a synthetic driver error echoes one at a time:
 // all but the DSN (it would mask a missed form) and a fragment canary.
 func (c advCase) echoes() (out []string) {
-	for _, f := range c.forbid {
-		if f != c.dsn && (f != canary() || !canaryFragment[c.name]) {
+	for _, f := range c.Forbid {
+		if f != c.DSN && (f != canary() || !c.Fragment) {
 			out = append(out, f)
 		}
 	}
@@ -184,8 +170,8 @@ func TestPgvectorMalformedDSNIsInvalidInput(t *testing.T) {
 		t.Fatalf("Open(malformed DSN) = %s, want KindInvalidInput", kindOf(err))
 	}
 	assertNoLeak(t, "open-malformed", err, []string{canary(), dsn, "u:" + canary()})
-	if got := redactDSN(dsn); got != maskedDSN {
-		t.Errorf("redactDSN(unparseable) is not the fixed mask (%d bytes)", len(got))
+	if got := dsnredact.Redact(dsn); got != "<redacted-dsn>" {
+		t.Errorf("dsnredact.Redact(unparseable) is not the fixed mask (%d bytes)", len(got))
 	}
 }
 
@@ -194,30 +180,30 @@ func TestPgvectorOpenNeverEchoesCredential(t *testing.T) {
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	echoes, checked := 0, 0
-	for _, c := range advCases(canary()) {
+	for _, c := range advCases(t, canary()) {
 		ctx := canceled // a parseable DSN must not dial: Ping returns at once
-		if _, perr := pgx.ParseConfig(c.dsn); perr != nil {
+		if _, perr := pgx.ParseConfig(c.DSN); perr != nil {
 			ctx = context.Background() // parsing fails first, so no dial happens
 		}
-		_, err := Open(ctx, c.dsn)
-		assertNoLeak(t, c.name+"/open", err, c.forbid)
-		errs := []error{errors.New("dial " + c.dsn)}
+		_, err := Open(ctx, c.DSN)
+		assertNoLeak(t, c.Name+"/open", err, c.Forbid)
+		errs := []error{errors.New("dial " + c.DSN)}
 		for _, f := range c.echoes() {
 			errs = append(errs, fmt.Errorf("connect: %w", errors.New("echo "+f)))
 		}
-		if _, perr := pgconn.ParseConfig(c.dsn); perr != nil {
-			echoes += countHits(perr.Error(), c.forbid)
+		if _, perr := pgconn.ParseConfig(c.DSN); perr != nil {
+			echoes += countHits(perr.Error(), c.Forbid)
 			errs = append(errs, perr)
 		} else {
-			errs = append(errs, lookupConnectError(t, c.dsn, ""), lookupConnectError(t, c.dsn, strings.Join(c.echoes(), " ")))
+			errs = append(errs, lookupConnectError(t, c.DSN, ""), lookupConnectError(t, c.DSN, strings.Join(c.echoes(), " ")))
 		}
 		for i, e := range errs {
-			assertNoLeak(t, fmt.Sprintf("%s/wrap#%d", c.name, i), wrapConnError(e, c.dsn, "pgvector: connect"), c.forbid)
+			assertNoLeak(t, fmt.Sprintf("%s/wrap#%d", c.Name, i), wrapConnError(e, c.DSN, "pgvector: connect"), c.Forbid)
 			checked++
 		}
-		r := redactDSN(c.dsn) // a non-URL DSN never renders: url.Parse would cut it at '?' or '#'
-		if countHits(r, c.forbid) != 0 || (!strings.HasPrefix(c.dsn, "postgres://") && r != maskedDSN) {
-			t.Errorf("%s: redactDSN output holds a forbidden value or renders a non-URL DSN", c.name)
+		r := dsnredact.Redact(c.DSN) // a non-URL DSN never renders: url.Parse would cut it at '?' or '#'
+		if countHits(r, c.Forbid) != 0 || (!strings.HasPrefix(c.DSN, "postgres") && r != "<redacted-dsn>") {
+			t.Errorf("%s: dsnredact.Redact output holds a forbidden value or renders a non-URL DSN", c.Name)
 		}
 	}
 	t.Logf("checked %d wrapped errors; raw pgx parse errors echoing a forbidden value: %d", checked, echoes)
@@ -269,7 +255,7 @@ func TestPgvectorConnErrorKeepsContextSentinelOnly(t *testing.T) {
 		t.Fatalf("Open(canceled ctx) = %s, want KindUnavailable wrapping context.Canceled", kindOf(err))
 	}
 	dsn := "host=localhost user=u password=" + canary() + " sslmode=disable"
-	secrets, _ := dsnSecrets(dsn)
+	secrets, _ := dsnredact.Secrets(dsn)
 	detached := wrapDBError(lookupConnectError(t, dsn, canary()), secrets, "pgvector: count %s", "ns")
 	if !cascade.HasKind(detached, cascade.KindUnavailable) {
 		t.Errorf("wrapDBError(reconnect failure) = %s, want KindUnavailable", kindOf(detached))
@@ -287,13 +273,13 @@ func TestPgvectorConnErrorKeepsContextSentinelOnly(t *testing.T) {
 	}
 	pw1, pw2 := canary()+"1", canary()+"2"
 	dsn = "postgres://u:" + pw1 + "@localhost/db?sslmode=disable&password=" + pw2
-	secrets, _ = dsnSecrets(dsn)
+	secrets, _ = dsnredact.Secrets(dsn)
 	echo := lookupConnectError(t, dsn, "u:"+pw1)
 	assertNoLeak(t, "detach-userinfo-vs-query", wrapDBError(echo, secrets, "pgvector: count"), []string{pw1, pw2})
 	assertNoLeak(t, "detach-unknown-secrets", wrapDBError(echo, nil, "pgvector: count"), []string{pw1, pw2})
 	clean := lookupConnectError(t, dsn, "")
-	if detachConnError(clean, nil).Error() != withheld || detachConnError(clean, secrets).Error() == withheld {
-		t.Error("detachConnError: want withheld with no secret set and the clean text with one")
+	if d0, d1 := dsnredact.Detach(clean, nil).Error(), dsnredact.Detach(clean, secrets).Error(); strings.Contains(d0, "failed to connect") || !strings.Contains(d1, "failed to connect") {
+		t.Error("dsnredact.Detach: want withheld with no secret set and the clean text with one")
 	}
 	t.Setenv("PGSSLPASSWORD", pw1)
 	assertNoLeak(t, "sslpassword-env", wrapConnError(errors.New("tls key: "+pw1), "host=localhost user=u sslmode=disable", "pgvector: connect"), []string{pw1})

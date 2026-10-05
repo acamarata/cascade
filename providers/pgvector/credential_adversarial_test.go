@@ -66,8 +66,8 @@ func TestPgvectorUnreachableIsUnavailable(t *testing.T) {
 			t.Fatalf("Open(closed loopback port) = %s, want KindUnavailable", kindOf(err))
 		}
 		assertNoLeak(t, "unreachable", err, []string{canary(), dsn, "u:" + canary()})
-		var cause *connCause // a parseable DSN and a clean refusal pass the driver text through
-		if !errors.As(err, &cause) || cause.text == withheld || !strings.Contains(cause.text, "failed to connect") {
+		cause := errors.Unwrap(err) // a parseable DSN and a clean refusal pass the driver text through
+		if cause == nil || !strings.Contains(cause.Error(), "failed to connect") {
 			t.Errorf("Open(closed loopback port): cause is not the clean driver text (found=%v)", cause != nil)
 		}
 	}
@@ -166,18 +166,18 @@ func TestPgvectorWrongPasswordIsNeverRetried(t *testing.T) {
 func TestPgvectorAuthFailureNeverEchoesCredential(t *testing.T) {
 	isolatePGEnv(t)
 	checked := 0
-	for _, c := range advCases(canary()) {
-		cfg, err := pgconn.ParseConfig(c.dsn)
+	for _, c := range advCases(t, canary()) {
+		cfg, err := pgconn.ParseConfig(c.DSN)
 		if err != nil {
 			continue // unparseable DSNs never reach a dial; the unit file covers them
 		}
 		stubDialer(cfg, "28P01")
 		_, err = pgconn.ConnectConfig(context.Background(), cfg)
-		got := wrapConnError(err, c.dsn, "pgvector: connect")
+		got := wrapConnError(err, c.DSN, "pgvector: connect")
 		if !cascade.HasKind(got, cascade.KindPermissionDenied) {
-			t.Errorf("%s: kind = %s, want KindPermissionDenied", c.name, kindOf(got))
+			t.Errorf("%s: kind = %s, want KindPermissionDenied", c.Name, kindOf(got))
 		}
-		assertNoLeak(t, c.name, got, c.forbid)
+		assertNoLeak(t, c.Name, got, c.Forbid)
 		checked++
 	}
 	if checked == 0 {

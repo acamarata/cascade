@@ -44,6 +44,7 @@ import (
 
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
+	"github.com/acamarata/cascade/providers/internal/dsnredact"
 )
 
 // schemaDDL creates the namespace-scoped vectors table. The embedding
@@ -69,7 +70,7 @@ var ErrExtensionMissing = cascade.New(cascade.KindUnsupported, "pgvector: extens
 // Driver is the real pgvector provider.VectorStore implementation.
 type Driver struct {
 	db      *sql.DB
-	secrets *secretSet // dsnSecrets of the opened DSN; nil when pgx cannot parse it
+	secrets *secretSet // dsnredact.Secrets of the opened DSN; nil when pgx cannot parse it
 }
 
 // Open dials dsn, verifies the connection, and ensures the pgvector
@@ -89,7 +90,7 @@ func Open(ctx context.Context, dsn string) (*Driver, error) {
 	if err != nil {
 		return nil, wrapConnError(err, dsn, "pgvector: open")
 	}
-	secrets, _ := dsnSecrets(dsn)
+	secrets, _ := dsnredact.Secrets(dsn)
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, wrapConnError(err, dsn, "pgvector: connect")
@@ -112,7 +113,7 @@ func Open(ctx context.Context, dsn string) (*Driver, error) {
 // privilege. Never falls back to any non-vector behavior.
 func ensureExtension(ctx context.Context, db *sql.DB, secrets []string) error {
 	if _, err := db.ExecContext(ctx, `CREATE EXTENSION IF NOT EXISTS vector`); err != nil {
-		return cascade.Wrap(cascade.KindUnsupported, errors.Join(ErrExtensionMissing, detachConnError(err, secrets)),
+		return cascade.Wrap(cascade.KindUnsupported, errors.Join(ErrExtensionMissing, dsnredact.Detach(err, secrets)),
 			"pgvector: CREATE EXTENSION vector failed — the server may not have pgvector installed")
 	}
 	return nil
