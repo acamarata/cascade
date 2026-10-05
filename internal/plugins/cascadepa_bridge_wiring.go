@@ -99,6 +99,10 @@ type BridgeDeps struct {
 	// Events is the journal a lockout and an unrouted message are recorded on.
 	// Required: a bridge whose lockouts go nowhere is the defect AC#16 names.
 	Events BridgeEventPublisher
+	// HTTPClient is the bot API client. Optional: nil keeps the telegram
+	// module's own default client (production); the daemon tests route the
+	// poll through a recording transport here.
+	HTTPClient *telegram.HTTPClient
 }
 
 // BridgeRuntime is the assembled bridge, as bare funcs so internal/daemon can
@@ -209,7 +213,7 @@ func enabledBridge(ctx context.Context, deps BridgeDeps, token string) (*BridgeR
 	}
 	stores := cascadepa.NewStores(deps.Clock, newBridgeDeviceRegistrar(deps.DataDir), state, pairKey)
 	journal := newBridgeJournal(deps.Events)
-	module := telegram.NewModule(token, nil, gate, bridgeElevationPolicy{}, stores, journal, scanner, journal)
+	module := telegram.NewModule(token, deps.HTTPClient, gate, bridgeElevationPolicy{}, stores, journal, scanner, journal)
 	subject := telegram.SubjectFromToken(token)
 	// FIX-0: the §5.24 producer leg (WireApprovalBridge arms it).
 	approvalLeg, err := newApprovalBridgeLeg(subject, state, stores.Callback, module.Client(), deps.Clock)

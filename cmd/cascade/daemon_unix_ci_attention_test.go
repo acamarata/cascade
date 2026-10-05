@@ -94,7 +94,7 @@ func TestWireCIAttentionSubscription_FailedRunForWatchedRepoLandsInStore(t *test
 	watches := func(context.Context) (ci.RouteOptions, error) {
 		return ci.RouteOptions{Watches: []runtime.CIWatchEntry{{Repo: "acamarata/cascade"}}}, nil
 	}
-	wireCIAttentionSubscription(ctx, watches, store, clock, bus, nil, slog.Default())
+	wireCIAttentionSubscription(ctx, testManifest(), watches, store, clock, bus, nil, slog.Default())
 
 	raw, err := json.Marshal(ciResultsWireEvent{RunID: -55, Repo: "acamarata/cascade", Passed: false, FailedStep: "test"})
 	if err != nil {
@@ -144,7 +144,7 @@ func TestWireCIAttentionSubscription_NilBusIsANoOp(t *testing.T) {
 		}
 	}()
 	watches := func(context.Context) (ci.RouteOptions, error) { return ci.RouteOptions{}, nil }
-	wireCIAttentionSubscription(context.Background(), watches, nil, testkit.NewFrozenClock(time.Now()), nil, nil, slog.Default())
+	wireCIAttentionSubscription(context.Background(), testManifest(), watches, nil, testkit.NewFrozenClock(time.Now()), nil, nil, slog.Default())
 }
 
 // TestCIWatchSourceFromReloader_ReadsHotReloaderCurrent proves the

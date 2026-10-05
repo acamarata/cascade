@@ -53,7 +53,7 @@ func TestStartScheduler_RetentionJobsPresentInRunningScheduler(t *testing.T) {
 		t.Fatalf("wirePolicy: %v", err)
 	}
 	sched, admin, cleanup, err := startScheduler(
-		ctx, store, rawDB, paths, nil, clock, bus, logger, pol.Router)
+		ctx, testManifest(), store, rawDB, paths, nil, clock, bus, logger, pol.Router)
 	if err != nil {
 		t.Fatalf("startScheduler: %v", err)
 	}

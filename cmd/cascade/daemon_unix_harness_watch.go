@@ -42,7 +42,7 @@ func wireHarnessSessionWatch(ctx context.Context, manifest *daemon.Manifest, bus
 		manifest.RegisterHarnessSessionWatch(ctx, nil)
 		return
 	}
-	watcher := plugins.NewClaudeSessionWatcher(claudeSessionStream(client.UnixDialer, socketPath), bus)
+	watcher := plugins.NewClaudeSessionWatcher(claudeSessionStream(manifest, client.UnixDialer, socketPath), bus)
 	manifest.RegisterHarnessSessionWatch(ctx, watcher.Run)
 }
 
@@ -54,18 +54,26 @@ func wireHarnessSessionWatch(ctx context.Context, manifest *daemon.Manifest, bus
 // `cascade fleet sessions --watch`. Both callers now share
 // dialDaemonEvents; the fold that turns the stream back into records stays
 // in the package that defines the wire format.
-func claudeSessionStream(dial eventsDialer, socketPath string) plugins.SessionStreamOpener {
+//
+// The reader that decodes the stream runs supervised on manifest under the
+// watch's own context, so the daemon's shutdown join waits for it too.
+func claudeSessionStream(manifest *daemon.Manifest, dial eventsDialer, socketPath string) plugins.SessionStreamOpener {
 	return func(ctx context.Context) (<-chan sessions.SessionRecord, func(), error) {
 		body, release, err := dialDaemonEvents(ctx, dial, socketPath, sessions.Topic)
 		if err != nil {
 			return nil, nil, err
 		}
 		records := make(chan sessions.SessionRecord, 16)
-		go func() {
+		manifest.GoSupervised(ctx, harnessSessionReaderSubsystem, "reading the session stream", func(ctx context.Context) error {
 			defer close(records)
 			defer release()
 			sessions.ReadRecords(ctx, body, records)
-		}()
+			return nil
+		})
 		return records, release, nil
 	}
 }
+
+// harnessSessionReaderSubsystem is the manifest name the session-stream
+// reader runs under.
+const harnessSessionReaderSubsystem = "harness-session-reader"

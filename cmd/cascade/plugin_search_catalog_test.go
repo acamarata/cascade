@@ -241,7 +241,7 @@ func TestRegisterDBPathHandlersWiresPluginSearch(t *testing.T) {
 	dbPath := filepath.Join(paths.DataDir(), "cascade.db")
 
 	registry := rpc.NewRegistry()
-	if err := registerDBPathHandlers(context.Background(), registry, nil, paths, clock, bus, store, dbPath); err != nil {
+	if err := registerDBPathHandlers(context.Background(), registry, nil, paths, clock, bus, store, dbPath, nil); err != nil {
 		t.Fatalf("registerDBPathHandlers: %v", err)
 	}
 	if !registry.Registered("plugin.search") {

@@ -83,7 +83,7 @@ func TestStartScheduler_MemoryJobsFireThroughTheProductionRegistration(t *testin
 	if err != nil {
 		t.Fatalf("wirePolicy: %v", err)
 	}
-	sched, _, cleanup, err := startScheduler(ctx, store, rawDB, paths, cfg, clock, bus, logger, pol.Router)
+	sched, _, cleanup, err := startScheduler(ctx, testManifest(), store, rawDB, paths, cfg, clock, bus, logger, pol.Router)
 	if err != nil {
 		t.Fatalf("startScheduler: %v", err)
 	}

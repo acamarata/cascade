@@ -35,9 +35,39 @@ order:
 4. Run the crash-safety recovery scan (`runtime.Scan`, described below),
    with a real `StoreDomainRegistry` (backed by the same store) wired in
    for the orphaned-advisory-lock step.
-5. Serve the IPC surface (above) and, for a real release build, the
+5. Derive the daemon's run context from the caller's context and create
+   the one subsystem manifest that `status.get` reports. The background
+   subsystems (the retention scheduler loop, the fleet metrics and CI
+   attention consumers, the memory projection loop, the jobs scheduler,
+   the harness session watch and the Telegram bridge poll) start under
+   that run context, and the manifest tracks each of their goroutines so
+   shutdown can join them. The loops started through the supervisor also
+   recover a panic, reported as a failed subsystem whose detail starts
+   with `panic:`; a clean return is reported as skipped with detail
+   `stopped`.
+6. Serve the IPC surface (above) and, for a real release build, the
    upgrade-in-place engine (see below), until a termination signal or the
    context is canceled.
+
+## Shutdown order
+
+However serving ends (the context is canceled, a termination signal
+arrives, or an upgrade attempt returns), the daemon tears down in this
+order:
+
+1. Cancel the run context. Nothing the daemon started waits on a signal
+   of its own; the Telegram bridge poll stops on this cancellation too.
+2. Join: wait until every supervised goroutine has returned, including
+   the bridge drain.
+3. Run the background cleanup (stop the config watcher, release the
+   retention scheduler's lock).
+4. Close the event bus, which stops any delivery goroutine a subscriber
+   left running.
+5. Close the store, then the log provider.
+
+The join comes before the store close on purpose: a background goroutine
+still running when the store closes would read or write a closed
+database.
 
 `internal/runtime.Bootstrap` covers the same path/config/log sequence for
 callers that do not also need the daemon-specific store, event bus, and
@@ -296,7 +326,11 @@ daemon drains and re-execs itself in place instead:
 2. Wait, up to the configured `shutdown_grace`, for any in-flight
    connection to finish. Anything still running once grace elapses is
    force-closed.
-3. `exec()` the on-disk binary with the same arguments and environment.
+3. Cancel the run context and join the supervised goroutines, bounded by
+   the same `shutdown_grace`. A goroutine still running when grace ends is
+   logged and the relaunch goes ahead anyway: a stuck goroutine never
+   blocks an upgrade.
+4. `exec()` the on-disk binary with the same arguments and environment.
    The process keeps its PID; no new process is spawned and no window
    opens where nothing is listening on the socket.
 

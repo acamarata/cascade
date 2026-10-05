@@ -24,10 +24,7 @@ package main
 
 import (
 	"context"
-	"log/slog"
-	"net"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/acamarata/cascade/internal/daemon"
@@ -35,7 +32,6 @@ import (
 	"github.com/acamarata/cascade/internal/plugins"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
-	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // composeDaemon builds everything the daemon needs before it serves. This is
@@ -44,6 +40,14 @@ import (
 // and hands daemon.Run a real *http.Server (POST /rpc, GET /events) and, for a
 // released build, a real UpgradeManager. The cleanups it returns run in
 // reverse order, also when it returns an error.
+//
+// It derives the daemon's one run context (runCtx) from ctx and creates the
+// one Manifest before any background subsystem starts. Every supervised
+// goroutine runs under runCtx and registers on that Manifest, and every
+// registration reads runCtx as daemonWiring.Ctx (withRunContext). The join
+// cleanup (cancel runCtx, then Manifest.Wait) is appended after closeStore's,
+// the bus close's and cleanupBackground's, so it runs before all three on
+// every exit path.
 //
 // It calls runtime.Scan directly rather than runtime.Bootstrap: Bootstrap
 // resolves its own PathProvider from Getenv/HomeDir, which would silently stop
@@ -68,7 +72,11 @@ func composeDaemon(ctx context.Context, deps daemonDeps, observe registryObserve
 	}
 	cleanups = append(cleanups, closeStore)
 
+	// The bus closes after the join and the background cleanup and before
+	// the store: Close stops every delivery goroutine a subscriber left
+	// running (they read the store), so none outlives it.
 	bus := events.New(store, deps.Clock)
+	cleanups = append(cleanups, func() { _ = bus.Close() })
 	if err := runRecoveryScan(ctx, paths, settings, deps, logProvider, bus, store); err != nil {
 		return daemon.RunOptions{}, cleanups, err
 	}
@@ -78,40 +86,42 @@ func composeDaemon(ctx context.Context, deps daemonDeps, observe registryObserve
 		return daemon.RunOptions{}, cleanups, err
 	}
 
-	memoryAdmin, pol, cleanupBackground, err := wireBackgroundSubsystems(ctx, paths, deps, cfg, store, rawDB, bus, logProvider)
+	runCtx, cancelRun := context.WithCancel(ctx)
+	manifest := daemon.NewManifest(logProvider.Logger(), deps.Clock)
+	joinRun := joinRunContext(cancelRun, manifest)
+	memoryAdmin, pol, cleanupBackground, err := wireBackgroundSubsystems(runCtx, manifest, paths, deps, cfg, store, rawDB, bus, logProvider)
 	if err != nil {
+		joinRun()
 		return daemon.RunOptions{}, cleanups, err
 	}
-	cleanups = append(cleanups, cleanupBackground)
+	cleanups = append(cleanups, cleanupBackground, joinRun)
 	wireCascadePAInstallHostDeps(store, pol.Queue, pol.Registry) // P1-E24-W5-S50-T4 (D1/D2)
 	plugins.SetBridgeApprovalQueue(pol.Queue)                    // P1-E23-W5-S48-T4 FIX-0
 
 	// withNodePlacement hands the placement engine its connection source: the
 	// controller-side tunnel registry this process holds (P1-E17-W4-S37-T1).
-	server, manifest, connections, err := buildRPCServer(bus, deps.Clock, logProvider.Logger(), settings, paths, memoryAdmin, store,
+	server, _, connections, err := buildRPCServer(bus, deps.Clock, logProvider.Logger(), settings, paths, memoryAdmin, store,
+		withRunContext(runCtx), withManifest(manifest),
 		withPolicyHandlers(pol), withStatusWidgetHandler(store, deps.Clock, bus, paths, cfg.Widget.ShowProjectNames),
 		withNodePlacement(deps.NodeTunnels), withDaemonRuntime(cfg, rawDB, pol, logProvider, deps), withRegistryObserver(observe))
 	if err != nil {
 		return daemon.RunOptions{}, cleanups, err
 	}
-
 	opts := daemon.RunOptions{
-		Settings:    settings,
-		PIDPath:     daemon.PIDFilePath(paths),
-		Logger:      logProvider.Logger(),
-		Clock:       deps.Clock,
-		Server:      server,
-		Environ:     deps.Environ,
-		Manifest:    manifest,
-		Connections: connections,
+		Settings: settings, PIDPath: daemon.PIDFilePath(paths), Logger: logProvider.Logger(), Clock: deps.Clock,
+		Server: server, Environ: deps.Environ, Manifest: manifest, Connections: connections,
 	}
-	wireUpgrade(&opts, deps, store, bus, logProvider.Logger())
+	wireUpgrade(&opts, deps, store, bus, manifest.RelaunchJoin(cancelRun, settings.ShutdownGrace))
 	return opts, cleanups, nil
 }
 
 // platformDaemonRun composes the daemon (composeDaemon) and serves it
 // (daemon.Run), running every cleanup composeDaemon registered, in reverse
-// order, whether it returned an error or not.
+// order, whether it returned an error or not. Run returning for any reason
+// (ctx cancelled, a termination signal, an upgrade attempt that returned)
+// reaches the same cleanups, so the run context is cancelled and every
+// supervised goroutine joined before the background cleanup and the store
+// close run.
 func platformDaemonRun(ctx context.Context, deps daemonDeps) error {
 	opts, cleanups, err := composeDaemon(ctx, deps, nil)
 	defer runCleanupsLIFO(cleanups)
@@ -119,40 +129,6 @@ func platformDaemonRun(ctx context.Context, deps daemonDeps) error {
 		return err
 	}
 	return daemon.Run(ctx, opts)
-}
-
-// runCleanupsLIFO runs cleanups in reverse registration order, the order the
-// deferred calls they replace would have run in.
-func runCleanupsLIFO(cleanups []func()) {
-	for i := len(cleanups) - 1; i >= 0; i-- {
-		cleanups[i]()
-	}
-}
-
-// wireUpgrade sets opts.Upgrade/Executable/Args from a real UpgradeManager,
-// but ONLY when this binary carries a real, released build hash
-// (daemon.BuildHash() != "dev"). An unreleased build's hash is always
-// "dev" (upgrade.go's own doc comment), which never matches any on-disk
-// binary, so CheckSkew reports skew against itself unconditionally. That
-// is documented as "expected and harmless... since Relaunch only runs
-// when a caller acts on CheckSkew's result", true only as long as nothing
-// production-side ever DOES act on it. Wiring RunOptions.Upgrade
-// unconditionally breaks that assumption: every SIGTERM/SIGINT on a dev
-// build would attempt drain-and-exec-relaunch instead of a clean exit,
-// which is exactly the daemon-never-stops regression the SIGTERM/SIGKILL
-// round-trip test (daemon_test.go) caught during development (dev builds
-// are the only kind this repo's own test suite and CI ever run). This
-// guard keeps the real UpgradeManager reachable from the real Run path
-// while keeping a dev build's ordinary shutdown exactly as clean as it
-// was before this file wired Upgrade in, since Upgrade nil is Run's
-// documented "skip upgrade, drain and exit normally" path.
-func wireUpgrade(opts *daemon.RunOptions, deps daemonDeps, store provider.Store, bus *events.Bus, logger *slog.Logger) {
-	if daemon.BuildHash() == "dev" {
-		return
-	}
-	opts.Upgrade = daemon.NewUpgradeManager(deps.Clock, time.Sleep, store, bus, logger)
-	opts.Executable = deps.Executable
-	opts.Args = relaunchExecArgs(deps)
 }
 
 // platformDaemonStart starts the daemon in the background, idempotently.
@@ -254,43 +230,4 @@ func platformDaemonStatus(ctx context.Context, deps daemonDeps) (statusView, err
 		Running: res.Running, PID: res.PID, UptimeS: res.UptimeS,
 		Connections: res.Connections, Detail: res.Detail,
 	}, nil
-}
-
-func stopOptions(paths runtime.PathProvider, settings daemon.Settings) daemon.StopOptions {
-	return daemon.StopOptions{
-		PIDPath:    daemon.PIDFilePath(paths),
-		Prober:     daemon.NewProber(),
-		Signal:     daemon.DefaultSignal,
-		SocketGone: func() bool { _, err := os.Stat(settings.SocketPath); return os.IsNotExist(err) },
-		Sleep:      time.Sleep,
-	}
-}
-
-// socketDialable reports whether some process is currently accepting
-// connections at path.
-func socketDialable(path string) bool {
-	c, err := net.Dial("unix", path)
-	if err != nil {
-		return false
-	}
-	_ = c.Close()
-	return true
-}
-
-func startDetail(res daemon.StartResult) string {
-	if res.AlreadyRunning {
-		return "already running pid=" + strconv.Itoa(res.PID)
-	}
-	return "started pid=" + strconv.Itoa(res.PID)
-}
-
-func stopDetail(res daemon.StopResult) string {
-	switch {
-	case !res.WasRunning:
-		return "not running"
-	case res.Escalated:
-		return "stopped (escalated to SIGKILL)"
-	default:
-		return "stopped"
-	}
 }

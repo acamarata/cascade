@@ -24,7 +24,9 @@
 package main
 
 import (
+	"context"
 	"database/sql"
+	"net/http"
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
@@ -32,6 +34,7 @@ import (
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -64,6 +67,84 @@ type rpcServerOption struct {
 	// runtime carries the values composeDaemon holds that registrations read
 	// through daemonWiring.Deps. The zero value (a test-built server) is valid.
 	runtime *daemonRuntime
+	// runCtx is the daemon's one run context (withRunContext): every
+	// registration reads it as daemonWiring.Ctx, so nothing buildRPCServer
+	// reaches runs under context.Background().
+	runCtx context.Context
+	// manifest is composeDaemon's one Manifest (withManifest): status.get
+	// reports it and GoSupervised registers on it, so the two never diverge.
+	manifest *daemon.Manifest
+	// bridgeHTTPClient is the bridge poll's HTTP client
+	// (withBridgeTransport). nil, every production call, keeps the
+	// telegram module's own default client.
+	bridgeHTTPClient *http.Client
+}
+
+// withRunContext hands registrations the daemon's run context as
+// daemonWiring.Ctx. composeDaemon derives it with context.WithCancel and
+// cancels it before joining the supervised goroutines.
+func withRunContext(runCtx context.Context) rpcServerOption {
+	return rpcServerOption{runCtx: runCtx}
+}
+
+// withManifest hands registrations composeDaemon's Manifest as
+// daemonWiring.Manifest, the same one wireBackgroundSubsystems already
+// started its supervised consumers on.
+func withManifest(manifest *daemon.Manifest) rpcServerOption {
+	return rpcServerOption{manifest: manifest}
+}
+
+// seedWiringFromOptions overrides w.Ctx and w.Manifest with the last run
+// context and Manifest the options supplied. A test-built server supplies
+// neither: it keeps the literal's background context and gets a fresh
+// Manifest over its own logger and clock.
+func seedWiringFromOptions(w *daemonWiring) *daemonWiring {
+	for _, opt := range w.Opts {
+		if opt.runCtx != nil {
+			w.Ctx = opt.runCtx
+		}
+		if opt.manifest != nil {
+			w.Manifest = opt.manifest
+		}
+	}
+	if w.Manifest == nil {
+		w.Manifest = daemon.NewManifest(w.Logger, w.Clock)
+	}
+	return w
+}
+
+// bridgeRoundTrip answers one bridge HTTP request from its method and URL
+// path alone. Returning an error fails the request the way a transport
+// failure would; withBridgeTransport is its only consumer.
+type bridgeRoundTrip func(ctx context.Context, method, path string) error
+
+// RoundTrip implements http.RoundTripper over the func: it never dials, and
+// it always fails the request, with the func's error or a refusal.
+func (f bridgeRoundTrip) RoundTrip(req *http.Request) (*http.Response, error) {
+	if err := f(req.Context(), req.Method, req.URL.Path); err != nil {
+		return nil, err
+	}
+	return nil, cascade.New(cascade.KindUnavailable, "bridge transport: no response recorded")
+}
+
+// withBridgeTransport routes the bridge poll's HTTP traffic through fn
+// instead of the network. It is the seam the daemon tests record the poll
+// through: an untagged test may not import net/http (the no-network unit
+// test rule), so the client is built here from a plain func.
+func withBridgeTransport(fn bridgeRoundTrip) rpcServerOption {
+	return rpcServerOption{bridgeHTTPClient: &http.Client{Transport: fn}}
+}
+
+// bridgeHTTPClientFrom returns the last bridge HTTP client an option
+// supplied, or nil (the telegram default) when none did.
+func bridgeHTTPClientFrom(opts []rpcServerOption) *http.Client {
+	var client *http.Client
+	for _, opt := range opts {
+		if opt.bridgeHTTPClient != nil {
+			client = opt.bridgeHTTPClient
+		}
+	}
+	return client
 }
 
 // registryObserver receives the finished RPC registry and GET /events mux.

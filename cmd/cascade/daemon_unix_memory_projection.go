@@ -44,6 +44,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -53,6 +54,10 @@ import (
 // its first, immediate run at daemon start (R-14.294: "Interval 60 s plus
 // a start run; no bus-event trigger in P1").
 const memoryProjectionInterval = 60 * time.Second
+
+// memoryProjectionSubsystem is the manifest name the projection loop runs
+// under.
+const memoryProjectionSubsystem = "memory.projection-loop"
 
 // memoryProjectionRunner is the minimal *memory.ProjectionJob surface the
 // loop needs -- narrow so a test can inject a fake that fails on demand
@@ -68,12 +73,15 @@ type memoryProjectionRunner interface {
 // goroutine tied to ctx. A nil store is a daemon that has not finished
 // opening its own database yet; the loop simply never starts rather than
 // racing that construction.
-func startMemoryProjection(ctx context.Context, paths runtime.PathProvider, store provider.Store, clock runtime.Clock, logger *slog.Logger) {
+func startMemoryProjection(ctx context.Context, manifest *daemon.Manifest, paths runtime.PathProvider, store provider.Store, clock runtime.Clock, logger *slog.Logger) {
 	if store == nil {
 		return
 	}
 	job := memory.NewProjectionJob(memory.NewFileStore(memoryStoreDir(paths), clock), store, nil, nil, clock)
-	go runMemoryProjectionLoop(ctx, job, runtime.NewSystemTicker(memoryProjectionInterval), logger, nil)
+	manifest.GoSupervised(ctx, memoryProjectionSubsystem, "projecting memory files", func(ctx context.Context) error {
+		runMemoryProjectionLoop(ctx, job, runtime.NewSystemTicker(memoryProjectionInterval), logger, nil)
+		return nil
+	})
 }
 
 // runMemoryProjectionLoop is startMemoryProjection's loop body, split out

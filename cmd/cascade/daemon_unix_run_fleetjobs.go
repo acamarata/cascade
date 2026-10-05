@@ -101,11 +101,11 @@ func wireFleetAndNodeHandlers(registry *rpc.Registry, store provider.Store, cloc
 // wireJobRPCHandlers behind one error check, purely to keep buildRPCServer
 // under Art.10.3's 50-line function cap -- mechanical composition, not a
 // new concern.
-func wireFleetNodeAndJobHandlers(registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider, settings daemon.Settings) error {
+func wireFleetNodeAndJobHandlers(ctx context.Context, registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider, settings daemon.Settings) error {
 	if ferr := wireFleetAndNodeHandlers(registry, store, clock, bus, paths, settings); ferr != nil {
 		return ferr
 	}
-	return wireJobRPCHandlers(registry, paths, clock)
+	return wireJobRPCHandlers(ctx, registry, paths, clock)
 }
 
 // wireJobRPCHandlers is buildRPCServer's job.*/lease.* call site (see
@@ -120,7 +120,10 @@ func wireFleetNodeAndJobHandlers(registry *rpc.Registry, store provider.Store, c
 // success. lease.release's UNelevated (own-lease) path is unaffected and
 // works today. Replace rpc.MapTrustStore{} once a real trust store is
 // wired at this composition root.
-func wireJobRPCHandlers(registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock) error {
-	_, err := wireJobRPC(context.Background(), registry, paths, clock, rpc.NewNonceLedger(clock), rpc.MapTrustStore{})
+//
+// ctx is the daemon's run context (daemonWiring.Ctx), never
+// context.Background(): the schema applies wireJobRPC runs end with the run.
+func wireJobRPCHandlers(ctx context.Context, registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock) error {
+	_, err := wireJobRPC(ctx, registry, paths, clock, rpc.NewNonceLedger(clock), rpc.MapTrustStore{})
 	return err
 }

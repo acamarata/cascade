@@ -36,6 +36,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/fleet"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -62,15 +63,19 @@ func daemonMetrics() (*runtime.Registry, *fleet.Metrics, error) {
 	return daemonMetricsReg, daemonFleetMetrics, daemonMetricsErr
 }
 
+// fleetMetricsSubsystem is the manifest name the attention consumer runs
+// under.
+const fleetMetricsSubsystem = "fleet.metrics-consumer"
+
 // startFleetMetricsConsumer opens the attention subscription the fleet
-// counters read and runs it until ctx ends.
+// counters read and runs it, supervised on manifest, until ctx ends.
 //
 // A subscription that cannot be opened is LOGGED and skipped, not fatal.
 // The counters are observability: refusing to start a daemon because one
 // of its graphs would be incomplete trades a working system for a tidier
 // dashboard. The log line is what makes the gap visible rather than
 // silent.
-func startFleetMetricsConsumer(ctx context.Context, bus *events.Bus, logger *slog.Logger) {
+func startFleetMetricsConsumer(ctx context.Context, manifest *daemon.Manifest, bus *events.Bus, logger *slog.Logger) {
 	_, metrics, err := daemonMetrics()
 	if err != nil {
 		logger.Error("fleet metrics unavailable", "error", err)
@@ -84,12 +89,10 @@ func startFleetMetricsConsumer(ctx context.Context, bus *events.Bus, logger *slo
 		logger.Error("fleet metrics: attention subscription unavailable", "error", err)
 		return
 	}
-	go func() {
+	manifest.GoSupervised(ctx, fleetMetricsSubsystem, "counting attention promotions", func(ctx context.Context) error {
 		defer func() { _ = sub.Unsubscribe() }()
-		if consumeErr := metrics.ConsumeAttention(ctx, sub); consumeErr != nil {
-			logger.Error("fleet metrics: attention stream ended", "error", consumeErr)
-		}
-	}()
+		return metrics.ConsumeAttention(ctx, sub)
+	})
 }
 
 // fleetMetricsCursor is the durable subscription cursor this consumer
