@@ -1,65 +1,150 @@
 //go:build !windows
 
 // Package daemon implements the long-lived cascade daemon. This file holds
-// the build stamp and version-skew detection.
+// the running binary's startup identity and the skew check built on it.
 //
-// Split from upgrade.go so the comparison that decides whether to relaunch
-// sits on its own. That decision has one sharp edge, described on CheckSkew,
-// and it is easier to see when it is not buried in the drain and relaunch
-// machinery.
+// The build identity is the content digest of the file the daemon was
+// started from, captured once before the listener accepts. No linker stamp
+// takes part: a binary cannot embed its own digest, and a version string or
+// git SHA can never equal a file digest. Skew means the installed file no
+// longer has the bytes the daemon started with.
 package daemon
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
 	"os"
+	"path/filepath"
+	"sync"
+	"sync/atomic"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// BuildHash returns the build-time embedded hash. It is a package
-// function (every UpgradeManager in one process shares the same answer)
-// and a method below, matching the contract's "UpgradeManager.BuildHash()"
-// call shape for holders of an instance.
-func BuildHash() string { return buildHash }
-
-// unstampedBuildHash is what buildHash holds when the linker did not stamp
-// a real digest, meaning a local or test build rather than a release.
+// unstampedBuildHash is BuildHash's answer when the running executable
+// cannot be resolved or hashed. wireUpgrade declines to wire the manager on
+// it, and CheckSkew never reports skew against it.
 const unstampedBuildHash = "dev"
 
-// BuildHash returns the running binary's embedded build hash.
-func (m *UpgradeManager) BuildHash() string { return BuildHash() }
-
-// CheckSkew reports whether the binary on disk at binaryPath differs from
-// the running process's embedded BuildHash, streaming the file through
-// SHA-256 rather than loading it whole. Any I/O failure (missing file,
-// permission denied, a directory instead of a file) is a typed
-// cascade.KindUnavailable error, never swallowed into a false "no skew".
-func (m *UpgradeManager) CheckSkew(binaryPath string) (bool, error) {
-	// An unstamped build reports the sentinel rather than a hash of
-	// itself, and the sentinel can never equal a hex digest. Comparing
-	// them directly therefore reports skew on every call, so an unstamped
-	// daemon would decide it had been upgraded every time it was asked,
-	// drain, and relaunch itself on an ordinary shutdown signal. That is
-	// exactly what happened once: wiring the manager in made every dev
-	// build relaunch on SIGTERM instead of exiting.
-	//
-	// The composition root also declines to wire the manager into an
-	// unstamped build, which is the right place to make that policy
-	// decision. This check stays anyway. That guard sits at one call site,
-	// and a single-site defence stops working the moment a second call
-	// site appears, which is the shape of the original bug.
-	if m.BuildHash() == unstampedBuildHash {
-		return false, nil
-	}
-	sum, err := hashFile(binaryPath)
-	if err != nil {
-		return false, cascade.Wrapf(cascade.KindUnavailable, err, "daemon: upgrade: hash %s", binaryPath)
-	}
-	return sum != m.BuildHash(), nil
+// startupIdentity is the running binary as it was at start: the path the OS
+// reported (symlinks unresolved), that path with every symlink resolved, and
+// the sha256 of the resolved file. load captures it at most once.
+type startupIdentity struct {
+	resolve     func() (string, error)
+	once        sync.Once
+	installPath string
+	path        string
+	digest      string
+	err         error
 }
 
+// startup holds the process's identity. Tests in this package swap it for
+// one with a different resolver; nothing outside the package can, so no
+// exported test seam exists.
+var startup atomic.Pointer[startupIdentity]
+
+func init() { startup.Store(newStartupIdentity(os.Executable)) }
+
+func newStartupIdentity(resolve func() (string, error)) *startupIdentity {
+	return &startupIdentity{resolve: resolve}
+}
+
+// load captures the identity on first use and returns it. The digest is
+// read from the file once; later calls never reopen it.
+func (s *startupIdentity) load() *startupIdentity {
+	s.once.Do(func() {
+		s.installPath, s.path, s.digest, s.err = captureStartup(s.resolve)
+	})
+	return s
+}
+
+// captureStartup resolves the executable, resolves its symlinks and hashes
+// the file they name. Any failure is returned, never an empty success.
+func captureStartup(resolve func() (string, error)) (install, path, digest string, err error) {
+	if resolve == nil {
+		return "", "", "", errors.New("no executable resolver")
+	}
+	if install, err = resolve(); err != nil {
+		return "", "", "", err
+	}
+	if path, err = filepath.EvalSymlinks(install); err != nil {
+		return "", "", "", err
+	}
+	if digest, err = hashFile(path); err != nil {
+		return "", "", "", err
+	}
+	return install, path, digest, nil
+}
+
+// BuildHash returns the hex sha256 of the file this process was started
+// from, captured on the first call (Run makes that call before its listener
+// accepts). If the executable cannot be resolved or read it returns the
+// "dev" sentinel, the value wireUpgrade's guard already declines.
+func BuildHash() string {
+	id := startup.Load().load()
+	if id.err != nil {
+		return unstampedBuildHash
+	}
+	return id.digest
+}
+
+// BuildHash returns the package-level BuildHash, for holders of a manager.
+func (m *UpgradeManager) BuildHash() string { return BuildHash() }
+
+// StartupPath returns the resolved path BuildHash hashed, or "" when the
+// startup identity could not be captured.
+func (m *UpgradeManager) StartupPath() string {
+	id := startup.Load().load()
+	if id.err != nil {
+		return ""
+	}
+	return id.path
+}
+
+// CheckSkew reports whether the installed binary differs from the bytes this
+// daemon started with. It fails closed: when either side cannot be read it
+// returns false with a typed cascade.KindUnavailable error, never a quiet
+// "no skew", and callers must not treat that error as "unchanged".
+func (m *UpgradeManager) CheckSkew() (bool, error) {
+	skew, _, _, _, err := m.checkSkew()
+	return skew, err
+}
+
+// checkSkew also returns the file it hashed, its sum and the install path. The
+// install path is resolved again here, so a symlinked install re-pointed at
+// a different file is compared by that file's content. An install path that
+// is not a symlink resolves to StartupPath, which is then rehashed.
+func (m *UpgradeManager) checkSkew() (bool, string, string, string, error) {
+	id := startup.Load().load()
+	if id.err != nil {
+		return false, "", "", "", cascade.Wrap(cascade.KindUnavailable, id.err, "daemon: upgrade: startup digest unavailable")
+	}
+	if id.digest == "" || id.digest == unstampedBuildHash {
+		return false, "", "", "", cascade.New(cascade.KindUnavailable, "daemon: upgrade: startup digest unavailable")
+	}
+	target, err := filepath.EvalSymlinks(id.installPath)
+	if err != nil {
+		return false, "", "", "", cascade.Wrapf(cascade.KindUnavailable, err, "daemon: upgrade: resolve %s", id.installPath)
+	}
+	sum, err := hashFile(target)
+	if err != nil {
+		return false, "", "", "", cascade.Wrapf(cascade.KindUnavailable, err, "daemon: upgrade: hash %s", target)
+	}
+	return sum != id.digest, target, sum, id.installPath, nil
+}
+
+// relaunchPath retains a symlinked install across exec while it still names
+// the verified target; otherwise the resolved, verified target wins.
+func relaunchPath(installPath, target string) string {
+	if resolved, err := filepath.EvalSymlinks(installPath); err == nil && resolved == target {
+		return installPath
+	}
+	return target
+}
+
+// hashFile streams path through SHA-256 rather than loading it whole.
 func hashFile(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {

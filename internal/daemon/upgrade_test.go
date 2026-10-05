@@ -61,73 +61,63 @@ func writeTempBinary(t *testing.T, contents string) string {
 	return path
 }
 
-// TestSkewDetected: a modified on-disk binary reports skew against the
-// (dev-default) embedded BuildHash.
+// TestSkewDetected: an installed binary whose bytes differ from the
+// recorded startup digest reports skew.
 func TestSkewDetected(t *testing.T) {
-	// Stamp a digest so this exercises the real skew comparison. An
-	// unstamped build now reports no skew by design, and without this
-	// the test would pass only because the sentinel never equals a hash,
-	// which is the bug that made dev builds relaunch on every shutdown.
-	setBuildHash(t, "1111111111111111111111111111111111111111111111111111111111111111")
 	m, _ := newTestManager(t, nil, nil)
-	path := writeTempBinary(t, "not-the-build-hash-contents")
+	pinStartupDigest(t, writeTempBinary(t, "not-the-startup-contents"), "1111111111111111111111111111111111111111111111111111111111111111")
 
-	skew, err := m.CheckSkew(path)
+	skew, err := m.CheckSkew()
 	if err != nil {
 		t.Fatalf("CheckSkew: %v", err)
 	}
 	if !skew {
-		t.Fatal("CheckSkew: want skew=true against an arbitrary on-disk binary")
+		t.Fatal("CheckSkew: want skew=true against a binary that differs from the startup digest")
 	}
 }
 
-// TestNoSkewNoOp: a binary whose hash matches BuildHash() reports no
-// skew, and AttemptUpgrade takes the no-op branch (no Drain, no Relaunch).
+// TestNoSkewNoOp: an unchanged startup binary reports no skew, and
+// AttemptUpgrade takes the no-op branch (no Drain, no Relaunch).
 func TestNoSkewNoOp(t *testing.T) {
-	origHash := buildHash
 	origExec := execFunc
-	t.Cleanup(func() { buildHash = origHash; execFunc = origExec })
-
-	path := writeTempBinary(t, "matching-contents")
-	sum, err := hashFile(path)
-	if err != nil {
-		t.Fatalf("hashFile: %v", err)
-	}
-	buildHash = sum
+	t.Cleanup(func() { execFunc = origExec })
+	pinStartup(t, writeTempBinary(t, "matching-contents"))
 
 	m, _ := newTestManager(t, nil, nil)
-	skew, err := m.CheckSkew(path)
+	skew, err := m.CheckSkew()
 	if err != nil || skew {
 		t.Fatalf("CheckSkew = %v, %v; want false, nil", skew, err)
 	}
 
 	execCalled := false
 	execFunc = func(string, []string, []string) error { execCalled = true; return nil }
-	relaunched, err := m.AttemptUpgrade(context.Background(), path, nil, nil, time.Second, nil, nil)
+	relaunched, err := m.AttemptUpgrade(context.Background(), nil, nil, time.Second, nil, nil)
 	if err != nil || relaunched {
 		t.Fatalf("AttemptUpgrade = %v, %v; want false, nil", relaunched, err)
 	}
-	if execCalled {
-		t.Fatal("AttemptUpgrade: execFunc must not be called on a no-skew no-op")
+	if execCalled || m.Draining() {
+		t.Fatalf("AttemptUpgrade no-op: execCalled=%v draining=%v; want neither", execCalled, m.Draining())
 	}
 }
 
-// TestCheckSkew_UnreadableBinary surfaces the I/O failure as a typed
-// cascade.KindUnavailable error rather than silently reporting no skew.
+// TestCheckSkew_UnreadableBinary surfaces a missing installed binary as a
+// typed cascade.KindUnavailable error rather than silently reporting no
+// skew, and AttemptUpgrade neither drains nor execs on it.
 func TestCheckSkew_UnreadableBinary(t *testing.T) {
-	// Stamp a real digest first. An unstamped build short-circuits before
-	// the hash is attempted, which is correct but would take this test off
-	// the path it exists to cover.
-	setBuildHash(t, "0000000000000000000000000000000000000000000000000000000000000000")
+	orig := execFunc
+	t.Cleanup(func() { execFunc = orig })
+	execCalled := false
+	execFunc = func(string, []string, []string) error { execCalled = true; return nil }
 	m, _ := newTestManager(t, nil, nil)
-	missing := filepath.Join(t.TempDir(), "does-not-exist")
+	pinStartupDigest(t, filepath.Join(t.TempDir(), "does-not-exist"), "0000000000000000000000000000000000000000000000000000000000000000")
 
-	_, err := m.CheckSkew(missing)
-	if err == nil {
-		t.Fatal("CheckSkew: want error for a missing binary")
-	}
-	if !cascade.HasKind(err, cascade.KindUnavailable) {
+	if _, err := m.CheckSkew(); !cascade.HasKind(err, cascade.KindUnavailable) {
 		t.Fatalf("CheckSkew error = %v; want KindUnavailable", err)
+	}
+	relaunched, err := m.AttemptUpgrade(context.Background(), nil, nil, time.Second, nil, nil)
+	if relaunched || err == nil || execCalled || m.Draining() {
+		t.Fatalf("AttemptUpgrade on an unreadable binary = %v, %v (exec=%v draining=%v); want false, error, neither",
+			relaunched, err, execCalled, m.Draining())
 	}
 }
 
@@ -229,12 +219,11 @@ func TestResumeCursor_WriteFailureNonFatal(t *testing.T) {
 	m.WriteResumeCursor(context.Background(), "wal-pos-1") // must not panic
 }
 
-// TestAttemptUpgrade_NilUpgradeIsNoOp proves Run's attemptUpgrade helper
-// preserves pre-upgrade behavior verbatim when Upgrade is unset. Passing a
-// literal nil (rather than a constructed net.Listener) needs no "net"
-// import here: attemptUpgrade never touches ln when Upgrade is nil.
-func TestAttemptUpgrade_NilUpgradeIsNoOp(t *testing.T) {
-	if attemptUpgrade(context.Background(), RunOptions{}, nil) {
-		t.Fatal("attemptUpgrade with nil Upgrade: want false")
+// TestHandleUpgradeSignal_NilUpgradeKeepsServing: with Upgrade unset the
+// hand-off is a logged no-op that neither relaunches nor drains. Passing a
+// literal nil listener needs no "net" import: nothing touches it.
+func TestHandleUpgradeSignal_NilUpgradeKeepsServing(t *testing.T) {
+	if relaunched, drained := handleUpgradeSignal(context.Background(), RunOptions{}, nil); relaunched || drained {
+		t.Fatalf("handleUpgradeSignal with nil Upgrade = %v, %v; want false, false", relaunched, drained)
 	}
 }

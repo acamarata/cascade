@@ -11,7 +11,8 @@ package daemon
 //   being closed immediately, restoring the reachability internal/rpc's
 //   handler and SSE bridge always had in tests but never had in a running
 //   daemon. Tracks an active-connection count and drains on SIGTERM/SIGINT
-//   within the configured [daemon] shutdown_grace window.
+//   within the configured [daemon] shutdown_grace window. UpgradeSignal
+//   (SIGUSR2) is the only trigger that consults the UpgradeManager.
 // Inputs: RunOptions: resolved Settings, the pidfile path, an injected
 //   *slog.Logger/runtime.Clock, the real *http.Server (Server) built by
 //   NewRPCServer, and two test seams: Signals (an injectable os.Signal
@@ -34,10 +35,8 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"sync/atomic"
-	"syscall"
 
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -56,21 +55,22 @@ type RunOptions struct {
 	Clock    runtime.Clock
 	// Manifest, if nil, is constructed fresh from Logger/Clock.
 	Manifest *Manifest
-	// Signals delivers termination signals. A nil channel makes Run
-	// install its own signal.Notify(SIGTERM, SIGINT) — production's real
+	// Signals delivers signals. A nil channel makes Run install its own
+	// signal.Notify(SIGTERM, SIGINT, UpgradeSignal), production's real
 	// path. Tests inject a channel they control directly instead.
 	Signals <-chan os.Signal
 	// Ready, if non-nil, is closed once the socket is listening and the
 	// pidfile is written — a test synchronization point (no sleeps).
 	Ready chan<- struct{}
-	// Upgrade, if non-nil, is consulted on every termination trigger
-	// before Run's normal drain-and-exit: a detected binary-version skew
-	// (R-14.12) drains the listener in place and exec-relaunches instead
-	// of a plain exit. nil preserves Run's exact pre-upgrade behavior.
-	// Executable/Args/Environ are read only when Upgrade is set — see
-	// upgrade.go's package doc for why the wiring lives here rather than
-	// at the Restart()/CLI composition layer (lifecycle_unix_stop.go and
-	// cmd/cascade/daemon_unix.go are outside this ticket's files_scope).
+	// Upgrade is consulted only when UpgradeSignal arrives: skew drains
+	// the listener and exec-relaunches the changed file in place; no skew
+	// (or a nil Upgrade) logs and keeps serving. SIGTERM, SIGINT and a
+	// cancelled ctx never consult it: they always drain and exit, so a
+	// stop after an out-of-band replacement still stops. Args/Environ are
+	// read only for a relaunch. Executable is no longer read by Run: the
+	// relaunch target comes from the startup identity (upgrade_skew.go),
+	// never from a path re-resolved through this func. The composition
+	// root still sets it.
 	Upgrade    *UpgradeManager
 	Executable func() (string, error)
 	Args       func() []string
@@ -100,11 +100,17 @@ type RunOptions struct {
 // Run serves the daemon in the foreground until ctx is canceled or a
 // termination signal arrives, then drains and returns.
 func Run(ctx context.Context, opts RunOptions) error {
+	// Capture the startup digest before the socket exists, so the file
+	// hashed is the one this process started from.
+	_ = BuildHash()
 	manifest := opts.Manifest
 	if manifest == nil {
 		manifest = NewManifest(opts.Logger, opts.Clock)
 	}
 	manifest.Register(ipcSocketSubsystem)
+
+	sigs, stopSignals := notifySignals(opts)
+	defer stopSignals()
 
 	ln, cleanup, err := setUpSocketAndPIDFile(opts, manifest)
 	if err != nil {
@@ -115,14 +121,6 @@ func Run(ctx context.Context, opts RunOptions) error {
 	manifest.Started(ipcSocketSubsystem, opts.Settings.SocketPath)
 	if opts.Ready != nil {
 		close(opts.Ready)
-	}
-
-	sigs := opts.Signals
-	if sigs == nil {
-		ch := make(chan os.Signal, 1)
-		signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT)
-		defer signal.Stop(ch)
-		sigs = ch
 	}
 
 	active := opts.Connections
@@ -136,12 +134,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	wrapped := &drainRefusingListener{Listener: ln, upgrade: opts.Upgrade, log: opts.Logger}
 	serveDone := serveRPC(wrapped, srv, active)
 
-	select {
-	case <-sigs:
-	case <-ctx.Done():
-	}
-
-	if attemptUpgrade(ctx, opts, ln) {
+	if awaitStop(ctx, opts, ln, sigs) {
 		// A successful Relaunch never returns to its caller — this line
 		// is reachable only when a test's execFunc stub returns. A real
 		// successful exec replaces the process image before it gets here.
@@ -210,32 +203,56 @@ func setUpSocketAndPIDFile(opts RunOptions, manifest *Manifest) (net.Listener, f
 	return ln, func() { _ = removePIDFile(opts.PIDPath); socketCleanup() }, nil
 }
 
-// attemptUpgrade consults opts.Upgrade, if set, before Run's ordinary
-// drain-and-exit. nil Upgrade/Executable, a CheckSkew error, a "no skew"
-// result, or a failed Relaunch all report false so Run falls through to
-// its normal shutdown — the non-bricking fallback this ticket requires:
-// Run's own deferred cleanup still removes the socket and pidfile.
-func attemptUpgrade(ctx context.Context, opts RunOptions, ln net.Listener) bool {
-	if opts.Upgrade == nil || opts.Executable == nil {
-		return false
-	}
-	execPath, err := opts.Executable()
-	if err != nil {
-		if opts.Logger != nil {
-			opts.Logger.Warn("daemon: upgrade: resolve executable failed", slog.String("error", err.Error()))
+// awaitStop serves until ctx ends or a stop signal arrives. UpgradeSignal
+// in between goes to handleUpgradeSignal and serving continues unless it
+// relaunched (true: only a test's execFunc stub returns here) or drained
+// for a relaunch that failed (false: Run's normal shutdown follows). A
+// closed signal channel counts as a stop.
+func awaitStop(ctx context.Context, opts RunOptions, ln net.Listener, sigs <-chan os.Signal) bool {
+	for {
+		select {
+		case <-ctx.Done():
+			return false
+		case sig, ok := <-sigs:
+			if !ok || sig != UpgradeSignal {
+				return false
+			}
+			relaunched, drained := handleUpgradeWithSignals(ctx, opts, ln, sigs)
+			if relaunched || drained {
+				return relaunched
+			}
 		}
-		return false
 	}
-	args := []string{execPath}
+}
+
+// handleUpgradeSignal is the hand-off: it consults opts.Upgrade, which on
+// skew drains ln and execs the changed file. drained reports that the
+// listener is closed, so Run cannot keep serving. A nil Upgrade, an
+// unchanged binary or a skew check that failed (logged, never read as
+// "unchanged") leave the daemon serving.
+func handleUpgradeSignal(ctx context.Context, opts RunOptions, ln net.Listener) (relaunched, drained bool) {
+	if opts.Upgrade == nil {
+		logRunInfo(opts, "daemon: upgrade requested, binary unchanged")
+		return false, false
+	}
+	var args, env []string
 	if opts.Args != nil {
 		args = opts.Args()
 	}
-	var env []string
 	if opts.Environ != nil {
 		env = opts.Environ()
 	}
-	relaunched, _ := opts.Upgrade.AttemptUpgrade(ctx, execPath, ln, nil, opts.Settings.ShutdownGrace, args, env)
-	return relaunched
+	relaunched, err := opts.Upgrade.AttemptUpgrade(ctx, ln, nil, opts.Settings.ShutdownGrace, args, env)
+	if err != nil && !opts.Upgrade.Draining() && opts.Logger != nil {
+		opts.Logger.Warn("daemon: upgrade requested, skew check failed; still serving", slog.String("error", err.Error()))
+	}
+	return relaunched, opts.Upgrade.Draining()
+}
+
+func logRunInfo(opts RunOptions, msg string) {
+	if opts.Logger != nil {
+		opts.Logger.Info(msg)
+	}
 }
 
 // drain logs the connection count at drain entry and exit, per this

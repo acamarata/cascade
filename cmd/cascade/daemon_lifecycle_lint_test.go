@@ -60,11 +60,12 @@ var backgroundAllow = []lifecycleEntry{
 }
 
 // goStmtAllow lists the go statements that stay: the supervisor's own two
-// and the two goroutines joined outside it.
+// and the goroutines joined outside it.
 var goStmtAllow = []lifecycleEntry{
 	{lifecycleSite{"internal/daemon/subsystems_goroutines.go", "Manifest.goSubsystem", "go"}, 1, lintOwner, "the supervisor: tracked by Manifest.running"},
 	{lifecycleSite{"internal/daemon/subsystems_goroutines.go", "Manifest.waitContext", "go"}, 1, lintOwner, "bounded-join waiter: exits with the last supervised goroutine"},
 	{lifecycleSite{"internal/daemon/lifecycle_unix_serve.go", "serveRPC", "go"}, 1, lintOwner, "joined through serveDone"},
+	{lifecycleSite{"internal/daemon/lifecycle_unix_handoff.go", "handleUpgradeWithSignals", "go"}, 1, lintOwner, "signal watcher cancelled or joined before hand-off returns"},
 	{lifecycleSite{"internal/daemon/upgrade_conntracker.go", "ConnTracker.Done", "go"}, 1, lintOwner, "joined through its WaitGroup"},
 }
 

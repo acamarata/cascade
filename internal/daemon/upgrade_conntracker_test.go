@@ -104,15 +104,10 @@ func TestDrainTimeout(t *testing.T) {
 	}
 }
 
-// TestRestartTriggersUpgrade is the restart-path contract test: a skewed
-// on-disk binary drives Drain + Relaunch; matching hashes perform a
-// logged no-op and never touch execFunc.
+// TestRestartTriggersUpgrade is the hand-off contract test: a skewed
+// installed binary drives Drain + Relaunch; an unchanged one is a logged
+// no-op that never drains and never touches execFunc.
 func TestRestartTriggersUpgrade(t *testing.T) {
-	// Stamp a digest so this exercises the real skew comparison. An
-	// unstamped build now reports no skew by design, and without this
-	// the test would pass only because the sentinel never equals a hash,
-	// which is the bug that made dev builds relaunch on every shutdown.
-	setBuildHash(t, "1111111111111111111111111111111111111111111111111111111111111111")
 	t.Run("skew", func(t *testing.T) {
 		orig := execFunc
 		t.Cleanup(func() { execFunc = orig })
@@ -122,8 +117,9 @@ func TestRestartTriggersUpgrade(t *testing.T) {
 		m, _ := newTestManager(t, nil, nil)
 		ln := &fakeListener{}
 		path := writeTempBinary(t, "definitely-not-buildhash")
+		pinStartupDigest(t, path, "1111111111111111111111111111111111111111111111111111111111111111")
 
-		relaunched, err := m.AttemptUpgrade(context.Background(), path, ln, nil, time.Second, []string{path}, nil)
+		relaunched, err := m.AttemptUpgrade(context.Background(), ln, nil, time.Second, []string{path}, nil)
 		if err != nil {
 			t.Fatalf("AttemptUpgrade: %v", err)
 		}
@@ -136,21 +132,15 @@ func TestRestartTriggersUpgrade(t *testing.T) {
 	})
 
 	t.Run("no-skew", func(t *testing.T) {
-		origHash := buildHash
 		orig := execFunc
-		t.Cleanup(func() { buildHash = origHash; execFunc = orig })
-		path := writeTempBinary(t, "same-bits")
-		sum, err := hashFile(path)
-		if err != nil {
-			t.Fatalf("hashFile: %v", err)
-		}
-		buildHash = sum
+		t.Cleanup(func() { execFunc = orig })
+		pinStartup(t, writeTempBinary(t, "same-bits"))
 		var execCalled bool
 		execFunc = func(string, []string, []string) error { execCalled = true; return nil }
 
 		m, _ := newTestManager(t, nil, nil)
-		relaunched, err := m.AttemptUpgrade(context.Background(), path, nil, nil, time.Second, nil, nil)
-		if err != nil || relaunched || execCalled {
+		relaunched, err := m.AttemptUpgrade(context.Background(), nil, nil, time.Second, nil, nil)
+		if err != nil || relaunched || execCalled || m.Draining() {
 			t.Fatalf("AttemptUpgrade(no-skew) = %v, %v, execCalled=%v; want false, nil, false", relaunched, err, execCalled)
 		}
 	})
@@ -160,14 +150,9 @@ func TestRestartTriggersUpgrade(t *testing.T) {
 // failure-path requirement: a skewed binary that fails to exec leaves
 // AttemptUpgrade reporting relaunched=false with a typed error, having
 // already drained (so a caller falling through to a normal exit — as
-// lifecycle_unix.go's attemptUpgrade does — converges on a clean,
+// lifecycle_unix.go's handleUpgradeSignal does — converges on a clean,
 // recoverable "not running" state rather than a half-alive one).
 func TestAttemptUpgrade_RelaunchFailure_NonBricking(t *testing.T) {
-	// Stamp a digest so this exercises the real skew comparison. An
-	// unstamped build now reports no skew by design, and without this
-	// the test would pass only because the sentinel never equals a hash,
-	// which is the bug that made dev builds relaunch on every shutdown.
-	setBuildHash(t, "1111111111111111111111111111111111111111111111111111111111111111")
 	orig := execFunc
 	t.Cleanup(func() { execFunc = orig })
 	execFunc = func(string, []string, []string) error { return errors.New("exec format error") }
@@ -175,8 +160,9 @@ func TestAttemptUpgrade_RelaunchFailure_NonBricking(t *testing.T) {
 	m, _ := newTestManager(t, nil, nil)
 	ln := &fakeListener{}
 	path := writeTempBinary(t, "skewed-binary")
+	pinStartupDigest(t, path, "1111111111111111111111111111111111111111111111111111111111111111")
 
-	relaunched, err := m.AttemptUpgrade(context.Background(), path, ln, nil, time.Second, []string{path}, nil)
+	relaunched, err := m.AttemptUpgrade(context.Background(), ln, nil, time.Second, []string{path}, nil)
 	if relaunched {
 		t.Fatal("AttemptUpgrade: want relaunched=false on exec failure")
 	}

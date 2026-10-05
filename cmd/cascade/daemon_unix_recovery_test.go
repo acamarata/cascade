@@ -18,43 +18,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/acamarata/cascade/internal/daemon"
-	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/runtime"
-	"github.com/acamarata/cascade/internal/storage/storetest"
 )
 
-// TestWireUpgrade_DevBuild_LeavesUpgradeNil is a regression test for the
-// self-relaunch-loop bug the SIGTERM/SIGKILL round-trip test
-// (TestDaemonStartStopRestartStatus_RealBinary, daemon_test.go) caught
-// during development: daemon.BuildHash() is "dev" for every unreleased
-// build (which is every build this repo's own CI and test suite ever
-// run), and CheckSkew reports skew against a "dev" build unconditionally.
-// Wiring RunOptions.Upgrade without this guard means every ordinary
-// termination signal on a dev build attempts drain-and-exec-relaunch
-// instead of a clean exit, which is the daemon-never-stops failure that
-// test exercises end to end. This test pins the guard directly: on the
-// dev build this test itself runs as, wireUpgrade must leave every field
-// it would otherwise set at its zero value.
-func TestWireUpgrade_DevBuild_LeavesUpgradeNil(t *testing.T) {
-	if daemon.BuildHash() != "dev" {
-		t.Skip("this binary carries a real release build hash; the guard this test pins does not apply")
-	}
-	var opts daemon.RunOptions
-	deps := newRunTestDeps(t, func() (string, error) { return "/bin/true", nil })
-	bus := events.New(storetest.NewMemStore(), deps.Clock)
-	wireUpgrade(&opts, deps, storetest.NewMemStore(), bus, nil)
-
-	if opts.Upgrade != nil {
-		t.Error("wireUpgrade set Upgrade on a dev build, want nil")
-	}
-	if opts.Executable != nil {
-		t.Error("wireUpgrade set Executable on a dev build, want nil")
-	}
-	if opts.Args != nil {
-		t.Error("wireUpgrade set Args on a dev build, want nil")
-	}
-}
+// The dev-build guard this file used to pin (wireUpgrade leaving Upgrade
+// nil when BuildHash is "dev") is now reachable only when the running
+// executable cannot be hashed. That case is tested where the resolver hook
+// lives (internal/daemon TestBuildHashDevOnResolverError); the always-wired
+// case is TestWireUpgradeAlwaysWires (daemon_upgrade_wire_test.go).
 
 // deadPid spawns a real short-lived child process, waits for it to exit
 // and be reaped, and returns its pid: a pid the OS unambiguously reports

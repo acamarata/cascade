@@ -19,6 +19,8 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // upgradeOrder records the order of upgrade events across goroutines.
@@ -45,18 +47,18 @@ type closerFunc func() error
 
 func (f closerFunc) Close() error { return f() }
 
-// skewedUpgrade stamps a build hash that never matches the temp binary it
-// writes, stubs execFunc to record "exec", and returns the manager, the
-// binary path and the recorded order.
-func skewedUpgrade(t *testing.T) (*UpgradeManager, string, *upgradeOrder) {
+// skewedUpgrade pins a startup digest that never matches the temp binary it
+// writes, stubs execFunc to record "exec", and returns the manager and the
+// recorded order.
+func skewedUpgrade(t *testing.T) (*UpgradeManager, *upgradeOrder) {
 	t.Helper()
-	setBuildHash(t, "2222222222222222222222222222222222222222222222222222222222222222")
+	pinStartupDigest(t, writeTempBinary(t, "skewed-binary-contents"), "2222222222222222222222222222222222222222222222222222222222222222")
 	orig := execFunc
 	t.Cleanup(func() { execFunc = orig })
 	order := &upgradeOrder{}
 	execFunc = func(string, []string, []string) error { order.add("exec"); return nil }
 	m, _ := newTestManager(t, nil, nil)
-	return m, writeTempBinary(t, "skewed-binary-contents"), order
+	return m, order
 }
 
 // TestAttemptUpgradeJoinsBeforeRelaunch: BeforeRelaunch (the daemon's
@@ -64,7 +66,7 @@ func skewedUpgrade(t *testing.T) (*UpgradeManager, string, *upgradeOrder) {
 // the exec stub, and a supervised goroutine waiting on the run context has
 // returned before the stub runs, within the drain grace.
 func TestAttemptUpgradeJoinsBeforeRelaunch(t *testing.T) {
-	m, bin, order := skewedUpgrade(t)
+	m, order := skewedUpgrade(t)
 	manifest := NewManifest(nil, nil)
 	runCtx, runCancel := context.WithCancel(context.Background())
 	defer runCancel()
@@ -82,7 +84,7 @@ func TestAttemptUpgradeJoinsBeforeRelaunch(t *testing.T) {
 	}
 	ln := closerFunc(func() error { order.add("drain-closed-listener"); return nil })
 
-	relaunched, err := m.AttemptUpgrade(context.Background(), bin, ln, nil, grace, nil, nil)
+	relaunched, err := m.AttemptUpgrade(context.Background(), ln, nil, grace, nil, nil)
 	if err != nil || !relaunched {
 		t.Fatalf("AttemptUpgrade = %v, %v; want true, nil", relaunched, err)
 	}
@@ -92,14 +94,12 @@ func TestAttemptUpgradeJoinsBeforeRelaunch(t *testing.T) {
 	}
 }
 
-// TestAttemptUpgradeJoinsOnCancelledContext: Run reaches AttemptUpgrade with
-// its own ctx, already cancelled on the ctx.Done exit path. The join's grace
-// bound must not inherit that cancel: in a synctest bubble AttemptUpgrade
-// stays blocked while a supervised goroutine gated after ctx.Done runs, and
-// that goroutine returns before the exec stub.
+// TestAttemptUpgradeJoinsOnCancelledContext: the join completes even with a
+// cancelled caller context, then the stop aborts exec. The join's grace
+// bound must not inherit that cancel: supervised work still finishes.
 func TestAttemptUpgradeJoinsOnCancelledContext(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		m, bin, order := skewedUpgrade(t)
+		m, order := skewedUpgrade(t)
 		manifest := NewManifest(nil, nil)
 		runCtx, runCancel := context.WithCancel(context.Background())
 		gate, done := make(chan struct{}), make(chan struct{})
@@ -114,8 +114,10 @@ func TestAttemptUpgradeJoinsOnCancelledContext(t *testing.T) {
 		cancelCaller()
 		go func() {
 			defer close(done)
-			if ok, err := m.AttemptUpgrade(callerCtx, bin, nil, nil, time.Second, nil, nil); err != nil || !ok {
-				t.Errorf("AttemptUpgrade = %v, %v; want true, nil", ok, err)
+			ok, err := m.AttemptUpgrade(callerCtx, nil, nil, time.Second, nil, nil)
+			want := cascade.Wrap(cascade.KindUnavailable, context.Canceled, "daemon: upgrade: aborted by stop")
+			if ok || !cascade.HasKind(err, cascade.KindUnavailable) || err.Error() != want.Error() {
+				t.Errorf("AttemptUpgrade = %v, %v; want false, %v", ok, err, want)
 			}
 		}()
 		synctest.Wait()
@@ -127,7 +129,7 @@ func TestAttemptUpgradeJoinsOnCancelledContext(t *testing.T) {
 		close(gate)
 		<-done
 		manifest.Wait()
-		if got, want := order.snapshot(), []string{"goroutine-returned", "exec"}; !reflect.DeepEqual(got, want) {
+		if got, want := order.snapshot(), []string{"goroutine-returned"}; !reflect.DeepEqual(got, want) {
 			t.Fatalf("upgrade order = %v, want %v", got, want)
 		}
 	})
@@ -136,9 +138,9 @@ func TestAttemptUpgradeJoinsOnCancelledContext(t *testing.T) {
 // TestAttemptUpgradeNilBeforeRelaunchKeepsOrder: with no hook the old
 // drain-then-exec order is unchanged.
 func TestAttemptUpgradeNilBeforeRelaunchKeepsOrder(t *testing.T) {
-	m, bin, order := skewedUpgrade(t)
+	m, order := skewedUpgrade(t)
 	ln := closerFunc(func() error { order.add("drain-closed-listener"); return nil })
-	relaunched, err := m.AttemptUpgrade(context.Background(), bin, ln, nil, time.Second, nil, nil)
+	relaunched, err := m.AttemptUpgrade(context.Background(), ln, nil, time.Second, nil, nil)
 	if err != nil || !relaunched {
 		t.Fatalf("AttemptUpgrade = %v, %v; want true, nil", relaunched, err)
 	}

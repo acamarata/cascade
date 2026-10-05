@@ -45,9 +45,9 @@ order:
    recover a panic, reported as a failed subsystem whose detail starts
    with `panic:`; a clean return is reported as skipped with detail
    `stopped`.
-6. Serve the IPC surface (above) and, for a real release build, the
-   upgrade-in-place engine (see below), until a termination signal or the
-   context is canceled.
+6. Serve the IPC surface (above) until a termination signal or the
+   context is canceled. The upgrade hand-off (see below) answers
+   `SIGUSR2` while serving.
 
 ## Shutdown order
 
@@ -342,28 +342,33 @@ what the scan found.
 
 ## Upgrade in place
 
-`cascade daemon restart` is the only user-facing trigger for an upgrade.
-There is no separate `daemon.upgrade` verb and no signal a user sends by
-hand. Package home: [`internal/daemon`](../internal/daemon)
-(`upgrade.go`, `upgrade_conntracker.go`).
+The daemon hands off to a replaced binary only when it receives
+`SIGUSR2` (`daemon.UpgradeSignal`), the signal the self-update sends once
+it has installed a new binary. `SIGTERM` and `SIGINT` never relaunch:
+`cascade daemon stop`, `restart`, service managers and Ctrl-C always drain
+and exit, even after an out-of-band replacement (a package manager, an
+install script re-run, a `go build -o` over the installed path). Package
+home: [`internal/daemon`](../internal/daemon) (`upgrade.go`,
+`upgrade_skew.go`, `upgrade_conntracker.go`).
 
-The upgrade-in-place engine is only wired into a running daemon's
-termination path for a real release build: an unreleased (`dev`) build's
-embedded hash never matches any on-disk binary by construction, so
-enabling this path unconditionally would make every ordinary shutdown
-signal on a dev build attempt a drain-and-relaunch instead of a clean
-exit. Every build this repository's own CI and test suite runs is a dev
-build, so this guard is what keeps `cascade daemon stop`/`restart`
-working during development at all; it costs a release build nothing,
-since a release build's hash is real and CheckSkew works as designed.
+**Build identity is a content digest.** Before its socket exists the
+daemon resolves its own executable (`os.Executable`, then every symlink)
+and records the SHA-256 of that file. That digest is captured once and
+never re-read. No linker flag or version stamp takes part: a binary cannot
+embed its own digest, and a version string never equals one. If the
+executable cannot be resolved or read at start, the build hash is the
+`dev` sentinel and the hand-off is not wired.
 
-When a termination trigger reaches a running daemon carrying a real
-release build hash, it compares the on-disk `cascade` binary's SHA-256
-hash against the hash embedded in the running process at build time. If
-the two match, this is a logged no-op and the daemon shuts down and
-restarts the ordinary way (stop, then a fresh spawn). If they differ, the
-binary on disk has been replaced since this daemon started, and the
-daemon drains and re-execs itself in place instead:
+**Skew.** On `SIGUSR2` the daemon resolves the install path again and
+hashes the file it names now. Different bytes mean skew. A file rewritten
+with identical bytes is not skew. A symlinked install that now points at
+a different file is compared by that file's content. If the installed file
+cannot be read, the check fails closed: the error is logged, nothing is
+drained or executed, and the daemon keeps serving. It never treats an
+unreadable file as "unchanged".
+
+With no skew the daemon logs `upgrade requested, binary unchanged` and
+keeps serving. With skew it drains and re-execs in place:
 
 1. Stop accepting new IPC connections; a connection accepted after this
    point is refused rather than accepted and silently dropped.
@@ -374,9 +379,18 @@ daemon drains and re-execs itself in place instead:
    the same `shutdown_grace`. A goroutine still running when grace ends is
    logged and the relaunch goes ahead anyway: a stuck goroutine never
    blocks an upgrade.
-4. `exec()` the on-disk binary with the same arguments and environment.
-   The process keeps its PID; no new process is spawned and no window
-   opens where nothing is listening on the socket.
+4. `exec()` the file it just hashed, with the same arguments and
+   environment. The process keeps its PID; no new process is spawned.
+
+**Residuals.** A file replaced between the daemon's exec and its startup
+hash is recorded as the running binary; the window is the daemon's own
+start and needs a same-user writer. A `SIGUSR2` that arrives before the
+daemon installs its signal handler (its first milliseconds) stops it,
+because that is Go's default action for the signal; the self-update sends
+it only after the daemon reports running, and a missed hand-off fails
+closed. On Linux `os.Executable` already returns the resolved file, so a
+symlinked install is followed only by its target's content. After a
+relaunch the new image's install path is the file that was executed.
 
 If the `exec()` call itself fails (the new binary is missing or not
 executable, for example), the daemon has already drained and cannot go

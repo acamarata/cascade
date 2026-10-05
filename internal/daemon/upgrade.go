@@ -3,20 +3,22 @@
 package daemon
 
 // Purpose: UpgradeManager, the daemon upgrade-in-place engine (R-14.12,
-// R-14.7): skew-detect (compare the running daemon's embedded build hash
-// against an on-disk binary's SHA-256), drain (stop accepting new
-// connections, wait bounded for in-flight work, force-close stragglers),
-// and exec-relaunch (syscall.Exec, same PID, no stop/start round trip).
-// Also carries the W1 allowed-fail resume leg: a WAL-position checkpoint
-// written to the db metadata domain before a drain, read back best-effort
-// on the next startup. Windows has no daemon at all (tier-2), so this
-// whole file is unix-only.
+// R-14.7): skew-detect (the sha256 the daemon captured from its own file at
+// start against the installed file's sha256, upgrade_skew.go), drain (stop
+// accepting new connections, wait bounded for in-flight work, force-close
+// stragglers), and exec-relaunch (syscall.Exec, same PID, no stop/start
+// round trip). Run reaches it only on UpgradeSignal. Also carries the W1
+// allowed-fail resume leg: a WAL-position checkpoint written to the db
+// metadata domain before a drain, read back best-effort on the next
+// startup. Windows has no daemon at all (tier-2), so this whole file is
+// unix-only.
 //
-// Inputs: an on-disk binary path (CheckSkew, Relaunch); a net.Listener and
-// *ConnTracker (Drain); a WAL-position string (WriteResumeCursor); every
-// collaborator (Clock, Sleep, Store, Events, Logger) injected, never
-// reached for directly (Art.7.1) - Store and Events may be nil, in which
-// case their features degrade to documented no-ops, never errors.
+// Inputs: the startup identity (upgrade_skew.go); a binary path (Relaunch);
+// a net.Listener and *ConnTracker (Drain); a WAL-position string
+// (WriteResumeCursor); every collaborator (Clock, Sleep, Store, Events,
+// Logger) injected, never reached for directly (Art.7.1) - Store and Events
+// may be nil, in which case their features degrade to documented no-ops,
+// never errors.
 //
 // Outputs: CheckSkew's bool+typed-error pair; Drain always returns nil (a
 // forced close at the grace boundary is its normal outcome, not a
@@ -44,13 +46,10 @@ import (
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
-// buildHash is overwritten at build time via goreleaser ldflags:
-// -X github.com/acamarata/cascade/internal/daemon.buildHash=<git-sha>.
-// "dev" is the unreleased-build value; it never matches a real on-disk
-// binary's hash, so an unreleased build always reports skew against
-// itself, which is expected and harmless since Relaunch only runs when a
-// caller acts on CheckSkew's result.
-var buildHash = "dev"
+// UpgradeSignal is the one hand-off signal: Run consults its UpgradeManager
+// only when this arrives. SIGTERM and SIGINT always drain and exit, so a
+// stop never turns into a relaunch, whatever is on disk.
+const UpgradeSignal = syscall.SIGUSR2
 
 // EventKindShutdownRequested is published to eventNamespace the moment
 // Drain begins closing its listener, before it waits for in-flight work.
@@ -206,33 +205,58 @@ func (m *UpgradeManager) Relaunch(binaryPath string, args, env []string) error {
 	return nil
 }
 
-// AttemptUpgrade is the single entry point a termination handler calls: it
-// resolves binaryPath's skew against BuildHash, and when skewed, drains ln
-// (tracked by tracker, bounded by grace) and exec-relaunches in place with
-// args/env unchanged. relaunched is true only when Relaunch was attempted
-// and returned (a stubbed execFunc in tests, since a real successful exec
-// never returns at all). err is CheckSkew's or Relaunch's error, whichever
-// fired; a nil err with relaunched=false means "no skew, logged no-op" -
-// the caller proceeds with its normal shutdown.
-func (m *UpgradeManager) AttemptUpgrade(ctx context.Context, binaryPath string, ln io.Closer, tracker *ConnTracker, grace time.Duration, args, env []string) (relaunched bool, err error) {
-	skew, err := m.CheckSkew(binaryPath)
+// AttemptUpgrade is the single entry point Run's UpgradeSignal handler
+// calls. It runs CheckSkew against the startup digest and, on skew, drains
+// ln (tracked by tracker, bounded by grace) and exec-relaunches the file it
+// just hashed with args/env (args nil means argv is just that path).
+// relaunched is true only when Relaunch was attempted and returned (a stubbed
+// execFunc in tests, since a real successful exec never returns). err is the
+// skew check's or Relaunch's error: Draining() tells them apart, because only
+// a relaunch failure comes after the drain. A nil err with relaunched=false
+// means the binary is unchanged; nothing was drained.
+func (m *UpgradeManager) AttemptUpgrade(ctx context.Context, ln io.Closer, tracker *ConnTracker, grace time.Duration, args, env []string) (relaunched bool, err error) {
+	skew, target, sum, installPath, err := m.checkSkew()
 	if err != nil {
 		return false, err
 	}
 	if !skew {
-		m.logInfo("daemon: upgrade: binary hashes match, no-op")
+		m.logInfo("daemon: upgrade requested, binary unchanged", "startup", m.StartupPath())
 		return false, nil
 	}
-	m.logInfo("daemon: upgrade: skew detected, draining", "binary", binaryPath)
+	m.logInfo("daemon: upgrade: skew detected, draining", "startup", m.StartupPath(), "binary", target)
 	_ = m.Drain(ctx, ln, tracker, grace)
 	if m.BeforeRelaunch != nil {
 		m.BeforeRelaunch(ctx)
 	}
-	if relErr := m.Relaunch(binaryPath, args, env); relErr != nil {
+	if err := m.upgradeStopError(ctx); err != nil {
+		return false, err
+	}
+	skew, checkedTarget, checkedSum, _, checkErr := m.checkSkew()
+	if checkErr != nil || !skew || checkedTarget != target || checkedSum != sum {
+		m.logInfo("daemon: upgrade: installed binary changed during hand-off")
+		return false, cascade.New(cascade.KindUnavailable, "daemon: upgrade: installed binary changed during hand-off")
+	}
+	target = relaunchPath(installPath, target)
+	if len(args) == 0 {
+		args = []string{target}
+	}
+	if err := m.upgradeStopError(ctx); err != nil {
+		return false, err
+	}
+	if relErr := m.Relaunch(target, args, env); relErr != nil {
 		m.logWarn("daemon: upgrade: relaunch failed, falling back to normal shutdown", "error", relErr.Error())
 		return false, relErr
 	}
 	return true, nil
+}
+
+// upgradeStopError makes a stop during drain or the join abort the exec.
+func (m *UpgradeManager) upgradeStopError(ctx context.Context) error {
+	if ctx.Err() != nil {
+		m.logInfo("daemon: upgrade: stop requested during hand-off, not relaunching")
+		return cascade.Wrap(cascade.KindUnavailable, ctx.Err(), "daemon: upgrade: aborted by stop")
+	}
+	return nil
 }
 
 // WriteResumeCursor persists pos (the current WAL position, an opaque
