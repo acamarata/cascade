@@ -40,7 +40,6 @@ package main
 import (
 	"context"
 	"io"
-	"net"
 	"net/http"
 	"os"
 
@@ -128,8 +127,8 @@ func serveStdioReal(ctx context.Context, tools *mcp.ToolRegistry, in io.Reader, 
 	return tr.Serve(ctx)
 }
 
-// serveSocketReal binds a dedicated MCP unix socket (see this file's doc
-// comment for why it is not yet the daemon's shared socket) and serves
+// serveSocketReal binds a dedicated owner-only MCP unix socket (see this
+// file's doc comment for why it is not yet the daemon's shared socket) and serves
 // mcp.dispatch over it via the same rpc.Registry/Handler pipeline the
 // daemon itself uses.
 func serveSocketReal(ctx context.Context, paths runtime.PathProvider, tools *mcp.ToolRegistry) error {
@@ -141,10 +140,14 @@ func serveSocketReal(ctx context.Context, paths runtime.PathProvider, tools *mcp
 	if err := transport.RegisterSocketMCP(registry, mcp.NewServer(tools)); err != nil {
 		return err
 	}
-	_ = os.Remove(sockPath)
-	ln, err := net.Listen("unix", sockPath)
+	// runtime.ListenOwnerSocket is the same owner-only bind the daemon
+	// socket uses: a planted symlink, a non-socket or a foreign-owned
+	// socket is refused and left, only our own stale socket is removed, and
+	// the socket is 0600 before Serve. Its *cascade.Error kind is returned
+	// as-is.
+	ln, err := runtime.ListenOwnerSocket(sockPath)
 	if err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "cascade mcp serve --socket: listen failed")
+		return err
 	}
 	defer func() { _ = ln.Close() }()
 	// ConnContext is required (P1-E04-W6-S146-T1): without it,

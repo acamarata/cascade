@@ -203,13 +203,17 @@ func Scan(ctx context.Context, opts RecoveryOptions) (*RecoveryEvent, error) {
 		return nil, nil
 	}
 
-	live, staleSocket, err := probeSocket(opts.SocketPath, opts.DialTimeout, dial)
+	// The socket's lifetime lock, once taken, is held until Scan returns:
+	// the stale-socket removal and every later step run while no listener
+	// can bind and no second scan can judge the path (R127).
+	live, staleSocket, release, err := probeSocketLocked(opts.SocketPath, opts.DialTimeout, dial)
+	defer release()
 	if err != nil {
 		return nil, err
 	}
 	if live {
 		return nil, cascade.Wrapf(cascade.KindConflict, ErrDaemonAlreadyRunning,
-			"runtime: recovery scan aborted: a live daemon answered %s", opts.SocketPath)
+			"runtime: recovery scan aborted: a live daemon holds or answers %s", opts.SocketPath)
 	}
 
 	ev := &RecoveryEvent{RecoveredAt: clock.Now()}

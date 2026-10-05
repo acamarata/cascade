@@ -8,6 +8,8 @@ See also [supply-chain tooling: pins and accepted residuals](security-posture/su
 
 See also [effect records: intent before, outcome after](security-posture/effect-records.md).
 
+See also [control sockets: owner-only, 0600, refuse what is not ours](security-posture/control-sockets.md).
+
 ## Vault backends
 
 Cascade's secret vault stores values through one custody backend, chosen at

@@ -31,6 +31,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -119,15 +120,32 @@ func deadPid(t *testing.T) int {
 
 func intToBytes(n int) string { return strconv.Itoa(n) }
 
-// writeSocketPlaceholder creates a plain file at path standing in for a
-// leftover socket inode. Scan/probeSocket only ever os.Stat's the path
-// for existence and (via the injected Dialer) attempts a connection —
-// neither cares whether the bytes at path are a real bound socket, so a
-// plain file is sufficient and keeps this package's unit lane free of
-// real net I/O (see recovery_test.go's file-level Art.7.2 note).
+// writeSocketPlaceholder leaves a real socket file at path that nobody
+// listens on and nobody holds the lock for: the inode a crashed daemon
+// leaves behind. Scan judges the path under the socket lock and refuses
+// anything that is not our own socket, so a plain file no longer stands in.
+// The socket is bound with syscall (no "net" import, Art.7.2) under a short
+// os.MkdirTemp root, since a t.TempDir path can overflow sun_path, then
+// renamed into place on the same filesystem; the descriptor is closed with
+// no listen, so a real connect to it is refused.
 func writeSocketPlaceholder(t *testing.T, path string) {
 	t.Helper()
-	if err := os.WriteFile(path, nil, 0o644); err != nil {
+	short, err := os.MkdirTemp("", "rsp")
+	if err != nil {
 		t.Fatalf("seed socket placeholder: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(short) }()
+	fd, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
+	if err != nil {
+		t.Fatalf("seed socket placeholder: socket: %v", err)
+	}
+	bound := short + "/s"
+	err = syscall.Bind(fd, &syscall.SockaddrUnix{Name: bound})
+	_ = syscall.Close(fd)
+	if err != nil {
+		t.Fatalf("seed socket placeholder: bind: %v", err)
+	}
+	if err := os.Rename(bound, path); err != nil {
+		t.Fatalf("seed socket placeholder: rename into place: %v", err)
 	}
 }
