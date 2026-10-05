@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05T08:41:06Z",
+  "generated_at": "2026-10-05T09:22:03Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -6359,6 +6359,20 @@
       ]
     },
     {
+      "name": "conductor.fanout leg-result sensitivity",
+      "sites": [
+        {
+          "file": "internal/conductor/fanout_results_sensitivity_test.go",
+          "line": 13,
+          "status": "CHANGE",
+          "raw": "conductor.fanout leg-result sensitivity (CHANGE, P1-SEC-19)."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
+      ]
+    },
+    {
       "name": "conductor.flow",
       "sites": [
         {
@@ -12067,10 +12081,17 @@
           "status": "ADD",
           "ticket": "P1-E20-W5-S44-T2",
           "raw": "internal.conversation.privacy/ADDED (P1-E20-W5-S44-T2)."
+        },
+        {
+          "file": "internal/conversation/privacy_parse_test.go",
+          "line": 11,
+          "status": "CHANGE",
+          "raw": "internal.conversation.privacy/CHANGE (P1-SEC-19)."
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -13254,6 +13275,34 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal.hooks.egress.class",
+      "sites": [
+        {
+          "file": "internal/hooks/egress/class_alias_test.go",
+          "line": 9,
+          "status": "CHANGE",
+          "raw": "internal.hooks.egress.class/CHANGE (P1-SEC-19)."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
+      ]
+    },
+    {
+      "name": "internal.hooks.egress.registry",
+      "sites": [
+        {
+          "file": "internal/hooks/egress/registry_tiers_test.go",
+          "line": 13,
+          "status": "CHANGE",
+          "raw": "internal.hooks.egress.registry/CHANGE (P1-SEC-19)."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
       ]
     },
     {
@@ -17411,6 +17460,20 @@
       ]
     },
     {
+      "name": "internal/daemon conductor.execute sensitivity",
+      "sites": [
+        {
+          "file": "internal/daemon/conductor_execute_params_sensitivity_test.go",
+          "line": 11,
+          "status": "CHANGE",
+          "raw": "internal/daemon conductor.execute sensitivity (CHANGE, P1-SEC-19)."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
+      ]
+    },
+    {
       "name": "internal/daemon status:requeue-collaborators",
       "sites": [
         {
@@ -19224,7 +19287,7 @@
       "sites": [
         {
           "file": "internal/nodes/placement.go",
-          "line": 26,
+          "line": 28,
           "status": "ADD",
           "ticket": "P1-E17-W4-S37-T1",
           "raw": "internal/nodes placement (ADD) — P1-E17-W4-S37-T1."
@@ -19269,7 +19332,7 @@
       "sites": [
         {
           "file": "internal/nodes/placement_trust.go",
-          "line": 14,
+          "line": 19,
           "status": "ADD",
           "ticket": "P1-E17-W4-S37-T1",
           "raw": "internal/nodes placement trust filter (ADD) — P1-E17-W4-S37-T1."
@@ -19411,14 +19474,14 @@
         },
         {
           "file": "internal/nodes/dispatch_ship_test.go",
-          "line": 16,
+          "line": 17,
           "status": "ADD",
           "ticket": "P1-E17-W4-S37-T2",
           "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
         },
         {
           "file": "internal/nodes/dispatch_test.go",
-          "line": 16,
+          "line": 17,
           "status": "ADD",
           "ticket": "P1-E17-W4-S37-T2",
           "raw": "internal/nodes tests (ADD) — P1-E17-W4-S37-T2."
@@ -19528,7 +19591,7 @@
       "sites": [
         {
           "file": "internal/nodes/dispatch.go",
-          "line": 27,
+          "line": 29,
           "status": "ADD",
           "ticket": "P1-E17-W4-S37-T2",
           "raw": "internal/nodes:dispatch (ADD) — P1-E17-W4-S37-T2."
@@ -19663,7 +19726,7 @@
       "sites": [
         {
           "file": "internal/nodes/dispatch_ship.go",
-          "line": 22,
+          "line": 24,
           "status": "ADD",
           "ticket": "P1-E17-W4-S37-T2",
           "raw": "internal/nodes:dispatch-ship (ADD) — P1-E17-W4-S37-T2."
@@ -24134,6 +24197,20 @@
       ]
     },
     {
+      "name": "internal/sync tier range guards",
+      "sites": [
+        {
+          "file": "internal/sync/tier_range_test.go",
+          "line": 12,
+          "status": "CHANGE",
+          "raw": "internal/sync tier range guards (CHANGE, P1-SEC-19)."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
+      ]
+    },
+    {
       "name": "internal/sync tombstones",
       "sites": [
         {
@@ -25989,7 +26066,7 @@
         },
         {
           "file": "pkg/provider/model.go",
-          "line": 21,
+          "line": 16,
           "status": "ADD",
           "ticket": "P1-E10-W3-S19-T1",
           "raw": "pkg.provider.modelprovider-contract/ADD (P1-E10-W3-S19-T1)."
@@ -26022,6 +26099,46 @@
           "status": "ADD",
           "ticket": "P1-E10-W3-S20-T2",
           "raw": "pkg.provider.registry_reader/ADD (P1-E10-W3-S20-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "pkg.provider.sensitivity-tier",
+      "sites": [
+        {
+          "file": "pkg/provider/sensitivity.go",
+          "line": 24,
+          "status": "CHANGE",
+          "raw": "pkg.provider.sensitivity-tier/CHANGE (contract:sensitivity-tier)."
+        },
+        {
+          "file": "pkg/provider/sensitivity_test.go",
+          "line": 12,
+          "status": "CHANGE",
+          "raw": "pkg.provider.sensitivity-tier/CHANGE (P1-SEC-19)."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
+      ]
+    },
+    {
+      "name": "pkg.provider.untrusted-provenance",
+      "sites": [
+        {
+          "file": "pkg/provider/provenance.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "pkg.provider.untrusted-provenance/ADD (contract:untrusted-provenance)."
+        },
+        {
+          "file": "pkg/provider/provenance_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "pkg.provider.untrusted-provenance/ADD (P1-SEC-19)."
         }
       ],
       "statuses": [
@@ -32215,7 +32332,7 @@
       ]
     }
   ],
-  "total_sites": 3072,
+  "total_sites": 3082,
   "unspecified_count": 160,
-  "multi_status_count": 90
+  "multi_status_count": 91
 }
