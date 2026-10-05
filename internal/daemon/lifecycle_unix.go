@@ -4,7 +4,8 @@ package daemon
 
 // Purpose: Run, `cascade daemon run`'s foreground implementation on every
 //   non-Windows platform (06-FORGE-SPEC §2: unix socket, 0600 perms).
-//   Creates the IPC socket, writes the pidfile, and serves real JSON-RPC
+//   Prepares the IPC socket, writes the pidfile, publishes the socket
+//   (owner-only, through runtime.PrepareOwnerSocket), and serves real JSON-RPC
 //   and SSE connections through the http.Server the composition root
 //   builds: accepted connections are handed to that server instead of
 //   being closed immediately, restoring the reachability internal/rpc's
@@ -29,7 +30,6 @@ package daemon
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -155,46 +155,58 @@ func Run(ctx context.Context, opts RunOptions) error {
 	return nil
 }
 
-// setUpSocketAndPIDFile writes the pidfile and THEN binds the unix socket,
-// recording either failure on manifest. cleanup closes/removes both and
-// must run via defer regardless of how Run later exits.
+// setUpStageHook is a test seam called with "pidfile" just before the
+// pidfile write, while the prepared socket holds its lock unpublished.
+var setUpStageHook = func(string) {}
+
+// setUpSocketAndPIDFile prepares the socket, writes the pidfile, THEN
+// publishes the socket, recording any failure on manifest. cleanup removes
+// the pidfile and closes the listener (which removes the socket only if it
+// is still ours) and must run via defer regardless of how Run later exits.
 //
-// The pidfile-before-socket order is load-bearing, not cosmetic (R-14.205):
-// Start's caller-side readiness probe treats "the socket answers a dial" as
-// its only external signal that the daemon is fully up, because it runs in
-// a separate process with no channel back into this one. Two sequential
-// statements in the SAME goroutine have a real happens-before relationship
-// no external observer can see around — so as long as the write completes
-// before the call that can make the socket dialable, any process that
-// observes a dialable socket is guaranteed the pidfile already exists.
-// The prior order (bind, then write) had no such guarantee: net.Listen
-// alone makes a unix socket dialable (the kernel queues the connection in
-// the listen backlog; no accept() is required), so a second `daemon start`
-// racing the first could see the socket answer while the pidfile write was
-// still in flight, read that as "nothing recorded", and spawn a second
-// daemon onto the same socket path. This ordering is real and it was a
-// CONTRIBUTING cause: measured in isolation against the linux container it
-// took the failure from every run to roughly one in three. It was not the
-// whole cause, and a partial fix that turns "always" into "sometimes" is the
-// most dangerous kind, because the next run looks green. What took it to
-// never is the like-for-unlike start-time comparison selfStartTime fixes.
+// The order is load-bearing (R-14.205, P1-BF-R130). Start's caller-side
+// readiness probe treats "the socket answers a dial" as its only signal
+// that the daemon is up, and the next start, status or stop then reads the
+// pidfile. So a dialable path must imply the pidfile exists: the write
+// completes before the link(2) that makes the path dialable, and two
+// statements in one goroutine give every observer that guarantee. With the
+// pidfile written after the socket answers, a second `daemon start` could
+// read "nothing recorded" and spawn a second daemon; measured against the
+// linux container that was a contributing cause of R-14.205's failure.
+// Prepare comes first because it takes the socket's lifetime lock: a
+// losing concurrent start fails there (KindConflict) and never writes or
+// removes the winner's pidfile. A failure after prepare removes the pidfile
+// it wrote while still holding the lock, so it can only be its own.
 func setUpSocketAndPIDFile(opts RunOptions, manifest *Manifest) (net.Listener, func(), error) {
 	if err := os.MkdirAll(filepath.Dir(opts.PIDPath), 0o700); err != nil {
 		manifest.Failed(ipcSocketSubsystem, "pidfile dir: "+err.Error())
 		return nil, nil, cascade.Wrap(cascade.KindUnavailable, err, "daemon: create pidfile directory")
 	}
-	if err := writePIDFile(opts.PIDPath, pidRecord{PID: os.Getpid(), StartedAt: selfStartTime(opts.Clock)}); err != nil {
-		manifest.Failed(ipcSocketSubsystem, "pidfile: "+err.Error())
+	// The helper's kinds (permission-denied, conflict, unavailable) reach
+	// the caller unchanged, as serveSocketReal returns them.
+	prep, err := runtime.PrepareOwnerSocket(opts.Settings.SocketPath)
+	if err != nil {
+		manifest.Failed(ipcSocketSubsystem, err.Error())
 		return nil, nil, err
 	}
-
-	ln, err := listenSocket(opts.Settings.SocketPath)
+	setUpStageHook("pidfile")
+	if err := writePIDFile(opts.PIDPath, pidRecord{PID: os.Getpid(), StartedAt: selfStartTime(opts.Clock)}); err != nil {
+		manifest.Failed(ipcSocketSubsystem, "pidfile: "+err.Error())
+		prep.Abort()
+		return nil, nil, err
+	}
+	ln, err := prep.Publish()
 	if err != nil {
 		manifest.Failed(ipcSocketSubsystem, err.Error())
 		_ = removePIDFile(opts.PIDPath)
-		return nil, nil, cascade.Wrap(cascade.KindUnavailable, err, "daemon: listen socket")
+		prep.Abort()
+		return nil, nil, err
 	}
-	socketCleanup := func() { _ = ln.Close(); _ = os.Remove(opts.Settings.SocketPath) }
+	// Close alone: it removes the socket path only while that path still
+	// names the inode this run bound, then releases the socket lock. An
+	// unconditional remove here, run after drain, would delete a
+	// successor's socket or another user's entry in a sticky directory.
+	socketCleanup := func() { _ = ln.Close() }
 	return ln, func() { _ = removePIDFile(opts.PIDPath); socketCleanup() }, nil
 }
 
@@ -224,47 +236,6 @@ func attemptUpgrade(ctx context.Context, opts RunOptions, ln net.Listener) bool 
 	}
 	relaunched, _ := opts.Upgrade.AttemptUpgrade(ctx, execPath, ln, nil, opts.Settings.ShutdownGrace, args, env)
 	return relaunched
-}
-
-// listenSocket binds a unix socket at path with 0600 permissions. A stale
-// socket file left by a crashed prior daemon (nobody listening) is removed
-// and the bind retried once; a socket a live process is actually listening
-// on is a genuine conflict, reported as-is.
-func listenSocket(path string) (net.Listener, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return nil, err
-	}
-	ln, err := net.Listen("unix", path)
-	if err != nil {
-		if isAddrInUse(err) && !dialable(path) {
-			_ = os.Remove(path)
-			ln, err = net.Listen("unix", path)
-		}
-		if err != nil {
-			return nil, err
-		}
-	}
-	if err := os.Chmod(path, 0o600); err != nil {
-		_ = ln.Close()
-		return nil, err
-	}
-	return ln, nil
-}
-
-func isAddrInUse(err error) bool {
-	return errors.Is(err, syscall.EADDRINUSE)
-}
-
-// dialable reports whether some live process is actually accepting
-// connections at path (as opposed to a stale socket file left behind by an
-// unclean exit).
-func dialable(path string) bool {
-	c, err := net.Dial("unix", path)
-	if err != nil {
-		return false
-	}
-	_ = c.Close()
-	return true
 }
 
 // drain logs the connection count at drain entry and exit, per this

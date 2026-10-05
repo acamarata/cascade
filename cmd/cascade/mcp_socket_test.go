@@ -27,12 +27,14 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/acamarata/cascade/internal/mcp"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/plugin"
 )
 
@@ -179,5 +181,41 @@ func TestMCPSocketServeRefusesOriginHeader(t *testing.T) {
 	const wantBody = "forbidden: browser-shaped request refused"
 	if got := strings.TrimSpace(string(body)); got != wantBody {
 		t.Fatalf("body = %q, want %q (the owner-UID branch's body would mean ConnContext never resolved a peer)", got, wantBody)
+	}
+}
+
+// TestMCPSocketModeIs0600 proves serveSocketReal binds through the owner-only
+// helper: once the socket answers, it is a socket with mode exactly 0600.
+func TestMCPSocketModeIs0600(t *testing.T) {
+	_, sockPath := startMCPSocketServer(t)
+	fi, err := os.Lstat(sockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode()&os.ModeSocket == 0 || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("Lstat(%s) mode = %v, want a socket with perm 0600", sockPath, fi.Mode())
+	}
+}
+
+// TestMCPSocketRefusesPlantedSymlink proves a symlink planted at the MCP
+// socket path is refused with KindPermissionDenied and left intact: the HEAD
+// path removed it and listened in its place.
+func TestMCPSocketRefusesPlantedSymlink(t *testing.T) {
+	paths, tools, sockPath := mcpSocketTestPaths(t)
+	target := filepath.Join(filepath.Dir(sockPath), "elsewhere")
+	if err := os.Symlink(target, sockPath); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := serveSocketReal(ctx, paths, tools)
+	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindPermissionDenied || !strings.Contains(err.Error(), "is a symlink") {
+		t.Fatalf("serveSocketReal with a planted symlink: %v, want KindPermissionDenied", err)
+	}
+	if got, rerr := os.Readlink(sockPath); rerr != nil || got != target {
+		t.Fatalf("planted symlink after refusal -> %q (%v), want %q", got, rerr, target)
+	}
+	if _, serr := os.Lstat(target); serr == nil {
+		t.Fatal("the symlink target was created")
 	}
 }

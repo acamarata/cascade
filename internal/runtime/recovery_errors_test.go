@@ -19,6 +19,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -125,6 +126,13 @@ func TestRecoveryScan_SocketRemoveErrorPropagates(t *testing.T) {
 	sockPath := filepath.Join(dir, "daemon.sock")
 	writeSocketPlaceholder(t, sockPath)
 
+	// Create the lifetime lock first (mode 0600, ours) so the scan can open
+	// it in an unwritable directory and reach the removal. Without it the
+	// scan fails earlier, at the lock open, and never calls RemoveSocketFile.
+	if err := os.WriteFile(sockPath+".lock", nil, 0o600); err != nil {
+		t.Fatalf("seed socket lock: %v", err)
+	}
+
 	// Make the containing directory unwritable so os.Remove fails with a
 	// permission error instead of succeeding.
 	if err := os.Chmod(dir, 0o500); err != nil {
@@ -145,6 +153,9 @@ func TestRecoveryScan_SocketRemoveErrorPropagates(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("Scan with an unremovable stale socket: want error, got nil")
+	}
+	if !strings.Contains(err.Error(), "remove stale socket") {
+		t.Fatalf("Scan error = %v, want it to name the remove step (\"remove stale socket\")", err)
 	}
 }
 

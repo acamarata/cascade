@@ -28,6 +28,13 @@ import (
 // denied, an unexpected network error) is UNDECIDABLE and returned as an
 // error — conservative per the brief: when in doubt, do not proceed to
 // remove anything.
+//
+// stale=true is only a refused connect, a candidate and never the proof
+// (R123/R127): a live listener with a full backlog refuses one on darwin.
+// Scan removes a socket only through probeSocketLocked
+// (socket_lock_unix.go), which judges the path under the socket's lifetime
+// lock and calls this for the dial. Lock-free on purpose: ProbeDaemonless
+// runs it before every command and must never take, or create, the lock.
 func probeSocket(path string, timeout time.Duration, dial Dialer) (live, stale bool, err error) {
 	// os.Lstat, not os.Stat (R-14.161, decided at the W1 hardening gate).
 	// Stat FOLLOWS symlinks, so a dangling symlink at path (its target
