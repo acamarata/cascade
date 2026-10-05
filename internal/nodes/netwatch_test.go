@@ -2,6 +2,7 @@ package nodes
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -20,55 +21,132 @@ func fakeInterfaces(names ...string) InterfacesFunc {
 	}
 }
 
-func TestNetworkWatcherDetectsRouteChange(t *testing.T) {
-	ticker := newFakeTicker()
-	inner := &captureBus{}
-	var mu sync.Mutex
-	bus := &lockedBusPublisher{inner: inner, mu: &mu}
-	var triggered atomic.Int64
-	var route atomic.Bool
+// syncTicker is an unbuffered Ticker: fire returns only once the watcher's
+// Run loop has received the tick, which it does only after the previous
+// pollOnce has fully returned. That makes "the previous poll is finished" an
+// observable fact instead of something a sleep has to guess.
+type syncTicker struct{ ch chan struct{} }
+
+func (s *syncTicker) C() <-chan struct{} { return s.ch }
+func (s *syncTicker) Stop()              {}
+
+// fire hands one tick to the watcher, failing with a clear message if the
+// Run loop does not take it within the bound.
+func (s *syncTicker) fire(t *testing.T) {
+	t.Helper()
+	select {
+	case s.ch <- struct{}{}:
+	case <-time.After(netwatchWait):
+		t.Fatalf("watcher did not receive the tick within %v", netwatchWait)
+	}
+}
+
+// netwatchWait bounds every wait on the watcher. It is a failure bound, not a
+// synchronisation delay: a healthy run never waits on it.
+const netwatchWait = 10 * time.Second
+
+// expectStep waits for the next recorded watcher step and fails unless it is
+// want. The steps arrive in the order the watcher performs them, so a route
+// change that lands before the first snapshot shows up as a wrong step here
+// rather than as a flaky event count.
+func expectStep(t *testing.T, steps <-chan string, want string) {
+	t.Helper()
+	select {
+	case got := <-steps:
+		if got != want {
+			t.Fatalf("watcher step = %q, want %q", got, want)
+		}
+	case <-time.After(netwatchWait):
+		t.Fatalf("timed out after %v waiting for watcher step %q", netwatchWait, want)
+	}
+}
+
+// netwatchRig wires a NetworkWatcher to injected fakes and records, in order,
+// each default-route read (the last read of a poll's fingerprint) and each
+// change callback (after the publish) on steps.
+type netwatchRig struct {
+	ticker    *syncTicker
+	bus       *lockedBusPublisher
+	route     atomic.Bool
+	triggered atomic.Int64
+	steps     chan string
+	cancel    context.CancelFunc
+	done      chan struct{}
+}
+
+func newNetwatchRig(t *testing.T) *netwatchRig {
+	t.Helper()
+	r := &netwatchRig{
+		ticker: &syncTicker{ch: make(chan struct{})},
+		bus:    &lockedBusPublisher{inner: &captureBus{}, mu: &sync.Mutex{}},
+		steps:  make(chan string, 16),
+		done:   make(chan struct{}),
+	}
 	w := NewNetworkWatcher(NetworkWatcherDeps{
-		Ticker:       ticker,
-		Interfaces:   fakeInterfaces("en0"),
-		DefaultRoute: route.Load,
-		Bus:          bus,
-		OnChange:     func() { triggered.Add(1) },
+		Ticker:     r.ticker,
+		Interfaces: fakeInterfaces("en0"),
+		DefaultRoute: func() bool {
+			v := r.route.Load()
+			r.steps <- fmt.Sprintf("route=%t", v)
+			return v
+		},
+		Bus: r.bus,
+		OnChange: func() {
+			r.triggered.Add(1)
+			r.steps <- "change"
+		},
 	})
-
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	done := make(chan struct{})
-	go func() { w.Run(ctx); close(done) }()
+	r.cancel = cancel
+	t.Cleanup(cancel)
+	go func() { w.Run(ctx); close(r.done) }()
+	return r
+}
 
-	ticker.fire()
-	time.Sleep(20 * time.Millisecond)
-	if n := bus.len(); n != 1 {
+func (r *netwatchRig) stop(t *testing.T) {
+	t.Helper()
+	r.cancel()
+	select {
+	case <-r.done:
+	case <-time.After(netwatchWait):
+		t.Fatalf("watcher did not stop within %v of cancel", netwatchWait)
+	}
+}
+
+func TestNetworkWatcherDetectsRouteChange(t *testing.T) {
+	r := newNetwatchRig(t)
+
+	// First poll: the first observation is always a change. The route is
+	// still false here, so the baseline cannot absorb the later flip.
+	r.ticker.fire(t)
+	expectStep(t, r.steps, "route=false")
+	expectStep(t, r.steps, "change")
+	if n := r.bus.len(); n != 1 {
 		t.Fatalf("first pass: published %d events, want exactly 1 (first observation is always a change)", n)
 	}
-	if got := triggered.Load(); got != 1 {
+	if got := r.triggered.Load(); got != 1 {
 		t.Fatalf("triggered = %d, want 1", got)
 	}
 
-	// Same fingerprint: no change, no new publish.
-	ticker.fire()
-	time.Sleep(20 * time.Millisecond)
-	if n := bus.len(); n != 1 {
-		t.Fatalf("unchanged pass: published %d events, want still 1", n)
-	}
+	// Same fingerprint: the poll reads the route and reports no change.
+	r.ticker.fire(t)
+	expectStep(t, r.steps, "route=false")
 
-	// Flip the default route: a real change.
-	route.Store(true)
-	ticker.fire()
-	time.Sleep(20 * time.Millisecond)
-	if n := bus.len(); n != 2 {
-		t.Fatalf("route-change pass: published %d events, want 2", n)
+	// The unchanged poll has taken its fingerprint, so flipping the route
+	// now cannot reach it. The next fire returns only after that poll has
+	// finished, and a spurious publish from it would surface as a "change"
+	// step ahead of the "route=true" read below.
+	r.route.Store(true)
+	r.ticker.fire(t)
+	expectStep(t, r.steps, "route=true")
+	expectStep(t, r.steps, "change")
+	if n := r.bus.len(); n != 2 {
+		t.Fatalf("route-change pass: published %d events, want 2 (the unchanged pass must publish nothing)", n)
 	}
-	if got := triggered.Load(); got != 2 {
+	if got := r.triggered.Load(); got != 2 {
 		t.Fatalf("triggered = %d, want 2 after a real network change", got)
 	}
-
-	cancel()
-	<-done
+	r.stop(t)
 }
 
 // lockedBusPublisher is an EventBus that serializes Publish calls behind
