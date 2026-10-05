@@ -17,7 +17,7 @@ func packWithOneDescriptor(name string, evt hookpacks.HookEventType) hookpacks.H
 	return hookpacks.HookPack{
 		Name: name,
 		Descriptors: []hookpacks.HookDescriptor{
-			{EventType: evt, Matcher: "", CommandTemplate: "echo {{CASCADE_SOCKET_PATH}} || true"},
+			{EventType: evt, Matcher: "", CommandTemplate: "echo '{{CASCADE_SOCKET_PATH}}' || true"},
 		},
 	}
 }

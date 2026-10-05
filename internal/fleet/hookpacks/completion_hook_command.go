@@ -1,83 +1,68 @@
 package hookpacks
 
-// Purpose (this file): builds the completion-gate hook's own shell command
+// Purpose (this file): builds the completion-gate hook's own command
 //
-//	template (completionHookCommand) -- the literal POSIX sh curl
-//	invocation the harness actually executes for TaskCompleted/Stop. Split
-//	out of completion_gate.go to keep that file's own R-16.16 dispatch
-//	logic under the 300-line cap while this file carries the CR-B/D1
-//	shell-layer fix on its own: CC's own hook contract has NO daemon-side
-//	fallback -- whatever this string does IS the fail-open/fail-closed
-//	behavior in the field, so every branch is proven directly against
-//	/bin/sh in completion_hook_command_test.go, not inferred from the
-//	Go-side handleCompletionHook this template merely calls into.
+//	template (completionHookCommand) -- the one command the harness executes
+//	for TaskCompleted/Stop. The command is a single invocation of the
+//	cascade binary's hidden `fleet completion-check` subcommand
+//	(cmd/cascade/fleet_completion_check.go), which reads the harness JSON on
+//	stdin, builds the completion.check params with encoding/json from the
+//	environment, makes one RPC call over the daemon socket and decodes the
+//	reply into a typed struct. The earlier template did all of that in POSIX
+//	sh: it matched the reply by substring and spliced $CASCADE_SESSION_ID,
+//	$CASCADE_JOB_ID and $CASCADE_TICKET_ID into JSON unescaped (AUD-035).
+//	sh has no JSON decoder and jq is not guaranteed on a harness host, so the
+//	body moved into the binary.
 //
-// Inputs: a HookEventType and the server-side completion_timeout that
+// Inputs: a HookEventType.
 //
-//	governs handleCompletionHook's own context.WithTimeout (defaultCompletionTimeout,
-//	completion_gate.go -- no [fleet.hooks] config section reads a
-//	different value yet, a disclosed Art.9 gap that file already names).
+// Outputs: one POSIX sh command string still carrying the unresolved
 //
-// Outputs: one POSIX sh command string, still carrying the unresolved
+//	binaryPlaceholder and socketPlaceholder tokens (renderer.go substitutes
+//	both, single-quoted).
 //
-//	socketPlaceholder token (renderer.go substitutes it).
+// Constraints: CC's own hook contract has NO daemon-side fallback --
 //
-// Constraints: fail CLOSED (exit 2, one-line reason on stderr) on every
+//	whatever this string does IS the fail-open/fail-closed behavior in the
+//	field. The subcommand exits 0 only for a decoded `deny: false` and exits
+//	2 with a one-line reason for everything else; the trailing `|| exit 2`
+//	turns any other way the process can end (a crash, a signal, a missing or
+//	non-executable binary) into the same exit 2, so no outcome but an
+//	explicit allow lets the harness proceed. The command is straight-line:
+//	exactly one invocation, nothing re-issues it, so a Stop -> block -> Stop
+//	replay can never become more than one request per invocation
+//	(TestCompletionHookCommand_RendersExactlyOneCall), and stop_hook_active
+//	changes no exit-code branch
+//	(TestCompletionHookCommand_StopHookActiveNeverBypassesFailClosed). The
+//	cascade binary is named by absolute path, never resolved through PATH
+//	(TestCompletionHookCommandUsesAbsolutePath).
 //
-//	outcome except a well-formed 2xx JSON body containing the literal
-//	`"deny":false` -- curl's own non-zero exit, an unreachable socket, a
-//	non-2xx HTTP status, an empty body and unparseable JSON all take the
-//	SAME exit-2 branch a real `"deny":true"` does (CR-B Q1: the PREVIOUS
-//	version of this template exited 0 -- allow -- on every one of those,
-//	because it only ever matched the deny:true case and fell through to
-//	an unconditional `exit 0`). The client-side `-m` budget is always
-//	serverTimeout+completionHookClientSlack: strictly greater than
-//	handleCompletionHook's own deadline, so curl can never give up and
-//	fall through before a genuine server-side Deny would have won the
-//	race (R-16.74's own text: "server + 5s").
-//
-// SPORT: fleet/hookpacks.completionHookCommand/ADD (P1-E32-W6-S66-T1).
+// SPORT: fleet/hookpacks.completionHookCommand/ADD (P1-E32-W6-S66-T1),
+// CHANGE (P1-CI-09).
 
-import (
-	"math"
-	"strconv"
-	"time"
-)
+import "time"
 
 // completionHookClientSlack is added to the server-side completion_timeout
-// to form curl's own -m budget (R-16.74).
+// to form the subcommand's own request deadline (R-16.74's "server + 5s"):
+// strictly greater than handleCompletionHook's own deadline, so the client
+// can never give up before a genuine server-side Deny would have won the
+// race.
 const completionHookClientSlack = 5 * time.Second
 
-// completionHookCommand builds one event's synchronous command template: a
-// curl call that WAITS for the daemon's response (unlike
-// sessionsPackCommand's fire-and-forget `|| true`) and translates every
-// non-explicit-allow outcome into the harness's own blocking contract (a
-// non-zero exit with a one-line reason on stderr). $CASCADE_JOB_ID/
-// $CASCADE_TICKET_ID/$CASCADE_SESSION_ID are the real environment a
-// Cascade-dispatched driver inherits (pkg/provider.driverEnvAllowlistBase);
-// an ordinary human session simply leaves them unset, the unscoped case
-// completion_scope.go documents.
-//
-// It also reads the harness's own native hook JSON off stdin (real
-// capture: testdata/completion/stop_fixture.json is compact, no
-// whitespace) once, to pull out stop_hook_active -- the harness's replay
-// signal after a prior block -- and forwards it verbatim as
-// CompletionHookPayload.StopHookActive. This is a STRAIGHT-LINE script:
-// exactly one curl call, no branch re-issues it, so a harness-level
-// Stop -> block -> Stop replay can never become more than one request per
-// invocation (TestCompletionHookCommand_RendersExactlyOneCurlCall), and
-// the flag changes no exit-code branch below (fail-closed either way,
-// TestCompletionHookCommand_StopHookActiveNeverBypassesFailClosed).
-func completionHookCommand(evt HookEventType, serverTimeout time.Duration) string {
-	clientSeconds := int(math.Ceil((serverTimeout + completionHookClientSlack).Seconds()))
-	return `stdin_json=$(cat); active=false; case "$stdin_json" in *'"stop_hook_active":true'*) active=true;; esac; ` +
-		`resp=$(curl -s -m ` + strconv.Itoa(clientSeconds) + ` -w '\n%{http_code}' --unix-socket ` + socketPlaceholder +
-		` -X POST http://cascade.sock/rpc -H "Content-Type: application/json"` +
-		` -d '{"jsonrpc":"2.0","id":1,"method":"` + MethodCompletionCheck +
-		`","params":{"event_type":"` + string(evt) + `","session_id":"'"$CASCADE_SESSION_ID"'",` +
-		`"job_id":"'"$CASCADE_JOB_ID"'","task_id":"'"$CASCADE_TICKET_ID"'","stop_hook_active":'"$active"'}}' 2>/dev/null); rc=$?; ` +
-		`if [ "$rc" -ne 0 ]; then echo "completion check request failed (curl exit $rc)" >&2; exit 2; fi; ` +
-		`code=$(printf '%s' "$resp" | tail -n 1); body=$(printf '%s' "$resp" | sed '$d'); ` +
-		`if [ "$code" != "200" ]; then echo "completion check request failed (http $code)" >&2; exit 2; fi; ` +
-		`case "$body" in *'"deny":false'*) exit 0;; *'"deny":true'*) echo "$body" | sed -n 's/.*"reason":"\([^"]*\)".*/\1/p' >&2; exit 2;; *) echo "completion check response malformed" >&2; exit 2;; esac`
+// CompletionClientBudget is the deadline `cascade fleet completion-check`
+// puts on its one daemon round trip: the daemon's completion timeout plus
+// completionHookClientSlack.
+func CompletionClientBudget() time.Duration {
+	return defaultCompletionTimeout + completionHookClientSlack
+}
+
+// completionHookCommand builds one event's synchronous command template.
+// serverTimeout is accepted for the registration call site's sake but not
+// rendered: the subcommand derives its deadline from CompletionClientBudget,
+// which is built on the same defaultCompletionTimeout every registration
+// passes today (no [fleet.hooks] config section exists to pass another, the
+// Art.9 gap completion_gate.go already names).
+func completionHookCommand(evt HookEventType, _ time.Duration) string {
+	return binaryPlaceholder + ` fleet completion-check --event ` + string(evt) +
+		` --socket '` + socketPlaceholder + `' || exit 2`
 }

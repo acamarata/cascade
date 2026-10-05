@@ -84,6 +84,11 @@ var reservedEnvVars = map[string]bool{
 	"CASCADE_YES":       true,
 	"CASCADE_TELEMETRY": true,
 
+	// Completion-hook identifiers are payload fields, not config overrides.
+	"CASCADE_SESSION_ID": true,
+	"CASCADE_JOB_ID":     true,
+	"CASCADE_TICKET_ID":  true,
+
 	// Read by the node-upgrade RPC as the minisign trust key.
 	"CASCADE_MINISIGN_PUBKEY": true,
 
