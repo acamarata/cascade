@@ -31,6 +31,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/internal/buildinfo"
+	"github.com/acamarata/cascade/internal/minisign"
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -150,7 +151,7 @@ func composeNodeUpgrade(deps nodeCLIDeps, a nodeUpgradeArgs) (nodes.Artifact, no
 	if err != nil {
 		return nodes.Artifact{}, nodes.ProvisionDeps{}, cascade.Wrap(cascade.KindInvalidInput, err, "node upgrade: read --pubkey")
 	}
-	pub, err := nodes.ParseMinisignPublicKey(pubBytes)
+	pub, err := minisign.ParsePublicKey(pubBytes)
 	if err != nil {
 		return nodes.Artifact{}, nodes.ProvisionDeps{}, err
 	}

@@ -5,9 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/minisign"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -83,12 +86,24 @@ func (d *fakeExecDialer) Dial(context.Context, Target, HostKeyVerifier) (ExecSes
 	return d.session, d.err
 }
 
-func testArtifact(t *testing.T, version string) (Artifact, MinisignPublicKey) {
+// minisignFixtureDir holds the real-CLI fixtures the minisign package owns.
+const minisignFixtureDir = "../minisign/testdata/minisign"
+
+func readTestdataMinisign(t *testing.T, name string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(minisignFixtureDir, name))
+	if err != nil {
+		t.Fatalf("read testdata: %v", err)
+	}
+	return data
+}
+
+func testArtifact(t *testing.T, version string) (Artifact, minisign.PublicKey) {
 	t.Helper()
 	data := readTestdataMinisign(t, "artifact.bin")
 	sig := readTestdataMinisign(t, "artifact.bin.minisig")
 	pubBytes := readTestdataMinisign(t, "test.pub")
-	pub, err := ParseMinisignPublicKey(pubBytes)
+	pub, err := minisign.ParsePublicKey(pubBytes)
 	if err != nil {
 		t.Fatalf("parse pubkey: %v", err)
 	}

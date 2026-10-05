@@ -38,6 +38,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/acamarata/cascade/internal/minisign"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -81,7 +82,7 @@ type ProvisionDeps struct {
 	// HostKeyVerifier cannot be shared across a --all rollout's many
 	// different node hosts; the caller supplies a factory instead.
 	VerifyFor func(Target) HostKeyVerifier
-	PublicKey MinisignPublicKey
+	PublicKey minisign.PublicKey
 	// InstallPath is the remote path the binary is installed to. Empty
 	// resolves to defaultRemoteInstallPath.
 	InstallPath string
@@ -112,15 +113,15 @@ const remoteTempSuffix = ".cascade-upload.tmp"
 // VerifyArtifactSignature parses artifact.Signature and verifies it over
 // artifact.Data against pub. This is the §D-32 gate: called before any
 // dial, so an invalid artifact is never offered to a node at all.
-func VerifyArtifactSignature(artifact Artifact, pub MinisignPublicKey) error {
+func VerifyArtifactSignature(artifact Artifact, pub minisign.PublicKey) error {
 	if len(artifact.Signature) == 0 {
-		return ErrSignatureInvalid("artifact carries no signature")
+		return minisign.ErrSignatureInvalid("artifact carries no signature")
 	}
-	sig, err := ParseMinisignSignature(artifact.Signature)
+	sig, err := minisign.ParseSignature(artifact.Signature)
 	if err != nil {
 		return err
 	}
-	return VerifyMinisign(pub, artifact.Data, sig)
+	return minisign.Verify(pub, artifact.Data, sig)
 }
 
 // Provision ships artifact to target, or verifies the node is already at

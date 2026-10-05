@@ -37,6 +37,7 @@ import (
 	"path/filepath"
 
 	"github.com/acamarata/cascade/internal/buildinfo"
+	"github.com/acamarata/cascade/internal/minisign"
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -79,7 +80,7 @@ func resolveNodeUpgradeDeps(ctx context.Context, paths runtime.PathProvider, clo
 	if err != nil {
 		return nodes.UpgradeDeps{}, cascade.Wrap(cascade.KindUnavailable, err, "daemon: node.upgrade: read CASCADE_MINISIGN_PUBKEY")
 	}
-	pub, err := nodes.ParseMinisignPublicKey(pubBytes)
+	pub, err := minisign.ParsePublicKey(pubBytes)
 	if err != nil {
 		return nodes.UpgradeDeps{}, err
 	}

@@ -12,8 +12,8 @@
 //   message bytes being verified are the caller's, never re-derived from
 //   the signature itself (Art.2 — never verify an artifact against a
 //   hash the artifact itself supplied).
-// Outputs: a parsed MinisignSignature/MinisignPublicKey, or a
-//   KindInvalidInput refusal for anything malformed; VerifyMinisign
+// Outputs: a parsed Signature/PublicKey, or a
+//   KindInvalidInput refusal for anything malformed; Verify
 //   returns nil only when BOTH the message signature and the
 //   comment-binding global signature verify, KindIntegrity otherwise.
 // Constraints: FAIL CLOSED on every path — wrong line count, bad base64,
@@ -23,12 +23,11 @@
 //   wire algorithms: "Ed" (legacy, direct ed25519 over the message) and
 //   "ED" (current default, ed25519 over the message's BLAKE2b-512
 //   digest) — both confirmed byte-for-byte against the real minisign
-//   0.12 CLI (internal/nodes/testdata/README.md provenance). No other
+//   0.12 CLI (internal/minisign/testdata/README.md provenance). No other
 //   algorithm tag exists in the format; anything else is malformed input.
-// SPORT: internal/nodes MinisignSignature/ADDED, VerifyMinisign/ADDED
-//   (P1-E17-W4-S36-T5).
+// SPORT: internal/minisign Signature/MOVED, Verify/MOVED
 
-package nodes
+package minisign
 
 import (
 	"crypto/ed25519"
@@ -60,9 +59,9 @@ const minisignPubDataLen = 42
 const untrustedCommentPrefix = "untrusted comment: "
 const trustedCommentPrefix = "trusted comment: "
 
-// MinisignSignature is a parsed minisign detached signature file.
-type MinisignSignature struct {
-	// Algorithm is "Ed" or "ED" (ParseMinisignSignature refuses any other
+// Signature is a parsed minisign detached signature file.
+type Signature struct {
+	// Algorithm is "Ed" or "ED" (ParseSignature refuses any other
 	// value).
 	Algorithm string
 	// KeyID is the 8-byte key identifier the signing key stamped.
@@ -80,8 +79,8 @@ type MinisignSignature struct {
 	GlobalSignature [64]byte
 }
 
-// MinisignPublicKey is a parsed minisign public-key file.
-type MinisignPublicKey struct {
+// PublicKey is a parsed minisign public-key file.
+type PublicKey struct {
 	Algorithm string
 	KeyID     [8]byte
 	Key       ed25519.PublicKey
@@ -92,43 +91,43 @@ func errMinisignMalformed(reason string) error {
 	return cascade.Newf(cascade.KindInvalidInput, "nodes: minisign signature malformed: %s", reason)
 }
 
-// ParseMinisignSignature parses a minisign detached signature file's raw
+// ParseSignature parses a minisign detached signature file's raw
 // bytes (the FuzzMinisignSignature target's subject). It never trusts
 // line count, base64 shape, or field lengths implicitly: every deviation
 // from the exact four-line armored format refuses.
-func ParseMinisignSignature(data []byte) (MinisignSignature, error) {
+func ParseSignature(data []byte) (Signature, error) {
 	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
 	if len(lines) != 4 {
-		return MinisignSignature{}, errMinisignMalformed("expected exactly 4 lines (untrusted comment, sig data, trusted comment, global signature)")
+		return Signature{}, errMinisignMalformed("expected exactly 4 lines (untrusted comment, sig data, trusted comment, global signature)")
 	}
 	if !strings.HasPrefix(lines[0], untrustedCommentPrefix) {
-		return MinisignSignature{}, errMinisignMalformed("line 1 is not an untrusted-comment line")
+		return Signature{}, errMinisignMalformed("line 1 is not an untrusted-comment line")
 	}
 	if !strings.HasPrefix(lines[2], trustedCommentPrefix) {
-		return MinisignSignature{}, errMinisignMalformed("line 3 is not a trusted-comment line")
+		return Signature{}, errMinisignMalformed("line 3 is not a trusted-comment line")
 	}
 
 	sigData, err := base64.StdEncoding.DecodeString(lines[1])
 	if err != nil {
-		return MinisignSignature{}, errMinisignMalformed("line 2 is not valid base64")
+		return Signature{}, errMinisignMalformed("line 2 is not valid base64")
 	}
 	if len(sigData) != minisignSigDataLen {
-		return MinisignSignature{}, errMinisignMalformed("signature data is not 74 bytes")
+		return Signature{}, errMinisignMalformed("signature data is not 74 bytes")
 	}
 	algo := string(sigData[0:2])
 	if algo != minisignAlgoLegacy && algo != minisignAlgoPrehashed {
-		return MinisignSignature{}, errMinisignMalformed("unrecognized signature algorithm tag " + algo)
+		return Signature{}, errMinisignMalformed("unrecognized signature algorithm tag " + algo)
 	}
 
 	globalSig, err := base64.StdEncoding.DecodeString(lines[3])
 	if err != nil {
-		return MinisignSignature{}, errMinisignMalformed("line 4 is not valid base64")
+		return Signature{}, errMinisignMalformed("line 4 is not valid base64")
 	}
 	if len(globalSig) != ed25519.SignatureSize {
-		return MinisignSignature{}, errMinisignMalformed("global signature is not 64 bytes")
+		return Signature{}, errMinisignMalformed("global signature is not 64 bytes")
 	}
 
-	sig := MinisignSignature{
+	sig := Signature{
 		Algorithm:      algo,
 		TrustedComment: strings.TrimPrefix(lines[2], trustedCommentPrefix),
 	}
@@ -138,25 +137,25 @@ func ParseMinisignSignature(data []byte) (MinisignSignature, error) {
 	return sig, nil
 }
 
-// ParseMinisignPublicKey parses a minisign public-key file's raw bytes
+// ParsePublicKey parses a minisign public-key file's raw bytes
 // (untrusted-comment line + one base64 line).
-func ParseMinisignPublicKey(data []byte) (MinisignPublicKey, error) {
+func ParsePublicKey(data []byte) (PublicKey, error) {
 	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
 	if len(lines) != 2 {
-		return MinisignPublicKey{}, errMinisignMalformed("public key: expected exactly 2 lines")
+		return PublicKey{}, errMinisignMalformed("public key: expected exactly 2 lines")
 	}
 	pubData, err := base64.StdEncoding.DecodeString(lines[1])
 	if err != nil {
-		return MinisignPublicKey{}, errMinisignMalformed("public key: line 2 is not valid base64")
+		return PublicKey{}, errMinisignMalformed("public key: line 2 is not valid base64")
 	}
 	if len(pubData) != minisignPubDataLen {
-		return MinisignPublicKey{}, errMinisignMalformed("public key: expected 42 decoded bytes")
+		return PublicKey{}, errMinisignMalformed("public key: expected 42 decoded bytes")
 	}
 	algo := string(pubData[0:2])
 	if algo != minisignAlgoLegacy && algo != minisignAlgoPrehashed {
-		return MinisignPublicKey{}, errMinisignMalformed("public key: unrecognized algorithm tag " + algo)
+		return PublicKey{}, errMinisignMalformed("public key: unrecognized algorithm tag " + algo)
 	}
-	key := MinisignPublicKey{Algorithm: algo, Key: ed25519.PublicKey(append([]byte(nil), pubData[10:42]...))}
+	key := PublicKey{Algorithm: algo, Key: ed25519.PublicKey(append([]byte(nil), pubData[10:42]...))}
 	copy(key.KeyID[:], pubData[2:10])
 	return key, nil
 }
@@ -170,8 +169,8 @@ func ErrSignatureInvalid(reason string) error {
 	return cascade.Newf(cascade.KindIntegrity, "nodes: minisign verification failed: %s", reason)
 }
 
-// VerifyMinisign verifies sig over message using pub, per the real
-// minisign wire semantics (internal/nodes/testdata/README.md provenance):
+// Verify verifies sig over message using pub, per the real
+// minisign wire semantics (internal/minisign/testdata/README.md provenance):
 //  1. sig.KeyID must equal pub.KeyID (a signature from a different key
 //     never silently "verifies" against the wrong key).
 //  2. the message signature verifies against message directly ("Ed") or
@@ -184,7 +183,7 @@ func ErrSignatureInvalid(reason string) error {
 // never distinguishes "which check failed" in its return type, so a
 // caller cannot be tempted to treat one failure mode as softer than
 // another (12-QUALITY-CONSTITUTION Art.1/Art.3 fail-closed discipline).
-func VerifyMinisign(pub MinisignPublicKey, message []byte, sig MinisignSignature) error {
+func Verify(pub PublicKey, message []byte, sig Signature) error {
 	if sig.KeyID != pub.KeyID {
 		return ErrSignatureInvalid("signature key id does not match the verifying public key")
 	}

@@ -1,4 +1,4 @@
-package nodes
+package minisign
 
 import (
 	"encoding/base64"
@@ -20,17 +20,17 @@ func readTestdataMinisign(t *testing.T, name string) []byte {
 	return data
 }
 
-// TestParseAndVerifyMinisign_RealFixture exercises the parser and
+// TestParseAndVerify_RealFixture exercises the parser and
 // verifier against a real minisign 0.12 CLI-produced signature (see
-// testdata/minisign/README.md for provenance).
-func TestParseAndVerifyMinisign_RealFixture(t *testing.T) {
+// testdata/README.md for provenance).
+func TestParseAndVerify_RealFixture(t *testing.T) {
 	message := readTestdataMinisign(t, "artifact.bin")
 	sigBytes := readTestdataMinisign(t, "artifact.bin.minisig")
 	pubBytes := readTestdataMinisign(t, "test.pub")
 
-	sig, err := ParseMinisignSignature(sigBytes)
+	sig, err := ParseSignature(sigBytes)
 	if err != nil {
-		t.Fatalf("ParseMinisignSignature: %v", err)
+		t.Fatalf("ParseSignature: %v", err)
 	}
 	if sig.Algorithm != minisignAlgoPrehashed {
 		t.Fatalf("algorithm = %q, want %q", sig.Algorithm, minisignAlgoPrehashed)
@@ -39,69 +39,69 @@ func TestParseAndVerifyMinisign_RealFixture(t *testing.T) {
 		t.Fatalf("trusted comment = %q", sig.TrustedComment)
 	}
 
-	pub, err := ParseMinisignPublicKey(pubBytes)
+	pub, err := ParsePublicKey(pubBytes)
 	if err != nil {
-		t.Fatalf("ParseMinisignPublicKey: %v", err)
+		t.Fatalf("ParsePublicKey: %v", err)
 	}
-	if err := VerifyMinisign(pub, message, sig); err != nil {
-		t.Fatalf("VerifyMinisign: %v", err)
+	if err := Verify(pub, message, sig); err != nil {
+		t.Fatalf("Verify: %v", err)
 	}
 }
 
-func TestVerifyMinisign_TamperedMessageRefused(t *testing.T) {
+func TestVerify_TamperedMessageRefused(t *testing.T) {
 	message := readTestdataMinisign(t, "artifact.bin")
-	sig, _ := ParseMinisignSignature(readTestdataMinisign(t, "artifact.bin.minisig"))
-	pub, _ := ParseMinisignPublicKey(readTestdataMinisign(t, "test.pub"))
+	sig, _ := ParseSignature(readTestdataMinisign(t, "artifact.bin.minisig"))
+	pub, _ := ParsePublicKey(readTestdataMinisign(t, "test.pub"))
 
 	tampered := append([]byte{}, message...)
 	tampered[0] ^= 0xFF
-	if err := VerifyMinisign(pub, tampered, sig); err == nil {
+	if err := Verify(pub, tampered, sig); err == nil {
 		t.Fatal("expected refusal for a tampered message, got nil")
 	} else if kind, _ := cascade.KindOf(err); kind != cascade.KindIntegrity {
 		t.Fatalf("kind = %v, want KindIntegrity", kind)
 	}
 }
 
-func TestVerifyMinisign_TamperedTrustedCommentRefused(t *testing.T) {
+func TestVerify_TamperedTrustedCommentRefused(t *testing.T) {
 	message := readTestdataMinisign(t, "artifact.bin")
-	sig, _ := ParseMinisignSignature(readTestdataMinisign(t, "artifact.bin.minisig"))
-	pub, _ := ParseMinisignPublicKey(readTestdataMinisign(t, "test.pub"))
+	sig, _ := ParseSignature(readTestdataMinisign(t, "artifact.bin.minisig"))
+	pub, _ := ParsePublicKey(readTestdataMinisign(t, "test.pub"))
 
 	sig.TrustedComment = "a swapped comment"
-	if err := VerifyMinisign(pub, message, sig); err == nil {
+	if err := Verify(pub, message, sig); err == nil {
 		t.Fatal("expected refusal for a swapped trusted comment, got nil")
 	}
 }
 
-func TestVerifyMinisign_WrongPublicKeyRefused(t *testing.T) {
+func TestVerify_WrongPublicKeyRefused(t *testing.T) {
 	message := readTestdataMinisign(t, "artifact.bin")
-	sig, _ := ParseMinisignSignature(readTestdataMinisign(t, "artifact.bin.minisig"))
+	sig, _ := ParseSignature(readTestdataMinisign(t, "artifact.bin.minisig"))
 
 	otherPub := readTestdataMinisign(t, "test.pub")
 	// Flip the key id so it no longer matches the signature's key id.
 	otherPub2 := append([]byte{}, otherPub...)
-	pub, err := ParseMinisignPublicKey(otherPub2)
+	pub, err := ParsePublicKey(otherPub2)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
 	pub.KeyID[0] ^= 0xFF
-	if err := VerifyMinisign(pub, message, sig); err == nil {
+	if err := Verify(pub, message, sig); err == nil {
 		t.Fatal("expected refusal for a key-id mismatch, got nil")
 	}
 }
 
-func TestVerifyMinisign_WrongKeyBytesRefused(t *testing.T) {
+func TestVerify_WrongKeyBytesRefused(t *testing.T) {
 	message := readTestdataMinisign(t, "artifact.bin")
-	sig, _ := ParseMinisignSignature(readTestdataMinisign(t, "artifact.bin.minisig"))
-	pub, _ := ParseMinisignPublicKey(readTestdataMinisign(t, "test.pub"))
+	sig, _ := ParseSignature(readTestdataMinisign(t, "artifact.bin.minisig"))
+	pub, _ := ParsePublicKey(readTestdataMinisign(t, "test.pub"))
 
 	pub.Key[0] ^= 0xFF // key id still matches; the actual key material does not
-	if err := VerifyMinisign(pub, message, sig); err == nil {
+	if err := Verify(pub, message, sig); err == nil {
 		t.Fatal("expected refusal for tampered key bytes, got nil")
 	}
 }
 
-func TestParseMinisignSignature_MalformedRefused(t *testing.T) {
+func TestParseSignature_MalformedRefused(t *testing.T) {
 	cases := map[string][]byte{
 		"empty":                nil,
 		"one line":             []byte("untrusted comment: x\n"),
@@ -113,7 +113,7 @@ func TestParseMinisignSignature_MalformedRefused(t *testing.T) {
 	}
 	for name, data := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := ParseMinisignSignature(data); err == nil {
+			if _, err := ParseSignature(data); err == nil {
 				t.Fatalf("%s: expected a parse refusal, got nil", name)
 			} else if kind, _ := cascade.KindOf(err); kind != cascade.KindInvalidInput {
 				t.Fatalf("%s: kind = %v, want KindInvalidInput", name, kind)
@@ -122,18 +122,18 @@ func TestParseMinisignSignature_MalformedRefused(t *testing.T) {
 	}
 }
 
-func TestParseMinisignPublicKey_MalformedRefused(t *testing.T) {
-	if _, err := ParseMinisignPublicKey([]byte("only one line\n")); err == nil {
+func TestParsePublicKey_MalformedRefused(t *testing.T) {
+	if _, err := ParsePublicKey([]byte("only one line\n")); err == nil {
 		t.Fatal("expected refusal for a single-line public key file")
 	}
-	if _, err := ParseMinisignPublicKey([]byte("untrusted comment: x\nnotbase64!!!\n")); err == nil {
+	if _, err := ParsePublicKey([]byte("untrusted comment: x\nnotbase64!!!\n")); err == nil {
 		t.Fatal("expected refusal for invalid base64")
 	}
 }
 
 // FuzzMinisignSignature is this ticket's mandated fuzz target (06 §5.7 —
 // the minisign signature-file parser is a new decoder). It never panics
-// and never returns a non-zero MinisignSignature alongside a non-nil
+// and never returns a non-zero Signature alongside a non-nil
 // error. Seed corpus: testdata/fuzz/FuzzMinisignSignature/ (a real
 // minisign-produced signature plus two malformed shapes).
 func FuzzMinisignSignature(f *testing.F) {
@@ -143,19 +143,19 @@ func FuzzMinisignSignature(f *testing.F) {
 	f.Add([]byte(""))
 	f.Add([]byte("untrusted comment: x\nAAAA\ntrusted comment: y\nBBBB\n"))
 	f.Fuzz(func(t *testing.T, data []byte) {
-		sig, err := ParseMinisignSignature(data)
+		sig, err := ParseSignature(data)
 		if err != nil {
-			if sig != (MinisignSignature{}) {
+			if sig != (Signature{}) {
 				t.Fatalf("non-zero result alongside an error: %+v", sig)
 			}
 			return
 		}
 		// A successfully parsed signature must never verify against an
-		// unrelated random public key, and VerifyMinisign must not panic
+		// unrelated random public key, and Verify must not panic
 		// on arbitrary parsed fields either.
-		var junkPub MinisignPublicKey
+		var junkPub PublicKey
 		junkPub.Key = make([]byte, 32)
-		_ = VerifyMinisign(junkPub, []byte("anything"), sig)
+		_ = Verify(junkPub, []byte("anything"), sig)
 	})
 }
 

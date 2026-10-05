@@ -84,11 +84,11 @@ verified replacement is fully staged, so a crash or refusal at any point
 before that rename structurally cannot leave a node without a working
 binary.
 
-**Minisign verification (`internal/nodes.VerifyMinisign`, §D-32).** A
+**Minisign verification (`internal/minisign.Verify`, §D-32).** A
 real parser and verifier for minisign's own armored signature-file
 format (both the legacy `Ed` direct-Ed25519 mode and the default `ED`
 BLAKE2b-512-prehashed mode), verified byte-for-byte against the real
-`minisign` 0.12 CLI (`internal/nodes/testdata/minisign/README.md`
+`minisign` 0.12 CLI (`internal/minisign/testdata/README.md`
 records provenance). This is the SAME signature format the §D-16 release
 train's `.goreleaser.yaml`/`release.yml` already produce and verify for
 end-user checksum verification — node provisioning checks the identical

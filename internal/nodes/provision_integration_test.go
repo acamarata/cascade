@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"golang.org/x/crypto/ssh"
+
+	"github.com/acamarata/cascade/internal/minisign"
 )
 
 // TestProvisionRealSSHD proves Provision's ssh transport against a real
@@ -125,7 +127,7 @@ func assertInstalledArtifact(t *testing.T, installPath string, artifact Artifact
 // this test run only -- mirrors A-T6's own ephemeral-keypair precedent
 // (04-PEWS-PLAN-W1-W3.md §Epic A T6) and tunnel_test.go's "generate fresh,
 // never commit" discipline.
-func realMinisignArtifact(t *testing.T, version string) (Artifact, MinisignPublicKey) {
+func realMinisignArtifact(t *testing.T, version string) (Artifact, minisign.PublicKey) {
 	t.Helper()
 	minisignPath, err := exec.LookPath("minisign")
 	if err != nil {
@@ -161,7 +163,7 @@ func realMinisignArtifact(t *testing.T, version string) (Artifact, MinisignPubli
 	if err != nil {
 		t.Fatalf("read pubkey: %v", err)
 	}
-	pub, err := ParseMinisignPublicKey(pubBytes)
+	pub, err := minisign.ParsePublicKey(pubBytes)
 	if err != nil {
 		t.Fatalf("parse pubkey: %v", err)
 	}
