@@ -78,6 +78,11 @@ stated basis. Re-deriving the term set is a separate, not-yet-scheduled
 ticket; the exclusions are documented here so the decision is public and
 auditable.
 
-Two further documents are planned for this directory as later P1 tickets
-land: a decommission protocol (the exact steps to retire a DONE pointer) and
-a rollback plan. Neither exists yet; this README will link them once they do.
+## Cutover runbooks
+
+- [`side-by-side-protocol.md`](side-by-side-protocol.md) — ownership, cutover
+  gates, monitoring thresholds, and rollout schedule.
+- [`rollback.md`](rollback.md) — severity triggers and a non-destructive
+  rollback procedure for each migration surface.
+- [`v1-pointer-inventory.md`](v1-pointer-inventory.md) — generated inventory
+  and current provenance classification.
