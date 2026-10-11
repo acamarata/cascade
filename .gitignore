@@ -2,6 +2,12 @@
 .claude/
 .opencode/
 .cascade/
+.codex/
+.ai/
+
+# Generated macOS project and build products
+/apps/widget-macos/*.xcodeproj/
+/apps/widget-macos/build/
 
 # OS
 .DS_Store

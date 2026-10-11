@@ -1,0 +1,73 @@
+name: CascadeWidget
+options:
+  deploymentTarget:
+    macOS: '14.0'
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    MACOSX_DEPLOYMENT_TARGET: '14.0'
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: Developer ID Application
+    ENABLE_HARDENED_RUNTIME: YES
+    CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+  configs:
+    Debug:
+      CODE_SIGN_INJECT_BASE_ENTITLEMENTS: YES
+targets:
+  CascadeMenuBar:
+    type: application
+    platform: macOS
+    sources:
+      - path: CascadeMenuBar
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.acamarata.cascade.widget
+        INFOPLIST_FILE: CascadeMenuBar/Info.plist
+        CODE_SIGN_ENTITLEMENTS: CascadeMenuBar/CascadeMenuBar.entitlements
+  CascadeMenuBarTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: CascadeMenuBarTests
+        excludes: [testdata]
+      - path: CascadeMenuBarTests/testdata
+        buildPhase: resources
+        type: folder
+    dependencies:
+      - target: CascadeMenuBar
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.acamarata.cascade.widget.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/CascadeMenuBar.app/Contents/MacOS/CascadeMenuBar
+        BUNDLE_LOADER: $(TEST_HOST)
+schemes:
+  CascadeMenuBar:
+    build:
+      targets:
+        CascadeMenuBar: all
+  CascadeMenuBarTests:
+    build:
+      targets:
+        CascadeMenuBar: all
+        CascadeMenuBarTests: [test]
+    test:
+      targets: [CascadeMenuBarTests]
+      environmentVariables:
+        CASCADE_TEST_BINARY: $(BUILT_PRODUCTS_DIR)/cascade
+        CASCADE_TEST_SEEDER: $(BUILT_PRODUCTS_DIR)/widgetseed
+      preActions:
+        - settingsTarget: CascadeMenuBar
+          script: |
+            exec > "$BUILT_PRODUCTS_DIR/widget-preaction.log" 2>&1
+            set -eu
+            export PATH="$HOME/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.6.darwin-arm64/bin:$HOME/bin:/opt/homebrew/bin:$PATH"
+            export GOTOOLCHAIN=local GOFLAGS=-p=4 GOPROXY=off GOSUMDB=off CGO_ENABLED=0
+            rm -f "$BUILT_PRODUCTS_DIR/cascade" "$BUILT_PRODUCTS_DIR/widgetseed"
+            go version
+            test "$(go env GOVERSION)" = go1.26.6
+            cd "$SRCROOT/../.."
+            PKG=./cmd/cascade
+            "$HOME/bin/flock" /tmp/cascade-pkg-$(printf %s "$PKG" | shasum | cut -c1-8).lock timeout 590 go build -p 4 -o "$BUILT_PRODUCTS_DIR/cascade" "$PKG"
+            PKG=./internal/daemon/testdata/widgetseed/
+            "$HOME/bin/flock" /tmp/cascade-pkg-$(printf %s "$PKG" | shasum | cut -c1-8).lock timeout 590 go build -p 4 -o "$BUILT_PRODUCTS_DIR/widgetseed" "$PKG"
