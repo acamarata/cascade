@@ -221,8 +221,25 @@ func rawHTTP(status int, body string) string {
 		status, len(body), body)
 }
 
-// startRawResponder binds a unix socket with the system nc and, after delay,
-// writes resp to the first connection. It returns once the socket exists.
+// ncCloseFlag is the nc flag that closes the connection once resp is written.
+// OpenBSD netcat (Debian/Ubuntu) keeps the socket open after stdin EOF unless
+// given -N, so a short body would read as a stall, not a cut connection. The
+// macOS nc has no -N and already closes on stdin EOF.
+var ncCloseFlag = sync.OnceValue(func() string {
+	usage, _ := exec.Command("nc", "-h").CombinedOutput() // -h exits non-zero on some variants.
+	for _, line := range strings.Split(string(usage), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "-N") {
+			return "-N "
+		}
+	}
+	return ""
+})
+
+// startRawResponder binds a unix socket with the system nc and, once the first
+// request byte arrives and delay has passed, writes resp and closes the
+// connection. Replying before the request would race the client's write: Go's
+// HTTP transport drops a response that lands on an idle connection. It
+// returns once the socket exists.
 func startRawResponder(t *testing.T, resp string, delay time.Duration) string {
 	t.Helper()
 	if _, err := exec.LookPath("nc"); err != nil {
@@ -237,7 +254,12 @@ func startRawResponder(t *testing.T, resp string, delay time.Duration) string {
 	if err := os.WriteFile(respFile, []byte(resp), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("(sleep %d; cat %q) | nc -lU %q", int(delay/time.Second), respFile, sock))
+	// The reader closes the fifo (nc's stdin) after the reply, then keeps
+	// draining nc's stdout so a late request byte cannot SIGPIPE nc.
+	fifo := filepath.Join(dir, "reply.fifo")
+	cmd := exec.Command("sh", "-c", fmt.Sprintf(
+		"mkfifo %q && nc %s-lU %q <%q | { head -c 1 >/dev/null; sleep %d; cat %q; exec >&-; cat >/dev/null; } >%q",
+		fifo, ncCloseFlag(), sock, fifo, int(delay/time.Second), respFile, fifo))
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start nc responder: %v", err)
 	}

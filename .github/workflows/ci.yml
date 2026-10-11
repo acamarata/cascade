@@ -86,8 +86,15 @@ jobs:
       # _test.go over a tagged implementation), but nothing asserts darwin
       # amd64 RUNTIME behavior. Restore a native entry the day a free Intel
       # macOS image exists.
+      #
+      # -timeout 25m, as in the race job: the store-backed packages
+      # (internal/jobs, internal/ci, internal/fleet/economics) take 20-45 s
+      # on linux but 380-570 s on the windows runner, where the same store
+      # tests run 20-50x slower. The default 10 m package cap then tripped
+      # on runner speed alone, mid-way through passing tests. A real hang
+      # still fails, at 25 m.
       - name: go test ./...
-        run: go test ./... -v
+        run: go test -timeout 25m ./... -v
 
       # P1-E20-W5-S44-T5: internal/conversation's two live-daemon/real-socket
       # cases (`!windows && integration`) never ran under `-tags=integration`
