@@ -6,6 +6,8 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/acamarata/cascade/internal/principal"
+
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -29,9 +31,12 @@ type MiddlewareFunc func(method string, next HandlerFunc) HandlerFunc
 // once at startup, before serving, but concurrent Dispatch calls from
 // multiple in-flight requests are the normal case.
 type Registry struct {
-	mu         sync.RWMutex
-	handlers   map[string]HandlerFunc
-	middleware []MiddlewareFunc
+	mu                  sync.RWMutex
+	handlers            map[string]HandlerFunc
+	middleware          []MiddlewareFunc
+	accessEnabled       bool
+	resolvePrincipal    func(string) (principal.Principal, error)
+	eventVisibleFactory func(principal.Principal) func(string, string) bool
 }
 
 // NewRegistry returns an empty Registry ready for Register/Use calls.
@@ -112,10 +117,16 @@ func (r *Registry) Dispatch(ctx context.Context, req *Request) (any, *ErrorObjec
 	handler, ok := r.handlers[req.Method]
 	chain := make([]MiddlewareFunc, len(r.middleware))
 	copy(chain, r.middleware)
+	check := r.accessEnabled
 	r.mu.RUnlock()
 
 	if !ok {
 		return nil, methodNotFoundError(req.Method)
+	}
+	if check {
+		if err := checkAccess(ctx, declaredAccess(req.Method)); err != nil {
+			return nil, accessErrorObject(err)
+		}
 	}
 
 	wrapped := handler

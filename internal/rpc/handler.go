@@ -6,6 +6,10 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
+
+	"github.com/acamarata/cascade/internal/principal"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // RPCPath is the single route this handler serves.
@@ -96,10 +100,24 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !guardLocalRequest(w, r) {
 		return
 	}
+	var admitted bool
+	r, admitted = h.admitCaller(w, r)
+	if !admitted {
+		return
+	}
 	if isEvents {
+		r, admitted = h.admitTopic(w, r)
+		if !admitted {
+			return
+		}
 		h.sse.ServeHTTP(w, r)
 		return
 	}
+	h.serveRPC(w, r)
+}
+
+// serveRPC parses the admitted request and preserves version-skew ordering.
+func (h *Handler) serveRPC(w http.ResponseWriter, r *http.Request) {
 
 	body, err := io.ReadAll(io.LimitReader(r.Body, maxBodyBytes+1))
 	if err != nil {
@@ -124,6 +142,118 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	result, dispatchErr := h.registry.Dispatch(r.Context(), req)
 	writeEnvelope(w, http.StatusOK, NewEnvelope(idOrNil(req), result, dispatchErr))
+}
+
+// admitCaller runs only after the socket owner/browser guard, for both routes.
+func (h *Handler) admitCaller(w http.ResponseWriter, r *http.Request) (*http.Request, bool) {
+	h.registry.mu.RLock()
+	enabled, resolve := h.registry.accessEnabled, h.registry.resolvePrincipal
+	h.registry.mu.RUnlock()
+	if !enabled {
+		return r, true
+	}
+	hasToken, hasOwner := headerPresent(r, principal.HeaderToken), headerPresent(r, principal.HeaderOwnerCLI)
+	if hasToken && hasOwner {
+		writeEnvelope(w, http.StatusBadRequest, NewEnvelope(nil, nil, accessErrorObject(cascade.New(cascade.KindInvalidInput, "conflicting caller headers"))))
+		return r, false
+	}
+	if hasToken {
+		var p principal.Principal
+		var err error
+		values := r.Header.Values(principal.HeaderToken)
+		if resolve == nil || len(values) != 1 || values[0] == "" {
+			err = cascade.New(cascade.KindPermissionDenied, "caller principal not recognized")
+		} else {
+			p, err = resolve(values[0])
+		}
+		if err != nil {
+			writeEnvelope(w, http.StatusForbidden, NewEnvelope(nil, nil, accessErrorObject(err)))
+			return r, false
+		}
+		return r.WithContext(principal.WithCaller(r.Context(), principal.Caller{Principal: &p})), true
+	}
+	if hasOwner {
+		values := r.Header.Values(principal.HeaderOwnerCLI)
+		if len(values) != 1 || values[0] != "owner-cli" {
+			writeEnvelope(w, http.StatusBadRequest, NewEnvelope(nil, nil, accessErrorObject(cascade.New(cascade.KindInvalidInput, "invalid owner marker"))))
+			return r, false
+		}
+		return r.WithContext(principal.WithCaller(r.Context(), principal.Caller{OwnerCLI: true})), true
+	}
+	return r, true
+}
+
+// admitTopic uses the mux's strict query grammar, leaving malformed shapes to it.
+func (h *Handler) admitTopic(w http.ResponseWriter, r *http.Request) (*http.Request, bool) {
+	h.registry.mu.RLock()
+	enabled, factory := h.registry.accessEnabled, h.registry.eventVisibleFactory
+	h.registry.mu.RUnlock()
+	if !enabled {
+		return r, true
+	}
+	q, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		return h.malformedTopic(w, r)
+	}
+	topic := DefaultStreamTopic
+	if topicLikeKeyCount(q) != 0 {
+		values, exact := q[topicParam]
+		if topicLikeKeyCount(q) != 1 || !exact || len(values) != 1 || values[0] == "" || len(values[0]) > maxTopicLen {
+			return h.malformedTopic(w, r)
+		}
+		topic = values[0]
+	}
+	if err = h.topicAccessError(r.Context(), topic); err != nil {
+		writeEnvelope(w, http.StatusForbidden, NewEnvelope(nil, nil, accessErrorObject(err)))
+		return r, false
+	}
+	if c, ok := principal.CallerFrom(r.Context()); ok && c.Principal != nil {
+		pred := denyAllEvents
+		if factory != nil {
+			if f := factory(*c.Principal); f != nil {
+				pred = f
+			}
+		}
+		r = r.WithContext(WithEventVisible(r.Context(), pred))
+	}
+	return r, true
+}
+
+// malformedTopic delegates only to the strict mux, never to an unfiltered stream.
+func (h *Handler) malformedTopic(w http.ResponseWriter, r *http.Request) (*http.Request, bool) {
+	if _, ok := h.sse.(*SSEMux); !ok {
+		writeTopicRefusal(w, "malformed /events topic")
+		return r, false
+	}
+	return r, true
+}
+
+// topicAccessError checks both the class and the consumer's filtering contract.
+func (h *Handler) topicAccessError(ctx context.Context, topic string) error {
+	accessMu.RLock()
+	a, marked := topicAccess[topic]
+	accessMu.RUnlock()
+	if !marked {
+		return cascade.New(cascade.KindPermissionDenied, "topic has no access marking")
+	}
+	if err := checkAccess(ctx, a); err != nil {
+		return err
+	}
+	if a != AccessOwnerView {
+		return nil
+	}
+	mux, ok := h.sse.(*SSEMux)
+	if !ok {
+		return errAccessDenied
+	}
+	handler := mux.Topics[topic]
+	if topic == DefaultStreamTopic {
+		handler = mux.Default
+	}
+	if _, consumes := handler.(EventVisibleConsumer); !consumes {
+		return errAccessDenied
+	}
+	return nil
 }
 
 // idOrNil returns req.ID as the envelope id, or nil for a notification

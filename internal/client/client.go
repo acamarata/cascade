@@ -43,9 +43,11 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"os"
 	"runtime"
 	"time"
 
+	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -145,13 +147,36 @@ func New(socketPath string, dial DialFunc, timeout time.Duration) *Client {
 // their requests through.
 func newHTTPClient(socketPath string, dial DialFunc, timeout time.Duration) *http.Client {
 	return &http.Client{
-		Transport: &http.Transport{
+		Transport: NewPrincipalTransport(&http.Transport{
 			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 				return dial(ctx, socketPath)
 			},
-		},
+		}),
 		Timeout: timeout,
 	}
+}
+
+// NewPrincipalTransport wraps base with the CLI identity rule every daemon
+// request carries: the token from the environment when one is set, the
+// owner-CLI marker otherwise. Callers that dial the daemon outside this SDK
+// (the raw /events stream) use it so they identify exactly like Do.
+func NewPrincipalTransport(base http.RoundTripper) http.RoundTripper {
+	return &principalTransport{base: base}
+}
+
+// principalTransport applies the same identity rule to RPC and SSE requests.
+type principalTransport struct{ base http.RoundTripper }
+
+func (t *principalTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r := req.Clone(req.Context())
+	r.Header.Del(principal.HeaderToken)
+	r.Header.Del(principal.HeaderOwnerCLI)
+	if token, present := os.LookupEnv(principal.EnvToken); present {
+		r.Header.Set(principal.HeaderToken, token)
+	} else {
+		r.Header.Set(principal.HeaderOwnerCLI, "owner-cli")
+	}
+	return t.base.RoundTrip(r)
 }
 
 // Do issues one JSON-RPC 2.0 call: method with params (marshaled as the

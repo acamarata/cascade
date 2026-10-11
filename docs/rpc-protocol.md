@@ -45,6 +45,48 @@ This guard covers the local unix socket only (the daemon's own socket and
 `internal/rpc.Handler`/`ConnContext` pipeline). A remote (network)
 listener is out of scope here; see the remote-transport work for that.
 
+## Caller headers and access classes
+
+After the local guard, both routes resolve `Cascade-Principal` as an opaque,
+daemon-issued credential, or `Cascade-Client: owner-cli` as the interactive
+owner marker. Both headers together refuse with HTTP 400. A token carried
+only in a query string has no authority. The SDK sends the principal header
+when `CASCADE_PRINCIPAL_TOKEN` is present, suppressing the owner marker even
+if that environment value is empty. Invalid tokens refuse with HTTP 403;
+the public message is `caller principal not recognized` for unknown,
+expired, revoked and pre-restart credentials alike.
+
+Credentials are memory-only. A daemon restart invalidates every token;
+launchers must mint replacements in the new daemon. No credential is
+persisted, logged or placed in an audit row. Refusal reasons are audited
+without the token. Tokens expire after at most 24 hours.
+
+The registry checks an explicit access declaration before middleware:
+
+| Class | Admission |
+| --- | --- |
+| Unmarked | Internal error; no handler or middleware runs |
+| Open | Socket guard suffices |
+| OwnerOnly | Transport-stamped Caller with no principal |
+| OwnerView | Stamped owner or principal; handler must scope principal reads |
+| Scoped | Principal required; owner marker alone refuses |
+| Ingest | Write-only; no principal required, no stored data returned |
+
+Unknown class values refuse with `unknown access class`. An absent Caller
+never receives the owner view. `OwnerCLI` changes no access class; it marks
+the CLI for local-only content. Chat, memory, recall and fleet reads remain
+OwnerOnly until their handlers enforce principal scope. `mcp.dispatch` is
+OwnerView; inner tool calls need their own method checks.
+
+The default event stream and `fleet.sessions` are OwnerOnly. Undeclared
+topics refuse. OwnerView topic handlers must implement `EventVisibleConsumer`
+and apply the context predicate per event. Every principal stream receives
+a predicate, defaulting to deny-all until the ancestry factory is installed.
+
+This protects model-facing surfaces from cross-session leakage. It is not
+an isolation boundary against shell-capable code running under the same UID;
+that requires OS isolation. See [caller principal](security-posture/caller-principal.md).
+
 ## POST /rpc
 
 Standard JSON-RPC 2.0 over HTTP. The request body is a JSON-RPC request

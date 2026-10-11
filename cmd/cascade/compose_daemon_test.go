@@ -27,6 +27,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/mcp/transport"
+	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/rpc"
 )
 
@@ -101,7 +102,7 @@ func mcpToolNames(t *testing.T, r *rpc.Registry) []string {
 	if err != nil {
 		t.Fatalf("marshal frame: %v", err)
 	}
-	res, eo := r.Dispatch(context.Background(), &rpc.Request{JSONRPC: "2.0", Method: transport.MCPMethod, Params: frame})
+	res, eo := r.Dispatch(principal.WithCaller(context.Background(), principal.Caller{}), &rpc.Request{JSONRPC: "2.0", Method: transport.MCPMethod, Params: frame})
 	if eo != nil {
 		t.Fatalf("mcp tools/list: %v", eo)
 	}

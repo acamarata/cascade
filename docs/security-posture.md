@@ -11,6 +11,8 @@ See also [effect records: intent before, outcome after](security-posture/effect-
 
 See also [control sockets: owner-only, 0600, refuse what is not ours](security-posture/control-sockets.md).
 
+See also [caller principals: who is calling the daemon, and what each caller may reach](security-posture/caller-principal.md).
+
 ## Vault backends
 
 Cascade's secret vault stores values through one custody backend, chosen at

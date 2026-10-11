@@ -43,6 +43,7 @@ import (
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/fleet/sessions"
+	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage/storetest"
@@ -72,7 +73,7 @@ func TestBuildRPCServerRegistersFleetSessions(t *testing.T) {
 	// Dispatch first, so an unregistered method fails with the real wire
 	// error (JSON-RPC -32601 method-not-found), the pre-fix reproduction.
 	req := &rpc.Request{JSONRPC: "2.0", Method: sessions.MethodList}
-	result, errObj := registry.Dispatch(context.Background(), req)
+	result, errObj := registry.Dispatch(principal.WithCaller(context.Background(), principal.Caller{OwnerCLI: true}), req)
 	if errObj != nil {
 		t.Fatalf("Dispatch(%s) through the daemon registry: code %d, message %q", sessions.MethodList, errObj.Code, errObj.Message)
 	}
