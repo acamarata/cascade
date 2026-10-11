@@ -114,7 +114,7 @@ func runPluginAddElevated(cmd *cobra.Command, deps pluginDeps, m plugin.Manifest
 	}
 	var result pluginAddView
 	params := pluginAddParams{ID: m.ID, Checksum: checksum, ManifestBytes: manifestBytes}
-	if err := c.Do(cmd.Context(), "plugin.add", params, &result); err != nil {
+	if err := callElevated(cmd.Context(), c, productionElevatedCallDeps(cmd.ErrOrStderr()), "plugin.add", params, &result); err != nil {
 		return err
 	}
 	return w.Result(result)

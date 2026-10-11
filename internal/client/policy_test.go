@@ -17,6 +17,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -77,7 +78,7 @@ func TestApprovalGrant_TransportFailurePropagates(t *testing.T) {
 	c := policyTransportClient(t)
 	res, err := c.ApprovalGrant(context.Background(), policy.ApprovalGrantParams{
 		RequestID: "req-1", SignedToken: "tok", Action: "do-a-thing",
-	})
+	}, policyTestAttest)
 	if !cascade.HasKind(err, cascade.KindUnavailable) {
 		t.Fatalf("err = %v, want KindUnavailable", err)
 	}
@@ -121,7 +122,7 @@ func TestStandingGrantList_TransportFailurePropagates(t *testing.T) {
 
 func TestStandingGrantCreate_TransportFailurePropagates(t *testing.T) {
 	c := policyTransportClient(t)
-	res, err := c.StandingGrantCreate(context.Background(), policy.StandingWriteParams{GrantID: "g1"})
+	res, err := c.StandingGrantCreate(context.Background(), policy.StandingWriteParams{GrantID: "g1"}, policyTestAttest)
 	if !cascade.HasKind(err, cascade.KindUnavailable) {
 		t.Fatalf("err = %v, want KindUnavailable", err)
 	}
@@ -132,7 +133,7 @@ func TestStandingGrantCreate_TransportFailurePropagates(t *testing.T) {
 
 func TestStandingGrantChange_TransportFailurePropagates(t *testing.T) {
 	c := policyTransportClient(t)
-	res, err := c.StandingGrantChange(context.Background(), policy.StandingWriteParams{GrantID: "g1"})
+	res, err := c.StandingGrantChange(context.Background(), policy.StandingWriteParams{GrantID: "g1"}, policyTestAttest)
 	if !cascade.HasKind(err, cascade.KindUnavailable) {
 		t.Fatalf("err = %v, want KindUnavailable", err)
 	}
@@ -194,4 +195,8 @@ func TestPolicyAuditQuery_TransportFailurePropagates(t *testing.T) {
 	if len(res.Records) != 0 || res.NextCursor != "" {
 		t.Errorf("PolicyAuditQuery returned %+v on failure, want the zero result", res)
 	}
+}
+
+func policyTestAttest(context.Context, string, string, string) (json.RawMessage, error) {
+	return nil, ErrElevationNotSatisfied
 }

@@ -25,6 +25,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/acamarata/cascade/internal/client"
 	"github.com/acamarata/cascade/internal/policy"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -54,7 +55,8 @@ func newApprovalGrantCmd(deps approvalDeps) *cobra.Command {
 				return err
 			}
 			params.RequestID = args[0]
-			res, err := c.ApprovalGrant(cmd.Context(), params)
+			var res policy.ApprovalGrantResult
+			err = callElevated(cmd.Context(), c, productionElevatedCallDeps(cmd.ErrOrStderr()), client.ApprovalGrantMethod, params, &res)
 			if err != nil {
 				return err
 			}
@@ -165,7 +167,12 @@ func newStandingWriteCmd(deps approvalDeps, verb string) *cobra.Command {
 			params.Grantee = policy.Subject{Kind: policy.SubjectKind(kind), ID: id}
 			params.ActionClass = policy.ActionClass(actionClass)
 			params.Exp = deps.Clock.Now().Add(ttl)
-			res, err := standingWriteCall(cmd, c, verb, params)
+			var res policy.StandingWriteResult
+			method := client.StandingGrantCreateMethod
+			if verb == "change" {
+				method = client.StandingGrantChangeMethod
+			}
+			err = callElevated(cmd.Context(), c, productionElevatedCallDeps(cmd.ErrOrStderr()), method, params, &res)
 			if err != nil {
 				return err
 			}

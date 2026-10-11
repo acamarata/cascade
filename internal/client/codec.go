@@ -105,7 +105,7 @@ func decodeResponse(method, wantID string, body []byte, out any) error {
 			"client: response id %q does not match request id %q for %s", env.ID, wantID, method)
 	}
 	if env.Error != nil {
-		return cascade.New(kindForRPCError(env.Error), method+": "+env.Error.Message)
+		return responseError(env.Error, body, method)
 	}
 	if out == nil || len(env.Result) == 0 {
 		return nil

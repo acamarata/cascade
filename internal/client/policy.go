@@ -52,9 +52,9 @@ func (c *Client) ApprovalShow(ctx context.Context, requestID string) (policy.Pen
 }
 
 // ApprovalGrant redeems a signed approval token.
-func (c *Client) ApprovalGrant(ctx context.Context, params policy.ApprovalGrantParams) (policy.ApprovalGrantResult, error) {
+func (c *Client) ApprovalGrant(ctx context.Context, params policy.ApprovalGrantParams, attest AttestFunc) (policy.ApprovalGrantResult, error) {
 	var res policy.ApprovalGrantResult
-	err := c.Do(ctx, ApprovalGrantMethod, params, &res)
+	err := c.DoElevated(ctx, ApprovalGrantMethod, params, &res, attest)
 	return res, err
 }
 
@@ -80,16 +80,16 @@ func (c *Client) StandingGrantList(ctx context.Context, params policy.StandingLi
 }
 
 // StandingGrantCreate writes a new standing grant.
-func (c *Client) StandingGrantCreate(ctx context.Context, params policy.StandingWriteParams) (policy.StandingWriteResult, error) {
+func (c *Client) StandingGrantCreate(ctx context.Context, params policy.StandingWriteParams, attest AttestFunc) (policy.StandingWriteResult, error) {
 	var res policy.StandingWriteResult
-	err := c.Do(ctx, StandingGrantCreateMethod, params, &res)
+	err := c.DoElevated(ctx, StandingGrantCreateMethod, params, &res, attest)
 	return res, err
 }
 
 // StandingGrantChange rewrites an existing standing grant's terms.
-func (c *Client) StandingGrantChange(ctx context.Context, params policy.StandingWriteParams) (policy.StandingWriteResult, error) {
+func (c *Client) StandingGrantChange(ctx context.Context, params policy.StandingWriteParams, attest AttestFunc) (policy.StandingWriteResult, error) {
 	var res policy.StandingWriteResult
-	err := c.Do(ctx, StandingGrantChangeMethod, params, &res)
+	err := c.DoElevated(ctx, StandingGrantChangeMethod, params, &res, attest)
 	return res, err
 }
 
