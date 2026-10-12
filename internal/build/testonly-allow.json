@@ -199,13 +199,6 @@
   },
   {
     "caller_site": "internal/evidence/distill.go",
-    "expected_caller": "AQ/S-83.T2's per-partition derivation and AQ/S-83.T3's per-manifest-item derivation",
-    "reason": "P1-E43-W9-S83-T1's contract text is explicit that this ticket owns only the immutable per-row DataClass and the Join primitive itself: \"the per-REQUEST effective-class derivation -- the lattice join over resolved sources and the per-partition ErrDataClassDenied refusal of R-21.71 -- belongs to AQ/S-83.T2 and AQ/S-83.T3; this ticket owns only the immutable per-row class and the Join primitive they call.\" Exercised directly in dataclass_test.go (MAX semantics, fail-closed on an unknown/empty input, commutativity).",
-    "retire_ticket": "P1-EXE-10",
-    "symbol": "internal/evidence.Join"
-  },
-  {
-    "caller_site": "internal/evidence/distill.go",
     "expected_caller": "AQ/S-83.T2's distiller, when it wires internal/jobs.Store and providers/fs (or providers/s3) into evidence.NewCapturer",
     "reason": "P1-E43-W9-S83-T1: the Capturer constructor over a provider.BlobStore and an ArtifactWriter. conductor.expand's wiring (cmd/cascade/daemon_unix_evidence.go) deliberately does NOT construct one: nothing on the expand read path calls Capture/Pin/Referenced. Its real production caller remains AQ/S-83.T2's distiller, which writes claims/evidence in the first place and does not exist in this tree yet -- explicitly out of this ticket's own BOUNDARIES paragraph, same as the sibling NewClaimID/NewEvidenceID/Join/IndexURI entries above, which already name that ticket rather than UNOWNED. Capture/Pin/Referenced are exercised end-to-end (capture_test.go, package evidence_test) against a real providers/fs.BlobStore and a real internal/jobs.Store through a one-line ArtifactWriter adapter -- the exact shape AQ/S-83.T2's composition root will supply.",
     "retire_ticket": "P1-EXE-10",
@@ -376,14 +369,6 @@
     "retire_ticket": "cap:governor-admission",
     "expires": "P1-EXIT-07",
     "symbol": "internal/fleet/governor.Recommend"
-  },
-  {
-    "caller_site": "cmd/cascade/daemon_unix_run.go",
-    "expected_caller": "cmd/cascade/daemon_unix_run.go's buildRPCServer, alongside the other registerXxxHandler calls, once a sessions.Store and an *events.Bus are already composed there for P1-E12-W3-S24-T3's own RegisterHandlers call; retire this entry once it is called there",
-    "reason": "Binds fleet.sessions.hook_event to an *rpc.Registry. Every landed precedent for registering a daemon RPC method (context.scope.show, memory.*, recall.*, fleet.sessions.list per P1-E12-W3-S24-T3's own identical entry above) is called from cmd/cascade/daemon_unix_run.go's buildRPCServer, which this ticket's files_scope does not include (files_scope.change lists cmd/cascade/root.go, which is pure cobra-tree wiring per its own doc comment and carries no RPC composition of any kind, and internal/rpc/registry.go, which is a fully generic name->HandlerFunc map with no method-specific code). RegisterHookEventHandler itself is exercised end-to-end against a real *rpc.Registry and a real sessions.Store (handler_test.go): every R-16.48 mapping-table event, malformed params, unknown harness, timestamp-out-of-range, unknown-event-type drop, domain-error propagation, the planted-credential canary, and the Windows tier-2 refusal.",
-    "retire_ticket": "cap:fleet-sessions",
-    "expires": "P1-EXIT-07",
-    "symbol": "internal/fleet/hookpacks.RegisterHookEventHandler"
   },
   {
     "caller_site": "internal/fleet/governor/escalation_wiring.go",
@@ -750,13 +735,6 @@
     "reason": "The zero value of PolicyVerdict, chosen deliberately so a PolicyEngine implementation that forgets to set the field denies rather than allows (fail-closed by construction, per this file's own doc comment). Because it is the zero value, no production comparison in this package ever needs to name it explicitly -- CheckGeneric's only explicit comparison is `verdict != PolicyVerdictAllow`, which already covers PolicyVerdictDeny without spelling it. Only this package's tests reference the identifier by name, to assert the zero-value default explicitly (TestPolicyVerdictZeroValueIsDeny) and to exercise CheckGeneric against an explicit deny verdict. CORRECTED by P1-E15-W4-S32-T4's COMPLETION PASS: see NewHostBoundaryEnforcer's entry above -- the same caller_site retarget, same reason. CORRECTED AGAIN by P1-E15-W4-S33-T4's own journal: see NewHostBoundaryEnforcer's entry above -- same wrong guess, same UNOWNED correction, same reason.",
     "retire_ticket": "UNOWNED",
     "symbol": "internal/plugins/host.PolicyVerdictDeny"
-  },
-  {
-    "caller_site": "internal/policy/lane_privacy.go",
-    "expected_caller": "the lane privacy policy that sets a lane's max data class (22-PEWS-PLAN-W9-EXECUTIVE-ECONOMY.md Epic AN S-77.T4)",
-    "reason": "The four data classes are one ordered ladder; layer 0 compares a request's class against the destination's ceiling, and the comparison is only correct if every rung exists in order. The two middle rungs are named by no caller yet because the lane privacy policy that carries a ceiling other than the two ends has not landed. Omitting them would leave a ladder with a hole in it, which is a worse defect than an unreferenced constant.",
-    "retire_ticket": "P1-TOP-02",
-    "symbol": "internal/policy.DataClassConfidential"
   },
   {
     "caller_site": "internal/policy/authorize_middleware.go",
@@ -1599,5 +1577,28 @@
     "reason": "Read-only custody report is implemented here; the security doctor mount is owned by the following ticket.",
     "retire_ticket": "P1-SEC-12",
     "symbol": "internal/elevation.CustodyReport"
+  },
+  {
+    "added_by_ticket": "P1-SEC-18",
+    "caller_site": "internal/providers/agents/env.go",
+    "expected_caller": "DriverEnv binds the daemon-issued principal token into the sanitized child environment.",
+    "reason": "Launcher environment binding lands with the credential consumer.",
+    "retire_ticket": "P1-AGT-15",
+    "symbol": "internal/principal.BindEnv"
+  },
+  {
+    "added_by_ticket": "P1-SEC-18",
+    "caller_site": "cmd/cascade/doctor_mounts_security.go",
+    "expected_caller": "newCallerPrincipalDoctorCheck reads the minter status and reports the caller-principal threat model.",
+    "reason": "The principal doctor consumer lands separately.",
+    "retire_ticket": "P1-SEC-12",
+    "symbol": "internal/principal.Status"
+  },
+  {
+    "caller_site": "cmd/cascade/selfupdate.go",
+    "expected_caller": "P1-SHIP-04 self-update verification against the embedded release trust root",
+    "reason": "The release trust root is delivered before the self-update consumer.",
+    "retire_ticket": "P1-SHIP-04",
+    "symbol": "internal/minisign.ReleasePublicKey"
   }
 ]
