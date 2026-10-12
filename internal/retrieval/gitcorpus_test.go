@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/repo"
 	"github.com/acamarata/cascade/internal/retrieval/corpus"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -74,9 +75,9 @@ func newRealGitRepo(t *testing.T) string {
 // committed content with correct path provenance and must never surface
 // the gitignored, untracked file.
 func TestCodeCorpus_RealGitCounterpart(t *testing.T) {
-	repo := newRealGitRepo(t)
+	root := newRealGitRepo(t)
 
-	c, chunks, err := IngestGitRepo(context.Background(), repo, "project/cascade", corpus.TrustTrusted)
+	c, chunks, _, err := IngestGitRepo(context.Background(), root, "project/cascade", corpus.TrustTrusted)
 	if err != nil {
 		t.Fatalf("IngestGitRepo: %v", err)
 	}
@@ -130,7 +131,7 @@ func TestCodeCorpus_ScopeRegistered(t *testing.T) {
 // error path: a path that is not a git repository at all.
 func TestIngestGitRepo_EnumerationFailure(t *testing.T) {
 	dir := t.TempDir() // never git-initialized
-	_, _, err := IngestGitRepo(context.Background(), dir, "project/cascade", corpus.TrustTrusted)
+	_, _, _, err := IngestGitRepo(context.Background(), dir, "project/cascade", corpus.TrustTrusted)
 	if err == nil {
 		t.Fatal("expected an error ingesting a non-git directory, got nil")
 	}
@@ -151,7 +152,7 @@ func TestIngestGitRepo_ChunkerError(t *testing.T) {
 	runGit(t, dir, "add", "broken.go")
 	runGit(t, dir, "commit", "-q", "-m", "broken")
 
-	_, _, err := IngestGitRepo(context.Background(), dir, "project/cascade", corpus.TrustTrusted)
+	_, _, _, err := IngestGitRepo(context.Background(), dir, "project/cascade", corpus.TrustTrusted)
 	if err == nil {
 		t.Fatal("expected a chunker error for unparseable Go source, got nil")
 	}
@@ -164,8 +165,8 @@ func TestIngestGitRepo_ChunkerError(t *testing.T) {
 // TestIngestGitRepo_UntrustedPropagates asserts the trust tier a caller
 // passes in is threaded through unchanged, never silently upgraded.
 func TestIngestGitRepo_UntrustedPropagates(t *testing.T) {
-	repo := newRealGitRepo(t)
-	c, _, err := IngestGitRepo(context.Background(), repo, "project/cascade", corpus.TrustUntrustedSource)
+	root := newRealGitRepo(t)
+	c, _, _, err := IngestGitRepo(context.Background(), root, "project/cascade", corpus.TrustUntrustedSource)
 	if err != nil {
 		t.Fatalf("IngestGitRepo: %v", err)
 	}
@@ -178,19 +179,19 @@ func TestIngestGitRepo_UntrustedPropagates(t *testing.T) {
 // reference refuses via Corpus.Validate rather than producing a
 // partially-classified Corpus.
 func TestIngestGitRepo_InvalidScopeRefused(t *testing.T) {
-	repo := newRealGitRepo(t)
-	_, _, err := IngestGitRepo(context.Background(), repo, "", corpus.TrustTrusted)
+	root := newRealGitRepo(t)
+	_, _, _, err := IngestGitRepo(context.Background(), root, "", corpus.TrustTrusted)
 	if err == nil {
 		t.Fatal("expected a refusal for an empty scope reference, got nil")
 	}
 }
 
-// TestGitTrackedFiles_OversizeFileRefused asserts a file over the
-// per-file byte bound refuses rather than being silently truncated.
+// TestGitTrackedFiles_OversizeFileRefused asserts a file over the guard's
+// byte bound is refused (reported, never chunked) rather than truncated.
 func TestGitTrackedFiles_OversizeFileRefused(t *testing.T) {
 	dir := t.TempDir()
 	runGit(t, dir, "init", "-q")
-	big := make([]byte, maxCodeFileBytes+1)
+	big := make([]byte, repo.MaxAdmitBytes+1)
 	for i := range big {
 		big[i] = 'a'
 	}
@@ -200,8 +201,11 @@ func TestGitTrackedFiles_OversizeFileRefused(t *testing.T) {
 	runGit(t, dir, "add", "big.txt")
 	runGit(t, dir, "commit", "-q", "-m", "big")
 
-	_, _, err := IngestGitRepo(context.Background(), dir, "project/cascade", corpus.TrustTrusted)
-	if err == nil {
-		t.Fatal("expected a refusal for an oversize tracked file, got nil")
+	_, chunks, refused, err := IngestGitRepo(context.Background(), dir, "project/cascade", corpus.TrustTrusted)
+	if err != nil {
+		t.Fatalf("IngestGitRepo: %v", err)
+	}
+	if len(chunks) != 0 || len(refused) != 1 || refused[0].Rel != "big.txt" || refused[0].Reason != repo.ReasonTooLarge {
+		t.Fatalf("oversize file not refused as too-large: chunks=%d refused=%+v", len(chunks), refused)
 	}
 }

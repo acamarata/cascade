@@ -38,9 +38,12 @@
 // module dependency). No platform-conditional code path: git's own
 // output uses NUL-separated relative paths on every OS the test
 // environment runs on, including Windows, so no separator normalizer is
-// needed. A file-read or chunker failure refuses the whole ingest rather
-// than silently dropping the failed file, so a caller never mistakes a
-// partial index for a complete one.
+// needed. A chunker failure refuses the whole ingest rather than silently
+// dropping the failed file, so a caller never mistakes a partial index for
+// a complete one. Admission is different: every tracked path goes through
+// repo.AdmitBatch (the one ingest guard), and a path it refuses (dotfile,
+// vendored, key material, over 1 MiB, secret-bearing, unreadable) is
+// skipped and reported, never chunked.
 //
 // SPORT: internal.retrieval.IngestGitRepo/ADDED,
 //
@@ -50,19 +53,13 @@ package retrieval
 import (
 	"bytes"
 	"context"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
+	"github.com/acamarata/cascade/internal/repo"
 	"github.com/acamarata/cascade/internal/retrieval/corpus"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
-
-// maxCodeFileBytes bounds a single tracked file's read. A file above this
-// is refused rather than truncated, so a truncated chunk is never mistaken
-// for a complete one.
-const maxCodeFileBytes = 2 << 20 // 2 MiB
 
 // maxCodeTrackedFiles bounds how many tracked files one ingest call
 // accepts, so a caller pointed at an unexpectedly enormous repository
@@ -94,15 +91,23 @@ func GitTrackedFiles(ctx context.Context, repoRoot string) ([]string, error) {
 	return raw, nil
 }
 
-// IngestGitRepo enumerates repoRoot's tracked files, chunks each through
-// the code-aware chunker, and returns the classified corpus.Corpus plus
-// every chunk produced. trust is threaded through unchanged, never
-// overridden to "trusted" by this function.
+// admitBatch is the guard call; tests wrap it to observe slices and to
+// swap a file between the scan and the chunking.
+var admitBatch = repo.AdmitBatch
+
+// IngestGitRepo enumerates repoRoot's tracked files, admits them through
+// repo.AdmitBatch in slices of at most repo.MaxAdmitBatch, chunks only the
+// admitted bytes (Admission.Content, the bytes the secret detector
+// scanned; the file is never read a second time) through the code-aware
+// chunker, and returns the classified corpus.Corpus, every chunk produced
+// and the refused admissions (Rel and Reason only; no content). A slice's
+// Content is dropped before the next slice is admitted. trust is threaded
+// through unchanged, never overridden to "trusted" by this function.
 func IngestGitRepo(
 	ctx context.Context, repoRoot string, scopeRef corpus.ScopeRef, trust corpus.TrustLevel,
-) (corpus.Corpus, []Chunk, error) {
+) (corpus.Corpus, []Chunk, []repo.Admission, error) {
 	if err := corpus.ValidateCorpusKind(corpus.CorpusIDCode); err != nil {
-		return corpus.Corpus{}, nil, err
+		return corpus.Corpus{}, nil, nil, err
 	}
 	c := corpus.Corpus{
 		ID:         corpus.CorpusIDCode,
@@ -112,45 +117,50 @@ func IngestGitRepo(
 		Trust:      trust,
 	}
 	if err := c.Validate(); err != nil {
-		return corpus.Corpus{}, nil, err
+		return corpus.Corpus{}, nil, nil, err
 	}
 
 	files, err := GitTrackedFiles(ctx, repoRoot)
 	if err != nil {
-		return corpus.Corpus{}, nil, err
+		return corpus.Corpus{}, nil, nil, err
 	}
 
+	var chunks []Chunk
+	var refused []repo.Admission
+	for start := 0; start < len(files); start += repo.MaxAdmitBatch {
+		end := min(start+repo.MaxAdmitBatch, len(files))
+		cs, rs, err := admitAndChunk(ctx, repoRoot, files[start:end])
+		if err != nil {
+			return corpus.Corpus{}, nil, nil, err
+		}
+		chunks = append(chunks, cs...)
+		refused = append(refused, rs...)
+	}
+	return c, chunks, refused, nil
+}
+
+// admitAndChunk admits one slice and chunks what was admitted. Each
+// admission's Content is released as soon as it is chunked.
+func admitAndChunk(ctx context.Context, repoRoot string, rels []string) ([]Chunk, []repo.Admission, error) {
+	adm, err := admitBatch(ctx, repoRoot, rels)
+	if err != nil {
+		return nil, nil, err
+	}
 	chunker := &CodeChunker{}
 	var chunks []Chunk
-	for _, rel := range files {
-		if rel == "" {
+	var refused []repo.Admission
+	for i := range adm {
+		a := &adm[i]
+		if !a.Admitted {
+			refused = append(refused, repo.Admission{Rel: a.Rel, Reason: a.Reason, PatternClass: a.PatternClass})
 			continue
 		}
-		data, err := readTrackedFile(filepath.Join(repoRoot, rel))
+		cs, err := chunker.Chunk(a.Rel, a.Content)
+		a.Content = nil
 		if err != nil {
-			return corpus.Corpus{}, nil, cascade.Wrapf(cascade.KindUnavailable, err,
-				"retrieval: reading tracked file %q", rel)
-		}
-		cs, err := chunker.Chunk(rel, data)
-		if err != nil {
-			return corpus.Corpus{}, nil, cascade.Wrapf(cascade.KindInvalidInput, err,
-				"retrieval: chunking %q", rel)
+			return nil, nil, cascade.Wrapf(cascade.KindInvalidInput, err, "retrieval: chunking %q", a.Rel)
 		}
 		chunks = append(chunks, cs...)
 	}
-	return c, chunks, nil
-}
-
-// readTrackedFile reads path bounded by maxCodeFileBytes, refusing rather
-// than truncating a file over the bound.
-func readTrackedFile(path string) ([]byte, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil, err
-	}
-	if info.Size() > maxCodeFileBytes {
-		return nil, cascade.Newf(cascade.KindInvalidInput,
-			"retrieval: %q is %d bytes, over the %d-byte bound", path, info.Size(), maxCodeFileBytes)
-	}
-	return os.ReadFile(path)
+	return chunks, refused, nil
 }
