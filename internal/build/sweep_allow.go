@@ -37,7 +37,7 @@ const allowPrefix = "!"
 // is the normal, stricter case.
 func ParseAllowPatterns(raw string) ([]*regexp.Regexp, error) {
 	var out []*regexp.Regexp
-	for _, line := range strings.Split(raw, "\n") {
+	for i, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, allowPrefix) {
 			continue
@@ -48,7 +48,9 @@ func ParseAllowPatterns(raw string) ([]*regexp.Regexp, error) {
 		}
 		re, err := regexp.Compile(body)
 		if err != nil {
-			return nil, fmt.Errorf("identifier sweep: invalid allow pattern %q: %w", body, err)
+			// Line number only: the allow body names the very identifier
+			// it forgives, and the regexp error would quote it.
+			return nil, fmt.Errorf("identifier sweep: invalid allow pattern at line %d", i+1)
 		}
 		out = append(out, re)
 	}

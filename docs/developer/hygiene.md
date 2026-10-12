@@ -43,11 +43,34 @@ this order by `build.LoadPatterns`:
 
 1. **Local dev machines**: an untracked file, one RE2 pattern per line
    (blank lines and `#` comments ignored), pointed to by
-   `CASCADE_IDENTIFIER_PATTERNS_FILE` (default:
-   `.claude/hygiene/identifier-patterns.txt`, under the already-gitignored
-   `.claude/` tree).
+   `CASCADE_IDENTIFIER_PATTERNS_FILE`. The one canonical file is
+   `~/.claude/cascade-hygiene/identifier-patterns.txt`, outside every clone.
+   Policy: never use a pattern file inside the repo tree (for example
+   under `.claude/hygiene/`) as a source.
 2. **CI**: the same one-pattern-per-line format, inline, in the masked
    variable/secret `CASCADE_IDENTIFIER_PATTERNS`.
+
+Three enforcement points use the canonical file: the tracked pre-push hook
+(`.github/hooks/pre-push`) falls back to it when no override is set, the
+local ship gate reads it, and the CI secret is refreshed from it. New
+patterns are appended there, never to a copy.
+
+### Testdata is scanned; output never echoes a match
+
+The sweep scans testdata too, because captured fixtures are where a
+private host or account id is most likely to land. Only
+`internal/build/testdata/` is exempt (`build.IdentifierSweepSkipsPath`,
+whole-segment match): it holds the seeded-violation fixtures that exist to
+contain what the sweep hunts for. The secret scan and the other gates keep
+their wider testdata exemption (`build.SweepSkipsPath`).
+
+A violation prints as `<file>:<line> matches pattern #<index>`, where the
+index is the 0-based position of the pattern among the loaded patterns.
+The output never contains the pattern text or the matched line. An
+invalid pattern is reported as `identifier sweep: invalid pattern at line
+<n>` (1-based line in the source), and an invalid allow line the same way,
+without the pattern body or the regexp error. CI logs are public, so the
+gate must not print what it guards.
 
 If neither source is configured, or the configured one is unreadable or
 parses to zero usable patterns, the sweep **fails closed**: it blocks the
@@ -69,8 +92,9 @@ decides what a "leak" looks like in this repo.
 - An identifier absent from the loaded pattern set: the sweep is only as
   good as its pattern source.
 - Obfuscated, base64/rot13-encoded, or whitespace-mangled identifiers.
-- An identifier embedded in binary content or image/EXIF metadata (a
-  non-UTF8 file read is a hard error, fail closed, not a silent skip).
+- An identifier embedded in compressed or encoded content or image/EXIF
+  metadata (binary files are scanned as raw bytes, so only a plain-text
+  match inside them is caught).
 - History outside the scanned commit range or the current tree: a prior
   push that already leaked an identifier is not retroactively caught.
 
@@ -90,9 +114,8 @@ brand-new remote ref (`remote-sha` all zeros) checks every commit
 reachable from the local tip, since nothing on the remote bounds the
 range yet.
 
-Set `CASCADE_IDENTIFIER_PATTERNS_FILE` in your shell profile if your local
-pattern file lives somewhere other than the default
-`.claude/hygiene/identifier-patterns.txt`.
+Set `CASCADE_IDENTIFIER_PATTERNS_FILE` in your shell profile to the
+canonical `~/.claude/cascade-hygiene/identifier-patterns.txt`.
 
 `go`/`git` are wrapped by `rtk` in some interactive dev environments in a
 way that does not track the real exit code (R-14.114); the hook uses

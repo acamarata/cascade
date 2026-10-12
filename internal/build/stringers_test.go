@@ -107,16 +107,21 @@ func TestFormatSecretScanHits_Empty(t *testing.T) {
 
 func TestFormatSweepViolations_NamesEveryViolation(t *testing.T) {
 	violations := []SweepViolation{
-		{Source: "internal/x/fixture.go", Line: 10, Pattern: "seamlessly", Snippet: "works seamlessly today"},
-		{Source: "internal/y/other.go", Line: 21, Pattern: "robust", Snippet: "a robust solution"},
+		{Source: "internal/x/fixture.go", Line: 10, Pattern: "seamlessly", PatternIndex: 0, Snippet: "works seamlessly today"},
+		{Source: "internal/y/other.go", Line: 21, Pattern: "robust", PatternIndex: 3, Snippet: "a robust solution"},
 	}
 	got := FormatSweepViolations(violations)
 	for _, want := range []string{
-		"internal/x/fixture.go:10", "seamlessly", "works seamlessly today",
-		"internal/y/other.go:21", "robust", "a robust solution",
+		"  - internal/x/fixture.go:10 matches pattern #0",
+		"  - internal/y/other.go:21 matches pattern #3",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("FormatSweepViolations() = %q, want it to contain %q", got, want)
+		}
+	}
+	for _, leak := range []string{"seamlessly", "robust", "works seamlessly today", "a robust solution"} {
+		if strings.Contains(got, leak) {
+			t.Errorf("FormatSweepViolations() = %q, must not echo the pattern or snippet %q", got, leak)
 		}
 	}
 	if strings.HasSuffix(got, "\n") {

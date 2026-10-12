@@ -103,27 +103,27 @@
     {
       "path": "internal/providers/intake/types.go",
       "term": "zai",
-      "reason": "comment naming the z.ai vendor as a speaker of the openai-compat protocol (DriverOpenAICompat); a vendor name, not the v1 [quota.zai] config key"
+      "reason": "comment naming the vendor-x vendor as a speaker of the openai-compat protocol (DriverOpenAICompat); a vendor name, not the v1 [quota.zai] config key"
     },
     {
       "path": "providers/openai/auth.go",
       "term": "zai",
-      "reason": "comments naming the z.ai vendor's captured error-envelope shape for the v2 openai-compat driver; a vendor name, not the v1 [quota.zai] config key"
+      "reason": "comments naming the vendor-x vendor's captured error-envelope shape for the v2 openai-compat driver; a vendor name, not the v1 [quota.zai] config key"
     },
     {
       "path": "providers/openai/openai.go",
       "term": "zai",
-      "reason": "package doc and rate-limit note naming the z.ai vendor served by the v2 openai-compat driver; a vendor name, not the v1 [quota.zai] config key"
+      "reason": "package doc and rate-limit note naming the vendor-x vendor served by the v2 openai-compat driver; a vendor name, not the v1 [quota.zai] config key"
     },
     {
       "path": "providers/openai/integration_test.go",
       "term": "zai",
-      "reason": "live-lane test comment naming a z.ai endpoint as a valid openai-compat target; a vendor name, not the v1 [quota.zai] config key"
+      "reason": "live-lane test comment naming a vendor-x endpoint as a valid openai-compat target; a vendor name, not the v1 [quota.zai] config key"
     },
     {
       "path": "providers/openai/openai_test.go",
       "term": "zai",
-      "reason": "captured z.ai 401 body fixture for the v2 openai-compat error mapping; a vendor name, not the v1 [quota.zai] config key"
+      "reason": "captured vendor-x 401 body fixture for the v2 openai-compat error mapping; a vendor name, not the v1 [quota.zai] config key"
     },
     {
       "path": "docs/harness-conventions.md",

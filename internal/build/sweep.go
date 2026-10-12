@@ -9,11 +9,23 @@
 // against would itself violate PRI hard rule 3 on this public repo. They
 // come from exactly two sources, resolved by LoadPatterns:
 //  1. an UNTRACKED local file on a dev machine, named by
-//     CASCADE_IDENTIFIER_PATTERNS_FILE (default
-//     .claude/hygiene/identifier-patterns.txt — under the already-gitignored
-//     .claude/ tree, PRI hard rule 3);
+//     CASCADE_IDENTIFIER_PATTERNS_FILE. The one canonical file is
+//     ~/.claude/cascade-hygiene/identifier-patterns.txt, outside every
+//     clone; the pre-push hook falls back to it and the CI secret is
+//     refreshed from it. Policy: a pattern file inside the repo tree (for
+//     example under .claude/hygiene/) must never be used as a source;
 //  2. a masked CI variable/secret, CASCADE_IDENTIFIER_PATTERNS, whose value
 //     is the same format inline instead of a file path.
+//
+// # Testdata is scanned, and output never echoes a match
+//
+// Unlike the secret scan and the other gates that use SweepSkipsPath, this
+// sweep scans testdata: captured fixtures are where a private host or
+// account id is most likely to land. Only internal/build/testdata, which
+// holds the seeded-violation fixtures, is exempt (IdentifierSweepSkipsPath).
+// A violation is reported as file:line plus the 0-based index of the
+// pattern that matched, never the pattern text or the matched line, so the
+// gate's own log (CI output is public) cannot leak what it guards.
 //
 // One pattern per line, blank lines and "#"-prefixed comments ignored,
 // each line a Go RE2 regular expression (regexp.Compile). Neither source
@@ -40,8 +52,8 @@
 // this repo's real deny-list precisely, including any repo-specific
 // exemptions its author chooses not to flag); obfuscated/base64/rot13/
 // whitespace-mangled or image/EXIF-embedded identifiers; matches inside
-// binary files (a non-UTF8 read is surfaced as a walk error, which fails
-// the gate closed rather than silently skipping the file); history
+// binary files (their raw bytes are scanned, but compressed or encoded
+// content is not decoded, so a gzip-wrapped capture passes); history
 // outside the scanned commit range or tree (a prior push that already
 // leaked an identifier is not retroactively caught). A green run is proof
 // the loaded patterns found nothing — never proof no identifier exists.
@@ -84,26 +96,33 @@ const (
 // repo-relative path, or "commit-message[N]") and on which line (1-based;
 // 0 for a match that spans how SweepContent joins lines, which currently
 // never happens since it matches per line).
+//
+// Pattern and Snippet stay in memory for FilterAllowed and callers that
+// need them; FormatSweepViolations never prints either. PatternIndex is the
+// 0-based index of the matching pattern among the loaded patterns.
 type SweepViolation struct {
-	Source  string
-	Line    int
-	Pattern string
-	Snippet string
+	Source       string
+	Line         int
+	Pattern      string
+	PatternIndex int
+	Snippet      string
 }
 
 // ParsePatterns decodes the one-pattern-per-line format both pattern
 // sources use. An empty result (nothing but blanks/comments, or empty
-// input) is an error — fail closed, per this file's package doc.
+// input) is an error — fail closed, per this file's package doc. A pattern
+// that does not compile is reported by its 1-based line number only: the
+// pattern text and the regexp error (which quotes it) never reach the log.
 func ParsePatterns(raw string) ([]*regexp.Regexp, error) {
 	var pats []*regexp.Regexp
-	for _, line := range strings.Split(raw, "\n") {
+	for i, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, allowPrefix) {
 			continue
 		}
 		re, err := regexp.Compile(line)
 		if err != nil {
-			return nil, fmt.Errorf("identifier sweep: invalid pattern %q: %w", line, err)
+			return nil, fmt.Errorf("identifier sweep: invalid pattern at line %d", i+1)
 		}
 		pats = append(pats, re)
 	}
@@ -118,9 +137,10 @@ func ParsePatterns(raw string) ([]*regexp.Regexp, error) {
 func SweepContent(patterns []*regexp.Regexp, source string, content []byte) []SweepViolation {
 	var out []SweepViolation
 	for i, line := range strings.Split(string(content), "\n") {
-		for _, re := range patterns {
+		for j, re := range patterns {
 			if re.FindStringIndex(line) != nil {
-				out = append(out, SweepViolation{Source: source, Line: i + 1, Pattern: re.String(), Snippet: strings.TrimSpace(line)})
+				out = append(out, SweepViolation{Source: source, Line: i + 1, Pattern: re.String(),
+					PatternIndex: j, Snippet: strings.TrimSpace(line)})
 			}
 		}
 	}
@@ -173,15 +193,37 @@ func SweepSkipsPath(rel string) bool {
 	return false
 }
 
+// identifierSweepExempt is the one directory the identifier sweep skips:
+// the seeded-violation fixtures that exist to contain what it hunts for.
+var identifierSweepExempt = []string{"internal", "build", "testdata"}
+
+// IdentifierSweepSkipsPath reports whether the identifier sweep skips rel.
+// It is true only for a path below internal/build/testdata/, matched on
+// whole leading segments of the repo-relative path. Every other testdata
+// directory is scanned, unlike SweepSkipsPath, which the secret scan and
+// the other gates keep using.
+func IdentifierSweepSkipsPath(rel string) bool {
+	segs := strings.Split(strings.TrimPrefix(filepath.ToSlash(rel), "./"), "/")
+	if len(segs) <= len(identifierSweepExempt) {
+		return false
+	}
+	for i, want := range identifierSweepExempt {
+		if segs[i] != want {
+			return false
+		}
+	}
+	return true
+}
+
 // SweepFiles reads each of relFiles under root and scans its content
-// against patterns. A read error (including a non-UTF8/binary file this
-// gate cannot meaningfully scan) is returned as an error, never silently
-// skipped — fail closed, per this file's package doc. Paths under a
-// testdata segment are excluded per SweepSkipsPath.
+// against patterns. A read error is returned as an error, never silently
+// skipped — fail closed, per this file's package doc. Binary files are
+// scanned as raw bytes and never error. Testdata is scanned;
+// only internal/build/testdata is excluded (IdentifierSweepSkipsPath).
 func SweepFiles(patterns []*regexp.Regexp, root string, relFiles []string) ([]SweepViolation, error) {
 	var out []SweepViolation
 	for _, rel := range relFiles {
-		if SweepSkipsPath(rel) {
+		if IdentifierSweepSkipsPath(rel) {
 			continue
 		}
 		data, err := os.ReadFile(root + string(os.PathSeparator) + rel)
@@ -194,11 +236,13 @@ func SweepFiles(patterns []*regexp.Regexp, root string, relFiles []string) ([]Sw
 }
 
 // FormatSweepViolations renders violations as one line each, for gate
-// error/log output.
+// error/log output: file:line and the pattern index only. Printing the
+// pattern or the matched line would publish the private identifier in the
+// very log meant to keep it out of public view.
 func FormatSweepViolations(violations []SweepViolation) string {
 	var b strings.Builder
 	for _, v := range violations {
-		fmt.Fprintf(&b, "  - %s:%d matches %q: %s\n", v.Source, v.Line, v.Pattern, v.Snippet)
+		fmt.Fprintf(&b, "  - %s:%d matches pattern #%d\n", v.Source, v.Line, v.PatternIndex)
 	}
 	return strings.TrimRight(b.String(), "\n")
 }

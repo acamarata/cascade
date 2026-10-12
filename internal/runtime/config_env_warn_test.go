@@ -228,7 +228,7 @@ var dynamicEnvReads = map[string][]string{
 	"internal/backup/targets/s3.go:70":       {"<operator-named>"},
 	"internal/backup/targets/s3.go:71":       {"<operator-named>"},
 	"internal/backup/targets/s3.go:72":       {"<operator-named>"},
-	"internal/build/sweep_allow.go:112":      {"CASCADE_IDENTIFIER_PATTERNS"},
+	"internal/build/sweep_allow.go:114":      {"CASCADE_IDENTIFIER_PATTERNS"},
 	"internal/ci/waitmerge_deps.go:77":       {"CASCADE_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"},
 	"internal/providers/intake/core.go:177":  {"<caller-named>"},
 	"internal/providers/intake/core.go:195":  {"<caller-named>"},
