@@ -1600,5 +1600,26 @@
     "reason": "The release trust root is delivered before the self-update consumer.",
     "retire_ticket": "P1-SHIP-04",
     "symbol": "internal/minisign.ReleasePublicKey"
+  },
+  {
+    "caller_site": "internal/tools/promotion/main.go",
+    "expected_caller": "The promotion tool, which creates the v0 module twin of the promoted artifact tag from buildinfo.ModuleTagFor (the dual-tag step of promotion)",
+    "reason": "ModuleTagFor is part of contract:signed-release-artifacts (the artifact-to-module tag map); its only production caller is the promotion tool, which is outside this ticket's write_scope.",
+    "retire_ticket": "P1-SHIP-11",
+    "symbol": "internal/buildinfo.ModuleTagFor"
+  },
+  {
+    "caller_site": "cmd/cascade/doctor_mounts_security.go",
+    "expected_caller": "The egress audit-only doctor check lists each class with its reason.",
+    "reason": "The audit inventory is consumed by the separately owned doctor mount.",
+    "retire_ticket": "P1-SEC-12",
+    "symbol": "internal/hooks/egress.AuditOnly"
+  },
+  {
+    "caller_site": "cmd/cascade/doctor_mounts_security.go",
+    "expected_caller": "The egress audit-only doctor check enumerates the sorted classes.",
+    "reason": "The audit inventory is consumed by the separately owned doctor mount.",
+    "retire_ticket": "P1-SEC-12",
+    "symbol": "internal/hooks/egress.AuditOnlyClasses"
   }
 ]
