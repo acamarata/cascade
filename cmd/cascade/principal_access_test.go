@@ -87,7 +87,7 @@ func TestSSETopicRefusesAnonymous(t *testing.T) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { calls.Add(1); w.WriteHeader(204) })
 	c.Events.Default = h
 	c.Events.WithTopic("test.owner", h)
-	c.Events.WithTopic("fleet.sessions", h)
+	c.Events.WithTopic("fleet.sessions", visibleStub(h))
 	_, httpClient, token := startPrincipalServer(t, c)
 	for _, path := range []string{"/events", "/events?topic=test.owner", "/events?topic=fleet.sessions"} {
 		if code, body := principalHTTP(t, httpClient, path, "", ""); code != 403 {
@@ -121,9 +121,12 @@ func TestAllTopicsMarked(t *testing.T) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) })
 	paths := []string{"/events"}
 	c.Events.Default = h
-	for topic := range c.Events.Topics {
+	for topic, real := range c.Events.Topics {
 		paths = append(paths, "/events?topic="+topic)
 		c.Events.Topics[topic] = h
+		if _, consumes := real.(rpc.EventVisibleConsumer); consumes {
+			c.Events.Topics[topic] = visibleStub(h)
+		}
 	}
 	c.Events.WithTopic("test.unmarked", h)
 	c.Events.WithTopic("test.visible", h)
@@ -139,6 +142,13 @@ func TestAllTopicsMarked(t *testing.T) {
 		}
 	}
 }
+
+// visibleStub stands in for an owner-view topic handler, which must declare
+// that it applies the event predicate.
+type visibleStub http.HandlerFunc
+
+func (f visibleStub) ServeHTTP(w http.ResponseWriter, r *http.Request) { f(w, r) }
+func (visibleStub) ConsumesEventVisible()                              {}
 
 type principalVisibleHandler struct{ denied atomic.Bool }
 

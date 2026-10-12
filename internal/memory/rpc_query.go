@@ -39,6 +39,9 @@ type RecallParams struct {
 	K int `json:"k"`
 	// Type narrows the scan to one MemoryKind. Empty scans all four.
 	Type string `json:"type,omitempty"`
+	// Scope narrows the scan to records attributed to one scope. It is
+	// never authority: a principal naming any scope but its own is refused.
+	Scope string `json:"scope,omitempty"`
 }
 
 // RecallResult is memory.recall's output.
@@ -61,6 +64,8 @@ type ListParams struct {
 	// Cursor is the last address of the previous page; the next page
 	// starts strictly after it.
 	Cursor string `json:"cursor,omitempty"`
+	// Scope narrows the listing like RecallParams.Scope.
+	Scope string `json:"scope,omitempty"`
 }
 
 // ListResult is memory.list's output.
@@ -81,6 +86,12 @@ func (h *Handler) Recall(ctx context.Context, params json.RawMessage) (any, erro
 	var p RecallParams
 	if err := decodeParams(MethodRecall, params, &p); err != nil {
 		return nil, err
+	}
+	if kinds, keep, scoped, err := scopedQuery(ctx, p.Type, p.Scope); scoped || err != nil {
+		if err != nil {
+			return nil, err
+		}
+		return h.recallFiltered(ctx, p, kinds, keep)
 	}
 	kinds, err := kindsFor(p.Type)
 	if err != nil {
@@ -118,6 +129,12 @@ func (h *Handler) List(ctx context.Context, params json.RawMessage) (any, error)
 	var p ListParams
 	if err := decodeParams(MethodList, params, &p); err != nil {
 		return nil, err
+	}
+	if kinds, keep, scoped, err := scopedQuery(ctx, p.Type, p.Scope); scoped || err != nil {
+		if err != nil {
+			return nil, err
+		}
+		return h.listFiltered(ctx, p, kinds, keep)
 	}
 	kinds, err := kindsFor(p.Type)
 	if err != nil {

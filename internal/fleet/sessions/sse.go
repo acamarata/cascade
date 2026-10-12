@@ -1,26 +1,16 @@
 package sessions
 
 // Purpose (this file): GET /events?topic=fleet.sessions — the SSE stream
-//
 //	delivering fleet.sessions.changed events (R-21.272) to a subscribed
 //	HTTP client, over the SAME real internal/events.Bus the daemon-wide
 //	bridge (internal/rpc/sse.go) uses.
-//
 // Inputs: an HTTP GET request's optional "topic" query parameter (only
-//
 //	"fleet.sessions" or empty is accepted) and events published to the
 //	"fleet.sessions" namespace by domain.go's Store.emit.
-//
 // Outputs: an SSE stream with "event"/"data"/"id"/"retry" fields per the
-//
-//	WHATWG SSE Living Standard, or an HTTP 400/501 before the handshake.
-//
-// Constraints: Windows is tier-2 (§Forge, no daemon at all), so ServeHTTP
-//
-//	refuses unconditionally there, before ever touching the bus — the
-//	same unconditional GOOS check internal/rpc/sse.go's own ServeHTTP
-//	makes, since a daemon socket is NEVER present on Windows to serve
-//	this from.
+//	WHATWG SSE Living Standard, or an HTTP 400/500 before the handshake.
+// Constraints: Windows is tier-2 (no daemon), so nothing mounts this there;
+//	a principal's stream carries only its session subtree (stream).
 //
 // CONTRACT DEVIATION (event/data/id/retry fields, recorded, not papered
 // over). internal/rpc/sse.go's SSEHandler (the "existing SSE
@@ -35,16 +25,9 @@ package sessions
 // Unsubscribe on ctx.Done or a closed Events channel) rather than
 // reinventing the connection loop.
 //
-// CONTRACT DEVIATION (mounting, recorded, not papered over). "add a GET
-// /events?topic=fleet.sessions handler" reads as a second route on the
-// daemon's mux. cmd/cascade/daemon_unix_run.go's buildRPCServer (out of
-// this ticket's files_scope) mounts exactly one SSEHandler at the fixed
-// rpc.EventsPath — a second http.ServeMux.Handle("/events", ...) call
-// there would panic on the duplicate pattern. This file's SSEHandler is
-// therefore a standalone http.Handler, ready to be mounted at its own
-// path (or composed behind a topic-dispatching wrapper) by whichever
-// ticket wires cmd/cascade/daemon_unix_run.go; recorded in
-// internal/build/testonly-allow.json naming this ticket.
+// Mounting: the daemon serves this handler as the fleet.sessions topic of
+// its rpc.SSEMux (cmd/cascade/wire_fleet_sessions_events.go). The topic is
+// owner-view: a principal's stream carries the session-subtree predicate.
 //
 // SPORT: internal.fleet.sessions.SSEHandler/ADDED (P1-E12-W3-S24-T3).
 
@@ -58,6 +41,8 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/principal"
+	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -146,8 +131,14 @@ func writeSSEPrelude(w http.ResponseWriter) {
 // blocks until its delivery goroutine has fully stopped, so once stream
 // (and so ServeHTTP) returns, no goroutine and no subscription remain —
 // see sse_test.go's TestSessionSSE_ClientDisconnect_CleanUnsubscribeNoLeak.
+//
+// When ctx carries an event-visibility predicate (a principal's stream),
+// an event is written only when the predicate admits its session; an event
+// whose payload names no session is skipped. With no predicate (the owner)
+// every event is written.
 func (h *SSEHandler) stream(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, sub *events.Subscription) {
 	defer func() { _ = sub.Unsubscribe() }()
+	visible, filtered := rpc.EventVisibleFrom(ctx)
 
 	ticker := time.NewTicker(ssePollInterval)
 	defer ticker.Stop()
@@ -158,6 +149,9 @@ func (h *SSEHandler) stream(ctx context.Context, w http.ResponseWriter, flusher 
 		case ev, open := <-sub.Events:
 			if !open {
 				return
+			}
+			if filtered && !eventVisible(visible, ev) {
+				continue
 			}
 			writeSSEEvent(w, ev)
 			flusher.Flush()
@@ -176,6 +170,32 @@ func (h *SSEHandler) stream(ctx context.Context, w http.ResponseWriter, flusher 
 	}
 }
 
+// ConsumesEventVisible marks SSEHandler as applying rpc.EventVisibleFrom to
+// every event, which an owner-view topic requires (rpc.EventVisibleConsumer).
+func (*SSEHandler) ConsumesEventVisible() {}
+
+var _ rpc.EventVisibleConsumer = (*SSEHandler)(nil)
+
+// eventSession is the session attribution an event payload carries.
+type eventSession struct {
+	SessionID       string  `json:"session_id"`
+	ParentSessionID *string `json:"parent_session_id"`
+}
+
+// eventVisible applies visible to ev's payload session. A payload that is
+// not JSON or names no session is never visible to a filtered stream.
+func eventVisible(visible func(string, string) bool, ev events.Event) bool {
+	var ref eventSession
+	if err := json.Unmarshal(ev.Payload, &ref); err != nil || ref.SessionID == "" {
+		return false
+	}
+	parent := ""
+	if ref.ParentSessionID != nil {
+		parent = *ref.ParentSessionID
+	}
+	return visible(ref.SessionID, parent)
+}
+
 // writeSSEEvent writes one event as a conformant WHATWG SSE record: a
 // named "event" field (always changedNamespace's changed-event name), the
 // "data" line, an "id" line (the event's own Seq, so a client's
@@ -187,12 +207,9 @@ func writeSSEEvent(w http.ResponseWriter, ev events.Event) {
 
 // LaneHealthChangedKind is a DISTINCT event kind on the SAME
 // fleet.sessions stream (R-16.78 §2), never a second stream and never an
-// envelope field folded into one SessionRecord (which describes exactly
-// one harness session, not every lane). This SSEHandler's stream/
-// writeSSEEvent above forwards any Kind published to changedNamespace
-// unfiltered -- ev.Kind already becomes the SSE "event:" field -- so no
-// dispatch change was needed here to carry a second event type; only the
-// kind constant and payload shape are new.
+// envelope field folded into one SessionRecord. ev.Kind becomes the SSE
+// "event:" field. Its payload names no session, so a principal's filtered
+// stream never carries it.
 const LaneHealthChangedKind = events.EventKind("fleet.sessions.lane_health.changed")
 
 // LaneHealth is one lane's latest probe/bench reading, as published on
@@ -224,4 +241,52 @@ func PublishLaneHealth(ctx context.Context, bus *events.Bus, health LaneHealth) 
 		return cascade.Wrap(cascade.KindUnavailable, err, "sessions: publish lane health")
 	}
 	return nil
+}
+
+// inSubtree reports whether id is root or a descendant of root at any
+// depth, following parent links through parentOf over id's whole ancestry.
+// A chain that loops anywhere is never trusted: a corrupt parent graph hides
+// a session rather than shows it. An empty root or id is never in a subtree.
+func inSubtree(root, id string, parentOf func(string) (string, bool)) bool {
+	if root == "" || id == "" {
+		return false
+	}
+	seen := map[string]bool{}
+	found := false
+	for cur := id; cur != ""; {
+		if seen[cur] {
+			return false
+		}
+		seen[cur] = true
+		found = found || cur == root
+		next, ok := parentOf(cur)
+		if !ok {
+			break
+		}
+		cur = next
+	}
+	return found
+}
+
+// parentLookup reads parent links from the store; a read failure ends the
+// walk, so an unreadable ancestor hides the session rather than shows it.
+func (s *Store) parentLookup(ctx context.Context) func(string) (string, bool) {
+	return func(id string) (string, bool) {
+		rec, err := s.getLocked(ctx, id)
+		if err != nil || rec.ParentSessionID == nil {
+			return "", false
+		}
+		return *rec.ParentSessionID, true
+	}
+}
+
+// Visibility returns the per-event predicate for p: a session is visible
+// when it is p's own session or a descendant of it in the store. The
+// event's own parent id is ignored; only stored ancestry is authority.
+func (s *Store) Visibility(p principal.Principal) func(sessionID, parentSessionID string) bool {
+	root := p.SessionID
+	return func(sessionID, _ string) bool {
+		//nolint:contextcheck // the predicate signature carries no context; a store read is bounded by the walk.
+		return inSubtree(root, sessionID, s.parentLookup(context.Background()))
+	}
 }

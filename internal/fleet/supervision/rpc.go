@@ -53,6 +53,7 @@ import (
 	"encoding/json"
 
 	"github.com/acamarata/cascade/internal/context/scope"
+	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -132,6 +133,15 @@ func fleetAttentionListHandler(store *Store, graphStore *scope.GraphStore) rpc.H
 		if err != nil {
 			return nil, err
 		}
+		if visible, scoped := callerSessionFilter(ctx); scoped {
+			kept := []AttentionItem{}
+			for _, item := range items {
+				if visible(item) {
+					kept = append(kept, item)
+				}
+			}
+			items = kept
+		}
 		return attnListResult{Items: items}, nil
 	}
 }
@@ -146,6 +156,9 @@ func fleetAttentionGetHandler(store *Store, graphStore *scope.GraphStore) rpc.Ha
 			return nil, cascade.New(cascade.KindInvalidInput, "supervision: fleet.attention.get: id is required")
 		}
 		item, err := store.Get(ctx, p.ID)
+		if visible, scoped := callerSessionFilter(ctx); scoped && (err != nil || !visible(item)) {
+			return nil, errAttnScope
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -170,6 +183,11 @@ func fleetAttentionAckHandler(store *Store) rpc.HandlerFunc {
 		}
 		if p.ID == "" {
 			return nil, cascade.New(cascade.KindInvalidInput, "supervision: fleet.attention.ack: id is required")
+		}
+		if visible, scoped := callerSessionFilter(ctx); scoped {
+			if current, err := store.Get(ctx, p.ID); err != nil || !visible(current) {
+				return nil, errAttnScope
+			}
 		}
 		item, err := store.Ack(ctx, p.ID)
 		if err != nil {
@@ -196,4 +214,22 @@ func scopeVisible(ref ScopeRef, visible []ScopeRef) bool {
 		}
 	}
 	return false
+}
+
+// errAttnScope is the one refusal a principal receives for an item outside
+// its session subtree, whether the item exists or not.
+var errAttnScope = cascade.New(cascade.KindPermissionDenied, "supervision: attention item outside caller scope")
+
+// callerSessionFilter returns the item filter for a principal caller: an
+// item is visible when its SourceRef is a session the dispatch's
+// event-visibility predicate admits (the caller's session subtree). scoped
+// is false for the owner. A principal dispatch with no predicate installed
+// sees nothing.
+func callerSessionFilter(ctx context.Context) (func(AttentionItem) bool, bool) {
+	c, ok := principal.CallerFrom(ctx)
+	if !ok || c.Principal == nil {
+		return nil, false
+	}
+	pred, has := rpc.EventVisibleFrom(ctx)
+	return func(item AttentionItem) bool { return has && pred(item.SourceRef, "") }, true
 }

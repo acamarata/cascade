@@ -40,7 +40,9 @@ import (
 	"context"
 	"encoding/json"
 	goruntime "runtime"
+	"sync"
 
+	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -100,6 +102,11 @@ func RegisterHandlers(registry *rpc.Registry, store *Store) {
 		if err != nil {
 			return nil, err
 		}
+		if c, ok := principal.CallerFrom(ctx); ok && c.Principal != nil {
+			if records, err = store.subtreeOnly(ctx, c.Principal.SessionID, records); err != nil {
+				return nil, err
+			}
+		}
 		return listResult{Sessions: records}, nil
 	})
 }
@@ -145,4 +152,140 @@ func (c *Client) List(ctx context.Context, filter Filter) ([]SessionRecord, erro
 		return nil, cascade.Wrap(cascade.KindInternal, err, "sessions: fleet.sessions.list failed")
 	}
 	return resp.Sessions, nil
+}
+
+// errSessionScope is the one refusal a principal receives for a session
+// outside its subtree, whether that session exists or not.
+var errSessionScope = cascade.New(cascade.KindPermissionDenied, "sessions: session outside caller scope")
+
+// subtreeOnly keeps the records in root's subtree, resolving ancestry from
+// one scan of every stored session.
+func (s *Store) subtreeOnly(ctx context.Context, root string, records []SessionRecord) ([]SessionRecord, error) {
+	all, err := s.List(ctx, Filter{})
+	if err != nil {
+		return nil, err
+	}
+	parents := make(map[string]string, len(all))
+	for _, rec := range all {
+		if rec.ParentSessionID != nil {
+			parents[rec.SessionID] = *rec.ParentSessionID
+		}
+	}
+	lookup := func(id string) (string, bool) { p, ok := parents[id]; return p, ok }
+	out := []SessionRecord{}
+	for _, rec := range records {
+		if inSubtree(root, rec.SessionID, lookup) {
+			out = append(out, rec)
+		}
+	}
+	return out, nil
+}
+
+// SessionBinding names the session-addressed verbs a principal is bound
+// to: Methods carry a session_id that must lie in the caller's subtree;
+// Creator is the one method that may create a new session, for the event
+// types in StartEvents.
+type SessionBinding struct {
+	Methods     []string
+	Creator     string
+	StartEvents []string
+}
+
+// sessionRef is the part of a bound method's params this binding reads.
+type sessionRef struct {
+	SessionID string `json:"session_id"`
+	EventType string `json:"event_type"`
+}
+
+// ScopeMiddleware confines a principal to its session subtree. On every
+// principal dispatch it installs the Visibility predicate (rpc.WithEventVisible)
+// for handlers that filter by session; on a bound method it refuses a
+// session_id outside the subtree before the handler runs. A principal can
+// create only its own daemon-minted session, linked to its minted parent; it
+// never creates another id, so it cannot claim an id another entity uses. A
+// start event never drops an existing parent link, for any caller. Bound
+// calls are serialized, so admission, creation and linking are one step and
+// no concurrent update writes back a record without its new parent link.
+func ScopeMiddleware(store *Store, b SessionBinding) rpc.MiddlewareFunc {
+	bound := make(map[string]bool, len(b.Methods))
+	for _, m := range b.Methods {
+		bound[m] = true
+	}
+	starts := make(map[string]bool, len(b.StartEvents))
+	for _, e := range b.StartEvents {
+		starts[e] = true
+	}
+	var startMu sync.Mutex // serializes every bound call
+	return func(method string, next rpc.HandlerFunc) rpc.HandlerFunc {
+		return func(ctx context.Context, raw json.RawMessage) (any, error) {
+			c, ok := principal.CallerFrom(ctx)
+			isPrincipal := ok && c.Principal != nil
+			if isPrincipal {
+				ctx = rpc.WithEventVisible(ctx, store.Visibility(*c.Principal))
+			}
+			if !bound[method] {
+				return next(ctx, raw)
+			}
+			var ref sessionRef
+			refErr := json.Unmarshal(raw, &ref)
+			start := refErr == nil && method == b.Creator && starts[ref.EventType]
+			startMu.Lock()
+			defer startMu.Unlock()
+			if !isPrincipal {
+				if start {
+					return store.startSession(ctx, ref.SessionID, "", raw, next)
+				}
+				return next(ctx, raw)
+			}
+			if refErr != nil {
+				return nil, errSessionScope
+			}
+			return store.bindSession(ctx, *c.Principal, ref, start, raw, next)
+		}
+	}
+}
+
+// bindSession admits a principal's bound call only for its own session or a
+// descendant. Its own session, once started, is linked to its minted parent.
+func (s *Store) bindSession(ctx context.Context, p principal.Principal, ref sessionRef, start bool, raw json.RawMessage, next rpc.HandlerFunc) (any, error) {
+	if p.SessionID == "" || !inSubtree(p.SessionID, ref.SessionID, s.parentLookup(ctx)) {
+		return nil, errSessionScope
+	}
+	if !start {
+		return next(ctx, raw)
+	}
+	parent := ""
+	if ref.SessionID == p.SessionID {
+		parent = p.ParentSessionID
+	}
+	return s.startSession(ctx, ref.SessionID, parent, raw, next)
+}
+
+// startSession runs a start event and then restores the session's parent
+// link: the prior parent when the session already existed, else parent.
+// The start event's own Upsert carries no parent field. A link that would
+// close a cycle (parent already under id) is never written.
+func (s *Store) startSession(ctx context.Context, id, parent string, raw json.RawMessage, next rpc.HandlerFunc) (any, error) {
+	if prior, err := s.getLocked(ctx, id); err == nil {
+		parent = ""
+		if prior.ParentSessionID != nil {
+			parent = *prior.ParentSessionID
+		}
+	}
+	res, err := next(ctx, raw)
+	if err != nil || parent == "" || inSubtree(id, parent, s.parentLookup(ctx)) {
+		return res, err
+	}
+	rec, err := s.getLocked(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if rec.ParentSessionID != nil && *rec.ParentSessionID == parent {
+		return res, nil
+	}
+	rec.ParentSessionID = &parent
+	if err := s.Upsert(ctx, rec); err != nil {
+		return nil, err
+	}
+	return res, nil
 }

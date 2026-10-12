@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"sync"
 
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -96,6 +97,8 @@ type RememberResult struct {
 //     indexed projection is derived state and a later ticket's query path.
 //   - memory.forget tombstones exactly one record. See ForgetResult and
 //     Forget's own doc comment for precisely what that removes and leaves.
+//   - a caller principal is confined to records attributed to its project
+//     scope (scope_attr.go); the owner view is unchanged.
 //   - memory.list pages live records in canonical-address order.
 //
 // # Error contracts
@@ -115,6 +118,9 @@ type Handler struct {
 	// result which of the two it was, and never claims the pipeline's
 	// guarantees without the pipeline.
 	forget Forgetter
+	// writeMu makes a scope check and the write or forget it admits one
+	// step, so a concurrent create cannot slip between them.
+	writeMu sync.Mutex
 }
 
 // HandlerOption configures a Handler at construction. It is a variadic
@@ -150,7 +156,7 @@ func NewHandler(store MemoryStore, clk Clock, opts ...HandlerOption) *Handler {
 func (h *Handler) Register(r *rpc.Registry) {
 	r.Register(MethodRemember, h.Remember)
 	r.Register(MethodRecall, h.Recall)
-	r.Register(MethodForget, h.Forget)
+	r.Register(MethodForget, h.scopedForget)
 	r.Register(MethodList, h.List)
 }
 
@@ -172,6 +178,11 @@ func (h *Handler) Remember(ctx context.Context, params json.RawMessage) (any, er
 	}
 	entry, err := h.entryFrom(p)
 	if err != nil {
+		return nil, err
+	}
+	h.writeMu.Lock()
+	defer h.writeMu.Unlock()
+	if err := h.attribute(ctx, &entry); err != nil {
 		return nil, err
 	}
 	if err := h.store.Write(ctx, entry); err != nil {

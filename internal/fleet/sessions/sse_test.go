@@ -1,15 +1,8 @@
-// Purpose: SSEHandler's required unit tests, driving a REAL
-//
-//	internal/events.Bus (Art.2): prelude headers, wire-format fields
-//	(event/data/id/retry), topic validation, heartbeat, and clean
-//	disconnect (no goroutine/subscription leak). Only "net/http/httptest"
-//	is imported, never "net/http" itself — the no-network-unit-lane gate
-//	(internal/build/hygiene.go) bans a bare "net"/"net/http" import in a
-//	non-integration _test.go file, mirroring internal/rpc/sse_test.go's
-//	own established pattern (this ticket's brief names it explicitly).
-//	The REAL independent-SSE-client conformance evidence lives in
-//	sse_integration_test.go (behind the integration build tag); this file
-//	is secondary/unit-level coverage plus the goroutine-leak proof.
+// Purpose: SSEHandler's unit tests over a REAL internal/events.Bus (Art.2):
+// prelude headers, wire fields, topic validation, heartbeat, clean
+// disconnect, and the per-event visibility predicate. Only
+// "net/http/httptest" is imported (no-network unit-lane gate); the real
+// SSE-client conformance evidence is sse_integration_test.go.
 //
 // SPORT: internal.fleet.sessions.SSEHandler/ADDED (P1-E12-W3-S24-T3).
 package sessions_test
@@ -25,6 +18,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/fleet/sessions"
+	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/internal/testkit"
 )
@@ -133,14 +127,9 @@ func TestSessionSSE_WireFormat_EventDataIDRetry(t *testing.T) {
 	}
 }
 
-// TestSessionSSE_LaneHealth_DistinctEventOnSameStream proves R-16.78 §2's
-// ruling end to end over the REAL *events.Bus and REAL SSEHandler this
-// file already drives for session-changed events (no fake bus, no fake
-// handler): a LaneHealthChangedKind event published via
-// PublishLaneHealth arrives on the SAME connection, as its OWN "event:"
-// name, alongside a session-changed event on the same subscription --
-// one stream, two distinguishable event types, exactly the ruling's
-// requirement.
+// TestSessionSSE_LaneHealth_DistinctEventOnSameStream proves R-16.78 §2 over
+// the REAL bus and handler: a LaneHealthChangedKind event arrives on the SAME
+// connection under its OWN "event:" name, beside a session-changed event.
 func TestSessionSSE_LaneHealth_DistinctEventOnSameStream(t *testing.T) {
 	h, bus, _ := newTestSSEHandler(t)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -188,15 +177,9 @@ func TestPublishLaneHealth_ZeroValueNotOmitted(t *testing.T) {
 	}
 }
 
-// NOTE: ServeHTTP's "streaming not supported" (!canFlush) branch is not
-// unit-tested here: proving it needs a http.ResponseWriter that does NOT
-// satisfy http.Flusher, which requires naming the http.ResponseWriter
-// type — an import of "net/http" itself, banned in a non-integration
-// _test.go file by the no-network-unit-lane gate (this file may only
-// import "net/http/httptest", per its own package doc above). That
-// branch is a one-line defensive refusal with no observable behavior
-// beyond the status code; internal/rpc/sse_test.go carries the identical
-// gap for the same reason.
+// NOTE: the !canFlush branch is not unit-tested: it needs a writer typed as
+// http.ResponseWriter, a "net/http" import this unit-lane file may not have
+// (internal/rpc/sse_test.go carries the same gap).
 
 func TestSessionSSE_SubscribeError_500(t *testing.T) {
 	h, bus, _ := newTestSSEHandler(t)
@@ -281,5 +264,36 @@ func TestSessionSSE_ContextCancel_TerminatesCleanly(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("ServeHTTP did not terminate on context deadline")
+	}
+}
+
+// TestSSEStreamAppliesEventVisible: a predicate on the stream context admits
+// only its sessions and skips an event naming none; no predicate writes all.
+func TestSSEStreamAppliesEventVisible(t *testing.T) {
+	onlyA := func(id, _ string) bool { return id == "a" }
+	for name, pred := range map[string]func(string, string) bool{"predicate": onlyA, "owner": nil} {
+		h, bus, _ := newTestSSEHandler(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		if pred != nil {
+			ctx = rpc.WithEventVisible(ctx, pred)
+		}
+		w, done := runSSE(ctx, h, "?topic=fleet.sessions")
+		waitFor(t, func() bool { _, _, wrote := w.snapshot(); return wrote })
+		_, errB := bus.Publish(ctx, sessions.Topic, "fleet.sessions.changed", "s:b", []byte(`{"session_id":"b"}`))
+		errL := sessions.PublishLaneHealth(ctx, bus, sessions.LaneHealth{LaneID: "lane-1"})
+		_, errA := bus.Publish(ctx, sessions.Topic, "fleet.sessions.changed", "s:a", []byte(`{"session_id":"a"}`))
+		if errB != nil || errL != nil || errA != nil {
+			t.Fatal(errB, errL, errA)
+		}
+		// "a" is published last, so once it is written every earlier event was handled.
+		waitFor(t, func() bool { _, body, _ := w.snapshot(); return strings.Contains(body, `"session_id":"a"`) })
+		cancel()
+		<-done
+		_, body, _ := w.snapshot()
+		hidden := strings.Contains(body, `"session_id":"b"`) || strings.Contains(body, "lane-1")
+		owner := strings.Contains(body, `"session_id":"b"`) && strings.Contains(body, "lane-1")
+		if (pred != nil && hidden) || (pred == nil && !owner) {
+			t.Errorf("%s stream:\n%s", name, body)
+		}
 	}
 }

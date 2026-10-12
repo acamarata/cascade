@@ -120,6 +120,43 @@ from the tree learns of the deletion by scanning it, without needing a
 previous listing to compare against. Writing the same name again removes
 the tombstone and brings the name back into use.
 
+### Who can see a record
+
+The daemon serves `memory.remember`, `memory.recall`, `memory.list` and
+`memory.forget` to two kinds of caller: the owner CLI, and a caller
+principal (a daemon-minted credential bound to one project scope, such as
+`project:demo`). Every other memory verb (`memory.consolidate`,
+`memory.review.*`, `memory.soul.*`) is owner-only. A call with no caller
+identity is refused.
+
+- **Attribution is written once.** `memory.remember` from a principal
+  files the new record under the principal's scope in `scope_ref`. A
+  later write never changes that value: a principal may rewrite only a
+  record already filed under its own scope, and an owner rewrite keeps
+  the stored `scope_ref`. Records the owner creates are filed under
+  `local`.
+- **A principal sees only its own scope.** `memory.recall` and
+  `memory.list` return to a principal only records whose `scope_ref` is
+  exactly its scope. Records filed under any other value, including
+  records written before attribution existed, are never returned. Paging
+  counts only those records, and a principal's result never names a
+  record the store could not read.
+- **The personal kinds stay private.** `user` and `feedback` records are
+  never returned to a principal, even when filed under its scope, and a
+  principal cannot write one.
+- **A declared scope is not authority.** `recall` and `list` accept an
+  optional `scope` parameter. From a principal it must equal the
+  principal's own scope or the call is refused; from the owner it narrows
+  the result to that scope.
+- **Refusals are uniform.** A principal's `memory.forget` of a record
+  outside its scope, unattributed or absent gets one permission-denied
+  refusal, so the refusal does not tell them apart. A `memory.remember`
+  over a record outside its scope gets the same refusal. In both cases
+  the record is left unchanged. Record names share one namespace, so a
+  principal can still learn that a name is taken by a refused remember.
+
+The owner CLI view is unchanged by any of this.
+
 ## What is authoritative
 
 The files are. Anything else that holds record data, including a search
