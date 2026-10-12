@@ -46,9 +46,11 @@ func NewNotifier(queues *queueSet, clock runtime.Clock) *Notifier {
 
 // Deliver validates n's required scope fields for its resolved Class,
 // assigns Timestamp, and enqueues n by Priority. It returns
-// errMissingScopeFields for an Addressed Notification with no
-// TargetSession, or a Scoped Notification with neither OriginScope nor
-// TargetScope set.
+// errMissingScopeFields for an Addressed Notification that sets neither
+// TargetSession nor TargetPrincipal, or a Scoped Notification with neither
+// OriginScope nor TargetScope set, and errAddressedTargets for an Addressed
+// Notification that sets both targets or any other Class that sets
+// TargetPrincipal.
 func (nf *Notifier) Deliver(ctx context.Context, n Notification) error {
 	n, err := nf.prepare(ctx, n)
 	if err != nil {
@@ -81,20 +83,37 @@ func (nf *Notifier) prepare(ctx context.Context, n Notification) (Notification, 
 	if err := ctx.Err(); err != nil {
 		return n, cascade.Wrap(cascade.KindCanceled, err, "notify: Deliver canceled")
 	}
+	if err := validateTargets(n); err != nil {
+		return n, err
+	}
+	n.Timestamp = nf.clock.Now()
+	return n, nil
+}
+
+// validateTargets checks n's scope and target fields for its resolved Class:
+// an Addressed item names exactly one of TargetSession and TargetPrincipal, a
+// Scoped item names a scope, and only an Addressed item may name a principal.
+func validateTargets(n Notification) error {
 	switch n.Class.Resolve() {
 	case ClassAddressed:
-		if n.TargetSession == "" {
-			return n, errMissingScopeFields
+		switch {
+		case n.TargetSession == "" && n.TargetPrincipal == "":
+			return errMissingScopeFields
+		case n.TargetSession != "" && n.TargetPrincipal != "":
+			return errAddressedTargets
 		}
+		return nil
 	case ClassScoped:
 		if n.OriginScope == "" && n.TargetScope == "" {
-			return n, errMissingScopeFields
+			return errMissingScopeFields
 		}
 	case ClassGlobalCritical, classUnresolvable:
 		// GlobalCritical needs no scope fields; classUnresolvable is
 		// listed only because Resolve()'s return type still enumerates
 		// it — Resolve() never actually produces it here.
 	}
-	n.Timestamp = nf.clock.Now()
-	return n, nil
+	if n.TargetPrincipal != "" {
+		return errAddressedTargets
+	}
+	return nil
 }

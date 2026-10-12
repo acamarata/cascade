@@ -88,6 +88,9 @@ type daemonRuntime struct {
 	Policy      *policyWiring
 	LogProvider *runtime.LogProvider
 	Daemon      daemonDeps
+	// Notify is the one notification runtime; the notify registration
+	// (phaseSupervised, Order 5) sets it for every later registration.
+	Notify *daemon.NotifyRuntime
 }
 
 // daemonRegistration is one subsystem's wiring step. Name must be unique and

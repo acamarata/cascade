@@ -113,29 +113,49 @@ func NewInbox() *Inbox {
 }
 
 // record stores notif (called by the dispatch loop after every fan-out
-// attempt, delivered or not).
+// attempt, delivered or not). A later notif reusing an id updates the record
+// only when it carries the same addressing; it can never re-address it.
 func (ib *Inbox) record(notif Notification) {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
 	if existing, ok := ib.records[notif.ID]; ok {
-		existing.n = notif
+		if sameAddressing(existing.n, notif) {
+			existing.n = notif
+		}
 		return
 	}
 	ib.records[notif.ID] = &inboxRecord{n: notif, ackedBy: make(map[string]bool)}
 }
 
 // recordWithheld increments sessionID's withheld count for notif without
-// making notif discoverable to that session.
+// making notif discoverable to that session. A principal-addressed notif is
+// never a session candidate, so it is stored but counted for no session.
 func (ib *Inbox) recordWithheld(notif Notification, sessionID string) {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
-	if _, ok := ib.records[notif.ID]; !ok {
+	if rec, ok := ib.records[notif.ID]; !ok {
 		ib.records[notif.ID] = &inboxRecord{n: notif, ackedBy: make(map[string]bool)}
+	} else if !sameAddressing(rec.n, notif) {
+		return
 	}
-	ib.withheldCounts[sessionID]++
+	if notif.TargetPrincipal == "" {
+		ib.withheldCounts[sessionID]++
+	}
 }
 
-// recordExpired marks notif as expired without fanning it out.
+// sessionRecord returns id's record for a session query. A
+// principal-addressed record is reported unknown: the session surface never
+// learns that it exists (Service.ReadAddressed is its only reader).
+func (ib *Inbox) sessionRecord(id string) (*inboxRecord, bool) {
+	rec, found := ib.records[id]
+	if !found || rec.n.TargetPrincipal != "" {
+		return nil, false
+	}
+	return rec, true
+}
+
+// recordExpired marks notif as expired without fanning it out. A reused id
+// with different addressing never expires the record already stored.
 func (ib *Inbox) recordExpired(notif Notification) {
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
@@ -143,6 +163,8 @@ func (ib *Inbox) recordExpired(notif Notification) {
 	if !ok {
 		rec = &inboxRecord{n: notif, ackedBy: make(map[string]bool)}
 		ib.records[notif.ID] = rec
+	} else if !sameAddressing(rec.n, notif) {
+		return
 	}
 	rec.expired = true
 }
@@ -157,6 +179,9 @@ func (ib *Inbox) List(_ context.Context, session SessionScopeRef, opts InboxOpts
 	var out []Notification
 	counts := Counts{Withheld: ib.withheldCounts[session.SessionID]}
 	for _, rec := range ib.records {
+		if rec.n.TargetPrincipal != "" {
+			continue
+		}
 		counts.Total++
 		if rec.expired {
 			counts.Expired++
@@ -184,7 +209,7 @@ func (ib *Inbox) Read(ctx context.Context, session SessionScopeRef, id string) (
 	}
 	ib.mu.RLock()
 	defer ib.mu.RUnlock()
-	rec, ok := ib.records[id]
+	rec, ok := ib.sessionRecord(id)
 	if !ok {
 		return Notification{}, ErrNotificationUnknown
 	}
@@ -204,7 +229,7 @@ func (ib *Inbox) Ack(ctx context.Context, session SessionScopeRef, id string) er
 	}
 	ib.mu.Lock()
 	defer ib.mu.Unlock()
-	rec, ok := ib.records[id]
+	rec, ok := ib.sessionRecord(id)
 	if !ok {
 		return ErrNotificationUnknown
 	}
@@ -241,4 +266,9 @@ func (ib *Inbox) Expire(now time.Time) int {
 		}
 	}
 	return swept
+}
+
+// sameAddressing reports whether a and b share Class and both targets.
+func sameAddressing(a, b Notification) bool {
+	return a.Class == b.Class && a.TargetPrincipal == b.TargetPrincipal && a.TargetSession == b.TargetSession
 }

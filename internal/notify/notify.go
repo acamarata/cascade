@@ -159,9 +159,19 @@ type Notification struct {
 	// for a Scoped Notification.
 	OriginScope string
 	TargetScope string
-	// TargetSession is required for an Addressed Notification: the exact
-	// session ID that alone may receive it.
+	// TargetSession addresses an Addressed Notification to the exact
+	// session ID that alone may receive it. An Addressed Notification sets
+	// exactly one of TargetSession and TargetPrincipal (Notifier.Deliver).
 	TargetSession string
+	// TargetPrincipal addresses an Addressed Notification to one caller
+	// principal ID, or to the owner CLI (OwnerCLITarget). Such an item is
+	// never fanned out to a session subscriber nor listed by the session
+	// Inbox; only Service.ReadAddressed returns it, and only to that caller.
+	TargetPrincipal string
+	// Kind is an open vocabulary naming what the item reports (for example
+	// "delegation.result"). Routing never reads it: an unknown value is
+	// carried unchanged and a reader that does not know it ignores it.
+	Kind string
 	// TargetTask optionally narrows a Scoped Notification further; it is
 	// informational only in this ticket (consumed by future surfaces).
 	TargetTask string
@@ -202,6 +212,9 @@ type Service struct {
 	Inbox      *Inbox
 	Notifier   *Notifier
 	Router     *NotificationRouter
+
+	// clock judges expiry for the addressed read-back (address.go).
+	clock runtime.Clock
 }
 
 // NewService wires one Registry/Dispatcher/Inbox/Notifier/Router set from
@@ -221,5 +234,6 @@ func NewService(cfg Config, clock runtime.Clock, log *slog.Logger) *Service {
 		Inbox:      inbox,
 		Notifier:   NewNotifier(queues, clock),
 		Router:     NewNotificationRouter(queues, clock, log),
+		clock:      clock,
 	}
 }

@@ -94,6 +94,11 @@ func ScopeDeliveryPredicate(session CandidateSession, n Notification) bool {
 // discoverability contract; inbox.go's List/Read/Ack call it before a
 // record is ever returned to a caller.
 func visible(session SessionScopeRef, rec *inboxRecord) bool {
+	if rec.n.TargetPrincipal != "" {
+		// A principal-addressed item reaches its addressee only through
+		// Service.ReadAddressed; no session view ever discovers it.
+		return false
+	}
 	switch rec.n.Visibility.Resolve() {
 	case VisibilityPrivate:
 		return rec.n.TargetSession != "" && rec.n.TargetSession == session.SessionID
