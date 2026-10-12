@@ -27,6 +27,7 @@ final class AppDelegateTests: XCTestCase {
     }
 
     func testStorageFailureClearsSnapshotAndBadgeAfterSuccessfulWrite() throws {
+        try skipWithoutDataProtection()
         try withPublishedSnapshot { delegate, shared, bytes in
             try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: shared.directory.path)
             defer {
@@ -38,6 +39,7 @@ final class AppDelegateTests: XCTestCase {
     }
 
     func testFetchFailureClearsSnapshotAndBadgeAndCanRecover() throws {
+        try skipWithoutDataProtection()
         try withPublishedSnapshot { delegate, shared, bytes in
             delegate.client.sse.onError?(.unavailable)
             assertFailedClosed(delegate, shared: shared, error: .unavailable)
@@ -72,6 +74,7 @@ final class AppDelegateTests: XCTestCase {
     }
 
     func testPanelRendersTheClientSnapshot() throws {
+        try skipWithoutDataProtection()
         try withPublishedSnapshot { delegate, _, _ in
             let snapshot = try XCTUnwrap(delegate.client.snapshot)
             XCTAssertEqual(delegate.panel?.table?.rows.count, snapshot.rows.count)
@@ -79,6 +82,7 @@ final class AppDelegateTests: XCTestCase {
     }
 
     func testSelfReportWrittenThroughTheDelegate() throws {
+        try skipWithoutDataProtection()
         let directory = scratch()
         let status = directory.appendingPathComponent("data/widget/widget-status.json")
         let shared = SharedContainer(directory: directory.appendingPathComponent("group"))

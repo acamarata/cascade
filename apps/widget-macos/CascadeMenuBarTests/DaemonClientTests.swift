@@ -59,6 +59,7 @@ final class DaemonClientTests: XCTestCase {
     }
 
     func testRealDaemonSeedSSEAndPollFallback() throws {
+        try skipWithoutDataProtection()
         let binary = try executable("CASCADE_TEST_BINARY")
         let seeder = try executable("CASCADE_TEST_SEEDER")
         let home = FileManager.default.temporaryDirectory.appendingPathComponent("w-" + String(UUID().uuidString.prefix(8)))

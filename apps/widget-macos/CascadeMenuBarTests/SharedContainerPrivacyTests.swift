@@ -1,8 +1,24 @@
 import XCTest
 @testable import CascadeMenuBar
 
+extension XCTestCase {
+    // The shared snapshot file is written with FileProtectionType.complete (the widget's privacy rule).
+    // A hosted macOS VM has no data protection to apply it, so the tests that publish a snapshot are skipped
+    // there; the owner-present widget parity run on a real Mac covers them.
+    func skipWithoutDataProtection() throws {
+        let manager = FileManager.default
+        let probe = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? manager.removeItem(at: probe) }
+        guard manager.createFile(atPath: probe.path, contents: nil) else { throw XCTSkip("no scratch file") }
+        try? manager.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: probe.path)
+        let applied = (try? manager.attributesOfItem(atPath: probe.path))?[.protectionKey] as? FileProtectionType
+        try XCTSkipUnless(applied == .complete, "this machine cannot apply FileProtectionType.complete")
+    }
+}
+
 final class SharedContainerPrivacyTests: XCTestCase {
     func testDeniedRenameInvalidatesPreviouslyPublishedBytes() throws {
+        try skipWithoutDataProtection()
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let shared = SharedContainer(directory: directory)
         let bytes = try ResultSlicer.result(in: WidgetModelsTests.fixture())
@@ -31,6 +47,7 @@ final class SharedContainerPrivacyTests: XCTestCase {
     }
 
     func testUnwritableDirectoryInvalidatesPreviouslyPublishedBytes() throws {
+        try skipWithoutDataProtection()
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let shared = SharedContainer(directory: directory)
         defer {
@@ -47,6 +64,7 @@ final class SharedContainerPrivacyTests: XCTestCase {
     }
 
     func testReloadsTimelinesAfterEachSuccessfulWriteOnly() throws {
+        try skipWithoutDataProtection()
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         var reloads = 0
         let shared = SharedContainer(directory: directory, reloadTimelines: { reloads += 1 })
@@ -68,6 +86,7 @@ final class SharedContainerPrivacyTests: XCTestCase {
     }
 
     func testRawRPCAndSSEBytesProtectionModeAndTruncation() throws {
+        try skipWithoutDataProtection()
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
