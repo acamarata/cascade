@@ -66,6 +66,12 @@ func wantSameEntry(t *testing.T, path string, before os.FileInfo) {
 func TestListenOwnerSocketHeldLockIsConflict(t *testing.T) {
 	path := filepath.Join(shortLockDir(t), "d.sock")
 	before := rawStaleSocket(t, path)
+	// A second link keeps the stale socket's inode allocated after the
+	// rebind unlinks it, so the fresh socket cannot reuse its number (ext4
+	// does) and the fresh-inode assertion below stays meaningful.
+	if err := os.Link(path, path+".keep"); err != nil {
+		t.Fatal(err)
+	}
 	holder, err := os.OpenFile(path+".lock", os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
 		t.Fatal(err)
