@@ -110,4 +110,6 @@ jobs:
 
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
-          allow-licenses: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, CC0-1.0
+          # LicenseRef-scancode-google-patent-license-golang is the Go project's patent grant, which scanners append to the
+          # BSD-3-Clause text of every golang.org/x/* module. It is a patent license in the project's favor, not a restriction.
+          allow-licenses: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, CC0-1.0, LicenseRef-scancode-google-patent-license-golang
