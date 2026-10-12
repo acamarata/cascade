@@ -35,6 +35,7 @@ package main
 
 import (
 	"context"
+	"github.com/acamarata/cascade/pkg/provider"
 	"os"
 	"strings"
 	"time"
@@ -184,8 +185,8 @@ func (f *githubCIFlags) mergeOptions() (ci.MergeOptions, error) {
 		Owner: owner, Repo: repo, PR: f.pr, Ref: f.ref,
 		MergeMethod: "squash", Subject: githubCISubject,
 		// The CLI thread carries no material above internal, and
-		// MergeOptions.dataClass floors it at internal in any case.
-		DataClass: policy.DataClassInternal,
+		// Explicitly classify this command for the internal destination ceiling.
+		DataClass: new(provider.SensitivityInternal),
 	}, nil
 }
 

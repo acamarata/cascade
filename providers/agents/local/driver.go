@@ -202,7 +202,7 @@ func (d *Driver) Spawn(ctx context.Context, job provider.AgentJobSpec) (provider
 	resp, err := d.model.Chat(ctx, modelSelection(""), provider.ChatRequest{
 		Messages: []provider.ChatMessage{{Role: "user", Content: job.Prompt}},
 	})
-	rec := &jobRecord{dataClass: job.DataClass.Resolved()}
+	rec := &jobRecord{dataClass: provider.JoinSensitivity(job.DataClass, provider.SensitivityPublic)}
 	if err != nil {
 		rec.state = provider.AgentRunFailed
 		rec.output = err.Error()

@@ -13,6 +13,7 @@ package ci
 import (
 	"context"
 	"encoding/json"
+	"github.com/acamarata/cascade/pkg/provider"
 	"path/filepath"
 	"testing"
 	"time"
@@ -142,7 +143,7 @@ func passedWait(owner, repo, ref string) WaitResult {
 }
 
 func baseMergeOptions() MergeOptions {
-	return MergeOptions{Owner: "acamarata", Repo: "cascade", PR: 42, Ref: "deadbeef", MergeMethod: "squash", Subject: testSubjectForMerge()}
+	return MergeOptions{DataClass: new(provider.SensitivityInternal), Owner: "acamarata", Repo: "cascade", PR: 42, Ref: "deadbeef", MergeMethod: "squash", Subject: testSubjectForMerge()}
 }
 
 // grantedFixture is newMergeFixture plus a written merge-on-green grant.

@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"github.com/acamarata/cascade/pkg/provider"
 	"os"
 	"testing"
 	"time"
@@ -64,7 +65,7 @@ func seedTestJob(t *testing.T, store *jobs.Store, id string, state jobs.JobState
 	t.Helper()
 	err := store.PutJob(context.Background(), jobs.Job{
 		ID: id, State: state, CreatedAt: 1, UpdatedAt: 1,
-		ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal,
+		ConsequenceClass: jobs.ConsequenceNormal, DataClass: new(provider.SensitivityInternal),
 	})
 	if err != nil {
 		t.Fatalf("PutJob(%s): %v", id, err)

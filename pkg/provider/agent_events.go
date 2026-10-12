@@ -88,7 +88,7 @@ func NormalizeEvent(raw DriverEvent) (AgentEvent, error) {
 			Text:      raw.Text,
 			State:     raw.State,
 			Err:       raw.Err,
-			DataClass: raw.DataClass.Resolved(),
+			DataClass: JoinSensitivity(raw.DataClass, SensitivityPublic),
 		}, nil
 	case DriverEventUnknown:
 		fallthrough

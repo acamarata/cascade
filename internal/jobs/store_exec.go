@@ -29,6 +29,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"github.com/acamarata/cascade/pkg/provider"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -141,24 +142,27 @@ func (s *Store) PutArtifact(ctx context.Context, a Artifact) error {
 	if !a.ConsequenceClass.Valid() {
 		return cascade.Newf(cascade.KindInvalidInput, "jobs: unknown consequence_class %q", string(a.ConsequenceClass))
 	}
-	if !a.DataClass.Valid() {
-		return cascade.Newf(cascade.KindInvalidInput, "jobs: unknown data_class %q", string(a.DataClass))
+	if a.DataClass == nil || !a.DataClass.Valid() {
+		return cascade.Newf(cascade.KindInvalidInput, "jobs: unknown data_class %q", "unset")
 	}
 	existing, ok, err := s.GetArtifact(ctx, a.ID)
 	if err != nil {
 		return err
 	}
-	if ok && existing.DataClass != a.DataClass {
+	if ok && *existing.DataClass != *a.DataClass {
+		storedName, _ := provider.DataClassName(*existing.DataClass)
+		className, _ := provider.DataClassName(*a.DataClass)
 		return cascade.Newf(cascade.KindIntegrity,
 			"jobs: artifact %q data_class is immutable: stored %q, refusing update to %q",
-			a.ID, existing.DataClass, a.DataClass)
+			a.ID, storedName, className)
 	}
+	className, _ := provider.DataClassName(*a.DataClass)
 	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO `+tableArtifact+` (id, job_id, execution_id, kind, blob_key, path, consequence_class, data_class)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, blob_key=excluded.blob_key,
 			path=excluded.path, consequence_class=excluded.consequence_class`,
-		a.ID, a.JobID, a.ExecutionID, a.Kind, a.BlobKey, a.Path, string(a.ConsequenceClass), string(a.DataClass))
+		a.ID, a.JobID, a.ExecutionID, a.Kind, a.BlobKey, a.Path, string(a.ConsequenceClass), className)
 	if err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "jobs: put artifact")
 	}
@@ -182,8 +186,10 @@ func (s *Store) GetArtifact(ctx context.Context, id string) (Artifact, bool, err
 	if a.ConsequenceClass, err = DecodeConsequenceClass(consequence); err != nil {
 		return Artifact{}, false, err
 	}
-	if a.DataClass, err = DecodeDataClass(data); err != nil {
+	tier, err := provider.ParseDataClassName(data)
+	if err != nil {
 		return Artifact{}, false, err
 	}
+	a.DataClass = new(tier)
 	return a, true, nil
 }

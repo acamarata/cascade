@@ -2,6 +2,7 @@ package evidence
 
 import (
 	"context"
+	"github.com/acamarata/cascade/pkg/provider"
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -11,7 +12,7 @@ func mustPutClaimWithEvidence(t *testing.T, s *Store, claimID string) Claim {
 	t.Helper()
 	c := Claim{
 		ID: claimID, Statement: "s", Type: ClaimObservedFact, Confidence: 0.5,
-		ProducedBy: ProducedBy{RunID: "run-1", LaneID: "lane-1"}, DataClass: DataClassInternal,
+		ProducedBy: ProducedBy{RunID: "run-1", LaneID: "lane-1"}, DataClass: new(provider.SensitivityInternal),
 	}
 	if err := s.PutClaim(context.Background(), c); err != nil {
 		t.Fatalf("PutClaim: %v", err)
@@ -19,7 +20,7 @@ func mustPutClaimWithEvidence(t *testing.T, s *Store, claimID string) Claim {
 	e := Evidence{
 		ID: claimID + "-EVD", ClaimID: claimID,
 		Source:      Source{Type: SourceFile, Path: "f.txt", Locator: Locator{Kind: LocatorBytes, Start: 0, End: 1}},
-		ContentHash: "h", DataClass: DataClassInternal,
+		ContentHash: "h", DataClass: new(provider.SensitivityInternal),
 	}
 	if err := s.PutEvidence(context.Background(), e); err != nil {
 		t.Fatalf("PutEvidence: %v", err)
@@ -31,7 +32,7 @@ func TestGetClaimWithoutEvidence(t *testing.T) {
 	s, _ := newStore(t)
 	c := Claim{
 		ID: "CLM-1", Statement: "s", Type: ClaimObservedFact, Confidence: 0.5,
-		ProducedBy: ProducedBy{RunID: "run-1"}, DataClass: DataClassInternal,
+		ProducedBy: ProducedBy{RunID: "run-1"}, DataClass: new(provider.SensitivityInternal),
 	}
 	if err := s.PutClaim(context.Background(), c); err != nil {
 		t.Fatalf("PutClaim: %v", err)
@@ -65,7 +66,7 @@ func TestDataClassImmutable(t *testing.T) {
 	mustPutClaimWithEvidence(t, s, "CLM-3")
 	updated := Claim{
 		ID: "CLM-3", Statement: "s2", Type: ClaimObservedFact, Confidence: 0.6,
-		ProducedBy: ProducedBy{RunID: "run-1"}, DataClass: DataClassSecret,
+		ProducedBy: ProducedBy{RunID: "run-1"}, DataClass: new(provider.SensitivityLocalOnly),
 	}
 	err := s.PutClaim(context.Background(), updated)
 	if !cascade.HasKind(err, cascade.KindConflict) {
@@ -156,7 +157,7 @@ func TestClaimStoreMethodsOnClosedDB(t *testing.T) {
 func validClaimFor(id string) Claim {
 	return Claim{
 		ID: id, Statement: "s", Type: ClaimObservedFact, Confidence: 0.5,
-		ProducedBy: ProducedBy{RunID: "run-1"}, DataClass: DataClassInternal,
+		ProducedBy: ProducedBy{RunID: "run-1"}, DataClass: new(provider.SensitivityInternal),
 	}
 }
 

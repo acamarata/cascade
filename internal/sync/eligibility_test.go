@@ -129,7 +129,7 @@ func TestTheZeroSensitivityResolvesRestrictively(t *testing.T) {
 	}{{egress.TierPublic, ""}, {unset, "sensitivity-restricted"}, {egress.SensitivityTier(9), "sensitivity-local-only"}} {
 		rec.Tier = tc.tier
 		if got := Eligible(rec, nodes.TierPairedDevice); got.Eligible != (tc.reason == "") || got.Reason != tc.reason {
-			t.Errorf("tier %d to a paired device = %+v, want reason %q", uint8(tc.tier), got, tc.reason)
+			t.Errorf("tier %v to a paired device = %+v, want reason %q", tc.tier, got, tc.reason)
 		}
 	}
 }

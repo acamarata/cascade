@@ -111,7 +111,7 @@ func rigJob(id string) jobs.Job {
 	return jobs.Job{
 		ID: id, State: jobs.JobStatePending, CreatedAt: 1, UpdatedAt: 1, Capabilities: []string{"code"},
 		MutableScope: "repo:/tmp/x", RiskClass: "normal", MinTaskClass: "code", NodeRequirements: "{}",
-		TimeoutSeconds: 60, CostCeiling: 1, Priority: 1, ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal,
+		TimeoutSeconds: 60, CostCeiling: 1, Priority: 1, ConsequenceClass: jobs.ConsequenceNormal, DataClass: new(provider.SensitivityInternal),
 	}
 }
 

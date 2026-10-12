@@ -15,6 +15,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"github.com/acamarata/cascade/pkg/provider"
 	"os"
 	"path/filepath"
 	"testing"
@@ -65,7 +66,7 @@ func seedStaleRunningJobDB(t *testing.T, paths fakeMemoryPaths, id string) {
 		ID: id, State: jobs.JobStateRunning, CreatedAt: 1, UpdatedAt: 1,
 		Capabilities: []string{"code"}, MutableScope: "repo:/tmp/x", RiskClass: "normal",
 		MinTaskClass: "code", NodeRequirements: "{}", TimeoutSeconds: 60, CostCeiling: 1.0,
-		Priority: 1, ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal,
+		Priority: 1, ConsequenceClass: jobs.ConsequenceNormal, DataClass: new(provider.SensitivityInternal),
 	}
 	if err := store.PutJob(ctx, job); err != nil {
 		t.Fatalf("seed job: %v", err)

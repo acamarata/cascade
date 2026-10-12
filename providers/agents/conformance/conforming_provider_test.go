@@ -4,7 +4,7 @@
 //	CompliancePosture, distinct process-group identity per job, an
 //	observable Cancel state transition, a context-bounded Collect, and a
 //	CollectResult.DataClass computed through the real
-//	provider.JoinDataClass) rather than one merely permissive enough to
+//	provider.JoinSensitivity) rather than one merely permissive enough to
 //	pass. Running Suite against it IN-PROCESS (inprocess_test.go) attributes
 //	real statement coverage to suite.go/cases_lifecycle.go/cases_security.go
 //	— something the existing child-process non-vacuity proof
@@ -207,7 +207,7 @@ func (p *conformingProvider) Cancel(_ context.Context, id provider.AgentJobID) e
 // background process, so there is nothing to wait for beyond ctx) and
 // returns a CollectResult whose Output is derived from the job's identity
 // and prompt LENGTH only, never the prompt's content, and whose DataClass
-// is the real provider.JoinDataClass of the spec's declared class with
+// is the real provider.JoinSensitivity of the spec's declared class with
 // what execution observed — never a hardcoded most-restrictive constant.
 func (p *conformingProvider) Collect(ctx context.Context, id provider.AgentJobID) (provider.CollectResult, error) {
 	p.mu.Lock()
@@ -231,7 +231,7 @@ func (p *conformingProvider) Collect(ctx context.Context, id provider.AgentJobID
 		JobID:     id,
 		Output:    fmt.Sprintf("job %s completed processing %d bytes of prompt", id, len(job.spec.Prompt)),
 		Artifacts: job.artifacts,
-		DataClass: provider.JoinDataClass(job.spec.DataClass, observed),
+		DataClass: provider.JoinSensitivity(job.spec.DataClass, observed),
 	}, nil
 }
 

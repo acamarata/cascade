@@ -2,6 +2,7 @@ package evidence
 
 import (
 	"context"
+	"github.com/acamarata/cascade/pkg/provider"
 	"strings"
 	"testing"
 
@@ -19,7 +20,7 @@ func setupPagingFixture(t *testing.T) (*Fetcher, *Store) {
 
 	if err := store.PutClaim(ctx, Claim{
 		ID: "CLM-PAGE", Statement: "s", Type: ClaimObservedFact, Confidence: 1,
-		ProducedBy: ProducedBy{RunID: "run-1"}, DataClass: DataClassInternal,
+		ProducedBy: ProducedBy{RunID: "run-1"}, DataClass: new(provider.SensitivityInternal),
 	}); err != nil {
 		t.Fatalf("PutClaim: %v", err)
 	}
@@ -28,7 +29,7 @@ func setupPagingFixture(t *testing.T) (*Fetcher, *Store) {
 		ID: "EVD-PAGE", ClaimID: "CLM-PAGE",
 		Source: Source{Type: SourceGit, Repository: repoDir, Commit: commit, Path: "big.txt",
 			Locator: Locator{Kind: LocatorBytes, Start: 0, End: len(content)}},
-		ContentHash: ContentHash([]byte(content)), DataClass: DataClassInternal,
+		ContentHash: ContentHash([]byte(content)), DataClass: new(provider.SensitivityInternal),
 	}
 	if err := store.PutEvidence(ctx, e); err != nil {
 		t.Fatalf("PutEvidence: %v", err)
@@ -96,7 +97,7 @@ func TestExpandClaimWithoutEvidence(t *testing.T) {
 	ctx := context.Background()
 	if err := store.PutClaim(ctx, Claim{
 		ID: "CLM-BARE", Statement: "s", Type: ClaimObservedFact, Confidence: 1,
-		ProducedBy: ProducedBy{RunID: "run-1"}, DataClass: DataClassInternal,
+		ProducedBy: ProducedBy{RunID: "run-1"}, DataClass: new(provider.SensitivityInternal),
 	}); err != nil {
 		t.Fatalf("PutClaim: %v", err)
 	}
@@ -111,7 +112,7 @@ func TestExpandInvalidatedClaimStillExpands(t *testing.T) {
 	ctx := context.Background()
 	if err := store.PutClaim(ctx, Claim{
 		ID: "CLM-INV", Statement: "s", Type: ClaimObservedFact, Confidence: 1,
-		ProducedBy: ProducedBy{RunID: "run-1"}, DataClass: DataClassInternal,
+		ProducedBy: ProducedBy{RunID: "run-1"}, DataClass: new(provider.SensitivityInternal),
 	}); err != nil {
 		t.Fatalf("PutClaim: %v", err)
 	}
@@ -119,7 +120,7 @@ func TestExpandInvalidatedClaimStillExpands(t *testing.T) {
 		ID: "EVD-INV", ClaimID: "CLM-INV",
 		Source: Source{Type: SourceGit, Repository: repoDir, Commit: commit, Path: "inv.txt",
 			Locator: Locator{Kind: LocatorLines, Start: 1, End: 1}},
-		ContentHash: ContentHash([]byte("hello")), DataClass: DataClassInternal,
+		ContentHash: ContentHash([]byte("hello")), DataClass: new(provider.SensitivityInternal),
 	}); err != nil {
 		t.Fatalf("PutEvidence: %v", err)
 	}

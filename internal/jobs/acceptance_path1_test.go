@@ -11,6 +11,7 @@ package jobs_test
 
 import (
 	"context"
+	"github.com/acamarata/cascade/pkg/provider"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/fleet/journal"
@@ -184,7 +185,7 @@ func seedJob(t *testing.T, rig *acceptanceRig, node jobs.DagNode) {
 	err := rig.store.PutJob(rig.ctx, jobs.Job{
 		ID: node.ID, State: jobs.JobStatePending, CreatedAt: 0, UpdatedAt: 0,
 		MutableScope: "docs/**", RiskClass: string(node.RiskClass), MinTaskClass: string(node.MinTaskClass),
-		ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal,
+		ConsequenceClass: jobs.ConsequenceNormal, DataClass: new(provider.SensitivityInternal),
 	})
 	if err != nil {
 		t.Fatalf("seed PutJob: %v", err)

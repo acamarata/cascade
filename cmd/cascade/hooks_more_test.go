@@ -22,6 +22,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"github.com/acamarata/cascade/pkg/provider"
 	"os"
 	"path/filepath"
 	"testing"
@@ -129,7 +130,7 @@ func TestCompletionPolicyGate_DefaultsEmptyRiskClassAndVerifyingTarget(t *testin
 	gate, _, store := setupCompletionGate(t)
 	job := jobs.Job{
 		ID: "job-verifying-no-risk", State: jobs.JobStateVerifying, CreatedAt: 1, UpdatedAt: 1,
-		ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal,
+		ConsequenceClass: jobs.ConsequenceNormal, DataClass: new(provider.SensitivityInternal),
 		// RiskClass deliberately left as the zero value.
 	}
 	if err := store.PutJob(context.Background(), job); err != nil {

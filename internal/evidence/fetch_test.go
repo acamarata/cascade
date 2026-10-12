@@ -9,6 +9,7 @@ package evidence
 import (
 	"bytes"
 	"context"
+	"github.com/acamarata/cascade/pkg/provider"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -64,7 +65,7 @@ func TestExpandResolvesAtRecordedCommit(t *testing.T) {
 		ID: "EVD-GIT", ClaimID: "CLM-GIT",
 		Source: Source{Type: SourceGit, Repository: repoDir, Commit: commit, Path: "file.txt",
 			Locator: Locator{Kind: LocatorLines, Start: 1, End: 2}},
-		ContentHash: ContentHash([]byte(full)), DataClass: DataClassInternal,
+		ContentHash: ContentHash([]byte(full)), DataClass: new(provider.SensitivityInternal),
 	}
 	if err := store.PutEvidence(ctx, e); err != nil {
 		t.Fatalf("PutEvidence: %v", err)
@@ -98,7 +99,7 @@ func TestExpandStaleEvidence(t *testing.T) {
 		// A content_hash that does NOT match "alpha" -- simulating a range
 		// whose recorded bytes no longer match what the commit actually
 		// holds (e.g. the row was written against a different capture).
-		ContentHash: ContentHash([]byte("not-alpha")), DataClass: DataClassInternal,
+		ContentHash: ContentHash([]byte("not-alpha")), DataClass: new(provider.SensitivityInternal),
 	}
 	if err := store.PutEvidence(ctx, e); err != nil {
 		t.Fatalf("PutEvidence: %v", err)
@@ -127,7 +128,7 @@ func TestFetchContentCapturedContentHashMismatch(t *testing.T) {
 		// CapturedRef does not parse to a valid provider.Hash, which
 		// exercises the malformed-ref path of fetchCaptured/parseCapturedRef.
 		CapturedRef: "artifact://not-a-real-artifact-id",
-		ContentHash: "whatever", DataClass: DataClassInternal,
+		ContentHash: "whatever", DataClass: new(provider.SensitivityInternal),
 	}
 	if err := store.PutEvidence(ctx, e); err != nil {
 		t.Fatalf("PutEvidence: %v", err)
@@ -157,7 +158,7 @@ func TestFetchContentCapturedSuccess(t *testing.T) {
 	e := Evidence{
 		ID: "EVD-FILE", ClaimID: "CLM-FILE",
 		Source:      Source{Type: SourceFile, Path: "f.txt", Locator: Locator{Kind: LocatorArtifact, ArtifactRef: capturedRef}},
-		ContentHash: ContentHash(data), DataClass: DataClassInternal, CapturedRef: capturedRef,
+		ContentHash: ContentHash(data), DataClass: new(provider.SensitivityInternal), CapturedRef: capturedRef,
 	}
 	if err := store.PutEvidence(ctx, e); err != nil {
 		t.Fatalf("PutEvidence: %v", err)

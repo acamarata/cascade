@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"github.com/acamarata/cascade/pkg/provider"
 	"testing"
 )
 
@@ -136,13 +137,13 @@ func TestArtifactDataClassImmutable(t *testing.T) {
 	}
 	a := Artifact{
 		ID: "art-1", JobID: j.ID, ExecutionID: e.ID, Kind: "diff", BlobKey: "blake3:abc", Path: "/tmp/x",
-		ConsequenceClass: ConsequenceNormal, DataClass: DataClassInternal,
+		ConsequenceClass: ConsequenceNormal, DataClass: new(provider.SensitivityInternal),
 	}
 	if err := s.PutArtifact(ctx, a); err != nil {
 		t.Fatalf("PutArtifact: %v", err)
 	}
 	changed := a
-	changed.DataClass = DataClassSecret
+	changed.DataClass = new(provider.SensitivityLocalOnly)
 	if err := s.PutArtifact(ctx, changed); err == nil {
 		t.Error("PutArtifact(changed data_class) = nil, want typed immutability error")
 	}
@@ -150,7 +151,7 @@ func TestArtifactDataClassImmutable(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("GetArtifact: got=%+v ok=%v err=%v", got, ok, err)
 	}
-	if got.DataClass != DataClassInternal {
+	if got.DataClass == nil || *got.DataClass != provider.SensitivityInternal {
 		t.Errorf("GetArtifact data_class = %q, want unchanged internal", got.DataClass)
 	}
 	// Same data_class, different consequence_class: allowed.
@@ -172,11 +173,11 @@ func TestPutArtifactRejectsUnknownClasses(t *testing.T) {
 	if err := s.PutExecution(ctx, e); err != nil {
 		t.Fatalf("PutExecution: %v", err)
 	}
-	bad := Artifact{ID: "art-bad", JobID: j.ID, ExecutionID: e.ID, ConsequenceClass: "bogus", DataClass: DataClassPublic}
+	bad := Artifact{ID: "art-bad", JobID: j.ID, ExecutionID: e.ID, ConsequenceClass: "bogus", DataClass: new(provider.SensitivityPublic)}
 	if err := s.PutArtifact(ctx, bad); err == nil {
 		t.Error("PutArtifact(unknown consequence_class) = nil, want error")
 	}
-	bad2 := Artifact{ID: "art-bad2", JobID: j.ID, ExecutionID: e.ID, ConsequenceClass: ConsequenceTrivial, DataClass: "bogus"}
+	bad2 := Artifact{ID: "art-bad2", JobID: j.ID, ExecutionID: e.ID, ConsequenceClass: ConsequenceTrivial, DataClass: new(provider.SensitivityTier(9))}
 	if err := s.PutArtifact(ctx, bad2); err == nil {
 		t.Error("PutArtifact(unknown data_class) = nil, want error")
 	}
@@ -230,7 +231,7 @@ func TestGetArtifactDecodeErrorOnBadStoredClasses(t *testing.T) {
 	if err := s.PutExecution(ctx, e); err != nil {
 		t.Fatalf("PutExecution: %v", err)
 	}
-	a := Artifact{ID: "art-raw-bad", JobID: j.ID, ExecutionID: e.ID, ConsequenceClass: ConsequenceNormal, DataClass: DataClassInternal}
+	a := Artifact{ID: "art-raw-bad", JobID: j.ID, ExecutionID: e.ID, ConsequenceClass: ConsequenceNormal, DataClass: new(provider.SensitivityInternal)}
 	if err := s.PutArtifact(ctx, a); err != nil {
 		t.Fatalf("PutArtifact: %v", err)
 	}

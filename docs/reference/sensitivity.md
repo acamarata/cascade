@@ -141,3 +141,31 @@ are a different concept or belong to another ticket, each with its reason.
 - Literals of `nodes.Requirement`, `nodes.ShipRequest` and
   `nodes.RequeueRequest` outside tests must set the tier explicitly, so no
   production placement relies on the restricted zero value.
+
+## Stored vocabulary
+
+Jobs, evidence, approval records, job RPC records, and policy trace rules retain their stored words.
+
+| Stored word | Sensitivity tier |
+| --- | --- |
+| public | Public |
+| internal | Internal |
+| confidential | Restricted |
+| secret | LocalOnly |
+
+`provider.DataClassName` and `provider.ParseDataClassName` are the single converter pair.
+Parsing is exact: case variants and vocabulary-1 words such as `restricted` and `local-only` refuse.
+Former data-class carriers use `*provider.SensitivityTier`: nil means unset. Evaluation uses
+`TierOrLocalOnly`, which maps nil and invalid values to LocalOnly. Stores and validation refuse
+unset classes. A nil destination ceiling still means no external destination; an invalid ceiling denies.
+Approval records retain signed text, and Claim/Evidence JSON retain an empty word for an unset class.
+The approval signer signs the record's word as given; verification refuses any word `ParseDataClassName` does not accept.
+The agent provider's value-typed DataClass alias keeps Restricted as its zero value.
+
+The typed tier-ops architecture gate checks Linux, macOS, and Windows packages, including test files. It rejects
+ordered tier comparisons, conversions out of the tier type, arithmetic and bitwise operations, tier-indexed
+tables, built-in `min`/`max`, `cmp.Compare`/`cmp.Less`, and generic instantiations that pass a tier for a
+type parameter whose constraint has type terms (such as `cmp.Ordered` or `~uint8`). Tier arguments to `Exec`, `Query`,
+and `QueryRow` methods (including their context variants) are rejected through every receiver type,
+including prepared statements and local interfaces.
+Use `MoreRestrictiveThan` or `JoinSensitivity` for ordering, and the converter pair at stored boundaries.

@@ -20,6 +20,7 @@
 package evidence
 
 import (
+	"github.com/acamarata/cascade/pkg/provider"
 	"time"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -120,15 +121,15 @@ type Verification struct {
 // later-invalidation flag: nil while the claim stands, set to the
 // injected clock's timestamp once the claim is retired.
 type Claim struct {
-	ID             string         `json:"id"`
-	Statement      string         `json:"statement"`
-	Type           ClaimType      `json:"type"`
-	Confidence     float64        `json:"confidence"`
-	ProducedBy     ProducedBy     `json:"produced_by"`
-	Verification   []Verification `json:"verification"`
-	Contradictions []string       `json:"contradictions"`
-	InvalidatedAt  *time.Time     `json:"invalidated_at,omitempty"`
-	DataClass      DataClass      `json:"data_class"`
+	ID             string                    `json:"id"`
+	Statement      string                    `json:"statement"`
+	Type           ClaimType                 `json:"type"`
+	Confidence     float64                   `json:"confidence"`
+	ProducedBy     ProducedBy                `json:"produced_by"`
+	Verification   []Verification            `json:"verification"`
+	Contradictions []string                  `json:"contradictions"`
+	InvalidatedAt  *time.Time                `json:"invalidated_at,omitempty"`
+	DataClass      *provider.SensitivityTier `json:"data_class"`
 }
 
 // NewClaimID mints a fresh claim identifier: ClaimIDPrefix plus the
@@ -156,8 +157,8 @@ func (c Claim) Validate() error {
 	if c.Confidence < 0 || c.Confidence > 1 {
 		return cascade.Newf(cascade.KindInvalidInput, "evidence: confidence %v is outside [0,1]", c.Confidence)
 	}
-	if !c.DataClass.Valid() {
-		return cascade.Newf(cascade.KindInvalidInput, "evidence: unknown data_class %q", string(c.DataClass))
+	if c.DataClass == nil || !c.DataClass.Valid() {
+		return cascade.Newf(cascade.KindInvalidInput, "evidence: unknown data_class %q", "unset")
 	}
 	if c.ProducedBy.RunID == "" {
 		return cascade.New(cascade.KindInvalidInput, "evidence: claim produced_by.run_id is required")

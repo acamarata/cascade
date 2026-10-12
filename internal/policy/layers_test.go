@@ -11,6 +11,7 @@ package policy
 import (
 	"context"
 	"errors"
+	"github.com/acamarata/cascade/pkg/provider"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/retrieval/corpus"
@@ -234,8 +235,8 @@ func TestDataClassLayerZeroUnconditional(t *testing.T) {
 		t.Fatalf("Grant: %v", err)
 	}
 	req := readRequest(L0)
-	req.DataClass = DataClassSecret
-	req.LaneMaxDataClass = DataClassPublic
+	req.DataClass = new(provider.SensitivityLocalOnly)
+	req.LaneMaxDataClass = new(provider.SensitivityPublic)
 
 	out, err := f.engine.Evaluate(ctx, req)
 	if !errors.Is(err, ErrDataClassDenied) {
@@ -250,7 +251,7 @@ func TestDataClassLayerZeroUnconditional(t *testing.T) {
 	}
 	// The same request under a lane that tolerates the class reaches the
 	// grant, which is what proves the refusal above was layer 0's doing.
-	req.LaneMaxDataClass = DataClassSecret
+	req.LaneMaxDataClass = new(provider.SensitivityLocalOnly)
 	if out, err = f.engine.Evaluate(ctx, req); err != nil || out.Layer != LayerStandingGrant {
 		t.Errorf("under a tolerant lane the request decided at %s (%v), want the grant", out.Layer, err)
 	}

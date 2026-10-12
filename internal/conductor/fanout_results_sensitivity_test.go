@@ -32,7 +32,7 @@ const legacyLegResult = `{"FanOutID":"f1","TaskID":"t1","LegIndex":2,"Attempt":1
 // an out-of-range tier does not marshal, and a stored record with an
 // unknown name or number is refused as KindIntegrity.
 func TestSensitivityCoversFanoutLegRecords(t *testing.T) {
-	for tier := provider.SensitivityRestricted; tier.Valid(); tier++ {
+	for _, tier := range []provider.SensitivityTier{provider.SensitivityRestricted, provider.SensitivityLocalOnly, provider.SensitivityInternal, provider.SensitivityPublic} {
 		in := LegResult{FanOutID: "f1", TaskID: "t1", LegIndex: 2, Attempt: 1, RequestDigest: "sha256:ab", Sensitivity: tier}
 		raw, err := json.Marshal(in)
 		if err != nil {

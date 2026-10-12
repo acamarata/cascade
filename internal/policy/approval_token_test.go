@@ -92,7 +92,7 @@ func sampleRecord() ApprovalRecord {
 		Scope:         "repo:/workspace",
 		Target:        ApprovalTarget{Node: "controller", Session: "S1", Task: "T1"},
 		Risk:          L2,
-		Sensitivity:   DataClassInternal,
+		Sensitivity:   "internal",
 		PolicyVersion: "2026-03-01",
 		Audience:      "controller",
 	}

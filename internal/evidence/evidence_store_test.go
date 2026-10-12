@@ -2,6 +2,7 @@ package evidence
 
 import (
 	"context"
+	"github.com/acamarata/cascade/pkg/provider"
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -11,7 +12,7 @@ func mustPutBareClaim(t *testing.T, s *Store, claimID string) {
 	t.Helper()
 	c := Claim{
 		ID: claimID, Statement: "s", Type: ClaimObservedFact, Confidence: 0.5,
-		ProducedBy: ProducedBy{RunID: "run-1"}, DataClass: DataClassInternal,
+		ProducedBy: ProducedBy{RunID: "run-1"}, DataClass: new(provider.SensitivityInternal),
 	}
 	if err := s.PutClaim(context.Background(), c); err != nil {
 		t.Fatalf("PutClaim: %v", err)
@@ -22,7 +23,7 @@ func TestPutEvidenceUnknownClaim(t *testing.T) {
 	s, _ := newStore(t)
 	e := Evidence{
 		ID: "EVD-1", ClaimID: "CLM-MISSING",
-		Source: Source{Type: SourceFile, Path: "f", Locator: Locator{Kind: LocatorBytes, Start: 0, End: 1}}, ContentHash: "h", DataClass: DataClassInternal,
+		Source: Source{Type: SourceFile, Path: "f", Locator: Locator{Kind: LocatorBytes, Start: 0, End: 1}}, ContentHash: "h", DataClass: new(provider.SensitivityInternal),
 	}
 	if err := s.PutEvidence(context.Background(), e); err != ErrClaimNotFound {
 		t.Fatalf("PutEvidence(unknown claim) = %v, want ErrClaimNotFound", err)
@@ -41,12 +42,12 @@ func TestEvidenceDataClassImmutable(t *testing.T) {
 	mustPutBareClaim(t, s, "CLM-7")
 	e := Evidence{
 		ID: "EVD-7", ClaimID: "CLM-7",
-		Source: Source{Type: SourceFile, Path: "f", Locator: Locator{Kind: LocatorBytes, Start: 0, End: 1}}, ContentHash: "h", DataClass: DataClassInternal,
+		Source: Source{Type: SourceFile, Path: "f", Locator: Locator{Kind: LocatorBytes, Start: 0, End: 1}}, ContentHash: "h", DataClass: new(provider.SensitivityInternal),
 	}
 	if err := s.PutEvidence(context.Background(), e); err != nil {
 		t.Fatalf("PutEvidence: %v", err)
 	}
-	e.DataClass = DataClassSecret
+	e.DataClass = new(provider.SensitivityLocalOnly)
 	err := s.PutEvidence(context.Background(), e)
 	if !cascade.HasKind(err, cascade.KindConflict) {
 		t.Fatalf("PutEvidence with changed data_class = %v, want typed conflict", err)
@@ -61,7 +62,7 @@ func TestEvidenceForClaimOrderedByID(t *testing.T) {
 			ID: id, ClaimID: "CLM-8",
 			Source: Source{Type: SourceGit, Repository: "/r", Commit: "c", Path: "p",
 				Locator: Locator{Kind: LocatorLines, Start: 1, End: 1}},
-			ContentHash: "h", DataClass: DataClassInternal,
+			ContentHash: "h", DataClass: new(provider.SensitivityInternal),
 		}
 		if err := s.PutEvidence(context.Background(), e); err != nil {
 			t.Fatalf("PutEvidence(%s): %v", id, err)
@@ -85,7 +86,7 @@ func TestEvidenceByIDSuccess(t *testing.T) {
 	e := Evidence{
 		ID: "EVD-BYID", ClaimID: "CLM-BYID",
 		Source:      Source{Type: SourceFile, Path: "f", Locator: Locator{Kind: LocatorBytes, Start: 0, End: 1}},
-		ContentHash: "h", DataClass: DataClassInternal,
+		ContentHash: "h", DataClass: new(provider.SensitivityInternal),
 	}
 	if err := s.PutEvidence(context.Background(), e); err != nil {
 		t.Fatalf("PutEvidence: %v", err)
@@ -109,7 +110,7 @@ func TestEvidenceStoreMethodsOnClosedDB(t *testing.T) {
 	e := Evidence{
 		ID: "EVD-ECLOSE", ClaimID: "CLM-ECLOSE",
 		Source:      Source{Type: SourceFile, Path: "f", Locator: Locator{Kind: LocatorBytes, Start: 0, End: 1}},
-		ContentHash: "h", DataClass: DataClassInternal,
+		ContentHash: "h", DataClass: new(provider.SensitivityInternal),
 	}
 	if err := s.PutEvidence(ctx, e); !cascade.HasKind(err, cascade.KindUnavailable) {
 		t.Errorf("PutEvidence on closed db = %v, want typed unavailable", err)

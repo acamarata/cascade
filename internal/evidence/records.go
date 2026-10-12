@@ -15,6 +15,7 @@ package evidence
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"github.com/acamarata/cascade/pkg/provider"
 	"time"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -76,13 +77,13 @@ type Source struct {
 // R-21.94 and R-21.86 add: an immutable DataClass and CapturedRef, the
 // artifact-store ref of the captured byte range (capture.go).
 type Evidence struct {
-	ID          string    `json:"id"`
-	ClaimID     string    `json:"claim_id"`
-	Source      Source    `json:"source"`
-	ContentHash string    `json:"content_hash"`
-	ObservedAt  time.Time `json:"observed_at"`
-	DataClass   DataClass `json:"data_class"`
-	CapturedRef string    `json:"captured_ref"`
+	ID          string                    `json:"id"`
+	ClaimID     string                    `json:"claim_id"`
+	Source      Source                    `json:"source"`
+	ContentHash string                    `json:"content_hash"`
+	ObservedAt  time.Time                 `json:"observed_at"`
+	DataClass   *provider.SensitivityTier `json:"data_class"`
+	CapturedRef string                    `json:"captured_ref"`
 }
 
 // NewEvidenceID mints a fresh evidence identifier: EvidenceIDPrefix plus
@@ -120,8 +121,8 @@ func (e Evidence) Validate() error {
 	if !e.Source.Type.Valid() {
 		return cascade.Newf(cascade.KindInvalidInput, "evidence: unknown source type %q", string(e.Source.Type))
 	}
-	if !e.DataClass.Valid() {
-		return cascade.Newf(cascade.KindInvalidInput, "evidence: unknown data_class %q", string(e.DataClass))
+	if e.DataClass == nil || !e.DataClass.Valid() {
+		return cascade.Newf(cascade.KindInvalidInput, "evidence: unknown data_class %q", "unset")
 	}
 	if e.ContentHash == "" {
 		return cascade.New(cascade.KindInvalidInput, "evidence: evidence content_hash is required")

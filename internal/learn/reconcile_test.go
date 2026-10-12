@@ -7,6 +7,7 @@ package learn
 
 import (
 	"context"
+	"github.com/acamarata/cascade/pkg/provider"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/jobs"
@@ -21,7 +22,7 @@ func baseJobForReconcile(id string) jobs.Job {
 		ID: id, State: jobs.JobStatePending, CreatedAt: 1, UpdatedAt: 6,
 		Capabilities: []string{"code"}, MutableScope: "repo:/tmp/x", RiskClass: "normal",
 		MinTaskClass: "code", NodeRequirements: "{}", TimeoutSeconds: 60, CostCeiling: 1.0,
-		Priority: 1, ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal,
+		Priority: 1, ConsequenceClass: jobs.ConsequenceNormal, DataClass: new(provider.SensitivityInternal),
 	}
 }
 

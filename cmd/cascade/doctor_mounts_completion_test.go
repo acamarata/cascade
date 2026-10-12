@@ -11,6 +11,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"github.com/acamarata/cascade/pkg/provider"
 	"os"
 	"path/filepath"
 	goruntime "runtime"
@@ -126,7 +127,7 @@ func seedJobsDB(t *testing.T, state jobs.JobState) string {
 		t.Fatalf("ApplyJobsSchema: %v", err)
 	}
 	err = jobs.NewStore(db).PutJob(context.Background(), jobs.Job{ID: "job-1", State: state, CreatedAt: 1, UpdatedAt: 1,
-		ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal})
+		ConsequenceClass: jobs.ConsequenceNormal, DataClass: new(provider.SensitivityInternal)})
 	if err != nil {
 		t.Fatalf("PutJob: %v", err)
 	}

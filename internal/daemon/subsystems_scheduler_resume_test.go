@@ -14,6 +14,7 @@ package daemon
 import (
 	"context"
 	"database/sql"
+	"github.com/acamarata/cascade/pkg/provider"
 	"path/filepath"
 	"testing"
 	"time"
@@ -60,7 +61,7 @@ func schedulerResumeTestJob(id string) jobs.Job {
 		ID: id, State: jobs.JobStateRunning, CreatedAt: 1, UpdatedAt: 1,
 		Capabilities: []string{"code"}, MutableScope: "repo:/tmp/x", RiskClass: "normal",
 		MinTaskClass: "code", NodeRequirements: "{}", TimeoutSeconds: 60, CostCeiling: 1.0,
-		Priority: 1, ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal,
+		Priority: 1, ConsequenceClass: jobs.ConsequenceNormal, DataClass: new(provider.SensitivityInternal),
 	}
 }
 

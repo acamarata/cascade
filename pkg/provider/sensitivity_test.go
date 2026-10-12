@@ -71,10 +71,10 @@ func TestParseSensitivityTierClosed(t *testing.T) {
 // member round-trips by name, an out-of-range value refuses to marshal, and
 // a failed unmarshal leaves local-only behind, not the zero value.
 func TestSensitivityTierTextRoundTrip(t *testing.T) {
-	for t0 := provider.SensitivityRestricted; t0.Valid(); t0++ {
+	for _, t0 := range []provider.SensitivityTier{provider.SensitivityRestricted, provider.SensitivityLocalOnly, provider.SensitivityInternal, provider.SensitivityPublic} {
 		b, err := t0.MarshalText()
 		if err != nil || string(b) != t0.String() {
-			t.Fatalf("MarshalText(%d) = %q, %v; want %q", uint8(t0), b, err, t0.String())
+			t.Fatalf("MarshalText(%v) = %q, %v; want %q", t0, b, err, t0.String())
 		}
 		var back provider.SensitivityTier
 		if err := back.UnmarshalText(b); err != nil || back != t0 {
@@ -83,7 +83,7 @@ func TestSensitivityTierTextRoundTrip(t *testing.T) {
 	}
 	for _, bad := range []provider.SensitivityTier{4, 9, 255} {
 		if _, err := bad.MarshalText(); err == nil {
-			t.Fatalf("MarshalText(%d) succeeded; want a refusal", uint8(bad))
+			t.Fatalf("MarshalText(%v) succeeded; want a refusal", bad)
 		} else {
 			requireInvalidInput(t, err, "is not a tier")
 		}

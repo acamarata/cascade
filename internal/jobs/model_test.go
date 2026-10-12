@@ -8,6 +8,7 @@
 package jobs
 
 import (
+	"github.com/acamarata/cascade/pkg/provider"
 	"reflect"
 	"testing"
 )
@@ -72,14 +73,18 @@ func TestConsequenceClassDecode(t *testing.T) {
 }
 
 func TestDataClassDecode(t *testing.T) {
-	for _, c := range []DataClass{DataClassPublic, DataClassInternal, DataClassConfidential, DataClassSecret} {
-		got, err := DecodeDataClass(string(c))
-		if err != nil || got != c {
-			t.Errorf("DecodeDataClass(%q) = (%q, %v), want (%q, nil)", c, got, err, c)
+	for _, word := range []string{"public", "internal", "confidential", "secret"} {
+		got, err := provider.ParseDataClassName(word)
+		if err != nil {
+			t.Fatal(err)
+		}
+		name, err := provider.DataClassName(got)
+		if err != nil || name != word {
+			t.Fatalf("stored word = %q: %v", name, err)
 		}
 	}
-	if _, err := DecodeDataClass("bogus"); err == nil {
-		t.Error("DecodeDataClass(bogus) = nil error, want typed error")
+	if _, err := provider.ParseDataClassName("bogus"); err == nil {
+		t.Fatal("unknown word accepted")
 	}
 }
 

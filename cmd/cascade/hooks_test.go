@@ -16,6 +16,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"github.com/acamarata/cascade/pkg/provider"
 	"os"
 	"strings"
 	"testing"
@@ -185,7 +186,7 @@ func seedRunningJob(t *testing.T, store *jobs.Store, id string) {
 	t.Helper()
 	err := store.PutJob(context.Background(), jobs.Job{
 		ID: id, State: jobs.JobStateRunning, CreatedAt: 1, UpdatedAt: 1,
-		RiskClass: "normal", ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal,
+		RiskClass: "normal", ConsequenceClass: jobs.ConsequenceNormal, DataClass: new(provider.SensitivityInternal),
 	})
 	if err != nil {
 		t.Fatalf("PutJob(%s): %v", id, err)

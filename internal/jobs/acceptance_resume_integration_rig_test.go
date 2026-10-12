@@ -13,6 +13,7 @@ package jobs_test
 import (
 	"context"
 	"database/sql"
+	"github.com/acamarata/cascade/pkg/provider"
 	"testing"
 	"time"
 
@@ -114,7 +115,7 @@ func seedPath2Stale(t *testing.T, dbPath, repoRoot string) {
 	if err := rig.store.PutJob(ctx, jobs.Job{
 		ID: path2JobID, State: jobs.JobStateRunning, MutableScope: "docs/**",
 		RiskClass: string(jobs.RiskClassLow), MinTaskClass: "code",
-		ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal,
+		ConsequenceClass: jobs.ConsequenceNormal, DataClass: new(provider.SensitivityInternal),
 	}); err != nil {
 		t.Fatalf("seed job: %v", err)
 	}

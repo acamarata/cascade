@@ -54,7 +54,7 @@ func Eligible(rec Record, tier nodes.Tier) EligibilityVerdict {
 	if !EligibleForTier(rec.Domain, rec.Subkind, tier) {
 		return EligibilityVerdict{Reason: "tier-not-permitted"}
 	}
-	if rec.Tier > egress.TierPublic {
+	if !rec.Tier.Valid() {
 		// Out of range: not a tier this build can reason about. Refused
 		// as local-only on this site's own guard, so the refusal does not
 		// depend on what some other function maps the value to.

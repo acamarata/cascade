@@ -10,6 +10,7 @@ package ci
 
 import (
 	"context"
+	"github.com/acamarata/cascade/pkg/provider"
 	"strings"
 	"testing"
 
@@ -156,7 +157,7 @@ func TestMergeOnGreen_AuditsTheCompletedMerge(t *testing.T) {
 func TestMergeOnGreen_DataClassAboveTheDestinationCeilingIsDenied(t *testing.T) {
 	f, opts := grantedFixture(t)
 	f.caller.resp = []byte(`{"sha":"cafef00d","merged":true,"message":""}`)
-	opts.DataClass = policy.DataClassConfidential
+	opts.DataClass = new(provider.SensitivityRestricted)
 
 	_, err := MergeOnGreen(context.Background(), f.deps(), opts, passedWait(opts.Owner, opts.Repo, opts.Ref))
 	if err == nil {

@@ -2,6 +2,7 @@ package conductor
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/hooks/egress"
@@ -98,15 +99,12 @@ func TestEgressClassConductor_AllowLocalOnlyRegistered(t *testing.T) {
 	if !cfg.Enabled || !cfg.AllowRestricted || !cfg.AllowLocalOnly {
 		t.Fatalf("cfg = %+v, want Enabled/AllowRestricted/AllowLocalOnly all true", cfg)
 	}
-	want := map[egress.SensitivityTier]bool{
-		egress.TierLocalOnly: true, egress.TierRestricted: true,
-		egress.TierInternal: true, egress.TierPublic: true,
-	}
+	want := []egress.SensitivityTier{egress.TierLocalOnly, egress.TierRestricted, egress.TierInternal, egress.TierPublic}
 	if len(cfg.AllowedTiers) != len(want) {
 		t.Fatalf("AllowedTiers = %v, want exactly local-only/restricted/internal/public", cfg.AllowedTiers)
 	}
 	for _, tier := range cfg.AllowedTiers {
-		if !want[tier] {
+		if !slices.Contains(want, tier) {
 			t.Fatalf("AllowedTiers contains unexpected tier %q", tier)
 		}
 	}

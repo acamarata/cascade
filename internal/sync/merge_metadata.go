@@ -53,7 +53,7 @@ func MergeMetadataOnly(
 func admissible(journal *ConflictJournal, dc DomainClass, side map[string]Record) map[string]Record {
 	out := make(map[string]Record, len(side))
 	for id, rec := range side {
-		if rec.Tier > egress.TierPublic {
+		if !rec.Tier.Valid() {
 			// Out of range: refused on this site's own guard, the most
 			// restrictive outcome, whatever ResolveTier would map it to.
 			refuseReplication(journal, dc, id, rec, "the record's sensitivity tier is out of range")

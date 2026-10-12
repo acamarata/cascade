@@ -10,6 +10,7 @@ package jobs
 import (
 	"context"
 	"database/sql"
+	"github.com/acamarata/cascade/pkg/provider"
 	"path/filepath"
 	"testing"
 	"time"
@@ -71,7 +72,7 @@ func baseJob(id string) Job {
 		CostCeiling:      1.0,
 		Priority:         1,
 		ConsequenceClass: ConsequenceNormal,
-		DataClass:        DataClassInternal,
+		DataClass:        new(provider.SensitivityInternal),
 	}
 }
 

@@ -25,6 +25,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"github.com/acamarata/cascade/pkg/provider"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -79,13 +80,14 @@ func (s *Store) PutJob(ctx context.Context, j Job) error {
 	if !j.ConsequenceClass.Valid() {
 		return cascade.Newf(cascade.KindInvalidInput, "jobs: unknown consequence_class %q", string(j.ConsequenceClass))
 	}
-	if !j.DataClass.Valid() {
-		return cascade.Newf(cascade.KindInvalidInput, "jobs: unknown data_class %q", string(j.DataClass))
+	if j.DataClass == nil || !j.DataClass.Valid() {
+		return cascade.Newf(cascade.KindInvalidInput, "jobs: unknown data_class %q", "unset")
 	}
 	caps, err := json.Marshal(j.Capabilities)
 	if err != nil {
 		return cascade.Wrap(cascade.KindInvalidInput, err, "jobs: encode capabilities")
 	}
+	className, _ := provider.DataClassName(*j.DataClass)
 	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO `+tableJob+` (id, state, created_at, updated_at, capabilities,
 			mutable_scope, risk_class, min_task_class, node_requirements,
@@ -102,7 +104,7 @@ func (s *Store) PutJob(ctx context.Context, j Job) error {
 		j.ID, string(j.State), j.CreatedAt, j.UpdatedAt, string(caps),
 		j.MutableScope, j.RiskClass, j.MinTaskClass, j.NodeRequirements,
 		j.TimeoutSeconds, j.CostCeiling, j.Priority, j.ConsecutiveFailedAttempts,
-		string(j.ConsequenceClass), string(j.DataClass))
+		string(j.ConsequenceClass), className)
 	if err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "jobs: put job")
 	}
@@ -132,9 +134,11 @@ func (s *Store) GetJob(ctx context.Context, id string) (Job, bool, error) {
 	if j.ConsequenceClass, err = DecodeConsequenceClass(consequence); err != nil {
 		return Job{}, false, err
 	}
-	if j.DataClass, err = DecodeDataClass(data); err != nil {
+	tier, err := provider.ParseDataClassName(data)
+	if err != nil {
 		return Job{}, false, err
 	}
+	j.DataClass = new(tier)
 	if err := json.Unmarshal([]byte(capsRaw), &j.Capabilities); err != nil {
 		return Job{}, false, cascade.Wrap(cascade.KindIntegrity, err, "jobs: decode capabilities")
 	}

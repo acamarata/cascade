@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/acamarata/cascade/internal/policy"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -204,12 +203,3 @@ func TestWaitOnGreen_ExplicitRequiredChecksAreHonored(t *testing.T) {
 
 // TestMergeOptions_DataClassFloorsAtInternal pins 06 §5.16's inheritance
 // rule: unset reads as internal, and a higher tier is carried through.
-func TestMergeOptions_DataClassFloorsAtInternal(t *testing.T) {
-	if got := (MergeOptions{}).dataClass(); got != policy.DataClassInternal {
-		t.Fatalf("unset DataClass = %s, want internal", got)
-	}
-	opts := MergeOptions{DataClass: policy.DataClassConfidential}
-	if got := opts.dataClass(); got != policy.DataClassConfidential {
-		t.Fatalf("DataClass = %s, want confidential carried through", got)
-	}
-}

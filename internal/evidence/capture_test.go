@@ -12,6 +12,7 @@ package evidence_test
 import (
 	"context"
 	"database/sql"
+	"github.com/acamarata/cascade/pkg/provider"
 	"path/filepath"
 	"testing"
 	"time"
@@ -42,10 +43,10 @@ func sqlOpen(path string) (*sql.DB, error) {
 // the composition root's job.
 type jobsArtifactAdapter struct{ store *jobs.Store }
 
-func (a jobsArtifactAdapter) PutArtifact(ctx context.Context, artifactID, jobID, executionID, blobKey string, class evidence.DataClass) error {
+func (a jobsArtifactAdapter) PutArtifact(ctx context.Context, artifactID, jobID, executionID, blobKey string, class *provider.SensitivityTier) error {
 	return a.store.PutArtifact(ctx, jobs.Artifact{
 		ID: artifactID, JobID: jobID, ExecutionID: executionID, Kind: "evidence",
-		BlobKey: blobKey, ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClass(class),
+		BlobKey: blobKey, ConsequenceClass: jobs.ConsequenceNormal, DataClass: class,
 	})
 }
 
@@ -70,7 +71,7 @@ func newCapturer(t *testing.T) (*evidence.Capturer, *evidence.Store, string, str
 		ID: "job-1", State: jobs.JobStatePending, CreatedAt: 1, UpdatedAt: 1,
 		Capabilities: []string{"code"}, MutableScope: "repo:/tmp/x", RiskClass: "normal",
 		MinTaskClass: "code", NodeRequirements: "{}", TimeoutSeconds: 60, CostCeiling: 1.0, Priority: 1,
-		ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal,
+		ConsequenceClass: jobs.ConsequenceNormal, DataClass: new(provider.SensitivityInternal),
 	}); err != nil {
 		t.Fatalf("PutJob: %v", err)
 	}
@@ -92,11 +93,11 @@ func TestCaptureIdempotent(t *testing.T) {
 	ctx := context.Background()
 	data := []byte("observed byte range")
 
-	ref1, hash1, err := c.Capture(ctx, jobID, execID, evidence.DataClassInternal, data)
+	ref1, hash1, err := c.Capture(ctx, jobID, execID, new(provider.SensitivityInternal), data)
 	if err != nil {
 		t.Fatalf("Capture (1st): %v", err)
 	}
-	ref2, hash2, err := c.Capture(ctx, jobID, execID, evidence.DataClassInternal, data)
+	ref2, hash2, err := c.Capture(ctx, jobID, execID, new(provider.SensitivityInternal), data)
 	if err != nil {
 		t.Fatalf("Capture (2nd): %v", err)
 	}
@@ -113,7 +114,7 @@ func TestCaptureIdempotent(t *testing.T) {
 
 func TestCaptureRejectsMissingScope(t *testing.T) {
 	c, _, _, _ := newCapturer(t)
-	if _, _, err := c.Capture(context.Background(), "", "exec-1", evidence.DataClassInternal, []byte("x")); !cascade.HasKind(err, cascade.KindInvalidInput) {
+	if _, _, err := c.Capture(context.Background(), "", "exec-1", new(provider.SensitivityInternal), []byte("x")); !cascade.HasKind(err, cascade.KindInvalidInput) {
 		t.Fatalf("Capture(empty jobID) = %v, want typed invalid-input", err)
 	}
 }
@@ -122,20 +123,20 @@ func TestPinAndReferenced(t *testing.T) {
 	c, store, jobID, execID := newCapturer(t)
 	ctx := context.Background()
 
-	ref, hash, err := c.Capture(ctx, jobID, execID, evidence.DataClassInternal, []byte("pinned bytes"))
+	ref, hash, err := c.Capture(ctx, jobID, execID, new(provider.SensitivityInternal), []byte("pinned bytes"))
 	if err != nil {
 		t.Fatalf("Capture: %v", err)
 	}
 	if err := store.PutClaim(ctx, evidence.Claim{
 		ID: "CLM-PIN", Statement: "s", Type: evidence.ClaimObservedFact, Confidence: 1,
-		ProducedBy: evidence.ProducedBy{RunID: "run-1"}, DataClass: evidence.DataClassInternal,
+		ProducedBy: evidence.ProducedBy{RunID: "run-1"}, DataClass: new(provider.SensitivityInternal),
 	}); err != nil {
 		t.Fatalf("PutClaim: %v", err)
 	}
 	if err := store.PutEvidence(ctx, evidence.Evidence{
 		ID: "EVD-PIN", ClaimID: "CLM-PIN",
 		Source:      evidence.Source{Type: evidence.SourceArtifact, Locator: evidence.Locator{Kind: evidence.LocatorArtifact, ArtifactRef: ref}},
-		ContentHash: hash, DataClass: evidence.DataClassInternal, CapturedRef: ref,
+		ContentHash: hash, DataClass: new(provider.SensitivityInternal), CapturedRef: ref,
 	}); err != nil {
 		t.Fatalf("PutEvidence: %v", err)
 	}

@@ -20,13 +20,16 @@ package jobs
 // Constraints: exactly the DECIDED field sets this ticket's contract
 //
 //	lists, plus the W9/W6 columns HOW steps 2b/2c add. See this ticket's
-//	journal for the DataClass-vocabulary decision (a package-local type
-//	rather than importing internal/policy.DataClass) and the
+//	journal for the DataClass-vocabulary decision (now *provider.SensitivityTier,
+//	stored as its vocabulary-2 word) and the
 //	consecutive_failed_attempts DEFAULT 0 contract/DSL contradiction.
 //
 // SPORT: jobs/domain-schema/ADD (P1-E29-W6-S59-T1).
 
-import "github.com/acamarata/cascade/pkg/cascade"
+import (
+	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
+)
 
 // Job is the R-16.37 DAG-node record: the DECIDED field set
 // {capabilities[], deps[], mutable_scope, risk_class, min task class,
@@ -59,7 +62,7 @@ type Job struct {
 	ConsequenceClass ConsequenceClass
 	// DataClass is R-21.94's request floor; the lattice join is
 	// AQ/S-83.T1-T4's.
-	DataClass DataClass
+	DataClass *provider.SensitivityTier
 }
 
 // TaskDependency materializes one deps[] edge: job depends on
@@ -114,7 +117,7 @@ type Artifact struct {
 	Path        string
 
 	ConsequenceClass ConsequenceClass
-	DataClass        DataClass
+	DataClass        *provider.SensitivityTier
 }
 
 // ResourceLease is the DECIDED lease record verbatim: {repo id,
@@ -187,46 +190,6 @@ func DecodeConsequenceClass(raw string) (ConsequenceClass, error) {
 			"jobs: unknown consequence_class %q: must be one of trivial, normal, consequential", raw)
 	}
 	return c, nil
-}
-
-// DataClass is this package's closed data-sensitivity floor (R-21.94).
-// It mirrors internal/policy.DataClass's four-value R-21.27 ordering by
-// VALUE, not by import -- see this ticket's journal for why a direct
-// cross-package enum import was rejected for this ticket's inert column.
-// The zero value is deliberately not a member.
-type DataClass string
-
-// The closed DataClass vocabulary, matching internal/policy.DataClass's
-// names exactly so a future caller that DOES join the two (AQ/S-83) sees
-// identical wire values.
-const (
-	DataClassPublic       DataClass = "public"
-	DataClassInternal     DataClass = "internal"
-	DataClassConfidential DataClass = "confidential"
-	DataClassSecret       DataClass = "secret"
-)
-
-// Valid reports whether d is one of the four closed values.
-func (d DataClass) Valid() bool {
-	switch d {
-	case DataClassPublic, DataClassInternal, DataClassConfidential, DataClassSecret:
-		return true
-	}
-	return false
-}
-
-// DecodeDataClass parses a stored TEXT value into a DataClass. An unknown
-// or empty value returns a typed A-T7 error -- there is no permissive
-// zero value (the fail-closed direction here is refusal, not silently
-// substituting DataClassSecret the way internal/policy's own
-// safeDataClass does for a DIFFERENT, evaluation-time concern).
-func DecodeDataClass(raw string) (DataClass, error) {
-	d := DataClass(raw)
-	if !d.Valid() {
-		return "", cascade.Newf(cascade.KindInvalidInput,
-			"jobs: unknown data_class %q: must be one of public, internal, confidential, secret", raw)
-	}
-	return d, nil
 }
 
 // ExecutionState is the execution-row lifecycle. The contract text names
