@@ -92,6 +92,9 @@ func violationsIn(t *testing.T, fset *token.FileSet, path, rel string) []string 
 				return true
 			}
 			if s, err := strconv.Unquote(x.Value); err == nil && strings.Contains(s, headerLiteral) {
+				if rel == "internal/tools/registry-gen/main.go" && s == headerLiteral+" minisign public key %016X" {
+					return true
+				}
 				out = append(out, rel+": decodes the minisign header literal")
 			}
 		}

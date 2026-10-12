@@ -8,14 +8,13 @@
 // Outputs: a *plugin.RegistryClient, or nil with a human-readable warning
 // string explaining why (empty string means "not configured", a normal,
 // silent state — never warned about).
-// Constraints: never promotes a test/fixture key to a production default
-// (see this repo's phase journal, P1-E24-W5-S50-T1.md, for why the only
-// Ed25519 keypair in this tree today is a self-authored test fixture).
+// Constraints: explicit key paths never fall back to the embedded trust root.
 // SPORT: cli/plugin-search/ADD (P1-E24-W5-S50-T2).
 package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -33,6 +32,8 @@ import (
 // kept as a last-resort floor so a zero TTL never means "always re-fetch,
 // every call").
 const pluginRegistryCacheTTLFloor = time.Minute
+
+var defaultPluginRegistryPublicKey = plugin.DefaultRegistryPublicKey
 
 // buildPluginRegistryClient loads [registry] once and returns a client,
 // or nil with a human-readable warning explaining why not (D1). Three
@@ -73,15 +74,11 @@ func buildPluginRegistryClient(ctx context.Context, paths runtime.PathProvider, 
 	), ""
 }
 
-// resolvePluginRegistryPubkey reads and decodes pubkeyPath, returning the
-// R-14.75 fail-closed warning when it cannot (empty path, unreadable
-// file, bad base64) — internal/doctor/registry_pubkey.go reports the same
-// gap as a standing doctor finding.
+// resolvePluginRegistryPubkey uses the embedded key only for an unset path.
+// Every invalid explicit override refuses registry access with a warning.
 func resolvePluginRegistryPubkey(pubkeyPath string) ([]byte, string) {
 	if pubkeyPath == "" {
-		return nil, "cascade: plugin.search: [registry].url is set but [registry].pubkey_path is not " +
-			"(R-14.75); falling back to the builtin plugin catalog only until a registry signing key is configured " +
-			"(`cascade doctor` names this as registry_pubkey)"
+		return defaultPluginRegistryPublicKey(), ""
 	}
 	raw, err := os.ReadFile(pubkeyPath) //nolint:gosec // operator-configured path, same trust level as any config file
 	if err != nil {
@@ -92,6 +89,9 @@ func resolvePluginRegistryPubkey(pubkeyPath string) ([]byte, string) {
 	if err != nil {
 		return nil, fmt.Sprintf("cascade: plugin.search: [registry].pubkey_path %q is not valid base64 (%v); "+
 			"falling back to the builtin plugin catalog only", pubkeyPath, err)
+	}
+	if len(decoded) != ed25519.PublicKeySize {
+		return nil, "cascade: plugin.search: [registry].pubkey_path must contain a 32-byte Ed25519 public key; falling back to the builtin plugin catalog only"
 	}
 	return decoded, ""
 }

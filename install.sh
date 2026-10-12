@@ -144,6 +144,19 @@ fetch_signed() {
 	fi
 	minisign -V -q -p "$WORK/key.pub" -m "$WORK/sums" -x "$WORK/sums.minisig" ||
 		fail_verify "the checksums signature does not verify with the release public key"
+	comment=$(sed -n '3p' "$WORK/sums.minisig")
+	signed_version=${comment#trusted comment: cascade }
+	signed_version=${signed_version% checksums}
+	case $signed_version in '' | *[!0-9A-Za-z.+-]*) fail_verify "invalid signed version comment" ;; esac
+	[ "$comment" = "trusted comment: cascade $signed_version checksums" ] || fail_verify "invalid signed version comment"
+	select_archive
+	archive_version=${ARCHIVE_NAME#cascade_}
+	archive_version=${archive_version%_${OS}_${ARCH}.tar.gz}
+	[ "$signed_version" = "$archive_version" ] || fail_verify "signed version does not match archive version"
+	if [ -n "$TAG" ]; then
+		[ "$signed_version" = "${TAG#v}" ] || fail_verify "signed version does not match requested tag"
+	fi
+	RELEASE_TAG=v$signed_version
 }
 
 # select_archive picks the single verified entry for this platform; the name comes from the signed file only, never the tag.

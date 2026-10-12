@@ -124,7 +124,8 @@ func (f *ishFx) archive(dir, name string, ms ...ishMember) string {
 func (f *ishFx) sums(dir, name string, lines ...string) {
 	p := filepath.Join(dir, name)
 	ishMust(f.t, os.WriteFile(p, []byte(strings.Join(lines, "\n")+"\n"), 0o644))
-	f.run("minisign", "-S", "-s", f.key, "-m", p, "-x", p+".minisig", "-t", "test checksums")
+	version := strings.TrimSuffix(strings.TrimPrefix(name, "cascade_"), "_checksums.txt")
+	f.run("minisign", "-S", "-s", f.key, "-m", p, "-x", p+".minisig", "-t", "cascade "+version+" checksums")
 }
 
 // release builds a signed linux/amd64 local-lane release and returns the archive sha256.
@@ -261,7 +262,7 @@ func TestInstallScriptSelectsArchiveAmongSBOMLines(t *testing.T) {
 	f.sums(f.dist, ishSums, sbom+"  "+ishArchive+".sbom.json", sum+"  "+ishArchive,
 		sbom+"  cascade_1.0.0_darwin_arm64.tar.gz", sbom+"  cascade_1.0.0_linux_amd64.tar.gz.sig")
 	f.expect(0)
-	if r := f.installed("cascade"); !strings.Contains(r, `"release_tag":"local","archive_name":"`+ishArchive+`","archive_sha256":"`+sum+`"`) {
+	if r := f.installed("cascade"); !strings.Contains(r, `"release_tag":"v1.0.0","archive_name":"`+ishArchive+`","archive_sha256":"`+sum+`"`) {
 		t.Fatalf("local lane selected %s", r)
 	}
 }

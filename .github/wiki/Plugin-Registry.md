@@ -23,8 +23,8 @@ MCP tool.
 
 ```toml
 [registry]
-url = "https://your-registry.example/index"
-pubkey_path = "/path/to/registry-signing-key.pub"
+url = "https://github.com/acamarata/cascade/releases/latest/download/"
+# Optional: pubkey_path = "/path/to/registry-signing-key.pub"
 ```
 
 The index is a static, signed JSON document — `pkg/plugin.RegistryIndex` —
@@ -33,12 +33,34 @@ management (generating an index, publishing it, rotating the key) is
 publisher-side tooling, not a `cascade` subcommand; see
 `internal/tools/registry-gen` for the reference generator.
 
-**No production registry is configured by default.** Shipping one requires a
-real, dedicated Ed25519 signing keypair — separate from the release-signing
-key — which this project has not yet generated. Until it has, `cascade plugin
-search` and the `cascade init` catalog page both answer from the builtin set
-only, and `cascade doctor` names the gap (`registry_pubkey` check) whenever
-`[registry].url` is set without a `[registry].pubkey_path`.
+The registry is **opt-in**. `[registry].url` is empty by default, so a default
+installation never fetches an index. Set the URL above to opt in. With no
+`pubkey_path`, the client uses the embedded registry public key. An explicit
+path selects only that key: unreadable files, invalid base64 and keys other
+than 32 bytes refuse registry access without falling back to the embedded
+key. `cascade doctor` names the source as `embedded` or `pubkey_path` and
+warns when an override cannot be read.
+
+Release custody consists of one encrypted minisign secret key and its
+passphrase, held in the release vault with separate escrow copies. Only the
+public key is committed in `docs/keys/minisign.pub` and embedded in
+`internal/minisign/release.pub`. The registry key is derived from the
+32-byte release seed with HKDF-SHA256, salt `cascade`, info
+`cascade/registry-index/v1`, then Ed25519. Its public half is compiled into
+the client; the private half is never written by the generator.
+
+Publishers use `registry-gen --derive-from-release` instead of `--key-ref`.
+It reads `MINISIGN_RELEASE_SECKEY_B64` (base64 of the minisign secret file)
+and `MINISIGN_RELEASE_PASSPHRASE` through release custody. The options are
+mutually exclusive. `--print-public` prints the derived public key hex;
+`--print-release-public` prints the release public file recomputed from the
+secret, allowing custody to be checked against both committed copies.
+
+The passphrase stays in the process environment for that invocation and
+can be visible to same-user process inspection (`ps -E`). Every first-party
+index signing needs the release master secret. Rotating the release key
+also rotates the registry key. The embedded release key has no revocation
+path other than a signed update carrying a replacement key.
 
 ## `cascade init`'s plugin page
 

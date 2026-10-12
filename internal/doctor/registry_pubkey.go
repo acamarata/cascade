@@ -1,29 +1,22 @@
 package doctor
 
-// Purpose: the registry_pubkey doctor finding (P1-E24-W5-S50-T2, D1):
-//   reports when [registry].url names a plugin registry but
-//   [registry].pubkey_path is unset or unreadable — the fail-closed state
-//   R-14.75 requires (never a fabricated in-binary default public key; see
-//   internal/runtime/config_registry.go's header for why no production
-//   key exists in this tree yet). It follows retrieval_fusion.go's own
-//   precedent exactly: a Check constructed over an injected interface,
-//   registered and exercised through the real CheckRegistry + Runner in
-//   this package's own test (registry_pubkey_test.go), and separately
-//   mounted at cmd/cascade's composition root (doctor_mounts.go) — a
-//   files_scope deviation this ticket records the same way
-//   retrieval_fusion.go's own header records its own.
+// Purpose: report the registry verification key source through the existing
+//   doctor CheckRegistry and Runner.
 // Inputs: a RegistryPubkeyProvider (internal/runtime.Config's [registry]
 //   fields, read through a small adapter at the composition root).
-// Outputs: CheckResult — status=warn naming the fail-closed gap when a
-//   registry URL is configured but no usable pubkey is; status=ok
-//   otherwise (no registry configured, or a pubkey is present).
+// Outputs: CheckResult naming embedded or pubkey_path; unreadable overrides warn.
 // Constraints: Art.1 — an unreadable config is status=error, never a
-//   silent ok; this check never itself decides whether the key at
-//   PubkeyPath is valid (that is Ed25519Verifier's job at call time), only
-//   whether one is configured at all.
+//   silent ok. An override is ok only when the client would accept it:
+//   base64 of exactly one 32-byte Ed25519 public key.
 // SPORT: doctor/registry-pubkey (ADD, P1-E24-W5-S50-T2).
 
-import "context"
+import (
+	"context"
+	"crypto/ed25519"
+	"encoding/base64"
+	"os"
+	"strings"
+)
 
 // RegistryPubkeyProvider supplies the effective [registry] URL and pubkey
 // path. *runtime.Config satisfies this via a small adapter at the
@@ -63,12 +56,7 @@ func (c *registryPubkeyCheck) Fix(context.Context) (FixResult, error) {
 	return FixResult{}, ErrCheckNotFixable
 }
 
-// Run reports the fail-closed gap: a configured registry URL with no
-// pubkey_path. Unconfigured (no URL at all) is StatusOK — nothing to
-// verify a key for. A URL WITH a pubkey_path is also StatusOK here: this
-// check names the CONFIGURATION gap only, not whether the key at that
-// path actually verifies the registry's signature (that is a runtime
-// fact, checked on every fetch, not a static doctor probe).
+// Run reports the resolved source and refuses to call an unreadable override OK.
 func (c *registryPubkeyCheck) Run(_ context.Context) (CheckResult, error) {
 	if c.config == nil {
 		return CheckResult{Status: StatusError, Message: "no config provided to the registry pubkey check"}, nil
@@ -77,14 +65,15 @@ func (c *registryPubkeyCheck) Run(_ context.Context) (CheckResult, error) {
 		return CheckResult{Status: StatusOK, Message: "no [registry].url configured; plugin search uses the builtin catalog only"}, nil
 	}
 	if c.config.RegistryPubkeyPath() != "" {
-		return CheckResult{Status: StatusOK, Message: "[registry].pubkey_path is configured"}, nil
+		raw, err := os.ReadFile(c.config.RegistryPubkeyPath())
+		if err != nil {
+			return CheckResult{Status: StatusWarn, Message: "registry key source: pubkey_path (unreadable)", Remediation: "set [registry].pubkey_path to a readable Ed25519 public key file"}, nil
+		}
+		key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(raw)))
+		if err != nil || len(key) != ed25519.PublicKeySize {
+			return CheckResult{Status: StatusWarn, Message: "registry key source: pubkey_path (not a base64 32-byte Ed25519 public key)", Remediation: "set [registry].pubkey_path to a file holding the base64 Ed25519 public key"}, nil
+		}
+		return CheckResult{Status: StatusOK, Message: "registry key source: pubkey_path"}, nil
 	}
-	return CheckResult{
-		Status:  StatusWarn,
-		Message: "[registry].url is set but [registry].pubkey_path is not",
-		Detail: "R-14.75 requires a dedicated registry signing key; this tree ships no in-binary default " +
-			"(see internal/runtime/config_registry.go), so an absent pubkey_path fails plugin search closed " +
-			"to the builtin catalog only",
-		Remediation: "set [registry].pubkey_path to the registry's Ed25519 public key file",
-	}, nil
+	return CheckResult{Status: StatusOK, Message: "registry key source: embedded"}, nil
 }
