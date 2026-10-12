@@ -19,6 +19,9 @@ targets:
     platform: macOS
     sources:
       - path: CascadeMenuBar
+    dependencies:
+      - target: CascadeWidgetExtension
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.acamarata.cascade.widget
@@ -41,6 +44,42 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/CascadeMenuBar.app/Contents/MacOS/CascadeMenuBar
         BUNDLE_LOADER: $(TEST_HOST)
+  CascadeWidgetExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: CascadeWidgetExtension
+      - path: CascadeMenuBar/WidgetModels.swift
+      - path: CascadeMenuBar/Formatting.swift
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.acamarata.cascade.widget.extension
+        INFOPLIST_FILE: CascadeWidgetExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: CascadeWidgetExtension/CascadeWidgetExtension.entitlements
+        ENABLE_APP_SANDBOX: YES
+  CascadeWidgetExtensionTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: CascadeWidgetExtensionTests
+        excludes: [testdata]
+      - path: CascadeWidgetExtensionTests/testdata
+        buildPhase: resources
+        type: folder
+      - path: CascadeWidgetExtension
+        excludes: ["*.plist", "*.entitlements"]
+      - path: CascadeMenuBar/WidgetModels.swift
+      - path: CascadeMenuBar/Formatting.swift
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.acamarata.cascade.widget.extension.tests
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
   CascadeMenuBar:
     build:
@@ -71,3 +110,9 @@ schemes:
             "$HOME/bin/flock" /tmp/cascade-pkg-$(printf %s "$PKG" | shasum | cut -c1-8).lock timeout 590 go build -p 4 -o "$BUILT_PRODUCTS_DIR/cascade" "$PKG"
             PKG=./internal/daemon/testdata/widgetseed/
             "$HOME/bin/flock" /tmp/cascade-pkg-$(printf %s "$PKG" | shasum | cut -c1-8).lock timeout 590 go build -p 4 -o "$BUILT_PRODUCTS_DIR/widgetseed" "$PKG"
+  CascadeWidgetExtensionTests:
+    build:
+      targets:
+        CascadeWidgetExtensionTests: [test]
+    test:
+      targets: [CascadeWidgetExtensionTests]

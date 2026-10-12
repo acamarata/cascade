@@ -1,0 +1,97 @@
+{
+  "active_jobs_count": 2,
+  "attention_count": 0,
+  "generated_at": "2026-10-05T12:00:00Z",
+  "nodes": [
+    {
+      "id": "node-0001",
+      "presence": "reachable",
+      "reachable": true,
+      "trust_tier": "worker-trusted"
+    }
+  ],
+  "projects": [],
+  "rows": [
+    {
+      "five_hour": {
+        "resets_in": 5400000000000,
+        "utilization_pct": 42.0
+      },
+      "kind": "profile",
+      "label": "acct-a-pool",
+      "reauth_required": false,
+      "ref": "acct-a-pool",
+      "seven_day": {
+        "resets_in": null,
+        "utilization_pct": 17.5
+      },
+      "state": "available",
+      "updated_at": "2026-10-05T12:00:00Z"
+    },
+    {
+      "five_hour": {
+        "resets_in": null,
+        "utilization_pct": null
+      },
+      "kind": "profile",
+      "label": "redacted",
+      "reauth_required": false,
+      "ref": "ref-b4c9a289323b",
+      "seven_day": {
+        "resets_in": null,
+        "utilization_pct": null
+      },
+      "state": "available",
+      "updated_at": "2026-10-05T12:00:00Z"
+    },
+    {
+      "five_hour": {
+        "resets_in": 7200000000000,
+        "utilization_pct": 100.0
+      },
+      "kind": "profile",
+      "label": "acct-c-limit",
+      "reauth_required": false,
+      "ref": "acct-c-limit",
+      "seven_day": {
+        "resets_in": null,
+        "utilization_pct": 63.0
+      },
+      "state": "exhausted",
+      "updated_at": "2026-10-05T12:00:00Z"
+    },
+    {
+      "five_hour": {
+        "resets_in": null,
+        "utilization_pct": null
+      },
+      "kind": "profile",
+      "label": "acct-d-auth",
+      "reauth_required": true,
+      "ref": "acct-d-auth",
+      "seven_day": {
+        "resets_in": null,
+        "utilization_pct": null
+      },
+      "state": "auth-required",
+      "updated_at": "2026-10-05T12:00:00Z"
+    },
+    {
+      "five_hour": {
+        "resets_in": null,
+        "utilization_pct": null
+      },
+      "kind": "profile",
+      "label": "acct-e-extra",
+      "reauth_required": false,
+      "ref": "acct-e-extra",
+      "seven_day": {
+        "resets_in": null,
+        "utilization_pct": null
+      },
+      "state": "unknown",
+      "updated_at": "2026-10-05T12:00:00Z"
+    }
+  ],
+  "seq": 7
+}
