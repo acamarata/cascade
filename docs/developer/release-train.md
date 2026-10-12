@@ -53,7 +53,7 @@ then ship through every channel unchanged. The `verify` job and the
 
 ## rc-publish
 
-Dispatch `release.yml` with two inputs:
+Dispatch `release.yml` with these two inputs and leave `record_json` empty. A set `record_json` runs the promote job instead (`docs/developer/promotion.md`):
 
 | Input | Format | Meaning |
 |---|---|---|

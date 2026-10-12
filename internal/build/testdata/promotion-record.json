@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "rc_tag": "v2.0.0-rc.1",
+  "final_tag": "v2.0.0",
+  "commit_sha": "01ad22eac43ce2773504a7e218661ebe5957a576",
+  "checksums_sha256": "3e30aec787d376716477df02736b484772fd981e02d40c2ed17039fac783a4b4",
+  "signature_sha256": "5c28d7f1c597bc0b185ca79bee8e44ffd7f93dbd063c3eaf26fb3ee0973cc137",
+  "archives": {
+    "darwin_amd64": "d78cbca395ab2de615364df3a2e03307cd2b2ab865a06b546652effb5ebd997d",
+    "darwin_arm64": "6be0692b45befd06df421c7672284ce8f8b492e4e7408d74c8c9ee4f0701c00a",
+    "linux_amd64": "12382192560579ecf87f749a0b52268742044bea4b463c6f6bf03ae7e347232f",
+    "linux_arm64": "db1da943640dd247b027e55ea7c24d6d7f9c1e8780d70b22350a6cf32123e4f0",
+    "windows_amd64": "df6c2ea6b130671f88d89d33ed77d4a22e42c7f3e63fc53f0a82b4051b9ed19f"
+  },
+  "assets": {
+    "cascade_2.0.0_darwin_amd64.tar.gz.sbom.json": "77eebd566a685beb9b0931138130dab4bec6c7f7ce80b272c9ba77a614b8c962",
+    "cascade_2.0.0_darwin_arm64.tar.gz.sbom.json": "4b9f024f825e745c38f76f487d16421437eb0ed94192c20f0d13e85f7b412949",
+    "cascade_2.0.0_linux_amd64.tar.gz.sbom.json": "cf7d677cb96037c21e9c81fd192e0ca496af6ef69c3a76bd40f6625c17684d73",
+    "cascade_2.0.0_linux_arm64.tar.gz.sbom.json": "0835813a6e0c1d62a7b0d048c3a503a4a068666a0f7703c685dae5a71b27c504",
+    "cascade_2.0.0_windows_amd64.zip.sbom.json": "a0c58e6d09a19d47e08b3fd2b66f7ea9c59848d0874fe2faeb539bcf0cea970f",
+    "cascade_images.txt": "7ab95f0771cd6b377a6ab94308902ad271527a8ebf08f812f88dabeb6645a8f1",
+    "install.sh": "a92354037c18bb593d1bc002d0158d5f3943f6e84d7a090e198bbc38f79fca9f"
+  },
+  "images": {
+    "cascade": "sha256:2d8f124c03bb40dea508f242dd947c2e72ad658304fddc30639b321b632ad173",
+    "cascade-linux-amd64": "sha256:4c30d83a58a35f0fa2ca86b7ff7d21867ca3a6c599f6ca2755d162ac64737cc8",
+    "cascade-linux-arm64": "sha256:e2cd540c61186d889ca19b0380640c7c64eb178bfea0a63c43eae55f8656129a"
+  },
+  "gate_report": {
+    "path": "release-gate-report.txt",
+    "sha256": "948eea248746a5fd431a1ed13493def6b9858986184d524d61120128a5aa6c2b"
+  },
+  "promoted_at": "2026-10-12T09:30:00Z"
+}

@@ -1,0 +1,61 @@
+# Publishes the release public key to GitHub Pages, so the documented URL
+# https://acamarata.github.io/cascade/keys/minisign.pub serves it
+# (docs/developer/promotion.md).
+#
+# Manual dispatch only. Before anything is uploaded the job proves that
+# docs/keys/minisign.pub parses as a minisign public key, is byte-identical
+# to internal/minisign/release.pub and is the release key compiled into the
+# promotion tool at the dispatched commit; the staged copy is checked again
+# so the uploaded bytes are the checked bytes. The shape gates live in
+# internal/build/promotion_workflows_test.go.
+#
+# Every `uses:` is pinned to a full commit SHA with the version in a
+# trailing comment.
+name: pages-keys
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-keys
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: publish docs/keys to Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Refuse unless docs/keys/minisign.pub is the embedded release key
+        run: go run ./internal/tools/promotion check-key --pub docs/keys/minisign.pub --embedded internal/minisign/release.pub
+
+      - name: Stage keys/ and check the staged copy
+        run: |
+          set -eu
+          mkdir -p "${RUNNER_TEMP}/site"
+          cp -R docs/keys "${RUNNER_TEMP}/site/keys"
+          [ "$(ls -A "${RUNNER_TEMP}/site/keys")" = "minisign.pub" ] || (echo "docs/keys holds more than minisign.pub" && exit 1)
+          go run ./internal/tools/promotion check-key --pub "${RUNNER_TEMP}/site/keys/minisign.pub" --embedded internal/minisign/release.pub
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ runner.temp }}/site
+
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

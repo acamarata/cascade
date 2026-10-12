@@ -1,0 +1,122 @@
+if: ${{ github.event_name == 'workflow_dispatch' && inputs.record_json != '' }}
+name: promote (verified rc bytes to the public release)
+permissions:
+    attestations: write
+    contents: write
+    id-token: write
+    packages: write
+runs-on: ubuntu-latest
+steps:
+    - env:
+        CASCADE_STAGING_REMOTE: ${{ secrets.CASCADE_STAGING_REMOTE }}
+        COMMIT_SHA: ${{ inputs.commit_sha }}
+        FINAL_TAG: ${{ inputs.final_tag }}
+        RECORD_JSON: ${{ inputs.record_json }}
+      name: Refuse a missing staging remote or malformed inputs
+      run: |
+        set -u
+        refuse() { echo "promote refused: $1"; exit 1; }
+        [ -n "${CASCADE_STAGING_REMOTE:-}" ] || refuse "the CASCADE_STAGING_REMOTE secret is empty"
+        [[ "$CASCADE_STAGING_REMOTE" =~ ^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9._-]*$ ]] || refuse "the staging remote is not a lowercase <owner>/<repo>"
+        [[ "${FINAL_TAG:-}" =~ ^v2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || refuse "final_tag is not v2.Y.Z"
+        [[ "${COMMIT_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || refuse "commit_sha is not 40 lowercase hex characters"
+        [ "$GITHUB_SHA" = "$COMMIT_SHA" ] || refuse "commit_sha is not the dispatched commit"
+        [ "$(printf '%s' "${RECORD_JSON:-}" | wc -c)" -le 65536 ] || refuse "record_json is larger than 64 KiB"
+        echo "promote inputs accepted"
+      shell: bash
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        persist-credentials: false
+        ref: ${{ inputs.commit_sha }}
+    - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+      with:
+        cache: false
+        go-version-file: go.mod
+    - name: Set up oras (promote job)
+      uses: oras-project/setup-oras@005458ad77f1c8facd38a094e4af2e69e5607ff4
+    - env:
+        COMMIT_SHA: ${{ inputs.commit_sha }}
+        FINAL_TAG: ${{ inputs.final_tag }}
+      name: Refuse a final tag that already names another commit
+      run: |
+        set -eu
+        refs="$(git ls-remote origin "refs/tags/${FINAL_TAG}" "refs/tags/${FINAL_TAG}^{}")"
+        peeled="$(printf '%s\n' "$refs" | awk -v r="refs/tags/${FINAL_TAG}^{}" '$2 == r {print $1}')"
+        plain="$(printf '%s\n' "$refs" | awk -v r="refs/tags/${FINAL_TAG}" '$2 == r {print $1}')"
+        [ -z "${peeled:-$plain}" ] || [ "${peeled:-$plain}" = "$COMMIT_SHA" ] || (echo "promote refused: final_tag already names another commit" && exit 1)
+    - env:
+        CASCADE_STAGING_REMOTE: ${{ secrets.CASCADE_STAGING_REMOTE }}
+        COMMIT_SHA: ${{ inputs.commit_sha }}
+        REGISTRY_TOKEN: ${{ github.token }}
+      name: Pull dist-<id> from the private staging package
+      run: |
+        set -euo pipefail
+        exec 3>&1 > "${RUNNER_TEMP}/promote-pull.log" 2>&1
+        trap 'echo "promote pull failed; its log stays in the runner" >&3' ERR
+        id="${COMMIT_SHA:0:12}"
+        printf '%s' "$REGISTRY_TOKEN" | oras login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+        oras pull "ghcr.io/${CASCADE_STAGING_REMOTE}:dist-${id}" -o "${RUNNER_TEMP}/dist"
+        echo "promote: dist-${id} pulled" >&3
+      shell: bash
+    - env:
+        FINAL_TAG: ${{ inputs.final_tag }}
+      name: Verify the signed set (first gate)
+      run: go run ./internal/tools/promotion verify-signed --dir "${RUNNER_TEMP}/dist" --pubkey docs/keys/minisign.pub --final-tag "$FINAL_TAG"
+    - env:
+        COMMIT_SHA: ${{ inputs.commit_sha }}
+        FINAL_TAG: ${{ inputs.final_tag }}
+        RECORD_JSON: ${{ inputs.record_json }}
+      name: Check the audit record against the verified set
+      run: |
+        set -eu
+        printf '%s' "$RECORD_JSON" > "${RUNNER_TEMP}/record.json"
+        jq -e --arg t "$FINAL_TAG" --arg c "$COMMIT_SHA" '.final_tag == $t and .commit_sha == $c' "${RUNNER_TEMP}/record.json" > /dev/null
+        mkdir "${RUNNER_TEMP}/release"
+        find "${RUNNER_TEMP}/dist" -maxdepth 1 -type f -exec cp {} "${RUNNER_TEMP}/release/" \;
+        go run ./internal/tools/promotion verify --record "${RUNNER_TEMP}/record.json" --staging "${RUNNER_TEMP}/dist" --public "${RUNNER_TEMP}/release"
+        jq -r '.images | to_entries[] | .value + "  " + .key' "${RUNNER_TEMP}/record.json" | sort > "${RUNNER_TEMP}/record-images.txt"
+        go run ./internal/tools/promotion images --dir "${RUNNER_TEMP}/dist" --pubkey docs/keys/minisign.pub --final-tag "$FINAL_TAG" | sort | cmp - "${RUNNER_TEMP}/record-images.txt"
+    - name: Attest build provenance over the archives and SBOMs
+      uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+      with:
+        subject-path: |
+            ${{ runner.temp }}/release/*.tar.gz
+            ${{ runner.temp }}/release/*.zip
+            ${{ runner.temp }}/release/*.sbom.json
+    - env:
+        COMMIT_SHA: ${{ inputs.commit_sha }}
+        FINAL_TAG: ${{ inputs.final_tag }}
+        GH_REPO: ${{ github.repository }}
+        GH_TOKEN: ${{ github.token }}
+        NOTES: ${{ inputs.notes }}
+      name: Create the public release with exactly the verified files
+      run: |
+        set -eu
+        printf '%s' "$NOTES" > "${RUNNER_TEMP}/notes.md"
+        gh release create "$FINAL_TAG" "${RUNNER_TEMP}"/release/* --target "$COMMIT_SHA" --title "$FINAL_TAG" --notes-file "${RUNNER_TEMP}/notes.md"
+    - env:
+        CASCADE_STAGING_REMOTE: ${{ secrets.CASCADE_STAGING_REMOTE }}
+        FINAL_TAG: ${{ inputs.final_tag }}
+      name: Copy the signed image index to the public repository
+      run: |
+        set -euo pipefail
+        exec 3>&1 > "${RUNNER_TEMP}/promote-copy.log" 2>&1
+        trap 'echo "promote image copy failed; its log stays in the runner" >&3' ERR
+        index="$(go run ./internal/tools/promotion images --dir "${RUNNER_TEMP}/dist" --pubkey docs/keys/minisign.pub --final-tag "$FINAL_TAG" --name cascade)"
+        oras cp --recursive "ghcr.io/${CASCADE_STAGING_REMOTE}@${index}" "ghcr.io/acamarata/cascade:${FINAL_TAG#v}"
+        echo "promote: signed image index copied" >&3
+      shell: bash
+    - name: Install cosign
+      uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6
+    - env:
+        FINAL_TAG: ${{ inputs.final_tag }}
+      name: Sign exactly the signed image digests on the public copy
+      run: |
+        set -euo pipefail
+        go run ./internal/tools/promotion images --dir "${RUNNER_TEMP}/dist" --pubkey docs/keys/minisign.pub --final-tag "$FINAL_TAG" > "${RUNNER_TEMP}/signed-images.txt"
+        signed=0
+        while read -r digest _; do
+          cosign sign --yes "ghcr.io/acamarata/cascade@${digest}" < /dev/null
+          signed=$((signed + 1))
+        done < "${RUNNER_TEMP}/signed-images.txt"
+        [ "$signed" -ge 1 ] && [ "$signed" -eq "$(grep -c . "${RUNNER_TEMP}/signed-images.txt")" ]

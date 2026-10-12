@@ -175,7 +175,7 @@ func workflowViolations(t *testing.T, text string) []string {
 	c.bad(slices.Equal(slices.Sorted(maps.Keys(wf.On)), []string{"push", "workflow_dispatch"}), "triggers are not exactly push and workflow_dispatch")
 	c.bad(wf.On["push"]["tags"] == nil && wf.On["push"]["tags-ignore"] == nil, "a push of tags triggers the workflow")
 	inputs, _ := wf.On["workflow_dispatch"]["inputs"].(map[string]any)
-	c.bad(len(inputs) == 2 && inputs["final_tag"] != nil && inputs["commit_sha"] != nil, "dispatch inputs are not exactly final_tag and commit_sha")
+	c.bad(slices.Equal(slices.Sorted(maps.Keys(inputs)), []string{"commit_sha", "final_tag", "notes", "record_json"}), "dispatch inputs are not exactly final_tag, commit_sha, record_json and notes")
 	c.bad(!strings.Contains(text, "vars.") && !strings.Contains(text, "::add-mask::"), "vars. or ::add-mask:: appears")
 	c.bad(!regexp.MustCompile(`git\s+push`).MatchString(text), "a step runs git push")
 	c.bad(!strings.Contains(text, "secrets.CASCADE_MINISIGN_KEY") && !strings.Contains(text, "secrets.CASCADE_MINISIGN_PUBKEY"), "a repository secret holds a minisign key")
@@ -185,11 +185,12 @@ func workflowViolations(t *testing.T, text string) []string {
 	}
 	c.bad(len(wf.Permissions) == 1 && wf.Permissions["contents"] == "read", "workflow default permissions are not contents read")
 	for name, job := range wf.Jobs {
-		c.bad(name == "rc-publish" || job.Permissions == nil, "job "+name+" widens permissions")
+		c.bad(relPermsExact(name, job), "job "+name+" widens permissions (permissions are not exactly the per-job allowlist)")
+		c.bad(relPromotionJobs[name].If == "" || job.If == relPromotionJobs[name].If, name+" is not dispatch-only with its record_json gate")
 		c.bad(job.Env["CASCADE_STAGING_REMOTE"] == nil || job.Env["CASCADE_STAGING_REMOTE"] == "example-owner/example-repo", "job "+name+" env holds a staging remote other than the placeholder")
 		for _, s := range job.Steps {
 			c.bad(name == "rc-publish" || !strings.Contains(s.Run, "goreleaser release") || strings.Contains(s.Run, "--snapshot"), "job "+name+" runs a non-snapshot release")
-			c.bad(name == "rc-publish" || !slices.Contains(slices.Collect(maps.Values(s.Env)), any(relStagingSecret)), "job "+name+" step env holds the staging secret")
+			c.bad(relPromotionJobs[name].If != "" || !slices.Contains(slices.Collect(maps.Values(s.Env)), any(relStagingSecret)), "job "+name+" step env holds the staging secret")
 		}
 	}
 	for _, name := range []string{"snapshot", "install-e2e"} {
@@ -199,15 +200,13 @@ func workflowViolations(t *testing.T, text string) []string {
 		}
 		c.bad(gen >= 0, name+" generates no minisign key")
 	}
-	c.bad(strings.Count(text, relStagingSecret) == len(slices.DeleteFunc(slices.Clone(wf.Jobs["rc-publish"].Steps), func(s relStep) bool { return s.Env["CASCADE_STAGING_REMOTE"] != relStagingSecret })), "the staging secret reaches a job, key or place other than rc-publish step env")
+	c.bad(strings.Count(text, relStagingSecret) == relStagingHolders(wf), "the staging secret reaches a job, key or place other than rc-publish and promote step env")
 	rcJobViolations(wf.Jobs["rc-publish"], &c)
-	return c
+	return append(c, relLooseKeys(t, text)...)
 }
 
 // rcJobViolations checks the rc-publish job itself.
 func rcJobViolations(job relJob, c *relCheck) {
-	c.bad(job.If == "${{ github.event_name == 'workflow_dispatch' }}", "rc-publish is not dispatch-only")
-	c.bad(len(job.Permissions) == 2 && job.Permissions["contents"] == "read" && job.Permissions["packages"] == "write", "rc-publish permissions are not exactly contents read, packages write")
 	find, has := func(f func(relStep) bool) int { return slices.IndexFunc(job.Steps, f) }, strings.Contains
 	refuse := find(func(s relStep) bool {
 		return has(s.Run, "exit 1") && s.Env["CASCADE_STAGING_REMOTE"] == relStagingSecret
@@ -237,13 +236,13 @@ func TestReleaseWorkflowRcPublishShape(t *testing.T) {
 	oras, accepted := "      - name: Set up oras\n", `echo "rc-publish inputs accepted"`
 	relSeeds(t, relWorkflowPath, workflowViolations, map[string][2]string{
 		"rc-publish uses":             {oras, "      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n" + oras},
-		"leaves cache on":             {"          go-version-file: go.mod\n          cache: false\n", "          go-version-file: go.mod\n"},
+		"leaves cache on":             {"nothing it builds may persist beyond the run.\n      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0\n        with:\n          go-version-file: go.mod\n          cache: false\n", "nothing it builds may persist beyond the run.\n      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0\n        with:\n          go-version-file: go.mod\n"},
 		"dispatch inputs":             {"      commit_sha:\n", "      rc_tag:\n        type: string\n      commit_sha:\n"},
-		"permissions are not":         {"      packages: write\n", "      packages: write\n      id-token: write\n"},
+		"permissions are not":         {"      contents: read\n      packages: write\n", "      contents: read\n      packages: write\n      id-token: write\n"},
 		"default permissions":         {"permissions:\n  contents: read\n", "permissions:\n  contents: write\n"},
 		"job verify widens":           {"    name: goreleaser check + build (no secrets)\n", "    name: goreleaser check + build (no secrets)\n    permissions:\n      packages: write\n"},
 		"non-snapshot release":        {"run: goreleaser release --snapshot --clean --skip=docker,sbom", "run: goreleaser release --clean --skip=docker,sbom"},
-		"vars. or ::add-mask::":       {"refuse() { echo", "echo \"::add-mask::$FINAL_TAG\"\n          refuse() { echo"},
+		"vars. or ::add-mask::":       {"refuse() { echo \"rc-publish", "echo \"::add-mask::$FINAL_TAG\"\n          refuse() { echo \"rc-publish"},
 		"git push":                    {"git tag \"$FINAL_TAG\" \"$COMMIT_SHA\"", "git tag \"$FINAL_TAG\" \"$COMMIT_SHA\" && git push origin \"$FINAL_TAG\""},
 		"a push of tags":              {"      - p1-integration\n", "      - p1-integration\n    tags:\n      - 'v*'\n"},
 		"signs or attests":            {oras, "      - run: cosign version\n" + oras},
