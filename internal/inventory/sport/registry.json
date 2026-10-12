@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-12T11:08:55Z",
+  "generated_at": "2026-10-12T17:50:05Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4355,6 +4355,12 @@
           "raw": "cmd/cascade root mounts (P1-CORE-01)."
         },
         {
+          "file": "cmd/cascade/mount_widget.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-WID-04)."
+        },
+        {
           "file": "cmd/cascade/root_mounts.go",
           "line": 6,
           "status": "",
@@ -5276,6 +5282,30 @@
           "raw": "cmd/cascade/doctor (ADD) — P1-E16-W4-S34-T4."
         },
         {
+          "file": "cmd/cascade/doctor_mounts_widget.go",
+          "line": 19,
+          "status": "",
+          "raw": "cmd/cascade/doctor (P1-WID-04)."
+        },
+        {
+          "file": "cmd/cascade/doctor_mounts_widget_real_darwin_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade/doctor (P1-WID-04)."
+        },
+        {
+          "file": "cmd/cascade/doctor_mounts_widget_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "cmd/cascade/doctor (P1-WID-04)."
+        },
+        {
+          "file": "cmd/cascade/doctor_mounts_widget_trust_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "cmd/cascade/doctor (P1-WID-04)."
+        },
+        {
           "file": "cmd/cascade/doctor_recall_index.go",
           "line": 6,
           "status": "CHANGE",
@@ -6058,6 +6088,26 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/widget",
+      "sites": [
+        {
+          "file": "cmd/cascade/widget.go",
+          "line": 23,
+          "status": "",
+          "raw": "cmd/cascade/widget (P1-WID-04)."
+        },
+        {
+          "file": "cmd/cascade/widget_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "cmd/cascade/widget (P1-WID-04)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -19034,9 +19084,100 @@
           "status": "ADD",
           "ticket": "T-2",
           "raw": "internal/daemon/service (ADD, per T-2 sport_updates)."
+        },
+        {
+          "file": "internal/daemon/service/widget.go",
+          "line": 20,
+          "status": "",
+          "raw": "internal/daemon/service (P1-WID-04)."
+        },
+        {
+          "file": "internal/daemon/service/widget_darwin.go",
+          "line": 16,
+          "status": "",
+          "raw": "internal/daemon/service (P1-WID-04)."
+        },
+        {
+          "file": "internal/daemon/service/widget_darwin_fixture_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "internal/daemon/service (P1-WID-04)."
+        },
+        {
+          "file": "internal/daemon/service/widget_darwin_guard_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "internal/daemon/service (P1-WID-04)."
+        },
+        {
+          "file": "internal/daemon/service/widget_darwin_home_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal/daemon/service (P1-WID-04)."
+        },
+        {
+          "file": "internal/daemon/service/widget_darwin_install_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "internal/daemon/service (P1-WID-04)."
+        },
+        {
+          "file": "internal/daemon/service/widget_darwin_status_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal/daemon/service (P1-WID-04)."
+        },
+        {
+          "file": "internal/daemon/service/widget_darwin_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "internal/daemon/service (P1-WID-04)."
+        },
+        {
+          "file": "internal/daemon/service/widget_other.go",
+          "line": 10,
+          "status": "",
+          "raw": "internal/daemon/service (P1-WID-04)."
+        },
+        {
+          "file": "internal/daemon/service/widget_other_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "internal/daemon/service (P1-WID-04)."
+        },
+        {
+          "file": "internal/daemon/service/widget_plist.go",
+          "line": 11,
+          "status": "",
+          "raw": "internal/daemon/service (P1-WID-04)."
+        },
+        {
+          "file": "internal/daemon/service/widget_plist_reader_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/daemon/service (P1-WID-04)."
+        },
+        {
+          "file": "internal/daemon/service/widget_plist_validate_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/daemon/service (P1-WID-04)."
+        },
+        {
+          "file": "internal/daemon/service/widget_status.go",
+          "line": 14,
+          "status": "",
+          "raw": "internal/daemon/service (P1-WID-04)."
+        },
+        {
+          "file": "internal/daemon/service/widget_status_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/daemon/service (P1-WID-04)."
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -19079,6 +19220,26 @@
           "status": "",
           "ticket": "P1-E17-W4-S36-T5",
           "raw": "internal/daemon:node-upgrade-rpc (TEST) -- P1-E17-W4-S36-T5."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/doctor",
+      "sites": [
+        {
+          "file": "internal/doctor/widget_check.go",
+          "line": 20,
+          "status": "",
+          "raw": "internal/doctor (P1-WID-04)."
+        },
+        {
+          "file": "internal/doctor/widget_check_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/doctor (P1-WID-04)."
         }
       ],
       "statuses": [
@@ -34501,7 +34662,7 @@
       ]
     }
   ],
-  "total_sites": 3313,
-  "unspecified_count": 214,
-  "multi_status_count": 104
+  "total_sites": 3337,
+  "unspecified_count": 216,
+  "multi_status_count": 105
 }
