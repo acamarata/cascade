@@ -9,7 +9,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	goruntime "runtime"
 	"strings"
@@ -156,27 +155,5 @@ func issueBackupChallenge(ctx context.Context, gate rpc.HandlerFunc, params json
 }
 
 func signBackupAttestation(deps elevateHelperDeps, ks elevation.ElevationKeystore, params json.RawMessage, nonce string) (rpc.Attestation, error) {
-	encoded, err := ks.PubKeyB64()
-	if err != nil {
-		return rpc.Attestation{}, err
-	}
-	fingerprint, err := elevation.Fingerprint(encoded)
-	if err != nil {
-		return rpc.Attestation{}, err
-	}
-	requestID, err := cascade.NewID()
-	if err != nil {
-		return rpc.Attestation{}, cascade.Wrap(cascade.KindInternal, err, "backup: mint elevation request id")
-	}
-	now := deps.Clock.Now()
-	att := rpc.Attestation{
-		RequestID: string(requestID), ActionHash: (&rpc.Request{Params: params}).ParamsHash(), Nonce: nonce,
-		PubkeyFingerprint: fingerprint, IssuedUnix: now.Unix(), ExpUnix: now.Add(attestationTTL).Unix(),
-	}
-	sig, err := ks.Sign(canonicalSignedBytes(att))
-	if err != nil {
-		return rpc.Attestation{}, err
-	}
-	att.SigB64 = base64.StdEncoding.EncodeToString(sig)
-	return att, nil
+	return signAttestation(ks, deps.Clock, (&rpc.Request{Params: params}).ParamsHash(), nonce)
 }

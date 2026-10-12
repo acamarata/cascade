@@ -225,34 +225,3 @@ func runElevateHelperSign(cmd *cobra.Command, deps elevateHelperDeps, requestID,
 	}
 	return nil
 }
-
-// canonicalSignedBytes reproduces, field-for-field and in the same
-// alphabetical-by-JSON-tag order, the exact byte sequence
-// internal/rpc/elevation_attest.go's unexported signedFields computes —
-// this ticket does not get to invent its own attestation format, and
-// internal/rpc is out of this ticket's files_scope to import the
-// unexported helper from, so the shape is reproduced here deliberately,
-// proven identical by TestElevateHelperCmd_SignVerifiesAgainstRealVerifier
-// signing with THIS function and verifying with rpc.VerifyAttestation.
-func canonicalSignedBytes(att rpc.Attestation) []byte {
-	type signable struct {
-		ActionHash        string `json:"action_hash"`
-		ExpUnix           int64  `json:"exp_unix"`
-		IssuedUnix        int64  `json:"issued_unix"`
-		Nonce             string `json:"nonce"`
-		PubkeyFingerprint string `json:"pubkey_fingerprint"`
-		RequestID         string `json:"request_id"`
-	}
-	b, err := json.Marshal(signable{
-		ActionHash:        att.ActionHash,
-		ExpUnix:           att.ExpUnix,
-		IssuedUnix:        att.IssuedUnix,
-		Nonce:             att.Nonce,
-		PubkeyFingerprint: att.PubkeyFingerprint,
-		RequestID:         att.RequestID,
-	})
-	if err != nil {
-		return nil
-	}
-	return b
-}

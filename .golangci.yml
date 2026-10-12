@@ -136,6 +136,10 @@ linters:
         # exemption here, in review, by name.
         cmd-rpc-server-boundary:
           files:
+            # depguard globs need a "/" after "**", so "cmd/cascade/**/*.go"
+            # alone matches only subdirectories; the first line covers the
+            # package's own files (a seeded import there was not reported).
+            - "**/cmd/cascade/*.go"
             - "**/cmd/cascade/**/*.go"
             - "!**/cmd/cascade/daemon_unix_run.go"
             - "!**/cmd/cascade/daemon_unix_run_memory.go"
@@ -217,6 +221,14 @@ linters:
             - "!**/cmd/cascade/mcp_tools.go"
             - "!**/cmd/cascade/mcp.go"
             - "!**/cmd/cascade/elevate_helper.go"
+            # Elevation signing composition root: wire types only; calls use the client.
+            - "!**/cmd/cascade/elevated_call.go"
+            # Config acceptance composition root registers the daemon handler.
+            - "!**/cmd/cascade/daemon_unix_config_accept.go"
+            # Local vault composition root reuses the attestation verifier.
+            - "!**/cmd/cascade/vault_elevated_gate.go"
+            # Policy authorization composition root registers the daemon handler.
+            - "!**/cmd/cascade/daemon_unix_policy_authorize.go"
             # backup_elevation.go never dials the daemon - there is no
             # client.Client.Call anywhere in it, no socket, no HTTP round
             # trip to a running server. It runs the 06 §5.14 nonce +

@@ -129,6 +129,10 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	"mcp_tools.go":      true,
 	"mcp.go":            true,
 	"elevate_helper.go": true,
+	// elevated_call.go composes custody signing for Client.DoElevated and
+	// references rpc.Attestation wire data without dialing the daemon itself.
+	// This mirrors the matching .golangci.yml cmd-rpc-server-boundary exemption.
+	"elevated_call.go": true,
 	// backup_elevation.go never dials the daemon: it runs the 06 §5.14
 	// nonce + local-auth-signature + middleware-verify + single-use-ledger
 	// ceremony entirely in-process, reusing the daemon's own
