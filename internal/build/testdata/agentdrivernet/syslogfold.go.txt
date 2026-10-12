@@ -1,0 +1,3 @@
+package fixture
+import "Log/syslog"
+func run() { _, _ = syslog.Dial("tcp", "localhost:9", 0, "x") }

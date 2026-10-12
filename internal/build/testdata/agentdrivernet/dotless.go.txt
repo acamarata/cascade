@@ -1,0 +1,3 @@
+package fixture
+import "evildial/dial"
+var _ = dial.Dial

@@ -16,8 +16,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/acamarata/cascade/internal/plugins/registryfetch"
 )
 
 func TestHTTPFetcher_RealDoer_Integration(t *testing.T) {
@@ -30,7 +28,7 @@ func TestHTTPFetcher_RealDoer_Integration(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	f := registryfetch.HTTPFetcher{BaseURL: srv.URL + "/"}
+	f := newFetcher(nil, srv.URL+"/")
 	data, err := f.FetchIndex(context.Background())
 	if err != nil {
 		t.Fatalf("FetchIndex over real socket: %v", err)

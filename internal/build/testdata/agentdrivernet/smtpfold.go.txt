@@ -1,0 +1,3 @@
+package fixture
+import "Net/smtp"
+func run() { _ = smtp.SendMail }

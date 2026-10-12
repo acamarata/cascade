@@ -1,0 +1,3 @@
+package fixture
+import "net"
+func run(p string) { n := "unix"; _, _ = net.Listen(n, p) }

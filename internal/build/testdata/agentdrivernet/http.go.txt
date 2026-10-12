@@ -1,0 +1,5 @@
+//go:build ignore
+
+package fixture
+import "net/http"
+var _ = http.Get

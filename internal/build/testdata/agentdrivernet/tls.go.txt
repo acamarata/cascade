@@ -1,0 +1,3 @@
+package fixture
+import "crypto/tls"
+var _ = tls.Dial

@@ -11,10 +11,6 @@ import (
 
 // egressPatternMatches implements EgressDirAllowed's single-pattern rule.
 func egressPatternMatches(dir, pattern string) bool {
-	if strings.HasSuffix(pattern, "/*") {
-		base := strings.TrimSuffix(pattern, "/*")
-		return dir == base || strings.HasPrefix(dir, base+"/")
-	}
 	return dir == pattern
 }
 
@@ -83,7 +79,7 @@ func ScanEgressImporters(root string, imports []string) ([]EgressImporter, error
 // egressFileImports returns the governed imports one file declares.
 func egressFileImports(path string, governed map[string]bool) ([]string, error) {
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
+	file, err := parser.ParseFile(fset, path, nil, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +87,7 @@ func egressFileImports(path string, governed map[string]bool) ([]string, error) 
 	for _, spec := range file.Imports {
 		importPath, uerr := strconv.Unquote(spec.Path.Value)
 		if uerr != nil {
-			continue
+			return nil, uerr
 		}
 		if governed[importPath] {
 			out = append(out, importPath)

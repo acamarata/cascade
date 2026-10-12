@@ -22,8 +22,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/acamarata/cascade/internal/bridge"
+	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/plugins/registryfetch"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/plugin"
 )
 
@@ -34,6 +37,9 @@ import (
 const pluginRegistryCacheTTLFloor = time.Minute
 
 var defaultPluginRegistryPublicKey = plugin.DefaultRegistryPublicKey
+
+// pluginRegistryFirewall uses the shared host firewall; tests isolate custody.
+var pluginRegistryFirewall = bridge.NewFirewall
 
 // buildPluginRegistryClient loads [registry] once and returns a client,
 // or nil with a human-readable warning explaining why not (D1). Three
@@ -65,9 +71,17 @@ func buildPluginRegistryClient(ctx context.Context, paths runtime.PathProvider, 
 	if cacheTTL <= 0 {
 		cacheTTL = pluginRegistryCacheTTLFloor
 	}
+	engine, err := pluginRegistryFirewall(secrets.Config{Service: secrets.DefaultVaultService, Dir: paths.DataDir()})
+	if err != nil {
+		return nil, fmt.Sprintf("cascade: plugin.search: registry firewall unavailable (%v)", err)
+	}
+	capability, err := engine.Capability(egress.EgressClassRegistryFetch)
+	if err != nil {
+		return nil, fmt.Sprintf("cascade: plugin.search: registry fetch refused (%v)", err)
+	}
 	return plugin.NewRegistryClient(
 		plugin.RegistryConfig{RegistryURL: cfg.Registry.URL, CacheDir: cacheDir, CacheTTL: cacheTTL, PublicKey: pub},
-		registryfetch.HTTPFetcher{BaseURL: cfg.Registry.URL},
+		registryfetch.HTTPFetcher{BaseURL: cfg.Registry.URL, Engine: engine, Capability: capability},
 		plugin.Ed25519Verifier{PublicKey: pub},
 		plugin.FileCache{Dir: cacheDir},
 		clock,

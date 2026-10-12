@@ -20,8 +20,7 @@ package build
 // EgressAllowEntry is one allowlisted package directory.
 type EgressAllowEntry struct {
 	// Dir is the module-relative package directory, e.g.
-	// "internal/secrets". A trailing "/*" admits the directory and every
-	// package beneath it.
+	// "internal/secrets". Entries match exactly.
 	Dir string
 	// Reason states why this package is allowed to import what it does.
 	Reason string
@@ -30,43 +29,27 @@ type EgressAllowEntry struct {
 // EgressNetNormative is the set of packages the egress ruling names as
 // permitted importers of "net" and "net/http".
 var EgressNetNormative = []EgressAllowEntry{
-	{"internal/secrets", "holds the in-package egress door the token-endpoint call transits under the oauth class"},
-	{"internal/providers/intake", "the provider-intake fetch; the health and recovery probes reuse its class"},
-	{"internal/providers/health", "provider health probes"},
-	{"providers/*", "a provider talks to its vendor endpoint; that is what a provider is"},
-	{"internal/backup/targets", "a remote backup destination"},
-	{"internal/plugins/remote", "the remote plugin runtime, disabled by default"},
-	{"internal/plugins/registryfetch", "the plugin registry fetch"},
-	{"internal/nodes", "node dispatch transport"},
-	{"internal/sync", "the sync engine"},
-	{"plugins/*", "bridge plugins reach their own services"},
-	{"internal/providers/agents/egressproxy", "the per-spawn loopback CONNECT proxy an external agent driver is routed through; it dials only exact allow-listed destinations"},
+	{"internal/secrets", "OAuth token transport; oauth remains audit-only"},
+	{"internal/providers/intake", "Provider intake and health requests"},
+	{"providers/embeddings/bgem3", "Embedding provider HTTP transport"},
+	{"providers/openai", "Model provider HTTP transport"},
+	{"providers/redis", "Redis storage provider transport"},
+	{"providers/s3", "Object storage provider transport"},
+	{"providers/transport", "Shared provider HTTP transport"},
+	{"internal/plugins/remote", "Remote plugin transport, disabled by default"},
+	{"internal/plugins/registryfetch", "Intercepted registry index and artifact fetches"},
+	{"internal/nodes", "Node dispatch transport"},
+	{"plugins/cascade-pa/telegram", "Bridge transport"},
+	{"plugins/github", "GitHub API polling"},
+	{"plugins/github/tools", "GitHub tool response types"},
+	{"plugins/pbd", "Process-tier-declared plugin transport"},
+	{"internal/providers/agents/egressproxy", "Per-spawn CONNECT proxy with exact destination policy"},
 }
 
-// EgressNetNotYetMigrated is what the tree holds today outside the
-// normative set. Every entry is a package that predates the egress ruling
-// and has not been routed through the firewall yet. The list exists so
-// that these are NAMED rather than silently tolerated, and so that a new
-// unlisted importer still turns the gate red.
+// EgressNetNotYetMigrated names the remaining non-egress network imports.
 var EgressNetNotYetMigrated = []EgressAllowEntry{
-	{"cmd/cascade", "the composition root builds the client and daemon transports"},
-	{"internal/build", "the gates themselves parse import paths as data; they open no socket"},
-	{"internal/client", "the control-socket client; local transport, not egress"},
-	{"internal/daemon", "the control-socket listener; local transport, not egress"},
-	{"internal/rpc", "the control-plane RPC frame layer; local transport, not egress"},
-	{"internal/runtime", "address and socket-path helpers"},
-	// NOTE ON THIS ENTRY'S PLACEMENT. internal/fleet/sessions does not
-	// "predate the egress ruling" the way every entry above it does: it
-	// was added after. It is here because it is the same KIND of importer
-	// as internal/rpc and internal/daemon -- it serves an SSE stream over
-	// the local control socket, so no bytes leave the machine and there is
-	// nothing for the egress firewall to filter. That class will never
-	// "migrate", because it was never egress; the list name is inaccurate
-	// for it, and splitting local-transport out into its own list is a
-	// change worth making deliberately rather than as a side effect of
-	// landing a ticket. Recorded so the imprecision is visible instead of
-	// buried in a one-line append.
-	{"internal/fleet/sessions", "the fleet.sessions SSE stream over the local control socket; local transport, not egress (see note above)"},
+	{"cmd/cascade", "The composition root constructs local transports"},
+	{"internal/runtime", "Address and socket-path helpers"},
 }
 
 // EgressExecNormative is the set the ruling names as permitted importers
@@ -127,9 +110,7 @@ func egressAllowDirs(lists ...[]EgressAllowEntry) []string {
 	return out
 }
 
-// EgressDirAllowed reports whether dir is admitted by any pattern. A
-// pattern ending in "/*" admits the parent directory and everything under
-// it; every other pattern matches exactly.
+// EgressDirAllowed reports whether dir is named by an exact entry.
 func EgressDirAllowed(dir string, patterns []string) bool {
 	for _, pattern := range patterns {
 		if egressPatternMatches(dir, pattern) {

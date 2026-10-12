@@ -14,11 +14,16 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/bridge"
+	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/plugin"
 	"github.com/acamarata/cascade/pkg/plugin/registry/generator"
 )
@@ -26,11 +31,8 @@ import (
 func TestBuildPluginRegistryClientNotConfigured(t *testing.T) {
 	paths := fakeDaemonPaths{root: t.TempDir()}
 	client, warning := buildPluginRegistryClient(context.Background(), paths, runtime.NewSystemClock())
-	if client != nil {
-		t.Fatalf("no config.toml at all: client = %v, want nil", client)
-	}
-	if warning != "" {
-		t.Fatalf("unconfigured is a normal, silent state: warning = %q, want empty", warning)
+	if client != nil || warning != "" {
+		t.Fatalf("no config.toml: client = %v, warning = %q, want nil and a silent state", client, warning)
 	}
 }
 
@@ -129,15 +131,16 @@ func TestEmbeddedDefaultVerifiesDerivedIndex(t *testing.T) {
 func verifyEmbeddedRegistryClient(t *testing.T, valid, fixture []byte) {
 	t.Helper()
 	dir := t.TempDir()
-	for _, name := range []string{"HOME", "USERPROFILE", "CASCADE_HOME"} {
-		t.Setenv(name, dir)
-	}
+	calls := isolatePluginRegistryFirewall(t, dir)
 	cacheDir := filepath.Join(dir, "cache")
 	writePluginRegistryConfig(t, dir, "[registry]\nurl = 'https://registry.example'\ncache_dir = '"+cacheDir+"'\n")
 	clock := runtime.NewSystemClock()
 	client, warning := buildPluginRegistryClient(context.Background(), fakeDaemonPaths{root: dir}, clock)
 	if client == nil || warning != "" {
 		t.Fatalf("client: %s", warning)
+	}
+	if *calls != 1 {
+		t.Fatalf("isolated firewall factory calls = %d, want 1", *calls)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -158,31 +161,65 @@ func verifyEmbeddedRegistryClient(t *testing.T, valid, fixture []byte) {
 
 func TestBuildPluginRegistryClientURLNoPubkey(t *testing.T) {
 	dir := t.TempDir()
+	calls := isolatePluginRegistryFirewall(t, dir)
 	writePluginRegistryConfig(t, dir, "[registry]\nurl = \"https://registry.example\"\n")
 	client, warning := buildPluginRegistryClient(context.Background(), fakeDaemonPaths{root: dir}, runtime.NewSystemClock())
-	if client == nil {
-		t.Fatalf("url with no pubkey_path: want embedded default, warning=%q", warning)
-	}
-	if warning != "" {
-		t.Fatal(warning)
+	if client == nil || warning != "" || *calls != 1 {
+		t.Fatalf("url with no pubkey_path: client=%v warning=%q isolated factory calls=%d, want the embedded default and 1", client, warning, *calls)
 	}
 }
 
 func TestBuildPluginRegistryClientConfigured(t *testing.T) {
-	dir := t.TempDir()
-	keyPath := filepath.Join(dir, "registry.pub")
-	writePluginRegistryPubkeyFixture(t, keyPath)
-	// A TOML literal string ('...') carries a windows path verbatim; a basic
-	// string would read its backslashes as escapes and the config would not
-	// parse (the windows lane proved it).
-	writePluginRegistryConfig(t, dir, "[registry]\nurl = \"https://registry.example\"\npubkey_path = '"+keyPath+"'\n")
+	dir, called := t.TempDir(), false
+	configurePluginRegistry(t, dir, func(cfg secrets.Config) (*egress.Engine, error) {
+		called = true
+		if cfg.Service != secrets.DefaultVaultService || cfg.Dir != (fakeDaemonPaths{root: dir}).DataDir() {
+			t.Fatalf("firewall custody config = %+v", cfg)
+		}
+		cfg.Dir, cfg.ForceFileVault = dir, true
+		return bridge.NewFirewall(cfg)
+	})
 	client, warning := buildPluginRegistryClient(context.Background(), fakeDaemonPaths{root: dir}, runtime.NewSystemClock())
 	if client == nil {
 		t.Fatalf("url+valid pubkey: client = nil, warning = %q, want a real client", warning)
 	}
-	if warning != "" {
-		t.Errorf("url+valid pubkey: warning = %q, want empty", warning)
+	if warning != "" || !called {
+		t.Errorf("url+valid pubkey: warning = %q, isolated factory called = %v; want empty and true", warning, called)
 	}
+}
+
+// isolatePluginRegistryFirewall points every home at dir and swaps the firewall
+// factory for a file-vault one; the returned counter records its calls.
+func isolatePluginRegistryFirewall(t *testing.T, dir string) *int {
+	t.Helper()
+	calls := 0
+	configurePluginRegistryHomes(t, dir, func(cfg secrets.Config) (*egress.Engine, error) {
+		calls++
+		cfg.Dir, cfg.ForceFileVault = dir, true
+		return bridge.NewFirewall(cfg)
+	})
+	return &calls
+}
+
+// configurePluginRegistryHomes isolates every home in dir and swaps the firewall factory.
+func configurePluginRegistryHomes(t *testing.T, dir string, factory func(secrets.Config) (*egress.Engine, error)) {
+	t.Helper()
+	for _, name := range []string{"HOME", "USERPROFILE", "CASCADE_HOME"} {
+		t.Setenv(name, dir)
+	}
+	original := pluginRegistryFirewall
+	t.Cleanup(func() { pluginRegistryFirewall = original })
+	pluginRegistryFirewall = factory
+}
+
+// configurePluginRegistry also writes a configured registry with a pubkey.
+func configurePluginRegistry(t *testing.T, dir string, factory func(secrets.Config) (*egress.Engine, error)) {
+	t.Helper()
+	configurePluginRegistryHomes(t, dir, factory)
+	keyPath := filepath.Join(dir, "registry.pub")
+	writePluginRegistryPubkeyFixture(t, keyPath)
+	// A TOML literal string ('...') keeps a windows path's backslashes verbatim.
+	writePluginRegistryConfig(t, dir, "[registry]\nurl = \"https://registry.example\"\npubkey_path = '"+keyPath+"'\n")
 }
 
 func TestResolvePluginRegistryPubkeyEmptyPath(t *testing.T) {
@@ -195,13 +232,27 @@ func TestResolvePluginRegistryPubkeyEmptyPath(t *testing.T) {
 	}
 }
 
+func TestBuildPluginRegistryClientFirewallRefusals(t *testing.T) {
+	// A nil engine issues no capability; either refusal must leave no client to fetch through.
+	for want, fail := range map[string]error{
+		"registry firewall unavailable (fixture firewall unavailable)": errors.New("fixture firewall unavailable"),
+		"registry fetch refused (":                                     nil,
+	} {
+		t.Run(want, func(t *testing.T) {
+			dir, calls := t.TempDir(), 0
+			configurePluginRegistry(t, dir, func(secrets.Config) (*egress.Engine, error) { calls++; return nil, fail })
+			client, warning := buildPluginRegistryClient(context.Background(), fakeDaemonPaths{root: dir}, runtime.NewSystemClock())
+			if client != nil || calls != 1 || !strings.HasPrefix(warning, "cascade: plugin.search: "+want) {
+				t.Fatalf("client=%v factory calls=%d warning=%q, want nil and %q", client, calls, warning, want)
+			}
+		})
+	}
+}
+
 func TestResolvePluginRegistryPubkeyUnreadableFile(t *testing.T) {
 	pub, warning := resolvePluginRegistryPubkey(filepath.Join(t.TempDir(), "does-not-exist.pub"))
-	if pub != nil {
-		t.Fatalf("unreadable file: pub = %v, want nil", pub)
-	}
-	if warning == "" {
-		t.Fatal("unreadable file: want a non-empty warning")
+	if pub != nil || warning == "" {
+		t.Fatalf("unreadable file: pub = %v, warning = %q, want nil and a warning", pub, warning)
 	}
 }
 
@@ -213,11 +264,8 @@ func TestResolvePluginRegistryPubkeyBadBase64(t *testing.T) {
 		t.Fatalf("write fixture: %v", err)
 	}
 	pub, warning := resolvePluginRegistryPubkey(path)
-	if pub != nil {
-		t.Fatalf("bad base64: pub = %v, want nil", pub)
-	}
-	if warning == "" {
-		t.Fatal("bad base64: want a non-empty warning")
+	if pub != nil || warning == "" {
+		t.Fatalf("bad base64: pub = %v, warning = %q, want nil and a warning", pub, warning)
 	}
 }
 
@@ -226,16 +274,12 @@ func TestResolvePluginRegistryPubkeyValid(t *testing.T) {
 	path := filepath.Join(dir, "good.pub")
 	writePluginRegistryPubkeyFixture(t, path)
 	pub, warning := resolvePluginRegistryPubkey(path)
-	if pub == nil {
-		t.Fatalf("valid key: pub = nil, warning = %q, want 32 bytes", warning)
-	}
 	if len(pub) != 32 {
-		t.Errorf("valid key: len(pub) = %d, want 32 (Ed25519 public key)", len(pub))
+		t.Fatalf("valid key: len(pub) = %d, warning = %q, want 32 (Ed25519 public key)", len(pub), warning)
 	}
 }
 
-// writePluginRegistryConfig writes a minimal config.toml under dir/
-// config.toml, matching fakeDaemonPaths.ConfigPath()'s own join.
+// writePluginRegistryConfig writes a minimal dir/config.toml.
 func writePluginRegistryConfig(t *testing.T, dir, toml string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(toml), 0o600); err != nil {
@@ -243,9 +287,7 @@ func writePluginRegistryConfig(t *testing.T, dir, toml string) {
 	}
 }
 
-// writePluginRegistryPubkeyFixture writes a real, syntactically valid
-// (though not a production trust root — see config_registry.go's header)
-// base64-encoded 32-byte Ed25519 public key to path.
+// writePluginRegistryPubkeyFixture writes a valid, non-production base64 Ed25519 key to path.
 func writePluginRegistryPubkeyFixture(t *testing.T, path string) {
 	t.Helper()
 	key := make([]byte, 32)
