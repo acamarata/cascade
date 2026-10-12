@@ -1,50 +1,22 @@
-// Purpose: chat.topics_list and chat.threads_list, the two JSON-RPC
-//   methods P1-E21-W5-S46-T4 adds so `cascade chat --topics`/`--threads`
-//   has a real daemon-side counterpart, over the REAL topic-engine seams:
-//   NewConversationThreadStore reading the conversation domain's own
-//   tables through conversation.Store, no second storage path.
-// Inputs: a conversation.Store and a Clock at construction; no params for
-//   topics_list, {page, page_size} for threads_list.
+// Purpose: chat.topics_list and chat.threads_list, the JSON-RPC methods
+//   behind `cascade chat --topics`/`--threads`, over the real topic-engine
+//   seams: NewConversationThreadStore reading the conversation tables
+//   through conversation.Store, no second storage path.
+// Inputs: a conversation.Store and a Clock at construction; {scope} for
+//   topics_list, {page, page_size, scope} for threads_list.
 // Outputs: topic types with thread/turn counts; a bounded page of topic
 //   threads with topic_type, id, turn_count and last_activity.
 // Constraints:
-//
-//   PACKAGE PLACEMENT (recorded contract deviation, not papered over).
-//   The ticket's contract places these methods "next to chat.list_threads
-//   in adapter.go" (package conversation). That is not buildable:
-//   thread_store.go (this package) imports internal/conversation for
-//   NewConversationThreadStore's own conversation.Store parameter, so
-//   internal/conversation importing internal/conversation/topics back
-//   would be a compile-time import cycle (`go build ./...` refuses it,
-//   the same class of proof internal/plugins/plugin_rpc.go's own
-//   CONTRACT NOTE already used for an identical placement conflict on
-//   this ticket's neighbor package). This file therefore lives in
-//   package topics, which already depends one-way on conversation, and is
-//   registered from the composition root (cmd/cascade/chat_wiring.go)
-//   alongside Adapter.RegisterHandlers -- exactly where every other
-//   chat.* registration call already happens per adapter.go's own
-//   CONTRACT DEVIATION note (the daemon composition root, not
-//   internal/rpc/registry.go itself, is the one real call site).
-//
-//   PRIVACY (recorded deviation from the ticket's literal text). The
-//   ticket says these two methods must "honour thread privacy modes
-//   exactly as chat.list_threads does ... reuse the same privacy filter,
-//   never a copy". Verified against the live tree: handleListThreads
-//   (adapter.go) calls a.store.ListThreads(ctx) unconditionally and
-//   applies NO privacy filter at all -- there is no existing filter to
-//   reuse. Rather than silently matching that (which would expose a
-//   local-only topic thread's existence through a new listing surface)
-//   or fabricating a "reuse" that does not exist, this file adds a real,
-//   new filter using the real primitive already in the tree
-//   (conversation.Store.ThreadPrivacy, P1-E20-W5-S44-T2): every
-//   topic-prefixed thread whose tier is provider.SensitivityLocalOnly is
-//   excluded from both methods, unconditionally (there is no
-//   caller-locality signal at the RPC layer to condition on, so the
-//   fail-closed choice is to exclude it from every caller, which is
-//   strictly a SUPERSET of "never listed through an external-capable
-//   path"). A ThreadPrivacy read failure propagates as the call's own
-//   error rather than being read as "not local-only" (fail closed on
-//   uncertainty).
+//   PACKAGE PLACEMENT: this package imports internal/conversation, so the
+//   methods cannot sit in adapter.go (an import cycle); they are registered
+//   from the composition root (cmd/cascade/chat_wiring.go) beside
+//   Adapter.RegisterHandlers.
+//   PRIVACY: every topic thread whose tier is SensitivityLocalOnly is
+//   excluded from both methods for every caller, and a ThreadPrivacy read
+//   failure fails the call (fail closed on uncertainty).
+//   SCOPE: rows are filtered by conversation.CallerThreadView, so a
+//   principal sees only threads attributed to its own scope; an optional
+//   scope param narrows a view and never widens one.
 // SPORT: internal/conversation/topics rpc (ADD) (P1-E21-W5-S46-T4).
 
 package topics
@@ -88,6 +60,7 @@ const (
 type RPCHandlers struct {
 	store   conversation.Store
 	threads ThreadStore
+	clock   Clock
 }
 
 // NewRPCHandlers wraps store as this file's real ThreadStore (through
@@ -98,7 +71,7 @@ func NewRPCHandlers(store conversation.Store, clock Clock) (*RPCHandlers, error)
 	if err != nil {
 		return nil, err
 	}
-	return &RPCHandlers{store: store, threads: threads}, nil
+	return &RPCHandlers{store: store, threads: threads, clock: clock}, nil
 }
 
 // RegisterHandlers binds both methods onto registry. See this file's
@@ -120,14 +93,14 @@ type topicsListResult struct {
 	Topics []topicSummaryWire `json:"topics"`
 }
 
-// handleTopicsList is chat.topics_list. It takes no params, matching
-// handleListThreads' own DisallowUnknownFields discipline for an
-// object with any field.
+// handleTopicsList is chat.topics_list. Its only param is an optional
+// scope; any other field is refused (DisallowUnknownFields).
 func (h *RPCHandlers) handleTopicsList(ctx context.Context, raw json.RawMessage) (any, error) {
-	if err := refuseNonEmptyParams(raw); err != nil {
+	scope, err := decodeTopicsListParams(raw)
+	if err != nil {
 		return nil, err
 	}
-	rows, err := h.listTopicThreads(ctx)
+	rows, err := h.listTopicThreads(ctx, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -150,8 +123,9 @@ type threadSummaryWire struct {
 // page and a page size, matching the CLI's own --page/--page-size flags
 // directly (no cursor translation at the client-glue layer).
 type threadsListParams struct {
-	Page     int `json:"page"`
-	PageSize int `json:"page_size"`
+	Page     int     `json:"page"`
+	PageSize int     `json:"page_size"`
+	Scope    *string `json:"scope,omitempty"`
 }
 
 // threadsListResult is chat.threads_list' wire response shape.
@@ -168,7 +142,11 @@ func (h *RPCHandlers) handleThreadsList(ctx context.Context, raw json.RawMessage
 	if err != nil {
 		return nil, err
 	}
-	rows, err := h.listTopicThreads(ctx)
+	scope, err := declaredScope(p.Scope)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := h.listTopicThreads(ctx, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -206,19 +184,32 @@ func decodeThreadsListParams(raw json.RawMessage) (threadsListParams, error) {
 	return p, nil
 }
 
-// refuseNonEmptyParams rejects any object with a field, matching
-// handleListThreads' own no-params discipline.
-func refuseNonEmptyParams(raw json.RawMessage) error {
-	if len(raw) == 0 {
-		return nil
+// decodeTopicsListParams reads topics_list's optional scope and refuses any
+// other field.
+func decodeTopicsListParams(raw json.RawMessage) (string, error) {
+	var p struct {
+		Scope *string `json:"scope"`
 	}
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
-	var empty struct{}
-	if err := dec.Decode(&empty); err != nil {
-		return cascade.Wrap(cascade.KindInvalidInput, err, "topics: chat.topics_list: malformed params")
+	if len(raw) > 0 {
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&p); err != nil {
+			return "", cascade.Wrap(cascade.KindInvalidInput, err, "topics: chat.topics_list: malformed params")
+		}
 	}
-	return nil
+	return declaredScope(p.Scope)
+}
+
+// declaredScope reads an optional scope param: absent is "", present must
+// be non-empty. It only narrows the caller's view (CallerThreadView).
+func declaredScope(scope *string) (string, error) {
+	if scope == nil {
+		return "", nil
+	}
+	if *scope == "" {
+		return "", cascade.New(cascade.KindInvalidInput, "topics: scope must be a non-empty string")
+	}
+	return *scope, nil
 }
 
 func clampPage(n int) int {
@@ -255,7 +246,11 @@ type topicThreadRow struct {
 // threads_list' pagination is stable across calls. A ThreadPrivacy or
 // ListTurns failure on any one thread fails the whole call -- never a
 // partial, silently-shorter list.
-func (h *RPCHandlers) listTopicThreads(ctx context.Context) ([]topicThreadRow, error) {
+func (h *RPCHandlers) listTopicThreads(ctx context.Context, scope string) ([]topicThreadRow, error) {
+	visible, err := conversation.CallerThreadView(ctx, h.store, h.clock, scope)
+	if err != nil {
+		return nil, err
+	}
 	all, err := h.store.ListThreads(ctx)
 	if err != nil {
 		return nil, err
@@ -263,7 +258,7 @@ func (h *RPCHandlers) listTopicThreads(ctx context.Context) ([]topicThreadRow, e
 	out := make([]topicThreadRow, 0, len(all))
 	for _, t := range all {
 		topicType, ok := strings.CutPrefix(t.ID, topicThreadIDPrefix)
-		if !ok {
+		if !ok || !visible(t.ID) {
 			continue
 		}
 		tier, err := h.store.ThreadPrivacy(ctx, t.ID)

@@ -201,8 +201,8 @@ func TestOwnerCLIKeepsOwnerView(t *testing.T) {
 	t.Setenv(principal.EnvToken, token)
 	var scoped json.RawMessage
 	err := cli.Do(context.Background(), "chat.list_threads", nil, &scoped)
-	if kind, _ := cascade.KindOf(err); kind != cascade.KindPermissionDenied || len(scoped) != 0 {
-		t.Fatal("interim owner-only chat leaked", string(scoped), err)
+	if err != nil || bytes.Contains(scoped, []byte(created.ThreadID)) {
+		t.Fatal("owner chat thread leaked to a principal", string(scoped), err)
 	}
 	err = cli.Do(context.Background(), "vault.get", nil, nil)
 	if kind, _ := cascade.KindOf(err); kind != cascade.KindPermissionDenied {

@@ -1,43 +1,25 @@
 package conversation
 
-// Purpose (this file): the D/S-06.T3 JSON-RPC method registry surface
-//   over T1's Store -- chat.append_turn, chat.get_thread, and
-//   chat.list_threads (the chat.* namespace 07-CLI-COMMAND-TREE.md pins
-//   for the chat surface). Mirrors internal/fleet/sessions/rpc.go's
-//   RegisterHandlers precedent: a generic *rpc.Registry.Register call per
-//   method, no method-specific code in internal/rpc itself.
-// Inputs: a Store, an EventBus (nil in embedded mode), a Substitutor
-//   (nil is a documented no-op passthrough, see sse.go), a Clock, and a
-//   mode string ("" for daemon, ModeEmbedded for Windows tier-2).
-// Outputs: registered handlers returning wire result shapes, or a
-//   pkg/cascade taxonomy error mapped to the JSON-RPC wire format by
-//   internal/rpc's existing generic errorObjectFrom/cascade.NewRPCError
-//   path (see adapter_errors.go for why this ticket adds no second
-//   mapping layer).
-// Constraints: L2 workspace-mutation risk (no elevation middleware
-//   required -- these three methods are registered directly, matching
-//   fleet.sessions.list's own no-elevation precedent). CLIENT-LOCAL ECHO:
-//   handleAppendTurn calls emitTurnAppended (sse.go) AFTER the store
-//   commit and BEFORE returning its JSON-RPC result, and propagates a
-//   non-embedded-mode SSE failure to the caller rather than reporting a
-//   turn as appended when no client will ever see it echoed.
-//
-// CONTRACT DEVIATION (composition-root wiring, recorded, not papered
-// over), matching internal/fleet/sessions/rpc.go's identical precedent:
-// the actual call to RegisterHandlers from the daemon's buildRPCServer
-// (cmd/cascade/daemon_unix_run.go) is outside this ticket's files_scope,
-// which lists no cmd/cascade file to change. Recorded in
-// internal/build/testonly-allow.json naming this ticket, exactly as
-// R-21.273's precedent directs when wiring the composition root itself
-// is genuinely out of scope; RegisterHandlers is ready for that call
-// site today.
-//
+// Purpose: the chat.* JSON-RPC surface over Store: chat.append_turn,
+//   chat.get_thread, chat.list_threads and chat.search, one generic
+//   rpc.Registry.Register call per method.
+// Inputs: a Store, an EventBus (nil in embedded mode), a Substitutor (nil is
+//   sse.go's passthrough), a Clock, and a mode ("" daemon, ModeEmbedded).
+// Outputs: wire result shapes, or a pkg/cascade error mapped by internal/rpc
+//   (adapter_errors.go explains why there is no second mapping layer).
+// Constraints: CLIENT-LOCAL ECHO: handleAppendTurn emits the SSE mirror after
+//   the store commit and before returning, and reports a non-embedded mirror
+//   failure instead of a success no client will see. SCOPE: every verb is
+//   owner-view (internal/rpc/access_table_conversation.go); reads run through
+//   scope_attr.go's wrappers and appends through scopedAppendThread, so a
+//   principal reaches only its own scope's threads.
 // SPORT: internal.conversation.adapter/ADDED (P1-E20-W5-S43-T2).
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"sort"
 
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -92,9 +74,9 @@ func (a *Adapter) SetScrub(p ScrubPipeline) { a.scrub = p }
 // this file's CONTRACT DEVIATION note for the composition-root call site.
 func (a *Adapter) RegisterHandlers(registry *rpc.Registry) {
 	registry.Register(MethodAppendTurn, mapped(a.handleAppendTurn))
-	registry.Register(MethodGetThread, mapped(a.handleGetThread))
-	registry.Register(MethodListThreads, mapped(a.handleListThreads))
-	registry.Register(MethodSearch, mapped(a.handleSearch))
+	registry.Register(MethodGetThread, mapped(a.scopedGetThread))
+	registry.Register(MethodListThreads, mapped(a.scopedListThreads))
+	registry.Register(MethodSearch, mapped(a.scopedSearch))
 }
 
 // mapped routes h's returned error through adapter_errors.go's
@@ -131,7 +113,7 @@ func (a *Adapter) handleAppendTurn(ctx context.Context, raw json.RawMessage) (an
 	if err != nil {
 		return nil, ErrMalformedTurnPayload
 	}
-	params.ThreadID, err = a.resolveAppendThread(ctx, params)
+	params.ThreadID, err = a.scopedAppendThread(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -152,14 +134,9 @@ func (a *Adapter) handleAppendTurn(ctx context.Context, raw json.RawMessage) (an
 		return nil, err
 	}
 
-	// P1-E20-W5-S44-T4: when a JournalStore is configured (SetJournal),
-	// the commit itself goes through AppendTurnJournaled -- a TurnAppend
-	// intent is journaled BEFORE this store write, satisfying the entity
-	// journal's "no partial store commit without a journal record"
-	// contract for every real chat.append_turn call, not just this
-	// package's own journal_test.go. a.journal is nil by default (T2's
-	// original, still-tested no-journal path), matching bus/subst's own
-	// optional-seam pattern above.
+	// With a JournalStore (SetJournal) the TurnAppend intent is journaled
+	// BEFORE the store write: no partial commit without a journal record.
+	// a.journal is nil by default, the original no-journal path.
 	if a.journal != nil {
 		if err := AppendTurnJournaled(ctx, a.journal, a.store, turn, segments); err != nil {
 			return nil, err
@@ -259,4 +236,62 @@ func (a *Adapter) handleListThreads(ctx context.Context, raw json.RawMessage) (a
 		return nil, err
 	}
 	return listThreadsResult{Threads: threads}, nil
+}
+
+// scopedSearch is chat.search over the caller's view. A narrowed view runs
+// the query per visible thread, so a foreign hit never takes a slot.
+func (a *Adapter) scopedSearch(ctx context.Context, raw json.RawMessage) (any, error) {
+	rest, declared, err := splitScopeParam(raw)
+	if err != nil {
+		return nil, err
+	}
+	v, err := resolveView(ctx, a.store, a.clock, declared)
+	if err != nil {
+		return nil, err
+	} else if v.all {
+		return a.handleSearch(ctx, rest)
+	}
+	p, err := decodeSearchParams(rest)
+	if err != nil {
+		return nil, err
+	}
+	if p.ThreadID != "" && !v.admits(p.ThreadID) {
+		return nil, errScopeDenied
+	}
+	ids := []string{p.ThreadID}
+	if p.ThreadID == "" {
+		ids = ids[:0]
+		for id := range v.ids {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+	}
+	var hits []TurnMatch
+	for _, id := range ids {
+		m, err := a.store.SearchTurns(ctx, p.Query, SearchFilter{ThreadID: id, Limit: p.Limit})
+		if err != nil {
+			return nil, err
+		}
+		hits = append(hits, m...)
+	}
+	sort.SliceStable(hits, func(i, j int) bool { return hits[i].Rank < hits[j].Rank })
+	if limit := clampLimit(p.Limit); len(hits) > limit {
+		hits = hits[:limit]
+	}
+	return a.rankedResults(ctx, hits)
+}
+
+// rankedResults renders narrowed hits. The score is the hit's rank position,
+// not bm25: bm25 weighs terms by the whole index, foreign threads included.
+func (a *Adapter) rankedResults(ctx context.Context, hits []TurnMatch) (any, error) {
+	out := make([]searchResultWire, 0, len(hits))
+	for i, m := range hits {
+		segs, err := a.store.ListSegments(ctx, m.Turn.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, searchResultWire{ThreadID: m.Turn.ThreadID, TurnID: m.Turn.ID,
+			Content: joinSegmentContent(segs), Score: float64(len(hits) - i)})
+	}
+	return searchResultSet{Results: out}, nil
 }
