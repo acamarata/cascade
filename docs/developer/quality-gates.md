@@ -26,6 +26,26 @@ those first for the sibling gates this document does not repeat.
 | Godoc + Example gate | Art.10.6 | `deadcode_godoc.go` | `testdata/seeded-violations/godoc/` |
 | Flake quarantine registry | Art.7.5 / Art.6 | `flakes.go` | `testdata/seeded-violations/flakes/`, `flake-registry.json` |
 | Atomic-write gate | contract:atomic-file-write | `atomicwritegate.go` | `testdata/seeded-violations/atomicwrite/`, `atomicwrite-exemptions.tsv` |
+| Release devkeys gate | Development custody isolation | `devkeysgate.go`, `nodevkeys/main.go` | `devkeysgate_test.go` |
+
+## Release devkeys gate
+
+Every release build runs `go run ./internal/build/nodevkeys "{{ .Path }}"`
+as its post hook. The command reads the artifact's embedded Go build
+settings with `debug/buildinfo`, including stripped artifacts, and exits 1
+when the `-tags` setting contains the exact `devkeys` tag or build information
+cannot be read. A missing or non-Go artifact, or one whose build information
+cannot be read, fails the gate.
+
+`TestGoreleaserBuildsCarryNoDevkeysTag` checks every configured build for
+development tags in tags, flags, and environment values (including `GOFLAGS`,
+top-level `env` and per-target `overrides`). It refuses templated tags, flags
+and `GOFLAGS` (including templated environment keys), refuses a `tool` or
+`gobinary` compiler wrapper, and requires the artifact hook as the last post
+hook. Seeded configurations prove that each of these forms is rejected.
+`TestDevkeysInBuildInfo` distinguishes `devkeys` from `devkeysx`. `CASCADE_TEST_FILE_VAULT` is not honoured yet; it
+must be honoured only under the `devkeys` tag, which this gate keeps out of
+releases.
 
 Every gate follows the established pattern (`docs/developer/lint-wall.md`):
 pure scanning/parsing logic in a non-test `.go` file, `_test.go` walks the
@@ -161,6 +181,9 @@ even above the floor. Live check: `TestCoverageGate_Live`, gated by
 build-cache lock contention past 5 minutes; this is why the check is
 env-var-gated against an already-produced profile, exactly like the
 hygiene gates below, rather than running the suite itself).
+If that profile is absent, the test skips; a skip is not a passing coverage
+result. The live ratchet remains owed until an Epic-level run provides the
+profile and produces a green result.
 
 ## Test hygiene (Art.7)
 
