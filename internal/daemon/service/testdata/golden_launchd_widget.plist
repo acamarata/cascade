@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>CASCADE_CLI_PATH</key>
+		<string>/Users/example/bin/cascade-real</string>
+		<key>CASCADE_SOCKET_PATH</key>
+		<string>/Users/example/.cascade/daemon.sock</string>
+		<key>CASCADE_WIDGET_STATUS_PATH</key>
+		<string>/Users/example/.cascade/data/widget/widget-status.json</string>
+	</dict>
+	<key>KeepAlive</key>
+	<false/>
+	<key>Label</key>
+	<string>com.acamarata.cascade.widget</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/example/Applications/CascadeMenuBar.app/Contents/MacOS/CascadeMenuBar</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/example/.cascade/logs/widget.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/example/.cascade/logs/widget.log</string>
+</dict>
+</plist>

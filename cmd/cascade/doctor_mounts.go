@@ -113,6 +113,9 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	reg.Register(newCensusDoctorCheck(doctor.NewSubsystemCensusCheck(statusCensus{status: status}), status))
 	reg.Register(newHookEventsDoctorCheck(status))
 	reg.Register(newStorageDoctorCheck(paths, status))
+	// widget (doctor_mounts_widget.go): a filter check like storage, left out
+	// of the default report and run alone by `doctor --widget`.
+	reg.Register(doctor.NewWidgetCheck(widgetDoctorBindings(paths)))
 	// config-permissions (doctor_config_perm.go): config.toml under the
 	// same permission policy Load enforces.
 	reg.Register(newConfigPermissionsDoctorCheck(paths))

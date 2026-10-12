@@ -33,3 +33,4 @@ top hidden=true aliases=
 vault hidden=false aliases=
 version hidden=false aliases=
 what hidden=true aliases=
+widget hidden=false aliases=

@@ -87,3 +87,36 @@ internal/daemon/service/testdata/README.md").
   (`[Unit]`/`[Service]`/`[Install]`) and required key names and asserts
   every one of them is also present in `renderSystemdUnit`'s output —
   never a string/byte compare against the golden blob alone.
+
+## launchctl_print_widget.txt
+
+- **Command:** `launchctl print gui/$(id -u)/com.apple.quicklook`, stdout
+  of a real loaded user agent (state `not running`, exit 0).
+- **Platform:** macOS 27.0.1 (BuildVersion 26A434), captured 2026-10-12.
+- **Substituted:** the label `com.apple.quicklook` became
+  `com.acamarata.cascade.widget` (including the endpoint names); the plist
+  path, `program` and `arguments` became synthetic `/Users/example/...`
+  paths ending in `CascadeMenuBar.app/Contents/MacOS/CascadeMenuBar`; the
+  working directory became `/Users/example`; the inherited
+  `SSH_AUTH_SOCK` path became `/private/tmp/example.launchd/Listeners`; the
+  system-service property was dropped. Structure, indentation and key order
+  are the captured ones.
+- **Not loaded:** a label launchd does not know exits 113 with
+  `Could not find service ...` on stderr and nothing on stdout; the tests
+  feed that shape to the parser for the not-loaded case.
+- **Used by:** `widget_status_test.go`, `widget_darwin_status_test.go`.
+
+## golden_launchd_widget.plist
+
+- **Tool:** `plutil -convert xml1` (`/usr/bin/plutil`), macOS 27.0.1
+  (BuildVersion 26A434), captured 2026-10-12.
+- **Source:** the plist of a real widget agent loaded in the GUI domain
+  (`launchctl print` exit 0, state running) by `cascade widget install`
+  with a fresh HOME and CASCADE_HOME.
+- **Normalised:** the fresh HOME became `/Users/example`, CASCADE_HOME
+  became `/Users/example/.cascade`, the cascade binary became
+  `/Users/example/bin/cascade-real`, the `CASCADE_HOME` entry (present
+  only because that run set it) and the `X-Cascade-Managed` marker (a
+  cascade-internal key, as for `golden_launchd.plist`) were removed. The
+  result is byte-identical to `renderWidgetPlist`'s normalised output.
+- **Used by:** `TestLaunchAgentUsesAbsoluteBundlePath`.

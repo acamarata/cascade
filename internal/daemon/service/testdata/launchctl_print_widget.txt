@@ -1,0 +1,66 @@
+gui/501/com.acamarata.cascade.widget = {
+	active count = 0
+	path = /Users/example/Library/LaunchAgents/com.acamarata.cascade.widget.plist
+	type = LaunchAgent
+	state = not running
+
+	program = /Users/example/Applications/CascadeMenuBar.app/Contents/MacOS/CascadeMenuBar
+	arguments = {
+		/Users/example/Applications/CascadeMenuBar.app/Contents/MacOS/CascadeMenuBar
+	}
+
+	working directory = /Users/example
+
+	inherited environment = {
+		SSH_AUTH_SOCK => /private/tmp/example.launchd/Listeners
+	}
+
+	default environment = {
+		PATH => /usr/bin:/bin:/usr/sbin:/sbin
+	}
+
+	environment = {
+		OSLogRateLimit => 64
+		MallocSpaceEfficient => 1
+		XPC_SERVICE_NAME => com.acamarata.cascade.widget
+	}
+
+	domain = gui/501 [100019]
+	asid = 100019
+	minimum runtime = 1
+	base minimum runtime = 1
+	exit timeout = 5
+	runs = 0
+	last exit code = (never exited)
+
+	endpoints = {
+		"com.acamarata.cascade.widget.xpc" = {
+			port = 0x0
+			active = 0
+			managed = 1
+			reset = 0
+			hide = 0
+			watching = 1
+		}
+		"com.acamarata.cascade.widget" = {
+			port = 0x0
+			active = 0
+			managed = 1
+			reset = 0
+			hide = 0
+			watching = 1
+		}
+	}
+
+	spawn type = adaptive (6)
+	jetsam priority = 40
+	jetsam memory limit (active, soft) = 70 MB
+	jetsam memory limit (inactive, soft) = 70 MB
+	jetsamproperties category = daemon
+	jetsam thread limit = 32
+	cpumon = default
+	exponential throttling grace limit = 10
+	sanitizer flags = 0x0
+
+	properties = supports transactions | supports pressured exit | inferred program | exponential throttling | tle system
+}

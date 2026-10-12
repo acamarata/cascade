@@ -99,6 +99,7 @@ type doctorFlags struct {
 	// storage narrows the run to the storage check, which the default
 	// report leaves out. Like harness it is a filter over the one registry.
 	storage bool
+	widget  bool // narrows the run to the widget check (a filter like storage)
 }
 
 // newDoctorCmd builds the `doctor` command and its `bundle` subcommand.
@@ -123,6 +124,8 @@ func newDoctorCmd(deps doctorDeps) *cobra.Command {
 		"run only the coding-harness detection and instruction-drift check")
 	cmd.Flags().BoolVar(&f.storage, "storage", false,
 		"run only the storage health probes (left out of the default report)")
+	cmd.Flags().BoolVar(&f.widget, "widget", false,
+		"run only the menu-bar widget check (left out of the default report)")
 	cmd.AddCommand(newDoctorBundleCmd(deps))
 	cmd.AddCommand(newDoctorCountsCmd(deps))
 	cmd.AddCommand(newDoctorSportCmd(deps))
@@ -155,25 +158,23 @@ func executeChecks(ctx context.Context, deps doctorDeps, f *doctorFlags) (doctor
 	if err != nil {
 		return doctor.RunReport{}, err
 	}
-	checks := withoutStorageCheck(reg.List())
+	checks := withoutWidgetCheck(withoutStorageCheck(reg.List()))
 	if f.firstRun {
 		checks = reg.FirstRun()
 	}
 	if f.harness {
-		// Narrowed LAST, so --harness --first-run is the harness check
-		// either way rather than an empty run whose meaning depends on
-		// flag order.
+		// Narrowed LAST: --harness --first-run is the harness check either way.
 		checks = onlyHarnessCheck(reg)
 	}
 	if f.storage {
-		// Narrowed after --harness, so --storage always means the storage
-		// check alone.
+		// Narrowed after --harness: --storage is the storage check alone.
 		checks = onlyStorageCheck(reg)
 	}
+	if f.widget {
+		checks = onlyWidgetCheck(reg)
+	}
 	if len(checks) == 0 {
-		// An empty run reports OutcomeOK, which would render as a silent
-		// clean bill of health for a doctor that examined nothing. Absence
-		// is never a pass (Art.1).
+		// An empty run would render as a clean bill of health (Art.1).
 		return doctor.RunReport{}, cascade.New(cascade.KindNotFound,
 			"cascade doctor: no diagnostic checks are registered for this run")
 	}

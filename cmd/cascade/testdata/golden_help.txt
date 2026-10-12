@@ -35,6 +35,7 @@ Available Commands:
   sync           Replicate domains between this device and its peers
   vault          Store and retrieve secrets in the platform keychain
   version        Print the cascade version, commit, build date, and install channel
+  widget         Install and inspect the macOS menu-bar widget
 
 Flags:
       --config string    override the config file path

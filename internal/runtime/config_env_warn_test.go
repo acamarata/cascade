@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -241,6 +242,23 @@ var dynamicEnvReads = map[string][]string{
 	"plugins/github/token_env.go:41":         {"CASCADE_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"},
 	"plugins/github/wiki/confirm.go:43":      {"<caller-named>"},
 	"plugins/nself/handshake_entries.go:129": {"CASCADE_STORAGE_POSTGRES_DSN", "CASCADE_STORAGE_REDIS_URL", "CASCADE_STORAGE_S3_ENDPOINT", "CASCADE_STORAGE_S3_BUCKET", "CASCADE_STORAGE_S3_KEY_ID", "CASCADE_STORAGE_S3_SECRET"}, // requiredServerEnvRefs, presence only
+
+	// widgetEnvironment reads CASCADE_HOME through the injected WidgetConfig.Getenv.
+	"internal/daemon/service/widget_darwin.go:43":  {"CASCADE_HOME"}, // install records it in the plist
+	"internal/daemon/service/widget_status.go:148": {"CASCADE_HOME"}, // status renders the expected plist
+}
+
+// foreignGOOSFile reports whether the file part of a "file:line" key carries
+// a _<goos>.go suffix for an OS other than the one running the test; the
+// scan never loads such a file, so its entry cannot match there.
+func foreignGOOSFile(at string) bool {
+	file, _, _ := strings.Cut(at, ":")
+	for _, goos := range []string{"darwin", "linux", "windows"} {
+		if goos != goruntime.GOOS && strings.HasSuffix(file, "_"+goos+".go") {
+			return true
+		}
+	}
+	return false
 }
 
 // TestReservedEnvDynamicReadsDeclared proves the dynamic-read table matches
@@ -253,6 +271,9 @@ func TestReservedEnvDynamicReadsDeclared(t *testing.T) {
 		t.Errorf("dynamic env read at %s is not declared in dynamicEnvReads", at)
 	}
 	for _, at := range stale {
+		if foreignGOOSFile(at) {
+			continue // the scan only loads files built for this OS
+		}
 		t.Errorf("dynamicEnvReads entry %s matches no dynamic env read in the tree", at)
 	}
 	names := map[string]string{}
