@@ -1,0 +1,6 @@
+package fake
+
+import nh "net/http"
+
+// Serve hides http.Serve behind an import alias and a function value.
+var Serve = nh.Serve

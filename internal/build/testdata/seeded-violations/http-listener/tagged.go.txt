@@ -1,0 +1,10 @@
+//go:build pam
+
+package fake
+
+import "net"
+
+// Open binds a socket only in the pam build.
+func Open() (net.Listener, error) {
+	return net.Listen("tcp", "127.0.0.1:0")
+}

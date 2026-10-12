@@ -1,0 +1,13 @@
+package fake
+
+import (
+	"net"
+	"net/http"
+)
+
+type wrapped struct{ *http.Server }
+
+// Run serves through a method promoted from an embedded *http.Server.
+func Run(s *http.Server, ln net.Listener) error {
+	return wrapped{s}.Serve(ln)
+}

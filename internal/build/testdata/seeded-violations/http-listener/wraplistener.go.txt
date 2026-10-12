@@ -1,0 +1,13 @@
+package fake
+
+import "net"
+
+// Accept serves raw connections on a listener another package bound.
+func Accept(bind func() (net.Listener, error)) error {
+	ln, err := bind()
+	if err != nil {
+		return err
+	}
+	_, err = ln.Accept()
+	return err
+}

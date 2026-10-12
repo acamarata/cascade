@@ -1,0 +1,13 @@
+package fake
+
+import (
+	"net"
+	"net/http"
+)
+
+// Rehandle serves a server built elsewhere through an interface, so no
+// listed method is named; the server value itself is what the gate sees.
+func Rehandle(get func() *http.Server, ln net.Listener) error {
+	var s interface{ Serve(net.Listener) error } = get()
+	return s.Serve(ln)
+}

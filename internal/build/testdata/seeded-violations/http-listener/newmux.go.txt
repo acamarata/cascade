@@ -1,0 +1,8 @@
+package fake
+
+import "net/http"
+
+// Build returns a mux built with new.
+func Build() *http.ServeMux {
+	return new(http.ServeMux)
+}

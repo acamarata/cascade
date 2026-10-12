@@ -1,0 +1,10 @@
+package fake
+
+import "net/http"
+
+// Mount serves an SSE stream on a fresh mux that never runs the owner guard.
+func Mount(events http.Handler) http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle("/events", events)
+	return mux
+}

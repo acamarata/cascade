@@ -1,0 +1,8 @@
+package fake
+
+import "net"
+
+// Open binds a TCP port directly.
+func Open() (*net.TCPListener, error) {
+	return net.ListenTCP("tcp", &net.TCPAddr{})
+}

@@ -1,0 +1,11 @@
+package fake
+
+import (
+	"context"
+	"net"
+)
+
+// Open binds a loopback TCP port through a ListenConfig method call.
+func Open(ctx context.Context) (net.Listener, error) {
+	return (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+}

@@ -1,0 +1,9 @@
+package fake
+
+import "net/http"
+
+// Register mounts an SSE stream on the default mux, which a server with a
+// nil handler serves.
+func Register(events http.Handler) {
+	http.Handle("/events", events)
+}

@@ -1,0 +1,11 @@
+package fake
+
+import (
+	"net"
+	"os"
+)
+
+// Adopt rebuilds a listener from an inherited file descriptor.
+func Adopt(f *os.File) (net.Listener, error) {
+	return net.FileListener(f)
+}

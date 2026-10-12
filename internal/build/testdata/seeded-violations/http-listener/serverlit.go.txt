@@ -1,0 +1,8 @@
+package fake
+
+import "net/http"
+
+// Build returns a server built from a composite literal.
+func Build(h http.Handler) *http.Server {
+	return &http.Server{Handler: h}
+}

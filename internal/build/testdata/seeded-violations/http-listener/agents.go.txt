@@ -1,0 +1,8 @@
+package driver
+
+import "net"
+
+// Open binds the driver's unix socket; ScanAgentDriverNetSurface owns this tree.
+func Open(path string) (net.Listener, error) {
+	return net.Listen("unix", path)
+}

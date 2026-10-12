@@ -1,0 +1,8 @@
+package fake
+
+import "net/http"
+
+// Open calls a function that does not exist.
+func Open() error {
+	return http.NoSuchListen()
+}

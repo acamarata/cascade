@@ -1,0 +1,8 @@
+package fake
+
+import "net/http"
+
+// Holder carries a mux by value; its zero value is a usable mux.
+type Holder struct {
+	Mux http.ServeMux
+}
