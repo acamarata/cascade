@@ -1,18 +1,20 @@
 # Cascade release pipeline (P1-E01-W1-S01-T6, Epic A's acceptance ticket).
 #
-# Produces signed, SBOM'd, checksummed static binaries for the R-14.1 release
-# matrix (darwin/arm64, darwin/amd64, linux/amd64, linux/arm64, windows/amd64),
-# a homebrew formula definition, and the license report — all verified LOCALLY
-# by a snapshot release (`goreleaser release --snapshot --clean`). Nothing in
-# this file publishes anything: `release.draft: true` plus goreleaser's own
-# snapshot/prerelease auto-skip on `brews.skip_upload` keep every publish
-# surface inert until a human (or the CI release lane, on a real tag, with a
-# real GitHub token) explicitly runs a non-snapshot release. cosign keyless
-# signing needs GitHub OIDC and therefore runs CI-side only (.github/workflows/
-# release.yml), never here.
+# Produces signed, SBOM'd, checksummed static binaries (cascade and
+# cascade-github) for the R-14.1 release matrix (darwin/arm64, darwin/amd64,
+# linux/amd64, linux/arm64, windows/amd64), the homebrew cask, the OCI image
+# and the license report. Local and CI runs are snapshots
+# (`goreleaser release --snapshot --clean`), which publish nothing. The only
+# non-snapshot run is the rc-publish job in .github/workflows/release.yml,
+# which passes --skip=publish,sign and pushes its output to a private staging
+# package itself. release.github reads its target ONLY from the
+# CASCADE_STAGING_REMOTE env (<owner>/<repo>), so a publish can never fall
+# back to a default repository; `goreleaser check` needs a placeholder value.
+# Archives are unstamped: the install channel is recorded by the installer's
+# receipt, never by an ldflag, so a released binary reports channel manual.
 #
-# See docs/developer/release.md for the full pipeline walkthrough, the
-# minisign user-verification instructions, and what publishes when.
+# See docs/developer/release-train.md for the publish train and
+# docs/developer/release.md for the user-verification instructions.
 version: 2
 
 project_name: cascade
@@ -63,12 +65,40 @@ builds:
       - -X github.com/acamarata/cascade/internal/buildinfo.Version={{ .Version }}
       - -X github.com/acamarata/cascade/internal/buildinfo.Commit={{ .Commit }}
       - -X github.com/acamarata/cascade/internal/buildinfo.Date={{ .Date }}
-      - -X github.com/acamarata/cascade/internal/buildinfo.InstallChannel=script
+  # The GitHub plugin ships beside cascade in every archive, the cask and the
+  # OCI image. Same matrix, flags, stamp and SEC-32 devkeys guard.
+  - id: cascade-github
+    hooks:
+      post:
+        - 'go run ./internal/build/nodevkeys "{{ .Path }}"'
+    main: ./plugins/github
+    binary: cascade-github
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    ldflags:
+      - -s -w
+      - -X github.com/acamarata/cascade/internal/buildinfo.Version={{ .Version }}
+      - -X github.com/acamarata/cascade/internal/buildinfo.Commit={{ .Commit }}
+      - -X github.com/acamarata/cascade/internal/buildinfo.Date={{ .Date }}
 
 archives:
   - id: cascade
     ids:
       - cascade
+      - cascade-github
     formats:
       - tar.gz
     format_overrides:
@@ -83,9 +113,13 @@ archives:
       - src: docs/THIRD_PARTY_LICENSES
         dst: THIRD_PARTY_LICENSES
 
+# Version-free name: install.sh and the promote job fetch it by this exact
+# name. install.sh is listed so the signed checksums cover the installer.
 checksum:
-  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+  name_template: "{{ .ProjectName }}_checksums.txt"
   algorithm: sha256
+  extra_files:
+    - glob: ./install.sh
 
 # Per-artifact SBOMs (real syft, Art.2 real-counterpart verification — never
 # a self-authored SBOM dialect).
@@ -133,6 +167,7 @@ dockers:
   - id: cascade-linux-amd64
     ids:
       - cascade
+      - cascade-github
     goos: linux
     goarch: amd64
     dockerfile: .github/docker/Dockerfile
@@ -148,6 +183,7 @@ dockers:
   - id: cascade-linux-arm64
     ids:
       - cascade
+      - cascade-github
     goos: linux
     goarch: arm64
     dockerfile: .github/docker/Dockerfile
@@ -177,10 +213,10 @@ docker_manifests:
       - "ghcr.io/acamarata/cascade:{{ .Version }}-arm64"
     skip_push: auto
 
-# Homebrew formula definition (AA/S-55.T4 owns the tap-repo owner-prereq and
-# the actual `brew install` publish; `skip_upload: auto` means goreleaser
-# never pushes to the tap on a snapshot or prerelease build — this ticket
-# proves the definition is well-formed via `goreleaser check` only).
+# Homebrew cask for the acamarata/homebrew-cascade tap. Nothing here ever
+# commits to the tap: snapshots skip it (`skip_upload: auto`) and rc-publish
+# runs --skip=publish; the cask file is carried in the rc payload and the tap
+# commit happens at promotion. `goreleaser check` validates the definition.
 # `brews:` is deprecated in goreleaser 2.18 (hard-fails `goreleaser check`);
 # `homebrew_casks:` is its replacement for both formula- and cask-style CLI
 # distribution as of this goreleaser release.
@@ -190,10 +226,14 @@ homebrew_casks:
       - cascade
     repository:
       owner: acamarata
-      name: homebrew-tap
+      name: homebrew-cascade
       branch: main
     directory: Casks
     skip_upload: auto
+    # Pinned to the public release URL: the default would follow
+    # release.github, which is the private staging remote.
+    url:
+      template: "https://github.com/acamarata/cascade/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
     homepage: "https://github.com/acamarata/cascade"
     # `brew style` refuses a description that starts with the cask's own
     # name or ends with a full stop (Cask/Desc), and a tap that will not
@@ -204,16 +244,24 @@ homebrew_casks:
     license: "MIT"
     binaries:
       - cascade
+      - cascade-github
+    # The release key is never inlined: users fetch it out of band.
+    caveats: |
+      Verify cascade releases with the minisign public key published at
+      https://acamarata.github.io/cascade/keys/minisign.pub
+      (also docs/keys/minisign.pub in the source repository).
 
 # GitHub release stays a DRAFT even when a real (non-snapshot) release runs,
 # so no artifact is ever publicly visible without an explicit human publish
-# click — the GATED action per 06-FORGE-SPEC §7. This ticket's checks never
-# run a non-snapshot release at all; goreleaser skips this section entirely
-# under --snapshot regardless.
+# click — the GATED action per 06-FORGE-SPEC §7. owner/name come only from
+# CASCADE_STAGING_REMOTE: an unset value fails templating instead of
+# targeting a default repository. Snapshots and rc-publish never publish.
 release:
   github:
-    owner: acamarata
-    name: cascade
+    owner: '{{ index (split .Env.CASCADE_STAGING_REMOTE "/") 0 }}'
+    name: '{{ index (split .Env.CASCADE_STAGING_REMOTE "/") 1 }}'
+  extra_files:
+    - glob: ./install.sh
   draft: true
   prerelease: auto
   mode: keep-existing
