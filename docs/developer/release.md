@@ -17,6 +17,7 @@ duplicate of the config.
 | `.github/workflows/release.yml` | CI verification lane: `goreleaser check`, `goreleaser build --snapshot`, and (when the minisign owner-prereq secrets exist) a full signed `goreleaser release --snapshot`. |
 | `.github/docker/Dockerfile` | OCI server-profile image definition (R-14.119, not at repo root; Art.10.1's clean-root allowlist has no root-Dockerfile entry, and `.github/` is where Art.10.1 already re-homes CI-adjacent infrastructure). |
 | `docs/THIRD_PARTY_LICENSES` | Third-party license report for every module actually compiled into a release binary, across all three release GOOSes. |
+| `.github/scripts/build-widget-release.sh`, `.github/scripts/sign-notarize-widget.sh` | The macOS widget's Developer ID build, signing, notarization and packaging; see [widget release](../widget/release.md). |
 
 ## Release matrix
 
