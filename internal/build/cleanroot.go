@@ -46,6 +46,8 @@ var CleanRootAllowedFiles = map[string]bool{
 	".golangci.yml":    true,
 	".goreleaser.yaml": true,
 	"Makefile":         true,
+	// .gitleaksignore is the secret scanner's reviewed-false-positive list; gitleaks reads it only at the repo root.
+	".gitleaksignore": true,
 }
 
 // CleanRootAllowedDirs is the RELEASE-STATE root DIRECTORY allowlist
