@@ -29,6 +29,9 @@ before:
 
 builds:
   - id: cascade
+    hooks:
+      post:
+        - 'go run ./internal/build/nodevkeys "{{ .Path }}"'
     main: ./cmd/cascade
     binary: cascade
     env:
