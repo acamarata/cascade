@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/acamarata/cascade/internal/client"
 	"github.com/acamarata/cascade/internal/fleet/sessions"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -50,11 +51,14 @@ func dialDaemonEvents(ctx context.Context, dial eventsDialer, socketPath, topic 
 			"cascade: no dialer was wired for the daemon event stream")
 	}
 
-	httpClient := &http.Client{Transport: &http.Transport{
+	// The stream identifies like every other CLI request: without the
+	// shared principal transport the daemon sees no caller and filters
+	// every event out of the stream.
+	httpClient := &http.Client{Transport: client.NewPrincipalTransport(&http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			return dial(ctx, socketPath)
 		},
-	}}
+	})}
 	// The host is a placeholder: the transport above ignores it and dials
 	// the unix socket instead. The path comes from the package that MOUNTS
 	// the handler rather than being spelled again here — a second copy of

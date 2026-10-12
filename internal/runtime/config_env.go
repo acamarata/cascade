@@ -89,6 +89,10 @@ var reservedEnvVars = map[string]bool{
 	"CASCADE_JOB_ID":     true,
 	"CASCADE_TICKET_ID":  true,
 
+	// The caller principal token a launched agent presents to the daemon: a
+	// credential carried in the environment, never a config override.
+	"CASCADE_PRINCIPAL_TOKEN": true,
+
 	// Read by the node-upgrade RPC as the minisign trust key.
 	"CASCADE_MINISIGN_PUBKEY": true,
 

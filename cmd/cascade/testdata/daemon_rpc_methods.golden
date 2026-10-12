@@ -29,6 +29,7 @@ fleet.mode.set
 fleet.mode.show
 fleet.quota.snapshot
 fleet.sessions.completion_check
+fleet.sessions.hook_event
 fleet.sessions.list
 job.cancel
 job.list

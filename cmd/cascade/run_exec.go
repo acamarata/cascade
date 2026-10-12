@@ -182,9 +182,9 @@ func runRunCmd(cmd *cobra.Command, deps runDeps, flags runFlags) error {
 // response body plus its closer. No client-level timeout: a subscription
 // is long-lived by design, bounded by ctx only.
 func openEventStream(ctx context.Context, deps runDeps, socketPath, jobID string) (io.ReadCloser, func(), error) {
-	hc := &http.Client{Transport: &http.Transport{
+	hc := &http.Client{Transport: client.NewPrincipalTransport(&http.Transport{
 		DialContext: func(c context.Context, _, _ string) (net.Conn, error) { return deps.DialContext(c, socketPath) },
-	}}
+	})}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix/events?filter=job:"+jobID, nil)
 	if err != nil {
 		return nil, func() {}, cascade.Wrap(cascade.KindInternal, err, "cascade run: build events request")
