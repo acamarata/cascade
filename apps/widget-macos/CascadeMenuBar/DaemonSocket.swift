@@ -36,7 +36,7 @@ final class DaemonSocket {
 
     static func requestBytes() -> Data {
         let body = #"{"jsonrpc":"2.0","id":1,"method":"status.widget"}"#
-        return Data("POST /rpc HTTP/1.1\r\nHost: unix\r\nContent-Type: application/json\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)".utf8)
+        return Data("POST /rpc HTTP/1.1\r\nHost: unix\r\nCascade-Client: owner-cli\r\nContent-Type: application/json\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)".utf8)
     }
 
     static func responseBody(_ data: Data) throws -> Data {

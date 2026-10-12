@@ -1,0 +1,69 @@
+# Seeded violation for the widget CI lane gates (internal/build/widget_ci_test.go).
+# Excerpt of the real lane with exactly one deliberate defect: the changes output has no missing-base fallback
+name: ci-seed
+
+on:
+  push:
+    branches: [p1-integration]
+
+jobs:
+  changes:
+    name: changes (widget path filter)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      widget: ${{ steps.filter.outputs.widget_code == 'true' || steps.filter.outputs.widget_app == 'true' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Base commit: github.event.before on push, the PR base on pull_request.
+      # Missing, all-zero or not present in the clone -> known=false -> widget=true.
+      - name: Resolve the diff base
+        id: base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -eu
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE"
+          else
+            base="$BEFORE"
+          fi
+          known=false
+          case "$base" in
+            ""|0000000000000000000000000000000000000000) ;;
+            *)
+              if git cat-file -e "${base}^{commit}" 2>/dev/null; then
+                known=true
+              fi
+              ;;
+          esac
+          echo "known=$known" >> "$GITHUB_OUTPUT"
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+          echo "widget diff base: ${base:-<none>} (known=$known)"
+
+      # predicate-quantifier every: a file counts only if it matches ALL rules
+      # of a filter. widget_code = a file outside the documentation globs;
+      # widget_app = any file (a README included) under apps/widget-macos.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        if: steps.base.outputs.known == 'true'
+        with:
+          base: ${{ steps.base.outputs.sha }}
+          predicate-quantifier: every
+          filters: |
+            widget_code:
+              - '**'
+              - '!docs/**'
+              - '!.github/wiki/**'
+              - '!**/*.md'
+            widget_app:
+              - 'apps/widget-macos/**'
+

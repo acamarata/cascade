@@ -15,7 +15,7 @@ final class DaemonSSE {
     init(environment: [String: String]) { self.environment = environment }
 
     func requestBytes() -> Data {
-        var request = "GET /events?filter=status.widget_changed HTTP/1.1\r\nHost: unix\r\nAccept: text/event-stream\r\n"
+        var request = "GET /events?filter=status.widget_changed HTTP/1.1\r\nHost: unix\r\nCascade-Client: owner-cli\r\nAccept: text/event-stream\r\n"
         if let lastEventID { request += "Last-Event-ID: \(lastEventID)\r\n" }
         return Data((request + "\r\n").utf8)
     }

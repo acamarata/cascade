@@ -58,6 +58,7 @@ final class DaemonSSETests: XCTestCase {
         let request = String(decoding: sse.requestBytes(), as: UTF8.self)
         XCTAssertTrue(request.contains("Last-Event-ID: AAAAAAAAAAE\r\n"))
         XCTAssertFalse(request.contains("Origin:"))
+        XCTAssertTrue(request.contains("Cascade-Client: owner-cli\r\n"))
         let previous = snapshots
         sse.consume(Data("id: bad\ndata: {broken}\n\n".utf8))
         XCTAssertEqual(snapshots, previous)

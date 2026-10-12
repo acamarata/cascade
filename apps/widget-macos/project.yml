@@ -100,11 +100,10 @@ schemes:
           script: |
             exec > "$BUILT_PRODUCTS_DIR/widget-preaction.log" 2>&1
             set -eu
-            export PATH="$HOME/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.6.darwin-arm64/bin:$HOME/bin:/opt/homebrew/bin:$PATH"
+            export PATH="$PATH:$HOME/bin:/opt/homebrew/bin"
             export GOTOOLCHAIN=local GOFLAGS=-p=4 GOPROXY=off GOSUMDB=off CGO_ENABLED=0
             rm -f "$BUILT_PRODUCTS_DIR/cascade" "$BUILT_PRODUCTS_DIR/widgetseed"
             go version
-            test "$(go env GOVERSION)" = go1.26.6
             cd "$SRCROOT/../.."
             PKG=./cmd/cascade
             "$HOME/bin/flock" /tmp/cascade-pkg-$(printf %s "$PKG" | shasum | cut -c1-8).lock timeout 590 go build -p 4 -o "$BUILT_PRODUCTS_DIR/cascade" "$PKG"

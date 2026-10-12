@@ -1,0 +1,22 @@
+# Seeded violation for the widget CI lane gates (internal/build/widget_ci_test.go).
+# Excerpt of the real lane with exactly one deliberate defect: the widget lane installs xcodegen from Homebrew
+name: ci-seed
+
+on:
+  push:
+    branches: [p1-integration]
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      widget: ${{ steps.filter.outputs.widget == 'true' }}
+    steps:
+      - run: echo changes
+  widget:
+    needs: changes
+    if: needs.changes.outputs.widget == 'true'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: brew install xcodegen

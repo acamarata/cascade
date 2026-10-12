@@ -1,0 +1,75 @@
+# Seeded violation for the widget CI lane gates (internal/build/widget_ci_test.go).
+# Excerpt of the real lane with exactly one deliberate defect: ci-gate does not require the widget job
+name: ci-seed
+
+on:
+  push:
+    branches: [p1-integration]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build-test
+  race:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo race
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo lint
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hygiene
+  coverage-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo coverage-gate
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      widget: ${{ steps.filter.outputs.widget == 'true' }}
+    steps:
+      - run: echo changes
+  ci-gate:
+    name: ci-gate (required status)
+    needs: [build-test, race, lint, hygiene, coverage-gate, changes]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: All lanes green
+        run: |
+          set -eu
+          for r in "${{ needs.build-test.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}"; do
+            if [ "$r" != "success" ]; then
+              echo "ci-gate: a required lane did not succeed ($r)"
+              exit 1
+            fi
+          done
+          # The widget lane is path-gated, so a skip is legal only when the
+          # changes job ran and said no widget-relevant file changed. A failed
+          # or skipped changes job, a failed or cancelled widget job, and a
+          # skipped widget job beside widget=true (or an empty output) all fail.
+          changes_result="${{ needs.changes.result }}"
+          widget_result="${{ needs.widget.result }}"
+          widget_wanted="${{ needs.changes.outputs.widget }}"
+          if [ "$changes_result" != "success" ]; then
+            echo "ci-gate: the changes job did not succeed ($changes_result)"
+            exit 1
+          fi
+          case "$widget_result" in
+            success) ;;
+            skipped)
+              if [ "$widget_wanted" != "false" ]; then
+                echo "ci-gate: the widget lane was skipped but changes said widget=$widget_wanted"
+                exit 1
+              fi
+              ;;
+            *)
+              echo "ci-gate: the widget lane did not succeed ($widget_result)"
+              exit 1
+              ;;
+          esac
+          echo "ci-gate: all lanes green"

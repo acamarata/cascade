@@ -102,3 +102,47 @@ attestation payload records `Selection` verbatim as `target_selection`,
 so the AF/S-66.T2 receive gate can see exactly which target set a given
 CI run actually used — a full run and a narrowed run are distinguishable
 after the fact, not just at dispatch time.
+
+## macOS widget lane
+
+The menu bar app and WidgetKit extension under `apps/widget-macos` only build on
+macOS, so `.github/workflows/ci.yml` runs them in a `widget` job on the free
+`macos-15` runner. It is part of the required status: `ci-gate` needs both the
+`changes` job and the `widget` job.
+
+| Part | Rule |
+|---|---|
+| `changes` job | Decides whether the lane runs. `widget=false` only when every changed file is under `docs/**`, `.github/wiki/**` or is a `**/*.md` file, and nothing changed under `apps/widget-macos/**`. Anything else, including a new Go package, `go.mod` or a workflow edit, runs the lane. |
+| Diff base | `github.event.before` on push, the PR base on pull_request. A missing or all-zero base, or one the clone does not hold, gives `widget=true`. |
+| `widget` job | SHA-pinned checkout and `actions/setup-go` (from `go.mod`), the pinned Xcode, XcodeGen from a release zip checked against `XCODEGEN_SHA256`, project generation, a `CascadeMenuBar` build, then `CascadeMenuBarTests` and `CascadeWidgetExtensionTests` with Thread Sanitizer on. |
+| Evidence | A step fails the job when an xcresult reports zero passed tests or any failed test. Both bundles upload as an artifact when the job fails. |
+| `ci-gate` | A skipped `widget` job passes only when `changes` succeeded and reported `widget=false`. A failed or skipped `changes` job, or a skipped `widget` job beside `widget=true`, fails the gate. The checks for every other lane are unchanged. |
+
+The Xcode path, XcodeGen version and its sha256 are `env` values on the `widget`
+job. The job log records `xcodebuild -version` and the verified checksum.
+
+Known limit: on a push the diff base is the previous tip of the branch, and `ci.yml`
+cancels an older run on the same ref. A docs-only push that lands right after a Swift
+push cancels the Swift run and then diffs only itself, so that one push can skip the
+lane. Pull requests list the whole PR and do not have this gap.
+
+### Gates that keep the lane honest
+
+`internal/build/widget_ci_test.go` reads `ci.yml` and fails if the lane loses its
+shape: action pins, `setup-go`, the required status wiring, the skip rule and the
+path filter. The `ci-gate` script runs under bash against every needs-result
+combination, and the diff-base step runs against a throwaway git repository. Each
+check has a seeded workflow under `internal/build/testdata/seeded-violations/widget-ci/`
+that must turn it red.
+
+`internal/build/widget_swift_gate_test.go` keeps the Swift tree inside four rules:
+no file over 300 lines, a paired `*Tests.swift` for every production file, no
+banned API (`NSAppleScript`, `sh -c`, `String(format:`, `/bin/sh` outside the reauth
+command file, `show_project_names`, `Network` or `URLSession` in the extension,
+`NSHomeDirectory` in the self-report file), and no stub markers (`TODO`, `FIXME`,
+`fatalError("not implemented")`, mock, fake or stub types). Seeded trees live under
+`internal/build/testdata/seeded-violations/widget-swift/`.
+
+On Linux and Windows the widget CLI refuses to install. `TestWidgetUnsupportedPlatformRefusal`
+in `internal/daemon/service/` proves that in the normal `go test ./...` legs; the
+widget lane proves the macOS half.

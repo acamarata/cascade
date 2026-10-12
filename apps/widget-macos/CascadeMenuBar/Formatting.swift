@@ -4,8 +4,8 @@ import Foundation
 // Inputs: optional scalars, daemon timestamps and injected clock. Outputs: display text.
 enum Formatting {
     static func percent(_ value: Double?) -> String {
-        guard let value else { return "—" }
-        return String(format: "%.0f%%", value)
+        guard let value, value.isFinite else { return "—" }
+        return "\(Int(min(max(value, -1e9), 1e9).rounded(.toNearestOrEven)))%"
     }
 
     static func count(_ value: Int?) -> String {

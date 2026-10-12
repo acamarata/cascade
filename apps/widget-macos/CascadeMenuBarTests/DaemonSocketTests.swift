@@ -4,7 +4,7 @@ import XCTest
 final class DaemonSocketTests: XCTestCase {
     func testRequestBytesPassLocalGuard() {
         let body = #"{"jsonrpc":"2.0","id":1,"method":"status.widget"}"#
-        let expected = "POST /rpc HTTP/1.1\r\nHost: unix\r\nContent-Type: application/json\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)"
+        let expected = "POST /rpc HTTP/1.1\r\nHost: unix\r\nCascade-Client: owner-cli\r\nContent-Type: application/json\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n\(body)"
         XCTAssertEqual(DaemonSocket.requestBytes(), Data(expected.utf8))
     }
 

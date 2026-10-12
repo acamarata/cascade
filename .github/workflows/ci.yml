@@ -1001,9 +1001,196 @@ jobs:
       - name: go test -tags=integration ./internal/nodes/ (kill a real node agent)
         run: go test -tags=integration -count=1 ./internal/nodes/ -run '^TestKillNodeMidRun$' -v
 
+  # macOS widget lane (menu bar app + WidgetKit extension).
+  #
+  # The Swift tree under apps/widget-macos only builds on macOS, so this lane
+  # runs on the free macos-15 runner. It is path-gated by the `changes` job:
+  # the lane is skipped ONLY when every changed file is documentation (docs/**,
+  # .github/wiki/** or **/*.md) and none sits under apps/widget-macos/**. This
+  # is a deny-list on purpose: a code path nobody remembered to list (a new Go
+  # package, go.mod, a workflow edit) still runs the lane. A push whose base
+  # commit is missing or all-zero (new branch, force-push over an unfetched
+  # commit) also yields widget=true. ci-gate treats a skipped widget job as
+  # green only when changes ran and reported widget=false.
+  #
+  # PAIRED LANES. On linux and windows the widget CLI must refuse to install
+  # (there is no macOS agent to manage). That refusal is proven by
+  # TestWidgetUnsupportedPlatformRefusal in internal/daemon/service/, which
+  # runs in the linux and windows legs of build-test (go test ./...). This
+  # macOS lane proves the other half: the Swift targets build and both XCTest
+  # schemes pass. The Swift source rules (file cap, paired tests, banned APIs,
+  # no stubs) are plain Go tests in internal/build (TestWidgetSwift*) and run in
+  # the same go test ./... legs, so they gate every platform.
+  changes:
+    name: changes (widget path filter)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      widget: ${{ steps.base.outputs.known != 'true' || steps.filter.outputs.widget_code == 'true' || steps.filter.outputs.widget_app == 'true' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Base commit: github.event.before on push, the PR base on pull_request.
+      # Missing, all-zero or not present in the clone -> known=false -> widget=true.
+      - name: Resolve the diff base
+        id: base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -eu
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE"
+          else
+            base="$BEFORE"
+          fi
+          known=false
+          case "$base" in
+            ""|0000000000000000000000000000000000000000) ;;
+            *)
+              if git cat-file -e "${base}^{commit}" 2>/dev/null; then
+                known=true
+              fi
+              ;;
+          esac
+          echo "known=$known" >> "$GITHUB_OUTPUT"
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+          echo "widget diff base: ${base:-<none>} (known=$known)"
+
+      # predicate-quantifier every: a file counts only if it matches ALL rules
+      # of a filter. widget_code = a file outside the documentation globs;
+      # widget_app = any file (a README included) under apps/widget-macos.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        if: steps.base.outputs.known == 'true'
+        with:
+          base: ${{ steps.base.outputs.sha }}
+          predicate-quantifier: every
+          filters: |
+            widget_code:
+              - '**'
+              - '!docs/**'
+              - '!.github/wiki/**'
+              - '!**/*.md'
+            widget_app:
+              - 'apps/widget-macos/**'
+
+  widget:
+    name: widget (macOS menu bar app + WidgetKit extension)
+    needs: changes
+    if: needs.changes.outputs.widget == 'true'
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      # Verified against the runner image (macos-15-arm64 image 20260907.0337.1
+      # lists /Applications/Xcode_26.3.app) and the XcodeGen release at build
+      # time by the steps below; both are recorded in the job log.
+      XCODE_DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      XCODEGEN_VERSION: 2.46.0
+      XCODEGEN_SHA256: 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Select the pinned Xcode
+        run: |
+          set -eu
+          test -d "$XCODE_DEVELOPER_DIR" || { echo "::error::pinned Xcode missing: $XCODE_DEVELOPER_DIR"; ls /Applications | grep -i xcode || true; exit 1; }
+          sudo xcode-select -s "$XCODE_DEVELOPER_DIR"
+          xcodebuild -version
+          sw_vers
+          go version
+
+      # XcodeGen comes from the release zip, never Homebrew: the zip is checked
+      # against the pinned sha256 before it is unpacked.
+      - name: Install XcodeGen (sha256-verified release zip)
+        run: |
+          set -eu
+          curl --fail --silent --show-error --location --output "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen-release"
+          echo "$RUNNER_TEMP/xcodegen-release/xcodegen/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/xcodegen-release/xcodegen/bin/xcodegen" --version
+
+      # The CascadeMenuBarTests scheme pre-action builds the cascade and
+      # widgetseed binaries offline (GOPROXY=off), so the module cache must be
+      # warm. ~/bin/flock is the dev machine's heavy-command lock; a CI VM runs
+      # one job, so a pass-through shim (it drops the lock file and the
+      # timeout wrapper, which the runner lacks) stands in for it.
+      - name: Prepare the Go module cache and the pre-action shim
+        run: |
+          set -eu
+          go mod download
+          mkdir -p "$HOME/bin"
+          printf '%s\n' '#!/bin/sh' 'shift' 'if [ "$1" = timeout ]; then shift 2; fi' 'exec "$@"' > "$HOME/bin/flock"
+          chmod +x "$HOME/bin/flock"
+
+      - name: Generate the Xcode project
+        run: xcodegen generate --spec apps/widget-macos/project.yml --project apps/widget-macos
+
+      # No signing identity on a CI runner: ad-hoc signing on the command line,
+      # as on the dev machine (the project file keeps Developer ID for release).
+      - name: Build CascadeMenuBar
+        run: |
+          set -eu
+          xcodebuild -project apps/widget-macos/CascadeWidget.xcodeproj -scheme CascadeMenuBar \
+            -destination 'platform=macOS' -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= build
+
+      - name: Test CascadeMenuBarTests (Thread Sanitizer)
+        run: |
+          set -eu
+          xcodebuild -project apps/widget-macos/CascadeWidget.xcodeproj -scheme CascadeMenuBarTests \
+            -destination 'platform=macOS' -derivedDataPath "$RUNNER_TEMP/dd" \
+            -resultBundlePath "$RUNNER_TEMP/menubar.xcresult" -enableThreadSanitizer YES \
+            CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= test
+
+      - name: Test CascadeWidgetExtensionTests (Thread Sanitizer)
+        run: |
+          set -eu
+          xcodebuild -project apps/widget-macos/CascadeWidget.xcodeproj -scheme CascadeWidgetExtensionTests \
+            -destination 'platform=macOS' -derivedDataPath "$RUNNER_TEMP/dd" \
+            -resultBundlePath "$RUNNER_TEMP/ext.xcresult" -enableThreadSanitizer YES \
+            CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= test
+
+      # A bundle that built but ran nothing is not a pass: fail on a zero
+      # passed count (and on any failed or skipped test the exit code missed).
+      - name: Assert the XCTest pass count is non-zero
+        run: |
+          set -eu
+          for bundle in menubar ext; do
+            summary="$(xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/$bundle.xcresult" --compact)"
+            printf '%s: %s\n' "$bundle" "$(printf '%s' "$summary" | jq -c '{passedTests, failedTests, skippedTests}')"
+            # jq -e exits non-zero for false, null (key missing) and bad JSON alike.
+            if ! printf '%s' "$summary" | jq -e '.passedTests > 0 and .failedTests == 0' > /dev/null; then
+              echo "::error::$bundle xcresult: zero passed tests, a failed test, or an unreadable summary fails the lane"
+              exit 1
+            fi
+          done
+
+      - name: Upload xcresult bundles
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: widget-xcresult
+          path: |
+            ${{ runner.temp }}/menubar.xcresult
+            ${{ runner.temp }}/ext.xcresult
+          if-no-files-found: warn
+
   ci-gate:
     name: ci-gate (required status)
-    needs: [build-test, darwin-amd64-build, linux-pam-build, conformance-suite, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, redis-storetest-under-docker, s3-storetest-under-docker, server-profile-assembly, plugin-integration, node-dispatch-real-git, node-kill-mid-run, sync-merge-real-git]
+    needs: [build-test, darwin-amd64-build, linux-pam-build, conformance-suite, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, redis-storetest-under-docker, s3-storetest-under-docker, server-profile-assembly, plugin-integration, node-dispatch-real-git, node-kill-mid-run, sync-merge-real-git, changes, widget]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -1016,4 +1203,28 @@ jobs:
               exit 1
             fi
           done
+          # The widget lane is path-gated, so a skip is legal only when the
+          # changes job ran and said no widget-relevant file changed. A failed
+          # or skipped changes job, a failed or cancelled widget job, and a
+          # skipped widget job beside widget=true (or an empty output) all fail.
+          changes_result="${{ needs.changes.result }}"
+          widget_result="${{ needs.widget.result }}"
+          widget_wanted="${{ needs.changes.outputs.widget }}"
+          if [ "$changes_result" != "success" ]; then
+            echo "ci-gate: the changes job did not succeed ($changes_result)"
+            exit 1
+          fi
+          case "$widget_result" in
+            success) ;;
+            skipped)
+              if [ "$widget_wanted" != "false" ]; then
+                echo "ci-gate: the widget lane was skipped but changes said widget=$widget_wanted"
+                exit 1
+              fi
+              ;;
+            *)
+              echo "ci-gate: the widget lane did not succeed ($widget_result)"
+              exit 1
+              ;;
+          esac
           echo "ci-gate: all lanes green"
