@@ -124,58 +124,6 @@ func rawHTTPResponse(status int, body string) string {
 		status, len(body), body)
 }
 
-// startFakeUnixResponder starts a background `nc -lU` process that binds
-// sockPath immediately (verified by polling for the socket file, so the
-// caller never races a connection against an unbound socket) and writes
-// resp to the first connection. Returns the bound socket path.
-func startFakeUnixResponder(t *testing.T, resp string) string {
-	t.Helper()
-	if _, err := exec.LookPath("nc"); err != nil {
-		t.Skip("nc not available in this environment")
-	}
-	dir, err := os.MkdirTemp("", "s66t1")
-	if err != nil {
-		t.Fatalf("MkdirTemp: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	sockPath := filepath.Join(dir, "s.sock")
-	respFile := filepath.Join(dir, "resp.txt")
-	if err := os.WriteFile(respFile, []byte(resp), 0o600); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-
-	shellCmd := fmt.Sprintf("cat %q | nc -lU %q", respFile, sockPath)
-	cmd := exec.Command("sh", "-c", shellCmd)
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("start nc responder: %v", err)
-	}
-	t.Cleanup(func() {
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
-		}
-		_ = cmd.Wait()
-	})
-
-	waitForSocket(t, sockPath)
-	return sockPath
-}
-
-// waitForSocket blocks (bounded by t's own eventual subtest failure, not
-// a raw loop) until sockPath exists or the deadline passes.
-func waitForSocket(t *testing.T, sockPath string) {
-	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		if _, err := os.Stat(sockPath); err == nil {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("nc responder never created socket %s", sockPath)
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-}
-
 // runShellCommandWithStdin runs cmd via /bin/sh (the harness's own execution
 // model) with an injected stdin -- the harness's own real delivery channel for
 // the native hook payload -- returning its exit code and stderr.
