@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-12T19:35:21Z",
+  "generated_at": "2026-10-12T20:21:04Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -19869,6 +19869,20 @@
       ]
     },
     {
+      "name": "internal/fleet/hookpacks",
+      "sites": [
+        {
+          "file": "internal/fleet/hookpacks/completion_hook_responder_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "internal/fleet/hookpacks (P1-CI-20)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/fleet/hookpacks hydration pack",
       "sites": [
         {
@@ -34789,7 +34803,7 @@
       ]
     }
   ],
-  "total_sites": 3350,
-  "unspecified_count": 216,
+  "total_sites": 3351,
+  "unspecified_count": 217,
   "multi_status_count": 106
 }
