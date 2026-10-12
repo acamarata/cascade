@@ -273,7 +273,8 @@ func TestCompletionHookCommandUsesAbsolutePath(t *testing.T) {
 // Stop -> block -> Stop replay can never turn into more than one request per
 // invocation.
 func TestCompletionHookCommand_RendersExactlyOneCall(t *testing.T) {
-	cmd := renderedCompletionStopCommand(t, "/nonexistent.sock", "/opt/cascade")
+	// Absolute on every OS: windows rejects "/opt/cascade" (no drive letter).
+	cmd := renderedCompletionStopCommand(t, "/nonexistent.sock", filepath.Join(t.TempDir(), "cascade"))
 	if n := strings.Count(cmd, "completion-check"); n != 1 {
 		t.Fatalf("rendered command invokes completion-check %d times, want exactly 1: %s", n, cmd)
 	}
