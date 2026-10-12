@@ -1,0 +1,4 @@
+package fixture
+// int f(void) { return 0; }
+import "C"
+func run() { _ = C.f() }

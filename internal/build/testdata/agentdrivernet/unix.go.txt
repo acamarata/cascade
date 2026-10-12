@@ -1,0 +1,6 @@
+package fixture
+import (
+	"net"
+	"net/url"
+)
+func run() { _, _ = net.Listen("unix", "/x"); _, _ = url.Parse("https://x") }

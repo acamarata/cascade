@@ -1,0 +1,3 @@
+package fixture
+import "unsafe"
+var _ = unsafe.Sizeof(0)

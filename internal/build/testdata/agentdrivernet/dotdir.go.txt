@@ -1,0 +1,3 @@
+package fixture
+import hidden "github.com/acamarata/cascade/providers/agents/x/.hidden"
+var _ = hidden.Dial

@@ -1,0 +1,3 @@
+package fixture
+import "golang.org/x/sys/windows"
+func run() { _ = windows.WSACleanup() }

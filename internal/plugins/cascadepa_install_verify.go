@@ -28,10 +28,15 @@ import (
 	"crypto/ed25519"
 	"strings"
 
+	"github.com/acamarata/cascade/internal/bridge"
+	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/plugins/registryfetch"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/plugin"
 )
+
+// registryArtifactFirewall binds production fetches to the host's egress policy.
+var registryArtifactFirewall = bridge.NewFirewall
 
 // errNoRegistryConfigured is the production registryURL default's typed
 // refusal.
@@ -96,11 +101,7 @@ func (a *installerAdapter) verifiedArtifactBytes(ctx context.Context, pluginID s
 		return nil, err
 	}
 
-	fetch := a.fetcher
-	if fetch == nil {
-		fetch = func(baseURL string) plugin.RegistryFetcher { return registryfetch.HTTPFetcher{BaseURL: baseURL} }
-	}
-	artifact, err := fetch(baseURL).FetchArtifact(ctx, entry)
+	artifact, err := a.fetchRegistryArtifact(ctx, baseURL, entry)
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +116,29 @@ func (a *installerAdapter) verifiedArtifactBytes(ctx context.Context, pluginID s
 	a.verified[key] = artifact
 	a.verifyMu.Unlock()
 	return artifact, nil
+}
+
+// fetchRegistryArtifact constructs the production fetcher with host custody.
+// Inputs: registry URL and entry. Outputs: intercepted bytes or a refusal.
+// Constraints: construction errors precede fetching. SPORT: registry-fetch.
+func (a *installerAdapter) fetchRegistryArtifact(ctx context.Context, baseURL string, entry plugin.RegistryVersionEntry) ([]byte, error) {
+	if a.fetcher != nil {
+		return a.fetcher(baseURL).FetchArtifact(ctx, entry)
+	}
+	paths, err := a.resolvePaths()
+	if err != nil {
+		return nil, err
+	}
+	engine, err := registryArtifactFirewall(BridgeVaultConfig(paths.DataDir()))
+	if err != nil {
+		return nil, err
+	}
+	capability, err := engine.Capability(egress.EgressClassRegistryFetch)
+	if err != nil {
+		return nil, err
+	}
+	fetcher := registryfetch.HTTPFetcher{BaseURL: baseURL, Engine: engine, Capability: capability}
+	return fetcher.FetchArtifact(ctx, entry)
 }
 
 // refuseNonHTTPS refuses when url is set but not https -- the shared guard

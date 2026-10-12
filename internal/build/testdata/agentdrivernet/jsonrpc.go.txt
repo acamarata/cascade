@@ -1,0 +1,3 @@
+package fixture
+import "net/rpc/jsonrpc"
+func run() { _, _ = jsonrpc.Dial("tcp", "localhost:9") }

@@ -1,7 +1,8 @@
 package registryfetch
 
 // Purpose: realDoer is the ONLY thing in this package that imports
-//   "net/http" — the production Doer, backed by http.DefaultClient.
+//   "net/http" — the production Doer. Its client admits every redirect
+//   target through HTTPRequest.CheckRedirect.
 //   Isolating it here (rather than inlining it in fetch.go) keeps the
 //   net/http import out of every _test.go file in this package (see
 //   fetch.go's header comment on the no-network-unit-lane gate).
@@ -41,7 +42,12 @@ func (realDoer) Do(ctx context.Context, req HTTPRequest) (HTTPResponse, error) {
 		return HTTPResponse{}, cascade.Wrapf(cascade.KindInvalidInput, err, "registryfetch: build request for %s", req.URL)
 	}
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	// get is the only caller and always supplies CheckRedirect, so every
+	// redirect target is admitted before it is requested.
+	client := &http.Client{CheckRedirect: func(next *http.Request, via []*http.Request) error {
+		return req.CheckRedirect(next.URL.String(), len(via))
+	}}
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		return HTTPResponse{}, err
 	}

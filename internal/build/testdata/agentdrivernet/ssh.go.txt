@@ -1,0 +1,3 @@
+package fixture
+import "golang.org/x/crypto/ssh"
+func run() { _, _ = ssh.Dial("tcp", "localhost:22", nil) }

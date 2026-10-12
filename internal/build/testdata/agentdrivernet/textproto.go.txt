@@ -1,0 +1,3 @@
+package fixture
+import "net/textproto"
+func run() { _, _ = textproto.Dial("tcp", "localhost:9") }

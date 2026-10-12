@@ -1,0 +1,3 @@
+package fixture
+import stdnet "net"
+func run() { _, _ = stdnet.Dial("tcp", "localhost:9") }
