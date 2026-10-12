@@ -1,0 +1,1 @@
+seeded observation: with click-wallpaper set to Always the Refresh click fired and a header drag moved the panel

@@ -1,0 +1,1 @@
+seeded observation: the auth-required key row is amber; the confirmation shows the remedy line with --key-env

@@ -1,0 +1,1 @@
+seeded observation: each subscription account row shows live 5H and Wk values and the weekly reset; needs re-auth only for a proven-dead credential

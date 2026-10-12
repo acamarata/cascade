@@ -1,0 +1,1 @@
+seeded observation: a pushed attention item showed as a header badge within one daemon tick

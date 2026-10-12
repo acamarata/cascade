@@ -1,0 +1,1 @@
+seeded observation: an expired primary with a refresh token read ok within one poll; amber only after invalid_grant

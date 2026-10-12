@@ -1,0 +1,1 @@
+seeded observation: popover and desktop window each show one row per enrolled provider profile; registry count matches

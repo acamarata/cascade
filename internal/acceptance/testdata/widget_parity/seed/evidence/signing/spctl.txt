@@ -1,0 +1,3 @@
+/seed/CascadeMenuBar.dmg: accepted
+source=Notarized Developer ID
+origin=Developer ID Application: Example Signer (SEED000000)

@@ -1,0 +1,1 @@
+seeded observation: a provider left without a quota source shows em-dashes, never a zero

@@ -1,0 +1,7 @@
+Submission ID received
+  id: 5eed0000-0000-4000-8000-000000000001
+Waiting for processing to complete.
+Current status: Accepted
+Processing complete
+  id: 5eed0000-0000-4000-8000-000000000001
+  status: Accepted

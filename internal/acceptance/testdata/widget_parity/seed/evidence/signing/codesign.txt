@@ -1,0 +1,8 @@
+Executable=/seed/CascadeMenuBar.dmg
+Identifier=seed.example.widget
+Format=disk image
+CodeDirectory v=20500 size=300 flags=0x0(none) hashes=2+0 location=embedded
+Hash type=sha256 size=32
+CDHash=5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed
+Signature size=9000
+Authority=Developer ID Application: Example Signer (SEED000000)

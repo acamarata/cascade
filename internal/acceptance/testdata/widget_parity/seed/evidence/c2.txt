@@ -1,0 +1,1 @@
+seeded observation: every row shows a percentage or an em-dash and a countdown or an em-dash for both windows
