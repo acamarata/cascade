@@ -11,6 +11,10 @@ package doctor
 
 import (
 	"context"
+	"encoding/base64"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -19,6 +23,40 @@ import (
 // branch tests below.
 type fakeRegistryPubkeyProvider struct {
 	url, pubkeyPath string
+}
+
+func TestDoctorRegistryPubkeyOKWithEmbeddedDefault(t *testing.T) {
+	result, err := NewRegistryPubkeyCheck(fakeRegistryPubkeyProvider{url: "https://registry.example"}).Run(context.Background())
+	if err != nil || result.Status != StatusOK || !strings.Contains(result.Message, "embedded") {
+		t.Fatalf("embedded: %+v %v", result, err)
+	}
+}
+
+func TestDoctorRegistryPubkeyNamesOverrideSource(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "registry.pub")
+	if err := os.WriteFile(path, []byte(base64.StdEncoding.EncodeToString(make([]byte, 32))), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := NewRegistryPubkeyCheck(fakeRegistryPubkeyProvider{url: "https://registry.example", pubkeyPath: path}).Run(context.Background())
+	if err != nil || result.Status != StatusOK || !strings.Contains(result.Message, "pubkey_path") {
+		t.Fatalf("override: %+v %v", result, err)
+	}
+	for name, content := range map[string]string{"not base64": "readable key", "31 bytes": base64.StdEncoding.EncodeToString(make([]byte, 31))} {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		result, err = NewRegistryPubkeyCheck(fakeRegistryPubkeyProvider{url: "https://registry.example", pubkeyPath: path}).Run(context.Background())
+		if err != nil || result.Status != StatusWarn || !strings.Contains(result.Message, "pubkey_path") {
+			t.Fatalf("%s: %+v %v", name, result, err)
+		}
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	result, err = NewRegistryPubkeyCheck(fakeRegistryPubkeyProvider{url: "https://registry.example", pubkeyPath: path}).Run(context.Background())
+	if err != nil || result.Status != StatusWarn {
+		t.Fatalf("unreadable: %+v %v", result, err)
+	}
 }
 
 func (f fakeRegistryPubkeyProvider) RegistryURL() string        { return f.url }
@@ -36,7 +74,11 @@ func TestRegistryPubkeyCheck_Unconfigured(t *testing.T) {
 }
 
 func TestRegistryPubkeyCheck_ConfiguredWithKey(t *testing.T) {
-	check := NewRegistryPubkeyCheck(fakeRegistryPubkeyProvider{url: "https://registry.example", pubkeyPath: "/etc/cascade/registry.pub"})
+	path := filepath.Join(t.TempDir(), "key.pub")
+	if err := os.WriteFile(path, []byte(base64.StdEncoding.EncodeToString(make([]byte, 32))), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	check := NewRegistryPubkeyCheck(fakeRegistryPubkeyProvider{url: "https://registry.example", pubkeyPath: path})
 	result, err := check.Run(context.Background())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -56,11 +98,11 @@ func TestRegistryPubkeyCheck_AbsentPubkey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if result.Status != StatusWarn {
-		t.Fatalf("url, no pubkey: Status = %v, want StatusWarn", result.Status)
+	if result.Status != StatusOK {
+		t.Fatalf("url, no pubkey: Status = %v, want StatusOK", result.Status)
 	}
-	if result.Remediation == "" {
-		t.Error("url, no pubkey: want a non-empty Remediation")
+	if !strings.Contains(result.Message, "embedded") {
+		t.Error("url, no pubkey: want embedded source")
 	}
 }
 
@@ -98,8 +140,8 @@ func TestRegistryPubkeyCheck_ViaRealRegistry(t *testing.T) {
 	for _, e := range report.Entries {
 		if e.Name == "registry_pubkey" {
 			found = true
-			if e.Result.Status != StatusWarn {
-				t.Errorf("registry_pubkey via real registry: Status = %v, want StatusWarn", e.Result.Status)
+			if e.Result.Status != StatusOK {
+				t.Errorf("registry_pubkey via real registry: Status = %v, want StatusOK", e.Result.Status)
 			}
 		}
 	}

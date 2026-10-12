@@ -35,7 +35,8 @@ mkrel() {
 	printf '#!/bin/sh\necho %s\n' "$4" >"$W/src/cascade" && chmod 0755 "$W/src/cascade"
 	tar -czf "$1/$3" -C "$W/src" cascade
 	printf '%s  %s\n%s  %s.sbom.json\n' "$(sha "$1/$3")" "$3" "$(sha "$1/$3")" "$3" >"$1/$2"
-	minisign -S -s "$5" -m "$1/$2" -x "$1/$2.minisig" -t "test checksums" >/dev/null
+	version=${3#cascade_}; version=${version%%_*}
+	minisign -S -s "$5" -m "$1/$2" -x "$1/$2.minisig" -t "cascade $version checksums" >/dev/null
 }
 fresh() { rm -rf "$W/leg" && cp -R "$W/pristine" "$W/leg" && : >"$W/curl.log"; }
 # leg NAME WANT_RC HOME [VAR=VALUE...] CMD...: run CMD under env -i and record the verdict
@@ -77,7 +78,7 @@ rm -rf "$W/src" && mkdir -p "$W/src" && printf '#!/bin/sh\necho evil\n' >"$W/src
 
 # Controls: the unmodified release installs in both lanes.
 fresh
-CHECK='grep -q "^echo good" "$1/.local/bin/cascade" && grep -q "\"channel\":\"script\"" "$1/.cascade/install-receipt.json"'
+CHECK='grep -q "^echo good" "$1/.local/bin/cascade" && grep -q "\"channel\":\"script\"" "$1/.cascade/install-receipt.json" && grep -q "\"release_tag\":\"v1.0.0\"" "$1/.cascade/install-receipt.json"'
 run local-ok 0
 fresh
 CHECK='grep -q "\"release_tag\":\"v1.0.0\"" "$1/.cascade/install-receipt.json"'
@@ -99,7 +100,7 @@ fresh && minisign -S -s "$W/o.key" -m "$W/leg/dist/$SUMS" -x "$W/leg/dist/$SUMS.
 # lane (the local lane refuses two archives itself, earlier) must refuse to pick one.
 fresh && cp "$W/leg/serve/$AR" "$W/leg/serve/cascade_1.0.1_linux_amd64.tar.gz" &&
 	printf '%s  %s\n%s  %s\n' "$(sha "$W/leg/serve/$AR")" "$AR" "$(sha "$W/leg/serve/$AR")" cascade_1.0.1_linux_amd64.tar.gz >"$W/leg/serve/cascade_checksums.txt" &&
-	minisign -S -s "$W/k.key" -m "$W/leg/serve/cascade_checksums.txt" -x "$W/leg/serve/cascade_checksums.txt.minisig" >/dev/null &&
+	minisign -S -s "$W/k.key" -m "$W/leg/serve/cascade_checksums.txt" -x "$W/leg/serve/cascade_checksums.txt.minisig" -t "cascade 1.0.0 checksums" >/dev/null &&
 	remote two-matching-archives 1 || failsetup two-matching-archives
 fresh && rm "$W/leg/serve/cascade_checksums.txt.minisig" && remote missing-signature-download 1 || failsetup missing-signature-download
 fresh && head -c 100 "$W/pristine/serve/$AR" >"$W/leg/serve/$AR" && remote partial-download 1 || failsetup partial-download
@@ -122,10 +123,10 @@ if [ "$(id -u)" -ne 0 ]; then
 	chmod 0755 "$W/home.unwritable/.local/bin"
 fi
 
-# Download lane: the archive name comes from the verified checksums file, never the tag.
+# Download lane: the verified archive entry and receipt carry the signed version.
 fresh && rm "$W/leg/serve/$AR"* && mkrel "$W/leg/serve" cascade_checksums.txt cascade_1.2.3-renamed_linux_amd64.tar.gz good "$W/k.key"
-CHECK='grep -q "^https://example.invalid/dl/v9.9.9/cascade_1.2.3-renamed_linux_amd64.tar.gz$" "'"$W"'/curl.log"'
-TAG=v9.9.9
+CHECK='grep -q "^https://example.invalid/dl/v1.2.3-renamed/cascade_1.2.3-renamed_linux_amd64.tar.gz$" "'"$W"'/curl.log" && grep -q "\"release_tag\":\"v1.2.3-renamed\"" "$1/.cascade/install-receipt.json"'
+TAG=v1.2.3-renamed
 remote renamed-archive-from-verified-entry 0
 TAG=v1.0.0
 fresh

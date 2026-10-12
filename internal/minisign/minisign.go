@@ -141,6 +141,9 @@ func ParseSignature(data []byte) (Signature, error) {
 // (untrusted-comment line + one base64 line).
 func ParsePublicKey(data []byte) (PublicKey, error) {
 	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if len(lines) == 1 {
+		lines = []string{"", lines[0]}
+	}
 	if len(lines) != 2 {
 		return PublicKey{}, errMinisignMalformed("public key: expected exactly 2 lines")
 	}

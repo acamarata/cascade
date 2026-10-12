@@ -37,14 +37,20 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 
+	"github.com/acamarata/cascade/internal/minisign"
 	"github.com/acamarata/cascade/internal/output"
+	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/plugin"
 	"github.com/acamarata/cascade/pkg/plugin/registry/generator"
 )
 
@@ -56,12 +62,18 @@ var (
 // envVault resolves a vault key-ref as the name of an environment variable
 // holding the Ed25519 private key, base64 or hex encoded. It never accepts
 // key material directly on the command line.
-type envVault struct{}
+type envVault struct{ key []byte }
 
-func (envVault) Get(_ context.Context, keyRef string) ([]byte, error) {
+func (v envVault) Get(_ context.Context, keyRef string) ([]byte, error) {
+	if v.key != nil {
+		return v.key, nil
+	}
 	raw := os.Getenv(keyRef)
 	if raw == "" {
 		return nil, os.ErrNotExist
+	}
+	if keyRef == "MINISIGN_RELEASE_PASSPHRASE" {
+		return []byte(raw), nil
 	}
 	if key, err := base64.StdEncoding.DecodeString(raw); err == nil {
 		return key, nil
@@ -83,6 +95,10 @@ func run(w *output.Writer, args []string) int {
 	baseURL := fs.String("base-url", "", "base URL for DownloadURL construction")
 	keyRef := fs.String("key-ref", "", "vault key-ref (env var name) naming the Ed25519 signing key")
 	plaintextKey := fs.String("key", "", "REFUSED: plaintext key material is never accepted, use --key-ref")
+	derive := fs.Bool("derive-from-release", false, "derive signing key from release custody")
+	printPublic := fs.Bool("print-public", false, "print derived registry public key hex")
+	printRelease := fs.Bool("print-release-public", false, "print paired minisign release public file")
+	printDefault := fs.Bool("print-default-public", false, "print embedded registry public key hex")
 	fs.SetOutput(io.Discard) // usage/parse-error text goes through w.Fail below, not flag's own stream
 	if err := fs.Parse(args); err != nil {
 		w.Fail(err)
@@ -92,6 +108,9 @@ func run(w *output.Writer, args []string) int {
 		w.Fail(errPlaintextKeyRefused)
 		return 1
 	}
+	if *derive || *printPublic || *printRelease || *printDefault {
+		return runRelease(w, *derive, *printPublic, *printRelease, *printDefault, *keyRef, *artifacts, *baseURL, *out)
+	}
 	if *artifacts == "" || *out == "" || *keyRef == "" {
 		w.Fail(errMissingRequiredFlags)
 		return 2
@@ -100,12 +119,22 @@ func run(w *output.Writer, args []string) int {
 }
 
 func generate(w *output.Writer, artifacts, baseURL, keyRef, out string) int {
+	return generateWithVault(w, artifacts, baseURL, keyRef, out, envVault{})
+}
+
+func generateWithVault(w *output.Writer, artifacts, baseURL, keyRef, out string, vault envVault) int {
 	idx, err := generator.GenerateIndex(generator.GeneratorConfig{ArtifactsDir: artifacts, BaseURL: baseURL})
 	if err != nil {
 		w.Fail(err)
 		return 1
 	}
-	if err := generator.SignIndex(idx, keyRef, envVault{}); err != nil {
+	key, err := vault.Get(context.Background(), keyRef)
+	defer clear(key)
+	if err != nil {
+		w.Fail(err)
+		return 1
+	}
+	if err := generator.SignIndex(idx, keyRef, envVault{key: key}); err != nil {
 		w.Fail(err)
 		return 1
 	}
@@ -119,4 +148,74 @@ func generate(w *output.Writer, artifacts, baseURL, keyRef, out string) int {
 	}
 	w.Println("registry-gen: wrote index.json")
 	return 0
+}
+
+// deriveAndZeroSeed consumes the caller's seed copy on both success and error.
+func deriveAndZeroSeed(seed []byte) (ed25519.PrivateKey, error) {
+	defer clear(seed)
+	return generator.DeriveRegistryKey(seed)
+}
+
+func runRelease(w *output.Writer, derive, printPublic, printRelease, printDefault bool, keyRef, artifacts, baseURL, out string) int {
+	if printDefault && !derive && !printPublic && !printRelease && keyRef == "" {
+		w.Println(hex.EncodeToString(plugin.DefaultRegistryPublicKey()))
+		return 0
+	}
+	if !derive || keyRef != "" || printDefault || (printPublic && printRelease) {
+		w.Fail(errors.New("registry-gen: release derivation and --key-ref are mutually exclusive; public output requires --derive-from-release"))
+		return 2
+	}
+	sk, err := releaseSecret()
+	if err != nil {
+		w.Fail(err)
+		return 1
+	}
+	defer sk.Zero()
+	if printRelease {
+		printReleaseKey(w, sk)
+		return 0
+	}
+	key, err := deriveAndZeroSeed(sk.Seed())
+	if err != nil {
+		w.Fail(err)
+		return 1
+	}
+	defer clear(key)
+	if printPublic {
+		w.Println(hex.EncodeToString(key.Public().(ed25519.PublicKey)))
+		return 0
+	}
+	if artifacts == "" || out == "" {
+		w.Fail(errMissingRequiredFlags)
+		return 2
+	}
+	return generateWithVault(w, artifacts, baseURL, "release", out, envVault{key: key})
+}
+
+// releaseSecret reads named custody values; errors expose names, never values.
+func releaseSecret() (minisign.SecretKey, error) {
+	file, err := (envVault{}).Get(context.Background(), "MINISIGN_RELEASE_SECKEY_B64")
+	if err != nil {
+		return minisign.SecretKey{}, cascade.New(cascade.KindUnavailable, "registry-gen: missing or invalid MINISIGN_RELEASE_SECKEY_B64")
+	}
+	defer clear(file)
+	pass, err := (envVault{}).Get(context.Background(), "MINISIGN_RELEASE_PASSPHRASE")
+	defer clear(pass)
+	if err != nil || len(pass) == 0 {
+		return minisign.SecretKey{}, cascade.New(cascade.KindUnavailable, "registry-gen: missing MINISIGN_RELEASE_PASSPHRASE")
+	}
+	return minisign.DecryptSecretKey(file, pass)
+}
+
+// printReleaseKey recomputes the paired public file, erasing secret scratch.
+func printReleaseKey(w *output.Writer, sk minisign.SecretKey) {
+	seed := sk.Seed()
+	defer clear(seed)
+	priv := ed25519.NewKeyFromSeed(seed)
+	defer clear(priv)
+	id := sk.KeyID()
+	raw := append([]byte("Ed"), id[:]...)
+	raw = append(raw, priv.Public().(ed25519.PublicKey)...)
+	w.Println(fmt.Sprintf("untrusted comment: minisign public key %016X", binary.LittleEndian.Uint64(id[:])))
+	w.Println(base64.StdEncoding.EncodeToString(raw))
 }
