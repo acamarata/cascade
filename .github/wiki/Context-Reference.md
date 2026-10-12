@@ -220,3 +220,22 @@ attaches a stage yet. The first production composition is the chat reply
 pipeline; whether it attaches a pre-assembly stage, which kind, and whether
 it condenses afterwards are that surface's own decisions, and the composer
 behaves identically with none, one or both attached.
+
+## Supervision directives in the capsule
+
+When the daemon's stall supervision has queued directives for a session (see
+`docs/stall-supervision.md`), the prompt-hydration hook delivers them in that
+session's next capsule. The hook sends the harness payload's `session_id` with
+its `context.slice` request; the daemon drains the queue only for a known,
+not-closed session and only for the owner CLI or a principal bound to that
+same session. Everyone else gets the slice without directives, and the queue
+is left as it was.
+
+Drained directives come back in `ContextSliceResult.directives` and the hook
+renders them first, under the heading `Cascade supervision`, one line per
+directive in the order they were queued. The context capsule follows. A turn
+with directives but no chunk above the score floor still injects the
+directives. A context directive doubles that slice's token budget once.
+
+If the daemon is not reachable the hook falls back as usual and drains
+nothing, so the directives wait for the next prompt.

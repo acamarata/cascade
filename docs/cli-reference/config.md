@@ -211,6 +211,19 @@ engine contract (timeout bound, at-least-once/idempotency, audit
 guarantee) and the composition-root wiring this section's fields feed
 into.
 
+## `[fleet.supervision]` `stall_threshold`
+
+```toml
+[fleet.supervision]
+stall_threshold = "30m"
+```
+
+How long a watched fleet session may go without progress before the daemon
+treats it as stalled and starts the escalation ladder. A duration string from
+`1m` to `24h`; absent means `30m`. It is read once at daemon start. An invalid
+value leaves the daemon running with `supervision.stall` in `error` and no
+stall supervision. See `docs/stall-supervision.md`.
+
 ## `[plugins]` and what a plugin selection means
 
 Two surfaces take a plugin selection, and they mean different things by it.

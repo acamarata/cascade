@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/acamarata/cascade/internal/context/hydration"
+	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -137,6 +138,47 @@ func TestContextSliceHookInjection(t *testing.T) {
 		if !strings.Contains(out.String(), key) {
 			t.Errorf("the emitted object has no %s key: %s", key, out.String())
 		}
+	}
+}
+
+// TestHydrationHookRendersSupervisionDirectives covers the hook's half of
+// the directive drain: the captured payload's session id rides on the slice
+// request, drained directives render under the supervision heading above the
+// capsule in enqueue order, and they render even when no chunk cleared the
+// floor (a stalled session's retry must not wait for relevant context).
+func TestHydrationHookRendersSupervisionDirectives(t *testing.T) {
+	payload, ok := decodeHookPayload(bytes.NewReader(realCCPayload(t)))
+	if !ok {
+		t.Fatal("the captured payload did not decode")
+	}
+	cfg := hydration.Default()
+	params := hookSliceParams(payload, cfg)
+	if params.SessionID == "" || params.SessionID != payload.SessionID || params.Cwd != payload.Cwd {
+		t.Fatalf("slice params %+v do not carry the payload's session id and cwd", params)
+	}
+	if params.MaxTokens == nil || *params.MaxTokens != cfg.BudgetTokens {
+		t.Fatalf("slice budget = %v, want %d", params.MaxTokens, cfg.BudgetTokens)
+	}
+
+	result := daemon.ContextSliceResult{
+		Directives: []string{"retry the failing step", "extra context granted"},
+		Retrieval:  []provider.RetrievedChunk{{Path: "docs/a.md", Score: 1}},
+	}
+	got := composeHydration(result, cfg, func() string { return "project/demo" })
+	want := "Cascade supervision\n\n- retry the failing step\n\n- extra context granted\n\n" +
+		"Cascade context (scope: project/demo, 1 items)\n\n- docs/a.md"
+	if got != want {
+		t.Fatalf("capsule =\n%s\nwant\n%s", got, want)
+	}
+
+	labelled := false
+	onlyDirectives := composeHydration(daemon.ContextSliceResult{Directives: []string{"retry"}}, cfg,
+		func() string { labelled = true; return "unused" })
+	if onlyDirectives != "Cascade supervision\n\n- retry" || labelled {
+		t.Fatalf("directives without chunks = %q (label resolved %v), want the heading and one line", onlyDirectives, labelled)
+	}
+	if empty := composeHydration(daemon.ContextSliceResult{}, cfg, func() string { return "x" }); empty != "" {
+		t.Fatalf("nothing to inject rendered %q", empty)
 	}
 }
 

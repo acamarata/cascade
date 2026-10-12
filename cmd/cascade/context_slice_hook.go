@@ -131,20 +131,54 @@ const maxHookPayloadBytes = 4 << 20
 //
 // The second return distinguishes the two silences: false means the slice
 // itself failed (degraded), and true with an empty string means the slice
-// succeeded and nothing cleared the floor (not degraded).
+// succeeded and nothing cleared the floor (not degraded). The payload's
+// session id rides along so the daemon can drain that session's
+// supervision directives; an unreachable daemon or the embedded fallback
+// drains nothing, and the directives wait for the next prompt.
 func buildHydrationCapsule(ctx context.Context, deps contextScopeDeps, payload hookPayload, cfg hydration.Config) (string, bool) {
-	budget := cfg.BudgetTokens
-	result, err := fetchContextSliceFor(ctx, deps, daemon.ContextAssembleParams{
-		Cwd: payload.Cwd, MaxTokens: &budget,
-	})
+	result, err := fetchContextSliceFor(ctx, deps, hookSliceParams(payload, cfg))
 	if err != nil {
 		return "", false
 	}
-	kept := filterByScore(result.Retrieval, cfg.MinScore)
-	if len(kept) == 0 {
-		return "", true
+	return composeHydration(result, cfg, func() string { return hydrationScopeLabel(ctx, deps, payload) }), true
+}
+
+// hookSliceParams is the context.slice request for payload: its cwd, the
+// configured budget and its session id.
+func hookSliceParams(payload hookPayload, cfg hydration.Config) daemon.ContextAssembleParams {
+	budget := cfg.BudgetTokens
+	return daemon.ContextAssembleParams{Cwd: payload.Cwd, MaxTokens: &budget, SessionID: payload.SessionID}
+}
+
+// composeHydration renders the injected text: the supervision directives
+// (when any were drained) above the capsule of chunks that cleared the
+// floor. Empty means there is nothing to inject. label is only resolved
+// when a capsule is rendered.
+func composeHydration(result daemon.ContextSliceResult, cfg hydration.Config, label func() string) string {
+	var parts []string
+	if len(result.Directives) > 0 {
+		parts = append(parts, renderSupervisionDirectives(result.Directives))
 	}
-	return renderCapsule(hydrationScopeLabel(ctx, deps, payload), kept), true
+	if kept := filterByScore(result.Retrieval, cfg.MinScore); len(kept) > 0 {
+		parts = append(parts, renderCapsule(label(), kept))
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// supervisionHeading heads the directives a stalled session's supervision
+// queued for its next prompt.
+const supervisionHeading = "Cascade supervision"
+
+// renderSupervisionDirectives renders the drained directives, one line
+// each in enqueue order, under supervisionHeading. They sit above the
+// capsule because they are instructions for this turn, not context.
+func renderSupervisionDirectives(directives []string) string {
+	var b strings.Builder
+	b.WriteString(supervisionHeading)
+	for _, d := range directives {
+		fmt.Fprintf(&b, "\n\n- %s", d)
+	}
+	return b.String()
 }
 
 // filterByScore drops every chunk below floor, preserving rank order.

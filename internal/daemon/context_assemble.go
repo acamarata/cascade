@@ -82,9 +82,14 @@ const defaultContextMaxTokens = 8000
 // asserted by BudgetConfig.Validate) is distinguishable from "unset" —a
 // plain int would make the two indistinguishable and silently fall back to
 // the default instead of surfacing the caller's typed error.
+//
+// SessionID names the live session the slice is for. It only selects which
+// session's supervision directives a caller allowed to act for that session
+// drains (context_assemble_directives.go); it never widens the slice.
 type ContextAssembleParams struct {
 	Cwd       string `json:"cwd"`
 	MaxTokens *int   `json:"max_tokens,omitempty"`
+	SessionID string `json:"session_id,omitempty"`
 }
 
 // ContextTierView is one rendered tier in a context.show result.
@@ -102,13 +107,16 @@ type ContextShowResult struct {
 
 // ContextSliceResult is context.slice's wire result: the assembled
 // context's slots plus its per-slot token accounting, flattened from
-// provider.ContextAssembly.
+// provider.ContextAssembly. Directives carries the supervision directives
+// drained for the request's session, in enqueue order; it is empty unless
+// the drain rule admitted the request.
 type ContextSliceResult struct {
-	Tier      []provider.TierBlock      `json:"tier"`
-	Retrieval []provider.RetrievedChunk `json:"retrieval"`
-	Memory    []provider.MemoryItem     `json:"memory"`
-	Counts    provider.SlotCounts       `json:"counts"`
-	Dropped   []provider.DroppedItem    `json:"dropped"`
+	Tier       []provider.TierBlock      `json:"tier"`
+	Retrieval  []provider.RetrievedChunk `json:"retrieval"`
+	Memory     []provider.MemoryItem     `json:"memory"`
+	Counts     provider.SlotCounts       `json:"counts"`
+	Dropped    []provider.DroppedItem    `json:"dropped"`
+	Directives []string                  `json:"directives,omitempty"`
 }
 
 // RegisterContextAssembleHandler opens the scope graph's SQLite connection
@@ -116,8 +124,10 @@ type ContextSliceResult struct {
 // makes; see this file's top doc comment) and registers context.slice and
 // context.show against registry. Returns the opened *sql.DB so the caller
 // can close it during daemon shutdown; a non-nil error means no db was left
-// open.
-func RegisterContextAssembleHandler(registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock) (*sql.DB, error) {
+// open. opts may add a directive drainer (WithDirectiveDrain); without one
+// context.slice never drains.
+func RegisterContextAssembleHandler(registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock, opts ...ContextOption) (*sql.DB, error) {
+	o := applyContextOptions(opts)
 	if err := os.MkdirAll(paths.DataDir(), 0o700); err != nil {
 		return nil, cascade.Wrap(cascade.KindUnavailable, err, "daemon: context.slice/show: create data dir")
 	}
@@ -145,7 +155,7 @@ func RegisterContextAssembleHandler(registry *rpc.Registry, paths runtime.PathPr
 		if err != nil {
 			return nil, err
 		}
-		return ComputeContextSlice(ctx, deps, p)
+		return o.sliceWithDirectives(ctx, deps, p)
 	})
 	return db, nil
 }
