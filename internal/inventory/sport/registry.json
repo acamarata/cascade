@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05T22:00:02Z",
+  "generated_at": "2026-10-12T03:03:46Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1411,20 +1411,6 @@
       ]
     },
     {
-      "name": "R-21.94",
-      "sites": [
-        {
-          "file": "internal/evidence/dataclass.go",
-          "line": 36,
-          "status": "",
-          "raw": "R-21.94."
-        }
-      ],
-      "statuses": [
-        ""
-      ]
-    },
-    {
       "name": "REHYDRATE_CHANNEL",
       "sites": [
         {
@@ -2542,7 +2528,7 @@
         },
         {
           "file": "cmd/cascade/plugin_registry_client.go",
-          "line": 14,
+          "line": 12,
           "status": "ADD",
           "ticket": "P1-E24-W5-S50-T2",
           "raw": "cli/plugin-search/ADD (P1-E24-W5-S50-T2)."
@@ -5485,6 +5471,12 @@
           "raw": "cmd/cascade/fleet-completion-check (coverage for P1-CI-09)."
         },
         {
+          "file": "cmd/cascade/fleet_completion_check_nosocket_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "cmd/cascade/fleet-completion-check."
+        },
+        {
           "file": "cmd/cascade/fleet_completion_check_test.go",
           "line": 15,
           "status": "",
@@ -6117,7 +6109,7 @@
       "sites": [
         {
           "file": "cmd/cascade/daemon_events_dial.go",
-          "line": 32,
+          "line": 33,
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T1",
           "raw": "cmd/cascade:daemon-events-dial (ADD) — P1-E16-W4-S34-T1."
@@ -7885,7 +7877,7 @@
       "sites": [
         {
           "file": "internal/doctor/registry_pubkey.go",
-          "line": 24,
+          "line": 11,
           "status": "ADD",
           "ticket": "P1-E24-W5-S50-T2",
           "raw": "doctor/registry-pubkey (ADD, P1-E24-W5-S50-T2)."
@@ -7931,6 +7923,40 @@
       ]
     },
     {
+      "name": "elevated CLI calls",
+      "sites": [
+        {
+          "file": "cmd/cascade/elevated_call.go",
+          "line": 4,
+          "status": "",
+          "raw": "elevated CLI calls."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "elevated client calls",
+      "sites": [
+        {
+          "file": "internal/client/elevated.go",
+          "line": 8,
+          "status": "",
+          "raw": "elevated client calls."
+        },
+        {
+          "file": "internal/client/elevated_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "elevated client calls."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "event:MemoryWeeklyDigest",
       "sites": [
         {
@@ -7964,6 +7990,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "evidence data-class serialization",
+      "sites": [
+        {
+          "file": "internal/evidence/dataclass.go",
+          "line": 13,
+          "status": "",
+          "raw": "evidence data-class serialization."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -8042,20 +8082,6 @@
           "line": 5,
           "status": "ADD",
           "raw": "evidence/claim-record (ADD)."
-        }
-      ],
-      "statuses": [
-        "ADD"
-      ]
-    },
-    {
-      "name": "evidence/data-class",
-      "sites": [
-        {
-          "file": "internal/evidence/dataclass.go",
-          "line": 36,
-          "status": "ADD",
-          "raw": "evidence/data-class (ADD)"
         }
       ],
       "statuses": [
@@ -31502,6 +31528,20 @@
       ]
     },
     {
+      "name": "principal/Minter",
+      "sites": [
+        {
+          "file": "internal/principal/minter.go",
+          "line": 6,
+          "status": "",
+          "raw": "principal/Minter."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "process lifecycle regression tests",
       "sites": [
         {
@@ -32756,6 +32796,78 @@
       ]
     },
     {
+      "name": "release artifact gate",
+      "sites": [
+        {
+          "file": "internal/build/devkeysgate.go",
+          "line": 17,
+          "status": "",
+          "raw": "release artifact gate."
+        },
+        {
+          "file": "internal/build/devkeysgate.go",
+          "line": 37,
+          "status": "",
+          "raw": "release artifact gate."
+        },
+        {
+          "file": "internal/build/nodevkeys/main.go",
+          "line": 14,
+          "status": "",
+          "raw": "release artifact gate."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "release configuration gate",
+      "sites": [
+        {
+          "file": "internal/build/devkeysgate.go",
+          "line": 59,
+          "status": "",
+          "raw": "release configuration gate."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "release-signing-custody",
+      "sites": [
+        {
+          "file": "internal/minisign/release.go",
+          "line": 6,
+          "status": "",
+          "raw": "release-signing-custody."
+        },
+        {
+          "file": "internal/minisign/seckey.go",
+          "line": 6,
+          "status": "",
+          "raw": "release-signing-custody."
+        },
+        {
+          "file": "pkg/plugin/registry/generator/derive.go",
+          "line": 6,
+          "status": "",
+          "raw": "release-signing-custody."
+        },
+        {
+          "file": "pkg/plugin/registry_default_key.go",
+          "line": 6,
+          "status": "",
+          "raw": "release-signing-custody."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "repo/graph-cross-scope-gating",
       "sites": [
         {
@@ -33127,6 +33239,20 @@
           "status": "",
           "ticket": "P1-E24-W5-S50-T8",
           "raw": "rework (P1-E24-W5-S50-T8)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "rpc/Access",
+      "sites": [
+        {
+          "file": "internal/rpc/access.go",
+          "line": 6,
+          "status": "",
+          "raw": "rpc/Access."
         }
       ],
       "statuses": [
@@ -34051,6 +34177,34 @@
       ]
     },
     {
+      "name": "sensitivity boundary enforcement",
+      "sites": [
+        {
+          "file": "internal/build/arch_tier_ops_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "sensitivity boundary enforcement."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "sensitivity stored vocabulary",
+      "sites": [
+        {
+          "file": "pkg/provider/sensitivity_dataclass.go",
+          "line": 9,
+          "status": "",
+          "raw": "sensitivity stored vocabulary."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "supervisor.rpc_surface",
       "sites": [
         {
@@ -34218,7 +34372,7 @@
       ]
     }
   ],
-  "total_sites": 3282,
-  "unspecified_count": 204,
+  "total_sites": 3297,
+  "unspecified_count": 213,
   "multi_status_count": 103
 }
