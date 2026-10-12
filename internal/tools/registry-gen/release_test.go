@@ -65,7 +65,7 @@ func TestRegistryGenDeriveFromRelease(t *testing.T) {
 	defer clear(key)
 	outDir := t.TempDir()
 	w, stdout, stderr := testWriter()
-	args := []string{"--derive-from-release", "--artifacts", fixturesDir, "--out", outDir}
+	args := []string{"--derive-from-release", "--sequence", "1", "--artifacts", fixturesDir, "--out", outDir}
 	if rc := run(w, args); rc != 0 {
 		t.Fatalf("run = %d: %s", rc, stderr)
 	}
@@ -130,7 +130,8 @@ func TestRegistryGenReleaseFlagMatrix(t *testing.T) {
 		{"public without derive", []string{"--print-public"}, 2, ""},
 		{"release public without derive", []string{"--print-release-public"}, 2, ""},
 		{"both public outputs", []string{"--derive-from-release", "--print-public", "--print-release-public"}, 2, ""},
-		{"derive without artifacts", []string{"--derive-from-release"}, 2, ""},
+		{"derive without sequence", []string{"--derive-from-release"}, 2, ""},
+		{"derive without artifacts", []string{"--derive-from-release", "--sequence", "1"}, 2, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -178,7 +179,7 @@ func TestRegistryGenReleaseUnwritableOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	w, _, stderr := testWriter()
-	args := []string{"--derive-from-release", "--artifacts", fixturesDir, "--out", filepath.Join(blocker, "out")}
+	args := []string{"--derive-from-release", "--sequence", "1", "--artifacts", fixturesDir, "--out", filepath.Join(blocker, "out")}
 	if rc := run(w, args); rc != 1 {
 		t.Fatalf("rc=%d, want 1: %s", rc, stderr)
 	}
@@ -193,7 +194,7 @@ func TestRegistryGenRefusesShortSigningKey(t *testing.T) {
 	t.Setenv("REG_GEN_SHORT_TEST_KEY", base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{7}, 16)))
 	out := t.TempDir()
 	w, _, stderr := testWriter()
-	if rc := run(w, []string{"--artifacts", fixturesDir, "--out", out, "--key-ref", "REG_GEN_SHORT_TEST_KEY"}); rc != 1 {
+	if rc := run(w, []string{"--artifacts", fixturesDir, "--sequence", "1", "--out", out, "--key-ref", "REG_GEN_SHORT_TEST_KEY"}); rc != 1 {
 		t.Fatalf("rc=%d, want 1: %s", rc, stderr)
 	}
 	if _, err := os.Stat(filepath.Join(out, "index.json")); err == nil {

@@ -64,10 +64,13 @@ func signedTestIndex(t *testing.T, priv ed25519.PrivateKey, entries []plugin.Reg
 	if err != nil {
 		t.Fatalf("marshal entries: %v", err)
 	}
+	const published = "2026-01-01T00:00:00Z"
 	payload, err := json.Marshal(struct {
 		SchemaVersion string          `json:"schema_version"`
 		Entries       json.RawMessage `json:"entries"`
-	}{plugin.SchemaVersionCurrent, entriesRaw})
+		Sequence      uint64          `json:"sequence"`
+		PublishedAt   string          `json:"published_at"`
+	}{plugin.SchemaVersionCurrent, entriesRaw, 1, published})
 	if err != nil {
 		t.Fatalf("marshal signed payload: %v", err)
 	}
@@ -75,8 +78,10 @@ func signedTestIndex(t *testing.T, priv ed25519.PrivateKey, entries []plugin.Reg
 	doc, err := json.Marshal(struct {
 		SchemaVersion string          `json:"schema_version"`
 		Entries       json.RawMessage `json:"entries"`
+		Sequence      uint64          `json:"sequence"`
+		PublishedAt   string          `json:"published_at"`
 		Signature     string          `json:"signature"`
-	}{plugin.SchemaVersionCurrent, entriesRaw, base64.StdEncoding.EncodeToString(sig)})
+	}{plugin.SchemaVersionCurrent, entriesRaw, 1, published, base64.StdEncoding.EncodeToString(sig)})
 	if err != nil {
 		t.Fatalf("marshal index document: %v", err)
 	}

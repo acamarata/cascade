@@ -30,6 +30,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -63,8 +64,15 @@ func fixedPublicKey() ed25519.PublicKey {
 
 const goldenPath = "../../../../internal/testdata/goldens/registry-generator/index.json"
 
+// fixturesConfig is the golden's generator input: sequence 1, published
+// 2026-01-01T00:00:00Z (sub-second input proves the truncation).
+func fixturesConfig() generator.GeneratorConfig {
+	return generator.GeneratorConfig{ArtifactsDir: "testdata/fixtures", BaseURL: "https://cdn.example.com/plugins/",
+		Sequence: 1, PublishedAt: time.Date(2026, 1, 1, 0, 0, 0, 999, time.UTC)}
+}
+
 func TestGenerateIndexGoldenDeterministicAndIdempotent(t *testing.T) {
-	cfg := generator.GeneratorConfig{ArtifactsDir: "testdata/fixtures", BaseURL: "https://cdn.example.com/plugins/"}
+	cfg := fixturesConfig()
 
 	idx1, err := generator.GenerateIndex(cfg)
 	if err != nil {
@@ -99,7 +107,7 @@ func TestGenerateIndexGoldenDeterministicAndIdempotent(t *testing.T) {
 }
 
 func TestGenerateIndexChecksumsMatchSourceFiles(t *testing.T) {
-	cfg := generator.GeneratorConfig{ArtifactsDir: "testdata/fixtures", BaseURL: "https://cdn.example.com/plugins/"}
+	cfg := fixturesConfig()
 	idx, err := generator.GenerateIndex(cfg)
 	if err != nil {
 		t.Fatalf("GenerateIndex: %v", err)
@@ -125,7 +133,7 @@ func TestGenerateIndexErrMissingManifest(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "orphan-1.0.0.plugin"), []byte("bytes"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := generator.GenerateIndex(generator.GeneratorConfig{ArtifactsDir: dir})
+	_, err := generator.GenerateIndex(generator.GeneratorConfig{ArtifactsDir: dir, Sequence: 1, PublishedAt: time.Unix(1, 0)})
 	if !errors.Is(err, generator.ErrMissingManifest) {
 		t.Fatalf("err = %v, want errors.Is ErrMissingManifest", err)
 	}
@@ -144,7 +152,7 @@ func TestGenerateIndexErrInvalidManifest(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "bad-1.0.0.manifest.toml"), []byte(bad), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := generator.GenerateIndex(generator.GeneratorConfig{ArtifactsDir: dir})
+	_, err := generator.GenerateIndex(generator.GeneratorConfig{ArtifactsDir: dir, Sequence: 1, PublishedAt: time.Unix(1, 0)})
 	if !errors.Is(err, generator.ErrInvalidManifest) {
 		t.Fatalf("err = %v, want errors.Is ErrInvalidManifest", err)
 	}
@@ -154,7 +162,7 @@ func TestGenerateIndexErrInvalidManifest(t *testing.T) {
 }
 
 func TestSignIndexPropagatesVaultError(t *testing.T) {
-	idx := &plugin.RegistryIndex{SchemaVersion: plugin.SchemaVersionCurrent}
+	idx := &plugin.RegistryIndex{SchemaVersion: plugin.SchemaVersionCurrent, Sequence: 1, PublishedAt: "2026-01-01T00:00:00Z"}
 	wantErr := errors.New("vault unreachable")
 	err := generator.SignIndex(idx, "any-ref", testVault{err: wantErr})
 	if err == nil {
@@ -182,7 +190,7 @@ type fixedClock struct{ t time.Time }
 func (c fixedClock) Now() time.Time { return c.t }
 
 func TestIntegrationRealClientAcceptsGeneratedIndex(t *testing.T) {
-	cfg := generator.GeneratorConfig{ArtifactsDir: "testdata/fixtures", BaseURL: "https://cdn.example.com/plugins/"}
+	cfg := fixturesConfig()
 	idx, err := generator.GenerateIndex(cfg)
 	if err != nil {
 		t.Fatalf("GenerateIndex: %v", err)
@@ -214,4 +222,40 @@ func TestIntegrationRealClientAcceptsGeneratedIndex(t *testing.T) {
 	if len(got.Entries) != len(idx.Entries) {
 		t.Fatalf("client returned %d entries, generator produced %d", len(got.Entries), len(idx.Entries))
 	}
+}
+
+// TestGeneratorRequiresSequence: a missing or zero sequence (or an unset
+// published_at) refuses before anything is signed; SignIndex never even
+// asks the vault for the key.
+func TestGeneratorRequiresSequence(t *testing.T) {
+	for name, cfg := range map[string]generator.GeneratorConfig{
+		"zero sequence":     {ArtifactsDir: "testdata/fixtures", PublishedAt: time.Unix(1, 0)},
+		"zero published_at": {ArtifactsDir: "testdata/fixtures", Sequence: 1},
+	} {
+		idx, err := generator.GenerateIndex(cfg)
+		if idx != nil || !errors.Is(err, generator.ErrMissingSequence) || !strings.Contains(err.Error(), "sequence (>= 1)") {
+			t.Errorf("%s: GenerateIndex = %v, %v; want nil and ErrMissingSequence", name, idx, err)
+		}
+	}
+	for name, idx := range map[string]*plugin.RegistryIndex{
+		"zero sequence":      {SchemaVersion: "1", PublishedAt: "2026-01-01T00:00:00Z"},
+		"empty published_at": {SchemaVersion: "1", Sequence: 1},
+	} {
+		vault := &countingVault{testVault: fixedVault()}
+		err := generator.SignIndex(idx, "test-key-ref", vault)
+		if !errors.Is(err, generator.ErrMissingSequence) || idx.Signature != "" || vault.calls != 0 {
+			t.Errorf("%s: SignIndex err=%v signature=%q vault calls=%d; want ErrMissingSequence, unsigned, 0 calls", name, err, idx.Signature, vault.calls)
+		}
+	}
+}
+
+// countingVault records how often the signing key was requested.
+type countingVault struct {
+	testVault
+	calls int
+}
+
+func (v *countingVault) Get(ctx context.Context, ref string) ([]byte, error) {
+	v.calls++
+	return v.testVault.Get(ctx, ref)
 }

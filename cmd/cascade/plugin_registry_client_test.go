@@ -38,8 +38,8 @@ func TestBuildPluginRegistryClientNotConfigured(t *testing.T) {
 
 func signedRegistryTestIndex(t *testing.T, key ed25519.PrivateKey) []byte {
 	t.Helper()
-	payload := []byte(`{"schema_version":"1","entries":[]}`)
-	idx := plugin.RegistryIndex{SchemaVersion: "1", Entries: []plugin.RegistryIndexEntry{}, Signature: base64.StdEncoding.EncodeToString(ed25519.Sign(key, payload))}
+	payload := []byte(`{"schema_version":"1","entries":[],"sequence":1,"published_at":"2026-01-01T00:00:00Z"}`)
+	idx := plugin.RegistryIndex{SchemaVersion: "1", Entries: []plugin.RegistryIndexEntry{}, Sequence: 1, PublishedAt: "2026-01-01T00:00:00Z", Signature: base64.StdEncoding.EncodeToString(ed25519.Sign(key, payload))}
 	raw, err := json.Marshal(idx)
 	if err != nil {
 		t.Fatal(err)

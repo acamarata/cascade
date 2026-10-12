@@ -53,15 +53,24 @@ var _ RegistryVerifier = Ed25519Verifier{}
 type rawIndexEnvelope struct {
 	SchemaVersion string          `json:"schema_version"`
 	Entries       json.RawMessage `json:"entries"`
+	Sequence      uint64          `json:"sequence"`
+	PublishedAt   string          `json:"published_at"`
 	Signature     string          `json:"signature"`
 }
 
-// signedPayload is exactly what the registry signs: schema_version plus
-// the raw entries bytes, re-encoded with fixed field order and no other
-// fields. It deliberately excludes Signature itself.
+// signedPayload is exactly what the registry signs: schema_version, the
+// raw entries bytes, then sequence and published_at, re-encoded with fixed
+// field order and no other fields. It deliberately excludes Signature
+// itself. Sequence and PublishedAt come AFTER entries with omitempty, so an
+// index signed before they existed keeps its exact signed bytes and still
+// verifies (it then carries Sequence 0, which RegistryClient refuses),
+// while stripping them from an index signed with them changes the payload
+// and fails verification.
 type signedPayload struct {
 	SchemaVersion string          `json:"schema_version"`
 	Entries       json.RawMessage `json:"entries"`
+	Sequence      uint64          `json:"sequence,omitempty"`
+	PublishedAt   string          `json:"published_at,omitempty"`
 }
 
 // VerifyIndex implements RegistryVerifier.
@@ -84,7 +93,7 @@ func (v Ed25519Verifier) VerifyIndex(_ context.Context, data []byte) (RegistryIn
 		return RegistryIndex{}, cascade.New(cascade.KindIntegrity, ErrSignatureInvalid.Msg+": signature is not a valid ed25519 signature")
 	}
 
-	payload, err := json.Marshal(signedPayload{SchemaVersion: env.SchemaVersion, Entries: env.Entries})
+	payload, err := json.Marshal(signedPayload{SchemaVersion: env.SchemaVersion, Entries: env.Entries, Sequence: env.Sequence, PublishedAt: env.PublishedAt})
 	if err != nil {
 		return RegistryIndex{}, cascade.Wrapf(cascade.KindInvalidInput, err, "%s: re-encode signed payload", ErrIndexMalformed.Msg)
 	}
@@ -96,7 +105,8 @@ func (v Ed25519Verifier) VerifyIndex(_ context.Context, data []byte) (RegistryIn
 	if err := json.Unmarshal(env.Entries, &entries); err != nil {
 		return RegistryIndex{}, cascade.Wrapf(cascade.KindInvalidInput, err, "%s: unmarshal verified entries", ErrIndexMalformed.Msg)
 	}
-	return RegistryIndex{SchemaVersion: env.SchemaVersion, Entries: entries, Signature: env.Signature}, nil
+	return RegistryIndex{SchemaVersion: env.SchemaVersion, Entries: entries, Sequence: env.Sequence,
+		PublishedAt: env.PublishedAt, Signature: env.Signature}, nil
 }
 
 // VerifyArtifact implements RegistryVerifier: it checks data's SHA-256

@@ -264,9 +264,10 @@ func pluginCatalogSearch(ctx context.Context, client *plugin.RegistryClient, q s
 			// real operational problem, surfaced rather than swallowed.
 			return nil, err
 		}
-		// Any other failure (signature invalid, malformed index —
-		// "unverified index") fails closed: the builtin half already
-		// collected above, nothing registry-sourced added.
+		// Any other failure (unverified, malformed or rolled-back index,
+		// KindIntegrity) fails closed to the builtin half, never silently:
+		// the error reaches stderr as a warning.
+		slog.Default().Warn("plugin registry index refused; listing builtin plugins only", "err", err)
 		return out, nil
 	}
 	for _, e := range registryEntries {

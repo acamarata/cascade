@@ -236,7 +236,7 @@ var dynamicEnvReads = map[string][]string{
 	"internal/runtime/profile_server.go:119": {"<operator-named>"}, // server-profile DSN env-ref
 	"internal/runtime/profile_server.go:152": {"<operator-named>"}, // server-profile s3_env_prefix + suffix
 	"internal/secrets/oauth_transport.go:68": {"<caller-named>"},
-	"internal/tools/registry-gen/main.go:71": {"<operator-named>"}, // --key-ref
+	"internal/tools/registry-gen/main.go:76": {"<operator-named>"}, // --key-ref
 	"plugins/cascade-pa/cmd/env.go:12":       {"<caller-named>"},
 	"plugins/github/token_env.go:41":         {"CASCADE_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"},
 	"plugins/github/wiki/confirm.go:43":      {"<caller-named>"},

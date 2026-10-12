@@ -24,18 +24,20 @@ package plugin
 //   contract exactly (TestCacheHit asserts zero fetcher invocations) while
 //   closing the poisoning gap. A corrupt or unparseable cache entry is
 //   treated as a cache MISS (re-fetch), never served.
-//   ROLLBACK/REPLAY GAP: RegistryIndex carries no monotonic
-//   version/sequence/timestamp field of its own (only SchemaVersion, which
-//   identifies the document SHAPE, not a point in time), so this client
-//   cannot detect or refuse an index that is a valid, signed, but OLDER
-//   replay of a previous index. This is a real gap, not implemented here,
-//   and flagged rather than silently absent — see the journal.
+//   ROLLBACK/REPLAY: every verified index (fetched or cached) passes
+//   acceptSequence (registry_rollback.go) before it is used: its signed
+//   Sequence must be >= 1 and must not move backwards, or repeat with
+//   different bytes, against the baseline stored in <CacheDir>/index.seq.
+//   A verified index older than 90 days (signed PublishedAt) is served
+//   with a warning.
 // SPORT: pkg/plugin registry-client (ADD) — P1-E24-W5-S50-T1.
 
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -67,6 +69,8 @@ type RegistryConfig struct {
 	// CacheTTL is how long a cached index is served without a network
 	// fetch. Zero means every Fetch call re-fetches.
 	CacheTTL time.Duration
+	// Logger receives the stale-index warning. Nil means slog.Default().
+	Logger *slog.Logger
 }
 
 const registryCacheKey = "index"
@@ -87,6 +91,11 @@ type RegistryClient struct {
 	verifier RegistryVerifier
 	cache    RegistryCache
 	clock    Clock
+
+	// seqMu serialises the index.seq read-check-write in acceptSequence.
+	seqMu sync.Mutex
+	// memBaseline holds the baseline when cfg.CacheDir is empty.
+	memBaseline map[string]seqBaseline
 }
 
 // NewRegistryClient constructs a RegistryClient over the given injected
@@ -112,10 +121,13 @@ func (c *RegistryClient) WithClock(clock Clock) *RegistryClient {
 // entry without any network call, or fetching, verifying, and caching a
 // new one otherwise. Fetch never returns the result of an unverified
 // payload — a verification failure is returned as an error and nothing is
-// cached.
+// cached. A verified index that would roll the registry back (older
+// sequence, same sequence with different bytes, or sequence 0) is refused
+// with KindIntegrity and is neither cached nor recorded.
 func (c *RegistryClient) Fetch(ctx context.Context) (RegistryIndex, error) {
 	if c.cache != nil {
 		if idx, ok := c.cacheHit(ctx); ok {
+			c.warnIfStale(idx)
 			return idx, nil
 		}
 	}
@@ -129,10 +141,14 @@ func (c *RegistryClient) Fetch(ctx context.Context) (RegistryIndex, error) {
 		// Fail closed: the payload is never cached and never returned.
 		return RegistryIndex{}, err
 	}
+	if err := c.acceptSequence(idx, data); err != nil {
+		return RegistryIndex{}, err
+	}
 
 	if c.cache != nil {
 		c.writeCache(ctx, data)
 	}
+	c.warnIfStale(idx)
 	return idx, nil
 }
 
@@ -154,6 +170,9 @@ func (c *RegistryClient) cacheHit(ctx context.Context) (RegistryIndex, bool) {
 	}
 	idx, err := c.verifier.VerifyIndex(ctx, env.Raw)
 	if err != nil {
+		return RegistryIndex{}, false
+	}
+	if err := c.acceptSequence(idx, env.Raw); err != nil {
 		return RegistryIndex{}, false
 	}
 	return idx, true

@@ -9,9 +9,12 @@
 //	no --yes, and a plaintext --key flag is refused rather than accepted
 //	(key material only ever travels as a vault key-ref).
 //
-// Inputs: --artifacts, --out, --base-url, --key-ref flags (all required
+// Inputs: --artifacts, --out, --base-url, --key-ref, --sequence flags (all
 //
-//	except --base-url); a plaintext --key flag, which is a hard refusal.
+//	required except --base-url; --sequence must be >= 1 and is refused
+//	before anything is signed); a plaintext --key flag, which is a hard
+//	refusal. published_at is stamped from the injected clock (UTC, whole
+//	seconds).
 //
 // Outputs: index.json written under --out; process exit code 0 on
 //
@@ -49,6 +52,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/minisign"
 	"github.com/acamarata/cascade/internal/output"
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/plugin"
 	"github.com/acamarata/cascade/pkg/plugin/registry/generator"
@@ -57,6 +61,7 @@ import (
 var (
 	errPlaintextKeyRefused  = errors.New("registry-gen: --key accepts no plaintext key material; use --key-ref with a vault reference")
 	errMissingRequiredFlags = errors.New("registry-gen: --artifacts, --out, and --key-ref are required")
+	errMissingSequence      = errors.New("registry-gen: --sequence is required and must be >= 1 (higher than every index published before)")
 )
 
 // envVault resolves a vault key-ref as the name of an environment variable
@@ -89,6 +94,11 @@ func main() {
 // run implements the command over an injected Writer and argv slice so
 // tests never touch the real process streams or os.Args.
 func run(w *output.Writer, args []string) int {
+	return runAt(w, runtime.NewSystemClock(), args)
+}
+
+// runAt is run with an injected Clock, so tests pin published_at.
+func runAt(w *output.Writer, clk runtime.Clock, args []string) int {
 	fs := flag.NewFlagSet("registry-gen", flag.ContinueOnError)
 	artifacts := fs.String("artifacts", "", "directory of (artifact, manifest) pairs")
 	out := fs.String("out", "", "output directory for index.json")
@@ -99,6 +109,7 @@ func run(w *output.Writer, args []string) int {
 	printPublic := fs.Bool("print-public", false, "print derived registry public key hex")
 	printRelease := fs.Bool("print-release-public", false, "print paired minisign release public file")
 	printDefault := fs.Bool("print-default-public", false, "print embedded registry public key hex")
+	sequence := fs.Uint64("sequence", 0, "index sequence (>= 1), higher than every index published before")
 	fs.SetOutput(io.Discard) // usage/parse-error text goes through w.Fail below, not flag's own stream
 	if err := fs.Parse(args); err != nil {
 		w.Fail(err)
@@ -109,21 +120,27 @@ func run(w *output.Writer, args []string) int {
 		return 1
 	}
 	if *derive || *printPublic || *printRelease || *printDefault {
-		return runRelease(w, *derive, *printPublic, *printRelease, *printDefault, *keyRef, *artifacts, *baseURL, *out)
+		cfg := generator.GeneratorConfig{ArtifactsDir: *artifacts, BaseURL: *baseURL, Sequence: *sequence, PublishedAt: clk.Now()}
+		return runRelease(w, *derive, *printPublic, *printRelease, *printDefault, *keyRef, cfg, *out)
 	}
 	if *artifacts == "" || *out == "" || *keyRef == "" {
 		w.Fail(errMissingRequiredFlags)
 		return 2
 	}
-	return generate(w, *artifacts, *baseURL, *keyRef, *out)
+	if *sequence == 0 {
+		w.Fail(errMissingSequence)
+		return 2
+	}
+	cfg := generator.GeneratorConfig{ArtifactsDir: *artifacts, BaseURL: *baseURL, Sequence: *sequence, PublishedAt: clk.Now()}
+	return generate(w, cfg, *keyRef, *out)
 }
 
-func generate(w *output.Writer, artifacts, baseURL, keyRef, out string) int {
-	return generateWithVault(w, artifacts, baseURL, keyRef, out, envVault{})
+func generate(w *output.Writer, cfg generator.GeneratorConfig, keyRef, out string) int {
+	return generateWithVault(w, cfg, keyRef, out, envVault{})
 }
 
-func generateWithVault(w *output.Writer, artifacts, baseURL, keyRef, out string, vault envVault) int {
-	idx, err := generator.GenerateIndex(generator.GeneratorConfig{ArtifactsDir: artifacts, BaseURL: baseURL})
+func generateWithVault(w *output.Writer, cfg generator.GeneratorConfig, keyRef, out string, vault envVault) int {
+	idx, err := generator.GenerateIndex(cfg)
 	if err != nil {
 		w.Fail(err)
 		return 1
@@ -156,13 +173,18 @@ func deriveAndZeroSeed(seed []byte) (ed25519.PrivateKey, error) {
 	return generator.DeriveRegistryKey(seed)
 }
 
-func runRelease(w *output.Writer, derive, printPublic, printRelease, printDefault bool, keyRef, artifacts, baseURL, out string) int {
+func runRelease(w *output.Writer, derive, printPublic, printRelease, printDefault bool, keyRef string, cfg generator.GeneratorConfig, out string) int {
 	if printDefault && !derive && !printPublic && !printRelease && keyRef == "" {
 		w.Println(hex.EncodeToString(plugin.DefaultRegistryPublicKey()))
 		return 0
 	}
 	if !derive || keyRef != "" || printDefault || (printPublic && printRelease) {
 		w.Fail(errors.New("registry-gen: release derivation and --key-ref are mutually exclusive; public output requires --derive-from-release"))
+		return 2
+	}
+	if !printPublic && !printRelease && cfg.Sequence == 0 {
+		// Signing path: refuse before any release custody is read.
+		w.Fail(errMissingSequence)
 		return 2
 	}
 	sk, err := releaseSecret()
@@ -185,11 +207,11 @@ func runRelease(w *output.Writer, derive, printPublic, printRelease, printDefaul
 		w.Println(hex.EncodeToString(key.Public().(ed25519.PublicKey)))
 		return 0
 	}
-	if artifacts == "" || out == "" {
+	if cfg.ArtifactsDir == "" || out == "" {
 		w.Fail(errMissingRequiredFlags)
 		return 2
 	}
-	return generateWithVault(w, artifacts, baseURL, "release", out, envVault{key: key})
+	return generateWithVault(w, cfg, "release", out, envVault{key: key})
 }
 
 // releaseSecret reads named custody values; errors expose names, never values.

@@ -16,11 +16,18 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
+	"log"
+	"log/slog"
 	"os"
+	"reflect"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/plugin"
@@ -209,5 +216,77 @@ func TestPluginSearchDaemonDown(t *testing.T) {
 	}
 	if stderr == "" && err.Error() == "" {
 		t.Fatalf("expected a readable error message, got none")
+	}
+}
+
+// seqSearchFetcher serves its documents in order, one per FetchIndex.
+type seqSearchFetcher struct {
+	fakeSearchFetcher
+	docs [][]byte
+	n    *int
+}
+
+func (f seqSearchFetcher) FetchIndex(context.Context) ([]byte, error) {
+	doc := f.docs[*f.n]
+	*f.n++
+	return doc, nil
+}
+
+// lockedBuffer is a bytes.Buffer safe for a logger shared across goroutines.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// TestPluginCatalogSearchRollbackWarns: a replayed index (sequence 1 again
+// with different bytes) is a KindIntegrity refusal. The catalog keeps
+// exactly the builtin rows and the refusal is logged as a warning naming
+// the rollback, never swallowed silently.
+func TestPluginCatalogSearchRollbackWarns(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	entries := registrySourcedTestEntries()
+	docs := [][]byte{signedTestIndex(t, priv, entries), signedTestIndex(t, priv, entries[:1])}
+	client := plugin.NewRegistryClient(plugin.RegistryConfig{}, seqSearchFetcher{docs: docs, n: new(int)},
+		plugin.Ed25519Verifier{PublicKey: pub}, nil, fixedSearchClock{now: time.Unix(1000, 0)})
+	logs := &lockedBuffer{}
+	prev, logOut, logFlags := slog.Default(), log.Writer(), log.Flags()
+	slog.SetDefault(slog.New(slog.NewTextHandler(logs, nil)))
+	// SetDefault also redirects the log package; restore both.
+	t.Cleanup(func() { slog.SetDefault(prev); log.SetOutput(logOut); log.SetFlags(logFlags) })
+
+	want, err := pluginSearchBuiltinFallback("")
+	if err != nil {
+		t.Fatalf("pluginSearchBuiltinFallback: %v", err)
+	}
+	if first, err := pluginCatalogSearch(context.Background(), client, ""); err != nil || len(first) != len(want)+2 {
+		t.Fatalf("first fetch = %d rows, err=%v, want builtin (%d) + 2", len(first), err, len(want))
+	}
+	if strings.Contains(logs.String(), "rollback") {
+		t.Fatalf("verified first fetch logged a rollback: %s", logs)
+	}
+	got, err := pluginCatalogSearch(context.Background(), client, "")
+	if err != nil {
+		t.Fatalf("rolled-back index must fail closed (no error), got: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("rollback result = %+v,\nwant EXACTLY the builtin set = %+v", got, want)
+	}
+	if out := logs.String(); !strings.Contains(out, "level=WARN") || !strings.Contains(out, "registry index rollback") {
+		t.Fatalf("rollback refusal not warned: %q", out)
 	}
 }

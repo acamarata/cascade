@@ -71,3 +71,13 @@ directories give in full — see either README for the complete rationale.
 `Ed25519Verifier` performs real, standard, unforgeable Ed25519 signature
 verification (the same primitive minisign itself uses) directly over the
 embedded `signature` field.
+
+## Re-signed with a sequence (registry index rollback refusal)
+
+`RegistryClient` now refuses an index without a signed `sequence`, so
+`index-bump-with-new-grant.json` was re-signed with `sequence: 1` and
+`published_at: "2026-01-01T00:00:00Z"`. The signed payload is now
+`schema_version`, the raw `entries` bytes, `sequence`, `published_at`, in
+that order. The key is the same seed (bytes `100..131`); the entries bytes
+and the public key constant are unchanged. `TestUpdateFixtureCarriesSequence`
+pins the result.
