@@ -1049,13 +1049,6 @@
     "symbol": "internal/secrets.NewSystemClipboardScheduler"
   },
   {
-    "caller_site": "internal/runtime/hotreload.go",
-    "expected_caller": "HotReloader.applyLive in internal/runtime/hotreload.go, in the change that gives the [secrets] section a typed consumer; retire together with the NewDetector entry",
-    "reason": "The [secrets] entropy_floor / confidence_threshold rows (08-INIT-CONFIG-SPEC §3, R-16.47) are ratified and hot-reloadable, but internal/runtime does not yet hand any typed consumer its [secrets] section - docs/config-reference.md records that these sections currently live only in Config.Extra with no live consumer. The parser is written now so the reload path has something validated to call the moment the section is wired; Detector.Reload, its in-process counterpart, is exercised under -race today. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/secrets.ParseDetectionConfig"
-  },
-  {
     "caller_site": "internal/daemon/lifecycle_unix_start.go",
     "expected_caller": "the daemon start path in internal/daemon, once it constructs a ClipboardWriter and a PendingClearStore",
     "reason": "P1-E08-W2-S16-T4's restart-survival re-arm for a pending clipboard clear. Its caller is the daemon start path (internal/daemon), another agent's concurrent lane; no daemon boot sequence calls it yet. Exported and covered by TestClipboardPendingClearRearmedOnBoot's simulated crash-restart.",
@@ -1553,20 +1546,6 @@
     "symbol": "internal/principal.Status"
   },
   {
-    "caller_site": "cmd/cascade/selfupdate.go",
-    "expected_caller": "P1-SHIP-04 self-update verification against the embedded release trust root",
-    "reason": "The release trust root is delivered before the self-update consumer.",
-    "retire_ticket": "P1-SHIP-04",
-    "symbol": "internal/minisign.ReleasePublicKey"
-  },
-  {
-    "caller_site": "internal/tools/promotion/main.go",
-    "expected_caller": "The promotion tool, which creates the v0 module twin of the promoted artifact tag from buildinfo.ModuleTagFor (the dual-tag step of promotion)",
-    "reason": "ModuleTagFor is part of contract:signed-release-artifacts (the artifact-to-module tag map); its only production caller is the promotion tool, which is outside this ticket's write_scope.",
-    "retire_ticket": "P1-SHIP-11",
-    "symbol": "internal/buildinfo.ModuleTagFor"
-  },
-  {
     "caller_site": "cmd/cascade/doctor_mounts_security.go",
     "expected_caller": "The egress audit-only doctor check lists each class with its reason.",
     "reason": "The audit inventory is consumed by the separately owned doctor mount.",
@@ -1587,5 +1566,12 @@
     "reason": "The composed-daemon route inventory in cmd/cascade must make its own real socket peer a non-owner, and ownerUID is unexported in internal/rpc. This is the only exported owner override; it restores the previous value in t.Cleanup. The row expires with the phase-exit replay so the seam is reviewed again there.",
     "retire_ticket": "P1-EXIT-07",
     "symbol": "internal/rpc.WithOwnerUIDForTest"
+  },
+  {
+    "caller_site": "cmd/cascade/daemon_unix_reload_secrets.go",
+    "expected_caller": "The daemon's [secrets] hot-reload applier (installed through HotReloader.SetSecretsApplier), which reloads the one process detector in place when the operator changes entropy_floor or confidence_threshold",
+    "reason": "P1-SEC-05 ships the process detector and its in-place reload entry point (contract:vault-per-process); applying [secrets] changes on hot reload is prohibited in this ticket and owned by P1-SEC-24. Until then the [secrets] section is read once at start.",
+    "retire_ticket": "P1-SEC-24",
+    "symbol": "internal/secrets.SetProcessDetectionConfig"
   }
 ]
