@@ -4,14 +4,15 @@
 #   .github/ is where Art.10.1 already re-homes CI-adjacent infrastructure
 #   (SECURITY.md, CONTRIBUTING.md, issue/PR templates), so the release image
 #   joins that set instead of amending the allowlist).
-# Inputs:   a single pre-built, statically linked (CGO_ENABLED=0) `cascade`
-#   binary supplied as build context by goreleaser's `dockers:` stanza (see
+# Inputs:   the pre-built, statically linked (CGO_ENABLED=0) `cascade` and
+#   `cascade-github` binaries supplied as build context by goreleaser's `dockers:` stanza (see
 #   .goreleaser.yaml) — this Dockerfile never runs `go build` itself. The
 #   binary is profile-agnostic: "server profile" (02-TARGET-STRUCTURE.md
 #   "Profiles" — Postgres/pgvector/S3/Redis vs local SQLite/fs) is a runtime
 #   config selection, not a build-time split, so the image ships the exact
 #   same bytes goreleaser's archives ship.
-# Outputs:  a minimal container image whose only executable is `cascade`.
+# Outputs:  a minimal container image whose executables are `cascade` and
+#   its GitHub plugin `cascade-github`.
 #   No shell, no package manager: distroless static base, so there is
 #   nothing in the image an attacker can pivot to.
 # Constraints: non-root (the distroless `:nonroot` tag runs uid/gid 65532);
@@ -30,9 +31,10 @@ LABEL org.opencontainers.image.source="https://github.com/acamarata/cascade" \
       org.opencontainers.image.licenses="MIT"
 
 # goreleaser's docker build context places the platform-matched archive
-# binary at the repo root of the build context under this exact name (see
+# binaries at the root of the build context under these exact names (see
 # .goreleaser.yaml dockers[].extra_files / binary naming for id: cascade).
 COPY cascade /usr/local/bin/cascade
+COPY cascade-github /usr/local/bin/cascade-github
 
 # The distroless `:nonroot` base already runs as uid/gid 65532 (user
 # "nonroot"); no USER directive is needed and none is added, so a future

@@ -1,36 +1,28 @@
-# Cascade release lane (P1-E01-W1-S01-T6).
+# Cascade release lane: the publish half of the release train.
 #
-# Runs the goreleaser snapshot train on every push so the release pipeline is
-# proven green continuously, never only "at cut time" (12-QUALITY-CONSTITUTION
-# Art.11 progressive hardening). Two jobs:
-#   - `verify`   (always): config + build only, no secrets required. This is
-#     the gate that must stay green regardless of owner-prereq status.
-#   - `snapshot` (push to p1-integration/main + manual dispatch): the full
-#     snapshot release — archives, SBOMs, checksums, minisign signature —
-#     gated on the CASCADE_MINISIGN_KEY/CASCADE_MINISIGN_PUBKEY repo secrets
-#     existing (06-FORGE-SPEC §7 owner prereq: minisign keypair generated +
-#     escrowed). Skips cleanly, never red, when the secrets are absent.
+# Jobs (docs/developer/release-train.md has the full train):
+#   - `verify`      (push + dispatch): goreleaser check + build, no secrets;
+#     asserts the built binary is unstamped (channel manual).
+#   - `snapshot`    (push + dispatch): full snapshot release (archives, SBOMs,
+#     checksums, OCI image) signed with a minisign key generated in the job.
+#     No repository secret holds a signing key. Nothing is uploaded.
+#   - `install-e2e` (push + dispatch): ubuntu and macOS; snapshot without
+#     docker or SBOMs, installs through install.sh's local lane, runs the
+#     tamper legs and the install tests with minisign required.
+#   - `rc-publish`  (dispatch only): builds the final-version bits for
+#     inputs.final_tag at inputs.commit_sha and pushes them, unsigned, as
+#     build-<commit_sha[:12]> to the private staging package. Signing, the
+#     provenance attestation and every public publish happen later, at
+#     promotion, over the locally signed dist-<id>.
 #
-# NEITHER job publishes anything. `goreleaser release --snapshot` never
-# creates a GitHub Release, pushes a Homebrew tap commit, or pushes an OCI
-# image (06 §7: any publish is GATED). Real, non-snapshot publishing on a
-# real version tag is AA/S-55.T4's owner-prereq-gated territory, not this
-# lane's — including the actual `ghcr.io` push and cosign keyless
-# attestation, which stay unwired here (and `id-token: write` is deliberately
-# NOT granted; AA/S-55.T4 grants it at the job that needs it). The OCI server-profile image itself DOES
-# build in the `snapshot` job as of R-14.119 (Dockerfile at
-# .github/docker/Dockerfile): `dockers:`/`docker_manifests:` in
-# .goreleaser.yaml carry `skip_push: auto`, and `--snapshot` additionally
-# implies `--skip=publish`, so the images are built into the local Docker
-# daemon and pushed nowhere.
+# The staging remote comes only from the repository secret
+# CASCADE_STAGING_REMOTE (masked by the runner). Every other job uses the
+# placeholder example-owner/example-repo, which goreleaser needs to template
+# release.github. This repo is PUBLIC: GitHub-hosted runners, free.
 #
-# This repo is PUBLIC: GitHub-hosted runners are free and used here per ASI
-# Policy 8 (never self-host what GitHub gives free; never pay for Actions).
-#
-# Every `uses:` below is pinned to a full commit SHA (never a floating tag)
-# with the resolved version in a trailing comment, matching ci.yml's
-# convention — this is the workflow that signs and publishes release
-# artifacts, the worst place to trust a mutable tag.
+# Every `uses:` is pinned to a full commit SHA with the version in a trailing
+# comment: this workflow builds release artifacts, the worst place to trust a
+# mutable tag.
 name: release
 
 on:
@@ -38,25 +30,35 @@ on:
     branches:
       - main
       - p1-integration
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      final_tag:
+        description: Final release tag the bits are stamped with (v2.Y.Z)
+        required: true
+        type: string
+      commit_sha:
+        description: Full 40-hex commit to build
+        required: true
+        type: string
 
-# Least privilege: id-token: write is NOT granted here. Cosign keyless needs
-# it, but that step is AA/S-55.T4's, and a write-scoped OIDC token granted to
-# every job in this workflow ahead of any consumer is a standing capability
-# nobody uses. AA/S-55.T4 grants it at the job that needs it.
+# Least privilege: jobs widen this only where they need to.
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: true
+  group: release-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
   verify:
     name: goreleaser check + build (no secrets)
     runs-on: ubuntu-latest
+    env:
+      CASCADE_STAGING_REMOTE: example-owner/example-repo
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
@@ -66,24 +68,6 @@ jobs:
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
         with:
           install-only: true
-
-      - name: Install syft (SBOM generator)
-        # Pinned to an exact release asset, verified against its published
-        # sha256 before extraction — never a script fetched from a branch ref
-        # (P1-SHIP-14/AUD-041: the prior `.../main/install.sh | sh` resolved
-        # whatever anchore/syft's default branch currently holds). The
-        # checksum literal below is copied verbatim from syft's own v1.52.0
-        # release checksums file (syft_1.52.0_checksums.txt), never computed
-        # from a download in this run; provenance captured in
-        # .claude/evidence/P1-SHIP-14/provenance/.
-        run: |
-          set -eu
-          curl -sSfL -o /tmp/syft.tar.gz \
-            https://github.com/anchore/syft/releases/download/v1.52.0/syft_1.52.0_linux_amd64.tar.gz
-          echo "caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d  /tmp/syft.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/syft.tar.gz -C /tmp syft
-          install -m 0755 /tmp/syft /usr/local/bin/syft
-          rm -f /tmp/syft.tar.gz /tmp/syft
 
       - name: goreleaser check
         run: goreleaser check
@@ -94,22 +78,27 @@ jobs:
       - name: goreleaser build --snapshot (all 5 platforms, no signing)
         run: goreleaser build --snapshot --clean
 
-      - name: Verify the ldflags stamp resolves on a built binary
+      - name: Verify the stamp resolves and the binary is unstamped
         run: |
           set -eu
           # This runner is linux/amd64, so run that build's binary directly.
           bin="dist/cascade_linux_amd64_v1/cascade"
           "$bin" version
           "$bin" version | grep -q '^cascade version 0\.0\.0-SNAPSHOT-' || (echo "version stamp did not resolve" && exit 1)
-          "$bin" version | grep -q '^channel: script$' || (echo "install-channel stamp did not resolve" && exit 1)
+          "$bin" version | grep -q '^channel: manual$' || (echo "release binaries must be unstamped (channel manual)" && exit 1)
+          test -x dist/cascade-github_linux_amd64_v1/cascade-github || (echo "cascade-github was not built" && exit 1)
 
   snapshot:
     name: goreleaser release --snapshot (signed, SBOM'd)
     needs: verify
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/p1-integration' }}
+    env:
+      CASCADE_STAGING_REMOTE: example-owner/example-repo
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
@@ -122,13 +111,8 @@ jobs:
 
       - name: Install syft (SBOM generator)
         # Pinned to an exact release asset, verified against its published
-        # sha256 before extraction — never a script fetched from a branch ref
-        # (P1-SHIP-14/AUD-041: the prior `.../main/install.sh | sh` resolved
-        # whatever anchore/syft's default branch currently holds). The
-        # checksum literal below is copied verbatim from syft's own v1.52.0
-        # release checksums file (syft_1.52.0_checksums.txt), never computed
-        # from a download in this run; provenance captured in
-        # .claude/evidence/P1-SHIP-14/provenance/.
+        # sha256 before extraction (P1-SHIP-14/AUD-041). The checksum literal
+        # is copied verbatim from syft_1.52.0_checksums.txt.
         run: |
           set -eu
           curl -sSfL -o /tmp/syft.tar.gz \
@@ -141,85 +125,260 @@ jobs:
       - name: Install minisign
         run: sudo apt-get update && sudo apt-get install -y minisign
 
-      # QEMU + buildx: the goreleaser dockers: stanza builds BOTH linux/amd64
-      # (native on this runner) and linux/arm64 (R-14.1's linux legs) OCI
-      # images (R-14.119); cross-arch emulation needs QEMU registered and a
-      # buildx builder available, neither of which ubuntu-latest ships with
-      # by default.
+      # QEMU + buildx: the dockers: stanza builds linux/amd64 and linux/arm64
+      # images, which needs QEMU and a buildx builder on this runner.
       - name: Set up QEMU (cross-arch docker builds)
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
-      - name: Check minisign owner-prereq secrets are present
-        id: minisign-secret
-        env:
-          KEY_PRESENT: ${{ secrets.CASCADE_MINISIGN_KEY != '' }}
-          PUB_PRESENT: ${{ secrets.CASCADE_MINISIGN_PUBKEY != '' }}
+      - name: Generate an ephemeral minisign key (this job only)
         run: |
-          if [ "$KEY_PRESENT" = "true" ] && [ "$PUB_PRESENT" = "true" ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::CASCADE_MINISIGN_KEY/CASCADE_MINISIGN_PUBKEY secrets are not set (06-FORGE-SPEC §7 owner prereq: minisign keypair generated + escrowed). Skipping the signed snapshot release; goreleaser build --snapshot already proved the cross-platform build in the verify job."
-          fi
-
-      - name: Write minisign key material to a runner-local temp file
-        if: steps.minisign-secret.outputs.present == 'true'
-        env:
-          MINISIGN_KEY_CONTENT: ${{ secrets.CASCADE_MINISIGN_KEY }}
-          MINISIGN_PUBKEY_CONTENT: ${{ secrets.CASCADE_MINISIGN_PUBKEY }}
-        run: |
+          set -eu
           umask 077
-          printf '%s' "$MINISIGN_KEY_CONTENT" > "${RUNNER_TEMP}/minisign.key"
-          printf '%s' "$MINISIGN_PUBKEY_CONTENT" > "${RUNNER_TEMP}/minisign.pub"
+          minisign -G -W -s "${RUNNER_TEMP}/ephemeral.key" -p "${RUNNER_TEMP}/ephemeral.pub"
 
       - name: goreleaser release --snapshot --clean (signed, SBOM'd, no publish)
-        if: steps.minisign-secret.outputs.present == 'true'
         env:
-          CASCADE_MINISIGN_KEY: ${{ runner.temp }}/minisign.key
-          CASCADE_MINISIGN_PUBKEY: ${{ runner.temp }}/minisign.pub
+          CASCADE_MINISIGN_KEY: ${{ runner.temp }}/ephemeral.key
         run: goreleaser release --snapshot --clean
 
-      - name: Verify checksums and minisign signature
-        if: steps.minisign-secret.outputs.present == 'true'
+      - name: Verify checksums, signature and the signed version
         run: |
           set -eu
+          version="$(jq -r .version dist/metadata.json)"
+          cp install.sh dist/
           cd dist
-          shasum -a 256 -c ./*_checksums.txt
-          minisign -Vm ./*_checksums.txt -p "${RUNNER_TEMP}/minisign.pub"
+          shasum -a 256 -c cascade_checksums.txt
+          minisign -Vm cascade_checksums.txt -p "${RUNNER_TEMP}/ephemeral.pub" > "${RUNNER_TEMP}/minisign-verify.txt"
+          cat "${RUNNER_TEMP}/minisign-verify.txt"
+          grep -qx "Trusted comment: cascade ${version} checksums" "${RUNNER_TEMP}/minisign-verify.txt" ||
+            (echo "the signature does not bind version ${version}" && exit 1)
 
-      # Real-counterpart verification (Art.2) of the OCI server-profile image
-      # built by this run's `goreleaser release --snapshot` above: the image
-      # is never pushed (skip_push: auto + implicit --skip=publish), but it
-      # DOES land in this runner's local Docker daemon, so `cascade version`
-      # is exercised inside the actual built container, matching R-14.119's
-      # "OCI image builds" acceptance criterion.
-      - name: Verify the OCI server-profile image runs and is non-root
-        if: steps.minisign-secret.outputs.present == 'true'
+      # Real-counterpart check of the OCI image this run built (never pushed).
+      - name: Verify the OCI image runs, is non-root and carries the plugin
         run: |
           set -eu
-          version="0.0.0-SNAPSHOT-$(git rev-parse --short HEAD)"
+          version="$(jq -r .version dist/metadata.json)"
           image="ghcr.io/acamarata/cascade:${version}-amd64"
-          docker run --rm "$image" version
           docker run --rm "$image" version | grep -q '^cascade version 0\.0\.0-SNAPSHOT-' || (echo "OCI image version stamp did not resolve" && exit 1)
           user="$(docker inspect "$image" --format '{{ .Config.User }}')"
           [ "$user" = "65532" ] || (echo "OCI image does not run as the expected non-root uid (got: '$user')" && exit 1)
+          docker create --name plugin-probe "$image"
+          docker cp plugin-probe:/usr/local/bin/cascade-github "${RUNNER_TEMP}/cascade-github"
+          docker rm plugin-probe
+          test -x "${RUNNER_TEMP}/cascade-github"
 
-      - name: Remove minisign key material
-        if: always() && steps.minisign-secret.outputs.present == 'true'
-        run: rm -f "${RUNNER_TEMP}/minisign.key" "${RUNNER_TEMP}/minisign.pub"
-
-      - name: Upload snapshot artifacts (workflow artifact, NOT a GitHub Release)
-        if: steps.minisign-secret.outputs.present == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+  install-e2e:
+    name: install.sh end to end (${{ matrix.os }})
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    env:
+      CASCADE_STAGING_REMOTE: example-owner/example-repo
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          name: cascade-snapshot-${{ github.sha }}
-          path: |
-            dist/*.tar.gz
-            dist/*.zip
-            dist/*.sbom.json
-            dist/*_checksums.txt
-            dist/*_checksums.txt.minisig
-          retention-days: 14
+          persist-credentials: false
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+
+      - name: Install goreleaser
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
+        with:
+          install-only: true
+
+      - name: Install minisign
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then brew install minisign; else sudo apt-get update && sudo apt-get install -y minisign; fi
+
+      - name: Generate ephemeral minisign keys (this job only)
+        run: |
+          set -eu
+          umask 077
+          minisign -G -W -s "${RUNNER_TEMP}/e2e.key" -p "${RUNNER_TEMP}/e2e.pub"
+          minisign -G -W -s "${RUNNER_TEMP}/wrong.key" -p "${RUNNER_TEMP}/wrong.pub"
+
+      - name: goreleaser release --snapshot (no docker, no SBOMs)
+        env:
+          CASCADE_MINISIGN_KEY: ${{ runner.temp }}/e2e.key
+        run: goreleaser release --snapshot --clean --skip=docker,sbom
+
+      - name: Install through the local lane and check the receipt
+        run: |
+          set -eu
+          H="${RUNNER_TEMP}/home-ok"
+          mkdir -p "$H"
+          HOME="$H" CASCADE_INSTALL_DIST="$PWD/dist" CASCADE_MINISIGN_PUBKEY="${RUNNER_TEMP}/e2e.pub" sh ./install.sh
+          "$H/.local/bin/cascade" version
+          "$H/.local/bin/cascade" version | grep -q '^channel: manual$' || (echo "installed binary must be unstamped" && exit 1)
+          test -x "$H/.local/bin/cascade-github"
+          grep -q '"channel":"script"' "$H/.cascade/install-receipt.json"
+
+      # P1-SHIP-01 tamper legs: each must exit non-zero with no installed file
+      # and no receipt.
+      - name: Tamper legs refuse with nothing installed
+        shell: bash
+        run: |
+          set -eu
+          version="$(jq -r .version dist/metadata.json)"
+          archive="cascade_${version}_$(go env GOOS)_$(go env GOARCH).tar.gz"
+          garbage_sig() { printf 'garbage\n' > "$1/cascade_checksums.txt.minisig"; }
+          wrong_key() {
+            minisign -S -s "${RUNNER_TEMP}/wrong.key" -t "cascade ${version} checksums" \
+              -m "$1/cascade_checksums.txt" -x "$1/cascade_checksums.txt.minisig"
+          }
+          flip_byte() { python3 -c 'import sys; p = sys.argv[1]; b = bytearray(open(p, "rb").read()); b[100] ^= 1; open(p, "wb").write(b)' "$1/${archive}"; }
+          edit_line() {
+            awk -v a="$archive" '$2 == a { $1 = (substr($1, 1, 1) == "0" ? "1" : "0") substr($1, 2) } { print $1 "  " $2 }' \
+              "$1/cascade_checksums.txt" > "$1/sums.tmp"
+            mv "$1/sums.tmp" "$1/cascade_checksums.txt"
+          }
+          http_key() { :; }
+          for leg in garbage_sig wrong_key flip_byte edit_line http_key; do
+            T="${RUNNER_TEMP}/tamper-${leg}"
+            mkdir -p "$T/dist" "$T/home"
+            cp "dist/${archive}" dist/cascade_checksums.txt dist/cascade_checksums.txt.minisig "$T/dist/"
+            "$leg" "$T/dist"
+            key=(CASCADE_MINISIGN_PUBKEY="${RUNNER_TEMP}/e2e.pub")
+            if [ "$leg" = http_key ]; then key=(CASCADE_MINISIGN_PUBKEY_URL=http://example.invalid/minisign.pub); fi
+            if env HOME="$T/home" CASCADE_INSTALL_DIST="$T/dist" "${key[@]}" sh ./install.sh; then
+              echo "tamper leg ${leg} installed" && exit 1
+            fi
+            [ -z "$(ls -A "$T/home/.local/bin" 2> /dev/null)" ] || (echo "tamper leg ${leg} left files" && exit 1)
+            [ ! -e "$T/home/.cascade/install-receipt.json" ] || (echo "tamper leg ${leg} wrote a receipt" && exit 1)
+            echo "tamper leg ${leg}: refused, nothing written"
+          done
+
+      - name: install.sh and minisign interop tests (minisign required)
+        env:
+          CASCADE_REQUIRE_MINISIGN: "1"
+        run: go test -count=1 -run '^TestInstallScript|^TestDeriveRegistryKeyMinisignCLIInterop$' ./internal/build/ ./pkg/plugin/registry/generator/
+
+  rc-publish:
+    name: rc-publish (staging only)
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      # Runs before checkout. Prints only which check failed, never a value.
+      - name: Refuse a missing staging remote or malformed inputs
+        shell: bash
+        env:
+          CASCADE_STAGING_REMOTE: ${{ secrets.CASCADE_STAGING_REMOTE }}
+          FINAL_TAG: ${{ inputs.final_tag }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -u
+          refuse() { echo "rc-publish refused: $1"; exit 1; }
+          [ -n "${CASCADE_STAGING_REMOTE:-}" ] || refuse "the CASCADE_STAGING_REMOTE secret is empty"
+          [[ "$CASCADE_STAGING_REMOTE" =~ ^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9._-]*$ ]] || refuse "the staging remote is not a lowercase <owner>/<repo>"
+          [[ "${FINAL_TAG:-}" =~ ^v2\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || refuse "final_tag is not v2.Y.Z"
+          [[ "${COMMIT_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || refuse "commit_sha is not 40 lowercase hex characters"
+          echo "rc-publish inputs accepted"
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.commit_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # No action cache in this job: nothing it builds may persist beyond the run.
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Install goreleaser
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
+        with:
+          install-only: true
+
+      - name: Install syft (SBOM generator)
+        run: |
+          set -eu
+          curl -sSfL -o /tmp/syft.tar.gz \
+            https://github.com/anchore/syft/releases/download/v1.52.0/syft_1.52.0_linux_amd64.tar.gz
+          echo "caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d  /tmp/syft.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/syft.tar.gz -C /tmp syft
+          install -m 0755 /tmp/syft /usr/local/bin/syft
+          rm -f /tmp/syft.tar.gz /tmp/syft
+
+      - name: Set up QEMU (cross-arch docker builds)
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+        with:
+          cache-image: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+        with:
+          cache-binary: false
+
+      - name: Set up oras
+        uses: oras-project/setup-oras@005458ad77f1c8facd38a094e4af2e69e5607ff4 # v2.0.2
+
+      # The final tag exists only in this runner; nothing pushes it. commit_sha
+      # must be the dispatched commit itself, so the bits are built from exactly
+      # the release config and workflow that this run executes.
+      - name: Create the final tag in this runner only
+        env:
+          FINAL_TAG: ${{ inputs.final_tag }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: |
+          set -eu
+          [ "$(git rev-parse HEAD)" = "$COMMIT_SHA" ] || (echo "checkout is not commit_sha" && exit 1)
+          [ "$GITHUB_SHA" = "$COMMIT_SHA" ] || (echo "commit_sha is not the dispatched commit" && exit 1)
+          if git rev-parse -q --verify "refs/tags/${FINAL_TAG}" > /dev/null; then
+            [ "$(git rev-parse "${FINAL_TAG}^{commit}")" = "$COMMIT_SHA" ] || (echo "final_tag already names another commit" && exit 1)
+          else
+            git tag "$FINAL_TAG" "$COMMIT_SHA"
+          fi
+
+      - name: Build the final-version bits (no publish, no signing)
+        env:
+          GORELEASER_CURRENT_TAG: ${{ inputs.final_tag }}
+          CASCADE_STAGING_REMOTE: ${{ secrets.CASCADE_STAGING_REMOTE }}
+        run: goreleaser release --clean --skip=publish,sign
+
+      # Push output goes to a file that stays in this runner (never uploaded):
+      # no digest, artifact list or registry reference reaches the run log.
+      - name: Push build-<id> to the private staging package
+        shell: bash
+        env:
+          CASCADE_STAGING_REMOTE: ${{ secrets.CASCADE_STAGING_REMOTE }}
+          FINAL_TAG: ${{ inputs.final_tag }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          exec 3>&1 > "${RUNNER_TEMP}/rc-publish-push.log" 2>&1
+          trap 'echo "rc-publish push failed; its log stays in the runner" >&3' ERR
+          id="${COMMIT_SHA:0:12}"
+          version="${FINAL_TAG#v}"
+          ref="ghcr.io/${CASCADE_STAGING_REMOTE}"
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          printf '%s' "$REGISTRY_TOKEN" | oras login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          : > dist/cascade_images.txt
+          for arch in amd64 arm64; do
+            docker tag "ghcr.io/acamarata/cascade:${version}-${arch}" "${ref}:build-${id}-${arch}"
+            docker push "${ref}:build-${id}-${arch}"
+            digest="$(docker buildx imagetools inspect "${ref}:build-${id}-${arch}" --format '{{json .Manifest}}' | jq -r .digest)"
+            printf '%s  cascade-linux-%s\n' "$digest" "$arch" >> dist/cascade_images.txt
+          done
+          docker buildx imagetools create -t "${ref}:build-${id}-index" "${ref}:build-${id}-amd64" "${ref}:build-${id}-arm64"
+          digest="$(docker buildx imagetools inspect "${ref}:build-${id}-index" --format '{{json .Manifest}}' | jq -r .digest)"
+          printf '%s  cascade\n' "$digest" >> dist/cascade_images.txt
+          cp install.sh dist/
+          mkdir -p dist/Casks
+          cp dist/homebrew/Casks/cascade.rb dist/Casks/cascade.rb
+          cd dist
+          oras push "${ref}:build-${id}" -- *.tar.gz *.zip *.sbom.json cascade_checksums.txt cascade_images.txt install.sh Casks/cascade.rb
+          echo "rc-publish: build payload pushed" >&3
