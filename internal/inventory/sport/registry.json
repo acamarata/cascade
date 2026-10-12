@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-12T17:50:05Z",
+  "generated_at": "2026-10-12T19:10:51Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3874,6 +3874,12 @@
           "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
         },
         {
+          "file": "cmd/cascade/wire_notify.go",
+          "line": 16,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations — notify (P1-AGT-04)."
+        },
+        {
           "file": "cmd/cascade/wire_options.go",
           "line": 4,
           "status": "",
@@ -3890,6 +3896,12 @@
           "line": 4,
           "status": "",
           "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/wire_stall.go",
+          "line": 4,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-SUP-04)."
         },
         {
           "file": "cmd/cascade/wire_status.go",
@@ -3924,6 +3936,39 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "cmd/cascade daemon stall supervision",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_stall.go",
+          "line": 27,
+          "status": "ADD",
+          "raw": "cmd/cascade daemon stall supervision (ADDED, P1-SUP-04)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_stall_test.go",
+          "line": 15,
+          "status": "",
+          "raw": "cmd/cascade daemon stall supervision (tests, P1-SUP-04)."
+        },
+        {
+          "file": "cmd/cascade/wire_context_drain.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "cmd/cascade daemon stall supervision (ADDED, P1-SUP-04)."
+        },
+        {
+          "file": "cmd/cascade/wire_context_drain_test.go",
+          "line": 15,
+          "status": "",
+          "raw": "cmd/cascade daemon stall supervision (tests, P1-SUP-04)."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
       ]
     },
     {
@@ -4370,6 +4415,34 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "cmd/cascade route inventory",
+      "sites": [
+        {
+          "file": "cmd/cascade/route_inventory_test.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "cmd/cascade route inventory (TestRouteInventoryRefusesNonOwnerAndBrowser) [ADD]."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade route inventory transport",
+      "sites": [
+        {
+          "file": "cmd/cascade/route_inventory_socket_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "cmd/cascade route inventory transport [ADD]."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -7711,6 +7784,20 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "daemon.notify_runtime",
+      "sites": [
+        {
+          "file": "internal/daemon/notify_runtime.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "daemon.notify_runtime (ADD, P1-AGT-04)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -15621,6 +15708,20 @@
       ]
     },
     {
+      "name": "internal.notify.ReadAddressed",
+      "sites": [
+        {
+          "file": "internal/notify/address.go",
+          "line": 22,
+          "status": "ADD",
+          "raw": "internal.notify.ReadAddressed/ADDED (P1-AGT-04)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.notify.Registry",
       "sites": [
         {
@@ -16600,6 +16701,20 @@
           "status": "ADD",
           "ticket": "P1-E06-W2-S12-T3",
           "raw": "internal.retrieval.rrf.Rerank/ADDED (P1-E06-W2-S12-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.rpc ownertest",
+      "sites": [
+        {
+          "file": "internal/rpc/ownertest.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal.rpc ownertest (WithOwnerUIDForTest) [ADD]."
         }
       ],
       "statuses": [
@@ -18444,6 +18559,12 @@
           "line": 42,
           "status": "ADD",
           "raw": "internal/daemon (ADD, context.slice + context.show registration,"
+        },
+        {
+          "file": "internal/daemon/context_assemble_directives.go",
+          "line": 26,
+          "status": "CHANGE",
+          "raw": "internal/daemon (CHANGED, context.slice supervision directives)."
         },
         {
           "file": "internal/daemon/context_harness.go",
@@ -34662,7 +34783,7 @@
       ]
     }
   ],
-  "total_sites": 3337,
+  "total_sites": 3349,
   "unspecified_count": 216,
-  "multi_status_count": 105
+  "multi_status_count": 106
 }
