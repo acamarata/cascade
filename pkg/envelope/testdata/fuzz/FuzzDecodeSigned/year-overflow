@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"env\":{\"v\":1,\"id\":\"x\",\"iss\":\"ed25519:00\",\"principal\":\"p\",\"roots\":[\"/a\",\"/b/c\"],\"tools\":[\"read\"],\"cmds\":null,\"egress\":[\"model\"],\"grants\":[{\"id\":\"g\",\"verb\":\"read\",\"exp\":\"2026-01-01T00:00:00Z\"}],\"budget\":{\"wall\":1,\"tok\":2,\"cost\":3,\"procs\":4},\"ext\":[{\"kind\":\"k\",\"data\":{\"max\":1}}],\"fence\":{\"dispatch\":\"d\",\"attempt\":1,\"epoch\":2},\"sens\":\"restricted\",\"iat\":\"2026-01-01T00:00:00Z\",\"exp\":\"9999-12-31T23:00:00-02:00\"},\"sig\":\"AA==\"}")
