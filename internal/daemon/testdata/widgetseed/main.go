@@ -64,19 +64,23 @@ func main() {
 }
 
 func run(args []string) error {
-	if len(args) == 0 || (args[0] != "seed" && args[0] != "lane") {
-		return fmt.Errorf("usage: widgetseed seed|lane --data-dir DIR [lane flags]")
+	if len(args) == 0 || (args[0] != "seed" && args[0] != "lane" && args[0] != "provider") {
+		return fmt.Errorf("usage: widgetseed seed|lane|provider --data-dir DIR [flags]")
 	}
 	fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	dataDir := fs.String("data-dir", "", "directory holding providers.db")
 	name := fs.String("name", "", "provider whose lane to move (lane)")
 	state := fs.String("state", "", "lane state (lane)")
 	resetSeconds := fs.Int("reset-seconds", 0, "reset estimate, seconds from now (lane)")
+	count := fs.Int("count", len(seedSet), "first N fixture providers (seed)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
 	if *dataDir == "" {
 		return fmt.Errorf("--data-dir is required")
+	}
+	if *count < 0 || *count > len(seedSet) {
+		return fmt.Errorf("--count must be between 0 and %d", len(seedSet))
 	}
 	clock := runtime.NewSystemClock()
 	reg, closeDB, err := open(*dataDir, clock)
@@ -85,7 +89,16 @@ func run(args []string) error {
 	}
 	defer closeDB()
 	if args[0] == "seed" {
-		return seed(context.Background(), reg, clock)
+		if *count == len(seedSet) {
+			return seed(context.Background(), reg, clock)
+		}
+		return seedEntries(context.Background(), reg, clock, seedSet[:*count])
+	}
+	if args[0] == "provider" {
+		if *name == "" {
+			return fmt.Errorf("provider needs --name")
+		}
+		return seedEntries(context.Background(), reg, clock, []seedSpec{{name: *name, state: registry.LaneStateAvailable}})
 	}
 	return moveLane(context.Background(), reg, clock, *name, registry.LaneState(*state), time.Duration(*resetSeconds)*time.Second)
 }
@@ -110,7 +123,12 @@ func open(dir string, clock runtime.Clock) (*registry.Registry, func(), error) {
 // seed writes seedSet; a provider that already exists keeps its record and
 // has its lane rewritten, so seed can be run twice.
 func seed(ctx context.Context, reg *registry.Registry, clock runtime.Clock) error {
-	for _, s := range seedSet {
+	return seedEntries(ctx, reg, clock, seedSet)
+}
+
+// seedEntries writes only the supplied fixture entries through the existing registry path.
+func seedEntries(ctx context.Context, reg *registry.Registry, clock runtime.Clock, entries []seedSpec) error {
+	for _, s := range entries {
 		rec := registry.ProviderRecord{
 			Name: s.name, Driver: registry.DriverOpenAICompat, BaseURL: "https://example.invalid/v1",
 			Auth: registry.AuthKey, AuthRef: registry.VaultKeyRef("provider." + vaultSafe(s.name) + ".key"),
