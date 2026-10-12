@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-12T22:00:03Z",
+  "generated_at": "2026-10-12T22:56:39Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -24450,6 +24450,20 @@
       ]
     },
     {
+      "name": "internal/providers/health",
+      "sites": [
+        {
+          "file": "internal/providers/health/health_fallthrough_test.go",
+          "line": 18,
+          "status": "",
+          "raw": "internal/providers/health."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/providers/intake credential redaction",
       "sites": [
         {
@@ -34920,7 +34934,7 @@
       ]
     }
   ],
-  "total_sites": 3364,
-  "unspecified_count": 218,
+  "total_sites": 3365,
+  "unspecified_count": 219,
   "multi_status_count": 106
 }
