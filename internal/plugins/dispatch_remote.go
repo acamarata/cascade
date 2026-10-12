@@ -13,16 +13,13 @@
 // default-registry wrapper around newDispatchRemoteInterceptorFrom) is called
 // once per RuntimeRemote ProvisionElevated call that needs one built
 // (the caller may also inject its own via remoteIntercept and skip this
-// entirely — production wiring for a live credential-store-backed vault
-// is a gap this file does not close, see below).
-// Outputs: a remote.Interceptor backed by a real *egress.Engine.
-// Constraints: the handshake carries no credential material by
-// construction (internal/plugins/remote has no import path to
-// internal/secrets at all), so this file's vault is deliberately empty
-// rather than backed by a live *secrets.Broker — see
-// dispatchRemoteEmptyVault's own doc comment for why building a full
-// custody chain here is out of this ticket's scope, named rather than
-// silently skipped.
+// entirely).
+// Outputs: a remote.Interceptor backed by the process firewall's engine
+// (egress.ProcessEngine), so both halves of the substitution pass run: the
+// detector over credential shape and the exact-value pass over the real
+// vault.
+// Constraints: fail closed. With no process firewall installed the
+// interceptor is not built and the handshake is refused.
 // SPORT: internal/plugins dispatch-remote (ADD) — P1-E15-W4-S33-T4.
 package plugins
 
@@ -31,7 +28,6 @@ import (
 
 	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/plugins/remote"
-	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/plugin"
 )
@@ -92,10 +88,9 @@ func newDispatchRemoteInterceptor() (remote.Interceptor, error) {
 // newDispatchRemoteInterceptorFrom builds the Interceptor over reg: it
 // acquires the real egress.Capability for EgressClassPluginRemote from reg
 // (Capability() itself refuses a disabled or unknown class, per
-// egress.Registry.Capability's own contract), binds it to a real
-// secrets.Detector, and an intentionally empty vault. The engine checks
-// the SAME registry the capability came from, so a caller cannot pair a
-// token from one registry with the policy of another.
+// egress.Registry.Capability's own contract) and takes the process
+// firewall's engine over the SAME registry, so a caller cannot pair a token
+// from one registry with the policy of another.
 func newDispatchRemoteInterceptorFrom(reg *egress.Registry) (remote.Interceptor, error) {
 	if reg == nil {
 		return nil, cascade.New(cascade.KindInvalidInput, "plugin: the remote-handshake interceptor needs an egress registry")
@@ -104,37 +99,9 @@ func newDispatchRemoteInterceptorFrom(reg *egress.Registry) (remote.Interceptor,
 	if err != nil {
 		return nil, err
 	}
-	detector, err := secrets.NewDetector(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
+	engine, err := egress.ProcessEngine(reg)
 	if err != nil {
-		return nil, cascade.Wrap(cascade.KindInternal, err, "plugin: build remote-handshake secret detector")
-	}
-	engine, err := egress.NewEngine(reg, dispatchRemoteEmptyVault{}, detector)
-	if err != nil {
-		return nil, cascade.Wrap(cascade.KindInternal, err, "plugin: build remote-handshake egress engine")
+		return nil, err
 	}
 	return dispatchRemoteInterceptor{engine: engine, token: token}, nil
-}
-
-// dispatchRemoteEmptyVault is the exact-value pass's value source for
-// the handshake path: always empty.
-//
-// DISCLOSED GAP (LANE-RULES §1): the firewall's real value source in
-// production is secrets.EgressVault, backed by a live *secrets.Broker —
-// which itself needs a Custody backend and an ElevationGate, neither of
-// which any composition root threads into ProvisionElevated today (its
-// signature carries a *sql.DB/Store/PluginDomainRegistry tuple, not a
-// vault broker). Building that chain here would be a materially larger
-// change than this ticket's stated scope (a handshake stub), and the
-// handshake body this vault is checked against carries no credential
-// material in the first place — internal/plugins/remote has no import
-// path to internal/secrets at all (BOUNDARY NOTE), so there is
-// structurally nothing for a live vault to catch here that the
-// detector's shape-based pass (still real, still running) would not
-// already catch. Named here rather than silently assumed correct.
-type dispatchRemoteEmptyVault struct{}
-
-func (dispatchRemoteEmptyVault) List(context.Context) ([]string, error) { return nil, nil }
-
-func (dispatchRemoteEmptyVault) Get(context.Context, string) ([]byte, error) {
-	return nil, cascade.New(cascade.KindNotFound, "plugin: remote-handshake vault has no entries")
 }

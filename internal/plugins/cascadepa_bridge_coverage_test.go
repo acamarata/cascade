@@ -124,16 +124,16 @@ func TestBridgeIssuer_PropagatesIssueCodeFailure(t *testing.T) {
 
 // TestNewCascadePABridge_PropagatesSecretScannerFailure exercises TWO of
 // this ticket's three new, otherwise-dead error returns in one seam:
-// newBridgeSecretScanner's Wrap (secrets.NewDetector never fails for the
-// real DefaultRegistry/DefaultDetectionConfig, so it needs newDetectorFn's
-// test hook) and enabledBridge's own propagation of that failure.
+// newBridgeSecretScanner's Wrap (the process detector refuses only on an
+// invalid [secrets] section, so it needs processDetectorFn's test hook) and
+// enabledBridge's own propagation of that failure.
 func TestNewCascadePABridge_PropagatesSecretScannerFailure(t *testing.T) {
 	deps, _, _ := enabledBridgeDeps(t)
-	orig := newDetectorFn
-	newDetectorFn = func(secrets.Registry, secrets.DetectionConfig) (*secrets.Detector, error) {
+	orig := processDetectorFn
+	processDetectorFn = func() (*secrets.Detector, error) {
 		return nil, errors.New("test: detector misconfigured")
 	}
-	defer func() { newDetectorFn = orig }()
+	defer func() { processDetectorFn = orig }()
 	if _, err := NewCascadePABridge(context.Background(), deps); err == nil {
 		t.Fatal("a broken secret-value detector was not reported by NewCascadePABridge")
 	}

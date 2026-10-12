@@ -1,7 +1,7 @@
 package plugins
 
 // Purpose: prove installer firewall construction and refusal before fetching.
-// Inputs: isolated file custody and factory failures. Outputs: no cached bytes.
+// Inputs: the process firewall TestMain installs over a throwaway file vault, and factory failures. Outputs: no cached bytes.
 // Constraints: no host custody or sockets. SPORT: registry-fetch enforcement.
 
 import (
@@ -14,7 +14,6 @@ import (
 	"github.com/acamarata/cascade/internal/bridge"
 	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/runtime"
-	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/plugin"
 )
@@ -30,19 +29,15 @@ func TestRegistryArtifactFirewallWiring(t *testing.T) {
 			t.Cleanup(func() { registryArtifactFirewall = original })
 			failure := cascade.New(cascade.KindUnavailable, "isolated firewall refused")
 			called := false
-			registryArtifactFirewall = func(cfg secrets.Config) (*egress.Engine, error) {
+			registryArtifactFirewall = func() (*egress.Engine, error) {
 				called = true
-				if cfg.Service != secrets.DefaultVaultService || cfg.Dir != dir {
-					t.Fatalf("firewall custody config = %+v", cfg)
-				}
 				if mode == "factory-error" {
 					return nil, failure
 				}
 				if mode == "capability-error" {
 					return &egress.Engine{}, nil
 				}
-				cfg.ForceFileVault = true
-				return bridge.NewFirewall(cfg)
+				return bridge.NewFirewall()
 			}
 			a := &installerAdapter{
 				resolvePaths:   func() (runtime.PathProvider, error) { return tempDataPathProvider{dir: dir}, nil },

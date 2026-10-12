@@ -188,24 +188,23 @@ func (g bridgeEgressGate) Guard(
 	return g.engine.InterceptClass(ctx, egress.EgressClassBridge, egress.SensitivityTier(tier), content)
 }
 
-// newBridgeEgressGateFor adapts this host's bridge firewall onto the
-// plugin-facing gate. The engine itself is built by internal/bridge — see that
-// package's firewall.go for why the vault construction lives there and not
-// here (the non-elevated read is granted to one small package, not to the whole
-// plugin-wiring tree).
-func newBridgeEgressGateFor(cfg secrets.Config) (telegram.EgressGate, error) {
-	engine, err := bridge.NewFirewall(cfg)
+// newBridgeEgressGateFor adapts the process firewall onto the plugin-facing
+// gate. The engine comes from internal/bridge, which takes it from the
+// process firewall: no package here builds an engine or a value source.
+//
+// The bridge's custody config (where its own token lives) is not consulted:
+// the value source is the process vault every outbound path resolves against.
+func newBridgeEgressGateFor(_ secrets.Config) (telegram.EgressGate, error) {
+	engine, err := bridge.NewFirewall()
 	if err != nil {
 		return nil, err
 	}
 	return NewBridgeEgressGate(engine), nil
 }
 
-// bridgeSecretScanner adapts *secrets.Detector to telegram.SecretScanner,
-// built from the SAME construction dispatch.go:171 uses for the
-// plugin-storage gate (secrets.NewDetector over DefaultRegistry/
-// DefaultDetectionConfig) — one detector configuration, not two. Class
-// crosses the plugins/** boundary as a plain string: the typed
+// bridgeSecretScanner adapts *secrets.Detector to telegram.SecretScanner over
+// the process detector the plugin-storage gate also uses (one detector, not
+// two). Class crosses the plugins/** boundary as a plain string: the typed
 // internal/secrets.Class can never reach telegram.SecretScanOutcome
 // (that package may not import internal/**), so this is the one place
 // the translation can happen at all.
@@ -224,16 +223,16 @@ func (s bridgeSecretScanner) Scan(content []byte) telegram.SecretScanOutcome {
 	return telegram.SecretScanOutcome{Detected: true, Class: string(hits[0].Class)}
 }
 
-// newDetectorFn is secrets.NewDetector, indirected so a test can force
-// newBridgeSecretScanner's otherwise-dead error branch (DefaultRegistry/
-// DefaultDetectionConfig never fail for real).
-var newDetectorFn = secrets.NewDetector
+// processDetectorFn is secrets.ProcessDetector, indirected so a test can
+// force newBridgeSecretScanner's error branch (the process detector refuses
+// only when the operator's [secrets] section is invalid).
+var processDetectorFn = secrets.ProcessDetector
 
-// newBridgeSecretScanner builds the production scanner, identically to
-// dispatch.go:171's detector construction — one configuration serving
-// both the plugin-storage gate and the bridge's message gate.
+// newBridgeSecretScanner builds the production scanner over the process
+// detector: the same detector the plugin-storage gate and every other scan
+// site in the process use, so one [secrets] configuration governs them all.
 func newBridgeSecretScanner() (bridgeSecretScanner, error) {
-	d, err := newDetectorFn(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
+	d, err := processDetectorFn()
 	if err != nil {
 		return bridgeSecretScanner{}, cascade.Wrap(cascade.KindInternal, err,
 			"cascade-pa bridge: build the secret-value detector")

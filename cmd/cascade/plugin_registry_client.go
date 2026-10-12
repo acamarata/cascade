@@ -26,7 +26,6 @@ import (
 	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/plugins/registryfetch"
 	"github.com/acamarata/cascade/internal/runtime"
-	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/plugin"
 )
 
@@ -38,7 +37,7 @@ const pluginRegistryCacheTTLFloor = time.Minute
 
 var defaultPluginRegistryPublicKey = plugin.DefaultRegistryPublicKey
 
-// pluginRegistryFirewall uses the shared host firewall; tests isolate custody.
+// pluginRegistryFirewall uses the process egress firewall; tests swap the factory.
 var pluginRegistryFirewall = bridge.NewFirewall
 
 // buildPluginRegistryClient loads [registry] once and returns a client,
@@ -71,7 +70,7 @@ func buildPluginRegistryClient(ctx context.Context, paths runtime.PathProvider, 
 	if cacheTTL <= 0 {
 		cacheTTL = pluginRegistryCacheTTLFloor
 	}
-	engine, err := pluginRegistryFirewall(secrets.Config{Service: secrets.DefaultVaultService, Dir: paths.DataDir()})
+	engine, err := pluginRegistryFirewall()
 	if err != nil {
 		return nil, fmt.Sprintf("cascade: plugin.search: registry firewall unavailable (%v)", err)
 	}

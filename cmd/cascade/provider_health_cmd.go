@@ -128,7 +128,7 @@ func openProviderStorage(ctx context.Context, deps providerDeps) (*providerStora
 		httpDeps = realHTTPDoer{client: &http.Client{Timeout: providerDoctorTimeout}}
 	}
 	prober := httpReachabilityProber{doer: httpDeps}
-	mgr := health.NewManager(reg, bus, clock, 0).WithEgress(deps.egressEngineForHealth(), prober)
+	mgr := health.NewManager(reg, bus, clock, 0).WithEgress(egressEngineForHealth(), prober)
 
 	closers := []func() error{regDB.Close, usageDB.Close, eventStore.Close}
 	return &providerStorage{Registry: reg, Usage: usage.NewManager(usageDB, clock), Health: mgr, closers: closers}, nil
@@ -150,17 +150,18 @@ func openMigratedDB(ctx context.Context, path string, apply func(context.Context
 	return db, nil
 }
 
-// egressEngineForHealth builds the same provider-intake egress engine
-// `provider add` uses (buildProviderEgressEngine in provider_cmd.go),
-// gating the reachability prober behind the same egress class.
-func (deps providerDeps) egressEngineForHealth() *egress.Engine {
-	broker, err := providerVaultBroker(deps)
+// egressEngineForHealth returns the process firewall's engine, the one
+// `provider add` writes through, gating the reachability prober behind the
+// same egress class. On failure it returns a gate that refuses every class
+// with the firewall's cause (Kind and message, no path), never a typed nil
+// *egress.Engine, so the probe fails closed and says why.
+func egressEngineForHealth() health.Egress {
+	engine, err := egress.ProcessEngine(egress.DefaultRegistry())
 	if err != nil {
-		return nil
+		return firewallUnavailable{cause: firewallCause(err)}
 	}
-	engine, err := buildProviderEgressEngine(broker)
-	if err != nil {
-		return nil
+	if engine == nil {
+		return firewallUnavailable{cause: cascade.New(cascade.KindInternal, "egress firewall unavailable: no engine")}
 	}
 	return engine
 }

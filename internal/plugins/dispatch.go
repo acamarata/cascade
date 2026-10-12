@@ -168,9 +168,9 @@ func provisionStorageDomain(
 	if err != nil {
 		return err
 	}
-	detector, err := secrets.NewDetector(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
+	detector, err := secrets.ProcessDetector()
 	if err != nil {
-		return cascade.Wrap(cascade.KindInternal, err, "plugin: build secret detector")
+		return err
 	}
 	_, err = storage.NewPluginStorage(
 		pluginID, store, metadataGrantChecker{store: store}, detectorSecretScanner{d: detector}, migrator)

@@ -44,6 +44,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/internal/ci"
+	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/plugins"
 	"github.com/acamarata/cascade/internal/policy"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -194,7 +195,7 @@ func (f *githubCIFlags) mergeOptions() (ci.MergeOptions, error) {
 // failure it also routes to the R/S-39.T1 attention queue for any matching
 // P1-E25-W5-S51-T4 [ci.watch] entry -- see github_ci_watch_cmd.go.
 func hostWaitOnGreen(ctx context.Context, opts ci.WaitOptions) (ci.WaitResult, error) {
-	deps, err := ci.WaitDepsFromEnv(newGitHubTokenDoer, os.Getenv, runtime.NewSystemClock())
+	deps, err := ci.WaitDepsFromEnv(newGitHubTokenDoer, os.Getenv, runtime.NewSystemClock(), egress.ProcessEngine)
 	if err != nil {
 		return ci.WaitResult{}, err
 	}
@@ -209,7 +210,7 @@ func hostMergeOnGreen(ctx context.Context, opts ci.MergeOptions) (ci.MergeResult
 	if err != nil {
 		return ci.MergeResult{}, err
 	}
-	waitDeps, err := ci.WaitDepsFromEnv(newGitHubTokenDoer, os.Getenv, runtime.NewSystemClock())
+	waitDeps, err := ci.WaitDepsFromEnv(newGitHubTokenDoer, os.Getenv, runtime.NewSystemClock(), egress.ProcessEngine)
 	if err != nil {
 		return ci.MergeResult{}, err
 	}

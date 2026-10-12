@@ -19,11 +19,17 @@ package transport_test
 // SPORT: internal/mcp/transport test-support (ADD).
 
 import (
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/acamarata/cascade/internal/hooks/egress"
+	"github.com/acamarata/cascade/internal/secrets"
 )
 
 // sweepStaleTransportHomes removes cascade-transport-home* dirs left behind
@@ -32,15 +38,53 @@ import (
 // see the matching helper and comment in cmd/cascade/main_test.go, which
 // this package's TestMain mirrors.
 func sweepStaleTransportHomes() {
-	entries, err := os.ReadDir(os.TempDir())
+	sweepStaleHomes(os.TempDir(), "cascade-transport-home", time.Now(), staleHomeAge)
+}
+
+// staleHomeAge is how long a throwaway HOME must sit untouched before a
+// later run treats it as abandoned; a younger one belongs to a run that is
+// still going (several runs share the temp dir).
+const staleHomeAge = 3 * time.Hour
+
+// sweepStaleHomes removes the directories in dir that start with prefix and
+// were last modified more than maxAge before now.
+func sweepStaleHomes(dir, prefix string, now time.Time, maxAge time.Duration) {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
 	}
 	for _, e := range entries {
-		if !e.IsDir() || !strings.HasPrefix(e.Name(), "cascade-transport-home") {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), prefix) {
 			continue
 		}
-		_ = os.RemoveAll(filepath.Join(os.TempDir(), e.Name()))
+		info, err := e.Info()
+		if err != nil || now.Sub(info.ModTime()) <= maxAge {
+			continue
+		}
+		_ = os.RemoveAll(filepath.Join(dir, e.Name()))
+	}
+}
+
+// TestSweepStaleHomesSparesFreshDirs: only the old directory goes.
+func TestSweepStaleHomesSparesFreshDirs(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now()
+	old, fresh := filepath.Join(dir, "cascade-transport-home1"), filepath.Join(dir, "cascade-transport-home2")
+	for _, d := range []string{old, fresh} {
+		if err := os.Mkdir(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	past := now.Add(-4 * time.Hour)
+	if err := os.Chtimes(old, past, past); err != nil {
+		t.Fatal(err)
+	}
+	sweepStaleHomes(dir, "cascade-transport-home", now, staleHomeAge)
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Fatalf("the old dir survived: %v", err)
+	}
+	if _, err := os.Stat(fresh); err != nil {
+		t.Fatalf("the fresh dir was removed: %v", err)
 	}
 }
 
@@ -81,7 +125,44 @@ func TestMain(m *testing.M) {
 		}
 	}
 
+	// Both transports write through the process firewall; install one over
+	// a file vault inside the throwaway HOME, so no test reaches the host
+	// keychain and none runs without a firewall.
+	if err := installProcessFirewall(filepath.Join(home, "vault")); err != nil {
+		panic("transport tests: could not install the process firewall: " + err.Error())
+	}
+
 	code := m.Run()
 	_ = os.RemoveAll(home)
 	os.Exit(code)
+}
+
+// installProcessFirewall installs a process firewall over an empty file
+// vault under dir and the process detector.
+func installProcessFirewall(dir string) error {
+	custody, err := secrets.SelectCustody(secrets.Config{
+		Service: "cascade-transport-test", Dir: dir, ForceFileVault: true, Passphrase: "transport-test-pass",
+		Runner: func(context.Context, string, ...string) ([]byte, error) {
+			return nil, errors.New("test: no platform keychain helper")
+		},
+	})
+	if err != nil {
+		return err
+	}
+	broker, err := secrets.NewBroker(custody, nil)
+	if err != nil {
+		return err
+	}
+	vault, err := secrets.NewEgressVault(broker)
+	if err != nil {
+		return err
+	}
+	egress.SetProcessEngineFactory(func(r *egress.Registry) (*egress.Engine, error) {
+		detector, derr := secrets.ProcessDetector()
+		if derr != nil {
+			return nil, derr
+		}
+		return egress.NewEngine(r, vault, detector)
+	})
+	return nil
 }

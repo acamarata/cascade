@@ -98,16 +98,15 @@ func validateTargetField(label, value string) error {
 }
 
 // looksLikeSecret reports whether value would be flagged as credential
-// material by the H/S-15.T3 detector at its default, precision-first
-// threshold -- the same check internal/providers/intake/config.go's
-// looksLikeSecret uses, reused here so a target's driver config cannot
-// smuggle a literal past the one detector this repo trusts to make that
-// call.
+// material by the process detector at its precision-first threshold --
+// the same check internal/providers/intake/config.go's looksLikeSecret
+// uses, reused here so a target's driver config cannot smuggle a literal
+// past the one detector this process trusts to make that call.
 func looksLikeSecret(value string) bool {
 	if strings.TrimSpace(value) == "" {
 		return false
 	}
-	detector, err := secrets.NewDetector(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
+	detector, err := secrets.ProcessDetector()
 	if err != nil {
 		// Fail closed: a detector this build cannot construct is not
 		// "assume safe", it is "assume the worst" -- a nil-detector

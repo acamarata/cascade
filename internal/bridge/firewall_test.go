@@ -1,15 +1,15 @@
-// Purpose: NewFirewall's tests — a real engine over a temp-dir file vault, the
+// Purpose: NewFirewall's tests — the process firewall's engine over a
 //
-//	tier matrix it enforces on the bridge class, and the substitution pass
-//	that makes the value source load-bearing.
+//	temp-dir file vault, the tier matrix it enforces on the bridge class, and
+//	the substitution pass that makes the value source load-bearing.
 //
 // Constraints: NO REAL KEYCHAIN. Every secrets.Config literal here forces the
 //
 //	file vault AND supplies a Runner that fails, so the platform backend
 //	reports unavailable and no test can write to the operator's own
-//	credential store (R-14.206). No network, no real HOME.
+//	credential store. No network, no real HOME.
 //
-// SPORT: internal.bridge.NewFirewall/TESTED (P1-E23-W5-S48-T1).
+// SPORT: internal.bridge.NewFirewall/TESTED.
 package bridge
 
 import (
@@ -37,11 +37,43 @@ func testVaultConfig(dir string) secrets.Config {
 	}
 }
 
-// TestNewFirewall_EnforcesTheBridgeClassTierMatrix proves the engine this
-// package builds is the real one: restricted and local-only are refused on the
-// bridge class, internal and public are admitted.
+// installFirewall makes the process firewall one over a file vault under a
+// temp dir, storing name=value when name is set, until the test ends.
+func installFirewall(t *testing.T, name, value string) {
+	t.Helper()
+	custody, err := secrets.SelectCustody(testVaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatalf("SelectCustody: %v", err)
+	}
+	broker, err := secrets.NewBroker(custody, nil)
+	if err != nil {
+		t.Fatalf("NewBroker: %v", err)
+	}
+	if name != "" {
+		if _, err := broker.Set(context.Background(), name, []byte(value), secrets.SetUpdate); err != nil {
+			t.Fatalf("Set: %v", err)
+		}
+	}
+	vault, err := secrets.NewEgressVault(broker)
+	if err != nil {
+		t.Fatalf("NewEgressVault: %v", err)
+	}
+	detector, err := secrets.ProcessDetector()
+	if err != nil {
+		t.Fatalf("ProcessDetector: %v", err)
+	}
+	egress.SetProcessEngineFactory(func(r *egress.Registry) (*egress.Engine, error) {
+		return egress.NewEngine(r, vault, detector)
+	})
+	t.Cleanup(func() { egress.SetProcessEngineFactory(nil) })
+}
+
+// TestNewFirewall_EnforcesTheBridgeClassTierMatrix proves the engine is the
+// real one: restricted and local-only are refused on the bridge class,
+// internal and public are admitted.
 func TestNewFirewall_EnforcesTheBridgeClassTierMatrix(t *testing.T) {
-	engine, err := NewFirewall(testVaultConfig(t.TempDir()))
+	installFirewall(t, "", "")
+	engine, err := NewFirewall()
 	if err != nil {
 		t.Fatalf("NewFirewall: %v", err)
 	}
@@ -62,25 +94,13 @@ func TestNewFirewall_EnforcesTheBridgeClassTierMatrix(t *testing.T) {
 	}
 }
 
-// TestNewFirewall_SubstitutesAStoredValue is why the value source exists: a
-// stored secret with NO credential shape is caught only by the exact-value
-// pass, and that pass runs only when the engine has a vault behind it.
-func TestNewFirewall_SubstitutesAStoredValue(t *testing.T) {
-	dir := t.TempDir()
-	const name, value = "bridge_firewall_test_entry", "correct horse battery staple 4471"
-	custody, err := secrets.SelectCustody(testVaultConfig(dir))
-	if err != nil {
-		t.Fatalf("SelectCustody: %v", err)
-	}
-	broker, err := secrets.NewBroker(custody, nil)
-	if err != nil {
-		t.Fatalf("NewBroker: %v", err)
-	}
-	if _, err := broker.Set(context.Background(), name, []byte(value), secrets.SetUpdate); err != nil {
-		t.Fatalf("Set: %v", err)
-	}
-
-	engine, err := NewFirewall(testVaultConfig(dir))
+// TestBridgeEgressRedactsVaultValue is why the value source exists: a stored
+// value with NO credential shape (at least eight bytes) is caught only by
+// the exact-value pass, and leaves only as its vault reference.
+func TestBridgeEgressRedactsVaultValue(t *testing.T) {
+	const name, value = "BRIDGE_CANARY", "plain-canary-9f"
+	installFirewall(t, name, value)
+	engine, err := NewFirewall()
 	if err != nil {
 		t.Fatalf("NewFirewall: %v", err)
 	}
@@ -92,29 +112,45 @@ func TestNewFirewall_SubstitutesAStoredValue(t *testing.T) {
 	if strings.Contains(string(out), value) {
 		t.Fatalf("a stored vault value crossed the bridge class verbatim: %q", out)
 	}
+	if !strings.Contains(string(out), name) {
+		t.Fatalf("the stored value was not replaced by its vault reference: %q", out)
+	}
 }
 
-// TestNewFirewall_CustodyFailureYieldsNoEngine: a firewall that cannot read the
-// vault must be an error, never a half-built engine that would filter with only
-// half its passes.
-func TestNewFirewall_CustodyFailureYieldsNoEngine(t *testing.T) {
-	// No Service label: SelectCustody refuses before any platform backend is
-	// attempted, so this cannot reach the operator's keychain.
-	engine, err := NewFirewall(secrets.Config{Dir: t.TempDir()})
-	if err == nil {
-		t.Fatal("an engine was returned over an unselectable custody")
+// TestNewFirewall_RefusesWithoutAProcessFirewall: no firewall installed is
+// a refusal, never an engine with only half its passes.
+func TestNewFirewall_RefusesWithoutAProcessFirewall(t *testing.T) {
+	egress.SetProcessEngineFactory(nil)
+	engine, err := NewFirewall()
+	if err != egress.ErrNoProcessFirewall { //nolint:errorlint // identity: the refusal is the sentinel itself
+		t.Fatalf("err = %v, want egress.ErrNoProcessFirewall", err)
 	}
 	if engine != nil {
 		t.Fatal("a non-nil engine came back with an error")
 	}
 }
 
-func TestFirstErr(t *testing.T) {
-	a, b := errors.New("a"), errors.New("b")
-	if got := firstErr(nil, a, b); got != a {
-		t.Fatalf("firstErr = %v, want the first non-nil error", got)
+// TestNewFirewall_CustodyFailureIsReturnedUnchanged: a firewall that cannot
+// read the vault is an error with its own Kind and cause.
+func TestNewFirewall_CustodyFailureIsReturnedUnchanged(t *testing.T) {
+	cause := secrets.ErrNoCustodyAvailable()
+	egress.SetProcessEngineFactory(func(*egress.Registry) (*egress.Engine, error) { return nil, cause })
+	t.Cleanup(func() { egress.SetProcessEngineFactory(nil) })
+	engine, err := NewFirewall()
+	if err != cause || engine != nil { //nolint:errorlint // identity: returned unchanged
+		t.Fatalf("NewFirewall = (%v, %v), want (nil, the custody error unchanged)", engine, err)
 	}
-	if got := firstErr(nil, nil); got != nil {
-		t.Fatalf("firstErr = %v, want nil", got)
+}
+
+// TestEncodeListRefusesAnUnencodableList covers the list-column encoder's
+// failure branch: a value JSON cannot encode is an error and no column
+// text, never a partial encoding written to the subject row.
+func TestEncodeListRefusesAnUnencodableList(t *testing.T) {
+	out, err := encodeList([]chan int{make(chan int)})
+	if err == nil || out != "" {
+		t.Fatalf("encodeList(unencodable) = (%q, %v), want an error and no text", out, err)
+	}
+	if got, err := encodeList[string](nil); err != nil || got != "[]" {
+		t.Fatalf("encodeList(nil) = (%q, %v), want \"[]\"", got, err)
 	}
 }

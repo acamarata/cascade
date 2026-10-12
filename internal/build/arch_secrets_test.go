@@ -18,9 +18,15 @@
 //     with CGO_ENABLED=0, so a cgo-gated custody backend would be absent
 //     from every shipped artifact, which is the whole point of the
 //     no-cgo custody rule.
+//  4. no shipping file in cmd/cascade names secrets.SelectCustody except as
+//     the value of selectProcessCustody in egress_firewall.go: every host
+//     vault selection goes through that one selector, which the test
+//     binary wraps so no test reaches host custody.
 package build
 
 import (
+	"go/ast"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -137,23 +143,14 @@ var unelevatedReadAllowlist = map[string][]string{
 		filepath.Join("internal", "policy"),
 		filepath.Join("cmd", "cascade"),
 	},
-	// The outbound firewall's value source. internal/mcp binds it to the
-	// egress engine on the response path; cmd/cascade may bind one for a
-	// process that builds its own engine.
-	//
-	// internal/bridge holds the same exemption for the same argument, added
-	// deliberately by P1-E23-W5-S48-T1: Epic W's bridge classes are an
-	// outbound firewall on the daemon's own path with no operator present, so
-	// an attestation prompt per intercepted message is not a control anybody
-	// can answer, and a firewall that cannot read the vault cannot redact
-	// what is in it. The grant is scoped to internal/bridge — one small,
-	// single-purpose package that exists to hold the bridge's host-side
-	// resources — rather than to internal/plugins, which builds the adapter
-	// but never names the reader.
+	// The outbound firewall's value source. One process firewall builds it:
+	// cmd/cascade/egress_firewall.go owns the custody selection, the broker
+	// and this reader, and every internal package takes its engine from
+	// egress.ProcessEngine. internal/mcp and internal/bridge held this grant
+	// while each built its own engine; neither does now, so neither may name
+	// the reader.
 	"NewEgressVault(": {
 		filepath.Join("internal", "secrets"),
-		filepath.Join("internal", "mcp"),
-		filepath.Join("internal", "bridge"),
 		filepath.Join("cmd", "cascade"),
 	},
 }
@@ -232,5 +229,71 @@ func TestArchUnelevatedReadCallersDetectsViolation(t *testing.T) {
 	}
 	if dirOnAllowlist(filepath.Join("internal", "policy"), unelevatedReadAllowlist["NewEgressVault("]) {
 		t.Fatal("the egress vault must not be reachable from internal/policy; the two allowlists are not one list")
+	}
+}
+
+// selectCustodyViolations applies rule 4.
+func selectCustodyViolations(srcs []archSource) []string {
+	var bad []string
+	for _, s := range srcs {
+		if !underDir(s.rel, "cmd/cascade") {
+			continue
+		}
+		n := selectorRefs(s.file, secretsImportPath, "SelectCustody")
+		if s.rel == "cmd/cascade/egress_firewall.go" && varInitIsSelector(s.file, "selectProcessCustody", secretsImportPath, "SelectCustody") {
+			n--
+		}
+		if n > 0 {
+			bad = append(bad, s.rel)
+		}
+	}
+	return bad
+}
+
+// varInitIsSelector reports whether f declares `var name = <pkg>.symbol`
+// with <pkg> a local name of importPath.
+func varInitIsSelector(f *ast.File, name, importPath, symbol string) bool {
+	local := map[string]bool{}
+	for _, n := range importNames(f, importPath) {
+		local[n] = true
+	}
+	for _, decl := range f.Decls {
+		gd, ok := decl.(*ast.GenDecl)
+		if !ok || gd.Tok != token.VAR {
+			continue
+		}
+		for _, spec := range gd.Specs {
+			vs, ok := spec.(*ast.ValueSpec)
+			if !ok || len(vs.Names) != 1 || vs.Names[0].Name != name || len(vs.Values) != 1 {
+				continue
+			}
+			if sel, ok := vs.Values[0].(*ast.SelectorExpr); ok && sel.Sel.Name == symbol {
+				if id, ok := sel.X.(*ast.Ident); ok && local[id.Name] {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func TestArchHostCustodyOneSelector(t *testing.T) {
+	if bad := selectCustodyViolations(shippingSources(t, archModuleRoot(t))); len(bad) > 0 {
+		t.Fatalf("cmd/cascade selects custody with secrets.SelectCustody directly; use selectProcessCustody(hostCustodyConfig(dir)):\n  %s",
+			strings.Join(bad, "\n  "))
+	}
+}
+
+func TestArchHostCustodyOneSelectorDetectsViolation(t *testing.T) {
+	srcs := seededSources(t, map[string]string{
+		"cmd/cascade/egress_firewall.go": "package main\nimport \"" + secretsImportPath + "\"\n" +
+			"var selectProcessCustody = secrets.SelectCustody\n",
+		"cmd/cascade/vault.go": "package main\nimport sec \"" + secretsImportPath + "\"\n" +
+			"func f() { _, _ = sec.SelectCustody(sec.Config{}) }\n",
+		"cmd/cascade/other.go": "package main\nimport \"" + secretsImportPath + "\"\nvar selectProcessCustody2 = secrets.SelectCustody\n",
+		"internal/c/ok.go":     "package c\nimport \"" + secretsImportPath + "\"\nvar f = secrets.SelectCustody\n",
+	})
+	if got := strings.Join(selectCustodyViolations(srcs), ","); got != "cmd/cascade/other.go,cmd/cascade/vault.go" {
+		t.Fatalf("SelectCustody violations = %s", got)
 	}
 }

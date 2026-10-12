@@ -35,7 +35,8 @@ import (
 	"github.com/acamarata/cascade/pkg/plugin"
 )
 
-// registryArtifactFirewall binds production fetches to the host's egress policy.
+// registryArtifactFirewall binds production fetches to the process egress
+// firewall (one vault and detector per process; refuses when none is installed).
 var registryArtifactFirewall = bridge.NewFirewall
 
 // errNoRegistryConfigured is the production registryURL default's typed
@@ -118,18 +119,15 @@ func (a *installerAdapter) verifiedArtifactBytes(ctx context.Context, pluginID s
 	return artifact, nil
 }
 
-// fetchRegistryArtifact constructs the production fetcher with host custody.
+// fetchRegistryArtifact constructs the production fetcher over the process
+// egress firewall.
 // Inputs: registry URL and entry. Outputs: intercepted bytes or a refusal.
 // Constraints: construction errors precede fetching. SPORT: registry-fetch.
 func (a *installerAdapter) fetchRegistryArtifact(ctx context.Context, baseURL string, entry plugin.RegistryVersionEntry) ([]byte, error) {
 	if a.fetcher != nil {
 		return a.fetcher(baseURL).FetchArtifact(ctx, entry)
 	}
-	paths, err := a.resolvePaths()
-	if err != nil {
-		return nil, err
-	}
-	engine, err := registryArtifactFirewall(BridgeVaultConfig(paths.DataDir()))
+	engine, err := registryArtifactFirewall()
 	if err != nil {
 		return nil, err
 	}

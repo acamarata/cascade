@@ -26,10 +26,11 @@ type SecretScanner interface {
 
 var _ SecretScanner = (*secrets.Detector)(nil)
 
-// NewSecretScanner builds the production scanner over the real registry
-// and the shipped detection defaults.
+// NewSecretScanner returns the production scanner: the process detector,
+// under the operator's [secrets] configuration. On error the scanner is not
+// usable; the caller checks the error first, as with any constructor.
 func NewSecretScanner() (SecretScanner, error) {
-	return secrets.NewDetector(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
+	return secrets.ProcessDetector()
 }
 
 // Load reads, scans and parses the setup file at path.

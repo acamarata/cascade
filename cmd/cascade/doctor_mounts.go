@@ -181,7 +181,7 @@ func registryPubkeyProviderFor(ctx context.Context, paths runtime.PathProvider) 
 // temp-dir file vault rather than the operator's own keychain;
 // production never replaces it.
 var newDoctorCustody = func(dir string) (secrets.Custody, error) {
-	return secrets.SelectCustody(secrets.Config{Service: vaultService, Dir: dir})
+	return selectProcessCustody(hostCustodyConfig(dir))
 }
 
 // secretsDoctorChecks builds the five vault and detector checks over the
@@ -204,7 +204,7 @@ func secretsDoctorChecks(ctx context.Context, paths runtime.PathProvider, clock 
 	if err != nil {
 		return nil, err
 	}
-	detector, err := secrets.NewDetector(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
+	detector, err := secrets.ProcessDetector()
 	if err != nil {
 		return nil, err
 	}

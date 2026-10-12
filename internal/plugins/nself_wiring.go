@@ -10,9 +10,9 @@
 //
 // Inputs: none at import time beyond the process-wide default egress
 //
-//	registry and the default secret-detection config — the same two
-//	collaborators dispatch_remote.go's newDispatchRemoteInterceptor already
-//	resolves in this package.
+//	registry. The engine is the process firewall's (egress.ProcessEngine),
+//	resolved on every write, never at init: init() runs before any
+//	composition root installs the firewall.
 //
 // Outputs: either the real interceptor is installed, or nothing is and the
 //
@@ -25,8 +25,8 @@
 //
 // Constraints: init() must not touch the environment. It reads the
 //
-//	compile-time class registry and builds a detector; it opens no file,
-//	dials nothing and forks nothing.
+//	compile-time class registry; it opens no file, dials nothing and forks
+//	nothing. A write with no process firewall installed refuses.
 //
 // SPORT: internal/plugins:nself-wiring (ADD) — P1-E25-W5-S52-T2.
 
@@ -37,7 +37,6 @@ import (
 	"log/slog"
 
 	"github.com/acamarata/cascade/internal/hooks/egress"
-	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/cascade"
 	nselfplugin "github.com/acamarata/cascade/plugins/nself"
 )
@@ -83,32 +82,23 @@ func newRealNselfInterceptor() (nselfplugin.EgressInterceptor, error) {
 
 // newNselfInterceptor is newRealNselfInterceptor's body with the class
 // registry as a parameter: the unforgeable capability for the nself-backend
-// class (Capability itself refuses an unknown or disabled class), a real
-// secrets.Detector, and a real egress.Engine — the same construction
-// newDispatchRemoteInterceptor uses in this package. The registry is a
-// parameter so nself_wiring_test.go can drive the refusal an operator who
-// disabled this class would produce, which is the branch that decides
-// whether the daemon keeps running.
+// class is checked here (Capability itself refuses an unknown or disabled
+// class), and the engine is the process firewall's, resolved per write. The
+// registry is a parameter so nself_wiring_test.go can drive the refusal an
+// operator who disabled this class would produce, which is the branch that
+// decides whether the daemon keeps running.
 func newNselfInterceptor(registry *egress.Registry) (nselfplugin.EgressInterceptor, error) {
 	if _, err := registry.Capability(nselfEgressClass); err != nil {
 		return nil, err
 	}
-	detector, err := secrets.NewDetector(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
-	if err != nil {
-		return nil, cascade.Wrap(cascade.KindInternal, err, "plugin: build cascade-nself secret detector")
-	}
-	engine, err := egress.NewEngine(registry, nselfEmptyVault{}, detector)
-	if err != nil {
-		return nil, cascade.Wrap(cascade.KindInternal, err, "plugin: build cascade-nself egress engine")
-	}
-	return nselfEgressAdapter{engine: engine}, nil
+	return nselfEgressAdapter{registry: registry}, nil
 }
 
-// nselfEgressAdapter adapts the real *egress.Engine to the plugin's local
+// nselfEgressAdapter adapts the process firewall to the plugin's local
 // EgressInterceptor seam. It is a cast, not a translation: the class and
 // tier strings are identical by the constants above.
 type nselfEgressAdapter struct {
-	engine *egress.Engine
+	registry *egress.Registry
 }
 
 // InterceptClass implements nselfplugin.EgressInterceptor over the real
@@ -125,25 +115,9 @@ func (a nselfEgressAdapter) InterceptClass(
 		return nil, cascade.Newf(cascade.KindCapabilityDenied,
 			"plugin: cascade-nself may only write to the %q egress class, not %q", nselfEgressClass, class)
 	}
-	return a.engine.InterceptClass(ctx, nselfEgressClass, egress.SensitivityTier(tier), content)
-}
-
-// nselfEmptyVault is the exact-value pass's value source for this path:
-// always empty.
-//
-// DISCLOSED GAP: the firewall's real value source in production is
-// secrets.EgressVault over a live *secrets.Broker, which needs a Custody
-// backend and an ElevationGate that no composition root threads into a
-// builtin plugin's wiring today — dispatch_remote.go's
-// dispatchRemoteEmptyVault documents the identical gap for the identical
-// reason. The detector's shape-based pass is still real and still runs on
-// every byte, which is what catches a credential in this payload; the
-// exact-value pass has nothing to compare against, and that is stated here
-// rather than assumed harmless.
-type nselfEmptyVault struct{}
-
-func (nselfEmptyVault) List(context.Context) ([]string, error) { return nil, nil }
-
-func (nselfEmptyVault) Get(context.Context, string) ([]byte, error) {
-	return nil, cascade.New(cascade.KindNotFound, "plugin: cascade-nself's egress vault has no entries")
+	engine, err := egress.ProcessEngine(a.registry)
+	if err != nil {
+		return nil, err
+	}
+	return engine.InterceptClass(ctx, nselfEgressClass, egress.SensitivityTier(tier), content)
 }

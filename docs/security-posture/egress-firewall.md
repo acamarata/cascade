@@ -5,6 +5,86 @@ what each one cannot yet see. Written to be read by someone deciding
 whether to trust a claim, so every gap below is named rather than
 implied.
 
+## One firewall per process
+
+Every outbound path writes through one engine binding: the process
+firewall. `cmd/cascade/egress_firewall.go` selects the vault custody once,
+builds the non-elevated broker and `secrets.EgressVault` over it, and
+installs the factory behind `egress.ProcessEngine`. Nothing else in the
+tree builds an `egress.Engine` or supplies a value source.
+
+**Exact-value coverage on every egress path.** The substitution pass has
+two halves: the detector redacts a string with credential shape, and the
+exact-value pass replaces a string that IS a stored secret even when it has
+no shape at all. The second half only runs when the engine reads the real
+vault. These paths now take their engine from the process firewall, so a
+stored value of eight bytes or more leaves only as its vault reference:
+
+| path | where |
+|---|---|
+| MCP responses | `internal/mcp` (`NewDefaultResponseMarshaler`) |
+| bridge replies | `internal/bridge` (`NewFirewall`) |
+| nself backend tool responses | `internal/plugins/nself_wiring.go` |
+| remote plugin handshake | `internal/plugins/dispatch_remote.go` |
+| wait-on-green / merge-on-green polling | `internal/ci` (engine injected by `cmd/cascade`) |
+| provider intake and health probes | `cmd/cascade/provider_cmd.go`, `provider_health_cmd.go` |
+| conductor execute and recall answers | `cmd/cascade` daemon wiring |
+
+Three of these (ci polling, nself, remote dispatch) used to bind an empty
+vault, so only the shape half ran on them. Each has a test that plants a
+shapeless value in the vault and fails if it crosses verbatim.
+
+**Custody unavailable is a refusal.** With no firewall installed,
+`egress.ProcessEngine` returns `egress.ErrNoProcessFirewall`. A custody
+backend that cannot be selected is returned with its own kind and cause,
+and the failure is not cached: a later call succeeds once the vault is
+available. The firewall is bound to the data directory it was built over;
+a caller naming another directory is refused, so one directory's grants
+are never read through another's vault. The daemon builds the firewall in its `egress-firewall` wiring
+step, right after `status.get`, so a daemon that cannot open its vault
+refuses to start and names that step.
+
+**One detector, under the operator's settings.** Every scan site uses
+`secrets.ProcessDetector`, one detector per process. Its configuration is
+config.toml's `[secrets]` section (`entropy_floor`,
+`confidence_threshold`); an absent section takes the shipped defaults. An
+invalid value (out of range, or a string where a number belongs) or an
+unknown key (a typo such as `confidence_treshold`) is refused with the key
+named, and the daemon will not start on it. `keychain_backend` and
+`clipboard_ttl` are accepted; other readers own them. The
+section is read once at start; a hot reload of `[secrets]` is not applied
+yet.
+
+**Gates.** `internal/build/arch_detector_test.go` fails the build if
+shipping code outside `internal/secrets` names
+`secrets.DefaultDetectionConfig`, `secrets.NewDetector` or
+`secrets.NewScrubber` (through any alias), if anything outside the process
+firewall calls `egress.NewEngine`, or if any shipping type outside
+`internal/secrets` implements the vault interface (an empty, map or other
+stand-in, with its two methods in one file or two). The non-elevated
+`NewEgressVault` read is limited to `internal/secrets` and `cmd/cascade`.
+`internal/build/arch_secrets_test.go` fails it if `cmd/cascade` calls
+`secrets.SelectCustody` anywhere but through its one host custody
+selector.
+
+**One host custody selection.** The process firewall, the `cascade vault`
+commands, `cascade provider add`, `cascade doctor`'s vault checks and the
+daemon's chat scrub vault all select custody through one selector with one
+configuration (the cascade vault under the data directory), so they read
+and write the same store.
+
+**QA custody.** A `devkeys` development build run with
+`CASCADE_TEST_FILE_VAULT=1` forces every one of those selections onto the
+encrypted file vault in the same data directory, so a real-binary QA run
+never touches the login keychain and the firewall still sees what `vault
+set` stored. A release build ignores the variable.
+
+**What this does not cover.** Custody selected inside other packages from
+a configuration the CLI hands them does not go through that selector. The
+bridge token vault follows the QA switch (its configuration takes the same
+file-vault bit), but it is selected inside the plugin. The node keystore
+and the CI token probe are outside both the selector and the QA switch.
+
 ## Thread privacy mode: enforcement
 
 A conversation thread carries a privacy mode -- one of the four §5.16

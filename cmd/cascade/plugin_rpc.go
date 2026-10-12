@@ -60,7 +60,6 @@ import (
 	"github.com/acamarata/cascade/internal/plugins"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
-	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/internal/storage"
 	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -93,7 +92,7 @@ func registerDBPathHandlers(
 	// function's doc comment for why it must not select one itself. The
 	// service label is vault.go's, so a scrubbed turn's secret lands in
 	// the same vault `cascade vault` reads.
-	custody, err := secrets.SelectCustody(daemonCustodyConfig(custodySiteChat, secrets.Config{Service: vaultService, Dir: paths.DataDir()}))
+	custody, err := selectProcessCustody(daemonCustodyConfig(custodySiteChat, hostCustodyConfig(paths.DataDir())))
 	if err != nil {
 		return err
 	}
@@ -161,7 +160,7 @@ func wireCascadePABridge(ctx context.Context, registry *rpc.Registry, manifest *
 	}
 	rt, err := plugins.NewCascadePABridge(ctx, plugins.BridgeDeps{
 		DataDir:    paths.DataDir(),
-		Vault:      daemonCustodyConfig(custodySiteBridge, plugins.BridgeVaultConfig(paths.DataDir())),
+		Vault:      daemonCustodyConfig(custodySiteBridge, bridgeCustodyConfig(paths.DataDir())),
 		Clock:      clock,
 		Events:     bus,
 		HTTPClient: httpClient,

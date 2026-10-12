@@ -5,7 +5,8 @@
 // the CLI half -- see cmd/cascade/github_ci_cmd.go).
 //
 // Inputs: the process environment (for the API token), an injected
-// runtime.Clock, and the composition root's Doer constructor.
+// runtime.Clock, the composition root's Doer constructor and its engine
+// constructor (production: egress.ProcessEngine, the process firewall).
 //
 // Outputs: a WaitDeps over the real S-51.T2 Client -- the caller's Doer,
 // the real ci-poll egress engine, the installed never-pay route resolver
@@ -23,13 +24,10 @@
 //
 // Constraints: NO fail-open default anywhere in this file. A missing token
 // is a refusal, not an anonymous request; a detector or engine that will
-// not build is a refusal, not a nil engine. The egress vault is
-// deliberately EMPTY and that is not a stand-in: the ci-poll class sends
-// no request body (poll.go issues GETs and consults the engine for the
-// class capability and the sensitivity pass only, never Intercept), so
-// there is no outbound content for a substitution pass to redact. The day
-// this path sends a body, it needs the real vault, and this comment is
-// where that is recorded.
+// not build is a refusal, not a nil engine. The engine is the process
+// firewall's, bound to the real vault: this package never builds an engine
+// and never supplies a value source of its own, so the day this path sends a
+// body, the exact-value pass already covers it.
 //
 // SPORT: internal.ci.WaitDepsFromEnv/ADDED, internal.ci.ClientHeadSHA/ADDED
 //
@@ -42,7 +40,6 @@ import (
 
 	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/runtime"
-	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -66,11 +63,19 @@ func ErrNoGitHubToken() error {
 type NewTokenDoer func(token string) Doer
 
 // WaitDepsFromEnv builds the production WaitDeps over the Doer newDoer
-// builds for the token it resolves.
-func WaitDepsFromEnv(newDoer NewTokenDoer, getenv runtime.Getenv, clock runtime.Clock) (WaitDeps, error) {
+// builds for the token it resolves and the engine newEngine returns for the
+// process's default registry. A nil newEngine is KindUnavailable: there is
+// no outbound path without a firewall.
+func WaitDepsFromEnv(newDoer NewTokenDoer, getenv runtime.Getenv, clock runtime.Clock,
+	newEngine func(*egress.Registry) (*egress.Engine, error),
+) (WaitDeps, error) {
 	if newDoer == nil || getenv == nil || clock == nil {
 		return WaitDeps{}, cascade.New(cascade.KindInvalidInput,
 			"ci: WaitDepsFromEnv requires a Doer constructor, a getenv and a clock")
+	}
+	if newEngine == nil {
+		return WaitDeps{}, cascade.New(cascade.KindUnavailable,
+			"ci: WaitDepsFromEnv requires the process egress firewall")
 	}
 	token := ""
 	for _, name := range waitTokenEnvNames {
@@ -82,7 +87,9 @@ func WaitDepsFromEnv(newDoer NewTokenDoer, getenv runtime.Getenv, clock runtime.
 	if token == "" {
 		return WaitDeps{}, ErrNoGitHubToken()
 	}
-	engine, err := newCIPollEgressEngine()
+	// The engine error is returned unchanged: a custody failure keeps its
+	// Kind and cause.
+	engine, err := newEngine(egress.DefaultRegistry())
 	if err != nil {
 		return WaitDeps{}, err
 	}
@@ -95,31 +102,6 @@ func WaitDepsFromEnv(newDoer NewTokenDoer, getenv runtime.Getenv, clock runtime.
 	// API and returns a decision), and the id only labels persisted rows.
 	client := NewClient(doer, engine, "", 0, InstalledRouteResolver())
 	return WaitDeps{Client: client, Clock: clock, Sleep: ContextSleep}, nil
-}
-
-// newCIPollEgressEngine builds the real egress engine the ci-poll class is
-// registered in (see this file's header for the empty-vault reasoning).
-func newCIPollEgressEngine() (*egress.Engine, error) {
-	detector, err := secrets.NewDetector(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
-	if err != nil {
-		return nil, cascade.Wrap(cascade.KindUnavailable, err, "ci: building the outbound secrets detector")
-	}
-	engine, err := egress.NewEngine(egress.DefaultRegistry(), emptyEgressVault{}, detector)
-	if err != nil {
-		return nil, cascade.Wrap(cascade.KindUnavailable, err, "ci: building the ci-poll egress engine")
-	}
-	return engine, nil
-}
-
-// emptyEgressVault is an egress.Vault holding nothing. See the header.
-type emptyEgressVault struct{}
-
-// List implements egress.Vault.
-func (emptyEgressVault) List(context.Context) ([]string, error) { return nil, nil }
-
-// Get implements egress.Vault: nothing is stored, so nothing is found.
-func (emptyEgressVault) Get(_ context.Context, name string) ([]byte, error) {
-	return nil, cascade.Newf(cascade.KindNotFound, "ci: no egress vault entry named %q on the ci-poll path", name)
 }
 
 // ClientHeadSHA is the production HeadSHAFetcher: it re-reads the run list

@@ -22,7 +22,7 @@ var forbiddenOutput = []string{"/Users/", "/home/", `\Users\`, "cascade-golden-"
 
 // guardFixtures checks every fixture's bytes.
 func guardFixtures(fixtures []fixture) error {
-	det, err := secrets.NewDetector(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
+	det, err := secrets.ProcessDetector()
 	if err != nil {
 		return cascade.Wrap(cascade.KindInternal, err, "golden harvest: build the secret detector")
 	}

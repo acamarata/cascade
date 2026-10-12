@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/client"
+	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/secrets"
 	cascadepa "github.com/acamarata/cascade/plugins/cascade-pa"
@@ -48,9 +49,10 @@ func TestReadTelegramModuleConfig_UnreadableManifestIsAnError(t *testing.T) {
 // be built must not yield a gate, because a nil-engine gate that refused
 // everything would look identical to a firewall doing its job.
 func TestNewBridgeEgressGateFor_FirewallFailurePropagates(t *testing.T) {
-	// No Service label: SelectCustody refuses outright and never reaches a
-	// platform backend, so this cannot touch the operator's keychain.
-	if _, err := newBridgeEgressGateFor(secrets.Config{Dir: bridgeTestRoot(t)}); err == nil {
+	// No process firewall installed: the engine cannot be built.
+	egress.SetProcessEngineFactory(nil)
+	t.Cleanup(func() { egress.SetProcessEngineFactory(processFirewallDefault) })
+	if _, err := newBridgeEgressGateFor(BridgeVaultConfig(bridgeTestRoot(t))); err == nil {
 		t.Fatal("a gate was built over an unbuildable firewall")
 	}
 }

@@ -109,7 +109,7 @@ func renderReadme(domain v1.Domain, rows []provenanceRow) []byte {
 
 // guardReadme applies the fixture output guard to rendered README bytes.
 func guardReadme(data []byte) error {
-	det, err := secrets.NewDetector(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
+	det, err := secrets.ProcessDetector()
 	if err != nil {
 		return cascade.Wrap(cascade.KindInternal, err, "golden harvest: build the secret detector")
 	}

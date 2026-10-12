@@ -250,7 +250,8 @@ func readKeyFlagValue(deps providerDeps, verb string) ([]byte, error) {
 }
 
 // buildIntakeDeps wires the production intake.Deps: a real vault broker
-// over deps' custody/gate, the process egress engine, and reg (resolved by
+// over deps' custody/gate (where `provider add` stores a key), the process
+// firewall's engine for the provider-intake class, and reg (resolved by
 // resolveProviderRegistry).
 func buildIntakeDeps(deps providerDeps, reg intake.Registry) (intake.Deps, error) {
 	custody, err := deps.NewCustody()
@@ -261,7 +262,7 @@ func buildIntakeDeps(deps providerDeps, reg intake.Registry) (intake.Deps, error
 	if err != nil {
 		return intake.Deps{}, err
 	}
-	engine, err := buildProviderEgressEngine(broker)
+	engine, err := egress.ProcessEngine(egress.DefaultRegistry())
 	if err != nil {
 		return intake.Deps{}, err
 	}
@@ -276,22 +277,6 @@ func buildIntakeDeps(deps providerDeps, reg intake.Registry) (intake.Deps, error
 		Vault: broker, Egress: engine, Registry: reg,
 		NewOAuthBroker: newOAuth, Getenv: deps.Getenv,
 	}, nil
-}
-
-// buildProviderEgressEngine mirrors internal/mcp.NewDefaultResponseMarshaler's
-// wiring: the same detector and the process's default egress registry
-// (which already carries the `provider-intake` class this ticket's
-// classes.go entry registers) bound to this broker's egress vault.
-func buildProviderEgressEngine(broker *secrets.Broker) (*egress.Engine, error) {
-	detector, err := secrets.NewDetector(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
-	if err != nil {
-		return nil, err
-	}
-	vault, err := secrets.NewEgressVault(broker)
-	if err != nil {
-		return nil, err
-	}
-	return egress.NewEngine(egress.DefaultRegistry(), vault, detector)
 }
 
 // intakeClockAdapter satisfies intake.Clock over runtime.Clock.

@@ -23,7 +23,6 @@ import (
 	"github.com/acamarata/cascade/internal/bridge"
 	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/runtime"
-	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/plugin"
 	"github.com/acamarata/cascade/pkg/plugin/registry/generator"
 )
@@ -171,13 +170,9 @@ func TestBuildPluginRegistryClientURLNoPubkey(t *testing.T) {
 
 func TestBuildPluginRegistryClientConfigured(t *testing.T) {
 	dir, called := t.TempDir(), false
-	configurePluginRegistry(t, dir, func(cfg secrets.Config) (*egress.Engine, error) {
+	configurePluginRegistry(t, dir, func() (*egress.Engine, error) {
 		called = true
-		if cfg.Service != secrets.DefaultVaultService || cfg.Dir != (fakeDaemonPaths{root: dir}).DataDir() {
-			t.Fatalf("firewall custody config = %+v", cfg)
-		}
-		cfg.Dir, cfg.ForceFileVault = dir, true
-		return bridge.NewFirewall(cfg)
+		return bridge.NewFirewall()
 	})
 	client, warning := buildPluginRegistryClient(context.Background(), fakeDaemonPaths{root: dir}, runtime.NewSystemClock())
 	if client == nil {
@@ -189,20 +184,19 @@ func TestBuildPluginRegistryClientConfigured(t *testing.T) {
 }
 
 // isolatePluginRegistryFirewall points every home at dir and swaps the firewall
-// factory for a file-vault one; the returned counter records its calls.
+// factory for the process firewall (TestMain's throwaway file vault); the returned counter records its calls.
 func isolatePluginRegistryFirewall(t *testing.T, dir string) *int {
 	t.Helper()
 	calls := 0
-	configurePluginRegistryHomes(t, dir, func(cfg secrets.Config) (*egress.Engine, error) {
+	configurePluginRegistryHomes(t, dir, func() (*egress.Engine, error) {
 		calls++
-		cfg.Dir, cfg.ForceFileVault = dir, true
-		return bridge.NewFirewall(cfg)
+		return bridge.NewFirewall()
 	})
 	return &calls
 }
 
 // configurePluginRegistryHomes isolates every home in dir and swaps the firewall factory.
-func configurePluginRegistryHomes(t *testing.T, dir string, factory func(secrets.Config) (*egress.Engine, error)) {
+func configurePluginRegistryHomes(t *testing.T, dir string, factory func() (*egress.Engine, error)) {
 	t.Helper()
 	for _, name := range []string{"HOME", "USERPROFILE", "CASCADE_HOME"} {
 		t.Setenv(name, dir)
@@ -213,7 +207,7 @@ func configurePluginRegistryHomes(t *testing.T, dir string, factory func(secrets
 }
 
 // configurePluginRegistry also writes a configured registry with a pubkey.
-func configurePluginRegistry(t *testing.T, dir string, factory func(secrets.Config) (*egress.Engine, error)) {
+func configurePluginRegistry(t *testing.T, dir string, factory func() (*egress.Engine, error)) {
 	t.Helper()
 	configurePluginRegistryHomes(t, dir, factory)
 	keyPath := filepath.Join(dir, "registry.pub")
@@ -240,7 +234,7 @@ func TestBuildPluginRegistryClientFirewallRefusals(t *testing.T) {
 	} {
 		t.Run(want, func(t *testing.T) {
 			dir, calls := t.TempDir(), 0
-			configurePluginRegistry(t, dir, func(secrets.Config) (*egress.Engine, error) { calls++; return nil, fail })
+			configurePluginRegistry(t, dir, func() (*egress.Engine, error) { calls++; return nil, fail })
 			client, warning := buildPluginRegistryClient(context.Background(), fakeDaemonPaths{root: dir}, runtime.NewSystemClock())
 			if client != nil || calls != 1 || !strings.HasPrefix(warning, "cascade: plugin.search: "+want) {
 				t.Fatalf("client=%v factory calls=%d warning=%q, want nil and %q", client, calls, warning, want)

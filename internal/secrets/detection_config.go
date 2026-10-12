@@ -27,6 +27,8 @@ package secrets
 
 import (
 	"math"
+	"sort"
+	"strings"
 	"sync"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -90,6 +92,9 @@ func (c DetectionConfig) Validate() error {
 // present but not a number is refused, because a typo'd threshold that
 // silently reverts to the default is a security setting that lies.
 func ParseDetectionConfig(section map[string]interface{}) (DetectionConfig, error) {
+	if err := refuseUnknownSecretsKeys(section); err != nil {
+		return DetectionConfig{}, err
+	}
 	cfg := DefaultDetectionConfig()
 	if raw, ok := section["entropy_floor"]; ok {
 		value, err := configFloat("entropy_floor", raw)
@@ -109,6 +114,53 @@ func ParseDetectionConfig(section map[string]interface{}) (DetectionConfig, erro
 		return DetectionConfig{}, err
 	}
 	return cfg, nil
+}
+
+// knownSecretsKeys is every key [secrets] may hold: the two detection keys
+// read here, plus keychain_backend and clipboard_ttl, which the hot-reload
+// guard and the clipboard own.
+var knownSecretsKeys = map[string]bool{
+	"entropy_floor": true, "confidence_threshold": true,
+	"keychain_backend": true, "clipboard_ttl": true,
+}
+
+// refuseUnknownSecretsKeys refuses a key [secrets] does not define, naming
+// it (the first in sorted order): a typo'd confidence_treshold would
+// otherwise leave the scan sites at the shipped threshold with no message.
+func refuseUnknownSecretsKeys(section map[string]interface{}) error {
+	var unknown []string
+	for key := range section {
+		if !knownSecretsKeys[key] {
+			unknown = append(unknown, key)
+		}
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	sort.Strings(unknown)
+	if !plainConfigKey(unknown[0]) {
+		// Not key-shaped: it may be a pasted value, so it is not echoed.
+		return cascade.New(cascade.KindInvalidInput, "secrets: [secrets] holds an unrecognised key")
+	}
+	return cascade.Newf(cascade.KindInvalidInput, "secrets: [secrets] has no key %q", unknown[0])
+}
+
+// plainConfigKey reports whether key looks like a config key (lower-case
+// letters, digits and underscores, at most 40 characters, and no run past
+// 32 characters without an underscore) that the shipped detector does not
+// flag, and so is safe to name in an error. The shipped rules, not the
+// process detector: this runs while the process configuration is parsed.
+func plainConfigKey(key string) bool {
+	if key == "" || len(key) > 40 || (len(key) > 32 && !strings.Contains(key, "_")) {
+		return false
+	}
+	for _, r := range key {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' {
+			return false
+		}
+	}
+	detector, err := NewDetector(DefaultRegistry(), DefaultDetectionConfig())
+	return err == nil && len(detector.Scan([]byte(key))) == 0
 }
 
 // configFloat coerces the number shapes a TOML decoder produces. A bool,

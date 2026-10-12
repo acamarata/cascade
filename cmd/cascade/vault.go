@@ -87,7 +87,7 @@ func productionVaultDeps() vaultDeps {
 				return nil, cascade.New(cascade.KindUnavailable,
 					"vault: could not resolve the cascade data directory")
 			}
-			return secrets.SelectCustody(secrets.Config{Service: vaultService, Dir: dir})
+			return selectProcessCustody(hostCustodyConfig(dir))
 		},
 		Gate: newElevationGate(
 			productionCustody,

@@ -51,13 +51,13 @@ import (
 	"github.com/acamarata/cascade/internal/context/scope"
 	"github.com/acamarata/cascade/internal/conversation"
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/retrieval"
 	"github.com/acamarata/cascade/internal/retrieval/fusion"
 	"github.com/acamarata/cascade/internal/retrieval/recall"
 	"github.com/acamarata/cascade/internal/retrieval/rrf"
 	"github.com/acamarata/cascade/internal/runtime"
-	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -83,11 +83,7 @@ func buildRecallWhatHandler(
 	if err != nil {
 		return nil, err
 	}
-	detector, err := secrets.NewDetector(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
-	if err != nil {
-		return nil, err
-	}
-	firewall, err := daemonEgressFirewall(paths, detector)
+	firewall, err := daemonEgressFirewall(paths, egress.DefaultRegistry())
 	if err != nil {
 		return nil, err
 	}

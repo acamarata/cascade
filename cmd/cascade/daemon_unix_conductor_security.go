@@ -61,7 +61,11 @@ func (d detectorScanner) ScanCertainClasses(content string) []string {
 
 // conductorSecurity builds the five collaborators.
 func conductorSecurity(paths runtime.PathProvider) (daemon.ConductorSecurity, error) {
-	detector, err := secrets.NewDetector(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
+	if paths == nil {
+		return daemon.ConductorSecurity{}, cascade.New(cascade.KindUnavailable,
+			"conductor: the security pipeline needs a resolved data directory")
+	}
+	detector, err := secrets.ProcessDetector()
 	if err != nil {
 		return daemon.ConductorSecurity{}, err
 	}
@@ -69,7 +73,7 @@ func conductorSecurity(paths runtime.PathProvider) (daemon.ConductorSecurity, er
 	if err != nil {
 		return daemon.ConductorSecurity{}, err
 	}
-	firewall, err := daemonEgressFirewall(paths, detector)
+	firewall, err := daemonEgressFirewall(paths, egress.DefaultRegistry())
 	if err != nil {
 		return daemon.ConductorSecurity{}, err
 	}
@@ -87,63 +91,43 @@ func conductorSecurity(paths runtime.PathProvider) (daemon.ConductorSecurity, er
 	}, nil
 }
 
-// daemonEgressFirewall builds the outbound firewall the pipeline enforces.
-//
-// It uses the SAME custody the `cascade vault` commands use, through an
-// EgressVault — the unelevated value source internal/secrets already ships
-// for exactly this purpose: the firewall's exact-value substitution pass
-// runs on the daemon's own path with no operator present, so raising an
-// elevation prompt there would either hang the daemon or be answered by
-// nobody. That reasoning is unelevated.go's, not this file's; this call
-// site only supplies the custody.
-func daemonEgressFirewall(paths runtime.PathProvider, detector *secrets.Detector) (*egress.Engine, error) {
-	if paths == nil {
-		return nil, cascade.New(cascade.KindUnavailable,
-			"conductor: the egress firewall needs a resolved data directory")
-	}
-	custody, err := secrets.SelectCustody(secrets.Config{Service: vaultService, Dir: paths.DataDir()})
+// daemonEgressFirewall returns the process firewall's engine over registry:
+// the SAME custody the `cascade vault` commands use, read through the
+// non-elevated EgressVault (egress_firewall.go owns that binding). The
+// firewall's exact-value pass runs on the daemon's own path with no
+// operator present, so raising an elevation prompt there would either hang
+// the daemon or be answered by nobody. It is part of the daemon's
+// composition root, so it binds as the owner: over the daemon's own paths
+// it is the firewall the egress-firewall wiring step already bound.
+func daemonEgressFirewall(paths runtime.PathProvider, registry *egress.Registry) (*egress.Engine, error) {
+	firewall, err := bindDaemonFirewall(paths)
 	if err != nil {
 		return nil, err
 	}
-	// No elevation gate: this broker exists only to back the EgressVault,
-	// whose Get is the documented unelevated path. Broker.Get itself still
-	// refuses without a gate, so nothing here gains an elevated read.
-	broker, err := secrets.NewBroker(custody, nil)
-	if err != nil {
-		return nil, err
-	}
-	vault, err := secrets.NewEgressVault(broker)
-	if err != nil {
-		return nil, err
-	}
-	return egress.NewEngine(egress.DefaultRegistry(), vault, detector)
+	return firewall.Engine(registry)
 }
 
 // daemonCredentialSource builds the resolver's credential reader.
 //
-// It opens the SAME custody and the SAME grant register the `cascade vault`
-// commands use, so a grant issued at the terminal is the grant the daemon
+// It reads through the process firewall's broker (the SAME custody the
+// `cascade vault` commands use, selected once per process) and the SAME
+// grant register, so a grant issued at the terminal is the grant the daemon
 // reads under — there is one register, not a daemon-side copy.
 //
 // No elevation gate is passed: the daemon has no human to prove presence,
 // which is the whole reason grants exist. Broker.Get itself still refuses
 // without a gate, so this path gains no elevated read; only GetGranted
 // succeeds, and only for a key a human has granted.
+//
+// Like daemonEgressFirewall it is part of the daemon's composition root and
+// binds as the owner: the broker it reads through is always the one bound to
+// the same data directory as the grant register it pairs with.
 func daemonCredentialSource(paths runtime.PathProvider) (*providerdispatch.GrantedCredentials, error) {
-	if paths == nil {
-		return nil, cascade.New(cascade.KindUnavailable,
-			"conductor: the credential source needs a resolved data directory")
-	}
-	dir := paths.DataDir()
-	custody, err := secrets.SelectCustody(secrets.Config{Service: vaultService, Dir: dir})
+	firewall, err := bindDaemonFirewall(paths)
 	if err != nil {
 		return nil, err
 	}
-	broker, err := secrets.NewBroker(custody, nil)
-	if err != nil {
-		return nil, err
-	}
-	store, err := secrets.NewFileGrantStore(dir)
+	store, err := secrets.NewFileGrantStore(paths.DataDir())
 	if err != nil {
 		return nil, err
 	}
@@ -151,5 +135,5 @@ func daemonCredentialSource(paths runtime.PathProvider) (*providerdispatch.Grant
 	if err != nil {
 		return nil, err
 	}
-	return providerdispatch.NewGrantedCredentials(broker, grants)
+	return providerdispatch.NewGrantedCredentials(firewall.Broker(), grants)
 }

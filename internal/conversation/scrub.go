@@ -182,7 +182,7 @@ func NewDefaultScrubPipelineOverVault(dataDir string, clock Clock, vault SecretV
 	if err != nil {
 		return nil, err
 	}
-	detector, err := secrets.NewDetector(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
+	detector, err := secrets.ProcessDetector()
 	if err != nil {
 		return nil, err
 	}
