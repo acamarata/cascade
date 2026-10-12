@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-12T03:03:46Z",
+  "generated_at": "2026-10-12T11:08:55Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -7774,6 +7774,20 @@
       ]
     },
     {
+      "name": "daemon/session-scope",
+      "sites": [
+        {
+          "file": "cmd/cascade/wire_session_scope.go",
+          "line": 15,
+          "status": "",
+          "raw": "daemon/session-scope."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "doctor/bundle",
       "sites": [
         {
@@ -14049,7 +14063,7 @@
       "sites": [
         {
           "file": "internal/fleet/sessions/sse.go",
-          "line": 49,
+          "line": 32,
           "status": "ADD",
           "ticket": "P1-E12-W3-S24-T3",
           "raw": "internal.fleet.sessions.SSEHandler/ADDED (P1-E12-W3-S24-T3)."
@@ -14063,7 +14077,7 @@
         },
         {
           "file": "internal/fleet/sessions/sse_test.go",
-          "line": 14,
+          "line": 7,
           "status": "ADD",
           "ticket": "P1-E12-W3-S24-T3",
           "raw": "internal.fleet.sessions.SSEHandler/ADDED (P1-E12-W3-S24-T3)."
@@ -15272,9 +15286,16 @@
           "status": "ADD",
           "ticket": "P1-E07-W2-S13-T3",
           "raw": "internal.memory.rpc.Handler (ADD, P1-E07-W2-S13-T3)."
+        },
+        {
+          "file": "internal/memory/scope_attr.go",
+          "line": 15,
+          "status": "",
+          "raw": "internal.memory.rpc.Handler (scoped reads)."
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -17777,6 +17798,18 @@
           "line": 15,
           "status": "",
           "raw": "internal/buildinfo — ldflags stamp source of truth (A-T6)."
+        },
+        {
+          "file": "internal/buildinfo/moduletag.go",
+          "line": 13,
+          "status": "",
+          "raw": "internal/buildinfo — release tag mapping (contract:signed-release-artifacts)."
+        },
+        {
+          "file": "internal/buildinfo/moduletag_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "internal/buildinfo — release tag mapping (contract:signed-release-artifacts)."
         }
       ],
       "statuses": [
@@ -22063,7 +22096,7 @@
       "sites": [
         {
           "file": "internal/plugins/registryfetch/doer.go",
-          "line": 17,
+          "line": 18,
           "status": "ADD",
           "ticket": "P1-E24-W5-S50-T1",
           "raw": "internal/plugins/registryfetch (ADD) — P1-E24-W5-S50-T1."
@@ -22084,7 +22117,7 @@
         },
         {
           "file": "internal/plugins/registryfetch/fetch_test.go",
-          "line": 6,
+          "line": 5,
           "status": "ADD",
           "ticket": "P1-E24-W5-S50-T1",
           "raw": "internal/plugins/registryfetch (ADD) — P1-E24-W5-S50-T1."
@@ -25676,7 +25709,7 @@
       "sites": [
         {
           "file": "internal/tools/registry-gen/main.go",
-          "line": 35,
+          "line": 38,
           "status": "ADD",
           "ticket": "P1-E24-W5-S50-T5",
           "raw": "internal/tools/registry-gen (ADD) — P1-E24-W5-S50-T5."
@@ -27965,6 +27998,74 @@
       ]
     },
     {
+      "name": "pkg/envelope",
+      "sites": [
+        {
+          "file": "pkg/envelope/canonical.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "pkg/envelope (ADD) — P1-SEC-20 (contract:scope-envelope)."
+        },
+        {
+          "file": "pkg/envelope/decode.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "pkg/envelope (ADD) — P1-SEC-20 (contract:scope-envelope)."
+        },
+        {
+          "file": "pkg/envelope/envelope.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "pkg/envelope (ADD) — P1-SEC-20 (contract:scope-envelope)."
+        },
+        {
+          "file": "pkg/envelope/extension.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "pkg/envelope (ADD) — P1-SEC-20 (contract:scope-envelope)."
+        },
+        {
+          "file": "pkg/envelope/narrow.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "pkg/envelope (ADD) — P1-SEC-20 (contract:scope-envelope)."
+        },
+        {
+          "file": "pkg/envelope/prescan.go",
+          "line": 22,
+          "status": "ADD",
+          "raw": "pkg/envelope (ADD) — P1-SEC-20 (contract:scope-envelope)."
+        },
+        {
+          "file": "pkg/envelope/prescan_scan.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "pkg/envelope (ADD) — P1-SEC-20 (contract:scope-envelope)."
+        },
+        {
+          "file": "pkg/envelope/prescan_text.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "pkg/envelope (ADD) — P1-SEC-20 (contract:scope-envelope)."
+        },
+        {
+          "file": "pkg/envelope/sign.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "pkg/envelope (ADD) — P1-SEC-20 (contract:scope-envelope)."
+        },
+        {
+          "file": "pkg/envelope/validate_text.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "pkg/envelope (ADD) — P1-SEC-20 (contract:scope-envelope)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "pkg/plugin author-kit-types",
       "sites": [
         {
@@ -28317,6 +28418,34 @@
       "statuses": [
         "ADD",
         "CHANGE"
+      ]
+    },
+    {
+      "name": "pkg/plugin registry-index-rollback",
+      "sites": [
+        {
+          "file": "pkg/plugin/registry_rollback.go",
+          "line": 30,
+          "status": "ADD",
+          "raw": "pkg/plugin registry-index-rollback (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "pkg/plugin registry-index-rollback tests",
+      "sites": [
+        {
+          "file": "pkg/plugin/registry_rollback_test.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "pkg/plugin registry-index-rollback tests (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -34372,7 +34501,7 @@
       ]
     }
   ],
-  "total_sites": 3297,
-  "unspecified_count": 213,
-  "multi_status_count": 103
+  "total_sites": 3313,
+  "unspecified_count": 214,
+  "multi_status_count": 104
 }
