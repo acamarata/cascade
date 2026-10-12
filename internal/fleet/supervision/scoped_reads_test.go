@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	goruntime "runtime"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/acamarata/cascade/internal/fleet/supervision"
 	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/rpc"
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/internal/testkit"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -152,9 +154,7 @@ func TestPrincipalAttentionWithoutPredicateSeesNothing(t *testing.T) {
 func TestPrincipalCannotClaimAttentionSource(t *testing.T) {
 	f := newAttnFixture(t, true)
 	clock := testkit.NewFrozenClock(time.Unix(1_700_000_000, 0))
-	if err := hookpacks.RegisterHookEventHandler(f.reg, f.sess, nil, clock); err != nil {
-		t.Fatal(err)
-	}
+	registerHookEvents(t, f.reg, f.sess, clock)
 	_, eo := f.call(principalA(), hookpacks.MethodHookEvent, map[string]any{"harness": "claude-code",
 		"event_type": string(hookpacks.EventSessionStart), "session_id": "job-7", "pid": 1, "account": "x",
 		"timestamp_ms": clock.Now().UnixMilli()})
@@ -206,9 +206,7 @@ func TestStartNeverLinksACycle(t *testing.T) {
 	sess := sessions.New(storetest.NewMemStore(), clock, nil)
 	reg := rpc.NewRegistry()
 	reg.SetAccessPolicy(nil)
-	if err := hookpacks.RegisterHookEventHandler(reg, sess, nil, clock); err != nil {
-		t.Fatal(err)
-	}
+	registerHookEvents(t, reg, sess, clock)
 	reg.Use(sessions.ScopeMiddleware(sess, sessions.SessionBinding{Methods: []string{hookpacks.MethodHookEvent},
 		Creator: hookpacks.MethodHookEvent, StartEvents: []string{string(hookpacks.EventSessionStart)}}))
 	for _, s := range [][2]string{{"c", "p"}, {"g", "c"}, {"p", "g"}} {
@@ -223,4 +221,23 @@ func TestStartNeverLinksACycle(t *testing.T) {
 	if rec, err := sess.Get(ctx, "p"); err != nil || rec.ParentSessionID != nil {
 		t.Fatalf("p linked under its own descendant: %v %v", rec.ParentSessionID, err)
 	}
+}
+
+// registerHookEvents installs the hook-event handler. On Windows tier-2 the
+// handler is refused by design, so the platform contract is the typed refusal
+// (compared by message: errors.Is matches on Kind alone) and the test that
+// needs the handler stops there; everywhere else registration must succeed.
+func registerHookEvents(t *testing.T, reg *rpc.Registry, sess *sessions.Store, clock runtime.Clock) {
+	t.Helper()
+	err := hookpacks.RegisterHookEventHandler(reg, sess, nil, clock)
+	if goruntime.GOOS != "windows" {
+		if err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	if err == nil || err.Error() != hookpacks.ErrWindowsTier2Unavailable.Error() {
+		t.Fatalf("windows tier-2 must refuse hook events with the typed refusal, got %v", err)
+	}
+	t.Skip("hook events are unavailable on Windows tier-2 (typed refusal asserted)")
 }
