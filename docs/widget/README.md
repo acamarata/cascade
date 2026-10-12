@@ -5,8 +5,8 @@ AppKit views, a Unix-domain Network.framework connection, an SSE subscriber and
 a 30-second silence poll. The socket path must be supplied in
 `CASCADE_SOCKET_PATH`; an absent or relative path produces a single error line.
 Labels are displayed verbatim. Unknown utilization, reset and job values remain
-unknown and display an em-dash. Sign-in buttons emit a reauthentication request;
-the action consumer belongs to the subsequent authentication integration.
+unknown and display an em-dash. A sign-in button opens a confirmation that shows
+the command; confirming launches it in Terminal (see [reauth.md](reauth.md)).
 
 This directory currently contains this overview only.
 

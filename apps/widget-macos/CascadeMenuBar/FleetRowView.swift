@@ -1,11 +1,13 @@
 import AppKit
 
 // Purpose: render one feed row verbatim with both windows, age and reauthentication affordance.
-// Inputs: a row and injected clock. Outputs: native labels and an optional amber tap target.
+// Inputs: a row and injected clock. Outputs: native labels and an optional amber tap target whose tap calls onReauth.
+// Constraints: only a row with reauthRequired has a tap target; the tap launches nothing by itself.
 final class FleetRowView: NSStackView {
     private(set) var labels: [NSTextField] = []
     private(set) var reauthButton: NSButton?
     private let row: WidgetRow
+    var onReauth: ((WidgetRow) -> Void)?
 
     init(row: WidgetRow, now: () -> Date = Date.init) {
         self.row = row
@@ -36,7 +38,6 @@ final class FleetRowView: NSStackView {
     required init?(coder: NSCoder) { fatalError("Use init(row:now:)") }
 
     @objc private func requestReauthentication() {
-        NotificationCenter.default.post(name: Notification.Name("CascadeReauthenticationRequested"),
-                                        object: self, userInfo: ["ref": row.ref])
+        onReauth?(row)
     }
 }

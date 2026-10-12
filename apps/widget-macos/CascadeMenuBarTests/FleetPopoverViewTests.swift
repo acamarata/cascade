@@ -37,4 +37,37 @@ final class FleetPopoverViewTests: XCTestCase {
         XCTAssertEqual(view.rows[0].labels[0].stringValue, "Project 1")
         XCTAssertEqual(view.rows[4].labels[0].stringValue, "redacted")
     }
+
+    private struct Failing: ReauthLaunching {
+        let error: LaunchError
+        func launch(ref: String, snapshot: WidgetSnapshot?) throws { throw error }
+    }
+
+    func testEachLaunchErrorRendersAsOneInlineAlertLine() throws {
+        let all: [LaunchError] = [.unknownProvider, .invalidProviderRef, .commandFileUnwritable, .cliUnavailable,
+                                  .invalidBundlePath, .terminalUnavailable]
+        for error in all {
+            let presenter = ReauthPresenter(launcher: Failing(error: error))
+            let view = FleetPopoverView(snapshot: try WidgetModelsTests.snapshot(), error: nil, presenter: presenter)
+            view.rows.first { $0.reauthButton != nil }?.reauthButton?.performClick(nil)
+            try XCTUnwrap(view.confirmation).confirmButton.performClick(nil)
+            let alert = try XCTUnwrap(view.alertLabel, "\(error)")
+            XCTAssertEqual(alert.stringValue, error.errorDescription)
+            XCTAssertFalse(alert.stringValue.contains("\n"))
+            XCTAssertEqual(alert.maximumNumberOfLines, 1)
+            XCTAssertNil(view.confirmation)
+            XCTAssertNotNil(FleetPopoverView(snapshot: try WidgetModelsTests.snapshot(), error: nil, presenter: presenter).alertLabel)
+        }
+    }
+
+    func testANewTapClearsTheAlert() throws {
+        let presenter = ReauthPresenter(launcher: Failing(error: .terminalUnavailable))
+        let view = FleetPopoverView(snapshot: try WidgetModelsTests.snapshot(), error: nil, presenter: presenter)
+        view.rows.first { $0.reauthButton != nil }?.reauthButton?.performClick(nil)
+        try XCTUnwrap(view.confirmation).confirmButton.performClick(nil)
+        XCTAssertNotNil(view.alertLabel)
+        view.rows.first { $0.reauthButton != nil }?.reauthButton?.performClick(nil)
+        XCTAssertNil(view.alertLabel)
+        XCTAssertNotNil(view.confirmation)
+    }
 }

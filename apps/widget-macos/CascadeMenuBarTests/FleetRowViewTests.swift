@@ -27,4 +27,17 @@ final class FleetRowViewTests: XCTestCase {
             XCTAssertFalse(FleetRowView(row: row).labels.contains { $0.stringValue.contains("*") })
         }
     }
+
+    func testTapCallsOnReauthWithTheRowAndLaunchesNothingItself() throws {
+        let snapshot = try WidgetModelsTests.snapshot()
+        let amber = try XCTUnwrap(snapshot.rows.first { $0.reauthRequired })
+        let view = FleetRowView(row: amber)
+        var tapped: [String] = []
+        view.onReauth = { tapped.append($0.ref) }
+        view.reauthButton?.performClick(nil)
+        XCTAssertEqual(tapped, [amber.ref])
+        var quiet = snapshot.rows[2]
+        quiet.state = "auth-required"
+        XCTAssertNil(FleetRowView(row: quiet).reauthButton, "only reauth_required rows have a tap target")
+    }
 }
