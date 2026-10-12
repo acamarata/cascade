@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-12T20:21:04Z",
+  "generated_at": "2026-10-12T22:00:03Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -437,6 +437,26 @@
           "status": "ADD",
           "ticket": "P1-E08-W2-S16-T1",
           "raw": "EGRESS_CLASS_HOOK: ADD (P1-E08-W2-S16-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "EGRESS_PROCESS_FIREWALL",
+      "sites": [
+        {
+          "file": "cmd/cascade/egress_firewall.go",
+          "line": 24,
+          "status": "ADD",
+          "raw": "EGRESS_PROCESS_FIREWALL: ADD (cmd/cascade process firewall)."
+        },
+        {
+          "file": "internal/hooks/egress/process.go",
+          "line": 24,
+          "status": "ADD",
+          "raw": "EGRESS_PROCESS_FIREWALL: ADD (internal/hooks/egress ProcessEngine)."
         }
       ],
       "statuses": [
@@ -999,7 +1019,7 @@
       "sites": [
         {
           "file": "internal/mcp/firewall.go",
-          "line": 16,
+          "line": 18,
           "status": "ADD",
           "raw": "MCP_RESPONSE_FIREWALL: ADD (internal/mcp response-marshal egress routing)."
         },
@@ -1598,6 +1618,20 @@
       ]
     },
     {
+      "name": "SECRETS_CUSTODY",
+      "sites": [
+        {
+          "file": "internal/secrets/custody_testvault.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "SECRETS_CUSTODY: ADD (internal/secrets QAFileVaultForced)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "SECRETS_DETECTOR",
       "sites": [
         {
@@ -1605,6 +1639,12 @@
           "line": 24,
           "status": "ADD",
           "raw": "SECRETS_DETECTOR: ADD (internal/secrets.DetectionConfig)."
+        },
+        {
+          "file": "internal/secrets/detection_process.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "SECRETS_DETECTOR: ADD (internal/secrets ProcessDetector)."
         },
         {
           "file": "internal/secrets/detector.go",
@@ -3844,6 +3884,12 @@
           "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
         },
         {
+          "file": "cmd/cascade/wire_egress_firewall.go",
+          "line": 7,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (egress firewall)."
+        },
+        {
           "file": "cmd/cascade/wire_fleet_node_jobs.go",
           "line": 4,
           "status": "",
@@ -4508,7 +4554,7 @@
         },
         {
           "file": "cmd/cascade/main_test.go",
-          "line": 29,
+          "line": 42,
           "status": "ADD",
           "raw": "cmd/cascade test-support (ADD)."
         },
@@ -11196,14 +11242,13 @@
       "sites": [
         {
           "file": "internal/bridge/firewall.go",
-          "line": 26,
-          "status": "ADD",
-          "ticket": "P1-E23-W5-S48-T1",
-          "raw": "internal.bridge.NewFirewall/ADDED (P1-E23-W5-S48-T1)."
+          "line": 23,
+          "status": "CHANGE",
+          "raw": "internal.bridge.NewFirewall/CHANGED (process firewall)."
         }
       ],
       "statuses": [
-        "ADD"
+        "CHANGE"
       ]
     },
     {
@@ -11213,8 +11258,7 @@
           "file": "internal/bridge/firewall_test.go",
           "line": 12,
           "status": "",
-          "ticket": "P1-E23-W5-S48-T1",
-          "raw": "internal.bridge.NewFirewall/TESTED (P1-E23-W5-S48-T1)."
+          "raw": "internal.bridge.NewFirewall/TESTED."
         }
       ],
       "statuses": [
@@ -11568,7 +11612,7 @@
       "sites": [
         {
           "file": "internal/ci/waitmerge_deps.go",
-          "line": 34,
+          "line": 32,
           "status": "ADD",
           "raw": "internal.ci.ClientHeadSHA/ADDED"
         }
@@ -12321,7 +12365,7 @@
       "sites": [
         {
           "file": "internal/ci/waitmerge_deps.go",
-          "line": 34,
+          "line": 32,
           "status": "ADD",
           "raw": "internal.ci.WaitDepsFromEnv/ADDED"
         }
@@ -12981,7 +13025,7 @@
       "sites": [
         {
           "file": "internal/conversation/adapter.go",
-          "line": 35,
+          "line": 16,
           "status": "ADD",
           "ticket": "P1-E20-W5-S43-T2",
           "raw": "internal.conversation.adapter/ADDED (P1-E20-W5-S43-T2)."
@@ -13031,6 +13075,36 @@
           "raw": "internal.conversation.adapter (CHANGED — wire split,"
         },
         {
+          "file": "internal/conversation/scope_attr.go",
+          "line": 14,
+          "status": "",
+          "raw": "internal.conversation.adapter (scoped reads)."
+        },
+        {
+          "file": "internal/conversation/scope_attr_errors_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal.conversation.adapter (scoped reads)."
+        },
+        {
+          "file": "internal/conversation/scope_attr_postgres_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "internal.conversation.adapter (scoped reads, tests)."
+        },
+        {
+          "file": "internal/conversation/scope_attr_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "internal.conversation.adapter (scoped reads)."
+        },
+        {
+          "file": "internal/conversation/scoped_reads_test.go",
+          "line": 13,
+          "status": "",
+          "raw": "internal.conversation.adapter (scoped reads)."
+        },
+        {
           "file": "internal/conversation/sse_integration_test.go",
           "line": 29,
           "status": "ADD",
@@ -13039,6 +13113,7 @@
         }
       ],
       "statuses": [
+        "",
         "ADD",
         "CHANGE"
       ]
@@ -18350,7 +18425,7 @@
       "sites": [
         {
           "file": "internal/conversation/topics/rpc.go",
-          "line": 48,
+          "line": 20,
           "status": "ADD",
           "ticket": "P1-E21-W5-S46-T4",
           "raw": "internal/conversation/topics rpc (ADD) (P1-E21-W5-S46-T4)."
@@ -18373,6 +18448,20 @@
       "statuses": [
         "",
         "ADD"
+      ]
+    },
+    {
+      "name": "internal/conversation/topics rpc scope",
+      "sites": [
+        {
+          "file": "internal/conversation/topics/rpc_scope_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/conversation/topics rpc scope (TEST)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -21873,7 +21962,7 @@
       "sites": [
         {
           "file": "internal/plugins/dispatch_remote.go",
-          "line": 26,
+          "line": 23,
           "status": "ADD",
           "ticket": "P1-E15-W4-S33-T4",
           "raw": "internal/plugins dispatch-remote (ADD) — P1-E15-W4-S33-T4."
@@ -24410,6 +24499,20 @@
       ]
     },
     {
+      "name": "internal/release/promotion",
+      "sites": [
+        {
+          "file": "internal/release/promotion/doc.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal/release/promotion (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/review.artifact",
       "sites": [
         {
@@ -26000,6 +26103,20 @@
           "status": "ADD",
           "ticket": "P1-E17-W4-S38-T2",
           "raw": "internal/sync tombstones (ADD) — P1-E17-W4-S38-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/tools/promotion",
+      "sites": [
+        {
+          "file": "internal/tools/promotion/main.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal/tools/promotion (ADD)."
         }
       ],
       "statuses": [
@@ -34803,7 +34920,7 @@
       ]
     }
   ],
-  "total_sites": 3351,
-  "unspecified_count": 217,
+  "total_sites": 3364,
+  "unspecified_count": 218,
   "multi_status_count": 106
 }
