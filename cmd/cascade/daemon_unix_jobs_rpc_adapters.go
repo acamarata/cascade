@@ -15,6 +15,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"github.com/acamarata/cascade/pkg/provider"
 
 	"github.com/acamarata/cascade/internal/jobs"
 	"github.com/acamarata/cascade/internal/nodes"
@@ -24,13 +25,14 @@ import (
 
 // jobRecordFrom converts a real jobs.Job into rpc.JobRecord.
 func jobRecordFrom(j jobs.Job) rpc.JobRecord {
+	className, _ := provider.DataClassName(provider.TierOrLocalOnly(j.DataClass))
 	return rpc.JobRecord{
 		ID: j.ID, State: string(j.State), CreatedAt: j.CreatedAt, UpdatedAt: j.UpdatedAt,
 		Capabilities: j.Capabilities, MutableScope: j.MutableScope, RiskClass: j.RiskClass,
 		MinTaskClass: j.MinTaskClass, NodeRequirements: j.NodeRequirements,
 		TimeoutSeconds: j.TimeoutSeconds, CostCeiling: j.CostCeiling, Priority: j.Priority,
 		ConsecutiveFailedAttempts: j.ConsecutiveFailedAttempts,
-		ConsequenceClass:          string(j.ConsequenceClass), DataClass: string(j.DataClass),
+		ConsequenceClass:          string(j.ConsequenceClass), DataClass: className,
 	}
 }
 
@@ -68,6 +70,10 @@ func (a jobStoreAdapter) CancelJob(ctx context.Context, id string, now int64) (r
 }
 
 func (a jobStoreAdapter) RetryJob(ctx context.Context, orig rpc.JobRecord, newID string, gen int64, now int64) (rpc.JobRecord, error) {
+	tier, err := provider.ParseDataClassName(orig.DataClass)
+	if err != nil {
+		return rpc.JobRecord{}, err
+	}
 	newJob := jobs.Job{
 		ID: newID, State: jobs.JobStatePending, CreatedAt: now, UpdatedAt: now,
 		Capabilities: orig.Capabilities, MutableScope: orig.MutableScope, RiskClass: orig.RiskClass,
@@ -75,7 +81,7 @@ func (a jobStoreAdapter) RetryJob(ctx context.Context, orig rpc.JobRecord, newID
 		TimeoutSeconds: orig.TimeoutSeconds, CostCeiling: orig.CostCeiling, Priority: orig.Priority,
 		ConsecutiveFailedAttempts: gen,
 		ConsequenceClass:          jobs.ConsequenceClass(orig.ConsequenceClass),
-		DataClass:                 jobs.DataClass(orig.DataClass),
+		DataClass:                 new(tier),
 	}
 	if err := a.store.PutJob(ctx, newJob); err != nil {
 		return rpc.JobRecord{}, err

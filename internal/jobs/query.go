@@ -38,6 +38,7 @@ package jobs
 import (
 	"context"
 	"encoding/json"
+	"github.com/acamarata/cascade/pkg/provider"
 	"strconv"
 	"strings"
 
@@ -192,11 +193,11 @@ func scanJobRow(row jobRowScanner) (Job, error) {
 		return Job{}, err
 	}
 	j.ConsequenceClass = cc
-	dc, err := DecodeDataClass(data)
+	dc, err := provider.ParseDataClassName(data)
 	if err != nil {
 		return Job{}, err
 	}
-	j.DataClass = dc
+	j.DataClass = new(dc)
 	return j, nil
 }
 

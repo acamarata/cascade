@@ -1,6 +1,7 @@
 package evidence
 
 import (
+	"github.com/acamarata/cascade/pkg/provider"
 	"strings"
 	"testing"
 
@@ -61,7 +62,7 @@ func validEvidence() Evidence {
 			Locator:    Locator{Kind: LocatorLines, Start: 1, End: 2},
 		},
 		ContentHash: "abc",
-		DataClass:   DataClassInternal,
+		DataClass:   new(provider.SensitivityInternal),
 	}
 }
 
@@ -75,7 +76,7 @@ func TestEvidenceValidate(t *testing.T) {
 	}{
 		{"empty claim_id", func(e Evidence) Evidence { e.ClaimID = ""; return e }},
 		{"unknown source type", func(e Evidence) Evidence { e.Source.Type = "bogus"; return e }},
-		{"unknown data_class", func(e Evidence) Evidence { e.DataClass = "bogus"; return e }},
+		{"unknown data_class", func(e Evidence) Evidence { e.DataClass = new(provider.SensitivityTier(9)); return e }},
 		{"empty content_hash", func(e Evidence) Evidence { e.ContentHash = ""; return e }},
 	}
 	for _, tc := range cases {

@@ -8,6 +8,7 @@
 package capacity
 
 import (
+	"github.com/acamarata/cascade/pkg/provider"
 	"testing"
 	"time"
 
@@ -71,7 +72,7 @@ func baseTestRequest() ResourceRequest {
 		MinQuality: QualityStandard,
 		Deadline:   DeadlineInteractive,
 		RiskClass:  jobs.RiskClassNormal,
-		DataClass:  DataClassPublic,
+		DataClass:  new(provider.SensitivityPublic),
 	}
 }
 

@@ -24,6 +24,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"github.com/acamarata/cascade/pkg/provider"
 
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -58,10 +59,12 @@ func (s *Store) PutClaim(ctx context.Context, c Claim) error {
 	if err != nil {
 		return err
 	}
-	if ok && existing.DataClass != c.DataClass {
+	if ok && *existing.DataClass != *c.DataClass {
+		storedName, _ := provider.DataClassName(*existing.DataClass)
+		className, _ := provider.DataClassName(*c.DataClass)
 		return cascade.Wrapf(cascade.KindConflict, ErrDataClassImmutable,
 			"evidence: claim %q data_class is immutable: stored %q, refusing update to %q",
-			c.ID, existing.DataClass, c.DataClass)
+			c.ID, storedName, className)
 	}
 	verificationJSON, err := json.Marshal(c.Verification)
 	if err != nil {
@@ -75,6 +78,7 @@ func (s *Store) PutClaim(ctx context.Context, c Claim) error {
 	if c.InvalidatedAt != nil {
 		invalidatedAt = c.InvalidatedAt.Unix()
 	}
+	className, _ := provider.DataClassName(*c.DataClass)
 	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO `+tableClaim+` (claim_id, statement, type, confidence, data_class, run_id, lane_id,
 			verification_json, contradictions_json, invalidated_at, created_at)
@@ -83,7 +87,7 @@ func (s *Store) PutClaim(ctx context.Context, c Claim) error {
 			confidence=excluded.confidence, run_id=excluded.run_id, lane_id=excluded.lane_id,
 			verification_json=excluded.verification_json, contradictions_json=excluded.contradictions_json,
 			invalidated_at=excluded.invalidated_at`,
-		c.ID, c.Statement, string(c.Type), c.Confidence, string(c.DataClass), c.ProducedBy.RunID, c.ProducedBy.LaneID,
+		c.ID, c.Statement, string(c.Type), c.Confidence, className, c.ProducedBy.RunID, c.ProducedBy.LaneID,
 		string(verificationJSON), string(contradictionsJSON), invalidatedAt, s.clock.Now().Unix())
 	if err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "evidence: put claim")
@@ -251,9 +255,11 @@ func scanClaimRow(row rowScanner) (Claim, error) {
 	if c.Type, err = DecodeClaimType(claimType); err != nil {
 		return Claim{}, err
 	}
-	if c.DataClass, err = DecodeDataClass(dataClass); err != nil {
+	tier, err := provider.ParseDataClassName(dataClass)
+	if err != nil {
 		return Claim{}, err
 	}
+	c.DataClass = new(tier)
 	if err := json.Unmarshal([]byte(verificationJSON), &c.Verification); err != nil {
 		return Claim{}, cascade.Wrap(cascade.KindInternal, err, "evidence: decode verification")
 	}

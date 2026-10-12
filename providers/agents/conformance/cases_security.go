@@ -87,7 +87,7 @@ func (s *Suite) TestDataClassPropagates(t *testing.T) {
 	requireNoError(t, err, "Spawn")
 	cr, err := p.Collect(ctx, res.JobID)
 	requireNoError(t, err, "Collect")
-	if provider.JoinDataClass(cr.DataClass, spec.DataClass) != cr.DataClass.Resolved() {
+	if provider.JoinSensitivity(cr.DataClass, spec.DataClass) != provider.JoinSensitivity(cr.DataClass, provider.SensitivityPublic) {
 		t.Fatalf("CollectResult.DataClass %q is less restrictive than the spec's %q", cr.DataClass, spec.DataClass)
 	}
 }

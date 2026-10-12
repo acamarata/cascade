@@ -18,6 +18,7 @@ package jobs_test
 
 import (
 	"context"
+	"github.com/acamarata/cascade/pkg/provider"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/fleet/governor"
@@ -54,7 +55,7 @@ func seedPendingJob(t *testing.T, rig *acceptanceRig, id, scope string, priority
 	err := rig.store.PutJob(rig.ctx, jobs.Job{
 		ID: id, State: jobs.JobStatePending, MutableScope: scope, RiskClass: string(jobs.RiskClassLow),
 		MinTaskClass: "code", Priority: priority,
-		ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal,
+		ConsequenceClass: jobs.ConsequenceNormal, DataClass: new(provider.SensitivityInternal),
 	})
 	if err != nil {
 		t.Fatalf("seed %s: %v", id, err)
@@ -70,10 +71,7 @@ func TestAcceptancePath3ContendingLease(t *testing.T) {
 	seedPendingJob(t, rig, holder, "docs/**", 1)
 	holderLease := applyLeaseIntent(ctx, t, rig, holder, "docs/**")
 
-	// A contending node (docs/developer/** intersects docs/**) must
-	// never be admitted while the holder's lease is active -- the
-	// scheduler's own admissibility rule, exercised against the REAL
-	// lease row just acquired above (ListLeases, not a hand-built slice).
+	// Contending nodes must not be admitted while the stored lease is active.
 	const contenderB, contenderC = "job-docs-dev-b", "job-docs-dev-c"
 	seedPendingJob(t, rig, contenderB, "docs/developer/**", 5)
 	seedPendingJob(t, rig, contenderC, "docs/developer/**", 1)
@@ -94,10 +92,7 @@ func TestAcceptancePath3ContendingLease(t *testing.T) {
 		t.Fatalf("Release: %v", err)
 	}
 
-	// Re-Advance after release, over the REAL (now-empty) lease view:
-	// both contenders are admitted in ONE batch, in the S-59.T5
-	// priority-desc/id-asc order -- not FIFO (contenderC was seeded
-	// first but carries lower priority).
+	// After release, admit both contenders in priority-desc/id-asc order.
 	afterRelease := activeLeasesForRepo(t, rig)
 	delta2 := sched.Advance(ctx, contendDag, jobs.LeaseAcquired{JobID: holder, LeaseID: "released"}, states, afterRelease, allowAll)
 	if len(delta2.LeasesToAcquire) != 2 {

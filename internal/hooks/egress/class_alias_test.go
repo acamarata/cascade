@@ -45,7 +45,7 @@ func TestFormerParseSitesFailClosed(t *testing.T) {
 	t.Run("egress_ResolveTier", func(t *testing.T) {
 		for _, unknown := range []SensitivityTier{4, 9, 255} {
 			if got := ResolveTier(unknown); got != TierLocalOnly {
-				t.Fatalf("ResolveTier(%d) = %v, want local-only", uint8(unknown), got)
+				t.Fatalf("ResolveTier(%v) = %v, want local-only", unknown, got)
 			}
 		}
 		var unset SensitivityTier

@@ -38,7 +38,7 @@ func SensitivityPass(class EgressClass, cfg InterceptConfig, tier SensitivityTie
 // refused on this site's own guard rather than on whatever ResolveTier
 // happens to map it to.
 func matrixVerdict(class EgressClass, cfg InterceptConfig, declared, resolved SensitivityTier) error {
-	if declared > TierPublic {
+	if !declared.Valid() {
 		return sensitivityViolation(class, cfg, declared, resolved, "out-of-range tier")
 	}
 	switch resolved {

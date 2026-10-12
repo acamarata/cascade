@@ -26,6 +26,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/acamarata/cascade/pkg/provider"
 	"strconv"
 	"time"
 
@@ -102,7 +103,7 @@ type ApprovalRecord struct {
 	// Risk is the action's rung.
 	Risk RiskLevel `json:"risk"`
 	// Sensitivity is the data class of the material involved.
-	Sensitivity DataClass `json:"sensitivity"`
+	Sensitivity string `json:"sensitivity"`
 	// PolicyVersion is the policy revision the decision was taken under.
 	PolicyVersion string `json:"policy_version"`
 	// Audience names who may verify this record.
@@ -138,7 +139,7 @@ func CanonicalEncode(r ApprovalRecord) []byte {
 	b.WriteString(`,"schema_version":`)
 	b.WriteString(strconv.Itoa(r.SchemaVersion))
 	writeStringField(&b, "scope", r.Scope, false)
-	writeStringField(&b, "sensitivity", r.Sensitivity.String(), false)
+	writeStringField(&b, "sensitivity", r.Sensitivity, false)
 	b.WriteString(`,"target":{`)
 	writeStringField(&b, "node", r.Target.Node, true)
 	writeStringField(&b, "session", r.Target.Session, false)
@@ -247,15 +248,15 @@ func recordFromWire(w canonicalWire) (ApprovalRecord, error) {
 		return ApprovalRecord{}, cascade.Wrapf(cascade.KindInvalidInput,
 			ErrNonCanonical, "policy: approval record names no known risk rung")
 	}
-	sens, ok := dataClassFromName(w.Sensitivity)
-	if !ok {
+	_, err = provider.ParseDataClassName(w.Sensitivity)
+	if err != nil {
 		return ApprovalRecord{}, cascade.Wrapf(cascade.KindInvalidInput,
 			ErrNonCanonical, "policy: approval record names no known sensitivity")
 	}
 	rec := ApprovalRecord{
 		SchemaVersion: w.SchemaVersion, KeyID: w.KeyID, Verb: w.Verb,
 		ParamsDigest: w.ParamsDigest, Requester: w.Requester, Approver: w.Approver,
-		Origin: w.Origin, Scope: w.Scope, Risk: risk, Sensitivity: sens,
+		Origin: w.Origin, Scope: w.Scope, Risk: risk, Sensitivity: w.Sensitivity,
 		PolicyVersion: w.PolicyVersion, Audience: w.Audience,
 		Issued: issued, Expiry: expiry,
 		Target: ApprovalTarget{Node: w.Target.Node, Session: w.Target.Session, Task: w.Target.Task},
@@ -276,17 +277,6 @@ func riskFromName(name string) (RiskLevel, bool) {
 	for r := L0; r <= L4; r++ {
 		if r.String() == name {
 			return r, true
-		}
-	}
-	return 0, false
-}
-
-// dataClassFromName maps a canonical class name back to its value, on the
-// same terms as riskFromName.
-func dataClassFromName(name string) (DataClass, bool) {
-	for d := DataClassPublic; d <= DataClassSecret; d++ {
-		if d.String() == name {
-			return d, true
 		}
 	}
 	return 0, false

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/acamarata/cascade/pkg/provider"
 	"os"
 	"path/filepath"
 	"time"
@@ -41,7 +42,7 @@ func Example() {
 		CreatedAt: 1, UpdatedAt: 1, Capabilities: []string{"code"},
 		MutableScope: "repo:/tmp/example", RiskClass: "normal", MinTaskClass: "code",
 		NodeRequirements: "{}", TimeoutSeconds: 60, CostCeiling: 1,
-		Priority: 1, ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal,
+		Priority: 1, ConsequenceClass: jobs.ConsequenceNormal, DataClass: new(provider.SensitivityInternal),
 	}
 	if err := store.PutJob(ctx, j); err != nil {
 		fmt.Println("put job error:", err)

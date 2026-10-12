@@ -37,11 +37,12 @@ var runTaskClasses = []string{
 	"segment", "summarize", "extract", "chat",
 }
 
-// runSensitivityNames lists the §5.16 tier names in member order, read from
+// runSensitivityNames lists the §5.16 tier names in member order, named by
 // provider.SensitivityTier itself so the CLI keeps no second name table.
 func runSensitivityNames() []string {
 	var names []string
-	for t := provider.SensitivityRestricted; t.Valid(); t++ {
+	for _, t := range []provider.SensitivityTier{provider.SensitivityRestricted, provider.SensitivityLocalOnly,
+		provider.SensitivityInternal, provider.SensitivityPublic} {
 		names = append(names, t.String())
 	}
 	return names

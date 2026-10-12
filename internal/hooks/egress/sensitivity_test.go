@@ -107,7 +107,7 @@ func TestSensitivityTierResolve(t *testing.T) {
 	}
 	for _, tier := range []SensitivityTier{4, 9, 255} {
 		if got := ResolveTier(tier); got != TierLocalOnly {
-			t.Errorf("ResolveTier(%d) = %s, want local-only", uint8(tier), got)
+			t.Errorf("ResolveTier(%v) = %s, want local-only", tier, got)
 		}
 	}
 }

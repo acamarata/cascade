@@ -31,6 +31,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/acamarata/cascade/pkg/provider"
 	"net"
 	"net/http"
 	"testing"
@@ -60,7 +61,7 @@ func seedPath4Accepted(t *testing.T, dbPath string, clock runtime.Clock, repoRoo
 	if err := rig.store.PutJob(ctx, jobs.Job{
 		ID: path4JobID, State: jobs.JobStatePending, MutableScope: "docs/**",
 		RiskClass: string(jobs.RiskClassLow), MinTaskClass: "code",
-		ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal,
+		ConsequenceClass: jobs.ConsequenceNormal, DataClass: new(provider.SensitivityInternal),
 	}); err != nil {
 		t.Fatalf("seed job: %v", err)
 	}

@@ -32,13 +32,8 @@ var (
 
 // sensExemptions: another concept or ticket, with the reason (memory.Provenance, a struct, and process TrustTier need none).
 var sensExemptions = map[string]string{
-	"pkg/provider.DataClass":            "owner P1-SEC-34: agent data class; P1-AGT-01 WIP file",
-	"internal/evidence.DataClass":       "owner P1-SEC-34: vocabulary 2 (public..secret), persisted codec",
-	"internal/jobs.DataClass":           "owner P1-SEC-34: vocabulary 2, persisted job rows",
-	"internal/fleet/capacity.DataClass": "owner P1-SEC-34: vocabulary 2, capacity requests",
-	"internal/policy.DataClass":         "owner P1-SEC-34: vocabulary 2 inside the signed approval record",
-	"internal/repo.SensitiveClass":      "a file-content class {auth, secret, schema}, not a data tier (P1-BF-R126)",
-	"internal/nodes.Gate":               "placement gate names (trust.go), not a data tier (P1-BF-R126)",
+	"internal/repo.SensitiveClass": "a file-content class {auth, secret, schema}, not a data tier (P1-BF-R126)",
+	"internal/nodes.Gate":          "placement gate names (trust.go), not a data tier (P1-BF-R126)",
 }
 
 // sensParse parses every non-test .go file under root's five source roots.

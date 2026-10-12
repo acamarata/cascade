@@ -7,6 +7,7 @@ package policy
 
 import (
 	"context"
+	"github.com/acamarata/cascade/pkg/provider"
 	"testing"
 )
 
@@ -48,28 +49,13 @@ func TestDecisionLayerVocabulary(t *testing.T) {
 // direction: an unset or out-of-range class reads as the most restricted
 // material, never as publishable.
 func TestDataClassLadder(t *testing.T) {
-	order := []DataClass{DataClassPublic, DataClassInternal, DataClassConfidential, DataClassSecret}
-	names := []string{"public", "internal", "confidential", "secret"}
-	for i, c := range order {
-		if c.String() != names[i] {
-			t.Errorf("DataClass %d renders as %q, want %q", i, c.String(), names[i])
+	order := []provider.SensitivityTier{provider.SensitivityPublic, provider.SensitivityInternal, provider.SensitivityRestricted, provider.SensitivityLocalOnly}
+	for i, tier := range order {
+		if !tier.Valid() || provider.TierOrLocalOnly(new(tier)) != tier {
+			t.Fatal("valid class changed")
 		}
-		if !c.Valid() {
-			t.Errorf("%s is not valid", names[i])
-		}
-		if i > 0 && order[i-1] >= c {
-			t.Errorf("%s does not sort below %s", names[i-1], names[i])
-		}
-		if safeDataClass(c) != c {
-			t.Errorf("safeDataClass changed the valid class %s", names[i])
-		}
-	}
-	for _, bad := range []DataClass{0, 5, 200} {
-		if safeDataClass(bad) != DataClassSecret {
-			t.Errorf("safeDataClass(%d) = %s, want secret", bad, safeDataClass(bad))
-		}
-		if bad.String() != "invalid-data-class" {
-			t.Errorf("DataClass(%d) renders as %q", bad, bad.String())
+		if i > 0 && !tier.MoreRestrictiveThan(order[i-1]) {
+			t.Fatal("class order changed")
 		}
 	}
 }

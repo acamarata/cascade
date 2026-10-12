@@ -32,6 +32,7 @@
 package secrets_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/hooks/egress"
@@ -51,12 +52,12 @@ func TestEgressClassBridgeRegistered(t *testing.T) {
 	if cfg.AllowLocalOnly {
 		t.Fatal("EgressClassBridge.AllowLocalOnly = true, want false")
 	}
-	wantTiers := map[egress.SensitivityTier]bool{egress.TierInternal: true, egress.TierPublic: true}
+	wantTiers := []egress.SensitivityTier{egress.TierInternal, egress.TierPublic}
 	if len(cfg.AllowedTiers) != len(wantTiers) {
 		t.Fatalf("AllowedTiers = %v, want exactly {internal, public}", cfg.AllowedTiers)
 	}
 	for _, tier := range cfg.AllowedTiers {
-		if !wantTiers[tier] {
+		if !slices.Contains(wantTiers, tier) {
 			t.Fatalf("AllowedTiers contains unexpected tier %q", tier)
 		}
 	}

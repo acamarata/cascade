@@ -2,6 +2,7 @@ package evidence
 
 import (
 	"encoding/json"
+	"github.com/acamarata/cascade/pkg/provider"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,7 +65,7 @@ func validClaim() Claim {
 		Type:       ClaimObservedFact,
 		Confidence: 0.5,
 		ProducedBy: ProducedBy{RunID: "run-1", LaneID: "lane-1"},
-		DataClass:  DataClassInternal,
+		DataClass:  new(provider.SensitivityInternal),
 	}
 }
 
@@ -81,7 +82,7 @@ func TestClaimValidate(t *testing.T) {
 		{"unknown type", func(c Claim) Claim { c.Type = "bogus"; return c }},
 		{"confidence too low", func(c Claim) Claim { c.Confidence = -0.1; return c }},
 		{"confidence too high", func(c Claim) Claim { c.Confidence = 1.1; return c }},
-		{"unknown data_class", func(c Claim) Claim { c.DataClass = "bogus"; return c }},
+		{"unknown data_class", func(c Claim) Claim { c.DataClass = new(provider.SensitivityTier(9)); return c }},
 		{"empty run_id", func(c Claim) Claim { c.ProducedBy.RunID = ""; return c }},
 		{"unknown verification result", func(c Claim) Claim {
 			c.Verification = []Verification{{RunID: "r", Result: "bogus"}}
@@ -132,17 +133,14 @@ func TestClaimSchemaRoundTripsAgainstGolden(t *testing.T) {
 	if err := json.Unmarshal(reEncoded, &roundTripped); err != nil {
 		t.Fatalf("unmarshal re-encoded: %v", err)
 	}
-	if roundTripped.Claim.ID != fixture.Claim.ID || roundTripped.Claim.DataClass != fixture.Claim.DataClass {
+	if roundTripped.Claim.ID != fixture.Claim.ID || roundTripped.Claim.DataClass == nil || *roundTripped.Claim.DataClass != *fixture.Claim.DataClass {
 		t.Errorf("claim round trip mismatch: got %+v, want %+v", roundTripped.Claim, fixture.Claim)
 	}
 	if roundTripped.Evidence.CapturedRef != fixture.Evidence.CapturedRef ||
 		roundTripped.Evidence.Source.Locator != fixture.Evidence.Source.Locator {
 		t.Errorf("evidence round trip mismatch: got %+v, want %+v", roundTripped.Evidence, fixture.Evidence)
 	}
-
-	// Field-set fence: every top-level JSON key present in the fixture
-	// must correspond to an actual struct field (an unknown key here
-	// means either the fixture or the struct has drifted from R-21.41).
+	// Field-set fence: every JSON key must correspond to an actual field.
 	var rawMap map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &rawMap); err != nil {
 		t.Fatalf("unmarshal raw map: %v", err)

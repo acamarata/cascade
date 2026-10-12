@@ -136,70 +136,24 @@ func (d *DeadlineEnum) UnmarshalText(b []byte) error {
 	return err
 }
 
-// DataClass is this package's closed data-sensitivity floor (R-21.94,
-// R-21.143). It mirrors internal/jobs.DataClass's four-value ordering BY
-// VALUE, not by import, matching that file's own precedent (and
-// internal/evidence/dataclass.go's) for the identical situation: a
-// package-local copy with identical names/ordering keeps every consumer
-// interoperable at the wire without adding a fifth cross-package edge for
-// four string constants.
-type DataClass string
-
-// The closed DataClass vocabulary, ordered least to most sensitive,
-// matching internal/jobs.DataClass and internal/policy.DataClass exactly.
-const (
-	DataClassPublic       DataClass = "public"
-	DataClassInternal     DataClass = "internal"
-	DataClassConfidential DataClass = "confidential"
-	DataClassSecret       DataClass = "secret"
-)
-
-// dataClassRank orders the four values for the raise-only comparison
-// below. An invalid value never reaches this map -- callers resolve it to
-// DataClassSecret first.
-var dataClassRank = map[DataClass]int{
-	DataClassPublic:       0,
-	DataClassInternal:     1,
-	DataClassConfidential: 2,
-	DataClassSecret:       3,
-}
-
-// Valid reports whether d is one of the four closed values.
-func (d DataClass) Valid() bool {
-	_, ok := dataClassRank[d]
-	return ok
-}
-
-// MarshalText implements encoding.TextMarshaler for DataClass.
-func (d DataClass) MarshalText() ([]byte, error) { return marshalEnumText(d, d.Valid(), "data_class") }
-
-// UnmarshalText implements encoding.TextUnmarshaler for DataClass.
-func (d *DataClass) UnmarshalText(b []byte) error {
-	v, err := unmarshalEnumText(b, DataClass.Valid, "data_class")
-	if err == nil {
-		*d = v
-	}
-	return err
-}
-
 // ValidateDataClassFloor enforces R-21.143's raise-only rule: presented
 // must be a valid DataClass at or above floor's rank. A presented value
 // below the floor is refused with a typed policy-denied error -- it is
 // never silently downgraded or silently accepted. floor itself is
 // resolved by the caller (ValidateResourceRequest resolves an unset floor
-// to DataClassSecret, the most restrictive member, before calling this).
-func ValidateDataClassFloor(presented, floor DataClass) (DataClass, error) {
-	if !presented.Valid() {
-		return "", textDecodeErr("data_class", string(presented))
+// to LocalOnly, the most restrictive member, before calling this).
+func ValidateDataClassFloor(presented, floor *provider.SensitivityTier) (*provider.SensitivityTier, error) {
+	if presented == nil || !presented.Valid() {
+		return nil, textDecodeErr("data_class", "unset")
 	}
-	if !floor.Valid() {
-		floor = DataClassSecret
+	minimum := provider.TierOrLocalOnly(floor)
+	if minimum.MoreRestrictiveThan(*presented) {
+		className, _ := provider.DataClassName(*presented)
+		floorName, _ := provider.DataClassName(minimum)
+		return nil, cascade.Newf(cascade.KindPolicyDenied,
+			"capacity: data_class %q is below the derived floor %q: downgrade refused (R-21.143)", className, floorName)
 	}
-	if dataClassRank[presented] < dataClassRank[floor] {
-		return "", cascade.Newf(cascade.KindPolicyDenied,
-			"capacity: data_class %q is below the derived floor %q: downgrade refused (R-21.143)", presented, floor)
-	}
-	return presented, nil
+	return new(*presented), nil
 }
 
 // ResourceRequest is the tier-policy engine's primary input (06-FORGE-SPEC
@@ -215,7 +169,7 @@ type ResourceRequest struct {
 	Deadline      DeadlineEnum
 	PreferredTier TierEnum
 	ReserveTier0  bool
-	DataClass     DataClass
+	DataClass     *provider.SensitivityTier
 }
 
 // conductorTaskClasses is every §5.16 task-class member ResourceRequest.
@@ -255,9 +209,9 @@ func validRiskClass(r jobs.RiskClass) bool {
 // ValidateResourceRequest normalizes req against its fail-closed defaults
 // and returns a typed error for anything that cannot be resolved safely.
 // derivedFloor is the R-21.143 provenance-derived DataClass floor (an
-// unset/invalid floor resolves to DataClassSecret, the most restrictive
+// unset/invalid floor resolves to LocalOnly, the most restrictive
 // member, per §5.15).
-func ValidateResourceRequest(req ResourceRequest, derivedFloor DataClass) (ResourceRequest, error) {
+func ValidateResourceRequest(req ResourceRequest, derivedFloor *provider.SensitivityTier) (ResourceRequest, error) {
 	out := req
 	if out.Intent == "" {
 		return ResourceRequest{}, cascade.Newf(cascade.KindInvalidInput, "capacity: resource request intent must not be empty")
@@ -282,12 +236,9 @@ func ValidateResourceRequest(req ResourceRequest, derivedFloor DataClass) (Resou
 	} else if !validRiskClass(out.RiskClass) {
 		return ResourceRequest{}, cascade.Newf(cascade.KindInvalidInput, "capacity: unknown risk_class %q", out.RiskClass)
 	}
-	floor := derivedFloor
-	if !floor.Valid() {
-		floor = DataClassSecret
-	}
-	if out.DataClass == "" {
-		out.DataClass = floor
+	floor := new(provider.TierOrLocalOnly(derivedFloor))
+	if out.DataClass == nil {
+		out.DataClass = new(*floor)
 		return out, nil
 	}
 	raised, err := ValidateDataClassFloor(out.DataClass, floor)

@@ -65,6 +65,22 @@ quoted `[]byte(...)` literal), so `go test -fuzz` seeds from them directly.
 
 ## Regenerating
 
+### Pre-fold stored vocabulary
+
+`pre-sec34/` holds one signed token per stored word (`public`, `internal`,
+`confidential`, `secret`) and the corresponding `public-key.bin`. These bytes
+were captured before production edits, using `fixtureKeySeed` and
+`fixtureIssued` with the existing signer and the standard library Ed25519
+implementation.
+
+| Item | Value |
+| --- | --- |
+| Base commit | `dbbabb850b92b39c7cfd91ff75e90ed717efc29d` |
+| Toolchain | `go1.26.6 darwin/arm64` |
+| Capture date | 2026-10-05 |
+| Capture command | `APPROVAL_CAPTURE_DIR="$PWD/internal/policy/testdata/approval/pre-sec34" go test -count=1 -run '^TestCapturePreFoldApproval$' ./internal/policy` |
+| Generator | Temporary package test, removed after capture; preserved in local build evidence |
+
 Regenerate only when the record shape changes, and say so in the ticket that
 changes it. The generator is a skipped test unless its environment variable
 is set, so an ordinary run never rewrites the fixtures it is asserting

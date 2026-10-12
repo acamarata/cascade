@@ -19,6 +19,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/acamarata/cascade/pkg/provider"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -42,11 +43,14 @@ func (s *Store) PutEvidence(ctx context.Context, e Evidence) error {
 	if err != nil {
 		return err
 	}
-	if ok && existing.DataClass != e.DataClass {
+	if ok && *existing.DataClass != *e.DataClass {
+		storedName, _ := provider.DataClassName(*existing.DataClass)
+		className, _ := provider.DataClassName(*e.DataClass)
 		return cascade.Wrapf(cascade.KindConflict, ErrDataClassImmutable,
 			"evidence: evidence %q data_class is immutable: stored %q, refusing update to %q",
-			e.ID, existing.DataClass, e.DataClass)
+			e.ID, storedName, className)
 	}
+	className, _ := provider.DataClassName(*e.DataClass)
 	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO `+tableClaimEvidence+` (evidence_id, claim_id, source_type, data_class, repository,
 			"commit", path, locator, content_hash, captured_ref, observed_at)
@@ -55,7 +59,7 @@ func (s *Store) PutEvidence(ctx context.Context, e Evidence) error {
 			repository=excluded.repository, "commit"=excluded."commit", path=excluded.path,
 			locator=excluded.locator, content_hash=excluded.content_hash, captured_ref=excluded.captured_ref,
 			observed_at=excluded.observed_at`,
-		e.ID, e.ClaimID, string(e.Source.Type), string(e.DataClass), e.Source.Repository, e.Source.Commit,
+		e.ID, e.ClaimID, string(e.Source.Type), className, e.Source.Repository, e.Source.Commit,
 		e.Source.Path, e.Source.Locator.String(), e.ContentHash, e.CapturedRef, e.ObservedAt.Unix())
 	if err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "evidence: put evidence")
@@ -135,9 +139,11 @@ func scanEvidenceRow(row rowScanner) (Evidence, error) {
 	if e.Source.Type, err = DecodeSourceType(sourceType); err != nil {
 		return Evidence{}, err
 	}
-	if e.DataClass, err = DecodeDataClass(dataClass); err != nil {
+	tier, err := provider.ParseDataClassName(dataClass)
+	if err != nil {
 		return Evidence{}, err
 	}
+	e.DataClass = new(tier)
 	if e.Source.Locator, err = ParseLocator(locatorStr); err != nil {
 		return Evidence{}, err
 	}

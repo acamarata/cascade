@@ -54,10 +54,10 @@ const artifactIDPrefix = "ART-"
 // ArtifactWriter is the narrow surface Capture needs from an
 // artifact-record store. internal/jobs.Store.PutArtifact is the real
 // implementation (adapted by the caller -- see this file's IMPORT-CYCLE
-// note); class is passed as this package's own DataClass, which shares
-// internal/jobs.DataClass's wire values exactly (dataclass.go).
+// note); class is a *provider.SensitivityTier (nil = unset, refused), and
+// the store writes its vocabulary-2 word through provider.DataClassName.
 type ArtifactWriter interface {
-	PutArtifact(ctx context.Context, artifactID, jobID, executionID, blobKey string, class DataClass) error
+	PutArtifact(ctx context.Context, artifactID, jobID, executionID, blobKey string, class *provider.SensitivityTier) error
 }
 
 // Capturer writes observed byte ranges into the content-addressed artifact
@@ -80,12 +80,12 @@ func NewCapturer(blobs provider.BlobStore, artifacts ArtifactWriter, store *Stor
 // re-capture of identical bytes returns the existing ref and writes no
 // second blob (provider.BlobStore.Put's own idempotency) and no second
 // artifact record (the artifact id is derived from the hash).
-func (c *Capturer) Capture(ctx context.Context, jobID, executionID string, class DataClass, data []byte) (capturedRef, hash string, err error) {
+func (c *Capturer) Capture(ctx context.Context, jobID, executionID string, class *provider.SensitivityTier, data []byte) (capturedRef, hash string, err error) {
 	if jobID == "" || executionID == "" {
 		return "", "", cascade.New(cascade.KindInvalidInput, "evidence: capture requires jobID and executionID")
 	}
-	if !class.Valid() {
-		return "", "", cascade.Newf(cascade.KindInvalidInput, "evidence: unknown data_class %q", string(class))
+	if class == nil || !class.Valid() {
+		return "", "", cascade.Newf(cascade.KindInvalidInput, "evidence: unknown data_class %q", "unset")
 	}
 	hash = ContentHash(data)
 	blobHash, err := c.blobs.Put(ctx, "evidence", bytes.NewReader(data))

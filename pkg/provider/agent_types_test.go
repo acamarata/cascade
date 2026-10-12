@@ -1,7 +1,7 @@
 // Purpose: tests for agent_types.go's DTOs — AgentRunState's closed
 //
 //	vocabulary and no-permissive-zero-value rule, the DataClass lattice's
-//	JoinDataClass/WithDataClass raise-only rule, EgressClassAgentDriver,
+//	JoinSensitivity/WithDataClass raise-only rule, EgressClassAgentDriver,
 //	and the CompliancePosture.CredentialSharing compile-time constraint
 //	(already enforced by compliance.go — reasserted here from the
 //	AgentProvider surface per this ticket's task list).
@@ -54,12 +54,12 @@ func TestDataClassJoinMonotonic(t *testing.T) {
 		{provider.DataClassPublic, provider.DataClassInternal, provider.DataClassInternal},
 		{provider.DataClassRestricted, provider.DataClassPublic, provider.DataClassRestricted},
 		{provider.DataClassLocalOnly, provider.DataClassRestricted, provider.DataClassLocalOnly},
-		{"", provider.DataClassPublic, provider.DataClassRestricted}, // unresolved -> restricted
+		{provider.SensitivityRestricted, provider.DataClassPublic, provider.DataClassRestricted}, // unresolved -> restricted
 	}
 	for _, c := range cases {
-		got := provider.JoinDataClass(c.a, c.b)
+		got := provider.JoinSensitivity(c.a, c.b)
 		if got != c.want {
-			t.Errorf("JoinDataClass(%q, %q) = %q, want %q", c.a, c.b, got, c.want)
+			t.Errorf("JoinSensitivity(%q, %q) = %q, want %q", c.a, c.b, got, c.want)
 		}
 	}
 }
@@ -78,9 +78,9 @@ func TestDataClassDowngradeRejected(t *testing.T) {
 	}
 }
 
-func TestDataClassResolvedUnknownIsRestricted(t *testing.T) {
-	if got := provider.DataClass("bogus").Resolved(); got != provider.DataClassRestricted {
-		t.Fatalf("Resolved(unknown) = %q, want restricted", got)
+func TestDataClassUnknownJoinsAsLocalOnly(t *testing.T) {
+	if got := provider.JoinSensitivity(provider.SensitivityTier(9), provider.SensitivityPublic); got != provider.SensitivityLocalOnly {
+		t.Fatalf("JoinSensitivity(unknown) = %q, want local-only", got)
 	}
 }
 

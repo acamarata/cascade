@@ -261,7 +261,7 @@ func (g *tierGate) Guard(
 		return nil, g.refuse
 	}
 	if tier != cascadepa.TierInternal && tier != cascadepa.TierPublic {
-		return nil, errors.New("test gate: tier " + string(tier) + " is not admitted on the bridge class")
+		return nil, errors.New("test gate: tier " + tier.String() + " is not admitted on the bridge class")
 	}
 	return []byte(strings.ReplaceAll(string(content), secretValue, redactedValue)), nil
 }

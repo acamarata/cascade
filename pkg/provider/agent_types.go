@@ -9,7 +9,7 @@ package provider
 //
 // Inputs: none at this layer — these are data shapes, not behavior, except
 //
-//	for JoinDataClass/WithDataClass, which are pure functions over the
+//	for JoinSensitivity/WithDataClass, which are pure functions over the
 //	DataClass lattice.
 //
 // Outputs: none beyond the functions above.
@@ -51,8 +51,7 @@ type AgentJobSpec struct {
 	// built from.
 	Scope WorktreeScope
 	// DataClass is the sensitivity tier this job's inputs carry. Required:
-	// the zero value is not a member of the DataClass lattice and resolves
-	// to DataClassRestricted via Resolved().
+	// the zero value is Restricted.
 	DataClass DataClass
 }
 
@@ -61,10 +60,10 @@ type AgentJobSpec struct {
 // lower the resolved class returns ErrDataClassDowngrade and the zero
 // AgentJobSpec.
 func (s AgentJobSpec) WithDataClass(c DataClass) (AgentJobSpec, error) {
-	if c.Resolved().rank() < s.DataClass.Resolved().rank() {
+	if s.DataClass.MoreRestrictiveThan(c) {
 		return AgentJobSpec{}, ErrDataClassDowngrade
 	}
-	s.DataClass = JoinDataClass(s.DataClass, c)
+	s.DataClass = JoinSensitivity(s.DataClass, c)
 	return s, nil
 }
 
@@ -127,61 +126,16 @@ func (s AgentRunState) Terminal() bool {
 	return terminalAgentRunStates[s]
 }
 
-// DataClass is the pure pkg enum mirroring the 06-FORGE-SPEC.md §5.16
-// sensitivity tiers (R-21.143), ordered most to least restrictive:
-// local-only > restricted > internal > public. The zero value is not a
-// member; Resolved treats it (and any other unknown value) as
-// DataClassRestricted — fail closed, never permissive.
-type DataClass string
+// DataClass is the canonical sensitivity tier. Its zero is Restricted.
+type DataClass = SensitivityTier
 
-// The four closed DataClass members, plus dataClassRank's ordering.
+// Compatibility names for agent callers.
 const (
-	DataClassPublic     DataClass = "public"
-	DataClassInternal   DataClass = "internal"
-	DataClassRestricted DataClass = "restricted"
-	DataClassLocalOnly  DataClass = "local-only"
+	DataClassPublic     = SensitivityPublic
+	DataClassInternal   = SensitivityInternal
+	DataClassRestricted = SensitivityRestricted
+	DataClassLocalOnly  = SensitivityLocalOnly
 )
-
-// dataClassRank orders the four members from least (0) to most (3)
-// restrictive; Resolved's fallback and JoinDataClass both read through it.
-var dataClassRank = map[DataClass]int{
-	DataClassPublic:     0,
-	DataClassInternal:   1,
-	DataClassRestricted: 2,
-	DataClassLocalOnly:  3,
-}
-
-// Valid reports whether d is one of the four closed DataClass members.
-func (d DataClass) Valid() bool {
-	_, ok := dataClassRank[d]
-	return ok
-}
-
-// Resolved returns d if it is a valid member, else DataClassRestricted —
-// unset, unknown or unresolvable data class reads as restricted, never as
-// unrestricted (R-21.143 fail-closed rule).
-func (d DataClass) Resolved() DataClass {
-	if d.Valid() {
-		return d
-	}
-	return DataClassRestricted
-}
-
-// rank returns d's resolved position in the restrictiveness ordering.
-func (d DataClass) rank() int {
-	return dataClassRank[d.Resolved()]
-}
-
-// JoinDataClass returns the more restrictive of a and b (after resolving
-// each), the monotonic join every transformation in the agent-driver path
-// applies when combining a spec's declared class with an observed one.
-func JoinDataClass(a, b DataClass) DataClass {
-	ar, br := a.Resolved(), b.Resolved()
-	if ar.rank() >= br.rank() {
-		return ar
-	}
-	return br
-}
 
 // DriverDefaults is the typed option struct the composition root injects
 // into a driver: cancel-ladder timing, approval-wait timing, and status

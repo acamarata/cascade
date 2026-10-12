@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"github.com/acamarata/cascade/pkg/provider"
 	"testing"
 )
 
@@ -58,7 +59,7 @@ func TestPutJobRejectsUnknownConsequenceAndDataClass(t *testing.T) {
 		t.Error("PutJob(unknown consequence_class) = nil, want error")
 	}
 	j2 := baseJob("job-bad-data")
-	j2.DataClass = DataClass("bogus")
+	j2.DataClass = new(provider.SensitivityTier(9))
 	if err := s.PutJob(ctx, j2); err == nil {
 		t.Error("PutJob(unknown data_class) = nil, want error")
 	}

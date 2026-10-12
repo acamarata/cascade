@@ -41,6 +41,7 @@ package policy
 
 import (
 	"context"
+	"github.com/acamarata/cascade/pkg/provider"
 
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -70,20 +71,22 @@ var ErrDataClassDenied = &ClassifyError{
 // layer passes without deciding; a request that names a lane MUST carry
 // the ceiling, and its own class reads as secret when unset.
 func (c *evalRun) layerDataClass() (LayerResult, error) {
-	if !c.req.LaneMaxDataClass.Valid() {
+	if c.req.LaneMaxDataClass == nil {
 		return c.pass(LayerDataClass,
 			"no external destination is declared, so no data class applies"), nil
 	}
-	class, ceiling := safeDataClass(c.req.DataClass), c.req.LaneMaxDataClass
-	if class > ceiling {
-		rule := class.String() + " material may not travel to a destination capped at " + ceiling.String()
+	class, ceiling := provider.TierOrLocalOnly(c.req.DataClass), *c.req.LaneMaxDataClass
+	className, _ := provider.DataClassName(class)
+	ceilingName, _ := provider.DataClassName(ceiling)
+	if !ceiling.Valid() || class.MoreRestrictiveThan(ceiling) {
+		rule := className + " material may not travel to a destination capped at " + ceilingName
 		return LayerResult{
 			Index: LayerDataClass.Index(), Layer: LayerDataClass,
 			Verdict: VerdictDeny, Rule: rule, Decided: true,
 		}, ErrDataClassDenied
 	}
 	return c.pass(LayerDataClass,
-		class.String()+" material is within the "+ceiling.String()+" ceiling"), nil
+		className+" material is within the "+ceilingName+" ceiling"), nil
 }
 
 // layerDenyList is LAYER 1: the never-allow set. The unconditional portion

@@ -25,6 +25,7 @@ import (
 	"github.com/acamarata/cascade/internal/learn"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/testkit"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 func newLearnTestScheduler(t *testing.T, roots ...string) (*scheduler.Scheduler, *sql.DB, *events.Bus, fakeDaemonPaths, *testkit.FrozenClock) {
@@ -79,10 +80,9 @@ func seedLearnJob(t *testing.T, db *sql.DB, state jobs.JobState) string {
 	t.Helper()
 	id := "job-" + string(state)
 	err := jobs.NewStore(db).PutJob(context.Background(), jobs.Job{
-		ID: id, State: state, CreatedAt: 1, UpdatedAt: 2,
-		Capabilities: []string{"code"}, MutableScope: "repo:/tmp/x", RiskClass: "normal",
+		ID: id, State: state, CreatedAt: 1, UpdatedAt: 2, Capabilities: []string{"code"}, MutableScope: "repo:/tmp/x", RiskClass: "normal",
 		MinTaskClass: "code", NodeRequirements: "{}", TimeoutSeconds: 60, CostCeiling: 1,
-		Priority: 1, ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal,
+		Priority: 1, ConsequenceClass: jobs.ConsequenceNormal, DataClass: new(provider.SensitivityInternal),
 	})
 	if err != nil {
 		t.Fatal(err)

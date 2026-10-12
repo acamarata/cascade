@@ -9,6 +9,7 @@ package capacity
 import (
 	"encoding"
 	"encoding/json"
+	"github.com/acamarata/cascade/pkg/provider"
 	"testing"
 
 	"github.com/pelletier/go-toml/v2"
@@ -33,12 +34,7 @@ func TestResourceRequestEnums(t *testing.T) {
 		roundTripTOML(t, DeadlineBatch, &out)
 		requireDecodeErrorJSON(t, "bogus", &out)
 	})
-	t.Run("DataClass", func(t *testing.T) {
-		var out DataClass
-		roundTripJSON(t, DataClassConfidential, &out)
-		roundTripTOML(t, DataClassConfidential, &out)
-		requireDecodeErrorJSON(t, "bogus", &out)
-	})
+
 	t.Run("Tier", func(t *testing.T) {
 		var out Tier
 		roundTripJSON(t, TierOne, &out)
@@ -124,7 +120,7 @@ func TestResourceRequestDataClassRaiseOnly(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ValidateResourceRequest: %v", err)
 			}
-			if out.DataClass != c.want {
+			if out.DataClass == nil || *out.DataClass != *c.want {
 				t.Fatalf("DataClass = %q, want %q", out.DataClass, c.want)
 			}
 		})
@@ -133,21 +129,21 @@ func TestResourceRequestDataClassRaiseOnly(t *testing.T) {
 
 type dataClassRaiseOnlyCase struct {
 	name      string
-	presented DataClass
-	floor     DataClass
+	presented *provider.SensitivityTier
+	floor     *provider.SensitivityTier
 	wantErr   bool
-	want      DataClass
+	want      *provider.SensitivityTier
 }
 
 // dataClassRaiseOnlyCases is split out of the test function so the test
 // itself stays under the 50-line function cap.
 func dataClassRaiseOnlyCases() []dataClassRaiseOnlyCase {
 	return []dataClassRaiseOnlyCase{
-		{name: "raise accepted", presented: DataClassSecret, floor: DataClassPublic, want: DataClassSecret},
-		{name: "downgrade refused", presented: DataClassPublic, floor: DataClassSecret, wantErr: true},
-		{name: "unset resolves to floor", presented: "", floor: DataClassConfidential, want: DataClassConfidential},
-		{name: "unset floor resolves to most restrictive", presented: "", floor: "", want: DataClassSecret},
-		{name: "equal to floor accepted", presented: DataClassInternal, floor: DataClassInternal, want: DataClassInternal},
+		{name: "raise accepted", presented: new(provider.SensitivityLocalOnly), floor: new(provider.SensitivityPublic), want: new(provider.SensitivityLocalOnly)},
+		{name: "downgrade refused", presented: new(provider.SensitivityPublic), floor: new(provider.SensitivityLocalOnly), wantErr: true},
+		{name: "unset resolves to floor", presented: nil, floor: new(provider.SensitivityRestricted), want: new(provider.SensitivityRestricted)},
+		{name: "unset floor resolves to most restrictive", presented: nil, floor: nil, want: new(provider.SensitivityLocalOnly)},
+		{name: "equal to floor accepted", presented: new(provider.SensitivityInternal), floor: new(provider.SensitivityInternal), want: new(provider.SensitivityInternal)},
 	}
 }
 
@@ -177,14 +173,14 @@ func TestValidateResourceRequestFailClosed(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if _, err := ValidateResourceRequest(c.mut(valid), DataClassPublic); err == nil {
+			if _, err := ValidateResourceRequest(c.mut(valid), new(provider.SensitivityPublic)); err == nil {
 				t.Fatalf("ValidateResourceRequest(%s) = nil error, want a refusal", c.name)
 			}
 		})
 	}
 
 	t.Run("unset risk_class resolves to Critical", func(t *testing.T) {
-		out, err := ValidateResourceRequest(valid, DataClassPublic)
+		out, err := ValidateResourceRequest(valid, new(provider.SensitivityPublic))
 		if err != nil {
 			t.Fatalf("ValidateResourceRequest: %v", err)
 		}
@@ -192,4 +188,26 @@ func TestValidateResourceRequestFailClosed(t *testing.T) {
 			t.Fatalf("RiskClass = %q, want critical (most restrictive)", out.RiskClass)
 		}
 	})
+}
+
+func TestUnsetDataClassFailsClosed(t *testing.T) {
+	req := ResourceRequest{Intent: "test", TaskClass: conductor.TaskClassCode, MinQuality: QualityStandard, Deadline: DeadlineInteractive}
+	got, err := ValidateResourceRequest(req, nil)
+	if err != nil || got.DataClass == nil || *got.DataClass != provider.SensitivityLocalOnly {
+		t.Fatalf("unset = %+v: %v", got, err)
+	}
+	for _, tier := range []provider.SensitivityTier{provider.SensitivityPublic, provider.SensitivityInternal, provider.SensitivityRestricted} {
+		req.DataClass = new(tier)
+		if _, err := ValidateResourceRequest(req, nil); !cascade.HasKind(err, cascade.KindPolicyDenied) {
+			t.Fatalf("below unset floor: %v", err)
+		}
+	}
+	if _, err := ValidateDataClassFloor(nil, nil); !cascade.HasKind(err, cascade.KindInvalidInput) {
+		t.Fatalf("nil presented: %v", err)
+	}
+	req.DataClass = new(provider.SensitivityLocalOnly)
+	got, err = ValidateResourceRequest(req, nil)
+	if err != nil || got.DataClass == req.DataClass {
+		t.Fatalf("not a fresh pointer: %v", err)
+	}
 }

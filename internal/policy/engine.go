@@ -37,7 +37,10 @@
 //	(P1-E09-W2-S17-T2); denylist-defaults/CHANGE (P1-E09-W2-S17-T4).
 package policy
 
-import "github.com/acamarata/cascade/pkg/cascade"
+import (
+	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
+)
 
 // DecisionLayer names the layer that produced a verdict, so an audit row
 // and `cascade policy explain` can say WHY an action decided the way it
@@ -123,13 +126,13 @@ type EvalRequest struct {
 	Params []byte
 	// DataClass is the sensitivity of the material this action would
 	// move. An unset value reads as secret, the most restricted class.
-	DataClass DataClass
+	DataClass *provider.SensitivityTier
 	// LaneMaxDataClass is the most sensitive class the destination
 	// tolerates. The zero value means NO external destination was
 	// declared, i.e. the action stays on this machine, and layer 0 has
 	// nothing to compare against. A caller that dispatches to a lane
 	// MUST set it; a caller that runs locally leaves it unset.
-	LaneMaxDataClass DataClass
+	LaneMaxDataClass *provider.SensitivityTier
 	// ElevationNonce is the nonce from an ELEVATION_REQUIRED round trip,
 	// and ParamsHash the digest it was bound to. Layer 2 verifies them
 	// against the in-memory elevation ledger.

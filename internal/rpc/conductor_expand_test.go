@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"github.com/acamarata/cascade/pkg/provider"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -74,7 +75,7 @@ func newTestFetcher(t *testing.T) *evidence.Fetcher {
 	store := evidence.NewStore(db, clock)
 	if err := store.PutClaim(ctx, evidence.Claim{
 		ID: "CLM-RPC", Statement: "s", Type: evidence.ClaimObservedFact, Confidence: 1,
-		ProducedBy: evidence.ProducedBy{RunID: "run-1"}, DataClass: evidence.DataClassInternal,
+		ProducedBy: evidence.ProducedBy{RunID: "run-1"}, DataClass: new(provider.SensitivityInternal),
 	}); err != nil {
 		t.Fatalf("PutClaim: %v", err)
 	}
@@ -82,7 +83,7 @@ func newTestFetcher(t *testing.T) *evidence.Fetcher {
 		ID: "EVD-RPC", ClaimID: "CLM-RPC",
 		Source: evidence.Source{Type: evidence.SourceGit, Repository: repoDir, Commit: commit, Path: "f.txt",
 			Locator: evidence.Locator{Kind: evidence.LocatorLines, Start: 1, End: 1}},
-		ContentHash: evidence.ContentHash([]byte("hello")), DataClass: evidence.DataClassInternal,
+		ContentHash: evidence.ContentHash([]byte("hello")), DataClass: new(provider.SensitivityInternal),
 	}); err != nil {
 		t.Fatalf("PutEvidence: %v", err)
 	}

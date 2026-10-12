@@ -47,6 +47,7 @@ package ci
 
 import (
 	"context"
+	"github.com/acamarata/cascade/pkg/provider"
 	"strconv"
 	"strings"
 
@@ -81,7 +82,7 @@ const mergeToolMethod = "cascade-github.prs.merge"
 // thread classifies above internal does not. Declaring the ceiling is what
 // makes policy layer 0 run at all -- an unset LaneMaxDataClass means "no
 // external destination", which is false for an L3 GitHub write (06 §5.16).
-const mergeDataCeiling = policy.DataClassInternal
+const mergeDataCeiling = provider.SensitivityInternal
 
 // MergeCaller performs one JSON-RPC round trip against a running
 // process-tier plugin. Declared locally (not imported from
@@ -107,9 +108,9 @@ type MergeOptions struct {
 	Subject     policy.Subject
 	// DataClass is the calling thread's sensitivity tier. 06 §5.16 says
 	// the action inherits it, with internal as the FLOOR, which is what
-	// dataClass below implements; an unset value therefore reads as
-	// internal rather than as "unclassified".
-	DataClass policy.DataClass
+	// dataClass below implements. Unset or invalid values resolve to
+	// local-only and cannot pass the internal destination ceiling.
+	DataClass *provider.SensitivityTier
 }
 
 func (o MergeOptions) validate() error {
@@ -129,11 +130,8 @@ func (o MergeOptions) validate() error {
 }
 
 // dataClass is 06 §5.16's "minimum internal" inheritance.
-func (o MergeOptions) dataClass() policy.DataClass {
-	if o.DataClass > policy.DataClassInternal {
-		return o.DataClass
-	}
-	return policy.DataClassInternal
+func (o MergeOptions) dataClass() *provider.SensitivityTier {
+	return new(provider.JoinSensitivity(provider.TierOrLocalOnly(o.DataClass), provider.SensitivityInternal))
 }
 
 // MergeDeps carries MergeOnGreen's collaborators. All four are required:
@@ -277,7 +275,7 @@ func mergeEvalRequest(opts MergeOptions) policy.EvalRequest {
 			"pr": strconv.Itoa(opts.PR), "merge_on_green": "true",
 		},
 		DataClass:        opts.dataClass(),
-		LaneMaxDataClass: mergeDataCeiling,
+		LaneMaxDataClass: new(mergeDataCeiling),
 		Summary:          "merge-on-green: " + opts.Owner + "/" + opts.Repo + " #" + strconv.Itoa(opts.PR),
 	}
 }

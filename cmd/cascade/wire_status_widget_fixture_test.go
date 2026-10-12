@@ -19,6 +19,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"github.com/acamarata/cascade/pkg/provider"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -88,7 +89,7 @@ func (ww *widgetWire) seedWorld() {
 	}
 	store := jobs.NewStore(db)
 	for id, st := range map[string]jobs.JobState{"job-1": jobs.JobStateLeased, "job-2": jobs.JobStateRunning, "job-3": jobs.JobStatePending} {
-		job := jobs.Job{ID: id, State: st, ConsequenceClass: jobs.ConsequenceNormal, DataClass: jobs.DataClassInternal}
+		job := jobs.Job{ID: id, State: st, ConsequenceClass: jobs.ConsequenceNormal, DataClass: new(provider.SensitivityInternal)}
 		if err := store.PutJob(ctx, job); err != nil {
 			ww.t.Fatalf("seed job: %v", err)
 		}
