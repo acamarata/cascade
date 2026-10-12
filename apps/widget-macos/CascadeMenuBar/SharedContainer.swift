@@ -1,9 +1,12 @@
 import Foundation
+import WidgetKit
 
 // Purpose: publish received snapshot bytes to the app's shared group container.
-// Inputs: validated snapshot bytes. Outputs: atomic protected file. No re-encoding or extra keys.
+// Inputs: validated snapshot bytes and a timeline reloader. Outputs: atomic protected file, then one reload.
+// Constraints: no re-encoding or extra keys; a failed write never reloads the widget timelines.
 struct SharedContainer {
     let directory: URL
+    var reloadTimelines: () -> Void = { WidgetCenter.shared.reloadAllTimelines() }
     var file: URL { directory.appendingPathComponent("widget-snapshot.json") }
 
     static func application() throws -> SharedContainer {
@@ -21,6 +24,7 @@ struct SharedContainer {
             try invalidate()
             throw error
         }
+        reloadTimelines()
     }
 
     // Remove failed publications; a non-writable directory may still allow truncating its file.

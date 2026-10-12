@@ -46,6 +46,27 @@ final class SharedContainerPrivacyTests: XCTestCase {
         XCTAssertTrue(stored == nil || stored?.isEmpty == true, "Prior bytes remain readable")
     }
 
+    func testReloadsTimelinesAfterEachSuccessfulWriteOnly() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        var reloads = 0
+        let shared = SharedContainer(directory: directory, reloadTimelines: { reloads += 1 })
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let bytes = try ResultSlicer.result(in: WidgetModelsTests.fixture())
+        try shared.write(bytes)
+        XCTAssertEqual(reloads, 1)
+        try shared.write(bytes)
+        XCTAssertEqual(reloads, 2)
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: directory.path)
+        XCTAssertThrowsError(try shared.write(bytes))
+        XCTAssertEqual(reloads, 2, "A failed write reloaded the widget timelines")
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+        try shared.write(bytes)
+        XCTAssertEqual(reloads, 3)
+    }
+
     func testRawRPCAndSSEBytesProtectionModeAndTruncation() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

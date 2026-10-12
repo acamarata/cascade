@@ -1,0 +1,140 @@
+{
+  "active_jobs_count": 2,
+  "attention_count": 3,
+  "generated_at": "2026-10-05T12:00:00Z",
+  "nodes": [
+    {
+      "id": "node-0001",
+      "presence": "reachable",
+      "reachable": true,
+      "trust_tier": "worker-trusted"
+    }
+  ],
+  "projects": [
+    {
+      "label": "project-a",
+      "ref": "project-a",
+      "task_summary": "2 open tasks in a",
+      "updated_at": "2026-10-05T12:00:00Z"
+    },
+    {
+      "label": "project-b",
+      "ref": "project-b",
+      "task_summary": "3 open tasks in b",
+      "updated_at": "2026-10-05T12:00:00Z"
+    },
+    {
+      "label": "project-c",
+      "ref": "project-c",
+      "task_summary": null,
+      "updated_at": "2026-10-05T12:00:00Z"
+    },
+    {
+      "label": "project-d",
+      "ref": "project-d",
+      "task_summary": "5 open tasks in d",
+      "updated_at": "2026-10-05T12:00:00Z"
+    },
+    {
+      "label": "project-e",
+      "ref": "project-e",
+      "task_summary": "6 open tasks in e",
+      "updated_at": "2026-10-05T12:00:00Z"
+    },
+    {
+      "label": "project-f",
+      "ref": "project-f",
+      "task_summary": "7 open tasks in f",
+      "updated_at": "2026-10-05T12:00:00Z"
+    },
+    {
+      "label": "project-g",
+      "ref": "project-g",
+      "task_summary": "8 open tasks in g",
+      "updated_at": "2026-10-05T12:00:00Z"
+    }
+  ],
+  "rows": [
+    {
+      "five_hour": {
+        "resets_in": 5400000000000,
+        "utilization_pct": 42.0
+      },
+      "kind": "profile",
+      "label": "acct-a-pool",
+      "reauth_required": false,
+      "ref": "acct-a-pool",
+      "seven_day": {
+        "resets_in": null,
+        "utilization_pct": 17.5
+      },
+      "state": "available",
+      "updated_at": "2026-10-05T12:00:00Z"
+    },
+    {
+      "five_hour": {
+        "resets_in": null,
+        "utilization_pct": null
+      },
+      "kind": "profile",
+      "label": "redacted",
+      "reauth_required": false,
+      "ref": "ref-b4c9a289323b",
+      "seven_day": {
+        "resets_in": null,
+        "utilization_pct": null
+      },
+      "state": "available",
+      "updated_at": "2026-10-05T12:00:00Z"
+    },
+    {
+      "five_hour": {
+        "resets_in": 7200000000000,
+        "utilization_pct": 100.0
+      },
+      "kind": "profile",
+      "label": "acct-c-limit",
+      "reauth_required": false,
+      "ref": "acct-c-limit",
+      "seven_day": {
+        "resets_in": null,
+        "utilization_pct": 63.0
+      },
+      "state": "exhausted",
+      "updated_at": "2026-10-05T12:00:00Z"
+    },
+    {
+      "five_hour": {
+        "resets_in": null,
+        "utilization_pct": null
+      },
+      "kind": "profile",
+      "label": "acct-d-auth",
+      "reauth_required": true,
+      "ref": "acct-d-auth",
+      "seven_day": {
+        "resets_in": null,
+        "utilization_pct": null
+      },
+      "state": "auth-required",
+      "updated_at": "2026-10-05T12:00:00Z"
+    },
+    {
+      "five_hour": {
+        "resets_in": null,
+        "utilization_pct": null
+      },
+      "kind": "profile",
+      "label": "acct-e-extra",
+      "reauth_required": false,
+      "ref": "acct-e-extra",
+      "seven_day": {
+        "resets_in": null,
+        "utilization_pct": null
+      },
+      "state": "unknown",
+      "updated_at": "2026-10-05T12:00:00Z"
+    }
+  ],
+  "seq": 7
+}
