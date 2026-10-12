@@ -69,9 +69,18 @@ type RegistryIndex struct {
 	SchemaVersion string `json:"schema_version"`
 	// Entries lists every plugin the registry publishes.
 	Entries []RegistryIndexEntry `json:"entries"`
-	// Signature is the detached signature over Entries plus SchemaVersion
-	// (in the canonical encoding X/S-50.T1 defines), verified before any
-	// entry is trusted.
+	// Sequence is the registry's monotonic publication counter (>= 1),
+	// covered by Signature. RegistryClient refuses an index whose Sequence
+	// is 0, lower than the last one it accepted for the same registry, or
+	// equal to it with different bytes (registry_rollback.go).
+	Sequence uint64 `json:"sequence"`
+	// PublishedAt is the RFC 3339 UTC instant (whole seconds) the registry
+	// published this index, covered by Signature. RegistryClient warns when
+	// a verified index is older than 90 days.
+	PublishedAt string `json:"published_at"`
+	// Signature is the detached signature over SchemaVersion, Entries,
+	// Sequence and PublishedAt (in the canonical encoding registry_verify.go
+	// defines), verified before any entry is trusted.
 	Signature string `json:"signature"`
 }
 

@@ -62,6 +62,40 @@ index signing needs the release master secret. Rotating the release key
 also rotates the registry key. The embedded release key has no revocation
 path other than a signed update carrying a replacement key.
 
+### Rollback and replay
+
+Every index carries a signed `sequence` (1 or higher) and `published_at`
+(RFC 3339 UTC). `registry-gen` refuses to sign without `--sequence`, with
+`--key-ref` and `--derive-from-release` alike; give each published index a
+higher sequence than the one before. The client stores the last accepted
+sequence and the sha256 of its bytes per registry URL in
+`<cache_dir>/index.seq`, written only after the signature verifies. It
+refuses, with an integrity error naming "registry index rollback":
+
+- an index whose sequence is lower than the stored one,
+- the stored sequence with different bytes,
+- an index with no sequence (sequence 0), including indexes signed before
+  the field existed. Re-sign those with a sequence.
+
+The first fetch for a registry, with no stored entry, is accepted. When
+`index.seq` is missing but a verified cached index is still present, the
+client checks that cached index and re-seeds `index.seq` from it, so a
+deleted baseline alone does not reopen a rollback. `cascade plugin search`
+keeps listing the builtin plugins on a refused index and logs the error as
+a warning: on stderr when it runs without a daemon, in the daemon log when
+a daemon answers the search. No registry entry is listed.
+
+Residuals, by design:
+
+- **Freeze.** An attacker who can serve the registry URL can keep replaying
+  the newest index the client already accepted. The client cannot tell
+  that from a registry that simply has not published. It logs a warning
+  naming the age when a verified index is more than 90 days old; treat that
+  warning as a reason to check the registry.
+- **Local baseline.** A process running as the same user can delete
+  `index.seq` and the cached index; the next verified index is then
+  accepted as a first fetch.
+
 ## `cascade init`'s plugin page
 
 Step 4 of the setup wizard renders the same catalog `plugin search` does — a

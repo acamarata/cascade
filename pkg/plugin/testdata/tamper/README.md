@@ -55,3 +55,20 @@ second file to truncate or substitute independently of the body.
   checksum correctness are independent properties —
   `plugin.VerifyArtifact` on this entry must reject it despite the index
   itself verifying.
+
+## Registry index sequence (rollback refusal)
+
+`RegistryClient` refuses an index without a signed `sequence`. Two
+fixtures changed so each still fails for its own reason and never for the
+sequence rule:
+
+- `checksum-mismatch.json` was re-signed (same seed 200..231) with
+  `sequence: 1` and `published_at: "2026-01-01T00:00:00Z"`, because its
+  index must verify and be accepted before the checksum check runs.
+- `body-modified-after-sign.json` was rebuilt from the re-signed
+  `../registry/index.json`: same one-byte change in the body, signature
+  copied from the untampered sequence-1 document.
+
+`empty-signature.json`, `sig-truncated.json`, `sig-wrong-key-body.json` and
+`malformed.json` are byte-identical; they fail before the sequence check.
+`TestTamperFixturesKeepTheirReason` asserts each reason's text.

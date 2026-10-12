@@ -65,6 +65,7 @@ func passthroughClient(t *testing.T, latestVersion string) *plugin.RegistryClien
 	t.Helper()
 	idx := plugin.RegistryIndex{
 		SchemaVersion: "1",
+		Sequence:      1,
 		Entries: []plugin.RegistryIndexEntry{{
 			ID: "semver-demo", LatestVersion: latestVersion,
 			Versions: []plugin.RegistryVersionEntry{{Version: latestVersion, Checksum: "ab"}},
@@ -174,4 +175,33 @@ func TestStageAndVerifyArtifact_NonVerifyingSignatureRefused(t *testing.T) {
 		t.Fatalf("StageAndVerifyArtifact(non-verifying signature) err = %v, want KindIntegrity", err)
 	}
 	assertStagingEmpty(t, dir)
+}
+
+// TestTamperFixturesKeepTheirReason: after the sequence change every tamper
+// fixture still fails for its own reason (reason text asserted), never for
+// the sequence rule; checksum-mismatch, re-signed with sequence 1, still
+// verifies as an index and fails only at the artifact checksum.
+func TestTamperFixturesKeepTheirReason(t *testing.T) {
+	for fixture, reason := range map[string]string{
+		"sig-truncated.json":            "signature is not a valid ed25519 signature",
+		"sig-wrong-key-body.json":       "signature does not verify",
+		"body-modified-after-sign.json": "signature does not verify",
+		"empty-signature.json":          "index has no signature",
+		"malformed.json":                "unmarshal index envelope",
+	} {
+		client, _ := tamperClient(t, tamperFixture(t, fixture), realVerifier(t))
+		_, err := client.Fetch(context.Background())
+		if err == nil || !strings.Contains(err.Error(), reason) || strings.Contains(err.Error(), "rollback") {
+			t.Errorf("Fetch(%s) err = %v, want its own reason %q", fixture, err, reason)
+		}
+	}
+	client, _ := tamperClient(t, tamperFixture(t, "checksum-mismatch.json"), plugin.Ed25519Verifier{PublicKey: altPublicKey(t)})
+	idx, err := client.Fetch(context.Background())
+	if err != nil || idx.Sequence != 1 {
+		t.Fatalf("Fetch(checksum-mismatch) = seq %d, err %v; want a verified sequence-1 index", idx.Sequence, err)
+	}
+	err = plugin.VerifyArtifact(idx.Entries[0].Versions[0], []byte("not the published artifact bytes"))
+	if err == nil || !strings.Contains(err.Error(), "artifact checksum mismatch") {
+		t.Fatalf("VerifyArtifact(checksum-mismatch) err = %v, want \"artifact checksum mismatch\"", err)
+	}
 }

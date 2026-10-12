@@ -72,6 +72,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/plugin"
@@ -91,6 +92,10 @@ var (
 	// ErrInvalidManifest is returned when a manifest sibling fails
 	// cascade.plugin/v2 schema validation (plugin.ParseManifest).
 	ErrInvalidManifest = &cascade.Error{Kind: cascade.KindInvalidInput, Msg: "registry-gen: manifest failed v2 schema validation"}
+	// ErrMissingSequence is returned, before anything is signed, when the
+	// index sequence is missing or zero or published_at is unset: the
+	// registry client refuses an unsequenced index as a rollback.
+	ErrMissingSequence = &cascade.Error{Kind: cascade.KindInvalidInput, Msg: "registry-gen: sequence (>= 1) and published_at are required"}
 )
 
 // VaultClient retrieves signing key material by an opaque reference. The
@@ -112,6 +117,12 @@ type GeneratorConfig struct {
 	ArtifactsDir string
 	// BaseURL prefixes every generated Entry's DownloadURL.
 	BaseURL string
+	// Sequence is the index's monotonic publication counter; it must be
+	// >= 1 and greater than every sequence published before.
+	Sequence uint64
+	// PublishedAt is the publication instant, written as RFC 3339 UTC
+	// truncated to whole seconds. The zero time is refused.
+	PublishedAt time.Time
 }
 
 // GenerateIndex scans cfg.ArtifactsDir for artifact/manifest pairs and
@@ -119,9 +130,14 @@ type GeneratorConfig struct {
 // ID, each entry's versions sorted by version string, LatestVersion set to
 // the lexicographically-last version (a semver-major-aware ordering is not
 // implemented; documented in the journal as a known simplification for an
-// S-weight ticket). GenerateIndex reads no wall clock and carries no
-// timestamp field, so two calls over the same inputs are byte-identical.
+// S-weight ticket). GenerateIndex reads no wall clock: Sequence and
+// PublishedAt come from cfg, so two calls over the same inputs are
+// byte-identical. A zero Sequence or PublishedAt refuses with
+// ErrMissingSequence.
 func GenerateIndex(cfg GeneratorConfig) (*plugin.RegistryIndex, error) {
+	if cfg.Sequence == 0 || cfg.PublishedAt.IsZero() {
+		return nil, cascade.New(ErrMissingSequence.Kind, ErrMissingSequence.Msg)
+	}
 	bases, err := discoverArtifacts(cfg.ArtifactsDir)
 	if err != nil {
 		return nil, err
@@ -149,7 +165,8 @@ func GenerateIndex(cfg GeneratorConfig) (*plugin.RegistryIndex, error) {
 		e.LatestVersion = e.Versions[len(e.Versions)-1].Version
 		entries = append(entries, *e)
 	}
-	return &plugin.RegistryIndex{SchemaVersion: plugin.SchemaVersionCurrent, Entries: entries}, nil
+	return &plugin.RegistryIndex{SchemaVersion: plugin.SchemaVersionCurrent, Entries: entries, Sequence: cfg.Sequence,
+		PublishedAt: cfg.PublishedAt.UTC().Truncate(time.Second).Format(time.RFC3339)}, nil
 }
 
 // discoverArtifacts returns the sorted, extension-stripped base names of
@@ -204,8 +221,8 @@ func buildVersionEntry(cfg GeneratorConfig, base string) (id, name string, ve pl
 }
 
 // signedPayload mirrors pkg/plugin's unexported signedPayload exactly
-// (field names, order, and json tags): schema_version plus the raw
-// entries bytes, excluding Signature. Marshaling the same *plugin.Index's
+// (field names, order, and json tags): schema_version, the raw entries
+// bytes, then sequence and published_at (omitempty), excluding Signature. Marshaling the same *plugin.Index's
 // Entries slice through this struct and through the final RegistryIndex
 // envelope produces byte-identical "entries" bytes in both places, so the
 // signature SignIndex computes here is exactly what
@@ -213,13 +230,19 @@ func buildVersionEntry(cfg GeneratorConfig, base string) (id, name string, ve pl
 type signedPayload struct {
 	SchemaVersion string          `json:"schema_version"`
 	Entries       json.RawMessage `json:"entries"`
+	Sequence      uint64          `json:"sequence,omitempty"`
+	PublishedAt   string          `json:"published_at,omitempty"`
 }
 
 // SignIndex signs idx with the Ed25519 private key named by keyRef and
 // sets idx.Signature to the base64-encoded (standard encoding) detached
 // signature. keyRef is never accepted as inline key material — only an
-// opaque reference resolved through vault.
+// opaque reference resolved through vault. An index with no Sequence or
+// PublishedAt refuses with ErrMissingSequence before the key is fetched.
 func SignIndex(idx *plugin.RegistryIndex, keyRef string, vault VaultClient) error {
+	if idx.Sequence == 0 || idx.PublishedAt == "" {
+		return cascade.New(ErrMissingSequence.Kind, ErrMissingSequence.Msg)
+	}
 	priv, err := vault.Get(context.Background(), keyRef)
 	if err != nil {
 		return cascade.Wrapf(cascade.KindUnavailable, err, "registry-gen: retrieve signing key %q", keyRef)
@@ -231,7 +254,8 @@ func SignIndex(idx *plugin.RegistryIndex, keyRef string, vault VaultClient) erro
 	if err != nil {
 		return cascade.Wrapf(cascade.KindInvalidInput, err, "registry-gen: marshal entries")
 	}
-	payload, err := json.Marshal(signedPayload{SchemaVersion: idx.SchemaVersion, Entries: entriesRaw})
+	payload, err := json.Marshal(signedPayload{SchemaVersion: idx.SchemaVersion, Entries: entriesRaw,
+		Sequence: idx.Sequence, PublishedAt: idx.PublishedAt})
 	if err != nil {
 		return cascade.Wrapf(cascade.KindInvalidInput, err, "registry-gen: marshal signed payload")
 	}

@@ -10,6 +10,10 @@ package plugin_test
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -141,5 +145,65 @@ func TestRegistryCache_GetPutRoundTrip(t *testing.T) {
 	}
 	if string(got) != "artifact-bytes" {
 		t.Fatalf("Get(example@0.1.0) = %q, want %q", got, "artifact-bytes")
+	}
+}
+
+// TestLegacyIndexVerifiesButClientRefusesSequenceZero: an index signed in
+// the pre-sequence format ({schema_version, entries} only) still verifies
+// byte-for-byte through Ed25519Verifier and NewVerifiedIndex, and
+// RegistryClient alone refuses it as sequence 0.
+func TestLegacyIndexVerifiesButClientRefusesSequenceZero(t *testing.T) {
+	legacy := signedSeqIndex(t, rollbackKey(), 0, "legacy")
+	if strings.Contains(string(legacy), "sequence") || strings.Contains(string(legacy), "published_at") {
+		t.Fatalf("legacy fixture carries the new fields: %s", legacy)
+	}
+	verifier := plugin.Ed25519Verifier{PublicKey: rollbackKey().Public().(ed25519.PublicKey)}
+	idx, err := verifier.VerifyIndex(context.Background(), legacy)
+	if err != nil || idx.Sequence != 0 || idx.PublishedAt != "" || len(idx.Entries) != 1 {
+		t.Fatalf("VerifyIndex(legacy) = seq %d published %q entries %d, err %v; want a verified sequence-0 index", idx.Sequence, idx.PublishedAt, len(idx.Entries), err)
+	}
+	if vi, err := plugin.NewVerifiedIndex(context.Background(), verifier, legacy); err != nil || len(vi.Entries()) != 1 {
+		t.Fatalf("NewVerifiedIndex(legacy) err = %v, want the verified witness", err)
+	}
+	c, dir := rollbackClient(t, &swapFetcher{index: legacy})
+	assertRollbackRefusal(t, c, dir, "sequence 0")
+}
+
+// TestStrippedSequenceFailsSignature: deleting sequence and published_at
+// from an index signed with them changes the signed payload.
+func TestStrippedSequenceFailsSignature(t *testing.T) {
+	data := realFixtureBytes(t)
+	if _, err := realVerifier(t).VerifyIndex(context.Background(), data); err != nil {
+		t.Fatalf("unstripped fixture must verify: %v", err)
+	}
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("decode fixture: %v", err)
+	}
+	if string(doc["sequence"]) != "1" {
+		t.Fatalf("fixture sequence = %s, want 1", doc["sequence"])
+	}
+	delete(doc, "sequence")
+	delete(doc, "published_at")
+	stripped, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatalf("encode stripped: %v", err)
+	}
+	_, err = realVerifier(t).VerifyIndex(context.Background(), stripped)
+	var ce *cascade.Error
+	if !errors.As(err, &ce) || ce.Kind != cascade.KindIntegrity || !strings.Contains(err.Error(), "signature does not verify") {
+		t.Fatalf("VerifyIndex(stripped) err = %v, want KindIntegrity \"signature does not verify\"", err)
+	}
+}
+
+// TestUpdateFixtureCarriesSequence: the re-signed grant-diff update
+// fixture verifies under its pinned key and carries sequence 1.
+func TestUpdateFixtureCarriesSequence(t *testing.T) {
+	idx, err := grantDiffVerifier(t).VerifyIndex(context.Background(), grantDiffFixtureBytes(t))
+	if err != nil {
+		t.Fatalf("VerifyIndex(update fixture): %v", err)
+	}
+	if idx.Sequence != 1 || idx.PublishedAt != "2026-01-01T00:00:00Z" {
+		t.Fatalf("update fixture = sequence %d published_at %q, want 1 / 2026-01-01T00:00:00Z", idx.Sequence, idx.PublishedAt)
 	}
 }

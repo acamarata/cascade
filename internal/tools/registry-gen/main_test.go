@@ -16,15 +16,24 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/acamarata/cascade/internal/output"
 )
 
 const fixturesDir = "../../../pkg/plugin/registry/generator/testdata/fixtures"
+
+// testClock stamps published_at; the half second proves the truncation.
+var testClock = stubClock{t: time.Date(2026, 1, 1, 12, 34, 56, 5e8, time.UTC)}
+
+type stubClock struct{ t time.Time }
+
+func (c stubClock) Now() time.Time { return c.t }
 
 func testWriter() (*output.Writer, *bytes.Buffer, *bytes.Buffer) {
 	var stdout, stderr bytes.Buffer
@@ -33,7 +42,7 @@ func testWriter() (*output.Writer, *bytes.Buffer, *bytes.Buffer) {
 
 func TestRunRefusesPlaintextKey(t *testing.T) {
 	w, _, stderr := testWriter()
-	code := run(w, []string{"--artifacts", fixturesDir, "--out", t.TempDir(), "--key-ref", "REG_GEN_TEST_KEY", "--key", "not-a-real-key-but-still-refused"})
+	code := runAt(w, testClock, []string{"--artifacts", fixturesDir, "--out", t.TempDir(), "--key-ref", "REG_GEN_TEST_KEY", "--key", "not-a-real-key-but-still-refused"})
 	if code == 0 {
 		t.Fatalf("run returned 0 with a plaintext --key flag set")
 	}
@@ -47,7 +56,7 @@ func TestRunRefusesPlaintextKey(t *testing.T) {
 
 func TestRunRequiresFlags(t *testing.T) {
 	w, _, stderr := testWriter()
-	code := run(w, []string{"--artifacts", fixturesDir})
+	code := runAt(w, testClock, []string{"--artifacts", fixturesDir})
 	if code == 0 {
 		t.Fatal("run returned 0 with --out and --key-ref missing")
 	}
@@ -66,8 +75,8 @@ func TestRunHappyPathWritesIndex(t *testing.T) {
 
 	outDir := t.TempDir()
 	w, _, stderr := testWriter()
-	code := run(w, []string{
-		"--artifacts", fixturesDir,
+	code := runAt(w, testClock, []string{
+		"--artifacts", fixturesDir, "--sequence", "7",
 		"--out", outDir,
 		"--base-url", "https://cdn.example.com/plugins/",
 		"--key-ref", "REG_GEN_TEST_KEY",
@@ -75,16 +84,17 @@ func TestRunHappyPathWritesIndex(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("run = %d, stderr: %s", code, stderr.String())
 	}
-	if _, err := os.Stat(filepath.Join(outDir, "index.json")); err != nil {
-		t.Errorf("index.json not written: %v", err)
+	data, err := os.ReadFile(filepath.Join(outDir, "index.json"))
+	if err != nil || !strings.Contains(string(data), `"sequence":7,"published_at":"2026-01-01T12:34:56Z"`) {
+		t.Errorf("index.json lacks the flag's sequence and the clock-stamped published_at: %s (err %v)", data, err)
 	}
 }
 
 func TestRunMissingKeyRefEnvFails(t *testing.T) {
 	_ = os.Unsetenv("REG_GEN_TEST_KEY_UNSET")
 	w, _, stderr := testWriter()
-	code := run(w, []string{
-		"--artifacts", fixturesDir,
+	code := runAt(w, testClock, []string{
+		"--artifacts", fixturesDir, "--sequence", "1",
 		"--out", t.TempDir(),
 		"--key-ref", "REG_GEN_TEST_KEY_UNSET",
 	})
@@ -97,7 +107,7 @@ func TestRunMissingKeyRefEnvFails(t *testing.T) {
 }
 
 // TestEnvVaultGetFallsBackToHexAndFailsOnGarbage drives envVault.Get's
-// second decode branch (line 69): a value that fails base64 decoding falls
+// second decode branch (the hex fallback): a value that fails base64 decoding falls
 // through to hex.DecodeString, and a value that is neither must refuse
 // rather than return zero-value key bytes.
 func TestEnvVaultGetFallsBackToHexAndFailsOnGarbage(t *testing.T) {
@@ -107,16 +117,13 @@ func TestEnvVaultGetFallsBackToHexAndFailsOnGarbage(t *testing.T) {
 	}
 }
 
-// TestEnvVaultGetAcceptsHexKey proves the hex fallback branch also succeeds
-// on real hex-encoded key material, not just the base64 path every other
-// test in this file exercises. The 3-byte value hex-encodes to 6
-// characters, a length base64.StdEncoding always rejects (not a multiple
-// of 4), so this deterministically forces the hex fallback rather than
-// relying on base64 happening to also fail on the byte content — an even
-// byte count hex-encodes to a length base64 can (wrongly) accept.
+// TestEnvVaultGetAcceptsHexKey proves the hex fallback succeeds on real hex
+// key material. The 3-byte value hex-encodes to 6 characters, a length
+// base64.StdEncoding always rejects (not a multiple of 4), so this always
+// forces the hex fallback.
 func TestEnvVaultGetAcceptsHexKey(t *testing.T) {
 	raw := []byte{0xAA, 0xBB, 0xCC}
-	t.Setenv("REG_GEN_TEST_HEX_KEY", hexEncode(raw))
+	t.Setenv("REG_GEN_TEST_HEX_KEY", hex.EncodeToString(raw))
 	got, err := (envVault{}).Get(context.Background(), "REG_GEN_TEST_HEX_KEY")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
@@ -128,7 +135,7 @@ func TestEnvVaultGetAcceptsHexKey(t *testing.T) {
 
 func TestRunRejectsUnknownFlag(t *testing.T) {
 	w, _, stderr := testWriter()
-	code := run(w, []string{"--not-a-real-flag"})
+	code := runAt(w, testClock, []string{"--not-a-real-flag"})
 	if code != 2 {
 		t.Fatalf("run = %d, want 2 for an unparseable flag set", code)
 	}
@@ -144,8 +151,8 @@ func TestRunRejectsUnknownFlag(t *testing.T) {
 func TestRunGenerateIndexErrorRefusesPartialOutput(t *testing.T) {
 	outDir := t.TempDir()
 	w, _, stderr := testWriter()
-	code := run(w, []string{
-		"--artifacts", filepath.Join(t.TempDir(), "does-not-exist"),
+	code := runAt(w, testClock, []string{
+		"--artifacts", filepath.Join(t.TempDir(), "does-not-exist"), "--sequence", "1",
 		"--out", outDir,
 		"--key-ref", "REG_GEN_TEST_KEY_UNUSED",
 	})
@@ -174,8 +181,8 @@ func TestRunMkdirAllFailureRefusesOutput(t *testing.T) {
 	outDir := filepath.Join(blocker, "sub")
 
 	w, _, stderr := testWriter()
-	code := run(w, []string{
-		"--artifacts", fixturesDir,
+	code := runAt(w, testClock, []string{
+		"--artifacts", fixturesDir, "--sequence", "1",
 		"--out", outDir,
 		"--key-ref", "REG_GEN_TEST_KEY_MKDIR",
 	})
@@ -185,10 +192,8 @@ func TestRunMkdirAllFailureRefusesOutput(t *testing.T) {
 	if stderr.Len() == 0 {
 		t.Error("expected a diagnostic on stderr")
 	}
-	// blocker/sub can never exist: blocker itself is a regular file, so
-	// stat on any path under it fails (ENOTDIR, not ENOENT) rather than
-	// reporting IsNotExist — any stat failure here proves no index was
-	// written.
+	// blocker is a regular file, so any stat under it fails (ENOTDIR):
+	// a failure proves no index was written.
 	if _, err := os.Stat(filepath.Join(outDir, "index.json")); err == nil {
 		t.Error("index.json must not exist under a blocked path")
 	}
@@ -217,8 +222,8 @@ func TestRunWriteIndexFailureRefusesPartialOutput(t *testing.T) {
 	makeDirGenuinelyUnwritable(t, outDir)
 
 	w, _, stderr := testWriter()
-	code := run(w, []string{
-		"--artifacts", fixturesDir,
+	code := runAt(w, testClock, []string{
+		"--artifacts", fixturesDir, "--sequence", "1",
 		"--out", outDir,
 		"--key-ref", "REG_GEN_TEST_KEY_RO",
 	})
@@ -243,8 +248,8 @@ func TestRunHappyPathDoesNotLeakSigningKey(t *testing.T) {
 
 	outDir := t.TempDir()
 	w, stdout, stderr := testWriter()
-	code := run(w, []string{
-		"--artifacts", fixturesDir,
+	code := runAt(w, testClock, []string{
+		"--artifacts", fixturesDir, "--sequence", "1",
 		"--out", outDir,
 		"--base-url", "https://cdn.example.com/plugins/",
 		"--key-ref", "REG_GEN_TEST_KEY_LEAK",
@@ -274,14 +279,22 @@ func fixedSeed45() []byte {
 	return seed
 }
 
-// hexEncode is a tiny local helper so TestEnvVaultGetAcceptsHexKey does not
-// need to import encoding/hex solely for one call.
-func hexEncode(b []byte) string {
-	const digits = "0123456789abcdef"
-	out := make([]byte, len(b)*2)
-	for i, c := range b {
-		out[i*2] = digits[c>>4]
-		out[i*2+1] = digits[c&0x0f]
+// TestRegistryGenRequiresSequenceFlag: a missing or zero --sequence exits 2
+// before any key is read or index written, with --key-ref and with
+// --derive-from-release (both keys are unset, so a later refusal exits 1).
+func TestRegistryGenRequiresSequenceFlag(t *testing.T) {
+	t.Setenv("MINISIGN_RELEASE_SECKEY_B64", "")
+	for _, mode := range [][]string{{"--key-ref", "REG_GEN_TEST_KEY_UNSET_SEQ"}, {"--derive-from-release"}} {
+		for _, seq := range [][]string{nil, {"--sequence", "0"}} {
+			outDir := t.TempDir()
+			w, _, stderr := testWriter()
+			args := append(append([]string{"--artifacts", fixturesDir, "--out", outDir}, mode...), seq...)
+			if code := runAt(w, testClock, args); code != 2 || !strings.Contains(stderr.String(), "--sequence is required") {
+				t.Errorf("run(%v) = %d, stderr %q; want 2 naming --sequence", args, code, stderr.String())
+			}
+			if _, err := os.Stat(filepath.Join(outDir, "index.json")); !os.IsNotExist(err) {
+				t.Errorf("run(%v) wrote index.json, stat err = %v", args, err)
+			}
+		}
 	}
-	return string(out)
 }
