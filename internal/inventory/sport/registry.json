@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-12T19:10:51Z",
+  "generated_at": "2026-10-12T19:35:21Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -19285,6 +19285,12 @@
           "raw": "internal/daemon/service (P1-WID-04)."
         },
         {
+          "file": "internal/daemon/service/widget_portable_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal/daemon/service (P1-WID-04)."
+        },
+        {
           "file": "internal/daemon/service/widget_status.go",
           "line": 14,
           "status": "",
@@ -34783,7 +34789,7 @@
       ]
     }
   ],
-  "total_sites": 3349,
+  "total_sites": 3350,
   "unspecified_count": 216,
   "multi_status_count": 106
 }
