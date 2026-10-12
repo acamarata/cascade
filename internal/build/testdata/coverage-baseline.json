@@ -41,6 +41,8 @@
   "internal/fleet/supervision": { "tier": "core", "floor": 85.0, "baseline": 88.8 },
   "internal/fleet/tailer": { "tier": "core", "floor": 85.0, "baseline": 91.7 },
   "internal/fleet/topology": { "tier": "core", "floor": 85.0, "baseline": 90.9 },
+  "internal/goldencheck": { "tier": "core", "floor": 85.0, "baseline": 98.0 },
+  "internal/goldencheck/cmd/goldenlane": { "tier": "core", "floor": 85.0, "baseline": 95.5 },
   "internal/hooks": { "tier": "core", "floor": 85.0, "baseline": 94.0 },
   "internal/hooks/egress": { "tier": "security", "floor": 90.0, "baseline": 96.3 },
   "internal/inventory": { "tier": "core", "floor": 85.0, "baseline": 85.7 },

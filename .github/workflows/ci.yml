@@ -1188,16 +1188,62 @@ jobs:
             ${{ runner.temp }}/ext.xcresult
           if-no-files-found: warn
 
+  golden-parity:
+    # Golden-parity aggregate lane. internal/goldencheck discovers every golden
+    # root, resolves it against the committed owner table (or its exclusion
+    # list) and prints the run plan; this job runs each row with
+    # `go test -json` and never stops on a failing row, then the aggregator
+    # fails on an unmapped root, a row that ran zero tests, or any failing row
+    # after collecting every result into one JSON report. The Go package only
+    # plans and aggregates, so no subprocess surface exists in product
+    # packages. Adding a golden root adds its owner row in the same change.
+    name: golden-parity (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, macos-15, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: run every golden-parity row
+        shell: bash
+        run: |
+          D="$RUNNER_TEMP/golden-parity"
+          mkdir -p "$D"
+          go run ./internal/goldencheck/cmd/goldenlane plan > "$D/plan.tsv"
+          i=0
+          while IFS="$(printf '\t')" read -r pkg re root; do
+            i=$((i+1))
+            go test -json -count=1 -run "$re" "$pkg" > "$D/$i.json" || echo "golden-parity: row $i ($root) exited non-zero; the report decides"
+          done < "$D/plan.tsv"
+
+      - name: aggregate the report
+        shell: bash
+        run: go run ./internal/goldencheck/cmd/goldenlane report --dir "$RUNNER_TEMP/golden-parity" --out "$RUNNER_TEMP/golden-parity/report.json"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: golden-parity-report-${{ matrix.runner }}
+          path: ${{ runner.temp }}/golden-parity/report.json
+          if-no-files-found: error
+
   ci-gate:
     name: ci-gate (required status)
-    needs: [build-test, darwin-amd64-build, linux-pam-build, conformance-suite, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, redis-storetest-under-docker, s3-storetest-under-docker, server-profile-assembly, plugin-integration, node-dispatch-real-git, node-kill-mid-run, sync-merge-real-git, changes, widget]
+    needs: [build-test, darwin-amd64-build, linux-pam-build, conformance-suite, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, redis-storetest-under-docker, s3-storetest-under-docker, server-profile-assembly, plugin-integration, node-dispatch-real-git, node-kill-mid-run, sync-merge-real-git, changes, widget, golden-parity]
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: All lanes green
         run: |
           set -eu
-          for r in "${{ needs.build-test.result }}" "${{ needs.darwin-amd64-build.result }}" "${{ needs.linux-pam-build.result }}" "${{ needs.conformance-suite.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}" "${{ needs.retrieval-eval-gate.result }}" "${{ needs.storetest-under-docker.result }}" "${{ needs.pgvector-storetest-under-docker.result }}" "${{ needs.redis-storetest-under-docker.result }}" "${{ needs.s3-storetest-under-docker.result }}" "${{ needs.server-profile-assembly.result }}" "${{ needs.plugin-integration.result }}" "${{ needs.node-dispatch-real-git.result }}" "${{ needs.node-kill-mid-run.result }}" "${{ needs.sync-merge-real-git.result }}"; do
+          for r in "${{ needs.build-test.result }}" "${{ needs.darwin-amd64-build.result }}" "${{ needs.linux-pam-build.result }}" "${{ needs.conformance-suite.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}" "${{ needs.retrieval-eval-gate.result }}" "${{ needs.storetest-under-docker.result }}" "${{ needs.pgvector-storetest-under-docker.result }}" "${{ needs.redis-storetest-under-docker.result }}" "${{ needs.s3-storetest-under-docker.result }}" "${{ needs.server-profile-assembly.result }}" "${{ needs.plugin-integration.result }}" "${{ needs.node-dispatch-real-git.result }}" "${{ needs.node-kill-mid-run.result }}" "${{ needs.sync-merge-real-git.result }}" "${{ needs.golden-parity.result }}"; do
             if [ "$r" != "success" ]; then
               echo "ci-gate: a required lane did not succeed ($r)"
               exit 1

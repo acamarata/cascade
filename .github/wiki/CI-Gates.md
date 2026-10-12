@@ -81,6 +81,51 @@ repository routed to hosted Actions, and the Actions polling path refuses a
 repository routed to the local gate. See `docs/cli-reference/ci.md` for the
 `[ci.policy]` and `[ci.local]` keys.
 
+## Golden-parity aggregate lane
+
+The `golden-parity` job in `.github/workflows/ci.yml` runs every committed
+golden root's owner tests and collects the result into one report. It runs on
+`ubuntu-latest`, `macos-15` and `windows-latest` and is required by `ci-gate`.
+
+`internal/goldencheck` only plans and aggregates; it starts no subprocess.
+The job runs the rows:
+
+1. `go run ./internal/goldencheck/cmd/goldenlane plan` discovers the roots
+   and prints one `<package><TAB><regex><TAB><root>` line per row. It exits 1
+   when a golden root has neither an owner row nor an exclusion.
+2. For each line the job runs `go test -json -count=1 -run <regex> <package>`
+   into `<n>.json` and never stops on a failing row.
+3. `goldenlane report --dir <dir> --out report.json` scores every row and
+   exits 1 unless all rows pass. The job uploads `report.json` as the
+   `golden-parity-report-<runner>` artifact.
+
+### The owner table
+
+`internal/goldencheck/owners.go` holds `Owners`: one row per golden root
+(root, package, `-run` regex) and `Excluded`: roots no test reads, each with a
+reason. Discovery finds every `testdata/v1-goldens` directory, every
+`v1-goldens/migration` sub-root, and the `testdata/goldens/claude-code`
+replay directory. A `v1-goldens` directory whose only entry is a registered
+`migration` sub-root is a container and needs no row. The four migration
+sub-roots share one row shape: `./internal/migration/tripwire` with
+`^TestTripwireStable$`.
+
+### Adding a golden root
+
+Add the row to `Owners` in the same change that adds the root. If no test
+reads the root, add it to `Excluded` with the reason instead. Use exact test
+names in the regex (`^TestName$` or `^(TestA|TestB)$`): the lane fails when a
+named test did not run, so a rename cannot silently drop a check.
+
+### Reading the report
+
+Each row lists `run`, `passed`, `failed` and `skipped` counts, `ok`, and a
+`reason` when it failed. A row fails on any of: no captured output, zero
+`run` events (the regex matched nothing), a failed test, a package-level
+failure (build error, panic, timeout), a test that started but never
+finished, no passing test (all skipped), or a named test that did not run.
+The text summary printed by the report step shows the same rows, one per line.
+
 ## Other gates
 
 See `internal/build/*.go` (gofmt-clean, dead-code, test-only usage,
