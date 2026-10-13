@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-13T01:15:07Z",
+  "generated_at": "2026-10-13T01:49:14Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -30404,6 +30404,20 @@
       ]
     },
     {
+      "name": "plugins/claude",
+      "sites": [
+        {
+          "file": "plugins/claude/inbox_push_platform_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "plugins/claude (P1-HRN-02)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "plugins/claude entity",
       "sites": [
         {
@@ -35089,7 +35103,7 @@
       ]
     }
   ],
-  "total_sites": 3377,
-  "unspecified_count": 221,
+  "total_sites": 3378,
+  "unspecified_count": 222,
   "multi_status_count": 106
 }
