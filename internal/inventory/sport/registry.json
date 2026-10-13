@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-13T05:03:47Z",
+  "generated_at": "2026-10-13T08:59:31Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3708,6 +3708,40 @@
       ]
     },
     {
+      "name": "cmd/cascade chat journal wiring",
+      "sites": [
+        {
+          "file": "cmd/cascade/chat_journal_wiring.go",
+          "line": 31,
+          "status": "ADD",
+          "raw": "cmd/cascade chat journal wiring (ADD) — P1-CPA-08."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade chat journal wiring tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/chat_journal_wiring_test.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "cmd/cascade chat journal wiring tests (ADD) — P1-CPA-08."
+        },
+        {
+          "file": "cmd/cascade/chat_journal_wiring_unix_test.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "cmd/cascade chat journal wiring tests (ADD) — P1-CPA-08."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade chat platform boundary",
       "sites": [
         {
@@ -3771,7 +3805,7 @@
       "sites": [
         {
           "file": "cmd/cascade/chat_wiring.go",
-          "line": 42,
+          "line": 43,
           "status": "ADD",
           "ticket": "P1-E20-W5-S43-T5",
           "raw": "cmd/cascade chat wiring (ADD) — P1-E20-W5-S43-T5; platform tag"
@@ -35808,7 +35842,7 @@
       ]
     }
   ],
-  "total_sites": 3460,
+  "total_sites": 3463,
   "unspecified_count": 229,
   "multi_status_count": 106
 }
