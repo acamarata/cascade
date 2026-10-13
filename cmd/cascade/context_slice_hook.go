@@ -33,6 +33,7 @@ import (
 	"github.com/acamarata/cascade/internal/context/hydration"
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/pkg/provider"
+	"github.com/acamarata/cascade/plugins/claude"
 )
 
 // hookPayload is the harness's UserPromptSubmit stdin object, narrowed to
@@ -136,7 +137,7 @@ const maxHookPayloadBytes = 4 << 20
 // supervision directives; an unreachable daemon or the embedded fallback
 // drains nothing, and the directives wait for the next prompt.
 func buildHydrationCapsule(ctx context.Context, deps contextScopeDeps, payload hookPayload, cfg hydration.Config) (string, bool) {
-	result, err := fetchContextSliceFor(ctx, deps, hookSliceParams(payload, cfg))
+	result, err := fetchHookSlice(ctx, deps, hookSliceParams(payload, cfg))
 	if err != nil {
 		return "", false
 	}
@@ -159,11 +160,36 @@ func composeHydration(result daemon.ContextSliceResult, cfg hydration.Config, la
 	if len(result.Directives) > 0 {
 		parts = append(parts, renderSupervisionDirectives(result.Directives))
 	}
+	if block := claude.RenderInboxBlock(inboxRecordsFromViews(result.Inbox)); block != "" {
+		parts = append(parts, block)
+	}
 	if kept := filterByScore(result.Retrieval, cfg.MinScore); len(kept) > 0 {
 		parts = append(parts, renderCapsule(label(), kept))
 	}
 	return strings.Join(parts, "\n\n")
 }
+
+// inboxRecordsFromViews converts the daemon's wire views back to the
+// records claude.RenderInboxBlock renders; the renderer escapes every
+// field again, so a view is never trusted to be pre-escaped.
+func inboxRecordsFromViews(views []daemon.InboxEnvelopeView) []claude.InboxRecord {
+	recs := make([]claude.InboxRecord, 0, len(views))
+	for _, v := range views {
+		recs = append(recs, claude.InboxRecord{
+			Envelope: claude.Envelope{
+				ID: v.ID, Class: v.Class, OriginScope: v.OriginScope, DataClass: v.DataClass, Summary: v.Summary,
+			},
+			TargetScope: v.TargetScope, TargetSession: v.TargetSession, TargetTask: v.TargetTask,
+			Visibility: v.Visibility, CorrelationID: v.CorrelationID, ExpiresAtMs: v.ExpiresAtMs,
+			Provenance: v.Provenance,
+		})
+	}
+	return recs
+}
+
+// fetchHookSlice resolves the hook's slice; a test replaces it to serve the
+// request from an in-process registry instead of the daemon socket.
+var fetchHookSlice = fetchContextSliceFor
 
 // supervisionHeading heads the directives a stalled session's supervision
 // queued for its next prompt.

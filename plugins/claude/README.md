@@ -228,3 +228,59 @@ lifecycle events to the daemon) · `mcp-register` (register the MCP server).
 
 `testdata/README.md` records which external contracts are golden-verified
 and which are not.
+
+## Addressed inbox delivery
+
+**Status: registered, off.** The daemon wires the hydration drain behind a flag that is false in
+every shipped build. While it is false `context.slice` returns no inbox envelopes and leaves every
+queue untouched. The tool gate turns it on.
+
+**Eligibility.** An addressed inbox event is queued for a session only when the notify router
+selects it for that session and the host adapter (`internal/plugins/claude_inbox_push.go`) accepts it
+with the router's own rules, `notify.ScopeDeliveryPredicate` and `notify.Visible` (`private` only for
+the addressed session, `scoped` for a session whose scope chain admits the target scope, `shared` for
+any session of the user, unknown treated as `private`). An `addressed` event naming another session,
+only a task, or no target at all, is withheld. Expired events are dropped at delivery and again at drain.
+Nothing here widens a session's scope.
+
+**Next-turn hydration.** Each event is retained durably in the daemon store (namespace
+`inbox.hydration`, keyed by the harness session id, at most 256 pending per session), so a daemon
+restart loses nothing. At the session's next UserPromptSubmit the hook (`cascade context slice
+--hook`) sends the payload's `session_id` to `context.slice`. The daemon drains that session's
+envelopes only for the owner CLI or a caller bound to that session, and only when the fleet sessions
+store knows the session and it is not closed. The hook prints them after the supervision directives
+as one `<cascade-inbox-data provenance="untrusted-source">` block. Every field is escaped (`&`, `<`,
+`>`, line breaks, control and invisible characters), so no value can forge a line or close the block.
+A drain returns `AppendResult{SessionID, Appended}`; `Appended` is true only when records came back.
+Delivery is at most once: the drain removes the queue entry in the same transaction that returns it, so a
+hook that times out or dies afterwards loses the hydrated copy (never the source inbox record).
+
+**The envelope** is exactly `{id, class, origin_scope, data_class, summary}`. The summary is a marked
+excerpt of at most half the body and at most 200 characters; the body is never included. An encoded
+envelope or record over 16 KiB is refused with `KindInvalidInput`. The data class is the producer's
+`provider.SensitivityTier` and travels unchanged; this package never derives or lowers one, and a
+request below the event's class is refused with `provider.ErrDataClassDowngrade`. The adapter passes
+`restricted` (the fail-closed default) until a derived class exists.
+
+**No automatic action.** Delivered content is data, never an instruction: no routing decision reads
+it, and untrusted content cannot satisfy an approval, a gate, a completion claim or a policy change.
+No path acknowledges the source inbox record.
+
+**Global-critical** events are additionally filed on the daemon attention queue (kind `error`,
+source `inbox:<id>`, no content) and remain in `cascade inbox`.
+
+**Direct channel push is off.** `CCChannel` probes once and the production probe is indeterminate,
+which resolves to unsupported: the harness gives a server no observable proof that a pushed channel
+notification reaches a `-p`-driven session (see `testdata/cc-channel/README.md`). The deferral is
+recorded on `InboxPush.Deferral`, and every event is hydrated instead. An out-of-range harness
+revision is refused at runtime with `provider.ErrHarnessIncompatible`.
+
+**Errors.** Channel rejection (`ErrChannelRejected`), cancellation (`KindCanceled`), a delivery
+racing the session's unsubscribe (`ErrInboxSessionClosed`), a full queue (`ErrHydrationFull`) and a
+store failure (`KindUnavailable`) are typed; each leaves the source inbox record available.
+
+**Windows** is tier-2 for the channel: it refuses with `ErrWindowsUnsupported` (`KindUnsupported`)
+before probing, and every event is hydrated.
+
+**Known gap.** The router subscription (`WireClaudeInboxPush`) has no production caller yet, so no
+production path enqueues envelopes. The daemon wiring that subscribes live sessions adds it.

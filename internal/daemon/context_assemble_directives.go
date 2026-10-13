@@ -51,6 +51,7 @@ type ContextOption func(*contextOptions)
 // assembler, ComputeContextSlice unless a package test replaces it.
 type contextOptions struct {
 	drainer DirectiveDrainer
+	inbox   InboxHydrationSource // WithInboxHydration (context_inbox.go)
 	compute func(context.Context, scope.ResolveDeps, ContextAssembleParams) (ContextSliceResult, error)
 }
 

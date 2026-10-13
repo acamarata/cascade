@@ -117,6 +117,9 @@ type ContextSliceResult struct {
 	Counts     provider.SlotCounts       `json:"counts"`
 	Dropped    []provider.DroppedItem    `json:"dropped"`
 	Directives []string                  `json:"directives,omitempty"`
+	// Inbox is the session's drained addressed inbox envelopes (see
+	// context_inbox.go). Absent when none.
+	Inbox []InboxEnvelopeView `json:"inbox,omitempty"`
 }
 
 // RegisterContextAssembleHandler opens the scope graph's SQLite connection
@@ -155,7 +158,12 @@ func RegisterContextAssembleHandler(registry *rpc.Registry, paths runtime.PathPr
 		if err != nil {
 			return nil, err
 		}
-		return o.sliceWithDirectives(ctx, deps, p)
+		result, err := o.sliceWithDirectives(ctx, deps, p)
+		if err != nil {
+			return nil, err
+		}
+		result.Inbox = o.drainInbox(ctx, p.SessionID)
+		return result, nil
 	})
 	return db, nil
 }

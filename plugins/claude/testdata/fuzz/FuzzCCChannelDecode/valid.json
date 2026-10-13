@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"roots\":{\"listChanged\":true},\"elicitation\":{}},\"clientInfo\":{\"name\":\"cc-harness\",\"version\":\"2.1.273\"}}")

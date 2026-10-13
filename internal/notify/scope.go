@@ -94,21 +94,28 @@ func ScopeDeliveryPredicate(session CandidateSession, n Notification) bool {
 // discoverability contract; inbox.go's List/Read/Ack call it before a
 // record is ever returned to a caller.
 func visible(session SessionScopeRef, rec *inboxRecord) bool {
-	if rec.n.TargetPrincipal != "" {
+	return Visible(session, rec.n)
+}
+
+// Visible is visible's rule for a bare Notification, exported so a
+// delivery-time consumer (internal/plugins/claude_inbox_push.go) applies
+// the SAME R-16.60 rule the Inbox applies, never a re-derivation of it.
+func Visible(session SessionScopeRef, n Notification) bool {
+	if n.TargetPrincipal != "" {
 		// A principal-addressed item reaches its addressee only through
 		// Service.ReadAddressed; no session view ever discovers it.
 		return false
 	}
-	switch rec.n.Visibility.Resolve() {
+	switch n.Visibility.Resolve() {
 	case VisibilityPrivate:
-		return rec.n.TargetSession != "" && rec.n.TargetSession == session.SessionID
+		return n.TargetSession != "" && n.TargetSession == session.SessionID
 	case VisibilityShared:
 		// The `--all` global view for the same user; session identity is
 		// sufficient at this ticket's layer (per-user session sets are a
 		// composition-root concern — see R-21.227's projection note).
 		return true
 	case VisibilityScoped, VisibilityExecutive:
-		return ScopeDeliveryPredicate(session, rec.n)
+		return ScopeDeliveryPredicate(session, n)
 	default:
 		return false
 	}

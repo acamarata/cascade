@@ -1,0 +1,57 @@
+{
+  "_provenance": "See README.md. Two sources, each labeled: (A) bytes this session sent and verified accepted by the installed CC harness (2.1.273) over a real MCP stdio connection from a throwaway server; (B) the wire method name and payload shape as implemented by the real, currently-running official 'telegram' channel plugin distributed through the harness's plugin marketplace, cited by file name, not re-derived from a ruling paraphrase. No local path appears in this file.",
+  "A_sent_by_this_session": {
+    "notification": {
+      "jsonrpc": "2.0",
+      "method": "notifications/claude/channel",
+      "params": {
+        "content": "CASCADE_TEST_PUSH_MARKER: addressed inbox event id=test-1",
+        "meta": {
+          "source": "cascade-test",
+          "event_id": "test-1",
+          "ts": "2026-09-23T06:50:59.733Z"
+        }
+      }
+    },
+    "harness_accepted_connection": true,
+    "harness_surfaced_content_into_a_-p_turn": false,
+    "test_method": "claude -p --input-format stream-json --output-format stream-json --channels server:<name> --mcp-config <file>, two user turns over stdin with the notification sent between them by the throwaway server; the second turn was asked to report any received channel content and answered 'NONE' both times across three independent live runs (single-shot -p and two-turn stream-json -p)."
+  },
+  "B_real_reference_shape_telegram_plugin": {
+    "source_file": "server.ts of the telegram channel plugin from the harness's official plugin marketplace (local install path omitted)",
+    "capability_declaration": {
+      "capabilities": {
+        "tools": {},
+        "experimental": {
+          "claude/channel": {},
+          "claude/channel/permission": {}
+        }
+      }
+    },
+    "notification_sent_by_that_real_server": {
+      "method": "notifications/claude/channel",
+      "params": {
+        "content": "<the inbound message text>",
+        "meta": {
+          "chat_id": "<string>",
+          "message_id": "<string, optional>",
+          "user": "<string>",
+          "user_id": "<string>",
+          "ts": "<ISO8601 string>",
+          "image_path": "<string, optional>",
+          "attachment_kind": "<string, optional>",
+          "attachment_file_id": "<string, optional>",
+          "attachment_size": "<string, optional>",
+          "attachment_mime": "<string, optional>",
+          "attachment_name": "<string, optional>"
+        }
+      }
+    },
+    "how_the_harness_renders_it_per_that_plugin_s_own_instructions_field": "Messages from Telegram arrive as <channel source=\"telegram\" chat_id=\"...\" message_id=\"...\" user=\"...\" ts=\"...\">CONTENT</channel> in the session's context.",
+    "related_relay_methods_observed_in_the_same_real_source": [
+      "notifications/claude/channel/permission_request (server->client, wraps a pending tool-permission prompt)",
+      "notifications/claude/channel/permission (server->client, carries a user's allow/deny reply keyed by request_id)"
+    ]
+  },
+  "honest_gap": "No run in this session observed a 'claude/channel' notification actually rendered into a -p-driven session's context (the delivery target this ticket calls 'an active CC session or task', matching how providers/agents/claude spawns the harness). The real, currently-running production counterpart (the telegram plugin) proves the capability and wire shape above are genuine and delivery DOES work for that plugin's use case, which runs the harness interactively (no -p), driven by a long-lived terminal/tmux session rather than a single-shot programmatic turn. This session did not attempt a PTY-driven fully-interactive capture (out of scope for the remaining time this pass); CCChannel.Probe's honest, evidence-backed result for cascade's actual '-p'-based delivery target is therefore 'unsupported' today, not because the harness lacks the feature, but because the feature's real delivery path does not reach a programmatically-driven single-turn session. This is a narrower and more precise finding than 'no such feature exists'."
+}

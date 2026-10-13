@@ -1,0 +1,57 @@
+{
+  "_provenance": "See README.md in this directory. Captured live from the installed CC harness (version 2.1.273) connecting as an MCP client to a throwaway stdio server declaring experimental[\"claude/channel\"]. The request/response bytes are real and unmodified except clientInfo: its name, title, description and website fields named the vendor product and are replaced by the neutral token \"cc-harness\" / \"<redacted>\" (description and website removed); protocolVersion, capabilities and version are exactly as captured. No account path or session id appears in this exchange (MCP initialize carries neither).",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 0,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-11-25",
+      "capabilities": {
+        "roots": {
+          "listChanged": true
+        },
+        "elicitation": {}
+      },
+      "clientInfo": {
+        "name": "cc-harness",
+        "title": "<redacted>",
+        "version": "2.1.273"
+      }
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 0,
+    "result": {
+      "protocolVersion": "2025-11-25",
+      "capabilities": {
+        "tools": {},
+        "resources": {},
+        "prompts": {},
+        "experimental": {
+          "claude/channel": {}
+        }
+      },
+      "serverInfo": {
+        "name": "cascade-channel-test",
+        "version": "0.0.1"
+      }
+    }
+  },
+  "notification_initialized": {
+    "jsonrpc": "2.0",
+    "method": "notifications/initialized"
+  },
+  "session_init_event_excerpt": {
+    "_comment": "From the harness's own stream-json system/init event for this same session, confirming the server connected. The harness-version key is renamed to a neutral name; its value is as captured.",
+    "type": "system",
+    "subtype": "init",
+    "harness_version": "2.1.273",
+    "mcp_servers": [
+      {
+        "name": "cascadetest",
+        "status": "connected"
+      }
+    ]
+  }
+}

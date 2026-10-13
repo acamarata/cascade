@@ -7,12 +7,14 @@
 // exists exactly when a detector can queue directives. The RPC registry
 // replaces a re-registered method, so the method set does not change.
 // Inputs: the daemon wiring and daemon.NewLiveDirectiveDrainer's drainer.
-// Outputs: context.slice and context.show bound with WithDirectiveDrain.
+// Outputs: context.slice and context.show bound with WithDirectiveDrain and
+// the inbox hydration option (inboxHydrationOption; drains nothing while
+// inboxHydrationLive is false).
 // Constraints: the live-session and caller rules live in internal/daemon
 // (context_assemble_directives.go). The second scope-graph connection follows
 // the context-engine registration's documented tradeoff and is not closed
 // separately.
-// SPORT: cmd/cascade daemon stall supervision (ADDED, P1-SUP-04).
+// SPORT: cmd/cascade daemon stall supervision (ADDED, P1-SUP-04; CHANGED, P1-HRN-02).
 package main
 
 import "github.com/acamarata/cascade/internal/daemon"
@@ -20,6 +22,6 @@ import "github.com/acamarata/cascade/internal/daemon"
 // registerContextDrain re-binds context.slice and context.show with the
 // directive drain.
 func registerContextDrain(w *daemonWiring, drainer daemon.DirectiveDrainer) error {
-	_, err := daemon.RegisterContextAssembleHandler(w.Registry, w.Paths, w.Clock, daemon.WithDirectiveDrain(drainer))
+	_, err := daemon.RegisterContextAssembleHandler(w.Registry, w.Paths, w.Clock, daemon.WithDirectiveDrain(drainer), inboxHydrationOption(w))
 	return err
 }
