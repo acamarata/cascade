@@ -33,6 +33,10 @@ func commitAll(t *testing.T, files map[string]string) string {
 	t.Setenv("CASCADE_HOME", t.TempDir())
 	dir := t.TempDir()
 	runGit(t, dir, "init", "-q")
+	// No background maintenance: an auto gc detached from the commit can still be
+	// writing under .git while the test's temp dir is removed (macOS runners).
+	runGit(t, dir, "config", "gc.auto", "0")
+	runGit(t, dir, "config", "maintenance.auto", "false")
 	for rel, content := range files {
 		full := filepath.Join(dir, filepath.FromSlash(rel))
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
