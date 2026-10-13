@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-13T04:16:31Z",
+  "generated_at": "2026-10-13T05:03:47Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -18155,6 +18155,12 @@
           "raw": "internal/build (ADD, per T-2 sport_updates)."
         },
         {
+          "file": "internal/build/integrationlanes_excluded.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal/build (P1-CI-17)."
+        },
+        {
           "file": "internal/build/stringers_test.go",
           "line": 11,
           "status": "ADD",
@@ -35802,7 +35808,7 @@
       ]
     }
   ],
-  "total_sites": 3459,
+  "total_sites": 3460,
   "unspecified_count": 229,
   "multi_status_count": 106
 }
