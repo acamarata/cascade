@@ -387,6 +387,43 @@ filter_stages:
       - "capability:1-matched"
       - "sensitivity:local-only:1-filtered"
 
+  - name: sensitivity-restricted-remote-refused
+    base_url: "https://remote.example.com"
+    health: "healthy"
+    sensitivity: "restricted"
+    want_err: "ErrSensitivityViolation"
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:restricted:1-filtered"
+      - "sensitivity:restricted:removed:lane-a(external-api)"
+
+  - name: sensitivity-restricted-remote-permitted
+    base_url: "https://remote.example.com"
+    health: "healthy"
+    sensitivity: "restricted"
+    permit_lanes: ["lane-a"]
+    want_lane_id: "lane-a"
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:restricted:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+    want_err: ""
+
+  - name: sensitivity-internal-remote-admitted
+    base_url: "https://remote.example.com"
+    health: "healthy"
+    sensitivity: "internal"
+    want_lane_id: "lane-a"
+    want_flags:
+      - "capability:1-matched"
+      - "sensitivity:internal:0-filtered"
+      - "health:0-evicted"
+      - "quota:priority:lane-lane-a"
+      - "cost:cheapest-selected"
+    want_err: ""
+
   - name: health-clean
     base_url: "http://127.0.0.1:8080"
     health: "healthy"

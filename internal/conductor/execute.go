@@ -101,9 +101,10 @@ func (e *Executor) Execute(ctx context.Context, req provider.ModelRequest) (prov
 
 	sel, err := e.router.Select(dctx, req)
 	if err != nil {
-		e.auditRefusal(ctx, req, tier, ErrNoLane)
+		err = selectRefusal(err)
+		e.auditRefusal(ctx, req, tier, err)
 		e.publishTerminal(ctx, jobID, "error")
-		return provider.ModelResponse{}, ErrNoLane
+		return provider.ModelResponse{}, err
 	}
 	req, err = e.substituteInputs(dctx, req, tier)
 	if err != nil {
@@ -187,8 +188,9 @@ func (e *Executor) ExecuteStream(ctx context.Context, req provider.ModelRequest)
 	}
 	sel, err := e.router.Select(ctx, req)
 	if err != nil {
-		e.auditRefusal(ctx, req, tier, ErrNoLane)
-		return nil, nil, ErrNoLane
+		err = selectRefusal(err)
+		e.auditRefusal(ctx, req, tier, err)
+		return nil, nil, err
 	}
 	req, err = e.substituteInputs(ctx, req, tier)
 	if err != nil {

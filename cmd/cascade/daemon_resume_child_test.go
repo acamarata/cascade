@@ -35,7 +35,6 @@ import (
 
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/daemon"
-	"github.com/acamarata/cascade/internal/nodes"
 	providerdispatch "github.com/acamarata/cascade/internal/providers/dispatch"
 	providerregistry "github.com/acamarata/cascade/internal/providers/registry"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -185,7 +184,7 @@ func registerDenyConductor(w *daemonWiring, store provider.Store, reg *providerr
 	fan := daemon.NewConductorFanOut(store, w.Clock)
 	if err := daemon.RegisterConductorExecuteHandler(w.Registry, w.Manifest, providerregistry.NewReader(reg),
 		conductor.NewQuotaPolicy(quotaCfg, w.Clock), resolver, auditLog, w.Clock, security, accounting, fan,
-		conductor.NodePlacement(nodes.Engine{Tunnels: nodeTunnelLookup(w.Opts)}, nodeRecordStore(w.Paths, w.Clock))); err != nil {
+		conductorRouterOptions(nodeTunnelLookup(w.Opts), w.Paths, w.Clock, nil)...); err != nil {
 		return fan, err
 	}
 	return fan, daemon.WireReachability(w.Ctx, w.Manifest, w.Paths, w.Clock)

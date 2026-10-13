@@ -53,11 +53,11 @@ import (
 // both R-16.80 connectors. A nil store leaves both unregistered (see this
 // file's header comment); any other failure is propagated, matching every
 // sibling registerXHandler's own error-propagation convention.
-func wireConductorAndReachability(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest, paths runtime.PathProvider, clock runtime.Clock, store provider.Store, tunnels nodes.TunnelStateLookup) (daemon.ConductorFanOut, error) {
+func wireConductorAndReachability(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest, paths runtime.PathProvider, clock runtime.Clock, store provider.Store, tunnels nodes.TunnelStateLookup, routerOpts ...conductor.RouterOption) (daemon.ConductorFanOut, error) {
 	if store == nil {
 		return daemon.ConductorFanOut{}, nil
 	}
-	fanOut, err := wireConductorExecute(ctx, registry, manifest, paths, clock, store, tunnels)
+	fanOut, err := wireConductorExecute(ctx, registry, manifest, paths, clock, store, tunnels, routerOpts...)
 	if err != nil {
 		return fanOut, err
 	}
@@ -85,7 +85,7 @@ func wireConductorAndReachability(ctx context.Context, registry *rpc.Registry, m
 // unchanged from before: a typed KindUnavailable naming the key, refused
 // at the true credential boundary per request, never a prompt from a
 // process with nobody to answer it.
-func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest, paths runtime.PathProvider, clock runtime.Clock, store provider.Store, tunnels nodes.TunnelStateLookup) (daemon.ConductorFanOut, error) {
+func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest, paths runtime.PathProvider, clock runtime.Clock, store provider.Store, tunnels nodes.TunnelStateLookup, routerOpts ...conductor.RouterOption) (daemon.ConductorFanOut, error) {
 	regDB, err := openMigratedDB(ctx, filepath.Join(paths.DataDir(), providerRegistryDBFile),
 		func(ctx context.Context, db *sql.DB) error {
 			return providerregistry.ApplyMigrationSchema(ctx, db, migrate.SQLiteEmitter{}, clock, "", "")
@@ -128,7 +128,34 @@ func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest 
 	fanOut := daemon.NewConductorFanOut(store, clock)
 	return fanOut, daemon.RegisterConductorExecuteHandler(registry, manifest, reader, quota, resolver, auditWriter, clock,
 		security, accounting, fanOut,
-		conductor.NodePlacement(nodes.Engine{Tunnels: tunnels}, nodeRecordStore(paths, clock)))
+		conductorRouterOptions(tunnels, paths, clock, routerOpts)...)
+}
+
+// conductorRouterOptions is the router wiring the daemon applies: the node
+// placement seam first, then extra (the restricted-permit option). One helper
+// so the production wiring and the resume tests' deny wiring cannot differ.
+func conductorRouterOptions(tunnels nodes.TunnelStateLookup, paths runtime.PathProvider, clock runtime.Clock, extra []conductor.RouterOption) []conductor.RouterOption {
+	placement := conductor.NodePlacement(nodes.Engine{Tunnels: tunnels}, nodeRecordStore(paths, clock))
+	return append([]conductor.RouterOption{placement}, extra...)
+}
+
+// restrictedPermitsOption reads [conductor] restricted_external_lanes from
+// the daemon's loaded config and returns the router option that applies it.
+// It is read ONCE, here, at conductor construction: a changed list applies at
+// the next start. A nil config or an absent key is the empty list (every
+// external lane refused for restricted content); a malformed list (wildcard,
+// non-string entry) refuses KindInvalidInput and the daemon does not start
+// with a permit list it cannot read exactly.
+func restrictedPermitsOption(cfg *runtime.Config) (conductor.RouterOption, error) {
+	var section map[string]interface{}
+	if cfg != nil {
+		section, _ = cfg.Extra["conductor"].(map[string]interface{})
+	}
+	permits, err := conductor.ParseRestrictedPermits(section)
+	if err != nil {
+		return nil, err
+	}
+	return conductor.WithRestrictedPermits(permits), nil
 }
 
 // nodeRecordStore opens the enrolled-node record store over the SAME

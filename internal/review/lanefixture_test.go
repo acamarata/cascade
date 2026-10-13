@@ -127,11 +127,22 @@ func (s *laneOrderSpiller) NextLane(_ context.Context, excluded []conductor.Lane
 func realRouter(t *testing.T, reg *laneRegistry) *conductor.DefaultRouter {
 	t.Helper()
 	order := make([]conductor.LaneID, 0, len(reg.lanes))
+	names := make([]interface{}, 0, len(reg.lanes))
 	for _, l := range reg.lanes {
 		order = append(order, conductor.LaneID(l.LaneName))
+		names = append(names, l.LaneName)
 	}
-	return conductor.NewRouter(reg, &laneOrderSpiller{order: order},
+	// The operator has listed every fixture lane under [conductor]
+	// restricted_external_lanes, so the default-restricted review classes may
+	// reach the external ones. Local-only threads are unaffected by a permit.
+	permits, err := conductor.ParseRestrictedPermits(map[string]interface{}{"restricted_external_lanes": names})
+	if err != nil {
+		t.Fatalf("ParseRestrictedPermits: %v", err)
+	}
+	r := conductor.NewRouter(reg, &laneOrderSpiller{order: order},
 		testkit.NewFrozenClock(time.Unix(0, 0)), conductor.TaskClasses())
+	conductor.WithRestrictedPermits(permits)(r)
+	return r
 }
 
 // routerExecutor is the conductor-boundary double: it does what the real

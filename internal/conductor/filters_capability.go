@@ -10,8 +10,8 @@
 //   arbitrary lane. See the journal for the CONTRACT DEVIATION on
 //   R-21.113's locality predicate: ProviderInfo carries no credential_ref
 //   or domain_kind field, so locality here is computed from BaseURL's
-//   host only (loopback or unix-socket), which is a strict subset of the
-//   full predicate the ticket text describes.
+//   host only (loopback literal or a host-less unix socket), which is a
+//   strict subset of the full predicate the ticket text describes.
 // SPORT: conductor.router/ADD (P1-E11-W3-S22-T2).
 
 package conductor
@@ -85,95 +85,130 @@ func hasUnprobedDimension(caps provider.Capabilities, req provider.RequiredCapab
 	return false
 }
 
-// filterSensitivity is FILTER 2 (§5.16 + §5.22, amended by R-21.228):
-// local-only retains exactly the lanes whose computed locality is local
-// and removes every remote-locality lane; restricted removes lanes not
-// reachable at worker-trusted or better. It never widens the tier the
-// envelope resolved.
-func filterSensitivity(cands []laneCandidate, req provider.ModelRequest, flags []string) ([]laneCandidate, []string, error) {
-	tier := req.Sensitivity
-	if !tier.Valid() {
-		tier = provider.SensitivityRestricted
+// filterSensitivity is FILTER 2 (§5.16 + §5.22, amended by R-21.228 and
+// P1-SEC-02): every candidate is decided by the one lane table
+// (SensitivityAllows, lane_table.go) at req.Sensitivity, an invalid tier
+// reading as restricted. It never widens the tier the envelope resolved.
+//
+// local-only keeps its R-21.228 contract: the flag is the count alone and an
+// emptied set is cascade.ErrNoLane. Every other tier adds one
+// "sensitivity:<tier>:removed:<lane>(<lanetype>)" flag per removed lane, and
+// an emptied set returns ErrSensitivityViolation.
+func filterSensitivity(cands []laneCandidate, req provider.ModelRequest, permits RestrictedPermits, flags []string) ([]laneCandidate, []string, error) {
+	tier := effectiveTier(req.Sensitivity)
+	v := applyLaneTable(cands, tier, permits)
+	flags = append(flags, fmt.Sprintf("sensitivity:%s:%d-filtered", tier.String(), len(v.removed)))
+	if tier != provider.SensitivityLocalOnly {
+		flags = append(flags, v.flags...)
 	}
-	switch tier {
-	case provider.SensitivityLocalOnly:
-		return filterLocalOnly(cands, flags)
-	case provider.SensitivityRestricted, provider.SensitivityInternal, provider.SensitivityPublic:
-		// CONTRACT DEVIATION: the real ProviderRegistryReader carries no
-		// node-trust-tier vocabulary (worker-trusted/paired-device), so
-		// the restricted/internal/public legs cannot remove candidates
-		// against §5.22's ladder; see the journal. They remove nothing
-		// and record the fact.
-		flags = append(flags, fmt.Sprintf("sensitivity:%s:0-filtered", tier.String()))
-		return cands, flags, nil
-	default:
-		flags = append(flags, fmt.Sprintf("sensitivity:%s:0-filtered", tier.String()))
-		return cands, flags, nil
-	}
-}
-
-// filterLocalOnly implements the local-only leg of FILTER 2 (R-21.228):
-// retain lanes whose computed locality is local, remove the rest.
-// cascade.ErrNoLane (not ErrSensitivityViolation) is returned when no
-// local-locality lane existed to begin with - that is the concrete
-// reason an emptied local-only candidate set always has here, since this
-// leg removes only remote-locality lanes.
-func filterLocalOnly(cands []laneCandidate, flags []string) ([]laneCandidate, []string, error) {
-	out := make([]laneCandidate, 0, len(cands))
-	removed := 0
-	for _, c := range cands {
-		if computedLocalityIsLocal(c.provider) {
-			out = append(out, c)
-		} else {
-			removed++
+	if len(v.kept) == 0 && len(cands) > 0 {
+		if tier == provider.SensitivityLocalOnly {
+			return v.kept, flags, ErrNoLane
 		}
+		return v.kept, flags, emptiedRefusal(tier, v)
 	}
-	flags = append(flags, fmt.Sprintf("sensitivity:local-only:%d-filtered", removed))
-	if len(out) == 0 && len(cands) > 0 {
-		return out, flags, ErrNoLane
-	}
-	return out, flags, nil
+	return v.kept, flags, nil
 }
 
 // computedLocalityIsLocal implements the reachable subset of the R-21.113
-// predicate given the real ProviderInfo shape: local iff BaseURL's host
-// is loopback or a unix socket. ProviderInfo has no credential_ref or
-// domain_kind field to check the remaining two conjuncts against (see
-// this file's header comment); this is a documented narrowing, never an
-// authored "is local" column and never derived from the provider name.
+// predicate given the real ProviderInfo shape: local iff BaseURL names a unix
+// socket on this machine (a unix:// URL with an EMPTY host) or its host is a
+// loopback literal. ProviderInfo has no credential_ref or domain_kind field
+// to check the remaining two conjuncts against (see this file's header
+// comment); this is a documented narrowing, never an authored "is local"
+// column and never derived from the provider name.
 func computedLocalityIsLocal(p provider.ProviderInfo) bool {
 	if p.BaseURL == "" {
 		return false
-	}
-	if strings.HasPrefix(p.BaseURL, "unix://") {
-		return true
 	}
 	u, err := url.Parse(p.BaseURL)
 	if err != nil {
 		return false
 	}
-	host := u.Hostname()
-	if host == "localhost" || host == "::1" {
-		return true
+	if u.Scheme == "unix" {
+		// A unix socket is a path on THIS machine: unix:///run/x.sock has no
+		// host. A unix:// URL that names a host (unix://api.evil.com/x) says
+		// the socket lives elsewhere, so it is never local.
+		return strings.HasPrefix(p.BaseURL, "unix://") && u.Host == ""
 	}
-	// IPv4 loopback is 127.0.0.0/8, and ONLY as a literal address.
-	//
-	// A bare `HasPrefix(host, "127.")` admits `127.evil.com` — a
-	// registrable domain whose Hostname() starts with "127." and which
-	// resolves wherever its owner points it. A provider record with that
-	// BaseURL would be classified controller-local, and every local-only
-	// gate built on this predicate would wave it through. Found by the
-	// independent review of P1-E20-W5-S44-T2.
-	//
-	// Still no "net" import (egress-firewall-gated, A-T2) for a
-	// computation that never opens a socket: a dotted-decimal host has no
-	// characters but digits and dots, which is exactly what separates the
-	// literal address from the domain.
-	if !strings.HasPrefix(host, "127.") {
+	host, ok := canonicalHost(u.Host)
+	if !ok {
 		return false
 	}
-	for _, r := range host {
-		if (r < '0' || r > '9') && r != '.' {
+	return host == "localhost" || host == "::1" || isLoopbackIPv4Literal(host)
+}
+
+// canonicalHost splits u.Host into a host and an optional all-digit port and
+// refuses every spelling that is not canonical: an IPv6 literal must be
+// bracketed, and a port, when ":" is present, must be non-empty. Go's HTTP
+// proxy selection reads "http://127.000.000.001" (and, where net/url accepts
+// it, a bare "http://::1:") as hosts that are NOT loopback and sends the
+// request to HTTP_PROXY, so a classifier
+// that is more lenient than the transport would call a request that leaves
+// this machine local. Do not lowercase the host to be friendlier to
+// "LOCALHOST": Go's proxy rule skips only the lowercase spelling, so
+// lowercasing here would reopen the same leak.
+func canonicalHost(hostport string) (string, bool) {
+	host, rest := hostport, ""
+	if strings.HasPrefix(hostport, "[") {
+		end := strings.Index(hostport, "]")
+		if end < 0 {
+			return "", false
+		}
+		host, rest = hostport[1:end], hostport[end+1:]
+	} else if i := strings.LastIndex(hostport, ":"); i >= 0 {
+		host, rest = hostport[:i], hostport[i:]
+	}
+	if rest != "" {
+		if len(rest) < 2 || rest[0] != ':' {
+			return "", false
+		}
+		for _, r := range rest[1:] {
+			if r < '0' || r > '9' {
+				return "", false
+			}
+		}
+	}
+	if host == "::1" && !strings.HasPrefix(hostport, "[") {
+		return "", false
+	}
+	return host, host != ""
+}
+
+// isLoopbackIPv4Literal reports whether host is a dotted-quad address in
+// 127.0.0.0/8, and ONLY a literal address.
+//
+// A bare `HasPrefix(host, "127.")` admits `127.evil.com` — a registrable
+// domain whose Hostname() starts with "127." and which resolves wherever its
+// owner points it. A provider record with that BaseURL would be classified
+// controller-local, and every gate built on this predicate would wave it
+// through. Found by the independent review of P1-E20-W5-S44-T2.
+//
+// Still no "net" import (egress-firewall-gated, A-T2) for a computation that
+// never opens a socket: the host must be exactly four canonical decimal
+// octets (no leading zeros), each 0-255, the first 127, which separates the
+// literal address from any domain.
+func isLoopbackIPv4Literal(host string) bool {
+	parts := strings.Split(host, ".")
+	if len(parts) != 4 || parts[0] != "127" {
+		return false
+	}
+	for _, part := range parts {
+		// Canonical decimal only: "127.000.000.001" parses as loopback to a
+		// lenient reader, but Go's HTTP proxy selection does not treat that
+		// spelling as loopback and would send the request to the configured
+		// proxy, i.e. off this machine.
+		if len(part) == 0 || len(part) > 3 || (len(part) > 1 && part[0] == '0') {
+			return false
+		}
+		n := 0
+		for _, r := range part {
+			if r < '0' || r > '9' {
+				return false
+			}
+			n = n*10 + int(r-'0')
+		}
+		if n > 255 {
 			return false
 		}
 	}

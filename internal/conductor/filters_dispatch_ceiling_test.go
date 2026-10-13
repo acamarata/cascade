@@ -31,7 +31,7 @@ func testUnconfiguredNoCeilings(t *testing.T, clock *testkit.FrozenClock) {
 	p := NewQuotaPolicy(QuotaConfig{}, clock)
 	r := NewRouter(twoLaneRegistry(), p, clock, nil)
 
-	sel, err := r.Select(context.Background(), chatReq())
+	sel, err := r.Select(context.Background(), internalReq())
 	if err != nil {
 		t.Fatalf("Select: unexpected error: %v", err)
 	}
@@ -56,19 +56,19 @@ func testUnconfiguredWithCeilings(t *testing.T, clock *testkit.FrozenClock) {
 	ctx := context.Background()
 
 	// Call 1: lane-local admitted.
-	sel, err := r.Select(ctx, chatReq())
+	sel, err := r.Select(ctx, internalReq())
 	if err != nil || sel.LaneID != "lane-local" {
 		t.Fatalf("call 1: got (%q, %v), want (lane-local, nil)", sel.LaneID, err)
 	}
 
 	// Call 2: lane-local is at ceiling (1), so lane-remote is admitted.
-	sel, err = r.Select(ctx, chatReq())
+	sel, err = r.Select(ctx, internalReq())
 	if err != nil || sel.LaneID != "lane-remote" {
 		t.Fatalf("call 2: got (%q, %v), want (lane-remote, nil)", sel.LaneID, err)
 	}
 
 	// Call 3: both lane-local and lane-remote are at ceiling. ErrAllLanesExhausted expected.
-	_, err = r.Select(ctx, chatReq())
+	_, err = r.Select(ctx, internalReq())
 	if !errIdentity(err, ErrAllLanesExhausted) {
 		t.Fatalf("call 3: got error %v, want ErrAllLanesExhausted (identity)", err)
 	}
@@ -78,7 +78,7 @@ func testUnconfiguredWithCeilings(t *testing.T, clock *testkit.FrozenClock) {
 
 	// Advance clock past CeilingWindow: lane-local is admitted again.
 	clock.Advance(CeilingWindow + time.Second)
-	sel, err = r.Select(ctx, chatReq())
+	sel, err = r.Select(ctx, internalReq())
 	if err != nil || sel.LaneID != "lane-local" {
 		t.Fatalf("call 4 after window: got (%q, %v), want (lane-local, nil)", sel.LaneID, err)
 	}

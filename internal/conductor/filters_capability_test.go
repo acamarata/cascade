@@ -62,23 +62,3 @@ func TestRouter_SensitivityGate_LocalOnly_NoLocalLane_ErrNoLane(t *testing.T) {
 		t.Fatalf("got %v, want ErrNoLane", err)
 	}
 }
-
-// TestRouter_SensitivityGate_Restricted documents the CONTRACT DEVIATION:
-// ProviderInfo carries no node-trust-tier vocabulary, so the restricted
-// leg of FILTER 2 removes nothing; this test asserts that documented,
-// verified behavior rather than a fabricated removal.
-func TestRouter_SensitivityGate_Restricted(t *testing.T) {
-	reg := twoLaneRegistry()
-	quota := &fakeQuota{order: []LaneID{"lane-local"}}
-	r := NewRouter(reg, quota, nil, nil)
-	req := chatReq()
-	req.Sensitivity = provider.SensitivityRestricted
-
-	_, flags, err := r.SelectExplain(context.Background(), req)
-	if err != nil {
-		t.Fatalf("SelectExplain: %v", err)
-	}
-	if !containsPrefix(flags, "sensitivity:restricted:0-filtered") {
-		t.Fatalf("flags = %v, want sensitivity:restricted:0-filtered", flags)
-	}
-}

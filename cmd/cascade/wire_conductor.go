@@ -7,7 +7,11 @@ package main
 var _ = registerDaemonWiring(daemonRegistration{
 	Name: "conductor", Phase: phaseConductor, Order: 10,
 	Wire: func(w *daemonWiring) error {
-		fanOut, err := wireConductorAndReachability(w.Ctx, w.Registry, w.Manifest, w.Paths, w.Clock, w.Store, nodeTunnelLookup(w.Opts))
+		permits, err := restrictedPermitsOption(w.Deps.Config)
+		if err != nil {
+			return err
+		}
+		fanOut, err := wireConductorAndReachability(w.Ctx, w.Registry, w.Manifest, w.Paths, w.Clock, w.Store, nodeTunnelLookup(w.Opts), permits)
 		w.ConductorFanOut = fanOut
 		return err
 	},

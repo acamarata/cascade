@@ -67,6 +67,10 @@ type DefaultRouter struct {
 	// that names node capabilities (it refuses, it does not ignore them).
 	placement NodeEligibility
 	fleet     NodeFleet
+	// restrictedPermits is the operator's [conductor]
+	// restricted_external_lanes list (restricted_permits.go), set once at
+	// construction by WithRestrictedPermits. The zero value permits nothing.
+	restrictedPermits RestrictedPermits
 }
 
 // NewRouter builds a Router. No vendor names or provider identifiers are
@@ -181,7 +185,7 @@ func (r *DefaultRouter) SelectExplain(ctx context.Context, req provider.ModelReq
 	// FILTER 0, ahead of capability: a thread's privacy_mode decides which
 	// lanes its work may reach AT ALL, and a refusal here is reported as a
 	// privacy refusal rather than as a capability miss. See privacy.go.
-	cands, flags, err = filterPrivacy(ctx, cands, flags)
+	cands, flags, err = filterPrivacy(ctx, cands, r.restrictedPermits, flags)
 	if err != nil {
 		return provider.Selection{}, flags, err
 	}
@@ -190,7 +194,7 @@ func (r *DefaultRouter) SelectExplain(ctx context.Context, req provider.ModelReq
 	if err != nil {
 		return provider.Selection{}, flags, err
 	}
-	cands, flags, err = filterSensitivity(cands, req, flags)
+	cands, flags, err = filterSensitivity(cands, req, r.restrictedPermits, flags)
 	if err != nil {
 		return provider.Selection{}, flags, err
 	}

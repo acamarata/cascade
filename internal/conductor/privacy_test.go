@@ -17,7 +17,7 @@ import (
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
-// allModes is every tier the table is total over, plus one that is not a
+// allModes is every tier the lane table (lane_table.go) is total over, plus one that is not a
 // tier at all: §5.16 says an unset mode is restricted, so the table must
 // answer for values outside the four as well as for the four.
 var allModes = []struct {
@@ -35,37 +35,6 @@ var allModes = []struct {
 // undeclared LaneType must be answered as strictly as an unresolved one,
 // so the table is total over LaneType's whole range too.
 var allLaneTypes = []LaneType{LaneControllerLocal, LaneExternalAPI, LaneUnresolved, LaneType(99)}
-
-// TestPrivacyModeTable asserts EVERY (privacy_mode x lane_type) cell, by
-// naming each expected answer here rather than by re-deriving it from the
-// same switch the implementation uses. A table test that computes its own
-// expectation from the code under test asserts nothing.
-func TestPrivacyModeTable(t *testing.T) {
-	// Columns, in allLaneTypes order: local, external, unresolved, undeclared.
-	want := map[string][4]bool{
-		"local-only":   {true, false, false, false},
-		"restricted":   {true, true, false, false},
-		"internal":     {true, true, false, false},
-		"public":       {true, true, true, true},
-		"out-of-range": {true, true, false, false}, // read as restricted
-	}
-	cells := 0
-	for _, m := range allModes {
-		row, ok := want[m.name]
-		if !ok {
-			t.Fatalf("no expectation declared for mode %s", m.name)
-		}
-		for i, lane := range allLaneTypes {
-			cells++
-			if got := PrivacyAllows(m.mode, lane); got != row[i] {
-				t.Errorf("PrivacyAllows(%s, %s) = %v, want %v", m.name, lane, got, row[i])
-			}
-		}
-	}
-	if cells != len(allModes)*len(allLaneTypes) {
-		t.Fatalf("checked %d cells, want %d: the table did not resolve", cells, len(allModes)*len(allLaneTypes))
-	}
-}
 
 // TestPrivacyModeClassifyLane pins the three computable lane types, and in
 // particular the distinction computedLocalityIsLocal collapses: "another
@@ -89,6 +58,10 @@ func TestPrivacyModeClassifyLane(t *testing.T) {
 		{"domain masquerading as loopback", "http://127.evil.com", LaneExternalAPI},
 		{"subdomain of a loopback-looking domain", "http://127.0.0.1.evil.com", LaneExternalAPI},
 		{"loopback with a port is still loopback", "http://127.0.0.53:9000", LaneControllerLocal},
+		{"unix url naming a remote host", "unix://api.evil.com/run/x.sock", LaneExternalAPI},
+		{"out-of-range octet is not a literal address", "http://127.0.0.999", LaneExternalAPI},
+		{"three octets is not a literal address", "http://127.0.1", LaneExternalAPI},
+		{"canonical zero octets stay loopback", "http://127.0.0.1", LaneControllerLocal},
 		{"empty base url", "", LaneUnresolved},
 		{"no host", "https://", LaneUnresolved},
 		{"unparseable", "://not a url", LaneUnresolved},
@@ -232,7 +205,9 @@ func TestPrivacyModeIntegration(t *testing.T) {
 			ThreadID: "th-open", Mode: provider.SensitivityPublic,
 		})
 
-		if _, err := r.Select(ctx, chatReq()); err != nil {
+		req := chatReq()
+		req.Sensitivity = provider.SensitivityPublic // FILTER 2 reads the request tier too
+		if _, err := r.Select(ctx, req); err != nil {
 			t.Fatalf("Select for a public thread: %v; the gate refused a mode that permits everything", err)
 		}
 	})

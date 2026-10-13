@@ -132,9 +132,9 @@ func TestReviewCRALocalOnlyNeverReachesExternalLane(t *testing.T) {
 }
 
 // TestReviewDispatchSensitivityIsTaskClassDefault is the assertion the router
-// alone cannot make: filterSensitivity's restricted/internal/public legs
-// remove no candidate (its own recorded contract deviation), so a dispatch
-// silently downgraded from restricted to internal would still route. This
+// alone cannot make: a dispatch silently downgraded from restricted to
+// internal would still route (the fixture's lanes are permitted for
+// restricted content, so both tiers admit them). This
 // pins every level's dispatched Sensitivity -- and its Requirements -- to the
 // REAL §5.16 row for its task class, so the downgrade the CR found cannot
 // come back unnoticed.

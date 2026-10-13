@@ -140,7 +140,9 @@ func acceptancePrivacyAssertPublicRoutes(ctx context.Context, t *testing.T, reg 
 	router := conductor.NewRouter(reg, quota, nil, nil)
 	rctx := conductor.ContextWithThreadPrivacy(ctx, conductor.ThreadPrivacy{ThreadID: publicThreadID, Mode: publicMode})
 
-	sel, err := router.Select(rctx, acceptanceChatReq())
+	req := acceptanceChatReq()
+	req.Sensitivity = provider.SensitivityPublic // FILTER 2 reads the request tier as well as the thread
+	sel, err := router.Select(rctx, req)
 	if err != nil {
 		t.Fatalf("Select for a public thread against a registry offering both lanes: %v, want a successful selection -- the privacy gate refused a mode that permits every lane type", err)
 	}

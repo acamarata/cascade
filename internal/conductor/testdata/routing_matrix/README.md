@@ -39,15 +39,11 @@ zero required capabilities):
   `anyCapabilityRequired` is false (no capability set), so the lane is
   appended unconditionally and `capability:%d-matched` reports len(out)=1.
   No unprobed flag - `unprobed` stays 0.
-- `sensitivity:<tier>:0-filtered` - for `local-only`, `filterLocalOnly`
-  (filters_capability.go:131) removes zero lanes because
-  `computedLocalityIsLocal` (line 144) returns true for a
-  `127.0.0.1`-hosted BaseURL, so `removed` stays 0. For
-  `restricted`/`internal`/`public`, `filterSensitivity`'s own default leg
-  (filters_capability.go:107/110) always appends
-  `sensitivity:%s:0-filtered` unconditionally (a CONTRACT DEVIATION already
-  recorded in that file's header: the real registry carries no node-trust
-  vocabulary for those three tiers to filter against).
+- `sensitivity:<tier>:0-filtered` - `filterSensitivity` (filters_capability.go)
+  runs every candidate through the one lane table (`SensitivityAllows`,
+  lane_table.go). The single `127.0.0.1`-hosted lane is controller-local,
+  which every tier admits, so each tier removes zero lanes and appends
+  `sensitivity:%s:0-filtered` (P1-SEC-02 left these 36 rows unchanged).
 - `health:0-evicted` - `filterHealth` (filters_dispatch.go:43): the lane's
   `HealthStatus` is `"healthy"`, so `evicted` stays 0.
 - `quota:priority:lane-lane-a` - `quotaFlag` (filters_dispatch.go:88-92):
@@ -69,6 +65,9 @@ golden per K/S-22.T2 filter-stage outcome:
 | capability-unprobed-excluded | FILTER 1 | `CapabilityUnknown` -> `ErrNoCapableProvider`, `capability:1-unprobed-excluded` then `capability:0-matched` |
 | sensitivity-permitted-local | FILTER 2 | `local-only` tier, loopback lane -> retained |
 | sensitivity-filtered-local | FILTER 2 | `local-only` tier, a non-loopback `BaseURL` -> removed, `ErrNoLane` (filterLocalOnly's own contract: an emptied local-only set returns `ErrNoLane`, never `ErrSensitivityViolation` - see filters_capability.go:117-120) |
+| sensitivity-restricted-remote-refused | FILTER 2 | `restricted` tier, a non-loopback `BaseURL`, no permit -> removed, `ErrSensitivityViolation` (wrapped: the harness checks it by `errors.Is` and the permit-key name), flags `sensitivity:restricted:1-filtered` then `sensitivity:restricted:removed:lane-a(external-api)` (lane_table.go) |
+| sensitivity-restricted-remote-permitted | FILTER 2 | same lane named in `permit_lanes` (the `[conductor] restricted_external_lanes` list) -> retained, `sensitivity:restricted:0-filtered` |
+| sensitivity-internal-remote-admitted | FILTER 2 | `internal` tier, a non-loopback `BaseURL` -> retained (the table allows external-api for internal and public) |
 | health-clean | FILTER 3 | `HealthStatus: healthy` -> retained |
 | health-evicted | FILTER 3 | `HealthStatus: evicted` -> `ErrAllProvidersEvicted` |
 | quota-pool-selected | FILTER 4 | `PoolMembership: pool-x` -> `quota:pool-pool-x:lane-lane-a` |

@@ -24,21 +24,11 @@
 // anyway. The thread is request-scoped metadata, which is what a context
 // value is for. Router.Select's signature is unchanged.
 //
-// CONTRACT DEVIATION (recorded, not papered over). The contract's
-// restricted row reads "refuse bridge lanes and any external-API lane not
-// explicitly permitted for restricted content". Neither half is
-// computable here: the real provider registry's closed vocabularies
-// (DriverKind, AuthType, AccountKind, Tier, HealthStatus, CapacityBucket)
-// contain no bridge member and no per-lane permit field, which is the
-// same deviation filterSensitivity already records for its own
-// restricted/internal/public legs. A bridge lane is by construction not
-// controller-local, so the local-only row refuses it; the restricted row
-// refuses it only when its locality is unresolved. Making the restricted
-// row refuse EVERY external lane was rejected: restricted is the §5.16
-// default for an unset mode, so that reading refuses every external lane
-// for every request that names no tier, which is a routing change this
-// ticket is not licensed to make. What would make the cell direct is a
-// registry trust-tier field, and R-14.60 strikes inventing one.
+// THE TABLE LIVES IN lane_table.go. This file classifies lanes and applies
+// the thread's mode; the (tier x lane type) verdict is SensitivityAllows,
+// the same table FILTER 2 reads (P1-SEC-02, C5: one table). A restricted
+// thread may use an external lane only when the operator named it in
+// [conductor] restricted_external_lanes (restricted_permits.go).
 //
 // SPORT: conductor.privacy/ADD (P1-E20-W5-S44-T2).
 
@@ -154,42 +144,6 @@ func resolvableHost(p provider.ProviderInfo) bool {
 	return u.Hostname() != ""
 }
 
-// PrivacyAllows is the (privacy_mode x lane_type) table itself. Every one
-// of the twelve cells is decided here, and privacy_test.go asserts each.
-//
-//	mode \ lane   | controller-local | external-api | unresolved
-//	local-only    | allow            | REFUSE       | REFUSE
-//	restricted    | allow            | allow (*)    | REFUSE
-//	internal      | allow            | allow        | REFUSE
-//	public        | allow            | allow        | allow
-//
-// (*) the CONTRACT DEVIATION in this file's header.
-//
-// A tier outside the four is read as restricted, matching EffectiveMode
-// and §5.16, so the table is total over provider.SensitivityTier's whole
-// uint8 range rather than over its four named values.
-func PrivacyAllows(mode provider.SensitivityTier, lane LaneType) bool {
-	if !mode.Valid() {
-		mode = provider.SensitivityRestricted
-	}
-	switch lane {
-	case LaneControllerLocal:
-		// Work that never leaves this machine is what every mode permits;
-		// local-only is the mode that permits nothing else.
-		return true
-	case LaneExternalAPI:
-		return mode != provider.SensitivityLocalOnly
-	case LaneUnresolved:
-		// Only content already declared public may ride a lane whose
-		// destination this build cannot name.
-		return mode == provider.SensitivityPublic
-	default:
-		// An undeclared LaneType is treated as unresolved, never as one of
-		// the two kinds the table lets more modes through.
-		return mode == provider.SensitivityPublic
-	}
-}
-
 // threadPrivacyKey is the unexported context key. Unexported and of a
 // private type so no other package can collide with it or forge a thread
 // onto a context this package will trust.
@@ -232,26 +186,19 @@ func ThreadPrivacyFrom(ctx context.Context) (ThreadPrivacy, bool) {
 // presence of a privacy: flag is itself the signal that a thread was in
 // scope, so its ABSENCE is the diagnosis for a thread whose mode did not
 // reach routing.
-func filterPrivacy(ctx context.Context, cands []laneCandidate, flags []string) ([]laneCandidate, []string, error) {
+func filterPrivacy(ctx context.Context, cands []laneCandidate, permits RestrictedPermits, flags []string) ([]laneCandidate, []string, error) {
 	tp, ok := ThreadPrivacyFrom(ctx)
 	if !ok {
 		return cands, flags, nil
 	}
 	mode := tp.EffectiveMode()
-	out := make([]laneCandidate, 0, len(cands))
-	var refused []laneCandidate
-	for _, c := range cands {
-		if PrivacyAllows(mode, ClassifyLane(c.provider)) {
-			out = append(out, c)
-			continue
-		}
-		refused = append(refused, c)
+	v := applyLaneTable(cands, mode, permits)
+	flags = append(flags, fmt.Sprintf("privacy:%s:%d-filtered", mode.String(), len(v.removed)))
+	flags = append(flags, v.flags...)
+	if len(v.kept) == 0 && len(cands) > 0 {
+		return v.kept, flags, privacyRefusal(tp, mode, v.removed)
 	}
-	flags = append(flags, fmt.Sprintf("privacy:%s:%d-filtered", mode.String(), len(refused)))
-	if len(out) == 0 && len(cands) > 0 {
-		return out, flags, privacyRefusal(tp, mode, refused)
-	}
-	return out, flags, nil
+	return v.kept, flags, nil
 }
 
 // privacyRefusal builds the ErrSensitivityViolation the contract names,
@@ -270,6 +217,6 @@ func privacyRefusal(tp ThreadPrivacy, mode provider.SensitivityTier, refused []l
 		laneType = ClassifyLane(refused[0].provider)
 	}
 	return cascade.Wrapf(cascade.KindPolicyDenied, ErrSensitivityViolation,
-		"conductor: thread %s is %s, so it may not use lane %q (%s); %d candidate lane(s) refused, none remain",
-		tp.ThreadID, mode.String(), lane, laneType.String(), len(refused))
+		"conductor: thread %s is %s, so it may not use lane %q (%s); %d candidate lane(s) refused, none remain; %s",
+		tp.ThreadID, mode.String(), lane, laneType.String(), len(refused), refusalHint(mode, refused))
 }

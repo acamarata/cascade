@@ -16,7 +16,7 @@ against the real implementation.
 | # | Filter | File | Narrows on | Fail-closed error |
 |---|---|---|---|---|
 | 1 | Capability | `filters_capability.go` | `req.RequiredCapabilities` against each lane's cached `Capabilities` | `ErrNoCapableProvider` |
-| 2 | Sensitivity | `filters_capability.go` | the resolved `SensitivityTier` | `ErrNoLane` (local-only leg only) |
+| 2 | Sensitivity | `filters_capability.go` | the resolved `SensitivityTier` | `ErrNoLane` (local-only tier), `ErrSensitivityViolation` (every other tier) |
 | 3 | Health | `filters_dispatch.go` | `ProviderInfo.HealthStatus` | `ErrAllProvidersEvicted` |
 | 4 | Quota/spill | `filters_dispatch.go` | `QuotaSpiller.NextLane`'s ordering | (propagates `QuotaSpiller`'s own error, e.g. `ErrAllLanesExhausted`) |
 | 5 | Cost | `filters_dispatch.go` | none - builds the final `Selection` from FILTER 4's single survivor | none |
@@ -38,15 +38,41 @@ adds a `capability:N-unprobed-excluded` flag before the terminal
 ### FILTER 2 - sensitivity
 
 An unset or invalid `Sensitivity` value resolves to `SensitivityRestricted`
-before this filter runs (see `resolve.go`'s `ResolveSensitivity`, the same
-function `execute.go`'s `authorize` calls). `local-only` retains exactly
-the lanes whose computed locality is local (a loopback or unix-socket
-`BaseURL`) and removes every remote-locality lane; an emptied local-only
-set returns `ErrNoLane`. The `restricted`/`internal`/`public` legs are a
-recorded CONTRACT DEVIATION: the real `ProviderRegistryReader` carries no
-node-trust-tier vocabulary, so those three legs remove nothing and record
-the fact via a `sensitivity:<tier>:0-filtered` flag rather than silently
-widening the tier.
+(`resolve.go`'s `ResolveSensitivity`, the same function `execute.go`'s
+`authorize` calls). Every candidate lane is then decided by ONE table,
+`SensitivityAllows` in `lane_table.go`. The thread-privacy filter (FILTER 0,
+`privacy.go`) reads the same table, so the two gates cannot disagree.
+
+| tier \ lane | controller-local | external-api | unresolved |
+|---|---|---|---|
+| local-only | allow | refuse | refuse |
+| restricted | allow | allow only if permitted | refuse |
+| internal | allow | allow | refuse |
+| public | allow | allow | allow |
+
+A lane is controller-local when its `BaseURL` is a host-less `unix://` socket,
+`localhost`, `::1` or a dotted-quad address in `127.0.0.0/8`. Anything else
+with a host is external-api (so `127.evil.com`, `localhost.evil.com` and a
+`unix://` URL that names a host are external). An empty or unparseable
+`BaseURL` is unresolved. A tier outside the four reads as restricted.
+
+**Restricted permits.** Restricted content may use an external lane only when
+the operator names that lane in the guarded config key
+`[conductor] restricted_external_lanes` (a list of exact lane names, default
+empty). A wildcard, a non-string entry or a non-list value refuses the config
+with `invalid_input`; a permit never admits an unresolved lane. The list is
+read once when the daemon builds the conductor, so a change applies at the next
+start. Adding a lane loosens the policy, so the key belongs to the guarded
+`[conductor]` section. Every default request is restricted, so until the
+operator lists a cloud lane the conductor routes only to controller-local
+lanes.
+
+**Refusal.** `local-only` keeps its R-21.228 contract: an emptied set returns
+`ErrNoLane` and the flag is the count alone. For every other tier each removed
+lane adds a flag `sensitivity:<tier>:removed:<lane>(<lanetype>)` (sorted by
+lane name), and an emptied set returns `ErrSensitivityViolation` (kind
+`policy_denied`) naming the tier, the first removed lane and its type, the
+count and the `conductor.restricted_external_lanes` key.
 
 ### FILTER 3 - health
 

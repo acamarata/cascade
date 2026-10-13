@@ -16,8 +16,10 @@ package conductor
 
 import (
 	"context"
+	"errors"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/provider"
@@ -48,6 +50,9 @@ type stageRow struct {
 	WantLaneID       string   `yaml:"want_lane_id"`
 	WantFlags        []string `yaml:"want_flags"`
 	WantErr          string   `yaml:"want_err"`
+	// PermitLanes is the [conductor] restricted_external_lanes list the row
+	// runs under; empty is the default (no external lane for restricted).
+	PermitLanes []string `yaml:"permit_lanes"`
 }
 
 // goldenFile mirrors goldens.yaml's top-level shape.
@@ -103,6 +108,9 @@ var stageErrByName = map[string]error{
 	"ErrNoCapableProvider":   ErrNoCapableProvider,
 	"ErrAllProvidersEvicted": ErrAllProvidersEvicted,
 	"ErrNoLane":              ErrNoLane,
+	// An emptied non-local-only set wraps this sentinel with detail, so the
+	// stage check below compares it by Is + message, not identity.
+	"ErrSensitivityViolation": ErrSensitivityViolation,
 }
 
 // pairRegistry builds the uniform single-healthy-local-lane fixture the
@@ -202,6 +210,7 @@ func TestRoutingMatrix_FilterStages(t *testing.T) {
 			}
 			quota := &fakeQuota{order: []LaneID{"lane-a"}}
 			r := NewRouter(reg, quota, nil, nil)
+			WithRestrictedPermits(permitsOf(t, row.PermitLanes...))(r)
 			req := chatReq()
 			req.Sensitivity = sensitivityByName[row.Sensitivity]
 			req.RequiredCapabilities.Search = row.RequiredSearch
@@ -223,7 +232,11 @@ func assertStageOutcome(t *testing.T, row stageRow, sel provider.Selection, flag
 		if !ok {
 			t.Fatalf("goldens.yaml names unrecognized want_err %q", row.WantErr)
 		}
-		if err != wantErr {
+		if wantErr == ErrSensitivityViolation {
+			if err == nil || !errors.Is(err, wantErr) || !strings.Contains(err.Error(), RestrictedPermitsKey) {
+				t.Fatalf("err = %v, want a wrapped ErrSensitivityViolation naming %s", err, RestrictedPermitsKey)
+			}
+		} else if err != wantErr {
 			t.Fatalf("err = %v, want %v", err, wantErr)
 		}
 	} else if err != nil {

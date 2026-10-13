@@ -54,7 +54,7 @@ func TestRouter_TieBreakCostThenLaneID(t *testing.T) {
 	quota := &fakeQuota{order: []LaneID{"lane-remote", "lane-local"}}
 	r := NewRouter(reg, quota, nil, nil)
 
-	sel, err := r.Select(context.Background(), chatReq())
+	sel, err := r.Select(context.Background(), internalReq())
 	if err != nil {
 		t.Fatalf("Select: %v", err)
 	}
