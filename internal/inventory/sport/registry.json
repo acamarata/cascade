@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-13T00:08:47Z",
+  "generated_at": "2026-10-13T00:35:50Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3851,6 +3851,20 @@
       ]
     },
     {
+      "name": "cmd/cascade daemon inbox hydration composition",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_inbox_hydration.go",
+          "line": 14,
+          "status": "",
+          "raw": "cmd/cascade daemon inbox hydration composition (P1-HRN-02)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd/cascade daemon registrations",
       "sites": [
         {
@@ -3906,6 +3920,12 @@
           "line": 4,
           "status": "",
           "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/wire_inbox_hydration.go",
+          "line": 27,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-HRN-02)."
         },
         {
           "file": "cmd/cascade/wire_mcp.go",
@@ -4001,9 +4021,9 @@
         },
         {
           "file": "cmd/cascade/wire_context_drain.go",
-          "line": 15,
+          "line": 17,
           "status": "ADD",
-          "raw": "cmd/cascade daemon stall supervision (ADDED, P1-SUP-04)."
+          "raw": "cmd/cascade daemon stall supervision (ADDED, P1-SUP-04; CHANGED, P1-HRN-02)."
         },
         {
           "file": "cmd/cascade/wire_context_drain_test.go",
@@ -19179,6 +19199,20 @@
       ]
     },
     {
+      "name": "internal/daemon context.slice inbox hydration",
+      "sites": [
+        {
+          "file": "internal/daemon/context_inbox.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal/daemon context.slice inbox hydration (ADD,"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/daemon status:requeue-collaborators",
       "sites": [
         {
@@ -20150,6 +20184,20 @@
           "status": "ADD",
           "ticket": "P1-E22-W5-S47-T1",
           "raw": "internal/integration (ADD, P1-E22-W5-S47-T1, fix item 12)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/integration cascade-claude-inbox-push",
+      "sites": [
+        {
+          "file": "internal/integration/claude_inbox_push_test.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal/integration cascade-claude-inbox-push (ADD) —"
         }
       ],
       "statuses": [
@@ -21740,6 +21788,20 @@
           "status": "ADD",
           "ticket": "P1-E03-W1-S05-T7",
           "raw": "internal/plugins builtin-registry tests (ADD) — P1-E03-W1-S05-T7."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins cascade-claude inbox host adapter",
+      "sites": [
+        {
+          "file": "internal/plugins/claude_inbox_push.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "internal/plugins cascade-claude inbox host adapter (ADD) —"
         }
       ],
       "statuses": [
@@ -30469,6 +30531,65 @@
       ]
     },
     {
+      "name": "plugins/claude/inbox-next-turn-hydration",
+      "sites": [
+        {
+          "file": "plugins/claude/inbox_hydration.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E37-W8-S73-T1",
+          "raw": "plugins/claude/inbox-next-turn-hydration (ADD) — P1-E37-W8-S73-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/claude/inbox-push",
+      "sites": [
+        {
+          "file": "plugins/claude/inbox_push.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E37-W8-S73-T1",
+          "raw": "plugins/claude/inbox-push (ADD) — P1-E37-W8-S73-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/claude/inbox-push-envelope + inbox-data-class",
+      "sites": [
+        {
+          "file": "plugins/claude/inbox_envelope.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "plugins/claude/inbox-push-envelope + inbox-data-class (ADD) —"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/claude/mcp-push-channel",
+      "sites": [
+        {
+          "file": "plugins/claude/cc_channel.go",
+          "line": 26,
+          "status": "ADD",
+          "ticket": "P1-E37-W8-S73-T1",
+          "raw": "plugins/claude/mcp-push-channel (ADD) — P1-E37-W8-S73-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/claude:watch",
       "sites": [
         {
@@ -34968,7 +35089,7 @@
       ]
     }
   ],
-  "total_sites": 3368,
-  "unspecified_count": 220,
+  "total_sites": 3377,
+  "unspecified_count": 221,
   "multi_status_count": 106
 }
