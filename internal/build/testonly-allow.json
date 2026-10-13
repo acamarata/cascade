@@ -1,12 +1,5 @@
 [
   {
-    "caller_site": "internal/audit/composition.go",
-    "expected_caller": "the composition root that builds the egress substitution engine, in the SAME change that binds a vault-backed redactor",
-    "reason": "The append-path redaction seam is built before the engine that fills it. No composition root binds a secrets substitution pass yet, so every shipped Log is still built with New; wiring this constructor is the same change that mounts that engine. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/audit.NewWithRedactor"
-  },
-  {
     "caller_site": "cmd/cascade/bench.go",
     "expected_caller": "a future `cascade bench` (or CI bench-gate) command in cmd/cascade that runs go test -bench=., pipes stdout through ParseBenchOutput, and calls Gate against RegisteredBudgets; retire this entry once that lands",
     "reason": "P1-E28-W10-S58-T2 builds the go test -bench output parser and budget gate as a standalone package with no CLI verb calling it yet -- ParseBenchOutput/Gate/RegisteredBudgets are fully implemented and tested against real go test -bench=. output, but no cmd/cascade command runs a bench and feeds the result through this package.",
@@ -1019,13 +1012,6 @@
     "symbol": "internal/secrets.NewClipboardWriter"
   },
   {
-    "caller_site": "internal/audit/composition.go",
-    "expected_caller": "the composition root that builds the egress substitution engine, alongside internal/audit.NewWithRedactor",
-    "reason": "The concrete redactor that satisfies internal/audit.Redactor. It is unreachable for exactly as long as NewWithRedactor is; retire the two entries together. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/secrets.NewRedactor"
-  },
-  {
     "caller_site": "internal/conductor/executor.go",
     "expected_caller": "the conductor executor's action-dispatch function (internal/conductor/executor), when that package lands",
     "reason": "Rehydration is executor-only by ruling, and the executor is a later wave. Wiring it anywhere else now would violate the boundary this ticket's own arch gate enforces. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
@@ -1248,14 +1234,6 @@
     "reason": "The runner-table constructor for agent-note ships with the engine; the table is assembled at the composition root, which is P1-SUP-02's scope, so only internal/hooks tests call it at this tip.",
     "retire_ticket": "P1-SUP-02",
     "symbol": "internal/hooks.AgentNoteRunner"
-  },
-  {
-    "added_by_ticket": "P1-SEC-33",
-    "caller_site": "cmd/cascade/audit_log.go",
-    "expected_caller": "cmd/cascade/audit_log.go, where openEffectLog calls audit.NewEffectLog per the P1-SEC-06 contract; retire this entry when that lands",
-    "reason": "NewEffectLog is the constructor of the audit effect recorder. This ticket ships the library only; every external-effect site that consumes it lands later and reaches it through openEffectLog (P1-SEC-06). Exercised by internal/audit/effect_test.go, effect_index_test.go and effect_crash_test.go over memstore and real SQLite, including a re-exec crash test.",
-    "retire_ticket": "P1-SEC-06",
-    "symbol": "internal/audit.NewEffectLog"
   },
   {
     "caller_site": "internal/learn/finding.go",
@@ -1587,5 +1565,13 @@
     "reason": "P1-HRN-02 ships the hydration queue, the bridge and the context.slice drain; the drain side is composed (wire_inbox_hydration.go registers it flag-off) but nothing constructs the router subscription until P1-HRN-07 builds the per-session subscription wiring, so internal/plugins tests are the only callers today",
     "retire_ticket": "P1-HRN-07",
     "symbol": "internal/plugins.WireClaudeInboxPush"
+  },
+  {
+    "added_by_ticket": "P1-AGT-01",
+    "caller_site": "internal/providers/agents/harness_claude.go",
+    "expected_caller": "internal/providers/agents/harness_claude.go, the claude DriverFactory that adapts a SpawnSite to claude.Config and calls claude.New; retire this entry once that file calls New",
+    "reason": "P1-AGT-01 ships providers/agents/claude.Driver implemented and tested against injected seam doubles (testkit_test.go) and appended to the conformance suite (TestConformanceClaude), but the harness registry that resolves the real profile, lease and per-spawn filter and constructs the driver from a running composition root is P1-AGT-02 (harness_claude.go); the import boundary forbids internal/** from importing providers/agents until that ticket binds it. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
+    "retire_ticket": "P1-AGT-02",
+    "symbol": "providers/agents/claude.New"
   }
 ]
