@@ -65,7 +65,11 @@ func setupCompletionGate(t *testing.T) (*completionPolicyGate, *completionJobRes
 	authz := jobs.NewProducerAuthz(jstore, func() bool { return true }, nil)
 	kv := storetest.NewMemStore()
 	bus := events.New(kv, clock)
-	ledger, err := jobs.NewEvidenceLedger(jstore, clock, audit.New(kv, clock, nil), authz)
+	effects, err := audit.NewEffectLog(audit.New(kv, clock, nil))
+	if err != nil {
+		t.Fatalf("NewEffectLog: %v", err)
+	}
+	ledger, err := jobs.NewEvidenceLedger(jstore, clock, effects, authz)
 	if err != nil {
 		t.Fatalf("NewEvidenceLedger: %v", err)
 	}

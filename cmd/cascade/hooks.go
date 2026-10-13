@@ -58,6 +58,7 @@ import (
 	"errors"
 	"path/filepath"
 
+	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/fleet/hookpacks"
 	"github.com/acamarata/cascade/internal/jobs"
@@ -100,13 +101,27 @@ func wireCompletionHookPack(ctx context.Context, registry *rpc.Registry, store p
 
 	jstore := jobs.NewStore(db)
 	authz := jobs.NewProducerAuthz(jstore, func() bool { return true }, nil)
-	auditLog, err := openDaemonAuditLog(store, clock, nil, paths)
+	// The daemon binds the process egress firewall before its audit log opens
+	// (openDaemonAuditLog); the effect log is then the verified view of that
+	// same shared log.
+	if _, err = openDaemonAuditLog(store, clock, nil, paths); err != nil { // result unused: openEffectLog reads the memoized log
+		return err
+	}
+	effects, err := openEffectLog(store, clock, nil, paths)
 	if err != nil {
 		return err
 	}
-	ledger, err := jobs.NewEvidenceLedger(jstore, clock, auditLog, authz)
+	ledger, err := jobs.NewEvidenceLedger(jstore, clock, effects, authz)
 	if err != nil {
 		return err
+	}
+	// Settle the intents a crash left open before the gate serves anything.
+	if err := recoverEvidenceEffects(ctx, effects, ledger); err != nil {
+		kind, ok := cascade.KindOf(err)
+		if !ok {
+			kind = cascade.KindUnavailable
+		}
+		return cascade.Wrap(kind, err, "completion gate: start-up recovery of open evidence audit intents failed")
 	}
 	policy, err := jobs.NewCompletionPolicy(jobs.CompletionPolicyDeps{
 		Store: jstore, Ledger: ledger, Bus: bus, Clock: clock, EngineID: completionGateEngineID,
@@ -121,6 +136,18 @@ func wireCompletionHookPack(ctx context.Context, registry *rpc.Registry, store p
 		return err
 	}
 	return hookpacks.RegisterCompletionCheckHandler(registry, clock, bus, gate, resolver, 0)
+}
+
+// recoverEvidenceEffects settles every evidence intent a previous run left
+// open (a crash between the audit intent and the row's confirmation): the
+// ledger probes each row and confirms or fails the intent. Intents of other
+// effect sites are left for their own recovery.
+func recoverEvidenceEffects(ctx context.Context, effects *audit.EffectLog, ledger *jobs.EvidenceLedger) error {
+	pending, err := effects.PendingEffects(ctx)
+	if err != nil {
+		return err
+	}
+	return ledger.RecoverEffects(ctx, pending)
 }
 
 // completionPolicyGate adapts *jobs.CompletionPolicy to

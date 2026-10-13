@@ -2,7 +2,7 @@ package jobs
 
 // Purpose: EvidenceLedger's own contract -- Append happy path, Query
 //
-//	latest, audit.Writer call count, and rows surviving a store reopen
+//	latest, audit effect call count, and rows surviving a store reopen
 //	(the S-60.T4 resume guarantee) -- over a real modernc-sqlite db in
 //	t.TempDir() (Art.2/Art.7.1).
 //
@@ -18,15 +18,40 @@ import (
 	"github.com/acamarata/cascade/internal/runtime"
 )
 
-// recordingWriter counts audit.Writer.Append calls and captures them.
+// recordingWriter is an audit.EffectWriter fake: it keeps every BeginEffect
+// request in calls, the settled handles in confirmed/failed, refuses a key
+// begun twice like the real log, and fails BeginEffect with err when set.
 type recordingWriter struct {
-	calls []audit.Event
-	err   error
+	calls     []audit.EffectRequest
+	confirmed []audit.EffectHandle
+	failed    []audit.EffectHandle
+	begun     map[string]bool
+	err       error
 }
 
-func (w *recordingWriter) Append(_ context.Context, e audit.Event) (audit.Record, error) {
-	w.calls = append(w.calls, e)
-	return audit.Record{}, w.err
+func (w *recordingWriter) BeginEffect(_ context.Context, req audit.EffectRequest) (audit.EffectHandle, error) {
+	if w.err != nil {
+		return audit.EffectHandle{}, w.err
+	}
+	if w.begun[req.Key] {
+		return audit.EffectHandle{}, audit.ErrEffectExists
+	}
+	if w.begun == nil {
+		w.begun = map[string]bool{}
+	}
+	w.begun[req.Key] = true
+	w.calls = append(w.calls, req)
+	return audit.EffectHandle{Key: req.Key, Kind: req.Kind, IntentSeq: uint64(len(w.calls))}, nil
+}
+
+func (w *recordingWriter) ConfirmEffect(_ context.Context, h audit.EffectHandle, _ string) (audit.Record, error) {
+	w.confirmed = append(w.confirmed, h)
+	return audit.Record{}, nil
+}
+
+func (w *recordingWriter) FailEffect(_ context.Context, h audit.EffectHandle, _ string) (audit.Record, error) {
+	w.failed = append(w.failed, h)
+	return audit.Record{}, nil
 }
 
 // alwaysAuthorized is a ProducerAuthz stand-in that permits every Append,

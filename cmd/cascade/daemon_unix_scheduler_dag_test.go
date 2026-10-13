@@ -43,7 +43,7 @@ func TestBuildRPCServer_MountsJobScheduler(t *testing.T) {
 	bus := events.New(storetest.NewMemStore(), clock)
 	paths := fakeMemoryPaths{root: t.TempDir()}
 
-	srv, manifest, _, err := buildRPCServer(bus, clock, nil, daemon.Settings{SocketPath: filepath.Join(paths.root, "d.sock")}, paths, nil, nil)
+	srv, manifest, _, err := buildRPCServer(bus, clock, nil, daemon.Settings{SocketPath: filepath.Join(paths.root, "d.sock")}, paths, nil, storetest.NewMemStore())
 	if err != nil {
 		t.Fatalf("buildRPCServer: %v", err)
 	}

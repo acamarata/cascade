@@ -41,7 +41,7 @@ func TestBuildRPCServer_ContextSyncReachableOverRealSocket(t *testing.T) {
 	clock := runtime.NewSystemClock()
 	bus := events.New(storetest.NewMemStore(), clock)
 
-	srv, _, _, err := buildRPCServer(bus, clock, nil, daemon.Settings{SocketPath: "ctxsynce2e.sock"}, fakeMemoryPaths{root: t.TempDir()}, nil, nil)
+	srv, _, _, err := buildRPCServer(bus, clock, nil, daemon.Settings{SocketPath: "ctxsynce2e.sock"}, fakeMemoryPaths{root: t.TempDir()}, nil, storetest.NewMemStore())
 	if err != nil {
 		t.Fatalf("buildRPCServer: %v", err)
 	}

@@ -35,7 +35,7 @@ func TestBuildRPCServer_StatusReachableOverRealSocket(t *testing.T) {
 	dir := mkdirTempIT(t, "statuse2e")
 	sockPath := filepath.Join(dir, "d.sock")
 
-	srv, manifest, _, err := buildRPCServer(bus, clock, nil, daemon.Settings{SocketPath: sockPath}, fakeMemoryPaths{root: t.TempDir()}, nil, nil)
+	srv, manifest, _, err := buildRPCServer(bus, clock, nil, daemon.Settings{SocketPath: sockPath}, fakeMemoryPaths{root: t.TempDir()}, nil, storetest.NewMemStore())
 	if err != nil {
 		t.Fatalf("buildRPCServer: %v", err)
 	}

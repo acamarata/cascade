@@ -133,8 +133,13 @@ outcome, and a failed cleanup already refuses.
 
 ## Limits
 
-- Until a site above lands, nothing in the shipped binary constructs an
-  `EffectLog`. The library is complete and tested; it has no caller yet.
+- Until the rest of the sites above land, the only shipped caller is the
+  evidence ledger (`internal/jobs/evidence_effect.go`), which the
+  completion hook wiring builds from the verified `EffectLog` and recovers
+  at start-up. The library is complete and tested.
+- An evidence append whose row insert fails burns its attempt key for good
+  and the next try uses the next one. After 16 such attempts for one
+  (job, idempotency key) pair, `Append` refuses with a conflict.
 - `Log.Verify` replays the chained effect records and compares them with
   the `eff:` index rows. A missing, extra or different row returns
   `ErrTampered` naming the key, as does a second intent for one key.

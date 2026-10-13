@@ -43,7 +43,7 @@ func TestBuildRPCServer_ChatReachableOverRealSocket(t *testing.T) {
 	sockPath := filepath.Join(dir, "d.sock")
 
 	srv, _, _, err := buildRPCServer(bus, clock, nil,
-		daemon.Settings{SocketPath: sockPath}, fakeMemoryPaths{root: t.TempDir()}, nil, nil)
+		daemon.Settings{SocketPath: sockPath}, fakeMemoryPaths{root: t.TempDir()}, nil, storetest.NewMemStore())
 	if err != nil {
 		t.Fatalf("buildRPCServer: %v", err)
 	}

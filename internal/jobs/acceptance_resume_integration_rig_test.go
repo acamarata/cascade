@@ -77,7 +77,10 @@ func openPath2Rig(t *testing.T, dbPath string, clock runtime.Clock) *path2Rig {
 		t.Fatalf("NewWorktreeManager: %v", err)
 	}
 	authz := jobs.NewProducerAuthz(store, func() bool { return true }, leases)
-	writer := audit.New(storetest.NewMemStore(), clock, nil)
+	writer, err := audit.NewEffectLog(audit.New(storetest.NewMemStore(), clock, nil))
+	if err != nil {
+		t.Fatalf("NewEffectLog: %v", err)
+	}
 	ledger, err := jobs.NewEvidenceLedger(store, clock, writer, authz)
 	if err != nil {
 		t.Fatalf("NewEvidenceLedger: %v", err)

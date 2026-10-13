@@ -58,7 +58,7 @@ func startRecallDaemon(t *testing.T) recallDeps {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	settings := daemon.Settings{SocketPath: filepath.Join(sockDir, "daemon.sock")}
 
-	server, _, _, err := buildRPCServer(bus, clock, logger, settings, paths, nil, nil)
+	server, _, _, err := buildRPCServer(bus, clock, logger, settings, paths, nil, storetest.NewMemStore())
 	if err != nil {
 		t.Fatalf("buildRPCServer: %v", err)
 	}

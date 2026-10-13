@@ -21,16 +21,15 @@ package jobs
 //
 //	there is no method that could issue one); a repeated idempotency_key
 //	is a no-op returning the existing row; every timestamp comes from
-//	the injected runtime.Clock (Art.7.3); every Append is audited
-//	through the injected audit.Writer (I/S-18.T2) BEFORE the caller sees
-//	success, so a write that was never audited never landed either.
+//	the injected runtime.Clock (Art.7.3); every Append runs inside an
+//	audit effect (evidence_effect.go): the intent record is committed
+//	BEFORE the row, so a row never exists without an audit record.
 //
-// SPORT: jobs/completion-gate/ADD (P1-E29-W6-S60-T3).
+// SPORT: jobs/completion-gate/ADD (P1-E29-W6-S60-T3, P1-SEC-21).
 
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/json"
 	"time"
 
@@ -185,31 +184,29 @@ func chainHash(r EvidenceRecord) ([]byte, error) {
 // EvidenceLedger is the per-job append-only evidence ledger, backed by
 // the jobs_evidence table.
 type EvidenceLedger struct {
-	store  *Store
-	clock  runtime.Clock
-	writer audit.Writer
-	authz  *ProducerAuthz
+	store   *Store
+	clock   runtime.Clock
+	effects audit.EffectWriter
+	authz   *ProducerAuthz
 }
 
-// NewEvidenceLedger constructs a ledger. writer is REQUIRED -- an
-// EvidenceLedger with no audit sink would let a write land unaudited,
-// which R-16.47 forbids outright, so this constructor refuses a nil
-// writer rather than silently degrading (unlike leaseEventSink's
-// deliberately-optional fan-outs, which describe telemetry, not the
-// R-16.47 audit requirement itself). authz may be nil only in tests that
-// exercise Append's other refusals directly against a pre-built
-// AppendAuthorization; production always wires a real *ProducerAuthz.
-func NewEvidenceLedger(store *Store, clock runtime.Clock, writer audit.Writer, authz *ProducerAuthz) (*EvidenceLedger, error) {
+// NewEvidenceLedger constructs a ledger. effects is REQUIRED -- a ledger
+// with no audit sink would let a write land unaudited, which R-16.47
+// forbids outright, so a nil effects is refused rather than degraded.
+// authz may be nil only in tests that exercise Append's other refusals
+// directly against a pre-built AppendAuthorization; production always
+// wires a real *ProducerAuthz.
+func NewEvidenceLedger(store *Store, clock runtime.Clock, effects audit.EffectWriter, authz *ProducerAuthz) (*EvidenceLedger, error) {
 	if store == nil {
 		return nil, cascade.New(cascade.KindInvalidInput, "jobs: EvidenceLedger requires a non-nil store")
 	}
 	if clock == nil {
 		return nil, cascade.New(cascade.KindInvalidInput, "jobs: EvidenceLedger requires a non-nil Clock")
 	}
-	if writer == nil {
-		return nil, cascade.New(cascade.KindInvalidInput, "jobs: EvidenceLedger requires a non-nil audit.Writer")
+	if effects == nil {
+		return nil, cascade.New(cascade.KindInvalidInput, "jobs: EvidenceLedger requires a non-nil audit.EffectWriter")
 	}
-	return &EvidenceLedger{store: store, clock: clock, writer: writer, authz: authz}, nil
+	return &EvidenceLedger{store: store, clock: clock, effects: effects, authz: authz}, nil
 }
 
 // validateEvidenceRecord runs Append's field-level checks: the closed
@@ -235,10 +232,13 @@ func validateEvidenceRecord(rec EvidenceRecord) error {
 }
 
 // Append validates rec, authorizes the write against auth (evidence_authz.go),
-// computes the R-21.183 hash-chain link and appends exactly one row --
-// or, for a repeated idempotency_key, returns the EXISTING row as a
-// no-op. Every successful Append (including the no-op) is preceded by a
-// real audit.Writer.Append call.
+// then appends exactly one row under an audit effect (evidence_effect.go):
+// the intent record is committed first, so a failing audit sink leaves no
+// row. A repeated idempotency_key returns the EXISTING row as a no-op and
+// writes no new audit record (two truly concurrent first appends of one key
+// may each audit an attempt; the loser's intent ends Failed, or Confirmed
+// against the winner's row when its own insert errored with identical
+// content; one row lands).
 func (l *EvidenceLedger) Append(ctx context.Context, rec EvidenceRecord, auth AppendAuthorization) (EvidenceRecord, error) {
 	if l == nil {
 		return EvidenceRecord{}, cascade.New(cascade.KindInvalidInput, "jobs: nil EvidenceLedger")
@@ -251,44 +251,10 @@ func (l *EvidenceLedger) Append(ctx context.Context, rec EvidenceRecord, auth Ap
 			return EvidenceRecord{}, err
 		}
 	}
-
-	var out EvidenceRecord
-	txErr := l.store.withTx(ctx, func(tx *sql.Tx) error {
-		if existing, ok, err := existingByIdempotencyKeyTx(ctx, tx, rec.JobID, rec.IdempotencyKey); err != nil {
-			return err
-		} else if ok {
-			out = existing
-			return nil
-		}
-		prev, err := prevHashTx(ctx, tx, rec.JobID)
-		if err != nil {
-			return err
-		}
-		seq, err := nextSeqTx(ctx, tx, rec.JobID)
-		if err != nil {
-			return err
-		}
-		now := l.clock.Now().UTC()
-		rec.Seq = seq
-		rec.CreatedAt = now
-		rec.PrevHash = prev
-		if err := insertEvidenceRowTx(ctx, tx, rec); err != nil {
-			return err
-		}
-		out = rec
-		return nil
-	})
-	if txErr != nil {
-		return EvidenceRecord{}, txErr
+	if existing, ok, err := l.lookup(ctx, rec.JobID, rec.IdempotencyKey); err != nil || ok {
+		return existing, err
 	}
-
-	if _, err := l.writer.Append(ctx, audit.Event{
-		Kind: audit.KindPolicyDecide, Actor: "jobs.evidence",
-		Action: "evidence.append:" + string(out.Kind), Outcome: string(out.Outcome),
-	}); err != nil {
-		return EvidenceRecord{}, err
-	}
-	return out, nil
+	return l.appendWithEffect(ctx, rec)
 }
 
 // Query and Cursor are defined in migration_evidence.go, alongside the

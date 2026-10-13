@@ -260,7 +260,10 @@ func (cp *CompletionPolicy) checkApproval(ctx context.Context, req TransitionReq
 
 // commit re-reads the ledger cursor in the SAME store transaction as
 // the state write: a row appended after Transition's initial read can
-// never retroactively satisfy an already-evaluated gate.
+// never retroactively satisfy an already-evaluated gate. The UPDATE
+// carries the evaluated state (`AND state = ?`) and must change exactly
+// one row, so two transitions evaluated from one state cannot both win
+// and a job moved out of band after evaluation is left untouched.
 func (cp *CompletionPolicy) commit(ctx context.Context, req TransitionRequest, evaluatedCursor int64) error {
 	var denial *ErrorCompletionDenied
 	txErr := cp.deps.Store.withTx(ctx, func(tx *sql.Tx) error {
@@ -273,10 +276,16 @@ func (cp *CompletionPolicy) commit(ctx context.Context, req TransitionRequest, e
 			return nil
 		}
 		now := cp.deps.Clock.Now().UTC().Unix()
-		_, err := tx.ExecContext(ctx, `UPDATE `+tableJob+` SET state = ?, updated_at = ? WHERE id = ?`,
-			string(req.Target), now, req.Job.ID)
+		res, err := tx.ExecContext(ctx, `UPDATE `+tableJob+` SET state = ?, updated_at = ? WHERE id = ? AND state = ?`,
+			string(req.Target), now, req.Job.ID, string(req.Job.State))
 		if err != nil {
 			return cascade.Wrap(cascade.KindUnavailable, err, "jobs: commit completion transition")
+		}
+		if n, err := res.RowsAffected(); err != nil {
+			return cascade.Wrap(cascade.KindUnavailable, err, "jobs: read completion transition result")
+		} else if n != 1 {
+			return cascade.Newf(cascade.KindConflict,
+				"jobs: job %q is no longer in state %s; the completion transition was not applied", req.Job.ID, req.Job.State)
 		}
 		return nil
 	})

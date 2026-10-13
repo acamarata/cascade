@@ -255,8 +255,8 @@ func newApprovalQueueForTest(t *testing.T) (*policy.StoreApprovals, func(jobID, 
 }
 
 func TestCompletionApprovalToken(t *testing.T) {
-	cp, _, ledger, _, job := newCompletionFixture(t, RiskClassCritical)
-	job.State = JobStateReviewing
+	cp, store, ledger, _, job := newCompletionFixture(t, RiskClassCritical)
+	setJobState(t, store, &job, JobStateReviewing)
 	passAll(t, ledger, []EvidenceKind{EvidenceBuild, EvidenceLint, EvidenceTests, EvidenceReview, EvidenceAdversarial})
 
 	ctx := context.Background()
