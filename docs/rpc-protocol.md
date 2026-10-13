@@ -302,6 +302,67 @@ status.widget's own attention-queue reader. The payload is a full,
 redacted `WidgetSnapshot` with an incrementing `seq` for client dedup
 (small enough that a delta encoding is not needed).
 
+## chat.create_thread
+
+`chat.create_thread` starts a new conversation thread. The daemon mints the
+thread id. In one database transaction it writes the thread row, the
+thread's privacy marker and the thread's attribution. Clients never name a
+new thread's id, and there is no method that changes a marker later.
+
+Access class: **owner-view**. The owner CLI's threads are attributed to
+`owner`. A principal's threads are attributed to the principal's own project
+scope, and only that principal's scope can read them. A call with no caller
+identity is refused with `permission-denied` before anything is written, and
+so is a principal without a project scope.
+
+Params (required):
+
+```json
+{"privacy_mode": "internal"}
+```
+
+`privacy_mode` must be exactly one of `local-only`, `restricted`, `internal`
+or `public`. A missing, empty or differently spelled mode, an unknown field
+or trailing data is refused with `invalid-input`, and nothing is written.
+
+Result:
+
+```json
+{"thread_id": "thread-<daemon-minted id>"}
+```
+
+Errors:
+
+- `invalid-input`: the params above are malformed.
+- `permission-denied`: no caller identity, or a principal without a project
+  scope.
+- `conflict`: the minted id already exists. Nothing is written.
+- `unavailable`: the store failed. The transaction rolls back, so no thread,
+  marker or attribution is left behind.
+
+**Privacy markers are write-once.** Once a thread has a marker, writing the
+same mode again is a no-op and writing a different mode is refused with
+`conflict`, leaving the marker unchanged. A thread that already holds turns
+and has no marker keeps its implicit `restricted` mode: setting any marker on
+it is refused with `conflict`.
+
+**Telegram bridge threads.** The bridge creates every new chat thread with
+`chat.create_thread` at `internal`, and remembers it in a durable
+chat-to-thread map in the bridge's own state. Only the paired owner's direct
+chat (a private chat whose id is the sender's id) is ever mapped; groups and
+channels never get a thread. A chat whose legacy `bridge-telegram:<chat id>`
+thread already exists is bound to that thread instead, so its history
+carries over. An adopted legacy thread keeps whatever marker it had. If it
+had none, it stays unmarked and reads `restricted`: adoption never widens it,
+and messages on it are not mirrored to Telegram in either direction. Any map
+error refuses the message: nothing is appended and nothing is sent.
+
+A legacy `bridge-telegram:<chat id>` thread that has turns and no marker is
+adopted as it is. It reads `restricted`, so it is neither recorded from nor
+mirrored to. Setting a marker on a thread that already holds turns is refused, so this cannot be changed in place. The
+chat stays bound to that thread until an owner-only rebind exists, which is
+not part of this release.
+
 ## bridge.send
 
 `bridge.send` mirrors one turn that is already committed in a conversation
@@ -317,7 +378,7 @@ transport.
 Params:
 
 ```json
-{"thread_id": "bridge-telegram:<chat id>", "content": "<turn text>", "sensitivity": "internal"}
+{"thread_id": "<thread id>", "content": "<turn text>", "sensitivity": "internal"}
 ```
 
 `sensitivity` is the turn's resolved sensitivity (`public`, `internal`,
@@ -337,16 +398,21 @@ Result:
   publishes one content-free `bridge.refused` event and makes no transport
   call.
 - Neither flag, with a `reason`: nothing was sent because the daemon runs no
-  enabled chat bridge, or the thread is not a chat-bridge thread.
+  enabled chat bridge, or the thread is not a chat-bridge thread. With no
+  bridge wired, only a legacy `bridge-telegram:<chat id>` id gets the
+  no-bridge reason; any other id reads as not a chat-bridge thread.
 
 The send itself also enforces the thread's own sensitivity tier, so the
 message goes out only when both the turn and the thread are `internal` or
-`public`. Only canonical thread ids (`bridge-telegram:` followed by the chat's
-decimal id) are chat-bridge threads, and the chat must be the current paired
-binding's chat. An unpaired bridge, another chat's thread, a binding-store
-error and a privacy-resolver error all refuse with `policy-denied`, one
-`bridge.refused` event and zero transport calls. A transport error returns to
-the caller as an error and emits no `bridge.refused`.
+`public`. A chat-bridge thread is one the bridge's chat-to-thread map holds
+(see `chat.create_thread`); the thread id's shape decides nothing, and a
+thread the map does not hold is skipped with zero transport calls. The
+mapped chat must be the current paired binding's chat. An unpaired bridge,
+another chat's thread, a binding-store error and a privacy-resolver error all
+refuse with `policy-denied`, one `bridge.refused` event and zero transport
+calls. A map read error is returned as an error with zero transport calls. A
+transport error returns to the caller as an error and emits no
+`bridge.refused`.
 
 Once the daemon starts stopping the bridge, `bridge.send` returns
 `unavailable` (`-32004`) with no transport call. Shutdown order is: refuse new

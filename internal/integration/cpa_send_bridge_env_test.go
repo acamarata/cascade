@@ -159,6 +159,14 @@ func registerChatAppend(t *testing.T, registry *rpc.Registry, dataDir string, cl
 		TrustTier: "paired-device", PairedAt: clock.Now(), AllowedFrom: []string{cpaBridgeChat}}); err != nil {
 		t.Fatalf("seed binding: %v", err)
 	}
+	// bridge.send resolves a thread's chat through the durable map only.
+	threads, err := plugins.OpenBridgeThreadMap(ctx, db, dataDir, clock)
+	if err == nil {
+		_, err = threads.Bind(ctx, telegram.SubjectFromToken(cpaBridgeToken), 555000111, cpaBridgeThread)
+	}
+	if err != nil {
+		t.Fatalf("seed map row: %v", err)
+	}
 }
 
 // installProcessFirewall installs the process egress firewall the bridge's

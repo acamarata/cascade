@@ -224,3 +224,60 @@ func TestWireChatBridge_NilOrDisabled_InjectsNothing(t *testing.T) {
 		}
 	}
 }
+
+// mintedThreadID has the shape of a daemon-minted thread id: no bridge map
+// and no retired bridge ever held it.
+const mintedThreadID = "th-0123456789abcdef"
+
+// realBridgeSendDoer answers bridge.send by calling the production BridgeSend
+// in-process, so a test sees the daemon's real decision through the client.
+type realBridgeSendDoer struct{}
+
+func (realBridgeSendDoer) Do(ctx context.Context, _ string, params, out any) error {
+	res, err := BridgeSend(ctx, params.(BridgeSendParams))
+	if err != nil {
+		return err
+	}
+	*out.(*BridgeSendResult) = res
+	return nil
+}
+
+// TestBridgeSend_NoBridgeWired_MintedThread_IsNotABridgeThread proves that a
+// daemon with no chat bridge answers "not a bridge thread" for an ordinary
+// minted id, and keeps the "no chat bridge" answer for a legacy id only.
+// Mutation: drop the IsLegacyBridgeThreadID branch (always return
+// reasonNoChatBridge) and the minted case goes RED.
+func TestBridgeSend_NoBridgeWired_MintedThread_IsNotABridgeThread(t *testing.T) {
+	resetChatSender(t)
+	res, err := BridgeSend(context.Background(), BridgeSendParams{
+		ThreadID: mintedThreadID, Content: "hi", Sensitivity: tools.SensitivityPublic,
+	})
+	if err != nil {
+		t.Fatalf("BridgeSend: %v", err)
+	}
+	if res != (BridgeSendResult{Reason: reasonNotBridgeThread}) {
+		t.Fatalf("result = %+v, want exactly {Reason: %q}", res, reasonNotBridgeThread)
+	}
+}
+
+// TestBridgeMirroringConversations_NoBridgeWired_MintedThread_CarriesNoOutcome
+// runs an Append on a minted thread through the real mirroring decorator and
+// the real BridgeSend of a daemon with no bridge: the result has no outcome.
+func TestBridgeMirroringConversations_NoBridgeWired_MintedThread_CarriesNoOutcome(t *testing.T) {
+	resetChatSender(t)
+	inner := &stubConversations{res: tools.AppendResult{ThreadID: mintedThreadID, TurnID: "turn-1"}}
+	conv := &bridgeMirroringConversations{inner: inner, send: bridgeSendClient{doer: realBridgeSendDoer{}}}
+	res, err := conv.Append(context.Background(), tools.AppendRequest{ThreadID: mintedThreadID, Role: "user", Content: "hi"})
+	if err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+	if res.Bridge != nil {
+		t.Fatalf("Bridge = %+v, want nil for a minted thread on a daemon with no bridge", res.Bridge)
+	}
+	legacy := &stubConversations{res: tools.AppendResult{ThreadID: bridgedThreadID, TurnID: "turn-2"}}
+	conv = &bridgeMirroringConversations{inner: legacy, send: bridgeSendClient{doer: realBridgeSendDoer{}}}
+	res, err = conv.Append(context.Background(), tools.AppendRequest{ThreadID: bridgedThreadID, Role: "user", Content: "hi"})
+	if err != nil || res.Bridge == nil || res.Bridge.Status != tools.BridgeSkipped || res.Bridge.Reason != reasonNoChatBridge {
+		t.Fatalf("legacy id: Bridge = %+v, err = %v, want skipped with %q", res.Bridge, err, reasonNoChatBridge)
+	}
+}

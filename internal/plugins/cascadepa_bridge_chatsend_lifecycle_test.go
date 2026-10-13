@@ -88,7 +88,8 @@ func TestUnwireChatBridge_RefusesNewAndWaitsForAdmitted(t *testing.T) {
 func TestNewCascadePABridge_ChatBridgeReachesBridgeSend(t *testing.T) {
 	resetChatSender(t)
 	ctx := context.Background()
-	deps, bus, _ := enabledBridgeDeps(t)
+	deps, bus, dataDir := enabledBridgeDeps(t)
+	seedBridgeThread(t, dataDir, 555000111, "bridge-telegram:555000111") // mapped, never paired
 	rt, err := NewCascadePABridge(ctx, deps)
 	if err != nil {
 		t.Fatalf("NewCascadePABridge: %v", err)

@@ -55,26 +55,6 @@ func TestPrivacyRoundTrip(t *testing.T) {
 	}
 }
 
-// TestPrivacyOverwriteIsLastWriteWins asserts a second Set replaces rather
-// than accumulating rows, so a reopen cannot read a stale mode.
-func TestPrivacyOverwriteIsLastWriteWins(t *testing.T) {
-	store := newTestStore(t)
-	ctx := context.Background()
-	if err := store.SetThreadPrivacy(ctx, "th-x", provider.SensitivityPublic); err != nil {
-		t.Fatalf("first SetThreadPrivacy: %v", err)
-	}
-	if err := store.SetThreadPrivacy(ctx, "th-x", provider.SensitivityLocalOnly); err != nil {
-		t.Fatalf("second SetThreadPrivacy: %v", err)
-	}
-	got, err := store.ThreadPrivacy(ctx, "th-x")
-	if err != nil {
-		t.Fatalf("ThreadPrivacy: %v", err)
-	}
-	if got != provider.SensitivityLocalOnly {
-		t.Fatalf("ThreadPrivacy = %s, want local-only", got)
-	}
-}
-
 // TestPrivacyParseSensitivityTier covers the name decoder: empty is the
 // restricted zero value and anything unrecognised is local-only (R136).
 func TestPrivacyParseSensitivityTier(t *testing.T) {

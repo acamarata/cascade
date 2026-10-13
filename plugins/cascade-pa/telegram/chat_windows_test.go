@@ -30,8 +30,8 @@ import (
 
 func TestBridgeWindowsTierTwoRefusal(t *testing.T) {
 	rig := newDefaultRig(t)
-	bridge := NewTelegramBridge(rig.module, rig.stores.Binding, testSubject,
-		&fakeChatService{}, newFakeThreadPrivacy(), &fakeDivergenceSink{})
+	bridge := NewTelegramBridge(rig.module, rig.stores.Binding, testSubject, BridgeSeams{
+		Chat: &mintingChat{fakeChatService: &fakeChatService{}}, Privacy: newFakeThreadPrivacy(), Divergence: &fakeDivergenceSink{}})
 
 	err := bridge.Start(context.Background())
 	if err == nil {
@@ -55,8 +55,8 @@ func TestBridgeWindowsTierTwoRefusal(t *testing.T) {
 // the Bot API on this platform).
 func TestBridgeWindowsTierTwoRefusal_Send(t *testing.T) {
 	rig := newDefaultRig(t)
-	bridge := NewTelegramBridge(rig.module, rig.stores.Binding, testSubject,
-		&fakeChatService{}, newFakeThreadPrivacy(), &fakeDivergenceSink{})
+	bridge := NewTelegramBridge(rig.module, rig.stores.Binding, testSubject, BridgeSeams{
+		Chat: &mintingChat{fakeChatService: &fakeChatService{}}, Privacy: newFakeThreadPrivacy(), Divergence: &fakeDivergenceSink{}})
 
 	err := bridge.Send(context.Background(), threadIDForChat(9012), []byte("x"))
 	if err == nil {

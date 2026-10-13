@@ -22,14 +22,18 @@ import (
 //
 // Inputs: the inner tools.Conversations and each Append's request.
 //
-// Outputs: the inner Append's result, plus — for a bridge thread only
-//   (telegram.IsBridgeThread) — a typed tools.BridgeOutcome in
+// Outputs: the inner Append's result, plus — for a bridge thread only (the
+//   daemon's chat-to-thread map decides) — a typed tools.BridgeOutcome in
 //   AppendResult.Bridge that cascade_cpa_send returns to its caller (L3):
 //   mirrored, refused (with the daemon's fixed reason), skipped or failed.
 //
 // Constraints:
-//   - BRIDGE THREADS ONLY (L2): every other thread's Append never dials
-//     bridge.send and carries no outcome.
+//   - BRIDGE THREADS ONLY (L2): this process cannot read the bridge's map, so
+//     it dials bridge.send for any id telegram.MayBeBridgeThread allows and
+//     never for one the map can never hold; a thread the daemon's map does
+//     not hold carries no outcome. A caller bridge.send refuses (it is
+//     owner-only) also gets no outcome on an id that is not a legacy bridge
+//     id; during the daemon's shutdown window every id gets a failed outcome.
 //   - BOUNDED: one call, chatSendTimeout past the Append, WithoutCancel so a
 //     caller that hangs up does not strand the mirror halfway.
 //   - NEVER FAILS THE APPEND: the turn is already recorded; a mirror failure
@@ -92,6 +96,9 @@ func (c bridgeSendClient) send(ctx context.Context, threadID, content, sensitivi
 	if err := rpc.Do(sctx, MethodBridgeSend, BridgeSendParams{
 		ThreadID: threadID, Content: content, Sensitivity: sensitivity,
 	}, &res); err != nil {
+		if !telegram.IsLegacyBridgeThreadID(threadID) && cascade.HasKind(err, cascade.KindPermissionDenied) {
+			return nil // bridge.send is owner-only: a refused caller cannot mirror, so an ordinary thread carries no outcome
+		}
 		slog.Default().Warn("cascade-pa bridge: bridge.send", "thread_id", threadID, "error", err)
 		return bridgeOutcomeForError(err)
 	}
@@ -104,6 +111,8 @@ func (c bridgeSendClient) send(ctx context.Context, threadID, content, sensitivi
 // bridgeOutcomeFor maps bridge.send's wire result onto the tool's outcome.
 func bridgeOutcomeFor(res BridgeSendResult) *tools.BridgeOutcome {
 	switch {
+	case !res.Mirrored && !res.Refused && res.Reason == reasonNotBridgeThread:
+		return nil // the daemon's map does not hold the thread: no outcome
 	case res.Mirrored:
 		return &tools.BridgeOutcome{Status: tools.BridgeMirrored}
 	case res.Refused:
@@ -146,7 +155,7 @@ func (c *bridgeMirroringConversations) Append(ctx context.Context, req tools.App
 	if err != nil {
 		return res, err
 	}
-	if telegram.IsBridgeThread(res.ThreadID) {
+	if telegram.MayBeBridgeThread(res.ThreadID) { // only the daemon's map knows; ask it
 		res.Bridge = c.send.send(ctx, res.ThreadID, req.Content, req.Sensitivity)
 	}
 	return res, nil

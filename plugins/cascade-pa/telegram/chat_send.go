@@ -6,9 +6,9 @@
 //   refuse() (chat.go) already emits inbound. Split from chat.go to stay
 //   under Art.10.3's 300-line cap.
 //
-// Inputs: a threadID this module minted (threadIDForChat, egress.go, now
-//   canonical-only per K3), the body to deliver, and TelegramBridge's own
-//   already-wired collaborators (module, binding, privacy, divergence).
+// Inputs: a threadID the chat-to-thread map holds (threadmap.go), the body
+//   to deliver, and TelegramBridge's own already-wired collaborators
+//   (module, threads, binding, privacy, divergence).
 //
 // Outputs: one client.SendMessage call on ALLOW, or a typed refusal plus
 //   (for a POLICY refusal only) a bridge.refused event on REFUSE.
@@ -58,8 +58,10 @@ var errSendNotBound = cascade.New(cascade.KindPolicyDenied,
 
 // Send delivers body into the chat threadID maps to, at threadID's own
 // resolved tier — never a caller-declared one. Windows tier-2 refuses
-// before any IO (R-16.60a, matching Start); an unmapped threadID refuses
-// by name (a caller error, not a policy decision — no divergence event).
+// before any IO (R-16.60a, matching Start). The chat comes from the
+// chat-to-thread map only: a map error refuses as-is and a thread the map
+// does not hold refuses by name (neither a policy decision, so no
+// divergence event), both before any transport call.
 // From there, in order: the binding gate (K3, matching the inbound path's
 // OWN "S-48.T1 binding gate runs ahead of privacy" precedent), the real
 // egress Guard's tier decision (a nil-content probe, THE REAL DECISION per
@@ -76,7 +78,10 @@ func (b *TelegramBridge) Send(ctx context.Context, threadID string, body []byte)
 	if refusal := platformBridgeRefusal(); refusal != nil {
 		return refusal
 	}
-	chatID, ok := chatIDForThread(threadID)
+	chatID, ok, merr := b.threads.ChatFor(ctx, threadID)
+	if merr != nil {
+		return merr
+	}
 	if !ok {
 		return cascade.Newf(cascade.KindNotFound,
 			"cascade-pa/telegram: thread %q does not map to a chat this bridge serves", threadID)

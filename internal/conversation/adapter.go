@@ -1,8 +1,8 @@
 package conversation
 
 // Purpose: the chat.* JSON-RPC surface over Store: chat.append_turn,
-//   chat.get_thread, chat.list_threads and chat.search, one generic
-//   rpc.Registry.Register call per method.
+//   chat.get_thread, chat.list_threads, chat.search and chat.create_thread
+//   (adapter_createthread.go), one rpc.Registry.Register call per method.
 // Inputs: a Store, an EventBus (nil in embedded mode), a Substitutor (nil is
 //   sse.go's passthrough), a Clock, and a mode ("" daemon, ModeEmbedded).
 // Outputs: wire result shapes, or a pkg/cascade error mapped by internal/rpc
@@ -77,6 +77,7 @@ func (a *Adapter) RegisterHandlers(registry *rpc.Registry) {
 	registry.Register(MethodGetThread, mapped(a.scopedGetThread))
 	registry.Register(MethodListThreads, mapped(a.scopedListThreads))
 	registry.Register(MethodSearch, mapped(a.scopedSearch))
+	registry.Register(MethodCreateThread, mapped(a.handleCreateThread)) // adapter_createthread.go
 }
 
 // mapped routes h's returned error through adapter_errors.go's

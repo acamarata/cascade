@@ -24,6 +24,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -178,5 +179,25 @@ func seedBoundInternalThread(t *testing.T, dataDir string) {
 	}
 	if err := conversation.NewStore(db).SetThreadPrivacy(ctx, enabledBridgeThread, provider.SensitivityInternal); err != nil {
 		t.Fatalf("SetThreadPrivacy: %v", err)
+	}
+	seedEnabledBridgeMap(t, db, dataDir, clock)
+}
+
+// seedEnabledBridgeMap binds the paired chat to enabledBridgeThread in the
+// durable chat-to-thread map, as the owner's first message would have:
+// bridge.send resolves a thread's chat through that map only.
+func seedEnabledBridgeMap(t *testing.T, db *sql.DB, dataDir string, clock runtime.Clock) {
+	t.Helper()
+	ctx := context.Background()
+	threads, err := plugins.OpenBridgeThreadMap(ctx, db, dataDir, clock)
+	if err != nil {
+		t.Fatalf("OpenBridgeThreadMap: %v", err)
+	}
+	chat, err := strconv.ParseInt(enabledBridgeChat, 10, 64)
+	if err == nil {
+		_, err = threads.Bind(ctx, telegram.SubjectFromToken(enabledBridgeToken), chat, enabledBridgeThread)
+	}
+	if err != nil {
+		t.Fatalf("seed map row: %v", err)
 	}
 }

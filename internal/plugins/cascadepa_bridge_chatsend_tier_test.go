@@ -88,6 +88,7 @@ func seedPairedThread(t *testing.T, dataDir string, tier provider.SensitivityTie
 	if err := conversation.NewStore(db).SetThreadPrivacy(ctx, tierTestThread, tier); err != nil {
 		t.Fatalf("SetThreadPrivacy: %v", err)
 	}
+	seedBridgeThread(t, dataDir, 555000222, tierTestThread)
 }
 
 // armTierBridge assembles a real enabled bridge over a recording transport

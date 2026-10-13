@@ -228,12 +228,12 @@ func TestHandleThreadsListRejectsMalformedParams(t *testing.T) {
 // of "never listed through an external-capable path").
 func TestHandleTopicsAndThreadsListExcludeLocalOnly(t *testing.T) {
 	h, store := newTestRPCHandlers(t)
-	secretID := seedTopicThread(t, store, "secret", 2)
-	seedTopicThread(t, store, "public", 1)
-
-	if err := store.SetThreadPrivacy(context.Background(), string(secretID), provider.SensitivityLocalOnly); err != nil {
+	// The marker is write-once and refused after turns exist: mark first.
+	if err := store.SetThreadPrivacy(context.Background(), "topic:secret", provider.SensitivityLocalOnly); err != nil {
 		t.Fatalf("SetThreadPrivacy: %v", err)
 	}
+	seedTopicThread(t, store, "secret", 2)
+	seedTopicThread(t, store, "public", 1)
 
 	topicsRaw, errObj := dispatch(t, h, MethodTopicsList, nil)
 	if errObj != nil {

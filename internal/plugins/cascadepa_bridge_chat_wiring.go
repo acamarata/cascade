@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/acamarata/cascade/internal/bridge"
 	"github.com/acamarata/cascade/internal/client"
 	"github.com/acamarata/cascade/internal/conversation"
 	"github.com/acamarata/cascade/internal/events"
@@ -17,70 +18,38 @@ import (
 	"github.com/acamarata/cascade/plugins/cascade-pa/telegram"
 )
 
-// Purpose (this file): the W/S-48.T2 chat-parity composition root —
-//   NewCascadePABridgeChatHandler assembles the three host-mediated seams
-//   egress.go declares (telegram.ChatService, ThreadPrivacyResolver,
-//   DivergenceSink) and hands them to telegram.NewTelegramBridge, which
-//   registers itself as the module's HandlerText.
+// Purpose (this file): the chat-parity composition root.
+//   NewCascadePABridgeChatHandler assembles the host-mediated seams the
+//   telegram package declares (ChatService, ThreadPrivacyResolver,
+//   LegacyThreadLookup, DivergenceSink and the durable chat-to-thread
+//   ThreadMap) and hands them to telegram.NewTelegramBridge, which registers
+//   itself as the module's HandlerText. enabledBridge
+//   (cascadepa_bridge_wiring.go) is the production caller.
 //
-// WHY THIS IS A SIBLING FILE, NOT A HUNK IN cascadepa_bridge_wiring.go.
-//   That file's enabledBridge is the natural call site (it already
-//   constructs `module` and comments "HandlerText still records rather
-//   than drops (W/S-48.T2 replaces this)") but is under concurrent edit by
-//   the W/S-48.T4 approval lane at the time this ticket landed (LANE-RULES
-//   composition-root precedent: add a NEW sibling file, report the exact
-//   hunk for T0 to merge, never skip the wiring). The merge this needs, once
-//   T4's edits land, is: replace
-//     module.RegisterHandler(telegram.HandlerText, journal.unroutedHandler(telegram.HandlerText))
-//   with
-//     chatBridge, err := NewCascadePABridgeChatHandler(ctx, ChatWiringDeps{DataDir: deps.DataDir, Events: deps.Events}, module, stores.Binding, subject, deps.Clock)
-//     if err != nil { return nil, closeStateOnError(state, err) }
-//     _ = chatBridge
-//   (NewTelegramBridge's own constructor performs the RegisterHandler call).
-//
-// Inputs: the daemon's data directory (cascade.db lives at DataDir/cascade.db;
-//   ThreadPrivacy still applies its own migration set the way
-//   registerContextEngineHandlers/wireConductorExpand and
-//   cmd/cascade/chat_wiring.go's wireChatHandlers apply theirs — a namespace
-//   of its own on the shared file, not a shared table), the bridge's
-//   BridgeEventPublisher, the OWNING *sql.DB connection openBridgeState
-//   already opened (ChatWiringDeps.DB — see ci-fix14 below for why this is a
-//   parameter, not a second sql.Open), the already-constructed
-//   *telegram.TelegramModule/BindingStore/subject, and a clock.
+// Inputs: the daemon's data directory, the OWNING *sql.DB openBridgeState
+//   already opened on DataDir/cascade.db, the bridge's BridgeEventPublisher,
+//   the constructed module/BindingStore/subject, and a clock.
 //
 // Outputs: a *telegram.TelegramBridge whose HandlerText is already wired.
 //
 // Constraints:
-//   - NO NEW RPC METHOD. internal/conversation/adapter.go registers
-//     chat.append_turn/get_thread/list_threads/search only (S-43.T2); there
-//     is no wire method for ThreadPrivacy. Adding one is that ticket's
-//     files_scope, not this one's, so bridgeThreadPrivacyResolver reads it
-//     directly over conversation.Store instead.
-//   - THE CHAT SERVICE REUSES cascadePAClient'S OWN WIRE CODE.
-//     bridgeChatService is the identical chat.append_turn round trip
-//     cascadePAClient.OneShot (cascadepa_wiring.go) makes for `cascade
-//     chat`, over the SAME appendTurnParams/rpcDoer/pathResolver types —
-//     one RPC client shape, not two.
-//   - ONE CONNECTION, ONE OWNER (ci-fix14, 2026-09-22). This file used to
-//     open its OWN second *sql.DB to cascade.db inside
-//     newBridgeThreadPrivacyResolver and never closed it: nothing in
-//     enabledBridge or BridgeRuntime.Stop held a reference to it, so every
-//     bridge construction leaked a sqlite handle for the life of the
-//     process. On POSIX that leak was invisible (an idle connection does
-//     not block anything); on windows/amd64 CI it made every bridge test's
-//     t.TempDir() cleanup fail with "The process cannot access the file
-//     because it is being used by another process" on cascade.db. The fix
-//     is not a shorter TempDir path — it is that this file no longer owns
-//     any connection at all: ChatWiringDeps.DB is the SAME *sql.DB
-//     enabledBridge's openBridgeState already opened (bridgeStateSQLDB,
-//     cascadepa_bridge_state.go), so the ONE close in
-//     BridgeRuntime.Stop (closeStateAfterStop, cascadepa_bridge_state_close.go)
-//     already releases it. A caller that is not enabledBridge (a test
-//     exercising this file directly) opens and t.Cleanup-closes its own
-//     *sql.DB — see cascadepa_bridge_fixtures_test.go's
-//     openTestConversationDB.
+//   - THREADS COME FROM THE DAEMON. bridgeChatService mints every new bridge
+//     thread through chat.create_thread over the daemon socket (owner-CLI
+//     caller, so the thread is attributed "owner") and appends through
+//     chat.append_turn, over the SAME rpcDoer/pathResolver shapes
+//     cascadePAClient uses for `cascade chat`.
+//   - THE MAP LIVES IN THE BRIDGE STATE STORE. OpenBridgeThreadMap puts the
+//     chat-to-thread map on the same bridge subject table the pairing
+//     binding uses (cascadepa.ThreadMapStore's create-only rows); no new
+//     database file. The thread-privacy resolver and the legacy-thread
+//     lookup read the conversation tables of that same cascade.db directly
+//     (there is no wire method for either).
+//   - ONE CONNECTION, ONE OWNER. Nothing here opens or closes a *sql.DB:
+//     ChatWiringDeps.DB is the connection openBridgeState opened, closed only
+//     by BridgeRuntime.Stop (closeStateAfterStop). A second, never-closed
+//     handle once leaked here and broke windows CI's TempDir cleanup.
 //
-// SPORT: internal/plugins:cascadepa-bridge-chat-wiring (ADD) — P1-E23-W5-S48-T2; ci-fix14.
+// SPORT: internal/plugins:cascadepa-bridge-chat-wiring (CHANGED: thread map).
 
 // ChatWiringDeps is what NewCascadePABridgeChatHandler needs beyond the
 // already-constructed module/binding/subject.
@@ -113,6 +82,10 @@ type bridgeChatService struct {
 	doer rpcDoer
 }
 
+// bridgeChatFactory builds the chat service the bridge is wired with; a
+// same-package test swaps in one whose rpcDoer is a real in-process registry.
+var bridgeChatFactory = newBridgeChatService
+
 func newBridgeChatService() bridgeChatService {
 	return bridgeChatService{dial: client.UnixDialer, timeout: cascadePAClientTimeout, resolvePaths: runtime.NewDefaultPathProvider}
 }
@@ -142,6 +115,31 @@ func (c bridgeChatService) AppendTurn(ctx context.Context, threadID, role, text 
 		return "", err
 	}
 	return result.TurnID, nil
+}
+
+// createThreadWire/createThreadResultWire: chat.create_thread's wire shapes.
+type createThreadWire struct {
+	PrivacyMode string `json:"privacy_mode"`
+}
+
+type createThreadResultWire struct {
+	ThreadID string `json:"thread_id"`
+}
+
+// CreateThread implements telegram.ChatService over the real
+// chat.create_thread RPC: the daemon mints the id and writes the thread,
+// its marker and its attribution in one transaction.
+func (c bridgeChatService) CreateThread(ctx context.Context, privacyMode string) (string, error) {
+	rpc, err := c.rpcClient()
+	if err != nil {
+		return "", err
+	}
+	var result createThreadResultWire
+	err = rpc.Do(ctx, conversation.MethodCreateThread, createThreadWire{PrivacyMode: privacyMode}, &result)
+	if err == nil && result.ThreadID == "" {
+		err = cascade.New(cascade.KindIntegrity, "cascade-pa bridge: chat.create_thread returned no thread id")
+	}
+	return result.ThreadID, err
 }
 
 var _ telegram.ChatService = bridgeChatService{}
@@ -189,6 +187,46 @@ func (r bridgeThreadPrivacyResolver) ThreadPrivacy(ctx context.Context, threadID
 }
 
 var _ telegram.ThreadPrivacyResolver = bridgeThreadPrivacyResolver{}
+
+// ThreadExists implements telegram.LegacyThreadLookup over the same
+// conversation.Store: whether a chat's legacy thread already holds a row.
+func (r bridgeThreadPrivacyResolver) ThreadExists(ctx context.Context, threadID string) (bool, error) {
+	_, ok, err := r.store.GetThread(ctx, threadID)
+	return ok && err == nil, err
+}
+
+var _ telegram.LegacyThreadLookup = bridgeThreadPrivacyResolver{}
+
+// OpenBridgeThreadMap returns the durable chat-to-thread map on db (the
+// bridge's cascade.db connection, owned by the caller): it applies the
+// bridge schema (idempotent; enabledBridge's openBridgeState already did)
+// and puts cascadepa.ThreadMapStore on the bridge subject table.
+func OpenBridgeThreadMap(ctx context.Context, db *sql.DB, dataDir string, clock migrate.Clock) (*cascadepa.ThreadMapStore, error) {
+	if db == nil || dataDir == "" {
+		return nil, cascade.New(cascade.KindInvalidInput, "cascade-pa bridge: the thread map needs a connection and a data directory")
+	}
+	dbPath := filepath.Join(dataDir, "cascade.db")
+	if err := bridge.ApplyMigrationSchema(ctx, db, migrate.SQLiteEmitter{}, clock, dbPath, filepath.Join(dataDir, "backups")); err != nil {
+		return nil, err
+	}
+	return cascadepa.NewThreadMapStore(bridgeStateAdapter{store: bridge.NewStore(db)}), nil
+}
+
+// bridgeThreadLookup is the map lookup a ChatBridge offers bridge.send.
+type bridgeThreadLookup interface {
+	IsBridgeThread(ctx context.Context, threadID string) (bool, error)
+}
+
+// chatBridgeHoldsThread reports whether sender's chat-to-thread map holds
+// threadID. A bridge with no map lookup holds no thread; a lookup error is
+// returned so bridge.send refuses rather than guessing.
+func chatBridgeHoldsThread(ctx context.Context, sender cascadepa.ChatBridge, threadID string) (bool, error) {
+	lookup, ok := sender.(bridgeThreadLookup)
+	if !ok {
+		return false, nil
+	}
+	return lookup.IsBridgeThread(ctx, threadID)
+}
 
 // bridgeRefusedPayload is EventKindBridgeRefused's wire shape: the exact
 // four fields the contract names, never message content.
@@ -250,7 +288,12 @@ func NewCascadePABridgeChatHandler(ctx context.Context, deps ChatWiringDeps,
 	if err != nil {
 		return nil, err
 	}
-	chat := newBridgeChatService()
-	divergence := bridgeDivergenceJournal{bus: deps.Events}
-	return telegram.NewTelegramBridge(module, binding, subject, chat, privacy, divergence), nil
+	threads, err := OpenBridgeThreadMap(ctx, deps.DB, deps.DataDir, clock)
+	if err != nil {
+		return nil, err
+	}
+	return telegram.NewTelegramBridge(module, binding, subject, telegram.BridgeSeams{
+		Chat: bridgeChatFactory(), Privacy: privacy, Divergence: bridgeDivergenceJournal{bus: deps.Events},
+		Threads: telegram.NewThreadMap(threads, binding, subject), Legacy: privacy,
+	}), nil
 }

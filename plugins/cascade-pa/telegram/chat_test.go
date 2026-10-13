@@ -15,36 +15,6 @@ import (
 	cascadepa "github.com/acamarata/cascade/plugins/cascade-pa"
 )
 
-// bridgeRig is a testRig (rig_test.go) plus a TelegramBridge over fake ChatService/ThreadPrivacyResolver/DivergenceSink seams.
-type bridgeRig struct {
-	*testRig
-	bridge     *TelegramBridge
-	privacy    *fakeThreadPrivacy
-	chat       *fakeChatService
-	divergence *fakeDivergenceSink
-}
-
-func newBridgeRig(t *testing.T) *bridgeRig {
-	t.Helper()
-	rig := newDefaultRig(t)
-	privacy := newFakeThreadPrivacy()
-	chat := &fakeChatService{}
-	divergence := &fakeDivergenceSink{}
-	bridge := NewTelegramBridge(rig.module, rig.stores.Binding, testSubject, chat, privacy, divergence)
-	return &bridgeRig{testRig: rig, bridge: bridge, privacy: privacy, chat: chat, divergence: divergence}
-}
-
-// dispatchText runs one message through the FULL production dispatch path
-// (binding, secret-scan, elevated-verb, handleInbound); senderID is decimal.
-func (r *bridgeRig) dispatchText(t *testing.T, senderID string, chatID int64, text string) {
-	t.Helper()
-	fromID, err := strconv.ParseInt(senderID, 10, 64)
-	if err != nil {
-		t.Fatalf("senderID %q is not numeric: %v", senderID, err)
-	}
-	r.module.dispatch(context.Background(), textUpdate(1, fromID, chatID, text))
-}
-
 // TestBridgePrivacy_RefusalMatrix covers the three REFUSE paths (task's
 // security test matrix, Art.4): local-only, restricted, and an
 // unresolvable tier (§5.16 fail-closed: follows the local-only path). In
@@ -67,7 +37,7 @@ func TestBridgePrivacy_RefusalMatrix(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			r := newBridgeRig(t)
 			senderID := strconv.Itoa(6000 + i)
-			chatID := int64(9100 + i)
+			chatID := int64(6000 + i) // the owner DM: chat id == sender id
 			r.bind(t, senderID)
 			threadID := threadIDForChat(chatID)
 			if c.setTier {
@@ -101,10 +71,10 @@ func TestBridgePrivacy_RefusalMatrix(t *testing.T) {
 func TestBridgePrivacy_InternalForwardsAndReplies(t *testing.T) {
 	r := newBridgeRig(t)
 	r.bind(t, "5554")
-	threadID := threadIDForChat(9004)
+	threadID := threadIDForChat(5554)
 	r.privacy.set(threadID, cascadepa.TierInternal)
 
-	r.dispatchText(t, "5554", 9004, "hello world")
+	r.dispatchText(t, "5554", 5554, "hello world")
 
 	if n := r.chat.callCount(); n != 1 {
 		t.Fatalf("AppendTurn called %d times, want 1", n)
@@ -128,10 +98,10 @@ func TestBridgePrivacy_InternalForwardsAndReplies(t *testing.T) {
 func TestBridgePrivacy_PublicForwardsAndReplies(t *testing.T) {
 	r := newBridgeRig(t)
 	r.bind(t, "5555")
-	threadID := threadIDForChat(9005)
+	threadID := threadIDForChat(5555)
 	r.privacy.set(threadID, cascadepa.TierPublic)
 
-	r.dispatchText(t, "5555", 9005, "hello")
+	r.dispatchText(t, "5555", 5555, "hello")
 
 	if n := r.chat.callCount(); n != 1 {
 		t.Fatalf("AppendTurn called %d times, want 1", n)
@@ -161,14 +131,14 @@ func TestBridgePrivacy_UnpairedSenderRefusedBeforeEgress(t *testing.T) {
 func TestInboundMessageUntrustedOrigin(t *testing.T) {
 	r := newBridgeRig(t)
 	r.bind(t, "5556")
-	threadID := threadIDForChat(9007)
+	threadID := threadIDForChat(5556)
 	r.privacy.set(threadID, cascadepa.TierInternal)
 	ch, err := r.bridge.Receive(context.Background())
 	if err != nil {
 		t.Fatalf("Receive: %v", err)
 	}
 
-	r.dispatchText(t, "5556", 9007, "carrying content")
+	r.dispatchText(t, "5556", 5556, "carrying content")
 
 	select {
 	case delivered := <-ch:
@@ -232,8 +202,7 @@ func TestChatBridge_Send(t *testing.T) {
 			t.Skip("Send is refused on Windows tier-2; TestBridgeWindowsTierTwoRefusal_Send proves that path")
 		}
 		r := newBridgeRig(t)
-		threadID := threadIDForChat(9008)
-		r.bind(t, "9008") // fix18 K3: Send now refuses an unbound chat
+		threadID := r.pairLegacy(t, 9008) // Send resolves the chat through the map, then the binding
 		r.privacy.set(threadID, cascadepa.TierPublic)
 		if err := r.bridge.Send(context.Background(), threadID, []byte("assistant reply")); err != nil {
 			t.Fatalf("Send: %v", err)
@@ -250,11 +219,11 @@ func TestChatBridge_Send(t *testing.T) {
 func TestChatBridge_AppendTurnFailure_RepliesWithoutThreadContent(t *testing.T) {
 	r := newBridgeRig(t)
 	r.bind(t, "5558")
-	threadID := threadIDForChat(9009)
+	threadID := threadIDForChat(5558)
 	r.privacy.set(threadID, cascadepa.TierInternal)
 	r.chat.err = errTestStoreDown
 
-	r.dispatchText(t, "5558", 9009, "will not be recorded")
+	r.dispatchText(t, "5558", 5558, "will not be recorded")
 
 	sent := lastSent(t, r.doer)
 	if strings.Contains(sent, "will not be recorded") {
@@ -271,13 +240,13 @@ func TestChatBridge_AppendTurnFailure_RepliesWithoutThreadContent(t *testing.T) 
 func TestChatBridge_Drain_WaitsForInFlight(t *testing.T) {
 	r := newBridgeRig(t)
 	r.bind(t, "5559")
-	threadID := threadIDForChat(9010)
+	threadID := threadIDForChat(5559)
 	r.privacy.set(threadID, cascadepa.TierInternal)
 	r.chat.block = make(chan struct{})
 
 	// Direct dispatch (not dispatchText, whose t.Fatalf must stay on this
 	// goroutine): the sender id is a numeric literal, nothing to parse.
-	go r.module.dispatch(context.Background(), textUpdate(1, 5559, 9010, "in flight"))
+	go r.module.dispatch(context.Background(), textUpdate(1, 5559, 5559, "in flight"))
 	time.Sleep(20 * time.Millisecond) // let dispatch reach the blocked AppendTurn call
 
 	drainDone := make(chan error, 1)

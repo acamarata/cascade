@@ -6,6 +6,7 @@ approval.show
 bridge.send
 cascade_search
 chat.append_turn
+chat.create_thread
 chat.get_thread
 chat.list_threads
 chat.search

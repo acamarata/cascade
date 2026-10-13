@@ -33,8 +33,7 @@ func TestChatBridge_Send_SecretRefused(t *testing.T) {
 	}
 	r := newBridgeRig(t)
 	r.module.secretScanner = secretScannerFor(witnessSecretText, "api-key")
-	threadID := threadIDForChat(9011)
-	r.bind(t, "9011") // fix18 K3: Send now refuses an unbound chat
+	threadID := r.pairLegacy(t, 9011) // Send resolves the chat through the map, then the binding
 	r.privacy.set(threadID, cascadepa.TierPublic)
 
 	err := r.bridge.Send(context.Background(), threadID, []byte(witnessSecretText))

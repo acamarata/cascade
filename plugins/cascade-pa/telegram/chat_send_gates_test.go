@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,13 +22,19 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// TestIsBridgeThread_CanonicalOnly pins the exact alias set the canonical
-// round-trip in chatIDForThread rejects. Dropping that round-trip makes
-// "+1", "01" and "-0" parse as chats 1 and 0 and this goes RED.
+// TestIsBridgeThread_CanonicalOnly: with chat 1 bound to its canonical
+// legacy thread, only that exact id is a bridge thread; every alias of it
+// (and every unmapped legacy-form id) is not, and Bind refuses each alias
+// with nothing written. Dropping chatIDForThread's canonical round-trip
+// lets ThreadMap.Bind accept "+1" or "01" for chat 1 and this goes RED.
 func TestIsBridgeThread_CanonicalOnly(t *testing.T) {
+	r := newBridgeRig(t)
+	r.pairLegacy(t, 1)
+	r.bind(t, "2")
+	owner := Chat{ID: 2, Type: "private"}
 	cases := map[string]bool{
 		bridgeThreadPrefix + "1":      true,
-		bridgeThreadPrefix + "-5":     true,
+		bridgeThreadPrefix + "-5":     false,
 		bridgeThreadPrefix + "+1":     false,
 		bridgeThreadPrefix + "01":     false,
 		bridgeThreadPrefix + "-0":     false,
@@ -37,9 +44,18 @@ func TestIsBridgeThread_CanonicalOnly(t *testing.T) {
 		"bridge-telegram-other:12345": false,
 	}
 	for threadID, want := range cases {
-		if got := IsBridgeThread(threadID); got != want {
-			t.Errorf("IsBridgeThread(%q) = %v, want %v", threadID, got, want)
+		if got, err := r.bridge.IsBridgeThread(context.Background(), threadID); err != nil || got != want {
+			t.Errorf("IsBridgeThread(%q) = %v, %v; want %v", threadID, got, err, want)
 		}
+		if want || !strings.HasPrefix(threadID, bridgeThreadPrefix) {
+			continue // a non-legacy id is an ordinary (minted-shape) id, bindable by design
+		}
+		if _, err := r.threads.Bind(context.Background(), owner, 2, threadID); err == nil {
+			t.Errorf("ThreadMap.Bind(chat 2, %q) accepted a non-canonical or foreign legacy id", threadID)
+		}
+	}
+	if bound, ok, err := r.threads.ThreadFor(context.Background(), 2); err != nil || ok {
+		t.Fatalf("chat 2 bound to %q (%v, %v) after only refused binds", bound, ok, err)
 	}
 }
 
@@ -52,7 +68,7 @@ func TestChatBridge_Send_AliasThread_SendsNothing(t *testing.T) {
 		t.Skip("Send refuses at the platform gate first on Windows (chat_windows_test.go)")
 	}
 	r := newBridgeRig(t)
-	r.bind(t, "9016")
+	r.pairLegacy(t, 9016) // the canonical thread IS mapped; its alias must not resolve to it
 	alias := bridgeThreadPrefix + "+9016"
 	r.privacy.set(alias, cascadepa.TierPublic)
 
@@ -74,8 +90,7 @@ func TestChatBridge_Send_BindingStoreError_FailsClosed(t *testing.T) {
 		t.Skip("Send refuses at the platform gate first on Windows (chat_windows_test.go)")
 	}
 	r := newBridgeRig(t)
-	r.bind(t, "9017")
-	threadID := threadIDForChat(9017)
+	threadID := r.pairLegacy(t, 9017) // the map has its own state; only the binding store fails
 	r.privacy.set(threadID, cascadepa.TierPublic)
 	r.state.mu.Lock()
 	r.state.loadErr = errors.New("test: binding store unreachable")
@@ -114,13 +129,15 @@ func TestChatBridge_Drain_WaitsForInFlightSend(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Send refuses at the platform gate first on Windows (chat_windows_test.go)")
 	}
-	rig := newDefaultRig(t)
+	r := newBridgeRig(t)
 	privacy := &blockingPrivacy{arrived: make(chan struct{}), release: make(chan struct{})}
-	bridge := NewTelegramBridge(rig.module, rig.stores.Binding, testSubject, &fakeChatService{}, privacy, &fakeDivergenceSink{})
-	rig.bind(t, "9018")
+	seams := r.seams()
+	seams.Privacy = privacy
+	bridge := NewTelegramBridge(r.module, r.stores.Binding, testSubject, seams)
+	threadID := r.pairLegacy(t, 9018)
 
 	sent := make(chan error, 1)
-	go func() { sent <- bridge.Send(context.Background(), threadIDForChat(9018), []byte("in flight")) }()
+	go func() { sent <- bridge.Send(context.Background(), threadID, []byte("in flight")) }()
 	<-privacy.arrived
 
 	short, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)

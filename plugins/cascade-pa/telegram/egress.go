@@ -1,15 +1,16 @@
 // Purpose (this file): the three host-mediated seams chat.go's forward
 //   handler needs beyond BotClient's existing per-call EgressGate (client.go)
-//   — a thread's §5.16 privacy mode, the S-43.T2 chat.append_turn service,
-//   and the divergence-event sink a refusal publishes to — plus the pure
-//   thread-id/reason-text helpers chat.go composes them with.
+//   — a thread's §5.16 privacy mode, the chat.append_turn and
+//   chat.create_thread service, and the divergence-event sink a refusal
+//   publishes to — plus the legacy thread-id and reason-text helpers.
 //
 // Inputs: a chat id (this module's own unit of "which conversation"), and
 //   the host's real implementations of the three interfaces below.
 //
-// Outputs: a deterministic thread id for a chat, the fixed refusal reason
-//   text for a resolved tier, and the fail-closed defaults every interface
-//   here resolves to when the host has not wired a real one.
+// Outputs: a chat's LEGACY thread id (adoption only, threadmap.go), the
+//   fixed refusal reason text for a resolved tier, and the fail-closed
+//   defaults every interface here resolves to when the host has not wired a
+//   real one.
 //
 // Constraints:
 //   - THIS PACKAGE NEVER IMPORTS internal/ (R-14.69, same boundary
@@ -54,6 +55,10 @@ type ChatService interface {
 	// AppendTurn records one turn (role, text) on threadID and returns the
 	// turn id the store assigned.
 	AppendTurn(ctx context.Context, threadID, role, text string) (turnID string, err error)
+	// CreateThread is chat.create_thread: the daemon mints a thread id and
+	// writes the thread, its privacy marker (privacyMode) and its
+	// attribution in one transaction. The bridge never names a thread id.
+	CreateThread(ctx context.Context, privacyMode string) (threadID string, err error)
 }
 
 // ThreadPrivacyResolver resolves threadID's §5.16 sensitivity tier — the
@@ -119,6 +124,10 @@ func (unconfiguredChatService) AppendTurn(context.Context, string, string, strin
 	return "", errNoChatService
 }
 
+func (unconfiguredChatService) CreateThread(context.Context, string) (string, error) {
+	return "", errNoChatService
+}
+
 // chatServiceOrRefuseAll substitutes the fail-closed default for a nil
 // service.
 func chatServiceOrRefuseAll(c ChatService) ChatService {
@@ -150,34 +159,25 @@ func divergenceOrDiscard(d DivergenceSink) DivergenceSink {
 	return d
 }
 
-// bridgeThreadPrefix namespaces every thread id this module mints from a
-// Telegram chat id, so a bridge thread can never collide with a thread a
-// CLI or another adapter created.
+// bridgeThreadPrefix is the LEGACY bridge thread namespace: before
+// chat.create_thread existed, a chat's thread id was this prefix plus the
+// chat id. New chats never get such an id; it survives only so a chat whose
+// legacy thread already holds history is bound to it (threadmap.go), and so
+// a legacy-form id can never be bound to any chat but its own.
 const bridgeThreadPrefix = "bridge-telegram:"
 
-// threadIDForChat derives the deterministic conversation thread id for
-// chatID: one Telegram chat maps to exactly one thread, always, so a
-// privacy mode set on that thread (via `cascade chat --thread
-// bridge-telegram:<id> --private`, an operator's own local action) governs
-// every future message from that chat. There is no thread-creation path on
-// this side: an operator opts a chat into internal/public tiers from the
-// local CLI, matching this ticket's fail-closed default (an unmarked
-// thread reads as restricted, per internal/conversation/privacy.go, and
-// restricted is excluded from the bridge's AllowedTiers).
+// threadIDForChat is chatID's LEGACY thread id: the one candidate the
+// inbound path checks for history before minting (chat_threads.go). It is
+// never appended to or sent on unless the chat-to-thread map binds it.
 func threadIDForChat(chatID int64) string {
 	return bridgeThreadPrefix + strconv.FormatInt(chatID, 10)
 }
 
-// chatIDForThread reverses threadIDForChat, for ChatBridge.Send's
-// thread->chat direction. ok is false for any threadID this module did not
-// mint (a foreign or malformed id) — Send refuses those by name rather
-// than guessing a chat. CANONICAL FORM ONLY (fix18 round 2, K3): rest must
-// round-trip through FormatInt exactly, so "+123" (ParseInt accepts a
-// leading sign) and "0123" (a leading zero) are rejected even though
-// ParseInt itself would accept them — each such alias would otherwise
-// address the SAME chat as its canonical form while carrying its own,
-// independent privacy row, silently bypassing whatever tier the operator
-// set on "bridge-telegram:123".
+// chatIDForThread reverses threadIDForChat for a legacy-form id. ok is false
+// for any id not in the CANONICAL legacy form: rest must round-trip through
+// FormatInt exactly, so "+123" and "0123" (which ParseInt accepts) are
+// refused, since each alias would otherwise name the same chat. Bind uses
+// it to keep a legacy id bound only to its own chat.
 func chatIDForThread(threadID string) (chatID int64, ok bool) {
 	rest, found := strings.CutPrefix(threadID, bridgeThreadPrefix)
 	if !found {
@@ -188,19 +188,6 @@ func chatIDForThread(threadID string) (chatID int64, ok bool) {
 		return 0, false
 	}
 	return n, true
-}
-
-// IsBridgeThread reports whether threadID was minted by threadIDForChat —
-// the exported form of chatIDForThread's own mapping check (fix18), for a
-// composition-root caller (internal/plugins) that must decide whether to
-// route a cascade-pa send through this bridge at all, without importing
-// this package's unexported prefix constant or re-deriving the mapping
-// itself. Routing a non-bridged thread's send into Send would otherwise
-// silently misreport it as "does not map to a chat this bridge serves"
-// instead of simply not routing it there.
-func IsBridgeThread(threadID string) bool {
-	_, ok := chatIDForThread(threadID)
-	return ok
 }
 
 // The contract's two fixed refusal reply texts (task 4 / AC), plus the

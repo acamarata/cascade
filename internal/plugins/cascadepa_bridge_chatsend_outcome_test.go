@@ -20,10 +20,12 @@ import (
 )
 
 // TestBridgeMirroringConversations_NonBridgeThread_NeverCallsRPC proves the
-// L2 pre-filter: an ordinary thread's Append never dials bridge.send and
-// carries no outcome. Dropping the IsBridgeThread filter turns this RED.
+// L2 pre-filter: an id no bridge map can ever hold never dials bridge.send
+// and carries no outcome. Dropping the MayBeBridgeThread filter turns this
+// RED. (Any other id is the daemon's map to decide; see
+// TestBridgeMirroringConversations_UnmappedThread_CarriesNoOutcome.)
 func TestBridgeMirroringConversations_NonBridgeThread_NeverCallsRPC(t *testing.T) {
-	for _, threadID := range []string{"thread-7", "bridge-telegram:+918273", "bridge-telegram:0918273"} {
+	for _, threadID := range []string{"", "bridge-telegram:+918273", "bridge-telegram:0918273"} {
 		doer := &recordingBridgeSendDoer{}
 		inner := &stubConversations{res: tools.AppendResult{ThreadID: threadID, TurnID: "turn-1"}}
 		conv := &bridgeMirroringConversations{inner: inner, send: bridgeSendClient{doer: doer}}
@@ -108,5 +110,47 @@ func TestCascadePAToolsInit_RegistersTheMirroringDecorator(t *testing.T) {
 	}
 	if !strings.Contains(string(out), `"bridge":{"status":"mirrored"}`) {
 		t.Fatalf("cascade_cpa_send result = %s, want the mirrored outcome", out)
+	}
+}
+
+// TestBridgeMirroringConversations_RefusedCallerOnOrdinaryThread_NoOutcome
+// proves a caller bridge.send refuses (it is owner-only) gets no outcome on
+// an ordinary minted thread, while a legacy bridge id and any other failure
+// on an ordinary thread are still reported. Dropping the permission-denied
+// branch in bridgeSendClient.send turns the first case RED.
+func TestBridgeMirroringConversations_RefusedCallerOnOrdinaryThread_NoOutcome(t *testing.T) {
+	denied := cascade.New(cascade.KindPermissionDenied, "caller not permitted")
+	cases := []struct {
+		name     string
+		threadID string
+		err      error
+		want     string // "" means no outcome
+	}{
+		{"minted id, caller refused", "th-0123456789abcdef", denied, ""},
+		{"legacy id, caller refused", "bridge-telegram:918273", denied, tools.BridgeFailed},
+		{"minted id, bridge stopped", "th-0123456789abcdef", ErrBridgeSendUnavailable, tools.BridgeFailed},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			doer := &recordingBridgeSendDoer{err: c.err}
+			inner := &stubConversations{res: tools.AppendResult{ThreadID: c.threadID, TurnID: "turn-1"}}
+			conv := &bridgeMirroringConversations{inner: inner, send: bridgeSendClient{doer: doer}}
+			res, err := conv.Append(context.Background(), tools.AppendRequest{ThreadID: c.threadID, Role: "user", Content: "hi"})
+			if err != nil {
+				t.Fatalf("Append: %v", err)
+			}
+			if len(doer.calls) != 1 {
+				t.Fatalf("bridge.send calls = %d, want 1", len(doer.calls))
+			}
+			if c.want == "" {
+				if res.Bridge != nil {
+					t.Fatalf("Bridge = %+v, want no outcome", res.Bridge)
+				}
+				return
+			}
+			if res.Bridge == nil || res.Bridge.Status != c.want {
+				t.Fatalf("Bridge = %+v, want status %q", res.Bridge, c.want)
+			}
+		})
 	}
 }

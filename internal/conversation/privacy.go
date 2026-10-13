@@ -30,8 +30,21 @@ import (
 // ThreadPrivacyStore is the privacy_mode half of Store, declared here so
 // the surface and the implementation that satisfies it read together.
 type ThreadPrivacyStore interface {
-	// SetThreadPrivacy records threadID's §5.16 sensitivity tier.
+	// SetThreadPrivacy records threadID's §5.16 sensitivity tier,
+	// WRITE-ONCE: the first write wins; a later write naming the same tier
+	// is a no-op and one naming a different tier is refused with
+	// KindConflict, the marker unchanged. A thread that already has turns
+	// and no marker is refused too: its implicit restricted tier is never
+	// rewritten after content exists (setThreadPrivacyTx).
 	SetThreadPrivacy(ctx context.Context, threadID string, tier provider.SensitivityTier) error
+	// CreateThread inserts a brand-new thread row (zero turns), its §5.16
+	// marker and its creating caller's attribution (scope_attr.go) in ONE
+	// transaction (chat.create_thread). An existing id is KindConflict with
+	// nothing written; any failed insert rolls back all three. createdAt is
+	// a caller-resolved Clock reading. The thread_scope schema must already
+	// be applied (ensureScopeSchema); without it the attribution insert
+	// fails and nothing is written.
+	CreateThread(ctx context.Context, threadID string, tier provider.SensitivityTier, attribution string, createdAt int64) error
 	// ThreadPrivacy reads threadID's tier. A thread with no row -- and a
 	// thread that does not exist -- reads as restricted, never as an
 	// error the caller could mistake for permission.
@@ -72,13 +85,16 @@ func privacyStep() migrate.MigrationStep {
 }
 
 // SetThreadPrivacy implements Store. It does NOT require the thread to
-// exist (see the body); a repeat call REPLACES the tier.
+// exist: the mode is recorded on the request that CREATES a thread, before
+// its first turn commits, because an unmarked thread reads as restricted
+// and any window between "has content" and "is marked local-only" would
+// route under the looser tier. A mark for an id that never gets a turn is
+// inert; ThreadPrivacy already answers restricted for an id it cannot find.
 //
-// Replace rather than DO NOTHING, unlike archival: archiving twice is the
-// same fact stated twice, while setting a tier twice is a caller changing
-// its mind, and the second value is the one it means. Narrowing is always
-// allowed; whether a WIDENING is permitted is the router's decision
-// (§5.14 makes it a loosening), not this store's.
+// WRITE-ONCE, in one transaction (setThreadPrivacyTx,
+// privacy_createthread.go): a marker is never widened or narrowed after it
+// is written, and a thread that already holds turns without a marker keeps
+// its implicit restricted tier.
 func (s *conversationStore) SetThreadPrivacy(ctx context.Context, threadID string, tier provider.SensitivityTier) error {
 	if threadID == "" {
 		return ErrInvalidRecord
@@ -87,27 +103,9 @@ func (s *conversationStore) SetThreadPrivacy(ctx context.Context, threadID strin
 		return cascade.Newf(cascade.KindInvalidInput,
 			"conversation: %q is not a sensitivity tier", tier.String())
 	}
-	// NO "does the thread exist yet" CHECK, deliberately. A thread exists
-	// in an append-only model once it has a turn, and the mode has to be
-	// recorded BEFORE that turn is committed: an unmarked thread reads as
-	// restricted, so a window between "thread has content" and "thread is
-	// marked local-only" is a window in which a local-only thread routes
-	// under the looser of the two tiers. An existence check here made the
-	// one case the contract requires — setting the mode on the request
-	// that CREATES the thread — the one case that could not work.
-	//
-	// A mark for an id that never gets a turn is inert: nothing routes a
-	// thread with no content, and ThreadPrivacy already answers restricted
-	// for an id it cannot find. The refusal a caller needs for a bad id
-	// comes from the operation it is actually attempting.
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO `+tableThreadPrivacy+` (thread_id, privacy_mode) VALUES (?, ?) `+
-			`ON CONFLICT(thread_id) DO UPDATE SET privacy_mode = excluded.privacy_mode`,
-		threadID, tier.String())
-	if err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "conversation: set thread privacy mode")
-	}
-	return nil
+	return runTx(ctx, s.db, func(tx *sql.Tx) error {
+		return setThreadPrivacyTx(ctx, tx, threadID, tier)
+	})
 }
 
 // ThreadPrivacy implements Store.

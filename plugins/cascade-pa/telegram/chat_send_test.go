@@ -30,8 +30,7 @@ func TestChatBridge_Send_TierRefused_EmitsBridgeRefused(t *testing.T) {
 		t.Skip("Send is refused at the platform gate first on Windows (chat_windows_test.go)")
 	}
 	r := newBridgeRig(t)
-	threadID := threadIDForChat(9013)
-	r.bind(t, "9013") // fix18 K3: isolate the tier gate from the binding gate
+	threadID := r.pairLegacy(t, 9013) // fix18 K3: isolate the tier gate from the binding gate
 	r.privacy.set(threadID, cascadepa.TierRestricted)
 
 	err := r.bridge.Send(context.Background(), threadID, []byte("assistant reply"))
@@ -76,7 +75,10 @@ func TestChatBridge_Send_NotBound_Refuses(t *testing.T) {
 	}
 	r := newBridgeRig(t)
 	threadID := threadIDForChat(9014)
-	// Deliberately NOT bound: no r.bind(t, "9014") call.
+	// Mapped, but deliberately NOT bound: no r.bind(t, "9014") call.
+	if _, err := r.mapStore.Bind(context.Background(), testSubject, 9014, threadID); err != nil {
+		t.Fatalf("seed map row: %v", err)
+	}
 	r.privacy.set(threadID, cascadepa.TierPublic)
 
 	err := r.bridge.Send(context.Background(), threadID, []byte("assistant reply"))
@@ -104,8 +106,7 @@ func TestChatBridge_Send_PrivacyResolverError_FailsClosed(t *testing.T) {
 		t.Skip("Send is refused at the platform gate first on Windows (chat_windows_test.go)")
 	}
 	r := newBridgeRig(t)
-	threadID := threadIDForChat(9015)
-	r.bind(t, "9015") // isolate the privacy-resolver gate from the binding gate
+	threadID := r.pairLegacy(t, 9015) // isolate the privacy-resolver gate from the binding gate
 	r.privacy.err = errTestGateClosed
 
 	err := r.bridge.Send(context.Background(), threadID, []byte("assistant reply"))
@@ -123,7 +124,7 @@ func TestChatBridge_Send_PrivacyResolverError_FailsClosed(t *testing.T) {
 }
 
 // TestChatBridge_Send_UnknownThread_NoDivergenceEvent proves the
-// caller-error refusal (a threadID this bridge never minted) is NOT a
+// caller-error refusal (a threadID the map does not hold) is NOT a
 // policy refusal: it publishes no bridge.refused event, unlike a tier or
 // secret-gate refusal.
 func TestChatBridge_Send_UnknownThread_NoDivergenceEvent(t *testing.T) {

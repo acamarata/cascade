@@ -149,10 +149,19 @@ func BridgeSend(ctx context.Context, params BridgeSendParams) (BridgeSendResult,
 		return BridgeSendResult{}, err
 	}
 	if sender == nil {
-		return BridgeSendResult{Reason: reasonNoChatBridge}, nil
+		// With no bridge wired nothing is a bridge thread; only a legacy id
+		// keeps the "no chat bridge" answer.
+		if telegram.IsLegacyBridgeThreadID(params.ThreadID) {
+			return BridgeSendResult{Reason: reasonNoChatBridge}, nil
+		}
+		return BridgeSendResult{Reason: reasonNotBridgeThread}, nil
 	}
 	defer bridgeSendInFlight.Add(-1)
-	if !telegram.IsBridgeThread(params.ThreadID) {
+	held, err := chatBridgeHoldsThread(ctx, sender, params.ThreadID) // the bridge's map, never the id's shape
+	if err != nil {
+		return BridgeSendResult{}, err
+	}
+	if !held {
 		return BridgeSendResult{Reason: reasonNotBridgeThread}, nil
 	}
 	resolved := tools.ResolveSensitivity(params.Sensitivity)

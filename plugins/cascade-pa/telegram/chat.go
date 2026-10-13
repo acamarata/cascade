@@ -78,6 +78,8 @@ type TelegramBridge struct {
 	chat       ChatService
 	privacy    ThreadPrivacyResolver
 	divergence DivergenceSink
+	threads    ThreadMap
+	legacy     LegacyThreadLookup
 
 	inbound    chan cascadepa.InboundMessage
 	closeGuard sync.Once
@@ -96,17 +98,19 @@ var _ cascadepa.ChatBridge = (*TelegramBridge)(nil)
 // NewTelegramBridge builds a ChatBridge over module and registers this
 // bridge's forward handler as module's HandlerText — the ONE call site
 // turning "admitted message" into "chat parity" (last RegisterHandler for a
-// kind wins, module.go's map-assignment semantics). A nil chat/privacy/
-// divergence resolves to its fail-closed default (egress.go).
+// kind wins, module.go's map-assignment semantics). A nil seam resolves to
+// its fail-closed default (egress.go, threadmap.go).
 func NewTelegramBridge(module *TelegramModule, binding *cascadepa.BindingStore, subject string,
-	chat ChatService, privacy ThreadPrivacyResolver, divergence DivergenceSink) *TelegramBridge {
+	seams BridgeSeams) *TelegramBridge {
 	b := &TelegramBridge{
 		module:     module,
 		binding:    binding,
 		subject:    subject,
-		chat:       chatServiceOrRefuseAll(chat),
-		privacy:    threadPrivacyOrRefuseAll(privacy),
-		divergence: divergenceOrDiscard(divergence),
+		chat:       chatServiceOrRefuseAll(seams.Chat),
+		privacy:    threadPrivacyOrRefuseAll(seams.Privacy),
+		divergence: divergenceOrDiscard(seams.Divergence),
+		threads:    threadMapOrRefuseAll(seams.Threads),
+		legacy:     legacyOrRefuseAll(seams.Legacy),
 		inbound:    make(chan cascadepa.InboundMessage, inboundBufferSize),
 	}
 	module.RegisterHandler(HandlerText, b.handleInbound)
@@ -186,9 +190,20 @@ func (b *TelegramBridge) handleInbound(ctx context.Context, msg InboundMessage) 
 	if m == nil || m.From == nil {
 		return nil // module.go's admitMessage never reaches HandlerText without both
 	}
-	threadID := threadIDForChat(m.Chat.ID)
+	// R-21.227 first: an update without the pinned marker never reaches the
+	// map, create_thread or the chat service.
+	if msg.Origin != OriginBridgeTelegram || !msg.Untrusted {
+		return cascade.Newf(cascade.KindIntegrity,
+			"cascade-pa/telegram: admitted update carries origin %q untrusted=%v, want %q/true",
+			msg.Origin, msg.Untrusted, OriginBridgeTelegram)
+	}
 	corrID := "chat:" + strconv.FormatInt(m.Chat.ID, 10)
 	chatKind := chatKindOf(m)
+	threadID, err := b.resolveInboundThread(ctx, m) // chat_threads.go: the map, never a derived id
+	if err != nil {
+		b.recordUnmapped(corrID)
+		return err
+	}
 
 	tier, perr := b.privacy.ThreadPrivacy(ctx, threadID)
 	if perr != nil {
@@ -201,7 +216,7 @@ func (b *TelegramBridge) handleInbound(ctx context.Context, msg InboundMessage) 
 		b.refuse(ctx, m.Chat.ID, threadID, tier, corrID, chatKind)
 		return nil
 	}
-	return b.forward(ctx, msg, m, threadID, tier, chatKind)
+	return b.forward(ctx, m, threadID, tier, chatKind)
 }
 
 // refuse records and replies a bridge-boundary refusal: no message content
@@ -222,15 +237,11 @@ func (b *TelegramBridge) refuse(ctx context.Context, chatID int64, threadID stri
 // forward appends msg's text as a "user" turn (chat parity), replies with
 // the honest disclosure (or a recorded-but-unreachable notice on a
 // ChatService failure), then delivers onto Receive's channel — the ONE
-// place InboundMessage becomes cascadepa.InboundMessage. It refuses first
-// when Origin/Untrusted don't match (R-21.227: delivered turns pin Untrusted true).
-func (b *TelegramBridge) forward(ctx context.Context, msg InboundMessage, m *Message,
+// place InboundMessage becomes cascadepa.InboundMessage. handleInbound has
+// already refused an update whose Origin/Untrusted don't match (R-21.227:
+// delivered turns pin Untrusted true).
+func (b *TelegramBridge) forward(ctx context.Context, m *Message,
 	threadID string, tier cascadepa.SensitivityTier, chatKind string) error {
-	if msg.Origin != OriginBridgeTelegram || !msg.Untrusted {
-		return cascade.Newf(cascade.KindIntegrity,
-			"cascade-pa/telegram: admitted update carries origin %q untrusted=%v, want %q/true",
-			msg.Origin, msg.Untrusted, OriginBridgeTelegram)
-	}
 	turnID, err := b.chat.AppendTurn(ctx, threadID, "user", m.Text)
 	if err != nil {
 		b.module.reply(ctx, m.Chat.ID, chatKind,
