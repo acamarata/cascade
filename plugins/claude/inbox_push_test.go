@@ -213,7 +213,7 @@ func TestInboxPushFlagOffRecordsDeferral(t *testing.T) {
 	}
 	p, h := newRouter(t, ch)
 	def := p.Deferral()
-	wantExactly(t, def, ErrChannelUnsupported, "D-S73T1-1")
+	wantPlatformDeferral(t, def)
 	if !cascade.HasKind(def, cascade.KindUnsupported) {
 		t.Fatalf("deferral kind = %v, want KindUnsupported", def)
 	}
