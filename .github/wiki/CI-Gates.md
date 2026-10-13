@@ -132,3 +132,80 @@ See `internal/build/*.go` (gofmt-clean, dead-code, test-only usage,
 license allowlist, and this file's own bench-budget harness) for every
 other gate `go test ./internal/build/...` runs. Each carries its own
 seeded-violation fixture under `internal/build/testdata/seeded-violations/`.
+
+## Integration lanes
+
+Tests behind the `integration` build tag are not part of `go test ./...`, so a
+tagged package nobody runs goes green forever. The `integration-lanes` job in
+`.github/workflows/ci.yml` closes that from a committed registry instead of a
+per-package list that would drift again.
+
+**The registry** lives in `internal/build/integrationlanes_table.go`:
+
+- `IntegrationLanes` is a list of `LaneRow{Package, Tags, RunRegex, Job, OS, SkipOn}`.
+  `Job: "integration-lanes"` rows are run by the lane job itself:
+  `go test -json -count=1 -tags <Tags> -run <RunRegex> <Package>` on every runner
+  listed in `OS` (`ubuntu-latest`, `macos-15`, `windows-latest`). Any other `Job`
+  names an existing `ci.yml` job that already runs the package; the gate checks
+  that the job exists, has no `continue-on-error`, is in `ci-gate` needs, and has
+  a step naming the package (or a `./dir/...` pattern covering it) with every tag
+  in a `-tags` flag.
+- `SkipOn` maps a runner to a gate message. On that runner every skipped test must
+  print the message; a skip without it fails the row, and a row whose tests all
+  skip with the message passes. On `windows-latest` the rule is strict: a row with
+  no `SkipOn` entry accepts no skipped test at all, so a windows skip is never
+  counted as a pass without its declared gate message.
+- `IntegrationExcluded` maps a package to the reason no lane runs it, and names
+  the local command to run instead. A package a free GitHub-hosted runner cannot
+  serve (a needed service or secret) goes here.
+
+**The gate** is `TestIntegrationLanesCoverTree`. `DiscoverIntegrationPackages`
+parses the `//go:build` line of every `_test.go` file with `go/build/constraint`
+(never a substring match) and lists the packages with a file that is false
+without the `integration` tag and true with it. `testdata`, `vendor`, dot and
+underscore directories and nested modules are skipped. The gate fails when a
+package is neither a row nor excluded, when a row or exclusion names a package
+with no such file, and when a row's job could not block a merge. The same check
+runs at the start of `integrationlane plan`, so a stale registry fails the CI
+job, not only the unit test.
+
+**The devkeys-absent leg.** The `integration-lanes` job on `ubuntu-latest` also
+builds a release-configured `cmd/cascade` (CGO off, default tags) and runs
+`internal/build/nodevkeys` over it, then builds one with the `devkeys` tag and
+requires the same tool to refuse it. This is a job step, not a registry row: it is
+not a `go test` run.
+
+**Adding a package.** Add the integration-tagged test file, then add its row in
+the same change (the gate fails until you do). Prefer a `RunRegex` that names the
+integration tests exactly (`^(TestA|TestB)$`): the report fails a row when a
+named test did not run, so a renamed test cannot drop out of the lane.
+
+**Reading the report.** Each runner uploads `integration-lanes-report-<runner>`,
+the JSON written by `go run ./internal/build/gen/integrationlane report`. It uses
+`internal/goldencheck`'s aggregation: a row fails when it ran zero tests (a wrong
+regex or tag), a test failed, the package failed to build, started tests did not
+finish, nothing passed, or a named test did not run. It also fails a row whose
+events name a different package than the plan. Locally:
+
+```
+go run ./internal/build/gen/integrationlane plan --os macos-15
+```
+
+prints one tab-separated `package tags regex` line per row for a runner.
+
+**The red proof.** A green lane proves little unless it can go red.
+`integration-lanes-red-proof` runs one seeded row, `TestSeededRed` under
+`internal/build/testdata/integrationlanes/seeded`, which fails on purpose, through
+the same plan, run and report path. The job is expected to fail: it has no
+`continue-on-error`, is not in `ci-gate` needs, and uploads its report with
+`if: always()`. `integration-lanes-red-assert` (`needs` the red-proof job,
+`if: always()`, in `ci-gate` needs) passes only when the red-proof job concluded
+`failure` and `integrationlane assert-red` finds exactly one row, the seeded one,
+with at least one run event and a failure of `TestSeededRed` alone. A skipped
+red-proof job, a build error, a tag mismatch (zero run events) or a seeded test
+that passed all fail the assert job. `TestIntegrationLanesRedProofShape` pins
+that workflow shape.
+
+Because the red-proof job fails on every run, the workflow run's own conclusion
+is failure by design. `ci-gate` is the verdict: it requires `integration-lanes`
+and `integration-lanes-red-assert`, not `integration-lanes-red-proof`.

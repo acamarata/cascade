@@ -1,0 +1,28 @@
+# A minimal workflow with the shape CheckLaneCoverage requires; the red-proof
+# shape test breaks one property at a time. Not a real workflow.
+jobs:
+  integration-lanes:
+    runs-on: ubuntu-latest
+    steps:
+      - run: go run ./internal/build/gen/integrationlane plan
+  integration-lanes-red-proof:
+    runs-on: ubuntu-latest
+    steps:
+      - run: go run ./internal/build/gen/integrationlane report
+      - uses: actions/upload-artifact@v0
+        if: always()
+  integration-lanes-red-assert:
+    needs: integration-lanes-red-proof
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: go run ./internal/build/gen/integrationlane assert-red
+  pg:
+    runs-on: ubuntu-latest
+    steps:
+      - run: go test -tags="postgres integration" -count=1 ./providers/postgres/... -v
+  ci-gate:
+    needs: [integration-lanes, integration-lanes-red-assert, pg]
+    runs-on: ubuntu-latest
+    steps:
+      - run: "true"

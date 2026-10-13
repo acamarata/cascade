@@ -1271,16 +1271,154 @@ jobs:
           path: ${{ runner.temp }}/golden-parity/report.json
           if-no-files-found: error
 
+  integration-lanes:
+    # Integration lane. internal/build holds the committed registry of every
+    # package with an integration-constrained test file (IntegrationLanes, or a
+    # reasoned IntegrationExcluded entry); `integrationlane plan` first proves
+    # the registry still covers the tree and this file (an unmapped package, a
+    # stale row or a row whose job cannot block fails the plan), then prints the
+    # rows that run on this runner. Each row runs with `go test -json` and never
+    # stops the loop; the aggregator fails on a row that ran zero tests, a
+    # failing test, a build error, or a skip without the row's declared gate
+    # message. A row whose Job is another job here is checked, not run: that job
+    # must run the package with the tags and be required by ci-gate.
+    name: integration-lanes (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, macos-15, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: run every integration lane row
+        shell: bash
+        run: |
+          D="$RUNNER_TEMP/integration-lanes"
+          mkdir -p "$D"
+          go run ./internal/build/gen/integrationlane plan --os "${{ matrix.runner }}" > "$D/plan.tsv"
+          i=0
+          while IFS="$(printf '\t')" read -r pkg tags re; do
+            i=$((i+1))
+            go test -json -count=1 -tags "$tags" -run "$re" "$pkg" > "$D/$i.json" < /dev/null || echo "integration-lanes: row $i ($pkg) exited non-zero; the report decides"
+          done < "$D/plan.tsv"
+
+      - name: aggregate the report
+        shell: bash
+        run: go run ./internal/build/gen/integrationlane report --dir "$RUNNER_TEMP/integration-lanes" --out "$RUNNER_TEMP/integration-lanes/report.json" --os "${{ matrix.runner }}"
+
+      # SEC-32 devkeys-absent leg: a release-configured build (CGO off, default
+      # tags) must carry no development custody, and the same gate must refuse a
+      # build made with the devkeys tag, so the check cannot pass by being blind.
+      - name: devkeys-absent leg
+        if: matrix.runner == 'ubuntu-latest'
+        shell: bash
+        run: |
+          CGO_ENABLED=0 go build -o "$RUNNER_TEMP/cascade-release" ./cmd/cascade
+          go run ./internal/build/nodevkeys "$RUNNER_TEMP/cascade-release"
+          CGO_ENABLED=0 go build -tags devkeys -o "$RUNNER_TEMP/cascade-devkeys" ./cmd/cascade
+          if go run ./internal/build/nodevkeys "$RUNNER_TEMP/cascade-devkeys"; then
+            echo "::error::nodevkeys accepted a build made with the devkeys tag"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: integration-lanes-report-${{ matrix.runner }}
+          path: ${{ runner.temp }}/integration-lanes/report.json
+          if-no-files-found: error
+
+  integration-lanes-red-proof:
+    # EXPECTED TO FAIL (R18 M7). Runs only the seeded row, a test that fails on
+    # purpose, through the same plan/run/report path as the lane above. It has
+    # no continue-on-error and is not in ci-gate needs: it concludes failure on
+    # every run, so the workflow run itself is red by design and ci-gate is the
+    # verdict. integration-lanes-red-assert proves it failed for the right
+    # reason. No registry row may name this job.
+    name: integration-lanes-red-proof (expected to fail)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: run the seeded failing row
+        shell: bash
+        run: |
+          D="$RUNNER_TEMP/integration-lanes-red"
+          mkdir -p "$D"
+          go run ./internal/build/gen/integrationlane plan --seeded > "$D/plan.tsv"
+          i=0
+          while IFS="$(printf '\t')" read -r pkg tags re; do
+            i=$((i+1))
+            go test -json -count=1 -tags "$tags" -run "$re" "$pkg" > "$D/$i.json" < /dev/null || echo "integration-lanes-red-proof: seeded row $i exited non-zero, as expected"
+          done < "$D/plan.tsv"
+
+      - name: aggregate the seeded row (fails by design)
+        shell: bash
+        run: go run ./internal/build/gen/integrationlane report --dir "$RUNNER_TEMP/integration-lanes-red" --out "$RUNNER_TEMP/integration-lanes-red/report.json"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: integration-lanes-red-report
+          path: ${{ runner.temp }}/integration-lanes-red/report.json
+          if-no-files-found: error
+
+  integration-lanes-red-assert:
+    # Passes only when the red-proof job concluded failure AND its report shows
+    # the seeded row failing through TestSeededRed with at least one run event.
+    # A skipped or cancelled red-proof, a build error, a tag mismatch (zero run
+    # events) or a seeded test that passed all fail this job.
+    name: integration-lanes-red-assert
+    needs: [integration-lanes-red-proof]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: the red proof must have failed
+        shell: bash
+        run: |
+          result="${{ needs.integration-lanes-red-proof.result }}"
+          if [ "$result" != "failure" ]; then
+            echo "::error::integration-lanes-red-proof concluded $result, expected failure: the seeded red proof did not fail"
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: integration-lanes-red-report
+          path: ${{ runner.temp }}/integration-lanes-red
+
+      - name: the failure must be the seeded row's
+        shell: bash
+        run: go run ./internal/build/gen/integrationlane assert-red --report "$RUNNER_TEMP/integration-lanes-red/report.json"
+
   ci-gate:
     name: ci-gate (required status)
-    needs: [build-test, darwin-amd64-build, linux-pam-build, conformance-suite, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, redis-storetest-under-docker, s3-storetest-under-docker, server-profile-assembly, plugin-integration, node-dispatch-real-git, node-kill-mid-run, sync-merge-real-git, changes, widget, golden-parity]
+    needs: [build-test, darwin-amd64-build, linux-pam-build, conformance-suite, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, redis-storetest-under-docker, s3-storetest-under-docker, server-profile-assembly, plugin-integration, node-dispatch-real-git, node-kill-mid-run, sync-merge-real-git, changes, widget, golden-parity, integration-lanes, integration-lanes-red-assert]
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: All lanes green
         run: |
           set -eu
-          for r in "${{ needs.build-test.result }}" "${{ needs.darwin-amd64-build.result }}" "${{ needs.linux-pam-build.result }}" "${{ needs.conformance-suite.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}" "${{ needs.retrieval-eval-gate.result }}" "${{ needs.storetest-under-docker.result }}" "${{ needs.pgvector-storetest-under-docker.result }}" "${{ needs.redis-storetest-under-docker.result }}" "${{ needs.s3-storetest-under-docker.result }}" "${{ needs.server-profile-assembly.result }}" "${{ needs.plugin-integration.result }}" "${{ needs.node-dispatch-real-git.result }}" "${{ needs.node-kill-mid-run.result }}" "${{ needs.sync-merge-real-git.result }}" "${{ needs.golden-parity.result }}"; do
+          for r in "${{ needs.build-test.result }}" "${{ needs.darwin-amd64-build.result }}" "${{ needs.linux-pam-build.result }}" "${{ needs.conformance-suite.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}" "${{ needs.retrieval-eval-gate.result }}" "${{ needs.storetest-under-docker.result }}" "${{ needs.pgvector-storetest-under-docker.result }}" "${{ needs.redis-storetest-under-docker.result }}" "${{ needs.s3-storetest-under-docker.result }}" "${{ needs.server-profile-assembly.result }}" "${{ needs.plugin-integration.result }}" "${{ needs.node-dispatch-real-git.result }}" "${{ needs.node-kill-mid-run.result }}" "${{ needs.sync-merge-real-git.result }}" "${{ needs.golden-parity.result }}" "${{ needs.integration-lanes.result }}" "${{ needs.integration-lanes-red-assert.result }}"; do
             if [ "$r" != "success" ]; then
               echo "ci-gate: a required lane did not succeed ($r)"
               exit 1
