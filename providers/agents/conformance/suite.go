@@ -20,9 +20,10 @@ package conformance
 //	field read outside the interface. No driver implementation ships from
 //	this ticket; a driver appends its own factory entry to the sibling
 //	_test.go files (append-only, so concurrent driver tickets do not
-//	collide). Split across suite.go (this file, the ten original cases)
-//	and cases_lifecycle.go/cases_security.go (the Round-35 amendment
-//	cases) to stay under the 300-line cap per file.
+//	collide). Split across suite.go (this file, the ten original cases),
+//	cases_lifecycle.go/cases_security.go (the Round-35 amendment cases)
+//	and cases_envelope.go (the spawn-envelope case) to stay under the
+//	300-line cap per file.
 //
 //	R-14.322: every Spawn a case makes goes through s.newSpec(), so the
 //	suite's Env, Worktree and Filter reach the driver (an external driver
@@ -57,10 +58,12 @@ type Suite struct {
 }
 
 // newSpec returns defaultSpec() carrying the suite's Env, Worktree (as
-// WorktreeRoot) and Filter; every case that spawns uses it (R-14.322).
+// WorktreeRoot), Filter and a complete envelope rooted at Worktree; every
+// case that spawns uses it (R-14.322).
 func (s *Suite) newSpec() provider.AgentJobSpec {
 	spec := defaultSpec()
 	spec.Env, spec.WorktreeRoot, spec.Filter = s.Env, s.Worktree, s.Filter
+	spec.Envelope = completeEnvelope(s.Worktree)
 	return spec
 }
 

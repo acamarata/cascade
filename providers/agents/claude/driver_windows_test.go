@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/acamarata/cascade/pkg/provider"
 )
@@ -39,7 +40,7 @@ func TestClaudeDriverErrPlatformOnWindows(t *testing.T) {
 	}
 	d, err := New(Config{
 		Binary: bin, Profile: windowsProfile{home: root},
-		Worktree: windowsLeaser{root: root}, Defaults: provider.NewDriverDefaults(),
+		Worktree: windowsLeaser{root: root}, Defaults: provider.NewDriverDefaults(), Clock: windowsClock{},
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -54,3 +55,8 @@ func TestClaudeDriverErrPlatformOnWindows(t *testing.T) {
 		}
 	}
 }
+
+// windowsClock is the fixed clock for the windows-only refusal test.
+type windowsClock struct{}
+
+func (windowsClock) Now() time.Time { return time.Date(2026, 10, 13, 9, 0, 0, 0, time.UTC) }

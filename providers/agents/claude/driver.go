@@ -71,7 +71,13 @@ type Config struct {
 	Descriptor Descriptor
 	// ProbeTimeout bounds each pre-spawn probe; zero means 60s.
 	ProbeTimeout time.Duration
+	// Clock supplies "now" for the envelope expiry check. New accepts nil (a
+	// probe-only driver never spawns); Spawn then refuses before any child.
+	Clock Clock
 }
+
+// Clock is the injected time source (the runtime.Clock method set).
+type Clock interface{ Now() time.Time }
 
 // Driver is the headless one-shot AgentProvider. Construct with New.
 type Driver struct {
@@ -204,6 +210,9 @@ func (d *Driver) prepare(ctx context.Context, job provider.AgentJobSpec, prof Pr
 	if err != nil {
 		return nil, err
 	}
+	if err := checkModelEffort(job.Model, job.Effort, d.cfg.Defaults.Effort); err != nil {
+		return nil, err
+	}
 	if err := checkSpawnEnv(job.Env, prof); err != nil {
 		return nil, err
 	}
@@ -225,7 +234,7 @@ func (d *Driver) prepare(ctx context.Context, job provider.AgentJobSpec, prof Pr
 	}
 	in := argvInput{def: d.cfg.Defaults, desc: d.cfg.Descriptor, version: version, policy: policy,
 		cred: prof.CredentialClass, name: sessionName(job, id), jobID: id, root: lease.Root, addDirs: dirs,
-		home: job.Env.Home, prompt: job.Prompt}
+		home: job.Env.Home, prompt: job.Prompt, model: job.Model, effort: job.Effort}
 	argv, err := buildArgv(in)
 	if err != nil {
 		return nil, err
@@ -243,8 +252,9 @@ func (d *Driver) prepare(ctx context.Context, job provider.AgentJobSpec, prof Pr
 }
 
 // leaseFor refuses an empty spec.WorktreeRoot (ErrEntitlement naming the
-// field), resolves the lease, and refuses a WorktreeRoot that is not the
-// lease root: the child's cwd is WorktreeRoot, so the two must agree.
+// field), resolves the lease, refuses a WorktreeRoot that is not the lease
+// root (the child's cwd is WorktreeRoot, so the two must agree) and refuses
+// an incomplete spec.Envelope (ErrEnvelopeIncomplete), all before any child.
 func (d *Driver) leaseFor(ctx context.Context, job provider.AgentJobSpec) (Lease, error) {
 	if job.WorktreeRoot == "" {
 		return Lease{}, cascade.Wrap(cascade.KindPolicyDenied, provider.ErrEntitlement, "claude: spec.WorktreeRoot is empty")
@@ -257,7 +267,13 @@ func (d *Driver) leaseFor(ctx context.Context, job provider.AgentJobSpec) (Lease
 		return Lease{}, cascade.Wrapf(cascade.KindConflict, ErrWorktreeRootMismatch,
 			"claude: spec.WorktreeRoot %q is not the lease root %q", job.WorktreeRoot, lease.Root)
 	}
-	return lease, nil
+	if d.cfg.Clock == nil {
+		return Lease{}, cascade.New(cascade.KindInvalidInput, "claude: Config.Clock is nil, so the envelope expiry cannot be checked")
+	}
+	if err := job.Envelope.Check(job.WorktreeRoot, d.cfg.Clock.Now()); err != nil {
+		return Lease{}, err
+	}
+	return lease, leaseWithinRoots(lease.Root, job.Envelope.Roots)
 }
 
 // checkTree validates the lease and the tree it names, then runs the real

@@ -225,3 +225,30 @@ func TestSessionIDForIsStableUUID(t *testing.T) {
 		t.Fatal("SessionIDFor returned one id for two job ids")
 	}
 }
+
+func TestAgentJobSpecModelEffortFields(t *testing.T) {
+	var zero provider.AgentJobSpec
+	if zero.Model != "" || zero.Effort != "" || zero.Envelope.Digest != "" || zero.Envelope.Roots != nil {
+		t.Fatalf("zero AgentJobSpec carries a model, effort or envelope: %+v", zero)
+	}
+	spec := provider.AgentJobSpec{Prompt: "p", DataClass: provider.DataClassInternal, Model: "model-x", Effort: "high",
+		Envelope: provider.SpawnEnvelope{Digest: "d", Principal: "p1", Roots: []string{"/r"}}}
+	raised, err := spec.WithDataClass(provider.DataClassRestricted)
+	if err != nil {
+		t.Fatalf("WithDataClass: %v", err)
+	}
+	if raised.Model != "model-x" || raised.Effort != "high" || raised.Envelope.Principal != "p1" || len(raised.Envelope.Roots) != 1 {
+		t.Fatalf("WithDataClass dropped a model, effort or envelope: %+v", raised)
+	}
+}
+
+func TestApprovalRequestCarriesKindAndGrant(t *testing.T) {
+	req := provider.ApprovalRequest{ID: "a1", Kind: provider.ApprovalKindPermissions,
+		Grant: &provider.PermissionGrant{Paths: []string{"/p"}, Hosts: []string{"h.example"}}}
+	if req.Kind != "permissions" || req.Grant == nil || req.Grant.Paths[0] != "/p" || req.Grant.Hosts[0] != "h.example" {
+		t.Fatalf("ApprovalRequest lost its kind or grant: %+v", req)
+	}
+	if provider.ApprovalKindCommand != "command" || provider.ApprovalKindFileChange != "file_change" {
+		t.Fatal("ApprovalKind spellings changed")
+	}
+}

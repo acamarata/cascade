@@ -52,6 +52,18 @@ type DriverEvent struct {
 	State     AgentRunState
 	Err       error
 	DataClass DataClass
+	// Native is the harness's undecoded per-event frame, nil when the driver
+	// has no per-event native stream.
+	Native *NativeEvent
+}
+
+// NativeEvent is one event in the harness's own stream: its type name and the
+// undecoded line or frame. Consumers that need harness detail read Raw; the
+// closed fields of AgentEvent carry the normalized meaning.
+type NativeEvent struct {
+	Type string
+	// Raw is the undecoded native line or frame, exactly as received.
+	Raw []byte
 }
 
 // AgentEvent is the pure pkg DTO NormalizeEvent produces — the shape
@@ -71,6 +83,9 @@ type AgentEvent struct {
 	// Protocol is the ProtocolVersion pinned for this job at Negotiate
 	// time; every AgentEvent for a job carries the same value.
 	Protocol ProtocolVersion
+	// Native is the driver's undecoded native event; nil when the driver has
+	// no per-event native stream (claude headless json mode).
+	Native *NativeEvent
 }
 
 // NormalizeEvent maps one raw DriverEvent to its pure AgentEvent DTO. It is
@@ -89,12 +104,22 @@ func NormalizeEvent(raw DriverEvent) (AgentEvent, error) {
 			State:     raw.State,
 			Err:       raw.Err,
 			DataClass: JoinSensitivity(raw.DataClass, SensitivityPublic),
+			Native:    cloneNative(raw.Native),
 		}, nil
 	case DriverEventUnknown:
 		fallthrough
 	default:
 		return AgentEvent{}, cascade.New(cascade.KindInvalidInput, "provider: unknown driver event variant")
 	}
+}
+
+// cloneNative returns a deep copy of n so a normalized event never aliases
+// the driver's buffer; nil stays nil.
+func cloneNative(n *NativeEvent) *NativeEvent {
+	if n == nil {
+		return nil
+	}
+	return &NativeEvent{Type: n.Type, Raw: append([]byte(nil), n.Raw...)}
 }
 
 // EventNormalizer enforces the R-21.158 per-job ordering and dedup

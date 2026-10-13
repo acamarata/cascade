@@ -79,3 +79,24 @@ func TestEventOrderingAndDedup(t *testing.T) {
 		t.Fatalf("advancing Seq: (keep=%v, err=%v), want (true, nil)", keep, err)
 	}
 }
+
+func TestNativeEventCarriesRawBytes(t *testing.T) {
+	raw := []byte(`{"type":"item.completed","n":1}` + "\n")
+	in := provider.DriverEvent{Kind: provider.DriverEventStdout, Seq: 1, DataClass: provider.DataClassPublic,
+		Native: &provider.NativeEvent{Type: "item.completed", Raw: raw}}
+	ev, err := provider.NormalizeEvent(in)
+	if err != nil {
+		t.Fatalf("NormalizeEvent: %v", err)
+	}
+	if ev.Native == nil || ev.Native.Type != "item.completed" || string(ev.Native.Raw) != string(raw) {
+		t.Fatalf("normalized event lost the native frame: %+v", ev.Native)
+	}
+	raw[0] = 'X'
+	if ev.Native.Raw[0] != '{' {
+		t.Fatal("normalized native frame aliases the driver's buffer")
+	}
+	bare, err := provider.NormalizeEvent(provider.DriverEvent{Kind: provider.DriverEventDone, Seq: 2})
+	if err != nil || bare.Native != nil {
+		t.Fatalf("an event with no native stream must carry nil Native, got %+v (%v)", bare.Native, err)
+	}
+}

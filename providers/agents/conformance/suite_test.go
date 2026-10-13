@@ -44,13 +44,13 @@ const vacuityCheckEnv = "CASCADE_CONFORMANCE_VACUITY_CHECK"
 // which is a different and unrelated outcome that needs its own message.
 const vacuityChildDeadline = 60 * time.Second
 
-// wantCaseCount is the nineteen named conformance cases: ten original
-// (suite.go) plus four lifecycle (cases_lifecycle.go) plus five security
-// (cases_security.go).
-const wantCaseCount = 19
+// wantCaseCount is the twenty named conformance cases: ten original
+// (suite.go) plus four lifecycle (cases_lifecycle.go), five security
+// (cases_security.go) and one envelope case (cases_envelope.go).
+const wantCaseCount = 20
 
 // TestConformanceCaseInventory asserts *Suite exports every one of the
-// nineteen named case methods, so a driver ticket cannot silently skip
+// twenty named case methods, so a driver ticket cannot silently skip
 // one by never calling it.
 func TestConformanceCaseInventory(t *testing.T) {
 	want := []string{
@@ -62,6 +62,7 @@ func TestConformanceCaseInventory(t *testing.T) {
 		"TestProtocolNegotiationRefusal", "TestEventOrderingAndDedup",
 		"TestChildEnvAllowlist", "TestPreSpawnSecretScanAborts", "TestDriverNeverAutoApproves",
 		"TestDataClassPropagates", "TestCredentialCanaryFailsClosed",
+		"TestSpawnRefusesIncompleteEnvelope",
 	}
 	if len(want) != wantCaseCount {
 		t.Fatalf("inventory table has %d names, want %d", len(want), wantCaseCount)
@@ -234,13 +235,13 @@ func TestConformanceClaude(t *testing.T) {
 	}
 	s := &Suite{Worktree: root, Env: env, Filter: func(b []byte) ([]byte, error) { return b, nil },
 		New: func() (provider.AgentProvider, error) {
-			return claude.New(claude.Config{Binary: bin, Profile: claudeSuiteProfile{home: home},
+			return claude.New(claude.Config{Binary: bin, Profile: claudeSuiteProfile{home: home}, Clock: wallClock{},
 				Worktree: claudeSuiteLease{root: root}, Defaults: provider.NewDriverDefaults()})
 		}}
 	runAllCases(t, s)
 }
 
-// TestSuiteSpawnCasesCarryEnv runs all nineteen cases over a recording
+// TestSuiteSpawnCasesCarryEnv runs all twenty cases over a recording
 // provider and asserts every Spawn received exactly s.Env, s.Worktree as
 // WorktreeRoot, and s.Filter itself (non-nil; it returns the suite's own
 // marker), so no case spawns with defaultSpec() alone.
@@ -253,7 +254,7 @@ func TestSuiteSpawnCasesCarryEnv(t *testing.T) {
 		New:    func() (provider.AgentProvider, error) { return rec.wrap(newConformingProvider()), nil }}
 	runAllCases(t, s)
 	specs := rec.all()
-	const wantSpawns = 12 // one per spawning case, two for TestSpawnResultCarriesProcessGroup
+	const wantSpawns = 12 + 9 // one per spawning case, two for TestSpawnResultCarriesProcessGroup, nine refused by TestSpawnRefusesIncompleteEnvelope
 	if len(specs) != wantSpawns {
 		t.Fatalf("recorded %d Spawn calls, want %d", len(specs), wantSpawns)
 	}

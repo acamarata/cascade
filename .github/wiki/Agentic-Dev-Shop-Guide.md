@@ -185,6 +185,19 @@ per-spawn filter, binds the real lease and profile registry, and constructs the 
 in the running daemon is the AD/S-62.T3 ticket; until it lands the driver runs only under
 tests and the opt-in conformance run.
 
+### Harness binding table
+
+`internal/providers/agents` binds each external harness to the plugin that owns
+it. The host shim resolves a lane through it; a harness whose plugin is absent
+or disabled is unavailable and never replaced by another one.
+
+| Harness | Owning plugin | Lane |
+|---|---|---|
+| claude | `cascade-claude` | `agent:claude` |
+
+The local model lane is not a harness and is never registered here. Field map
+and refusal rules for the spawn envelope: `docs/reference/spawn-envelope.md`.
+
 ## Completion gate
 
 `internal/fleet/hookpacks`'s `"completion-gate"` pack (`RegisterCompletionHookPack`,

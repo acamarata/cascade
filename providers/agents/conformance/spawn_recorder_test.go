@@ -18,6 +18,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/acamarata/cascade/pkg/provider"
 	"github.com/acamarata/cascade/providers/agents/claude"
@@ -101,3 +102,9 @@ type claudeSuiteLease struct{ root string }
 func (l claudeSuiteLease) Lease(context.Context, provider.WorktreeScope) (claude.Lease, error) {
 	return claude.Lease{Root: l.root, GitDir: filepath.Join(l.root, ".git")}, nil
 }
+
+// wallClock is the real-time clock the claude suite factory injects (test
+// code may read the wall clock; the production driver may not).
+type wallClock struct{}
+
+func (wallClock) Now() time.Time { return time.Now() }

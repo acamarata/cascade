@@ -18,6 +18,8 @@ package claude
 
 import (
 	"context"
+	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -74,6 +76,10 @@ type argvInput struct {
 	addDirs []string
 	home    string
 	prompt  string
+	// model and effort are the per-job values (spec.Model, spec.Effort);
+	// empty emits no flag, a non-empty effort overrides def.Effort.
+	model  string
+	effort string
 }
 
 // pluginDirEmitted reports whether --plugin-dir is set and the harness has
@@ -85,6 +91,42 @@ func (in argvInput) pluginDirEmitted() bool {
 
 // validEfforts is the closed --effort set from the captured --help.
 var validEfforts = map[string]bool{"low": true, "medium": true, "high": true, "xhigh": true, "max": true}
+
+// validModel is the accepted --model spelling: an alias or a full name (for
+// example "opus", "claude-opus-4-1" or "opus[1m]"), never a flag-shaped or
+// spaced token.
+var validModel = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/\[\]-]{0,127}$`)
+
+// checkModelEffort refuses (KindInvalidInput) a model that is not a plain
+// name or alias and an effort (the job's, else the driver default) outside
+// the captured closed set; "" passes.
+func checkModelEffort(model, effort, defaultEffort string) error {
+	if effort == "" {
+		effort = defaultEffort
+	}
+	if model != "" && !validModel.MatchString(model) {
+		return cascade.Newf(cascade.KindInvalidInput, "claude: --model %q is not a model name", model)
+	}
+	if effort != "" && !validEfforts[effort] {
+		return cascade.Newf(cascade.KindInvalidInput, "claude: --effort %q is not emitted", effort)
+	}
+	return nil
+}
+
+// leaseWithinRoots refuses a lease whose real path (symlinks resolved) is not
+// at or under the real path of an envelope root: Check is lexical only, so a
+// leased root that is a link out of the envelope would otherwise pass.
+func leaseWithinRoots(leaseRoot string, roots []string) error {
+	resolved, err := filepath.EvalSymlinks(leaseRoot)
+	for _, r := range roots {
+		root, rerr := filepath.EvalSymlinks(filepath.FromSlash(r))
+		if rel, relErr := filepath.Rel(root, resolved); err == nil && rerr == nil && relErr == nil &&
+			rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return nil
+		}
+	}
+	return cascade.Wrap(cascade.KindPolicyDenied, provider.ErrEnvelopeIncomplete, "claude: the leased root resolves outside every envelope root")
+}
 
 // buildArgv returns the job's exact spawn argv.
 func buildArgv(in argvInput) ([]string, error) {
@@ -141,11 +183,18 @@ func defaultsFlags(in argvInput) ([]string, error) {
 	if in.pluginDirEmitted() {
 		out = append(out, "--plugin-dir", d.PluginDir)
 	}
-	if d.Effort != "" {
-		if !validEfforts[d.Effort] {
-			return nil, cascade.Newf(cascade.KindInvalidInput, "claude: --effort %q is not emitted", d.Effort)
-		}
-		out = append(out, "--effort", d.Effort)
+	effort := d.Effort
+	if in.effort != "" {
+		effort = in.effort
+	}
+	if err := checkModelEffort(in.model, in.effort, d.Effort); err != nil {
+		return nil, err
+	}
+	if in.model != "" {
+		out = append(out, "--model", in.model)
+	}
+	if effort != "" {
+		out = append(out, "--effort", effort)
 	}
 	if d.FallbackModel != "" {
 		out = append(out, "--fallback-model", d.FallbackModel)

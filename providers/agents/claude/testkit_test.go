@@ -165,6 +165,7 @@ func identity(b []byte) ([]byte, error) { return b, nil }
 func (f *fx) spec() provider.AgentJobSpec {
 	return provider.AgentJobSpec{
 		Prompt: "hello", DataClass: provider.DataClassInternal, WorktreeRoot: f.root, Filter: identity,
+		Envelope: testEnvelope(f.root),
 		Env: provider.SpawnEnv{
 			Driver: []string{"PATH=" + os.Getenv("PATH"), "HOME=" + f.home, VendorConfigDirVar + "=" + f.vendor,
 				KeyVarOAuthToken + "=" + fakeKeyValue},
@@ -201,7 +202,7 @@ func (f *fx) config() Config {
 	def.CancelGrace = 500 * time.Millisecond
 	return Config{Binary: f.script(), HookPackPath: f.pack, Profile: fakeProfile{prof: f.profile()},
 		Worktree: fakeLeaser{lease: Lease{Root: f.root, GitDir: filepath.Join(f.root, ".git")}},
-		Defaults: def, ProbeTimeout: 5 * time.Second}
+		Defaults: def, ProbeTimeout: 5 * time.Second, Clock: testClock{}}
 }
 
 func (f *fx) driver(cfg Config) *Driver {

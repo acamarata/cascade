@@ -41,14 +41,14 @@ func TestClaudeDriverIntegration(t *testing.T) {
 		Posture: provider.NewCompliancePosture([]string{"oauth"}, true, true, []string{"agent"}, "steady", false)}
 	d, err := New(Config{Binary: bin, Profile: fakeProfile{prof: prof},
 		Worktree: fakeLeaser{lease: Lease{Root: root, GitDir: filepath.Join(root, ".git")}},
-		Defaults: provider.NewDriverDefaults()})
+		Defaults: provider.NewDriverDefaults(), Clock: testClock{}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	spec := provider.AgentJobSpec{Prompt: "Reply with the single word: ok", DataClass: provider.DataClassPublic,
-		WorktreeRoot: root, Filter: identity,
+		WorktreeRoot: root, Filter: identity, Envelope: testEnvelope(root),
 		Env: provider.SpawnEnv{Home: home, Driver: []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home,
 			VendorConfigDirVar + "=" + filepath.Join(home, "config"), KeyVarOAuthToken + "=" + token}}}
 	res, err := d.Spawn(ctx, spec)

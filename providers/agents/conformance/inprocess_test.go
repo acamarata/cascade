@@ -1,4 +1,4 @@
-// Purpose: runs the full nineteen-case Suite IN-PROCESS against
+// Purpose: runs the full twenty-case Suite IN-PROCESS against
 //
 //	conformingProvider (conforming_provider_test.go), which no other test
 //	in this package does: TestSuiteSkipsWithNilFactory proves the skip
@@ -21,7 +21,7 @@ import (
 )
 
 // TestSuiteRunsInProcessAgainstConformingImplementation drives every one
-// of the nineteen named cases (the same set TestConformanceCaseInventory
+// of the twenty named cases (the same set TestConformanceCaseInventory
 // enumerates) against conformingProvider in this process and fails loudly
 // if any of them fails: a regression here means either the double drifted
 // from the contract or a case started asserting something the double does
@@ -48,6 +48,7 @@ func TestSuiteRunsInProcessAgainstConformingImplementation(t *testing.T) {
 		"TestDriverNeverAutoApproves":        s.TestDriverNeverAutoApproves,
 		"TestDataClassPropagates":            s.TestDataClassPropagates,
 		"TestCredentialCanaryFailsClosed":    s.TestCredentialCanaryFailsClosed,
+		"TestSpawnRefusesIncompleteEnvelope": s.TestSpawnRefusesIncompleteEnvelope,
 	}
 	if len(cases) != wantCaseCount {
 		t.Fatalf("in-process runner covers %d cases, want %d", len(cases), wantCaseCount)

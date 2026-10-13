@@ -27,9 +27,13 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/acamarata/cascade/pkg/provider"
 )
+
+// doubleNow is the fixed instant the double checks envelope expiry against.
+var doubleNow = time.Date(2026, 10, 13, 9, 0, 0, 0, time.UTC)
 
 // conformingJob is one spawned job's mutable state.
 type conformingJob struct {
@@ -139,6 +143,13 @@ func (p *conformingProvider) Spawn(ctx context.Context, spec provider.AgentJobSp
 	}
 	if !caps.CompliancePosture.ProgrammaticEntitlement {
 		return provider.SpawnResult{}, provider.ErrEntitlement
+	}
+	// Like an external driver, refuse an incomplete envelope; a spec with no
+	// WorktreeRoot is the in-process shape (the local lane) and is exempt.
+	if spec.WorktreeRoot != "" {
+		if err := spec.Envelope.Check(spec.WorktreeRoot, doubleNow); err != nil {
+			return provider.SpawnResult{}, err
+		}
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()

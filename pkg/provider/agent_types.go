@@ -12,7 +12,7 @@ package provider
 // Constraints: imports nothing from internal/ (Art.10.2); no permissive
 // zero value on AgentRunState or DataClass (the DataClass zero is
 // Restricted); CompliancePosture is reused from compliance.go.
-// SPORT: pkg.provider.AgentProvider/EXTEND (P1-E30-W6-S61-T1, S61-T2).
+// SPORT: pkg.provider.AgentProvider/EXTEND (P1-E30-W6-S61-T1, S61-T2, P1-AGT-02).
 
 import (
 	"time"
@@ -85,6 +85,18 @@ type AgentJobSpec struct {
 	// JobID, when set, is the job id Spawn uses and returns; "" lets the
 	// driver mint one. An id already live in the driver is KindConflict.
 	JobID AgentJobID
+	// Envelope is the driver-facing projection of the verified scope
+	// envelope; an external driver refuses a spawn whose Envelope.Check fails
+	// before any child exists. Only internal/providers/agents.ProjectEnvelope
+	// fills it in production code.
+	Envelope SpawnEnvelope
+	// Model is the per-job model name; "" means the driver default and the
+	// flag is omitted.
+	Model string
+	// Effort is the per-job effort level; "" means DriverDefaults.Effort. A
+	// non-empty value overrides it, and each driver validates it against its
+	// own captured closed set.
+	Effort string
 }
 
 // WithDataClass returns s with DataClass raised to the join with c; a call
@@ -216,6 +228,25 @@ type ApprovalRequest struct {
 	Prompt string
 	// DataClass is the joined class of what the decision exposes.
 	DataClass DataClass
+	// Kind is what the request asks for: command, file_change or permissions
+	// ("" when the driver does not say).
+	Kind string
+	// Grant is what a permissions request would add; nil for any other Kind.
+	Grant *PermissionGrant
+}
+
+// The ApprovalRequest.Kind members.
+const (
+	ApprovalKindCommand     = "command"
+	ApprovalKindFileChange  = "file_change"
+	ApprovalKindPermissions = "permissions"
+)
+
+// PermissionGrant is the access a permissions ApprovalRequest would add:
+// the filesystem paths and network hosts the harness asks to be allowed.
+type PermissionGrant struct {
+	Paths []string
+	Hosts []string
 }
 
 // CollectResult is Collect's success return: the job's final output,
