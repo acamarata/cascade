@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-12T22:56:39Z",
+  "generated_at": "2026-10-13T00:08:47Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -16095,7 +16095,7 @@
       "sites": [
         {
           "file": "internal/retrieval/gitcorpus.go",
-          "line": 45,
+          "line": 48,
           "status": "ADD",
           "raw": "internal.retrieval.IngestGitRepo/ADDED"
         },
@@ -16108,6 +16108,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal.retrieval.IngestGitRepo/ADMISSION test coverage",
+      "sites": [
+        {
+          "file": "internal/retrieval/gitcorpus_admit_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal.retrieval.IngestGitRepo/ADMISSION test coverage."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -33481,6 +33495,26 @@
       ]
     },
     {
+      "name": "repo/ingest-admission-guard",
+      "sites": [
+        {
+          "file": "internal/repo/ingestguard.go",
+          "line": 24,
+          "status": "ADD",
+          "raw": "repo/ingest-admission-guard/ADD (contract:repo-ingest-admission)."
+        },
+        {
+          "file": "internal/repo/ingestguard_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "repo/ingest-admission-guard/ADD test coverage."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "repo/inventory-model",
       "sites": [
         {
@@ -34934,7 +34968,7 @@
       ]
     }
   ],
-  "total_sites": 3365,
-  "unspecified_count": 219,
+  "total_sites": 3368,
+  "unspecified_count": 220,
   "multi_status_count": 106
 }
