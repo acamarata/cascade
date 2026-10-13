@@ -1573,5 +1573,12 @@
     "reason": "P1-SEC-05 ships the process detector and its in-place reload entry point (contract:vault-per-process); applying [secrets] changes on hot reload is prohibited in this ticket and owned by P1-SEC-24. Until then the [secrets] section is read once at start.",
     "retire_ticket": "P1-SEC-24",
     "symbol": "internal/secrets.SetProcessDetectionConfig"
+  },
+  {
+    "caller_site": "internal/repo/maintenance.go",
+    "expected_caller": "P1-GEN-04's maintenance pipeline (internal/repo/maintenance.go), which admits a single changed path from a watcher event through Admit and the batch of an initial scan through AdmitBatch; if it only uses AdmitBatch, repoint or retire this entry in that ticket",
+    "reason": "P1-GEN-03 ships the ingest admission guard; Admit is the one-path form of AdmitBatch named by contract:repo-ingest-admission. IngestGitRepo, the only production caller at this tip, always has many paths and uses AdmitBatch, so tests are the only callers of Admit here.",
+    "retire_ticket": "P1-GEN-04",
+    "symbol": "internal/repo.Admit"
   }
 ]
