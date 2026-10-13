@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-13T01:49:14Z",
+  "generated_at": "2026-10-13T03:08:56Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1336,6 +1336,20 @@
           "line": 6,
           "status": "ADD",
           "raw": "PendingEntry/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "Poster",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/assemble_over.go",
+          "line": 23,
+          "status": "ADD",
+          "raw": "Poster/ADDED (fix18)."
         }
       ],
       "statuses": [
@@ -4200,17 +4214,72 @@
           "status": "ADD",
           "ticket": "P1-E15-W4-S32-T4",
           "raw": "cmd/cascade plugin.add handler (ADD) — P1-E15-W4-S32-T4"
-        },
-        {
-          "file": "cmd/cascade/plugin_rpc_bridge.go",
-          "line": 15,
-          "status": "CHANGE",
-          "raw": "cmd/cascade plugin.add handler (CHANGED, custody hook split)."
         }
       ],
       "statuses": [
-        "ADD",
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade plugin_rpc_bridge",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_rpc_bridge.go",
+          "line": 25,
+          "status": "CHANGE",
+          "raw": "cmd/cascade plugin_rpc_bridge (CHANGED, bridge.send route)."
+        }
+      ],
+      "statuses": [
         "CHANGE"
+      ]
+    },
+    {
+      "name": "cmd/cascade plugin_rpc_bridge_access/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_rpc_bridge_access_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "cmd/cascade plugin_rpc_bridge_access/TEST (ADD) — P1-CPA-01."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade plugin_rpc_bridge_enabled/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_rpc_bridge_enabled_helpers_test.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "cmd/cascade plugin_rpc_bridge_enabled/TEST (ADD) — fix18 round 3."
+        },
+        {
+          "file": "cmd/cascade/plugin_rpc_bridge_enabled_test.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "cmd/cascade plugin_rpc_bridge_enabled/TEST (ADD) — fix18 round 3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade plugin_rpc_bridge_send/TEST",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_rpc_bridge_send_test.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "cmd/cascade plugin_rpc_bridge_send/TEST (ADD) — fix18 rounds 2-3."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -20205,6 +20274,26 @@
       ]
     },
     {
+      "name": "internal/integration cpa_send_bridge",
+      "sites": [
+        {
+          "file": "internal/integration/cpa_send_bridge_env_test.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "internal/integration cpa_send_bridge (ADD) — fix18 round 3 (L2)."
+        },
+        {
+          "file": "internal/integration/cpa_send_bridge_test.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "internal/integration cpa_send_bridge (ADD) — fix18 round 3 (L2/L3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/mcp",
       "sites": [
         {
@@ -22769,6 +22858,108 @@
       ]
     },
     {
+      "name": "internal/plugins:cascadepa-bridge-chatsend-access",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_chatsend_access.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal/plugins:cascadepa-bridge-chatsend-access (ADD) — P1-CPA-01."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-bridge-chatsend-client",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_chatsend_client.go",
+          "line": 38,
+          "status": "ADD",
+          "raw": "internal/plugins:cascadepa-bridge-chatsend-client (ADD) — fix18"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-bridge-chatsend-client/TEST",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_chatsend_outcome_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "internal/plugins:cascadepa-bridge-chatsend-client/TEST — fix18 round 3."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-bridge-chatsend-module",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_chatsend_module.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal/plugins:cascadepa-bridge-chatsend-module (ADD) — P1-CPA-01."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-bridge-chatsend-wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_chatsend_wiring.go",
+          "line": 45,
+          "status": "CHANGE",
+          "raw": "internal/plugins:cascadepa-bridge-chatsend-wiring (CHANGED) —"
+        }
+      ],
+      "statuses": [
+        "CHANGE"
+      ]
+    },
+    {
+      "name": "internal/plugins:cascadepa-bridge-chatsend-wiring/TEST",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_chatsend_client_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal/plugins:cascadepa-bridge-chatsend-wiring/TEST — fix18 round 2."
+        },
+        {
+          "file": "internal/plugins/cascadepa_bridge_chatsend_lifecycle_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "internal/plugins:cascadepa-bridge-chatsend-wiring/TEST — fix18 round 3."
+        },
+        {
+          "file": "internal/plugins/cascadepa_bridge_chatsend_tier_test.go",
+          "line": 20,
+          "status": "",
+          "raw": "internal/plugins:cascadepa-bridge-chatsend-wiring/TEST — P1-CPA-01."
+        },
+        {
+          "file": "internal/plugins/cascadepa_bridge_chatsend_wiring_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "internal/plugins:cascadepa-bridge-chatsend-wiring/TEST — fix18 round 2."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/plugins:cascadepa-bridge-client",
       "sites": [
         {
@@ -22963,7 +23154,7 @@
         },
         {
           "file": "internal/plugins/cascadepa_bridge_wiring.go",
-          "line": 66,
+          "line": 64,
           "status": "ADD",
           "ticket": "P1-E23-W5-S48-T1",
           "raw": "internal/plugins:cascadepa-bridge-wiring (ADD) — P1-E23-W5-S48-T1."
@@ -23252,7 +23443,7 @@
         },
         {
           "file": "internal/plugins/cascadepa_tools_wiring.go",
-          "line": 35,
+          "line": 34,
           "status": "ADD",
           "ticket": "P1-E20-W5-S43-T4",
           "raw": "internal/plugins:cascadepa-tools-wiring (ADD) — P1-E20-W5-S43-T4."
@@ -29648,6 +29839,34 @@
       ]
     },
     {
+      "name": "plugins/cascade-pa/telegram NewModuleOver",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/assemble_over.go",
+          "line": 23,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa/telegram NewModuleOver/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram NewModuleOver/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/assemble_over_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram NewModuleOver/TEST (fix18)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "plugins/cascade-pa/telegram QuarantineEvent",
       "sites": [
         {
@@ -29704,6 +29923,20 @@
       ]
     },
     {
+      "name": "plugins/cascade-pa/telegram TelegramBridge.Send",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/chat_send.go",
+          "line": 29,
+          "status": "CHANGE",
+          "raw": "plugins/cascade-pa/telegram TelegramBridge.Send/CHANGED"
+        }
+      ],
+      "statuses": [
+        "CHANGE"
+      ]
+    },
+    {
       "name": "plugins/cascade-pa/telegram TelegramModule",
       "sites": [
         {
@@ -29722,10 +29955,24 @@
       "sites": [
         {
           "file": "plugins/cascade-pa/telegram/chat_test.go",
-          "line": 4,
+          "line": 3,
           "status": "",
           "ticket": "P1-E23-W5-S48-T2",
           "raw": "plugins/cascade-pa/telegram TestBridgePrivacy*/TEST, TestInboundMessageUntrustedOrigin/TEST (P1-E23-W5-S48-T2)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram TestChatBridge_Send gates/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/chat_send_gates_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram TestChatBridge_Send gates/TEST (fix18)."
         }
       ],
       "statuses": [
@@ -29740,6 +29987,20 @@
           "line": 10,
           "status": "",
           "raw": "plugins/cascade-pa/telegram TestChatBridge_Send_SecretRefused/TEST"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram TestChatBridge_Send_TierRefused/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/chat_send_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram TestChatBridge_Send_TierRefused/TEST"
         }
       ],
       "statuses": [
@@ -30338,6 +30599,12 @@
           "status": "ADD",
           "ticket": "P1-E20-W5-S43-T4",
           "raw": "plugins/cascade-pa:mcp-tools:cascade_cpa_send (ADD) — P1-E20-W5-S43-T4."
+        },
+        {
+          "file": "plugins/cascade-pa/tools/cpa_send_bridge_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "plugins/cascade-pa:mcp-tools:cascade_cpa_send (TEST) — fix18."
         },
         {
           "file": "plugins/cascade-pa/tools/cpa_send_test.go",
@@ -35103,7 +35370,7 @@
       ]
     }
   ],
-  "total_sites": 3378,
-  "unspecified_count": 222,
-  "multi_status_count": 106
+  "total_sites": 3400,
+  "unspecified_count": 227,
+  "multi_status_count": 105
 }

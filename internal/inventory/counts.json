@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-10-13T01:49:14Z",
+  "generated_at": "2026-10-13T03:08:56Z",
   "providers": 15,
   "plugins": 9,
-  "sport_lines": 3240,
+  "sport_lines": 3261,
   "platforms": [
     "darwin",
     "linux",
