@@ -40,8 +40,8 @@ func testKeyVaultDeps(t *testing.T, authorize backupAuthorizeFunc) backupDeps {
 		}
 		return secrets.NewBroker(custody, backupProofGate{proof: proof})
 	}
-	deps.AuditLog = func(store provider.Store) *audit.Log {
-		return audit.New(store, deps.Clock, nil)
+	deps.AuditLog = func(store provider.Store) (*audit.Log, error) {
+		return audit.New(store, deps.Clock, nil), nil
 	}
 	return deps
 }

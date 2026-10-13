@@ -109,9 +109,23 @@ type policyWiring struct {
 	// so an operator listing the queue sees the entries the engine
 	// actually made rather than a second, empty queue.
 	Queue policy.ApprovalQueue
+	// Audit is the process's one redacting audit log (openAuditLog): the
+	// writer the engine's router, the approval queue and supervision share.
+	Audit *audit.Log
 	// Handlers is the approval/policy JSON-RPC handler set built over
 	// everything above. The RPC composition root registers it.
 	Handlers map[string]policy.MethodFunc
+}
+
+// newBootRegistry is the capability registry populated with the boot set.
+func newBootRegistry(ctx context.Context) (*policy.MemoryRegistry, error) {
+	registry := policy.NewMemoryRegistry()
+	for _, c := range bootCapabilities() {
+		if err := registry.Add(ctx, c); err != nil {
+			return nil, err
+		}
+	}
+	return registry, nil
 }
 
 // wirePolicy constructs the production policy engine and the one
@@ -136,12 +150,10 @@ type policyWiring struct {
 // deliberately left at their fail-closed defaults. No production
 // implementation of either exists, and attaching a placeholder would make
 // an unauthorized action report success.
-func wirePolicy(ctx context.Context, store provider.Store, clock runtime.Clock, cfg *runtime.Config) (*policyWiring, error) {
-	registry := policy.NewMemoryRegistry()
-	for _, c := range bootCapabilities() {
-		if err := registry.Add(ctx, c); err != nil {
-			return nil, err
-		}
+func wirePolicy(ctx context.Context, store provider.Store, clock runtime.Clock, cfg *runtime.Config, paths runtime.PathProvider) (*policyWiring, error) {
+	registry, err := newBootRegistry(ctx)
+	if err != nil {
+		return nil, err
 	}
 	grants, err := policy.NewStoreGrants(store, registry, clock)
 	if err != nil {
@@ -160,14 +172,15 @@ func wirePolicy(ctx context.Context, store provider.Store, clock runtime.Clock, 
 		return nil, err
 	}
 	engine = engine.WithDenyList(denyList)
-
-	log := audit.New(store, clock, nil)
+	log, err := openDaemonAuditLog(store, clock, nil, paths)
+	if err != nil {
+		return nil, err
+	}
 	queue, err := buildApprovalQueue(store, registry, grants, denyList, clock, log)
 	if err != nil {
 		return nil, err
 	}
 	engine = engine.WithApprovalQueue(queue)
-
 	router, err := routing.NewActionRouter(engine, log)
 	if err != nil {
 		return nil, err
@@ -176,7 +189,7 @@ func wirePolicy(ctx context.Context, store provider.Store, clock runtime.Clock, 
 	if err != nil {
 		return nil, err
 	}
-	wiring := &policyWiring{Registry: registry, Engine: engine, Router: router, Queue: queue}
+	wiring := &policyWiring{Registry: registry, Engine: engine, Router: router, Queue: queue, Audit: log}
 	wiring.Handlers = policy.MethodHandlers(policy.RPCDeps{
 		Queue:    queue,
 		Engine:   engine,

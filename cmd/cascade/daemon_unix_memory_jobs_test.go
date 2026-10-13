@@ -79,7 +79,7 @@ func TestStartScheduler_MemoryJobsFireThroughTheProductionRegistration(t *testin
 	// installed an allow-gate of its own could not see whether a shipped
 	// daemon fires anything at all, which is the defect this file exists
 	// to catch.
-	pol, err := wirePolicy(ctx, store, clock, cfg)
+	pol, err := wirePolicy(ctx, store, clock, cfg, auditTestPaths(t))
 	if err != nil {
 		t.Fatalf("wirePolicy: %v", err)
 	}

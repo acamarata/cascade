@@ -47,7 +47,7 @@ func newLearnTestScheduler(t *testing.T, roots ...string) (*scheduler.Scheduler,
 	t.Cleanup(closeStore)
 	bus := events.New(store, clock)
 	cfg := &runtime.Config{}
-	pol, err := wirePolicy(ctx, store, clock, cfg)
+	pol, err := wirePolicy(ctx, store, clock, cfg, auditTestPaths(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func testLearnSchemaFailure(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS applied_migrations (id INTEGER PRIMARY KEY, schema_version INTEGER, checksum TEXT, applied_at INTEGER, set_id TEXT); INSERT INTO applied_migrations (schema_version, checksum, applied_at, set_id) VALUES (999, 'future-learn-schema', 1, 'learn')`); err != nil {
 		t.Fatal(err)
 	}
-	pol, err := wirePolicy(ctx, store, clock, &runtime.Config{})
+	pol, err := wirePolicy(ctx, store, clock, &runtime.Config{}, auditTestPaths(t))
 	if err != nil {
 		t.Fatal(err)
 	}

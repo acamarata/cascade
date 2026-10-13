@@ -227,29 +227,45 @@ func TestAuditAppendOnlySurface(t *testing.T) {
 }
 
 // TestAuditAppendRefusesToOverwrite drives the storage-level half of the
-// same guarantee: a writer holding a stale view of the tail is refused,
-// never allowed to replace the record that already occupies its sequence
-// number.
+// same guarantee: a record already sitting at the next sequence number is
+// never replaced. The writer re-reads the head, finds the slot still taken
+// and gives up with a conflict after its retries.
 func TestAuditAppendRefusesToOverwrite(t *testing.T) {
 	ctx := context.Background()
-	log, store, _, clock := newTestLog(t)
+	log, store, _, _ := newTestLog(t)
 
 	first, err := log.Append(ctx, sampleEvent(1))
 	if err != nil {
 		t.Fatalf("Append: %v", err)
 	}
-	stale := New(store, clock, nil)
-	stale.head = head{}
-	stale.loaded = true
+	squatter := []byte(`{"seq":2,"squatter":true}`)
+	if err := store.Put(ctx, namespace, recordKey(2), squatter); err != nil {
+		t.Fatalf("planting the squatter: %v", err)
+	}
 
-	if _, err := stale.Append(ctx, sampleEvent(2)); !cascade.HasKind(err, cascade.KindConflict) {
-		t.Fatalf("a stale writer's append returned %v, want KindConflict", err)
+	_, err = log.Append(ctx, sampleEvent(2))
+	if !cascade.HasKind(err, cascade.KindConflict) {
+		t.Fatalf("an append onto an occupied sequence returned %v, want KindConflict", err)
 	}
-	page, qerr := log.Query(ctx, Filter{})
-	if qerr != nil {
-		t.Fatalf("Query: %v", qerr)
+	requireSentinel(t, err, ErrAlreadyRecorded)
+	got, gerr := store.Get(ctx, namespace, recordKey(2))
+	if gerr != nil || !reflect.DeepEqual(got, squatter) {
+		t.Fatalf("record 2 = %q, %v; the refused append replaced it", got, gerr)
 	}
-	if len(page.Records) != 1 || page.Records[0].ID != first.ID {
-		t.Fatal("the refused append changed the log")
+	if rec, qerr := log.Explain(ctx, first.ID); qerr != nil || rec.Record.Seq != 1 {
+		t.Fatalf("record 1 changed: %+v, %v", rec, qerr)
+	}
+}
+
+// A Log with no store refuses the append instead of dereferencing nil.
+func TestAppendWithoutStoreIsUnavailable(t *testing.T) {
+	log := New(nil, testkit.NewFrozenClock(testInstant), nil)
+	_, err := log.Append(context.Background(), sampleEvent(1))
+	if !cascade.HasKind(err, cascade.KindUnavailable) {
+		t.Fatalf("Append over a nil store = %v, want KindUnavailable", err)
+	}
+	requireSentinel(t, err, ErrStoreUnavailable)
+	if verr := log.Verify(context.Background()); !cascade.HasKind(verr, cascade.KindUnavailable) {
+		t.Fatalf("Verify over a nil store = %v, want KindUnavailable", verr)
 	}
 }

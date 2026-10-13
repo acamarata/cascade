@@ -28,7 +28,9 @@ import (
 // package, so this package importing it would be a cycle.
 //
 // Implementations return the substituted content, or an error and no
-// content. internal/secrets.Redactor satisfies it.
+// content. The cascade binary's auditRedactor (cmd/cascade/audit_log.go,
+// the exact-value pass over the process vault plus the process detector)
+// satisfies it.
 type Redactor interface {
 	// Redact returns content with credential material replaced by typed
 	// vault-reference tags.
@@ -44,11 +46,9 @@ type Redactor interface {
 // no update path" is provable by listing the methods. A WithRedactor
 // method would have broken that proof to save one argument.
 //
-// STATED GAP: a Log built without one appends unredacted fields. That is
-// the state of every caller today, because the process that owns the
-// vault and the detector has no composition root for the substitution
-// engine yet. The seam is what closes it; binding it is the mount, and
-// the mount belongs to whoever builds that engine.
+// A Log built without a redactor appends unredacted fields. Production
+// code never builds one: cmd/cascade/audit_log.go is the only non-test
+// caller of New and NewWithRedactor (TestArchAuditNewOnlyInHelper).
 func NewWithRedactor(store provider.Store, clock runtime.Clock, bus Publisher, redactor Redactor) *Log {
 	l := New(store, clock, bus)
 	l.redactor = redactor

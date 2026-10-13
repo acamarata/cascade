@@ -77,8 +77,8 @@ func TestEffectIndexTamperRefused(t *testing.T) {
 	}
 }
 
-// A deleted index row lets the key begin again and Verify stays clean, but
-// PendingEffects names the second intent, so recovery refuses.
+// A deleted index row lets the key begin again, but Verify replays the
+// effect records against the index and refuses, and so does PendingEffects.
 func TestEffectDeletedRowDetectedAtRecovery(t *testing.T) {
 	for _, s := range effectStores {
 		t.Run(s.name, func(t *testing.T) {
@@ -99,9 +99,7 @@ func TestEffectDeletedRowDetectedAtRecovery(t *testing.T) {
 			if h2.IntentSeq == h.IntentSeq {
 				t.Fatalf("second intent reused seq %d", h.IntentSeq)
 			}
-			if err := log.Verify(ctx); err != nil {
-				t.Fatalf("Verify = %v; the log chain itself is intact", err)
-			}
+			requireSentinel(t, log.Verify(ctx), ErrTampered)
 			pending, err := el.PendingEffects(ctx)
 			requireSentinel(t, err, ErrTampered)
 			if want := fmt.Sprintf("record %d (", h2.IntentSeq); !strings.Contains(err.Error(), want) {

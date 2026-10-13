@@ -135,13 +135,15 @@ outcome, and a failed cleanup already refuses.
 
 - Until a site above lands, nothing in the shipped binary constructs an
   `EffectLog`. The library is complete and tested; it has no caller yet.
-- The effect index is not covered by `Log.Verify`, only by
-  `PendingEffects`. Run recovery before serving effects.
-- A deleted index row lets `BeginEffect` begin the same key again. `Verify`
-  stays clean, even with two intents for the key. `PendingEffects` detects
-  it and returns `ErrTampered` naming the second intent. Until the log
-  covers the index itself, a caller that replays a signed request must run
-  recovery first.
+- `Log.Verify` replays the chained effect records and compares them with
+  the `eff:` index rows. A missing, extra or different row returns
+  `ErrTampered` naming the key, as does a second intent for one key.
+  `openEffectLog` in the cascade binary runs that check once per `Log` and
+  refuses with `KindIntegrity` when it fails. `PendingEffects` makes the
+  same comparison.
+- An attacker who can write the store can still rewrite the records and
+  the index together; the hash chain and the head pointer are what catch
+  that, and neither is signed.
 - `ErrEffectExists`, `ErrEffectNotPending` and `ErrAlreadyRecorded` share
   `KindConflict`. Compare them by identity, not by kind. Treat any error
   from `BeginEffect` as "do not run the effect".

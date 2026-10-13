@@ -122,7 +122,7 @@ func wireBackgroundSubsystems(ctx context.Context, manifest *daemon.Manifest, pa
 	// The policy composition root. It is built BEFORE the scheduler
 	// because the scheduler's gate is installed from it: a scheduler
 	// started without one fires nothing at all (scheduler_route.go).
-	pol, err := wirePolicy(ctx, store, deps.Clock, cfg)
+	pol, err := wirePolicy(ctx, store, deps.Clock, cfg, paths)
 	if err != nil {
 		watcher.Stop()
 		return nil, nil, nil, err

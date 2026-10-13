@@ -48,7 +48,7 @@ func TestStartScheduler_RetentionJobsPresentInRunningScheduler(t *testing.T) {
 	bus := events.New(store, clock)
 	logger := slog.New(slog.NewTextHandler(testWriter{t}, nil))
 
-	pol, err := wirePolicy(ctx, store, clock, nil)
+	pol, err := wirePolicy(ctx, store, clock, nil, auditTestPaths(t))
 	if err != nil {
 		t.Fatalf("wirePolicy: %v", err)
 	}

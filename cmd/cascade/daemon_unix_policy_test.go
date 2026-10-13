@@ -15,12 +15,17 @@ package main
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/acamarata/cascade/internal/audit"
+	"github.com/acamarata/cascade/internal/daemon"
+	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/events/routing"
 	"github.com/acamarata/cascade/internal/policy"
+	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/internal/testkit"
@@ -60,7 +65,8 @@ func TestDaemonPolicyEngineUsesBLayerSeams(t *testing.T) {
 	store := storetest.NewMemStore()
 	clock := testkit.NewFrozenClock(policyTestEpoch)
 
-	pol, err := wirePolicy(ctx, store, clock, nil)
+	paths := auditTestPaths(t)
+	pol, err := wirePolicy(ctx, store, clock, nil, paths)
 	if err != nil {
 		t.Fatalf("wirePolicy: %v", err)
 	}
@@ -81,7 +87,7 @@ func TestDaemonPolicyEngineUsesBLayerSeams(t *testing.T) {
 	}
 	// A SECOND wiring over the same store, so the row is read at boot the
 	// way a restarted daemon reads it.
-	pol2, err := wirePolicy(ctx, store, clock, nil)
+	pol2, err := wirePolicy(ctx, store, clock, nil, paths)
 	if err != nil {
 		t.Fatalf("wirePolicy (second): %v", err)
 	}
@@ -103,7 +109,7 @@ func TestWirePolicyRefusesAMalformedPolicySection(t *testing.T) {
 		"policy": map[string]any{"autonomy_profile": "unlimited"},
 	}}
 	if _, err := wirePolicy(context.Background(), storetest.NewMemStore(),
-		testkit.NewFrozenClock(policyTestEpoch), cfg); err == nil {
+		testkit.NewFrozenClock(policyTestEpoch), cfg, auditTestPaths(t)); err == nil {
 		t.Fatal("wirePolicy accepted an unknown autonomy profile; it must refuse rather than fall back")
 	}
 }
@@ -113,7 +119,64 @@ func TestWirePolicyRefusesAMalformedPolicySection(t *testing.T) {
 // assuming both are empty.
 func TestWirePolicyRequiresAStore(t *testing.T) {
 	if _, err := wirePolicy(context.Background(), nil,
-		testkit.NewFrozenClock(policyTestEpoch), nil); err == nil {
+		testkit.NewFrozenClock(policyTestEpoch), nil, auditTestPaths(t)); err == nil {
 		t.Fatal("wirePolicy built an engine with no store")
+	}
+}
+
+// TestDaemonHasSingleAuditLog proves the daemon's audit writers share one
+// redacting log per store. Each wiring is run on a store no log was opened
+// over: the memo holding a log for it afterwards is the proof the wiring
+// took its log from openAuditLog, and a second policy wiring (a reload)
+// must hand back the same pointer. The policy wiring's log is the one its
+// router, approval queue and supervision writers were built over.
+func TestDaemonHasSingleAuditLog(t *testing.T) {
+	ctx := context.Background()
+	resetProcessFirewall(t)
+	paths := fakeDaemonPaths{root: t.TempDir()}
+	if err := os.MkdirAll(paths.DataDir(), 0o700); err != nil {
+		t.Fatalf("MkdirAll(DataDir): %v", err)
+	}
+	clock := testkit.NewFrozenClock(policyTestEpoch)
+	memoOf := func(store *storetest.MemStore) *audit.Log {
+		auditLogMemo.mu.Lock()
+		defer auditLogMemo.mu.Unlock()
+		return auditLogMemo.logs[store]
+	}
+
+	conductorStore := storetest.NewMemStore()
+	if memoOf(conductorStore) != nil {
+		t.Fatal("a log existed before any wiring ran")
+	}
+	if _, err := wireConductorExecute(ctx, rpc.NewRegistry(), daemon.NewManifest(nil, clock), paths, clock, conductorStore, nil); err != nil {
+		t.Fatalf("wireConductorExecute: %v", err)
+	}
+	if memoOf(conductorStore) == nil {
+		t.Fatal("the conductor wiring built its audit writer without openAuditLog")
+	}
+
+	hooksStore := storetest.NewMemStore()
+	if err := wireCompletionHookPack(ctx, rpc.NewRegistry(), hooksStore, clock, events.New(hooksStore, clock), paths); err != nil {
+		t.Fatalf("wireCompletionHookPack: %v", err)
+	}
+	if memoOf(hooksStore) == nil {
+		t.Fatal("the hooks wiring built its audit writer without openAuditLog")
+	}
+
+	store := storetest.NewMemStore()
+	first, err := wirePolicy(ctx, store, clock, nil, paths)
+	if err != nil {
+		t.Fatalf("wirePolicy: %v", err)
+	}
+	reloaded, err := wirePolicy(ctx, store, clock, nil, paths)
+	if err != nil {
+		t.Fatalf("wirePolicy (reload): %v", err)
+	}
+	if first.Audit == nil || first.Audit != reloaded.Audit || first.Audit != memoOf(store) {
+		t.Fatalf("policy audit logs = %p, %p after a reload; memo holds %p: want one pointer", first.Audit, reloaded.Audit, memoOf(store))
+	}
+	shared, err := openAuditLog(store, clock, nil, paths)
+	if err != nil || shared != first.Audit {
+		t.Fatalf("openAuditLog over the policy store = (%p, %v), want the policy wiring's log %p", shared, err, first.Audit)
 	}
 }

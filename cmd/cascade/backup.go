@@ -52,12 +52,14 @@ type backupDeps struct {
 	Restore     func(context.Context, backup.ElevationProof, backup.RestoreOptions, backup.SnapshotID) (backup.RestoreReport, error)
 	Export      func(context.Context, backup.ElevationProof, backup.ExportOptions, backup.SnapshotID) ([]byte, error)
 	Import      func(context.Context, backup.ElevationProof, backup.ImportOptions, []byte, backup.SnapshotID) (backup.ImportReport, error)
-	// AuditLog builds the S-42.T6 recovery-key ceremony's audit-domain
+	// AuditLog opens the S-42.T6 recovery-key ceremony's audit-domain
 	// collaborator over store: RecordKeyEscrowed (backup_key.go) writes
 	// through it, and AuditEscrowChecker (backup_create.go) reads through
-	// it. Nil in a caller that predates the ceremony is a documented
-	// no-op: backupEscrowChecker below never dereferences a nil AuditLog.
-	AuditLog func(provider.Store) *audit.Log
+	// it. Production opens the process's redacting log (openAuditLog) and
+	// an error refuses the verb. Nil in a caller that predates the ceremony
+	// is a documented no-op: backupEscrowChecker below never calls a nil
+	// AuditLog.
+	AuditLog func(provider.Store) (*audit.Log, error)
 	// Verify runs S-42.T4's read-only verification pass -- the exact
 	// RunVerification the scheduled cron calls (06 §5.8 automation
 	// parity). Assigned directly to backup.RunVerification in production.
@@ -95,8 +97,8 @@ func productionBackupDeps() backupDeps {
 		Restore: backup.Restore,
 		Export:  backup.ExportPortable,
 		Import:  backup.ImportPortable,
-		AuditLog: func(store provider.Store) *audit.Log {
-			return audit.New(store, clock, nil)
+		AuditLog: func(store provider.Store) (*audit.Log, error) {
+			return openAuditLog(store, clock, nil, paths)
 		},
 		Verify: backup.RunVerification,
 		NewAttentionSink: func(store provider.Store) backup.AttentionSink {
@@ -108,12 +110,17 @@ func productionBackupDeps() backupDeps {
 // backupEscrowChecker builds the S-42.T6 escrow guard over rt's store, or
 // nil when deps.AuditLog is unset -- the documented no-op default every
 // pre-ticket backupDeps literal (test scaffolding included) already relies
-// on, since CreateSnapshotDeps.Escrow itself tolerates nil (snapshot.go).
-func backupEscrowChecker(deps backupDeps, rt *backupRuntime) backup.EscrowChecker {
+// on, since CreateSnapshotDeps.Escrow itself tolerates nil (snapshot.go). An
+// audit log that cannot be opened is an error: the verb refuses.
+func backupEscrowChecker(deps backupDeps, rt *backupRuntime) (backup.EscrowChecker, error) {
 	if deps.AuditLog == nil {
-		return nil
+		return nil, nil
 	}
-	return backup.AuditEscrowChecker{Reader: deps.AuditLog(rt.Store)}
+	log, err := deps.AuditLog(rt.Store)
+	if err != nil {
+		return nil, err
+	}
+	return backup.AuditEscrowChecker{Reader: log}, nil
 }
 
 // backupOptionalVault adapts deps.NewVault(proof) into a backup.VaultStore

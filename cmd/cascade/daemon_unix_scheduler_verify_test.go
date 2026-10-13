@@ -37,7 +37,7 @@ func TestStartScheduler_VerificationJobPresentInRunningScheduler(t *testing.T) {
 
 	bus := events.New(store, clock)
 	logger := slog.New(slog.NewTextHandler(testWriter{t}, nil))
-	policyWiring, err := wirePolicy(ctx, store, clock, nil)
+	policyWiring, err := wirePolicy(ctx, store, clock, nil, auditTestPaths(t))
 	if err != nil {
 		t.Fatalf("wirePolicy: %v", err)
 	}

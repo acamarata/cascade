@@ -14,6 +14,7 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"strconv"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -78,10 +79,94 @@ func (l *Log) Query(ctx context.Context, f Filter) (Page, error) {
 
 // Verify walks the entire log and reports the first integrity failure it
 // finds, or nil when every record verifies, the chain is unbroken, no
-// sequence number is missing, and the tail matches the head pointer.
+// sequence number is missing, the tail matches the head pointer, and the
+// effect index holds exactly the rows the chained effect records replay to.
+//
+// The walk and the index scan run under the append lock, so this Log's own
+// writers cannot move the log mid-check. A writer in another process or on
+// another Log value can: when the stored head differs from the tail the
+// walk reached, the check runs again, and a mismatch under a head that did
+// not move between two runs is tampering.
 func (l *Log) Verify(ctx context.Context) error {
-	_, _, err := l.walk(ctx, func(Record) bool { return true })
-	return err
+	if l.store == nil {
+		return cascade.Wrapf(cascade.KindUnavailable, ErrStoreUnavailable, "this log has no store")
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var seen head
+	for attempt := 1; attempt <= verifyAttempts; attempt++ {
+		var recs []Record
+		tail, _, err := l.walkRecords(ctx, func(r Record) bool { recs = append(recs, r); return true })
+		if err != nil {
+			return err
+		}
+		mismatch := l.checkEffectIndex(ctx, recs)
+		stored, herr := l.storedHead(ctx)
+		if herr != nil {
+			return herr
+		}
+		if stored.Seq == tail.Seq && stored.Hash == tail.Hash {
+			return mismatch
+		}
+		if attempt > 1 && stored == seen {
+			return cascade.Wrapf(cascade.KindIntegrity, ErrTampered,
+				"log ends at record %d but the tail pointer names record %d: records are missing", tail.Seq, stored.Seq)
+		}
+		seen = stored
+	}
+	return cascade.Wrapf(cascade.KindConflict, ErrAlreadyRecorded,
+		"the log kept changing while it was verified; run the check again")
+}
+
+// verifyAttempts bounds Verify's re-runs against a moving head.
+const verifyAttempts = 3
+
+// checkEffectIndex compares the eff: rows in the store with the rows the
+// chained effect records replay to, and names the first key that differs.
+func (l *Log) checkEffectIndex(ctx context.Context, recs []Record) error {
+	want, _, err := replayEffects(recs)
+	if err != nil {
+		return err
+	}
+	got, err := (&EffectLog{log: l}).scanRows(ctx)
+	if err != nil {
+		return err
+	}
+	keys := make([]string, 0, len(want)+len(got))
+	for k := range want {
+		keys = append(keys, k)
+	}
+	for k := range got {
+		if _, ok := want[k]; !ok {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		w, inWant := want[k]
+		g, inGot := got[k]
+		if inWant != inGot || w != g {
+			return cascade.Wrapf(cascade.KindIntegrity, ErrTampered,
+				"effect %q does not match its records (index row present: %t, replayed: %t)", k, inGot, inWant)
+		}
+	}
+	return nil
+}
+
+// storedHead reads the tail pointer; a log with none has the zero head.
+func (l *Log) storedHead(ctx context.Context) (head, error) {
+	data, err := l.store.Get(ctx, namespace, headKey)
+	if err != nil {
+		if cascade.HasKind(err, cascade.KindNotFound) {
+			return head{}, nil
+		}
+		return head{}, wrapStore(err, "reading head pointer")
+	}
+	var h head
+	if uerr := json.Unmarshal(data, &h); uerr != nil {
+		return head{}, cascade.Wrapf(cascade.KindIntegrity, ErrTampered, "head pointer is not decodable: %v", uerr)
+	}
+	return h, nil
 }
 
 // walk scans the log in sequence order, verifying as it goes, and calls
@@ -89,9 +174,19 @@ func (l *Log) Verify(ctx context.Context) error {
 // last sequence number visited and whether the walk reached the end of the
 // log.
 func (l *Log) walk(ctx context.Context, visit func(Record) bool) (uint64, bool, error) {
+	last, complete, err := l.walkRecords(ctx, visit)
+	if err != nil || !complete {
+		return last.Seq, complete, err
+	}
+	return last.Seq, true, l.checkHead(ctx, last)
+}
+
+// walkRecords is the scan under walk; Verify calls it directly because it
+// makes the closing head comparison itself.
+func (l *Log) walkRecords(ctx context.Context, visit func(Record) bool) (Record, bool, error) {
 	it, err := l.store.Scan(ctx, namespace, recordPrefix)
 	if err != nil {
-		return 0, false, wrapStore(err, "scanning audit records")
+		return Record{}, false, wrapStore(err, "scanning audit records")
 	}
 	defer func() { _ = it.Close() }()
 
@@ -99,20 +194,17 @@ func (l *Log) walk(ctx context.Context, visit func(Record) bool) (uint64, bool, 
 	for it.Next(ctx) {
 		rec, derr := decodeRecord(it.Value())
 		if derr != nil {
-			return prev.Seq, false, derr
+			return prev, false, derr
 		}
 		if cerr := checkChain(prev, rec); cerr != nil {
-			return prev.Seq, false, cerr
+			return prev, false, cerr
 		}
 		prev = rec
 		if !visit(rec) {
-			return rec.Seq, false, iterErr(it)
+			return rec, false, iterErr(it)
 		}
 	}
-	if err := iterErr(it); err != nil {
-		return prev.Seq, false, err
-	}
-	return prev.Seq, true, l.checkHead(ctx, prev)
+	return prev, true, iterErr(it)
 }
 
 // iterErr converts an iteration failure into this package's taxonomy.

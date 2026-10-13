@@ -33,7 +33,6 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/nodes"
@@ -179,9 +178,13 @@ func registerDenyConductor(w *daemonWiring, store provider.Store, reg *providerr
 	if err != nil {
 		return daemon.ConductorFanOut{}, err
 	}
+	auditLog, err := openDaemonAuditLog(store, w.Clock, nil, w.Paths)
+	if err != nil {
+		return daemon.ConductorFanOut{}, err
+	}
 	fan := daemon.NewConductorFanOut(store, w.Clock)
 	if err := daemon.RegisterConductorExecuteHandler(w.Registry, w.Manifest, providerregistry.NewReader(reg),
-		conductor.NewQuotaPolicy(quotaCfg, w.Clock), resolver, audit.New(store, w.Clock, nil), w.Clock, security, accounting, fan,
+		conductor.NewQuotaPolicy(quotaCfg, w.Clock), resolver, auditLog, w.Clock, security, accounting, fan,
 		conductor.NodePlacement(nodes.Engine{Tunnels: nodeTunnelLookup(w.Opts)}, nodeRecordStore(w.Paths, w.Clock))); err != nil {
 		return fan, err
 	}

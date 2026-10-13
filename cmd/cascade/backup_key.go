@@ -19,6 +19,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/internal/backup"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -83,6 +84,15 @@ func runBackupKeyExport(cmd *cobra.Command, deps backupDeps, flags backupKeyExpo
 }
 
 func exportRecoveryKey(cmd *cobra.Command, deps backupDeps, rt *backupRuntime, flags backupKeyExportFlags, passphrase string, proof backup.ElevationProof) error {
+	// Open the audit log before anything is generated or written: an
+	// escrow that cannot be recorded must not leave a key artifact behind.
+	var auditLog *audit.Log
+	if deps.AuditLog != nil {
+		var aerr error
+		if auditLog, aerr = deps.AuditLog(rt.Store); aerr != nil {
+			return aerr
+		}
+	}
 	broker, err := deps.NewVault(proof)
 	if err != nil {
 		return err
@@ -103,8 +113,8 @@ func exportRecoveryKey(cmd *cobra.Command, deps backupDeps, rt *backupRuntime, f
 	if err := deps.WriteFile(flags.outPath, artifact, 0o600); err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "backup: write recovery key artifact")
 	}
-	if deps.AuditLog != nil {
-		if err := backup.RecordKeyEscrowed(cmd.Context(), deps.AuditLog(rt.Store), "backup"); err != nil {
+	if auditLog != nil {
+		if err := backup.RecordKeyEscrowed(cmd.Context(), auditLog, "backup"); err != nil {
 			return err
 		}
 	}

@@ -37,7 +37,6 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/nodes"
@@ -101,7 +100,6 @@ func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest 
 		return daemon.ConductorFanOut{}, err
 	}
 	quota := conductor.NewQuotaPolicy(cfg, clock)
-	auditWriter := audit.New(store, clock, nil)
 	credentials, cerr := daemonCredentialSource(paths)
 	if cerr != nil {
 		return daemon.ConductorFanOut{}, cerr
@@ -117,6 +115,12 @@ func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest 
 	accounting, aerr := wireConductorAccounting(ctx, paths, clock, reg)
 	if aerr != nil {
 		return daemon.ConductorFanOut{}, aerr
+	}
+	// After conductorSecurity, which binds the process firewall to this
+	// daemon's data directory: the audit log opens over the same vault.
+	auditWriter, err := openDaemonAuditLog(store, clock, nil, paths)
+	if err != nil {
+		return daemon.ConductorFanOut{}, err
 	}
 	// Durable fan-out over the daemon store itself (no second connection):
 	// one leg budget and one claim table per daemon, returned so the

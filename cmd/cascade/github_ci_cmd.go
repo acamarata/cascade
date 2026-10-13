@@ -288,5 +288,10 @@ func githubCIPolicy() (*policy.Engine, audit.Writer, func(), error) {
 		closeStore()
 		return nil, nil, nil, err
 	}
-	return engine, audit.New(store, clock, nil), closeStore, nil
+	log, err := openAuditLog(store, clock, nil, lazyPaths{})
+	if err != nil {
+		closeStore()
+		return nil, nil, nil, err
+	}
+	return engine, log, closeStore, nil
 }

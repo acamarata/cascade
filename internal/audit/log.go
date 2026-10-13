@@ -10,16 +10,20 @@ package audit
 //   queue), an injected runtime.Clock, and an optional Publisher.
 // Outputs: the sealed Record, or a pkg/cascade taxonomy error.
 // Constraints: no bare time.Now (R-14.11); crypto/rand only; the write is
-//   a conditional create, so a second writer racing for the same sequence
-//   number is refused with ErrAlreadyRecorded rather than overwriting a
-//   record that already exists.
+//   a conditional create and a compare-and-swap of the head pointer, so a
+//   second writer racing for the same sequence number is refused instead
+//   of overwriting a record that already exists. A writer that lost the
+//   race re-reads the head and tries again (three retries), so several
+//   Log values over one store never fork the chain.
 // SPORT: internal.audit.Log/ADDED (P1-E09-W2-S18-T2).
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"encoding/json"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -79,10 +83,17 @@ type Log struct {
 	// documented, unmounted configuration, not an error.
 	redactor Redactor
 
-	mu     sync.Mutex
-	head   head
-	loaded bool
+	mu sync.Mutex
+	// head and headRaw are the tail pointer as the last read of the store
+	// saw it (headRaw is its exact stored bytes, nil when the store has
+	// none yet). commitLocked swaps the stored head from headRaw, so a
+	// head another writer moved is a conflict, never an overwrite.
+	head    head
+	headRaw []byte
 }
+
+// appendAttempts is the first try plus three retries after a conflict.
+const appendAttempts = 4
 
 // New returns a Log persisting through store and stamping every record
 // from clock. Pass runtime.NewSystemClock() in production and a frozen
@@ -114,18 +125,61 @@ func (l *Log) Append(ctx context.Context, event Event) (Record, error) {
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if err := l.loadHeadLocked(ctx); err != nil {
-		return Record{}, err
-	}
-	rec, err := l.buildLocked(event)
+	rec, err := l.sealAndCommitLocked(ctx, event)
 	if err != nil {
 		return Record{}, err
 	}
-	if err := l.commitLocked(ctx, rec); err != nil {
-		return Record{}, err
-	}
-	l.head = head{Seq: rec.Seq, Hash: rec.Hash}
 	return rec, l.notify(ctx, rec)
+}
+
+// sealAndCommitLocked reads the head, seals event as the next record and
+// commits it. A conflict (another writer took the sequence number or moved
+// the head) re-reads the head and seals again, up to appendAttempts times;
+// the last conflict is returned as KindConflict wrapping ErrAlreadyRecorded
+// with nothing written.
+func (l *Log) sealAndCommitLocked(ctx context.Context, event Event) (Record, error) {
+	if l.store == nil {
+		return Record{}, cascade.Wrapf(cascade.KindUnavailable, ErrStoreUnavailable, "this log has no store")
+	}
+	for attempt := 1; ; attempt++ {
+		if err := l.loadHeadLocked(ctx); err != nil {
+			return Record{}, err
+		}
+		rec, err := l.buildLocked(event)
+		if err != nil {
+			return Record{}, err
+		}
+		err = l.commitLocked(ctx, rec)
+		if err == nil {
+			l.head = head{Seq: rec.Seq, Hash: rec.Hash}
+			return rec, nil
+		}
+		if !cascade.HasKind(err, cascade.KindConflict) || attempt >= appendAttempts {
+			return Record{}, err
+		}
+		if perr := retryPause(ctx, attempt); perr != nil {
+			return Record{}, perr
+		}
+	}
+}
+
+// retryPause waits a random fraction of 2^attempt milliseconds before a
+// retry. Two writers retrying in lockstep would keep losing to each other
+// (the one that read second always commits second); the random gap breaks
+// the pattern. crypto/rand only; a cancelled context ends the wait.
+func retryPause(ctx context.Context, attempt int) error {
+	var b [1]byte
+	if _, err := cryptorand.Read(b[:]); err != nil {
+		return cascade.Wrap(cascade.KindInternal, err, "audit: retry jitter")
+	}
+	timer := time.NewTimer(time.Duration(b[0]) * (time.Millisecond << attempt) / 256)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return cascade.Wrap(cascade.KindUnavailable, ctx.Err(), "audit: append abandoned while waiting to retry")
+	}
 }
 
 // buildLocked mints the next record's id, time, position and chain link.
@@ -145,11 +199,13 @@ func (l *Log) buildLocked(event Event) (Record, error) {
 }
 
 // commitLocked writes the record, its id index, and the new head pointer in
-// one transaction. The record itself goes in with CompareAndSwap against a
-// nil prior value, which is a conditional create: if anything already
-// occupies that sequence number the write is refused instead of replacing
-// it. That refusal is the append-only guarantee at the storage layer, not
-// merely the absence of an update method on this type.
+// one transaction. The head moves with CompareAndSwap from the exact bytes
+// this Log read, so a writer holding a stale tail is refused. The record
+// itself goes in with CompareAndSwap against a nil prior value, which is a
+// conditional create: if anything already occupies that sequence number the
+// write is refused instead of replacing it. That refusal is the append-only
+// guarantee at the storage layer, not merely the absence of an update
+// method on this type.
 func (l *Log) commitLocked(ctx context.Context, rec Record) error {
 	data, err := json.Marshal(rec)
 	if err != nil {
@@ -160,18 +216,28 @@ func (l *Log) commitLocked(ctx context.Context, rec Record) error {
 		return cascade.Wrap(cascade.KindInternal, err, "audit: encoding head")
 	}
 	txErr := l.store.Tx(ctx, func(ctx context.Context, tx provider.Tx) error {
+		if err := tx.CompareAndSwap(ctx, namespace, headKey, l.headRaw, headData); err != nil {
+			return conflictOrRaw(err, "head pointer moved before sequence %d: %v", rec.Seq)
+		}
 		if err := tx.CompareAndSwap(ctx, namespace, recordKey(rec.Seq), nil, data); err != nil {
-			return cascade.Wrapf(cascade.KindConflict, ErrAlreadyRecorded, "sequence %d: %v", rec.Seq, err)
+			return conflictOrRaw(err, "sequence %d: %v", rec.Seq)
 		}
-		if err := tx.Put(ctx, namespace, indexKey(rec.ID), []byte(strconv.FormatUint(rec.Seq, 10))); err != nil {
-			return err
-		}
-		return tx.Put(ctx, namespace, headKey, headData)
+		return tx.Put(ctx, namespace, indexKey(rec.ID), []byte(strconv.FormatUint(rec.Seq, 10)))
 	})
 	if txErr != nil {
 		return wrapStore(txErr, "appending record")
 	}
+	l.headRaw = headData
 	return nil
+}
+
+// conflictOrRaw turns a refused compare-and-swap into KindConflict wrapping
+// ErrAlreadyRecorded, and leaves any other store failure as it came.
+func conflictOrRaw(err error, format string, seq uint64) error {
+	if !cascade.HasKind(err, cascade.KindConflict) {
+		return err
+	}
+	return cascade.Wrapf(cascade.KindConflict, ErrAlreadyRecorded, format, seq, err)
 }
 
 // notify publishes the committed record's identity on the bus.
@@ -194,28 +260,24 @@ func (l *Log) notify(ctx context.Context, rec Record) error {
 	return nil
 }
 
-// loadHeadLocked recovers the tail pointer once per Log instance, so a
-// fresh Log over a store that already holds records resumes numbering where
-// the previous instance stopped rather than colliding with it.
+// loadHeadLocked reads the tail pointer from the store, on every append,
+// so a Log over a store another writer has moved numbers its next record
+// from the stored head rather than from a stale copy. The exact stored
+// bytes are kept for the compare-and-swap in commitLocked.
 func (l *Log) loadHeadLocked(ctx context.Context) error {
-	if l.loaded {
-		return nil
-	}
 	data, err := l.store.Get(ctx, namespace, headKey)
 	if err != nil {
 		if !cascade.HasKind(err, cascade.KindNotFound) {
 			return wrapStore(err, "reading head pointer")
 		}
-		l.head = head{}
-		l.loaded = true
+		l.head, l.headRaw = head{}, nil
 		return nil
 	}
 	var h head
 	if uerr := json.Unmarshal(data, &h); uerr != nil {
 		return cascade.Wrapf(cascade.KindIntegrity, ErrTampered, "head pointer is not decodable: %v", uerr)
 	}
-	l.head = h
-	l.loaded = true
+	l.head, l.headRaw = h, append([]byte(nil), data...)
 	return nil
 }
 

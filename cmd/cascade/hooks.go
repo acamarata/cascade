@@ -58,7 +58,6 @@ import (
 	"errors"
 	"path/filepath"
 
-	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/fleet/hookpacks"
 	"github.com/acamarata/cascade/internal/jobs"
@@ -101,7 +100,11 @@ func wireCompletionHookPack(ctx context.Context, registry *rpc.Registry, store p
 
 	jstore := jobs.NewStore(db)
 	authz := jobs.NewProducerAuthz(jstore, func() bool { return true }, nil)
-	ledger, err := jobs.NewEvidenceLedger(jstore, clock, audit.New(store, clock, nil), authz)
+	auditLog, err := openDaemonAuditLog(store, clock, nil, paths)
+	if err != nil {
+		return err
+	}
+	ledger, err := jobs.NewEvidenceLedger(jstore, clock, auditLog, authz)
 	if err != nil {
 		return err
 	}

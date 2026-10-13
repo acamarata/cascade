@@ -102,6 +102,7 @@ func TestPluginCLI_ListEmptyAndInfoNotFound(t *testing.T) {
 }
 
 func TestPluginCLI_AddListEnableDisableRemove_RealStoreState(t *testing.T) {
+	resetProcessFirewall(t) // remove opens the audit log, which binds the process firewall to deps.Paths
 	deps := testPluginDeps(t)
 	manifestPath := filepath.Join(t.TempDir(), "demo.toml")
 	if err := os.WriteFile(manifestPath, []byte(builtinManifestFixture), 0o600); err != nil {

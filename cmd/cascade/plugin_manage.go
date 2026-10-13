@@ -32,7 +32,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/acamarata/cascade/internal/audit"
 	claude "github.com/acamarata/cascade/plugins/claude"
 
 	"github.com/acamarata/cascade/internal/plugins"
@@ -98,7 +97,11 @@ func newPluginRemoveCmd(deps pluginDeps) *cobra.Command {
 				return errBuiltinNotToggleable("remove", args[0])
 			}
 			rec, err := withPluginStore(cmd.Context(), deps, func(ctx context.Context, store provider.Store) (plugins.PluginMetadata, error) {
-				return plugins.RemovePlugin(ctx, store, claudeTeardown(deps, store), args[0])
+				teardown, terr := claudeTeardown(deps, store)
+				if terr != nil {
+					return plugins.PluginMetadata{}, terr
+				}
+				return plugins.RemovePlugin(ctx, store, teardown, args[0])
 			})
 			if err != nil {
 				return err
@@ -122,19 +125,28 @@ func (v pluginRemoveView) String() string {
 // cascade-claude deleted its RECORD and left every file it had written on
 // disk — an uninstall that uninstalled nothing.
 //
-// A teardown that cannot be built is nil, which RemovePlugin treats as
-// "no hook": the record is still removed. That is the honest degradation.
-// Refusing to remove a plugin because its harness paths could not be
-// resolved would strand an operator on a machine whose harness is already
-// gone, which is exactly when they are most likely to be removing it.
-func claudeTeardown(deps pluginDeps, store provider.Store) plugins.ProcessTeardown {
+// A teardown whose harness paths cannot be resolved is nil, which
+// RemovePlugin treats as "no hook": the record is still removed. That is the
+// honest degradation. Refusing to remove a plugin because its harness paths
+// could not be resolved would strand an operator on a machine whose harness
+// is already gone, which is exactly when they are most likely to be removing
+// it. An audit log that cannot be opened is different: the verb refuses
+// (KindUnavailable or KindIntegrity from the vault custody) before it changes
+// anything, so no removal runs on a machine that cannot audit. The log is
+// opened first even when the teardown then degrades to nil; the only record
+// a removal writes today is the claude uninstall's.
+func claudeTeardown(deps pluginDeps, store provider.Store) (plugins.ProcessTeardown, error) {
+	log, err := openAuditLog(store, deps.Clock, nil, deps.Paths)
+	if err != nil {
+		return nil, err
+	}
 	paths, err := claude.HostPaths()
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
-		return nil
+		return nil, nil
 	}
-	return plugins.NewClaudeTeardown(paths, cwd, audit.New(store, deps.Clock, nil))
+	return plugins.NewClaudeTeardown(paths, cwd, log), nil
 }

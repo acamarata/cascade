@@ -53,9 +53,13 @@ minting a string at a call site.
 
 `Append` is the only write path. There is no update method and no delete method.
 
-At the storage layer, the write is a `CompareAndSwap` against a nil prior value, a
-conditional create. A second writer racing for the same sequence number gets
-`ErrAlreadyRecorded`, not a silent overwrite.
+At the storage layer, one transaction does three things. It swaps the head pointer from the
+exact bytes the writer read, it creates the record with a `CompareAndSwap` against a nil
+prior value (a conditional create), and it writes the id index. A writer whose view of the
+tail is stale loses one of the two swaps. It reads the head again and tries once more, up to
+three retries with a short random pause. If every try loses, `Append` returns `KindConflict`
+wrapping `ErrAlreadyRecorded` and nothing is written, so several `Log` values over one store
+(or several processes over a shared one) never fork the chain and never overwrite a record.
 
 Every record carries two chain links:
 
@@ -127,8 +131,11 @@ err := log.Verify(ctx)
 ```
 
 Walks the whole log and returns the first integrity failure, or nil when every record
-verifies, the chain is unbroken, no sequence number is missing, and the tail matches the
-head pointer.
+verifies, the chain is unbroken, no sequence number is missing, the tail matches the head
+pointer, and the effect index (`eff:` rows) holds exactly the rows the chained effect
+records replay to. A missing, extra or different row returns `ErrTampered` naming the key.
+The walk runs under the append lock. If another writer moves the head while it runs, the
+check runs again; a mismatch under a head that did not move is tampering.
 
 Scope limit, stated plainly: the chain and the head pointer detect a record altered,
 replaced, or removed underneath the API. They do not defend against an attacker who can
@@ -186,6 +193,12 @@ type Writer interface {
 Policy, the approval queue, config reload, and the elevation middleware take a `Writer`, not
 a `*Log`. This keeps the dependency direction one-way: subsystem → audit.
 
+In the `cascade` binary every `*Log` comes from one helper (`openAuditLog`). It memoizes one
+`Log` per store per process and builds it with the substitution pass: stored vault values
+first, then the process detector, over `action` and `explain` before the record is sealed.
+No custody means no log, and a redactor error refuses the append. Nothing else in
+production code calls `audit.New`; an architecture test fails the build if it does.
+
 ---
 
 ## Error taxonomy
@@ -193,7 +206,7 @@ a `*Log`. This keeps the dependency direction one-way: subsystem → audit.
 | Sentinel | Kind | When |
 |---|---|---|
 | `ErrTampered` | `KindIntegrity` | A record's hash is wrong, the chain is broken, or the tail pointer disagrees with the log. |
-| `ErrAlreadyRecorded` | `KindConflict` | Two writers raced for the same sequence number. |
+| `ErrAlreadyRecorded` | `KindConflict` | Two writers raced for the same sequence number or head and the append lost four tries in a row. Nothing was written. |
 | `ErrNoSuchRecord` | `KindNotFound` | `Explain` called with an id no record carries. |
 | `ErrUnknownKind` | `KindInvalidInput` | `Append` called with a kind outside the eleven. |
 | `ErrInvalidEvent` | `KindInvalidInput` | A required field is missing, a field exceeds 512 bytes, or a JSON field is not valid JSON. |
@@ -211,4 +224,15 @@ All errors satisfy `errors.Is` by `cascade.Kind`, not pointer identity.
 - Control characters (`U+0000`–`U+001F`, `U+007F`) in any field.
 - Non-JSON bodies in `Explain` or `PolicySnapshot`.
 
-These are refused at `Append` time, not silently stored.
+These are refused at `Append` time, not silently stored. The check runs on the redacted text:
+a substitution that grows a field past the limit is refused, never truncated.
+
+Redaction limits, stated plainly. The substitution pass runs over `action` and `explain` only;
+`outcome` and `policy_snapshot` are not redacted. It matches a stored vault value of 8 bytes or more
+as written, and as `encoding/json` writes it up to three levels deep (JSON in a JSON string, JSON
+quoted in an action), with and without HTML escaping. Every match is found first and rewritten
+in one call, so a vault value that embeds another value is tagged whole. It does not match escapes `encoding/json`
+never writes (`\/`, `\u00e4` for a non-ASCII letter, `\u0022` for a quote), nor a value that
+reached `explain` as a Go `[]byte` (encoding/json writes it as base64). A writer who wraps a
+secret in text that already looks like a vault tag can shield an upper-case secret from the pass.
+These are gaps to close in the secrets rewriter and the audit field list, not guarantees.

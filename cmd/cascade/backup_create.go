@@ -73,6 +73,10 @@ type backupCreateResult struct {
 }
 
 func createBackupSnapshot(ctx context.Context, cmd *cobra.Command, deps backupDeps, rt *backupRuntime, record backup.TargetRecord, policy backup.TargetPolicy, proof backup.ElevationProof) error {
+	escrow, err := backupEscrowChecker(deps, rt)
+	if err != nil {
+		return err
+	}
 	target, err := deps.BuildTarget(ctx, record, nil, deps.Getenv)
 	if err != nil {
 		return recordCreateFailure(ctx, rt, deps, record.Name, err)
@@ -89,7 +93,7 @@ func createBackupSnapshot(ctx context.Context, cmd *cobra.Command, deps backupDe
 	manifest, err := deps.Create(ctx, proof, backup.CreateSnapshotDeps{
 		Target: target, AgeRecipient: recipient, Clock: deps.Clock,
 		Domains: backupCaptureDomains(rt, policy.Domains),
-		Escrow:  backupEscrowChecker(deps, rt),
+		Escrow:  escrow,
 		Vault:   vault,
 	}, previous)
 	if err != nil {

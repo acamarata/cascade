@@ -71,7 +71,7 @@ func newStallRig(t *testing.T, store provider.Store, extra map[string]interface{
 	clock := &stallClock{now: stallNow}
 	ctx, cancel := context.WithCancel(context.Background())
 	cfg := &runtime.Config{Extra: extra}
-	pol, err := wirePolicy(ctx, store, clock, cfg)
+	pol, err := wirePolicy(ctx, store, clock, cfg, auditTestPaths(t))
 	if err != nil {
 		t.Fatalf("wirePolicy: %v", err)
 	}
