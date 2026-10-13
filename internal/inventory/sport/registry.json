@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-13T08:59:31Z",
+  "generated_at": "2026-10-13T09:55:32Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3863,6 +3863,12 @@
           "line": 16,
           "status": "CHANGE",
           "raw": "cmd/cascade daemon (CHANGE, P1-WID-11)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_conductor_permits_test.go",
+          "line": 10,
+          "status": "CHANGE",
+          "raw": "cmd/cascade daemon (CHANGE, P1-SEC-02)."
         }
       ],
       "statuses": [
@@ -6935,6 +6941,47 @@
       ]
     },
     {
+      "name": "conductor.lane-classify",
+      "sites": [
+        {
+          "file": "internal/conductor/lane_hostile_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "conductor.lane-classify (TEST) - P1-SEC-02."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "conductor.lane-table",
+      "sites": [
+        {
+          "file": "internal/conductor/lane_router_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "conductor.lane-table (TEST) - P1-SEC-02."
+        },
+        {
+          "file": "internal/conductor/lane_table.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "conductor.lane-table/ADD (P1-SEC-02)."
+        },
+        {
+          "file": "internal/conductor/lane_table_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "conductor.lane-table (TEST) - P1-SEC-02."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "conductor.pipeline",
       "sites": [
         {
@@ -6954,7 +7001,7 @@
       "sites": [
         {
           "file": "internal/conductor/privacy.go",
-          "line": 43,
+          "line": 33,
           "status": "ADD",
           "ticket": "P1-E20-W5-S44-T2",
           "raw": "conductor.privacy/ADD (P1-E20-W5-S44-T2)."
@@ -6990,6 +7037,27 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "conductor.restricted-permits",
+      "sites": [
+        {
+          "file": "internal/conductor/restricted_permits.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "conductor.restricted-permits/ADD (P1-SEC-02)."
+        },
+        {
+          "file": "internal/conductor/restricted_permits_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "conductor.restricted-permits (TEST) - P1-SEC-02."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
       ]
     },
     {
@@ -18366,6 +18434,20 @@
       "statuses": [
         "",
         "ADD"
+      ]
+    },
+    {
+      "name": "internal/conductor",
+      "sites": [
+        {
+          "file": "internal/conductor/execute_refusal.go",
+          "line": 13,
+          "status": "",
+          "raw": "internal/conductor (P1-SEC-02)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -35842,7 +35924,7 @@
       ]
     }
   ],
-  "total_sites": 3463,
-  "unspecified_count": 229,
-  "multi_status_count": 106
+  "total_sites": 3471,
+  "unspecified_count": 231,
+  "multi_status_count": 108
 }
