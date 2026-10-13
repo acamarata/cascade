@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-13T00:35:50Z",
+  "generated_at": "2026-10-13T01:15:07Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -21770,7 +21770,7 @@
       "sites": [
         {
           "file": "internal/plugins/registry_integration_test.go",
-          "line": 41,
+          "line": 47,
           "status": "ADD",
           "raw": "internal/plugins builtin-registry integration test (ADD) —"
         }
