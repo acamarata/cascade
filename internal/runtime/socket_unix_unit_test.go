@@ -280,6 +280,13 @@ func TestOwnerSocketBindsReplacesAndConflicts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Pin the stale inode with one more link so the rebind's unlink cannot
+	// free it: Linux filesystems (ext4, tmpfs) hand a just-freed inode
+	// number straight back to the next create, and the fresh socket would
+	// then share the old (dev, ino) and pass for the stale one.
+	if err := os.Link(stale, filepath.Join(dir, "pin.sock")); err != nil {
+		t.Fatal(err)
+	}
 	ln, err = ListenOwnerSocket(stale)
 	if err != nil {
 		t.Fatalf("own stale socket: %v, want it replaced", err)

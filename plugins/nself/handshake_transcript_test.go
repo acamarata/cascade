@@ -148,8 +148,8 @@ func TestHandshakeLiveNself(t *testing.T) {
 	withGetenv(t, true, "")
 
 	version, err := probeVersion(context.Background(), dir)
-	if err != nil || version.Version != minNselfVersion {
-		t.Fatalf("live nself version = %q, err %v; want 1.3.5", version.Version, err)
+	if err != nil || !versionAtLeast(version.Version, minNselfVersion) {
+		t.Fatalf("live nself version = %q, err %v; want >= %s", version.Version, err, minNselfVersion)
 	}
 	resp, err := runHandshake(context.Background(), handshakeModePropose, dir)
 	if err != nil {
