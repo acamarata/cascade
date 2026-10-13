@@ -180,6 +180,33 @@ jobs:
             }
           done
 
+      # BF-045: internal/plugins and internal/secrets each hold
+      # `integration`-tagged tests that no step above selects, so both
+      # packages were unreachable from CI and the builtin-registry and
+      # OAuth PKCE proofs never ran here. The whole packages run (no
+      # test-name filter, so no integration test in either one can fall out
+      # of the lane); the log is captured to a file, not a pipe, so the
+      # go test exit code gates the step, and the named tests must show an
+      # EXECUTED and PASS line each.
+      - name: go test -tags=integration ./internal/plugins/ ./internal/secrets/ (whole packages)
+        if: matrix.goos != 'windows'
+        run: |
+          log="$RUNNER_TEMP/integration-plugins-secrets.log"
+          rc=0
+          go test -tags=integration -count=1 -race ./internal/plugins/ ./internal/secrets/ -v > "$log" 2>&1 || rc=$?
+          cat "$log"
+          test "$rc" -eq 0 || exit 1
+          for name in TestBuiltinRegistry_Integration_RealConfigLoadAndRegistration TestOAuthPKCEFixture; do
+            grep -q "^=== RUN   ${name}$" "$log" || {
+              echo "::error::${name} did not execute (no '=== RUN' line). A skipped or filtered-out named check cannot close this job's obligation."
+              exit 1
+            }
+            grep -q -- "--- PASS: ${name} (" "$log" || {
+              echo "::error::${name} did not pass."
+              exit 1
+            }
+          done
+
   # The darwin/amd64 stand-in for the retired macos-13 matrix entry (see
   # the ART.5.1 DEVIATION note above). It runs on the arm64 macOS runner and
   # cross-compiles, so it proves the whole tree BUILDS and VETS for darwin
@@ -318,6 +345,16 @@ jobs:
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.13.2
+
+      # BF-048, DEBT-PROC-08: the untagged run above skips every
+      # `integration`-tagged file, so a lint breach in one (an unchecked
+      # error, an oversized function) reached main unseen. Same pinned
+      # action and version, whole tree, with the tag on.
+      - name: golangci-lint run (integration tag)
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.13.2
+          args: --build-tags=integration --max-same-issues=0
 
       # A/S-01.T2's architecture/size/boundary gates plus this ticket's
       # license and bench-harness gates — all live in internal/build and

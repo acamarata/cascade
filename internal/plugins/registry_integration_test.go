@@ -12,6 +12,7 @@ import (
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/internal/testkit"
+	"github.com/acamarata/cascade/pkg/plugin"
 )
 
 // Purpose: the Art.2 integration test for the Epic C acceptance ticket
@@ -37,6 +38,11 @@ import (
 // EventKindPluginRegistered event naming the SAME builtin this test just
 // loaded and asserted, and a real Subscribe proving that exact event
 // arrives, in order, with no fabrication standing in for either half.
+//
+// The List() surface is asserted by membership, not as an exact list: other
+// compile-time builtins register in this test binary, so the test checks
+// that exactly one entry is example-builtin, none is the rejected
+// invalid-example, and the list is sorted by Manifest.ID.
 //
 // SPORT: internal/plugins builtin-registry integration test (ADD) —
 //
@@ -78,12 +84,34 @@ func TestBuiltinRegistry_Integration_RealConfigLoadAndRegistration(t *testing.T)
 		t.Errorf("RPCMethodName(...) = %q, want %q", got, wantRPC)
 	}
 
-	list := reg.List()
-	if len(list) != 1 || list[0].Manifest.ID != "example-builtin" {
-		t.Fatalf("reg.List() = %v, want exactly [example-builtin]", list)
-	}
+	assertListMembership(t, reg.List())
 
 	assertPluginRegisteredEventDelivered(ctx, t, entry.Manifest.ID)
+}
+
+// assertListMembership asserts the List() read surface by membership, not by
+// an exact one-entry list: other compile-time builtins register in the same
+// test binary, so exactly one entry must carry the example-builtin ID, no
+// entry may carry the rejected invalid-example ID, and List must be sorted by
+// Manifest.ID.
+func assertListMembership(t *testing.T, list []plugin.BuiltinRegistration) {
+	t.Helper()
+
+	found := 0
+	for i, entry := range list {
+		switch entry.Manifest.ID {
+		case "example-builtin":
+			found++
+		case "invalid-example":
+			t.Errorf("reg.List() holds the rejected manifest invalid-example at index %d", i)
+		}
+		if i > 0 && list[i-1].Manifest.ID >= entry.Manifest.ID {
+			t.Errorf("reg.List() not sorted by Manifest.ID: %q before %q", list[i-1].Manifest.ID, entry.Manifest.ID)
+		}
+	}
+	if found != 1 {
+		t.Fatalf("reg.List() holds %d entries with Manifest.ID example-builtin, want exactly 1", found)
+	}
 }
 
 // assertPluginRegisteredEventDelivered starts a real internal/events.Bus,
