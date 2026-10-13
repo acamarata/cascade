@@ -1567,11 +1567,27 @@
     "symbol": "internal/plugins.WireClaudeInboxPush"
   },
   {
-    "added_by_ticket": "P1-AGT-01",
-    "caller_site": "internal/providers/agents/harness_claude.go",
-    "expected_caller": "internal/providers/agents/harness_claude.go, the claude DriverFactory that adapts a SpawnSite to claude.Config and calls claude.New; retire this entry once that file calls New",
-    "reason": "P1-AGT-01 ships providers/agents/claude.Driver implemented and tested against injected seam doubles (testkit_test.go) and appended to the conformance suite (TestConformanceClaude), but the harness registry that resolves the real profile, lease and per-spawn filter and constructs the driver from a running composition root is P1-AGT-02 (harness_claude.go); the import boundary forbids internal/** from importing providers/agents until that ticket binds it. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
-    "retire_ticket": "P1-AGT-02",
-    "symbol": "providers/agents/claude.New"
+    "added_by_ticket": "P1-AGT-02",
+    "caller_site": "internal/providers/agents/spawn.go",
+    "expected_caller": "internal/providers/agents/spawn.go, the host shim that resolves a lane to its binding and driver factory and lists the bindings for the plugin-host surface; retire this entry once that file calls Bindings",
+    "reason": "P1-AGT-02 ships the read-only harness listing implemented and tested, but the shim that lists bindings to a caller (P1-AGT-03) and the plugin-host listing surface do not exist yet, so nothing in production calls Bindings. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists without the call.",
+    "retire_ticket": "P1-AGT-03",
+    "symbol": "internal/providers/agents.Bindings"
+  },
+  {
+    "added_by_ticket": "P1-AGT-02",
+    "caller_site": "internal/providers/agents/spawn.go",
+    "expected_caller": "internal/providers/agents/spawn.go, the host shim that builds the Resolver from the plugin registry's presence callback and resolves a lane before every spawn; retire this entry once that file calls NewResolver",
+    "reason": "P1-AGT-02 ships the lane resolver (unknown lane, absent plugin and no-fallback refusals) implemented and tested, but its only production caller is the host shim of P1-AGT-03.",
+    "retire_ticket": "P1-AGT-03",
+    "symbol": "internal/providers/agents.NewResolver"
+  },
+  {
+    "added_by_ticket": "P1-AGT-02",
+    "caller_site": "internal/providers/agents/spawn.go",
+    "expected_caller": "internal/providers/agents/spawn.go, the host shim that projects the signed scope envelope of a dispatch onto AgentJobSpec.Envelope before it spawns; retire this entry once that file calls ProjectEnvelope",
+    "reason": "P1-AGT-02 ships the one conversion from a verified signed envelope to the driver-facing SpawnEnvelope implemented and tested, but the only production caller is the host shim of P1-AGT-03.",
+    "retire_ticket": "P1-AGT-03",
+    "symbol": "internal/providers/agents.ProjectEnvelope"
   }
 ]
