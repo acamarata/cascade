@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-13T12:41:51Z",
+  "generated_at": "2026-10-13T13:32:51Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4154,10 +4154,24 @@
       "sites": [
         {
           "file": "cmd/cascade/elevate_helper.go",
-          "line": 26,
+          "line": 24,
           "status": "ADD",
           "ticket": "P1-E04-W1-S07-T6",
           "raw": "cmd/cascade elevate-helper/ADDED (P1-E04-W1-S07-T6)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade elevate-helper presence tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/elevate_helper_presence_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "cmd/cascade elevate-helper presence tests/ADDED (P1-SEC-25)."
         }
       ],
       "statuses": [
@@ -20036,6 +20050,66 @@
           "status": "ADD",
           "ticket": "P1-E04-W1-S07-T6",
           "raw": "internal/elevation linuxNoCGOKeystore/ADDED (P1-E04-W1-S07-T6)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation presence tests",
+      "sites": [
+        {
+          "file": "internal/elevation/keystore_presence_hardening_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal/elevation presence tests/ADDED (P1-SEC-25)."
+        },
+        {
+          "file": "internal/elevation/keystore_presence_notty_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal/elevation presence tests/ADDED (P1-SEC-25)."
+        },
+        {
+          "file": "internal/elevation/keystore_presence_paths_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal/elevation presence tests/ADDED (P1-SEC-25)."
+        },
+        {
+          "file": "internal/elevation/keystore_presence_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal/elevation presence tests/ADDED (P1-SEC-25)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation presenceEnroll",
+      "sites": [
+        {
+          "file": "internal/elevation/keystore_presence_tty_linux.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal/elevation presenceEnroll/ADDED (P1-SEC-25)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation presenceKeystore",
+      "sites": [
+        {
+          "file": "internal/elevation/keystore_presence.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal/elevation presenceKeystore/ADDED (P1-SEC-25)."
         }
       ],
       "statuses": [
@@ -36072,7 +36146,7 @@
       ]
     }
   ],
-  "total_sites": 3490,
+  "total_sites": 3497,
   "unspecified_count": 230,
   "multi_status_count": 110
 }
