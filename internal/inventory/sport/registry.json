@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-13T13:32:51Z",
+  "generated_at": "2026-10-13T19:12:32Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -13339,6 +13339,18 @@
           "raw": "internal.conversation.adapter/ADDED (P1-E20-W5-S43-T2)."
         },
         {
+          "file": "internal/conversation/adapter_createthread.go",
+          "line": 19,
+          "status": "",
+          "raw": "internal.conversation.adapter (chat.create_thread)."
+        },
+        {
+          "file": "internal/conversation/adapter_createthread_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal.conversation.adapter (chat.create_thread, tests)."
+        },
+        {
           "file": "internal/conversation/adapter_journal_test.go",
           "line": 9,
           "status": "ADD",
@@ -13575,6 +13587,18 @@
           "raw": "internal.conversation.privacy/ADDED (P1-E20-W5-S44-T2)."
         },
         {
+          "file": "internal/conversation/privacy_createthread.go",
+          "line": 20,
+          "status": "",
+          "raw": "internal.conversation.privacy (create_thread, write-once markers)."
+        },
+        {
+          "file": "internal/conversation/privacy_createthread_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal.conversation.privacy (write-once markers, tests)."
+        },
+        {
           "file": "internal/conversation/privacy_parse_test.go",
           "line": 11,
           "status": "CHANGE",
@@ -13582,6 +13606,7 @@
         }
       ],
       "statuses": [
+        "",
         "ADD",
         "CHANGE"
       ]
@@ -18698,6 +18723,20 @@
       ]
     },
     {
+      "name": "internal/conversation",
+      "sites": [
+        {
+          "file": "internal/conversation/privacy_createthread_concurrent_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal/conversation (TEST)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/conversation/topics acceptance",
       "sites": [
         {
@@ -22191,6 +22230,20 @@
       ]
     },
     {
+      "name": "internal/plugins",
+      "sites": [
+        {
+          "file": "internal/plugins/cascadepa_bridge_chat_wiring_threads_helpers_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/plugins (TEST)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/plugins builtin-registry",
       "sites": [
         {
@@ -23190,10 +23243,9 @@
       "sites": [
         {
           "file": "internal/plugins/cascadepa_bridge_chat_wiring.go",
-          "line": 83,
-          "status": "ADD",
-          "ticket": "P1-E23-W5-S48-T2",
-          "raw": "internal/plugins:cascadepa-bridge-chat-wiring (ADD) — P1-E23-W5-S48-T2; ci-fix14."
+          "line": 52,
+          "status": "CHANGE",
+          "raw": "internal/plugins:cascadepa-bridge-chat-wiring (CHANGED: thread map)."
         },
         {
           "file": "internal/plugins/cascadepa_bridge_chat_wiring_test.go",
@@ -23201,11 +23253,23 @@
           "status": "",
           "ticket": "P1-E23-W5-S48-T2",
           "raw": "internal/plugins:cascadepa-bridge-chat-wiring (TEST) — P1-E23-W5-S48-T2."
+        },
+        {
+          "file": "internal/plugins/cascadepa_bridge_chat_wiring_threads_test.go",
+          "line": 16,
+          "status": "",
+          "raw": "internal/plugins:cascadepa-bridge-chat-wiring (TEST: thread map rig)."
+        },
+        {
+          "file": "internal/plugins/cascadepa_bridge_threadmap_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "internal/plugins:cascadepa-bridge-chat-wiring (TEST: thread map)."
         }
       ],
       "statuses": [
         "",
-        "ADD"
+        "CHANGE"
       ]
     },
     {
@@ -23227,7 +23291,7 @@
       "sites": [
         {
           "file": "internal/plugins/cascadepa_bridge_chatsend_client.go",
-          "line": 38,
+          "line": 42,
           "status": "ADD",
           "raw": "internal/plugins:cascadepa-bridge-chatsend-client (ADD) — fix18"
         }
@@ -29940,6 +30004,40 @@
       ]
     },
     {
+      "name": "plugins/cascade-pa ThreadMapStore",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/state_threadmap.go",
+          "line": 35,
+          "status": "",
+          "raw": "plugins/cascade-pa ThreadMapStore (chat-to-thread map)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa ThreadMapStore/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/state_threadmap_errors_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "plugins/cascade-pa ThreadMapStore/TEST."
+        },
+        {
+          "file": "plugins/cascade-pa/state_threadmap_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "plugins/cascade-pa ThreadMapStore/TEST."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "plugins/cascade-pa binding-tests/TEST",
       "sites": [
         {
@@ -30244,7 +30342,7 @@
       "sites": [
         {
           "file": "plugins/cascade-pa/telegram/egress.go",
-          "line": 32,
+          "line": 33,
           "status": "ADD",
           "raw": "plugins/cascade-pa/telegram ChatService/ADDED"
         }
@@ -30374,9 +30472,16 @@
           "line": 32,
           "status": "ADD",
           "raw": "plugins/cascade-pa/telegram TelegramBridge/ADDED"
+        },
+        {
+          "file": "plugins/cascade-pa/telegram/chat_threads.go",
+          "line": 28,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram TelegramBridge (thread resolution)."
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -30459,6 +30564,34 @@
           "line": 7,
           "status": "",
           "raw": "plugins/cascade-pa/telegram TestChatBridge_Send_TierRefused/TEST"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram ThreadMap",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/threadmap.go",
+          "line": 25,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram ThreadMap (chat-to-thread map)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram ThreadMap/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/chat_threadmap_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram ThreadMap/TEST."
         }
       ],
       "statuses": [
@@ -30572,6 +30705,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram bridge test rig/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/chat_rig_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram bridge test rig/TEST."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -36146,7 +36293,7 @@
       ]
     }
   ],
-  "total_sites": 3497,
-  "unspecified_count": 230,
-  "multi_status_count": 110
+  "total_sites": 3512,
+  "unspecified_count": 237,
+  "multi_status_count": 111
 }
