@@ -156,3 +156,28 @@ phase that refused and a static reason, never turn content.
 **What the SSE echo carries.** The echo is emitted from the SCRUBBED
 segments, so a client sees the typed tags and never the raw value. A turn
 that is refused produces no echo at all — only the divergence event.
+
+## Crash resume
+
+The daemon journals every `chat.append_turn` in its runtime store, in its own
+journal namespace, `conversation.journal`. The fleet resume scan reads a
+different namespace, so it never replays chat entries. For each turn the
+adapter writes an intent entry before the store write and an ack entry after
+it commits.
+
+When the daemon starts, it resumes every journaled thread before it registers
+any `chat.*` method. Resume replays the acked entries into the conversation
+store. A turn the store already holds is skipped, so a second start over the
+same journal changes nothing. A turn whose rows were lost, for example after
+a restore or a crash that cost the conversation commit, comes back and
+`chat.get_thread` returns it.
+
+**A failed resume refuses the start.** If one thread's journal cannot be
+replayed (a corrupt entry, a store error), the daemon does not start. The
+error is an integrity error that names the thread (`chat: resume journaled
+thread <id>`) and the wiring entry that stopped. No `chat.*` method is
+registered, so no client reads a thread the journal still owes rows to.
+
+Test compositions that pass no runtime store skip journaling and log one
+warning, `chat: no runtime store; turns are not journaled`. The daemon always
+passes its store.

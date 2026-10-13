@@ -22,6 +22,7 @@ import (
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage/storetest"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // TestBuildRPCServer_ChatReachableOverRealSocket starts the real server
@@ -127,4 +128,38 @@ func chatCall(t *testing.T, client *http.Client, method string, params map[strin
 		t.Fatalf("%s -> %d %q", method, envelope.Error.Code, envelope.Error.Message)
 	}
 	return envelope.Result
+}
+
+// TestDaemonCrashResume_RealJournalSurvivesRestart seeds an ACKed TurnAppend
+// journal entry into the runtime store BEFORE the daemon starts (the turn's
+// rows are not in the daemon's cascade.db, as after a restore or a crash
+// that lost the conversation commit), starts the production composition
+// root, and reads the turn back through chat.get_thread. A second start over
+// the same store changes nothing: resume is idempotent. The daemon has no
+// fault-injection hook; the entry comes from the production write path.
+func TestDaemonCrashResume_RealJournalSurvivesRestart(t *testing.T) {
+	deps := newRunTestDeps(t, nil)
+	const thread = "th-crash-resume"
+	var turnID string
+	withRuntimeStore(t, deps, func(store provider.Store) {
+		turnID = seedAckedChatTurn(t, store, deps.Clock, thread, "written before the crash")
+	})
+
+	for start := 1; start <= 2; start++ {
+		d := startJournalDaemon(t, deps)
+		got := journalRPC(t, unixRPCClient(deps.Paths.SocketPath()), "chat.get_thread", map[string]any{"thread_id": thread})
+		turns, _ := got["turns"].([]any)
+		if len(turns) != 1 {
+			t.Fatalf("start %d: chat.get_thread returned %d turns, want 1: %v", start, len(turns), got)
+		}
+		turn := turns[0].(map[string]any)
+		if id := turn["turn"].(map[string]any)["ID"]; id != turnID {
+			t.Fatalf("start %d: resumed turn id = %v, want %s", start, id, turnID)
+		}
+		segs, _ := turn["segments"].([]any)
+		if len(segs) != 1 || segs[0].(map[string]any)["Content"] != "written before the crash" {
+			t.Fatalf("start %d: resumed segments = %v", start, segs)
+		}
+		d.stop(t)
+	}
 }

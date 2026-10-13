@@ -26,9 +26,10 @@
 // method (R-14.284).
 //
 // Inputs: the RPC registry, the event bus, the clock, the path provider
-// siting cascade.db, and the SECRET CUSTODY the scrub pipeline's vault is
+// siting cascade.db, the SECRET CUSTODY the scrub pipeline's vault is
 // built on — injected, never selected here (see the function's own doc
-// comment for why that parameter exists).
+// comment for why that parameter exists) — and the daemon's runtime
+// provider.Store, which holds the chat turn journal.
 // Outputs: chat.append_turn, chat.get_thread and chat.list_threads bound
 // on the registry.
 // Constraints: the mode passed to the adapter is the DAEMON mode, never
@@ -40,7 +41,7 @@
 // tier-2 behaviour and not something this file may paper over.
 //
 // SPORT: cmd/cascade chat wiring (ADD) — P1-E20-W5-S43-T5; platform tag
-// removed — P1-E45-W10-S88-T2.
+// removed — P1-E45-W10-S88-T2; chat journal wired — P1-CPA-08.
 package main
 
 import (
@@ -57,6 +58,7 @@ import (
 	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // wireChatHandlers binds the chat.* namespace.
@@ -79,30 +81,19 @@ import (
 // over a temp dir, and there is no path from here to a platform backend
 // at all. A nil custody is refused by secrets.NewBroker rather than
 // skipping the scrub pipeline.
+//
+// store is the daemon's runtime provider.Store: the chat turn journal lives
+// in it, and a nil store (test compositions only) skips journaling with one
+// WARN. A journaled thread that fails to resume returns KindIntegrity naming
+// the thread, with no chat.* method registered.
 func wireChatHandlers(ctx context.Context, registry *rpc.Registry, paths runtime.PathProvider,
-	clock runtime.Clock, bus *events.Bus, custody secrets.Custody) error {
-	if err := os.MkdirAll(paths.DataDir(), 0o700); err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "daemon: chat: create data dir")
-	}
-	dbPath := filepath.Join(paths.DataDir(), "cascade.db")
-	db, err := sql.Open("sqlite", "file:"+dbPath+"?_busy_timeout=5000")
+	clock runtime.Clock, bus *events.Bus, custody secrets.Custody, store provider.Store) error {
+	db, convStore, err := openChatConversationStore(ctx, paths, clock)
 	if err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "daemon: chat: open cascade.db")
-	}
-	// This namespace applies its OWN schema, on its own connection, the
-	// way wireConductorExpand does for evidence. openRuntimeStore also
-	// applies it, and the migration ledger makes the second call a no-op
-	// — but depending on that would make chat's availability a function
-	// of whether some other subsystem ran first, which is an ordering
-	// nobody reading this file could see.
-	if err := conversation.ApplyConversationSchema(
-		ctx, db, migrate.SQLiteEmitter{}, clock, dbPath, filepath.Join(paths.DataDir(), "backups")); err != nil {
-		_ = db.Close()
 		return err
 	}
-	store := conversation.NewStore(db)
 	adapter := conversation.NewAdapter(
-		store,
+		convStore,
 		bus,
 		// No substitutor. The egress substitution pass belongs on the
 		// path where content LEAVES the machine; the SSE mirror is a
@@ -121,7 +112,53 @@ func wireChatHandlers(ctx context.Context, registry *rpc.Registry, paths runtime
 		_ = db.Close()
 		return err
 	}
+	// The turn journal is set and every journaled thread resumed BEFORE
+	// chat.* registers (chat_journal_wiring.go): a failed resume returns
+	// here with nothing registered, which stops the daemon at start.
+	if _, err := wireChatJournal(ctx, adapter, convStore, store, clock); err != nil {
+		_ = db.Close()
+		return err
+	}
 	adapter.RegisterHandlers(registry)
+	if err := wireChatTopics(registry, adapter, convStore, clock, bus, paths); err != nil {
+		_ = db.Close()
+		return err
+	}
+	return nil
+}
+
+// openChatConversationStore opens this namespace's own connection to
+// cascade.db, applies the conversation schema on it, and returns the handle
+// with the store over it. Split out of wireChatHandlers for Art.10.3's
+// 50-line cap.
+func openChatConversationStore(ctx context.Context, paths runtime.PathProvider,
+	clock runtime.Clock) (*sql.DB, conversation.Store, error) {
+	if err := os.MkdirAll(paths.DataDir(), 0o700); err != nil {
+		return nil, nil, cascade.Wrap(cascade.KindUnavailable, err, "daemon: chat: create data dir")
+	}
+	dbPath := filepath.Join(paths.DataDir(), "cascade.db")
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?_busy_timeout=5000")
+	if err != nil {
+		return nil, nil, cascade.Wrap(cascade.KindUnavailable, err, "daemon: chat: open cascade.db")
+	}
+	// This namespace applies its OWN schema, on its own connection, the
+	// way wireConductorExpand does for evidence. openRuntimeStore also
+	// applies it, and the migration ledger makes the second call a no-op
+	// — but depending on that would make chat's availability a function
+	// of whether some other subsystem ran first, which is an ordering
+	// nobody reading this file could see.
+	if err := conversation.ApplyConversationSchema(
+		ctx, db, migrate.SQLiteEmitter{}, clock, dbPath, filepath.Join(paths.DataDir(), "backups")); err != nil {
+		_ = db.Close()
+		return nil, nil, err
+	}
+	return db, conversation.NewStore(db), nil
+}
+
+// wireChatTopics composes the topic engine and binds chat.topics_list /
+// chat.threads_list, after chat.* itself.
+func wireChatTopics(registry *rpc.Registry, adapter *conversation.Adapter, store conversation.Store,
+	clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider) error {
 	// Topic engine hook (U/S-46.T4 D2): wired into the adapter before any
 	// chat.append_turn request can reach it, so handleAppendTurn's
 	// finishAppend (internal/conversation/adapter_topics.go) always has a
@@ -131,7 +168,6 @@ func wireChatHandlers(ctx context.Context, registry *rpc.Registry, paths runtime
 	// once that changes.
 	topicEngine, err := newChatTopicEngine(store, clock, bus, paths)
 	if err != nil {
-		_ = db.Close()
 		return err
 	}
 	adapter.SetTopicObserver(topicEngine)
@@ -143,7 +179,6 @@ func wireChatHandlers(ctx context.Context, registry *rpc.Registry, paths runtime
 	// chat.* method's real call site.
 	topicsHandlers, err := topics.NewRPCHandlers(store, clock)
 	if err != nil {
-		_ = db.Close()
 		return err
 	}
 	topicsHandlers.RegisterHandlers(registry)

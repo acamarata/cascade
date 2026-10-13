@@ -84,9 +84,11 @@ func registerDBPathHandlers(
 	}
 	// chat.* (T/S-43.T2) belongs in this group by the same description:
 	// a namespace over its own second connection to this same cascade.db.
-	// It registers even when store is nil, because it does not use the
-	// shared store at all — and because a chat surface that silently did
-	// not register is precisely the defect this wiring closed (R-14.284).
+	// It registers even when store is nil (the turn journal is then
+	// skipped, with a WARN) — a chat surface that silently did not
+	// register is precisely the defect this wiring closed (R-14.284). The
+	// shared store carries the chat turn journal, resumed before chat.*
+	// registers; a failed resume stops the daemon here.
 	// The chat scrub pipeline's vault custody is selected HERE, in the
 	// composition root, and handed to wireChatHandlers — see that
 	// function's doc comment for why it must not select one itself. The
@@ -96,7 +98,7 @@ func registerDBPathHandlers(
 	if err != nil {
 		return err
 	}
-	if err := wireChatHandlers(ctx, registry, paths, clock, bus, custody); err != nil {
+	if err := wireChatHandlers(ctx, registry, paths, clock, bus, custody, store); err != nil {
 		return err
 	}
 	// The cascade-pa TELEGRAM BRIDGE — the other half of this plugin's daemon

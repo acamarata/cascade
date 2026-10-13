@@ -91,7 +91,7 @@ func chatRegistryForTest(t *testing.T) *rpc.Registry {
 	// first run in which that lane compiled at all. This helper's RemoveAll
 	// is best-effort; the OS reclaims the directory.
 	err := wireChatHandlers(context.Background(), registry, fakeDaemonPaths{root: shortCascadeHome(t)}, clock, bus,
-		testChatCustody(t, nil))
+		testChatCustody(t, nil), nil)
 	if err != nil {
 		t.Fatalf("wireChatHandlers on this platform: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestChatWiringVaultsThroughTheInjectedCustody(t *testing.T) {
 	bus := events.New(storetest.NewMemStore(), clock)
 
 	if err := wireChatHandlers(context.Background(), registry,
-		fakeDaemonPaths{root: shortCascadeHome(t)}, clock, bus, spy); err != nil {
+		fakeDaemonPaths{root: shortCascadeHome(t)}, clock, bus, spy, nil); err != nil {
 		t.Fatalf("wireChatHandlers: %v", err)
 	}
 
