@@ -1580,5 +1580,12 @@
     "reason": "P1-GEN-03 ships the ingest admission guard; Admit is the one-path form of AdmitBatch named by contract:repo-ingest-admission. IngestGitRepo, the only production caller at this tip, always has many paths and uses AdmitBatch, so tests are the only callers of Admit here.",
     "retire_ticket": "P1-GEN-04",
     "symbol": "internal/repo.Admit"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_inbox_delivery.go",
+    "expected_caller": "P1-HRN-07's daemon composition (cmd/cascade/wire_inbox_delivery.go), which subscribes every live session in the sessions store to the one notify.Service through WireClaudeInboxPush and unsubscribes it when the session closes",
+    "reason": "P1-HRN-02 ships the hydration queue, the bridge and the context.slice drain; the drain side is composed (wire_inbox_hydration.go registers it flag-off) but nothing constructs the router subscription until P1-HRN-07 builds the per-session subscription wiring, so internal/plugins tests are the only callers today",
+    "retire_ticket": "P1-HRN-07",
+    "symbol": "internal/plugins.WireClaudeInboxPush"
   }
 ]
