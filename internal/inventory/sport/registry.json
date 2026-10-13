@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-13T11:39:14Z",
+  "generated_at": "2026-10-13T12:41:51Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -11590,6 +11590,27 @@
       ]
     },
     {
+      "name": "internal.build tests",
+      "sites": [
+        {
+          "file": "internal/build/arch_agent_envelope_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "internal.build tests (ADD) - P1-AGT-02."
+        },
+        {
+          "file": "internal/build/arch_agent_spawn_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal.build tests (EXTEND) - P1-AGT-02."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.build.CheckCountsDrift",
       "sites": [
         {
@@ -16198,6 +16219,58 @@
           "line": 13,
           "status": "ADD",
           "raw": "internal.policy.resolveRung/ADDED (T0, R-14.211)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.providers.agents",
+      "sites": [
+        {
+          "file": "internal/providers/agents/binding.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-02, contract:harness-agent-binding)."
+        },
+        {
+          "file": "internal/providers/agents/doc.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-02, contract:harness-agent-binding)."
+        },
+        {
+          "file": "internal/providers/agents/harness_claude.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-02)."
+        },
+        {
+          "file": "internal/providers/agents/project.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-02, contract:scope-envelope use)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.providers.agents tests",
+      "sites": [
+        {
+          "file": "internal/providers/agents/binding_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "internal.providers.agents tests (ADD) - P1-AGT-02."
+        },
+        {
+          "file": "internal/providers/agents/project_test.go",
+          "line": 4,
+          "status": "ADD",
+          "raw": "internal.providers.agents tests (ADD) - P1-AGT-02."
         }
       ],
       "statuses": [
@@ -28395,6 +28468,12 @@
       "name": "pkg.provider.AgentProvider tests",
       "sites": [
         {
+          "file": "pkg/provider/agent_envelope_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "pkg.provider.AgentProvider tests (EXTEND) - P1-AGT-02."
+        },
+        {
           "file": "pkg/provider/agent_errors_test.go",
           "line": 5,
           "status": "",
@@ -28452,6 +28531,12 @@
           "raw": "pkg.provider.AgentProvider/EXTEND (P1-E30-W6-S61-T1, S61-T2)."
         },
         {
+          "file": "pkg/provider/agent_envelope.go",
+          "line": 20,
+          "status": "",
+          "raw": "pkg.provider.AgentProvider/EXTEND (P1-AGT-02)."
+        },
+        {
           "file": "pkg/provider/agent_errors.go",
           "line": 19,
           "status": "",
@@ -28491,7 +28576,7 @@
           "line": 15,
           "status": "",
           "ticket": "P1-E30-W6-S61-T1",
-          "raw": "pkg.provider.AgentProvider/EXTEND (P1-E30-W6-S61-T1, S61-T2)."
+          "raw": "pkg.provider.AgentProvider/EXTEND (P1-E30-W6-S61-T1, S61-T2, P1-AGT-02)."
         }
       ],
       "statuses": [
@@ -33370,6 +33455,12 @@
           "raw": "providers.agents.claude tests (P1-AGT-01)."
         },
         {
+          "file": "providers/agents/claude/envelope_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "providers.agents.claude tests (ADD) - P1-AGT-02."
+        },
+        {
           "file": "providers/agents/claude/procgroup_helpers_test.go",
           "line": 10,
           "status": "",
@@ -33377,12 +33468,19 @@
         }
       ],
       "statuses": [
-        ""
+        "",
+        "ADD"
       ]
     },
     {
       "name": "providers.agents.conformance",
       "sites": [
+        {
+          "file": "providers/agents/conformance/cases_envelope.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "providers.agents.conformance/ADD (P1-AGT-02)."
+        },
         {
           "file": "providers/agents/conformance/cases_lifecycle.go",
           "line": 9,
@@ -33448,7 +33546,7 @@
         },
         {
           "file": "providers/agents/conformance/suite.go",
-          "line": 33,
+          "line": 34,
           "status": "ADD",
           "ticket": "P1-E30-W6-S61-T1",
           "raw": "providers.agents.conformance/ADD (P1-E30-W6-S61-T1, S61-T2)."
@@ -33459,6 +33557,20 @@
           "status": "ADD",
           "ticket": "P1-E30-W6-S61-T1",
           "raw": "providers.agents.conformance/ADD (P1-E30-W6-S61-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "providers.agents.conformance tests",
+      "sites": [
+        {
+          "file": "providers/agents/conformance/cases_envelope_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "providers.agents.conformance tests (ADD) - P1-AGT-02."
         }
       ],
       "statuses": [
@@ -35960,7 +36072,7 @@
       ]
     }
   ],
-  "total_sites": 3477,
-  "unspecified_count": 231,
-  "multi_status_count": 108
+  "total_sites": 3490,
+  "unspecified_count": 230,
+  "multi_status_count": 110
 }
