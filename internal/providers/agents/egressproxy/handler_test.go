@@ -134,7 +134,15 @@ func TestServeConnTunnelLimit(t *testing.T) {
 	}
 	_ = open[0].Close()
 	h.waitRows(t, 2*2+1+1) // two tunnels' intent+connected, the refusal, one closed
-	c, _, status := h.open(t, h.connect(string(allowed), h.auth()))
+	// The slot is released after the closed row is journaled, so the first
+	// connect after that row can still see the cap; poll for the release.
+	var c *pipeEnd
+	status := 0
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+		if c, _, status = h.open(t, h.connect(string(allowed), h.auth())); status == 200 {
+			break
+		}
+	}
 	if status != 200 {
 		t.Fatalf("after a tunnel closed: status %d, want 200", status)
 	}

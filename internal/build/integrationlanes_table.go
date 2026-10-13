@@ -76,7 +76,7 @@ var IntegrationLanes = slices.Concat(
 		{"./cmd/cascade", "integration", "^(TestMCPSocketServeAcceptsOwnerPeer|TestMCPSocketServeRefusesOriginHeader)$", LaneJob, unixRunners, nil},
 		{"./internal/client", "integration", "^TestCLIClientPassesLocalRequestGuard$", LaneJob, unixRunners, nil},
 	},
-	rows(LaneRow{Tags: "integration", RunRegex: ".", Job: LaneJob, OS: unixRunners}, "./internal/acceptance", "./internal/backup",
+	rows(LaneRow{Tags: "integration", RunRegex: ".", Job: LaneJob, OS: unixRunners}, "./internal/backup",
 		"./internal/backup/targets", "./internal/conductor", "./internal/elevation", "./internal/fleet", "./internal/fleet/journal",
 		"./internal/fleet/sessions", "./internal/hooks/egress", "./internal/minisign", "./internal/plugins/host",
 		"./internal/plugins/registryfetch", "./internal/plugins/remote", "./internal/providers/agents/egressproxy",
@@ -86,6 +86,8 @@ var IntegrationLanes = slices.Concat(
 	rows(LaneRow{Tags: "integration", RunRegex: ".", Job: LaneJob, OS: allRunners, SkipOn: winSkip("skip: ")}, "./providers/anthropic",
 		"./providers/embeddings", "./providers/gemini", "./providers/ollama", "./providers/openai", "./providers/transport"),
 	rows(LaneRow{Tags: "integration", RunRegex: ".", Job: LaneJob, OS: macOnly}, "./internal/migration"),
+	// acceptance is linux-only: its elevation drill stores a key in the Keychain, which an unsigned test binary cannot do (OSStatus -34018).
+	rows(LaneRow{Tags: "integration", RunRegex: ".", Job: LaneJob, OS: linuxOnly}, "./internal/acceptance"),
 	rows(LaneRow{Tags: "integration", RunRegex: ".", Job: LaneJob, OS: unixRunners, SkipOn: map[string]string{RunnerLinux: harnessSkip, RunnerMacOS: harnessSkip}}, "./providers/agents/claude"),
 	rows(LaneRow{Tags: "integration", Job: "build-test", OS: unixRunners}, "./internal/conversation", "./internal/daemon",
 		"./internal/integration", "./internal/plugins", "./internal/secrets"),
@@ -98,12 +100,6 @@ var IntegrationLanes = slices.Concat(
 	rows(LaneRow{Tags: "integration", Job: "redis-storetest-under-docker", OS: linuxOnly}, "./providers/redis"),
 	rows(LaneRow{Tags: "integration", Job: "s3-storetest-under-docker", OS: linuxOnly}, "./providers/s3"),
 )
-
-// IntegrationExcluded lists integration-constrained packages no lane runs,
-// each with its reason (the local command to run instead).
-var IntegrationExcluded = map[string]string{
-	"./internal/jobs": "TestAcceptancePath2KillResume and TestAcceptancePath4RPCSpotCheck fail under the integration tag with 'job.show/job.list over the daemon socket: -32007 caller not permitted'; fix them, then add a lane row. Run: go test -tags integration ./internal/jobs",
-}
 
 // ciWorkflow is the slice of a workflow file the gate reads.
 type ciWorkflow struct {
