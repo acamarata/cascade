@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-13T09:55:32Z",
+  "generated_at": "2026-10-13T11:39:14Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5456,6 +5456,12 @@
           "status": "",
           "ticket": "P1-E32-W6-S66-T1",
           "raw": "cmd/cascade/daemon:hooks (TEST, P1-E32-W6-S66-T1 branch follow-up)."
+        },
+        {
+          "file": "cmd/cascade/hooks_recover_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade/daemon:hooks (TEST, P1-SEC-21)."
         },
         {
           "file": "cmd/cascade/hooks_test.go",
@@ -26707,11 +26713,17 @@
           "raw": "jobs/completion-gate/ADD (P1-E29-W6-S60-T3)."
         },
         {
+          "file": "internal/jobs/completion_guard_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "jobs/completion-gate/ADD (tests) (P1-SEC-21)."
+        },
+        {
           "file": "internal/jobs/evidence.go",
           "line": 28,
           "status": "ADD",
           "ticket": "P1-E29-W6-S60-T3",
-          "raw": "jobs/completion-gate/ADD (P1-E29-W6-S60-T3)."
+          "raw": "jobs/completion-gate/ADD (P1-E29-W6-S60-T3, P1-SEC-21)."
         },
         {
           "file": "internal/jobs/evidence_authz.go",
@@ -26726,6 +26738,30 @@
           "status": "ADD",
           "ticket": "P1-E29-W6-S60-T3",
           "raw": "jobs/completion-gate/ADD (P1-E29-W6-S60-T3)."
+        },
+        {
+          "file": "internal/jobs/evidence_effect.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "jobs/completion-gate/ADD (P1-SEC-21)."
+        },
+        {
+          "file": "internal/jobs/evidence_effect_crash_test.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "jobs/completion-gate/ADD (tests) (P1-SEC-21)."
+        },
+        {
+          "file": "internal/jobs/evidence_effect_key.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "jobs/completion-gate/ADD (P1-SEC-21)."
+        },
+        {
+          "file": "internal/jobs/evidence_effect_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "jobs/completion-gate/ADD (tests) (P1-SEC-21)."
         },
         {
           "file": "internal/jobs/evidence_test.go",
@@ -35924,7 +35960,7 @@
       ]
     }
   ],
-  "total_sites": 3471,
+  "total_sites": 3477,
   "unspecified_count": 231,
   "multi_status_count": 108
 }
