@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-13T03:08:56Z",
+  "generated_at": "2026-10-13T04:16:31Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -18,15 +18,15 @@
         },
         {
           "file": "internal/secrets/redactor.go",
-          "line": 17,
+          "line": 25,
           "status": "ADD",
-          "raw": "AUDIT_REDACTION: ADD (internal/secrets.Redactor)."
+          "raw": "AUDIT_REDACTION: ADD (internal/secrets.SnapshotVault)."
         },
         {
           "file": "internal/secrets/redactor_test.go",
-          "line": 9,
+          "line": 5,
           "status": "ADD",
-          "raw": "AUDIT_REDACTION: ADD (tests)."
+          "raw": "AUDIT_REDACTION: ADD (tests, internal/secrets.SnapshotVault)."
         }
       ],
       "statuses": [
@@ -4748,6 +4748,44 @@
       ]
     },
     {
+      "name": "cmd/cascade/audit_log",
+      "sites": [
+        {
+          "file": "cmd/cascade/audit_log.go",
+          "line": 31,
+          "status": "ADD",
+          "raw": "cmd/cascade/audit_log (ADD, P1-SEC-06)."
+        },
+        {
+          "file": "cmd/cascade/audit_log_json_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "cmd/cascade/audit_log (ADD, tests, P1-SEC-06)."
+        },
+        {
+          "file": "cmd/cascade/audit_log_redact_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "cmd/cascade/audit_log (ADD, tests, P1-SEC-06)."
+        },
+        {
+          "file": "cmd/cascade/audit_log_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "cmd/cascade/audit_log (ADD, tests, P1-SEC-06)."
+        },
+        {
+          "file": "cmd/cascade/audit_log_verbs_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "cmd/cascade/audit_log (ADD, tests, P1-SEC-06)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade/backup views",
       "sites": [
         {
@@ -8060,6 +8098,26 @@
       ]
     },
     {
+      "name": "deviation",
+      "sites": [
+        {
+          "file": "providers/agents/claude/driver_unix.go",
+          "line": 19,
+          "status": "",
+          "raw": "deviation."
+        },
+        {
+          "file": "providers/agents/claude/driver_windows.go",
+          "line": 9,
+          "status": "",
+          "raw": "deviation."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "doctor/bundle",
       "sites": [
         {
@@ -10425,6 +10483,12 @@
       "name": "internal.audit.Log",
       "sites": [
         {
+          "file": "internal/audit/chain_postgres_test.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal.audit.Log/ADDED (tests) (P1-SEC-06)."
+        },
+        {
           "file": "internal/audit/errors_test.go",
           "line": 8,
           "status": "ADD",
@@ -10447,7 +10511,7 @@
         },
         {
           "file": "internal/audit/log.go",
-          "line": 16,
+          "line": 18,
           "status": "ADD",
           "ticket": "P1-E09-W2-S18-T2",
           "raw": "internal.audit.Log/ADDED (P1-E09-W2-S18-T2)."
@@ -10458,6 +10522,12 @@
           "status": "ADD",
           "ticket": "P1-E09-W2-S18-T2",
           "raw": "internal.audit.Log/ADDED (tests) (P1-E09-W2-S18-T2)."
+        },
+        {
+          "file": "internal/audit/multiprocess_test.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal.audit.Log/ADDED (tests) (P1-SEC-06)."
         },
         {
           "file": "internal/audit/query.go",
@@ -10472,6 +10542,12 @@
           "status": "ADD",
           "ticket": "P1-E09-W2-S18-T2",
           "raw": "internal.audit.Log/ADDED (tests) (P1-E09-W2-S18-T2)."
+        },
+        {
+          "file": "internal/audit/verify_effects_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal.audit.Log/ADDED (tests) (P1-SEC-06)."
         }
       ],
       "statuses": [
@@ -28179,7 +28255,7 @@
           "line": 6,
           "status": "",
           "ticket": "P1-E30-W6-S61-T1",
-          "raw": "pkg.provider.AgentProvider tests (EXTEND) — P1-E30-W6-S61-T1."
+          "raw": "pkg.provider.AgentProvider tests (EXTEND) — P1-E30-W6-S61-T1, S61-T2."
         },
         {
           "file": "pkg/provider/agent_provider_test.go",
@@ -28200,7 +28276,7 @@
           "line": 9,
           "status": "",
           "ticket": "P1-E30-W6-S61-T1",
-          "raw": "pkg.provider.AgentProvider tests (EXTEND) — P1-E30-W6-S61-T1."
+          "raw": "pkg.provider.AgentProvider tests (EXTEND) — P1-E30-W6-S61-T1, S61-T2."
         }
       ],
       "statuses": [
@@ -28211,11 +28287,18 @@
       "name": "pkg.provider.AgentProvider/EXTEND",
       "sites": [
         {
+          "file": "pkg/provider/agent_capacity.go",
+          "line": 12,
+          "status": "",
+          "ticket": "P1-E30-W6-S61-T1",
+          "raw": "pkg.provider.AgentProvider/EXTEND (P1-E30-W6-S61-T1, S61-T2)."
+        },
+        {
           "file": "pkg/provider/agent_errors.go",
           "line": 19,
           "status": "",
           "ticket": "P1-E30-W6-S61-T1",
-          "raw": "pkg.provider.AgentProvider/EXTEND (P1-E30-W6-S61-T1)."
+          "raw": "pkg.provider.AgentProvider/EXTEND (P1-E30-W6-S61-T1, S61-T2)."
         },
         {
           "file": "pkg/provider/agent_events.go",
@@ -28226,10 +28309,10 @@
         },
         {
           "file": "pkg/provider/agent_protocol.go",
-          "line": 22,
+          "line": 25,
           "status": "",
           "ticket": "P1-E30-W6-S61-T1",
-          "raw": "pkg.provider.AgentProvider/EXTEND (P1-E30-W6-S61-T1)."
+          "raw": "pkg.provider.AgentProvider/EXTEND (P1-E30-W6-S61-T1, S61-T2)."
         },
         {
           "file": "pkg/provider/agent_provider.go",
@@ -28247,10 +28330,10 @@
         },
         {
           "file": "pkg/provider/agent_types.go",
-          "line": 25,
+          "line": 15,
           "status": "",
           "ticket": "P1-E30-W6-S61-T1",
-          "raw": "pkg.provider.AgentProvider/EXTEND (P1-E30-W6-S61-T1)."
+          "raw": "pkg.provider.AgentProvider/EXTEND (P1-E30-W6-S61-T1, S61-T2)."
         }
       ],
       "statuses": [
@@ -28766,6 +28849,45 @@
       ]
     },
     {
+      "name": "pkg/nofollow",
+      "sites": [
+        {
+          "file": "pkg/nofollow/doc.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "pkg/nofollow (ADD) — P1-AGT-01."
+        },
+        {
+          "file": "pkg/nofollow/flags_unix.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "pkg/nofollow (ADD) — P1-AGT-01."
+        },
+        {
+          "file": "pkg/nofollow/flags_windows.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "pkg/nofollow (ADD) — P1-AGT-01."
+        },
+        {
+          "file": "pkg/nofollow/nofollow_test.go",
+          "line": 13,
+          "status": "",
+          "raw": "pkg/nofollow (TEST) — P1-AGT-01."
+        },
+        {
+          "file": "pkg/nofollow/nofollow_windows_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "pkg/nofollow (TEST) — P1-AGT-01."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "pkg/plugin author-kit-types",
       "sites": [
         {
@@ -29210,15 +29332,27 @@
         },
         {
           "file": "pkg/procgroup/doc.go",
-          "line": 23,
+          "line": 28,
           "status": "ADD",
-          "raw": "pkg/procgroup (ADD) — P1-PLG-09."
+          "raw": "pkg/procgroup (ADD) — P1-PLG-09; (CHANGE) — P1-AGT-01."
         },
         {
           "file": "pkg/procgroup/example_test.go",
           "line": 9,
           "status": "",
           "raw": "pkg/procgroup (TEST) — P1-PLG-09."
+        },
+        {
+          "file": "pkg/procgroup/group_test.go",
+          "line": 14,
+          "status": "",
+          "raw": "pkg/procgroup (TEST) — P1-AGT-01."
+        },
+        {
+          "file": "pkg/procgroup/group_unix.go",
+          "line": 18,
+          "status": "CHANGE",
+          "raw": "pkg/procgroup (CHANGE) — P1-AGT-01."
         },
         {
           "file": "pkg/procgroup/procgroup_test.go",
@@ -29228,15 +29362,21 @@
         },
         {
           "file": "pkg/procgroup/procgroup_windows.go",
-          "line": 16,
+          "line": 18,
           "status": "ADD",
-          "raw": "pkg/procgroup (ADD) — P1-PLG-09."
+          "raw": "pkg/procgroup (ADD) — P1-PLG-09; (CHANGE) — P1-AGT-01."
         },
         {
           "file": "pkg/procgroup/procgroup_windows_test.go",
           "line": 7,
           "status": "",
           "raw": "pkg/procgroup (TEST) — P1-PLG-09."
+        },
+        {
+          "file": "pkg/procgroup/sig.go",
+          "line": 16,
+          "status": "CHANGE",
+          "raw": "pkg/procgroup (CHANGE) — P1-AGT-01."
         },
         {
           "file": "pkg/procgroup/signal_unix.go",
@@ -29247,7 +29387,8 @@
       ],
       "statuses": [
         "",
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -32798,6 +32939,290 @@
       ]
     },
     {
+      "name": "providers.agents.claude",
+      "sites": [
+        {
+          "file": "providers/agents/claude/artifacts.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/artifacts_ignored.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "providers.agents.claude/ADD (P1-AGT-01)."
+        },
+        {
+          "file": "providers/agents/claude/artifacts_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/callback.go",
+          "line": 20,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/callback_frame.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/callback_limits_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/callback_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/collect.go",
+          "line": 17,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/collect_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/credential.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "providers.agents.claude/ADD (P1-AGT-01, named deviation B-1)."
+        },
+        {
+          "file": "providers/agents/claude/descriptor.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/descriptor_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/doc.go",
+          "line": 44,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/driver.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/driver_integration_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/driver_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/driver_unix.go",
+          "line": 19,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)"
+        },
+        {
+          "file": "providers/agents/claude/driver_windows.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)"
+        },
+        {
+          "file": "providers/agents/claude/driver_windows_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/events_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/exec.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/exec_finalize_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/exec_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/guard.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/guard_settings_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/guard_test.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/jobid.go",
+          "line": 10,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/journal.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/journal_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/probe.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/probe_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/protocol.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/protocol_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/redteam_test.go",
+          "line": 14,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/spawn_seams_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/testkit_test.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "providers.agents.claude tests",
+      "sites": [
+        {
+          "file": "providers/agents/claude/credential_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "providers.agents.claude tests (P1-AGT-01)."
+        },
+        {
+          "file": "providers/agents/claude/custody_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "providers.agents.claude tests (P1-AGT-01)."
+        },
+        {
+          "file": "providers/agents/claude/procgroup_helpers_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "providers.agents.claude tests (P1-AGT-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "providers.agents.conformance",
       "sites": [
         {
@@ -32805,7 +33230,7 @@
           "line": 9,
           "status": "ADD",
           "ticket": "P1-E30-W6-S61-T1",
-          "raw": "providers.agents.conformance/ADD (P1-E30-W6-S61-T1)."
+          "raw": "providers.agents.conformance/ADD (P1-E30-W6-S61-T1, S61-T2)."
         },
         {
           "file": "providers/agents/conformance/cases_lifecycle_test.go",
@@ -32819,7 +33244,7 @@
           "line": 15,
           "status": "ADD",
           "ticket": "P1-E30-W6-S61-T1",
-          "raw": "providers.agents.conformance/ADD (P1-E30-W6-S61-T1)."
+          "raw": "providers.agents.conformance/ADD (P1-E30-W6-S61-T1, S61-T2)."
         },
         {
           "file": "providers/agents/conformance/cases_security_test.go",
@@ -32857,11 +33282,18 @@
           "raw": "providers.agents.conformance/ADD (P1-E30-W6-S61-T1)."
         },
         {
+          "file": "providers/agents/conformance/spawn_recorder_test.go",
+          "line": 11,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S61-T2",
+          "raw": "providers.agents.conformance/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
           "file": "providers/agents/conformance/suite.go",
-          "line": 27,
+          "line": 33,
           "status": "ADD",
           "ticket": "P1-E30-W6-S61-T1",
-          "raw": "providers.agents.conformance/ADD (P1-E30-W6-S61-T1)."
+          "raw": "providers.agents.conformance/ADD (P1-E30-W6-S61-T1, S61-T2)."
         },
         {
           "file": "providers/agents/conformance/suite_test.go",
@@ -35370,7 +35802,7 @@
       ]
     }
   ],
-  "total_sites": 3400,
-  "unspecified_count": 227,
-  "multi_status_count": 105
+  "total_sites": 3459,
+  "unspecified_count": 229,
+  "multi_status_count": 106
 }
