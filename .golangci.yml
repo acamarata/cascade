@@ -271,6 +271,14 @@ linters:
             # internal/plugins is a real cycle (go build: "import cycle not
             # allowed"). cmd/cascade already imports both without incident.
             - "!**/cmd/cascade/plugin_rpc.go"
+            # plugin_rpc_bridge.go (fix18 round 2) is wireCascadePABridge and
+            # its bridge.send registration, split out of plugin_rpc.go under
+            # that file's own 300-line cap (the same move daemon_unix_run_
+            # memory.go made for daemon_unix_run.go). It REGISTERS
+            # "bridge.send" and "pa.pair_code" on the daemon's own registry
+            # and never dials the daemon, on the identical grounds as
+            # plugin_rpc.go directly above.
+            - "!**/cmd/cascade/plugin_rpc_bridge.go"
             - "!**/*_test.go"
           deny:
             - pkg: "github.com/acamarata/cascade/internal/rpc"

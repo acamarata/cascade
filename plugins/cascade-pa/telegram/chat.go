@@ -172,32 +172,9 @@ func (b *TelegramBridge) RefusalReport() []cascadepa.RefusalRecord {
 	return out
 }
 
-// Send delivers body into the chat threadID maps to, at threadID's own
-// resolved tier — never a caller-declared one. Windows tier-2 refuses
-// before any IO (R-16.60a, matching Start); an unmapped threadID refuses
-// by name; a secret-shaped body refuses typed (S-49.T4 Q1) rather than
-// silently delivering the swapped notice and reporting nil. An ALLOW body
-// crosses the SAME guardOutboundChecked + client.SendMessage path forward
-// uses for its reply.
-func (b *TelegramBridge) Send(ctx context.Context, threadID string, body []byte) error {
-	if refusal := platformBridgeRefusal(); refusal != nil {
-		return refusal
-	}
-	chatID, ok := chatIDForThread(threadID)
-	if !ok {
-		return cascade.Newf(cascade.KindNotFound,
-			"cascade-pa/telegram: thread %q does not map to a chat this bridge serves", threadID)
-	}
-	tier, perr := b.privacy.ThreadPrivacy(ctx, threadID)
-	if perr != nil {
-		tier = cascadepa.TierLocalOnly
-	}
-	text, refused := b.module.guardOutboundChecked(ctx, string(body), "")
-	if refused {
-		return errSendBodyRefused
-	}
-	return b.module.client.SendMessage(ctx, chatID, tier, text)
-}
+// Send (TelegramBridge's outbound leg) lives in chat_send.go — split out
+// to stay under this file's 300-line cap (fix18, mechanical split, no
+// behaviour change to anything below).
 
 // handleInbound is the HandlerText this bridge registers: chat parity's
 // entry point, called only after module.go's own gates (secret-scan,

@@ -301,3 +301,53 @@ underlying `capacity.Compositor` snapshot, and a push or ack through
 status.widget's own attention-queue reader. The payload is a full,
 redacted `WidgetSnapshot` with an incrementing `seq` for client dedup
 (small enough that a delta encoding is not needed).
+
+## bridge.send
+
+`bridge.send` mirrors one turn that is already committed in a conversation
+thread to the owner's paired Telegram chat. The `cascade_cpa_send` tool calls
+it after a successful `chat.append_turn`, and only for a chat-bridge thread.
+Only the daemon process holds the live bridge, so the tool reaches it over the
+daemon socket.
+
+Access class: **owner-only**. A session or other principal token is refused
+with `permission-denied` before the handler runs, so nothing reaches the
+transport.
+
+Params:
+
+```json
+{"thread_id": "bridge-telegram:<chat id>", "content": "<turn text>", "sensitivity": "internal"}
+```
+
+`sensitivity` is the turn's resolved sensitivity (`public`, `internal`,
+`restricted` or `local-only`). An empty value is `restricted`; an unknown
+value is refused.
+
+Result:
+
+```json
+{"mirrored": true}
+{"refused": true, "reason": "turn sensitivity is not internal or public"}
+{"reason": "the thread is not a chat-bridge thread"}
+```
+
+- `mirrored`: exactly one Bot API send was made.
+- `refused`: the turn's sensitivity is narrower than `internal`. The daemon
+  publishes one content-free `bridge.refused` event and makes no transport
+  call.
+- Neither flag, with a `reason`: nothing was sent because the daemon runs no
+  enabled chat bridge, or the thread is not a chat-bridge thread.
+
+The send itself also enforces the thread's own sensitivity tier, so the
+message goes out only when both the turn and the thread are `internal` or
+`public`. Only canonical thread ids (`bridge-telegram:` followed by the chat's
+decimal id) are chat-bridge threads, and the chat must be the current paired
+binding's chat. An unpaired bridge, another chat's thread, a binding-store
+error and a privacy-resolver error all refuse with `policy-denied`, one
+`bridge.refused` event and zero transport calls. A transport error returns to
+the caller as an error and emits no `bridge.refused`.
+
+Once the daemon starts stopping the bridge, `bridge.send` returns
+`unavailable` (`-32004`) with no transport call. Shutdown order is: refuse new
+calls and wait for admitted ones, drain the chat bridge, then stop the module.

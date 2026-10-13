@@ -1,6 +1,5 @@
 // Purpose (this file): TelegramBridge's behavior — the §5.16 privacy matrix (REFUSE local-only/restricted/
 //   unresolvable, ALLOW internal/public), S-48.T1/T3 gate ordering, Untrusted/Origin (R-21.227), lifecycle.
-//
 // SPORT: plugins/cascade-pa/telegram TestBridgePrivacy*/TEST, TestInboundMessageUntrustedOrigin/TEST (P1-E23-W5-S48-T2).
 
 package telegram
@@ -234,6 +233,7 @@ func TestChatBridge_Send(t *testing.T) {
 		}
 		r := newBridgeRig(t)
 		threadID := threadIDForChat(9008)
+		r.bind(t, "9008") // fix18 K3: Send now refuses an unbound chat
 		r.privacy.set(threadID, cascadepa.TierPublic)
 		if err := r.bridge.Send(context.Background(), threadID, []byte("assistant reply")); err != nil {
 			t.Fatalf("Send: %v", err)

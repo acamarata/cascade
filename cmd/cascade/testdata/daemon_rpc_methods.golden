@@ -3,6 +3,7 @@ approval.expire
 approval.grant
 approval.list
 approval.show
+bridge.send
 cascade_search
 chat.append_turn
 chat.get_thread

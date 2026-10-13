@@ -133,57 +133,9 @@ func wirePluginSearchHandler(ctx context.Context, registry *rpc.Registry, paths 
 	registry.Register("plugin.search", pluginSearchRPCHandler(client))
 }
 
-// wireCascadePABridge mounts Epic W's Telegram bridge on this daemon: the poll
-// goroutine as a tracked subsystem, its drain on shutdown, and pa.pair_code so
-// `cascade pa pair` issues codes through the process that verifies them.
-//
-// It never fails the daemon's startup. A bridge that cannot be assembled at all
-// (an unreadable data directory, a malformed module manifest) is recorded as a
-// FAILED subsystem and the daemon continues; a bridge that is merely not
-// enabled — the shipped state — is recorded as disabled. Refusing to start the
-// daemon because an opt-in chat bridge is misconfigured would trade a missing
-// convenience for a dead host.
-//
-// The custody selection is made HERE, in the composition root, and handed in:
-// a bridge that selected its own could not be exercised without reaching the
-// operator's real keychain (R-14.206), the same reason wireChatHandlers takes
-// its custody as a parameter.
-//
-// The poll runs under ctx, the daemon's run context. composeDaemon cancels it
-// before it joins the supervised goroutines, which ends the poll and lets the
-// tracked drain return before the store closes. httpClient is the bot API
-// client withBridgeTransport supplied, or nil (the telegram default).
-func wireCascadePABridge(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest,
-	paths runtime.PathProvider, clock runtime.Clock, bus *events.Bus, httpClient *http.Client) {
-	if manifest == nil {
-		return
-	}
-	rt, err := plugins.NewCascadePABridge(ctx, plugins.BridgeDeps{
-		DataDir:    paths.DataDir(),
-		Vault:      daemonCustodyConfig(custodySiteBridge, bridgeCustodyConfig(paths.DataDir())),
-		Clock:      clock,
-		Events:     bus,
-		HTTPClient: httpClient,
-	})
-	if err != nil {
-		manifest.RegisterBridgeModule(ctx, registry, daemon.BridgeSubsystem{DisabledReason: err.Error()})
-		return
-	}
-	if rt.Start == nil {
-		// Not enabled: no poll to stop. pa.pair_code is still registered, and
-		// answers with the runtime's own typed refusal naming what is missing.
-		manifest.RegisterBridgeModule(ctx, registry, daemon.BridgeSubsystem{
-			IssueCode: bridgePairCodeIssuer(rt), DisabledReason: rt.DisabledReason,
-		})
-		return
-	}
-	plugins.WireApprovalBridge(rt) // FLAG-0: arm the running approval queue
-	manifest.RegisterBridgeModule(ctx, registry, daemon.BridgeSubsystem{
-		Start:     rt.Start,
-		Stop:      rt.Stop,
-		IssueCode: bridgePairCodeIssuer(rt),
-	})
-}
+// wireCascadePABridge (Epic W's Telegram bridge composition) moved to
+// plugin_rpc_bridge.go — a mechanical split, no behaviour change, to stay under
+// this file's 300-line cap (it also carries the bridge.send registration).
 
 // pluginAddRPCResult mirrors plugin_add.go's pluginAddView field-for-
 // field. The request side reuses plugin_add.go's own pluginAddParams

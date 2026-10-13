@@ -119,6 +119,13 @@ type AppendRequest struct {
 	Role string
 	// Content is the turn's text.
 	Content string
+	// Sensitivity is the turn's own declared tier, already normalized
+	// through ResolveSensitivity (fix18 K2) — never raw caller input.
+	// An implementation that also bridges this turn elsewhere (the
+	// composition root's chat-bridge mirror) must consult THIS field
+	// alongside the thread's own privacy tier, never assume a turn is
+	// safe to bridge just because its thread is.
+	Sensitivity string
 }
 
 // AppendResult is what the daemon recorded.
@@ -126,7 +133,33 @@ type AppendResult struct {
 	ThreadID  string
 	TurnID    string
 	CreatedAt string
+	// Bridge is what the composition root's chat-bridge mirror did with
+	// this turn (fix18 L3), or nil when the thread is not a bridge thread.
+	Bridge *BridgeOutcome
 }
+
+// BridgeOutcome reports a recorded turn's chat-bridge mirror to the tool
+// caller, so a refused or failed mirror is visible and typed rather than a
+// silent success. Status is one of the Bridge* constants; Reason is the
+// daemon's fixed, content-free explanation (empty when mirrored).
+type BridgeOutcome struct {
+	Status string `json:"status"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// The four BridgeOutcome statuses.
+const (
+	// BridgeMirrored: the turn reached the bridged chat.
+	BridgeMirrored = "mirrored"
+	// BridgeRefused: a policy gate (turn sensitivity, thread tier, binding,
+	// secret) kept the turn off the bridge.
+	BridgeRefused = "refused"
+	// BridgeSkipped: the daemon runs no chat bridge to mirror through.
+	BridgeSkipped = "skipped"
+	// BridgeFailed: the mirror could not be attempted or did not complete
+	// (daemon unreachable, stopped bridge, transport error).
+	BridgeFailed = "failed"
+)
 
 // ThreadDetail is one thread's turns.
 type ThreadDetail struct {

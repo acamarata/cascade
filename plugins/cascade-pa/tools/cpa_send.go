@@ -41,6 +41,9 @@ type SendOutput struct {
 	// can see that its request was narrowed, rather than believing its
 	// public turn is public (06 §5.16).
 	Sensitivity string `json:"sensitivity"`
+	// Bridge is the chat-bridge mirror's outcome for a bridge thread (fix18
+	// L3), omitted for every other thread.
+	Bridge *BridgeOutcome `json:"bridge,omitempty"`
 }
 
 // ResolveSensitivity maps a caller's tier to the one actually used.
@@ -69,10 +72,12 @@ func (d *Dispatcher) send(ctx context.Context, input []byte) ([]byte, error) {
 		return nil, cascade.Newf(cascade.KindInvalidInput,
 			"%s: content is empty; there is nothing to record", ToolSend)
 	}
+	sensitivity := ResolveSensitivity(in.Sensitivity)
 	res, err := d.svc.Append(ctx, AppendRequest{
-		ThreadID: in.ThreadID,
-		Role:     "user",
-		Content:  in.Content,
+		ThreadID:    in.ThreadID,
+		Role:        "user",
+		Content:     in.Content,
+		Sensitivity: sensitivity, // fix18 K2: the same value echoed below
 	})
 	if err != nil {
 		return nil, err
@@ -89,7 +94,8 @@ func (d *Dispatcher) send(ctx context.Context, input []byte) ([]byte, error) {
 		TurnID:      res.TurnID,
 		ThreadID:    res.ThreadID,
 		CreatedAt:   res.CreatedAt,
-		Sensitivity: ResolveSensitivity(in.Sensitivity),
+		Sensitivity: sensitivity,
+		Bridge:      res.Bridge,
 	})
 }
 

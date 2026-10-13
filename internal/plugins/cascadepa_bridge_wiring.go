@@ -50,10 +50,8 @@ import (
 //     hold), so a code can only be issued for a subject whose module is
 //     actually configured. Any other subject is refused by name rather than
 //     issued and silently unverifiable.
-//   - THE HANDLERS ARE REGISTERED HERE. Until W/S-48.T2's chat route lands, an
-//     admitted message reaches a handler that RECORDS it as unrouted; without
-//     that, an admitted message was dropped inside the module with no trace
-//     anywhere, which is indistinguishable from a refusal.
+//   - THE HANDLERS ARE REGISTERED HERE, so an admitted message always reaches
+//     a real handler rather than being dropped inside the module untraceably.
 //   - THE REAL SECRET SCANNER IS BOUND HERE (T0 D1, P1-E23-W5-S48-T3).
 //     bridgeSecretScanner wraps the SAME *secrets.Detector construction
 //     dispatch.go:171 uses; without this wiring the module's own unwired
@@ -99,10 +97,11 @@ type BridgeDeps struct {
 	// Events is the journal a lockout and an unrouted message are recorded on.
 	// Required: a bridge whose lockouts go nowhere is the defect AC#16 names.
 	Events BridgeEventPublisher
-	// HTTPClient is the bot API client. Optional: nil keeps the telegram
-	// module's own default client (production); the daemon tests route the
-	// poll through a recording transport here.
+	// HTTPClient is the bot API client (nil: the telegram default, production);
+	// Transport is a byte-level seam for tests that may not import net/http and
+	// wins over it when set (telegram.NewModuleOver). Both nil in production.
 	HTTPClient *telegram.HTTPClient
+	Transport  telegram.Poster
 }
 
 // BridgeRuntime is the assembled bridge, as bare funcs so internal/daemon can
@@ -124,8 +123,7 @@ type BridgeRuntime struct {
 	DisabledReason string
 	// sink is the lockout/journal sink this wiring built and handed to the
 	// module, kept so the wiring test can assert that production passes a
-	// RECORDING sink and not the plugin's discarding default (AC#16). It is
-	// evidence of one line of this file, not a collaborator anybody calls.
+	// RECORDING sink and not the plugin's discarding default (AC#16): evidence.
 	sink telegram.LockoutSink
 	// scanner is the SecretScanner this wiring built and handed to the
 	// module, kept so the wiring test can assert that production passes a
@@ -142,6 +140,8 @@ type BridgeRuntime struct {
 	Routes []string
 	// ApprovalBridge is the §5.24 producer leg (FIX-0); WireApprovalBridge arms it.
 	ApprovalBridge policy.BridgeNotifier
+	ChatBridge     cascadepa.ChatBridge // with Events: arms bridge.send (WireChatBridge)
+	Events         BridgeEventPublisher
 }
 
 // NewCascadePABridge assembles the bridge for deps.DataDir.
@@ -213,7 +213,7 @@ func enabledBridge(ctx context.Context, deps BridgeDeps, token string) (*BridgeR
 	}
 	stores := cascadepa.NewStores(deps.Clock, newBridgeDeviceRegistrar(deps.DataDir), state, pairKey)
 	journal := newBridgeJournal(deps.Events)
-	module := telegram.NewModule(token, deps.HTTPClient, gate, bridgeElevationPolicy{}, stores, journal, scanner, journal)
+	module := newBridgeTelegramModule(token, deps, gate, stores, journal, scanner)
 	subject := telegram.SubjectFromToken(token)
 	// FIX-0: the §5.24 producer leg (WireApprovalBridge arms it).
 	approvalLeg, err := newApprovalBridgeLeg(subject, state, stores.Callback, module.Client(), deps.Clock)
@@ -221,9 +221,10 @@ func enabledBridge(ctx context.Context, deps BridgeDeps, token string) (*BridgeR
 		return nil, closeStateOnError(state, err)
 	}
 	// HandlerText: the S-48.T2 chat bridge (registers itself); HandlerCallbackQuery: S-48.T4's approval flow.
-	if _, err := NewCascadePABridgeChatHandler(ctx,
+	chatBridge, err := NewCascadePABridgeChatHandler(ctx,
 		ChatWiringDeps{DataDir: deps.DataDir, DB: stateDB, Events: deps.Events},
-		module, stores.Binding, subject, deps.Clock); err != nil {
+		module, stores.Binding, subject, deps.Clock)
+	if err != nil {
 		return nil, closeStateOnError(state, err)
 	}
 	wireApprovalHandler(module, subject, stores, journal, deps.Clock)
@@ -237,6 +238,8 @@ func enabledBridge(ctx context.Context, deps BridgeDeps, token string) (*BridgeR
 		scanner:        scanner,
 		Routes:         routes,
 		ApprovalBridge: approvalLeg,
+		ChatBridge:     chatBridge,
+		Events:         deps.Events,
 	}, nil
 }
 

@@ -62,12 +62,5 @@ type HTTPClient = http.Client
 func NewModule(token string, httpClient *HTTPClient, egress EgressGate,
 	elevation cascadepa.ElevationPolicy, stores *cascadepa.Stores, sink LockoutSink,
 	secretScanner SecretScanner, quarantine QuarantineSink) *TelegramModule {
-	subject := SubjectFromToken(token)
-	doer := newAPIDoer(token, newHTTPPoster(httpClient))
-	client := NewBotClient(subject, doer, egress, stores.Updates)
-	pairer := newPairCoordinator(stores.Pairing, stores.Binding, sink, stores.Clock)
-	module := NewTelegramModule(subject, client, stores.Binding, pairer, elevation, stores.Clock)
-	module.secretScanner = secretScanner
-	module.quarantine = quarantine
-	return module
+	return NewModuleOver(token, newHTTPPoster(httpClient), egress, elevation, stores, sink, secretScanner, quarantine)
 }

@@ -157,6 +157,16 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// .golangci.yml's cmd-rpc-server-boundary exemption list; the two must
 	// be edited together or this gate and the linter disagree.
 	"plugin_rpc.go": true,
+	// plugin_rpc_bridge.go (fix18 round 2): wireCascadePABridge and its
+	// bridge.send registration, split out of plugin_rpc.go under that
+	// file's own 300-line cap (the SAME move daemon_unix_run_memory.go
+	// made for daemon_unix_run.go). It REGISTERS "bridge.send" and
+	// "pa.pair_code" on the daemon's own registry and never dials the
+	// daemon — identical daemon-SIDE reasoning to plugin_rpc.go directly
+	// above. This map mirrors .golangci.yml's cmd-rpc-server-boundary
+	// exemption list; the two must be edited together or this gate and
+	// the linter disagree.
+	"plugin_rpc_bridge.go": true,
 }
 
 // scanCmdCascadeRPCImports returns, sorted, the base filenames under dir

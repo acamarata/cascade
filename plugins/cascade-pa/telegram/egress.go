@@ -171,17 +171,36 @@ func threadIDForChat(chatID int64) string {
 // chatIDForThread reverses threadIDForChat, for ChatBridge.Send's
 // thread->chat direction. ok is false for any threadID this module did not
 // mint (a foreign or malformed id) — Send refuses those by name rather
-// than guessing a chat.
+// than guessing a chat. CANONICAL FORM ONLY (fix18 round 2, K3): rest must
+// round-trip through FormatInt exactly, so "+123" (ParseInt accepts a
+// leading sign) and "0123" (a leading zero) are rejected even though
+// ParseInt itself would accept them — each such alias would otherwise
+// address the SAME chat as its canonical form while carrying its own,
+// independent privacy row, silently bypassing whatever tier the operator
+// set on "bridge-telegram:123".
 func chatIDForThread(threadID string) (chatID int64, ok bool) {
 	rest, found := strings.CutPrefix(threadID, bridgeThreadPrefix)
 	if !found {
 		return 0, false
 	}
 	n, err := strconv.ParseInt(rest, 10, 64)
-	if err != nil {
+	if err != nil || strconv.FormatInt(n, 10) != rest {
 		return 0, false
 	}
 	return n, true
+}
+
+// IsBridgeThread reports whether threadID was minted by threadIDForChat —
+// the exported form of chatIDForThread's own mapping check (fix18), for a
+// composition-root caller (internal/plugins) that must decide whether to
+// route a cascade-pa send through this bridge at all, without importing
+// this package's unexported prefix constant or re-deriving the mapping
+// itself. Routing a non-bridged thread's send into Send would otherwise
+// silently misreport it as "does not map to a chat this bridge serves"
+// instead of simply not routing it there.
+func IsBridgeThread(threadID string) bool {
+	_, ok := chatIDForThread(threadID)
+	return ok
 }
 
 // The contract's two fixed refusal reply texts (task 4 / AC), plus the

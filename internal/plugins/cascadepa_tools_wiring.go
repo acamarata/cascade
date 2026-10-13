@@ -7,7 +7,6 @@ import (
 
 	"github.com/acamarata/cascade/internal/client"
 	"github.com/acamarata/cascade/internal/conversation"
-	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 	cascadepa "github.com/acamarata/cascade/plugins/cascade-pa"
 	"github.com/acamarata/cascade/plugins/cascade-pa/tools"
@@ -35,8 +34,10 @@ import (
 // SPORT: internal/plugins:cascadepa-tools-wiring (ADD) — P1-E20-W5-S43-T4.
 
 func init() {
-	cascadepa.SetConversations(newCascadePAConversations(
-		client.UnixDialer, cascadePAClientTimeout, runtime.NewDefaultPathProvider))
+	// cascadePATools (cascadepa_bridge_chatsend_client.go, fix18): the
+	// daemon-socket adapter below, decorated so a cascade_cpa_send on a
+	// bridge thread also reaches the daemon's bridge.send.
+	cascadepa.SetConversations(cascadePATools)
 }
 
 // cascadePAConversations implements tools.Conversations over the daemon's
