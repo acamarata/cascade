@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"type\":\"result\",\"subtype\":\"error_max_turns\",\"is_error\":true,\"session_id\":\"s\",\"total_cost_usd\":0,\"num_turns\":1,\"usage\":{}}")

@@ -20,11 +20,14 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
+	"github.com/acamarata/cascade/providers/agents/claude"
 )
 
 // vacuityCheckEnv, when set to "1" in this test binary's own environment,
@@ -195,4 +198,102 @@ func TestSuiteFailsAgainstEmptyImplementation(t *testing.T) {
 		t.Fatalf("empty implementation PASSED the suite (child exit 0): the suite is vacuous\n%s", out)
 	}
 	t.Logf("empty implementation correctly FAILED the suite (child exit %v), proving non-vacuity:\n%s", err, out)
+}
+
+// AD/S-61.T2's factory entry (append-only), then the R-14.322 proofs.
+
+// TestConformanceClaude runs every Suite case against claude.Driver over
+// the real harness, with the suite's Env (DriverEnvAllowlist keys: PATH,
+// HOME, the config-dir variable and the OAuth key variable), Worktree (a fresh git tree, the lease
+// root) and an identity Filter reaching every Spawn through newSpec().
+// CASCADE_TEST_CLAUDE_BINARY unset: an asserted skip, so no default check
+// makes a paid model call. CASCADE_TEST_CLAUDE_HOME is a 0700 runtime home
+// whose config/ child is an authenticated config dir (a t.TempDir() home
+// holds no credential); the real HOME is never used.
+func TestConformanceClaude(t *testing.T) {
+	bin := os.Getenv("CASCADE_TEST_CLAUDE_BINARY")
+	if bin == "" {
+		t.Skip("CASCADE_TEST_CLAUDE_BINARY not set")
+	}
+	home, token := os.Getenv("CASCADE_TEST_CLAUDE_HOME"), os.Getenv(claude.KeyVarOAuthToken)
+	if home == "" || token == "" {
+		t.Fatalf("CASCADE_TEST_CLAUDE_HOME must name the runtime home and %s carry the daemon-env OAuth token", claude.KeyVarOAuthToken)
+	}
+	root := t.TempDir()
+	if out, err := exec.Command("git", "init", "--quiet", root).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	values := map[string]string{"PATH": os.Getenv("PATH"), "HOME": home,
+		claude.VendorConfigDirVar: filepath.Join(home, "config"), "TMPDIR": t.TempDir(),
+		claude.KeyVarOAuthToken: token}
+	env := provider.SpawnEnv{Home: home}
+	for _, key := range provider.DriverEnvAllowlist(claude.VendorConfigDirVar, claude.KeyVarOAuthToken) {
+		if v, ok := values[key]; ok {
+			env.Driver = append(env.Driver, key+"="+v)
+		}
+	}
+	s := &Suite{Worktree: root, Env: env, Filter: func(b []byte) ([]byte, error) { return b, nil },
+		New: func() (provider.AgentProvider, error) {
+			return claude.New(claude.Config{Binary: bin, Profile: claudeSuiteProfile{home: home},
+				Worktree: claudeSuiteLease{root: root}, Defaults: provider.NewDriverDefaults()})
+		}}
+	runAllCases(t, s)
+}
+
+// TestSuiteSpawnCasesCarryEnv runs all nineteen cases over a recording
+// provider and asserts every Spawn received exactly s.Env, s.Worktree as
+// WorktreeRoot, and s.Filter itself (non-nil; it returns the suite's own
+// marker), so no case spawns with defaultSpec() alone.
+func TestSuiteSpawnCasesCarryEnv(t *testing.T) {
+	rec := &spawnRecorder{}
+	env := provider.SpawnEnv{Driver: []string{"HOME=/suite/home", "PATH=/suite/bin"}, Tool: []string{"HOME=/suite/home"},
+		Home: "/suite/home"}
+	s := &Suite{Worktree: t.TempDir(), Env: env,
+		Filter: func(b []byte) ([]byte, error) { return append([]byte("suite-filter:"), b...), nil },
+		New:    func() (provider.AgentProvider, error) { return rec.wrap(newConformingProvider()), nil }}
+	runAllCases(t, s)
+	specs := rec.all()
+	const wantSpawns = 12 // one per spawning case, two for TestSpawnResultCarriesProcessGroup
+	if len(specs) != wantSpawns {
+		t.Fatalf("recorded %d Spawn calls, want %d", len(specs), wantSpawns)
+	}
+	for i, spec := range specs {
+		if !reflect.DeepEqual(spec.Env, env) || spec.WorktreeRoot != s.Worktree || spec.Filter == nil {
+			t.Fatalf("Spawn %d got Env %+v WorktreeRoot %q Filter nil=%v; want the suite's", i, spec.Env, spec.WorktreeRoot, spec.Filter == nil)
+		}
+		if out, err := spec.Filter([]byte("x")); err != nil || string(out) != "suite-filter:x" {
+			t.Fatalf("Spawn %d carried a Filter other than s.Filter (%q, %v)", i, out, err)
+		}
+	}
+}
+
+// TestMessageProbeAcceptsOnlyNilOrUnsupported pins classifyMessageProbe:
+// nil and the exact ErrMessageUnsupported pass; ErrPlatform (same Kind), a
+// wrapped or re-made ErrMessageUnsupported and ErrJobNotFound fail, both
+// directly and through TestMessageAfterSpawn over a provider answering so.
+func TestMessageProbeAcceptsOnlyNilOrUnsupported(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		pass bool
+	}{
+		{"nil", nil, true},
+		{"ErrMessageUnsupported", provider.ErrMessageUnsupported, true},
+		{"ErrPlatform (same Kind)", provider.ErrPlatform, false},
+		{"wrapped ErrMessageUnsupported", cascade.Wrap(cascade.KindUnsupported, provider.ErrMessageUnsupported, "x"), false},
+		{"same Kind and message", cascade.New(cascade.KindUnsupported, provider.ErrMessageUnsupported.Error()), false},
+		{"ErrJobNotFound", provider.ErrJobNotFound, false},
+	}
+	for _, c := range cases {
+		if got := classifyMessageProbe(c.err) == nil; got != c.pass {
+			t.Fatalf("%s: classifyMessageProbe passed = %v, want %v", c.name, got, c.pass)
+		}
+		s := &Suite{New: func() (provider.AgentProvider, error) { return messageAnswers(c.err), nil }}
+		if failed := runIsolated(s.TestMessageAfterSpawn); failed == c.pass {
+			t.Fatalf("%s: TestMessageAfterSpawn failed = %v, want %v", c.name, failed, !c.pass)
+		}
+	}
+	if n := reflect.TypeOf(&Suite{}).NumMethod(); n != wantCaseCount {
+		t.Fatalf("Suite has %d methods, want the %d cases (the probe adds none)", n, wantCaseCount)
+	}
 }

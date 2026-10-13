@@ -24,10 +24,17 @@ package conformance
 //	and cases_lifecycle.go/cases_security.go (the Round-35 amendment
 //	cases) to stay under the 300-line cap per file.
 //
-// SPORT: providers.agents.conformance/ADD (P1-E30-W6-S61-T1).
+//	R-14.322: every Spawn a case makes goes through s.newSpec(), so the
+//	suite's Env, Worktree and Filter reach the driver (an external driver
+//	refuses an empty Env.Driver, an empty WorktreeRoot and a nil Filter);
+//	the in-process local driver ignores all three. TestMessageAfterSpawn
+//	classifies Message through classifyMessageProbe.
+//
+// SPORT: providers.agents.conformance/ADD (P1-E30-W6-S61-T1, S61-T2).
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -38,12 +45,35 @@ import (
 // assumes a shared or pre-seeded provider across cases.
 type Factory func() (provider.AgentProvider, error)
 
-// Suite is the conformance harness. New is required; Worktree names a
-// helper directory the worktree-scoped cases (PreSpawnScan et al.) may
-// use — callers typically pass t.TempDir().
+// Suite is the conformance harness. New is required; Worktree names the
+// leased tree every spawned job runs in (spec.WorktreeRoot) — callers
+// typically pass t.TempDir(). Env is the host-built spawn environment and
+// Filter the per-spawn output filter an external driver requires.
 type Suite struct {
 	New      Factory
 	Worktree string
+	Env      provider.SpawnEnv
+	Filter   provider.OutputFilter
+}
+
+// newSpec returns defaultSpec() carrying the suite's Env, Worktree (as
+// WorktreeRoot) and Filter; every case that spawns uses it (R-14.322).
+func (s *Suite) newSpec() provider.AgentJobSpec {
+	spec := defaultSpec()
+	spec.Env, spec.WorktreeRoot, spec.Filter = s.Env, s.Worktree, s.Filter
+	return spec
+}
+
+// classifyMessageProbe is TestMessageAfterSpawn's verdict on Message for a
+// live job: nil (the driver delivered the turn) or an error IDENTICAL to
+// provider.ErrMessageUnsupported (the capability probe) passes; anything
+// else fails. Identity, not errors.Is: *cascade.Error.Is compares Kind
+// only and would also admit ErrPlatform (KindUnsupported).
+func classifyMessageProbe(err error) error {
+	if err == nil || err == provider.ErrMessageUnsupported {
+		return nil
+	}
+	return fmt.Errorf("conformance: Message on a live job returned %v, want nil or provider.ErrMessageUnsupported", err)
 }
 
 // newProvider constructs a fresh provider via s.New, skipping the case
@@ -118,7 +148,7 @@ func pollUntilTerminal(t *testing.T, p provider.AgentProvider, id provider.Agent
 // non-empty JobID and a non-negative ProcessGroupID.
 func (s *Suite) TestSpawnHappyPath(t *testing.T) {
 	p := s.newProvider(t)
-	res, err := p.Spawn(testContext(t), defaultSpec())
+	res, err := p.Spawn(testContext(t), s.newSpec())
 	requireNoError(t, err, "Spawn")
 	if res.JobID == "" {
 		t.Fatal("Spawn returned an empty JobID")
@@ -139,7 +169,7 @@ func (s *Suite) TestSpawnErrEntitlement(t *testing.T) {
 	ctx := testContext(t)
 	caps, err := p.Capabilities(ctx, "")
 	requireNoError(t, err, "Capabilities")
-	_, spawnErr := p.Spawn(ctx, defaultSpec())
+	_, spawnErr := p.Spawn(ctx, s.newSpec())
 	if caps.CompliancePosture.ProgrammaticEntitlement {
 		if spawnErr != nil {
 			t.Fatalf("Spawn with declared entitlement returned %v, want nil", spawnErr)
@@ -151,14 +181,15 @@ func (s *Suite) TestSpawnErrEntitlement(t *testing.T) {
 	}
 }
 
-// TestMessageAfterSpawn asserts Message succeeds against a job that
-// exists and returns ErrJobNotFound against one that does not.
+// TestMessageAfterSpawn asserts Message against a job that exists either
+// delivers the turn or reports the ErrMessageUnsupported capability probe
+// (classifyMessageProbe), and returns ErrJobNotFound for an unknown job.
 func (s *Suite) TestMessageAfterSpawn(t *testing.T) {
 	p := s.newProvider(t)
 	ctx := testContext(t)
-	res, err := p.Spawn(ctx, defaultSpec())
+	res, err := p.Spawn(ctx, s.newSpec())
 	requireNoError(t, err, "Spawn")
-	requireNoError(t, p.Message(ctx, res.JobID, "next turn"), "Message")
+	requireNoError(t, classifyMessageProbe(p.Message(ctx, res.JobID, "next turn")), "Message")
 	if err := p.Message(ctx, provider.AgentJobID("conformance-missing-job"), "x"); err != provider.ErrJobNotFound {
 		t.Fatalf("Message(missing job) = %v, want ErrJobNotFound", err)
 	}
@@ -169,7 +200,7 @@ func (s *Suite) TestMessageAfterSpawn(t *testing.T) {
 func (s *Suite) TestStatusReturnsKnownState(t *testing.T) {
 	p := s.newProvider(t)
 	ctx := testContext(t)
-	res, err := p.Spawn(ctx, defaultSpec())
+	res, err := p.Spawn(ctx, s.newSpec())
 	requireNoError(t, err, "Spawn")
 	state, err := p.Status(ctx, res.JobID)
 	requireNoError(t, err, "Status")
@@ -184,7 +215,7 @@ func (s *Suite) TestStatusReturnsKnownState(t *testing.T) {
 func (s *Suite) TestCancelRunning(t *testing.T) {
 	p := s.newProvider(t)
 	ctx := testContext(t)
-	res, err := p.Spawn(ctx, defaultSpec())
+	res, err := p.Spawn(ctx, s.newSpec())
 	requireNoError(t, err, "Spawn")
 	cancelErr := p.Cancel(ctx, res.JobID)
 	if cancelErr != nil && cancelErr != provider.ErrCancelUnconfirmed {
@@ -211,7 +242,7 @@ func (s *Suite) TestCancelNonExistent(t *testing.T) {
 func (s *Suite) TestCollectBlocksUntilDone(t *testing.T) {
 	p := s.newProvider(t)
 	ctx := testContext(t)
-	res, err := p.Spawn(ctx, defaultSpec())
+	res, err := p.Spawn(ctx, s.newSpec())
 	requireNoError(t, err, "Spawn")
 	if _, err := p.Collect(ctx, res.JobID); err != nil {
 		t.Fatalf("Collect: %v", err)
@@ -232,7 +263,7 @@ func (s *Suite) TestCollectBeforeSpawn(t *testing.T) {
 func (s *Suite) TestArtifactsEmptyNotNil(t *testing.T) {
 	p := s.newProvider(t)
 	ctx := testContext(t)
-	res, err := p.Spawn(ctx, defaultSpec())
+	res, err := p.Spawn(ctx, s.newSpec())
 	requireNoError(t, err, "Spawn")
 	artifacts, err := p.Artifacts(ctx, res.JobID)
 	requireNoError(t, err, "Artifacts")

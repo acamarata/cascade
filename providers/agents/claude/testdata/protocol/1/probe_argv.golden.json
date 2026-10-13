@@ -1,0 +1,40 @@
+{
+ "provenance": {
+  "harness_version": "2.1.273",
+  "captured": "2026-09-23",
+  "command": "claude --help",
+  "note": "stream-json output under -p needs --verbose; the probe is killed as soon as its system/init line arrives.",
+  "setting_sources": "--setting-sources project is listed by --help; the value is parser-checked without a model call (2.1.273, 2026-09-23): `claude -p --setting-sources project --session-id bad -- x` reports the invalid session id, while `--setting-sources bogus` reports 'Invalid setting source'. Only the tree's .claude/settings.json (the hook pack's) loads; user and local settings do not.",
+  "hidden_flags": {
+   "--max-turns": "absent from --help; the parser accepts it (`claude -p --max-turns 1 < /dev/null` exits with the missing-input error, not 'unknown option', 2.1.273, 2026-09-23), but R-14.329 counts a flag --help does not list as unsupported: the probe omits it and a DriverDefaults.MaxTurns value refuses Spawn",
+   "--append-system-prompt-file": "absent as its own --help entry; --help names it in the --bare option text ('--append-system-prompt[-file]'), and the contract emits it from KernelPromptFile",
+   "--append-subagent-system-prompt-file": "absent from --help; the parser accepts it the same way, but R-14.329 counts it unsupported: a DriverDefaults.SubagentKernelPromptFile value refuses Spawn"
+  }
+ },
+ "probe_argv": [
+  "-p",
+  "--output-format",
+  "stream-json",
+  "--verbose",
+  "--no-session-persistence",
+  "--permission-prompts",
+  "none",
+  "--strict-mcp-config",
+  "--setting-sources",
+  "project",
+  "--disallowedTools",
+  "Write",
+  "Edit",
+  "MultiEdit",
+  "NotebookEdit",
+  "Bash",
+  "Agent",
+  "Task",
+  "WebFetch",
+  "WebSearch"
+ ],
+ "unsupported_flags": [
+  "--append-subagent-system-prompt-file",
+  "--max-turns"
+ ]
+}

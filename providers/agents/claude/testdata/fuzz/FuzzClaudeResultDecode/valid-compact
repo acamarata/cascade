@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"session_id\":\"s\",\"total_cost_usd\":0.5,\"num_turns\":1,\"duration_ms\":10,\"usage\":{\"input_tokens\":1},\"result\":\"ok\",\"structured_output\":{\"k\":\"v\"}}")

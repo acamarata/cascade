@@ -16,7 +16,7 @@ package provider
 //	than just the Kind) can still compare with errors.Is against these
 //	exact values since they are the Kind's own zero-message instance.
 //
-// SPORT: pkg.provider.AgentProvider/EXTEND (P1-E30-W6-S61-T1).
+// SPORT: pkg.provider.AgentProvider/EXTEND (P1-E30-W6-S61-T1, S61-T2).
 
 import "github.com/acamarata/cascade/pkg/cascade"
 
@@ -51,4 +51,16 @@ var (
 	// is NOT confirmed within the cancel deadline (R-21.174/R-21.140); the
 	// job stays AgentRunCancelling.
 	ErrCancelUnconfirmed = cascade.New(cascade.KindTimeout, "provider: agent cancel deadline expired without confirmed exit")
+	// ErrTranscriptPersistenceForbidden refuses every raw-transcript
+	// request: only the closed journal projection persists (R-21.152).
+	ErrTranscriptPersistenceForbidden = cascade.New(cascade.KindPermissionDenied, "provider: raw transcript persistence is forbidden")
+	// ErrInvalidToolPolicy refuses a ToolPolicy outside none|readonly|all.
+	ErrInvalidToolPolicy = cascade.New(cascade.KindInvalidInput, "provider: tool policy is not none, readonly or all")
+	// ErrEgressSubstitutionFailed fails a run whose OutputFilter errored:
+	// the chunk is withheld and the child is cancelled (fail closed).
+	ErrEgressSubstitutionFailed = cascade.New(cascade.KindUnavailable, "provider: output substitution failed; output withheld")
+	// ErrMessageUnsupported is Message's answer for a known job when the
+	// driver cannot deliver a mid-run turn (R-14.327 item 3). It shares
+	// KindUnsupported with ErrPlatform, so callers compare identity.
+	ErrMessageUnsupported = cascade.New(cascade.KindUnsupported, "provider: this agent driver cannot deliver a mid-run turn")
 )

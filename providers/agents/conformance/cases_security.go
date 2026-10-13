@@ -12,7 +12,7 @@ package conformance
 //	exists in source (GitHub push protection); concatenation still
 //	produces the real value the scan under test must catch.
 //
-// SPORT: providers.agents.conformance/ADD (P1-E30-W6-S61-T1).
+// SPORT: providers.agents.conformance/ADD (P1-E30-W6-S61-T1, S61-T2).
 
 import (
 	"os"
@@ -82,7 +82,8 @@ func (s *Suite) TestDriverNeverAutoApproves(t *testing.T) {
 func (s *Suite) TestDataClassPropagates(t *testing.T) {
 	p := s.newProvider(t)
 	ctx := testContext(t)
-	spec := provider.AgentJobSpec{Prompt: "propagate", DataClass: provider.DataClassInternal}
+	spec := s.newSpec()
+	spec.Prompt, spec.DataClass = "propagate", provider.DataClassInternal
 	res, err := p.Spawn(ctx, spec)
 	requireNoError(t, err, "Spawn")
 	cr, err := p.Collect(ctx, res.JobID)
@@ -101,7 +102,9 @@ func (s *Suite) TestCredentialCanaryFailsClosed(t *testing.T) {
 	p := s.newProvider(t)
 	ctx := testContext(t)
 	canary := "cascade-canary-" + "7f3a9c2e1b8d4f60"
-	res, err := p.Spawn(ctx, provider.AgentJobSpec{Prompt: canary, DataClass: provider.DataClassRestricted})
+	spec := s.newSpec()
+	spec.Prompt, spec.DataClass = canary, provider.DataClassRestricted
+	res, err := p.Spawn(ctx, spec)
 	requireNoError(t, err, "Spawn")
 	cr, err := p.Collect(ctx, res.JobID)
 	requireNoError(t, err, "Collect")

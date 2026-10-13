@@ -1,0 +1,41 @@
+{
+ "provenance": {
+  "harness_version": "2.1.273",
+  "captured": "2026-09-23",
+  "command": "claude --help (full output kept locally; the option blocks this driver uses are in protocol/1/help-excerpt.txt)",
+  "flag_lines": [
+   "--disallowedTools, --disallowed-tools <tools...>  Comma or space-separated list of tool names to deny",
+   "--permission-mode <mode>  (choices: \"acceptEdits\", \"auto\", \"bypassPermissions\", \"manual\", \"dontAsk\", \"plan\")"
+  ],
+  "tool_names": "R-14.291 list. Write, Edit, NotebookEdit, Bash, Task, WebFetch and WebSearch appear in the 2.1.273 init tools[] (claude_headless_init.json); MultiEdit and Agent do not, and stay as inert deny entries per the ruling.",
+  "default_mode": "--permission-mode has no 'default' choice on 2.1.273, so none and readonly keep the default mode by omitting the flag."
+ },
+ "mappings": {
+  "none": [
+   "--disallowedTools",
+   "Write",
+   "Edit",
+   "MultiEdit",
+   "NotebookEdit",
+   "Bash",
+   "Agent",
+   "Task",
+   "WebFetch",
+   "WebSearch"
+  ],
+  "readonly": [
+   "--disallowedTools",
+   "Write",
+   "Edit",
+   "MultiEdit",
+   "NotebookEdit",
+   "Bash",
+   "Agent",
+   "Task"
+  ],
+  "all": [
+   "--permission-mode",
+   "bypassPermissions"
+  ]
+ }
+}

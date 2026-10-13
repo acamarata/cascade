@@ -53,6 +53,138 @@ See `docs/cli/run.md` for the `cascade run --task` help text, generated from
 `cmd/cascade/run.go`'s cobra Long/Example text, which states the same
 task-class support inline at the CLI.
 
+### Claude Driver (`providers/agents/claude`)
+
+The Claude driver is a headless **one-shot** lane: each `Spawn` execs the CC harness
+binary once, in its leased git worktree and in its own OS process group, and returns
+once the child has started. `Collect` blocks until that run has exited and its whole
+process group is gone.
+
+**Entitlement guard.** `Spawn` resolves the active profile first and refuses with the
+`ErrEntitlement` sentinel, starting no process at all, when the profile's
+`ProgrammaticEntitlement` is false. An empty `SpawnEnv.Driver` refuses the same way,
+and so does an empty `spec.WorktreeRoot` (the error names the field).
+
+**Spawn seams.** Each job carries its own output filter (`spec.Filter`); a nil filter
+refuses with `ErrEgressSubstitutionFailed` before anything runs. The child's working
+directory is `spec.WorktreeRoot`, which must equal the root of the tree the lease
+names: a different value refuses with `ErrWorktreeRootMismatch` rather than picking
+one of the two. A non-empty `spec.JobID` is the job id `Spawn` returns (an id already
+live in the driver refuses with a conflict); otherwise the driver mints one.
+`Executable()` reports the absolute, symlink-resolved harness path `New` resolved;
+`New` refuses a relative or missing path.
+
+**Environment custody.** The child's environment is exactly `SpawnEnv.Driver`, which
+the host shim builds from `provider.DriverEnvAllowlist(vendorAuthVar)`; the driver
+never reads the daemon's own environment. The driver refuses a key outside that
+allowlist, a duplicate key, a `HOME` that differs from the profile's runtime home
+(`<state>/agents/profiles/<profile-id>/home`, which must be a real 0700 directory),
+and a `vendorAuthVar` value (the harness's config-directory variable) that is not
+under that home. `SpawnEnv.Tool` must fit `provider.ToolEnvAllowlist()`, which never
+carries `vendorAuthVar`. The harness starts its own tool and hook subprocesses and
+passes them its environment; the driver cannot substitute `SpawnEnv.Tool` there (see
+LIMIT).
+
+**Worktree guards and pre-spawn scan.** Before any child exists the driver refuses a
+runtime home that overlaps the leased tree, any symlink under the tree's `.claude/`
+directory, and any symlink whose target leaves the tree. It then runs
+`provider.PreSpawnScan` over the whole tree (the child's working directory is the
+tree root, so every file is exposed whatever the job's scope says); a hit aborts
+with `ErrPreSpawnSecretFound`.
+
+**Hook-pack injection.** The operator's hook pack is copied into the tree's
+`.claude/` directory with every created directory checked and every file opened
+without following symlinks, so a planted link cannot redirect the copy outside the
+tree. A `settings*.json` file (any letter case) already under the tree's `.claude/`
+that the pack does not provide refuses the spawn with `ErrForeignHarnessSettings`
+before any harness process runs: repo-owned hooks there would run with the vendor
+auth environment. The probe and the job run with `--setting-sources project`, so
+the pack's `settings.json` is the only settings file the harness loads.
+
+**Credentials.** A profile names one credential class. Class `oauth_token` puts
+`CLAUDE_CODE_OAUTH_TOKEN` beside the config-dir variable; class `api_key` puts
+`ANTHROPIC_API_KEY` there and the argv carries `--bare`. Any other key variable, a key
+variable that does not match the class, or one without the config-dir variable refuses
+the spawn before a child exists. Tool environments never carry either.
+
+**Harness probes.** The driver runs `--version` (a failure or an unparsable version
+refuses the spawn; there is no configured fallback) and a one-turn stream-json probe
+whose `system/init` event must match protocol revision 1 (see
+`testdata/README.md`). An MCP server that is not `connected`, a plugin entry that is
+not a plain `{name, path}`, a plugin directory that loaded nothing, or a permission
+mode that does not match the tool policy refuses the spawn. The probe is killed as
+soon as its init line arrives.
+
+**Invocation.** `-p --output-format json --no-session-persistence --session-id <uuid>
+--strict-mcp-config --setting-sources project`, one `--add-dir` per in-scope prefix,
+`--permission-prompts none`, the tool-policy flags (`none` and `readonly` disallow
+the write and execute tools and keep the default permission mode; only `all` gets
+`--permission-mode bypassPermissions`), deny rules for the harness's file tools on the runtime home,
+then each `DriverDefaults` flag only when it is set, `--bare` and `--max-budget-usd`
+only for api_key lanes, and the prompt last after a literal `--`. A flag below its
+minimum harness version refuses the spawn. A flag the probed `--help` does not list
+(`--append-subagent-system-prompt-file`, `--max-turns` on 2.1.273) is unsupported: a
+`SubagentKernelPromptFile` or `MaxTurns` value refuses the spawn with
+`ErrHarnessIncompatible` before any process runs. The session name is the
+ticket id (else the job id); the session id is `provider.SessionIDFor` of the job id; stdin is the null device, so `Message` on a known job
+answers `ErrMessageUnsupported` and writes nothing to the child.
+
+**Output custody.** Every stdout and stderr chunk passes through the job's
+`spec.Filter` before anything buffers it. A filter error withholds that
+chunk and all later output, cancels the child through the process-group ladder, and
+fails the run with `ErrEgressSubstitutionFailed`. Output past 16 MiB per stream fails
+the run the same way.
+
+**Collection.** `Collect` decodes stdout as the single result object, in memory
+(`session_id`, `structured_output`, and `total_cost_usd` recorded as a
+`cli-observation` estimate, never billing truth). The result yields no tool event:
+per-tool rows come only from authenticated callback frames. The persisted journal is the closed field set only: tool name,
+duration, exit code, worktree-relative paths, result hash, event kind, sequence, data
+class and protocol version. No prompt, model output or raw transcript is kept, and a
+raw-stream request returns `ErrTranscriptPersistenceForbidden`. The driver also opens
+a per-spawn callback channel: a unix socket announced, with a 128-bit token, in the
+0600 `provider.CallbackFileName` file under `.claude/`; frames are
+`provider.EncodeCallbackFrame` lines carrying a `provider.CallbackPayload`. A frame without that token is refused before it is parsed. An
+authenticated frame must fit the closed shapes (tool name `[A-Za-z0-9_.:-]{1,128}`,
+result hash empty or 64 lowercase hex, clean relative paths of at most 4096 bytes with
+no `..` or control characters); its tool name and paths pass through the
+job's filter before they are kept. A frame that breaks a shape, a filter error, a
+sequence regression, or more than 10000 rows or 16 MiB of frames fails the run and
+stops the job. The P/S-34.T1 hook pack does not read the token file or post to this
+channel yet, so a real run records no callback rows until it does.
+
+**Canary.** Every spawn plants a random credential canary in the runtime home. If it
+appears in the run's output, stderr, callback frames, journal, artifact names or the
+content of any file the job created or modified, in exact, base64 or hex form, the run
+fails closed; the error never contains it. A modified path that cannot be read, or is
+not a regular file, directory or symlink, fails the run the same way.
+
+**Cancel.** `Cancel` sends SIGTERM to the process group, waits `CancelGrace`, sends
+SIGKILL to the group, and reports cancelled only once the group is confirmed empty;
+otherwise it returns `ErrCancelUnconfirmed` and the job stays cancelling while the
+driver finishes the ladder. A clean exit reads `accepted` (R-14.316). A `Cancel`
+that arrives after the harness has exited sends no signal and leaves the run's own
+verdict in place.
+
+**LIMIT (read this before assuming the egress is filtered).** Worktree minimization
+and the pre-spawn scan are the controls on what the CC binary can read. The
+`OutputFilter` covers driver **stdio only**: the harness opens its own TLS connection
+to the vendor and reads worktree files the substitution pass never sees. The
+harness's own tool subprocesses inherit its environment, including the config-dir
+variable and the key variable. After the harness exits, the driver inspects only the members still in the
+job's process group and fails the run when one carries the config-dir variable. It does not see
+a descendant that called `setsid()` and left the group (known limit), nor a tool
+subprocess that exits while the harness is running. No document or help text may
+claim this driver's egress is filtered or its tool subprocesses isolated. The residual
+is the recorded deferral `DEF-P2-driver-tool-isolation` (see `docs/security-posture.md`,
+Agent driver custody): `SpawnEnv.Tool` is journaled by name only and is not delivered
+to tool subprocesses.
+
+**Wiring.** The host shim that fills `SpawnEnv`, `WorktreeRoot`, `JobID` and the
+per-spawn filter, binds the real lease and profile registry, and constructs the driver
+in the running daemon is the AD/S-62.T3 ticket; until it lands the driver runs only under
+tests and the opt-in conformance run.
+
 ## Completion gate
 
 `internal/fleet/hookpacks`'s `"completion-gate"` pack (`RegisterCompletionHookPack`,

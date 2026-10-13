@@ -1,0 +1,13 @@
+{
+ "provenance": {
+  "harness_version": "2.1.288",
+  "captured": "2026-10-12",
+  "command": "claude -p --output-format stream-json --verbose --no-session-persistence --permission-prompts none --strict-mcp-config --setting-sources project --disallowedTools Write Edit MultiEdit NotebookEdit Bash Agent Task WebFetch WebSearch -- ping (throwaway runtime home, OAuth-token env, empty git tree; the probe was killed at the system/init line)",
+  "note": "only the plugins member of the system/init event is kept; the builtin entries carry a third key, source, that 2.1.273 did not emit"
+ },
+ "plugins": [
+  {"name": "cc-plugin-agents-md", "path": "builtin", "source": "cc-plugin-agents-md@builtin"},
+  {"name": "cc-plugin-telemetry", "path": "builtin", "source": "cc-plugin-telemetry@builtin"},
+  {"name": "cc-plugin-plugin-authoring", "path": "builtin", "source": "cc-plugin-plugin-authoring@builtin"}
+ ]
+}

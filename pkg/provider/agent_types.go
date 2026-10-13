@@ -1,64 +1,94 @@
 package provider
 
 // Purpose: the pure DTOs AD/S-61.T1 adds to pkg/provider for the
-//
-//	AgentProvider job-dispatch contract (R-16.68a): job identity and spec,
-//	the R-16.37/R-21.140 run-state enum, the R-21.143 data-classification
-//	lattice, worktree minimization, driver defaults, and the R-16.10
-//	capacity-snapshot shape for agent lanes.
-//
-// Inputs: none at this layer — these are data shapes, not behavior, except
-//
-//	for JoinSensitivity/WithDataClass, which are pure functions over the
-//	DataClass lattice.
-//
-// Outputs: none beyond the functions above.
-// Constraints: pkg/provider imports nothing from internal/ (Art.10.2); no
-//
-//	permissive zero value on AgentRunState or DataClass — an unresolved
-//	DataClass reads as DataClassRestricted (fail closed), never as
-//	unrestricted. CompliancePosture and its CredentialSharingForbidden
-//	constant already exist in compliance.go (R-16.10, published by
-//	P1-E10-W3-S19-T1) and are reused here rather than redeclared — see
-//	this ticket's journal for the contract-vs-tree note.
-//
-// SPORT: pkg.provider.AgentProvider/EXTEND (P1-E30-W6-S61-T1).
+// AgentProvider job-dispatch contract (R-16.68a): job identity and spec
+// (with the R-14.329 spawn seams), the R-16.37/R-21.140 run-state enum, the
+// R-21.143 data-class lattice, worktree minimization, driver defaults,
+// spawn environments, the closed tool-policy enum and collect results
+// (the R-16.10 capacity snapshot lives in agent_capacity.go).
+// Inputs: none; data shapes plus the pure JoinSensitivity/WithDataClass and
+// ResolveToolPolicy functions.
+// Outputs: none beyond those functions.
+// Constraints: imports nothing from internal/ (Art.10.2); no permissive
+// zero value on AgentRunState or DataClass (the DataClass zero is
+// Restricted); CompliancePosture is reused from compliance.go.
+// SPORT: pkg.provider.AgentProvider/EXTEND (P1-E30-W6-S61-T1, S61-T2).
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 // AgentJobID identifies one spawned agent job.
 type AgentJobID string
 
-// WorktreeScope names the R-21.177 worktree-minimization set a spawned
-// job's leased tree is materialized from: only these repo-relative
-// prefixes plus the declared dependency paths, never the whole tree.
+// WorktreeScope is the R-21.177 minimization set a leased tree holds.
 type WorktreeScope struct {
-	// InScopePrefixes lists the repo-relative path prefixes the leased
-	// worktree materializes.
+	// InScopePrefixes lists the repo-relative prefixes the tree holds.
 	InScopePrefixes []string
-	// DeclaredDeps lists additional repo-relative paths (typically
-	// dependency manifests or shared packages) materialized alongside
-	// InScopePrefixes even though they fall outside it.
+	// DeclaredDeps lists extra repo-relative paths (dependency manifests,
+	// shared packages) materialized alongside InScopePrefixes.
 	DeclaredDeps []string
 }
 
-// AgentJobSpec is the pure pkg DTO describing one job a caller asks an
-// AgentProvider to Spawn. It carries no internal/jobs type.
-type AgentJobSpec struct {
-	// Prompt is the initial turn handed to the spawned agent.
-	Prompt string
-	// Scope is the R-21.177 worktree-minimization set the leased tree is
-	// built from.
-	Scope WorktreeScope
-	// DataClass is the sensitivity tier this job's inputs carry. Required:
-	// the zero value is Restricted.
-	DataClass DataClass
+// SpawnEnv is the host-built environment for one spawn (R-21.151): Driver
+// is the trusted child's exact environ (DriverEnvAllowlist), Tool the
+// untrusted tool-subprocess environ (ToolEnvAllowlist, never the
+// vendorAuthVar), Home the per-profile runtime home. AD/S-62.T3 fills it.
+type SpawnEnv struct {
+	Driver []string
+	Tool   []string
+	Home   string
 }
 
-// WithDataClass returns a copy of s with DataClass raised to the more
-// restrictive of s.DataClass and c (never lowered). A call that would
-// lower the resolved class returns ErrDataClassDowngrade and the zero
-// AgentJobSpec.
+// The closed AgentJobSpec.ToolPolicy enum (R-14.291).
+const (
+	ToolPolicyNone     = "none"
+	ToolPolicyReadonly = "readonly"
+	ToolPolicyAll      = "all"
+)
+
+// ResolveToolPolicy maps the zero value to ToolPolicyNone (fail closed)
+// and refuses anything outside the closed enum with ErrInvalidToolPolicy.
+func ResolveToolPolicy(p string) (string, error) {
+	switch p {
+	case "":
+		return ToolPolicyNone, nil
+	case ToolPolicyNone, ToolPolicyReadonly, ToolPolicyAll:
+		return p, nil
+	}
+	return "", ErrInvalidToolPolicy
+}
+
+// AgentJobSpec describes one job a caller asks an AgentProvider to Spawn.
+type AgentJobSpec struct {
+	Prompt string // the initial turn handed to the spawned agent
+	// Scope is the R-21.177 minimization set the leased tree is built from.
+	Scope WorktreeScope
+	// DataClass is the sensitivity tier this job's inputs carry; the zero
+	// value is Restricted.
+	DataClass DataClass
+	// Env is the host-built spawn environment; an empty Env.Driver refuses.
+	Env SpawnEnv
+	// ToolPolicy is the closed none|readonly|all enum; "" resolves to none.
+	ToolPolicy string
+	// TicketID names the ticket the job serves; drivers derive the session
+	// name from it (R-14.230), else from the JobID.
+	TicketID string
+	// WorktreeRoot is the absolute root of the minimized tree the job runs
+	// in (the external driver's cmd.Dir); an external driver refuses "".
+	WorktreeRoot string
+	// Filter is the per-spawn output filter (R-14.329); an external driver
+	// refuses a nil Filter with ErrEgressSubstitutionFailed.
+	Filter OutputFilter
+	// JobID, when set, is the job id Spawn uses and returns; "" lets the
+	// driver mint one. An id already live in the driver is KindConflict.
+	JobID AgentJobID
+}
+
+// WithDataClass returns s with DataClass raised to the join with c; a call
+// that would lower the resolved class returns ErrDataClassDowngrade.
 func (s AgentJobSpec) WithDataClass(c DataClass) (AgentJobSpec, error) {
 	if s.DataClass.MoreRestrictiveThan(c) {
 		return AgentJobSpec{}, ErrDataClassDowngrade
@@ -67,21 +97,18 @@ func (s AgentJobSpec) WithDataClass(c DataClass) (AgentJobSpec, error) {
 	return s, nil
 }
 
-// SpawnResult is Spawn's success return (R-21.177): the assigned job id
-// and the process group the driver spawned the child into. ProcessGroupID
-// is 0 only for an in-process lane that spawns no child process.
+// SpawnResult is Spawn's success return (R-21.177): the job id and the
+// child's process group (0 only for an in-process lane).
 type SpawnResult struct {
 	JobID          AgentJobID
 	ProcessGroupID int
 }
 
-// AgentRunState is the pure pkg mirror of the R-16.37 job-lifecycle enum as
-// amended by R-21.140. The zero value is deliberately not a member —
-// internal/jobs maps this DTO to jobs.JobState at its own boundary, never
-// the reverse.
+// AgentRunState mirrors the R-16.37 job-lifecycle enum (R-21.140). The
+// zero value is not a member; internal/jobs maps it at its own boundary.
 type AgentRunState string
 
-// The ten closed AgentRunState members, in R-16.37/R-21.140 order.
+// The ten closed AgentRunState members (R-16.37/R-21.140 order).
 const (
 	AgentRunPending    AgentRunState = "pending"
 	AgentRunLeased     AgentRunState = "leased"
@@ -95,8 +122,7 @@ const (
 	AgentRunFailed     AgentRunState = "failed"
 )
 
-// Valid reports whether s is one of the ten closed AgentRunState members.
-// The zero value ("") is not a member and reports false.
+// Valid reports whether s is one of the ten closed members ("" is not).
 func (s AgentRunState) Valid() bool {
 	switch s {
 	case AgentRunPending, AgentRunLeased, AgentRunRunning, AgentRunVerifying,
@@ -107,10 +133,8 @@ func (s AgentRunState) Valid() bool {
 	return false
 }
 
-// terminalAgentRunStates holds the four AgentRunState members no further
-// transition leaves. A lookup table, rather than a switch, keeps this
-// independent of the exhaustive linter's enum-switch requirement — Valid
-// above is the function that must list every member.
+// terminalAgentRunStates holds the four members no transition leaves (a
+// table, so only Valid must list every member for the exhaustive linter).
 var terminalAgentRunStates = map[AgentRunState]bool{
 	AgentRunAccepted:  true,
 	AgentRunRejected:  true,
@@ -118,10 +142,8 @@ var terminalAgentRunStates = map[AgentRunState]bool{
 	AgentRunFailed:    true,
 }
 
-// Terminal reports whether s is one of the three states no further
-// transition leaves (accepted, rejected, cancelled) or failed. Cancelling
-// is explicitly NOT terminal: it is the sole gateway into cancelled, held
-// until process-group exit is confirmed (R-21.140/R-21.174).
+// Terminal reports accepted, rejected, cancelled or failed. Cancelling is
+// not terminal: it holds until group exit is confirmed (R-21.174).
 func (s AgentRunState) Terminal() bool {
 	return terminalAgentRunStates[s]
 }
@@ -138,21 +160,29 @@ const (
 )
 
 // DriverDefaults is the typed option struct the composition root injects
-// into a driver: cancel-ladder timing, approval-wait timing, and status
-// poll cadence. Ticket-local and testable; 08 §3 gains no row for it.
+// into a driver: cancel-ladder timing, approval-wait timing, status poll
+// cadence, and the optional spawn-flag values (R-14.288), each emitted
+// only when non-empty/non-zero. 08 §3 gains no row for it.
 type DriverDefaults struct {
-	// CancelGrace is how long Cancel waits after SIGTERM to the process
-	// group before escalating to SIGKILL (R-21.174). Default 30s.
+	SessionNameFlag          string
+	KernelPromptFile         string
+	SubagentKernelPromptFile string
+	PluginDir                string
+	Effort                   string
+	FallbackModel            string
+	MCPConfigPath            string
+	MaxTurns                 int
+	MaxBudgetUSD             float64
+	// CancelGrace is the SIGTERM-to-SIGKILL wait (R-21.174). Default 30s.
 	CancelGrace time.Duration
-	// ApprovalTimeout is how long an unresolved ApprovalRequest may sit
-	// before the caller treats it as stale (R-21.171). Default 30m.
+	// ApprovalTimeout is when an unresolved approval is stale (R-21.171).
 	ApprovalTimeout time.Duration
 	// PollInterval is the cadence Status polling uses. Default 5s.
 	PollInterval time.Duration
 }
 
-// NewDriverDefaults returns the R-21.174/R-21.171 defaults: 30s cancel
-// grace, 30m approval timeout, 5s poll interval.
+// NewDriverDefaults returns 30s cancel grace, 30m approval timeout and a
+// 5s poll interval; every spawn-flag field stays empty/zero.
 func NewDriverDefaults() DriverDefaults {
 	return DriverDefaults{
 		CancelGrace:     30 * time.Second,
@@ -161,87 +191,68 @@ func NewDriverDefaults() DriverDefaults {
 	}
 }
 
-// BucketState mirrors one J/S-20.T2 capacity bucket's shape for an agent
-// lane: how much of the bucket has been used against its limit. A zero
-// Limit means the bucket carries no enforced ceiling.
-type BucketState struct {
-	Used  float64
-	Limit float64
-}
-
-// CapacityState is the pure pkg mirror of an agent lane's overall
-// availability. The zero value is CapacityStateUnknown, not
-// CapacityStateAvailable — an unresolved snapshot never silently reads as
-// available.
-type CapacityState string
-
-// The closed CapacityState members. CapacityStateUnknown is the
-// legitimate zero value.
+// OutputFilter is the custody seam every driver accepts: the AD/S-62.T3
+// host shim binds it to the H/S-16.T1 substitution pass so driver stdout
+// and stderr are redacted before any caller sees them.
 //
-// SDK-INTENT: CapacityStateAvailable/Constrained/Exhausted/AuthRequired are
-// a contract only. No production caller sets them yet — CapacitySnapshot
-// is consumed by AD/S-62.T2 (internal/conductor's agent-lane quota
-// bridge), a later ticket than this one; they are declared here now so
-// that ticket's driver-facing shape is already frozen.
-const (
-	CapacityStateUnknown      CapacityState = ""
-	CapacityStateAvailable    CapacityState = "available"
-	CapacityStateConstrained  CapacityState = "constrained"
-	CapacityStateExhausted    CapacityState = "exhausted"
-	CapacityStateAuthRequired CapacityState = "auth-required"
-)
-
-// CapacitySnapshot mirrors the J/S-20.T2 bucket shape for agent providers:
-// three named buckets, an overall state, and an optional reset estimate.
-type CapacitySnapshot struct {
-	InteractiveUsage BucketState
-	AgentSDKCredit   BucketState
-	APICredit        BucketState
-	State            CapacityState
-	ResetEstimate    *time.Time
-}
-
-// OutputFilter is the pkg-typed custody seam every driver accepts: the
-// AD/S-62.T3 host shim binds it to the H/S-16.T1 substitution pass so a
-// driver's stdout/stderr is scanned and redacted before it ever reaches a
-// caller.
-//
-// SDK-INTENT: this is a contract only. No production caller binds an
-// OutputFilter yet — that wiring belongs to AD/S-62.T3's host shim, a
-// later ticket than this one.
+// SDK-INTENT: AD/S-62.T3's host shim is the first production binder.
 type OutputFilter func([]byte) ([]byte, error)
 
-// ApprovalRequest is the pure DTO a driver surfaces via
-// AgentProvider.ApprovalRequests / ResolveApproval. internal/conductor
-// (AD/S-62.T2) bridges it to the I/S-18.T3 approval queue; no driver
-// imports internal.
+// ExecutableReporter is implemented by every external agent driver: the
+// absolute, symlink-resolved vendor CLI path it resolved at construction
+// (the host shim's executable allowlist, R-14.329).
+type ExecutableReporter interface {
+	Executable() string
+}
+
+// ApprovalRequest is the DTO a driver surfaces via ApprovalRequests;
+// internal/conductor (AD/S-62.T2) bridges it to the I/S-18.T3 queue.
 type ApprovalRequest struct {
 	// ID identifies this request; ResolveApproval(id, token) resolves it.
 	ID string
 	// JobID names the job this approval blocks.
 	JobID AgentJobID
-	// Prompt is the human-readable text describing what is being
-	// approved.
+	// Prompt is the human-readable text describing what is approved.
 	Prompt string
-	// DataClass is the joined sensitivity class of the material the
-	// approval decision would expose (R-21.143). Required.
+	// DataClass is the joined class of what the decision exposes.
 	DataClass DataClass
 }
 
 // CollectResult is Collect's success return: the job's final output,
-// discovered artifact paths, and the joined data class of everything it
-// carries.
+// discovered artifact paths, the joined data class of everything it
+// carries, and the harness result fields a driver parsed (R-14.288).
 type CollectResult struct {
 	JobID     AgentJobID
 	Output    string
 	Artifacts []string
-	// DataClass is the joined sensitivity class of Output and Artifacts
-	// (R-21.143). Required.
+	// DataClass is the joined class of Output and Artifacts (R-21.143).
 	DataClass DataClass
+	// SessionID is the harness-reported session id, when one exists.
+	SessionID string
+	// StructuredOutput is the raw JSON a schema-constrained run returned.
+	StructuredOutput []byte
+	// Cost is a client-side observation when the harness reports one.
+	Cost *CostEstimate
+}
+
+// CostSourceCLIObservation marks a cost read from the harness CLI's own
+// result object: a client-side estimate, never billing truth (R-14.288).
+const CostSourceCLIObservation = "cli-observation"
+
+// CostEstimate is one cost observation and where it came from.
+type CostEstimate struct {
+	USD    float64
+	Source string
 }
 
 // EgressClassAgentDriver names the egress class the AD/S-62.T3 host shim
-// registers exactly once (R-16.68b, R-16.56 convention). This constant is
-// the class NAME only — registration happens in the registrant's own
-// package init, never here.
+// registers exactly once (R-16.68b); registration happens there.
 const EgressClassAgentDriver = "agent-driver"
+
+// SessionIDFor returns the harness session id for a job: the RFC 9562
+// version-5 UUID of the job id under NameSpace_URL (a name-based
+// identifier, not a security hash). The claude driver's --session-id and
+// the principal session id both come from this one function.
+func SessionIDFor(job AgentJobID) string {
+	return uuid.NewSHA1(uuid.NameSpaceURL, []byte(job)).String()
+}

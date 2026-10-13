@@ -6,7 +6,7 @@ package conformance
 //	identity, protocol negotiation refusal, and event ordering/dedup —
 //	split from suite.go per the 300-line cap (R-14.117 in-package split).
 //
-// SPORT: providers.agents.conformance/ADD (P1-E30-W6-S61-T1).
+// SPORT: providers.agents.conformance/ADD (P1-E30-W6-S61-T1, S61-T2).
 
 import (
 	"testing"
@@ -24,7 +24,7 @@ import (
 func (s *Suite) TestCancelUncooperativeChild(t *testing.T) {
 	p := s.newProvider(t)
 	ctx := testContext(t)
-	res, err := p.Spawn(ctx, defaultSpec())
+	res, err := p.Spawn(ctx, s.newSpec())
 	requireNoError(t, err, "Spawn")
 
 	cancelErr := p.Cancel(ctx, res.JobID)
@@ -47,9 +47,9 @@ func (s *Suite) TestCancelUncooperativeChild(t *testing.T) {
 func (s *Suite) TestSpawnResultCarriesProcessGroup(t *testing.T) {
 	p := s.newProvider(t)
 	ctx := testContext(t)
-	a, err := p.Spawn(ctx, defaultSpec())
+	a, err := p.Spawn(ctx, s.newSpec())
 	requireNoError(t, err, "Spawn a")
-	b, err := p.Spawn(ctx, defaultSpec())
+	b, err := p.Spawn(ctx, s.newSpec())
 	requireNoError(t, err, "Spawn b")
 
 	if a.ProcessGroupID < 0 || b.ProcessGroupID < 0 {

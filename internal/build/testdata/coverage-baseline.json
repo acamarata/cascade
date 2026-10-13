@@ -130,6 +130,7 @@
   "plugins/pbd/internal/dispatch": { "tier": "plugins", "floor": 80.0, "baseline": 100.0 },
   "plugins/pbd/internal/pews": { "tier": "plugins", "floor": 80.0, "baseline": 89.1 },
   "plugins/review": { "tier": "plugins", "floor": 80.0, "baseline": 92.5 },
+  "providers/agents/claude": { "tier": "plugins", "floor": 80.0, "baseline": 92.8 },
   "providers/agents/conformance": { "tier": "plugins", "floor": 80.0, "baseline": 86.9 },
   "providers/agents/local": { "tier": "plugins", "floor": 80.0, "baseline": 88.3 },
   "providers/anthropic": { "tier": "plugins", "floor": 80.0, "baseline": 84.9 },

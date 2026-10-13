@@ -752,6 +752,52 @@ and runtime profile all agree with the lane's own: a mismatch is refused
 rather than silently written, closing off the case where a call would
 authenticate against one account while charging another's quota.
 
+## Agent driver custody
+
+The headless agent driver (`providers/agents/claude`, which runs the CC harness)
+treats the harness as a trusted child and enforces, with tests, only what it controls:
+
+- The child's environment is exactly `SpawnEnv.Driver`, built by the host shim from
+  `provider.DriverEnvAllowlist(configDirVar, keyVar)` (the config-dir variable plus the
+  one key variable the profile's credential class permits: an OAuth token or an API
+  key, never both); the daemon's own environment is never read, and an empty `SpawnEnv.Driver` refuses the spawn.
+- The child's working directory is `spec.WorktreeRoot`, the minimized leased tree. An
+  empty value refuses the spawn, and a value that is not the lease root refuses rather
+  than picking one. `provider.PreSpawnScan` runs over that tree before any child exists.
+- For tool policy `none` and `readonly` the argv carries the disallowed-tool list
+  (which includes the shell tool), and `--add-dir` names only in-scope prefixes under
+  the tree.
+- Every stdout and stderr chunk passes through the job's own output filter; a nil
+  filter refuses the spawn. This is defence in depth: the harness's own TLS traffic
+  and its reads of worktree files are not inspected (R-21.177).
+
+The credential canary and the key variable's value are tripwires, not an adversarial
+control. The driver scans stdout, stderr, callback frames, the journal, and the name and
+content of every file `git status` lists as changed in the leased tree, ignored files
+included, for each value in exact, upper-case, lower-case, hex and base64 form. A job that
+rewrites the repository's own bookkeeping (`update-index --assume-unchanged`, a commit), or
+that encodes the value another way (reversal, rot13), is not caught, and a symlink's target
+text is scanned but not the file it points to. The scan runs inside a 30 second window and
+reads every file under a git-ignored directory such as `node_modules/` or `target/` (about 6 to
+22 MB/s was measured on a loaded host), so a very large ignored tree, an unreadable file, or a
+foreign-owned directory under an ignored path fails the run closed as unscannable. An empty
+directory named after the value is invisible to `git status` and is not seen.
+
+### Tool-subprocess limit (DEF-P2-driver-tool-isolation)
+
+Tool subprocesses the harness spawns run as the daemon's UID and inherit the
+harness's own environment. Mode 0700 on the vendor auth directory does not keep them
+out of it, and they carry the vendor auth variables (the config-dir variable and the key
+variable). No harness at this wave documents
+a way to give its tool subprocesses a different environment, so `SpawnEnv.Tool`
+(`provider.ToolEnvAllowlist()`, which never carries either vendor auth variable) is
+computed by the host shim and journaled by name only. It is not delivered to tool
+subprocesses, and nothing here claims it is. The residual is that a tool call under a
+harness that permits shell or file tools can read the vendor auth directory; a
+descendant that calls `setsid()` also leaves the process group the driver inspects.
+This is the Art.6 deferral `DEF-P2-driver-tool-isolation`, re-entering in P2 together
+with `DEF-P2-driver-netns` (OS network namespaces for driver egress).
+
 ## Doctor checks for the vault
 
 `cascade doctor` registers five named secrets checks:

@@ -44,16 +44,19 @@ var driverEnvAllowlistBase = []string{
 }
 
 // DriverEnvAllowlist returns the trusted-driver environment allowlist: the
-// normative base set plus the driver's own vendorAuthVar name. Everything
-// else is stripped by the shim — the child never inherits the daemon
-// environ. HOME on this allowlist names the per-profile RUNTIME home
-// (<state>/agents/profiles/<profile-id>/home, mode 0700, driver-only),
-// never the user's real home.
-func DriverEnvAllowlist(vendorAuthVar string) []string {
-	out := make([]string, 0, len(driverEnvAllowlistBase)+1)
+// normative base set plus each non-empty authVar name (the harness
+// config-directory variable and, for a key credential class, its key
+// variable). Everything else is stripped by the shim: the child never
+// inherits the daemon environ. HOME on this allowlist names the
+// per-profile RUNTIME home (<state>/agents/profiles/<profile-id>/home,
+// mode 0700, driver-only), never the user's real home.
+func DriverEnvAllowlist(authVars ...string) []string {
+	out := make([]string, 0, len(driverEnvAllowlistBase)+len(authVars))
 	out = append(out, driverEnvAllowlistBase...)
-	if vendorAuthVar != "" {
-		out = append(out, vendorAuthVar)
+	for _, v := range authVars {
+		if v != "" {
+			out = append(out, v)
+		}
 	}
 	return out
 }
@@ -98,6 +101,19 @@ func PreSpawnScan(root string, scope WorktreeScope) error {
 	return nil
 }
 
+// readableAsFile reports whether PreSpawnScan should read path: a regular
+// file, or a symlink whose target is one. A FIFO, socket or device (or a
+// link to one) holds no stored secret and would block or never end when read.
+// A link that cannot be resolved, or that names a directory, is read anyway,
+// so its error fails closed.
+func readableAsFile(path string, info os.FileInfo) bool {
+	if info.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Stat(path)
+		return err != nil || target.IsDir() || target.Mode().IsRegular()
+	}
+	return info.Mode().IsRegular()
+}
+
 // scanPrefix walks one prefix rooted at dir, fail-closed on any walk or
 // read error.
 func scanPrefix(dir string) error {
@@ -110,6 +126,9 @@ func scanPrefix(dir string) error {
 		}
 		if info.IsDir() {
 			return nil
+		}
+		if !readableAsFile(path, info) {
+			return nil // holds no stored secret, and reading a FIFO would block the spawn forever
 		}
 		data, readErr := os.ReadFile(path)
 		if readErr != nil {
