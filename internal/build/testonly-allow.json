@@ -1258,22 +1258,6 @@
   },
   {
     "added_by_ticket": "P1-SEC-13",
-    "caller_site": "internal/providers/agents/proxy.go",
-    "expected_caller": "internal/providers/agents/proxy.go StartSpawnProxy, which starts one proxy per driver spawn and puts Env() in the child environment",
-    "reason": "contract:driver-egress-proxy ships the per-spawn proxy package complete and tested, but its consumer is the daemon-side spawn composition that P1-AGT-13 builds (StartSpawnProxy over [agents.egress.<driver-id>], ProxyJournal bound to the redacting audit log); this ticket's write_scope forbids the AGT shim files, so no shipping caller exists yet. Start is the per-spawn constructor that composition calls once per driver spawn.",
-    "retire_ticket": "P1-AGT-13",
-    "symbol": "internal/providers/agents/egressproxy.Start"
-  },
-  {
-    "added_by_ticket": "P1-SEC-13",
-    "caller_site": "internal/providers/agents/proxy.go",
-    "expected_caller": "internal/providers/agents/proxy.go StartSpawnProxy, passing ProductionDial() as Options.Dial",
-    "reason": "contract:driver-egress-proxy ships the per-spawn proxy package complete and tested, but its consumer is the daemon-side spawn composition that P1-AGT-13 builds (StartSpawnProxy over [agents.egress.<driver-id>], ProxyJournal bound to the redacting audit log); this ticket's write_scope forbids the AGT shim files, so no shipping caller exists yet. ProductionDial is the guarded upstream dialer that composition passes as Options.Dial.",
-    "retire_ticket": "P1-AGT-13",
-    "symbol": "internal/providers/agents/egressproxy.ProductionDial"
-  },
-  {
-    "added_by_ticket": "P1-SEC-13",
     "caller_site": "cmd/cascade/guarded_extractors.go",
     "expected_caller": "cmd/cascade/guarded_extractors.go, where the guarded extractors parse the operator allow lists from runtime.Config.Extra",
     "reason": "contract:driver-egress-proxy ships the per-spawn proxy package complete and tested, but its consumer is the guarded extractors that P1-SEC-36 builds, which parse the operator allow lists; this ticket's write_scope forbids those files, so no shipping caller exists yet. ParseEgressAllowlists reads the cold [agents.egress.<driver-id>] tables from runtime.Config.Extra for them.",
@@ -1300,13 +1284,6 @@
     "reason": "The jobs_reservation MigrationSet is fully implemented and tested (table creation, all four indexes, idempotent re-apply), but no composition root calls it yet because the daemon-start wiring is the same deferred portion of P1-E41-W9-S79-T4 noted on NewReservationStore.",
     "retire_ticket": "P1-CAP-10",
     "symbol": "internal/fleet/economics.ApplyReservationSchema"
-  },
-  {
-    "caller_site": "cmd/cascade/wire_fleet_dispatch.go",
-    "expected_caller": "a future internal/conductor/execute_reserve.go split out of execute.go's dispatch door, building the Estimate for its ReserveRequest before calling economics.Reserve",
-    "reason": "The R-21.35/R-21.50 token estimate is fully implemented and golden-tested, but its caller is the dispatch path that hydrates a context and builds a ReserveRequest before calling Reserve -- internal/conductor/execute.go's dispatch door, which this pass's deferred wiring did not reach.",
-    "retire_ticket": "P1-TOP-04",
-    "symbol": "internal/fleet/economics.EstimateFor"
   },
   {
     "caller_site": "cmd/cascade/daemon_unix_reservation.go",
@@ -1417,13 +1394,6 @@
     "symbol": "internal/fleet/capacity.NewTierPolicy"
   },
   {
-    "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
-    "expected_caller": "S-63.T3/S-64.T2's fleet-scheduling composition root, which normalizes every caller-supplied ResourceRequest through this before SelectTier; retire this entry once it lands (repointed at the Epic gate, BF-204: P1-CAP-05 composes the tier policy in subsystems_fleet_capacity.go and retires this row)",
-    "reason": "P1-E31-W6-S63-T2 ships the ResourceRequest fail-closed normalizer (task_class/min_quality/deadline/sensitivity/risk_class/data_class validation, R-21.143's raise-only floor) fully unit-tested, but the caller that builds a ResourceRequest from a real dispatch intent and calls this before SelectTier is the same not-yet-landed fleet-scheduling composition root -- see NewTierPolicy's entry above for full context.",
-    "retire_ticket": "P1-CAP-05",
-    "symbol": "internal/fleet/capacity.ValidateResourceRequest"
-  },
-  {
     "added_by_ticket": "P1-CI-01",
     "caller_site": "internal/daemon/subsystems_ci.go",
     "expected_caller": "internal/daemon/wire_ci.go, where P1-CI-10's CI subsystem composition calls ci.NewDispatcher with the lease manager's Fence, the worktree manager's Snapshot, the jobs outbox database and a SubJobExecutor, then mounts Checkpoint and Resume; retire this entry when that lands",
@@ -1486,13 +1456,6 @@
     "symbol": "internal/nodes.PendingCandidate"
   },
   {
-    "caller_site": "internal/fleet/capacity/tier_selector.go",
-    "expected_caller": "NewTierPolicySelector projects the snapshot and eligible lanes before calling SelectTier.",
-    "reason": "The tier projection contract precedes the fleet selector that consumes it.",
-    "retire_ticket": "P1-CAP-04",
-    "symbol": "internal/fleet/capacity.ProjectTiers"
-  },
-  {
     "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
     "expected_caller": "FleetRuntime merges registered agent lanes into capacity snapshots using AgentLaneSlots.",
     "reason": "The agent lane projection precedes the runtime registration and snapshot composition.",
@@ -1506,14 +1469,6 @@
     "reason": "Read-only custody report is implemented here; the security doctor mount is owned by the following ticket.",
     "retire_ticket": "P1-SEC-12",
     "symbol": "internal/elevation.CustodyReport"
-  },
-  {
-    "added_by_ticket": "P1-SEC-18",
-    "caller_site": "internal/providers/agents/env.go",
-    "expected_caller": "DriverEnv binds the daemon-issued principal token into the sanitized child environment.",
-    "reason": "Launcher environment binding lands with the credential consumer.",
-    "retire_ticket": "P1-AGT-15",
-    "symbol": "internal/principal.BindEnv"
   },
   {
     "added_by_ticket": "P1-SEC-18",
@@ -1589,5 +1544,109 @@
     "reason": "P1-AGT-02 ships the one conversion from a verified signed envelope to the driver-facing SpawnEnvelope implemented and tested, but the only production caller is the host shim of P1-AGT-03.",
     "retire_ticket": "P1-AGT-03",
     "symbol": "internal/providers/agents.ProjectEnvelope"
+  },
+  {
+    "added_by_ticket": "P1-AGT-14",
+    "caller_site": "internal/providers/agents/spawn.go",
+    "expected_caller": "internal/providers/agents/spawn.go, Shim.Spawn: the spawn order renders the relay hook pack (RenderAgentHookPack) into the pack directory it hands the driver as HookPackPath; retire this entry once that file calls it",
+    "reason": "P1-AGT-14 ships the hook relay and RenderAgentHookPack implemented and tested (including a live run of the real harness through the driver). The only production caller is the host shim's Spawn order, which is P1-AGT-03 (spawn.go); until it lands nothing writes the relay entries into a pack. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
+    "retire_ticket": "P1-AGT-03",
+    "symbol": "internal/providers/agents.RenderAgentHookPack"
+  },
+  {
+    "added_by_ticket": "P1-AGT-15",
+    "caller_site": "internal/providers/agents/spawn.go",
+    "expected_caller": "internal/providers/agents/spawn.go, the host shim Spawn: parses the operator's [agents.auth.<harness>] tables into one DriverAuth per harness; retire this entry once that file calls it",
+    "reason": "P1-AGT-15 ships the driver credential inputs implemented and tested, but the host shim that composes them per driver spawn (P1-AGT-03) does not exist yet, so a call from production code now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists.",
+    "retire_ticket": "P1-AGT-03",
+    "symbol": "internal/providers/agents.ParseDriverAuth"
+  },
+  {
+    "added_by_ticket": "P1-AGT-15",
+    "caller_site": "internal/providers/agents/spawn.go",
+    "expected_caller": "internal/providers/agents/spawn.go, the host shim Spawn: provisions the per-spawn runtime profile (home, config dir, tmp) before the driver child starts; retire this entry once that file calls it",
+    "reason": "P1-AGT-15 ships the driver credential inputs implemented and tested, but the host shim that composes them per driver spawn (P1-AGT-03) does not exist yet, so a call from production code now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists.",
+    "retire_ticket": "P1-AGT-03",
+    "symbol": "internal/providers/agents.ProvisionRuntimeProfile"
+  },
+  {
+    "added_by_ticket": "P1-AGT-15",
+    "caller_site": "internal/providers/agents/spawn.go",
+    "expected_caller": "internal/providers/agents/spawn.go, the host shim Spawn: builds the exact driver and tool environments and the secret list for the output scrub; retire this entry once that file calls it",
+    "reason": "P1-AGT-15 ships the driver credential inputs implemented and tested, but the host shim that composes them per driver spawn (P1-AGT-03) does not exist yet, so a call from production code now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists.",
+    "retire_ticket": "P1-AGT-03",
+    "symbol": "internal/providers/agents.BuildDriverEnv"
+  },
+  {
+    "added_by_ticket": "P1-SEC-01",
+    "caller_site": "internal/daemon/conductor_door.go",
+    "expected_caller": "internal/daemon/conductor_door.go, the in-process conductor door that wraps every leaf Embed and Execute call in ContextWithDoorSensitivity(ctx, tier) with the daemon-side tier; retire this entry once that file calls ContextWithDoorSensitivity",
+    "reason": "P1-SEC-01 ships conductor.ContextWithDoorSensitivity, the one way a leaf-door caller declares its sensitivity tier to enterDoor (no declaration resolves to restricted), implemented and tested at every leaf verb. Its first production caller is the in-process conductor door in P1-CPA-10, which does not exist yet, so wiring a call here now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once conductor_door.go exists.",
+    "retire_ticket": "P1-CPA-10",
+    "symbol": "internal/conductor.ContextWithDoorSensitivity"
+  },
+  {
+    "added_by_ticket": "P1-AGT-13",
+    "caller_site": "internal/providers/agents/spawn.go",
+    "expected_caller": "internal/providers/agents/spawn.go, the host shim Spawn: starts one proxy per driver spawn over [agents.egress.<driver-id>] and puts Env() in the child environment; retire this entry once that file calls it",
+    "reason": "P1-AGT-13 ships the per-spawn containment (egress proxy bound to the audit log, lease-marker sweep) implemented and tested, but the shim that composes it per driver spawn (P1-AGT-03) does not exist yet, so a call from production code now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists.",
+    "retire_ticket": "P1-AGT-03",
+    "symbol": "internal/providers/agents.StartSpawnProxy"
+  },
+  {
+    "added_by_ticket": "P1-AGT-13",
+    "caller_site": "internal/providers/agents/spawn.go",
+    "expected_caller": "internal/providers/agents/spawn.go, the host shim Spawn: binds the spawn proxy's Journal to the redacting audit log and effect writer; retire this entry once that file calls it",
+    "reason": "P1-AGT-13 ships the per-spawn containment (egress proxy bound to the audit log, lease-marker sweep) implemented and tested, but the shim that composes it per driver spawn (P1-AGT-03) does not exist yet, so a call from production code now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists.",
+    "retire_ticket": "P1-AGT-03",
+    "symbol": "internal/providers/agents.ProxyJournal"
+  },
+  {
+    "added_by_ticket": "P1-AGT-13",
+    "caller_site": "internal/providers/agents/spawn.go",
+    "expected_caller": "internal/providers/agents/spawn.go, the host shim Spawn: mints the spawn's CASCADE_LEASE_ID marker; retire this entry once that file calls it",
+    "reason": "P1-AGT-13 ships the per-spawn containment (egress proxy bound to the audit log, lease-marker sweep) implemented and tested, but the shim that composes it per driver spawn (P1-AGT-03) does not exist yet, so a call from production code now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists.",
+    "retire_ticket": "P1-AGT-03",
+    "symbol": "internal/providers/agents.NewLeaseMarker"
+  },
+  {
+    "added_by_ticket": "P1-AGT-13",
+    "caller_site": "internal/providers/agents/spawn.go",
+    "expected_caller": "internal/providers/agents/spawn.go, the host shim Spawn: kills every marked process at Release and fails closed on a survivor; retire this entry once that file calls it",
+    "reason": "P1-AGT-13 ships the per-spawn containment (egress proxy bound to the audit log, lease-marker sweep) implemented and tested, but the shim that composes it per driver spawn (P1-AGT-03) does not exist yet, so a call from production code now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists.",
+    "retire_ticket": "P1-AGT-03",
+    "symbol": "internal/providers/agents.SweepLease"
+  },
+  {
+    "added_by_ticket": "P1-CAP-04",
+    "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
+    "expected_caller": "FleetRuntime composition in internal/daemon/subsystems_fleet_capacity.go constructs the one capacity.Fleet with capacity.NewFleet, passing the production snapshot source, the selector, the learn scorer and decision adapters, DomainOf, node placement, the one Reserver and its reservation store; retire this entry once that file calls NewFleet",
+    "reason": "P1-CAP-04 ships Fleet.Lease and its companions (Commit, Abort, Release, ExpireStale, ReservationByExecution, RepoOfLease) implemented and tested over real SQLite, but the composition root that builds the Fleet is P1-CAP-05's scope and the first dispatch door that calls the lease methods is P1-TOP-04, so nothing in production calls NewFleet yet. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once the file exists without the call.",
+    "retire_ticket": "P1-CAP-05",
+    "symbol": "internal/fleet/capacity.NewFleet"
+  },
+  {
+    "added_by_ticket": "P1-CAP-04",
+    "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
+    "expected_caller": "FleetRuntime composition in internal/daemon/subsystems_fleet_capacity.go builds the interim Selector with capacity.NewTierPolicySelector over the TierPolicy it constructs, and passes it to NewFleet; P1-TOP-09 later replaces it with the economics.Rank selector and deletes this symbol",
+    "reason": "The interim Selector is the Lease seam's only implementation until P1-TOP-09. It is fully unit-tested, but the composition root that holds the TierPolicy is P1-CAP-05's scope, so nothing in production calls it yet.",
+    "retire_ticket": "P1-CAP-05",
+    "symbol": "internal/fleet/capacity.NewTierPolicySelector"
+  },
+  {
+    "added_by_ticket": "P1-TOP-01",
+    "caller_site": "internal/fleet/topology/lane_ceiling.go",
+    "expected_caller": "internal/fleet/topology/lane_ceiling.go, the lane-ceiling resolver that derives a profile lane's lane type from EndpointIsLocal(profile); retire this entry once that file calls EndpointIsLocal",
+    "reason": "P1-TOP-01 ships topology.EndpointIsLocal, the one locality input of the data-class ceiling (an explicit loopback or unix-socket endpoint is local, an empty endpoint is remote on every profile), implemented over topology.URLIsLocal, the one locality classifier the router also calls. Its only consumer is the lane-ceiling resolver in P1-TOP-02, which does not exist yet, so wiring a call here now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once lane_ceiling.go exists.",
+    "retire_ticket": "P1-TOP-02",
+    "symbol": "internal/fleet/topology.EndpointIsLocal"
+  },
+  {
+    "added_by_ticket": "P1-TOP-01",
+    "caller_site": "internal/fleet/topology/enroll.go",
+    "expected_caller": "internal/fleet/topology/enroll.go, the enrollment path that calls EnsureHome before it writes a claude-cli subscription credential row; retire this entry once that file calls EnsureHome",
+    "reason": "P1-TOP-01 ships topology.EnsureHome, the per-profile 0700 runtime home, implemented and tested (mode creation, tightening, symlink and file refusal, windows declared refusal). Its first production caller is account enrollment in P1-TOP-07 (enroll.go), and the spawn path that passes the home to a runtime is P1-TOP-17; neither exists yet. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once enroll.go exists.",
+    "retire_ticket": "P1-TOP-07",
+    "symbol": "internal/fleet/topology.EnsureHome"
   }
 ]
