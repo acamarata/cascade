@@ -1,13 +1,11 @@
 //go:build !windows
 
-// Purpose: the daemon run path's POLICY composition root. It constructs
+// Purpose: the daemon run path's POLICY composition root. It takes the one
 //
-//	the one production policy.Engine this process evaluates every gated
-//	action through, over the B-layer seams only, and builds the single
-//	authorization middleware (routing.ActionRouter) the scheduler and the
-//	hook dispatcher share. policy.NewEngine was called nowhere in cmd/
-//	before this file, so no call site could install a gate at all and the
-//	scheduler's fail-closed routing refused every due job.
+//	production policy.Engine this process evaluates every gated action
+//	through from newPolicyEngine (policy_engine.go), over the B-layer seams
+//	only, and builds the single authorization middleware
+//	(routing.ActionRouter) the scheduler and the hook dispatcher share.
 //
 // Inputs: the real provider.Store openRuntimeStore opened, the process
 //
@@ -35,7 +33,6 @@ import (
 
 	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/internal/events/routing"
-	"github.com/acamarata/cascade/internal/jobs"
 	"github.com/acamarata/cascade/internal/policy"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -96,11 +93,13 @@ func bootCapabilities() []policy.Capability {
 // policyWiring is what wirePolicy built, named as a set so a caller cannot
 // take the router without the engine that answers for it.
 type policyWiring struct {
-	// Registry is the boot-loaded capability registry singleton.
-	Registry policy.CapabilityRegistry
-	// Engine is the one production policy engine this process evaluates
-	// through.
-	Engine *policy.Engine
+	// policyEngineParts carries the engine every gated call site evaluates
+	// through and the collaborators it was built over: the capability
+	// registry singleton, the grant store, the stored deny list, the
+	// autonomy controller and the process's one redacting audit log
+	// (openAuditLog), which the router, the approval queue and supervision
+	// share.
+	policyEngineParts
 	// Router is the single authorization middleware every gated call site
 	// in this process shares.
 	Router *routing.ActionRouter
@@ -109,23 +108,9 @@ type policyWiring struct {
 	// so an operator listing the queue sees the entries the engine
 	// actually made rather than a second, empty queue.
 	Queue policy.ApprovalQueue
-	// Audit is the process's one redacting audit log (openAuditLog): the
-	// writer the engine's router, the approval queue and supervision share.
-	Audit *audit.Log
 	// Handlers is the approval/policy JSON-RPC handler set built over
 	// everything above. The RPC composition root registers it.
 	Handlers map[string]policy.MethodFunc
-}
-
-// newBootRegistry is the capability registry populated with the boot set.
-func newBootRegistry(ctx context.Context) (*policy.MemoryRegistry, error) {
-	registry := policy.NewMemoryRegistry()
-	for _, c := range bootCapabilities() {
-		if err := registry.Add(ctx, c); err != nil {
-			return nil, err
-		}
-	}
-	return registry, nil
 }
 
 // wirePolicy constructs the production policy engine and the one
@@ -151,52 +136,47 @@ func newBootRegistry(ctx context.Context) (*policy.MemoryRegistry, error) {
 // implementation of either exists, and attaching a placeholder would make
 // an unauthorized action report success.
 func wirePolicy(ctx context.Context, store provider.Store, clock runtime.Clock, cfg *runtime.Config, paths runtime.PathProvider) (*policyWiring, error) {
-	registry, err := newBootRegistry(ctx)
+	// Bind the process firewall to the daemon's own data directory before
+	// the constructor opens the audit log, so which wiring step reaches the
+	// log first never decides whether the vault is the daemon's. (A
+	// malformed [policy] now selects vault custody before it refuses; the
+	// refusal itself is unchanged.)
+	if _, err := bindDaemonFirewall(paths); err != nil {
+		return nil, err
+	}
+	// The daemon loads its config with runtime.Load, which reads a
+	// config.toml it cannot follow as "no config file". Refuse that here, as
+	// the MCP and github-ci surfaces do, rather than run the default profile.
+	if err := refuseUnfollowableConfig(paths); err != nil {
+		return nil, err
+	}
+	parts, err := newPolicyEngine(ctx, policyEngineInputs{
+		Store: store, Clock: clock, Config: cfg, Capabilities: bootCapabilities(), Paths: paths,
+	})
 	if err != nil {
 		return nil, err
 	}
-	grants, err := policy.NewStoreGrants(store, registry, clock)
+	queue, err := buildApprovalQueue(store, parts.Registry, parts.Grants, parts.DenyList, clock, parts.Audit)
 	if err != nil {
 		return nil, err
 	}
-	denyList, err := policy.NewStoreDenyList(store)
+	engine := parts.Engine.WithApprovalQueue(queue)
+	router, err := routing.NewActionRouter(engine, parts.Audit)
 	if err != nil {
 		return nil, err
 	}
-	controller := policy.NewController(nil)
-	if err := applyAutonomyProfile(ctx, controller, cfg); err != nil {
-		return nil, err
-	}
-	engine, err := policy.NewEngine(registry, grants, controller)
+	router, err = attachAutoAdvance(router, engine, parts.Controller, store, clock, parts.Audit, cfg)
 	if err != nil {
 		return nil, err
 	}
-	engine = engine.WithDenyList(denyList)
-	log, err := openDaemonAuditLog(store, clock, nil, paths)
-	if err != nil {
-		return nil, err
-	}
-	queue, err := buildApprovalQueue(store, registry, grants, denyList, clock, log)
-	if err != nil {
-		return nil, err
-	}
-	engine = engine.WithApprovalQueue(queue)
-	router, err := routing.NewActionRouter(engine, log)
-	if err != nil {
-		return nil, err
-	}
-	router, err = attachAutoAdvance(router, engine, controller, store, clock, log, cfg)
-	if err != nil {
-		return nil, err
-	}
-	wiring := &policyWiring{Registry: registry, Engine: engine, Router: router, Queue: queue, Audit: log}
+	wiring := &policyWiring{policyEngineParts: parts, Router: router, Queue: queue}
 	wiring.Handlers = policy.MethodHandlers(policy.RPCDeps{
 		Queue:    queue,
 		Engine:   engine,
-		Registry: registry,
-		Grants:   grants,
-		DenyList: denyList,
-		Audit:    log,
+		Registry: parts.Registry,
+		Grants:   parts.Grants,
+		DenyList: parts.DenyList,
+		Audit:    parts.Audit,
 		Clock:    clock,
 		// Verifier and Attestor are deliberately absent. No production
 		// approval-key source and no production attestation helper exist
@@ -227,43 +207,4 @@ func buildApprovalQueue(
 		Recorder: log,
 		DenyList: denyList,
 	})
-}
-
-// applyAutonomyProfile loads the [policy] section into the controller. A
-// nil config carries no section, which Apply resolves to the shipped
-// baseline; a malformed section is returned as an error rather than
-// warned past, because unlike a maintenance schedule an unreadable policy
-// section decides what the daemon is allowed to do.
-//
-// [policy.risk_gates]'s gate-step names are validated HERE, before
-// Apply, rather than inside internal/policy: that package cannot import
-// internal/jobs (an import cycle -- see risk_gates_config.go's own doc
-// comment), so its own parse only checks the overlay's shape and its
-// risk-class-name keys. This composition root imports both packages, so
-// a bad gate-step name refuses the whole reload before controller.Apply
-// ever swaps anything in (validate-before-write, R-16.70(b), AH/S-69.T1).
-func applyAutonomyProfile(ctx context.Context, controller *policy.Controller, cfg *runtime.Config) error {
-	if cfg == nil {
-		return controller.Apply(ctx, map[string]interface{}{})
-	}
-	if err := validateRiskGateOverlay(cfg); err != nil {
-		return err
-	}
-	return controller.Apply(ctx, cfg.Extra)
-}
-
-// validateRiskGateOverlay re-parses the [policy] section far enough to
-// reach RiskGates and runs jobs.BuildRiskGateOverlay over it, so an
-// unparseable gate-step name is caught before the reload swap rather
-// than only when a later `policy risk explain` call happens to hit it.
-// A [policy] section this file cannot even parse structurally is not
-// this function's error to report -- controller.Apply reports that one
-// itself, with the richer refusal-audit path Controller already owns.
-func validateRiskGateOverlay(cfg *runtime.Config) error {
-	parsed, err := policy.ParseConfig(cfg.Extra)
-	if err != nil {
-		return nil
-	}
-	_, err = jobs.BuildRiskGateOverlay(parsed.RiskGates)
-	return err
 }

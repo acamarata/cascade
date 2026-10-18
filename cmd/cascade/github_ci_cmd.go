@@ -223,8 +223,16 @@ func hostMergeOnGreen(ctx context.Context, opts ci.MergeOptions) (ci.MergeResult
 	if err != nil {
 		return ci.MergeResult{}, err
 	}
-	deps := ci.MergeDeps{Engine: engine, Caller: caller, HeadSHA: ci.ClientHeadSHA(waitDeps.Client), Audit: log}
+	deps := githubCIMergeDeps(engine, log, caller, ci.ClientHeadSHA(waitDeps.Client))
 	return ci.MergeOnGreen(ctx, deps, opts, wait)
+}
+
+// githubCIMergeDeps wires the github-ci engine and its shared redacting
+// audit log into the merge collaborators, so a merge decision is recorded in
+// the same log every other engine writes to. It is one function so a test can
+// build the production deps without the plugin host.
+func githubCIMergeDeps(engine *policy.Engine, log audit.Writer, caller ci.MergeCaller, head ci.HeadSHAFetcher) ci.MergeDeps {
+	return ci.MergeDeps{Engine: engine, Caller: caller, HeadSHA: head, Audit: log}
 }
 
 // githubCICapabilities are the two capabilities the GitHub CI verbs
@@ -239,7 +247,7 @@ func hostMergeOnGreen(ctx context.Context, opts ci.MergeOptions) (ci.MergeResult
 // would have nothing to grant against.
 //
 // This function is the one source; bootCapabilities (the daemon's
-// composition root) appends it, and githubCIPolicy below seeds the CLI's
+// composition root) appends it, and githubCIPolicy (policy_engine.go) seeds the CLI's
 // engine from it, so the two can never disagree about the class.
 func githubCICapabilities() []policy.Capability {
 	return []policy.Capability{
@@ -254,44 +262,4 @@ func githubCICapabilities() []policy.Capability {
 			DefaultPolicy: policy.ClassExternalSideEffect,
 		},
 	}
-}
-
-// githubCIPolicy builds the real policy engine and audit log an unattended
-// merge is decided by, over the runtime store.
-//
-// It reuses openMCPPolicyStore because that is this binary's ONE
-// platform-split opener for the runtime store (daemon_unix_store.go's
-// openRuntimeStore is !windows, and the windows half is the documented
-// tier-2 refusal). The name predates this second caller; what matters is
-// that the grants an operator wrote with `cascade policy grant` are the
-// ones read here, rather than a second, empty store.
-func githubCIPolicy() (*policy.Engine, audit.Writer, func(), error) {
-	clock := runtime.NewSystemClock()
-	store, closeStore, err := openMCPPolicyStore(lazyPaths{}, clock)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	registry := policy.NewMemoryRegistry()
-	for _, capability := range githubCICapabilities() {
-		if err := registry.Add(context.Background(), capability); err != nil {
-			closeStore()
-			return nil, nil, nil, err
-		}
-	}
-	grants, err := policy.NewStoreGrants(store, registry, clock)
-	if err != nil {
-		closeStore()
-		return nil, nil, nil, err
-	}
-	engine, err := policy.NewEngine(registry, grants, policy.NewController(nil))
-	if err != nil {
-		closeStore()
-		return nil, nil, nil, err
-	}
-	log, err := openAuditLog(store, clock, nil, lazyPaths{})
-	if err != nil {
-		closeStore()
-		return nil, nil, nil, err
-	}
-	return engine, log, closeStore, nil
 }

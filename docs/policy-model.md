@@ -333,6 +333,56 @@ command text, through the classifier described above.
 value), whether an autonomous loop may advance past the action, the rung actually
 evaluated, the layer that decided, a one-line reason and the full `Trace`.
 
+### One constructor
+
+Every production engine is built by one function, so the three surfaces that
+evaluate actions (the daemon, the MCP tool filter and the `cascade github ci`
+verbs) cannot drift apart. It wires, in this order:
+
+1. the capability registry, from the capability set the caller routes;
+2. the durable grant store;
+3. the stored deny list, **read once at construction**;
+4. the operator's `[policy]` autonomy profile, from `config.toml`;
+5. the process's one redacting audit log for the store.
+
+What each surface does when a step fails:
+
+| Failure | Daemon | MCP tool filter | `github ci` |
+|---|---|---|---|
+| Missing `config.toml` | default profile | default profile | default profile |
+| `config.toml` or `[policy]` does not parse, or exists and cannot be read | refuses to start | lists nothing (deny-all filter) | refuses the verb |
+| Deny store unreadable or holds a corrupt row | refuses to start | lists nothing | refuses the verb |
+| Store, clock, or audit log (vault custody) unavailable | refuses to start | lists nothing | refuses the verb |
+
+A missing file is the only case that is not a refusal. A config that exists
+and cannot be followed (an unreadable file, a symlink to nothing, a
+directory) refuses on all three surfaces and never selects the default
+profile, because the profile decides what the process may do. `CASCADE_POLICY__*` environment overrides
+apply on all three surfaces, as they do for every config key. The MCP server
+opens the audit log only to satisfy the constructor: its tool-listing checks
+do not append to it.
+
+The daemon keeps the deny rows it read in memory and drops them when its own
+handlers add or remove a row. The MCP server and the `github ci` verbs read
+the deny rows again on every decision instead of trusting a cache they do not
+own. The runtime store admits one opener at a time today, so no other process
+can write a row while they run; the re-read is defence in depth. A read
+failure at decision time is treated as "listed", so the action is refused.
+
+Two limits are worth knowing. A deny row matches the action text of a
+request, so a request that has no command text (`CommandLess` with an empty
+action) is not matched by any row; the deny list is a command-pattern list,
+not a capability list. The merge-on-green request is such a request, so the
+`github ci` engine checks it against the rows as the commands `gh pr merge`,
+`gh pr merge --auto` and `gh pr merge` with each merge method (`--squash`,
+`--merge`, `--rebase`): a row `gh pr merge *`, `gh pr *`, the exact
+`gh pr merge` or `gh pr merge --squash` refuses the merge, and a row for
+another command does not. The
+rows cannot name a repository or pull request, because the request carries no
+text that does. And the MCP listing action is the one constant
+`mcp.tools/list`, so a deny row hides every MCP tool or none, never a single
+tool.
+
 ### The seven layers
 
 | # | Layer | What it consults | What it can answer |

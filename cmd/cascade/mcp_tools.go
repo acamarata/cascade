@@ -173,38 +173,56 @@ func registerMCPRecall(ctx context.Context, registry *rpc.Registry, paths runtim
 //
 // Every failure returns mcp.DenyAllFilter: with no engine there is no
 // basis on which to expose a capability-gated tool, and exposing one
-// anyway is the single outcome this whole filter exists to prevent. The
-// store is NOT closed on the success path — the engine reads grants
-// through it on every Allow call, so it lives as long as the server does.
+// anyway is the single outcome this whole filter exists to prevent. That
+// includes a config.toml that does not parse and a deny store that cannot
+// be read: the operator's profile and deny rows decide what may be listed,
+// so a process that cannot read them lists nothing. The store is NOT
+// closed on the success path -- the engine reads grants through it on
+// every Allow call, so it lives as long as the server does.
 func mcpToolFilter(paths runtime.PathProvider, clock runtime.Clock) (mcp.CapabilityFilter, func()) {
 	store, closeStore, err := openMCPPolicyStore(paths, clock)
 	if err != nil {
 		return mcp.DenyAllFilter{}, nil
 	}
-	engine, err := buildMCPPolicyEngine(store, clock)
-	if err != nil {
+	filter := mcpPolicyFilter(context.Background(), store, clock, paths)
+	if _, denied := filter.(mcp.DenyAllFilter); denied {
 		closeStore()
-		return mcp.DenyAllFilter{}, nil
+		return filter, nil
 	}
-	return coretools.NewPolicyFilter(engine, mcpToolSubject), closeStore
+	return filter, closeStore
 }
 
-// buildMCPPolicyEngine assembles the engine over store: a memory
-// capability registry seeded with the three capabilities the first-party
-// tools declare, the durable grant store, and a controller at its default
-// autonomy profile.
-func buildMCPPolicyEngine(store provider.Store, clock runtime.Clock) (*policy.Engine, error) {
-	registry := policy.NewMemoryRegistry()
-	for _, capability := range mcpToolCapabilities() {
-		if err := registry.Add(context.Background(), capability); err != nil {
-			return nil, err
-		}
+// mcpPolicyFilter is mcpToolFilter over an opened store: the capability
+// filter over the MCP engine, or mcp.DenyAllFilter when the engine cannot be
+// built (a config.toml that does not parse, a malformed [policy] section, an
+// unreadable deny store, an audit log that will not open). The engine
+// re-reads the deny rows on every decision rather than trusting a cache it
+// does not own (defence in depth: an MCP server outlives the rows it started
+// with).
+func mcpPolicyFilter(ctx context.Context, store provider.Store, clock runtime.Clock, paths runtime.PathProvider) mcp.CapabilityFilter {
+	engine, err := buildMCPPolicyEngine(ctx, store, clock, paths)
+	if err != nil {
+		return mcp.DenyAllFilter{}
 	}
-	grants, err := policy.NewStoreGrants(store, registry, clock)
+	return coretools.NewPolicyFilter(engine, mcpToolSubject)
+}
+
+// buildMCPPolicyEngine assembles the MCP tool engine over store through the
+// one policy constructor: the first-party capability set, the durable
+// grants, the stored deny list and the operator's [policy] profile from
+// config.toml (read-only; a missing file is the default profile).
+func buildMCPPolicyEngine(ctx context.Context, store provider.Store, clock runtime.Clock, paths runtime.PathProvider) (*policy.Engine, error) {
+	cfg, err := loadPolicyConfig(ctx, paths)
 	if err != nil {
 		return nil, err
 	}
-	return policy.NewEngine(registry, grants, policy.NewController(nil))
+	parts, err := newPolicyEngine(ctx, policyEngineInputs{
+		Store: store, Clock: clock, Config: cfg, Capabilities: mcpToolCapabilities(), Paths: paths,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return withFreshDenyList(parts, store, nil), nil
 }
 
 // runClosers runs every closer, ignoring nils.

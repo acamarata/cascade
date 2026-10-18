@@ -17,7 +17,10 @@ import (
 // composition becomes portable nobody would notice this test had stopped
 // meaning anything.
 func TestTheGrantStoreRefusalIsAssertedPerPlatform(t *testing.T) {
-	filter, closeFilter := mcpToolFilter(doctorTestPaths(t), cascaderuntime.SystemClock{})
+	// auditTestPaths, not doctorTestPaths: the filter's engine now opens the
+	// process audit log, which binds the process firewall to these paths, so
+	// the binding left by an earlier test must be reset first.
+	filter, closeFilter := mcpToolFilter(auditTestPaths(t), cascaderuntime.SystemClock{})
 	if closeFilter != nil {
 		t.Cleanup(closeFilter)
 	}
