@@ -29,13 +29,13 @@ on the request that created the row.
 States: `held`, `parked`, `committed`, `released`, `rolled_back`. Legal
 moves: held to parked and back, held to committed, committed to parked,
 held or parked to `released` or `rolled_back`, and committed to `released`
-only. `released` and `rolled_back` are terminal. Every state change goes through the store's transition, which is
-compare-and-set on the stored state. A pure state move (park, unpark,
-commit) writes the state column and nothing else. A progress write (step
-ledger, handles, accounting, and the teardown that ends in a terminal
-state) never writes the placement or the liveness columns. So a `Bind`
-or a claim that lands after a writer read the row is never erased by that
-writer.
+only. `released` and `rolled_back` are terminal. Every state change goes
+through the store's transition, which is compare-and-set on the stored state.
+A pure state move (park, unpark, commit) writes the state column and nothing
+else. A progress write (step ledger, handles, accounting, and the teardown
+that ends in a terminal state) never writes the placement or the liveness
+columns. So a `Bind` or a claim that lands after a writer read the row is
+never erased by that writer.
 
 Kinds: `interactive` (the default; takes leases and a worktree when it has
 scope globs) and `batch` (quota only, no globs, a 24 hour expiry).
@@ -182,3 +182,119 @@ all are valid they are kept. Otherwise the stored leases that are still
 valid are released and the whole stored scope is re-acquired in one call
 with the stored repo, job and globs. If that fails, the reservation is
 rolled back.
+
+## Fleet.Lease
+
+`Fleet.Lease` is the one in-process door from a request to a reservation.
+It is not an RPC. Code: `internal/fleet/capacity/fleet.go`, `resolve.go`,
+`lease.go`. Build a `Fleet` only with `capacity.NewFleet(FleetDeps)`; every
+field is required except `Floors`, and a missing one is `KindInvalidInput`
+naming it.
+
+### Request and dispatch reference
+
+`Lease(ctx, req, d, attempt)` takes a `ResourceRequest` (what the work
+needs), a `DispatchRef` (what it is) and the attempt number (1 or more).
+
+| `DispatchRef` field | Rule |
+|---|---|
+| `ProjectID` | required |
+| `Requests` | at least 1; `HydratedTokens` at least 0 |
+| `JobID` | set: the execution row is written; empty: no execution row |
+| `RepoID`, `ScopeGlobs` | globs need both a `JobID` and a `RepoID`; the reservation leases them; the teardown removes the worktree, then releases them |
+| `AgentOnly` | restrict to `agent:` lanes (otherwise non-agent lanes) |
+| `Placement` | nil runs on the controller; otherwise node capabilities only |
+
+`PlacementNeed` carries no sensitivity. The placement requirement's tier is
+derived from the request: `JoinSensitivity(req.Sensitivity,
+TierOrLocalOnly(req.DataClass))`. The caller never supplies it.
+
+The data-class floor comes from the leased job's own data class. A request
+that leaves `DataClass` nil takes the job's class (the mapping `Lease` owns);
+one that sets it below the job's class is refused. A request with no job has
+nothing to derive from, so its data class reads local-only and it can run only
+on controller-local lanes.
+
+### Order
+
+1. Validate the dispatch reference and the request (`ValidateResourceRequest`).
+2. Read the snapshot.
+3. Allowed lanes: snapshot lanes with `Posture.ProgrammaticEntitlement`,
+   agent lanes only when `AgentOnly`. None: `ErrNoAllowedLanes`.
+4. Sensitivity filter: `conductor.SensitivityAllows` over the joined tier.
+   This runs first and cannot be removed.
+5. `FleetDeps.Floors`, in order, over the lanes the filter kept.
+6. The `Selector` chooses tier and lane from what is left.
+7. Node placement (only when `Placement` is set).
+8. `DomainOf(lane)`; a lane with no quota domain refuses. Unknown capacity is
+   never unlimited.
+9. `Reserve` (execution id minted), then `Bind` in one transaction: the job's
+   data class is read again inside it (a class raised since step 1 refuses
+   with `ErrDataClassDenied`), then the placement, the execution row (when
+   there is a job) and the scheduler decision through the `DecisionRecorder`.
+
+Nothing is written before `Reserve`, and every refusal before it writes zero
+rows. `Lease` never sets `ReserveRequest.ScopeID`; the Reserver derives the
+limit scope. The Selector and the floors get a private copy of the snapshot
+and of the eligible lanes. `Lease` keeps its own record of the eligible lanes
+and their tiers and refuses a Selection whose lane was not eligible before the
+Selector ran, or whose tier is not that lane's tier.
+
+### Errors
+
+| Error | Kind | When |
+|---|---|---|
+| `ErrNoCapableTier` (wraps `ErrFleetExhausted`) | unavailable | no schedulable tier, or the floors removed every lane |
+| `ErrTier0Reserved` | unavailable | tier-0 is schedulable (after backoff), `reserve_tier0` is set and no jump fired |
+| `ErrSensitivityConstraint` | policy denied | local-only work with no controller lane or node, or restricted work with no trusted node |
+| `ErrDataClassDenied` | policy denied | the data class forbids every remaining lane |
+| `ErrReservationFailed` | unavailable | reserve or bind failed; the cause stays in the chain |
+| `ErrNoQuotaDomain` | unavailable | the lane has no quota domain |
+| `ErrLeaseUnknown` | not found | `RepoOfLease` on an unknown lease |
+| `ErrNoAllowedLanes` | policy denied | no entitled lane of the right kind (unchanged) |
+
+`errors.Is` on these compares the kind only: test a sentinel by identity and
+read the message, which names every removed lane and its type.
+
+### Commit, Abort, Release, ExpireStale
+
+`Commit` confirms a spawn (held to committed). `Abort` is for a failed spawn:
+it rolls a held reservation back and returns nil on a second call. The Reserver
+has no rollback entry point, so `Abort` fails a `Bind` on the row (its own
+rollback path); a parked or committed reservation is retired through `Release`.
+`Commit`, `Abort` and `Release` refuse a lease whose reservation id does not
+match its execution; `Abort` and `Release` also ignore the caller's
+cancellation. `Release` runs the terminal teardown (worktree, then leases) and
+returns nil on a second call. `ExpireStale` calls `Reserver.ExpireStale` with
+`FleetDeps.TTL` as the liveness interval, so there is one expiry rule, then
+drops the lease-index entry of every lease whose reservation is gone, replaced
+or terminal (a parked lease stays indexed). `ReservationByExecution` reads an
+execution's reservation through `FleetDeps.Reservations`.
+
+### Selector seam
+
+`Selector.Select(ctx, SelectInput)` chooses the tier and the lane from
+`SelectInput.Eligible` (sorted, filtered, never nil). The interim
+`NewTierPolicySelector` keeps the eligible lanes schedulable now on their own
+observation (a fresh available state or a constrained one, profile outside
+its backoff), projects them into tier slots (`ProjectTiers`), asks
+`TierPolicy.SelectTier` (the one tier walk, jump rule and reserve flag) for the
+tier and takes the first kept lane of it in lane-id order. A lane with unknown
+or stale-available state is never leased and never probed: a probe stays in
+flight until a dispatcher classifies it. A call reads its clock, scores and backoff
+answers once. A later `economics.Rank` selector replaces it and owns probes.
+
+### RepoOfLease
+
+`RepoOfLease(leaseID)` answers which repository a live lease was issued for.
+The repo is only what the caller put on `DispatchRef.RepoID`; it is never
+derived from a path, a name, the job or the globs. It answers
+`(repo, true, nil)` for a live lease with a repo and `("", false, nil)` for a
+live lease issued with none. An unknown, released, aborted or pre-restart
+lease, or one whose reservation is no longer held or committed, is
+`ErrLeaseUnknown`; so is one whose reservation row names another repo than the
+lease. An empty id is `KindInvalidInput`; a reservation read error is returned
+as it is. A parked lease answers `ErrLeaseUnknown` while it is parked but
+stays in the index (`ExpireStale` forgets only retired leases), so it answers
+again after `Unpark`. The lease index is in memory and not persisted,
+so after a restart every earlier lease id is unknown (fail closed).
