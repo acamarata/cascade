@@ -80,22 +80,30 @@ func (e *Executor) auditOutcome(ctx context.Context, req provider.ModelRequest, 
 	e.append(ctx, req, tier, sel, outcome, cause)
 }
 
-// append is the single audit call site every terminal outcome routes
-// through, so Execute and ExecuteStream never write more or fewer than one
-// record per call. The Explain payload carries only the redacted trace and
-// cost accounting - never a raw request field.
+// append is the Execute and Authorize audit call site: every terminal outcome
+// of those two routes through it, via auditDoor, so they never write more or
+// fewer than one record per call. The Explain payload
+// carries only the redacted trace and cost accounting - never a raw request
+// field.
 func (e *Executor) append(ctx context.Context, req provider.ModelRequest, tier provider.SensitivityTier, sel provider.Selection, outcome string, cause error) {
+	e.auditDoor(ctx, VerbExecute, tier, req.TaskID+"|"+req.TaskClass, sel, outcome, cause)
+}
+
+// auditDoor is the one audit writer behind every door (R-14.37): Action is the
+// verb, RiskLevel the resolved tier, ParamsHash a hash of key (a task or
+// lane|model identity, never content).
+func (e *Executor) auditDoor(ctx context.Context, verb DoorVerb, tier provider.SensitivityTier, key string, sel provider.Selection, outcome string, cause error) {
 	trace := ExecutionTrace{LaneID: sel.LaneID, Outcome: outcome}
 	if cause != nil {
 		trace.Reason = cause.Error()
 	}
 	explain, _ := json.Marshal(trace)
-	paramsHash := audit.HashParams([]byte(req.TaskID + "|" + req.TaskClass))
-	_, _ = e.pipeline.cfg.Audit.Append(ctx, audit.Event{
+	// A cancelled caller must not lose its own refusal or outcome record.
+	_, _ = e.pipeline.cfg.Audit.Append(context.WithoutCancel(ctx), audit.Event{
 		Kind:       audit.KindPolicyRoute,
 		Actor:      "conductor",
-		Action:     "model.execute",
-		ParamsHash: paramsHash,
+		Action:     string(verb),
+		ParamsHash: audit.HashParams([]byte(key)),
 		RiskLevel:  tier.String(),
 		Verdict:    outcome,
 		Outcome:    outcome,

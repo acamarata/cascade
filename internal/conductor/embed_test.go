@@ -114,8 +114,8 @@ func TestEmbeddingExecutor_BindsSelectionOnce(t *testing.T) {
 	if len(resp.Vectors) != 1 {
 		t.Fatalf("resp = %+v, want one vector", resp)
 	}
-	if deps.audit.events[0].RiskLevel != "" {
-		t.Fatalf("Embed's audit RiskLevel = %q, want empty (no ModelRequest sensitivity resolved)", deps.audit.events[0].RiskLevel)
+	if got := deps.audit.events[0].RiskLevel; got != provider.SensitivityRestricted.String() {
+		t.Fatalf("Embed's audit RiskLevel = %q, want the door's resolved tier restricted (no context tier)", got)
 	}
 	// Router.Select is never called by the embed path: sel is bound once
 	// at EmbeddingExecutor construction, never re-selected per call.

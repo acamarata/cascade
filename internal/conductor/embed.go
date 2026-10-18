@@ -2,9 +2,8 @@
 //   the EmbeddingExecutorFunc adapter that let a fixed-lane caller (J/S-
 //   19.T6's providers/embeddings.ProviderEmbedder) reach a
 //   pkg/provider.ModelProvider's Embed verb without ever holding one
-//   itself. It mirrors execute.go's Ready() gate, sole-dispatch resolution
-//   through Pipeline.embedCapability, and exactly-one-audit-record
-//   discipline. It does NOT run Execute's Classifier/TaskClass/Policy
+//   itself. It passes enterDoor (door.go): readiness, tier, lane admission,
+//   policy and egress substitution, then one dispatch and one audit record. It does NOT run Execute's Classifier/TaskClass/Policy
 //   authorize() chain: that chain is built entirely around
 //   provider.ModelRequest's chat-shaped fields (TaskID, TaskClass, Inputs
 //   []ChatMessage, Requirements) and Router.Select's signature is
@@ -19,10 +18,9 @@
 //   their lane once at construction, like ProviderEmbedder already does;
 //   see EmbeddingExecutor) and a provider.ModelEmbedRequest.
 // Outputs: a provider.ModelEmbedResponse, or a taxonomy error.
-// Constraints: this file is the only place a pkg/provider.ModelProvider
-//   Embed call may originate from (R-40.X10,
+// Constraints: the Embed call originates only from door.go (R-40.X10,
 //   TestSeam_NoDirectModelProviderCallOutsideConductor,
-//   TestExecute_ProviderCallGraph). No second audit-redaction engine: the
+//   TestDoorIsOnlyDispatchPath). No second audit-redaction engine: the
 //   one terminal record per call runs through the same injected
 //   audit.Writer Execute already uses, so a Writer built with
 //   audit.NewWithRedactor redacts this path identically.
@@ -32,53 +30,28 @@ package conductor
 
 import (
 	"context"
-	"encoding/json"
 
-	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
-// Embed runs req against sel's resolved provider through the sole
-// permitted Embed-verb dispatch path (Pipeline.embedCapability), gated by
-// the same Ready() readiness check Execute uses: zero provider calls
-// happen before all six R-21.206 collaborators are installed. A dispatch
-// error is mapped onto the A-T7 taxonomy exactly like Execute's own
-// mapProviderError, never surfaced raw.
+// Embed runs req against sel's lane through enterDoor and the door's Embed
+// dispatch: the batch is substituted under the resolved tier before any
+// provider is resolved. A dispatch error is mapped onto the A-T7 taxonomy
+// exactly like Execute's own mapProviderError, never surfaced raw.
 func (e *Executor) Embed(ctx context.Context, sel provider.Selection, req provider.ModelEmbedRequest) (provider.ModelEmbedResponse, error) {
-	if err := e.pipeline.Ready(); err != nil {
+	pass, err := e.enterDoor(ctx, doorCall{Verb: VerbEmbed, Sel: sel, Model: req.Model, Payload: req.Inputs})
+	if err != nil {
 		return provider.ModelEmbedResponse{}, err
 	}
-	resp, err := e.pipeline.embedCapability()(ctx, sel, req)
-	if err != nil {
-		mapped := mapProviderError(err)
-		e.auditEmbed(ctx, sel, req, "provider_failure", mapped)
-		return provider.ModelEmbedResponse{}, mapped
+	if req.Inputs, err = doorPayload[[]string](pass); err != nil {
+		return provider.ModelEmbedResponse{}, err
 	}
-	e.auditEmbed(ctx, sel, req, "success", nil)
+	req.Model = pass.Model
+	resp, err := e.doorEmbed(ctx, pass.Sel, req)
+	if err = e.finishLeaf(ctx, VerbEmbed, pass, req.Model, err); err != nil {
+		return provider.ModelEmbedResponse{}, err
+	}
 	return resp, nil
-}
-
-// auditEmbed writes the one terminal audit record every Embed call
-// produces, mirroring Executor.append's shape (ExecutionTrace,
-// audit.KindPolicyRoute, action "model.embed"). RiskLevel is left the zero
-// value rather than a fabricated SensitivityTier: unlike Execute, Embed
-// resolves no tier of its own (see this file's header).
-func (e *Executor) auditEmbed(ctx context.Context, sel provider.Selection, req provider.ModelEmbedRequest, outcome string, cause error) {
-	trace := ExecutionTrace{LaneID: sel.LaneID, Outcome: outcome}
-	if cause != nil {
-		trace.Reason = cause.Error()
-	}
-	explain, _ := json.Marshal(trace)
-	paramsHash := audit.HashParams([]byte(sel.LaneID + "|" + req.Model))
-	_, _ = e.pipeline.cfg.Audit.Append(ctx, audit.Event{
-		Kind:       audit.KindPolicyRoute,
-		Actor:      "conductor",
-		Action:     "model.embed",
-		ParamsHash: paramsHash,
-		Verdict:    outcome,
-		Outcome:    outcome,
-		Explain:    explain,
-	})
 }
 
 // EmbeddingExecutorFunc adapts a fixed provider.Selection to the

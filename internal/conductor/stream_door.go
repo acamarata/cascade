@@ -14,58 +14,33 @@
 //   a provider.StreamSink.
 // Outputs: nil, or a taxonomy error; StreamEvent deliveries happen through
 //   sink exactly as ModelProvider.Stream's own contract specifies.
-// Constraints: one of exactly four leaf-door files (chat.go, embed.go,
-//   count.go, stream_door.go) permitted to originate a
-//   pkg/provider.ModelProvider call outside Execute/ExecuteStream's own
-//   dispatch path. One terminal audit record per call, written after sink
+// Constraints: every call passes enterDoor (door.go) before any provider is
+//   resolved. One terminal audit record per call, written after sink
 //   delivery completes (success or error), matching runStream's own
 //   after-the-fact audit timing.
-// SPORT: conductor.stream-leaf-door/ADD (FIX-manifest-collision-and-conductor-seam).
+// SPORT: conductor.stream-leaf-door/CHANGE (P1-SEC-01).
 
 package conductor
 
 import (
 	"context"
-	"encoding/json"
+	"sync/atomic"
 
-	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
-// Stream runs req against sel's resolved provider through the sole
-// permitted Stream-verb leaf-dispatch path (Pipeline.streamCapability),
-// gated by the same Ready() readiness check every door method uses.
+// Stream runs req against sel's lane through enterDoor and the door's Stream
+// dispatch; the audit record is written after the sink finishes.
 func (e *Executor) Stream(ctx context.Context, sel provider.Selection, req provider.ChatRequest, sink provider.StreamSink) error {
-	if err := e.pipeline.Ready(); err != nil {
+	pass, err := e.enterDoor(ctx, doorCall{Verb: VerbStream, Sel: sel, Model: req.Model, Payload: req.Messages})
+	if err != nil {
 		return err
 	}
-	err := e.pipeline.streamCapability()(ctx, sel, req, sink)
-	if err != nil {
-		mapped := mapProviderError(err)
-		e.auditStream(ctx, sel, req, "provider_failure", mapped)
-		return mapped
+	if req.Messages, err = doorPayload[[]provider.ChatMessage](pass); err != nil {
+		return err
 	}
-	e.auditStream(ctx, sel, req, "success", nil)
-	return nil
-}
-
-// auditStream writes the one terminal audit record every Stream leaf-
-// dispatch call produces, mirroring auditEmbed/auditChat/auditCount's
-// shape.
-func (e *Executor) auditStream(ctx context.Context, sel provider.Selection, req provider.ChatRequest, outcome string, cause error) {
-	trace := ExecutionTrace{LaneID: sel.LaneID, Outcome: outcome}
-	if cause != nil {
-		trace.Reason = cause.Error()
-	}
-	explain, _ := json.Marshal(trace)
-	paramsHash := audit.HashParams([]byte(sel.LaneID + "|" + req.Model))
-	_, _ = e.pipeline.cfg.Audit.Append(ctx, audit.Event{
-		Kind:       audit.KindPolicyRoute,
-		Actor:      "conductor",
-		Action:     "model.stream",
-		ParamsHash: paramsHash,
-		Verdict:    outcome,
-		Outcome:    outcome,
-		Explain:    explain,
-	})
+	req.Model = pass.Model
+	var delivered atomic.Bool
+	err = e.doorStream(ctx, pass.Sel, req, &delivered, sink)
+	return e.finishLeaf(ctx, VerbStream, pass, req.Model, err)
 }

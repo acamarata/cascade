@@ -34,6 +34,11 @@ import (
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
+// errJobCancelled is the context cause of a job its caller cancelled
+// (CancelFunc, job.cancel): cancelled work audits it instead of a bare
+// context.Canceled.
+var errJobCancelled = cascade.New(cascade.KindCanceled, "conductor: job cancelled by caller")
+
 // EventBridge is the injected SSE-publish seam (D/S-06.T4): *events.Bus
 // satisfies this interface with its existing Publish method (structural
 // typing, no adapter needed). Tests substitute a recording double so the
@@ -191,16 +196,15 @@ func (e *Executor) publishDelta(ctx context.Context, id JobID, ev provider.Strea
 // ExecuteStream's own idempotent CancelFunc) and is also what job.cancel
 // (cancel.go) invokes via the cancel registry for a known job id.
 func (e *Executor) ExecuteStreamJob(ctx context.Context, req provider.ModelRequest) (JobID, <-chan provider.StreamEvent, CancelFunc, error) {
-	innerCh, innerCancel, err := e.ExecuteStream(ctx, req)
-	if err != nil {
-		return "", nil, nil, err
-	}
 	rawID, err := cascade.NewID()
 	if err != nil {
-		innerCancel()
 		return "", nil, nil, cascade.Wrap(cascade.KindInternal, err, "conductor: minting stream job id")
 	}
 	id := JobID(rawID)
+	innerCh, innerCancel, err := e.executeStream(ctx, req, id)
+	if err != nil {
+		return "", nil, nil, err
+	}
 
 	var cancelled atomic.Bool
 	cancelFn := CancelFunc(func() {

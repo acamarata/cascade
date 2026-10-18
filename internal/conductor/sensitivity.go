@@ -25,7 +25,6 @@ package conductor
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 
 	"github.com/acamarata/cascade/internal/hooks/egress"
@@ -103,22 +102,64 @@ func tierToEgress(t provider.SensitivityTier) egress.SensitivityTier {
 // outside this ticket's files_scope and has no single composition-root
 // init hook to call it from once.
 func (e *Executor) substituteInputs(ctx context.Context, req provider.ModelRequest, tier provider.SensitivityTier) (provider.ModelRequest, error) {
-	firewall := e.pipeline.cfg.Firewall
-	if err := RegisterEgressClassConductor(firewall.Registry()); err != nil {
-		return req, ErrEgressSubstitutionFailed
-	}
-	raw, err := json.Marshal(req.Inputs)
-	if err != nil {
-		return req, ErrEgressSubstitutionFailed
-	}
-	out, err := SubstitutionMiddleware(ctx, firewall, EgressClassConductor, tierToEgress(tier), raw)
+	out, err := e.substitutePayload(ctx, req.Inputs, tier)
 	if err != nil {
 		return req, err
 	}
-	var substituted []provider.ChatMessage
-	if err := json.Unmarshal(out, &substituted); err != nil {
-		return req, ErrEgressSubstitutionFailed
-	}
-	req.Inputs = substituted
+	req.Inputs = out.([]provider.ChatMessage)
 	return req, nil
+}
+
+// substitutePayload is the one substitution engine every door uses (door.go):
+// the payload is a []provider.ChatMessage (each Role and Content), a []string
+// or a string, every field transited as raw text.
+// Any other shape, a substitutor error or a malformed result fails closed.
+func (e *Executor) substitutePayload(ctx context.Context, payload any, tier provider.SensitivityTier) (any, error) {
+	firewall := e.pipeline.cfg.Firewall
+	if err := RegisterEgressClassConductor(firewall.Registry()); err != nil {
+		return nil, ErrEgressSubstitutionFailed
+	}
+	text := func(s string) (string, error) {
+		out, err := SubstitutionMiddleware(ctx, firewall, EgressClassConductor, tierToEgress(tier), []byte(s))
+		return string(out), err
+	}
+	switch p := payload.(type) {
+	case []provider.ChatMessage:
+		// Each field is transited as raw text, never as a JSON document: JSON
+		// escaping (a quote, backslash, "&", "<" or a newline in a secret)
+		// would stop a literal vault match and unmarshal back to the secret.
+		fields := make([]string, 0, 2*len(p))
+		for _, m := range p {
+			fields = append(fields, m.Role, m.Content)
+		}
+		res, err := substituteEach(fields, text)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]provider.ChatMessage, len(p))
+		for i := range p {
+			out[i] = provider.ChatMessage{Role: res[2*i], Content: res[2*i+1]}
+		}
+		return out, nil
+	case []string:
+		return substituteEach(p, text)
+	case string:
+		return text(p)
+	}
+	return nil, ErrEgressSubstitutionFailed
+}
+
+// substituteEach transits every field through its own engine call. A single
+// joined call would be cheaper (the engine reloads the vault per call), but a
+// detector that reads past the end of a span then shadows a secret that a
+// field-by-field call tags, so each field stands alone.
+func substituteEach(in []string, text func(string) (string, error)) ([]string, error) {
+	out := make([]string, len(in))
+	for i, f := range in {
+		var err error
+		if out[i], err = text(f); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }

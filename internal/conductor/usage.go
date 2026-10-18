@@ -45,6 +45,7 @@ package conductor
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -193,6 +194,13 @@ func (e *Executor) usageClockStart() time.Time {
 		return e.pipeline.cfg.Clock.Now()
 	}
 	return time.Time{}
+}
+
+// attemptJobID keys a superseded attempt's usage row apart from the job's own
+// terminal row: jobs_usage holds one row per job_id, so a failover that wrote
+// both attempts under one id lost the second insert.
+func attemptJobID(id JobID, attempt int) JobID {
+	return JobID(fmt.Sprintf("%s#attempt-%d", id, attempt))
 }
 
 // attributeUsage builds a UsageRecord from one terminal Execute outcome

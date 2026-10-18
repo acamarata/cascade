@@ -25,6 +25,24 @@ import (
 type fakeRouter struct {
 	selectFn func(ctx context.Context, req provider.ModelRequest, exclude ...string) (provider.Selection, error)
 	calls    int
+	// laneFn, when set, answers the leaf doors' lane lookup (door.go laneSource).
+	laneFn func(ctx context.Context, sel provider.Selection) (laneCandidate, RestrictedPermits, error)
+}
+
+// doorLane makes fakeRouter a laneSource: by default every named lane is a
+// loopback (controller-local) lane, so a leaf door admits it at any tier.
+func (r *fakeRouter) doorLane(ctx context.Context, sel provider.Selection) (laneCandidate, RestrictedPermits, error) {
+	if r.laneFn != nil {
+		return r.laneFn(ctx, sel)
+	}
+	name := sel.LaneID
+	if name == "" {
+		name = "lane-1"
+	}
+	return laneCandidate{
+		lane:     provider.LaneInfo{LaneName: name, ProviderName: "test"},
+		provider: provider.ProviderInfo{Name: "test", BaseURL: "http://127.0.0.1:11434"},
+	}, RestrictedPermits{}, nil
 }
 
 func (r *fakeRouter) Select(ctx context.Context, req provider.ModelRequest, exclude ...string) (provider.Selection, error) {

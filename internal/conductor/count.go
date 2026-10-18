@@ -3,61 +3,36 @@
 //   R-40.X10 precedent and chat.go's Chat leaf door exactly): Executor.Count
 //   lets a caller that has already resolved its own provider.Selection
 //   reach a pkg/provider.ModelProvider's Count verb without ever holding
-//   one itself. It does not run Execute's authorize() chain, for the same
-//   reason chat.go's Chat gives: provider.CountRequest carries a text and
-//   an optional model name, none of the chat-shaped fields that chain
-//   needs, and a caller here has already fixed its own Selection.
+//   one itself. It passes enterDoor (door.go), not Execute's classifier chain: a
+//   CountRequest has none of the chat-shaped fields that chain needs.
 // Inputs: a caller-resolved provider.Selection and a provider.CountRequest.
 // Outputs: a provider.CountResponse, or a taxonomy error.
-// Constraints: one of exactly four leaf-door files (chat.go, embed.go,
-//   count.go, stream_door.go) permitted to originate a
-//   pkg/provider.ModelProvider call outside Execute/ExecuteStream's own
-//   dispatch path. One terminal audit record per call.
-// SPORT: conductor.count-leaf-door/ADD (FIX-manifest-collision-and-conductor-seam).
+// Constraints: every call passes enterDoor (door.go) before any provider is
+//   resolved. One terminal audit record per call.
+// SPORT: conductor.count-leaf-door/CHANGE (P1-SEC-01).
 
 package conductor
 
 import (
 	"context"
-	"encoding/json"
 
-	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
-// Count runs req against sel's resolved provider through the sole
-// permitted Count-verb leaf-dispatch path (Pipeline.countCapability),
-// gated by the same Ready() readiness check every door method uses.
+// Count runs req against sel's lane through enterDoor and the door's Count
+// dispatch.
 func (e *Executor) Count(ctx context.Context, sel provider.Selection, req provider.CountRequest) (provider.CountResponse, error) {
-	if err := e.pipeline.Ready(); err != nil {
+	pass, err := e.enterDoor(ctx, doorCall{Verb: VerbCount, Sel: sel, Model: req.Model, Payload: req.Text})
+	if err != nil {
 		return provider.CountResponse{}, err
 	}
-	resp, err := e.pipeline.countCapability()(ctx, sel, req)
-	if err != nil {
-		mapped := mapProviderError(err)
-		e.auditCount(ctx, sel, req, "provider_failure", mapped)
-		return provider.CountResponse{}, mapped
+	if req.Text, err = doorPayload[string](pass); err != nil {
+		return provider.CountResponse{}, err
 	}
-	e.auditCount(ctx, sel, req, "success", nil)
+	req.Model = pass.Model
+	resp, err := e.doorCount(ctx, pass.Sel, req)
+	if err = e.finishLeaf(ctx, VerbCount, pass, req.Model, err); err != nil {
+		return provider.CountResponse{}, err
+	}
 	return resp, nil
-}
-
-// auditCount writes the one terminal audit record every Count leaf-
-// dispatch call produces, mirroring auditEmbed/auditChat's shape.
-func (e *Executor) auditCount(ctx context.Context, sel provider.Selection, req provider.CountRequest, outcome string, cause error) {
-	trace := ExecutionTrace{LaneID: sel.LaneID, Outcome: outcome}
-	if cause != nil {
-		trace.Reason = cause.Error()
-	}
-	explain, _ := json.Marshal(trace)
-	paramsHash := audit.HashParams([]byte(sel.LaneID + "|" + req.Model))
-	_, _ = e.pipeline.cfg.Audit.Append(ctx, audit.Event{
-		Kind:       audit.KindPolicyRoute,
-		Actor:      "conductor",
-		Action:     "model.count",
-		ParamsHash: paramsHash,
-		Verdict:    outcome,
-		Outcome:    outcome,
-		Explain:    explain,
-	})
 }

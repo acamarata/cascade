@@ -141,3 +141,63 @@ Wiring status: the fleet adapter that implements `JournalAppender` and
 `conductor.execute` fan-out path that mints the fan-out id, calls it and
 applies `DeleteTask` per outcome is not built yet (P1-CORE-19); until then
 no production caller persists leg output.
+
+## The model door: one enforcement chokepoint
+
+Six calls reach a model: `Execute`, `ExecuteStream`, `Chat`, `Embed`, `Count`
+and `Stream`. Each one passes `enterDoor` (`internal/conductor/door.go`)
+before any provider is resolved. `TestDoorIsOnlyDispatchPath` fails the build
+if any code outside `door.go` references a dispatch helper or reads the
+`Resolver` (a call, a method value or an alias), if a function that is not one
+of the six doors references a door helper (a call, a method value or a method
+expression, at package level too), if a door dispatches without calling
+`enterDoor`, if anything but `door.go` names the `doorPass` type, or if code
+outside the package calls `ExecuteStream`. It is a static name check: it skips
+`door.go` and `pipeline.go`, matches `enterDoor` by name on any receiver, and
+does not follow data flow, so review stays the guard for new code in `door.go`.
+
+Order inside the door:
+
+1. **Readiness.** All six security collaborators must be installed, else
+   `ErrSecurityPipelineNotReady`. No audit record (the writer may be missing).
+2. **Tier.** `Execute` and `ExecuteStream` run the classifier, task-class and
+   sensitivity-gate steps (`authorize`), and the request carries the resolved
+   tier into `Router.Select`. A leaf call has no request: its tier is the
+   context tier (`ContextWithDoorSensitivity`; **restricted when absent**)
+   joined with the thread privacy mode and the sensitivity gate. The join only
+   narrows, and an out-of-range tier reads as local-only.
+3. **Lane.** `Router.Select` applies the lane table for `Execute` and
+   `ExecuteStream`. A leaf call names its own `Selection`, so the door
+   re-reads the lane from the registry: it never trusts `Selection.Provider`
+   (a mismatch with the lane's provider is `KindInvalidInput`), an empty
+   `LaneID` resolves by `Model` to exactly one lane (zero or several is
+   `KindInvalidInput`), and the lane goes through the same `admitLane` the
+   router uses. A router that cannot expose its registry makes every leaf call
+   refuse.
+4. **Policy.** `Policy.Authorize` sees the request at the resolved tier (a gate
+   that narrows public to restricted is enforced), or for a leaf call a view
+   with the tier and messages and no task class (leaf doors invent none).
+5. **Substitution.** The payload (messages, embed batch or count text) goes
+   through the one egress engine under `EgressClassConductor` at the resolved
+   tier. Every field is transited as raw text, never as one JSON document, so
+   a vault value holding a quote, a backslash, `&`, `<` or a newline still
+   matches. A vault value reaches the provider only as its tag.
+
+Every refusal writes one audit record with `RiskLevel` set to the tier and
+`Action` set to the verb (`model.execute`, `model.execute_stream`,
+`model.chat`, `model.embed`, `model.count`, `model.stream`). A dispatched call
+writes one terminal record after the provider answers.
+
+**Leaf callers:** pass `ContextWithDoorSensitivity` with the tier of the
+content. Without it the call is restricted, and a restricted call refuses any
+remote lane the operator has not listed in `conductor.restricted_external_lanes`.
+
+**Streams:** a first lane that answers capability-denied before delivering any
+event fails over once (a second denial, or a denial after output, does not).
+Usage is attributed for both attempts. A cancelled stream's audit record
+carries `context.Cause`: the caller's cancel, or the parent context's own cause.
+
+**Residual risk:** admission reads one registry snapshot, and the provider
+resolver reads the registry again at dispatch. An operator who rewrites a
+provider's base URL between the two reads can send restricted content to the
+new endpoint. Closing that needs the resolver to take the admitted snapshot.
