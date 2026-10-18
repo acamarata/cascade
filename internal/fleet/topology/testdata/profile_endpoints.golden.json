@@ -1,0 +1,11 @@
+[
+  {"name": "loopback_v4", "host": "127.0.0.1", "port": 8080, "want_host": "127.0.0.1", "want_port": 8080, "want_local": true},
+  {"name": "loopback_name", "host": "localhost", "port": 11434, "want_host": "localhost", "want_port": 11434, "want_local": true},
+  {"name": "loopback_v6", "host": "::1", "port": 8080, "want_host": "::1", "want_port": 8080, "want_local": true},
+  {"name": "remote_v6", "host": "fe80::1", "port": 8080, "want_host": "fe80::1", "want_port": 8080, "want_local": false},
+  {"name": "unix_socket_url", "host": "unix:///run/runtime-b.sock", "port": 0, "want_host": "unix:///run/runtime-b.sock", "want_port": 0, "want_local": true},
+  {"name": "unix_socket", "host": "unix:/run/runtime-a.sock", "port": 0, "want_host": "unix:/run/runtime-a.sock", "want_port": 0, "want_local": true},
+  {"name": "lan_host", "host": "10.0.0.5", "port": 11434, "want_host": "10.0.0.5", "want_port": 11434, "want_local": false},
+  {"name": "invalid_tld", "host": "host.invalid", "port": 443, "want_host": "host.invalid", "want_port": 443, "want_local": false},
+  {"name": "cleared", "host": "", "port": 0, "want_host": "", "want_port": 0, "want_local": false}
+]

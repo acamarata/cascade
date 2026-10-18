@@ -18,9 +18,8 @@ package conductor
 
 import (
 	"fmt"
-	"net/url"
-	"strings"
 
+	"github.com/acamarata/cascade/internal/fleet/topology"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -112,105 +111,15 @@ func filterSensitivity(cands []laneCandidate, req provider.ModelRequest, permits
 
 // computedLocalityIsLocal implements the reachable subset of the R-21.113
 // predicate given the real ProviderInfo shape: local iff BaseURL names a unix
-// socket on this machine (a unix:// URL with an EMPTY host) or its host is a
-// loopback literal. ProviderInfo has no credential_ref or domain_kind field
-// to check the remaining two conjuncts against (see this file's header
-// comment); this is a documented narrowing, never an authored "is local"
-// column and never derived from the provider name.
+// socket on this machine (a unix URL with an EMPTY host and an absolute
+// path) or its canonical host is a loopback literal. ProviderInfo has no
+// credential_ref or domain_kind field to check the remaining two conjuncts
+// against (see this file's header comment); this is a documented narrowing,
+// never an authored "is local" column and never derived from the provider
+// name. The rules (canonical spellings only, matching Go's HTTP proxy
+// selection) live in topology.URLIsLocal, the one classifier the fleet
+// topology's EndpointIsLocal also uses, so the router table and the lane
+// ceiling cannot disagree.
 func computedLocalityIsLocal(p provider.ProviderInfo) bool {
-	if p.BaseURL == "" {
-		return false
-	}
-	u, err := url.Parse(p.BaseURL)
-	if err != nil {
-		return false
-	}
-	if u.Scheme == "unix" {
-		// A unix socket is a path on THIS machine: unix:///run/x.sock has no
-		// host. A unix:// URL that names a host (unix://api.evil.com/x) says
-		// the socket lives elsewhere, so it is never local.
-		return strings.HasPrefix(p.BaseURL, "unix://") && u.Host == ""
-	}
-	host, ok := canonicalHost(u.Host)
-	if !ok {
-		return false
-	}
-	return host == "localhost" || host == "::1" || isLoopbackIPv4Literal(host)
-}
-
-// canonicalHost splits u.Host into a host and an optional all-digit port and
-// refuses every spelling that is not canonical: an IPv6 literal must be
-// bracketed, and a port, when ":" is present, must be non-empty. Go's HTTP
-// proxy selection reads "http://127.000.000.001" (and, where net/url accepts
-// it, a bare "http://::1:") as hosts that are NOT loopback and sends the
-// request to HTTP_PROXY, so a classifier
-// that is more lenient than the transport would call a request that leaves
-// this machine local. Do not lowercase the host to be friendlier to
-// "LOCALHOST": Go's proxy rule skips only the lowercase spelling, so
-// lowercasing here would reopen the same leak.
-func canonicalHost(hostport string) (string, bool) {
-	host, rest := hostport, ""
-	if strings.HasPrefix(hostport, "[") {
-		end := strings.Index(hostport, "]")
-		if end < 0 {
-			return "", false
-		}
-		host, rest = hostport[1:end], hostport[end+1:]
-	} else if i := strings.LastIndex(hostport, ":"); i >= 0 {
-		host, rest = hostport[:i], hostport[i:]
-	}
-	if rest != "" {
-		if len(rest) < 2 || rest[0] != ':' {
-			return "", false
-		}
-		for _, r := range rest[1:] {
-			if r < '0' || r > '9' {
-				return "", false
-			}
-		}
-	}
-	if host == "::1" && !strings.HasPrefix(hostport, "[") {
-		return "", false
-	}
-	return host, host != ""
-}
-
-// isLoopbackIPv4Literal reports whether host is a dotted-quad address in
-// 127.0.0.0/8, and ONLY a literal address.
-//
-// A bare `HasPrefix(host, "127.")` admits `127.evil.com` — a registrable
-// domain whose Hostname() starts with "127." and which resolves wherever its
-// owner points it. A provider record with that BaseURL would be classified
-// controller-local, and every gate built on this predicate would wave it
-// through. Found by the independent review of P1-E20-W5-S44-T2.
-//
-// Still no "net" import (egress-firewall-gated, A-T2) for a computation that
-// never opens a socket: the host must be exactly four canonical decimal
-// octets (no leading zeros), each 0-255, the first 127, which separates the
-// literal address from any domain.
-func isLoopbackIPv4Literal(host string) bool {
-	parts := strings.Split(host, ".")
-	if len(parts) != 4 || parts[0] != "127" {
-		return false
-	}
-	for _, part := range parts {
-		// Canonical decimal only: "127.000.000.001" parses as loopback to a
-		// lenient reader, but Go's HTTP proxy selection does not treat that
-		// spelling as loopback and would send the request to the configured
-		// proxy, i.e. off this machine.
-		if len(part) == 0 || len(part) > 3 || (len(part) > 1 && part[0] == '0') {
-			return false
-		}
-		n := 0
-		for _, r := range part {
-			if r < '0' || r > '9' {
-				return false
-			}
-			n = n*10 + int(r-'0')
-		}
-		if n > 255 {
-			return false
-		}
-	}
-	return true
+	return topology.URLIsLocal(p.BaseURL)
 }
