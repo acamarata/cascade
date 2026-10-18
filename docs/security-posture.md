@@ -8,6 +8,8 @@ See also [supply-chain tooling: pins and accepted residuals](security-posture/su
 See also [driver egress proxy: advisory routing for external agent drivers](security-posture/driver-egress-proxy.md).
 See also [egress allowlist: package purposes, local transport and audit-only classes](security-posture/egress-allowlist.md).
 
+See also [driver containment: the per-spawn proxy, the lease-marker sweep and their limits](security-posture/driver-containment.md).
+
 See also [effect records: intent before, outcome after](security-posture/effect-records.md).
 
 See also [control sockets: owner-only, 0600, refuse what is not ours](security-posture/control-sockets.md).
