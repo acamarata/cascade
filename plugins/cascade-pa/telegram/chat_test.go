@@ -122,9 +122,7 @@ func TestBridgePrivacy_UnpairedSenderRefusedBeforeEgress(t *testing.T) {
 	if n := r.chat.callCount(); n != 0 {
 		t.Fatalf("AppendTurn called %d times for an unpaired sender, want 0", n)
 	}
-	if sent := lastSent(t, r.doer); sent != replyNotPaired {
-		t.Fatalf("reply = %q, want %q", sent, replyNotPaired)
-	}
+	requireNoCalls(t, r.doer)
 }
 
 // TestInboundMessageUntrustedOrigin proves R-21.227: an ALLOW-path forward is delivered on Receive with Untrusted=true, Origin=bridge-telegram.

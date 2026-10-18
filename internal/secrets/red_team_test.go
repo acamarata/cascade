@@ -38,6 +38,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/plugins"
@@ -105,8 +106,24 @@ func redTeamBridge(t *testing.T) (*telegram.BotClient, *recordingDoer) {
 	doer := &recordingDoer{}
 	client := telegram.NewBotClient("tg-redteam", doer, gate,
 		cascadepa.NewUpdateLedger(redTeamState{}))
+	if err := client.SetOwnerGuard(redTeamOwnerDM{}, redTeamRefusals{}, time.Now); err != nil {
+		t.Fatalf("SetOwnerGuard: %v", err)
+	}
 	return client, doer
 }
+
+// redTeamOwnerDM admits every private (positive) chat id, so these cases
+// exercise the egress class rather than the owner-chat guard.
+type redTeamOwnerDM struct{}
+
+func (redTeamOwnerDM) AllowsChat(_ context.Context, chatID int64) (bool, error) {
+	return chatID > 0, nil
+}
+
+// redTeamRefusals discards bridge.refused events.
+type redTeamRefusals struct{}
+
+func (redTeamRefusals) EmitRefused(context.Context, telegram.RefusalEvent) {}
 
 // redTeamState is a BridgeState that answers "nothing stored" — these cases
 // never poll, so the ledger is never consulted for anything but its own
@@ -204,22 +221,20 @@ func TestRedTeamBridgeClass_AdmittedTiersActuallySend(t *testing.T) {
 }
 
 // TestRedTeamBridgeClass_CallbackAnswersCrossTheSameClass: answerCallbackQuery is
-// an outbound path too, and the review found it ungated.
+// an outbound path too, and the review found it ungated. An id the dispatch gate
+// never admitted is refused outright, whatever tier it names; the substituted
+// body of an admitted callback answer is proven in package telegram
+// (TestBotClient_AnswerCallbackQueryPostsTheGatesOutput), where the id is recorded.
 func TestRedTeamBridgeClass_CallbackAnswersCrossTheSameClass(t *testing.T) {
 	client, doer := redTeamBridge(t)
-	if err := client.AnswerCallbackQuery(context.Background(), "cb-1",
-		cascadepa.TierRestricted, "refused"); err == nil {
-		t.Fatal("a restricted callback answer was admitted")
+	for _, tier := range []cascadepa.SensitivityTier{cascadepa.TierRestricted, cascadepa.TierInternal} {
+		if err := client.AnswerCallbackQuery(context.Background(), "cb-1", tier,
+			"here it is: "+redTeamSecret); err == nil {
+			t.Fatalf("an unadmitted callback answer at tier %q was sent", tier)
+		}
 	}
 	if len(doer.methods) != 0 {
 		t.Fatalf("the transport was reached: %v", doer.methods)
-	}
-	if err := client.AnswerCallbackQuery(context.Background(), "cb-2",
-		cascadepa.TierInternal, "here it is: "+redTeamSecret); err != nil {
-		t.Fatalf("AnswerCallbackQuery: %v", err)
-	}
-	if strings.Contains(doer.bodies[0], redTeamSecret) {
-		t.Fatalf("a stored value reached the callback answer verbatim: %q", doer.bodies[0])
 	}
 }
 

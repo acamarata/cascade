@@ -40,7 +40,13 @@ func (p *wirePoster) Post(_ context.Context, url string, body []byte) ([]byte, e
 // Poster receives the pinned-host sendMessage URL and the production JSON
 // body, so a host test counting Poster calls counts real Bot API calls.
 func TestNewModuleOver_TransportCarriesTheRealWireCall(t *testing.T) {
-	stores := cascadepa.NewStores(fixedTestClock{t0()}, &okRegistrar{}, newMemState(), testPairKey(t))
+	state := newMemState()
+	if err := state.Save(context.Background(), cascadepa.SubjectState{
+		Subject: SubjectFromToken(syntheticToken), TrustTier: "paired-device", AllowedFrom: []string{"555000111"},
+	}); err != nil {
+		t.Fatalf("Save bound state: %v", err)
+	}
+	stores := cascadepa.NewStores(fixedTestClock{t0()}, &okRegistrar{}, state, testPairKey(t))
 	poster := &wirePoster{reply: mustReadTestdata(t, "sendmessage_ok.json")}
 	module := NewModuleOver(syntheticToken, poster, &tierGate{}, nodeVerbPolicy(), stores, nil, nil, nil)
 

@@ -67,6 +67,9 @@ func TestNewModule_WiresScannerAndQuarantineForDispatch(t *testing.T) {
 	scanner := secretScannerFor(witnessSecretText, "api-key")
 	sink := &recordingQuarantineSink{}
 	module := NewModule(syntheticToken, nil, nil, nodeVerbPolicy(), stores, nil, scanner, sink)
+	if _, err := stores.Binding.Bind(context.Background(), SubjectFromToken(syntheticToken), "111"); err != nil {
+		t.Fatalf("Bind: %v", err)
+	}
 
 	called := false
 	module.RegisterHandler(HandlerText, func(context.Context, InboundMessage) error {
@@ -89,6 +92,7 @@ func TestNewBotClient_NilLedgerFailsClosed(t *testing.T) {
 	doer := &fakeDoer{}
 	doer.push(mustReadTestdata(t, "getupdates_text.json"), nil)
 	c := NewBotClient(testSubject, doer, &tierGate{}, nil)
+	armTestGuard(t, c)
 	sleep, _ := instantSleep()
 	c.sleep = sleep
 	if got := pollBriefly(t, c); len(got) != 0 {

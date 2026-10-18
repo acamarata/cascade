@@ -74,6 +74,8 @@ func TestBotClient_AnswerCallbackQueryIsGated(t *testing.T) {
 	doer := &fakeDoer{}
 	gate := &tierGate{}
 	c := newTestClient(doer, gate, newMemState())
+	c.recordCallback("cb-1")
+	c.recordCallback("cb-2")
 	if err := c.AnswerCallbackQuery(context.Background(), "cb-1", cascadepa.TierInternal,
 		"secret "+secretValue); err != nil {
 		t.Fatalf("AnswerCallbackQuery: %v", err)

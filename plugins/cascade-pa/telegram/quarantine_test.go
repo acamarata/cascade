@@ -17,6 +17,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	cascadepa "github.com/acamarata/cascade/plugins/cascade-pa"
 )
 
 // TestQuarantinePayloadHasNoCredentialRef is the R-21.105 compile-time
@@ -122,7 +124,11 @@ func TestQuarantineExposureIDsAreUniqueAndOpaque(t *testing.T) {
 // not panic minting a quarantine timestamp.
 func TestQuarantineTimestampSurvivesANilPairer(t *testing.T) {
 	client := NewBotClient(testSubject, &fakeDoer{}, &tierGate{}, nil)
-	module := NewTelegramModule(testSubject, client, nil, nil, nodeVerbPolicy(), fixedTestClock{t0()})
+	stores := cascadepa.NewStores(fixedTestClock{t0()}, &okRegistrar{}, newMemState(), testPairKey(t))
+	if _, err := stores.Binding.Bind(context.Background(), testSubject, "111"); err != nil {
+		t.Fatalf("Bind: %v", err)
+	}
+	module := NewTelegramModule(testSubject, client, stores.Binding, nil, nodeVerbPolicy(), fixedTestClock{t0()})
 	module.secretScanner = secretScannerFor(witnessSecretText, "api-key")
 	sink := &recordingQuarantineSink{}
 	module.quarantine = sink

@@ -97,9 +97,9 @@ func TestBridgeSecretRefusedAtDecode(t *testing.T) {
 	})
 }
 
-// TestBridgeSecretRefusedBeforePairing is D4: an unpaired sender's
-// secret-shaped message, and a secret-shaped "/pair <token>", are both
-// refused and quarantined before any pairing/binding lookup.
+// TestBridgeSecretRefusedBeforePairing is D4: an unpaired chat's secret text is
+// consumed silently (never scanned); a secret "/pair <token>" is quarantined
+// and never reaches the verifier. Neither gets a reply.
 func TestBridgeSecretRefusedBeforePairing(t *testing.T) {
 	t.Run("unpaired sender, ordinary text shape", func(t *testing.T) {
 		rig := newDefaultRig(t)
@@ -107,11 +107,9 @@ func TestBridgeSecretRefusedBeforePairing(t *testing.T) {
 		sink := &recordingQuarantineSink{}
 		rig.module.quarantine = sink
 		rig.module.dispatch(context.Background(), textUpdate(1, 999, 999, witnessSecretText))
-		if got := lastSent(t, rig.doer); got != replyBridgeSecretRefused {
-			t.Fatalf("reply = %q, want the fail-closed refusal, not a plain \"not paired\"", got)
-		}
-		if len(sink.events) != 1 {
-			t.Fatalf("quarantine events = %d, want 1 for an unpaired sender's secret message", len(sink.events))
+		requireNoCalls(t, rig.doer)
+		if len(sink.events) != 0 {
+			t.Fatalf("quarantine events = %d, want 0: an unadmitted chat's text is never scanned", len(sink.events))
 		}
 	})
 	t.Run("secret-shaped pair token", func(t *testing.T) {
@@ -121,9 +119,7 @@ func TestBridgeSecretRefusedBeforePairing(t *testing.T) {
 		sink := &recordingQuarantineSink{}
 		rig.module.quarantine = sink
 		rig.module.dispatch(context.Background(), textUpdate(1, 999, 999, witnessToken))
-		if got := lastSent(t, rig.doer); got != replyBridgeSecretRefused {
-			t.Fatalf("reply = %q, want the refusal; a secret /pair attempt must never reach VerifyAndConsume", got)
-		}
+		requireNoCalls(t, rig.doer)
 		if len(sink.events) != 1 {
 			t.Fatalf("quarantine events = %d, want 1", len(sink.events))
 		}
@@ -180,6 +176,7 @@ func TestBridgeSecretWarningNeverVariesWithTheDetection(t *testing.T) {
 // Origin=outbound publishes, carrying the caller's real chat kind (D9).
 func TestBridgeOutboundVaultMaterialRefused(t *testing.T) {
 	rig := newDefaultRig(t)
+	rig.bind(t, "111")
 	rig.module.secretScanner = secretScannerFor(witnessSecretText, "api-key")
 	sink := &recordingQuarantineSink{}
 	rig.module.quarantine = sink
@@ -208,6 +205,7 @@ func TestBridgeOutboundAnswerVaultMaterialRefused(t *testing.T) {
 	rig.module.secretScanner = secretScannerFor(witnessSecretText, "api-key")
 	sink := &recordingQuarantineSink{}
 	rig.module.quarantine = sink
+	rig.module.client.recordCallback("cb-1")
 	rig.module.answer(context.Background(), "cb-1", "group", witnessSecretText)
 	if got := lastSent(t, rig.doer); got != replyBridgeSecretRefused {
 		t.Fatalf("sent = %q, want the value-free refusal", got)
@@ -221,6 +219,7 @@ func TestBridgeOutboundAnswerVaultMaterialRefused(t *testing.T) {
 // outbound gate reply/answer do, not a transport call of its own.
 func TestPairingSayRoutesThroughGuardOutbound(t *testing.T) {
 	rig := newDefaultRig(t)
+	rig.bind(t, "111")
 	rig.module.secretScanner = secretScannerFor(witnessSecretText, "api-key")
 	rig.module.pairer.say(context.Background(), rig.module, 111, witnessSecretText)
 	got := lastSent(t, rig.doer)
@@ -284,6 +283,7 @@ func TestBridgeOutboundSocketLayerNeverCarriesVaultedValue(t *testing.T) {
 	pairer := newPairCoordinator(stores.Pairing, stores.Binding, &recordingSink{}, clock)
 	module := NewTelegramModule(testSubject, client, stores.Binding, pairer, nodeVerbPolicy(), clock)
 	module.secretScanner = secretScannerFor(witnessSecretText, "api-key")
+	_, _ = stores.Binding.Bind(context.Background(), testSubject, "111")
 
 	module.reply(context.Background(), 111, "private", witnessSecretText)
 

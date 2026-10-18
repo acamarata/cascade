@@ -25,11 +25,12 @@ func textUpdate(id, fromID, chatID int64, text string) Update {
 func callbackUpdate(id, fromID int64, data string) Update {
 	return Update{UpdateID: id, CallbackQuery: &CallbackQuery{
 		ID: "cb-1", From: User{ID: fromID, FirstName: "T"}, Data: data,
+		Message: &Message{MessageID: 1, Chat: Chat{ID: fromID, Type: "private"}},
 	}}
 }
 
 // TestTelegramNonPairedSenderDropped is the fail-closed unbound-bot criterion:
-// no handler runs, and the sender gets exactly "not paired".
+// no handler runs, and the sender gets no reply at all.
 func TestTelegramNonPairedSenderDropped(t *testing.T) {
 	rig := newDefaultRig(t)
 	called := false
@@ -41,8 +42,8 @@ func TestTelegramNonPairedSenderDropped(t *testing.T) {
 	if called {
 		t.Fatal("a handler ran for an unpaired sender")
 	}
-	if got := lastSent(t, rig.doer); got != replyNotPaired {
-		t.Fatalf("reply = %q, want %q", got, replyNotPaired)
+	if sent := rig.doer.methods(); len(sent) != 0 {
+		t.Fatalf("an unpaired sender got outbound traffic: %v", sent)
 	}
 }
 
@@ -60,12 +61,9 @@ func TestTelegramStrangerOnABoundBotIsIndistinguishable(t *testing.T) {
 	}
 
 	rig.module.dispatch(ctx, textUpdate(1, 999, 999, "hello"))
-	plain := lastSent(t, rig.doer)
 	rig.module.dispatch(ctx, textUpdate(2, 999, 999, "/pair "+code))
-	pairAttempt := lastSent(t, rig.doer)
-
-	if plain != replyNotPaired || pairAttempt != plain {
-		t.Fatalf("stranger replies differ: plain %q, /pair %q", plain, pairAttempt)
+	if sent := rig.doer.methods(); len(sent) != 0 {
+		t.Fatalf("a stranger on a bound bot got outbound traffic: %v", sent)
 	}
 	pending, err := rig.stores.Pairing.Pending(ctx, testSubject)
 	if err != nil {
@@ -151,7 +149,7 @@ func TestTelegramCallbackMediaRefused(t *testing.T) {
 		return nil
 	})
 	u := callbackUpdate(1, 111, "approve:req-1")
-	u.CallbackQuery.Message = &Message{MessageID: 7, Chat: Chat{ID: 111},
+	u.CallbackQuery.Message = &Message{MessageID: 7, Chat: Chat{ID: 111, Type: "private"},
 		Photo: []json.RawMessage{[]byte(`{"file_id":"synthetic"}`)}}
 	rig.module.dispatch(context.Background(), u)
 	if called {
@@ -255,7 +253,7 @@ func TestTelegramMessageWithoutFromIsIgnored(t *testing.T) {
 }
 
 // TestTelegramUnreadableStateRefuses: a state store the module cannot read
-// answers "not paired" and dispatches nothing.
+// is consumed silently and dispatches nothing.
 func TestTelegramUnreadableStateRefuses(t *testing.T) {
 	rig := newDefaultRig(t)
 	rig.bind(t, "111")
@@ -269,7 +267,7 @@ func TestTelegramUnreadableStateRefuses(t *testing.T) {
 	if called {
 		t.Fatal("a handler ran while the binding store was unreadable")
 	}
-	if got := lastSent(t, rig.doer); got != replyNotPaired {
-		t.Fatalf("reply = %q, want %q", got, replyNotPaired)
+	if sent := rig.doer.methods(); len(sent) != 0 {
+		t.Fatalf("an unreadable store produced outbound traffic: %v", sent)
 	}
 }

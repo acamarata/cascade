@@ -36,6 +36,7 @@ package telegram
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	cascadepa "github.com/acamarata/cascade/plugins/cascade-pa"
@@ -100,6 +101,9 @@ type BotClient struct {
 	egress  EgressGate
 	ledger  *cascadepa.UpdateLedger
 	sleep   func(ctx context.Context, d time.Duration) bool
+	// guard is the owner-DM-only send guard (outbound_guard.go). Unset, every
+	// send refuses.
+	guard atomic.Pointer[ownerGuard]
 }
 
 // NewBotClient constructs a client for subject. A nil egress resolves to
@@ -189,6 +193,9 @@ func (c *BotClient) fetchOne(ctx context.Context) ([]Update, error) {
 func (c *BotClient) SendMessage(
 	ctx context.Context, chatID int64, tier cascadepa.SensitivityTier, text string,
 ) error {
+	if err := c.outboundChatAllowed(ctx, chatID); err != nil {
+		return err
+	}
 	safe, err := c.egress.Guard(ctx, tier, []byte(text))
 	if err != nil {
 		return err
@@ -198,10 +205,15 @@ func (c *BotClient) SendMessage(
 
 // AnswerCallbackQuery answers a bare callback — the only reply channel a
 // callback_query has, since it carries no chat to send into. It crosses the
-// identical gate: an outbound byte is an outbound byte.
+// identical gate: an outbound byte is an outbound byte. Only a callback id
+// recorded at owner-DM admission is answered, once; any other id is consumed
+// with zero transport calls.
 func (c *BotClient) AnswerCallbackQuery(
 	ctx context.Context, callbackID string, tier cascadepa.SensitivityTier, text string,
 ) error {
+	if !c.consumeCallback(callbackID) {
+		return errCallbackNotAdmitted
+	}
 	safe, err := c.egress.Guard(ctx, tier, []byte(text))
 	if err != nil {
 		return err

@@ -22,6 +22,7 @@ import (
 // newTestClient builds a client over the given state with an instant sleeper.
 func newTestClient(doer Doer, gate EgressGate, state cascadepa.BridgeState) *BotClient {
 	c := NewBotClient(testSubject, doer, gate, cascadepa.NewUpdateLedger(state))
+	_ = c.SetOwnerGuard(positiveChats{}, &recordingRefusals{}, t0)
 	sleep, _ := instantSleep()
 	c.sleep = sleep
 	return c
@@ -216,6 +217,7 @@ func TestBotClient_BackoffDoublesOnTransientError(t *testing.T) {
 	doer.push(nil, errors.New("transient"))
 	doer.push(mustReadTestdata(t, "getupdates_text.json"), nil)
 	c := NewBotClient(testSubject, doer, &tierGate{}, cascadepa.NewUpdateLedger(newMemState()))
+	armTestGuard(t, c)
 	sleep, durations := instantSleep()
 	c.sleep = sleep
 	if got := collectPoll(t, c, 1); len(got) != 1 {

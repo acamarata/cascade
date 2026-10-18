@@ -130,8 +130,10 @@ func (m *TelegramModule) refusesSecret(raw string) (refused bool, outcome Secret
 	return outcome.Detected, outcome, unconfigured
 }
 
-// refuseInboundText handles a secret-shaped text message (dispatchMessage
-// calls this FIRST, before any pairing or binding lookup — R-21.203/D4):
+// refuseInboundText handles a secret-shaped text message from the owner DM
+// (dispatchBound calls this after owner-DM admission, before any pairing
+// reply or handler — R-21.203/D4; a chat that is not the owner DM is never
+// scanned and gets no reply):
 // nothing about the message — not its content, not a hash, not a
 // fingerprint — is stored or reaches a handler. The sender gets the
 // value-free warning always; a quarantine event publishes only when

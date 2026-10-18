@@ -10,16 +10,16 @@
 //
 // Outputs: on Bound, binds senderID through the BindingStore and confirms
 //   with the DIGEST-DERIVED subject (never a token, never a raw operator
-//   string). On Refused, replies "pairing failed". On LockedOut, replies
-//   "pairing failed" and emits the typed LockoutEvent.
+//   string). Every other outcome is SILENT: no reply, one content-free
+//   bridge.refused; a lockout also emits the typed LockoutEvent.
 //
 // Constraints:
 //   - A BINDING IS WRITTEN ON EXACTLY ONE OUTCOME. Mismatch, expiry and
 //     lockout all write nothing.
-//   - A FAILED BIND IS A FAILED PAIRING. Bind now fails when the
-//     paired-device record cannot be written, and this file reports that as
-//     "pairing failed" rather than confirming a pairing the device registry
-//     never recorded.
+//   - A FAILED BIND IS A FAILED PAIRING. Bind fails when the paired-device
+//     record cannot be written, and nothing is confirmed then.
+//   - PAIRING IS OWNER-INITIATED. module.go admits "/pair" only from a
+//     private chat with chat.id == from.id while unbound.
 //   - THE SUBJECT IS NEVER ECHOED RAW. The confirmation names the subject
 //     that reached this module, which assemble.go derives as a digest of the
 //     bot token; there is no path here that could print a token, and none
@@ -40,11 +40,6 @@ import (
 
 	cascadepa "github.com/acamarata/cascade/plugins/cascade-pa"
 )
-
-// replyPairingFailed is the one answer every non-bind outcome produces. It
-// does not say WHY: distinguishing "wrong code" from "no code outstanding"
-// would tell a stranger whether the owner is mid-pairing.
-const replyPairingFailed = "pairing failed"
 
 // replyPaired confirms a successful pairing. It names the subject, which is
 // a token digest (assemble.go's SubjectFromToken), never the token.
@@ -107,43 +102,39 @@ func newPairCoordinator(codes *cascadepa.PairCodeStore, binding *cascadepa.Bindi
 // is the ONLY call site that may write a binding, and it does so on exactly
 // one outcome: PairOutcome.Bound with a successful Bind.
 //
-// module (not a bare *BotClient) is what every reply routes through (D5): a
-// pairing reply is an outbound bridge write like any other, so it crosses
-// the SAME R-21.203 refusal gate reply/answer apply (refuse.go's
-// guardOutbound), not a second path that calls the transport directly.
+// The only reply is the success confirmation, and it goes to the chat that was
+// just bound. A wrong code, an expired code, a lockout and a failed bind get
+// NO reply: answering would tell a stranger whether the owner is mid-pairing.
+// Each such attempt records one content-free bridge.refused instead.
 func (p *pairCoordinator) handlePairCommand(ctx context.Context, module *TelegramModule,
 	subject string, chatID int64, senderID, candidate string) {
 	outcome, err := p.codes.VerifyAndConsume(ctx, subject, candidate)
-	if err != nil {
-		p.say(ctx, module, chatID, replyPairingFailed)
-		return
-	}
 	switch {
+	case err != nil:
+		module.consumeSilently(ctx)
 	case outcome.Bound:
 		p.bind(ctx, module, subject, chatID, senderID)
 	case outcome.LockedOut:
 		p.sink.EmitLockout(ctx, LockoutEvent{Subject: subject, At: p.clock.Now()})
-		p.say(ctx, module, chatID, replyPairingFailed)
+		module.consumeSilently(ctx)
 	default:
-		p.say(ctx, module, chatID, replyPairingFailed)
+		module.consumeSilently(ctx)
 	}
 }
 
-// bind writes the binding and confirms it, or reports the failure honestly.
+// bind writes the binding and confirms it. A failed bind is a failed pairing:
+// nothing is confirmed, and nothing is said.
 func (p *pairCoordinator) bind(ctx context.Context, module *TelegramModule, subject string, chatID int64, senderID string) {
 	if _, err := p.binding.Bind(ctx, subject, senderID); err != nil {
-		p.say(ctx, module, chatID, replyPairingFailed)
+		module.consumeSilently(ctx)
 		return
 	}
 	p.say(ctx, module, chatID, replyPaired+subject)
 }
 
-// say sends one pairing-flow reply through module.reply — the SAME
-// R-21.203 outbound gate (guardOutbound) and egress firewall every other
-// reply in this package applies (D5). chatKind is "" here: a pairing
-// reply's text is always one of the two fixed strings above, never
-// credential-shaped, so no outbound quarantine event is expected on this
-// path in production.
+// say sends the pairing confirmation through module.reply — the SAME
+// R-21.203 outbound gate and owner-DM guard every other reply applies (D5).
+// By now the redeeming private chat is bound, so the guard admits it.
 func (p *pairCoordinator) say(ctx context.Context, module *TelegramModule, chatID int64, text string) {
 	module.reply(ctx, chatID, "", text)
 }

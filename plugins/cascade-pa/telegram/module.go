@@ -5,25 +5,23 @@
 //   coordinator, and the host's cascadepa.ElevationPolicy.
 //
 // Outputs: Start/Stop manage the poll goroutine; dispatch enforces, IN
-//   ORDER: the R-21.203/R-21.105 secret-value refusal (refuse.go, BEFORE any
-//   pairing/binding lookup — D4), pairing/allowlist (fail-closed), media
-//   refusal (§R-21.227), elevated-verb refusal (§5.14 LOCAL-ONLY), then
-//   Origin/Untrusted stamping — IDENTICALLY on the text path and callback
-//   path.
+//   ORDER: owner-DM admission (private chat, chat.id == from.id, allowlisted
+//   sender; everything else is consumed silently), the R-21.203/R-21.105
+//   secret-value refusal, media refusal (§R-21.227), elevated-verb refusal
+//   (§5.14 LOCAL-ONLY), then Origin/Untrusted stamping — IDENTICALLY on the
+//   text path and callback path.
 //
 // Constraints, each a defect this file was rewritten to close:
-//   - ONE GATE, TWO TRANSPORTS. Every content gate (secret-value, media,
-//     elevated-verb) applies identically on dispatchMessage and
-//     dispatchCallback; a callback used to skip checks its byte-identical
-//     text sibling enforced.
+//   - ONE GATE, TWO TRANSPORTS. Every content gate applies identically on
+//     dispatchMessage and dispatchCallback.
+//   - SILENCE TO EVERY CHAT BUT THE OWNER DM. A stranger, a group, a channel
+//     post, a wrong /pair code and a store error all get no reply, so a
+//     stranger cannot tell a bound bot from an unbound one; each update
+//     records one content-free bridge.refused (outbound_guard.go).
 //   - CLASSIFICATION IS THE HOST'S. The elevated-verb decision comes from
-//     cascadepa.RefusesElevated over the policy the host injects, never from
-//     a prefix list kept here (see cascadepa/bridge_policy.go).
-//   - A CODE IS REDEEMABLE ONLY WHILE UNBOUND (T0 D5). On a bound bot a
-//     non-allowlisted sender gets the same "not paired" reply whether or not
-//     the text is "/pair <code>", and nothing is consumed or counted — a
-//     stranger cannot burn the owner's outstanding code, and cannot tell a
-//     bound bot from an unbound one.
+//     cascadepa.RefusesElevated over the policy the host injects.
+//   - A CODE IS REDEEMABLE ONLY WHILE UNBOUND AND ONLY FROM A PRIVATE CHAT
+//     (T0 D5): nothing is consumed or counted on a bound bot.
 //   - STOP'S CANCELLATION REACHES EVERYTHING. dispatch takes the poll
 //     goroutine's ctx, so Stop's cancellation reaches every handler/reply.
 //
@@ -85,7 +83,6 @@ var (
 // The subject-facing replies. Every one of them is fixed text: a refusal
 // that varied with internal state would be an oracle.
 const (
-	replyNotPaired     = "not paired"
 	replyAlreadyPaired = "already paired"
 	replyMediaRefused  = "media not supported over the bridge"
 )
@@ -114,6 +111,10 @@ type TelegramModule struct {
 	secretScanner SecretScanner
 	quarantine    QuarantineSink
 
+	// refusalDest backs the owner guard's bridge.refused sink
+	// (outbound_guard.go); nil discards. Guarded by mu.
+	refusalDest DivergenceSink
+
 	mu     sync.Mutex
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -124,12 +125,14 @@ type TelegramModule struct {
 // refuse-everything default. clock is required (T0 D8): see quarantine.go.
 func NewTelegramModule(subject string, client *BotClient, binding *cascadepa.BindingStore,
 	pairer *pairCoordinator, elevation cascadepa.ElevationPolicy, clock cascadepa.PairClock) *TelegramModule {
-	return &TelegramModule{
+	m := &TelegramModule{
 		subject: subject, client: client, binding: binding, pairer: pairer,
 		elevation: cascadepa.ElevationOrRefuseAll(elevation),
 		handlers:  make(map[string]Handler),
 		clock:     clock,
 	}
+	m.armOwnerGuard()
+	return m
 }
 
 // RegisterHandler wires kind (HandlerText or HandlerCallbackQuery) to h.
@@ -197,38 +200,42 @@ func (m *TelegramModule) dispatch(ctx context.Context, u Update) {
 		m.dispatchMessage(ctx, u)
 	case u.CallbackQuery != nil:
 		m.dispatchCallback(ctx, u)
+	default:
+		m.consumeSilently(ctx)
 	}
 }
 
-// dispatchMessage gates one Message Update. The secret-value scan (D4) runs
-// FIRST, before any pairing/binding lookup.
+// dispatchMessage gates one Message Update. Only the owner's DM is ever
+// answered (outbound_guard.go): the chat shape is checked first, then the
+// binding; everything else is consumed silently with one bridge.refused.
 func (m *TelegramModule) dispatchMessage(ctx context.Context, u Update) {
 	msg := u.Message
-	if refused, outcome, unconfigured := m.refusesSecret(msg.Text); refused {
-		m.refuseInboundText(ctx, msg, outcome, unconfigured)
+	if !isOwnerDMMessage(msg) {
+		m.consumeSilently(ctx)
 		return
 	}
-	if msg.From == nil {
-		// A channel post or anonymous-admin message carries no From: there
-		// is no sender identity to pair or allowlist, so there is nothing to
-		// admit.
-		return
-	}
-	senderID := strconv.FormatInt(msg.From.ID, 10)
 	bound, err := m.binding.Bound(ctx, m.subject)
-	if err != nil {
-		m.reply(ctx, msg.Chat.ID, chatKindOf(msg), replyNotPaired)
-		return
+	switch {
+	case err != nil:
+		m.consumeSilently(ctx)
+	case !bound:
+		m.dispatchUnbound(ctx, msg, strconv.FormatInt(msg.From.ID, 10))
+	default:
+		m.dispatchBound(ctx, u, msg)
 	}
-	if !bound {
-		m.dispatchUnbound(ctx, msg, senderID)
-		return
-	}
-	allowed, err := m.binding.IsAllowed(ctx, m.subject, senderID)
-	if err != nil || !allowed {
+}
+
+// dispatchBound handles a private-chat message on a bound bot: the sender's
+// DM must be on the allowlist BEFORE the secret scan or any reply (R17c N-6).
+func (m *TelegramModule) dispatchBound(ctx context.Context, u Update, msg *Message) {
+	if !m.client.allowsOwnerDM(ctx, msg.Chat.ID) {
 		// Identical to a stranger's plain text, /pair included: no code is
 		// consumed and no attempt is counted (T0 D5).
-		m.reply(ctx, msg.Chat.ID, chatKindOf(msg), replyNotPaired)
+		m.consumeSilently(ctx)
+		return
+	}
+	if refused, outcome, unconfigured := m.refusesSecret(msg.Text); refused {
+		m.refuseInboundText(ctx, msg, outcome, unconfigured)
 		return
 	}
 	if _, isPair := isPairCommand(msg.Text); isPair {
@@ -238,18 +245,8 @@ func (m *TelegramModule) dispatchMessage(ctx context.Context, u Update) {
 	m.admitMessage(ctx, u, msg)
 }
 
-// dispatchUnbound handles a message on a bot with no binding at all: a
-// "/pair <code>" attempt is verified, everything else is refused.
-func (m *TelegramModule) dispatchUnbound(ctx context.Context, msg *Message, senderID string) {
-	if code, isPair := isPairCommand(msg.Text); isPair {
-		m.pairer.handlePairCommand(ctx, m, m.subject, msg.Chat.ID, senderID, code)
-		return
-	}
-	m.reply(ctx, msg.Chat.ID, chatKindOf(msg), replyNotPaired)
-}
-
-// admitMessage runs the remaining content gates (secret-value already ran,
-// at the top of dispatchMessage) and hands off to the text handler.
+// admitMessage runs the remaining content gates (secret-value already ran in
+// dispatchBound, after owner-DM admission) and hands off to the text handler.
 func (m *TelegramModule) admitMessage(ctx context.Context, u Update, msg *Message) {
 	if msg.HasRefusedMedia() {
 		m.reply(ctx, msg.Chat.ID, chatKindOf(msg), replyMediaRefused)
@@ -268,21 +265,18 @@ func (m *TelegramModule) admitMessage(ctx context.Context, u Update, msg *Messag
 }
 
 // dispatchCallback is dispatchMessage's callback twin (ONE GATE, TWO
-// TRANSPORTS), answered over answerCallbackQuery. The secret-value scan
-// runs FIRST, before the allowlist lookup (D4).
+// TRANSPORTS), answered over answerCallbackQuery. Only an owner-DM callback
+// is admitted and recorded; the secret-value scan runs after that (R17c N-1).
 func (m *TelegramModule) dispatchCallback(ctx context.Context, u Update) {
 	cq := u.CallbackQuery
+	if !m.admitCallback(ctx, cq) {
+		return
+	}
 	if refused, outcome, unconfigured := m.refusesSecret(cq.Data); refused {
 		m.refuseInboundCallback(ctx, cq, outcome, unconfigured)
 		return
 	}
-	senderID := strconv.FormatInt(cq.From.ID, 10)
-	allowed, err := m.binding.IsAllowed(ctx, m.subject, senderID)
-	if err != nil || !allowed {
-		m.answer(ctx, cq.ID, chatKindOf(cq.Message), replyNotPaired)
-		return
-	}
-	if cq.Message != nil && cq.Message.HasRefusedMedia() {
+	if cq.Message.HasRefusedMedia() {
 		m.answer(ctx, cq.ID, chatKindOf(cq.Message), replyMediaRefused)
 		return
 	}

@@ -4,6 +4,15 @@ Issues a one-use pairing code for a personal-assistant bridge module (Telegram
 today, WhatsApp next). It is the issuance half of the bridge pairing flow; the
 other half is typing `/pair <code>` into the bridge itself.
 
+**Pairing is owner-initiated, and only from a private chat.** The code is minted
+and printed here, on your machine. `/pair <code>` is accepted only in a private
+chat with the bot (the chat id equals your user id) while the bot is still
+unpaired. The bot never answers any other chat: a stranger, a group, a channel
+post, a wrong or expired code and a lockout all get no reply. The only pairing
+reply is the success confirmation, sent to the chat that was just bound (the
+already-paired owner DM can also get a fixed `already paired` reply). After
+pairing, the bot speaks only to that owner chat and refuses every other chat id.
+
 **It asks the daemon.** The command is a client for the `pa.pair_code` RPC: the
 daemon runs the bridge's long poll and verifies the code, and it is the only
 process holding the key the stored digest is computed under. With no daemon
@@ -85,6 +94,21 @@ its configured bridge is "tg-9f2a4c1b8d3e5f70"
 Both refuse rather than inventing a placeholder, because a code issued under a
 name no module verifies looks exactly like a working command and fails only
 later, in Telegram, with no explanation.
+
+## What the bot says back
+
+| Situation | Reply |
+|---|---|
+| Correct code, private chat, bot unpaired | `paired: <subject>` to that chat |
+| `/pair` from the already-paired owner DM | `already paired` to that DM |
+| Wrong code, expired code or lockout | nothing |
+| `/pair` from a group, supergroup or channel | nothing |
+| Any message from a chat that is not the paired owner DM | nothing |
+
+Silence is deliberate: a reply would tell a stranger whether the bot exists,
+whether it is paired and whether you are mid-pairing. Each ignored update is
+recorded locally as a content-free `bridge.refused` event (no chat id, no
+sender, no text).
 
 ## Non-interactive
 

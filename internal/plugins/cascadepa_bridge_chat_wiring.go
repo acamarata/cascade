@@ -276,8 +276,7 @@ var _ telegram.DivergenceSink = bridgeDivergenceJournal{}
 
 // NewCascadePABridgeChatHandler assembles the chat-parity ChatBridge for
 // module and registers it as HandlerText (telegram.NewTelegramBridge's own
-// constructor performs that call) — the real, non-test production caller
-// NewTelegramBridge needs.
+// constructor does that): the production caller NewTelegramBridge needs.
 func NewCascadePABridgeChatHandler(ctx context.Context, deps ChatWiringDeps,
 	module *telegram.TelegramModule, binding *cascadepa.BindingStore, subject string, clock migrate.Clock,
 ) (*telegram.TelegramBridge, error) {
@@ -292,8 +291,10 @@ func NewCascadePABridgeChatHandler(ctx context.Context, deps ChatWiringDeps,
 	if err != nil {
 		return nil, err
 	}
+	divergence := bridgeDivergenceJournal{bus: deps.Events}
+	module.SetRefusalSink(divergence) // the owner-DM guard audits refusals over this journal
 	return telegram.NewTelegramBridge(module, binding, subject, telegram.BridgeSeams{
-		Chat: bridgeChatFactory(), Privacy: privacy, Divergence: bridgeDivergenceJournal{bus: deps.Events},
+		Chat: bridgeChatFactory(), Privacy: privacy, Divergence: divergence,
 		Threads: telegram.NewThreadMap(threads, binding, subject), Legacy: privacy,
 	}), nil
 }

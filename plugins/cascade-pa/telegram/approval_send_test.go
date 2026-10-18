@@ -78,6 +78,7 @@ func newSenderFixture(t *testing.T, bound bool) (*TelegramApprovalSender, *sendC
 	}
 	doer := &sendCapturingDoer{reply: mustReadTestdata(t, "sendmessage_approval_buttons.json")}
 	client := NewBotClient(testSubject, doer, &tierGate{}, cascadepa.NewUpdateLedger(state))
+	armTestGuard(t, client)
 	sender := NewTelegramApprovalSender(TelegramApprovalSenderDeps{
 		Subject: testSubject, State: state, Callbacks: cascadepa.NewCallbackNonceStore(),
 		Client: client, Clock: fixedTestClock{t0()},
@@ -103,6 +104,7 @@ func TestTelegramApprovalSender_UnknownSubject_NothingSent(t *testing.T) {
 	state := newMemState()
 	doer := &sendCapturingDoer{reply: mustReadTestdata(t, "sendmessage_approval_buttons.json")}
 	client := NewBotClient(testSubject, doer, &tierGate{}, cascadepa.NewUpdateLedger(state))
+	armTestGuard(t, client)
 	sender := NewTelegramApprovalSender(TelegramApprovalSenderDeps{
 		Subject: "tg-never-seen", State: state, Callbacks: cascadepa.NewCallbackNonceStore(),
 		Client: client, Clock: fixedTestClock{t0()},
@@ -190,6 +192,7 @@ func TestTelegramApprovalSender_TextNamesNothing(t *testing.T) {
 func TestTelegramModule_Client_ExposesTheRealBotClient(t *testing.T) {
 	doer := &sendCapturingDoer{}
 	client := NewBotClient(testSubject, doer, &tierGate{}, cascadepa.NewUpdateLedger(newMemState()))
+	armTestGuard(t, client)
 	module := NewTelegramModule(testSubject, client, nil, nil, nil, fixedTestClock{t0()})
 	if module.Client() != client {
 		t.Error("Client() did not return the exact *BotClient the module was built with")

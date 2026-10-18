@@ -67,6 +67,7 @@ func TestApprovalDenyErrorRejected(t *testing.T) {
 // path — using a real TelegramModule from the rig.
 func TestAnswer_UsesTheGuardedPath(t *testing.T) {
 	rig := newDefaultRig(t)
+	rig.module.client.recordCallback("cbq-x")
 	rig.module.Answer(context.Background(), "cbq-x", "private", "approved")
 	methods := rig.doer.methods()
 	if len(methods) != 1 || methods[0] != MethodAnswerCallbackQuery {

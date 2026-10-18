@@ -49,6 +49,7 @@ func newRoundTripRig(t *testing.T, requestID string) (rig roundTripRig, approveD
 	callbacks := cascadepa.NewCallbackNonceStore()
 	sendDoer := &sendCapturingDoer{reply: mustReadTestdata(t, "sendmessage_approval_buttons.json")}
 	client := NewBotClient(testSubject, sendDoer, &tierGate{}, cascadepa.NewUpdateLedger(state))
+	armTestGuard(t, client)
 	sender := NewTelegramApprovalSender(TelegramApprovalSenderDeps{
 		Subject: testSubject, State: state, Callbacks: callbacks, Client: client, Clock: fixedTestClock{t0()},
 	})
@@ -159,6 +160,7 @@ func TestTelegramApprovalSender_TransportFailure_NoNoncesStored(t *testing.T) {
 	callbacks := cascadepa.NewCallbackNonceStore()
 	doer := &sendCapturingDoer{err: context.DeadlineExceeded}
 	client := NewBotClient(testSubject, doer, &tierGate{}, cascadepa.NewUpdateLedger(state))
+	armTestGuard(t, client)
 	sender := NewTelegramApprovalSender(TelegramApprovalSenderDeps{
 		Subject: testSubject, State: state, Callbacks: callbacks, Client: client, Clock: fixedTestClock{t0()},
 	})

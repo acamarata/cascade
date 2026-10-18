@@ -28,7 +28,7 @@ func issue(t *testing.T, rig *testRig) string {
 func TestPairCoordinator_CorrectCodeBinds(t *testing.T) {
 	rig := newDefaultRig(t)
 	code := issue(t, rig)
-	rig.module.dispatch(context.Background(), textUpdate(1, 111, 999, "/pair "+code))
+	rig.module.dispatch(context.Background(), textUpdate(1, 111, 111, "/pair "+code))
 	if !rig.allows(t, "111") {
 		t.Fatal("a correct code did not bind the sender")
 	}
@@ -59,7 +59,7 @@ func TestPairCoordinator_ConfirmationNamesTheDigestNotTheToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("IssueCode: %v", err)
 	}
-	module.dispatch(ctx, textUpdate(1, 222, 999, "/pair "+code))
+	module.dispatch(ctx, textUpdate(1, 222, 222, "/pair "+code))
 	got := lastSent(t, doer)
 	if !tokenAbsent(got, syntheticToken) {
 		t.Fatalf("the confirmation carried the bot token: %q", got)
@@ -72,12 +72,12 @@ func TestPairCoordinator_ConfirmationNamesTheDigestNotTheToken(t *testing.T) {
 func TestPairCoordinator_WrongCodeNeverBinds(t *testing.T) {
 	rig := newDefaultRig(t)
 	_ = issue(t, rig)
-	rig.module.dispatch(context.Background(), textUpdate(1, 111, 999, "/pair 00000000"))
+	rig.module.dispatch(context.Background(), textUpdate(1, 111, 111, "/pair 00000000"))
 	if rig.allows(t, "111") {
 		t.Fatal("a wrong code bound the sender")
 	}
-	if got := lastSent(t, rig.doer); got != replyPairingFailed {
-		t.Fatalf("reply = %q, want %q", got, replyPairingFailed)
+	if sent := rig.doer.methods(); len(sent) != 0 {
+		t.Fatalf("a failed pairing produced outbound traffic: %v", sent)
 	}
 }
 
@@ -86,12 +86,12 @@ func TestPairCoordinator_ExpiredCodeNeverBinds(t *testing.T) {
 	rig := newRig(t, clock, &okRegistrar{}, nodeVerbPolicy())
 	code := issue(t, rig)
 	clock.advance(cascadepa.PairCodeTTL + 1)
-	rig.module.dispatch(context.Background(), textUpdate(1, 111, 999, "/pair "+code))
+	rig.module.dispatch(context.Background(), textUpdate(1, 111, 111, "/pair "+code))
 	if rig.allows(t, "111") {
 		t.Fatal("an expired code bound the sender")
 	}
-	if got := lastSent(t, rig.doer); got != replyPairingFailed {
-		t.Fatalf("reply = %q, want %q", got, replyPairingFailed)
+	if sent := rig.doer.methods(); len(sent) != 0 {
+		t.Fatalf("a failed pairing produced outbound traffic: %v", sent)
 	}
 }
 
@@ -103,7 +103,7 @@ func TestPairCodeLockoutBurn(t *testing.T) {
 	code := issue(t, rig)
 	ctx := context.Background()
 	for i := int64(1); i <= cascadepa.PairCodeMaxAttempts; i++ {
-		rig.module.dispatch(ctx, textUpdate(i, 111, 999, "/pair ZZZZZZZZ"))
+		rig.module.dispatch(ctx, textUpdate(i, 111, 111, "/pair ZZZZZZZZ"))
 	}
 	if rig.sink.count() != 1 {
 		t.Fatalf("emitted %d lockout events, want exactly 1", rig.sink.count())
@@ -115,7 +115,7 @@ func TestPairCodeLockoutBurn(t *testing.T) {
 	if pending {
 		t.Fatal("the outstanding code survived the lockout")
 	}
-	rig.module.dispatch(ctx, textUpdate(99, 111, 999, "/pair "+code))
+	rig.module.dispatch(ctx, textUpdate(99, 111, 111, "/pair "+code))
 	if rig.allows(t, "111") {
 		t.Fatal("the burned code still bound the sender")
 	}
@@ -160,9 +160,9 @@ func TestPairCoordinator_LockoutCounterSurvivesRestart(t *testing.T) {
 func TestPairCoordinator_RegistrarFailureIsAPairingFailure(t *testing.T) {
 	rig := newRig(t, fixedTestClock{t0()}, failingRegistrar{}, nodeVerbPolicy())
 	code := issue(t, rig)
-	rig.module.dispatch(context.Background(), textUpdate(1, 111, 999, "/pair "+code))
-	if got := lastSent(t, rig.doer); got != replyPairingFailed {
-		t.Fatalf("reply = %q, want %q — a bind whose device record failed is not a pairing", got, replyPairingFailed)
+	rig.module.dispatch(context.Background(), textUpdate(1, 111, 111, "/pair "+code))
+	if sent := rig.doer.methods(); len(sent) != 0 {
+		t.Fatalf("a failed pairing produced outbound traffic: %v", sent)
 	}
 	if rig.allows(t, "111") {
 		t.Fatal("the sender was bound even though the paired-device record was never written")
@@ -175,7 +175,7 @@ func TestPairCoordinator_RegistrarRunsOnEveryBind(t *testing.T) {
 	reg := &okRegistrar{}
 	rig := newRig(t, fixedTestClock{t0()}, reg, nodeVerbPolicy())
 	code := issue(t, rig)
-	rig.module.dispatch(context.Background(), textUpdate(1, 111, 999, "/pair "+code))
+	rig.module.dispatch(context.Background(), textUpdate(1, 111, 111, "/pair "+code))
 	reg.mu.Lock()
 	defer reg.mu.Unlock()
 	if len(reg.seen) != 1 || reg.seen[0] != testSubject+"/111" {
@@ -188,7 +188,7 @@ func TestPairCoordinator_RegistrarRunsOnEveryBind(t *testing.T) {
 func TestPairCoordinator_AlreadyPairedSenderIsTold(t *testing.T) {
 	rig := newDefaultRig(t)
 	rig.bind(t, "111")
-	rig.module.dispatch(context.Background(), textUpdate(1, 111, 999, "/pair ABCDEFGH"))
+	rig.module.dispatch(context.Background(), textUpdate(1, 111, 111, "/pair ABCDEFGH"))
 	if got := lastSent(t, rig.doer); got != replyAlreadyPaired {
 		t.Fatalf("reply = %q, want %q", got, replyAlreadyPaired)
 	}
@@ -218,21 +218,21 @@ func TestDiscardLockoutSinkIsCallable(_ *testing.T) {
 	discardLockoutSink{}.EmitLockout(context.Background(), LockoutEvent{Subject: testSubject})
 }
 
-// TestPairCoordinator_StoreErrorReportsPairingFailed: an unreachable store must
-// answer "pairing failed", never bind and never panic.
-func TestPairCoordinator_StoreErrorReportsPairingFailed(t *testing.T) {
+// TestPairCoordinator_StoreErrorStaysSilent: an unreachable store must
+// stay silent, never bind and never panic.
+func TestPairCoordinator_StoreErrorStaysSilent(t *testing.T) {
 	rig := newDefaultRig(t)
 	rig.state.loadErr = errTestStoreDown
-	rig.module.dispatch(context.Background(), textUpdate(1, 111, 999, "/pair ABCDEFGH"))
-	if got := lastSent(t, rig.doer); got != replyNotPaired {
-		t.Fatalf("reply = %q, want %q (the Bound() read fails first)", got, replyNotPaired)
+	rig.module.dispatch(context.Background(), textUpdate(1, 111, 111, "/pair ABCDEFGH"))
+	if sent := rig.doer.methods(); len(sent) != 0 {
+		t.Fatalf("an unreadable store produced outbound traffic: %v", sent)
 	}
 }
 
-// TestPairCoordinator_VerifierErrorReportsPairingFailed drives the coordinator
+// TestPairCoordinator_VerifierErrorStaysSilent drives the coordinator
 // directly with an unreadable store, so the verifier's own error branch (not
 // the dispatch gate's earlier Bound() read) is the one under test.
-func TestPairCoordinator_VerifierErrorReportsPairingFailed(t *testing.T) {
+func TestPairCoordinator_VerifierErrorStaysSilent(t *testing.T) {
 	state := newMemState()
 	state.loadErr = errTestStoreDown
 	clock := fixedTestClock{t0()}
@@ -246,9 +246,9 @@ func TestPairCoordinator_VerifierErrorReportsPairingFailed(t *testing.T) {
 	// branch) from tripping T0 D1's unwired fail-closed default instead.
 	module := NewTelegramModule(testSubject, client, stores.Binding, pairer, nodeVerbPolicy(), clock)
 	module.secretScanner = fakeSecretScanner{}
-	pairer.handlePairCommand(context.Background(), module, testSubject, 999, "111", "ABCDEFGH")
-	if got := lastSent(t, doer); got != replyPairingFailed {
-		t.Fatalf("reply = %q, want %q", got, replyPairingFailed)
+	pairer.handlePairCommand(context.Background(), module, testSubject, 111, "111", "ABCDEFGH")
+	if sent := doer.methods(); len(sent) != 0 {
+		t.Fatalf("a failed pairing produced outbound traffic: %v", sent)
 	}
 	allowed, _ := stores.Binding.IsAllowed(context.Background(), testSubject, "111")
 	if allowed {

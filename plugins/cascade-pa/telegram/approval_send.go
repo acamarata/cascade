@@ -237,6 +237,9 @@ type sendApprovalButtonsParams struct {
 // chat/message id rather than the one it merely asked for.
 func (c *BotClient) sendApprovalButtons(ctx context.Context, chatID int64,
 	tier cascadepa.SensitivityTier, text, approveData, denyData string) (Message, error) {
+	if err := c.outboundChatAllowed(ctx, chatID); err != nil {
+		return Message{}, err
+	}
 	safe, err := c.egress.Guard(ctx, tier, []byte(text))
 	if err != nil {
 		return Message{}, err

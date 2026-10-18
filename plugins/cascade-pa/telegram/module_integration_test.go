@@ -41,7 +41,7 @@ func TestTelegramModule_StartStopDrain(t *testing.T) {
 	}
 }
 
-func TestTelegramCallback_NonAllowlistedAnsweredNotPaired(t *testing.T) {
+func TestTelegramCallback_NonAllowlistedNotAnswered(t *testing.T) {
 	rig := newDefaultRig(t)
 	called := false
 	rig.module.RegisterHandler(HandlerCallbackQuery, func(context.Context, InboundMessage) error {
@@ -52,8 +52,8 @@ func TestTelegramCallback_NonAllowlistedAnsweredNotPaired(t *testing.T) {
 	if called {
 		t.Fatal("the callback handler ran for a non-allowlisted sender")
 	}
-	if got := lastSent(t, rig.doer); got != replyNotPaired {
-		t.Fatalf("answer = %q, want %q", got, replyNotPaired)
+	if sent := rig.doer.methods(); len(sent) != 0 {
+		t.Fatalf("a non-allowlisted callback got outbound traffic: %v", sent)
 	}
 }
 
@@ -266,12 +266,12 @@ func TestPairingRepliesAreTheGatesOutput(t *testing.T) {
 
 	// A wrong candidate (the refusal reply) and then the right one (the
 	// confirmation reply): both go out through the pairing path's say().
-	module.dispatch(ctx, textUpdate(1, 111, 999, "/pair 00000000"))
-	module.dispatch(ctx, textUpdate(2, 111, 999, "/pair "+code))
+	module.dispatch(ctx, textUpdate(1, 111, 111, "/pair 00000000"))
+	module.dispatch(ctx, textUpdate(2, 111, 111, "/pair "+code))
 
 	sent := doer.sentTexts()
-	if len(sent) != 2 {
-		t.Fatalf("the pairing flow sent %d replies, want 2: %v", len(sent), sent)
+	if len(sent) != 1 {
+		t.Fatalf("the pairing flow sent %d replies, want only the confirmation: %v", len(sent), sent)
 	}
 	for i, got := range sent {
 		if got != gateMarker {
@@ -282,17 +282,14 @@ func TestPairingRepliesAreTheGatesOutput(t *testing.T) {
 	// And the gate really saw the pairing flow's own texts, so the assertion
 	// above is about routing rather than about a gate that saw nothing.
 	observed := gate.observed()
-	var sawFailed, sawPaired bool
+	var sawPaired bool
 	for _, body := range observed {
-		switch body {
-		case replyPairingFailed:
-			sawFailed = true
-		case replyPaired + testSubject:
+		if body == replyPaired+testSubject {
 			sawPaired = true
 		}
 	}
-	if !sawFailed || !sawPaired {
-		t.Fatalf("the gate did not see both pairing replies: %v", observed)
+	if !sawPaired {
+		t.Fatalf("the gate did not see the pairing confirmation: %v", observed)
 	}
 	if allowed, _ := stores.Binding.IsAllowed(ctx, testSubject, "111"); !allowed {
 		t.Fatal("the correct code did not bind the sender")
