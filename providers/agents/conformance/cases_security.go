@@ -15,6 +15,7 @@ package conformance
 // SPORT: providers.agents.conformance/ADD (P1-E30-W6-S61-T1, S61-T2).
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,9 +51,16 @@ func (s *Suite) TestPreSpawnSecretScanAborts(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "seed.env"), []byte("SECRET="+seeded), 0o600); err != nil {
 		t.Fatalf("seed fixture: %v", err)
 	}
-	if err := provider.PreSpawnScan(root, provider.WorktreeScope{}); err != provider.ErrPreSpawnSecretFound {
+	if err := provider.PreSpawnScan(root, provider.WorktreeScope{}, fixtureMatch(seeded)); err != provider.ErrPreSpawnSecretFound {
 		t.Fatalf("PreSpawnScan(seeded) = %v, want ErrPreSpawnSecretFound", err)
 	}
+}
+
+// fixtureMatch is the scan's content matcher for this case: it hits on the
+// seeded fixture value alone, so the case tests the pkg-level seam and not a
+// detector (the process detector is covered where it lives).
+func fixtureMatch(seeded string) func([]byte) (string, bool) {
+	return func(content []byte) (string, bool) { return "fixture", bytes.Contains(content, []byte(seeded)) }
 }
 
 // TestDriverNeverAutoApproves asserts ApprovalRequests returns a usable

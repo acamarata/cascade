@@ -69,6 +69,13 @@ func newClaudeDriver(site SpawnSite) (provider.AgentProvider, error) {
 		Posture:         site.Posture,
 		CredentialClass: claude.CredentialClass(site.CredentialClass),
 	}
+	var match func([]byte) (string, bool)
+	if site.Clock != nil { // a probe-only site never scans
+		var err error
+		if match, err = ProcessDetectorMatch(); err != nil {
+			return nil, err
+		}
+	}
 	d, err := claude.New(claude.Config{
 		Binary:       site.Binary,
 		HookPackPath: site.HookPackPath,
@@ -76,6 +83,7 @@ func newClaudeDriver(site SpawnSite) (provider.AgentProvider, error) {
 		Worktree:     siteLease{root: site.WorktreeRoot},
 		Defaults:     site.Defaults,
 		Clock:        site.Clock,
+		ContentMatch: match,
 	})
 	if err != nil {
 		return nil, err

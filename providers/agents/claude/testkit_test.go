@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -202,7 +203,7 @@ func (f *fx) config() Config {
 	def.CancelGrace = 500 * time.Millisecond
 	return Config{Binary: f.script(), HookPackPath: f.pack, Profile: fakeProfile{prof: f.profile()},
 		Worktree: fakeLeaser{lease: Lease{Root: f.root, GitDir: filepath.Join(f.root, ".git")}},
-		Defaults: def, ProbeTimeout: 5 * time.Second, Clock: testClock{}}
+		Defaults: def, ProbeTimeout: 5 * time.Second, Clock: testClock{}, ContentMatch: processMatch(f.t)}
 }
 
 func (f *fx) driver(cfg Config) *Driver {
@@ -278,3 +279,19 @@ func has(s []string, tok string) bool {
 }
 
 func contains(b []byte, s string) bool { return bytes.Contains(b, []byte(s)) }
+
+// processMatch is the host's matcher: the process's one secret detector.
+func processMatch(t testing.TB) func([]byte) (string, bool) {
+	t.Helper()
+	d, err := secrets.ProcessDetector()
+	if err != nil {
+		t.Fatalf("secrets.ProcessDetector: %v", err)
+	}
+	return func(content []byte) (string, bool) {
+		hits := d.ScanCertain(content)
+		if len(hits) == 0 {
+			return "", false
+		}
+		return string(hits[0].Class), true
+	}
+}

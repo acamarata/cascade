@@ -220,28 +220,30 @@ func TestLoadNilWarnUsesDefaultSlog(t *testing.T) {
 // CASCADE_* name here must be reserved. Slices of names are not evaluated:
 // their names are listed by hand.
 var dynamicEnvReads = map[string][]string{
-	"cmd/cascade/backup_key.go:187":          {"<operator-named>"}, // --passphrase-env
-	"cmd/cascade/init_adapters.go:30":        {"<caller-named>"},
-	"cmd/cascade/profile_attach.go:62":       {"<caller-named>"},
-	"internal/backup/targets.go:227":         {"<operator-named>"}, // name match only: passes getenv and the S3 prefix to s3.go
-	"internal/backup/targets/s3.go:69":       {"<operator-named>"}, // target S3 env prefix + suffix
-	"internal/backup/targets/s3.go:70":       {"<operator-named>"},
-	"internal/backup/targets/s3.go:71":       {"<operator-named>"},
-	"internal/backup/targets/s3.go:72":       {"<operator-named>"},
-	"internal/build/sweep_allow.go:114":      {"CASCADE_IDENTIFIER_PATTERNS"},
-	"internal/ci/waitmerge_deps.go:82":       {"CASCADE_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"},
-	"internal/providers/intake/core.go:177":  {"<caller-named>"},
-	"internal/providers/intake/core.go:195":  {"<caller-named>"},
-	"internal/runtime/config_load.go:145":    {"CASCADE_PROFILE"},
-	"internal/runtime/initconfig/env.go:100": {"<caller-named>"},
-	"internal/runtime/profile_server.go:119": {"<operator-named>"}, // server-profile DSN env-ref
-	"internal/runtime/profile_server.go:152": {"<operator-named>"}, // server-profile s3_env_prefix + suffix
-	"internal/secrets/oauth_transport.go:68": {"<caller-named>"},
-	"internal/tools/registry-gen/main.go:76": {"<operator-named>"}, // --key-ref
-	"plugins/cascade-pa/cmd/env.go:12":       {"<caller-named>"},
-	"plugins/github/token_env.go:41":         {"CASCADE_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"},
-	"plugins/github/wiki/confirm.go:43":      {"<caller-named>"},
-	"plugins/nself/handshake_entries.go:129": {"CASCADE_STORAGE_POSTGRES_DSN", "CASCADE_STORAGE_REDIS_URL", "CASCADE_STORAGE_S3_ENDPOINT", "CASCADE_STORAGE_S3_BUCKET", "CASCADE_STORAGE_S3_KEY_ID", "CASCADE_STORAGE_S3_SECRET"}, // requiredServerEnvRefs, presence only
+	"cmd/cascade/backup_key.go:187":            {"<operator-named>"}, // --passphrase-env
+	"cmd/cascade/init_adapters.go:30":          {"<caller-named>"},
+	"cmd/cascade/profile_attach.go:62":         {"<caller-named>"},
+	"internal/backup/targets.go:227":           {"<operator-named>"}, // name match only: passes getenv and the S3 prefix to s3.go
+	"internal/backup/targets/s3.go:69":         {"<operator-named>"}, // target S3 env prefix + suffix
+	"internal/backup/targets/s3.go:70":         {"<operator-named>"},
+	"internal/backup/targets/s3.go:71":         {"<operator-named>"},
+	"internal/backup/targets/s3.go:72":         {"<operator-named>"},
+	"internal/build/sweep_allow.go:114":        {"CASCADE_IDENTIFIER_PATTERNS"},
+	"internal/ci/waitmerge_deps.go:82":         {"CASCADE_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"},
+	"internal/providers/agents/env.go:70":      {"<operator-named>"}, // the binding's key variable, named by the daemon configuration
+	"internal/providers/agents/profile.go:161": {"<caller-named>"},   // the harness binding's vendor config directory variable
+	"internal/providers/intake/core.go:177":    {"<caller-named>"},
+	"internal/providers/intake/core.go:195":    {"<caller-named>"},
+	"internal/runtime/config_load.go:145":      {"CASCADE_PROFILE"},
+	"internal/runtime/initconfig/env.go:100":   {"<caller-named>"},
+	"internal/runtime/profile_server.go:119":   {"<operator-named>"}, // server-profile DSN env-ref
+	"internal/runtime/profile_server.go:152":   {"<operator-named>"}, // server-profile s3_env_prefix + suffix
+	"internal/secrets/oauth_transport.go:68":   {"<caller-named>"},
+	"internal/tools/registry-gen/main.go:76":   {"<operator-named>"}, // --key-ref
+	"plugins/cascade-pa/cmd/env.go:12":         {"<caller-named>"},
+	"plugins/github/token_env.go:41":           {"CASCADE_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"},
+	"plugins/github/wiki/confirm.go:43":        {"<caller-named>"},
+	"plugins/nself/handshake_entries.go:129":   {"CASCADE_STORAGE_POSTGRES_DSN", "CASCADE_STORAGE_REDIS_URL", "CASCADE_STORAGE_S3_ENDPOINT", "CASCADE_STORAGE_S3_BUCKET", "CASCADE_STORAGE_S3_KEY_ID", "CASCADE_STORAGE_S3_SECRET"}, // requiredServerEnvRefs, presence only
 
 	// widgetEnvironment reads CASCADE_HOME through the injected WidgetConfig.Getenv.
 	"internal/daemon/service/widget_darwin.go:43":  {"CASCADE_HOME"}, // install records it in the plist

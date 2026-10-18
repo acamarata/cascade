@@ -13,6 +13,7 @@
 package provider_test
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,16 +25,28 @@ import (
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
+// awsMatch is a fixture matcher: it hits on the AKIA access-key prefix. The
+// package holds no pattern list; the real matcher is the host's detector.
+func awsMatch(content []byte) (string, bool) {
+	return "aws_access_key", bytes.Contains(content, []byte("AKIA"))
+}
+
 func TestDriverEnvAllowlistIsNormative(t *testing.T) {
 	got := provider.DriverEnvAllowlist("VENDOR_TOKEN")
 	want := []string{"PATH", "HOME", "TMPDIR", "LANG", "CASCADE_JOB_ID", "CASCADE_SOCKET",
-		"HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "VENDOR_TOKEN"}
+		"CASCADE_PRINCIPAL_TOKEN", "CASCADE_LEASE_ID",
+		"HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "https_proxy", "http_proxy", "no_proxy", "VENDOR_TOKEN"}
 	if len(got) != len(want) {
 		t.Fatalf("DriverEnvAllowlist = %v, want %v", got, want)
 	}
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("DriverEnvAllowlist[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+	for _, v := range got {
+		if v == "ALL_PROXY" || v == "all_proxy" {
+			t.Fatalf("DriverEnvAllowlist carries %s: the one per-spawn proxy is the only route out", v)
 		}
 	}
 }
@@ -53,14 +66,14 @@ func TestToolEnvOmitsVendorAuthVar(t *testing.T) {
 
 func TestPreSpawnScanFailsClosed(t *testing.T) {
 	root := t.TempDir()
-	if err := provider.PreSpawnScan(root, provider.WorktreeScope{}); err != nil {
+	if err := provider.PreSpawnScan(root, provider.WorktreeScope{}, awsMatch); err != nil {
 		t.Fatalf("PreSpawnScan(empty tree): %v, want nil", err)
 	}
 
 	// A non-existent prefix scoped explicitly is not an error (nothing to
 	// scan there yet); real I/O failures on an existing path are.
 	scope := provider.WorktreeScope{InScopePrefixes: []string{"missing"}}
-	if err := provider.PreSpawnScan(root, scope); err != nil {
+	if err := provider.PreSpawnScan(root, scope, awsMatch); err != nil {
 		t.Fatalf("PreSpawnScan(missing prefix): %v, want nil", err)
 	}
 }
@@ -74,9 +87,9 @@ func TestPreSpawnScanAbortsOnSecretShape(t *testing.T) {
 		t.Fatalf("seed fixture: %v", err)
 	}
 
-	err := provider.PreSpawnScan(root, provider.WorktreeScope{})
-	if !cascade.HasKind(err, cascade.KindCapabilityDenied) {
-		t.Fatalf("PreSpawnScan(seeded secret) err = %v, want ErrPreSpawnSecretFound", err)
+	err := provider.PreSpawnScan(root, provider.WorktreeScope{}, awsMatch)
+	if err != provider.ErrPreSpawnSecretFound {
+		t.Fatalf("PreSpawnScan(seeded secret) err = %v, want ErrPreSpawnSecretFound itself", err)
 	}
 }
 
@@ -112,7 +125,7 @@ func TestPreSpawnScanSkipsNamedPipes(t *testing.T) {
 		t.Skipf("symlink unavailable: %v", err)
 	}
 	done := make(chan error, 1)
-	go func() { done <- provider.PreSpawnScan(root, provider.WorktreeScope{}) }()
+	go func() { done <- provider.PreSpawnScan(root, provider.WorktreeScope{}, awsMatch) }()
 	select {
 	case err := <-done:
 		if err != nil {
@@ -130,7 +143,36 @@ func TestPreSpawnScanLinkToDirectoryFailsClosed(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(root, "dirlink")); err != nil {
 		t.Skipf("symlink unavailable: %v", err)
 	}
-	if err := provider.PreSpawnScan(root, provider.WorktreeScope{}); err == nil {
+	if err := provider.PreSpawnScan(root, provider.WorktreeScope{}, awsMatch); err == nil {
 		t.Fatal("PreSpawnScan(tree with a link to a directory) = nil, want a fail-closed error")
+	}
+}
+
+// TestPreSpawnScanTakesMatcher: the scan runs the caller's matcher over every
+// regular file in scope, reports a hit as the sentinel, passes a clean tree,
+// and refuses a nil matcher instead of treating the tree as clean.
+func TestPreSpawnScanTakesMatcher(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("plain"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var seen []string
+	record := func(content []byte) (string, bool) {
+		seen = append(seen, string(content))
+		return "", false
+	}
+	if err := provider.PreSpawnScan(root, provider.WorktreeScope{}, record); err != nil {
+		t.Fatalf("PreSpawnScan(clean tree) = %v, want nil", err)
+	}
+	if len(seen) != 1 || seen[0] != "plain" {
+		t.Fatalf("matcher saw %q, want the one file's content", seen)
+	}
+	hit := func([]byte) (string, bool) { return "any", true }
+	if err := provider.PreSpawnScan(root, provider.WorktreeScope{}, hit); err != provider.ErrPreSpawnSecretFound {
+		t.Fatalf("PreSpawnScan(matcher hit) = %v, want ErrPreSpawnSecretFound by identity", err)
+	}
+	err := provider.PreSpawnScan(root, provider.WorktreeScope{}, nil)
+	if !cascade.HasKind(err, cascade.KindInvalidInput) || err == provider.ErrPreSpawnSecretFound {
+		t.Fatalf("PreSpawnScan(nil matcher) = %v, want KindInvalidInput", err)
 	}
 }

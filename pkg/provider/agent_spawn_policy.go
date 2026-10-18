@@ -29,18 +29,21 @@ package provider
 import (
 	"os"
 	"path/filepath"
-	"regexp"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // driverEnvAllowlistBase is the R-21.151 normative set every driver child
 // inherits regardless of vendor: PATH, HOME, TMPDIR, LANG, the job/socket
-// identity, and the H/S-16.T1 broker-proxy variables.
+// identity, the principal token and lease marker, and the six per-spawn
+// proxy variables in both cases. ALL_PROXY and all_proxy are deliberately
+// absent: the one proxy is the only route out.
 var driverEnvAllowlistBase = []string{
 	"PATH", "HOME", "TMPDIR", "LANG",
 	"CASCADE_JOB_ID", "CASCADE_SOCKET",
+	"CASCADE_PRINCIPAL_TOKEN", "CASCADE_LEASE_ID",
 	"HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY",
+	"https_proxy", "http_proxy", "no_proxy",
 }
 
 // DriverEnvAllowlist returns the trusted-driver environment allowlist: the
@@ -70,22 +73,17 @@ func ToolEnvAllowlist() []string {
 	return out
 }
 
-// secretPatterns are the credential shapes PreSpawnScan checks for. Every
-// literal here is a PATTERN, not a real credential value.
-var secretPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`AKIA[0-9A-Z]{16}`),
-	regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY-----`),
-	regexp.MustCompile(`ghp_[0-9A-Za-z]{36}`),
-	regexp.MustCompile(`xox[baprs]-[0-9A-Za-z-]{10,}`),
-}
-
 // PreSpawnScan is the pkg-typed seam the shim runs BEFORE every spawn: it
 // walks root restricted to scope's InScopePrefixes plus DeclaredDeps and
-// checks each regular file's contents against secretPatterns. A hit
-// aborts the spawn with ErrPreSpawnSecretFound; any I/O error scanning the
-// tree is ALSO fail-closed (the spawn is aborted) rather than treated as
-// an absence of secrets.
-func PreSpawnScan(root string, scope WorktreeScope) error {
+// checks each regular file's contents with match, the caller's content
+// matcher (the process's one secret detector; this package holds no pattern
+// list of its own). A hit aborts the spawn with ErrPreSpawnSecretFound; any
+// I/O error scanning the tree is ALSO fail-closed (the spawn is aborted)
+// rather than treated as an absence of secrets, and so is a nil match.
+func PreSpawnScan(root string, scope WorktreeScope, match func(content []byte) (class string, hit bool)) error {
+	if match == nil {
+		return cascade.New(cascade.KindInvalidInput, "provider: pre-spawn scan needs a content matcher")
+	}
 	prefixes := scope.InScopePrefixes
 	if len(scope.DeclaredDeps) > 0 {
 		prefixes = append(append([]string{}, prefixes...), scope.DeclaredDeps...)
@@ -94,7 +92,7 @@ func PreSpawnScan(root string, scope WorktreeScope) error {
 		prefixes = []string{"."}
 	}
 	for _, p := range prefixes {
-		if err := scanPrefix(filepath.Join(root, p)); err != nil {
+		if err := scanPrefix(filepath.Join(root, p), match); err != nil {
 			return err
 		}
 	}
@@ -116,7 +114,7 @@ func readableAsFile(path string, info os.FileInfo) bool {
 
 // scanPrefix walks one prefix rooted at dir, fail-closed on any walk or
 // read error.
-func scanPrefix(dir string) error {
+func scanPrefix(dir string, match func([]byte) (string, bool)) error {
 	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -134,10 +132,8 @@ func scanPrefix(dir string) error {
 		if readErr != nil {
 			return cascade.Wrapf(cascade.KindInternal, readErr, "provider: pre-spawn scan could not read %s", path)
 		}
-		for _, pat := range secretPatterns {
-			if pat.Match(data) {
-				return ErrPreSpawnSecretFound
-			}
+		if _, hit := match(data); hit {
+			return ErrPreSpawnSecretFound
 		}
 		return nil
 	})

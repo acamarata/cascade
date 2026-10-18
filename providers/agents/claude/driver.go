@@ -71,9 +71,9 @@ type Config struct {
 	Descriptor Descriptor
 	// ProbeTimeout bounds each pre-spawn probe; zero means 60s.
 	ProbeTimeout time.Duration
-	// Clock supplies "now" for the envelope expiry check. New accepts nil (a
-	// probe-only driver never spawns); Spawn then refuses before any child.
-	Clock Clock
+	// Clock supplies "now" for the envelope expiry check; nil is allowed for a probe-only driver (Spawn refuses).
+	Clock        Clock
+	ContentMatch func(content []byte) (class string, hit bool) // pre-spawn scan matcher; Spawn refuses while nil
 }
 
 // Clock is the injected time source (the runtime.Clock method set).
@@ -293,7 +293,7 @@ func (d *Driver) checkTree(lease Lease, job provider.AgentJobSpec) ([]string, er
 	if err := refuseForeignSettings(filepath.Join(lease.Root, ".claude"), d.cfg.HookPackPath); err != nil {
 		return nil, err
 	}
-	if err := provider.PreSpawnScan(lease.Root, provider.WorktreeScope{InScopePrefixes: []string{"."}}); err != nil {
+	if err := provider.PreSpawnScan(lease.Root, provider.WorktreeScope{InScopePrefixes: []string{"."}}, d.cfg.ContentMatch); err != nil {
 		return nil, err
 	}
 	return dirs, nil
