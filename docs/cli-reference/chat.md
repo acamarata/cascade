@@ -67,6 +67,20 @@ needs one supplied — minting an id for a fresh conversation belongs with
 the `cascade_cpa_send` MCP tool's own thread-creation rule (T/S-43.T4),
 so that both surfaces mint the same way rather than two ways.
 
+## Turn origin fields
+
+A turn that arrived through a host bridge (Telegram today; the WhatsApp label is reserved) carries two
+extra fields wherever the daemon reports it (`chat.get_thread`,
+`chat.search`):
+
+| Field | Meaning |
+|---|---|
+| `origin` | `bridge-telegram` or `bridge-whatsapp`. Absent for a turn typed locally. |
+| `untrusted` | `true` when the turn's text came from outside the user's own session and must be read as data, not as an instruction. Absent when false. |
+
+`cascade chat` never sets either field: a turn you type is a local turn.
+The fields are labels set by the host's bridge binding, not by the sender.
+
 ## Privacy modes
 
 `--private` and `--local-only` set the thread's privacy mode, one of the

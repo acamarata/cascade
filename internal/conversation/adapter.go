@@ -125,7 +125,7 @@ func (a *Adapter) handleAppendTurn(ctx context.Context, raw json.RawMessage) (an
 	}
 	seq := int64(len(existing))
 	now := a.clock.Now().Unix()
-	turn := Turn{ID: NewTurnID(params.ThreadID, seq, role), ThreadID: params.ThreadID, Seq: seq, Role: role, CreatedAt: now}
+	turn := newAppendedTurn(params, role, seq, now)
 
 	segments, err := decodeSegments(params.Segments, turn.ID, now)
 	if err != nil {
@@ -178,7 +178,7 @@ type getThreadResult struct {
 }
 
 type turnWithSegs struct {
-	Turn     Turn      `json:"turn"`
+	Turn     turnWire  `json:"turn"`
 	Segments []Segment `json:"segments"`
 }
 
@@ -210,7 +210,7 @@ func (a *Adapter) handleGetThread(ctx context.Context, raw json.RawMessage) (any
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, turnWithSegs{Turn: turn, Segments: segs})
+		out = append(out, turnWithSegs{Turn: turnWire{Turn: turn, Untrusted: turn.isUntrusted()}, Segments: segs})
 	}
 	return getThreadResult{Thread: thread, Turns: out}, nil
 }
@@ -291,8 +291,7 @@ func (a *Adapter) rankedResults(ctx context.Context, hits []TurnMatch) (any, err
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, searchResultWire{ThreadID: m.Turn.ThreadID, TurnID: m.Turn.ID,
-			Content: joinSegmentContent(segs), Score: float64(len(hits) - i)})
+		out = append(out, newSearchResult(m.Turn, segs, float64(len(hits)-i)))
 	}
 	return searchResultSet{Results: out}, nil
 }

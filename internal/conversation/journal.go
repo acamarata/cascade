@@ -52,6 +52,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/fleet/journal"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // The closed set of journalPayload.Type discriminators this domain
@@ -82,6 +83,9 @@ type journalPayload struct {
 	Type     string    `json:"type"`
 	Turn     *Turn     `json:"turn,omitempty"`
 	Segments []Segment `json:"segments,omitempty"`
+	// Provenance is the turn's origin-marker provenance (origin.go); the
+	// origin label itself rides inside Turn. Both survive Resume.
+	Provenance provider.Provenance `json:"provenance,omitempty"`
 }
 
 // ErrJournalDecodeFailed is returned when a stored journal entry's
@@ -100,7 +104,7 @@ var ErrJournalDecodeFailed = cascade.New(cascade.KindIntegrity, "conversation: j
 // lets Resume tell "attempted but unconfirmed" apart from "completed"
 // (Resume only replays KindAck entries).
 func AppendTurnJournaled(ctx context.Context, js JournalStore, store Store, turn Turn, segments []Segment) error {
-	payload, err := json.Marshal(journalPayload{Type: JournalEntryTurnAppend, Turn: &turn, Segments: segments})
+	payload, err := json.Marshal(journalPayload{Type: JournalEntryTurnAppend, Turn: &turn, Segments: segments, Provenance: turn.Provenance})
 	if err != nil {
 		return cascade.Wrap(cascade.KindInternal, err, "conversation: marshal journal payload")
 	}
@@ -166,7 +170,7 @@ func Resume(ctx context.Context, js JournalStore, store Store, threadID string) 
 		if p.Type != JournalEntryTurnAppend || p.Turn == nil {
 			continue
 		}
-		n, err := resumeOneTurn(ctx, store, *p.Turn, p.Segments)
+		n, err := resumeOneTurn(ctx, store, restoreMarker(*p.Turn, p.Provenance), p.Segments)
 		if err != nil {
 			return applied, err
 		}

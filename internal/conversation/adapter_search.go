@@ -42,12 +42,7 @@ func (a *Adapter) handleSearch(ctx context.Context, raw json.RawMessage) (any, e
 		if segErr != nil {
 			return nil, segErr
 		}
-		out = append(out, searchResultWire{
-			ThreadID: m.Turn.ThreadID,
-			TurnID:   m.Turn.ID,
-			Content:  joinSegmentContent(segs),
-			Score:    -m.Rank,
-		})
+		out = append(out, newSearchResult(m.Turn, segs, -m.Rank))
 	}
 	return searchResultSet{Results: out}, nil
 }

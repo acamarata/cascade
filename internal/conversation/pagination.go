@@ -142,8 +142,8 @@ func (s *conversationStore) ListTurnsPage(ctx context.Context, threadID string, 
 	}
 
 	rows, err := listRows(ctx, s.db,
-		`SELECT id, thread_id, seq, role, created_at FROM `+tableTurn+
-			` WHERE thread_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?`,
+		turnSelect+
+			` WHERE t.thread_id = ? AND t.seq > ? ORDER BY t.seq ASC LIMIT ?`,
 		[]any{threadID, afterSeq, limit + 1}, scanTurn, "turns page")
 	if err != nil {
 		return TurnPage{}, err
@@ -218,9 +218,11 @@ func (a *Adapter) ListThreadsPage(ctx context.Context, filter PaginationFilter) 
 func scanTurn(rows *sql.Rows) (Turn, error) {
 	var t Turn
 	var role string
-	if err := rows.Scan(&t.ID, &t.ThreadID, &t.Seq, &role, &t.CreatedAt); err != nil {
+	var origin, prov sql.NullString
+	if err := rows.Scan(&t.ID, &t.ThreadID, &t.Seq, &role, &t.CreatedAt, &origin, &prov); err != nil {
 		return Turn{}, cascade.Wrap(cascade.KindUnavailable, err, "conversation: scan turn")
 	}
+	applyStoredMarker(&t, origin, prov)
 	r, err := DecodeRole(role)
 	t.Role = r
 	return t, err

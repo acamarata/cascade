@@ -108,7 +108,7 @@ func (c bridgeChatService) AppendTurn(ctx context.Context, threadID, role, text 
 	if err != nil {
 		return "", err
 	}
-	params := appendTurnParams{ThreadID: threadID, Role: role,
+	params := appendTurnParams{ThreadID: threadID, Role: role, Origin: conversation.OriginBridgeTelegram, Untrusted: true,
 		Segments: []appendSegmentWire{{Kind: "text", Content: text}}}
 	var result appendTurnResult
 	if err := rpc.Do(ctx, conversation.MethodAppendTurn, params, &result); err != nil {

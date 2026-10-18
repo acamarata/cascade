@@ -108,6 +108,11 @@ type appendTurnParams struct {
 	// fail-closed tier at 0 and make an omitted field indistinguishable
 	// from an explicit "restricted".
 	PrivacyMode string `json:"privacy_mode,omitempty"`
+	// Origin/Untrusted mirror chat.append_turn's turn-origin stamp. Only a
+	// host binding sets them, from a constant of its own (see
+	// bridgeChatService.AppendTurn); `cascade chat` leaves both zero.
+	Origin    string `json:"origin,omitempty"`
+	Untrusted bool   `json:"untrusted,omitempty"`
 }
 
 type appendSegmentWire struct {

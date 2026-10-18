@@ -167,12 +167,12 @@ func (s *conversationStore) searchHits(ctx context.Context, query string, filter
 func (s *conversationStore) getTurnByID(ctx context.Context, id string) (Turn, error) {
 	var t Turn
 	var role string
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id, thread_id, seq, role, created_at FROM `+tableTurn+` WHERE id = ?`, id,
-	).Scan(&t.ID, &t.ThreadID, &t.Seq, &role, &t.CreatedAt)
+	var origin, prov sql.NullString
+	err := s.db.QueryRowContext(ctx, turnSelect+` WHERE t.id = ?`, id).Scan(&t.ID, &t.ThreadID, &t.Seq, &role, &t.CreatedAt, &origin, &prov)
 	if err != nil {
 		return Turn{}, cascade.Wrap(cascade.KindUnavailable, err, "conversation: get turn by id")
 	}
+	applyStoredMarker(&t, origin, prov)
 	r, err := DecodeRole(role)
 	t.Role = r
 	return t, err

@@ -28,6 +28,11 @@ type appendTurnParams struct {
 	// the request that creates a thread; see handleAppendTurn for why
 	// sending it on a continuation is refused rather than ignored.
 	PrivacyMode string `json:"privacy_mode,omitempty"`
+	// Origin and Untrusted are the host binding's turn-origin stamp
+	// (origin.go): a closed label set, refused outside it, and a bridge
+	// origin must say untrusted. Absent means a local caller.
+	Origin    string `json:"origin,omitempty"`
+	Untrusted bool   `json:"untrusted,omitempty"`
 }
 
 type appendSegmentWire struct {
@@ -64,6 +69,9 @@ func decodeAppendTurnParams(raw json.RawMessage) (appendTurnParams, error) {
 	// nothing can infer who spoke (R-14.285).
 	if p.Role == "" {
 		return appendTurnParams{}, ErrMalformedTurnPayload
+	}
+	if _, err := resolveMarker(p.Origin, p.Untrusted); err != nil {
+		return appendTurnParams{}, err
 	}
 	return p, nil
 }
@@ -111,6 +119,9 @@ type searchResultWire struct {
 	TurnID   string  `json:"turn_id"`
 	Content  string  `json:"content"`
 	Score    float64 `json:"score"`
+	// Origin/Untrusted are the matching turn's origin marker (origin.go).
+	Origin    string `json:"origin,omitempty"`
+	Untrusted bool   `json:"untrusted,omitempty"`
 }
 
 // searchResultSet is chat.search's wire response shape.
@@ -153,4 +164,22 @@ func joinSegmentContent(segs []Segment) string {
 		}
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// turnWire is a Turn as chat.get_thread reports it: the stored fields plus
+// the "untrusted" flag (true when the turn's provenance is untrusted-source)
+// beside the "origin" the embedded Turn already carries. Both are omitted
+// for an unmarked local turn, so the owner's view of local history is
+// byte-identical to before the marker existed.
+type turnWire struct {
+	Turn
+	Untrusted bool `json:"untrusted,omitempty"`
+}
+
+// newSearchResult renders one chat.search hit: the matching turn's content
+// and its origin marker (omitted for a local turn), so a consumer can tell
+// a bridge-sourced hit from a local one.
+func newSearchResult(t Turn, segs []Segment, score float64) searchResultWire {
+	return searchResultWire{ThreadID: t.ThreadID, TurnID: t.ID, Content: joinSegmentContent(segs),
+		Score: score, Origin: t.Origin, Untrusted: t.isUntrusted()}
 }

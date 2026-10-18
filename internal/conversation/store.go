@@ -20,9 +20,6 @@ import (
 	"errors"
 	"sync"
 
-	mcsqlite "modernc.org/sqlite"
-	sqlite3 "modernc.org/sqlite/lib"
-
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -103,7 +100,7 @@ func validateTurn(turn Turn) error {
 	if turn.ID == "" || turn.ThreadID == "" || turn.CreatedAt <= 0 || turn.Seq < 0 || !turn.Role.Valid() {
 		return ErrInvalidRecord
 	}
-	return nil
+	return checkTurnMarker(turn)
 }
 
 func validateSegment(seg Segment) error {
@@ -146,7 +143,10 @@ func (s *conversationStore) AppendTurn(ctx context.Context, turn Turn) error {
 		_, err = tx.ExecContext(ctx,
 			`INSERT INTO `+tableTurn+` (id, thread_id, seq, role, created_at) VALUES (?, ?, ?, ?, ?)`,
 			turn.ID, turn.ThreadID, turn.Seq, string(turn.Role), turn.CreatedAt)
-		return translateAppendError(err, "conversation: append turn")
+		if err := translateAppendError(err, "conversation: append turn"); err != nil {
+			return err
+		}
+		return insertTurnOrigin(ctx, tx, turn) // same tx: the marker and the turn commit together
 	})
 }
 
@@ -218,7 +218,7 @@ func (s *conversationStore) GetThread(ctx context.Context, id string) (Thread, b
 // ListTurns implements Store.
 func (s *conversationStore) ListTurns(ctx context.Context, threadID string) ([]Turn, error) {
 	return listRows(ctx, s.db,
-		`SELECT id, thread_id, seq, role, created_at FROM `+tableTurn+` WHERE thread_id = ? ORDER BY seq ASC`,
+		turnSelect+` WHERE t.thread_id = ? ORDER BY t.seq ASC`,
 		[]any{threadID}, scanTurn, "turns")
 }
 
@@ -240,61 +240,3 @@ func (s *conversationStore) ListThreads(ctx context.Context) ([]Thread, error) {
 // by the plain and cursor-paginated listers alike) to keep this file
 // under Art.10.3's 300-line cap once ListTurnsPage/ListThreadsPage's own
 // interface additions landed above.
-
-// runTx commits fn's *sql.Tx on nil, else rolls back -- the
-// existence/next-seq/insert sequence runs atomically, no TOCTOU window.
-func runTx(ctx context.Context, db *sql.DB, fn func(tx *sql.Tx) error) error {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "conversation: begin transaction")
-	}
-	if err := fn(tx); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "conversation: commit transaction")
-	}
-	return nil
-}
-
-// rowExists reports whether table has a row with id. Called before the
-// out-of-order check so a same-id replay reports ErrImmutable, not
-// ErrOutOfOrder; PRIMARY KEY is the structural backstop either way.
-func rowExists(ctx context.Context, tx *sql.Tx, table, id string) (bool, error) {
-	var exists int
-	err := tx.QueryRowContext(ctx, `SELECT 1 FROM `+table+` WHERE id = ?`, id).Scan(&exists)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, cascade.Wrap(cascade.KindUnavailable, err, "conversation: check row exists")
-	}
-	return true, nil
-}
-
-// nextSeq returns the next expected 0-based Seq for table/idColumn/id: a
-// proposed Seq that differs is refused as ErrOutOfOrder at the call site.
-func nextSeq(ctx context.Context, tx *sql.Tx, table, idColumn, id string) (int64, error) {
-	var count int64
-	err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+table+` WHERE `+idColumn+` = ?`, id).Scan(&count)
-	if err != nil {
-		return 0, cascade.Wrap(cascade.KindUnavailable, err, "conversation: read next seq")
-	}
-	return count, nil
-}
-
-// translateAppendError maps a raw INSERT error to ErrImmutable when it is
-// a real SQLite constraint violation (via the driver's own result code,
-// matching sqlhelpers.go's classifyProbeError -- never a string match),
-// or wraps it as a generic storage failure otherwise.
-func translateAppendError(err error, msg string) error {
-	if err == nil {
-		return nil
-	}
-	var sqliteErr *mcsqlite.Error
-	if errors.As(err, &sqliteErr) && sqliteErr.Code()&0xff == sqlite3.SQLITE_CONSTRAINT {
-		return ErrImmutable
-	}
-	return cascade.Wrap(cascade.KindUnavailable, err, msg)
-}

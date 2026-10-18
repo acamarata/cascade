@@ -77,6 +77,30 @@ CLI/MCP surface to call. None of them are registered on the JSON-RPC
 registry yet: `chat.append_turn`, `chat.get_thread`,
 `chat.list_threads` and `chat.search` are the wire methods today.
 
+## Turn provenance
+
+A turn can carry an origin marker: `origin` (`bridge-telegram` or
+`bridge-whatsapp`; absent for a local caller) and `untrusted` (the turn's
+provenance is `untrusted-source`). The marker is a label stamped by a host
+binding, never an authority: it says where the text came from so that
+readers treat it as data, and it only ever narrows what a consumer does.
+Absence means a local caller, and no code path grants, widens or skips a
+check because a turn is unmarked.
+
+- `chat.append_turn` accepts `origin` and `untrusted`. An origin outside
+  the closed set, or a bridge origin with `untrusted` false, is refused
+  with `invalid_input` before the store is touched. `untrusted` alone,
+  with no origin, is accepted and stored untrusted.
+- The marker row (`conversation_turn_origin`) commits in the same
+  transaction as the turn. A local turn with neither field writes no row.
+- `chat.get_thread` and `chat.search` return `origin` and `untrusted` on a
+  marked turn; both are omitted for a local, trusted one. Journal resume
+  restores the marker with the turn.
+- A stored provenance that does not parse reads back as untrusted. Nothing
+  clears or rewrites a marker.
+- The host's bridge binding sets the stamp itself, as a constant. It is
+  never read from the plugin or from the message payload.
+
 ## Thread privacy modes
 
 Every thread carries a privacy mode: one of the four §5.16 sensitivity
