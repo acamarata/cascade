@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-13T19:12:32Z",
+  "generated_at": "2026-10-18T18:57:33Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4421,6 +4421,18 @@
       "name": "cmd/cascade root mounts",
       "sites": [
         {
+          "file": "cmd/cascade/hook_relay_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-AGT-14, contract:agent-hook-relay)."
+        },
+        {
+          "file": "cmd/cascade/hook_relay_tree_test.go",
+          "line": 14,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-AGT-14, contract:agent-hook-relay)."
+        },
+        {
           "file": "cmd/cascade/mount_approval.go",
           "line": 2,
           "status": "",
@@ -4485,6 +4497,12 @@
           "line": 2,
           "status": "",
           "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_hook_relay.go",
+          "line": 30,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-AGT-14, contract:agent-hook-relay)."
         },
         {
           "file": "cmd/cascade/mount_init.go",
@@ -4765,6 +4783,130 @@
           "status": "ADD",
           "ticket": "P1-E45-W10-S88-T2",
           "raw": "cmd/cascade view tests (ADD) — P1-E45-W10-S88-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade-elevate-helper backend",
+      "sites": [
+        {
+          "file": "cmd/cascade-elevate-helper/backend_darwin.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "cmd/cascade-elevate-helper backend/ADDED (P1-SHIP-15)."
+        },
+        {
+          "file": "cmd/cascade-elevate-helper/backend_other.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "cmd/cascade-elevate-helper backend/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade-elevate-helper backend tests",
+      "sites": [
+        {
+          "file": "cmd/cascade-elevate-helper/backend_other_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "cmd/cascade-elevate-helper backend tests/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade-elevate-helper callerCheck",
+      "sites": [
+        {
+          "file": "cmd/cascade-elevate-helper/caller_darwin.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "cmd/cascade-elevate-helper callerCheck/ADDED (P1-SHIP-15)."
+        },
+        {
+          "file": "cmd/cascade-elevate-helper/caller_other.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "cmd/cascade-elevate-helper callerCheck/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade-elevate-helper callerCheck tests",
+      "sites": [
+        {
+          "file": "cmd/cascade-elevate-helper/caller_darwin_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "cmd/cascade-elevate-helper callerCheck tests/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade-elevate-helper main",
+      "sites": [
+        {
+          "file": "cmd/cascade-elevate-helper/main.go",
+          "line": 27,
+          "status": "ADD",
+          "raw": "cmd/cascade-elevate-helper main/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade-elevate-helper protocol",
+      "sites": [
+        {
+          "file": "cmd/cascade-elevate-helper/protocol.go",
+          "line": 23,
+          "status": "ADD",
+          "raw": "cmd/cascade-elevate-helper protocol/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade-elevate-helper protocol tests",
+      "sites": [
+        {
+          "file": "cmd/cascade-elevate-helper/protocol_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "cmd/cascade-elevate-helper protocol tests/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade-elevate-helper run tests",
+      "sites": [
+        {
+          "file": "cmd/cascade-elevate-helper/run_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "cmd/cascade-elevate-helper run tests/ADDED (P1-SHIP-15)."
         }
       ],
       "statuses": [
@@ -5182,7 +5324,7 @@
         },
         {
           "file": "cmd/cascade/daemon_unix_policy.go",
-          "line": 30,
+          "line": 28,
           "status": "CHANGE",
           "raw": "cmd/cascade/daemon (CHANGED — policy composition root)."
         },
@@ -6203,6 +6345,44 @@
       ]
     },
     {
+      "name": "cmd/cascade/policy",
+      "sites": [
+        {
+          "file": "cmd/cascade/policy_engine.go",
+          "line": 30,
+          "status": "ADD",
+          "raw": "cmd/cascade/policy (ADD) -- the policy engine constructor."
+        },
+        {
+          "file": "cmd/cascade/policy_engine_daemon_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "cmd/cascade/policy (ADD) -- constructor verification."
+        },
+        {
+          "file": "cmd/cascade/policy_engine_guard_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "cmd/cascade/policy (ADD) -- constructor verification."
+        },
+        {
+          "file": "cmd/cascade/policy_engine_merge_test.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "cmd/cascade/policy (ADD) -- constructor verification."
+        },
+        {
+          "file": "cmd/cascade/policy_engine_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "cmd/cascade/policy (ADD) -- constructor verification."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade/run",
       "sites": [
         {
@@ -6752,13 +6932,13 @@
       "sites": [
         {
           "file": "internal/conductor/chat.go",
-          "line": 25,
-          "status": "ADD",
-          "raw": "conductor.chat-leaf-door/ADD (FIX-manifest-collision-and-conductor-seam)."
+          "line": 23,
+          "status": "CHANGE",
+          "raw": "conductor.chat-leaf-door/CHANGE (P1-SEC-01)."
         }
       ],
       "statuses": [
-        "ADD"
+        "CHANGE"
       ]
     },
     {
@@ -6796,12 +6976,63 @@
       "sites": [
         {
           "file": "internal/conductor/count.go",
-          "line": 16,
-          "status": "ADD",
-          "raw": "conductor.count-leaf-door/ADD (FIX-manifest-collision-and-conductor-seam)."
+          "line": 12,
+          "status": "CHANGE",
+          "raw": "conductor.count-leaf-door/CHANGE (P1-SEC-01)."
         }
       ],
       "statuses": [
+        "CHANGE"
+      ]
+    },
+    {
+      "name": "conductor.door",
+      "sites": [
+        {
+          "file": "internal/conductor/door.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "conductor.door/ADD (P1-SEC-01)."
+        },
+        {
+          "file": "internal/conductor/door_canary_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "conductor.door (TEST) - P1-SEC-01."
+        },
+        {
+          "file": "internal/conductor/door_guard_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "conductor.door (TEST) - P1-SEC-01."
+        },
+        {
+          "file": "internal/conductor/door_hardening_more_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "conductor.door (TEST) - P1-SEC-01."
+        },
+        {
+          "file": "internal/conductor/door_hardening_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "conductor.door (TEST) - P1-SEC-01."
+        },
+        {
+          "file": "internal/conductor/door_stream_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "conductor.door (TEST) - P1-SEC-01."
+        },
+        {
+          "file": "internal/conductor/door_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "conductor.door (TEST) - P1-SEC-01."
+        }
+      ],
+      "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -6810,7 +7041,7 @@
       "sites": [
         {
           "file": "internal/conductor/embed.go",
-          "line": 29,
+          "line": 27,
           "status": "ADD",
           "ticket": "P1-E11-W3-S22-T1",
           "raw": "conductor.embed/ADD (R-40.X10 defect fix, P1-E11-W3-S22-T1 follow-up)."
@@ -7179,13 +7410,13 @@
       "sites": [
         {
           "file": "internal/conductor/stream_door.go",
-          "line": 23,
-          "status": "ADD",
-          "raw": "conductor.stream-leaf-door/ADD (FIX-manifest-collision-and-conductor-seam)."
+          "line": 21,
+          "status": "CHANGE",
+          "raw": "conductor.stream-leaf-door/CHANGE (P1-SEC-01)."
         }
       ],
       "statuses": [
-        "ADD"
+        "CHANGE"
       ]
     },
     {
@@ -8680,6 +8911,134 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "fleet.capacity.lease",
+      "sites": [
+        {
+          "file": "internal/fleet/capacity/decision.go",
+          "line": 13,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/decision_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/fleet.go",
+          "line": 15,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/fleet_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/lease.go",
+          "line": 17,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/lease_edge_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/lease_errors.go",
+          "line": 14,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/lease_errors_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/lease_fixtures_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/lease_repo.go",
+          "line": 15,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/lease_repo_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/lease_reservation_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/lease_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/resolve.go",
+          "line": 15,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/resolve_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/resolve_types.go",
+          "line": 16,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/resolve_types_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/selector.go",
+          "line": 12,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/tier_selector.go",
+          "line": 17,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/tier_selector_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -10355,6 +10714,20 @@
       ]
     },
     {
+      "name": "fleet/topology/locality",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/locality.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "fleet/topology/locality/ADD (P1-TOP-01)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "fleet/topology/migration",
       "sites": [
         {
@@ -10378,6 +10751,62 @@
           "status": "ADD",
           "ticket": "P1-E40-W9-S77-T1",
           "raw": "fleet/topology/offering_snapshot/ADD (P1-E40-W9-S77-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/profile_home",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/profile_home.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "fleet/topology/profile_home/ADD (P1-TOP-01)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/profile_home_unix",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/profile_home_unix.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "fleet/topology/profile_home_unix/ADD (P1-TOP-01)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/profile_home_windows",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/profile_home_windows.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "fleet/topology/profile_home_windows/ADD (P1-TOP-01)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/profile_store",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/profile_store.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "fleet/topology/profile_store/ADD (P1-TOP-01)."
         }
       ],
       "statuses": [
@@ -13549,6 +13978,26 @@
       ]
     },
     {
+      "name": "internal.conversation.origin",
+      "sites": [
+        {
+          "file": "internal/conversation/origin.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "internal.conversation.origin/ADDED (contract:chat-turn-origin)."
+        },
+        {
+          "file": "internal/conversation/origin_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal.conversation.origin/ADDED (tests) (contract:chat-turn-origin)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.conversation.pagination",
       "sites": [
         {
@@ -13627,6 +14076,20 @@
           "status": "ADD",
           "ticket": "P1-E20-W5-S44-T3",
           "raw": "internal.conversation.retention/ADDED (tests) (P1-E20-W5-S44-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.conversation.schema",
+      "sites": [
+        {
+          "file": "internal/conversation/schema.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal.conversation.schema/ADDED."
         }
       ],
       "statuses": [
@@ -13789,6 +14252,20 @@
       "statuses": [
         "ADD",
         "CHANGE"
+      ]
+    },
+    {
+      "name": "internal.conversation.store_tx",
+      "sites": [
+        {
+          "file": "internal/conversation/store_tx.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "internal.conversation.store_tx/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -16274,16 +16751,106 @@
           "raw": "internal.providers.agents/ADD (P1-AGT-02, contract:harness-agent-binding)."
         },
         {
+          "file": "internal/providers/agents/detector_match.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-15, R16 M-10)."
+        },
+        {
           "file": "internal/providers/agents/doc.go",
           "line": 19,
           "status": "ADD",
           "raw": "internal.providers.agents/ADD (P1-AGT-02, contract:harness-agent-binding)."
         },
         {
+          "file": "internal/providers/agents/driver_auth.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-15, contract:driver-credentials)."
+        },
+        {
+          "file": "internal/providers/agents/env.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-15, contract:driver-credentials)."
+        },
+        {
           "file": "internal/providers/agents/harness_claude.go",
           "line": 8,
           "status": "ADD",
           "raw": "internal.providers.agents/ADD (P1-AGT-02)."
+        },
+        {
+          "file": "internal/providers/agents/hookbridge.go",
+          "line": 24,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-14, contract:agent-hook-relay)."
+        },
+        {
+          "file": "internal/providers/agents/hookbridge_test.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-14)."
+        },
+        {
+          "file": "internal/providers/agents/hookpack.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-14, contract:agent-hook-relay)."
+        },
+        {
+          "file": "internal/providers/agents/hookpack_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-14)."
+        },
+        {
+          "file": "internal/providers/agents/hookrelay.go",
+          "line": 43,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-14, contract:agent-hook-relay)."
+        },
+        {
+          "file": "internal/providers/agents/hookrelay_bind_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-14)."
+        },
+        {
+          "file": "internal/providers/agents/hookrelay_errors_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-14)."
+        },
+        {
+          "file": "internal/providers/agents/hookrelay_test.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-14)."
+        },
+        {
+          "file": "internal/providers/agents/hookrelay_trust_test.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-14)."
+        },
+        {
+          "file": "internal/providers/agents/hookrelay_unix.go",
+          "line": 24,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-14, contract:agent-hook-relay)."
+        },
+        {
+          "file": "internal/providers/agents/hookrelay_windows.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-14, contract:agent-hook-relay)."
+        },
+        {
+          "file": "internal/providers/agents/profile.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-15, contract:driver-credentials)."
         },
         {
           "file": "internal/providers/agents/project.go",
@@ -16304,6 +16871,42 @@
           "line": 5,
           "status": "ADD",
           "raw": "internal.providers.agents tests (ADD) - P1-AGT-02."
+        },
+        {
+          "file": "internal/providers/agents/detector_match_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "internal.providers.agents tests (ADD) - P1-AGT-15."
+        },
+        {
+          "file": "internal/providers/agents/driver_auth_test.go",
+          "line": 4,
+          "status": "ADD",
+          "raw": "internal.providers.agents tests (ADD) - P1-AGT-15."
+        },
+        {
+          "file": "internal/providers/agents/env_secrets_test.go",
+          "line": 3,
+          "status": "ADD",
+          "raw": "internal.providers.agents tests (ADD) - P1-AGT-15."
+        },
+        {
+          "file": "internal/providers/agents/env_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "internal.providers.agents tests (ADD) - P1-AGT-15."
+        },
+        {
+          "file": "internal/providers/agents/profile_link_test.go",
+          "line": 4,
+          "status": "ADD",
+          "raw": "internal.providers.agents tests (ADD) - P1-AGT-15."
+        },
+        {
+          "file": "internal/providers/agents/profile_test.go",
+          "line": 4,
+          "status": "ADD",
+          "raw": "internal.providers.agents tests (ADD) - P1-AGT-15."
         },
         {
           "file": "internal/providers/agents/project_test.go",
@@ -19910,6 +20513,20 @@
       ]
     },
     {
+      "name": "internal/elevation DeletePlatformKeyItems",
+      "sites": [
+        {
+          "file": "internal/elevation/keystore_darwin_delete.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "internal/elevation DeletePlatformKeyItems/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/elevation ElevationKeystore",
       "sites": [
         {
@@ -19933,6 +20550,20 @@
           "status": "ADD",
           "ticket": "P1-E04-W1-S07-T6",
           "raw": "internal/elevation ElevationTrustStore/ADDED (P1-E04-W1-S07-T6)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation custody edge tests",
+      "sites": [
+        {
+          "file": "internal/elevation/custody_edge_paths_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "internal/elevation custody edge tests/ADDED (P1-SHIP-15)."
         }
       ],
       "statuses": [
@@ -20029,6 +20660,152 @@
           "status": "ADD",
           "ticket": "P1-E04-W1-S07-T6",
           "raw": "internal/elevation fileBackend tests/ADDED (P1-E04-W1-S07-T6)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation helper codesign tests",
+      "sites": [
+        {
+          "file": "internal/elevation/keystore_helper_codesign_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal/elevation helper codesign tests/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation helper custody tests",
+      "sites": [
+        {
+          "file": "internal/elevation/custody_helper_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal/elevation helper custody tests/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation helper edge tests",
+      "sites": [
+        {
+          "file": "internal/elevation/keystore_helper_edge_paths_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal/elevation helper edge tests/ADDED (P1-SHIP-15)."
+        },
+        {
+          "file": "internal/elevation/keystore_helper_peer_integration_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal/elevation helper edge tests/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation helper path tests",
+      "sites": [
+        {
+          "file": "internal/elevation/keystore_helper_paths_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal/elevation helper path tests/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation helper response tests",
+      "sites": [
+        {
+          "file": "internal/elevation/keystore_helper_response_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal/elevation helper response tests/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation helper runner",
+      "sites": [
+        {
+          "file": "internal/elevation/keystore_helper_exec.go",
+          "line": 26,
+          "status": "ADD",
+          "raw": "internal/elevation helper runner/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation helper signature check",
+      "sites": [
+        {
+          "file": "internal/elevation/keystore_helper_sig.go",
+          "line": 27,
+          "status": "ADD",
+          "raw": "internal/elevation helper signature check/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation helper signature tests",
+      "sites": [
+        {
+          "file": "internal/elevation/keystore_helper_sig_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal/elevation helper signature tests/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation helperKeystore",
+      "sites": [
+        {
+          "file": "internal/elevation/keystore_helper.go",
+          "line": 22,
+          "status": "ADD",
+          "raw": "internal/elevation helperKeystore/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation helperKeystore tests",
+      "sites": [
+        {
+          "file": "internal/elevation/keystore_helper_test.go",
+          "line": 23,
+          "status": "ADD",
+          "raw": "internal/elevation helperKeystore tests/ADDED (P1-SHIP-15)."
         }
       ],
       "statuses": [
@@ -20149,6 +20926,34 @@
           "line": 9,
           "status": "ADD",
           "raw": "internal/elevation presenceKeystore/ADDED (P1-SEC-25)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation testdata callerprobe",
+      "sites": [
+        {
+          "file": "internal/elevation/testdata/callerprobe/main.go",
+          "line": 24,
+          "status": "ADD",
+          "raw": "internal/elevation testdata callerprobe/ADDED (P1-SHIP-15)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/elevation testdata fakehelper",
+      "sites": [
+        {
+          "file": "internal/elevation/testdata/fakehelper/main.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "internal/elevation testdata fakehelper/ADDED (P1-SHIP-15)."
         }
       ],
       "statuses": [
@@ -23246,6 +24051,12 @@
           "line": 52,
           "status": "CHANGE",
           "raw": "internal/plugins:cascadepa-bridge-chat-wiring (CHANGED: thread map)."
+        },
+        {
+          "file": "internal/plugins/cascadepa_bridge_chat_wiring_origin_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal/plugins:cascadepa-bridge-chat-wiring (TEST: origin stamp)."
         },
         {
           "file": "internal/plugins/cascadepa_bridge_chat_wiring_test.go",
@@ -27538,6 +28349,18 @@
           "raw": "jobs/store/ADD (P1-E29-W6-S59-T1)."
         },
         {
+          "file": "internal/jobs/store_exec_tx.go",
+          "line": 22,
+          "status": "ADD",
+          "raw": "jobs/store/ADD."
+        },
+        {
+          "file": "internal/jobs/store_exec_tx_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "jobs/store/ADD."
+        },
+        {
           "file": "internal/jobs/store_job.go",
           "line": 21,
           "status": "ADD",
@@ -30423,6 +31246,20 @@
       ]
     },
     {
+      "name": "plugins/cascade-pa/telegram OwnerChatSource",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/outbound_guard.go",
+          "line": 27,
+          "status": "ADD",
+          "raw": "plugins/cascade-pa/telegram OwnerChatSource/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/cascade-pa/telegram QuarantineEvent",
       "sites": [
         {
@@ -30504,7 +31341,7 @@
       "sites": [
         {
           "file": "plugins/cascade-pa/telegram/module.go",
-          "line": 30,
+          "line": 28,
           "status": "ADD",
           "raw": "plugins/cascade-pa/telegram TelegramModule/ADDED"
         }
@@ -30772,6 +31609,20 @@
       ]
     },
     {
+      "name": "plugins/cascade-pa/telegram foreign-chat/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/module_foreignchat_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram foreign-chat/TEST (P1-CPA-17)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "plugins/cascade-pa/telegram httpDoer",
       "sites": [
         {
@@ -30830,6 +31681,48 @@
       ]
     },
     {
+      "name": "plugins/cascade-pa/telegram owner-guard-ast/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/outbound_guard_ast_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram owner-guard-ast/TEST (P1-CPA-17)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram owner-guard-callbacks/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/outbound_guard_callback_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram owner-guard-callbacks/TEST (P1-CPA-17)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram owner-guard/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/outbound_guard_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram owner-guard/TEST (P1-CPA-17)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "plugins/cascade-pa/telegram pairCoordinator",
       "sites": [
         {
@@ -30841,6 +31734,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram pairing-silent/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/pairing_silent_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram pairing-silent/TEST (P1-CPA-17)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -36293,7 +37200,7 @@
       ]
     }
   ],
-  "total_sites": 3512,
-  "unspecified_count": 237,
-  "multi_status_count": 111
+  "total_sites": 3611,
+  "unspecified_count": 243,
+  "multi_status_count": 112
 }
