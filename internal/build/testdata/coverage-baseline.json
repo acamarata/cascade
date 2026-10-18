@@ -1,5 +1,6 @@
 {
   "cmd/cascade": { "tier": "cli", "floor": 70.0, "baseline": 80.0 },
+  "cmd/cascade-elevate-helper": { "tier": "cli", "floor": 70.0, "baseline": 86.0 },
   "cmd/cascade/config": { "tier": "cli", "floor": 70.0, "baseline": 82.3 },
   "internal/audit": { "tier": "security", "floor": 90.0, "baseline": 93.8 },
   "internal/backup": { "tier": "core", "floor": 85.0, "baseline": 86.5 },

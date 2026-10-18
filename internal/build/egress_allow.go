@@ -51,6 +51,8 @@ var EgressNetNotYetMigrated = []EgressAllowEntry{
 	{"cmd/cascade", "The composition root constructs local transports"},
 	{"internal/runtime", "Address and socket-path helpers"},
 	{"internal/providers/agents", "The hook relay dials only the unix socket the driver announced for one spawn (a local callback channel, no remote host); the relay never posts to the daemon RPC socket"},
+	{"internal/elevation", "P1-SHIP-15: listens on a unix socket in a fresh 0700 directory that only the verified elevation helper child connects to; local transport, not egress"},
+	{"cmd/cascade-elevate-helper", "P1-SHIP-15: the elevation helper dials the unix socket path cascade names on its gate descriptor; local transport, not egress"},
 }
 
 // EgressExecNormative is the set the ruling names as permitted importers
@@ -94,6 +96,7 @@ var EgressExecNotYetMigrated = []EgressAllowEntry{
 	{"internal/ci", "P1-E25-W5-S51-T5: the local CI gate's ShellExecutor runs the operator's own configured lint/test/build commands from [ci.local] in their repository, plus `git remote get-url origin` to name the repo the never-pay policy routes -- 06-FORGE-SPEC §5.15 puts local sub-process execution at L1, the same class as internal/jobs' git worktrees directly above, and every command is operator-supplied rather than fetched, so no byte leaves the machine on this package's account"},
 	{"plugins/github/wiki", "P1-E25-W5-S51-T6: `cascade github wiki sync`/`wiki check` exec the real git binary to clone, commit and push a repository's GitHub wiki (06-FORGE-SPEC §5.15: clone is L1-L2, push is L3) -- the same class as internal/jobs' git worktrees and internal/evidence's git show above (R-14.80 git-is-an-Art.2-external-contract); every argument is built from the resolved owner/repo, never operator-supplied text, and the token NEVER appears in argv (D3, confirming review finding 3): it travels only in gitAuthEnv's per-invocation GIT_CONFIG_* environment, the same actions/checkout HTTP-extraheader technique, supplied fresh to both the clone and the push call since git never persists it to .git/config"},
 	{"providers/agents/claude", "P1-E30-W6-S61-T2: the headless driver execs the vendor harness binary three ways, each in its own process group with cmd.Env set to the job's host-built SpawnEnv.Driver (never the daemon environ): `--version` and the one-turn stream-json init probe before the job, then the job itself; Artifacts execs `git status --porcelain -z` and `git config --get-regexp` with PATH plus GIT_CONFIG_NOSYSTEM/GIT_CONFIG_GLOBAL/GIT_ATTR_NOSYSTEM only. The job prompt (operator text) is the last argv token after a literal \"--\" and a prompt starting with \"-\" is refused (protocol.go). Left on the not-yet-migrated half because promoting it to the normative list needs a ruling amendment to egressExecSpec (arch_egress_test.go)."},
+	{"internal/elevation", "P1-SHIP-15: execs only the sibling cascade-elevate-helper resolved beside the real executable, /usr/bin/codesign to verify it and itself and /bin/ls to read extended ACLs on the paths it trusts -- a local sub-process (06-FORGE-SPEC §5.15 L1) with an empty environment, started on a socketpair, never a PATH lookup and never a network peer, so no byte leaves the machine on this package's account"},
 }
 
 // EgressNetImports are the stdlib import paths the network list governs.

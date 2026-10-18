@@ -11,8 +11,8 @@ package build
 //   a server or mux value is reported wherever it flows (variable, field,
 //   call result, pointer or container element), so serving one through an
 //   interface still meets a reported value. Non-test code only;
-//   providers/agents/** belongs to ScanAgentDriverNetSurface. Each GOOS loads
-//   in full; each extra tag loads the packages holding a file naming it.
+//   providers/agents/** belongs to ScanAgentDriverNetSurface. Each GOOS and
+//   each extra tag loads the packages that name it.
 
 import (
 	"fmt"
@@ -32,8 +32,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-// httpListenerAllowed is the gate table: an exact slash path, or a trailing
-// "/**" for a directory tree, with its reason.
+// httpListenerAllowed is the gate table: an exact slash path or a "/**" tree.
 var httpListenerAllowed = []struct{ Pattern, Reason string }{
 	{"internal/daemon/daemon.go", "NewRPCServer: the daemon mux, every route through rpc.Handler"},
 	{"internal/daemon/lifecycle_unix.go", "RunOptions.Server: the one server daemon.Run serves"},
@@ -51,6 +50,7 @@ var httpListenerAllowed = []struct{ Pattern, Reason string }{
 	{"plugins/github/transport.go", "one-shot OAuth loopback callback"},
 	{"internal/nodes/tunnel.go", "controller tunnel over SSH"},
 	{"internal/nodes/reconnect.go", "controller tunnel re-listen after reconnect"},
+	{"internal/elevation/keystore_helper_exec.go", "darwin elevation helper rendezvous: one owner-only unix socket, one connection from the verified child pid"},
 }
 
 // httpListenerFuncs names every function or method the gate reports, in
