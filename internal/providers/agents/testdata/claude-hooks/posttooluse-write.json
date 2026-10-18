@@ -1,0 +1,23 @@
+{
+  "session_id": "a10c6f4f-73da-44d0-aa70-b055a5f88632",
+  "transcript_path": "/home/agent/.config/claude/projects/-work-tree/a10c6f4f-73da-44d0-aa70-b055a5f88632.jsonl",
+  "cwd": "/work/tree",
+  "prompt_id": "7cb2537e-4672-4d7c-a7a7-5e23355dc613",
+  "permission_mode": "default",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "/work/tree/b.txt",
+    "content": "hi"
+  },
+  "tool_response": {
+    "type": "create",
+    "filePath": "/work/tree/b.txt",
+    "content": "hi",
+    "structuredPatch": [],
+    "originalFile": null,
+    "userModified": false
+  },
+  "tool_use_id": "toolu_01NNpojGok3UxKF4ePttFBuj",
+  "duration_ms": 2
+}

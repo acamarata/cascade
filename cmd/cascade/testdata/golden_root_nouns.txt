@@ -11,6 +11,7 @@ doctor hidden=false aliases=
 elevate-helper hidden=true aliases=
 fleet hidden=false aliases=
 github hidden=false aliases=
+hook hidden=true aliases=
 init hidden=false aliases=
 journal hidden=true aliases=
 mcp hidden=false aliases=

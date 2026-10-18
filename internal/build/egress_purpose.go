@@ -32,6 +32,7 @@ var EgressNetPurpose = map[string]string{
 	"internal/daemon":                       PurposeLocalTransport,
 	"internal/rpc":                          PurposeLocalTransport,
 	"internal/fleet/sessions":               PurposeLocalTransport,
+	"internal/providers/agents":             PurposeLocalTransport,
 	// The gateway owner registers this class when its importer lands.
 	"internal/providers/gateway": "provider-usage",
 }

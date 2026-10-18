@@ -50,6 +50,7 @@ var EgressNetNormative = []EgressAllowEntry{
 var EgressNetNotYetMigrated = []EgressAllowEntry{
 	{"cmd/cascade", "The composition root constructs local transports"},
 	{"internal/runtime", "Address and socket-path helpers"},
+	{"internal/providers/agents", "The hook relay dials only the unix socket the driver announced for one spawn (a local callback channel, no remote host); the relay never posts to the daemon RPC socket"},
 }
 
 // EgressExecNormative is the set the ruling names as permitted importers

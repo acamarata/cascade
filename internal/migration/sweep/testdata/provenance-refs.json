@@ -189,6 +189,26 @@
       "path": "internal/integration/capmap/probe_helpers_test.go",
       "term": "socket_path",
       "reason": "JSON field tag of the live v2 status.get reply decoded by the capability-map probe (SocketPath string, tag socket_path); a v2 wire field name, not a dependency on the v1 socket_path config key"
+    },
+    {
+      "path": ".github/wiki/Agent-Callback-Channel.md",
+      "term": "cascade hook",
+      "reason": "live v2 command: `cascade hook relay <event>` is the hidden relay the driver's harness hooks invoke (same spelling as the retired v1 `hook` command, different behaviour); must not be retired"
+    },
+    {
+      "path": "cmd/cascade/hook_relay_test.go",
+      "term": "cascade hook",
+      "reason": "live v2 command: `cascade hook relay <event>` is the hidden relay the driver's harness hooks invoke (same spelling as the retired v1 `hook` command, different behaviour); must not be retired"
+    },
+    {
+      "path": "cmd/cascade/hook_relay_tree_test.go",
+      "term": "cascade hook",
+      "reason": "live v2 command: `cascade hook relay <event>` is the hidden relay the driver's harness hooks invoke (same spelling as the retired v1 `hook` command, different behaviour); must not be retired"
+    },
+    {
+      "path": "cmd/cascade/mount_hook_relay.go",
+      "term": "cascade hook",
+      "reason": "live v2 command: `cascade hook relay <event>` is the hidden relay the driver's harness hooks invoke (same spelling as the retired v1 `hook` command, different behaviour); must not be retired"
     }
   ]
 }

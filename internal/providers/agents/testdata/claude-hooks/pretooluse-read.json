@@ -1,0 +1,13 @@
+{
+  "session_id": "4bec3d3e-b513-4fa5-ab98-d219eda16575",
+  "transcript_path": "/home/agent/.config/claude/projects/-work-tree/4bec3d3e-b513-4fa5-ab98-d219eda16575.jsonl",
+  "cwd": "/work/tree",
+  "prompt_id": "a5810e12-da41-404c-a13c-109326b7a84e",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "/work/tree/a.txt"
+  },
+  "tool_use_id": "toolu_01PJnfeg18hY9djy2MbFSd7E"
+}
