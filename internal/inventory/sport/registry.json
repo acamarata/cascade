@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-18T18:57:33Z",
+  "generated_at": "2026-10-26T22:05:18Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -225,6 +225,20 @@
       ]
     },
     {
+      "name": "CheckResult",
+      "sites": [
+        {
+          "file": "internal/update/check.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "CheckResult/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "CodeDigest",
       "sites": [
         {
@@ -402,6 +416,20 @@
           "line": 37,
           "status": "ADD",
           "raw": "Dialer/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "DirFetcher",
+      "sites": [
+        {
+          "file": "internal/update/source.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "DirFetcher/ADDED."
         }
       ],
       "statuses": [
@@ -974,6 +1002,20 @@
           "line": 40,
           "status": "ADD",
           "raw": "K12Preset/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "LatestStable",
+      "sites": [
+        {
+          "file": "internal/update/source.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "LatestStable/ADDED"
         }
       ],
       "statuses": [
@@ -1555,6 +1597,20 @@
       ]
     },
     {
+      "name": "Restore",
+      "sites": [
+        {
+          "file": "internal/update/swap.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "Restore/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "Revoke",
       "sites": [
         {
@@ -1904,6 +1960,20 @@
       ]
     },
     {
+      "name": "Swap",
+      "sites": [
+        {
+          "file": "internal/update/swap.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "Swap/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "TURN_REWRITER",
       "sites": [
         {
@@ -1960,6 +2030,20 @@
       ]
     },
     {
+      "name": "UpgradeSignaller",
+      "sites": [
+        {
+          "file": "internal/update/daemon_unix.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "UpgradeSignaller/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "Verdict",
       "sites": [
         {
@@ -1967,6 +2051,34 @@
           "line": 7,
           "status": "ADD",
           "raw": "Verdict/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "WaitVersion",
+      "sites": [
+        {
+          "file": "internal/update/drain.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "WaitVersion/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "WriteReceipt",
+      "sites": [
+        {
+          "file": "internal/update/receipt.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "WriteReceipt/ADDED."
         }
       ],
       "statuses": [
@@ -3667,7 +3779,7 @@
         },
         {
           "file": "cmd/cascade/version.go",
-          "line": 19,
+          "line": 20,
           "status": "",
           "raw": "cmd/cascade — cobra-root, global-flags, version, completions."
         }
@@ -3753,6 +3865,29 @@
         }
       ],
       "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade chat resume wiring",
+      "sites": [
+        {
+          "file": "cmd/cascade/chat_resume_wiring.go",
+          "line": 53,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "cmd/cascade chat resume wiring (ADD) -- P1-E22-W5-S47-T2."
+        },
+        {
+          "file": "cmd/cascade/chat_resume_wiring_test.go",
+          "line": 7,
+          "status": "",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "cmd/cascade chat resume wiring (TEST) -- P1-E22-W5-S47-T2."
+        }
+      ],
+      "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -3956,6 +4091,12 @@
           "line": 7,
           "status": "",
           "raw": "cmd/cascade daemon registrations (egress firewall)."
+        },
+        {
+          "file": "cmd/cascade/wire_elevation.go",
+          "line": 13,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-SEC-03)."
         },
         {
           "file": "cmd/cascade/wire_fleet_node_jobs.go",
@@ -4191,6 +4332,32 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade elevation wiring tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_elevation_fixture_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "cmd/cascade elevation wiring tests (P1-SEC-03)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_elevation_plugin_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "cmd/cascade elevation wiring tests (P1-SEC-03)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_elevation_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "cmd/cascade elevation wiring tests (P1-SEC-03)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -4577,6 +4744,12 @@
           "raw": "cmd/cascade root mounts (P1-CORE-01)."
         },
         {
+          "file": "cmd/cascade/mount_selfupdate.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
           "file": "cmd/cascade/mount_status.go",
           "line": 2,
           "status": "",
@@ -4646,6 +4819,26 @@
           "line": 11,
           "status": "ADD",
           "raw": "cmd/cascade route inventory transport [ADD]."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade self-update",
+      "sites": [
+        {
+          "file": "cmd/cascade/selfupdate.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "cmd/cascade self-update/ADDED."
+        },
+        {
+          "file": "cmd/cascade/selfupdate_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "cmd/cascade self-update/ADDED."
         }
       ],
       "statuses": [
@@ -4772,6 +4965,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade version",
+      "sites": [
+        {
+          "file": "cmd/cascade/version_test.go",
+          "line": 3,
+          "status": "CHANGE",
+          "raw": "cmd/cascade version/CHANGED."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
       ]
     },
     {
@@ -13768,6 +13975,12 @@
           "raw": "internal.conversation.adapter/ADDED (P1-E20-W5-S43-T2)."
         },
         {
+          "file": "internal/conversation/adapter_appendtarget.go",
+          "line": 21,
+          "status": "",
+          "raw": "internal.conversation.adapter (chat.append_turn target)."
+        },
+        {
           "file": "internal/conversation/adapter_createthread.go",
           "line": 19,
           "status": "",
@@ -13791,6 +14004,20 @@
           "line": 5,
           "status": "CHANGE",
           "raw": "internal.conversation.adapter (CHANGED — thread minting,"
+        },
+        {
+          "file": "internal/conversation/adapter_resume.go",
+          "line": 20,
+          "status": "CHANGE",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.adapter/CHANGED (P1-E22-W5-S47-T2)."
+        },
+        {
+          "file": "internal/conversation/adapter_resume_test.go",
+          "line": 7,
+          "status": "CHANGE",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.adapter/CHANGED (tests) (P1-E22-W5-S47-T2)."
         },
         {
           "file": "internal/conversation/adapter_search.go",
@@ -13822,6 +14049,19 @@
           "line": 6,
           "status": "CHANGE",
           "raw": "internal.conversation.adapter (CHANGED — wire split,"
+        },
+        {
+          "file": "internal/conversation/privacy_appendturn_test.go",
+          "line": 8,
+          "status": "CHANGE",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.adapter/CHANGED (tests) (P1-E22-W5-S47-T2)."
+        },
+        {
+          "file": "internal/conversation/resume_scope_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "internal.conversation.adapter (chat.resume scope)."
         },
         {
           "file": "internal/conversation/scope_attr.go",
@@ -14058,6 +14298,137 @@
         "",
         "ADD",
         "CHANGE"
+      ]
+    },
+    {
+      "name": "internal.conversation.resume",
+      "sites": [
+        {
+          "file": "internal/conversation/resume.go",
+          "line": 31,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.resume/ADDED (P1-E22-W5-S47-T2)."
+        },
+        {
+          "file": "internal/conversation/resume_budget_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.resume/ADDED (tests) (P1-E22-W5-S47-T2)."
+        },
+        {
+          "file": "internal/conversation/resume_egress.go",
+          "line": 22,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.resume/ADDED (P1-E22-W5-S47-T2)."
+        },
+        {
+          "file": "internal/conversation/resume_errors.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.resume/ADDED (P1-E22-W5-S47-T2)."
+        },
+        {
+          "file": "internal/conversation/resume_fixture_update_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "internal.conversation.resume/ADDED (integration test)"
+        },
+        {
+          "file": "internal/conversation/resume_freshsession_test.go",
+          "line": 7,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.resume/ADDED (tests) (P1-E22-W5-S47-T2)."
+        },
+        {
+          "file": "internal/conversation/resume_integration_helpers_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "internal.conversation.resume/ADDED (integration test)"
+        },
+        {
+          "file": "internal/conversation/resume_integration_test.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal.conversation.resume/ADDED (integration test)"
+        },
+        {
+          "file": "internal/conversation/resume_matrix_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.resume/ADDED (tests) (P1-E22-W5-S47-T2)."
+        },
+        {
+          "file": "internal/conversation/resume_query.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.resume/ADDED (P1-E22-W5-S47-T2)."
+        },
+        {
+          "file": "internal/conversation/resume_query_recallwhat_test.go",
+          "line": 12,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.resume/ADDED (tests) (P1-E22-W5-S47-T2)."
+        },
+        {
+          "file": "internal/conversation/resume_query_test.go",
+          "line": 8,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.resume/ADDED (tests) (P1-E22-W5-S47-T2)."
+        },
+        {
+          "file": "internal/conversation/resume_review_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.resume/ADDED (tests) (P1-E22-W5-S47-T2)."
+        },
+        {
+          "file": "internal/conversation/resume_scoped_seed_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.resume/ADDED (tests) (P1-E22-W5-S47-T2)."
+        },
+        {
+          "file": "internal/conversation/resume_seed_test.go",
+          "line": 5,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.resume/ADDED (tests) (P1-E22-W5-S47-T2)."
+        },
+        {
+          "file": "internal/conversation/resume_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.resume/ADDED (tests) (P1-E22-W5-S47-T2)."
+        },
+        {
+          "file": "internal/conversation/resume_topic.go",
+          "line": 25,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.resume/ADDED (P1-E22-W5-S47-T2)."
+        },
+        {
+          "file": "internal/conversation/resume_topic_test.go",
+          "line": 6,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "internal.conversation.resume/ADDED (tests) (P1-E22-W5-S47-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -16864,6 +17235,20 @@
       ]
     },
     {
+      "name": "internal.providers.agents peer_guard",
+      "sites": [
+        {
+          "file": "internal/providers/agents/peer_guard.go",
+          "line": 26,
+          "status": "",
+          "raw": "internal.providers.agents peer_guard (AgentPeerGuard, LiveSpawn,"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal.providers.agents tests",
       "sites": [
         {
@@ -17782,6 +18167,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal.rpc owner_peer",
+      "sites": [
+        {
+          "file": "internal/rpc/owner_peer.go",
+          "line": 32,
+          "status": "",
+          "raw": "internal.rpc owner_peer (OwnerPeerGuard, SetOwnerPeerGuard,"
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -20187,6 +20586,20 @@
       ]
     },
     {
+      "name": "internal/daemon NewElevationMiddleware/RefuseAllElevation",
+      "sites": [
+        {
+          "file": "internal/daemon/elevation_wiring.go",
+          "line": 24,
+          "status": "",
+          "raw": "internal/daemon NewElevationMiddleware/RefuseAllElevation (P1-SEC-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/daemon conductor.execute sensitivity",
       "sites": [
         {
@@ -21936,6 +22349,21 @@
           "status": "",
           "ticket": "P1-E17-W4-S36-T3",
           "raw": "internal/nodes (P1-E17-W4-S36-T3, R-21.226)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/nodes BuildServeRegistry",
+      "sites": [
+        {
+          "file": "internal/nodes/serve_registry.go",
+          "line": 14,
+          "status": "",
+          "ticket": "P1-E17-W4-S36-T2",
+          "raw": "internal/nodes BuildServeRegistry (P1-E17-W4-S36-T2; elevation P1-SEC-03)."
         }
       ],
       "statuses": [
@@ -24466,7 +24894,7 @@
         },
         {
           "file": "internal/plugins/cascadepa_install_elevator.go",
-          "line": 42,
+          "line": 39,
           "status": "ADD",
           "ticket": "P1-E24-W5-S50-T4",
           "raw": "internal/plugins:cascadepa-install-wiring (ADD) -- P1-E24-W5-S50-T4."
@@ -25529,6 +25957,20 @@
       ]
     },
     {
+      "name": "internal/policy WitnessAttestor",
+      "sites": [
+        {
+          "file": "internal/policy/witness_attestor.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal/policy WitnessAttestor/ADDED (P1-SEC-03)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/policy approval-grant-handler",
       "sites": [
         {
@@ -26275,14 +26717,42 @@
       ]
     },
     {
+      "name": "internal/rpc ElevationAuditor",
+      "sites": [
+        {
+          "file": "internal/rpc/elevation_audit.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "internal/rpc ElevationAuditor (ADD) — P1-SEC-03."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/rpc VerifiedElevation",
+      "sites": [
+        {
+          "file": "internal/rpc/elevation_witness.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "internal/rpc VerifiedElevation (ADD) — P1-SEC-03."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/rpc elevation verbs",
       "sites": [
         {
           "file": "internal/rpc/elevation_verbs.go",
-          "line": 10,
+          "line": 16,
           "status": "ADD",
           "ticket": "P1-E17-W4-S38-T3",
-          "raw": "internal/rpc elevation verbs (ADD) — P1-E17-W4-S38-T3."
+          "raw": "internal/rpc elevation verbs (ADD) — P1-E17-W4-S38-T3; registration"
         }
       ],
       "statuses": [
@@ -27654,6 +28124,282 @@
           "status": "ADD",
           "ticket": "P1-E24-W5-S50-T5",
           "raw": "internal/tools/registry-gen tests (ADD) — P1-E24-W5-S50-T5."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update",
+      "sites": [
+        {
+          "file": "internal/update/doc.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal/update/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update Apply",
+      "sites": [
+        {
+          "file": "internal/update/apply.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal/update Apply/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update Check",
+      "sites": [
+        {
+          "file": "internal/update/check.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal/update Check/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update DaemonStatus",
+      "sites": [
+        {
+          "file": "internal/update/daemon_unix.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "internal/update DaemonStatus/ADDED"
+        },
+        {
+          "file": "internal/update/daemon_windows.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal/update DaemonStatus/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update Drain",
+      "sites": [
+        {
+          "file": "internal/update/drain.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "internal/update Drain/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update FetchVerified",
+      "sites": [
+        {
+          "file": "internal/update/verify.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal/update FetchVerified/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update HTTPFetcher",
+      "sites": [
+        {
+          "file": "internal/update/transport.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "internal/update HTTPFetcher/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update ProcessInterceptor",
+      "sites": [
+        {
+          "file": "internal/update/egress.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal/update ProcessInterceptor/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update ReadReceipt",
+      "sites": [
+        {
+          "file": "internal/update/receipt.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal/update ReadReceipt/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update ResolveChannel",
+      "sites": [
+        {
+          "file": "internal/update/channel.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal/update ResolveChannel/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update Source",
+      "sites": [
+        {
+          "file": "internal/update/source.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal/update Source/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update Stage",
+      "sites": [
+        {
+          "file": "internal/update/swap.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal/update Stage/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update TrustRoot",
+      "sites": [
+        {
+          "file": "internal/update/trust.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal/update TrustRoot/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update acquireUpdateLock",
+      "sites": [
+        {
+          "file": "internal/update/lock.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "internal/update acquireUpdateLock/ADDED."
+        },
+        {
+          "file": "internal/update/lock_unix.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal/update acquireUpdateLock/ADDED."
+        },
+        {
+          "file": "internal/update/lock_windows.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal/update acquireUpdateLock/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update compareVersions",
+      "sites": [
+        {
+          "file": "internal/update/semver.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal/update compareVersions/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update extractArchive",
+      "sites": [
+        {
+          "file": "internal/update/extract.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal/update extractArchive/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update parseChecksums",
+      "sites": [
+        {
+          "file": "internal/update/checksums.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal/update parseChecksums/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/update replaceFile",
+      "sites": [
+        {
+          "file": "internal/update/replace_unix.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal/update replaceFile/ADDED."
+        },
+        {
+          "file": "internal/update/replace_windows.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal/update replaceFile/ADDED."
         }
       ],
       "statuses": [
@@ -31927,6 +32673,13 @@
           "raw": "plugins/cascade-pa:cmd:chat (CHANGE) — P1-E21-W5-S46-T4."
         },
         {
+          "file": "plugins/cascade-pa/cmd/chat_dispatch.go",
+          "line": 6,
+          "status": "CHANGE",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "plugins/cascade-pa:cmd:chat (CHANGED) -- P1-E22-W5-S47-T2."
+        },
+        {
           "file": "plugins/cascade-pa/cmd/chat_refusal_nonwindows_test.go",
           "line": 18,
           "status": "ADD",
@@ -31939,6 +32692,13 @@
           "status": "ADD",
           "ticket": "P1-E20-W5-S43-T3",
           "raw": "plugins/cascade-pa:cmd:chat (ADD) — P1-E20-W5-S43-T3."
+        },
+        {
+          "file": "plugins/cascade-pa/cmd/chat_tui_resume_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "plugins/cascade-pa:cmd:chat (TEST) -- P1-E22-W5-S47-T2."
         },
         {
           "file": "plugins/cascade-pa/cmd/chat_tui_run.go",
@@ -31977,6 +32737,7 @@
         }
       ],
       "statuses": [
+        "",
         "ADD",
         "CHANGE"
       ]
@@ -32016,6 +32777,50 @@
         }
       ],
       "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa:cmd:resume",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/cmd/resume.go",
+          "line": 18,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "plugins/cascade-pa:cmd:resume (ADD) -- P1-E22-W5-S47-T2."
+        },
+        {
+          "file": "plugins/cascade-pa/cmd/resume_flag_test.go",
+          "line": 6,
+          "status": "",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "plugins/cascade-pa:cmd:resume (TEST) -- P1-E22-W5-S47-T2."
+        },
+        {
+          "file": "plugins/cascade-pa/cmd/resume_freshsession_test.go",
+          "line": 8,
+          "status": "",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "plugins/cascade-pa:cmd:resume (TEST) -- P1-E22-W5-S47-T2."
+        },
+        {
+          "file": "plugins/cascade-pa/cmd/resume_session.go",
+          "line": 16,
+          "status": "ADD",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "plugins/cascade-pa:cmd:resume (ADD) -- P1-E22-W5-S47-T2."
+        },
+        {
+          "file": "plugins/cascade-pa/cmd/resume_test.go",
+          "line": 7,
+          "status": "",
+          "ticket": "P1-E22-W5-S47-T2",
+          "raw": "plugins/cascade-pa:cmd:resume (TEST) -- P1-E22-W5-S47-T2."
+        }
+      ],
+      "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -37200,7 +38005,7 @@
       ]
     }
   ],
-  "total_sites": 3611,
-  "unspecified_count": 243,
-  "multi_status_count": 112
+  "total_sites": 3688,
+  "unspecified_count": 248,
+  "multi_status_count": 114
 }
