@@ -29,12 +29,14 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"sync"
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/mcp"
 	"github.com/acamarata/cascade/internal/mcp/coretools"
 	"github.com/acamarata/cascade/internal/memory"
+	"github.com/acamarata/cascade/internal/providers/agents"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -75,7 +77,11 @@ func buildRPCServer(bus *events.Bus, clock runtime.Clock, logger *slog.Logger, s
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	return daemon.NewRPCServer(registry, eventsHandler), manifest, connections, nil
+	srv := daemon.NewRPCServer(registry, eventsHandler)
+	if err := armOwnerPeer(srv); err != nil {
+		return nil, nil, nil, err
+	}
+	return srv, manifest, connections, nil
 }
 
 // buildDaemonRegistry does buildRPCServer's composition-root work: it builds
@@ -190,4 +196,43 @@ func runRecoveryScan(ctx context.Context, paths runtime.PathProvider, settings d
 		Registry:    runtime.NewStoreDomainRegistry(store),
 	})
 	return err
+}
+
+// The daemon socket's owner-peer seam (ADR-0006 section 3, P1-AGT-16):
+// buildRPCServer arms the server it returns, so the real daemon composition,
+// not a test helper, installs the guard. Fail closed: a HideDaemonEnviron
+// failure stops the daemon; the guard installs once per process
+// (rpc.SetOwnerPeerGuard panics on a second call); daemonSpawns is the guard's
+// only live-spawn source, and whatever starts an agent spawn in the daemon
+// registers it there before the child runs and releases it after its lease
+// sweep (P1-AGT-08's delegation service).
+
+// daemonSpawns is the daemon's live agent spawns, the guard's only source.
+var daemonSpawns = agents.NewSpawnRegistry()
+
+// ownerPeerArm runs the process-wide half of armOwnerPeer once.
+var ownerPeerArm = struct {
+	once sync.Once
+	err  error
+}{}
+
+// armOwnerPeer arms srv: every connection it accepts records its connecting
+// process, and every owner-CLI request on it is judged by the agent guard.
+func armOwnerPeer(srv *http.Server) error {
+	ownerPeerArm.once.Do(func() {
+		if err := agents.HideDaemonEnviron(); err != nil {
+			ownerPeerArm.err = err
+			return
+		}
+		rpc.SetOwnerPeerGuard(agents.AgentPeerGuard(daemonSpawns.Live))
+	})
+	if ownerPeerArm.err != nil {
+		return ownerPeerArm.err
+	}
+	next := srv.ConnContext
+	if next == nil {
+		next = rpc.ConnContext
+	}
+	srv.ConnContext = rpc.GuardedConnContext(next)
+	return nil
 }

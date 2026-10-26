@@ -16,6 +16,8 @@ See also [control sockets: owner-only, 0600, refuse what is not ours](security-p
 
 See also [caller principals: who is calling the daemon, and what each caller may reach](security-posture/caller-principal.md).
 
+See also [agent owner reach: what stops an agent session acting as the owner, and what does not](security-posture/agent-owner-reach.md).
+
 ## Vault backends
 
 Cascade's secret vault stores values through one custody backend, chosen at

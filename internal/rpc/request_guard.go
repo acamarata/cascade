@@ -39,7 +39,9 @@ var socketHosts = map[string]bool{
 // guardLocalRequest runs, in order: (1) the owner-peer check — the same
 // ConnContext-derived peerCred Handler.ServeHTTP checked inline before
 // this ticket, reused here rather than re-derived; (2) the browser-shaped
-// refusal (browserShaped below). It writes the HTTP 403 response itself
+// refusal (browserShaped below); (3) the owner-peer guard, which judges an
+// owner-CLI-marked request by the process behind the socket (owner_peer.go).
+// It writes the HTTP 403 response itself
 // on refusal and returns false; callers must return immediately without
 // reading the body, parsing JSON-RPC, or subscribing to the event bus.
 func guardLocalRequest(w http.ResponseWriter, r *http.Request) bool {
@@ -52,7 +54,7 @@ func guardLocalRequest(w http.ResponseWriter, r *http.Request) bool {
 		http.Error(w, "forbidden: browser-shaped request refused", http.StatusForbidden)
 		return false
 	}
-	return true
+	return guardOwnerPeer(w, r)
 }
 
 // headerPresent reports whether r carries key at all, regardless of its
