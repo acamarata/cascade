@@ -6,6 +6,8 @@
 package agents
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -69,6 +71,10 @@ func TestParseDriverAuthClassMustBeOffered(t *testing.T) {
 	}
 }
 
+// absAuthSource is an absolute path on every host ("/a/b" is relative on
+// windows, which has no root without a drive).
+var absAuthSource = filepath.Join(os.TempDir(), "a", "b")
+
 func TestParseDriverAuthRefusesMissingFields(t *testing.T) {
 	bs := []Binding{fakeBinding("fake")}
 	cases := map[string]struct {
@@ -81,9 +87,9 @@ func TestParseDriverAuthRefusesMissingFields(t *testing.T) {
 		"key class sans key_env": {map[string]any{"class": "api_key"}, "key_env is required"},
 		"key_env lowercase":      {map[string]any{"class": "api_key", "key_env": "my_key"}, "not an environment variable name"},
 		"key_env control var":    {map[string]any{"class": "api_key", "key_env": "CASCADE_HOME"}, "daemon control variable"},
-		"key class with source":  {map[string]any{"class": "api_key", "key_env": "SRC", "auth_source": "/a/b"}, "only allowed for class subscription"},
+		"key class with source":  {map[string]any{"class": "api_key", "key_env": "SRC", "auth_source": absAuthSource}, "only allowed for class subscription"},
 		"subscription sans src":  {map[string]any{"class": "subscription"}, "auth_source is required"},
-		"subscription key_env":   {map[string]any{"class": "subscription", "auth_source": "/a/b", "key_env": "SRC"}, "key_env is not allowed"},
+		"subscription key_env":   {map[string]any{"class": "subscription", "auth_source": absAuthSource, "key_env": "SRC"}, "key_env is not allowed"},
 		"relative auth_source":   {map[string]any{"class": "subscription", "auth_source": "rel/auth.json"}, "absolute path"},
 	}
 	for name, c := range cases {

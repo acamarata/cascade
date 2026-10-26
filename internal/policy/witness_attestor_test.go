@@ -48,6 +48,11 @@ func attestedDispatch(t *testing.T, issuer *rpc.WitnessIssuer, method string, in
 	data, _ := json.Marshal(eo.Data)
 	var nonce struct{ Nonce string }
 	_ = json.Unmarshal(data, &nonce)
+	if goruntime.GOOS == "windows" && nonce.Nonce == "" {
+		// The tier-2 refusal carries the ELEVATION_REQUIRED code but no
+		// nonce: there is no attestation flow on Windows to drive.
+		t.Skipf("no nonce in the challenge (%s): Windows tier-2 refuses before the attestation flow", eo.Message)
+	}
 	signed, _ := json.Marshal(struct { // the documented signed fields, alphabetical
 		ActionHash string `json:"action_hash"`
 		ExpUnix    int64  `json:"exp_unix"`

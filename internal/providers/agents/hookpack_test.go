@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -67,13 +68,17 @@ func TestRenderAgentHookPackWritesRelayEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, hooks := readPack(t, dir)
+	word := exe // a path of plain characters is one shell word as it stands
+	if goruntime.GOOS == "windows" {
+		word = `"` + exe + `"` // a drive colon and backslashes are not plain: the word is double-quoted
+	}
 	for _, ev := range []string{"PreToolUse", "PostToolUse", "Stop"} {
 		entries := hooks[ev]
 		if len(entries) != 1 || len(entries[0].Hooks) != 1 {
 			t.Fatalf("%s: %+v, want one entry with one hook", ev, entries)
 		}
 		h := entries[0].Hooks[0]
-		if h.Type != "command" || h.Command != exe+" hook relay "+ev || h.Timeout != 5 {
+		if h.Type != "command" || h.Command != word+" hook relay "+ev || h.Timeout != 5 {
 			t.Fatalf("%s hook %+v", ev, h)
 		}
 	}

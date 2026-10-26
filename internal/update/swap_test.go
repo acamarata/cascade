@@ -47,6 +47,32 @@ func readDir(t *testing.T, dir string) map[string]string {
 	return out
 }
 
+// targetRenames keeps the renames that land on an install name, dropping the
+// windows rename-old step (<name>.old) so the order reads the same on every
+// host.
+func targetRenames(order []string) []string {
+	var out []string
+	for _, n := range order {
+		if !strings.HasSuffix(n, ".old") {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// withoutAsides drops the <name>.failed-<n> files a windows restore leaves
+// next to the restored image (it renames and never deletes a file that may be
+// the running image); on other hosts nothing matches.
+func withoutAsides(files map[string]string) map[string]string {
+	out := map[string]string{}
+	for n, b := range files {
+		if !strings.Contains(n, ".failed-") {
+			out[n] = b
+		}
+	}
+	return out
+}
+
 // TestSwapFailureRestoresEverything is acceptance [1]: a rename failure on
 // cascade after the helper and plugin swapped restores every file
 // byte-identical and keeps the previous dir.
@@ -71,10 +97,10 @@ func TestSwapFailureRestoresEverything(t *testing.T) {
 	}
 	_, err := Swap(staged, install, prev, prevReceipt(install))
 	wantKind(t, err, cascade.KindUnavailable, "swap cascade")
-	if strings.Join(order[:3], ",") != "cascade-elevate-helper,cascade-github,cascade" {
+	if got := targetRenames(order); strings.Join(got[:3], ",") != "cascade-elevate-helper,cascade-github,cascade" {
 		t.Fatalf("rename order = %v, want helper, plugin, cascade", order)
 	}
-	if got := readDir(t, install); len(got) != 3 || got["cascade"] != old["cascade"] ||
+	if got := withoutAsides(readDir(t, install)); len(got) != 3 || got["cascade"] != old["cascade"] ||
 		got["cascade-github"] != old["cascade-github"] || got["cascade-elevate-helper"] != old["cascade-elevate-helper"] {
 		t.Fatalf("install dir after a failed swap = %v, want %v", got, old)
 	}

@@ -1,6 +1,7 @@
 package update
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,13 +10,22 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
+// jsonString encodes s as a JSON string (a windows path holds backslashes).
+func jsonString(s string) string {
+	b, err := json.Marshal(s)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}
+
 func receiptWithFiles(installDir string, names ...string) string {
 	var files []string
 	for _, n := range names {
 		files = append(files, `{"name":"`+n+`","sha256":"`+hexSum([]byte(n))+`"}`)
 	}
 	return `{"schema_version":1,"channel":"script","release_tag":"v2.0.0","archive_name":"a","archive_sha256":"` +
-		hexSum([]byte("a")) + `","install_dir":"` + installDir + `","installed_at":"x","files":[` + strings.Join(files, ",") + `]}`
+		hexSum([]byte("a")) + `","install_dir":` + jsonString(installDir) + `,"installed_at":"x","files":[` + strings.Join(files, ",") + `]}`
 }
 
 // TestReadReceiptRefusesUnsafeNames is acceptance [13].
@@ -54,7 +64,7 @@ func TestReadReceiptRefusesUnsafeNames(t *testing.T) {
 
 // TestParseReceiptRefusals covers the remaining structural refusals.
 func TestParseReceiptRefusals(t *testing.T) {
-	base := receiptWithFiles("/abs", "cascade")
+	base := receiptWithFiles(absInstall, "cascade")
 	cases := map[string]struct{ body, msg string }{
 		"not json":       {"{", "not valid JSON"},
 		"trailing data":  {base + "{}", "trailing data after the JSON object"},
@@ -64,8 +74,8 @@ func TestParseReceiptRefusals(t *testing.T) {
 		"no tag":         {strings.Replace(base, `"release_tag":"v2.0.0"`, `"release_tag":""`, 1), `release_tag "" is not v + a SemVer version`},
 		"local tag":      {strings.Replace(base, `"release_tag":"v2.0.0"`, `"release_tag":"local"`, 1), `release_tag "local" is not v + a SemVer version`},
 		"archive digest": {strings.Replace(base, hexSum([]byte("a")), "zz", 1), "archive_sha256 is not a sha256 digest"},
-		"duplicate":      {receiptWithFiles("/abs", "cascade", "cascade"), `file name "cascade" is listed twice`},
-		"no cascade":     {receiptWithFiles("/abs", "cascade-github"), "files[] does not list cascade"},
+		"duplicate":      {receiptWithFiles(absInstall, "cascade", "cascade"), `file name "cascade" is listed twice`},
+		"no cascade":     {receiptWithFiles(absInstall, "cascade-github"), "files[] does not list cascade"},
 		"bad digest":     {strings.Replace(base, hexSum([]byte("cascade")), "x", 1), `file "cascade" has no sha256 digest`},
 		"too large":      {base + strings.Repeat(" ", maxReceiptBytes), "larger than 65536 bytes"},
 	}
@@ -86,8 +96,8 @@ func TestParseReceiptRefusals(t *testing.T) {
 // FuzzInstallReceiptParse is acceptance [10]: no input panics, and any
 // accepted receipt names only known executables.
 func FuzzInstallReceiptParse(f *testing.F) {
-	f.Add([]byte(receiptWithFiles("/abs", "cascade")))
-	f.Add([]byte(receiptWithFiles("/abs", "cascade-elevate-helper", "cascade-github", "cascade")))
+	f.Add([]byte(receiptWithFiles(absInstall, "cascade")))
+	f.Add([]byte(receiptWithFiles(absInstall, "cascade-elevate-helper", "cascade-github", "cascade")))
 	f.Add([]byte(`{"schema_version":1,"files":[{"name":"../x"}]}`))
 	f.Fuzz(func(t *testing.T, data []byte) {
 		r, err := parseReceipt(data)

@@ -18,6 +18,7 @@ func TestApplyWindowsRenameOld(t *testing.T) {
 	for _, n := range []string{"cascade-elevate-helper", "cascade-github", "cascade"} {
 		must(t, os.Remove(filepath.Join(f.installDir, n)))
 	}
+	useReceiptGOOS(t, "windows") // from here the receipt lists .exe names
 	var files []ReceiptFile
 	for _, n := range []string{"cascade-github.exe", "cascade.exe"} {
 		body := []byte(n + " 2.0.0")

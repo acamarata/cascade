@@ -151,6 +151,14 @@ func registerChatAppend(t *testing.T, registry *rpc.Registry, dataDir string, cl
 	if err := store.SetThreadPrivacy(ctx, cpaBridgeThread, provider.SensitivityInternal); err != nil {
 		t.Fatalf("SetThreadPrivacy: %v", err)
 	}
+	// chat.append_turn refuses a caller-named thread that does not exist
+	// (adapter_appendtarget.go), and a marker alone is not a thread. The
+	// bridged chat's thread holds its inbound owner turn, as it does once a
+	// real message has arrived, so the appends under test name a real thread.
+	if err := store.AppendTurn(ctx, conversation.Turn{ID: "turn-bridge-seed", ThreadID: cpaBridgeThread,
+		Role: conversation.RoleUser, CreatedAt: clock.Now().Unix()}); err != nil {
+		t.Fatalf("seed bridge thread: %v", err)
+	}
 	conversation.NewAdapter(store, bus, nil, clock, "").RegisterHandlers(registry)
 	if err := bridge.ApplyMigrationSchema(ctx, db, migrate.SQLiteEmitter{}, clock, dbPath, backups); err != nil {
 		t.Fatalf("bridge schema: %v", err)

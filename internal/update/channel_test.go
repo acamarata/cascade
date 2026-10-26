@@ -8,7 +8,7 @@ import (
 
 func receiptJSON(channel, installDir string) string {
 	return `{"schema_version":1,"channel":"` + channel + `","release_tag":"v2.0.0","archive_name":"cascade_2.0.0_linux_amd64.tar.gz",` +
-		`"archive_sha256":"` + hexSum([]byte("a")) + `","install_dir":"` + installDir + `","installed_at":"2026-01-01T00:00:00Z",` +
+		`"archive_sha256":"` + hexSum([]byte("a")) + `","install_dir":` + jsonString(installDir) + `,"installed_at":"2026-01-01T00:00:00Z",` +
 		`"files":[{"name":"cascade","sha256":"` + hexSum([]byte("c")) + `"}]}`
 }
 

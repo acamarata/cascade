@@ -204,7 +204,9 @@ func TestTrustOwnerNeedsARealOwnedStat(t *testing.T) {
 		{"nil pointer", (*stat)(nil), false},
 		{"no uid field", &struct{ Gid uint32 }{}, false},
 		{"other owner", &stat{Uid: uint32(os.Geteuid()) + 1}, false},
-		{"current owner", &stat{Uid: uint32(os.Geteuid())}, true},
+		// os.Geteuid is -1 on Windows, which has no POSIX owner to match:
+		// trustOwner stays false there (fail closed).
+		{"current owner", &stat{Uid: uint32(os.Geteuid())}, goruntime.GOOS != "windows"},
 	} {
 		if got := trustOwner(fakeFileInfo{sys: tc.sys}); got != tc.want {
 			t.Errorf("%s: trustOwner = %v, want %v", tc.name, got, tc.want)
