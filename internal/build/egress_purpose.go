@@ -26,6 +26,7 @@ var EgressNetPurpose = map[string]string{
 	"plugins/github/tools":                  PurposeTypeOnly,
 	"plugins/pbd":                           PurposeProcessTierDeclared,
 	"internal/providers/agents/egressproxy": PurposeProcessTierDeclared,
+	"internal/update":                       "release-download",
 	"cmd/cascade":                           PurposeLocalTransport,
 	"internal/runtime":                      PurposeLocalTransport,
 	"internal/client":                       PurposeLocalTransport,

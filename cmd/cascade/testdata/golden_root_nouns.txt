@@ -27,6 +27,7 @@ provider hidden=false aliases=
 recall hidden=false aliases=
 review hidden=false aliases=
 run hidden=false aliases=
+self-update hidden=false aliases=
 sessions hidden=true aliases=
 status hidden=false aliases=
 sync hidden=false aliases=

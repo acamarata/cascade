@@ -83,10 +83,43 @@ file and rename in the same directory):
  "files":[{"name":"cascade","sha256":"<hex>"}]}
 ```
 
-`release_tag` is `local` for a `CASCADE_INSTALL_DIST` run without a tag.
+`release_tag` is always `v` plus the signed version, also for a
+`CASCADE_INSTALL_DIST` run; self-update refuses a receipt without one.
 `install_dir` is the absolute, symlink-free path. `files[]` lists only what
 this script installed; self-update and uninstall act on those files alone and
 check their digests first.
+
+## Updating
+
+`cascade self-update` updates an `install.sh` install in place:
+
+```sh
+cascade self-update --check   # report only
+cascade self-update           # verify, swap, hand off the daemon
+```
+
+It verifies the signed checksums with the release key embedded in the binary,
+refuses an older release (`downgrade`) and a release whose signed version does
+not match its archive (`version mismatch`), and first checks every receipt file
+against `install_dir` (`install differs from receipt`; rerun install.sh).
+
+The previous files and receipt are kept in `${CASCADE_HOME:-$HOME/.cascade}/data/update/previous/`.
+Exactly one generation is kept; the next update replaces it. If any step after
+the swap fails, or a running daemon does not come back on the new version
+within 30 seconds, the previous files are restored and the receipt is left as
+it was. An interrupted swap (the process killed between two renames) is
+refused by the next run with `install differs from receipt`: rerun `install.sh`;
+the previous set stays in `${CASCADE_HOME:-$HOME/.cascade}/data/update/previous/`.
+Only one self-update runs at a time.
+
+`CASCADE_MINISIGN_PUBKEY`, `CASCADE_UPDATE_BASE_URL` and `CASCADE_UPDATE_DIST`
+let whoever sets the environment choose the trust root and the release source.
+Never run self-update under `sudo -E` or any privileged runner that keeps the
+caller's environment.
+
+Homebrew and OCI installs are updated by their own tool, and a node-managed
+install by its controller; `self-update` says so and changes nothing. Details:
+[`cli-reference/self-update.md`](cli-reference/self-update.md).
 
 ## Verifying a release by hand
 

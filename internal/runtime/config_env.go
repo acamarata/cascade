@@ -96,6 +96,10 @@ var reservedEnvVars = map[string]bool{
 	// Read by the node-upgrade RPC as the minisign trust key.
 	"CASCADE_MINISIGN_PUBKEY": true,
 
+	// The self-update release source: a base URL and a local dist directory.
+	"CASCADE_UPDATE_BASE_URL": true,
+	"CASCADE_UPDATE_DIST":     true,
+
 	// The QA custody switch: honoured only in a devkeys build, where it
 	// keeps the process firewall's vault in the file vault.
 	"CASCADE_TEST_FILE_VAULT": true,

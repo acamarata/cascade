@@ -54,6 +54,14 @@ const (
 	// refuses local-only/restricted records before a byte reaches this
 	// class, so this class itself stays as strict as every other default.
 	EgressClassSync EgressClass = "sync"
+	// EgressClassReleaseDownload is `cascade self-update`'s release fetch
+	// (P1-SHIP-04): the releases/latest lookup, the signed checksums and
+	// the archive download each transit it once per request, redirects
+	// included, before any connection is made. Declared here so the
+	// purpose and transit scans see it; registered only by
+	// internal/update/egress.go's init (the EgressClassSync convention).
+	// AllowRestricted is NOT set: the content is the public request URL.
+	EgressClassReleaseDownload EgressClass = "release-download"
 	// EgressClassBridge is the personal-assistant bridge's outbound leg
 	// (P1-E23-W5-S48-T1, R-21.227): every Telegram getUpdates poll and
 	// sendMessage call this ticket's plugins/cascade-pa/telegram module

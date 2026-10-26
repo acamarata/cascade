@@ -64,6 +64,21 @@ func TestEgressClassesR21265Registered(t *testing.T) {
 	}
 }
 
+// TestReleaseDownloadClassDeclaredHere pins the release-download constant
+// and its registrant convention: declared in this package, registered only
+// by internal/update's init, so this package's own registry never holds it.
+func TestReleaseDownloadClassDeclaredHere(t *testing.T) {
+	if string(EgressClassReleaseDownload) != "release-download" {
+		t.Fatalf("EgressClassReleaseDownload = %q, want %q", string(EgressClassReleaseDownload), "release-download")
+	}
+	if _, ok := DefaultRegistry().Lookup(EgressClassReleaseDownload); ok {
+		t.Fatal("the egress package registered release-download itself; internal/update owns the registration")
+	}
+	if !strings.Contains(readSourceFile(t, "classes.go"), `EgressClassReleaseDownload EgressClass = "release-download"`) {
+		t.Fatal("classes.go does not declare EgressClassReleaseDownload as a literal EgressClass constant")
+	}
+}
+
 // TestDisabledClassesEgressNothing drives the two disabled classes
 // through the real entry point and asserts a refusal with zero output.
 func TestDisabledClassesEgressNothing(t *testing.T) {

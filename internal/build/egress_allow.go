@@ -44,6 +44,7 @@ var EgressNetNormative = []EgressAllowEntry{
 	{"plugins/github/tools", "GitHub tool response types"},
 	{"plugins/pbd", "Process-tier-declared plugin transport"},
 	{"internal/providers/agents/egressproxy", "Per-spawn CONNECT proxy with exact destination policy"},
+	{"internal/update", "Self-update release download: pinned hosts, release-download class on every request and redirect"},
 }
 
 // EgressNetNotYetMigrated names the remaining non-egress network imports.

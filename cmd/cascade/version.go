@@ -6,7 +6,8 @@
 //
 // Outputs: a human-readable line set containing version, commit, date, and
 //
-//	the §D-33 install channel.
+//	the §D-33 install channel as internal/update.ResolveChannel resolves it
+//	(stamp, then Caskroom path, then install receipt, then manual).
 //
 // Constraints: no business logic; A-T6 owns the ldflags/receipt stamp AND
 //
@@ -25,8 +26,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/internal/buildinfo"
+	"github.com/acamarata/cascade/internal/update"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
+
+// versionEnv is the channel input `cascade version` resolves; tests replace it.
+var versionEnv = productionUpdateEnv
 
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
@@ -34,9 +39,10 @@ func newVersionCmd() *cobra.Command {
 		Short: "Print the cascade version, commit, build date, and install channel",
 		Args:  usageArgs(cobra.NoArgs),
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			channel, _ := update.ResolveChannel(versionEnv())
 			_, err := fmt.Fprintf(cmd.OutOrStdout(),
 				"cascade version %s\ncommit:  %s\nbuilt:   %s\nchannel: %s\n",
-				buildinfo.Version, buildinfo.Commit, buildinfo.Date, buildinfo.ResolvedInstallChannel())
+				buildinfo.Version, buildinfo.Commit, buildinfo.Date, channel)
 			if err != nil {
 				return cascade.Wrap(cascade.KindUnavailable, err, "write version output")
 			}

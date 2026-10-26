@@ -36,6 +36,7 @@ var egressNetSpec = []string{
 	"plugins/github/tools",
 	"plugins/pbd",
 	"internal/providers/agents/egressproxy",
+	"internal/update",
 }
 
 // egressExecSpec is the process-spawn list the ruling names. It has one

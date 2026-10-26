@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb  ../cascade_2.0.1_linux_amd64.tar.gz\n")
