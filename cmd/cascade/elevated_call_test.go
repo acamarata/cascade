@@ -93,7 +93,7 @@ func TestCallElevatedRoundTripAgainstRealMiddleware(t *testing.T) {
 	pub, _ := k.PubKeyB64()
 	fp, _ := elevation.Fingerprint(pub)
 	registry := rpc.NewRegistry()
-	registry.Use(rpc.ElevationMiddleware(rpc.ElevationDeps{Ledger: rpc.NewNonceLedger(deps.Clock), Trust: rpc.MapTrustStore{fp: k.pub}, Clock: deps.Clock, Custody: func() (string, bool) { return "platform", true }}))
+	registry.Use(rpc.ElevationMiddleware(rpc.ElevationDeps{Ledger: rpc.NewNonceLedger(deps.Clock), Trust: rpc.MapTrustStore{fp: k.pub}, Clock: deps.Clock, Audit: rpc.LocalCeremonyAudit{}, Custody: func() (string, bool) { return "platform", true }}))
 	handled := new(atomic.Int32)
 	var verifiedHash string
 	registry.Register("plugin.add", func(_ context.Context, p json.RawMessage) (any, error) {

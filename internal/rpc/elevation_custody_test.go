@@ -68,7 +68,7 @@ func assertCustodyDispatch(t *testing.T, gate CustodyGate, method string, signed
 	calls := 0
 	reg := NewRegistry()
 	reg.Register(method, func(context.Context, json.RawMessage) (any, error) { calls++; return nil, nil })
-	reg.Use(ElevationMiddleware(ElevationDeps{Ledger: ledger, Trust: MapTrustStore{"file-fp": pub}, Clock: clock, Custody: gate}))
+	reg.Use(ElevationMiddleware(ElevationDeps{Ledger: ledger, Trust: MapTrustStore{"file-fp": pub}, Clock: clock, Audit: &recordingAuditor{}, Custody: gate}))
 	_, err := reg.Dispatch(t.Context(), &Request{Method: method, Params: params})
 	tier := "file"
 	if gate == nil {
@@ -101,7 +101,7 @@ func assertCustodyIssuedAttestation(t *testing.T, gate CustodyGate, pub ed25519.
 	calls := 0
 	reg := NewRegistry()
 	reg.Register("vault.get", func(context.Context, json.RawMessage) (any, error) { calls++; return nil, nil })
-	reg.Use(ElevationMiddleware(ElevationDeps{Ledger: ledger, Trust: trust, Clock: clock, Custody: gate}))
+	reg.Use(ElevationMiddleware(ElevationDeps{Ledger: ledger, Trust: trust, Clock: clock, Audit: &recordingAuditor{}, Custody: gate}))
 	_, refusal := reg.Dispatch(t.Context(), &Request{Method: "vault.get", Params: params})
 	if refusal == nil || refusal.Code != -32012 || calls != 0 || ledger.Len() != 1 {
 		t.Fatalf("refusal=%v calls=%d ledger=%d", refusal, calls, ledger.Len())

@@ -238,3 +238,52 @@ func TestNewSystemTicker(t *testing.T) {
 	ticker.Stop()
 	ticker.Stop() // idempotent
 }
+
+// TestServeRegistryRefusesUnattestedEnroll: node serve is its own process
+// with no custody session, so node.enroll over it never runs unattested. With
+// no Elevation supplied the registry installs the refuse-all middleware: the
+// call is refused with the custody-tier refusal and writes no device record.
+func TestServeRegistryRefusesUnattestedEnroll(t *testing.T) {
+	deps := newServeDeps(t) // Elevation left nil
+	registry := BuildServeRegistry(deps)
+	id := testIdentity(t, "stranger")
+	params, err := json.Marshal(map[string]string{"node_id": id.NodeID, "node_pubkey_b64": id.PubKeyB64(), "trust_tier": string(TierWorkerTrusted)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []json.RawMessage{params, json.RawMessage(`{"_attestation":{},"_args":` + string(params) + `}`)} {
+		_, errObj := registry.Dispatch(context.Background(), &rpc.Request{Method: "node.enroll", Params: p})
+		if errObj == nil {
+			t.Fatal("node.enroll over node serve ran unattested")
+		}
+		data, _ := errObj.Data.(map[string]string)
+		if data["reason"] != rpc.ReasonCustodyTier || data["tier"] != "none" {
+			t.Errorf("refusal = %+v, want the custody-tier refusal at tier none", errObj)
+		}
+		if errObj.Code == -32008 {
+			t.Errorf("refusal carried ELEVATION_REQUIRED (%d): a nonce nobody can answer must not be offered", errObj.Code)
+		}
+	}
+	recs, err := deps.Records.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recs) != 0 {
+		t.Fatalf("a refused node.enroll wrote %d device records", len(recs))
+	}
+}
+
+// TestServeRegistryMountsSuppliedElevation: an explicit middleware replaces
+// the refuse-all default and is mounted verbatim.
+func TestServeRegistryMountsSuppliedElevation(t *testing.T) {
+	deps := newServeDeps(t)
+	ran := 0
+	deps.Elevation = func(_ string, next rpc.HandlerFunc) rpc.HandlerFunc {
+		return func(ctx context.Context, p json.RawMessage) (any, error) { ran++; return next(ctx, p) }
+	}
+	registry := BuildServeRegistry(deps)
+	_, _ = registry.Dispatch(context.Background(), &rpc.Request{Method: "node.heartbeat", Params: []byte(`{}`)})
+	if ran != 1 {
+		t.Fatalf("supplied middleware ran %d times, want 1", ran)
+	}
+}

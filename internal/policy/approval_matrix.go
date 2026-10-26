@@ -21,51 +21,27 @@
 // SPORT: internal/policy RemoteApprovabilityMatrix/ADDED, CanBridge/ADDED,
 //
 //	ElevationClassVerbs/ADDED, ExecutionID/ADDED, NextApprovalState/ADDED
-//	(P1-E08-W2-S16-T3).
+//	(P1-E08-W2-S16-T3); the verb set derives from internal/rpc's elevation
+//	table (P1-SEC-03).
 package policy
 
-import "github.com/acamarata/cascade/pkg/cascade"
+import (
+	"github.com/acamarata/cascade/internal/rpc"
+	"github.com/acamarata/cascade/pkg/cascade"
+)
 
-// elevationClassVerbs is the complete 06-FORGE-SPEC §5.14 elevated-verb
-// enumeration, transcribed from that rule's prose. These verbs are
-// LOCAL-ONLY: they are never bridge-approvable and never standing,
-// regardless of the class or rung they otherwise carry.
+// ElevationClassVerbs returns the elevated-verb enumeration, derived at call
+// time from internal/rpc's one elevation table (06-FORGE-SPEC §5.14 plus the
+// rows later tickets register through rpc.RegisterElevatedVerb). There is no
+// second list here to drift: a verb registered there is local-only and never
+// bridge-approvable or standing the moment it exists. The slice is a copy, so
+// a caller cannot shrink the local-only set by writing to it.
 //
-// approval_matrix_test.go re-transcribes the same spec prose into a second
-// list and asserts set equality, so an omission here fails that test
+// approval_matrix_test.go re-transcribes the spec prose into an independent
+// list and asserts set equality, so an omission in the table fails that test
 // rather than quietly narrowing the local-only set.
-var elevationClassVerbs = []string{
-	"vault.get",
-	"vault.rotate",
-	"approval.grant",
-	"standing_grant.create",
-	"standing_grant.change",
-	"backup.create",
-	"backup.export",
-	"backup.import",
-	"backup.restore",
-	"backup.key_export",
-	"backup.key_import",
-	"plugin.add",
-	"perms.grant",
-	"perms.revoke",
-	"node.enroll",
-	"node.remove",
-	"node.upgrade",
-	"sync.conflicts_resolve",
-	"policy.set",
-	"sensitivity.set",
-	"elevation.set_allow_remote",
-	"plugins.set_enable_remote_runtime",
-	"uninstall.purge_data",
-}
-
-// ElevationClassVerbs returns the §5.14 enumeration. The slice is copied,
-// so a caller cannot shrink the local-only set by writing to it.
 func ElevationClassVerbs() []string {
-	out := make([]string, len(elevationClassVerbs))
-	copy(out, elevationClassVerbs)
-	return out
+	return rpc.ElevatedVerbNames()
 }
 
 // RemoteApprovabilityMatrix answers the §5.24 question: may a decision on
@@ -112,12 +88,7 @@ func (m RemoteApprovabilityMatrix) CanBridgeVerb(verb string, class ActionClass)
 // caller's own registry decides whether an unregistered verb is admitted
 // at all, and R-21.207 requires that it refuse.
 func IsElevationClassVerb(verb string) bool {
-	for _, v := range elevationClassVerbs {
-		if v == verb {
-			return true
-		}
-	}
-	return false
+	return rpc.IsElevatedVerb(verb)
 }
 
 // ExecutionID names one execution of one approved action. It is minted

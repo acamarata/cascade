@@ -46,6 +46,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/internal/backup"
+	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/mcp"
 	"github.com/acamarata/cascade/internal/mcp/coretools"
 	"github.com/acamarata/cascade/internal/mcp/transport"
@@ -136,8 +137,11 @@ func serveSocketReal(ctx context.Context, paths runtime.PathProvider, tools *mcp
 	if sockPath == "-mcp" {
 		return cascade.New(cascade.KindUnavailable, "cascade mcp serve --socket: could not resolve a socket path")
 	}
-	registry := rpc.NewRegistry()
-	if err := transport.RegisterSocketMCP(registry, mcp.NewServer(tools)); err != nil {
+	// This process holds no custody session, so the socket gets the
+	// refuse-all elevation middleware: an elevated verb dispatched through it
+	// is refused before any handler runs.
+	registry, err := buildSocketMCPRegistry(tools, daemon.RefuseAllElevation(runtime.NewSystemClock()))
+	if err != nil {
 		return err
 	}
 	// runtime.ListenOwnerSocket is the same owner-only bind the daemon
@@ -167,6 +171,19 @@ func serveSocketReal(ctx context.Context, paths runtime.PathProvider, tools *mcp
 		return cascade.Wrap(cascade.KindUnavailable, err, "cascade mcp serve --socket: serve failed")
 	}
 	return nil
+}
+
+// buildSocketMCPRegistry builds the registry the MCP socket serves: the
+// mcp.dispatch method over tools, behind mw. Every production caller passes an
+// elevation middleware (RefuseAllElevation: the MCP processes hold no custody
+// session); the registry is never returned without one.
+func buildSocketMCPRegistry(tools *mcp.ToolRegistry, mw rpc.MiddlewareFunc) (*rpc.Registry, error) {
+	registry := rpc.NewRegistry()
+	registry.Use(mw)
+	if err := transport.RegisterSocketMCP(registry, mcp.NewServer(tools)); err != nil {
+		return nil, err
+	}
+	return registry, nil
 }
 
 // newMCPCmd builds the `mcp` command tree.

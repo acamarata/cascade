@@ -163,48 +163,13 @@ type ServeDeps struct {
 	Actions ActionLog
 	// EnrollmentID binds this node's result frames to its enrollment.
 	EnrollmentID string
-}
-
-// BuildServeRegistry mounts node.enroll (S-36.T1's RegisterHandlers) and
-// node.heartbeat (this ticket's RegisterHeartbeatHandler) on a fresh
-// *rpc.Registry — the node agent's complete RPC surface as of this
-// ticket. internal/nodes is an internal/rpc SERVER package (it is allowed
-// to name rpc.Registry); the CLI composition root (cmd/cascade/node_serve.go)
-// is a client of THIS package instead, through NewServeRegistry below,
-// because cmd/cascade may never import internal/rpc directly (the
-// cmd-rpc-server boundary, internal/client/boundary_test.go). serve_test.go
-// drives Dispatch through the identical registry a real client would use,
-// and proves the wiring is load-bearing by showing Dispatch fails with
-// method-not-found when this function is never called.
-func BuildServeRegistry(deps ServeDeps) *rpc.Registry {
-	registry := rpc.NewRegistry()
-	RegisterHandlers(registry, EnrollDeps{
-		Records:             deps.Records,
-		KnownHosts:          deps.KnownHosts,
-		Keystore:            deps.Keystore,
-		ControllerNodeID:    deps.Self.NodeID,
-		ControllerPubKeyB64: deps.Self.PubKeyB64(),
-	}, deps.Precondition)
-	RegisterHeartbeatHandler(registry, HeartbeatDeps{
-		Records:   deps.Records,
-		Sequences: deps.Sequences,
-		Clock:     deps.Clock,
-		Timeout:   deps.Timeout,
-	})
-	// The node-side dispatch leg (S-37.T2). Mounted only when the
-	// composition root supplied a durable action log: without one there is
-	// no dedup, and a node that answers a redelivered action twice is
-	// worse than one that does not answer at all.
-	if deps.Actions != nil {
-		RegisterExecuteHandler(registry, ExecuteDeps{
-			Actions:      deps.Actions,
-			Sign:         deps.Keystore.Sign,
-			Self:         deps.Self,
-			EnrollmentID: deps.EnrollmentID,
-			Sequences:    deps.Sequences,
-		})
-	}
-	return registry
+	// Elevation is the elevation middleware mounted on the registry. Nil
+	// installs a refuse-all middleware (serve_registry.go): node serve is a
+	// separate process that holds no custody session and cannot share the
+	// daemon's ledger, trust or audit log, so an elevated verb (node.enroll
+	// among them) is refused on this surface. Local `cascade node enroll` is
+	// unchanged.
+	Elevation rpc.MiddlewareFunc
 }
 
 // RPCPath re-exports internal/rpc.RPCPath's value as a plain string, so

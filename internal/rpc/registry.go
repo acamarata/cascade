@@ -113,6 +113,7 @@ func (r *Registry) Methods() []string {
 // there is nothing to elevate into. A handler error is converted to the
 // wire ErrorObject shape via errorObjectFrom.
 func (r *Registry) Dispatch(ctx context.Context, req *Request) (any, *ErrorObject) {
+	sealElevationTable() // the first Dispatch of any registry closes elevated-verb registration
 	r.mu.RLock()
 	handler, ok := r.handlers[req.Method]
 	chain := make([]MiddlewareFunc, len(r.middleware))

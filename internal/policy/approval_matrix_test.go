@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -18,12 +20,15 @@ import (
 // being mirrored by it:
 //
 //	"vault get/rotate · approval grant · standing-grant create/change ·
-//	 backup create/export/import/restore/key export/key import · plugin add
-//	 (process-tier or grant expansion)/perms grant/perms revoke · node
-//	 enroll/remove/upgrade · sync conflicts resolve (discarding
-//	 server-primary) · policy or sensitivity loosening · enabling remote
-//	 elevation · enabling the remote plugin runtime (R-14.48) ·
-//	 uninstall --purge-data"
+//	 backup create/export/import/restore/key export/key import · plugin
+//	 add/plugin update/perms grant/perms revoke · node enroll/remove/upgrade
+//	 · sync conflicts resolve (discarding server-primary) · policy or
+//	 sensitivity loosening · enabling remote elevation · enabling the remote
+//	 plugin runtime (R-14.48) · uninstall --purge-data · config accept
+//	 loosening · policy authorize"
+//
+// (Amended: plugin add unconditional, plugin update, config accept
+// loosening, policy authorize - the rows P1-SEC-03 registers.)
 var specElevationVerbs = []string{
 	"approval.grant",
 	"backup.create",
@@ -32,6 +37,7 @@ var specElevationVerbs = []string{
 	"backup.key_export",
 	"backup.key_import",
 	"backup.restore",
+	"config.accept_loosening",
 	"elevation.set_allow_remote",
 	"node.enroll",
 	"node.remove",
@@ -39,7 +45,9 @@ var specElevationVerbs = []string{
 	"perms.grant",
 	"perms.revoke",
 	"plugin.add",
+	"plugin.update",
 	"plugins.set_enable_remote_runtime",
+	"policy.authorize",
 	"policy.set",
 	"sensitivity.set",
 	"standing_grant.change",
@@ -50,10 +58,31 @@ var specElevationVerbs = []string{
 	"vault.rotate",
 }
 
+// testPolicyElevatedVerb is registered in the rpc table at init, as a later
+// ticket's file would: policy's class set follows with no edit here.
+const testPolicyElevatedVerb = "test.policy_registered_verb"
+
+func init() { rpc.RegisterElevatedVerb(testPolicyElevatedVerb, rpc.ElevationRule{Always: true}) }
+
+// TestRegisteredVerbIsElevationClass: a registered verb is local-only here.
+func TestRegisteredVerbIsElevationClass(t *testing.T) {
+	if !slices.Contains(ElevationClassVerbs(), testPolicyElevatedVerb) || !IsElevationClassVerb(testPolicyElevatedVerb) {
+		t.Fatal("a verb registered in the rpc elevation table is not elevation-class in policy")
+	}
+	if (RemoteApprovabilityMatrix{}).CanBridgeVerb(testPolicyElevatedVerb, ClassLocalDev) {
+		t.Error("a registered elevated verb was allowed to bridge")
+	}
+}
+
 // TestElevationVerbSetMatchesSpec asserts the shipped enumeration equals
 // the specification's, in both directions: nothing missing, nothing extra.
 func TestElevationVerbSetMatchesSpec(t *testing.T) {
-	got := ElevationClassVerbs()
+	got := []string{}
+	for _, v := range ElevationClassVerbs() {
+		if v != testPolicyElevatedVerb {
+			got = append(got, v)
+		}
+	}
 	sort.Strings(got)
 	want := append([]string{}, specElevationVerbs...)
 	sort.Strings(want)

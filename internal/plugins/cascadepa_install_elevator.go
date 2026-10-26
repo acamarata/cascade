@@ -13,23 +13,20 @@ package plugins
 //   elevate-helper --sign` itself calls), and rpc.VerifyAttestation checks
 //   the result against the enrolled ElevationTrustStore record.
 //
-// DISCLOSED GAP (recorded, not papered over): no production call site in
-//   this tree registers rpc.ElevationMiddleware on the daemon's live
-//   *rpc.Registry (verified empirically: grepping the whole module for
-//   ".Use(" against any *rpc.Registry returns zero production hits --
-//   every doc comment elsewhere in this tree claiming "elevation is
-//   enforced by internal/rpc's shared ElevationMiddleware" -- e.g.
-//   internal/daemon/sync_rpc.go:20, internal/daemon/node_upgrade_rpc.go:48 --
-//   describes a wiring that does not exist in the tree today). That gap
-//   is cmd/cascade's (buildRPCServer never calls registry.Use), out of
-//   this ticket's files_scope, and this file cannot close it. What this
-//   file DOES guarantee, on its own, independent of that gap: Flow
+// DAEMON ENFORCEMENT (P1-SEC-03): this file is the CLIENT-side ceremony.
+//   The daemon's own registry now mounts the same rpc.ElevationMiddleware
+//   (cmd/cascade/wire_elevation.go, built by daemon.NewElevationMiddleware),
+//   so a plugin.add sent over the daemon socket is challenged and must carry
+//   its own attestation (the CLI signs it through callElevated). This flow
+//   does not go through that RPC: Flow.install calls Install.Add in process,
+//   so THIS Elevate call is the only elevation gate on it. Flow
 //   (install/flow.go) never sets RunResult.Resumed=true for an elevated
 //   install unless THIS Elevate call independently ran the real
 //   nonce-issue/local-auth-sign/attestation-verify sequence to a genuine
 //   Approved:true -- the chat confirm alone can never satisfy it, exactly
-//   as the ticket requires, regardless of whether the daemon's own
-//   "plugin.add" RPC handler separately re-checks it.
+//   as the ticket requires. The in-process gate below records nothing
+//   (rpc.LocalCeremonyAudit): it mints no witness a handler could use and
+//   writes no daemon audit row; the daemon records its own attempt and grant.
 //
 // Inputs: an install.ElevationRequest naming the candidate and runtime.
 // Outputs: install.ElevationResult{Approved:true} only after a verified
@@ -55,13 +52,11 @@ import (
 	"github.com/acamarata/cascade/plugins/cascade-pa/install"
 )
 
-// installElevationMethod is the elevationTable verb this flow attests
-// against (internal/rpc/elevation.go's "plugin.add" entry). It is a
-// conditional rule keyed on process_tier/grant_expand presence
-// (hasJSONField): installElevationArgs always sets process_tier so a
-// process-runtime or grant-expanding candidate -- the only case Flow ever
-// calls Elevate for (flow.go's install method) -- is always classified
-// elevated, never silently waved through.
+// installElevationMethod is the elevation-table verb this flow attests
+// against (internal/rpc/elevation.go's "plugin.add" entry), which is elevated
+// whatever its params carry. installElevationArgs still sets process_tier, so
+// the candidate Flow calls Elevate for (flow.go's install method) is
+// classified elevated under either version of the rule.
 const installElevationMethod = "plugin.add"
 
 // installAttestationTTL matches elevate_helper.go's own 5-minute contract
@@ -113,7 +108,7 @@ func (e *installElevator) Elevate(ctx context.Context, req install.ElevationRequ
 
 	args := installElevationArgs(req)
 	next := func(context.Context, json.RawMessage) (any, error) { return "approved", nil }
-	gate := rpc.ElevationMiddleware(rpc.ElevationDeps{Ledger: e.ledger, Trust: trust, Clock: e.clock, Custody: func() (string, bool) { return string(custody.Tier()), custody.Tier().SatisfiesElevation() }})(installElevationMethod, next)
+	gate := rpc.ElevationMiddleware(rpc.ElevationDeps{Ledger: e.ledger, Trust: trust, Clock: e.clock, Audit: rpc.LocalCeremonyAudit{}, Custody: func() (string, bool) { return string(custody.Tier()), custody.Tier().SatisfiesElevation() }})(installElevationMethod, next)
 
 	nonce, err := issueInstallChallenge(ctx, gate, args)
 	if err != nil {

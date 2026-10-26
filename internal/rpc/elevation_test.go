@@ -16,10 +16,17 @@ import (
 // merely proving it matches itself.
 const specVerbListVerbatim = `vault get/rotate · approval grant · standing-grant ` +
 	`create/change · backup create/export/import/restore/key export/key import · ` +
-	`plugin add (process-tier or grant expansion)/perms grant/perms revoke · ` +
+	`plugin add/plugin update/perms grant/perms revoke · ` +
 	`node enroll/remove/upgrade · sync conflicts resolve (discarding server-primary) · ` +
 	`policy or sensitivity loosening · enabling remote elevation (allow_remote) · ` +
-	`enabling the remote plugin runtime (enable_remote_runtime) · uninstall --purge-data`
+	`enabling the remote plugin runtime (enable_remote_runtime) · uninstall --purge-data · ` +
+	`config accept loosening · policy authorize`
+
+// The two amendments to §5.14 this transcription carries (P1-SEC-03): plugin
+// add is no longer conditional on process_tier/grant_expand (the CLI never
+// sends them, so the condition gated nothing) and plugin update joins it;
+// config accept loosening (P1-SEC-04) and policy authorize (P1-SEC-10) are
+// elevated verbs whose rows this ticket registers.
 
 // translateSpecVerb maps one englishy clause from specVerbListVerbatim to
 // the one or more RPC method names elevationTable registers for it. This
@@ -34,9 +41,11 @@ var specVerbToMethods = map[string][]string{
 		"backup.create", "backup.export", "backup.import", "backup.restore",
 		"backup.key_export", "backup.key_import",
 	},
-	"plugin add (process-tier or grant expansion)/perms grant/perms revoke": {
-		"plugin.add", "perms.grant", "perms.revoke",
+	"plugin add/plugin update/perms grant/perms revoke": {
+		"plugin.add", "plugin.update", "perms.grant", "perms.revoke",
 	},
+	"config accept loosening":                                    {"config.accept_loosening"},
+	"policy authorize":                                           {"policy.authorize"},
 	"node enroll/remove/upgrade":                                 {"node.enroll", "node.remove", "node.upgrade"},
 	"sync conflicts resolve (discarding server-primary)":         {"sync.conflicts_resolve"},
 	"policy or sensitivity loosening":                            {"policy.set", "sensitivity.set"},
@@ -68,7 +77,9 @@ func TestElevationTableMatchesSpec(t *testing.T) {
 
 	gotMethods := map[string]bool{}
 	for _, rule := range elevationTable {
-		gotMethods[rule.method] = true
+		if rule.method != testRegisteredElevatedVerb {
+			gotMethods[rule.method] = true
+		}
 	}
 
 	for m := range wantMethods {
@@ -81,8 +92,8 @@ func TestElevationTableMatchesSpec(t *testing.T) {
 			t.Errorf("elevationTable registers %q but it is not derivable from the spec verb list", m)
 		}
 	}
-	if len(clauses) != 11 {
-		t.Errorf("spec verb list has %d clauses, expected 11 (drift in specVerbListVerbatim itself)", len(clauses))
+	if len(clauses) != 13 {
+		t.Errorf("spec verb list has %d clauses, expected 13 (drift in specVerbListVerbatim itself)", len(clauses))
 	}
 }
 
@@ -93,6 +104,7 @@ func TestIsElevated_AlwaysVerbs(t *testing.T) {
 		"backup.create", "backup.export", "backup.import", "backup.restore",
 		"backup.key_export", "backup.key_import",
 		"perms.grant", "perms.revoke",
+		"plugin.add", "plugin.update", "config.accept_loosening", "policy.authorize",
 		"node.enroll", "node.remove", "node.upgrade",
 		"uninstall.purge_data",
 	}
@@ -115,7 +127,7 @@ func TestIsElevated_ConditionalVerbs(t *testing.T) {
 		params string
 		want   bool
 	}{
-		{"plugin.add", `{"name":"x"}`, false},
+		{"plugin.add", `{"name":"x"}`, true},
 		{"plugin.add", `{"name":"x","process_tier":"trusted"}`, true},
 		{"plugin.add", `{"name":"x","grant_expand":true}`, true},
 		// Keeping the server's side is what the merge already decided:
@@ -203,5 +215,54 @@ func TestElevation_FailsClosedOnEveryWireShape(t *testing.T) {
 func TestElevation_UnknownVerbNeverElevates(t *testing.T) {
 	if IsElevated("status.get", json.RawMessage(`{}`)) {
 		t.Error("a read verb absent from the table must not be elevated")
+	}
+}
+
+// TestElevationVerbSetMatchesSpec is the same cross-check as
+// TestElevationTableMatchesSpec through the public accessor, the one policy
+// and the MCP filter read.
+func TestElevationVerbSetMatchesSpec(t *testing.T) {
+	want := map[string]bool{}
+	for _, clause := range strings.Split(specVerbListVerbatim, " · ") {
+		for _, m := range specVerbToMethods[clause] {
+			want[m] = true
+		}
+	}
+	got := map[string]bool{}
+	for _, n := range ElevatedVerbNames() {
+		if n != testRegisteredElevatedVerb {
+			got[n] = true
+		}
+	}
+	for m := range want {
+		if !got[m] {
+			t.Errorf("ElevatedVerbNames misses spec verb %q", m)
+		}
+	}
+	for m := range got {
+		if !want[m] {
+			t.Errorf("ElevatedVerbNames lists %q, which the spec does not", m)
+		}
+	}
+	for _, m := range []string{"plugin.add", "plugin.update", "config.accept_loosening", "policy.authorize"} {
+		if !IsElevated(m, nil) || !IsElevated(m, json.RawMessage(`{}`)) {
+			t.Errorf("%s must be elevated whatever its params", m)
+		}
+	}
+}
+
+// TestPluginAddAlwaysElevated: the CLI sends neither process_tier nor
+// grant_expand, so plugin.add used to run unattested for every real caller.
+func TestPluginAddAlwaysElevated(t *testing.T) {
+	for _, params := range []string{`{"name":"x"}`, `{}`, `null`, ``, `{"name":"x","process_tier":null}`} {
+		if !IsElevated("plugin.add", json.RawMessage(params)) {
+			t.Errorf("plugin.add %q was not elevated", params)
+		}
+	}
+	skipIfPlatformRefuses(t)
+	f := newMWFixture(t, "plugin.add")
+	f.challenge(t, `{"name":"x"}`) // fails the test unless it is challenged
+	if f.calls != 0 {
+		t.Errorf("plugin.add ran %d times without an attestation", f.calls)
 	}
 }

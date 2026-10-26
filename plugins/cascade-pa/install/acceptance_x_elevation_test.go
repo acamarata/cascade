@@ -115,7 +115,7 @@ func (e *acceptElevator) Elevate(ctx context.Context, req install.ElevationReque
 
 	args := acceptElevationArgs(req)
 	next := func(context.Context, json.RawMessage) (any, error) { return "approved", nil }
-	gate := rpc.ElevationMiddleware(rpc.ElevationDeps{Ledger: e.ledger, Trust: trust, Clock: e.clock, Custody: func() (string, bool) { return "platform", true }})(acceptElevationMethod, next)
+	gate := rpc.ElevationMiddleware(rpc.ElevationDeps{Ledger: e.ledger, Trust: trust, Clock: e.clock, Audit: rpc.LocalCeremonyAudit{}, Custody: func() (string, bool) { return "platform", true }})(acceptElevationMethod, next)
 
 	nonce, err := acceptIssueChallenge(ctx, gate, args)
 	if err != nil {

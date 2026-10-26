@@ -106,6 +106,9 @@ type mcpToolWiring struct {
 // position than one whose whole server failed to start.
 func buildMCPToolWiring(ctx context.Context, paths runtime.PathProvider, clock runtime.Clock) mcpToolWiring {
 	registry := rpc.NewRegistry()
+	// The MCP tool process holds no custody session: every elevated verb is
+	// refused before a handler runs, whether or not one is registered here.
+	registry.Use(daemon.RefuseAllElevation(clock))
 	// No paths means no data directory, which means no store, no index
 	// and no grant file. The honest wiring for that process is an empty
 	// method table and a filter that exposes nothing — every tool is then

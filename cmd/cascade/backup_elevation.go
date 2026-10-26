@@ -93,7 +93,7 @@ func attestBackupOperation(ctx context.Context, deps elevateHelperDeps, ks eleva
 	next := func(_ context.Context, _ json.RawMessage) (any, error) {
 		return backup.ElevationProof("verified"), nil
 	}
-	gate := rpc.ElevationMiddleware(rpc.ElevationDeps{Ledger: ledger, Trust: trust, Clock: deps.Clock, Custody: func() (string, bool) { c := deps.Keystore(); return string(c.Tier()), c.Tier().SatisfiesElevation() }})(method, next)
+	gate := rpc.ElevationMiddleware(rpc.ElevationDeps{Ledger: ledger, Trust: trust, Clock: deps.Clock, Audit: rpc.LocalCeremonyAudit{}, Custody: func() (string, bool) { c := deps.Keystore(); return string(c.Tier()), c.Tier().SatisfiesElevation() }})(method, next)
 	nonce, err := issueBackupChallenge(ctx, gate, params)
 	if err != nil {
 		return "", err

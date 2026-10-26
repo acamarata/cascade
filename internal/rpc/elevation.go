@@ -37,18 +37,6 @@ type elevationRequiredData struct {
 	Nonce  string `json:"nonce"`
 }
 
-// verbRule describes one §5.14 elevated-verb table entry. Always is true
-// for a verb that is unconditionally elevated; Conditional, when non-nil,
-// is consulted for a verb elevated only under specific params (e.g.
-// "plugin.add" is elevated only when it requests a process-tier or
-// grant-expansion change) — see elevationTable's per-entry comments for
-// which spec clause each Conditional encodes.
-type verbRule struct {
-	method      string
-	always      bool
-	conditional func(params json.RawMessage) bool
-}
-
 // The three helpers below back the conditional rules in elevationTable.
 // All of them FAIL CLOSED: when a helper cannot prove that a request is the
 // harmless case, it reports true and the verb is elevated.
@@ -66,12 +54,27 @@ type verbRule struct {
 // unparseableParams reports whether raw cannot be read as a JSON object.
 // Callers treat this as "elevate": params we cannot read cannot be shown to
 // be a narrowing.
+//
+// Keys are folded to lower case, because a handler decoding into a struct
+// matches field names case-insensitively: {"Direction":"loosen"} reaches a
+// handler as direction=loosen while an exact-case lookup sees no direction
+// key at all. Two keys that fold together are ambiguous (the decoder keeps
+// the last one, a reader of this map would keep another), so they are
+// unreadable too and elevate.
 func unparseableParams(raw json.RawMessage) (map[string]json.RawMessage, bool) {
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return nil, true
 	}
-	return m, false
+	folded := make(map[string]json.RawMessage, len(m))
+	for k, v := range m {
+		lower := strings.ToLower(k)
+		if _, dup := folded[lower]; dup {
+			return nil, true
+		}
+		folded[lower] = v
+	}
+	return folded, false
 }
 
 // hasJSONField reports whether raw contains key with any non-null value.
@@ -140,36 +143,46 @@ func jsonFieldEnables(raw json.RawMessage, key string) bool {
 	return true
 }
 
-// elevationTable is the authoritative elevated-verb table, transcribed from
-// 06-FORGE-SPEC.md's numbered item 14 (cited by this ticket's contract and
-// by 15-T0-RULINGS-R14.md as "§5.14"), amended by R-14.48 for
-// enable_remote_runtime. elevation_test.go's TestElevationTableMatchesSpec
-// independently re-transcribes the same spec prose into a second data
-// structure and asserts set-equality against this table's method names, so
-// a typo or omission here fails that test rather than merely reflecting
-// itself.
-var elevationTable = []verbRule{
-	{method: "vault.get", always: true},
-	{method: "vault.rotate", always: true},
-	{method: "approval.grant", always: true},
-	{method: "standing_grant.create", always: true},
-	{method: "standing_grant.change", always: true},
-	{method: "backup.create", always: true},
-	{method: "backup.export", always: true},
-	{method: "backup.import", always: true},
-	{method: "backup.restore", always: true},
-	{method: "backup.key_export", always: true},
-	{method: "backup.key_import", always: true},
-	// plugin.add is elevated only when it requests a process-tier change
-	// or a grant expansion, per §5.14's parenthetical.
-	{method: "plugin.add", conditional: func(p json.RawMessage) bool {
-		return hasJSONField(p, "process_tier") || hasJSONField(p, "grant_expand")
-	}},
-	{method: "perms.grant", always: true},
-	{method: "perms.revoke", always: true},
-	{method: "node.enroll", always: true},
-	{method: "node.remove", always: true},
-	{method: "node.upgrade", always: true},
+// specElevationRows are the static rows of the elevated-verb table,
+// transcribed from 06-FORGE-SPEC.md's numbered item 14 (cited by this
+// ticket's contract and by 15-T0-RULINGS-R14.md as "§5.14"), amended by
+// R-14.48 for enable_remote_runtime and by the P1-SEC rows below.
+// elevation_test.go's TestElevationTableMatchesSpec independently
+// re-transcribes the same spec prose into a second data structure and asserts
+// set-equality against the table's method names, so a typo or omission here
+// fails that test rather than merely reflecting itself.
+//
+// They are registered through RegisterElevatedVerb by a package-level
+// variable initialiser (see below), which Go completes before any init
+// function of this package or of an importer runs: a verb registered from an
+// init therefore always lands after these rows and before the table seals.
+var specElevationRows = []struct {
+	method string
+	rule   ElevationRule
+}{
+	{"vault.get", ElevationRule{Always: true}},
+	{"vault.rotate", ElevationRule{Always: true}},
+	{"approval.grant", ElevationRule{Always: true}},
+	{"standing_grant.create", ElevationRule{Always: true}},
+	{"standing_grant.change", ElevationRule{Always: true}},
+	{"backup.create", ElevationRule{Always: true}},
+	{"backup.export", ElevationRule{Always: true}},
+	{"backup.import", ElevationRule{Always: true}},
+	{"backup.restore", ElevationRule{Always: true}},
+	{"backup.key_export", ElevationRule{Always: true}},
+	{"backup.key_import", ElevationRule{Always: true}},
+	// plugin.add and plugin.update are always elevated. §5.14 elevated plugin
+	// add only when the request carried process_tier or grant_expand, but the
+	// CLI never sends either key, so the conditional left the verb ungated
+	// for every real caller. A plugin install changes what runs on the
+	// machine; the prompt is the point.
+	{"plugin.add", ElevationRule{Always: true}},
+	{"plugin.update", ElevationRule{Always: true}},
+	{"perms.grant", ElevationRule{Always: true}},
+	{"perms.revoke", ElevationRule{Always: true}},
+	{"node.enroll", ElevationRule{Always: true}},
+	{"node.remove", ElevationRule{Always: true}},
+	{"node.upgrade", ElevationRule{Always: true}},
 	// sync.conflicts_resolve is elevated when the resolution DISCARDS the
 	// server-primary side, per §5.14 ("when discarding server-primary").
 	//
@@ -180,38 +193,54 @@ var elevationTable = []verbRule{
 	// through ungated. It also read a params field (`resolution`) that no
 	// caller sends: internal/sync's surface takes `keep`, so even the
 	// inverted rule never matched a real request (R-14.273).
-	{method: "sync.conflicts_resolve", conditional: discardsServerPrimary},
+	{"sync.conflicts_resolve", ElevationRule{Conditional: discardsServerPrimary}},
 	// policy/sensitivity changes are elevated only when they LOOSEN
 	// (widen) the resolved value, per §5.14 + §5 item 16's "widening a
 	// resolved tier is a LOOSENING (elevated verb); narrowing is always
 	// allowed."
-	{method: "policy.set", conditional: func(p json.RawMessage) bool {
+	{"policy.set", ElevationRule{Conditional: func(p json.RawMessage) bool {
 		return jsonFieldEquals(p, "direction", "loosen")
-	}},
-	{method: "sensitivity.set", conditional: func(p json.RawMessage) bool {
+	}}},
+	{"sensitivity.set", ElevationRule{Conditional: func(p json.RawMessage) bool {
 		return jsonFieldEquals(p, "direction", "loosen")
-	}},
-	{method: "elevation.set_allow_remote", conditional: func(p json.RawMessage) bool {
+	}}},
+	{"elevation.set_allow_remote", ElevationRule{Conditional: func(p json.RawMessage) bool {
 		return jsonFieldEnables(p, "allow_remote") || jsonFieldEnables(p, "enable")
-	}},
+	}}},
 	// R-14.48: enabling [plugins].enable_remote_runtime is elevated.
-	{method: "plugins.set_enable_remote_runtime", conditional: func(p json.RawMessage) bool {
+	{"plugins.set_enable_remote_runtime", ElevationRule{Conditional: func(p json.RawMessage) bool {
 		return jsonFieldEnables(p, "enable_remote_runtime") || jsonFieldEnables(p, "enable")
-	}},
-	{method: "uninstall.purge_data", always: true},
+	}}},
+	{"uninstall.purge_data", ElevationRule{Always: true}},
+	// config.accept_loosening (P1-SEC-04) and policy.authorize (P1-SEC-10)
+	// are registered here, so this file is the one writer of the static
+	// table. Both stay always-elevated: a handler that decides server-side
+	// whether a request loosens may narrow its row; a client-declared flag
+	// never does.
+	{"config.accept_loosening", ElevationRule{Always: true}},
+	{"policy.authorize", ElevationRule{Always: true}},
 }
 
-// IsElevated reports whether method (with the given raw params) is an
-// elevated verb per elevationTable.
-func IsElevated(method string, params json.RawMessage) bool {
-	for _, rule := range elevationTable {
-		if rule.method != method {
-			continue
-		}
-		if rule.always {
-			return true
-		}
-		return rule.conditional != nil && rule.conditional(params)
+// registerSpecElevationRows fills the table from specElevationRows. It is the
+// initialiser of a package-level variable so it runs before every init.
+func registerSpecElevationRows() struct{} {
+	for _, r := range specElevationRows {
+		RegisterElevatedVerb(r.method, r.rule)
 	}
-	return false
+	return struct{}{}
+}
+
+var _ = registerSpecElevationRows()
+
+// IsElevated reports whether method (with the given raw params) is an
+// elevated verb per the elevation table. Reading the table seals it.
+func IsElevated(method string, params json.RawMessage) bool {
+	rule, ok := lookupElevationRule(method)
+	if !ok {
+		return false
+	}
+	if rule.always {
+		return true
+	}
+	return rule.conditional != nil && rule.conditional(params)
 }
