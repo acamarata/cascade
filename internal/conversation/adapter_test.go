@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -36,7 +37,10 @@ func dispatch(t *testing.T, registry *rpc.Registry, method string, params any) (
 		}
 		raw = b
 	}
-	return registry.Dispatch(context.Background(), &rpc.Request{JSONRPC: "2.0", Method: method, Params: raw})
+	// The owner CLI's transport-verified Caller: chat.create_thread refuses a
+	// call with no caller identity.
+	ctx := principal.WithCaller(context.Background(), principal.Caller{OwnerCLI: true})
+	return registry.Dispatch(ctx, &rpc.Request{JSONRPC: "2.0", Method: method, Params: raw})
 }
 
 func newTestAdapter(t *testing.T) (*Adapter, *rpc.Registry, *fakeBus) {
@@ -50,7 +54,8 @@ func newTestAdapter(t *testing.T) (*Adapter, *rpc.Registry, *fakeBus) {
 }
 
 func TestAdapter_AppendGetList_RoundTrip(t *testing.T) {
-	_, registry, bus := newTestAdapter(t)
+	adapter, registry, bus := newTestAdapter(t)
+	seedNamedThreads(t, adapter.store, "th1")
 
 	appendResult, errObj := dispatch(t, registry, MethodAppendTurn, appendTurnParams{
 		ThreadID: "th1", Role: "user",
@@ -103,6 +108,7 @@ func TestAdapter_AppendGetList_RoundTrip(t *testing.T) {
 //     adapter's own request shape happens not to expose it.
 func TestAdapter_CannotMutateHistory(t *testing.T) {
 	store := newTestStore(t)
+	seedNamedThreads(t, store, "th1")
 	bus := &fakeBus{}
 	adapter := NewAdapter(store, bus, passthroughSubst{}, newAdapterTestClock(), "")
 	registry := rpc.NewRegistry()
@@ -154,7 +160,8 @@ func TestAdapter_MalformedPayload_Refused(t *testing.T) {
 }
 
 func TestAdapter_MalformedPayload_MoreShapes(t *testing.T) {
-	_, registry, _ := newTestAdapter(t)
+	adapter, registry, _ := newTestAdapter(t)
+	seedNamedThreads(t, adapter.store, "th1")
 
 	// chat.append_turn: empty params.
 	if _, errObj := registry.Dispatch(context.Background(), &rpc.Request{
@@ -206,7 +213,8 @@ func TestAdapter_MalformedPayload_MoreShapes(t *testing.T) {
 }
 
 func TestAdapter_GetThread_MultiTurnWithSegments(t *testing.T) {
-	_, registry, _ := newTestAdapter(t)
+	adapter, registry, _ := newTestAdapter(t)
+	seedNamedThreads(t, adapter.store, "th1")
 	for i := 0; i < 2; i++ {
 		if _, errObj := dispatch(t, registry, MethodAppendTurn, appendTurnParams{
 			ThreadID: "th1", Role: "user",
@@ -238,6 +246,7 @@ func TestAdapter_GetThread_NotFound(t *testing.T) {
 // turn, but publishes nothing.
 func TestAdapter_EmbeddedMode_AppendsWithoutSSE(t *testing.T) {
 	store := newTestStore(t)
+	seedNamedThreads(t, store, "th1")
 	bus := &fakeBus{failWith: cascade.New(cascade.KindUnavailable, "must never be reached in embedded mode")}
 	adapter := NewAdapter(store, bus, passthroughSubst{}, newAdapterTestClock(), ModeEmbedded)
 	registry := rpc.NewRegistry()
@@ -268,6 +277,7 @@ func TestAdapter_EmbeddedMode_AppendsWithoutSSE(t *testing.T) {
 // never echoed.
 func TestAdapter_SSEWriteFailure_Propagates(t *testing.T) {
 	store := newTestStore(t)
+	seedNamedThreads(t, store, "th1")
 	bus := &fakeBus{failWith: cascade.New(cascade.KindUnavailable, "socket write failed")}
 	adapter := NewAdapter(store, bus, passthroughSubst{}, newAdapterTestClock(), "")
 	registry := rpc.NewRegistry()

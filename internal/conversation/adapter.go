@@ -33,6 +33,9 @@ const (
 	// MethodSearch is S-44.T3's FTS5 search, reachable over the wire.
 	// Without it SearchTurns is a Go method no running program can call.
 	MethodSearch = "chat.search"
+	// MethodResume is V/S-47.T2's bring-into-chat resume method. See
+	// adapter_resume.go for the wire shapes and handleResume.
+	MethodResume = "chat.resume"
 )
 
 // Adapter binds T1's Store to the D/S-06.T3 method registry and the SSE
@@ -46,6 +49,7 @@ type Adapter struct {
 	journal JournalStore  // optional; nil means "journal.go's write path is not wired here" -- see SetJournal
 	scrub   ScrubPipeline // optional; nil is scrub.go's documented passthrough -- see SetScrub
 	topics  TopicObserver // optional; nil means "no topic engine composed" -- see SetTopicObserver (adapter_topics.go)
+	resume  ResumeHandler // optional; nil means "no resume service composed" -- see SetResume (adapter_resume.go)
 }
 
 // NewAdapter returns an Adapter dispatching to store, mirroring appended
@@ -77,6 +81,7 @@ func (a *Adapter) RegisterHandlers(registry *rpc.Registry) {
 	registry.Register(MethodGetThread, mapped(a.scopedGetThread))
 	registry.Register(MethodListThreads, mapped(a.scopedListThreads))
 	registry.Register(MethodSearch, mapped(a.scopedSearch))
+	registry.Register(MethodResume, mapped(a.handleResume))             // adapter_resume.go
 	registry.Register(MethodCreateThread, mapped(a.handleCreateThread)) // adapter_createthread.go
 }
 
@@ -114,12 +119,12 @@ func (a *Adapter) handleAppendTurn(ctx context.Context, raw json.RawMessage) (an
 	if err != nil {
 		return nil, ErrMalformedTurnPayload
 	}
-	params.ThreadID, err = a.scopedAppendThread(ctx, params)
+	creating := params.ThreadID == ""
+	params.ThreadID, err = a.scopedAppendThread(ctx, params) // scope_attr.go -> resolveAppendThread; writes only the minted id's attribution row
 	if err != nil {
 		return nil, err
 	}
-
-	existing, err := a.store.ListTurns(ctx, params.ThreadID)
+	existing, err := a.existingTurns(ctx, params.ThreadID, creating)
 	if err != nil {
 		return nil, err
 	}
@@ -127,30 +132,12 @@ func (a *Adapter) handleAppendTurn(ctx context.Context, raw json.RawMessage) (an
 	now := a.clock.Now().Unix()
 	turn := newAppendedTurn(params, role, seq, now)
 
-	segments, err := decodeSegments(params.Segments, turn.ID, now)
+	segments, err := a.buildTurnSegments(ctx, params, turn.ID, now)
 	if err != nil {
 		return nil, err
 	}
-	if segments, err = a.scrubSegments(ctx, segments); err != nil { // S-44.T1: before journal/store/SSE
+	if err := a.commitTurn(ctx, turn, segments, creating, params.PrivacyMode); err != nil {
 		return nil, err
-	}
-
-	// With a JournalStore (SetJournal) the TurnAppend intent is journaled
-	// BEFORE the store write: no partial commit without a journal record.
-	// a.journal is nil by default, the original no-journal path.
-	if a.journal != nil {
-		if err := AppendTurnJournaled(ctx, a.journal, a.store, turn, segments); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := a.store.AppendTurn(ctx, turn); err != nil {
-			return nil, err
-		}
-		for _, seg := range segments {
-			if err := a.store.AppendSegment(ctx, seg); err != nil {
-				return nil, err
-			}
-		}
 	}
 
 	if _, err := emitTurnAppended(ctx, a.bus, a.subst, a.mode, turn, segments); err != nil {

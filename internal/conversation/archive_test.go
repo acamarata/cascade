@@ -97,6 +97,7 @@ func TestArchiveThread_UnknownThreadNotFound(t *testing.T) {
 // TestAdapterArchive_RoundTrip drives the Go-level Adapter surface.
 func TestAdapterArchive_RoundTrip(t *testing.T) {
 	adapter, registry, _ := newTestAdapter(t)
+	seedNamedThreads(t, adapter.store, "th-adapter-arch")
 	if _, errObj := dispatch(t, registry, MethodAppendTurn, appendTurnParams{
 		ThreadID: "th-adapter-arch", Role: "user", Segments: []appendSegmentWire{{Kind: "text", Content: "hi"}},
 	}); errObj != nil {

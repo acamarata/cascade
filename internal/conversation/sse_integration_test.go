@@ -123,6 +123,7 @@ func startEchoDaemonIT(t *testing.T) string {
 
 	bus := events.New(storetest.NewMemStore(), clock)
 	store := newTestStore(t)
+	seedNamedThreads(t, store, "th1")
 	adapter := NewAdapter(store, bus, passthroughSubst{}, clock, "")
 	registry := rpc.NewRegistry()
 	adapter.RegisterHandlers(registry)

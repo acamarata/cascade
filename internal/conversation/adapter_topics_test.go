@@ -58,6 +58,7 @@ func dispatchAppend(t *testing.T, registry *rpc.Registry, threadID, content stri
 
 func TestAdapter_TopicObserver_ObservedOnEveryAppend(t *testing.T) {
 	store := newTestStore(t)
+	seedNamedThreads(t, store, "th1")
 	bus := &fakeBus{}
 	adapter := NewAdapter(store, bus, passthroughSubst{}, newAdapterTestClock(), "")
 	observer := &fakeTopicObserver{}
@@ -89,6 +90,7 @@ func TestAdapter_TopicObserver_ObservedOnEveryAppend(t *testing.T) {
 
 func TestAdapter_TopicObserver_WarningSurfacesOnResult(t *testing.T) {
 	store := newTestStore(t)
+	seedNamedThreads(t, store, "th1")
 	bus := &fakeBus{}
 	adapter := NewAdapter(store, bus, passthroughSubst{}, newAdapterTestClock(), "")
 	adapter.SetTopicObserver(&fakeTopicObserver{warning: "topics: something to report"})
@@ -107,6 +109,7 @@ func TestAdapter_TopicObserver_WarningSurfacesOnResult(t *testing.T) {
 // not disturb.
 func TestAdapter_TopicObserver_NilIsTheDefault(t *testing.T) {
 	store := newTestStore(t)
+	seedNamedThreads(t, store, "th1")
 	bus := &fakeBus{}
 	adapter := NewAdapter(store, bus, passthroughSubst{}, newAdapterTestClock(), "")
 	registry := rpc.NewRegistry()

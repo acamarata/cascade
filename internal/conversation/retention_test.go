@@ -205,6 +205,7 @@ func TestRetentionRegistersAsASchedulerJob(t *testing.T) {
 // TestRetentionAdapterRoundTrip drives the Go-level Adapter surface.
 func TestRetentionAdapterRoundTrip(t *testing.T) {
 	adapter, registry, _ := newTestAdapter(t)
+	seedNamedThreads(t, adapter.store, "th-adapter-prune")
 	for i := 0; i < 3; i++ {
 		if _, errObj := dispatch(t, registry, MethodAppendTurn, appendTurnParams{
 			ThreadID: "th-adapter-prune", Role: "user", Segments: []appendSegmentWire{{Kind: "text", Content: "hi"}},

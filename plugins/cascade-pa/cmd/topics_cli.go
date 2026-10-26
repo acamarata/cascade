@@ -240,3 +240,36 @@ func writeThreadSummaryText(cc *cobra.Command, s ThreadSummary) error {
 	_, err := cc.OutOrStdout().Write([]byte(b.String()))
 	return err
 }
+
+// maybeWriteThreadSummary is chat.go's runChat's own "--thread <slug>
+// with no prompt is open mode" step, factored out under Art.10.3's
+// 50-line function cap. done=true means runChat's own caller should
+// return immediately (the summary was written, --json or non-interactive
+// parity); done=false means "not applicable, or a real TTY with neither
+// flag" -- runChat continues into the TUI below with opts.thread already
+// set. Non-interactive parity (06-FORGE-SPEC §5.8): CASCADE_NO_INPUT=1 or
+// the absence of a real TTY prints the same summary --json would, as
+// plain text, and exits 0 -- only a real TTY with neither flag falls
+// through to the TUI.
+func maybeWriteThreadSummary(ctx context.Context, cc *cobra.Command, opts chatOptions, lookupEnv envLookup) (done bool, err error) {
+	// A thread this session created (threadMinted: a resume on a fresh
+	// session) is not an operator naming an existing thread to open.
+	if opts.threadMinted || opts.thread == "" || opts.prompt != "" {
+		return false, nil
+	}
+	summary, err := openThread(ctx, opts.thread)
+	if err != nil {
+		return false, err
+	}
+	if opts.json {
+		return true, writeThreadSummary(cc, summary)
+	}
+	noInput := false
+	if v, ok := lookupEnv("CASCADE_NO_INPUT"); ok && v == "1" {
+		noInput = true
+	}
+	if noInput || !isRealTTY(cc.InOrStdin()) {
+		return true, writeThreadSummaryText(cc, summary)
+	}
+	return false, nil
+}

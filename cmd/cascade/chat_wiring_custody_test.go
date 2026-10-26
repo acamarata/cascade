@@ -180,9 +180,8 @@ func TestChatWiringVaultsThroughTheInjectedCustody(t *testing.T) {
 	}
 
 	params, err := json.Marshal(map[string]any{
-		"thread_id": "th-scrub-custody",
-		"role":      "user",
-		"segments":  []map[string]string{{"kind": "text", "content": input}},
+		"role":     "user",
+		"segments": []map[string]string{{"kind": "text", "content": input}},
 	})
 	if err != nil {
 		t.Fatalf("marshal params: %v", err)

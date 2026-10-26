@@ -23,6 +23,7 @@ import (
 	"github.com/acamarata/cascade/internal/conversation"
 	"github.com/acamarata/cascade/internal/conversation/topics"
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/internal/storage/storetest"
@@ -153,14 +154,32 @@ func newChatTopicsFixture(t *testing.T, failAfter int) *chatTopicsFixture {
 		t.Fatalf("topics.NewRPCHandlers: %v", err)
 	}
 	topicsHandlers.RegisterHandlers(registry)
+	applyThreadScopeSchema(ctx, t, registry)
 
 	return &chatTopicsFixture{t: t, clock: clock, store: store, bus: bus, registry: registry, engine: engine}
+}
+
+// applyThreadScopeSchema dispatches chat.create_thread as the owner CLI, which
+// applies the thread_scope schema on the fixture database; Store.CreateThread
+// needs that schema to seed a named thread (appendTurn).
+func applyThreadScopeSchema(ctx context.Context, t *testing.T, registry *rpc.Registry) {
+	t.Helper()
+	ownerCtx := principal.WithCaller(ctx, principal.Caller{OwnerCLI: true})
+	if _, errObj := registry.Dispatch(ownerCtx, &rpc.Request{JSONRPC: "2.0", Method: "chat.create_thread",
+		Params: json.RawMessage(`{"privacy_mode":"restricted"}`)}); errObj != nil {
+		t.Fatalf("chat.create_thread (scope schema): %+v", errObj)
+	}
 }
 
 // appendTurn dispatches chat.append_turn through the real registry and
 // decodes its result, failing the test on any RPC error.
 func (f *chatTopicsFixture) appendTurn(threadID, text string) appendTurnResultForTest {
 	f.t.Helper()
+	if _, ok, _ := f.store.GetThread(context.Background(), threadID); !ok {
+		if err := f.store.CreateThread(context.Background(), threadID, provider.SensitivityRestricted, "owner", f.clock.Now().Unix()); err != nil {
+			f.t.Fatalf("create thread %s: %v", threadID, err)
+		}
+	}
 	params, _ := json.Marshal(map[string]any{
 		"thread_id": threadID, "role": "user",
 		"segments": []map[string]string{{"kind": "text", "content": text}},

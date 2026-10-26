@@ -24,6 +24,7 @@ import (
 // the wiring is not a no-op.
 func TestAdapter_SetJournal_RoutesThroughJournaledPath(t *testing.T) {
 	store := newTestStore(t)
+	seedNamedThreads(t, store, "th1")
 	bus := &fakeBus{}
 	adapter := NewAdapter(store, bus, passthroughSubst{}, newAdapterTestClock(), "")
 	js := newTestJournal(t)
@@ -54,6 +55,7 @@ func TestAdapter_SetJournal_RoutesThroughJournaledPath(t *testing.T) {
 // showing the assertion above is not vacuously true.
 func TestAdapter_SetJournal_WiringCanFail(t *testing.T) {
 	store := newTestStore(t)
+	seedNamedThreads(t, store, "th1")
 	bus := &fakeBus{}
 	adapter := NewAdapter(store, bus, passthroughSubst{}, newAdapterTestClock(), "") // SetJournal deliberately NOT called
 	js := newTestJournal(t)

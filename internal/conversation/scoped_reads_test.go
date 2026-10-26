@@ -110,6 +110,9 @@ func (f *chatFixture) appendAs(ctx context.Context, t *testing.T, threadID, text
 	t.Helper()
 	params := map[string]any{"role": "user", "segments": []map[string]string{{"kind": "text", "content": text}}}
 	if threadID != "" {
+		if _, ok, _ := f.store.GetThread(ctx, threadID); !ok {
+			f.seedOwnerThread(t, threadID) // chat.append_turn no longer creates a caller-named thread
+		}
 		params["thread_id"] = threadID
 	}
 	out, eo := f.call(ctx, "chat.append_turn", params)

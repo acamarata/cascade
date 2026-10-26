@@ -104,6 +104,14 @@ var ErrJournalDecodeFailed = cascade.New(cascade.KindIntegrity, "conversation: j
 // lets Resume tell "attempted but unconfirmed" apart from "completed"
 // (Resume only replays KindAck entries).
 func AppendTurnJournaled(ctx context.Context, js JournalStore, store Store, turn Turn, segments []Segment) error {
+	return appendJournaledWith(ctx, js, turn, segments, func() error { return writeTurn(ctx, store, turn, segments) })
+}
+
+// appendJournaledWith is AppendTurnJournaled's intent -> write -> ack
+// sequence around an arbitrary store write, so a caller whose write is not
+// the plain AppendTurn/AppendSegment pair (the adapter's first-turn-with-
+// marker transaction) keeps the same journal contract.
+func appendJournaledWith(ctx context.Context, js JournalStore, turn Turn, segments []Segment, write func() error) error {
 	payload, err := json.Marshal(journalPayload{Type: JournalEntryTurnAppend, Turn: &turn, Segments: segments, Provenance: turn.Provenance})
 	if err != nil {
 		return cascade.Wrap(cascade.KindInternal, err, "conversation: marshal journal payload")
@@ -111,6 +119,17 @@ func AppendTurnJournaled(ctx context.Context, js JournalStore, store Store, turn
 	if _, err := js.Append(ctx, turn.ThreadID, journal.KindIntent, turn.ID, payload); err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "conversation: journal intent write failed; no store write attempted")
 	}
+	if err := write(); err != nil {
+		return err
+	}
+	if _, err := js.Append(ctx, turn.ThreadID, journal.KindAck, turn.ID, payload); err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "conversation: journal ack write failed after store commit")
+	}
+	return nil
+}
+
+// writeTurn is the plain store write: turn, then each segment in order.
+func writeTurn(ctx context.Context, store Store, turn Turn, segments []Segment) error {
 	if err := store.AppendTurn(ctx, turn); err != nil {
 		return err
 	}
@@ -118,9 +137,6 @@ func AppendTurnJournaled(ctx context.Context, js JournalStore, store Store, turn
 		if err := store.AppendSegment(ctx, seg); err != nil {
 			return err
 		}
-	}
-	if _, err := js.Append(ctx, turn.ThreadID, journal.KindAck, turn.ID, payload); err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "conversation: journal ack write failed after store commit")
 	}
 	return nil
 }

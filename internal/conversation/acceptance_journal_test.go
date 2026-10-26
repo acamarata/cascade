@@ -132,6 +132,7 @@ func acceptanceJournalAssertRecovered(t *testing.T, registry *rpc.Registry, firs
 func TestAcceptanceJournalResume(t *testing.T) {
 	js := newTestJournal(t)
 	preKillStore := newTestStore(t)
+	seedNamedThreads(t, preKillStore, acceptanceJournalThread)
 	preKillRegistry := newAcceptanceJournaledAdapter(preKillStore, js)
 	firstTurnID, secondTurnID := acceptanceJournalPreKillCommit(t, preKillRegistry)
 

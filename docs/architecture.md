@@ -537,3 +537,117 @@ this method changed `IndexedRecord`'s effective field set requirements
 `ProjectionVersion` moved from 1 to 2 — a version a stored row was written
 under is a version whose rows must be rebuilt, never compared byte-for-byte
 against a different layout's assumptions.
+
+## Bring-into-chat resume (`chat.resume`, `internal/conversation/resume*.go`)
+
+`chat.resume` (P1-E22-W5-S47-T2) composes a recorded conversation thread
+into a chat session as the leading block of the session's next turn.
+`cascade chat --resume-topic`/`--resume-query` and the TUI's `/resume`
+command reach it through one client call (`resumeIntoSession`,
+`plugins/cascade-pa/cmd/resume_session.go`).
+
+### Source: topic id or query
+
+A U/S-45 topic IS a `conversation.Thread` (`internal/conversation/topics`
+wraps this package's `Store` and imports it, so the reverse import would
+cycle): a topic id is a thread id, used directly. Unknown ids are
+`KindNotFound`.
+
+The query path dispatches `recall.what` in-process through the shared
+`*rpc.Registry` (the `ResumeQuerier` seam; `internal/conversation` never
+imports `internal/retrieval`) with the query and the caller's cwd and NO
+domains parameter (`WhatParams` has none). It keeps the rows whose `Domain`
+is `conversation`, ordered by rank and de-duplicated; each row's `Path` is
+the owning thread id, and each thread is checked at its own tier (an
+absent marker is restricted). File and memory rows are never composed or
+joined into the block's tier. While `recall.what` reports its conversation
+domain unavailable (`Errors["conversation"]`, until P1-E20-W5-S91-T3
+restores the leg) the query path answers `KindUnavailable`, even when
+other domains answered; no conversation row is `KindNotFound`; a `Path`
+that names no stored thread refuses the whole resume with nothing composed.
+The topic and query paths then share one rule for every source thread.
+
+Scope: `chat.resume` is owner-view. The owner resumes between any threads;
+a principal resumes only between threads attributed to its own scope
+(`CallerThreadView`, `scope_attr.go`). A foreign `session_thread_id` is
+`KindPermissionDenied`; a foreign source thread reads as `KindNotFound`.
+
+### Composition and budget
+
+`Resumer.Resume` builds one `SlotKindHistory` slot per turn, newest first,
+and calls U/S-46.T1's `context.Composer` (`Compose(ctx, budget, slots)` →
+`ComposedResult`) with the production `provider.NaiveTokenCounter`. Over
+budget, the Composer trims or drops the oldest slots and records a
+per-domain `BudgetTrimEvent`; the result carries one fixed, content-free
+line per event (`trimmed[]`), which the CLI prints as `warning:` lines on
+stderr. The session opens rather than failing.
+
+### Session thread: `chat.create_thread`
+
+A resume needs a target thread, and thread ids are minted daemon-side
+only (R-14.285). `chat.create_thread {privacy_mode}` (required, one of the
+four tier names) mints the id and writes the `conversation_thread` row and
+its `conversation_thread_privacy` marker in ONE transaction. A new session
+calls it with its flag tier (`restricted` when no flag is given) before
+`chat.resume`, so the target tier is always a stored marker; `chat.resume`
+refuses a `session_thread_id` that names no thread. `--thread X` is never
+switched.
+
+Markers are WRITE-ONCE (`setThreadPrivacyTx`): a repeat of the same tier
+is a no-op, a different tier is `KindConflict` and nothing changes.
+`chat.append_turn` accepts `privacy_mode` only when it creates a thread
+(no `thread_id`); the daemon then writes the thread, its marker (an
+explicit `restricted` when the request names none), the turn and its
+segments in one transaction (`Store.AppendFirstTurn`), after every refusal
+check, so a refused append leaves no marker. A caller-named `thread_id`
+must already exist (`KindNotFound` otherwise) and may not carry a
+`privacy_mode` (`KindInvalidInput`).
+
+### Privacy: source versus target
+
+The TARGET tier is `Store.ThreadPrivacy(session_thread_id)`. The SOURCE
+tier is the join (`provider.JoinSensitivity`) of the resumed threads'
+markers. `Resumer` refuses the whole resume
+with `ErrResumePrivacyBlocked` (`KindPolicyDenied`, naming both tiers)
+when `source.MoreRestrictiveThan(target)` under the order `local-only` >
+`restricted` > `internal` > `public`; nothing is returned and nothing is
+appended. An equal or less restrictive source is admitted. The strict
+order also keeps restricted content out of an internal thread, whose
+egress classes (the Telegram bridge admits internal) would otherwise carry
+it off the machine.
+
+RESIDUAL (recorded): the daemon has no session binding, so a same-UID
+local caller on the 0600 socket names its own target; it can already read
+every thread through `chat.get_thread`, and external egress of the block
+stays guarded at the model call by the S-44.T2 lane filter on the thread
+actually used plus the substitution below.
+
+### Egress
+
+The composed text always transits the H/S-16.T1 substitution pass through
+`EgressClassConversationResume` (`"conversation-resume"`,
+`internal/hooks/egress/classes.go`), which admits all four tiers:
+placement is decided by the rule above, never by the class. The block
+transits the process firewall's engine (`egress.ProcessEngine`), at the
+joined source tier. A substitution
+failure or a missing substitutor returns nothing
+(`ErrResumeSubstitutionFailed`/`ErrResumeSubstitutionUnavailable`).
+
+### Delivery: `leading_context` on the next append
+
+`chat.resume` performs no store write and is idempotent. Its result is
+`{thread_id, leading_context, tokens, trimmed[]}`. The client holds the
+block and sends it once as `leading_context` on its next
+`chat.append_turn` for the session thread; the daemon stores it as
+segment 0 (`SegmentText`) of that turn, ahead of the caller's segments.
+Printing the block is not delivery.
+
+### Composition root
+
+`cmd/cascade/chat_resume_wiring.go`'s `wireChatResume` (called once from
+`wireChatHandlers`) builds the `Resumer` over the daemon's
+`conversation.Store`, the shared registry as `ResumeQuerier`, a real
+Composer and a substitutor over the process firewall's engine, resolved
+per call (no private engine);
+`Adapter.SetResume` binds it, and an adapter with no resume handler
+answers `chat.resume` with `KindUnavailable`.

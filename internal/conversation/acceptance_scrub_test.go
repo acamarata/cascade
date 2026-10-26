@@ -72,6 +72,7 @@ func acceptanceScrubSetup(t *testing.T) (db *sql.DB, bus *events.Bus, turnID, se
 	sentinel = golden.Canaries[0] // "sk-Canary0000AAAA1111BBBB2222CCCC3333" -- the named failing input.
 
 	store, storeDB := newTestStoreWithDB(t)
+	seedNamedThreads(t, store, "th-accept-scrub")
 	realBus := events.New(storetest.NewMemStore(), runtime.NewSystemClock())
 	pipeline, _, dir := newTestScrubPipeline(t, realBus)
 

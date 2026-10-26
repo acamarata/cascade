@@ -41,6 +41,7 @@ func appendMarked(t *testing.T, reg *rpc.Registry, thread, text, origin string, 
 
 func TestAppendTurn_PersistsUntrustedOriginMarker(t *testing.T) {
 	adapter, reg, _ := newTestAdapter(t)
+	seedNamedThreads(t, adapter.store, "th-o")
 	if e := appendMarked(t, reg, "th-o", "from the bridge", OriginBridgeTelegram, true); e != nil {
 		t.Fatalf("marked append errored: %+v", e)
 	}
@@ -65,6 +66,7 @@ func TestAppendTurn_PersistsUntrustedOriginMarker(t *testing.T) {
 		}
 	}
 	// A local untrusted append (no origin) is accepted and stored untrusted.
+	seedNamedThreads(t, adapter.store, "th-u")
 	if e := appendMarked(t, reg, "th-u", "pasted", OriginLocal, true); e != nil {
 		t.Fatalf("local untrusted append errored: %+v", e)
 	}
@@ -108,6 +110,7 @@ func TestOriginMarkerSurvivesJournalResume(t *testing.T) {
 	adapter.SetJournal(js)
 	reg := rpc.NewRegistry()
 	adapter.RegisterHandlers(reg)
+	seedNamedThreads(t, store, "th-j")
 	if e := appendMarked(t, reg, "th-j", "bridge turn", OriginBridgeWhatsApp, true); e != nil {
 		t.Fatalf("bridge append: %+v", e)
 	}
@@ -132,7 +135,8 @@ func TestOriginMarkerSurvivesJournalResume(t *testing.T) {
 }
 
 func TestSearchTurns_CarriesUntrustedOriginMarker(t *testing.T) {
-	_, reg, _ := newTestAdapter(t)
+	adapter, reg, _ := newTestAdapter(t)
+	seedNamedThreads(t, adapter.store, "th-s1", "th-s2")
 	if e := appendMarked(t, reg, "th-s1", "quokka from the bridge", OriginBridgeTelegram, true); e != nil {
 		t.Fatalf("bridge append: %+v", e)
 	}
@@ -186,6 +190,7 @@ func TestAppendTurn_LocalAppendWritesNoOriginRow(t *testing.T) {
 	store, db := newTestStoreWithDB(t)
 	reg := rpc.NewRegistry()
 	NewAdapter(store, &fakeBus{}, passthroughSubst{}, newAdapterTestClock(), "").RegisterHandlers(reg)
+	seedNamedThreads(t, store, "th-l")
 	if e := appendMarked(t, reg, "th-l", "just me", OriginLocal, false); e != nil {
 		t.Fatalf("local append: %+v", e)
 	}

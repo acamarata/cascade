@@ -182,6 +182,16 @@ func wireChatTopics(registry *rpc.Registry, adapter *conversation.Adapter, store
 		return err
 	}
 	topicsHandlers.RegisterHandlers(registry)
+	// chat.resume (V/S-47.T2 D-composition): wired before
+	// RegisterHandlers' own chat.resume registration is ever dispatched,
+	// so a live request always finds a.resume non-nil -- see
+	// chat_resume_wiring.go's own header for why this composition lives
+	// in a sibling file rather than inline here.
+	resumeSvc, err := wireChatResume(store, registry)
+	if err != nil {
+		return err
+	}
+	adapter.SetResume(resumeSvc)
 	return nil
 }
 

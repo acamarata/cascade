@@ -59,6 +59,33 @@ reaches an error's message text.
   captured fresh on every CI run rather than checked in once and drifting
   from the code that produces it.
 
+## Resume fixture provenance (P1-E22-W5-S47-T2)
+
+- **Capture tool:** the repository's own real counterparts, as in the SSE
+  section above. `resume_integration_test.go`'s
+  `TestResume_RealSocket_FullFlow` runs the production daemon entry point
+  (`internal/daemon.Run`) on a real unix socket and POSTs real JSON-RPC
+  calls: `chat.create_thread` (topic thread, `internal`),
+  `chat.append_turn` (seed turn carrying a vaulted value in the clear; its
+  SSE CLIENT-LOCAL ECHO is observed), `chat.create_thread` (session thread,
+  `restricted`), `chat.resume` into the session thread through a real,
+  vault-backed `egress.Engine`, and the session's next `chat.append_turn`
+  with `leading_context`, read back with `chat.get_thread` as segment 0.
+- **`resume-fixtures/example-chat-resume-response.json`** records the
+  `chat.resume` result SHAPE `{thread_id, leading_context, tokens,
+  trimmed}`, not a golden: `tokens`/`trimmed` vary with thread content and
+  the token counter, and `thread_id` is daemon-minted per run. The default
+  run compares the fixture's field set with a fresh live result in both
+  directions. `go test -tags integration -run TestResume_RealSocket_FullFlow
+  ./internal/conversation/ -args -update` regenerates it from that live
+  result, with a `_provenance` field naming the test.
+- **Version:** `internal/rpc`/`internal/daemon` at the commit this ticket
+  lands in; Go `net/http` from the repository's pinned toolchain
+  (`go.mod`).
+- **Date:** 2026-09-23 (recaptured with `-update` after the wire field
+  names moved to the contract's `{thread_id, leading_context, tokens,
+  trimmed}`).
+
 ## Scrub pipeline fixture provenance (P1-E20-W5-S44-T1)
 
 `v1-goldens/scrub/single_span.golden` and `multi_span.golden` are byte-for-byte

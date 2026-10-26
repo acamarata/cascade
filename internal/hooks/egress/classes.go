@@ -155,6 +155,31 @@ const (
 	// header warns against, and skipping real egress enforcement is what
 	// the adversarial review rejected the previous draft for.
 	EgressClassRecallWhat EgressClass = "recall-what"
+	// EgressClassConversationResume is the bring-into-chat resume RPC
+	// response path (P1-E22-W5-S47-T2, H/S-16.T1): the composed context
+	// block internal/conversation.Resumer.Resume assembles from a resumed
+	// thread transits this class
+	// immediately before it is returned to the RPC caller. It is its own
+	// class, distinct from EgressClassRecallWhat: chat.resume is a
+	// different RPC method with a different owning ticket, and this
+	// package's own rule is that two subsystems answering to different
+	// owners never share a class (this file's header).
+	//
+	// This class admits ALL FOUR tiers (AllowRestricted+AllowLocalOnly,
+	// no narrowing AllowedTiers list): where resumed content may go is
+	// decided per request, before this class is reached, by the
+	// source-versus-target rule in resume_topic.go (a source more
+	// restrictive than the target, under local-only > restricted >
+	// internal > public, is refused). Content that clears that rule --
+	// e.g. a restricted thread into an equally restricted session -- must
+	// still substitute and return, not be refused a second time here. A
+	// downstream model call is filtered again by the S-44.T2 lane filter,
+	// so this class's job is unconditional vault substitution (the
+	// exact-value and detector passes), never a second privacy gate.
+	//
+	// This class did not exist before this ticket; the entry follows
+	// EgressClassRecallWhat's precedent one ticket earlier in this epic.
+	EgressClassConversationResume EgressClass = "conversation-resume"
 )
 
 // defaultClasses is the registration table. It is a slice of pairs rather
@@ -189,6 +214,12 @@ var defaultClasses = []struct {
 		Enabled: true, AllowRestricted: false,
 		AllowedTiers: []SensitivityTier{TierInternal, TierPublic},
 		Owner:        "P1-E22-W5-S47-T1",
+	}},
+	{EgressClassConversationResume, InterceptConfig{
+		// All four tiers admitted -- see the constant's doc comment: the
+		// per-request rule in resume_topic.go decides placement.
+		Enabled: true, AllowRestricted: true, AllowLocalOnly: true,
+		Owner: "P1-E22-W5-S47-T2",
 	}},
 }
 

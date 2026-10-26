@@ -49,6 +49,11 @@ type ThreadPrivacyStore interface {
 	// thread that does not exist -- reads as restricted, never as an
 	// error the caller could mistake for permission.
 	ThreadPrivacy(ctx context.Context, threadID string) (provider.SensitivityTier, error)
+	// AppendFirstTurn creates turn.ThreadID with tier as its marker and
+	// commits its first turn and segments, all in ONE transaction
+	// (chat.append_turn with no thread_id): a refused or failed write
+	// leaves no thread, no turn and no marker.
+	AppendFirstTurn(ctx context.Context, tier provider.SensitivityTier, turn Turn, segments []Segment) error
 }
 
 // tableThreadPrivacy is the privacy-mode marker table: one row per thread
@@ -108,6 +113,9 @@ func (s *conversationStore) SetThreadPrivacy(ctx context.Context, threadID strin
 	})
 }
 
+// setThreadPrivacyTx, CreateThread and AppendFirstTurn live in
+// privacy_createthread.go, split under Art.10.3's 300-line cap.
+
 // ThreadPrivacy implements Store.
 //
 // A thread with no row, and a thread that does not exist at all, both read
@@ -145,8 +153,8 @@ func (s *conversationStore) ThreadPrivacy(ctx context.Context, threadID string) 
 // narrowest tier, so a caller that cannot refuse never widens.
 //
 // It is NOT the stored-row reader: ThreadPrivacy parses rows itself.
-// applyAppendPrivacy calls this only after the closed parser has accepted
-// the name.
+// firstTurnTier calls this only after the closed parser has accepted the
+// name.
 func ParseSensitivityTier(name string) provider.SensitivityTier {
 	tier, err := provider.ParseSensitivityTier(name)
 	if err != nil {
@@ -165,58 +173,80 @@ func (a *Adapter) ThreadPrivacy(ctx context.Context, threadID string) (provider.
 	return a.store.ThreadPrivacy(ctx, threadID)
 }
 
-// applyAppendPrivacy records a newly created thread's privacy_mode.
-//
-// It runs BEFORE the turn is committed, deliberately. An absent privacy
-// row reads as restricted (privacy.go: absence means restricted), so a
-// window between "thread has content" and "thread is marked local-only"
-// would be a window in which the thread routes under the LESS restrictive
-// of the two. Writing the mark first closes it.
-//
-// A privacy_mode on a request that CONTINUES a thread is refused, not
-// ignored: `chat --private --thread t` looks to an operator like it
-// privatised t, and answering nothing would leave them believing it. The
-// refusal names the thread so they can see which one was not changed.
-func (a *Adapter) applyAppendPrivacy(ctx context.Context, threadID, mode string, creating bool) error {
-	if mode == "" {
+// resolveAppendThread (the thread chat.append_turn writes to) and the
+// first-turn commit live in adapter_appendtarget.go.
+
+// AppendFirstTurn implements Store: a brand-new thread's row, its marker,
+// its first turn (with its origin stamp) and that turn's segments, in one
+// transaction. Any failure (a colliding id, a segment the store refuses)
+// rolls back the marker and the thread row too.
+func (s *conversationStore) AppendFirstTurn(ctx context.Context, tier provider.SensitivityTier, turn Turn, segments []Segment) error {
+	if err := validateFirstTurn(tier, turn, segments); err != nil {
+		return err
+	}
+	fts := s.hasFTS(ctx) // probed before the tx opens: see AppendSegment
+	return runTx(ctx, s.db, func(tx *sql.Tx) error {
+		if err := insertNewThreadTx(ctx, tx, turn.ThreadID, turn.CreatedAt); err != nil {
+			return err
+		}
+		if err := setThreadPrivacyTx(ctx, tx, turn.ThreadID, tier); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO `+tableTurn+` (id, thread_id, seq, role, created_at) VALUES (?, ?, ?, ?, ?)`,
+			turn.ID, turn.ThreadID, turn.Seq, string(turn.Role), turn.CreatedAt); err != nil {
+			return translateAppendError(err, "conversation: append turn")
+		}
+		if err := insertTurnOrigin(ctx, tx, turn); err != nil {
+			return err
+		}
+		for _, seg := range segments {
+			if err := insertSegmentTx(ctx, tx, seg, turn.ThreadID, fts); err != nil {
+				return err
+			}
+		}
 		return nil
-	}
-	// An unrecognised tier NAME is refused, not coerced. §5.16's
-	// fail-closed rule is about an ABSENT mode; a caller that sent
-	// "local_only" sent a mode, and silently storing restricted would
-	// WIDEN what it asked for — restricted permits external lanes and
-	// local-only does not. The closed parser is the check: its error is
-	// the refusal.
-	if _, err := provider.ParseSensitivityTier(mode); err != nil {
-		return cascade.Wrapf(cascade.KindInvalidInput, err,
-			"%s: %q is not a sensitivity tier; expected one of local-only, restricted, internal, public",
-			MethodAppendTurn, mode)
-	}
-	if !creating {
-		return cascade.Newf(cascade.KindInvalidInput,
-			"%s: privacy_mode may only be set on the request that CREATES a thread; thread %s already exists and its mode is unchanged",
-			MethodAppendTurn, threadID)
-	}
-	return a.SetThreadPrivacy(ctx, threadID, ParseSensitivityTier(mode))
+	})
 }
 
-// resolveAppendThread returns the thread id an append_turn will write to,
-// minting one when the caller named none, and recording the privacy_mode
-// for a thread this call CREATES.
-//
-// A caller that named no thread is starting one, and the id is minted
-// SERVER-side rather than client-side: see threadid.go (R-14.285).
-func (a *Adapter) resolveAppendThread(ctx context.Context, params appendTurnParams) (string, error) {
-	threadID, creating := params.ThreadID, params.ThreadID == ""
-	if creating {
-		minted, err := NewThreadID()
-		if err != nil {
-			return "", err
+// validateFirstTurn checks AppendFirstTurn's inputs before any write: a
+// valid tier, a structurally valid turn at Seq 0, and segments that belong
+// to it, numbered 0..n-1.
+func validateFirstTurn(tier provider.SensitivityTier, turn Turn, segments []Segment) error {
+	if !tier.Valid() {
+		return cascade.Newf(cascade.KindInvalidInput, "conversation: %q is not a sensitivity tier", tier.String())
+	}
+	if err := validateTurn(turn); err != nil {
+		return err
+	}
+	if turn.Seq != 0 {
+		return ErrOutOfOrder
+	}
+	for i, seg := range segments {
+		if err := validateSegment(seg); err != nil {
+			return err
 		}
-		threadID = minted
+		if seg.TurnID != turn.ID {
+			return ErrInvalidRecord
+		}
+		if seg.Seq != int64(i) {
+			return ErrOutOfOrder
+		}
 	}
-	if err := a.applyAppendPrivacy(ctx, threadID, params.PrivacyMode, creating); err != nil {
-		return "", err
+	return nil
+}
+
+// insertSegmentTx inserts one segment inside tx and, when the search index
+// exists, mirrors it there in the same transaction (AppendSegment's rule).
+func insertSegmentTx(ctx context.Context, tx *sql.Tx, seg Segment, threadID string, fts bool) error {
+	_, err := tx.ExecContext(ctx,
+		`INSERT INTO `+tableSegment+` (id, turn_id, seq, kind, content, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		seg.ID, seg.TurnID, seg.Seq, string(seg.Kind), seg.Content, seg.CreatedAt)
+	if err := translateAppendError(err, "conversation: append segment"); err != nil {
+		return err
 	}
-	return threadID, nil
+	if fts {
+		return mirrorSegmentFTS(ctx, tx, seg, threadID)
+	}
+	return nil
 }

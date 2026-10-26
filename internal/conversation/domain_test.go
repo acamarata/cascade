@@ -60,6 +60,12 @@ func newTestStore(t *testing.T) Store {
 	if err := ApplyConversationSchema(ctx, db, migrate.SQLiteEmitter{}, newTestClock(), "", ""); err != nil {
 		t.Fatalf("ApplyConversationSchema: %v", err)
 	}
+	// Store.CreateThread writes the attribution row, so tests that seed a
+	// named thread (seedOwnedThread) need the scope schema, as the daemon
+	// has it once chat.create_thread has run.
+	if err := ensureScopeSchema(ctx, db, newTestClock()); err != nil {
+		t.Fatalf("ensureScopeSchema: %v", err)
+	}
 	return NewStore(db)
 }
 

@@ -33,6 +33,12 @@ type appendTurnParams struct {
 	// origin must say untrusted. Absent means a local caller.
 	Origin    string `json:"origin,omitempty"`
 	Untrusted bool   `json:"untrusted,omitempty"`
+	// LeadingContext is a bring-into-chat resume's composed block, sent by
+	// the client on the session's next append (plugins/cascade-pa/cmd). The
+	// daemon stores it as segment 0 of THIS turn, ahead of Segments
+	// (buildLeadingContextSegment): the one delivery mechanism, literally
+	// leading, not merely printed. Empty is the ordinary case.
+	LeadingContext string `json:"leading_context,omitempty"`
 }
 
 type appendSegmentWire struct {
@@ -76,23 +82,43 @@ func decodeAppendTurnParams(raw json.RawMessage) (appendTurnParams, error) {
 	return p, nil
 }
 
-// decodeSegments turns one append's wire segments into stored Segments.
+// decodeSegments turns one append's wire segments into stored Segments,
+// numbered starting at seqOffset (0 normally; 1 when handleAppendTurn has
+// already reserved segment 0 for a LeadingContext block --
+// buildLeadingContextSegment below).
 //
 // Factored out of handleAppendTurn for Art.10.3's 50-line cap. An
 // unrecognised kind is the whole turn's refusal, not a dropped segment: a
 // turn stored with half its content is worse than one refused, because
 // the caller is told it was recorded.
-func decodeSegments(wire []appendSegmentWire, turnID string, now int64) ([]Segment, error) {
+func decodeSegments(wire []appendSegmentWire, turnID string, now int64, seqOffset int64) ([]Segment, error) {
 	out := make([]Segment, 0, len(wire))
 	for i, sw := range wire {
 		kind, err := DecodeSegmentKind(sw.Kind)
 		if err != nil {
 			return nil, ErrMalformedTurnPayload
 		}
-		out = append(out, Segment{ID: NewSegmentID(turnID, int64(i), kind), TurnID: turnID, Seq: int64(i),
+		seq := int64(i) + seqOffset
+		out = append(out, Segment{ID: NewSegmentID(turnID, seq, kind), TurnID: turnID, Seq: seq,
 			Kind: kind, Content: sw.Content, CreatedAt: now})
 	}
 	return out, nil
+}
+
+// buildLeadingContextSegment builds a turn's segment 0 from a
+// chat.append_turn request's LeadingContext field: the one mechanism by
+// which a resumed block becomes the leading block of the next turn --
+// ahead of the caller's own Segments, so a future
+// reply-generation composer that reads this thread's turns
+// (resume_topic.go's own buildHistorySlots precedent: a turn's segments
+// ARE its slot content) sees it first. Reuses SegmentText rather than
+// adding a fifth SegmentKind: domain.go's closed vocabulary is outside
+// this ticket's files_scope, and a leading context block IS prose, like
+// any other text segment -- there is nothing about its SHAPE that needs a
+// new kind.
+func buildLeadingContextSegment(turnID, leadingContext string, now int64) Segment {
+	return Segment{ID: NewSegmentID(turnID, 0, SegmentText), TurnID: turnID, Seq: 0,
+		Kind: SegmentText, Content: leadingContext, CreatedAt: now}
 }
 
 // searchParams is chat.search's wire request shape.

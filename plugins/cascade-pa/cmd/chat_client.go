@@ -39,6 +39,20 @@ type Client interface {
 	// both channels promptly in that case rather than leaking the
 	// goroutine that feeds them.
 	Stream(ctx context.Context, req OneShotRequest) (<-chan string, <-chan error)
+	// Resume performs one V/S-47.T2 chat.resume call into req.Thread (the
+	// session thread): the composed block to send as the next append's
+	// leading context, or a typed error (KindNotFound for an unknown
+	// topic or session thread, KindPolicyDenied for a source more
+	// restrictive than the session, KindUnavailable when the daemon, its
+	// resume service or recall.what's conversation leg is unavailable).
+	Resume(ctx context.Context, req ResumeRequest) (ResumeResult, error)
+	// CreateThread is chat.create_thread: the daemon mints a thread id and
+	// writes the thread and its §5.16 marker in one transaction.
+	// privacyMode is REQUIRED (one of the four tier names; the session
+	// passes "restricted" when no flag was given). Returns the id, or a
+	// typed error (KindInvalidInput for an unknown tier, KindUnavailable
+	// when the daemon is unreachable).
+	CreateThread(ctx context.Context, privacyMode string) (threadID string, err error)
 }
 
 // unconfiguredClient is the default Client: every call fails with a typed,
@@ -66,6 +80,14 @@ func (unconfiguredClient) Stream(context.Context, OneShotRequest) (<-chan string
 	errs <- errClientUnconfigured
 	close(errs)
 	return tokens, errs
+}
+
+func (unconfiguredClient) Resume(context.Context, ResumeRequest) (ResumeResult, error) {
+	return ResumeResult{}, errClientUnconfigured
+}
+
+func (unconfiguredClient) CreateThread(context.Context, string) (string, error) {
+	return "", errClientUnconfigured
 }
 
 // clientState guards the package-level Client seam so SetClient is safe

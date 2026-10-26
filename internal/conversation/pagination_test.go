@@ -166,6 +166,7 @@ func TestAdapterPagination_RoundTrip(t *testing.T) {
 		t.Fatal("Adapter.ArchiveThread(no-such-thread) = nil error, want ErrThreadNotFound")
 	}
 
+	seedNamedThreads(t, adapter.store, "th-adapter-page")
 	if _, errObj := dispatch(t, registry, MethodAppendTurn, appendTurnParams{
 		ThreadID: "th-adapter-page", Role: "user", Segments: []appendSegmentWire{{Kind: "text", Content: "hi"}},
 	}); errObj != nil {

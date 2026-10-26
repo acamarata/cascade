@@ -163,6 +163,7 @@ func TestSearchTurns_UnavailableWhenNoFTS5Index(t *testing.T) {
 // TestAdapterSearchTurns_RoundTrip drives the Go-level Adapter surface.
 func TestAdapterSearchTurns_RoundTrip(t *testing.T) {
 	adapter, registry, _ := newTestAdapter(t)
+	seedNamedThreads(t, adapter.store, "th-adapter-search")
 	if _, errObj := dispatch(t, registry, MethodAppendTurn, appendTurnParams{
 		ThreadID: "th-adapter-search", Role: "user", Segments: []appendSegmentWire{{Kind: "text", Content: "searchable content"}},
 	}); errObj != nil {
@@ -197,7 +198,8 @@ func TestEnsureFTS5_NonSQLiteDialectIsNoOp(t *testing.T) {
 // cascade_cpa_search went on running the plain scan the index was written
 // to replace. A capability with no caller is not a feature (R-14.283).
 func TestSearchOverTheWireReachesTheIndex(t *testing.T) {
-	_, registry, _ := newTestAdapter(t)
+	adapter, registry, _ := newTestAdapter(t)
+	seedNamedThreads(t, adapter.store, "th-wire", "th-other")
 	seedWireTurn(t, registry, "th-wire", "the migration ledger is idempotent")
 	seedWireTurn(t, registry, "th-wire", "a turtle crawls slowly")
 	seedWireTurn(t, registry, "th-other", "migration again, elsewhere")
@@ -240,7 +242,8 @@ func TestSearchOverTheWireReachesTheIndex(t *testing.T) {
 }
 
 func TestSearchOverTheWireScopesToOneThread(t *testing.T) {
-	_, registry, _ := newTestAdapter(t)
+	adapter, registry, _ := newTestAdapter(t)
+	seedNamedThreads(t, adapter.store, "th-a", "th-b")
 	seedWireTurn(t, registry, "th-a", "migration one")
 	seedWireTurn(t, registry, "th-b", "migration two")
 

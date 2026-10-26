@@ -149,13 +149,18 @@ func TestChatWiring_JournalWiredAtCompositionRoot(t *testing.T) {
 		t.Fatalf("wireChatHandlers: %v", err)
 	}
 
-	chatDispatch(t, registry, "chat.append_turn", map[string]any{
-		"thread_id": "th-wired", "role": "user",
+	// No thread_id: the daemon mints the thread this first turn creates.
+	res := chatDispatch(t, registry, "chat.append_turn", map[string]any{
+		"role":     "user",
 		"segments": []map[string]string{{"kind": "text", "content": "journal me"}},
 	})
+	threadID, _ := res["thread_id"].(string)
+	if threadID == "" {
+		t.Fatalf("chat.append_turn returned no thread id: %v", res)
+	}
 
 	js := journal.New(store, clock, chatJournalNamespace)
-	entries, err := js.Replay(context.Background(), "th-wired", journal.Cursor{}, []journal.Kind{journal.KindAck})
+	entries, err := js.Replay(context.Background(), threadID, journal.Cursor{}, []journal.Kind{journal.KindAck})
 	if err != nil {
 		t.Fatalf("replay the chat journal: %v", err)
 	}
@@ -271,7 +276,7 @@ func TestChatWiring_NilStoreWarnsOnce(t *testing.T) {
 		t.Fatalf("wireChatHandlers with a nil store: %v", err)
 	}
 	chatDispatch(t, registry, "chat.append_turn", map[string]any{
-		"thread_id": "th-nil", "role": "user",
+		"role":     "user",
 		"segments": []map[string]string{{"kind": "text", "content": "unjournaled"}},
 	})
 

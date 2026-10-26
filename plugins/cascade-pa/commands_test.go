@@ -92,6 +92,14 @@ func (fakeOneShotClient) Stream(context.Context, pacmd.OneShotRequest) (<-chan s
 	return tokens, errs
 }
 
+func (fakeOneShotClient) Resume(context.Context, pacmd.ResumeRequest) (pacmd.ResumeResult, error) {
+	return pacmd.ResumeResult{}, nil
+}
+
+func (fakeOneShotClient) CreateThread(context.Context, string) (string, error) {
+	return "thread-fakeoneshot0000000000000000", nil
+}
+
 // TestRunCommandDispatchesInChatSoulEdit proves RunCommand("chat", ...)
 // consults the in-chat command registry BEFORE building the ordinary chat
 // cobra command: a `/soul edit` positional prompt reaches

@@ -108,6 +108,20 @@ type streamDoneMsg struct{}
 // abort-without-exit behavior.
 type streamErrMsg struct{ err error }
 
+// resumeDoneMsg carries a completed V/S-47.T2 "/resume" command's result:
+// the composed context block, rendered as its own transcript entry
+// (never sent as, or appended to, a normal user/assistant turn), plus any
+// trim-report lines to render alongside it as warnings.
+type resumeDoneMsg struct {
+	context    string
+	trimReport []string
+}
+
+// resumeErrMsg reports that a "/resume" command failed (unknown topic,
+// local-only refusal, daemon unreachable). Not fatal, matching
+// streamErrMsg's own contract.
+type resumeErrMsg struct{ err error }
+
 // Model is `cascade chat`'s bubbletea model.
 type Model struct {
 	thread    string
@@ -166,8 +180,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.cancel = nil
 		m.lines = append(m.lines, errStyle.Render("error: "+v.err.Error()))
 		return m, nil
+	case resumeDoneMsg:
+		return m.applyResumeDone(v), nil
+	case resumeErrMsg:
+		m.streaming = false
+		m.cancel = nil
+		m.lines = append(m.lines, errStyle.Render("error: "+v.err.Error()))
+		return m, nil
 	}
 	return m, nil
+}
+
+// applyResumeDone renders a completed "/resume" command: the composed
+// context block as its own transcript entry (assistantStyle, matching a
+// streamed reply's own rendering), followed by one errStyle warning line
+// per TrimReport entry — never appended into an in-progress assistant
+// line, so a resumed block is always visually distinct from a chat reply.
+func (m Model) applyResumeDone(v resumeDoneMsg) Model {
+	m.streaming = false
+	m.cancel = nil
+	m.lines = append(m.lines, assistantStyle.Render(v.context))
+	for _, line := range v.trimReport {
+		m.lines = append(m.lines, errStyle.Render("warning: "+line))
+	}
+	return m
 }
 
 func (m Model) updateKey(v tea.KeyMsg) (tea.Model, tea.Cmd) {

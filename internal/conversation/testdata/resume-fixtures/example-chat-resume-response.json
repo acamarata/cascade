@@ -1,0 +1,7 @@
+{
+  "_provenance": "Representative example of chat.resume's wire response shape, recorded from TestResume_RealSocket_FullFlow (resume_integration_test.go) via `-update`. Not used for golden-diffing: tokens/trimmed vary with real thread content and the injected TokenCounter, so a byte-frozen comparison would go stale by construction. The default test run compares this file's field set against a fresh live response, both ways.",
+  "leading_context": "integration test turn RESUME_IT_API_KEY=\u003capikey\u003eRESUME_IT_API_KEY\u003c/apikey\u003e",
+  "thread_id": "thread-34nk79ewszjczagwyt5fv01rw5",
+  "tokens": 19,
+  "trimmed": []
+}

@@ -363,6 +363,54 @@ mirrored to. Setting a marker on a thread that already holds turns is refused, s
 chat stays bound to that thread until an owner-only rebind exists, which is
 not part of this release.
 
+## chat.append_turn: thread targets
+
+`chat.append_turn` appends one turn. The daemon mints every thread id. A
+request with no `thread_id` starts a new thread: in one transaction the
+daemon writes the thread row, its privacy marker (the request's
+`privacy_mode`, or an explicit `restricted` when it names none), the turn and
+its segments. A refused request leaves no thread, marker or turn (a creating request can leave
+the `thread_scope` attribution row of its unused id; the row grants nothing). A request
+with a `thread_id` continues that thread, which must already exist
+(`not-found` otherwise) and may not carry a `privacy_mode` (`invalid-input`).
+
+An optional `leading_context` string is stored as segment 0 of the appended
+turn, ahead of `segments`. The client sends a resumed block this way, once.
+
+## chat.resume
+
+`chat.resume` composes a recorded conversation into a chat session as the
+leading block of the session's next turn. It writes nothing and returns the
+same block for the same params.
+
+Access class: **owner-view**. The owner resumes between any threads. A
+principal resumes only between threads attributed to its own project scope:
+a foreign `session_thread_id` is refused with `permission-denied`, and a
+foreign source thread reads as `not-found`.
+
+Params:
+
+```json
+{"session_thread_id": "<existing thread>", "topic_id": "<thread id>", "budget": 4000, "cwd": "/path"}
+```
+
+`session_thread_id` is required and must name an existing thread; its stored
+privacy marker is the target tier. Exactly one of `topic_id` or `query` names
+the source. `budget` and `cwd` are optional. An unknown field is refused with
+`invalid-input`.
+
+Result:
+
+```json
+{"thread_id": "<primary source thread>", "leading_context": "<block>", "tokens": 120, "trimmed": []}
+```
+
+A source whose tier is more restrictive than the target
+(`local-only` > `restricted` > `internal` > `public`) is refused with
+`policy-denied` and nothing is returned. A query resolves through
+`recall.what`; its conversation results are composed, and the block's tier is
+the strictest of their markers.
+
 ## bridge.send
 
 `bridge.send` mirrors one turn that is already committed in a conversation

@@ -93,6 +93,68 @@ func TestCascadePAClient_Stream_ClosesTokensBeforeError(t *testing.T) {
 	}
 }
 
+// TestCascadePAClient_Resume_TransportUnreachable mirrors
+// TestCascadePAClient_OneShot_TransportUnreachable for the V/S-47.T2
+// Resume method: a real internal/client.Client transport failure over a
+// socket nothing listens on, never a fabricated success.
+func TestCascadePAClient_Resume_TransportUnreachable(t *testing.T) {
+	socket := missingSocketPath(t)
+	c := newCascadePAClient(client.UnixDialer, time.Second, func() (runtime.PathProvider, error) {
+		return fakePathProvider{socket: socket}, nil
+	})
+	_, err := c.Resume(context.Background(), pacmd.ResumeRequest{TopicID: "t1"})
+	if err == nil {
+		t.Fatal("Resume: err = nil, want a transport error")
+	}
+	if got := err.Error(); !containsAll(got, "daemon not running or unreachable") {
+		t.Errorf("Resume: err = %q, want internal/client's own classified transport error", got)
+	}
+}
+
+// TestCascadePAClient_Resume_PathResolutionFailure mirrors OneShot's own
+// identical test.
+func TestCascadePAClient_Resume_PathResolutionFailure(t *testing.T) {
+	wantErr := errors.New("boom: no home directory")
+	c := newCascadePAClient(nil, time.Second, func() (runtime.PathProvider, error) {
+		return nil, wantErr
+	})
+	_, err := c.Resume(context.Background(), pacmd.ResumeRequest{TopicID: "t1"})
+	if !errors.Is(err, wantErr) {
+		t.Errorf("Resume: err = %v, want it to wrap %v", err, wantErr)
+	}
+}
+
+// TestCascadePAClient_CreateThread_TransportUnreachable mirrors
+// TestCascadePAClient_Resume_TransportUnreachable for CreateThread: a
+// real internal/client.Client transport failure over a socket nothing
+// listens on.
+func TestCascadePAClient_CreateThread_TransportUnreachable(t *testing.T) {
+	socket := missingSocketPath(t)
+	c := newCascadePAClient(client.UnixDialer, time.Second, func() (runtime.PathProvider, error) {
+		return fakePathProvider{socket: socket}, nil
+	})
+	_, err := c.CreateThread(context.Background(), "local-only")
+	if err == nil {
+		t.Fatal("CreateThread: err = nil, want a transport error")
+	}
+	if got := err.Error(); !containsAll(got, "daemon not running or unreachable") {
+		t.Errorf("CreateThread: err = %q, want internal/client's own classified transport error", got)
+	}
+}
+
+// TestCascadePAClient_CreateThread_PathResolutionFailure mirrors OneShot's
+// own identical test.
+func TestCascadePAClient_CreateThread_PathResolutionFailure(t *testing.T) {
+	wantErr := errors.New("boom: no home directory")
+	c := newCascadePAClient(nil, time.Second, func() (runtime.PathProvider, error) {
+		return nil, wantErr
+	})
+	_, err := c.CreateThread(context.Background(), "local-only")
+	if !errors.Is(err, wantErr) {
+		t.Errorf("CreateThread: err = %v, want it to wrap %v", err, wantErr)
+	}
+}
+
 func containsAll(s string, subs ...string) bool {
 	for _, sub := range subs {
 		if !strings.Contains(s, sub) {

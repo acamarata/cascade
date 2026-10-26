@@ -8,10 +8,13 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"strings"
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // recordingSender is a msgSender double: it records every tea.Msg passed
@@ -51,13 +54,16 @@ func newTestCobraCommand() *cobra.Command {
 	return c
 }
 
-// fakeClient is a Client test double. OneShotFn/StreamFn are optional;
-// a nil OneShotFn/StreamFn panics if called, which surfaces a test bug
-// (calling a path the test did not intend to exercise) immediately rather
-// than silently returning a zero value.
+// fakeClient is a Client test double. OneShotFn/StreamFn/ResumeFn are
+// optional; a nil one panics if called, surfacing a test that reached a
+// path it did not intend -- EXCEPT CreateThreadFn, which defaults to
+// minting a fresh "thread-"-prefixed id (the daemon's chat.create_thread
+// shape), because every resume on a new session creates its thread first.
 type fakeClient struct {
-	OneShotFn func(ctx context.Context, req OneShotRequest) (OneShotResult, error)
-	StreamFn  func(ctx context.Context, req OneShotRequest) (<-chan string, <-chan error)
+	OneShotFn      func(ctx context.Context, req OneShotRequest) (OneShotResult, error)
+	StreamFn       func(ctx context.Context, req OneShotRequest) (<-chan string, <-chan error)
+	ResumeFn       func(ctx context.Context, req ResumeRequest) (ResumeResult, error)
+	CreateThreadFn func(ctx context.Context, privacyMode string) (string, error)
 }
 
 func (f fakeClient) OneShot(ctx context.Context, req OneShotRequest) (OneShotResult, error) {
@@ -66,4 +72,19 @@ func (f fakeClient) OneShot(ctx context.Context, req OneShotRequest) (OneShotRes
 
 func (f fakeClient) Stream(ctx context.Context, req OneShotRequest) (<-chan string, <-chan error) {
 	return f.StreamFn(ctx, req)
+}
+
+func (f fakeClient) Resume(ctx context.Context, req ResumeRequest) (ResumeResult, error) {
+	return f.ResumeFn(ctx, req)
+}
+
+func (f fakeClient) CreateThread(ctx context.Context, privacyMode string) (string, error) {
+	if f.CreateThreadFn == nil {
+		id, err := cascade.NewID()
+		if err != nil {
+			return "", err
+		}
+		return "thread-" + strings.ToLower(string(id)), nil
+	}
+	return f.CreateThreadFn(ctx, privacyMode)
 }

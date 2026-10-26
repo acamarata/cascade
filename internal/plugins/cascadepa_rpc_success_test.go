@@ -27,15 +27,20 @@ import (
 
 // fakeRPCDoer stands in for *internal/client.Client's Do method. fill, if
 // set, writes into out (a pointer to the same result type the real RPC
-// method decodes into); err, if set, is returned instead.
+// method decodes into); err, if set, is returned instead. gotParams
+// records the params argument verbatim so a test can assert on the REAL
+// wire request an adapter method built, not only on the result it mapped
+// back.
 type fakeRPCDoer struct {
 	err          error
 	fill         func(out any)
 	calledMethod string
+	gotParams    any
 }
 
-func (f *fakeRPCDoer) Do(_ context.Context, method string, _, out any) error {
+func (f *fakeRPCDoer) Do(_ context.Context, method string, params, out any) error {
 	f.calledMethod = method
+	f.gotParams = params
 	if f.err != nil {
 		return f.err
 	}
@@ -63,6 +68,88 @@ func TestCascadePAClient_OneShot_SuccessMapsThreadAndTurn(t *testing.T) {
 	}
 	if doer.calledMethod == "" {
 		t.Error("OneShot never called Do")
+	}
+}
+
+// TestCascadePAClient_OneShot_SendsLeadingContext proves
+// pacmd.OneShotRequest.LeadingContext reaches the real wire request
+// cascadePAClient.OneShot builds -- the seam a resumed block travels
+// through to become segment 0 of the next turn.
+func TestCascadePAClient_OneShot_SendsLeadingContext(t *testing.T) {
+	doer := &fakeRPCDoer{fill: func(out any) {
+		res := out.(*appendTurnResult)
+		res.ThreadID = "thread-1"
+		res.TurnID = "turn-2"
+	}}
+	c := newCascadePAClient(nil, 0, nil)
+	c.doer = doer
+
+	_, _ = c.OneShot(context.Background(), pacmd.OneShotRequest{Prompt: "hi", LeadingContext: "resumed block"})
+	params, ok := doer.gotParams.(appendTurnParams)
+	if !ok {
+		t.Fatalf("Do params = %T, want appendTurnParams", doer.gotParams)
+	}
+	if params.LeadingContext != "resumed block" {
+		t.Fatalf("appendTurnParams.LeadingContext = %q, want %q", params.LeadingContext, "resumed block")
+	}
+}
+
+// TestCascadePAClient_Resume_SuccessMapsFields proves cascadePAClient.Resume
+// (V/S-47.T2) maps every chat.resume wire field onto pacmd.ResumeResult
+// and dispatches the real internal/conversation.MethodResume method name,
+// mirroring OneShot's own SuccessMapsThreadAndTurn test above.
+func TestCascadePAClient_Resume_SuccessMapsFields(t *testing.T) {
+	doer := &fakeRPCDoer{fill: func(out any) {
+		res := out.(*resumeResult)
+		*res = resumeResult{
+			ThreadID: "th1", LeadingContext: "composed block", Tokens: 12, Trimmed: []string{"turn:x: dropped"},
+		}
+	}}
+	c := newCascadePAClient(nil, 0, nil)
+	c.doer = doer
+
+	got, err := c.Resume(context.Background(), pacmd.ResumeRequest{TopicID: "th1", Thread: "session1"})
+	if err != nil {
+		t.Fatalf("Resume: %v", err)
+	}
+	if got.ThreadID != "th1" || got.LeadingContext != "composed block" || got.Tokens != 12 ||
+		len(got.Trimmed) != 1 || got.Trimmed[0] != "turn:x: dropped" {
+		t.Errorf("Resume: got %+v, did not map every chat.resume field", got)
+	}
+	params, ok := doer.gotParams.(resumeParams)
+	if !ok || params.TopicID != "th1" || params.SessionThreadID != "session1" {
+		t.Errorf("Resume params = %+v (ok=%v), want topic_id th1 into session_thread_id session1", doer.gotParams, ok)
+	}
+	if doer.calledMethod != "chat.resume" {
+		t.Errorf("Resume dispatched method %q, want \"chat.resume\"", doer.calledMethod)
+	}
+}
+
+// TestCascadePAClient_CreateThread_SuccessMapsThreadID proves
+// cascadePAClient.CreateThread dispatches the real internal/conversation.MethodCreateThread method
+// name, sends privacyMode on the wire, and maps the result's thread_id
+// back.
+func TestCascadePAClient_CreateThread_SuccessMapsThreadID(t *testing.T) {
+	doer := &fakeRPCDoer{fill: func(out any) {
+		res := out.(*createThreadResult)
+		res.ThreadID = "thread-new1"
+	}}
+	c := newCascadePAClient(nil, 0, nil)
+	c.doer = doer
+
+	got, err := c.CreateThread(context.Background(), "local-only")
+	if err != nil {
+		t.Fatalf("CreateThread: %v", err)
+	}
+	if got != "thread-new1" {
+		t.Errorf("CreateThread: got = %q, want %q", got, "thread-new1")
+	}
+	if doer.calledMethod != "chat.create_thread" {
+		t.Errorf("CreateThread dispatched method %q, want \"chat.create_thread\"", doer.calledMethod)
+	}
+	params, ok := doer.gotParams.(createThreadParams)
+	if !ok || params.PrivacyMode != "local-only" {
+		t.Errorf("CreateThread params = %+v (ok=%v), want PrivacyMode=local-only", doer.gotParams, ok)
 	}
 }
 

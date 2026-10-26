@@ -135,33 +135,34 @@ func TestPrivacyAppendTurnRefusesOnContinuation(t *testing.T) {
 	adapter, registry, _ := newTestAdapter(t)
 	ctx := context.Background()
 
-	if _, errObj := dispatch(t, registry, MethodAppendTurn, appendTurnParams{
-		ThreadID: "th-existing", Role: "user",
-		Segments: []appendSegmentWire{{Kind: "text", Content: "first"}},
-	}); errObj != nil {
+	seeded, errObj := dispatch(t, registry, MethodAppendTurn, appendTurnParams{
+		Role: "user", Segments: []appendSegmentWire{{Kind: "text", Content: "first"}},
+	})
+	if errObj != nil {
 		t.Fatalf("seeding the thread: %+v", errObj)
 	}
+	existing := seeded.(appendTurnResult).ThreadID
 
-	_, errObj := dispatch(t, registry, MethodAppendTurn, appendTurnParams{
-		ThreadID: "th-existing", Role: "user",
+	_, errObj = dispatch(t, registry, MethodAppendTurn, appendTurnParams{
+		ThreadID: existing, Role: "user",
 		Segments:    []appendSegmentWire{{Kind: "text", Content: "second"}},
 		PrivacyMode: "local-only",
 	})
 	if errObj == nil {
 		t.Fatal("chat.append_turn accepted a privacy_mode on a continuation; the caller would believe the thread was privatised")
 	}
-	if !strings.Contains(errObj.Message, "th-existing") {
+	if !strings.Contains(errObj.Message, existing) {
 		t.Errorf("refusal %q does not name the thread that was not changed", errObj.Message)
 	}
 	// And the refusal is total: the mode did not land, and neither did the turn.
-	got, err := adapter.ThreadPrivacy(ctx, "th-existing")
+	got, err := adapter.ThreadPrivacy(ctx, existing)
 	if err != nil {
 		t.Fatalf("ThreadPrivacy: %v", err)
 	}
 	if got != provider.SensitivityRestricted {
 		t.Fatalf("thread privacy = %s, want restricted; a refused request still wrote a mode", got)
 	}
-	turns, err := adapter.store.ListTurns(ctx, "th-existing")
+	turns, err := adapter.store.ListTurns(ctx, existing)
 	if err != nil {
 		t.Fatalf("ListTurns: %v", err)
 	}

@@ -88,6 +88,7 @@ func newTestScrubPipeline(t testing.TB, bus EventBus) (pipeline ScrubPipeline, q
 // returns the registry a test dispatches against.
 func newScrubAdapter(t testing.TB, store Store, bus EventBus, pipeline ScrubPipeline) *rpc.Registry {
 	t.Helper()
+	seedNamedThreads(t, store, "th1")
 	adapter := NewAdapter(store, bus, passthroughSubst{}, newAdapterTestClock(), "")
 	adapter.SetScrub(pipeline)
 	registry := rpc.NewRegistry()

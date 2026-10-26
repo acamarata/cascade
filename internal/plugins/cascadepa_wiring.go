@@ -113,6 +113,11 @@ type appendTurnParams struct {
 	// bridgeChatService.AppendTurn); `cascade chat` leaves both zero.
 	Origin    string `json:"origin,omitempty"`
 	Untrusted bool   `json:"untrusted,omitempty"`
+	// LeadingContext carries pacmd.OneShotRequest.LeadingContext onto the
+	// wire: a resume's composed block, stored by the daemon as segment 0 of
+	// this turn (internal/conversation/adapter_wire.go's identically named
+	// field).
+	LeadingContext string `json:"leading_context,omitempty"`
 }
 
 type appendSegmentWire struct {
@@ -170,10 +175,11 @@ func (c *cascadePAClient) OneShot(ctx context.Context, req pacmd.OneShotRequest)
 		return pacmd.OneShotResult{}, err
 	}
 	params := appendTurnParams{
-		ThreadID:    req.Thread,
-		Role:        "user",
-		Segments:    []appendSegmentWire{{Kind: "text", Content: req.Prompt}},
-		PrivacyMode: req.Privacy,
+		ThreadID:       req.Thread,
+		Role:           "user",
+		Segments:       []appendSegmentWire{{Kind: "text", Content: req.Prompt}},
+		PrivacyMode:    req.Privacy,
+		LeadingContext: req.LeadingContext,
 	}
 	var result appendTurnResult
 	if err := rpc.Do(ctx, conversation.MethodAppendTurn, params, &result); err != nil {
@@ -198,4 +204,73 @@ func (c *cascadePAClient) Stream(ctx context.Context, req pacmd.OneShotRequest) 
 		close(errs)
 	}()
 	return tokens, errs
+}
+
+// resumeParams/resumeResult mirror internal/conversation/adapter_resume.go's
+// wire shapes, duplicated client-side for the same reason appendTurnParams
+// is above: that package's types are unexported server decode targets.
+// SessionThreadID names the destination session thread (its stored marker
+// is the daemon's target tier); Cwd feeds recall.what's scope resolution.
+type resumeParams struct {
+	TopicID         string `json:"topic_id,omitempty"`
+	Query           string `json:"query,omitempty"`
+	SessionThreadID string `json:"session_thread_id,omitempty"`
+	Cwd             string `json:"cwd,omitempty"`
+}
+
+// resumeResult is chat.resume's result {thread_id, leading_context,
+// tokens, trimmed[]}.
+type resumeResult struct {
+	ThreadID       string   `json:"thread_id"`
+	LeadingContext string   `json:"leading_context"`
+	Tokens         int      `json:"tokens"`
+	Trimmed        []string `json:"trimmed"`
+}
+
+// Resume performs the real chat.resume round trip
+// (internal/conversation.MethodResume). A transport failure or a
+// server-side refusal returns internal/client's classified taxonomy error
+// unmodified, matching OneShot.
+func (c *cascadePAClient) Resume(ctx context.Context, req pacmd.ResumeRequest) (pacmd.ResumeResult, error) {
+	rpc, err := c.rpcClient()
+	if err != nil {
+		return pacmd.ResumeResult{}, err
+	}
+	params := resumeParams{TopicID: req.TopicID, Query: req.Query, SessionThreadID: req.Thread, Cwd: req.Cwd}
+	var result resumeResult
+	if err := rpc.Do(ctx, conversation.MethodResume, params, &result); err != nil {
+		return pacmd.ResumeResult{}, err
+	}
+	return pacmd.ResumeResult{
+		ThreadID: result.ThreadID, LeadingContext: result.LeadingContext, Tokens: result.Tokens, Trimmed: result.Trimmed,
+	}, nil
+}
+
+// createThreadParams/createThreadResult mirror
+// internal/conversation/adapter_createthread.go's wire shapes. privacy_mode
+// is required and always sent (never omitted), so an empty value reaches
+// the daemon and is refused there.
+type createThreadParams struct {
+	PrivacyMode string `json:"privacy_mode"`
+}
+
+type createThreadResult struct {
+	ThreadID string `json:"thread_id"`
+}
+
+// CreateThread performs the real chat.create_thread round trip
+// (internal/conversation.MethodCreateThread): the daemon mints the id and
+// writes the thread and its marker in one transaction. Errors are
+// internal/client's classified taxonomy errors, unmodified.
+func (c *cascadePAClient) CreateThread(ctx context.Context, privacyMode string) (string, error) {
+	rpc, err := c.rpcClient()
+	if err != nil {
+		return "", err
+	}
+	params := createThreadParams{PrivacyMode: privacyMode}
+	var result createThreadResult
+	if err := rpc.Do(ctx, conversation.MethodCreateThread, params, &result); err != nil {
+		return "", err
+	}
+	return result.ThreadID, nil
 }

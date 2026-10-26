@@ -9,6 +9,7 @@ chat.append_turn
 chat.create_thread
 chat.get_thread
 chat.list_threads
+chat.resume
 chat.search
 chat.threads_list
 chat.topics_list

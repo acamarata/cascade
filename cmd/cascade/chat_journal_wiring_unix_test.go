@@ -124,15 +124,16 @@ func TestPlatformDaemonRunJournalsChat(t *testing.T) {
 	deps := newRunTestDeps(t, nil)
 	d := startJournalDaemon(t, deps)
 	res := journalRPC(t, unixRPCClient(deps.Paths.SocketPath()), "chat.append_turn", map[string]any{
-		"thread_id": "th-daemon", "role": "user",
+		"role":     "user",
 		"segments": []map[string]string{{"kind": "text", "content": "journaled by the daemon"}},
 	})
 	if id, _ := res["turn_id"].(string); id == "" {
 		t.Fatalf("chat.append_turn returned no turn id: %v", res)
 	}
+	threadID, _ := res["thread_id"].(string) // daemon-minted: the append named no thread
 	d.stop(t)
 
-	if n := len(ackedChatEntries(t, deps, "th-daemon")); n != 1 {
+	if n := len(ackedChatEntries(t, deps, threadID)); n != 1 {
 		t.Fatalf("runtime store holds %d ACKed chat journal entries for the thread, want 1", n)
 	}
 }

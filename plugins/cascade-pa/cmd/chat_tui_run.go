@@ -27,12 +27,36 @@ package cmd
 import (
 	"context"
 	goruntime "runtime"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
+
+// pendingLeadingContext holds the ONE leading-context block a completed
+// /resume stages for the very next ordinary prompt. Mutex-guarded: the
+// resume goroutine sets it while the Program's event loop takes it.
+// Cleared on read, so a block is sent exactly once.
+type pendingLeadingContext struct {
+	mu   sync.Mutex
+	text string
+}
+
+func (p *pendingLeadingContext) set(s string) {
+	p.mu.Lock()
+	p.text = s
+	p.mu.Unlock()
+}
+
+func (p *pendingLeadingContext) takeAndClear() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	s := p.text
+	p.text = ""
+	return s
+}
 
 // msgSender is the one bubbletea method pumpStream needs: *tea.Program
 // satisfies it automatically, and tests substitute a recording double so
@@ -75,23 +99,46 @@ func runTUI(ctx context.Context, cc *cobra.Command, thread string) error {
 }
 
 // newSubmitFunc builds the closure Model.submit calls on every Enter: it
-// starts a new turn's context (canceled independently of the parent ctx,
-// so a mid-stream Ctrl-C aborts only that turn), fires pumpStream in a
-// goroutine against whatever senderRef currently points to, and returns
-// the cancel func immediately. senderRef is a pointer so runTUI can build
-// the submit closure BEFORE the tea.Program exists (Model needs submit at
-// construction time; the Program needs the Model) and assign the real
-// *tea.Program into *senderRef right after — the closure only
-// dereferences senderRef when a user actually presses Enter, by which
-// point the assignment has always already happened. Factored out from
-// runTUI so chat_tui_run_test.go can drive it directly with a
-// recordingSender, without ever constructing a tea.Program.
+// starts a turn context (canceled independently of ctx, so Ctrl-C aborts
+// only that turn), fires pumpStream -- or pumpResume for a "/resume topic
+// <id>"/"/resume query <terms>" line -- in a goroutine against whatever
+// senderRef points to, and returns the cancel func. senderRef is a pointer
+// so runTUI can build the closure before the tea.Program exists. The
+// session (resume_session.go) starts at thread, with the flag tier ctx
+// carries (tuiContext): a /resume creates the session thread at that tier
+// when there is none yet, and later turns go to that thread.
 func newSubmitFunc(ctx context.Context, thread string, client Client, senderRef *msgSender) func(string) (tea.Cmd, func()) {
+	session := newChatSession(thread, chatSessionTierFrom(ctx))
+	pending := &pendingLeadingContext{}
+	pending.set(resumeLeadingContextFrom(ctx))
 	return func(prompt string) (tea.Cmd, func()) {
 		turnCtx, cancel := context.WithCancel(ctx)
-		go pumpStream(turnCtx, *senderRef, client, OneShotRequest{Thread: thread, Prompt: prompt})
+		if req, ok := parseResumeCommand(prompt); ok {
+			req.Cwd = resumeCwd()
+			go pumpResume(turnCtx, *senderRef, client, session, req, pending)
+			return nil, cancel
+		}
+		go pumpStream(turnCtx, *senderRef, client, session.appendRequest(prompt, pending.takeAndClear()))
 		return nil, cancel
 	}
+}
+
+// pumpResume runs one resume into session (resumeIntoSession, the same
+// call the flags make) and sends exactly one resumeDoneMsg or resumeErrMsg.
+// It returns without sending when ctx was canceled first. On success the
+// block is staged on pending BEFORE resumeDoneMsg is sent, so the next
+// Enter (which the Program only processes after that message) takes it.
+func pumpResume(ctx context.Context, prog msgSender, client Client, session *chatSession, req ResumeRequest, pending *pendingLeadingContext) {
+	res, err := resumeIntoSession(ctx, client, session, req)
+	if ctx.Err() != nil {
+		return
+	}
+	if err != nil {
+		prog.Send(resumeErrMsg{err: err})
+		return
+	}
+	pending.set(res.LeadingContext)
+	prog.Send(resumeDoneMsg{context: res.LeadingContext, trimReport: res.Trimmed})
 }
 
 // pumpStream reads client.Stream(req) and forwards each token, and the

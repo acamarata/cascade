@@ -24,10 +24,7 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	goruntime "runtime"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -52,6 +49,11 @@ type OneShotRequest struct {
 	// daemon apply its own fail-closed default. Only meaningful when
 	// Thread is empty: that is the request that creates a thread.
 	Privacy string
+	// LeadingContext is a resume's composed block, staged by
+	// applyChatResume or the /resume command for delivery as the leading
+	// block of THIS turn: the daemon stores it as segment 0, ahead of
+	// Prompt. Sent exactly once, then cleared. Empty is the ordinary case.
+	LeadingContext string
 }
 
 // OneShotResult is the adapter's reply to a OneShotRequest: the identifiers
@@ -98,6 +100,21 @@ type chatOptions struct {
 	threads  bool
 	page     int
 	pageSize int
+	// resumeTopic/resumeQuery: V/S-47.T2 bring-into-chat resume. Mutually
+	// exclusive (validateResumeFlags, resume.go); neither set is ordinary
+	// chat.
+	resumeTopic string
+	resumeQuery string
+	// leadingContext is a resolved resume's block, staged by
+	// applyChatResume for the next dispatch; "" is the ordinary case.
+	leadingContext string
+	// threadMinted is true when this session CREATED its thread
+	// (applyChatResume via chat.create_thread) rather than the operator
+	// naming one with --thread; maybeWriteThreadSummary (topics_cli.go)
+	// reads it so a freshly created thread is not mistaken for an "open an
+	// existing thread" request, and dispatchOneShot sends no privacy_mode
+	// for it (its marker was written at creation).
+	threadMinted bool
 }
 
 // NewChatCommand builds the `chat` cobra command cascade-pa's commands.go
@@ -123,6 +140,9 @@ func NewChatCommand() *cobra.Command {
 			if _, err := resolveChatPrivacy(opts); err != nil {
 				return err
 			}
+			if err := validateResumeFlags(opts); err != nil {
+				return err
+			}
 			return runChat(cc, opts, osLookupEnv)
 		},
 	}
@@ -138,6 +158,10 @@ func NewChatCommand() *cobra.Command {
 	c.Flags().BoolVar(&opts.threads, "threads", false, "list threads (title, slug, message count), paginated, then exit")
 	c.Flags().IntVar(&opts.page, "page", 1, "--threads: page number (1-based)")
 	c.Flags().IntVar(&opts.pageSize, "page-size", 20, "--threads: threads per page")
+	c.Flags().StringVar(&opts.resumeTopic, "resume-topic", "",
+		"bring a topic thread's composed context into this session as the leading context block, then continue it")
+	c.Flags().StringVar(&opts.resumeQuery, "resume-query", "",
+		"bring a recall.what query's composed context into this session as the leading context block")
 	return c
 }
 
@@ -160,26 +184,24 @@ func runChat(cc *cobra.Command, opts chatOptions, lookupEnv envLookup) error {
 		return runThreadsList(ctx, cc, opts.json, opts.page, opts.pageSize)
 	}
 
-	// --thread <slug> with no prompt is "open" mode: validate the slug
-	// first. --json prints the summary and exits. Non-interactive parity
-	// (06-FORGE-SPEC §5.8): CASCADE_NO_INPUT=1 or the absence of a real
-	// TTY prints the same summary as plain text and exits 0 -- only a
-	// real TTY with neither flag falls through to the TUI below.
-	if opts.thread != "" && opts.prompt == "" {
-		summary, err := openThread(ctx, opts.thread)
-		if err != nil {
-			return err
-		}
-		if opts.json {
-			return writeThreadSummary(cc, summary)
-		}
-		noInput := false
-		if v, ok := lookupEnv("CASCADE_NO_INPUT"); ok && v == "1" {
-			noInput = true
-		}
-		if noInput || !isRealTTY(cc.InOrStdin()) {
-			return writeThreadSummaryText(cc, summary)
-		}
+	// The no-prompt refusals run BEFORE any daemon call: a session that
+	// cannot proceed never creates a thread.
+	if err := refuseNoPromptFreshSession(opts, lookupEnv); err != nil {
+		return err
+	}
+	if err := applyChatResume(ctx, cc, &opts); err != nil {
+		return err
+	}
+
+	// --thread <slug> with no prompt is "open" mode; see
+	// maybeWriteThreadSummary's own doc comment for the non-interactive
+	// parity rule this enforces.
+	done, err := maybeWriteThreadSummary(ctx, cc, opts, lookupEnv)
+	if err != nil {
+		return err
+	}
+	if done {
+		return nil
 	}
 
 	if opts.prompt == "" {
@@ -189,42 +211,14 @@ func runChat(cc *cobra.Command, opts chatOptions, lookupEnv envLookup) error {
 		if goruntime.GOOS == "windows" {
 			return errChatWindowsTUIRefusal
 		}
-		return runTUI(ctx, cc, opts.thread)
+		if err := refusePrivacyOnNamedThread(opts); err != nil {
+			return err
+		}
+		return runTUI(tuiContext(ctx, opts), cc, opts.thread)
 	}
 
-	privacy, err := resolveChatPrivacy(opts)
-	if err != nil {
-		return err
-	}
-	client := activeClient()
-	res, err := client.OneShot(ctx, OneShotRequest{Thread: opts.thread, Prompt: opts.prompt, Privacy: privacy})
-	if err != nil {
-		return err
-	}
-	return writeOneShotResult(cc, res, opts)
+	return dispatchOneShot(ctx, cc, opts)
 }
 
-// writeOneShotResult renders a completed OneShotResult to cc's own output
-// stream (cc.OutOrStdout() — never a bare os.Stdout reference in this
-// file, matching internal/build/outputgate.go's boundary) in one of three
-// shapes: --json's structured object; --quiet's content-only line; or the
-// default two-line "thread: <id>\nturn: <id>\n<content>" form.
-func writeOneShotResult(cc *cobra.Command, res OneShotResult, opts chatOptions) error {
-	out := cc.OutOrStdout()
-	if opts.json {
-		enc := json.NewEncoder(out)
-		return enc.Encode(struct {
-			TurnID   string `json:"turn_id"`
-			ThreadID string `json:"thread_id"`
-			Content  string `json:"content"`
-		}{TurnID: res.TurnID, ThreadID: res.ThreadID, Content: res.Content})
-	}
-	var b strings.Builder
-	if !opts.quiet {
-		fmt.Fprintf(&b, "thread: %s\nturn: %s\n", res.ThreadID, res.TurnID)
-	}
-	b.WriteString(res.Content)
-	b.WriteString("\n")
-	_, err := out.Write([]byte(b.String()))
-	return err
-}
+// dispatchOneShot/refuseNoPromptFreshSession/tuiContext/writeOneShotResult
+// live in chat_dispatch.go under Art.10.3's 300-line cap.

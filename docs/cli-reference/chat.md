@@ -18,6 +18,8 @@ cascade chat [prompt] [flags]
 | `--threads` | list threads (topic, id, message count), paginated, then exit |
 | `--page` | `--threads`: page number, 1-based (default 1) |
 | `--page-size` | `--threads`: threads per page (default 20) |
+| `--resume-topic` | bring a topic thread's composed context into this session as the next turn's leading block |
+| `--resume-query` | bring the thread a `recall.what` query resolves to into this session the same way |
 
 With a prompt it sends one turn and exits. With no prompt it opens the
 interactive terminal UI; under `CASCADE_NO_INPUT=1` with no prompt it
@@ -61,11 +63,11 @@ all existed and nothing called them (R-14.284).
 
 ## Threads
 
-`--thread <id>` continues a thread; the id is yours to choose and the
-thread row is created on first use. A run with no `--thread` currently
-needs one supplied — minting an id for a fresh conversation belongs with
-the `cascade_cpa_send` MCP tool's own thread-creation rule (T/S-43.T4),
-so that both surfaces mint the same way rather than two ways.
+`--thread <id>` continues a thread that already exists. Thread ids are
+minted by the daemon, never by a client: a run with no `--thread` starts
+a new thread whose id the daemon mints on its first turn (or, for a
+resume on a new session, through `chat.create_thread`), and a `--thread`
+naming a thread that does not exist is refused rather than created.
 
 ## Turn origin fields
 
@@ -192,3 +194,69 @@ for exactly what is missing and where). Until both close, `--topics` and
 from ordinary `cascade chat` turns. This is the same honest shape this
 page's own "It does not answer" section already documents for reply
 generation: the surface is real, the upstream producer is a later ticket.
+
+## Resume (bring-into-chat)
+
+`--resume-topic <id>` and `--resume-query <terms>` compose a recorded
+thread into the current session. In the interactive TUI the same flow is
+`/resume topic <id>` or `/resume query <terms>`. Both paths make the same
+`chat.resume` call (automation parity, 06-FORGE-SPEC §5 rule 8).
+
+```
+cascade chat --resume-topic <thread-id> -m "let's continue"
+cascade chat --resume-query "budget planning" -m "what did we decide?"
+```
+
+At most one of the two flags may be given; both together is a usage
+error and nothing is sent.
+
+**Session thread.** A resume is delivered INTO a session thread.
+
+- With `--thread <id>`, that thread is the session thread. It is never
+  switched: the resume is checked against it and the next turn is
+  appended to it. `--private` or `--local-only` together with `--thread`
+  and a resume is refused before anything is sent, because the named
+  thread's tier was fixed when it was created.
+- Without `--thread` (or on `/resume` before the session's first turn),
+  the command first calls `chat.create_thread` with the tier its flags
+  choose: `local-only` for `--local-only`, `restricted` for `--private`
+  or when no flag is given. The daemon mints the id and writes the thread
+  and its privacy marker in one transaction. The resume and the next turn
+  both use that thread. If the resume is refused, that thread keeps zero
+  turns and nothing is appended.
+
+**Delivery.** The composed block is printed (or shown in the TUI), but
+printing is not delivery: it is sent once, as `leading_context` on the
+session's next `chat.append_turn`, and the daemon stores it as segment 0
+of that turn, ahead of your prompt. A later turn carries none.
+
+**`--resume-topic <id>`** resumes that thread's turns, newest first,
+within the session budget.
+
+**`--resume-query <terms>`** asks `recall.what` (in-process, with this
+process's working directory for scope) and keeps its `conversation`
+results, best rank first; it resumes every thread those results name. File
+and memory results are never composed and never count toward the privacy
+tier below. Until `recall.what`'s conversation domain is
+restored it reports that domain unavailable, and `--resume-query` fails
+with an unavailable error; no conversation result is a not-found error.
+
+**Privacy.** The target tier is the session thread's stored marker. The
+source tier is the strictest marker among the resumed threads. The order is `local-only` >
+`restricted` > `internal` > `public`; a source more restrictive than the
+target is refused as a whole (a policy-denied error naming both tiers),
+and nothing is returned or appended. So a `local-only` thread only
+resumes into a `local-only` session, and a `restricted` thread never
+enters an `internal` or `public` one. The composed block always passes
+the vault substitution pass before it leaves the daemon, so no vaulted
+value appears in it.
+
+**Budget overflow.** Content over the session budget is truncated rather
+than failing: the session still opens, and each trimmed or dropped piece
+is reported as a `warning:` line on stderr.
+
+**Wire.** `chat.resume` takes `{session_thread_id` (required), exactly one
+of `topic_id` | `query`, optional `budget`, `cwd}` and returns
+`{thread_id, leading_context, tokens, trimmed[]}`. `chat.create_thread`
+takes `{privacy_mode}` (required, one of the four tier names) and returns
+`{thread_id}`. `--json` prints the `chat.resume` result with these names.

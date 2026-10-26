@@ -64,6 +64,7 @@ func newAcceptanceLiveMirrorHarness(t *testing.T, wrapBus func(EventBus) EventBu
 	clock := runtime.NewSystemClock()
 	bus := events.New(storetest.NewMemStore(), clock)
 	store := newTestStore(t)
+	seedNamedThreads(t, store, "th-lm-dir1", "th-lm-dir2")
 	var adapterBus EventBus = bus
 	if wrapBus != nil {
 		adapterBus = wrapBus(bus)
@@ -73,7 +74,6 @@ func newAcceptanceLiveMirrorHarness(t *testing.T, wrapBus func(EventBus) EventBu
 	adapter.RegisterHandlers(registry)
 	known := func(kind events.EventKind) bool { return kind == turnAppendedKind }
 	srv := daemon.NewRPCServer(registry, rpc.NewSSEHandler(bus, turnAppendedNamespace, known, clock))
-
 	signals := make(chan os.Signal, 1)
 	ready := make(chan struct{})
 	done := make(chan error, 1)

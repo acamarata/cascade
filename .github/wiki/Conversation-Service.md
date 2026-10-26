@@ -74,8 +74,9 @@ no turn or segment data is ever touched by archiving.
 a plain Go method -- `ListTurnsPage`, `ListThreadsPage`, `SearchTurns`,
 `ArchiveThread`, `UnarchiveThread`, `PruneTurns` -- for a future
 CLI/MCP surface to call. None of them are registered on the JSON-RPC
-registry yet: `chat.append_turn`, `chat.get_thread`,
-`chat.list_threads` and `chat.search` are the wire methods today.
+registry yet: `chat.append_turn`, `chat.create_thread`, `chat.get_thread`,
+`chat.list_threads`, `chat.search` and `chat.resume` are the wire methods
+today.
 
 ## Turn provenance
 
@@ -119,15 +120,29 @@ invert. `provider.SensitivityTier`'s own zero value is `restricted` for
 the same reason.
 
 `chat.append_turn` takes an optional `privacy_mode`, applied to the
-thread that call CREATES. Sent with an existing `thread_id` it is
-REFUSED, naming the thread: a caller that believes it privatised a thread
-and did not is the failure this prevents. The mode is written before the
-turn is committed, so there is no window in which a thread has content
-and reads as looser than it was created.
+thread that call CREATES (a request with no `thread_id`; the daemon mints
+the id). Sent with a `thread_id` it is REFUSED, naming the thread: a
+caller that believes it privatised a thread and did not is the failure
+this prevents. A `thread_id` that names no thread is refused too, so no
+caller picks an id. The thread row, its marker (an explicit `restricted`
+when the request names none), the turn and its segments commit in ONE
+transaction, so there is no window in which a thread has content and reads
+as looser than it was created, and a refused request leaves no marker.
 
 `Adapter.SetThreadPrivacy` / `Adapter.ThreadPrivacy` are the Go surface.
 Enforcement is the conductor's -- see the security posture note on
 [thread privacy modes](https://github.com/acamarata/cascade/blob/main/docs/security-posture/egress-firewall.md).
+
+## Bring-into-chat resume
+
+`chat.resume` composes a recorded thread, or the conversation results of a
+free-text query, into a session as the leading block of its next turn. The
+target tier is the session thread's stored marker; the source tier is the
+strictest marker among the resumed threads; a source more restrictive than
+the target is refused whole. The block transits the `conversation-resume`
+egress class through the process firewall, and the client sends it once as
+`leading_context` on the next `chat.append_turn`, where it is stored as
+segment 0. A principal resumes only between threads in its own scope.
 
 ## Secret scrub pipeline
 

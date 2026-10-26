@@ -33,6 +33,7 @@ func TestEgressClassesR21265Registered(t *testing.T) {
 		{EgressClassNselfBackend, "nself-backend", "P1-E25-W5-S52-T2", true, false},
 		{EgressClassWikiGitPush, "wiki-git-push", "P1-E25-W5-S51-T6", true, false},
 		{EgressClassRecallWhat, "recall-what", "P1-E22-W5-S47-T1", true, false},
+		{EgressClassConversationResume, "conversation-resume", "P1-E22-W5-S47-T2", true, true},
 	}
 	registry := DefaultRegistry()
 	if got, want := len(registry.Classes()), len(cases); got != want {
@@ -56,7 +57,8 @@ func TestEgressClassesR21265Registered(t *testing.T) {
 		if cfg.AllowRestricted != tc.allowRestricted {
 			t.Errorf("class %q allowRestricted = %v, want %v", tc.id, cfg.AllowRestricted, tc.allowRestricted)
 		}
-		if cfg.AllowLocalOnly {
+		if cfg.AllowLocalOnly && tc.class != EgressClassConversationResume { // resume admits all tiers: TestEgressClassConversationResumeAdmitsAllTiers
+
 			t.Errorf("class %q admits local-only content; no shipped class does", tc.id)
 		}
 	}
@@ -107,4 +109,26 @@ func godocOwnerList(t *testing.T) string {
 	}
 	t.Fatal("doc.go carries no owner list line starting with K/S-22.T3 (conductor)")
 	return ""
+}
+
+// TestEgressClassConversationResumeAdmitsAllTiers pins the resume class's
+// rule: it admits all four tiers, because where resumed content may go is
+// decided per request before the class is reached (the source-versus-target
+// rule in internal/conversation), and the class's own job is unconditional
+// vault substitution. Each tier is driven through the real entry point.
+func TestEgressClassConversationResumeAdmitsAllTiers(t *testing.T) {
+	cfg, ok := DefaultRegistry().Lookup(EgressClassConversationResume)
+	if !ok || !cfg.Enabled || !cfg.AllowRestricted || !cfg.AllowLocalOnly || len(cfg.AllowedTiers) != 0 {
+		t.Fatalf("conversation-resume config = %+v (registered %v); want enabled, restricted+local-only admitted, no narrowing list", cfg, ok)
+	}
+	engine := newTestEngine(t, nil)
+	for _, tier := range []SensitivityTier{TierLocalOnly, TierRestricted, TierInternal, TierPublic} {
+		out, err := engine.InterceptClass(context.Background(), EgressClassConversationResume, tier, []byte("payload"))
+		if err != nil || string(out) != "payload" {
+			t.Errorf("tier %s: InterceptClass = %q, %v; want the payload admitted", tier, out, err)
+		}
+	}
+	if _, err := engine.InterceptClass(context.Background(), EgressClassConversationResume, SensitivityTier(99), []byte("x")); !errors.Is(err, ErrSensitivityViolation) {
+		t.Errorf("out-of-range tier = %v, want ErrSensitivityViolation (the range guard still holds)", err)
+	}
 }

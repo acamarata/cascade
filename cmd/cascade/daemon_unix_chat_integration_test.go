@@ -70,18 +70,18 @@ func TestBuildRPCServer_ChatReachableOverRealSocket(t *testing.T) {
 	// to land: a handler registered over a store that cannot write would
 	// also answer something other than method-not-found.
 	result := chatCall(t, client, "chat.append_turn", map[string]any{
-		"thread_id": "wiring-e2e",
-		"role":      "user",
-		"segments":  []map[string]string{{"kind": "text", "content": "hello"}},
+		"role":     "user",
+		"segments": []map[string]string{{"kind": "text", "content": "hello"}},
 	})
 	turnID, _ := result["turn_id"].(string)
+	threadID, _ := result["thread_id"].(string)
 	if turnID == "" {
 		t.Fatalf("chat.append_turn returned no turn id: %v", result)
 	}
 
 	// And it is readable back through a SECOND method, so the store the
 	// write went to is the store the reads come from.
-	thread := chatCall(t, client, "chat.get_thread", map[string]any{"thread_id": "wiring-e2e"})
+	thread := chatCall(t, client, "chat.get_thread", map[string]any{"thread_id": threadID})
 	turns, _ := thread["turns"].([]any)
 	if len(turns) != 1 {
 		t.Fatalf("chat.get_thread returned %d turn(s) after one append: %v", len(turns), thread)
