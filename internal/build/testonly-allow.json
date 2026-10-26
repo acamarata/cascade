@@ -72,13 +72,6 @@
   },
   {
     "caller_site": "internal/conversation/reply.go",
-    "expected_caller": "the chat reply pipeline landed by P1-E45-W10-S89-T6, whose files_scope adds internal/conversation/reply.go: it constructs a Composer over a real TokenCounter and calls Compose to assemble the per-turn context it sends through the Conductor. Retire this entry when that lands.",
-    "reason": "P1-E21-W5-S46-T1 builds the context Composer as a standalone, fully-tested unit (bounded-context invariant table + generated matrix, composer_invariant_test.go). Its production caller is the first place a real per-request context is assembled from tier+memory+retrieval+history content for a chat turn, which is the reply pipeline of P1-E45-W10-S89-T6 ('Deliver promised chat replies and cancellation'), explicitly out of this ticket's files_scope (internal/context/composer_*.go and testdata only). CORRECTION (P1-E21-W5-S46-T2 rework): this entry previously named internal/conversation/compose.go under retire_ticket P1-E21-W5-S46-T5, and no ticket in the phase adds that file -- S-46.T5 is the topic-auto-filing and bounded-context acceptance ticket and adds no composition root. The promise was therefore unfalsifiable as written.",
-    "retire_ticket": "P1-CPA-13",
-    "symbol": "internal/context.NewComposer"
-  },
-  {
-    "caller_site": "internal/conversation/reply.go",
     "expected_caller": "the same chat reply pipeline named in internal/context.NewComposer's entry above (P1-E45-W10-S89-T6, whose files_scope adds internal/conversation/reply.go): it constructs a real Summarizer via NewSummarizer (a provider.ModelExecutor, a provider.Store, a provider.TokenCounter, a Clock and the daemon's event publisher) and passes it as NewComposer's SummarizerGetter argument. Retire this entry when that lands.",
     "reason": "P1-E21-W5-S46-T2 builds the rolling-summary engine (Summarizer: GetSummary's entity/granularity-keyed regeneration, storage round-trip via the B/S-02 provider.Store abstraction, version-keyed single-flight guard, and the Summarize method satisfying composer_types.go's SummarizerGetter seam) as a standalone, fully-tested unit -- summarizer_core_test.go, summarizer_dispatch_test.go, summarizer_rolling_test.go, summarizer_degrade_test.go, summarizer_concurrency_test.go, summarizer_cheap_lane_test.go. Its production caller is the same reply pipeline that first constructs a Composer (see NewComposer's own entry above, same file, same ticket): this ticket's files_scope is limited to internal/context/summarizer_*.go and includes no composition-root file. T1 and T2 share no compile-time dependency by design (T2 depends only on the SummarizerGetter interface T1 declares), so neither ticket's files_scope can wire the other in. CORRECTION (this ticket's rework): the entry previously named internal/conversation/compose.go under retire_ticket P1-E21-W5-S46-T5, a file no ticket in the phase adds.",
     "retire_ticket": "P1-CPA-13",
@@ -587,20 +580,6 @@
     "reason": "The R-21.197 one-transaction release seam this ticket's contract requires (a job whose node went unavailable, when canceled, releases its W9 reservation, AC lease and worktree together). No ticket in this tree has yet built the real reservation/lease/worktree types this seam composes - AH/S-70.T3 builds the analogous gate-denied stall/release path but for a different trigger. This function is real, tested (TestCancelReleasesReservationLeaseWorktree/TestCancelInFlightRunsAllDespiteOneFailure), and ready to compose whichever ticket lands those release functions first. (caller_site corrected during the AC/S-59.T5 x T3 merge-fix: internal/jobs/scheduler.go now exists and never called this symbol -- the earlier promise could not come true.)",
     "retire_ticket": "UNOWNED",
     "symbol": "internal/nodes.CancelInFlight"
-  },
-  {
-    "caller_site": "cmd/cascade/self_update.go",
-    "expected_caller": "AA/S-55.T7's `cascade self-update` command; retire this entry once that ticket lands",
-    "reason": "The typed refusal DeferSelfUpdate's caller returns; ships alongside DeferSelfUpdate for the same reason (AA/S-55.T7 has not landed) -- see that entry's reason for the full context.",
-    "retire_ticket": "P1-SHIP-04",
-    "symbol": "internal/nodes.ChannelDeferralError"
-  },
-  {
-    "caller_site": "cmd/cascade/self_update.go",
-    "expected_caller": "AA/S-55.T7's `cascade self-update` command, which calls DeferSelfUpdate(buildinfo.ResolvedInstallChannel()) before acting and returns ChannelDeferralError() when it reports true; retire this entry once that ticket lands",
-    "reason": "P1-E17-W4-S36-T5 implements the §D-33 install-channel deferral gate (node-managed installs must defer upgrades to the controller rollout) fully implemented and unit-tested, but the consuming command, `cascade self-update`, is AA/S-55.T7's own ticket and does not exist anywhere in this tree yet -- there is no self-update code path this ticket could wire the gate into.",
-    "retire_ticket": "P1-SHIP-04",
-    "symbol": "internal/nodes.DeferSelfUpdate"
   },
   {
     "caller_site": "cmd/cascade/node_status.go",
@@ -1648,5 +1627,13 @@
     "reason": "P1-TOP-01 ships topology.EnsureHome, the per-profile 0700 runtime home, implemented and tested (mode creation, tightening, symlink and file refusal, windows declared refusal). Its first production caller is account enrollment in P1-TOP-07 (enroll.go), and the spawn path that passes the home to a runtime is P1-TOP-17; neither exists yet. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once enroll.go exists.",
     "retire_ticket": "P1-TOP-07",
     "symbol": "internal/fleet/topology.EnsureHome"
+  },
+  {
+    "added_by_ticket": "P1-SEC-03",
+    "caller_site": "cmd/cascade/daemon_unix_approval_keys.go",
+    "expected_caller": "the daemon policy wiring that builds RPCDeps for the approval verbs, which passes policy.WitnessAttestor(status.Verifier) (the daemon's ElevationStatus.Verifier) as the Attestor so approval.grant redeems only under a witness for approval.grant; retire this entry once that wiring calls it. caller_site names the new approval-key file that ticket adds; if the call lands in daemon_unix_policy.go instead, retarget caller_site there in the same change",
+    "reason": "P1-SEC-03 ships policy.WitnessAttestor (the Attestor that reads the elevation middleware's VerifiedElevation witness, requires it to be minted under the daemon's issuer (via the verify-only WitnessVerifier), and matches its Method) implemented and tested through the real middleware, but wiring it into RPCDeps is P1-SEC-23's (daemon_unix_policy.go is outside this ticket's scope), so no production code calls it yet and a call from here would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry if the named file exists without the call.",
+    "retire_ticket": "P1-SEC-23",
+    "symbol": "internal/policy.WitnessAttestor"
   }
 ]
