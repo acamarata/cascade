@@ -127,6 +127,26 @@ can reach the helper. Registration is one line in
 Until both hold, the helper's behaviour is tested through the keystore
 directly, not through the production source list.
 
+## Release
+
+CI never builds, receives or packs the helper: no goreleaser build, archive,
+hook or image names it, and linux and windows archives never carry it. The
+build Mac adds it at the rc cut with `.github/scripts/assemble-rc-dist.sh`
+(see [release train](developer/release-train.md#assembling-dist-id)), which
+builds it with `.github/scripts/build-elevate-helper.sh` from the same clean
+commit as the release `cascade` (checked through `vcs.revision`), places it beside
+`cascade` in each darwin archive and signs the helper, `cascade` and
+`cascade-github` with the hardened runtime and the identifiers the
+requirements above pin (`cascade-elevate-helper` and `cascade`).
+`install.sh` and `cascade self-update` install it beside `cascade` and swap
+it together with the other executables.
+
+`apps/elevate-helper/entitlements.plist` is applied to the helper only. It
+is empty while the probe outcome is NEEDS_PROFILE: the Keychain entitlements
+need an embedded provisioning profile, and signing them without one makes
+the helper unlaunchable. Adding the profile and the entitlement is an owner
+step; until then a signed release helper still reports `available: false`.
+
 ## Limits
 
 - **Unattended signing.** `sign` and `delete` show a LocalAuthentication prompt.

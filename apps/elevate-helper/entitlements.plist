@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements of cascade-elevate-helper, applied only to the helper by
+  .github/scripts/assemble-rc-dist.sh. The helper probe found NEEDS_PROFILE:
+  the data-protection Keychain wants keychain-access-groups or
+  application-identifier, which on macOS need an embedded provisioning
+  profile. Signing those without a profile makes the helper unlaunchable, so
+  this dict stays empty until the profile exists (see
+  docs/elevation-helper.md). It never carries get-task-allow,
+  allow-dyld-environment-variables, disable-library-validation or debugger:
+  Cascade's requirement on the helper refuses them.
+-->
+<plist version="1.0">
+<dict/>
+</plist>

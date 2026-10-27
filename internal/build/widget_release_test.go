@@ -254,7 +254,7 @@ func TestSignNotarizeNoSecretEcho(t *testing.T) {
 	if !strings.Contains(seen.String(), "[redacted]") || !strings.Contains(f.file("notary-journal.log"), "submitted id="+wrSubmissionID) {
 		t.Error("the failure output was not shown redacted, or the journal lacks the submission id")
 	}
-	for _, s := range []string{wrBuild, wrSig} {
+	for _, s := range wrScanned {
 		if regexp.MustCompile(`(?m)set -[A-Za-z]*x|xtrace|^#!.*\s-[A-Za-z]*x`).MatchString(ishRead(t, filepath.Join(f.root, ".github", "scripts", s))) {
 			t.Errorf("%s enables xtrace", s)
 		}
@@ -269,7 +269,7 @@ func TestSignNotarizeNoKeychainWrites(t *testing.T) {
 			t.Errorf("the keychain grep misses the seeded line %q", l)
 		}
 	}
-	for _, s := range []string{wrBuild, wrSig} {
+	for _, s := range wrScanned {
 		if m := bad.FindString(ishRead(t, filepath.Join(root, ".github", "scripts", s))); m != "" {
 			t.Errorf("%s contains a keychain write: %q", s, m)
 		}

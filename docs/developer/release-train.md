@@ -117,6 +117,67 @@ The checksums file is extended first and signed last. No CI secret holds a
 release signing key; promotion consumes only `dist-<id>` and signs or copies
 images only by the digests in the signed `cascade_images.txt`.
 
+### Assembling dist-<id>
+
+`.github/scripts/assemble-rc-dist.sh` does the assembly on the build Mac. It
+reads `CASCADE_BUILD_DIR` (the pulled `build-<id>`), `CASCADE_DIST_OUT` (must
+not exist), `CASCADE_APPLE_SIGNING_IDENTITY` (`-` for ad-hoc),
+`CASCADE_NOTARY_SKIP`, `CASCADE_MINISIGN_KEY` (a key file; minisign reads its
+passphrase from the script's stdin, never from argv or the environment) and
+`CASCADE_RELEASE_VERSION`. With no argument it runs `sign`, `submit` and
+`finish` in one call; real notarization can be resumed with `finish` (exit 75
+while Apple still reports In Progress). Ad-hoc signing (`-`) and
+`CASCADE_NOTARY_SKIP=1` are refused unless the version is a `-SNAPSHOT-`
+rehearsal. `$CASCADE_DIST_OUT.lock` lets one assembly at a time work on an
+output. Run it from a clean clone at the release commit: the helper must come
+from the commit the darwin `cascade` was built from.
+
+1. **sign**: copy the build input into a private work directory
+   (`$CASCADE_DIST_OUT.work`, mode 0700) and check every copied file against
+   the copied `cascade_checksums.txt` before anything else. Each darwin
+   archive must hold exactly `cascade`, `cascade-github`, `README.md`,
+   `LICENSE` and `THIRD_PARTY_LICENSES`, and both darwin `cascade` binaries
+   must name the same `vcs.revision` and `vcs.time` with `vcs.modified=false`
+   (a `metadata.json`, when present, must name that commit). Build both
+   helpers with `build-elevate-helper.sh` (cgo, `-trimpath`, without the
+   caller's `GOFLAGS`, `GOEXPERIMENT`, cgo flags or git location overrides
+   such as `GIT_DIR`; refused unless its own tree is a clean git checkout at
+   that commit with a real `.git`, the go env file sets no build or module
+   source setting, and
+   `go version -m` shows `CGO_ENABLED=1`, darwin, the arch, no `-tags`, the
+   same `vcs.revision` and `vcs.modified=false`, and the devkeys guard
+   passes), place each beside
+   `cascade`, and codesign the helper, `cascade-github` and `cascade` with the
+   hardened runtime, a secure timestamp and their own identifiers
+   (`cascade-elevate-helper`, `cascade-github`, `cascade`).
+   `apps/elevate-helper/entitlements.plist` goes on the helper only. Every
+   signature must pass `codesign --verify --strict` with its identifier.
+2. **submit**: zip the six signed executables and notarize them through
+   `notary-lib.sh` (intent line, then the submission id, in the journal).
+3. **finish**: after Accepted (or a skip-mode submit), re-pack each darwin
+   archive deterministically (C-sorted names, the commit time (`vcs.time` of
+   the verified `cascade`) as every mtime, uid and gid 0, no extended
+   attributes, `gzip -n`). The packed archive is extracted again and every executable
+   must equal the signed bytes and still verify. The SBOMs are regenerated
+   with the pinned syft (the version `release.yml` installs). The darwin
+   lines of `cascade_checksums.txt` and the cask's darwin `sha256` fields are
+   rewritten, the cask installs `cascade-elevate-helper` on macOS, the
+   `cascade_images.txt` line is added and minisign signs the checksums with
+   the trusted comment `cascade <version> checksums`.
+
+Linux and windows archives, their SBOMs and `install.sh` are copied
+byte-identical and carry no helper. `CASCADE_DIST_OUT` is created only by the
+final step, which refuses when anything appeared there meanwhile, so a
+refusal leaves nothing there; a failed `sign` also removes the work
+directory. The passphrase descriptor is closed for the helper build (go, clang), codesign,
+ditto, notarytool and syft; only minisign reads it. The scripts never write to a keychain, never trace
+(`set -x`) and print `notarytool` output only through the redaction filter.
+A snapshot rehearsal (`goreleaser release --snapshot`) has no
+`cascade_images.txt`; any other version without it is refused. Stage a
+snapshot `dist/` the way rc-publish does (`cp install.sh dist/` and
+`dist/homebrew/Casks/cascade.rb` to `dist/Casks/cascade.rb`) before using it
+as `CASCADE_BUILD_DIR`.
+
 ## Dual tags
 
 Each release has an artifact tag and a Go module tag. The binary is

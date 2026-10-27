@@ -8,6 +8,16 @@ when. See `.goreleaser.yaml` and `.github/workflows/release.yml` for the
 executable source of truth: this document explains the *why*, not a
 duplicate of the config.
 
+Related pages:
+
+- [Release train](release-train.md): rc-publish, the `build-<id>` payload and
+  the local signing step that assembles `dist-<id>`.
+- [Promotion](promotion.md): how a signed `dist-<id>` becomes a public release.
+- [Install](../install.md): what `install.sh` verifies and installs.
+- [Elevation helper](../elevation-helper.md): the darwin-only
+  `cascade-elevate-helper` that the local signing step adds to the darwin
+  archives.
+
 ## Pipeline layout
 
 | File | Owns |
@@ -18,6 +28,8 @@ duplicate of the config.
 | `.github/docker/Dockerfile` | OCI server-profile image definition (R-14.119, not at repo root; Art.10.1's clean-root allowlist has no root-Dockerfile entry, and `.github/` is where Art.10.1 already re-homes CI-adjacent infrastructure). |
 | `docs/THIRD_PARTY_LICENSES` | Third-party license report for every module actually compiled into a release binary, across all three release GOOSes. |
 | `.github/scripts/build-widget-release.sh`, `.github/scripts/sign-notarize-widget.sh` | The macOS widget's Developer ID build, signing, notarization and packaging; see [widget release](../widget/release.md). |
+| `.github/scripts/notary-lib.sh` | The shared notary core (journal, credential check, `notarytool` call, redaction) of the widget and payload scripts. |
+| `.github/scripts/build-elevate-helper.sh`, `.github/scripts/assemble-rc-dist.sh` | The build Mac's local signing step: build the cgo helper, sign and notarize the darwin executables and assemble `dist-<id>`; see [release train](release-train.md#the-local-signing-step). |
 
 ## Release matrix
 

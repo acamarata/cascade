@@ -46,77 +46,10 @@ SKIP=0
 if [ "${CASCADE_NOTARY_SKIP:-}" = 1 ]; then SKIP=1; fi
 [ -d "$APP" ] || die "missing $APP (run build-widget-release.sh first)"
 
-journal() {
-	printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >>"$JOURNAL"
-}
-
-# require_real refuses before any signing when an identity or key is missing.
-require_real() {
-	if [ -z "$IDENTITY" ] || [ "$IDENTITY" = "-" ]; then
-		die "real mode needs a Developer ID identity in CASCADE_APPLE_SIGNING_IDENTITY (or CASCADE_NOTARY_SKIP=1)"
-	fi
-	[ -n "${CASCADE_APPLE_NOTARY_KEY_ID:-}" ] || die "CASCADE_APPLE_NOTARY_KEY_ID is required in real mode"
-	[ -n "${CASCADE_APPLE_NOTARY_KEY_ISSUER:-}" ] || die "CASCADE_APPLE_NOTARY_KEY_ISSUER is required in real mode"
-	[ -n "${CASCADE_APPLE_NOTARY_KEY_PATH:-}" ] || die "CASCADE_APPLE_NOTARY_KEY_PATH is required in real mode"
-	if ! [ -f "$CASCADE_APPLE_NOTARY_KEY_PATH" ] || ! [ -r "$CASCADE_APPLE_NOTARY_KEY_PATH" ] || ! [ -s "$CASCADE_APPLE_NOTARY_KEY_PATH" ]; then
-		die "CASCADE_APPLE_NOTARY_KEY_PATH does not name a readable, non-empty file"
-	fi
-}
-
-notary() {
-	xcrun notarytool "$@" --key "$CASCADE_APPLE_NOTARY_KEY_PATH" \
-		--key-id "$CASCADE_APPLE_NOTARY_KEY_ID" --issuer "$CASCADE_APPLE_NOTARY_KEY_ISSUER"
-}
-
-# redact prints TEXT to stderr, replacing with "[line withheld]" any line that
-# contains a line of the key file, a base64 run of 40 or more characters or
-# "PRIVATE KEY", and with the key id and issuer replaced in any letter case
-# (longer value first). If the key file cannot be read it withholds everything. awk reads the key path, id
-# and issuer from its environment, never from argv.
-redact() {
-	printf '%s\n' "$1" | awk '
-		function scrub(s, w, i, o) {
-			if (w == "") return s
-			o = ""
-			while ((i = index(tolower(s), w)) > 0) { o = o substr(s, 1, i - 1) "[redacted]"; s = substr(s, i + length(w)) }
-			return o s
-		}
-		function b64run(s) {
-			while (match(s, /[A-Za-z0-9+\/=]+/)) { if (RLENGTH >= 40) return 1; s = substr(s, RSTART + RLENGTH) }
-			return 0
-		}
-		BEGIN {
-			id = tolower(ENVIRON["CASCADE_APPLE_NOTARY_KEY_ID"]); iss = tolower(ENVIRON["CASCADE_APPLE_NOTARY_KEY_ISSUER"])
-			f = ENVIRON["CASCADE_APPLE_NOTARY_KEY_PATH"]
-			while ((r = (getline l < f)) > 0) { sub(/\r$/, "", l); if (length(l) >= 4) key[l] = 1 }
-			if (r < 0) nokey = 1
-			close(f)
-		}
-		{
-			sub(/\r$/, "")
-			if (nokey) { if (!told++) print "[output withheld: key file unreadable]"; next }
-			for (k in key) if (index($0, k)) { print "[line withheld]"; next }
-			if (/PRIVATE KEY/ || b64run($0)) { print "[line withheld]"; next }
-			print (length(id) > length(iss) ? scrub(scrub($0, id), iss) : scrub(scrub($0, iss), id))
-		}' >&2
-}
-
-# json_field NAME TEXT prints the string value of "NAME" in TEXT (the last one
-# on a line; notarytool prints flat JSON).
-json_field() {
-	printf '%s\n' "$2" | sed -n -E 's/.*"'"$1"'"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' | sed -n 1p
-}
-
-valid_id() {
-	[[ "$1" =~ ^[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$ ]]
-}
-
-# confirmed_id prints the submission id journaled after the last begin, intent
-# or skip line, or nothing.
-confirmed_id() {
-	[ -f "$JOURNAL" ] || return 0
-	awk '/^[^ ]+ (begin|intent|skip)( |$)/{id=""} /^[^ ]+ submitted id=/{id=$0; sub(/^[^ ]+ submitted id=/, "", id)} END{print id}' "$JOURNAL"
-}
+# The journal, credential check, notarytool call, redaction and journal
+# parsing are the shared notary core in notary-lib.sh.
+# shellcheck source=.github/scripts/notary-lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/notary-lib.sh"
 
 # clear_outputs removes the marker, the packages and their checksum lines so
 # nothing from an earlier run survives a new one.
@@ -148,7 +81,7 @@ package() {
 
 submit_real() {
 	local zip="$OUT/.notary/submit.zip" out id sha
-	require_real
+	notary_require_real
 	journal "begin"
 	clear_outputs
 	if [ -d "$EXT" ]; then
@@ -178,7 +111,7 @@ submit_real() {
 
 finish_real() {
 	local id out status
-	require_real
+	notary_require_real
 	id="$(confirmed_id)"
 	valid_id "$id" || die "no submission confirmed after the last submit; run submit again"
 	if ! out="$(notary info "$id" --output-format json 2>&1)"; then
