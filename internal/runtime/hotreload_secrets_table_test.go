@@ -144,6 +144,11 @@ func TestSecretsReloadsAreSerialised(t *testing.T) {
 	r := newRig(t, "")
 	r.hr.SetElevationApprover(approveAll{})
 	var renamed sync.WaitGroup
+	// Windows refuses a rename over a target another rename is replacing at
+	// that instant, so the workers take turns on the file swap. The overlap
+	// under test is between Reloads, which the barrier below still releases
+	// together.
+	var swapMu sync.Mutex
 	var inflight, overlaps, entered atomic.Int32
 	r.hr.SetSecretsApplier(serialisedApplier(t, r, &renamed, &inflight, &overlaps, &entered))
 	var wg sync.WaitGroup
@@ -154,7 +159,9 @@ func TestSecretsReloadsAreSerialised(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			<-start
+			swapMu.Lock()
 			replaceFile(t, fmt.Sprintf("%s.%d", r.path, i), r.path, fmt.Sprintf("[secrets]\nentropy_floor = 2.%d\n", i))
+			swapMu.Unlock()
 			renamed.Done()
 			// No Reload starts until every rename is done: on Windows a rename
 			// over a file another Reload has open fails.
@@ -177,15 +184,31 @@ func TestSecretsReloadsAreSerialised(t *testing.T) {
 }
 
 // replaceFile writes body to tmp and renames it over dst, so a reader sees
-// either file whole.
+// either file whole. On Windows a rename over a file that something else holds
+// open (a virus scanner, the indexer) fails for a moment with an access or
+// sharing error; only that error is retried, for a bounded time. Any other
+// error, and an error that outlasts the bound, fails the test.
 func replaceFile(t *testing.T, tmp, dst, body string) {
 	t.Helper()
 	if err := os.WriteFile(tmp, []byte(body), 0o600); err != nil {
 		t.Error(err)
 		return
 	}
-	if err := os.Rename(tmp, dst); err != nil {
-		t.Error(err)
+	delay := time.Millisecond
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		err := os.Rename(tmp, dst)
+		if err == nil {
+			return
+		}
+		if !transientReplaceError(err) || time.Now().After(deadline) {
+			t.Error(err)
+			return
+		}
+		time.Sleep(delay)
+		if delay < 32*time.Millisecond {
+			delay *= 2
+		}
 	}
 }
 
