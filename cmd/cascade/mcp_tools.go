@@ -24,18 +24,22 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 
+	"github.com/acamarata/cascade/internal/client"
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/mcp"
 	"github.com/acamarata/cascade/internal/mcp/coretools"
 	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/policy"
+	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/retrieval/fusion"
 	"github.com/acamarata/cascade/internal/retrieval/recall"
 	"github.com/acamarata/cascade/internal/retrieval/rrf"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -235,4 +239,61 @@ func runClosers(closers []func()) {
 			closer()
 		}
 	}
+}
+
+// applyPrincipalMode re-binds reg for a principal-bearing process. With no
+// token it changes nothing (the owner view). With a token, every registered
+// method with a declared access class is re-bound to scopedForwarder, every
+// method without one refuses KindPermissionDenied, and a dial failure leaves
+// the classed methods refusing KindUnavailable. The token is read once and
+// bound into the client; a present but empty token refuses every classed
+// method without dialing.
+func applyPrincipalMode(reg *rpc.Registry, getenv func(string) string, dial func(token string) (*client.Client, error)) error {
+	if reg == nil || getenv == nil || dial == nil {
+		return cascade.New(cascade.KindInternal, "mcp: principal mode needs a registry, getenv and a dialer")
+	}
+	token := getenv(principal.EnvToken)
+	if token == "" {
+		return nil
+	}
+	var c *client.Client
+	var dialErr error
+	emptyToken := token == emptyTokenMarker
+	if !emptyToken {
+		c, dialErr = dial(token)
+	}
+	if !emptyToken && dialErr == nil && c == nil {
+		dialErr = cascade.New(cascade.KindUnavailable, "mcp: daemon dialer returned no client")
+	}
+	for _, method := range reg.Methods() {
+		switch {
+		case !mcpAccessClassed(method):
+			reg.Register(method, refuseUnclassed(method))
+		case emptyToken:
+			reg.Register(method, refuseWith(errEmptyToken))
+		case dialErr != nil:
+			reg.Register(method, refuseUnreachable(method, dialErr))
+		default:
+			reg.Register(method, scopedForwarder(c, method))
+		}
+	}
+	return nil
+}
+
+// mcpAccessClassed reports whether method carries a caller-principal access
+// declaration. It asks a scratch registry with the access policy on to admit
+// a caller-less request: an undeclared or unknown class is refused as an
+// internal error, a declared one either admits or refuses as permission
+// denied. Reading the answer from the registry keeps the declarations the
+// only source of truth.
+func mcpAccessClassed(method string) bool {
+	probe := rpc.NewRegistry()
+	probe.SetAccessPolicy(nil)
+	probe.Register(method, func(context.Context, json.RawMessage) (any, error) { return nil, nil })
+	_, eo := probe.Dispatch(context.Background(), &rpc.Request{JSONRPC: "2.0", Method: method})
+	if eo == nil {
+		return true
+	}
+	data, _ := eo.Data.(map[string]string)
+	return data["kind"] == cascade.KindPermissionDenied.String()
 }

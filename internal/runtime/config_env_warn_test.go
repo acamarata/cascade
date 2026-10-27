@@ -212,16 +212,15 @@ func TestLoadNilWarnUsesDefaultSlog(t *testing.T) {
 	}
 }
 
-// dynamicEnvReads declares every env-accessor call whose first argument is
-// not a compile-time constant: file:line from the repo root -> the env
-// names it reads. "<caller-named>" marks a pass-through adapter whose
-// caller names the variable (a constant there is scanned at that call);
-// "<operator-named>" marks a name taken from a flag or from config. Every
-// CASCADE_* name here must be reserved. Slices of names are not evaluated:
-// their names are listed by hand.
+// dynamicEnvReads declares every env-accessor call whose first argument is not a compile-time
+// constant: file:line from the repo root -> the env names it reads. "<caller-named>" marks a
+// pass-through adapter whose caller names the variable (a constant there is scanned at that call);
+// "<operator-named>" marks a name taken from a flag or from config. Every CASCADE_* name here must be
+// reserved. Slices of names are not evaluated: their names are listed by hand.
 var dynamicEnvReads = map[string][]string{
 	"cmd/cascade/backup_key.go:187":            {"<operator-named>"}, // --passphrase-env
 	"cmd/cascade/init_adapters.go:30":          {"<caller-named>"},
+	"cmd/cascade/mcp.go:87":                    {"CASCADE_PRINCIPAL_TOKEN"}, // os.LookupEnv through mcpPrincipalGetenv: principal.EnvToken
 	"cmd/cascade/profile_attach.go:62":         {"<caller-named>"},
 	"internal/backup/targets.go:227":           {"<operator-named>"}, // name match only: passes getenv and the S3 prefix to s3.go
 	"internal/backup/targets/s3.go:69":         {"<operator-named>"}, // target S3 env prefix + suffix

@@ -37,10 +37,40 @@ refuses. The MCP dispatcher is OwnerView, never Open.
 | Widget status transport | `status.get` is Open; `status.widget` requires an owner Caller |
 | Plugin processes | Host handle; plugin token minting is refused |
 | Node dispatch clients | Owner-only pending the dedicated node transport |
-| In-process `cascade mcp serve` | Separate registry; daemon principal policy does not yet cover it |
+| `cascade mcp serve --stdio`, no token | Owner view from its own registry, like the owner CLI |
+| `cascade mcp serve --stdio`, token set | Every declared method forwarded to the daemon with the token; refused when unreachable |
+| `cascade mcp serve --socket` peer | Header-less or owner marker: owner, never `OwnerCLI`; a principal token is refused |
 
-The in-process MCP registry gap belongs to P1-SEC-38. Launcher binding belongs
-to the agent, harness and node consumers. No model-facing mint RPC exists.
+Launcher binding belongs to the agent, harness and node consumers. No model-facing mint RPC exists.
 Default SSE and fleet-session topics remain owner-only. Future OwnerView
 topics must consume the event-visibility predicate; its missing-factory
 behavior is deny-all, including a factory returning nil.
+
+## MCP servers
+
+`cascade mcp serve` follows the CLI rule. A process with no
+`CASCADE_PRINCIPAL_TOKEN` is the owner: it is exactly as trusted as the owner
+CLI, because the same UID is not a boundary, and it serves tools from its own
+registry. A process that carries the variable, even empty, is
+principal-bearing. Every method in its registry that has an access
+declaration is forwarded to the daemon with the token, and the daemon applies
+the caller's scope. A method with no declaration refuses. When the daemon
+cannot be reached each call refuses `KindUnavailable`; nothing falls back to
+the in-process owner view. Builtin plugin tools and in-process core tools that
+bypass the method registry are not listed in that mode. The token is read once
+at start and bound into the daemon client, which never reads the environment
+again: unsetting or changing the variable later cannot make a call the owner
+CLI or another principal.
+
+The MCP socket admits no principal. Its access policy has no minter, so a peer
+presenting a token is refused before any handler runs. Real MCP clients send
+no Cascade header, so a header-less peer and an owner-marker peer are both the
+owner. On both transports every tool handler, builtin plugin tools included,
+sees a Caller with no principal and `OwnerCLI` false.
+
+The daemon's own `mcp.dispatch` runs each core tool's method through the
+registry again, so a principal admitted to the dispatcher still meets the
+inner method's class: an owner-only verb refuses. Builtin plugin tools and
+the backup tools on the daemon's dispatcher do not pass through the registry,
+so they are owner-only: a caller principal, or a call with no Caller, is
+refused `KindPermissionDenied`.

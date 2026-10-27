@@ -19,29 +19,21 @@
 //	per the 07 tree: it loads the registry in-process from compile-time
 //	plugin manifests, no running daemon required.
 //
-// KNOWN WIRING GAP (see this ticket's completion report): `serve --socket`
-// cannot register onto the daemon's own shared unix socket, because the
-// daemon composition root (internal/daemon/daemon.go,
-// internal/runtime/bootstrap.go, and their cmd/cascade siblings) was held
-// by a concurrently dispatched ticket for the whole of this one and is
-// outside this ticket's files_scope. Registering MCP as a method namespace
-// on THAT socket — the design internal/mcp/transport/socket.go's doc
-// comment describes — needs a call to transport.RegisterSocketMCP from
-// inside the daemon's own registry construction, which this ticket cannot
-// make land. `serve --socket` here instead binds its OWN dedicated unix
-// socket (the daemon's SocketPath with an "-mcp" suffix) running the exact
-// same transport.RegisterSocketMCP/rpc.Handler pipeline, so the transport
-// itself is real and fully tested — only the "one shared socket" wiring is
-// deferred.
+// `serve --socket` binds its own owner-only socket (the daemon SocketPath
+// plus "-mcp"); the daemon serves mcp.dispatch on its own socket through
+// wire_mcp.go. Caller-principal rules: mcp_scoped_forward.go.
 //
 // SPORT: cmd/cascade/mcp (ADD, per T-6 sport_updates).
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -51,6 +43,7 @@ import (
 	"github.com/acamarata/cascade/internal/mcp/coretools"
 	"github.com/acamarata/cascade/internal/mcp/transport"
 	"github.com/acamarata/cascade/internal/output"
+	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -65,16 +58,10 @@ import (
 type mcpDeps struct {
 	Paths    runtime.PathProvider
 	NewTools func() *mcp.ToolRegistry
-	// ServeStdio runs the stdio transport over in/out. RunE supplies
-	// cobra's cmd.InOrStdin()/cmd.OutOrStdout() in production — these
-	// default to the real os.Stdin/os.Stdout, resolved inside the cobra
-	// dependency itself rather than named directly anywhere in this file:
-	// internal/output.NewDefault's doc comment documents that it is the
-	// ONLY place in cmd/** allowed to reference os.Stdout/os.Stderr
-	// directly (D/S-06.T5's forbidigo rule, enforced across all of cmd/**,
-	// and internal/build's outputgate.go AST gate enforces the same thing
-	// whole-program) — mcpOutputWriter below reaches the real stdout the
-	// same indirect way for `tools list`.
+	// ServeStdio runs the stdio transport over in/out: cobra's
+	// cmd.InOrStdin()/cmd.OutOrStdout() in production, never os.Stdout named
+	// here (internal/output.NewDefault is the only cmd/** site allowed to;
+	// forbidigo and internal/build's outputgate.go enforce it).
 	ServeStdio  func(ctx context.Context, in io.Reader, out io.Writer) error
 	ServeSocket func(ctx context.Context) error
 	// StdinIsPipe reports whether stdin is a non-TTY pipe, per the
@@ -97,8 +84,7 @@ func productionMCPDeps() mcpDeps {
 			backup.MCPRegistration(backupSnapshotLister(bDeps)),
 			backup.VerifyMCPRegistration(backupVerifyRunner(bDeps)),
 		}
-		return mcp.NewToolRegistry(plugin.Builtins, wiring.Filter,
-			append(core, coretools.Registrations(wiring.Methods)...)...)
+		return mcpServeTools(wiring, mcpPrincipalGetenv(os.LookupEnv), dialMCPDaemon(paths), plugin.Builtins, core)
 	}
 	return mcpDeps{
 		Paths:    paths,
@@ -119,17 +105,16 @@ func stdinIsPipe() bool {
 	return (info.Mode() & os.ModeCharDevice) == 0
 }
 
-// serveStdioReal runs the stdio transport over in/out — the real process
-// streams in production, injected by RunE rather than touched as bare
-// os.Stdin/os.Stdout globals inside this file or internal/mcp/transport.
+// serveStdioReal runs the stdio transport over in/out (injected by RunE,
+// never bare os.Stdin/os.Stdout). Every tool handler, builtin plugin tools
+// included, gets the owner caller: Principal nil, OwnerCLI false.
 func serveStdioReal(ctx context.Context, tools *mcp.ToolRegistry, in io.Reader, out io.Writer) error {
 	srv := mcp.NewServer(tools)
 	tr := transport.NewStdioTransport(srv, in, out)
-	return tr.Serve(ctx)
+	return tr.Serve(principal.WithCaller(ctx, principal.Caller{}))
 }
 
-// serveSocketReal binds a dedicated owner-only MCP unix socket (see this
-// file's doc comment for why it is not yet the daemon's shared socket) and serves
+// serveSocketReal binds a dedicated owner-only MCP unix socket and serves
 // mcp.dispatch over it via the same rpc.Registry/Handler pipeline the
 // daemon itself uses.
 func serveSocketReal(ctx context.Context, paths runtime.PathProvider, tools *mcp.ToolRegistry) error {
@@ -137,32 +122,64 @@ func serveSocketReal(ctx context.Context, paths runtime.PathProvider, tools *mcp
 	if sockPath == "-mcp" {
 		return cascade.New(cascade.KindUnavailable, "cascade mcp serve --socket: could not resolve a socket path")
 	}
-	// This process holds no custody session, so the socket gets the
-	// refuse-all elevation middleware: an elevated verb dispatched through it
-	// is refused before any handler runs.
+	// No custody session here: every elevated verb is refused before a handler.
 	registry, err := buildSocketMCPRegistry(tools, daemon.RefuseAllElevation(runtime.NewSystemClock()))
 	if err != nil {
 		return err
 	}
-	// runtime.ListenOwnerSocket is the same owner-only bind the daemon
-	// socket uses: a planted symlink, a non-socket or a foreign-owned
-	// socket is refused and left, only our own stale socket is removed, and
-	// the socket is 0600 before Serve. Its *cascade.Error kind is returned
-	// as-is.
+	// The daemon socket's owner-only bind: a planted symlink, a non-socket
+	// or a foreign-owned socket is refused; the socket is 0600 before Serve.
 	ln, err := runtime.ListenOwnerSocket(sockPath)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = ln.Close() }()
-	// ConnContext is required (P1-E04-W6-S146-T1): without it,
-	// rpc.Handler's ConnContext-derived peerCred is never resolved for any
-	// connection, so guardLocalRequest (request_guard.go) refuses every
-	// request fail-closed — correct in direction, but this socket was
-	// meant to serve its owner, not refuse them. Wiring the same
-	// peer-credential resolver the daemon socket uses (handler.go's
-	// ConnContext) makes this socket apply the identical owner-UID and
-	// browser-shaped-request guard, never a laxer one.
-	srv := &http.Server{Handler: rpc.NewHandler(registry), ConnContext: rpc.ConnContext}
+	// mcpSocketConnContext resolves the peer credential as rpc.ConnContext
+	// does (without it guardLocalRequest refuses every request), so the
+	// owner-UID and browser-shaped-request guard is the daemon's own.
+	return serveRPCListener(ctx, ln, rpc.NewHandler(registry), mcpSocketConnContext)
+}
+
+// buildSocketMCPRegistry builds the MCP socket's registry: mcp.dispatch over
+// tools behind mw (production passes RefuseAllElevation; never returned
+// without one).
+// The access policy has no Minter: a token peer is refused on every non-Open
+// verb before any handler runs; stampMCPOwner hands each admitted request
+// Caller{Principal: nil, OwnerCLI: false} (the owner-CLI marker is ignored).
+func buildSocketMCPRegistry(tools *mcp.ToolRegistry, mw rpc.MiddlewareFunc) (*rpc.Registry, error) {
+	registry := rpc.NewRegistry()
+	registry.SetAccessPolicy(refuseAllTokens)
+	registry.Use(stampMCPOwner)
+	registry.Use(mw)
+	if err := transport.RegisterSocketMCP(registry, mcp.NewServer(tools)); err != nil {
+		return nil, err
+	}
+	return registry, nil
+}
+
+// stampMCPOwner re-stamps every admitted MCP socket request as the owner
+// (Principal nil, OwnerCLI false); no Caller or a principal refuses.
+func stampMCPOwner(_ string, next rpc.HandlerFunc) rpc.HandlerFunc {
+	return func(ctx context.Context, params json.RawMessage) (any, error) {
+		c, ok := principal.CallerFrom(ctx)
+		if !ok || c.Principal != nil {
+			return nil, errNoOwnerCaller
+		}
+		return next(principal.WithCaller(ctx, principal.Caller{}), params)
+	}
+}
+
+// mcpSocketConnContext is rpc.ConnContext plus the owner caller a header-less
+// MCP client is (real MCP clients send no Cascade header). Admission still
+// refuses a token; stampMCPOwner clears OwnerCLI for an owner marker.
+func mcpSocketConnContext(ctx context.Context, conn net.Conn) context.Context {
+	return principal.WithCaller(rpc.ConnContext(ctx, conn), principal.Caller{})
+}
+
+// serveRPCListener serves h on ln until ctx ends, resolving each connection
+// through connCtx.
+func serveRPCListener(ctx context.Context, ln net.Listener, h http.Handler, connCtx connContextFunc) error {
+	srv := &http.Server{Handler: h, ConnContext: connCtx, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()
 		_ = srv.Close()
@@ -171,19 +188,6 @@ func serveSocketReal(ctx context.Context, paths runtime.PathProvider, tools *mcp
 		return cascade.Wrap(cascade.KindUnavailable, err, "cascade mcp serve --socket: serve failed")
 	}
 	return nil
-}
-
-// buildSocketMCPRegistry builds the registry the MCP socket serves: the
-// mcp.dispatch method over tools, behind mw. Every production caller passes an
-// elevation middleware (RefuseAllElevation: the MCP processes hold no custody
-// session); the registry is never returned without one.
-func buildSocketMCPRegistry(tools *mcp.ToolRegistry, mw rpc.MiddlewareFunc) (*rpc.Registry, error) {
-	registry := rpc.NewRegistry()
-	registry.Use(mw)
-	if err := transport.RegisterSocketMCP(registry, mcp.NewServer(tools)); err != nil {
-		return nil, err
-	}
-	return registry, nil
 }
 
 // newMCPCmd builds the `mcp` command tree.

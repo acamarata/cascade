@@ -179,6 +179,33 @@ func (t *principalTransport) RoundTrip(req *http.Request) (*http.Response, error
 	return t.base.RoundTrip(r)
 }
 
+// NewWithToken builds a Client that presents token as its caller principal
+// on every request. The credential is bound once, here: the environment is
+// never read, so a CASCADE_PRINCIPAL_TOKEN unset or changed later cannot turn
+// a request into the owner CLI or another principal. dial and a non-empty
+// token are required (a programmer error, like New's nil DialFunc).
+func NewWithToken(socketPath string, dial DialFunc, timeout time.Duration, token string) *Client {
+	if token == "" {
+		panic("client: NewWithToken called with an empty token")
+	}
+	c := New(socketPath, dial, timeout)
+	c.httpClient.Transport = &boundTokenTransport{base: c.httpClient.Transport.(*principalTransport).base, token: token}
+	return c
+}
+
+// boundTokenTransport sends one fixed principal token and never the owner marker.
+type boundTokenTransport struct {
+	base  http.RoundTripper
+	token string
+}
+
+func (t *boundTokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r := req.Clone(req.Context())
+	r.Header.Del(principal.HeaderOwnerCLI)
+	r.Header.Set(principal.HeaderToken, t.token)
+	return t.base.RoundTrip(r)
+}
+
 // Do issues one JSON-RPC 2.0 call: method with params (marshaled as the
 // request's "params" member; nil is sent as an omitted member), decoding
 // the result into out (a pointer, or nil to discard the result). Do is the

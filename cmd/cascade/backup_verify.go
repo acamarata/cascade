@@ -101,7 +101,10 @@ func daemonMCPToolRegistry(methods coretools.Dispatcher, filter mcp.CapabilityFi
 	// The first-party v1-parity tool set (P1-E16-W4-S34-T2) dispatches
 	// through the daemon's OWN method table -- the same handler values
 	// every RPC client reaches, never a second composition of them. A
-	// method this daemon does not serve registers no tool at all.
-	return mcp.NewToolRegistry(plugin.Builtins, filter,
-		append(core, coretools.Registrations(methods)...)...)
+	// method this daemon does not serve registers no tool at all. Builtin
+	// plugin and backup tools skip the method registry's access check, so
+	// they are owner-only: a caller principal admitted to mcp.dispatch is
+	// refused (mcp_scoped_forward.go ownerOnlyBuiltins/ownerOnlyCore).
+	return mcp.NewToolRegistry(ownerOnlyBuiltins(plugin.Builtins), filter,
+		append(ownerOnlyCore(core), coretools.Registrations(methods)...)...)
 }

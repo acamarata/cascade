@@ -16,7 +16,9 @@
 //     the coverage check. cmd/cascade/memory.go and cmd/cascade/recall.go
 //     both dispatch through a `method string` PARAMETER threaded in by
 //     their own callers rather than a literal at the .Do call site
-//     itself - this gate reports those as RPCMethodUnresolved rather than
+//     itself, and cmd/cascade/mcp_scoped_forward.go forwards each method
+//     the in-process MCP method table registered - this gate reports
+//     those three as RPCMethodUnresolved rather than
 //     silently treating them as covered, exactly as R-16.80 requires
 //     ("if it proves underivable... state precisely why").
 //   - The four-argument `Do(ctx, method, params, out)` shape is what
@@ -91,7 +93,8 @@ func (v RPCMethodViolation) String() string {
 
 // RPCMethodUnresolved names one cmd/cascade `.Do` call site this gate
 // could not resolve to a literal method name - see this file's package
-// doc comment for the two known cases (memory.go, recall.go) and why a
+// doc comment for the three known cases (memory.go, recall.go,
+// mcp_scoped_forward.go) and why a
 // dynamic method name is genuinely outside this gate's derivation.
 type RPCMethodUnresolved struct {
 	File string

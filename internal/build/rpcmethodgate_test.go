@@ -36,9 +36,10 @@ func rpcMethodGateModuleRoot(t *testing.T) string {
 
 // TestRPCMethodGate_RealTreeGreen proves conductor.execute (R-16.80's own
 // defect) and every other resolvable cmd/cascade .Do call site now has a
-// real Register(...) counterpart, and that the two known dynamic-method
-// call sites (memory.go, recall.go) are exactly the unresolved set - no
-// more, no fewer.
+// real Register(...) counterpart, and that the three known dynamic-method
+// call sites (memory.go, recall.go, and mcp_scoped_forward.go, which
+// forwards the MCP method table's own registered names) are exactly the
+// unresolved set - no more, no fewer.
 func TestRPCMethodGate_RealTreeGreen(t *testing.T) {
 	root := rpcMethodGateModuleRoot(t)
 	files, err := ListTrackedFiles(root)
@@ -52,9 +53,10 @@ func TestRPCMethodGate_RealTreeGreen(t *testing.T) {
 	if len(violations) != 0 {
 		t.Fatalf("rpc method gate: %d unregistered method(s):\n%v", len(violations), violations)
 	}
-	if len(unresolved) != 2 {
-		t.Fatalf("rpc method gate: want exactly 2 disclosed unresolved .Do call sites "+
-			"(cmd/cascade/memory.go, cmd/cascade/recall.go), got %d: %v", len(unresolved), unresolved)
+	if len(unresolved) != 3 {
+		t.Fatalf("rpc method gate: want exactly 3 disclosed unresolved .Do call sites "+
+			"(cmd/cascade/memory.go, cmd/cascade/recall.go, cmd/cascade/mcp_scoped_forward.go), got %d: %v",
+			len(unresolved), unresolved)
 	}
 	// ListTrackedFiles (sweep.go) is documented to return git ls-files
 	// output, which is always forward-slash regardless of host OS; that
@@ -69,6 +71,9 @@ func TestRPCMethodGate_RealTreeGreen(t *testing.T) {
 	wantFiles := map[string]bool{
 		"cmd/cascade/memory.go": false,
 		"cmd/cascade/recall.go": false,
+		// The principal-mode forwarder sends each method the in-process MCP
+		// method table registered; it registers none of its own.
+		"cmd/cascade/mcp_scoped_forward.go": false,
 	}
 	for _, u := range unresolved {
 		if _, ok := wantFiles[u.File]; !ok {

@@ -186,3 +186,25 @@ func TestClassifyTransportError_DeadlineFromErrorNotContext(t *testing.T) {
 		t.Errorf("err = %v, want KindTimeout", err)
 	}
 }
+
+// TestNewWithTokenTransportFailureIsUnavailable drives the bound-token
+// client through the real dialer at a path nothing serves: the bound
+// transport classifies like New's, KindUnavailable.
+func TestNewWithTokenTransportFailureIsUnavailable(t *testing.T) {
+	c := NewWithToken(missingSocket(t), UnixDialer, time.Second, "cpt1_FAKE-test-token")
+	err := c.Do(context.Background(), "status.get", nil, nil)
+	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindUnavailable {
+		t.Fatalf("Do over a missing socket = %v, want KindUnavailable", err)
+	}
+}
+
+// TestNewWithTokenRefusesEmptyToken: an empty token is a programmer error,
+// never a client that would send no credential.
+func TestNewWithTokenRefusesEmptyToken(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("NewWithToken with an empty token did not panic")
+		}
+	}()
+	_ = NewWithToken(missingSocket(t), UnixDialer, time.Second, "")
+}
