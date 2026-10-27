@@ -152,6 +152,15 @@ func ExecutableDigest(path string) (string, error) {
 	if reason := untrustable(before); reason != "" {
 		return "", refuseExecutable(id, reason, nil)
 	}
+	// On Windows os.Lstat records only the path; the file's volume and index
+	// are read from whatever the path names when os.SameFile first needs
+	// them. Without this call that happens after the swap below, both sides
+	// of the comparison name the replacement and the check can never fail.
+	// Asking for the identity now pins it to the file validated above (on
+	// unix it is the plain identity of the same stat result).
+	if !os.SameFile(before, before) {
+		return "", refuseExecutable(id, reasonSwapped, nil)
+	}
 	if beforeDigestOpen != nil {
 		beforeDigestOpen(path)
 	}
