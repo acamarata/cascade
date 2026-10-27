@@ -84,7 +84,7 @@ const completionGateEngineID = "hookpacks.completion-gate"
 // pack (descriptor side) and its live RPC handler (dispatch side).
 func wireCompletionHookPack(ctx context.Context, registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider) error {
 	dbPath := filepath.Join(paths.DataDir(), "cascade.db")
-	db, err := sql.Open("sqlite", "file:"+dbPath)
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?_busy_timeout=5000") // the shared cascade.db has other writers; every sibling site waits
 	if err != nil {
 		return cascade.Wrapf(cascade.KindUnavailable, err, "completion gate: open %s", dbPath)
 	}
