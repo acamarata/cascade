@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -123,6 +124,64 @@ func TestPluginWriteAuditsIntoTheOpenStore(t *testing.T) {
 // TestPluginEarlyRefusalsAudited: refusals decided before any store write
 // leave attempt then deny with their reason.
 func TestPluginEarlyRefusalsAudited(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		windowsDaemonGatedRefusals(t)
+	} else {
+		daemonGatedRefusalsAudited(t)
+	}
+	// A registry update that would add a grant, refused for no input.
+	deps := updateTestDeps(t)
+	f := newGateFixture(t, nil)
+	deps.Gate = f.gate
+	seedPluginUpdateMetadata(t, deps, pluginUpdateBuiltin(plugins.PluginMetadata{Name: "grant-diff-demo", InstalledVersion: "1.0.0", Grants: []string{"storage.local"}}))
+	deps.Getenv = func(k string) string { return map[string]string{"CASCADE_NO_INPUT": "1"}[k] }
+	_, _, err := runPluginCLI(t, deps, "update", "grant-diff-demo")
+	assertDenied(t, "registry update with no input", f, err, "CASCADE_NO_INPUT=1", "no_input")
+}
+
+// windowsDaemonGatedRefusals: Windows is tier 2 (no daemon socket, no local
+// elevation), so the daemon-gated plugin verbs are refused at the platform
+// gate before the audit writer or any signer is reached. They stay refused;
+// only the audit rows are a POSIX behavior.
+func windowsDaemonGatedRefusals(t *testing.T) {
+	t.Helper()
+	proc := writeProcessManifest(t)
+	for label, c := range map[string]struct {
+		args []string
+		text string
+	}{
+		"perms grant":  {[]string{"perms", "grant", "demo", "fake.capability"}, "elevation not available on Windows tier-2"},
+		"perms revoke": {[]string{"perms", "revoke", "demo", "fake.capability"}, "elevation not available on Windows tier-2"},
+		"process add":  {[]string{"add", proc}, "daemon not available on Windows tier-2"},
+	} {
+		deps, f := pluginGateFixture(t)
+		_, _, err := runPluginCLI(t, deps, c.args...)
+		if !cascade.HasKind(err, cascade.KindUnsupported) || !strings.Contains(err.Error(), c.text) {
+			t.Fatalf("%s on windows = %v, want an unsupported refusal containing %q", label, err, c.text)
+		}
+		if f.ks.signs != 0 || len(f.tap.recs) != 0 {
+			t.Fatalf("%s on windows reached the gate: %d signatures, %d rows", label, f.ks.signs, len(f.tap.recs))
+		}
+	}
+}
+
+// writeProcessManifest writes a process-runtime manifest, which only a
+// running daemon can install.
+func writeProcessManifest(t *testing.T) string {
+	t.Helper()
+	proc := filepath.Join(t.TempDir(), "proc.toml")
+	err := os.WriteFile(proc, []byte("id = \"proc-demo\"\nname = \"Proc Demo\"\nschema = \"cascade.plugin/v2\"\n"+
+		"version = \"1.0.0\"\nhost_version = \">=2.0.0\"\nruntime = \"process\"\n"), 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return proc
+}
+
+// daemonGatedRefusalsAudited: refusals decided before any store write leave
+// attempt then deny with their reason.
+func daemonGatedRefusalsAudited(t *testing.T) {
+	t.Helper()
 	for label, args := range map[string][]string{
 		"perms grant without a daemon":  {"perms", "grant", "demo", "fake.capability"},
 		"perms revoke without a daemon": {"perms", "revoke", "demo", "fake.capability"},
@@ -132,23 +191,9 @@ func TestPluginEarlyRefusalsAudited(t *testing.T) {
 		assertDenied(t, label, f, err, "needs a running daemon", "daemon_required")
 	}
 	deps, f := pluginGateFixture(t)
-	proc := filepath.Join(t.TempDir(), "proc.toml")
-	writeErr := os.WriteFile(proc, []byte("id = \"proc-demo\"\nname = \"Proc Demo\"\nschema = \"cascade.plugin/v2\"\n"+
-		"version = \"1.0.0\"\nhost_version = \">=2.0.0\"\nruntime = \"process\"\n"), 0o600)
-	if writeErr != nil {
-		t.Fatal(writeErr)
-	}
-	_, _, err := runPluginCLI(t, deps, "add", proc)
+	_, _, err := runPluginCLI(t, deps, "add", writeProcessManifest(t))
 	assertDenied(t, "process-tier add without a daemon", f, err, "needs a running daemon", "daemon_required")
 	if f.ks.signs != 0 {
 		t.Fatalf("a daemon-required refusal asked for %d signatures", f.ks.signs)
 	}
-	// A registry update that would add a grant, refused for no input.
-	deps = updateTestDeps(t)
-	f = newGateFixture(t, nil)
-	deps.Gate = f.gate
-	seedPluginUpdateMetadata(t, deps, pluginUpdateBuiltin(plugins.PluginMetadata{Name: "grant-diff-demo", InstalledVersion: "1.0.0", Grants: []string{"storage.local"}}))
-	deps.Getenv = func(k string) string { return map[string]string{"CASCADE_NO_INPUT": "1"}[k] }
-	_, _, err = runPluginCLI(t, deps, "update", "grant-diff-demo")
-	assertDenied(t, "registry update with no input", f, err, "CASCADE_NO_INPUT=1", "no_input")
 }

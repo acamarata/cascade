@@ -21,9 +21,12 @@ stderr 'manifest id "update-guard-demo" does not match requested name "some-othe
 
 # Installing needs a signed presence proof (plugin.add is always elevated)
 # and this sandbox has no enrolled key: the add refuses and installs nothing,
-# with and without CASCADE_NO_INPUT=1.
+# with and without CASCADE_NO_INPUT=1. Where a platform key source exists
+# (darwin) the daemonless gate answers elevation-required; where none does
+# (linux without an enrolled key, windows tier 2) custody selection refuses
+# first with its tier-none error. Both are refusals.
 ! exec cascade plugin add testdata/plugin_update_guards/demo-1.0.0.toml
-stderr 'elevation-required'
+stderr 'elevation-required|custody tier none'
 ! stdout 'installed'
 ! exec cascade plugin info update-guard-demo
 stderr 'neither installed nor built into this binary'
