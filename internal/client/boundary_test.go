@@ -142,6 +142,10 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// daemon. This mirrors the matching .golangci.yml cmd-rpc-server-boundary
 	// exemption.
 	"vault_elevated_gate.go": true,
+	// daemon_unix_policy_authorize.go registers policy.authorize on the
+	// daemon's own registry and never dials the daemon. This mirrors the
+	// matching .golangci.yml cmd-rpc-server-boundary exemption.
+	"daemon_unix_policy_authorize.go": true,
 	// backup_elevation.go never dials the daemon: it runs the 06 §5.14
 	// nonce + local-auth-signature + middleware-verify + single-use-ledger
 	// ceremony entirely in-process, reusing the daemon's own

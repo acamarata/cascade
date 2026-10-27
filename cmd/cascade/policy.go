@@ -1,6 +1,7 @@
 // Purpose: `cascade policy` (07-CLI-COMMAND-TREE §policy) — explain,
 //
-//	check, list and audit query. All four are read-only.
+//	check, list and audit query, all read-only, plus the elevated
+//	same-turn authorize (policy_authorize.go).
 //
 // Inputs: cobra flags and positional arguments, plus the approvalDeps
 //
@@ -12,7 +13,7 @@
 //
 // Constraints: every verb goes through the D/S-07.T3 client SDK, never a
 //
-//	hand-rolled request. These verbs evaluate; they never grant. A
+//	hand-rolled request. The read-only verbs evaluate; they never grant. A
 //	daemonless invocation is refused by approvalClient with an actionable
 //	error rather than answered by a second engine that would not be the
 //	one the daemon decides with.
@@ -52,6 +53,7 @@ func newPolicyCmd(deps approvalDeps) *cobra.Command {
 	policyCmd.AddCommand(newPolicyCheckCmd(deps))
 	policyCmd.AddCommand(newPolicyListCmd(deps))
 	policyCmd.AddCommand(newPolicyAuditCmd(deps))
+	policyCmd.AddCommand(newPolicyAuthorizeCmd(deps))
 	// risk is the AH/S-69.T1 sole exception to this file's own "every
 	// verb goes through the daemon" posture (see policy_risk.go's own
 	// doc comment): risk classification is a pure local computation,

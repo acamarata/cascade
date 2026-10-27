@@ -66,6 +66,7 @@ plugin.review.review
 plugin.search
 plugin.update
 policy.audit_query
+policy.authorize
 policy.check
 policy.explain
 policy.list

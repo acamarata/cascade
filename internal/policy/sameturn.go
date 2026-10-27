@@ -43,7 +43,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -128,35 +127,12 @@ func sameTurnKey(subject Subject, action string) string {
 // an elevation-class action (R-21.231), and an action this subject has
 // already authorized in this turn. The duplicate refusal exists so a
 // second AUTHORIZE cannot quietly extend a window the first one opened.
+// It is AuthorizeWithExpiry without the expiry (sameturn_expiry.go).
 func (l *SameTurnLedger) Authorize(
 	ctx context.Context, subject Subject, action string,
 ) (string, error) {
-	if err := ctx.Err(); err != nil {
-		return "", cascade.Wrapf(cascade.KindCanceled, err,
-			"policy: same-turn authorization was canceled")
-	}
-	if err := subject.Validate(); err != nil {
-		return "", err
-	}
-	if action == "" {
-		return "", cascade.New(cascade.KindInvalidInput,
-			"policy: a same-turn authorization must name the action it authorizes")
-	}
-	if rpc.IsElevated(action, nil) {
-		return "", newSameTurnElevation(action)
-	}
-	nonce, err := newNonce()
-	if err != nil {
-		return "", err
-	}
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	key := sameTurnKey(subject, action)
-	if entry, ok := l.entries[key]; ok && !l.expired(entry) {
-		return "", newSameTurnDuplicate(action)
-	}
-	l.entries[key] = sameTurnEntry{nonce: nonce, exp: l.clock.Now().Add(sameTurnWindow)}
-	return nonce, nil
+	nonce, _, err := l.AuthorizeWithExpiry(ctx, subject, action)
+	return nonce, err
 }
 
 // Authorized implements SameTurnAuthorizer, and CONSUMES the entry it

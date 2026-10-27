@@ -1,31 +1,28 @@
 // Purpose: the one constructor every production policy.Engine in this binary
 //
 //	is built through, and the two non-daemon builders over it (the github-ci
-//	engine here, the MCP engine in mcp_tools.go). The daemon (wirePolicy),
-//	the MCP tool filter and the github-ci verbs each used to assemble their
-//	own engine: only the daemon's read the stored deny list and the
-//	operator's [policy] profile, so a deny row in the policy store never
-//	refused an MCP tool, and a stricter profile never reached MCP or
-//	github-ci. The merge-on-green request has no action text, so the
-//	github-ci engine matches it as the commands in githubCIMergeActions.
+//	engine here, the MCP engine in mcp_tools.go). The daemon (wirePolicy), the MCP
+//	tool filter and the github-ci verbs each used to assemble their own engine:
+//	only the daemon's read the stored deny list and the operator's [policy]
+//	profile, so a deny row in the policy store never refused an MCP tool, and a
+//	stricter profile never reached MCP or github-ci. The merge-on-green request
+//	has no action text, so the github-ci engine matches it as githubCIMergeActions.
 //
 // Inputs: a policyEngineInputs -- the runtime store, the clock, the loaded
 //
-//	config (nil means no config file), the capability set the caller
-//	routes, the path provider the audit log's vault custody is bound to,
-//	and an optional audit bus.
+//	config (nil means no config file), the capability set the caller routes, the
+//	path provider the audit log's vault custody is bound to, and an optional bus.
 //
 // Outputs: a policyEngineParts -- the engine and every collaborator it was
 //
-//	built over, plus the process's one redacting audit log (openAuditLog).
+//	built over, the one redacting audit log (openAuditLog) and same-turn ledger.
 //
 // Constraints: untagged (the MCP and github-ci callers run on every OS).
 //
-//	Nothing here installs a permissive default: a malformed [policy]
-//	section, an unreadable deny store, a store or clock that is absent and
-//	an audit log that cannot be opened are each returned as an error, never
-//	as a partially wired engine that would answer by omission. Approval
-//	signing is not built here.
+//	Nothing here installs a permissive default: a malformed [policy] section, an
+//	unreadable deny store, a store or clock that is absent and an audit log that
+//	cannot be opened are each returned as an error, never as a partially wired
+//	engine that would answer by omission. Approval signing is not built here.
 //
 // SPORT: cmd/cascade/policy (ADD) -- the policy engine constructor.
 package main
@@ -76,14 +73,15 @@ type policyEngineParts struct {
 	Controller *policy.Controller
 	// Audit is the process's one redacting audit log for Store.
 	Audit *audit.Log
+	// SameTurn is the same-turn ledger; only the daemon attaches it (wire_policy_authorize.go).
+	SameTurn *policy.SameTurnLedger
 }
 
-// newPolicyEngine builds the grant store, the stored deny list, the operator
-// autonomy profile and the redacting audit log, and the engine over them.
-// A nil Store or Clock is KindInvalidInput; a malformed [policy] section is
-// the applyAutonomyProfile / validateRiskGateOverlay error. The deny list is
-// read here, once, so an unreadable or corrupt deny store refuses the
-// construction rather than surfacing later as a per-decision error.
+// newPolicyEngine builds the grant store, the stored deny list, the operator autonomy
+// profile, the same-turn ledger and the redacting audit log, and the engine over them.
+// A nil Store or Clock is KindInvalidInput; a malformed [policy] section is the
+// applyAutonomyProfile / validateRiskGateOverlay error. The deny list is read here,
+// once, so an unreadable or corrupt deny store refuses the construction.
 func newPolicyEngine(ctx context.Context, in policyEngineInputs) (policyEngineParts, error) {
 	if isNilStore(in.Store) {
 		return policyEngineParts{}, cascade.New(cascade.KindInvalidInput, "policy engine: a store is required")
@@ -117,13 +115,17 @@ func newPolicyEngine(ctx context.Context, in policyEngineInputs) (policyEnginePa
 		return policyEngineParts{}, err
 	}
 	engine = engine.WithDenyList(denyList)
+	sameTurn, err := policy.NewSameTurnLedger(in.Clock)
+	if err != nil {
+		return policyEngineParts{}, err
+	}
 	log, err := openAuditLog(in.Store, in.Clock, in.Bus, in.Paths)
 	if err != nil {
 		return policyEngineParts{}, err
 	}
 	return policyEngineParts{
 		Engine: engine, Registry: registry, Grants: grants,
-		DenyList: denyList, Controller: controller, Audit: log,
+		DenyList: denyList, Controller: controller, Audit: log, SameTurn: sameTurn,
 	}, nil
 }
 
@@ -157,16 +159,16 @@ func refuseUnfollowableConfig(paths runtime.PathProvider) error {
 	return nil
 }
 
-// freshDenyList is the deny list for a process that outlives the rows it was
-// started with (the MCP stdio server, a github-ci verb that waits on CI).
-// StoreDenyList caches the rows it reads; this reads the store on every
-// decision, so the answer never depends on a cache this process does not own.
-// A read failure is returned, which the engine treats as listed (fail closed).
+// freshDenyList is the deny list for a process that outlives the rows it was started
+// with (the MCP stdio server, a github-ci verb that waits on CI). StoreDenyList caches
+// the rows it reads; this reads the store on every decision, so the answer never
+// depends on a cache this process does not own. A read failure is returned, which
+// the engine treats as listed (fail closed).
 //
-// commandless is the set of commands a request with an empty action is
-// checked as: a row is a command pattern and the deny list has no opinion on
-// an empty action, so without it no row could refuse the merge-on-green
-// request. Any one form a row names denies. Empty means no substitution.
+// commandless is the set of commands a request with an empty action is checked as:
+// a row is a command pattern and the deny list has no opinion on an empty action,
+// so without it no row could refuse the merge-on-green request. Any one form a row
+// names denies. Empty means no substitution.
 type freshDenyList struct {
 	store       provider.Store
 	commandless []string
@@ -208,19 +210,17 @@ func withFreshDenyList(parts policyEngineParts, store provider.Store, commandles
 	return parts.Engine.WithDenyList(freshDenyList{store: store, commandless: commandless})
 }
 
-// applyAutonomyProfile loads the [policy] section into the controller. A
-// nil config carries no section, which Apply resolves to the shipped
-// baseline; a malformed section is returned as an error rather than
-// warned past, because unlike a maintenance schedule an unreadable policy
-// section decides what the daemon is allowed to do.
+// applyAutonomyProfile loads the [policy] section into the controller. A nil config
+// carries no section, which Apply resolves to the shipped baseline; a malformed
+// section is returned as an error rather than warned past, because unlike a
+// maintenance schedule an unreadable policy section decides what the daemon may do.
 //
-// [policy.risk_gates]'s gate-step names are validated HERE, before
-// Apply, rather than inside internal/policy: that package cannot import
-// internal/jobs (an import cycle -- see risk_gates_config.go's own doc
-// comment), so its own parse only checks the overlay's shape and its
-// risk-class-name keys. This composition root imports both packages, so
-// a bad gate-step name refuses the whole reload before controller.Apply
-// ever swaps anything in (validate-before-write, R-16.70(b), AH/S-69.T1).
+// [policy.risk_gates]'s gate-step names are validated HERE, before Apply, rather
+// than inside internal/policy: that package cannot import internal/jobs (an import
+// cycle -- see risk_gates_config.go's own doc comment), so its own parse only checks
+// the overlay's shape and its risk-class-name keys. This composition root imports
+// both packages, so a bad gate-step name refuses the whole reload before
+// controller.Apply swaps anything in (validate-before-write, R-16.70(b), AH/S-69.T1).
 func applyAutonomyProfile(ctx context.Context, controller *policy.Controller, cfg *runtime.Config) error {
 	if cfg == nil {
 		return controller.Apply(ctx, map[string]interface{}{})
@@ -231,13 +231,12 @@ func applyAutonomyProfile(ctx context.Context, controller *policy.Controller, cf
 	return controller.Apply(ctx, cfg.Extra)
 }
 
-// validateRiskGateOverlay re-parses the [policy] section far enough to
-// reach RiskGates and runs jobs.BuildRiskGateOverlay over it, so an
-// unparseable gate-step name is caught before the reload swap rather
-// than only when a later `policy risk explain` call happens to hit it.
-// A [policy] section this file cannot even parse structurally is not
-// this function's error to report -- controller.Apply reports that one
-// itself, with the richer refusal-audit path Controller already owns.
+// validateRiskGateOverlay re-parses the [policy] section far enough to reach
+// RiskGates and runs jobs.BuildRiskGateOverlay over it, so an unparseable gate-step
+// name is caught before the reload swap rather than only when a later `policy risk
+// explain` call happens to hit it. A [policy] section this file cannot even parse
+// structurally is not this function's error to report -- controller.Apply reports
+// that one itself, with the richer refusal-audit path Controller already owns.
 func validateRiskGateOverlay(cfg *runtime.Config) error {
 	parsed, err := policy.ParseConfig(cfg.Extra)
 	if err != nil {

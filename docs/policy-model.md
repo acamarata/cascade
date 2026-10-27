@@ -14,7 +14,7 @@ and the policy layers read it from there.
 | L1 | Safe local development: tests, lint, build. | allow |
 | L2 | Workspace mutation: staging, commits, writes to files. | ask |
 | L3 | External side effect: push, pull request, network, messages. | ask, never automatically |
-| L4 | Destructive or privileged. | deny, subject to same-turn authorization only |
+| L4 | Destructive or privileged. | deny; no same-turn authorization lifts it |
 
 Representative commands, one per rung:
 
@@ -487,7 +487,8 @@ Same-turn authorization is the one exception the risk ladder grants, and it is a
 rather than a permission.
 
 `SameTurnLedger.Authorize(ctx, subject, action)` records the authorization and returns a
-crypto-random nonce identifying it. `Authorized(ctx, subject, action)` is the seam layer 1
+crypto-random nonce identifying it; `AuthorizeWithExpiry` also returns the instant the
+window closes. `Authorized(ctx, subject, action)` is the seam layer 1
 consults, and it CONSUMES the entry it finds. `Consume` withdraws one authorization and
 `EndTurn` drops them all.
 
@@ -510,12 +511,50 @@ The window is as narrow as it can be made:
 
 | Entry | Overridable | Why |
 |---|---|---|
-| the ladder's own top-rung sentence | yes | being authorizable in-turn is what that rung reserves |
+| the ladder's own top-rung sentence | yes, at layer 1 only | the hard floor still refuses the top rung, so `policy.authorize` records nothing for it |
 | a configured row | yes | the operator who wrote the row is the one typing the authorization |
 | a deny-list that could not be READ | NO | nobody can authorize past an entry nobody can see |
 
 A non-overridable entry does not consult the authorizer at all, so a live authorization is
 never spent on an action it could not have covered.
+
+### Recording one: `cascade policy authorize <action>`
+
+The only way to record an authorization is the always-elevated, owner-only
+`policy.authorize` daemon verb, which `cascade policy authorize <action>` sends through the
+local attestation flow. AUTHORIZE text typed into a chat turn, a tool argument or any
+other request field is never read; nothing parses it.
+
+The daemon builds ONE ledger in the policy engine constructor and attaches it to the
+daemon engine only. The stdio MCP server's engine keeps `NoSameTurnAuth`. The handler
+runs in a fixed order:
+
+1. It requires the elevation middleware's witness for `policy.authorize` over these exact
+   params. A missing witness, or one for another verb, is refused as elevation-required
+   and audited as `sameturn-unattested`; the ledger is not touched.
+2. It ends the previous turn, so a new authorization closes every earlier window. This
+   happens before the action is checked, so an attested call that is then refused also
+   closes the earlier windows, and a second `policy authorize` for the same action
+   replaces the first window rather than being refused as a duplicate.
+3. It refuses an action the policy denies unconditionally (the top rung, or anything the
+   classifier cannot classify), an empty action, an elevation-class verb (including
+   `policy.authorize` itself) and, when two calls race past step 2, a duplicate. Each
+   refusal is audited under its code.
+4. It records a single-use authorization for the MCP subject, or for the calling
+   principal when the call carries one, with a two-minute backstop expiry. The reply
+   carries the nonce and the exact expiry.
+5. It audits the grant, with the nonce in the row's `explain`, so two grants of one action
+   stay distinguishable. If that audit fails the authorization is withdrawn and the call
+   fails, so no unaudited window exists. A refusal whose audit fails is still refused, and
+   the audit failure is returned with it.
+
+A grant recorded for one principal is keyed to that principal, so an evaluation made as
+another principal cannot spend it. Today `policy.authorize` is owner-only and the owner's
+CLI call carries no principal, so every grant is keyed to the shared MCP subject
+(`user:mcp`), which every MCP session evaluates as. The daemon engine is shared, so any
+evaluation of that subject and that exact action spends the grant, including an owner's
+`policy check` or `policy explain` that names `user:mcp`. A build-time architecture test
+pins this handler as the ledger's only production writer.
 
 Overriding is not allowing in ANY case. Layer 1 records the override and continues to
 layer 2; every later layer still applies, and the top rung's hard floor still clamps it to
