@@ -1426,13 +1426,6 @@
     "symbol": "internal/rpc.WithOwnerUIDForTest"
   },
   {
-    "caller_site": "cmd/cascade/daemon_unix_reload_secrets.go",
-    "expected_caller": "The daemon's [secrets] hot-reload applier (installed through HotReloader.SetSecretsApplier), which reloads the one process detector in place when the operator changes entropy_floor or confidence_threshold",
-    "reason": "P1-SEC-05 ships the process detector and its in-place reload entry point (contract:vault-per-process); applying [secrets] changes on hot reload is prohibited in this ticket and owned by P1-SEC-24. Until then the [secrets] section is read once at start.",
-    "retire_ticket": "P1-SEC-24",
-    "symbol": "internal/secrets.SetProcessDetectionConfig"
-  },
-  {
     "caller_site": "internal/repo/maintenance.go",
     "expected_caller": "P1-GEN-04's maintenance pipeline (internal/repo/maintenance.go), which admits a single changed path from a watcher event through Admit and the batch of an initial scan through AdmitBatch; if it only uses AdmitBatch, repoint or retire this entry in that ticket",
     "reason": "P1-GEN-03 ships the ingest admission guard; Admit is the one-path form of AdmitBatch named by contract:repo-ingest-admission. IngestGitRepo, the only production caller at this tip, always has many paths and uses AdmitBatch, so tests are the only callers of Admit here.",
@@ -1581,5 +1574,21 @@
     "reason": "P1-HRN-10 ships notify.BusStallSource, implemented and tested against the real event bus and the real supervision stall publisher. Its only production caller is the away-mode composition in P1-HRN-11 (wire_away.go), which does not exist yet, so wiring a call here now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once wire_away.go exists.",
     "retire_ticket": "P1-HRN-11",
     "symbol": "internal/notify.NewBusStallSource"
+  },
+  {
+    "added_by_ticket": "P1-PLG-10",
+    "caller_site": "internal/plugins/process_exec_shipping_caller.go",
+    "expected_caller": "none: a test-only hook that redirects ResolveExecutable to a test directory and panics outside a test binary (testing.Testing). caller_site names a file that must never exist; a non-test caller anywhere makes this row stale and fails the test-only gate.",
+    "reason": "The process-plugin trust grant resolves the plugin executable beside the cascade binary with no PATH lookup or environment override. Tests need a fake executable in t.TempDir(); this is the only injection point, it is panic-guarded outside tests (TestSetExecutableDirForTestPanicsOutsideTests), and the ticket prohibits any production caller. The row expires with the phase-exit replay so the seam is reviewed again there.",
+    "retire_ticket": "P1-EXIT-07",
+    "symbol": "internal/plugins.SetExecutableDirForTest"
+  },
+  {
+    "added_by_ticket": "P1-PLG-10",
+    "caller_site": "internal/plugins/trusted_launch.go",
+    "expected_caller": "internal/plugins/trusted_launch.go, the trusted process launcher, which maps a record that is not TrustTrusted to process.TrustTierUntrusted before process.ProcessRuntime.Launch refuses it; retire this entry once that file references it",
+    "reason": "ProvisionElevated's process branch used to launch every process install as TrustTierUntrusted to prove the refusal. Trust is now granted from a witnessed plugin.add (grantProcessTrust) and nothing is launched at install time, so the constant has no production reference until the trusted launcher lands.",
+    "retire_ticket": "P1-PLG-03",
+    "symbol": "internal/plugins/process.TrustTierUntrusted"
   }
 ]
