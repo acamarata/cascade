@@ -91,6 +91,13 @@ type daemonRuntime struct {
 	// Notify is the one notification runtime; the notify registration
 	// (phaseSupervised, Order 5) sets it for every later registration.
 	Notify *daemon.NotifyRuntime
+	// Presence is the operator-presence tracker; the presence registration
+	// (phaseMiddleware, Order 20) sets it for every later registration.
+	Presence *daemon.PresenceTracker
+	// ElevationVerifier recognises (and cannot mint) the witnesses the one
+	// elevation middleware issues; the elevation registration (phaseMiddleware,
+	// Order 10) sets it. The zero value matches nothing.
+	ElevationVerifier rpc.WitnessVerifier
 	// ConfigBaseline is the boot baseline check's outcome and the
 	// config.accept_loosening state (daemon_unix_config_baseline.go).
 	ConfigBaseline *configBaseline

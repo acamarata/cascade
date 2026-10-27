@@ -45,6 +45,8 @@ func wireElevation(w *daemonWiring) error {
 	}
 	mw, status := daemon.NewElevationMiddleware(dataDir, daemonElevationSelector(dataDir), log, w.Clock)
 	w.Registry.Use(mw)
+	// The presence registration (order 20) counts only this issuer's witnesses.
+	w.Deps.ElevationVerifier = status.Verifier
 	bindPolicyElevation(w, status) // the policy attestor reads this issuer's witnesses
 	detail := "tier " + status.Tier + ", bound"
 	if !status.Bound {
