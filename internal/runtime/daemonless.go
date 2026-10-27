@@ -9,15 +9,12 @@
 //
 // Outputs: DaemonlessState (embedded yes/no), a *sqlite.Driver for writes
 //
-//	(full arbitration) or reads (read-only fallback when the daemon owns
-//	the store).
+//	(full arbitration), or a read-only store (OpenReadOnlyStore, or the
+//	fallback when the daemon owns the store).
 //
-// Constraints: reuses probeSocket (recovery_scan.go) verbatim rather than
+// Constraints: reuses probeSocket (recovery_scan.go) and providers/sqlite.Open
 //
-//	defining a second probe — same package, same semantics. Reuses
-//	providers/sqlite.Open for ALL write-path arbitration (socket-probe +
-//	exclusive flock + ErrDaemonOwnsStore already live there); this file
-//	adds no second flock implementation. No bare time.Now/time.Sleep.
+//	for all write arbitration; no second probe or flock. No bare time.Now.
 //
 // SPORT: internal/runtime EmbeddedRuntime/ADDED.
 package runtime
@@ -40,11 +37,8 @@ import (
 // the only activation path, per §D-3.
 type DaemonlessState struct {
 	// Embedded is true unless the probe CONFIRMED a live daemon on
-	// SocketPath. An undecidable probe result (permission denied, etc.)
-	// also falls back to Embedded=true — ProbeErr carries the reason so
-	// the caller can surface a notice, but a process that cannot prove a
-	// daemon is listening must not block a one-shot command on that
-	// uncertainty.
+	// SocketPath. An undecidable probe result also falls back to
+	// Embedded=true; ProbeErr carries the reason for a notice.
 	Embedded bool
 	// SocketPath is the socket this state was probed against.
 	SocketPath string
@@ -54,17 +48,14 @@ type DaemonlessState struct {
 
 type daemonlessCtxKey struct{}
 
-// WithDaemonlessState attaches st to ctx — the "root Runtime context" the
-// contract names; cmd/cascade/root.go's PersistentPreRunE calls this once,
-// on cmd.Context(), for every invocation.
+// WithDaemonlessState attaches st to ctx; root.go's PersistentPreRunE calls
+// it once per invocation.
 func WithDaemonlessState(ctx context.Context, st DaemonlessState) context.Context {
 	return context.WithValue(ctx, daemonlessCtxKey{}, st)
 }
 
 // DaemonlessStateFrom reads back the state WithDaemonlessState attached.
-// ok is false when the root command never ran the probe (e.g. a unit test
-// constructing its own bare context) — callers must treat that as "unknown,
-// not embedded" rather than assume either mode.
+// ok is false when the probe never ran: treat that as "unknown, not embedded".
 func DaemonlessStateFrom(ctx context.Context) (DaemonlessState, bool) {
 	st, ok := ctx.Value(daemonlessCtxKey{}).(DaemonlessState)
 	return st, ok
@@ -108,11 +99,8 @@ func DaemonlessElevationPrecondition(fn ElevationPrecondition) (helperEnrolled, 
 }
 
 // ErrDaemonOwnsStore is the §D-3 write-arbitration refusal a WRITE verb
-// surfaces when the exclusive flock (or the socket probe inside
-// providers/sqlite.Open) proves the daemon (or another embedded process)
-// currently owns cascade.db. It wraps providers/sqlite.ErrDaemonOwnsStore
-// (errors.Is against either sentinel succeeds) with the actionable hint
-// the contract requires, rather than a second, differently-worded error.
+// surfaces when the flock or socket probe shows the daemon (or another
+// embedded process) owns cascade.db. errors.Is matches either sentinel.
 func ErrDaemonOwnsStore(cause error) error {
 	if cause == nil {
 		cause = sqlite.ErrDaemonOwnsStore
@@ -154,18 +142,10 @@ func OpenEmbeddedWriteStore(ctx context.Context, path string, probe sqlite.Socke
 // genuine read-only connection that never contends for the exclusive
 // flock at all.
 //
-// KNOWN GAP (reported, not papered over): providers/sqlite exposes no
-// read-only Open variant, and this ticket's files_scope does not include
-// providers/sqlite (only internal/runtime and internal/policy are
-// writable here) — adding one is the correct long-term fix but is out of
-// this ticket's scope. readOnlyStore below is the narrowest workaround
-// that does not touch providers/sqlite: a second, independent
-// database/sql connection opened with SQLite's own "mode=ro" query
-// parameter (a standard modernc-sqlite/SQLite feature, not a
-// reimplementation of providers/sqlite's logic) against the same kv
-// schema providers/sqlite.Open creates. It is READ-ONLY at the SQLite
-// level (SQLITE_OPEN_READONLY) — Put/Delete/Tx on it fail closed with
-// KindPermissionDenied rather than silently succeeding.
+// KNOWN GAP: providers/sqlite has no read-only Open variant and is outside
+// this file's scope, so readOnlyStore below is a second database/sql
+// connection opened with SQLite's own mode=ro against the same kv schema.
+// Put/Delete/Tx on it fail closed with KindPermissionDenied.
 func OpenEmbeddedReadStore(ctx context.Context, path string, probe sqlite.SocketProbe) (provider.Store, func() error, error) {
 	d, err := OpenEmbeddedWriteStore(ctx, path, probe, nil)
 	if err == nil {
@@ -174,7 +154,7 @@ func OpenEmbeddedReadStore(ctx context.Context, path string, probe sqlite.Socket
 	if !errors.Is(err, sqlite.ErrDaemonOwnsStore) {
 		return nil, nil, err
 	}
-	ro, roErr := openReadOnlyStore(ctx, path)
+	ro, roErr := openReadOnlyStore(ctx, path, "mode=ro")
 	if roErr != nil {
 		return nil, nil, roErr
 	}
@@ -191,8 +171,8 @@ type readOnlyStore struct {
 	db *sql.DB
 }
 
-func openReadOnlyStore(ctx context.Context, path string) (*readOnlyStore, error) {
-	dsn := fmt.Sprintf("file:%s?mode=ro&_busy_timeout=5000", path)
+func openReadOnlyStore(ctx context.Context, path, mode string) (*readOnlyStore, error) {
+	dsn := fmt.Sprintf("file:%s?%s&_busy_timeout=5000", path, mode)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "runtime: open read-only store %s", path)

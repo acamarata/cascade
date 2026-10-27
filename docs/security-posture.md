@@ -24,6 +24,24 @@ See also [approval records: a daemon-signed record, redeemed once](security-post
 
 See also [installation identity: the controller key that signs scope envelopes](security-posture/installation-identity.md).
 
+## Doctor security checks
+
+`cascade doctor` reports six security checks. All are read-only: none selects
+writing custody, builds a firewall, opens the runtime store or takes the store
+lock, and write no row, key or config file. The one file touch is `cascade.db-shm`
+(SQLite's derived read-mark index) while a daemon holds the store; `cascade.db` and
+`cascade.db-wal` stay byte-identical. The details, statuses and remedies are
+in [the doctor reference](cli-reference/doctor.md#security-checks).
+
+| Check | What it reports |
+|---|---|
+| `elevation_custody` | the custody tier elevated verbs use (ADR-0005), OK on the platform tier only with an enrolled, bound key; the [linux presence tier](elevation-presence.md) also warns on a changed or re-created enrolment |
+| `audit_chain` | the audit hash chain, tail and effect index, verified through a read-only store (`immutable=1` when no `-wal`/`-shm` exists, `mode=ro` while a daemon holds the store, a warning while the store is changing; with a daemon running only `cascade.db-shm` may be touched, never `cascade.db` or `-wal`) |
+| `policy` | the `[policy]` profile and whether the stored deny rules can be read |
+| `approval_key` | whether the daemon's approval signing key is stored and consistent |
+| `egress_audit_only` | the egress classes that do not yet transit an enforced path |
+| `caller_principal` | what [caller principals](security-posture/caller-principal.md) protect, and what they do not (no credential counts) |
+
 ## Vault backends
 
 Cascade's secret vault stores values through one custody backend, chosen at

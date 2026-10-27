@@ -55,6 +55,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/acamarata/cascade/internal/elevation"
 	"github.com/acamarata/cascade/internal/secrets"
 )
 
@@ -154,6 +155,8 @@ func TestMain(m *testing.M) {
 		}
 	}
 	selectProcessCustody = guardHostCustody(selectProcessCustody)
+	doctorApprovalKeyCustody = guardReadOnlyCustody(doctorApprovalKeyCustody, &callLog{})
+	doctorSelectCustody = func(dir string) elevation.Custody { return elevation.Selector{DataDir: dir}.Select() }
 	for key, val := range goCacheEnv {
 		if val == "" {
 			continue

@@ -119,6 +119,14 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	// config-permissions (doctor_config_perm.go): config.toml under the
 	// same permission policy Load enforces.
 	reg.Register(newConfigPermissionsDoctorCheck(paths))
+	// Security checks (doctor_mounts_security.go): read-only by construction,
+	// each opening the audit store only through runtime.OpenReadOnlyStore.
+	reg.Register(newElevationCustodyDoctorCheck(paths, clock))
+	reg.Register(newAuditChainDoctorCheck(paths))
+	reg.Register(newPolicyDoctorCheck(paths))
+	reg.Register(newApprovalKeyDoctorCheck(paths))
+	reg.Register(newEgressAuditOnlyDoctorCheck())
+	reg.Register(newCallerPrincipalDoctorCheck())
 	checks, err := secretsDoctorChecks(ctx, paths, clock)
 	if err != nil {
 		return nil, err
