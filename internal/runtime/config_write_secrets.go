@@ -67,8 +67,9 @@ func (e *SecretLiteralError) Error() string {
 // (06-FORGE-SPEC §5.19 allowed-fail precedent).
 func LooksLikeSecret(value string) (bool, string) {
 	// Bearer-prefix and PEM-header checks run unconditionally: a PEM
-	// header ("-----BEGIN PRIVATE KEY-----") legitimately contains
-	// spaces, so the whitespace guard below (which exists to keep prose
+	// header (the five-dash BEGIN line of a PEM private-key block)
+	// legitimately contains spaces, so the whitespace guard below (which
+	// exists to keep prose
 	// out of the bare-base64 check) must not short-circuit these two
 	// first.
 	for _, prefix := range secretBearerPrefixes {

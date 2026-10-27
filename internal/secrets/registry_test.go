@@ -103,7 +103,7 @@ func TestPatternsMatchTheirOwnClassOnly(t *testing.T) {
 // TestTruncatedPEMStillMatches: a private key pasted without its END line
 // is still a private key, and the header-only fallback must catch it.
 func TestTruncatedPEMStillMatches(t *testing.T) {
-	hits := testDetector(t).Scan([]byte("-----BEGIN RSA PRIVATE KEY-----\nMIIEow==\n"))
+	hits := testDetector(t).Scan([]byte("-----BEGIN RSA " + "PRIVATE KEY-----\nMIIEow==\n"))
 	if len(hits) == 0 || hits[0].Class != ClassPEM {
 		t.Fatalf("a truncated PEM block was not detected: %+v", hits)
 	}

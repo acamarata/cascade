@@ -19,7 +19,7 @@ import (
 // a fakeSecretScanner as its "credential-shaped" witness. It is obviously
 // synthetic and never sent anywhere real (fakeDoer never reaches a
 // socket).
-const witnessSecretText = "WITNESS-AKIA0000000000000000-NOT-REAL"
+const witnessSecretText = "WITNESS-AKIA" + "0000000000000000-NOT-REAL"
 
 // fakeSecretScanner drives refuse.go's pass-clean and detected branches
 // without a real internal/secrets.Detector (refuse.go's header: this

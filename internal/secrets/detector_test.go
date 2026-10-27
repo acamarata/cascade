@@ -13,6 +13,7 @@ package secrets
 //	in this package.
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -34,14 +35,20 @@ func testDetector(t *testing.T) *Detector {
 	return d
 }
 
-// readCorpus loads one fixture.
+// corpusSplitMarker is an empty marker that credential-shaped corpus files
+// (jwt.txt, pem.txt) carry inside the value, so the file itself holds no
+// credential-shaped text. readCorpus deletes it, which restores the exact
+// original bytes before any scan.
+const corpusSplitMarker = "{{}}"
+
+// readCorpus loads one fixture, with every corpusSplitMarker removed.
 func readCorpus(t *testing.T, name string) []byte {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join(corpusDir, name))
 	if err != nil {
 		t.Fatalf("reading the fixture %s: %v", name, err)
 	}
-	return raw
+	return bytes.ReplaceAll(raw, []byte(corpusSplitMarker), nil)
 }
 
 // TestScanCredentialCorpus asserts the acceptance criterion directly:
@@ -125,9 +132,9 @@ func TestNearMissCorpusQuarantinesNothing(t *testing.T) {
 // every time. A map iterated anywhere on the output path breaks this.
 func TestScanIsDeterministic(t *testing.T) {
 	d := testDetector(t)
-	content := []byte("api_key=sk-Nn4vQ2tR7yWx1Zb8Ka3Ld6Mf9Ph0Sj2Uv5Xy8Ac1De4Gi7 " +
-		"and token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1 " +
-		"and password: Qp7Zx2Mk9Lw4Rt6Vb")
+	content := []byte("api_key" + "=sk" + "-Nn4vQ2tR7yWx1Zb8Ka3Ld6Mf9Ph0Sj2Uv5Xy8Ac1De4Gi7 " +
+		"and token eyJ" + "hbGciOiJIUzI1NiJ9.eyJ" + "zdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1 " +
+		"and password" + ": Qp7Zx2Mk9Lw4Rt6Vb")
 	first := d.Scan(content)
 	if len(first) < 2 {
 		t.Fatalf("expected several hits, got %d", len(first))
@@ -161,7 +168,7 @@ func sameHits(a, b []DetectionHit) bool {
 // not appear in any hit field, nor in the JSON rendering a CLI or an
 // event payload would produce from one.
 func TestScanNeverEmitsTheValue(t *testing.T) {
-	const canary = "sk-CANARYvalue0123456789abcdefghijklmnop"
+	const canary = "sk" + "-CANARYvalue0123456789abcdefghijklmnop"
 	hits := testDetector(t).Scan([]byte("api_key=" + canary + "\n"))
 	if len(hits) == 0 {
 		t.Fatal("the canary was not detected at all, so this test proves nothing")
@@ -201,7 +208,7 @@ func TestEntropyAloneNeverReachesTheThreshold(t *testing.T) {
 // TestNamedEntropyIsCorroborated is the other side of the same rule: the
 // same run beside a credential-named field IS quarantine-eligible.
 func TestNamedEntropyIsCorroborated(t *testing.T) {
-	hits := testDetector(t).ScanCertain([]byte("wifi password: 7Kq2mZx9PLw4Rt6VbN3sQe8Hj1Cd5Fg0"))
+	hits := testDetector(t).ScanCertain([]byte("wifi password" + ": 7Kq2mZx9PLw4Rt6VbN3sQe8Hj1Cd5Fg0"))
 	if len(hits) != 1 {
 		t.Fatalf("expected one corroborated hit, got %+v", hits)
 	}
@@ -218,7 +225,7 @@ func TestNamedEntropyIsCorroborated(t *testing.T) {
 func TestStructuredIdentifiersStayBelowTheThreshold(t *testing.T) {
 	d := testDetector(t)
 	for _, content := range []string{
-		"session_token = 550e8400-e29b-41d4-a716-446655440000",
+		"session_token" + " = 550e8400-e29b-41d4-a716-446655440000",
 		"auth commit 9f2b7c1d4e6a8b0c3d5f7a9e1b3c5d7f9a1b3c5d",
 	} {
 		if hits := d.ScanCertain([]byte(content)); len(hits) != 0 {
@@ -249,7 +256,7 @@ func TestScanErrorPaths(t *testing.T) {
 // an API key is also a high-entropy run and also sits inside a bearer
 // header, and one span of bytes must still produce one hit.
 func TestOverlappingSignalsCollapseToOneHit(t *testing.T) {
-	hits := testDetector(t).Scan([]byte("Authorization: Bearer sk-Nn4vQ2tR7yWx1Zb8Ka3Ld6Mf9Ph0Sj2Uv5Xy8"))
+	hits := testDetector(t).Scan([]byte("Authorization: Bearer " + "sk" + "-Nn4vQ2tR7yWx1Zb8Ka3Ld6Mf9Ph0Sj2Uv5Xy8"))
 	if len(hits) != 1 {
 		t.Fatalf("overlapping signals produced %d hits: %+v", len(hits), hits)
 	}

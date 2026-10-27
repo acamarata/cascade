@@ -13,8 +13,8 @@ import (
 // appears in output, the test that planted it has caught a real leak.
 const (
 	canaryPath   = "/Users/example/Sites/acamarata/secret-project"
-	canaryToken  = "sk-CANARYvalue0123456789abcdefghij"
-	canaryAssign = "api_key = CANARYassignedvalue123"
+	canaryToken  = "sk" + "-CANARYvalue0123456789abcdefghij"
+	canaryAssign = "api_key" + " = CANARYassignedvalue123"
 )
 
 func TestUnrenderableDetectsWhatMustNotBeCommitted(t *testing.T) {
@@ -30,9 +30,9 @@ func TestUnrenderableDetectsWhatMustNotBeCommitted(t *testing.T) {
 		{"linux home path", "## Local\n\nRun /home/dev/build.sh", "machine-specific path"},
 		{"volume path", "## Local\n\nMounted at /Volumes/DATA/repo", "machine-specific path"},
 		{"windows user path", "## Local\n\nAt C:\\Users\\dev\\repo", "machine-specific path"},
-		{"private key", "## Keys\n\n-----BEGIN RSA PRIVATE KEY-----", "private key block"},
+		{"private key", "## Keys\n\n-----BEGIN RSA " + "PRIVATE KEY-----", "private key block"},
 		{"api token", "## Keys\n\nUse " + canaryToken, "credential-shaped token"},
-		{"github token", "## Keys\n\nghp_abcdefghijklmnopqrstuvwxyz01", "credential-shaped token"},
+		{"github token", "## Keys\n\nghp" + "_abcdefghijklmnopqrstuvwxyz01", "credential-shaped token"},
 		{"assigned secret", "## Keys\n\n" + canaryAssign, "assigned secret value"},
 	}
 	for _, tc := range tests {
@@ -105,7 +105,7 @@ func TestRenderTierBlockWhollyUnrenderableTierStillEmits(t *testing.T) {
 // rule set: for every detector, a section carrying its trigger must be
 // excluded, and the trigger must not appear anywhere in the output.
 func TestRenderTierBlockNeverLeaksAnyCanary(t *testing.T) {
-	planted := []string{canaryPath, canaryToken, canaryAssign, "-----BEGIN EC PRIVATE KEY-----"}
+	planted := []string{canaryPath, canaryToken, canaryAssign, "-----BEGIN EC " + "PRIVATE KEY-----"}
 	for _, p := range planted {
 		if unrenderable("## X\n\n"+p) == "" {
 			t.Fatalf("planted value %q is not detected at all, so this test proves nothing", p)

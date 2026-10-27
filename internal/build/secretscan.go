@@ -154,8 +154,6 @@ var SecretScanExemptions = map[string]string{
 		"token the command REFUSES to accept, illustrating the refusal; no real credential.",
 	"internal/doctor/redact.go": "the redaction gate's own pattern-definition source: a regex " +
 		"literal and its doc-comment example DSN shape, not a credential value.",
-	"internal/runtime/config_write_secrets.go": "the config-write guard's own vendor-prefix " +
-		"list and PEM header marker, used to REFUSE writing a secret-shaped value; not a credential.",
 	"internal/secrets/registry.go": "the shared detector's own pattern registry: its comments " +
 		"illustrate the shapes it matches (an example DSN, prefix names), not a credential value.",
 }

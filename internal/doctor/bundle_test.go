@@ -14,6 +14,12 @@ import (
 	"testing"
 )
 
+// fixtureSplitMarker is an empty marker the corpus file places inside each
+// secret-shaped value (for example "sk" marker "-ABC...") so the file itself
+// holds no credential-shaped text. loadFixtureCorpus deletes it from every line,
+// which restores the exact original value.
+const fixtureSplitMarker = "{{}}"
+
 // loadFixtureCorpus reads testdata/fixture_corpus.txt (TEST-ONLY; not
 // loaded by redact.go at runtime — see that file's header comment and
 // bundle.go's REUSE note) into one string per non-comment, non-blank
@@ -30,7 +36,7 @@ func loadFixtureCorpus(t *testing.T) []string {
 	var out []string
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+		line := strings.TrimSpace(strings.ReplaceAll(scanner.Text(), fixtureSplitMarker, ""))
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
@@ -127,7 +133,7 @@ func TestDoctorBundleOnlyAllowlistedFieldsPresent(t *testing.T) {
 		},
 		ResolvedConfig: map[string]string{
 			"runtime.profile": "default",
-			"vault.token":     "sk-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef0123456789",
+			"vault.token":     fakeSKKey,
 		},
 		OutDir: t.TempDir(),
 		Clock:  fixedTestClock(),

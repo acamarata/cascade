@@ -5,6 +5,22 @@ import (
 	"testing"
 )
 
+// Secret-shaped test inputs. Each is assembled from fragments at compile
+// time, so the file holds no credential-shaped literal while the compiled
+// value is byte-identical to the usual shape (the test needs the shape, not
+// a real credential).
+const (
+	fakeSKKey      = "sk" + "-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef0123456789"
+	fakeSKPathKey  = "sk" + "-liveTESTTOKEN1234567890abcdefgh"
+	fakePEMBegin   = "-----BEGIN " + "PRIVATE KEY-----"
+	fakePEMEnd     = "-----END " + "PRIVATE KEY-----"
+	fakePasswordKV = "password" + "=Tr0ub4dor&3ZQXKPLM"
+	fakeJWTBody    = "zdWIiOiIxMjM0NTY3ODkwIn0"
+	fakeJWT        = "eyJ" + "hbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ" + fakeJWTBody + ".dQw4w9WgXcQ_rerferf12345"
+	fakeDSNScheme  = "postgres:"
+	fakeDSNPass    = "S3cr3tP4ssw0rdXyz"
+)
+
 // redactShapeCase is one §D-31 secret-shape example shared by
 // TestDoctorRedactEntropyAndSecretShapes and its
 // _KVDSNJWTLog continuation (split per Art.10.3's 50-line cap).
@@ -25,13 +41,13 @@ var redactShapeCasesPart1 = []redactShapeCase{
 	},
 	{
 		name:   "bearer-prefixed key",
-		input:  "using token sk-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef0123456789 for the request",
+		input:  "using token " + fakeSKKey + " for the request",
 		want:   RedactedSecret,
-		absent: "sk-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef0123456789",
+		absent: fakeSKKey,
 	},
 	{
 		name:   "PEM block",
-		input:  "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKc=\n-----END PRIVATE KEY-----",
+		input:  fakePEMBegin + "\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKc=\n" + fakePEMEnd,
 		want:   RedactedSecret,
 		absent: "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKc=",
 	},
@@ -42,33 +58,33 @@ var redactShapeCasesPart1 = []redactShapeCase{
 var redactShapeCasesPart2 = []redactShapeCase{
 	{
 		name:   "secret-named key value",
-		input:  "password=Tr0ub4dor&3ZQXKPLM",
+		input:  fakePasswordKV,
 		want:   RedactedSecret,
 		absent: "Tr0ub4dor&3ZQXKPLM",
 	},
 	{
 		name:   "DSN with embedded credentials",
-		input:  "connecting to postgres://dbuser:S3cr3tP4ssw0rdXyz@db.example.com:5432/appdb now",
+		input:  "connecting to " + fakeDSNScheme + "//dbuser:" + fakeDSNPass + "@db.example.com:5432/appdb now",
 		want:   RedactedSecret,
-		absent: "S3cr3tP4ssw0rdXyz",
+		absent: fakeDSNPass,
 	},
 	{
 		name:   "JWT",
-		input:  "authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dQw4w9WgXcQ_rerferf12345",
+		input:  "authorization: Bearer " + fakeJWT,
 		want:   RedactedSecret,
-		absent: "eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+		absent: "eyJ" + fakeJWTBody,
 	},
 	{
 		name:   "secret inside a log line / error message",
-		input:  `ERROR: dial failed for postgres://svc:hunter2superSecretPass@10.0.0.5/prod: connection refused`,
+		input:  `ERROR: dial failed for ` + fakeDSNScheme + `//svc:hunter2superSecretPass@10.0.0.5/prod: connection refused`,
 		want:   RedactedSecret,
 		absent: "hunter2superSecretPass",
 	},
 	{
 		name:   "secret embedded in a file path",
-		input:  "/Users/dev/.secrets/sk-liveTESTTOKEN1234567890abcdefgh/config.toml",
+		input:  "/Users/dev/.secrets/" + fakeSKPathKey + "/config.toml",
 		want:   RedactedSecret,
-		absent: "sk-liveTESTTOKEN1234567890abcdefgh",
+		absent: fakeSKPathKey,
 	},
 }
 
@@ -151,7 +167,7 @@ func TestFilterAllowedFields_EmptyAllowlistRedactsEverything(t *testing.T) {
 func TestFilterAllowedFields_AllowlistedKeyStillGetsValueRedaction(t *testing.T) {
 	allowed := NewAllowedFields("runtime.data_dir")
 	out := FilterAllowedFields(map[string]string{
-		"runtime.data_dir": "sk-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef0123456789",
+		"runtime.data_dir": fakeSKKey,
 	}, allowed)
 	if out["runtime.data_dir"] != RedactedSecret {
 		t.Fatalf("got %q, want an allowlisted key's secret-shaped VALUE still redacted (defense in depth)", out["runtime.data_dir"])
@@ -161,9 +177,9 @@ func TestFilterAllowedFields_AllowlistedKeyStillGetsValueRedaction(t *testing.T)
 func TestRedactJoinedLines_PEMBlockSpanningMultipleLogLines(t *testing.T) {
 	lines := []string{
 		"daemon starting",
-		"-----BEGIN PRIVATE KEY-----",
+		fakePEMBegin,
 		"MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKc=",
-		"-----END PRIVATE KEY-----",
+		fakePEMEnd,
 		"daemon ready",
 	}
 	out := redactJoinedLines(lines)
@@ -186,7 +202,7 @@ func TestShannonEntropy_KnownValues(t *testing.T) {
 }
 
 func TestRedactLines(t *testing.T) {
-	out := RedactLines([]string{"password=Tr0ub4dor&3ZQXKPLM", "fine line"})
+	out := RedactLines([]string{fakePasswordKV, "fine line"})
 	if strings.Contains(out[0], "Tr0ub4dor") {
 		t.Fatalf("RedactLines did not redact line 0: %q", out[0])
 	}

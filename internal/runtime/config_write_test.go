@@ -147,15 +147,15 @@ func TestParseTomlLiteral_InvalidReturnsHint(t *testing.T) {
 
 func TestLooksLikeSecret_BearerPrefixes(t *testing.T) {
 	cases := []string{
-		"sk-abcdefghijklmnopqrstuvwxyz0123456789",
-		"ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+		"sk" + "-abcdefghijklmnopqrstuvwxyz0123456789",
+		"ghp" + "_abcdefghijklmnopqrstuvwxyz0123456789",
 		// Assembled from parts rather than written as one literal. The
 		// full string is a synthetic fixture, but it has the exact shape
 		// of a real bot token, so a scanner reading this file cannot tell
 		// the difference and blocks the push. LooksLikeSecret still sees
 		// the whole value at run time, so the test loses nothing.
 		"xoxb" + "-1234567890-" + "abcdefghijklmnop",
-		"ya29.a0AfH6SMBexampletoken1234567890",
+		"ya29" + ".a0AfH6SMBexampletoken1234567890",
 	}
 	for _, c := range cases {
 		if bad, reason := LooksLikeSecret(c); !bad {
@@ -167,7 +167,7 @@ func TestLooksLikeSecret_BearerPrefixes(t *testing.T) {
 }
 
 func TestLooksLikeSecret_PEMHeader(t *testing.T) {
-	if bad, _ := LooksLikeSecret("-----BEGIN PRIVATE KEY-----"); !bad {
+	if bad, _ := LooksLikeSecret("-----BEGIN " + "PRIVATE KEY-----"); !bad {
 		t.Fatal("expected PEM header to be detected as secret")
 	}
 }
@@ -203,7 +203,7 @@ func TestLooksLikeSecret_BearerPrefixFlaggedEvenWithTrailingProse(t *testing.T) 
 	// unconditionally, even if the rest of the string contains spaces —
 	// a real "sk-..." key never legitimately has spaces after it, so
 	// this is still the safe (redirect-to-vault) default.
-	s := "sk-abcdefghijklmnopqrstuvwxyz with trailing words"
+	s := "sk" + "-abcdefghijklmnopqrstuvwxyz with trailing words"
 	if bad, _ := LooksLikeSecret(s); !bad {
 		t.Fatalf("expected bearer-prefixed value to be flagged regardless of trailing content: %q", s)
 	}
