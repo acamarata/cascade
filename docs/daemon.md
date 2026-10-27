@@ -61,9 +61,10 @@ order:
    the bridge drain.
 3. Run the background cleanup (stop the config watcher, release the
    retention scheduler's lock).
-4. Close the event bus, which stops any delivery goroutine a subscriber
+4. Close the fleet runtime (see [Fleet runtime](#fleet-runtime)).
+5. Close the event bus, which stops any delivery goroutine a subscriber
    left running.
-5. Close the store, then the log provider.
+6. Close the store, then the log provider.
 
 The join comes before the store close on purpose: a background goroutine
 still running when the store closes would read or write a closed
@@ -87,6 +88,32 @@ would already be blocked waiting on that lock.
 The scan's result (a `*RecoveryEvent`, or `nil` on a clean start) is
 published to the daemon's event bus by the scan itself; the caller has
 nothing further to do with it.
+
+## Fleet runtime
+
+`composeDaemon` builds one `daemon.FleetRuntime` after the store, the bus,
+the run context and the manifest exist and before any registration runs. It
+is handed to every registration as `w.Deps.Fleet`; no registration builds its
+own. `NewFleetRuntime` runs an ordered list of builder steps and returns the
+first failure wrapped with the step name, after closing what the earlier
+steps built, so a failed step stops the daemon from starting.
+
+The first step is admission: it reads the `[governor]` table through
+`governor.Load`, builds the one `governor.Sampler` and the one
+`governor.AdmissionController` over it, and runs the sampler as the
+supervised subsystem `governor-sampler` on the run context. A later
+ticket adds its own step and file; the dependencies a step needs are already
+fields of `FleetRuntimeDeps`.
+
+The sampler goroutine is joined like every other supervised goroutine: the
+run context ends it and `Manifest.Wait` returns only after its ticker has
+stopped. `FleetRuntime.Close` then stops the sampler (the controller refuses
+new and queued admissions with a draining error) and runs the closers the
+later steps registered, in reverse. It is idempotent.
+
+`status.get` lists the subsystems `governor-sampler`, `admission-posture` (the
+row refresher) and `admission`. The last one's detail is
+`posture=<posture>` (see [Daemon admission](governor.md#daemon-admission)).
 
 ## Crash recovery
 

@@ -24,14 +24,17 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/plugins"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // composeDaemon builds everything the daemon needs before it serves. This is
@@ -90,6 +93,12 @@ func composeDaemon(ctx context.Context, deps daemonDeps, observe registryObserve
 	runCtx, cancelRun := context.WithCancel(ctx)
 	manifest := daemon.NewManifest(logProvider.Logger(), deps.Clock)
 	joinRun := joinRunContext(cancelRun, manifest)
+	// The fleet runtime closes after the join and before the bus and the
+	// store: its sampler goroutine is supervised on runCtx.
+	fleet, err := startFleetRuntime(runCtx, deps, cfg, paths, manifest, bus, store, logProvider, joinRun, &cleanups)
+	if err != nil {
+		return daemon.RunOptions{}, cleanups, err
+	}
 	memoryAdmin, pol, cleanupBackground, err := wireBackgroundSubsystems(runCtx, manifest, paths, deps, cfg, store, rawDB, bus, logProvider, baseline)
 	if err != nil {
 		joinRun()
@@ -104,16 +113,47 @@ func composeDaemon(ctx context.Context, deps daemonDeps, observe registryObserve
 	server, _, connections, err := buildRPCServer(bus, deps.Clock, logProvider.Logger(), settings, paths, memoryAdmin, store,
 		withRunContext(runCtx), withManifest(manifest),
 		withPolicyHandlers(pol),
-		withNodePlacement(deps.NodeTunnels), withBaselineRuntime(withDaemonRuntime(cfg, rawDB, pol, logProvider, deps), baseline), withRegistryObserver(observe))
+		withNodePlacement(deps.NodeTunnels), withBaselineRuntime(withFleetRuntime(withDaemonRuntime(cfg, rawDB, pol, logProvider, deps), fleet), baseline), withRegistryObserver(observe))
 	if err != nil {
 		return daemon.RunOptions{}, cleanups, err
 	}
+	return daemonRunOptions(deps, settings, paths, logProvider, server, manifest, connections, store, bus, cancelRun), cleanups, nil
+}
+
+// startFleetRuntime builds the daemon's one fleet runtime over the values
+// composeDaemon holds and registers its Close on cleanups. A failed build
+// joins the run first (joinRun), so nothing supervised outlives the error.
+func startFleetRuntime(ctx context.Context, deps daemonDeps, cfg *runtime.Config, paths runtime.PathProvider, manifest *daemon.Manifest, bus *events.Bus, store provider.Store, lp *runtime.LogProvider, joinRun func(), cleanups *[]func()) (*daemon.FleetRuntime, error) {
+	fleet, err := daemon.NewFleetRuntime(ctx, daemon.FleetRuntimeDeps{
+		Paths: paths, Clock: deps.Clock, Manifest: manifest, Bus: bus, Config: cfg, Store: store,
+		Binding: nodes.NewFileControllerBindingBackend(paths.DataDir()), Logger: lp.Logger(),
+	})
+	if err != nil {
+		joinRun()
+		return nil, err
+	}
+	*cleanups = append(*cleanups, func() { _ = fleet.Close() })
+	return fleet, nil
+}
+
+// withFleetRuntime hands the fleet runtime to every registration as
+// daemonWiring.Deps.Fleet.
+func withFleetRuntime(opt rpcServerOption, fleet *daemon.FleetRuntime) rpcServerOption {
+	if opt.runtime != nil {
+		opt.runtime.Fleet = fleet
+	}
+	return opt
+}
+
+// daemonRunOptions assembles the RunOptions composeDaemon hands daemon.Run
+// and wires the upgrade path.
+func daemonRunOptions(deps daemonDeps, settings daemon.Settings, paths runtime.PathProvider, lp *runtime.LogProvider, server *http.Server, manifest *daemon.Manifest, connections *int64, store provider.Store, bus *events.Bus, cancelRun context.CancelFunc) daemon.RunOptions {
 	opts := daemon.RunOptions{
-		Settings: settings, PIDPath: daemon.PIDFilePath(paths), Logger: logProvider.Logger(), Clock: deps.Clock,
+		Settings: settings, PIDPath: daemon.PIDFilePath(paths), Logger: lp.Logger(), Clock: deps.Clock,
 		Server: server, Environ: deps.Environ, Manifest: manifest, Connections: connections,
 	}
 	wireUpgrade(&opts, deps, store, bus, manifest.RelaunchJoin(cancelRun, settings.ShutdownGrace))
-	return opts, cleanups, nil
+	return opts
 }
 
 // platformDaemonRun composes the daemon (composeDaemon) and serves it

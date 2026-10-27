@@ -250,3 +250,34 @@ last snapshot ages into `stale` instead of being trusted forever.
   `KindUnavailable` error, and nothing is published.
 - Windows (tier 2): the collector always returns `ErrUnsupportedPlatform`,
   so nothing is published and admission refuses as `stale`.
+
+## Daemon admission
+
+The daemon owns exactly one `AdmissionController`, built by the fleet
+runtime (`internal/daemon`, see [Fleet runtime](daemon.md#fleet-runtime))
+and read by every consumer as `w.Deps.Fleet.Admission()`. Its `Sampler` is
+the supervised subsystem `governor-sampler`, started on the run context at
+the default rate.
+
+`status.get` reports the controller's posture on the subsystem `admission`:
+
+| Posture | Subsystem state | Detail |
+|---|---|---|
+| `stale` (no sample yet, or too old) | running | `posture=stale` |
+| `memory-only` | running | `posture=memory-only` |
+| `swap+memory` | running | `posture=swap+memory` |
+| `no-signal` | error (health reads degraded) | `posture=no-signal: ` followed by the refusal text |
+
+The row is refreshed after every completed sample, and again every sampler
+period by the supervised subsystem `admission-posture`, so a sampler stuck
+inside one collection still shows its posture ageing to `stale`. It is written
+only when it changes. A daemon whose sampler never ticks (a tier-2 platform,
+or a failing collector) therefore shows `posture=stale` and `Admit` refuses.
+
+The admission values come from `governor.Load` over `config.toml`. A
+malformed `[governor]` table stops the daemon from starting; an absent one
+resolves to the preset defaults. The daemon loads the table before the first
+sample exists, so an unpinned preset calibrates against an empty snapshot and
+resolves to the minimal envelope (the fail-closed rule in `calibrate`). Pin
+`[governor] preset` or set the `[governor.admission]` keys to choose a
+different envelope.

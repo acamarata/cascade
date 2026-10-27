@@ -101,6 +101,9 @@ type daemonRuntime struct {
 	// ConfigBaseline is the boot baseline check's outcome and the
 	// config.accept_loosening state (daemon_unix_config_baseline.go).
 	ConfigBaseline *configBaseline
+	// Fleet is the daemon's one fleet runtime (admission controller and the
+	// sampler behind it); composeDaemon builds it before any registration.
+	Fleet *daemon.FleetRuntime
 }
 
 // daemonRegistration is one subsystem's wiring step. Name must be unique and
