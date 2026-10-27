@@ -1,23 +1,17 @@
-// Purpose: the composition root for the first-party MCP tool set
+// Purpose: the composition root for the first-party MCP tool set: the
+// JSON-RPC method table those tools dispatch through, and the policy filter
+// that decides which of them a client may see.
 //
-//	(P1-E16-W4-S34-T2, R-14.251) — the JSON-RPC method table those tools
-//	dispatch through, and the policy filter that decides which of them a
-//	client may see.
+// Inputs: resolved paths and a clock. Outputs: an *rpc.Registry serving the
+// methods internal/mcp/coretools names, a capability filter over a real
+// policy engine, and the closer for the databases both opened.
 //
-// Inputs: resolved paths and a clock.
-// Outputs: an *rpc.Registry serving the methods internal/mcp/coretools
-//
-//	names, a capability filter over a real policy engine, and the closer
-//	for the databases both opened.
-//
-// Constraints: platform-neutral (Art.5). `cascade mcp serve --stdio` is
-//
-//	the surface the first-party harness client speaks to on every OS, so
-//	this file may not
-//	depend on daemon_unix_run.go's !windows composition and instead calls
-//	the SAME internal/daemon and internal/memory registration functions
-//	that file does. Every failure degrades to a filter that exposes
-//	nothing rather than to a tool that answers wrongly.
+// Constraints: platform-neutral (Art.5): `cascade mcp serve --stdio` is the
+// surface the first-party harness client speaks on every OS, so this file may
+// not depend on daemon_unix_run.go's !windows composition and calls the SAME
+// internal/daemon and internal/memory registration functions that file does.
+// Every failure degrades to a filter that exposes nothing rather than to a
+// tool that answers wrongly.
 //
 // SPORT: cmd/cascade/mcp (ADD) — P1-E16-W4-S34-T2.
 package main
@@ -25,8 +19,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 
+	"github.com/acamarata/cascade/internal/ci"
 	"github.com/acamarata/cascade/internal/client"
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/mcp"
@@ -46,12 +42,9 @@ import (
 // mcpToolSubject is the subject an MCP session acts as when the policy
 // engine is asked whether a tool may be listed.
 //
-// It is one fixed subject, not a per-session identity, and that is a
-// stated limit rather than an oversight: the MCP transport carries no
-// authenticated principal, so there is nobody else this process could
-// honestly name. Granting a capability to this subject grants it to every
-// MCP client of this machine, which is the same scope the harness's own
-// configuration already has.
+// One fixed subject, not a per-session identity: the MCP transport carries
+// no authenticated principal, so a grant to it covers every MCP client of
+// this machine, the same scope the harness's own configuration has.
 var mcpToolSubject = policy.Subject{Kind: policy.SubjectUser, ID: "mcp"}
 
 // mcpToolCapabilities are the capabilities the first-party tool set
@@ -67,19 +60,15 @@ func mcpToolCapabilities() []policy.Capability {
 		{
 			Name: coretools.CapabilityMemoryRead,
 			Desc: "read records from the memory store",
-			// ClassRead, not ClassLocalDev: recalling a record changes
-			// nothing, and the rung the §5.15 ladder derives from the
-			// class is what decides whether an autonomous loop may
-			// proceed past it without a human turn.
+			// ClassRead: recalling a record changes nothing; the §5.15
+			// ladder derives its rung from this class.
 			DefaultPolicy: policy.ClassRead,
 		},
 		{
 			Name: coretools.CapabilityMemoryWrite,
 			Desc: "write and retire records in the memory store",
 			// ClassWorkspaceMutation: remembering and forgetting change
-			// files on this machine. Not ClassExternalSideEffect — the
-			// store never leaves the device — and not ClassLocalDev,
-			// which is for build and test work that leaves no record.
+			// files on this machine, none of which leaves the device.
 			DefaultPolicy: policy.ClassWorkspaceMutation,
 		},
 		{
@@ -88,6 +77,18 @@ func mcpToolCapabilities() []policy.Capability {
 			// ClassRead: a catalog search changes nothing, the same
 			// reasoning as CapabilityMemoryRead above.
 			DefaultPolicy: policy.ClassRead,
+		},
+		{
+			Name:          coretools.CapabilityCIRead,
+			Desc:          "read recorded CI results",
+			DefaultPolicy: policy.ClassRead,
+		},
+		{
+			Name: coretools.CapabilityCIRun,
+			Desc: "run the local lint, test and build gate",
+			// ClassLocalDev: it runs the operator's configured build and
+			// test commands in the checkout and records the run locally.
+			DefaultPolicy: policy.ClassLocalDev,
 		},
 	}
 }
@@ -101,22 +102,16 @@ type mcpToolWiring struct {
 	Close   func()
 }
 
-// buildMCPToolWiring assembles both halves.
-//
-// It never returns an error. Every failure here is a reason to expose
-// FEWER tools, not a reason to refuse to serve MCP at all: a client that
-// cannot list cascade_memory_recall because the store would not open is
-// in a worse position than one that can, but it is in a far better
-// position than one whose whole server failed to start.
+// buildMCPToolWiring assembles both halves. It never returns an error:
+// every failure here is a reason to expose FEWER tools, not to refuse to
+// serve MCP at all.
 func buildMCPToolWiring(ctx context.Context, paths runtime.PathProvider, clock runtime.Clock) mcpToolWiring {
 	registry := rpc.NewRegistry()
 	// The MCP tool process holds no custody session: every elevated verb is
 	// refused before a handler runs, whether or not one is registered here.
 	registry.Use(daemon.RefuseAllElevation(clock))
-	// No paths means no data directory, which means no store, no index
-	// and no grant file. The honest wiring for that process is an empty
-	// method table and a filter that exposes nothing — every tool is then
-	// reported as unservable, which is exactly what it is.
+	// No paths means no store, index or grant file: an empty method table
+	// and a filter that exposes nothing, every tool reported unservable.
 	if paths == nil {
 		return mcpToolWiring{Methods: registry, Filter: mcp.DenyAllFilter{}, Close: func() {}}
 	}
@@ -131,12 +126,9 @@ func buildMCPToolWiring(ctx context.Context, paths runtime.PathProvider, clock r
 }
 
 // registerMCPToolMethods binds every method coretools.Specs names onto
-// registry, and returns the closers for the handles it opened.
-//
-// A registration that fails is SKIPPED rather than fatal, and the tool
-// that needed it is then unservable and simply absent — see
-// coretools.Registrations, which registers no tool for an unserved
-// method.
+// registry, and returns the closers for the handles it opened. A failed
+// registration is skipped, and its tool is then unservable and absent (see
+// coretools.Registrations).
 func registerMCPToolMethods(ctx context.Context, registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock) []func() {
 	var closers []func()
 	memory.NewHandler(memory.NewFileStore(memoryStoreDir(paths), clock), clock).Register(registry)
@@ -147,11 +139,14 @@ func registerMCPToolMethods(ctx context.Context, registry *rpc.Registry, paths r
 	if closer, err := registerMCPRecall(ctx, registry, paths); err == nil {
 		closers = append(closers, closer)
 	}
-	// plugin.search (P1-E24-W5-S50-T2, D4): the SAME wiring function the
-	// daemon's own composition root calls (plugin_rpc.go's
-	// registerDBPathHandlers), so the MCP tool and `cascade plugin search`
-	// dispatch through identical logic. It needs no store/db closer.
+	// plugin.search: the SAME wiring function the daemon calls
+	// (plugin_rpc.go's registerDBPathHandlers); it needs no closer.
 	wirePluginSearchHandler(ctx, registry, paths, clock)
+	// ci.run and ci.status: process-local, never daemon RPCs. They run over
+	// the serve process's own paths and clock, in its working directory.
+	ciDeps := ci.ProductionCmdDeps()
+	ciDeps.Paths, ciDeps.Clock = paths, clock
+	ci.RegisterMCPMethods(registry, ciDeps, os.Getwd)
 	return closers
 }
 

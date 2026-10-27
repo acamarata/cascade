@@ -124,7 +124,8 @@ func Specs() []Spec {
 	out := retrievalSpecs()
 	out = append(out, contextSpecs()...)
 	out = append(out, memorySpecs()...)
-	return append(out, pluginSpecs()...)
+	out = append(out, pluginSpecs()...)
+	return append(out, ciSpecs()...)
 }
 
 // retrievalSpecs are the tools over the retrieval engine. Split from

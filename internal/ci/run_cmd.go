@@ -84,47 +84,12 @@ func filterOnlySteps(steps []RunnerStep, flags ciRunFlags) []RunnerStep {
 	return out
 }
 
-// runCIRun implements `ci run`'s RunE: resolve config and the repo root,
-// check the never-pay policy actually routes this repository to the local
-// gate, build the runner config, open the embedded stores, execute, print
-// the result, and exit non-zero when any step failed.
+// runCIRun implements `ci run`'s RunE: run the local gate through the
+// shared RunLocal entry point, print the result, and exit non-zero when
+// any step failed.
 func runCIRun(cmd *cobra.Command, deps CmdDeps, flags ciRunFlags) error {
-	ctx := cmd.Context()
-	paths, err := deps.resolvePaths()
-	if err != nil {
-		return err
-	}
-	absRoot, err := resolveCheckout(flags.Repo)
-	if err != nil {
-		return err
-	}
-	rcfg, err := loadRunnerConfig(ctx, deps, paths.ConfigPath(), absRoot, flags)
-	if err != nil {
-		return err
-	}
-	// The policy gate comes BEFORE any store is opened or any step runs:
-	// a repository whose CI belongs on hosted Actions must not have a
-	// local run recorded against it at all.
-	// The same resolved identity feeds the never-pay guard AND the
-	// completed-run event a [ci.watch] subscriber matches against
-	// (P1-E25-W5-S51-T4) -- resolved once, never twice.
-	rcfg.OwnerRepo = ownerRepoFor(ctx, rcfg)
-	if err := guardLocalRun(ctx, deps.Routes, rcfg.OwnerRepo); err != nil {
-		return err
-	}
-
-	runDeps, closeStores, err := openRunDeps(ctx, paths.DataDir(), deps.Clock)
-	if err != nil {
-		return err
-	}
-	defer closeStores()
-
-	repoID, repoName := LocalRepoID(absRoot), filepath.Base(absRoot)
-	runID, err := ReserveLocalRun(ctx, runDeps.DB, repoID, repoName, deps.Clock.Now())
-	if err != nil {
-		return err
-	}
-	result, err := Execute(ctx, runDeps, rcfg, runID, repoID, repoName)
+	only := StepFilter{LintOnly: flags.LintOnly, TestOnly: flags.TestOnly, BuildOnly: flags.BuildOnly}
+	result, err := RunLocal(cmd.Context(), deps, flags.Repo, only)
 	if err != nil {
 		return err
 	}

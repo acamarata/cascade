@@ -843,6 +843,26 @@
       "rpc_method": "plugin.search",
       "capability": "plugins.read",
       "alias": ""
+    },
+    {
+      "v1_name": "NEW-IN-V2:cascade_ci_run",
+      "v1_description": "(no v1 ancestor -- the local CI gate as an MCP tool is new in v2)",
+      "v1_input_schema": {},
+      "status": "registered",
+      "name": "cascade_ci_run",
+      "rpc_method": "ci.run",
+      "capability": "ci.run",
+      "alias": ""
+    },
+    {
+      "v1_name": "NEW-IN-V2:cascade_ci_status",
+      "v1_description": "(no v1 ancestor -- the local CI gate as an MCP tool is new in v2)",
+      "v1_input_schema": {},
+      "status": "registered",
+      "name": "cascade_ci_status",
+      "rpc_method": "ci.status",
+      "capability": "ci.read",
+      "alias": ""
     }
   ]
 }

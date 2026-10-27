@@ -44,18 +44,7 @@ func newCIStatusCmd(deps CmdDeps) *cobra.Command {
 // The never-pay refusals live where money is actually at stake -- `ci run`
 // (run_cmd.go) and the Actions polling client (poll.go's guardActionsPoll).
 func runCIStatus(cmd *cobra.Command, deps CmdDeps, limit int) error {
-	ctx := cmd.Context()
-	paths, err := deps.resolvePaths()
-	if err != nil {
-		return err
-	}
-	db, err := openResultsDB(ctx, paths.DataDir(), deps.Clock)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = db.Close() }()
-
-	runs, err := ListRuns(ctx, db, limit)
+	runs, err := StatusLocal(cmd.Context(), deps, limit)
 	if err != nil {
 		return err
 	}
