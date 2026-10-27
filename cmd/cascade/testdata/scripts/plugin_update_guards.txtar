@@ -4,9 +4,9 @@
 #
 # `cascade plugin update` fails closed with no daemon running: an update
 # never installs a plugin that is not installed, a --from manifest whose id
-# is not <name> is refused before the store opens, and an update that needs
-# elevation exits non-zero with nothing written (with and without
-# CASCADE_NO_INPUT=1). The manifests are synthetic fixtures under
+# is not <name> is refused before the store opens, a local add without a
+# signed presence proof writes nothing, and an update that needs elevation
+# exits non-zero with nothing written (with and without CASCADE_NO_INPUT=1). The manifests are synthetic fixtures under
 # testdata/plugin_update_guards.
 
 # Not installed: refused, and the refusal names `cascade plugin add`.
@@ -19,10 +19,24 @@ stderr 'neither installed nor built into this binary'
 ! exec cascade plugin update some-other-plugin --from testdata/plugin_update_guards/demo-1.0.0.toml
 stderr 'manifest id "update-guard-demo" does not match requested name "some-other-plugin"'
 
-# Install the base version (no elevation needed), then an update that
+# Installing needs a signed presence proof (plugin.add is always elevated)
+# and this sandbox has no enrolled key: the add refuses and installs nothing,
+# with and without CASCADE_NO_INPUT=1.
+! exec cascade plugin add testdata/plugin_update_guards/demo-1.0.0.toml
+stderr 'elevation-required'
+! stdout 'installed'
+! exec cascade plugin info update-guard-demo
+stderr 'neither installed nor built into this binary'
+env CASCADE_NO_INPUT=1
+! exec cascade plugin add testdata/plugin_update_guards/demo-1.0.0.toml
+stderr 'CASCADE_NO_INPUT=1'
+env CASCADE_NO_INPUT=
+
+# Seed v1.0.0 as a signed add would have installed it, then an update that
 # requests a new capability exits non-zero and leaves v1.0.0 installed.
-exec cascade plugin add testdata/plugin_update_guards/demo-1.0.0.toml
-stdout 'installed update-guard-demo v1.0.0'
+seed-plugin testdata/plugin_update_guards/demo-1.0.0.toml
+exec cascade plugin info update-guard-demo
+stdout '1\.0\.0'
 ! exec cascade plugin update update-guard-demo --from testdata/plugin_update_guards/demo-1.1.0-grants.toml
 stderr 'needs a running daemon'
 ! stdout 'updated'

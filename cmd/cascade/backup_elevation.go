@@ -32,6 +32,14 @@ type backupElevatedEnvelope struct {
 
 func newBackupAuthorizer(deps elevateHelperDeps) backupAuthorizeFunc {
 	return func(ctx context.Context, cmd *cobra.Command, method string, params []byte, yes bool) (backup.ElevationProof, error) {
+		// CASCADE_NO_INPUT refuses before custody is selected: without --yes
+		// with the confirmation error (no prompt), with it with ErrNoInput.
+		if deps.Getenv != nil && deps.Getenv("CASCADE_NO_INPUT") == "1" {
+			if err := confirmBackupOperation(cmd, deps, method, yes); err != nil {
+				return "", err
+			}
+			return "", elevation.ErrNoInput()
+		}
 		ks, err := backupKeystore(deps)
 		if err != nil {
 			return "", err

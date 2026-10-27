@@ -34,7 +34,7 @@ func TestNodeUpgradeCmd_RequiresElevation(t *testing.T) {
 
 func TestNodeUpgradeCmd_RequiresArtifactAndSignature(t *testing.T) {
 	deps := testNodeCLIDeps(t, nil)
-	deps.Gate = allowingGate(nil)
+	deps.Gate = allowingGate(t, nil)
 	id := seedRecord(t, deps, nodes.TierWorkerTrusted)
 
 	cmd := newNodeUpgradeCmd(deps)

@@ -1,11 +1,10 @@
 // Purpose: `cascade vault get` and `cascade vault rotate`, the two
 //
-//	elevated vault verbs, plus the production elevation gate the broker
-//	consults before either one touches the store.
+//	elevated vault verbs.
 //
-// Inputs: cobra args/flags, the shared vaultDeps, and (for the gate) the
+// Inputs: cobra args/flags and the shared vaultDeps, whose Gate is the
 //
-//	platform elevation keystore and trust record.
+//	signed local elevation gate (vault_elevated_gate.go).
 //
 // Outputs: `get` writes the raw value to stdout and nothing else, so a
 //
@@ -13,11 +12,10 @@
 //	name it replaced. On refusal both emit ELEVATION_REQUIRED with the
 //	taxonomy's elevation-required exit status.
 //
-// Constraints: the gate decides, this file does not. It defers to
+// Constraints: the gate decides, this file does not. A gate that cannot
 //
-//	internal/policy, which classifies the verb through the one canonical
-//	elevated-verb table, so there is no second copy of that table here. A
-//	gate that cannot prove local presence refuses.
+//	prove local presence refuses, and `get` releases a value only after the
+//	gate recorded the access (name and verb, never the value).
 //
 // SPORT: cmd/cascade/vault (ADD - get, rotate).
 
@@ -25,75 +23,19 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/spf13/cobra"
 
-	"github.com/acamarata/cascade/internal/elevation"
-	"github.com/acamarata/cascade/internal/policy"
-	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// elevationGate is the production secrets.ElevationGate. It resolves the
-// two daemonless-elevation preconditions from internal/elevation (is a
-// device key enrolled, is a local authenticator usable) and hands them to
-// internal/policy for the decision.
-//
-// Both dependencies are constructed lazily, per invocation: building the
-// command tree must never probe the platform keystore.
-type elevationGate struct {
-	newKeystore     func() elevation.Custody
-	newTrustBackend func() elevation.Backend
-	clock           elevation.Clock
-	getenv          runtime.Getenv
-}
-
-// newElevationGate builds the production gate.
-func newElevationGate(
-	newKeystore func() elevation.Custody,
-	newTrustBackend func() elevation.Backend,
-	clock elevation.Clock,
-	getenv runtime.Getenv,
-) *elevationGate {
-	return &elevationGate{
-		newKeystore: newKeystore, newTrustBackend: newTrustBackend, clock: clock, getenv: getenv,
-	}
-}
-
-// Authorize implements secrets.ElevationGate. Every failure path refuses:
-// a keystore that will not construct, a trust store that will not read, and
-// CASCADE_NO_INPUT=1 (which forbids the local-presence prompt the flow
-// needs) are all "cannot prove local presence", never "proceed".
-func (g *elevationGate) Authorize(_ context.Context, verb string) error {
-	if g.newKeystore == nil {
-		return policy.ErrElevationRequired(verb, false, false)
-	}
-	if _, err := g.newKeystore().Signer(); err != nil {
-		return err
-	}
-	if g.getenv != nil && g.getenv("CASCADE_NO_INPUT") == "1" {
-		return cascade.Newf(cascade.KindElevationRequired,
-			"vault: %s needs local presence and CASCADE_NO_INPUT=1 forbids prompting for it", verb)
-	}
-	enrolled, available := g.preconditions()
-	if !policy.IsDaemonlessElevationAllowed(verb, enrolled, available) {
-		return policy.ErrElevationRequired(verb, enrolled, available)
-	}
-	return nil
-}
-
-// preconditions resolves the two hardware/enrollment facts. A dependency
-// this gate cannot construct reports false, so the policy layer refuses.
-func (g *elevationGate) preconditions() (enrolled, available bool) {
-	if g.newKeystore != nil {
-		available = g.newKeystore().Tier().SatisfiesElevation()
-	}
-	if g.newTrustBackend != nil {
-		if backend := g.newTrustBackend(); backend != nil {
-			enrolled = elevation.NewElevationTrustStore(backend, g.clock).IsEnrolled()
-		}
-	}
-	return enrolled, available
+// vaultAccessRecorder is the gate's audit of a released value. The
+// production elevationGate implements it; a gate that cannot record an
+// access cannot release a value.
+type vaultAccessRecorder interface {
+	RecordVaultAccess(ctx context.Context, name, verb string) error
 }
 
 func newVaultGetCmd(deps vaultDeps) *cobra.Command {
@@ -111,6 +53,21 @@ func newVaultGetCmd(deps vaultDeps) *cobra.Command {
 		Args:        usageArgs(cobra.ExactArgs(1)),
 		Annotations: map[string]string{"local": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			recorder, ok := deps.Gate.(vaultAccessRecorder)
+			if !ok {
+				return cascade.New(cascade.KindElevationRequired,
+					"vault get: the elevation gate cannot audit an access; refusing to read")
+			}
+			// The access is recorded first, through the gate's audit sink,
+			// which reads no vault and no custody; a failed record reads
+			// nothing and is reported on stderr with its reason code, so a
+			// refusal whose audit sink is down is never silent.
+			if err := recorder.RecordVaultAccess(cmd.Context(), args[0], secrets.VerbGet); err != nil {
+				if _, werr := fmt.Fprintln(cmd.ErrOrStderr(), "vault get: refused (audit_unavailable): the access could not be recorded"); werr != nil {
+					return cascade.Wrap(cascade.KindUnavailable, werr, "vault: writing the refusal failed")
+				}
+				return err
+			}
 			broker, err := vaultBroker(deps)
 			if err != nil {
 				return err

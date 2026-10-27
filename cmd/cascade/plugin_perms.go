@@ -1,22 +1,20 @@
 // Purpose: `cascade plugin perms grant|revoke <name> <capability>`. Both
-// directions are unconditionally elevated (§5.14) — internal/plugins.
-// ChangePerms enforces the daemon-required and CASCADE_NO_INPUT gates
-// itself (in that order), so this file's job is purely the CLI-side grant-
-// diff display before the call and rendering the result after. See
-// plugin_add.go's header for the same "no daemon-side handler registered
-// yet" gap; the local decision and refusal are complete and tested either
-// way.
+// directions are unconditionally elevated (§5.14). The change is made by the
+// daemon's attested perms.grant / perms.revoke (internal/plugins
+// perms_rpc.go), because the daemon holds the plugin store; without a daemon
+// the command refuses, as does CASCADE_NO_INPUT=1, in that order, and both
+// refusals are recorded as attempt then deny.
 //
 // SPORT: cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4).
 package main
 
 import (
 	"context"
+	"io"
 
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/internal/plugins"
-	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // newPluginPermsCmd builds the `plugin perms` group.
@@ -47,24 +45,36 @@ func runPluginPerms(cmd *cobra.Command, deps pluginDeps, name, capability string
 	if err := pluginWindowsTier2Refusal("elevation"); err != nil {
 		return err
 	}
+	verb, label := plugins.PermsRevokeRPCMethod, "perms revoke"
+	if grant {
+		verb, label = plugins.PermsGrantRPCMethod, "perms grant"
+	}
+	// The daemon holds the plugin store, so a change is always the daemon's
+	// attested perms.* call; without a daemon nothing can apply it. Both
+	// refusals are recorded as attempt then deny.
+	if !daemonAvailable {
+		return recordPluginRefusal(ctx, deps, verb, "daemon_required", plugins.ErrDaemonRequiredForElevatedPluginOp(label))
+	}
+	if pluginNoInput(deps) {
+		return recordPluginRefusal(ctx, deps, verb, "no_input", plugins.ErrNoInputHardError(label))
+	}
+	var res plugins.PermsResult
+	if err := pluginPermsElevatedCall(ctx, deps, cmd.ErrOrStderr(), verb, plugins.PermsParams{Name: name, Capability: capability}, &res); err != nil {
+		return err
+	}
+	// The diff is carried in the result: JSON mode never interleaves free
+	// text with the envelope (Writer.Println's own doc comment).
+	return pluginOutputWriter(cmd).Result(pluginPermsView{Name: res.Name, Before: res.Before, After: res.After})
+}
 
-	// The contract asks the diff to be displayed before it applies; since
-	// JSON mode never interleaves free text with the envelope (Writer.
-	// Println's own doc comment), the diff is carried IN the result
-	// instead — visible in both modes, and additionally asserted by a
-	// test without needing to scrape stderr.
-	before, _ := withPluginStore(ctx, deps, func(ctx context.Context, store provider.Store) (plugins.PluginMetadata, error) {
-		rec, _, err := plugins.LoadMetadata(ctx, store, name)
-		return rec, err
-	})
-
-	rec, err := withPluginStore(ctx, deps, func(ctx context.Context, store provider.Store) (plugins.PluginMetadata, error) {
-		return plugins.ChangePerms(ctx, store, name, capability, grant, daemonAvailable, pluginNoInput(deps))
-	})
+// pluginPermsElevatedCall dials perms.grant / perms.revoke through
+// callElevated. Tests replace it to reach an in-process registry.
+var pluginPermsElevatedCall = func(ctx context.Context, deps pluginDeps, stderr io.Writer, method string, params plugins.PermsParams, out any) error {
+	c, err := pluginClient(deps)
 	if err != nil {
 		return err
 	}
-	return pluginOutputWriter(cmd).Result(pluginPermsView{Name: rec.Name, Before: before.Grants, After: rec.Grants})
+	return callElevated(ctx, c, productionElevatedCallDeps(stderr), method, params, out)
 }
 
 type pluginPermsView struct {

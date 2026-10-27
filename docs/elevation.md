@@ -51,7 +51,7 @@ The nonce ledger drops expired nonces on each issue and refuses with `KindUnavai
 
 ### Verbs
 
-Always elevated: `vault.get`, `vault.rotate`, `approval.grant`, `standing_grant.create`, `standing_grant.change`, `backup.create`, `backup.export`, `backup.import`, `backup.restore`, `backup.key_export`, `backup.key_import`, `plugin.add`, `plugin.update`, `perms.grant`, `perms.revoke`, `node.enroll`, `node.remove`, `node.upgrade`, `uninstall.purge_data`, `config.accept_loosening`, `policy.authorize`.
+Always elevated: `vault.get`, `vault.rotate`, `approval.grant`, `standing_grant.create`, `standing_grant.change`, `backup.create`, `backup.export`, `backup.import`, `backup.restore`, `backup.key_export`, `backup.key_import`, `plugin.add`, `plugin.update`, `perms.grant`, `perms.revoke`, `node.enroll`, `node.remove`, `node.upgrade`, `node.rotate_key`, `node.revoke`, `uninstall.purge_data`, `config.accept_loosening`, `policy.authorize`.
 
 Elevated when the request loosens or discards: `sync.conflicts_resolve` (anything but keeping the server side), `policy.set` and `sensitivity.set` (`direction` is `loosen` or unreadable), `elevation.set_allow_remote` and `plugins.set_enable_remote_runtime` (a flag that turns on, or cannot be read).
 
@@ -72,3 +72,61 @@ Refuse-all returns the custody refusal at tier `none` (`-32012`, no nonce).
 ### CLI signing
 
 Every elevated CLI verb dials the daemon through `callElevated`: the first call goes out unsigned, a challenge carries the nonce, and one signed retry follows. A second challenge is `ErrElevationNotSatisfied`.
+
+## Local elevated verbs
+
+Some elevated verbs run in the CLI process without the daemon. Each one passes the local gate before it reads or writes anything. The gate returns success only after it has verified a signature over a nonce it issued during the same call.
+
+| Command | Verb |
+| --- | --- |
+| `vault get`, `vault grant` | `vault.get` |
+| `vault rotate` | `vault.rotate` |
+| `node enroll`, `node remove`, `node upgrade` | `node.enroll`, `node.remove`, `node.upgrade` |
+| `node rotate-key`, `node revoke` | `node.rotate_key`, `node.revoke` |
+| `plugin add`, no daemon running | `plugin.add` |
+| `plugin update`, no daemon running | `plugin.update` |
+
+The plugin commands ask for the proof only when they are about to write the plugin store. An add that is already installed writes nothing and asks for nothing. While a daemon runs it holds the plugin store, so `plugin add`, `plugin update` and `plugin perms grant|revoke` never open it: they are the daemon's attested `plugin.add`, `plugin.update`, `perms.grant` and `perms.revoke` calls. `plugin perms` refuses without a daemon. A plugin command's own refusals (no daemon where one is needed, `CASCADE_NO_INPUT=1`) are recorded like the gate's, with reasons `daemon_required` and `no_input`. On Linux the local signer can be the passphrase presence key: see [the presence tier](elevation-presence.md).
+
+The backup commands run their own in-process ceremony, which uses the same challenge and signing code. `CASCADE_NO_INPUT=1` refuses them before any custody is selected.
+
+For one call the gate:
+
+1. Refuses when `CASCADE_NO_INPUT=1`, before any custody is opened.
+2. Selects custody once. A tier that cannot elevate gets the typed custody refusal, and the gate never asks it to sign.
+3. Binds the trust record to that custody key through `elevation.BoundTrust`. A missing, swapped or stale record refuses.
+4. Refuses a verb that the elevation table does not list, with `ELEVATION_REQUIRED`. Prefixed names such as `local.vault.get` are not table verbs.
+5. Builds an in-process elevation middleware over a fresh nonce ledger, the bound trust and the gate's audit sink. It issues a challenge with method set to the verb and params exactly `{"verb":<verb>,"local":true}`.
+6. Signs the challenge through `signAttestation`, then verifies the result through the same middleware. The handler grants only when it holds that middleware's witness for the verb and params hash.
+
+A granted call writes three rows: `elevation.attempt` when the challenge is issued, `elevation.attempt` when the signed answer is verified, then `elevation.grant`. A refused call writes `elevation.attempt` (one, or two when the refusal comes at verification) and then `elevation.deny`, including calls refused before any challenge. The deny carries a constant reason:
+
+| Reason | Refusal |
+| --- | --- |
+| `no_input` | `CASCADE_NO_INPUT=1` |
+| `custody_tier` | the selected custody cannot elevate |
+| `unbound` | no trust record is bound to the custody key |
+| `not_elevated` | the verb is not in the elevation table |
+| `sign_failed`, `no_signature` | the signer returned an error, or no signature |
+| `invalid-input`, `not-found`, other kinds | the middleware refused the attestation. A replayed or foreign nonce is `not-found` |
+| `daemon_required` | a plugin command that needs the daemon ran without one |
+
+### Where the rows go
+
+Gate rows have a closed vocabulary: the row kind, the verb, a reason code, a params hash and, for `vault.access` only, the secret's name, which must match the secret-name grammar. A row carries no free text. Rows are appended through a log with no redactor, so writing one never reads the vault or any custody.
+
+While a daemon runs, it holds the runtime store, so the CLI sends each row to the daemon's `audit.gate_append` verb. That verb is owner only: a caller with a principal, or no caller at all, is refused. It is not elevated, because it grants nothing. It accepts exactly one row of at most 512 bytes, with no unknown fields, and validates every field. It admits 10 rows a second with a burst of 20, and appends them into the same audit chain as the daemon's own records. The daemon acknowledges each row with its sequence number, and a row without an acknowledgement refuses the call. With no daemon listening on the socket, the CLI appends to the store itself, opening and closing it for each row. A daemon that answered once and then fails refuses the call; the CLI never switches to the store mid-call.
+
+If an audit write fails, the call is refused, and the error reports the failed write with the code `audit_unavailable`.
+
+### Threat model for gate rows
+
+Every gate row carries `source: cli-gate` in its explanation. Its actor is `elevation.local`, or `cli` for `vault.access`. A gate row is written by a CLI process, and the daemon does not verify it. The daemon's own middleware rows use actor `elevation` and carry no `source`, and `audit.gate_append` refuses any row that names an actor or a source. A gate row therefore can never pose as a daemon row.
+
+Under the ADRs, the same user ID is not a trust boundary. Any process running as the owner can reach the daemon socket, so it can append forged `cli-gate` rows, just as it could write the store directly while the daemon is down. `audit.gate_append` is a token bucket: 10 rows a second with a burst of 20. A flood is spread out instead of landing at once. A same-user process can still starve a CLI call by flooding steadily. That process could equally kill the daemon, so this is not a new boundary.
+
+Audit-log retention is not covered: gate rows, like every audit row, are kept without limit. No ticket covers audit-log retention yet; it is a follow-up for planning. Because the ledger lives for one call only, an attestation from an earlier call or over another nonce never verifies. `vault get` writes `vault.access` (the secret's name and the verb, outcome `requested`) before it opens or reads the vault. If that record cannot be stored, nothing is read, and `vault get: refused (audit_unavailable)` is printed on standard error.
+
+`node.rotate_key` and `node.revoke` have no RPC handler. They are rows of the elevation table only so the local gate can challenge them like every other elevated verb.
+
+Production code builds every trust backend as an argument of `BoundTrust` or of an enrolment writer (`EnrollPresence`, `ReplaceFileTierEnrollment`, `NewElevationTrustStore(...).Enroll`). `TestProductionTrustStoresAreBound` enforces this.

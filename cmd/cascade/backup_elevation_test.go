@@ -178,3 +178,19 @@ func TestBackupAuthorizerRefusesFileTier(t *testing.T) {
 		t.Fatalf("refusal=%v signs=%d", err, k.signs)
 	}
 }
+
+// TestBackupNoInputRefusesBeforeCustody: CASCADE_NO_INPUT=1 refuses before
+// custody is selected, with --yes and without.
+func TestBackupNoInputRefusesBeforeCustody(t *testing.T) {
+	ks := newSigningKeystore(t)
+	pub, _ := ks.PubKeyB64()
+	deps := testElevateHelperDeps(ks, enrolledSigningBackend{pubKeyB64: pub}, map[string]string{"CASCADE_NO_INPUT": "1"})
+	selectCustody, calls := deps.Keystore, 0
+	deps.Keystore = func() elevation.Custody { calls++; return selectCustody() }
+	for _, yes := range []bool{true, false} {
+		_, err := newBackupAuthorizer(deps)(t.Context(), &cobra.Command{}, "backup.create", []byte("{}"), yes)
+		if err == nil || calls != 0 {
+			t.Fatalf("yes=%v: no-input backup = %v after %d custody selections", yes, err, calls)
+		}
+	}
+}

@@ -137,6 +137,16 @@ func shareAuditLog(store provider.Store, log *audit.Log) {
 	auditLogMemo.logs[store] = log
 }
 
+// openGateAuditLog is the plain log the local elevation gate's rows use: no
+// redactor, because a gate row is validated against a closed vocabulary and
+// carries no free text, so appending one never reads the vault. It is
+// returned as a gateRowLog, which accepts gate rows only. The chain is the
+// store's one chain: Append re-reads the head, so this log and the process
+// log interleave consistently.
+func openGateAuditLog(store provider.Store, clock runtime.Clock, bus audit.Publisher) gateRowLog {
+	return gateRowLog{log: audit.New(store, clock, bus)}
+}
+
 // openDaemonAuditLog is openAuditLog for the daemon's composition root: it
 // first binds the process firewall to the daemon's own data directory (the
 // owner binding conductorSecurity and the egress-firewall wiring step use),

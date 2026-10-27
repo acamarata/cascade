@@ -39,6 +39,7 @@ import (
 	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/internal/plugins"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/plugin"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -75,11 +76,16 @@ type pluginDeps struct {
 	// -unit-lane gate (Art.7.2) never sees a "net"/"net/http" import in a
 	// _test.go file.
 	UpdateRegistryClient func(ctx context.Context) (*plugin.RegistryClient, error)
+	// Gate is the signed local elevation gate every plugin-store write of an
+	// elevated verb (plugin.add, plugin.update, perms.grant, perms.revoke)
+	// passes first. nil refuses those writes.
+	Gate secrets.ElevationGate
 }
 
 // productionPluginDeps is the real environment.
 func productionPluginDeps() pluginDeps {
-	return pluginDeps{Paths: lazyPaths{}, Clock: runtime.NewSystemClock(), DialContext: client.UnixDialer, Getenv: os.Getenv}
+	return pluginDeps{Paths: lazyPaths{}, Clock: runtime.NewSystemClock(), DialContext: client.UnixDialer, Getenv: os.Getenv,
+		Gate: productionElevationGate(lazyPaths{}, os.Getenv)}
 }
 
 // mountPluginCmd attaches the top-level `plugin` command group. Sole mount

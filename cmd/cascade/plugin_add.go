@@ -25,6 +25,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -71,11 +72,22 @@ func runPluginAdd(cmd *cobra.Command, deps pluginDeps, ref, checksum string) err
 	}
 
 	ctx := cmd.Context()
-	daemonAvailable := pluginDaemonAvailable(ctx)
+	if pluginDaemonAvailable(ctx) {
+		// The daemon holds the plugin store: every daemon-up add is its
+		// attested plugin.add, never a client-side write.
+		m, err := plugin.ParseManifest(bytes.NewReader(manifestBytes))
+		if err != nil {
+			return err
+		}
+		return runPluginAddElevated(cmd, deps, m, checksum, manifestBytes)
+	}
 
-	res, err := withPluginStore(ctx, deps, func(ctx context.Context, store provider.Store) (plugins.AddResult, error) {
-		return plugins.AddPlugin(ctx, store, manifestBytes, checksum, manifestBytes, daemonAvailable)
+	res, err := withElevatedPluginStore(ctx, deps, "plugin.add", func(ctx context.Context, store provider.Store) (plugins.AddResult, error) {
+		return plugins.AddPlugin(ctx, store, manifestBytes, checksum, manifestBytes, false)
 	})
+	if isDaemonRequired(err, "add") {
+		return recordPluginRefusal(ctx, deps, "plugin.add", "daemon_required", err)
+	}
 	if err != nil {
 		return err
 	}
@@ -100,7 +112,7 @@ func runPluginAdd(cmd *cobra.Command, deps pluginDeps, ref, checksum string) err
 // the elevated request to the daemon via the client SDK.
 func runPluginAddElevated(cmd *cobra.Command, deps pluginDeps, m plugin.Manifest, checksum string, manifestBytes []byte) error {
 	if pluginNoInput(deps) {
-		return plugins.ErrNoInputHardError("add")
+		return recordPluginRefusal(cmd.Context(), deps, "plugin.add", "no_input", plugins.ErrNoInputHardError("add"))
 	}
 	w := pluginOutputWriter(cmd)
 	_ = w.Result(pluginAddView{
@@ -108,16 +120,22 @@ func runPluginAddElevated(cmd *cobra.Command, deps pluginDeps, m plugin.Manifest
 		Grants:  m.Requires,
 	})
 
+	var result pluginAddView
+	params := pluginAddParams{ID: m.ID, Checksum: checksum, ManifestBytes: manifestBytes}
+	if err := pluginAddElevatedCall(cmd.Context(), deps, cmd.ErrOrStderr(), params, &result); err != nil {
+		return err
+	}
+	return w.Result(result)
+}
+
+// pluginAddElevatedCall dials plugin.add through callElevated. Tests
+// replace it to reach an in-process registry.
+var pluginAddElevatedCall = func(ctx context.Context, deps pluginDeps, stderr io.Writer, params pluginAddParams, out any) error {
 	c, err := pluginClient(deps)
 	if err != nil {
 		return err
 	}
-	var result pluginAddView
-	params := pluginAddParams{ID: m.ID, Checksum: checksum, ManifestBytes: manifestBytes}
-	if err := callElevated(cmd.Context(), c, productionElevatedCallDeps(cmd.ErrOrStderr()), "plugin.add", params, &result); err != nil {
-		return err
-	}
-	return w.Result(result)
+	return callElevated(ctx, c, productionElevatedCallDeps(stderr), "plugin.add", params, out)
 }
 
 // pluginAddParams is the "plugin.add" wire request. ManifestBytes carries

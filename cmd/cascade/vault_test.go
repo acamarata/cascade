@@ -50,6 +50,9 @@ type okGate struct{}
 
 func (okGate) Authorize(context.Context, string) error { return nil }
 
+// RecordVaultAccess lets okGate release a value; it records nothing.
+func (okGate) RecordVaultAccess(context.Context, string, string) error { return nil }
+
 type refusingGate struct{}
 
 func (refusingGate) Authorize(_ context.Context, verb string) error {

@@ -22,7 +22,7 @@ import (
 func emptyDataDirNodeDeps(t *testing.T) nodeCLIDeps {
 	t.Helper()
 	deps := testNodeCLIDeps(t, nil)
-	deps.Gate = allowingGate(nil)
+	deps.Gate = allowingGate(t, nil)
 	deps.Paths = emptyDataDirPaths{}
 	return deps
 }
@@ -87,7 +87,7 @@ func TestNodeDrainCmd_UnknownNodeNotFound(t *testing.T) {
 // (the non-JSON output path Result takes by default).
 func TestNodeRemoveCmd_Success(t *testing.T) {
 	deps := testNodeCLIDeps(t, nil)
-	deps.Gate = allowingGate(nil)
+	deps.Gate = allowingGate(t, nil)
 	id := seedRecord(t, deps, nodes.TierWorkerTrusted)
 
 	cmd := newNodeRemoveCmd(deps)
@@ -107,7 +107,7 @@ func TestNodeRemoveCmd_Success(t *testing.T) {
 
 func TestNodeRemoveCmd_UnknownNodeNotFound(t *testing.T) {
 	deps := testNodeCLIDeps(t, nil)
-	deps.Gate = allowingGate(nil)
+	deps.Gate = allowingGate(t, nil)
 	cmd := newNodeRemoveCmd(deps)
 	cmd.SetArgs([]string{"does-not-exist"})
 	cmd.SetContext(context.Background())

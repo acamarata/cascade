@@ -15,7 +15,6 @@ import (
 	"io"
 	"os"
 
-	"github.com/acamarata/cascade/internal/elevation"
 	"github.com/acamarata/cascade/internal/providers/intake"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/secrets"
@@ -45,11 +44,7 @@ func providerDepsFor(paths runtime.PathProvider) providerDeps {
 			}
 			return selectProcessCustody(hostCustodyConfig(dir))
 		},
-		Gate: newElevationGate(
-			productionCustody,
-			func() elevation.Backend { return elevation.NewFileBackend(paths.DataDir()) },
-			runtime.NewSystemClock(), getenv,
-		),
+		Gate:   productionElevationGate(paths, getenv),
 		Getenv: getenv,
 		ReadStdin: func() ([]byte, error) {
 			return io.ReadAll(io.LimitReader(os.Stdin, maxSecretValueBytes+1))

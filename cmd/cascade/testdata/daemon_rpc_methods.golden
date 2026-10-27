@@ -3,6 +3,7 @@ approval.expire
 approval.grant
 approval.list
 approval.show
+audit.gate_append
 bridge.send
 cascade_search
 chat.append_turn
@@ -58,6 +59,8 @@ node.dispatch.journal
 node.dispatch.report
 node.upgrade
 pa.pair_code
+perms.grant
+perms.revoke
 plugin.add
 plugin.review.review
 plugin.search

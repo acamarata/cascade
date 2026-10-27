@@ -15,41 +15,20 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/acamarata/cascade/internal/elevation"
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// fakeAvailableKeystore/fakeEnrolledBackend satisfy the two daemonless
-// elevation preconditions unconditionally, so a test can drive an
-// elevated verb PAST its Authorize gate and exercise the real logic that
-// follows, without touching a real OS keychain (Art.7.1).
-type fakeAvailableKeystore struct{}
-
-func (fakeAvailableKeystore) GenerateKey() error          { return nil }
-func (fakeAvailableKeystore) PubKeyB64() (string, error)  { return "", nil }
-func (fakeAvailableKeystore) Sign([]byte) ([]byte, error) { return nil, nil }
-func (fakeAvailableKeystore) IsAvailable() bool           { return true }
-func (fakeAvailableKeystore) Tier() elevation.StorageTier { return elevation.TierOSKeychain }
-
-type fakeEnrolledBackend struct{}
-
-func (fakeEnrolledBackend) Load() (elevation.TrustRecord, bool, error) {
-	return elevation.TrustRecord{TOFUAcknowledged: true}, true, nil
-}
-func (fakeEnrolledBackend) Save(elevation.TrustRecord) error { return nil }
-
-// allowingGate returns a *elevationGate whose preconditions are always
-// satisfied (no CASCADE_NO_INPUT set), for tests exercising the logic
-// past an elevated verb's Authorize call.
-func allowingGate(env map[string]string) *elevationGate {
-	getenv := func(k string) string { return env[k] }
-	return newElevationGate(
-		(elevation.Selector{Sources: []elevation.CustodySource{{Tier: elevation.CustodyPlatform, Name: "test", Open: func(string) (elevation.ElevationKeystore, bool) { return fakeAvailableKeystore{}, true }}}}).Select,
-		func() elevation.Backend { return fakeEnrolledBackend{} },
-		runtime.NewFixedClock(time.Now()), getenv,
-	)
+// allowingGate returns the production signed gate over a fake ed25519 key
+// enrolled in a temp data dir and a memory audit log, so a test can drive an
+// elevated verb PAST a real signed Authorize and exercise the logic that
+// follows, without touching a real OS keychain (Art.7.1). Windows refuses
+// local elevation before any challenge, so those tests skip there.
+func allowingGate(t *testing.T, env map[string]string) *elevationGate {
+	t.Helper()
+	skipWithoutLocalElevation(t)
+	return newGateFixture(t, env).gate
 }
 
 // fakeCmdWithContext returns a bare *cobra.Command carrying a background
@@ -77,7 +56,7 @@ func testNodeCLIDeps(t *testing.T, env map[string]string) nodeCLIDeps {
 		SecretsDir: shortTempDir(t),
 		GOOS:       "darwin",
 		Getenv:     getenv,
-		Gate:       newElevationGate(nil, nil, runtime.NewFixedClock(time.Now()), getenv),
+		Gate:       newElevationGate(nil, nil, nil, runtime.NewFixedClock(time.Now()), getenv),
 	}
 }
 
@@ -259,7 +238,7 @@ func TestNodeEnrollRequiresTrustTier(t *testing.T) {
 // "net", so no real socket is opened).
 func TestNodeEnrollUnknownHostKeyRefused(t *testing.T) {
 	deps := testNodeCLIDeps(t, nil)
-	deps.Gate = allowingGate(nil)
+	deps.Gate = allowingGate(t, nil)
 	deps.Dialer = fakeVerifyOnlyDialer{fingerprint: "deadbeef"}
 
 	err := runNodeAdmit(fakeCmdWithContext(t), deps, "worker@host1", "worker-trusted", "", "")

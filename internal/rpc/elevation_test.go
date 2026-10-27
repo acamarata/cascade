@@ -20,13 +20,14 @@ const specVerbListVerbatim = `vault get/rotate · approval grant · standing-gra
 	`node enroll/remove/upgrade · sync conflicts resolve (discarding server-primary) · ` +
 	`policy or sensitivity loosening · enabling remote elevation (allow_remote) · ` +
 	`enabling the remote plugin runtime (enable_remote_runtime) · uninstall --purge-data · ` +
-	`config accept loosening · policy authorize`
+	`config accept loosening · policy authorize · node rotate key/revoke`
 
 // The two amendments to §5.14 this transcription carries (P1-SEC-03): plugin
 // add is no longer conditional on process_tier/grant_expand (the CLI never
 // sends them, so the condition gated nothing) and plugin update joins it;
 // config accept loosening (P1-SEC-04) and policy authorize (P1-SEC-10) are
-// elevated verbs whose rows this ticket registers.
+// elevated verbs whose rows this ticket registers. node rotate key/revoke
+// (R-21.220) joined for the local signed gate (P1-SEC-08).
 
 // translateSpecVerb maps one englishy clause from specVerbListVerbatim to
 // the one or more RPC method names elevationTable registers for it. This
@@ -46,6 +47,7 @@ var specVerbToMethods = map[string][]string{
 	},
 	"config accept loosening":                                    {"config.accept_loosening"},
 	"policy authorize":                                           {"policy.authorize"},
+	"node rotate key/revoke":                                     {"node.rotate_key", "node.revoke"},
 	"node enroll/remove/upgrade":                                 {"node.enroll", "node.remove", "node.upgrade"},
 	"sync conflicts resolve (discarding server-primary)":         {"sync.conflicts_resolve"},
 	"policy or sensitivity loosening":                            {"policy.set", "sensitivity.set"},
@@ -92,8 +94,8 @@ func TestElevationTableMatchesSpec(t *testing.T) {
 			t.Errorf("elevationTable registers %q but it is not derivable from the spec verb list", m)
 		}
 	}
-	if len(clauses) != 13 {
-		t.Errorf("spec verb list has %d clauses, expected 13 (drift in specVerbListVerbatim itself)", len(clauses))
+	if len(clauses) != 14 {
+		t.Errorf("spec verb list has %d clauses, expected 14 (drift in specVerbListVerbatim itself)", len(clauses))
 	}
 }
 
@@ -105,7 +107,7 @@ func TestIsElevated_AlwaysVerbs(t *testing.T) {
 		"backup.key_export", "backup.key_import",
 		"perms.grant", "perms.revoke",
 		"plugin.add", "plugin.update", "config.accept_loosening", "policy.authorize",
-		"node.enroll", "node.remove", "node.upgrade",
+		"node.enroll", "node.remove", "node.upgrade", "node.rotate_key", "node.revoke",
 		"uninstall.purge_data",
 	}
 	for _, m := range always {

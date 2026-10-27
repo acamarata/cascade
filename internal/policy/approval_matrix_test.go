@@ -28,7 +28,7 @@ import (
 //	 loosening · policy authorize"
 //
 // (Amended: plugin add unconditional, plugin update, config accept
-// loosening, policy authorize - the rows P1-SEC-03 registers.)
+// loosening, policy authorize, node rotate key/revoke (R-21.220, P1-SEC-08).)
 var specElevationVerbs = []string{
 	"approval.grant",
 	"backup.create",
@@ -40,7 +40,7 @@ var specElevationVerbs = []string{
 	"config.accept_loosening",
 	"elevation.set_allow_remote",
 	"node.enroll",
-	"node.remove",
+	"node.remove", "node.revoke", "node.rotate_key",
 	"node.upgrade",
 	"perms.grant",
 	"perms.revoke",

@@ -160,9 +160,12 @@ func runPluginUpdateFromRegistry(cmd *cobra.Command, deps pluginDeps, name strin
 		return err
 	}
 
-	res, err := withPluginStore(ctx, deps, func(ctx context.Context, store provider.Store) (plugins.UpdateResult, error) {
+	res, err := withElevatedPluginStore(ctx, deps, "plugin.update", func(ctx context.Context, store provider.Store) (plugins.UpdateResult, error) {
 		return plugins.UpdatePlugin(ctx, store, nil, nil, artifact, entry.Checksum, artifact, pluginDaemonAvailable(ctx))
 	})
+	if isDaemonRequired(err, "update") {
+		return recordPluginRefusal(ctx, deps, plugins.UpdateRPCMethod, "daemon_required", err)
+	}
 	if err != nil {
 		return err
 	}
@@ -212,7 +215,7 @@ func confirmPluginUpdateGrants(cmd *cobra.Command, deps pluginDeps, m plugin.Man
 		return nil // identical grant set -> no diff to show, proceed directly.
 	}
 	if len(added) > 0 && !yes && pluginNoInput(deps) {
-		return plugins.ErrNoInputHardError("update")
+		return recordPluginRefusal(cmd.Context(), deps, plugins.UpdateRPCMethod, "no_input", plugins.ErrNoInputHardError("update"))
 	}
 	_ = pluginOutputWriter(cmd).Result(pluginUpdateGrantDiffView{Name: m.ID, Added: added, Removed: removed})
 	return plugin.ConfirmGrantAcceptance(added, acceptGrant)

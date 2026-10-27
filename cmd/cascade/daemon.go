@@ -248,8 +248,8 @@ func loadDaemonConfig(ctx context.Context, deps daemonDeps) (*runtime.Config, ru
 }
 
 // productionElevationPrecondition wires the real §D-24 daemonless
-// elevation precondition check (internal/policy.IsDaemonlessElevationAllowed's
-// two bool inputs) against custody and the trust store. A resolution failure (paths
+// elevation precondition check (internal/policy.CanAttemptDaemonlessElevation's
+// two bool inputs) against custody and the trust bound to its key. A resolution failure (paths
 // unavailable) fails closed: both preconditions report false, matching
 // R-14.163's "cannot prove available" default the same way
 // internal/runtime.DaemonlessElevationPrecondition already does for a nil
@@ -264,8 +264,8 @@ func custodyElevationPrecondition(paths runtime.PathProvider, selectCustody func
 			return false, false
 		}
 		custody := selectCustody(paths.DataDir())
-		trust := elevation.NewElevationTrustStore(elevation.NewFileBackend(paths.DataDir()), runtime.SystemClock{})
-		return trust.IsEnrolled(), custody.Tier().SatisfiesElevation()
+		_, _, err := elevation.BoundTrust(custody, elevation.NewFileBackend(paths.DataDir()), runtime.SystemClock{})
+		return err == nil, custody.Tier().SatisfiesElevation()
 	}
 }
 

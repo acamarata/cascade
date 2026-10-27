@@ -84,9 +84,12 @@ func runPluginUpdate(cmd *cobra.Command, deps pluginDeps, args []string, checksu
 		// therefore needs a signature.
 		return runPluginUpdateElevated(cmd, deps, plugins.UpdateResult{Outcome: plugins.UpdateOutcomeElevationRequired, Manifest: m}, req)
 	}
-	res, err := withPluginStore(ctx, deps, func(ctx context.Context, store provider.Store) (plugins.UpdateResult, error) {
+	res, err := withElevatedPluginStore(ctx, deps, "plugin.update", func(ctx context.Context, store provider.Store) (plugins.UpdateResult, error) {
 		return plugins.UpdatePlugin(ctx, store, nil, nil, manifestBytes, checksum, manifestBytes, false)
 	})
+	if isDaemonRequired(err, "update") {
+		return recordPluginRefusal(ctx, deps, plugins.UpdateRPCMethod, "daemon_required", err)
+	}
 	if err != nil {
 		return err
 	}
@@ -143,7 +146,10 @@ func renderPluginUpdateResult(cmd *cobra.Command, deps pluginDeps, res plugins.U
 // KindElevationRequired exit. Nothing is written client-side either way.
 func runPluginUpdateElevated(cmd *cobra.Command, deps pluginDeps, res plugins.UpdateResult, req plugins.UpdateParams) error {
 	if pluginNoInput(deps) {
-		return elevation.ErrNoInput()
+		return recordPluginRefusal(cmd.Context(), deps, plugins.UpdateRPCMethod, "no_input", elevation.ErrNoInput())
+	}
+	if !pluginDaemonAvailable(cmd.Context()) {
+		return recordPluginRefusal(cmd.Context(), deps, plugins.UpdateRPCMethod, "daemon_required", plugins.ErrDaemonRequiredForElevatedPluginOp("update"))
 	}
 	w := pluginOutputWriter(cmd)
 	_ = w.Result(pluginUpdateView{Name: res.Manifest.ID, RegistryNotice: res.RegistryNotice,

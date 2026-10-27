@@ -132,9 +132,11 @@ func runScript(t *testing.T, script string) {
 			scriptMatch(t, i+1, "stdout", last.stdout, rest, negated)
 		case "stderr":
 			scriptMatch(t, i+1, "stderr", last.stderr, rest, negated)
+		case "seed-plugin":
+			scriptSeedPlugin(t, i+1, rest)
 		default:
 			t.Fatalf("line %d: %q is not a directive this runner implements "+
-				"(env, exec, stdout, stderr); a silently-ignored line asserts nothing", i+1, verb)
+				"(env, exec, stdout, stderr, seed-plugin); a silently-ignored line asserts nothing", i+1, verb)
 		}
 	}
 }

@@ -82,7 +82,7 @@ func TestRunNodeAdmit_ElevationRefused(t *testing.T) {
 
 func TestRunNodeAdmit_SplitUserHostErrorPropagates(t *testing.T) {
 	deps := testNodeCLIDeps(t, nil)
-	deps.Gate = allowingGate(nil)
+	deps.Gate = allowingGate(t, nil)
 	err := runNodeAdmit(fakeCmdWithContext(t), deps, "not-a-valid-host-arg", "worker-trusted", "", "")
 	if err == nil {
 		t.Fatal("expected a refusal for a malformed user@host argument")
@@ -91,7 +91,7 @@ func TestRunNodeAdmit_SplitUserHostErrorPropagates(t *testing.T) {
 
 func TestRunNodeAdmit_ComposeErrorPropagates(t *testing.T) {
 	deps := testNodeCLIDeps(t, nil)
-	deps.Gate = allowingGate(nil)
+	deps.Gate = allowingGate(t, nil)
 	deps.Paths = emptyDataDirPaths{}
 	err := runNodeAdmit(fakeCmdWithContext(t), deps, "worker@host1", "worker-trusted", "", "")
 	if err == nil {
@@ -105,7 +105,7 @@ func TestRunNodeAdmit_ComposeErrorPropagates(t *testing.T) {
 // error branch: empty stdin, no --payload-file.
 func TestRunNodeAdmit_PayloadLoadErrorPropagates(t *testing.T) {
 	deps := testNodeCLIDeps(t, nil)
-	deps.Gate = allowingGate(nil)
+	deps.Gate = allowingGate(t, nil)
 	deps.Dialer = fakeVerifyOnlyDialer{fingerprint: "matching-fp"}
 	err := runNodeAdmit(fakeCmdWithContext(t), deps, "worker@host1", "worker-trusted", "matching-fp", "")
 	if err == nil {
@@ -118,7 +118,7 @@ func TestRunNodeAdmit_PayloadLoadErrorPropagates(t *testing.T) {
 // refuses a payload whose pubkey does not decode to a real identity.
 func TestRunNodeAdmit_AdmitNodeErrorPropagates(t *testing.T) {
 	deps := testNodeCLIDeps(t, nil)
-	deps.Gate = allowingGate(nil)
+	deps.Gate = allowingGate(t, nil)
 	deps.Dialer = fakeVerifyOnlyDialer{fingerprint: "matching-fp"}
 	cmd := fakeCmdWithContext(t)
 	cmd.SetIn(strings.NewReader(`{"node_id":"x","node_pubkey_b64":"not-a-real-key","node_signature_b64":"c2ln"}`))

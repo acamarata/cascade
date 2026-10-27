@@ -2,14 +2,15 @@ package main
 
 import (
 	"bytes"
-	"crypto/ed25519"
-	"encoding/base64"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/internal/elevation"
 	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -79,7 +80,7 @@ func TestVaultCLIGetElevationRequiredMessageCasing(t *testing.T) {
 	}
 	deps.Gate = newElevationGate(
 		testCustody(t, availableKeystore{}, elevation.CustodyPlatform),
-		func() elevation.Backend { return emptyBackend{} },
+		func() string { return t.TempDir() }, &tapWriter{inner: audit.New(storetest.NewMemStore(), runtime.NewSystemClock(), nil)},
 		runtime.NewSystemClock(),
 		func(string) string { return "" },
 	)
@@ -139,28 +140,40 @@ func TestVaultCLIGetAbsent(t *testing.T) {
 // must refuse.
 func TestElevationGateFailsClosed(t *testing.T) {
 	clock := runtime.NewSystemClock()
+	noEnv := func(string) string { return "" }
+	enrolledDir := func(ks elevation.ElevationKeystore) func() string {
+		dir := t.TempDir()
+		if pub, err := ks.PubKeyB64(); err == nil && pub != "" {
+			if _, err := elevation.NewElevationTrustStore(elevation.NewFileBackend(dir), clock).Enroll(pub); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return func() string { return dir }
+	}
+	signer := newSigningKeystore(t)
+	log := &tapWriter{inner: audit.New(storetest.NewMemStore(), clock, nil)}
 	cases := map[string]*elevationGate{
-		"no keystore and no trust": newElevationGate(nil, nil, clock, func(string) string { return "" }),
+		"no custody and no data dir": newElevationGate(nil, nil, log, clock, noEnv),
 		"keystore returns nil": newElevationGate(
-			testCustody(t, nil, elevation.CustodyPlatform), nil, clock, func(string) string { return "" }),
+			testCustody(t, nil, elevation.CustodyPlatform), enrolledDir(signer), log, clock, noEnv),
 		"no input allowed": newElevationGate(
-			testCustody(t, availableKeystore{}, elevation.CustodyPlatform),
-			func() elevation.Backend { return enrolledBackend{} },
-			clock,
+			testCustody(t, signer, elevation.CustodyPlatform), enrolledDir(signer), log, clock,
 			func(k string) string {
 				if k == "CASCADE_NO_INPUT" {
 					return "1"
 				}
 				return ""
 			}),
-		"enrolled but no authenticator": newElevationGate(
-			testCustody(t, unavailableKeystore{}, elevation.CustodyPlatform),
-			func() elevation.Backend { return enrolledBackend{} },
-			clock, func(string) string { return "" }),
+		"no authenticator": newElevationGate(
+			testCustody(t, unavailableKeystore{}, elevation.CustodyPlatform), enrolledDir(signer), log, clock, noEnv),
 		"authenticator but not enrolled": newElevationGate(
-			testCustody(t, availableKeystore{}, elevation.CustodyPlatform),
-			func() elevation.Backend { return emptyBackend{} },
-			clock, func(string) string { return "" }),
+			testCustody(t, signer, elevation.CustodyPlatform), func() string { return t.TempDir() }, log, clock, noEnv),
+		"enrolled under another key": newElevationGate(
+			testCustody(t, signer, elevation.CustodyPlatform), enrolledDir(newSigningKeystore(t)), log, clock, noEnv),
+		"no audit writer": newElevationGate(
+			testCustody(t, signer, elevation.CustodyPlatform), enrolledDir(signer), nil, clock, noEnv),
+		"empty data dir": newElevationGate(
+			testCustody(t, signer, elevation.CustodyPlatform), func() string { return "" }, log, clock, noEnv),
 	}
 	for label, gate := range cases {
 		for _, verb := range []string{"vault.get", "vault.rotate"} {
@@ -173,20 +186,16 @@ func TestElevationGateFailsClosed(t *testing.T) {
 
 // TestElevationGateAllowsWhenBothPreconditionsHold is the negative control:
 // the gate must not refuse everything unconditionally, or the tests above
-// would pass against a gate that is simply broken.
+// would pass against a gate that is simply broken. A verb that is not
+// elevated is refused: the local gate only ever authorises table verbs.
 func TestElevationGateAllowsWhenBothPreconditionsHold(t *testing.T) {
-	gate := newElevationGate(
-		testCustody(t, availableKeystore{}, elevation.CustodyPlatform),
-		func() elevation.Backend { return enrolledBackend{} },
-		runtime.NewSystemClock(),
-		func(string) string { return "" },
-	)
-	if err := gate.Authorize(t.Context(), "vault.get"); err != nil {
+	skipWithoutLocalElevation(t)
+	f := newGateFixture(t, nil)
+	if err := f.gate.Authorize(t.Context(), "vault.get"); err != nil {
 		t.Fatalf("a fully-enrolled host was refused: %v", err)
 	}
-	// A verb that is not elevated at all passes through.
-	if err := gate.Authorize(t.Context(), "vault.list"); err != nil {
-		t.Fatalf("a non-elevated verb was refused: %v", err)
+	if err := f.gate.Authorize(t.Context(), "vault.list"); !cascade.HasKind(err, cascade.KindElevationRequired) {
+		t.Fatalf("a non-elevated verb = %v, want ELEVATION_REQUIRED", err)
 	}
 }
 
@@ -202,32 +211,89 @@ type unavailableKeystore struct{ availableKeystore }
 
 func (unavailableKeystore) IsAvailable() bool { return false }
 
-// enrolledBackend reports a trust record carrying a real Ed25519 public
-// key, the shape a genuine enrollment leaves behind.
-type enrolledBackend struct{}
-
-func (enrolledBackend) Load() (elevation.TrustRecord, bool, error) {
-	pub, _, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		return elevation.TrustRecord{}, false, err
-	}
-	return elevation.TrustRecord{PubKeyB64: base64.StdEncoding.EncodeToString(pub)}, true, nil
-}
-func (enrolledBackend) Save(elevation.TrustRecord) error { return nil }
-
-type emptyBackend struct{}
-
-func (emptyBackend) Load() (elevation.TrustRecord, bool, error) {
-	return elevation.TrustRecord{}, false, nil
-}
-func (emptyBackend) Save(elevation.TrustRecord) error { return nil }
 func TestVaultGateRefusesOnFileTier(t *testing.T) {
 	k := &refusingFileKey{signingKeystore: newSigningKeystore(t)}
-	gate := newElevationGate(testCustody(t, k, elevation.CustodyFile), func() elevation.Backend { return enrolledBackend{} }, runtime.NewSystemClock(), func(string) string { return "" })
+	if elevation.DevkeysBuild() {
+		t.Skip("a devkeys build lets file custody sign by design")
+	}
+	gate := newElevationGate(testCustody(t, k, elevation.CustodyFile), func() string { return t.TempDir() },
+		&tapWriter{inner: audit.New(storetest.NewMemStore(), runtime.NewSystemClock(), nil)}, runtime.NewSystemClock(), func(string) string { return "" })
 	for _, verb := range []string{"vault.get", "vault.rotate", "vault.grant", "node.enroll", "node.remove", "provider.add"} {
 		err := gate.Authorize(t.Context(), verb)
 		if tier, ok := elevation.CustodyTierOf(err); !ok || tier != elevation.CustodyFile || k.signs != 0 {
 			t.Fatalf("%s: %v signs=%d", verb, err, k.signs)
 		}
+	}
+}
+
+// TestVaultGrantRequiresSignature drives `vault grant` through the
+// production signed gate: a signer that returns no signature issues no
+// grant; a real signature issues one, audited under the read verb.
+func TestVaultGrantRequiresSignature(t *testing.T) {
+	skipWithoutLocalElevation(t)
+	f := newGateFixture(t, nil)
+	f.ks.sign = func([]byte) ([]byte, error) { return nil, nil }
+	deps := grantDeps(t, f.gate)
+	if _, _, err := runVault(t, deps, "", "grant", "provider.fake.key"); !isCLIKind(err, cascade.KindElevationRequired) {
+		t.Fatalf("grant with no signature = %v, want ELEVATION_REQUIRED", err)
+	}
+	if listed, _, err := runVault(t, deps, "", "grants"); err != nil || strings.Contains(listed, "provider.fake.key") {
+		t.Fatalf("a refused grant was issued: %q %v", listed, err)
+	}
+	f.ks.sign = nil
+	id := issueOneGrant(t, deps, "provider.fake.key")
+	if id == "" || f.ks.signs != 2 {
+		t.Fatalf("grant id %q after %d signatures", id, f.ks.signs)
+	}
+	rows := f.tap.kinds()
+	if len(rows) == 0 || rows[len(rows)-1] != "elevation.grant" || f.tap.recs[len(rows)-1].Action != "vault.get" {
+		t.Fatalf("audit rows %v; the grant must be recorded under vault.get", rows)
+	}
+}
+
+func TestLocalGateUnknownVerbRefuses(t *testing.T) {
+	f := newGateFixture(t, nil)
+	for _, verb := range []string{"local.vault.get", "node.git_gate_install"} {
+		err := f.gate.Authorize(t.Context(), verb)
+		if !cascade.HasKind(err, cascade.KindElevationRequired) || !strings.Contains(err.Error(), "not an elevated verb") {
+			t.Fatalf("%s = %v, want the not-an-elevated-verb refusal", verb, err)
+		}
+	}
+	if f.ks.signs != 0 || strings.Contains(strings.Join(f.tap.kinds(), ","), "grant") {
+		t.Fatalf("an unknown verb signed %d times and wrote rows %v", f.ks.signs, f.tap.kinds())
+	}
+}
+
+func TestLocalGateFileTierRefuses(t *testing.T) {
+	if elevation.DevkeysBuild() {
+		t.Skip("a devkeys build lets file custody sign by design")
+	}
+	f := newGateFixture(t, nil)
+	k := &refusingFileKey{signingKeystore: f.ks.signingKeystore}
+	f.gate.custody = testCustody(t, k, elevation.CustodyFile)
+	for _, verb := range []string{"vault.get", "node.enroll"} {
+		err := f.gate.Authorize(t.Context(), verb)
+		if tier, ok := elevation.CustodyTierOf(err); !ok || tier != elevation.CustodyFile || k.signs != 0 {
+			t.Fatalf("%s: %v (signs %d), want the typed file-tier refusal", verb, err, k.signs)
+		}
+	}
+	if strings.Join(f.tap.kinds(), ",") != "elevation.attempt,elevation.deny,elevation.attempt,elevation.deny" {
+		t.Fatalf("a tier refusal wrote rows %v, want attempt and deny per verb", f.tap.kinds())
+	}
+}
+
+func mustPub(t *testing.T, ks elevation.ElevationKeystore) string {
+	t.Helper()
+	pub, err := ks.PubKeyB64()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pub
+}
+
+func skipWithoutLocalElevation(t *testing.T) {
+	t.Helper()
+	if goruntime.GOOS == "windows" {
+		t.Skip("windows is tier 2: the middleware refuses every elevated verb before a challenge")
 	}
 }

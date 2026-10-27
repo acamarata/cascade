@@ -21,12 +21,9 @@
 //	internal/client/boundary_test.go), so these verbs call RecordStore
 //	methods directly rather than dispatching through an *rpc.Registry —
 //	see drain.go's package doc for the full contradiction this follows.
-//	remove/rotate-key/revoke are elevated (06 §5.14); rotate-key/revoke
-//	are NOT in internal/rpc's canonical elevationTable (that file and its
-//	spec cross-check test are out of this ticket's files_scope to extend
-//	safely — see the journal), so their elevation is enforced directly
-//	here via requireElevation rather than policy.IsDaemonlessElevationAllowed's
-//	table lookup. R-21.226: every verb refuses on Windows tier-2 via the
+//	remove/rotate-key/revoke are elevated (06 §5.14, R-21.220) and all
+//	three are rows of internal/rpc's elevation table; requireElevation
+//	sends rotate-key/revoke through the same signed local gate. R-21.226: every verb refuses on Windows tier-2 via the
 //	SAME nodes.RefuseOnGOOS the serve verb already uses (R-16.60: no
 //	second copy of that check).
 //
@@ -43,7 +40,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/acamarata/cascade/internal/elevation"
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/policy"
 	cruntime "github.com/acamarata/cascade/internal/runtime"
@@ -73,13 +69,9 @@ func productionNodeCLIDeps() nodeCLIDeps {
 	paths := lazyPaths{}
 	getenv := os.Getenv
 	return nodeCLIDeps{
-		Paths: paths,
-		Clock: cruntime.SystemClock{},
-		Gate: newElevationGate(
-			productionCustody,
-			func() elevation.Backend { return elevation.NewFileBackend(paths.DataDir()) },
-			cruntime.NewSystemClock(), getenv,
-		),
+		Paths:  paths,
+		Clock:  cruntime.SystemClock{},
+		Gate:   productionElevationGate(paths, getenv),
 		Getenv: getenv,
 		GOOS:   goruntime.GOOS,
 	}
@@ -96,23 +88,16 @@ func openRecordStore(deps nodeCLIDeps) (*nodes.RecordStore, error) {
 	return nodes.NewRecordStore(nodes.NewFileRecordBackend(dataDir), deps.Clock), nil
 }
 
-// requireElevation enforces the 06 §5.14 elevation flow for verb
-// UNCONDITIONALLY (never consulting internal/rpc's elevationTable): used
-// for node.rotate_key and node.revoke, which R-21.220 declares elevated
-// but which are not (and, per this ticket's files_scope, cannot safely be
-// made) members of that shared table — see this file's package doc.
-// CASCADE_NO_INPUT=1 is a hard error, never a hang (06 §5.8/08 §2),
-// exactly matching elevationGate.Authorize's own CASCADE_NO_INPUT branch.
-func requireElevation(_ context.Context, g *elevationGate, verb string) error {
-	if g.getenv != nil && g.getenv("CASCADE_NO_INPUT") == "1" {
-		return cascade.Newf(cascade.KindElevationRequired,
-			"node: %s needs local presence and CASCADE_NO_INPUT=1 forbids prompting for it", verb)
+// requireElevation gates node.rotate_key and node.revoke, which R-21.220
+// declares elevated and internal/rpc's elevation table registers as
+// always-elevated. It runs the same signed single-use proof as every other
+// local elevated verb (elevationGate.Authorize); a two-precondition check is
+// not proof of presence. A nil gate refuses.
+func requireElevation(ctx context.Context, g *elevationGate, verb string) error {
+	if g == nil {
+		return policy.ErrElevationRequired(verb, false, false)
 	}
-	enrolled, available := g.preconditions()
-	if !enrolled || !available {
-		return policy.ErrElevationRequired(verb, enrolled, available)
-	}
-	return nil
+	return g.Authorize(ctx, verb)
 }
 
 // newNodeListCmd builds `cascade node list` (✦ read verb, never elevated).

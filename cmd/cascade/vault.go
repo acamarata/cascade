@@ -35,7 +35,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/acamarata/cascade/internal/elevation"
 	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/secrets"
@@ -89,14 +88,7 @@ func productionVaultDeps() vaultDeps {
 			}
 			return selectProcessCustody(hostCustodyConfig(dir))
 		},
-		Gate: newElevationGate(
-			productionCustody,
-			func() elevation.Backend {
-				return elevation.NewFileBackend(paths.get(func(p runtime.PathProvider) string { return p.DataDir() }))
-			},
-			runtime.NewSystemClock(),
-			getenv,
-		),
+		Gate:     productionElevationGate(paths, getenv),
 		ReadFile: os.ReadFile,
 		Quarantine: func() (*secrets.QuarantineStore, error) {
 			dir := paths.get(func(p runtime.PathProvider) string { return p.DataDir() })
@@ -147,16 +139,14 @@ func newVaultCmd(deps vaultDeps) *cobra.Command {
 	return cmd
 }
 
-// vaultBroker builds the broker for one command invocation.
+// vaultBroker builds the broker for one command invocation. The custody is
+// lazy: the broker authorizes an elevated verb before it touches custody, so a
+// refused `vault get` or `vault rotate` never selects, opens or reads a vault.
 func vaultBroker(deps vaultDeps) (*secrets.Broker, error) {
 	if deps.NewCustody == nil {
 		return nil, cascade.New(cascade.KindInternal, "vault: no custody provider is configured")
 	}
-	custody, err := deps.NewCustody()
-	if err != nil {
-		return nil, err
-	}
-	return secrets.NewBroker(custody, deps.Gate)
+	return secrets.NewBroker(secrets.LazyCustody(deps.NewCustody), deps.Gate)
 }
 
 // vaultOutputWriter mirrors status.go's statusOutputWriter, per this

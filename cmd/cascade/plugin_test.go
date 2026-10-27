@@ -26,6 +26,7 @@ func testPluginDeps(t *testing.T) pluginDeps {
 		Paths:  fakeDaemonPaths{root: t.TempDir()},
 		Clock:  runtime.NewSystemClock(),
 		Getenv: func(string) string { return "" },
+		Gate:   okGate{},
 	}
 }
 

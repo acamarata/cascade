@@ -118,7 +118,7 @@ func TestNodeStatusCmd_RefusedOnWindows(t *testing.T) {
 // remote peer's), so the fixture seeds both sides consistently.
 func TestNodeRotateKeyCmd_Success(t *testing.T) {
 	deps := testNodeCLIDeps(t, nil)
-	deps.Gate = allowingGate(nil)
+	deps.Gate = allowingGate(t, nil)
 
 	id, priv, err := nodes.GenerateIdentity(deterministicReader{seed: 11})
 	if err != nil {
@@ -165,7 +165,7 @@ func TestNodeRotateKeyCmd_Success(t *testing.T) {
 // elevation gate to the actual RecordStore.Revoke call.
 func TestNodeRevokeCmd_Success(t *testing.T) {
 	deps := testNodeCLIDeps(t, nil)
-	deps.Gate = allowingGate(nil)
+	deps.Gate = allowingGate(t, nil)
 	id := seedRecord(t, deps, nodes.TierWorkerTrusted)
 
 	cmd := newNodeRevokeCmd(deps)
@@ -206,7 +206,7 @@ func TestNodeRotateKeyCmd_RefusedOnWindows(t *testing.T) {
 // it (never enrolled locally), so Sign refuses with KindNotFound.
 func TestNodeRotateKeyCmd_SignErrorNodeNotInLocalKeystore(t *testing.T) {
 	deps := testNodeCLIDeps(t, nil)
-	deps.Gate = allowingGate(nil)
+	deps.Gate = allowingGate(t, nil)
 	id := seedRecord(t, deps, nodes.TierWorkerTrusted)
 
 	cmd := newNodeRotateKeyCmd(deps)
@@ -234,7 +234,7 @@ func TestNodeRevokeCmd_RefusedOnWindows(t *testing.T) {
 // error branch, past a successfully-opened record store.
 func TestNodeRevokeCmd_UnknownNodeNotFound(t *testing.T) {
 	deps := testNodeCLIDeps(t, nil)
-	deps.Gate = allowingGate(nil)
+	deps.Gate = allowingGate(t, nil)
 	cmd := newNodeRevokeCmd(deps)
 	cmd.SetArgs([]string{"does-not-exist"})
 	cmd.SetContext(context.Background())
