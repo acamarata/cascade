@@ -44,11 +44,12 @@ const (
 	fleetRowSubsystem       = "admission-posture"
 )
 
-// Test seams: newRowTicker builds the ticker that re-reads the posture
-// between samples; beforeSamplerStart runs at the top of the sampler body.
+// Test seams: the row refresher's ticker, a hook at the top of the sampler
+// body, and a replacement for the host collector (nil in production).
 var (
 	newRowTicker       = func(period time.Duration) runtime.Ticker { return runtime.NewSystemTicker(period) }
 	beforeSamplerStart = func(*FleetRuntime) {}
+	samplerCollect     func() (governor.ResourceSnapshot, error)
 )
 
 // FleetRuntimeDeps is everything a builder step may read. Every field but
@@ -190,7 +191,7 @@ func (r *FleetRuntime) buildAdmission(ctx context.Context, d FleetRuntimeDeps) e
 		inner = runtime.NewSystemTicker(governor.PeriodForHz(0))
 	}
 	r.ticker = &samplerTicker{inner: inner, onWait: r.refreshAdmission, stopped: make(chan struct{})}
-	r.sampler = governor.NewSampler(governor.SamplerConfig{}, d.Clock, r.ticker, d.Logger)
+	r.sampler = governor.NewSampler(governor.SamplerConfig{Collect: samplerCollect}, d.Clock, r.ticker, d.Logger)
 	r.admission = governor.NewAdmissionController(r.sampler, admissionCfg, d.Clock)
 	d.Manifest.Register(fleetAdmissionSubsystem)
 	r.refreshAdmission()

@@ -79,6 +79,11 @@ type SamplerConfig struct {
 	// MaxHz is the sampler's maximum tick rate. Zero defaults to
 	// DefaultSamplerHz; a value above MaxSamplerHz is clamped to it.
 	MaxHz float64 `json:"sampler_hz"`
+	// Collect replaces the platform collector. Nil (every production
+	// caller) uses the host's: /proc on linux, sysctl on darwin. Tests inject
+	// a deterministic one so they never depend on the host's first reading,
+	// which on linux needs two ticks (the first has no CPU baseline).
+	Collect func() (ResourceSnapshot, error) `json:"-"`
 }
 
 // PeriodForHz converts a configured rate into a tick interval, applying
@@ -129,11 +134,15 @@ func NewSampler(cfg SamplerConfig, clk runtime.Clock, ticker runtime.Ticker, log
 	if ticker == nil {
 		ticker = runtime.NewSystemTicker(period)
 	}
+	collect := collectMetrics
+	if cfg.Collect != nil {
+		collect = cfg.Collect
+	}
 	return &Sampler{
 		clk:     clk,
 		ticker:  ticker,
 		log:     log,
-		collect: collectMetrics,
+		collect: collect,
 		period:  period,
 	}
 }

@@ -87,9 +87,13 @@ func newFleetRig(t *testing.T, configTOML string) *fleetRig {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	ft, rowT := newFleetFakeTicker(), newFleetFakeTicker()
-	saved := newRowTicker
+	savedTicker, savedCollect := newRowTicker, samplerCollect
 	newRowTicker = func(time.Duration) runtime.Ticker { return rowT }
-	t.Cleanup(func() { newRowTicker = saved })
+	// A fixed host reading: a real one needs two ticks on linux (no CPU baseline on the first).
+	samplerCollect = func() (governor.ResourceSnapshot, error) {
+		return governor.ResourceSnapshot{MemTotalBytes: 16 << 30, MemUsedBytes: 8 << 30}, nil
+	}
+	t.Cleanup(func() { newRowTicker, samplerCollect = savedTicker, savedCollect })
 	return &fleetRig{ctx: ctx, cancel: cancel, ticker: ft, rowTicker: rowT, clock: clock, deps: FleetRuntimeDeps{
 		Paths: paths, Clock: clock, Manifest: NewManifest(nil, clock), Bus: events.New(store, clock),
 		Config: &runtime.Config{}, Store: store, Binding: fakeBindingBackend{}, SamplerTicker: ft,

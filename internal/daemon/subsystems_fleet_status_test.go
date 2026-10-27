@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/acamarata/cascade/internal/fleet/governor"
 )
@@ -42,8 +43,8 @@ func TestStatusReportsAdmissionPosture(t *testing.T) {
 		t.Fatalf("admission before a tick = %+v health %q, want running posture=stale, ok", s, health)
 	}
 	g.ticker.tick(t)
-	if s, _ := g.admissionStatus(t); s.State != SubsystemRunning || (s.Detail != "posture=memory-only" && s.Detail != "posture=swap+memory") {
-		t.Fatalf("admission after a tick = %+v, want running with a memory posture", s)
+	if s, _ := g.admissionStatus(t); s.State != SubsystemRunning || s.Detail != "posture=memory-only" {
+		t.Fatalf("admission after a tick = %+v, want running posture=memory-only (fixed collector, no swap)", s)
 	}
 	drive := func(p governor.SignalPosture) (SubsystemStatus, string) {
 		r.postureOverride.Store(&p)
@@ -114,4 +115,22 @@ func TestFleetRuntimeStartCloseStress(t *testing.T) {
 		<-done
 		g.cancel()
 	}
+}
+
+// TestFleetRuntimeRealCollectorYieldsSample runs the HOST collector: the posture
+// must leave stale within a bounded number of ticks (linux needs two, the first
+// has no CPU baseline, and a third when /proc/stat's jiffies have not advanced).
+// It is the one test that depends on the real host; the rest inject a collector.
+func TestFleetRuntimeRealCollectorYieldsSample(t *testing.T) {
+	g := newFleetRig(t, "")
+	samplerCollect = nil // the rig restores it on cleanup
+	r := g.start(t)
+	for i := 0; i < 400; i++ {
+		g.ticker.tick(t)
+		if p, _ := r.Admission().Posture(); p == governor.PostureMemoryOnly || p == governor.PostureSwapAndMemory {
+			return
+		}
+		<-time.After(25 * time.Millisecond) // let /proc/stat jiffies advance between real ticks
+	}
+	t.Fatal("the host collector produced no usable sample in 400 ticks")
 }
