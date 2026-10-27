@@ -170,13 +170,6 @@
     "symbol": "internal/doctor.NewMCPIntegrationCheck"
   },
   {
-    "caller_site": "internal/plugins/registration.go",
-    "expected_caller": "the plugin registration path",
-    "reason": "An event kind defined ahead of the plugin registration path that will publish it. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/events.EventKindPluginRegistered"
-  },
-  {
     "caller_site": "internal/evidence/distill.go",
     "expected_caller": "AQ/S-83.T2's distiller, when it stamps source_index_ref on a brief",
     "reason": "P1-E43-W9-S83-T1: renders evidence://<run_id>, the source_index_ref value ExecutiveEvidenceBriefV1 (AQ/S-83.T2) writes into every distilled brief -- explicitly out of this ticket's own BOUNDARIES paragraph. ParseIndexURI/ResolveIndex, this function's inverse and consumer, are exercised directly in index_test.go and are themselves reachable from Store.ResolveIndex, so only the constructor side is unreached.",
@@ -711,22 +704,6 @@
     "symbol": "internal/policy.ExecutionID"
   },
   {
-    "caller_site": "internal/policy/authorize_middleware.go",
-    "expected_caller": "the policy.Authorize middleware (P1-E09-W2-S18-T5), in the SAME change that mints its first approval token",
-    "reason": "The Ed25519 approval signer is built before the middleware that mints approvals. R-21.207 routes every action origin through one policy.Authorize middleware, and that middleware does not exist yet; nothing else may hold the signing key. Building the signer first is the right order, leaving it unbuilt once the middleware exists would not be.",
-    "retire_ticket": "cap:authority-boundary",
-    "expires": "P1-EXIT-07",
-    "symbol": "internal/policy.NewApprovalSigner"
-  },
-  {
-    "caller_site": "internal/policy/ledger.go",
-    "expected_caller": "the controller redemption path in internal/policy/ledger.go (P1-E09-W2-S18-T3), alongside the single-use nonce check",
-    "reason": "The verifier's production caller is the controller's redemption path, which is I/S-18.T3's ledger work. This ticket owns the data model only and ships no ledger, so nothing shipping verifies a token yet.",
-    "retire_ticket": "cap:authority-boundary",
-    "expires": "P1-EXIT-07",
-    "symbol": "internal/policy.NewApprovalVerifier"
-  },
-  {
     "caller_site": "internal/policy/ingress_authorize.go",
     "expected_caller": "the ingress that parses an AUTHORIZE token, alongside the composition root that builds the policy engine",
     "reason": "The same-turn authorization ledger. It is fed by the AUTHORIZE token parser at the command ingress, which this ticket explicitly does not build, and it is attached to the policy engine, which has no shipping caller yet. NewEngine attaches NoSameTurnAuth in the meantime, which authorizes nothing and is fully wired. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
@@ -946,13 +923,6 @@
     "symbol": "internal/runtime.Bootstrap"
   },
   {
-    "caller_site": "cmd/cascade/daemon_unix_run.go",
-    "expected_caller": "the daemon start path, or a doctor.Check adapter over the baseline checker once the daemon exposes the store it needs",
-    "reason": "Built and tested; no caller on the daemon start path. The doctor command cannot construct one either: it needs a provider.Store, an EventPublisher and an AuditRecorder, none of which the CLI layer opens. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/runtime.NewBaselineChecker"
-  },
-  {
     "caller_site": "internal/runtime/clock.go",
     "expected_caller": "none; test-facing by design, kept out of a test-only package because production types reference the Clock interface",
     "reason": "A deterministic clock provided for tests in other packages. Shipping code correctly uses the system clock. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
@@ -973,14 +943,6 @@
     "retire_ticket": "cap:init-config",
     "expires": "P1-EXIT-07",
     "symbol": "internal/runtime.ResolveTelemetryConfig"
-  },
-  {
-    "caller_site": "internal/policy/authorize_middleware.go",
-    "expected_caller": "the composition root that wires internal/policy.NewApprovalSigner (P1-E09-W2-S18-T5), in the SAME change that retires the internal/policy.NewApprovalSigner entry",
-    "reason": "The named non-elevated read for the approval signing key. It exists because a release binary refuses elevated verbs outright, so a key reachable only through Broker.Get is unreadable in exactly the builds that ship. Its consumer seam, internal/policy's ApprovalKeySource, has no production caller yet either: NewApprovalSigner is itself listed here awaiting the policy.Authorize middleware. Its caller allowlist is already machine-enforced by TestArchUnelevatedReadCallers, so widening it is a red test rather than a quiet change.",
-    "retire_ticket": "cap:secrets-vault",
-    "expires": "P1-EXIT-07",
-    "symbol": "internal/secrets.NewApprovalKeyReader"
   },
   {
     "caller_site": "cmd/cascade/vault_elevated.go",
@@ -1627,13 +1589,5 @@
     "reason": "P1-TOP-01 ships topology.EnsureHome, the per-profile 0700 runtime home, implemented and tested (mode creation, tightening, symlink and file refusal, windows declared refusal). Its first production caller is account enrollment in P1-TOP-07 (enroll.go), and the spawn path that passes the home to a runtime is P1-TOP-17; neither exists yet. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once enroll.go exists.",
     "retire_ticket": "P1-TOP-07",
     "symbol": "internal/fleet/topology.EnsureHome"
-  },
-  {
-    "added_by_ticket": "P1-SEC-03",
-    "caller_site": "cmd/cascade/daemon_unix_approval_keys.go",
-    "expected_caller": "the daemon policy wiring that builds RPCDeps for the approval verbs, which passes policy.WitnessAttestor(status.Verifier) (the daemon's ElevationStatus.Verifier) as the Attestor so approval.grant redeems only under a witness for approval.grant; retire this entry once that wiring calls it. caller_site names the new approval-key file that ticket adds; if the call lands in daemon_unix_policy.go instead, retarget caller_site there in the same change",
-    "reason": "P1-SEC-03 ships policy.WitnessAttestor (the Attestor that reads the elevation middleware's VerifiedElevation witness, requires it to be minted under the daemon's issuer (via the verify-only WitnessVerifier), and matches its Method) implemented and tested through the real middleware, but wiring it into RPCDeps is P1-SEC-23's (daemon_unix_policy.go is outside this ticket's scope), so no production code calls it yet and a call from here would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry if the named file exists without the call.",
-    "retire_ticket": "P1-SEC-23",
-    "symbol": "internal/policy.WitnessAttestor"
   }
 ]
