@@ -3,44 +3,78 @@ package governor
 // Purpose: Subscribe's test suite: every transition delivered to every
 // subscriber, cancel() stopping delivery, ctx cancellation doing the
 // same automatically, and no goroutine leak across either path. Driven
-// entirely by tick() calls against a FixedClock - never a real sleep.
+// by tick() calls against a FixedClock; the only waiting is the bounded
+// poll that lets a cancelled watcher goroutine finish exiting.
 
 import (
+	"bytes"
 	"context"
-	"runtime"
+	"runtime/pprof"
+	"strings"
 	"testing"
 	"time"
 
 	rt "github.com/acamarata/cascade/internal/runtime"
 )
 
-// waitGoroutineCount polls runtime.NumGoroutine (yielding via
-// runtime.Gosched, never time.Sleep) until it drops to ceiling or below,
-// or a bounded number of attempts is exhausted, returning the last
-// observed count. This is the standard non-sleeping idiom for a
-// goroutine-leak assertion: the watcher goroutines Subscribe starts exit
-// asynchronously relative to cancel(), so some scheduling slack is
-// unavoidable, but no wall-clock wait is ever needed to prove
-// convergence.
-//
-// Deliberately "<=", never "==": runtime-internal goroutines (GC
-// workers, sysmon, the finalizer goroutine) come and go independent of
-// anything this test does, and can push NumGoroutine below a snapshot
-// taken moments earlier with no leak involved at all - the assertion
-// this helper exists for is "no extra goroutine survived cancellation",
-// not "the process has exactly as many goroutines as some earlier
-// instant", and the latter is what actually flaked CI (observed: count
-// dropped from a baseline of 3 to 2, never above it - proof of unrelated
-// runtime churn, not a leak, since a real leak can only ever push the
-// count up).
-func waitGoroutineCount(t *testing.T, ceiling int) int {
-	t.Helper()
-	got := runtime.NumGoroutine()
-	for i := 0; i < 10000 && got > ceiling; i++ {
-		runtime.Gosched()
-		got = runtime.NumGoroutine()
+// watcherFrame is the stack-frame prefix of the goroutine Subscribe
+// starts (and of the cancel closure it runs on ctx.Done()). A goroutine
+// leak in Subscribe is by definition a goroutine whose stack still
+// contains this frame, so counting exactly those goroutines measures the
+// property under test and nothing else.
+const watcherFrame = "(*ThrottleLadder).Subscribe.func"
+
+// subscribeWatchers returns how many goroutines currently have a
+// Subscribe watcher frame on their stack. Unlike runtime.NumGoroutine it
+// is immune to unrelated goroutines: the race detector's helpers, the
+// runtime's GC and finalizer workers, the test framework's own timers
+// and goroutines still winding down from a previous test all come and go
+// independent of this package, and counting them is what flaked the
+// hosted -race job (count 3 against a baseline of 2 with no leak).
+func subscribeWatchers() int {
+	var buf bytes.Buffer
+	if err := pprof.Lookup("goroutine").WriteTo(&buf, 2); err != nil {
+		panic(err) // a bytes.Buffer cannot fail; a profile error is a harness bug
 	}
-	return got
+	return strings.Count(buf.String(), watcherFrame)
+}
+
+// waitSubscribeWatchers polls subscribeWatchers until done(n) holds or a
+// generous wall-clock bound elapses, returning the last observed count.
+// The watcher exits asynchronously relative to cancel(), and on a loaded
+// single-core runner the scheduler may not run it for many milliseconds,
+// so the wait is bounded by time (seconds), never by an iteration count.
+// A real leak never converges and fails after the bound; a healthy run
+// returns on the first or second poll.
+func waitSubscribeWatchers(done func(n int) bool) int {
+	deadline := time.Now().Add(10 * time.Second)
+	n := subscribeWatchers()
+	for !done(n) && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+		n = subscribeWatchers()
+	}
+	return n
+}
+
+// subscribeBaseline returns the number of Subscribe watchers alive
+// before the test registers its own. It first waits for the count to
+// reach zero so a watcher still winding down from the previous test is
+// not mistaken for the baseline (which would let a later leak hide
+// behind it); if something genuinely never exits, the bounded wait ends
+// and the remaining count is the baseline, so that earlier leak is
+// excluded here and left for the test that caused it to report.
+func subscribeBaseline() int {
+	return waitSubscribeWatchers(func(n int) bool { return n == 0 })
+}
+
+// requireWatcherStarted proves the measurement can see the watcher at
+// all: after Subscribe the count must reach baseline+1. Without this a
+// renamed closure would make every "no leak" assertion vacuously pass.
+func requireWatcherStarted(t *testing.T, baseline int) {
+	t.Helper()
+	if got := waitSubscribeWatchers(func(n int) bool { return n >= baseline+1 }); got != baseline+1 {
+		t.Fatalf("subscribe watchers after Subscribe = %d, want %d: the measurement cannot see the watcher goroutine", got, baseline+1)
+	}
 }
 
 func TestThrottleLadderSubscribeDeliversToAllSubscribers(t *testing.T) {
@@ -90,16 +124,17 @@ func TestThrottleLadderSubscribeCancelStopsDelivery(t *testing.T) {
 	src := &stubPressureSource{}
 	l := newTestLadder(LadderConfig{StepDownDwell: -time.Second}, src, clk)
 
-	before := waitGoroutineCount(t, -1) // just a snapshot; -1 never matches
+	before := subscribeBaseline()
 
 	ch, cancel := l.Subscribe(context.Background())
+	requireWatcherStarted(t, before)
 	src.p = 0.99
 	l.tick()
 	<-ch // drain the one real transition
 
 	cancel()
-	if got := waitGoroutineCount(t, before); got > before {
-		t.Fatalf("goroutine count after cancel = %d, want at or below pre-Subscribe baseline %d (leak)", got, before)
+	if got := waitSubscribeWatchers(func(n int) bool { return n <= before }); got > before {
+		t.Fatalf("subscribe watchers after cancel = %d, want at or below pre-Subscribe baseline %d (leak)", got, before)
 	}
 
 	src.p = 0.0
@@ -116,15 +151,16 @@ func TestThrottleLadderSubscribeContextCancelAutoUnsubscribes(t *testing.T) {
 	src := &stubPressureSource{}
 	l := newTestLadder(LadderConfig{StepDownDwell: -time.Second}, src, clk)
 
-	before := waitGoroutineCount(t, -1)
+	before := subscribeBaseline()
 
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	ch, cancel := l.Subscribe(ctx)
 	defer cancel()
+	requireWatcherStarted(t, before)
 	ctxCancel()
 
-	if got := waitGoroutineCount(t, before); got > before {
-		t.Fatalf("goroutine count after ctx cancellation = %d, want at or below baseline %d (leak)", got, before)
+	if got := waitSubscribeWatchers(func(n int) bool { return n <= before }); got > before {
+		t.Fatalf("subscribe watchers after ctx cancellation = %d, want at or below baseline %d (leak)", got, before)
 	}
 	if _, ok := <-ch; ok {
 		t.Fatal("channel still open (or delivering) after its context was cancelled")
