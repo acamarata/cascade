@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-27T12:13:17Z",
+  "generated_at": "2026-10-27T14:03:20Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5760,6 +5760,12 @@
           "line": 39,
           "status": "ADD",
           "raw": "cmd/cascade/daemon (ADD, R-21.68)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_fleet_runtime_test.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "cmd/cascade/daemon (ADD, fleet runtime composition tests)."
         },
         {
           "file": "cmd/cascade/daemon_unix_handlers.go",
@@ -20837,6 +20843,24 @@
           "status": "ADD",
           "ticket": "T-2",
           "raw": "internal/daemon (ADD, per T-2 sport_updates)."
+        },
+        {
+          "file": "internal/daemon/subsystems_fleet.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-CAP-12)."
+        },
+        {
+          "file": "internal/daemon/subsystems_fleet_status_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-CAP-12)."
+        },
+        {
+          "file": "internal/daemon/subsystems_fleet_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-CAP-12)."
         },
         {
           "file": "internal/daemon/subsystems_goroutines.go",
@@ -38820,7 +38844,7 @@
       ]
     }
   ],
-  "total_sites": 3757,
+  "total_sites": 3761,
   "unspecified_count": 281,
   "multi_status_count": 116
 }
