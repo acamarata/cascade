@@ -15,9 +15,8 @@
 // so the retained snapshot ages into stale (admission_signal.go).
 //
 // Constraints: no CGO; darwin reads sysctls, linux reads /proc.
-// collectMetrics() is declared once per platform file under a matching
-// build tag; the pure parsers live in this UNTAGGED file so they compile
-// and fuzz on every host.
+// collectMetrics() is declared once per platform file under a build tag; the
+// pure parsers live in this UNTAGGED file so they compile and fuzz everywhere.
 //
 // SPORT: internal/fleet/governor.Sampler (ADD, per T-1 sport_updates).
 package governor
@@ -36,9 +35,8 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// DefaultSamplerHz is the sampler's rate when SamplerConfig.MaxHz is left
-// at its zero value (08-INIT-CONFIG-SPEC §3: "unconfigured -> defaults to
-// 1.0").
+// DefaultSamplerHz is the rate when SamplerConfig.MaxHz is zero
+// (08-INIT-CONFIG-SPEC §3: "unconfigured -> defaults to 1.0").
 const DefaultSamplerHz = 1.0
 
 // MaxSamplerHz is the sampler's hard rate ceiling. A configured MaxHz
@@ -79,10 +77,7 @@ type SamplerConfig struct {
 	// MaxHz is the sampler's maximum tick rate. Zero defaults to
 	// DefaultSamplerHz; a value above MaxSamplerHz is clamped to it.
 	MaxHz float64 `json:"sampler_hz"`
-	// Collect replaces the platform collector. Nil (every production
-	// caller) uses the host's: /proc on linux, sysctl on darwin. Tests inject
-	// a deterministic one so they never depend on the host's first reading,
-	// which on linux needs two ticks (the first has no CPU baseline).
+	// Collect replaces the host collector; nil in production (sampler_collect.go).
 	Collect func() (ResourceSnapshot, error) `json:"-"`
 }
 
@@ -134,15 +129,11 @@ func NewSampler(cfg SamplerConfig, clk runtime.Clock, ticker runtime.Ticker, log
 	if ticker == nil {
 		ticker = runtime.NewSystemTicker(period)
 	}
-	collect := collectMetrics
-	if cfg.Collect != nil {
-		collect = cfg.Collect
-	}
 	return &Sampler{
 		clk:     clk,
 		ticker:  ticker,
 		log:     log,
-		collect: collect,
+		collect: cfg.collector(),
 		period:  period,
 	}
 }
