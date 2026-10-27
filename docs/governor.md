@@ -268,6 +268,10 @@ the default rate.
 | `swap+memory` | running | `posture=swap+memory` |
 | `no-signal` | error (health reads degraded) | `posture=no-signal: ` followed by the refusal text |
 
+On Linux the first sample lands on the second tick (the first has no CPU
+baseline, see "Missing readings are never zero"), so a fresh daemon reads
+`posture=stale` for about two sampler periods.
+
 The row is refreshed after every completed sample, and again every sampler
 period by the supervised subsystem `admission-posture`, so a sampler stuck
 inside one collection still shows its posture ageing to `stale`. It is written
