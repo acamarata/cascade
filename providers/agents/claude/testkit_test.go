@@ -212,6 +212,8 @@ func (f *fx) driver(cfg Config) *Driver {
 	if err != nil {
 		f.t.Fatalf("New: %v", err)
 	}
+	// Registered after newFx's t.TempDir, so it runs before that RemoveAll.
+	f.t.Cleanup(func() { settleJobs(f.t, d) })
 	return d
 }
 

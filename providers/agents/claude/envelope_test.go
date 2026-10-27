@@ -59,9 +59,18 @@ func TestClaudeRefusesIncompleteEnvelope(t *testing.T) {
 			}
 		})
 	}
+	// The complete envelope starts a real child; wait for it, so nothing is
+	// still writing into the fixture directories when t.TempDir removes them.
 	f := newFx(t)
-	if _, err := f.driver(f.config()).Spawn(context.Background(), f.spec()); err != nil {
+	d := f.driver(f.config())
+	res, err := d.Spawn(context.Background(), f.spec())
+	if err != nil {
 		t.Fatalf("a complete envelope was refused: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if _, err := d.Collect(ctx, res.JobID); err != nil {
+		t.Fatalf("Collect after a complete envelope: %v", err)
 	}
 }
 
