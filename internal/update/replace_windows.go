@@ -23,22 +23,7 @@ import (
 // maxAsideNames bounds the search for a free <name>.failed-<n>.
 const maxAsideNames = 100
 
-func replaceFile(src, dst string) error {
-	old := dst + ".old"
-	_ = os.Remove(old)
-	if _, err := os.Lstat(dst); err == nil {
-		if err := renameFile(dst, old); err != nil {
-			return err
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	if err := renameFile(src, dst); err != nil {
-		_ = renameFile(old, dst)
-		return err
-	}
-	return nil
-}
+func replaceFile(src, dst string) error { return replaceByRenameAside(renameFile, src, dst) }
 
 // restoreFile moves the new target aside and renames <target>.old back.
 func restoreFile(target, prev string) error {
