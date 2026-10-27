@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-26T22:05:18Z",
+  "generated_at": "2026-10-27T02:17:46Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -28390,6 +28390,12 @@
       "name": "internal/update replaceFile",
       "sites": [
         {
+          "file": "internal/update/replace_aside.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "internal/update replaceFile/ADDED."
+        },
+        {
           "file": "internal/update/replace_unix.go",
           "line": 7,
           "status": "ADD",
@@ -38005,7 +38011,7 @@
       ]
     }
   ],
-  "total_sites": 3688,
+  "total_sites": 3689,
   "unspecified_count": 248,
   "multi_status_count": 114
 }
