@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -143,6 +144,10 @@ func runNetChild(dbPath string) {
 	if err != nil {
 		os.Exit(6)
 	}
+	// The listener is the dial target and nothing else references it once its
+	// address is read: without this the GC finalizer closes it and the proxy's
+	// dial is refused, so the dial hook never runs and the child times out.
+	defer runtime.KeepAlive(l)
 	rd := &routeDial{routes: map[string]string{netAllowedDest: l.Addr().String()}, after: func() {
 		f, err := os.OpenFile(filepath.Join(filepath.Dir(dbPath), "dials.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 		if err != nil {
