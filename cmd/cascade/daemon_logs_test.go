@@ -48,6 +48,12 @@ type logsFixture struct {
 
 func newLogsFixture(t *testing.T, initial string) logsFixture {
 	t.Helper()
+	return newLogsFixturePolled(t, initial, 5*time.Millisecond)
+}
+
+// newLogsFixturePolled is newLogsFixture with the follow poll interval chosen.
+func newLogsFixturePolled(t *testing.T, initial string, poll time.Duration) logsFixture {
+	t.Helper()
 	paths := fakeDaemonPaths{root: t.TempDir()}
 	f := logsFixture{path: runtime.LogFilePath(paths), out: &logsBuffer{}, err: &logsBuffer{}}
 	if initial != "" {
@@ -57,7 +63,7 @@ func newLogsFixture(t *testing.T, initial string) logsFixture {
 		f.write(t, f.path, initial)
 	}
 	f.run = func(ctx context.Context, args ...string) error {
-		cmd := newDaemonLogsCmdPolled(daemonDeps{Paths: paths}, 5*time.Millisecond)
+		cmd := newDaemonLogsCmdPolled(daemonDeps{Paths: paths}, poll)
 		cmd.SetOut(f.out)
 		cmd.SetErr(f.err)
 		cmd.SetArgs(args)
@@ -122,8 +128,15 @@ func TestDaemonLogsPrintsFile(t *testing.T) {
 // rotation (active file renamed away, a fresh file at the path) is followed:
 // the new file's lines appear, including ones written after the switch. A
 // cancelled context ends the command with no error.
+//
+// The poll interval is 100ms, not the 5ms the other follow tests use: the
+// follower tolerates three consecutive polls that cannot resolve the path (the
+// gap between a rotation's rename and create), so 5ms allowed only 15ms. A
+// loaded windows runner takes longer than that between os.Rename and the
+// WriteFile that recreates the path, and the follower then rightly reported
+// the file as deleted. 100ms allows 300ms and costs the test nothing.
 func TestDaemonLogsFollowStopsOnCancel(t *testing.T) {
-	f := newLogsFixture(t, "before\n")
+	f := newLogsFixturePolled(t, "before\n", 100*time.Millisecond)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)

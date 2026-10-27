@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	goruntime "runtime"
 	"testing"
 	"time"
 
@@ -257,6 +258,9 @@ func TestConfigFileParseMatchesLoad(t *testing.T) {
 }
 
 func TestReadConfigFileRefusesWorldWritable(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("windows reports no unix permission bits, so a 0666 file cannot be told from any other")
+	}
 	path := filepath.Join(t.TempDir(), "config.toml")
 	writeTestConfig(t, path, "[conductor]\n", 0o666)
 	_, err := ReadConfigFile(path)
