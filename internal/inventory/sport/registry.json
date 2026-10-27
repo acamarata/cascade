@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-27T15:58:34Z",
+  "generated_at": "2026-10-27T16:34:43Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1860,7 +1860,7 @@
       "sites": [
         {
           "file": "internal/secrets/unelevated.go",
-          "line": 28,
+          "line": 29,
           "status": "ADD",
           "raw": "SECRETS_UNELEVATED_READ: ADD (internal/secrets ApprovalKeyReader,"
         },
@@ -4687,6 +4687,54 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade installation identity",
+      "sites": [
+        {
+          "file": "cmd/cascade/envelope_signer.go",
+          "line": 30,
+          "status": "ADD",
+          "raw": "cmd/cascade installation identity/ADDED (P1-SEC-40)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade installation identity eligibility tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/envelope_signer_eligible_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "cmd/cascade installation identity eligibility tests (P1-SEC-40)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade installation identity tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/envelope_signer_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "cmd/cascade installation identity tests (P1-SEC-40)."
+        },
+        {
+          "file": "cmd/cascade/envelope_signer_use_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "cmd/cascade installation identity tests (P1-SEC-40)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -38997,7 +39045,7 @@
       ]
     }
   ],
-  "total_sites": 3777,
-  "unspecified_count": 288,
+  "total_sites": 3781,
+  "unspecified_count": 290,
   "multi_status_count": 117
 }
