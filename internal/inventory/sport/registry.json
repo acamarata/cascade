@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-27T06:46:30Z",
+  "generated_at": "2026-10-27T07:37:42Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -38417,6 +38417,34 @@
       ]
     },
     {
+      "name": "secrets.filevault.keymemo",
+      "sites": [
+        {
+          "file": "internal/secrets/agekey_memo.go",
+          "line": 12,
+          "status": "CHANGE",
+          "raw": "secrets.filevault.keymemo (CHANGE)."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
+      ]
+    },
+    {
+      "name": "secrets.filevault.keymemo tests",
+      "sites": [
+        {
+          "file": "internal/secrets/agekey_memo_test.go",
+          "line": 3,
+          "status": "CHANGE",
+          "raw": "secrets.filevault.keymemo tests (CHANGE)."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
+      ]
+    },
+    {
       "name": "secrets/vault-import",
       "sites": [
         {
@@ -38634,7 +38662,7 @@
       ]
     }
   ],
-  "total_sites": 3742,
+  "total_sites": 3744,
   "unspecified_count": 275,
   "multi_status_count": 116
 }
