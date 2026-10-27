@@ -109,20 +109,44 @@ the registry path is NOT exempt from the daemon-mediated elevation flow the
   manifest from disk and checksum-pins it with `--checksum`, then calls the
   identical `UpdatePlugin`.
 
-`UpdatePlugin` refuses to commit an update that would be **elevated** —
-either a capability-grant expansion, or ANY change to the plugin's runtime
-tier (builtin/process/wasm/remote, not only a move to process) relative to
-what is currently installed — unless a daemon is available; even with a
-daemon, this build has no attestation flow yet, so an elevated update is
-reported ("... requests new capabilities: ... — elevation required") rather
-than committed. `--accept-grant` (below) is required before the registry
-path will even ATTEMPT an expanding update, but it is never itself the
-authority that lets one commit.
+An update never installs: `<name>` must already be installed, or the
+command exits non-zero with `<name> is not installed; use cascade plugin add`
+and writes nothing. With `--from`, the manifest's `id` must equal `<name>`;
+a mismatch is refused as invalid input before the plugin store is opened.
+
+A candidate whose runtime is `remote` is refused on every path (add and
+update, elevated or not): the remote plugin runtime is deferred
+(`DEF-P2-remote-plugin-runtime`).
+
+A process-tier update is committed only after the new bundle's process
+handshake is confirmed. This build has no handshake wired for `plugin
+update`, so a process-tier update is refused with `cannot confirm the
+process handshake; update not applied` and the installed record is left
+byte-identical.
+
+With no daemon running, an update that would be **elevated** (a
+capability-grant expansion, or ANY change to the plugin's runtime tier
+relative to what is installed) is refused with the daemon-required error.
+
+With the daemon running, the daemon holds the plugin store, so the CLI
+never opens it: every `--from` update (elevated or not) is shown (`...
+requests runtime=<tier> and capabilities: ... — elevation required`) and
+sent to the daemon's always-elevated `plugin.update` RPC through the signed
+elevation flow, so each one needs a signature. The daemon re-checks every
+guard above against the stored record and commits; the CLI never writes the
+record itself. `CASCADE_NO_INPUT=1` refuses before anything is sent. A refusal
+from the daemon keeps its own kind and message (for example not installed),
+and a failed elevation exits non-zero (elevation required); nothing is
+written either way. The registry-driven path (no `--from`) is refused while
+the daemon runs, because it cannot read the installed version through the
+daemon yet; use `--from`. `--accept-grant` (below) is required before the
+registry path will even ATTEMPT an expanding update, but it is never itself
+the authority that lets one commit.
 
 Like `plugin search`, the registry-driven path refuses rather than silently
-bypassing a **configured** daemon (no `plugin.update` RPC method exists yet
-to route the registry check through it): update via `--from`, or run without
-a configured daemon, in that case.
+bypassing a **configured** daemon (no RPC routes the registry check itself
+through it yet): update via `--from`, or run without a configured daemon,
+in that case.
 
 ## Already at the latest version
 

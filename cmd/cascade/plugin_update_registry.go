@@ -23,13 +23,10 @@
 // below), but it is NEVER the authority that lets an expansion (or a
 // runtime-tier change) commit: with no daemon, UpdatePlugin itself refuses
 // with the typed ErrDaemonRequiredForElevatedPluginOp regardless of
-// --accept-grant; with a daemon, UpdatePlugin's own elevation outcome
-// (UpdateOutcomeElevationRequired — this build has no attestation source
-// yet) is surfaced verbatim by renderPluginUpdateResult, not silently
-// bypassed. The registry path runs no ProcessHandshaker (a real, disclosed
-// gap — see the journal — distinct from --from's O/S-31.T3 handshake,
-// which needs a running child process this path has no daemon-mediated
-// way to launch yet).
+// --accept-grant; with a daemon, UpdatePlugin's elevation outcome is
+// completed only through the daemon's attested plugin.update RPC
+// (renderPluginUpdateResult). The registry path runs no ProcessHandshaker,
+// so UpdatePlugin refuses a process-tier candidate here.
 //
 // SPORT: cli/plugin-lifecycle/CHANGE (P1-E24-W5-S50-T8, reworked).
 package main
@@ -51,13 +48,20 @@ import (
 
 // errRegistryUpdateDaemonConfigured mirrors plugin_search.go's D9
 // discipline: a daemon CONFIGURED for this process must never be
-// silently bypassed by a direct local network call. No "plugin.update"
-// registry-check RPC method exists yet to route through instead (a real,
-// disclosed gap — not a silent fallback).
+// silently bypassed by a direct local network call. No registry-check RPC
+// method exists yet to route through instead (a real, disclosed gap — not
+// a silent fallback; plugin.update commits an update, it checks nothing).
 var errRegistryUpdateDaemonConfigured = cascade.New(cascade.KindUnavailable,
 	"cascade plugin update: a daemon is configured for this host; the registry-mediated update check does not "+
-		"route through it yet (no plugin.update RPC method exists) and refuses to bypass it with a direct "+
+		"route through it yet (no registry-check RPC method exists) and refuses to bypass it with a direct "+
 		"network call — update via --from, or run without a configured daemon")
+
+// errRegistryUpdateDaemonRunning refuses the registry path while a daemon is
+// running: the daemon holds the plugin store exclusively, so the installed
+// version this path compares against cannot be read here.
+var errRegistryUpdateDaemonRunning = cascade.New(cascade.KindUnavailable,
+	"cascade plugin update: a daemon is running and holds the plugin store; the registry-driven update "+
+		"cannot read the installed version through it yet — update via --from, which the daemon applies")
 
 // errRegistryNotConfiguredForUpdate is returned when no daemon is
 // configured AND [registry].url itself resolves to nothing
@@ -114,7 +118,7 @@ func loadInstalledForUpdate(ctx context.Context, deps pluginDeps, name string) (
 		return plugins.PluginMetadata{}, err
 	}
 	if !r.ok {
-		return plugins.PluginMetadata{}, cascade.Newf(cascade.KindNotFound, "cascade plugin update: %q is not installed", name)
+		return plugins.PluginMetadata{}, cascade.Newf(cascade.KindNotFound, "%s is not installed; use cascade plugin add", name)
 	}
 	return r.rec, nil
 }
@@ -128,6 +132,9 @@ func loadInstalledForUpdate(ctx context.Context, deps pluginDeps, name string) (
 // renderPluginUpdateResult.
 func runPluginUpdateFromRegistry(cmd *cobra.Command, deps pluginDeps, name string, yes bool, acceptGrant []string) error {
 	ctx := cmd.Context()
+	if pluginDaemonAvailable(ctx) {
+		return errRegistryUpdateDaemonRunning
+	}
 	client, err := resolveUpdateRegistryClient(ctx, deps)
 	if err != nil {
 		return err
@@ -159,7 +166,7 @@ func runPluginUpdateFromRegistry(cmd *cobra.Command, deps pluginDeps, name strin
 	if err != nil {
 		return err
 	}
-	return renderPluginUpdateResult(cmd, deps, res)
+	return renderPluginUpdateResult(cmd, deps, res, plugins.UpdateParams{ID: name, Checksum: entry.Checksum, ManifestBytes: artifact})
 }
 
 // resolveVerifiedCandidate downloads and fully verifies entry's artifact

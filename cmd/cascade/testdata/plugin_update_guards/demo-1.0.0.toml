@@ -1,0 +1,8 @@
+# Synthetic fixture for plugin_update_guards.txtar: installable daemonless
+# (builtin runtime, no requested capabilities).
+id = "update-guard-demo"
+name = "Update Guard Demo"
+schema = "cascade.plugin/v2"
+version = "1.0.0"
+host_version = ">=2.0.0"
+runtime = "builtin"

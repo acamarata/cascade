@@ -8,6 +8,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/plugin"
 )
 
 // Purpose (this file): the record-level half of the lifecycle guards —
@@ -156,6 +157,9 @@ func TestUpdatePluginReportsTheRegistryNotice(t *testing.T) {
 	ctx := context.Background()
 	store := storetest.NewMemStore()
 	manifestBytes := []byte(builtinManifest)
+	if err := SaveMetadata(ctx, store, PluginMetadata{Name: "demo", InstalledVersion: "0.9.0", Enabled: true, RuntimeMode: plugin.RuntimeBuiltin}); err != nil {
+		t.Fatal(err) // an update presumes an installed record
+	}
 
 	res, err := UpdatePlugin(ctx, store, failingRegistry{}, nil, manifestBytes, "", manifestBytes, true)
 	if err != nil {

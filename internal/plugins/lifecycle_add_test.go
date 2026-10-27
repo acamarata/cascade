@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"strings"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/storage/storetest"
@@ -152,5 +153,27 @@ func TestPluginAdd_MalformedManifestRefused(t *testing.T) {
 	store := storetest.NewMemStore()
 	if _, err := AddPlugin(ctx, store, []byte("not = valid = toml = garbage"), "", nil, true); err == nil {
 		t.Fatal("AddPlugin with a malformed manifest succeeded, want a parse error")
+	}
+}
+
+// TestAddPlugin_RemoteRuntimeEmptyRequiresRefused: a remote-runtime manifest
+// with no requires (which no elevation rule would catch) and one with
+// requires (which would otherwise route to elevation) are both refused as
+// deferred, daemon or not, and write nothing.
+func TestAddPlugin_RemoteRuntimeEmptyRequiresRefused(t *testing.T) {
+	ctx := context.Background()
+	granting := strings.Replace(remoteManifest, `runtime = "remote"`, "runtime = \"remote\"\nrequires = [\"net.http\"]", 1)
+	if granting == remoteManifest {
+		t.Fatal("fixture edit did not apply")
+	}
+	for _, src := range []string{remoteManifest, granting} {
+		for _, daemon := range []bool{false, true} {
+			store := storetest.NewMemStore()
+			_, err := AddPlugin(ctx, store, []byte(src), "", nil, daemon)
+			requireRefusal(t, err, cascade.KindUnsupported, "DEF-P2-remote-plugin-runtime")
+			if got := storedRecordHash(t, store, "demo"); got != "absent" {
+				t.Fatalf("daemon=%v: a remote-runtime add wrote a record", daemon)
+			}
+		}
 	}
 }

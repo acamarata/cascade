@@ -1,0 +1,35 @@
+# plugin_update_guards.txtar
+#
+# testscript: executable
+#
+# `cascade plugin update` fails closed with no daemon running: an update
+# never installs a plugin that is not installed, a --from manifest whose id
+# is not <name> is refused before the store opens, and an update that needs
+# elevation exits non-zero with nothing written (with and without
+# CASCADE_NO_INPUT=1). The manifests are synthetic fixtures under
+# testdata/plugin_update_guards.
+
+# Not installed: refused, and the refusal names `cascade plugin add`.
+! exec cascade plugin update update-guard-demo --from testdata/plugin_update_guards/demo-1.0.0.toml
+stderr 'update-guard-demo is not installed; use cascade plugin add'
+! exec cascade plugin info update-guard-demo
+stderr 'neither installed nor built into this binary'
+
+# Id mismatch: refused as invalid input.
+! exec cascade plugin update some-other-plugin --from testdata/plugin_update_guards/demo-1.0.0.toml
+stderr 'manifest id "update-guard-demo" does not match requested name "some-other-plugin"'
+
+# Install the base version (no elevation needed), then an update that
+# requests a new capability exits non-zero and leaves v1.0.0 installed.
+exec cascade plugin add testdata/plugin_update_guards/demo-1.0.0.toml
+stdout 'installed update-guard-demo v1.0.0'
+! exec cascade plugin update update-guard-demo --from testdata/plugin_update_guards/demo-1.1.0-grants.toml
+stderr 'needs a running daemon'
+! stdout 'updated'
+
+env CASCADE_NO_INPUT=1
+! exec cascade plugin update update-guard-demo --from testdata/plugin_update_guards/demo-1.1.0-grants.toml
+stderr 'needs a running daemon'
+exec cascade plugin info update-guard-demo
+stdout '1\.0\.0'
+! stdout '1\.1\.0'

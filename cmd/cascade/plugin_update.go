@@ -5,8 +5,8 @@
 // an earlier revision of the registry path committed directly via
 // plugins.SaveMetadata, bypassing UpdatePlugin's elevation gate entirely
 // — that second commit path is gone): --from <path> reads a local
-// candidate manifest (see plugin_add.go's header for the shared "no
-// daemon-side handler registered yet" gap); omitting --from routes
+// candidate manifest whose id must equal <name> before any store opens;
+// omitting --from routes
 // through the X/S-50.T8 registry-driven path instead
 // (plugin_update_registry.go): CheckUpdate against the signed index,
 // c.verifier.VerifyArtifact (checksum AND signature) before anything else
@@ -20,13 +20,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
 
+	"github.com/acamarata/cascade/internal/elevation"
 	"github.com/acamarata/cascade/internal/plugins"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/plugin"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -66,47 +70,103 @@ func runPluginUpdate(cmd *cobra.Command, deps pluginDeps, args []string, checksu
 	if from == "" {
 		return runPluginUpdateFromRegistry(cmd, deps, args[0], yes, acceptGrant)
 	}
-	manifestBytes, err := os.ReadFile(from)
+	manifestBytes, m, err := readUpdateCandidate(from, args[0])
 	if err != nil {
-		return cascade.Wrapf(cascade.KindInvalidInput, err, "cascade plugin update: read manifest %q", from)
+		return err
 	}
+	req := plugins.UpdateParams{ID: args[0], Checksum: checksum, ManifestBytes: manifestBytes}
 
 	ctx := cmd.Context()
-	daemonAvailable := pluginDaemonAvailable(ctx)
-
+	if pluginDaemonAvailable(ctx) {
+		// The running daemon holds the plugin store exclusively, so the CLI
+		// never opens it: the daemon's attested plugin.update re-runs every
+		// guard against the stored record and commits. Every daemon-up update
+		// therefore needs a signature.
+		return runPluginUpdateElevated(cmd, deps, plugins.UpdateResult{Outcome: plugins.UpdateOutcomeElevationRequired, Manifest: m}, req)
+	}
 	res, err := withPluginStore(ctx, deps, func(ctx context.Context, store provider.Store) (plugins.UpdateResult, error) {
-		return plugins.UpdatePlugin(ctx, store, nil, nil, manifestBytes, checksum, manifestBytes, daemonAvailable)
+		return plugins.UpdatePlugin(ctx, store, nil, nil, manifestBytes, checksum, manifestBytes, false)
 	})
 	if err != nil {
 		return err
 	}
-	return renderPluginUpdateResult(cmd, deps, res)
+	return renderPluginUpdateResult(cmd, deps, res, req)
+}
+
+// readUpdateCandidate reads the --from manifest and refuses one whose id is
+// not name, or whose runtime is the deferred remote runtime, before any
+// store is opened or any daemon dialed.
+func readUpdateCandidate(from, name string) ([]byte, plugin.Manifest, error) {
+	manifestBytes, err := os.ReadFile(from)
+	if err != nil {
+		return nil, plugin.Manifest{}, cascade.Wrapf(cascade.KindInvalidInput, err, "cascade plugin update: read manifest %q", from)
+	}
+	m, err := plugin.ParseManifest(bytes.NewReader(manifestBytes))
+	if err != nil {
+		return nil, plugin.Manifest{}, err
+	}
+	if m.ID != name {
+		return nil, plugin.Manifest{}, cascade.Newf(cascade.KindInvalidInput,
+			"cascade plugin update: manifest id %q does not match requested name %q", m.ID, name)
+	}
+	if err := plugins.RefuseRemoteRuntime("update", m); err != nil {
+		return nil, plugin.Manifest{}, err
+	}
+	return manifestBytes, m, nil
 }
 
 // renderPluginUpdateResult maps a plugins.UpdateResult onto pluginUpdateView
-// and writes it — the ONE place either candidate source (this file's --from
+// and writes it: the ONE place either candidate source (this file's --from
 // path, or plugin_update_registry.go's registry-driven path) turns
-// UpdatePlugin's outcome into CLI output, so the two paths can never drift
-// on what "elevation required"/"rolled back"/"updated" means to an operator
-// (S-50.T8 rework: both paths now share this SAME commit call and this SAME
-// result rendering — see plugin_update_registry.go's header for why the
-// registry path no longer commits any other way).
-func renderPluginUpdateResult(cmd *cobra.Command, deps pluginDeps, res plugins.UpdateResult) error {
+// UpdatePlugin's outcome into CLI output. An elevation-required outcome is
+// completed only through the daemon's attested plugin.update (req is what
+// that call carries); no path writes a record client-side.
+func renderPluginUpdateResult(cmd *cobra.Command, deps pluginDeps, res plugins.UpdateResult, req plugins.UpdateParams) error {
 	view := pluginUpdateView{Name: res.Manifest.ID, RegistryNotice: res.RegistryNotice}
 	switch res.Outcome {
 	case plugins.UpdateOutcomeRolledBack:
 		view.Message = "update rolled back: " + res.RollbackErr.Error() + " (restored v" + res.Metadata.InstalledVersion + ")"
 	case plugins.UpdateOutcomeElevationRequired:
-		if pluginNoInput(deps) {
-			return plugins.ErrNoInputHardError("update")
-		}
-		view.Message = res.Manifest.ID + " requests new capabilities: " + joinOrNone(res.Manifest.Requires) + " — elevation required"
+		return runPluginUpdateElevated(cmd, deps, res, req)
 	case plugins.UpdateOutcomeUpdated:
 		view.Message = "updated " + res.Manifest.ID + " to v" + res.Manifest.Version
 	default:
 		return cascade.Newf(cascade.KindInternal, "cascade plugin update: unrecognized outcome %d", res.Outcome)
 	}
 	return pluginOutputWriter(cmd).Result(view)
+}
+
+// runPluginUpdateElevated shows what the update requests and completes it
+// through plugin.update. CASCADE_NO_INPUT=1 refuses before any dial. A
+// typed refusal from the daemon keeps its kind and message; an untyped
+// failure (transport, daemon down) or an elevation refusal is a non-zero
+// KindElevationRequired exit. Nothing is written client-side either way.
+func runPluginUpdateElevated(cmd *cobra.Command, deps pluginDeps, res plugins.UpdateResult, req plugins.UpdateParams) error {
+	if pluginNoInput(deps) {
+		return elevation.ErrNoInput()
+	}
+	w := pluginOutputWriter(cmd)
+	_ = w.Result(pluginUpdateView{Name: res.Manifest.ID, RegistryNotice: res.RegistryNotice,
+		Message: res.Manifest.ID + " requests runtime=" + string(res.Manifest.Runtime) + " and capabilities: " +
+			joinOrNone(res.Manifest.Requires) + " — elevation required"})
+	var out pluginAddView
+	if err := pluginUpdateElevatedCall(cmd.Context(), deps, cmd.ErrOrStderr(), req, &out); err != nil {
+		if kind, ok := cascade.KindOf(err); ok && kind != cascade.KindElevationRequired {
+			return err // the daemon's own typed refusal (not installed, id mismatch, remote, ...)
+		}
+		return cascade.Wrap(cascade.KindElevationRequired, err, "cascade plugin update: elevation was not completed; update not applied")
+	}
+	return w.Result(pluginUpdateView{Name: res.Manifest.ID, Message: out.Message})
+}
+
+// pluginUpdateElevatedCall dials plugin.update through callElevated, the one
+// elevated client path. Tests replace it to reach an in-process registry.
+var pluginUpdateElevatedCall = func(ctx context.Context, deps pluginDeps, stderr io.Writer, req plugins.UpdateParams, out any) error {
+	c, err := pluginClient(deps)
+	if err != nil {
+		return err
+	}
+	return callElevated(ctx, c, productionElevatedCallDeps(stderr), plugins.UpdateRPCMethod, req, out)
 }
 
 type pluginUpdateView struct {

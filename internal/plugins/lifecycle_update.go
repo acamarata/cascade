@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/plugin"
 	"github.com/acamarata/cascade/pkg/provider"
 )
@@ -86,51 +87,99 @@ type UpdateResult struct {
 // driven flow alike — funnels through; neither caller ever writes a
 // PluginMetadata record itself (S-50.T8 rework, adversarial CR FIX-1/2).
 //
-// Rollback mechanics: this function commits the new PluginMetadata record
-// ONLY after handshaker.Handshake succeeds (or handshaker is nil, in which
-// case there is nothing to roll back FROM — see cmd/cascade/plugin.go for
-// why a nil handshaker is refused before this function is ever called in
-// production). The prior record is therefore never touched by a failing
-// update: "rollback" is "never having applied the change," which is a
-// correct and stronger guarantee than restore-from-backup, and needs no
-// separate snapshot step.
+// Fail-closed guards (each refuses before any write): a remote-runtime
+// candidate is KindUnsupported (DEF-P2-remote-plugin-runtime); a name with
+// no stored record is KindNotFound (an update never installs; that is
+// `cascade plugin add`); and commitUpdate refuses a process-tier candidate
+// it cannot handshake.
+//
+// Rollback mechanics: the new PluginMetadata record is committed ONLY after
+// handshaker.Handshake succeeds. A nil handshaker is accepted only for a
+// non-process runtime, which has no child process to confirm. The prior
+// record is therefore never touched by a failing update: "rollback" is
+// "never having applied the change," which needs no snapshot step.
 func UpdatePlugin(ctx context.Context, store provider.Store, registry RegistryVersionChecker, handshaker ProcessHandshaker, manifestSource []byte, checksum string, artifact []byte, daemonAvailable bool) (UpdateResult, error) {
-	m, err := plugin.ParseManifest(bytes.NewReader(manifestSource))
+	m, err := parseUpdatableManifest(manifestSource)
 	if err != nil {
 		return UpdateResult{}, err
 	}
 
 	notice := checkRegistryGraceful(ctx, registry, m.ID)
 
-	if checksum != "" {
-		entry := plugin.RegistryVersionEntry{Checksum: checksum}
-		if err := plugin.VerifyArtifact(entry, artifact); err != nil {
-			return UpdateResult{}, err
-		}
+	if err := verifyUpdateChecksum(checksum, artifact); err != nil {
+		return UpdateResult{}, err
 	}
 
-	existing, existingOK, err := LoadMetadata(ctx, store, m.ID)
+	existing, err := loadInstalled(ctx, store, m.ID)
 	if err != nil {
 		return UpdateResult{}, err
 	}
 
-	if updateRequiresElevation(m, existing, existingOK) {
+	if updateRequiresElevation(m, existing) {
 		if !daemonAvailable {
 			return UpdateResult{}, ErrDaemonRequiredForElevatedPluginOp("update")
 		}
 		return UpdateResult{Outcome: UpdateOutcomeElevationRequired, RegistryNotice: notice, Manifest: m}, nil
 	}
+	return commitUpdate(ctx, store, handshaker, m, existing, checksum, notice)
+}
 
+// parseUpdatableManifest parses a candidate manifest and refuses the
+// deferred remote runtime before anything else looks at it.
+func parseUpdatableManifest(manifestSource []byte) (plugin.Manifest, error) {
+	m, err := plugin.ParseManifest(bytes.NewReader(manifestSource))
+	if err != nil {
+		return plugin.Manifest{}, err
+	}
+	if err := RefuseRemoteRuntime("update", m); err != nil {
+		return plugin.Manifest{}, err
+	}
+	return m, nil
+}
+
+// verifyUpdateChecksum checks artifact against a pinned checksum; an empty
+// checksum skips the check (AddPlugin's identical rule).
+func verifyUpdateChecksum(checksum string, artifact []byte) error {
+	if checksum == "" {
+		return nil
+	}
+	return plugin.VerifyArtifact(plugin.RegistryVersionEntry{Checksum: checksum}, artifact)
+}
+
+// loadInstalled returns id's stored record, or KindNotFound when there is
+// none: an update presumes a prior `cascade plugin add`.
+func loadInstalled(ctx context.Context, store provider.Store, id string) (PluginMetadata, error) {
+	existing, ok, err := LoadMetadata(ctx, store, id)
+	if err != nil {
+		return PluginMetadata{}, err
+	}
+	if !ok {
+		return PluginMetadata{}, cascade.Newf(cascade.KindNotFound, "%s is not installed; use cascade plugin add", id)
+	}
+	return existing, nil
+}
+
+// errProcessHandshakeUnconfirmed is the refusal for a process-tier update
+// with no handshaker to confirm the new bundle comes up.
+var errProcessHandshakeUnconfirmed = cascade.New(cascade.KindUnavailable,
+	"cannot confirm the process handshake; update not applied")
+
+// commitUpdate is the one commit step every update path shares, the CLI's
+// non-elevated path and the daemon's attested plugin.update alike: the
+// process-tier handshake guard, the handshake itself, then the write.
+func commitUpdate(ctx context.Context, store provider.Store, handshaker ProcessHandshaker, m plugin.Manifest, existing PluginMetadata, checksum, notice string) (UpdateResult, error) {
+	if handshaker == nil && m.Runtime == plugin.RuntimeProcess {
+		return UpdateResult{}, errProcessHandshakeUnconfirmed
+	}
 	if handshaker != nil {
 		if hsErr := handshaker.Handshake(ctx, m.ID, m.Version); hsErr != nil {
 			return UpdateResult{Outcome: UpdateOutcomeRolledBack, RegistryNotice: notice, Manifest: m, Metadata: existing, RollbackErr: hsErr}, nil
 		}
 	}
-
 	rec := PluginMetadata{
 		Name:             m.ID,
 		InstalledVersion: m.Version,
-		Enabled:          existing.Enabled || existing.InstalledVersion == "",
+		Enabled:          existing.Enabled,
 		RuntimeMode:      m.Runtime,
 		PinnedChecksum:   checksum,
 		Grants:           append([]string(nil), m.Requires...),
@@ -142,28 +191,13 @@ func UpdatePlugin(ctx context.Context, store provider.Store, registry RegistryVe
 }
 
 // updateRequiresElevation is the update-side counterpart to
-// lifecycle_add.go's addRequiresElevation, extended by the S-50.T8 rework
-// pass's own bug fix (adversarial CR FIX-3, PCI filed against this file):
-// the ORIGINAL check here consulted grantsExpand alone, unlike
-// addRequiresElevation, which also treats a RuntimeMode change as
-// elevated. That asymmetry let a candidate manifest change an EXISTING
-// installed plugin's runtime tier (builtin, process, wasm, or remote —
-// not merely "to process") with NO grant expansion at all, on a host with
-// no daemon configured, and never trigger elevation: a signed registry
-// entry could move a sandboxed plugin into a supervised child process (or
-// any other tier) with zero consent. ANY change to RuntimeMode — not only
-// a move specifically TO RuntimeProcess — is elevated when existingOK: the
-// installed tier is itself a security boundary an operator chose, and no
-// tier change is a silent, unconsented step. existingOK gates the
-// comparison to an ACTUAL prior install (LoadMetadata's own ok result):
-// with no prior record, existing's zero-valued RuntimeMode is not a real
-// tier to compare against, so only grantsExpand's own "any non-empty
-// Requires on a fresh record is itself an expansion" rule applies — the
-// identical, pre-existing behavior for that path (see
-// TestUpdatePluginPropagatesStoreFailures, which calls UpdatePlugin
-// against an empty store on purpose).
-func updateRequiresElevation(m plugin.Manifest, existing PluginMetadata, existingOK bool) bool {
-	if existingOK && m.Runtime != existing.RuntimeMode {
+// lifecycle_add.go's addRequiresElevation: ANY change to RuntimeMode (not
+// only a move to RuntimeProcess) is elevated, because the installed tier is
+// a security boundary an operator chose, and so is a grant expansion.
+// existing is always a real stored record here (loadInstalled refuses
+// otherwise), so the tier comparison never runs against a zero value.
+func updateRequiresElevation(m plugin.Manifest, existing PluginMetadata) bool {
+	if m.Runtime != existing.RuntimeMode {
 		return true
 	}
 	return grantsExpand(existing.Grants, m.Requires)

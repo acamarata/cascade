@@ -75,6 +75,9 @@ func AddPlugin(ctx context.Context, store provider.Store, manifestSource []byte,
 	if err != nil {
 		return AddResult{}, err
 	}
+	if err := RefuseRemoteRuntime("add", m); err != nil {
+		return AddResult{}, err
+	}
 
 	if checksum != "" {
 		entry := plugin.RegistryVersionEntry{Checksum: checksum}
@@ -146,4 +149,17 @@ func ErrDaemonRequiredForElevatedPluginOp(verb string) error {
 		"cascade plugin %s needs a running daemon: daemon required for elevated plugin operations "+
 			"(process-tier runtime, grant expansion, and perms grant/revoke all need the daemon's "+
 			"supervised plugin host). Start it with `cascade daemon start`.", verb)
+}
+
+// RefuseRemoteRuntime refuses a remote-runtime manifest on every add and
+// update path: the remote plugin runtime is deferred
+// (DEF-P2-remote-plugin-runtime), and no elevation rule would otherwise
+// catch a remote manifest that requests no grants.
+func RefuseRemoteRuntime(verb string, m plugin.Manifest) error {
+	if m.Runtime != plugin.RuntimeRemote {
+		return nil
+	}
+	return cascade.Newf(cascade.KindUnsupported,
+		"cascade plugin %s: %s uses the remote runtime, which is deferred (DEF-P2-remote-plugin-runtime); nothing was written",
+		verb, m.ID)
 }

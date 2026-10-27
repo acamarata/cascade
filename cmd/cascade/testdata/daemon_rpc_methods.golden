@@ -60,6 +60,7 @@ pa.pair_code
 plugin.add
 plugin.review.review
 plugin.search
+plugin.update
 policy.audit_query
 policy.check
 policy.explain

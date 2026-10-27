@@ -1,0 +1,9 @@
+# Synthetic fixture for plugin_update_guards.txtar: the same id, one new
+# requested capability, so the update needs elevation.
+id = "update-guard-demo"
+name = "Update Guard Demo"
+schema = "cascade.plugin/v2"
+version = "1.1.0"
+host_version = ">=2.0.0"
+runtime = "builtin"
+requires = ["net.http"]

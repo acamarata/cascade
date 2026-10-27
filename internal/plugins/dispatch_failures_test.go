@@ -9,6 +9,7 @@ import (
 	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/plugin"
 )
 
 // Purpose (this file): cover the failure branches of the elevated-install
@@ -153,10 +154,18 @@ func TestUpdatePluginPropagatesStoreFailures(t *testing.T) {
 	})
 
 	t.Run("uncommittable", func(t *testing.T) {
+		// A prior record is seeded: an update of an uninstalled plugin is
+		// KindNotFound before any commit is attempted.
 		mem := storetest.NewMemStore()
+		if err := SaveMetadata(ctx, mem, PluginMetadata{Name: "demo", InstalledVersion: "0.9.0", Enabled: true, RuntimeMode: plugin.RuntimeBuiltin}); err != nil {
+			t.Fatal(err)
+		}
 		broken := failingStore{MemStore: mem, failPut: true}
 		if _, err := UpdatePlugin(ctx, broken, nil, nil, manifestBytes, "", manifestBytes, true); !errors.Is(err, errStoreFailure) {
 			t.Fatalf("error = %v, want the store's own failure", err)
+		}
+		if rec, _, _ := LoadMetadata(ctx, mem, "demo"); rec.InstalledVersion != "0.9.0" {
+			t.Errorf("stored version = %q after a failed commit, want the prior 0.9.0", rec.InstalledVersion)
 		}
 	})
 }
