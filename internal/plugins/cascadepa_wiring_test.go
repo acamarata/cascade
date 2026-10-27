@@ -13,13 +13,16 @@ package plugins
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/acamarata/cascade/internal/client"
+	"github.com/acamarata/cascade/internal/conversation"
 	"github.com/acamarata/cascade/internal/runtime"
 	pacmd "github.com/acamarata/cascade/plugins/cascade-pa/cmd"
 )
@@ -162,4 +165,96 @@ func containsAll(s string, subs ...string) bool {
 		}
 	}
 	return true
+}
+
+const fakeProjectDir = "/fake/workspace/project-a"
+
+// cwdClient is a cascadePAClient over a recording doer with an injected getwd.
+func cwdClient(getwd func() (string, error)) (*cascadePAClient, *fakeRPCDoer) {
+	doer := &fakeRPCDoer{}
+	return &cascadePAClient{doer: doer, getwd: getwd}, doer
+}
+
+func fixedWd(dir string) func() (string, error) { return func() (string, error) { return dir, nil } }
+
+// wireKeys marshals params and returns its top-level JSON keys.
+func wireKeys(t *testing.T, params any) map[string]any {
+	t.Helper()
+	raw, err := json.Marshal(params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keys map[string]any
+	if err := json.Unmarshal(raw, &keys); err != nil {
+		t.Fatal(err)
+	}
+	return keys
+}
+
+// TestCascadePAClient_SendsCwdOnAppend: every chat.append_turn from
+// `cascade chat`, creating or continuing, carries the process cwd.
+func TestCascadePAClient_SendsCwdOnAppend(t *testing.T) {
+	for _, thread := range []string{"", "thread-existing"} {
+		c, doer := cwdClient(fixedWd(fakeProjectDir))
+		_, _ = c.OneShot(context.Background(), pacmd.OneShotRequest{Prompt: "hi", Thread: thread})
+		got, ok := doer.gotParams.(appendTurnParams)
+		if doer.calledMethod != conversation.MethodAppendTurn || !ok || got.Cwd != fakeProjectDir {
+			t.Fatalf("thread %q: %s sent %+v, want cwd %q", thread, doer.calledMethod, doer.gotParams, fakeProjectDir)
+		}
+	}
+	if c := newCascadePAClient(nil, time.Second, nil); c.getwd == nil {
+		t.Fatal("the production constructor wires no getwd, so nothing would ever send a cwd")
+	} else if want, _ := os.Getwd(); func() string { d, _ := c.getwd(); return d }() != want {
+		t.Fatal("the production getwd is not os.Getwd")
+	}
+}
+
+// TestCascadePAClient_SendsCwdOnCreateThread: chat.create_thread carries it too.
+func TestCascadePAClient_SendsCwdOnCreateThread(t *testing.T) {
+	c, doer := cwdClient(fixedWd(fakeProjectDir))
+	_, _ = c.CreateThread(context.Background(), "internal")
+	got, ok := doer.gotParams.(createThreadParams)
+	if doer.calledMethod != conversation.MethodCreateThread || !ok || got.Cwd != fakeProjectDir || got.PrivacyMode != "internal" {
+		t.Fatalf("%s sent %+v, want privacy internal and cwd %q", doer.calledMethod, doer.gotParams, fakeProjectDir)
+	}
+}
+
+// TestCascadePAClient_GetwdErrorSendsEmptyCwd: a getwd failure (or no getwd at
+// all) sends no cwd, never a guess: the thread is created unscoped.
+func TestCascadePAClient_GetwdErrorSendsEmptyCwd(t *testing.T) {
+	failing := func() (string, error) { return "/must/not/be/used", errors.New("fake getwd failure") }
+	for name, getwd := range map[string]func() (string, error){"error": failing, "nil": nil} {
+		c, doer := cwdClient(getwd)
+		_, _ = c.OneShot(context.Background(), pacmd.OneShotRequest{Prompt: "hi"})
+		if _, has := wireKeys(t, doer.gotParams)["cwd"]; has {
+			t.Fatalf("%s: append sent a cwd after getwd failed: %+v", name, doer.gotParams)
+		}
+		_, _ = c.CreateThread(context.Background(), "internal")
+		if _, has := wireKeys(t, doer.gotParams)["cwd"]; has {
+			t.Fatalf("%s: create_thread sent a cwd after getwd failed: %+v", name, doer.gotParams)
+		}
+	}
+}
+
+// TestBridgeChatService_NeverSendsCwd: the bridge acts for a remote chat, not
+// the daemon host's shell, so neither of its calls carries a cwd.
+func TestBridgeChatService_NeverSendsCwd(t *testing.T) {
+	doer := &fakeRPCDoer{fill: func(out any) {
+		if res, ok := out.(*createThreadResultWire); ok {
+			res.ThreadID = "t1"
+		}
+	}}
+	c := bridgeChatService{doer: doer}
+	if _, err := c.AppendTurn(context.Background(), "t1", "user", "hi"); err != nil {
+		t.Fatal(err)
+	}
+	if _, has := wireKeys(t, doer.gotParams)["cwd"]; has || doer.calledMethod != conversation.MethodAppendTurn {
+		t.Fatalf("bridge %s sent %+v, want no cwd", doer.calledMethod, doer.gotParams)
+	}
+	if _, err := c.CreateThread(context.Background(), "internal"); err != nil {
+		t.Fatal(err)
+	}
+	if _, has := wireKeys(t, doer.gotParams)["cwd"]; has || doer.calledMethod != conversation.MethodCreateThread {
+		t.Fatalf("bridge %s sent %+v, want no cwd", doer.calledMethod, doer.gotParams)
+	}
 }

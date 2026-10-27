@@ -10,14 +10,17 @@ package conversation
 //   thread_id starts a new thread: the daemon mints the id, and the
 //   request's privacy_mode (restricted when absent) becomes the thread's
 //   marker, written in the SAME transaction as the thread row and its first
-//   turn (Store.AppendFirstTurn). A non-empty thread_id must name a thread
+//   turn (Store.AppendFirstTurnProject). A non-empty thread_id must name a thread
 //   that already exists (created by chat.create_thread or by an earlier
 //   append) and may not carry a privacy_mode at all: a caller-named id is
 //   never "creating", so no request can mark a thread the caller named.
-//   Every refusal happens before the thread row, marker or turn is written
-//   (a creating call's thread_scope attribution row, written earlier by
-//   scopedAppendThread, can outlive a later refusal: it is inert, the id is
-//   random and never used).
+//   A creating call also records the thread's project once, in that same
+//   transaction (project.go): the call's cwd, resolved for the owner CLI, or
+//   the principal's own Scope. A continuation never records or changes it.
+//   Every refusal leaves no thread row, marker or turn (a project-store
+//   failure rolls the transaction back, KindUnavailable). A creating call's
+//   thread_scope attribution row, written earlier by scopedAppendThread, can
+//   outlive a later refusal: it is inert, the id is random and never used.
 // SPORT: internal.conversation.adapter (chat.append_turn target).
 
 import (
@@ -85,15 +88,16 @@ func firstTurnTier(mode string) provider.SensitivityTier {
 // wired the write runs between the journal's intent and ack records
 // (AppendTurnJournaled, or appendJournaledWith around the first-turn
 // transaction).
-func (a *Adapter) commitTurn(ctx context.Context, turn Turn, segments []Segment, creating bool, mode string) error {
+func (a *Adapter) commitTurn(ctx context.Context, turn Turn, segments []Segment, creating bool, params appendTurnParams) error {
 	if !creating {
 		if a.journal != nil {
 			return AppendTurnJournaled(ctx, a.journal, a.store, turn, segments)
 		}
 		return writeTurn(ctx, a.store, turn, segments)
 	}
-	tier := firstTurnTier(mode)
-	firstTurn := func() error { return a.store.AppendFirstTurn(ctx, tier, turn, segments) }
+	tier := firstTurnTier(params.PrivacyMode)
+	project := a.projectFor(ctx, params.Cwd) // project.go: resolved before the write, recorded in its transaction
+	firstTurn := func() error { return a.store.AppendFirstTurnProject(ctx, tier, turn, segments, project) }
 	if a.journal != nil {
 		return appendJournaledWith(ctx, a.journal, turn, segments, firstTurn)
 	}

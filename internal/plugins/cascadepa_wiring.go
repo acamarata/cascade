@@ -3,6 +3,7 @@ package plugins
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/acamarata/cascade/internal/client"
@@ -82,13 +83,16 @@ type cascadePAClient struct {
 	// doer, when non-nil, replaces the real rpcClient() construction --
 	// see rpcDoer's own doc comment. Always nil in production.
 	doer rpcDoer
+	// getwd is os.Getwd (tests inject): the "cwd" every owner call sends so
+	// the daemon records the thread's project once. Nil or a failure sends "".
+	getwd func() (string, error)
 }
 
 // newCascadePAClient builds a cascadePAClient from its three collaborators,
 // injected so tests substitute a fake dialer and a fake path resolver
 // without a real socket or a real home directory.
 func newCascadePAClient(dial client.DialFunc, timeout time.Duration, resolvePaths pathResolver) *cascadePAClient {
-	return &cascadePAClient{dial: dial, timeout: timeout, resolvePaths: resolvePaths}
+	return &cascadePAClient{dial: dial, timeout: timeout, resolvePaths: resolvePaths, getwd: os.Getwd}
 }
 
 // appendTurnParams/appendSegmentWire/appendTurnResult mirror
@@ -118,6 +122,9 @@ type appendTurnParams struct {
 	// this turn (internal/conversation/adapter_wire.go's identically named
 	// field).
 	LeadingContext string `json:"leading_context,omitempty"`
+	// Cwd is the owner CLI's working directory (cascadePAClient.getwd); only
+	// `cascade chat` sets it, the bridge, echo and tool callers never do.
+	Cwd string `json:"cwd,omitempty"`
 }
 
 type appendSegmentWire struct {
@@ -180,6 +187,7 @@ func (c *cascadePAClient) OneShot(ctx context.Context, req pacmd.OneShotRequest)
 		Segments:       []appendSegmentWire{{Kind: "text", Content: req.Prompt}},
 		PrivacyMode:    req.Privacy,
 		LeadingContext: req.LeadingContext,
+		Cwd:            c.cwd(),
 	}
 	var result appendTurnResult
 	if err := rpc.Do(ctx, conversation.MethodAppendTurn, params, &result); err != nil {
@@ -252,6 +260,8 @@ func (c *cascadePAClient) Resume(ctx context.Context, req pacmd.ResumeRequest) (
 // the daemon and is refused there.
 type createThreadParams struct {
 	PrivacyMode string `json:"privacy_mode"`
+	// Cwd is the owner CLI's working directory (cascadePAClient.getwd).
+	Cwd string `json:"cwd,omitempty"`
 }
 
 type createThreadResult struct {
@@ -267,10 +277,23 @@ func (c *cascadePAClient) CreateThread(ctx context.Context, privacyMode string) 
 	if err != nil {
 		return "", err
 	}
-	params := createThreadParams{PrivacyMode: privacyMode}
+	params := createThreadParams{PrivacyMode: privacyMode, Cwd: c.cwd()}
 	var result createThreadResult
 	if err := rpc.Do(ctx, conversation.MethodCreateThread, params, &result); err != nil {
 		return "", err
 	}
 	return result.ThreadID, nil
+}
+
+// cwd returns the process working directory, or "" when it is unknown (no
+// getwd, or it failed): the daemon then records no project for the thread.
+func (c *cascadePAClient) cwd() string {
+	if c.getwd == nil {
+		return ""
+	}
+	dir, err := c.getwd()
+	if err != nil {
+		return ""
+	}
+	return dir
 }

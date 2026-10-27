@@ -22,8 +22,9 @@ const (
 // file's SCHEMA VERSION doc comment. Bumped 7->8 by P1-E20-W5-S44-T3 for
 // the marker tables archive.go/retention.go add below; 8->9 by
 // P1-E20-W5-S44-T2 for conversation_thread_privacy (privacy.go); 9->10 for
-// conversation_turn_origin (origin.go).
-const conversationSchemaVersion = 10
+// conversation_turn_origin (origin.go); 10->11 for conversation_thread_project
+// (project.go).
+const conversationSchemaVersion = 11
 
 // SchemaVersion is conversationSchemaVersion exported for a future
 // composition root's reader-ceiling max(), matching registry/jobs's own
@@ -70,6 +71,7 @@ func MigrationSet() migrate.MigrationSet {
 				ForeignKeys: []migrate.ForeignKeyDef{fk("turn_id", tableTurn)},
 			}},
 			originStep(),
+			projectStep(),
 		},
 	}
 }

@@ -59,6 +59,9 @@ type Store interface {
 	// ThreadPrivacyStore is the privacy_mode half, declared beside its
 	// implementation in privacy.go rather than inline here.
 	ThreadPrivacyStore
+	// ThreadProjectStore is the project half (project.go): the thread's
+	// project, written once in the creating transaction.
+	ThreadProjectStore
 	// SearchTurns runs a parameterised FTS5 MATCH query over segment
 	// content (search.go), ranked by SQLite's own bm25 relevance.
 	// ErrSearchUnavailable with no fts5 index; adversarial MATCH syntax

@@ -39,6 +39,10 @@ type appendTurnParams struct {
 	// (buildLeadingContextSegment): the one delivery mechanism, literally
 	// leading, not merely printed. Empty is the ordinary case.
 	LeadingContext string `json:"leading_context,omitempty"`
+	// Cwd is the owner CLI's working directory. The daemon reads it only on
+	// the call that CREATES the thread, to record the thread's project once
+	// (project.go); a principal's cwd is ignored and a continuation's is unused.
+	Cwd string `json:"cwd,omitempty"`
 }
 
 type appendSegmentWire struct {

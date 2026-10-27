@@ -80,9 +80,17 @@ func mirrorSegmentFTS(ctx context.Context, tx *sql.Tx, seg Segment, threadID str
 // SearchFilter narrows a SearchTurns call. ThreadID == "" searches every
 // thread. Limit <=0 uses defaultPageSize; above maxPageSize is clamped,
 // matching PaginationFilter's own bound (pagination.go).
+//
+// ProjectSet narrows to threads whose recorded project (project.go) equals
+// ProjectRef, inside the SQL and so before the limit; ProjectRef "" is the
+// general bucket, never "any project". A thread with no project row matches no
+// narrowed query. A non-empty ProjectRef narrows even when ProjectSet is
+// false: a half-set filter is never read as unnarrowed.
 type SearchFilter struct {
-	ThreadID string
-	Limit    int
+	ThreadID   string
+	Limit      int
+	ProjectRef string
+	ProjectSet bool
 }
 
 // TurnMatch is one SearchTurns hit: the full matching Turn plus its
@@ -132,6 +140,10 @@ func (s *conversationStore) searchHits(ctx context.Context, query string, filter
 	if filter.ThreadID != "" {
 		sqlQuery += `AND thread_id = ? `
 		args = append(args, filter.ThreadID)
+	}
+	if filter.ProjectSet || filter.ProjectRef != "" {
+		sqlQuery += `AND thread_id IN (SELECT thread_id FROM ` + tableThreadProject + ` WHERE project_ref = ?) `
+		args = append(args, filter.ProjectRef)
 	}
 	sqlQuery += `ORDER BY rank ASC`
 

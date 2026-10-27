@@ -6,7 +6,7 @@ package conversation
 //   transaction, so a new conversation has a stored, marked and attributed
 //   destination before its first turn. There is no client-side mint and no
 //   chat.set_privacy.
-// Inputs: {"privacy_mode"}: REQUIRED, exactly one of local-only, restricted,
+// Inputs: {"privacy_mode", "cwd"?}: privacy_mode REQUIRED, exactly one of local-only, restricted,
 //   internal, public. Absent, empty, any other spelling or an extra field
 //   is KindInvalidInput and nothing is written. The caller comes only from
 //   the transport-verified Caller on ctx, never from params.
@@ -43,6 +43,10 @@ var errCreateNoCaller = cascade.New(cascade.KindPermissionDenied,
 // createThreadParams is chat.create_thread's wire request shape.
 type createThreadParams struct {
 	PrivacyMode string `json:"privacy_mode"`
+	// Cwd is the owner CLI's working directory, resolved to the thread's
+	// project when the thread is created (project.go). Optional: absent means
+	// the thread is unscoped. A principal's cwd is ignored.
+	Cwd string `json:"cwd,omitempty"`
 }
 
 // createThreadResult is chat.create_thread's wire response shape.
@@ -57,7 +61,7 @@ func (a *Adapter) handleCreateThread(ctx context.Context, raw json.RawMessage) (
 	if err != nil {
 		return nil, err
 	}
-	tier, err := decodeCreateThreadParams(raw)
+	tier, cwd, err := decodeCreateThreadParams(raw)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +72,8 @@ func (a *Adapter) handleCreateThread(ctx context.Context, raw json.RawMessage) (
 	if err != nil {
 		return nil, err
 	}
-	if err := a.store.CreateThread(ctx, threadID, tier, attribution, a.clock.Now().Unix()); err != nil {
+	project := a.projectFor(ctx, cwd) // project.go: resolved before the write, recorded in its transaction
+	if err := a.store.CreateThreadProject(ctx, threadID, tier, attribution, project, a.clock.Now().Unix()); err != nil {
 		return nil, err
 	}
 	return createThreadResult{ThreadID: threadID}, nil
@@ -98,27 +103,27 @@ func createAttribution(ctx context.Context) (string, error) {
 // trailing data refused) and parses privacy_mode through the closed
 // provider.ParseSensitivityTier. The empty name is refused here rather
 // than read as restricted: the mode is required.
-func decodeCreateThreadParams(raw json.RawMessage) (provider.SensitivityTier, error) {
+func decodeCreateThreadParams(raw json.RawMessage) (provider.SensitivityTier, string, error) {
 	var p createThreadParams
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if len(bytes.TrimSpace(raw)) == 0 {
-		return 0, errUnknownTierName("")
+		return 0, "", errUnknownTierName("")
 	}
 	if err := dec.Decode(&p); err != nil {
-		return 0, cascade.Wrap(cascade.KindInvalidInput, err, "conversation: chat.create_thread: malformed params")
+		return 0, "", cascade.Wrap(cascade.KindInvalidInput, err, "conversation: chat.create_thread: malformed params")
 	}
 	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return 0, cascade.New(cascade.KindInvalidInput, "conversation: chat.create_thread: trailing data after params")
+		return 0, "", cascade.New(cascade.KindInvalidInput, "conversation: chat.create_thread: trailing data after params")
 	}
 	if p.PrivacyMode == "" {
-		return 0, errUnknownTierName("")
+		return 0, "", errUnknownTierName("")
 	}
 	tier, err := provider.ParseSensitivityTier(p.PrivacyMode)
 	if err != nil {
-		return 0, errUnknownTierName(p.PrivacyMode)
+		return 0, "", errUnknownTierName(p.PrivacyMode)
 	}
-	return tier, nil
+	return tier, p.Cwd, nil
 }
 
 // errUnknownTierName refuses a privacy_mode outside the four §5.16 names,

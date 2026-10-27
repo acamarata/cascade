@@ -112,6 +112,9 @@ func wireChatHandlers(ctx context.Context, registry *rpc.Registry, paths runtime
 		_ = db.Close()
 		return err
 	}
+	// The owner CLI's cwd becomes the thread's project at creation
+	// (conversation/project.go). Nil on Windows and built lazily elsewhere.
+	adapter.SetProjectResolver(chatScopeResolver(paths))
 	// The turn journal is set and every journaled thread resumed BEFORE
 	// chat.* registers (chat_journal_wiring.go): a failed resume returns
 	// here with nothing registered, which stops the daemon at start.

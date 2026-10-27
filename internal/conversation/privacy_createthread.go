@@ -124,6 +124,13 @@ func insertNewThreadTx(ctx context.Context, tx *sql.Tx, threadID string, created
 // attribution in one transaction (this file's header).
 func (s *conversationStore) CreateThread(ctx context.Context, threadID string, tier provider.SensitivityTier,
 	attribution string, createdAt int64) error {
+	return s.CreateThreadProject(ctx, threadID, tier, attribution, nil, createdAt)
+}
+
+// CreateThreadProject implements ThreadProjectStore: CreateThread plus the
+// thread's project row in the same transaction (project.go).
+func (s *conversationStore) CreateThreadProject(ctx context.Context, threadID string, tier provider.SensitivityTier,
+	attribution string, project *string, createdAt int64) error {
 	if threadID == "" || attribution == "" || createdAt <= 0 {
 		return ErrInvalidRecord
 	}
@@ -138,6 +145,49 @@ func (s *conversationStore) CreateThread(ctx context.Context, threadID string, t
 		if err := setThreadPrivacyTx(ctx, tx, threadID, tier); err != nil {
 			return err
 		}
+		if err := writeProjectTx(ctx, tx, threadID, project); err != nil {
+			return err
+		}
 		return attributeThread(tx, threadID, attribution)
+	})
+}
+
+// AppendFirstTurnProject implements ThreadProjectStore: a brand-new thread's
+// row, its marker, its project row (project nil writes none), its first turn
+// with its origin stamp and that turn's segments, in ONE transaction. This is
+// the chat.append_turn creating path; privacy.go's AppendFirstTurn is the same
+// write without a project and is kept for callers that never record one. Any
+// failure (a colliding id, a project-store error, a segment the store
+// refuses) rolls everything back, so a refused call leaves no thread.
+func (s *conversationStore) AppendFirstTurnProject(ctx context.Context, tier provider.SensitivityTier, turn Turn,
+	segments []Segment, project *string) error {
+	if err := validateFirstTurn(tier, turn, segments); err != nil {
+		return err
+	}
+	fts := s.hasFTS(ctx) // probed before the tx opens: see AppendSegment
+	return runTx(ctx, s.db, func(tx *sql.Tx) error {
+		if err := insertNewThreadTx(ctx, tx, turn.ThreadID, turn.CreatedAt); err != nil {
+			return err
+		}
+		if err := setThreadPrivacyTx(ctx, tx, turn.ThreadID, tier); err != nil {
+			return err
+		}
+		if err := writeProjectTx(ctx, tx, turn.ThreadID, project); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO `+tableTurn+` (id, thread_id, seq, role, created_at) VALUES (?, ?, ?, ?, ?)`,
+			turn.ID, turn.ThreadID, turn.Seq, string(turn.Role), turn.CreatedAt); err != nil {
+			return translateAppendError(err, "conversation: append turn")
+		}
+		if err := insertTurnOrigin(ctx, tx, turn); err != nil {
+			return err
+		}
+		for _, seg := range segments {
+			if err := insertSegmentTx(ctx, tx, seg, turn.ThreadID, fts); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }

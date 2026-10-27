@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"sort"
 
+	"github.com/acamarata/cascade/internal/context/scope"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -50,6 +51,8 @@ type Adapter struct {
 	scrub   ScrubPipeline // optional; nil is scrub.go's documented passthrough -- see SetScrub
 	topics  TopicObserver // optional; nil means "no topic engine composed" -- see SetTopicObserver (adapter_topics.go)
 	resume  ResumeHandler // optional; nil means "no resume service composed" -- see SetResume (adapter_resume.go)
+	// projectResolver maps an owner cwd to a project ref; nil records no project (project.go).
+	projectResolver func(ctx context.Context, in scope.ResolveInput) (string, error)
 }
 
 // NewAdapter returns an Adapter dispatching to store, mirroring appended
@@ -136,7 +139,7 @@ func (a *Adapter) handleAppendTurn(ctx context.Context, raw json.RawMessage) (an
 	if err != nil {
 		return nil, err
 	}
-	if err := a.commitTurn(ctx, turn, segments, creating, params.PrivacyMode); err != nil {
+	if err := a.commitTurn(ctx, turn, segments, creating, params); err != nil {
 		return nil, err
 	}
 

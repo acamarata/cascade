@@ -32,6 +32,12 @@ SQLite's own `bm25()` relevance (lower is more relevant).
   search text can produce a malformed-FTS5-syntax error but can never
   reach raw SQL, so there is no injection surface regardless of content.
 - `SearchFilter.ThreadID` optionally scopes a search to one thread.
+- `SearchFilter.ProjectSet` with `ProjectRef` narrows to threads whose
+  recorded project (see [Thread project](#thread-project)) equals
+  `ProjectRef`. The join runs inside the SQL, before the result limit, so
+  another project's hits can never displace or join the answer. A thread
+  with no project row matches no narrowed search, and a non-empty
+  `ProjectRef` narrows even if `ProjectSet` is left false.
 - `ErrSearchUnavailable` is returned, never a panic, when the underlying
   store has no FTS5 index -- the case for a non-SQLite storage profile
   (FTS5 has no portable Postgres equivalent).
@@ -132,6 +138,33 @@ as looser than it was created, and a refused request leaves no marker.
 `Adapter.SetThreadPrivacy` / `Adapter.ThreadPrivacy` are the Go surface.
 Enforcement is the conductor's -- see the security posture note on
 [thread privacy modes](https://github.com/acamarata/cascade/blob/main/docs/security-posture/egress-firewall.md).
+
+## Thread project
+
+A thread records WHERE it belongs once, when it is created. This is a
+different question from who may read it: the caller attribution
+(`conversation_thread_scope`) answers who, the project row
+(`conversation_thread_project`, one `thread_id` and `project_ref` per
+thread) answers where. The two are written together in the creating
+transaction.
+
+- **Who sets it.** A principal's project is the `Scope` its transport
+  authenticated; any `cwd` it sends is ignored. For the owner CLI the
+  daemon resolves the `cwd` that `chat.create_thread` or the creating
+  `chat.append_turn` carries, through the same resolver `recall.what`
+  uses. `cascade chat` sends its working directory on every call; the
+  bridge never does.
+- **Immutable.** The row is insert-once. An append to an existing thread,
+  whatever its `cwd`, never adds or changes it.
+- **General bucket.** A `cwd` that resolves to no project records the
+  empty ref `""`. A narrowed search for `""` matches exactly those
+  threads.
+- **Fails closed.** No resolver (always the case on Windows), an empty
+  `cwd`, a resolver error or a caller that is neither the owner CLI nor
+  a project-scoped principal writes no row, and a thread with no row
+  matches no project-narrowed search. If the project write itself fails,
+  the call is refused with `KindUnavailable` and no thread, marker or
+  turn is stored.
 
 ## Bring-into-chat resume
 
