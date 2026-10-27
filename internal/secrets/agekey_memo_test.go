@@ -15,7 +15,7 @@ func TestMemoScryptKeyMatchesFreshDerivation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := range 2 { // the second call is served from the memo
+	for i := range 3 { // calls 2 and 3 are served from the memo, after call 1 mutated its copy
 		got, err := memoScryptKey("fake-pass", salt, 4)
 		if err != nil || !bytes.Equal(got, want) {
 			t.Fatalf("call %d: key %x, %v; want %x", i, got, err, want)
@@ -52,6 +52,18 @@ func TestMemoScryptDecryptStillAuthenticates(t *testing.T) {
 	}
 	if _, err := ageDecryptWith("fake-wrong", file, memoScryptKey); err == nil {
 		t.Fatal("a wrong passphrase decrypted")
+	}
+	// The header MAC line follows "\n--- ": forging it must be refused even
+	// though the wrap key comes from the memo.
+	i := bytes.Index(file, []byte("\n--- ")) + 5
+	forged := append([]byte(nil), file...)
+	if forged[i] == 'A' {
+		forged[i] = 'B'
+	} else {
+		forged[i] = 'A'
+	}
+	if _, err := ageDecryptWith("fake-pass", forged, memoScryptKey); err == nil {
+		t.Fatal("a forged header MAC decrypted")
 	}
 	tampered := append([]byte(nil), file...)
 	tampered[len(tampered)-1] ^= 1
