@@ -22,6 +22,8 @@ See also [agent owner reach: what stops an agent session acting as the owner, an
 
 See also [approval records: a daemon-signed record, redeemed once](security-posture/approval-records.md).
 
+See also [installation identity: the controller key that signs scope envelopes](security-posture/installation-identity.md).
+
 ## Vault backends
 
 Cascade's secret vault stores values through one custody backend, chosen at

@@ -6,18 +6,13 @@
 //     vault is reached BY provider code, never the other way round; a
 //     provider package on the vault's import path would put third-party
 //     plugin code inside the process boundary that holds every secret.
-//  2. internal/secrets must not import internal/elevation, and
-//     internal/elevation must not import internal/secrets. This is the
-//     mirror of .golangci.yml's elevation-no-vault rule, and it is
-//     warranted in BOTH directions: the elevation keystore is the root of
-//     trust that authorises reading a secret, so a compromise of either
-//     domain must not reach the other. The broker takes its authorisation
-//     decision through an injected ElevationGate that cmd/ wires, which is
-//     what makes the boundary keepable.
-//  3. no file in internal/secrets enables cgo. Release binaries are built
-//     with CGO_ENABLED=0, so a cgo-gated custody backend would be absent
-//     from every shipped artifact, which is the whole point of the
-//     no-cgo custody rule.
+//  2. internal/secrets and internal/elevation never import each other
+//     (the mirror of .golangci.yml's elevation-no-vault rule): the
+//     elevation keystore is the root of trust that authorises reading a
+//     secret, so a compromise of either domain must not reach the other.
+//     The broker decides through an ElevationGate that cmd/ injects.
+//  3. no file in internal/secrets enables cgo: release binaries are built
+//     with CGO_ENABLED=0, so a cgo-gated custody backend would not ship.
 //  4. no shipping file in cmd/cascade names secrets.SelectCustody except as
 //     the value of selectProcessCustody in egress_firewall.go: every host
 //     vault selection goes through that one selector, which the test
@@ -122,18 +117,15 @@ func TestSecretsHasNoCGO(t *testing.T) {
 // unelevatedReadAllowlist maps each NAMED non-elevated vault read to the
 // directories whose production files may name its constructor.
 //
-// Rule 4, and the reason it exists: internal/secrets holds two exported
+// Rule 4, and the reason it exists: internal/secrets holds exported
 // reads that skip the elevated-verb gate, because a release binary
 // refuses elevated verbs outright and a value reachable only through
-// Broker.Get is unreadable in exactly the builds that ship. That
-// exemption is only safe while it stays where it was argued for. The
-// unexported internalGet cannot leave the package at all (rule 2 in
-// arch_rehydrate_test.go); these two CAN, so the boundary has to be
-// asserted rather than assumed.
+// Broker.Get is unreadable in exactly the builds that ship. The
+// unexported internalGet cannot leave the package (rule 2 in
+// arch_rehydrate_test.go); these CAN, so the boundary is asserted here.
 //
-// Each entry is one purpose with one allowlist. Widening either list is a
-// deliberate edit to this table with the argument written next to it,
-// which is the whole point.
+// Each entry is one purpose with one allowlist. Widening any list is a
+// deliberate edit to this table with the argument written next to it.
 var unelevatedReadAllowlist = map[string][]string{
 	// The approval signer's key source. internal/policy is the consumer
 	// seam (its ApprovalKeySource interface); cmd/cascade is the
@@ -150,6 +142,12 @@ var unelevatedReadAllowlist = map[string][]string{
 	// while each built its own engine; neither does now, so neither may name
 	// the reader.
 	"NewEgressVault(": {
+		filepath.Join("internal", "secrets"),
+		filepath.Join("cmd", "cascade"),
+	},
+	// The installation key that signs scope envelopes: one fixed name, one
+	// consumer (cmd/cascade/envelope_signer.go); never internal/policy.
+	"NewInstallationKeyReader(": {
 		filepath.Join("internal", "secrets"),
 		filepath.Join("cmd", "cascade"),
 	},
@@ -229,6 +227,9 @@ func TestArchUnelevatedReadCallersDetectsViolation(t *testing.T) {
 	}
 	if dirOnAllowlist(filepath.Join("internal", "policy"), unelevatedReadAllowlist["NewEgressVault("]) {
 		t.Fatal("the egress vault must not be reachable from internal/policy; the two allowlists are not one list")
+	}
+	if row := unelevatedReadAllowlist["NewInstallationKeyReader("]; len(row) == 0 || dirOnAllowlist(filepath.Join("internal", "policy"), row) {
+		t.Fatal("the installation key reader needs its own row, and internal/policy must not be on it")
 	}
 }
 

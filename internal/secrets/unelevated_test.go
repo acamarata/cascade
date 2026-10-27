@@ -12,6 +12,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"errors"
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -150,5 +151,119 @@ func TestEgressVaultReadsWithoutElevation(t *testing.T) {
 	}
 	if _, err := vault.Get(context.Background(), "ABSENT_NAME"); err == nil {
 		t.Fatal("the egress vault invented a value for a name it does not hold")
+	}
+}
+
+// TestInstallationKeyReaderRefusesMalformed drives the installation key read
+// over a real file vault behind a refusing gate. Each value is seeded through
+// the file-vault Custody.Set: Broker.Set refuses the reserved name.
+func TestInstallationKeyReaderRefusesMalformed(t *testing.T) {
+	t.Run("malformed lengths", testInstallationKeyMalformedLengths)
+	t.Run("well-formed key", testInstallationKeyWellFormed)
+	t.Run("missing entry and nil reader", testInstallationKeyMissingAndNil)
+}
+
+func testInstallationKeyMalformedLengths(t *testing.T) {
+	ctx := context.Background()
+	for _, size := range []int{31, 32, 63, 65} {
+		broker := newUnelevatedBroker(t)
+		malformed := bytes.Repeat([]byte{0xA5}, size)
+		if err := broker.custody.Set(ctx, InstallationKeyName, malformed); err != nil {
+			t.Fatalf("seeding a %d-byte value: %v", size, err)
+		}
+		reader, err := NewInstallationKeyReader(broker)
+		if err != nil {
+			t.Fatalf("NewInstallationKeyReader: %v", err)
+		}
+		id, key, err := reader.InstallationKey(ctx)
+		if !cascade.HasKind(err, cascade.KindIntegrity) {
+			t.Fatalf("a %d-byte entry: err = %v, want KindIntegrity", size, err)
+		}
+		if key != nil || id != "" {
+			t.Fatalf("a %d-byte entry returned a key (id %q, %d bytes)", size, id, len(key))
+		}
+	}
+}
+
+func testInstallationKeyWellFormed(t *testing.T) {
+	ctx := context.Background()
+	broker := newUnelevatedBroker(t)
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generating a key: %v", err)
+	}
+	if err := broker.custody.Set(ctx, InstallationKeyName, private); err != nil {
+		t.Fatalf("seeding the key: %v", err)
+	}
+	// The elevated verb is refused: the read below genuinely skips it.
+	if _, err := broker.Get(ctx, InstallationKeyName); err == nil {
+		t.Fatal("the elevated Get was not refused; this test proves nothing")
+	}
+	reader, err := NewInstallationKeyReader(broker)
+	if err != nil {
+		t.Fatalf("NewInstallationKeyReader: %v", err)
+	}
+	id, got, err := reader.InstallationKey(ctx)
+	if err != nil {
+		t.Fatalf("InstallationKey: %v", err)
+	}
+	if !bytes.Equal(got, private) {
+		t.Fatal("the reader returned a different key than the one stored")
+	}
+	if !bytes.Equal(got.Public().(ed25519.PublicKey), public) {
+		t.Fatal("the returned key's public half is not the stored key's")
+	}
+	if id != approvalKeyID(public) {
+		t.Fatalf("key id = %q, want the digest of the stored key's public half", id)
+	}
+}
+
+func testInstallationKeyMissingAndNil(t *testing.T) {
+	ctx := context.Background()
+	empty, err := NewInstallationKeyReader(newUnelevatedBroker(t))
+	if err != nil {
+		t.Fatalf("NewInstallationKeyReader: %v", err)
+	}
+	_, key, err := empty.InstallationKey(ctx)
+	if !cascade.HasKind(err, cascade.KindNotFound) || key != nil {
+		t.Fatalf("a missing entry: (%d bytes, %v), want KindNotFound and no key", len(key), err)
+	}
+	// Identity, not errors.Is (which compares Kind only): the shared read's
+	// not-found sentinel comes back unchanged on the chain.
+	found := false
+	for e := error(err); e != nil; e = errors.Unwrap(e) {
+		found = found || e == ErrVaultKeyNotFound
+	}
+	if !found {
+		t.Fatalf("a missing entry: %v does not carry ErrVaultKeyNotFound", err)
+	}
+
+	if _, err := NewInstallationKeyReader(nil); !cascade.HasKind(err, cascade.KindInvalidInput) {
+		t.Fatalf("NewInstallationKeyReader(nil) = %v, want KindInvalidInput", err)
+	}
+	var none *InstallationKeyReader
+	if _, key, err := none.InstallationKey(ctx); err == nil || key != nil {
+		t.Fatal("a nil installation key reader answered a read")
+	}
+}
+
+// TestInstallationKeyReaderReadsOnlyItsName pins the one fixed name: an
+// approval key in the same vault is never returned as the installation key.
+func TestInstallationKeyReaderReadsOnlyItsName(t *testing.T) {
+	ctx := context.Background()
+	broker := newUnelevatedBroker(t)
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generating a key: %v", err)
+	}
+	if err := broker.custody.Set(ctx, ApprovalKeyName, private); err != nil {
+		t.Fatalf("seeding the approval key: %v", err)
+	}
+	reader, err := NewInstallationKeyReader(broker)
+	if err != nil {
+		t.Fatalf("NewInstallationKeyReader: %v", err)
+	}
+	if _, key, err := reader.InstallationKey(ctx); !cascade.HasKind(err, cascade.KindNotFound) || key != nil {
+		t.Fatalf("InstallationKey over a vault holding only the approval key = (%d bytes, %v)", len(key), err)
 	}
 }

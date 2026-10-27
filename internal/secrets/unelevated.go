@@ -1,4 +1,4 @@
-// Purpose: the NAMED, non-elevated vault reads. Two of them, each with a
+// Purpose: the NAMED, non-elevated vault reads. Three of them, each with a
 //
 //	single stated purpose and a machine-enforced caller allowlist
 //	(internal/build/arch_secrets_test.go). They exist because a release
@@ -8,15 +8,16 @@
 //	signature or per outbound response is not a control anybody can
 //	answer honestly at that rate.
 //
-// Inputs: a *Broker. Both readers go through the package-internal
+// Inputs: a *Broker. Every reader goes through the package-internal
 //
 //	internalGet, so name validation and the custody backend remain the
-//	only path to a value; neither reader talks to a custody backend
-//	directly and neither can widen what internalGet already permits.
+//	only path to a value; no reader talks to a custody backend
+//	directly and none can widen what internalGet already permits.
 //
 // Outputs: ApprovalKeyReader hands back the approval keypair for the
 //
-//	policy signer; EgressVault satisfies the egress engine's value source
+//	policy signer; InstallationKeyReader hands back the controller
+//	installation key for the scope-envelope signer; EgressVault satisfies the egress engine's value source
 //	so the firewall's exact-value substitution pass has something to
 //	resolve against.
 //
@@ -27,7 +28,7 @@
 //
 // SPORT: SECRETS_UNELEVATED_READ: ADD (internal/secrets ApprovalKeyReader,
 //
-//	EgressVault).
+//	EgressVault); InstallationKeyReader/ADDED (P1-SEC-40).
 
 package secrets
 
@@ -104,18 +105,61 @@ func (r *ApprovalKeyReader) ApprovalKey(ctx context.Context) (string, ed25519.Pr
 		return "", nil, cascade.New(cascade.KindUnavailable,
 			"secrets: no approval key reader configured")
 	}
-	value, err := daemonKeyGet(ctx, r.broker, ApprovalKeyName)
+	return readDaemonPrivateKey(ctx, r.broker, ApprovalKeyName)
+}
+
+// readDaemonPrivateKey is the one non-elevated private-key read both named
+// key readers share. It reads the reserved name through daemonKeyGet, so
+// KindNotFound and custody errors come back unchanged; a stored value that
+// is not exactly an ed25519 private key is zeroed and refused as
+// KindIntegrity, never padded, truncated or read as "absent".
+func readDaemonPrivateKey(ctx context.Context, b *Broker, name string) (string, ed25519.PrivateKey, error) {
+	value, err := daemonKeyGet(ctx, b, name)
 	if err != nil {
 		return "", nil, err
 	}
 	if len(value) != ed25519.PrivateKeySize {
 		zeroAll([][]byte{value})
 		return "", nil, cascade.Newf(cascade.KindIntegrity,
-			"secrets: the stored approval key is %d bytes; an ed25519 private key is %d",
-			len(value), ed25519.PrivateKeySize)
+			"secrets: the stored %s is %d bytes; an ed25519 private key is %d",
+			name, len(value), ed25519.PrivateKeySize)
 	}
 	private := ed25519.PrivateKey(value)
 	return approvalKeyID(private.Public().(ed25519.PublicKey)), private, nil
+}
+
+// InstallationKeyReader reads the controller installation identity key
+// (the scope-envelope signing key) WITHOUT the elevated verb gate, for the
+// same reason ApprovalKeyReader does: signing happens inside the daemon,
+// per dispatch, and a release binary refuses elevated verbs outright.
+//
+// It is a distinct type with its own allowlist row in
+// internal/build/arch_secrets_test.go, and it reads ONE fixed name.
+type InstallationKeyReader struct {
+	broker *Broker
+}
+
+// NewInstallationKeyReader builds the reader over broker. A nil broker is
+// refused: a reader with no store would answer "no key", which reads like
+// an unprovisioned host.
+func NewInstallationKeyReader(broker *Broker) (*InstallationKeyReader, error) {
+	if broker == nil {
+		return nil, cascade.New(cascade.KindInvalidInput,
+			"secrets: an installation key reader needs a vault broker")
+	}
+	return &InstallationKeyReader{broker: broker}, nil
+}
+
+// InstallationKey returns the key id and the private key bytes of
+// InstallationKeyName. The slice is a copy the caller owns and zeroes;
+// nothing is retained here. A malformed entry is KindIntegrity with a nil
+// key; a missing entry is KindNotFound; custody errors are unchanged.
+func (r *InstallationKeyReader) InstallationKey(ctx context.Context) (string, ed25519.PrivateKey, error) {
+	if r == nil || r.broker == nil {
+		return "", nil, cascade.New(cascade.KindUnavailable,
+			"secrets: no installation key reader configured")
+	}
+	return readDaemonPrivateKey(ctx, r.broker, InstallationKeyName)
 }
 
 // approvalKeyID derives the stable identifier for a public key. It is a
