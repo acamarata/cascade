@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -61,7 +62,10 @@ func TestApplyKeepsPreviousBeforeFirstRename(t *testing.T) {
 func TestApplySwapRestoreFailureNamesInstallSh(t *testing.T) {
 	f := newFixture(t, "2.0.0", "2.0.1")
 	injectRename(t, func(orig func(string, string) error, src, dst string) error {
-		if filepath.Base(dst) == "cascade" || strings.HasSuffix(src, ".restore") {
+		// Restore publishes through ".<name>.restore" on unix; on windows it renames
+		// "<name>.old" back, so that is the step to fail there.
+		if filepath.Base(dst) == "cascade" || strings.HasSuffix(src, ".restore") ||
+			(goruntime.GOOS == "windows" && strings.HasSuffix(src, ".old")) {
 			return errors.New("injected rename failure")
 		}
 		return orig(src, dst)

@@ -82,8 +82,14 @@ func TestRenderAgentHookPackWritesRelayEntries(t *testing.T) {
 			t.Fatalf("%s hook %+v", ev, h)
 		}
 	}
-	if fi, err := os.Stat(filepath.Join(dir, "settings.json")); err != nil || fi.Mode().Perm() != 0o600 {
-		t.Fatalf("settings.json mode %v, err %v, want 0600", fi, err)
+	fi, err := os.Stat(filepath.Join(dir, "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// windows reports 0666 or 0444 for every file (no unix permission bits), so
+	// the 0600 contract is only observable on unix hosts.
+	if goruntime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
+		t.Fatalf("settings.json mode %v, want 0600", fi.Mode().Perm())
 	}
 }
 

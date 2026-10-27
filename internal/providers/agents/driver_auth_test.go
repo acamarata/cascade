@@ -111,8 +111,8 @@ func TestParseDriverAuthRefusesMissingFields(t *testing.T) {
 	if got, err := ParseDriverAuth(map[string]any{}, bs); err != nil || len(got) != 0 {
 		t.Fatalf("ParseDriverAuth(no section) = %v, %v, want empty", got, err)
 	}
-	sub, err := ParseDriverAuth(authExtra("fake", map[string]any{"class": "subscription", "auth_source": "/a/auth.json"}), bs)
-	if err != nil || sub["fake"].AuthSource != "/a/auth.json" || sub["fake"].KeyEnv != "" {
+	sub, err := ParseDriverAuth(authExtra("fake", map[string]any{"class": "subscription", "auth_source": absAuthSource}), bs)
+	if err != nil || sub["fake"].AuthSource != absAuthSource || sub["fake"].KeyEnv != "" {
 		t.Fatalf("ParseDriverAuth(subscription) = %+v, %v", sub, err)
 	}
 }
