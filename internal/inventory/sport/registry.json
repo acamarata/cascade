@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-27T02:17:46Z",
+  "generated_at": "2026-10-27T06:46:30Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -576,6 +576,20 @@
       ]
     },
     {
+      "name": "ErrReservedName",
+      "sites": [
+        {
+          "file": "internal/secrets/daemon_keys.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "ErrReservedName/ADDED (P1-SEC-23)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "EvalRequest",
       "sites": [
         {
@@ -936,6 +950,20 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "HeldSignedRecord",
+      "sites": [
+        {
+          "file": "internal/policy/approval_held.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "HeldSignedRecord/ADDED (P1-SEC-23)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -2658,7 +2686,7 @@
         },
         {
           "file": "cmd/cascade/plugin_update_registry.go",
-          "line": 34,
+          "line": 31,
           "status": "CHANGE",
           "ticket": "P1-E24-W5-S50-T8",
           "raw": "cli/plugin-lifecycle/CHANGE (P1-E24-W5-S50-T8, reworked)."
@@ -3805,6 +3833,48 @@
       ]
     },
     {
+      "name": "cmd/cascade approval grant tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_approval_grant_test.go",
+          "line": 13,
+          "status": "",
+          "raw": "cmd/cascade approval grant tests (P1-SEC-23)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade approval-keys tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_approval_keys_test.go",
+          "line": 13,
+          "status": "",
+          "raw": "cmd/cascade approval-keys tests (P1-SEC-23)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade approval-keys wiring",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_approval_keys.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "cmd/cascade approval-keys wiring/ADDED (P1-SEC-23)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade chat custody injection",
       "sites": [
         {
@@ -3884,6 +3954,39 @@
           "status": "",
           "ticket": "P1-E22-W5-S47-T2",
           "raw": "cmd/cascade chat resume wiring (TEST) -- P1-E22-W5-S47-T2."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade chat scope resolver",
+      "sites": [
+        {
+          "file": "cmd/cascade/chat_scope_resolver_unix.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "cmd/cascade chat scope resolver (ADD) -- P1-CPA-06."
+        },
+        {
+          "file": "cmd/cascade/chat_scope_resolver_unix_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "cmd/cascade chat scope resolver (TEST) -- P1-CPA-06."
+        },
+        {
+          "file": "cmd/cascade/chat_scope_resolver_windows.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "cmd/cascade chat scope resolver (ADD) -- P1-CPA-06."
+        },
+        {
+          "file": "cmd/cascade/chat_scope_resolver_windows_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "cmd/cascade chat scope resolver (TEST) -- P1-CPA-06."
         }
       ],
       "statuses": [
@@ -3984,6 +4087,82 @@
           "line": 13,
           "status": "",
           "raw": "cmd/cascade composition root tests (P1-CORE-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade config baseline",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_config_baseline.go",
+          "line": 18,
+          "status": "",
+          "raw": "cmd/cascade config baseline (P1-SEC-04)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade config baseline tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_config_baseline_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "cmd/cascade config baseline tests (P1-SEC-04)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_config_degraded_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "cmd/cascade config baseline tests (P1-SEC-04)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade config.accept_loosening",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_config_accept.go",
+          "line": 18,
+          "status": "",
+          "raw": "cmd/cascade config.accept_loosening (P1-SEC-04)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade config.accept_loosening tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_config_accept_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "cmd/cascade config.accept_loosening tests (P1-SEC-04)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade config.accept_loosening wiring",
+      "sites": [
+        {
+          "file": "cmd/cascade/wire_config_accept.go",
+          "line": 10,
+          "status": "",
+          "raw": "cmd/cascade config.accept_loosening wiring (P1-SEC-04)."
         }
       ],
       "statuses": [
@@ -4147,6 +4326,18 @@
           "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
         },
         {
+          "file": "cmd/cascade/wire_plugin_install.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (plugin-install)."
+        },
+        {
+          "file": "cmd/cascade/wire_plugin_update.go",
+          "line": 11,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (plugin.update)."
+        },
+        {
           "file": "cmd/cascade/wire_resume.go",
           "line": 26,
           "status": "",
@@ -4306,6 +4497,20 @@
       ]
     },
     {
+      "name": "cmd/cascade elevate-helper method binding tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/elevate_helper_method_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "cmd/cascade elevate-helper method binding tests/ADDED (P1-SEC-03)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade elevate-helper presence tests",
       "sites": [
         {
@@ -4413,6 +4618,20 @@
       ]
     },
     {
+      "name": "cmd/cascade plugin update guards",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_update_guard_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "cmd/cascade plugin update guards."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd/cascade plugin-view tests",
       "sites": [
         {
@@ -4439,6 +4658,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade plugin.update RPC tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_update_rpc_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade plugin.update RPC tests."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -6306,7 +6539,7 @@
       "sites": [
         {
           "file": "cmd/cascade/mcp.go",
-          "line": 37,
+          "line": 26,
           "status": "ADD",
           "ticket": "T-6",
           "raw": "cmd/cascade/mcp (ADD, per T-6 sport_updates)."
@@ -6338,6 +6571,46 @@
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T2",
           "raw": "cmd/cascade/mcp (ADD) — P1-E16-W4-S34-T2."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/mcp principal mode",
+      "sites": [
+        {
+          "file": "cmd/cascade/mcp_scoped_forward.go",
+          "line": 27,
+          "status": "ADD",
+          "raw": "cmd/cascade/mcp principal mode [ADD]."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/mcp principal mode tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/mcp_principal_fixtures_test.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "cmd/cascade/mcp principal mode tests [ADD]."
+        },
+        {
+          "file": "cmd/cascade/mcp_scoped_forward_test.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "cmd/cascade/mcp principal mode tests [ADD]."
+        },
+        {
+          "file": "cmd/cascade/mcp_socket_principal_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "cmd/cascade/mcp principal mode tests [ADD]."
         }
       ],
       "statuses": [
@@ -12293,7 +12566,7 @@
       "sites": [
         {
           "file": "internal/build/rpcmethodgate.go",
-          "line": 35,
+          "line": 37,
           "status": "ADD",
           "raw": "internal.build.CheckRPCMethodCoverage/ADDED (R-16.80)."
         },
@@ -13976,7 +14249,7 @@
         },
         {
           "file": "internal/conversation/adapter_appendtarget.go",
-          "line": 21,
+          "line": 24,
           "status": "",
           "raw": "internal.conversation.adapter (chat.append_turn target)."
         },
@@ -14298,6 +14571,32 @@
         "",
         "ADD",
         "CHANGE"
+      ]
+    },
+    {
+      "name": "internal.conversation.project",
+      "sites": [
+        {
+          "file": "internal/conversation/project.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "internal.conversation.project/ADDED (P1-CPA-06, contract:thread-scope)."
+        },
+        {
+          "file": "internal/conversation/project_search_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal.conversation.project/ADDED (tests) (P1-CPA-06)."
+        },
+        {
+          "file": "internal/conversation/project_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal.conversation.project/ADDED (tests) (P1-CPA-06)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -23750,7 +24049,7 @@
       "sites": [
         {
           "file": "internal/plugins/dispatch_failures_test.go",
-          "line": 19,
+          "line": 20,
           "status": "ADD",
           "raw": "internal/plugins dispatch-failure tests (ADD)."
         }
@@ -23838,6 +24137,34 @@
       ]
     },
     {
+      "name": "internal/plugins install middleware",
+      "sites": [
+        {
+          "file": "internal/plugins/install_middleware.go",
+          "line": 14,
+          "status": "",
+          "raw": "internal/plugins install middleware."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins install middleware tests",
+      "sites": [
+        {
+          "file": "internal/plugins/install_middleware_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "internal/plugins install middleware tests."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/plugins lifecycle-add",
       "sites": [
         {
@@ -23887,7 +24214,7 @@
       "sites": [
         {
           "file": "internal/plugins/lifecycle_records_test.go",
-          "line": 20,
+          "line": 21,
           "status": "ADD",
           "raw": "internal/plugins lifecycle-record tests (ADD)."
         }
@@ -23923,6 +24250,48 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins lifecycle-update guards",
+      "sites": [
+        {
+          "file": "internal/plugins/lifecycle_update_guard_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal/plugins lifecycle-update guards."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins plugin.update RPC",
+      "sites": [
+        {
+          "file": "internal/plugins/update_rpc.go",
+          "line": 10,
+          "status": "",
+          "raw": "internal/plugins plugin.update RPC."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins plugin.update RPC tests",
+      "sites": [
+        {
+          "file": "internal/plugins/update_rpc_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "internal/plugins plugin.update RPC tests."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -25149,7 +25518,7 @@
         },
         {
           "file": "internal/plugins/cascadepa_wiring.go",
-          "line": 43,
+          "line": 44,
           "status": "ADD",
           "raw": "internal/plugins:cascadepa-wiring (ADD) -- FIX-cascade-chat-client-wiring."
         },
@@ -25673,6 +26042,20 @@
       ]
     },
     {
+      "name": "internal/policy HeldRecordSource",
+      "sites": [
+        {
+          "file": "internal/policy/approval_held.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "internal/policy HeldRecordSource/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/policy Ledger",
       "sites": [
         {
@@ -25975,14 +26358,28 @@
       "sites": [
         {
           "file": "internal/policy/rpc_grant.go",
-          "line": 20,
+          "line": 24,
           "status": "ADD",
           "ticket": "P1-E09-W2-S18-T6",
-          "raw": "internal/policy approval-grant-handler/ADDED (P1-E09-W2-S18-T6)."
+          "raw": "internal/policy approval-grant-handler/ADDED (P1-E09-W2-S18-T6)"
         }
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal/policy approval.grant tests",
+      "sites": [
+        {
+          "file": "internal/policy/rpc_grant_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal/policy approval.grant tests (P1-SEC-23)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -26116,6 +26513,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal/policy held-record tests",
+      "sites": [
+        {
+          "file": "internal/policy/approval_held_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal/policy held-record tests (P1-SEC-23)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -26760,6 +27171,34 @@
       ]
     },
     {
+      "name": "internal/rpc recorded attestation verification",
+      "sites": [
+        {
+          "file": "internal/rpc/attestation_record.go",
+          "line": 23,
+          "status": "",
+          "raw": "internal/rpc recorded attestation verification (P1-SEC-04)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/rpc recorded attestation verification tests",
+      "sites": [
+        {
+          "file": "internal/rpc/attestation_record_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "internal/rpc recorded attestation verification tests (P1-SEC-04)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/runtime",
       "sites": [
         {
@@ -27398,6 +27837,76 @@
       ]
     },
     {
+      "name": "internal/secrets ProvisionDaemonKey",
+      "sites": [
+        {
+          "file": "internal/secrets/daemon_keys.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "internal/secrets ProvisionDaemonKey/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/secrets ProvisionDaemonKey concurrency test",
+      "sites": [
+        {
+          "file": "internal/secrets/daemon_keys_race_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal/secrets ProvisionDaemonKey concurrency test (P1-SEC-23)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/secrets ProvisionDaemonKey tests",
+      "sites": [
+        {
+          "file": "internal/secrets/daemon_keys_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal/secrets ProvisionDaemonKey tests (P1-SEC-23)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/secrets SelectCustodyReadOnly",
+      "sites": [
+        {
+          "file": "internal/secrets/custody_readonly.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal/secrets SelectCustodyReadOnly/ADDED (P1-SEC-23)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/secrets SelectCustodyReadOnly tests",
+      "sites": [
+        {
+          "file": "internal/secrets/custody_readonly_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/secrets SelectCustodyReadOnly tests (P1-SEC-23)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/secrets TestEgressClassBridgeRegistered",
       "sites": [
         {
@@ -27542,6 +28051,54 @@
       ]
     },
     {
+      "name": "internal/secrets daemon-key lock",
+      "sites": [
+        {
+          "file": "internal/secrets/daemon_keys_lock_unix.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal/secrets daemon-key lock (P1-SEC-23)."
+        },
+        {
+          "file": "internal/secrets/daemon_keys_lock_windows.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal/secrets daemon-key lock (P1-SEC-23)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/secrets file-vault write tests",
+      "sites": [
+        {
+          "file": "internal/secrets/custody_filevault_write_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/secrets file-vault write tests (P1-SEC-23)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/secrets file-vault writes",
+      "sites": [
+        {
+          "file": "internal/secrets/custody_filevault_write.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/secrets file-vault writes (split for the 300-line cap, P1-SEC-23)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/secrets file-vault-age-codec",
       "sites": [
         {
@@ -27634,6 +28191,34 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal/secrets reserved-name path tests",
+      "sites": [
+        {
+          "file": "internal/secrets/broker_reserved_paths_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal/secrets reserved-name path tests (P1-SEC-23)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/secrets reserved-name tests",
+      "sites": [
+        {
+          "file": "internal/secrets/broker_reserved_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal/secrets reserved-name tests (P1-SEC-23)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -37046,10 +37631,15 @@
       "sites": [
         {
           "file": "internal/runtime/baseline.go",
-          "line": 32,
-          "status": "ADD",
-          "ticket": "T-8",
-          "raw": "runtime/boot-baseline-check (ADD, placeholder per T-8 sport_updates)."
+          "line": 25,
+          "status": "",
+          "raw": "runtime/boot-baseline-check."
+        },
+        {
+          "file": "internal/runtime/baseline_accept.go",
+          "line": 22,
+          "status": "",
+          "raw": "runtime/boot-baseline-check (accept + apply)."
         },
         {
           "file": "internal/runtime/baseline_hash.go",
@@ -37057,10 +37647,43 @@
           "status": "ADD",
           "ticket": "T-8",
           "raw": "runtime/boot-baseline-check (ADD, placeholder per T-8 sport_updates)."
+        },
+        {
+          "file": "internal/runtime/baseline_signed.go",
+          "line": 22,
+          "status": "",
+          "raw": "runtime/boot-baseline-check (signed baseline record)."
         }
       ],
       "statuses": [
+        "",
         "ADD"
+      ]
+    },
+    {
+      "name": "runtime/boot-baseline-check tests",
+      "sites": [
+        {
+          "file": "internal/runtime/baseline_accept_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "runtime/boot-baseline-check tests (P1-SEC-04)."
+        },
+        {
+          "file": "internal/runtime/baseline_signed_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "runtime/boot-baseline-check tests (P1-SEC-04)."
+        },
+        {
+          "file": "internal/runtime/baseline_state_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "runtime/boot-baseline-check tests (P1-SEC-04)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -38011,7 +38634,7 @@
       ]
     }
   ],
-  "total_sites": 3689,
-  "unspecified_count": 248,
-  "multi_status_count": 114
+  "total_sites": 3742,
+  "unspecified_count": 275,
+  "multi_status_count": 116
 }
