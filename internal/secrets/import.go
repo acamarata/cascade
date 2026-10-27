@@ -187,6 +187,13 @@ func Import(ctx context.Context, b *Broker, data []byte) (ImportReport, error) {
 	if err != nil {
 		return ImportReport{}, err
 	}
+	// A reserved daemon key anywhere in the file refuses the whole import
+	// before its first write.
+	for _, e := range entries {
+		if err := refuseReservedName(e.Name); err != nil {
+			return ImportReport{}, err
+		}
+	}
 	report := ImportReport{Parsed: len(entries)}
 	seen := map[string]bool{}
 	for _, entry := range entries {

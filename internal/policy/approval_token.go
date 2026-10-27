@@ -38,10 +38,6 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// ApprovalKeyName is the vault key the Ed25519 approval keypair lives
-// under.
-const ApprovalKeyName = "cascade.approval.ed25519"
-
 // approvalDomain is the domain-separation context string. It prefixes
 // every signing input, so a signature produced here can never verify as
 // anything else and a signature produced elsewhere can never verify here.
@@ -112,8 +108,8 @@ func (s *ApprovalSigner) Sign(ctx context.Context, rec ApprovalRecord) ([]byte, 
 	}
 	defer zeroKey(private)
 	if len(private) != ed25519.PrivateKeySize {
-		return nil, cascade.Newf(cascade.KindInternal,
-			"policy: the value under %s is not an Ed25519 private key", ApprovalKeyName)
+		return nil, cascade.New(cascade.KindInternal,
+			"policy: the approval key source returned a value that is not an Ed25519 private key")
 	}
 	if rec.RequestID, err = cascade.NewID(); err != nil {
 		return nil, err

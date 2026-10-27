@@ -208,6 +208,11 @@ func internalGet(ctx context.Context, b *Broker, name string) ([]byte, error) {
 	if err := validateSecretName(name); err != nil {
 		return nil, err
 	}
+	// The daemon's own keys never leave through rehydration, the egress
+	// vault or a doctor read; only daemonKeyGet (daemon_keys.go) reads them.
+	if err := refuseReservedName(name); err != nil {
+		return nil, err
+	}
 	value, err := b.custody.Get(ctx, name)
 	if err != nil {
 		if cascade.HasKind(err, cascade.KindNotFound) {

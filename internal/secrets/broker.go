@@ -59,6 +59,9 @@ type Broker struct {
 	custody    Custody
 	gate       ElevationGate
 	grantAudit GrantAudit
+	// keyLockPath is the cross-process lock file daemon-key provisioning
+	// takes (WithDaemonKeyLock); empty, provisioning refuses.
+	keyLockPath string
 }
 
 // NewBroker builds a broker over custody. A nil custody is refused rather
@@ -110,6 +113,9 @@ func (b *Broker) Get(ctx context.Context, name string) ([]byte, error) {
 	if err := validateSecretName(name); err != nil {
 		return nil, err
 	}
+	if err := refuseReservedName(name); err != nil {
+		return nil, err
+	}
 	if err := b.authorize(ctx, VerbGet); err != nil {
 		return nil, err
 	}
@@ -149,6 +155,9 @@ const maxCollisionSuffix = 1000
 // secret does not disclose an existing one.
 func (b *Broker) Set(ctx context.Context, name string, value []byte, mode SetMode) (SetResult, error) {
 	if err := validateSecretName(name); err != nil {
+		return SetResult{}, err
+	}
+	if err := refuseReservedName(name); err != nil {
 		return SetResult{}, err
 	}
 	exists, err := b.Exists(ctx, name)
@@ -211,6 +220,9 @@ func (b *Broker) Rotate(ctx context.Context, name string, value []byte) error {
 	if err := validateSecretName(name); err != nil {
 		return err
 	}
+	if err := refuseReservedName(name); err != nil {
+		return err
+	}
 	if err := b.authorize(ctx, VerbRotate); err != nil {
 		return err
 	}
@@ -233,6 +245,9 @@ func (b *Broker) List(ctx context.Context) ([]string, error) {
 // Delete removes a secret.
 func (b *Broker) Delete(ctx context.Context, name string) error {
 	if err := validateSecretName(name); err != nil {
+		return err
+	}
+	if err := refuseReservedName(name); err != nil {
 		return err
 	}
 	return b.custody.Delete(ctx, name)

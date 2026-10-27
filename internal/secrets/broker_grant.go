@@ -34,6 +34,9 @@ func (b *Broker) GetGranted(ctx context.Context, name string, grants *Grants) ([
 	if err := validateSecretName(name); err != nil {
 		return nil, err
 	}
+	if err := refuseReservedName(name); err != nil {
+		return nil, err
+	}
 	if grants == nil {
 		return nil, cascade.Newf(cascade.KindUnavailable,
 			"secrets: reading %s needs a standing grant and no grant register is configured", name)

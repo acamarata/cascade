@@ -30,25 +30,26 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// newApprovalGrantCmd builds `approval grant <id> --token <signed-token>`.
+// approvalGrantCallDeps builds the elevated-call collaborators the grant verb
+// signs its attestation with; tests inject a test custody here.
+var approvalGrantCallDeps = productionElevatedCallDeps
+
+// newApprovalGrantCmd builds `approval grant <id> [--token <signed-token>]`.
+// Without --token the daemon redeems the signed record it holds.
 func newApprovalGrantCmd(deps approvalDeps) *cobra.Command {
 	var params policy.ApprovalGrantParams
 	cmd := &cobra.Command{
 		Use:   "grant <request-id>",
 		Short: "Redeem a signed approval token for one request",
-		Long: "Redeem a signed approval token. The token is verified before anything is\n" +
-			"written, so a forged or expired token changes no queue state. Knowing a\n" +
-			"request id is never enough on its own, and this verb needs a fresh local\n" +
-			"attestation as well.",
-		Example: "  cascade approval grant 01J8ZC5W2K4F6H8M0P2R4T6V8X --token \"$TOKEN\"",
+		Long: "Redeem an approval exactly once. Without --token the daemon redeems the\n" +
+			"signed record it holds, which needs a fresh local attestation for this verb.\n" +
+			"A record is verified before anything is written, so a forged or expired one\n" +
+			"changes no queue state. Knowing a request id is never enough on its own.",
+		Example: "  cascade approval grant <request-id>",
 		Args:    usageArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := refuseElevatedOnUnsupportedPlatform("approval grant"); err != nil {
 				return err
-			}
-			if params.SignedToken == "" {
-				return cascade.New(cascade.KindInvalidInput,
-					"cascade approval grant needs the signed approval token (--token)")
 			}
 			c, err := approvalClient(cmd.Context(), deps, "approval grant")
 			if err != nil {
@@ -56,7 +57,7 @@ func newApprovalGrantCmd(deps approvalDeps) *cobra.Command {
 			}
 			params.RequestID = args[0]
 			var res policy.ApprovalGrantResult
-			err = callElevated(cmd.Context(), c, productionElevatedCallDeps(cmd.ErrOrStderr()), client.ApprovalGrantMethod, params, &res)
+			err = callElevated(cmd.Context(), c, approvalGrantCallDeps(cmd.ErrOrStderr()), client.ApprovalGrantMethod, params, &res)
 			if err != nil {
 				return err
 			}
@@ -64,7 +65,7 @@ func newApprovalGrantCmd(deps approvalDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&params.SignedToken, "token", "",
-		"the base64 signed approval token issued for this request")
+		"optional base64 signed approval record; omit it to redeem the daemon-held record")
 	cmd.Flags().StringVar(&params.Action, "action", "",
 		"the action about to run, re-hashed against the approved digests")
 	return cmd

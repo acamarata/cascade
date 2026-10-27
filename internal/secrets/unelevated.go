@@ -104,7 +104,7 @@ func (r *ApprovalKeyReader) ApprovalKey(ctx context.Context) (string, ed25519.Pr
 		return "", nil, cascade.New(cascade.KindUnavailable,
 			"secrets: no approval key reader configured")
 	}
-	value, err := internalGet(ctx, r.broker, ApprovalKeyName)
+	value, err := daemonKeyGet(ctx, r.broker, ApprovalKeyName)
 	if err != nil {
 		return "", nil, err
 	}
@@ -156,7 +156,18 @@ func (v *EgressVault) List(ctx context.Context) ([]string, error) {
 	if v == nil || v.broker == nil {
 		return nil, cascade.New(cascade.KindUnavailable, "secrets: no egress vault configured")
 	}
-	return v.broker.List(ctx)
+	names, err := v.broker.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// The daemon's own keys are not egress material: never listed here.
+	visible := names[:0:0]
+	for _, name := range names {
+		if !reservedDaemonKey(name) {
+			visible = append(visible, name)
+		}
+	}
+	return visible, nil
 }
 
 // Get returns one stored value without the elevated gate.

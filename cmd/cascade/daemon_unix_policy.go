@@ -111,6 +111,12 @@ type policyWiring struct {
 	// Handlers is the approval/policy JSON-RPC handler set built over
 	// everything above. The RPC composition root registers it.
 	Handlers map[string]policy.MethodFunc
+	// rpcDeps are the handlers' collaborators, kept so the elevation wiring
+	// can bind the witness attestor once the daemon's issuer exists
+	// (bindPolicyElevation) and rebuild Handlers before registration.
+	rpcDeps policy.RPCDeps
+	// approvalKeys is the signing key outcome status.get reports.
+	approvalKeys approvalKeys
 }
 
 // wirePolicy constructs the production policy engine and the one
@@ -156,7 +162,12 @@ func wirePolicy(ctx context.Context, store provider.Store, clock runtime.Clock, 
 	if err != nil {
 		return nil, err
 	}
-	queue, err := buildApprovalQueue(store, parts.Registry, parts.Grants, parts.DenyList, clock, parts.Audit)
+	keys := provisionApprovalKeys(ctx, paths, clock)
+	queue, err := buildApprovalQueue(store, parts.Registry, parts.Grants, parts.DenyList, clock, parts.Audit, keys.minter)
+	if err != nil {
+		return nil, err
+	}
+	effects, err := openGrantEffects(ctx, parts.Audit)
 	if err != nil {
 		return nil, err
 	}
@@ -169,22 +180,16 @@ func wirePolicy(ctx context.Context, store provider.Store, clock runtime.Clock, 
 	if err != nil {
 		return nil, err
 	}
-	wiring := &policyWiring{policyEngineParts: parts, Router: router, Queue: queue}
-	wiring.Handlers = policy.MethodHandlers(policy.RPCDeps{
-		Queue:    queue,
-		Engine:   engine,
-		Registry: parts.Registry,
-		Grants:   parts.Grants,
-		DenyList: parts.DenyList,
-		Audit:    parts.Audit,
-		Clock:    clock,
-		// Verifier and Attestor are deliberately absent. No production
-		// approval-key source and no production attestation helper exist
-		// in this tree, and both absences are fail-closed: approval.grant
-		// refuses a token nothing can verify, and every elevated verb
-		// returns ElevationRequired. Attaching a placeholder to either
-		// would make an unauthorized redemption report success.
-	})
+	wiring := &policyWiring{policyEngineParts: parts, Router: router, Queue: queue, approvalKeys: keys}
+	wiring.rpcDeps = policy.RPCDeps{
+		Queue: queue, Engine: engine, Registry: parts.Registry, Grants: parts.Grants,
+		DenyList: parts.DenyList, Audit: parts.Audit, Clock: clock,
+		// Verifier is nil when the key failed: approval.grant then refuses.
+		// Attestor is bound later by bindPolicyElevation.
+		Verifier: keys.verifier, Held: queue, Effects: effects,
+		AuditVerify: openAuditVerifier(store), Recorder: parts.Audit,
+	}
+	wiring.Handlers = policy.MethodHandlers(wiring.rpcDeps)
 	return wiring, nil
 }
 
@@ -197,7 +202,7 @@ func wirePolicy(ctx context.Context, store provider.Store, clock runtime.Clock, 
 // the engine that consults it.
 func buildApprovalQueue(
 	store provider.Store, registry *policy.MemoryRegistry, grants *policy.StoreGrants,
-	denyList *policy.StoreDenyList, clock runtime.Clock, log *audit.Log,
+	denyList *policy.StoreDenyList, clock runtime.Clock, log *audit.Log, minter policy.TokenMinter,
 ) (*policy.StoreApprovals, error) {
 	return policy.NewApprovalQueue(policy.ApprovalQueueConfig{
 		Store:    store,
@@ -206,5 +211,6 @@ func buildApprovalQueue(
 		Clock:    clock,
 		Recorder: log,
 		DenyList: denyList,
+		Minter:   minter, // never nil: the signing minter or a refusing one
 	})
 }

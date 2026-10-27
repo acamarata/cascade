@@ -20,18 +20,17 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// TestApprovalGrantRequiresTheToken proves the CLI refuses before it dials
-// when the signed token is absent: a request id alone is never enough.
-// This is POSIX-only: on Windows, refuseElevatedOnUnsupportedPlatform
-// refuses grant before the --token check ever runs, for a different
-// reason (see approval_windows_test.go).
-func TestApprovalGrantRequiresTheToken(t *testing.T) {
-	out, err := execRoot(t, "approval", "grant", "01J8ZC5W2K4F6H8M0P2R4T6V8X")
+// TestApprovalGrantWithoutTokenGoesToTheDaemon proves a tokenless grant is
+// not refused locally (P1-SEC-23): it dials the daemon, which redeems its
+// held record only under an attestation. With nothing listening it fails
+// as unreachable, never as a missing token.
+func TestApprovalGrantWithoutTokenGoesToTheDaemon(t *testing.T) {
+	out, err := execLeaf(t, newApprovalGrantCmd(hermeticApprovalDeps(t)), []string{"01J8ZC5W2K4F6H8M0P2R4T6V8X"})
 	if err == nil {
-		t.Fatalf("approval grant with no token succeeded: %s", out)
+		t.Fatalf("approval grant succeeded against a socket nothing listens on: %s", out)
 	}
-	if !strings.Contains(err.Error(), "token") {
-		t.Errorf("the refusal does not name the missing token: %v", err)
+	if !cascade.HasKind(err, cascade.KindUnavailable) || strings.Contains(err.Error(), "--token") {
+		t.Errorf("tokenless grant error = %v, want the unreachable daemon", err)
 	}
 }
 

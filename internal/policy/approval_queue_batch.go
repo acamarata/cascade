@@ -80,6 +80,8 @@ func (q *StoreApprovals) mintLocked(
 ) (*approvalEntry, ApprovalToken, error) {
 	token, err := q.cfg.Minter.Mint(ctx, ApprovalMintRequest{
 		Subject:    req.Subject,
+		Verb:       req.Verb,
+		Level:      safeLevel(req.Level),
 		ActionHash: actionHash,
 		ParamsHash: paramsHash,
 		Issued:     now,
@@ -103,6 +105,7 @@ func (q *StoreApprovals) mintLocked(
 		summary:    presentedSummary(req.Summary, safeLevel(req.Level)),
 		actionHash: actionHash, paramsHash: paramsHash, nonce: token.Nonce,
 		issued: now, expires: token.Expires, state: ApprovalPending, grantBacked: granted,
+		signed: token.Signed,
 	}
 	q.entries[entry.requestID] = entry
 	q.order = append(q.order, entry.requestID)

@@ -67,7 +67,14 @@ func newFileVaultCustody(cfg Config) (*fileVaultCustody, error) {
 	}
 	fv := &fileVaultCustody{dir: cfg.Dir, passphrase: cfg.Passphrase, rnd: cfg.rand()}
 	if fv.passphrase == "" {
+		// Under the vault lock, so two processes opening a fresh vault
+		// cannot both create a key file.
+		release, err := acquireLockFile(context.Background(), filepath.Join(cfg.Dir, fileVaultLockName))
+		if err != nil {
+			return nil, err
+		}
 		pass, err := fv.loadOrCreateKey()
+		release()
 		if err != nil {
 			return nil, err
 		}
@@ -114,7 +121,12 @@ func (f *fileVaultCustody) loadOrCreateKey() (string, error) {
 		return "", ErrCustodyUnavailable(fileVaultName, err)
 	}
 	encoded := hex.EncodeToString(key)
-	if err := writeFilePrivate(path, []byte(encoded)); err != nil {
+	switch err := createFilePrivate(path, []byte(encoded)); {
+	case errors.Is(err, fs.ErrExist):
+		// Another writer created it first (an older binary takes no
+		// lock): use the key that exists, never replace it.
+		return f.loadExistingKey(path)
+	case err != nil:
 		return "", ErrCustodyUnavailable(fileVaultName, err)
 	}
 	return encoded, nil
@@ -158,17 +170,55 @@ func (f *fileVaultCustody) save(entries map[string][]byte) error {
 	return nil
 }
 
-// Set stores value under name, overwriting any existing entry.
-func (f *fileVaultCustody) Set(_ context.Context, name string, value []byte) error {
-	if err := validateSecretName(name); err != nil {
+// fileVaultLockName is the lock every mutation takes around its whole
+// load-modify-save, across processes, so no writer can drop another's entry.
+const fileVaultLockName = ".vault.lock"
+
+// mutate runs change over the freshly loaded entries under the vault lock
+// and saves when change reports a write.
+func (f *fileVaultCustody) mutate(ctx context.Context, change func(map[string][]byte) (bool, error)) error {
+	release, err := acquireLockFile(ctx, filepath.Join(f.dir, fileVaultLockName))
+	if err != nil {
 		return err
 	}
+	defer release()
 	entries, err := f.load()
 	if err != nil {
 		return err
 	}
-	entries[name] = append([]byte(nil), value...)
+	write, err := change(entries)
+	if err != nil || !write {
+		return err
+	}
 	return f.save(entries)
+}
+
+// Set stores value under name, overwriting any existing entry.
+func (f *fileVaultCustody) Set(ctx context.Context, name string, value []byte) error {
+	if err := validateSecretName(name); err != nil {
+		return err
+	}
+	return f.mutate(ctx, func(entries map[string][]byte) (bool, error) {
+		entries[name] = append([]byte(nil), value...)
+		return true, nil
+	})
+}
+
+// createIfAbsent stores value only when name is absent, in one locked
+// load-check-save; created reports whether it wrote.
+func (f *fileVaultCustody) createIfAbsent(ctx context.Context, name string, value []byte) (created bool, err error) {
+	if err := validateSecretName(name); err != nil {
+		return false, err
+	}
+	err = f.mutate(ctx, func(entries map[string][]byte) (bool, error) {
+		if _, ok := entries[name]; ok {
+			return false, nil
+		}
+		entries[name] = append([]byte(nil), value...)
+		created = true
+		return true, nil
+	})
+	return created && err == nil, err
 }
 
 // Get returns the stored value, or ErrSecretNotFound.
@@ -188,19 +238,17 @@ func (f *fileVaultCustody) Get(_ context.Context, name string) ([]byte, error) {
 }
 
 // Delete removes name, or reports that it was not stored.
-func (f *fileVaultCustody) Delete(_ context.Context, name string) error {
+func (f *fileVaultCustody) Delete(ctx context.Context, name string) error {
 	if err := validateSecretName(name); err != nil {
 		return err
 	}
-	entries, err := f.load()
-	if err != nil {
-		return err
-	}
-	if _, ok := entries[name]; !ok {
-		return ErrSecretNotFound(name)
-	}
-	delete(entries, name)
-	return f.save(entries)
+	return f.mutate(ctx, func(entries map[string][]byte) (bool, error) {
+		if _, ok := entries[name]; !ok {
+			return false, ErrSecretNotFound(name)
+		}
+		delete(entries, name)
+		return true, nil
+	})
 }
 
 // List returns the stored names, sorted, and never a value.
@@ -214,33 +262,4 @@ func (f *fileVaultCustody) List(_ context.Context) ([]string, error) {
 		names = append(names, name)
 	}
 	return sortedNames(names), nil
-}
-
-// writeFilePrivate writes data to path through a temp file in the same
-// directory and renames it into place, so a reader never observes a
-// half-written vault and a crash never truncates the old one.
-func writeFilePrivate(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".vault-*.tmp")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	defer func() { _ = os.Remove(tmpName) }()
-	if err := tmp.Chmod(fileVaultFilePerm); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, path)
 }

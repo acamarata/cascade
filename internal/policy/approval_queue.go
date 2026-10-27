@@ -141,6 +141,7 @@ type approvalEntry struct {
 	expires     time.Time
 	state       ApprovalState
 	grantBacked bool
+	signed      []byte // the held signed record; never listed or journaled
 }
 
 // approvalBatch is the currently open collection window.

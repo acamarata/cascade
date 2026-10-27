@@ -45,6 +45,7 @@ func wireElevation(w *daemonWiring) error {
 	}
 	mw, status := daemon.NewElevationMiddleware(dataDir, daemonElevationSelector(dataDir), log, w.Clock)
 	w.Registry.Use(mw)
+	bindPolicyElevation(w, status) // the policy attestor reads this issuer's witnesses
 	detail := "tier " + status.Tier + ", bound"
 	if !status.Bound {
 		detail = "tier " + status.Tier + ", elevated verbs refused: " + status.Reason

@@ -3,6 +3,7 @@ package v1
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -174,4 +175,21 @@ func walkRelative(t *testing.T, root string) []string {
 		t.Fatal(err)
 	}
 	return paths
+}
+
+// TestVaultImporter_RefusesReservedDaemonKey: a v1 vault.env naming the
+// daemon's approval key is refused before any entry is written, so a
+// migration can never replace the signing key (P1-SEC-23).
+func TestVaultImporter_RefusesReservedDaemonKey(t *testing.T) {
+	root := t.TempDir()
+	writeSource(t, root, ".claude/vault.env", []byte("AAA_FIRST=fake\n"+secrets.ApprovalKeyName+"=fake-replacement\n"))
+	custody := newMapCustody()
+	custody.values[secrets.ApprovalKeyName] = []byte("fake-original")
+	_, err := NewVaultImporter(testBroker(t, custody)).Import(context.Background(), Request{SourceRoot: root})
+	if !cascade.HasKind(err, cascade.KindPermissionDenied) || !errors.Is(err, secrets.ErrReservedName) {
+		t.Fatalf("import naming the approval key = %v, want the reserved-name refusal", err)
+	}
+	if _, wrote := custody.values["AAA_FIRST"]; wrote || string(custody.values[secrets.ApprovalKeyName]) != "fake-original" {
+		t.Fatalf("the refused import wrote: %v", custody.values)
+	}
 }

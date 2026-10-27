@@ -77,6 +77,9 @@ func (b *Broker) readExportDocument(ctx context.Context) (vaultExportDocument, e
 	}
 	doc := vaultExportDocument{Version: 1, Entries: make([]vaultExportRecord, 0, len(names))}
 	for _, name := range names {
+		if reservedDaemonKey(name) {
+			continue // the daemon's own keys never leave in a backup
+		}
 		value, gerr := b.custody.Get(ctx, name)
 		if gerr != nil {
 			zeroExportDocument(doc)
@@ -129,6 +132,10 @@ func decodeVaultExport(data []byte) (vaultExportDocument, error) {
 	}
 	for _, entry := range doc.Entries {
 		if err := validateSecretName(entry.Name); err != nil {
+			return vaultExportDocument{}, err
+		}
+		// Refused here, before Import writes its first entry.
+		if err := refuseReservedName(entry.Name); err != nil {
 			return vaultExportDocument{}, err
 		}
 	}

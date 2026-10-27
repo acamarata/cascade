@@ -54,7 +54,8 @@ func TestApprovalKeyReaderReadsWithoutElevation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generating a key: %v", err)
 	}
-	if _, err := broker.Set(context.Background(), ApprovalKeyName, private, SetUpdate); err != nil {
+	// Seeded through the file-vault custody: Broker.Set refuses the reserved name.
+	if err := broker.custody.Set(context.Background(), ApprovalKeyName, private); err != nil {
 		t.Fatalf("storing the approval key: %v", err)
 	}
 	// The elevated verb is refused, which is the state a release binary
@@ -83,7 +84,7 @@ func TestApprovalKeyReaderReadsWithoutElevation(t *testing.T) {
 
 func TestApprovalKeyReaderRefusesAMalformedKey(t *testing.T) {
 	broker := newUnelevatedBroker(t)
-	if _, err := broker.Set(context.Background(), ApprovalKeyName, []byte("too short"), SetUpdate); err != nil {
+	if err := broker.custody.Set(context.Background(), ApprovalKeyName, []byte("too short")); err != nil {
 		t.Fatalf("storing the malformed key: %v", err)
 	}
 	reader, err := NewApprovalKeyReader(broker)

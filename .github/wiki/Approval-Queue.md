@@ -116,6 +116,32 @@ Pending entries live in daemon memory and do not survive a restart, which is
 correct: an approval nobody is waiting on is an approval nobody gave. The
 ledger is the part that must survive everything.
 
+## Signed records and the attested grant
+
+The daemon mints every approval as an Ed25519-signed record. The key lives
+in the vault under `cascade_approval_key`, is generated once on first start
+and is never overwritten. No vault verb (`vault set`, `vault import`,
+`vault rotate`, `vault delete` or a backup import) can write, replace or
+remove it, and the egress vault never lists or reads it. If the key cannot be read, the daemon queues no approvals,
+`approval grant` refuses, and `cascade status` shows `approval-keys` as
+failed with the reason. There is no unsigned fallback.
+
+The signed bytes stay in daemon memory beside the entry. They never appear
+in `approval list`, `approval show`, a bridge payload, an event or the audit
+journal.
+
+Approving and redeeming stay separate: `approval.grant` redeems only an
+entry already approved through `Decide`, and refuses a pending one (or a
+mistyped `--action`) before claiming anything. Until the owner's approval
+path lands nothing in production approves an entry. `cascade approval grant <request-id>` without `--token`
+redeems the held record. It needs a fresh local attestation for `approval.grant` itself; an
+attestation for any other verb, or none, is refused. The grant first
+verifies the sealed audit history, then claims an `approval.grant:<id>`
+effect (create-only) before the ledger is touched, and confirms it after.
+A second grant, a concurrent grant and a grant after a crash between
+redemption and confirmation all refuse. Bridge approvals still never carry
+an attestation. See [approval records](../../docs/security-posture/approval-records.md).
+
 ## The remote-approvable payload
 
 `GetPending` returns three fields and nothing else, to any caller, bridge

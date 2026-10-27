@@ -18,6 +18,8 @@ See also [caller principals: who is calling the daemon, and what each caller may
 
 See also [agent owner reach: what stops an agent session acting as the owner, and what does not](security-posture/agent-owner-reach.md).
 
+See also [approval records: a daemon-signed record, redeemed once](security-posture/approval-records.md).
+
 ## Vault backends
 
 Cascade's secret vault stores values through one custody backend, chosen at

@@ -108,12 +108,20 @@ type ApprovalToken struct {
 	// Expires is when it stops being redeemable, never later than
 	// Issued.Add(MaxApprovalTTL).
 	Expires time.Time `json:"exp"`
+	// Signed is the signed approval record a signing minter produced. It
+	// is held in daemon memory only and never serialised.
+	Signed []byte `json:"-"`
 }
 
 // ApprovalMintRequest is what a TokenMinter is asked to mint.
 type ApprovalMintRequest struct {
 	// Subject is the principal the approval will be issued to.
 	Subject Subject
+	// Verb is the RPC method the action names, when it is one; a signing
+	// minter binds it into the signed record.
+	Verb string
+	// Level is the rung the entry carries, bound into a signed record.
+	Level RiskLevel
 	// ActionHash and ParamsHash are the digests the token binds to.
 	ActionHash string
 	ParamsHash string

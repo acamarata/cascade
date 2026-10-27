@@ -71,6 +71,13 @@ func planAtomicImport(ctx context.Context, b *Broker, parsed []EnvEntry) (Atomic
 	if err != nil {
 		return AtomicImportReport{}, nil, err
 	}
+	// A reserved daemon key anywhere in the file refuses the whole import
+	// before anything is read or written.
+	for _, name := range names {
+		if err := refuseReservedName(name); err != nil {
+			return AtomicImportReport{}, nil, err
+		}
+	}
 	report := AtomicImportReport{Parsed: len(parsed), Names: names, DuplicateNames: duplicates}
 	plan := make([]atomicImportEntry, 0, len(names))
 	for _, name := range names {
@@ -152,6 +159,9 @@ func applyAtomicImport(ctx context.Context, b *Broker, plan []atomicImportEntry)
 		if err := ctx.Err(); err != nil {
 			cause := cascade.Wrap(cascade.KindCanceled, err, "secrets: atomic import canceled")
 			return rollbackAtomicImport(ctx, b, applied, cause)
+		}
+		if err := refuseReservedName(entry.name); err != nil {
+			return rollbackAtomicImport(ctx, b, applied, err)
 		}
 		if err := b.custody.Set(ctx, entry.name, entry.value); err != nil {
 			return rollbackAtomicImport(ctx, b, append(applied, entry), err)

@@ -68,6 +68,20 @@ type RPCDeps struct {
 	Clock Clock
 	// Attestor vouches for a fresh local attestation on elevated verbs.
 	Attestor Attestor
+	// Held hands approval.grant the daemon-held signed record when the
+	// caller sends none. Absent, a tokenless grant refuses.
+	Held HeldRecordSource
+	// Effects claims each redemption as a create-only audit effect.
+	// Absent, approval.grant refuses.
+	Effects audit.EffectWriter
+	// AuditVerify checks the sealed audit history (effect index included)
+	// before a redemption is claimed. Absent, approval.grant refuses.
+	AuditVerify interface {
+		Verify(ctx context.Context) error
+	}
+	// Recorder is the audit sink approval.grant writes its refusals to.
+	// Absent, approval.grant refuses.
+	Recorder ApprovalRecorder
 }
 
 // MethodHandlers returns the handler for every verb in the registry,
