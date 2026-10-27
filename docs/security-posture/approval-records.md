@@ -48,39 +48,49 @@ into list or show output, bridge payloads, events or the journal.
 A daemon whose key failed mints nothing: every ask verdict that would have
 queued an approval is downgraded to a deny.
 
-## Redemption
+## Granting and redemption
 
-Approving and redeeming are separate steps. The approval is the human
-decision recorded by `Decide`, bound to the summary and rung that were
-shown. `approval.grant` only redeems an entry that is already approved; it
-never approves one, and the daemon's signature is not an approval. A grant
-of a pending entry is refused before anything is claimed, so granting too
-early spends nothing. (A later change adds the owner's approval path.)
+Approving and redeeming are separate steps, done by different parties:
 
-Until the owner's approval path lands, no production verb
-approves an entry, so a tokenless grant of a queued entry is refused. That
-is expected sequencing; the end-to-end QA leg belongs to that ticket.
+1. An owner (the component that needs the action, such as the plugin
+   install gate or the completion gate) queues the request and keeps its
+   nonce.
+2. A human approves it with `cascade approval grant <id>` (no `--token`).
+   This records the decision through `Decide`, bound to the summary and rung
+   the entry itself carries, and redeems nothing. It answers
+   `{"request_id": ..., "state": "approved"}`.
+3. The owner redeems the approved entry with its own nonce, exactly once.
 
-`approval.grant` is an elevated verb. On top of that:
+The tokenless grant is an elevated verb. On top of that:
 
-1. With no token, the call must carry the elevation middleware's witness for
+1. The call must carry the elevation middleware's witness for
    `approval.grant`, minted by the daemon's own issuer. A witness for another
-   verb, or none, is refused.
-2. The record must verify under the daemon's key, be unexpired and name the
-   request being granted.
-3. The entry must be approved, live and bound to the action being run. This
-   is checked without consuming, so a mistyped `--action` is refused and
-   spends nothing.
-4. The sealed audit history, effect index included, must verify.
-5. The redemption is claimed as the audit effect `approval.grant:<id>`. The
+   verb, or none, is refused and the entry stays pending.
+2. The daemon-held record must verify under the daemon's key, be unexpired
+   and name the request being granted. A consumed request has no held
+   record and is refused here.
+3. The sealed audit history, effect index included, must verify.
+4. The decision is claimed as the audit effect `approval.grant:<id>`. The
    claim is create-only, so of any number of concurrent grants exactly one
-   proceeds.
-6. Only the claimant consumes the entry, then confirms the effect.
+   proceeds, and a second grant of the same request is refused.
+5. The entry must be pending. A denied, canceled or expired entry is refused
+   with its own state's error and the effect ends failed.
+6. The approval is recorded, then the effect is confirmed. Nothing on this
+   path consumes the entry.
+
+With `--token`, the caller holds a signed record and runs the action
+itself: the record is verified first, the entry must already be approved,
+live and bound to the action being run (checked without consuming, so a
+mistyped `--action` spends nothing), and only then is it consumed once.
 
 On restart, an `approval.grant` intent with no terminal record is marked
-`unknown-outcome`. Its key stays claimed, so that request never redeems
+`unknown-outcome`. Its key stays claimed, so that request is never granted
 again. Every refusal is a permission error and writes an `approval.deny`
 audit row without any token bytes.
+
+`approval.show` reports any retained entry's state: `pending`, `approved`,
+`consuming`, `consumed`, `denied`, `expired` or `canceled`. It never shows a
+nonce, token, signed record or digest.
 
 ## Known limits
 
@@ -103,9 +113,11 @@ audit row without any token bytes.
 - A backup does not carry the approval key. A restored installation
   provisions its own key on first start; approvals signed by the old key do
   not carry over, which is intended (they expire within five minutes anyway).
-- A grant that fails after its effect was claimed (the queue changing
-  between the check and the claim, or a storage failure) spends the
-  approval; queue the action again. Single use is never given back.
+- A grant that fails after its effect was claimed (the entry not pending,
+  the queue changing between the read and the decision, or a storage
+  failure) leaves that request ungrantable; queue the action again. A claim
+  is never given back.
+- An approved entry that its owner never redeems simply expires.
 - On a host using the file vault, every audit record reads the vault for
   redaction. Once the key exists the vault file exists, so each record pays
   one scrypt decryption (work factor 2^15).

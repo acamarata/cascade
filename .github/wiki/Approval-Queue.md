@@ -130,17 +130,27 @@ The signed bytes stay in daemon memory beside the entry. They never appear
 in `approval list`, `approval show`, a bridge payload, an event or the audit
 journal.
 
-Approving and redeeming stay separate: `approval.grant` redeems only an
-entry already approved through `Decide`, and refuses a pending one (or a
-mistyped `--action`) before claiming anything. Until the owner's approval
-path lands nothing in production approves an entry. `cascade approval grant <request-id>` without `--token`
-redeems the held record. It needs a fresh local attestation for `approval.grant` itself; an
-attestation for any other verb, or none, is refused. The grant first
-verifies the sealed audit history, then claims an `approval.grant:<id>`
-effect (create-only) before the ledger is touched, and confirms it after.
-A second grant, a concurrent grant and a grant after a crash between
-redemption and confirmation all refuse. Bridge approvals still never carry
-an attestation. See [approval records](../../docs/security-posture/approval-records.md).
+Approving and redeeming stay separate, and different parties do them. The
+owner that queued a request (the plugin install gate, the completion gate)
+holds its nonce. `cascade approval grant <request-id>` without `--token` is
+the human decision: it needs a fresh local attestation for `approval.grant`
+itself (an attestation for any other verb, or none, is refused), verifies
+the daemon-held record and the sealed audit history, claims an
+`approval.grant:<id>` effect (create-only), approves the entry only if it is
+still pending, against the summary and rung the entry carries, and confirms
+the effect. It prints `request <id> approved; the requester that queued it
+redeems it` and redeems nothing. The owner then redeems once with its own
+nonce. A second grant, a concurrent grant and a grant after a crash between
+the decision and its confirmation all refuse.
+
+With `--token`, the caller holds the signed record and runs the action
+itself: the record is verified first, the entry must already be approved
+and match `--action`, and it is consumed once.
+
+`approval show <request-id>` reports a retained entry's state: `pending`,
+`approved`, `consuming`, `consumed`, `denied`, `expired` or `canceled`.
+Bridge approvals still never carry an attestation. See
+[approval records](../../docs/security-posture/approval-records.md).
 
 ## The remote-approvable payload
 

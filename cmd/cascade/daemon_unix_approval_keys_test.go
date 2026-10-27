@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -101,6 +102,19 @@ func (d approvalDaemon) injectApprovedState(t *testing.T) policy.EnqueueResult {
 // grantParams is the tokenless grant for the enqueueAsk action.
 func grantParams(id string) policy.ApprovalGrantParams {
 	return policy.ApprovalGrantParams{RequestID: id, Action: "fake action"}
+}
+
+// signedGrantParams is the signed-token grant for the enqueueAsk action,
+// carrying the entry's held record as the caller's token.
+func (d approvalDaemon) signedGrantParams(t *testing.T, id string) policy.ApprovalGrantParams {
+	t.Helper()
+	raw, err := d.Pol.rpcDeps.Held.HeldSignedRecord(id)
+	if err != nil {
+		t.Fatalf("held record of %s: %v", id, err)
+	}
+	p := grantParams(id)
+	p.SignedToken = base64.StdEncoding.EncodeToString(raw)
+	return p
 }
 
 // seedVaultValue writes a reserved entry straight into the daemon's file

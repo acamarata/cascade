@@ -158,9 +158,10 @@ func (v approvalListView) String() string {
 func newApprovalShowCmd(deps approvalDeps) *cobra.Command {
 	return &cobra.Command{
 		Use:   "show <request-id>",
-		Short: "Show one pending approval request",
-		Long: "Show one pending approval request. The response carries the request id, the\n" +
-			"summary the approver is asked about and the expiry, and never the approval\n" +
+		Short: "Show one approval request and its state",
+		Long: "Show one approval request. The response carries the request id, the summary\n" +
+			"the approver is asked about, the expiry and the state (pending, approved,\n" +
+			"consuming, consumed, denied, expired or canceled), and never the approval\n" +
 			"token, its nonce or its action hash.",
 		Example: "  cascade approval show 01J8ZC5W2K4F6H8M0P2R4T6V8X",
 		Args:    usageArgs(cobra.ExactArgs(1)),
@@ -173,22 +174,23 @@ func newApprovalShowCmd(deps approvalDeps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return approvalOutputWriter(cmd).Result(approvalEntryView(entry))
+			return approvalOutputWriter(cmd).Result(approvalShowView(entry))
 		},
 	}
 }
 
-// approvalEntryView renders one pending entry.
-type approvalEntryView policy.PendingEntry
+// approvalShowView renders one entry with its state.
+type approvalShowView policy.ApprovalShowResult
 
-// String renders the entry as a two-column table.
-func (v approvalEntryView) String() string {
+// String renders the entry as a two-column table with its state.
+func (v approvalShowView) String() string {
 	var buf bytes.Buffer
 	tw := tabwriter.NewWriter(&buf, 0, 4, 2, ' ', 0)
 	_, _ = fmt.Fprintf(tw, "FIELD\tVALUE\n")
 	_, _ = fmt.Fprintf(tw, "request_id\t%s\n", v.RequestID)
 	_, _ = fmt.Fprintf(tw, "action\t%s\n", v.Summary)
 	_, _ = fmt.Fprintf(tw, "expires\t%s\n", v.ExpiresAt.UTC().Format(time.RFC3339))
+	_, _ = fmt.Fprintf(tw, "state\t%s\n", v.State)
 	_ = tw.Flush()
 	return strings.TrimRight(buf.String(), "\n")
 }

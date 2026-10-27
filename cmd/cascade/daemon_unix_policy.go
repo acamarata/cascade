@@ -108,6 +108,9 @@ type policyWiring struct {
 	// so an operator listing the queue sees the entries the engine
 	// actually made rather than a second, empty queue.
 	Queue policy.ApprovalQueue
+	// Entries reads one entry's state for approval.show and the held grant.
+	// It is the SAME *policy.StoreApprovals as Queue, never a second queue.
+	Entries policy.ApprovalEntrySource
 	// Handlers is the approval/policy JSON-RPC handler set built over
 	// everything above. The RPC composition root registers it.
 	Handlers map[string]policy.MethodFunc
@@ -180,13 +183,13 @@ func wirePolicy(ctx context.Context, store provider.Store, clock runtime.Clock, 
 	if err != nil {
 		return nil, err
 	}
-	wiring := &policyWiring{policyEngineParts: parts, Router: router, Queue: queue, approvalKeys: keys}
+	wiring := &policyWiring{policyEngineParts: parts, Router: router, Queue: queue, Entries: queue, approvalKeys: keys}
 	wiring.rpcDeps = policy.RPCDeps{
 		Queue: queue, Engine: engine, Registry: parts.Registry, Grants: parts.Grants,
 		DenyList: parts.DenyList, Audit: parts.Audit, Clock: clock,
 		// Verifier is nil when the key failed: approval.grant then refuses.
 		// Attestor is bound later by bindPolicyElevation.
-		Verifier: keys.verifier, Held: queue, Effects: effects,
+		Verifier: keys.verifier, Held: queue, Entries: queue, Effects: effects,
 		AuditVerify: openAuditVerifier(store), Recorder: parts.Audit,
 	}
 	wiring.Handlers = policy.MethodHandlers(wiring.rpcDeps)

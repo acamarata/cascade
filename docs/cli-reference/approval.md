@@ -26,8 +26,10 @@ action hash — those never leave the daemon.
 
 ## `show <request-id>`
 
-Shows one pending entry: request id, summary, expiry. Same three
-bridge-safe fields `list` prints, for one request.
+Shows one retained entry: request id, summary, expiry and its state
+(`pending`, `approved`, `consuming`, `consumed`, `denied`, `expired` or
+`canceled`), so an operator and the requester can tell an approved request
+from a redeemed one. It never shows a token, nonce or digest.
 
 ## `deny <request-id>`
 
@@ -38,11 +40,13 @@ whatever the entry happens to say now.
 
 ## `grant <request-id>`
 
-Redeems a signed approval token. This is an **elevated verb**: it needs a
-fresh local attestation in addition to `--token`, the base64 signed
-approval record. The token is verified before anything is written, so a
-forged or expired one changes no queue state. Knowing a request id is
-never enough on its own.
+Without `--token`, approves a pending request and redeems nothing: the
+requester that queued it redeems it once with its own nonce. With
+`--token` (the base64 signed approval record), redeems that record once.
+This is an **elevated verb**: both forms need a fresh local attestation.
+A record is verified before anything is written, so a forged or expired
+one changes no queue state. Knowing a request id is never enough on its
+own.
 
 ## `expire`
 

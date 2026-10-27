@@ -35,16 +35,18 @@ import (
 var approvalGrantCallDeps = productionElevatedCallDeps
 
 // newApprovalGrantCmd builds `approval grant <id> [--token <signed-token>]`.
-// Without --token the daemon redeems the signed record it holds.
+// Without --token it approves the queued request; the owner that queued it
+// redeems it. With --token it redeems that signed record.
 func newApprovalGrantCmd(deps approvalDeps) *cobra.Command {
 	var params policy.ApprovalGrantParams
 	cmd := &cobra.Command{
 		Use:   "grant <request-id>",
-		Short: "Redeem a signed approval token for one request",
-		Long: "Redeem an approval exactly once. Without --token the daemon redeems the\n" +
-			"signed record it holds, which needs a fresh local attestation for this verb.\n" +
-			"A record is verified before anything is written, so a forged or expired one\n" +
-			"changes no queue state. Knowing a request id is never enough on its own.",
+		Short: "Approve a queued request, or redeem a signed token with --token",
+		Long: "Without --token, record your approval of a queued request. This needs a\n" +
+			"fresh local attestation for this verb, and the owner that queued the request\n" +
+			"redeems it, exactly once. With --token, redeem that signed approval record\n" +
+			"once. A record is verified before anything is written, so a forged or expired\n" +
+			"one changes no queue state. Knowing a request id is never enough on its own.",
 		Example: "  cascade approval grant <request-id>",
 		Args:    usageArgs(cobra.ExactArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -56,6 +58,14 @@ func newApprovalGrantCmd(deps approvalDeps) *cobra.Command {
 				return err
 			}
 			params.RequestID = args[0]
+			if params.SignedToken == "" {
+				var dec policy.DecisionResult
+				err = callElevated(cmd.Context(), c, approvalGrantCallDeps(cmd.ErrOrStderr()), client.ApprovalGrantMethod, params, &dec)
+				if err != nil {
+					return err
+				}
+				return approvalOutputWriter(cmd).Result(heldGrantView(dec))
+			}
 			var res policy.ApprovalGrantResult
 			err = callElevated(cmd.Context(), c, approvalGrantCallDeps(cmd.ErrOrStderr()), client.ApprovalGrantMethod, params, &res)
 			if err != nil {
@@ -65,7 +75,7 @@ func newApprovalGrantCmd(deps approvalDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&params.SignedToken, "token", "",
-		"optional base64 signed approval record; omit it to redeem the daemon-held record")
+		"optional base64 signed approval record to redeem; omit it to approve the queued request")
 	cmd.Flags().StringVar(&params.Action, "action", "",
 		"the action about to run, re-hashed against the approved digests")
 	return cmd
@@ -78,6 +88,14 @@ type grantView policy.ApprovalGrantResult
 func (v grantView) String() string {
 	return fmt.Sprintf("request %s redeemed at %s (capability %s, %s)",
 		v.RequestID, v.ConsumedAt, v.Capability, v.Level)
+}
+
+// heldGrantView reports a recorded approval: nothing was redeemed.
+type heldGrantView policy.DecisionResult
+
+// String names the approved request and who redeems it.
+func (v heldGrantView) String() string {
+	return fmt.Sprintf("request %s %s; the requester that queued it redeems it", v.RequestID, v.State)
 }
 
 // newApprovalStandingCmd builds the `approval standing` subtree.

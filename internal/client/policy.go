@@ -44,9 +44,9 @@ func (c *Client) ApprovalList(ctx context.Context) (policy.ApprovalListResult, e
 	return res, err
 }
 
-// ApprovalShow returns one pending entry.
-func (c *Client) ApprovalShow(ctx context.Context, requestID string) (policy.PendingEntry, error) {
-	var res policy.PendingEntry
+// ApprovalShow returns one retained entry and its state.
+func (c *Client) ApprovalShow(ctx context.Context, requestID string) (policy.ApprovalShowResult, error) {
+	var res policy.ApprovalShowResult
 	err := c.Do(ctx, ApprovalShowMethod, policy.ApprovalShowParams{RequestID: requestID}, &res)
 	return res, err
 }

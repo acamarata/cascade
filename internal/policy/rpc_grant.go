@@ -1,29 +1,29 @@
-// Package policy (rpc_grant.go): Purpose: approval.grant — the one verb
+// Package policy (rpc_grant.go): Purpose: approval.grant. With a signed
 //
-//	that turns a recorded decision into a spendable authorization. Split
+//	token it redeems an approved entry once; without one it records the
+//	human approval of a pending entry (rpc_grant_held.go). Split
 //	from rpc.go under Art.10.3's 300-line cap; it is the same handler set,
 //	kept apart because this is the file where the signature check lives
 //	and it should be readable on its own.
 //
 // Inputs: the request id, an optional SIGNED approval token, and the action
 //
-//	about to run. With no token, the daemon-held signed record is used, and
-//	only under a verified local attestation for approval.grant itself.
+//	about to run. With no token, the daemon-held signed record is verified,
+//	and only under a verified local attestation for approval.grant itself.
 //
 // Outputs: approvalGrant and its params/result types.
 // Constraints: R-21.230 — the signature is VERIFIED BEFORE anything is
 //
 //	written, so a forged or expired token changes no queue state at all.
 //	Knowing a request id is never enough. The sealed audit history is
-//	verified, then the redemption is claimed as a create-only audit effect
-//	BEFORE the queue's ledger is touched and confirmed after, so a replay,
-//	a concurrent second grant and a crash between redeem and confirm all
-//	refuse. Every refusal is a KindPermissionDenied (KindInvalidInput for a
-//	missing id) and is audited without the token bytes.
+//	verified, then the grant is claimed as a create-only audit effect
+//	BEFORE the queue is touched and confirmed after, so a replay, a
+//	concurrent second grant and a crash before confirm all refuse. Every
+//	refusal is audited without the token bytes.
 //
 // SPORT: internal/policy approval-grant-handler/ADDED (P1-E09-W2-S18-T6),
 //
-//	held-record redemption/CHANGED (P1-SEC-23).
+//	held-record redemption/CHANGED (P1-SEC-23), held-record decision/CHANGED (P1-SEC-41).
 package policy
 
 import (
@@ -45,8 +45,9 @@ type ApprovalGrantParams struct {
 	// RequestID names the approved entry.
 	RequestID string `json:"request_id"`
 	// SignedToken is the base64 (standard encoding) signed approval
-	// record. When empty, the daemon redeems its own held record, which
-	// needs a verified local attestation for approval.grant.
+	// record. When empty, the call approves the pending entry (the queuing
+	// owner redeems it), which needs a verified local attestation for
+	// approval.grant.
 	SignedToken string `json:"signed_token"`
 	// Action and Params are the action ABOUT TO RUN. The queue re-hashes
 	// them and refuses a request that changed after it was approved.
@@ -67,13 +68,14 @@ type ApprovalGrantResult struct {
 	ConsumedAt string `json:"consumed_at"`
 }
 
-// approvalGrant verifies a signed record and, only then, redeems it once.
+// approvalGrant without a token records the approval of a pending entry
+// (decideHeld). With a token it verifies the record and, only then,
+// redeems it once:
 //
 //  1. the request id must be present;
 //  2. the verifier, queue, effect log, audit verifier and audit sink must
 //     all be wired — any one absent refuses;
-//  3. the record is the caller's token, or (no token) the held record
-//     under a verified approval.grant witness;
+//  3. the record is the caller's token;
 //  4. it must decode, verify, be unexpired and name THIS request id;
 //  5. the sealed audit history must verify;
 //  6. the entry must be approved (Decide), live and bound to this action
@@ -89,7 +91,13 @@ func (d RPCDeps) approvalGrant(ctx context.Context, params json.RawMessage) (any
 	if p.RequestID == "" {
 		return nil, cascade.New(cascade.KindInvalidInput, "policy: approval.grant requires a request_id")
 	}
-	res, err := d.redeemGrant(ctx, p)
+	var res any
+	var err error
+	if p.SignedToken == "" {
+		res, err = d.decideHeld(ctx, p)
+	} else {
+		res, err = d.redeemGrant(ctx, p)
+	}
 	if err != nil {
 		return nil, d.auditGrantRefusal(ctx, p.RequestID, err)
 	}

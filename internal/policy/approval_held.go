@@ -11,12 +11,17 @@
 //
 // Constraints: the held bytes never reach GetPending, list/show JSON, a
 //
-//	bridge payload or the journal. A request that is unknown, consumed,
-//	denied, canceled, expired or was minted unsigned has no held record
-//	(KindNotFound); a pending one is refused ErrApprovalNotApproved. The
-//	grant redeems; it never approves (Decide is the approval step).
+//	bridge payload or the journal; their one production reader is the
+//	witnessed approval.grant, which only verifies them. Any retained signed
+//	entry that is not consumed or being consumed has a held record, whatever
+//	its exp, so the grant can record the decision on a pending entry and
+//	refuse the others with their own state's refusal. A request that is
+//	unknown, consumed, consuming or was minted unsigned has none
+//	(KindNotFound).
 //
-// SPORT: internal/policy HeldRecordSource/ADDED, HeldSignedRecord/ADDED (P1-SEC-23).
+// SPORT: internal/policy HeldRecordSource/ADDED, HeldSignedRecord/ADDED (P1-SEC-23),
+//
+//	HeldSignedRecord states/CHANGED (P1-SEC-41).
 
 package policy
 
@@ -64,9 +69,12 @@ const grantEffectPrefix = "approval.grant:"
 // GrantEffectKey is the audit effect key one request's redemption claims.
 func GrantEffectKey(requestID string) string { return grantEffectPrefix + requestID }
 
-// HeldSignedRecord implements HeldRecordSource. It returns a copy, and only
-// for an approved, unexpired entry: a pending entry is refused before any
-// redemption is claimed, so granting too early never spends the approval.
+// HeldSignedRecord implements HeldRecordSource. It returns a copy for any
+// retained, signed entry that is not consumed or consuming (pending,
+// approved, denied, canceled or expired, whatever its exp): the grant
+// verifies it and then reads the entry's state, which is what refuses a
+// non-pending entry. A consumed or consuming entry has no held record, so a
+// grant racing the owner's redemption refuses before any effect is begun.
 func (q *StoreApprovals) HeldSignedRecord(requestID string) ([]byte, error) {
 	if q == nil {
 		return nil, cascade.New(cascade.KindInvalidInput, "policy: nil approval queue")
@@ -74,12 +82,7 @@ func (q *StoreApprovals) HeldSignedRecord(requestID string) ([]byte, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	entry, ok := q.entries[requestID]
-	now := q.cfg.Clock.Now().UTC()
-	switch {
-	case ok && entry.state == ApprovalPending && now.Before(entry.expires):
-		return nil, refuse(ErrApprovalNotApproved,
-			"request %s is pending; it must be approved before it is redeemed", sanitize(requestID))
-	case !ok || len(entry.signed) == 0 || !now.Before(entry.expires) || entry.state != ApprovalApproved:
+	if !ok || len(entry.signed) == 0 || entry.state == ApprovalConsumed || entry.state == ApprovalConsuming {
 		return nil, cascade.Newf(cascade.KindNotFound,
 			"policy: no held approval record for request %q", sanitize(requestID))
 	}

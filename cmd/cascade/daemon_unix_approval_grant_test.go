@@ -1,26 +1,24 @@
 //go:build !windows
 
-// Purpose: approval.grant end to end on the daemon: an attested tokenless
+// Purpose: approval.grant end to end on the daemon: a signed-token grant
 //
-//	grant redeems the daemon-held signed record once (over the registry and
-//	from the real CLI command over a socket), and a crash between redeem and
-//	confirm leaves an unknown-outcome effect that refuses every later grant.
+//	redeems an approved entry once over the registry, and a crash between
+//	the held-record decision and its confirm leaves an unknown-outcome
+//	effect that refuses every later grant.
 //
 // Inputs: a fresh HOME / CASCADE_HOME, an injected elevation custody, the
 //
 //	file vault forced by TestMain; the crash leg re-runs this test binary.
 //
-// SPORT: cmd/cascade approval grant tests (P1-SEC-23).
+// SPORT: cmd/cascade approval grant tests (P1-SEC-23, P1-SEC-41).
 
 package main
 
 import (
-	"bufio"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
-	"io"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -29,7 +27,6 @@ import (
 	"testing"
 
 	"github.com/acamarata/cascade/internal/audit"
-	"github.com/acamarata/cascade/internal/client"
 	"github.com/acamarata/cascade/internal/elevation"
 	"github.com/acamarata/cascade/internal/policy"
 	"github.com/acamarata/cascade/internal/rpc"
@@ -42,62 +39,16 @@ func TestDaemonApprovalGrantRoundTrip(t *testing.T) {
 		d := newApprovalDaemon(t, nil)
 		ctx := context.Background()
 		res := d.injectApprovedState(t)
+		params := d.signedGrantParams(t, res.RequestID)
 		var out policy.ApprovalGrantResult
-		if err := d.Call(ctx, "approval.grant", grantParams(res.RequestID), &out); err != nil || out.RequestID != res.RequestID {
-			t.Fatalf("attested tokenless grant = %+v, %v", out, err)
+		if err := d.Call(ctx, "approval.grant", params, &out); err != nil || out.RequestID != res.RequestID {
+			t.Fatalf("attested signed-token grant = %+v, %v", out, err)
 		}
-		err := d.Call(ctx, "approval.grant", grantParams(res.RequestID), nil)
+		err := d.Call(ctx, "approval.grant", params, nil)
 		if err == nil || !strings.Contains(err.Error(), "redeem") {
 			t.Fatalf("second grant = %v, want a refusal", err)
 		}
 	})
-}
-
-// TestProductionDecideNeverApprovesSoGrantRefuses: through the daemon's own
-// verbs a queued entry is never approved (the only production Decide,
-// approval.deny, denies), so a tokenless grant refuses before and after the
-// deny and spends nothing. The approve step is a later ticket.
-func TestProductionDecideNeverApprovesSoGrantRefuses(t *testing.T) {
-	d := newApprovalDaemon(t, nil)
-	ctx := context.Background()
-	res, err := d.enqueueAsk(ctx)
-	if err != nil {
-		t.Fatalf("Enqueue: %v", err)
-	}
-	if err := d.Call(ctx, "approval.grant", grantParams(res.RequestID), nil); err == nil || !strings.Contains(err.Error(), "pending") {
-		t.Fatalf("grant of a queued entry = %v, want the not-approved refusal", err)
-	}
-	if err := d.Call(ctx, "approval.deny", policy.ApprovalDecisionParams{RequestID: res.RequestID}, nil); err != nil {
-		t.Fatalf("approval.deny: %v", err)
-	}
-	if err := d.Call(ctx, "approval.grant", grantParams(res.RequestID), nil); err == nil {
-		t.Fatal("grant of a denied entry succeeded")
-	}
-}
-
-func TestApprovalGrantCLIWithoutTokenSignsAndRedeems(t *testing.T) {
-	t.Run("approved_state_injected", testApprovalGrantCLIInjected)
-}
-
-func testApprovalGrantCLIInjected(t *testing.T) {
-	d := newApprovalDaemon(t, nil)
-	res := d.injectApprovedState(t)
-	socket := serveRegistry(t, d.Registry)
-	previous := approvalGrantCallDeps
-	approvalGrantCallDeps = func(stderr io.Writer) elevatedCallDeps {
-		return elevatedCallDeps{Custody: testCustody(t, d.KS, elevation.CustodyPlatform), Clock: runtime.NewSystemClock(),
-			Getenv: func(string) string { return "" }, Stderr: stderr}
-	}
-	t.Cleanup(func() { approvalGrantCallDeps = previous })
-	deps := hermeticApprovalDeps(t)
-	deps.DialContext = redirectDial(client.UnixDialer, socket)
-	out, err := execLeaf(t, newApprovalGrantCmd(deps), []string{res.RequestID, "--action", "fake action"})
-	if err != nil || !strings.Contains(out, res.RequestID) {
-		t.Fatalf("approval grant <id> (no --token) = %q, %v", out, err)
-	}
-	if _, err := execLeaf(t, newApprovalGrantCmd(deps), []string{res.RequestID, "--action", "fake action"}); err == nil {
-		t.Fatal("a second CLI grant of the same request succeeded")
-	}
 }
 
 // serveRegistry serves reg over a fresh unix socket and returns its path.
@@ -128,38 +79,66 @@ func redirectDial[C any](dial func(context.Context, string) (C, error), path str
 	return func(ctx context.Context, _ string) (C, error) { return dial(ctx, path) }
 }
 
-// --- crash between redeem and confirm (P1-SEC-33 recipe) -------------------
+// --- crash between decision and confirm (P1-SEC-33 recipe) ---------------
 
-const grantCrashEnv = "CASCADE_TEST_GRANT_CRASH_DIR"
+const heldCrashEnv = "CASCADE_TEST_HELD_GRANT_CRASH_DIR"
 
-// crashQueue records the consume, then dies before ConfirmEffect runs.
-type crashQueue struct {
+// crashDecideQueue logs each Decide and ConsumeToken; with crash set it dies
+// inside Decide, after the effect intent and before its confirm.
+type crashDecideQueue struct {
 	policy.ApprovalQueue
 	dir   string
 	crash bool
 }
 
-func (q crashQueue) ConsumeToken(_ context.Context, req policy.ConsumeRequest) (policy.ConsumeResult, error) {
-	f, err := os.OpenFile(filepath.Join(q.dir, "consumed.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err == nil {
-		_, _ = f.WriteString(req.RequestID + "\n")
-		_ = f.Close()
-	}
+func (q crashDecideQueue) Decide(_ context.Context, reqs []policy.DecisionRequest) ([]policy.DecisionOutcome, error) {
+	appendLine(q.dir, "decided.log", reqs[0].RequestID)
 	if q.crash {
 		os.Exit(3)
 	}
-	return policy.ConsumeResult{RequestID: req.RequestID, Capability: "fake.cap", Level: policy.L2}, nil
+	return []policy.DecisionOutcome{{RequestID: reqs[0].RequestID, State: policy.ApprovalApproved}}, nil
 }
 
-// heldFile serves the held record a parent wrote to disk.
-type heldFile struct{ signed []byte }
+func (q crashDecideQueue) ConsumeToken(_ context.Context, req policy.ConsumeRequest) (policy.ConsumeResult, error) {
+	appendLine(q.dir, "consumed.log", req.RequestID)
+	return policy.ConsumeResult{}, nil
+}
 
-func (h heldFile) HeldSignedRecord(string) ([]byte, error)   { return h.signed, nil }
-func (heldFile) CheckRedeemable(policy.ConsumeRequest) error { return nil }
+// heldRecordFile serves the held record a parent wrote to disk; pendingView
+// reports that request pending.
+type heldRecordFile struct{ signed []byte }
 
-// crashRegistry is approval.grant over the store at dir/cascade.db, behind
-// a real elevation middleware trusting key, with keys read from dir.
-func crashRegistry(t *testing.T, dir string, crash bool) (*rpc.Registry, func(ctx context.Context, method string, params, out any) error, *audit.EffectLog) {
+func (h heldRecordFile) HeldSignedRecord(string) ([]byte, error) { return h.signed, nil }
+
+type pendingView struct{}
+
+func (pendingView) EntryView(_ context.Context, id string) (policy.ApprovalEntryView, error) {
+	return policy.ApprovalEntryView{RequestID: id, Summary: "fake summary", Level: policy.L2, State: policy.ApprovalPending}, nil
+}
+
+func appendLine(dir, name, line string) {
+	f, err := os.OpenFile(filepath.Join(dir, name), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // test temp dir
+	if err == nil {
+		_, _ = f.WriteString(line + "\n")
+		_ = f.Close()
+	}
+}
+
+func logLines(t *testing.T, dir, name string) int {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(dir, name)) //nolint:gosec // test temp dir
+	if errors.Is(err, os.ErrNotExist) {
+		return 0
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Count(string(raw), "\n")
+}
+
+// heldCrashCaller is the guarded approval.grant over dir/cascade.db behind
+// the real elevation middleware, with the logging queue above.
+func heldCrashCaller(t *testing.T, dir string, crash bool) (func(context.Context, string, any, any) error, *audit.EffectLog) {
 	t.Helper()
 	ctx := context.Background()
 	store, err := sqlite.Open(ctx, filepath.Join(dir, "cascade.db"))
@@ -169,18 +148,19 @@ func crashRegistry(t *testing.T, dir string, crash bool) (*rpc.Registry, func(ct
 	t.Cleanup(func() { _ = store.Close() })
 	clock := runtime.NewSystemClock()
 	log := audit.New(store, clock, nil)
-	effects, err := openGrantEffects(ctx, log)
+	effects, err := openGrantEffects(ctx, log) // recovery runs here
 	if err != nil {
 		t.Fatal(err)
 	}
-	approvalPub, _ := os.ReadFile(filepath.Join(dir, "approval.pub")) //nolint:gosec // test temp dir
-	signed, _ := os.ReadFile(filepath.Join(dir, "record.bin"))        //nolint:gosec // test temp dir
-	elevSeed, _ := os.ReadFile(filepath.Join(dir, "elevation.seed"))  //nolint:gosec // test temp dir
-	verifier, err := policy.NewApprovalVerifier(approvalPub, clock)
+	read := func(name string) []byte {
+		b, _ := os.ReadFile(filepath.Join(dir, name)) //nolint:gosec // test temp dir
+		return b
+	}
+	verifier, err := policy.NewApprovalVerifier(read("approval.pub"), clock)
 	if err != nil {
 		t.Fatal(err)
 	}
-	priv := ed25519.NewKeyFromSeed(elevSeed)
+	priv := ed25519.NewKeyFromSeed(read("elevation.seed"))
 	ks := signingKeystore{dir: dir, priv: priv, pub: priv.Public().(ed25519.PublicKey)}
 	pubB64, _ := ks.PubKeyB64()
 	fp, _ := elevation.Fingerprint(pubB64)
@@ -188,19 +168,18 @@ func crashRegistry(t *testing.T, dir string, crash bool) (*rpc.Registry, func(ct
 	reg := rpc.NewRegistry()
 	reg.Use(rpc.ElevationMiddleware(rpc.ElevationDeps{Ledger: rpc.NewNonceLedger(clock), Trust: rpc.MapTrustStore{fp: ks.pub},
 		Clock: clock, Audit: rpc.LocalCeremonyAudit{}, Issuer: issuer, Custody: func() (string, bool) { return "platform", true }}))
-	deps := policy.RPCDeps{Queue: crashQueue{dir: dir, crash: crash}, Clock: clock, Verifier: verifier,
-		Attestor: policy.WitnessAttestor(issuer.Verifier()), Held: heldFile{signed: signed}, Effects: effects,
-		AuditVerify: log, Recorder: log}
+	deps := policy.RPCDeps{Queue: crashDecideQueue{dir: dir, crash: crash}, Clock: clock, Verifier: verifier,
+		Attestor: policy.WitnessAttestor(issuer.Verifier()), Held: heldRecordFile{signed: read("record.bin")},
+		Entries: pendingView{}, Effects: effects, AuditVerify: log, Recorder: log}
 	reg.Register("approval.grant", rpc.HandlerFunc(policy.MethodHandlers(deps)["approval.grant"]))
-	return reg, elevatedCaller(reg, ks, clock), effects
+	return elevatedCaller(reg, ks, clock), effects
 }
 
-func TestGrantCrashBetweenRedeemAndConfirm(t *testing.T) {
-	if dir := os.Getenv(grantCrashEnv); dir != "" {
-		_, call, _ := crashRegistry(t, dir, true)
-		id, _ := os.ReadFile(filepath.Join(dir, "request.id")) //nolint:gosec // test temp dir
-		err := call(context.Background(), "approval.grant", grantParams(string(id)), nil)
-		t.Fatalf("the child returned instead of crashing inside ConsumeToken: %v", err)
+func TestGrantCrashBetweenDecideAndConfirm(t *testing.T) {
+	if dir := os.Getenv(heldCrashEnv); dir != "" {
+		call, _ := heldCrashCaller(t, dir, true)
+		err := call(context.Background(), "approval.grant", policy.ApprovalGrantParams{RequestID: string(readFile(t, dir, "request.id"))}, nil)
+		t.Fatalf("the child returned instead of crashing inside Decide: %v", err)
 	}
 	dir := t.TempDir()
 	_, approvalPriv, _ := ed25519.GenerateKey(rand.Reader)
@@ -213,41 +192,38 @@ func TestGrantCrashBetweenRedeemAndConfirm(t *testing.T) {
 	}
 	elevSeed := make([]byte, ed25519.SeedSize)
 	_, _ = rand.Read(elevSeed)
-	for name, v := range map[string][]byte{"approval.pub": approvalPriv.Public().(ed25519.PublicKey), "record.bin": tok.Signed, "elevation.seed": elevSeed, "request.id": []byte(tok.RequestID)} {
+	for name, v := range map[string][]byte{"approval.pub": approvalPriv.Public().(ed25519.PublicKey), "record.bin": tok.Signed,
+		"elevation.seed": elevSeed, "request.id": []byte(tok.RequestID)} {
 		if err := os.WriteFile(filepath.Join(dir, name), v, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	cmd := exec.Command(os.Args[0], "-test.run=^TestGrantCrashBetweenRedeemAndConfirm$", "-test.count=1") //nolint:gosec // re-runs this test binary
-	cmd.Env = append(os.Environ(), grantCrashEnv+"="+dir)
+	cmd := exec.Command(os.Args[0], "-test.run=^TestGrantCrashBetweenDecideAndConfirm$", "-test.count=1") //nolint:gosec // re-runs this test binary
+	cmd.Env = append(os.Environ(), heldCrashEnv+"="+dir)
 	out, err := cmd.CombinedOutput()
 	var exitErr *exec.ExitError
-	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 3 {
-		t.Fatalf("child = %v, want exit 3 inside ConsumeToken; output:\n%s", err, out)
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 3 || logLines(t, dir, "decided.log") != 1 {
+		t.Fatalf("child = %v, want exit 3 inside Decide; output:\n%s", err, out)
 	}
-	_, call, effects := crashRegistry(t, dir, false) // recovery runs in openGrantEffects
+	call, effects := heldCrashCaller(t, dir, false)
 	if phase, found, err := effects.EffectState(context.Background(), policy.GrantEffectKey(tok.RequestID)); err != nil || !found || phase != audit.EffectUnknown {
 		t.Fatalf("effect after crash and recovery = %q %v %v, want unknown-outcome", phase, found, err)
 	}
-	err = call(context.Background(), "approval.grant", grantParams(tok.RequestID), nil)
-	if err == nil || !strings.Contains(err.Error(), "redeem") {
-		t.Fatalf("grant after the crash = %v, want a refusal", err)
+	err = call(context.Background(), "approval.grant", policy.ApprovalGrantParams{RequestID: tok.RequestID}, nil)
+	if err == nil || !strings.Contains(err.Error(), "already granted") {
+		t.Fatalf("grant after the crash = %v, want the replay refusal", err)
 	}
-	if n := countLines(t, filepath.Join(dir, "consumed.log")); n != 1 {
-		t.Fatalf("ConsumeToken ran %d times, want once", n)
+	if logLines(t, dir, "decided.log") != 1 || logLines(t, dir, "consumed.log") != 0 {
+		t.Fatalf("Decide ran %d times and ConsumeToken %d; want once and never",
+			logLines(t, dir, "decided.log"), logLines(t, dir, "consumed.log"))
 	}
 }
 
-func countLines(t *testing.T, path string) int {
+func readFile(t *testing.T, dir, name string) []byte {
 	t.Helper()
-	f, err := os.Open(path) //nolint:gosec // test temp dir
+	b, err := os.ReadFile(filepath.Join(dir, name)) //nolint:gosec // test temp dir
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = f.Close() }()
-	n := 0
-	for s := bufio.NewScanner(f); s.Scan(); {
-		n++
-	}
-	return n
+	return b
 }

@@ -106,7 +106,7 @@ func TestApprovalViewsRender(t *testing.T) {
 			t.Errorf("the queue table is missing %q:\n%s", want, out)
 		}
 	}
-	entry := approvalEntryView(policy.PendingEntry{RequestID: "req-0001", Summary: "write a.txt"})
+	entry := approvalShowView(policy.ApprovalShowResult{PendingEntry: policy.PendingEntry{RequestID: "req-0001", Summary: "write a.txt"}})
 	if !strings.Contains(entry.String(), "request_id") {
 		t.Errorf("the entry view renders no request_id:\n%s", entry.String())
 	}

@@ -19,7 +19,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -105,26 +104,6 @@ func TestGrantEmptyTokenRequiresWitness(t *testing.T) {
 	}
 }
 
-func TestGrantEmptyTokenRedeemsHeldRecordOnce(t *testing.T) {
-	g := newRedeemFixture(t)
-	res := g.approved(t, "edit")
-	out, err := g.grant(g.witness(t, grantMethod), g.deps, res.RequestID, "")
-	if err != nil {
-		t.Fatalf("tokenless grant: %v", err)
-	}
-	if got, ok := out.(ApprovalGrantResult); !ok || got.RequestID != res.RequestID || got.Capability != approvalCap().Name {
-		t.Fatalf("result = %#v", out)
-	}
-	if phase, _, _ := g.effects.EffectState(context.Background(), GrantEffectKey(res.RequestID)); phase != audit.EffectConfirmed {
-		t.Fatalf("effect phase = %q, want confirmed", phase)
-	}
-	before := g.denials(t)
-	_, err = g.grant(g.witness(t, grantMethod), g.deps, res.RequestID, "")
-	if !cascade.HasKind(err, cascade.KindPermissionDenied) || g.denials(t) != before+1 || g.counter.consumed.Load() != 1 {
-		t.Fatalf("second grant = %v (consumed %d), want an audited refusal and one consume", err, g.counter.consumed.Load())
-	}
-}
-
 func TestGrantRefusesWhenNotFullyWired(t *testing.T) {
 	g := newRedeemFixture(t)
 	res := g.approved(t, "edit")
@@ -146,72 +125,79 @@ func TestGrantRefusesWhenNotFullyWired(t *testing.T) {
 func TestGrantBeforeApprovalSpendsNothing(t *testing.T) {
 	g := newRedeemFixture(t)
 	res := g.enqueue(t, "edit")
-	if _, err := g.queue.HeldSignedRecord(res.RequestID); !errors.Is(err, ErrApprovalNotApproved) || !strings.Contains(err.Error(), "pending") {
-		t.Fatalf("held record of a pending entry = %v, want the not-approved refusal", err)
-	}
-	_, err := g.grant(g.witness(t, grantMethod), g.deps, res.RequestID, "")
-	if !cascade.HasKind(err, cascade.KindPermissionDenied) || g.counter.consumed.Load() != 0 {
-		t.Fatalf("grant of a pending entry = %v (consumed %d), want a refusal before ConsumeToken", err, g.counter.consumed.Load())
-	}
-	if _, found, _ := g.effects.EffectState(context.Background(), GrantEffectKey(res.RequestID)); found {
-		t.Fatal("a grant of a pending entry claimed the redemption effect")
-	}
-	g.queue.mu.Lock()
-	signed := append([]byte(nil), g.queue.entries[res.RequestID].signed...)
-	g.queue.mu.Unlock()
-	_, err = g.grant(g.witness(t, grantMethod), g.deps, res.RequestID, base64.StdEncoding.EncodeToString(signed))
-	if !cascade.HasKind(err, cascade.KindPermissionDenied) || g.counter.consumed.Load() != 0 {
-		t.Fatalf("token grant of a pending entry = %v (consumed %d), want a refusal before ConsumeToken", err, g.counter.consumed.Load())
+	_, err := g.grant(g.witness(t, grantMethod), g.deps, res.RequestID, g.heldToken(t, res.RequestID))
+	if !errors.Is(err, ErrApprovalNotApproved) || !strings.Contains(err.Error(), "only an approved request") || g.counter.consumed.Load() != 0 {
+		t.Fatalf("token grant of a pending entry = %v (consumed %d), want ErrApprovalNotApproved before ConsumeToken", err, g.counter.consumed.Load())
 	}
 	if _, found, _ := g.effects.EffectState(context.Background(), GrantEffectKey(res.RequestID)); found {
 		t.Fatal("a token grant of a pending entry claimed the redemption effect")
 	}
-	if _, err := g.queue.Decide(context.Background(), []DecisionRequest{{RequestID: res.RequestID, Approved: true,
-		PresentedSummary: res.Summary, PresentedLevel: res.Level}}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := g.grant(g.witness(t, grantMethod), g.deps, res.RequestID, ""); err != nil {
-		t.Fatalf("grant after approval: %v", err)
-	}
 }
 
+// TestHeldSignedRecordRefusesDeadEntries pins the accessor's states: a copy
+// for every retained signed entry that is not consumed or consuming, none
+// for an unknown, consumed, consuming or unsigned one.
 func TestHeldSignedRecordRefusesDeadEntries(t *testing.T) {
 	g := newRedeemFixture(t)
-	for name, id := range map[string]string{"unknown": "no-such-request"} {
-		if _, err := g.queue.HeldSignedRecord(id); !cascade.HasKind(err, cascade.KindNotFound) {
+	ids := g.seedEveryState(t)
+	for _, state := range []string{"pending", "approved", "denied", "canceled"} {
+		if st := g.showState(t, ids[state]); st != state {
+			t.Fatalf("%s entry reads %q", state, st)
+		}
+		g.assertHeldCopy(t, state, ids[state])
+	}
+	g.clock.Advance(MaxApprovalTTL + time.Second)
+	if st := g.showState(t, ids["pending"]); st != "expired" {
+		t.Fatalf("lapsed entry reads %q, want expired", st)
+	}
+	g.assertHeldCopy(t, "expired", ids["pending"])
+	unsigned := newApprovalFixtureWith(t, ApprovalQueueConfig{Batching: ApprovalBatching{WindowSeconds: 10, Cap: 3}, Minter: randomTokenMinter{}})
+	u := unsigned.enqueue(t, "unsigned")
+	for name, held := range map[string]struct {
+		q  *StoreApprovals
+		id string
+	}{"unknown": {g.queue, "no-such-request"}, "consumed": {g.queue, ids["consumed"]},
+		"consuming": {g.queue, ids["consuming"]}, "unsigned": {unsigned.queue, u.RequestID}} {
+		if _, err := held.q.HeldSignedRecord(held.id); !cascade.HasKind(err, cascade.KindNotFound) {
 			t.Fatalf("%s: %v, want KindNotFound", name, err)
 		}
 	}
-	denied := g.enqueue(t, "deny-me")
-	if _, err := g.queue.Decide(context.Background(), []DecisionRequest{{RequestID: denied.RequestID}}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := g.queue.HeldSignedRecord(denied.RequestID); !cascade.HasKind(err, cascade.KindNotFound) {
-		t.Fatalf("denied: %v, want KindNotFound", err)
-	}
-	live := g.approved(t, "expire-me")
-	g.clock.Advance(MaxApprovalTTL + time.Second)
-	if _, err := g.queue.HeldSignedRecord(live.RequestID); !cascade.HasKind(err, cascade.KindNotFound) {
-		t.Fatalf("expired: %v, want KindNotFound", err)
-	}
 	var nilQueue *StoreApprovals
-	if _, err := nilQueue.HeldSignedRecord("x"); err == nil {
-		t.Fatal("a nil queue served a held record")
+	if _, err := nilQueue.HeldSignedRecord("x"); !cascade.HasKind(err, cascade.KindInvalidInput) {
+		t.Fatalf("a nil queue = %v, want KindInvalidInput", err)
 	}
 	if _, err := RecoverGrantEffects(context.Background(), nil); err == nil {
 		t.Fatal("recovery without an effect log succeeded")
 	}
 }
 
+// assertHeldCopy: the accessor returns the held bytes, and writing into the
+// returned copy leaves them unchanged.
+func (g *redeemFixture) assertHeldCopy(t *testing.T, name, id string) {
+	t.Helper()
+	g.queue.mu.Lock()
+	want := append([]byte(nil), g.queue.entries[id].signed...)
+	g.queue.mu.Unlock()
+	got, err := g.queue.HeldSignedRecord(id)
+	if err != nil || len(want) <= ed25519.SignatureSize || string(got) != string(want) {
+		t.Fatalf("%s: held record = %d bytes, %v; want the %d held bytes", name, len(got), err, len(want))
+	}
+	got[0] ^= 0xff
+	if again, _ := g.queue.HeldSignedRecord(id); string(again) != string(want) {
+		t.Fatalf("%s: writing into the returned copy changed the held bytes", name)
+	}
+}
+
 func TestGrantWrongActionDoesNotBurnApproval(t *testing.T) {
 	g := newRedeemFixture(t)
 	res := g.approved(t, "edit")
+	token := g.heldToken(t, res.RequestID)
 	req := askRequest("edit")
-	params, _ := json.Marshal(ApprovalGrantParams{RequestID: res.RequestID, Action: "a different action", Params: req.Params})
+	params, _ := json.Marshal(ApprovalGrantParams{RequestID: res.RequestID, SignedToken: token, Action: "a different action", Params: req.Params})
 	before := g.denials(t)
 	_, err := MethodHandlers(g.deps)["approval.grant"](g.witness(t, grantMethod), params)
 	g.refusedUnchanged(t, "grant with the wrong action", before, res.RequestID, err)
-	if _, err := g.grant(g.witness(t, grantMethod), g.deps, res.RequestID, ""); err != nil || g.counter.consumed.Load() != 1 {
+	if _, err := g.grant(g.witness(t, grantMethod), g.deps, res.RequestID, token); err != nil || g.counter.consumed.Load() != 1 {
 		t.Fatalf("grant with the right action after a mistyped one = %v (consumed %d), want success", err, g.counter.consumed.Load())
 	}
 }

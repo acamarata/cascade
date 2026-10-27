@@ -1,10 +1,11 @@
 // Purpose: the grant fixture (a real SQLite queue with a signing minter, a
 //
 //	real audit log and effect log, the real witness attestor) and the tests
-//	of the held record itself: never listed, redeemed once under a
-//	16-goroutine race, refused after the effect index is tampered.
+//	of the held record itself: never listed, decided once under a
+//	16-goroutine race, a redemption refused after the effect index is
+//	tampered.
 //
-// SPORT: internal/policy held-record tests (P1-SEC-23).
+// SPORT: internal/policy held-record tests (P1-SEC-23, P1-SEC-41).
 
 package policy
 
@@ -98,7 +99,7 @@ func newRedeemFixture(t *testing.T) *redeemFixture {
 	g := &redeemFixture{approvalFixture: f, priv: priv, log: log, effects: effects, issuer: rpc.NewWitnessIssuer(),
 		counter: &countingQueue{ApprovalQueue: f.queue}}
 	g.deps = RPCDeps{Queue: g.counter, Registry: f.reg, Grants: f.grants, Clock: f.clock, Verifier: verifier,
-		Attestor: WitnessAttestor(g.issuer.Verifier()), Held: f.queue, Effects: effects, AuditVerify: log, Recorder: log}
+		Attestor: WitnessAttestor(g.issuer.Verifier()), Held: f.queue, Entries: f.queue, Effects: effects, AuditVerify: log, Recorder: log}
 	return g
 }
 
@@ -141,35 +142,6 @@ func (g *redeemFixture) denials(t *testing.T) int {
 	return len(page.Records)
 }
 
-// effectRecords counts the effect records of one key by phase.
-func (g *redeemFixture) effectRecords(t *testing.T, key string) map[string]int {
-	t.Helper()
-	page, err := g.log.Query(context.Background(), audit.Filter{Kinds: []audit.Kind{audit.KindApprovalGrant}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	out := map[string]int{}
-	for _, r := range page.Records {
-		if r.EffectKey == key {
-			out[r.EffectPhase]++
-		}
-	}
-	return out
-}
-
-// assertNoHeldMaterial fails when any surface's full JSON carries a needle.
-func assertNoHeldMaterial(t *testing.T, surfaces map[string]any, needles []string) {
-	t.Helper()
-	for name, v := range surfaces {
-		raw, _ := json.Marshal(v)
-		for _, needle := range needles {
-			if bytes.Contains(raw, []byte(needle)) {
-				t.Fatalf("%s carries held-record material (%d-byte needle): %s", name, len(needle), raw)
-			}
-		}
-	}
-}
-
 func TestHeldSignedRecordNeverListed(t *testing.T) {
 	g := newRedeemFixture(t)
 	res := g.approved(t, "edit")
@@ -197,14 +169,12 @@ func TestHeldSignedRecordNeverListed(t *testing.T) {
 	if lerr != nil || serr != nil {
 		t.Fatalf("list %v, show %v", lerr, serr)
 	}
-	if _, err := g.grant(g.witness(t, grantMethod), g.deps, res.RequestID, ""); err != nil {
-		t.Fatalf("grant: %v", err)
-	}
+	approvedShow := g.grantRedeemShow(t, g2, "edit-two", res.RequestID)
 	page, err := g.log.Query(context.Background(), audit.Filter{})
 	if err != nil || len(page.Records) == 0 {
 		t.Fatalf("journal: %v (%d rows)", err, len(page.Records))
 	}
-	surfaces := map[string]any{"GetPending": pending, "approval.list": list, "approval.show": show,
+	surfaces := map[string]any{"GetPending": pending, "approval.list": list, "approval.show": show, "approval.show approved": approvedShow,
 		"bridge": BridgePayload(rec2), "grant journal": page.Records, "queue journal": g.sink.events}
 	if len(g.sink.events) == 0 {
 		t.Fatal("the queue's own recorder holds no rows; the journal leg proves nothing")
@@ -218,15 +188,15 @@ func TestHeldSignedRecordNeverListed(t *testing.T) {
 			t.Fatalf("the token serialises its signed record: %s", tokenJSON)
 		}
 	}
-	if _, err := g.queue.HeldSignedRecord(res.RequestID); !cascade.HasKind(err, cascade.KindNotFound) {
+	if _, err := g.queue.HeldSignedRecord(g2.RequestID); !cascade.HasKind(err, cascade.KindNotFound) {
 		t.Fatalf("held record after redemption = %v, want KindNotFound", err)
 	}
 }
 
-func TestGrantConcurrentRedeemOnce(t *testing.T) {
+func TestGrantConcurrentDecideOnce(t *testing.T) {
 	g := newRedeemFixture(t)
-	res := g.approved(t, "edit")
-	g.counter.accept = true
+	q, deps := g.heldDeps()
+	res := g.enqueue(t, "edit")
 	const n = 16
 	ctxs := make([]context.Context, n)
 	for i := range ctxs {
@@ -234,29 +204,33 @@ func TestGrantConcurrentRedeemOnce(t *testing.T) {
 	}
 	start := make(chan struct{})
 	var wg sync.WaitGroup
-	var wins, denied atomic.Int32
+	var wins, replays atomic.Int32
 	for i := 0; i < n; i++ {
 		wg.Add(1)
 		go func(ctx context.Context) {
 			defer wg.Done()
 			<-start
-			_, err := g.grant(ctx, g.deps, res.RequestID, "")
+			_, err := g.grant(ctx, deps, res.RequestID, "")
 			switch {
 			case err == nil:
 				wins.Add(1)
-			case cascade.HasKind(err, cascade.KindPermissionDenied):
-				denied.Add(1)
+			case cascade.HasKind(err, cascade.KindPermissionDenied) && isEffectExists(err):
+				replays.Add(1)
 			}
 		}(ctxs[i])
 	}
 	close(start)
 	wg.Wait()
-	if wins.Load() != 1 || denied.Load() != n-1 || g.counter.consumed.Load() != 1 {
-		t.Fatalf("wins=%d denied=%d consumed=%d; want 1, %d, 1", wins.Load(), denied.Load(), g.counter.consumed.Load(), n-1)
+	if wins.Load() != 1 || replays.Load() != n-1 || q.decides.Load() != 1 || q.consumes.Load() != 0 || g.approvedRows() != 1 {
+		t.Fatalf("wins=%d replays=%d decides=%d consumes=%d approved rows=%d; want 1, %d, 1, 0, 1",
+			wins.Load(), replays.Load(), q.decides.Load(), q.consumes.Load(), g.approvedRows(), n-1)
 	}
 	got := g.effectRecords(t, GrantEffectKey(res.RequestID))
 	if got[string(audit.EffectIntent)] != 1 || got[string(audit.EffectConfirmed)] != 1 || len(got) != 2 {
 		t.Fatalf("effect records = %v, want one intent and one terminal", got)
+	}
+	if _, err := g.redeem(res, "edit"); err != nil {
+		t.Fatalf("the owner's redemption after the race: %v", err)
 	}
 }
 
@@ -264,7 +238,8 @@ func TestGrantRefusesAfterEffectIndexTamper(t *testing.T) {
 	g := newRedeemFixture(t)
 	res := g.approved(t, "edit")
 	g.counter.accept = true
-	if _, err := g.grant(g.witness(t, grantMethod), g.deps, res.RequestID, ""); err != nil {
+	token := g.heldToken(t, res.RequestID)
+	if _, err := g.grant(g.witness(t, grantMethod), g.deps, res.RequestID, token); err != nil {
 		t.Fatalf("first grant: %v", err)
 	}
 	if phase, ok, err := g.effects.EffectState(context.Background(), GrantEffectKey(res.RequestID)); err != nil || !ok || phase != audit.EffectConfirmed {
@@ -277,7 +252,7 @@ func TestGrantRefusesAfterEffectIndexTamper(t *testing.T) {
 		t.Fatal("the effect row is still readable; the tamper did not happen")
 	}
 	before := g.denials(t)
-	_, err := g.grant(g.witness(t, grantMethod), g.deps, res.RequestID, "")
+	_, err := g.grant(g.witness(t, grantMethod), g.deps, res.RequestID, token)
 	if !cascade.HasKind(err, cascade.KindPermissionDenied) || g.denials(t) != before+1 || g.counter.consumed.Load() != 1 {
 		t.Fatalf("grant after tamper = %v (denials %d->%d, consumed %d); want an audited refusal and one consume",
 			err, before, g.denials(t), g.counter.consumed.Load())

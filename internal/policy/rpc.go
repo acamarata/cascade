@@ -82,6 +82,11 @@ type RPCDeps struct {
 	// Recorder is the audit sink approval.grant writes its refusals to.
 	// Absent, approval.grant refuses.
 	Recorder ApprovalRecorder
+	// Entries reads one retained entry's state: approval.show reports it and
+	// the held grant refuses a non-pending entry with it. The daemon wires
+	// the same *StoreApprovals as Queue. Absent, a held grant refuses and
+	// approval.show reads pending entries only.
+	Entries ApprovalEntrySource
 }
 
 // MethodHandlers returns the handler for every verb in the registry,
@@ -174,40 +179,6 @@ func (d RPCDeps) approvalList(ctx context.Context, _ json.RawMessage) (any, erro
 		pending = []PendingEntry{}
 	}
 	return ApprovalListResult{Pending: pending}, nil
-}
-
-// ApprovalShowParams names one queued entry.
-type ApprovalShowParams struct {
-	// RequestID is the entry's identifier.
-	RequestID string `json:"request_id"`
-}
-
-// approvalShow returns one pending entry. An id that names nothing is
-// KindNotFound; an empty id is KindInvalidInput, because an absent id is a
-// malformed request rather than a miss.
-func (d RPCDeps) approvalShow(ctx context.Context, params json.RawMessage) (any, error) {
-	var p ApprovalShowParams
-	if err := decodeParams(params, &p); err != nil {
-		return nil, err
-	}
-	if p.RequestID == "" {
-		return nil, cascade.New(cascade.KindInvalidInput, "policy: approval.show requires a request_id")
-	}
-	queue, err := d.requireQueue()
-	if err != nil {
-		return nil, err
-	}
-	pending, err := queue.GetPending(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, entry := range pending {
-		if entry.RequestID == p.RequestID {
-			return entry, nil
-		}
-	}
-	return nil, cascade.Newf(cascade.KindNotFound,
-		"policy: no pending approval has request id %q", sanitize(p.RequestID))
 }
 
 // ApprovalDecisionParams is the deny verb's params. The presented summary
