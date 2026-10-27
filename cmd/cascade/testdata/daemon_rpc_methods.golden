@@ -15,6 +15,7 @@ chat.threads_list
 chat.topics_list
 conductor.execute
 conductor.expand
+config.accept_loosening
 context.harness_list
 context.harness_sync
 context.hydration.degraded

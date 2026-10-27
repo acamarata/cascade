@@ -107,11 +107,15 @@ func wireHotReload(paths runtime.PathProvider, clock runtime.Clock, getenv runti
 // new concern). On a startScheduler failure this also stops the watcher
 // it already started, so a caller that gets a non-nil error never needs
 // to guess what, if anything, it must still tear down.
-func wireBackgroundSubsystems(ctx context.Context, manifest *daemon.Manifest, paths runtime.PathProvider, deps daemonDeps, cfg *runtime.Config, store provider.Store, rawDB *sql.DB, bus *events.Bus, logProvider *runtime.LogProvider) (*memory.AdminHandler, *policyWiring, func(), error) {
+func wireBackgroundSubsystems(ctx context.Context, manifest *daemon.Manifest, paths runtime.PathProvider, deps daemonDeps, cfg *runtime.Config, store provider.Store, rawDB *sql.DB, bus *events.Bus, logProvider *runtime.LogProvider, baseline *configBaseline) (*memory.AdminHandler, *policyWiring, func(), error) {
 	hr, watcher, err := wireHotReload(paths, deps.Clock, deps.Getenv, deps.Environ, cfg, store, bus, logProvider)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	// The baseline's single-use slot is the reloader's only loosening
+	// approver; without it every loosening reload is refused.
+	baseline.report(manifest)
+	baseline.attachReloader(hr, runtime.LoadOptions{Path: paths.ConfigPath(), Getenv: deps.Getenv, Environ: deps.Environ})
 
 	// schedCtx is deliberately its own cancellation, not ctx directly:
 	// daemon.Run does its own SIGTERM/SIGINT handling

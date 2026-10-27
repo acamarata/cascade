@@ -127,9 +127,10 @@ func (hr *HotReloader) Reload(ctx context.Context) ReloadOutcome {
 	candidate := freezeColdSections(old, proposed)
 
 	elevationRef := ""
-	paths := CompareSecurity(extractEffectiveConfig(old), extractEffectiveConfig(candidate))
+	proposedEff := extractEffectiveConfig(candidate)
+	paths := CompareSecurity(extractEffectiveConfig(old), proposedEff)
 	if len(paths) > 0 {
-		ref, err := hr.authorizeLoosening(ctx, paths)
+		ref, err := hr.authorizeLoosening(ctx, proposedEff, paths)
 		if err != nil {
 			hr.reject(ctx, err.Error(), paths)
 			return ReloadOutcome{Rejected: true, ElevationRequired: true, LooseningPaths: paths, Err: err}

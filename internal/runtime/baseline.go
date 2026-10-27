@@ -1,40 +1,34 @@
 package runtime
 
-// Purpose: the boot-time divergent-baseline check (08 §3 / 11-ROUND3-
+// Purpose: the boot-time config baseline check (08 §3, §D-26/§D-39): a
 //
-//	DELTAS.md §D-26/§D-39): computes a canonical SHA-256 over the six
-//	CompareSecurity-guarded sections of the resolved config, compares it
-//	against the last-persisted baseline record in the audit domain
-//	(pkg/provider.Store), and fails closed — most-restrictive shipped
-//	defaults, a config.policy.divergent event, a doctor-error audit
-//	record — whenever the baseline is missing or the on-disk config is
-//	looser than it. A tighter on-disk config is not a divergence: it
-//	proceeds normally and the baseline record is rewritten to the new,
-//	tighter hash.
+//	canonical SHA-256 over the guarded sections of the resolved config is
+//	compared with the record persisted in the audit domain. A config looser
+//	than MostRestrictiveDefaults is admitted only by a matching v2 record
+//	whose proof verifies (baseline_signed.go); a missing, unsigned-looser,
+//	proof-invalid or divergent baseline fails closed: most-restrictive
+//	values, a config.policy.divergent event, a doctor-error audit record.
+//	A tighter config at or under the defaults rewrites the record.
 //
-// Inputs: the resolved EffectiveConfig (extractEffectiveConfig(cfg)) and
+// Inputs: the resolved EffectiveConfig, the config file's digest, and an
 //
-//	an injected provider.Store + Clock.
+//	injected provider.Store, Clock and BaselineVerifier.
 //
-// Outputs: a BaselineResult naming the outcome; on Divergent/Missing, the
+// Outputs: a BaselineResult naming the outcome and the EffectiveConfig the
 //
-//	EffectiveConfig to actually run with (most-restrictive shipped
-//	defaults, never the looser on-disk values).
+//	caller must run with.
 //
-// Constraints: the reader tolerates unknown record fields and a
+// Constraints: the reader tolerates unknown record fields and versions
 //
-//	schema_version greater than 1 without error (forward-compat for a
-//	later v2 signed record) — RawFields on baselineRecordV1 carries
-//	anything this reader does not recognise straight through unexamined,
-//	proven by baseline_test.go decoding a hand-built v2 fixture with a
-//	`sig` field. Never calls a bare time.Now (Clock-injected, Art.7.3).
+//	above 2 (warning only). Never calls a bare time.Now (Art.7.3).
 //
-// SPORT: runtime/boot-baseline-check (ADD, placeholder per T-8 sport_updates).
+// SPORT: runtime/boot-baseline-check.
 
 import (
 	"context"
 	"encoding/json"
 
+	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -65,35 +59,52 @@ const baselineSnapshotKey = "config_baseline_snapshot"
 // itself treated as divergent, fail-closed).
 var baselineGuardedSections = []string{"policy", "secrets", "sync", "nodes", "conductor", "elevation"}
 
-// baselineRecordV1 is the v1 baseline record schema per the ticket
-// contract verbatim: {v: 1, sections_hash: "<sha256-hex>", sections:
-// [...]}. json.Unmarshal ignores fields it does not know about by
-// default, which is exactly the forward-compat property a v2 reader
-// needs — no RawFields capture is required to satisfy "tolerates unknown
-// fields", but Version is read as a plain int so v>1 is detected without
-// error (Reader MUST tolerate... v > 1 without error, warning log only).
+// baselineRecordV1 is the baseline record schema: the v1 shape {v: 1,
+// sections_hash, sections} plus the v2 fields (config_sha256, proof) that
+// baseline_signed.go reads. json.Unmarshal ignores fields it does not know,
+// so a newer record still decodes; Version is a plain int so v>2 is
+// detected without error.
 type baselineRecordV1 struct {
-	Version      int      `json:"v"`
-	SectionsHash string   `json:"sections_hash"`
-	Sections     []string `json:"sections"`
+	Version      int               `json:"v"`
+	SectionsHash string            `json:"sections_hash"`
+	Sections     []string          `json:"sections"`
+	ConfigSHA256 string            `json:"config_sha256,omitempty"`
+	Proof        *baselineProofDoc `json:"proof,omitempty"`
 }
 
-// BaselineOutcome names the four cases the boot-time check distinguishes.
+// BaselineOutcome names the cases the boot-time check distinguishes.
 type BaselineOutcome int
 
 const (
-	// BaselineOK means the on-disk config matches (or is tighter than)
-	// the persisted baseline; proceed normally with the on-disk config.
+	// BaselineOK means the on-disk config matches the persisted baseline
+	// and is not looser than MostRestrictiveDefaults.
 	BaselineOK BaselineOutcome = iota
 	// BaselineTightened means the on-disk config is strictly tighter than
-	// the persisted baseline; proceed normally, and the baseline record
-	// is rewritten to the new, tighter hash.
+	// the persisted baseline and not looser than MostRestrictiveDefaults;
+	// the record is rewritten to the new hash.
 	BaselineTightened
-	// BaselineMissing means no baseline record exists yet; fail closed.
+	// BaselineMissing means no usable record exists and the on-disk config
+	// is looser than MostRestrictiveDefaults; fail closed.
 	BaselineMissing
-	// BaselineDivergent means a baseline record exists but the on-disk
-	// config is looser than it; fail closed.
+	// BaselineDivergent means a record exists but the on-disk config does
+	// not match it and is not a provable tightening; fail closed.
 	BaselineDivergent
+	// BaselineFirstBootAccepted means no record existed and the on-disk
+	// config is not looser than MostRestrictiveDefaults; a v1 record was
+	// written.
+	BaselineFirstBootAccepted
+	// BaselineAccepted means the on-disk config is looser than the
+	// defaults and a v2 record whose proof verifies covers its exact bytes.
+	BaselineAccepted
+	// BaselineUnsignedLooser means the record matches a looser on-disk
+	// config but carries no proof (v1, or v2 without one); fail closed.
+	BaselineUnsignedLooser
+	// BaselineProofInvalid means the record matches a looser on-disk config
+	// but its proof does not verify or covers other bytes; fail closed.
+	BaselineProofInvalid
+	// BaselineCorrupt means a record exists but cannot be read or decoded;
+	// fail closed and leave the row as it is.
+	BaselineCorrupt
 )
 
 // BaselineResult is BaselineChecker.Check's full report.
@@ -119,6 +130,12 @@ type BaselineChecker struct {
 	clock  Clock
 	events EventPublisher
 	audit  AuditRecorder
+	// verify checks a v2 record's proof. Nil admits no v2 record.
+	verify BaselineVerifier
+	// boot is the effective config the last CheckFile told the caller to
+	// run; restart-required keys are measured against it for the life of
+	// the process (nil: no check ran, MostRestrictiveDefaults stands in).
+	boot *EffectiveConfig
 }
 
 // NewBaselineChecker builds a BaselineChecker. events/audit follow the
@@ -142,33 +159,76 @@ const auditKindDoctorError = "doctor_error"
 // is rewritten to a new (tighter, or first-ever) hash.
 const auditKindBaselineUpdate = "baseline_update"
 
-// Check runs the boot-time baseline check against onDisk (the resolved
-// current EffectiveConfig).
+// Check runs the boot-time baseline check against onDisk without a file
+// digest, so no v2 record can admit a looser config. CheckFile is the
+// daemon's entry point.
 func (b *BaselineChecker) Check(ctx context.Context, onDisk EffectiveConfig) BaselineResult {
-	actualHash := ComputeSectionsHash(onDisk)
+	return b.CheckFile(ctx, onDisk, BaselineFile{})
+}
 
-	record, versionWarning, found, err := b.readRecord(ctx)
-	if err != nil || !found {
-		return b.failClosed(ctx, BaselineMissing, "", actualHash, map[string]interface{}{"reason": "baseline_missing"})
+// CheckFile runs the boot-time baseline check against onDisk, the resolved
+// EffectiveConfig the daemon will run (environment overrides included), and
+// file, the config file's exact bytes. A config looser than
+// MostRestrictiveDefaults is admitted only by a v2 record whose proof
+// verifies over file.SHA256 and whose signed bytes declare exactly onDisk's
+// guarded values; every other looser case returns MostRestrictiveDefaults.
+func (b *BaselineChecker) CheckFile(ctx context.Context, onDisk EffectiveConfig, file BaselineFile) BaselineResult {
+	res := b.checkFile(ctx, onDisk, file)
+	boot := res.Effective
+	b.boot = &boot
+	return res
+}
+
+func (b *BaselineChecker) checkFile(ctx context.Context, onDisk EffectiveConfig, file BaselineFile) BaselineResult {
+	actualHash := ComputeSectionsHash(onDisk)
+	atFloor := len(CompareSecurity(MostRestrictiveDefaults(), onDisk)) == 0
+
+	record, versionWarning, state := b.readRecord(ctx)
+	if state == recordCorrupt {
+		return b.failClosed(ctx, b.fallbackBase(ctx, onDisk), BaselineCorrupt, "", actualHash, map[string]interface{}{"reason": "baseline_corrupt"})
+	}
+	if state == recordAbsent {
+		// With no store nothing could be recorded, so nothing is accepted;
+		// a record that did not persist is the same as none.
+		if atFloor && b.store != nil {
+			if err := b.persistBaselineUpdate(ctx, actualHash, onDisk); err != nil {
+				return b.failClosed(ctx, onDisk, BaselineMissing, "", actualHash, map[string]interface{}{"reason": "baseline_missing", "error": err.Error()})
+			}
+			return BaselineResult{Outcome: BaselineFirstBootAccepted, ActualHash: actualHash, Effective: onDisk}
+		}
+		return b.failClosed(ctx, onDisk, BaselineMissing, "", actualHash, map[string]interface{}{"reason": "baseline_missing"})
 	}
 
 	if record.SectionsHash == actualHash {
-		return BaselineResult{Outcome: BaselineOK, ExpectedHash: record.SectionsHash, ActualHash: actualHash, Effective: onDisk, VersionWarning: versionWarning}
+		if atFloor {
+			return BaselineResult{Outcome: BaselineOK, ExpectedHash: record.SectionsHash, ActualHash: actualHash, Effective: onDisk, VersionWarning: versionWarning}
+		}
+		outcome := b.signedOutcome(record, file, onDisk)
+		if outcome == BaselineAccepted {
+			return BaselineResult{Outcome: outcome, ExpectedHash: record.SectionsHash, ActualHash: actualHash, Effective: onDisk, VersionWarning: versionWarning}
+		}
+		return b.failClosed(ctx, b.fallbackBase(ctx, onDisk), outcome, record.SectionsHash, actualHash, map[string]interface{}{
+			"reason": outcome.Detail(), "expected_hash": record.SectionsHash, "actual_hash": actualHash,
+		})
 	}
 
-	// Direction (tighter vs looser) is not computable from the hash
-	// alone (SHA-256 is one-way), so it is read from the adjacent
-	// snapshot key (see baselineSnapshotKey's doc comment). No usable
-	// snapshot (e.g. a legacy pre-snapshot record) is treated
-	// conservatively as divergent — a hash mismatch this checker cannot
-	// prove is a tightening is fail-closed, never assumed safe.
+	// Direction (tighter vs looser) is not computable from the hash alone,
+	// so it is read from the adjacent snapshot. The snapshot is unsigned,
+	// so it can only ever prove a tightening down to a config that is
+	// itself not looser than the defaults; a looser config is admitted by
+	// a matching signed record alone.
+	// A [sync] domain the snapshot names and onDisk drops is not a
+	// tightening: CompareSecurity reads it as local-only, but the sync
+	// runtime falls back to the domain's compiled class.
 	snapshot, hasSnapshot := b.readSnapshot(ctx)
-	if hasSnapshot && len(CompareSecurity(snapshot, onDisk)) == 0 {
-		b.persistBaselineUpdate(ctx, actualHash, onDisk)
+	if atFloor && hasSnapshot && namesEverySyncDomain(snapshot, onDisk) && len(CompareSecurity(snapshot, onDisk)) == 0 {
+		if err := b.persistBaselineUpdate(ctx, actualHash, onDisk); err != nil {
+			return b.failClosed(ctx, b.fallbackBase(ctx, onDisk), BaselineDivergent, record.SectionsHash, actualHash, map[string]interface{}{"reason": "baseline_divergent", "error": err.Error()})
+		}
 		return BaselineResult{Outcome: BaselineTightened, ExpectedHash: record.SectionsHash, ActualHash: actualHash, Effective: onDisk, VersionWarning: versionWarning}
 	}
 
-	return b.failClosed(ctx, BaselineDivergent, record.SectionsHash, actualHash, map[string]interface{}{
+	return b.failClosed(ctx, b.fallbackBase(ctx, onDisk), BaselineDivergent, record.SectionsHash, actualHash, map[string]interface{}{
 		"reason": "baseline_divergent", "expected_hash": record.SectionsHash, "actual_hash": actualHash,
 	})
 }
@@ -176,74 +236,38 @@ func (b *BaselineChecker) Check(ctx context.Context, onDisk EffectiveConfig) Bas
 // failClosed applies §D-39's fail-closed treatment: most-restrictive
 // shipped defaults, config.policy.divergent event, doctor-error audit
 // record.
-func (b *BaselineChecker) failClosed(ctx context.Context, outcome BaselineOutcome, expected, actual string, fields map[string]interface{}) BaselineResult {
+func (b *BaselineChecker) failClosed(ctx context.Context, onDisk EffectiveConfig, outcome BaselineOutcome, expected, actual string, fields map[string]interface{}) BaselineResult {
 	b.events.Publish(ctx, eventPolicyDivergent, fields)
 	if b.audit != nil {
 		_ = b.audit.Record(ctx, auditKindDoctorError, fields)
 	}
-	return BaselineResult{Outcome: outcome, ExpectedHash: expected, ActualHash: actual, Effective: MostRestrictiveDefaults()}
+	return BaselineResult{Outcome: outcome, ExpectedHash: expected, ActualHash: actual, Effective: RestrictiveFallback(onDisk)}
 }
 
 // persistBaselineUpdate rewrites the baseline record to hash and its
-// adjacent snapshot to effective, so the NEXT boot's divergence check has
-// something to compare against.
-func (b *BaselineChecker) persistBaselineUpdate(ctx context.Context, hash string, effective EffectiveConfig) {
+// adjacent snapshot to effective, so the next boot has something to compare
+// against. It returns the first store error: a record that did not persist
+// must not be reported as accepted.
+func (b *BaselineChecker) persistBaselineUpdate(ctx context.Context, hash string, effective EffectiveConfig) error {
 	if b.store == nil {
-		return
+		return cascade.New(cascade.KindUnavailable, "baseline: no store to record the baseline in")
 	}
-	rec := baselineRecordV1{Version: 1, SectionsHash: hash, Sections: baselineGuardedSections}
-	if data, err := json.Marshal(rec); err == nil {
-		_ = b.store.Put(ctx, auditNamespace, baselineRecordKey, data)
+	rec, err := json.Marshal(baselineRecordV1{Version: 1, SectionsHash: hash, Sections: baselineGuardedSections})
+	if err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "baseline: encode record")
 	}
-	if data, err := json.Marshal(effective); err == nil {
-		_ = b.store.Put(ctx, auditNamespace, baselineSnapshotKey, data)
+	snap, err := json.Marshal(effective)
+	if err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "baseline: encode snapshot")
+	}
+	if err := b.store.Put(ctx, auditNamespace, baselineRecordKey, rec); err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "baseline: write record")
+	}
+	if err := b.store.Put(ctx, auditNamespace, baselineSnapshotKey, snap); err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "baseline: write snapshot")
 	}
 	if b.audit != nil {
 		_ = b.audit.Record(ctx, auditKindBaselineUpdate, map[string]interface{}{"sections_hash": hash})
 	}
-}
-
-// readSnapshot reads and decodes the adjacent EffectiveConfig snapshot;
-// any absence or decode failure reports hasSnapshot=false.
-func (b *BaselineChecker) readSnapshot(ctx context.Context) (EffectiveConfig, bool) {
-	if b.store == nil {
-		return EffectiveConfig{}, false
-	}
-	data, err := b.store.Get(ctx, auditNamespace, baselineSnapshotKey)
-	if err != nil {
-		return EffectiveConfig{}, false
-	}
-	var snap EffectiveConfig
-	if err := json.Unmarshal(data, &snap); err != nil {
-		return EffectiveConfig{}, false
-	}
-	return snap, true
-}
-
-// readRecord reads and decodes the persisted baseline record. A missing
-// key (provider.KindNotFound) or a nil store both report found=false,
-// never an error the caller must distinguish from "genuinely absent" —
-// both mean the same fail-closed treatment.
-func (b *BaselineChecker) readRecord(ctx context.Context) (baselineRecordV1, string, bool, error) {
-	if b.store == nil {
-		return baselineRecordV1{}, "", false, nil
-	}
-	data, err := b.store.Get(ctx, auditNamespace, baselineRecordKey)
-	if err != nil {
-		// Both a genuine cascade.KindNotFound (no baseline persisted yet)
-		// and any other read error are treated identically here: "no
-		// usable baseline" -> fail closed. Distinguishing them would not
-		// change the outcome (§D-39 fail-closed applies to both a
-		// missing AND an unverifiable baseline).
-		return baselineRecordV1{}, "", false, nil
-	}
-	var rec baselineRecordV1
-	if err := json.Unmarshal(data, &rec); err != nil {
-		return baselineRecordV1{}, "", false, nil
-	}
-	warning := ""
-	if rec.Version > 1 {
-		warning = "baseline record schema_version is newer than this binary's v1 reader understands; reading tolerantly"
-	}
-	return rec, warning, true, nil
+	return nil
 }

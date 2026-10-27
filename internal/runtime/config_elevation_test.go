@@ -24,7 +24,7 @@ type recordingApprover struct {
 	seen  []LooseningPath
 }
 
-func (a *recordingApprover) ApproveLoosening(_ context.Context, paths []LooseningPath) (string, error) {
+func (a *recordingApprover) ApproveLoosening(_ context.Context, _ EffectiveConfig, paths []LooseningPath) (string, error) {
 	a.calls++
 	a.seen = append(a.seen, paths...)
 	return a.ref, a.err

@@ -74,34 +74,67 @@ dropped and nothing partially-applies without saying so.
 
 ## Boot-time baseline divergence
 
-Once at daemon boot, after config load, `internal/runtime.BaselineChecker`
-computes a canonical SHA-256 over the same six guarded families
-(`ComputeSectionsHash`) and compares it against the last-persisted
-baseline record in the audit domain (`pkg/provider.Store`, namespace
-`"audit"`, key `config_baseline`):
+Before any background subsystem starts, the daemon compares the guarded
+values of `config.toml` (`[policy]`, `[secrets]`, `[sync]`, `[nodes]`,
+`[conductor]`, `[elevation]`) with the baseline record it keeps in its audit
+store. The outcome appears in `cascade status` as the `config-baseline`
+subsystem:
 
-- **No baseline record found** (first boot, or the record was lost) →
-  fail closed: `MostRestrictiveDefaults()` (all guarded fields at their
-  safest value: `elevation.allow_remote=false`, empty sync-class map,
-  etc.) is used for the six guarded families regardless of what's on
-  disk, a `config.policy.divergent` event fires with
-  `{reason: "baseline_missing"}`, and a `doctor_error` record is
-  persisted (`cascade doctor` surfaces it).
-- **Hash mismatch, on-disk is looser** → same fail-closed treatment,
-  `{reason: "baseline_divergent", expected_hash, actual_hash}`.
-- **Hash mismatch, on-disk is tighter** → proceeds normally with the
-  on-disk config, and the baseline record is rewritten to the new,
-  tighter hash.
-- **Unrecognised `schema_version`** (`v > 1`) on the persisted record is
-  tolerated (a warning is surfaced, not an error), so a future signed
-  v2 record (D/S-07.T6) is forward-compatible with this reader.
+| Detail | Meaning | Values that run |
+|---|---|---|
+| `baseline_ok` | the file matches the record and is not looser than the defaults | the file's |
+| `baseline_tightened` | the file is tighter than the record; the record is rewritten | the file's |
+| `baseline_first_boot_accepted` | no record yet and the file is not looser than the defaults; a record is written | the file's |
+| `baseline_accepted` | the file is looser than the defaults and a signed record covers its exact bytes | the file's |
+| `baseline_missing` | no record and the file is looser than the defaults | most-restrictive |
+| `baseline_divergent` | the file differs from the record and is not a provable tightening | most-restrictive |
+| `baseline_unsigned_looser` | the record matches a looser file but carries no signed acceptance | most-restrictive |
+| `baseline_proof_invalid` | the record's acceptance does not verify or covers other bytes | most-restrictive |
+| `baseline_corrupt` | a record exists but cannot be read or decoded; it is left as is | most-restrictive |
 
-**Recovery from a divergent-boot state:** re-authorize the tighter
-baseline via an elevated verb (not shipped in this ticket, D/S-07.T6's
-territory) that re-signs and re-persists the baseline record at the
-current on-disk hash. Until that lands, the only way out of a
-divergent-boot state in this tree is to restore `config.toml` to a
-configuration that is no looser than the last-recorded baseline.
+The last five report the daemon's health as `degraded`. Removing a `[sync]` entry the record names is not a tightening: the domain would fall back to its compiled class. "Most-restrictive"
+means `policy.autonomy_profile = "strict"`, every `[sync]` domain the file
+or the record names set to `local-only`, and every guarded boolean `false`, all written
+explicitly so no absent key falls back to a looser default. Daemon settings
+(including `[sync]`) are resolved after this check, so the RPCs see the same
+values. Editing the store
+record by hand never admits a looser file: only a record carrying the
+attestation of a `config.accept_loosening` call over the file's exact SHA-256
+does, and that attestation is re-verified at every boot against the trust key
+bound to the elevation custody. The signature covers the file bytes only, so
+at boot the daemon re-reads those bytes and admits exactly the guarded values
+they declare: an environment override of a guarded key, or any other value
+the signed bytes do not declare, runs the most-restrictive values instead.
+A baseline record that cannot be written is reported as `baseline_missing` on
+a first boot and as `baseline_divergent` when it was being rewritten after a
+tightening. A `baseline_corrupt` record is kept as it is; to recover, re-run
+`config.accept_loosening` for the file on disk, which writes a new record.
+
+### Accepting a looser config: `config.accept_loosening`
+
+`config.accept_loosening` is the one RPC that accepts a looser config. It is
+always elevated and owner-only. Its params are exactly
+`{"config_sha256": "<64 lowercase hex>"}`, the SHA-256 of the `config.toml`
+bytes on disk. The daemon reads the file itself, refuses a digest that does
+not match (`conflict`); it reads the file once, with the same permission and
+ownership checks as a normal load (a world-writable file is refused with
+`permission_denied`), and parses exactly the bytes it hashed, never reopening
+the file (`invalid_input` when they do not load); it refuses when an
+environment override changes a guarded value (`conflict`), writes the signed record (`unavailable` when it cannot, and then
+nothing else happens), and arms a single-use approval that expires after five
+minutes. It then runs one hot reload that carries that approval. That reload
+updates the daemon's config view, not the components that read guarded values
+at start, so the result lists every guarded key the file loosens relative to
+the values the daemon started with in `restart_required_keys`, on every
+acceptance until the next start. Of those keys, `policy.autonomy_profile` and
+`[sync]` are enforced (the policy engine and the sync runtime read them at
+start). The others are recorded and checked but have no consumer yet:
+`conductor.external_routing_enabled`, `conductor.spill_enabled`,
+`elevation.allow_remote`, `elevation.helper_pubkey`,
+`secrets.keychain_backend` and `nodes.trust_tier`. Reloads
+started by a file change or by SIGHUP never carry it, so they keep refusing
+the loosening. A file swapped after the digest check does not match the
+approval and is refused.
 
 ## `[elevation]`: why it is never hot-reloadable
 

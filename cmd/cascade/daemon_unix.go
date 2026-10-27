@@ -56,7 +56,7 @@ import (
 // runtime-bootstrap.md).
 func composeDaemon(ctx context.Context, deps daemonDeps, observe registryObserver) (daemon.RunOptions, []func(), error) {
 	var cleanups []func()
-	cfg, paths, settings, err := loadDaemonConfig(ctx, deps)
+	cfg, paths, _, err := loadDaemonConfig(ctx, deps)
 	if err != nil {
 		return daemon.RunOptions{}, cleanups, err
 	}
@@ -77,7 +77,9 @@ func composeDaemon(ctx context.Context, deps daemonDeps, observe registryObserve
 	// running (they read the store), so none outlives it.
 	bus := events.New(store, deps.Clock)
 	cleanups = append(cleanups, func() { _ = bus.Close() })
-	if err := runRecoveryScan(ctx, paths, settings, deps, logProvider, bus, store); err != nil {
+	baseline := checkBootBaseline(ctx, cfg, paths.ConfigPath(), store, bus, deps.Clock, productionBaselineVerifier(paths.DataDir(), deps.Clock))
+	settings, err := recoverWithBaselineSettings(ctx, cfg, paths, deps, logProvider, bus, store)
+	if err != nil {
 		return daemon.RunOptions{}, cleanups, err
 	}
 	// M/S-27.T2: resume scan before any RPC connection; dispatches nothing
@@ -85,11 +87,10 @@ func composeDaemon(ctx context.Context, deps daemonDeps, observe registryObserve
 	if _, err := wireResumeScan(ctx, store, deps.Clock); err != nil {
 		return daemon.RunOptions{}, cleanups, err
 	}
-
 	runCtx, cancelRun := context.WithCancel(ctx)
 	manifest := daemon.NewManifest(logProvider.Logger(), deps.Clock)
 	joinRun := joinRunContext(cancelRun, manifest)
-	memoryAdmin, pol, cleanupBackground, err := wireBackgroundSubsystems(runCtx, manifest, paths, deps, cfg, store, rawDB, bus, logProvider)
+	memoryAdmin, pol, cleanupBackground, err := wireBackgroundSubsystems(runCtx, manifest, paths, deps, cfg, store, rawDB, bus, logProvider, baseline)
 	if err != nil {
 		joinRun()
 		return daemon.RunOptions{}, cleanups, err
@@ -103,7 +104,7 @@ func composeDaemon(ctx context.Context, deps daemonDeps, observe registryObserve
 	server, _, connections, err := buildRPCServer(bus, deps.Clock, logProvider.Logger(), settings, paths, memoryAdmin, store,
 		withRunContext(runCtx), withManifest(manifest),
 		withPolicyHandlers(pol),
-		withNodePlacement(deps.NodeTunnels), withDaemonRuntime(cfg, rawDB, pol, logProvider, deps), withRegistryObserver(observe))
+		withNodePlacement(deps.NodeTunnels), withBaselineRuntime(withDaemonRuntime(cfg, rawDB, pol, logProvider, deps), baseline), withRegistryObserver(observe))
 	if err != nil {
 		return daemon.RunOptions{}, cleanups, err
 	}

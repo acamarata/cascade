@@ -91,6 +91,9 @@ type daemonRuntime struct {
 	// Notify is the one notification runtime; the notify registration
 	// (phaseSupervised, Order 5) sets it for every later registration.
 	Notify *daemon.NotifyRuntime
+	// ConfigBaseline is the boot baseline check's outcome and the
+	// config.accept_loosening state (daemon_unix_config_baseline.go).
+	ConfigBaseline *configBaseline
 }
 
 // daemonRegistration is one subsystem's wiring step. Name must be unique and

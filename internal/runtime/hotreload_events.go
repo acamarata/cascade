@@ -39,7 +39,9 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/acamarata/cascade/pkg/provider"
 )
@@ -83,9 +85,8 @@ type AuditRecorder interface {
 // backed directly by pkg/provider.Store — the actual B/S-02 Store API
 // contract, not a placeholder. Each record is JSON-encoded and written
 // under a key namespaced by kind, so `Scan(ctx, "audit", kind+"/")`
-// retrieves every record of one kind in insertion order (the counter is
-// zero-padded for lexicographic == chronological ordering within one
-// process's lifetime).
+// retrieves every record of one kind, normally in time order (auditKey:
+// time, then counter, both zero-padded).
 type StoreAuditRecorder struct {
 	store   provider.Store
 	clock   Clock
@@ -117,23 +118,23 @@ func (r *StoreAuditRecorder) Record(ctx context.Context, kind string, fields map
 		return nil
 	}
 	seq := r.counter.Add(1)
-	rec := auditRecord{Kind: kind, TimeMS: r.clock.Now().UnixMilli(), Fields: fields}
+	now := r.clock.Now()
+	rec := auditRecord{Kind: kind, TimeMS: now.UnixMilli(), Fields: fields}
 	data, err := json.Marshal(rec)
 	if err != nil {
 		return err
 	}
-	key := auditKey(kind, seq)
+	key := auditKey(kind, now, seq)
 	return r.store.Put(ctx, auditNamespace, key, data)
 }
 
-// auditKey builds the deterministic, sortable key for one audit record.
-func auditKey(kind string, seq uint64) string {
-	const width = 20 // enough digits for any uint64, zero-padded for sort order
-	digits := []byte{}
-	n := seq
-	for i := 0; i < width; i++ {
-		digits = append([]byte{byte('0' + n%10)}, digits...)
-		n /= 10
-	}
-	return kind + "/" + string(digits)
+// auditKey builds the sortable key for one audit record: the record time
+// in nanoseconds, then the per-recorder counter, both zero-padded. Each
+// recorder's counter restarts at 1 per process, so the time is what keeps
+// a later boot from overwriting an earlier record: a collision needs the
+// same nanosecond, counter and kind. Time order can break if the wall clock
+// steps back; no production code reads audit records by key order
+// (retention uses the database timestamp).
+func auditKey(kind string, at time.Time, seq uint64) string {
+	return kind + "/" + fmt.Sprintf("%020d-%020d", at.UnixNano(), seq)
 }

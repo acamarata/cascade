@@ -53,6 +53,9 @@ type VerifiedElevation struct {
 	paramsHash string
 	verifiedAt time.Time
 	issuer     *WitnessIssuer
+	// attestation is the attestation the middleware verified, kept so a
+	// handler can persist it as proof (RecordedAttestation).
+	attestation Attestation
 }
 
 // IssuedBy reports whether the witness was minted under the verifier's

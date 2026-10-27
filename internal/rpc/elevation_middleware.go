@@ -202,7 +202,9 @@ func (d ElevationDeps) attest(ctx context.Context, att Attestation, method strin
 	if d.Issuer == nil {
 		return next(ctx, args)
 	}
-	return next(withVerifiedElevation(ctx, newVerifiedElevation(d.Issuer, method, hash, now)), args)
+	witness := newVerifiedElevation(d.Issuer, method, hash, now)
+	witness.attestation = att
+	return next(withVerifiedElevation(ctx, witness), args)
 }
 
 // denyReason is the short constant code a deny record carries: the error's

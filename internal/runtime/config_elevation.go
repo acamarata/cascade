@@ -39,14 +39,15 @@ func elevationGuardedFamilies() []string { return baselineGuardedSections }
 // package depends on the interface only, so internal/runtime keeps its
 // no-internal-imports position at the bottom of the dependency graph.
 //
-// NO production implementation exists yet anywhere in this tree, which is
-// stated here rather than left implicit (Art.1).
+// The production implementation is the daemon's single-use loosening slot
+// (cmd/cascade), armed only by the elevated config.accept_loosening RPC.
 type ElevationApprover interface {
-	// ApproveLoosening asks the local elevation helper to approve
-	// loosening the named keys. A nil error authorizes this one write and
-	// must be accompanied by a non-empty reference the audit trail
-	// records; any error refuses it.
-	ApproveLoosening(ctx context.Context, paths []LooseningPath) (string, error)
+	// ApproveLoosening asks whether the proposed guarded values (the
+	// whole EffectiveConfig the reload would apply) may loosen the named
+	// keys. A nil error authorizes this one write and must be accompanied
+	// by a non-empty reference the audit trail records; any error refuses
+	// it.
+	ApproveLoosening(ctx context.Context, proposed EffectiveConfig, paths []LooseningPath) (string, error)
 }
 
 // ElevationRequiredError reports that a config change loosens one or more
@@ -88,11 +89,11 @@ func (hr *HotReloader) SetElevationApprover(approver ElevationApprover) {
 // authorizeLoosening runs the elevation flow for paths and returns the
 // approval reference to record. A non-nil error is always an
 // *ElevationRequiredError, so every caller can surface the loosened keys.
-func (hr *HotReloader) authorizeLoosening(ctx context.Context, paths []LooseningPath) (string, error) {
+func (hr *HotReloader) authorizeLoosening(ctx context.Context, proposed EffectiveConfig, paths []LooseningPath) (string, error) {
 	if hr.elevation == nil {
 		return "", newElevationRequired(paths, "no elevation helper is enrolled on this machine")
 	}
-	ref, err := hr.elevation.ApproveLoosening(ctx, paths)
+	ref, err := hr.elevation.ApproveLoosening(ctx, proposed, paths)
 	if err != nil {
 		return "", newElevationRequired(paths, "the elevation helper refused: "+err.Error())
 	}

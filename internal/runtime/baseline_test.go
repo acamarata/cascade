@@ -73,8 +73,8 @@ func TestBaselineChecker_DivergentLooserFailsClosed(t *testing.T) {
 	if result.ActualHash != ComputeSectionsHash(loose) {
 		t.Fatal("ActualHash mismatch")
 	}
-	if result.Effective.Sync.Classes["memory"] != "" {
-		t.Fatal("expected most-restrictive defaults, not the looser on-disk config")
+	if result.Effective.Sync.Classes["memory"] != "local-only" {
+		t.Fatal("expected the most-restrictive class, not the looser on-disk config")
 	}
 	found := false
 	for _, n := range events.names() {
