@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-27T07:37:42Z",
+  "generated_at": "2026-10-27T12:13:17Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2644,7 +2644,7 @@
         },
         {
           "file": "cmd/cascade/plugin_perms.go",
-          "line": 10,
+          "line": 8,
           "status": "ADD",
           "ticket": "P1-E15-W4-S32-T4",
           "raw": "cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4)."
@@ -2708,6 +2708,20 @@
       "statuses": [
         "ADD",
         "CHANGE"
+      ]
+    },
+    {
+      "name": "cli/plugin-lifecycle elevated writes",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_elevation.go",
+          "line": 20,
+          "status": "",
+          "raw": "cli/plugin-lifecycle elevated writes (P1-SEC-08)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -3875,6 +3889,20 @@
       ]
     },
     {
+      "name": "cmd/cascade audit.gate_append handler",
+      "sites": [
+        {
+          "file": "cmd/cascade/gate_audit_append.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade audit.gate_append handler (P1-SEC-08)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd/cascade chat custody injection",
       "sites": [
         {
@@ -4296,6 +4324,12 @@
           "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
         },
         {
+          "file": "cmd/cascade/wire_gate_audit.go",
+          "line": 14,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (audit.gate_append, P1-SEC-08)."
+        },
+        {
           "file": "cmd/cascade/wire_inbox_hydration.go",
           "line": 27,
           "status": "",
@@ -4332,10 +4366,22 @@
           "raw": "cmd/cascade daemon registrations (plugin-install)."
         },
         {
+          "file": "cmd/cascade/wire_plugin_perms.go",
+          "line": 10,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (perms.grant, perms.revoke; P1-SEC-08)."
+        },
+        {
           "file": "cmd/cascade/wire_plugin_update.go",
           "line": 11,
           "status": "",
           "raw": "cmd/cascade daemon registrations (plugin.update)."
+        },
+        {
+          "file": "cmd/cascade/wire_presence.go",
+          "line": 16,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-HRN-10)."
         },
         {
           "file": "cmd/cascade/wire_resume.go",
@@ -6637,7 +6683,7 @@
       "sites": [
         {
           "file": "cmd/cascade/node.go",
-          "line": 33,
+          "line": 30,
           "status": "CHANGE",
           "raw": "cmd/cascade/node (CHG: list/status/drain/remove/rotate-key/revoke"
         },
@@ -7007,7 +7053,7 @@
         },
         {
           "file": "cmd/cascade/vault_elevated.go",
-          "line": 22,
+          "line": 20,
           "status": "ADD",
           "raw": "cmd/cascade/vault (ADD - get, rotate)."
         },
@@ -7039,6 +7085,62 @@
       "statuses": [
         "",
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/vault elevation gate",
+      "sites": [
+        {
+          "file": "cmd/cascade/vault_elevated_gate.go",
+          "line": 27,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/vault elevation gate (CHG: signed single-use proof)."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
+      ]
+    },
+    {
+      "name": "cmd/cascade/vault elevation gate audit",
+      "sites": [
+        {
+          "file": "cmd/cascade/vault_elevated_audit.go",
+          "line": 16,
+          "status": "",
+          "raw": "cmd/cascade/vault elevation gate audit (P1-SEC-08)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade/vault elevation gate audit rows",
+      "sites": [
+        {
+          "file": "cmd/cascade/gate_audit_row.go",
+          "line": 20,
+          "status": "",
+          "raw": "cmd/cascade/vault elevation gate audit rows (P1-SEC-08)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade/vault elevation gate audit sink",
+      "sites": [
+        {
+          "file": "cmd/cascade/gate_audit_sink.go",
+          "line": 21,
+          "status": "",
+          "raw": "cmd/cascade/vault elevation gate audit sink (P1-SEC-08)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -20899,6 +21001,20 @@
       ]
     },
     {
+      "name": "internal/daemon PresenceTracker/PresenceMiddleware",
+      "sites": [
+        {
+          "file": "internal/daemon/presence.go",
+          "line": 33,
+          "status": "ADD",
+          "raw": "internal/daemon PresenceTracker/PresenceMiddleware (ADD) — P1-HRN-10."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/daemon conductor.execute sensitivity",
       "sites": [
         {
@@ -23706,6 +23822,20 @@
       ]
     },
     {
+      "name": "internal/notify BusStallSource",
+      "sites": [
+        {
+          "file": "internal/notify/stall_source.go",
+          "line": 29,
+          "status": "ADD",
+          "raw": "internal/notify BusStallSource (ADD) — P1-HRN-10."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/output",
       "sites": [
         {
@@ -24260,6 +24390,20 @@
           "line": 5,
           "status": "",
           "raw": "internal/plugins lifecycle-update guards."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins perms.grant/perms.revoke RPC",
+      "sites": [
+        {
+          "file": "internal/plugins/perms_rpc.go",
+          "line": 10,
+          "status": "",
+          "raw": "internal/plugins perms.grant/perms.revoke RPC (P1-SEC-08)."
         }
       ],
       "statuses": [
@@ -25853,7 +25997,7 @@
       "sites": [
         {
           "file": "internal/policy/daemonless_elevation.go",
-          "line": 35,
+          "line": 37,
           "status": "ADD",
           "raw": "internal/policy DaemonlessElevationGuard/ADDED."
         },
@@ -38417,6 +38561,20 @@
       ]
     },
     {
+      "name": "secrets.custody.lazy",
+      "sites": [
+        {
+          "file": "internal/secrets/lazy_custody.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "secrets.custody.lazy (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "secrets.filevault.keymemo",
       "sites": [
         {
@@ -38662,7 +38820,7 @@
       ]
     }
   ],
-  "total_sites": 3744,
-  "unspecified_count": 275,
+  "total_sites": 3757,
+  "unspecified_count": 281,
   "multi_status_count": 116
 }
