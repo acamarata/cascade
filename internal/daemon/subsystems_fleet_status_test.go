@@ -122,6 +122,9 @@ func TestFleetRuntimeStartCloseStress(t *testing.T) {
 // has no CPU baseline, and a third when /proc/stat's jiffies have not advanced).
 // It is the one test that depends on the real host; the rest inject a collector.
 func TestFleetRuntimeRealCollectorYieldsSample(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("windows is tier 2: its collector always returns governor.ErrUnsupportedPlatform, so no host sample exists")
+	}
 	g := newFleetRig(t, "")
 	samplerCollect = nil // the rig restores it on cleanup
 	r := g.start(t)
