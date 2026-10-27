@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-27T21:03:28Z",
+  "generated_at": "2026-10-27T22:05:37Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -76,6 +76,20 @@
           "line": 6,
           "status": "ADD",
           "raw": "ApprovalBatching/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "ApprovalEntrySource",
+      "sites": [
+        {
+          "file": "internal/policy/approval_entry_view.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "ApprovalEntrySource/ADDED (P1-SEC-41)."
         }
       ],
       "statuses": [
@@ -957,9 +971,9 @@
       "sites": [
         {
           "file": "internal/policy/approval_held.go",
-          "line": 19,
+          "line": 22,
           "status": "ADD",
-          "raw": "HeldSignedRecord/ADDED (P1-SEC-23)."
+          "raw": "HeldSignedRecord/ADDED (P1-SEC-23)"
         }
       ],
       "statuses": [
@@ -2147,6 +2161,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "approval.show state",
+      "sites": [
+        {
+          "file": "internal/policy/rpc_show.go",
+          "line": 15,
+          "status": "CHANGE",
+          "raw": "approval.show state/CHANGED (P1-SEC-41)."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
       ]
     },
     {
@@ -3853,7 +3881,7 @@
           "file": "cmd/cascade/daemon_unix_approval_grant_test.go",
           "line": 13,
           "status": "",
-          "raw": "cmd/cascade approval grant tests (P1-SEC-23)."
+          "raw": "cmd/cascade approval grant tests (P1-SEC-23, P1-SEC-41)."
         }
       ],
       "statuses": [
@@ -4631,6 +4659,20 @@
           "line": 11,
           "status": "",
           "raw": "cmd/cascade elevation wiring tests (P1-SEC-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade held-record decision tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/approval_held_grant_test.go",
+          "line": 15,
+          "status": "",
+          "raw": "cmd/cascade held-record decision tests (P1-SEC-41)."
         }
       ],
       "statuses": [
@@ -25970,6 +26012,20 @@
       ]
     },
     {
+      "name": "internal/policy ApprovalEntryView",
+      "sites": [
+        {
+          "file": "internal/policy/approval_entry_view.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal/policy ApprovalEntryView/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/policy ApprovalError",
       "sites": [
         {
@@ -26376,7 +26432,7 @@
       "sites": [
         {
           "file": "internal/policy/approval_held.go",
-          "line": 19,
+          "line": 22,
           "status": "ADD",
           "raw": "internal/policy HeldRecordSource/ADDED"
         }
@@ -26713,6 +26769,20 @@
       ]
     },
     {
+      "name": "internal/policy approval.show state tests",
+      "sites": [
+        {
+          "file": "internal/policy/rpc_show_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/policy approval.show state tests (P1-SEC-41)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/policy autonomy-ceiling tests",
       "sites": [
         {
@@ -26846,13 +26916,55 @@
       ]
     },
     {
+      "name": "internal/policy held-record decision",
+      "sites": [
+        {
+          "file": "internal/policy/rpc_grant_held.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal/policy held-record decision/ADDED (P1-SEC-41)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/policy held-record decision refusal tests",
+      "sites": [
+        {
+          "file": "internal/policy/approval_entry_view_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/policy held-record decision refusal tests (P1-SEC-41)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/policy held-record decision tests",
+      "sites": [
+        {
+          "file": "internal/policy/rpc_grant_held_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal/policy held-record decision tests (P1-SEC-41)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/policy held-record tests",
       "sites": [
         {
           "file": "internal/policy/approval_held_test.go",
-          "line": 7,
+          "line": 8,
           "status": "",
-          "raw": "internal/policy held-record tests (P1-SEC-23)."
+          "raw": "internal/policy held-record tests (P1-SEC-23, P1-SEC-41)."
         }
       ],
       "statuses": [
@@ -26954,6 +27066,13 @@
           "status": "ADD",
           "ticket": "P1-E09-W2-S18-T6",
           "raw": "internal/policy rpc-handlers/ADDED (P1-E09-W2-S18-T6)."
+        },
+        {
+          "file": "internal/policy/rpc_show.go",
+          "line": 15,
+          "status": "ADD",
+          "ticket": "P1-E09-W2-S18-T6",
+          "raw": "internal/policy rpc-handlers/ADDED (P1-E09-W2-S18-T6)"
         }
       ],
       "statuses": [
@@ -39063,7 +39182,7 @@
       ]
     }
   ],
-  "total_sites": 3784,
-  "unspecified_count": 290,
+  "total_sites": 3793,
+  "unspecified_count": 294,
   "multi_status_count": 117
 }
