@@ -31,19 +31,22 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// The ratified [secrets] defaults (08-INIT-CONFIG-SPEC §3, R-16.47).
+// The ratified [secrets] defaults (08-INIT-CONFIG-SPEC §3, R-16.47). They
+// alias the hot-reload guard's constants, so what "absent" means is stated
+// once.
 const (
 	// DefaultEntropyFloor is the Shannon-entropy floor, in bits per
 	// character, below which a run is not even a candidate.
-	DefaultEntropyFloor = 3.5
+	DefaultEntropyFloor = runtime.DefaultSecretsEntropyFloor
 	// DefaultConfidenceThreshold is the score a hit must reach to be
 	// eligible for quarantine. It sits above ConfidenceStructured and
 	// below ConfidenceCorroborated on purpose: corroborated hits are
 	// quarantined, shape-only hits are not.
-	DefaultConfidenceThreshold = 0.8
+	DefaultConfidenceThreshold = runtime.DefaultSecretsConfidenceThreshold
 )
 
 // maxEntropyFloor is the ceiling on entropy_floor. Eight bits per

@@ -61,6 +61,12 @@ type SecretsSection struct {
 	// as AutonomyProfile (backend identity has no ratified security
 	// ordering either).
 	KeychainBackend string
+	// EntropyFloor and ConfidenceThreshold are the detector's thresholds.
+	// nil is the shipped default (an explicit default is normalised to nil),
+	// so an absent key, a default key and an upgraded v1 snapshot all hash
+	// and compare alike. A raise is a loosening (hotreload_secrets.go).
+	EntropyFloor        *float64 `json:",omitempty"`
+	ConfidenceThreshold *float64 `json:",omitempty"`
 }
 
 // SyncSection is the guarded per-domain sync-class map. Classes maps a
@@ -119,6 +125,7 @@ func CompareSecurity(current, proposed EffectiveConfig) []LooseningPath {
 		current.Policy.AutonomyProfile, proposed.Policy.AutonomyProfile)...)
 	paths = append(paths, compareAnyChange("secrets", "secrets.keychain_backend",
 		current.Secrets.KeychainBackend, proposed.Secrets.KeychainBackend)...)
+	paths = append(paths, compareSecretsThresholds(current.Secrets, proposed.Secrets)...)
 	paths = append(paths, compareSyncClasses(current.Sync, proposed.Sync)...)
 	paths = append(paths, compareAnyChange("nodes", "nodes.trust_tier",
 		current.Nodes.TrustTier, proposed.Nodes.TrustTier)...)
@@ -207,7 +214,7 @@ func extractEffectiveConfig(cfg *Config) EffectiveConfig {
 	}
 	return EffectiveConfig{
 		Policy:  PolicySection{AutonomyProfile: stringAt(cfg.Extra, "policy", "autonomy_profile")},
-		Secrets: SecretsSection{KeychainBackend: stringAt(cfg.Extra, "secrets", "keychain_backend")},
+		Secrets: secretsSectionAt(cfg.Extra),
 		Sync:    SyncSection{Classes: stringMapAt(cfg.Extra, "sync")},
 		Nodes:   NodesSection{TrustTier: stringAt(cfg.Extra, "nodes", "trust_tier")},
 		Conductor: ConductorSection{

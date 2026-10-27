@@ -144,6 +144,9 @@ func (b *BaselineChecker) Accept(ctx context.Context, onDisk EffectiveConfig, pr
 	if b.store == nil {
 		return cascade.New(cascade.KindUnavailable, "baseline: no store to record the accepted config in")
 	}
+	if err := onDisk.Secrets.validate(); err != nil {
+		return err // invalid_input: the operator fixes the value; nothing is written
+	}
 	hash := ComputeSectionsHash(onDisk)
 	rec := baselineRecordV1{
 		Version: baselineRecordVersionSigned, SectionsHash: hash, Sections: baselineGuardedSections, ConfigSHA256: digest,

@@ -241,7 +241,10 @@ func (b *BaselineChecker) failClosed(ctx context.Context, onDisk EffectiveConfig
 	if b.audit != nil {
 		_ = b.audit.Record(ctx, auditKindDoctorError, fields)
 	}
-	return BaselineResult{Outcome: outcome, ExpectedHash: expected, ActualHash: actual, Effective: RestrictiveFallback(onDisk)}
+	eff := RestrictiveFallback(onDisk)
+	// Tightest of the default and the on-disk threshold, per field.
+	eff.Secrets = restrictiveSecrets(onDisk.Secrets)
+	return BaselineResult{Outcome: outcome, ExpectedHash: expected, ActualHash: actual, Effective: eff}
 }
 
 // persistBaselineUpdate rewrites the baseline record to hash and its

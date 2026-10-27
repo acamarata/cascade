@@ -32,7 +32,13 @@ func ComputeSectionsHash(cfg EffectiveConfig) string {
 		"elevation": cfg.Elevation,
 	}
 	for _, name := range baselineGuardedSections {
-		b, _ := json.Marshal(sections[name]) // encoding/json errors only on unsupported types (chan/func); none appear in these structs
+		b, err := json.Marshal(sections[name])
+		if err != nil {
+			// A section that cannot be encoded (an invalid [secrets] threshold)
+			// hashes as a marker no valid section encodes to, so it can never
+			// equal a recorded hash.
+			b = []byte("!unencodable:" + err.Error())
+		}
 		h.Write([]byte(name))
 		h.Write([]byte{0})
 		h.Write(b)
@@ -69,7 +75,10 @@ func sortedSyncClasses(s SyncSection) []struct{ Domain, Class string } {
 // trust_tier="" / external_routing_enabled=false / spill_enabled=false)
 // is already its most restrictive shape — an empty/false guarded field
 // reads as "not configured", never as "loosest possible", under every
-// comparison function in hotreload_security.go.
+// comparison function in hotreload_security.go. The [secrets] thresholds
+// are the exception: their zero value would be refused by the detector, so
+// an absent (nil) threshold stands for the shipped default, which is where a
+// raise is measured from (hotreload_secrets.go).
 func MostRestrictiveDefaults() EffectiveConfig {
 	return EffectiveConfig{
 		Sync:      SyncSection{Classes: map[string]string{}},

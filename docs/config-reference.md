@@ -19,7 +19,8 @@ a `SIGHUP`, a `cascade config reload`, or an fsnotify-detected write
 | `[logging]` | hot | **Yes**, the only section with a real runtime consumer (`LogProvider.SetLevel`/`Reconfigure`, `internal/runtime/logger.go`/`rotation.go`). `HotReloader.applyLive` calls both without a restart. |
 | `[storage]` | cold | Diffed, reported, never live-applied. |
 | `[retrieval]`, `[memory]`, `[conductor]`, `[notify]`, `[nodes]`, `[sync]`, `[telemetry]`, `[hooks]`, `[governor]`, `[registry]`, `[plugins]`, `[plugins.<name>]` | hot (per 08 §3's table) | **Registered, awaiting their owning ticket.** These sections have no typed consumer anywhere in this tree yet (they live only in `Config.Extra`, the generic preserved map). A change to one of them is accepted into the in-memory `*Config` snapshot, so a subsequent `cascade config get`/`list --effective` sees the new value immediately, but nothing today reads `Config.Extra["retrieval"]` (etc.) to actually change behavior. Calling this "hot-reloaded" without qualification would be an Art.1 violation; it is accurate to say the *snapshot* reloads, not that a *behavior* changes, until each section's owning subsystem ticket lands and starts consuming it through `HotReloader.applyLive`. |
-| `[policy]`, `[secrets]`, `[sync]` (domain classes), `[nodes]` (`trust_tier`), `[conductor]` (external-routing/spill) | hot, but **tightening-only** | Same "snapshot updates, no live consumer yet" caveat as above, and every change is additionally run through the loosening gate (next section) before it is even accepted into the snapshot. |
+| `[secrets]` (`entropy_floor`, `confidence_threshold`) | hot, **tightening-only** | **Yes**: a tightening reaches the process's secret detector before the next scan, and a loosening applies only through `config.accept_loosening` (see `[secrets]` thresholds below). `keychain_backend` stays snapshot-only. |
+| `[policy]`, `[sync]` (domain classes), `[nodes]` (`trust_tier`), `[conductor]` (external-routing/spill) | hot, but **tightening-only** | Same "snapshot updates, no live consumer yet" caveat as above, and every change is additionally run through the loosening gate (next section) before it is even accepted into the snapshot. |
 | `[elevation]` | **never hot-reloadable, either direction** | A change to `allow_remote` or `helper_pubkey`, tightening or loosening, is unconditionally rejected via hot-reload. Rotating either requires an out-of-band elevated verb with a valid attestation (not shipped in W1); a config.toml edit alone is never sufficient. |
 | `[widget]` | hot (per 08 §3) | **Registered with a real typed consumer** (`status.widget`'s `StatusWidgetDeps.showProjectNames`, `internal/daemon/status_widget.go`), but read exactly once, at daemon composition time (`platformDaemonRun`'s `cfg.Widget.ShowProjectNames`) — the same "snapshot updates, no live-following consumer yet" caveat as the `[retrieval]`/`[memory]`/... row above applies here too: a `config.toml` edit updates what `cascade config get` reports immediately, but a running daemon keeps the value it started with until restarted. |
 
@@ -28,6 +29,7 @@ a `SIGHUP`, a `cascade config reload`, or an fsnotify-detected write
 `internal/runtime.CompareSecurity(current, proposed EffectiveConfig)
 []LooseningPath` is the pure classifier behind the gate. It compares six
 guarded families (`policy.autonomy_profile`, `secrets.keychain_backend`,
+`secrets.entropy_floor`, `secrets.confidence_threshold`,
 `sync`'s per-domain classes, `nodes.trust_tier`,
 `conductor.{external_routing_enabled,spill_enabled}`, and
 `elevation.{allow_remote,helper_pubkey}`) and returns every field that is
@@ -135,6 +137,40 @@ start). The others are recorded and checked but have no consumer yet:
 started by a file change or by SIGHUP never carry it, so they keep refusing
 the loosening. A file swapped after the digest check does not match the
 approval and is refused.
+
+## `[secrets]` thresholds on reload
+
+```toml
+[secrets]
+entropy_floor = 3.5          # bits per character; lower catches more
+confidence_threshold = 0.8   # a hit must score this to be quarantined; lower catches more
+```
+
+The daemon applies both keys at start (the process detector reads them) and
+guards both on every reload. An absent key is the shipped default (3.5 and
+0.8), and a key written with the default value is the same as an absent one.
+
+| Edit | Result |
+|---|---|
+| lower a value | a tightening: the live detector changes before the next scan, with no restart and no approval |
+| raise a value, or remove a key you had lowered | a loosening: the reload is refused with `ElevationRequired` naming the key, and the detector and the config view stay as they were. It applies only through the `config.accept_loosening` flow above |
+| a value that is invalid: not a number (a string, `nan`, `inf`, a boolean) or outside the detector's range (`confidence_threshold` at or below 0 or above 1, `entropy_floor` below 0 or above 8) | read as looser than every valid value, so the reload is refused with `ElevationRequired` naming the key (never accepted as a tightening, even for a value below the default). It can never be accepted: `config.accept_loosening` refuses to record it and writes nothing, and the daemon does not start with it. Fix the file |
+| an unknown key in `[secrets]`, or `[secrets]` that is not a table | rejected as invalid (kind `invalid_input`) when the reload reaches the detector; the previous config and detector keep running |
+| the detector cannot be changed (kind `unavailable`) | the reload is rejected, the previous config keeps running, and the `egress-firewall` subsystem reports `degraded` in `cascade status` until a later reload applies |
+
+That `degraded` entry clears on the next reload that applies, including a reload after you revert the file to what is running: a failed apply is retried even when `[secrets]` is unchanged. Two reloads never run at once. A degraded boot (the table above) keeps a
+threshold you set below the default and runs the default for one you
+raised; it never runs a raised threshold. A file written before thresholds
+were guarded is not divergent because of them: an unchanged file reports
+`baseline_ok`, a lowered threshold `baseline_tightened`. A threshold raised
+in the file while the daemon was stopped is `baseline_divergent` until you
+accept it. An invalid value (above) is never recorded as the baseline, so fixing
+the typo later boots `baseline_ok` or `baseline_tightened`, not divergent.
+
+An accepted raise applies to the running detector at once, so it needs no
+restart, but `restart_required_keys` of `config.accept_loosening` still names
+`secrets.entropy_floor` and `secrets.confidence_threshold` among the keys
+loosened since start.
 
 ## `[elevation]`: why it is never hot-reloadable
 

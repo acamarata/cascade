@@ -82,7 +82,7 @@ func (p *busEventPublisher) Publish(ctx context.Context, name string, payload ma
 // same call rather than as a separate seam) and starts the real
 // fsnotify ReloadWatcher on paths.ConfigPath(). The caller stops the
 // returned watcher on shutdown.
-func wireHotReload(paths runtime.PathProvider, clock runtime.Clock, getenv runtime.Getenv, environ func() []string, cfg *runtime.Config, store provider.Store, bus *events.Bus, logs *runtime.LogProvider) (*runtime.HotReloader, *runtime.ReloadWatcher, error) {
+func wireHotReload(paths runtime.PathProvider, clock runtime.Clock, getenv runtime.Getenv, environ func() []string, cfg *runtime.Config, store provider.Store, bus *events.Bus, logs *runtime.LogProvider, options ...func(*runtime.HotReloader)) (*runtime.HotReloader, *runtime.ReloadWatcher, error) {
 	loadOpts := runtime.LoadOptions{
 		Path:    paths.ConfigPath(),
 		Getenv:  getenv,
@@ -90,6 +90,9 @@ func wireHotReload(paths runtime.PathProvider, clock runtime.Clock, getenv runti
 	}
 	audit := runtime.NewStoreAuditRecorder(store, clock)
 	hr := runtime.NewHotReloader(paths.ConfigPath(), loadOpts, cfg, clock, &busEventPublisher{bus: bus}, audit, logs)
+	for _, option := range options {
+		option(hr)
+	}
 
 	watcher := runtime.NewReloadWatcher(hr, paths.ConfigPath(), 0)
 	if err := watcher.Start(); err != nil {
@@ -108,7 +111,10 @@ func wireHotReload(paths runtime.PathProvider, clock runtime.Clock, getenv runti
 // it already started, so a caller that gets a non-nil error never needs
 // to guess what, if anything, it must still tear down.
 func wireBackgroundSubsystems(ctx context.Context, manifest *daemon.Manifest, paths runtime.PathProvider, deps daemonDeps, cfg *runtime.Config, store provider.Store, rawDB *sql.DB, bus *events.Bus, logProvider *runtime.LogProvider, baseline *configBaseline) (*memory.AdminHandler, *policyWiring, func(), error) {
-	hr, watcher, err := wireHotReload(paths, deps.Clock, deps.Getenv, deps.Environ, cfg, store, bus, logProvider)
+	if err := bootSecrets(cfg, baseline); err != nil {
+		return nil, nil, nil, err
+	}
+	hr, watcher, err := wireHotReload(paths, deps.Clock, deps.Getenv, deps.Environ, cfg, store, bus, logProvider, secretsApplierOption(manifest))
 	if err != nil {
 		return nil, nil, nil, err
 	}

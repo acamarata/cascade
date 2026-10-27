@@ -1,43 +1,36 @@
 package runtime
 
-// Purpose: HotReloader — the daemon-side (and daemonless-CLI-side) engine
+// Purpose: HotReloader — the engine behind `cascade config reload`, SIGHUP and
 //
-//	behind `cascade config reload` / SIGHUP / the fsnotify watcher
-//	(hotreload_watch.go): re-reads config.toml, validates it, enforces
-//	cold-key restart-required semantics, enforces the W1 unconditional
-//	tightening-only loosening gate (hotreload_security.go's
-//	CompareSecurity) plus the separate absolute [elevation] guard, and —
-//	only when every check passes — atomically swaps in the new snapshot,
-//	applies the one section this tree has a real hot-reload consumer for
-//	(logging, via LogProvider.SetLevel/Reconfigure), and emits/persists
-//	the outcome.
+//	the fsnotify watcher (hotreload_watch.go): re-reads config.toml,
+//	validates it, enforces cold-key restart-required semantics, the W1
+//	tightening-only loosening gate (CompareSecurity) and the separate
+//	absolute [elevation] guard, and only when every check passes swaps in
+//	the new snapshot, applies the sections that have a real consumer
+//	([logging] via LogProvider, [secrets] via the applier) and records the
+//	outcome.
 //
-// Inputs: the resolved config.toml path, an injected Clock, an
+// Inputs: the config.toml path, a Clock, an EventPublisher, an AuditRecorder
 //
-//	EventPublisher, an AuditRecorder, and (optional) a *LogProvider to
-//	drive logging's real hot-apply seam.
+//	and (optional) a *LogProvider.
 //
-// Outputs: a ReloadOutcome describing what happened; the emitted event
+// Outputs: a ReloadOutcome, the emitted event, a persisted audit record and,
 //
-//	name/payload; a persisted audit record; and, on acceptance, the new
-//	*Config visible to every future Current() call.
+//	on acceptance, the new *Config visible to every later Current().
 //
-// Constraints: Current() and Reload never mutate a shared *Config in
+// Constraints: Current() and Reload never mutate a shared *Config in place;
 //
-//	place — every transition is an atomic.Pointer swap to a brand-new
-//	value, so a concurrent reader never observes a partially-updated
-//	config (proven under -race in hotreload_test.go). Art.1: sections
-//	this tree has no real consumer for (everything except logging) are
-//	updated in the in-memory snapshot only — HotReloader never claims to
-//	have applied a live behavioral change for them; ReloadOutcome.
-//	AppliedLive lists exactly the sections genuinely pushed to a
-//	consumer.
+//	every transition is an atomic.Pointer swap to a new value (proven under
+//	-race in hotreload_test.go). Art.1: a section with no real consumer is
+//	updated in the snapshot only, and ReloadOutcome.AppliedLive lists
+//	exactly the sections pushed to a consumer.
 //
 // SPORT: runtime/hot-reload-engine (ADD, placeholder per T-8 sport_updates).
 
 import (
 	"context"
 	"reflect"
+	"sync"
 	"sync/atomic"
 )
 
@@ -54,6 +47,11 @@ type HotReloader struct {
 	// elevation is the loosening-approval seam (config_elevation.go).
 	elevation ElevationApprover
 	watchStop func()
+	// mu serialises Reload and guards secretsApply (hotreload_secrets.go).
+	mu           sync.Mutex
+	secretsApply func(section map[string]interface{}) error
+	// secretsRetry: the last apply failed, so the next reload applies again.
+	secretsRetry bool
 }
 
 // NewHotReloader builds a HotReloader over an already-loaded initial
@@ -92,11 +90,7 @@ type ReloadOutcome struct {
 	Err          error
 }
 
-// eventReloadAccepted / eventReloadRejected / eventRestartRequired name
-// the C/S-04.T3 event-bus events this engine emits (08 §3: "invalid file
-// -> keep running config, emit config.reload.rejected"; "cold-key change
-// -> daemon emits config.restart.required"; every applied reload ->
-// audit journal).
+// Event and audit names this engine emits (08 §3).
 const (
 	eventReloadAccepted   = "config.reload.accepted"
 	eventReloadRejected   = "config.reload.rejected"
@@ -107,10 +101,12 @@ const (
 
 // Reload re-reads and re-validates config.toml from disk and applies the
 // full W1 hot-reload decision chain, in the order the ticket contract
-// specifies: whole-file Validate, cold-key detection, then the
-// tightening-only classifier (with [elevation] hard-gated independently
-// of CompareSecurity's own verdict for it).
+// specifies: whole-file Validate, cold-key detection, the tightening-only
+// classifier ([elevation] hard-gated independently of it), then the [secrets]
+// applier, and only then the swap of the new snapshot.
 func (hr *HotReloader) Reload(ctx context.Context) ReloadOutcome {
+	hr.mu.Lock()
+	defer hr.mu.Unlock()
 	old := hr.Current()
 	proposed, err := Load(ctx, hr.loadOpts)
 	if err != nil {
@@ -138,7 +134,14 @@ func (hr *HotReloader) Reload(ctx context.Context) ReloadOutcome {
 		elevationRef = ref
 	}
 
+	secretsApplied, err := hr.applySecrets(ctx, old, candidate)
+	if err != nil {
+		return ReloadOutcome{Rejected: true, Err: err}
+	}
 	applied := hr.applyLive(old, candidate)
+	if secretsApplied {
+		applied = append(applied, "secrets")
+	}
 	hr.current.Store(candidate)
 
 	fields := map[string]interface{}{"restart_required_keys": restartKeys, "applied_live": applied}
@@ -172,12 +175,11 @@ func (hr *HotReloader) recordAudit(ctx context.Context, kind string, fields map[
 	return hr.audit.Record(ctx, kind, fields)
 }
 
-// applyLive pushes the one section this tree has a genuine runtime
-// consumer for — [logging], via LogProvider.SetLevel/Reconfigure — and
-// reports which sections were actually pushed live. Every other section
-// takes effect only in the sense that Current() now returns the new
-// value; HotReloader never reports a section here it did not really call
-// a consumer for (Art.1).
+// applyLive pushes the one section this tree has a genuine runtime consumer
+// for (the [logging] LogProvider seam) and reports which sections it pushed.
+// Every other section takes effect only as Current() returning the new value;
+// [secrets] reaches its detector through the applier (hotreload_secrets.go).
+// HotReloader never reports a section here it did not call a consumer for.
 func (hr *HotReloader) applyLive(old, candidate *Config) []string {
 	if hr.logs == nil || loggingEqual(old.Logging, candidate.Logging) {
 		return nil
@@ -193,11 +195,10 @@ func (hr *HotReloader) applyLive(old, candidate *Config) []string {
 	return []string{"logging"}
 }
 
-// loggingEqual compares two loggingSection values by content rather than
-// Go's default struct equality, which would compare loggingRotation's
-// *int fields by pointer identity — always "different" across two
-// separate Load() calls even when both point at equal ints, which would
-// make applyLive treat logging as changed on every single reload.
+// loggingEqual compares two loggingSection values by content: Go's struct
+// equality would compare the *int rotation fields by pointer, always unequal
+// across two Load() calls, so applyLive would treat logging as changed on
+// every reload.
 func loggingEqual(a, b loggingSection) bool {
 	if a.Level != b.Level || a.Format != b.Format {
 		return false
