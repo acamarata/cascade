@@ -143,7 +143,7 @@ func (f *fileVaultCustody) load() (map[string][]byte, error) {
 	if err != nil {
 		return nil, ErrCustodyUnavailable(fileVaultName, err)
 	}
-	plain, err := ageDecrypt(f.passphrase, raw)
+	plain, err := ageDecryptWith(f.passphrase, raw, memoScryptKey)
 	if err != nil {
 		return nil, ErrCustodyCorrupt(fileVaultName, err)
 	}

@@ -30,6 +30,13 @@ import (
 // failed header MAC or a failed chunk authentication is an error: this
 // never returns a partial or unauthenticated plaintext.
 func ageDecrypt(passphrase string, file []byte) ([]byte, error) {
+	return ageDecryptWith(passphrase, file, ageScryptKey)
+}
+
+// ageDecryptWith is ageDecrypt with the scrypt step injected, so a caller
+// that re-reads one unchanged file many times can reuse the derived key. The
+// header MAC and chunk authentication still run on every call.
+func ageDecryptWith(passphrase string, file []byte, derive func(passphrase string, salt []byte, logN int) ([]byte, error)) ([]byte, error) {
 	if passphrase == "" {
 		return nil, errors.New("age: refusing to decrypt with an empty passphrase")
 	}
@@ -41,7 +48,7 @@ func ageDecrypt(passphrase string, file []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	wrapKey, err := ageScryptKey(passphrase, salt, logN)
+	wrapKey, err := derive(passphrase, salt, logN)
 	if err != nil {
 		return nil, err
 	}
