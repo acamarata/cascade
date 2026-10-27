@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-27T16:34:43Z",
+  "generated_at": "2026-10-27T16:39:19Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -36319,6 +36319,12 @@
           "line": 10,
           "status": "",
           "raw": "providers.agents.claude tests (P1-AGT-01)."
+        },
+        {
+          "file": "providers/agents/claude/settle_test.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "providers.agents.claude tests (ADD)."
         }
       ],
       "statuses": [
@@ -38457,6 +38463,18 @@
       "name": "runtime/hot-reload-engine tests",
       "sites": [
         {
+          "file": "internal/runtime/hotreload_replace_other_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "runtime/hot-reload-engine tests (P1-SEC-24)."
+        },
+        {
+          "file": "internal/runtime/hotreload_replace_windows_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "runtime/hot-reload-engine tests (P1-SEC-24)."
+        },
+        {
           "file": "internal/runtime/hotreload_secrets_table_test.go",
           "line": 6,
           "status": "",
@@ -39045,7 +39063,7 @@
       ]
     }
   ],
-  "total_sites": 3781,
+  "total_sites": 3784,
   "unspecified_count": 290,
   "multi_status_count": 117
 }
