@@ -53,7 +53,7 @@ func assertCustodyDispatch(t *testing.T, gate CustodyGate, method string, signed
 	}
 	params := args
 	if signed {
-		att := Attestation{RequestID: "custody-test", ActionHash: hashParams(args), Nonce: "file-signed-nonce", PubkeyFingerprint: "file-fp", IssuedUnix: clock.Now().Unix(), ExpUnix: clock.Now().Add(time.Minute).Unix()}
+		att := Attestation{RequestID: "custody-test", ActionHash: hashParams(args), Method: method, Nonce: "file-signed-nonce", PubkeyFingerprint: "file-fp", IssuedUnix: clock.Now().Unix(), ExpUnix: clock.Now().Add(time.Minute).Unix()}
 		sig := ed25519.Sign(priv, signedFields(att))
 		att.SigB64 = base64.StdEncoding.EncodeToString(sig)
 		if !ed25519.Verify(pub, signedFields(att), sig) {
@@ -91,7 +91,7 @@ func assertCustodyIssuedAttestation(t *testing.T, gate CustodyGate, pub ed25519.
 	if err != nil {
 		t.Fatal(err)
 	}
-	att := Attestation{RequestID: "custody-issued", ActionHash: hashParams(args), Nonce: nonce, PubkeyFingerprint: "file-fp", IssuedUnix: clock.Now().Unix(), ExpUnix: clock.Now().Add(time.Minute).Unix()}
+	att := Attestation{RequestID: "custody-issued", ActionHash: hashParams(args), Method: "vault.get", Nonce: nonce, PubkeyFingerprint: "file-fp", IssuedUnix: clock.Now().Unix(), ExpUnix: clock.Now().Add(time.Minute).Unix()}
 	att.SigB64 = base64.StdEncoding.EncodeToString(ed25519.Sign(priv, signedFields(att)))
 	params, err := json.Marshal(elevatedEnvelope{Attestation: &att, Args: args})
 	if err != nil {

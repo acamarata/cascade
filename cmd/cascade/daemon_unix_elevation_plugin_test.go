@@ -106,7 +106,7 @@ func TestPluginAddRPCNonceSingleUse(t *testing.T) {
 	raw, _ := json.Marshal(pluginAddCall(t))
 	_, eo := d.Registry.Dispatch(owner, &rpc.Request{JSONRPC: "2.0", Method: "plugin.add", Params: raw})
 	nonce := nonceOf(eo)
-	att, err := signAttestation(d.KS, runtime.NewSystemClock(), rpc.ParamsHash(raw), nonce)
+	att, err := signAttestation(d.KS, runtime.NewSystemClock(), "plugin.add", rpc.ParamsHash(raw), nonce)
 	if err != nil {
 		t.Fatal(err)
 	}

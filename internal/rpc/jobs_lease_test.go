@@ -82,7 +82,7 @@ func TestLeaseRelease_ValidAttestationSatisfiesElevation(t *testing.T) {
 		t.Fatalf("Issue: %v", err)
 	}
 	att := signAttestation(priv, Attestation{
-		RequestID: "r1", ActionHash: hash, Nonce: nonce, PubkeyFingerprint: "fp1",
+		RequestID: "r1", ActionHash: hash, Method: "lease.release", Nonce: nonce, PubkeyFingerprint: "fp1",
 		IssuedUnix: clock.Now().Unix(), ExpUnix: clock.Now().Add(time.Minute).Unix(),
 	})
 	envelope, _ := json.Marshal(elevatedEnvelope{Attestation: &att, Args: args})
@@ -110,7 +110,7 @@ func TestLeaseRelease_ReplayedAttestationRefused(t *testing.T) {
 	hash := hashParams(args)
 	nonce, _ := deps.Ledger.Issue("lease.release", hash)
 	att := signAttestation(priv, Attestation{
-		RequestID: "r1", ActionHash: hash, Nonce: nonce, PubkeyFingerprint: "fp1",
+		RequestID: "r1", ActionHash: hash, Method: "lease.release", Nonce: nonce, PubkeyFingerprint: "fp1",
 		IssuedUnix: clock.Now().Unix(), ExpUnix: clock.Now().Add(time.Minute).Unix(),
 	})
 	envelope, _ := json.Marshal(elevatedEnvelope{Attestation: &att, Args: args})

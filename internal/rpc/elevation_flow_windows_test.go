@@ -52,6 +52,7 @@ func TestElevationMiddleware_Windows_RefusesEvenWithValidAttestation(t *testing.
 	att := Attestation{
 		RequestID:         "req-2",
 		ActionHash:        hashParams(originalArgs),
+		Method:            "vault.get",
 		Nonce:             "irrelevant-on-windows",
 		PubkeyFingerprint: "fp1",
 		IssuedUnix:        clock.Now().Unix(),

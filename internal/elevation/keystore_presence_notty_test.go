@@ -12,7 +12,6 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -62,17 +61,9 @@ func signed(t *testing.T, ks elevation.ElevationKeystore, led *rpc.NonceLedger, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	att := rpc.Attestation{RequestID: "req-" + nonce[:6], ActionHash: hash, Nonce: nonce, PubkeyFingerprint: fp,
+	att := rpc.Attestation{RequestID: "req-" + nonce[:6], ActionHash: hash, Method: "vault.get", Nonce: nonce, PubkeyFingerprint: fp,
 		IssuedUnix: now.Unix(), ExpUnix: now.Add(5 * time.Minute).Unix()}
-	payload, _ := json.Marshal(struct {
-		ActionHash        string `json:"action_hash"`
-		ExpUnix           int64  `json:"exp_unix"`
-		IssuedUnix        int64  `json:"issued_unix"`
-		Nonce             string `json:"nonce"`
-		PubkeyFingerprint string `json:"pubkey_fingerprint"`
-		RequestID         string `json:"request_id"`
-	}{att.ActionHash, att.ExpUnix, att.IssuedUnix, att.Nonce, att.PubkeyFingerprint, att.RequestID})
-	sig, err := ks.Sign(payload)
+	sig, err := ks.Sign(rpc.AttestationSignedBytes(att))
 	if err != nil {
 		t.Fatal(err)
 	}

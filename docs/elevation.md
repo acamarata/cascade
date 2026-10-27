@@ -31,7 +31,9 @@ Replacement is allowed only when the old trust record matches the file key. It s
 
 ## Signing
 
-Authentication and signing share one operation. Attestations bind the request, action and nonce and expire after five minutes. Nonces are single use. The `devkeys` tag permits file signing for development; it does not prove local presence and is unsuitable for release artifacts.
+Authentication and signing share one operation. Attestations bind the request, the RPC method, the action and the nonce, and expire after five minutes. Nonces are single use. The `devkeys` tag permits file signing for development; it does not prove local presence and is unsuitable for release artifacts.
+
+The signed bytes are the compact JSON object `{action_hash, exp_unix, issued_unix, method, nonce, pubkey_fingerprint, request_id}`, keys in that order. `action_hash` is the SHA-256 of the raw params. `method` names the verb the attestation authorizes. The verifier compares the signed method with the method being dispatched, and the ledger-free check provided for a persisted attestation record (no expiry, no nonce) compares it with the expected method, so an attestation for one verb never verifies for another verb with byte-identical params. An attestation without a method, including one signed in the earlier six-field format, is refused. `cascade elevate-helper --sign` takes `<request-id> <method> <action-hash> <nonce>`. The format has not been released, so nothing is migrated: enrolled keys and trust records stay valid, the `cascade-elevate-helper` binary signs whatever bytes it is given and needs no change, and an attestation made by an older `cascade` binary is refused until that binary is rebuilt.
 
 ## Daemon enforcement
 

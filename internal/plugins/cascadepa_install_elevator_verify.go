@@ -56,7 +56,7 @@ func (v elevationAttestationVerifier) Verify(ctx context.Context, att install.At
 // VerifyElevationWitness takes, field for field.
 func installAttestationFromRPC(att rpc.Attestation) install.Attestation {
 	return install.Attestation{
-		RequestID: att.RequestID, ActionHash: att.ActionHash, Nonce: att.Nonce,
+		RequestID: att.RequestID, ActionHash: att.ActionHash, Method: att.Method, Nonce: att.Nonce,
 		PubkeyFingerprint: att.PubkeyFingerprint, IssuedUnix: att.IssuedUnix,
 		ExpUnix: att.ExpUnix, SigB64: att.SigB64,
 	}
@@ -70,7 +70,7 @@ func installAttestationFromRPC(att rpc.Attestation) install.Attestation {
 // it.
 func rpcAttestationFromInstall(att install.Attestation) rpc.Attestation {
 	return rpc.Attestation{
-		RequestID: att.RequestID, ActionHash: att.ActionHash, Nonce: att.Nonce,
+		RequestID: att.RequestID, ActionHash: att.ActionHash, Method: att.Method, Nonce: att.Nonce,
 		PubkeyFingerprint: att.PubkeyFingerprint, IssuedUnix: att.IssuedUnix,
 		ExpUnix: att.ExpUnix, SigB64: att.SigB64,
 	}

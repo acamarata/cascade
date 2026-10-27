@@ -162,12 +162,13 @@ func (e *installElevator) signInstallAttestation(ks elevation.ElevationKeystore,
 	att := rpc.Attestation{
 		RequestID:         string(requestID),
 		ActionHash:        (&rpc.Request{Params: args}).ParamsHash(),
+		Method:            installElevationMethod,
 		Nonce:             nonce,
 		PubkeyFingerprint: fingerprint,
 		IssuedUnix:        now.Unix(),
 		ExpUnix:           now.Add(installAttestationTTL).Unix(),
 	}
-	sig, err := ks.Sign(installSignedFields(att))
+	sig, err := ks.Sign(rpc.AttestationSignedBytes(att))
 	if err != nil {
 		return rpc.Attestation{}, err
 	}
@@ -238,36 +239,6 @@ func issueInstallChallenge(ctx context.Context, gate rpc.HandlerFunc, args json.
 type installElevatedEnvelope struct {
 	Attestation rpc.Attestation `json:"_attestation"`
 	Args        json.RawMessage `json:"_args"`
-}
-
-// installSignedFields duplicates internal/rpc/elevation_attest.go's own
-// unexported signedFields byte format field-for-field (alphabetical by
-// JSON tag, independent of struct declaration order) -- VerifyAttestation
-// recomputes this internally from the Attestation this file sends over
-// gate(ctx, envelope), so the two must produce byte-identical output for
-// ed25519.Verify to ever succeed. Not imported: signedFields is
-// unexported in a different package.
-func installSignedFields(a rpc.Attestation) []byte {
-	type signable struct {
-		ActionHash        string `json:"action_hash"`
-		ExpUnix           int64  `json:"exp_unix"`
-		IssuedUnix        int64  `json:"issued_unix"`
-		Nonce             string `json:"nonce"`
-		PubkeyFingerprint string `json:"pubkey_fingerprint"`
-		RequestID         string `json:"request_id"`
-	}
-	b, err := json.Marshal(signable{
-		ActionHash:        a.ActionHash,
-		ExpUnix:           a.ExpUnix,
-		IssuedUnix:        a.IssuedUnix,
-		Nonce:             a.Nonce,
-		PubkeyFingerprint: a.PubkeyFingerprint,
-		RequestID:         a.RequestID,
-	})
-	if err != nil {
-		return nil
-	}
-	return b
 }
 
 // compile-time proof installElevator really is the Elevator install.Flow

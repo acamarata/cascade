@@ -77,7 +77,7 @@ func elevatedCaller(reg *rpc.Registry, ks elevation.ElevationKeystore, clock run
 			if nonce == "" {
 				return eo
 			}
-			att, err := signAttestation(ks, clock, rpc.ParamsHash(p), nonce)
+			att, err := signAttestation(ks, clock, method, rpc.ParamsHash(p), nonce)
 			if err != nil {
 				return err
 			}

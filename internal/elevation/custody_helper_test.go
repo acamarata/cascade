@@ -13,7 +13,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"path/filepath"
 	"testing"
 	"time"
@@ -22,16 +21,6 @@ import (
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 )
-
-// signable mirrors the canonical attestation bytes (alphabetical JSON keys).
-type signable struct {
-	ActionHash        string `json:"action_hash"`
-	ExpUnix           int64  `json:"exp_unix"`
-	IssuedUnix        int64  `json:"issued_unix"`
-	Nonce             string `json:"nonce"`
-	PubkeyFingerprint string `json:"pubkey_fingerprint"`
-	RequestID         string `json:"request_id"`
-}
 
 func TestHelperKeystoreSignRoundTrip(t *testing.T) {
 	elevation.TrustAnyVolumeForTest(t)
@@ -58,9 +47,9 @@ func TestHelperKeystoreSignRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	att := rpc.Attestation{RequestID: "req-1", ActionHash: "hash1", Nonce: nonce, PubkeyFingerprint: fp,
+	att := rpc.Attestation{RequestID: "req-1", ActionHash: "hash1", Method: "vault.get", Nonce: nonce, PubkeyFingerprint: fp,
 		IssuedUnix: now.Unix(), ExpUnix: now.Add(time.Minute).Unix()}
-	payload, _ := json.Marshal(signable{att.ActionHash, att.ExpUnix, att.IssuedUnix, att.Nonce, att.PubkeyFingerprint, att.RequestID})
+	payload := rpc.AttestationSignedBytes(att)
 	sig, err := ks.Sign(payload)
 	if err != nil {
 		t.Fatalf("Sign: %v", err)

@@ -53,19 +53,11 @@ func attestedDispatch(t *testing.T, issuer *rpc.WitnessIssuer, method string, in
 		// nonce: there is no attestation flow on Windows to drive.
 		t.Skipf("no nonce in the challenge (%s): Windows tier-2 refuses before the attestation flow", eo.Message)
 	}
-	signed, _ := json.Marshal(struct { // the documented signed fields, alphabetical
-		ActionHash string `json:"action_hash"`
-		ExpUnix    int64  `json:"exp_unix"`
-		IssuedUnix int64  `json:"issued_unix"`
-		Nonce      string `json:"nonce"`
-		Pubkey     string `json:"pubkey_fingerprint"`
-		RequestID  string `json:"request_id"`
-	}{rpc.ParamsHash(args), clock.Now().Add(time.Minute).Unix(), clock.Now().Unix(), nonce.Nonce, "fp", "req"})
 	att := rpc.Attestation{
-		RequestID: "req", ActionHash: rpc.ParamsHash(args), Nonce: nonce.Nonce, PubkeyFingerprint: "fp",
+		RequestID: "req", ActionHash: rpc.ParamsHash(args), Method: method, Nonce: nonce.Nonce, PubkeyFingerprint: "fp",
 		IssuedUnix: clock.Now().Unix(), ExpUnix: clock.Now().Add(time.Minute).Unix(),
-		SigB64: base64.StdEncoding.EncodeToString(ed25519.Sign(priv, signed)),
 	}
+	att.SigB64 = base64.StdEncoding.EncodeToString(ed25519.Sign(priv, rpc.AttestationSignedBytes(att)))
 	env, _ := json.Marshal(map[string]any{"_attestation": att, "_args": args})
 	if _, err := wrapped(context.Background(), env); err != nil {
 		t.Fatalf("attested dispatch of %s: %v", method, err)

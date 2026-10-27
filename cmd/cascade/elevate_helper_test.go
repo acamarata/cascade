@@ -123,7 +123,7 @@ func TestElevateHelperCmd_Enroll_SecondRun_Refused(t *testing.T) {
 
 func TestElevateHelperCmd_Sign_MissingEnrollment(t *testing.T) {
 	deps := newTestDeps(t, &fakeCmdKeystore{notEnrolled: true}, nil)
-	_, err := execElevateHelper(t, deps, "--sign", "req-1", "hash-1", "nonce-1")
+	_, err := execElevateHelper(t, deps, "--sign", "req-1", "vault.get", "hash-1", "nonce-1")
 	if err == nil {
 		t.Fatal("--sign with no enrolled key must fail")
 	}
@@ -139,7 +139,7 @@ func TestElevateHelperCmd_Sign_AuthFailure(t *testing.T) {
 	}
 	ks.authFails = true
 	deps := newTestDeps(t, ks, nil)
-	_, err := execElevateHelper(t, deps, "--sign", "req-1", "hash-1", "nonce-1")
+	_, err := execElevateHelper(t, deps, "--sign", "req-1", "vault.get", "hash-1", "nonce-1")
 	if err == nil {
 		t.Fatal("--sign must fail when local authentication fails")
 	}
@@ -164,7 +164,7 @@ func TestElevateHelperCmd_NoInput_FailsFastBeforeAuth(t *testing.T) {
 		}
 		return ""
 	})
-	_, err := execElevateHelper(t, deps, "--sign", "req-1", "hash-1", "nonce-1")
+	_, err := execElevateHelper(t, deps, "--sign", "req-1", "vault.get", "hash-1", "nonce-1")
 	if err == nil {
 		t.Fatal("CASCADE_NO_INPUT=1 must make --sign fail fast, not succeed")
 	}
@@ -208,7 +208,7 @@ func TestElevateHelperCmd_Sign_WrongArgCount(t *testing.T) {
 
 // TestElevateHelperCmd_SignVerifiesAgainstRealVerifier is this ticket's
 // Art.2 real-counterpart proof: it signs an attestation through THIS
-// command's actual code path (runElevateHelperSign, canonicalSignedBytes)
+// command's actual code path (runElevateHelperSign, rpc.AttestationSignedBytes)
 // and verifies the result with internal/rpc.VerifyAttestation — the real,
 // already-shipped verifier this ticket must match, not a reimplementation
 // of it.
@@ -264,7 +264,7 @@ func signRealAttestation(t *testing.T, requestID, actionHash string) (rpc.Attest
 		t.Fatalf("ledger.Issue: %v", err)
 	}
 
-	out, err := execElevateHelper(t, deps, "--sign", requestID, actionHash, nonce)
+	out, err := execElevateHelper(t, deps, "--sign", requestID, "vault.get", actionHash, nonce)
 	if err != nil {
 		t.Fatalf("--sign: %v", err)
 	}

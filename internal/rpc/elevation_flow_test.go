@@ -72,6 +72,7 @@ func TestElevationMiddleware_FullRoundTripWithAttestation(t *testing.T) {
 	att := Attestation{
 		RequestID:         "req-2",
 		ActionHash:        paramsHash,
+		Method:            "vault.get",
 		Nonce:             nonce,
 		PubkeyFingerprint: "fp1",
 		IssuedUnix:        clock.Now().Unix(),

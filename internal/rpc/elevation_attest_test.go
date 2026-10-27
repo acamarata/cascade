@@ -35,6 +35,7 @@ func newValidAttestation(t *testing.T, priv ed25519.PrivateKey, fingerprint, non
 	att := Attestation{
 		RequestID:         "req-1",
 		ActionHash:        paramsHash,
+		Method:            "vault.get",
 		Nonce:             nonce,
 		PubkeyFingerprint: fingerprint,
 		IssuedUnix:        now.Unix(),
@@ -160,6 +161,7 @@ func TestVerifyAttestation_Expired(t *testing.T) {
 	att := Attestation{
 		RequestID:         "req-1",
 		ActionHash:        "hash1",
+		Method:            "vault.get",
 		Nonce:             nonce,
 		PubkeyFingerprint: "fp1",
 		IssuedUnix:        clock.Now().Unix(),

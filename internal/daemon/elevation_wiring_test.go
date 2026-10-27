@@ -110,17 +110,10 @@ func (f *elevFixture) attestedEnvelope(t *testing.T, ks *memKeystore, args, nonc
 	pub, _ := ks.PubKeyB64()
 	fp, _ := elevation.Fingerprint(pub)
 	hash := rpc.ParamsHash(json.RawMessage(args))
-	signed, _ := json.Marshal(struct {
-		ActionHash string `json:"action_hash"`
-		ExpUnix    int64  `json:"exp_unix"`
-		IssuedUnix int64  `json:"issued_unix"`
-		Nonce      string `json:"nonce"`
-		Pubkey     string `json:"pubkey_fingerprint"`
-		RequestID  string `json:"request_id"`
-	}{hash, f.clock.Now().Add(time.Minute).Unix(), f.clock.Now().Unix(), nonce, fp, "req"})
-	sig, _ := ks.Sign(signed)
-	att := rpc.Attestation{RequestID: "req", ActionHash: hash, Nonce: nonce, PubkeyFingerprint: fp,
-		IssuedUnix: f.clock.Now().Unix(), ExpUnix: f.clock.Now().Add(time.Minute).Unix(), SigB64: base64.StdEncoding.EncodeToString(sig)}
+	att := rpc.Attestation{RequestID: "req", ActionHash: hash, Method: "plugin.add", Nonce: nonce, PubkeyFingerprint: fp,
+		IssuedUnix: f.clock.Now().Unix(), ExpUnix: f.clock.Now().Add(time.Minute).Unix()}
+	sig, _ := ks.Sign(rpc.AttestationSignedBytes(att))
+	att.SigB64 = base64.StdEncoding.EncodeToString(sig)
 	env, _ := json.Marshal(map[string]any{"_attestation": att, "_args": json.RawMessage(args)})
 	return env
 }

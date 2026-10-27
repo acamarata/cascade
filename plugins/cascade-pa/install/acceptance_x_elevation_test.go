@@ -142,16 +142,16 @@ func (e *acceptElevator) signAttestation(fingerprint, nonce string, args json.Ra
 	now := e.clock.Now()
 	att := rpc.Attestation{
 		RequestID: string(requestID), ActionHash: (&rpc.Request{Params: args}).ParamsHash(),
-		Nonce: nonce, PubkeyFingerprint: fingerprint,
+		Method: acceptElevationMethod, Nonce: nonce, PubkeyFingerprint: fingerprint,
 		IssuedUnix: now.Unix(), ExpUnix: now.Add(acceptAttestationTTL).Unix(),
 	}
-	sig, err := e.ks.Sign(acceptSignedFields(att))
+	sig, err := e.ks.Sign(rpc.AttestationSignedBytes(att))
 	if err != nil {
 		return install.Attestation{}, err
 	}
 	att.SigB64 = base64.StdEncoding.EncodeToString(sig)
 	return install.Attestation{
-		RequestID: att.RequestID, ActionHash: att.ActionHash, Nonce: att.Nonce,
+		RequestID: att.RequestID, ActionHash: att.ActionHash, Method: att.Method, Nonce: att.Nonce,
 		PubkeyFingerprint: att.PubkeyFingerprint, IssuedUnix: att.IssuedUnix,
 		ExpUnix: att.ExpUnix, SigB64: att.SigB64,
 	}, nil
@@ -224,7 +224,7 @@ type acceptElevatedEnvelope struct {
 // Verify implements install.AttestationVerifier.
 func (v acceptAttestationVerifier) Verify(ctx context.Context, att install.Attestation) error {
 	rpcAtt := rpc.Attestation{
-		RequestID: att.RequestID, ActionHash: att.ActionHash, Nonce: att.Nonce,
+		RequestID: att.RequestID, ActionHash: att.ActionHash, Method: att.Method, Nonce: att.Nonce,
 		PubkeyFingerprint: att.PubkeyFingerprint, IssuedUnix: att.IssuedUnix,
 		ExpUnix: att.ExpUnix, SigB64: att.SigB64,
 	}
@@ -234,29 +234,6 @@ func (v acceptAttestationVerifier) Verify(ctx context.Context, att install.Attes
 	}
 	_, err = v.gate(ctx, envelope)
 	return err
-}
-
-// acceptSignedFields duplicates internal/rpc/elevation_attest.go's own
-// unexported signedFields byte format field-for-field (alphabetical by
-// JSON tag) -- rpc.VerifyAttestation recomputes this internally, so the
-// two must produce byte-identical output for ed25519.Verify to succeed.
-func acceptSignedFields(a rpc.Attestation) []byte {
-	type signable struct {
-		ActionHash        string `json:"action_hash"`
-		ExpUnix           int64  `json:"exp_unix"`
-		IssuedUnix        int64  `json:"issued_unix"`
-		Nonce             string `json:"nonce"`
-		PubkeyFingerprint string `json:"pubkey_fingerprint"`
-		RequestID         string `json:"request_id"`
-	}
-	b, err := json.Marshal(signable{
-		ActionHash: a.ActionHash, ExpUnix: a.ExpUnix, IssuedUnix: a.IssuedUnix,
-		Nonce: a.Nonce, PubkeyFingerprint: a.PubkeyFingerprint, RequestID: a.RequestID,
-	})
-	if err != nil {
-		return nil
-	}
-	return b
 }
 
 type acceptCustodyKey struct{ priv ed25519.PrivateKey }

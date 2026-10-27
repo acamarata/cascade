@@ -95,6 +95,7 @@ func (a *recordingAuditor) phases() []string {
 // mwFixture is a middleware over one trusted key, a recording auditor and a
 // handler that counts its runs and keeps the context it ran with.
 type mwFixture struct {
+	method  string
 	clock   *runtime.FixedClock
 	priv    ed25519.PrivateKey
 	ledger  *NonceLedger
@@ -116,7 +117,7 @@ func newMWFixture(t *testing.T, method string) *mwFixture {
 func newMWFixtureWith(t *testing.T, method string, issuer *WitnessIssuer) *mwFixture {
 	t.Helper()
 	pub, priv := genAttestTestKey(t)
-	f := &mwFixture{clock: runtime.NewFixedClock(time.Unix(4000, 0)), priv: priv, audit: &recordingAuditor{fails: map[string]bool{}}}
+	f := &mwFixture{method: method, clock: runtime.NewFixedClock(time.Unix(4000, 0)), priv: priv, audit: &recordingAuditor{fails: map[string]bool{}}}
 	f.ledger = NewNonceLedger(f.clock)
 	f.issuer = issuer
 	mw := ElevationMiddleware(ElevationDeps{
@@ -142,11 +143,18 @@ func (f *mwFixture) challenge(t *testing.T, params string) string {
 	return eo.Data.(elevationRequiredData).Nonce
 }
 
-// envelope signs args under nonce and wraps both the way the client does.
+// envelope signs args under nonce for the fixture's method and wraps both the
+// way the client does.
 func (f *mwFixture) envelope(t *testing.T, args, nonce string) json.RawMessage {
 	t.Helper()
+	return f.envelopeFor(t, f.method, args, nonce)
+}
+
+// envelopeFor is envelope with the signed method named explicitly.
+func (f *mwFixture) envelopeFor(t *testing.T, method, args, nonce string) json.RawMessage {
+	t.Helper()
 	att := Attestation{
-		RequestID: "req", ActionHash: hashParams(json.RawMessage(args)), Nonce: nonce, PubkeyFingerprint: "fp1",
+		RequestID: "req", ActionHash: hashParams(json.RawMessage(args)), Method: method, Nonce: nonce, PubkeyFingerprint: "fp1",
 		IssuedUnix: f.clock.Now().Unix(), ExpUnix: f.clock.Now().Add(time.Minute).Unix(),
 	}
 	att.SigB64 = base64.StdEncoding.EncodeToString(ed25519.Sign(f.priv, signedFields(att)))

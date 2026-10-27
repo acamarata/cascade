@@ -81,36 +81,18 @@ func hashParamsForTest(params json.RawMessage) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// signedAttestationFieldsForTest replicates internal/rpc's unexported
-// signedFields: the canonical, alphabetically-keyed-by-tag JSON encoding
-// of every Attestation field except SigB64.
-func signedAttestationFieldsForTest(a rpc.Attestation) []byte {
-	type signable struct {
-		ActionHash        string `json:"action_hash"`
-		ExpUnix           int64  `json:"exp_unix"`
-		IssuedUnix        int64  `json:"issued_unix"`
-		Nonce             string `json:"nonce"`
-		PubkeyFingerprint string `json:"pubkey_fingerprint"`
-		RequestID         string `json:"request_id"`
-	}
-	b, _ := json.Marshal(signable{
-		ActionHash: a.ActionHash, ExpUnix: a.ExpUnix, IssuedUnix: a.IssuedUnix,
-		Nonce: a.Nonce, PubkeyFingerprint: a.PubkeyFingerprint, RequestID: a.RequestID,
-	})
-	return b
-}
-
 func buildAttestedEnvelope(t *testing.T, args json.RawMessage, nonce string, priv ed25519.PrivateKey, clock *runtime.FixedClock) json.RawMessage {
 	t.Helper()
 	att := rpc.Attestation{
 		RequestID:         "req-1",
 		ActionHash:        hashParamsForTest(args),
+		Method:            "node.enroll",
 		Nonce:             nonce,
 		PubkeyFingerprint: "helper-fp",
 		IssuedUnix:        clock.Now().Unix(),
 		ExpUnix:           clock.Now().Add(time.Minute).Unix(),
 	}
-	sig := ed25519.Sign(priv, signedAttestationFieldsForTest(att))
+	sig := ed25519.Sign(priv, rpc.AttestationSignedBytes(att))
 	att.SigB64 = base64.StdEncoding.EncodeToString(sig)
 
 	env := map[string]interface{}{"_attestation": att, "_args": args}

@@ -38,7 +38,7 @@ func productionElevatedCallDeps(stderr io.Writer) elevatedCallDeps {
 // refuses on Windows, then under CASCADE_NO_INPUT=1 before custody is
 // consulted, then signs through Custody().Signer() alone.
 func callElevated(ctx context.Context, c *client.Client, deps elevatedCallDeps, method string, params, out any) error {
-	return c.DoElevated(ctx, method, params, out, func(_ context.Context, _, hash, nonce string) (json.RawMessage, error) {
+	return c.DoElevated(ctx, method, params, out, func(_ context.Context, method, hash, nonce string) (json.RawMessage, error) {
 		if goruntime.GOOS == "windows" {
 			return nil, elevation.ErrWindowsTier2()
 		}
@@ -53,7 +53,7 @@ func callElevated(ctx context.Context, c *client.Client, deps elevatedCallDeps, 
 		if err != nil {
 			return nil, err
 		}
-		att, err := signAttestation(ks, deps.Clock, hash, nonce)
+		att, err := signAttestation(ks, deps.Clock, method, hash, nonce)
 		if err != nil {
 			return nil, err
 		}
@@ -61,10 +61,11 @@ func callElevated(ctx context.Context, c *client.Client, deps elevatedCallDeps, 
 	})
 }
 
-// signAttestation is the one signing primitive: it binds actionHash and the
-// server nonce to the keystore's key for attestationTTL. backup_elevation.go
-// reuses it for the in-process backup ceremony.
-func signAttestation(ks elevation.ElevationKeystore, clock runtime.Clock, actionHash, nonce string) (rpc.Attestation, error) {
+// signAttestation is the one signing primitive: it binds method, actionHash
+// and the server nonce to the keystore's key for attestationTTL, over
+// rpc.AttestationSignedBytes. backup_elevation.go reuses it for the
+// in-process backup ceremony.
+func signAttestation(ks elevation.ElevationKeystore, clock runtime.Clock, method, actionHash, nonce string) (rpc.Attestation, error) {
 	encoded, err := ks.PubKeyB64()
 	if err != nil {
 		return rpc.Attestation{}, err
@@ -78,25 +79,12 @@ func signAttestation(ks elevation.ElevationKeystore, clock runtime.Clock, action
 		return rpc.Attestation{}, cascade.Wrap(cascade.KindInternal, err, "elevation: mint request id")
 	}
 	now := clock.Now()
-	att := rpc.Attestation{RequestID: string(requestID), ActionHash: actionHash, Nonce: nonce,
+	att := rpc.Attestation{RequestID: string(requestID), ActionHash: actionHash, Method: method, Nonce: nonce,
 		PubkeyFingerprint: fingerprint, IssuedUnix: now.Unix(), ExpUnix: now.Add(attestationTTL).Unix()}
-	sig, err := ks.Sign(canonicalSignedBytes(att))
+	sig, err := ks.Sign(rpc.AttestationSignedBytes(att))
 	if err != nil {
 		return rpc.Attestation{}, err
 	}
 	att.SigB64 = base64.StdEncoding.EncodeToString(sig)
 	return att, nil
-}
-
-// canonicalSignedBytes mirrors the verifier's signed fields and JSON ordering.
-func canonicalSignedBytes(att rpc.Attestation) []byte {
-	b, _ := json.Marshal(struct {
-		ActionHash        string `json:"action_hash"`
-		ExpUnix           int64  `json:"exp_unix"`
-		IssuedUnix        int64  `json:"issued_unix"`
-		Nonce             string `json:"nonce"`
-		PubkeyFingerprint string `json:"pubkey_fingerprint"`
-		RequestID         string `json:"request_id"`
-	}{att.ActionHash, att.ExpUnix, att.IssuedUnix, att.Nonce, att.PubkeyFingerprint, att.RequestID})
-	return b
 }

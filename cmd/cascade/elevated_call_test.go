@@ -89,23 +89,29 @@ func TestCallElevatedRoundTripAgainstRealMiddleware(t *testing.T) {
 	if goruntime.GOOS == "windows" {
 		t.Skip("Windows refuses elevation")
 	}
-	deps, k := callTestDeps(t, elevation.CustodyPlatform)
-	pub, _ := k.PubKeyB64()
-	fp, _ := elevation.Fingerprint(pub)
-	registry := rpc.NewRegistry()
-	registry.Use(rpc.ElevationMiddleware(rpc.ElevationDeps{Ledger: rpc.NewNonceLedger(deps.Clock), Trust: rpc.MapTrustStore{fp: k.pub}, Clock: deps.Clock, Audit: rpc.LocalCeremonyAudit{}, Custody: func() (string, bool) { return "platform", true }}))
-	handled := new(atomic.Int32)
-	var verifiedHash string
-	registry.Register("plugin.add", func(_ context.Context, p json.RawMessage) (any, error) {
-		handled.Add(1)
-		verifiedHash = (&rpc.Request{Params: p}).ParamsHash()
-		return "installed", nil
-	})
-	c, requests := callTestClient(t, rpc.NewHandler(registry))
-	var out string
-	err := callElevated(t.Context(), c, deps, "plugin.add", map[string]string{"process_tier": "<>&"}, &out)
-	if err != nil || requests.Load() != 2 || k.signs != 1 || handled.Load() != 1 || out != "installed" || verifiedHash == "" || verifiedHash != k.hash {
-		t.Fatalf("err=%v requests=%d signs=%d handled=%d result=%q hashes=%s/%s", err, requests.Load(), k.signs, handled.Load(), out, verifiedHash, k.hash)
+	// Two always-elevated verbs, so an attestation signed for any verb but
+	// the one dialed is refused by the real middleware.
+	for _, method := range []string{"plugin.add", "plugin.update"} {
+		t.Run(method, func(t *testing.T) {
+			deps, k := callTestDeps(t, elevation.CustodyPlatform)
+			pub, _ := k.PubKeyB64()
+			fp, _ := elevation.Fingerprint(pub)
+			registry := rpc.NewRegistry()
+			registry.Use(rpc.ElevationMiddleware(rpc.ElevationDeps{Ledger: rpc.NewNonceLedger(deps.Clock), Trust: rpc.MapTrustStore{fp: k.pub}, Clock: deps.Clock, Audit: rpc.LocalCeremonyAudit{}, Custody: func() (string, bool) { return "platform", true }}))
+			handled := new(atomic.Int32)
+			var verifiedHash string
+			registry.Register(method, func(_ context.Context, p json.RawMessage) (any, error) {
+				handled.Add(1)
+				verifiedHash = (&rpc.Request{Params: p}).ParamsHash()
+				return "installed", nil
+			})
+			c, requests := callTestClient(t, rpc.NewHandler(registry))
+			var out string
+			err := callElevated(t.Context(), c, deps, method, map[string]string{"process_tier": "<>&"}, &out)
+			if err != nil || requests.Load() != 2 || k.signs != 1 || handled.Load() != 1 || out != "installed" || verifiedHash == "" || verifiedHash != k.hash {
+				t.Fatalf("err=%v requests=%d signs=%d handled=%d result=%q hashes=%s/%s", err, requests.Load(), k.signs, handled.Load(), out, verifiedHash, k.hash)
+			}
+		})
 	}
 }
 
@@ -180,7 +186,7 @@ func TestSignedBytesMatchVerifier(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	att, err := signAttestation(k, deps.Clock, "hash", nonce)
+	att, err := signAttestation(k, deps.Clock, "plugin.add", "hash", nonce)
 	if err != nil {
 		t.Fatal(err)
 	}

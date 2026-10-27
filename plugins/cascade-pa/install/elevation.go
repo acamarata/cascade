@@ -84,12 +84,14 @@ func (w ElevationWitness) Valid() bool { return w.requestID != "" }
 type Attestation struct {
 	// RequestID is the attestation's own fresh, unguessable identifier.
 	RequestID string
-	// ActionHash, Nonce, PubkeyFingerprint, IssuedUnix, ExpUnix and SigB64
-	// are the remaining signed-envelope fields a real AttestationVerifier
-	// needs to independently verify the attestation (signature, replay,
-	// expiry) -- carried here so the verification itself happens on the
-	// composition-root side of the boundary, never inside this package.
+	// ActionHash, Method, Nonce, PubkeyFingerprint, IssuedUnix, ExpUnix and
+	// SigB64 are the remaining signed-envelope fields a real
+	// AttestationVerifier needs to independently verify the attestation
+	// (signature, method, replay, expiry) -- carried here so the
+	// verification itself happens on the composition-root side of the
+	// boundary, never inside this package.
 	ActionHash        string
+	Method            string
 	Nonce             string
 	PubkeyFingerprint string
 	IssuedUnix        int64

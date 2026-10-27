@@ -98,7 +98,7 @@ func attestBackupOperation(ctx context.Context, deps elevateHelperDeps, ks eleva
 	if err != nil {
 		return "", err
 	}
-	att, err := signBackupAttestation(deps, ks, params, nonce)
+	att, err := signBackupAttestation(deps, ks, method, params, nonce)
 	if err != nil {
 		return "", err
 	}
@@ -154,6 +154,6 @@ func issueBackupChallenge(ctx context.Context, gate rpc.HandlerFunc, params json
 	return challenge.Nonce, nil
 }
 
-func signBackupAttestation(deps elevateHelperDeps, ks elevation.ElevationKeystore, params json.RawMessage, nonce string) (rpc.Attestation, error) {
-	return signAttestation(ks, deps.Clock, (&rpc.Request{Params: params}).ParamsHash(), nonce)
+func signBackupAttestation(deps elevateHelperDeps, ks elevation.ElevationKeystore, method string, params json.RawMessage, nonce string) (rpc.Attestation, error) {
+	return signAttestation(ks, deps.Clock, method, (&rpc.Request{Params: params}).ParamsHash(), nonce)
 }

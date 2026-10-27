@@ -106,7 +106,7 @@ func newElevateHelperCmd(deps elevateHelperDeps) *cobra.Command {
 	cmd.Flags().Bool("replace-file-tier", false, "replace an enrollment bound to the stale file key")
 	cmd.Flags().Bool("enroll", false, "generate (if absent) and TOFU-enroll this device's elevation key")
 	cmd.Flags().Bool("presence", false, "with --enroll: enroll the linux passphrase presence key (weaker than hardware custody)")
-	cmd.Flags().Bool("sign", false, "authenticate and sign <request-id> <action-hash> <nonce> atomically")
+	cmd.Flags().Bool("sign", false, "authenticate and sign <request-id> <method> <action-hash> <nonce> atomically")
 	return cmd
 }
 
@@ -131,10 +131,10 @@ func runElevateHelper(cmd *cobra.Command, deps elevateHelperDeps, args []string)
 		}
 		return runElevateHelperEnroll(cmd, deps)
 	default:
-		if len(args) != 3 {
-			return cascade.New(cascade.KindInvalidInput, "elevate-helper --sign requires exactly <request-id> <action-hash> <nonce>")
+		if len(args) != 4 {
+			return cascade.New(cascade.KindInvalidInput, "elevate-helper --sign requires exactly <request-id> <method> <action-hash> <nonce>")
 		}
-		return runElevateHelperSign(cmd, deps, args[0], args[1], args[2])
+		return runElevateHelperSign(cmd, deps, args[0], args[1], args[2], args[3])
 	}
 }
 
@@ -257,9 +257,9 @@ func enrollKeystore(deps elevateHelperDeps) (elevation.ElevationKeystore, error)
 
 // runElevateHelperSign implements --sign: under CASCADE_NO_INPUT=1 it
 // refuses BEFORE calling Keystore() (§5.8 rule-23 automation parity);
-// otherwise it signs via ks.Sign and prints the attestation shape
-// internal/rpc/elevation_attest.go verifies.
-func runElevateHelperSign(cmd *cobra.Command, deps elevateHelperDeps, requestID, actionHash, nonce string) error {
+// otherwise it signs the method with the rest (P1-BF-R266) and prints the
+// attestation shape internal/rpc/elevation_attest.go verifies.
+func runElevateHelperSign(cmd *cobra.Command, deps elevateHelperDeps, requestID, method, actionHash, nonce string) error {
 	if deps.Getenv("CASCADE_NO_INPUT") == "1" {
 		return elevation.ErrNoInput()
 	}
@@ -276,15 +276,9 @@ func runElevateHelperSign(cmd *cobra.Command, deps elevateHelperDeps, requestID,
 		return err
 	}
 	now := deps.Clock.Now()
-	att := rpc.Attestation{
-		RequestID:         requestID,
-		ActionHash:        actionHash,
-		Nonce:             nonce,
-		PubkeyFingerprint: fp,
-		IssuedUnix:        now.Unix(),
-		ExpUnix:           now.Add(attestationTTL).Unix(),
-	}
-	sig, err := ks.Sign(canonicalSignedBytes(att))
+	att := rpc.Attestation{RequestID: requestID, ActionHash: actionHash, Method: method, Nonce: nonce,
+		PubkeyFingerprint: fp, IssuedUnix: now.Unix(), ExpUnix: now.Add(attestationTTL).Unix()}
+	sig, err := ks.Sign(rpc.AttestationSignedBytes(att))
 	if err != nil {
 		return err
 	}
