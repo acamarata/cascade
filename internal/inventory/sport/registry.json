@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-27T14:03:20Z",
+  "generated_at": "2026-10-27T15:27:59Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -22039,10 +22039,22 @@
       "sites": [
         {
           "file": "internal/fleet/governor/sampler.go",
-          "line": 22,
+          "line": 21,
           "status": "ADD",
           "ticket": "T-1",
           "raw": "internal/fleet/governor.Sampler (ADD, per T-1 sport_updates)."
+        },
+        {
+          "file": "internal/fleet/governor/sampler_collect.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal/fleet/governor.Sampler (ADD, P1-CAP-12 follow-up)."
+        },
+        {
+          "file": "internal/fleet/governor/sampler_collect_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "internal/fleet/governor.Sampler (ADD, P1-CAP-12 follow-up)."
         },
         {
           "file": "internal/fleet/governor/sampler_darwin.go",
@@ -38844,7 +38856,7 @@
       ]
     }
   ],
-  "total_sites": 3761,
+  "total_sites": 3763,
   "unspecified_count": 281,
   "multi_status_count": 116
 }
