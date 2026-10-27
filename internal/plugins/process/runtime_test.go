@@ -203,6 +203,7 @@ func TestLaunchEmitsConsentWarningBeforeExec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Launch: %v", err)
 	}
+	closeAtCleanup(t, h)
 	_ = h
 	warning := stderr.String()
 	if !bytes.Contains([]byte(warning), []byte("consent-demo")) || !bytes.Contains([]byte(warning), []byte("github.com")) {
@@ -225,6 +226,7 @@ func TestLaunchHandshakeReadyForRoundTripCalls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Launch: %v", err)
 	}
+	closeAtCleanup(t, h)
 	result, err := h.Call(context.Background(), "demo.echo", nil)
 	if err != nil {
 		t.Fatalf("Call: %v", err)
@@ -270,6 +272,7 @@ func TestLaunchCrashIsolationExhaustsRestartsToInvalid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Launch: %v", err)
 	}
+	closeAtCleanup(t, h)
 	deadline := time.Now().Add(5 * time.Second)
 	for h.State() != "invalid" && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)

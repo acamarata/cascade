@@ -5,8 +5,6 @@ package process
 import (
 	"bytes"
 	"context"
-	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -95,6 +93,7 @@ func TestProcessRuntime_RealCounterpart(t *testing.T) {
 	if err != nil {
 		t.Skipf("real sh subprocess unavailable, skipping real-counterpart check: %v", err)
 	}
+	closeAtCleanup(t, h)
 	if h.Ack.ProtocolVersion != "1.0.0" || h.Ack.ManifestHash != "deadbeef" {
 		t.Fatalf("unexpected ack from real subprocess: %+v", h.Ack)
 	}
@@ -137,9 +136,11 @@ func TestLaunchWiresEgressRegistration(t *testing.T) {
 			return newFakeCommander("1.0.0", 0, false, nil)
 		},
 	}
-	if _, err := rt.Launch(context.Background(), trustedManifest("wiring-proof")); err != nil {
+	h, err := rt.Launch(context.Background(), trustedManifest("wiring-proof"))
+	if err != nil {
 		t.Fatalf("Launch: %v", err)
 	}
+	closeAtCleanup(t, h)
 	cfg, ok := reg.Lookup(egress.EgressClass(EgressClassPluginProcess))
 	if !ok {
 		t.Fatal("Launch did not register the plugin-process egress class")
@@ -173,6 +174,7 @@ func TestRespawnFailurePathAdvancesMonitorLoop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Launch: %v", err)
 	}
+	closeAtCleanup(t, h)
 	deadline := time.Now().Add(5 * time.Second)
 	for h.State() != "invalid" && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
@@ -181,17 +183,6 @@ func TestRespawnFailurePathAdvancesMonitorLoop(t *testing.T) {
 		t.Fatalf("expected state-invalid, got %q", h.State())
 	}
 }
-
-// failingCommander fails at StdinPipe, so spawnOne never reaches Start.
-type failingCommander struct{}
-
-func (failingCommander) StdinPipe() (io.WriteCloser, error) {
-	return nil, errors.New("process: fake stdin pipe failure")
-}
-func (failingCommander) StdoutPipe() (io.ReadCloser, error) { return nil, nil }
-func (failingCommander) Start() error                       { return nil }
-func (failingCommander) Wait() error                        { return nil }
-func (failingCommander) Signal(os.Signal) error             { return nil }
 
 // TestLaunchChildGetsOnlyManifestEnv: the parent holds a principal token,
 // a provider key and a canary; the real child (and its respawn) sees

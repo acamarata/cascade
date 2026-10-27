@@ -19,6 +19,8 @@ package process
 import (
 	"bytes"
 	"context"
+	"errors"
+	"io"
 	"os"
 	"runtime"
 	"strings"
@@ -236,3 +238,14 @@ func TestLifetimeFallbacks(t *testing.T) {
 		t.Fatal("without a run context, lifetime() and childCtx() are the caller's lifetime")
 	}
 }
+
+// failingCommander fails at StdinPipe, so spawnOne never reaches Start.
+type failingCommander struct{}
+
+func (failingCommander) StdinPipe() (io.WriteCloser, error) {
+	return nil, errors.New("process: fake stdin pipe failure")
+}
+func (failingCommander) StdoutPipe() (io.ReadCloser, error) { return nil, nil }
+func (failingCommander) Start() error                       { return nil }
+func (failingCommander) Wait() error                        { return nil }
+func (failingCommander) Signal(os.Signal) error             { return nil }

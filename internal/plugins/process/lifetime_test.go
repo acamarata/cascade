@@ -65,9 +65,11 @@ func TestLaunch_PluginOutlivesTheStartupDeadline(t *testing.T) {
 		Name: "sh-outlives-startup", TrustTier: TrustTierTrusted,
 		Command: "sh", Args: []string{"-c", script},
 	}
-	if _, err := rt.Launch(context.Background(), m); err != nil {
+	h, err := rt.Launch(context.Background(), m)
+	if err != nil {
 		t.Skipf("real sh subprocess unavailable, skipping: %v", err)
 	}
+	closeAtCleanup(t, h)
 
 	select {
 	case key := <-spy.seen:
@@ -145,9 +147,11 @@ func TestMonitorReadsPluginOutputBeforeReapingIt(t *testing.T) {
 		commandFactory:    func(context.Context, Manifest) Commander { return cmd },
 	}
 
-	if _, err := rt.Launch(context.Background(), trustedManifest("drain")); err != nil {
+	h, err := rt.Launch(context.Background(), trustedManifest("drain"))
+	if err != nil {
 		t.Fatalf("launch: %v", err)
 	}
+	closeAtCleanup(t, h)
 
 	// The plugin makes a host call and then goes quiet WITHOUT its stdout
 	// being closed: it has effectively exited, but its output is unread.

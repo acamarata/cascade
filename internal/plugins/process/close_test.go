@@ -68,12 +68,21 @@ func launchReal(ctx context.Context, t *testing.T, rt *ProcessRuntime, bin strin
 	if err != nil {
 		t.Fatalf("Launch(lifecycleplugin %v): %v", args, err)
 	}
+	closeAtCleanup(t, h)
+	return h
+}
+
+// closeAtCleanup registers a bounded Close that also waits for the monitor
+// goroutine to finish. A Handle left running past its test lets that goroutine
+// read package state (DrainGrace) while a later test rewrites it, which the
+// race detector reports under load.
+func closeAtCleanup(t *testing.T, h *Handle) {
+	t.Helper()
 	t.Cleanup(func() {
 		cctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_ = h.Close(cctx)
 	})
-	return h
 }
 
 // childPid is the pid of h's current real child.

@@ -6,7 +6,7 @@
 // Flags:
 //
 //	-dir DIR          write DIR/env-<pid> (this process's environment, one
-//	                  entry per line) at startup
+//	                  entry per line) at startup, atomically (temp + rename)
 //	-ignore-term      ignore SIGTERM
 //	-ignore-eof       keep running after stdin reaches EOF
 //	-grandchild       fork a sleeper grandchild that inherits stdout,
@@ -50,8 +50,7 @@ func main() {
 		signal.Ignore(syscall.SIGTERM)
 	}
 	if *dir != "" {
-		name := filepath.Join(*dir, "env-"+strconv.Itoa(os.Getpid()))
-		must(os.WriteFile(name, []byte(strings.Join(os.Environ(), "\n")), 0o600))
+		writeEnvFile(*dir)
 	}
 	if *grandchild {
 		forkSleeper(*dir)
@@ -67,6 +66,17 @@ func main() {
 	if *ignoreEOF {
 		time.Sleep(time.Hour)
 	}
+}
+
+// writeEnvFile publishes DIR/env-<pid> atomically: the entries go to a
+// hidden temp file in the same directory and are renamed into place, so a
+// reader that globs env-* never sees the file created but not yet written
+// (an empty file is also the legitimate content of an empty environment).
+func writeEnvFile(dir string) {
+	pid := strconv.Itoa(os.Getpid())
+	tmp := filepath.Join(dir, ".env-"+pid+".tmp")
+	must(os.WriteFile(tmp, []byte(strings.Join(os.Environ(), "\n")), 0o600))
+	must(os.Rename(tmp, filepath.Join(dir, "env-"+pid)))
 }
 
 // serve answers every request until stdin reaches EOF. The first request
