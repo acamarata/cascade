@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-27T16:39:19Z",
+  "generated_at": "2026-10-27T21:03:28Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -6686,7 +6686,7 @@
         },
         {
           "file": "cmd/cascade/mcp_tools.go",
-          "line": 22,
+          "line": 16,
           "status": "ADD",
           "ticket": "P1-E16-W4-S34-T2",
           "raw": "cmd/cascade/mcp (ADD) — P1-E16-W4-S34-T2."
