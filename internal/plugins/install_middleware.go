@@ -4,7 +4,8 @@
 // Outputs: one events.EventKindPluginRegistered event per successful commit,
 // payload {id, version, runtime} read from the stored record.
 // It also refuses a remote-runtime manifest on both verbs before the handler
-// runs (DEF-P2-remote-plugin-runtime).
+// runs (DEF-P2-remote-plugin-runtime), and binds the raw params it received
+// into the handler's context for the process-tier trust grant.
 // Constraints: mounted inside the elevation middleware, so the params it
 // reads are the attested `_args`, never the envelope. Publishes only after
 // next returns a nil error and the stored record exists; a refusal, an
@@ -56,13 +57,15 @@ func InstallMiddleware(bus *events.Bus, store provider.Store, logger ...*slog.Lo
 	}
 	return func(method string, next rpc.HandlerFunc) rpc.HandlerFunc {
 		if method != "plugin.add" && method != UpdateRPCMethod {
-			return next
+			return func(ctx context.Context, raw json.RawMessage) (any, error) {
+				return next(withoutInstallParams(ctx), raw)
+			}
 		}
 		return func(ctx context.Context, raw json.RawMessage) (any, error) {
 			if err := refuseRemoteParams(method, raw); err != nil {
 				return nil, err
 			}
-			res, err := next(ctx, raw)
+			res, err := next(withInstallParams(ctx, raw), raw)
 			if err != nil || bus == nil || store == nil {
 				return res, err
 			}
@@ -73,6 +76,33 @@ func InstallMiddleware(bus *events.Bus, store provider.Store, logger ...*slog.Lo
 			return res, nil
 		}
 	}
+}
+
+// installParamsKey is the context key of the raw install params.
+type installParamsKey struct{}
+
+// withInstallParams binds a copy of the raw plugin.add or plugin.update
+// params this middleware received, so the trust grant can check that the
+// witness covers exactly these bytes and that they name the manifest being
+// installed.
+func withInstallParams(ctx context.Context, raw json.RawMessage) context.Context {
+	return context.WithValue(ctx, installParamsKey{}, json.RawMessage(append([]byte(nil), raw...)))
+}
+
+// withoutInstallParams hides any install params already in ctx, so params
+// bound for one install never ride into another method's dispatch.
+func withoutInstallParams(ctx context.Context) context.Context {
+	if _, ok := installParamsFrom(ctx); !ok {
+		return ctx
+	}
+	return context.WithValue(ctx, installParamsKey{}, json.RawMessage(nil))
+}
+
+// installParamsFrom returns the raw params withInstallParams bound, and
+// false when ctx carries none.
+func installParamsFrom(ctx context.Context) (json.RawMessage, bool) {
+	raw, ok := ctx.Value(installParamsKey{}).(json.RawMessage)
+	return raw, ok && raw != nil
 }
 
 // refuseRemoteParams refuses an install whose manifest_bytes declare the

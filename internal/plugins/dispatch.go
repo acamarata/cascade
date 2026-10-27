@@ -39,14 +39,11 @@
 // look new every time), and the manifest plus checksum the CLI already
 // parsed and verified.
 //
-// Outputs: on success, a PluginMetadata record committed to store. On a
-// process-tier manifest, a typed refusal rather than a fabricated
-// success: no code path in this tree marks a manifest's process.TrustTier
-// above TrustTierUntrusted yet (there is no signing/allowlist mechanism),
-// so an elevated add for a process-tier plugin can never actually launch
-// — this composition root proves that with the real
-// process.ProcessRuntime.Launch refusal instead of silently installing a
-// metadata record for a runtime that can never start.
+// Outputs: on success, a PluginMetadata record committed to store. A
+// process-tier record is committed only when grantProcessTrust (trust_grant.go)
+// grants it from the plugin.add witness, carrying TrustTier, the executable's
+// ExecDigest and TrustGrants; nothing is launched here, and a refused grant
+// writes nothing.
 //
 // SPORT: internal/plugins dispatch (ADD) — P1-E15-W4-S32-T4 COMPLETION PASS.
 package plugins
@@ -55,7 +52,6 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/acamarata/cascade/internal/plugins/process"
 	"github.com/acamarata/cascade/internal/plugins/remote"
 	"github.com/acamarata/cascade/internal/plugins/wasm"
 	"github.com/acamarata/cascade/internal/secrets"
@@ -72,7 +68,7 @@ import (
 const pluginHostDomainOwner = "cascade.plugin-host"
 
 // ProvisionElevated is the composition root the daemon's "plugin.add" RPC
-// handler (internal/daemon/plugin_rpc.go) calls for an elevated install
+// handler (cmd/cascade/plugin_rpc.go) calls for an elevated install
 // (process-tier, or a grant-expanding wasm/builtin manifest). domains
 // must be the SAME *storage.PluginDomainRegistry instance across every
 // call for the daemon's lifetime (see package doc).
@@ -99,23 +95,12 @@ func ProvisionElevated(
 
 	switch m.Runtime {
 	case plugin.RuntimeProcess:
-		// No path in this tree ever sets a manifest's trust tier above
-		// the default — every process-tier install evaluates through the
-		// REAL process.ProcessRuntime.Launch trust gate here, which
-		// always refuses TrustTierUntrusted before touching Stderr,
-		// egress, or spawning anything (runtime.go's own first check).
-		if _, err := process.NewProcessRuntime().Launch(ctx, process.Manifest{
-			Name: m.ID, TrustTier: process.TrustTierUntrusted,
-		}); err != nil {
-			return PluginMetadata{}, cascade.Wrapf(cascade.KindPolicyDenied, err,
-				"plugin: %s is a process-tier plugin and this host has no mechanism to mark any "+
-					"plugin trusted yet", m.ID)
+		tier, digest, err := grantProcessTrust(ctx, "plugin.add", m, checksum)
+		if err != nil {
+			return PluginMetadata{}, err
 		}
-		// Launch cannot succeed today (see above): the branch above
-		// always returns. Left explicit, rather than folded into a
-		// default case, so a future ticket that adds a real trust
-		// mechanism finds this switch already shaped to fall through to
-		// provisioning once Launch can succeed.
+		rec.TrustTier, rec.ExecDigest = tier, digest
+		rec.TrustGrants = append([]string(nil), m.Requires...)
 	case plugin.RuntimeWasm:
 		limits := wasm.DefaultResourceLimits()
 		rt, err := wasm.NewRuntime(ctx, limits.MemoryPages)
@@ -178,10 +163,8 @@ func provisionStorageDomain(
 }
 
 // metadataGrantChecker is the real storage.GrantChecker: a plugin's
-// cross-domain capability is whatever this ticket's own ChangePerms
-// (lifecycle.go) already recorded in its PluginMetadata.Grants — the same
-// grant set `cascade plugin perms grant/revoke` and `plugin info` already
-// read and write, so this performs no parallel bookkeeping of its own.
+// cross-domain capability is its EffectiveGrants (lifecycle.go), so a
+// process plugin holds only what its witnessed grant bound.
 type metadataGrantChecker struct {
 	store provider.Store
 }
@@ -195,7 +178,7 @@ func (g metadataGrantChecker) CheckGrant(ctx context.Context, subjectID, capabil
 	if !ok {
 		return cascade.Newf(cascade.KindPermissionDenied, "plugin: %s is not installed, no grants to check", subjectID)
 	}
-	for _, granted := range rec.Grants {
+	for _, granted := range EffectiveGrants(rec) {
 		if granted == capability {
 			return nil
 		}

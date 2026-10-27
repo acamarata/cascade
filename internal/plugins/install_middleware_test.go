@@ -153,3 +153,59 @@ func TestInstallMiddlewareRefusesRemoteBeforeHandler(t *testing.T) {
 		t.Fatalf("%d events for refused remote installs, want 0", n)
 	}
 }
+
+// TestInstallMiddlewareBindsParamsOnlyForInstallVerbs: plugin.add and
+// plugin.update see a copy of their own raw params; any other method sees
+// none, even inside a context that already carries an install's params.
+func TestInstallMiddlewareBindsParamsOnlyForInstallVerbs(t *testing.T) {
+	mw := InstallMiddleware(nil, nil)
+	raw := json.RawMessage(`{"id":"demo"}`)
+	var seen json.RawMessage
+	var bound bool
+	probe := func(ctx context.Context, _ json.RawMessage) (any, error) {
+		seen, bound = installParamsFrom(ctx)
+		return nil, nil
+	}
+	for _, method := range []string{"plugin.add", UpdateRPCMethod} {
+		if _, err := mw(method, probe)(context.Background(), raw); err != nil || !bound || string(seen) != string(raw) {
+			t.Fatalf("%s: bound=%v params=%s err=%v, want its own params", method, bound, seen, err)
+		}
+	}
+	outer := withInstallParams(context.Background(), raw)
+	if _, err := mw("plugin.info", probe)(outer, json.RawMessage(`{}`)); err != nil || bound {
+		t.Fatalf("plugin.info inherited install params %s (err %v)", seen, err)
+	}
+}
+
+// trustWriters are the only functions that may assign each PluginMetadata
+// trust field: grantProcessTrust's caller and UpdatePlugin's commit, which
+// saves only a processTrust built by trustBuilders.
+var trustWriters = map[string]string{
+	"internal/plugins/dispatch.go:ProvisionElevated":     "TrustTier ExecDigest TrustGrants",
+	"internal/plugins/lifecycle_update.go:commitUpdate":  "TrustTier ExecDigest TrustGrants",
+	"internal/plugins/trust_grant_sweep_seed.go:granted": "TrustTier", // the seeded input below
+}
+
+// trustBuilders are the only functions that may build a non-zero
+// processTrust: the non-elevated copy and the plugin.update grant.
+var trustBuilders = map[string]bool{
+	"internal/plugins/lifecycle_update.go:keptTrust":     true,
+	"internal/plugins/update_rpc.go:attestedUpdateTrust": true,
+}
+
+// grantsReaders are the functions that read a .Grants for something other
+// than process authority (the authority read is EffectiveGrants).
+var grantsReaders = map[string]bool{
+	"internal/plugins/lifecycle.go:EffectiveGrants":                   true, // the authority read
+	"internal/plugins/lifecycle.go:ChangePerms":                       true, // edits the stored set
+	"internal/plugins/lifecycle_add.go:addRequiresElevation":          true, // elevation decision
+	"internal/plugins/perms_rpc.go:PermsRPCHandler":                   true, // reports before and after
+	"internal/plugins/update_rpc.go:UpdateRPCHandler":                 true, // reports the committed set
+	"internal/plugins/registry.go:Grants":                             true, // BuiltinRegistry entries
+	"cmd/cascade/plugin.go:String":                                    true, // plugin info display
+	"cmd/cascade/plugin_add.go:runPluginAdd":                          true, // add result display
+	"cmd/cascade/plugin_rpc.go:pluginAddRPCHandler":                   true, // add result display
+	"cmd/cascade/plugin_update_registry.go:confirmPluginUpdateGrants": true, // grant diff shown for consent
+	"cmd/cascade/approval_standing.go:String":                         true, // standing approvals, not plugins
+	"cmd/cascade/daemon_unix_policy.go:wirePolicy":                    true, // policy grants, not plugins
+}

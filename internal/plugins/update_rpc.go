@@ -6,7 +6,8 @@
 // Constraints: owner-only; refuses KindElevationRequired unless the witness
 // names plugin.update and the exact params bytes; re-runs every UpdatePlugin
 // guard (remote refusal, id match, checksum, installed record, process
-// handshake) against the stored record; every refusal writes nothing.
+// handshake) against the stored record; a process-tier candidate is trusted
+// only through grantProcessTrust; every refusal writes nothing.
 // SPORT: internal/plugins plugin.update RPC.
 package plugins
 
@@ -17,6 +18,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/plugin"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -78,7 +80,10 @@ func UpdateRPCHandler(store provider.Store, handshaker func() ProcessHandshaker)
 // applyAttestedUpdate re-runs UpdatePlugin's guards for an attested call and
 // commits through commitUpdate. Elevation is already proven, so no
 // elevation decision is made here; a handshake failure is an error, since
-// the caller asked for a commit and none happened.
+// the caller asked for a commit and none happened. Order: parse, id match,
+// then the trust grant for a process-tier candidate (so its refusal is the
+// policy-denied one naming the failed condition), then the checksum, the
+// installed record, the handshaker and the handshake.
 func applyAttestedUpdate(ctx context.Context, store provider.Store, hs ProcessHandshaker, p UpdateParams) (UpdateResult, error) {
 	m, err := parseUpdatableManifest(p.ManifestBytes)
 	if err != nil {
@@ -88,6 +93,10 @@ func applyAttestedUpdate(ctx context.Context, store provider.Store, hs ProcessHa
 		return UpdateResult{}, cascade.Newf(cascade.KindInvalidInput,
 			"plugin.update: manifest id %q does not match requested id %q", m.ID, p.ID)
 	}
+	trust, err := attestedUpdateTrust(ctx, hs, m, p.Checksum)
+	if err != nil {
+		return UpdateResult{}, err
+	}
 	if err := verifyUpdateChecksum(p.Checksum, p.ManifestBytes); err != nil {
 		return UpdateResult{}, err
 	}
@@ -95,7 +104,7 @@ func applyAttestedUpdate(ctx context.Context, store provider.Store, hs ProcessHa
 	if err != nil {
 		return UpdateResult{}, err
 	}
-	res, err := commitUpdate(ctx, store, hs, m, existing, p.Checksum, "")
+	res, err := commitUpdate(ctx, store, hs, m, existing, trust, p.Checksum, "")
 	if err != nil {
 		return UpdateResult{}, err
 	}
@@ -104,4 +113,23 @@ func applyAttestedUpdate(ctx context.Context, store provider.Store, hs ProcessHa
 			"plugin.update: %s handshake failed; update not applied", m.ID)
 	}
 	return res, nil
+}
+
+// attestedUpdateTrust is the trust an attested update records. A process-tier
+// candidate is trusted only by grantProcessTrust for plugin.update, decided
+// before any handshake could launch it; a granted candidate with no
+// handshaker is then refused (KindUnavailable) as commitUpdate would. Any
+// other runtime records no trust.
+func attestedUpdateTrust(ctx context.Context, hs ProcessHandshaker, m plugin.Manifest, checksum string) (processTrust, error) {
+	if m.Runtime != plugin.RuntimeProcess {
+		return processTrust{}, nil
+	}
+	tier, digest, err := grantProcessTrust(ctx, UpdateRPCMethod, m, checksum)
+	if err != nil {
+		return processTrust{}, err
+	}
+	if hs == nil {
+		return processTrust{}, errProcessHandshakeUnconfirmed
+	}
+	return processTrust{Tier: tier, Digest: digest, Bound: append([]string(nil), m.Requires...)}, nil
 }

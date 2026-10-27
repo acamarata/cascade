@@ -137,8 +137,11 @@ func TestUpdateRPCHandlerReRunsGuards(t *testing.T) {
 	}{
 		{"uninstalled", "demo", updatedManifest, "", false, nil, cascade.KindNotFound, "cascade plugin add"},
 		{"id mismatch", "other", updatedManifest, "", true, nil, cascade.KindInvalidInput, "does not match requested id"},
-		{"process without handshaker", "demo", updateProcessTierManifest, "", true, nil, cascade.KindUnavailable, "cannot confirm the process handshake"},
-		{"handshake fails", "demo", updateProcessTierManifest, "", true, failing, cascade.KindUnavailable, "handshake failed"},
+		{"process without handshaker or bound params", "demo", updateProcessTierManifest, "", true, nil, cascade.KindPolicyDenied, "no install params bound"},
+		// A process candidate that handshakes is trusted only by the grant, so
+		// a failing handshake with no bound params is the grant's refusal; the
+		// post-grant handshake failure is TestAttestedProcessUpdateRegrantsTrust.
+		{"handshake unreachable without a grant", "demo", updateProcessTierManifest, "", true, failing, cascade.KindPolicyDenied, "trust_tier not granted"},
 		{"checksum mismatch", "demo", updatedManifest, "sha256:" + strings.Repeat("0", 64), true, nil, cascade.KindIntegrity, ""},
 	}
 	for _, tc := range cases {

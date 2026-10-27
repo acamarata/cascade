@@ -19,6 +19,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/testkit"
+	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/plugin"
 	"github.com/acamarata/cascade/plugins/cascade-pa/install"
 )
@@ -155,29 +156,26 @@ func TestInstallerAdapter_ElevatedAddWithoutWitnessRefuses(t *testing.T) {
 	}
 }
 
-// TestInstallerAdapter_CandidateSourceRegistry_ProcessTierNeverLaunches proves
-// this adapter never papers over dispatch.go's own real, permanent
-// process-tier refusal.
-func TestInstallerAdapter_CandidateSourceRegistry_ProcessTierNeverLaunches(t *testing.T) {
+// TestInstallFlowWitnessNeverGrantsTrust: the cascade-pa elevated retry with
+// a valid install.ElevationWitness, a well-formed executable in place and no
+// rpc witness installs no process record and names `cascade plugin add`.
+func TestInstallFlowWitnessNeverGrantsTrust(t *testing.T) {
 	raw, checksum, signature, pub := signedFixture(t, processTierManifest)
-	fetcher := &fakeRegistryFetcher{artifact: raw}
-	a := newTestInstallerAdapter(t, "https://registry.example/", fetcher, pub)
+	writeExecutable(t, filepath.Join(injectDir(t), exeName("process-plugin")), 0o755)
+	a := newTestInstallerAdapter(t, "https://registry.example/", &fakeRegistryFetcher{artifact: raw}, pub)
 	req := install.AddRequest{Candidate: plugin.Candidate{
 		PluginID: "process-plugin", Source: plugin.CandidateSourceRegistry,
 		RegistryEntry: plugin.RegistryIndexEntry{ID: "process-plugin", LatestVersion: "1.0.0",
 			Versions: []plugin.RegistryVersionEntry{{Version: "1.0.0", Checksum: checksum, Signature: signature}}},
 	}}
-	res, err := a.Add(context.Background(), req)
-	if err != nil {
-		t.Fatalf("Add (decide phase): %v", err)
+	if res, err := a.Add(context.Background(), req); err != nil || res.Outcome != install.AddOutcomeElevationRequired {
+		t.Fatalf("decide phase = %v, %v; want AddOutcomeElevationRequired", res.Outcome, err)
 	}
-	if res.Outcome != install.AddOutcomeElevationRequired {
-		t.Fatalf("Outcome = %v, want AddOutcomeElevationRequired for a process-tier candidate", res.Outcome)
-	}
-
 	req.Witness = testWitness(t, "test-attestation-3")
-	if _, err := a.Add(context.Background(), req); err == nil {
-		t.Fatal("elevated Add: err = nil, want the real process-tier trust-gate refusal, never a fabricated install")
+	_, err := a.Add(context.Background(), req)
+	requireRefusal(t, err, cascade.KindPolicyDenied, "cascade-pa install:", "cascade plugin add")
+	if _, ok, lerr := LoadMetadata(context.Background(), a.store, "process-plugin"); lerr != nil || ok {
+		t.Fatalf("the cascade-pa witness installed a process record: ok=%v err=%v", ok, lerr)
 	}
 }
 

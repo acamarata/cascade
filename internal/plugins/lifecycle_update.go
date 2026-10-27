@@ -121,7 +121,32 @@ func UpdatePlugin(ctx context.Context, store provider.Store, registry RegistryVe
 		}
 		return UpdateResult{Outcome: UpdateOutcomeElevationRequired, RegistryNotice: notice, Manifest: m}, nil
 	}
-	return commitUpdate(ctx, store, handshaker, m, existing, checksum, notice)
+	trust, err := keptTrust(existing, checksum, manifestSource)
+	if err != nil {
+		return UpdateResult{}, err
+	}
+	return commitUpdate(ctx, store, handshaker, m, existing, trust, checksum, notice)
+}
+
+// errTrustedNeedsPin refuses a non-elevated update of a trusted record whose
+// new manifest bytes no checksum pins: a trusted record never carries an
+// empty or unverified pin.
+var errTrustedNeedsPin = cascade.New(cascade.KindPolicyDenied,
+	"a trusted process plugin is updated only with a checksum that is the sha256 of the new manifest bytes; update not applied")
+
+// keptTrust is the trust a non-elevated update carries over: the prior
+// record's TrustTier, ExecDigest and TrustGrants, unchanged. A non-elevated
+// update never sets or widens them; only grantProcessTrust's callers do. A
+// trusted record keeps them only when checksum is non-empty and is the sha256
+// of the new manifest bytes, which then become its pin; otherwise the update
+// is refused and nothing is written.
+func keptTrust(existing PluginMetadata, checksum string, manifestSource []byte) (processTrust, error) {
+	if existing.TrustTier != "" {
+		if checksum == "" || plugin.VerifyArtifact(plugin.RegistryVersionEntry{Checksum: checksum}, manifestSource) != nil {
+			return processTrust{}, errTrustedNeedsPin
+		}
+	}
+	return processTrust{Tier: existing.TrustTier, Digest: existing.ExecDigest, Bound: existing.TrustGrants}, nil
 }
 
 // parseUpdatableManifest parses a candidate manifest and refuses the
@@ -166,8 +191,10 @@ var errProcessHandshakeUnconfirmed = cascade.New(cascade.KindUnavailable,
 
 // commitUpdate is the one commit step every update path shares, the CLI's
 // non-elevated path and the daemon's attested plugin.update alike: the
-// process-tier handshake guard, the handshake itself, then the write.
-func commitUpdate(ctx context.Context, store provider.Store, handshaker ProcessHandshaker, m plugin.Manifest, existing PluginMetadata, checksum, notice string) (UpdateResult, error) {
+// process-tier handshake guard, the handshake itself, then the write. trust
+// is what the record carries: keptTrust for a non-elevated update, the
+// plugin.update grant (or none) for an attested one.
+func commitUpdate(ctx context.Context, store provider.Store, handshaker ProcessHandshaker, m plugin.Manifest, existing PluginMetadata, trust processTrust, checksum, notice string) (UpdateResult, error) {
 	if handshaker == nil && m.Runtime == plugin.RuntimeProcess {
 		return UpdateResult{}, errProcessHandshakeUnconfirmed
 	}
@@ -183,6 +210,9 @@ func commitUpdate(ctx context.Context, store provider.Store, handshaker ProcessH
 		RuntimeMode:      m.Runtime,
 		PinnedChecksum:   checksum,
 		Grants:           append([]string(nil), m.Requires...),
+		TrustTier:        trust.Tier,
+		ExecDigest:       trust.Digest,
+		TrustGrants:      append([]string(nil), trust.Bound...),
 	}
 	if err := SaveMetadata(ctx, store, rec); err != nil {
 		return UpdateResult{}, err
@@ -193,14 +223,17 @@ func commitUpdate(ctx context.Context, store provider.Store, handshaker ProcessH
 // updateRequiresElevation is the update-side counterpart to
 // lifecycle_add.go's addRequiresElevation: ANY change to RuntimeMode (not
 // only a move to RuntimeProcess) is elevated, because the installed tier is
-// a security boundary an operator chose, and so is a grant expansion.
+// a security boundary an operator chose, and so is a grant expansion. The
+// expansion is measured against EffectiveGrants, so stored grants a perms
+// edit or a store write widened (no authority) never hide one, and an
+// untrusted process record has nothing to keep.
 // existing is always a real stored record here (loadInstalled refuses
 // otherwise), so the tier comparison never runs against a zero value.
 func updateRequiresElevation(m plugin.Manifest, existing PluginMetadata) bool {
 	if m.Runtime != existing.RuntimeMode {
 		return true
 	}
-	return grantsExpand(existing.Grants, m.Requires)
+	return grantsExpand(EffectiveGrants(existing), m.Requires)
 }
 
 // registryUnavailableNotice is the exact §5.19 graceful-notice text.

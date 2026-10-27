@@ -186,6 +186,13 @@ func (a *installerAdapter) addRegistry(ctx context.Context, req install.AddReque
 	if err != nil {
 		return install.AddResult{}, err
 	}
+	if m.Runtime == plugin.RuntimeProcess {
+		// install.ElevationWitness is never a trust source: a process-tier
+		// plugin is trusted only by grantProcessTrust under a plugin.add
+		// witness (trust_grant.go).
+		return install.AddResult{}, cascade.Newf(cascade.KindPolicyDenied,
+			"cascade-pa install: %s is a process-tier plugin; install it with an elevated `cascade plugin add`", m.ID)
+	}
 	existing, ok, err := LoadMetadata(ctx, a.store, m.ID)
 	if err != nil {
 		return install.AddResult{}, err

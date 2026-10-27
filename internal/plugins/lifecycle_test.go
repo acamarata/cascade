@@ -2,6 +2,9 @@ package plugins
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/storage/storetest"
@@ -206,5 +209,81 @@ func TestChangePerms_GrantAndRevoke(t *testing.T) {
 	// input available, so the refusal really is about the name).
 	if _, err := ChangePerms(ctx, store, "ghost", "net.http", true, true, false); err == nil {
 		t.Fatal("ChangePerms on an unknown plugin succeeded, want KindNotFound")
+	}
+}
+
+// trustFields renders the three trust fields for a byte comparison.
+func trustFields(rec PluginMetadata) string {
+	b, _ := json.Marshal([]any{rec.TrustTier, rec.ExecDigest, rec.TrustGrants})
+	return string(b)
+}
+
+// grantedTrustDemo installs trustManifest, trusted, through the witnessed path.
+func grantedTrustDemo(t *testing.T) trustFixture {
+	t.Helper()
+	f := newTrustFixture(t, "trustdemo")
+	if err := attested(t, "plugin.add", "plugin.add", pinnedArgs(t, "trustdemo", trustManifest), f.addHandler()); err != nil {
+		t.Fatalf("witnessed plugin.add: %v", err)
+	}
+	return f
+}
+
+// widerTrustManifest is trustManifest at 1.1.0 also asking for oauth:repo.
+var widerTrustManifest = strings.Replace(strings.Replace(trustManifest, `"1.0.0"`, `"1.1.0"`, 1),
+	`"host.secret_ref"]`, `"host.secret_ref", "oauth:repo"]`, 1)
+
+func TestUpdatePreservesTrustFields(t *testing.T) {
+	ctx := context.Background()
+	f := grantedTrustDemo(t)
+	before, _, _ := LoadMetadata(ctx, f.store, "trustdemo")
+	if before.TrustTier != TrustTrusted {
+		t.Fatalf("seed record is not trusted: %+v", before)
+	}
+	// Same runtime, one grant dropped, version bumped: not elevated.
+	narrower := strings.Replace(strings.Replace(trustManifest, `"1.0.0"`, `"1.1.0"`, 1), `, "host.secret_ref"`, ``, 1)
+	calls := 0
+	res, err := UpdatePlugin(ctx, f.store, nil, okHandshaker{calls: &calls}, []byte(narrower), sha256Hex([]byte(narrower)), []byte(narrower), true)
+	if err != nil || res.Outcome != UpdateOutcomeUpdated || calls != 1 {
+		t.Fatalf("non-elevated update = %+v, %v (handshakes %d)", res, err, calls)
+	}
+	after, _, _ := LoadMetadata(ctx, f.store, "trustdemo")
+	if after.InstalledVersion != "1.1.0" || after.PinnedChecksum != sha256Hex([]byte(narrower)) || trustFields(after) != trustFields(before) {
+		t.Fatalf("trust fields %s -> %s across a non-elevated update", trustFields(before), trustFields(after))
+	}
+	if got := strings.Join(EffectiveGrants(after), ","); got != "net.http:api.github.com" {
+		t.Fatalf("EffectiveGrants after narrowing = %s", got)
+	}
+	// A grant-expanding non-elevated update writes nothing.
+	hash := storedRecordHash(t, f.store, "trustdemo")
+	res, err = UpdatePlugin(ctx, f.store, nil, okHandshaker{calls: &calls}, []byte(widerTrustManifest), "", nil, true)
+	if err != nil || res.Outcome != UpdateOutcomeElevationRequired || storedRecordHash(t, f.store, "trustdemo") != hash {
+		t.Fatalf("expanding update = %+v, %v; want ElevationRequired and no write", res, err)
+	}
+}
+
+// TestAttestedProcessUpdateRegrantsTrust: a witnessed plugin.update of a
+// process manifest re-grants trust over the new grant set; without bound
+// params, or with a handshake failing after the grant, nothing is written.
+func TestAttestedProcessUpdateRegrantsTrust(t *testing.T) {
+	ctx := context.Background()
+	f := grantedTrustDemo(t)
+	args := pinnedArgs(t, "trustdemo", widerTrustManifest)
+	before := storedRecordHash(t, f.store, "trustdemo")
+	calls := 0
+	ok := func() ProcessHandshaker { return okHandshaker{calls: &calls} }
+	failing := func() ProcessHandshaker { return alwaysFailHandshaker{err: errors.New("hello_ack timed out")} }
+	err := attested(t, UpdateRPCMethod, UpdateRPCMethod, args, UpdateRPCHandler(f.store, failing))
+	requireRefusal(t, err, cascade.KindUnavailable, "handshake failed")
+	_, err = attestedCall(t, UpdateRPCMethod, args, UpdateRPCHandler(f.store, ok))
+	requireRefusal(t, err, cascade.KindPolicyDenied, "no install params bound")
+	if calls != 0 || storedRecordHash(t, f.store, "trustdemo") != before {
+		t.Fatalf("a refused update handshook %d times or changed the record", calls)
+	}
+	if err := attested(t, UpdateRPCMethod, UpdateRPCMethod, args, UpdateRPCHandler(f.store, ok)); err != nil {
+		t.Fatalf("witnessed plugin.update: %v", err)
+	}
+	rec, _, _ := LoadMetadata(ctx, f.store, "trustdemo")
+	if rec.TrustTier != TrustTrusted || rec.ExecDigest != f.digest || !strings.Contains(strings.Join(rec.TrustGrants, ","), "oauth:repo") || calls != 1 {
+		t.Fatalf("record after a witnessed update = %+v (handshakes %d)", rec, calls)
 	}
 }

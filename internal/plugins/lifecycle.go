@@ -8,24 +8,13 @@
 //
 // Outputs: PluginMetadata records; a not-found sentinel on a missing name.
 //
-// Constraints: this file imports only pkg/** (never internal/**), but NOT
-// because the depguard boundary forces it to (CORRECTED in this ticket's
-// COMPLETION PASS — see dispatch.go's package doc comment for the
-// verified boundary shape: a file directly at internal/plugins/<x>.go,
-// this file included, is free to import internal/**; only its
-// SUBPACKAGES, e.g. internal/plugins/process and internal/plugins/wasm,
-// are restricted to pkg/**-only). internal/storage.PluginStorage — the
-// natural-looking fit regardless — is still never imported HERE, on its
-// own independent merits: it isolates ONE plugin's own data from every
-// OTHER plugin's (NewPluginStorage refuses the reserved "__host__" id
-// outright, by design — R-14.100's own ReservedPluginHostNamespace doc
-// comment), and what this file needs is the HOST's own bookkeeping across
-// every installed plugin, which is a plain pkg/provider.Store namespace,
-// not a PluginStorage instance. cmd/cascade/plugin.go supplies the real
-// *providers/sqlite.Driver (itself a provider.Store) bound to this
-// namespace; dispatch.go is the real composition root that DOES construct
-// a PluginStorage, for the different job of provisioning an elevated
-// plugin's own isolated domain.
+// Constraints: this file imports only pkg/**. internal/storage.PluginStorage
+// is not used here: it isolates one plugin's data from every other plugin's
+// and refuses the reserved "__host__" id, while this file keeps the host's
+// own bookkeeping across every plugin in a plain pkg/provider.Store
+// namespace. The process-tier trust fields are written only by the elevated
+// grant (trust_grant.go) and copied by an update; process authority is read
+// only through EffectiveGrants.
 //
 // SPORT: internal/plugins lifecycle-metadata/ADD — P1-E15-W4-S32-T4.
 package plugins
@@ -83,6 +72,43 @@ type PluginMetadata struct {
 	// RuntimeWasm plugin only (dispatch.go's ProvisionElevated). Zero for
 	// every other RuntimeMode.
 	HostABIVersion int `json:"host_abi_version,omitempty"`
+	// TrustTier is "" (untrusted) or TrustTrusted, set for a process-tier
+	// record only by a witnessed plugin.add or plugin.update.
+	TrustTier string `json:"trust_tier,omitempty"`
+	// TrustGrants is the grant set the witness bound (m.Requires at grant
+	// time). A process plugin's authority never exceeds it.
+	TrustGrants []string `json:"trust_grants,omitempty"`
+	// ExecDigest is the lowercase sha256 hex of the resolved executable at
+	// grant time.
+	ExecDigest string `json:"exec_digest,omitempty"`
+}
+
+// TrustTrusted is the only TrustTier value that confers process authority.
+const TrustTrusted = "trusted"
+
+// EffectiveGrants is the one grant read for process authority. For a
+// RuntimeProcess record it is Grants intersected with TrustGrants, in Grants
+// order, and nil unless the record is trusted, so a store write that widens
+// Grants outside a witnessed path confers nothing. Every other runtime gets
+// a copy of Grants.
+func EffectiveGrants(rec PluginMetadata) []string {
+	if rec.RuntimeMode != plugin.RuntimeProcess {
+		return append([]string(nil), rec.Grants...)
+	}
+	if rec.TrustTier != TrustTrusted {
+		return nil
+	}
+	bound := make(map[string]struct{}, len(rec.TrustGrants))
+	for _, g := range rec.TrustGrants {
+		bound[g] = struct{}{}
+	}
+	var out []string
+	for _, g := range rec.Grants {
+		if _, ok := bound[g]; ok {
+			out = append(out, g)
+		}
+	}
+	return out
 }
 
 // metadataKey builds the storage key for name's record.

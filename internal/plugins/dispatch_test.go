@@ -13,7 +13,6 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
-	goruntime "runtime"
 	"strings"
 	"testing"
 	"time"
@@ -84,55 +83,57 @@ func mustParseManifest(t *testing.T, source string) plugin.Manifest {
 	return m
 }
 
-// TestProvisionElevated_ProcessTierRefuses is the mutation-provable proof
-// for process.TrustTierUntrusted's real wiring: no path in this tree ever
-// marks a manifest's process.TrustTier above Untrusted, so a process-tier
-// elevated install must ALWAYS refuse via the real
-// process.ProcessRuntime.Launch trust gate — never write a metadata
-// record for a runtime that can never start.
-func TestProvisionElevated_ProcessTierRefuses(t *testing.T) {
+// TestPermsStoreOnlyGrantAddsNoAuthority: on a process record trusted
+// without oauth:repo, perms grants and a raw store write widen Grants (the
+// store really changes) but not EffectiveGrants, the only read of process
+// authority, nor the storage grant checker built on it.
+func TestPermsStoreOnlyGrantAddsNoAuthority(t *testing.T) {
 	ctx := context.Background()
-	store := storetest.NewMemStore()
-	db := openDispatchTestDB(t)
-	domains := storage.NewPluginDomainRegistry()
-	m := mustParseManifest(t, processManifest)
-
-	_, err := ProvisionElevated(ctx, db, migrate.SQLiteEmitter{}, dispatchFixedClock{}, "", "", store, domains, m, "", false, nil)
-	if err == nil {
-		t.Fatal("ProvisionElevated: want a refusal for a process-tier manifest, got nil error")
+	f := newTrustFixture(t, "trustdemo")
+	if err := attested(t, "plugin.add", "plugin.add", pinnedArgs(t, "trustdemo", trustManifest), f.addHandler()); err != nil {
+		t.Fatalf("witnessed plugin.add: %v", err)
 	}
-	// The refusal itself is universal; the CAUSE underneath it is not.
-	// On linux/darwin the trust gate in process.wrapUntrusted refuses
-	// ("trust_tier"). On Windows the platform gate refuses first — process
-	// plugins need the daemon, which Windows tier-2 does not have — so the
-	// trust refusal wraps THAT instead. Both are correct refusals, and
-	// asserting the linux wording everywhere asserts a property Windows
-	// does not have.
-	wantCause := "trust_tier"
-	if goruntime.GOOS == "windows" {
-		wantCause = "not launched on windows"
+	trusted, _, _ := LoadMetadata(ctx, f.store, "trustdemo")
+	want := strings.Join(EffectiveGrants(trusted), ",")
+	if want != "net.http:api.github.com,host.secret_ref" {
+		t.Fatalf("EffectiveGrants of the trusted record = %s", want)
 	}
-	if !strings.Contains(err.Error(), wantCause) {
-		t.Errorf("ProvisionElevated error = %q, want it to contain %q", err.Error(), wantCause)
+	widen := map[string]func() error{
+		"perms grant net.http:evil.example": func() error {
+			_, err := ChangePerms(ctx, f.store, "trustdemo", "net.http:evil.example", true, true, false)
+			return err
+		},
+		"perms grant oauth:repo": func() error {
+			_, err := ChangePerms(ctx, f.store, "trustdemo", "oauth:repo", true, true, false)
+			return err
+		},
+		"raw SaveMetadata": func() error {
+			rec, _, _ := LoadMetadata(ctx, f.store, "trustdemo")
+			rec.Grants = append(rec.Grants, "net.http:other.example")
+			return SaveMetadata(ctx, f.store, rec)
+		},
 	}
-	// What must hold on EVERY platform: the refusal is the trust gate's,
-	// named as such, not some unrelated failure that happens to error.
-	if !strings.Contains(err.Error(), "process-tier plugin") {
-		t.Errorf("ProvisionElevated error = %q, want the trust gate's own refusal", err.Error())
+	for _, name := range []string{"perms grant net.http:evil.example", "perms grant oauth:repo", "raw SaveMetadata"} {
+		before, _, _ := LoadMetadata(ctx, f.store, "trustdemo")
+		if err := widen[name](); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		rec, _, _ := LoadMetadata(ctx, f.store, "trustdemo")
+		if len(rec.Grants) != len(before.Grants)+1 {
+			t.Fatalf("%s did not widen the stored Grants: %v", name, rec.Grants)
+		}
+		if got := strings.Join(EffectiveGrants(rec), ","); got != want {
+			t.Fatalf("after %s EffectiveGrants = %s, want %s", name, got, want)
+		}
 	}
-	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindPolicyDenied {
-		t.Errorf("cascade.KindOf(err) = (%v, %v), want (KindPolicyDenied, true)", kind, ok)
+	checker := metadataGrantChecker{store: f.store}
+	for _, capability := range []string{"oauth:repo", "net.http:evil.example", "net.http:other.example"} {
+		if err := checker.CheckGrant(ctx, "trustdemo", capability); err == nil {
+			t.Fatalf("the storage grant checker honours store-only %s", capability)
+		}
 	}
-
-	// Real STORE STATE: no metadata record was written for a plugin whose
-	// runtime can never start.
-	if _, ok, lerr := LoadMetadata(ctx, store, "demo"); lerr != nil || ok {
-		t.Errorf("LoadMetadata after refused process-tier add: ok=%v err=%v, want ok=false err=nil", ok, lerr)
-	}
-	// Real STATE: the storage domain was never claimed either — the
-	// refusal happens before provisionStorageDomain runs.
-	if _, ok := domains.Version("demo"); ok {
-		t.Errorf("domains.Version(%q) claimed after a refused install, want unclaimed", "demo")
+	if err := checker.CheckGrant(ctx, "trustdemo", "host.secret_ref"); err != nil {
+		t.Fatalf("a witnessed grant was refused: %v", err)
 	}
 }
 
@@ -249,3 +250,21 @@ func TestProvisionElevated_RemoteTierRefuses(t *testing.T) {
 // dispatch_remote_integration_test.go (`//go:build integration`)
 // instead; found the hard way when this file originally imported
 // net/net-http/httptest directly and the gate caught it.
+
+// EffectiveGrants gives an untrusted process record nothing, even with a
+// bound set present, and a trusted one only the intersection.
+func TestEffectiveGrantsUntrustedProcessIsNil(t *testing.T) {
+	rec := PluginMetadata{Name: "p", RuntimeMode: plugin.RuntimeProcess,
+		Grants: []string{"net.http:a.example", "oauth:repo"}, TrustGrants: []string{"net.http:a.example"}}
+	if got := EffectiveGrants(rec); got != nil {
+		t.Fatalf("untrusted EffectiveGrants = %v, want nil", got)
+	}
+	rec.TrustTier = TrustTrusted
+	if got := strings.Join(EffectiveGrants(rec), ","); got != "net.http:a.example" {
+		t.Fatalf("trusted EffectiveGrants = %s, want net.http:a.example", got)
+	}
+	rec.RuntimeMode = plugin.RuntimeBuiltin
+	if got := strings.Join(EffectiveGrants(rec), ","); got != "net.http:a.example,oauth:repo" {
+		t.Fatalf("builtin EffectiveGrants = %s, want its stored grants", got)
+	}
+}
