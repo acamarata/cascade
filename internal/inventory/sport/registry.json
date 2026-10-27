@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-27T15:27:59Z",
+  "generated_at": "2026-10-27T15:58:34Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4211,6 +4211,12 @@
           "line": 10,
           "status": "CHANGE",
           "raw": "cmd/cascade daemon (CHANGE, P1-SEC-02)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_reload_secrets.go",
+          "line": 17,
+          "status": "CHANGE",
+          "raw": "cmd/cascade daemon (CHANGED, P1-SEC-24 [secrets] hot reload)."
         }
       ],
       "statuses": [
@@ -4470,6 +4476,26 @@
       ]
     },
     {
+      "name": "cmd/cascade daemon tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_reload_secrets_boot_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade daemon tests (P1-SEC-24)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_reload_secrets_test.go",
+          "line": 13,
+          "status": "",
+          "raw": "cmd/cascade daemon tests (P1-SEC-24)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd/cascade daemon usage wiring",
       "sites": [
         {
@@ -4661,6 +4687,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade plugin trust grant tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_trust_grant_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "cmd/cascade plugin trust grant tests (P1-PLG-10)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -24179,7 +24219,7 @@
       "sites": [
         {
           "file": "internal/plugins/dispatch.go",
-          "line": 51,
+          "line": 48,
           "status": "ADD",
           "ticket": "P1-E15-W4-S32-T4",
           "raw": "internal/plugins dispatch (ADD) — P1-E15-W4-S32-T4 COMPLETION PASS."
@@ -24307,7 +24347,7 @@
       "sites": [
         {
           "file": "internal/plugins/install_middleware.go",
-          "line": 14,
+          "line": 15,
           "status": "",
           "raw": "internal/plugins install middleware."
         }
@@ -24365,7 +24405,7 @@
       "sites": [
         {
           "file": "internal/plugins/lifecycle.go",
-          "line": 30,
+          "line": 19,
           "status": "ADD",
           "ticket": "P1-E15-W4-S32-T4",
           "raw": "internal/plugins lifecycle-metadata/ADD — P1-E15-W4-S32-T4."
@@ -24451,7 +24491,7 @@
       "sites": [
         {
           "file": "internal/plugins/update_rpc.go",
-          "line": 10,
+          "line": 11,
           "status": "",
           "raw": "internal/plugins plugin.update RPC."
         }
@@ -24468,6 +24508,68 @@
           "line": 4,
           "status": "",
           "raw": "internal/plugins plugin.update RPC tests."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins process executable resolution",
+      "sites": [
+        {
+          "file": "internal/plugins/process_exec.go",
+          "line": 10,
+          "status": "",
+          "raw": "internal/plugins process executable resolution (P1-PLG-10)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins process executable resolution tests",
+      "sites": [
+        {
+          "file": "internal/plugins/process_exec_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/plugins process executable resolution tests (P1-PLG-10)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins process trust grant",
+      "sites": [
+        {
+          "file": "internal/plugins/trust_grant.go",
+          "line": 15,
+          "status": "",
+          "raw": "internal/plugins process trust grant (P1-PLG-10)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins process trust grant tests",
+      "sites": [
+        {
+          "file": "internal/plugins/trust_grant_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal/plugins process trust grant tests (P1-PLG-10)."
+        },
+        {
+          "file": "internal/plugins/trust_sweep_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal/plugins process trust grant tests (P1-PLG-10)."
         }
       ],
       "statuses": [
@@ -37860,6 +37962,18 @@
           "line": 10,
           "status": "",
           "raw": "runtime/boot-baseline-check tests (P1-SEC-04)."
+        },
+        {
+          "file": "internal/runtime/hotreload_secrets_accept_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "runtime/boot-baseline-check tests (P1-SEC-24)."
+        },
+        {
+          "file": "internal/runtime/hotreload_secrets_baseline_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "runtime/boot-baseline-check tests (P1-SEC-24)."
         }
       ],
       "statuses": [
@@ -38232,7 +38346,7 @@
       "sites": [
         {
           "file": "internal/runtime/hotreload.go",
-          "line": 36,
+          "line": 28,
           "status": "ADD",
           "ticket": "T-8",
           "raw": "runtime/hot-reload-engine (ADD, placeholder per T-8 sport_updates)."
@@ -38250,6 +38364,12 @@
           "status": "ADD",
           "ticket": "T-8",
           "raw": "runtime/hot-reload-engine (ADD, placeholder per T-8 sport_updates)."
+        },
+        {
+          "file": "internal/runtime/hotreload_secrets.go",
+          "line": 29,
+          "status": "CHANGE",
+          "raw": "runtime/hot-reload-engine (CHANGED, P1-SEC-24)."
         },
         {
           "file": "internal/runtime/hotreload_security.go",
@@ -38281,7 +38401,28 @@
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
+      ]
+    },
+    {
+      "name": "runtime/hot-reload-engine tests",
+      "sites": [
+        {
+          "file": "internal/runtime/hotreload_secrets_table_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "runtime/hot-reload-engine tests (P1-SEC-24)."
+        },
+        {
+          "file": "internal/runtime/hotreload_secrets_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "runtime/hot-reload-engine tests (P1-SEC-24)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -38856,7 +38997,7 @@
       ]
     }
   ],
-  "total_sites": 3763,
-  "unspecified_count": 281,
-  "multi_status_count": 116
+  "total_sites": 3777,
+  "unspecified_count": 288,
+  "multi_status_count": 117
 }
