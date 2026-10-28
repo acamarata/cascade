@@ -190,10 +190,9 @@ that never happened.
 ## `cascade recall what`
 
 `recall what <query>` (P1-E22-W5-S47-T1, R-14.65/66; rpc `recall.what`,
-`internal/retrieval/recallwhat*.go`) fuses the domains this build can scope —
-files and memory; the conversation leg is excluded until threads carry a
-scope reference and is reported as an unavailable domain — into one ranked,
-cited answer. Unlike
+`internal/retrieval/recallwhat*.go`) fuses the files, memory and conversation
+domains, each narrowed to the caller's resolved scope, into one
+ranked, cited answer. Unlike
 the bare `recall` command it takes **only** the positional query: there
 is no `--scope`, `--corpus`, `--k` or `--cite` flag (07-CLI-COMMAND-TREE
 §recall ratifies none). The session scope is resolved by the daemon from
@@ -219,19 +218,29 @@ $ cascade recall what "why did the retry policy change"
   reordering only, no rescoring (`recallwhat_filter.go`'s
   `demoteSupersededAndExpired`, pinned against a golden fixture at
   `internal/retrieval/testdata/v1-goldens/recallwhat_ranking.json`).
-- **conversation** — **unconditionally excluded.** `conversation.Thread`
-  carries no `ScopeRef` field and `conversation.SearchFilter` carries only
-  `ThreadID`/`Limit`, so this leg has no server-side column to narrow a
-  search by. Running it unscoped would leak a thread across project
-  boundaries — reproduced directly: a public thread created under one
-  project, returned to a `recall.what` caller whose cwd resolves to a
-  different project — so instead the leg never runs at all:
-  `SearchTurns`/`ThreadPrivacy`/`ListSegments` are never called, and every
-  response carries `Errors["conversation"]` (`KindUnavailable`,
-  "the conversation domain cannot be narrowed to a session scope")
-  regardless of any given thread's role, tier, or trust. A widening ticket
-  to add `ScopeRef` to `Thread` and `SearchFilter` is tracked separately;
-  the leg is restored there, not before.
+- **conversation** — the chat turn store's full-text search, narrowed in
+  the same SQL statement, before its result limit, to threads whose
+  recorded project equals the caller's resolved project. The general
+  bucket is explicit: a session that resolves to no project reads only
+  threads whose creating call also resolved to no project, never "any
+  project". A thread with no project row at all (created before projects
+  were recorded, or by a caller with no resolvable project) is never
+  recalled. A scope resolution error refuses the whole leg
+  (`errors.conversation`); the leg never falls back to an unscoped search.
+  Each row is `conversation:<turn_id>` with `path` set to its thread id.
+  Only `internal` and `public` threads are ever recalled: a thread created
+  with the default `restricted` tier, or `local-only`, is refused by the
+  egress boundary and counted in `Withheld`.
+
+**Principal callers** (`recall.what` is owner-view: the owner CLI and
+authenticated principals may call it, an anonymous caller may not). A
+principal's conversation search additionally requires the thread's
+attribution (the scope recorded when the thread was created) to equal the
+principal's own scope, in the same SQL: an owner-created, unattributed or
+other-principal thread in the same project is never returned. The files
+and memory legs carry no per-principal attribution, so for a principal
+they return no rows and report `errors.file` and `errors.memory` as
+"not in principal scope"; the owner still gets all three legs.
 
 **Two unconditional exclusion rules**, both enforced by the real egress
 boundary (`internal/hooks/egress.Engine`, class `recall-what`,
@@ -240,9 +249,7 @@ itself: (1) content tagged `TrustUntrustedSource` (a tool-authored
 conversation turn, or a file the corpus model tags untrusted) never
 appears in a `recall.what` answer. (2) a conversation thread whose own
 privacy tier the egress class does not admit (it admits only
-`internal`/`public`) is excluded — currently unreachable in practice since
-the conversation leg above never runs at all, but tested and kept ready
-for the day that leg is restored. Every outbound field — snippet, path,
+`internal`/`public`) is excluded before it is ranked. Every outbound field — snippet, path,
 memory key, the rendered citation block, and each per-domain error
 string — transits the same boundary before it reaches the wire, so a
 vaulted or credential-shaped value cannot leak through any of them

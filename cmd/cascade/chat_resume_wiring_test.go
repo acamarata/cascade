@@ -182,12 +182,12 @@ func (resumeQueryTestStore) ThreadPrivacy(context.Context, string) (provider.Sen
 	return provider.SensitivityRestricted, nil
 }
 
-// resumeQueryTestConvLeg is a configured recall.what conversation leg; the
-// real service answers it unavailable without calling it.
+// resumeQueryTestConvLeg is a configured recall.what conversation leg whose
+// store is down: every search answers unavailable.
 type resumeQueryTestConvLeg struct{}
 
 func (resumeQueryTestConvLeg) SearchTurns(context.Context, string, retrieval.RecallWhatSearchFilter) ([]retrieval.RecallWhatTurnMatch, error) {
-	return nil, nil
+	return nil, cascade.New(cascade.KindUnavailable, "conversation: search index unavailable")
 }
 func (resumeQueryTestConvLeg) ListSegments(context.Context, string) ([]retrieval.RecallWhatSegment, error) {
 	return nil, nil

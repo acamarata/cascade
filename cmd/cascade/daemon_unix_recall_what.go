@@ -14,13 +14,15 @@
 // constructor the conductor security pipeline uses).
 //
 // THIS FILE DOES NOT IMPORT internal/rpc. It builds the service and
-// returns a *retrieval.RecallWhatHandler; the actual registry.Register
-// call is the one-line hook in daemon_unix_memory_recall.go, a
-// cmd-rpc-server-boundary-exempt file (build-lane-rules item 17/19: "do
-// the rpc.Registry call from an exempt file"). daemon_unix_memory_recall.go
-// is outside this ticket's ORIGINAL files_scope; this is a recorded scope
-// deviation, the same shape build-lane-rules item 19 itself anticipates
-// ("add a NEW sibling wiring file... never skip the wiring").
+// returns a *retrieval.RecallWhatHandler; the registry.Register call is
+// the one-line hook in daemon_unix_memory_recall.go, a
+// cmd-rpc-server-boundary-exempt file.
+//
+// Principal callers (recall.what is AccessOwnerView): the conversation leg
+// adds the caller's thread_scope attribution to the SQL search, and the
+// files and memory legs refuse a principal outright ("not in principal
+// scope"), since neither carries a per-principal attribution. The caller
+// is read only from the transport-verified principal.Caller on ctx.
 //
 // Inputs: the daemon's shared runtime.PathProvider, runtime.Clock,
 // *events.Bus and provider.Store (buildRPCServer already threads all four
@@ -45,6 +47,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 
 	_ "modernc.org/sqlite" // registers the "sqlite" database/sql driver
 
@@ -53,6 +56,7 @@ import (
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/memory"
+	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/retrieval"
 	"github.com/acamarata/cascade/internal/retrieval/fusion"
 	"github.com/acamarata/cascade/internal/retrieval/recall"
@@ -77,7 +81,7 @@ func buildRecallWhatHandler(
 	}
 	var mem retrieval.RecallWhatMemoryLeg
 	if store != nil {
-		mem = memory.NewProjectionJob(memory.NewFileStore(memoryStoreDir(paths), clock), store, nil, nil, clock)
+		mem = ownerOnlyMemoryLeg{inner: memory.NewProjectionJob(memory.NewFileStore(memoryStoreDir(paths), clock), store, nil, nil, clock)}
 	}
 	resolver, err := recallWhatScopeResolver(paths)
 	if err != nil {
@@ -110,7 +114,48 @@ func recallWhatFilesLeg(paths runtime.PathProvider, bus *events.Bus, store provi
 		}
 		legs = append(legs, retrieval.NewLeg(idx))
 	}
-	return recall.NewService(catalog, rrf.Params{}, legs...)
+	svc, err := recall.NewService(catalog, rrf.Params{}, legs...)
+	if err != nil {
+		return nil, err
+	}
+	return ownerOnlyFilesLeg{inner: svc}, nil
+}
+
+// errNotInPrincipalScope is the files and memory legs' refusal for a
+// principal caller; Response.Errors carries its text for that domain.
+var errNotInPrincipalScope = cascade.New(cascade.KindPermissionDenied, "not in principal scope")
+
+// principalCaller returns the principal on ctx; ok is false for the owner
+// CLI and for an in-process caller (the RPC registry refuses a missing
+// Caller before recall.what runs).
+func principalCaller(ctx context.Context) (principal.Principal, bool) {
+	c, ok := principal.CallerFrom(ctx)
+	if !ok || c.Principal == nil {
+		return principal.Principal{}, false
+	}
+	return *c.Principal, true
+}
+
+// ownerOnlyFilesLeg refuses a principal before the files index is read.
+type ownerOnlyFilesLeg struct{ inner retrieval.RecallWhatFilesLeg }
+
+// Query implements retrieval.RecallWhatFilesLeg.
+func (l ownerOnlyFilesLeg) Query(ctx context.Context, req recall.Request) (recall.Response, error) {
+	if _, isPrincipal := principalCaller(ctx); isPrincipal {
+		return recall.Response{}, errNotInPrincipalScope
+	}
+	return l.inner.Query(ctx, req)
+}
+
+// ownerOnlyMemoryLeg refuses a principal before the projection is read.
+type ownerOnlyMemoryLeg struct{ inner retrieval.RecallWhatMemoryLeg }
+
+// SearchInScopeIncludingExpired implements retrieval.RecallWhatMemoryLeg.
+func (l ownerOnlyMemoryLeg) SearchInScopeIncludingExpired(ctx context.Context, query, scopeRef string, limit int) ([]memory.IndexedRecord, error) {
+	if _, isPrincipal := principalCaller(ctx); isPrincipal {
+		return nil, errNotInPrincipalScope
+	}
+	return l.inner.SearchInScopeIncludingExpired(ctx, query, scopeRef, limit)
 }
 
 // recallWhatConversationLeg opens its own sqlite connection to
@@ -151,16 +196,30 @@ type conversationLegSource interface {
 // retrieval-owned types -- the D1cycle fix's composition-root half.
 type conversationLegAdapter struct{ store conversationLegSource }
 
-// SearchTurns implements retrieval.RecallWhatConversationLeg.
+// SearchTurns implements retrieval.RecallWhatConversationLeg. It forwards
+// the project narrowing unchanged and, for a principal caller, requires
+// the thread's attribution to equal the principal's own Scope in the same
+// SQL; a principal without a project scope is refused before any search.
 func (a conversationLegAdapter) SearchTurns(ctx context.Context, query string, filter retrieval.RecallWhatSearchFilter) ([]retrieval.RecallWhatTurnMatch, error) {
-	matches, err := a.store.SearchTurns(ctx, query, conversation.SearchFilter{ThreadID: filter.ThreadID, Limit: filter.Limit})
+	f := conversation.SearchFilter{ThreadID: filter.ThreadID, Limit: filter.Limit,
+		ProjectRef: filter.ProjectRef, ProjectSet: filter.ProjectSet,
+		AttributedScope: filter.AttributedScope, AttributedSet: filter.AttributedSet}
+	if p, isPrincipal := principalCaller(ctx); isPrincipal {
+		if !strings.HasPrefix(p.Scope, "project:") || len(p.Scope) == len("project:") {
+			return nil, errNotInPrincipalScope
+		}
+		f.AttributedScope, f.AttributedSet = p.Scope, true
+	}
+	matches, err := a.store.SearchTurns(ctx, query, f)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]retrieval.RecallWhatTurnMatch, len(matches))
 	for i, m := range matches {
+		prov := m.Turn.Provenance
 		out[i] = retrieval.RecallWhatTurnMatch{
-			Turn: retrieval.RecallWhatTurn{ID: m.Turn.ID, ThreadID: m.Turn.ThreadID, Role: string(m.Turn.Role)},
+			Turn: retrieval.RecallWhatTurn{ID: m.Turn.ID, ThreadID: m.Turn.ThreadID, Role: string(m.Turn.Role),
+				Untrusted: prov != "" && prov != provider.ProvenanceTrusted},
 			Rank: m.Rank,
 		}
 	}

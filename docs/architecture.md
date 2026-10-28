@@ -439,23 +439,16 @@ mechanism... and it runs BEFORE any leg does."
 
 The resolved scope reference narrows the files leg (passed through to
 `recall.Service`'s own `fusion.ScopeFilter`) and the memory leg
-(`IndexedRecord.ScopeRef` equality). The conversation leg cannot be
-narrowed this way at all: `conversation.Thread` carries no `ScopeRef`
-field, and `conversation.SearchFilter` carries only `ThreadID`/`Limit` — no
-scope column exists to check. A caller-side confirming review reproduced
-the leak this would otherwise cause (a public thread created under one
-project, reachable from a `cascade recall what` call whose cwd resolves to
-a different project), so the leg does not run unscoped: **it is
-unconditionally excluded**. Every `recall.what` call gets
-`Errors["conversation"] = "recall.what: the conversation domain cannot be
-narrowed to a session scope"` (`KindUnavailable`), and no conversation row
-ever reaches a response, regardless of the thread's own privacy tier or
-the turn's role — `SearchTurns`/`ThreadPrivacy`/`ListSegments` are never
-even called. This is a per-request refusal, not "leg absent": a build with
-no conversation store configured at all reports the leg simply not
-configured (no error), a different signal. A widening ticket is tracked
-(PCI, repo `cascade`, type `planning`) to add a `ScopeRef` to `Thread` and
-`SearchFilter` and restore the leg once one exists.
+(`IndexedRecord.ScopeRef` equality). The conversation leg resolves the
+scope itself and searches with the resolved project ref and `ProjectSet`,
+so `conversation.SearchTurns` narrows to that project's threads inside its
+own SQL, before the result limit; a resolution error refuses the leg
+(`Errors["conversation"]`) and no unscoped search ever runs. For a
+principal caller the composition-root adapter also requires the thread's
+`thread_scope` attribution to equal the principal's scope in the same SQL,
+and the files and memory legs refuse the principal ("not in principal
+scope"). Each conversation candidate crosses the egress boundary at its
+thread's own tier before it is ranked.
 
 ### Multi-domain fan-out and RRF merge
 

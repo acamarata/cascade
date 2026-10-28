@@ -2,8 +2,7 @@ package retrieval
 
 // Purpose: the AKIA-shaped-leak proof per outbound envelope field
 // (rework brief: "one AKIA-shaped leak test per envelope field — snippet,
-// path, memory key, rendered block, Errors[domain]"), plus the
-// conversation-row-is-untrusted-source proof fix item 6 names. Every test
+// path, memory key, rendered block, Errors[domain]"). Every test
 // here drives the REAL RecallWhatService.Query end to end over the real
 // egress.Engine (testEgress), so the redaction proof is against the
 // actual substitution pass, never a hand-rolled string check.
@@ -18,7 +17,6 @@ import (
 
 	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/pkg/cascade"
-	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // akiaSecret is the credential-shaped literal secrets.DefaultRegistry's
@@ -38,16 +36,9 @@ func mustMarshal(t *testing.T, v any) string {
 }
 
 // TestAKIALeak_ConversationSnippet: a turn's segment content carries the
-// secret; it must not survive into Results[].Snippet. D6/Q1 changed WHY
-// this holds: the conversation leg is now unconditionally excluded
-// (conversationOutcome, recallwhat_legs.go), so no conversation content of
-// any kind -- secret or not -- ever reaches a response. The assertion
-// below therefore also checks Errors[conversation] is populated: proof
-// the absence is the real exclusion mechanism firing, not an unrelated
-// bug that happened to drop the row (the survival-guard gap D6/Q3 named;
-// the still-live redaction mechanism itself is proven separately, with a
-// row that DOES survive, by recallwhat_filter_test.go's
-// TestFilterFusedResults_SecretSnippetRedactedRowSurvives).
+// secret; it must not survive into Results[].Snippet. The conversation row
+// itself must survive (its thread is public and in scope), so the secret's
+// absence is the egress substitution firing, not the row being dropped.
 func TestAKIALeak_ConversationSnippet(t *testing.T) {
 	files, conv, mem := baselineLegs()
 	conv.segs["t1"] = []RecallWhatSegment{{Content: "my key is " + akiaSecret + " keep it secret"}}
@@ -59,8 +50,12 @@ func TestAKIALeak_ConversationSnippet(t *testing.T) {
 	if strings.Contains(mustMarshal(t, resp), akiaSecret) {
 		t.Fatalf("conversation snippet leaked the secret: %s", mustMarshal(t, resp))
 	}
-	if resp.Errors[DomainConversation] == "" {
-		t.Fatal("Errors[conversation] is empty -- the secret's absence must come from the domain-unavailable exclusion, not a silent drop")
+	survived := false
+	for _, r := range resp.Results {
+		survived = survived || (r.Domain == DomainConversation && strings.Contains(r.Snippet, "keep it secret"))
+	}
+	if !survived {
+		t.Fatalf("the conversation row was dropped; the redaction proof needs it to survive: %s", mustMarshal(t, resp))
 	}
 }
 
@@ -144,43 +139,5 @@ func TestAKIALeak_DomainError(t *testing.T) {
 	}
 	if resp.Errors[DomainFile] == "" {
 		t.Fatal("Errors[file] was empty; the domain-unavailable signal itself was lost")
-	}
-}
-
-// TestConversationLeg_ExcludedRegardlessOfRoleOrTier is D6/Q1's
-// scope-leak-prevention proof, the exact scenario the confirming review
-// reproduced: append_turn{privacy_mode:"public"} creates a public thread
-// under one project ("project B"); a caller whose cwd resolves to a
-// DIFFERENT project ("project A", "proj1" below) must never see it,
-// because conversation.Thread carries no ScopeRef to narrow the search by
-// in the first place. Before this fix, a public-tier, user-authored
-// ("trusted") turn WAS admitted (this replaces the two tests that used to
-// prove exactly that: TestConversationRow_ToolRole_IsUntrustedSource_Excluded
-// and TestConversationRow_UserRole_IsTrusted_Kept, both now false — the
-// leg excludes every turn unconditionally, not only untrusted-source
-// ones). Failing input: a project-B public thread's turn, queried by a
-// project-A-scoped caller.
-func TestConversationLeg_ExcludedRegardlessOfRoleOrTier(t *testing.T) {
-	for _, role := range []string{"user", "tool"} {
-		t.Run(role, func(t *testing.T) {
-			files, conv, mem := baselineLegs()
-			conv.matches = []RecallWhatTurnMatch{
-				{Turn: RecallWhatTurn{ID: "t1", ThreadID: "th-project-b", Role: role}, Rank: 1},
-			}
-			conv.tiers["th-project-b"] = provider.SensitivityPublic
-			svc := newBaselineService(t, files, conv, mem) // resolves to "proj1" ("project A")
-			resp, err := svc.Query(context.Background(), RecallWhatRequest{Query: "hello"})
-			if err != nil {
-				t.Fatalf("Query: %v", err)
-			}
-			for _, r := range resp.Results {
-				if r.Domain == DomainConversation {
-					t.Fatalf("project-B's public thread reached a project-A-scoped caller: %+v", r)
-				}
-			}
-			if resp.Errors[DomainConversation] == "" {
-				t.Fatal("Errors[conversation] is empty, want the domain-unavailable refusal recorded")
-			}
-		})
 	}
 }

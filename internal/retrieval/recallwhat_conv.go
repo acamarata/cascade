@@ -13,12 +13,10 @@
 // packages because neither imports cmd/cascade.
 //
 // Inputs/Outputs: pure data-shape declarations. RecallWhatConversationLeg
-// is the interface conversationOutcome (recallwhat_legs.go) calls
-// against -- today only the s.conversation nil-check (D6/Q1's
-// unconditional KindUnavailable refusal); these types carry the fields a
-// restored leg would need once the ScopeRef widening ticket
-// (s47t1-conversation-scope-ref-missing) lands and SearchTurns/
-// ListSegments/ThreadPrivacy are actually invoked.
+// is the interface conversationOutcome (recallwhat_legs.go) calls: every
+// SearchTurns it makes carries the resolved project ref with ProjectSet,
+// and the composition-root adapter adds the caller principal's
+// attribution, so both narrowings run inside the store's own SQL.
 //
 // Constraints: no import of internal/conversation, ever, in this file or
 // anywhere else in package retrieval -- that is the invariant this file
@@ -38,13 +36,16 @@ import (
 )
 
 // RecallWhatTurn is the retrieval-owned mirror of the conversation.Turn
-// fields a restored conversation leg needs: ID, ThreadID and Role (kept
-// as a plain string -- conversation.Role is a package-local enum this
-// package must not import).
+// fields the conversation leg needs: ID, ThreadID and Role (kept as a
+// plain string -- conversation.Role is a package-local enum this package
+// must not import). Untrusted mirrors the turn's provenance marker: true
+// for any provenance other than the unmarked or trusted local default, and
+// the leg ranks such a turn corpus.TrustUntrustedSource.
 type RecallWhatTurn struct {
-	ID       string
-	ThreadID string
-	Role     string
+	ID        string
+	ThreadID  string
+	Role      string
+	Untrusted bool
 }
 
 // RecallWhatTurnMatch is the retrieval-owned mirror of one SearchTurns
@@ -56,18 +57,28 @@ type RecallWhatTurnMatch struct {
 }
 
 // RecallWhatSegment is the retrieval-owned mirror of conversation.Segment,
-// carrying only Content -- the one field a restored leg would hydrate a
-// snippet from (recallwhat_filter.go's turnSnippet).
+// carrying only Content -- the one field the leg hydrates a snippet from
+// (recallwhat_legs.go's turnSnippet).
 type RecallWhatSegment struct {
 	Content string
 }
 
 // RecallWhatSearchFilter is the retrieval-owned mirror of
 // conversation.SearchFilter: ThreadID == "" searches every thread,
-// Limit <= 0 uses the adapted store's own default page size.
+// Limit <= 0 uses the adapted store's own default page size. ProjectSet
+// narrows to threads whose recorded project equals ProjectRef ("" is the
+// general bucket, never "any project"); AttributedSet narrows to threads
+// attributed to AttributedScope. Both are applied by the store in SQL
+// before its limit. The leg sets the project pair; the composition root
+// sets the attribution pair from the transport-verified caller, never
+// from request parameters.
 type RecallWhatSearchFilter struct {
-	ThreadID string
-	Limit    int
+	ThreadID        string
+	Limit           int
+	ProjectRef      string
+	ProjectSet      bool
+	AttributedScope string
+	AttributedSet   bool
 }
 
 // RecallWhatConversationLeg is the turns/threads domain, spoken entirely

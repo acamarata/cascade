@@ -103,57 +103,52 @@ func TestRecallWhatService_Query_ScopeResolutionFailurePropagates(t *testing.T) 
 	}
 }
 
-// TestRecallWhatService_Query_FusesAcrossDomains fuses across the two
-// domains that can still answer: D6/Q1 made the conversation leg
-// unconditionally unavailable (conversationOutcome, recallwhat_legs.go),
-// so a baseline query now produces file+memory results only, and
-// Errors[conversation] is always populated alongside them.
+// TestRecallWhatService_Query_FusesAcrossDomains fuses across all three
+// domains: the conversation leg answers again, narrowed to the resolved
+// project (conversationOutcome, recallwhat_legs.go).
 func TestRecallWhatService_Query_FusesAcrossDomains(t *testing.T) {
 	svc := newDefaultService(t)
 	resp, err := svc.Query(context.Background(), RecallWhatRequest{Query: "hello"})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
-	if len(resp.Results) != 2 {
-		t.Fatalf("Results = %d rows, want 2 (file + memory; conversation is unconditionally unavailable): %+v", len(resp.Results), resp.Results)
+	if len(resp.Results) != 3 {
+		t.Fatalf("Results = %d rows, want 3 (conversation + file + memory): %+v", len(resp.Results), resp.Results)
 	}
 	seen := map[string]bool{}
 	for _, r := range resp.Results {
 		seen[r.Domain] = true
 	}
-	for _, d := range []string{DomainFile, DomainMemory} {
+	for _, d := range []string{DomainConversation, DomainFile, DomainMemory} {
 		if !seen[d] {
 			t.Errorf("domain %q missing from Results: %+v", d, resp.Results)
 		}
 	}
-	if seen[DomainConversation] {
-		t.Errorf("conversation reached Results despite being unconditionally unavailable: %+v", resp.Results)
+	if len(resp.Citations) != 3 {
+		t.Errorf("Citations = %d, want 3", len(resp.Citations))
 	}
-	if len(resp.Citations) != 2 {
-		t.Errorf("Citations = %d, want 2", len(resp.Citations))
+	if got := strings.Join(resp.Legs, ","); got != "conversation,file,memory" {
+		t.Errorf("Legs = %q, want sorted conversation,file,memory", got)
 	}
-	if got := strings.Join(resp.Legs, ","); got != "file,memory" {
-		t.Errorf("Legs = %q, want sorted file,memory", got)
-	}
-	if resp.Errors[DomainConversation] == "" {
-		t.Error("Errors[conversation] empty, want the domain-unavailable refusal recorded on every call")
+	if len(resp.Errors) != 0 {
+		t.Errorf("Errors = %v, want none when every leg answers", resp.Errors)
 	}
 }
 
 // TestRecallWhatService_Query_DomainUnavailable_PartialResults: with files
-// ALSO forced unavailable and conversation unconditionally unavailable
-// (D6/Q1), only memory can still answer -- a two-domain partial failure,
-// not the single-domain case this test proved before the rework.
+// AND conversation forced unavailable, only memory can still answer -- a
+// two-domain partial failure.
 func TestRecallWhatService_Query_DomainUnavailable_PartialResults(t *testing.T) {
 	files, conv, mem := baselineLegs()
 	files.err = cascade.New(cascade.KindUnavailable, "files index unreadable")
+	conv.searchErr = cascade.New(cascade.KindUnavailable, "conversation index unreadable")
 	svc := newBaselineService(t, files, conv, mem)
 	resp, err := svc.Query(context.Background(), RecallWhatRequest{Query: "hello"})
 	if err != nil {
 		t.Fatalf("a domain-unavailable leg must not fail the whole query: %v", err)
 	}
 	if len(resp.Results) != 1 {
-		t.Fatalf("Results = %d, want 1 (memory only; files forced unavailable, conversation always is)", len(resp.Results))
+		t.Fatalf("Results = %d, want 1 (memory only; files and conversation forced unavailable)", len(resp.Results))
 	}
 	if resp.Errors[DomainFile] == "" {
 		t.Errorf("Errors[%q] empty, want the files leg's error recorded", DomainFile)
@@ -163,13 +158,13 @@ func TestRecallWhatService_Query_DomainUnavailable_PartialResults(t *testing.T) 
 	}
 }
 
-// TestRecallWhatService_Query_AllDomainsUnavailable: conversation no
-// longer needs conv.searchErr forced (D6/Q1 -- it fails unconditionally,
-// SearchTurns is never called), so only files and memory are forced here.
+// TestRecallWhatService_Query_AllDomainsUnavailable: every leg forced
+// unavailable refuses the whole query.
 func TestRecallWhatService_Query_AllDomainsUnavailable(t *testing.T) {
 	files, conv, mem := baselineLegs()
 	files.err = errors.New("boom")
 	mem.err = errors.New("boom")
+	conv.searchErr = errors.New("boom")
 	svc := newBaselineService(t, files, conv, mem)
 	_, err := svc.Query(context.Background(), RecallWhatRequest{Query: "hello"})
 	kind, _ := cascade.KindOf(err)
@@ -220,8 +215,8 @@ func TestRecallWhatRPC(t *testing.T) {
 	if !ok {
 		t.Fatalf("result type = %T, want WhatResult", result)
 	}
-	if len(resp.Results) != 2 {
-		t.Fatalf("Results = %d, want 2 (file + memory; conversation is unconditionally unavailable, D6/Q1)", len(resp.Results))
+	if len(resp.Results) != 3 {
+		t.Fatalf("Results = %d, want 3 (conversation + file + memory)", len(resp.Results))
 	}
 }
 

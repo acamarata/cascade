@@ -45,9 +45,13 @@ type ScopeResolver interface {
 //
 // ScopeKindGeneral (no repository bound to the resolved git root, R-16.3's
 // documented restricted-but-successful result) has no Project to narrow
-// to; it resolves to the empty scope reference, which every leg's own
-// narrowing treats as "matches nothing" rather than "matches everything" —
-// an unresolved session is not a reason to widen what it can read.
+// to; it resolves to the empty scope reference, the general bucket. Every
+// leg narrows to "" by equality, never as "any scope": a general session
+// reads only rows recorded under "" (a memory row with an empty ScopeRef,
+// a conversation thread whose creating call resolved to no project), and
+// a conversation thread with no project row at all matches no narrowed
+// query, general or not. An unresolved session is not a reason to widen
+// what it can read.
 func scopeRefFor(s scope.SessionScope) string {
 	if s.Kind == scope.ScopeKindGeneral {
 		return ""

@@ -2,7 +2,7 @@ package conversation
 
 // Purpose: the query path against the REAL recall.what service
 //   (internal/retrieval.RecallWhatService behind its real handler on a real
-//   *rpc.Registry), never an injected top-level error: while the
+//   *rpc.Registry), never an injected top-level error: when the
 //   conversation leg reports itself unavailable, --resume-query is
 //   KindUnavailable even though the file leg answered, and a service with
 //   no conversation leg at all yields KindNotFound -- in neither case is a
@@ -43,11 +43,18 @@ func (recallFilesLeg) Query(context.Context, recall.Request) (recall.Response, e
 }
 
 // recallConvLeg adapts this package's real Store to recall.what's
-// conversation-leg shape (the composition root's adapter does the same).
-type recallConvLeg struct{ store Store }
+// conversation-leg shape (the composition root's adapter does the same);
+// a non-nil unavailable is returned by every search instead.
+type recallConvLeg struct {
+	store       Store
+	unavailable error
+}
 
 func (l recallConvLeg) SearchTurns(ctx context.Context, q string, f retrieval.RecallWhatSearchFilter) ([]retrieval.RecallWhatTurnMatch, error) {
-	hits, err := l.store.SearchTurns(ctx, q, SearchFilter{ThreadID: f.ThreadID, Limit: f.Limit})
+	if l.unavailable != nil {
+		return nil, l.unavailable
+	}
+	hits, err := l.store.SearchTurns(ctx, q, SearchFilter{ThreadID: f.ThreadID, Limit: f.Limit, ProjectRef: f.ProjectRef, ProjectSet: f.ProjectSet})
 	out := make([]retrieval.RecallWhatTurnMatch, 0, len(hits))
 	for _, h := range hits {
 		out = append(out, retrieval.RecallWhatTurnMatch{Turn: retrieval.RecallWhatTurn{ID: h.Turn.ID, ThreadID: h.Turn.ThreadID, Role: string(h.Turn.Role)}, Rank: h.Rank})
@@ -80,8 +87,8 @@ func (recallEmptyVault) Get(context.Context, string) ([]byte, error) {
 }
 
 // realRecallWhatRegistry registers a real RecallWhatService on a registry.
-// withConversation configures the conversation leg over store.
-func realRecallWhatRegistry(t *testing.T, store Store, withConversation bool) *rpc.Registry {
+// conv is the conversation leg (nil: none configured).
+func realRecallWhatRegistry(t *testing.T, conv retrieval.RecallWhatConversationLeg) *rpc.Registry {
 	t.Helper()
 	detector, err := secrets.NewDetector(secrets.DefaultRegistry(), secrets.DefaultDetectionConfig())
 	if err != nil {
@@ -90,10 +97,6 @@ func realRecallWhatRegistry(t *testing.T, store Store, withConversation bool) *r
 	engine, err := egress.NewEngine(egress.DefaultRegistry(), recallEmptyVault{}, detector)
 	if err != nil {
 		t.Fatalf("NewEngine: %v", err)
-	}
-	var conv retrieval.RecallWhatConversationLeg
-	if withConversation {
-		conv = recallConvLeg{store: store}
 	}
 	clock := testkit.NewFrozenClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 	svc, err := retrieval.NewRecallWhatService(recallFilesLeg{}, conv, nil, rrf.Params{}, clock, recallScope{}, engine)
@@ -106,13 +109,15 @@ func realRecallWhatRegistry(t *testing.T, store Store, withConversation bool) *r
 }
 
 // TestResumeQueryUnavailableUntilConversationLeg (contract name). The
-// precondition dispatch proves the real service answered a file row AND
-// reported Errors["conversation"]; Resume must then be KindUnavailable,
-// not a block built from the file row. Failing input: ignoring
-// Errors["conversation"] (the query then reports KindNotFound instead).
+// conversation leg's store reports itself unavailable; the precondition
+// dispatch proves the real service answered a file row AND reported
+// Errors["conversation"]; Resume must then be KindUnavailable, not a block
+// built from the file row. Failing input: ignoring Errors["conversation"]
+// (the query then reports KindNotFound instead).
 func TestResumeQueryUnavailableUntilConversationLeg(t *testing.T) {
 	store := newResumeStore(t)
-	registry := realRecallWhatRegistry(t, store, true)
+	down := cascade.New(cascade.KindUnavailable, "conversation: search index unavailable")
+	registry := realRecallWhatRegistry(t, recallConvLeg{store: store, unavailable: down})
 	raw, errObj := registry.Dispatch(context.Background(), &rpc.Request{Method: "recall.what", Params: json.RawMessage(`{"query":"plan"}`)})
 	if errObj != nil {
 		t.Fatalf("recall.what: %+v", errObj)
@@ -137,7 +142,7 @@ func TestResumeQueryUnavailableUntilConversationLeg(t *testing.T) {
 // with KindNotFound instead of composing it.
 func TestResumeQuery_NoConversationLeg_NotFound(t *testing.T) {
 	store := newResumeStore(t)
-	r, err := NewResumer(store, echoComposer{}, realRecallWhatRegistry(t, store, false), &recordingSubst{})
+	r, err := NewResumer(store, echoComposer{}, realRecallWhatRegistry(t, nil), &recordingSubst{})
 	if err != nil {
 		t.Fatalf("NewResumer: %v", err)
 	}

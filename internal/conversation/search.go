@@ -86,11 +86,25 @@ func mirrorSegmentFTS(ctx context.Context, tx *sql.Tx, seg Segment, threadID str
 // general bucket, never "any project". A thread with no project row matches no
 // narrowed query. A non-empty ProjectRef narrows even when ProjectSet is
 // false: a half-set filter is never read as unnarrowed.
+//
+// AttributedSet narrows, in the same SQL and so also before the limit, to
+// threads whose thread_scope attribution (scope_attr.go) equals
+// AttributedScope: a principal's recall reads only threads attributed to its
+// own scope, never an owner-attributed or unattributed one. A non-empty
+// AttributedScope narrows even when AttributedSet is false, and an empty one
+// with AttributedSet matches nothing (no thread is attributed to "").
 type SearchFilter struct {
-	ThreadID   string
-	Limit      int
-	ProjectRef string
-	ProjectSet bool
+	ThreadID        string
+	Limit           int
+	ProjectRef      string
+	ProjectSet      bool
+	AttributedScope string
+	AttributedSet   bool
+}
+
+// attributionNarrowed reports whether f narrows by thread_scope attribution.
+func (f SearchFilter) attributionNarrowed() bool {
+	return f.AttributedSet || f.AttributedScope != ""
 }
 
 // TurnMatch is one SearchTurns hit: the full matching Turn plus its
@@ -134,19 +148,13 @@ type searchHit struct {
 // convention: lower is more relevant) and keeps only the FIRST -- and
 // therefore best -- occurrence of each turn_id.
 func (s *conversationStore) searchHits(ctx context.Context, query string, filter SearchFilter) ([]searchHit, error) {
-	sqlQuery := `SELECT turn_id, bm25(` + tableTurnFTS + `) AS rank FROM ` + tableTurnFTS +
-		` WHERE ` + tableTurnFTS + ` MATCH ? `
-	args := []any{query}
-	if filter.ThreadID != "" {
-		sqlQuery += `AND thread_id = ? `
-		args = append(args, filter.ThreadID)
+	if filter.attributionNarrowed() {
+		present, err := s.hasScopeTable(ctx)
+		if err != nil || !present {
+			return nil, err // no attribution table: no thread is attributed to anyone
+		}
 	}
-	if filter.ProjectSet || filter.ProjectRef != "" {
-		sqlQuery += `AND thread_id IN (SELECT thread_id FROM ` + tableThreadProject + ` WHERE project_ref = ?) `
-		args = append(args, filter.ProjectRef)
-	}
-	sqlQuery += `ORDER BY rank ASC`
-
+	sqlQuery, args := searchSQL(query, filter)
 	rows, err := s.db.QueryContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return nil, translateSearchError(err)
@@ -173,6 +181,42 @@ func (s *conversationStore) searchHits(ctx context.Context, query string, filter
 		hits = hits[:limit]
 	}
 	return hits, nil
+}
+
+// searchSQL builds the parameterised MATCH query. Every narrowing is a
+// WHERE clause of this one statement, so it applies before the limit
+// searchHits enforces; no caller value is ever interpolated.
+func searchSQL(query string, filter SearchFilter) (string, []any) {
+	sqlQuery := `SELECT turn_id, bm25(` + tableTurnFTS + `) AS rank FROM ` + tableTurnFTS +
+		` WHERE ` + tableTurnFTS + ` MATCH ? `
+	args := []any{query}
+	if filter.ThreadID != "" {
+		sqlQuery += `AND thread_id = ? `
+		args = append(args, filter.ThreadID)
+	}
+	if filter.ProjectSet || filter.ProjectRef != "" {
+		sqlQuery += `AND thread_id IN (SELECT thread_id FROM ` + tableThreadProject + ` WHERE project_ref = ?) `
+		args = append(args, filter.ProjectRef)
+	}
+	if filter.attributionNarrowed() {
+		sqlQuery += `AND thread_id IN (SELECT thread_id FROM ` + tableThreadScope + ` WHERE scope_ref = ?) `
+		args = append(args, filter.AttributedScope)
+	}
+	return sqlQuery + `ORDER BY rank ASC`, args
+}
+
+// hasScopeTable reports whether the thread_scope table exists yet. It is
+// created on first use by the chat handlers (ensureScopeSchema), so a
+// database where no thread was ever attributed may not carry it. Probed on
+// every call, never cached: a later attribution creates it.
+func (s *conversationStore) hasScopeTable(ctx context.Context) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, tableThreadScope).Scan(&n)
+	if err != nil {
+		return false, cascade.Wrap(cascade.KindUnavailable, err, "conversation: probe thread scope table")
+	}
+	return n > 0, nil
 }
 
 // getTurnByID reads one turn by its content-addressed id.
