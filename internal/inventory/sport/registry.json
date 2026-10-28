@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-28T12:17:21Z",
+  "generated_at": "2026-10-28T18:36:15Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2133,6 +2133,13 @@
         {
           "file": "internal/acceptance/j_s21_compat_sub_test.go",
           "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E10-W3-S21-T3",
+          "raw": "acceptance/j-s21-compat-sub (ADD) — P1-E10-W3-S21-T3."
+        },
+        {
+          "file": "internal/acceptance/j_s21_doctor_test.go",
+          "line": 9,
           "status": "ADD",
           "ticket": "P1-E10-W3-S21-T3",
           "raw": "acceptance/j-s21-compat-sub (ADD) — P1-E10-W3-S21-T3."
@@ -4326,6 +4333,12 @@
       "name": "cmd/cascade daemon registrations",
       "sites": [
         {
+          "file": "cmd/cascade/plugin_intent_mount_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (plugin.intent; TEST) — P1-PLG-07."
+        },
+        {
           "file": "cmd/cascade/wire_completion_gate.go",
           "line": 4,
           "status": "",
@@ -4426,6 +4439,18 @@
           "line": 9,
           "status": "",
           "raw": "cmd/cascade daemon registrations (plugin-install)."
+        },
+        {
+          "file": "cmd/cascade/wire_plugin_intent.go",
+          "line": 10,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (plugin.intent; P1-PLG-07)."
+        },
+        {
+          "file": "cmd/cascade/wire_plugin_launch.go",
+          "line": 12,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (plugin launch, P1-PLG-03)."
         },
         {
           "file": "cmd/cascade/wire_plugin_perms.go",
@@ -4654,6 +4679,20 @@
       ]
     },
     {
+      "name": "cmd/cascade doctor_mounts_fleet.go",
+      "sites": [
+        {
+          "file": "cmd/cascade/doctor_mounts_fleet.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "cmd/cascade doctor_mounts_fleet.go (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade elevate-helper",
       "sites": [
         {
@@ -4731,6 +4770,34 @@
           "line": 11,
           "status": "",
           "raw": "cmd/cascade elevation wiring tests (P1-SEC-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade guarded families",
+      "sites": [
+        {
+          "file": "cmd/cascade/guarded_extractors.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade guarded families (P1 config baseline)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade guarded families tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/guarded_extractors_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "cmd/cascade guarded families tests."
         }
       ],
       "statuses": [
@@ -4845,6 +4912,69 @@
           "line": 10,
           "status": "",
           "raw": "cmd/cascade installation identity tests (P1-SEC-40)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade plugin add \u003cintent-ref\u003e",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_intent.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "cmd/cascade plugin add \u003cintent-ref\u003e (ADD) — P1-PLG-07."
+        },
+        {
+          "file": "cmd/cascade/plugin_intent_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "cmd/cascade plugin add \u003cintent-ref\u003e (TEST) — P1-PLG-07."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade plugin launch environment",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_launch_env.go",
+          "line": 16,
+          "status": "",
+          "raw": "cmd/cascade plugin launch environment (P1-PLG-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade plugin launch environment tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_launch_env_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "cmd/cascade plugin launch environment tests (P1-PLG-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade plugin launch tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_launch_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "cmd/cascade plugin launch tests (P1-PLG-03)."
         }
       ],
       "statuses": [
@@ -5321,6 +5451,20 @@
       ]
     },
     {
+      "name": "cmd/cascade root mounts; uninstall production deps",
+      "sites": [
+        {
+          "file": "cmd/cascade/mount_uninstall.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "cmd/cascade root mounts; uninstall production deps/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade route inventory",
       "sites": [
         {
@@ -5484,6 +5628,20 @@
           "status": "ADD",
           "ticket": "P1-E17-W4-S38-T3",
           "raw": "cmd/cascade testscript driver (ADD) — P1-E17-W4-S38-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade uninstall",
+      "sites": [
+        {
+          "file": "cmd/cascade/uninstall.go",
+          "line": 22,
+          "status": "ADD",
+          "raw": "cmd/cascade uninstall/ADDED."
         }
       ],
       "statuses": [
@@ -6019,10 +6177,10 @@
         },
         {
           "file": "cmd/cascade/daemon_unix_jobs_rpc.go",
-          "line": 32,
+          "line": 21,
           "status": "ADD",
           "ticket": "P1-E29-W6-S60-T1",
-          "raw": "cmd/cascade/daemon (ADD, P1-E29-W6-S60-T1)."
+          "raw": "cmd/cascade/daemon (ADD, P1-E29-W6-S60-T1; CHANGED, P1-CAP-10)."
         },
         {
           "file": "cmd/cascade/daemon_unix_jobs_rpc_adapters.go",
@@ -6030,6 +6188,12 @@
           "status": "ADD",
           "ticket": "P1-E29-W6-S60-T1",
           "raw": "cmd/cascade/daemon (ADD, P1-E29-W6-S60-T1)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_jobs_rpc_role_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "cmd/cascade/daemon (ADD, P1-CAP-10)."
         },
         {
           "file": "cmd/cascade/daemon_unix_memory_forget_test.go",
@@ -6072,10 +6236,16 @@
         },
         {
           "file": "cmd/cascade/daemon_unix_recall_what.go",
-          "line": 40,
+          "line": 42,
           "status": "ADD",
           "ticket": "P1-E22-W5-S47-T1",
           "raw": "cmd/cascade/daemon (ADD, P1-E22-W5-S47-T1, D1)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_recall_what_engine_test.go",
+          "line": 10,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGED, recall.what conversation leg)."
         },
         {
           "file": "cmd/cascade/daemon_unix_recall_what_test.go",
@@ -6106,6 +6276,12 @@
           "line": 12,
           "status": "CHANGE",
           "raw": "cmd/cascade/daemon (CHANGED — R-14.175 hot-reload wiring"
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_reservation_sweep_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "cmd/cascade/daemon (ADD, P1-CAP-10)."
         },
         {
           "file": "cmd/cascade/daemon_unix_run.go",
@@ -15200,6 +15376,12 @@
           "raw": "internal.conversation.search/ADDED (P1-E20-W5-S44-T3)."
         },
         {
+          "file": "internal/conversation/search_attr_test.go",
+          "line": 8,
+          "status": "CHANGE",
+          "raw": "internal.conversation.search/CHANGED (tests)."
+        },
+        {
           "file": "internal/conversation/search_test.go",
           "line": 8,
           "status": "ADD",
@@ -15208,7 +15390,8 @@
         }
       ],
       "statuses": [
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -18218,7 +18401,7 @@
         },
         {
           "file": "internal/retrieval/recallwhat_conv.go",
-          "line": 28,
+          "line": 26,
           "status": "CHANGE",
           "raw": "internal.retrieval.RecallWhatService/CHANGED (ci-fix11: broke"
         },
@@ -18245,17 +18428,15 @@
         },
         {
           "file": "internal/retrieval/recallwhat_legs.go",
-          "line": 6,
-          "status": "ADD",
-          "ticket": "P1-E22-W5-S47-T1",
-          "raw": "internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1)."
+          "line": 13,
+          "status": "CHANGE",
+          "raw": "internal.retrieval.RecallWhatService/CHANGED (conversation leg"
         },
         {
           "file": "internal/retrieval/recallwhat_legs_test.go",
-          "line": 8,
-          "status": "ADD",
-          "ticket": "P1-E22-W5-S47-T1",
-          "raw": "internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1)."
+          "line": 14,
+          "status": "CHANGE",
+          "raw": "internal.retrieval.RecallWhatService/CHANGED (conversation leg)."
         },
         {
           "file": "internal/retrieval/recallwhat_memoryleg_test.go",
@@ -18273,7 +18454,7 @@
         },
         {
           "file": "internal/retrieval/recallwhat_redact_test.go",
-          "line": 11,
+          "line": 10,
           "status": "ADD",
           "ticket": "P1-E22-W5-S47-T1",
           "raw": "internal.retrieval.RecallWhatService/ADDED (P1-E22-W5-S47-T1)."
@@ -20047,6 +20228,20 @@
       ]
     },
     {
+      "name": "internal/build guarded config gate tests",
+      "sites": [
+        {
+          "file": "internal/build/guardedconfiggate_test.go",
+          "line": 16,
+          "status": "",
+          "raw": "internal/build guarded config gate tests."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/build tests",
       "sites": [
         {
@@ -21095,6 +21290,30 @@
           "raw": "internal/daemon (ADD, P1-CAP-12)."
         },
         {
+          "file": "internal/daemon/subsystems_fleet_liveness_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-CAP-10)."
+        },
+        {
+          "file": "internal/daemon/subsystems_fleet_reservation.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-CAP-10)."
+        },
+        {
+          "file": "internal/daemon/subsystems_fleet_reservation_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-CAP-10)."
+        },
+        {
+          "file": "internal/daemon/subsystems_fleet_seams.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-CAP-10)."
+        },
+        {
           "file": "internal/daemon/subsystems_fleet_status_test.go",
           "line": 6,
           "status": "ADD",
@@ -21105,6 +21324,12 @@
           "line": 6,
           "status": "ADD",
           "raw": "internal/daemon (ADD, P1-CAP-12)."
+        },
+        {
+          "file": "internal/daemon/subsystems_fleet_txlock_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-CAP-10)."
         },
         {
           "file": "internal/daemon/subsystems_goroutines.go",
@@ -22272,6 +22497,20 @@
           "status": "ADD",
           "ticket": "T-4",
           "raw": "internal/fleet/governor.Load (ADD, per T-4 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/fleet/governor.SampleOnce",
+      "sites": [
+        {
+          "file": "internal/fleet/governor/sample_once.go",
+          "line": 29,
+          "status": "ADD",
+          "raw": "internal/fleet/governor.SampleOnce (ADD)."
         }
       ],
       "statuses": [
@@ -24358,14 +24597,14 @@
       "sites": [
         {
           "file": "internal/plugins/ci_waitmerge_wiring.go",
-          "line": 30,
-          "status": "ADD",
+          "line": 19,
+          "status": "",
           "ticket": "P1-E25-W5-S51-T3",
-          "raw": "internal/plugins ci-waitmerge-wiring/ADDED (P1-E25-W5-S51-T3)."
+          "raw": "internal/plugins ci-waitmerge-wiring (P1-E25-W5-S51-T3; live handle P1-PLG-03)."
         }
       ],
       "statuses": [
-        "ADD"
+        ""
       ]
     },
     {
@@ -24373,10 +24612,10 @@
       "sites": [
         {
           "file": "internal/plugins/ci_waitmerge_wiring_test.go",
-          "line": 9,
+          "line": 10,
           "status": "",
           "ticket": "P1-E25-W5-S51-T3",
-          "raw": "internal/plugins ci-waitmerge-wiring/TESTED (P1-E25-W5-S51-T3)."
+          "raw": "internal/plugins ci-waitmerge-wiring/TESTED (P1-E25-W5-S51-T3; P1-PLG-03)."
         }
       ],
       "statuses": [
@@ -24547,6 +24786,34 @@
       ]
     },
     {
+      "name": "internal/plugins host boundary hook",
+      "sites": [
+        {
+          "file": "internal/plugins/host_boundary_hook.go",
+          "line": 14,
+          "status": "",
+          "raw": "internal/plugins host boundary hook (P1-PLG-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins host boundary hook tests",
+      "sites": [
+        {
+          "file": "internal/plugins/host_boundary_hook_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/plugins host boundary hook tests (P1-PLG-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/plugins install middleware",
       "sites": [
         {
@@ -24572,6 +24839,27 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "internal/plugins intent-dispatch",
+      "sites": [
+        {
+          "file": "internal/plugins/intent_dispatch.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal/plugins intent-dispatch (ADD) — P1-PLG-07."
+        },
+        {
+          "file": "internal/plugins/intent_dispatch_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal/plugins intent-dispatch (TEST) — P1-PLG-07."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
       ]
     },
     {
@@ -24691,6 +24979,61 @@
       ]
     },
     {
+      "name": "internal/plugins plugin effect recovery",
+      "sites": [
+        {
+          "file": "internal/plugins/effect_recovery.go",
+          "line": 17,
+          "status": "",
+          "raw": "internal/plugins plugin effect recovery (P1-PLG-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins plugin effect recovery tests",
+      "sites": [
+        {
+          "file": "internal/plugins/effect_recovery_lock_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/plugins plugin effect recovery tests (P1-PLG-03)."
+        },
+        {
+          "file": "internal/plugins/effect_recovery_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/plugins plugin effect recovery tests (P1-PLG-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins plugin.intent RPC",
+      "sites": [
+        {
+          "file": "internal/plugins/intent_rpc.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "internal/plugins plugin.intent RPC (ADD) — P1-PLG-07."
+        },
+        {
+          "file": "internal/plugins/intent_rpc_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal/plugins plugin.intent RPC (TEST) — P1-PLG-07."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins plugin.update RPC",
       "sites": [
         {
@@ -24712,6 +25055,34 @@
           "line": 4,
           "status": "",
           "raw": "internal/plugins plugin.update RPC tests."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins process child environment",
+      "sites": [
+        {
+          "file": "internal/plugins/process_env.go",
+          "line": 11,
+          "status": "",
+          "raw": "internal/plugins process child environment (P1-PLG-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins process child environment tests",
+      "sites": [
+        {
+          "file": "internal/plugins/process_env_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal/plugins process child environment tests (P1-PLG-03)."
         }
       ],
       "statuses": [
@@ -24774,6 +25145,34 @@
           "line": 8,
           "status": "",
           "raw": "internal/plugins process trust grant tests (P1-PLG-10)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins process update handshaker",
+      "sites": [
+        {
+          "file": "internal/plugins/process_handshaker.go",
+          "line": 14,
+          "status": "",
+          "raw": "internal/plugins process update handshaker (P1-PLG-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins process update handshaker tests",
+      "sites": [
+        {
+          "file": "internal/plugins/process_handshaker_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal/plugins process update handshaker tests (P1-PLG-03)."
         }
       ],
       "statuses": [
@@ -24866,25 +25265,106 @@
       ]
     },
     {
+      "name": "internal/plugins trusted launch architecture tests",
+      "sites": [
+        {
+          "file": "internal/plugins/arch_launch_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/plugins trusted launch architecture tests (P1-PLG-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins trusted launch effect tests",
+      "sites": [
+        {
+          "file": "internal/plugins/trusted_launch_effects_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "internal/plugins trusted launch effect tests (P1-PLG-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins trusted launch environment",
+      "sites": [
+        {
+          "file": "internal/plugins/launch_env.go",
+          "line": 12,
+          "status": "",
+          "raw": "internal/plugins trusted launch environment (P1-PLG-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins trusted launch tests",
+      "sites": [
+        {
+          "file": "internal/plugins/launch_env_resolve_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal/plugins trusted launch tests (P1-PLG-03)."
+        },
+        {
+          "file": "internal/plugins/launch_env_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal/plugins trusted launch tests (P1-PLG-03)."
+        },
+        {
+          "file": "internal/plugins/trusted_launch_refusals_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/plugins trusted launch tests (P1-PLG-03)."
+        },
+        {
+          "file": "internal/plugins/trusted_launch_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal/plugins trusted launch tests (P1-PLG-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins trusted process launch",
+      "sites": [
+        {
+          "file": "internal/plugins/trusted_launch.go",
+          "line": 17,
+          "status": "",
+          "raw": "internal/plugins trusted process launch (P1-PLG-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/plugins wiki-wiring",
       "sites": [
         {
           "file": "internal/plugins/wiki_wiring.go",
-          "line": 21,
-          "status": "ADD",
+          "line": 14,
+          "status": "",
           "ticket": "P1-E25-W5-S51-T6",
-          "raw": "internal/plugins wiki-wiring/ADDED (P1-E25-W5-S51-T6)."
-        },
-        {
-          "file": "internal/plugins/wiki_wiring.go",
-          "line": 90,
-          "status": "ADD",
-          "ticket": "P1-E25-W5-S51-T6",
-          "raw": "internal/plugins wiki-wiring/ADDED (P1-E25-W5-S51-T6)."
+          "raw": "internal/plugins wiki-wiring (P1-E25-W5-S51-T6; live handle P1-PLG-03)."
         }
       ],
       "statuses": [
-        "ADD"
+        ""
       ]
     },
     {
@@ -24892,10 +25372,10 @@
       "sites": [
         {
           "file": "internal/plugins/wiki_wiring_test.go",
-          "line": 10,
+          "line": 9,
           "status": "",
           "ticket": "P1-E25-W5-S51-T6",
-          "raw": "internal/plugins wiki-wiring/TESTED (P1-E25-W5-S51-T6)."
+          "raw": "internal/plugins wiki-wiring/TESTED (P1-E25-W5-S51-T6; P1-PLG-03)."
         }
       ],
       "statuses": [
@@ -29325,6 +29805,174 @@
       ]
     },
     {
+      "name": "internal/uninstall",
+      "sites": [
+        {
+          "file": "internal/uninstall/doc.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal/uninstall/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/uninstall Inventory",
+      "sites": [
+        {
+          "file": "internal/uninstall/inventory.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal/uninstall Inventory/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/uninstall IsBackupPath",
+      "sites": [
+        {
+          "file": "internal/uninstall/guard.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal/uninstall IsBackupPath/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/uninstall Run",
+      "sites": [
+        {
+          "file": "internal/uninstall/run.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal/uninstall Run/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/uninstall data items",
+      "sites": [
+        {
+          "file": "internal/uninstall/data.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal/uninstall data items/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/uninstall executable items",
+      "sites": [
+        {
+          "file": "internal/uninstall/executables.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal/uninstall executable items/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/uninstall plugin and vault items",
+      "sites": [
+        {
+          "file": "internal/uninstall/softitems.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal/uninstall plugin and vault items/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/uninstall primitives",
+      "sites": [
+        {
+          "file": "internal/uninstall/types.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal/uninstall primitives/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/uninstall receipt item",
+      "sites": [
+        {
+          "file": "internal/uninstall/receipt_item.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "internal/uninstall receipt item/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/uninstall receipt plan",
+      "sites": [
+        {
+          "file": "internal/uninstall/receipt.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal/uninstall receipt plan/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/uninstall removeTree",
+      "sites": [
+        {
+          "file": "internal/uninstall/tree.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal/uninstall removeTree/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/uninstall unit items",
+      "sites": [
+        {
+          "file": "internal/uninstall/units.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal/uninstall unit items/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/update",
       "sites": [
         {
@@ -29878,11 +30526,23 @@
       "name": "jobs/lease-model",
       "sites": [
         {
+          "file": "internal/jobs/lease_commit_release_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "jobs/lease-model (ADD, P1-CAP-10)."
+        },
+        {
           "file": "internal/jobs/lease_events.go",
           "line": 38,
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T2",
           "raw": "jobs/lease-model (ADD, P1-E29-W6-S59-T2)."
+        },
+        {
+          "file": "internal/jobs/lease_events_ctor_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "jobs/lease-model (ADD, P1-CAP-10)."
         },
         {
           "file": "internal/jobs/lease_events_drive_test.go",
@@ -29929,6 +30589,12 @@
           "line": 21,
           "status": "",
           "raw": "jobs/lease-model."
+        },
+        {
+          "file": "internal/jobs/lease_kill_test.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "jobs/lease-model (ADD, P1-CAP-10)."
         },
         {
           "file": "internal/jobs/lease_query.go",
@@ -38258,7 +38924,7 @@
         },
         {
           "file": "internal/runtime/baseline_hash.go",
-          "line": 10,
+          "line": 14,
           "status": "ADD",
           "ticket": "T-8",
           "raw": "runtime/boot-baseline-check (ADD, placeholder per T-8 sport_updates)."
@@ -38268,11 +38934,18 @@
           "line": 22,
           "status": "",
           "raw": "runtime/boot-baseline-check (signed baseline record)."
+        },
+        {
+          "file": "internal/runtime/guarded_families.go",
+          "line": 22,
+          "status": "CHANGE",
+          "raw": "runtime/boot-baseline-check (CHANGED, guarded families)."
         }
       ],
       "statuses": [
         "",
-        "ADD"
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -38295,6 +38968,12 @@
           "line": 10,
           "status": "",
           "raw": "runtime/boot-baseline-check tests (P1-SEC-04)."
+        },
+        {
+          "file": "internal/runtime/guarded_families_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "runtime/boot-baseline-check tests (guarded families)."
         },
         {
           "file": "internal/runtime/hotreload_secrets_accept_test.go",
@@ -38706,7 +39385,7 @@
         },
         {
           "file": "internal/runtime/hotreload_security.go",
-          "line": 31,
+          "line": 25,
           "status": "ADD",
           "ticket": "T-8",
           "raw": "runtime/hot-reload-engine (ADD, placeholder per T-8 sport_updates)."
@@ -39342,7 +40021,7 @@
       ]
     }
   ],
-  "total_sites": 3809,
-  "unspecified_count": 298,
-  "multi_status_count": 117
+  "total_sites": 3871,
+  "unspecified_count": 319,
+  "multi_status_count": 121
 }
