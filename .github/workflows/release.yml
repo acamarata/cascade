@@ -407,7 +407,6 @@ jobs:
     name: promote (verified rc bytes to the public release)
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.record_json != '' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
     permissions:
       contents: write
       packages: write
