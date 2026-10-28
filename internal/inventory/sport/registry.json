@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-28T18:36:15Z",
+  "generated_at": "2026-10-28T21:09:55Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -21290,6 +21290,18 @@
           "raw": "internal/daemon (ADD, P1-CAP-12)."
         },
         {
+          "file": "internal/daemon/subsystems_fleet_closer.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-CI-22)."
+        },
+        {
+          "file": "internal/daemon/subsystems_fleet_closer_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-CI-22)."
+        },
+        {
           "file": "internal/daemon/subsystems_fleet_liveness_test.go",
           "line": 8,
           "status": "ADD",
@@ -40021,7 +40033,7 @@
       ]
     }
   ],
-  "total_sites": 3871,
+  "total_sites": 3873,
   "unspecified_count": 319,
   "multi_status_count": 121
 }
