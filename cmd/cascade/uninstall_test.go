@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -257,7 +258,8 @@ func TestUninstallDryRunAndDeclinedConfirmRemoveNothing(t *testing.T) {
 // (real store, real receipt path, fake HOME/CASCADE_HOME, a refusing
 // keychain runner) over an unmigrated store and a vault with entries: a dry
 // run and a declined run write nothing and never select the delete custody;
-// a confirmed run selects it once and deletes the entries.
+// a confirmed run selects it once and deletes the entries. The inventory uses
+// the real GOOS: assertPurgeDryRun holds the per-OS --purge-data contract.
 func TestUninstallDryRunNeverWritesTheRealStore(t *testing.T) {
 	top, vaultDir := t.TempDir(), t.TempDir()
 	home := filepath.Join(top, "home")
@@ -281,9 +283,8 @@ func TestUninstallDryRunNeverWritesTheRealStore(t *testing.T) {
 	deps := uninstallDeps{Getenv: func(string) string { return "" }, GOOS: "linux", Inventory: uninstallInventory(list, del),
 		Confirm: func(*cobra.Command, string) (bool, error) { return false, nil }}
 	before := digestTree(t, top)
-	if out, err := execUninstall(t, deps, "--dry-run", "--purge-data"); err != nil || !strings.Contains(out, "data-dir") {
-		t.Fatalf("dry run = %q, %v", out, err)
-	}
+	out, err := execUninstall(t, deps, "--dry-run", "--purge-data")
+	assertPurgeDryRun(t, goruntime.GOOS, out, err, filepath.Join(home, ".cascade"))
 	if _, err := execUninstall(t, deps); err == nil {
 		t.Fatal("a declined run succeeded")
 	}

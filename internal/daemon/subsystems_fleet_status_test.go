@@ -8,6 +8,7 @@ package daemon
 import (
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -74,15 +75,20 @@ func (f *fleetFakeTicker) settledPolls() int {
 }
 
 // TestFleetRuntimeCloseBeforeSamplerStarts: Close runs exactly between the
-// build and the sampler body's start. The body must not start the sampler
-// afterwards (no loop polls the ticker), must still return, and the ticker
-// must be stopped by Close itself.
+// build and the sampler body's start (the hook waits for the build to finish,
+// so the order is fixed on every OS). The body must not start the sampler
+// afterwards (no loop polls the ticker), must still return, the ticker must be
+// stopped by Close itself and the jobs DB handle must be closed. The opposite
+// order (Close before the build registers its closer) is
+// TestBuildReservationCloseWinsLeavesNoOpenHandle.
 func TestFleetRuntimeCloseBeforeSamplerStarts(t *testing.T) {
 	g := newFleetRig(t, "")
-	saved := beforeSamplerStart
-	beforeSamplerStart = func(r *FleetRuntime) { _ = r.Close() }
-	t.Cleanup(func() { beforeSamplerStart = saved })
+	built, saved := make(chan struct{}), beforeSamplerStart
+	var builtOnce sync.Once
+	beforeSamplerStart = func(r *FleetRuntime) { <-built; _ = r.Close() }
+	t.Cleanup(func() { beforeSamplerStart = saved; builtOnce.Do(func() { close(built) }) })
 	r, err := NewFleetRuntime(g.ctx, g.deps)
+	builtOnce.Do(func() { close(built) })
 	if err != nil {
 		t.Fatalf("NewFleetRuntime: %v", err)
 	}
@@ -91,6 +97,9 @@ func TestFleetRuntimeCloseBeforeSamplerStarts(t *testing.T) {
 	case <-r.ticker.stopped:
 	default:
 		t.Fatal("Close before the sampler started left the ticker running")
+	}
+	if r.JobsDB().Ping() == nil {
+		t.Fatal("Close before the sampler started left the jobs DB handle open")
 	}
 	if n := g.ticker.settledPolls(); n != 0 {
 		t.Fatalf("the sampler loop ran after Close (%d ticker polls): Start-after-Stop leaked a goroutine", n)

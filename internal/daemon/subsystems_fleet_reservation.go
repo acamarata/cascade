@@ -102,14 +102,19 @@ func (r *FleetRuntime) OwnerEpoch() string { return r.res.epoch }
 func (r *FleetRuntime) IsController() bool { return r.res.isController() }
 
 // buildReservation is the reservation step. The handle's close is registered
-// first, so a later failure closes it with the rest of the runtime.
+// first, so a later failure closes it with the rest of the runtime. When Close
+// won the race (registerOrFail) the closer has run at once and the step fails
+// closed: the handle is closed on every path.
 func (r *FleetRuntime) buildReservation(ctx context.Context, d FleetRuntimeDeps) error {
 	db, err := openJobsDB(ctx, d.Paths, d.Clock)
 	if err != nil {
 		return err
 	}
+	afterJobsDBOpen(r)
 	stop := make(chan struct{})
-	r.addCloser(func() error { close(stop); return closeJobsDB(db) })
+	if err := r.registerOrFail(func() error { close(stop); return closeJobsDB(db) }); err != nil {
+		return err
+	}
 	epoch, err := mintOwnerEpoch()
 	if err != nil {
 		return err
@@ -133,15 +138,14 @@ func (r *FleetRuntime) buildReservation(ctx context.Context, d FleetRuntimeDeps)
 	return f.buildReserver(r.Admission().Admit)
 }
 
-// openJobsDB opens cascade.db with the write-DSN form (IMMEDIATE transactions
-// waiting under busy_timeout) and applies the jobs, outbox, reservation and
-// topology schemas on that one handle.
+// openJobsDB opens cascade.db with jobsDBQuery and applies the jobs, outbox,
+// reservation and topology schemas on that one handle.
 func openJobsDB(ctx context.Context, paths runtime.PathProvider, clock runtime.Clock) (*sql.DB, error) {
 	if err := os.MkdirAll(paths.DataDir(), 0o700); err != nil {
 		return nil, cascade.Wrap(cascade.KindUnavailable, err, "fleet runtime: create data dir")
 	}
 	dbPath := filepath.Join(paths.DataDir(), "cascade.db")
-	db, err := sql.Open("sqlite", "file:"+dbPath+"?_busy_timeout=5000&_txlock=immediate")
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?"+jobsDBQuery)
 	if err != nil {
 		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "fleet runtime: open %s", dbPath)
 	}

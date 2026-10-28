@@ -96,3 +96,17 @@ func assertInterleaveCommits(t *testing.T, g *resRig, drv *sqlite.Driver) {
 		t.Fatalf("driver write after the transaction: %v", err)
 	}
 }
+
+// TestFleetRuntimeDBPragmas: the runtime handle is WAL with synchronous NORMAL
+// and a 5 s busy timeout, so a commit holds the write lock without an fsync and
+// never starves a second connection under a slow fsync (windows). A rollback
+// journal or a full sync makes this red on every OS.
+func TestFleetRuntimeDBPragmas(t *testing.T) {
+	g := newResRig(t)
+	for pragma, want := range map[string]string{"journal_mode": "wal", "synchronous": "1", "busy_timeout": "5000"} {
+		var got string
+		if err := g.rt.JobsDB().QueryRow("PRAGMA " + pragma).Scan(&got); err != nil || got != want {
+			t.Errorf("PRAGMA %s = %q, %v; want %q", pragma, got, err, want)
+		}
+	}
+}

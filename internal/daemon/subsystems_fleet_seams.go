@@ -250,3 +250,19 @@ func otherDaemonLive(pidPath string, prober ProcessProber, self int) (bool, erro
 	}
 	return classifyPID(rec, ok, prober) == livenessRunning, nil
 }
+
+// jobsDBQuery is the runtime handle's DSN: IMMEDIATE transactions waiting under
+// busy_timeout, WAL like the providers/sqlite driver on the same file, and
+// synchronous=NORMAL. A lease transaction holds the write lock from BEGIN to
+// COMMIT; with a full sync that is several fsyncs, so back-to-back transactions
+// kept the lock nearly always held and SQLite's polling busy handler starved a
+// second connection past busy_timeout once fsync is slow (SQLITE_BUSY on
+// windows; WAL alone did not cure it, NORMAL did). In WAL, NORMAL appends the
+// commit without an fsync (the checkpoint syncs). DURABILITY: a process crash
+// loses nothing and the file is never corrupted, but an OS crash or power cut
+// can lose the last commits on this handle (leases, reservations, jobs and
+// outbox rows); the start sweep only settles rows that survived and does not
+// recover lost ones. This is a deliberate exception to the driver's pinned
+// synchronous=FULL on the same file (providers/sqlite/README.md), recorded in
+// the P1-CI-22 evidence for a ruling.
+const jobsDBQuery = "_busy_timeout=5000&_txlock=immediate&_journal_mode=WAL&_synchronous=NORMAL"
