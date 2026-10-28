@@ -32,6 +32,7 @@ sessions hidden=true aliases=
 status hidden=false aliases=
 sync hidden=false aliases=
 top hidden=true aliases=
+uninstall hidden=false aliases=
 vault hidden=false aliases=
 version hidden=false aliases=
 what hidden=true aliases=

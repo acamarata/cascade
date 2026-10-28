@@ -34,6 +34,7 @@ Available Commands:
   self-update    Update cascade to the latest signed release
   status         One-shot summary of the running daemon
   sync           Replicate domains between this device and its peers
+  uninstall      Remove every Cascade-owned item from this machine
   vault          Store and retrieve secrets in the platform keychain
   version        Print the cascade version, commit, build date, and install channel
   widget         Install and inspect the macOS menu-bar widget

@@ -111,6 +111,7 @@
   "internal/testkit": { "tier": "core", "floor": 85.0, "baseline": 100.0 },
   "internal/tools/promotion": { "tier": "core", "floor": 85.0, "baseline": 87.7 },
   "internal/tools/registry-gen": { "tier": "core", "floor": 85.0, "baseline": 95.0 },
+  "internal/uninstall": { "tier": "core", "floor": 85.0, "baseline": 91.1 },
   "internal/update": { "tier": "core", "floor": 85.0, "baseline": 87.0 },
   "plugins/cascade-pa": { "tier": "plugins", "floor": 80.0, "baseline": 92.5 },
   "plugins/cascade-pa/cmd": { "tier": "plugins", "floor": 80.0, "baseline": 81.9 },

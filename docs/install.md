@@ -121,6 +121,22 @@ Homebrew and OCI installs are updated by their own tool, and a node-managed
 install by its controller; `self-update` says so and changes nothing. Details:
 [`cli-reference/self-update.md`](cli-reference/self-update.md).
 
+## Uninstalling
+
+```sh
+cascade uninstall --dry-run   # list every item, remove nothing
+cascade uninstall             # print the plan, confirm, remove install items
+cascade uninstall --purge-data   # also the data dir, config and elevation key (elevated)
+```
+
+The default run removes the service units, plugins (through their teardown
+hooks), the vault entries Cascade indexed, the receipt-listed executables whose
+sha256 still matches, and the receipt. Config and data stay. Backups are never
+touched, with or without `--purge-data`. A file that changed since install is
+kept and named, with the remedy: rerun `install.sh`, then `cascade uninstall`.
+Homebrew installs keep the binary (`brew uninstall cascade`). Details:
+[`cli-reference/uninstall.md`](cli-reference/uninstall.md).
+
 ## Verifying a release by hand
 
 The release public key is published out of band, in two places:
