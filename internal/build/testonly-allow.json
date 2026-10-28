@@ -688,13 +688,6 @@
     "symbol": "internal/policy.ExecutionID"
   },
   {
-    "caller_site": "internal/policy/ingress_authorize.go",
-    "expected_caller": "the ingress that parses an AUTHORIZE token, alongside the composition root that builds the policy engine",
-    "reason": "The same-turn authorization ledger. It is fed by the AUTHORIZE token parser at the command ingress, which this ticket explicitly does not build, and it is attached to the policy engine, which has no shipping caller yet. NewEngine attaches NoSameTurnAuth in the meantime, which authorizes nothing and is fully wired. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/policy.NewSameTurnLedger"
-  },
-  {
     "caller_site": "internal/policy/evaluate.go",
     "expected_caller": "the policy evaluation engine (04 §Epic I S-17.T2) and the first path that carries a corpus record beyond its owning scope",
     "reason": "The TEAM carrier from P1-E09-W2-S17-T1. Its consumers are the policy evaluation engine and the sharing paths that carry a corpus record to the team; both are later tickets. Building the authorization rule before the callers that need it is the right order — leaving it unwired once a sharing path exists would not be.",
@@ -1388,36 +1381,6 @@
     "symbol": "internal/fleet/capacity.AgentLaneSlots"
   },
   {
-    "added_by_ticket": "P1-SEC-00",
-    "caller_site": "cmd/cascade/doctor_mounts_security.go",
-    "expected_caller": "newElevationCustodyDoctorCheck calls CustodyReport when mounting the elevation_custody check",
-    "reason": "Read-only custody report is implemented here; the security doctor mount is owned by the following ticket.",
-    "retire_ticket": "P1-SEC-12",
-    "symbol": "internal/elevation.CustodyReport"
-  },
-  {
-    "added_by_ticket": "P1-SEC-18",
-    "caller_site": "cmd/cascade/doctor_mounts_security.go",
-    "expected_caller": "newCallerPrincipalDoctorCheck reads the minter status and reports the caller-principal threat model.",
-    "reason": "The principal doctor consumer lands separately.",
-    "retire_ticket": "P1-SEC-12",
-    "symbol": "internal/principal.Status"
-  },
-  {
-    "caller_site": "cmd/cascade/doctor_mounts_security.go",
-    "expected_caller": "The egress audit-only doctor check lists each class with its reason.",
-    "reason": "The audit inventory is consumed by the separately owned doctor mount.",
-    "retire_ticket": "P1-SEC-12",
-    "symbol": "internal/hooks/egress.AuditOnly"
-  },
-  {
-    "caller_site": "cmd/cascade/doctor_mounts_security.go",
-    "expected_caller": "The egress audit-only doctor check enumerates the sorted classes.",
-    "reason": "The audit inventory is consumed by the separately owned doctor mount.",
-    "retire_ticket": "P1-SEC-12",
-    "symbol": "internal/hooks/egress.AuditOnlyClasses"
-  },
-  {
     "added_by_ticket": "P1-SEC-15",
     "caller_site": "internal/rpc/ownertest_shipping_caller.go",
     "expected_caller": "none: a test-only owner override that takes a *testing.T. caller_site names a file that must never exist; a non-test caller anywhere makes this row stale and fails the test-only gate.",
@@ -1590,5 +1553,21 @@
     "reason": "ProvisionElevated's process branch used to launch every process install as TrustTierUntrusted to prove the refusal. Trust is now granted from a witnessed plugin.add (grantProcessTrust) and nothing is launched at install time, so the constant has no production reference until the trusted launcher lands.",
     "retire_ticket": "P1-PLG-03",
     "symbol": "internal/plugins/process.TrustTierUntrusted"
+  },
+  {
+    "added_by_ticket": "P1-SEC-00",
+    "caller_site": "cmd/cascade/doctor_custody_report_caller.go",
+    "expected_caller": "none: caller_site names a file that must never exist. The elevation_custody doctor check reports the tier from elevation.SelectCustody and asks elevation.BoundTrust for the bound fingerprint, because CustodyReport needs an elevation.Selector literal and a trust Backend, which TestNoSelectorLiteralOutsideElevation and TestProductionTrustStoresAreBound forbid outside internal/elevation. A non-test caller makes this row stale.",
+    "reason": "CustodyReport is implemented and tested in internal/elevation; no cmd/cascade code can pass it its inputs under the source-ranked custody guards, so the doctor check re-expresses it over SelectCustody and BoundTrust. The row is reviewed again at phase exit: either route the doctor through a guard-approved elevation constructor or delete CustodyReport.",
+    "retire_ticket": "P1-EXIT-07",
+    "symbol": "internal/elevation.CustodyReport"
+  },
+  {
+    "added_by_ticket": "P1-SEC-18",
+    "caller_site": "cmd/cascade/doctor_principal_status_caller.go",
+    "expected_caller": "none: caller_site names a file that must never exist. The caller_principal doctor check states the ADR-0006 threat model only and reports no credential counts, because principal credentials live only in the issuing daemon's memory and the doctor process cannot read them. A non-test caller makes this row stale.",
+    "reason": "principal.Status is implemented and tested for a consumer inside the daemon process; a CLI doctor run holds no minter, so any call from it would be a fake caller. The row is reviewed again at phase exit: expose a daemon status source that carries the counts (P2), or delete Status.",
+    "retire_ticket": "P1-EXIT-07",
+    "symbol": "internal/principal.Status"
   }
 ]
