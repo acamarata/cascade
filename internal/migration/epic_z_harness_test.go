@@ -112,6 +112,14 @@ func epicDoctorReport(data []byte, rc int) error {
 			switch entry.Name {
 			case "completion-gate-hooks", "hook-events", "provider_health", "subsystem_census":
 				warnings++
+			case "elevation_custody":
+				// P1-SEC-12 contract: an unenrolled host warns and says elevated
+				// verbs refuse. This sealed machine never enrols, so only that
+				// refusal form is expected; any other custody warning is not.
+				if !strings.Contains(entry.Result.Message, "elevated verbs refuse") {
+					return fmt.Errorf("unexpected elevation_custody warning: %s", entry.Result.Message)
+				}
+				warnings++
 			default:
 				return fmt.Errorf("unexpected doctor warning: %s", entry.Name)
 			}

@@ -1,0 +1,133 @@
+package main
+
+import (
+	"encoding/json"
+	"maps"
+
+	"example.com/fixture/internal/runtime"
+)
+
+// Each function below reads a guarded key in a shape the gate must not treat as modeled.
+
+// compared: a comparison is not a nil check.
+func compared(cfg *runtime.Config) bool {
+	return cfg.Extra["nodes"].(map[string]interface{})["allow_remote"] == true
+}
+
+func tbl(m map[string]interface{}, k string) map[string]interface{} {
+	t, _ := m[k].(map[string]interface{})
+	return t
+}
+
+// throughHelper indexes a helper call's result directly.
+func throughHelper(cfg *runtime.Config) interface{} {
+	return tbl(cfg.Extra, "nodes")["allow_remote"]
+}
+
+// packageLiteral is a func literal outside any function declaration.
+var packageLiteral = func(cfg *runtime.Config) interface{} {
+	return cfg.Extra["nodes"].(map[string]interface{})["tier"]
+}
+
+// marshaled hands the section to encoding/json, which the Extract also calls.
+func marshaled(cfg *runtime.Config) []byte {
+	b, _ := json.Marshal(cfg.Extra["nodes"])
+	return b
+}
+
+// localName names the section through a local holding a constant.
+func localName(cfg *runtime.Config) interface{} {
+	sec := "nodes"
+	return cfg.Extra[sec]
+}
+
+func countKeys(v interface{}) int { m, _ := v.(map[string]interface{}); return len(m) }
+
+// parentTable hands the whole [agents] table to a helper no family registers.
+func parentTable(cfg *runtime.Config) int {
+	return countKeys(cfg.Extra["agents"])
+}
+
+// aliasRange ranges over the tree through a local.
+func aliasRange(cfg *runtime.Config) int {
+	x, n := cfg.Extra, 0
+	for range x {
+		n++
+	}
+	return n
+}
+
+// marshaledTree hands the whole tree to encoding/json.
+func marshaledTree(cfg *runtime.Config) []byte {
+	b, _ := json.Marshal(cfg.Extra)
+	return b
+}
+
+// rangedAll ranges over the tree through a stdlib iterator.
+func rangedAll(cfg *runtime.Config) bool {
+	for k, v := range maps.All(cfg.Extra) {
+		if k == "nodes" {
+			b, _ := v.(map[string]interface{})["allow_remote"].(bool)
+			return b
+		}
+	}
+	return false
+}
+
+// The tree laundered through a module wrapper that marshals or ranges it.
+func dumpTree(m map[string]interface{}) []byte { b, _ := json.Marshal(m); return b }
+
+func wrappedDump(cfg *runtime.Config) []byte { return dumpTree(cfg.Extra) }
+
+func countTree(m map[string]interface{}) (n int) {
+	for range m {
+		n++
+	}
+	return n
+}
+
+func wrappedRange(cfg *runtime.Config) int { return countTree(cfg.Extra) }
+
+func passN(n int) int { return n }
+
+// nestedStdlib hands the tree to a stdlib call wrapped in a module one.
+func nestedStdlib(cfg *runtime.Config) int { return passN(len(maps.Collect(maps.All(cfg.Extra)))) }
+
+// sameLine hides an unsafe use behind a safe one on the same line.
+func sameLine(cfg *runtime.Config) ([]byte, error) {
+	return json.Marshal(map[string]interface{}{"all": cfg.Extra, "has": cfg.Extra["x"] != nil})
+}
+
+// computedKey names the section at run time.
+func computedKey(cfg *runtime.Config, s string) interface{} { return cfg.Extra[s] }
+
+// dumpSection looks like a section helper but marshals the whole tree.
+func dumpSection(m map[string]interface{}, name string) []byte { b, _ := json.Marshal(m); return b }
+
+func viaHelper(cfg *runtime.Config) []byte { return dumpSection(cfg.Extra, "nodes") }
+
+type box struct{}
+
+func (box) pick(leak, safe map[string]interface{}) []byte {
+	_ = safe["x"]
+	b, _ := json.Marshal(leak)
+	return b
+}
+
+// methodExpr passes the tree as the method's first parameter (argument 1).
+func methodExpr(cfg *runtime.Config) []byte { return box.pick(box{}, cfg.Extra, nil) }
+
+// rangeKey and pointerKey rewrite a key local after its constant start.
+func rangeKey(cfg *runtime.Config) (v interface{}) {
+	k := "x"
+	for _, k = range []string{"nodes"} {
+	}
+	return cfg.Extra[k]
+}
+
+func pointerKey(cfg *runtime.Config) interface{} {
+	k := "x"
+	p := &k
+	*p = "nodes"
+	return cfg.Extra[k]
+}

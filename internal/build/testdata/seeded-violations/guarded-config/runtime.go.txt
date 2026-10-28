@@ -1,0 +1,12 @@
+// Package runtime stands in for internal/runtime: the gate matches the
+// Config and GuardedFamily type names in a package ending internal/runtime.
+package runtime
+
+type Config struct{ Extra map[string]interface{} }
+
+type GuardedFamily struct {
+	Section string
+	Extract func(extra map[string]interface{}) ([]byte, error)
+}
+
+func RegisterGuardedFamily(GuardedFamily) {}

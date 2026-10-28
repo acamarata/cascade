@@ -146,6 +146,27 @@ func TestEpicZDoctorOutcomes(t *testing.T) {
 		}
 	}
 	testEpicZDoctorCustody(t)
+	testEpicZDoctorElevationCustody(t)
+}
+
+// testEpicZDoctorElevationCustody pins that only the unenrolled refusal
+// form of elevation_custody passes the post-check.
+func testEpicZDoctorElevationCustody(t *testing.T) {
+	t.Helper()
+	for _, tc := range []struct {
+		message   string
+		wantError bool
+	}{
+		{"tier=none: no protected source available; elevated verbs refuse", false},
+		{"tier=platform (source platform) but no enrolled key is bound to it: x; elevated verbs refuse", false},
+		{"tier=presence (source presence): weaker than hardware custody. The enrolled fingerprint a differs from the last audited enrolment b.", true},
+		{"", true},
+	} {
+		data := fmt.Appendf(nil, `{"data":{"entries":[{"name":"elevation_custody","result":{"status":"warn","message":%q}},{"name":"secrets/keychain-reachable","result":{"status":"ok","message":"custody backend file-vault"}}]}}`, tc.message)
+		if err := epicDoctorReport(data, 5); (err != nil) != tc.wantError {
+			t.Errorf("elevation_custody %q: error=%v wantError=%t", tc.message, err, tc.wantError)
+		}
+	}
 }
 
 func testEpicZDoctorCustody(t *testing.T) {

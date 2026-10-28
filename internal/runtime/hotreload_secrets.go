@@ -191,10 +191,16 @@ func (hr *HotReloader) applySecrets(ctx context.Context, old, candidate *Config)
 // families use here would be refused by DetectionConfig.Validate, so absent
 // stands for the default.
 func restrictiveSecrets(onDisk SecretsSection) SecretsSection {
-	return SecretsSection{
+	out := SecretsSection{
 		EntropyFloor:        tighterThanDefault(onDisk.EntropyFloor, DefaultSecretsEntropyFloor),
 		ConfidenceThreshold: tighterThanDefault(onDisk.ConfidenceThreshold, DefaultSecretsConfidenceThreshold),
 	}
+	// A clipboard_ttl shorter than the default stays (a shorter TTL is tighter).
+	if t := onDisk.ClipboardTTL; t != nil && *t < DefaultSecretsClipboardTTL {
+		v := *t
+		out.ClipboardTTL = &v
+	}
+	return out
 }
 
 func tighterThanDefault(p *float64, def float64) *float64 {

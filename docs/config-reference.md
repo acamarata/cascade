@@ -138,6 +138,44 @@ started by a file change or by SIGHUP never carry it, so they keep refusing
 the loosening. A file swapped after the digest check does not match the
 approval and is refused.
 
+## Guarded families: keys that need attestation to loosen
+
+Every key a production decoder reads from a guarded section is modeled in the
+baseline. Loosening any of them is refused on hot reload (`ElevationRequired`)
+and, at restart, runs the degraded value (`baseline_divergent`) until
+`config.accept_loosening` admits the file. A tightening applies at once. An
+absent key is the shipped default; a value its decoder refuses is never read
+as a tightening.
+
+| Family | Keys | A loosening is |
+|---|---|---|
+| `[policy]` | `allow`, `ask`, `deny`, `auto_advance_ceiling`, `approval_batch_window_s`, `approval_batch_cap`, `risk_gates` | an `allow` entry added, any `ask` change, a `deny` entry removed, a higher ceiling (`disabled` < `tier1` < `tier2` < `tier3`), any batching change, a risk gate step removed |
+| `[nodes]` | `default_trust_tier`, `known_hosts_path`, `scan_lan`, `discovery_networks`, `dispatch_repo_root`, `dispatch_remote`, `travel` | `scan_lan` turned on, a discovery network added, any other change |
+| `[conductor]` | `restricted_external_lanes`, `[conductor.quota]` | a lane added; a lane `ceiling` removed or raised (adding or lowering one tightens); any other quota change |
+| `[agents.egress.<driver>]` | `allow` | a destination added |
+| `[agents.auth.<harness>]` | `class`, `key_env`, `auth_source` | a harness table added, or a value set or changed (removing one tightens) |
+| `[agents.lanes.<lane>]` | `posture` | any change |
+| `[retrieval.embedding]` | `local_socket` | setting or changing it (unsetting tightens) |
+| `[secrets]` | `clipboard_ttl` | a longer TTL (default `30s`) |
+
+The keys of `[policy]`, `[nodes]`, `[conductor]`, `[retrieval.embedding]`
+and the two `[secrets]` thresholds are known to `cascade config set`; tables
+keyed by driver, harness or lane are edited in the file. A degraded boot runs,
+per key, the tighter of the shipped default and the file's value, and writes
+that value back into the configuration the daemon's consumers read. It runs
+the `strict` profile, keeps every `deny` entry, every lane `ceiling`, and the
+`ask` entries at levels `strict` does not deny (`L0` to `L2`). A key whose
+values have no tighter order (a path, a remote, a posture) runs its default.
+
+**Upgrade note.** A config accepted before these keys were modeled that
+already holds a non-default value for one of them boots degraded once after
+the upgrade, until `config.accept_loosening` accepts it again. This fails
+closed. A config whose newly modeled keys are all at their defaults keeps its
+baseline (`baseline_ok`).
+
+A build gate (`TestGuardedConfigGate_RealTreeGreen`) fails when a decoder
+reads a guarded section that no family models.
+
 ## `[secrets]` thresholds on reload
 
 ```toml

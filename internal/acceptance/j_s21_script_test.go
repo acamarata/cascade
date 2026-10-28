@@ -157,5 +157,5 @@ func runCompatSubDrill(t *testing.T, target compatSubTarget) {
 		drillDispatch(t, d)
 	}
 	drillUsage(t, d, granted)
-	drillDoctor(t, d)
+	drillDoctor(t, d, granted)
 }

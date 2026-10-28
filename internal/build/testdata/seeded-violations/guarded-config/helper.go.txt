@@ -1,0 +1,21 @@
+package main
+
+import "example.com/fixture/internal/runtime"
+
+const conductorSection = "conductor"
+
+func lookup(m map[string]interface{}, key string) interface{} { return m[key] }
+
+// spillOn reads [conductor] through a helper and a const section name.
+func spillOn(cfg *runtime.Config) interface{} {
+	return lookup(cfg.Extra, conductorSection)
+}
+
+// everything ranges over the whole tree.
+func everything(cfg *runtime.Config) int {
+	n := 0
+	for range cfg.Extra {
+		n++
+	}
+	return n
+}

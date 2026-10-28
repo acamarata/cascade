@@ -146,11 +146,24 @@ func drillUsage(t *testing.T, d drillEnv, expectRows bool) {
 }
 
 // drillDoctor is step 6: the health check reads the same registry.
-func drillDoctor(t *testing.T, d drillEnv) {
+//
+// granted is step 3's verdict. P1-SEC-12's elevation_custody check is
+// contracted to WARN whenever elevated verbs cannot run here ("none warn
+// with the reason"; the retired file tier and an unbound platform key say
+// "elevated verbs refuse" too) and always on the presence tier ("weaker
+// than hardware"). That WARN is doctor agreeing with step 3's boundary, so
+// it is the one problem the drill accepts; a refusal form only when step 3
+// could not elevate. Any other WARN or ERROR still fails the drill.
+func drillDoctor(t *testing.T, d drillEnv, granted bool) {
 	t.Helper()
 	out, err := d.run(t, "doctor")
 	if err != nil {
-		t.Fatalf("`cascade doctor` did not exit 0:\n%s", out)
+		problems := doctorProblems(out)
+		if len(problems) != 1 || !custodyBoundary(problems[0], granted) || !strings.Contains(out, "(outcome warn)") {
+			t.Fatalf("`cascade doctor` did not exit 0 for a reason other than the elevation boundary "+
+				"(step 3 granted=%v):\n%s", granted, out)
+		}
+		t.Logf("doctor's only problem is the elevation custody boundary: %s", problems[0])
 	}
 	line := ""
 	for _, l := range strings.Split(out, "\n") {
@@ -167,6 +180,40 @@ func drillDoctor(t *testing.T, d drillEnv) {
 	if !strings.Contains(line, "healthy") {
 		t.Errorf("provider_health passed without reporting a healthy provider: %s", strings.TrimSpace(line))
 	}
+}
+
+// doctorProblems returns the report lines whose status is not OK.
+func doctorProblems(out string) []string {
+	var problems []string
+	for _, l := range strings.Split(out, "\n") {
+		if f := strings.Fields(l); len(f) >= 2 && (f[0] == "WARN" || f[0] == "ERROR" || f[0] == "?") {
+			problems = append(problems, strings.TrimSpace(l))
+		}
+	}
+	return problems
+}
+
+// custodyBoundary reports whether line is one of elevation_custody's
+// contracted WARN forms: the presence residual on any host, or a refusal
+// form only on a host where step 3 could not elevate.
+//
+// The presence residual is the one presence line that ends in
+// "fingerprint=<fp>"; the presence lines for an unbound key, a changed or
+// re-enrolled fingerprint or an unreadable audit history do not, so they
+// still fail. The file tier never satisfies elevation here because
+// buildCascade builds without the devkeys tag, so a successful grant
+// beside a refusal form is a contradiction, not a boundary. If BF-383 is
+// ruled toward "an unenrolled clean machine exits 0", drop the refusal
+// forms from this tolerance.
+func custodyBoundary(line string, granted bool) bool {
+	f := strings.Fields(line)
+	if len(f) < 3 || f[0] != "WARN" || f[1] != "elevation_custody" {
+		return false
+	}
+	if strings.HasPrefix(f[2], "tier=presence") {
+		return strings.HasPrefix(f[len(f)-1], "fingerprint=")
+	}
+	return !granted && strings.Contains(line, "elevated verbs refuse")
 }
 
 // jsonTail strips the leading warning lines a daemonless invocation

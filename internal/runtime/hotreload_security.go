@@ -1,42 +1,37 @@
 package runtime
 
-// Purpose: EffectiveConfig — the six-family guarded view of a resolved
+// Purpose: EffectiveConfig, the guarded view of a resolved config used by
 //
-//	config used by both the hot-reload engine's loosening gate and
-//	baseline.go's boot-time divergence hash — and CompareSecurity, the
-//	pure tightening-only classifier the ticket contract requires
-//	(§D-26/§D-27). Split out of hotreload.go per R-14.117/Art.10.3.
+//	the hot-reload loosening gate and the boot-time baseline hash, and
+//	CompareSecurity, the pure tightening-only classifier (§D-26/§D-27).
 //
 // Inputs: two EffectiveConfig values (current, the running snapshot;
 //
 //	proposed, freshly parsed from an edited config.toml).
 //
-// Outputs: []LooseningPath — empty iff proposed is no looser than current
+// Outputs: []LooseningPath, empty iff proposed is no looser than current in
 //
-//	across every guarded family; each element names the family, the
-//	dotted key, both values, and why it counts as looser.
+//	any guarded field or family; each names the family, the dotted key, both
+//	values, and why it counts as looser.
 //
-// Constraints: pure function, no I/O, no clock, no global state — every
+// Constraints: pure, no I/O, no clock. A field with no ratified order
 //
-//	ordering decision that has no ratified total order in the P1 planning
-//	corpus (autonomy_profile, trust_tier, secrets.keychain_backend
-//	identity, elevation.helper_pubkey identity) is treated conservatively:
-//	ANY change to that field is reported as a LooseningPath. This matches
-//	§D-27's W1 doctrine ("deny-by-default needs no policy engine") —
-//	under-specified is deny, never silently accept. Where the corpus DOES
-//	define an order (elevation.allow_remote: false is strictly tighter
-//	than true; sync domain class: local-only < synced < server-primary,
-//	00-VISION.md §sync), that order is used instead of the blanket rule.
+//	(autonomy_profile, trust_tier, keychain_backend, helper_pubkey) counts
+//	ANY change as loosening (§D-27 W1: under-specified is deny). Where the
+//	corpus defines an order (allow_remote false < true; sync local-only <
+//	synced < server-primary, 00-VISION §sync) that order is used. Registered
+//	guarded families (guarded_families.go) compare through their own rules.
 //
 // SPORT: runtime/hot-reload-engine (ADD, placeholder per T-8 sport_updates).
 
-// EffectiveConfig is the resolved view of the six 11-ROUND3-DELTAS.md
-// §D-26 guarded families, extracted from a *Config's typed sections
-// (Elevation) and its Extra map (everything else — this package types
-// only [runtime]/[elevation]/[logging]; policy/secrets/sync/nodes/
-// conductor are read here directly from Extra, exactly as Art.1 intends:
-// this ticket does not retroactively "own" those sections, it only reads
-// the specific guarded keys the loosening gate needs).
+import (
+	"encoding/json"
+	"time"
+)
+
+// EffectiveConfig is the resolved view of the §D-26 guarded sections: the
+// typed Elevation section, the guarded keys read from Extra, and the
+// registered families' values.
 type EffectiveConfig struct {
 	Policy    PolicySection
 	Secrets   SecretsSection
@@ -44,6 +39,9 @@ type EffectiveConfig struct {
 	Nodes     NodesSection
 	Conductor ConductorSection
 	Elevation elevationSection
+	// Families holds each registered guarded family's canonical value
+	// (guarded_families.go); a family at its shipped default is absent.
+	Families map[string]json.RawMessage `json:",omitempty"`
 }
 
 // PolicySection is the guarded slice of [policy] this ticket reads.
@@ -56,10 +54,7 @@ type PolicySection struct {
 
 // SecretsSection is the guarded slice of [secrets] this ticket reads.
 type SecretsSection struct {
-	// KeychainBackend is cold per 08 §3's [secrets] "mixed" row; treated
-	// as any-change-is-loosening for the same conservative-default reason
-	// as AutonomyProfile (backend identity has no ratified security
-	// ordering either).
+	// KeychainBackend has no ratified security ordering: any change loosens.
 	KeychainBackend string
 	// EntropyFloor and ConfidenceThreshold are the detector's thresholds.
 	// nil is the shipped default (an explicit default is normalised to nil),
@@ -67,6 +62,9 @@ type SecretsSection struct {
 	// and compare alike. A raise is a loosening (hotreload_secrets.go).
 	EntropyFloor        *float64 `json:",omitempty"`
 	ConfidenceThreshold *float64 `json:",omitempty"`
+	// ClipboardTTL is secrets.clipboard_ttl, nil at the shipped default; a
+	// raise is a loosening. SecretsClipboardTTL is its only reader.
+	ClipboardTTL *time.Duration `json:",omitempty"`
 }
 
 // SyncSection is the guarded per-domain sync-class map. Classes maps a
@@ -88,11 +86,8 @@ var syncClassRank = map[string]int{
 
 // NodesSection is the guarded slice of [nodes] this ticket reads.
 type NodesSection struct {
-	// TrustTier has a ratified enum (controller|worker-trusted|
-	// paired-device, 06-FORGE-SPEC §5 rule 22 / 10-ROUND2-DELTAS §D-11)
-	// but no ratified ordering of which tier is "looser" as a config
-	// default to expand toward — CompareSecurity treats any change as
-	// loosening, conservatively, pending Q/S-36.T1's fuller semantics.
+	// TrustTier's enum (06-FORGE-SPEC §5 rule 22) has no ratified order of
+	// looseness, so any change is treated as loosening.
 	TrustTier string
 }
 
@@ -126,6 +121,7 @@ func CompareSecurity(current, proposed EffectiveConfig) []LooseningPath {
 	paths = append(paths, compareAnyChange("secrets", "secrets.keychain_backend",
 		current.Secrets.KeychainBackend, proposed.Secrets.KeychainBackend)...)
 	paths = append(paths, compareSecretsThresholds(current.Secrets, proposed.Secrets)...)
+	paths = append(paths, compareClipboardTTL(current.Secrets.ClipboardTTL, proposed.Secrets.ClipboardTTL)...)
 	paths = append(paths, compareSyncClasses(current.Sync, proposed.Sync)...)
 	paths = append(paths, compareAnyChange("nodes", "nodes.trust_tier",
 		current.Nodes.TrustTier, proposed.Nodes.TrustTier)...)
@@ -137,7 +133,7 @@ func CompareSecurity(current, proposed EffectiveConfig) []LooseningPath {
 		current.Elevation.AllowRemote, proposed.Elevation.AllowRemote)...)
 	paths = append(paths, compareAnyChange("elevation", "elevation.helper_pubkey",
 		current.Elevation.HelperPubkey, proposed.Elevation.HelperPubkey)...)
-	return paths
+	return append(paths, compareFamilies(current.Families, proposed.Families)...)
 }
 
 // compareAnyChange implements the conservative "no ratified order: any
@@ -153,11 +149,9 @@ func compareAnyChange(family, key, current, proposed string) []LooseningPath {
 	}}
 }
 
-// compareBool implements true-is-looser-than-false, the ratified
-// direction for elevation.allow_remote (08 §[elevation]: "allow_remote =
-// false" is the safe default) and the reasonable reading of the
-// conductor external-routing/spill toggles (enabling either expands what
-// leaves the trust boundary).
+// compareBool implements true-is-looser-than-false: elevation.allow_remote
+// (08: false is the safe default) and the conductor external-routing/spill
+// toggles (enabling either expands what leaves the trust boundary).
 func compareBool(family, key string, current, proposed bool) []LooseningPath {
 	if !proposed || proposed == current {
 		return nil
@@ -212,11 +206,14 @@ func extractEffectiveConfig(cfg *Config) EffectiveConfig {
 	if cfg == nil {
 		return EffectiveConfig{Sync: SyncSection{Classes: map[string]string{}}}
 	}
+	secrets := secretsSectionAt(cfg.Extra)
+	secrets.ClipboardTTL = clipboardTTLAt(cfg.Extra)
 	return EffectiveConfig{
-		Policy:  PolicySection{AutonomyProfile: stringAt(cfg.Extra, "policy", "autonomy_profile")},
-		Secrets: secretsSectionAt(cfg.Extra),
-		Sync:    SyncSection{Classes: stringMapAt(cfg.Extra, "sync")},
-		Nodes:   NodesSection{TrustTier: stringAt(cfg.Extra, "nodes", "trust_tier")},
+		Policy:   PolicySection{AutonomyProfile: stringAt(cfg.Extra, "policy", "autonomy_profile")},
+		Secrets:  secrets,
+		Families: extractFamilies(cfg.Extra),
+		Sync:     SyncSection{Classes: stringMapAt(cfg.Extra, "sync")},
+		Nodes:    NodesSection{TrustTier: stringAt(cfg.Extra, "nodes", "trust_tier")},
 		Conductor: ConductorSection{
 			ExternalRoutingEnabled: boolAt(cfg.Extra, "conductor", "external_routing_enabled"),
 			SpillEnabled:           boolAt(cfg.Extra, "conductor", "spill_enabled"),
@@ -264,4 +261,39 @@ func stringMapAt(extra map[string]interface{}, section string) map[string]string
 		}
 	}
 	return out
+}
+
+// clipboardTTLAt reads secrets.clipboard_ttl, a duration string ("45s") or
+// whole seconds: nil when absent or the default, invalidClipboardTTL for
+// anything that is not a positive duration.
+func clipboardTTLAt(extra map[string]interface{}) *time.Duration {
+	raw, ok := sectionAt(extra, "secrets")["clipboard_ttl"]
+	if !ok {
+		return nil
+	}
+	d := invalidClipboardTTL
+	if v, isStr := raw.(string); isStr {
+		if p, err := time.ParseDuration(v); err == nil && p > 0 {
+			d = p
+		}
+	} else if v, isInt := raw.(int64); isInt && v > 0 && v <= int64(invalidClipboardTTL/time.Second) {
+		d = time.Duration(v) * time.Second
+	}
+	if d == DefaultSecretsClipboardTTL {
+		return nil
+	}
+	return &d
+}
+
+// applyClipboardTTL writes ttl into extra's [secrets] (nil removes the key).
+func applyClipboardTTL(extra map[string]interface{}, ttl *time.Duration) {
+	if sectionAt(extra, "secrets") == nil && ttl == nil {
+		return
+	}
+	sec := cloneSection(extra, "secrets")
+	delete(sec, "clipboard_ttl")
+	if ttl != nil {
+		sec["clipboard_ttl"] = ttl.String()
+	}
+	extra["secrets"] = sec
 }

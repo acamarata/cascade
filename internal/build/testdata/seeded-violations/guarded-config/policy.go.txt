@@ -1,0 +1,17 @@
+package policy
+
+const sectionKey = "policy"
+
+// ParseConfig is the registered [policy] decoder.
+func ParseConfig(tree map[string]interface{}) []string {
+	t, _ := tree[sectionKey].(map[string]interface{})
+	v, _ := t["allow"].([]string)
+	return v
+}
+
+// ParseBypass is a second decoder no family registers.
+func ParseBypass(tree map[string]interface{}) bool {
+	t, _ := tree["policy"].(map[string]interface{})
+	b, _ := t["bypass"].(bool)
+	return b
+}

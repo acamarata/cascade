@@ -62,10 +62,13 @@ func (b *BaselineChecker) LoosenedSinceBoot(accepted EffectiveConfig) []string {
 func EffectiveConfigOf(cfg *Config) EffectiveConfig { return extractEffectiveConfig(cfg) }
 
 // ApplyEffective writes eff's guarded values into cfg: the modeled keys of
-// [policy], [secrets], [sync], [nodes] and [conductor] in cfg.Extra, and
-// cfg.Elevation. Unmodeled keys are untouched. A string value of "" removes
-// its key (absent and empty read the same); booleans are always written,
-// so an absent key can never fall back to a looser consumer default.
+// [policy], [secrets] (keychain_backend, the two thresholds, clipboard_ttl),
+// [sync], [nodes] and [conductor] in cfg.Extra, every registered guarded
+// family's admitted value (a family absent from eff.Families is written at
+// its shipped default, removing its modeled keys), and cfg.Elevation.
+// Unmodeled keys are untouched. A string value of "" removes its key (absent
+// and empty read the same); booleans are always written, so an absent key
+// can never fall back to a looser consumer default.
 func ApplyEffective(cfg *Config, eff EffectiveConfig) {
 	if cfg == nil {
 		return
@@ -82,8 +85,11 @@ func ApplyEffective(cfg *Config, eff EffectiveConfig) {
 	conductor["spill_enabled"] = eff.Conductor.SpillEnabled
 	extra["conductor"] = conductor
 	applySyncClasses(extra, eff.Sync)
+	applyClipboardTTL(extra, eff.Secrets.ClipboardTTL)
+	applyGuardedFamilies(extra, eff.Families)
 	cfg.Extra = extra
 	cfg.Elevation = eff.Elevation
+	ApplySecretsThresholds(cfg, eff.Secrets)
 }
 
 // cloneSection returns a copy of extra[section] as a table (empty when
@@ -198,13 +204,17 @@ const (
 // "strict" and every [sync] domain onDisk names pinned to "local-only".
 // No guarded key ends up looser than onDisk's value, including under its
 // consumer's absent-key default. Domains onDisk does not name keep their
-// compiled class, exactly as onDisk would run them.
+// compiled class, exactly as onDisk would run them. The [secrets] values and
+// each guarded family take the tighter of the shipped default and onDisk's
+// value, so a degraded boot never loosens an operator's tighter setting.
 func RestrictiveFallback(onDisk EffectiveConfig) EffectiveConfig {
 	eff := MostRestrictiveDefaults()
 	eff.Policy.AutonomyProfile = restrictiveAutonomyProfile
 	for domain := range onDisk.Sync.Classes {
 		eff.Sync.Classes[domain] = restrictiveSyncClass
 	}
+	eff.Secrets = restrictiveSecrets(onDisk.Secrets)
+	eff.Families = restrictFamilies(onDisk.Families)
 	return eff
 }
 

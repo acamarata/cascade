@@ -1,0 +1,40 @@
+package main
+
+import (
+	"encoding/json"
+
+	"example.com/fixture/internal/policy"
+	"example.com/fixture/internal/runtime"
+)
+
+func extractPolicy(extra map[string]interface{}) ([]byte, error) {
+	_ = policy.ParseConfig(extra)
+	return nil, nil
+}
+
+func loadNodes(section map[string]interface{}) string { s, _ := section["tier"].(string); return s }
+
+func extractNodes(extra map[string]interface{}) ([]byte, error) {
+	section, _ := extra["nodes"].(map[string]interface{})
+	return json.Marshal(loadNodes(section))
+}
+
+func init() {
+	for _, f := range []runtime.GuardedFamily{
+		{Section: "policy", Extract: extractPolicy},
+		{Section: "nodes", Extract: extractNodes},
+	} {
+		runtime.RegisterGuardedFamily(f)
+	}
+}
+
+// dispatch hands the whole [nodes] section to the registered decoder: modeled.
+func dispatch(cfg *runtime.Config) string {
+	section, _ := cfg.Extra["nodes"].(map[string]interface{})
+	if section == nil {
+		return ""
+	}
+	return loadNodes(section)
+}
+
+func main() { _ = dispatch(nil); _ = policy.ParseBypass(nil) }

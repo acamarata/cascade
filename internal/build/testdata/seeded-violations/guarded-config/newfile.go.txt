@@ -1,0 +1,9 @@
+package main
+
+import "example.com/fixture/internal/runtime"
+
+// remoteAllowed reads a [nodes] key no family models.
+func remoteAllowed(cfg *runtime.Config) bool {
+	v, _ := cfg.Extra["nodes"].(map[string]any)["allow_remote"].(bool)
+	return v
+}
