@@ -106,6 +106,9 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	// `cascade github ci watch add` — informational (StatusOK) on every
 	// platform, since the refusal itself is specified behaviour.
 	reg.Register(ciTier2Check{goos: goruntime.GOOS})
+	// admission_signal (doctor_mounts_fleet.go): samples this host once and
+	// classifies it with the classifier daemon admission uses; local only.
+	reg.Register(newAdmissionSignalDoctorCheck(clock))
 	// Daemon-state checks (doctor_daemon_state.go), each answered from the
 	// one status.get the run asks for, and each a warning, never a pass,
 	// when no daemon answers: the subsystem census, dropped hook events,

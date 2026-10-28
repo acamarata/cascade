@@ -90,6 +90,26 @@ disagree:
 The check is read-only and never changes the file's mode; the remediation
 text names the `chmod` to run.
 
+## `admission_signal`
+
+Reports which resource signal the daemon's admission controller decides
+on. The check samples this host itself (it never asks the daemon): two
+reads of the platform collector one sampler period apart, so a linux host
+has its CPU baseline and the second read is the sample. The sample is
+classified by the same rule admission applies, so doctor and the daemon
+cannot disagree:
+
+| Posture | Result |
+|---|---|
+| `swap+memory` (memory and swap totals) | OK, detail `posture=swap+memory` |
+| `memory-only` (no swap configured) | OK, detail `posture=memory-only` |
+| `no-signal` (no memory total) | error: `admission refuses every request on this host: no memory signal` |
+| sample failed, timed out, or is stale | error naming the cause |
+| Windows (no daemon admission) | OK, `skipped: no daemon admission on windows`, nothing sampled |
+
+The check never reports OK without a sample it took. It adds about one
+second to a doctor run.
+
 ## Security checks
 
 Six checks report the security posture. All are read-only: they open the
