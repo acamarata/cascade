@@ -507,14 +507,6 @@
     "symbol": "internal/jobs.RequireHumanApproval"
   },
   {
-    "caller_site": "internal/daemon/lease_composition.go",
-    "expected_caller": "the same daemon composition-root file that constructs the production LeaseManager (see internal/jobs.NewLeaseManager's entry); retire both together",
-    "reason": "P1-E29-W6-S59-T2 ships the release-on-terminal wiring seam (Store.SetTerminalHook plus this exported one-line installer, since LeaseManager.releaseAllForJob is unexported and Store cannot hold a *LeaseManager directly without an import cycle) and proves it end to end in TestWireLeaseReleaseInstallsHook, but calling it from the real daemon composition root is the same out-of-files_scope composition-root work NewLeaseManager's own entry above records.",
-    "retire_ticket": "cap:job-dag-leases",
-    "expires": "P1-EXIT-07",
-    "symbol": "internal/jobs.WireLeaseRelease"
-  },
-  {
     "caller_site": "internal/jobs/completion_gate.go",
     "expected_caller": "AC/S-60.T3's completion gate, or whichever ticket wires TemplateRegistry.By into the DAG assembler; retire this entry once it lands",
     "reason": "P1-E29-W6-S60-T2 ships the six typed job templates and TemplateRegistry, fully implemented and tested (each Resolve exercised directly), but the composition root that would build a real ExecutionDag by looking up a kind via TemplateRegistry.By and calling WithTemplateContext to supply its per-ticket id/footprint is AC/S-60.T3's completion gate, which does not exist yet -- explicitly out of this ticket's own scope.",
@@ -1175,35 +1167,6 @@
     "symbol": "internal/context.GitRemoteURL"
   },
   {
-    "added_by_ticket": "P1-SEC-13",
-    "caller_site": "cmd/cascade/guarded_extractors.go",
-    "expected_caller": "cmd/cascade/guarded_extractors.go, where the guarded extractors parse the operator allow lists from runtime.Config.Extra",
-    "reason": "contract:driver-egress-proxy ships the per-spawn proxy package complete and tested, but its consumer is the guarded extractors that P1-SEC-36 builds, which parse the operator allow lists; this ticket's write_scope forbids those files, so no shipping caller exists yet. ParseEgressAllowlists reads the cold [agents.egress.<driver-id>] tables from runtime.Config.Extra for them.",
-    "retire_ticket": "P1-SEC-36",
-    "symbol": "internal/providers/agents/egressproxy.ParseEgressAllowlists"
-  },
-  {
-    "caller_site": "internal/daemon/subsystems_fleet_reservation.go",
-    "expected_caller": "a new internal/jobs/scheduler_reserve.go, mirroring scheduler_admit.go's own file-per-concern split, which will hold the live *economics.Reserver once this ticket's wiring tasks land",
-    "reason": "P1-E41-W9-S79-T4 ships the full atomic-reservation pipeline (reserve.go/reserve_teardown.go) fully implemented and tested, including the partial-failure rollback and concurrency proofs, but this same ticket's own wiring work -- internal/jobs/scheduler_admit.go replacing its per-node Admit with economics.Reserve, and the internal/conductor ModelRequest.ReservationID / execute.go dispatch-door / fanout.go WithPermitFn changes -- was not completed in this pass. The construction call site therefore does not exist yet.",
-    "retire_ticket": "P1-CAP-10",
-    "symbol": "internal/fleet/economics.NewReserver"
-  },
-  {
-    "caller_site": "internal/daemon/subsystems_fleet_reservation.go",
-    "expected_caller": "a new internal/daemon/subsystems_reservation.go, mirroring the existing subsystems_scheduler.go/subsystems_worktree.go per-subsystem split, once P1-E41-W9-S79-T4's wiring tasks land",
-    "reason": "Same gap as NewReserver: the ReservationStore is fully implemented and tested over a real modernc-sqlite db, but the composition root that opens the jobs-domain database and constructs the live store (mirroring internal/jobs.NewStore's own daemon-start precedent) has not been wired yet.",
-    "retire_ticket": "P1-CAP-10",
-    "symbol": "internal/fleet/economics.NewReservationStore"
-  },
-  {
-    "caller_site": "internal/daemon/subsystems_fleet_reservation.go",
-    "expected_caller": "the same future internal/daemon/subsystems_reservation.go, beside ApplyJobsSchema's own registration",
-    "reason": "The jobs_reservation MigrationSet is fully implemented and tested (table creation, all four indexes, idempotent re-apply), but no composition root calls it yet because the daemon-start wiring is the same deferred portion of P1-E41-W9-S79-T4 noted on NewReservationStore.",
-    "retire_ticket": "P1-CAP-10",
-    "symbol": "internal/fleet/economics.ApplyReservationSchema"
-  },
-  {
     "caller_site": "cmd/cascade/daemon_unix_reservation.go",
     "expected_caller": "P2 route (R68): reader-ceiling / reservation inspect surface / rolling+batch admission dims",
     "reason": "Exported for a future composition root's reader-ceiling max(), matching topology.SchemaVersion's and jobs.SchemaVersion's own already-landed precedent (jobs.SchemaVersion carries an identical testonly-allow entry). No composition root computes that max yet.",
@@ -1405,14 +1368,6 @@
   {
     "added_by_ticket": "P1-AGT-02",
     "caller_site": "internal/providers/agents/spawn.go",
-    "expected_caller": "internal/providers/agents/spawn.go, the host shim that resolves a lane to its binding and driver factory and lists the bindings for the plugin-host surface; retire this entry once that file calls Bindings",
-    "reason": "P1-AGT-02 ships the read-only harness listing implemented and tested, but the shim that lists bindings to a caller (P1-AGT-03) and the plugin-host listing surface do not exist yet, so nothing in production calls Bindings. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists without the call.",
-    "retire_ticket": "P1-AGT-03",
-    "symbol": "internal/providers/agents.Bindings"
-  },
-  {
-    "added_by_ticket": "P1-AGT-02",
-    "caller_site": "internal/providers/agents/spawn.go",
     "expected_caller": "internal/providers/agents/spawn.go, the host shim that builds the Resolver from the plugin registry's presence callback and resolves a lane before every spawn; retire this entry once that file calls NewResolver",
     "reason": "P1-AGT-02 ships the lane resolver (unknown lane, absent plugin and no-fallback refusals) implemented and tested, but its only production caller is the host shim of P1-AGT-03.",
     "retire_ticket": "P1-AGT-03",
@@ -1433,14 +1388,6 @@
     "reason": "P1-AGT-14 ships the hook relay and RenderAgentHookPack implemented and tested (including a live run of the real harness through the driver). The only production caller is the host shim's Spawn order, which is P1-AGT-03 (spawn.go); until it lands nothing writes the relay entries into a pack. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
     "retire_ticket": "P1-AGT-03",
     "symbol": "internal/providers/agents.RenderAgentHookPack"
-  },
-  {
-    "added_by_ticket": "P1-AGT-15",
-    "caller_site": "internal/providers/agents/spawn.go",
-    "expected_caller": "internal/providers/agents/spawn.go, the host shim Spawn: parses the operator's [agents.auth.<harness>] tables into one DriverAuth per harness; retire this entry once that file calls it",
-    "reason": "P1-AGT-15 ships the driver credential inputs implemented and tested, but the host shim that composes them per driver spawn (P1-AGT-03) does not exist yet, so a call from production code now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists.",
-    "retire_ticket": "P1-AGT-03",
-    "symbol": "internal/providers/agents.ParseDriverAuth"
   },
   {
     "added_by_ticket": "P1-AGT-15",
@@ -1547,14 +1494,6 @@
     "symbol": "internal/plugins.SetExecutableDirForTest"
   },
   {
-    "added_by_ticket": "P1-PLG-10",
-    "caller_site": "internal/plugins/trusted_launch.go",
-    "expected_caller": "internal/plugins/trusted_launch.go, the trusted process launcher, which maps a record that is not TrustTrusted to process.TrustTierUntrusted before process.ProcessRuntime.Launch refuses it; retire this entry once that file references it",
-    "reason": "ProvisionElevated's process branch used to launch every process install as TrustTierUntrusted to prove the refusal. Trust is now granted from a witnessed plugin.add (grantProcessTrust) and nothing is launched at install time, so the constant has no production reference until the trusted launcher lands.",
-    "retire_ticket": "P1-PLG-03",
-    "symbol": "internal/plugins/process.TrustTierUntrusted"
-  },
-  {
     "added_by_ticket": "P1-SEC-00",
     "caller_site": "cmd/cascade/doctor_custody_report_caller.go",
     "expected_caller": "none: caller_site names a file that must never exist. The elevation_custody doctor check reports the tier from elevation.SelectCustody and asks elevation.BoundTrust for the bound fingerprint, because CustodyReport needs an elevation.Selector literal and a trust Backend, which TestNoSelectorLiteralOutsideElevation and TestProductionTrustStoresAreBound forbid outside internal/elevation. A non-test caller makes this row stale.",
@@ -1569,5 +1508,45 @@
     "reason": "principal.Status is implemented and tested for a consumer inside the daemon process; a CLI doctor run holds no minter, so any call from it would be a fake caller. The row is reviewed again at phase exit: expose a daemon status source that carries the counts (P2), or delete Status.",
     "retire_ticket": "P1-EXIT-07",
     "symbol": "internal/principal.Status"
+  },
+  {
+    "added_by_ticket": "P1-PLG-03",
+    "caller_site": "internal/plugins/process/hostserver.go",
+    "expected_caller": "internal/plugins/process/hostserver.go, which P1-PLG-08 routes host calls through; it compares the child's tier to process.TrustTierUntrusted before answering a host call; retire this entry once that file references it",
+    "reason": "P1-PLG-03's trusted launcher refuses an untrusted record before any launch (trustedRecord), so it never needs the untrusted constant; the first production reader is the host-call router. ORCHESTRATOR: confirm or repoint caller_site.",
+    "retire_ticket": "P1-PLG-08",
+    "symbol": "internal/plugins/process.TrustTierUntrusted"
+  },
+  {
+    "added_by_ticket": "P1-PLG-03",
+    "caller_site": "cmd/cascade/plugin_host_boundary.go",
+    "expected_caller": "cmd/cascade/plugin_host_boundary.go, the composition root that installs the host-call boundary factory for launched plugins; retire this entry once that file calls SetHostBoundary",
+    "reason": "P1-PLG-03 ships the hook that gives every launched child the host boundary factory's capability checker, implemented and tested; the host-call routing and the factory that calls SetHostBoundary are P1-PLG-08.",
+    "retire_ticket": "P1-PLG-08",
+    "symbol": "internal/plugins.SetHostBoundary"
+  },
+  {
+    "added_by_ticket": "P1-PLG-03",
+    "caller_site": "cmd/cascade/hooks_rehydrate.go",
+    "expected_caller": "cmd/cascade/hooks_rehydrate.go, which rehydrates secret-bearing params and wraps the plugin Call ctx with WithParamsDigest over the tagged form; retire this entry once that file references it",
+    "reason": "P1-PLG-03 ships the params-hash override on TrustedHandle.Call, implemented and tested (TestCallParamsDigestOverride, TestAuditSweepNoPlaintextHash); the rehydrating caller is P1-SUP-02.",
+    "retire_ticket": "P1-SUP-02",
+    "symbol": "internal/plugins.WithParamsDigest"
+  },
+  {
+    "added_by_ticket": "P1-SEC-36",
+    "caller_site": "cmd/cascade/embedder_compose.go",
+    "expected_caller": "cmd/cascade/embedder_compose.go, the embedder composition that reads local_socket from the ADMITTED effective config before it dials a sidecar; retire this entry once that file calls RetrievalEmbeddingLocalSocket",
+    "reason": "P1-SEC-36 models retrieval.embedding.local_socket in the [retrieval.embedding] guarded family and ships its only reader, tested end to end through the baseline, but the local embedding lane that dials the socket is P1-CPA-11 (embedder_compose.go), which depends on this ticket; nothing in production reads the key until then. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
+    "retire_ticket": "P1-CPA-11",
+    "symbol": "internal/runtime.RetrievalEmbeddingLocalSocket"
+  },
+  {
+    "added_by_ticket": "P1-SEC-36",
+    "caller_site": "cmd/cascade/vault_clipboard.go",
+    "expected_caller": "cmd/cascade/vault_clipboard.go, the vault --clipboard path that clears the clipboard after the admitted secrets.clipboard_ttl; retire this entry once that file calls SecretsClipboardTTL",
+    "reason": "P1-SEC-36 adds secrets.clipboard_ttl to the [secrets] guarded family (a raise needs attestation, a degraded boot keeps a tighter value) and ships its only reader, but the clipboard copy that consumes the TTL is P1-SEC-09, which depends on this ticket. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
+    "retire_ticket": "P1-SEC-09",
+    "symbol": "internal/runtime.SecretsClipboardTTL"
   }
 ]
