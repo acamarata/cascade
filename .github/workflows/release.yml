@@ -69,6 +69,7 @@ jobs:
   verify:
     name: goreleaser check + build (no secrets)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     env:
       CASCADE_STAGING_REMOTE: example-owner/example-repo
     steps:
@@ -108,6 +109,7 @@ jobs:
     name: goreleaser release --snapshot (signed, SBOM'd)
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     if: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/p1-integration' }}
     env:
       CASCADE_STAGING_REMOTE: example-owner/example-repo
@@ -194,6 +196,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-15]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     env:
       CASCADE_STAGING_REMOTE: example-owner/example-repo
     steps:
@@ -281,6 +284,7 @@ jobs:
     name: rc-publish (staging only)
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.record_json == '' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
@@ -403,6 +407,7 @@ jobs:
     name: promote (verified rc bytes to the public release)
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.record_json != '' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: write
       packages: write
