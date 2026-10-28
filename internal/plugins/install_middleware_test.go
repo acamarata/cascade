@@ -202,6 +202,7 @@ var grantsReaders = map[string]bool{
 	"internal/plugins/perms_rpc.go:PermsRPCHandler":                   true, // reports before and after
 	"internal/plugins/update_rpc.go:UpdateRPCHandler":                 true, // reports the committed set
 	"internal/plugins/registry.go:Grants":                             true, // BuiltinRegistry entries
+	"internal/plugins/intent_dispatch.go:enabledSet":                  true, // len(BuiltinRegistration.Grants) only: the enabled check, never process authority
 	"cmd/cascade/plugin.go:String":                                    true, // plugin info display
 	"cmd/cascade/plugin_add.go:runPluginAdd":                          true, // add result display
 	"cmd/cascade/plugin_rpc.go:pluginAddRPCHandler":                   true, // add result display

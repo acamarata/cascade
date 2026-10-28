@@ -1,7 +1,7 @@
 // Purpose: `cascade plugin add <ref> [--checksum <hash>]`. ref is a local
-// path to a cascade.plugin/v2 manifest — the contract's "registry hint"
-// half belongs to X/S-50 (`cascade plugin search`), explicitly out of
-// scope here per the contract's own first line.
+// path to a cascade.plugin/v2 manifest; a ref that names no file is an
+// intent ref routed by plugin_intent.go to the one plugin declaring the
+// install intent. A blank ref and any other Lstat failure refuse.
 //
 // Elevation: internal/plugins.AddPlugin decides whether the manifest needs
 // elevation (process-tier runtime, or a grant-expansion) and, when it does,
@@ -25,8 +25,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
+	"io/fs"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -52,6 +55,9 @@ func newPluginAddCmd(deps pluginDeps) *cobra.Command {
 }
 
 func runPluginAdd(cmd *cobra.Command, deps pluginDeps, ref, checksum string) error {
+	if routed, err := routeNonFileRef(cmd, deps, ref); routed {
+		return err
+	}
 	manifestBytes, err := os.ReadFile(ref)
 	if err != nil {
 		return cascade.Wrapf(cascade.KindInvalidInput, err, "cascade plugin add: read manifest %q", ref)
@@ -105,6 +111,24 @@ func runPluginAdd(cmd *cobra.Command, deps pluginDeps, ref, checksum string) err
 	default:
 		return cascade.Newf(cascade.KindInternal, "cascade plugin add: unrecognized outcome %d", res.Outcome)
 	}
+}
+
+// routeNonFileRef decides what a ref is before the manifest flow runs. A
+// blank ref refuses; a ref that names nothing on disk is an intent ref
+// (plugin_intent.go); any other Lstat failure refuses rather than guessing.
+// Lstat, so a dangling symlink is an existing path, not an intent. routed is
+// false only for an existing path, which keeps the manifest flow byte for byte.
+func routeNonFileRef(cmd *cobra.Command, deps pluginDeps, ref string) (routed bool, err error) {
+	if strings.TrimSpace(ref) == "" {
+		return true, cascade.New(cascade.KindInvalidInput, "cascade plugin add: the ref is empty; nothing was proposed or installed")
+	}
+	if _, statErr := os.Lstat(ref); statErr != nil {
+		if errors.Is(statErr, fs.ErrNotExist) {
+			return true, runPluginAddIntent(cmd, deps, ref)
+		}
+		return true, cascade.Wrapf(cascade.KindInvalidInput, statErr, "cascade plugin add: cannot stat %q; nothing was installed", ref)
+	}
+	return false, nil
 }
 
 // runPluginAddElevated displays the requested grant set and, unless

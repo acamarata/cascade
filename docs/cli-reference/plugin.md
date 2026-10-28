@@ -85,6 +85,50 @@ builtin catalog only, no error, nothing leaked.
 `cascade_<noun>_<verb>` mirror rule), gated by the `plugins.read` capability —
 a policy that denies it hides the tool from `tools/list` entirely.
 
+# `cascade plugin add <intent-ref>`
+
+```
+cascade plugin add <ref> [--checksum <hash>]
+```
+
+`<ref>` is read in this order:
+
+1. **An existing path** runs the manifest install exactly as before.
+2. **A ref that names no file** (for example `cascade plugin add "link my GitHub"`)
+   is an install intent. The whole ref becomes the intent text and is routed to
+   the one enabled plugin that declares the install intent (cascade-pa's install
+   flow). That flow resolves it, proposes a plugin and waits for confirmation
+   through the approval queue (`cascade approval grant|deny`). A dangling
+   symlink counts as an existing path, not an intent.
+3. **Any other `lstat` failure** (a path whose parent cannot be searched, a name
+   the platform rejects, such as `: ? * < > |` on Windows or an over-long name)
+   refuses with `cannot stat`. It is never guessed to be an intent. A blank ref
+   is refused too.
+
+Routing is fail-closed:
+
+- No enabled plugin declares the intent: `KindNotFound`, nothing runs.
+- More than one does: `KindConflict` naming every plugin id, nothing runs. The
+  dispatcher never picks one.
+- `CASCADE_NO_INPUT=1` refuses before routing, because the confirmation the flow
+  needs cannot be answered. Nothing is proposed or installed.
+
+With a daemon running, the CLI calls the owner-only `plugin.intent` RPC
+(`{"intent_name", "input"}` in, `{"result"}` out, the plugin's bytes unchanged).
+Without one, it routes in process over the binary's own builtin registry. The
+verb itself is not elevated. Any install the flow attempts goes through the
+flow's own confirmation and elevation, and an intent-driven install never makes
+a process-tier plugin trusted: that needs an elevated `cascade plugin add` of
+its manifest.
+
+Only this command and `plugin.intent` route intents. No chat turn, bridge
+message or conversation content reaches the dispatcher.
+
+The flow needs a verified registry index to find a plugin you do not have yet.
+A binary that has none refuses with `no verified registry index` and installs
+nothing. Without a daemon the flow can never complete an install either: its
+event record and the plugin store belong to the daemon.
+
 # `cascade plugin update`
 
 ```

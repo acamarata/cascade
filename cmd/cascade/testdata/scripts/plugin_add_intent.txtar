@@ -1,0 +1,31 @@
+# plugin_add_intent.txtar
+#
+# testscript: executable
+#
+# `cascade plugin add <ref>` with a ref that names no file routes the ref as
+# cascade-pa's install intent through the real builtin registry, with no
+# daemon. The runner drives the real root command in process. This binary's install flow has no verified registry index, so the
+# flow's resolver refuses there: reaching that refusal proves the route got
+# through the dispatcher and cascade-pa into Flow.RunIntent. Nothing is
+# proposed or installed. (The proposal itself, over the signed acceptance
+# fixture index, is TestPluginAddIntentRefRoutesToInstallFlow.)
+
+! exec cascade plugin add link-my-github
+stderr 'no verified registry index'
+! stdout 'installed'
+! exec cascade plugin info cascade-github
+stderr 'neither installed nor built into this binary'
+
+# CASCADE_NO_INPUT=1 refuses before any dispatch: the resolver never runs.
+env CASCADE_NO_INPUT=1
+! exec cascade plugin add link-my-github
+stderr 'CASCADE_NO_INPUT=1 forbids the confirmation it needs; nothing was proposed or installed'
+! stderr 'registry index'
+env CASCADE_NO_INPUT=
+
+# An existing manifest path keeps the manifest flow: the output below is the
+# HEAD output for this command, line for line.
+seed-plugin testdata/plugin_update_guards/demo-1.0.0.toml
+exec cascade plugin add testdata/plugin_update_guards/demo-1.0.0.toml
+stdout '^already installed at v1\.0\.0 \(update-guard-demo\)\n$'
+! stderr .
