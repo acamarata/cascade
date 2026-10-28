@@ -161,7 +161,7 @@ func runPluginUpdateFromRegistry(cmd *cobra.Command, deps pluginDeps, name strin
 	}
 
 	res, err := withElevatedPluginStore(ctx, deps, "plugin.update", func(ctx context.Context, store provider.Store) (plugins.UpdateResult, error) {
-		return plugins.UpdatePlugin(ctx, store, nil, nil, artifact, entry.Checksum, artifact, pluginDaemonAvailable(ctx))
+		return plugins.UpdatePlugin(ctx, store, nil, plugins.NewProcessHandshakerOver(store), artifact, entry.Checksum, artifact, pluginDaemonAvailable(ctx))
 	})
 	if isDaemonRequired(err, "update") {
 		return recordPluginRefusal(ctx, deps, plugins.UpdateRPCMethod, "daemon_required", err)

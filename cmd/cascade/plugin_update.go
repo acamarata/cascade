@@ -85,7 +85,7 @@ func runPluginUpdate(cmd *cobra.Command, deps pluginDeps, args []string, checksu
 		return runPluginUpdateElevated(cmd, deps, plugins.UpdateResult{Outcome: plugins.UpdateOutcomeElevationRequired, Manifest: m}, req)
 	}
 	res, err := withElevatedPluginStore(ctx, deps, "plugin.update", func(ctx context.Context, store provider.Store) (plugins.UpdateResult, error) {
-		return plugins.UpdatePlugin(ctx, store, nil, nil, manifestBytes, checksum, manifestBytes, false)
+		return plugins.UpdatePlugin(ctx, store, nil, plugins.NewProcessHandshakerOver(store), manifestBytes, checksum, manifestBytes, false)
 	})
 	if isDaemonRequired(err, "update") {
 		return recordPluginRefusal(ctx, deps, plugins.UpdateRPCMethod, "daemon_required", err)

@@ -128,7 +128,7 @@ func TestGitHubWikiSync_ProductionPathReachesTheHonestPrerequisite(t *testing.T)
 	if !cascade.HasKind(err, cascade.KindUnavailable) {
 		t.Fatalf("err = %v, want KindUnavailable", err)
 	}
-	for _, want := range []string{"cascade-github", "trust-elevation", "wiki.sync"} {
+	for _, want := range []string{"cascade-github", "cascade plugin add cascade-github", "wiki.sync"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("err = %q, want it to name %q", err.Error(), want)
 		}

@@ -473,6 +473,15 @@ an older ABI. If your toolchain does not let you export a plain i32
 global by that name, check its documentation for global-export support
 before assuming the ABI check itself is broken.
 
+**"My process plugin refuses to start."** A process plugin starts only
+after an owner-attested `cascade plugin add <id>`, and only while the
+executable beside `cascade` still matches the digest that add pinned. A
+refusal naming `cascade plugin add` means the record is missing, disabled
+or not trusted; one naming `--reverify` means the executable changed. The
+plugin's environment holds only `PATH`, `HOME`, `TMPDIR`, `LANG`, `LC_ALL`
+and `TZ` (and, for `cascade-github` holding `oauth:repo`, the GitHub token
+names), so read nothing else from it.
+
 **"My process plugin never gets past launch."** Check the handshake
 (§5) first: does your `cascade.hello_ack` response include a
 `protocol_version` that parses as strict `major.minor.patch`? A

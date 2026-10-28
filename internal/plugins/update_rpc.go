@@ -104,6 +104,9 @@ func applyAttestedUpdate(ctx context.Context, store provider.Store, hs ProcessHa
 	if err != nil {
 		return UpdateResult{}, err
 	}
+	if trust.Digest != "" {
+		ctx = withGrantedDigest(ctx, m.ID, trust.Digest) // the handshake runs only this executable
+	}
 	res, err := commitUpdate(ctx, store, hs, m, existing, trust, p.Checksum, "")
 	if err != nil {
 		return UpdateResult{}, err

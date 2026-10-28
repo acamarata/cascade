@@ -64,16 +64,35 @@ elevated `cascade plugin add` to pin the new executable.
 
 ## Limits
 
-- The executable digest is pinned at grant time. Recomputing and comparing it
-  at launch belongs to the process launcher, which does not exist yet; until
-  it does, no process plugin is launched at all.
+- The executable digest is pinned at grant time and checked again at every
+  launch. A process plugin starts only through `LaunchInstalled`
+  (`internal/plugins/trusted_launch.go`): the record must be enabled and
+  trusted, the sibling executable is resolved again (missing, not a regular
+  file, a symlink, or group/world-writable refuses), and its sha256 must equal
+  `exec_digest`. A mismatch is refused as policy-denied, naming
+  `cascade plugin update <id> --reverify`. A same-user process can still swap
+  the file between the hash and the exec, or before a crash respawn (which
+  runs the same path again without hashing it); that is not a boundary this
+  release claims.
+- The child's environment is a closed allowlist: `PATH`, `HOME`, `TMPDIR`,
+  `LANG`, `LC_ALL` and `TZ` when set, plus `CASCADE_GITHUB_TOKEN`,
+  `GITHUB_TOKEN` and `GH_TOKEN` for `cascade-github` only when its effective
+  grants hold `oauth:repo`. The principal token, the owner-CLI marker and
+  provider keys never reach a child.
+- Every launch and every call writes an effect intent before it runs and a
+  confirmed, failed or unknown-outcome record after. A recorder holds a lock
+  file under `<data dir>/plugin-effects/` for its whole life; when the effect
+  log is next opened, intents whose recorder is gone are marked
+  unknown-outcome and never re-run. A call whose params carry secret values
+  records a digest over their tagged form instead of a hash of the plaintext.
 - The daemon's plugin store is the trust root. A record is not signed, so a
   process that can write the daemon's database directly can forge one; the
   RPC surface cannot.
 - The executable's owner and its directory's permissions are not checked. The
   directory beside the `cascade` binary is trusted as installed; a user who
   can replace files there can already replace `cascade` itself.
-- The daemon's `plugin.update` has no process handshaker wired yet. An
-  elevated update of a process-tier plugin that passes the trust grant is
-  then refused as unavailable (the handshake cannot be confirmed) and writes
-  nothing.
+- An update of a process-tier plugin is confirmed by launching the candidate
+  through the same launcher and completing the handshake. Under an elevated
+  `plugin.update` the candidate must match the digest that update just
+  pinned; a non-elevated update must still match the stored digest. A failed
+  handshake rolls the update back and leaves the record unchanged.

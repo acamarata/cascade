@@ -2,60 +2,42 @@ package plugins
 
 // Purpose (this file): the PLUGIN-HOST CALL PATH bridge merge-on-green
 // dispatches cascade-github.prs.merge through (R-21.270): internal/ci may
-// not import internal/plugins/process (Art.10.2 -- internal/ci is core),
-// so this file, the one package allowed to import both plugins/** and
-// internal/**, is where ci.MergeCaller meets a real O/S-31.T3
-// process.Handle, exactly as ci_policy_wiring.go bridges internal/ci's
-// never-pay RouteResolver to plugins/github/cipolicy.
+// not import internal/plugins/process (Art.10.2 -- internal/ci is core), so
+// this file is where ci.MergeCaller meets a live, recorded TrustedHandle.
 //
-// Inputs: none at import time. Each call resolves the running
-// cascade-github process's Handle through the injected HandleProvider.
+// Inputs: none at import time. Each call launches cascade-github through the
+// injected HandleProvider (production: InstalledHandleProvider, i.e.
+// LaunchInstalled), calls it once, and closes it.
 //
 // Outputs: a ci.MergeCaller a composition root wires into
-// ci.MergeDeps.Caller (see waitmerge_merge.go's own doc comment for why
-// the interface, not a concrete type, crosses that boundary).
+// ci.MergeDeps.Caller, or the typed refusal naming
+// `cascade plugin add cascade-github` when no trusted record exists.
 //
-// Constraints (HONEST GAP, recorded rather than papered over): no code
-// path in this tree can produce a live process.Handle for cascade-github
-// today. dispatch.go's ProvisionElevated documents why: every process-tier
-// install evaluates through process.ProcessRuntime.Launch's real trust
-// gate, which always refuses process.TrustTierUntrusted before spawning
-// anything, and no ticket has added a mechanism to mark any manifest
-// trusted yet. noRunningPluginHandle is therefore the correct DEFAULT
-// HandleProvider today: a typed, actionable refusal naming the real reason,
-// never a fabricated Handle or a silent nil-returning success. A future
-// ticket that adds trust elevation and a live-Handle registry replaces
-// this default without changing ci.MergeCaller's shape at all.
+// Constraints: the launch, the call and their effect records are
+// trusted_launch.go's; this file never builds a process.Handle itself.
 //
-// SPORT: internal/plugins ci-waitmerge-wiring/ADDED (P1-E25-W5-S51-T3).
+// SPORT: internal/plugins ci-waitmerge-wiring (P1-E25-W5-S51-T3; live handle P1-PLG-03).
 
 import (
 	"context"
+	"time"
 
 	"github.com/acamarata/cascade/internal/ci"
-	"github.com/acamarata/cascade/internal/plugins/process"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// Compile-time proof that *process.Handle satisfies ci.MergeCaller with NO
-// adapter code: the two method sets are identical by construction (see
-// waitmerge_merge.go's header comment). If process.Handle.Call's signature
-// ever drifts from ci.MergeCaller's, this line -- not a runtime surprise --
-// is what breaks the build.
-var _ ci.MergeCaller = (*process.Handle)(nil)
+// A TrustedHandle satisfies ci.MergeCaller with no adapter code.
+var _ ci.MergeCaller = (*TrustedHandle)(nil)
 
-// cascadeGitHubPluginID is the manifest id this bridge resolves a live
-// Handle for.
+// cascadeGitHubPluginID is the manifest id this bridge launches.
 const cascadeGitHubPluginID = "cascade-github"
 
-// HandleProvider resolves the live process.Handle for a running
-// process-tier plugin, or a refusal when none is running.
-type HandleProvider func(ctx context.Context, pluginID string) (*process.Handle, error)
+// closeGrace bounds the Close a per-call caller runs after its call.
+const closeGrace = 10 * time.Second
 
-// NewGitHubMergeCaller returns a ci.MergeCaller that resolves
-// cascade-github's live Handle through provider on every call and
-// dispatches through its real stdio transport. Passing a nil provider
-// makes every call refuse rather than panic.
+// NewGitHubMergeCaller returns a ci.MergeCaller that launches cascade-github
+// through provider on every call, dispatches through its live transport and
+// closes it. A nil provider makes every call refuse rather than panic.
 func NewGitHubMergeCaller(provider HandleProvider) ci.MergeCaller {
 	return &githubMergeCaller{provider: provider}
 }
@@ -66,47 +48,58 @@ type githubMergeCaller struct {
 
 // Call implements ci.MergeCaller.
 func (c *githubMergeCaller) Call(ctx context.Context, method string, params []byte) ([]byte, error) {
-	if c.provider == nil {
-		return nil, cascade.New(cascade.KindInvalidInput, "plugins: the github merge caller has no HandleProvider")
+	return callOnce(ctx, c.provider, "merge", method, params)
+}
+
+// callOnce launches cascade-github through provider, makes one call, and
+// closes the handle whatever the call returned.
+func callOnce(ctx context.Context, provider HandleProvider, what, method string, params []byte) ([]byte, error) {
+	if provider == nil {
+		return nil, cascade.Newf(cascade.KindInvalidInput, "plugins: the github %s caller has no HandleProvider", what)
 	}
-	h, err := c.provider(ctx, cascadeGitHubPluginID)
+	h, err := provider(ctx, cascadeGitHubPluginID)
 	if err != nil {
 		return nil, err
 	}
 	if h == nil {
 		return nil, cascade.New(cascade.KindInternal, "plugins: the HandleProvider returned no Handle and no error")
 	}
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), closeGrace)
+		defer cancel()
+		_ = h.Close(closeCtx)
+	}()
 	return h.Call(ctx, method, params)
 }
 
+// mergeHandleProvider is the HandleProvider NewGitHubMergeCallerForHost
+// builds its caller over; a test may swap it (restoring it at cleanup).
+var mergeHandleProvider = InstalledHandleProvider()
+
 // NewGitHubMergeCallerForHost is the PRODUCTION entry point
-// cmd/cascade/github_ci_cmd.go builds merge-on-green's transport with
-// (P1-E25-W5-S51-T3, D1). It returns either a working ci.MergeCaller or the
-// unmet prerequisite that makes an unattended merge impossible today, as a
-// typed error naming that prerequisite -- never a caller that would refuse
-// later with a less specific message, and never a fabricated success.
-//
-// Today it always returns the refusal: the trust-elevation mechanism a
-// process-tier Launch needs does not exist (see this file's header comment
-// and internal/plugins/dispatch.go's ProvisionElevated). The day it does,
-// this function returns the real caller and nothing else on this path
-// changes.
+// cmd/cascade/github_ci_cmd.go builds merge-on-green's transport with. It
+// returns the caller when cascade-github is installed as an enabled, trusted
+// process plugin in the launch environment's store, and otherwise the typed
+// refusal naming `cascade plugin add cascade-github`. The check launches
+// nothing; the caller launches on each call.
 func NewGitHubMergeCallerForHost(ctx context.Context) (ci.MergeCaller, error) {
-	if _, err := noRunningPluginHandle(ctx, cascadeGitHubPluginID); err != nil {
-		return nil, cascade.Wrapf(cascade.KindUnavailable, err,
-			"plugins: `cascade github ci merge-on-green` needs a live %s process to dispatch prs.merge through, "+
-				"and this build has no trust-elevation path that can launch one. The elevated `plugin add` "+
-				"install flow that can mark a process-tier manifest trusted is P1-E24-W5-S50-T4's; until it "+
-				"lands, no process-tier plugin starts", cascadeGitHubPluginID)
+	if err := installedPrereq(ctx, "`cascade github ci merge-on-green` needs a live %s process to dispatch prs.merge through"); err != nil {
+		return nil, err
 	}
-	return NewGitHubMergeCaller(noRunningPluginHandle), nil
+	return NewGitHubMergeCaller(mergeHandleProvider), nil
 }
 
-// noRunningPluginHandle is the default HandleProvider (see this file's
-// header comment for why it refuses rather than launches anything).
-func noRunningPluginHandle(_ context.Context, pluginID string) (*process.Handle, error) {
-	return nil, cascade.Newf(cascade.KindUnavailable,
-		"plugins: no running %s process is registered with this host yet -- process-tier plugins have no "+
-			"trust-elevation/launch path in this build (see internal/plugins/dispatch.go's ProvisionElevated)",
-		pluginID)
+// installedPrereq refuses, naming `cascade plugin add cascade-github`, unless
+// the launch environment resolves and holds an enabled, trusted
+// cascade-github record. need is the caller's sentence (one %s: the id).
+func installedPrereq(ctx context.Context, need string) error {
+	env, err := ResolveLaunchEnv(ctx)
+	if err == nil {
+		_, err = trustedRecord(ctx, env, cascadeGitHubPluginID)
+	}
+	if err == nil {
+		return nil
+	}
+	return cascade.Wrapf(cascade.KindUnavailable, err, "plugins: "+need+
+		"; run `cascade plugin add %s` (an owner-attested add) first", cascadeGitHubPluginID, cascadeGitHubPluginID)
 }

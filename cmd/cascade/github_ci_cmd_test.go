@@ -112,7 +112,7 @@ func TestGitHubCIMergeOnGreenReturnsTheElevationPrerequisite(t *testing.T) {
 	if !cascade.HasKind(err, cascade.KindUnavailable) {
 		t.Fatalf("err = %v, want KindUnavailable", err)
 	}
-	for _, want := range []string{"merge-on-green", "cascade-github", "trust-elevation"} {
+	for _, want := range []string{"merge-on-green", "cascade-github", "cascade plugin add cascade-github"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("err = %q, want it to name %q", err.Error(), want)
 		}
