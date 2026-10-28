@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-27T22:05:37Z",
+  "generated_at": "2026-10-28T12:17:21Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2807,7 +2807,7 @@
       "sites": [
         {
           "file": "cmd/cascade/policy.go",
-          "line": 20,
+          "line": 21,
           "status": "ADD",
           "ticket": "P1-E09-W2-S18-T6",
           "raw": "cli/policy/ADD (P1-E09-W2-S18-T6)."
@@ -2815,6 +2815,34 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "cli/policy authorize",
+      "sites": [
+        {
+          "file": "cmd/cascade/policy_authorize.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "cli/policy authorize (ADD) -- P1-SEC-10."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cli/policy authorize tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/policy_authorize_test.go",
+          "line": 13,
+          "status": "",
+          "raw": "cli/policy authorize tests (P1-SEC-10)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -4560,6 +4588,50 @@
       ]
     },
     {
+      "name": "cmd/cascade doctor security mounts",
+      "sites": [
+        {
+          "file": "cmd/cascade/doctor_mounts_security.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "cmd/cascade doctor security mounts/ADDED (P1-SEC-12)."
+        },
+        {
+          "file": "cmd/cascade/doctor_mounts_security_audit.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "cmd/cascade doctor security mounts/ADDED (P1-SEC-12)."
+        },
+        {
+          "file": "cmd/cascade/doctor_mounts_security_audit_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "cmd/cascade doctor security mounts/ADDED (tests, P1-SEC-12)."
+        },
+        {
+          "file": "cmd/cascade/doctor_mounts_security_elevation_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "cmd/cascade doctor security mounts/ADDED (tests, P1-SEC-12)."
+        },
+        {
+          "file": "cmd/cascade/doctor_mounts_security_policy_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "cmd/cascade doctor security mounts/ADDED (tests, P1-SEC-12)."
+        },
+        {
+          "file": "cmd/cascade/doctor_mounts_security_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "cmd/cascade doctor security mounts/ADDED (tests, P1-SEC-12)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade doctor_ci_tier2.go",
       "sites": [
         {
@@ -4910,6 +4982,48 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade policy.authorize handler",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_policy_authorize.go",
+          "line": 18,
+          "status": "",
+          "raw": "cmd/cascade policy.authorize handler (P1-SEC-10)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade policy.authorize tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_policy_authorize_test.go",
+          "line": 13,
+          "status": "",
+          "raw": "cmd/cascade policy.authorize tests (P1-SEC-10)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade policy.authorize wiring",
+      "sites": [
+        {
+          "file": "cmd/cascade/wire_policy_authorize.go",
+          "line": 15,
+          "status": "",
+          "raw": "cmd/cascade policy.authorize wiring (P1-SEC-10)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -7011,7 +7125,7 @@
       "sites": [
         {
           "file": "cmd/cascade/policy_engine.go",
-          "line": 30,
+          "line": 27,
           "status": "ADD",
           "raw": "cmd/cascade/policy (ADD) -- the policy engine constructor."
         },
@@ -26540,6 +26654,26 @@
       ]
     },
     {
+      "name": "internal/policy SameTurnLedger.AuthorizeWithExpiry",
+      "sites": [
+        {
+          "file": "internal/policy/sameturn_expiry.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "internal/policy SameTurnLedger.AuthorizeWithExpiry/ADDED (P1-SEC-10)."
+        },
+        {
+          "file": "internal/policy/sameturn_expiry_test.go",
+          "line": 4,
+          "status": "ADD",
+          "raw": "internal/policy SameTurnLedger.AuthorizeWithExpiry/ADDED (P1-SEC-10)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/policy StandingGrant",
       "sites": [
         {
@@ -27696,7 +27830,7 @@
       "sites": [
         {
           "file": "internal/runtime/daemonless.go",
-          "line": 22,
+          "line": 19,
           "status": "ADD",
           "raw": "internal/runtime EmbeddedRuntime/ADDED."
         },
@@ -27734,6 +27868,32 @@
       "statuses": [
         "ADD",
         "CHANGE"
+      ]
+    },
+    {
+      "name": "internal/runtime OpenReadOnlyStore",
+      "sites": [
+        {
+          "file": "internal/runtime/readonly_store.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal/runtime OpenReadOnlyStore/ADDED (P1-SEC-12)."
+        },
+        {
+          "file": "internal/runtime/readonly_store_edge_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "internal/runtime OpenReadOnlyStore/ADDED (P1-SEC-12 tests)."
+        },
+        {
+          "file": "internal/runtime/readonly_store_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal/runtime OpenReadOnlyStore/ADDED (P1-SEC-12 tests)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -39182,7 +39342,7 @@
       ]
     }
   ],
-  "total_sites": 3793,
-  "unspecified_count": 294,
+  "total_sites": 3809,
+  "unspecified_count": 298,
   "multi_status_count": 117
 }
