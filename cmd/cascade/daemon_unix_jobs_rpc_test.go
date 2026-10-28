@@ -44,12 +44,11 @@ func setupJobsRPC(t *testing.T) (*rpc.Registry, *jobs.Store) {
 	clock := runtime.NewFixedClock(time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC))
 	registry := rpc.NewRegistry()
 
-	db, err := wireJobRPC(context.Background(), registry, paths, clock, rpc.NewNonceLedger(clock), rpc.MapTrustStore{})
-	if err != nil {
+	rt := newTestFleetRuntime(t, paths, clock)
+	if err := wireJobRPC(context.Background(), registry, rt, clock, rpc.NewNonceLedger(clock), rpc.MapTrustStore{}); err != nil {
 		t.Fatalf("wireJobRPC: %v", err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
-	return registry, jobs.NewStore(db)
+	return registry, rt.Jobs()
 }
 
 func TestWireJobRPC_MountsAllSixMethods(t *testing.T) {

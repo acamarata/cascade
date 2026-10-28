@@ -296,5 +296,5 @@ func (cp *CompletionPolicy) commit(ctx context.Context, req TransitionRequest, e
 		return cp.deny(ctx, req, denial)
 	}
 	req.Job.State = req.Target
-	return nil
+	return cp.deps.Store.afterTransition(ctx, req.Job.ID, req.Target)
 }

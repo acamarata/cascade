@@ -93,16 +93,35 @@ type LeaseManager struct {
 	clock        runtime.Clock
 	isController func() bool
 	defaults     LeaseDefaults
-	sink         *leaseEventSink // nil is legitimate: no journal/bus/attention wiring (tests)
+	sink         *LeaseEventSink // nil is legitimate: no journal/bus/attention wiring (tests)
 }
 
 // NewLeaseManager constructs a LeaseManager. isController reports
 // whether THIS daemon process holds the B/S-02.T2 database advisory
 // lock -- pass a func that always returns true for a single-daemon test
 // or a controller-only production process. sink may be nil (no
-// journal/event-bus/attention integration); see lease_events.go.
-func NewLeaseManager(store *Store, clock runtime.Clock, isController func() bool, defaults LeaseDefaults, sink *leaseEventSink) *LeaseManager {
+// journal/event-bus/attention integration); see lease_events.go. The
+// daemon composition root uses NewLeaseManagerWithEvents instead.
+func NewLeaseManager(store *Store, clock runtime.Clock, isController func() bool, defaults LeaseDefaults, sink *LeaseEventSink) *LeaseManager {
 	return &LeaseManager{store: store, clock: clock, isController: isController, defaults: defaults, sink: sink}
+}
+
+// NewLeaseManagerWithEvents is the production constructor: every argument
+// is required, so a composed daemon always journals, publishes and raises
+// attention for its lease lifecycle. A nil store, clock, isController or
+// sink is KindInvalidInput naming it.
+func NewLeaseManagerWithEvents(store *Store, clock runtime.Clock, isController func() bool, defaults LeaseDefaults, sink *LeaseEventSink) (*LeaseManager, error) {
+	switch {
+	case store == nil:
+		return nil, cascade.New(cascade.KindInvalidInput, "jobs: lease manager requires a store")
+	case clock == nil:
+		return nil, cascade.New(cascade.KindInvalidInput, "jobs: lease manager requires a clock")
+	case isController == nil:
+		return nil, cascade.New(cascade.KindInvalidInput, "jobs: lease manager requires a controller-role check")
+	case sink == nil:
+		return nil, cascade.New(cascade.KindInvalidInput, "jobs: lease manager requires an event sink")
+	}
+	return NewLeaseManager(store, clock, isController, defaults, sink), nil
 }
 
 // AcquireResult is Acquire's outcome: exactly one of Lease (granted) or
@@ -240,4 +259,17 @@ func (s LeaseState) Contending() bool {
 // (DECIDED release path 2). Idempotent to call more than once.
 func WireLeaseRelease(store *Store, m *LeaseManager) {
 	store.SetTerminalHook(m.releaseAllForJob)
+}
+
+// LeasesForHolder returns every lease row naming holder (a job id),
+// across every repo and in every state: the reservation recovery lookup
+// over the holder query releaseAllForJob uses.
+func (s *Store) LeasesForHolder(ctx context.Context, holder string) ([]ResourceLease, error) {
+	return s.allLeasesForHolder(ctx, holder)
+}
+
+// WorktreeForLease returns the worktree row bound to (repoID, scopeGlob),
+// if any: the reservation recovery lookup of a lease's worktree.
+func (s *Store) WorktreeForLease(ctx context.Context, repoID, scopeGlob string) (Worktree, bool, error) {
+	return worktreeRowForLease(ctx, s, repoID, scopeGlob)
 }

@@ -44,8 +44,7 @@ const (
 	fleetRowSubsystem       = "admission-posture"
 )
 
-// Test seams: the row refresher's ticker, a hook at the top of the sampler
-// body, and a replacement for the host collector (nil in production).
+// Test seams: the row ticker, a sampler-start hook, the host collector (nil in production).
 var (
 	newRowTicker       = func(period time.Duration) runtime.Ticker { return runtime.NewSystemTicker(period) }
 	beforeSamplerStart = func(*FleetRuntime) {}
@@ -86,14 +85,14 @@ type FleetRuntime struct {
 
 	mu      sync.Mutex
 	closers []func() error
-	// started and closed: the body starts the sampler only while not closed;
-	// Close stops the ticker itself only when the sampler never started.
+	// The body starts the sampler only while !closed; Close stops an unstarted ticker.
 	started, closed bool
 	rowState        SubsystemState
 	rowDetail       string
 
 	closeOnce sync.Once
 	closeErr  error
+	res       fleetReservation // the reservation step (subsystems_fleet_reservation.go)
 }
 
 // NewFleetRuntime validates deps, then runs the builder steps in order. The
@@ -106,6 +105,7 @@ func NewFleetRuntime(ctx context.Context, deps FleetRuntimeDeps) (*FleetRuntime,
 	r := &FleetRuntime{manifest: deps.Manifest}
 	steps := []fleetStep{
 		{name: "admission", build: r.buildAdmission},
+		{name: "reservation", build: r.buildReservation},
 	}
 	for _, step := range steps {
 		if err := step.build(ctx, deps); err != nil {

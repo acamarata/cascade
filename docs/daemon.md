@@ -115,6 +115,59 @@ later steps registered, in reverse. It is idempotent.
 row refresher) and `admission`. The last one's detail is
 `posture=<posture>` (see [Daemon admission](governor.md#daemon-admission)).
 
+### Reservation substrate
+
+The second step, `reservation`, opens `cascade.db` once. The handle allows one
+connection, and every transaction on it takes the write lock at `BEGIN`
+(`_txlock=immediate`) and waits under `_busy_timeout=5000`, so it never fails
+with `SQLITE_BUSY_SNAPSHOT` against the store's own writes. The jobs, outbox,
+reservation and topology schemas are applied on that handle, and everything
+below shares it:
+
+- **One jobs store and one lease authority.** `Jobs()` and `Leases()` are the
+  only `jobs.Store` and `jobs.LeaseManager` in the daemon. The lease manager
+  asks the controller binding (`<data>/nodes/controller_binding.json`) on every
+  call, so a node-role daemon grants, renews and releases no lease, and a
+  re-designation takes effect without a restart. Its events go to the daemon
+  bus, the fleet journal and the attention queue. A job that reaches a
+  terminal state, the completion policy's commit included, releases every
+  lease it holds.
+- **Fenced worktrees.** `Worktrees()` comes from the `jobs.worktree.sweep`
+  subsystem: built with the lease manager's fence, and its orphan sweep runs
+  once at build. A create under a lease that is no longer current is refused.
+- **One reserver.** `Reserver()` is the one `economics.Reserver`, with an owner
+  epoch minted per daemon start (`OwnerEpoch()`). A reservation's lease id is
+  `<repo>:<glob>@<epoch>`: the lease and the grant it was made at, so a later
+  holder's grant of the same scope is never renewed or released by it.
+- **The `job.*`/`lease.*` RPCs** run over this store and lease manager and open
+  no database of their own.
+
+Before the socket serves, the `fleet-node-jobs` registration runs the start
+sweep. It reads the pidfile and refuses to start (`ErrConcurrentDaemon`) when
+it names a running daemon other than this process. Otherwise every held or
+parked reservation of a dead epoch is recovered and rolled back with its leases
+and worktree released, and every committed one is adopted. The
+`reservation-sweep` row of `status.get` carries the counts and the new epoch,
+for example `rolled_back=1 adopted=1 expired=0 rollback_errors=0
+owner_epoch=daemon-…`. A row the sweep could not retire marks that row failed
+without stopping the daemon; a sweep that cannot read the reservation rows at
+all refuses the start. The pidfile check runs before the socket's lifetime
+lock is taken, so two daemons started at the same instant can both sweep: the
+reservation ledger's compare-and-set writes keep each row retired or adopted
+once, and the loser exits when it cannot take the socket. A reservation whose
+lease was reclaimed (a later epoch) no longer finds its worktree during
+recovery; the worktree is left for the orphan sweep of the next daemon start
+rather than risk touching a later holder's tree.
+
+The supervised subsystem `fleet-reservation-liveness` then ticks every lease
+renew interval (15 minutes): it heartbeats this daemon's reservations and
+renews their leases, retires reservations whose heartbeat is older than three
+intervals (skipped on a tick whose heartbeat write failed), and, on the
+controller, expires overdue leases and reclaims those whose holder process is
+gone. An adopted committed row that nothing claims is therefore released after
+three intervals. The loop is joined with the other supervised goroutines, and
+`Close` closes the handle once, after the join and before the store.
+
 ## Crash recovery
 
 The recovery scan handles the case where the daemon's previous process

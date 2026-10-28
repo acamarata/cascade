@@ -101,16 +101,18 @@ func wireFleetAndNodeHandlers(registry *rpc.Registry, store provider.Store, cloc
 // wireJobRPCHandlers behind one error check, purely to keep buildRPCServer
 // under Art.10.3's 50-line function cap -- mechanical composition, not a
 // new concern.
-func wireFleetNodeAndJobHandlers(ctx context.Context, registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider, settings daemon.Settings) error {
+func wireFleetNodeAndJobHandlers(ctx context.Context, registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider, settings daemon.Settings, fleet *daemon.FleetRuntime) error {
 	if ferr := wireFleetAndNodeHandlers(registry, store, clock, bus, paths, settings); ferr != nil {
 		return ferr
 	}
-	return wireJobRPCHandlers(ctx, registry, paths, clock)
+	return wireJobRPCHandlers(ctx, registry, fleet, clock)
 }
 
 // wireJobRPCHandlers is buildRPCServer's job.*/lease.* call site (see
-// daemon_unix_jobs_rpc.go's header comment), split out purely to keep
-// buildRPCServer under Art.10.3's 50-line function cap.
+// daemon_unix_jobs_rpc.go's header comment). It first runs the fleet
+// runtime's fenced reservation sweep, refusing to start while another
+// daemon is live on this home, and starts its liveness loop, all before
+// the socket serves; then it mounts job.*/lease.* over the runtime.
 //
 // This daemon's composition root has no H/S-16.T3 trust-store wiring at
 // HEAD, so rpc.MapTrustStore{} is a genuinely EMPTY store: no pubkey
@@ -122,8 +124,16 @@ func wireFleetNodeAndJobHandlers(ctx context.Context, registry *rpc.Registry, st
 // wired at this composition root.
 //
 // ctx is the daemon's run context (daemonWiring.Ctx), never
-// context.Background(): the schema applies wireJobRPC runs end with the run.
-func wireJobRPCHandlers(ctx context.Context, registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock) error {
-	_, err := wireJobRPC(ctx, registry, paths, clock, rpc.NewNonceLedger(clock), rpc.MapTrustStore{})
-	return err
+// context.Background(): the liveness loop is supervised on it.
+func wireJobRPCHandlers(ctx context.Context, registry *rpc.Registry, fleet *daemon.FleetRuntime, clock runtime.Clock) error {
+	if fleet == nil {
+		// A composition without the fleet runtime (buildRPCServer in tests) has
+		// no lease authority: job.*/lease.* stay unmounted and nothing is swept.
+		// composeDaemon always supplies one (TestCompositionFleetRuntimePresent).
+		return nil
+	}
+	if err := fleet.StartReservations(ctx, daemon.NewProber()); err != nil {
+		return err
+	}
+	return wireJobRPC(ctx, registry, fleet, clock, rpc.NewNonceLedger(clock), rpc.MapTrustStore{})
 }

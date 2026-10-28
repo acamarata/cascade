@@ -3,7 +3,7 @@ package jobs
 // Purpose: the lease lifecycle's event-bus and journal integration (step
 //
 //	7/8 of this ticket's HOW) plus the expiry/fence-mismatch attention
-//	integration (step 6/10) -- one leaseEventSink other files call after
+//	integration (step 6/10) -- one LeaseEventSink other files call after
 //	their own DB transaction has already committed. No RPC methods are
 //	registered anywhere in this ticket (S-60.T1's scope).
 //
@@ -63,19 +63,36 @@ const (
 // filtered-SSE feed's namespace for every lease lifecycle event.
 const leaseEventNamespace = "jobs.lease"
 
-// leaseEventSink bundles the three real downstream systems a lease
+// LeaseEventSink bundles the three real downstream systems a lease
 // lifecycle event fans out to. A nil field disables that one fan-out
-// (tests that only care about journaling, say, pass a nil bus).
-type leaseEventSink struct {
+// (tests that only care about journaling, say, pass a nil bus); the
+// production constructor NewLeaseEventSink refuses every nil part.
+type LeaseEventSink struct {
 	bus       *events.Bus
 	journal   journal.Store
 	attention *supervision.Store
 }
 
 // newLeaseEventSink constructs a sink. Any argument may be nil to
-// disable that fan-out.
-func newLeaseEventSink(bus *events.Bus, j journal.Store, attention *supervision.Store) *leaseEventSink {
-	return &leaseEventSink{bus: bus, journal: j, attention: attention}
+// disable that fan-out (unit tests only).
+func newLeaseEventSink(bus *events.Bus, j journal.Store, attention *supervision.Store) *LeaseEventSink {
+	return &LeaseEventSink{bus: bus, journal: j, attention: attention}
+}
+
+// NewLeaseEventSink is the composition root's constructor: the daemon
+// bus, the fleet journal and the attention store are all required, so no
+// production LeaseManager journals into nothing. A nil part is
+// KindInvalidInput naming it.
+func NewLeaseEventSink(bus *events.Bus, j journal.Store, attention *supervision.Store) (*LeaseEventSink, error) {
+	switch {
+	case bus == nil:
+		return nil, cascade.New(cascade.KindInvalidInput, "jobs: lease event sink requires an event bus")
+	case j == nil:
+		return nil, cascade.New(cascade.KindInvalidInput, "jobs: lease event sink requires a journal")
+	case attention == nil:
+		return nil, cascade.New(cascade.KindInvalidInput, "jobs: lease event sink requires an attention store")
+	}
+	return newLeaseEventSink(bus, j, attention), nil
 }
 
 type leasePayload struct {
@@ -90,7 +107,7 @@ func toPayload(l ResourceLease) leasePayload {
 	return leasePayload{RepoID: l.RepoID, ScopeGlob: l.ScopeGlob, Holder: l.Holder, Epoch: l.Epoch, State: string(l.State)}
 }
 
-func (s *leaseEventSink) publish(ctx context.Context, kind events.EventKind, l ResourceLease) error {
+func (s *LeaseEventSink) publish(ctx context.Context, kind events.EventKind, l ResourceLease) error {
 	if s.bus == nil {
 		return nil
 	}
@@ -102,7 +119,7 @@ func (s *leaseEventSink) publish(ctx context.Context, kind events.EventKind, l R
 	return err
 }
 
-func (s *leaseEventSink) appendJournal(ctx context.Context, l ResourceLease, kind journal.Kind, op string) error {
+func (s *LeaseEventSink) appendJournal(ctx context.Context, l ResourceLease, kind journal.Kind, op string) error {
 	if s.journal == nil {
 		return nil
 	}
@@ -114,35 +131,35 @@ func (s *leaseEventSink) appendJournal(ctx context.Context, l ResourceLease, kin
 	return err
 }
 
-func (s *leaseEventSink) acquired(ctx context.Context, l ResourceLease) error {
+func (s *LeaseEventSink) acquired(ctx context.Context, l ResourceLease) error {
 	if err := s.appendJournal(ctx, l, journal.KindIntent, "acquired"); err != nil {
 		return err
 	}
 	return s.publish(ctx, EventLeaseAcquired, l)
 }
 
-func (s *leaseEventSink) renewed(ctx context.Context, l ResourceLease) error {
+func (s *LeaseEventSink) renewed(ctx context.Context, l ResourceLease) error {
 	if err := s.appendJournal(ctx, l, journal.KindCheckpoint, "renewed"); err != nil {
 		return err
 	}
 	return s.publish(ctx, EventLeaseRenewed, l)
 }
 
-func (s *leaseEventSink) released(ctx context.Context, l ResourceLease) error {
+func (s *LeaseEventSink) released(ctx context.Context, l ResourceLease) error {
 	if err := s.appendJournal(ctx, l, journal.KindAck, "released"); err != nil {
 		return err
 	}
 	return s.publish(ctx, EventLeaseReleased, l)
 }
 
-func (s *leaseEventSink) reclaimed(ctx context.Context, l ResourceLease) error {
+func (s *LeaseEventSink) reclaimed(ctx context.Context, l ResourceLease) error {
 	return s.appendJournal(ctx, l, journal.KindAck, "reclaimed")
 }
 
 // contended has no lease row of its own -- it journals/publishes under
 // the WINNING (conflicting) lease's entity id, naming the loser's
 // would-be holder in the payload.
-func (s *leaseEventSink) contended(ctx context.Context, repoID, scopeGlob, requestingHolder string, conflicting ResourceLease) error {
+func (s *LeaseEventSink) contended(ctx context.Context, repoID, scopeGlob, requestingHolder string, conflicting ResourceLease) error {
 	if s.journal != nil {
 		raw, err := json.Marshal(map[string]string{
 			"repo_id": repoID, "scope_glob": scopeGlob,
@@ -162,7 +179,7 @@ func (s *leaseEventSink) contended(ctx context.Context, repoID, scopeGlob, reque
 // expired pushes the step-6 attention item (kind stall, source_ref =
 // this lease's entity id, idempotent) through the REAL R/S-39.T1 queue,
 // then journals and publishes.
-func (s *leaseEventSink) expired(ctx context.Context, l ResourceLease) error {
+func (s *LeaseEventSink) expired(ctx context.Context, l ResourceLease) error {
 	if err := s.pushAttention(ctx, l); err != nil {
 		return err
 	}
@@ -189,7 +206,7 @@ func (s *leaseEventSink) expired(ctx context.Context, l ResourceLease) error {
 // called first in both fenced and expired below) -- a reader paging an
 // attention item can pull the structured detail from the journal by the
 // shared id.
-func (s *leaseEventSink) fenced(ctx context.Context, repoID, scopeGlob string, _ int64) error {
+func (s *LeaseEventSink) fenced(ctx context.Context, repoID, scopeGlob string, _ int64) error {
 	if s.attention == nil {
 		return nil
 	}
@@ -201,7 +218,7 @@ func (s *leaseEventSink) fenced(ctx context.Context, repoID, scopeGlob string, _
 	return err
 }
 
-func (s *leaseEventSink) pushAttention(ctx context.Context, l ResourceLease) error {
+func (s *LeaseEventSink) pushAttention(ctx context.Context, l ResourceLease) error {
 	if s.attention == nil {
 		return nil
 	}

@@ -165,12 +165,33 @@ func (s *Store) PutTransition(ctx context.Context, id string, to JobState, updat
 	if err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "jobs: put transition")
 	}
-	if to.Terminal() && s.onTerminal != nil {
-		if err := s.onTerminal(ctx, id); err != nil {
-			return err
-		}
+	return s.afterTransition(ctx, id, to)
+}
+
+// afterTransition runs the terminal hook once a transition has landed id in
+// a terminal state. Every path that writes a job's state calls it:
+// PutTransition and the completion policy's commit.
+func (s *Store) afterTransition(ctx context.Context, id string, to JobState) error {
+	if !to.Terminal() || s.onTerminal == nil {
+		return nil
+	}
+	// A node daemon holds no lease authority, so it has nothing to release;
+	// the committed transition is not reported as failed for that.
+	if err := s.onTerminal(ctx, id); !isErrNotController(err) {
+		return err
 	}
 	return nil
+}
+
+// isErrNotController matches ErrNotController by identity (cascade errors of
+// one Kind compare equal under errors.Is).
+func isErrNotController(err error) bool {
+	for ; err != nil; err = errors.Unwrap(err) {
+		if err == ErrNotController {
+			return true
+		}
+	}
+	return false
 }
 
 // PutDependency records one deps[] edge: job depends on dependsOnJobID.

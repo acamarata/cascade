@@ -20,7 +20,7 @@ import (
 // (storetest.NewMemStore) production wiring would share via one
 // DomainSessions-namespaced KV -- never a package-local double of any
 // of the three.
-func newTestSink(t *testing.T) (*leaseEventSink, *events.Bus, journal.Store, *supervision.Store) {
+func newTestSink(t *testing.T) (*LeaseEventSink, *events.Bus, journal.Store, *supervision.Store) {
 	t.Helper()
 	kv := storetest.NewMemStore()
 	clock := runtime.NewFixedClock(time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC))

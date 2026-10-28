@@ -1,95 +1,65 @@
 //go:build !windows
 
-// Purpose: the composition-root call site for P1-E29-W6-S60-T1's
+// Purpose: the composition-root call site for the job.*/lease.* RPC
 //
-//	job.*/lease.* RPC surface. Opens a second sqlite connection to the
-//	daemon's own cascade.db (registerContextEngineHandlers' already-
-//	blessed pattern for a subsystem that needs its own schema applied
-//	there), applies jobs.ApplyJobsSchema + jobs.ApplyOutboxSchema,
-//	constructs a real *jobs.Store/*jobs.LeaseManager, resolves this
-//	daemon's nodes.Role once, and adapts all four into internal/rpc's
-//	duck-typed JobStore/LeaseStore/ControllerGuard/OutboxRecorder seams
-//	(see internal/rpc/jobs.go's CONTRACT NOTE for why those seams exist:
-//	internal/rpc cannot import internal/jobs or internal/nodes directly —
-//	both edges are real import cycles).
+//	surface, over the daemon's one fleet runtime: its one cascade.db
+//	handle, *jobs.Store and *jobs.LeaseManager (P1-CAP-10). wireJobRPC
+//	opens no database of its own and builds no LeaseManager; it adapts the
+//	runtime's into internal/rpc's duck-typed JobStore/LeaseStore/
+//	ControllerGuard/OutboxRecorder seams (see internal/rpc/jobs.go's
+//	CONTRACT NOTE: internal/rpc cannot import internal/jobs or
+//	internal/nodes, both edges are import cycles).
 //
-// CONTRACT NOTE (files_scope, quoted in the journal): this file, and the
-// two-line call this file's wireJobRPC needs from buildRPCServer
-// (daemon_unix_run.go), are not named in this ticket's files_scope. Per
-// the AGENT-BRIEF's own instruction ("files_scope is INTENT, not proof
-// the paths exist... find the REAL composition root... a registered RPC
-// method must be MOUNTED at the composition root"), this file exists
-// because job.list/show/cancel/retry and lease.list/release would
-// otherwise ship built, tested and unreachable from any real daemon —
-// exactly the pattern R-14.166/R-14.223 forbid. Named and exempted in
-// .golangci.yml's cmd-rpc-server-boundary list and
-// internal/client/boundary_test.go's cmdRPCBoundaryExempt map (edited
-// together, per the AGENT-BRIEF): this file REGISTERS job.*/lease.* on
-// the daemon's own registry and never dials the daemon, the same
-// daemon-SIDE reasoning daemon_unix_conductor.go and
-// daemon_unix_evidence.go already carry their own exemptions under.
+// Constraints: this file REGISTERS job.*/lease.* on the daemon's own
 //
-// SPORT: cmd/cascade/daemon (ADD, P1-E29-W6-S60-T1).
+//	registry and never dials the daemon, the daemon-side reasoning behind
+//	its exemption in .golangci.yml's cmd-rpc-server-boundary list and
+//	internal/client/boundary_test.go's cmdRPCBoundaryExempt map. The role
+//	guard asks the runtime on every call, the same answer the LeaseManager
+//	acts on, so a re-designation needs no restart.
+//
+// SPORT: cmd/cascade/daemon (ADD, P1-E29-W6-S60-T1; CHANGED, P1-CAP-10).
 package main
 
 import (
 	"context"
-	"database/sql"
-	"path/filepath"
 
-	"github.com/acamarata/cascade/internal/jobs"
+	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
-	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// wireJobRPC opens the jobs domain's own db handle, applies its schemas,
-// builds the real Store/LeaseManager, resolves this daemon's Role, and
-// registers job.*/lease.* against registry. Returns the opened *sql.DB so
-// the caller can close it on shutdown alongside its other db handles.
-func wireJobRPC(ctx context.Context, registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock, ledger *rpc.NonceLedger, trust rpc.TrustStore) (*sql.DB, error) {
-	dbPath := filepath.Join(paths.DataDir(), "cascade.db")
-	db, err := sql.Open("sqlite", "file:"+dbPath)
-	if err != nil {
-		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "jobs rpc: open %s", dbPath)
+// wireJobRPC registers job.*/lease.* against registry over rt's one jobs
+// store, LeaseManager and handle. The runtime owns and closes the handle.
+func wireJobRPC(_ context.Context, registry *rpc.Registry, rt *daemon.FleetRuntime, clock runtime.Clock, ledger *rpc.NonceLedger, trust rpc.TrustStore) error {
+	if rt == nil || rt.Jobs() == nil || rt.Leases() == nil {
+		return cascade.New(cascade.KindInvalidInput, "jobs rpc: requires the fleet runtime's jobs store and lease manager")
 	}
-	db.SetMaxOpenConns(1)
-	// runtime.Clock and migrate.Clock are structurally identical (both
-	// declare exactly Now() time.Time — migrate/clock.go's own doc
-	// comment names this as deliberate), so clock satisfies migrate.Clock
-	// with no adapter.
-	if err := jobs.ApplyJobsSchema(ctx, db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-	if err := jobs.ApplyOutboxSchema(ctx, db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-
-	store := jobs.NewStore(db)
-	leaseMgr := jobs.NewLeaseManager(store, clock, func() bool { return true }, jobs.DefaultLeaseDefaults(), nil)
-	store.SetTerminalHook(nil)
-
-	binding := nodes.NewFileControllerBindingBackend(paths.DataDir())
-	role, err := nodes.ResolveRole(binding)
-	if err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-
 	rpc.RegisterJobHandlers(registry, rpc.JobHandlerDeps{
-		Jobs:   jobStoreAdapter{store: store},
-		Leases: leaseStoreAdapter{store: store, lease: leaseMgr},
-		Guard:  controllerGuardAdapter{role: role},
-		Outbox: outboxAdapter{db: db, clock: clock},
+		Jobs:   jobStoreAdapter{store: rt.Jobs()},
+		Leases: leaseStoreAdapter{store: rt.Jobs(), lease: rt.Leases()},
+		Guard:  runtimeGuard{rt: rt},
+		Outbox: outboxAdapter{db: rt.JobsDB(), clock: clock},
 		Ledger: ledger,
 		Trust:  trust,
 		Clock:  clock,
 	})
-	return db, nil
+	return nil
+}
+
+// runtimeGuard implements rpc.ControllerGuard over the runtime's role,
+// resolved on every call.
+type runtimeGuard struct{ rt *daemon.FleetRuntime }
+
+// RequireController refuses method unless this daemon is the controller now.
+func (g runtimeGuard) RequireController(method string) error {
+	role := nodes.RoleNode
+	if g.rt.IsController() {
+		role = nodes.RoleController
+	}
+	return controllerGuardAdapter{role: role}.RequireController(method)
 }
 
 // jobRPCGuardedMethods names the two job.*/lease.* verbs this daemon
