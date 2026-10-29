@@ -104,6 +104,9 @@ type daemonRuntime struct {
 	// Fleet is the daemon's one fleet runtime (admission controller and the
 	// sampler behind it); composeDaemon builds it before any registration.
 	Fleet *daemon.FleetRuntime
+	// CI is the daemon's one CI runtime (the streaming dispatcher); the "ci"
+	// registration (wire_ci.go) sets it.
+	CI *daemon.CIRuntime
 }
 
 // daemonRegistration is one subsystem's wiring step. Name must be unique and

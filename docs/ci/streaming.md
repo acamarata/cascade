@@ -71,3 +71,15 @@ Before each run the controller, not the job, runs `go mod download` then `go mod
 These are applied after the environment allowlist and win over `[ci.local]` env keys. A module missing from the cache fails the run; a run never fetches one. The run records `Environment.IsolationClass = "clean-checkout-same-uid"`.
 
 Residual: the shared module cache is writable by the same user the run executes as. A job that deliberately writes into it can poison later runs. The cache content is verified by the controller's `go mod verify` before each run, and the same-uid write is a disclosed limit, never a trust input.
+
+## Daemon composition
+
+The daemon holds one `Dispatcher`. `internal/daemon.NewCISubsystem` builds it over the fleet runtime's one `cascade.db` handle (the `ci_results` schema is applied to that handle), the lease manager's `Fence` and the worktree manager's `Snapshot`. The requirement model's `Config` comes from `ci.ConfigFromRuntime`, so `[ci].affected_cmd` reaches target selection.
+
+Who emits checkpoints: `internal/jobs.CheckpointWatcher`. Every 5 seconds it reads the `HEAD` of each held lease's worktree and publishes one `lease_checkpoint` event on the `jobs.lease` namespace per sha it has not reported for that lease. The first sighting after a start is reported too, so a commit made while the daemon was down is not lost. A released lease, or one with no worktree, is skipped. `internal/jobs` never imports `internal/ci`.
+
+Who consumes them: the `ci` registration in `cmd/cascade/wire_ci.go`. For each event it reads the job row, the lease row (its current epoch), the worktree row and the job's latest execution, then calls `Checkpoint`. The event supplies only the job, lease and commit identity. Tier, scope and planned risk come from the job row. A commit equal to its merge-base with the repository `HEAD` (nothing new yet) is skipped. A refused checkpoint is logged and never stops the consumer.
+
+When resume runs: the `ci` registration calls `Resume` while the daemon is still wiring, before the socket serves. The status.get `ci` row reports the counts (`resume: N redispatched, N confirmed, N dropped, N unmatched`).
+
+Kinds with no command: the local executor runs `[ci.local]` lint for format and lint, build for compile and test for unit. Integration, architecture and security have no `[ci.local]` source. A kind with no configured command is never reported as passed and never left pending. It ends in an explicit terminal: a `ci_run` with status `completed` and conclusion `skipped`, one `ci_job` named `<kind>: not configured (no [ci.local] command)`, executor kind `local-not-configured` and `passed=false`. Its outbox row is confirmed, so a restart does not retry it. `CIRuntime.SetExecutor` replaces this before the runtime starts (the seam P1-CI-03 uses).
