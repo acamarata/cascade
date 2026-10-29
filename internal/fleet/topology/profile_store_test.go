@@ -79,6 +79,9 @@ func newReopenableStore(t *testing.T) (*Store, *sql.DB, string) {
 		t.Fatalf("open: %v", err)
 	}
 	db.SetMaxOpenConns(1)
+	// Close before TempDir removes the folder: Windows cannot delete an open
+	// topology.db. A second Close by a reopen test is a no-op.
+	t.Cleanup(func() { _ = db.Close() })
 	if err := ApplyMigrationSchema(context.Background(), db, migrate.SQLiteEmitter{}, newTestClock(), "", ""); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
