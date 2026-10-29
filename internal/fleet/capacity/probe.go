@@ -138,7 +138,7 @@ func (a *DefaultProbeAdmission) Classify(profile string, outcome State, now time
 		a.records[profile] = rec
 	}
 	rec.inFlight = false
-	switch outcome {
+	switch outcome { //nolint:exhaustive // an unrecognized outcome fails closed through the named default below (see the doc comment)
 	case StateAvailable, StateConstrained:
 		delete(a.records, profile)
 		return

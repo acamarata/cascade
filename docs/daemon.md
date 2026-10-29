@@ -168,6 +168,46 @@ gone. An adopted committed row that nothing claims is therefore released after
 three intervals. The loop is joined with the other supervised goroutines, and
 `Close` closes the handle once, after the join and before the store.
 
+### Capacity
+
+The third step, `capacity`, builds the one `capacity.Fleet` (`Fleet()`) and
+the compositor behind `fleet.capacity`. It opens the provider registry
+(`<data>/providers.db`), applies the learn schema (SchemaVersion 2) on the
+runtime handle and creates the aggregation salt at
+`<data>/learn/aggregate_salt` (mode 0600) once. The Fleet's parts are:
+
+- the learn capability scorer, estimate source and scheduler-decision writer
+  (the decision is written inside the lease's `Bind` transaction);
+- the interim selector, `NewTierPolicySelector` over
+  `NewTierPolicy(estimate, NewDefaultProbeAdmission(), clock)`;
+- `DomainOf`: a registry lane resolves through the topology credential
+  `Reconcile` named after it. An un-reconciled lane, a quarantined credential
+  and a domain with no live lane refuse `ErrNoQuotaDomain`;
+- placement over the enrolled node records, and the controller id read once
+  from the controller binding (its endpoint on a node daemon, `controller`
+  otherwise). The runtime holds no tunnel registry yet, so a placement need
+  refuses; work without one runs on the controller.
+
+The supervised subsystem `fleet-capacity-refresh` reads the providers, the
+node records and the latest admission sample into the compositor every two
+seconds on the run context (node slots are re-stamped on a change and every ten seconds). A slot not refreshed for 30 seconds reads
+unknown. Each material change publishes `fleet.capacity_changed` on the bus.
+The loop is joined with the others; `Close` closes the registry handle after
+the join and before the store.
+
+A second supervised subsystem, `fleet-learn-aggregate`, runs
+`learn.Aggregator.Aggregate` over the runtime handle every hour with the
+salt above; a failed pass is logged and retried on the next tick.
+`SetAgentLanes(fn)` registers the source of agent lanes: the Fleet's
+snapshot (not the `fleet.capacity` result) gains one available tier-zero
+`agent:<driver>` lane per entry.
+
+`fleet.capacity` and the `fleet.capacity` topic on `GET /events` are
+owner-only (declared in `internal/fleet/capacity/rpc.go`, mounted by
+`wire_fleet_capacity.go`). A principal caller is refused
+`KindPermissionDenied`. There is no `fleet.lease` RPC: leasing stays in
+process.
+
 ## Crash recovery
 
 The recovery scan handles the case where the daemon's previous process

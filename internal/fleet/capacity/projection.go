@@ -41,7 +41,7 @@ func ProjectTiers(snap FleetSnapshot, eligible []conductor.LaneID) map[Tier]Tier
 
 // projectionStateRank orders usable states first; every other state ties.
 func projectionStateRank(state State) int {
-	switch state {
+	switch state { //nolint:exhaustive // usable states rank first; every other state, including an unrecognized one, ties through the default
 	case StateAvailable:
 		return 0
 	case StateConstrained:

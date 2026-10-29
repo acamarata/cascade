@@ -189,7 +189,9 @@ rolled back.
 It is not an RPC. Code: `internal/fleet/capacity/fleet.go`, `resolve.go`,
 `lease.go`. Build a `Fleet` only with `capacity.NewFleet(FleetDeps)`; every
 field is required except `Floors`, and a missing one is `KindInvalidInput`
-naming it.
+naming it. The daemon builds the one production Fleet in the fleet
+runtime's capacity step and serves its snapshot as the owner-only
+`fleet.capacity` method and topic ([daemon.md](daemon.md#capacity)).
 
 ### Request and dispatch reference
 

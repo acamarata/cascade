@@ -73,7 +73,7 @@ func winSkip(msg string) map[string]string { return map[string]string{RunnerWind
 // regex of "." runs the whole package under the integration tags.
 var IntegrationLanes = slices.Concat(
 	[]LaneRow{
-		{"./cmd/cascade", "integration", "^(TestMCPSocketServeAcceptsOwnerPeer|TestMCPSocketServeRefusesOriginHeader)$", LaneJob, unixRunners, nil},
+		{"./cmd/cascade", "integration", "^(TestMCPSocketServeAcceptsOwnerPeer|TestMCPSocketServeRefusesOriginHeader|TestFleetCapacityTopicOwnerOnly)$", LaneJob, unixRunners, nil},
 		{"./internal/client", "integration", "^TestCLIClientPassesLocalRequestGuard$", LaneJob, unixRunners, nil},
 	},
 	rows(LaneRow{Tags: "integration", RunRegex: ".", Job: LaneJob, OS: unixRunners}, "./internal/backup",

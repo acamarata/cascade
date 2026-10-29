@@ -107,6 +107,18 @@ invariant before committing; a violation aborts the whole pass and leaves
 the prior rows untouched. Running it twice over unchanged input writes
 byte-identical rows and never moves a lane's `discovered_at` timestamp.
 
+### Which quota domain a lease charges
+
+A capacity lane is a registry lane name. The lease resolves its quota
+domain through the credential the reconcile pass named after that lane,
+not through the derived lane id: two unfiltered lanes of one provider
+share one topology lane but keep two credentials, and both charge the
+provider's domain. For example `anthropic-main` charges `anthropic:api`,
+`claude-sub-1` (OAuth) charges `claude-sub:subscription`, and a lane in
+pool `team` charges `pool:team`. A lane the reconcile has not seen, a
+quarantined credential and a domain whose every lane is retired have no
+domain, and the lease is refused: unknown capacity is never unlimited.
+
 ## Quota domains and buckets
 
 P1-E40-W9-S77-T3 gives every `QuotaDomain` real capacity numbers: a
@@ -205,6 +217,15 @@ known than its weakest bucket. `internal/fleet/capacity.FleetSnapshot`
 embeds this payload additively: an older snapshot with no `quota` key
 decodes to the zero value (confidence `0`, no domains) rather than
 failing to decode.
+
+### fleet.capacity
+
+`cascade fleet capacity [--json]` calls the owner-only `fleet.capacity`
+method: one row per provider with its bucket states, refreshed by the
+daemon every two seconds from the provider registry, the enrolled nodes
+and the resource sampler. The owner-only `fleet.capacity` topic on
+`GET /events` streams `fleet.capacity_changed` on each material change.
+A session principal is refused both.
 
 ## Shadow price and quota pressure
 

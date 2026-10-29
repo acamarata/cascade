@@ -28,6 +28,7 @@ context.sync
 fleet.attention.ack
 fleet.attention.get
 fleet.attention.list
+fleet.capacity
 fleet.journal_replay
 fleet.journal_show
 fleet.mode.set

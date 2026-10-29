@@ -30,7 +30,11 @@
 // found for internal/daemon/server.go: a files_scope list written before
 // the real registration pattern landed.
 //
-// SPORT: fleet.capacity.rpc (ADD, per T-1 sport_updates).
+// NewSSEHandler (P1-CAP-05) is that bridge for the fleet.capacity topic: the
+// daemon's event-topics wiring mounts it, so the composition root never
+// repeats this package's namespace or kind.
+//
+// SPORT: fleet.capacity.rpc (ADD, per T-1 sport_updates; topic handler P1-CAP-05).
 
 package capacity
 
@@ -40,6 +44,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/rpc"
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -54,6 +59,25 @@ const (
 	fleetCapacityNamespace                    = "fleet"
 	FleetCapacityChangedKind events.EventKind = "fleet.capacity_changed"
 )
+
+// FleetCapacityTopic is the GET /events topic that streams
+// fleet.capacity_changed.
+const FleetCapacityTopic = "fleet.capacity"
+
+// The snapshot names every provider and node and no scope model exists for
+// it, so the method and its topic are owner-only (the fail-closed class).
+var (
+	_ = rpc.DeclareAccess(MethodFleetCapacity, rpc.AccessOwnerOnly)
+	_ = rpc.DeclareTopicAccess(FleetCapacityTopic, rpc.AccessOwnerOnly)
+)
+
+// NewSSEHandler returns the FleetCapacityTopic handler: bus's fleet
+// namespace, admitting only FleetCapacityChangedKind, heartbeating from clock.
+func NewSSEHandler(bus *events.Bus, clock runtime.Clock) *rpc.SSEHandler {
+	return rpc.NewSSEHandler(bus, fleetCapacityNamespace, func(kind events.EventKind) bool {
+		return kind == FleetCapacityChangedKind
+	}, clock)
+}
 
 // EventBus is the minimal seam WireSSE publishes through, duck-typed
 // against *events.Bus's own Publish signature - matching

@@ -158,3 +158,15 @@ func writeFixture(t *testing.T, b []byte) {
 		t.Fatalf("write fixture: %v", err)
 	}
 }
+
+// TestFleetCapacityTopicHandler: the topic name matches the method name the
+// owner reads, and the handler is built over the given bus (the daemon
+// composition's TestFleetCapacityTopic proves delivery and access).
+func TestFleetCapacityTopicHandler(t *testing.T) {
+	if FleetCapacityTopic != MethodFleetCapacity {
+		t.Fatalf("FleetCapacityTopic = %q, want %q", FleetCapacityTopic, MethodFleetCapacity)
+	}
+	if h := NewSSEHandler(nil, nil); h == nil {
+		t.Fatal("NewSSEHandler returned nil")
+	}
+}

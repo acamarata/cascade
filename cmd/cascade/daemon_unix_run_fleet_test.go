@@ -42,6 +42,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/fleet/capacity"
 	"github.com/acamarata/cascade/internal/fleet/sessions"
 	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/rpc"
@@ -127,8 +128,8 @@ func TestBuildRPCServerMountsFleetSessionsSSE(t *testing.T) {
 	if _, ok := topicHandler.(*sessions.SSEHandler); !ok {
 		t.Fatalf("SSEMux.Topics[%q] = %T, want *sessions.SSEHandler", sessions.Topic, topicHandler)
 	}
-	if len(mux.Topics) != 1 {
-		t.Fatalf("SSEMux.Topics has %d entries, want exactly 1 (fleet.sessions)", len(mux.Topics))
+	if _, ok := mux.Topics[capacity.FleetCapacityTopic]; !ok || len(mux.Topics) != 2 {
+		t.Fatalf("SSEMux.Topics = %d entries (fleet.capacity mounted: %v), want exactly fleet.sessions and fleet.capacity", len(mux.Topics), ok)
 	}
 
 	req := httptest.NewRequest("GET", rpc.EventsPath+"?topic="+sessions.Topic, nil)

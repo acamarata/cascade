@@ -9,7 +9,6 @@ package daemon
 //	so status.get reports it.
 //
 // Inputs: FleetRuntimeDeps. Outputs: a *FleetRuntime read as w.Deps.Fleet.
-//
 // Constraints: no second AdmissionController or Sampler, no bare go statement
 //
 //	(Manifest.GoSupervised only), no change to the admission decision logic.
@@ -17,8 +16,7 @@ package daemon
 //	subsystems_fleet_<part>.go file, and registers teardown with addCloser.
 //	Manifest.Wait returns once the sampler's ticker has stopped, the last call
 //	of its loop; the loop goroutine's own exit needs a governor Done signal.
-//
-// SPORT: internal/daemon (ADD, P1-CAP-12).
+// SPORT: internal/daemon (ADD, P1-CAP-12; capacity step P1-CAP-05).
 
 import (
 	"context"
@@ -93,6 +91,7 @@ type FleetRuntime struct {
 	closeOnce sync.Once
 	closeErr  error
 	res       fleetReservation // the reservation step (subsystems_fleet_reservation.go)
+	capa      fleetCapacity    // the capacity step (subsystems_fleet_capacity.go)
 }
 
 // NewFleetRuntime validates deps, then runs the builder steps in order. The
@@ -106,6 +105,7 @@ func NewFleetRuntime(ctx context.Context, deps FleetRuntimeDeps) (*FleetRuntime,
 	steps := []fleetStep{
 		{name: "admission", build: r.buildAdmission},
 		{name: "reservation", build: r.buildReservation},
+		{name: "capacity", build: r.buildCapacity},
 	}
 	for _, step := range steps {
 		if err := step.build(ctx, deps); err != nil {
