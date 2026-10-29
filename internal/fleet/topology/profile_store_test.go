@@ -78,6 +78,10 @@ func newReopenableStore(t *testing.T) (*Store, *sql.DB, string) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
+	// Close before t.TempDir's RemoveAll runs (cleanups are LIFO): Windows
+	// refuses to unlink an open topology.db. reopen closes db early; a second
+	// Close is a no-op.
+	t.Cleanup(func() { _ = db.Close() })
 	db.SetMaxOpenConns(1)
 	if err := ApplyMigrationSchema(context.Background(), db, migrate.SQLiteEmitter{}, newTestClock(), "", ""); err != nil {
 		t.Fatalf("migrate: %v", err)
