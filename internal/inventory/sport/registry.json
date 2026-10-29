@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-28T21:09:55Z",
+  "generated_at": "2026-10-29T17:21:51Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3966,6 +3966,20 @@
       ]
     },
     {
+      "name": "cmd/cascade away mode composition",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_away.go",
+          "line": 28,
+          "status": "",
+          "raw": "cmd/cascade away mode composition (P1-HRN-11)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd/cascade chat custody injection",
       "sites": [
         {
@@ -4339,6 +4353,12 @@
           "raw": "cmd/cascade daemon registrations (plugin.intent; TEST) — P1-PLG-07."
         },
         {
+          "file": "cmd/cascade/wire_away.go",
+          "line": 4,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations — away mode (P1-HRN-11)."
+        },
+        {
           "file": "cmd/cascade/wire_completion_gate.go",
           "line": 4,
           "status": "",
@@ -4379,6 +4399,12 @@
           "line": 13,
           "status": "",
           "raw": "cmd/cascade daemon registrations (P1-SEC-03)."
+        },
+        {
+          "file": "cmd/cascade/wire_fleet_capacity.go",
+          "line": 7,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-CAP-05)."
         },
         {
           "file": "cmd/cascade/wire_fleet_node_jobs.go",
@@ -6430,11 +6456,29 @@
           "raw": "cmd/cascade/daemon (ADD, per T-2 sport_updates; R-14.117 sibling"
         },
         {
+          "file": "cmd/cascade/fleet_capacity_integration_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "cmd/cascade/daemon (ADD, P1-CAP-05)."
+        },
+        {
           "file": "cmd/cascade/hooks.go",
           "line": 52,
           "status": "ADD",
           "ticket": "P1-E32-W6-S66-T1",
           "raw": "cmd/cascade/daemon (ADD, P1-E32-W6-S66-T1)."
+        },
+        {
+          "file": "cmd/cascade/wire_fleet_capacity_socket_integration_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "cmd/cascade/daemon (ADD, P1-CAP-05)."
+        },
+        {
+          "file": "cmd/cascade/wire_fleet_capacity_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "cmd/cascade/daemon (ADD, P1-CAP-05)."
         }
       ],
       "statuses": [
@@ -10175,10 +10219,10 @@
       "sites": [
         {
           "file": "internal/fleet/capacity/rpc.go",
-          "line": 33,
+          "line": 37,
           "status": "ADD",
           "ticket": "T-1",
-          "raw": "fleet.capacity.rpc (ADD, per T-1 sport_updates)."
+          "raw": "fleet.capacity.rpc (ADD, per T-1 sport_updates; topic handler P1-CAP-05)."
         }
       ],
       "statuses": [
@@ -11700,6 +11744,20 @@
           "status": "ADD",
           "ticket": "P1-E40-W9-S77-T1",
           "raw": "fleet/topology/lane_identity/ADD (P1-E40-W9-S77-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/lane_lookup",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/lane_lookup.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "fleet/topology/lane_lookup/ADD (P1-CAP-05)."
         }
       ],
       "statuses": [
@@ -17655,7 +17713,7 @@
       "sites": [
         {
           "file": "internal/notify/away.go",
-          "line": 51,
+          "line": 43,
           "status": "ADD",
           "ticket": "P1-E23-W5-S49-T2",
           "raw": "internal.notify.AwayController/ADDED (P1-E23-W5-S49-T2)."
@@ -17777,6 +17835,20 @@
           "status": "ADD",
           "ticket": "P1-E23-W5-S49-T1",
           "raw": "internal.notify.Notifier/ADDED (P1-E23-W5-S49-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.notify.ParseAwaySection",
+      "sites": [
+        {
+          "file": "internal/notify/away_load.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal.notify.ParseAwaySection/ADDED (P1-HRN-11)."
         }
       ],
       "statuses": [
@@ -21285,9 +21357,39 @@
         },
         {
           "file": "internal/daemon/subsystems_fleet.go",
-          "line": 21,
+          "line": 19,
           "status": "ADD",
-          "raw": "internal/daemon (ADD, P1-CAP-12)."
+          "raw": "internal/daemon (ADD, P1-CAP-12; capacity step P1-CAP-05)."
+        },
+        {
+          "file": "internal/daemon/subsystems_fleet_adapters.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-CAP-05)."
+        },
+        {
+          "file": "internal/daemon/subsystems_fleet_capacity.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-CAP-05)."
+        },
+        {
+          "file": "internal/daemon/subsystems_fleet_capacity_close_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-CAP-05)."
+        },
+        {
+          "file": "internal/daemon/subsystems_fleet_capacity_nodes_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-CAP-05)."
+        },
+        {
+          "file": "internal/daemon/subsystems_fleet_capacity_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-CAP-05)."
         },
         {
           "file": "internal/daemon/subsystems_fleet_closer.go",
@@ -40033,7 +40135,7 @@
       ]
     }
   ],
-  "total_sites": 3873,
-  "unspecified_count": 319,
+  "total_sites": 3886,
+  "unspecified_count": 320,
   "multi_status_count": 121
 }
