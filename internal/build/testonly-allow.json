@@ -1182,37 +1182,6 @@
     "symbol": "internal/context/generate.Check"
   },
   {
-    "added_by_ticket": "P1-CI-01",
-    "caller_site": "internal/daemon/subsystems_ci.go",
-    "expected_caller": "internal/daemon/wire_ci.go, where P1-CI-10's CI subsystem composition calls ci.NewDispatcher with the lease manager's Fence, the worktree manager's Snapshot, the jobs outbox database and a SubJobExecutor, then mounts Checkpoint and Resume; retire this entry when that lands",
-    "reason": "NewDispatcher is the constructor of the streaming CI dispatcher (Checkpoint, Dispatch, OnTerminal, CurrentCheckpoint, Resume). This ticket ships the library only: the daemon composition that holds a live Dispatcher is P1-CI-10's scope. Exercised by internal/ci/stream_*_test.go over a real git repository, the real jobs stack and a re-exec crash test.",
-    "retire_ticket": "P1-CI-10",
-    "symbol": "internal/ci.NewDispatcher"
-  },
-  {
-    "added_by_ticket": "P1-CI-01",
-    "caller_site": "internal/daemon/subsystems_ci.go",
-    "expected_caller": "internal/daemon/wire_ci.go, where P1-CI-10 builds the local SubJobExecutor from the [ci.local] commands, the ambient environment and the module cache directory, and passes it to ci.NewDispatcher; retire this entry when that lands",
-    "reason": "NewLocalSubJobExecutor is the one production SubJobExecutor of this ticket (a clean-checkout executor over Execute). Its only consumer is the daemon composition, which is P1-CI-10's scope. Exercised by internal/ci/stream_local_test.go and stream_cleanroom_test.go against real git and the real go command.",
-    "retire_ticket": "P1-CI-10",
-    "symbol": "internal/ci.NewLocalSubJobExecutor"
-  },
-  {
-    "added_by_ticket": "P1-CI-01",
-    "caller_site": "internal/daemon/subsystems_ci.go",
-    "expected_caller": "internal/daemon/wire_ci.go, where P1-CI-10's CI event routing reads RunViaStream to skip a ci_run that a streaming checkpoint already reported; retire this entry when that lands",
-    "reason": "RunViaStream is the read side of the ci_run_stream marker UpsertRunSourceStream writes. The consumer is the daemon-layer dedup of stream results, which is P1-CI-10's composition. Exercised by internal/ci/domain_stream_test.go and the dispatcher tests.",
-    "retire_ticket": "P1-CI-10",
-    "symbol": "internal/ci.RunViaStream"
-  },
-  {
-    "caller_site": "internal/daemon/subsystems_ci.go",
-    "expected_caller": "AF/S-65.T2's own contract text (T-2.yaml): 'internal/daemon/subsystems_ci.go NewCISubsystem constructs the ONE ci Dispatcher' -- the daemon composition root that builds a RequirementModel (and therefore its Config) from the loaded runtime.Config for the streaming dispatcher; not yet built. Retire this entry once that lands. (repointed at the Epic gate, BF-204: P1-CI-10 owns subsystems_ci.go and asserts TestCISubsystemConfigFromRuntime)",
-    "reason": "Final-confirm round 3: this ticket's own AC ('internal/ci/affected_cmd.go reads it from there, not from an unsourced field') requires a real production path from internal/runtime's parsed [ci].affected_cmd into internal/ci.Config.AffectedCmd. ConfigFromRuntime (config_runtime.go) is that ONE mapping, fully implemented and tested end-to-end against a real affected_cmd subprocess (TestConfigFromRuntime_AffectedCmdEndToEnd), but T-3.yaml:35 names S-65.T1 as the sole owner of [ci].affected_cmd registration while the only production CALLER of a fully-wired RequirementModel is S-65.T2's daemon composition layer -- no ticket in S-65 builds internal/daemon/subsystems_ci.go before T2. This is a planning contradiction (T-3.yaml:35 vs. the only real caller living in T2's scope) flagged for T0 to file as a PCI (slug ci-affectedcmd-ownership-t1-vs-t2, type planning), not filed by this fix lane per LANE-RULES.",
-    "retire_ticket": "P1-CI-10",
-    "symbol": "internal/ci.ConfigFromRuntime"
-  },
-  {
     "added_by_ticket": "P1-LRN-01",
     "caller_site": "cmd/cascade/wire_learn.go",
     "expected_caller": "P1-LRN-05's daemon composition (cmd/cascade/wire_learn.go), which applies learn.ConfigMigrationSet through migrate.Apply at daemon start before any learn RPC registration",
