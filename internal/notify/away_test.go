@@ -2,8 +2,12 @@ package notify
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 func TestAwayStateString(t *testing.T) {
@@ -142,5 +146,115 @@ func TestAwayNilAdmissionNeverConfirmsAway(t *testing.T) {
 	}
 	if h.router.Accumulating() {
 		t.Fatal("accumulation on with no admission source wired")
+	}
+}
+
+// TestAwayControllerSetConfigUnderLock: SetConfig races Tick and HandleEvent
+// under -race (the swap, the digest rebuild and the compileDigest read all
+// sit behind c.mu), an invalid config changes nothing, and a valid one takes
+// effect on the next evaluation.
+func TestAwayControllerSetConfigUnderLock(t *testing.T) {
+	ctx := context.Background()
+	h := newAwayFixture(t, newFixedClockPtr(time.Unix(7000, 0)), stubAdmission{}, "node-setcfg")
+	var built atomic.Int32
+	h.deps.NewDigest = func(cfg AwayConfig) *DigestCompiler {
+		built.Add(1)
+		return NewDigestCompiler(h.registry, h.notifier, h.router, h.clock, cfg, silentLogger())
+	}
+	h.ac = NewAwayController(h.deps, h.cfg)
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			h.clock.Advance(time.Minute)
+			h.ac.Tick(ctx)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			h.ac.HandleEvent(ctx, ActivityEvent{At: h.clock.Now()})
+		}
+	}()
+	last := AwayConfig{}
+	go func() {
+		defer wg.Done()
+		for i := 1; i <= 200; i++ {
+			last = AwayConfig{Threshold: time.Duration(i) * time.Minute, DigestUrgentDeepLinks: i}
+			if err := h.ac.SetConfig(last); err != nil {
+				t.Errorf("SetConfig(%+v): %v", last, err)
+				return
+			}
+		}
+	}()
+	wg.Wait()
+	if got := h.ac.Config(); got != last {
+		t.Fatalf("Config() = %+v after the race, want the last set %+v", got, last)
+	}
+	if n := built.Load(); n != 200 {
+		t.Fatalf("NewDigest built %d compilers for 200 SetConfig calls", n)
+	}
+	if got := h.ac.deps.Digest.cfg; got != last {
+		t.Fatalf("running digest compiler holds %+v, want %+v", got, last)
+	}
+
+	requireSetConfigRefused(t, h.ac)
+	if got := h.ac.Config(); got != last || built.Load() != 200 {
+		t.Fatalf("a refused SetConfig changed the running state: cfg %+v, built %d", got, built.Load())
+	}
+}
+
+// requireSetConfigRefused asserts each invalid config is a KindInvalidInput.
+func requireSetConfigRefused(t *testing.T, ac *AwayController) {
+	t.Helper()
+	for _, bad := range []AwayConfig{{}, {Threshold: -time.Minute, DigestUrgentDeepLinks: 1}, {Threshold: time.Minute, DigestUrgentDeepLinks: -1}} {
+		err := ac.SetConfig(bad)
+		if err == nil || !cascade.HasKind(err, cascade.KindInvalidInput) {
+			t.Fatalf("SetConfig(%+v) = %v, want KindInvalidInput", bad, err)
+		}
+	}
+}
+
+// TestAwaySetConfigThresholdTakesEffect: lowering the threshold on a running
+// controller governs its next evaluation, with no state reset.
+func TestAwaySetConfigThresholdTakesEffect(t *testing.T) {
+	ctx := context.Background()
+	h := newTestAway(t, newFixedClockPtr(time.Unix(7100, 0)), stubAdmission{}, "node-thr")
+	h.clock.Advance(2 * time.Minute)
+	if got := h.ac.Tick(ctx); got != StateActive {
+		t.Fatalf("Tick under a 10m threshold after 2m = %v, want Active", got)
+	}
+	if err := h.ac.SetConfig(AwayConfig{Threshold: time.Minute, DigestUrgentDeepLinks: 10}); err != nil {
+		t.Fatalf("SetConfig: %v", err)
+	}
+	if got := h.ac.Tick(ctx); got != StateAwayPending {
+		t.Fatalf("Tick under the new 1m threshold = %v, want AwayPending", got)
+	}
+	h.clock.Advance(2 * time.Minute)
+	if got := h.ac.Tick(ctx); got != StateAway {
+		t.Fatalf("second Tick under the new threshold = %v, want Away", got)
+	}
+}
+
+// TestAwayFailOpenReleasesHeldNotifications: after FailOpen the router no
+// longer withholds delivery and what it held is back in the normal queues.
+func TestAwayFailOpenReleasesHeldNotifications(t *testing.T) {
+	h := newTestAway(t, newFixedClockPtr(time.Unix(7000, 0)), stubAdmission{}, "node-failopen")
+	h.driveToAway(t)
+	if !h.router.Accumulating() {
+		t.Fatal("setup: not accumulating in Away")
+	}
+	h.ac.FailOpen()
+	h.ac.FailOpen() // idempotent
+	if h.router.Accumulating() {
+		t.Fatal("FailOpen left the router withholding delivery")
+	}
+	if got := h.router.DrainAccumulated(); len(got) != 0 {
+		t.Fatalf("FailOpen left %d notifications in the accumulation buffer", len(got))
+	}
+	if got := h.ac.State(); got != StateAway {
+		t.Fatalf("FailOpen changed the state machine to %v", got)
 	}
 }

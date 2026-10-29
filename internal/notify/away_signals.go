@@ -36,13 +36,26 @@ func (c *AwayController) compileDigest(ctx context.Context, episodeID string, dr
 	if episodeID == "" {
 		return
 	}
-	if c.deps.Digest == nil {
+	c.mu.Lock()
+	digest := c.deps.Digest // SetConfig swaps it under c.mu
+	c.mu.Unlock()
+	if digest == nil {
 		for _, n := range drained {
 			c.deps.Router.requeue(n)
 		}
 		return
 	}
-	if err := c.deps.Digest.CompileDrained(ctx, episodeID, c.deps.EntityID, drained); err != nil {
+	defer func() { // a panicking compile must not drop the drained episode
+		if v := recover(); v != nil {
+			// A digest that already went out may now repeat its originals; a
+			// duplicate beats a silent loss when failing open.
+			for _, n := range drained {
+				c.deps.Router.requeue(n)
+			}
+			panic(v)
+		}
+	}()
+	if err := digest.CompileDrained(ctx, episodeID, c.deps.EntityID, drained); err != nil {
 		c.log.Error("notify: return-digest compile/dispatch failed", "episode", episodeID, "error", err)
 	}
 }
@@ -85,11 +98,29 @@ func (c *AwayController) drainStalls() {
 }
 
 // reclassify bumps every accumulated notification matching sn to Urgent and
-// returns how many it changed.
+// returns how many distinct notifications it changed.
 func (c *AwayController) reclassify(sn StallNotice) int {
-	n := c.deps.Router.reclassifyAccumulated(sn.NotificationID)
-	if sn.CorrelationID != "" && sn.CorrelationID != sn.NotificationID {
-		n += c.deps.Router.reclassifyAccumulated(sn.CorrelationID)
+	return c.deps.Router.queues.reclassifyAccumulatedAny(sn.NotificationID, sn.CorrelationID)
+}
+
+// reclassifyAccumulatedAny sets Priority to Urgent on every buffered
+// notification whose ID or CorrelationID equals any of the non-empty ids, in
+// one pass under the buffer lock, and returns how many notifications that
+// was. One pass per id would count a notification carrying both ids twice
+// (the cross-referenced pair ID "Y"/Correlation "X" against a notice for
+// "X"/"Y"); an empty id matches nothing.
+func (q *queueSet) reclassifyAccumulatedAny(ids ...string) int {
+	q.accumMu.Lock()
+	defer q.accumMu.Unlock()
+	n := 0
+	for i := range q.accumBuf {
+		for _, id := range ids {
+			if id != "" && (q.accumBuf[i].ID == id || q.accumBuf[i].CorrelationID == id) {
+				q.accumBuf[i].Priority = PriorityUrgent
+				n++
+				break
+			}
+		}
 	}
 	return n
 }

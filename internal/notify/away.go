@@ -32,21 +32,13 @@
 //   - The auto-advance tier-1 ceiling (R/S-39.T2) is never touched here:
 //     this file has no import of, and no effect on, that ceiling.
 //
-// SIGNAL SOURCES (recorded, decided, not guessed): the contract names
-// supervision.Subscribe, event Kind "attention.idle",
-// AdmissionController.IdleState() and a "supervision.stalled" payload
-// carrying the stalled notification's id. None of the four exists in this
-// tree, and the nearest real signals are different facts, not faithful
-// substitutes — Inflight==0 && QueueDepth==0 is "the governor has no
-// work", i.e. machine idleness, and a session-change event is neither
-// necessary nor sufficient for operator presence. Presenting either as
-// presence would be a fail-open guess. This controller therefore consumes
-// PresenceSource and StallSource (away_config.go): narrow injected
-// interfaces a composition root implements against whatever the tree
-// really publishes. The wiring ticket that implements them is the same one
-// that constructs this controller at all; see the deferral recorded in
-// internal/build/testonly-allow.json, which states plainly that no P1
-// ticket owns away-mode wiring today.
+// SIGNAL SOURCES: presence and stalls are injected seams (PresenceSource,
+// StallSource, away_config.go), never bus payloads this package decodes by
+// guess. Machine idleness (Inflight()==0 && QueueDepth()==0) is the confirming
+// second signal, not presence. The daemon composes the real sources in
+// cmd/cascade/daemon_away.go (attested presence tracker, bus stall source,
+// the fleet runtime's admission controller) and loads the [notify] keys with
+// ParseAwaySection (away_load.go); SetConfig re-applies a validated reload.
 //
 // SPORT: internal.notify.AwayController/ADDED (P1-E23-W5-S49-T2).
 
@@ -132,6 +124,33 @@ func (c *AwayController) install(restored ReplayResult) {
 	}
 }
 
+// SetConfig validates cfg and installs it. An invalid cfg returns its error
+// and changes nothing, so a rejected reload leaves the running config in
+// force. The swap runs under the lock every transition holds, so a concurrent
+// Tick or HandleEvent sees the old config or the new one, never a mixture.
+// With AwayDeps.NewDigest set, the digest compiler is rebuilt for cfg in the
+// same critical section (it fixes its Urgent DeepLink cap when built). An
+// open Away episode stays open; the new threshold governs the next evaluation.
+func (c *AwayController) SetConfig(cfg AwayConfig) error {
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cfg = cfg
+	if c.deps.NewDigest != nil {
+		c.deps.Digest = c.deps.NewDigest(cfg)
+	}
+	return nil
+}
+
+// Config returns the config the controller is running now.
+func (c *AwayController) Config() AwayConfig {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.cfg
+}
+
 // State returns the controller's current state.
 func (c *AwayController) State() AwayState {
 	c.mu.Lock()
@@ -155,7 +174,8 @@ func (c *AwayController) EpisodeID() string {
 // and report a combination the machine never actually occupied. Under this
 // package's own invariant the pair is always consistent — Away implies
 // accumulating, anything else implies not accumulating — so an inconsistent
-// return means the flag was flipped outside the critical section.
+// return means the flag was flipped outside the critical section (FailOpen,
+// run only after a tick-loop panic, is the one sanctioned exception).
 func (c *AwayController) Snapshot() (AwayState, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -169,16 +189,7 @@ func (c *AwayController) Tick(ctx context.Context) AwayState {
 	c.drainStalls()
 	now := c.deps.Clock.Now()
 
-	c.mu.Lock()
-	ended := ""
-	var drained []Notification
-	if at := c.presenceActivity(); at.After(c.lastActivity) {
-		ended, drained = c.observeActivityLocked(ctx, at)
-	} else {
-		c.advanceLocked(ctx, now)
-	}
-	state := c.state
-	c.mu.Unlock()
+	ended, drained, state := c.tickSection(ctx, now)
 
 	c.compileDigest(ctx, ended, drained)
 	return state
@@ -194,10 +205,7 @@ func (c *AwayController) HandleEvent(ctx context.Context, ev ActivityEvent) Away
 		at = c.deps.Clock.Now()
 	}
 
-	c.mu.Lock()
-	ended, drained := c.observeActivityLocked(ctx, at)
-	state := c.state
-	c.mu.Unlock()
+	ended, drained, state := c.eventSection(ctx, at)
 
 	c.compileDigest(ctx, ended, drained)
 	return state
@@ -228,6 +236,14 @@ func (c *AwayController) observeActivityLocked(ctx context.Context, at time.Time
 	}
 	c.deps.Router.SetAccumulate(false)
 	drained := c.deps.Router.DrainAccumulated()
+	defer func() { // a panicking journal must not drop what the drain took
+		if v := recover(); v != nil {
+			for _, n := range drained {
+				c.deps.Router.requeue(n)
+			}
+			panic(v)
+		}
+	}()
 	c.appendJournal(ctx, journal.KindAck, episodeID, awayJournalPayload{EpisodeID: episodeID, ReturnedAt: at})
 	return episodeID, drained
 }

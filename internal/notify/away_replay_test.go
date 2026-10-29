@@ -205,3 +205,51 @@ func TestAwayConfigValidate(t *testing.T) {
 func TestAwayAdmissionSourceCompileTimeMatch(_ *testing.T) {
 	var _ AdmissionIdleSource = stubAdmission{}
 }
+
+// shuffledJournal is a journal.Store whose Replay returns its entries in a
+// fixed, NOT sequence-ordered, order: a store's return order is not part of
+// its contract, and ReplayState must not lean on it.
+type shuffledJournal struct {
+	journal.Store
+	entries []journal.Entry
+}
+
+func (s shuffledJournal) Replay(context.Context, string, journal.Cursor, []journal.Kind) ([]journal.Entry, error) {
+	return s.entries, nil
+}
+
+// TestReplayStateUsesJournalOrder (deep audit D8): entries returned out of
+// append order still resume the open episode with the highest journal
+// sequence, and the slice the store returned is left as it was.
+func TestReplayStateUsesJournalOrder(t *testing.T) {
+	intent := func(seq uint64, op string) journal.Entry {
+		return journal.Entry{EntityID: "node-d8", Seq: seq, Kind: journal.KindIntent, OperationID: op}
+	}
+	ack := func(seq uint64, op string) journal.Entry {
+		return journal.Entry{EntityID: "node-d8", Seq: seq, Kind: journal.KindAck, OperationID: op}
+	}
+	cases := []struct {
+		name    string
+		entries []journal.Entry // in the (wrong) order the store returns them
+		want    ReplayResult
+	}{
+		{"two open episodes, newest first in the slice", []journal.Entry{intent(2, "ep-new"), intent(1, "ep-old")}, ReplayResult{State: StateAway, EpisodeID: "ep-new"}},
+		{"two open episodes, oldest first in the slice", []journal.Entry{intent(1, "ep-old"), intent(2, "ep-new")}, ReplayResult{State: StateAway, EpisodeID: "ep-new"}},
+		{"newest closed, older still open", []journal.Entry{ack(4, "ep-new"), intent(1, "ep-old"), intent(3, "ep-new")}, ReplayResult{State: StateAway, EpisodeID: "ep-old"}},
+		{"ack listed before its own intent", []journal.Entry{ack(2, "ep"), intent(1, "ep")}, ReplayResult{State: StateActive}},
+		{"nothing recorded", nil, ReplayResult{State: StateActive}},
+	}
+	for _, tc := range cases {
+		in := append([]journal.Entry(nil), tc.entries...)
+		got, err := ReplayState(context.Background(), shuffledJournal{entries: in}, "node-d8")
+		if err != nil || got != tc.want {
+			t.Errorf("%s: ReplayState = %+v, %v; want %+v", tc.name, got, err, tc.want)
+		}
+		for i := range in {
+			if in[i].Seq != tc.entries[i].Seq || in[i].OperationID != tc.entries[i].OperationID {
+				t.Errorf("%s: ReplayState reordered the store's slice in place", tc.name)
+				break
+			}
+		}
+	}
+}

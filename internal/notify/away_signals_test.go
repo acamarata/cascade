@@ -177,3 +177,83 @@ func TestAwayStallNoticeIsNotLostToAConcurrentReturn(t *testing.T) {
 			n, len(h.router.queues.queues[PriorityNormal]))
 	}
 }
+
+// TestStallReclassifyCountsOnce (deep audit D5): a buffered notification that
+// matches a stall notice through BOTH its ids is one reclassification, not
+// two, and a notice matching nothing is still reported as zero.
+func TestStallReclassifyCountsOnce(t *testing.T) {
+	h := newTestAway(t, newFixedClockPtr(time.Unix(4600, 0)), stubAdmission{}, "node-d5")
+	h.router.SetAccumulate(true)
+	enqueue := func(id, corr string) {
+		h.router.queues.enqueue(Notification{ID: id, CorrelationID: corr, Class: ClassGlobalCritical, Priority: PriorityNormal})
+	}
+	enqueue("Y", "X") // matches the notice below through its ID and its CorrelationID
+	enqueue("X", "")  // matches through its ID only
+	enqueue("other", "other-corr")
+
+	if got := h.ac.reclassify(StallNotice{NotificationID: "X", CorrelationID: "Y"}); got != 2 {
+		t.Fatalf("reclassify counted %d, want 2 distinct notifications (the cross-referenced one counted once)", got)
+	}
+	if got := h.ac.reclassify(StallNotice{NotificationID: "nothing", CorrelationID: ""}); got != 0 {
+		t.Fatalf("a notice matching nothing counted %d, want 0", got)
+	}
+	if got := h.ac.reclassify(StallNotice{}); got != 0 {
+		t.Fatalf("an empty notice counted %d, want 0", got)
+	}
+	urgent := map[string]bool{}
+	for _, n := range h.router.DrainAccumulated() {
+		urgent[n.ID] = n.Priority == PriorityUrgent
+	}
+	if !urgent["Y"] || !urgent["X"] || urgent["other"] {
+		t.Fatalf("priorities after reclassify (true = Urgent) = %v, want X and Y Urgent and other untouched", urgent)
+	}
+}
+
+// TestDigestRequeueRacesNewEpisode (deep audit D4): between an episode's
+// return (drain, inside the lock) and its digest's re-queue (outside it), the
+// machine re-enters Away and a new item is buffered. The audit feared the
+// re-queued items would be re-accumulated or lost. They are neither: the
+// re-queue bypasses the gate, so the first episode's items reach the normal
+// queue exactly once and the new episode's buffer holds only its own item.
+func TestDigestRequeueRacesNewEpisode(t *testing.T) {
+	ctx := context.Background()
+	h := newTestAway(t, newFixedClockPtr(time.Unix(4700, 0)), stubAdmission{}, "node-d4")
+	h.driveToAway(t)
+	first := h.ac.EpisodeID()
+	routeBusNotification(h.router, "backup.result", "ep1-a", "proj-1")
+	routeBusNotification(h.router, "backup.result", "ep1-b", "proj-1")
+
+	// The return transition, exactly as HandleEvent runs it, stopped before
+	// the digest is compiled (no session is registered, so everything is
+	// re-queued).
+	h.ac.mu.Lock()
+	ended, drained := h.ac.observeActivityLocked(ctx, h.clock.Now())
+	h.ac.mu.Unlock()
+	if ended != first || len(drained) != 2 {
+		t.Fatalf("return edge = %q with %d items, want %q with 2", ended, len(drained), first)
+	}
+
+	// The new episode starts inside the race window and buffers its own item.
+	h.driveToAway(t)
+	second := h.ac.EpisodeID()
+	routeBusNotification(h.router, "backup.result", "ep2-c", "proj-1")
+
+	h.ac.compileDigest(ctx, ended, drained)
+
+	if second == first || !h.router.Accumulating() {
+		t.Fatalf("setup: second episode %q (first %q), accumulating %v", second, first, h.router.Accumulating())
+	}
+	queued := map[string]int{}
+	for _, p := range priorityOrder {
+		for len(h.router.queues.queues[p]) > 0 {
+			queued[(<-h.router.queues.queues[p]).ID]++
+		}
+	}
+	if queued["ep1-a"] != 1 || queued["ep1-b"] != 1 || len(queued) != 2 {
+		t.Fatalf("normal queues after the late re-queue = %v, want ep1-a and ep1-b once each and nothing else", queued)
+	}
+	buf := h.router.DrainAccumulated()
+	if len(buf) != 1 || buf[0].ID != "ep2-c" {
+		t.Fatalf("new episode's buffer = %+v, want only ep2-c (no re-accumulated or duplicated item)", buf)
+	}
+}

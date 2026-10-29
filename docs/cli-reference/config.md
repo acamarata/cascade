@@ -224,6 +224,22 @@ treats it as stalled and starts the escalation ladder. A duration string from
 value leaves the daemon running with `supervision.stall` in `error` and no
 stall supervision. See `docs/stall-supervision.md`.
 
+## `[notify]` away keys
+
+```toml
+[notify]
+away_threshold = "30m"
+digest_urgent_deeplinks = 10
+```
+
+`away_threshold` is how long both you and the machine must stay idle before the
+daemon enters away mode: a positive duration string, default `30m`.
+`digest_urgent_deeplinks` is the most urgent deep links one return digest
+carries: a whole number, zero or more, default `10`. Both reload without a
+restart. Any other key in `[notify]`, or an invalid value, keeps away mode off
+(or keeps the running values on a reload) and records the reason. See
+`docs/away-mode.md`.
+
 ## `[plugins]` and what a plugin selection means
 
 Two surfaces take a plugin selection, and they mean different things by it.

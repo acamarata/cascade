@@ -37,6 +37,7 @@ package notify
 import (
 	"context"
 	"log/slog"
+	"sort"
 	"time"
 
 	"github.com/acamarata/cascade/internal/fleet/governor"
@@ -64,7 +65,11 @@ type AwayDeps struct {
 	// EntityID is the local node identity (Q/S-36.T1), used as the
 	// journal entity id and as the digest's OriginScope.
 	EntityID string
-	Log      *slog.Logger
+	// NewDigest, when set, builds the compiler for a config SetConfig
+	// installs, because a DigestCompiler fixes its Urgent DeepLink cap when
+	// it is built. Nil keeps Digest as constructed.
+	NewDigest func(AwayConfig) *DigestCompiler
+	Log       *slog.Logger
 }
 
 // AwayState is the closed three-member away-mode state set.
@@ -236,6 +241,11 @@ func ReplayState(ctx context.Context, j journal.Store, entityID string) (ReplayR
 	if err != nil {
 		return ReplayResult{State: StateActive}, err
 	}
+	// The newest open episode is decided by journal sequence, never by the
+	// order Replay happened to return entries in (a store's return order is
+	// not part of its contract). Sort a copy so the caller's slice is intact.
+	entries = append([]journal.Entry(nil), entries...)
+	sort.SliceStable(entries, func(a, b int) bool { return entries[a].Seq < entries[b].Seq })
 	open := map[string]bool{}
 	for _, e := range entries {
 		switch e.Kind {
