@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-29T17:21:51Z",
+  "generated_at": "2026-10-29T23:24:44Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3785,6 +3785,20 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "cmd.cascade.wireCI",
+      "sites": [
+        {
+          "file": "cmd/cascade/wire_ci.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "cmd.cascade.wireCI/ADDED (P1-CI-10)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -15597,6 +15611,34 @@
       ]
     },
     {
+      "name": "internal.daemon.CIRuntime",
+      "sites": [
+        {
+          "file": "internal/daemon/subsystems_ci.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "internal.daemon.CIRuntime/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.daemon.NewCISubsystem",
+      "sites": [
+        {
+          "file": "internal/daemon/subsystems_ci.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "internal.daemon.NewCISubsystem/ADDED (P1-CI-10)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.daemon.RegisterFleetSessionsHandler",
       "sites": [
         {
@@ -16861,6 +16903,34 @@
           "line": 6,
           "status": "ADD",
           "raw": "internal.inventory.sport.splitTopLevelSegments/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.jobs.CheckpointWatcher",
+      "sites": [
+        {
+          "file": "internal/jobs/worktree_checkpoint.go",
+          "line": 27,
+          "status": "ADD",
+          "raw": "internal.jobs.CheckpointWatcher/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.jobs.EventLeaseCheckpoint",
+      "sites": [
+        {
+          "file": "internal/jobs/worktree_checkpoint.go",
+          "line": 27,
+          "status": "ADD",
+          "raw": "internal.jobs.EventLeaseCheckpoint/ADDED"
         }
       ],
       "statuses": [
@@ -23990,10 +24060,28 @@
       "sites": [
         {
           "file": "internal/nodes/records_file.go",
-          "line": 13,
+          "line": 15,
           "status": "CHANGE",
           "ticket": "P1-E17-W4-S37-T1",
           "raw": "internal/nodes records file backend (CHG) — P1-E17-W4-S37-T1."
+        },
+        {
+          "file": "internal/nodes/records_file_other.go",
+          "line": 8,
+          "status": "CHANGE",
+          "raw": "internal/nodes records file backend (CHG): windows sharing retry."
+        },
+        {
+          "file": "internal/nodes/records_file_retry.go",
+          "line": 27,
+          "status": "CHANGE",
+          "raw": "internal/nodes records file backend (CHG): windows sharing retry."
+        },
+        {
+          "file": "internal/nodes/records_file_windows.go",
+          "line": 17,
+          "status": "CHANGE",
+          "raw": "internal/nodes records file backend (CHG): windows sharing retry."
         }
       ],
       "statuses": [
@@ -40135,7 +40223,7 @@
       ]
     }
   ],
-  "total_sites": 3886,
+  "total_sites": 3894,
   "unspecified_count": 320,
   "multi_status_count": 121
 }
