@@ -222,22 +222,6 @@
     "symbol": "internal/fleet.WithBenchClock"
   },
   {
-    "caller_site": "cmd/cascade/daemon_capacity_wire.go",
-    "expected_caller": "cmd/cascade's daemon composition root, alongside the other registerXxxHandler calls",
-    "reason": "Binds fleet.capacity to an *rpc.Registry. Mirrors internal/fleet/sessions.RegisterHandlers's identical precedent (same allow-list, same reasoning): every landed daemon RPC method is registered from cmd/cascade's composition root, which this ticket's files_scope does not include. Exercised end to end against a real rpc.Registry.Dispatch in rpc_test.go (TestFleetCapacityRPC, TestFleetCapacityRPC_DaemonNotReady). STATUS NOTE (P1-E38-W8-S74-T1, done, recorded in its journal): that ticket landed status.widget over its OWN separate capacity.Compositor instance (internal/daemon/status_widget.go) and retired capacity.NewCompositor's own entry on that basis, but never calls fleet.capacity's RegisterHandlers itself -- the cascade fleet capacity CLI (cmd/cascade/fleet_capacity.go) dialing this method against a real daemon remains unwired. retire_ticket below is stale (that ticket will not retire this entry); left as the last real assignment pending a T0 re-triage rather than invented here.",
-    "retire_ticket": "cap:fleet-sessions",
-    "expires": "P1-EXIT-07",
-    "symbol": "internal/fleet/capacity.RegisterHandlers"
-  },
-  {
-    "caller_site": "cmd/cascade/daemon_capacity_wire.go",
-    "expected_caller": "cmd/cascade's daemon composition root, alongside RegisterHandlers",
-    "reason": "Installs the fleet.capacity_changed SSE mirror onto a Compositor's ChangeFunc. Exercised end to end against a real events.Bus-shaped fake in rpc_test.go (TestFleetCapacitySSEFires: fires within one Compositor tick, monotonic Seq, no-op on a no-change update); the real *events.Bus is constructed only by the daemon composition root. STATUS NOTE (P1-E38-W8-S74-T1, done, recorded in its journal): that ticket found fleet.capacity_changed's own \"fleet\" namespace choice is invisible to the daemon's one real /events subscriber (bound to \"daemon\" only, per internal/rpc/supervisor_sse.go's own NAMESPACE precedent) -- a pre-existing defect recorded in that ticket's journal, not fixed by it, and did not call WireSSE itself. retire_ticket below is stale; left as the last real assignment pending a T0 re-triage rather than invented here.",
-    "retire_ticket": "cap:fleet-sessions",
-    "expires": "P1-EXIT-07",
-    "symbol": "internal/fleet/capacity.WireSSE"
-  },
-  {
     "caller_site": "internal/fleet/census/collector_wire.go",
     "expected_caller": "internal/fleet/census/collector_wire.go, which P1-E12-W3-S24-T3 constructs; retire this entry when that lands",
     "reason": "The census Collector landed under P1-E12-W3-S25-T4. The composition that constructs one Collector shared between the sessions poll consumer and the telemetry readers is S-24.T3. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
@@ -613,34 +597,6 @@
     "retire_ticket": "cap:node-placement",
     "expires": "P1-EXIT-07",
     "symbol": "internal/nodes.SignTranscript"
-  },
-  {
-    "caller_site": "cmd/cascade/inbox.go",
-    "expected_caller": "NOT OWNED BY ANY P1 TICKET: no ticket wires away mode today. Grep-verified: AwayController appears in exactly one P1 contract, this one, which builds it and does not construct it. PCI s49t2-away-mode-contradictions asks planning to forge a composition-root ticket for AwayController/DigestCompiler/ReplayState (plus the real PresenceSource and StallSource implementations) and to re-point this entry at it. P1-E37-W8-S73-T2 (cmd/cascade/inbox.go, the nearest inbox surface, already named by this file's internal/notify.NewService and DefaultConfig siblings) holds the entry meanwhile so it is tracked rather than invisible.",
-    "reason": "AwayController and DigestCompiler (away.go/digest.go) land under P1-E23-W5-S49-T2 fully built and tested, but internal/notify as a whole has zero production callers as of this ticket -- verified by grep: no file outside internal/notify itself imports the package. The same S-73.T2 ticket already named by this file's sibling internal/notify.NewService/DefaultConfig entries (immediately above) is the nearest ratified ticket positioned to construct the first real notify.Service composition root; wiring AwayController/DigestCompiler into a live daemon subsystem is the identical no-composition-root-yet situation, deferred to the same place for the same reason.",
-    "retire_ticket": "P1-HRN-06",
-    "symbol": "internal/notify.DefaultAwayConfig"
-  },
-  {
-    "caller_site": "cmd/cascade/inbox.go",
-    "expected_caller": "NOT OWNED BY ANY P1 TICKET: no ticket wires away mode today. Grep-verified: AwayController appears in exactly one P1 contract, this one, which builds it and does not construct it. PCI s49t2-away-mode-contradictions asks planning to forge a composition-root ticket for AwayController/DigestCompiler/ReplayState (plus the real PresenceSource and StallSource implementations) and to re-point this entry at it. P1-E37-W8-S73-T2 (cmd/cascade/inbox.go, the nearest inbox surface, already named by this file's internal/notify.NewService and DefaultConfig siblings) holds the entry meanwhile so it is tracked rather than invisible.",
-    "reason": "AwayController and DigestCompiler (away.go/digest.go) land under P1-E23-W5-S49-T2 fully built and tested, but internal/notify as a whole has zero production callers as of this ticket -- verified by grep: no file outside internal/notify itself imports the package. The same S-73.T2 ticket already named by this file's sibling internal/notify.NewService/DefaultConfig entries (immediately above) is the nearest ratified ticket positioned to construct the first real notify.Service composition root; wiring AwayController/DigestCompiler into a live daemon subsystem is the identical no-composition-root-yet situation, deferred to the same place for the same reason.",
-    "retire_ticket": "P1-HRN-06",
-    "symbol": "internal/notify.NewAwayController"
-  },
-  {
-    "caller_site": "cmd/cascade/inbox.go",
-    "expected_caller": "NOT OWNED BY ANY P1 TICKET: no ticket wires away mode today. Grep-verified: AwayController appears in exactly one P1 contract, this one, which builds it and does not construct it. PCI s49t2-away-mode-contradictions asks planning to forge a composition-root ticket for AwayController/DigestCompiler/ReplayState (plus the real PresenceSource and StallSource implementations) and to re-point this entry at it. P1-E37-W8-S73-T2 (cmd/cascade/inbox.go, the nearest inbox surface, already named by this file's internal/notify.NewService and DefaultConfig siblings) holds the entry meanwhile so it is tracked rather than invisible.",
-    "reason": "AwayController and DigestCompiler (away.go/digest.go) land under P1-E23-W5-S49-T2 fully built and tested, but internal/notify as a whole has zero production callers as of this ticket -- verified by grep: no file outside internal/notify itself imports the package. The same S-73.T2 ticket already named by this file's sibling internal/notify.NewService/DefaultConfig entries (immediately above) is the nearest ratified ticket positioned to construct the first real notify.Service composition root; wiring AwayController/DigestCompiler into a live daemon subsystem is the identical no-composition-root-yet situation, deferred to the same place for the same reason.",
-    "retire_ticket": "P1-HRN-06",
-    "symbol": "internal/notify.NewDigestCompiler"
-  },
-  {
-    "caller_site": "cmd/cascade/inbox.go",
-    "expected_caller": "NOT OWNED BY ANY P1 TICKET: no ticket wires away mode today. Grep-verified: AwayController appears in exactly one P1 contract, this one, which builds it and does not construct it. PCI s49t2-away-mode-contradictions asks planning to forge a composition-root ticket for AwayController/DigestCompiler/ReplayState (plus the real PresenceSource and StallSource implementations) and to re-point this entry at it. P1-E37-W8-S73-T2 (cmd/cascade/inbox.go, the nearest inbox surface, already named by this file's internal/notify.NewService and DefaultConfig siblings) holds the entry meanwhile so it is tracked rather than invisible.",
-    "reason": "ReplayState (away_config.go) reconstructs an AwayController's state from M/S-27.T1's journal after a restart; it is called only by away_test.go/away_replay_test.go today. The composition root that owns process startup (constructing the journal.Store, calling ReplayState once, then NewAwayController with the result) is the same not-yet-built site as this file's sibling internal/notify entries -- deferred to P1-E37-W8-S73-T2 for the identical reason.",
-    "retire_ticket": "P1-HRN-06",
-    "symbol": "internal/notify.ReplayState"
   },
   {
     "caller_site": "internal/plugins/dispatch_host_boundary.go",
@@ -1202,20 +1158,6 @@
     "symbol": "internal/fleet/topology.SlidingWindowSum"
   },
   {
-    "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
-    "expected_caller": "the AO/S-79.T4 dispatch path's config-to-Tables resolution step",
-    "reason": "Same gap as NewTables directly above: ApplyOverrides merges the decoded [fleet.economics] block onto the base table, but the composition root that reads internal/runtime.Config.Economics and calls it is AO/S-79.T3/T4's scope, explicitly excluded from this ticket (NOT IN SCOPE: eligibility, correlation, ranking, atomic reservation).",
-    "retire_ticket": "P1-TOP-09",
-    "symbol": "internal/fleet/economics.ApplyOverrides"
-  },
-  {
-    "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
-    "expected_caller": "the AO/S-79.T4 dispatch path's config-to-Tables resolution step",
-    "reason": "P1-E41-W9-S79-T2 ships Tables as an immutable snapshot type consumed by ApplyOverrides. Its real production caller is the daemon composition root that resolves the live [fleet.economics] overrides before a dispatch decision, which is AO/S-79.T3/T4's scope (this ticket's own NOT IN SCOPE section names both), not T2's.",
-    "retire_ticket": "P1-TOP-09",
-    "symbol": "internal/fleet/economics.NewTables"
-  },
-  {
     "added_by_ticket": "P1-GEN-05",
     "caller_site": "internal/context/generate/run.go",
     "expected_caller": "the generate run orchestrator in internal/context/generate/run.go (P1-GEN-11), which builds one Writer per `cascade context generate` run over the prior manifest",
@@ -1238,41 +1180,6 @@
     "reason": "The four-condition drift check is built with the manifest; the verb that runs it is P1-GEN-11, so only tests call it today.",
     "retire_ticket": "P1-GEN-11",
     "symbol": "internal/context/generate.Check"
-  },
-  {
-    "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
-    "expected_caller": "The fleet composition root that creates the salt at daemon startup and registers a periodic Aggregate run (wired with the capacity port adapters)",
-    "reason": "P1-CAP-03 provides the create-once salt file and the above-scope aggregation (contract:capability-scorer); the composition root that calls them is outside this ticket's write_scope.",
-    "retire_ticket": "P1-CAP-05",
-    "symbol": "internal/learn.EnsureAggregateSalt"
-  },
-  {
-    "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
-    "expected_caller": "Same composition root as EnsureAggregateSalt: the periodic aggregation runnable",
-    "reason": "Aggregation is built and tested here; its scheduler registration is outside this ticket's write_scope.",
-    "retire_ticket": "P1-CAP-05",
-    "symbol": "internal/learn.NewAggregator"
-  },
-  {
-    "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
-    "expected_caller": "The fleet composition root that injects the production EstimateSource into capacity.NewTierPolicy",
-    "reason": "The production EstimateSource is provided here; the TierPolicy is constructed with it in the wiring ticket.",
-    "retire_ticket": "P1-CAP-05",
-    "symbol": "internal/learn.NewSQLiteEstimateSource"
-  },
-  {
-    "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
-    "expected_caller": "S-63.T3/S-64.T2's fleet-scheduling composition root, which constructs one DefaultProbeAdmission per daemon lifetime and injects it into NewTierPolicy; retire this entry once it lands (repointed at the Epic gate, BF-204: P1-CAP-05 composes the tier policy in subsystems_fleet_capacity.go and retires this row)",
-    "reason": "Ships alongside NewTierPolicy for the same reason: DefaultProbeAdmission is this ticket's real R-21.166 ProbeAdmission implementation, fully unit-tested (TestProbeAdmissionBackoff, TestTierPolicyProbeOnlyUnknown), but its production caller is the same not-yet-landed fleet-scheduling composition root -- see NewTierPolicy's entry above for full context.",
-    "retire_ticket": "P1-CAP-05",
-    "symbol": "internal/fleet/capacity.NewDefaultProbeAdmission"
-  },
-  {
-    "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
-    "expected_caller": "S-63.T3/S-64.T2's fleet-scheduling composition root, which resolves a FleetSnapshot into map[Tier]TierSlot, constructs one NewTierPolicy per daemon lifetime with the real EstimateSource/ProbeAdmission/Clock, and calls SelectTier per ResourceRequest; retire this entry once it lands (repointed at the Epic gate, BF-204: P1-CAP-05 composes the tier policy in subsystems_fleet_capacity.go and retires this row)",
-    "reason": "P1-E31-W6-S63-T2 ships the tier-policy engine (SelectTier, the jump rule, the reserve flag) fully implemented and unit-tested against test-only stub CapabilityScorer/EstimateSource/ProbeAdmission doubles. NewTierPolicy's real production caller needs a live FleetSnapshot -> map[Tier]TierSlot projection (the profile/tier config-domain binding) that no landed ticket ships yet -- see policy.go's own CONTRACT DEVIATION note. That composition-root wiring is S-63.T3/S-64.T2's job.",
-    "retire_ticket": "P1-CAP-05",
-    "symbol": "internal/fleet/capacity.NewTierPolicy"
   },
   {
     "added_by_ticket": "P1-CI-01",
@@ -1335,13 +1242,6 @@
     "reason": "A plain data shape for a discovery finding awaiting approval (R-21.163). Its own producer (discovery.go) was explicitly deferred by P1-E36-W7-S72-T1's journal, and its consumer (the AI/S-71 proposal store, R-21.161) had not landed as of this ticket. Building either here would either fabricate a producer with nothing to discover, or create the second competing proposal store R-21.161 forbids.",
     "retire_ticket": "P1-NODE-14",
     "symbol": "internal/nodes.PendingCandidate"
-  },
-  {
-    "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
-    "expected_caller": "FleetRuntime merges registered agent lanes into capacity snapshots using AgentLaneSlots.",
-    "reason": "The agent lane projection precedes the runtime registration and snapshot composition.",
-    "retire_ticket": "P1-CAP-05",
-    "symbol": "internal/fleet/capacity.AgentLaneSlots"
   },
   {
     "added_by_ticket": "P1-SEC-15",
@@ -1446,22 +1346,6 @@
     "symbol": "internal/providers/agents.SweepLease"
   },
   {
-    "added_by_ticket": "P1-CAP-04",
-    "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
-    "expected_caller": "FleetRuntime composition in internal/daemon/subsystems_fleet_capacity.go constructs the one capacity.Fleet with capacity.NewFleet, passing the production snapshot source, the selector, the learn scorer and decision adapters, DomainOf, node placement, the one Reserver and its reservation store; retire this entry once that file calls NewFleet",
-    "reason": "P1-CAP-04 ships Fleet.Lease and its companions (Commit, Abort, Release, ExpireStale, ReservationByExecution, RepoOfLease) implemented and tested over real SQLite, but the composition root that builds the Fleet is P1-CAP-05's scope and the first dispatch door that calls the lease methods is P1-TOP-04, so nothing in production calls NewFleet yet. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once the file exists without the call.",
-    "retire_ticket": "P1-CAP-05",
-    "symbol": "internal/fleet/capacity.NewFleet"
-  },
-  {
-    "added_by_ticket": "P1-CAP-04",
-    "caller_site": "internal/daemon/subsystems_fleet_capacity.go",
-    "expected_caller": "FleetRuntime composition in internal/daemon/subsystems_fleet_capacity.go builds the interim Selector with capacity.NewTierPolicySelector over the TierPolicy it constructs, and passes it to NewFleet; P1-TOP-09 later replaces it with the economics.Rank selector and deletes this symbol",
-    "reason": "The interim Selector is the Lease seam's only implementation until P1-TOP-09. It is fully unit-tested, but the composition root that holds the TierPolicy is P1-CAP-05's scope, so nothing in production calls it yet.",
-    "retire_ticket": "P1-CAP-05",
-    "symbol": "internal/fleet/capacity.NewTierPolicySelector"
-  },
-  {
     "added_by_ticket": "P1-TOP-01",
     "caller_site": "internal/fleet/topology/lane_ceiling.go",
     "expected_caller": "internal/fleet/topology/lane_ceiling.go, the lane-ceiling resolver that derives a profile lane's lane type from EndpointIsLocal(profile); retire this entry once that file calls EndpointIsLocal",
@@ -1476,14 +1360,6 @@
     "reason": "P1-TOP-01 ships topology.EnsureHome, the per-profile 0700 runtime home, implemented and tested (mode creation, tightening, symlink and file refusal, windows declared refusal). Its first production caller is account enrollment in P1-TOP-07 (enroll.go), and the spawn path that passes the home to a runtime is P1-TOP-17; neither exists yet. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once enroll.go exists.",
     "retire_ticket": "P1-TOP-07",
     "symbol": "internal/fleet/topology.EnsureHome"
-  },
-  {
-    "added_by_ticket": "P1-HRN-10",
-    "caller_site": "cmd/cascade/wire_away.go",
-    "expected_caller": "cmd/cascade/wire_away.go, the away-mode composition that builds the stall source with notify.NewBusStallSource over the daemon bus, runs it on the run context through Manifest.GoSupervised and passes it to the away controller as its StallSource; retire this entry once that file calls NewBusStallSource",
-    "reason": "P1-HRN-10 ships notify.BusStallSource, implemented and tested against the real event bus and the real supervision stall publisher. Its only production caller is the away-mode composition in P1-HRN-11 (wire_away.go), which does not exist yet, so wiring a call here now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once wire_away.go exists.",
-    "retire_ticket": "P1-HRN-11",
-    "symbol": "internal/notify.NewBusStallSource"
   },
   {
     "added_by_ticket": "P1-PLG-10",
@@ -1548,5 +1424,21 @@
     "reason": "P1-SEC-36 adds secrets.clipboard_ttl to the [secrets] guarded family (a raise needs attestation, a degraded boot keeps a tighter value) and ships its only reader, but the clipboard copy that consumes the TTL is P1-SEC-09, which depends on this ticket. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
     "retire_ticket": "P1-SEC-09",
     "symbol": "internal/runtime.SecretsClipboardTTL"
+  },
+  {
+    "added_by_ticket": "P1-CAP-05",
+    "caller_site": "internal/daemon/fleet_candidates.go",
+    "expected_caller": "the AO/S-79.T4 dispatch path's config-to-Tables resolution step",
+    "reason": "Same gap as NewTables directly above: ApplyOverrides merges the decoded [fleet.economics] block onto the base table, but the composition root that reads internal/runtime.Config.Economics and calls it is AO/S-79.T3/T4's scope, explicitly excluded from this ticket (NOT IN SCOPE: eligibility, correlation, ranking, atomic reservation).",
+    "retire_ticket": "P1-TOP-09",
+    "symbol": "internal/fleet/economics.ApplyOverrides"
+  },
+  {
+    "added_by_ticket": "P1-CAP-05",
+    "caller_site": "internal/daemon/fleet_candidates.go",
+    "expected_caller": "the AO/S-79.T4 dispatch path's config-to-Tables resolution step",
+    "reason": "P1-E41-W9-S79-T2 ships Tables as an immutable snapshot type consumed by ApplyOverrides. Its real production caller is the daemon composition root that resolves the live [fleet.economics] overrides before a dispatch decision, which is AO/S-79.T3/T4's scope (this ticket's own NOT IN SCOPE section names both), not T2's.",
+    "retire_ticket": "P1-TOP-09",
+    "symbol": "internal/fleet/economics.NewTables"
   }
 ]
