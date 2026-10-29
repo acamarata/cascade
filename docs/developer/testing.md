@@ -110,14 +110,17 @@ never a re-typed approximation of the config.
 ## Coverage lane
 
 The `coverage` job in `.github/workflows/ci.yml` runs
-`go test -covermode=atomic -coverprofile=coverage.out ./...` on every push
-and uploads the profile as a build artifact. This lane MEASURES coverage;
-it does not itself enforce 12-QUALITY-CONSTITUTION.md Art.4's per-package
-floors or ratchet; that is a later ticket's floor-gate, which consumes
-this lane's profile. Run the same command locally before pushing:
+`go test -timeout 40m -covermode=atomic -coverprofile=coverage.out ./...` on
+every push and uploads the profile as a build artifact. The explicit
+`-timeout 40m` replaces go's default 10m per-package bound, which the slow
+hosted runner exceeded in internal/build while every test passed. This lane
+MEASURES coverage; it does not itself enforce 12-QUALITY-CONSTITUTION.md
+Art.4's per-package floors or ratchet; that is a later ticket's floor-gate,
+which consumes this lane's profile. Run the same command locally before
+pushing:
 
 ```sh
-go test -covermode=atomic -coverprofile=coverage.out ./...
+go test -timeout 40m -covermode=atomic -coverprofile=coverage.out ./...
 go tool cover -func=coverage.out | tail -1   # total coverage
 go tool cover -html=coverage.out             # per-line, in a browser
 ```

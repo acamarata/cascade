@@ -321,8 +321,10 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # -timeout 40m: hosted b41 took 1370 s here against the old 25m (1500 s)
+      # bound; the slow packages (internal/build, cmd/cascade) only grow.
       - name: go test -race ./...
-        run: go test -race -timeout 25m ./...
+        run: go test -race -timeout 40m ./...
 
   coverage:
     # P1-E01-W1-S01-T4: measures coverage on every push. This lane does NOT
@@ -340,8 +342,12 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # -timeout 40m: go's default 10m per-package bound killed internal/build
+      # on the hosted runner (600 s, b41) with every test passing; the suite
+      # is slow there, not wrong. The same explicit bound sits on the other
+      # heavy steps (race, the lint wall's internal/build run, redirected-HOME).
       - name: go test -cover ./...
-        run: go test -timeout 25m -covermode=atomic -coverprofile=coverage.out ./...
+        run: go test -timeout 40m -covermode=atomic -coverprofile=coverage.out ./...
 
       - name: coverage summary
         run: go tool cover -func=coverage.out | tail -1
@@ -381,7 +387,7 @@ jobs:
       # license and bench-harness gates — all live in internal/build and
       # must be green alongside the lint wall (docs/developer/lint-wall.md).
       - name: go test ./internal/build/...
-        run: go test ./internal/build/... -v
+        run: go test -timeout 40m ./internal/build/... -v
 
   coverage-gate:
     # P1-E01-W1-S01-T8: consumes the coverage-profile artifact the
@@ -455,7 +461,7 @@ jobs:
           GOENV: /tmp/cascade-goenv/env
         run: |
           mkdir -p "$HOME" /tmp/cascade-gocache /tmp/cascade-gomodcache /tmp/cascade-gopath /tmp/cascade-goenv
-          go test ./...
+          go test -timeout 40m ./...
 
       - name: snapshot git status (after)
         run: git status --porcelain > /tmp/git-status-after.txt
