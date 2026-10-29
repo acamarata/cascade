@@ -45,6 +45,7 @@ jobs:
   build-test:
     name: build+test (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -217,6 +218,7 @@ jobs:
   darwin-amd64-build:
     name: build+vet (darwin/amd64, cross-compiled)
     runs-on: macos-15
+    timeout-minutes: 45
     env:
       GOOS: darwin
       GOARCH: amd64
@@ -243,6 +245,7 @@ jobs:
   linux-pam-build:
     name: linux pam keystore (build only)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -274,6 +277,7 @@ jobs:
   conformance-suite:
     name: plugin ABI conformance (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -295,6 +299,7 @@ jobs:
   race:
     name: race detector
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -313,6 +318,7 @@ jobs:
     # failed, not a coverage regression.
     name: coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -321,7 +327,7 @@ jobs:
           go-version-file: go.mod
 
       - name: go test -cover ./...
-        run: go test -covermode=atomic -coverprofile=coverage.out ./...
+        run: go test -timeout 25m -covermode=atomic -coverprofile=coverage.out ./...
 
       - name: coverage summary
         run: go tool cover -func=coverage.out | tail -1
@@ -334,6 +340,7 @@ jobs:
   lint:
     name: lint wall + build gates
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -372,6 +379,7 @@ jobs:
     name: coverage gate (floors + ratchet)
     needs: [coverage]
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -403,6 +411,7 @@ jobs:
     # this one).
     name: redirected-HOME + clean-tree
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -454,6 +463,7 @@ jobs:
     # real history, not the default single-commit shallow checkout.
     name: hygiene (commit + identifier sweep)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -523,6 +533,7 @@ jobs:
     # against it, per Art.2 (never a hand-rolled fake).
     name: storetest-under-docker (postgres, required)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -558,6 +569,7 @@ jobs:
     # pgvector-specific failure is visible on its own CI check name.
     name: pgvector-storetest-under-docker (required)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -596,6 +608,7 @@ jobs:
     # ticket checks establish.
     name: redis-storetest-under-docker (required)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     services:
       redis:
         image: redis:7-alpine
@@ -650,6 +663,7 @@ jobs:
     # nothing printed SKIP.
     name: s3-storetest-under-docker (required)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -732,6 +746,7 @@ jobs:
     # unset — a silent skip would put the job straight back where it was.
     name: server-profile-assembly (required)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -784,6 +799,7 @@ jobs:
     # ci-gate on infra outside this repo's control.
     name: node-tunnel-real-sshd (loopback OpenSSH, allowed-fail)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -810,6 +826,7 @@ jobs:
     # allowed-fail shape as node-tunnel-real-sshd above (D-2 precedent).
     name: node-provision-real-counterparts (loopback OpenSSH + minisign, allowed-fail)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -841,6 +858,7 @@ jobs:
     # repo's control, never a required gate).
     name: sync-chunked-transfer-real-sshd (loopback OpenSSH, allowed-fail)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -874,6 +892,7 @@ jobs:
     # the `lint` job above.
     name: retrieval eval gate
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -961,6 +980,7 @@ jobs:
     # and must block.
     name: plugin-integration (tagged tests under plugins/**)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -982,6 +1002,7 @@ jobs:
     # A red result is this repo's bug and must block.
     name: node-dispatch-real-git (real git repositories)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -1003,6 +1024,7 @@ jobs:
     # own temp dir, so a red result is this repo's bug and must block.
     name: sync-merge-real-git (real git repositories)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -1028,6 +1050,7 @@ jobs:
     # tier-2 ruling, and there is no SIGKILL to send it.
     name: node-kill-mid-run (real node agent, SIGKILL)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -1061,6 +1084,7 @@ jobs:
   changes:
     name: changes (widget path filter)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
       pull-requests: read
@@ -1413,6 +1437,7 @@ jobs:
     name: ci-gate (required status)
     needs: [build-test, darwin-amd64-build, linux-pam-build, conformance-suite, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, redis-storetest-under-docker, s3-storetest-under-docker, server-profile-assembly, plugin-integration, node-dispatch-real-git, node-kill-mid-run, sync-merge-real-git, changes, widget, golden-parity, integration-lanes, integration-lanes-red-assert]
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     if: always()
     steps:
       - name: All lanes green

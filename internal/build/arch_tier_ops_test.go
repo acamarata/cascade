@@ -171,7 +171,7 @@ func tierFindings(pkgs []*packages.Package, root string) []string {
 
 // tierCIPin is the reviewed digest of ci.yml's build-test job, the workflow's on, env
 // and defaults, and ci-gate needing build-test; an edit refuses skips until re-pinned.
-const tierCIPin = "4038a14c99ea136696dc31cde44112e6a734dc0ff91b487e56e0baf7d250b3e7"
+const tierCIPin = "79bcc97b6e1aac8ac025ce72d1894060457712710cd00bd3327e3db1671b8254"
 
 // tierPlatforms maps each analysed GOOS to its native runner label prefix.
 var tierPlatforms = map[string]string{"linux": "ubuntu-", "darwin": "macos-", "windows": "windows-"}
