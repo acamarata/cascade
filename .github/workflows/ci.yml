@@ -61,6 +61,20 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # Windows only: TMP and TEMP move from C:\Users\runneradmin\AppData\
+      # Local\Temp to runner.temp on the D: work drive. Every t.TempDir(),
+      # every test SQLite store and go's own build work dir live under
+      # TMP, and fsync on the runner's C: OS disk is slow enough that the
+      # store-backed packages ran 20-60x slower than on linux (see the
+      # -timeout note on go test below). The workspace already lives on
+      # D:, so nothing else about the lane changes.
+      - name: point TMP/TEMP at the work drive (windows)
+        if: matrix.goos == 'windows'
+        shell: bash
+        run: |
+          echo "TMP=${{ runner.temp }}" >> "$GITHUB_ENV"
+          echo "TEMP=${{ runner.temp }}" >> "$GITHUB_ENV"
+
       - name: go build ./...
         run: go build ./...
 
