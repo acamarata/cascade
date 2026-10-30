@@ -1,0 +1,25 @@
+# testscript: executable
+# ci_watch.txtar: `cascade ci watch` against a real daemon (P1-CI-11).
+# ci-watch-fixture is a hidden test-only mount (ci_watch_wiring_test.go):
+# `start` serves the production ci topic on the socket the ci mount
+# resolves and replays a scripted acceptance re-run for job-7 (lint and
+# unit), with a streaming checkpoint of job-7 and another job's acceptance
+# checkpoint around it. The watch itself is the production command. The
+# fixture mounts only while CASCADE_TEST_CI_WATCH_FIXTURE=1.
+
+env CASCADE_TEST_CI_WATCH_FIXTURE=1
+
+[!windows] exec cascade ci-watch-fixture start job-7
+[!windows] exec cascade ci watch job-7
+[!windows] stdout 'ci.checkpoint.dispatched checkpoint=cp-[0-9]+ kind=lint acceptance=true'
+[!windows] stdout 'ci.checkpoint.terminal checkpoint=cp-[0-9]+ kind=unit acceptance=true passed=true'
+[!windows] ! stdout 'other-cp'
+[!windows] exec cascade ci-watch-fixture stop
+
+# The daemon is gone: the watch refuses rather than waiting on nothing.
+! exec cascade ci watch job-7
+stderr 'cascade daemon run'
+
+# A job id is required.
+! exec cascade ci watch
+stderr 'exactly one job id'

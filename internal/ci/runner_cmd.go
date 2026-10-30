@@ -20,9 +20,12 @@
 // Outputs: a *cobra.Command tree, and the opened stores its verbs write
 // through.
 // Constraints: every `ci` verb is fully non-interactive (06 §5.8, no
-// prompts) and daemonless (06 §2, embedded mode always -- no daemon RPC
-// path exists for this domain). No new outbound network class: it only
-// ever touches the local cascade.db and local sub-processes.
+// prompts). `run` and `status` are daemonless (06 §2, embedded mode
+// against the local cascade.db). `watch` reads the daemon's event stream
+// and `attest verify` runs a verifier, each only through a CmdDeps field
+// the ci mount file binds; a nil field refuses. No new outbound network
+// class: only the local cascade.db, local sub-processes and the local
+// daemon socket.
 // SPORT: internal.ci.NewCICmd/ADDED (P1-E25-W5-S51-T5).
 
 package ci
@@ -56,6 +59,13 @@ type CmdDeps struct {
 	// InstalledRouteResolver; a test passes its own. A nil Routes makes
 	// every routed verb fail closed rather than run unguarded.
 	Routes RouteResolver
+	// WatchEvents opens jobID's CI event stream (contract:ci-cli-attach).
+	// The ci mount file binds it to (*client.Client).JobEvents; nil makes
+	// `ci watch` refuse with KindUnavailable.
+	WatchEvents func(ctx context.Context, jobID string) (<-chan CIEventFrame, func(), error)
+	// AttestVerify runs `ci attest verify` (contract:ci-cli-attach). It is
+	// nil until P1-CI-04 binds it; nil refuses with KindUnavailable.
+	AttestVerify func(cmd *cobra.Command, args []string) error
 }
 
 // ProductionCmdDeps builds CmdDeps against the real environment --
@@ -90,7 +100,26 @@ func NewCICmd(deps CmdDeps) *cobra.Command {
 	}
 	root.AddCommand(newCIRunCmd(deps))
 	root.AddCommand(newCIStatusCmd(deps))
+	root.AddCommand(newCIWatchCmd(deps))
+	root.AddCommand(newCIAttestCmd(deps))
 	return root
+}
+
+// newCIAttestCmd builds `ci attest` and its `verify` verb. verify runs
+// deps.AttestVerify; a nil field hides nothing and refuses naming the verb.
+func newCIAttestCmd(deps CmdDeps) *cobra.Command {
+	attest := &cobra.Command{Use: "attest", Short: "Verify CI attestation records"}
+	attest.AddCommand(&cobra.Command{
+		Use:   "verify <commit-sha>",
+		Short: "Verify the stored CI attestations for a commit",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if deps.AttestVerify == nil {
+				return cascade.New(cascade.KindUnavailable, "ci attest verify: no attestation verifier is bound in this build")
+			}
+			return deps.AttestVerify(cmd, args)
+		},
+	})
+	return attest
 }
 
 // outputWriter builds an internal/output.Writer bound to cmd's own

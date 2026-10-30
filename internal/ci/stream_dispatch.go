@@ -49,6 +49,40 @@ type streamEventPayload struct {
 	RunID        int64  `json:"run_id"`
 	RepoID       int64  `json:"repo_id"`
 	ExecutorKind string `json:"executor_kind"`
+	// Kinds is set on the plan event only: every kind the dispatch runs.
+	Kinds []string `json:"kinds,omitempty"`
+	// Error is set on the aborted event of a kind that ended abnormally.
+	Error string `json:"error,omitempty"`
+}
+
+// EventKindCheckpointPlanned is published once per Dispatch, before any
+// kind starts, listing every kind it runs (P1-CI-11, T0 individual
+// ruling): the kinds run in parallel and publish their dispatched events
+// in no fixed order, so `ci watch` completes on this list.
+const EventKindCheckpointPlanned events.EventKind = "ci.checkpoint.planned"
+
+// EventKindCheckpointAborted is a kind's failed end when it errored or
+// panicked without a terminal result. It is not a terminal (Resume may still
+// finish the kind), but a watcher takes it as that kind failing.
+const EventKindCheckpointAborted events.EventKind = "ci.checkpoint.aborted"
+
+// publishPlan emits e's plan event on the ci_results namespace.
+func (d *Dispatcher) publishPlan(ctx context.Context, e dispatchEntry) error {
+	kinds := make([]string, len(e.Kinds))
+	for i, k := range e.Kinds {
+		kinds[i] = string(k)
+	}
+	payload, err := json.Marshal(streamEventPayload{
+		JobID: e.Ref.JobID, CheckpointID: e.Snapshot.CheckpointID, TreeHash: e.Snapshot.TreeHash,
+		Acceptance: e.Acceptance, ViaStream: true, Sensitivity: e.Ref.Sensitivity.String(), Kinds: kinds,
+	})
+	if err != nil {
+		return cascade.Wrap(cascade.KindInternal, err, "ci: stream: encode plan event")
+	}
+	if _, err := d.deps.Bus.Publish(ctx, EventNamespace, EventKindCheckpointPlanned, streamEventSource, payload); err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "ci: stream: publish plan event")
+	}
+	return nil
 }
 
 // kindsOf lists the kinds plan requires, in the closed enum's order.
@@ -81,6 +115,9 @@ func (d *Dispatcher) Dispatch(ctx context.Context, ref JobRef, snap CandidateSna
 	if err := d.ensureIntents(ctx, e); err != nil {
 		return nil, err
 	}
+	if err := d.publishPlan(ctx, e); err != nil {
+		return nil, err
+	}
 	return d.runKinds(ctx, e)
 }
 
@@ -94,6 +131,7 @@ func (d *Dispatcher) runKinds(ctx context.Context, e dispatchEntry) ([]CIResultE
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			defer d.endAbnormally(ctx, e, kind, &errs[i])
 			results[i], errs[i] = d.runKind(ctx, e, kind)
 		}()
 	}
@@ -108,6 +146,30 @@ func (d *Dispatcher) runKinds(ctx context.Context, e dispatchEntry) ([]CIResultE
 		return out, err
 	}
 	return out, d.finishAttempt(ctx, e.Snapshot.AttemptID)
+}
+
+// endAbnormally runs deferred around one kind: a panic becomes *errp, and
+// a kind that ends with an error publishes an aborted event carrying it
+// (P1-CI-11), so a watcher never waits for a terminal that cannot come. A
+// kind refused as running elsewhere, fenced or superseded (KindConflict)
+// publishes nothing: another run owns it.
+func (d *Dispatcher) endAbnormally(ctx context.Context, e dispatchEntry, kind RequirementKind, errp *error) {
+	if p := recover(); p != nil {
+		*errp = cascade.Newf(cascade.KindInternal, "ci: stream: kind %s panicked: %v", kind, p)
+	}
+	if k, _ := cascade.KindOf(*errp); *errp == nil || k == cascade.KindConflict || errChainHas(*errp, jobs.ErrLeaseFenced) {
+		return
+	}
+	payload, err := json.Marshal(streamEventPayload{
+		JobID: e.Ref.JobID, CheckpointID: e.Snapshot.CheckpointID, TreeHash: e.Snapshot.TreeHash, Kind: string(kind),
+		Acceptance: e.Acceptance, ViaStream: true, Sensitivity: e.Ref.Sensitivity.String(), Error: (*errp).Error(),
+	})
+	if err == nil {
+		_, err = d.deps.Bus.Publish(context.WithoutCancel(ctx), EventNamespace, EventKindCheckpointAborted, streamEventSource, payload)
+	}
+	if err != nil {
+		*errp = errors.Join(*errp, cascade.Wrap(cascade.KindUnavailable, err, "ci: stream: publish aborted event"))
+	}
 }
 
 // runKind runs one kind: the shared body of Dispatch and Resume.

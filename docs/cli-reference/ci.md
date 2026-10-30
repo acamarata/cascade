@@ -2,13 +2,16 @@
 
 Runs the local lint/test/build gate, and shows what CI has recorded.
 
-`ci` is a core noun. It is not a verb of the `cascade-github` plugin, and
-it needs no daemon: both verbs run in embedded mode against the local
-`cascade.db`, fully non-interactive, with no prompts.
+`ci` is a core noun. It is not a verb of the `cascade-github` plugin.
+`run` and `status` need no daemon: they run in embedded mode against the
+local `cascade.db`. `watch` reads the running daemon's event stream. Every
+verb is non-interactive, with no prompts.
 
 ```
 cascade ci run [flags]
 cascade ci status
+cascade ci watch <job-id>
+cascade ci attest verify <commit-sha>
 ```
 
 ## `cascade ci run`
@@ -67,6 +70,46 @@ and spends nothing, so there is no routing decision to make here. The
 refusals live where money is at stake: `ci run` above, and the Actions
 polling path, which refuses to spend a request on a repository the policy
 routes local.
+
+## `cascade ci watch <job-id>`
+
+Follows one job's `ci.checkpoint.planned`, `ci.checkpoint.dispatched` and
+`ci.checkpoint.terminal` events through the daemon's `ci` event topic, one
+line per event:
+
+```
+ci.checkpoint.planned checkpoint=<id> kinds=lint,unit acceptance=true
+ci.checkpoint.dispatched checkpoint=<id> kind=lint acceptance=true
+ci.checkpoint.terminal checkpoint=<id> kind=lint acceptance=true passed=true
+```
+
+`--json` writes one compact JSON record per event instead.
+
+The `ci` topic is owner-only. Run the watch as the user who runs
+`cascade daemon run`; any other caller is refused.
+
+The watch first replays the job's stored events, then follows new ones.
+The dispatcher publishes one plan event per run, before any check starts,
+listing every kind it will run. The watch decides on the job's latest
+acceptance plan, and only after the replay ends, so an older run never
+answers for a newer one. A run that finished before the watch started is
+reported at once.
+
+| Exit | When |
+|---|---|
+| 0 | Every kind in the latest acceptance plan has an `acceptance=true` terminal event, and all of them passed. |
+| 1 | A planned kind failed or aborted (its check errored or crashed: `ci.checkpoint.aborted`), the stream ended first (the daemon stopped or the connection dropped), or a frame for the job could not be read. |
+| 5 | No daemon is reachable, or the build has no event stream bound. |
+| 7 | The caller is not the daemon owner. |
+
+Streaming checkpoints and other jobs never decide the watch. With no
+acceptance plan for the job yet, the watch waits for one.
+
+## `cascade ci attest verify <commit-sha>`
+
+Verifies the stored CI attestation records for a commit. The verifier
+arrives with the attestation work; until a build binds it, the verb exits
+5 (unavailable) and names itself.
 
 ## Configuration
 

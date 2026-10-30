@@ -40,6 +40,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/ci"
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/fleet/capacity"
@@ -128,8 +129,11 @@ func TestBuildRPCServerMountsFleetSessionsSSE(t *testing.T) {
 	if _, ok := topicHandler.(*sessions.SSEHandler); !ok {
 		t.Fatalf("SSEMux.Topics[%q] = %T, want *sessions.SSEHandler", sessions.Topic, topicHandler)
 	}
-	if _, ok := mux.Topics[capacity.FleetCapacityTopic]; !ok || len(mux.Topics) != 2 {
-		t.Fatalf("SSEMux.Topics = %d entries (fleet.capacity mounted: %v), want exactly fleet.sessions and fleet.capacity", len(mux.Topics), ok)
+	if _, ok := mux.Topics[capacity.FleetCapacityTopic]; !ok || len(mux.Topics) != 3 {
+		t.Fatalf("SSEMux.Topics = %d entries (fleet.capacity mounted: %v), want exactly fleet.sessions, fleet.capacity and ci", len(mux.Topics), ok)
+	}
+	if h, ok := mux.Topics[ci.WatchTopic]; !ok || h == nil {
+		t.Fatalf("SSEMux.Topics[%q] missing, want the ci watch handler mounted", ci.WatchTopic)
 	}
 
 	req := httptest.NewRequest("GET", rpc.EventsPath+"?topic="+sessions.Topic, nil)

@@ -15,6 +15,7 @@ chat.resume
 chat.search
 chat.threads_list
 chat.topics_list
+ci.watch_replay_end
 conductor.execute
 conductor.expand
 config.accept_loosening
