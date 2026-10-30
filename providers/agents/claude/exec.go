@@ -281,11 +281,14 @@ func (d *Driver) Cancel(ctx context.Context, id provider.AgentJobID) error {
 	return provider.ErrCancelUnconfirmed
 }
 
+// beginCancel marks the job cancelling and reports whether Cancel waits:
+// not for a terminal job or a harness that exited before any Cancel, but
+// yes when an earlier Cancel is pending and the leader exited mid-ladder.
 func (r *jobRecord) beginCancel() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.state.Terminal() || r.leaderExited {
-		return false
+		return !r.state.Terminal() && r.cancelRequested
 	}
 	r.cancelRequested = true
 	r.state = provider.AgentRunCancelling

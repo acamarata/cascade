@@ -130,6 +130,7 @@ func cancelUnconfirmedThenComplete(t *testing.T) {
 		t.Fatalf("state %s, want cancelling", state(t, d, res.JobID))
 	}
 	_ = syscall.Kill(g, syscall.SIGKILL) // the group empties on its own now
+	waitLeaderExited(t, d, res.JobID)    // the second Cancel lands after the leader is reaped
 	if err := d.Cancel(context.Background(), res.JobID); err != nil || state(t, d, res.JobID) != provider.AgentRunCancelled {
 		t.Fatalf("second Cancel = %v, state %s", err, state(t, d, res.JobID))
 	}
