@@ -143,6 +143,10 @@ type Query struct {
 	// means every corpus the membership already authorizes; naming a
 	// corpus never widens the membership decision, it only narrows.
 	CorpusIDs []string `json:"corpus_ids,omitempty"`
+	// GeneralSession marks a query from a general session (R-16.3: user
+	// tiers only, NO project state). Only personal and global content is
+	// admitted; project-class content is never a candidate.
+	GeneralSession bool `json:"general_session,omitempty"`
 }
 
 // Store holds corpora and their records and answers scope-filtered
@@ -263,6 +267,9 @@ func authorize(r Record, c Corpus, q Query) (Record, bool) {
 	}
 	privacy := resolvePrivacy(r.Privacy, c.Privacy)
 	if !q.Entitlement.permits(privacy) {
+		return Record{}, false
+	}
+	if q.GeneralSession && privacy != PrivacyPersonal && privacy != PrivacyGlobal {
 		return Record{}, false
 	}
 	r.Privacy = privacy

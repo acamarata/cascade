@@ -33,10 +33,12 @@ package retrieval
 
 import (
 	"context"
+	"slices"
 
 	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/retrieval/corpus"
 	"github.com/acamarata/cascade/internal/retrieval/rrf"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // memoryOutcome queries the memory projection's indexed read model (D2),
@@ -62,7 +64,7 @@ func (s *RecallWhatService) memoryOutcome(ctx context.Context, req RecallWhatReq
 	// demoteSupersededAndExpired below has a row to demote against, and
 	// req.Scope narrows the projection's own search before its k cap
 	// applies rather than after.
-	rows, err := s.memory.SearchInScopeIncludingExpired(ctx, req.Query, req.Scope, k)
+	rows, err := s.memoryRows(ctx, req, k)
 	if err != nil {
 		return whatLegOutcome{domain: DomainMemory, err: err, configured: true}
 	}
@@ -78,8 +80,10 @@ func (s *RecallWhatService) memoryOutcome(ctx context.Context, req RecallWhatReq
 		// check is now redundant with the projection's own pre-limit
 		// filter in the common case, and stays anyway (fail-closed,
 		// R-16.7): a bug in one layer must not be the only thing
-		// standing between an out-of-scope row and the caller.
-		if r.Deleted || r.ScopeRef != req.Scope {
+		// standing between an out-of-scope row and the caller. An empty
+		// req.Scope matches nothing, as in the projection's own filter.
+		if r.Deleted || req.Scope == "" || r.ScopeRef != req.Scope ||
+			(req.general && !slices.Contains(generalMemoryKinds(), r.Kind)) {
 			continue
 		}
 		id := DomainMemory + ":" + r.ID
@@ -92,6 +96,25 @@ func (s *RecallWhatService) memoryOutcome(ctx context.Context, req RecallWhatReq
 	}
 	return whatLegOutcome{domain: DomainMemory, list: list, meta: meta, configured: true}
 }
+
+// memoryRows runs the memory search. A general session narrows by kind
+// inside the projection, before its cap; a leg that cannot do that refuses
+// the general session rather than reading project-kind rows.
+func (s *RecallWhatService) memoryRows(ctx context.Context, req RecallWhatRequest, k int) ([]memory.IndexedRecord, error) {
+	if !req.general {
+		return s.memory.SearchInScopeIncludingExpired(ctx, req.Query, req.Scope, k)
+	}
+	kl, ok := s.memory.(RecallWhatGeneralMemoryLeg)
+	if !ok {
+		return nil, errGeneralMemoryUnsupported
+	}
+	return kl.SearchInScopeKindsIncludingExpired(ctx, req.Query, req.Scope, generalMemoryKinds(), k)
+}
+
+// errGeneralMemoryUnsupported refuses a general session's memory leg when
+// the configured leg cannot narrow by kind.
+var errGeneralMemoryUnsupported = cascade.New(cascade.KindUnavailable,
+	"recall.what: the memory leg cannot narrow a general session by kind")
 
 // memorySupersedesID: "<kind>/<name>" ref -> domain-prefixed chunk id.
 func memorySupersedesID(ref string) string {

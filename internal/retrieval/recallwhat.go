@@ -117,6 +117,16 @@ type RecallWhatMemoryLeg interface {
 	SearchInScopeIncludingExpired(ctx context.Context, query, scopeRef string, limit int) ([]memory.IndexedRecord, error)
 }
 
+// RecallWhatGeneralMemoryLeg is the kind-narrowed search a general
+// session's memory leg needs (memory.ProjectionJob implements it). A
+// memory leg without it refuses a general session rather than reading
+// project-kind rows.
+type RecallWhatGeneralMemoryLeg interface {
+	SearchInScopeKindsIncludingExpired(
+		ctx context.Context, query, scopeRef string, kinds []memory.MemoryKind, limit int,
+	) ([]memory.IndexedRecord, error)
+}
+
 // RecallWhatRequest is one recall.what query, after decoding off the
 // wire. ResolveIn carries the caller's raw session signals
 // (scope.ResolveInput); Scope, when non-empty, is the caller's OWN claim
@@ -131,6 +141,10 @@ type RecallWhatRequest struct {
 	Entitlement string
 	K           int
 	ResolveIn   scope.ResolveInput
+
+	// general is set only by runLegs on the files and memory legs' copy,
+	// from storeScopeFor; never decoded off the wire.
+	general bool
 }
 
 // RecallWhatResult is one fused answer row.
@@ -234,12 +248,12 @@ func (s *RecallWhatService) Query(ctx context.Context, req RecallWhatRequest) (R
 	if err != nil {
 		return RecallWhatResponse{}, err
 	}
-	scopeRef, err := resolveRequestScope(ctx, s.resolver, req)
+	scopeRef, store, err := resolveRequestScopes(ctx, s.resolver, req)
 	if err != nil {
 		return RecallWhatResponse{}, err
 	}
 	req.Scope = scopeRef
-	lists, meta, ranLegs, domainErrs, filesWithheld := s.runLegs(ctx, req, k)
+	lists, meta, ranLegs, domainErrs, filesWithheld := s.runLegs(ctx, req, store, k)
 	if len(lists) == 0 {
 		return RecallWhatResponse{}, cascade.New(cascade.KindUnavailable,
 			"recall.what: no domain answered; every configured domain is unavailable")

@@ -102,6 +102,8 @@ func corpusQuery(req Request) (corpus.Query, error) {
 		Membership:  corpus.Membership{Scope: corpus.ScopeRef(req.Scope)},
 		Entitlement: entitlement,
 		CorpusIDs:   append([]string(nil), req.Corpora...),
+
+		GeneralSession: req.GeneralSession,
 	}
 	if err := q.Membership.Validate(); err != nil {
 		return corpus.Query{}, err

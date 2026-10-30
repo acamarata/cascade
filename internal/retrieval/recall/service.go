@@ -98,6 +98,9 @@ type Request struct {
 	Entitlement string
 	// K caps the results. Zero uses DefaultK.
 	K int
+	// GeneralSession is corpus.Query.GeneralSession: no project-class
+	// content for a general session (R-16.3).
+	GeneralSession bool
 }
 
 // Result is one ranked answer row.

@@ -25,6 +25,7 @@ import (
 	"context"
 
 	"github.com/acamarata/cascade/internal/context/scope"
+	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -45,13 +46,13 @@ type ScopeResolver interface {
 //
 // ScopeKindGeneral (no repository bound to the resolved git root, R-16.3's
 // documented restricted-but-successful result) has no Project to narrow
-// to; it resolves to the empty scope reference, the general bucket. Every
-// leg narrows to "" by equality, never as "any scope": a general session
-// reads only rows recorded under "" (a memory row with an empty ScopeRef,
-// a conversation thread whose creating call resolved to no project), and
-// a conversation thread with no project row at all matches no narrowed
-// query, general or not. An unresolved session is not a reason to widen
-// what it can read.
+// to; it resolves to the empty scope reference, the general bucket. The
+// conversation leg narrows to "" by equality, never as "any scope": a
+// general session reads only threads whose creating call resolved to no
+// project, and a thread with no project row at all matches no narrowed
+// query, general or not. The files and memory legs narrow to
+// storeScopeRefFor instead. An unresolved session is not a reason to
+// widen what it can read.
 func scopeRefFor(s scope.SessionScope) string {
 	if s.Kind == scope.ScopeKindGeneral {
 		return ""
@@ -66,17 +67,61 @@ func scopeRefFor(s scope.SessionScope) string {
 // common case of a caller that never guessed and is trusting resolution
 // entirely.
 func resolveRequestScope(ctx context.Context, resolver ScopeResolver, req RecallWhatRequest) (string, error) {
+	ref, _, err := resolveRequestScopes(ctx, resolver, req)
+	return ref, err
+}
+
+// resolveRequestScopes is resolveRequestScope plus the files and memory
+// legs' scope (storeScopeFor), both taken from this one resolution. The
+// conversation leg re-resolves on its own; a disagreement there refuses
+// that leg, never widens it.
+func resolveRequestScopes(ctx context.Context, resolver ScopeResolver, req RecallWhatRequest) (string, storeScope, error) {
 	if resolver == nil {
-		return "", cascade.New(cascade.KindUnavailable, "recall.what: no scope resolver is configured")
+		return "", storeScope{}, cascade.New(cascade.KindUnavailable, "recall.what: no scope resolver is configured")
 	}
 	resolved, err := resolver.Resolve(ctx, req.ResolveIn)
 	if err != nil {
-		return "", err
+		return "", storeScope{}, err
 	}
 	ref := scopeRefFor(resolved)
 	if req.Scope != "" && req.Scope != ref {
-		return "", cascade.Newf(cascade.KindInvalidInput,
+		return "", storeScope{}, cascade.Newf(cascade.KindInvalidInput,
 			"recall.what: the requested scope %q does not match the resolved session scope %q", req.Scope, ref)
 	}
-	return ref, nil
+	return ref, storeScopeFor(resolved), nil
+}
+
+// storeScope is what the files and memory legs narrow to: one store
+// reference, and whether the session is general.
+type storeScope struct {
+	ref     string
+	general bool
+}
+
+// generalMemoryKinds is the closed allowlist of memory kinds a general
+// session may read (R-16.3: user tiers, NO project state): facts about the
+// person and their stated preferences. KindProject is project state.
+// KindReference is excluded too: looked-up material carries no tier of its
+// own and is often a project's. A new kind is excluded until listed here.
+// A function, not a package variable, so no caller can widen it.
+func generalMemoryKinds() []memory.MemoryKind {
+	return []memory.MemoryKind{memory.KindUser, memory.KindFeedback}
+}
+
+// storeScopeFor derives the files and memory legs' scope. Neither store
+// can hold an empty reference (corpus.ScopeRef.Valid, memory types.go).
+// Owner content written with no per-project resolver, the configured
+// retrieval sources and `cascade memory remember`, is filed under the
+// owner bucket memory.DefaultScopeRef from any session, so that bucket
+// pools project material. A general session reads that bucket, narrowed
+// to non-project content: the files leg admits only personal and global
+// privacy (corpus.Query.GeneralSession) and the memory leg only
+// generalMemoryKinds. The mapping keys on Kind, never on an empty
+// Project: any other kind with no Project keeps "", which the files leg
+// refuses and the memory leg matches nothing with (fail closed).
+func storeScopeFor(s scope.SessionScope) storeScope {
+	if s.Kind == scope.ScopeKindGeneral {
+		return storeScope{ref: memory.DefaultScopeRef, general: true}
+	}
+	return storeScope{ref: s.Project}
 }

@@ -46,14 +46,18 @@ type whatLegOutcome struct {
 // Returns the fuse input, merged metadata, the sorted legs that ran, one
 // error per domain that was configured but failed (or answered with a
 // per-candidate note), and the rows the legs' own authorization and
-// egress passes withheld.
-func (s *RecallWhatService) runLegs(ctx context.Context, req RecallWhatRequest, k int) (
+// egress passes withheld. The files and memory legs see store (from
+// storeScopeFor) as their Scope and general flag; the conversation leg
+// keeps req.
+func (s *RecallWhatService) runLegs(ctx context.Context, req RecallWhatRequest, store storeScope, k int) (
 	[]rrf.RankedList, map[string]whatCandidate, []string, map[string]string, int,
 ) {
+	storeReq := req
+	storeReq.Scope, storeReq.general = store.ref, store.general
 	jobs := []func(context.Context) whatLegOutcome{
-		func(ctx context.Context) whatLegOutcome { return s.filesOutcome(ctx, req, k) },
+		func(ctx context.Context) whatLegOutcome { return s.filesOutcome(ctx, storeReq, k) },
 		func(ctx context.Context) whatLegOutcome { return s.conversationOutcome(ctx, req, k) },
-		func(ctx context.Context) whatLegOutcome { return s.memoryOutcome(ctx, req, k) },
+		func(ctx context.Context) whatLegOutcome { return s.memoryOutcome(ctx, storeReq, k) },
 	}
 	sem := make(chan struct{}, maxParallelLegs)
 	var wg sync.WaitGroup
@@ -105,7 +109,9 @@ func (s *RecallWhatService) filesOutcome(ctx context.Context, req RecallWhatRequ
 	if s.files == nil {
 		return whatLegOutcome{domain: DomainFile}
 	}
-	resp, err := s.files.Query(ctx, recall.Request{Query: req.Query, Scope: req.Scope, Entitlement: req.Entitlement, K: k})
+	resp, err := s.files.Query(ctx, recall.Request{
+		Query: req.Query, Scope: req.Scope, Entitlement: req.Entitlement, K: k, GeneralSession: req.general,
+	})
 	if err != nil {
 		return whatLegOutcome{domain: DomainFile, err: err, configured: true}
 	}

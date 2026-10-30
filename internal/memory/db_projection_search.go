@@ -25,6 +25,7 @@ package memory
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/acamarata/cascade/pkg/provider"
@@ -40,6 +41,10 @@ import (
 type scopeFilter struct {
 	Ref    string
 	Active bool
+	// Kinds, when KindsActive, is the closed allowlist of kinds a row may
+	// carry. An active empty list matches nothing.
+	Kinds       []MemoryKind
+	KindsActive bool
 }
 
 // Search returns the projected records matching query, most useful as the
@@ -77,6 +82,16 @@ func (j *ProjectionJob) SearchInScope(ctx context.Context, query, scopeRef strin
 // R-16.7 demotion pass needs an expired row in hand to demote against.
 func (j *ProjectionJob) SearchInScopeIncludingExpired(ctx context.Context, query, scopeRef string, limit int) ([]IndexedRecord, error) {
 	return searchIndex(ctx, j.kv, query, scopeFilter{Ref: scopeRef, Active: true}, j.clock.Now().UTC(), limit, true)
+}
+
+// SearchInScopeKindsIncludingExpired is SearchInScopeIncludingExpired
+// further narrowed to the given kinds, also BEFORE limit applies. An empty
+// kinds list matches nothing, never every kind.
+func (j *ProjectionJob) SearchInScopeKindsIncludingExpired(
+	ctx context.Context, query, scopeRef string, kinds []MemoryKind, limit int,
+) ([]IndexedRecord, error) {
+	sf := scopeFilter{Ref: scopeRef, Active: true, Kinds: kinds, KindsActive: true}
+	return searchIndex(ctx, j.kv, query, sf, j.clock.Now().UTC(), limit, true)
 }
 
 // searchIndex answers a full-text query from the postings.
@@ -123,6 +138,9 @@ func searchIndex(
 			continue
 		}
 		if sf.Active && row.ScopeRef != sf.Ref {
+			continue
+		}
+		if sf.KindsActive && !slices.Contains(sf.Kinds, row.Kind) {
 			continue
 		}
 		out = append(out, row)
