@@ -185,10 +185,12 @@ var _ = registerRootMount(rootMount{Name: "ci-watch-fixture", Order: 990, Mount:
 		}})
 }})
 
-// shortHome points HOME, CASCADE_HOME and the socket at a fresh temp dir.
+// shortHome points HOME, CASCADE_HOME and the socket at a fresh temp dir
+// outside t.TempDir(): on hosted macOS runners that dir plus the test name
+// pushes the socket past the 104-byte sun_path limit.
 func shortHome(t *testing.T) {
 	t.Helper()
-	home := t.TempDir()
+	home := shortHomeDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("CASCADE_HOME", filepath.Join(home, ".cascade"))
