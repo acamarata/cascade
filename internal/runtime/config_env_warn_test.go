@@ -231,6 +231,7 @@ var dynamicEnvReads = map[string][]string{
 	"internal/ci/waitmerge_deps.go:82":         {"CASCADE_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"},
 	"internal/plugins/process_env.go:38":       {"<caller-named>"},   // plugin process env passthrough: childEnv reads each name of its fixed allow-list through the injected getenv
 	"internal/providers/agents/env.go:70":      {"<operator-named>"}, // the binding's key variable, named by the daemon configuration
+	"internal/providers/gateway/source.go:72":  {"<operator-named>"}, // a gateway account's credential variable, named by the daemon configuration
 	"internal/providers/agents/profile.go:161": {"<caller-named>"},   // the harness binding's vendor config directory variable
 	"internal/providers/intake/core.go:177":    {"<caller-named>"},
 	"internal/providers/intake/core.go:195":    {"<caller-named>"},

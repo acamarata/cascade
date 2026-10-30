@@ -80,6 +80,7 @@
   "internal/providers/agents": { "tier": "core", "floor": 85.0, "baseline": 90.4 },
   "internal/providers/agents/egressproxy": { "tier": "core", "floor": 85.0, "baseline": 91.0 },
   "internal/providers/dispatch": { "tier": "core", "floor": 85.0, "baseline": 97.7 },
+  "internal/providers/gateway": { "tier": "core", "floor": 85.0, "baseline": 96.5 },
   "internal/providers/health": { "tier": "core", "floor": 85.0, "baseline": 94.8 },
   "internal/providers/intake": { "tier": "core", "floor": 85.0, "baseline": 90.8 },
   "internal/providers/registry": { "tier": "core", "floor": 85.0, "baseline": 92.3 },

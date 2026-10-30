@@ -24,6 +24,8 @@ See also [approval records: a daemon-signed record, redeemed once](security-post
 
 See also [installation identity: the controller key that signs scope envelopes](security-posture/installation-identity.md).
 
+See also [credential helpers: a digest-pinned program that prints a gateway key, and its residuals](security-posture/credential-helpers.md).
+
 ## Doctor security checks
 
 `cascade doctor` reports six security checks. All are read-only: none selects
