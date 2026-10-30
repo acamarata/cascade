@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-29T23:24:44Z",
+  "generated_at": "2026-10-30T03:09:51Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -9514,6 +9514,66 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "delegation/gate",
+      "sites": [
+        {
+          "file": "internal/delegation/gate.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "delegation/gate/ADD (P1-AGT-11)."
+        },
+        {
+          "file": "internal/delegation/gate_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "delegation/gate/ADD (P1-AGT-11)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "delegation/mint",
+      "sites": [
+        {
+          "file": "internal/delegation/mint.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "delegation/mint/ADD (P1-AGT-11)."
+        },
+        {
+          "file": "internal/delegation/mint_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "delegation/mint/ADD (P1-AGT-11)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "delegation/verify",
+      "sites": [
+        {
+          "file": "internal/delegation/verify.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "delegation/verify/ADD (P1-AGT-11)."
+        },
+        {
+          "file": "internal/delegation/verify_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "delegation/verify/ADD (P1-AGT-11)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -26785,6 +26845,20 @@
       ]
     },
     {
+      "name": "internal/plugins:review_prdiff_wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/review_prdiff_wiring.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal/plugins:review_prdiff_wiring (ADD) — P1-PLG-05."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins:telegram-approval-wiring",
       "sites": [
         {
@@ -30652,6 +30726,38 @@
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T4",
           "raw": "jobs/dag-planner/ADD (P1-E29-W6-S59-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "jobs/delegation-record",
+      "sites": [
+        {
+          "file": "internal/jobs/delegation.go",
+          "line": 23,
+          "status": "ADD",
+          "raw": "jobs/delegation-record/ADD (P1-AGT-11)."
+        },
+        {
+          "file": "internal/jobs/delegation_schema.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "jobs/delegation-record/ADD (P1-AGT-11)."
+        },
+        {
+          "file": "internal/jobs/delegation_schema_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "jobs/delegation-record/ADD (P1-AGT-11)."
+        },
+        {
+          "file": "internal/jobs/delegation_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "jobs/delegation-record/ADD (P1-AGT-11)."
         }
       ],
       "statuses": [
@@ -36891,6 +36997,20 @@
       ]
     },
     {
+      "name": "plugins/review:prdiff",
+      "sites": [
+        {
+          "file": "plugins/review/prdiff.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "plugins/review:prdiff (ADD) — P1-PLG-05."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "principal/Minter",
       "sites": [
         {
@@ -40223,7 +40343,7 @@
       ]
     }
   ],
-  "total_sites": 3894,
+  "total_sites": 3906,
   "unspecified_count": 320,
   "multi_status_count": 121
 }
