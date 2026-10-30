@@ -71,7 +71,7 @@ func TestLocalExecutorRemovesRunDirInOneRemoveAll(t *testing.T) {
 		Environ:  []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir()},
 		RunRoot:  root, ModCache: filepath.Join(t.TempDir(), "mod"),
 		Populate:      func(context.Context, string, []string) error { return nil },
-		OnEnvironment: func(e Environment) { rec.env = e },
+		OnEnvironment: func(e RunEnvironment) { rec.env = e },
 	})
 	if err != nil {
 		t.Fatalf("NewLocalSubJobExecutor: %v", err)

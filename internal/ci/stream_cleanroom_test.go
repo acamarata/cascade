@@ -22,7 +22,7 @@ import (
 )
 
 // runDirEnv is what OnEnvironment recorded for the last run.
-type runDirEnv struct{ env Environment }
+type runDirEnv struct{ env RunEnvironment }
 
 func envValues(env []string, name string) []string {
 	var out []string
@@ -71,7 +71,7 @@ func poisonedHome(t *testing.T) (home, cache string) {
 	return home, cache
 }
 
-func assertCleanEnv(t *testing.T, rec Environment) {
+func assertCleanEnv(t *testing.T, rec RunEnvironment) {
 	t.Helper()
 	if rec.IsolationClass != "clean-checkout-same-uid" {
 		t.Fatalf("IsolationClass = %q, want clean-checkout-same-uid", rec.IsolationClass)
@@ -90,7 +90,7 @@ func assertCleanEnv(t *testing.T, rec Environment) {
 	}
 }
 
-func assertCleanOutput(t *testing.T, out string, rec Environment, poison ...string) {
+func assertCleanOutput(t *testing.T, out string, rec RunEnvironment, poison ...string) {
 	t.Helper()
 	raw, err := os.ReadFile(out)
 	if err != nil {
@@ -131,7 +131,7 @@ func TestLocalCleanRoomIgnoresPoisonedHome(t *testing.T) {
 		ExtraEnvKeys: []string{"GOPROXY", "GOFLAGS", "HOME", "GOTOOLCHAIN", "GOSUMDB"},
 		RunRoot:      quietTemp(t), ModCache: filepath.Join(t.TempDir(), "mod"),
 		Populate:      func(context.Context, string, []string) error { return nil },
-		OnEnvironment: func(e Environment) { rec.env = e },
+		OnEnvironment: func(e RunEnvironment) { rec.env = e },
 	})
 	if err != nil {
 		t.Fatalf("NewLocalSubJobExecutor: %v", err)

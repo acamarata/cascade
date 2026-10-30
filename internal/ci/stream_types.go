@@ -102,11 +102,13 @@ type SubJob struct {
 }
 
 // SubJobResult is what an executor reports for a finished sub-job: the
-// ci_run key its rows were written under and whether the run passed.
+// ci_run key its rows were written under and whether the run passed. Env is
+// the per-run provenance the resolving executor stamps (P1-CI-03).
 type SubJobResult struct {
 	RunID, RepoID        int64
 	Passed               bool
 	ExecutorKind, NodeID string
+	Env                  Environment
 }
 
 // SubJobExecutor runs one sub-job. The local implementation

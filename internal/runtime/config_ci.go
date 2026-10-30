@@ -5,17 +5,10 @@
 // (R-14.117) rather than growing config.go past its 300-line cap.
 //
 // FILES_SCOPE DEVIATION (recorded, same reasoning as config_fleet.go's
-// and config_economics.go's own identical notes). This ticket's contract
-// names only "internal/runtime/config/schema.go" (resolved, per this
-// ticket's own execution_guidance, to internal/runtime/config.go) as the
-// registration point. Every existing section in this package (widget,
-// economics, fleet accounts, plugins, retrieval) is its own sibling file,
-// not inline in config.go — that IS the registration convention R-21.267
-// itself describes ("the only config registration point" means Load/
-// Config/EffectiveEntries wire every section, not that every section's
-// parser lives in one physical file, which Art.10.3's 300-line cap would
-// make impossible). This file and its wiring into config_sections.go and
-// config.go follow that same established shape.
+// and config_economics.go's notes): the contract named config.go as the
+// registration point, but every section in this package is its own sibling
+// file wired through config_sections.go and config.go, which is the
+// registration convention R-21.267 describes under Art.10.3's 300-line cap.
 //
 // Inputs: the decoded generic config tree (env overrides already applied).
 // Outputs: a ciPolicySection / ciLocalSection, or a typed *ConfigError for
@@ -29,7 +22,8 @@
 //
 //	internal.runtime.parseCILocalSection/ADDED (P1-E25-W5-S51-T5),
 //	internal.runtime.parseCIAffectedCmdField/ADDED (P1-E32-W6-S65-T1,
-//	fix round 2, AMD-20260922/F7-7, R-21.173).
+//	fix round 2, AMD-20260922/F7-7, R-21.173),
+//	internal.runtime.parseCIToolchainVersions/ADDED (P1-CI-03).
 
 package runtime
 
@@ -272,6 +266,25 @@ func parseCIAffectedCmdField(tree map[string]interface{}) (string, error) {
 		return "", &ConfigError{Field: "ci.affected_cmd", Reason: "must be a string"}
 	}
 	return s, nil
+}
+
+// parseCIToolchainVersions type-checks [ci].toolchain_versions (P1-CI-03): non-blank strings, absent = empty; hot.
+func parseCIToolchainVersions(tree map[string]interface{}) ([]string, error) {
+	ciTree, _ := tree["ci"].(map[string]interface{})
+	raw, present := ciTree["toolchain_versions"]
+	list, ok := raw.([]interface{})
+	out := make([]string, 0, len(list))
+	for i := 0; ok && i < len(list); i++ {
+		if v, isStr := list[i].(string); isStr && strings.TrimSpace(v) != "" {
+			out = append(out, strings.TrimSpace(v))
+		} else {
+			return nil, &ConfigError{Field: fmt.Sprintf("ci.toolchain_versions[%d]", i), Reason: "must be a non-empty version string"}
+		}
+	}
+	if present && !ok {
+		return nil, &ConfigError{Field: "ci.toolchain_versions", Reason: "must be an array of version strings"}
+	}
+	return out, nil
 }
 
 // nestedTable reads tree[a][b] as a map, tolerating either level being

@@ -215,3 +215,22 @@ func TestConfigCIAffectedCmd(t *testing.T) {
 		t.Errorf("error = %q, want it to name ci.affected_cmd", err.Error())
 	}
 }
+
+// TestConfigCIToolchainVersions: [ci].toolchain_versions parses as a list
+// (default empty), a malformed value fails Load, and [ci].affected_cmd
+// beside it parses as before (P1-CI-03).
+func TestConfigCIToolchainVersions(t *testing.T) {
+	cfg, err := loadCITestConfig(t, "")
+	if err != nil || len(cfg.CIToolchainVersions) != 0 || cfg.AffectedCmd != "" {
+		t.Fatalf("default: %v, %v, %q; want an empty list", cfg.CIToolchainVersions, err, cfg.AffectedCmd)
+	}
+	cfg, err = loadCITestConfig(t, "[ci]\naffected_cmd = \"go list ./...\"\ntoolchain_versions = [\" node 22 \", \"go1.24\"]\n")
+	if err != nil || strings.Join(cfg.CIToolchainVersions, ",") != "node 22,go1.24" || cfg.AffectedCmd != "go list ./..." {
+		t.Fatalf("explicit: %q, %q, %v; want both keys parsed", cfg.CIToolchainVersions, cfg.AffectedCmd, err)
+	}
+	for _, bad := range []string{"toolchain_versions = \"go1.24\"", "toolchain_versions = [\"\"]", "toolchain_versions = [1]"} {
+		if _, err := loadCITestConfig(t, "[ci]\n"+bad+"\n"); err == nil || !strings.Contains(err.Error(), "ci.toolchain_versions") {
+			t.Fatalf("%s: Load error = %v, want a ci.toolchain_versions config error", bad, err)
+		}
+	}
+}

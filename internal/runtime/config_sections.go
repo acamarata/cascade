@@ -43,6 +43,8 @@ type configSections struct {
 	// round 2, R-21.173), same deviation as fleetAccounts above -- see
 	// config_ci.go's parseCIAffectedCmdField.
 	affectedCmd string
+	// ciToolchainVersions is [ci].toolchain_versions (P1-CI-03).
+	ciToolchainVersions []string
 	// ciWatch is the ci.watch key (P1-E25-W5-S51-T4), same deviation as
 	// fleetAccounts above -- see config_ci_watch.go.
 	ciWatch ciWatchSection
@@ -93,6 +95,9 @@ func parseConfigSections(tree map[string]interface{}, warn func(string, ...inter
 	if s.affectedCmd, err = parseCIAffectedCmdField(tree); err != nil {
 		return configSections{}, err
 	}
+	if s.ciToolchainVersions, err = parseCIToolchainVersions(tree); err != nil {
+		return configSections{}, err
+	}
 	if s.ciWatch, err = parseCIWatchSection(tree); err != nil {
 		return configSections{}, err
 	}
@@ -114,7 +119,7 @@ func parseConfigSections(tree map[string]interface{}, warn func(string, ...inter
 // past Art.10.3's cap.
 // SPORT: internal.runtime.assembleConfig/ADDED (P1-E32-W6-S65-T1, fix round 2).
 func assembleConfig(sec configSections, schemaVersion int, profile Profile, tree map[string]interface{}, sources map[string]ConfigSource) *Config {
-	return &Config{
+	c := &Config{
 		SchemaVersion: schemaVersion,
 		Runtime:       runtimeSection{Profile: profile},
 		Elevation:     sec.elevation,
@@ -135,4 +140,6 @@ func assembleConfig(sec configSections, schemaVersion int, profile Profile, tree
 		sources:       sources,
 		rawTree:       tree,
 	}
+	c.CIToolchainVersions = sec.ciToolchainVersions // P1-CI-03
+	return c
 }

@@ -109,7 +109,7 @@ func allKindCommands() map[RequirementKind][]string {
 }
 
 // useLocal swaps the rig's executor for the real local executor over fx.
-func (r *streamRig) useLocal(fx Executor, onEnv func(Environment)) {
+func (r *streamRig) useLocal(fx Executor, onEnv func(RunEnvironment)) {
 	r.t.Helper()
 	ex, err := NewLocalSubJobExecutor(LocalExecutorDeps{
 		CIDB: r.ciDB, Events: r.bus, Clock: newTestClock(), Exec: fx, Commands: allKindCommands(),

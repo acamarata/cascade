@@ -25,8 +25,9 @@
 // its reserved ci_run id, so Resume never writes a second ci_run.
 // SPORT: internal.ci.NewLocalSubJobExecutor/ADDED,
 //
-//	internal.ci.LocalExecutorDeps/ADDED, internal.ci.Environment/ADDED
-//	(P1-CI-01).
+//	internal.ci.LocalExecutorDeps/ADDED, internal.ci.RunEnvironment/ADDED
+//	(P1-CI-01; renamed from Environment by P1-CI-03, whose contract owns
+//	ci.Environment as the per-run provenance type).
 
 package ci
 
@@ -45,16 +46,16 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// IsolationCleanCheckoutSameUID is the Environment.IsolationClass of the
+// IsolationCleanCheckoutSameUID is the RunEnvironment.IsolationClass of the
 // local executor: a clean checkout of the bound tree, run as the same user.
 const IsolationCleanCheckoutSameUID = "clean-checkout-same-uid"
 
 // executorKindLocal is the SubJobResult.ExecutorKind of this executor.
 const executorKindLocal = "local"
 
-// Environment describes the isolation one local run executed under: the
+// RunEnvironment describes the isolation one local run executed under: the
 // class, the run directory and the exact environment the run received.
-type Environment struct {
+type RunEnvironment struct {
 	IsolationClass string
 	RunDir         string
 	Env            []string
@@ -81,8 +82,8 @@ type LocalExecutorDeps struct {
 	// Populate is the controller's module populate-and-verify step; nil
 	// means `go mod download` then `go mod verify`.
 	Populate func(ctx context.Context, dir string, env []string) error
-	// OnEnvironment, when set, receives the Environment of every run.
-	OnEnvironment  func(Environment)
+	// OnEnvironment, when set, receives the RunEnvironment of every run.
+	OnEnvironment  func(RunEnvironment)
 	TimeoutPerStep time.Duration
 }
 
@@ -186,7 +187,7 @@ func (l *localExecutor) prepare(ctx context.Context, sj SubJob, runDir string) (
 		return RunnerConfig{}, err
 	}
 	if l.d.OnEnvironment != nil {
-		l.d.OnEnvironment(Environment{IsolationClass: IsolationCleanCheckoutSameUID, RunDir: runDir, Env: env})
+		l.d.OnEnvironment(RunEnvironment{IsolationClass: IsolationCleanCheckoutSameUID, RunDir: runDir, Env: env})
 	}
 	timeout := l.d.TimeoutPerStep
 	if timeout <= 0 {
@@ -245,7 +246,10 @@ func (l *localExecutor) materialize(ctx context.Context, sj SubJob, runDir strin
 func (l *localExecutor) steps(sj SubJob) ([]RunnerStep, error) {
 	cmds := l.d.Commands[sj.Kind]
 	if len(cmds) == 0 {
-		return nil, cascade.Newf(cascade.KindInvalidInput, "ci: local executor: no commands configured for kind %q", sj.Kind)
+		// No [ci.local] command: this executor cannot run the kind. The
+		// resolving executor turns ErrNoCapableExecutor into an explicit
+		// non-pass terminal (P1-CI-03, R294), never a retry and never a pass.
+		return nil, cascade.Wrapf(cascade.KindUnavailable, ErrNoCapableExecutor, "ci: local executor: no commands configured for kind %q", sj.Kind)
 	}
 	targets, err := targetArgs(sj.Plan)
 	if err != nil {

@@ -213,8 +213,8 @@ func TestDaemonCheckpointReachesDispatcher(t *testing.T) {
 		}
 		got[fmt.Sprint(p["kind"])] = fmt.Sprintf("%v/%v", p["executor_kind"], p["passed"])
 	}
-	if got["lint"] != "local/true" || got["unit"] != "local/true" || got["integration"] != "local-not-configured/false" {
-		t.Fatalf("terminals by kind = %v, want lint and unit passed locally, integration not-configured and not passed", got)
+	if got["lint"] != "local/true" || got["unit"] != "local/true" || got["integration"] != "unresolved/false" {
+		t.Fatalf("terminals by kind = %v, want lint and unit passed locally, integration unresolved and not passed", got)
 	}
 	cur, ok, err := fr.Jobs().GetLease(context.Background(), lease.RepoID, lease.ScopeGlob)
 	if err != nil || !ok || cur.Epoch != lease.Epoch {

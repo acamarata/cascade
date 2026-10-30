@@ -7,28 +7,36 @@ package daemon
 // LeaseManager's Fence and the WorktreeManager's Snapshot. The requirement
 // model's Config comes from ci.ConfigFromRuntime only.
 //
-// The executor is the local clean-checkout executor built from [ci.local]:
-// lint and format run the lint list, compile runs the build list, unit runs
-// the test list. A requirement kind with no configured command (integration,
-// architecture and security always; any kind whose [ci.local] list is empty)
-// is never reported as passed and never left pending: it gets an explicit
-// terminal ci_run with status completed, conclusion skipped and one ci_job
-// whose name carries the reason, executor kind "local-not-configured",
-// Passed=false. Its outbox row is confirmed like any terminal, so a restart
-// does not retry it. P1-CI-03 replaces this through SetExecutor; from then
-// every kind goes to the installed executor.
+// The executor is the resolver-backed one (P1-CI-03), installed through
+// SetExecutor before the runtime starts: one ci.Resolver over
+// FleetRuntime.Fleet(), a RunnerSet holding only the local runner (the
+// clean-checkout executor built from [ci.local]: lint and format run the
+// lint list, compile the build list, unit the test list) and no GitHub
+// reader (no HTTP doer or ci-poll egress engine reaches NewCISubsystem, so
+// the hosted step is refused). Every kind goes to that executor. A kind no
+// executor may run (integration, architecture and security always; any kind
+// whose [ci.local] list is empty) ends as the resolving executor's explicit
+// non-pass terminal (completed/skipped, executor kind "unresolved",
+// Passed=false), which retires P1-CI-10's not-configured path (T0
+// P1-BF-R294). Resolver refusals are journaled to the daemon log.
+//
+// Source trust: the dispatcher only receives checkpoints of jobs leased from
+// this controller's own job store on repositories registered with it, the
+// owner's repositories (provider.ProvenanceTrusted). A job missing from the
+// store is an error, never trusted.
 //
 // Every terminal sub-job is checked against its ci_run_stream marker
 // (ci.RunViaStream). A terminal whose run is not marked as a stream run is
 // an integrity fault: it raises one attention item.
 //
-// SPORT: internal.daemon.CIRuntime/ADDED, internal.daemon.NewCISubsystem/ADDED (P1-CI-10).
+// SPORT: internal.daemon.CIRuntime/ADDED, internal.daemon.NewCISubsystem/ADDED (P1-CI-10;
+// resolver composition P1-CI-03).
 
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -56,15 +64,10 @@ type CIRuntime struct {
 	clock     runtime.Clock
 
 	mu sync.Mutex
-	// exec runs every kind in configured (nil when [ci.local] has no
-	// command). configured is nil once SetExecutor installed an executor.
-	exec       ci.SubJobExecutor
-	configured map[ci.RequirementKind]bool
-	started    bool
+	// exec runs every kind (SetExecutor installs it before the runtime starts).
+	exec    ci.SubJobExecutor
+	started bool
 }
-
-// executorKindNotConfigured is the executor kind of a not-configured terminal.
-const executorKindNotConfigured = "local-not-configured"
 
 // NewCISubsystem builds the CI runtime over fr. ctx bounds the terminal
 // marker checks; cfg is the loaded daemon config.
@@ -77,12 +80,14 @@ func NewCISubsystem(ctx context.Context, fr *FleetRuntime, cfg *runtime.Config, 
 	if err := ci.ApplyMigrationSchema(ctx, db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
 		return nil, err
 	}
-	local, configured, err := newLocalCIExecutor(fr.res.paths, cfg, db, bus, clock)
+	exec, err := newResolvingCIExecutor(fr, cfg, db, bus, clock)
 	if err != nil {
 		return nil, err
 	}
-	r := &CIRuntime{ctx: ctx, db: db, cfg: ci.ConfigFromRuntime(*cfg), attention: attention, clock: clock,
-		exec: local, configured: configured}
+	r := &CIRuntime{ctx: ctx, db: db, cfg: ci.ConfigFromRuntime(*cfg), attention: attention, clock: clock}
+	if err := r.SetExecutor(exec); err != nil {
+		return nil, err
+	}
 	disp, err := ci.NewDispatcher(ci.DispatcherDeps{
 		CIDB: db, JobsDB: db, Snapshot: fr.Worktrees().Snapshot, Fence: fr.Leases().Fence,
 		StoredSensitivity: storedSensitivity(fr.Jobs()), Executor: ciExecutorFunc(r.run),
@@ -153,50 +158,15 @@ func (r *CIRuntime) SetExecutor(e ci.SubJobExecutor) error {
 	if r.started {
 		return cascade.New(cascade.KindConflict, "daemon: CIRuntime.SetExecutor after the CI runtime started")
 	}
-	r.exec, r.configured = e, nil
+	r.exec = e
 	return nil
 }
 
 func (r *CIRuntime) run(ctx context.Context, sj ci.SubJob) (ci.SubJobResult, error) {
 	r.mu.Lock()
-	e, configured := r.exec, r.configured
+	e := r.exec
 	r.mu.Unlock()
-	if configured != nil && !configured[sj.Kind] {
-		return r.notConfigured(ctx, sj)
-	}
 	return e.Run(ctx, sj)
-}
-
-// notConfigured records sj's explicit not-configured terminal: one ci_run
-// (completed, skipped) named like the local executor's stream runs, so a
-// redispatch finds and reuses it, and one ci_job naming the reason.
-func (r *CIRuntime) notConfigured(ctx context.Context, sj ci.SubJob) (ci.SubJobResult, error) {
-	repoID, name := ci.LocalRepoID(sj.Ref.RepoRoot), "stream-"+sj.Snapshot.AttemptID+"-"+string(sj.Kind)
-	if sj.Acceptance {
-		name += "-acceptance"
-	}
-	// Local runs (ci.ReserveLocalRun) take negative ids, descending from -1,
-	// so run_id < 0 selects exactly the local runs and never a provider run.
-	var runID int64
-	err := r.db.QueryRowContext(ctx, `SELECT run_id FROM ci_run WHERE repo_id = ? AND name = ? AND run_id < 0
-		ORDER BY run_id LIMIT 1`, repoID, name).Scan(&runID)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return ci.SubJobResult{}, cascade.Wrap(cascade.KindUnavailable, err, "daemon: ci: looking up a not-configured run")
-	}
-	now := r.clock.Now()
-	if runID == 0 {
-		if runID, err = ci.ReserveLocalRun(ctx, r.db, repoID, name, now); err != nil {
-			return ci.SubJobResult{}, err
-		}
-	}
-	run := ci.Run{RunID: runID, RepoID: repoID, Name: name, HeadSHA: sj.Ref.CheckpointCommit,
-		Status: ci.RunStatusCompleted, Conclusion: ci.ConclusionSkipped, CreatedAt: now, UpdatedAt: now}
-	job := ci.Job{JobID: runID, RunID: runID, Name: string(sj.Kind) + ": not configured (no [ci.local] command)",
-		Status: ci.RunStatusCompleted, Conclusion: ci.ConclusionSkipped, StartedAt: now, FinishedAt: now}
-	if err := ci.Upsert(ctx, r.db, run, []ci.Job{job}, nil); err != nil {
-		return ci.SubJobResult{}, err
-	}
-	return ci.SubJobResult{RunID: runID, RepoID: repoID, Passed: false, ExecutorKind: executorKindNotConfigured}, nil
 }
 
 // checkStreamMarker raises an attention item for a terminal whose ci_run
@@ -235,32 +205,93 @@ func storedSensitivity(store *jobs.Store) func(ctx context.Context, jobID string
 	}
 }
 
-// newLocalCIExecutor builds the local executor from [ci.local] and the set
-// of kinds it has commands for. With no command at all it returns a nil
-// executor and an empty set: every kind is then not configured.
+// newLocalCIExecutor builds the local executor from [ci.local]. With no
+// command at all it returns nil: the local runner then refuses every kind.
 func newLocalCIExecutor(paths runtime.PathProvider, cfg *runtime.Config, db *sql.DB, bus *events.Bus,
-	clock runtime.Clock) (ci.SubJobExecutor, map[ci.RequirementKind]bool, error) {
-	cmds, configured := map[ci.RequirementKind][]string{}, map[ci.RequirementKind]bool{}
+	clock runtime.Clock) (ci.SubJobExecutor, error) {
+	cmds := map[ci.RequirementKind][]string{}
 	for kind, list := range map[ci.RequirementKind][]string{
 		ci.RequirementFormat: cfg.CILocal.Lint, ci.RequirementLint: cfg.CILocal.Lint,
 		ci.RequirementCompile: cfg.CILocal.Build, ci.RequirementUnit: cfg.CILocal.Test,
 	} {
 		if len(list) > 0 {
-			cmds[kind], configured[kind] = list, true
+			cmds[kind] = list
 		}
 	}
 	if len(cmds) == 0 {
-		return nil, configured, nil
+		return nil, nil
 	}
 	root := filepath.Join(paths.DataDir(), "ci")
 	if err := os.MkdirAll(filepath.Join(root, "stream-runs"), 0o700); err != nil {
-		return nil, nil, cascade.Wrap(cascade.KindUnavailable, err, "daemon: ci: creating the stream run root")
+		return nil, cascade.Wrap(cascade.KindUnavailable, err, "daemon: ci: creating the stream run root")
 	}
-	exec, err := ci.NewLocalSubJobExecutor(ci.LocalExecutorDeps{
+	return ci.NewLocalSubJobExecutor(ci.LocalExecutorDeps{
 		CIDB: db, Events: bus, Clock: clock, Exec: ci.ShellExecutor{}, Commands: cmds,
 		Environ: os.Environ(), ExtraEnvKeys: cfg.CILocal.EnvKeys,
 		RunRoot: filepath.Join(root, "stream-runs"), ModCache: filepath.Join(root, "modcache"),
 		TimeoutPerStep: time.Duration(cfg.CILocal.TimeoutSeconds) * time.Second,
 	})
-	return exec, configured, err
+}
+
+// newResolvingCIExecutor builds the resolver-backed executor: one Resolver
+// over FleetRuntime.Fleet(), RunnerSet{local} and no GitHub reader.
+func newResolvingCIExecutor(fr *FleetRuntime, cfg *runtime.Config, db *sql.DB, bus *events.Bus,
+	clock runtime.Clock) (ci.SubJobExecutor, error) {
+	local, err := newLocalCIExecutor(fr.res.paths, cfg, db, bus, clock)
+	if err != nil {
+		return nil, err
+	}
+	ci.SetToolchainVersions(cfg.CIToolchainVersions)
+	runners := ciRunners(local)
+	deps := ci.ResolverDeps{Runners: runners, Fingerprint: ci.ComputeToolchainFingerprint,
+		Refusals: journalCIRefusal, Clock: clock}
+	if f := fr.Fleet(); f != nil {
+		deps.Fleet = f
+	}
+	res, err := ci.NewResolver(deps)
+	if err != nil {
+		return nil, err
+	}
+	return ci.NewResolvingSubJobExecutor(res, runners, deps.Fleet, ci.ResolvingDeps{
+		CIDB: db, Clock: clock, Fingerprint: ci.ComputeToolchainFingerprint, SourceTrust: storedSourceTrust(fr.Jobs()),
+	}), nil
+}
+
+// ciRunners is the production runner registry: exactly the local runner.
+// Node and github-actions runners are P1-NODE-08/-09's.
+func ciRunners(local ci.SubJobExecutor) ci.RunnerSet {
+	return ci.RunnerSet{ci.ExecutorLocal: ciLocalRunner{exec: local}}
+}
+
+// ciLocalRunner runs the local kind on the [ci.local] executor; with no
+// command configured it refuses every kind with ci.ErrNoCapableExecutor.
+type ciLocalRunner struct{ exec ci.SubJobExecutor }
+
+func (l ciLocalRunner) Run(ctx context.Context, _ ci.ResolvedExecutor, sj ci.SubJob) (ci.SubJobResult, error) {
+	if l.exec == nil {
+		return ci.SubJobResult{}, cascade.Wrapf(cascade.KindUnavailable, ci.ErrNoCapableExecutor,
+			"daemon: ci: [ci.local] has no command, so %s cannot run locally", sj.Kind)
+	}
+	return l.exec.Run(ctx, sj)
+}
+
+// journalCIRefusal writes one resolver refusal to the daemon log.
+func journalCIRefusal(_ context.Context, r ci.Refusal) {
+	slog.Default().Info("ci: executor step refused", "job", r.JobID, "kind", string(r.Kind),
+		"step", string(r.Step), "reason", r.Reason, "at", r.At)
+}
+
+// storedSourceTrust reports a job of this controller's own store as
+// trusted (the owner's repository); a job it cannot find is an error.
+func storedSourceTrust(store *jobs.Store) func(ctx context.Context, sj ci.SubJob) (provider.Provenance, error) {
+	return func(ctx context.Context, sj ci.SubJob) (provider.Provenance, error) {
+		_, ok, err := store.GetJob(ctx, sj.Ref.JobID)
+		if err != nil {
+			return "", err
+		}
+		if !ok {
+			return "", cascade.Newf(cascade.KindNotFound, "daemon: ci: job %s is not in this controller's store", sj.Ref.JobID)
+		}
+		return provider.ProvenanceTrusted, nil
+	}
 }

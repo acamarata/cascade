@@ -149,6 +149,8 @@ type Config struct {
 	// AffectedCmd is [ci].affected_cmd (P1-E32-W6-S65-T1, fix round 2,
 	// R-21.173); hot (see config_ci.go). Empty means "not configured".
 	AffectedCmd string
+	// CIToolchainVersions is [ci].toolchain_versions (P1-CI-03); hot, empty by default.
+	CIToolchainVersions []string
 	// Registry is the [registry] block (P1-E24-W5-S50-T2, R-14.75); hot
 	// (see config_registry.go's header on PubkeyPath's empty default).
 	Registry registrySection

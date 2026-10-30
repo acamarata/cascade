@@ -3,8 +3,11 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -187,4 +190,69 @@ func ciLeasedCommit(t *testing.T, fr *FleetRuntime) ci.JobRef {
 	return ci.JobRef{JobID: "job-ci", RepoRoot: repo, WorktreeRoot: wt.Path, Lease: res.Lease,
 		LeaseEpoch: res.Lease.Epoch, CheckpointCommit: ciGit(t, wt.Path, "rev-parse", "HEAD"), BaseCommit: base,
 		ScopePrefixes: []string{"src/"}, PlannedRisk: jobs.RiskClassLow, Sensitivity: tier}
+}
+
+// TestCIDispatcherComposed: the production composition registers exactly
+// the local runner, and a real checkpoint through the composed Dispatcher
+// resolves every kind to local: lint (configured) runs and passes, a kind
+// with no [ci.local] command ends as the explicit unresolved non-pass, and
+// the unregistered node and hosted steps are journaled as skipped (P1-CI-03).
+func TestCIDispatcherComposed(t *testing.T) {
+	if got := ciRunners(nil); len(got) != 1 || got[ci.ExecutorLocal] == nil {
+		t.Fatalf("production runners = %v, want exactly {local}", got)
+	}
+	var journal bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&journal, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	g, fr, r, _ := newCITestRuntime(t, "[ci.local]\nlint = [\"true\"]\n")
+	var mu sync.Mutex
+	got := map[ci.RequirementKind]string{}
+	d := r.Dispatcher()
+	d.OnTerminal(func(ev ci.CIResultEvent) {
+		mu.Lock()
+		defer mu.Unlock()
+		got[ev.Kind] = fmt.Sprintf("%s/%v", ev.ExecutorKind, ev.Passed)
+	})
+	ref := ciLeasedCommit(t, fr)
+	if _, err := d.Checkpoint(g.ctx, ref, r.Model(ref.RepoRoot)); err != nil {
+		t.Fatalf("Checkpoint: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if got[ci.RequirementLint] != "local/true" || len(got) < 2 {
+		t.Fatalf("terminals = %v, want lint local/true among several kinds", got)
+	}
+	for kind, v := range got {
+		if kind != ci.RequirementLint && kind != ci.RequirementFormat && v != "unresolved/false" {
+			t.Fatalf("terminal %s = %s, want unresolved/false (no [ci.local] command)", kind, v)
+		}
+	}
+	log := journal.String()
+	if !strings.Contains(log, "step=node") || !strings.Contains(log, "no node runner is registered") ||
+		!strings.Contains(log, "step=github-actions") {
+		t.Fatalf("journal lacks the skipped node and hosted steps:\n%s", log)
+	}
+}
+
+// TestCIStoredSourceTrustFailsClosed: the daemon's SourceTrust rule trusts
+// only a job present in this controller's store; a missing job and a store
+// read error are never trusted (P1-CI-03, R-CI03-3).
+func TestCIStoredSourceTrustFailsClosed(t *testing.T) {
+	_, fr, _, _ := newCITestRuntime(t, "")
+	ref := ciLeasedCommit(t, fr)
+	trust := storedSourceTrust(fr.Jobs())
+	if p, err := trust(context.Background(), ci.SubJob{Ref: ref}); err != nil || p != provider.ProvenanceTrusted {
+		t.Fatalf("stored job: %q, %v; want trusted (positive control)", p, err)
+	}
+	missing := ref
+	missing.JobID = "job-not-in-store"
+	if p, err := trust(context.Background(), ci.SubJob{Ref: missing}); err == nil || p == provider.ProvenanceTrusted {
+		t.Fatalf("missing job: %q, %v; want an error and never trusted", p, err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if p, err := trust(ctx, ci.SubJob{Ref: ref}); err == nil || p == provider.ProvenanceTrusted {
+		t.Fatalf("store read error: %q, %v; want an error and never trusted", p, err)
+	}
 }
