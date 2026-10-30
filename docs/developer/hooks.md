@@ -162,6 +162,59 @@ failure keeps the previous set and publishes `hooks.reload.rejected` on
 `ns` with `{"error": "<message>"}`. The message comes from the parser,
 which never quotes values; a failing source publishes only its error kind.
 
+## Vault bindings
+
+A plugin-call hook may carry vault tags in its `action_params`, for
+example `<apikey>NAME</apikey>`. `VaultBindingsOf(hooks, tags)` turns
+each one into a `VaultBinding{HookID, PluginID, VaultName}`, sorted. The
+`tags` reader is the rehydrate scanner (`secrets.RehydrationTagNames`), so
+the bindings are read with the same span walk that later resolves them.
+The section is refused (`KindInvalidInput`) for a tag on any other action
+type, a `pii` tag, a malformed tag, a tag in a param name or in the
+`plugin` param, and a tagged hook with no `plugin` param. `config.toml`
+holds tags only, never values.
+
+### Accept-loosening flow
+
+`[hooks]` is a guarded config family. Its extractor is
+`hooksFamilyExtract` (cmd/cascade/guarded_hooks.go), and its admitted
+value is the hook list sorted by id, with params stored verbatim. When a
+reload adds a hook, or changes an existing hook's namespace, trigger,
+action type or params, `hooksFamilyCompare` reports `hooks.action`
+(detail `<hook>/<action_type>/<plugin>/<tool>`). A new binding also
+reports `hooks.vault_binding` (detail `<hook>/<plugin>/<vault>`). Both
+are loosenings. They take effect only through `config.accept_loosening`
+over that exact file, at restart or at hot reload. Removing a hook is a
+tightening and applies at once. A section that does not parse is an
+extract error, never an empty list. When the boot file diverges from the
+signed baseline, `ApplyEffective` writes the admitted list back as
+`[[hooks]]`, so the daemon runs the admitted hooks and not the file's.
+
+### Dispatch-time guard
+
+`BoundRehydrate(admitted, rehydrate)` is the rehydration seam. The
+production `rehydrate` wraps `Rehydrator.RehydrateOnly`, the rehydrator's
+only exported method. `admitted` reads the bindings from the admitted
+config (`Reloader.Current`), never from the file on disk. The tagged
+params are encoded as one canonical JSON object. The rehydrator asks
+`allowName` about every span its own scan finds, before it reads anything
+from the vault. A name with no admitted binding for this hook and plugin
+refuses the whole action with `secrets: tag not permitted at this
+boundary` and no vault read. That includes a tag the egress pass added to
+a raw value. An error from `admitted` refuses the action as
+`KindUnavailable`. Params with no tag pass through unchanged, and
+`admitted` is not read for them.
+
+Limits:
+
+- `zero()` wipes the rehydrated buffer. The param strings decoded from it
+  are Go copies, which zeroing cannot reach.
+- A vault value with JSON syntax in it (a quote or a backslash) does not
+  decode back to the tagged params. The action is refused
+  (`KindIntegrity`) rather than delivering changed or extra params.
+- A `pii` tag in a param fails the scan at dispatch, because JSON
+  escapes the quotes in its `kind` attribute. The action is refused.
+
 ## RPC surface
 
 `Dispatcher.Hooks()` (configured hooks, params verbatim: an RPC exposing

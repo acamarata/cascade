@@ -35,13 +35,16 @@ var (
 		{"internal/runtime/config.go", "*", "EffectiveEntries flattens the whole tree for the read-only effective view (config show); it displays values and decides nothing"},
 		{"internal/runtime/config_retrieval.go", "retrieval", "decodes sources/fusion/reranker; its closed key set refuses [retrieval.embedding]"},
 		{"internal/runtime/config_retrieval_fusion.go", "retrieval", "reads [retrieval.fusion] only; a nested embedding read is its own key"}}
-	// guardedConfigBuiltins read, decode or write back the built-in EffectiveConfig fields.
+	// guardedConfigBuiltins read, decode or write back the built-in EffectiveConfig fields;
+	// hooksFamilyApply is the [hooks] family's Apply, ApplyEffective's write-back of the
+	// admitted list (its Extract, hooksFamilyExtract, is the registered reader).
 	guardedConfigBuiltins = []string{guardedRT + ".extractEffectiveConfig", guardedRT + ".parseElevationSection",
-		guardedRT + ".ApplyEffective", guardedRT + ".ApplySecretsThresholds", "(*" + guardedRT + ".HotReloader).applySecrets"}
+		guardedRT + ".ApplyEffective", guardedRT + ".ApplySecretsThresholds", "(*" + guardedRT + ".HotReloader).applySecrets",
+		"github.com/acamarata/cascade/cmd/cascade.hooksFamilyApply"}
 	// guardedFamilies are the guarded sections; "*" is a range over the tree; a
 	// parent ([agents], [retrieval]) counts only as the whole table.
 	guardedFamilies = []string{"policy", "secrets", "sync", "nodes", "conductor", "elevation",
-		"agents.egress", "agents.auth", "agents.lanes", "retrieval.embedding", "*", "agents", "retrieval"}
+		"agents.egress", "agents.auth", "agents.lanes", "retrieval.embedding", "hooks", "*", "agents", "retrieval"}
 )
 
 type guardedSite struct {

@@ -8,6 +8,9 @@
 // Outputs: a *RehydratedContent whose Data carries the raw values, or an
 //
 //	error and nothing at all. There is no partial result on any path.
+//	RehydrateOnly is the Rehydrator's only exported method: every caller
+//	says which tags its boundary permits, and the check runs on this
+//	package's own spans before the first vault read.
 //
 // Constraints: fail closed and total. An unknown NAME, a tag-like run the
 //
@@ -18,6 +21,9 @@
 //
 // SPORT: REHYDRATOR: ADD (internal/secrets.Rehydrator, RehydratedContent, Zero).
 //
+//	REHYDRATE_ONLY: CHANGED (Rehydrate is unexported as rehydrate;
+//	Rehydrator.RehydrateOnly is the only exported entry).
+//
 //	REHYDRATE_CHANNEL: ADD (internal/secrets - non-inherited buffer carrier).
 
 package secrets
@@ -25,7 +31,6 @@ package secrets
 import (
 	"context"
 	"errors"
-	"unicode/utf8"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -43,11 +48,17 @@ var ErrVaultKeyNotFound = errors.New("secrets: no vault entry for that name")
 // and neither is safe to forward.
 var ErrMalformedTag = errors.New("secrets: malformed typed tag")
 
+// ErrTagNotPermitted is RehydrateOnly's refusal for content carrying a tag
+// the caller's allow predicate rejects. It is returned as is, before any
+// vault read, and names neither the tag nor its position: a diagnostic is
+// no place to list the vault names an action tried to reach.
+var ErrTagNotPermitted = cascade.New(cascade.KindPermissionDenied, "secrets: tag not permitted at this boundary")
+
 // RehydratedContent holds content with raw vault values injected.
 //
-// EXECUTOR-ONLY. The value lives from Rehydrate to the executor's return
+// EXECUTOR-ONLY. The value lives from RehydrateOnly to the executor's return
 // and no longer. The caller calls Zero in a defer immediately after
-// Rehydrate, on the success path and the error path alike.
+// RehydrateOnly, on the success path and the error path alike.
 //
 // The type implements no rendering interface on purpose: not
 // fmt.Stringer, not fmt.GoStringer, not encoding.TextMarshaler, not
@@ -94,35 +105,55 @@ func NewRehydrator(broker *Broker) (*Rehydrator, error) {
 	return &Rehydrator{broker: broker}, nil
 }
 
-// Rehydrate replaces every typed tag in content with the raw value the
-// vault holds under the tag's NAME.
+// RehydrateOnly replaces every typed tag in content with the raw value the
+// vault holds under the tag's NAME, provided allow permits every tag.
+//
+// allow is asked about the spans this rehydrator's own scan located, all
+// before the first vault read: one rejected tag refuses the whole content
+// with ErrTagNotPermitted and nothing is read. A nil allow permits no tag.
+// Otherwise the semantics are rehydrate's: total, no partial result.
 //
 // Approved use, and the only approved use:
 //
-//	rc, err := rehydrator.Rehydrate(ctx, action.Content)
+//	rc, err := rehydrator.RehydrateOnly(ctx, action.Content, permitted)
 //	if err != nil {
 //		return err
 //	}
 //	defer rc.Zero()
 //	return executor.Run(ctx, rc.Data)
-//
-// Nil or empty content returns (nil, nil): no allocation and no vault
-// call. Every other failure returns (nil, error), so no caller can ever
-// observe a partially rehydrated buffer.
-func (r *Rehydrator) Rehydrate(ctx context.Context, content []byte) (*RehydratedContent, error) {
+func (r *Rehydrator) RehydrateOnly(ctx context.Context, content []byte, allow func(Tag) bool) (*RehydratedContent, error) {
+	if allow == nil {
+		allow = func(Tag) bool { return false }
+	}
+	return r.resolve(ctx, content, allow)
+}
+
+// rehydrate resolves every tag in content with no boundary check. It is
+// unexported on purpose: production code reaches the vault only through
+// RehydrateOnly, and only this package's tests call it.
+func (r *Rehydrator) rehydrate(ctx context.Context, content []byte) (*RehydratedContent, error) {
+	return r.resolve(ctx, content, func(Tag) bool { return true })
+}
+
+// resolve is the one walk both entries share. Nil or empty content
+// returns (nil, nil): no allocation and no vault call. Every other
+// failure returns (nil, error), so no caller can ever observe a partially
+// rehydrated buffer.
+func (r *Rehydrator) resolve(ctx context.Context, content []byte, allow func(Tag) bool) (*RehydratedContent, error) {
 	if r == nil || r.broker == nil {
 		return nil, cascade.New(cascade.KindUnavailable, "secrets: no rehydrator configured")
 	}
 	if len(content) == 0 {
 		return nil, nil
 	}
-	if !utf8.Valid(content) {
-		return nil, cascade.Wrap(cascade.KindInvalidInput, ErrMalformedTag,
-			"secrets: content must be valid UTF-8 before it can be rehydrated")
-	}
-	spans, err := scanRehydrationSpans(content)
+	spans, err := rehydrationSpans(content)
 	if err != nil {
 		return nil, err
+	}
+	for _, span := range spans {
+		if !allow(span.tag) {
+			return nil, ErrTagNotPermitted
+		}
 	}
 	if len(spans) == 0 {
 		out := make([]byte, len(content))

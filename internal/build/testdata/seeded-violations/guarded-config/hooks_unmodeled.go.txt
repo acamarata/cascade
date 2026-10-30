@@ -1,0 +1,10 @@
+package main
+
+import (
+	"fmt"
+
+	"example.com/fixture/internal/runtime"
+)
+
+// fireHooks reads [[hooks]] straight from the tree, outside any family: red.
+func fireHooks(cfg *runtime.Config) string { return fmt.Sprint(cfg.Extra["hooks"]) }

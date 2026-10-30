@@ -68,7 +68,7 @@ func TestRehydrateRoundTrip(t *testing.T) {
 		t.Fatalf("the rewriter left the raw value in the turn")
 	}
 
-	rc, err := r.Rehydrate(context.Background(), rewritten.Text)
+	rc, err := r.rehydrate(context.Background(), rewritten.Text)
 	if err != nil {
 		t.Fatalf("Rehydrate: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestRehydrateRoundTrip(t *testing.T) {
 
 func TestRehydrateUnknownName(t *testing.T) {
 	r, _ := newRehydratorFixture(t, map[string]string{"KNOWN": "value-one"})
-	rc, err := r.Rehydrate(context.Background(), []byte("a <apikey>MISSING</apikey> b"))
+	rc, err := r.rehydrate(context.Background(), []byte("a <apikey>MISSING</apikey> b"))
 	if !errors.Is(err, ErrVaultKeyNotFound) {
 		t.Fatalf("want ErrVaultKeyNotFound, got %v", err)
 	}
@@ -96,7 +96,7 @@ func TestRehydrateSecondNameMissingLeaksNothing(t *testing.T) {
 	const first = "first-secret-value"
 	r, _ := newRehydratorFixture(t, map[string]string{"FIRST": first})
 	content := []byte("<apikey>FIRST</apikey> then <apikey>SECOND</apikey>")
-	rc, err := r.Rehydrate(context.Background(), content)
+	rc, err := r.rehydrate(context.Background(), content)
 	if !errors.Is(err, ErrVaultKeyNotFound) {
 		t.Fatalf("want ErrVaultKeyNotFound, got %v", err)
 	}
@@ -123,7 +123,7 @@ func TestRehydrateMalformedTagRefuses(t *testing.T) {
 	r, _ := newRehydratorFixture(t, map[string]string{"NAME": "value-one"})
 	for name, content := range cases {
 		t.Run(name, func(t *testing.T) {
-			rc, err := r.Rehydrate(context.Background(), []byte(content))
+			rc, err := r.rehydrate(context.Background(), []byte(content))
 			if !errors.Is(err, ErrMalformedTag) {
 				t.Fatalf("want ErrMalformedTag, got %v", err)
 			}
@@ -137,7 +137,7 @@ func TestRehydrateMalformedTagRefuses(t *testing.T) {
 func TestRehydrateNilAndEmptyInput(t *testing.T) {
 	r, _ := newRehydratorFixture(t, nil)
 	for _, in := range [][]byte{nil, {}} {
-		rc, err := r.Rehydrate(context.Background(), in)
+		rc, err := r.rehydrate(context.Background(), in)
 		if err != nil || rc != nil {
 			t.Fatalf("empty input must be (nil, nil), got (%v, %v)", rc, err)
 		}
@@ -146,7 +146,7 @@ func TestRehydrateNilAndEmptyInput(t *testing.T) {
 
 func TestRehydrateUntaggedContentIsCopied(t *testing.T) {
 	r, _ := newRehydratorFixture(t, nil)
-	rc, err := r.Rehydrate(context.Background(), []byte("plain prose </password> only"))
+	rc, err := r.rehydrate(context.Background(), []byte("plain prose </password> only"))
 	if err != nil {
 		t.Fatalf("Rehydrate: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestRehydrateUntaggedContentIsCopied(t *testing.T) {
 
 func TestRehydrateRefusesNonUTF8(t *testing.T) {
 	r, _ := newRehydratorFixture(t, nil)
-	if _, err := r.Rehydrate(context.Background(), []byte{0xff, 0xfe}); !errors.Is(err, ErrMalformedTag) {
+	if _, err := r.rehydrate(context.Background(), []byte{0xff, 0xfe}); !errors.Is(err, ErrMalformedTag) {
 		t.Fatalf("want ErrMalformedTag for invalid UTF-8, got %v", err)
 	}
 }
@@ -168,7 +168,7 @@ func TestRehydrateNeedsABroker(t *testing.T) {
 		t.Fatalf("a rehydrator with no broker must be refused")
 	}
 	var zero *Rehydrator
-	if _, err := zero.Rehydrate(context.Background(), []byte("x")); err == nil {
+	if _, err := zero.rehydrate(context.Background(), []byte("x")); err == nil {
 		t.Fatalf("a nil rehydrator must refuse rather than proceed")
 	}
 }
@@ -176,7 +176,7 @@ func TestRehydrateNeedsABroker(t *testing.T) {
 func TestRehydratedContentZero(t *testing.T) {
 	const value = "zero-me-completely"
 	r, _ := newRehydratorFixture(t, map[string]string{"ZERO_ME": value})
-	rc, err := r.Rehydrate(context.Background(), []byte("<token>ZERO_ME</token>"))
+	rc, err := r.rehydrate(context.Background(), []byte("<token>ZERO_ME</token>"))
 	if err != nil {
 		t.Fatalf("Rehydrate: %v", err)
 	}

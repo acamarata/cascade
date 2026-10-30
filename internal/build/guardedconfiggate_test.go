@@ -32,7 +32,7 @@ func guardedConfigFixture(t *testing.T) string {
 	for dest, name := range map[string]string{
 		"internal/runtime/runtime.go": "runtime", "internal/policy/policy.go": "policy",
 		"cmd/app/families.go": "families", "cmd/app/newfile.go": "newfile", "cmd/app/helper.go": "helper",
-		"cmd/app/shapes.go": "shapes", "plugins/none/none.go": "none",
+		"cmd/app/shapes.go": "shapes", "plugins/none/none.go": "none", "cmd/app/hooks_unmodeled.go": "hooks_unmodeled",
 	} {
 		body, err := os.ReadFile(filepath.Join("testdata", "seeded-violations", "guarded-config", name+".go.txt"))
 		if err != nil {
@@ -61,6 +61,7 @@ func TestGuardedConfigGate_RealTreeGreen(t *testing.T) {
 
 // guardedSeededFindings is every finding the seeded fixture must produce.
 var guardedSeededFindings = []string{
+	"cmd/app/hooks_unmodeled.go:10: hooks",
 	"cmd/app/helper.go:11: conductor",
 	"cmd/app/newfile.go:8: nodes.allow_remote",
 	"internal/policy/policy.go:16: policy.bypass",

@@ -97,13 +97,13 @@ func TestReservedDaemonKeyNeverRehydratedOrEgressListed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rc, err := r.Rehydrate(ctx, []byte("send <apikey>"+ApprovalKeyName+"</apikey>"))
+	rc, err := r.rehydrate(ctx, []byte("send <apikey>"+ApprovalKeyName+"</apikey>"))
 	// Tag names are upper-case, so the reserved name cannot even be tagged;
 	// the refusal must hold either way and nothing is emitted.
 	if err == nil || rc != nil {
 		t.Fatalf("rehydrating the approval key = %v, %v; want a refusal", rc, err)
 	}
-	if rc, err := r.Rehydrate(ctx, []byte("send <apikey>FAKE_API_KEY</apikey>")); err != nil || !bytes.Contains(rc.Data, []byte("fake-value")) {
+	if rc, err := r.rehydrate(ctx, []byte("send <apikey>FAKE_API_KEY</apikey>")); err != nil || !bytes.Contains(rc.Data, []byte("fake-value")) {
 		t.Fatalf("control rehydration = %v, %v", rc, err)
 	}
 	ev, err := NewEgressVault(b)

@@ -45,7 +45,7 @@ func TestRehydrateForbiddenCarriers(t *testing.T) {
 	cmd.Dir = dir
 	cmd.Env = os.Environ()
 
-	rc, err := r.Rehydrate(context.Background(), tagged)
+	rc, err := r.rehydrate(context.Background(), tagged)
 	if err != nil {
 		t.Fatalf("Rehydrate: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestRehydrateStagingBufferIsZeroedOnBothPaths(t *testing.T) {
 	const value = "staging-buffer-secret-value"
 	r, _ := newRehydratorFixture(t, map[string]string{"STAGE_KEY": value})
 
-	rc, err := r.Rehydrate(context.Background(), []byte("<token>STAGE_KEY</token>"))
+	rc, err := r.rehydrate(context.Background(), []byte("<token>STAGE_KEY</token>"))
 	if err != nil {
 		t.Fatalf("Rehydrate: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestRehydrateStagingBufferIsZeroedOnBothPaths(t *testing.T) {
 
 	// Error path: the deferred Zero runs against whatever the caller
 	// holds, including the nil content a refusal returns.
-	failed, ferr := r.Rehydrate(context.Background(), []byte("<token>NO_SUCH_KEY</token>"))
+	failed, ferr := r.rehydrate(context.Background(), []byte("<token>NO_SUCH_KEY</token>"))
 	if ferr == nil {
 		t.Fatalf("expected a refusal for an unknown name")
 	}
@@ -131,7 +131,7 @@ func TestRehydrateStagingBufferIsZeroedOnBothPaths(t *testing.T) {
 func TestRehydrateOutputRedaction(t *testing.T) {
 	const value = "AKIA7YQ2XPLM4RZV6WTB"
 	r, _ := newRehydratorFixture(t, map[string]string{"ECHO_KEY": value})
-	rc, err := r.Rehydrate(context.Background(), []byte("<apikey>ECHO_KEY</apikey>"))
+	rc, err := r.rehydrate(context.Background(), []byte("<apikey>ECHO_KEY</apikey>"))
 	if err != nil {
 		t.Fatalf("Rehydrate: %v", err)
 	}

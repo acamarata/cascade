@@ -17,11 +17,14 @@
 //	total over arbitrary bytes (FuzzRehydrateScan).
 //
 // SPORT: REHYDRATE_CHANNEL: ADD (internal/secrets tag-span scanning).
+//
+//	REHYDRATION_TAG_NAMES: ADD (RehydrationTagNames over the same spans).
 
 package secrets
 
 import (
 	"bytes"
+	"unicode/utf8"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -33,6 +36,34 @@ type rehydrationSpan struct {
 	start int
 	end   int
 	tag   Tag
+}
+
+// RehydrationTagNames returns the tags RehydrateOnly would resolve in
+// content, in order: exactly the spans its own scan locates, so a caller
+// deriving a permitted set from content (a config's declared bindings)
+// sees the same tags the guard is later asked about. Content that is not
+// valid UTF-8 or holds a tag-like run the grammar refuses is
+// ErrMalformedTag, exactly as RehydrateOnly refuses it.
+func RehydrationTagNames(content []byte) ([]Tag, error) {
+	spans, err := rehydrationSpans(content)
+	if err != nil {
+		return nil, err
+	}
+	tags := make([]Tag, len(spans))
+	for i, span := range spans {
+		tags[i] = span.tag
+	}
+	return tags, nil
+}
+
+// rehydrationSpans is the one entry to the scan both RehydrateOnly and
+// RehydrationTagNames use: the UTF-8 check, then the span walk.
+func rehydrationSpans(content []byte) ([]rehydrationSpan, error) {
+	if !utf8.Valid(content) {
+		return nil, cascade.Wrap(cascade.KindInvalidInput, ErrMalformedTag,
+			"secrets: content must be valid UTF-8 before it can be rehydrated")
+	}
+	return scanRehydrationSpans(content)
 }
 
 // scanRehydrationSpans finds every typed tag in content, refusing any run
