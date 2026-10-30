@@ -14,11 +14,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/acamarata/cascade/internal/audit"
+	"github.com/acamarata/cascade/internal/client"
 	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -79,9 +82,46 @@ func (w *sinkDrivingWriter) Write(ctx context.Context, _, _ []byte) error {
 // dial to the profile socket fails), the gate's rows and the clipboard records open and close the one real sqlite store in
 // turn; nothing holds it, so the call completes and both land in the log.
 func TestVaultGetClipboardDaemonlessSharesTheStore(t *testing.T) {
+	assertDaemonlessClipboard(t, firewallTestPaths(t))
+}
+
+// TestVaultGetClipboardDaemonlessOverLongSocketPath: a profile socket path
+// at or over the unix limit (a long TMPDIR or HOME, as on hosted macOS
+// runners) can hold no daemon, so the call still takes the store path.
+func TestVaultGetClipboardDaemonlessOverLongSocketPath(t *testing.T) {
+	root := t.TempDir()
+	root = filepath.Join(root, strings.Repeat("p", max(1, 120-len(root))))
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	paths, err := runtime.NewPathProvider(func(key string) string {
+		if key == "CASCADE_HOME" {
+			return root
+		}
+		return ""
+	}, func() (string, error) { return root, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(paths.SocketPath()); n < 108 {
+		t.Fatalf("socket path is %d bytes, want one over every platform's limit", n)
+	}
+	assertDaemonlessClipboard(t, paths)
+}
+
+// TestIsDialFailureCoversOverLongSocketPath: the dialer's over-limit refusal
+// is a dial failure, never a daemon answer the sinks must refuse on.
+func TestIsDialFailureCoversOverLongSocketPath(t *testing.T) {
+	_, err := client.UnixDialer(context.Background(), strings.Repeat("x", 130))
+	if !isDialFailure(err) {
+		t.Fatalf("isDialFailure(%v) = false, want true", err)
+	}
+}
+
+func assertDaemonlessClipboard(t *testing.T, paths runtime.PathProvider) {
+	t.Helper()
 	resetProcessFirewall(t)
 	selectProcessCustody = testProcessCustody(t.TempDir())
-	paths := firewallTestPaths(t)
 	clock := runtime.NewSystemClock()
 	w := &sinkDrivingWriter{t: t}
 	deps, _ := clipDeps(t, storeRowGate{storeGateSink{paths: paths, clock: clock}}, &fakeClipWriter{})

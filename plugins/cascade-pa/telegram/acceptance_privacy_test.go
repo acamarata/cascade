@@ -46,6 +46,7 @@ func refusedTiers() []privacyCase {
 }
 
 func TestPABridge_PrivacyModeRefusal(t *testing.T) {
+	skipOnWindowsTier2(t)
 	for i, c := range refusedTiers() {
 		t.Run(c.name, func(t *testing.T) {
 			owner := int64(9300 + i)
@@ -117,6 +118,7 @@ func TestPABridge_PrivacyModeRefusal_Inbound(t *testing.T) {
 // and dispatch on an internal thread: one sendMessage carrying the body to
 // the owner, one AppendTurn on the mapped thread, no RefusalEvent.
 func TestPABridge_PrivacyModeRefusal_AllowPathContrast(t *testing.T) {
+	skipOnWindowsTier2(t)
 	const owner = int64(9310)
 	r := newAcceptRig(t, "", "")
 	threadID := r.pairOwner(t, owner, provider.SensitivityInternal)
@@ -142,6 +144,7 @@ func TestPABridge_PrivacyModeRefusal_AllowPathContrast(t *testing.T) {
 // by identity and message: a KindPolicyDenied cascade error wrapping the
 // egress sentinel ErrSensitivityViolation, with the engine's exact text.
 func TestPABridge_OutboundPrivacyRefusal_Send(t *testing.T) {
+	skipOnWindowsTier2(t)
 	cfg, ok := egress.DefaultRegistry().Lookup(egress.EgressClassBridge)
 	if !ok {
 		t.Fatal("the bridge egress class is not registered")

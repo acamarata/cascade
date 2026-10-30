@@ -71,7 +71,9 @@ type DialFunc func(ctx context.Context, socketPath string) (net.Conn, error)
 // no daemon restart can fix.
 func UnixDialer(ctx context.Context, socketPath string) (net.Conn, error) {
 	if err := unixSocketPathError(socketPath); err != nil {
-		return nil, err
+		// A dial failure: the daemon refuses to bind such a path too
+		// (runtime.bindOwnerSocket), so no daemon can be listening there.
+		return nil, &net.OpError{Op: "dial", Net: "unix", Addr: &net.UnixAddr{Name: socketPath, Net: "unix"}, Err: err}
 	}
 	return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
 }

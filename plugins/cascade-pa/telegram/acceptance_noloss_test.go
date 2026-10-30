@@ -49,6 +49,7 @@ const noLossReceiveTimeout = 3 * time.Second
 // calls with distinct texts, all on the same thread, each delivered Receive
 // item carrying Origin/Untrusted pinned.
 func TestPABridge_NoLossAcrossRecordedUpdates(t *testing.T) {
+	skipOnWindowsTier2(t)
 	const owner = int64(7500)
 	r := newAcceptRig(t, "", "")
 	threadID := r.pairOwner(t, owner, provider.SensitivityInternal)

@@ -28,6 +28,7 @@ const (
 )
 
 func TestPABridge_BridgeSecretScrub(t *testing.T) {
+	skipOnWindowsTier2(t)
 	const owner = int64(9401)
 	r := newAcceptRig(t, scrubName, scrubValue)
 	threadID := r.pairOwner(t, owner, provider.SensitivityInternal)
@@ -109,6 +110,7 @@ func assertInboundSecretQuarantined(t *testing.T, r *acceptRig, owner int64) {
 // same real gates leave ordinary text byte-identical on the wire and in the
 // appended turn, with no refusal and no quarantine event.
 func TestPABridge_BridgeSecretScrub_OrdinaryTextUnaffected(t *testing.T) {
+	skipOnWindowsTier2(t)
 	const owner, text = int64(9402), "just an ordinary status update"
 	r := newAcceptRig(t, scrubName, scrubValue)
 	threadID := r.pairOwner(t, owner, provider.SensitivityInternal)

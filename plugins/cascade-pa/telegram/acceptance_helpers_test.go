@@ -23,6 +23,7 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 
@@ -36,6 +37,18 @@ import (
 
 	_ "modernc.org/sqlite" // registers the "sqlite" database/sql driver
 )
+
+// skipOnWindowsTier2 skips an acceptance test that drives Start or Send.
+// Windows tier-2 refuses both at the platform gate before any IO, so the
+// privacy, secret and poll gates behind it are unreachable there and no
+// policy refusal is recorded (none was decided). chat_windows_test.go and
+// bridge_acceptance_windows_test.go prove that refusal and its zero sends.
+func skipOnWindowsTier2(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Start/Send are refused at the platform gate first on Windows tier-2 (chat_windows_test.go)")
+	}
+}
 
 // realAcceptEgressGate is internal/plugins.bridgeEgressGate, verbatim.
 type realAcceptEgressGate struct{ engine *egress.Engine }
