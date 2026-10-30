@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-30T09:23:37Z",
+  "generated_at": "2026-10-30T12:29:30Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -38269,6 +38269,20 @@
       ]
     },
     {
+      "name": "providers.agents.claude/EXTEND",
+      "sites": [
+        {
+          "file": "providers/agents/claude/exec_cancel_wait_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "providers.agents.claude/EXTEND (P1-CI-28)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "providers.agents.conformance",
       "sites": [
         {
@@ -41012,7 +41026,7 @@
       ]
     }
   ],
-  "total_sites": 3963,
-  "unspecified_count": 346,
+  "total_sites": 3964,
+  "unspecified_count": 347,
   "multi_status_count": 125
 }
