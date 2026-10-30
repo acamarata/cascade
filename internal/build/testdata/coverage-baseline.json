@@ -25,6 +25,7 @@
   "internal/coverage": { "tier": "core", "floor": 85.0, "baseline": 95.2 },
   "internal/daemon": { "tier": "core", "floor": 85.0, "baseline": 86.1 },
   "internal/daemon/service": { "tier": "core", "floor": 85.0, "baseline": 85.2 },
+  "internal/delegation": { "tier": "core", "floor": 85.0, "baseline": 95.5 },
   "internal/doctor": { "tier": "core", "floor": 85.0, "baseline": 89.8 },
   "internal/elevation": { "tier": "core", "floor": 85.0, "baseline": 85.5 },
   "internal/events": { "tier": "core", "floor": 85.0, "baseline": 86.4 },
