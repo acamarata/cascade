@@ -355,3 +355,54 @@ P1-E25-W5-S103-T1 the only one, is `cascade nself handshake` —
 `cascade nself handshake --json` prints exactly this shape:
 `{status, applied[], unchanged[], skipped[], withheld[], missing_env[],
 dsn_shape, restart_required, note}`.
+
+## Loosening ceremony and secret screening (P1-SEC-30)
+
+### Loosening a guarded setting
+
+`config set`, `config unset` and `config edit` stage the change, then compare
+the security-relevant settings of the previous file and the new one. Both
+files load the same way the daemon loads them. The compare runs on every
+write, whatever key you touched.
+
+- A tightening, or a change to an unguarded key, writes the file and asks the
+  daemon to reload. You get no prompt.
+- A loosening (for example `cascade config set conductor.spill_enabled true`)
+  writes the file and lists the loosened keys. It then calls the elevated
+  `config.accept_loosening` with the sha256 of the bytes it wrote, which
+  prompts for local authentication once. Until that call succeeds, the
+  daemon keeps running the restrictive values.
+- When no daemon is running or reachable, the command still writes the file
+  and exits 0. It prints that the loosening applies only after
+  `cascade config reload --accept-loosening` succeeds against a running
+  daemon.
+- With `CASCADE_NO_INPUT=1` the elevated call refuses before the keystore is
+  opened. The file stays written, and the command exits non-zero with the
+  same `--accept-loosening` hint.
+- `set` and `unset` on a key in a guarded family print a notice before the
+  write, so you know the change may need elevation.
+
+`cascade config reload --accept-loosening` sends `config.accept_loosening`
+for the file as it is on disk now. That covers hand edits too. A plain
+`cascade config reload`, a SIGHUP or a file-watch reload never applies a
+loosening.
+
+`unset` and `edit` refuse an unsafe config file (for example mode 0666)
+before they write anything, the same way `set` does.
+
+### Every detected secret is reported
+
+`config set` and `config edit` screen every string in the resulting file,
+array elements included, with the process secret detector (its pattern and
+entropy passes) and the earlier heuristic. Anything the earlier heuristic
+refused is still refused. A value is also checked:
+
+- in its parts, split at whitespace and at path, URL, userinfo and `key=value`
+  punctuation, so `host:<token>` or `/srv/token=<token>` is caught;
+- after mapping fullwidth look-alike characters to ASCII;
+- joined with the next string in the same table or array, so a token split
+  into two halves is caught.
+
+The refusal names every offending field and what was detected. It never
+prints the value. Store the value with `cascade vault set` instead. If the
+detector is not available, the write is refused.

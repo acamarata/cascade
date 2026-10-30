@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -176,8 +177,9 @@ func TestConfigWriter_Set_SecretValueNoWrite(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for secret-shaped value")
 	}
-	if _, ok := err.(*SecretLiteralError); !ok {
-		t.Fatalf("expected *SecretLiteralError, got %T: %v", err, err)
+	var hit *SecretLiteralError
+	if !errors.As(err, &hit) {
+		t.Fatalf("expected a *SecretLiteralError hit, got %T: %v", err, err)
 	}
 	if fileExists(path) {
 		t.Fatal("disk must not be touched when the value looks like a secret")

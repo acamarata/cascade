@@ -1,36 +1,20 @@
 package config
 
-// Purpose: `cascade config` — the CLI surface over internal/runtime's
-//   config load/write/hot-reload engine (07-CLI-COMMAND-TREE.md §config,
-//   08-INIT-CONFIG-SPEC.md §3): get/set/unset/list/validate/edit/reload/
-//   path. Per the ticket contract's ownership split, this file MOUNTS
-//   the read-verb behavior C/S-04.T1 already scaffolded in
-//   internal/runtime (ListEffectiveHandler for `list --effective`,
-//   PathHandler for `path`) and implements `get`/`validate` as thin
-//   glue directly over that same already-public API (*Config.
-//   EffectiveEntries/Source, runtime.Validate) — no new internal/runtime
-//   read capability is added here, only CLI wiring. The WRITE verbs
-//   (set/unset/edit/reload) are this ticket's own new implementation,
-//   split into config_write.go and config_reload*.go.
-// Inputs: cobra args/flags; the resolved config.toml path (via an
-//   injected PathProvider) and process environment.
-// Outputs: process output via internal/output.Writer (human text or the
-//   --json envelope); a non-zero taxonomy exit code on failure.
-// Constraints: NEVER prints via os.Stdout/fmt.Print directly (D/S-06.T5,
-//   forbidigo-enforced in cmd/**) — every command builds an
-//   internal/output.Writer over cmd.OutOrStdout()/cmd.OutOrStderr(),
-//   which defaults to the real streams in production and is
-//   test-overridable via cobra's SetOut/SetErr, exactly like every other
-//   cmd/cascade/* command. MOUNTING NOTE: cmd/cascade/root.go (D/S-06.T1)
-//   is explicitly out of this ticket's files_scope and has no extension
-//   registry yet for a later package to hook into without editing it —
-//   NewConfigCmd is exported and ready to be added via a one-line
-//   `root.AddCommand(config.NewConfigCmd(...))` in root.go the moment
-//   that ticket (or a follow-up) adds the call; see this ticket's final
-//   report for the precise blocker.
+// Purpose: `cascade config` — the CLI over internal/runtime's config
+//   load/write/hot-reload engine (07-CLI-COMMAND-TREE.md §config, 08 §3):
+//   get/set/unset/list/validate/edit/reload/path. Read verbs are thin glue
+//   over runtime's public API; write verbs live in config_write.go,
+//   config_loosening.go and config_reload*.go.
+// Inputs: cobra args/flags; the injected Deps (paths, environment, clock,
+//   the daemon's config.accept_loosening client).
+// Outputs: internal/output.Writer text or the --json envelope; a non-zero
+//   taxonomy exit code on failure.
+// Constraints: never prints via os.Stdout/fmt.Print (forbidigo, cmd/**);
+//   mounted from cmd/cascade/mount_config.go (composition root).
 // SPORT: cmd/cascade/config (ADD, placeholder per T-8 sport_updates).
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -51,6 +35,10 @@ type Deps struct {
 	Clock  runtime.Clock
 	// Environ matches os.Environ's signature.
 	Environ func() []string
+	// AcceptLoosening submits config.accept_loosening for the config file
+	// whose sha256 is sha256hex, through callElevated. nil means "no daemon
+	// client": a loosening write prints the unreachable message.
+	AcceptLoosening func(ctx context.Context, sha256hex string) error
 }
 
 // NewConfigCmd builds the `config` command tree. deps must be fully

@@ -26,6 +26,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -55,12 +56,19 @@ func readDaemonPID(root string) (pid int, found bool, err error) {
 }
 
 func newReloadCmd(deps Deps) *cobra.Command {
-	return &cobra.Command{
+	var acceptLoosening bool
+	cmd := &cobra.Command{
 		Use:   "reload",
 		Short: "Send the running daemon SIGHUP to reload config.toml",
-		Args:  cobra.NoArgs,
+		Long: "Send the running daemon SIGHUP to reload config.toml. A reload never applies a\n" +
+			"loosening of a guarded value; --accept-loosening submits the elevated\n" +
+			"config.accept_loosening for the file's exact bytes, which reloads it.",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			w := outputWriter(cmd)
+			if acceptLoosening {
+				return reloadAcceptingLoosening(cmd, deps)
+			}
 			pid, found, err := readDaemonPID(deps.Paths.Root())
 			if err != nil {
 				return cascade.Wrap(cascade.KindInternal, err, "read daemon pidfile")
@@ -74,6 +82,28 @@ func newReloadCmd(deps Deps) *cobra.Command {
 			return w.Result("sent reload signal to daemon")
 		},
 	}
+	cmd.Flags().BoolVar(&acceptLoosening, "accept-loosening", false,
+		"accept the on-disk config.toml's loosening through an elevated config.accept_loosening")
+	return cmd
+}
+
+// reloadAcceptingLoosening submits config.accept_loosening for the sha256 of
+// the config file as it is on disk now. No daemon client is unavailable.
+func reloadAcceptingLoosening(cmd *cobra.Command, deps Deps) error {
+	if deps.AcceptLoosening == nil {
+		return cascade.New(cascade.KindUnavailable, "config reload --accept-loosening: no daemon client")
+	}
+	data, err := readConfigBytes(deps.Paths.ConfigPath())
+	if err != nil {
+		return err
+	}
+	if data == nil {
+		return cascade.New(cascade.KindInvalidInput, "config reload --accept-loosening: there is no config.toml to accept")
+	}
+	if err := deps.AcceptLoosening(cmd.Context(), runtime.ConfigDigest(data)); err != nil {
+		return err
+	}
+	return outputWriter(cmd).Result("the daemon accepted config.toml's loosening and reloaded it")
 }
 
 // sendReloadSignal is triggerReload's best-effort helper (config_write.go):

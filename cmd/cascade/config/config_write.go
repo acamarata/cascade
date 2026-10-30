@@ -8,9 +8,13 @@ package config
 // Outputs: the same output.Writer contract as config.go's read verbs; a
 //   secret-shaped value or an invalid literal/key exits non-zero with an
 //   actionable message and never touches disk.
-// Constraints: same internal/output-only-printing rule as config.go.
+// Constraints: same internal/output-only-printing rule as config.go. Every
+//   write goes through commitConfigWrite (config_loosening.go); set and edit
+//   screen the whole candidate file with runtime.ScanTreeForSecrets, whose
+//   scanner is ProcessSecretLiteralScanner in the cascade binary.
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -19,8 +23,41 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
+
+// minOpaqueRun is the shortest unnamed entropy run ProcessSecretLiteralScanner
+// counts: two 16-character halves (the detector's minimum run) joined.
+const minOpaqueRun = 32
+
+// processDetector is secrets.ProcessDetector; a test replaces it to prove a
+// detector failure refuses.
+var processDetector = secrets.ProcessDetector
+
+// ProcessSecretLiteralScanner is the runtime.SecretLiteralScanner cascade
+// installs at init: the pattern and entropy passes of
+// secrets.ProcessDetector over one value. A hit counts when it reaches the
+// detector's confidence threshold, or when it is an unnamed entropy run of
+// at least minOpaqueRun characters with no '/' or '.' (path and host text).
+// A detector that cannot be resolved reports a hit, so the write refuses.
+func ProcessSecretLiteralScanner(value string) []string {
+	d, err := processDetector()
+	if err != nil {
+		return []string{"detector_unavailable"}
+	}
+	threshold := secrets.Confidence(d.Config().ConfidenceThreshold)
+	var classes []string
+	for _, h := range d.Scan([]byte(value)) {
+		span := strings.TrimRight(value[h.Offset:h.Offset+h.Len], "=")
+		opaque := h.Pattern == "entropy" && h.Confidence == secrets.ConfidenceWeak &&
+			len(span) >= minOpaqueRun && !strings.ContainsAny(span, "/.")
+		if h.Confidence >= threshold || opaque {
+			classes = append(classes, string(h.Class))
+		}
+	}
+	return classes
+}
 
 func newSetCmd(deps Deps) *cobra.Command {
 	return &cobra.Command{
@@ -29,19 +66,33 @@ func newSetCmd(deps Deps) *cobra.Command {
 		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			key, value, err := splitSetArgs(args)
+			if err == nil {
+				err = screenKeyArg(key)
+			}
 			if err != nil {
+				if _, typed := cascade.KindOf(err); typed {
+					return err
+				}
 				return cascade.Wrap(cascade.KindInvalidInput, err, "config set")
 			}
 			path := deps.Paths.ConfigPath()
 			if err := checkConfigPerm(cmd, path); err != nil {
 				return err // an unsafe or uninspectable config is never written
 			}
-			w := &runtime.ConfigWriter{Path: path}
-			res, err := w.Set(key, value)
+			var res *runtime.WriteSetResult
+			prev, next, err := stagedEdit(path, func(w *runtime.ConfigWriter) (err error) {
+				res, err = w.Set(key, value)
+				return err
+			})
+			if err == nil {
+				err = screenConfigBytes(next)
+			}
 			if err != nil {
 				return classifySetError(key, err)
 			}
-			triggerReload(cmd, deps)
+			if err := commitConfigWrite(cmd, deps, path, prev, next, key); err != nil {
+				return err
+			}
 			return outputWriter(cmd).Result(res)
 		},
 	}
@@ -63,18 +114,23 @@ func splitSetArgs(args []string) (key, value string, err error) {
 	return key, value, nil
 }
 
-// classifySetError maps a ConfigWriter.Set failure to the right taxonomy
-// kind: a secret-shaped literal is invalid-input with an explicit
-// vault-redirect message (already carried by *SecretLiteralError.Error());
-// an unknown key or invalid literal is likewise invalid-input; anything
-// else (a disk I/O failure) is internal.
+// classifySetError maps a write failure to its taxonomy kind: a
+// secret-shaped value (every hit, with the vault redirect), an unknown key
+// or an invalid literal is invalid-input; an already-typed error keeps its
+// kind (no installed scanner stays unavailable); anything else is internal.
 func classifySetError(key string, err error) error {
-	switch err.(type) {
-	case *runtime.SecretLiteralError, *runtime.DottedPathError, *runtime.LiteralError, *runtime.ConfigError, *runtime.SchemaError:
+	var secret *runtime.SecretLiteralError
+	if errors.As(err, &secret) {
 		return cascade.Wrap(cascade.KindInvalidInput, err, "config set "+key)
-	default:
-		return cascade.Wrap(cascade.KindInternal, err, "config set "+key)
 	}
+	switch err.(type) {
+	case *runtime.DottedPathError, *runtime.LiteralError, *runtime.ConfigError, *runtime.SchemaError:
+		return cascade.Wrap(cascade.KindInvalidInput, err, "config set "+key)
+	}
+	if _, typed := cascade.KindOf(err); typed {
+		return err
+	}
+	return cascade.Wrap(cascade.KindInternal, err, "config set "+key)
 }
 
 func newUnsetCmd(deps Deps) *cobra.Command {
@@ -83,14 +139,25 @@ func newUnsetCmd(deps Deps) *cobra.Command {
 		Short: "Remove one config key, reverting it to its schema default",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			key := args[0]
-			w := &runtime.ConfigWriter{Path: deps.Paths.ConfigPath()}
-			found, err := w.Unset(key)
+			key, path := args[0], deps.Paths.ConfigPath()
+			if err := screenKeyArg(key); err != nil {
+				return err
+			}
+			if err := checkConfigPerm(cmd, path); err != nil {
+				return err // an unsafe or uninspectable config is never written
+			}
+			var found bool
+			prev, next, err := stagedEdit(path, func(w *runtime.ConfigWriter) (err error) {
+				found, err = w.Unset(key)
+				return err
+			})
 			if err != nil {
 				return classifySetError(key, err)
 			}
 			if found {
-				triggerReload(cmd, deps)
+				if err := commitConfigWrite(cmd, deps, path, prev, next, key); err != nil {
+					return err
+				}
 			}
 			return outputWriter(cmd).Result(unsetResult{Key: key, Removed: found})
 		},
@@ -130,7 +197,14 @@ func newEditCmd(deps Deps) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			path := deps.Paths.ConfigPath()
-			tmpPath, cleanup, err := writeEditScratchFile(path)
+			if err := checkConfigPerm(cmd, path); err != nil {
+				return err // an unsafe or uninspectable config is never written
+			}
+			prev, err := readConfigBytes(path)
+			if err != nil {
+				return err
+			}
+			tmpPath, cleanup, err := stageFile(prev)
 			if err != nil {
 				return err
 			}
@@ -144,38 +218,12 @@ func newEditCmd(deps Deps) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := runtime.WriteBytesAtomic(path, edited); err != nil {
-				return cascade.Wrap(cascade.KindInternal, err, "apply edited config.toml")
+			if err := commitConfigWrite(cmd, deps, path, prev, edited); err != nil {
+				return err
 			}
-			triggerReload(cmd, deps)
 			return outputWriter(cmd).Result("config.toml updated and validated")
 		},
 	}
-}
-
-// writeEditScratchFile copies path's current content (tolerating a
-// not-yet-existing file) into a fresh scratch file for $EDITOR to open,
-// returning its path and a cleanup func that removes it.
-func writeEditScratchFile(path string) (tmpPath string, cleanup func(), err error) {
-	original, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return "", nil, cascade.Wrap(cascade.KindInternal, err, "read config.toml")
-	}
-	tmp, err := os.CreateTemp("", "cascade-config-edit-*.toml")
-	if err != nil {
-		return "", nil, cascade.Wrap(cascade.KindInternal, err, "create edit scratch file")
-	}
-	cleanup = func() { _ = os.Remove(tmp.Name()) }
-	if _, err := tmp.Write(original); err != nil {
-		_ = tmp.Close()
-		cleanup()
-		return "", nil, cascade.Wrap(cascade.KindInternal, err, "write edit scratch file")
-	}
-	if err := tmp.Close(); err != nil {
-		cleanup()
-		return "", nil, cascade.Wrap(cascade.KindInternal, err, "close edit scratch file")
-	}
-	return tmp.Name(), cleanup, nil
 }
 
 // runEditor launches deps' $EDITOR (or vi) against tmpPath, wired to
@@ -213,6 +261,9 @@ func readAndCheckEditedConfig(tmpPath string) (edited []byte, tree map[string]in
 		return nil, nil, cascade.Wrap(cascade.KindInvalidInput, err, "edited config.toml failed validation; not applied")
 	}
 	if err := runtime.ScanTreeForSecrets(tree); err != nil {
+		if _, typed := cascade.KindOf(err); typed {
+			return nil, nil, err // no installed scanner: unavailable, not applied
+		}
 		return nil, nil, cascade.Wrap(cascade.KindInvalidInput, err, "edited config.toml not applied")
 	}
 	return edited, tree, nil
