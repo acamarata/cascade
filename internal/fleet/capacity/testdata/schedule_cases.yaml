@@ -1,0 +1,33 @@
+- name: cheap-lane-loses-through-rework
+  request:
+    task_class: code
+    min_quality: standard
+    preferred_tier: tier-2
+    reserve_tier0: false
+    risk_class: normal
+  attempt: 2
+  expected_tier: tier-0
+  expected_jump_rule_fired: true
+  expected_reserve_tier0_flag: false
+- name: reserve-does-not-suppress-jump
+  request:
+    task_class: code
+    min_quality: standard
+    preferred_tier: tier-2
+    reserve_tier0: true
+    risk_class: normal
+  attempt: 2
+  expected_tier: tier-0
+  expected_jump_rule_fired: true
+  expected_reserve_tier0_flag: true
+- name: reserve-tier-hold
+  request:
+    task_class: code
+    min_quality: standard
+    preferred_tier: tier-2
+    reserve_tier0: true
+    risk_class: normal
+  attempt: 1
+  expected_tier: tier-2
+  expected_jump_rule_fired: false
+  expected_reserve_tier0_flag: true

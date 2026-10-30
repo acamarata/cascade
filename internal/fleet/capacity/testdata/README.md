@@ -28,3 +28,9 @@ just not the full unix-socket round trip.
 ## fuzz/FuzzSnapshotDecode/seed1
 
 See the file's own header for its provenance.
+
+## schedule_cases.yaml
+
+Hand-authored golden cases for `TestFleetCapacityAcceptance` (P1-CAP-06), not
+captured from a live call: the three scheduling-objective scenarios, each with
+its request, attempt and expected tier, jump and reserve flags.
