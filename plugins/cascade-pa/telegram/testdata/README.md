@@ -160,3 +160,36 @@ existing `Update` decoder already produces. There is therefore no new
 `quarantine_test.go` drive the refusal and quarantine gate directly against
 an injected `SecretScanner`/`QuarantineSink`, over the same synthetic,
 obviously-fake witness strings this file's Identifiers section describes.
+
+## getupdates_live_{text,pair,callback_approve,callback_reject}.json (P1-E23-W5-S49-T4, AMD-20260922/3, T0 RULING R10) — STILL PENDING, NOT YET PRODUCED
+
+Four fixtures are still required from a live capture against the owner's
+own paired bot, over the owner's own direct-message chat established by a
+real pairing handshake (27 SSA.2; R10 replaced the earlier fixed-channel
+targeting this section used to describe), per R-14.295/AMD-20260922-3: a
+text message, a `/pair ` message, an Approve callback_query and a Reject
+callback_query, each redacted field-by-field on the raw response bytes and
+decoded through the real production `decodeEnvelope`/`parseApprovalData`.
+They do not exist yet. The provenance row this ticket's acceptance check
+greps for is written automatically, once, by the capture run itself (see
+`live_capture_fixtures_test.go`'s `recordCaptureProvenance`) and appears
+ONLY below this paragraph, never inside it, so this paragraph's own prose
+can describe that outcome without pre-empting the check that looks for it.
+`TestTelegramLiveCapturedFixturesDecode` (`live_fixture_test.go`, build tag
+`tgcapture`) fails until the fixtures land, by design (R6: a missing capture
+is a failing acceptance check, never a silent skip). The tag keeps it out of
+every untagged and integration run until the capture exists. The capture runs
+only in the P1-EXIT-11 owner-present session.
+
+To produce them, the owner maps the vault's own bot-token value onto the
+one neutral env-ref below at invocation time (the vault's own variable name
+is deliberately never spelled out in this tracked file) and sets the
+capture opt-in; the pairing code the run prints is entered from Telegram,
+never typed into this command line:
+
+```
+CASCADE_ACCEPT_TELEGRAM_BOT_TOKEN=<the vault's bot token> \
+CASCADE_ACCEPT_CAPTURE=1 \
+go test -tags integration -run '^TestTelegramLiveCapture$' ./plugins/cascade-pa/telegram/
+go test -tags tgcapture -run '^TestTelegramLiveCapturedFixturesDecode$' ./plugins/cascade-pa/telegram/
+```

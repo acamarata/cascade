@@ -50,12 +50,8 @@ func TestBridgePrivacy_RefusalMatrix(t *testing.T) {
 			if n := r.chat.callCount(); n != 0 {
 				t.Fatalf("AppendTurn called %d times, want 0 (no message content exits)", n)
 			}
-			sent := lastSent(t, r.doer)
-			if sent != c.wantReason {
-				t.Fatalf("reply = %q, want %q", sent, c.wantReason)
-			}
-			if strings.Contains(sent, "secret plan") {
-				t.Fatal("refusal reply carries the original message content")
+			if sent := r.doer.sentTexts(); len(sent) != 0 {
+				t.Fatalf("a privacy refusal sent %d message(s), want 0 (privacy fails closed)", len(sent))
 			}
 			events := r.divergence.snapshot()
 			if len(events) != 1 || events[0].ResolvedTier != c.wantTier.String() || events[0].ThreadID != threadID {

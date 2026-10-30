@@ -10,8 +10,9 @@
 //   admitMessage), a *cascadepa.BindingStore for Paired(), and egress.go's
 //   three host-mediated seams.
 //
-// Outputs: chat.append_turn calls, sendMessage replies (a refusal, or the
-//   honest "recorded, no reply generator yet" disclosure — replyText),
+// Outputs: chat.append_turn calls, sendMessage replies (only on the ALLOW
+//   path: the honest "recorded, no reply generator yet" disclosure —
+//   replyText; a privacy refusal sends nothing, P1-CPA-14 acceptance [0]),
 //   bridge.refused divergence records, and the ChatBridge surface a host
 //   composition root drives.
 //
@@ -23,9 +24,9 @@
 //   - SAME PACKAGE, REAL HELPERS. b.module.reply/guardOutbound/
 //     guardOutboundChecked/now/client/egress are unexported
 //     TelegramModule/BotClient members this file reaches directly (package
-//     telegram), not a reimplementation. A refusal reply reuses reply()
-//     (fixed TierInternal); an ALLOW reply needs the THREAD's resolved
-//     tier, so it guards then calls client.SendMessage directly.
+//     telegram), not a reimplementation. A privacy refusal sends nothing;
+//     an ALLOW reply needs the THREAD's resolved tier, so it guards then
+//     calls client.SendMessage directly.
 //   - NO ASSISTANT REPLY EXISTS. replyText mirrors errReplyGenerationUnavailable
 //     (cascadepa_wiring.go): nothing generates one yet, so this discloses that honestly (Art.1).
 //
@@ -213,16 +214,18 @@ func (b *TelegramBridge) handleInbound(ctx context.Context, msg InboundMessage) 
 	// THE REAL DECISION (this file's header): a nil-content probe through
 	// the already-registered egress class (BotClient.fetchOne's own shape).
 	if _, err := b.module.client.egress.Guard(ctx, tier, nil); err != nil {
-		b.refuse(ctx, m.Chat.ID, threadID, tier, corrID, chatKind)
+		b.refuse(ctx, threadID, tier, corrID)
 		return nil
 	}
 	return b.forward(ctx, m, threadID, tier, chatKind)
 }
 
-// refuse records and replies a bridge-boundary refusal: no message content
-// exits in either the reply or the divergence event.
-func (b *TelegramBridge) refuse(ctx context.Context, chatID int64, threadID string,
-	tier cascadepa.SensitivityTier, corrID, chatKind string) {
+// refuse records a bridge-boundary privacy refusal. Nothing is sent to the
+// chat (privacy fails closed: a restricted or local-only thread puts zero
+// bytes on the wire, P1-CPA-14 acceptance [0]); the RefusalRecord and the
+// divergence event carry no message content.
+func (b *TelegramBridge) refuse(ctx context.Context, threadID string,
+	tier cascadepa.SensitivityTier, corrID string) {
 	reason := refusalReasonForTier(tier)
 	at := b.module.now()
 	b.recordRefusal(cascadepa.RefusalRecord{
@@ -231,7 +234,6 @@ func (b *TelegramBridge) refuse(ctx context.Context, chatID int64, threadID stri
 	b.divergence.EmitRefused(ctx, RefusalEvent{
 		ThreadID: threadID, ResolvedTier: tier.String(), Reason: reason, CorrelationID: corrID, At: at,
 	})
-	b.module.reply(ctx, chatID, chatKind, reason)
 }
 
 // forward appends msg's text as a "user" turn (chat parity), replies with
