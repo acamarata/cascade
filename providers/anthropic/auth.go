@@ -33,7 +33,7 @@ import (
 // token that would expire mid-request is refreshed ahead of time.
 const tokenExpirySkew = 30 * time.Second
 
-// AuthMode names which of the anthropic driver's two auth modes an
+// AuthMode names which of the anthropic driver's three auth modes an
 // AuthConfig configures.
 type AuthMode uint8
 
@@ -42,17 +42,35 @@ const (
 	AuthModeKey AuthMode = iota
 	// AuthModeOAuth is broker-driven OAuth ("authorization: Bearer ...").
 	AuthModeOAuth
+	// AuthModeBearerKey is static bearer-token auth ("authorization: Bearer ...")
+	// used by gateway accounts whose credential lives outside the vault.
+	AuthModeBearerKey
 )
 
-// Valid reports whether m is one of the two declared AuthMode members.
-func (m AuthMode) Valid() bool { return m <= AuthModeOAuth }
+// validAuthModes reports whether m is one of the declared AuthMode members.
+func validAuthModes(m AuthMode) bool {
+	switch m {
+	case AuthModeKey, AuthModeOAuth, AuthModeBearerKey:
+		return true
+	}
+	return false
+}
+
+// Valid reports whether m is one of the three declared AuthMode members.
+func (m AuthMode) Valid() bool { return validAuthModes(m) }
 
 // String returns m's stable lowercase name.
 func (m AuthMode) String() string {
-	if m == AuthModeOAuth {
+	switch m {
+	case AuthModeOAuth:
 		return "oauth"
+	case AuthModeBearerKey:
+		return "bearer-key"
+	case AuthModeKey:
+		return "key"
+	default: // an undeclared value reports as the zero mode
+		return "key"
 	}
-	return "key"
 }
 
 // KeyResolver dereferences a vault-key NAME to its current secret value. A
@@ -63,13 +81,13 @@ type KeyResolver interface {
 	Resolve(ctx context.Context, ref string) (string, error)
 }
 
-// AuthConfig configures one of the driver's two auth modes. It never holds
+// AuthConfig configures one of the driver's three auth modes. It never holds
 // a raw credential: KeyRef and the OAuth token record's *Ref fields are
 // vault-key names, dereferenced only through Resolver at request time.
 type AuthConfig struct {
-	// Mode selects AuthModeKey or AuthModeOAuth.
+	// Mode selects key, OAuth or static bearer-key authentication.
 	Mode AuthMode
-	// KeyRef is the vault key name holding the API key (AuthModeKey).
+	// KeyRef identifies the credential resolved for key or bearer-key auth.
 	KeyRef string
 	// OAuth is the provider's OAuth configuration (AuthModeOAuth).
 	OAuth provider.ProviderOAuthConfig
@@ -80,14 +98,14 @@ type AuthConfig struct {
 	// (AuthModeOAuth).
 	Account string
 	// Resolver dereferences a vault-key name to its secret value. Required
-	// for both modes.
+	// for all modes.
 	Resolver KeyResolver
 }
 
 // validate fails closed on any AuthConfig this driver cannot safely use.
 func (a AuthConfig) validate() error {
 	if !a.Mode.Valid() {
-		return cascade.Newf(cascade.KindInvalidInput, "anthropic: auth mode %d is not one of key/oauth", a.Mode)
+		return cascade.Newf(cascade.KindInvalidInput, "anthropic: auth mode %d is not one of key/oauth/bearer-key", a.Mode)
 	}
 	if a.Resolver == nil {
 		return cascade.New(cascade.KindInvalidInput, "anthropic: auth resolver must not be nil")
@@ -96,6 +114,10 @@ func (a AuthConfig) validate() error {
 	case AuthModeKey:
 		if strings.TrimSpace(a.KeyRef) == "" {
 			return cascade.New(cascade.KindInvalidInput, "anthropic: key auth requires a non-empty key_ref")
+		}
+	case AuthModeBearerKey:
+		if err := bearerKeyValidate(a); err != nil {
+			return err
 		}
 	case AuthModeOAuth:
 		if a.Broker == nil {
@@ -137,6 +159,8 @@ func (d *Driver) headerFor(ctx context.Context) (name, value string, err error) 
 			return "", "", mapErr(rerr, cascade.KindUnavailable, "anthropic: resolving api key")
 		}
 		return "x-api-key", v, nil
+	case AuthModeBearerKey:
+		return bearerKeyHeader(ctx, d.cfg.Auth)
 	case AuthModeOAuth:
 		rec, terr := d.currentToken(ctx)
 		if terr != nil {

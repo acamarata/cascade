@@ -50,6 +50,7 @@ import (
 func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, clock runtime.Clock) (*doctor.CheckRegistry, error) {
 	reg := doctor.NewCheckRegistry()
 	reg.Register(doctor.NewDoctorSelfCheck())
+	reg.Register(gatewayPostureCheck{paths: paths})
 	// retrieval_index: the on-disk retrieval index exists unconditionally,
 	// so there is no unimplemented interface between this check and
 	// something real to probe.

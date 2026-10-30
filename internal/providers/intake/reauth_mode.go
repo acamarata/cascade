@@ -54,6 +54,8 @@ func InferReauthMode(ctx context.Context, reg Registry, getenv func(string) stri
 		return CredentialOAuth, nil
 	case AuthKey:
 		return CredentialUnset, errFlaglessKeyRecord(name)
+	case AuthGateway:
+		return CredentialUnset, errFlaglessGatewayRecord(name)
 	default:
 		return CredentialUnset, errFlaglessUnknownAuth(name)
 	}
@@ -92,6 +94,13 @@ func errFlaglessKeyRecord(name string) error {
 	return cascade.Wrapf(cascade.KindInvalidInput, ErrFlaglessRefused,
 		"intake: provider %q stores an API key, and the flagless form never reads a key from the terminal; "+
 			"run `cascade provider reauth %s --key-env VAR`, or --key with the value on stdin", name, name)
+}
+
+// errFlaglessGatewayRecord reports a gateway record under the flagless form:
+// its credential comes from the configured source, never from a flag.
+func errFlaglessGatewayRecord(name string) error {
+	return cascade.Wrapf(cascade.KindInvalidInput, ErrFlaglessRefused,
+		"intake: provider %q is a gateway account, so reauth re-reads its configured credential source and takes no credential flag", name)
 }
 
 // errFlaglessUnknownAuth reports a record whose auth type is empty or not

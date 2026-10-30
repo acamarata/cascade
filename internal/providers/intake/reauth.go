@@ -119,6 +119,9 @@ func Reauth(ctx context.Context, deps Deps, req ReauthRequest) (AddResult, error
 	if err != nil {
 		return AddResult{}, err
 	}
+	if existing.Auth == AuthGateway {
+		return AddResult{}, cascade.New(cascade.KindInvalidInput, "intake: use ReauthGateway for a gateway record")
+	}
 	cred, authType, ref, err := resolveReauthCredential(ctx, deps, req, existing.Driver)
 	if err != nil {
 		return AddResult{}, err

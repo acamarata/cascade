@@ -56,6 +56,11 @@ func (rec ProviderRecord) Validate() error {
 	if !rec.Auth.Valid() {
 		return cascade.Newf(cascade.KindInvalidInput, "registry: invalid auth_type %q", rec.Auth)
 	}
+	if rec.Auth == AuthGateway {
+		if err := ValidateGatewayAuthRef(rec.AuthRef); err != nil {
+			return err
+		}
+	}
 	if rec.AuthRef == "" {
 		return cascade.New(cascade.KindInvalidInput, "registry: auth_ref is required")
 	}
@@ -108,6 +113,11 @@ func scanProviderRow(row rowScanner) (ProviderRecord, error) {
 
 	rec.Driver = DriverKind(driver)
 	rec.Auth = AuthType(auth)
+	if rec.Auth == AuthGateway {
+		if err := ValidateGatewayAuthRef(rec.AuthRef); err != nil {
+			return ProviderRecord{}, err
+		}
+	}
 	rec.AccountKind = AccountKind(accountKind)
 	rec.Tier = Tier(tier)
 	rec.HealthStatus = HealthStatus(health)

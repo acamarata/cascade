@@ -112,6 +112,18 @@ func TestReauthFlaglessKeyRecordRefused(t *testing.T) {
 	assertUnchanged(t, deps, seed)
 }
 
+func TestReauthFlaglessGatewayRecordRefused(t *testing.T) {
+	deps, custody := testDeps(t, anthropicSuccessDoer(t))
+	starts := 0
+	seed := oauthSeed(t, &deps, custody, AuthGateway, &starts)
+	_, err := Reauth(context.Background(), deps, ReauthRequest{Name: "anthropic-main"})
+	assertRefused(t, err, cascade.KindInvalidInput, ErrFlaglessRefused, "gateway account", "configured credential source")
+	if starts != 0 {
+		t.Fatal("refused flagless ran the broker on a gateway record")
+	}
+	assertUnchanged(t, deps, seed)
+}
+
 func TestReauthFlaglessUnknownAuthFailsClosed(t *testing.T) {
 	for _, auth := range []AuthType{"", "bogus"} {
 		deps, custody := testDeps(t, anthropicSuccessDoer(t))

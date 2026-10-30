@@ -70,8 +70,7 @@ func DriverKinds() []DriverKind {
 	}
 }
 
-// AuthType names how a provider record's credential is held. Exactly two
-// members: 08-INIT-CONFIG-SPEC.md §2 defines no third.
+// AuthType names a vault-backed credential or a call-time gateway source.
 type AuthType string
 
 const (
@@ -79,10 +78,20 @@ const (
 	AuthKey AuthType = "key"
 	// AuthOAuth is a broker-managed OAuth grant.
 	AuthOAuth AuthType = "oauth"
+	// AuthGateway is a gateway-account credential resolved at call time
+	// through gateway.Source; AuthRef is "gateway:<account>", never a
+	// vault key.
+	AuthGateway AuthType = "gateway"
 )
 
-// Valid reports whether a is AuthKey or AuthOAuth.
-func (a AuthType) Valid() bool { return a == AuthKey || a == AuthOAuth }
+// Valid reports whether a is one of the three declared members.
+func (a AuthType) Valid() bool {
+	switch a {
+	case AuthKey, AuthOAuth, AuthGateway:
+		return true
+	}
+	return false
+}
 
 // VaultKeyRef is a vault broker key NAME, never a credential value. It is
 // declared as a distinct type (rather than a plain string field on

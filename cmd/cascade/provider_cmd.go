@@ -87,7 +87,7 @@ func newProviderCmd(deps providerDeps) *cobra.Command {
 		Annotations: map[string]string{"local": "true"},
 	}
 	cmd.AddCommand(newProviderAddCmd(deps))
-	cmd.AddCommand(newProviderReauthCmd(deps))
+	cmd.AddCommand(newGatewayAwareReauthCmd(deps))
 	mountProviderQueryCmds(cmd, deps)
 	return cmd
 }
@@ -99,6 +99,7 @@ type providerAddFlags struct {
 	kind     string
 	noVerify bool
 	pool     string
+	gateway  string
 }
 
 func newProviderAddCmd(deps providerDeps) *cobra.Command {
@@ -107,6 +108,7 @@ func newProviderAddCmd(deps providerDeps) *cobra.Command {
 		Use:   "add <name>",
 		Short: "Register a provider via the universal intake path",
 		Long: "Register a provider named <name>.\n\n" +
+			"--gateway <account> uses a configured gateway account and its catalog.\n" +
 			"Exactly one of --key (reads a value from stdin), --key-env <VAR> (reads\n" +
 			"the named environment variable once, non-interactively), or --oauth\n" +
 			"(runs a PKCE browser flow; refuses under CASCADE_NO_INPUT=1, citing\n" +
@@ -135,6 +137,7 @@ func newProviderAddCmd(deps providerDeps) *cobra.Command {
 	f.StringVar(&flags.kind, "kind", "", "pin the driver shape instead of letting the probe decide")
 	f.BoolVar(&flags.noVerify, "no-verify", false, "skip the live micro-verify call")
 	f.StringVar(&flags.pool, "pool", "", "join the named key-pool")
+	f.StringVar(&flags.gateway, "gateway", "", "use the named configured gateway account")
 	return cmd
 }
 
@@ -142,6 +145,9 @@ func newProviderAddCmd(deps providerDeps) *cobra.Command {
 // writing through resolveProviderRegistry's registry -- the fix for the
 // disclosed add/list split (provider_registry_adapter.go's header comment).
 func runProviderAdd(cmd *cobra.Command, deps providerDeps, name string, flags providerAddFlags) error {
+	if cmd.Flags().Changed("gateway") {
+		return runProviderAddGateway(cmd, deps, name, flags)
+	}
 	req, err := buildAddRequest(deps, name, flags)
 	if err != nil {
 		return err

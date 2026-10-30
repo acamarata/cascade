@@ -34,3 +34,33 @@ configuration is accepted through `config.accept_loosening`.
 
 See [credential helpers](security-posture/credential-helpers.md) before enabling
 an executable credential source.
+
+## Add
+
+`cascade provider add <name> --gateway <account> [--pool P] [--no-verify]`
+registers an account from the on-disk effective configuration. It pins the
+anthropic driver and creates an `api_credit` lane. `--key`, `--key-env`,
+`--oauth`, `--base-url` and `--kind` cannot accompany `--gateway`.
+The provider stores only `auth_type = gateway` and `auth_ref = gateway:<account>`.
+Tokens are resolved at call time and never written to a vault or database.
+
+## Catalog
+
+A declared `models` list skips discovery. Otherwise registration calls
+GET `<base>/v1/models` with the account's header style. A missing catalog
+refuses registration: declare `models` or use a gateway with `/v1/models`.
+The first model is used for the one-token micro-verify. `--no-verify` records
+an unknown lane state. Catalog source and observation time are recorded.
+
+## Reauth
+
+`cascade provider reauth <name>` resolves the configured source again and
+re-verifies the stored first model. Credential overrides and `--no-verify`
+are refused for gateway records. Success marks the lane available; failure
+leaves the record and lane unchanged.
+
+## Posture
+
+Gateway providers are operator-configured and terms-sensitive. Doctor names
+each registered gateway provider with that posture. Static bearer-key auth
+is programmatic and has no interactive entitlement or OAuth refresh path.

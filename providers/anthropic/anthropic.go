@@ -275,14 +275,7 @@ func (d *Driver) Count(ctx context.Context, req provider.CountRequest) (provider
 // posture. lane is accepted for interface conformance; this driver's
 // posture does not currently vary per lane.
 func (d *Driver) Capabilities(_ context.Context, _ string) (provider.Capabilities, error) {
-	posture := provider.NewCompliancePosture(
-		[]string{"api-key", "oauth"},
-		true, // interactive_entitlement: oauth is a human-present login flow
-		true, // programmatic_entitlement: api-key is a programmatic grant
-		[]string{"batch", "agent", "scheduled"},
-		"steady-with-burst",
-		true, // multi_profile_enabled: a pool may hold more than one account
-	)
+	posture := postureFor(d.cfg.Auth.Mode)
 	return provider.Capabilities{
 		Search:            provider.CapabilityUnsupported,
 		URLFetch:          provider.CapabilityUnsupported,

@@ -51,18 +51,6 @@ func (k DriverKind) Valid() bool {
 	return false
 }
 
-// AuthType names how a provider record's credential is held.
-type AuthType string
-
-// The two closed AuthType members.
-const (
-	AuthKey   AuthType = "key"
-	AuthOAuth AuthType = "oauth"
-)
-
-// Valid reports whether a is AuthKey or AuthOAuth.
-func (a AuthType) Valid() bool { return a == AuthKey || a == AuthOAuth }
-
 // AccountKind is the R-14.34 provider-ownership classification.
 type AccountKind string
 
