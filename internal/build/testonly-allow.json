@@ -855,13 +855,6 @@
     "symbol": "internal/runtime.NewFixedClock"
   },
   {
-    "caller_site": "cmd/cascade/config_cmd.go",
-    "expected_caller": "the config set command, in the change that surfaces the elevation requirement before a write",
-    "reason": "The write-verb side of the config loosening gate, so `config set` can tell an operator that a key needs elevation before the write is attempted. The reload path already enforces the same gate; this is the pre-flight answer for the CLI verb, which lands with the config-set surface. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/runtime.RequiresElevationToLoosen"
-  },
-  {
     "caller_site": "internal/runtime/bootstrap.go",
     "expected_caller": "internal/runtime/bootstrap.go, which P1-E27-W10-S55-T3 constructs; retire this entry when that lands",
     "reason": "ResolveTelemetryConfig landed under P1-E27-W10-S55-T3, whose files_scope forbade touching config.go and config_sections.go, so the section is real and self-contained but not yet read by Load. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
