@@ -96,7 +96,10 @@ func scriptBody(raw string) string {
 // stop.
 func runScript(t *testing.T, script string) {
 	t.Helper()
-	home := t.TempDir()
+	// shortHomeDir, not t.TempDir(): a script that starts a daemon binds
+	// $HOME/.cascade/daemon.sock, which a t.TempDir() path on hosted macOS
+	// runners pushes past the 104-byte sun_path limit.
+	home := shortHomeDir(t)
 	t.Setenv("HOME", home)
 	t.Setenv("CASCADE_HOME", filepath.Join(home, ".cascade"))
 

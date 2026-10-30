@@ -33,7 +33,13 @@ func ciTopicDaemon(t *testing.T) (*client.Client, *events.Bus) {
 // ciDaemon is ciTopicDaemon, optionally without the ci topic mounted.
 func ciDaemon(t *testing.T, withTopic bool) (*client.Client, *events.Bus) {
 	t.Helper()
-	home := t.TempDir()
+	// Not t.TempDir(): on hosted macOS runners its path plus the test name
+	// pushes d.sock past the 104-byte sun_path limit.
+	home, err := os.MkdirTemp("", "je")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	clock := runtime.NewSystemClock()
