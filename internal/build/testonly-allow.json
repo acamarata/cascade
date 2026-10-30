@@ -870,14 +870,6 @@
     "symbol": "internal/runtime.ResolveTelemetryConfig"
   },
   {
-    "caller_site": "cmd/cascade/vault_elevated.go",
-    "expected_caller": "the `cascade vault get --clipboard` RunE in cmd/cascade/vault_elevated.go, once that flag is added",
-    "reason": "P1-E08-W2-S16-T4's clipboard fallback. R-21.242 names its sole production caller as the elevated `cascade vault get --clipboard` verb, which lives in cmd/cascade (another agent's concurrent lane on this ticket) and does not exist yet. Built and tested against a fake and, on darwin, a real pbcopy; nothing that ships constructs one yet.",
-    "retire_ticket": "cap:secrets-vault",
-    "expires": "P1-EXIT-07",
-    "symbol": "internal/secrets.NewClipboardWriter"
-  },
-  {
     "caller_site": "internal/conductor/executor.go",
     "expected_caller": "the conductor executor's action-dispatch function (internal/conductor/executor), when that package lands",
     "reason": "Rehydration is executor-only by ruling, and the executor is a later wave. Wiring it anywhere else now would violate the boundary this ticket's own arch gate enforces. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
@@ -891,22 +883,6 @@
     "retire_ticket": "cap:secrets-vault",
     "expires": "P1-EXIT-07",
     "symbol": "internal/secrets.NewScrubber"
-  },
-  {
-    "caller_site": "internal/daemon/lifecycle_unix_start.go",
-    "expected_caller": "same composition root as internal/secrets.NewClipboardWriter, once it exists",
-    "reason": "The production time.AfterFunc-backed ClipboardScheduler for P1-E08-W2-S16-T4's clipboard fallback. It is only wired in once the same composition root builds a real ClipboardWriter (see the NewClipboardWriter entry above); tests inject a fake scheduler instead.",
-    "retire_ticket": "cap:secrets-vault",
-    "expires": "P1-EXIT-07",
-    "symbol": "internal/secrets.NewSystemClipboardScheduler"
-  },
-  {
-    "caller_site": "internal/daemon/lifecycle_unix_start.go",
-    "expected_caller": "the daemon start path in internal/daemon, once it constructs a ClipboardWriter and a PendingClearStore",
-    "reason": "P1-E08-W2-S16-T4's restart-survival re-arm for a pending clipboard clear. Its caller is the daemon start path (internal/daemon), another agent's concurrent lane; no daemon boot sequence calls it yet. Exported and covered by TestClipboardPendingClearRearmedOnBoot's simulated crash-restart.",
-    "retire_ticket": "cap:secrets-vault",
-    "expires": "P1-EXIT-07",
-    "symbol": "internal/secrets.RearmPendingClears"
   },
   {
     "caller_site": "internal/storage/composition.go",
@@ -1065,20 +1041,6 @@
     "reason": "Same shape as internal/context.NewPreStage directly above, for the post-assembly hook (task class \"summarize\", §5.16 LaneAffinity \"cheap\"): pipeline_compose.go's runPostStage runs it whenever a Composer has one attached, and pipeline_compose_test.go plus pipeline_lane_test.go cover the wiring, but nothing constructs one for a running binary until the reply pipeline lands.",
     "retire_ticket": "P1-CPA-13",
     "symbol": "internal/context.NewSummarizeStage"
-  },
-  {
-    "caller_site": "plugins/cascade-pa/whatsapp/bridge.go",
-    "expected_caller": "W/S-49.T3's WhatsApp Business Cloud API adapter, which decodes an inbound webhook payload and stamps it Origin=bridge-whatsapp/Untrusted=true (R-21.227) the same way telegram/module.go's stampInbound does for Telegram; retire this entry when that file lands",
-    "reason": "P1-E23-W5-S48-T2 (this ticket) declares OriginBridgeWhatsApp in plugins/cascade-pa/bridge.go alongside OriginBridgeTelegram so the closed two-member Origin vocabulary is proven and documented in one place (R-21.227's own text names both origins), matching the ticket's own InboundMessage contract. Only the Telegram adapter exists in P1; W/S-49.T3 is the WhatsApp adapter and its own files_scope.add lists plugins/cascade-pa/whatsapp/bridge.go, which does not exist yet. Deleting the constant now and having T3 re-add it would churn the Origin vocabulary bridge.go's own compile-time InboundMessage tests already assert against (bridge_test.go's TestInboundMessage_UntrustedIsNeverClearedByThisType).",
-    "retire_ticket": "P1-CPA-14",
-    "symbol": "plugins/cascade-pa.OriginBridgeWhatsApp"
-  },
-  {
-    "caller_site": "cmd/cascade/daemon_unix_hooks.go",
-    "expected_caller": "P1-SUP-02's daemon composition, which decodes config.toml's [[hooks]] value and calls ParseHooksSection with the built Dispatcher's Runnable predicate before registering the result",
-    "reason": "P1-SUP-01 ships the strict [[hooks]] section parser in the engine library only; the packet prohibits any cmd/cascade edit (composition is P1-SUP-02), so its only callers at this tip are internal/hooks tests (config_test.go, reload_test.go).",
-    "retire_ticket": "P1-SUP-02",
-    "symbol": "internal/hooks.ParseHooksSection"
   },
   {
     "caller_site": "cmd/cascade/daemon_unix_hooks.go",
@@ -1387,14 +1349,6 @@
     "symbol": "internal/runtime.RetrievalEmbeddingLocalSocket"
   },
   {
-    "added_by_ticket": "P1-SEC-36",
-    "caller_site": "cmd/cascade/vault_clipboard.go",
-    "expected_caller": "cmd/cascade/vault_clipboard.go, the vault --clipboard path that clears the clipboard after the admitted secrets.clipboard_ttl; retire this entry once that file calls SecretsClipboardTTL",
-    "reason": "P1-SEC-36 adds secrets.clipboard_ttl to the [secrets] guarded family (a raise needs attestation, a degraded boot keeps a tighter value) and ships its only reader, but the clipboard copy that consumes the TTL is P1-SEC-09, which depends on this ticket. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
-    "retire_ticket": "P1-SEC-09",
-    "symbol": "internal/runtime.SecretsClipboardTTL"
-  },
-  {
     "added_by_ticket": "P1-CAP-05",
     "caller_site": "internal/daemon/fleet_candidates.go",
     "expected_caller": "the AO/S-79.T4 dispatch path's config-to-Tables resolution step",
@@ -1457,5 +1411,21 @@
     "reason": "P1-AGT-11 ships the jobs_delegation migration and triggers implemented and tested, but the daemon start-up that applies it belongs to the delegate wiring of P1-AGT-08.",
     "retire_ticket": "P1-AGT-08",
     "symbol": "internal/jobs.ApplyDelegationSchema"
+  },
+  {
+    "added_by_ticket": "P1-CPA-14",
+    "caller_site": "plugins/cascade-pa/whatsapp/bridge.go",
+    "expected_caller": "W/S-49.T3's WhatsApp Business Cloud API adapter, which decodes an inbound webhook payload and stamps it Origin=bridge-whatsapp/Untrusted=true (R-21.227) the same way telegram/module.go's stampInbound does for Telegram; retire this entry when that file lands",
+    "reason": "P1-E23-W5-S48-T2 (this ticket) declares OriginBridgeWhatsApp in plugins/cascade-pa/bridge.go alongside OriginBridgeTelegram so the closed two-member Origin vocabulary is proven and documented in one place (R-21.227's own text names both origins), matching the ticket's own InboundMessage contract. Only the Telegram adapter exists in P1; W/S-49.T3 is the WhatsApp adapter and its own files_scope.add lists plugins/cascade-pa/whatsapp/bridge.go, which does not exist yet. Deleting the constant now and having T3 re-add it would churn the Origin vocabulary bridge.go's own compile-time InboundMessage tests already assert against (bridge_test.go's TestInboundMessage_UntrustedIsNeverClearedByThisType). Re-keyed by P1-CPA-14 (T0, 2026-10-30): the WhatsApp adapter is deferred to P2 (DEF-P2-whatsapp-bridge), so no P1 ticket will create plugins/cascade-pa/whatsapp/bridge.go; recorded honestly as UNOWNED instead of a closed retire_ticket.",
+    "retire_ticket": "UNOWNED",
+    "symbol": "plugins/cascade-pa.OriginBridgeWhatsApp"
+  },
+  {
+    "added_by_ticket": "P1-SUP-05",
+    "caller_site": "cmd/cascade/wire_hooks.go",
+    "expected_caller": "P1-SUP-02's cmd/cascade/wire_hooks.go, which sets the one Dispatcher's Rehydrate to hooks.BoundRehydrate(admittedHookBindings(w.Deps.Reloader), rehydrateOver(secrets.NewRehydrator(fw.Broker()))); retire this entry once that file calls BoundRehydrate",
+    "reason": "P1-SUP-05 ships the dispatch-time vault-binding seam (contract:hooks-vault-binding) tested behind the real Rehydrator.RehydrateOnly over a counting in-memory vault; the packet prohibits any cmd/cascade composition file, so its production caller is P1-SUP-02. ParseHooksSection is removed because the guarded [hooks] family (cmd/cascade/guarded_hooks.go hooksFamilyExtract) now calls it in shipped code.",
+    "retire_ticket": "P1-SUP-02",
+    "symbol": "internal/hooks.BoundRehydrate"
   }
 ]
