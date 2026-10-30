@@ -66,6 +66,7 @@ perms.grant
 perms.revoke
 plugin.add
 plugin.intent
+plugin.review.pr_diff
 plugin.review.review
 plugin.search
 plugin.update

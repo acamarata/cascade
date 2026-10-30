@@ -140,3 +140,25 @@ func TestPRDiffWiringDecodeRefuses(t *testing.T) {
 		t.Fatalf("valid result: %q %v", got, err)
 	}
 }
+
+// TestInProcessPRDiffFetcherIsTheWiredPath (P1-PLG-14): the accessor hands
+// out the same in-process fetch path init installs: the installed-plugin
+// provider and the default egress registry, so a bad reference is refused
+// before any launch exactly as before.
+func TestInProcessPRDiffFetcherIsTheWiredPath(t *testing.T) {
+	for _, key := range []string{"HOME", "USERPROFILE", "CASCADE_HOME"} {
+		t.Setenv(key, t.TempDir())
+	}
+	f, ok := InProcessPRDiffFetcher().(*prDiffFetcher)
+	if !ok || f.provider == nil || f.registry != egress.DefaultRegistry() || f.intercept == nil {
+		t.Fatalf("InProcessPRDiffFetcher = %#v, want the provider-backed fetcher over the default registry", f)
+	}
+	if _, err := f.FetchPRDiff(t.Context(), "octocat", "Hello-World", 0); kindOf(err) != cascade.KindInvalidInput {
+		t.Fatalf("number 0: err %v, want invalid-input before any launch", err)
+	}
+}
+
+func kindOf(err error) cascade.Kind {
+	k, _ := cascade.KindOf(err)
+	return k
+}

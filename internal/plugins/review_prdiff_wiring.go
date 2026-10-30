@@ -6,7 +6,7 @@ package plugins
 // TrustedHandle), asked for cascade-github.prs.diff once, and closed.
 // No other fetch path exists: no HTTP client, no gh, no git.
 //
-// SPORT: internal/plugins:review_prdiff_wiring (ADD) — P1-PLG-05.
+// SPORT: internal/plugins:review_prdiff_wiring (ADD) — P1-PLG-05; EXTEND P1-PLG-14.
 
 import (
 	"bytes"
@@ -26,6 +26,14 @@ func init() {
 	// The fetcher is non-nil by construction, the only refusal
 	// SetPRDiffFetcher has, so the error cannot occur.
 	_ = reviewplugin.SetPRDiffFetcher(newPRDiffFetcher(InstalledHandleProvider(), egress.DefaultRegistry()))
+}
+
+// InProcessPRDiffFetcher returns the in-process fetch path this file
+// installs at init: a fresh fetcher over InstalledHandleProvider and the
+// default egress registry. The daemon's plugin.review.pr_diff verb runs it
+// under the daemon's own launch environment (P1-PLG-14).
+func InProcessPRDiffFetcher() reviewplugin.PRDiffFetcher {
+	return newPRDiffFetcher(InstalledHandleProvider(), egress.DefaultRegistry())
 }
 
 // prDiffParams is the request JSON {owner, repo, number}.

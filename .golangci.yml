@@ -154,6 +154,11 @@ linters:
             # the daemon's own Registry, and never dials the daemon (P1-SEC-09,
             # P1-BF-R298).
             - "!**/cmd/cascade/wire_clipboard_effect.go"
+            # wire_review_pr_diff.go earns its exemption by name: it only declares
+            # plugin.review.pr_diff AccessOwnerOnly next to its registration over
+            # the daemon's own Registry, and never dials the daemon (P1-PLG-14,
+            # P1-BF-R305).
+            - "!**/cmd/cascade/wire_review_pr_diff.go"
             # daemon_unix_conductor.go earns its exemption by name, per this
             # rule's own comment above: it is a new COMPOSITION-ROOT file, not a
             # hand-rolled client. It is called only from buildRPCServer, it

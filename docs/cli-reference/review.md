@@ -79,6 +79,17 @@ keeps the plugin launcher's `policy_denied` refusal. A diff over 8 MiB is
 path. Errors the plugin returns while running cross the process boundary
 as `internal`, with the plugin's message.
 
+`--pr` works with the daemon running and without it. When a daemon
+answers, the CLI asks it through the owner-only `plugin.review.pr_diff`
+verb, and the daemon launches `cascade-github` under its own plugin
+launch environment, so the CLI never opens the runtime store the daemon
+holds. When no daemon socket can be reached at all, the CLI runs the same
+fetch itself and opens the store once. Any other daemon error, a refusal
+included, is returned as is; the CLI never retries it in-process. The
+first fetch picks the mode and the process keeps it. The daemon verb takes
+only `{owner, repo, number}`, refuses anything else as `invalid_input`,
+rate-limits fetches and never returns more than 8 MiB.
+
 Fetched diff bytes reach the review provider with `untrusted-source`
 provenance. The reviewer places the filtered diff inside an explicit,
 JSON-quoted untrusted-data frame so remote source text stays data.
