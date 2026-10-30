@@ -45,6 +45,8 @@ type Request struct {
 	Path string
 	// Body is the JSON request body, or nil for a bodiless call.
 	Body []byte
+	// Accept selects a response representation; empty uses GitHub JSON.
+	Accept string
 }
 
 // URL renders the absolute URL this request targets.
@@ -268,6 +270,8 @@ func BuildRequest(tool string, a Args) (Request, error) {
 		return ListPRsRequest(a.Owner, a.Repo, a.State, a.PerPage)
 	case "prs.get":
 		return GetPRRequest(a.Owner, a.Repo, a.Number)
+	case "prs.diff":
+		return PRDiffRequest(a.Owner, a.Repo, a.Number)
 	case "prs.create":
 		return CreatePRRequest(a.Owner, a.Repo, a.Title, a.Head, a.Base, a.Body, a.Draft)
 	case "prs.merge":

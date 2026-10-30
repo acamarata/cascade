@@ -80,6 +80,10 @@ name = "cascade-github.prs.get"
 description = "Fetch one pull request by number."
 
 [[provides.tools]]
+name = "cascade-github.prs.diff"
+description = "Fetch one pull request's diff, limited to 8 MiB."
+
+[[provides.tools]]
 name = "cascade-github.prs.create"
 description = "Open a pull request from a head branch into a base branch."
 

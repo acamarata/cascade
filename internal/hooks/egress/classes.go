@@ -188,6 +188,9 @@ const (
 	// This class did not exist before this ticket; the entry follows
 	// EgressClassRecallWhat's precedent one ticket earlier in this epic.
 	EgressClassConversationResume EgressClass = "conversation-resume"
+	// EgressClassGitHubPRDiff gates review PR-diff requests before the trusted
+	// cascade-github process plugin starts. Only internal and public are admitted.
+	EgressClassGitHubPRDiff EgressClass = "github-pr-diff"
 )
 
 // defaultClasses is the registration table. It is a slice of pairs rather
@@ -228,6 +231,12 @@ var defaultClasses = []struct {
 		// per-request rule in resume_topic.go decides placement.
 		Enabled: true, AllowRestricted: true, AllowLocalOnly: true,
 		Owner: "P1-E22-W5-S47-T2",
+	}},
+	{EgressClassGitHubPRDiff, InterceptConfig{
+		Enabled:         true,
+		AllowRestricted: false,
+		AllowedTiers:    []SensitivityTier{TierInternal, TierPublic},
+		Owner:           "P1-PLG-05",
 	}},
 }
 

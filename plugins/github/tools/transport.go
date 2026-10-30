@@ -76,15 +76,30 @@ func (d HTTPDoer) Do(ctx context.Context, req Request, token string) (int, []byt
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseBytes+1))
+	body, err := readResponse(req, resp.Body)
 	if err != nil {
-		return 0, nil, cascade.Wrap(cascade.KindUnavailable, err, "github: reading the API response")
-	}
-	if len(body) > MaxResponseBytes {
-		return 0, nil, cascade.Newf(cascade.KindInvalidInput,
-			"github: the response exceeded %d bytes", MaxResponseBytes)
+		return 0, nil, err
 	}
 	return resp.StatusCode, body, nil
+}
+
+// readResponse reads the body under its representation's cap. A diff is
+// read to at most MaxPRDiffBytes+1 and returned without error, so
+// DecodePRDiff makes the one 8 MiB refusal; any other body over
+// MaxResponseBytes is refused here.
+func readResponse(req Request, source io.Reader) ([]byte, error) {
+	limit := MaxResponseBytes
+	if req.Accept == AcceptPRDiff {
+		limit = MaxPRDiffBytes
+	}
+	body, err := io.ReadAll(io.LimitReader(source, int64(limit)+1))
+	if err != nil {
+		return nil, cascade.Wrap(cascade.KindUnavailable, err, "github: reading the API response")
+	}
+	if len(body) > limit && req.Accept != AcceptPRDiff {
+		return nil, cascade.Newf(cascade.KindInvalidInput, "github: the response exceeded %d bytes", limit)
+	}
+	return body, nil
 }
 
 // build renders a described Request as an HTTP request against APIBase.
@@ -118,6 +133,9 @@ func APIHeaders(req Request, token string) map[string]string {
 	}
 	if len(req.Body) > 0 {
 		headers["Content-Type"] = "application/json"
+	}
+	if req.Accept != "" {
+		headers["Accept"] = req.Accept
 	}
 	if strings.TrimSpace(token) != "" {
 		headers["Authorization"] = "Bearer " + token

@@ -35,9 +35,18 @@ another repository.
 | `issues.close` | `PATCH /repos/{owner}/{repo}/issues/{number}` |
 | `prs.list` | `GET /repos/{owner}/{repo}/pulls` |
 | `prs.get` | `GET /repos/{owner}/{repo}/pulls/{number}` |
+| `prs.diff` | Same endpoint with `Accept: application/vnd.github.diff`; raw diff, at most 8 MiB |
 | `prs.create` | `POST /repos/{owner}/{repo}/pulls` |
 | `prs.merge` | `PUT /repos/{owner}/{repo}/pulls/{number}/merge` |
 | `prs.review_request` | `POST /repos/{owner}/{repo}/pulls/{number}/requested_reviewers` |
+
+`cascade review --pr owner/repo#number` calls `prs.diff` through the trusted
+process install after the host checks the `github-pr-diff` egress class.
+The result is `{"diff": "<body>", "bytes": <len>}` with the body unchanged.
+A diff over 8 MiB is `KindInvalidInput` ("pull request diff exceeds 8 MiB"),
+GitHub's 406 is `KindUnsupported`, 404 is `KindNotFound`, 401/403 keep the
+permission mapping, and a number <= 0 is refused before any request. The host
+treats the fetched diff as untrusted source material for review.
 
 `api.github.com` is the only host this plugin reaches, declared in the
 manifest as `net.http:api.github.com`.
@@ -79,7 +88,7 @@ Grant only the rows for the tools you intend to use.
 | `repos.list`, `repos.get`, `repos.clone_url` | Metadata | Read |
 | `issues.list`, `issues.get` | Issues | Read |
 | `issues.create`, `issues.comment`, `issues.close` | Issues | Read and write |
-| `prs.list`, `prs.get` | Pull requests | Read |
+| `prs.list`, `prs.get`, `prs.diff` | Pull requests | Read |
 | `prs.create`, `prs.review_request` | Pull requests | Read and write |
 | `prs.merge` | **Contents** | Read and write |
 

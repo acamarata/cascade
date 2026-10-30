@@ -96,35 +96,24 @@ func TestReviewDiffAndPRMutuallyExclusive(t *testing.T) {
 	}
 }
 
-// TestReviewPRRefusedNoNetworkCall proves --pr's real fetch refusal (D6,
-// 2026-09-21: plugins/review cannot reach internal/ci's GitHub client, and
-// no egress class covers a PR-diff fetch either way) fires before any
-// provider dispatch -- the stub records zero calls -- for a well-formed
-// reference. A well-formed ref is required here specifically so this test
-// exercises errPRFetchUnsupported, not parsePRRef's format refusal (see
-// TestReviewPRMalformedRefIsInvalidInput for that one).
+// TestReviewPRRefusedNoNetworkCall proves a well-formed --pr in a build
+// without the host fetch wiring (this package alone) refuses typed before
+// any provider dispatch: the stub records zero calls.
 func TestReviewPRRefusedNoNetworkCall(t *testing.T) {
 	calls := 0
 	withStubProvider(t, &countingReviewProvider{inner: &stubReviewProvider{resp: findingResponse()}, calls: &calls})
 	_, err := runCmd(t, []string{"--pr", "acamarata/cascade#1234"})
-	if err == nil {
-		t.Fatal("got nil error for --pr")
-	}
-	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindUnsupported {
-		t.Fatalf("Kind = %v (ok=%v), want KindUnsupported", kind, ok)
-	}
-	if !strings.Contains(err.Error(), "acamarata/cascade#1234") {
-		t.Fatalf("error = %q, want it to name the ref it refused", err.Error())
+	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindUnavailable {
+		t.Fatalf("err %v: Kind = %v (ok=%v), want KindUnavailable", err, kind, ok)
 	}
 	if calls != 0 {
-		t.Fatalf("reviewProvider.Review called %d times for --pr, want 0 (fetch is refused, never attempted)", calls)
+		t.Fatalf("reviewProvider.Review called %d times for an unfetched --pr, want 0", calls)
 	}
 }
 
 // TestReviewPRMalformedRefIsInvalidInput proves --pr's format validation
 // (parsePRRef, D6) is real: a ref that is not "owner/repo#number" is
-// refused as invalid input, distinct from -- and reached before --
-// errPRFetchUnsupported's KindUnsupported refusal above.
+// refused as invalid input, before any fetch is attempted.
 func TestReviewPRMalformedRefIsInvalidInput(t *testing.T) {
 	for _, bad := range []string{"123", "owner/repo", "owner#123", "/repo#123", "owner/#123", "owner/repo#abc", "owner/repo#0"} {
 		_, err := runCmd(t, []string{"--pr", bad})

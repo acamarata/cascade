@@ -25,8 +25,8 @@
 //
 // Inputs: --diff (file path or "-" for stdin), --pr (a PR reference
 //
-//	string of the form "owner/repo#number"; real format validation, but
-//	the fetch itself refuses — see runReview's own doc comment), --level
+//	string of the form "owner/repo#number", fetched through the trusted
+//	host plugin bridge), --level
 //	(A/B/C, default B), --json.
 //
 // Outputs: TTY mode prints a ranked finding list to stdout; --json prints
@@ -96,7 +96,7 @@ func NewReviewCommand() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.StringVar(&flags.diff, "diff", "", "unified diff: a file path, or '-' to read it from stdin")
-	f.StringVar(&flags.pr, "pr", "", "a pull request reference, \"owner/repo#number\" (fetch is refused; see runReview's doc comment)")
+	f.StringVar(&flags.pr, "pr", "", "a pull request reference, \"owner/repo#number\", fetched through cascade-github")
 	f.StringVar(&flags.level, "level", flags.level, "review tier: A (lightweight), B (peer, default), or C (adversarial)")
 	f.BoolVar(&flags.json, "json", false, "emit the versioned JSON envelope instead of human-readable text")
 	return cmd
@@ -108,30 +108,20 @@ func NewReviewCommand() *cobra.Command {
 // refusal otherwise; never a second, stub construction), and render the
 // result or propagate the error unchanged.
 //
-// --pr's format is validated for real (parsePRRef); the fetch itself
-// refuses (errPRFetchUnsupported's own doc comment — T0 decision D6,
-// 2026-09-21). Every refusal is typed, never a silent no-op or a
-// fabricated resolution, matching docs/cli-reference/pa-pair.md's own
-// subject-refusal precedent.
+// --pr uses the injected host fetcher and marks its diff as untrusted data.
 func runReview(cmd *cobra.Command, flags *reviewFlags) error {
 	if err := validateReviewFlags(flags); err != nil {
 		return err
-	}
-	if flags.pr != "" {
-		if _, _, _, err := parsePRRef(flags.pr); err != nil {
-			return err
-		}
-		return errPRFetchUnsupported(flags.pr)
 	}
 	level, err := parseReviewLevel(flags.level)
 	if err != nil {
 		return err
 	}
-	diff, err := readReviewDiff(cmd, flags.diff)
+	diff, provenance, err := resolveReviewDiff(cmd, flags)
 	if err != nil {
 		return err
 	}
-	resp, err := reviewProvider.Review(cmd.Context(), provider.ReviewRequest{Level: level, Diff: diff})
+	resp, err := reviewProvider.Review(cmd.Context(), provider.ReviewRequest{Level: level, Diff: diff, Provenance: provenance})
 	if err != nil {
 		return err
 	}
@@ -172,8 +162,7 @@ func parseReviewLevel(raw string) (provider.ReviewCRLevel, error) {
 }
 
 // parsePRRef validates --pr's required "owner/repo#number" shape — real,
-// useful validation independent of whether this command can go on to
-// actually fetch the diff (errPRFetchUnsupported below). A malformed ref
+// useful validation before fetching the diff. A malformed ref
 // is refused before any other work, exactly like an invalid --level.
 func parsePRRef(raw string) (owner, repo string, number int, err error) {
 	malformed := cascade.Newf(cascade.KindInvalidInput, "cascade review: --pr must be \"owner/repo#number\", got %q", raw)
@@ -192,31 +181,23 @@ func parsePRRef(raw string) (owner, repo string, number int, err error) {
 	return owner, repo, number, nil
 }
 
-// errPRFetchUnsupported is --pr's real, typed refusal (T0 decision D6,
-// 2026-09-21, superseding the ticket's own "no network call in this
-// ticket" framing). Fetching a PR's unified diff needs two things this
-// build does not have, both outside this ticket's files_scope/D7
-// deny-list: (1) a host bridge — plugins/review may import pkg/** only,
-// never internal/** (Art.10.2), so reaching internal/ci from here is
-// architecturally impossible without a review_wiring.go-shaped bridge
-// (internal/plugins is the one package allowed to import both sides; none
-// exists for this yet); (2) even from that bridge, internal/ci's only
-// egress class is "ci-poll" (internal/hooks/egress/classes.go), scoped to
-// Actions run/job polling (R-21.265/06-§5.17) — fetching a PR's unified
-// diff is a different purpose with different sensitivity (full source
-// content vs. pass/fail metadata) and has no egress class of its own.
-// Adding either is real work for a ticket that owns internal/ci and
-// internal/hooks/egress, not this one (internal/ci/** is under
-// concurrent edit by another lane this phase — git status, verified
-// before writing this file).
-func errPRFetchUnsupported(ref string) error {
-	return cascade.Newf(cascade.KindUnsupported,
-		"cascade review: --pr %q is a well-formed PR reference, but this build refuses to fetch its diff: "+
-			"plugins/review cannot reach internal/ci's GitHub client (Art.10.2 boundary: no host bridge exists "+
-			"yet, matching internal/plugins/review_wiring.go's pattern for the review engine itself), and "+
-			"internal/ci's only egress class (\"ci-poll\") is scoped to Actions run/job polling, not PR-diff "+
-			"fetching; resolve the pull request to a diff yourself (e.g. `git diff` against its base) and pass "+
-			"it via --diff", ref)
+// resolveReviewDiff returns --diff's text with the zero Provenance, or
+// --pr's fetched diff marked ProvenanceUntrustedSource. The fetched bytes
+// enter the review request unchanged, exactly as --diff bytes do.
+func resolveReviewDiff(cmd *cobra.Command, flags *reviewFlags) (string, provider.Provenance, error) {
+	if flags.pr == "" {
+		diff, err := readReviewDiff(cmd, flags.diff)
+		return diff, "", err
+	}
+	owner, repo, number, err := parsePRRef(flags.pr)
+	if err != nil {
+		return "", "", err
+	}
+	diff, err := prDiffFetcher.FetchPRDiff(cmd.Context(), owner, repo, number)
+	if err != nil {
+		return "", "", err
+	}
+	return string(diff), provider.ProvenanceUntrustedSource, nil
 }
 
 // readReviewDiff resolves --diff's value: "-" reads cmd.InOrStdin() (cobra's

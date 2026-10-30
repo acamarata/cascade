@@ -44,8 +44,12 @@ fixtures never share signing material.
   verifies.
 
 **Drift note:** the checksum above is pinned to `plugins/github/manifest.toml`
-as it existed on 2026-09-21 (sha256
-`53f2a071b7d73e8e613fdbf99c435284461878e3ee9adbb359983d6414a5a418`). If a
+as it existed on 2026-10-29, after the `cascade-github.prs.diff` tool was added
+(sha256 `0f2636028178d60b2c6d4ec9d2061640eac2b1c10df916dbed5bd115d6aabe26`;
+the 2026-09-21 original was `53f2a071...a418`). The artifact signature and the
+index signature were re-made with the same fixed-seed key; `index.json.minisig`
+still covers the 2026-09-21 bytes (its throwaway key was never kept, and no
+code reads it). If a
 later ticket edits that manifest, the acceptance test's checksum-verify
 step will start failing — deliberately: it is a real-counterpart proof
 against the actual shipped artifact, not a private copy, so it also

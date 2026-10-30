@@ -335,6 +335,7 @@ substituted bytes.
 | `plugin-remote` | disabled until the remote-runtime key is set | the remote plugin runtime |
 | `registry-fetch` | enabled | the plugin registry fetch |
 | `bridge` | enabled, `AllowedTiers` {internal, public} | the cascade-pa bridge's outbound leg |
+| `github-pr-diff` | enabled, `AllowedTiers` {internal, public}; request intercepted before plugin launch | P1-PLG-05; review PR diffs through the trusted cascade-github process plugin |
 
 Net-scope enforcement for `bridge` is the O/S-31.T4 plugin-host capability
 path over the manifest's declared net grants, not this registry: this class

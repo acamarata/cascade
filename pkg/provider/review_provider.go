@@ -57,6 +57,9 @@ type ReviewRequest struct {
 	// against /dev/null. Full file contents are refused
 	// (ErrUnrecognisedArtifactFormat).
 	Diff string
+	// Provenance marks remotely fetched diffs as untrusted source data.
+	// The zero value preserves the existing local diff request behavior.
+	Provenance Provenance
 	// Context is free-text background the caller supplies: the ticket or
 	// task description, acceptance criteria, or anything else a reviewer
 	// needs beyond the diff itself.

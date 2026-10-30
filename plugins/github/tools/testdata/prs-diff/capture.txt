@@ -1,0 +1,6 @@
+request: GET https://api.github.com/repos/octocat/Hello-World/pulls/1
+accept: application/vnd.github.diff
+status: 200
+content-type: application/vnd.github.diff; charset=utf-8
+date: Thu, 29 Oct 2026 23:04:31 GMT
+x-github-request-id: CD7C:107624:3A85499:BFF8D40:6AE3D0FF

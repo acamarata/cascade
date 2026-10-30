@@ -15,7 +15,7 @@ Exactly one of `--diff` or `--pr` is required.
 | Flag | Values | Default | Meaning |
 |---|---|---|---|
 | `--diff` | a file path, or `-` for stdin | — | the unified diff to review |
-| `--pr` | a pull request reference, `owner/repo#number` | — | format is validated for real; the fetch itself is **refused** (see below) |
+| `--pr` | a pull request reference, `owner/repo#number` | — | fetches the diff through the trusted `cascade-github` process plugin |
 | `--level` | `A`, `B`, or `C` (case-insensitive) | `B` | CR-A (lightweight), CR-B (peer), or CR-C (adversarial) |
 | `--json` | boolean | `false` | emit the versioned JSON envelope instead of human-readable text |
 
@@ -62,32 +62,28 @@ envelope carries no top-level `approved` field — neither the ticket's OUTPUT
 contract nor 07-CLI-COMMAND-TREE §review names one (the human-text renderer
 above still reports `approved=…`; only the `--json` wire shape dropped it).
 
-## `--pr`'s format is real; the fetch is refused
+## Fetching a pull request
 
-`--pr` must be `owner/repo#number` — a malformed reference is a plain usage
-error. A well-formed one still refuses, because fetching its diff needs two
-things this build does not have: `plugins/review` cannot import
-`internal/ci` (Art.10.2 — no host bridge exists for this yet, the way
-`internal/plugins/review_wiring.go` bridges the review engine itself), and
-`internal/ci`'s only egress class (`ci-poll`) is scoped to GitHub Actions
-run/job polling, not fetching a pull request's diff:
+`--pr` must be `owner/repo#number`; malformed references are usage errors.
+The host admits the request through the `github-pr-diff` egress class
+before launching the trusted `cascade-github` process plugin and calling
+its `prs.diff` tool. Install it with `cascade plugin add cascade-github`.
 
-```
-$ cascade review --pr acamarata/cascade#1234
-cascade review: --pr "acamarata/cascade#1234" is a well-formed PR
-reference, but this build refuses to fetch its diff: plugins/review
-cannot reach internal/ci's GitHub client (Art.10.2 boundary: no host
-bridge exists yet, matching internal/plugins/review_wiring.go's pattern
-for the review engine itself), and internal/ci's only egress class
-("ci-poll") is scoped to Actions run/job polling, not PR-diff fetching;
-resolve the pull request to a diff yourself (e.g. `git diff` against its
-base) and pass it via --diff
-```
+An absent or untrusted plugin, an unavailable process firewall, or a
+disabled egress class refuses the fetch. A missing plugin is `unavailable`
+and names `cascade plugin add cascade-github`; a disabled or untrusted one
+keeps the plugin launcher's `policy_denied` refusal. A diff over 8 MiB is
+`invalid_input` ("pull request diff exceeds 8 MiB"), GitHub's 406 is
+`unsupported`. A build without the host wiring refuses `unavailable`
+("PR diff fetch is not wired in this build"). There is no fallback fetch
+path. Errors the plugin returns while running cross the process boundary
+as `internal`, with the plugin's message.
 
-No provider dispatch happens for a `--pr` call — the refusal fires before
-any network-shaped work. This is the honest degradation, not a silent no-op
-or a fabricated resolution: passing `--diff` and `--pr` together is refused
-the same way, as a plain usage error.
+Fetched diff bytes reach the review provider with `untrusted-source`
+provenance. The reviewer places the filtered diff inside an explicit,
+JSON-quoted untrusted-data frame so remote source text stays data.
+Local `--diff` requests retain their existing behavior. Passing both
+`--diff` and `--pr` remains a usage error.
 
 ## Non-interactive
 

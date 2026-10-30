@@ -237,12 +237,19 @@ ranked-finding-list text; every finding field maps straight onto
 interactive prompt, so `CASCADE_NO_INPUT=1` changes nothing (06-FORGE-SPEC
 §5.8's automation-parity criterion is met structurally).
 
-`--pr` (`owner/repo#number`) is format-validated for real, but its diff is
-not fetched: `plugins/review` cannot import `internal/ci` (Art.10.2 — no
-host bridge exists for this yet), and `internal/ci`'s only egress class
-(`ci-poll`) is scoped to Actions run/job polling, not a PR-diff fetch.
-Passing a well-formed `--pr` refuses with a typed error naming both
-reasons — resolve the PR to a diff yourself and pass `--diff`.
+`--pr` (`owner/repo#number`) fetches through the injected host bridge.
+The request transits `github-pr-diff` before the trusted `cascade-github`
+process plugin launches; its `prs.diff` tool supplies the diff. Missing
+trust, a missing plugin or process firewall, and a disabled class refuse
+the operation. A diff over 8 MiB is refused as invalid input (checked in
+the plugin and again on the host), GitHub's 406 as unsupported, and a
+missing plugin as unavailable naming `cascade plugin add cascade-github`.
+No alternate fetch path exists.
+
+The review request and dispatch plan carry `untrusted-source` provenance.
+The filtered remote diff appears in the model prompt as a JSON string
+inside an explicit untrusted-data frame, with its provenance stated in
+the frame's instruction. Local `--diff` prompt bytes remain unchanged.
 
 The command dispatches straight to the injected `reviewProvider` seam
 (`plugins/review/plugin.go`, wired to the real `internal/review.Provider` by

@@ -64,6 +64,11 @@ func (c Client) Call(ctx context.Context, tool string, a Args) (any, error) {
 	if err != nil {
 		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "github: calling %s", req.URL())
 	}
+	if tool == "prs.diff" && status == 406 {
+		// GitHub answers 406 when it will not render this PR as a diff
+		// (too large to render, or the media type is not served).
+		return nil, cascade.New(cascade.KindUnsupported, "github: GitHub will not serve this pull request as a diff (406)")
+	}
 	if err := Classify(status, body); err != nil {
 		return nil, err
 	}
@@ -88,6 +93,7 @@ var decoders = map[string]func([]byte) (any, error){
 
 	"prs.list":           func(b []byte) (any, error) { return DecodePullRequests(b) },
 	"prs.get":            func(b []byte) (any, error) { return DecodePullRequest(b) },
+	"prs.diff":           func(b []byte) (any, error) { return DecodePRDiff(b) },
 	"prs.create":         func(b []byte) (any, error) { return DecodePullRequest(b) },
 	"prs.merge":          func(b []byte) (any, error) { return DecodeMergeResult(b) },
 	"prs.review_request": func(b []byte) (any, error) { return DecodePullRequest(b) },

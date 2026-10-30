@@ -157,6 +157,8 @@ type BlindRequest struct {
 // paths R-21.191 removed (surfaced to the caller as a note, so an exclusion
 // is never silent).
 type Plan struct {
+	// Provenance records whether the artifact came from an untrusted source.
+	Provenance provider.Provenance
 	// Blind is the R-21.156(a) request the dispatch is built from.
 	Blind BlindRequest
 	// Checks is the checklist parsed out of the caller's Context.
@@ -197,7 +199,13 @@ func NewPlan(req provider.ReviewRequest, consequence ConsequenceClass) (Plan, er
 	reqContext, ctxExcluded := filterDiffSections(req.Context)
 	reqContext, proseExcluded := filterContextProse(reqContext)
 	checks := ParseChecklist(reqContext)
+	// Only the zero Provenance (a local --diff) is placed bare. Any set
+	// value is framed as data, so an unrecognised one fails closed.
+	if req.Provenance != "" {
+		artifact = frameUntrustedDiff(artifact)
+	}
 	return Plan{
+		Provenance: req.Provenance,
 		Blind: BlindRequest{
 			CheckpointID:     audit.HashParams([]byte(artifact)),
 			Rubric:           renderRubric(tmpl.Rubric(), reqContext, checks),

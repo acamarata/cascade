@@ -59,7 +59,7 @@
 // The tickets that own an outbound path each register their own class and
 // call Intercept before any outbound write. The owner list is:
 //
-//	K/S-22.T3 (conductor) · O/S-31.T3 (process plugin) · Q/S-37.T2 (node dispatch) · Q/S-38.T1 (sync engine) · W/S-48.T1 (bridge registration) · X/S-50.T1 (registry fetch) · Y/S-51.T2 (ci-poll) · Y/S-51.T6 (wiki-git-push) · AD/S-61.T2-T5 (agent-driver) · AJ/S-72.T4 (external-executor) · W/S-49.T3 (bridge, messaging instance) · Y/S-52.T2 (backend-integration) · AF/S-66.T2 (ci-mirror-push) · J/S-20.T1 (provider-intake) · F/S-12.T5 (spike-measurement) · S/S-41.T3 (backup-target) · O/S-33.T4 (plugin-remote) · X/S-50.T1 (registry-fetch, the fetch living in internal/plugins/registryfetch) · AN/S-77.T5 (fleet-discovery)
+//	K/S-22.T3 (conductor) · O/S-31.T3 (process plugin) · Q/S-37.T2 (node dispatch) · Q/S-38.T1 (sync engine) · W/S-48.T1 (bridge registration) · X/S-50.T1 (registry fetch) · Y/S-51.T2 (ci-poll) · Y/S-51.T6 (wiki-git-push) · AD/S-61.T2-T5 (agent-driver) · AJ/S-72.T4 (external-executor) · W/S-49.T3 (bridge, messaging instance) · Y/S-52.T2 (backend-integration) · AF/S-66.T2 (ci-mirror-push) · J/S-20.T1 (provider-intake) · F/S-12.T5 (spike-measurement) · S/S-41.T3 (backup-target) · O/S-33.T4 (plugin-remote) · X/S-50.T1 (registry-fetch, the fetch living in internal/plugins/registryfetch) · AN/S-77.T5 (fleet-discovery) · P1-PLG-05 (github-pr-diff)
 //
 // TestRegistrantListByteEqual asserts that line stays byte-equal to the
 // forge spec's rule-17 owner list and fails when either side moves.

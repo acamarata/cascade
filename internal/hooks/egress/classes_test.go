@@ -34,6 +34,7 @@ func TestEgressClassesR21265Registered(t *testing.T) {
 		{EgressClassWikiGitPush, "wiki-git-push", "P1-E25-W5-S51-T6", true, false},
 		{EgressClassRecallWhat, "recall-what", "P1-E22-W5-S47-T1", true, false},
 		{EgressClassConversationResume, "conversation-resume", "P1-E22-W5-S47-T2", true, true},
+		{EgressClassGitHubPRDiff, "github-pr-diff", "P1-PLG-05", true, false},
 	}
 	registry := DefaultRegistry()
 	if got, want := len(registry.Classes()), len(cases); got != want {
@@ -48,14 +49,8 @@ func TestEgressClassesR21265Registered(t *testing.T) {
 			t.Errorf("class %q is not registered", tc.id)
 			continue
 		}
-		if cfg.Owner != tc.owner {
-			t.Errorf("class %q owner = %q, want %q", tc.id, cfg.Owner, tc.owner)
-		}
-		if cfg.Enabled != tc.enabled {
-			t.Errorf("class %q enabled = %v, want %v", tc.id, cfg.Enabled, tc.enabled)
-		}
-		if cfg.AllowRestricted != tc.allowRestricted {
-			t.Errorf("class %q allowRestricted = %v, want %v", tc.id, cfg.AllowRestricted, tc.allowRestricted)
+		if cfg.Owner != tc.owner || cfg.Enabled != tc.enabled || cfg.AllowRestricted != tc.allowRestricted {
+			t.Errorf("class %q config = %+v, want owner %q, enabled %v, allowRestricted %v", tc.id, cfg, tc.owner, tc.enabled, tc.allowRestricted)
 		}
 		if cfg.AllowLocalOnly && tc.class != EgressClassConversationResume { // resume admits all tiers: TestEgressClassConversationResumeAdmitsAllTiers
 
@@ -105,7 +100,7 @@ func TestRegistrantListByteEqual(t *testing.T) {
 		"Y/S-52.T2 (backend-integration) · AF/S-66.T2 (ci-mirror-push) · J/S-20.T1 (provider-intake) · " +
 		"F/S-12.T5 (spike-measurement) · S/S-41.T3 (backup-target) · O/S-33.T4 (plugin-remote) · " +
 		"X/S-50.T1 (registry-fetch, the fetch living in internal/plugins/registryfetch) · " +
-		"AN/S-77.T5 (fleet-discovery)"
+		"AN/S-77.T5 (fleet-discovery) · P1-PLG-05 (github-pr-diff)"
 
 	got := godocOwnerList(t)
 	if got != specList {
@@ -145,5 +140,35 @@ func TestEgressClassConversationResumeAdmitsAllTiers(t *testing.T) {
 	}
 	if _, err := engine.InterceptClass(context.Background(), EgressClassConversationResume, SensitivityTier(99), []byte("x")); !errors.Is(err, ErrSensitivityViolation) {
 		t.Errorf("out-of-range tier = %v, want ErrSensitivityViolation (the range guard still holds)", err)
+	}
+}
+
+// TestEgressClassGitHubPRDiffRegistered pins the dedicated review fetch policy.
+func TestEgressClassGitHubPRDiffRegistered(t *testing.T) {
+	cfg, ok := DefaultRegistry().Lookup(EgressClassGitHubPRDiff)
+	if string(EgressClassGitHubPRDiff) != "github-pr-diff" || !ok || !cfg.Enabled || cfg.Owner != "P1-PLG-05" {
+		t.Fatalf("github-pr-diff config = %+v, registered %v", cfg, ok)
+	}
+	if cfg.AllowRestricted || cfg.AllowLocalOnly || len(cfg.AllowedTiers) != 2 ||
+		cfg.AllowedTiers[0] != TierInternal || cfg.AllowedTiers[1] != TierPublic {
+		t.Fatalf("github-pr-diff must admit only internal and public: %+v", cfg)
+	}
+	engine := newTestEngine(t, nil)
+	for _, tier := range []SensitivityTier{TierInternal, TierPublic} {
+		out, err := engine.InterceptClass(context.Background(), EgressClassGitHubPRDiff, tier, []byte("payload"))
+		if err != nil || string(out) != "payload" {
+			t.Errorf("tier %s: InterceptClass = %q, %v", tier, out, err)
+		}
+	}
+}
+
+// TestEgressClassGitHubPRDiffRefusesLocalOnlyAndRestricted proves refusal emits nothing.
+func TestEgressClassGitHubPRDiffRefusesLocalOnlyAndRestricted(t *testing.T) {
+	engine := newTestEngine(t, nil)
+	for _, tier := range []SensitivityTier{TierLocalOnly, TierRestricted} {
+		out, err := engine.InterceptClass(context.Background(), EgressClassGitHubPRDiff, tier, []byte("payload"))
+		if !errors.Is(err, ErrSensitivityViolation) || out != nil {
+			t.Errorf("tier %s: InterceptClass = %q, %v; want no bytes and sensitivity refusal", tier, out, err)
+		}
 	}
 }

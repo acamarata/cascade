@@ -127,6 +127,44 @@ func GetPRRequest(owner, repo string, number int) (Request, error) {
 	return Request{Method: "GET", Path: repoPath(owner, repo) + "/pulls/" + strconv.Itoa(number)}, nil
 }
 
+// MaxPRDiffBytes bounds a pull-request diff: 8 MiB.
+const MaxPRDiffBytes = 8 << 20
+
+// AcceptPRDiff is GitHub's diff media type for a pull request.
+const AcceptPRDiff = "application/vnd.github.diff"
+
+// errPRDiffTooLarge is the one refusal for a diff over MaxPRDiffBytes.
+const errPRDiffTooLarge = "pull request diff exceeds 8 MiB"
+
+// PRDiff is one pull request's unified diff as GitHub served it.
+type PRDiff struct {
+	// Diff is the response body, unchanged.
+	Diff string `json:"diff"`
+	// Bytes is len(Diff), so a reader can check it arrived whole.
+	Bytes int `json:"bytes"`
+}
+
+// PRDiffRequest builds GET /repos/{owner}/{repo}/pulls/{number} asking for
+// the diff representation. A number <= 0 is KindInvalidInput.
+func PRDiffRequest(owner, repo string, number int) (Request, error) {
+	req, err := GetPRRequest(owner, repo, number)
+	if err != nil {
+		return Request{}, err
+	}
+	req.Accept = AcceptPRDiff
+	return req, nil
+}
+
+// DecodePRDiff keeps the body byte for byte and refuses one over 8 MiB
+// (KindInvalidInput). It is the single place that cap is decided: the
+// transport reads at most one byte past it and leaves the refusal here.
+func DecodePRDiff(body []byte) (PRDiff, error) {
+	if len(body) > MaxPRDiffBytes {
+		return PRDiff{}, cascade.New(cascade.KindInvalidInput, errPRDiffTooLarge)
+	}
+	return PRDiff{Diff: string(body), Bytes: len(body)}, nil
+}
+
 // CreatePRRequest builds the request opening a pull request. head and base
 // are both required: GitHub defaults neither, and a PR opened against the
 // wrong base is an expensive mistake to undo.
