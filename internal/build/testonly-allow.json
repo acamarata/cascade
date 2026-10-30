@@ -1409,5 +1409,53 @@
     "reason": "P1-E41-W9-S79-T2 ships Tables as an immutable snapshot type consumed by ApplyOverrides. Its real production caller is the daemon composition root that resolves the live [fleet.economics] overrides before a dispatch decision, which is AO/S-79.T3/T4's scope (this ticket's own NOT IN SCOPE section names both), not T2's.",
     "retire_ticket": "P1-TOP-09",
     "symbol": "internal/fleet/economics.NewTables"
+  },
+  {
+    "added_by_ticket": "P1-AGT-11",
+    "caller_site": "internal/delegation/service.go",
+    "expected_caller": "internal/delegation/service.go, the delegate service that mints a root envelope for an owner-cli caller before MintChild; retire this entry once that file calls MintRoot",
+    "reason": "P1-AGT-11 ships contract:delegation-record implemented and tested, but the delegate service that consumes it (P1-AGT-08) does not exist yet, so nothing in production calls MintRoot.",
+    "retire_ticket": "P1-AGT-08",
+    "symbol": "internal/delegation.MintRoot"
+  },
+  {
+    "added_by_ticket": "P1-AGT-11",
+    "caller_site": "internal/delegation/service.go",
+    "expected_caller": "internal/delegation/service.go, the delegate service that narrows the parent envelope for each child before InsertDelegation; retire this entry once that file calls MintChild",
+    "reason": "P1-AGT-11 ships contract:delegation-record implemented and tested, but the delegate service that consumes it (P1-AGT-08) does not exist yet, so nothing in production calls MintChild.",
+    "retire_ticket": "P1-AGT-08",
+    "symbol": "internal/delegation.MintChild"
+  },
+  {
+    "added_by_ticket": "P1-AGT-11",
+    "caller_site": "internal/delegation/service.go",
+    "expected_caller": "internal/delegation/service.go, the delegate service that verifies the parent record's chain before any lease; retire this entry once that file calls VerifyChain",
+    "reason": "P1-AGT-11 ships contract:delegation-record implemented and tested, but the delegate service that consumes it (P1-AGT-08) does not exist yet, so nothing in production calls VerifyChain.",
+    "retire_ticket": "P1-AGT-08",
+    "symbol": "internal/delegation.VerifyChain"
+  },
+  {
+    "added_by_ticket": "P1-AGT-11",
+    "caller_site": "internal/delegation/service.go",
+    "expected_caller": "internal/delegation/service.go, the delegate service that runs every registered pre-spawn gate after BindDelegationMarker and before Shim.Spawn; retire this entry once that file calls PreSpawnGates",
+    "reason": "P1-AGT-11 ships contract:delegation-record implemented and tested, but the delegate service that consumes it (P1-AGT-08) does not exist yet, so nothing in production calls PreSpawnGates.",
+    "retire_ticket": "P1-AGT-08",
+    "symbol": "internal/delegation.PreSpawnGates"
+  },
+  {
+    "added_by_ticket": "P1-AGT-11",
+    "caller_site": "internal/executive/envelope_debit.go",
+    "expected_caller": "internal/executive/envelope_debit.go, the executive budget debit that registers itself as a pre-spawn gate at init; retire this entry once that file calls RegisterPreSpawnGate",
+    "reason": "P1-AGT-11 ships the pre-spawn gate registry implemented and tested; its first registrant is the P1-EXE-04 budget debit, which does not exist yet.",
+    "retire_ticket": "P1-EXE-04",
+    "symbol": "internal/delegation.RegisterPreSpawnGate"
+  },
+  {
+    "added_by_ticket": "P1-AGT-11",
+    "caller_site": "cmd/cascade/wire_delegate.go",
+    "expected_caller": "cmd/cascade/wire_delegate.go, the delegate wiring that applies the jobs_delegation set to the daemon's jobs database before the service starts; retire this entry once that file calls ApplyDelegationSchema",
+    "reason": "P1-AGT-11 ships the jobs_delegation migration and triggers implemented and tested, but the daemon start-up that applies it belongs to the delegate wiring of P1-AGT-08.",
+    "retire_ticket": "P1-AGT-08",
+    "symbol": "internal/jobs.ApplyDelegationSchema"
   }
 ]
