@@ -3,6 +3,7 @@ approval.expire
 approval.grant
 approval.list
 approval.show
+audit.clipboard_effect
 audit.gate_append
 bridge.send
 cascade_search

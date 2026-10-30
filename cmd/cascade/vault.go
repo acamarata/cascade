@@ -32,9 +32,11 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/secrets"
@@ -71,6 +73,9 @@ type vaultDeps struct {
 	// StdinIsPiped reports whether stdin carries data. Injected so the
 	// CASCADE_NO_INPUT refusal is testable without a real terminal.
 	StdinIsPiped func() bool
+	// NewClipboard builds the `vault get --clipboard` writer. Injected so a
+	// test passes a fake backend and never reaches the real clipboard.
+	NewClipboard func(ttl time.Duration, v secrets.ApprovalVerifier, aw audit.Writer, fx audit.EffectWriter) (secrets.ClipboardWriter, error)
 }
 
 // productionVaultDeps builds vaultDeps against the real environment.
@@ -99,6 +104,7 @@ func productionVaultDeps() vaultDeps {
 			return secrets.NewQuarantineStore(filepath.Join(dir, quarantineDirName), runtime.NewSystemClock())
 		},
 		StdinIsPiped: productionStdinIsPiped,
+		NewClipboard: newHostClipboard(paths),
 	}
 }
 

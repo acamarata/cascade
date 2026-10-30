@@ -1,42 +1,37 @@
-// Purpose: the platform-independent half of the clipboard fallback: the
+// Purpose: the platform-independent half of clipboard delivery: the
 //
-//	ClipboardWriter contract, approval gating, the zero-payload audit
-//	contract, and the durable pending-clear record that survives a daemon
-//	restart. Platform pbcopy/xclip/Windows-refusal specifics live in the
-//	three build-tagged sibling files; this file never imports os/exec.
+//	ClipboardWriter contract, approval gating, the effect-recorded write and
+//	the hold that blocks until the TTL clear has run and been confirmed.
+//	Platform pbcopy/xclip/Windows specifics live in the three build-tagged
+//	sibling files; the durable clear and the daemon re-arm live in
+//	clipboard_rearm.go. This file never imports os/exec.
 //
-// Inputs: a signed approval token, a payload, an injected runtime.Clock,
+// Inputs: a signed approval, a payload, an injected runtime.Clock, an
 //
-//	an audit.Writer, a PendingClearStore and a ClipboardScheduler.
+//	audit.Writer, an audit.EffectWriter, a PendingClearStore and a
+//	ClipboardScheduler.
 //
-// Outputs: ClipboardWriter, NewClipboardWriter, ErrTier2Unsupported,
+// Outputs: ClipboardWriter, NewClipboardWriter, the clipboard sentinels.
 //
-//	ErrClipboardUnavailable, ErrApprovalRequired, PendingClearStore,
-//	RearmPendingClears.
+// Constraints: FAIL CLOSED. Order in Write: verify approval, BeginEffect
 //
-// Constraints: FAIL CLOSED — an unverifiable token, an unavailable
+//	(intent), store.Put, setValue, ConfirmEffect; any failure before setValue
+//	stops with the clipboard untouched, and after setValue a failure clears
+//	and keeps the row until a confirmed clear. No payload byte reaches an
+//	audit record, a log or an argument vector. No time.Sleep: the hold waits
+//	on the injected scheduler.
 //
-//	platform tool, or a store that cannot persist the pending clear all
-//	refuse before a byte reaches an OS clipboard. No payload byte is ever
-//	handed to audit.Writer, logged, or placed in a subprocess argument
-//	vector. No bare time.After/time.Sleep in this file or its siblings;
-//	scheduling goes through ClipboardScheduler, every timestamp comes from
-//	the injected Clock. Contract-vs-tree contradictions (the audit Kind
-//	enum gap, the ApprovalToken/ApprovalVerifier mismatch, the append-only
-//	"same record" requirement) are recorded in the ticket journal, not
-//	here, to stay inside the 300-line cap.
+// SPORT: internal/secrets ClipboardWriter/CHANGED, NewClipboardWriter/CHANGED,
 //
-// SPORT: internal/secrets ClipboardWriter/ADDED, NewClipboardWriter/ADDED,
-//
-//	ErrTier2Unsupported/ADDED, ErrClipboardUnavailable/ADDED,
-//	ErrApprovalRequired/ADDED, PendingClearStore/ADDED,
-//	RearmPendingClears/ADDED (P1-E08-W2-S16-T4).
+//	ErrClipboardUnsupported/ADDED (P1-SEC-09).
 
 package secrets
 
 import (
 	"context"
 	"encoding/json"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/acamarata/cascade/internal/audit"
@@ -45,251 +40,247 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// clipboardClearTTL is the 08 S3 [secrets] clipboard_ttl default.
-const clipboardClearTTL = 30 * time.Second
+// KindSecretsClipboardWrite is the audit kind every clipboard record
+// carries. It aliases the one declaration in internal/audit.
+const KindSecretsClipboardWrite = audit.KindSecretsClipboardWrite
 
-// KindSecretsClipboardWrite is the audit kind this package emits under.
-// R-21.235 requires it as a ratified internal/audit.Kind value; as of
-// this ticket the enum (internal/audit/schema.go, owned by
-// P1-E09-W2-S18-T2, outside this ticket's files_scope) is still closed at
-// its original eleven names and has none with a "secrets." prefix. This
-// constant carries the exact string R-21.235 specifies, valid once T2
-// lands; see the journal for the full contradiction.
-const KindSecretsClipboardWrite audit.Kind = "secrets.clipboard_write"
+// ClipboardApprovalVerb is the only verb an approval presented to Write
+// may name.
+const ClipboardApprovalVerb = "vault.get.clipboard"
 
-const clipboardActionClass = "clipboard.write"
+const (
+	clipboardWriteAction   = "clipboard.write"
+	clipboardClearAction   = "clipboard.clear"
+	clipboardRefusedAction = "clipboard.write.refused"
+	clipboardActor         = "cli"
+)
 
 // Sentinel errors, each carrying its own taxonomy Kind.
 var (
 	// ErrTier2Unsupported: Windows is tier-2 scope; no clipboard service.
 	ErrTier2Unsupported = cascade.New(cascade.KindUnsupported,
 		"secrets: clipboard delivery requires macOS or Linux; on Windows use `cascade vault get` and copy manually")
-	// ErrClipboardUnavailable: the platform tool cannot be reached.
-	// Fail closed (R-14.24): no alternative delivery path.
+	// ErrClipboardUnsupported: this host has no clipboard tool (the
+	// exec.LookPath probe failed). Nothing is written or persisted.
+	ErrClipboardUnsupported = cascade.New(cascade.KindUnsupported,
+		"secrets: no clipboard tool is installed on this host (install xclip on Linux); nothing was written")
+	// ErrClipboardUnavailable: the tool is present but failed.
 	ErrClipboardUnavailable = cascade.New(cascade.KindUnavailable,
-		"secrets: no OS clipboard tool is available (install xclip on Linux); nothing was written")
-	// ErrApprovalRequired: no verifiable approval token was presented.
+		"secrets: the clipboard tool failed")
+	// ErrApprovalRequired: no verifiable approval was presented.
 	ErrApprovalRequired = cascade.New(cascade.KindElevationRequired,
-		"secrets: clipboard delivery requires a verified approval token")
+		"secrets: clipboard delivery requires a verified approval")
 )
 
-// ApprovalVerifier is the H/S-16.T3 verify seam. The ticket text names
-// Write's gating parameter `tok policy.ApprovalToken`, a type with no
-// signature field; R-21.242 also requires "the H/S-16.T3 Verify path
-// (signature, expiry, domain separation)", which the tree implements as
-// policy.ApprovalVerifier.Verify(signed []byte) (*policy.ApprovalRecord,
-// error). This file follows the mechanism the tree actually ships. See
-// the journal for both sides quoted.
+// ApprovalVerifier is the approval-record verify seam
+// (policy.ApprovalVerifier in production).
 type ApprovalVerifier interface {
 	Verify(signed []byte) (*policy.ApprovalRecord, error)
 }
 
-// PendingClear is the durable, restart-surviving record of one clipboard
-// write awaiting its clear (R-21.242): no payload, hash or byte length.
-type PendingClear struct {
-	RefID      string
-	Platform   string
-	WrittenAt  time.Time
-	ClearDueAt time.Time
-}
-
-// PendingClearStore persists PendingClear rows. The spec places these in
-// the `policy` storage domain; this ticket's files_scope (internal/secrets
-// plus two docs files) excludes internal/policy and the cross-domain
-// capability grant a real implementation would need, so this is the seam
-// a composition root supplies. See the journal.
-type PendingClearStore interface {
-	Put(ctx context.Context, pc PendingClear) error
-	List(ctx context.Context) ([]PendingClear, error)
-	Delete(ctx context.Context, refID string) error
-}
-
-// ClipboardScheduler abstracts the one-shot post-write countdown so tests
-// fire it deterministically. NewSystemClipboardScheduler is the
-// production adapter and the one place time.AfterFunc appears (mirroring
-// internal/runtime.Ticker's systemTicker); domain logic only ever sees
-// this interface, and every recorded timestamp still comes from Clock.
-type ClipboardScheduler interface {
-	AfterFunc(d time.Duration, fn func()) (stop func())
-}
-
-type systemClipboardScheduler struct{}
-
-// NewSystemClipboardScheduler returns the production scheduler.
-func NewSystemClipboardScheduler() ClipboardScheduler { return systemClipboardScheduler{} }
-
-func (systemClipboardScheduler) AfterFunc(d time.Duration, fn func()) (stop func()) {
-	t := time.AfterFunc(d, fn)
-	return func() { t.Stop() }
-}
-
-// clipboardOps is the per-platform surface. clipboard_darwin.go,
-// clipboard_linux.go and clipboard_windows.go each define newClipboardOps
-// under their own //go:build tag; exactly one compiles into any build.
+// clipboardOps is the per-platform surface; exactly one newClipboardOps
+// compiles into any build. probe reports ErrClipboardUnsupported (or the
+// tier-2 refusal) when the host has no tool, before anything is recorded.
 type clipboardOps interface {
 	platform() string
+	probe() error
 	setValue(ctx context.Context, payload []byte) error
 	clearValue(ctx context.Context) error
 }
 
-// ClipboardWriter is the gated clipboard delivery channel (R-21.242).
+// clipboardEffects is the effect writer plus the unknown-outcome mark a
+// failed clear needs. *audit.EffectLog provides both.
+type clipboardEffects interface {
+	audit.EffectWriter
+	MarkUnknownOutcome(ctx context.Context, h audit.EffectHandle) (audit.Record, error)
+}
+
+// ClipboardWriter is the gated clipboard delivery channel.
 type ClipboardWriter interface {
-	// Write verifies signedApproval, places payload on the OS clipboard,
-	// and arms a TTL-bounded durable clear. Refuses with
-	// ErrApprovalRequired (no subprocess run) if the token does not
-	// verify; ErrTier2Unsupported on Windows before any OS call;
-	// ErrClipboardUnavailable if the tool cannot be reached (nothing
-	// written).
+	// Write verifies signedApproval, records the intent, persists the
+	// pending clear, places payload on the clipboard, confirms, then blocks
+	// until the TTL clear has run and been confirmed. Cancelling ctx (the
+	// SIGINT/SIGTERM path) clears at once.
 	Write(ctx context.Context, signedApproval []byte, payload []byte) error
 }
 
 type clipboardWriter struct {
-	clock     runtime.Clock
+	clipboardClearer
 	audit     audit.Writer
 	verifier  ApprovalVerifier
-	store     PendingClearStore
 	scheduler ClipboardScheduler
-	ops       clipboardOps
 	ttl       time.Duration
 }
 
-// NewClipboardWriter builds the production ClipboardWriter for this host's
-// platform. Every dependency is required: this is security-class code and
-// a writer missing a seam cannot honor its guarantees, so construction
-// refuses rather than degrading silently.
-func NewClipboardWriter(
-	clock runtime.Clock, aw audit.Writer, verifier ApprovalVerifier,
-	store PendingClearStore, scheduler ClipboardScheduler,
-) (ClipboardWriter, error) {
+// NewClipboardWriter builds the production ClipboardWriter over this host's
+// clipboard tool. Every dependency is required, effects must also mark an
+// unknown outcome, and ttl must lie in [5s, 10m].
+func NewClipboardWriter(clock runtime.Clock, aw audit.Writer, effects audit.EffectWriter, verifier ApprovalVerifier,
+	store PendingClearStore, scheduler ClipboardScheduler, ttl time.Duration) (ClipboardWriter, error) {
 	ops, err := newClipboardOps()
 	if err != nil {
 		return nil, err
 	}
-	return newClipboardWriterWithOps(clock, aw, verifier, store, scheduler, ops)
+	return newClipboardWriterWithOps(clock, aw, effects, verifier, store, scheduler, ops, ttl)
 }
 
-// newClipboardWriterWithOps is the fully-injected constructor the
-// platform test files use to substitute a fake clipboardOps.
-func newClipboardWriterWithOps(
-	clock runtime.Clock, aw audit.Writer, verifier ApprovalVerifier,
-	store PendingClearStore, scheduler ClipboardScheduler, ops clipboardOps,
-) (ClipboardWriter, error) {
-	if clock == nil || aw == nil || verifier == nil || store == nil || scheduler == nil || ops == nil {
+// newClipboardWriterWithOps is the fully injected constructor tests use to
+// substitute a fake backend.
+func newClipboardWriterWithOps(clock runtime.Clock, aw audit.Writer, effects audit.EffectWriter, verifier ApprovalVerifier,
+	store PendingClearStore, scheduler ClipboardScheduler, ops clipboardOps, ttl time.Duration) (ClipboardWriter, error) {
+	if clock == nil || aw == nil || effects == nil || verifier == nil || store == nil || scheduler == nil || ops == nil {
 		return nil, cascade.New(cascade.KindInvalidInput,
-			"secrets: clipboard writer requires a clock, audit writer, approval verifier, store, scheduler and platform ops")
+			"secrets: clipboard writer requires a clock, audit writer, effect writer, approval verifier, store, scheduler and platform ops")
+	}
+	fx, ok := effects.(clipboardEffects)
+	if !ok {
+		return nil, cascade.New(cascade.KindInvalidInput, "secrets: clipboard writer requires an effect writer that can mark an unknown outcome")
+	}
+	if err := checkClipboardTTL(ttl); err != nil {
+		return nil, err
 	}
 	return &clipboardWriter{
-		clock: clock, audit: aw, verifier: verifier, store: store,
-		scheduler: scheduler, ops: ops, ttl: clipboardClearTTL,
+		clipboardClearer: clipboardClearer{clock: clock, effects: fx, store: store, ops: ops},
+		audit:            aw, verifier: verifier, scheduler: scheduler, ttl: ttl,
 	}, nil
 }
 
-// clipboardEventFields is the zero-payload JSON shape stamped into every
-// audit Event's Explain field: action_class, an opaque ref, written_at,
-// cleared_at (empty until the clear fires), and platform. Never anything
-// derived from the payload.
+// clipboardEventFields is the zero-payload explain of every clipboard
+// record: the action, an opaque ref, the timestamps and the platform.
 type clipboardEventFields struct {
 	ActionClass string `json:"action_class"`
-	Ref         string `json:"ref"`
-	WrittenAt   string `json:"written_at"`
-	ClearedAt   string `json:"cleared_at,omitempty"`
+	Ref         string `json:"ref,omitempty"`
+	WrittenAt   string `json:"written_at,omitempty"`
+	ClearDueAt  string `json:"clear_due_at,omitempty"`
 	Platform    string `json:"platform"`
+}
+
+func effectRequest(action, key string, row PendingClear) audit.EffectRequest {
+	fields := clipboardEventFields{ActionClass: action, Ref: row.RefID, Platform: row.Platform}
+	if !row.WrittenAt.IsZero() {
+		fields.WrittenAt = row.WrittenAt.Format(time.RFC3339Nano)
+		fields.ClearDueAt = row.ClearDueAt.Format(time.RFC3339Nano)
+	}
+	explain, _ := json.Marshal(fields) // a struct of strings always encodes
+	return audit.EffectRequest{Kind: KindSecretsClipboardWrite, Actor: clipboardActor, Action: action, Key: key, Explain: explain}
 }
 
 // Write implements ClipboardWriter.
 func (w *clipboardWriter) Write(ctx context.Context, signedApproval []byte, payload []byte) error {
-	if _, err := w.verifier.Verify(signedApproval); err != nil {
-		return cascade.Wrap(cascade.KindElevationRequired, ErrApprovalRequired, err.Error())
+	if err := w.approve(ctx, signedApproval); err != nil {
+		return err
+	}
+	if err := w.ops.probe(); err != nil {
+		return err
+	}
+	id, err := cascade.NewID()
+	if err != nil {
+		return cascade.Wrap(cascade.KindInternal, err, "secrets: the clipboard write could not be named; nothing was written")
+	}
+	now := w.clock.Now().UTC()
+	row := PendingClear{RefID: id.String(), Platform: w.ops.platform(), WrittenAt: now, ClearDueAt: now.Add(w.ttl)}
+	h, err := w.effects.BeginEffect(ctx, effectRequest(clipboardWriteAction, clipboardWriteAction+":"+row.RefID, row))
+	if err != nil {
+		return w.abandon(ctx, h, cascade.Wrap(cascade.KindUnavailable, err, "secrets: the clipboard write could not be audited; nothing was written"))
+	}
+	if err := w.store.Put(ctx, row); err != nil {
+		return w.abandon(ctx, h, cascade.Wrap(kindOr(err, cascade.KindUnavailable), err,
+			"secrets: the pending clear could not be persisted; nothing was written"))
 	}
 	if err := w.ops.setValue(ctx, payload); err != nil {
-		// A taxonomy error setValue already produced (Windows tier-2's
-		// ErrTier2Unsupported, in particular) is returned as-is: wrapping
-		// it again in ErrClipboardUnavailable would bury its Kind behind
-		// a second cascade.Error, and errors.Is(err, ErrTier2Unsupported)
-		// stops matching once that happens. Only a genuine non-taxonomy
-		// OS error (the real POSIX clipboard-tool-missing case) gets
-		// promoted to ErrClipboardUnavailable here.
-		if _, ok := cascade.KindOf(err); ok {
-			return err
+		_, merr := w.effects.MarkUnknownOutcome(ctx, h)
+		return withCleanup(setValueError(err), merr, w.clear(context.WithoutCancel(ctx), row.RefID))
+	}
+	if _, err := w.effects.ConfirmEffect(ctx, h, "on the clipboard"); err != nil {
+		// Clear at once rather than at the TTL. The message must not claim a
+		// clear that did not complete.
+		cerr := w.clear(context.WithoutCancel(ctx), row.RefID)
+		msg := "secrets: the clipboard write could not be confirmed; the value was cleared at once"
+		if cerr != nil {
+			msg = "secrets: the clipboard write could not be confirmed and the immediate clear did not complete; the pending clear is kept for the daemon"
 		}
-		return cascade.Wrap(cascade.KindUnavailable, ErrClipboardUnavailable, err.Error())
+		return withCleanup(cascade.Wrap(cascade.KindUnavailable, err, msg), cerr)
 	}
-	refID, err := cascade.NewID()
-	if err != nil {
-		_ = w.ops.clearValue(ctx)
-		return cascade.Wrap(cascade.KindInternal, err, "secrets: clipboard write could not be recorded")
-	}
-	ref := refID.String()
-	writtenAt := w.clock.Now().UTC()
-	dueAt := writtenAt.Add(w.ttl)
-	if err := w.store.Put(ctx, PendingClear{
-		RefID: ref, Platform: w.ops.platform(), WrittenAt: writtenAt, ClearDueAt: dueAt,
-	}); err != nil {
-		_ = w.ops.clearValue(ctx)
-		return cascade.Wrap(cascade.KindUnavailable, err, "secrets: clipboard clear could not be scheduled durably")
-	}
-	w.emitAudit(ctx, ref, writtenAt, time.Time{})
-	w.scheduler.AfterFunc(w.ttl, func() { w.fireClear(context.Background(), ref) })
-	return nil
+	return w.hold(ctx, row.RefID)
 }
 
-// fireClear runs the platform clear, updates the audit trail, and drops
-// the pending-clear row. Called from the armed scheduler and from
-// RearmPendingClears on daemon start.
-func (w *clipboardWriter) fireClear(ctx context.Context, ref string) {
-	// The AUDIT CONTRACT requires the cleared_at update regardless of
-	// subprocess error status, so the outcome itself is not branched on.
-	_ = w.ops.clearValue(ctx)
-	clearedAt := w.clock.Now().UTC()
-	w.emitAudit(ctx, ref, time.Time{}, clearedAt)
-	_ = w.store.Delete(ctx, ref)
+// approve verifies the approval and its verb. A refusal is audited; an
+// audit failure is reported with the refusal, never instead of it.
+func (w *clipboardWriter) approve(ctx context.Context, signed []byte) error {
+	rec, err := w.verifier.Verify(signed)
+	if err == nil && (rec == nil || rec.Verb != ClipboardApprovalVerb) {
+		err = cascade.Newf(cascade.KindElevationRequired, "the approval does not name %s", ClipboardApprovalVerb)
+	}
+	if err == nil {
+		return nil
+	}
+	refusal := cascade.Wrap(cascade.KindElevationRequired, ErrApprovalRequired, "secrets: clipboard delivery refused: "+err.Error())
+	explain, _ := json.Marshal(clipboardEventFields{ActionClass: clipboardRefusedAction, Platform: w.ops.platform()})
+	_, aerr := w.audit.Append(ctx, audit.Event{Kind: KindSecretsClipboardWrite, Actor: clipboardActor, Action: clipboardRefusedAction, Explain: explain})
+	return withCleanup(refusal, aerr)
 }
 
-// emitAudit appends one clipboard.write audit event. See
-// KindSecretsClipboardWrite and the journal for the closed-enum gap, and
-// the journal for why this appends a second event at clear time (with the
-// same ref) rather than mutating the first: internal/audit.Log's whole
-// method set is Append/Query/Explain/Verify, so a sealed record cannot be
-// updated in place.
-func (w *clipboardWriter) emitAudit(ctx context.Context, ref string, writtenAt, clearedAt time.Time) {
-	fields := clipboardEventFields{ActionClass: clipboardActionClass, Ref: ref, Platform: w.ops.platform()}
-	if !writtenAt.IsZero() {
-		fields.WrittenAt = writtenAt.Format(time.RFC3339Nano)
+// abandon fails an intent whose effect never ran (h is zero when no intent
+// was committed) and returns cause.
+func (w *clipboardWriter) abandon(ctx context.Context, h audit.EffectHandle, cause error) error {
+	if h.IntentSeq == 0 {
+		return cause
 	}
-	if !clearedAt.IsZero() {
-		fields.ClearedAt = clearedAt.Format(time.RFC3339Nano)
-	}
-	explain, err := json.Marshal(fields)
-	if err != nil {
-		return
-	}
-	_, _ = w.audit.Append(ctx, audit.Event{Kind: KindSecretsClipboardWrite, Action: clipboardActionClass, Explain: explain})
+	_, err := w.effects.FailEffect(ctx, h, "not run: "+cause.Error())
+	return withCleanup(cause, err)
 }
 
-// RearmPendingClears re-arms every persisted pending clear on daemon
-// start (R-21.242): a row already past ClearDueAt fires immediately; a
-// row not yet due is re-scheduled for its remaining time. Exported and
-// ready to be wired; this ticket's lane forbids touching internal/daemon
-// (another agent holds it concurrently), so no caller installs it on the
-// daemon start path here — see internal/build/testonly-allow.json.
-func RearmPendingClears(ctx context.Context, w ClipboardWriter, clock runtime.Clock, scheduler ClipboardScheduler, store PendingClearStore) error {
-	cw, ok := w.(*clipboardWriter)
-	if !ok {
-		return cascade.New(cascade.KindInvalidInput, "secrets: RearmPendingClears requires the production ClipboardWriter")
-	}
-	pending, err := store.List(ctx)
-	if err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "secrets: could not list pending clipboard clears")
-	}
-	now := clock.Now()
-	for _, pc := range pending {
-		ref := pc.RefID
-		if !now.Before(pc.ClearDueAt) {
-			cw.fireClear(ctx, ref)
-			continue
+// hold blocks until the scheduled clear has run, or clears at once when ctx
+// ends. Exactly one of the two paths runs the clear.
+func (w *clipboardWriter) hold(ctx context.Context, ref string) error {
+	var claimed atomic.Bool
+	done := make(chan error, 1)
+	stop := w.scheduler.AfterFunc(w.ttl, func() {
+		if claimed.CompareAndSwap(false, true) {
+			done <- w.clear(context.Background(), ref)
 		}
-		remaining := pc.ClearDueAt.Sub(now)
-		scheduler.AfterFunc(remaining, func() { cw.fireClear(context.Background(), ref) })
+	})
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
 	}
-	return nil
+	if stop != nil {
+		stop()
+	}
+	if !claimed.CompareAndSwap(false, true) {
+		return <-done
+	}
+	return w.clear(context.WithoutCancel(ctx), ref)
+}
+
+// setValueError keeps a taxonomy error from the backend and promotes any
+// other OS error to ErrClipboardUnavailable.
+func setValueError(err error) error {
+	if _, ok := cascade.KindOf(err); ok {
+		return err
+	}
+	return cascade.Wrap(cascade.KindUnavailable, ErrClipboardUnavailable, err.Error())
+}
+
+func kindOr(err error, fallback cascade.Kind) cascade.Kind {
+	if k, ok := cascade.KindOf(err); ok {
+		return k
+	}
+	return fallback
+}
+
+// withCleanup returns primary (keeping its kind and chain), naming every
+// non-nil later error from the cleanup that followed it.
+func withCleanup(primary error, more ...error) error {
+	var also []string
+	for _, err := range more {
+		if err != nil {
+			also = append(also, err.Error())
+		}
+	}
+	if len(also) == 0 {
+		return primary
+	}
+	return cascade.Wrap(kindOr(primary, cascade.KindInternal), primary, "and then: "+strings.Join(also, "; "))
 }

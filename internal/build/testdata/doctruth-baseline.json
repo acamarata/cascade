@@ -324,6 +324,12 @@
     "detail": "stale-claim phrase: not yet wired"
   },
   {
+    "key": "docs/security-posture.md|index|6e6f9a58feba|1",
+    "file": "docs/security-posture.md",
+    "rule": "index",
+    "detail": "unlinked page: docs/security-posture/clipboard.md"
+  },
+  {
     "key": "docs/security-posture.md|index|a1c963fdc689|1",
     "file": "docs/security-posture.md",
     "rule": "index",

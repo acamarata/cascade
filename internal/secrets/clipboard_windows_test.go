@@ -1,57 +1,40 @@
 //go:build windows
 
-// Purpose: windows-only clipboard tests: Write refuses with
+// Purpose: the Windows tier-2 refusal: probe, set and clear all refuse with
 //
-//	ErrTier2Unsupported and no OS clipboard operation is attempted.
+//	KindUnsupported, and a writer refuses before any record or row.
 //
-// SPORT: internal/secrets clipboard_windows_test.go/ADDED
-//
-//	(P1-E08-W2-S16-T4).
+// SPORT: internal/secrets clipboard_windows.go/TEST (P1-SEC-09).
 package secrets
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// TestClipboard_Windows_Refuses asserts the full writer, built with the
-// real windows ops, refuses every Write with ErrTier2Unsupported.
 func TestClipboard_Windows_Refuses(t *testing.T) {
-	clock := runtime.NewFixedClock(time.Unix(1, 0))
-	aw := &fakeAudit{}
-	store := newFakeStore()
-	sched := &fakeScheduler{}
-	w, err := NewClipboardWriter(clock, aw, okVerifier(), store, sched)
+	r := newRig()
+	w, err := NewClipboardWriter(runtime.NewFixedClock(clipNow), r.aw, r.fx, fakeVerifier{verb: ClipboardApprovalVerb}, r.store, r.sched, 30*time.Second)
 	if err != nil {
 		t.Fatalf("NewClipboardWriter: %v", err)
 	}
-	err = w.Write(context.Background(), []byte("signed"), []byte("v"))
-	if !errors.Is(err, ErrTier2Unsupported) {
-		t.Fatalf("Write = %v, want ErrTier2Unsupported", err)
+	if err := w.Write(context.Background(), []byte("tok"), []byte("v")); !cascade.HasKind(err, cascade.KindUnsupported) {
+		t.Fatalf("Write = %v, want KindUnsupported", err)
 	}
-	if len(aw.events) != 0 || len(store.rows) != 0 {
-		t.Fatalf("a refused windows write must not persist or audit anything")
+	if len(r.tr.list()) != 0 || r.store.len() != 0 {
+		t.Fatalf("trace = %v; a refused windows write records nothing", r.tr.list())
 	}
 }
 
-// TestClipboard_Windows_OpsRefuseDirectly covers the ops methods
-// themselves, independent of the shared Write path.
 func TestClipboard_Windows_OpsRefuseDirectly(t *testing.T) {
-	ops, err := newClipboardOps()
-	if err != nil {
-		t.Fatalf("newClipboardOps: %v", err)
-	}
-	if ops.platform() != "windows" {
-		t.Fatalf("platform() = %q, want windows", ops.platform())
-	}
-	if err := ops.setValue(context.Background(), []byte("v")); !errors.Is(err, ErrTier2Unsupported) {
-		t.Fatalf("setValue = %v, want ErrTier2Unsupported", err)
-	}
-	if err := ops.clearValue(context.Background()); !errors.Is(err, ErrTier2Unsupported) {
-		t.Fatalf("clearValue = %v, want ErrTier2Unsupported", err)
+	ops, _ := newClipboardOps()
+	if ops.platform() != "windows" || !cascade.HasKind(ops.probe(), cascade.KindUnsupported) ||
+		!cascade.HasKind(ops.setValue(context.Background(), []byte("v")), cascade.KindUnsupported) ||
+		!cascade.HasKind(ops.clearValue(context.Background()), cascade.KindUnsupported) {
+		t.Fatal("windows ops must refuse every call with KindUnsupported")
 	}
 }

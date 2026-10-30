@@ -149,6 +149,11 @@ linters:
             # the daemon's own *rpc.Registry and *rpc.SSEMux, and never dials the
             # daemon (P1-CORE-01).
             - "!**/cmd/cascade/compose_daemon.go"
+            # wire_clipboard_effect.go earns its exemption by name: it only declares
+            # audit.clipboard_effect AccessOwnerOnly next to its registration over
+            # the daemon's own Registry, and never dials the daemon (P1-SEC-09,
+            # P1-BF-R298).
+            - "!**/cmd/cascade/wire_clipboard_effect.go"
             # daemon_unix_conductor.go earns its exemption by name, per this
             # rule's own comment above: it is a new COMPOSITION-ROOT file, not a
             # hand-rolled client. It is called only from buildRPCServer, it

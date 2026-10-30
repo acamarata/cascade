@@ -74,6 +74,10 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// .golangci.yml's cmd-rpc-server-boundary exemption list; the two must
 	// be edited together or this gate and the linter disagree.
 	"daemon_unix_evidence.go": true,
+	// wire_clipboard_effect.go only declares and registers the owner-only
+	// audit.clipboard_effect verb on the daemon's own Registry and never dials
+	// the daemon (P1-SEC-09); mirrors .golangci.yml's exemption for it.
+	"wire_clipboard_effect.go": true,
 	// daemon_unix_jobs_rpc.go and daemon_unix_jobs_rpc_adapters.go: the
 	// P1-E29-W6-S60-T1 composition-root call site for job.*/lease.* — see
 	// .golangci.yml's cmd-rpc-server-boundary comment (edited together

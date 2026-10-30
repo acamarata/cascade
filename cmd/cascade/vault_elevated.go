@@ -39,7 +39,8 @@ type vaultAccessRecorder interface {
 }
 
 func newVaultGetCmd(deps vaultDeps) *cobra.Command {
-	return &cobra.Command{
+	var clipboard bool
+	cmd := &cobra.Command{
 		Use:   "get NAME",
 		Short: "Read a secret's value (elevated: requires local presence)",
 		Long: "Print the value stored under NAME.\n\n" +
@@ -53,6 +54,9 @@ func newVaultGetCmd(deps vaultDeps) *cobra.Command {
 		Args:        usageArgs(cobra.ExactArgs(1)),
 		Annotations: map[string]string{"local": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if clipboard {
+				return runVaultGetClipboard(cmd, deps, args[0])
+			}
 			recorder, ok := deps.Gate.(vaultAccessRecorder)
 			if !ok {
 				return cascade.New(cascade.KindElevationRequired,
@@ -88,6 +92,9 @@ func newVaultGetCmd(deps vaultDeps) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&clipboard, "clipboard", false,
+		"copy the value to the clipboard instead of printing it; it is cleared after [secrets].clipboard_ttl")
+	return cmd
 }
 
 // rotateResultView is `vault rotate`'s rendered result: the name, never the
