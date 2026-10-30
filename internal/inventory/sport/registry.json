@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-30T03:09:51Z",
+  "generated_at": "2026-10-30T06:53:28Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1185,13 +1185,13 @@
       "sites": [
         {
           "file": "internal/secrets/clipboard.go",
-          "line": 29,
-          "status": "ADD",
-          "raw": "NewClipboardWriter/ADDED"
+          "line": 24,
+          "status": "CHANGE",
+          "raw": "NewClipboardWriter/CHANGED"
         }
       ],
       "statuses": [
-        "ADD"
+        "CHANGE"
       ]
     },
     {
@@ -1549,11 +1549,25 @@
       ]
     },
     {
+      "name": "REHYDRATE_ONLY tests",
+      "sites": [
+        {
+          "file": "internal/secrets/rehydrate_only_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "REHYDRATE_ONLY tests."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "REHYDRATOR",
       "sites": [
         {
           "file": "internal/secrets/rehydrate.go",
-          "line": 19,
+          "line": 22,
           "status": "ADD",
           "raw": "REHYDRATOR: ADD (internal/secrets.Rehydrator, RehydratedContent, Zero)."
         },
@@ -3966,6 +3980,27 @@
       ]
     },
     {
+      "name": "cmd/cascade audit.clipboard_effect",
+      "sites": [
+        {
+          "file": "cmd/cascade/clipboard_effect_rpc.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "cmd/cascade audit.clipboard_effect (ADD, P1-SEC-09, P1-BF-R298)."
+        },
+        {
+          "file": "cmd/cascade/clipboard_effect_rpc_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "cmd/cascade audit.clipboard_effect (TEST, P1-SEC-09, P1-BF-R298)."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade audit.gate_append handler",
       "sites": [
         {
@@ -4173,6 +4208,27 @@
       ]
     },
     {
+      "name": "cmd/cascade clipboard audit sink",
+      "sites": [
+        {
+          "file": "cmd/cascade/clipboard_audit_sink.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "cmd/cascade clipboard audit sink (ADD, P1-SEC-09, P1-BF-R298)."
+        },
+        {
+          "file": "cmd/cascade/clipboard_audit_sink_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "cmd/cascade clipboard audit sink (TEST, P1-SEC-09, P1-BF-R298)."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade composition root",
       "sites": [
         {
@@ -4371,6 +4427,24 @@
           "line": 4,
           "status": "",
           "raw": "cmd/cascade daemon registrations — away mode (P1-HRN-11)."
+        },
+        {
+          "file": "cmd/cascade/wire_clipboard_effect.go",
+          "line": 17,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations — audit.clipboard_effect (P1-SEC-09, P1-BF-R298)."
+        },
+        {
+          "file": "cmd/cascade/wire_clipboard_rearm.go",
+          "line": 15,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations — clipboard re-arm (P1-SEC-09)."
+        },
+        {
+          "file": "cmd/cascade/wire_clipboard_rearm_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations — clipboard re-arm (TEST, P1-SEC-09)."
         },
         {
           "file": "cmd/cascade/wire_completion_gate.go",
@@ -4838,6 +4912,34 @@
           "line": 7,
           "status": "",
           "raw": "cmd/cascade guarded families tests."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade guarded hooks family",
+      "sites": [
+        {
+          "file": "cmd/cascade/guarded_hooks.go",
+          "line": 14,
+          "status": "",
+          "raw": "cmd/cascade guarded hooks family (P1-SUP-05)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade guarded hooks family tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/guarded_hooks_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "cmd/cascade guarded hooks family tests (P1-SUP-05)."
         }
       ],
       "statuses": [
@@ -7536,6 +7638,12 @@
           "raw": "cmd/cascade/vault (ADD - audit tests)."
         },
         {
+          "file": "cmd/cascade/vault_clipboard.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "cmd/cascade/vault (ADD - get --clipboard, P1-SEC-09)."
+        },
+        {
           "file": "cmd/cascade/vault_elevated.go",
           "line": 20,
           "status": "ADD",
@@ -7621,6 +7729,20 @@
           "line": 21,
           "status": "",
           "raw": "cmd/cascade/vault elevation gate audit sink (P1-SEC-08)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade/vault get --clipboard",
+      "sites": [
+        {
+          "file": "cmd/cascade/vault_clipboard_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "cmd/cascade/vault get --clipboard (TEST, P1-SEC-09)."
         }
       ],
       "statuses": [
@@ -9372,6 +9494,20 @@
           "line": 16,
           "status": "",
           "raw": "contract:driver-egress-proxy (cap:egress-policy, cap:agent-drivers)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "contract:hooks-vault-binding",
+      "sites": [
+        {
+          "file": "internal/hooks/binding.go",
+          "line": 35,
+          "status": "",
+          "raw": "contract:hooks-vault-binding (P1-SUP-05)."
         }
       ],
       "statuses": [
@@ -12108,7 +12244,7 @@
       "sites": [
         {
           "file": "plugins/cascade-pa/telegram/chat.go",
-          "line": 32,
+          "line": 33,
           "status": "ADD",
           "ticket": "P1-E23-W5-S48-T2",
           "raw": "handleInbound/ADDED (P1-E23-W5-S48-T2)."
@@ -13485,6 +13621,20 @@
       ]
     },
     {
+      "name": "internal.ci.Client.RepoVisibility",
+      "sites": [
+        {
+          "file": "internal/ci/gha_reader.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal.ci.Client.RepoVisibility/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.ci.ClientHeadSHA",
       "sites": [
         {
@@ -13492,6 +13642,26 @@
           "line": 32,
           "status": "ADD",
           "raw": "internal.ci.ClientHeadSHA/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.ComputeToolchainFingerprint",
+      "sites": [
+        {
+          "file": "internal/ci/executor_unix.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal.ci.ComputeToolchainFingerprint/ADDED (P1-CI-03)."
+        },
+        {
+          "file": "internal/ci/executor_windows.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal.ci.ComputeToolchainFingerprint/ADDED (P1-CI-03)."
         }
       ],
       "statuses": [
@@ -13656,6 +13826,20 @@
       ]
     },
     {
+      "name": "internal.ci.Environment",
+      "sites": [
+        {
+          "file": "internal/ci/executor.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal.ci.Environment/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.ci.ErrAffectedCmdFailed",
       "sites": [
         {
@@ -13722,6 +13906,20 @@
           "line": 32,
           "status": "ADD",
           "raw": "internal.ci.Executor/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.ExecutorKind",
+      "sites": [
+        {
+          "file": "internal/ci/executor.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal.ci.ExecutorKind/ADDED"
         }
       ],
       "statuses": [
@@ -13942,6 +14140,34 @@
       ]
     },
     {
+      "name": "internal.ci.NewResolvingSubJobExecutor",
+      "sites": [
+        {
+          "file": "internal/ci/executor_subjob.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "internal.ci.NewResolvingSubJobExecutor/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.Refusal",
+      "sites": [
+        {
+          "file": "internal/ci/executor_resolver.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "internal.ci.Refusal/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.ci.RequirementKind",
       "sites": [
         {
@@ -13981,6 +14207,20 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "internal.ci.ResolverDeps",
+      "sites": [
+        {
+          "file": "internal/ci/executor_resolver.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "internal.ci.ResolverDeps/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -15675,7 +15915,7 @@
       "sites": [
         {
           "file": "internal/daemon/subsystems_ci.go",
-          "line": 25,
+          "line": 32,
           "status": "ADD",
           "raw": "internal.daemon.CIRuntime/ADDED"
         }
@@ -15689,9 +15929,9 @@
       "sites": [
         {
           "file": "internal/daemon/subsystems_ci.go",
-          "line": 25,
+          "line": 32,
           "status": "ADD",
-          "raw": "internal.daemon.NewCISubsystem/ADDED (P1-CI-10)."
+          "raw": "internal.daemon.NewCISubsystem/ADDED (P1-CI-10;"
         }
       ],
       "statuses": [
@@ -19321,7 +19561,7 @@
       "sites": [
         {
           "file": "internal/runtime/config_sections.go",
-          "line": 115,
+          "line": 120,
           "status": "ADD",
           "ticket": "P1-E32-W6-S65-T1",
           "raw": "internal.runtime.assembleConfig/ADDED (P1-E32-W6-S65-T1, fix round 2)."
@@ -19336,7 +19576,7 @@
       "sites": [
         {
           "file": "internal/runtime/config_ci.go",
-          "line": 28,
+          "line": 21,
           "status": "ADD",
           "raw": "internal.runtime.parseCIPolicySection/ADDED"
         }
@@ -29086,13 +29326,33 @@
       "sites": [
         {
           "file": "internal/secrets/clipboard.go",
-          "line": 29,
-          "status": "ADD",
-          "raw": "internal/secrets ClipboardWriter/ADDED"
+          "line": 24,
+          "status": "CHANGE",
+          "raw": "internal/secrets ClipboardWriter/CHANGED"
         }
       ],
       "statuses": [
-        "ADD"
+        "CHANGE"
+      ]
+    },
+    {
+      "name": "internal/secrets ClipboardWriter/TEST",
+      "sites": [
+        {
+          "file": "internal/secrets/clipboard_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/secrets ClipboardWriter/TEST (P1-SEC-09)."
+        },
+        {
+          "file": "internal/secrets/clipboard_writer_failpaths_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal/secrets ClipboardWriter/TEST (P1-SEC-09)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -29202,6 +29462,62 @@
       ]
     },
     {
+      "name": "internal/secrets NewFilePendingClearStore",
+      "sites": [
+        {
+          "file": "internal/secrets/clipboard_pending_store.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "internal/secrets NewFilePendingClearStore/ADDED (P1-SEC-09)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/secrets NewFilePendingClearStore/TEST",
+      "sites": [
+        {
+          "file": "internal/secrets/clipboard_pending_store_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/secrets NewFilePendingClearStore/TEST (P1-SEC-09)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/secrets ParseClipboardTTL",
+      "sites": [
+        {
+          "file": "internal/secrets/clipboard_ttl.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal/secrets ParseClipboardTTL/ADDED (P1-SEC-09)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/secrets ParseClipboardTTL/TEST",
+      "sites": [
+        {
+          "file": "internal/secrets/clipboard_ttl_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal/secrets ParseClipboardTTL/TEST (P1-SEC-09)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/secrets ProvisionDaemonKey",
       "sites": [
         {
@@ -29237,6 +29553,34 @@
           "line": 7,
           "status": "",
           "raw": "internal/secrets ProvisionDaemonKey tests (P1-SEC-23)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/secrets RearmHostPendingClears",
+      "sites": [
+        {
+          "file": "internal/secrets/clipboard_rearm.go",
+          "line": 22,
+          "status": "ADD",
+          "raw": "internal/secrets RearmHostPendingClears/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/secrets RearmHostPendingClears/TEST",
+      "sites": [
+        {
+          "file": "internal/secrets/clipboard_rearm_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal/secrets RearmHostPendingClears/TEST (P1-SEC-09)."
         }
       ],
       "statuses": [
@@ -29319,27 +29663,26 @@
         {
           "file": "internal/secrets/clipboard_darwin.go",
           "line": 16,
-          "status": "ADD",
-          "ticket": "P1-E08-W2-S16-T4",
-          "raw": "internal/secrets clipboard_darwin.go/ADDED (P1-E08-W2-S16-T4)."
+          "status": "CHANGE",
+          "raw": "internal/secrets clipboard_darwin.go/CHANGED (P1-SEC-09)."
         }
       ],
       "statuses": [
-        "ADD"
+        "CHANGE"
       ]
     },
     {
-      "name": "internal/secrets clipboard_darwin_test.go",
+      "name": "internal/secrets clipboard_darwin.go/TEST",
       "sites": [
         {
           "file": "internal/secrets/clipboard_darwin_test.go",
-          "line": 8,
-          "status": "ADD",
-          "raw": "internal/secrets clipboard_darwin_test.go/ADDED"
+          "line": 10,
+          "status": "",
+          "raw": "internal/secrets clipboard_darwin.go/TEST (P1-SEC-09)."
         }
       ],
       "statuses": [
-        "ADD"
+        ""
       ]
     },
     {
@@ -29347,43 +29690,27 @@
       "sites": [
         {
           "file": "internal/secrets/clipboard_linux.go",
-          "line": 17,
-          "status": "ADD",
-          "ticket": "P1-E08-W2-S16-T4",
-          "raw": "internal/secrets clipboard_linux.go/ADDED (P1-E08-W2-S16-T4)."
+          "line": 15,
+          "status": "CHANGE",
+          "raw": "internal/secrets clipboard_linux.go/CHANGED (P1-SEC-09)."
         }
       ],
       "statuses": [
-        "ADD"
+        "CHANGE"
       ]
     },
     {
-      "name": "internal/secrets clipboard_linux_test.go",
+      "name": "internal/secrets clipboard_linux.go/TEST",
       "sites": [
         {
           "file": "internal/secrets/clipboard_linux_test.go",
           "line": 9,
-          "status": "ADD",
-          "raw": "internal/secrets clipboard_linux_test.go/ADDED"
+          "status": "",
+          "raw": "internal/secrets clipboard_linux.go/TEST (P1-SEC-09)."
         }
       ],
       "statuses": [
-        "ADD"
-      ]
-    },
-    {
-      "name": "internal/secrets clipboard_test.go",
-      "sites": [
-        {
-          "file": "internal/secrets/clipboard_test.go",
-          "line": 5,
-          "status": "ADD",
-          "ticket": "P1-E08-W2-S16-T4",
-          "raw": "internal/secrets clipboard_test.go/ADDED (P1-E08-W2-S16-T4)."
-        }
-      ],
-      "statuses": [
-        "ADD"
+        ""
       ]
     },
     {
@@ -29391,28 +29718,27 @@
       "sites": [
         {
           "file": "internal/secrets/clipboard_windows.go",
-          "line": 14,
-          "status": "ADD",
-          "ticket": "P1-E08-W2-S16-T4",
-          "raw": "internal/secrets clipboard_windows.go/ADDED (P1-E08-W2-S16-T4)."
+          "line": 13,
+          "status": "CHANGE",
+          "raw": "internal/secrets clipboard_windows.go/CHANGED (P1-SEC-09)."
         }
       ],
       "statuses": [
-        "ADD"
+        "CHANGE"
       ]
     },
     {
-      "name": "internal/secrets clipboard_windows_test.go",
+      "name": "internal/secrets clipboard_windows.go/TEST",
       "sites": [
         {
           "file": "internal/secrets/clipboard_windows_test.go",
           "line": 7,
-          "status": "ADD",
-          "raw": "internal/secrets clipboard_windows_test.go/ADDED"
+          "status": "",
+          "raw": "internal/secrets clipboard_windows.go/TEST (P1-SEC-09)."
         }
       ],
       "statuses": [
-        "ADD"
+        ""
       ]
     },
     {
@@ -33635,6 +33961,26 @@
       ]
     },
     {
+      "name": "plugins/cascade-pa",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/bridge_acceptance_integration_reply_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "plugins/cascade-pa (external, integration-tagged)"
+        },
+        {
+          "file": "plugins/cascade-pa/bridge_acceptance_windows_test.go",
+          "line": 52,
+          "status": "",
+          "raw": "plugins/cascade-pa (external) TestPABridge_WindowsTierTwoRefusal/TEST"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "plugins/cascade-pa BindingStore",
       "sites": [
         {
@@ -33747,6 +34093,20 @@
       ]
     },
     {
+      "name": "plugins/cascade-pa TestPABridge_OwnerWindow/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/bridge_acceptance_integration_test.go",
+          "line": 16,
+          "status": "",
+          "raw": "plugins/cascade-pa TestPABridge_OwnerWindow/TEST (P1-CPA-14)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "plugins/cascade-pa ThreadMapStore",
       "sites": [
         {
@@ -33789,6 +34149,34 @@
           "status": "",
           "ticket": "P1-E23-W5-S48-T1",
           "raw": "plugins/cascade-pa binding-tests/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa bridge-acceptance-integration-fixtures/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/bridge_acceptance_integration_helpers_test.go",
+          "line": 23,
+          "status": "",
+          "raw": "plugins/cascade-pa bridge-acceptance-integration-fixtures/TEST"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa bridge-acceptance-integration-peek/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/bridge_acceptance_integration_peek_test.go",
+          "line": 20,
+          "status": "",
+          "raw": "plugins/cascade-pa bridge-acceptance-integration-peek/TEST"
         }
       ],
       "statuses": [
@@ -34055,14 +34443,27 @@
       "name": "plugins/cascade-pa/telegram",
       "sites": [
         {
+          "file": "plugins/cascade-pa/telegram/acceptance_noloss_test.go",
+          "line": 27,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram"
+        },
+        {
           "file": "plugins/cascade-pa/telegram/doc.go",
           "line": 13,
           "status": "ADD",
           "ticket": "P1-E23-W5-S48-T1",
           "raw": "plugins/cascade-pa/telegram (ADD) — P1-E23-W5-S48-T1."
+        },
+        {
+          "file": "plugins/cascade-pa/telegram/live_fixture_test.go",
+          "line": 25,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram"
         }
       ],
       "statuses": [
+        "",
         "ADD"
       ]
     },
@@ -34226,7 +34627,7 @@
       "sites": [
         {
           "file": "plugins/cascade-pa/telegram/chat.go",
-          "line": 32,
+          "line": 33,
           "status": "ADD",
           "raw": "plugins/cascade-pa/telegram TelegramBridge/ADDED"
         },
@@ -34328,6 +34729,76 @@
       ]
     },
     {
+      "name": "plugins/cascade-pa/telegram TestOwnerWindowFiltersForeignChats/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/acceptance_ownerwindow_test.go",
+          "line": 21,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram TestOwnerWindowFiltersForeignChats/TEST"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram TestPABridge_BridgeSecretScrub/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/acceptance_secretscrub_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram TestPABridge_BridgeSecretScrub/TEST"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram TestPABridge_PrivacyModeRefusal/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/acceptance_privacy_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram TestPABridge_PrivacyModeRefusal/TEST"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram TestTelegramLiveCapture/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/live_capture_test.go",
+          "line": 48,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram TestTelegramLiveCapture/TEST"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram TestTelegramTransportLiveSend/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/live_transport_test.go",
+          "line": 16,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram TestTelegramTransportLiveSend/TEST"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "plugins/cascade-pa/telegram ThreadMap",
       "sites": [
         {
@@ -34367,6 +34838,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram acceptance-fixtures/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/acceptance_helpers_test.go",
+          "line": 18,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram acceptance-fixtures/TEST (P1-CPA-14)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -34579,6 +35064,34 @@
           "status": "",
           "ticket": "P1-E23-W5-S48-T1",
           "raw": "plugins/cascade-pa/telegram integration-tests/TEST (P1-E23-W5-S48-T1)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram live-capture-fixture-writer/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/live_capture_fixtures_test.go",
+          "line": 24,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram live-capture-fixture-writer/TEST"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "plugins/cascade-pa/telegram live-capture-poll/TEST",
+      "sites": [
+        {
+          "file": "plugins/cascade-pa/telegram/live_capture_poll_test.go",
+          "line": 13,
+          "status": "",
+          "raw": "plugins/cascade-pa/telegram live-capture-poll/TEST"
         }
       ],
       "statuses": [
@@ -40343,7 +40856,7 @@
       ]
     }
   ],
-  "total_sites": 3906,
-  "unspecified_count": 320,
-  "multi_status_count": 121
+  "total_sites": 3949,
+  "unspecified_count": 344,
+  "multi_status_count": 124
 }
