@@ -531,6 +531,31 @@ this method changed `IndexedRecord`'s effective field set requirements
 under is a version whose rows must be rebuilt, never compared byte-for-byte
 against a different layout's assumptions.
 
+### Recall-to-resume acceptance (`internal/retrieval/recall_acceptance_test.go`)
+
+`TestEpicV_RecallResumeAcceptance` (build tags `integration` and not
+`windows`) is the end-to-end proof of the recall-to-resume story. TestMain
+builds `./cmd/cascade` once as a development build and exports the path as
+`acceptanceBinary`; each test then starts its own daemon with its own
+socket, with `HOME`, `CASCADE_HOME` and the socket under a temp tree and
+custody forced to the QA file vault, so no real home directory or keychain
+is read. Step 1 seeds a conversation thread over the socket, a memory
+record with `memory remember --type user`, and the configured files source.
+Step 2 asserts `recall what --json` returns a ranked list over more than one
+domain with the conversation thread on top, decoded against the versioned
+schema. Step 3 resumes the top hit and reads the stored session thread. Step
+4 resumes a local-only thread into a restricted session and expects a
+policy refusal with no stored change.
+
+The privacy boundary is the point. A session started in a plain workspace is
+general-scope, and a general session reads only non-project content
+(R-16.3, P1-CPA-20): memory of kind user or feedback, and files whose corpus
+privacy is personal or global. Configured retrieval sources are project
+privacy, so the files domain stays empty from a general workspace and the
+second domain is memory. A restricted thread is withheld from the answer
+(Step 2b), and a vaulted literal in a stored turn reaches the resumed
+session only as its redaction tag.
+
 ## Bring-into-chat resume (`chat.resume`, `internal/conversation/resume*.go`)
 
 `chat.resume` (P1-E22-W5-S47-T2) composes a recorded conversation thread

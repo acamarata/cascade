@@ -1,0 +1,14 @@
+{
+  "_provenance": "Recorded by TestEpicV_RecallResumeAcceptance/Step3 (internal/retrieval/recall_acceptance_resume_test.go) from a devkeys build of ./cmd/cascade (version dev) on a live daemon, 2026-10-30, via -update-acceptance. Thread ids are normalised to \u003cseed-thread\u003e and \u003csession-thread\u003e; the default run compares this file with a fresh round trip.",
+  "method": "chat.resume",
+  "request": {
+    "session_thread_id": "\u003csession-thread\u003e",
+    "topic_id": "\u003cseed-thread\u003e"
+  },
+  "response": {
+    "leading_context": "Decision: ship the quartz lighthouse rollout behind the staged gate. The vaulted reference is \u003capikey\u003eCPA09_CANARY\u003c/apikey\u003e and must never travel.",
+    "thread_id": "\u003cseed-thread\u003e",
+    "tokens": 35,
+    "trimmed": []
+  }
+}

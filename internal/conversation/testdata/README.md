@@ -133,3 +133,14 @@ literal `"wifi password: 7Kq2mZx9PLw4Rt6VbN3sQe8Hj1Cd5Fg0"` from
 `internal/secrets/detector_test.go`'s `TestNamedEntropyIsCorroborated` -- a real,
 already-proven case of a corroborated high-entropy span with no `TagFor`
 mapping, which is what makes the real `secrets.Rewriter` refuse it.
+
+## Recall-to-resume acceptance fixture (P1-CPA-09)
+
+- **`resume-fixtures/v2-acceptance.json`** records one `chat.resume` socket
+  round trip from `TestEpicV_RecallResumeAcceptance/Step3`
+  (`internal/retrieval/recall_acceptance_resume_test.go`) via
+  `-update-acceptance`. Tool: `cascade` built from `./cmd/cascade` with the
+  `devkeys` tag, version `dev`, on a live daemon under a temp `CASCADE_HOME`;
+  date: 2026-10-30. Thread ids are normalised, and the default run compares
+  the file with a fresh round trip, so it cannot go stale silently. Its
+  `leading_context` shows the vaulted literal as a redaction tag.

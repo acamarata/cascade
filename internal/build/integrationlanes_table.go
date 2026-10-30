@@ -80,7 +80,7 @@ var IntegrationLanes = slices.Concat(
 		"./internal/backup/targets", "./internal/conductor", "./internal/elevation", "./internal/fleet", "./internal/fleet/journal",
 		"./internal/fleet/sessions", "./internal/hooks/egress", "./internal/minisign", "./internal/plugins/host",
 		"./internal/plugins/registryfetch", "./internal/plugins/remote", "./internal/providers/agents/egressproxy",
-		"./internal/providers/registry", "./internal/retrieval/recall", "./internal/rpc", "./internal/runtime", "./internal/runtime/init"),
+		"./internal/providers/registry", "./internal/retrieval", "./internal/retrieval/recall", "./internal/rpc", "./internal/runtime", "./internal/runtime/init"),
 	rows(LaneRow{Tags: "integration", RunRegex: ".", Job: LaneJob, OS: allRunners, SkipOn: winSkip("daemon unix socket: Windows tier-2")},
 		"./internal/memory"),
 	rows(LaneRow{Tags: "integration", RunRegex: ".", Job: LaneJob, OS: allRunners, SkipOn: winSkip("skip: ")}, "./providers/anthropic",

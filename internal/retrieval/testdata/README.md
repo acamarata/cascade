@@ -136,3 +136,14 @@ here.
   implements none of it (flat RRF over three domains' already-ranked
   lists, no graph). Tool: n/a, real source file copied verbatim from the
   archive clone; date: 2026-09-21.
+
+## Recall-to-resume acceptance fixtures (P1-CPA-09)
+
+- **`acceptance/seed.json`** — the seed text `TestEpicV_RecallResumeAcceptance`
+  (`recall_acceptance_test.go`) writes through the daemon's own surfaces: a
+  conversation turn, a user-kind memory record, a project-privacy file, a
+  restricted note, a local-only note and a vault canary name and value
+  (a made-up word string, not a credential). Hand-authored, not harvested.
+  Tool: `cascade` built from `./cmd/cascade` with the `devkeys` tag, version
+  `dev`, driven as a real binary over a real daemon socket; date: 2026-10-30.
+  The test's own recorded state, not a stub, is what the steps assert.

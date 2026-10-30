@@ -1,0 +1,12 @@
+{
+  "query": "quartz lighthouse rollout",
+  "conversation": "Decision: ship the quartz lighthouse rollout behind the staged gate. The vaulted reference is ember-harbor-literal-77 and must never travel.",
+  "memory_name": "rollout-pref",
+  "memory": "Owner preference: the quartz lighthouse rollout always ships with a staged gate.",
+  "file": "# Handbook\nThe quartz lighthouse rollout checklist lives in this project file.\n",
+  "vault_name": "CPA09_CANARY",
+  "vault_value": "ember-harbor-literal-77",
+  "restricted": "A restricted note about the obsidian kestrel migration.",
+  "restricted_query": "obsidian kestrel migration",
+  "local_only": "A local-only note about the feldspar compass survey."
+}
