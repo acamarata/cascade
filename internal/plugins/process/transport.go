@@ -1,24 +1,7 @@
-// Purpose: newline-delimited JSON-RPC 2.0 framing over a plugin process's
-//
-//	stdin/stdout: one goroutine reads frames and routes them by
-//	correlation ID, the caller's goroutine writes a Request and blocks on
-//	its own response channel until it arrives or its context is done.
-//
-// Inputs: an io.Writer (the plugin's stdin) and an io.Reader (its
-//
-//	stdout), plus a per-call timeout.
-//
-// Outputs: Call (request/response round trip), Notify (fire-and-forget),
-//
-//	Notifications (the channel of frames the plugin sent that were not a
-//	response to any pending call).
-//
-// Constraints: every error path returns a typed pkg/cascade error. No
-//
-//	bare time.Now/After; per-call timeout composes onto the caller's ctx
-//	with context.WithTimeout, which is not itself a forbidden identifier.
-//
-// SPORT: internal/plugins/process transport (ADD) — P1-E15-W4-S31-T3; single-parse routeFrame (CHANGE) — P1-PLG-09.
+// Purpose: correlated JSON-RPC requests and replies over plugin stdio.
+// Inputs: serialized writer, reader and per-call timeout.
+// Outputs: host call responses, plugin requests and notifications.
+// Constraints: IDs on plugin requests never claim a pending host call.
 
 package process
 
@@ -56,6 +39,7 @@ type Transport struct {
 	closed  bool
 
 	notifications chan Notification
+	hostRequests  chan HostRequest
 	// done is closed once readLoop has consumed the plugin's stdout to
 	// EOF. It is what lets a caller honour os/exec's StdoutPipe contract:
 	// "Wait will close the pipe after seeing the command exit ... it is
@@ -74,7 +58,7 @@ type Transport struct {
 // the result instead of re-parsing the line.
 type frameEnvelope struct {
 	JSONRPC string          `json:"jsonrpc"`
-	ID      *uint64         `json:"id"`
+	ID      json.RawMessage `json:"id"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params,omitempty"`
 	Result  json.RawMessage `json:"result,omitempty"`
@@ -98,6 +82,7 @@ func NewTransport(w io.Writer, r io.Reader, callTimeout time.Duration) *Transpor
 		callTimeout:   callTimeout,
 		pending:       make(map[uint64]*pendingCall),
 		notifications: make(chan Notification, 16),
+		hostRequests:  make(chan HostRequest, 16),
 		done:          make(chan struct{}),
 		readErr:       make(chan error, 1),
 	}
@@ -122,6 +107,7 @@ func (t *Transport) Done() <-chan struct{} { return t.done }
 func (t *Transport) readLoop(r io.Reader) {
 	defer close(t.done)
 	defer close(t.notifications)
+	defer close(t.hostRequests)
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 	for scanner.Scan() {
@@ -146,14 +132,22 @@ func (t *Transport) routeFrame(line []byte) {
 	if decode(line, &env) != nil || env.JSONRPC != "2.0" {
 		return
 	}
-	if env.ID == nil || env.Method != "" {
+	if env.Method != "" && len(env.ID) != 0 && string(env.ID) != "null" {
+		t.hostRequests <- HostRequest{ID: env.ID, Method: env.Method, Params: env.Params}
+		return
+	}
+	if len(env.ID) == 0 || string(env.ID) == "null" || env.Method != "" {
 		if env.Method == "" {
 			return
 		}
 		t.notifications <- Notification{JSONRPC: env.JSONRPC, Method: env.Method, Params: env.Params}
 		return
 	}
-	resp := Response{JSONRPC: env.JSONRPC, ID: *env.ID, Result: env.Result, Error: env.Error}
+	id, valid := responseID(env.ID)
+	if !valid {
+		return
+	}
+	resp := Response{JSONRPC: env.JSONRPC, ID: id, Result: env.Result, Error: env.Error}
 	t.mu.Lock()
 	pc, ok := t.pending[resp.ID]
 	if ok {

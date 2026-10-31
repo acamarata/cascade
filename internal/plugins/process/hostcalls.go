@@ -1,132 +1,132 @@
 //go:build !windows
 
-// Purpose: dispatches a launched plugin's host-ABI notifications through
-//
-//	the injected capability boundary before anything else happens with
-//	them.
-//
-// Inputs: the Notification frames a plugin's Transport delivers on its
-//
-//	Notifications channel.
-//
-// Outputs: none directly — every decision is a CapabilityChecker call,
-//
-//	which is responsible for its own audit trail (internal/plugins/host).
-//
-// Constraints: a nil CapabilityChecker means the composition root has not
-//
-//	wired the boundary; calls are ignored, never treated as allowed. See
-//	consumeHostCalls's doc comment for the transport-layer gap this
-//	works within (P1-E15-W4-S31-T4's journal quotes it in full).
-//
-// SPORT: internal/plugins/process host-call-dispatch (ADD) — P1-E15-W4-S31-T4; per-transport consumer (CHANGE) — P1-PLG-09.
-
 package process
 
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"strings"
+
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// HostCapabilityChecker is the local seam onto the plugin capability
-// boundary (internal/plugins/host.HostBoundaryEnforcer). This package
-// cannot import internal/plugins/host directly: both sit under
-// internal/plugins/**, and golangci's plugins-providers-boundary depguard
-// rule forbids any internal/** import from a non-test file there (see
-// types.go's doc comment on the identical EgressRegistrar pattern this
-// mirrors). A composition root outside internal/plugins/** wraps a real
-// *host.HostBoundaryEnforcer in a small adapter satisfying this
-// interface and assigns it to ProcessRuntime.CapabilityChecker.
-//
-// CheckSecretRef returns `any` rather than host.SecretHandle: this
-// package has no plugin-facing response path to forward the handle
-// through yet (see consumeHostCalls), so it only needs the check to run
-// and audit, never the handle's value.
+// HostCapabilityChecker authorizes plugin operations before host execution.
 type HostCapabilityChecker interface {
-	CheckHTTP(ctx context.Context, url string) error
-	CheckStorage(ctx context.Context, domain string) error
-	CheckSecretRef(ctx context.Context, key string) (any, error)
-	CheckGeneric(ctx context.Context, capability string) error
+	CheckHTTP(context.Context, string) error
+	CheckStorage(context.Context, string) error
+	CheckSecretRef(context.Context, string) (any, error)
+	CheckGeneric(context.Context, string) error
 }
 
-// Host-ABI notification method names (05-PEWS-PLAN-W4-W6.md §Epic O
-// preamble). hostMethodStoragePrefix covers every host_storage_* verb.
-const (
-	hostMethodHTTPRequest = "host_http_request"
-	hostMethodSecretRef   = "host_secret_ref"
-	hostMethodStoragePref = "host_storage_"
-)
-
-// hostGenericCapability maps every other capability-gated host-ABI
-// method to the capability string CheckGeneric evaluates. host_log
-// carries no capability of its own in the preamble's list and is
-// deliberately absent: log output is not policy-gated.
-var hostGenericCapability = map[string]string{
-	"host_stream_emit":   "host.stream_emit",
-	"host_event_emit":    "host.event_emit",
-	"host_tool_register": "host.tool_register",
-}
-
-// consumeHostCalls drains t's plugin-initiated notifications until t's
-// reads finish and checks every recognized host-ABI call against
-// rt.CapabilityChecker before anything else happens with it. It is handed
-// the transport it serves (never reading h.transport later, when a
-// respawn may already have swapped it), so each live transport has
-// exactly one consumer. ctx is the Handle's lifetime(); the loop keeps
-// draining after ctx ends, because a consumer that stopped early would
-// block the transport's read loop and with it the monitor's reap.
-//
-// It is the process runtime's ONLY plugin-to-host call path today:
-// transport.go's routeFrame correlates a plugin REQUEST's id with the
-// host's own outstanding Call, not the reverse, so a plugin-initiated
-// JSON-RPC request (id set, expecting a reply) is decoded as a
-// Notification with its id silently discarded, and no response ever
-// reaches the plugin. Returning a value or an error to the plugin for a
-// request-shaped host call needs its own id-correlation half inside
-// Transport, and transport.go is not in this ticket's files_scope change
-// list. This loop enforces the capability boundary on the one channel
-// that reaches the host today; the ticket journal quotes both sides of
-// this contradiction.
+// consumeHostCalls drains one transport through EOF, including after restart.
 func (rt *ProcessRuntime) consumeHostCalls(ctx context.Context, t *Transport) {
-	for n := range t.Notifications() {
-		rt.checkHostCall(ctx, n)
-	}
-}
-
-// checkHostCall routes one plugin notification to the matching
-// HostCapabilityChecker method. A nil CapabilityChecker means no
-// composition root has wired the boundary yet; the call is ignored
-// rather than panicking — but unlike Audit's documented nil-is-valid
-// convention on ProcessRuntime, production wiring of CapabilityChecker
-// is a hard requirement of this ticket's acceptance criteria, not an
-// optional collaborator.
-func (rt *ProcessRuntime) checkHostCall(ctx context.Context, n Notification) {
-	if rt.CapabilityChecker == nil {
-		return
-	}
-	switch {
-	case n.Method == hostMethodHTTPRequest:
-		_ = rt.CapabilityChecker.CheckHTTP(ctx, decodeHostParam(n.Params, "url"))
-	case n.Method == hostMethodSecretRef:
-		_, _ = rt.CapabilityChecker.CheckSecretRef(ctx, decodeHostParam(n.Params, "key"))
-	case strings.HasPrefix(n.Method, hostMethodStoragePref):
-		_ = rt.CapabilityChecker.CheckStorage(ctx, decodeHostParam(n.Params, "domain"))
-	default:
-		if capability, known := hostGenericCapability[n.Method]; known {
-			_ = rt.CapabilityChecker.CheckGeneric(ctx, capability)
+	requests, notifications := t.HostRequests(), t.Notifications()
+	for requests != nil || notifications != nil {
+		select {
+		case r, ok := <-requests:
+			if !ok {
+				requests = nil
+				continue
+			}
+			result, err := rt.serveHostCall(ctx, r)
+			_ = t.Reply(r.ID, result, err)
+		case n, ok := <-notifications:
+			if !ok {
+				notifications = nil
+				continue
+			}
+			rt.checkHostCall(ctx, n)
 		}
 	}
 }
 
-// decodeHostParam reads one string field from a notification's JSON
-// params. A decode failure or a missing field returns "", which every
-// HostCapabilityChecker method treats as a fail-closed denial (an empty
-// URL/domain/key never matches a declared grant).
+// checkHostCall checks authority but never executes notification operations.
+func (rt *ProcessRuntime) checkHostCall(ctx context.Context, n Notification) {
+	if !strings.HasPrefix(n.Method, "host_") {
+		return
+	}
+	_ = rt.authorizeHostCall(ctx, n.Method, n.Params)
+	var params map[string]json.RawMessage
+	_ = json.Unmarshal(n.Params, &params)
+	keys := make([]string, 0, len(params))
+	for key := range params {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	if sink, ok := rt.CapabilityChecker.(interface {
+		AuditHostNotification(context.Context, string, []string)
+	}); ok {
+		sink.AuditHostNotification(ctx, n.Method, keys)
+	}
+}
+
+func (rt *ProcessRuntime) authorizeHostCall(ctx context.Context, method string, params json.RawMessage) error {
+	c := rt.CapabilityChecker
+	if c == nil {
+		return cascade.New(cascade.KindUnavailable, "host boundary not wired")
+	}
+	switch {
+	case method == "host_http_request":
+		return c.CheckHTTP(ctx, decodeHostParam(params, "url"))
+	case method == "host_secret_ref":
+		_, err := c.CheckSecretRef(ctx, decodeHostParam(params, "key"))
+		return err
+	case strings.HasPrefix(method, "host_storage_"):
+		return c.CheckStorage(ctx, decodeHostParam(params, "domain"))
+	case method == "host_event_emit", method == "host_stream_emit", method == "host_tool_register":
+		return c.CheckGeneric(ctx, strings.Replace(method, "host_", "host.", 1))
+	case method == "host_log":
+		return nil
+	default:
+		return cascade.New(cascade.KindUnsupported, "unsupported host method")
+	}
+}
+
+func (rt *ProcessRuntime) serveHostCall(ctx context.Context, r HostRequest) (any, error) {
+	if err := rt.authorizeHostCall(ctx, r.Method, r.Params); err != nil {
+		return nil, err
+	}
+	if r.Method == "host_tool_register" {
+		// Authorized and audited above; the process boundary has no tool
+		// registration service, so an allowed call is still not served.
+		return nil, cascade.New(cascade.KindUnsupported, "host tool registration is not served over the process boundary")
+	}
+	s, ok := rt.CapabilityChecker.(HostServer)
+	if !ok {
+		return nil, cascade.New(cascade.KindUnavailable, "host boundary not wired")
+	}
+	switch {
+	case r.Method == "host_http_request":
+		var req HostHTTPRequest
+		if json.Unmarshal(r.Params, &req) != nil {
+			return nil, cascade.ErrInvalidInput
+		}
+		return s.ServeHTTP(ctx, req)
+	case strings.HasPrefix(r.Method, "host_storage_"):
+		return s.ServeStorage(ctx, strings.TrimPrefix(r.Method, "host_storage_"), r.Params)
+	case r.Method == "host_secret_ref":
+		return s.ServeSecretRef(ctx, decodeHostParam(r.Params, "key"))
+	case r.Method == "host_log":
+		return nil, s.ServeLog(ctx, decodeHostParam(r.Params, "level"), decodeHostParam(r.Params, "msg"))
+	default:
+		var p struct {
+			Kind    string          `json:"kind"`
+			Payload json.RawMessage `json:"payload"`
+		}
+		if json.Unmarshal(r.Params, &p) != nil {
+			return nil, cascade.ErrInvalidInput
+		}
+		return nil, s.ServeEvent(ctx, p.Kind, p.Payload)
+	}
+}
+
 func decodeHostParam(raw json.RawMessage, field string) string {
-	var m map[string]string
-	if err := json.Unmarshal(raw, &m); err != nil {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(raw, &m) != nil {
 		return ""
 	}
-	return m[field]
+	var value string
+	_ = json.Unmarshal(m[field], &value)
+	return value
 }

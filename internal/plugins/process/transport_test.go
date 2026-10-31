@@ -195,7 +195,8 @@ func TestRouteFrameParsesOnce(t *testing.T) {
 	var decodes int
 	tr := &Transport{
 		pending: make(map[uint64]*pendingCall), notifications: make(chan Notification, 4),
-		decode: func(line []byte, env *frameEnvelope) error { decodes++; return decodeEnvelope(line, env) },
+		hostRequests: make(chan HostRequest, 1),
+		decode:       func(line []byte, env *frameEnvelope) error { decodes++; return decodeEnvelope(line, env) },
 	}
 	pc := &pendingCall{resp: make(chan Response, 1)}
 	tr.pending[5] = pc
@@ -215,11 +216,14 @@ func TestRouteFrameParsesOnce(t *testing.T) {
 	if resp.ID != 5 || string(resp.Result) != `{"ok":true}` || resp.Error == nil || resp.Error.Code != 3 {
 		t.Fatalf("response = %+v, want id 5 with its result and error", resp)
 	}
-	for _, want := range []string{"host_log", "host_secret_ref"} {
+	for _, want := range []string{"host_log"} {
 		n := <-tr.notifications
 		if n.Method != want || n.JSONRPC != "2.0" || len(n.Params) == 0 {
 			t.Fatalf("notification = %+v, want method %q with params", n, want)
 		}
+	}
+	if r := <-tr.HostRequests(); r.Method != "host_secret_ref" || string(r.ID) != "9" {
+		t.Fatalf("plugin request lost its identifier: %+v", r)
 	}
 	if len(tr.notifications) != 0 {
 		t.Fatal("the malformed frame was delivered")

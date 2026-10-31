@@ -338,6 +338,7 @@ substituted bytes.
 | `registry-fetch` | enabled | the plugin registry fetch |
 | `bridge` | enabled, `AllowedTiers` {internal, public} | the cascade-pa bridge's outbound leg |
 | `github-pr-diff` | enabled, `AllowedTiers` {internal, public}; request intercepted before plugin launch | P1-PLG-05; review PR diffs through the trusted cascade-github process plugin |
+| `plugin-host-http` | enabled, `AllowedTiers` {internal, public}; vault substitution before the request leaves | P1-PLG-08; host-served process-plugin HTTP with intent and terminal effect records |
 
 Net-scope enforcement for `bridge` is the O/S-31.T4 plugin-host capability
 path over the manifest's declared net grants, not this registry: this class
@@ -961,17 +962,13 @@ package instead uses it for a plugin capability GRANT the operator did
 not authorize. Both readings are "the capability was not granted"; no new
 Kind was added to the frozen 14-member taxonomy (R-14.3).
 
-**Known gap (recorded, not silent): the process-tier transport has no
-plugin-to-host request/response path.** `internal/plugins/process`'s
-JSON-RPC transport correlates a plugin REQUEST's id against the host's
-own outstanding `Call`, not the reverse; a plugin-initiated request (id
-set, expecting a reply) decodes as a `Notification` with its id
-discarded, and no response ever reaches the plugin. `HostBoundaryEnforcer`
-is wired into the one channel that does reach the host today —
-`ProcessRuntime`'s notification-consumption loop
-(`internal/plugins/process/hostcalls.go`) — so every recognized host-ABI
-call is checked, but a process-tier plugin cannot yet receive the
-*result* of an allowed `host_http_request` or `host_secret_ref` call.
-Closing that gap needs an id-correlation half inside `Transport`, which
-is outside this ticket's files_scope. See the P1-E15-W4-S31-T4 journal
-for the full contradiction.
+**Process-plugin host calls have correlated replies.** Requests retain their
+plugin IDs on a separate transport channel. The host boundary checks network
+scopes from effective witnessed grants, confines storage and secret references
+to the plugin, and routes events to `plugin.<id>`. Host HTTP crosses
+`plugin-host-http` before an intent is recorded and the request is sent;
+completion is confirmed and a lost recorder's intent becomes unknown-outcome.
+Notification-shaped host calls are checked and audited with method and sorted
+parameter keys only, and never execute. Missing wiring returns unavailable;
+denials return capability-denied. Direct networking by trusted process plugins
+remains outside this host-call boundary. See [the host-call contract](security-posture/plugin-host-boundary.md).

@@ -4,6 +4,8 @@ package egress
 // that owns the outbound path, so a refusal points at the code that
 // declared the policy rather than at this file.
 const (
+	// EgressClassPluginHostHTTP gates host-served process-plugin HTTP.
+	EgressClassPluginHostHTTP EgressClass = "plugin-host-http"
 	// EgressClassMCP is the daemon's tool-protocol response path to a
 	// harness connection.
 	EgressClassMCP EgressClass = "mcp.response"
@@ -200,6 +202,10 @@ var defaultClasses = []struct {
 	Class  EgressClass
 	Config InterceptConfig
 }{
+	// P1-PLG-08: host-served plugin HTTP transits this class with intent and
+	// confirm effect records; vault values leave as tags, never raw bytes.
+	{EgressClassPluginHostHTTP, InterceptConfig{Enabled: true,
+		AllowedTiers: []SensitivityTier{TierInternal, TierPublic}, Owner: "P1-PLG-08"}},
 	{EgressClassMCP, InterceptConfig{Enabled: true, Owner: "D/S-06.T6"}},
 	{EgressClassHook, InterceptConfig{Enabled: true, Owner: "C/S-05.T1"}},
 	{EgressClassTelemetry, InterceptConfig{Enabled: false, Owner: "P1-E08-W2-S16-T1"}},

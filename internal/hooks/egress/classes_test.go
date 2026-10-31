@@ -19,6 +19,7 @@ func TestEgressClassesR21265Registered(t *testing.T) {
 		enabled         bool
 		allowRestricted bool
 	}{
+		{EgressClassPluginHostHTTP, "plugin-host-http", "P1-PLG-08", true, false},
 		{EgressClassMCP, "mcp.response", "D/S-06.T6", true, false},
 		{EgressClassHook, "hook.response", "C/S-05.T1", true, false},
 		{EgressClassTelemetry, "telemetry", "P1-E08-W2-S16-T1", false, false},
@@ -100,7 +101,7 @@ func TestRegistrantListByteEqual(t *testing.T) {
 		"Y/S-52.T2 (backend-integration) · AF/S-66.T2 (ci-mirror-push) · J/S-20.T1 (provider-intake) · " +
 		"F/S-12.T5 (spike-measurement) · S/S-41.T3 (backup-target) · O/S-33.T4 (plugin-remote) · " +
 		"X/S-50.T1 (registry-fetch, the fetch living in internal/plugins/registryfetch) · " +
-		"AN/S-77.T5 (fleet-discovery) · P1-PLG-05 (github-pr-diff)"
+		"AN/S-77.T5 (fleet-discovery) · P1-PLG-05 (github-pr-diff) · P1-PLG-08 (plugin-host-http)"
 
 	got := godocOwnerList(t)
 	if got != specList {
@@ -169,6 +170,23 @@ func TestEgressClassGitHubPRDiffRefusesLocalOnlyAndRestricted(t *testing.T) {
 		out, err := engine.InterceptClass(context.Background(), EgressClassGitHubPRDiff, tier, []byte("payload"))
 		if !errors.Is(err, ErrSensitivityViolation) || out != nil {
 			t.Errorf("tier %s: InterceptClass = %q, %v; want no bytes and sensitivity refusal", tier, out, err)
+		}
+	}
+}
+
+// TestEgressClassPluginHostHTTPRegistered pins the host HTTP firewall policy.
+func TestEgressClassPluginHostHTTPRegistered(t *testing.T) {
+	cfg, ok := DefaultRegistry().Lookup(EgressClassPluginHostHTTP)
+	if !ok || string(EgressClassPluginHostHTTP) != "plugin-host-http" || !cfg.Enabled || cfg.Owner != "P1-PLG-08" || cfg.AllowRestricted || cfg.AllowLocalOnly {
+		t.Fatalf("host HTTP class = %+v, registered=%v", cfg, ok)
+	}
+	if len(cfg.AllowedTiers) != 2 || cfg.AllowedTiers[0] != TierInternal || cfg.AllowedTiers[1] != TierPublic {
+		t.Fatalf("host HTTP tiers = %v", cfg.AllowedTiers)
+	}
+	engine := newTestEngine(t, nil)
+	for _, tier := range []SensitivityTier{TierLocalOnly, TierRestricted} {
+		if out, err := engine.InterceptClass(context.Background(), EgressClassPluginHostHTTP, tier, []byte("payload")); err == nil || out != nil {
+			t.Fatalf("host HTTP admitted %s", tier)
 		}
 	}
 }
