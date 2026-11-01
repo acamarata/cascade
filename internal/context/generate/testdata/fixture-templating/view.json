@@ -1,0 +1,15 @@
+{
+  "RepoRoot": "fixture-templating",
+  "Inventory": {
+    "Repository": {"ID": "repo-templating"},
+    "Languages": [
+      {"Language": "go", "Detected": true, "Commands": {"Build": "make build", "Test": "go test ./...", "Lint": "golangci-lint run"}},
+      {"Language": "rust", "Detected": false, "Commands": {"Build": "never-rendered"}}
+    ],
+    "CI": {"GitHubActions": true}
+  },
+  "Accepted": [
+    {"ID": "fact:repo-templating:layout", "Version": 1, "Subject": "layout", "Fact": "commands live in `cmd/`", "Truth": "operator-accepted", "Provenance": "untrusted-source", "AcceptedBy": "operator:elevated"}
+  ],
+  "Denied": []
+}

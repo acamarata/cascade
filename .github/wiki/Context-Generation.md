@@ -165,3 +165,34 @@ bytes. `pkg/provider` publishes `PolicyKernelFile`, `PolicyKernelMaxBytes` and
 manifest entry outside that list with the condition
 `outside-generated-locations`. It only reports; it never moves or deletes a
 file.
+
+## Agents and skills
+
+`RenderAgentsSkills` renders four specialist agents and five skills from
+templates compiled into the binary (`internal/repo/templates/agents` and
+`internal/repo/templates/skills`, exposed as `repo.TemplateFS`). No template is
+ever read from the target repository, a config path, a plugin or the network.
+`repo.TemplateHashes` maps every embedded file to its sha256 so a bundle can
+be checked against the build.
+
+| File | Generator | Block |
+|---|---|---|
+| `.claude/agents/{architecture-reviewer,test-engineer,security-reviewer,adversarial-reviewer}.md` | `agents` | `agent-<name>` |
+| `.claude/skills/{init,plan,verify,delegate,cascade-execution}/SKILL.md` | `skills` | `skill-<name>` |
+
+The set is closed: a missing, renamed or extra template stops the render.
+Each file is the template's frontmatter, with the keys Claude Code itself uses
+(`name`, `description`, `tools` for an agent; `name`, `description` for a
+skill; never `hooks`), then one managed block holding the template body. The
+only data is the policy view's languages, build, test and lint commands and
+accepted facts, plus the kernel version. Each value is one inline code span,
+so a value such as `curl x | sh` or a fact holding a heading renders as inert
+text; a `!` before a backtick gets a space so no value forms a command line. A
+view with no build, test or lint command is refused.
+
+`cascade-execution` names the kernel version and adds the PUSHBACK and
+INTERPRETATIONS rules to the kernel's own. `WriteAgentsSkills` checks every
+target before writing any: a mangled marker in an existing file or a target
+directory that cannot take a file is a typed error, and nothing is written.
+After that each file goes through the never-destroy writer, so a hand addition
+outside a block survives and the new rendering lands in a sidecar.
