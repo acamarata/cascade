@@ -18,7 +18,8 @@ package runtime
 //   the generic round-trip and the `cascade config` effective view keep
 //   working without knowing this file exists.
 // SPORT: runtime/config.retrieval (ADD, P1-E06-W2-S12-T3; extended by
-//   P1-E06-W2-S12-T4 with sources[] and [retrieval.fusion]).
+//   P1-E06-W2-S12-T4 with sources[] and [retrieval.fusion]; P1-CPA-11
+//   admits [retrieval.embedding], checked by config_retrieval_embedding.go).
 
 // retrievalSection is the typed [retrieval] table: the whole 08 §3 key
 // set (R-14.18) except retrieval.fusion.enabled, which is F/S-12.T6's.
@@ -35,7 +36,7 @@ type retrievalSection struct {
 // set on purpose: a misspelled section key is a tuning the operator
 // believes is live, so it is refused rather than preserved silently in
 // Extra alongside the keys that do take effect.
-var retrievalKeys = map[string]bool{"sources": true, "fusion": true, "reranker": true}
+var retrievalKeys = map[string]bool{"sources": true, "fusion": true, "reranker": true, "embedding": true}
 
 // rerankerSection is [retrieval.reranker]. Enabled is the gate on the
 // optional post-fusion reranker stage (internal/retrieval/rrf). Its
@@ -97,6 +98,9 @@ func parseRetrievalSection(tree map[string]interface{}) (retrievalSection, error
 		return out, err
 	}
 	out.Fusion = fusion
+	if err := checkRetrievalEmbedding(retrievalEmbeddingValue(tree)); err != nil {
+		return out, err
+	}
 	return parseReranker(table, out)
 }
 
@@ -126,4 +130,18 @@ func parseReranker(table map[string]interface{}, out retrievalSection) (retrieva
 		out.Reranker.Enabled = enabled
 	}
 	return out, nil
+}
+
+// retrievalEmbeddingValue returns the raw [retrieval.embedding] value, nil
+// when absent. It ranges over [retrieval]'s entries rather than indexing
+// the sub-table, so config_retrieval_embedding.go reads the six settings by
+// name from a value this file handed it, and never local_socket's value.
+func retrievalEmbeddingValue(tree map[string]interface{}) interface{} {
+	table, _ := tree["retrieval"].(map[string]interface{})
+	for key, value := range table {
+		if key == "embedding" {
+			return value
+		}
+	}
+	return nil
 }

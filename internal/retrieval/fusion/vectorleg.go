@@ -13,14 +13,22 @@
 // retrieval was not available, so the degradation is visible to the doctor
 // instead of silently looking like a thin index.
 //
-// SPORT: internal.retrieval.fusion.VectorLeg/ADDED (P1-E06-W2-S11-T1).
+// A leg whose embedder is not local (VectorLegOptions.AdmitPersonal false)
+// skips a scope holding personal records, and every query embed carries
+// the scope's tier (ScopeFilter.SensitivityTier) on the context, so the
+// conductor door sees the tier of the content and not one the caller chose.
+//
+// SPORT: internal.retrieval.fusion.VectorLeg/ADDED (P1-E06-W2-S11-T1;
+// CHANGED P1-CPA-11, personal-scope skip and tier stamp).
 
 package fusion
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 
+	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/retrieval/rrf"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -28,8 +36,13 @@ import (
 )
 
 // EventKindVectorLegUnavailable records that a query ran without its
-// vector leg because no embedder was configured.
+// vector leg: no embedder was configured, or the scope held personal
+// content and the embedder is not local (ReasonPersonalScope).
 const EventKindVectorLegUnavailable events.EventKind = "retrieval.vector_leg.unavailable"
+
+// ReasonPersonalScope is the unavailability event's reason when the leg
+// skips a personal scope for an embedder that is not local.
+const ReasonPersonalScope = "personal content in scope; embedder is not local"
 
 // eventNamespace and eventSource label this leg's events on the bus.
 const (
@@ -63,14 +76,28 @@ type VectorLeg struct {
 	embedder Embedder
 	store    provider.VectorStore
 	events   EventSink
+	opts     VectorLegOptions
 }
 
-// NewVectorLeg builds the leg. embedder, store and sink may each be nil:
-// a nil embedder or store is the unconfigured case the leg is required to
+// VectorLegOptions are what the composition root knows about the embedder.
+type VectorLegOptions struct {
+	// AdmitPersonal is true only for an embedder that never leaves the
+	// machine. False skips every scope holding personal records.
+	AdmitPersonal bool
+}
+
+// NewVectorLeg builds the leg with the zero VectorLegOptions: a personal
+// scope is skipped. embedder, store and sink may each be nil: a nil
+// embedder or store is the unconfigured case the leg is required to
 // degrade through, and a nil sink is a caller that has no event bus to
 // report the degradation to.
 func NewVectorLeg(embedder Embedder, store provider.VectorStore, sink EventSink) *VectorLeg {
-	return &VectorLeg{embedder: embedder, store: store, events: sink}
+	return NewVectorLegWith(embedder, store, sink, VectorLegOptions{})
+}
+
+// NewVectorLegWith builds the leg with o.
+func NewVectorLegWith(e Embedder, s provider.VectorStore, sink EventSink, o VectorLegOptions) *VectorLeg {
+	return &VectorLeg{embedder: e, store: s, events: sink, opts: o}
 }
 
 // Query returns the leg's ranked candidates for text.
@@ -89,15 +116,15 @@ func (l *VectorLeg) Query(ctx context.Context, filter *ScopeFilter, text string,
 			"fusion: topK must be positive, got %d", topK)
 	}
 	if l.embedder == nil || l.store == nil {
-		if err := l.reportUnavailable(ctx); err != nil {
-			return rrf.RankedList{}, false, err
-		}
-		return rrf.RankedList{}, false, nil
+		return rrf.RankedList{}, false, l.reportUnavailable(ctx, "")
 	}
 	if filter.Empty() {
 		return rrf.RankedList{Strategy: rrf.StrategyVector, Weight: rrf.NeutralWeight}, true, nil
 	}
-	values, err := l.embed(ctx, text)
+	if !l.opts.AdmitPersonal && filter.HasPersonal() {
+		return rrf.RankedList{}, false, l.reportUnavailable(ctx, ReasonPersonalScope)
+	}
+	values, err := l.embed(conductor.ContextWithDoorSensitivity(ctx, filter.SensitivityTier()), text)
 	if err != nil {
 		return rrf.RankedList{}, false, err
 	}
@@ -208,11 +235,15 @@ func pathFromMetadata(md map[string]any) string {
 // silently, which is the only case where the degradation is not recorded.
 // A sink that fails to record it is a real fault in the event log and is
 // returned as one; it is a different condition from the missing embedder,
-// which is never an error.
-func (l *VectorLeg) reportUnavailable(ctx context.Context) error {
+// which is never an error. A non-empty reason rides as {"reason": ...}.
+func (l *VectorLeg) reportUnavailable(ctx context.Context, reason string) error {
 	if l.events == nil {
 		return nil
 	}
-	_, err := l.events.Publish(ctx, eventNamespace, EventKindVectorLegUnavailable, eventSource, nil)
+	var payload []byte
+	if reason != "" {
+		payload, _ = json.Marshal(map[string]string{"reason": reason})
+	}
+	_, err := l.events.Publish(ctx, eventNamespace, EventKindVectorLegUnavailable, eventSource, payload)
 	return err
 }

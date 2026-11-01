@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/retrieval/corpus"
 	"github.com/acamarata/cascade/internal/retrieval/rrf"
@@ -20,10 +21,12 @@ type fakeEmbedder struct {
 	values [][]float32
 	err    error
 	calls  int
+	tier   provider.SensitivityTier
 }
 
-func (f *fakeEmbedder) Embed(_ context.Context, texts []string) ([][]float32, error) {
+func (f *fakeEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	f.calls++
+	f.tier, _ = conductor.DoorSensitivityFrom(ctx)
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -65,11 +68,10 @@ type fakeSink struct {
 	err       error
 }
 
-func (f *fakeSink) Publish(_ context.Context, namespace string, kind events.EventKind, source string, payload []byte) (events.Event, error) {
+func (f *fakeSink) Publish(_ context.Context, _ string, kind events.EventKind, source string, payload []byte) (events.Event, error) {
 	if f.err != nil {
 		return events.Event{}, f.err
 	}
-	_ = namespace
 	ev := events.Event{Kind: kind, Source: source, Payload: payload}
 	f.published = append(f.published, ev)
 	return ev, nil
@@ -78,10 +80,7 @@ func (f *fakeSink) Publish(_ context.Context, namespace string, kind events.Even
 func project1Filter(t *testing.T) (*ScopeFilter, scenario) {
 	t.Helper()
 	store, p1, _ := leakStore(t)
-	f, err := NewScopeFilter(store, corpus.Query{
-		Membership:  p1.Membership,
-		Entitlement: corpus.PrivacyProject,
-	})
+	f, err := NewScopeFilter(store, corpus.Query{Membership: p1.Membership, Entitlement: corpus.PrivacyProject})
 	if err != nil {
 		t.Fatalf("NewScopeFilter: %v", err)
 	}
@@ -93,25 +92,16 @@ func project1Filter(t *testing.T) (*ScopeFilter, scenario) {
 // and the query proceeds on the full-text leg alone.
 func TestVectorLeg_SkipsWithoutEmbedder(t *testing.T) {
 	filter, _ := project1Filter(t)
-	sink := &fakeSink{}
-	store := &fakeVectorStore{}
-
-	leg := NewVectorLeg(nil, store, sink)
-	list, ran, err := leg.Query(context.Background(), filter, "scope filter", 10)
+	sink, store := &fakeSink{}, &fakeVectorStore{}
+	list, ran, err := NewVectorLeg(nil, store, sink).Query(context.Background(), filter, "scope filter", 10)
 	if err != nil || ran {
 		t.Fatalf("a missing embedder must be a clean skip, got ran=%t err=%v", ran, err)
 	}
-	if len(list.Hits) != 0 {
-		t.Errorf("the skipped leg produced %d hits, which would be invented vectors", len(list.Hits))
+	if len(list.Hits) != 0 || len(store.opened) != 0 {
+		t.Errorf("the skipped leg produced %d hits (invented vectors) and opened %v", len(list.Hits), store.opened)
 	}
-	if len(store.opened) != 0 {
-		t.Errorf("the skipped leg still opened namespaces %v", store.opened)
-	}
-	if len(sink.published) != 1 {
-		t.Fatalf("published %d events, want the one unavailability event", len(sink.published))
-	}
-	if sink.published[0].Kind != EventKindVectorLegUnavailable {
-		t.Errorf("event kind = %q, want %q", sink.published[0].Kind, EventKindVectorLegUnavailable)
+	if len(sink.published) != 1 || sink.published[0].Kind != EventKindVectorLegUnavailable {
+		t.Fatalf("published %+v, want the one %q event", sink.published, EventKindVectorLegUnavailable)
 	}
 }
 
@@ -120,15 +110,13 @@ func TestVectorLeg_SkipsWithoutEmbedder(t *testing.T) {
 func TestVectorLeg_SkipVariants(t *testing.T) {
 	filter, _ := project1Filter(t)
 	sink := &fakeSink{}
-	if _, ran, err := NewVectorLeg(&fakeEmbedder{}, nil, sink).
-		Query(context.Background(), filter, "q", 5); err != nil || ran {
+	if _, ran, err := NewVectorLeg(&fakeEmbedder{}, nil, sink).Query(context.Background(), filter, "q", 5); err != nil || ran {
 		t.Fatalf("no vector store: want a clean skip, got ran=%t err=%v", ran, err)
 	}
 	if len(sink.published) != 1 {
 		t.Errorf("published %d events, want one", len(sink.published))
 	}
-	if _, ran, err := NewVectorLeg(nil, nil, nil).
-		Query(context.Background(), filter, "q", 5); err != nil || ran {
+	if _, ran, err := NewVectorLeg(nil, nil, nil).Query(context.Background(), filter, "q", 5); err != nil || ran {
 		t.Fatalf("no sink: want a clean skip, got ran=%t err=%v", ran, err)
 	}
 }
@@ -137,14 +125,8 @@ func TestVectorLeg_SkipVariants(t *testing.T) {
 // the leg: it opens the namespaces the filter authorized and no others,
 // and never asks the driver what namespaces exist.
 func TestVectorLeg_QueriesOnlyScopeBoundNamespaces(t *testing.T) {
-	store, p1, p3 := leakStore(t)
-	filter, err := NewScopeFilter(store, corpus.Query{
-		Membership:  p1.Membership,
-		Entitlement: corpus.PrivacyProject,
-	})
-	if err != nil {
-		t.Fatalf("NewScopeFilter: %v", err)
-	}
+	filter, p1 := project1Filter(t)
+	p3 := loadScenario(t, "corpus_project3.json")
 	vec := &fakeVectorStore{byNamespace: map[string][]provider.VectorMatch{
 		NamespaceFor(p1.Corpus.ID): {
 			{ID: p1.Records[0].ID, Score: 0.9, Metadata: map[string]any{MetadataKeyPath: "docs/retrieval.md"}},
@@ -155,8 +137,7 @@ func TestVectorLeg_QueriesOnlyScopeBoundNamespaces(t *testing.T) {
 		},
 	}}
 
-	list, ran, err := NewVectorLeg(&fakeEmbedder{}, vec, nil).
-		Query(context.Background(), filter, "scope filter", 10)
+	list, ran, err := NewVectorLeg(&fakeEmbedder{}, vec, nil).Query(context.Background(), filter, "scope filter", 10)
 	if err != nil || !ran {
 		t.Fatalf("want the leg to run, got ran=%t err=%v", ran, err)
 	}
@@ -194,8 +175,7 @@ func TestVectorLeg_WithholdsUnclassifiedMatches(t *testing.T) {
 			{ID: p1.Records[0].ID, Score: 0.1},
 		},
 	}}
-	list, ran, err := NewVectorLeg(&fakeEmbedder{}, vec, nil).
-		Query(context.Background(), filter, "q", 10)
+	list, ran, err := NewVectorLeg(&fakeEmbedder{}, vec, nil).Query(context.Background(), filter, "q", 10)
 	if err != nil || !ran {
 		t.Fatalf("want the leg to run, got ran=%t err=%v", ran, err)
 	}
@@ -213,8 +193,7 @@ func TestVectorLeg_TopKCapsTheMergedList(t *testing.T) {
 	vec := &fakeVectorStore{byNamespace: map[string][]provider.VectorMatch{
 		NamespaceFor(p1.Corpus.ID): matches,
 	}}
-	list, _, err := NewVectorLeg(&fakeEmbedder{}, vec, nil).
-		Query(context.Background(), filter, "q", 2)
+	list, _, err := NewVectorLeg(&fakeEmbedder{}, vec, nil).Query(context.Background(), filter, "q", 2)
 	if err != nil {
 		t.Fatalf("Query: %v", err)
 	}
@@ -228,10 +207,7 @@ func TestVectorLeg_TopKCapsTheMergedList(t *testing.T) {
 
 func TestVectorLeg_EmptyScopeRunsWithoutOpeningAnything(t *testing.T) {
 	store, _, _ := leakStore(t)
-	filter, err := NewScopeFilter(store, corpus.Query{
-		Membership:  corpus.Membership{Scope: "project:unrelated"},
-		Entitlement: corpus.PrivacyProject,
-	})
+	filter, err := NewScopeFilter(store, corpus.Query{Membership: corpus.Membership{Scope: "project:unrelated"}, Entitlement: corpus.PrivacyProject})
 	if err != nil {
 		t.Fatalf("NewScopeFilter: %v", err)
 	}
@@ -251,39 +227,62 @@ func TestVectorLeg_EmptyScopeRunsWithoutOpeningAnything(t *testing.T) {
 
 func TestVectorLeg_ErrorPaths(t *testing.T) {
 	filter, _ := project1Filter(t)
-	ctx := context.Background()
+	logDown := &fakeSink{err: cascade.New(cascade.KindUnavailable, "log unwritable")}
+	cases := []struct {
+		name   string
+		leg    *VectorLeg
+		filter *ScopeFilter
+		topK   int
+		want   cascade.Kind
+	}{
+		{"nil filter", NewVectorLeg(&fakeEmbedder{}, &fakeVectorStore{}, nil), nil, 10, cascade.KindInvalidInput},
+		{"non-positive topK", NewVectorLeg(&fakeEmbedder{}, &fakeVectorStore{}, nil), filter, 0, cascade.KindInvalidInput},
+		{"embedder failure", NewVectorLeg(&fakeEmbedder{err: errors.New("provider down")}, &fakeVectorStore{}, nil), filter, 10, cascade.KindUnavailable},
+		{"embedder returned the wrong shape", NewVectorLeg(&fakeEmbedder{values: [][]float32{}}, &fakeVectorStore{}, nil), filter, 10, cascade.KindIntegrity},
+		{"driver failure", NewVectorLeg(&fakeEmbedder{}, &fakeVectorStore{err: errors.New("index unreadable")}, nil), filter, 10, cascade.KindUnavailable},
+		{"event log failure surfaces", NewVectorLeg(nil, nil, logDown), filter, 10, cascade.KindUnavailable},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, ran, err := tc.leg.Query(context.Background(), tc.filter, "q", tc.topK); ran {
+				t.Error("the leg claimed to run")
+			} else {
+				assertKind(t, err, tc.want)
+			}
+		})
+	}
+}
 
-	t.Run("nil filter", func(t *testing.T) {
-		_, _, err := NewVectorLeg(&fakeEmbedder{}, &fakeVectorStore{}, nil).Query(ctx, nil, "q", 10)
-		assertKind(t, err, cascade.KindInvalidInput)
-	})
-	t.Run("non-positive topK", func(t *testing.T) {
-		_, _, err := NewVectorLeg(&fakeEmbedder{}, &fakeVectorStore{}, nil).Query(ctx, filter, "q", 0)
-		assertKind(t, err, cascade.KindInvalidInput)
-	})
-	t.Run("embedder failure", func(t *testing.T) {
-		e := &fakeEmbedder{err: errors.New("provider down")}
-		_, _, err := NewVectorLeg(e, &fakeVectorStore{}, nil).Query(ctx, filter, "q", 10)
-		assertKind(t, err, cascade.KindUnavailable)
-	})
-	t.Run("embedder returned the wrong shape", func(t *testing.T) {
-		e := &fakeEmbedder{values: [][]float32{}}
-		_, _, err := NewVectorLeg(e, &fakeVectorStore{}, nil).Query(ctx, filter, "q", 10)
-		assertKind(t, err, cascade.KindIntegrity)
-	})
-	t.Run("driver failure", func(t *testing.T) {
-		vec := &fakeVectorStore{err: errors.New("index unreadable")}
-		_, _, err := NewVectorLeg(&fakeEmbedder{}, vec, nil).Query(ctx, filter, "q", 10)
-		assertKind(t, err, cascade.KindUnavailable)
-	})
-	t.Run("event log failure surfaces", func(t *testing.T) {
-		sink := &fakeSink{err: cascade.New(cascade.KindUnavailable, "log unwritable")}
-		_, ran, err := NewVectorLeg(nil, nil, sink).Query(ctx, filter, "q", 10)
-		if ran {
-			t.Error("the leg claimed to run")
-		}
-		assertKind(t, err, cascade.KindUnavailable)
-	})
+// TestVectorLegSkipsPersonalScopeForExternalEmbedder: a scope holding a
+// personal record is never embedded by an embedder that is not local, the
+// skip is recorded with its reason, and an admitted scope's query carries
+// the scope's own tier on the context.
+func TestVectorLegSkipsPersonalScopeForExternalEmbedder(t *testing.T) {
+	store, p1, _ := leakStore(t)
+	personal := p1.Records[0]
+	personal.ID, personal.Privacy = "project1/notes/diary.md#entry", corpus.PrivacyPersonal
+	if err := store.AddRecord(personal); err != nil {
+		t.Fatalf("AddRecord: %v", err)
+	}
+	filter, err := NewScopeFilter(store, corpus.Query{Membership: p1.Membership, Entitlement: corpus.PrivacyPersonal})
+	if err != nil || !filter.HasPersonal() {
+		t.Fatalf("NewScopeFilter: %v (personal in scope %t)", err, err == nil && filter.HasPersonal())
+	}
+	sink, e, vec := &fakeSink{}, &fakeEmbedder{}, &fakeVectorStore{}
+	if _, ran, err := NewVectorLegWith(e, vec, sink, VectorLegOptions{}).Query(context.Background(), filter, "q", 5); ran || err != nil {
+		t.Fatalf("personal scope, external embedder: ran=%t err=%v, want a clean skip", ran, err)
+	}
+	if e.calls != 0 || len(vec.opened) != 0 || len(sink.published) != 1 ||
+		string(sink.published[0].Payload) != `{"reason":"`+ReasonPersonalScope+`"}` {
+		t.Fatalf("embeds %d, opened %v, events %+v: want no embed and one reasoned event", e.calls, vec.opened, sink.published)
+	}
+	if _, ran, err := NewVectorLegWith(e, vec, nil, VectorLegOptions{AdmitPersonal: true}).Query(context.Background(), filter, "q", 5); !ran || err != nil || e.tier != provider.SensitivityLocalOnly {
+		t.Fatalf("local embedder: ran=%t err=%v tier %s, want a run stamped local-only", ran, err, e.tier)
+	}
+	project, _ := project1Filter(t)
+	if _, ran, err := NewVectorLeg(e, vec, nil).Query(context.Background(), project, "q", 5); !ran || err != nil || e.tier != provider.SensitivityInternal {
+		t.Fatalf("project scope: ran=%t err=%v tier %s, want a run stamped internal", ran, err, e.tier)
+	}
 }
 
 func assertKind(t *testing.T, err error, want cascade.Kind) {

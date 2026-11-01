@@ -43,9 +43,11 @@ import (
 	"context"
 	"sort"
 
+	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/retrieval"
 	"github.com/acamarata/cascade/internal/retrieval/corpus"
 	"github.com/acamarata/cascade/internal/retrieval/embed"
+	"github.com/acamarata/cascade/internal/retrieval/fusion"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -102,6 +104,18 @@ type ManagerOptions struct {
 	Vectors provider.VectorStore
 	// Pipeline embeds and upserts chunks. Nil alongside Vectors.
 	Pipeline *embed.Pipeline
+	// EmbedAdmits reports whether a corpus's content may be handed to the
+	// Pipeline's embedder. A refused corpus is indexed full-text only and
+	// Verify does not count it as vector-incomplete. Nil admits every
+	// corpus (a local embedder); the daemon always sets it.
+	EmbedAdmits func(corpus.Corpus) bool
+	// EmbeddingStatus renders the doctor's "embedding: ..." line from the
+	// process's embedder Selection. Nil omits the line.
+	EmbeddingStatus func() string
+	// EmbeddingErr is non-nil when a configured embedder is refused or
+	// failing; the doctor check then warns. Nil, or a nil result, is
+	// healthy (an unconfigured embedder is healthy).
+	EmbeddingErr func() error
 	// Sources supplies the registered corpora. Nil behaves as an
 	// always-empty provider.
 	Sources SourceProvider
@@ -118,6 +132,9 @@ type Manager struct {
 	index       retrieval.Indexer
 	vectors     provider.VectorStore
 	pipeline    *embed.Pipeline
+	embedAdmits func(corpus.Corpus) bool
+	embedStatus func() string
+	embedErr    func() error
 	sources     SourceProvider
 	treeHash    GitTreeHashFunc
 	clock       runtime.Clock
@@ -140,8 +157,20 @@ func NewManager(opts ManagerOptions) (*Manager, error) {
 	return &Manager{
 		catalogPath: opts.CatalogPath, store: opts.Store, index: opts.Index,
 		vectors: opts.Vectors, pipeline: opts.Pipeline, sources: opts.Sources,
+		embedAdmits: opts.EmbedAdmits, embedStatus: opts.EmbeddingStatus, embedErr: opts.EmbeddingErr,
 		treeHash: opts.TreeHash, clock: opts.Clock,
 	}, nil
+}
+
+// embedContext stamps c's tier (its privacy class) on ctx, so a lane
+// embedder hands the conductor door the tier of the content it carries.
+func embedContext(ctx context.Context, c corpus.Corpus) context.Context {
+	return conductor.ContextWithDoorSensitivity(ctx, fusion.PrivacyTier(c.Privacy))
+}
+
+// admitsEmbedding reports whether c's content may be embedded.
+func (m *Manager) admitsEmbedding(c corpus.Corpus) bool {
+	return m.embedAdmits == nil || m.embedAdmits(c)
 }
 
 // sourcesOrEmpty returns m.sources' current sources, or an empty slice

@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/daemon"
@@ -76,9 +77,12 @@ func TestBuildRecallIndexManager_LiveDaemonLock(t *testing.T) {
 		t.Fatalf("DoctorCheck.Run against a live daemon lock = %+v, want a non-error status "+
 			"(a flock conflict must never be a read failure)", result)
 	}
-	if result.Message != "no retrieval index has been built yet" {
+	// The check appends the process embedder's status line; a fresh temp dir
+	// configures none, so that line reports not-configured.
+	if !strings.HasPrefix(result.Message, "no retrieval index has been built yet") ||
+		!strings.Contains(result.Message, "embedding: not configured") {
 		t.Fatalf("DoctorCheck.Run against a live daemon lock: Message = %q, want the honest "+
-			"no-index-yet message (read-only fallback must still see the real filesystem state)", result.Message)
+			"no-index-yet message plus the not-configured embedding line (read-only fallback must still see the real filesystem state)", result.Message)
 	}
 }
 

@@ -58,7 +58,6 @@ import (
 	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/retrieval"
-	"github.com/acamarata/cascade/internal/retrieval/fusion"
 	"github.com/acamarata/cascade/internal/retrieval/recall"
 	"github.com/acamarata/cascade/internal/retrieval/rrf"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -66,6 +65,18 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
 )
+
+// The embedder-selection wiring composes the process's one embedder
+// Selection from the admitted config before any recall namespace mounts.
+var _ = registerDaemonWiring(daemonRegistration{
+	Name: "embedder-selection", Phase: phaseCore, Order: 27,
+	Wire: func(w *daemonWiring) error {
+		if cfg := w.Deps.Config; cfg != nil {
+			daemonEmbedderWith(w.Paths, cfg, runtime.EffectiveConfigOf(cfg))
+		}
+		return nil
+	},
+})
 
 // buildRecallWhatHandler builds D1's real *retrieval.RecallWhatHandler.
 func buildRecallWhatHandler(
@@ -98,15 +109,11 @@ func buildRecallWhatHandler(
 	return retrieval.NewRecallWhatHandler(svc), nil
 }
 
-// recallWhatFilesLeg mirrors registerRecallHandler's own construction
-// (daemon_unix_handlers.go): the SAME catalog path and full-text leg over
-// the SAME store, so recall.what's files answers agree with `cascade
-// recall`'s. A separate *recall.Service instance is unavoidable here:
-// registerRecallHandler builds and discards its own rather than returning
-// one, and widening its signature is out of this ticket's files_scope.
+// recallWhatFilesLeg mirrors registerRecallHandler: the same catalog,
+// embedder Selection and full-text leg over the same store.
 func recallWhatFilesLeg(paths runtime.PathProvider, bus *events.Bus, store provider.Store) (retrieval.RecallWhatFilesLeg, error) {
 	catalog := recall.NewFileCatalog(filepath.Join(recallIndexDir(paths), recall.CatalogFileName))
-	legs := []recall.Leg{fusion.NewVectorLeg(nil, nil, bus)}
+	legs := []recall.Leg{recallVectorLeg(processEmbedder(paths), store, bus)}
 	if store != nil {
 		idx, err := retrieval.NewIndex(store)
 		if err != nil {

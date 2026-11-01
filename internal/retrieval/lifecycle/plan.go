@@ -114,10 +114,10 @@ func (m *Manager) writeCorpora(ctx context.Context, plan sourcePlan) error {
 		if err := m.index.Write(ctx, id, cp.chunks); err != nil {
 			return err
 		}
-		if m.pipeline == nil || len(cp.chunks) == 0 {
+		if m.pipeline == nil || len(cp.chunks) == 0 || !m.admitsEmbedding(cp.corpus) {
 			continue
 		}
-		if _, err := m.pipeline.Run(ctx, embed.Request{Corpus: cp.corpus, Chunks: cp.chunks}); err != nil {
+		if _, err := m.pipeline.Run(embedContext(ctx, cp.corpus), embed.Request{Corpus: cp.corpus, Chunks: cp.chunks}); err != nil {
 			return err
 		}
 	}

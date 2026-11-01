@@ -128,8 +128,8 @@ func (m *Manager) rewriteTouched(ctx context.Context, sources []Source, touched 
 		if err := m.index.Write(ctx, src.Corpus.ID, chunks); err != nil {
 			return written, err
 		}
-		if m.pipeline != nil && len(chunks) > 0 {
-			if _, err := m.pipeline.Run(ctx, embed.Request{Corpus: src.Corpus, Chunks: chunks}); err != nil {
+		if m.pipeline != nil && len(chunks) > 0 && m.admitsEmbedding(src.Corpus) {
+			if _, err := m.pipeline.Run(embedContext(ctx, src.Corpus), embed.Request{Corpus: src.Corpus, Chunks: chunks}); err != nil {
 				return written, err
 			}
 		}

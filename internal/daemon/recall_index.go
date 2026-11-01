@@ -31,7 +31,8 @@ package daemon
 // registerMemoryHandler already applies to a nil memoryAdmin.
 //
 // SPORT: internal/daemon (CHANGED — recall.index.* registration,
-// P1-E06-W2-S11-T4; CHANGED again, retrieval.sources ingest wiring).
+// P1-E06-W2-S11-T4; CHANGED again, retrieval.sources ingest wiring;
+// CHANGED P1-CPA-11, RecallEmbedding embeds admitted corpora only).
 import (
 	"context"
 	"database/sql"
@@ -45,6 +46,8 @@ import (
 	_ "modernc.org/sqlite" // registers the "sqlite" database/sql driver
 
 	"github.com/acamarata/cascade/internal/retrieval"
+	"github.com/acamarata/cascade/internal/retrieval/corpus"
+	"github.com/acamarata/cascade/internal/retrieval/embed"
 	"github.com/acamarata/cascade/internal/retrieval/lifecycle"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -63,38 +66,56 @@ const (
 	RecallIndexUpdateMethod  = "recall.index.update"
 )
 
+// RecallEmbedding is the embedding half recall.index.* writes with: the
+// process's one Selection's embedder, the vector store the query-time leg
+// reads, and the admission rule over corpora (the Selection's tier rule
+// over each corpus's privacy class). A zero value is no embedder.
+type RecallEmbedding struct {
+	// Embedder embeds admitted corpora. Nil means no vector leg is written.
+	Embedder provider.Embedder
+	// Vectors is the vector store. Nil means no vector leg is written.
+	Vectors provider.VectorStore
+	// AdmitCorpus reports whether a corpus's content may be embedded. Nil
+	// with an Embedder admits nothing.
+	AdmitCorpus func(corpus.Corpus) bool
+}
+
 // RegisterRecallIndexHandler mounts the recall.index.* namespace on
 // registry, over a Manager built against store. A nil store leaves the
 // namespace unregistered: a build with no runtime store configured (a
 // minimal test harness) is not this ticket's problem to solve, and an
 // unknown-method response is the correct, honest answer for it — the
 // same choice registerMemoryHandler's nil-admin branch already makes.
+//
+// emb is at most one RecallEmbedding. With an Embedder and Vectors the
+// Manager embeds every corpus emb.AdmitCorpus admits and Verify checks only
+// those; otherwise no vector leg is written or counted
+// (DEFECT-vector-leg-never-written-on-rebuild.md: a vector store nothing
+// writes made `cascade doctor` warn vector-incomplete on every install).
 func RegisterRecallIndexHandler(
 	registry *rpc.Registry, paths runtime.PathProvider, clock runtime.Clock, store provider.Store, dbPath string,
+	emb ...RecallEmbedding,
 ) error {
 	if store == nil {
 		return nil
 	}
-	manager, err := lifecycle.NewManager(lifecycle.ManagerOptions{
+	if len(emb) > 1 {
+		return cascade.New(cascade.KindInvalidInput, "recall index: at most one RecallEmbedding")
+	}
+	opts := lifecycle.ManagerOptions{
 		CatalogPath: filepath.Join(recallIndexDataDir(paths), recallIndexCatalogName),
 		Store:       store,
 		Index:       mustIndex(store),
-		// Vectors/Pipeline: left nil. No embedding provider is configured
-		// at this composition root (registerRecallHandler's own doc
-		// comment states the same thing for the query-time leg), so
-		// wiring a non-nil localvector.New(store) here — with nothing
-		// that ever calls Pipeline.Run to populate it — left Rebuild/
-		// Update able to DELETE and Verify able to COUNT a vector leg
-		// that nothing WRITES, which made `cascade doctor` warn
-		// `vector-incomplete` on every install that had ever ingested a
-		// real document (DEFECT-vector-leg-never-written-on-rebuild.md).
-		// rebuild.go's own ManagerOptions.Vectors doc comment already
-		// specifies nil as "no embedder is configured"; this now matches
-		// it, and Verify's vectorIncomplete correctly reports empty.
-		Sources:  configSourceProvider{configPath: paths.ConfigPath()},
-		Clock:    clock,
-		TreeHash: GitTreeHash,
-	})
+		Sources:     configSourceProvider{configPath: paths.ConfigPath()},
+		Clock:       clock,
+		TreeHash:    GitTreeHash,
+	}
+	if len(emb) == 1 {
+		if err := withRecallEmbedding(&opts, emb[0], store, clock); err != nil {
+			return err
+		}
+	}
+	manager, err := lifecycle.NewManager(opts)
 	if err != nil {
 		return err
 	}
@@ -102,6 +123,25 @@ func RegisterRecallIndexHandler(
 	registry.Register(RecallIndexVerifyMethod, recallIndexVerifyHandler(manager))
 	registry.Register(RecallIndexUpdateMethod, recallIndexUpdateHandler(manager))
 	registry.Register(RecallIndexMigrateMethod, recallIndexMigrateHandler(clock, dbPath))
+	return nil
+}
+
+// withRecallEmbedding sets opts' vector leg from emb: the pipeline over
+// emb's embedder and vectors, keeping its bookkeeping in store, and the
+// admission rule (nil admits nothing). An incomplete emb sets nothing.
+func withRecallEmbedding(opts *lifecycle.ManagerOptions, emb RecallEmbedding, store provider.Store, clock runtime.Clock) error {
+	if emb.Embedder == nil || emb.Vectors == nil {
+		return nil
+	}
+	pipeline, err := embed.New(emb.Embedder, emb.Vectors, store, clock, 0)
+	if err != nil {
+		return err
+	}
+	admit := emb.AdmitCorpus
+	if admit == nil {
+		admit = func(corpus.Corpus) bool { return false }
+	}
+	opts.Vectors, opts.Pipeline, opts.EmbedAdmits = emb.Vectors, pipeline, admit
 	return nil
 }
 

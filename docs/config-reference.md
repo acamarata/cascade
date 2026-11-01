@@ -497,3 +497,35 @@ The group-writable warning is a reviewable default: a shared deployment
 that needs a group-writable config accepts the warning rather than a
 refusal. On windows the check reports `not_checked` (NTFS ACLs are not
 modelled by mode bits) and Load neither refuses nor warns.
+
+## `[retrieval.embedding]`
+
+The one embedder the recall vector leg, `recall.what`'s files leg,
+`recall.index.*` and the `retrieval_index` doctor check share. It is read
+once, at daemon start. Unknown keys are refused.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `local_socket` | `""` | Path of the local BGE-M3 sidecar's unix socket. `""` means no sidecar; no default path is ever picked up. A guarded key: setting or changing it needs `config.accept_loosening`. |
+| `local_model` | `"bge-m3"` | Model id the sidecar must answer with. |
+| `local_dimensions` | `1024` | Vector width the sidecar must answer with. |
+| `lane` | `""` | Conductor lane used when no sidecar is set. Requires `model` and `dimensions`. |
+| `model` | `""` | Embedding model id on the lane. |
+| `dimensions` | `0` | Vector width on the lane. |
+| `timeout` | `"30s"` | Bound on one embed call; greater than zero and at most `60s`. |
+
+Selection order:
+
+1. `local_socket` set and the socket passes the counterpart check (a socket,
+   not a symlink, owned by the daemon user, in a directory that is not group-
+   or world-writable; not on windows): the sidecar embeds content of every
+   sensitivity tier.
+2. Otherwise `lane` set: the lane embeds internal and public content only.
+   Personal corpora (local-only) and restricted content are never sent; the
+   vector leg skips a scope holding personal records and reports
+   `retrieval.vector_leg.unavailable` with the reason
+   `personal content in scope; embedder is not local`.
+3. Otherwise no embedder: retrieval runs full-text only.
+
+A configured sidecar that is refused or fails is never replaced by the lane.
+Two embedding spaces in one index cannot be told apart afterwards.

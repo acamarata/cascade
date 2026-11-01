@@ -146,6 +146,15 @@ index is present, current and consistent. It is registered in
 `productionCheckRegistry`, so it runs in a shipped binary rather than only
 under test.
 
+The check's message ends with an embedding line from the process's one
+embedder selection (`[retrieval.embedding]`, see the config reference):
+`embedding: local-sidecar <model>/<dims> (unverified counterpart)`,
+`embedding: conductor-lane <lane> <model>/<dims> (internal and public content
+only)`, or the not-configured text naming the unset `local_socket` and
+`lane`. Not configured stays OK; only a configured selection that is refused
+or failing warns. Corpora the embedder may not receive are indexed full-text
+only and are not counted as vector-incomplete.
+
 A fresh install with no index yet reports OK, not a warning. An absent
 index on a machine that has never indexed anything is the expected state,
 and a check that cries about it teaches people to ignore `doctor`.

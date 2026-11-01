@@ -9,7 +9,16 @@
 package main
 
 import (
+	"context"
 	"path/filepath"
+	"sync"
+
+	"github.com/acamarata/cascade/internal/conductor"
+	"github.com/acamarata/cascade/internal/hooks/egress"
+	"github.com/acamarata/cascade/internal/retrieval/embedsel"
+	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/providers/embeddings"
+	"github.com/acamarata/cascade/providers/localvector"
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
@@ -70,7 +79,7 @@ func recallIndexDir(paths runtime.PathProvider) string {
 // retrieval leg is available (KindUnavailable).
 func registerRecallHandler(registry *rpc.Registry, paths runtime.PathProvider, bus *events.Bus, store provider.Store) error {
 	catalog := recall.NewFileCatalog(filepath.Join(recallIndexDir(paths), recall.CatalogFileName))
-	legs := []recall.Leg{fusion.NewVectorLeg(nil, nil, bus)}
+	legs := []recall.Leg{recallVectorLeg(processEmbedder(paths), store, bus)}
 	if store != nil {
 		idx, err := retrieval.NewIndex(store)
 		if err != nil {
@@ -84,4 +93,86 @@ func registerRecallHandler(registry *rpc.Registry, paths runtime.PathProvider, b
 	}
 	recall.NewHandler(svc).Register(registry)
 	return nil
+}
+
+// laneInterceptor runs every lane input through the process firewall's
+// engine under the conductor egress class, at the stamped tier or the
+// embedder's own, whichever is more restrictive. The engine is built on
+// first use; a failure is not cached.
+type laneInterceptor struct {
+	engine func(*egress.Registry) (*egress.Engine, error)
+	mu     sync.Mutex
+	built  *egress.Engine
+}
+
+// InterceptClass checks content for the lane.
+func (l *laneInterceptor) InterceptClass(ctx context.Context, _ embeddings.EgressClass, own provider.SensitivityTier, content []byte) ([]byte, error) {
+	tier, err := stampedLaneTier(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if own.MoreRestrictiveThan(tier) {
+		return nil, cascade.Newf(cascade.KindPolicyDenied, "embedding: refused at tier %s", own)
+	}
+	engine, err := l.engineOnce()
+	if err != nil {
+		return nil, err
+	}
+	return engine.InterceptClass(ctx, conductor.EgressClassConductor, tier, content)
+}
+
+// engineOnce returns the engine, building it on a registry holding the
+// conductor egress class.
+func (l *laneInterceptor) engineOnce() (*egress.Engine, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.built != nil {
+		return l.built, nil
+	}
+	if l.engine == nil {
+		return nil, egress.ErrNoProcessFirewall
+	}
+	reg := egress.NewRegistry()
+	if err := conductor.RegisterEgressClassConductor(reg); err != nil {
+		return nil, err
+	}
+	e, err := l.engine(reg)
+	if err != nil {
+		return nil, err
+	}
+	l.built = e
+	return e, nil
+}
+
+// firewallEngineFor is the production engine factory: the process
+// firewall's Engine over the registry (P1-SEC-05).
+func firewallEngineFor(paths runtime.PathProvider) func(*egress.Registry) (*egress.Engine, error) {
+	return func(r *egress.Registry) (*egress.Engine, error) {
+		fw, err := processFirewallFor(paths)
+		if err != nil {
+			return nil, err
+		}
+		return fw.Engine(r)
+	}
+}
+
+// recallVectorLeg is the query-time vector leg over sel: no embedder when
+// sel is unusable or there is no store (the leg then reports itself
+// unavailable), and a personal scope is admitted only for a local embedder.
+func recallVectorLeg(sel *embedsel.Selection, store provider.Store, bus *events.Bus) *fusion.VectorLeg {
+	if sel == nil || sel.Err() != nil || store == nil {
+		return fusion.NewVectorLeg(nil, nil, bus)
+	}
+	return fusion.NewVectorLegWith(sel.FusionEmbedder(), localvector.New(store), bus,
+		fusion.VectorLegOptions{AdmitPersonal: sel.Admits(provider.SensitivityLocalOnly)})
+}
+
+// recallEmbeddingFor is recall.index.*'s embedding half over sel: none when
+// sel is unusable or there is no store, else sel's embedder over the same
+// vector store the query leg reads, admitting only the corpora sel admits.
+func recallEmbeddingFor(sel *embedsel.Selection, store provider.Store) []daemon.RecallEmbedding {
+	if sel == nil || sel.Err() != nil || store == nil {
+		return nil
+	}
+	return []daemon.RecallEmbedding{{Embedder: sel.Embedder(), Vectors: localvector.New(store), AdmitCorpus: sel.AdmitsCorpus}}
 }

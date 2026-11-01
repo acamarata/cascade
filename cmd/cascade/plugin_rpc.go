@@ -79,7 +79,7 @@ func registerDBPathHandlers(
 	paths runtime.PathProvider, clock runtime.Clock,
 	bus *events.Bus, store provider.Store, dbPath string, bridgeHTTP *http.Client,
 ) error {
-	if err := daemon.RegisterRecallIndexHandler(registry, paths, clock, store, dbPath); err != nil {
+	if err := daemon.RegisterRecallIndexHandler(registry, paths, clock, store, dbPath, recallEmbeddingFor(processEmbedder(paths), store)...); err != nil {
 		return err
 	}
 	// chat.* (T/S-43.T2) belongs in this group by the same description:

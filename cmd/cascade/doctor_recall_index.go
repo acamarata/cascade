@@ -8,10 +8,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/retrieval"
+	"github.com/acamarata/cascade/internal/retrieval/embedsel"
 	"github.com/acamarata/cascade/internal/retrieval/lifecycle"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -58,19 +60,18 @@ func buildRecallIndexManager(paths runtime.PathProvider, clock runtime.Clock) li
 			closer()
 			return nil, nil, err
 		}
+		sel, lane := doctorEmbedder(ctx, paths)
 		manager, err := lifecycle.NewManager(lifecycle.ManagerOptions{
 			CatalogPath: filepath.Join(paths.DataDir(), "retrieval", "catalog.json"),
 			Store:       store,
 			Index:       idx,
-			// Vectors: left nil, matching internal/daemon/recall_index.go's
-			// production wiring — no embedding provider is configured at
-			// this composition root, so this check must not construct a
-			// vector store nothing ever writes into
-			// (DEFECT-vector-leg-never-written-on-rebuild.md). Verify's
-			// vectorIncomplete then correctly skips vector-completeness
-			// checking instead of reporting a false incompleteness.
-			Clock:    clock,
-			TreeHash: doctorMarkerFunc(),
+			// Vectors: left nil. Verify is read-only, so the doctor needs only
+			// the embedding line and admission rule of the process Selection.
+			EmbedAdmits:     sel.AdmitsCorpus,
+			EmbeddingStatus: func() string { return embeddingStatusLine(sel, lane) },
+			EmbeddingErr:    func() error { return embeddingHealth(sel) },
+			Clock:           clock,
+			TreeHash:        doctorMarkerFunc(),
 		})
 		if err != nil {
 			closer()
@@ -93,3 +94,38 @@ func buildRecallIndexManager(paths runtime.PathProvider, clock runtime.Clock) li
 // now; if a second is ever wanted, this is the line that would have to
 // change, and the test watches it.
 func doctorMarkerFunc() lifecycle.GitTreeHashFunc { return daemon.GitTreeHash }
+
+// doctorEmbedder returns the process's embedder Selection and the
+// configured lane, composing it from the config this command reads when no
+// daemon in this process composed one first.
+func doctorEmbedder(ctx context.Context, paths runtime.PathProvider) (*embedsel.Selection, string) {
+	cfg, err := loadPolicyConfig(ctx, paths)
+	if err != nil {
+		return processEmbedder(paths), ""
+	}
+	return daemonEmbedderWith(paths, cfg, runtime.EffectiveConfigOf(cfg)), cfg.RetrievalEmbedding().Lane
+}
+
+// embeddingStatusLine is the retrieval_index check's embedding line.
+func embeddingStatusLine(sel *embedsel.Selection, lane string) string {
+	dims := fmt.Sprintf("%s/%d", sel.Model(), sel.Dimensions())
+	switch {
+	case !sel.Configured():
+		return "embedding: not configured (retrieval.embedding.local_socket is unset, no sidecar socket path; retrieval.embedding.lane is unset)"
+	case sel.Err() != nil:
+		return "embedding: " + sel.Source() + " refused"
+	case sel.Source() == embedsel.SourceLocalSidecar:
+		return "embedding: local-sidecar " + dims + " (unverified counterpart)"
+	default:
+		return "embedding: conductor-lane " + lane + " " + dims + " (internal and public content only)"
+	}
+}
+
+// embeddingHealth is nil unless a configured selection is refused or
+// failing: not-configured is healthy.
+func embeddingHealth(sel *embedsel.Selection) error {
+	if !sel.Configured() {
+		return nil
+	}
+	return sel.Err()
+}

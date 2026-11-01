@@ -4,7 +4,13 @@ package lifecycle
 // pluggable doctor framework: index presence, generation-marker currency,
 // and a verify summary — surfaced through `cascade doctor`.
 //
-// SPORT: internal.retrieval.lifecycle.DoctorCheck/ADDED (P1-E06-W2-S11-T4).
+// Every result built over a Manager carries the process embedder's
+// "embedding: ..." line (ManagerOptions.EmbeddingStatus); an unconfigured
+// embedder keeps the result's status, a configured one that is refused or
+// failing (ManagerOptions.EmbeddingErr) raises an OK result to a warning.
+//
+// SPORT: internal.retrieval.lifecycle.DoctorCheck/ADDED (P1-E06-W2-S11-T4;
+// CHANGED P1-CPA-11, embedding line).
 import (
 	"context"
 	"fmt"
@@ -67,6 +73,11 @@ func (c DoctorCheck) Run(ctx context.Context) (doctor.CheckResult, error) {
 	if closer != nil {
 		defer closer()
 	}
+	return manager.withEmbedding(c.runOver(ctx, manager)), nil
+}
+
+// runOver reports the health of the index manager owns.
+func (c DoctorCheck) runOver(ctx context.Context, manager *Manager) doctor.CheckResult {
 	// An index that was never built is a normal, unconfigured state on a
 	// fresh install — not a defect `cascade doctor` should fail on — so
 	// this reports StatusOK with an informational remediation rather than
@@ -75,18 +86,44 @@ func (c DoctorCheck) Run(ctx context.Context) (doctor.CheckResult, error) {
 	if _, err := os.Stat(manager.catalogPath); os.IsNotExist(err) {
 		return doctor.CheckResult{Status: doctor.StatusOK,
 			Message:     "no retrieval index has been built yet",
-			Remediation: "run `cascade recall index rebuild` to build one"}, nil
+			Remediation: "run `cascade recall index rebuild` to build one"}
 	}
 	report, err := manager.Verify(ctx)
 	if err != nil {
 		if cascade.HasKind(err, cascade.KindNotFound) {
 			return doctor.CheckResult{Status: doctor.StatusOK,
-				Message: "no retrieval index has been built yet", Remediation: "run `cascade recall index rebuild` to build one"}, nil
+				Message: "no retrieval index has been built yet", Remediation: "run `cascade recall index rebuild` to build one"}
 		}
 		return doctor.CheckResult{Status: doctor.StatusError,
-			Message: "could not verify the retrieval index", Detail: err.Error()}, nil
+			Message: "could not verify the retrieval index", Detail: err.Error()}
 	}
-	return doctorResultFrom(report), nil
+	return doctorResultFrom(report)
+}
+
+// withEmbedding appends the embedding line and lets a refused or failing
+// configured embedder raise an OK result to a warning.
+func (m *Manager) withEmbedding(r doctor.CheckResult) doctor.CheckResult {
+	if m.embedStatus != nil {
+		r.Message += "; " + m.embedStatus()
+	}
+	if m.embedErr == nil {
+		return r
+	}
+	err := m.embedErr()
+	if err == nil {
+		return r
+	}
+	if r.Status == doctor.StatusOK {
+		r.Status = doctor.StatusWarn
+	}
+	if r.Detail != "" {
+		r.Detail += "\n"
+	}
+	r.Detail += "embedding: " + err.Error()
+	if r.Remediation == "" {
+		r.Remediation = "fix [retrieval.embedding] in config.toml, then restart the daemon"
+	}
+	return r
 }
 
 // doctorResultFrom shapes Verify's report into a CheckResult.

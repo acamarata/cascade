@@ -9,6 +9,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/retrieval/corpus"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // scenario is one side of the shared-vocabulary leak fixture that the
@@ -197,6 +198,24 @@ func TestScopeFilter_EmptyMembershipAdmitsNothing(t *testing.T) {
 	}
 	if len(filter.Namespaces()) != 0 {
 		t.Errorf("an unrelated scope reached namespaces %v", filter.Namespaces())
+	}
+	if tier := filter.SensitivityTier(); tier != provider.SensitivityRestricted {
+		t.Errorf("an empty scope is stamped %v, want restricted so no lane admits it", tier)
+	}
+}
+
+// TestPrivacyTier_MapsEveryClass pins the embed tier of each corpus privacy
+// class: personal content never leaves the machine.
+func TestPrivacyTier_MapsEveryClass(t *testing.T) {
+	for class, want := range map[corpus.PrivacyClass]provider.SensitivityTier{
+		corpus.PrivacyGlobal:   provider.SensitivityInternal,
+		corpus.PrivacyProject:  provider.SensitivityInternal,
+		corpus.PrivacyPersonal: provider.SensitivityLocalOnly,
+		"unknown-class":        provider.SensitivityLocalOnly,
+	} {
+		if got := PrivacyTier(class); got != want {
+			t.Errorf("PrivacyTier(%q) = %v, want %v", class, got, want)
+		}
 	}
 }
 

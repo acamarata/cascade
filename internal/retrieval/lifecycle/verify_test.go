@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/acamarata/cascade/internal/retrieval"
+	"github.com/acamarata/cascade/internal/retrieval/corpus"
+	"github.com/acamarata/cascade/internal/retrieval/fusion"
 	"github.com/acamarata/cascade/internal/retrieval/lifecycle"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -148,5 +150,49 @@ func TestRecallIndexGenerationDriftMismatch(t *testing.T) {
 	}
 	if report.MarkerStatus != lifecycle.MarkerDrifted {
 		t.Fatalf("want a mismatched marker to read as drifted, got %+v", report)
+	}
+}
+
+// personalCorpus is a corpus whose content no lane may embed.
+var personalCorpus = corpus.Corpus{
+	ID: "diary", ScopeRef: "project/example",
+	Privacy: corpus.PrivacyPersonal, Visibility: corpus.VisibilityScopeLocal, Trust: corpus.TrustTrusted,
+}
+
+// TestVerifyExcludesRefusedCorporaFromVectorIncomplete: a corpus the
+// embedder refuses is indexed full-text only, never embedded, and verify
+// does not report its empty namespace as vector-incomplete. The same index
+// verified without the admission rule does report it, so the exclusion is
+// what keeps the report clean.
+func TestVerifyExcludesRefusedCorporaFromVectorIncomplete(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	sources := append(oneSource("a.md", "# T\n\nbody text"), lifecycle.Source{Corpus: personalCorpus,
+		Files: []lifecycle.SourceFile{{Path: "d.md", Content: []byte("# Diary\n\nprivate words")}}})
+	admits := func(c corpus.Corpus) bool { return c.Privacy != corpus.PrivacyPersonal }
+	m, err := lifecycle.NewManager(lifecycle.ManagerOptions{
+		CatalogPath: h.catalogPath, Store: h.store, Index: h.index, Vectors: h.vectors, Pipeline: h.pipeline,
+		EmbedAdmits: admits, Sources: fixedSource{sources: sources}, TreeHash: h.hash.Get, Clock: h.clock,
+	})
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	if res, err := m.Rebuild(ctx); err != nil || res.CorporaIndexed != 2 {
+		t.Fatalf("Rebuild: %+v, %v", res, err)
+	}
+	if n, err := h.vectors.Count(ctx, fusion.NamespaceFor(personalCorpus.ID)); err != nil || n != 0 {
+		t.Fatalf("the refused corpus has %d vectors (err %v), want none", n, err)
+	}
+	if n, err := h.vectors.Count(ctx, fusion.NamespaceFor(testCorpus.ID)); err != nil || n == 0 {
+		t.Fatalf("the admitted corpus has %d vectors (err %v), want its chunks", n, err)
+	}
+	report, err := m.Verify(ctx)
+	if err != nil || !report.Clean() {
+		t.Fatalf("Verify = %+v, %v; want clean", report, err)
+	}
+	unruled := h.manager(sources)
+	report, err = unruled.Verify(ctx)
+	if err != nil || len(report.VectorIncomplete) != 1 || report.VectorIncomplete[0] != personalCorpus.ID {
+		t.Fatalf("without the rule Verify = %+v, %v; want the refused corpus reported", report, err)
 	}
 }

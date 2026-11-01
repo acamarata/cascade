@@ -91,6 +91,7 @@
   "internal/retrieval/citations": { "tier": "core", "floor": 85.0, "baseline": 97.6 },
   "internal/retrieval/corpus": { "tier": "core", "floor": 85.0, "baseline": 97.7 },
   "internal/retrieval/embed": { "tier": "core", "floor": 85.0, "baseline": 95.8 },
+  "internal/retrieval/embedsel": { "tier": "core", "floor": 85.0, "baseline": 97.1 },
   "internal/retrieval/eval": { "tier": "core", "floor": 85.0, "baseline": 90.6 },
   "internal/retrieval/eval/vectorizer": { "tier": "core", "floor": 85.0, "baseline": 95.1 },
   "internal/retrieval/eval/vectorizer/cmd/regen": { "tier": "core", "floor": 85.0, "baseline": 92.5 },

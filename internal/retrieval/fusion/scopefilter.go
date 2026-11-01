@@ -30,6 +30,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/retrieval/corpus"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // namespacePrefix is the vector-store namespace each corpus's embeddings
@@ -134,6 +135,49 @@ func (f *ScopeFilter) Predicate() ScopePredicate {
 // asks this to skip work, never to decide access.
 func (f *ScopeFilter) Empty() bool {
 	return len(f.records) == 0
+}
+
+// HasPersonal reports whether any authorized record is personal, or carries
+// a privacy class this build cannot read (which reads as personal). A leg
+// whose embedder is not local skips such a scope rather than sending its
+// query to a lane.
+func (f *ScopeFilter) HasPersonal() bool {
+	for _, r := range f.records {
+		if PrivacyTier(r.Privacy) == provider.SensitivityLocalOnly {
+			return true
+		}
+	}
+	return false
+}
+
+// SensitivityTier is the most restrictive tier over the authorized records:
+// the tier a query over this scope is stamped with before an embed. An
+// empty scope is restricted, which no lane admits.
+func (f *ScopeFilter) SensitivityTier() provider.SensitivityTier {
+	if len(f.records) == 0 {
+		return provider.SensitivityRestricted
+	}
+	tier := provider.SensitivityPublic
+	for _, r := range f.records {
+		if t := PrivacyTier(r.Privacy); t.MoreRestrictiveThan(tier) {
+			tier = t
+		}
+	}
+	return tier
+}
+
+// PrivacyTier maps a corpus privacy class onto the sensitivity tier an
+// embed of that content carries: personal content is local-only, global
+// and project content is internal, and anything else is local-only.
+func PrivacyTier(c corpus.PrivacyClass) provider.SensitivityTier {
+	switch c {
+	case corpus.PrivacyGlobal, corpus.PrivacyProject:
+		return provider.SensitivityInternal
+	case corpus.PrivacyPersonal:
+		fallthrough
+	default:
+		return provider.SensitivityLocalOnly
+	}
 }
 
 // Resolve returns the authorized record for a chunk id a leg's driver

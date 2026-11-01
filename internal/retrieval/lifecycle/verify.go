@@ -8,7 +8,8 @@ package lifecycle
 // document keys (read directly through provider.Store.Scan — see
 // store.go's docKeyPrefix doc comment for why that is the FTS5 leg's own
 // published contract, not a private peek), and — when a vector store is
-// configured — its per-namespace Count.
+// configured — its per-namespace Count, over the corpora the embedder
+// admits (ManagerOptions.EmbedAdmits).
 //
 // Outputs: a VerifyReport, or a pkg/cascade taxonomy error when the
 // catalog or the store cannot be read at all (a report with every field
@@ -28,6 +29,7 @@ import (
 	"strings"
 
 	"github.com/acamarata/cascade/internal/retrieval"
+	"github.com/acamarata/cascade/internal/retrieval/corpus"
 	"github.com/acamarata/cascade/internal/retrieval/fusion"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -89,7 +91,7 @@ func (m *Manager) Verify(ctx context.Context) (VerifyReport, error) {
 	report := VerifyReport{
 		Missing:          diffIDs(recordIDs, indexedIDs),
 		Orphaned:         diffIDs(indexedIDs, recordIDs),
-		VectorIncomplete: m.vectorIncomplete(ctx, byCorpus),
+		VectorIncomplete: m.vectorIncomplete(ctx, m.embeddedCorpora(doc.Corpora, byCorpus)),
 	}
 	m.checkMarker(ctx, &report)
 	return report, nil
@@ -111,6 +113,23 @@ func (m *Manager) scanIndexedIDs(ctx context.Context) (map[string]bool, error) {
 		return nil, cascade.Wrap(cascade.KindUnavailable, err, "lifecycle: scan retrieval index")
 	}
 	return ids, nil
+}
+
+// embeddedCorpora keeps byCorpus's corpora whose content the embedder
+// admits: a refused corpus was never embedded, so an empty namespace is
+// its correct state. A corpus the catalog does not classify is refused
+// when an admission rule is set.
+func (m *Manager) embeddedCorpora(corpora []corpus.Corpus, byCorpus map[string]int) map[string]int {
+	if m.embedAdmits == nil {
+		return byCorpus
+	}
+	out := make(map[string]int, len(byCorpus))
+	for _, c := range corpora {
+		if n, ok := byCorpus[c.ID]; ok && m.embedAdmits(c) {
+			out[c.ID] = n
+		}
+	}
+	return out
 }
 
 // vectorIncomplete names corpora whose vector namespace count differs
