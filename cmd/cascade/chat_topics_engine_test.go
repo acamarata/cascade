@@ -20,10 +20,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/conversation"
 	"github.com/acamarata/cascade/internal/conversation/topics"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/principal"
+	"github.com/acamarata/cascade/internal/retrieval/embedsel"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/internal/storage/storetest"
@@ -108,17 +110,8 @@ type chatTopicsFixture struct {
 func newChatTopicsFixture(t *testing.T, failAfter int) *chatTopicsFixture {
 	t.Helper()
 	clock := newTestChatClock()
-	dbPath := filepath.Join(t.TempDir(), "chat-topics-test.db")
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		t.Fatalf("open test db: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
 	ctx := context.Background()
-	if err := conversation.ApplyConversationSchema(ctx, db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
-		t.Fatalf("ApplyConversationSchema: %v", err)
-	}
-	store := conversation.NewStore(db)
+	store, _ := openTestConversationStore(t, clock)
 
 	kv := storetest.NewMemStore() // real reference provider.Store (internal/storage/storetest's own doc: not a stub)
 	bus := events.New(kv, clock)
@@ -132,7 +125,7 @@ func newChatTopicsFixture(t *testing.T, failAfter int) *chatTopicsFixture {
 	if err != nil {
 		t.Fatalf("NewExemplarStore: %v", err)
 	}
-	executor := &fakeSegmenterExecutor{failAfter: failAfter}
+	executor := chatModelExecutor{door: &fakeSegmenterExecutor{failAfter: failAfter}, lane: "local-classifier", model: "m"}
 	threader, err := topics.NewDefaultAutoThreader(
 		executor, fakeSegmenterEmbedder{}, topics.HysteresisConfig{Threshold: 0.5, Window: 1},
 		threadStore, taxonomy, exemplars, bus, clock)
@@ -143,7 +136,8 @@ func newChatTopicsFixture(t *testing.T, failAfter int) *chatTopicsFixture {
 	if err != nil {
 		t.Fatalf("NewObserveLogger: %v", err)
 	}
-	engine := &chatTopicEngine{logger: slog.Default(), observer: observer}
+	engine := &chatTopicEngine{logger: slog.Default(), observer: observer, tiers: store,
+		selection: allTierSelection(), lane: "local-classifier", laneType: fixedLaneType(conductor.LaneControllerLocal)}
 
 	adapter := conversation.NewAdapter(store, bus, nil, clock, "")
 	adapter.SetTopicObserver(engine)
@@ -157,6 +151,33 @@ func newChatTopicsFixture(t *testing.T, failAfter int) *chatTopicsFixture {
 	applyThreadScopeSchema(ctx, t, registry)
 
 	return &chatTopicsFixture{t: t, clock: clock, store: store, bus: bus, registry: registry, engine: engine}
+}
+
+// openTestConversationStore opens a migrated sqlite conversation store
+// under t.TempDir(), returning its *sql.DB so a test can close it early.
+func openTestConversationStore(t *testing.T, clock *mutableClock) (conversation.Store, *sql.DB) {
+	t.Helper()
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "chat-topics-test.db"))
+	if err != nil {
+		t.Fatalf("open test db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := conversation.ApplyConversationSchema(context.Background(), db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
+		t.Fatalf("ApplyConversationSchema: %v", err)
+	}
+	return conversation.NewStore(db), db
+}
+
+// allTierSelection is a sidecar-shaped Selection admitting every tier.
+func allTierSelection() *embedsel.Selection {
+	return embedsel.New(fakeSegmenterEmbedder{}, embedsel.SourceLocalSidecar, "fake-topics-embed-v1", 2,
+		[]provider.SensitivityTier{provider.SensitivityLocalOnly, provider.SensitivityRestricted,
+			provider.SensitivityInternal, provider.SensitivityPublic})
+}
+
+// fixedLaneType reports lt for every lane name.
+func fixedLaneType(lt conductor.LaneType) laneTypeFunc {
+	return func(context.Context, string) (conductor.LaneType, error) { return lt, nil }
 }
 
 // applyThreadScopeSchema dispatches chat.create_thread as the owner CLI, which

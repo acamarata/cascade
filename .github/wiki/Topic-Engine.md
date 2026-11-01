@@ -526,6 +526,48 @@ scope; doctor and status surfaces call `IsObserving()` directly once a
 composition root exists.
 
 
+## Daemon composition and the classifier lane (P1-CPA-12)
+
+`cmd/cascade/chat_topics_engine.go` builds the engine the daemon hands to
+`conversation.SetTopicObserver`. It runs only when `[topics]
+classifier_lane` is set (see `docs/config-reference.md`). Otherwise every
+turn is stored normally and `Observe` returns a "not configured" warning
+naming the missing piece.
+
+Collaborators (`chat_topics_executor.go`):
+
+| Piece | Source |
+|---|---|
+| Classifier | `chatModelExecutor` over `daemon.ProcessConductorDoor().Execute`, in process |
+| Embedder | the process `embedsel.Selection` (`processEmbedder`), the same pointer the recall vector leg holds |
+| Lane locality | the providers registry: the lane from `ListLanes`, its provider through `conductor.ClassifyLane` |
+| Taxonomy | injected by the plugin that owns the labels; core ships none (R-14.63) |
+
+Per turn, before any model call, the engine reads the thread's privacy
+tier and skips with a named reason when the tier is unreadable, when the
+Selection does not admit it, or when `conductor.SensitivityAllows` refuses
+it on the classifier lane's locality (no restricted permit). An admitted
+call carries the tier on its context (`ContextWithDoorSensitivity` and
+`ContextWithThreadPrivacy`), and `chatModelExecutor` stamps it on
+`ModelRequest.Sensitivity`. The door has no lane pin: the router chooses
+the lane under the thread's privacy filter, so the lane check is a
+precondition and the router's table is the backstop.
+
+Known gaps:
+
+- The daemon's retrieval `provider.Store` is not yet passed into
+  `wireChatTopics` (`chat_wiring.go`, P1-CPA-13). Until it is, the engine
+  reports "not configured" even with a classifier lane set.
+- No plugin injects a taxonomy into the daemon composition yet. With none,
+  every label resolves to the empty topic type, which the topics package
+  refuses.
+
+Live proofs: two build-tagged tests (tag `live` in `cmd/cascade`, tags
+`integration,live` in `internal/retrieval`) run in the build session with
+`CASCADE_LIVE_EMBED_LANE` and the gemini key exported. Both replay the
+hand-authored four-topic fixture under the topics package's acceptance
+testdata (see its README for provenance).
+
 ## Platform support
 
 The package is pure Go with no CGO and no OS-specific code path.

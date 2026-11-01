@@ -529,3 +529,36 @@ Selection order:
 
 A configured sidecar that is refused or fails is never replaced by the lane.
 Two embedding spaces in one index cannot be told apart afterwards.
+
+## `[topics]`
+
+Topic auto-filing for chat turns (P1-CPA-12). Read at daemon start. The
+table is strict: unknown keys and non-string values are refused.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `classifier_lane` | `""` | Conductor lane that classifies chat turns. `""` turns auto-filing off: no turn is ever sent to a classifier. |
+| `classifier_model` | `""` | Model the classifier lane runs. Required when `classifier_lane` is set. |
+
+Before any turn reaches the embedder or the classifier, the engine reads the
+thread's privacy tier and skips the turn, with a named reason and no model
+call, when:
+
+1. the tier cannot be read;
+2. the `[retrieval.embedding]` selection does not admit the tier (a lane
+   embedder admits internal and public only); or
+3. the classifier lane's locality does not admit the tier (the conductor's
+   lane table: a local-only thread never reaches an external lane, and a
+   restricted thread never does either, since no restricted permit applies).
+
+An admitted request carries the thread tier as its sensitivity. The topic
+engine holds the same embedder selection as the recall vector leg.
+`cascade doctor` reports the state under `chat_topics_engine`.
+
+Example:
+
+```toml
+[topics]
+classifier_lane = "topics-classifier"
+classifier_model = "gemini-2.5-flash"
+```

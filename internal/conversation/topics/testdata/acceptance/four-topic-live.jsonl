@@ -1,0 +1,13 @@
+{"provenance":{"source":"hand-authored synthetic conversation; no owner or personal content","tool":"text editor","date":"2026-11-01","recorder":"TestChatThreadsLiveFourFixtureThreads (cmd/cascade, //go:build live)","topics":4}}
+{"role":"user","text":"My tomato seedlings are getting leggy on the windowsill. How much light do they need before I move them outside?","topic":"gardening"}
+{"role":"user","text":"Should I harden off the tomato seedlings over a week, or can I plant them in the raised bed straight away?","topic":"gardening"}
+{"role":"user","text":"What compost ratio works best in a raised vegetable bed for tomatoes and peppers?","topic":"gardening"}
+{"role":"user","text":"Switching subjects: I want to bake sourdough bread this weekend. How long should the starter ferment before I mix the dough?","topic":"baking"}
+{"role":"user","text":"My sourdough loaves come out dense. Is that underproofing, or is my oven temperature too low?","topic":"baking"}
+{"role":"user","text":"Can I retard the sourdough dough in the fridge overnight and bake it cold in the morning?","topic":"baking"}
+{"role":"user","text":"New topic: tonight I want to look at Jupiter through my small telescope. Which eyepiece shows the cloud bands best?","topic":"astronomy"}
+{"role":"user","text":"When will Jupiter's moons line up on one side of the planet this month, and can I see them with binoculars?","topic":"astronomy"}
+{"role":"user","text":"How do I align the telescope's finder scope before the planets rise?","topic":"astronomy"}
+{"role":"user","text":"Different question: my road bike chain keeps skipping on the rear cassette when I climb. Is the chain worn out?","topic":"cycling"}
+{"role":"user","text":"How do I measure bicycle chain stretch with a ruler, and at what point should I replace the chain and cassette together?","topic":"cycling"}
+{"role":"user","text":"What tyre pressure should I run on 28 mm road bike tyres for a long ride on rough roads?","topic":"cycling"}
