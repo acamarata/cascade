@@ -1,6 +1,13 @@
 package repo
 
-import "testing"
+import (
+	"context"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/acamarata/cascade/pkg/cascade"
+)
 
 func TestPolicyProjection(t *testing.T) {
 	accepted := validFact()
@@ -30,6 +37,23 @@ func TestPolicyProjection(t *testing.T) {
 	if recs[0].Subject != accepted.Subject || recs[0].Fact != accepted.Fact || recs[0].Scope != "scope-a" {
 		t.Fatalf("recs[0] = %+v, want a projection of the accepted fact", recs[0])
 	}
+
+	// The read API over a stored ledger holding every state returns only the
+	// accepted row.
+	svc, ledger := newTestLedgerService(t)
+	ctx := context.Background()
+	for i, f := range []InferredFact{accepted, proposed, rejected, superseded} {
+		f.RepositoryID = "repo-1"
+		f.ID = FactID("repo-1", allSubjects[i])
+		f.Subject = allSubjects[i]
+		if err := ledger.Append(ctx, f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	facts, denied, err := svc.AcceptedFacts(ctx, "repo-1")
+	if err != nil || len(denied) != 0 || len(facts) != 1 || facts[0].Subject != allSubjects[0] {
+		t.Fatalf("AcceptedFacts = %+v, %v, %v; want only the accepted row", facts, denied, err)
+	}
 }
 
 // TestPolicyDenylistHostileFact drives a hostile proposal asserting that
@@ -45,6 +69,25 @@ func TestPolicyDenylistHostileFact(t *testing.T) {
 	_, err := ProjectPolicy([]InferredFact{hostile}, "scope-a")
 	if err == nil {
 		t.Fatal("ProjectPolicy on a hostile accepted fact: err = nil, want typed refusal")
+	}
+	wantKind(t, err, cascade.KindPolicyDenied, "denylisted policy field")
+	// No state of the ledger can yield a policy field: the projected record
+	// has no slot governing gates, risk, egress, capability or autonomy.
+	typ := reflect.TypeOf(PolicyRecord{})
+	for i := 0; i < typ.NumField(); i++ {
+		name := strings.ToLower(typ.Field(i).Name + " " + typ.Field(i).Tag.Get("json"))
+		for _, banned := range []string{"gate", "risk", "egress", "capabilit", "autonomy"} {
+			if strings.Contains(name, banned) {
+				t.Errorf("PolicyRecord field %q governs %s", typ.Field(i).Name, banned)
+			}
+		}
+	}
+	for _, st := range []FactState{FactProposed, FactAccepted, FactRejected, FactSuperseded} {
+		h := hostile
+		h.State = st
+		if recs, _ := ProjectPolicy([]InferredFact{h}, "scope-a"); len(recs) != 0 {
+			t.Errorf("hostile fact in state %s projected %+v", st, recs)
+		}
 	}
 }
 

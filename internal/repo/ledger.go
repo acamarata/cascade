@@ -29,8 +29,8 @@ package repo
 //   file actually checks, and returns false for layout/harness_files --
 //   an honest "not derivable here", not a silent pass. A false result
 //   from corroborable never accepts a fact; it only means the human-
-//   accept path (cmd/cascade/context_facts.go, not built in this pass --
-//   see this ticket's journal) is the ONLY path those two subjects can
+//   accept path (LedgerService.AcceptByOperator behind the elevated
+//   context.facts.accept verb) is the ONLY path those two subjects can
 //   ever reach FactAccepted through.
 // Inputs: a proposed InferredFact and the *Store to corroborate it
 //   against.
@@ -42,6 +42,7 @@ package repo
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -217,32 +218,6 @@ func Reject(f InferredFact, reason string) (InferredFact, error) {
 	return f, nil
 }
 
-// Supersede accepts newVersion (via Accept) and marks prior as
-// FactSuperseded, recording prior's ID as newVersion's Rollback target.
-// prior must already be FactAccepted; newVersion must be FactProposed at
-// exactly prior.Version+1.
-func Supersede(prior, newVersion InferredFact, acceptedBy string) (superseded, accepted InferredFact, err error) {
-	if prior.State != FactAccepted {
-		return InferredFact{}, InferredFact{}, cascade.Newf(cascade.KindConflict,
-			"repo: cannot supersede a prior fact in state %q, want %q", prior.State, FactAccepted)
-	}
-	if newVersion.ID != prior.ID {
-		return InferredFact{}, InferredFact{}, cascade.New(cascade.KindInvalidInput,
-			"repo: Supersede requires newVersion.ID == prior.ID")
-	}
-	if newVersion.Version != prior.Version+1 {
-		return InferredFact{}, InferredFact{}, cascade.Newf(cascade.KindConflict,
-			"repo: newVersion.Version %d must be prior.Version+1 (%d)", newVersion.Version, prior.Version+1)
-	}
-	accepted, err = Accept(newVersion, acceptedBy)
-	if err != nil {
-		return InferredFact{}, InferredFact{}, err
-	}
-	accepted.Rollback = rowKeyFor(prior)
-	prior.State = FactSuperseded
-	return prior, accepted, nil
-}
-
 // Rollback reports the fact version rollbackTo should restore, given the
 // currently accepted version current. Rolling back a version-1 fact (one
 // with no prior version to restore) is a typed error.
@@ -259,10 +234,30 @@ func Rollback(current InferredFact) (InferredFact, error) {
 		return InferredFact{}, cascade.New(cascade.KindInvalidInput,
 			"repo: fact carries no rollback reference")
 	}
+	version, ok := rollbackVersion(current.ID, current.Rollback)
+	if !ok || version >= current.Version {
+		return InferredFact{}, cascade.Newf(cascade.KindIntegrity,
+			"repo: rollback reference %q does not name an earlier version of %s", current.Rollback, current.ID)
+	}
 	restored := current
-	restored.Version = current.Version - 1
+	restored.Version = version
 	restored.State = FactAccepted
 	return restored, nil
+}
+
+// rollbackVersion parses the version out of a rowKeyFor reference for id.
+// Versions need not be contiguous: rejected and proposed rows sit between
+// accepted ones in a stored chain.
+func rollbackVersion(id, ref string) (int, bool) {
+	rest, ok := strings.CutPrefix(ref, id+"@")
+	if !ok {
+		return 0, false
+	}
+	v, err := strconv.Atoi(rest)
+	if err != nil || v < 1 {
+		return 0, false
+	}
+	return v, true
 }
 
 // rowKeyFor renders the storage-facing identity of f, for use as a

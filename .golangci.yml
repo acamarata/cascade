@@ -289,6 +289,11 @@ linters:
             # and never dials the daemon, on the identical grounds as
             # plugin_rpc.go directly above.
             - "!**/cmd/cascade/plugin_rpc_bridge.go"
+            # context_facts_rpc.go mounts context.facts.list|propose|accept on
+            # the daemon's own registry, declares their access and registers
+            # the accept elevation row; it never dials the daemon (the CLI
+            # half, context_facts.go, uses internal/client).
+            - "!**/cmd/cascade/context_facts_rpc.go"
             - "!**/*_test.go"
           deny:
             - pkg: "github.com/acamarata/cascade/internal/rpc"

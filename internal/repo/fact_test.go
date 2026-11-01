@@ -1,6 +1,14 @@
 package repo
 
-import "testing"
+import (
+	"context"
+	"reflect"
+	"strconv"
+	"strings"
+	"testing"
+
+	"github.com/acamarata/cascade/pkg/cascade"
+)
 
 // TestFactSubjectEnumClosed proves the seven closed subjects validate
 // and nothing else does -- no `other` member, no permissive zero value.
@@ -14,10 +22,56 @@ func TestFactSubjectEnumClosed(t *testing.T) {
 			t.Errorf("FactSubject(%q).Valid() = false, want true", s)
 		}
 	}
-	invalid := []FactSubject{"", "other", "OTHER", "secrets"}
+	invalid := []FactSubject{"", "other", "OTHER", "secrets", "Languages"}
 	for _, s := range invalid {
 		if s.Valid() {
 			t.Errorf("FactSubject(%q).Valid() = true, want false", s)
+		}
+		raw := `{"proposals":[{"subject":` + strconv.Quote(string(s)) + `,"fact":"x","confidence":0.5}]}`
+		got, err := ParseExtractProposal([]byte(raw))
+		if k, _ := cascade.KindOf(err); k != cascade.KindInvalidInput || got != nil {
+			t.Errorf("ParseExtractProposal(subject %q) = %v, %v; want nil and KindInvalidInput", s, got, err)
+		}
+	}
+	svc, ledger := newTestLedgerService(t)
+	bad := []ProposedFact{{Subject: SubjectLanguages, Fact: "go", Confidence: 0.5}, {Subject: "other", Fact: "x", Confidence: 0.5}}
+	if _, err := svc.Record(context.Background(), "repo-1", bad); err == nil {
+		t.Fatal("Record accepted a proposal naming subject \"other\"")
+	}
+	if rows, _ := ledger.List(context.Background(), LedgerFilter{RepositoryID: "repo-1"}); len(rows) != 0 {
+		t.Fatalf("a refused batch appended %d rows, want 0", len(rows))
+	}
+}
+
+// TestFactRecordFieldSet pins the ledger row to the decided field set plus
+// identity and state, and the state set to exactly four members.
+func TestFactRecordFieldSet(t *testing.T) {
+	want := map[string]bool{
+		"fact": true, "source": true, "confidence": true, "version": true, "accepted_by": true, "rollback": true,
+		"id": true, "repository_id": true, "subject": true, "state": true, "reject_reason": true,
+	}
+	typ := reflect.TypeOf(InferredFact{})
+	got := map[string]bool{}
+	for i := 0; i < typ.NumField(); i++ {
+		name, _, _ := strings.Cut(typ.Field(i).Tag.Get("json"), ",")
+		got[name] = true
+		if !want[name] {
+			t.Errorf("InferredFact carries undecided field %q", name)
+		}
+	}
+	for name := range want {
+		if !got[name] {
+			t.Errorf("InferredFact lacks decided field %q", name)
+		}
+	}
+	states := []FactState{FactProposed, FactAccepted, FactRejected, FactSuperseded}
+	if len(states) != 4 || string(FactProposed) != "proposed" || string(FactAccepted) != "accepted" ||
+		string(FactRejected) != "rejected" || string(FactSuperseded) != "superseded" {
+		t.Fatalf("fact states drifted: %v", states)
+	}
+	for _, s := range []FactState{"", "pending", "Accepted"} {
+		if s.Valid() {
+			t.Errorf("FactState(%q).Valid() = true, want false", s)
 		}
 	}
 }

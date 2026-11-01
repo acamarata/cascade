@@ -137,9 +137,8 @@ func TestAcceptRejectTransitions(t *testing.T) {
 	}
 }
 
-func TestSupersedeAndRollback(t *testing.T) {
-	v1 := validFact()
-	accepted1, err := Accept(v1, "detector:languages")
+func TestRollback(t *testing.T) {
+	accepted1, err := Accept(validFact(), "detector:languages")
 	if err != nil {
 		t.Fatalf("Accept v1: %v", err)
 	}
@@ -147,17 +146,11 @@ func TestSupersedeAndRollback(t *testing.T) {
 	v2 := validFact()
 	v2.Version = 2
 	v2.Fact = "go,rust"
-
-	superseded, accepted2, err := Supersede(accepted1, v2, "detector:languages")
+	accepted2, err := Accept(v2, "detector:languages")
 	if err != nil {
-		t.Fatalf("Supersede: %v", err)
+		t.Fatalf("Accept v2: %v", err)
 	}
-	if superseded.State != FactSuperseded {
-		t.Fatalf("superseded.State = %v, want FactSuperseded", superseded.State)
-	}
-	if accepted2.State != FactAccepted || accepted2.Rollback == "" {
-		t.Fatalf("accepted2 = %+v, want FactAccepted with a rollback reference", accepted2)
-	}
+	accepted2.Rollback = rowKeyFor(accepted1)
 
 	restored, err := Rollback(accepted2)
 	if err != nil {
@@ -169,23 +162,5 @@ func TestSupersedeAndRollback(t *testing.T) {
 
 	if _, err := Rollback(accepted1); err == nil {
 		t.Fatal("Rollback of a version-1 fact: err = nil, want typed error")
-	}
-}
-
-func TestSupersede_RejectsWrongPriorState(t *testing.T) {
-	v1 := validFact() // still FactProposed, not FactAccepted
-	v2 := validFact()
-	v2.Version = 2
-	if _, _, err := Supersede(v1, v2, "detector"); err == nil {
-		t.Fatal("Supersede on a non-accepted prior: err = nil, want typed error")
-	}
-}
-
-func TestSupersede_RejectsVersionGap(t *testing.T) {
-	accepted1, _ := Accept(validFact(), "detector")
-	v3 := validFact()
-	v3.Version = 3 // must be exactly prior+1 = 2
-	if _, _, err := Supersede(accepted1, v3, "detector"); err == nil {
-		t.Fatal("Supersede with a version gap: err = nil, want typed error")
 	}
 }

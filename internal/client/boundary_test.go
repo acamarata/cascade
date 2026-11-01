@@ -188,6 +188,9 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// exemption list; the two must be edited together or this gate and
 	// the linter disagree.
 	"plugin_rpc_bridge.go": true,
+	// context_facts_rpc.go mounts and declares context.facts.* on the
+	// daemon's own registry and never dials the daemon; mirrors .golangci.yml.
+	"context_facts_rpc.go": true,
 }
 
 // scanCmdCascadeRPCImports returns, sorted, the base filenames under dir

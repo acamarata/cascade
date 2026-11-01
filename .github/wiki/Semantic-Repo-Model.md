@@ -141,3 +141,38 @@ parameter and error return. No daemon startup path calls
 `RegisterReachability` yet -- the scheduler/footprint-rule composition is
 a later ticket's, matching `RegisterConductorRouter`'s own precedent in
 the same file.
+
+## Inferred facts and the fact ledger
+
+Beside the deterministic inventory, `internal/repo` keeps a ledger of
+inferred facts: values a model proposes for the seven closed subjects the
+detectors do not already cover.
+
+- **Intake** (`extract.go`). `ExtractIntake.Propose` sends exactly one
+  request through the injected `provider.ModelExecutor` (in the daemon, the
+  in-process conductor door), task class `extract`, at the tier the caller
+  read from that class's default. Content is only admitted bytes
+  (`Admission.Content`); each file sits inside a
+  `<repository-data provenance="untrusted-source">` frame with its markup
+  escaped. `ParseExtractProposal` is strict: an unknown field, a subject
+  outside the closed enum, an empty fact, a confidence outside [0,1] or
+  trailing data is refused. The package builds no other model, HTTP or RPC
+  client (`TestArchRepoNoOtherModelClient`).
+- **Ledger service** (`ledger_service.go`). `LedgerService.Record` appends
+  one row per proposal (`FactID` = `fact:<repository-id>:<subject>`, version
+  = highest stored + 1, source `untrusted-source`) and corroborates it
+  against the live inventory: a match is accepted by the detector family, a
+  contradiction is rejected with its reason, anything else stays proposed.
+  `AcceptByOperator` records an elevated operator accept as a new version
+  that supersedes the prior accepted one; `Rollback` follows the stored
+  reference back to it.
+- **Read API.** `AcceptedFacts` returns the newest accepted version of each
+  fact as `{ID, Version, Subject, Fact, Truth, Provenance, AcceptedBy}`
+  (`Truth` is `operator-accepted` or `detector-corroborated`). Each fact
+  passes through `ProjectPolicy` on its own; a refused one is listed in
+  `denied` and never returned.
+- **Registrar and verbs.** `cmd/cascade` holds the one repository registrar
+  (`registerRepository`) and the `context.facts.list`, `.propose` and
+  `.accept` daemon verbs behind `cascade context facts`
+  (`docs/cli-reference/context.md`). `context.facts.accept` is always
+  elevated.

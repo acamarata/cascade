@@ -104,6 +104,8 @@ func newContextCmd(deps contextScopeDeps) *cobra.Command {
 	// `harness sync` and the older `context sync` above are one
 	// operation under two names; see context_harness_cmd.go.
 	contextCmd.AddCommand(newContextHarnessCmd(deps))
+	// facts (P1-GEN-02) lives in context_facts.go.
+	contextCmd.AddCommand(newContextFactsCmd(deps))
 	return contextCmd
 }
 
