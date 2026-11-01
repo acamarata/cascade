@@ -35,12 +35,14 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
+	"os"
 	"path/filepath"
 
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/nodes"
 	providerdispatch "github.com/acamarata/cascade/internal/providers/dispatch"
+	"github.com/acamarata/cascade/internal/providers/gateway"
 	providerregistry "github.com/acamarata/cascade/internal/providers/registry"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -103,7 +105,7 @@ func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest 
 	if cerr != nil {
 		return daemon.ConductorFanOut{}, cerr
 	}
-	resolver, err := providerdispatch.NewResolver(reg, credentials, clock, providertransport.NewHTTPTransport(&http.Client{}))
+	resolver, err := newDaemonResolver(reg, credentials, clock, providertransport.NewHTTPTransport(&http.Client{}), admittedDaemonConfig(paths))
 	if err != nil {
 		return daemon.ConductorFanOut{}, err
 	}
@@ -128,6 +130,38 @@ func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest 
 	return fanOut, daemon.RegisterConductorExecuteHandler(registry, manifest, reader, quota, resolver, auditWriter, clock,
 		security, accounting, fanOut,
 		conductorRouterOptions(tunnels, paths, clock, routerOpts)...)
+}
+
+// newDaemonResolver builds the conductor's provider resolver: the
+// standing-grant credentials for vault refs and, for gateway provider
+// records, the gateway accounts ADMITTED in cfg (EffectiveConfigOf, the
+// accepted baseline, never the raw file) with a call-time token source of
+// this daemon process (P1-GWY-08). The accounts are read once here: an
+// account accepted later applies at the next start. A nil cfg admits none.
+func newDaemonResolver(reg providerdispatch.RegistryLookup, credentials providerdispatch.CredentialSource, clock runtime.Clock, tr providertransport.Transport, cfg *runtime.Config) (*providerdispatch.Resolver, error) {
+	accounts, err := gateway.AccountsFrom(runtime.EffectiveConfigOf(cfg))
+	if err != nil {
+		return nil, err
+	}
+	home, _ := os.UserHomeDir()
+	src := gateway.Source{Getenv: os.Getenv, Home: home, User: os.Getenv("USER")}
+	return providerdispatch.NewResolver(reg, credentials, clock, tr, providerdispatch.WithGatewayAccounts(accounts, src))
+}
+
+// admittedDaemonConfig returns the live (admitted) config of the composed
+// daemon whose config path is paths', or nil when no daemon was composed
+// over it (a bare wiring test): nil admits no gateway account.
+func admittedDaemonConfig(paths runtime.PathProvider) *runtime.Config {
+	if paths == nil {
+		return nil
+	}
+	livePolicies.mu.Lock()
+	owner := livePolicies.owner[paths.ConfigPath()]
+	livePolicies.mu.Unlock()
+	if owner == nil || owner.reloader == nil {
+		return nil
+	}
+	return owner.reloader.Current()
 }
 
 // conductorRouterOptions is the router wiring the daemon applies: the node

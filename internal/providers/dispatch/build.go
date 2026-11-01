@@ -52,8 +52,15 @@ import (
 // the lane-outcome decorator (lane_outcome.go), so every call it makes
 // records its outcome on the lane. The decorator's Unwrap returns the
 // real driver.
+// A gateway record's driver comes from gatewayDriver (gateway.go), which
+// refuses an unadmitted account or a base URL mismatch before any driver
+// exists; every driver, gateway ones included, gets the decorator here.
 func (r *Resolver) build(lane registry.LaneRecord, rec registry.ProviderRecord, model string) (provider.ModelProvider, error) {
-	driver, err := r.newDriver(rec, model, observingTransport{inner: r.transport})
+	newDriver := r.newDriver
+	if rec.Auth == registry.AuthGateway {
+		newDriver = r.gatewayDriver
+	}
+	driver, err := newDriver(rec, model, observingTransport{inner: r.transport})
 	if err != nil {
 		return nil, err
 	}

@@ -48,6 +48,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/acamarata/cascade/internal/providers/gateway"
 	"github.com/acamarata/cascade/internal/providers/registry"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -104,6 +105,11 @@ type Resolver struct {
 	// process (lane_outcome_record.go).
 	log    *slog.Logger
 	laneMu sync.Mutex
+	// gateways is the daemon's ADMITTED gateway account set and gatewaySrc
+	// the call-time token source for it (gateway.go, WithGatewayAccounts).
+	// Empty means no gateway record is admitted: every one is refused.
+	gateways   []gateway.Account
+	gatewaySrc gateway.Source
 }
 
 // NewResolver builds a Resolver. credentials may be nil: every
@@ -111,8 +117,9 @@ type Resolver struct {
 // naming its missing credential rather than panicking or fabricating a
 // driver (see this file's header comment). lookup, clock and transport
 // must not be nil; the composition root builds transport with
-// providers/transport's NewHTTPTransport.
-func NewResolver(lookup RegistryLookup, credentials CredentialSource, clock runtime.Clock, transport transport.Transport) (*Resolver, error) {
+// providers/transport's NewHTTPTransport. opts apply in order after the
+// required arguments are checked (WithGatewayAccounts, gateway.go).
+func NewResolver(lookup RegistryLookup, credentials CredentialSource, clock runtime.Clock, transport transport.Transport, opts ...ResolverOption) (*Resolver, error) {
 	if lookup == nil {
 		return nil, cascade.New(cascade.KindInvalidInput, "dispatch: registry lookup must not be nil")
 	}
@@ -122,7 +129,13 @@ func NewResolver(lookup RegistryLookup, credentials CredentialSource, clock runt
 	if transport == nil {
 		return nil, cascade.New(cascade.KindInvalidInput, "dispatch: transport must not be nil")
 	}
-	return &Resolver{lookup: lookup, credentials: credentials, clock: clock, transport: transport, log: slog.Default()}, nil
+	r := &Resolver{lookup: lookup, credentials: credentials, clock: clock, transport: transport, log: slog.Default()}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(r)
+		}
+	}
+	return r, nil
 }
 
 var _ interface {
@@ -154,6 +167,11 @@ func (r *Resolver) Resolve(ctx context.Context, sel provider.Selection) (provide
 	if rec.Auth == registry.AuthOAuth {
 		return nil, cascade.Newf(cascade.KindUnsupported,
 			"dispatch: provider %q uses oauth auth, and no production OAuthBroker is wired at this composition root yet", rec.Name)
+	}
+	if rec.Auth == registry.AuthGateway {
+		// Resolved against the admitted accounts only, never the vault
+		// (gateway.go); a refusal here sends nothing.
+		return r.build(lane, rec, sel.Model)
 	}
 	if r.credentials == nil {
 		return nil, cascade.Newf(cascade.KindUnavailable,

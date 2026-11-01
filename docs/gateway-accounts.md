@@ -64,3 +64,29 @@ leaves the record and lane unchanged.
 Gateway providers are operator-configured and terms-sensitive. Doctor names
 each registered gateway provider with that posture. Static bearer-key auth
 is programmatic and has no interactive entitlement or OAuth refresh path.
+
+## Dispatch
+
+The daemon resolves a gateway provider against the gateway accounts in its
+admitted configuration, never against the provider record alone. The daemon
+reads the admitted accounts once at start, so an account accepted later
+applies at the next start.
+
+- The account named by `gateway:<account>` must be admitted. Otherwise the call
+  is refused with `permission_denied` before any request: "gateway account
+  <account> is not admitted; run `cascade config accept` after reviewing
+  [gateways.<account>]".
+- The record's base URL must equal the account's base URL exactly. A record
+  that differs, for example a tampered `providers.db`, is refused with
+  `conflict` and nothing is sent. Re-register it with
+  `cascade provider add <name> --gateway <account>`.
+- The request goes to the account's base URL with the account's header style:
+  `authorization: Bearer <token>` for `bearer`, `x-api-key` for `x-api-key`.
+- The token comes from the account's `key_env` or credential helper at call
+  time, from the daemon's own environment, home and user. A `gateway:` reference
+  is never read from the vault. Every other provider keeps the standing-grant
+  vault reader.
+- A helper that fails makes the call fail with `unavailable`, naming the helper
+  path. No request is sent and the lane row is unchanged.
+- Each call records its outcome on the lane like any other provider. Retry,
+  backoff and health writes are not part of dispatch.

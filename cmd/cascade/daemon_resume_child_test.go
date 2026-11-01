@@ -35,7 +35,6 @@ import (
 
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/daemon"
-	providerdispatch "github.com/acamarata/cascade/internal/providers/dispatch"
 	providerregistry "github.com/acamarata/cascade/internal/providers/registry"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/secrets"
@@ -153,7 +152,7 @@ func wireDenyConductor(w *daemonWiring, store provider.Store, pol conductor.Poli
 	if err != nil {
 		return daemon.ConductorFanOut{}, err
 	}
-	resolver, err := providerdispatch.NewResolver(reg, credentials, w.Clock, providertransport.NewHTTPTransport(&http.Client{}))
+	resolver, err := newDaemonResolver(reg, credentials, w.Clock, providertransport.NewHTTPTransport(&http.Client{}), admittedDaemonConfig(w.Paths))
 	if err != nil {
 		return daemon.ConductorFanOut{}, err
 	}
