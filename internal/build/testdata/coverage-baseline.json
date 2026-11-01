@@ -14,6 +14,7 @@
   "internal/build/nodevkeys": { "tier": "cli", "floor": 70.0, "baseline": 85.7 },
   "internal/buildinfo": { "tier": "core", "floor": 85.0, "baseline": 100.0 },
   "internal/ci": { "tier": "core", "floor": 85.0, "baseline": 91.8 },
+  "internal/ci/attest": { "tier": "core", "floor": 85.0, "baseline": 92.4 },
   "internal/client": { "tier": "core", "floor": 85.0, "baseline": 90.9 },
   "internal/conductor": { "tier": "core", "floor": 85.0, "baseline": 91.5 },
   "internal/context": { "tier": "core", "floor": 85.0, "baseline": 93.5 },

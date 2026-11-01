@@ -63,7 +63,10 @@ const jobsSchemaVersion = 5
 // identical situation).
 const SchemaVersion = jobsSchemaVersion
 
-// MigrationSet is the jobs domain's seven-table schema.
+// MigrationSet is the jobs domain's seven-table schema plus the
+// ci_attestation and attestation_nonce tables (contract:ci-attestation),
+// appended at the same schema version: Apply runs the steps past the
+// ledger's applied prefix.
 func MigrationSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
 		SetID:         "jobs",
@@ -77,6 +80,9 @@ func MigrationSet() migrate.MigrationSet {
 			artifactTableStep(),
 			resourceLeaseTableStep(),
 			worktreeTableStep(),
+			ciAttestationTableStep(),
+			ciAttestationUniqueStep(),
+			attestationNonceTableStep(),
 		},
 	}
 }

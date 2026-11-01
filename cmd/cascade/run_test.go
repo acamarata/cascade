@@ -245,11 +245,17 @@ func TestRunCmd_OnlyModelDoor(t *testing.T) {
 	// --sensitivity and --fan-out have no such pre-existing collision and
 	// are the flags this check can assert without a false positive; see
 	// the journal for both sides quoted.
+	// `cascade ci attest verify --require` (exit 1 unless an eligible
+	// attestation exists) is a verification switch the receive gate relies
+	// on, not model dispatch; it is the one exempt (path, flag) pair.
 	modelFlags := []string{"require", "sensitivity", "fan-out"}
 	var walk func(cmd *cobra.Command)
 	walk = func(cmd *cobra.Command) {
 		if cmd.CommandPath() != "cascade run" {
 			for _, name := range modelFlags {
+				if cmd.CommandPath() == "cascade ci attest verify" && name == "require" {
+					continue
+				}
 				if cmd.Flags().Lookup(name) != nil {
 					t.Errorf("command %q declares model-dispatch flag --%s, want it declared only on run", cmd.CommandPath(), name)
 				}

@@ -11,7 +11,7 @@ verb is non-interactive, with no prompts.
 cascade ci run [flags]
 cascade ci status
 cascade ci watch <job-id>
-cascade ci attest verify <commit-sha>
+cascade ci attest verify <commit-sha> [--require] [--repo-id <id>]
 ```
 
 ## `cascade ci run`
@@ -107,9 +107,29 @@ acceptance plan for the job yet, the watch waits for one.
 
 ## `cascade ci attest verify <commit-sha>`
 
-Verifies the stored CI attestation records for a commit. The verifier
-arrives with the attestation work; until a build binds it, the verb exits
-5 (unavailable) and names itself.
+Verifies the stored CI attestation records for a commit against the commit's
+real tree (`git rev-parse <sha>^{tree}` in the current repository). It reads
+the local `cascade.db` read-only, so it never consumes an attestation nonce.
+
+| Flag | Meaning |
+|---|---|
+| `--require` | exit 1 unless at least one eligible record exists |
+| `--repo-id` | the controller's registry id for this repository; default: `git config cascade.gate.repoId` |
+| `--json` | write the result as a JSON envelope |
+
+A record is eligible when its signature verifies under the node's current
+key, it is unexpired, it binds this commit and tree, it is passing (exit
+status 0 and a result for every planned kind), its derived attestor class is
+`enrolled-node` or `ephemeral-oidc`, and its repo id, job spec hash and
+policy version match the accepted fact bound to its nonce. See
+[CI attestations](../security-posture/ci-attestation.md).
+
+| Exit | When |
+|---|---|
+| 0 | At least one eligible record exists, or, without `--require`, no record is stored at all. |
+| 1 | A stored record fails verification (signature, key, expiry, binding, or columns that disagree with the signed bytes), records are stored but none is eligible, or `--require` finds no record. |
+| 2 | The argument is not a commit in this repository, or no repo id was given or configured. |
+| 5 | The data directory cannot be resolved or `cascade.db` cannot be read. |
 
 ## Configuration
 

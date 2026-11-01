@@ -26,6 +26,8 @@ See also [installation identity: the controller key that signs scope envelopes](
 
 See also [credential helpers: a digest-pinned program that prints a gateway key, and its residuals](security-posture/credential-helpers.md).
 
+See also [CI attestations: signed records of acceptance re-runs and how they verify](security-posture/ci-attestation.md).
+
 ## Doctor security checks
 
 `cascade doctor` reports six security checks. All are read-only: none selects
