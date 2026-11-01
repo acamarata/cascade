@@ -1,0 +1,6 @@
+event: message_start
+data: {"type":"message_start","message":{"id":"msg_000","type":"message","role":"assistant","model":"model-a","content":[],"usage":{"input_tokens":1,"output_tokens":0}}}
+
+event: error
+data: {"type":"error","error":{"type":"api_error","message":"Internal server error"}}
+

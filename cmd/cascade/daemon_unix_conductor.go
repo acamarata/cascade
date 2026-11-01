@@ -34,9 +34,11 @@ package main
 import (
 	"context"
 	"database/sql"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/daemon"
@@ -165,11 +167,33 @@ func admittedDaemonConfig(paths runtime.PathProvider) *runtime.Config {
 }
 
 // conductorRouterOptions is the router wiring the daemon applies: the node
-// placement seam first, then extra (the restricted-permit option). One helper
-// so the production wiring and the resume tests' deny wiring cannot differ.
+// placement seam first, then transient retry, then extra (the
+// restricted-permit option). One helper so the production wiring and the
+// resume tests' deny wiring cannot differ.
 func conductorRouterOptions(tunnels nodes.TunnelStateLookup, paths runtime.PathProvider, clock runtime.Clock, extra []conductor.RouterOption) []conductor.RouterOption {
 	placement := conductor.NodePlacement(nodes.Engine{Tunnels: tunnels}, nodeRecordStore(paths, clock))
-	return append([]conductor.RouterOption{placement}, extra...)
+	return append([]conductor.RouterOption{placement, daemonRetryOption(clock)}, extra...)
+}
+
+// daemonRetryOption applies SetRetry to the Executor built over the
+// daemon's router (P1-GWY-03): the default policy on the daemon clock, a
+// pause that ends early with its context, and a source seeded once from the
+// clock. No eligibility seam yet: P1-GWY-09 wires provider health.
+func daemonRetryOption(clock runtime.Clock) conductor.RouterOption {
+	seed := uint64(clock.Now().UnixNano())
+	return conductor.RetryOption(conductor.DefaultRetryPolicy(), clock, contextSleep, rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)), nil)
+}
+
+// contextSleep pauses for d on a timer, returning ctx.Err() if ctx ends first.
+func contextSleep(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
 }
 
 // restrictedPermitsOption reads [conductor] restricted_external_lanes from

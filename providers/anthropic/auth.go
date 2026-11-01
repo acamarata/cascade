@@ -277,7 +277,8 @@ type wireErrorBody struct {
 
 // mapTransportError classifies a network-layer failure: context
 // cancellation/deadline first (they are the caller's own signal, not the
-// server's), everything else falls back to KindUnavailable.
+// server's), everything else falls back to KindUnavailable, marked
+// transient on a connection reset (transient.go).
 func mapTransportError(ctx context.Context, err error) error {
 	if errors.Is(ctx.Err(), context.Canceled) {
 		return cascade.Wrap(cascade.KindCanceled, err, "anthropic: request canceled")
@@ -285,7 +286,7 @@ func mapTransportError(ctx context.Context, err error) error {
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return cascade.Wrap(cascade.KindTimeout, err, "anthropic: request deadline exceeded")
 	}
-	return cascade.Wrap(cascade.KindUnavailable, err, "anthropic: sending request")
+	return markTransport(ctx, cascade.Wrap(cascade.KindUnavailable, err, "anthropic: sending request"), err)
 }
 
 // errorMessage extracts the vendor's error message from body, falling back

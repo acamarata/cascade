@@ -97,7 +97,7 @@ func (d *Driver) send(ctx context.Context, path string, payload []byte) (rawResp
 	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxReadBody))
 	if err != nil {
-		return rawResponse{}, cascade.Wrap(cascade.KindUnavailable, err, "anthropic: reading response body")
+		return rawResponse{}, readBodyError(ctx, err)
 	}
 	return rawResponse{status: resp.Status, body: body}, nil
 }
@@ -118,30 +118,6 @@ func (d *Driver) newRequest(ctx context.Context, path string, payload []byte) (H
 		},
 		Body: payload,
 	}, nil
-}
-
-// mapStatusError classifies an HTTP error response by status code, per
-// 06 §5's explicit-mapping requirement (429 and the 529 overload status
-// named specifically).
-func mapStatusError(status int, body []byte) error {
-	msg := errorMessage(status, body)
-	switch status {
-	case statusBadRequest, statusRequestTooLarge:
-		return cascade.New(cascade.KindInvalidInput, msg)
-	case statusUnauthorized, statusForbidden:
-		return cascade.New(cascade.KindPermissionDenied, msg)
-	case statusNotFound:
-		return cascade.New(cascade.KindNotFound, msg)
-	case statusTooManyRequests:
-		return cascade.New(cascade.KindQuotaExhausted, msg)
-	case statusOverloaded:
-		return cascade.New(cascade.KindUnavailable, msg)
-	default:
-		if status >= statusInternalServerError {
-			return cascade.New(cascade.KindUnavailable, msg)
-		}
-		return cascade.New(cascade.KindInternal, msg)
-	}
 }
 
 // wireSSEEvent is one decoded Messages-API SSE event: the "event:" line's
@@ -191,8 +167,7 @@ func decodeSSEEvent(ev wireSSEEvent) (provider.StreamEvent, bool, error) {
 		if err := json.Unmarshal(ev.Data, &wireErr); err != nil {
 			return provider.StreamEvent{}, false, cascade.Wrap(cascade.KindIntegrity, err, "anthropic: decoding stream error event")
 		}
-		streamErr := cascade.Newf(cascade.KindUnavailable, "anthropic: stream error %s: %s", wireErr.Error.Type, wireErr.Error.Message)
-		return provider.StreamEvent{Kind: provider.StreamEventError, Err: streamErr}, true, nil
+		return provider.StreamEvent{Kind: provider.StreamEventError, Err: streamAPIError(wireErr)}, true, nil
 	default:
 		// message_start, content_block_start, content_block_stop, ping,
 		// and any future event name this driver does not yet interpret.

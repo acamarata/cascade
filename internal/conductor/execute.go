@@ -42,6 +42,7 @@ type Executor struct {
 	usageStore      UsageRecorder
 	usageAgg        UsageAggregator
 	costEstimator   CostEstimator
+	retry           atomic.Pointer[retrySeam] // transient_retry.go
 }
 
 // CancelFunc cancels an in-flight ExecuteStream job's context. It is
@@ -78,25 +79,23 @@ func (e *Executor) Execute(ctx context.Context, req provider.ModelRequest) (prov
 		resp, derr = e.doorChat(c, s, chatReq)
 		return resp.Usage, false, derr
 	}
-	abandoned := func(s provider.Selection, u provider.Usage, aerr error) {
-		e.attributeUsage(ctx, req, attemptJobID(jobID, 1), s, 1, u, aerr, start)
-	}
-	finalSel, attempt, _, err := e.withFailover(dctx, req, sel, run, abandoned)
+	finalSel, st, _, err := e.withRetry(dctx, req, sel, run, e.abandonedUsage(ctx, req, jobID, start))
+	key := req.TaskID + "|" + req.TaskClass
 	if err != nil {
 		mapped := mapProviderError(err)
 		outcome, cause := "provider_failure", mapped
 		if dctx.Err() != nil {
 			outcome, cause = "cancellation", context.Cause(dctx)
 		}
-		e.auditOutcome(context.WithoutCancel(ctx), req, tier, finalSel, outcome, cause)
+		e.auditAttempts(ctx, VerbExecute, tier, key, finalSel, outcome, cause, st)
 		e.publishTerminal(ctx, jobID, "error")
-		e.attributeUsage(ctx, req, jobID, finalSel, attempt, resp.Usage, err, start)
+		e.attributeUsage(ctx, req, jobID, finalSel, st.Attempts, resp.Usage, err, start)
 		return provider.ModelResponse{}, mapped
 	}
 	out := provider.ModelResponse{JobID: provider.JobID(jobID), Selection: finalSel, Output: resp.Message.Content, Usage: resp.Usage}
-	e.auditOutcome(ctx, req, tier, finalSel, "success", nil)
+	e.auditAttempts(ctx, VerbExecute, tier, key, finalSel, "success", nil, st)
 	e.publishTerminal(ctx, jobID, "done")
-	e.attributeUsage(ctx, req, jobID, finalSel, attempt, resp.Usage, nil, start)
+	e.attributeUsage(ctx, req, jobID, finalSel, st.Attempts, resp.Usage, nil, start)
 	e.trySpawn(req, finalSel) // P1-E12-W3-S25-T3: no-op unless IsSubprocessDispatch(finalSel)
 	return out, nil
 }
@@ -165,39 +164,23 @@ func (e *Executor) executeStream(ctx context.Context, req provider.ModelRequest,
 	return ch, cancelFn, nil
 }
 
-// runStream drives one streaming dispatch to completion: a capability-denied
-// first lane that delivered nothing fails over once (door.go), both attempts
-// are attributed, and exactly one terminal audit record is written (success,
-// provider failure, or cancellation carrying context.Cause).
+// runStream drives one streaming dispatch to completion under the retry
+// policy (transient_retry.go): a transient failure or a capability denial
+// before any output reached the caller is retried or fails over once, every
+// attempt is attributed, and exactly one terminal audit record is written
+// (success, provider failure, or cancellation carrying context.Cause).
 func (e *Executor) runStream(ctx context.Context, req provider.ModelRequest, jobID JobID, pass doorPass, ch chan<- provider.StreamEvent) {
 	defer close(ch)
 	start := e.usageClockStart()
 	chatReq := toChatRequest(req)
-	var errSent atomic.Bool
+	var last *streamAttempt
 	run := func(c context.Context, s provider.Selection) (provider.Usage, bool, error) {
-		var u provider.Usage
-		var delivered atomic.Bool
-		err := e.doorStream(c, s, chatReq, &delivered, func(ev provider.StreamEvent) error {
-			switch ev.Kind {
-			case provider.StreamEventUsage, provider.StreamEventDone:
-				// A Done that carries no usage must not erase what an earlier
-				// Usage event reported (the bundled drivers emit that pair).
-				if ev.Usage != (provider.Usage{}) {
-					u = ev.Usage
-				}
-			case provider.StreamEventError:
-				errSent.Store(true)
-			case provider.StreamEventUnknown, provider.StreamEventDelta, provider.StreamEventToolCall: // forwarded only
-			}
-			return send(c, ch, ev)
-		})
-		return u, delivered.Load(), err
+		var ignored atomic.Bool // streamAttempt tracks what reached the caller
+		last = &streamAttempt{ctx: c, ch: ch}
+		return last.finish(e.doorStream(c, s, chatReq, &ignored, last.sink))
 	}
 	dctx := context.WithoutCancel(ctx)
-	abandoned := func(s provider.Selection, u provider.Usage, aerr error) {
-		e.attributeUsage(dctx, req, attemptJobID(jobID, 1), s, 1, u, aerr, start)
-	}
-	sel, attempt, u, err := e.withFailover(ctx, req, pass.Sel, run, abandoned)
+	sel, st, u, err := e.withRetry(ctx, req, pass.Sel, run, e.abandonedUsage(dctx, req, jobID, start))
 	outcome, cause := "success", error(nil)
 	if err != nil {
 		outcome, cause = "provider_failure", err
@@ -205,9 +188,9 @@ func (e *Executor) runStream(ctx context.Context, req provider.ModelRequest, job
 			outcome, cause = "cancellation", context.Cause(ctx)
 		}
 	}
-	e.auditDoor(dctx, VerbExecuteStream, pass.Tier, req.TaskID+"|"+req.TaskClass, sel, outcome, cause)
-	e.attributeUsage(dctx, req, jobID, sel, attempt, u, err, start)
-	if err != nil && outcome != "cancellation" && !errSent.Load() {
+	e.auditAttempts(dctx, VerbExecuteStream, pass.Tier, req.TaskID+"|"+req.TaskClass, sel, outcome, cause, st)
+	e.attributeUsage(dctx, req, jobID, sel, st.Attempts, u, err, start)
+	if err != nil && outcome != "cancellation" && (last == nil || !last.errSent) {
 		_ = send(ctx, ch, provider.StreamEvent{Kind: provider.StreamEventError, Err: err})
 	}
 }
