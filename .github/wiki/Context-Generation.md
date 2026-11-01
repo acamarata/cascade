@@ -115,3 +115,53 @@ exactly four conditions per file:
 
 Bytes outside the markers never count, so a hand edit beside a managed block
 leaves the check green. `Check` reads only; it creates and writes nothing.
+
+## The policy view and the rules generator
+
+`BuildView` turns the stored repository inventory and the fact ledger's
+accepted facts into an inert `View`. It reads facts only through
+`AcceptedFacts`, so a proposed or rejected fact never reaches it. Each
+accepted fact passes the ledger's policy projection again. A fact outside the
+seven closed subjects, or one whose text names a gate, waiver, capability or
+similar policy field, goes into `View.Denied` by id and is never rendered.
+Facts appear only for subjects the detector inventory leaves empty. In P1
+there is one scope, the repository root (slug `root`).
+
+`ScopeSlug` lowercases a path and turns each run of other characters into
+`-`: `ScopeSlug("apps/Web UI")` is `apps-web-ui`, and `.` is `root`.
+
+`RenderRules` produces three kinds of file, all inside managed blocks:
+
+| File | Generator | Blocks |
+|---|---|---|
+| `.claude/CLAUDE.md` | `rules-cc` | `cc-invariants` (the CC instruction writer's output for the repository invariants and Cascade availability, nothing per path), `policy-kernel@1` |
+| `.claude/rules/<slug>.md` | `rules-scoped` | `rules-<slug>`: the per-language build, test and lint commands and the accepted facts |
+| `.cascade/policy-kernel.md` | `policy-kernel` | `policy-kernel@1` |
+
+CLAUDE.md always carries the CLI fallback line: "if the Cascade MCP server is
+unavailable, use the `cascade` CLI for the same operations". Every view value
+is written as an inline code span, so a fact value can never become a heading,
+a list or a marker. No block carries a timestamp, so equal views render equal
+bytes. The files go through the never-destroy writer, so a hand addition
+outside the blocks is kept and the new rendering lands in a sidecar.
+
+## The policy kernel
+
+`internal/context/policy` holds the execution kernel: five rules (SCOPE,
+SIMPLICITY, GROUNDING, AMBIGUITY, VERIFICATION) and an ESCALATION line, at most
+120 tokens by `TokenCount`. `RenderKernelFile` returns the canonical bytes of
+`.cascade/policy-kernel.md`. `EnsureKernelFile` creates that file when it is
+missing and refuses to overwrite a file that differs from the canonical
+bytes. `pkg/provider` publishes `PolicyKernelFile`, `PolicyKernelMaxBytes` and
+`PolicyKernelSHA256`, and a test keeps the hash equal to the rendered kernel.
+
+## The location lint
+
+`GeneratedLocations` is the closed list of places a generator may write:
+`.claude/CLAUDE.md`, `.claude/rules/*.md`, `.claude/agents/*.md`,
+`.claude/skills/*/SKILL.md`, `.claude/workflows/*.js`,
+`.claude/workflows/cascade-workflows.json`, `AGENTS.md`, `.codex/config.toml`,
+`opencode.json` and `.cascade/policy-kernel.md`. `LintLocations` names each
+manifest entry outside that list with the condition
+`outside-generated-locations`. It only reports; it never moves or deletes a
+file.
