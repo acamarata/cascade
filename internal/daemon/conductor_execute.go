@@ -96,12 +96,18 @@ func RegisterConductorExecuteHandler(
 	fanOut ConductorFanOut,
 	routerOpts ...conductor.RouterOption,
 ) error {
+	// The process door (conductor_door.go) is bound once per composition,
+	// to this composition's Executor or to the reason it has none.
+	var exec *conductor.Executor
+	var cerr error
+	defer func() { ProcessConductorDoor().bind(exec, reg, auditWriter, cerr) }()
 	router, err := manifest.RegisterConductorRouter(reg, quota, clock, routerOpts...)
 	if err != nil {
+		cerr = err
 		return err
 	}
 	manifest.Register(conductorExecutorSubsystem)
-	exec, cerr := conductor.NewExecutor(conductor.ExecutorConfig{
+	exec, cerr = conductor.NewExecutor(conductor.ExecutorConfig{
 		Router: router, Resolver: resolver, Audit: auditWriter, Clock: clock,
 		Classifier:  security.Classifier,
 		Taxonomy:    security.Taxonomy,
