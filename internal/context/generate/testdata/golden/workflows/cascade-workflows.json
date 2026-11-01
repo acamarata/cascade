@@ -1,0 +1,18 @@
+// cascade:managed:begin workflows-data
+{
+  "version": 1,
+  "scopes": [
+    {
+      "rel": ".",
+      "languages": [
+        {
+          "language": "go",
+          "build": "make build",
+          "test": "go test ./...",
+          "lint": "golangci-lint run"
+        }
+      ]
+    }
+  ]
+}
+// cascade:managed:end

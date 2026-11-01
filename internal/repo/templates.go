@@ -1,16 +1,18 @@
 package repo
 
-// Purpose: the compiled-in templates the agent and skill generators read
-//   (contract:compiled-templates). The tree is embedded at build time, so
+// Purpose: the compiled-in templates the agent, skill and harness workflow
+//   generators read (contract:compiled-templates). The tree is embedded at build time, so
 //   no template is ever read from a target repository, a config path, a
 //   plugin or the network.
 // Inputs: none at run time.
 // Outputs: TemplateFS, the read-only embedded tree, and TemplateHashes,
 //   the sha256 of every embedded file.
-// Constraints: only templates/agents and templates/skills are embedded;
-//   templates/wiki-sync-workflow.yml stays out. A later generator appends
-//   its own directory to the embed line.
-// SPORT: context-engine/compiled-templates (ADD, P1-GEN-08).
+// Constraints: only templates/agents, templates/skills and
+//   templates/workflows are embedded; templates/wiki-sync-workflow.yml
+//   stays out. A later generator appends its own directory to the embed
+//   line.
+// SPORT: context-engine/compiled-templates (ADD, P1-GEN-08; workflows
+//   P1-GEN-09).
 
 import (
 	"crypto/sha256"
@@ -19,7 +21,7 @@ import (
 	"io/fs"
 )
 
-//go:embed templates/agents templates/skills
+//go:embed templates/agents templates/skills templates/workflows
 var templateFS embed.FS
 
 // TemplateFS returns the embedded template tree. Paths are slash-separated

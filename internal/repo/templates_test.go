@@ -25,12 +25,19 @@ var wantTemplates = []string{
 	"templates/skills/verify/SKILL.md",
 }
 
-// embeddedFiles lists every regular file of the embedded tree, sorted.
+// agentSkillTree reports whether p is under the agents or skills template
+// trees; the workflows tree is pinned by templates_workflows_test.go.
+func agentSkillTree(p string) bool {
+	return strings.HasPrefix(p, "templates/agents/") || strings.HasPrefix(p, "templates/skills/")
+}
+
+// embeddedFiles lists every regular agents and skills file of the embedded
+// tree, sorted.
 func embeddedFiles(t *testing.T) []string {
 	t.Helper()
 	var out []string
 	err := fs.WalkDir(TemplateFS(), ".", func(p string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() {
+		if err == nil && !d.IsDir() && agentSkillTree(p) {
 			out = append(out, p)
 		}
 		return err
@@ -92,16 +99,15 @@ func TestTemplateHashesCoverEmbeddedSet(t *testing.T) {
 	hashes := TemplateHashes()
 	var keys []string
 	for k := range hashes {
-		keys = append(keys, k)
+		if agentSkillTree(k) {
+			keys = append(keys, k)
+		}
 	}
 	sort.Strings(keys)
 	if strings.Join(keys, "\n") != strings.Join(wantTemplates, "\n") {
 		t.Fatalf("TemplateHashes keys =\n%s\nwant\n%s", strings.Join(keys, "\n"), strings.Join(wantTemplates, "\n"))
 	}
 	for _, k := range keys {
-		if !strings.HasPrefix(k, "templates/agents/") && !strings.HasPrefix(k, "templates/skills/") {
-			t.Errorf("TemplateHashes covers %s outside the agents and skills trees", k)
-		}
 		data, err := fs.ReadFile(TemplateFS(), k)
 		if err != nil {
 			t.Fatal(err)

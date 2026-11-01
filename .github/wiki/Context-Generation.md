@@ -196,3 +196,49 @@ target before writing any: a mangled marker in an existing file or a target
 directory that cannot take a file is a typed error, and nothing is written.
 After that each file goes through the never-destroy writer, so a hand addition
 outside a block survives and the new rendering lands in a sidecar.
+
+## Harness workflows
+
+`RenderWorkflows` writes Claude Code workflow scripts only when the installed
+CLI is known to support them. It asks a `WorkflowsSupportProbe` first, and
+`Negotiate` accepts protocol revision 1 alone (`ProtocolMin` and
+`ProtocolMax` are both 1).
+
+The production probe, `NewExecProbe`, finds the CLI through `exec.LookPath`
+and runs it exactly twice: `--version`, then `--help`. Each run gets five
+seconds, an environment of only `PATH` and `HOME`, a fresh empty temp
+directory as `HOME`, another as its working directory, and no stdin. No other
+argument or subcommand is ever passed, and no credential or `CASCADE_*`
+variable reaches it. Every `Negotiate` call probes again. Within one process a
+repeated result with the same binary, version and exit status keeps its
+sequence number; a changed binary or version replaces it.
+
+| Result | When |
+|---|---|
+| `supported` | the `Commands:` section of `--help` lists `workflows` as a command, and the version is at least `MinCLIVersion` (2.1.273) |
+| `unsupported` | the CLI is not on `PATH`, or `Commands:` lists no `workflows` command (a mention in option prose does not count) |
+| `out-of-range` | `workflows` is listed but the version is older than 2.1.273 |
+| `indeterminate` | an invocation failed or timed out, the version could not be parsed, or `--help` has no `Commands:` section |
+
+Only `supported` renders files, all under generator id `workflows`, each one
+`//` managed block:
+
+| File | Block | Content |
+|---|---|---|
+| `.claude/workflows/verify.js` | `workflow-verify` | the compiled-in template `templates/workflows/verify.js.tmpl` |
+| `.claude/workflows/review.js` | `workflow-review` | `templates/workflows/review.js.tmpl` |
+| `.claude/workflows/implement.js` | `workflow-implement` | `templates/workflows/implement.js.tmpl` |
+| `.claude/workflows/cascade-workflows.json` | `workflows-data` | the detected build, test and lint commands per scope, as JSON data |
+
+The three scripts carry no repository value, so they are byte-identical in
+every repository; they point the agent at `cascade-workflows.json` for the
+commands. A template holding a value placeholder or any of `require`,
+`import`, `fs`, `child_process`, `process.` or `Deno.` stops the render.
+
+Every other result returns `ErrHarnessIncompatible` from `Negotiate`, and
+`RenderWorkflows` turns it into data: no file under `.claude/workflows`, no
+manifest entry for one, and a manifest deferral with generator `workflows`,
+the result, a reason, owner `DEF-P3-cc-workflows` and expiry 2026-12-21. No
+installed Claude Code CLI lists a `workflows` command yet (2.1.316 does not),
+so today this deferral is the normal outcome. Nothing in Fleet, the
+Conductor or the agent drivers reads these files.

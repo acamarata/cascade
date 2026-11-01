@@ -11,13 +11,16 @@ Every file under `testdata/` and what produced it.
 | `fixture-templating/view.json` | one inventory (Go detected with `make build`, `go test ./...` and `golangci-lint run`; Rust not detected) and one accepted layout fact holding backticks | written by hand on 2026-11-01 for P1-GEN-08; `TestTemplatingCorrectness` proves those commands reach the bodies and no placeholder does |
 | `golden/agents/*.md`, `golden/skills/*.md` | the nine files `RenderAgentsSkills` produces for `fixture-templating` (skills named `<skill>.md`) | captured on 2026-11-01 from the real generator with `CASCADE_UPDATE_AGENTS_SKILLS_GOLDENS=1 go test -run TestAgentsSkillsGoldens ./internal/context/generate/`, then read line by line; `TestAgentsSkillsGoldens` compares byte for byte |
 | `real-cc-agents/{agent-fixture.md,skill-fixture.md}` | the subagent and skill scaffolds the installed Claude Code CLI 2.1.316 writes; their frontmatter keys bind the generated files | read from the CLI binary as raw bytes on 2026-11-01; provenance, method and the listing gap are in `real-cc-agents/README.md` |
+| `real-cc-workflows/{unsupported,supported,out-of-range}-fixture.json` | one `claude --help` probe each, with `tool`, `version`, `captured_at`, `command`, `stdout`, `exit_code` and `synthetic`; the probe tests replay them through `ExecProbe` | `unsupported` is the real `--help` of the installed CLI 2.1.316, captured on 2026-11-01 under an empty temp HOME and working directory with only PATH and HOME set; `supported` (2.1.273) and `out-of-range` (2.1.272) add one `workflows` command line to it and are marked `synthetic: true`; details in `real-cc-workflows/README.md` |
+| `golden/workflows/{verify.js,review.js,implement.js,cascade-workflows.json}` | the four files `RenderWorkflows` produces for `fixture-templating` behind a supported probe | captured on 2026-11-01 from the real generator with `CASCADE_UPDATE_WORKFLOWS_GOLDENS=1 go test -run TestWorkflowsGoldens ./internal/context/generate/`, then read line by line; `TestWorkflowsGoldens` compares byte for byte |
 
 The in-code seeds (`f.Add`) in `managed_test.go` and `manifest_test.go` repeat
 one valid input per marker form and one valid manifest, so the fuzz targets
 also start from accepted input.
 
-Only `real-cc-agents/` is captured from an external tool (and the hook-event
-capture it is scrub-checked with, `internal/fleet/hookpacks/canon/testdata/real-cc-hooks/`).
+Only `real-cc-agents/` and `real-cc-workflows/` are captured from an external
+tool (plus the hook-event capture `real-cc-agents/` is scrub-checked with,
+`internal/fleet/hookpacks/canon/testdata/real-cc-hooks/`).
 No other fixture here is. The marker grammar and the
 manifest schema are this package's own contract (`contract:generation-manifest`),
 so there is no external counterpart to capture; the tests build every file
