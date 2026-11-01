@@ -173,7 +173,7 @@ func wireDenyConductor(w *daemonWiring, store provider.Store, pol conductor.Poli
 // wireConductorExecute and wireConductorAndReachability do.
 func registerDenyConductor(w *daemonWiring, store provider.Store, reg *providerregistry.Registry, resolver conductor.ProviderResolver,
 	security daemon.ConductorSecurity, accounting daemon.ConductorAccounting) (daemon.ConductorFanOut, error) {
-	quotaCfg, _, err := conductor.ParseQuotaConfig(nil)
+	live, err := conductorPolicyFor(w.Paths, w.Clock)
 	if err != nil {
 		return daemon.ConductorFanOut{}, err
 	}
@@ -183,7 +183,7 @@ func registerDenyConductor(w *daemonWiring, store provider.Store, reg *providerr
 	}
 	fan := daemon.NewConductorFanOut(store, w.Clock)
 	if err := daemon.RegisterConductorExecuteHandler(w.Registry, w.Manifest, providerregistry.NewReader(reg),
-		conductor.NewQuotaPolicy(quotaCfg, w.Clock), resolver, auditLog, w.Clock, security, accounting, fan,
+		live.Quota, resolver, auditLog, w.Clock, security, accounting, fan,
 		conductorRouterOptions(nodeTunnelLookup(w.Opts), w.Paths, w.Clock, nil)...); err != nil {
 		return fan, err
 	}

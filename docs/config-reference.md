@@ -152,7 +152,7 @@ as a tightening.
 |---|---|---|
 | `[policy]` | `allow`, `ask`, `deny`, `auto_advance_ceiling`, `approval_batch_window_s`, `approval_batch_cap`, `risk_gates` | an `allow` entry added, any `ask` change, a `deny` entry removed, a higher ceiling (`disabled` < `tier1` < `tier2` < `tier3`), any batching change, a risk gate step removed |
 | `[nodes]` | `default_trust_tier`, `known_hosts_path`, `scan_lan`, `discovery_networks`, `dispatch_repo_root`, `dispatch_remote`, `travel` | `scan_lan` turned on, a discovery network added, any other change |
-| `[conductor]` | `restricted_external_lanes`, `[conductor.quota]` | a lane added; a lane `ceiling` removed or raised (adding or lowering one tightens); any other quota change |
+| `[conductor]` | `restricted_external_lanes`, `deny_task_classes`, `[conductor.quota]` (`ceiling`, `personal_tracking`) | a lane added; a `deny_task_classes` entry removed; a lane `ceiling` removed or raised (adding or lowering one tightens); a `personal_tracking` change. `spill_order` is exempt (a preference order; every ceiling, deny and sensitivity rule still applies) |
 | `[agents.egress.<driver>]` | `allow` | a destination added |
 | `[agents.auth.<harness>]` | `class`, `key_env`, `auth_source` | a harness table added, or a value set or changed (removing one tightens) |
 | `[agents.lanes.<lane>]` | `posture` | any change |
@@ -423,6 +423,15 @@ with the values the docs describe.
 running daemon uses is the one it started with. A change takes effect on
 the next registration pass — a daemon restart, or the next
 `cascade context harness sync`.
+
+## `[conductor]`, `[learn]` and `[governor]` keys
+
+| Key | Type and default | Reload | Meaning |
+|---|---|---|---|
+| `conductor.deny_task_classes` | string array, default `[]` | hot | Task classes refused with `KindPolicyDenied` before any provider call. An unknown class or a non-string entry refuses start; an unreadable value in the live config refuses every class. See [conductor/quota-and-deny.md](conductor/quota-and-deny.md). |
+| `conductor.quota.ceiling.<lane>` | non-negative integer, no default (no cap) | hot (`QuotaPolicy.Apply`) | At most this many admissions of `<lane>` per rolling `CeilingWindow` (fixed at one hour). Every candidate at its ceiling fails with `KindQuotaExhausted`. A reload that does not parse keeps the previous quota. |
+| `learn.retention.max_age_days` | positive integer, default `90` | hot (read on each sweep) | Telemetry outcome rows older than this many days are deleted by the retention sweep. A non-positive value is a config error. |
+| `governor.admission.mem_threshold` | fraction, default `0.90` | read when the governor loads its config | Admission holds new work while the memory-used fraction is above this value. Zero or absent means the default. |
 
 ## Path resolution, env overrides and file permissions
 

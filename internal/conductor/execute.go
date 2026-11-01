@@ -26,23 +26,10 @@ import (
 
 // Executor implements provider.ModelExecutor: the sole caller-facing model
 // call door. Build one with NewExecutor; the zero value is not usable.
-//
-// cancelsOnce/cancelsRegistry/bridge (P1-E11-W3-S23-T3) are the streaming
-// and cancellation collaborators: a lazily-constructed cancel-map (see
-// stream.go's cancels() getter) and an optional SSE publish seam (see
-// SetEventBridge). Both are added as struct fields here, rather than
-// ExecutorConfig parameters, because pipeline.go's ExecutorConfig and
-// NewExecutor are outside this ticket's files_scope - see stream.go's
-// journal note for both sides quoted. Every existing NewExecutor call
-// site keeps compiling and working unchanged: cancelsRegistry comes into
-// being on first use, and a nil bridge makes every publish a documented
-// no-op.
-// spawnHook/spawnSem/spawnDrops (P1-E12-W3-S25-T3) are the unified
-// spawned-agent registration seam - see spawn_hook.go for SetSpawnHook,
-// trySpawn/enqueueSpawn and this ticket's CONTRACT DEVIATION note. Added
-// as struct fields for the same reason cancelsOnce/cancelsRegistry/bridge
-// were: ExecutorConfig/NewExecutor (pipeline.go) are outside this ticket's
-// files_scope too.
+// cancelsOnce/cancelsRegistry/bridge (stream.go), spawnHook/spawnSem/
+// spawnDrops (spawn_hook.go) and the usage seams (usage.go) are struct
+// fields rather than ExecutorConfig parameters so every NewExecutor call
+// site keeps compiling unchanged; each is lazily built or a nil no-op.
 type Executor struct {
 	pipeline        *Pipeline
 	router          Router
@@ -52,34 +39,21 @@ type Executor struct {
 	spawnHook       SpawnHook
 	spawnSem        chan struct{}
 	spawnDrops      int64
-	// usageStore/usageAgg/costEstimator (P1-E11-W3-S23-T4): R-16.52 usage/
-	// cost seams, see usage.go's Set* methods; same reasoning as above.
-	usageStore    UsageRecorder
-	usageAgg      UsageAggregator
-	costEstimator CostEstimator
+	usageStore      UsageRecorder
+	usageAgg        UsageAggregator
+	costEstimator   CostEstimator
 }
 
-// CancelFunc cancels an in-flight ExecuteStream job. It is idempotent
-// (safe to call more than once) and never panics on an already-closed
-// stream channel. It cancels the job's context only; the wire-level
-// job.cancel JSON-RPC bridge over POST /rpc is S-23.T3's (R-40.X9).
+// CancelFunc cancels an in-flight ExecuteStream job's context. It is
+// idempotent and never panics on an already-closed stream channel.
 type CancelFunc func()
 
 var _ provider.ModelExecutor = (*Executor)(nil)
 
-// Execute runs req to completion through the sole model.execute door.
-//
-// P1-E11-W3-S23-T3 extends this method with the one-terminal-event rule
-// (R-21.217): every dispatched-past-authorization call mints a JobID,
-// registers a cancel func for it BEFORE dispatch, and publishes exactly
-// one terminal SSE event (done|error) through the bridge before
-// deregistering - so a GET /events?filter=job:<id> subscriber to a
-// one-shot job never hangs waiting for a terminal event
-// (TestStream_OneShotTerminalEventEmitted), and job.cancel on a one-shot
-// job in flight actually cancels its own dispatch context
-// (TestStream_OneShotJobID). A request that never reaches dispatch
-// (authorize failure) mints no job id at all - there is nothing yet for a
-// client to subscribe to.
+// Execute runs req to completion through the sole model.execute door. A
+// call past authorization mints a JobID, registers its cancel func before
+// dispatch and publishes exactly one terminal SSE event (R-21.217); a call
+// refused before dispatch mints none.
 func (e *Executor) Execute(ctx context.Context, req provider.ModelRequest) (provider.ModelResponse, error) {
 	start := e.usageClockStart() // P1-E11-W3-S23-T4: see usage.go's CONTRACT NOTE.
 	pass, err := e.enterDoor(ctx, doorCall{Verb: VerbExecute, Req: &req})

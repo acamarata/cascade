@@ -76,6 +76,7 @@ var knownConfigKeys = []string{
 	"policy.autonomy_profile", "policy.approval_batch_window_s", "policy.approval_batch_cap",
 	"secrets.keychain_backend", "secrets.clipboard_ttl",
 	"conductor.lane_order", "conductor.external_routing_enabled", "conductor.spill_enabled",
+	ConductorDenyKey, "conductor.quota",
 	"notify.aggregation_window",
 	"nodes.trust_tier",
 	"sync.class",

@@ -77,15 +77,17 @@ func conductorSecurity(paths runtime.PathProvider) (daemon.ConductorSecurity, er
 	if err != nil {
 		return daemon.ConductorSecurity{}, err
 	}
+	policy, err := conductorPolicyFor(paths, runtime.NewSystemClock())
+	if err != nil {
+		return daemon.ConductorSecurity{}, err
+	}
 	return daemon.ConductorSecurity{
 		Classifier: classifier,
 		Taxonomy:   conductor.TaskClassRegistry{},
-		// No deny store is wired yet: `cascade policy` owns the operator's
-		// rules and has no daemon-side reader at this call site. nil means
-		// "no deny rules configured", which NewOwnerPolicy documents as the
-		// deliberate default HERE — identity is proven by the socket-owner
-		// check below this seam, not re-proven by a rule.
-		Policy:      conductor.NewOwnerPolicy(nil),
+		// The owner deny store over [conductor].deny_task_classes, read
+		// from the daemon's live config on every call; a wiring with no
+		// composed daemon behind it refuses every class.
+		Policy:      conductor.NewOwnerPolicy(policy.Deny),
 		Sensitivity: conductor.FailClosedSensitivity{},
 		Firewall:    firewall,
 	}, nil

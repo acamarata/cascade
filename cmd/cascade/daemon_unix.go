@@ -99,7 +99,10 @@ func composeDaemon(ctx context.Context, deps daemonDeps, observe registryObserve
 	if err != nil {
 		return daemon.RunOptions{}, cleanups, err
 	}
-	memoryAdmin, pol, cleanupBackground, err := wireBackgroundSubsystems(runCtx, manifest, paths, deps, cfg, store, rawDB, bus, logProvider, baseline)
+	// live: the one conductor quota policy and owner deny store, built over
+	// the reloader's current config (conductor_deny_store.go).
+	live := &liveConductor{}
+	memoryAdmin, pol, cleanupBackground, err := wireBackgroundSubsystems(runCtx, manifest, paths, deps, cfg, store, rawDB, bus, logProvider, baseline, live)
 	if err != nil {
 		joinRun()
 		return daemon.RunOptions{}, cleanups, err
@@ -113,7 +116,7 @@ func composeDaemon(ctx context.Context, deps daemonDeps, observe registryObserve
 	server, _, connections, err := buildRPCServer(bus, deps.Clock, logProvider.Logger(), settings, paths, memoryAdmin, store,
 		withRunContext(runCtx), withManifest(manifest),
 		withPolicyHandlers(pol),
-		withNodePlacement(deps.NodeTunnels), withBaselineRuntime(withFleetRuntime(withDaemonRuntime(cfg, rawDB, pol, logProvider, deps), fleet), baseline), withRegistryObserver(observe))
+		withNodePlacement(deps.NodeTunnels), withLiveConductor(withBaselineRuntime(withFleetRuntime(withDaemonRuntime(cfg, rawDB, pol, logProvider, deps), fleet), baseline), live), withRegistryObserver(observe))
 	if err != nil {
 		return daemon.RunOptions{}, cleanups, err
 	}

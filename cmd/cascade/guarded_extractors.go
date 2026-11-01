@@ -1,11 +1,9 @@
 // Purpose: registers every guarded config family with internal/runtime. Each
-// Extract runs the section's own production decoder (the one its consumers
-// call) and returns a value mirroring the TOML table with every shipped
-// default omitted; the FieldSpec rules order each key.
+// Extract runs the section's production decoder and returns a value mirroring
+// the TOML table with every shipped default omitted; FieldSpec rules order keys.
 // Inputs: the config tree. Outputs: RegisterGuardedFamily calls at init.
 // Constraints: one decode per family (C5); an invalid section is an Extract
-// error, never a default. [secrets] and [sync] values are built-in
-// EffectiveConfig fields, so those families only run the decoder.
+// error, never a default. [secrets] and [sync] only run their decoders.
 // SPORT: cmd/cascade guarded families (P1 config baseline).
 package main
 
@@ -37,7 +35,8 @@ func table(f map[string]runtime.FieldSpec, o *runtime.FieldSpec) runtime.FieldSp
 // The family specs. [policy]: an allow entry, any ask change, a removed deny
 // entry, a higher ceiling, a batching change or a removed risk gate loosens; a
 // degraded boot (strict profile) keeps an ask overlay at a level strict does not
-// deny (askKeep). [conductor.quota.ceiling]: a removed or raised limit loosens.
+// deny (askKeep). [conductor]: a removed deny_task_classes entry and a removed or
+// raised quota ceiling loosen; conductorExempt keys are not modeled at all.
 var (
 	askKeep    = []interface{}{policy.L0.String(), policy.L1.String(), policy.L2.String()}
 	policySpec = table(map[string]runtime.FieldSpec{
@@ -51,13 +50,15 @@ var (
 		"discovery_networks": ruleGrows, "dispatch_repo_root": ruleAny, "dispatch_remote": ruleAny, "travel": ruleAny,
 	}, nil)
 	conductorSpec = table(map[string]runtime.FieldSpec{
-		"restricted_external_lanes": ruleGrows,
-		"quota":                     table(map[string]runtime.FieldSpec{"spill_order": ruleAny, "ceiling": table(nil, &runtime.FieldSpec{Rule: runtime.RuleCap}), "personal_tracking": ruleAny}, nil),
+		"restricted_external_lanes": ruleGrows, "deny_task_classes": {Rule: runtime.RuleSetShrinks},
+		"quota": table(map[string]runtime.FieldSpec{"ceiling": table(nil, &runtime.FieldSpec{Rule: runtime.RuleCap}), "personal_tracking": ruleAny}, nil),
 	}, nil)
-	egressSpec    = table(nil, &runtime.FieldSpec{Rule: runtime.RuleTable, Fields: map[string]runtime.FieldSpec{"allow": ruleGrows}})
-	authSpec      = table(nil, &runtime.FieldSpec{Rule: runtime.RuleTable, Fields: map[string]runtime.FieldSpec{"class": ruleSetChg, "key_env": ruleSetChg, "auth_source": ruleSetChg}})
-	lanesSpec     = table(nil, &runtime.FieldSpec{Rule: runtime.RuleTable, Fields: map[string]runtime.FieldSpec{"posture": ruleAny}})
-	embeddingSpec = table(map[string]runtime.FieldSpec{"local_socket": ruleSetChg}, nil)
+	// conductorExempt: unmodeled [conductor.quota] keys (never a loosening), each with its reason.
+	conductorExempt = map[string]string{"spill_order": "a preference order over lanes the router already admits; every ceiling, deny and sensitivity rule still applies to each lane it names (R-14.245)"}
+	egressSpec      = table(nil, &runtime.FieldSpec{Rule: runtime.RuleTable, Fields: map[string]runtime.FieldSpec{"allow": ruleGrows}})
+	authSpec        = table(nil, &runtime.FieldSpec{Rule: runtime.RuleTable, Fields: map[string]runtime.FieldSpec{"class": ruleSetChg, "key_env": ruleSetChg, "auth_source": ruleSetChg}})
+	lanesSpec       = table(nil, &runtime.FieldSpec{Rule: runtime.RuleTable, Fields: map[string]runtime.FieldSpec{"posture": ruleAny}})
+	embeddingSpec   = table(map[string]runtime.FieldSpec{"local_socket": ruleSetChg}, nil)
 )
 
 // guardedFamilies is the registration table; its order is not significant.
@@ -69,7 +70,7 @@ func guardedFamilies() []runtime.GuardedFamily {
 			Keys: []string{"nodes.default_trust_tier", "nodes.known_hosts_path", "nodes.scan_lan", "nodes.discovery_networks",
 				"nodes.dispatch_repo_root", "nodes.dispatch_remote", "nodes.travel"}}),
 		conductorSpec.Bind(runtime.GuardedFamily{Section: "conductor", Extract: extractConductorFamily,
-			Keys: []string{"conductor.restricted_external_lanes", "conductor.quota"}}),
+			Keys: []string{"conductor.restricted_external_lanes", "conductor.quota", runtime.ConductorDenyKey}}),
 		egressSpec.Bind(runtime.GuardedFamily{Section: "agents.egress", Extract: extractEgressFamily}),
 		authSpec.Bind(runtime.GuardedFamily{Section: "agents.auth", Extract: extractAuthFamily}),
 		lanesSpec.Bind(runtime.GuardedFamily{Section: "agents.lanes", Extract: extractLanesFamily}),
@@ -140,14 +141,18 @@ func extractNodesFamily(extra map[string]interface{}) (json.RawMessage, error) {
 	return json.Marshal(v)
 }
 
-// extractConductorFamily runs ParseRestrictedPermits and ParseQuotaConfig; a
-// present [conductor.quota] is kept even when empty (it ends the divergence event).
+// extractConductorFamily runs ParseRestrictedPermits, ConductorDenyTaskClasses and
+// ParseQuotaConfig; a present [conductor.quota] is kept even when empty.
 func extractConductorFamily(extra map[string]interface{}) (json.RawMessage, error) {
 	section, err := subTable(extra, "conductor")
 	if err != nil {
 		return nil, err
 	}
 	if _, err := conductor.ParseRestrictedPermits(section); err != nil {
+		return nil, err
+	}
+	denied, err := runtime.ConductorDenyTaskClasses(&runtime.Config{Extra: extra})
+	if err != nil {
 		return nil, err
 	}
 	q, missing, err := conductor.ParseQuotaConfig(extra)
@@ -159,11 +164,9 @@ func extractConductorFamily(extra map[string]interface{}) (json.RawMessage, erro
 	raw, _ := json.Marshal(section["restricted_external_lanes"])
 	_ = json.Unmarshal(raw, &lanes)
 	putList(v, "restricted_external_lanes", lanes)
+	putList(v, "deny_task_classes", denied)
 	if !missing {
 		quota := map[string]interface{}{}
-		if len(q.SpillOrder) > 0 {
-			quota["spill_order"] = q.SpillOrder
-		}
 		if len(q.CeilingOverrides) > 0 {
 			quota["ceiling"] = q.CeilingOverrides
 		}
@@ -244,9 +247,8 @@ func extractEmbeddingFamily(extra map[string]interface{}) (json.RawMessage, erro
 	return json.Marshal(v)
 }
 
-// extractSecretsFamily and extractSyncFamily run their consumers' decoders and
-// return nothing: the values are built-in EffectiveConfig fields, so
-// builtinFamily never has two values to compare (invalid is handled first).
+// extractSecretsFamily and extractSyncFamily only run their decoders: the values
+// are built-in EffectiveConfig fields, so builtinFamily has nothing to compare.
 func builtinFamily(_, _ json.RawMessage) ([]runtime.LooseningPath, error) { return nil, nil }
 
 func extractSecretsFamily(extra map[string]interface{}) (json.RawMessage, error) {
@@ -259,8 +261,7 @@ func extractSyncFamily(extra map[string]interface{}) (json.RawMessage, error) {
 	return nil, err
 }
 
-// subTable returns the table at m[path[0]][path[1]]...: nil when absent, an
-// error when a step is present and not a table.
+// subTable returns the table at m[path[0]][path[1]]...: nil when absent, an error when not a table.
 func subTable(m map[string]interface{}, path ...string) (map[string]interface{}, error) {
 	for _, key := range path {
 		raw, ok := m[key]
@@ -280,8 +281,7 @@ func putString(v map[string]interface{}, key, s string) {
 	}
 }
 
-// putStringKey copies t[key] into v when it is a non-empty string and refuses
-// a value of any other type.
+// putStringKey copies a non-empty string t[key] into v; any other type is refused.
 func putStringKey(v, t map[string]interface{}, key, table string) error {
 	raw, ok := t[key]
 	s, isStr := raw.(string)

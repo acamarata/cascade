@@ -66,7 +66,7 @@ const hotReloadEventSource = "runtime.hotreload"
 // perspective, and ReloadOutcome / the audit record remain the
 // authoritative account of what Reload actually did either way.
 type busEventPublisher struct {
-	bus *events.Bus
+	bus eventBus
 }
 
 func (p *busEventPublisher) Publish(ctx context.Context, name string, payload map[string]interface{}) {
@@ -77,12 +77,36 @@ func (p *busEventPublisher) Publish(ctx context.Context, name string, payload ma
 	_, _ = p.bus.Publish(ctx, hotReloadEventNamespace, events.EventKind(name), hotReloadEventSource, data)
 }
 
+// eventBus is the publish half of *events.Bus.
+type eventBus interface {
+	Publish(ctx context.Context, namespace string, kind events.EventKind, source string, payload []byte) (events.Event, error)
+}
+
+// reloadAcceptedEvent is the event HotReloader publishes after a swap.
+const reloadAcceptedEvent events.EventKind = "config.reload.accepted"
+
+// acceptHookBus publishes through eventBus, then runs accepted after each
+// config.reload.accepted, synchronously: Current() is already swapped.
+type acceptHookBus struct {
+	eventBus
+	accepted func(context.Context)
+}
+
+// Publish implements eventBus.
+func (b acceptHookBus) Publish(ctx context.Context, namespace string, kind events.EventKind, source string, payload []byte) (events.Event, error) {
+	ev, err := b.eventBus.Publish(ctx, namespace, kind, source, payload)
+	if kind == reloadAcceptedEvent && b.accepted != nil {
+		b.accepted(ctx)
+	}
+	return ev, err
+}
+
 // wireHotReload builds the real HotReloader (over store's real
 // StoreAuditRecorder — R-14.175's other named gap, closed here in the
 // same call rather than as a separate seam) and starts the real
 // fsnotify ReloadWatcher on paths.ConfigPath(). The caller stops the
 // returned watcher on shutdown.
-func wireHotReload(paths runtime.PathProvider, clock runtime.Clock, getenv runtime.Getenv, environ func() []string, cfg *runtime.Config, store provider.Store, bus *events.Bus, logs *runtime.LogProvider, options ...func(*runtime.HotReloader)) (*runtime.HotReloader, *runtime.ReloadWatcher, error) {
+func wireHotReload(paths runtime.PathProvider, clock runtime.Clock, getenv runtime.Getenv, environ func() []string, cfg *runtime.Config, store provider.Store, bus eventBus, logs *runtime.LogProvider, options ...func(*runtime.HotReloader)) (*runtime.HotReloader, *runtime.ReloadWatcher, error) {
 	loadOpts := runtime.LoadOptions{
 		Path:    paths.ConfigPath(),
 		Getenv:  getenv,
@@ -109,14 +133,23 @@ func wireHotReload(paths runtime.PathProvider, clock runtime.Clock, getenv runti
 // the cap; this is a cap-driven split of composition-root glue, not a
 // new concern). On a startScheduler failure this also stops the watcher
 // it already started, so a caller that gets a non-nil error never needs
-// to guess what, if anything, it must still tear down.
-func wireBackgroundSubsystems(ctx context.Context, manifest *daemon.Manifest, paths runtime.PathProvider, deps daemonDeps, cfg *runtime.Config, store provider.Store, rawDB *sql.DB, bus *events.Bus, logProvider *runtime.LogProvider, baseline *configBaseline) (*memory.AdminHandler, *policyWiring, func(), error) {
+// to guess what, if anything, it must still tear down. A live conductor
+// (composeDaemon passes one) gets its policy built over the reloader here,
+// re-applied on every accepted reload; a value that does not parse refuses.
+func wireBackgroundSubsystems(ctx context.Context, manifest *daemon.Manifest, paths runtime.PathProvider, deps daemonDeps, cfg *runtime.Config, store provider.Store, rawDB *sql.DB, bus *events.Bus, logProvider *runtime.LogProvider, baseline *configBaseline, live ...*liveConductor) (*memory.AdminHandler, *policyWiring, func(), error) {
 	if err := bootSecrets(cfg, baseline); err != nil {
 		return nil, nil, nil, err
 	}
-	hr, watcher, err := wireHotReload(paths, deps.Clock, deps.Getenv, deps.Environ, cfg, store, bus, logProvider, secretsApplierOption(manifest))
+	lc := firstLiveConductor(live)
+	hr, watcher, err := wireHotReload(paths, deps.Clock, deps.Getenv, deps.Environ, cfg, store, acceptHookBus{eventBus: bus, accepted: lc.reloaded}, logProvider, secretsApplierOption(manifest))
 	if err != nil {
 		return nil, nil, nil, err
+	}
+	if len(live) > 0 {
+		if err := attachLiveConductor(ctx, lc, hr, paths, deps, manifest, logProvider.Logger()); err != nil {
+			watcher.Stop()
+			return nil, nil, nil, err
+		}
 	}
 	// The baseline's single-use slot is the reloader's only loosening
 	// approver; without it every loosening reload is refused.
@@ -173,28 +206,52 @@ func wireBackgroundSubsystems(ctx context.Context, manifest *daemon.Manifest, pa
 		return nil, nil, nil, err
 	}
 
-	// The ci_results attention subscriber (P1-E25-W5-S51-T4). Same
-	// child-context posture as metricsCtx/schedCtx above: ctx itself is
-	// not guaranteed canceled when daemon.Run returns, so this gets its
-	// own cancel folded into the cleanup func below.
-	ciCtx, ciCancel := context.WithCancel(ctx)
-	wireCIAttentionSubscription(ciCtx, manifest, ciWatchSourceFromReloader(hr), store, deps.Clock, bus, cfg.CIPolicy.PrivateRepos, logProvider.Logger())
-
-	// The memory projection background loop (P1-E07-W5-S92-T1). Same
-	// child-context posture as metricsCtx/schedCtx/ciCtx above, and the
-	// SAME runtime store every other subsystem here already holds -- no
-	// second sqlite handle is opened for it.
-	memProjCtx, memProjCancel := context.WithCancel(ctx)
-	startMemoryProjection(memProjCtx, manifest, paths, store, deps.Clock, logProvider.Logger())
+	lateCancel := startLateConsumers(ctx, manifest, paths, deps, cfg, store, bus, hr, logProvider.Logger())
 
 	return admin, pol, func() {
 		watcher.Stop()
+		lc.detach()
 		metricsCancel()
 		schedCancel()
-		ciCancel()
-		memProjCancel()
+		lateCancel()
 		schedCleanup(context.Background())
 	}, nil
+}
+
+// firstLiveConductor returns the conductor handed to the wiring, or an inert
+// one when none was passed.
+func firstLiveConductor(live []*liveConductor) *liveConductor {
+	if len(live) > 0 && live[0] != nil {
+		return live[0]
+	}
+	return &liveConductor{}
+}
+
+// attachLiveConductor builds lc's policy over the reloader from the config
+// file as written, before the baseline restricts it: a deny or quota value
+// that does not parse refuses start (conductor_deny_store.go).
+func attachLiveConductor(ctx context.Context, lc *liveConductor, hr *runtime.HotReloader, paths runtime.PathProvider, deps daemonDeps, manifest *daemon.Manifest, log *slog.Logger) error {
+	onDisk, err := runtime.Load(ctx, runtime.LoadOptions{Path: paths.ConfigPath(), Getenv: deps.Getenv, Environ: deps.Environ})
+	if err != nil {
+		return err
+	}
+	return lc.attach(hr, onDisk, paths.ConfigPath(), deps.Clock, manifest, log)
+}
+
+// startLateConsumers starts the ci_results attention subscriber and the
+// memory projection loop, each on a child context: ctx itself is not
+// guaranteed canceled when daemon.Run returns. The returned func cancels
+// both and belongs in the caller's cleanup. The projection reuses the SAME
+// runtime store every other subsystem holds -- no second sqlite handle.
+func startLateConsumers(ctx context.Context, manifest *daemon.Manifest, paths runtime.PathProvider, deps daemonDeps, cfg *runtime.Config, store provider.Store, bus *events.Bus, hr *runtime.HotReloader, log *slog.Logger) context.CancelFunc {
+	ciCtx, ciCancel := context.WithCancel(ctx)
+	wireCIAttentionSubscription(ciCtx, manifest, ciWatchSourceFromReloader(hr), store, deps.Clock, bus, cfg.CIPolicy.PrivateRepos, log)
+	memProjCtx, memProjCancel := context.WithCancel(ctx)
+	startMemoryProjection(memProjCtx, manifest, paths, store, deps.Clock, log)
+	return func() {
+		ciCancel()
+		memProjCancel()
+	}
 }
 
 // registerHydrationPack resolves [context.hydration] and registers the

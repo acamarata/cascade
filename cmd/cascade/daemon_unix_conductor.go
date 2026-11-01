@@ -3,7 +3,7 @@
 // Purpose: the composition-root call site R-16.80 Ruling 2 assigns:
 //
 //	builds the real conductor.execute collaborators (the durable
-//	providers registry, a fail-closed default QuotaPolicy, and the
+//	providers registry, the daemon's configured QuotaPolicy, and the
 //	daemon's real audit.Writer) and calls daemon.
 //	RegisterConductorExecuteHandler and daemon.WireReachability so
 //	"conductor.execute" and Manifest.RegisterReachability both get a
@@ -66,14 +66,13 @@ func wireConductorAndReachability(ctx context.Context, registry *rpc.Registry, m
 
 // wireConductorExecute opens the same durable providers.db `provider
 // add/list/health` already use (openMigratedDB, provider_health_cmd.go),
-// builds a real registry.Reader, a fail-closed default QuotaPolicy
-// (no [conductor.quota] TOML section is parsed at this call site yet --
-// a disclosed, narrower gap than R-16.80's connector fix, since
-// ParseQuotaConfig(nil) itself already fails closed to a safe single-lane
-// default rather than an error), and a real conductor.ProviderResolver
-// (dispatch.NewResolver, DEFECT-conductor-execute-permanently-
-// unavailable.md), then calls daemon.RegisterConductorExecuteHandler with
-// all of them plus the daemon's real audit.Writer.
+// builds a real registry.Reader, takes the daemon's one QuotaPolicy (built
+// from [conductor.quota] over the HotReloader's current config and
+// re-applied on every accepted reload, conductor_deny_store.go), builds a
+// real conductor.ProviderResolver (dispatch.NewResolver,
+// DEFECT-conductor-execute-permanently-unavailable.md), then calls
+// daemon.RegisterConductorExecuteHandler with all of them plus the daemon's
+// real audit.Writer.
 //
 // The resolver's CredentialSource is the STANDING-GRANT reader
 // (R-14.243, daemon_unix_conductor_security.go's daemonCredentialSource).
@@ -95,11 +94,11 @@ func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest 
 	}
 	reg := providerregistry.NewRegistry(regDB, clock)
 	reader := providerregistry.NewReader(reg)
-	cfg, _, err := conductor.ParseQuotaConfig(nil)
+	live, err := conductorPolicyFor(paths, clock)
 	if err != nil {
 		return daemon.ConductorFanOut{}, err
 	}
-	quota := conductor.NewQuotaPolicy(cfg, clock)
+	quota := live.Quota
 	credentials, cerr := daemonCredentialSource(paths)
 	if cerr != nil {
 		return daemon.ConductorFanOut{}, cerr

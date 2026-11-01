@@ -31,6 +31,7 @@ import (
 	"log/slog"
 	"sort"
 
+	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/memory"
@@ -107,6 +108,22 @@ type daemonRuntime struct {
 	// CI is the daemon's one CI runtime (the streaming dispatcher); the "ci"
 	// registration (wire_ci.go) sets it.
 	CI *daemon.CIRuntime
+	// Reloader is the daemon's one config HotReloader; Current() is the
+	// effective config every live reader reads.
+	Reloader *runtime.HotReloader
+	// ConductorPolicy is the daemon's one quota policy and owner deny store
+	// (conductor_deny_store.go). The conductor wiring and the reservation
+	// owner (P1-TOP-04) read these same two values; neither builds its own.
+	ConductorPolicy *conductorPolicy
+}
+
+// conductorPolicy is built once in composeDaemon over Reloader.Current();
+// start refuses when either value does not parse. Quota is re-applied on
+// every accepted reload (QuotaPolicy.Apply); Deny reads the live config on
+// every call.
+type conductorPolicy struct {
+	Quota *conductor.QuotaPolicy
+	Deny  conductor.DenyStore
 }
 
 // daemonRegistration is one subsystem's wiring step. Name must be unique and
