@@ -23,8 +23,8 @@ const (
 // the marker tables archive.go/retention.go add below; 8->9 by
 // P1-E20-W5-S44-T2 for conversation_thread_privacy (privacy.go); 9->10 for
 // conversation_turn_origin (origin.go); 10->11 for conversation_thread_project
-// (project.go).
-const conversationSchemaVersion = 11
+// (project.go); 11->12 for conversation_reply (reply_store.go).
+const conversationSchemaVersion = 12
 
 // SchemaVersion is conversationSchemaVersion exported for a future
 // composition root's reader-ceiling max(), matching registry/jobs's own
@@ -72,6 +72,7 @@ func MigrationSet() migrate.MigrationSet {
 			}},
 			originStep(),
 			projectStep(),
+			replyStep(),
 		},
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"io/fs"
 	"path/filepath"
 	"strings"
@@ -60,6 +61,15 @@ func helperRefs(n ast.Node) []string {
 	return out
 }
 
+// replyDoorStreamCalls are ExecuteStream calls on a conversation.ReplyDoor
+// value (contract:chat-reply names the method): the production ReplyDoor is
+// daemon.ConductorDoor, whose ExecuteStream enters through ExecuteStreamJob.
+// Keyed by file, then by the exact receiver expression; any other receiver
+// in these files is still a violation.
+var replyDoorStreamCalls = map[string]map[string]bool{
+	"internal/conversation/reply_rpc.go": {"r.door": true, "d.next": true},
+}
+
 // doorViolations lists the places in file (repo-relative path rel) that
 // bypass the chokepoint: any reference to a Pipeline dispatch helper or to the
 // Resolver field outside door.go and pipeline.go; a door helper referenced
@@ -87,7 +97,7 @@ func doorViolations(rel string, file *ast.File) []string {
 				out = append(out, slash+": references "+x.Sel.Name+" outside door.go")
 			case !inDoor && inConductor && slash != "internal/conductor/pipeline.go" && x.Sel.Name == "Resolver":
 				out = append(out, slash+": reads the Resolver outside door.go and pipeline.go")
-			case !inConductor && x.Sel.Name == "ExecuteStream":
+			case !inConductor && x.Sel.Name == "ExecuteStream" && !replyDoorStreamCalls[slash][types.ExprString(x.X)]:
 				out = append(out, slash+": calls ExecuteStream directly (use ExecuteStreamJob)")
 			}
 		case *ast.Ident:
@@ -216,4 +226,6 @@ var doorBypassSeeds = []struct{ name, rel, src string }{
 		doorPre + "func (e *Executor) Chat() { e.doorChat(nil, sel, req) }"},
 	{"ExecuteStream from cmd", "cmd/cascade/run.go",
 		"package main\nfunc run() { exec.ExecuteStream(nil, nil) }"},
+	{"ExecuteStream on an Executor in a reply file", "internal/conversation/reply_rpc.go",
+		"package conversation\nfunc f() { r.exec.ExecuteStream(nil, nil) }"},
 }

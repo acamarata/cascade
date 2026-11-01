@@ -119,38 +119,41 @@ func (s *conversationStore) AppendTurn(ctx context.Context, turn Turn) error {
 	if err := validateTurn(turn); err != nil {
 		return err
 	}
-	return runTx(ctx, s.db, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO `+tableThread+` (id, name, created_at) VALUES (?, ?, ?)
-			 ON CONFLICT(id) DO NOTHING`,
-			turn.ThreadID, turn.ThreadID, turn.CreatedAt); err != nil {
-			return cascade.Wrap(cascade.KindUnavailable, err, "conversation: ensure thread")
-		}
+	return runTx(ctx, s.db, func(tx *sql.Tx) error { return appendTurnTx(ctx, tx, turn) })
+}
 
-		exists, err := rowExists(ctx, tx, tableTurn, turn.ID)
-		if err != nil {
-			return err
-		}
-		if exists {
-			return ErrImmutable
-		}
-
-		next, err := nextSeq(ctx, tx, tableTurn, "thread_id", turn.ThreadID)
-		if err != nil {
-			return err
-		}
-		if turn.Seq != next {
-			return ErrOutOfOrder
-		}
-
-		_, err = tx.ExecContext(ctx,
-			`INSERT INTO `+tableTurn+` (id, thread_id, seq, role, created_at) VALUES (?, ?, ?, ?, ?)`,
-			turn.ID, turn.ThreadID, turn.Seq, string(turn.Role), turn.CreatedAt)
-		if err := translateAppendError(err, "conversation: append turn"); err != nil {
-			return err
-		}
-		return insertTurnOrigin(ctx, tx, turn) // same tx: the marker and the turn commit together
-	})
+// appendTurnTx is AppendTurn's body on an open transaction, shared with the
+// reply write (reply_store.go) so the assistant turn and its reply row
+// commit together: ensure the thread row, refuse a duplicate id or a seq
+// that does not extend the thread by one, insert the turn and its marker.
+func appendTurnTx(ctx context.Context, tx *sql.Tx, turn Turn) error {
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO `+tableThread+` (id, name, created_at) VALUES (?, ?, ?)
+		 ON CONFLICT(id) DO NOTHING`,
+		turn.ThreadID, turn.ThreadID, turn.CreatedAt); err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "conversation: ensure thread")
+	}
+	exists, err := rowExists(ctx, tx, tableTurn, turn.ID)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return ErrImmutable
+	}
+	next, err := nextSeq(ctx, tx, tableTurn, "thread_id", turn.ThreadID)
+	if err != nil {
+		return err
+	}
+	if turn.Seq != next {
+		return ErrOutOfOrder
+	}
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO `+tableTurn+` (id, thread_id, seq, role, created_at) VALUES (?, ?, ?, ?, ?)`,
+		turn.ID, turn.ThreadID, turn.Seq, string(turn.Role), turn.CreatedAt)
+	if err := translateAppendError(err, "conversation: append turn"); err != nil {
+		return err
+	}
+	return insertTurnOrigin(ctx, tx, turn) // same tx: the marker and the turn commit together
 }
 
 // AppendSegment implements Store.

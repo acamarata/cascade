@@ -86,6 +86,10 @@ type journalPayload struct {
 	// Provenance is the turn's origin-marker provenance (origin.go); the
 	// origin label itself rides inside Turn. Both survive Resume.
 	Provenance provider.Provenance `json:"provenance,omitempty"`
+	// ReplyTo is the user turn an assistant turn answers (reply_store.go):
+	// the conversation_reply mapping rides in the same entry as the turn,
+	// and Resume restores both in one transaction.
+	ReplyTo string `json:"reply_to,omitempty"`
 }
 
 // ErrJournalDecodeFailed is returned when a stored journal entry's
@@ -112,7 +116,15 @@ func AppendTurnJournaled(ctx context.Context, js JournalStore, store Store, turn
 // the plain AppendTurn/AppendSegment pair (the adapter's first-turn-with-
 // marker transaction) keeps the same journal contract.
 func appendJournaledWith(ctx context.Context, js JournalStore, turn Turn, segments []Segment, write func() error) error {
-	payload, err := json.Marshal(journalPayload{Type: JournalEntryTurnAppend, Turn: &turn, Segments: segments, Provenance: turn.Provenance})
+	return appendJournaledPayload(ctx, js, journalPayload{Type: JournalEntryTurnAppend, Turn: &turn,
+		Segments: segments, Provenance: turn.Provenance}, write)
+}
+
+// appendJournaledPayload is the intent -> write -> ack sequence for one
+// TurnAppend payload p, whose Turn must be set.
+func appendJournaledPayload(ctx context.Context, js JournalStore, p journalPayload, write func() error) error {
+	turn := *p.Turn
+	payload, err := json.Marshal(p)
 	if err != nil {
 		return cascade.Wrap(cascade.KindInternal, err, "conversation: marshal journal payload")
 	}
@@ -186,13 +198,35 @@ func Resume(ctx context.Context, js JournalStore, store Store, threadID string) 
 		if p.Type != JournalEntryTurnAppend || p.Turn == nil {
 			continue
 		}
-		n, err := resumeOneTurn(ctx, store, restoreMarker(*p.Turn, p.Provenance), p.Segments)
+		n, err := resumePayload(ctx, store, p)
 		if err != nil {
 			return applied, err
 		}
 		applied += n
 	}
 	return applied, nil
+}
+
+// resumePayload re-applies one TurnAppend payload: an assistant reply with
+// its mapping through the one-transaction reply write, any other turn
+// through resumeOneTurn.
+func resumePayload(ctx context.Context, store Store, p journalPayload) (int, error) {
+	turn := restoreMarker(*p.Turn, p.Provenance)
+	if p.ReplyTo == "" {
+		return resumeOneTurn(ctx, store, turn, p.Segments)
+	}
+	cs, ok := store.(*conversationStore)
+	if !ok {
+		return 0, errReplyStore
+	}
+	err := cs.appendReply(ctx, p.ReplyTo, turn, p.Segments)
+	if cascade.HasKind(err, cascade.KindConflict) {
+		return 0, nil // the reply and its mapping already committed together
+	}
+	if err != nil {
+		return 0, err
+	}
+	return 1 + len(p.Segments), nil
 }
 
 // resumeOneTurn re-applies one journaled turn+segments against store,
