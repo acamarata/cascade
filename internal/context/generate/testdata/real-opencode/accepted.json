@@ -1,0 +1,9 @@
+{
+  "tool": "opencode",
+  "version": "1.15.5",
+  "captured_at": "2026-11-01T10:50:32Z",
+  "command": "opencode debug config",
+  "golden_sha256": "45557241b48c2c057351a374ef64b83b2ff93a88515640226a9412fc02314ba3",
+  "stdout_excerpt": "{\n  \"$schema\": \"https://opencode.ai/config.json\",\n  \"mcp\": {\n    \"cascade\": {\n      \"type\": \"local\",\n      \"command\": [\n        \"cascade\",\n        \"mcp\",\n        \"serve\",\n        \"--stdio\"\n      ],\n      \"enabled\": true\n    }\n  },\n  \"agent\": {},\n  \"mode\": {},\n  \"plugin\": [],\n  \"command\": {},\n  \"username\": \"unknown\"\n}\n",
+  "exit_code": 0
+}

@@ -1,0 +1,5 @@
+# cascade:managed:begin codex-config
+[mcp_servers.cascade]
+command = "cascade"
+args = ["mcp", "serve", "--stdio"]
+# cascade:managed:end

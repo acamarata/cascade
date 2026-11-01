@@ -1,0 +1,9 @@
+{
+  "tool": "codex",
+  "version": "codex-cli 0.160.0",
+  "captured_at": "2026-11-01T10:50:32Z",
+  "command": "codex mcp list --json",
+  "golden_sha256": "353fff8c226ec1ca180ae5e8c0760a6f0c381b1785d5ebc1a57b72cc78574184",
+  "stdout_excerpt": "[\n  {\n    \"name\": \"cascade\",\n    \"enabled\": true,\n    \"disabled_reason\": null,\n    \"transport\": {\n      \"type\": \"stdio\",\n      \"command\": \"cascade\",\n      \"args\": [\n        \"mcp\",\n        \"serve\",\n        \"--stdio\"\n      ],\n      \"env\": null,\n      \"env_vars\": [],\n      \"cwd\": null\n    },\n    \"startup_timeout_sec\": null,\n    \"tool_timeout_sec\": null,\n    \"auth_status\": \"unsupported\"\n  }\n]\n",
+  "exit_code": 0
+}

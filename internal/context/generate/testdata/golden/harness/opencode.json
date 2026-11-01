@@ -1,0 +1,7 @@
+{
+  "mcp": {
+    // cascade:managed:begin opencode-config
+    "cascade": {"type": "local", "command": ["cascade", "mcp", "serve", "--stdio"], "enabled": true}
+    // cascade:managed:end
+  }
+}

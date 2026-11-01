@@ -181,7 +181,7 @@ be checked against the build.
 | `.claude/skills/{init,plan,verify,delegate,cascade-execution}/SKILL.md` | `skills` | `skill-<name>` |
 
 The set is closed: a missing, renamed or extra template stops the render.
-Each file is the template's frontmatter, with the keys Claude Code itself uses
+Each file is the template's frontmatter, with the keys claude CLI itself uses
 (`name`, `description`, `tools` for an agent; `name`, `description` for a
 skill; never `hooks`), then one managed block holding the template body. The
 only data is the policy view's languages, build, test and lint commands and
@@ -199,7 +199,7 @@ outside a block survives and the new rendering lands in a sidecar.
 
 ## Harness workflows
 
-`RenderWorkflows` writes Claude Code workflow scripts only when the installed
+`RenderWorkflows` writes claude CLI workflow scripts only when the installed
 CLI is known to support them. It asks a `WorkflowsSupportProbe` first, and
 `Negotiate` accepts protocol revision 1 alone (`ProtocolMin` and
 `ProtocolMax` are both 1).
@@ -239,6 +239,57 @@ Every other result returns `ErrHarnessIncompatible` from `Negotiate`, and
 `RenderWorkflows` turns it into data: no file under `.claude/workflows`, no
 manifest entry for one, and a manifest deferral with generator `workflows`,
 the result, a reason, owner `DEF-P3-cc-workflows` and expiry 2026-12-21. No
-installed Claude Code CLI lists a `workflows` command yet (2.1.316 does not),
+installed claude CLI CLI lists a `workflows` command yet (2.1.316 does not),
 so today this deferral is the normal outcome. Nothing in Fleet, the
 Conductor or the agent drivers reads these files.
+
+## Scoped AGENTS.md, Codex and OpenCode config
+
+`RenderScopedHarness(v View)` turns each scope of the policy view into one
+scoped `MergedContext` (the repository invariants, the scope's commands and
+its accepted facts; nothing from a tier outside the repository) and renders
+it through the unmodified `CXInstructionWriter` and `OCInstructionWriter`,
+called only through `Generate`. Both writers must produce the same bytes;
+if they ever differ the render stops with `internal`. The repository-root
+`AGENTS.md` is one shared file holding one block per scope.
+
+| File | Generator | Block | What the block holds |
+|---|---|---|---|
+| `AGENTS.md` | `agents-md` | `agents-md-<slug>` | the writers' rendering of that scope |
+| `<scope>/.codex/config.toml` | `codex-config` | `codex-config` | exactly the `[mcp_servers.cascade]` table below |
+| `<scope>/opencode.json` | `opencode-config` | `opencode-config` | exactly the `"cascade"` member of the top-level `"mcp"` object below |
+
+These are the published owned keys. Nothing else is ever written:
+
+```toml
+# cascade:managed:begin codex-config
+[mcp_servers.cascade]
+command = "cascade"
+args = ["mcp", "serve", "--stdio"]
+# cascade:managed:end
+```
+
+```jsonc
+{
+  "mcp": {
+    // cascade:managed:begin opencode-config
+    "cascade": {"type": "local", "command": ["cascade", "mcp", "serve", "--stdio"], "enabled": true}
+    // cascade:managed:end
+  }
+}
+```
+
+`MCPServeArgv()` is that argv. The root scope writes `.codex/config.toml`
+and `opencode.json` at the repository root. Codex reads a project's
+`.codex/config.toml` only when the project is trusted in the user's Codex
+config. OpenCode reads `opencode.json` as JSONC, so the `//` markers are
+comments to it.
+
+A person's keys go outside the blocks, and the file is then theirs: the next
+generation refuses it as `outside-edited` and writes a sidecar. A later
+projector (P2-HRN-15) adds its keys in its own block through
+`Writer.ApplyBlock`. The manifest records each block's generator and the
+outside hash leaves every recorded block out, so a re-render carries the
+projector's block and never refuses. Appending a block to `opencode.json`
+is `unsupported` until an in-object anchor exists, and leaves the file
+untouched; `.codex/config.toml` takes an appended block today.
