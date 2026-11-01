@@ -39,6 +39,7 @@
   "internal/fleet/economics": { "tier": "core", "floor": 85.0, "baseline": 85.3 },
   "internal/fleet/governor": { "tier": "core", "floor": 85.0, "baseline": 87.5 },
   "internal/fleet/hookpacks": { "tier": "core", "floor": 85.0, "baseline": 91.9 },
+  "internal/fleet/hookpacks/canon": { "tier": "core", "floor": 85.0, "baseline": 100.0 },
   "internal/fleet/journal": { "tier": "core", "floor": 85.0, "baseline": 95.3 },
   "internal/fleet/resume": { "tier": "core", "floor": 85.0, "baseline": 88.8 },
   "internal/fleet/sessions": { "tier": "core", "floor": 85.0, "baseline": 87.7 },

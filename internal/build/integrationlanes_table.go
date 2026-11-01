@@ -89,6 +89,8 @@ var IntegrationLanes = slices.Concat(
 	// acceptance is linux-only: its elevation drill stores a key in the Keychain, which an unsigned test binary cannot do (OSStatus -34018).
 	rows(LaneRow{Tags: "integration", RunRegex: ".", Job: LaneJob, OS: linuxOnly}, "./internal/acceptance"),
 	rows(LaneRow{Tags: "integration", RunRegex: ".", Job: LaneJob, OS: unixRunners, SkipOn: map[string]string{RunnerLinux: harnessSkip, RunnerMacOS: harnessSkip}}, "./providers/agents/claude"),
+	// the hook-event canon is checked against the installed claude binary (TestCanonMatchesInstalledCLI); a runner without the CLI skips it with the gate message
+	rows(LaneRow{Tags: "integration", RunRegex: ".", Job: LaneJob, OS: unixRunners, SkipOn: map[string]string{RunnerLinux: "claude CLI not installed", RunnerMacOS: "claude CLI not installed"}}, "./internal/fleet/hookpacks/canon"),
 	// the driver spawn proxy tests carry the security tag as well; a bare integration build compiles none of them
 	[]LaneRow{{"./internal/providers/agents", "integration security", "^(TestProxiedDialEffectRecordsIntentConfirm|TestSpawnProxyCloseDuringDialFailsTheEffect|TestSpawnProxyAbsentTableDeniesEveryDestination|TestRedTeamNetworkRefusedByBroker|TestSpawnProxyCredentialsDifferPerSpawn|TestSpawnProxyClosedAtReleaseRefusesConnect)$", LaneJob, unixRunners, nil}},
 	rows(LaneRow{Tags: "integration", Job: "build-test", OS: unixRunners}, "./internal/conversation", "./internal/daemon",
