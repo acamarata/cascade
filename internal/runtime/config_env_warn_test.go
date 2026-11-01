@@ -212,11 +212,9 @@ func TestLoadNilWarnUsesDefaultSlog(t *testing.T) {
 	}
 }
 
-// dynamicEnvReads declares every env-accessor call whose first argument is not a compile-time
-// constant: file:line from the repo root -> the env names it reads. "<caller-named>" marks a
-// pass-through adapter whose caller names the variable (a constant there is scanned at that call);
-// "<operator-named>" marks a name taken from a flag or from config. Every CASCADE_* name here must be
-// reserved. Slices of names are not evaluated: their names are listed by hand.
+// dynamicEnvReads maps nonconstant env reads (repo file:line) to names; CASCADE_* names must be reserved.
+// "<caller-named>" means the caller's constant is scanned there; "<operator-named>" means flag/config input.
+// dynamicEnvReadSlices binds slice-driven rows to declarations checked by TestDynamicEnvReadSlicesMatchTable.
 var dynamicEnvReads = map[string][]string{
 	"cmd/cascade/backup_key.go:187":            {"<operator-named>"}, // --passphrase-env
 	"cmd/cascade/init_adapters.go:30":          {"<caller-named>"},

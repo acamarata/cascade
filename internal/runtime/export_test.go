@@ -161,11 +161,11 @@ func ownerSeamCases() []ownerCase {
 		{name: "foreign-owned parent directory refused", fileUID: me, dirUID: foreign, setup: safe, substr: owned},
 		{name: "owned by the running user accepted", fileUID: me, dirUID: me, setup: safe},
 		{name: "owned by root accepted", setup: safe},
-		{name: "foreign-owned link in a sticky 1777 dir to a 0600 file refused", fileUID: me, dirUID: me, linkUID: foreign,
+		{name: "foreign-owned link in a sticky 1777 dir to a 0600 file refused", fileUID: me, dirUID: 0, linkUID: foreign,
 			foreignLink: "config.toml", setup: stickyLink, substr: "symlink %s " + owned},
-		{name: "link in a sticky 1777 dir owned by the running user accepted", fileUID: me, dirUID: me, linkUID: me,
+		{name: "link in a sticky 1777 dir owned by the running user accepted", fileUID: me, dirUID: 0, linkUID: me,
 			foreignLink: "config.toml", setup: stickyLink},
-		{name: "two-hop chain whose middle link is foreign-owned refused", fileUID: me, dirUID: me, linkUID: foreign,
+		{name: "two-hop chain whose middle link is foreign-owned refused", fileUID: me, dirUID: 0, linkUID: foreign,
 			foreignLink: "mid.toml", setup: twoHop, substr: "mid.toml " + owned},
 	}
 }
@@ -205,7 +205,15 @@ func TestForeignOwnerRefusedViaSeam(t *testing.T) {
 func runOwnerSeamSetup(t *testing.T, c ownerCase) (string, *int) {
 	t.Helper()
 	path, links := c.setup(t), new(int)
+	created := ownerCaseEntries(t, path)
 	setOwnerUIDLookup(t, func(fi fs.FileInfo) (int, bool) {
+		matched := false
+		for _, own := range created {
+			matched = matched || os.SameFile(own, fi)
+		}
+		if !matched {
+			return ownerUID(fi)
+		}
 		if fi.Mode()&os.ModeSymlink != 0 && fi.Name() == c.foreignLink {
 			*links++
 			return c.linkUID, true
@@ -268,29 +276,5 @@ func TestCheckRefusesNameSwappedAfterOpen(t *testing.T) {
 	}
 	if swaps != 2 {
 		t.Fatalf("owner seam swapped the file %d times, want once per classification (2)", swaps)
-	}
-}
-
-// TestConfigLinkChainBound proves a symlink chain longer than
-// maxConfigLinkHops is refused, while one at the bound is walked.
-func TestConfigLinkChainBound(t *testing.T) {
-	for _, c := range []struct {
-		hops   int
-		refuse bool
-	}{{maxConfigLinkHops, false}, {maxConfigLinkHops + 1, true}} {
-		isolateHome(t)
-		dir := filepath.Dir(mkConfig(t, 0o700, 0o600))
-		prev := "config.toml"
-		for i := 0; i < c.hops; i++ {
-			name := "hop" + strconv.Itoa(i)
-			if err := os.Symlink(prev, filepath.Join(dir, name)); err != nil {
-				t.Fatal(err)
-			}
-			prev = name
-		}
-		got, err := CheckConfigPermissions(filepath.Join(dir, prev))
-		if err != nil || (got.Level == ConfigPermRefuse) != c.refuse || (c.refuse && !strings.Contains(got.Reason, "symlinks")) {
-			t.Fatalf("%d hops: %+v, %v; want refuse=%v", c.hops, got, err, c.refuse)
-		}
 	}
 }

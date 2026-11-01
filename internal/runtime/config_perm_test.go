@@ -61,6 +61,10 @@ type permCase struct {
 	loadRefus bool
 	loadWarns int
 	substr    string // expected in the reason
+
+	// needsNonRoot skips the row as root, where the directory the case
+	// creates is root-owned and so may be sticky.
+	needsNonRoot bool
 }
 
 // mkConfig writes config.toml with mode inside a directory of dirMode.
@@ -117,7 +121,7 @@ func permCases() []permCase {
 		{name: "0666 refused", setup: cfg(0o700, 0o666), level: ConfigPermRefuse, loadRefus: true, substr: "world-writable"},
 		{name: "0602 refused", setup: cfg(0o700, 0o602), level: ConfigPermRefuse, loadRefus: true, substr: "world-writable"},
 		{name: "0600 file in a 0777 directory refused", setup: cfg(0o777, 0o600), level: ConfigPermRefuse, loadRefus: true, substr: "chmod o-w"},
-		{name: "0600 file in a sticky 1777 directory is ok", setup: cfg(0o777|os.ModeSticky, 0o600), level: ConfigPermOK},
+		{name: "0600 file in a user sticky 1777 directory refused", needsNonRoot: true, setup: cfg(0o777|os.ModeSticky, 0o600), level: ConfigPermRefuse, loadRefus: true, substr: "chmod o-w"},
 		{name: "missing file is ok", setup: func(t *testing.T) string { return filepath.Join(t.TempDir(), "config.toml") }, level: ConfigPermOK},
 		{name: "root-owned 0644 accepted", needsRoot: true, setup: cfg(0o755, 0o644), level: ConfigPermWarn, substr: "world-readable"},
 		{name: "file owned by another uid refused", needsRoot: true, level: ConfigPermRefuse, loadRefus: true, substr: "chown",
@@ -153,7 +157,7 @@ func symlinkPermCases() []permCase {
 			setup: link(0o700, func(t *testing.T) string { return mkConfig(t, 0o777, 0o600) })},
 		{name: "symlink in a 0777 dir to a 0600 file in a safe dir refused", level: ConfigPermRefuse, loadRefus: true, substr: "chmod o-w",
 			setup: link(0o777, safeFile)},
-		{name: "symlink in a sticky 1777 dir to a 0600 file in a safe dir is ok", level: ConfigPermOK,
+		{name: "symlink in a user sticky 1777 dir refused", needsNonRoot: true, level: ConfigPermRefuse, loadRefus: true, substr: "chmod o-w",
 			setup: link(0o777|os.ModeSticky, safeFile)},
 		{name: "two-hop chain whose middle hop sits in a 0777 dir refused", level: ConfigPermRefuse, loadRefus: true, substr: "chmod o-w",
 			setup: link(0o700, link(0o777, safeFile))},
@@ -183,6 +187,9 @@ func skipUnlessUnix(t *testing.T) {
 
 func skipUnlessRoot(t *testing.T, c permCase) {
 	t.Helper()
+	if c.needsNonRoot && os.Geteuid() == 0 {
+		t.Skipf("%s needs a non-root uid (as root the sticky directory is root-owned and allowed); TestConfigAncestorRootStickyViaSeam covers the owner condition", c.name)
+	}
 	if c.needsRoot && os.Geteuid() != 0 {
 		t.Skipf("%s needs root (chown to another uid); it executes in the linux container run", c.name)
 	}
