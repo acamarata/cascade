@@ -53,17 +53,17 @@ func TestUnwireChatBridge_RefusesNewAndWaitsForAdmitted(t *testing.T) {
 
 	held := make(chan error, 1)
 	go func() {
-		_, err := BridgeSend(context.Background(), params)
+		_, err := BridgeSend(ownerToolCtx(), params)
 		held <- err
 	}()
 	<-sender.arrived
 
-	short, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	short, cancel := context.WithTimeout(ownerToolCtx(), 50*time.Millisecond)
 	defer cancel()
 	if err := UnwireChatBridge(short); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("UnwireChatBridge with a call in flight = %v, want context.DeadlineExceeded", err)
 	}
-	if _, err := BridgeSend(context.Background(), params); err != ErrBridgeSendUnavailable {
+	if _, err := BridgeSend(ownerToolCtx(), params); err != ErrBridgeSendUnavailable {
 		t.Fatalf("bridge.send during shutdown = %v, want ErrBridgeSendUnavailable", err)
 	}
 
@@ -71,7 +71,7 @@ func TestUnwireChatBridge_RefusesNewAndWaitsForAdmitted(t *testing.T) {
 	if err := <-held; err != nil {
 		t.Fatalf("the admitted bridge.send: %v", err)
 	}
-	if err := UnwireChatBridge(context.Background()); err != nil {
+	if err := UnwireChatBridge(ownerToolCtx()); err != nil {
 		t.Fatalf("UnwireChatBridge after the admitted call returned: %v", err)
 	}
 	if len(sender.sent) != 1 {
@@ -87,7 +87,7 @@ func TestUnwireChatBridge_RefusesNewAndWaitsForAdmitted(t *testing.T) {
 // ChatBridge is nil answers "skipped" with no error and turns this RED.
 func TestNewCascadePABridge_ChatBridgeReachesBridgeSend(t *testing.T) {
 	resetChatSender(t)
-	ctx := context.Background()
+	ctx := ownerToolCtx()
 	deps, bus, dataDir := enabledBridgeDeps(t)
 	seedBridgeThread(t, dataDir, 555000111, "bridge-telegram:555000111") // mapped, never paired
 	rt, err := NewCascadePABridge(ctx, deps)
@@ -122,7 +122,7 @@ func TestNewCascadePABridge_ChatBridgeReachesBridgeSend(t *testing.T) {
 // unavailable), and malformed params are refused as invalid input.
 func TestRegisterBridgeSend_DispatchesAndStartsFresh(t *testing.T) {
 	resetChatSender(t)
-	if err := UnwireChatBridge(context.Background()); err != nil {
+	if err := UnwireChatBridge(ownerToolCtx()); err != nil {
 		t.Fatalf("UnwireChatBridge: %v", err)
 	}
 	registry := rpc.NewRegistry()
@@ -132,14 +132,14 @@ func TestRegisterBridgeSend_DispatchesAndStartsFresh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	raw, errObj := registry.Dispatch(context.Background(), &rpc.Request{Method: MethodBridgeSend, Params: params})
+	raw, errObj := registry.Dispatch(ownerToolCtx(), &rpc.Request{Method: MethodBridgeSend, Params: params})
 	if errObj != nil {
 		t.Fatalf("bridge.send after a fresh registration = %+v, want skipped", errObj)
 	}
 	if res, ok := raw.(BridgeSendResult); !ok || res.Reason != reasonNoChatBridge {
 		t.Fatalf("bridge.send result = %#v, want skipped with reason %q", raw, reasonNoChatBridge)
 	}
-	_, errObj = registry.Dispatch(context.Background(), &rpc.Request{Method: MethodBridgeSend, Params: json.RawMessage(`[1]`)})
+	_, errObj = registry.Dispatch(ownerToolCtx(), &rpc.Request{Method: MethodBridgeSend, Params: json.RawMessage(`[1]`)})
 	if errObj == nil || !strings.Contains(errObj.Message, "decode params") {
 		t.Fatalf("malformed bridge.send = %+v, want a decode refusal", errObj)
 	}
@@ -152,7 +152,7 @@ func TestBridgeSendClient_Send_PathResolutionFailure_ReportsFailed(t *testing.T)
 	c := bridgeSendClient{resolvePaths: func() (runtime.PathProvider, error) {
 		return nil, cascade.New(cascade.KindUnavailable, "test: no home directory")
 	}}
-	got := c.send(context.Background(), bridgedThreadID, "hi", "internal")
+	got := c.send(ownerToolCtx(), bridgedThreadID, "hi", "internal")
 	if got.Status != tools.BridgeFailed || !strings.Contains(got.Reason, "no home directory") {
 		t.Fatalf("send = %+v, want failed naming the resolution error", got)
 	}

@@ -139,7 +139,7 @@ func newMapRig(t *testing.T) *mapRig {
 		t.Setenv(k, t.TempDir())
 	}
 	deps, _, dataDir := enabledBridgeDeps(t)
-	ctx, dbPath, backups := context.Background(), filepath.Join(dataDir, "cascade.db"), filepath.Join(dataDir, "backups")
+	ctx, dbPath, backups := ownerToolCtx(), filepath.Join(dataDir, "cascade.db"), filepath.Join(dataDir, "backups")
 	db := openTestConversationDB(t, dataDir)
 	if err := bridge.ApplyMigrationSchema(ctx, db, migrate.SQLiteEmitter{}, deps.Clock, dbPath, backups); err != nil {
 		t.Fatalf("bridge schema: %v", err)
@@ -218,7 +218,7 @@ func (r *mapRig) deliver(t *testing.T, updates ...string) (*BridgeRuntime, *upda
 	t.Helper()
 	rt, poster := r.start(t, updates...)
 	r.await(t, poster)
-	if err := rt.Stop(context.Background()); err != nil {
+	if err := rt.Stop(ownerToolCtx()); err != nil {
 		t.Fatalf("stop bridge: %v", err)
 	}
 	return rt, poster
@@ -229,11 +229,11 @@ func (r *mapRig) start(t *testing.T, updates ...string) (*BridgeRuntime, *update
 	poster := &updatePoster{batch: strings.Join(updates, ","), polled: make(chan struct{}, 1)}
 	deps := r.deps
 	deps.Transport = poster
-	rt, err := NewCascadePABridge(context.Background(), deps)
+	rt, err := NewCascadePABridge(ownerToolCtx(), deps)
 	if err != nil {
 		t.Fatalf("NewCascadePABridge: %v", err)
 	}
-	if err := rt.Start(context.Background()); err != nil {
+	if err := rt.Start(ownerToolCtx()); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	return rt, poster
@@ -260,11 +260,11 @@ func (f *recordingChatSender) IsBridgeThread(_ context.Context, threadID string)
 // an already-mapped chat.
 func seedBridgeThread(t *testing.T, dataDir string, chat int64, threadID string) {
 	t.Helper()
-	store, err := OpenBridgeThreadMap(context.Background(), openTestConversationDB(t, dataDir), dataDir, runtime.NewSystemClock())
+	store, err := OpenBridgeThreadMap(ownerToolCtx(), openTestConversationDB(t, dataDir), dataDir, runtime.NewSystemClock())
 	if err != nil {
 		t.Fatalf("OpenBridgeThreadMap: %v", err)
 	}
-	if _, err := store.Bind(context.Background(), telegram.SubjectFromToken(syntheticBotToken), chat, threadID); err != nil {
+	if _, err := store.Bind(ownerToolCtx(), telegram.SubjectFromToken(syntheticBotToken), chat, threadID); err != nil {
 		t.Fatalf("seed map row: %v", err)
 	}
 }
@@ -276,7 +276,7 @@ func TestBridgeMirroringConversations_UnmappedThread_CarriesNoOutcome(t *testing
 	doer := &recordingBridgeSendDoer{res: &BridgeSendResult{Reason: reasonNotBridgeThread}}
 	inner := &stubConversations{res: tools.AppendResult{ThreadID: "thread-7", TurnID: "turn-1"}}
 	conv := &bridgeMirroringConversations{inner: inner, send: bridgeSendClient{doer: doer}}
-	res, err := conv.Append(context.Background(), tools.AppendRequest{ThreadID: "thread-7", Role: "user", Content: "hi"})
+	res, err := conv.Append(ownerToolCtx(), tools.AppendRequest{ThreadID: "thread-7", Role: "user", Content: "hi"})
 	if err != nil || len(doer.calls) != 1 || res.Bridge != nil {
 		t.Fatalf("Append = %+v, %v with %d bridge.send calls; want one call and no outcome", res, err, len(doer.calls))
 	}

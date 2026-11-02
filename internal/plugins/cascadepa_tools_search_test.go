@@ -11,7 +11,6 @@
 package plugins
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -24,7 +23,7 @@ func TestToolsWiringSearchMapsTheIndexResults(t *testing.T) {
 	doer := &methodRPCDoer{searchRes: searchResultSetWire{Results: []searchResultWire{
 		{ThreadID: "t1", TurnID: "u1", Content: "the migration ledger", Score: 4.5},
 	}}}
-	got, err := toolsAdapter(doer).Search(context.Background(), tools.SearchRequest{Query: "migration", Limit: 3})
+	got, err := toolsAdapter(doer).Search(ownerToolCtx(), tools.SearchRequest{Query: "migration", Limit: 3})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -50,7 +49,7 @@ func TestToolsWiringSearchRecognisesAStoreWithNoIndex(t *testing.T) {
 			searchUnavailableMarker, conversation.ErrSearchUnavailable.Error())
 	}
 	doer := &methodRPCDoer{searchErr: conversation.ErrSearchUnavailable}
-	_, err := toolsAdapter(doer).Search(context.Background(), tools.SearchRequest{Query: "x"})
+	_, err := toolsAdapter(doer).Search(ownerToolCtx(), tools.SearchRequest{Query: "x"})
 	if err != tools.ErrSearchUnavailable {
 		t.Fatalf("Search err = %v, want exactly tools.ErrSearchUnavailable so the scan fallback engages", err)
 	}
@@ -61,7 +60,7 @@ func TestToolsWiringSearchPropagatesEveryOtherFailure(t *testing.T) {
 	// index: the first is reported, the second falls back to a scan that
 	// cannot work either without a daemon.
 	doer := &methodRPCDoer{searchErr: cascade.New(cascade.KindUnavailable, "daemon not running")}
-	_, err := toolsAdapter(doer).Search(context.Background(), tools.SearchRequest{Query: "x"})
+	_, err := toolsAdapter(doer).Search(ownerToolCtx(), tools.SearchRequest{Query: "x"})
 	if err == tools.ErrSearchUnavailable {
 		t.Fatal("a transport failure was mistaken for a missing index")
 	}
@@ -84,7 +83,7 @@ func TestToolsWiringSearchCannotBeTrickedIntoFallingBack(t *testing.T) {
 	forged := cascade.Newf(cascade.KindInvalidInput,
 		"conversation: search query rejected: fts5: syntax error near %q", searchUnavailableMarker)
 	doer := &methodRPCDoer{searchErr: forged}
-	_, err := toolsAdapter(doer).Search(context.Background(), tools.SearchRequest{Query: searchUnavailableMarker})
+	_, err := toolsAdapter(doer).Search(ownerToolCtx(), tools.SearchRequest{Query: searchUnavailableMarker})
 	if err == tools.ErrSearchUnavailable {
 		t.Fatal("a rejected query quoting the marker was mistaken for a store with no index")
 	}

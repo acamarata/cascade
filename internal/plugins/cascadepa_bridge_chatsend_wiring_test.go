@@ -75,7 +75,7 @@ func TestBridgeSend_BridgedThread_AllowedSensitivity_DeliversOneSend(t *testing.
 	sender := &recordingChatSender{}
 	WireChatBridge(&BridgeRuntime{ChatBridge: sender, Events: newRecordingBus()}, runtime.NewSystemClock())
 
-	res, err := BridgeSend(context.Background(), BridgeSendParams{
+	res, err := BridgeSend(ownerToolCtx(), BridgeSendParams{
 		ThreadID: bridgedThreadID, Content: "hello owner", Sensitivity: tools.SensitivityPublic,
 	})
 	if err != nil {
@@ -100,7 +100,7 @@ func TestBridgeSend_NonBridgedThread_SilentNoOp(t *testing.T) {
 	sender := &recordingChatSender{}
 	WireChatBridge(&BridgeRuntime{ChatBridge: sender, Events: newRecordingBus()}, runtime.NewSystemClock())
 
-	res, err := BridgeSend(context.Background(), BridgeSendParams{
+	res, err := BridgeSend(ownerToolCtx(), BridgeSendParams{
 		ThreadID: "not-a-bridge-thread", Content: "hi", Sensitivity: tools.SensitivityPublic,
 	})
 	if err != nil {
@@ -118,7 +118,7 @@ func TestBridgeSend_NonBridgedThread_SilentNoOp(t *testing.T) {
 // WireChatBridge call yet) leaves cascade-pa sends unaffected.
 func TestBridgeSend_NoSenderWired_SilentNoOp(t *testing.T) {
 	resetChatSender(t)
-	res, err := BridgeSend(context.Background(), BridgeSendParams{
+	res, err := BridgeSend(ownerToolCtx(), BridgeSendParams{
 		ThreadID: bridgedThreadID, Content: "hi", Sensitivity: tools.SensitivityPublic,
 	})
 	if err != nil {
@@ -137,7 +137,7 @@ func TestBridgeSend_NoSenderWired_SilentNoOp(t *testing.T) {
 // sender gets a Send call for a restricted-sensitivity turn).
 func TestBridgeSend_SensitivityNotAllowed_RefusesAndEmitsEvent(t *testing.T) {
 	// caller sensitivity -> the tier name the content-free event must carry
-	cases := map[string]string{"": "restricted", "local-only": "local-only", "restricted": "restricted", "garbage-value": "restricted"}
+	cases := map[string]string{"": "local-only", "local-only": "local-only", "restricted": "restricted", "garbage-value": "local-only"}
 	for sensitivity, wantTier := range cases {
 		t.Run(sensitivity, func(t *testing.T) {
 			resetChatSender(t)
@@ -145,7 +145,7 @@ func TestBridgeSend_SensitivityNotAllowed_RefusesAndEmitsEvent(t *testing.T) {
 			bus := newRecordingBus()
 			WireChatBridge(&BridgeRuntime{ChatBridge: sender, Events: bus}, runtime.NewSystemClock())
 
-			res, err := BridgeSend(context.Background(), BridgeSendParams{
+			res, err := BridgeSend(ownerToolCtx(), BridgeSendParams{
 				ThreadID: bridgedThreadID, Content: "turn-body-marker", Sensitivity: sensitivity,
 			})
 			if err != nil {
@@ -177,11 +177,11 @@ func TestBridgeSend_AfterStop_RefusesTypedUnavailable(t *testing.T) {
 	resetChatSender(t)
 	sender := &recordingChatSender{}
 	WireChatBridge(&BridgeRuntime{ChatBridge: sender, Events: newRecordingBus()}, runtime.NewSystemClock())
-	if err := UnwireChatBridge(context.Background()); err != nil {
+	if err := UnwireChatBridge(ownerToolCtx()); err != nil {
 		t.Fatalf("UnwireChatBridge: %v", err)
 	}
 
-	_, err := BridgeSend(context.Background(), BridgeSendParams{
+	_, err := BridgeSend(ownerToolCtx(), BridgeSendParams{
 		ThreadID: bridgedThreadID, Content: "hi", Sensitivity: tools.SensitivityPublic,
 	})
 	if err != ErrBridgeSendUnavailable {
@@ -201,7 +201,7 @@ func TestBridgeSend_SenderError_Propagated(t *testing.T) {
 	sender := &recordingChatSender{err: wantErr}
 	WireChatBridge(&BridgeRuntime{ChatBridge: sender, Events: newRecordingBus()}, runtime.NewSystemClock())
 
-	_, err := BridgeSend(context.Background(), BridgeSendParams{
+	_, err := BridgeSend(ownerToolCtx(), BridgeSendParams{
 		ThreadID: bridgedThreadID, Content: "hi", Sensitivity: tools.SensitivityInternal,
 	})
 	if err != wantErr {
@@ -216,7 +216,7 @@ func TestWireChatBridge_NilOrDisabled_InjectsNothing(t *testing.T) {
 	clock := runtime.NewSystemClock()
 	for _, rt := range []*BridgeRuntime{nil, {ChatBridge: nil}} {
 		WireChatBridge(rt, clock)
-		res, err := BridgeSend(context.Background(), BridgeSendParams{
+		res, err := BridgeSend(ownerToolCtx(), BridgeSendParams{
 			ThreadID: bridgedThreadID, Content: "hi", Sensitivity: tools.SensitivityPublic,
 		})
 		if err != nil || res.Reason != reasonNoChatBridge {
@@ -249,7 +249,7 @@ func (realBridgeSendDoer) Do(ctx context.Context, _ string, params, out any) err
 // reasonNoChatBridge) and the minted case goes RED.
 func TestBridgeSend_NoBridgeWired_MintedThread_IsNotABridgeThread(t *testing.T) {
 	resetChatSender(t)
-	res, err := BridgeSend(context.Background(), BridgeSendParams{
+	res, err := BridgeSend(ownerToolCtx(), BridgeSendParams{
 		ThreadID: mintedThreadID, Content: "hi", Sensitivity: tools.SensitivityPublic,
 	})
 	if err != nil {
@@ -267,7 +267,7 @@ func TestBridgeMirroringConversations_NoBridgeWired_MintedThread_CarriesNoOutcom
 	resetChatSender(t)
 	inner := &stubConversations{res: tools.AppendResult{ThreadID: mintedThreadID, TurnID: "turn-1"}}
 	conv := &bridgeMirroringConversations{inner: inner, send: bridgeSendClient{doer: realBridgeSendDoer{}}}
-	res, err := conv.Append(context.Background(), tools.AppendRequest{ThreadID: mintedThreadID, Role: "user", Content: "hi"})
+	res, err := conv.Append(ownerToolCtx(), tools.AppendRequest{ThreadID: mintedThreadID, Role: "user", Content: "hi"})
 	if err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -276,7 +276,7 @@ func TestBridgeMirroringConversations_NoBridgeWired_MintedThread_CarriesNoOutcom
 	}
 	legacy := &stubConversations{res: tools.AppendResult{ThreadID: bridgedThreadID, TurnID: "turn-2"}}
 	conv = &bridgeMirroringConversations{inner: legacy, send: bridgeSendClient{doer: realBridgeSendDoer{}}}
-	res, err = conv.Append(context.Background(), tools.AppendRequest{ThreadID: bridgedThreadID, Role: "user", Content: "hi"})
+	res, err = conv.Append(ownerToolCtx(), tools.AppendRequest{ThreadID: bridgedThreadID, Role: "user", Content: "hi"})
 	if err != nil || res.Bridge == nil || res.Bridge.Status != tools.BridgeSkipped || res.Bridge.Reason != reasonNoChatBridge {
 		t.Fatalf("legacy id: Bridge = %+v, err = %v, want skipped with %q", res.Bridge, err, reasonNoChatBridge)
 	}

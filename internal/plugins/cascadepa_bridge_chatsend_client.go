@@ -78,13 +78,16 @@ func (c bridgeSendClient) rpc() (rpcDoer, error) {
 	if err != nil {
 		return nil, cascade.Wrap(cascade.KindUnavailable, err, "cascade-pa bridge: resolve daemon socket path")
 	}
-	return client.New(paths.SocketPath(), c.dial, c.timeout), nil
+	return modelFacingClient(paths, c.dial, c.timeout), nil
 }
 
 // send calls bridge.send over the daemon socket and reports what happened.
 // A resolve or RPC failure is logged and becomes a failed (or, for a typed
 // policy refusal, refused) outcome — never an error (this file's header).
 func (c bridgeSendClient) send(ctx context.Context, threadID, content, sensitivity string) *tools.BridgeOutcome {
+	if err := requireToolCaller(ctx); err != nil {
+		return bridgeOutcomeForError(err)
+	}
 	rpc, err := c.rpc()
 	if err != nil {
 		slog.Default().Warn("cascade-pa bridge: resolve bridge.send client", "error", err)

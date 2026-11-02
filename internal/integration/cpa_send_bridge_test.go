@@ -99,15 +99,15 @@ func TestCpaSendReachesTheBridgeOverTheRealSocket(t *testing.T) {
 }
 
 // TestCpaSendDefaultSensitivityIsRefusedVisibly is L3 end to end: an unset
-// sensitivity resolves to restricted, the daemon refuses the mirror
+// sensitivity resolves to local-only, the daemon refuses the mirror
 // (bridge.refused on the bus), nothing reaches the Bot API, and the MCP
 // caller sees a typed refused outcome rather than a silent success.
 func TestCpaSendDefaultSensitivityIsRefusedVisibly(t *testing.T) {
 	d := startCPADaemon(t, true)
 
 	got := callCpaSendOverStdio(t, map[string]string{"content": "stay home", "thread_id": cpaBridgeThread})
-	if got.Sensitivity != tools.SensitivityRestricted {
-		t.Fatalf("echoed sensitivity = %q, want restricted", got.Sensitivity)
+	if got.Sensitivity != tools.SensitivityLocalOnly {
+		t.Fatalf("echoed sensitivity = %q, want local-only", got.Sensitivity)
 	}
 	if got.Bridge == nil || got.Bridge.Status != tools.BridgeRefused || got.Bridge.Reason == "" {
 		t.Fatalf("bridge outcome = %+v, want a typed refusal with its reason", got.Bridge)

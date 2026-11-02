@@ -27,7 +27,7 @@ type SendInput struct {
 	// result names it.
 	ThreadID string `json:"thread_id,omitempty"`
 	// Sensitivity is the tier this content carries. Anything unset or
-	// unrecognised resolves to restricted — see ResolveSensitivity.
+	// unrecognised resolves to local-only. See ResolveSensitivity.
 	Sensitivity string `json:"sensitivity,omitempty"`
 }
 
@@ -37,7 +37,7 @@ type SendOutput struct {
 	ThreadID  string `json:"thread_id"`
 	CreatedAt string `json:"created_at"`
 	// Sensitivity is the tier this turn was recorded under — ECHOED, not
-	// assumed. A caller that misspelled a tier gets "restricted" back and
+	// assumed. A caller that misspelled a tier gets "local-only" back and
 	// can see that its request was narrowed, rather than believing its
 	// public turn is public (06 §5.16).
 	Sensitivity string `json:"sensitivity"`
@@ -49,7 +49,7 @@ type SendOutput struct {
 // ResolveSensitivity maps a caller's tier to the one actually used.
 //
 // FAIL CLOSED (06 §5.16): unset, unknown, misspelled and
-// differently-cased all resolve to restricted. There is exactly one
+// differently-cased all resolve to local-only. There is exactly one
 // direction an unrecognised value may resolve in, and it is the narrow
 // one — a typo that widened a tier would be silent until the content had
 // already left.
@@ -58,7 +58,7 @@ func ResolveSensitivity(v string) string {
 	case SensitivityLocalOnly, SensitivityRestricted, SensitivityInternal, SensitivityPublic:
 		return v
 	default:
-		return SensitivityRestricted
+		return SensitivityLocalOnly
 	}
 }
 

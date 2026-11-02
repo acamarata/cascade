@@ -31,6 +31,7 @@ refuses. The MCP dispatcher is OwnerView, never Open.
 | Caller | Required authority |
 | --- | --- |
 | SDK CLI | Owner marker, or principal token exclusively when inherited |
+| cascade-pa MCP tool adapter | `Cascade-Client: owner-model`, or the process principal token exclusively when inherited; never local-only owner-CLI authority |
 | Installed session hook commands | `fleet.sessions.hook_event`: Ingest, principal-less allowed |
 | Legacy hookpack curl bodies | Ingest for hook-event; owner marker for owner-only reads |
 | Completion and hydration command hooks | SDK headers; completion check is owner-only; hydration degradation is Ingest |
@@ -42,6 +43,19 @@ refuses. The MCP dispatcher is OwnerView, never Open.
 | `cascade mcp serve --socket` peer | Header-less or owner marker: owner, never `OwnerCLI`; a principal token is refused |
 
 Launcher binding belongs to the agent, harness and node consumers. No model-facing mint RPC exists.
+
+`owner-cli` and `owner-model` are byte-exact marker values. The latter
+resolves to a present Caller with no principal and `OwnerCLI: false`.
+Empty, repeated, case-varied, whitespace-padded and comma-joined markers
+refuse with `invalid client marker`. Supplying a marker with a principal
+header still refuses with `conflicting caller headers`.
+
+Tool adapters use `Client.ModelFacing`, a client copy sharing the transport
+whose marker never derives from a context Caller. The cascade-pa helper
+requires a registry-stamped owner Caller before any RPC, rejects context
+principals even when a process token exists, and forwards that process token
+exclusively when present. Conversation handlers decide visibility. The
+interactive CLI and in-chat adapters retain `client.New` and `owner-cli`.
 Default SSE and fleet-session topics remain owner-only. Future OwnerView
 topics must consume the event-visibility predicate; its missing-factory
 behavior is deny-all, including a factory returning nil.

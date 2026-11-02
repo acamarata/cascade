@@ -174,11 +174,11 @@ func (h *Handler) admitCaller(w http.ResponseWriter, r *http.Request) (*http.Req
 	}
 	if hasOwner {
 		values := r.Header.Values(principal.HeaderOwnerCLI)
-		if len(values) != 1 || values[0] != "owner-cli" {
-			writeEnvelope(w, http.StatusBadRequest, NewEnvelope(nil, nil, accessErrorObject(cascade.New(cascade.KindInvalidInput, "invalid owner marker"))))
+		if len(values) != 1 || (values[0] != "owner-cli" && values[0] != "owner-model") {
+			writeEnvelope(w, http.StatusBadRequest, NewEnvelope(nil, nil, accessErrorObject(cascade.New(cascade.KindInvalidInput, "invalid client marker"))))
 			return r, false
 		}
-		return r.WithContext(principal.WithCaller(r.Context(), principal.Caller{OwnerCLI: true})), true
+		return r.WithContext(principal.WithCaller(r.Context(), principal.Caller{OwnerCLI: values[0] == "owner-cli"})), true
 	}
 	return r, true
 }

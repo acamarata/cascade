@@ -157,7 +157,7 @@ func jsonKeys(t *testing.T, raw []byte) map[string]struct{} {
 // emptying the fixture fails it but hand-editing a value does not. These
 // two relations hold between frames of a genuine session and would have to
 // be forged together to survive an edit: the sensitivity the server
-// reported is the fail-closed resolution of the one the client asked for,
+// reported follows the capture-time default when the request omitted it,
 // and the thread the send named is the thread the listing then returned.
 func TestCpaMCPRoundTripValuesAreConsistent(t *testing.T) {
 	args, results := recordedCalls(t)
@@ -179,9 +179,10 @@ func TestCpaMCPRoundTripValuesAreConsistent(t *testing.T) {
 	if err := json.Unmarshal(args[tools.ToolSend], &asked); err != nil {
 		t.Fatalf("decoding the recorded send arguments: %v", err)
 	}
-	if want := tools.ResolveSensitivity(asked.Sensitivity); sent.Sensitivity != want {
-		t.Errorf("recorded sensitivity = %q for a request asking %q; fail-closed resolution gives %q",
-			sent.Sensitivity, asked.Sensitivity, want)
+	// Capture-time rule, 2026-09-20: an omitted tier resolved to restricted.
+	// Current fail-closed behavior is pinned by the tools package tests.
+	if asked.Sensitivity != "" || strings.Contains(string(args[tools.ToolSend]), `"sensitivity"`) || sent.Sensitivity != "restricted" {
+		t.Errorf("recorded sensitivity relation changed: asked %q, recorded %q", asked.Sensitivity, sent.Sensitivity)
 	}
 	if sent.ThreadID == "" {
 		t.Fatal("the recorded send named no thread; the server is supposed to mint one")

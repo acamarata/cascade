@@ -59,7 +59,10 @@ func newCascadePAConversations(dial client.DialFunc, timeout time.Duration, reso
 }
 
 // rpc resolves the socket path and builds a client, per call.
-func (c *cascadePAConversations) rpc() (rpcDoer, error) {
+func (c *cascadePAConversations) rpc(ctx context.Context) (rpcDoer, error) {
+	if err := requireToolCaller(ctx); err != nil {
+		return nil, err
+	}
 	if c.doer != nil {
 		return c.doer, nil
 	}
@@ -67,7 +70,7 @@ func (c *cascadePAConversations) rpc() (rpcDoer, error) {
 	if err != nil {
 		return nil, cascade.Wrap(cascade.KindUnavailable, err, "cascade-pa tools: resolve daemon socket path")
 	}
-	return client.New(paths.SocketPath(), c.dial, c.timeout), nil
+	return modelFacingClient(paths, c.dial, c.timeout), nil
 }
 
 // Append records one turn through chat.append_turn.
@@ -81,7 +84,7 @@ func (c *cascadePAConversations) rpc() (rpcDoer, error) {
 // chat.append_turn to return created_at, which belongs to the conversation
 // domain (S-43.T1/T2), not to this adapter.
 func (c *cascadePAConversations) Append(ctx context.Context, req tools.AppendRequest) (tools.AppendResult, error) {
-	rpc, err := c.rpc()
+	rpc, err := c.rpc(ctx)
 	if err != nil {
 		return tools.AppendResult{}, err
 	}
@@ -112,7 +115,7 @@ func (c *cascadePAConversations) Append(ctx context.Context, req tools.AppendReq
 
 // Thread reads one thread's turns, oldest first.
 func (c *cascadePAConversations) Thread(ctx context.Context, threadID string) (tools.ThreadDetail, error) {
-	rpc, err := c.rpc()
+	rpc, err := c.rpc(ctx)
 	if err != nil {
 		return tools.ThreadDetail{}, err
 	}
@@ -152,7 +155,7 @@ func (c *cascadePAConversations) thread(ctx context.Context, rpc rpcDoer, thread
 // declared schema. The durable fix is for chat.list_threads to carry it —
 // again the conversation domain's, not this adapter's.
 func (c *cascadePAConversations) Threads(ctx context.Context) ([]tools.ThreadSummary, error) {
-	rpc, err := c.rpc()
+	rpc, err := c.rpc(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +197,7 @@ func (c *cascadePAConversations) threadUpdatedAt(ctx context.Context, rpc rpcDoe
 // index and answer with a silent scan. That error is KindInvalidInput
 // (translateSearchError), so requiring the kind as well closes it.
 func (c *cascadePAConversations) Search(ctx context.Context, req tools.SearchRequest) ([]tools.SearchResult, error) {
-	rpc, err := c.rpc()
+	rpc, err := c.rpc(ctx)
 	if err != nil {
 		return nil, err
 	}

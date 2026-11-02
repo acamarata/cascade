@@ -102,7 +102,7 @@ func TestToolsWiringAppendReadsTheTimestampBack(t *testing.T) {
 			},
 		},
 	}
-	res, err := toolsAdapter(doer).Append(context.Background(), tools.AppendRequest{Role: "user", Content: "second"})
+	res, err := toolsAdapter(doer).Append(ownerToolCtx(), tools.AppendRequest{Role: "user", Content: "second"})
 	if err != nil {
 		t.Fatalf("Append: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestToolsWiringAppendSurvivesAnUnreadableThread(t *testing.T) {
 		appendRes: appendTurnResult{ThreadID: "t1", TurnID: "u1"},
 		threadErr: cascade.New(cascade.KindUnavailable, "gone"),
 	}
-	res, err := toolsAdapter(doer).Append(context.Background(), tools.AppendRequest{Role: "user", Content: "x"})
+	res, err := toolsAdapter(doer).Append(ownerToolCtx(), tools.AppendRequest{Role: "user", Content: "x"})
 	if err != nil {
 		t.Fatalf("Append: %v, want the write to be reported as the success it was", err)
 	}
@@ -135,7 +135,7 @@ func TestToolsWiringAppendSurvivesAnUnreadableThread(t *testing.T) {
 
 func TestToolsWiringAppendPropagatesTheTransportError(t *testing.T) {
 	doer := &methodRPCDoer{appendErr: cascade.New(cascade.KindUnavailable, "daemon not running")}
-	_, err := toolsAdapter(doer).Append(context.Background(), tools.AppendRequest{Role: "user", Content: "x"})
+	_, err := toolsAdapter(doer).Append(ownerToolCtx(), tools.AppendRequest{Role: "user", Content: "x"})
 	if !cascade.HasKind(err, cascade.KindUnavailable) {
 		t.Fatalf("Append err = %v, want KindUnavailable preserved", err)
 	}
@@ -152,7 +152,7 @@ func TestToolsWiringThreadFlattensSegments(t *testing.T) {
 			turnWire("u1", 1, 1758000000, conversation.RoleAssistant, "prose", "", "func main() {}"),
 		},
 	}}
-	detail, err := toolsAdapter(doer).Thread(context.Background(), "t1")
+	detail, err := toolsAdapter(doer).Thread(ownerToolCtx(), "t1")
 	if err != nil {
 		t.Fatalf("Thread: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestToolsWiringThreadsDerivesUpdatedAt(t *testing.T) {
 			turnWire("u2", 2, 1758003600, conversation.RoleUser, "b"),
 		}},
 	}
-	got, err := toolsAdapter(doer).Threads(context.Background())
+	got, err := toolsAdapter(doer).Threads(ownerToolCtx())
 	if err != nil {
 		t.Fatalf("Threads: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestToolsWiringThreadsFallsBackToTheThreadsOwnTime(t *testing.T) {
 		listRes:   listThreadsResultWire{Threads: []conversation.Thread{{ID: "t1", CreatedAt: 1758000000}}},
 		threadErr: cascade.New(cascade.KindNotFound, "gone"),
 	}
-	got, err := toolsAdapter(doer).Threads(context.Background())
+	got, err := toolsAdapter(doer).Threads(ownerToolCtx())
 	if err != nil {
 		t.Fatalf("Threads: %v", err)
 	}
@@ -214,7 +214,7 @@ func TestToolsWiringThreadsFallsBackToTheThreadsOwnTime(t *testing.T) {
 
 func TestToolsWiringThreadsPropagatesTheTransportError(t *testing.T) {
 	doer := &methodRPCDoer{listErr: cascade.New(cascade.KindUnavailable, "daemon not running")}
-	if _, err := toolsAdapter(doer).Threads(context.Background()); !cascade.HasKind(err, cascade.KindUnavailable) {
+	if _, err := toolsAdapter(doer).Threads(ownerToolCtx()); !cascade.HasKind(err, cascade.KindUnavailable) {
 		t.Fatalf("Threads err = %v, want KindUnavailable preserved", err)
 	}
 }
@@ -224,7 +224,7 @@ func TestToolsWiringReportsAPathResolutionFailure(t *testing.T) {
 	// fail to resolve a home directory.
 	boom := errors.New("no home directory")
 	c := newCascadePAConversations(nil, 0, func() (runtime.PathProvider, error) { return nil, boom })
-	_, err := c.Threads(context.Background())
+	_, err := c.Threads(ownerToolCtx())
 	if !cascade.HasKind(err, cascade.KindUnavailable) {
 		t.Fatalf("Threads err = %v, want KindUnavailable", err)
 	}
@@ -282,7 +282,7 @@ func dispatchToolForTest(t *testing.T) ([]byte, error) {
 		if reg.Manifest.ID != "cascade-pa" {
 			continue
 		}
-		return reg.Handlers.DispatchTool(context.Background(), tools.ToolSend, []byte(`{"content":"hi"}`))
+		return reg.Handlers.DispatchTool(ownerToolCtx(), tools.ToolSend, []byte(`{"content":"hi"}`))
 	}
 	t.Fatal("cascade-pa is not in the builtin registry")
 	return nil, nil

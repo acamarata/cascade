@@ -88,7 +88,7 @@ func TestBridgeMirroringConversations_BridgedThread_CallsBridgeSendRPC(t *testin
 	inner := &stubConversations{res: tools.AppendResult{ThreadID: bridgedThreadID, TurnID: "turn-1"}}
 	conv := &bridgeMirroringConversations{inner: inner, send: bridgeSendClient{doer: doer}}
 
-	res, err := conv.Append(context.Background(), tools.AppendRequest{
+	res, err := conv.Append(ownerToolCtx(), tools.AppendRequest{
 		ThreadID: bridgedThreadID, Role: "user", Content: "hello owner", Sensitivity: tools.SensitivityPublic,
 	})
 	if err != nil {
@@ -118,7 +118,7 @@ func TestBridgeMirroringConversations_AppendFailure_NeverCallsRPC(t *testing.T) 
 	inner := &stubConversations{err: wantErr}
 	conv := &bridgeMirroringConversations{inner: inner, send: bridgeSendClient{doer: doer}}
 
-	_, err := conv.Append(context.Background(), tools.AppendRequest{ThreadID: bridgedThreadID, Role: "user", Content: "hi"})
+	_, err := conv.Append(ownerToolCtx(), tools.AppendRequest{ThreadID: bridgedThreadID, Role: "user", Content: "hi"})
 	if err != wantErr {
 		t.Fatalf("Append error = %v, want the inner adapter's own error unchanged", err)
 	}
@@ -135,7 +135,7 @@ func TestBridgeMirroringConversations_RPCFailure_StillReturnsAppendResult(t *tes
 	inner := &stubConversations{res: tools.AppendResult{ThreadID: bridgedThreadID, TurnID: "turn-4"}}
 	conv := &bridgeMirroringConversations{inner: inner, send: bridgeSendClient{doer: doer}}
 
-	res, err := conv.Append(context.Background(), tools.AppendRequest{ThreadID: bridgedThreadID, Role: "user", Content: "hi"})
+	res, err := conv.Append(ownerToolCtx(), tools.AppendRequest{ThreadID: bridgedThreadID, Role: "user", Content: "hi"})
 	if err != nil {
 		t.Fatalf("Append: %v, want the mirror failure swallowed", err)
 	}
@@ -160,7 +160,7 @@ func TestBridgeMirroringConversations_ReadPassthroughs(t *testing.T) {
 		results: []tools.SearchResult{{ThreadID: "t1", TurnID: "u1", Content: "q hit"}},
 	}
 	conv := newBridgeMirroringConversations(inner)
-	ctx := context.Background()
+	ctx := ownerToolCtx()
 
 	if got, err := conv.Thread(ctx, "t1"); err != nil || got.ThreadID != "t1" || len(got.Turns) != 1 {
 		t.Fatalf("Thread = %+v, %v; want inner's detail", got, err)
@@ -213,7 +213,7 @@ func TestBridgeSendClient_Send_TransportUnreachable_NeverPanics(t *testing.T) {
 	socket := missingSocketPath(t)
 	c := bridgeSendClient{dial: client.UnixDialer, timeout: time.Second,
 		resolvePaths: func() (runtime.PathProvider, error) { return fakePathProvider{socket: socket}, nil }}
-	if got := c.send(context.Background(), bridgedThreadID, "hi", tools.SensitivityPublic); got.Status != tools.BridgeFailed {
+	if got := c.send(ownerToolCtx(), bridgedThreadID, "hi", tools.SensitivityPublic); got.Status != tools.BridgeFailed {
 		t.Fatalf("send over an unreachable socket = %+v, want failed", got)
 	}
 }

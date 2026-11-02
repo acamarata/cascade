@@ -169,6 +169,32 @@ func NewPrincipalTransport(base http.RoundTripper) http.RoundTripper {
 // principalTransport applies the same identity rule to RPC and SSE requests.
 type principalTransport struct{ base http.RoundTripper }
 
+// ModelFacing returns a copy sharing the transport that presents the process
+// token, or the fixed owner-model marker. Context callers cannot widen it.
+func (c *Client) ModelFacing() *Client {
+	httpCopy := *c.httpClient
+	base := httpCopy.Transport
+	if transport, ok := base.(*principalTransport); ok {
+		base = transport.base
+	}
+	httpCopy.Transport = &modelFacingTransport{base: base}
+	return &Client{target: c.target, httpClient: &httpCopy}
+}
+
+type modelFacingTransport struct{ base http.RoundTripper }
+
+func (t *modelFacingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r := req.Clone(req.Context())
+	r.Header.Del(principal.HeaderToken)
+	r.Header.Del(principal.HeaderOwnerCLI)
+	if token, present := os.LookupEnv(principal.EnvToken); present {
+		r.Header.Set(principal.HeaderToken, token)
+	} else {
+		r.Header.Set(principal.HeaderOwnerCLI, "owner-model")
+	}
+	return t.base.RoundTrip(r)
+}
+
 func (t *principalTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	r := req.Clone(req.Context())
 	r.Header.Del(principal.HeaderToken)

@@ -61,22 +61,22 @@ func TestSendContinuesANamedThread(t *testing.T) {
 
 func TestSendResolvesSensitivityFailClosed(t *testing.T) {
 	// 06 §5.16: the enum has no permissive zero value. Unset, unknown,
-	// misspelled and differently-cased all resolve to restricted. The
+	// misspelled and differently-cased all resolve to local-only. The
 	// table below deliberately includes a case-variant of a VALID tier —
 	// "Public" must not widen, because a resolution that accepted it
 	// would be a loosening nobody authorised.
 	cases := []struct{ in, want string }{
-		{"", SensitivityRestricted},
+		{"", SensitivityLocalOnly},
 		{"restricted", SensitivityRestricted},
 		{"local-only", SensitivityLocalOnly},
 		{"internal", SensitivityInternal},
 		{"public", SensitivityPublic},
-		{"Public", SensitivityRestricted},
-		{"PUBLIC", SensitivityRestricted},
-		{" public", SensitivityRestricted},
-		{"publik", SensitivityRestricted},
-		{"secret", SensitivityRestricted},
-		{"local_only", SensitivityRestricted},
+		{"Public", SensitivityLocalOnly},
+		{"PUBLIC", SensitivityLocalOnly},
+		{" public", SensitivityLocalOnly},
+		{"publik", SensitivityLocalOnly},
+		{"secret", SensitivityLocalOnly},
+		{"local_only", SensitivityLocalOnly},
 	}
 	for _, c := range cases {
 		if got := ResolveSensitivity(c.in); got != c.want {
@@ -93,8 +93,18 @@ func TestSendEchoesTheResolvedSensitivity(t *testing.T) {
 	d := NewDispatcher(svc)
 	var out SendOutput
 	dispatchJSON(t, d, ToolSend, `{"content":"x","sensitivity":"publik"}`, &out)
-	if out.Sensitivity != SensitivityRestricted {
-		t.Errorf("sensitivity = %q, want %q echoed back", out.Sensitivity, SensitivityRestricted)
+	if out.Sensitivity != SensitivityLocalOnly {
+		t.Errorf("sensitivity = %q, want %q echoed back", out.Sensitivity, SensitivityLocalOnly)
+	}
+}
+
+func TestResolveSensitivityUnknownIsLocalOnly(t *testing.T) {
+	TestSendResolvesSensitivityFailClosed(t)
+	svc := &fakeConversations{appendResult: AppendResult{ThreadID: "t", TurnID: "u"}}
+	var out SendOutput
+	dispatchJSON(t, NewDispatcher(svc), ToolSend, `{"content":"x"}`, &out)
+	if len(svc.gotAppend) != 1 || svc.gotAppend[0].Sensitivity != SensitivityLocalOnly || out.Sensitivity != SensitivityLocalOnly {
+		t.Fatal("unset sensitivity did not stay local-only", svc.gotAppend, out)
 	}
 }
 

@@ -9,7 +9,6 @@ package plugins
 // SPORT: internal/plugins:cascadepa-bridge-chatsend-client/TEST — fix18 round 3.
 
 import (
-	"context"
 	"os"
 	"strings"
 	"testing"
@@ -29,7 +28,7 @@ func TestBridgeMirroringConversations_NonBridgeThread_NeverCallsRPC(t *testing.T
 		doer := &recordingBridgeSendDoer{}
 		inner := &stubConversations{res: tools.AppendResult{ThreadID: threadID, TurnID: "turn-1"}}
 		conv := &bridgeMirroringConversations{inner: inner, send: bridgeSendClient{doer: doer}}
-		res, err := conv.Append(context.Background(), tools.AppendRequest{ThreadID: threadID, Role: "user", Content: "hi"})
+		res, err := conv.Append(ownerToolCtx(), tools.AppendRequest{ThreadID: threadID, Role: "user", Content: "hi"})
 		if err != nil {
 			t.Fatalf("%s: Append: %v", threadID, err)
 		}
@@ -60,7 +59,7 @@ func TestBridgeMirroringConversations_ReportsEveryOutcome(t *testing.T) {
 	for _, c := range cases {
 		inner := &stubConversations{res: tools.AppendResult{ThreadID: bridgedThreadID, TurnID: "turn-1"}}
 		conv := &bridgeMirroringConversations{inner: inner, send: bridgeSendClient{doer: c.doer}}
-		res, err := conv.Append(context.Background(), tools.AppendRequest{ThreadID: bridgedThreadID, Content: "hi"})
+		res, err := conv.Append(ownerToolCtx(), tools.AppendRequest{ThreadID: bridgedThreadID, Content: "hi"})
 		if err != nil {
 			t.Fatalf("%s: Append: %v (a mirror outcome must never fail the Append)", c.name, err)
 		}
@@ -98,7 +97,7 @@ func TestCascadePAToolsInit_RegistersTheMirroringDecorator(t *testing.T) {
 	var out []byte
 	for _, reg := range plugin.Builtins() {
 		if reg.Manifest.ID == "cascade-pa" {
-			out, err = reg.Handlers.DispatchTool(context.Background(), tools.ToolSend,
+			out, err = reg.Handlers.DispatchTool(ownerToolCtx(), tools.ToolSend,
 				[]byte(`{"content":"hi","thread_id":"`+bridgedThreadID+`","sensitivity":"internal"}`))
 		}
 	}
@@ -135,7 +134,7 @@ func TestBridgeMirroringConversations_RefusedCallerOnOrdinaryThread_NoOutcome(t 
 			doer := &recordingBridgeSendDoer{err: c.err}
 			inner := &stubConversations{res: tools.AppendResult{ThreadID: c.threadID, TurnID: "turn-1"}}
 			conv := &bridgeMirroringConversations{inner: inner, send: bridgeSendClient{doer: doer}}
-			res, err := conv.Append(context.Background(), tools.AppendRequest{ThreadID: c.threadID, Role: "user", Content: "hi"})
+			res, err := conv.Append(ownerToolCtx(), tools.AppendRequest{ThreadID: c.threadID, Role: "user", Content: "hi"})
 			if err != nil {
 				t.Fatalf("Append: %v", err)
 			}

@@ -13,13 +13,13 @@ import (
 )
 
 // TestSendCarriesTheResolvedSensitivity pins what the mirror is handed: an
-// unset or unknown tier arrives as restricted, a named tier arrives as
+// unset or unknown tier arrives as local-only, a named tier arrives as
 // itself. Hardcoding AppendRequest.Sensitivity to "public" turns every
 // narrower case RED.
 func TestSendCarriesTheResolvedSensitivity(t *testing.T) {
 	cases := []struct{ in, want string }{
-		{`{"content":"x","thread_id":"t"}`, SensitivityRestricted},
-		{`{"content":"x","thread_id":"t","sensitivity":"Public"}`, SensitivityRestricted},
+		{`{"content":"x","thread_id":"t"}`, SensitivityLocalOnly},
+		{`{"content":"x","thread_id":"t","sensitivity":"Public"}`, SensitivityLocalOnly},
 		{`{"content":"x","thread_id":"t","sensitivity":"local-only"}`, SensitivityLocalOnly},
 		{`{"content":"x","thread_id":"t","sensitivity":"restricted"}`, SensitivityRestricted},
 		{`{"content":"x","thread_id":"t","sensitivity":"internal"}`, SensitivityInternal},
