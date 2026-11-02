@@ -102,7 +102,7 @@ func setupCompletionHooks(t *testing.T) (*rpc.Registry, *jobs.Store) {
 	kv := storetest.NewMemStore()
 	bus := events.New(kv, clock)
 
-	if err := wireCompletionHookPack(context.Background(), registry, kv, clock, bus, paths); err != nil {
+	if err := wireCompletionHookPack(context.Background(), registry, kv, clock, bus, paths, testAcceptanceVerifier{}, &testCompletionCheckpoints{}, nil, func() bool { return true }); err != nil {
 		t.Fatalf("wireCompletionHookPack: %v", err)
 	}
 

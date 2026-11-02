@@ -177,7 +177,7 @@ func TestWireCompletionHookPack_CascadeDBPathOccupiedRefuses(t *testing.T) {
 	kv := storetest.NewMemStore()
 	bus := events.New(kv, clock)
 
-	err := wireCompletionHookPack(context.Background(), rpc.NewRegistry(), kv, clock, bus, paths)
+	err := wireCompletionHookPack(context.Background(), rpc.NewRegistry(), kv, clock, bus, paths, testAcceptanceVerifier{}, &testCompletionCheckpoints{}, nil, func() bool { return true })
 	if err == nil {
 		t.Fatal("wireCompletionHookPack over a cascade.db path occupied by a directory: want an error, got nil")
 	}

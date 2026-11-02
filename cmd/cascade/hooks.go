@@ -1,54 +1,8 @@
 //go:build !windows
 
-// Purpose: the AF/S-66.T1 completion-gate composition root. It gives
-//
-//	internal/jobs.NewCompletionPolicy (P1-E29-W6-S60-T3, shipped fully
-//	implemented and tested but with zero production callers -- see
-//	testonly-allow.json and R-16.83) its first real caller: a
-//	*jobs.CompletionPolicy built over this daemon's own jobs domain
-//	tables, wired to the daemon's real event bus, and reached through the
-//	real internal/fleet/hookpacks.PolicyGate seam.
-//
-// CONTRACT NOTE (files_scope, quoted in the journal, same shape as
-// daemon_unix_jobs_rpc.go's own CONTRACT NOTE it cites): this file, and
-// the one-line call this file's wireCompletionHookPack needs from
-// buildRPCServer (daemon_unix_run.go), are not named in this ticket's
-// files_scope. Per the AGENT-BRIEF's own instruction ("a registered RPC
-// method must be MOUNTED at the composition root... never invent a new
-// root"), this file exists because RegisterCompletionHookPack and
-// RegisterCompletionCheckHandler would otherwise ship built, tested and
-// unreachable from any real daemon -- exactly R-14.166/R-14.223's
-// forbidden pattern, and the specific defect class R-16.83 named this
-// ticket as the fix for. Named and exempted in .golangci.yml's
-// cmd-rpc-server-boundary list and internal/client/boundary_test.go's
-// cmdRPCBoundaryExempt map (edited together, per the AGENT-BRIEF): this
-// file REGISTERS fleet.sessions.completion_check on the daemon's own
-// registry and never dials the daemon, the identical daemon-SIDE
-// reasoning daemon_unix_jobs_rpc.go already carries its own exemption
-// under.
-//
-// Inputs: the real *rpc.Registry, provider.Store (for the real
-//
-//	audit.Writer -- the SAME store buildRPCServer's other call sites
-//	share, never a second one), the process Clock, the daemon's own
-//	*events.Bus, and the resolved PathProvider.
-//
-// Outputs: fleet.sessions.completion_check registered on registry, and
-//
-//	the "completion-gate" pack registered on hookpacks.DefaultRegistry
-//	(P/S-34.T1's install wizard renders it from there, same as
-//	"sessions").
-//
-// Constraints: Approvals and Attention are deliberately nil
-//
-//	(jobs.CompletionPolicyDeps' own doc comment: "acceptable for a
-//	CompletionPolicy that only ever gates Normal/Low jobs, never for a
-//	production composition that also handles Critical/High"). Wiring a
-//	real policy.ApprovalQueue here would mean threading wirePolicy's
-//	*policyWiring through this call site, which does not happen at HEAD
-//	(buildRPCServer's own withPolicyHandlers option is the only consumer
-//	today) -- recorded as a follow-up, not invented here.
-//
+// Purpose: compose the completion gate over the daemon's stores and event bus.
+// Outputs: the completion-gate hook pack and fleet.sessions.completion_check.
+// Constraints: acceptance uses the daemon dispatcher and real lease authority.
 // SPORT: cmd/cascade/daemon (ADD, P1-E32-W6-S66-T1).
 package main
 
@@ -59,9 +13,11 @@ import (
 	"path/filepath"
 
 	"github.com/acamarata/cascade/internal/audit"
+	"github.com/acamarata/cascade/internal/ci"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/fleet/hookpacks"
 	"github.com/acamarata/cascade/internal/jobs"
+	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage/migrate"
@@ -76,44 +32,98 @@ import (
 // ends, so the value only needs to be non-empty and stable.
 const completionGateEngineID = "hookpacks.completion-gate"
 
+// completionController resolves the on-disk role on every authorization.
+func completionController(paths runtime.PathProvider) func() bool {
+	return func() bool {
+		role, err := nodes.ResolveRole(nodes.NewFileControllerBindingBackend(paths.DataDir()))
+		return err == nil && role == nodes.RoleController
+	}
+}
+
 // wireCompletionHookPack opens the jobs domain's own db handle (the same
 // registerContextEngineHandlers/wireJobRPC "second sqlite connection to
 // cascade.db" pattern buildRPCServer's own comments document, since
 // rawDB is not threaded into this composition root), builds a real
 // *jobs.CompletionPolicy, and registers both the completion-gate hook
 // pack (descriptor side) and its live RPC handler (dispatch side).
-func wireCompletionHookPack(ctx context.Context, registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider) error {
-	dbPath := filepath.Join(paths.DataDir(), "cascade.db")
-	db, err := sql.Open("sqlite", "file:"+dbPath+"?_busy_timeout=5000") // the shared cascade.db has other writers; every sibling site waits
+func wireCompletionHookPack(ctx context.Context, registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider, acceptance ...any) error {
+	// Legacy startup-recovery callers do not mount a completion handler.
+	if len(acceptance) == 0 {
+		_, _, err := completionLedger(ctx, store, clock, paths, nil, nil)
+		return err
+	}
+	if len(acceptance) != 4 {
+		return cascade.New(cascade.KindInvalidInput, "completion gate: acceptance dependencies required")
+	}
+	verifier, _ := acceptance[0].(jobs.AcceptanceVerifier)
+	checkpoints, _ := acceptance[1].(completionCheckpoints)
+	leases, _ := acceptance[2].(*jobs.LeaseManager)
+	isController, _ := acceptance[3].(func() bool)
+	return registerCompletionGate(ctx, registry, store, clock, bus, paths, verifier, checkpoints, leases, isController)
+}
+
+// registerCompletionGate requires an exact-checkpoint source before mounting.
+func registerCompletionGate(ctx context.Context, registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider,
+	verifier jobs.AcceptanceVerifier, checkpoints completionCheckpoints, leases *jobs.LeaseManager, isController func() bool) error {
+	if checkpoints == nil {
+		return cascade.New(cascade.KindInvalidInput, "completion gate: checkpoints required")
+	}
+	if v, ok := verifier.(*ciAcceptanceVerifier); ok && checkpoints != v.dispatcher {
+		return cascade.New(cascade.KindInvalidInput, "completion gate: acceptance and checkpoints must use the same dispatcher")
+	}
+	ledger, jstore, err := completionLedger(ctx, store, clock, paths, leases, isController)
 	if err != nil {
-		return cascade.Wrapf(cascade.KindUnavailable, err, "completion gate: open %s", dbPath)
+		return err
+	}
+	policy, err := jobs.NewCompletionPolicy(jobs.CompletionPolicyDeps{
+		Store: jstore, Ledger: ledger, Bus: bus, Clock: clock, EngineID: completionGateEngineID,
+		Acceptance: verifier, RequireAcceptance: true,
+	})
+	if err != nil {
+		return err
+	}
+	gate := &completionPolicyGate{policy: policy, store: jstore, checkpoints: checkpoints}
+	resolver := &completionJobResolver{store: jstore}
+	if err := hookpacks.RegisterCompletionHookPack(hookpacks.DefaultRegistry, gate, resolver); err != nil {
+		return err
+	}
+	return hookpacks.RegisterCompletionCheckHandler(registry, clock, bus, gate, resolver, 0)
+}
+
+// completionLedger opens the evidence store and binds producers to the lease authority.
+func completionLedger(ctx context.Context, store provider.Store, clock runtime.Clock, paths runtime.PathProvider,
+	leases *jobs.LeaseManager, isController func() bool) (*jobs.EvidenceLedger, *jobs.Store, error) {
+	dbPath := filepath.Join(paths.DataDir(), "cascade.db")
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?_busy_timeout=5000&_txlock=immediate&_journal_mode=WAL&_synchronous=NORMAL")
+	if err != nil {
+		return nil, nil, cascade.Wrapf(cascade.KindUnavailable, err, "completion gate: open %s", dbPath)
 	}
 	db.SetMaxOpenConns(1)
 	if err := jobs.ApplyJobsSchema(ctx, db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
-		return err
+		return nil, nil, err
 	}
 	if err := jobs.ApplyEvidenceSchema(ctx, db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
-		return err
+		return nil, nil, err
 	}
 	// db is intentionally not closed here: it lives for the daemon
 	// process's lifetime, the same disclosed gap wireJobRPC's own call
 	// site (daemon_unix_run_fleetjobs.go) already carries.
 
 	jstore := jobs.NewStore(db)
-	authz := jobs.NewProducerAuthz(jstore, func() bool { return true }, nil)
+	authz := jobs.NewProducerAuthz(jstore, isController, leases)
 	// The daemon binds the process egress firewall before its audit log opens
 	// (openDaemonAuditLog); the effect log is then the verified view of that
 	// same shared log.
 	if _, err = openDaemonAuditLog(store, clock, nil, paths); err != nil { // result unused: openEffectLog reads the memoized log
-		return err
+		return nil, nil, err
 	}
 	effects, err := openEffectLog(store, clock, nil, paths)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	ledger, err := jobs.NewEvidenceLedger(jstore, clock, effects, authz)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	// Settle the intents a crash left open before the gate serves anything.
 	if err := recoverEvidenceEffects(ctx, effects, ledger); err != nil {
@@ -121,21 +131,9 @@ func wireCompletionHookPack(ctx context.Context, registry *rpc.Registry, store p
 		if !ok {
 			kind = cascade.KindUnavailable
 		}
-		return cascade.Wrap(kind, err, "completion gate: start-up recovery of open evidence audit intents failed")
+		return nil, nil, cascade.Wrap(kind, err, "completion gate: start-up recovery of open evidence audit intents failed")
 	}
-	policy, err := jobs.NewCompletionPolicy(jobs.CompletionPolicyDeps{
-		Store: jstore, Ledger: ledger, Bus: bus, Clock: clock, EngineID: completionGateEngineID,
-	})
-	if err != nil {
-		return err
-	}
-
-	gate := &completionPolicyGate{policy: policy, store: jstore}
-	resolver := &completionJobResolver{store: jstore}
-	if err := hookpacks.RegisterCompletionHookPack(hookpacks.DefaultRegistry, gate, resolver); err != nil {
-		return err
-	}
-	return hookpacks.RegisterCompletionCheckHandler(registry, clock, bus, gate, resolver, 0)
+	return ledger, jstore, nil
 }
 
 // recoverEvidenceEffects settles every evidence intent a previous run left
@@ -154,19 +152,21 @@ func recoverEvidenceEffects(ctx context.Context, effects *audit.EffectLog, ledge
 // hookpacks.PolicyGate. It is the concrete type completion_gate.go's own
 // doc comment says never lives in that file.
 type completionPolicyGate struct {
-	policy *jobs.CompletionPolicy
-	store  *jobs.Store
+	policy      *jobs.CompletionPolicy
+	store       *jobs.Store
+	checkpoints completionCheckpoints
 }
 
-// nextCompletionTarget names the policy-reserved edge a completion check
-// evaluates from job's current state: running jobs are checked against
-// verifying, and jobs already at verifying (a second completion claim,
-// e.g. after a prior gate denial was fixed) are checked against
-// reviewing. Any other current state is passed through unchanged so
-// Transition's own PolicyTransitionAllowed produces the correct
-// WrongSuccessor denial rather than this adapter guessing a nonsensical
-// target.
+// completionCheckpoints supplies the dispatcher's current immutable binding.
+type completionCheckpoints interface {
+	CurrentCheckpoint(context.Context, string) (ci.CandidateSnapshot, bool, error)
+}
+
+// nextCompletionTarget selects the next reserved edge for the job's state.
 func nextCompletionTarget(state jobs.JobState) jobs.JobState {
+	if state == jobs.JobStateReviewing {
+		return jobs.JobStateAccepted
+	}
 	if state == jobs.JobStateVerifying {
 		return jobs.JobStateReviewing
 	}
@@ -187,12 +187,23 @@ func (g *completionPolicyGate) CompletionCheck(ctx context.Context, jobID string
 	if job.RiskClass == "" {
 		risk = jobs.RiskClassNormal
 	}
-	err = g.policy.Transition(ctx, jobs.TransitionRequest{
+	req := jobs.TransitionRequest{
 		Job:              &job,
 		Target:           nextCompletionTarget(job.State),
 		Caller:           jobs.PolicyEngineIdentity{EngineID: completionGateEngineID},
 		PlannedRiskClass: risk,
-	})
+	}
+	if req.Target == jobs.JobStateAccepted {
+		if job.RiskClass == "" {
+			return false, "completion gate: job " + jobID + " has no risk class", nil
+		}
+		snap, found, checkpointErr := g.checkpoints.CurrentCheckpoint(ctx, jobID)
+		if checkpointErr != nil || !found {
+			return false, "completion gate: current checkpoint unavailable", nil
+		}
+		req.CheckpointID, req.TreeHash = snap.CheckpointID, snap.TreeHash
+	}
+	err = g.policy.Transition(ctx, req)
 	if err == nil {
 		return true, "", nil
 	}

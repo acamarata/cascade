@@ -65,6 +65,7 @@ var goStmtAllow = []lifecycleEntry{
 	{lifecycleSite{"internal/daemon/lifecycle_unix_serve.go", "serveRPC", "go"}, 1, lintOwner, "joined through serveDone"},
 	{lifecycleSite{"internal/daemon/lifecycle_unix_handoff.go", "handleUpgradeWithSignals", "go"}, 1, lintOwner, "signal watcher cancelled or joined before hand-off returns"},
 	{lifecycleSite{"internal/daemon/upgrade_conntracker.go", "ConnTracker.Done", "go"}, 1, lintOwner, "joined through its WaitGroup"},
+	{lifecycleSite{"cmd/cascade/wire_ci_acceptance.go", "ciAcceptanceVerifier.wait", "go"}, 1, lintOwner, "the re-run is cancelled with wait's context and sends on a buffered channel"},
 }
 
 // lifecycleScope returns the repo-relative non-test files the lint covers.
