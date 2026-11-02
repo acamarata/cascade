@@ -71,27 +71,6 @@
     "symbol": "internal/context.GenerateCCInstructions"
   },
   {
-    "caller_site": "internal/conversation/reply.go",
-    "expected_caller": "the same chat reply pipeline named in internal/context.NewComposer's entry above (P1-E45-W10-S89-T6, whose files_scope adds internal/conversation/reply.go): it constructs a real Summarizer via NewSummarizer (a provider.ModelExecutor, a provider.Store, a provider.TokenCounter, a Clock and the daemon's event publisher) and passes it as NewComposer's SummarizerGetter argument. Retire this entry when that lands.",
-    "reason": "P1-E21-W5-S46-T2 builds the rolling-summary engine (Summarizer: GetSummary's entity/granularity-keyed regeneration, storage round-trip via the B/S-02 provider.Store abstraction, version-keyed single-flight guard, and the Summarize method satisfying composer_types.go's SummarizerGetter seam) as a standalone, fully-tested unit -- summarizer_core_test.go, summarizer_dispatch_test.go, summarizer_rolling_test.go, summarizer_degrade_test.go, summarizer_concurrency_test.go, summarizer_cheap_lane_test.go. Its production caller is the same reply pipeline that first constructs a Composer (see NewComposer's own entry above, same file, same ticket): this ticket's files_scope is limited to internal/context/summarizer_*.go and includes no composition-root file. T1 and T2 share no compile-time dependency by design (T2 depends only on the SummarizerGetter interface T1 declares), so neither ticket's files_scope can wire the other in. CORRECTION (this ticket's rework): the entry previously named internal/conversation/compose.go under retire_ticket P1-E21-W5-S46-T5, a file no ticket in the phase adds.",
-    "retire_ticket": "P1-CPA-13",
-    "symbol": "internal/context.NewSummarizer"
-  },
-  {
-    "caller_site": "internal/conversation/reply.go",
-    "expected_caller": "the conversation acceptance flow landed by P1-E21-W5-S46-T5, which tags memory/SOUL-store content with SlotKindMemory before calling Compose; retire this entry when that lands",
-    "reason": "Composer's SlotKind vocabulary (tier/memory/retrieval/history) is exercised end-to-end by this ticket's own tests, but no production caller tags a real Slot with SlotKindMemory until a real memory/SOUL-store reader is wired into the Composer by S-46.T5. Same shape and same owner as internal/context.NewComposer above. [2026-09-21: caller_site was internal/conversation/compose.go under P1-E21-W5-S46-T5, a file no contract adds (S-46.T5 adds only tests and a README), so the promise could never be checked; repointed with the NewComposer/NewSummarizer entries to the reply pipeline, whose contract adds internal/conversation/reply.go.]",
-    "retire_ticket": "P1-CPA-13",
-    "symbol": "internal/context.SlotKindMemory"
-  },
-  {
-    "caller_site": "internal/conversation/reply.go",
-    "expected_caller": "the conversation acceptance flow landed by P1-E21-W5-S46-T5, which tags fused retrieval chunks with SlotKindRetrieval before calling Compose; retire this entry when that lands",
-    "reason": "Same shape as internal/context.SlotKindMemory directly above: no production caller tags a real Slot with SlotKindRetrieval until S-46.T5 wires retrieval hits into the Composer. [2026-09-21: caller_site was internal/conversation/compose.go under P1-E21-W5-S46-T5, a file no contract adds (S-46.T5 adds only tests and a README), so the promise could never be checked; repointed with the NewComposer/NewSummarizer entries to the reply pipeline, whose contract adds internal/conversation/reply.go.]",
-    "retire_ticket": "P1-CPA-13",
-    "symbol": "internal/context.SlotKindRetrieval"
-  },
-  {
     "caller_site": "internal/conversation/journal.go",
     "expected_caller": "a future segment-state-machine ticket that journals segment state transitions as their own event; retire this entry once that lands",
     "reason": "P1-E20-W5-S44-T4: JournalEntryThreadCreate's twin gap. This package defines no segment-state machine of its own to transition, so nothing constructs a SegmentStateTransition-typed payload yet; exercised only by TestConversationResume_SkipsReservedPayloadTypes, which proves Resume treats it as a safe no-op.",
@@ -600,24 +579,10 @@
   },
   {
     "caller_site": "internal/plugins/dispatch_host_boundary.go",
-    "expected_caller": "the composition root that constructs a real *host.HostBoundaryEnforcer per launched plugin and assigns it (via an adapter) to process.ProcessRuntime.CapabilityChecker and the equivalent seam on the wasm/remote runtimes; no open ticket is currently positioned to add it (P1-E15-W4-S33-T4's journal corrects the earlier guess)",
-    "reason": "P1-E15-W4-S31-T4 built the plugin capability boundary (CheckHTTP/CheckStorage/CheckSecretRef/CheckGeneric) but golangci's plugins-providers-boundary depguard rule forbids ANY internal/plugins/**/*.go non-test file from importing internal/** at all, including internal/plugins/host itself -- so internal/plugins/process/runtime.go (this ticket's only in-scope wiring point) can only hold a local HostCapabilityChecker seam (hostcalls.go), never construct a *host.HostBoundaryEnforcer directly. The real construction site is a composition root outside internal/plugins/** entirely. CORRECTED by P1-E15-W4-S32-T4's COMPLETION PASS: internal/plugins/dispatch.go now exists (that ticket's own real composition root, ProvisionElevated for elevated plugin.add), but it provisions storage and selects a runtime tier -- it does not construct a HostBoundaryEnforcer or wire a PolicyEngine, and TestCallerSitesAreWiredOnceTheirFileExists correctly flagged the stale promise once the file landed without that call. caller_site retargeted to a file dispatch.go's own top-level package (internal/plugins, NOT restricted by the depguard boundary -- see dispatch.go's package doc comment) does not yet contain, naming the split S-33.T4 (Epic O's acceptance ticket, still open, files_scope.change already lists internal/plugins/dispatch.go) is the real, nearest ticket positioned to add. CORRECTED AGAIN by P1-E15-W4-S33-T4's own journal: that guess was wrong -- S-33.T4's real, ratified contract is the remote plugin runtime handshake stub, which never touches HostBoundaryEnforcer or a PolicyEngine, and structurally cannot from inside internal/plugins/remote (no import path to internal/plugins/host at all). Recorded UNOWNED rather than guessed against another ticket, matching testonly-unowned-baseline.txt's providers/localvector.New precedent; caller_site left as the still-plausible eventual site for whichever future ticket actually builds the PolicyEngine composition root.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/plugins/host.NewHostBoundaryEnforcer"
-  },
-  {
-    "caller_site": "internal/plugins/dispatch_host_boundary.go",
     "expected_caller": "the composition root's PolicyEngine adapter over the real internal/policy.Engine.Evaluate, which will map that engine's VerdictAsk to this value when it starts producing real verdicts; no open ticket is currently positioned to add it (see NewHostBoundaryEnforcer above)",
     "reason": "PolicyVerdict mirrors internal/policy.Verdict's three values as this package's own string-free, dependency-free enum (capability.go/policy.go doc comments explain the depguard boundary this works around). CheckGeneric's production code compares only against PolicyVerdictAllow (the fail-closed default covers Ask and Deny identically, by design: this file's doc comment states an ask verdict is treated as a denial at a synchronous host boundary with no channel back to an operator). The identifier itself is therefore only referenced by this package's own tests, which construct a fakePolicyEngine returning each of the three verdicts to prove CheckGeneric's fail-closed behavior per verdict. The real internal/policy.Engine on the other side of the (not-yet-built) composition root's PolicyEngine adapter is what will actually produce a PolicyVerdictAsk value at runtime. CORRECTED by P1-E15-W4-S32-T4's COMPLETION PASS: see NewHostBoundaryEnforcer's entry above -- the same caller_site retarget, same reason. CORRECTED AGAIN by P1-E15-W4-S33-T4's own journal: see NewHostBoundaryEnforcer's entry above -- same wrong guess, same UNOWNED correction, same reason.",
     "retire_ticket": "UNOWNED",
     "symbol": "internal/plugins/host.PolicyVerdictAsk"
-  },
-  {
-    "caller_site": "internal/plugins/dispatch_host_boundary.go",
-    "expected_caller": "the composition root's PolicyEngine adapter over internal/policy.Engine.Evaluate, once it maps that engine's VerdictDeny to this value; no open ticket is currently positioned to add it (see NewHostBoundaryEnforcer above)",
-    "reason": "The zero value of PolicyVerdict, chosen deliberately so a PolicyEngine implementation that forgets to set the field denies rather than allows (fail-closed by construction, per this file's own doc comment). Because it is the zero value, no production comparison in this package ever needs to name it explicitly -- CheckGeneric's only explicit comparison is `verdict != PolicyVerdictAllow`, which already covers PolicyVerdictDeny without spelling it. Only this package's tests reference the identifier by name, to assert the zero-value default explicitly (TestPolicyVerdictZeroValueIsDeny) and to exercise CheckGeneric against an explicit deny verdict. CORRECTED by P1-E15-W4-S32-T4's COMPLETION PASS: see NewHostBoundaryEnforcer's entry above -- the same caller_site retarget, same reason. CORRECTED AGAIN by P1-E15-W4-S33-T4's own journal: see NewHostBoundaryEnforcer's entry above -- same wrong guess, same UNOWNED correction, same reason.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/plugins/host.PolicyVerdictDeny"
   },
   {
     "caller_site": "internal/policy/authorize_middleware.go",
@@ -684,27 +649,6 @@
     "symbol": "internal/providers/intake.ParseInitConfig"
   },
   {
-    "caller_site": "cmd/cascade/repo_cmd.go",
-    "expected_caller": "cmd/cascade/repo_cmd.go, which P1-E33-W7-S67-T2 constructs; retire this entry when that lands",
-    "reason": "The repository inventory model landed under P1-E33-W7-S67-T1, files_scope internal/repo/* only. The CLI surface that scans a repository is S-67.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "retire_ticket": "P1-GEN-02",
-    "symbol": "internal/repo.ApplyInventorySchema"
-  },
-  {
-    "caller_site": "internal/repo/extract.go",
-    "expected_caller": "the daemon composition root (alongside ApplyScopeSchema/ApplyInventorySchema/ApplyGraphSchema) once the extract-intake driver exists; retire once wired",
-    "reason": "P1-E33-W7-S67-T2 ships the inferred-fact ledger's core domain logic (fact schema, corroboration gate, accept/reject/supersede/rollback, policy projection) and its own storage, but the extract-intake driver (internal/repo/extract.go, dispatching through the K/S-22.T1 model.execute executor) and the CLI+RPC human-accept surface (cmd/cascade/context_facts.go, context.facts.list/accept) were not completed in this pass -- see journals/BLOCKED-P1-E33-W7-S67-T2.md. Every function here is exercised directly by its own _test.go, never through a production caller yet.",
-    "retire_ticket": "P1-GEN-02",
-    "symbol": "internal/repo.ApplyLedgerSchema"
-  },
-  {
-    "caller_site": "internal/repo/extract.go",
-    "expected_caller": "internal/repo/extract.go's extract-intake driver, which runs Corroborate on every freshly-parsed proposal before Accept/Reject",
-    "reason": "P1-E33-W7-S67-T2 ships the inferred-fact ledger's core domain logic (fact schema, corroboration gate, accept/reject/supersede/rollback, policy projection) and its own storage, but the extract-intake driver (internal/repo/extract.go, dispatching through the K/S-22.T1 model.execute executor) and the CLI+RPC human-accept surface (cmd/cascade/context_facts.go, context.facts.list/accept) were not completed in this pass -- see journals/BLOCKED-P1-E33-W7-S67-T2.md. Every function here is exercised directly by its own _test.go, never through a production caller yet.",
-    "retire_ticket": "P1-GEN-02",
-    "symbol": "internal/repo.Corroborate"
-  },
-  {
     "caller_site": "internal/repo/watch.go",
     "expected_caller": "the S-67.T4 watcher/rescan driver; retire this entry once it lands",
     "reason": "Same as RegisteredLanguages above: the per-language extractor lookup this ticket ships has no driver ticket in files_scope. TestGraphExtract_RealCounterpart exercises the concrete goExtractor{} directly, not this lookup.",
@@ -712,53 +656,11 @@
     "symbol": "internal/repo.ExtractorFor"
   },
   {
-    "caller_site": "internal/repo/extract.go",
-    "expected_caller": "internal/repo/extract.go's extract-intake driver, which appends proposals through a LedgerStore",
-    "reason": "P1-E33-W7-S67-T2 ships the inferred-fact ledger's core domain logic (fact schema, corroboration gate, accept/reject/supersede/rollback, policy projection) and its own storage, but the extract-intake driver (internal/repo/extract.go, dispatching through the K/S-22.T1 model.execute executor) and the CLI+RPC human-accept surface (cmd/cascade/context_facts.go, context.facts.list/accept) were not completed in this pass -- see journals/BLOCKED-P1-E33-W7-S67-T2.md. Every function here is exercised directly by its own _test.go, never through a production caller yet.",
-    "retire_ticket": "P1-GEN-02",
-    "symbol": "internal/repo.NewLedgerStore"
-  },
-  {
-    "caller_site": "cmd/cascade/repo_cmd.go",
-    "expected_caller": "cmd/cascade/repo_cmd.go, which P1-E33-W7-S67-T2 constructs; retire this entry when that lands",
-    "reason": "The repository inventory model landed under P1-E33-W7-S67-T1, files_scope internal/repo/* only. The CLI surface that scans a repository is S-67.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "retire_ticket": "P1-GEN-02",
-    "symbol": "internal/repo.NewStore"
-  },
-  {
-    "caller_site": "internal/repo/rulesgen.go",
-    "expected_caller": "AG/S-68.T5's rules generator, which reads accepted facts through this projection",
-    "reason": "P1-E33-W7-S67-T2 ships the inferred-fact ledger's core domain logic (fact schema, corroboration gate, accept/reject/supersede/rollback, policy projection) and its own storage, but the extract-intake driver (internal/repo/extract.go, dispatching through the K/S-22.T1 model.execute executor) and the CLI+RPC human-accept surface (cmd/cascade/context_facts.go, context.facts.list/accept) were not completed in this pass -- see journals/BLOCKED-P1-E33-W7-S67-T2.md. Every function here is exercised directly by its own _test.go, never through a production caller yet.",
-    "retire_ticket": "P1-GEN-11",
-    "symbol": "internal/repo.ProjectPolicy"
-  },
-  {
     "caller_site": "internal/repo/watch.go",
     "expected_caller": "the S-67.T4 watcher/rescan driver, which enumerates registered languages before dispatching an extractor; retire this entry once it lands",
     "reason": "P1-E33-W7-S67-T3 ships the Go symbol/dependency graph extractor and its language registry with no driver ticket of its own: the rescan driver that walks a repository and calls the registry to pick an extractor is S-67.T4 (watchers), explicitly out of this ticket's files_scope/boundaries (HOW-7: 'no watchers (S-67.T4)').",
     "retire_ticket": "P1-GEN-04",
     "symbol": "internal/repo.RegisteredLanguages"
-  },
-  {
-    "caller_site": "internal/repo/extract.go",
-    "expected_caller": "internal/repo/extract.go's extract-intake driver, on a Corroborate VerdictContradicted result",
-    "reason": "P1-E33-W7-S67-T2 ships the inferred-fact ledger's core domain logic (fact schema, corroboration gate, accept/reject/supersede/rollback, policy projection) and its own storage, but the extract-intake driver (internal/repo/extract.go, dispatching through the K/S-22.T1 model.execute executor) and the CLI+RPC human-accept surface (cmd/cascade/context_facts.go, context.facts.list/accept) were not completed in this pass -- see journals/BLOCKED-P1-E33-W7-S67-T2.md. Every function here is exercised directly by its own _test.go, never through a production caller yet.",
-    "retire_ticket": "P1-GEN-02",
-    "symbol": "internal/repo.Reject"
-  },
-  {
-    "caller_site": "cmd/cascade/repo_cmd.go",
-    "expected_caller": "cmd/cascade/repo_cmd.go, which P1-E33-W7-S67-T2 constructs; retire this entry when that lands",
-    "reason": "The repository inventory model landed under P1-E33-W7-S67-T1, files_scope internal/repo/* only. The CLI surface that scans a repository is S-67.T2. Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "retire_ticket": "P1-GEN-02",
-    "symbol": "internal/repo.Scan"
-  },
-  {
-    "caller_site": "cmd/cascade/context_facts.go",
-    "expected_caller": "cmd/cascade/context_facts.go's human-accept path, when accepting a new version of an already-accepted subject",
-    "reason": "P1-E33-W7-S67-T2 ships the inferred-fact ledger's core domain logic (fact schema, corroboration gate, accept/reject/supersede/rollback, policy projection) and its own storage, but the extract-intake driver (internal/repo/extract.go, dispatching through the K/S-22.T1 model.execute executor) and the CLI+RPC human-accept surface (cmd/cascade/context_facts.go, context.facts.list/accept) were not completed in this pass -- see journals/BLOCKED-P1-E33-W7-S67-T2.md. Every function here is exercised directly by its own _test.go, never through a production caller yet.",
-    "retire_ticket": "P1-GEN-02",
-    "symbol": "internal/repo.Supersede"
   },
   {
     "caller_site": "cmd/cascade/retrieval.go",
@@ -774,14 +676,6 @@
     "reason": "P1-E33-W7-S67-T3 ships the graph-corpus serialization function with no driver ticket in files_scope: the rescan driver that extracts a SymbolGraph and feeds it to this function before the existing FTS5/embed upsert paths write it is S-67.T4 (watchers). TestIngestSymbolGraph_* exercises the function directly with a hand-built SymbolGraph, not through a production caller.",
     "retire_ticket": "P1-GEN-04",
     "symbol": "internal/retrieval.IngestSymbolGraph"
-  },
-  {
-    "caller_site": "cmd/cascade/recall_cmd.go",
-    "expected_caller": "the recall and index command surface, P1-E06-W2-S11-T3",
-    "reason": "The embed pipeline is complete; the ingest and recall command surface that drives it is a later ticket in this epic.",
-    "retire_ticket": "cap:retrieval-fusion",
-    "expires": "P1-EXIT-07",
-    "symbol": "internal/retrieval/embed.New"
   },
   {
     "caller_site": "internal/retrieval/eval/verb.go",
@@ -992,50 +886,6 @@
     "symbol": "providers/agents/local.NewQualifier"
   },
   {
-    "caller_site": "internal/retrieval/embed_pipeline.go",
-    "expected_caller": "F-S10.T3's embed pipeline (internal/retrieval), which constructs a ProviderEmbedder over a live ModelProvider and a real Interceptor-backed adapter over internal/hooks/egress.Engine; retire this entry once it lands",
-    "reason": "P1-E10-W3-S19-T6 builds the api-backed ProviderEmbedder as a standalone adapter over any pkg/provider.ModelProvider, with no wiring ticket of its own: the embed pipeline that composes an Embedder with content-hash dedup and vector upsert is F-S10.T3's, explicitly out of this ticket's scope (full_desc: \"NOT here: ... the embed pipeline + vector upsert + content-hash dedupe (F-S10.T3's)\"), and the K/S-22.T3 Interceptor this type depends on is likewise built by a different ticket. ProviderEmbedder ships fully implemented and tested (recorded-fixture round-trip and order proof, capability-gate refusal propagation, malformed/empty-vector paths, sensitivity-tier propagation and fail-closed seam behaviour, construction validation) against a fake ModelProvider and a fake Interceptor; only its construction call site is missing until the pipeline lands.",
-    "retire_ticket": "cap:embeddings-retrieval",
-    "expires": "P1-EXIT-07",
-    "symbol": "providers/embeddings.NewProviderEmbedder"
-  },
-  {
-    "caller_site": "internal/retrieval/embed/sidecar_wiring.go",
-    "expected_caller": "the embed pipeline's provider wiring, added post-P1 together with the BGE-M3 sidecar artifact and its client-to-real-sidecar integration test; retire this entry in that ticket",
-    "reason": "The BGE-M3 sidecar client is a seam whose server does not exist yet: the native sidecar ships as a separate post-P1 artifact (01-FEATURE-INVENTORY, Local-LLM row; the 04-PEWS-PLAN DECIDED ruling for F/S-12.T2). P1 deliberately ships the wire spec (providers/embeddings/bgem3/SPEC.md) and the client that speaks it WITHOUT registering it as an active embedder lane, because a registered lane with no sidecar behind it would be a capability that appears to work; the absence is documented instead (Art.1.3). The client's protocol conformance is asserted against a spec-conformance server that exists only under _test.go (Art.1.1).",
-    "retire_ticket": "cap:embeddings-retrieval",
-    "expires": "P1-EXIT-07",
-    "symbol": "providers/embeddings/bgem3.New"
-  },
-  {
-    "caller_site": "internal/daemon/recall_index_embedder.go",
-    "expected_caller": "internal/daemon/recall_index.go's RegisterRecallIndexHandler (and cmd/cascade/doctor_recall_index.go's buildRecallIndexManager), once a future ticket adds a real embedding-provider composition root and conditionally wires Vectors: localvector.New(store) alongside a non-nil Pipeline -- not the current recall_index.go, which this ticket just made stop calling it, hence the new file name rather than the existing one",
-    "reason": "P1-E09-W2-S18-T7 (Wave-2 hardening gate) fixed DEFECT-vector-leg-never-written-on-rebuild.md: internal/daemon/recall_index.go and cmd/cascade/doctor_recall_index.go used to wire a non-nil localvector.New(store) into lifecycle.ManagerOptions.Vectors with no Pipeline ever set, so Rebuild/Update could never write a vector row while doctor's Verify still counted the (always-empty) vector namespace and reported vector-incomplete on every install that had ever ingested real content. The only correct fix, per rebuild.go's own ManagerOptions.Vectors doc comment ('nil means no embedder is configured'), is to leave Vectors nil at both composition roots until a real embedding provider is genuinely configured -- there is no such provider wired anywhere in this build (embed.New and providers/embeddings.NewProviderEmbedder are themselves test-only per this same file). That removed localvector.New's only two production callers. Searched the full planning corpus (all 406 tickets, closed-ticket-manifest.json) for an open ticket that owns wiring a real embedding provider into the retrieval composition root; none exists -- this is a genuine, currently-unassigned product gap (DEFECT-vector-leg-never-written-on-rebuild.md's own 'Unblocks when' names it 'a T0/product decision, not this gate's to make'), not a wiring shortcut. Recorded UNOWNED rather than named against a closed ticket (which the orphan gate would flag) or this ticket itself (self-referential, refused outright); testonly-unowned-baseline.txt and testonly-debt-baseline.txt raised by one to match, disclosed in this ticket's journal.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "providers/localvector.New"
-  },
-  {
-    "caller_site": "internal/conversation/reply.go",
-    "expected_caller": "P1-E45-W10-S89-T6 \"Deliver promised chat replies and cancellation\" -- its files_scope adds internal/conversation/reply.go, the reply pipeline and the first production code that will route conversation content. It reads the thread privacy_mode through the ThreadPrivacyStore surface and wraps the dispatch context with ContextWithThreadPrivacy before the conductor selects a lane. Nothing bars that import direction: internal/conversation imports no conductor today and conductor imports no conversation, so there is no cycle and no boundary_test/arch_test rule against it. Retire this entry in that change.",
-    "reason": "P1-E20-W5-S44-T2 builds the enforcement half of thread privacy modes: the (privacy_mode x lane_type) table, FILTER 0 in Router.Select, and the ErrSensitivityViolation refusal, all exercised end to end by internal/conductor/privacy_test.go. The producing half is wired and shipped too -- `cascade chat --private`/`--local-only` reaches conversation_thread_privacy through chat.append_turn's privacy_mode param, with a production caller at every hop. What has no production caller is the one seam that JOINS them, because the joining component does not exist: no daemon code generates an assistant reply yet (internal/plugins/cascadepa_wiring.go returns errReplyGenerationUnavailable), so no conversation-class task reaches Router.Select at all. This is NOT the R-14.283 shape of a seam whose caller exists and was never wired -- the caller is a ticket that has not run. Building the gate first is deliberate: S-89.T6 must not be the change that both introduces conversation routing AND decides how privacy is enforced on it.",
-    "retire_ticket": "P1-CPA-13",
-    "symbol": "internal/conductor.ContextWithThreadPrivacy"
-  },
-  {
-    "caller_site": "internal/conversation/reply.go",
-    "expected_caller": "the chat reply pipeline landed by P1-E45-W10-S89-T6, whose files_scope adds internal/conversation/reply.go: it is the first production composition that builds a Composer at all (internal/context.NewComposer, exempted above for the same reason). Whether it attaches a pre-assembly stage, and which kind (classify or segment), is that ticket's own choice -- this entry claims no obligation on it. Retire this entry when it attaches one, or record the remaining gap there.",
-    "reason": "P1-E21-W5-S46-T3 ships the pre-assembly PipelineStage Compose runs over the caller's slots (pipeline_compose.go's runPreStage, covered by pipeline_compose_test.go and pipeline_lane_test.go) as a standalone, fully-tested unit in both kinds. Its files_scope is limited to internal/context/pipeline*.go and composer_*.go and includes no composition-root file, matching NewComposer/NewSummarizer's identical situation.",
-    "retire_ticket": "P1-CPA-13",
-    "symbol": "internal/context.NewPreStage"
-  },
-  {
-    "caller_site": "internal/conversation/reply.go",
-    "expected_caller": "the same chat reply pipeline named in internal/context.NewPreStage's entry above (P1-E45-W10-S89-T6, whose files_scope adds internal/conversation/reply.go). Whether it attaches a post-assembly condensation pass is that ticket's own choice; retire this entry when it does, or record the remaining gap there.",
-    "reason": "Same shape as internal/context.NewPreStage directly above, for the post-assembly hook (task class \"summarize\", §5.16 LaneAffinity \"cheap\"): pipeline_compose.go's runPostStage runs it whenever a Composer has one attached, and pipeline_compose_test.go plus pipeline_lane_test.go cover the wiring, but nothing constructs one for a running binary until the reply pipeline lands.",
-    "retire_ticket": "P1-CPA-13",
-    "symbol": "internal/context.NewSummarizeStage"
-  },
-  {
     "caller_site": "cmd/cascade/daemon_unix_hooks.go",
     "expected_caller": "P1-SUP-02's daemon composition, which calls WatchReload before its initial hook build and runs the returned ReloadWatch alongside the Dispatcher",
     "reason": "P1-SUP-01 ships hot reload in the engine library only; composition is P1-SUP-02 and cmd/cascade is prohibited here, so reload_test.go is the only caller at this tip.",
@@ -1062,20 +912,6 @@
     "reason": "PCI s64t1-findingwriter-owner-is-s71t2, settled at CR: legacy P1-E35-W7-S71-T2 is carried to P1-LRN-02, whose outputs take the writer as a parameter; the non-test construction lands in P1-LRN-05's daemon composition (plan/p1/epics/LRN/tickets.yaml P1-LRN-05 objective). Wiring it to a fabricated/synthetic signal instead would violate the same no-fabricated-data rule this ticket enforces for outcome.go's HONEST GAP fields.",
     "retire_ticket": "P1-LRN-05",
     "symbol": "internal/learn.NewSQLiteFindingWriter"
-  },
-  {
-    "caller_site": "cmd/cascade/repo_cmd.go",
-    "expected_caller": "cmd/cascade/repo_cmd.go, which P1-E33-W7-S67-T2 constructs: it supplies context.GitCommonDir as ScanDeps.GitCommonDir when it mounts repo.Scan; retire this entry when that lands",
-    "reason": "GitCommonDir is the one production implementation of internal/context/scope.GitCommonDirFunc, injected by scope.CanonicalRepoRoot/EnsureRepository and by ScanDeps.GitCommonDir (internal/repo/scan.go), which is now required, but repo.Scan has no production caller yet, so no composition root assigns context.GitCommonDir as the concrete value. Fully exercised by internal/context/git_common_dir_test.go's TestGitCommonDirRealRepo against a real git binary.",
-    "retire_ticket": "P1-GEN-02",
-    "symbol": "internal/context.GitCommonDir"
-  },
-  {
-    "caller_site": "cmd/cascade/repo_cmd.go",
-    "expected_caller": "cmd/cascade/repo_cmd.go, which P1-E33-W7-S67-T2 constructs: it supplies context.GitRemoteURL as ScanDeps.RemoteURL (the repository registrar also consumes it); retire this entry when that lands",
-    "reason": "GitRemoteURL is the one production repo.RemoteURLFunc, but the repository registrar that consumes it has not landed, so no production call site assigns it yet. Fully exercised by internal/context/git_remote_url_test.go's TestGitRemoteURLRealRepo against a real git binary.",
-    "retire_ticket": "P1-GEN-02",
-    "symbol": "internal/context.GitRemoteURL"
   },
   {
     "caller_site": "cmd/cascade/daemon_unix_reservation.go",
@@ -1230,14 +1066,6 @@
     "symbol": "internal/providers/agents.BuildDriverEnv"
   },
   {
-    "added_by_ticket": "P1-SEC-01",
-    "caller_site": "internal/daemon/conductor_door.go",
-    "expected_caller": "internal/daemon/conductor_door.go, the in-process conductor door that wraps every leaf Embed and Execute call in ContextWithDoorSensitivity(ctx, tier) with the daemon-side tier; retire this entry once that file calls ContextWithDoorSensitivity",
-    "reason": "P1-SEC-01 ships conductor.ContextWithDoorSensitivity, the one way a leaf-door caller declares its sensitivity tier to enterDoor (no declaration resolves to restricted), implemented and tested at every leaf verb. Its first production caller is the in-process conductor door in P1-CPA-10, which does not exist yet, so wiring a call here now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once conductor_door.go exists.",
-    "retire_ticket": "P1-CPA-10",
-    "symbol": "internal/conductor.ContextWithDoorSensitivity"
-  },
-  {
     "added_by_ticket": "P1-AGT-13",
     "caller_site": "internal/providers/agents/spawn.go",
     "expected_caller": "internal/providers/agents/spawn.go, the host shim Spawn: starts one proxy per driver spawn over [agents.egress.<driver-id>] and puts Env() in the child environment; retire this entry once that file calls it",
@@ -1311,35 +1139,11 @@
   },
   {
     "added_by_ticket": "P1-PLG-03",
-    "caller_site": "internal/plugins/process/hostserver.go",
-    "expected_caller": "internal/plugins/process/hostserver.go, which P1-PLG-08 routes host calls through; it compares the child's tier to process.TrustTierUntrusted before answering a host call; retire this entry once that file references it",
-    "reason": "P1-PLG-03's trusted launcher refuses an untrusted record before any launch (trustedRecord), so it never needs the untrusted constant; the first production reader is the host-call router. ORCHESTRATOR: confirm or repoint caller_site.",
-    "retire_ticket": "P1-PLG-08",
-    "symbol": "internal/plugins/process.TrustTierUntrusted"
-  },
-  {
-    "added_by_ticket": "P1-PLG-03",
-    "caller_site": "cmd/cascade/plugin_host_boundary.go",
-    "expected_caller": "cmd/cascade/plugin_host_boundary.go, the composition root that installs the host-call boundary factory for launched plugins; retire this entry once that file calls SetHostBoundary",
-    "reason": "P1-PLG-03 ships the hook that gives every launched child the host boundary factory's capability checker, implemented and tested; the host-call routing and the factory that calls SetHostBoundary are P1-PLG-08.",
-    "retire_ticket": "P1-PLG-08",
-    "symbol": "internal/plugins.SetHostBoundary"
-  },
-  {
-    "added_by_ticket": "P1-PLG-03",
     "caller_site": "cmd/cascade/hooks_rehydrate.go",
     "expected_caller": "cmd/cascade/hooks_rehydrate.go, which rehydrates secret-bearing params and wraps the plugin Call ctx with WithParamsDigest over the tagged form; retire this entry once that file references it",
     "reason": "P1-PLG-03 ships the params-hash override on TrustedHandle.Call, implemented and tested (TestCallParamsDigestOverride, TestAuditSweepNoPlaintextHash); the rehydrating caller is P1-SUP-02.",
     "retire_ticket": "P1-SUP-02",
     "symbol": "internal/plugins.WithParamsDigest"
-  },
-  {
-    "added_by_ticket": "P1-SEC-36",
-    "caller_site": "cmd/cascade/embedder_compose.go",
-    "expected_caller": "cmd/cascade/embedder_compose.go, the embedder composition that reads local_socket from the ADMITTED effective config before it dials a sidecar; retire this entry once that file calls RetrievalEmbeddingLocalSocket",
-    "reason": "P1-SEC-36 models retrieval.embedding.local_socket in the [retrieval.embedding] guarded family and ships its only reader, tested end to end through the baseline, but the local embedding lane that dials the socket is P1-CPA-11 (embedder_compose.go), which depends on this ticket; nothing in production reads the key until then. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
-    "retire_ticket": "P1-CPA-11",
-    "symbol": "internal/runtime.RetrievalEmbeddingLocalSocket"
   },
   {
     "added_by_ticket": "P1-CAP-05",
@@ -1420,5 +1224,157 @@
     "reason": "P1-SUP-05 ships the dispatch-time vault-binding seam (contract:hooks-vault-binding) tested behind the real Rehydrator.RehydrateOnly over a counting in-memory vault; the packet prohibits any cmd/cascade composition file, so its production caller is P1-SUP-02. ParseHooksSection is removed because the guarded [hooks] family (cmd/cascade/guarded_hooks.go hooksFamilyExtract) now calls it in shipped code.",
     "retire_ticket": "P1-SUP-02",
     "symbol": "internal/hooks.BoundRehydrate"
+  },
+  {
+    "added_by_ticket": "P1-PLG-03",
+    "caller_site": "internal/plugins/reverify.go",
+    "expected_caller": "internal/plugins/reverify.go, the attested re-verification that P1-PLG-12 adds; it is the first production path that reads a record held at the untrusted tier before it re-pins trust, and it compares against TrustTierUntrusted; retire this entry once that file references it. P1-PLG-08 host calls do not read a tier: a launched child is trusted by construction, so hostserver.go never needed the constant.",
+    "reason": "P1-PLG-03 ships the process trust tiers. Launch only compares against TrustTierTrusted, so nothing in production reads the untrusted constant yet. The caller named earlier (hostserver.go) exists and does not need it, so the promise moved to the file that will hold a real reader. P1-PLG-12 is the nearest open plugin trust ticket, but its contract does not name the constant, so the owner should confirm or re-key this row.",
+    "retire_ticket": "P1-PLG-12",
+    "symbol": "internal/plugins/process.TrustTierUntrusted"
+  },
+  {
+    "added_by_ticket": "P1-CPA-16",
+    "caller_site": "internal/conversation/reply_memory.go",
+    "expected_caller": "internal/conversation/reply_memory.go, a future memory and SOUL reader for the chat reply that tags its content with SlotKindMemory before Compose; retire this entry once that file calls SlotKindMemory",
+    "reason": "Composer's slot vocabulary (tier, memory, retrieval, history) is tested end to end, but the chat reply composes no memory slot in P1 (P1-CPA-16 reply.go and reply_prompt.go tag retrieval and history only). The caller named earlier (reply.go) exists without the call, so the promise moved to the file a memory reader would add. No P1 ticket adds that file, so P1-CPA-13 stays as the nominal owner (the EPIC forbids UNOWNED for this row); the owner should confirm or re-key it.",
+    "retire_ticket": "P1-CPA-13",
+    "symbol": "internal/context.SlotKindMemory"
+  },
+  {
+    "added_by_ticket": "P1-CPA-16",
+    "caller_site": "cmd/cascade/chat_reply_wiring.go",
+    "expected_caller": "cmd/cascade/chat_reply_wiring.go, the daemon composition that P1-CPA-13 adds; it builds the Replier from a ReplyConfig (store, journal, tiered door, counter, effects) and registers chat.reply; retire this entry once that file calls conversation.NewReplier",
+    "reason": "P1-CPA-16 builds the reply pipeline (prompt envelope, tiered door, durable assistant turn) and tests it through NewReplier, but the daemon composition that constructs it is P1-CPA-13, so nothing in production calls it yet.",
+    "retire_ticket": "P1-CPA-13",
+    "symbol": "internal/conversation.NewReplier"
+  },
+  {
+    "added_by_ticket": "P1-CPA-16",
+    "caller_site": "cmd/cascade/chat_reply_wiring.go",
+    "expected_caller": "cmd/cascade/chat_reply_wiring.go, the daemon composition that P1-CPA-13 adds; it constructs the ReplyHub (server-minted stream ids, grace window) the chat.reply_open and chat.reply handlers share; retire this entry once that file calls conversation.NewReplyHub",
+    "reason": "Same gap as conversation.NewReplier: the stream hub is built and tested by P1-CPA-16, and the composition root that constructs it lands with P1-CPA-13.",
+    "retire_ticket": "P1-CPA-13",
+    "symbol": "internal/conversation.NewReplyHub"
+  },
+  {
+    "added_by_ticket": "P1-GEN-06",
+    "caller_site": "internal/context/generate/run.go",
+    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it registers the repository, builds the policy view with BuildView and hands it to every renderer; retire this entry once that file calls the symbol",
+    "reason": "P1-GEN-06 builds the policy view from the accepted fact ledger and tests it directly. The sync driver that feeds the renderers is P1-GEN-11, so nothing in production calls it yet.",
+    "retire_ticket": "P1-GEN-11",
+    "symbol": "internal/context/generate.BuildView"
+  },
+  {
+    "added_by_ticket": "P1-GEN-06",
+    "caller_site": "internal/context/generate/run.go",
+    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it renders the rules leg with RenderRules over the view; retire this entry once that file calls the symbol",
+    "reason": "P1-GEN-06 renders the .claude/rules and managed rules blocks and tests them against goldens. Only the P1-GEN-11 generation run calls the renderer in production.",
+    "retire_ticket": "P1-GEN-11",
+    "symbol": "internal/context/generate.RenderRules"
+  },
+  {
+    "added_by_ticket": "P1-GEN-06",
+    "caller_site": "internal/context/generate/run.go",
+    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it checks every written path against the closed list of generated locations; retire this entry once that file calls the symbol",
+    "reason": "P1-GEN-06 fixes the closed list of locations a generator may write. The enforcing caller is the P1-GEN-11 generation run; until then only tests read the list.",
+    "retire_ticket": "P1-GEN-11",
+    "symbol": "internal/context/generate.GeneratedLocations"
+  },
+  {
+    "added_by_ticket": "P1-GEN-06",
+    "caller_site": "internal/context/generate/run.go",
+    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it lints the manifest for entries outside the generated locations after each run; retire this entry once that file calls the symbol",
+    "reason": "P1-GEN-06 ships the report-only locations lint over a manifest. The generation run in P1-GEN-11 is the first production caller.",
+    "retire_ticket": "P1-GEN-11",
+    "symbol": "internal/context/generate.LintLocations"
+  },
+  {
+    "added_by_ticket": "P1-GEN-06",
+    "caller_site": "internal/context/generate/run.go",
+    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it sizes the rendered policy kernel against its token budget with policy.TokenCount; retire this entry once that file calls the symbol",
+    "reason": "P1-GEN-06 ships the P1 token counter (the naive four code points per token estimate) and tests the kernel against its budget with it. No production caller sizes the kernel until the P1-GEN-11 run; if that run does not need it, delete the counter instead.",
+    "retire_ticket": "P1-GEN-11",
+    "symbol": "internal/context/policy.TokenCount"
+  },
+  {
+    "added_by_ticket": "P1-GEN-08",
+    "caller_site": "internal/context/generate/run.go",
+    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it renders the agents and skills leg with RenderAgentsSkills; retire this entry once that file calls the symbol",
+    "reason": "P1-GEN-08 renders the specialist agents and the five skills from compiled templates and tests them against goldens. Only the P1-GEN-11 generation run calls it in production.",
+    "retire_ticket": "P1-GEN-11",
+    "symbol": "internal/context/generate.RenderAgentsSkills"
+  },
+  {
+    "added_by_ticket": "P1-GEN-08",
+    "caller_site": "internal/context/generate/run.go",
+    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it writes the rendered agents and skills through the Writer, keeping hand edits; retire this entry once that file calls the symbol",
+    "reason": "P1-GEN-08 ships the hand-edit-preserving writer for agents and skills. Only the P1-GEN-11 generation run calls it in production.",
+    "retire_ticket": "P1-GEN-11",
+    "symbol": "internal/context/generate.WriteAgentsSkills"
+  },
+  {
+    "added_by_ticket": "P1-GEN-08",
+    "caller_site": "plugins/claude/bundle_deps.go",
+    "expected_caller": "the Claude plugin bundle that P1-HRN-12 adds; internal/plugins/claude_wiring.go passes repo.TemplateHashes() as the bundle's TemplateHashes seam so the bundle skills match the compiled templates; retire this entry once production code calls repo.TemplateHashes",
+    "reason": "P1-GEN-08 hashes the embedded template set so a bundle can prove its skills are the compiled ones. The bundle that consumes the hashes is P1-HRN-12.",
+    "retire_ticket": "P1-HRN-12",
+    "symbol": "internal/repo.TemplateHashes"
+  },
+  {
+    "added_by_ticket": "P1-GEN-07",
+    "caller_site": "plugins/claude/bundle_deps.go",
+    "expected_caller": "the Claude plugin bundle that P1-HRN-12 adds; internal/plugins/claude_wiring.go binds canon.Parse as the bundle's ValidateHookEvent seam (plugins/claude/bundle_deps.go declares it); retire this entry once production code references canon.Parse",
+    "reason": "P1-GEN-07 ships the closed hook-event canon, checked against the installed claude binary. Its consumer is the generated hooks.json in the P1-HRN-12 plugin bundle, which does not exist yet.",
+    "retire_ticket": "P1-HRN-12",
+    "symbol": "internal/fleet/hookpacks/canon.Parse"
+  },
+  {
+    "added_by_ticket": "P1-GEN-07",
+    "caller_site": "plugins/claude/bundle_deps.go",
+    "expected_caller": "the Claude plugin bundle that P1-HRN-12 adds; internal/plugins/claude_wiring.go binds canon.RefusalCommand as the bundle's RefusalCommand seam, which writes the refusing hook body for a Blocks event; retire this entry once production code references canon.RefusalCommand",
+    "reason": "Same gap as canon.Parse: the refusal command builder is tested against the canon, and the P1-HRN-12 bundle is its first production consumer.",
+    "retire_ticket": "P1-HRN-12",
+    "symbol": "internal/fleet/hookpacks/canon.RefusalCommand"
+  },
+  {
+    "added_by_ticket": "P1-GEN-07",
+    "caller_site": "plugins/claude/bundle_deps.go",
+    "expected_caller": "the Claude plugin bundle that P1-HRN-12 adds, which lists the canon's event names when it validates generated hooks; retire this entry once production code references canon.Names",
+    "reason": "Same gap as canon.Parse: the closed name list is used by the canon tests and the hookpacks subset test only. The P1-HRN-12 bundle is its expected consumer.",
+    "retire_ticket": "P1-HRN-12",
+    "symbol": "internal/fleet/hookpacks/canon.Names"
+  },
+  {
+    "added_by_ticket": "P1-GEN-09",
+    "caller_site": "internal/context/generate/run.go",
+    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it renders the workflows leg with RenderWorkflows over the protocol probe; retire this entry once that file calls the symbol",
+    "reason": "P1-GEN-09 renders harness workflows only behind the fail-closed probe and records the deferral otherwise. Only the P1-GEN-11 generation run calls it in production.",
+    "retire_ticket": "P1-GEN-11",
+    "symbol": "internal/context/generate.RenderWorkflows"
+  },
+  {
+    "added_by_ticket": "P1-GEN-09",
+    "caller_site": "internal/context/generate/run.go",
+    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it passes generate.NewExecProbe() to RenderWorkflows as the production WorkflowsSupportProbe; retire this entry once that file calls the symbol",
+    "reason": "P1-GEN-09 ships the production probe (exec.LookPath plus two isolated invocations of the harness CLI). The run that supplies it to RenderWorkflows is P1-GEN-11.",
+    "retire_ticket": "P1-GEN-11",
+    "symbol": "internal/context/generate.NewExecProbe"
+  },
+  {
+    "added_by_ticket": "P1-GEN-10",
+    "caller_site": "internal/context/generate/run.go",
+    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it renders the scoped AGENTS.md and tool config leg with RenderScopedHarness; retire this entry once that file calls the symbol",
+    "reason": "P1-GEN-10 renders scoped AGENTS.md and the tool configs and tests them against goldens. Only the P1-GEN-11 generation run calls it in production.",
+    "retire_ticket": "P1-GEN-11",
+    "symbol": "internal/context/generate.RenderScopedHarness"
+  },
+  {
+    "added_by_ticket": "P1-CI-04",
+    "caller_site": "internal/ci/attest_local.go",
+    "expected_caller": "internal/ci/attest_local.go, the production attestation signer that builds the record of an acceptance re-run and signs it through NodeKeystore.Sign bound to the node id; retire this entry once that file calls attest.Attest",
+    "reason": "P1-CI-04 ships the canonical record and Attest over a custody signing function, implemented and tested (round trip, tamper, golden, domain prefix), together with the verifier and `ci attest verify`. Production signing of acceptance re-runs is split to P1-CI-12, so nothing in production calls Attest yet.",
+    "retire_ticket": "P1-CI-12",
+    "symbol": "internal/ci/attest.Attest"
   }
 ]
