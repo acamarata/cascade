@@ -179,7 +179,9 @@ func (h *e2eHarness) chunkFile(
 	if err != nil {
 		t.Fatalf("ChunkerFor(%s): %v", path, err)
 	}
-	chunks, err := chunker.Chunk(path, raw)
+	// The chunk path is corpus-relative: the vector leg withholds an
+	// absolute metadata path, so the fixture indexes the way that leg reads.
+	chunks, err := chunker.Chunk(filepath.Join(c.ID, name), raw)
 	if err != nil {
 		t.Fatalf("Chunk(%s): %v", path, err)
 	}

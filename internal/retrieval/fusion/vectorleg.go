@@ -81,6 +81,12 @@ type VectorLeg struct {
 
 // VectorLegOptions are what the composition root knows about the embedder.
 type VectorLegOptions struct {
+	// CorpusRoot resolves an indexed corpus to its source root. Nil uses
+	// corpus-relative paths, rooted at the current directory.
+	CorpusRoot func(corpusID string) (string, bool)
+	// Withheld receives the number of raw matches rejected by this query.
+	// Calls from concurrent queries may overlap.
+	Withheld func(int)
 	// AdmitPersonal is true only for an embedder that never leaves the
 	// machine. False skips every scope holding personal records.
 	AdmitPersonal bool
@@ -168,12 +174,19 @@ type scoredHit struct {
 // matches crowd out another's before the merge ever saw them.
 func (l *VectorLeg) search(ctx context.Context, filter *ScopeFilter, values []float32, topK int) ([]rrf.Candidate, error) {
 	var hits []scoredHit
+	withheld := 0
 	for _, ns := range filter.Namespaces() {
 		matches, err := l.store.Query(ctx, ns, provider.VectorQuery{Values: values, TopK: topK})
 		if err != nil {
 			return nil, cascade.Wrapf(cascade.KindUnavailable, err, "fusion: querying namespace %q", ns)
 		}
-		hits = append(hits, resolveMatches(filter, matches)...)
+		resolved := resolveMatches(filter, matches)
+		resolved = validatePaths(resolved, l.opts.CorpusRoot)
+		hits = append(hits, resolved...)
+		withheld += len(matches) - len(resolved)
+	}
+	if l.opts.Withheld != nil {
+		l.opts.Withheld(withheld)
 	}
 	sort.Slice(hits, func(i, j int) bool {
 		if hits[i].score != hits[j].score {
