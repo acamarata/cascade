@@ -57,6 +57,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/elevation"
 	"github.com/acamarata/cascade/internal/secrets"
+	"github.com/acamarata/cascade/plugins/claude"
 )
 
 // sweepStaleCmdHomes removes cascade-cmd-home* dirs left behind by previous
@@ -153,6 +154,12 @@ func TestMain(m *testing.M) {
 		if err := os.Setenv(key, home); err != nil {
 			panic("cmd/cascade tests: could not redirect " + key + ": " + err.Error())
 		}
+	}
+	// A harness config-dir override (set in shells that run under another
+	// account) relocates the harness settings away from the throwaway HOME,
+	// so tests would read the host's real settings file. Drop it.
+	if err := os.Unsetenv(claude.OverrideVar()); err != nil {
+		panic("cmd/cascade tests: could not clear " + claude.OverrideVar() + ": " + err.Error())
 	}
 	selectProcessCustody = guardHostCustody(selectProcessCustody)
 	doctorApprovalKeyCustody = guardReadOnlyCustody(doctorApprovalKeyCustody, &callLog{})
