@@ -178,8 +178,9 @@ func newFanRig(t *testing.T, o rigOpts) *fanRig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if o.policy != nil {
-		security.Policy = o.policy
+	security.Policy = o.policy
+	if security.Policy == nil {
+		security.Policy = fileDenyPolicy(ctx, t, paths, clock)
 	}
 	r.fan = daemon.NewConductorFanOut(r.store, clock)
 	if o.edit != nil {

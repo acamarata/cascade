@@ -59,7 +59,7 @@ func embedFixture(t *testing.T, emb func(provider.Store) RecallEmbedding) (*rpc.
 		if err := os.WriteFile(filepath.Join(root, "n.md"), []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		roots = append(roots, `"`+root+`"`)
+		roots = append(roots, "'"+root+"'") // a TOML literal string: a Windows path has backslashes
 	}
 	paths := fakePaths{root: dir}
 	if err := os.WriteFile(paths.ConfigPath(), []byte("[retrieval]\nsources = ["+strings.Join(roots, ", ")+"]\n"), 0o600); err != nil {

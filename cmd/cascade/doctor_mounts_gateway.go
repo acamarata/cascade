@@ -42,7 +42,7 @@ func (c gatewayPostureCheck) Run(ctx context.Context) (doctor.CheckResult, error
 	if _, err := os.Stat(filepath.Join(c.paths.DataDir(), providerRegistryDBFile)); os.IsNotExist(err) {
 		return result, nil
 	}
-	u := url.URL{Scheme: "file", Path: filepath.ToSlash(filepath.Join(c.paths.DataDir(), providerRegistryDBFile)), RawQuery: "mode=ro"}
+	u := readOnlyFileURI(filepath.Join(c.paths.DataDir(), providerRegistryDBFile))
 	db, err := sql.Open("sqlite", u.String())
 	if err != nil {
 		return result, err
@@ -62,4 +62,12 @@ func (c gatewayPostureCheck) Run(ctx context.Context) (doctor.CheckResult, error
 		result.Message = "gateway providers " + strings.Join(names, ", ") + ": terms-sensitive; operator-configured"
 	}
 	return result, nil
+}
+
+// readOnlyFileURI is the read-only sqlite URI for path. The path rides in
+// Opaque, not Path: a Windows drive path ("D:/a/x.db") in Path renders as
+// "file://D:/a/x.db", which sqlite reads as the authority "D:".
+func readOnlyFileURI(path string) *url.URL {
+	escaped := strings.NewReplacer("%", "%25", "?", "%3f", "#", "%23").Replace(filepath.ToSlash(path))
+	return &url.URL{Scheme: "file", Opaque: escaped, RawQuery: "mode=ro"}
 }

@@ -115,7 +115,7 @@ func embedOne(ctx context.Context, sel *embedsel.Selection) error {
 func TestComposeEmbedderPrefersLocalSidecarSocket(t *testing.T) {
 	paths := embedTestPaths(t)
 	sock := filepath.Join(t.TempDir(), "s", "bgem3.sock")
-	socketFixture(t, sock)
+	unixSocketFixture(t, sock)
 	sel := composeEmbedderWith(loadEmbedConfig(t, paths, laneBody), admittedSocket(t, sock), testDeps(paths, &recordingDoor{}))
 	if sel.Err() != nil || sel.Source() != embedsel.SourceLocalSidecar || sel.Model() != "bge-m3" || sel.Dimensions() != 1024 {
 		t.Fatalf("selection = %s %s/%d err %v, want local-sidecar bge-m3/1024", sel.Source(), sel.Model(), sel.Dimensions(), sel.Err())
@@ -171,7 +171,7 @@ func TestComposeEmbedderNotConfigured(t *testing.T) {
 func TestComposeEmbedderNoRuntimeFallback(t *testing.T) {
 	paths := embedTestPaths(t)
 	sock := filepath.Join(t.TempDir(), "s", "bgem3.sock")
-	socketFixture(t, sock)
+	unixSocketFixture(t, sock)
 	door := &recordingDoor{dims: 3}
 	cfg := loadEmbedConfig(t, paths, laneBody)
 	sel := composeEmbedderWith(cfg, admittedSocket(t, sock), testDeps(paths, door))
@@ -258,7 +258,7 @@ func TestComposeEmbedderRefusesForeignOwnedOrSymlinkSocket(t *testing.T) {
 	paths := embedTestPaths(t)
 	dir := filepath.Join(t.TempDir(), "s")
 	sock := filepath.Join(dir, "bgem3.sock")
-	socketFixture(t, sock)
+	unixSocketFixture(t, sock)
 	link := filepath.Join(t.TempDir(), "link.sock")
 	if os.Symlink(sock, link) != nil {
 		t.Fatal("symlink")
@@ -288,7 +288,7 @@ func TestComposeEmbedderRefusesForeignOwnedOrSymlinkSocket(t *testing.T) {
 func TestComposeEmbedderUsesAdmittedLocalSocket(t *testing.T) {
 	paths := embedTestPaths(t)
 	sock := filepath.Join(t.TempDir(), "s", "bgem3.sock")
-	socketFixture(t, sock)
+	unixSocketFixture(t, sock)
 	cfg := loadEmbedConfig(t, paths, "[retrieval.embedding]\nlocal_socket = \""+filepath.ToSlash(sock)+"\"\n")
 	if sel := composeEmbedderWith(cfg, runtime.EffectiveConfig{}, testDeps(paths, &recordingDoor{})); sel.Source() != embedsel.SourceNotConfigured {
 		t.Fatalf("an unadmitted on-disk local_socket selected %s", sel.Source())

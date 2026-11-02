@@ -14,7 +14,6 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -269,11 +268,9 @@ func (s probeStore) Get(ctx context.Context, ns, key string) ([]byte, error) {
 func TestConductorRegistrationStoresHandlerFanOut(t *testing.T) {
 	dir, clock, held, seen := t.TempDir(), runtime.NewSystemClock(), "01ARZ3NDEKTSV4RRFFQ69G5FAV", new(atomic.Bool)
 	t.Setenv("HOME", dir)
-	if err := os.MkdirAll(fakeMemoryPaths{root: dir}.DataDir(), 0o700); err != nil {
-		t.Fatal(err)
-	}
 	w := &daemonWiring{Ctx: context.Background(), Registry: rpc.NewRegistry(), Manifest: daemon.NewManifest(nil, clock),
 		Clock: clock, Paths: fakeMemoryPaths{root: dir}}
+	prepareDaemonDir(w.Ctx, t, w.Paths, clock)
 	w.Store = probeStore{Store: storetest.NewMemStore(), probe: func() {
 		if c := w.ConductorFanOut.Claims; c != nil && !c.TryClaim(held) {
 			seen.Store(true)

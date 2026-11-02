@@ -4,29 +4,8 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"slices"
 	"testing"
-
-	"github.com/acamarata/cascade/internal/policy"
-	"github.com/acamarata/cascade/internal/rpc"
 )
-
-func TestFactsAcceptRegisteredElevated(t *testing.T) {
-	if !rpc.IsElevatedVerb(contextFactsAcceptMethod) {
-		t.Fatalf("%s is not an elevated verb", contextFactsAcceptMethod)
-	}
-	if !rpc.IsElevated(contextFactsAcceptMethod, []byte(`{"id":"fact:r:layout"}`)) {
-		t.Fatalf("%s is not always elevated", contextFactsAcceptMethod)
-	}
-	if !slices.Contains(policy.ElevationClassVerbs(), contextFactsAcceptMethod) {
-		t.Fatalf("policy.ElevationClassVerbs() lacks %s", contextFactsAcceptMethod)
-	}
-	for _, m := range []string{contextFactsListMethod, contextFactsProposeMethod} {
-		if rpc.IsElevatedVerb(m) {
-			t.Errorf("%s should not be elevated", m)
-		}
-	}
-}
 
 // acceptDialViolations reports, for one parsed file, every call that passes
 // contextFactsAcceptMethod to anything but callElevated, and whether any

@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -34,7 +35,7 @@ func TestParseAccountsRefusesUnknownKey(t *testing.T) {
 
 func TestParseAccountsExactlyOneCredential(t *testing.T) {
 	m := accountTable()
-	m["credential_helper"] = "/owner/program"
+	m["credential_helper"] = filepath.Join(t.TempDir(), "program") // absolute on every platform
 	parseTable(t, m, "exactly one")
 	delete(m, "key_env")
 	delete(m, "credential_helper")

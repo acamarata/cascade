@@ -189,7 +189,11 @@ func TestWorkflowsRunIsolated(t *testing.T) {
 	if err != nil {
 		t.Skip("no go binary on PATH")
 	}
-	env := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir()}
+	home := t.TempDir()
+	settleDir(t, filepath.Dir(home))
+	// No build cache and no toolchain download: the probe must not write
+	// anywhere under the fake home while it is being removed.
+	env := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "GOCACHE=off", "GOTOOLCHAIN=local"}
 	out, exit, err := runIsolated(t.Context(), goBin, []string{"version"}, env)
 	if err != nil || exit != 0 || !bytes.HasPrefix(out, []byte("go version ")) {
 		t.Fatalf("go version = %q %d %v", out, exit, err)
@@ -205,4 +209,18 @@ func TestWorkflowsRunIsolated(t *testing.T) {
 	if n, err := w.Write([]byte("abcdef")); n != 6 || err != nil || b.String() != "abc" {
 		t.Fatalf("capWriter kept %q (%d %v)", b.String(), n, err)
 	}
+}
+
+// settleDir removes dir at cleanup, retrying while a straggling child of the
+// probe is still writing into it, so t.TempDir's own removal finds it gone.
+func settleDir(t *testing.T, dir string) {
+	t.Helper()
+	t.Cleanup(func() {
+		for range 20 {
+			if os.RemoveAll(dir) == nil {
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	})
 }
