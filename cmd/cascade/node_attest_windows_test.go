@@ -9,6 +9,7 @@
 package main
 
 import (
+	goruntime "runtime"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/nodes"
@@ -18,6 +19,7 @@ const windowsTier2Skip = "node verbs are not available on windows tier-2 (nodes.
 
 func TestNodeBindRefusesOnWindows(t *testing.T) {
 	deps := testNodeCLIDeps(t, nil)
+	deps.GOOS = goruntime.GOOS // the shared helper pins darwin; this file runs natively on windows
 	windowsRefused(t, "node bind", runNodeBind(fakeCmdWithContext(t), deps, "binding.json"))
 	if err := nodes.RefuseOnGOOS("windows"); err == nil {
 		t.Fatal("RefuseOnGOOS(windows) = nil")

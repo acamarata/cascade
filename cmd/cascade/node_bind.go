@@ -46,10 +46,13 @@ func (v nodeEnrollView) String() string {
 	return v.Node.String() + "\nbinding (save it on the node and run `cascade node bind --binding-file <file>`):\n" + string(raw)
 }
 
-// runNodeEnroll is the enroll verb: the endpoint is required and checked
-// before anything else; the installation key is read after elevation and
+// runNodeEnroll is the enroll verb: the tier-2 refusal comes first, then the
+// required endpoint; the installation key is read after elevation and
 // before any dial, so a machine that cannot pin a key enrolls nothing.
 func runNodeEnroll(cmd *cobra.Command, deps nodeCLIDeps, a nodeAdmitArgs, endpoint string) error {
+	if err := nodes.RefuseOnGOOS(deps.GOOS); err != nil {
+		return err
+	}
 	endpoint = strings.TrimSpace(endpoint)
 	if endpoint == "" {
 		return cascade.New(cascade.KindInvalidInput, "node enroll: --controller-endpoint is required (the node's binding records it)")
