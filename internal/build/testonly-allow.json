@@ -1370,11 +1370,19 @@
     "symbol": "internal/context/generate.RenderScopedHarness"
   },
   {
-    "added_by_ticket": "P1-CI-04",
-    "caller_site": "internal/ci/attest_local.go",
-    "expected_caller": "internal/ci/attest_local.go, the production attestation signer that builds the record of an acceptance re-run and signs it through NodeKeystore.Sign bound to the node id; retire this entry once that file calls attest.Attest",
-    "reason": "P1-CI-04 ships the canonical record and Attest over a custody signing function, implemented and tested (round trip, tamper, golden, domain prefix), together with the verifier and `ci attest verify`. Production signing of acceptance re-runs is split to P1-CI-12, so nothing in production calls Attest yet.",
-    "retire_ticket": "P1-CI-12",
-    "symbol": "internal/ci/attest.Attest"
+    "added_by_ticket": "P1-CI-14",
+    "caller_site": "internal/ci/runner_gha.go",
+    "expected_caller": "internal/ci/runner_gha.go, the GitHub Actions runner that produces ephemeral-oidc records only through the countersign; retire this entry once that file calls CountersignOIDC",
+    "reason": "P1-CI-14 ships the OIDC verifier and JWKS source implemented and tested (valid token, every named rejection, fetch failure, cache expiry), but the token ingress and the call site are the hosted runner of P1-NODE-09, so nothing in production calls CountersignOIDC yet. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once runner_gha.go exists without the call.",
+    "retire_ticket": "P1-NODE-09",
+    "symbol": "internal/ci.CountersignOIDC"
+  },
+  {
+    "added_by_ticket": "P1-CI-14",
+    "caller_site": "internal/ci/runner_gha.go",
+    "expected_caller": "internal/ci/runner_gha.go, the GitHub Actions runner that builds the JWKS source over the ci-oidc-jwks egress class for the verifier; retire this entry once that file calls NewGitHubJWKSource",
+    "reason": "P1-CI-14 ships the OIDC verifier and JWKS source implemented and tested (valid token, every named rejection, fetch failure, cache expiry), but the token ingress and the call site are the hosted runner of P1-NODE-09, so nothing in production calls NewGitHubJWKSource yet. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once runner_gha.go exists without the call.",
+    "retire_ticket": "P1-NODE-09",
+    "symbol": "internal/ci.NewGitHubJWKSource"
   }
 ]
