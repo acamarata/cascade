@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-30T12:29:30Z",
+  "generated_at": "2026-11-02T06:02:09Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2304,6 +2304,20 @@
       ]
     },
     {
+      "name": "cli.doctor.gateway",
+      "sites": [
+        {
+          "file": "cmd/cascade/doctor_mounts_gateway.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "cli.doctor.gateway/ADD."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cli.provider.add",
       "sites": [
         {
@@ -2354,6 +2368,20 @@
           "status": "ADD",
           "ticket": "P1-E10-W4-S87-T1",
           "raw": "cli.provider.add:lane (ADD) — P1-E10-W4-S87-T1 (Art.9, W3 gate)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cli.provider.gateway",
+      "sites": [
+        {
+          "file": "cmd/cascade/provider_add_gateway.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "cli.provider.gateway/ADD."
         }
       ],
       "statuses": [
@@ -2573,6 +2601,20 @@
           "status": "ADD",
           "ticket": "P1-E09-W2-S18-T6",
           "raw": "cli/approval-standing/ADD (P1-E09-W2-S18-T6)"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cli/context facts",
+      "sites": [
+        {
+          "file": "cmd/cascade/context_facts.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "cli/context facts (ADD) -- P1-GEN-02."
         }
       ],
       "statuses": [
@@ -4153,7 +4195,7 @@
       "sites": [
         {
           "file": "cmd/cascade/chat_topics_doctor.go",
-          "line": 27,
+          "line": 19,
           "status": "ADD",
           "ticket": "P1-E21-W5-S46-T4",
           "raw": "cmd/cascade chat topics doctor check (ADD) -- P1-E21-W5-S46-T4 D2."
@@ -4168,7 +4210,7 @@
       "sites": [
         {
           "file": "cmd/cascade/chat_topics_engine.go",
-          "line": 35,
+          "line": 30,
           "status": "ADD",
           "ticket": "P1-E21-W5-S46-T4",
           "raw": "cmd/cascade chat topics engine (ADD) -- P1-E21-W5-S46-T4 D2."
@@ -4193,6 +4235,20 @@
       ]
     },
     {
+      "name": "cmd/cascade chat topics executor",
+      "sites": [
+        {
+          "file": "cmd/cascade/chat_topics_executor.go",
+          "line": 22,
+          "status": "ADD",
+          "raw": "cmd/cascade chat topics executor (ADD, P1-CPA-12)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade chat wiring",
       "sites": [
         {
@@ -4201,6 +4257,20 @@
           "status": "ADD",
           "ticket": "P1-E20-W5-S43-T5",
           "raw": "cmd/cascade chat wiring (ADD) — P1-E20-W5-S43-T5; platform tag"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade ci attest verify",
+      "sites": [
+        {
+          "file": "cmd/cascade/ci_attest.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "cmd/cascade ci attest verify (ADD, P1-CI-04)."
         }
       ],
       "statuses": [
@@ -4373,8 +4443,42 @@
       ]
     },
     {
+      "name": "cmd/cascade context facts RPCs",
+      "sites": [
+        {
+          "file": "cmd/cascade/context_facts_rpc.go",
+          "line": 16,
+          "status": "",
+          "raw": "cmd/cascade context facts RPCs (P1-GEN-02)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade context facts wiring",
+      "sites": [
+        {
+          "file": "cmd/cascade/wire_context_facts.go",
+          "line": 14,
+          "status": "",
+          "raw": "cmd/cascade context facts wiring (P1-GEN-02)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd/cascade daemon",
       "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_conductor_gateway_test.go",
+          "line": 13,
+          "status": "CHANGE",
+          "raw": "cmd/cascade daemon (CHANGE, P1-GWY-08)."
+        },
         {
           "file": "cmd/cascade/daemon_unix_conductor_lane_test.go",
           "line": 16,
@@ -4386,6 +4490,12 @@
           "line": 10,
           "status": "CHANGE",
           "raw": "cmd/cascade daemon (CHANGE, P1-SEC-02)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_conductor_retry_test.go",
+          "line": 10,
+          "status": "CHANGE",
+          "raw": "cmd/cascade daemon (CHANGE, P1-GWY-03)."
         },
         {
           "file": "cmd/cascade/daemon_unix_reload_secrets.go",
@@ -4931,11 +5041,25 @@
       ]
     },
     {
+      "name": "cmd/cascade embedder composition",
+      "sites": [
+        {
+          "file": "cmd/cascade/embedder_compose.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "cmd/cascade embedder composition (ADDED, P1-CPA-11)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade guarded families",
       "sites": [
         {
           "file": "cmd/cascade/guarded_extractors.go",
-          "line": 9,
+          "line": 7,
           "status": "",
           "raw": "cmd/cascade guarded families (P1 config baseline)."
         }
@@ -5419,6 +5543,20 @@
       ]
     },
     {
+      "name": "cmd/cascade repository registrar",
+      "sites": [
+        {
+          "file": "cmd/cascade/repo_register.go",
+          "line": 13,
+          "status": "",
+          "raw": "cmd/cascade repository registrar (P1-GEN-02)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd/cascade result-stringer gate",
       "sites": [
         {
@@ -5482,7 +5620,7 @@
         },
         {
           "file": "cmd/cascade/mount_ci.go",
-          "line": 3,
+          "line": 5,
           "status": "",
           "raw": "cmd/cascade root mounts (P1-CORE-01)."
         },
@@ -6725,6 +6863,47 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "cmd/cascade/daemon:conductor-door-inprocess",
+      "sites": [
+        {
+          "file": "cmd/cascade/conductor_door_socket_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade/daemon:conductor-door-inprocess (tests, P1-CPA-10)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade/daemon:conductor-quota-deny",
+      "sites": [
+        {
+          "file": "cmd/cascade/conductor_deny_store.go",
+          "line": 22,
+          "status": "ADD",
+          "raw": "cmd/cascade/daemon:conductor-quota-deny (ADD, P1-CAP-07)."
+        },
+        {
+          "file": "cmd/cascade/conductor_deny_store_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade/daemon:conductor-quota-deny (tests, P1-CAP-07)."
+        },
+        {
+          "file": "cmd/cascade/conductor_policy_quota_completion_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade/daemon:conductor-quota-deny (tests, P1-CAP-07)."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
       ]
     },
     {
@@ -8366,6 +8545,20 @@
       ]
     },
     {
+      "name": "conductor.execute tests",
+      "sites": [
+        {
+          "file": "internal/conductor/execute_quota_error_test.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "conductor.execute tests (ADD, P1-CAP-07)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "conductor.fanout",
       "sites": [
         {
@@ -8734,6 +8927,33 @@
       ]
     },
     {
+      "name": "conductor.transient-retry",
+      "sites": [
+        {
+          "file": "internal/conductor/transient_retry.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "conductor.transient-retry/ADD (P1-GWY-03)."
+        },
+        {
+          "file": "internal/conductor/transient_retry_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "conductor.transient-retry (TEST) - P1-GWY-03."
+        },
+        {
+          "file": "internal/conductor/transient_stream_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "conductor.transient-retry (TEST) - P1-GWY-03."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "conductor.usage-attribution",
       "sites": [
         {
@@ -8796,6 +9016,26 @@
       "statuses": [
         "ADD",
         "CHANGE"
+      ]
+    },
+    {
+      "name": "context-engine/agents-skills-generator",
+      "sites": [
+        {
+          "file": "internal/context/generate/agents.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "context-engine/agents-skills-generator (ADD, P1-GEN-08)."
+        },
+        {
+          "file": "internal/context/generate/skills.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "context-engine/agents-skills-generator (ADD, P1-GEN-08)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -8872,6 +9112,20 @@
           "status": "ADD",
           "ticket": "T-3",
           "raw": "context-engine/cc-instruction-gen (ADD, per T-3 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/compiled-templates",
+      "sites": [
+        {
+          "file": "internal/repo/templates.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "context-engine/compiled-templates (ADD, P1-GEN-08; workflows"
         }
       ],
       "statuses": [
@@ -9021,6 +9275,20 @@
           "line": 15,
           "status": "ADD",
           "raw": "context-engine/generation-manifest (ADD, P1-GEN-05)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/generation-policy-view",
+      "sites": [
+        {
+          "file": "internal/context/generate/policy_view.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "context-engine/generation-policy-view (ADD, P1-GEN-06)."
         }
       ],
       "statuses": [
@@ -9304,6 +9572,80 @@
       ]
     },
     {
+      "name": "context-engine/policy-kernel",
+      "sites": [
+        {
+          "file": "internal/context/policy/kernel.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "context-engine/policy-kernel (ADD, P1-GEN-06)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/policy-lint",
+      "sites": [
+        {
+          "file": "internal/context/generate/policy_lint.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "context-engine/policy-lint (ADD, P1-GEN-06)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/rules-generator",
+      "sites": [
+        {
+          "file": "internal/context/generate/rules_cc.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "context-engine/rules-generator (ADD, P1-GEN-06)."
+        },
+        {
+          "file": "internal/context/generate/rules_scoped.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "context-engine/rules-generator (ADD, P1-GEN-06)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/scoped-harness-generation",
+      "sites": [
+        {
+          "file": "internal/context/generate/codex.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "context-engine/scoped-harness-generation (ADD, P1-GEN-10)."
+        },
+        {
+          "file": "internal/context/generate/opencode.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "context-engine/scoped-harness-generation (ADD, P1-GEN-10)."
+        },
+        {
+          "file": "internal/context/generate/scoped_harness.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "context-engine/scoped-harness-generation (ADD, P1-GEN-10)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "context-engine/summarizer-cheap-lane",
       "sites": [
         {
@@ -9462,6 +9804,40 @@
           "status": "ADD",
           "ticket": "T-1",
           "raw": "context-engine/tier-model (ADD, per T-1 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/workflows-generator",
+      "sites": [
+        {
+          "file": "internal/context/generate/workflows.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "context-engine/workflows-generator (ADD, P1-GEN-09)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/workflows-probe",
+      "sites": [
+        {
+          "file": "internal/context/generate/workflows_detect.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "context-engine/workflows-probe (ADD, P1-GEN-09)."
+        },
+        {
+          "file": "internal/context/generate/workflows_proto.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "context-engine/workflows-probe (ADD, P1-GEN-09)."
         }
       ],
       "statuses": [
@@ -14694,6 +15070,76 @@
       ]
     },
     {
+      "name": "internal.ci.attest",
+      "sites": [
+        {
+          "file": "internal/ci/attest/doc.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "internal.ci.attest/ADDED (P1-CI-04)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.attest.AttestationRecord",
+      "sites": [
+        {
+          "file": "internal/ci/attest/attestation.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal.ci.attest.AttestationRecord/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.attest.AttestorClass",
+      "sites": [
+        {
+          "file": "internal/ci/attest/attest_class.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal.ci.attest.AttestorClass/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.attest.NewRecordTrustStore",
+      "sites": [
+        {
+          "file": "internal/ci/attest/attest_truststore.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal.ci.attest.NewRecordTrustStore/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.attest.TrustStore",
+      "sites": [
+        {
+          "file": "internal/ci/attest/attest_verify.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal.ci.attest.TrustStore/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.ci.changedOwningPackages",
       "sites": [
         {
@@ -15617,6 +16063,110 @@
           "line": 7,
           "status": "ADD",
           "raw": "internal.conversation.project/ADDED (tests) (P1-CPA-06)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.conversation.reply",
+      "sites": [
+        {
+          "file": "internal/conversation/reply.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal.conversation.reply/ADDED (P1-CPA-16)."
+        },
+        {
+          "file": "internal/conversation/reply_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal.conversation.reply/ADDED (tests) (P1-CPA-16)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.conversation.reply tests",
+      "sites": [
+        {
+          "file": "internal/conversation/reply_edge_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal.conversation.reply tests (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.conversation.reply_hub",
+      "sites": [
+        {
+          "file": "internal/conversation/reply_hub.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal.conversation.reply_hub/ADDED (P1-CPA-16)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.conversation.reply_prompt",
+      "sites": [
+        {
+          "file": "internal/conversation/reply_prompt.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal.conversation.reply_prompt/ADDED (P1-CPA-16)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.conversation.reply_rpc",
+      "sites": [
+        {
+          "file": "internal/conversation/reply_rpc.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal.conversation.reply_rpc/ADDED (P1-CPA-16)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.conversation.reply_store",
+      "sites": [
+        {
+          "file": "internal/conversation/reply_store.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal.conversation.reply_store/ADDED (P1-CPA-16)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.conversation.reply_store tests",
+      "sites": [
+        {
+          "file": "internal/conversation/reply_cache_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal.conversation.reply_store tests (ADD)."
         }
       ],
       "statuses": [
@@ -17334,6 +17884,20 @@
       ]
     },
     {
+      "name": "internal.jobs.AttestationNonceStore",
+      "sites": [
+        {
+          "file": "internal/jobs/attestation_nonce.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "internal.jobs.AttestationNonceStore/ADDED (P1-CI-04)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.jobs.CheckpointWatcher",
       "sites": [
         {
@@ -17348,6 +17912,20 @@
       ]
     },
     {
+      "name": "internal.jobs.CiAttestationStore",
+      "sites": [
+        {
+          "file": "internal/jobs/ci_attestation.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal.jobs.CiAttestationStore/ADDED (P1-CI-04)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.jobs.EventLeaseCheckpoint",
       "sites": [
         {
@@ -17355,6 +17933,20 @@
           "line": 27,
           "status": "ADD",
           "raw": "internal.jobs.EventLeaseCheckpoint/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.jobs.JobSpecHash",
+      "sites": [
+        {
+          "file": "internal/jobs/job_spec_hash.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal.jobs.JobSpecHash/ADDED (P1-CI-04)."
         }
       ],
       "statuses": [
@@ -18189,6 +18781,20 @@
       ]
     },
     {
+      "name": "internal.nodes.KeyIDFor",
+      "sites": [
+        {
+          "file": "internal/nodes/keyid.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal.nodes.KeyIDFor/ADDED (P1-CI-04)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.notify.AwayConfig",
       "sites": [
         {
@@ -18698,6 +19304,20 @@
           "line": 4,
           "status": "ADD",
           "raw": "internal.providers.agents tests (ADD) - P1-AGT-02."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.retrieval recall resume topic",
+      "sites": [
+        {
+          "file": "internal/retrieval/recall_resume_topic_test.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal.retrieval recall resume topic (ADD) (P1-CPA-12)."
         }
       ],
       "statuses": [
@@ -19274,6 +19894,20 @@
       ]
     },
     {
+      "name": "internal.retrieval.embedsel.Selection",
+      "sites": [
+        {
+          "file": "internal/retrieval/embedsel/selection.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "internal.retrieval.embedsel.Selection/ADDED (P1-CPA-11)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.retrieval.fusion.ScopeFilter",
       "sites": [
         {
@@ -19293,10 +19927,10 @@
       "sites": [
         {
           "file": "internal/retrieval/fusion/vectorleg.go",
-          "line": 16,
+          "line": 21,
           "status": "ADD",
           "ticket": "P1-E06-W2-S11-T1",
-          "raw": "internal.retrieval.fusion.VectorLeg/ADDED (P1-E06-W2-S11-T1)."
+          "raw": "internal.retrieval.fusion.VectorLeg/ADDED (P1-E06-W2-S11-T1;"
         }
       ],
       "statuses": [
@@ -19308,10 +19942,10 @@
       "sites": [
         {
           "file": "internal/retrieval/lifecycle/doctor.go",
-          "line": 7,
+          "line": 12,
           "status": "ADD",
           "ticket": "P1-E06-W2-S11-T4",
-          "raw": "internal.retrieval.lifecycle.DoctorCheck/ADDED (P1-E06-W2-S11-T4)."
+          "raw": "internal.retrieval.lifecycle.DoctorCheck/ADDED (P1-E06-W2-S11-T4;"
         },
         {
           "file": "internal/retrieval/lifecycle/doctor_test.go",
@@ -19400,7 +20034,7 @@
         },
         {
           "file": "internal/retrieval/lifecycle/verify.go",
-          "line": 24,
+          "line": 25,
           "status": "ADD",
           "ticket": "P1-E06-W2-S11-T4",
           "raw": "internal.retrieval.lifecycle.Manager/ADDED (P1-E06-W2-S11-T4)."
@@ -21005,7 +21639,7 @@
       "sites": [
         {
           "file": "internal/conductor/execute_refusal.go",
-          "line": 13,
+          "line": 15,
           "status": "",
           "raw": "internal/conductor (P1-SEC-02)."
         }
@@ -21473,6 +22107,18 @@
           "line": 8,
           "status": "ADD",
           "raw": "internal/daemon (ADD, coverage-floor fix)."
+        },
+        {
+          "file": "internal/daemon/conductor_door.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-CPA-10)."
+        },
+        {
+          "file": "internal/daemon/conductor_door_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/daemon (tests, P1-CPA-10)."
         },
         {
           "file": "internal/daemon/conductor_execute.go",
@@ -26166,21 +26812,6 @@
       ]
     },
     {
-      "name": "internal/plugins/process host-call-dispatch",
-      "sites": [
-        {
-          "file": "internal/plugins/process/hostcalls.go",
-          "line": 22,
-          "status": "ADD",
-          "ticket": "P1-E15-W4-S31-T4",
-          "raw": "internal/plugins/process host-call-dispatch (ADD) — P1-E15-W4-S31-T4; per-transport consumer (CHANGE) — P1-PLG-09."
-        }
-      ],
-      "statuses": [
-        "ADD"
-      ]
-    },
-    {
       "name": "internal/plugins/process lifetime",
       "sites": [
         {
@@ -26241,21 +26872,6 @@
           "status": "ADD",
           "ticket": "P1-E15-W4-S31-T3",
           "raw": "internal/plugins/process runtime windows (ADD) — P1-E15-W4-S31-T3."
-        }
-      ],
-      "statuses": [
-        "ADD"
-      ]
-    },
-    {
-      "name": "internal/plugins/process transport",
-      "sites": [
-        {
-          "file": "internal/plugins/process/transport.go",
-          "line": 21,
-          "status": "ADD",
-          "ticket": "P1-E15-W4-S31-T3",
-          "raw": "internal/plugins/process transport (ADD) — P1-E15-W4-S31-T3; single-parse routeFrame (CHANGE) — P1-PLG-09."
         }
       ],
       "statuses": [
@@ -28461,6 +29077,32 @@
       ]
     },
     {
+      "name": "internal/providers/dispatch gateway",
+      "sites": [
+        {
+          "file": "internal/providers/dispatch/gateway.go",
+          "line": 24,
+          "status": "ADD",
+          "raw": "internal/providers/dispatch gateway/ADD (P1-GWY-08)."
+        },
+        {
+          "file": "internal/providers/dispatch/gateway_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal/providers/dispatch gateway/ADD (P1-GWY-08)."
+        },
+        {
+          "file": "internal/providers/dispatch/gateway_unit_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal/providers/dispatch gateway/ADD."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/providers/dispatch lane_outcome",
       "sites": [
         {
@@ -28528,6 +29170,34 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal/providers/gateway compare",
+      "sites": [
+        {
+          "file": "internal/providers/gateway/compare.go",
+          "line": 8,
+          "status": "",
+          "raw": "internal/providers/gateway compare (P1-GWY-02)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/providers/gateway source",
+      "sites": [
+        {
+          "file": "internal/providers/gateway/source.go",
+          "line": 9,
+          "status": "",
+          "raw": "internal/providers/gateway source (P1-GWY-02)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -29891,6 +30561,26 @@
           "line": 7,
           "status": "",
           "raw": "internal/secrets clipboard_windows.go/TEST (P1-SEC-09)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/secrets credhelper",
+      "sites": [
+        {
+          "file": "internal/secrets/credhelper.go",
+          "line": 16,
+          "status": "",
+          "raw": "internal/secrets credhelper (P1-GWY-02)."
+        },
+        {
+          "file": "internal/secrets/credhelper_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal/secrets credhelper (P1-GWY-02)."
         }
       ],
       "statuses": [
@@ -33090,6 +33780,20 @@
       ]
     },
     {
+      "name": "pkg.provider.PolicyKernel",
+      "sites": [
+        {
+          "file": "pkg/provider/agent_kernel.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "pkg.provider.PolicyKernel/ADD (P1-GEN-06)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "pkg.provider.Queue",
       "sites": [
         {
@@ -33335,6 +34039,27 @@
       ],
       "statuses": [
         "CHANGE"
+      ]
+    },
+    {
+      "name": "pkg.provider.transient-error-class",
+      "sites": [
+        {
+          "file": "pkg/provider/transient.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "pkg.provider.transient-error-class/ADD (P1-GWY-03)."
+        },
+        {
+          "file": "pkg/provider/transient_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "pkg.provider.transient-error-class (TEST) - P1-GWY-03."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
       ]
     },
     {
@@ -37857,6 +38582,48 @@
       ]
     },
     {
+      "name": "provider.intake.gateway",
+      "sites": [
+        {
+          "file": "internal/providers/intake/gateway.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "provider.intake.gateway/ADD."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "provider.intake.gateway tests",
+      "sites": [
+        {
+          "file": "internal/providers/intake/gateway_refusals_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "provider.intake.gateway tests (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "provider.intake.gateway.reauth",
+      "sites": [
+        {
+          "file": "internal/providers/intake/reauth_gateway.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "provider.intake.gateway.reauth/ADD."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "provider.registry",
       "sites": [
         {
@@ -38434,6 +39201,20 @@
       "statuses": [
         "ADD",
         "CHANGE"
+      ]
+    },
+    {
+      "name": "providers.anthropic.auth-bearer",
+      "sites": [
+        {
+          "file": "providers/anthropic/auth_bearer.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "providers.anthropic.auth-bearer/ADD (P1-GWY-07)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -39097,10 +39878,24 @@
           "line": 9,
           "status": "ADD",
           "raw": "placeholder: providers/anthropic driver (ADD) - see anthropic.go."
+        },
+        {
+          "file": "providers/anthropic/transient.go",
+          "line": 12,
+          "status": "CHANGE",
+          "raw": "placeholder: providers/anthropic driver (CHANGE, P1-GWY-03)."
+        },
+        {
+          "file": "providers/anthropic/transient_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "placeholder: providers/anthropic driver (TEST, P1-GWY-03)."
         }
       ],
       "statuses": [
-        "ADD"
+        "",
+        "ADD",
+        "CHANGE"
       ]
     },
     {
@@ -39376,6 +40171,12 @@
       "name": "repo/inferred-fact-ledger",
       "sites": [
         {
+          "file": "internal/repo/extract.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "repo/inferred-fact-ledger/ADD (P1-GEN-02)."
+        },
+        {
           "file": "internal/repo/fact.go",
           "line": 16,
           "status": "ADD",
@@ -39388,6 +40189,12 @@
           "status": "ADD",
           "ticket": "P1-E33-W7-S67-T2",
           "raw": "repo/inferred-fact-ledger/ADD (P1-E33-W7-S67-T2)."
+        },
+        {
+          "file": "internal/repo/ledger_service.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "repo/inferred-fact-ledger/ADD (P1-GEN-02)."
         },
         {
           "file": "internal/repo/ledger_store.go",
@@ -40028,6 +40835,34 @@
       ]
     },
     {
+      "name": "runtime/conductor-deny",
+      "sites": [
+        {
+          "file": "internal/runtime/conductor_deny.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "runtime/conductor-deny (ADD, P1-CAP-07)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "runtime/conductor-deny tests",
+      "sites": [
+        {
+          "file": "internal/runtime/conductor_deny_test.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "runtime/conductor-deny tests (ADD, P1-CAP-07)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "runtime/config",
       "sites": [
         {
@@ -40094,7 +40929,7 @@
         },
         {
           "file": "internal/runtime/config_perm.go",
-          "line": 31,
+          "line": 29,
           "status": "ADD",
           "raw": "runtime/config (ADD, P1-CORE-16)."
         },
@@ -40106,7 +40941,7 @@
         },
         {
           "file": "internal/runtime/config_perm_unix.go",
-          "line": 29,
+          "line": 34,
           "status": "ADD",
           "raw": "runtime/config (ADD, P1-CORE-16)."
         },
@@ -40332,6 +41167,34 @@
           "status": "ADD",
           "ticket": "P1-E06-W2-S12-T3",
           "raw": "runtime/config.retrieval (ADD, P1-E06-W2-S12-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "runtime/config.retrieval.embedding",
+      "sites": [
+        {
+          "file": "internal/runtime/config_retrieval_embedding.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "runtime/config.retrieval.embedding (ADD, P1-CPA-11)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "runtime/config.topics",
+      "sites": [
+        {
+          "file": "internal/runtime/config_topics.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "runtime/config.topics (ADD, P1-CPA-12)."
         }
       ],
       "statuses": [
@@ -41026,7 +41889,7 @@
       ]
     }
   ],
-  "total_sites": 3964,
-  "unspecified_count": 347,
-  "multi_status_count": 125
+  "total_sites": 4038,
+  "unspecified_count": 354,
+  "multi_status_count": 129
 }
