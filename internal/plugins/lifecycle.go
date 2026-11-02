@@ -208,49 +208,6 @@ func ErrNoInputHardError(verb string) error {
 			"pass the required confirmation flag non-interactively instead", verb)
 }
 
-// ChangePerms applies a §5.14 perms grant|revoke: both directions are
-// unconditionally elevated, so daemonAvailable is checked first (D/S-07.T4)
-// and noInput second (§5.8) — an elevated call that cannot prompt refuses
-// before it can be told "yes" on its own behalf. grant=true adds cap to
-// name's Grants (idempotent: already-granted is a no-op, not an error);
-// grant=false removes it (idempotent: already-absent is a no-op).
-func ChangePerms(ctx context.Context, store provider.Store, name, capability string, grant, daemonAvailable, noInput bool) (PluginMetadata, error) {
-	if !daemonAvailable {
-		verb := "perms grant"
-		if !grant {
-			verb = "perms revoke"
-		}
-		return PluginMetadata{}, ErrDaemonRequiredForElevatedPluginOp(verb)
-	}
-	if noInput {
-		verb := "perms grant"
-		if !grant {
-			verb = "perms revoke"
-		}
-		return PluginMetadata{}, ErrNoInputHardError(verb)
-	}
-	if err := validateName(name); err != nil {
-		return PluginMetadata{}, err
-	}
-	if strings.TrimSpace(capability) == "" {
-		return PluginMetadata{}, cascade.New(cascade.KindInvalidInput, "plugin: perms capability is empty")
-	}
-
-	rec, ok, err := LoadMetadata(ctx, store, name)
-	if err != nil {
-		return PluginMetadata{}, err
-	}
-	if !ok {
-		return PluginMetadata{}, cascade.Newf(cascade.KindNotFound, "plugin: %q is not installed", name)
-	}
-
-	rec.Grants = applyGrantChange(rec.Grants, capability, grant)
-	if err := SaveMetadata(ctx, store, rec); err != nil {
-		return PluginMetadata{}, err
-	}
-	return rec, nil
-}
-
 // applyGrantChange returns grants with cap added (grant=true) or removed
 // (grant=false), idempotently, preserving order for the entries that
 // remain.

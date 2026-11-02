@@ -256,7 +256,7 @@ func TestUpdateOfTrustedRecordNeedsManifestPin(t *testing.T) {
 func TestUpdateExpansionUsesEffectiveGrants(t *testing.T) {
 	ctx := context.Background()
 	f := grantedTrustDemo(t)
-	if _, err := ChangePerms(ctx, f.store, "trustdemo", "oauth:repo", true, true, false); err != nil {
+	if _, err := ChangeStorePerms(ctx, f.store, "trustdemo", "oauth:repo", true, true, false); err != nil {
 		t.Fatal(err)
 	}
 	calls := 0

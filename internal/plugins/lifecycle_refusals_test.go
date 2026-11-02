@@ -29,7 +29,7 @@ var badNames = []string{"", "   ", "\t", "\n "}
 // A manifest's ID is pattern-checked ([a-z][a-z0-9-]*) by plugin.Validate
 // at parse time, and pkg/plugin's own doc explains why: an id becomes a
 // storage namespace and a CLI/RPC mount point. But SetEnabled,
-// RemovePlugin and ChangePerms take an OPERATOR-SUPPLIED name straight
+// RemovePlugin and ChangeStorePerms take an OPERATOR-SUPPLIED name straight
 // from the command line, and validateName refuses only emptiness. A name
 // like "../escape" therefore passes the guard and is refused later, by the
 // lookup failing, rather than by validation.
@@ -73,12 +73,12 @@ func TestRemovePluginRefusesAMalformedName(t *testing.T) {
 	}
 }
 
-func TestChangePermsRefusesAMalformedName(t *testing.T) {
+func TestChangeStorePermsRefusesAMalformedName(t *testing.T) {
 	store := storetest.NewMemStore()
 	for _, name := range badNames {
-		_, err := ChangePerms(context.Background(), store, name, "net.http", true, true, false)
+		_, err := ChangeStorePerms(context.Background(), store, name, "net.http", true, true, false)
 		if err == nil {
-			t.Errorf("ChangePerms accepted the malformed name %q", name)
+			t.Errorf("ChangeStorePerms accepted the malformed name %q", name)
 		}
 	}
 }
@@ -107,12 +107,12 @@ func TestSetEnabledAndRemoveReportNotInstalled(t *testing.T) {
 	}
 }
 
-// TestChangePermsIsElevatedInBothDirections pins R-14.51's elevation rule:
+// TestChangeStorePermsIsElevatedInBothDirections pins R-14.51's elevation rule:
 // perms grant AND revoke are both elevated, so both refuse without a
 // daemon and both refuse when they cannot prompt. A revoke that skipped
 // these gates would let an unattended caller strip a capability with
 // nothing able to say no on the operator's behalf.
-func TestChangePermsIsElevatedInBothDirections(t *testing.T) {
+func TestChangeStorePermsIsElevatedInBothDirections(t *testing.T) {
 	ctx := context.Background()
 	store := storetest.NewMemStore()
 	if err := SaveMetadata(ctx, store, PluginMetadata{
@@ -128,7 +128,7 @@ func TestChangePermsIsElevatedInBothDirections(t *testing.T) {
 		}
 
 		t.Run(wantVerb+"/no daemon", func(t *testing.T) {
-			_, err := ChangePerms(ctx, store, "demo", "net.http", grant, false, false)
+			_, err := ChangeStorePerms(ctx, store, "demo", "net.http", grant, false, false)
 			if err == nil {
 				t.Fatal("succeeded with no daemon available, want a refusal")
 			}
@@ -138,7 +138,7 @@ func TestChangePermsIsElevatedInBothDirections(t *testing.T) {
 		})
 
 		t.Run(wantVerb+"/no input", func(t *testing.T) {
-			_, err := ChangePerms(ctx, store, "demo", "net.http", grant, true, true)
+			_, err := ChangeStorePerms(ctx, store, "demo", "net.http", grant, true, true)
 			if err == nil {
 				t.Fatal("succeeded with no input available, want a refusal")
 			}
@@ -149,27 +149,27 @@ func TestChangePermsIsElevatedInBothDirections(t *testing.T) {
 	}
 }
 
-// TestChangePermsRefusesAnEmptyCapability covers the guard between name
+// TestChangeStorePermsRefusesAnEmptyCapability covers the guard between name
 // validation and the store read: an empty capability would otherwise be
 // appended to a plugin's grant list as a blank entry.
-func TestChangePermsRefusesAnEmptyCapability(t *testing.T) {
+func TestChangeStorePermsRefusesAnEmptyCapability(t *testing.T) {
 	store := storetest.NewMemStore()
 	for _, capability := range []string{"", "   ", "\t"} {
-		_, err := ChangePerms(context.Background(), store, "demo", capability, true, true, false)
+		_, err := ChangeStorePerms(context.Background(), store, "demo", capability, true, true, false)
 		if err == nil {
-			t.Errorf("ChangePerms accepted the empty capability %q", capability)
+			t.Errorf("ChangeStorePerms accepted the empty capability %q", capability)
 		}
 	}
 }
 
-// TestChangePermsReportsNotInstalled covers the branch after the store
+// TestChangeStorePermsReportsNotInstalled covers the branch after the store
 // read: the plugin name is well formed and the gates passed, but no record
 // exists.
-func TestChangePermsReportsNotInstalled(t *testing.T) {
+func TestChangeStorePermsReportsNotInstalled(t *testing.T) {
 	store := storetest.NewMemStore()
-	_, err := ChangePerms(context.Background(), store, "absent", "net.http", true, true, false)
+	_, err := ChangeStorePerms(context.Background(), store, "absent", "net.http", true, true, false)
 	if err == nil {
-		t.Fatal("ChangePerms succeeded for an uninstalled plugin, want a not-found refusal")
+		t.Fatal("ChangeStorePerms succeeded for an uninstalled plugin, want a not-found refusal")
 	}
 	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindNotFound {
 		t.Errorf("error kind = %v (typed=%v), want %v", kind, ok, cascade.KindNotFound)

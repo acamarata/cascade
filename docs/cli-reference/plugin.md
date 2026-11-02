@@ -1,3 +1,21 @@
+# `cascade plugin perms grant|revoke`
+
+```
+cascade plugin perms grant <name> <capability>
+cascade plugin perms revoke <name> <capability>
+```
+
+Both commands require a running daemon and signed elevation. `CASCADE_NO_INPUT=1`
+refuses before dialing. The CLI sends `perms.grant` or `perms.revoke` with
+`{"id":"<name>","capability":"<capability>"}` and never writes plugin metadata.
+
+The daemon requires a verified witness for that method and those exact params.
+It records an audit intent, saves the grant change once, and records confirmation
+or failure. For an already trusted process plugin, the same save changes both
+`grants` and `trust_grants`. Granting a capability never makes an untrusted plugin
+trusted. Revoking removes the capability from both sets. Repeating a grant adds
+no duplicate. JSON output includes `name`, `grants_before`, and `grants_after`.
+
 # `cascade plugin search`
 
 Searches the plugin registry catalog: the compiled-in builtin plugins this

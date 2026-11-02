@@ -226,10 +226,30 @@ func TestOneHostCallConsumerAfterPluginRestart(t *testing.T) {
 	if err != nil || string(out) != "1" {
 		t.Fatalf("reply count=%s error=%v", out, err)
 	}
-	stack := make([]byte, 1024*1024)
-	n := goruntime.Stack(stack, true)
-	if bytes.Count(stack[:n], []byte("process.(*ProcessRuntime).consumeHostCalls(")) != 1 {
-		t.Fatal("expected one host call consumer")
+	// The replaced consumer may still be exiting right after the restart, so
+	// poll for exactly one until a short deadline; more than one persisting
+	// past it is the leak this test guards against.
+	consumers := -1
+	for end := time.Now().Add(3 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		consumers = bytes.Count(allGoroutineStacks(), []byte("process.(*ProcessRuntime).consumeHostCalls("))
+		if consumers == 1 || time.Now().After(end) {
+			break
+		}
+	}
+	if consumers != 1 {
+		t.Fatalf("expected one host call consumer, found %d", consumers)
+	}
+}
+
+// allGoroutineStacks returns the full dump of every goroutine. A fixed buffer
+// truncates the dump when earlier tests leave many goroutines behind, which
+// hides the consumer being counted.
+func allGoroutineStacks() []byte {
+	for size := 1 << 20; ; size *= 2 {
+		stack := make([]byte, size)
+		if n := goruntime.Stack(stack, true); n < size {
+			return stack[:n]
+		}
 	}
 }
 

@@ -40,10 +40,10 @@ type pluginRegisteredPayload struct {
 	Runtime string `json:"runtime"`
 }
 
-// InstallMiddleware wraps plugin.add and plugin.update; every other method
-// passes through untouched. It refuses a remote-runtime manifest before the
-// handler runs. A nil bus or store publishes nothing: there is nothing to
-// publish to or read from. The commit has already happened when a publish
+// InstallMiddleware binds params for plugin.add, plugin.update and the perms
+// verbs. Other methods receive no bound params. It refuses a remote-runtime
+// manifest before the handler runs. A nil bus or store publishes nothing:
+// there is nothing to publish to or read from. The commit has already happened when a publish
 // fails, so the call still succeeds and the failure is a warning on logger
 // (the daemon's logger; the first non-nil one given, else slog.Default),
 // never silent.
@@ -56,24 +56,30 @@ func InstallMiddleware(bus *events.Bus, store provider.Store, logger ...*slog.Lo
 		}
 	}
 	return func(method string, next rpc.HandlerFunc) rpc.HandlerFunc {
-		if method != "plugin.add" && method != UpdateRPCMethod {
+		switch method {
+		case "plugin.add", UpdateRPCMethod:
+			return func(ctx context.Context, raw json.RawMessage) (any, error) {
+				if err := refuseRemoteParams(method, raw); err != nil {
+					return nil, err
+				}
+				res, err := next(withInstallParams(ctx, raw), raw)
+				if err != nil || bus == nil || store == nil {
+					return res, err
+				}
+				if perr := publishPluginRegistered(ctx, bus, store, raw); perr != nil {
+					log.Warn("plugin.registered event not published; the commit stands",
+						slog.String("method", method), slog.String("error", perr.Error()))
+				}
+				return res, nil
+			}
+		case PermsGrantRPCMethod, PermsRevokeRPCMethod:
+			return func(ctx context.Context, raw json.RawMessage) (any, error) {
+				return next(withInstallParams(ctx, raw), raw)
+			}
+		default:
 			return func(ctx context.Context, raw json.RawMessage) (any, error) {
 				return next(withoutInstallParams(ctx), raw)
 			}
-		}
-		return func(ctx context.Context, raw json.RawMessage) (any, error) {
-			if err := refuseRemoteParams(method, raw); err != nil {
-				return nil, err
-			}
-			res, err := next(withInstallParams(ctx, raw), raw)
-			if err != nil || bus == nil || store == nil {
-				return res, err
-			}
-			if perr := publishPluginRegistered(ctx, bus, store, raw); perr != nil {
-				log.Warn("plugin.registered event not published; the commit stands",
-					slog.String("method", method), slog.String("error", perr.Error()))
-			}
-			return res, nil
 		}
 	}
 }
@@ -81,7 +87,7 @@ func InstallMiddleware(bus *events.Bus, store provider.Store, logger ...*slog.Lo
 // installParamsKey is the context key of the raw install params.
 type installParamsKey struct{}
 
-// withInstallParams binds a copy of the raw plugin.add or plugin.update
+// withInstallParams binds a copy of the raw install or permission-change
 // params this middleware received, so the trust grant can check that the
 // witness covers exactly these bytes and that they name the manifest being
 // installed.

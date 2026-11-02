@@ -186,7 +186,7 @@ func TestPluginCLI_PermsNoInputHardError(t *testing.T) {
 	}
 	// A daemon IS reachable here (Embedded: false) so the assertion is
 	// really about CASCADE_NO_INPUT, not about the (separate,
-	// independently tested) daemon-required gate — ChangePerms checks
+	// independently tested) daemon-required gate — runPluginPerms checks
 	// daemon-availability first and CASCADE_NO_INPUT second, so this
 	// command never gets far enough to need the (unreachable) test dialer
 	// either way.

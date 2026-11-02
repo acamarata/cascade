@@ -59,7 +59,7 @@ func runPluginPerms(cmd *cobra.Command, deps pluginDeps, name, capability string
 		return recordPluginRefusal(ctx, deps, verb, "no_input", plugins.ErrNoInputHardError(label))
 	}
 	var res plugins.PermsResult
-	if err := pluginPermsElevatedCall(ctx, deps, cmd.ErrOrStderr(), verb, plugins.PermsParams{Name: name, Capability: capability}, &res); err != nil {
+	if err := pluginPermsElevatedCall(ctx, deps, cmd.ErrOrStderr(), verb, plugins.PermsParams{ID: name, Capability: capability}, &res); err != nil {
 		return err
 	}
 	// The diff is carried in the result: JSON mode never interleaves free

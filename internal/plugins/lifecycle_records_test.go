@@ -9,7 +9,36 @@ import (
 	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/plugin"
+	"github.com/acamarata/cascade/pkg/provider"
 )
+
+// ChangeStorePerms preserves the store-only fixture operation used by legacy
+// lifecycle tests. It is compiled only into this package's tests; production
+// permission changes are served exclusively by the attested RPC handlers.
+func ChangeStorePerms(ctx context.Context, store provider.Store, id, capability string, grant, daemonAvailable, noInput bool) (PluginMetadata, error) {
+	verb := "perms grant"
+	if !grant {
+		verb = "perms revoke"
+	}
+	if !daemonAvailable {
+		return PluginMetadata{}, ErrDaemonRequiredForElevatedPluginOp(verb)
+	}
+	if noInput {
+		return PluginMetadata{}, ErrNoInputHardError(verb)
+	}
+	if strings.TrimSpace(capability) == "" {
+		return PluginMetadata{}, cascade.New(cascade.KindInvalidInput, "capability must not be empty")
+	}
+	rec, ok, err := LoadMetadata(ctx, store, id)
+	if err != nil {
+		return PluginMetadata{}, err
+	}
+	if !ok {
+		return PluginMetadata{}, cascade.New(cascade.KindNotFound, "plugin not installed")
+	}
+	rec.Grants = applyGrantChange(rec.Grants, capability, grant)
+	return rec, SaveMetadata(ctx, store, rec)
+}
 
 // Purpose (this file): the record-level half of the lifecycle guards —
 //
@@ -54,46 +83,6 @@ func TestSaveMetadataRefusesAnEmptyName(t *testing.T) {
 		if err := SaveMetadata(context.Background(), store, PluginMetadata{Name: name}); err == nil {
 			t.Errorf("SaveMetadata accepted the malformed name %q", name)
 		}
-	}
-}
-
-// TestChangePermsIsIdempotentInBothDirections covers applyGrantChange's two
-// no-op arms: granting a capability already held, and revoking one that is
-// already absent. Both must converge rather than duplicating an entry or
-// erroring, since a repair script re-applies the desired state blindly.
-func TestChangePermsIsIdempotentInBothDirections(t *testing.T) {
-	ctx := context.Background()
-	store := storetest.NewMemStore()
-	if err := SaveMetadata(ctx, store, PluginMetadata{
-		Name: "demo", Enabled: true, Grants: []string{"net.http"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	rec, err := ChangePerms(ctx, store, "demo", "net.http", true, true, false)
-	if err != nil {
-		t.Fatalf("re-granting an existing capability: %v", err)
-	}
-	if len(rec.Grants) != 1 {
-		t.Fatalf("grants = %v, want the capability present exactly once", rec.Grants)
-	}
-
-	rec, err = ChangePerms(ctx, store, "demo", "never-granted", false, true, false)
-	if err != nil {
-		t.Fatalf("revoking an absent capability: %v", err)
-	}
-	if len(rec.Grants) != 1 || rec.Grants[0] != "net.http" {
-		t.Fatalf("grants = %v, want the untouched original set", rec.Grants)
-	}
-}
-
-// TestChangePermsPropagatesAnUnreadableStore covers the read branch between
-// the guards and the write.
-func TestChangePermsPropagatesAnUnreadableStore(t *testing.T) {
-	broken := failingStore{MemStore: storetest.NewMemStore(), failGet: true}
-	_, err := ChangePerms(context.Background(), broken, "demo", "net.http", true, true, false)
-	if !errors.Is(err, errStoreFailure) {
-		t.Fatalf("error = %v, want the store's own failure", err)
 	}
 }
 

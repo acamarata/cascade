@@ -155,7 +155,7 @@ func TestInstallMiddlewareRefusesRemoteBeforeHandler(t *testing.T) {
 }
 
 // TestInstallMiddlewareBindsParamsOnlyForInstallVerbs: plugin.add and
-// plugin.update see a copy of their own raw params; any other method sees
+// plugin.update and perms verbs see a copy of their own raw params; other methods see
 // none, even inside a context that already carries an install's params.
 func TestInstallMiddlewareBindsParamsOnlyForInstallVerbs(t *testing.T) {
 	mw := InstallMiddleware(nil, nil)
@@ -166,7 +166,7 @@ func TestInstallMiddlewareBindsParamsOnlyForInstallVerbs(t *testing.T) {
 		seen, bound = installParamsFrom(ctx)
 		return nil, nil
 	}
-	for _, method := range []string{"plugin.add", UpdateRPCMethod} {
+	for _, method := range []string{"plugin.add", UpdateRPCMethod, PermsGrantRPCMethod, PermsRevokeRPCMethod} {
 		if _, err := mw(method, probe)(context.Background(), raw); err != nil || !bound || string(seen) != string(raw) {
 			t.Fatalf("%s: bound=%v params=%s err=%v, want its own params", method, bound, seen, err)
 		}
@@ -181,6 +181,7 @@ func TestInstallMiddlewareBindsParamsOnlyForInstallVerbs(t *testing.T) {
 // trust field: grantProcessTrust's caller and UpdatePlugin's commit, which
 // saves only a processTrust built by trustBuilders.
 var trustWriters = map[string]string{
+	"internal/plugins/perms_rpc.go:applyPermsChange":     "TrustGrants",
 	"internal/plugins/dispatch.go:ProvisionElevated":     "TrustTier ExecDigest TrustGrants",
 	"internal/plugins/lifecycle_update.go:commitUpdate":  "TrustTier ExecDigest TrustGrants",
 	"internal/plugins/trust_grant_sweep_seed.go:granted": "TrustTier", // the seeded input below
@@ -196,10 +197,10 @@ var trustBuilders = map[string]bool{
 // grantsReaders are the functions that read a .Grants for something other
 // than process authority (the authority read is EffectiveGrants).
 var grantsReaders = map[string]bool{
+	"internal/plugins/perms_rpc.go:applyPermsChange":                  true, // witnessed grant-set change
+	"internal/plugins/perms_rpc.go:commitPermsChange":                 true, // reports before and after
 	"internal/plugins/lifecycle.go:EffectiveGrants":                   true, // the authority read
-	"internal/plugins/lifecycle.go:ChangePerms":                       true, // edits the stored set
 	"internal/plugins/lifecycle_add.go:addRequiresElevation":          true, // elevation decision
-	"internal/plugins/perms_rpc.go:PermsRPCHandler":                   true, // reports before and after
 	"internal/plugins/update_rpc.go:UpdateRPCHandler":                 true, // reports the committed set
 	"internal/plugins/registry.go:Grants":                             true, // BuiltinRegistry entries
 	"internal/plugins/intent_dispatch.go:enabledSet":                  true, // len(BuiltinRegistration.Grants) only: the enabled check, never process authority

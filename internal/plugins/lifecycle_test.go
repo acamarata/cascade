@@ -102,17 +102,17 @@ func TestValidateName_EmptyRefused(t *testing.T) {
 	}
 }
 
-func TestChangePerms_EmptyCapabilityRefused(t *testing.T) {
+func TestChangeStorePerms_EmptyCapabilityRefused(t *testing.T) {
 	ctx := context.Background()
 	store := storetest.NewMemStore()
 	if err := SaveMetadata(ctx, store, PluginMetadata{Name: "demo"}); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if _, err := ChangePerms(ctx, store, "demo", "  ", true, true, false); err == nil {
-		t.Fatal("ChangePerms with a blank capability succeeded, want a refusal")
+	if _, err := ChangeStorePerms(ctx, store, "demo", "  ", true, true, false); err == nil {
+		t.Fatal("ChangeStorePerms with a blank capability succeeded, want a refusal")
 	}
-	if _, err := ChangePerms(ctx, store, "  ", "net.http", false, true, false); err == nil {
-		t.Fatal("ChangePerms revoke on a blank plugin name succeeded, want a refusal")
+	if _, err := ChangeStorePerms(ctx, store, "  ", "net.http", false, true, false); err == nil {
+		t.Fatal("ChangeStorePerms revoke on a blank plugin name succeeded, want a refusal")
 	}
 }
 
@@ -148,16 +148,16 @@ func TestGrantsExpand(t *testing.T) {
 	}
 }
 
-func TestChangePerms_DaemonlessElevatedRefusal(t *testing.T) {
+func TestChangeStorePerms_DaemonlessElevatedRefusal(t *testing.T) {
 	ctx := context.Background()
 	store := storetest.NewMemStore()
-	_, err := ChangePerms(ctx, store, "demo", "net.http", true, false /* daemonAvailable */, false)
+	_, err := ChangeStorePerms(ctx, store, "demo", "net.http", true, false /* daemonAvailable */, false)
 	if err == nil {
-		t.Fatal("ChangePerms with daemonAvailable=false succeeded, want the daemon-required refusal")
+		t.Fatal("ChangeStorePerms with daemonAvailable=false succeeded, want the daemon-required refusal")
 	}
 	kind, ok := cascade.KindOf(err)
 	if !ok || kind != cascade.KindUnavailable {
-		t.Fatalf("ChangePerms daemonless error kind = %v (ok=%v), want KindUnavailable", kind, ok)
+		t.Fatalf("ChangeStorePerms daemonless error kind = %v (ok=%v), want KindUnavailable", kind, ok)
 	}
 }
 
@@ -167,24 +167,24 @@ func TestPluginPerms_NoInputHardError(t *testing.T) {
 	if err := SaveMetadata(ctx, store, PluginMetadata{Name: "demo"}); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	_, err := ChangePerms(ctx, store, "demo", "net.http", true, true /* daemonAvailable */, true /* noInput */)
+	_, err := ChangeStorePerms(ctx, store, "demo", "net.http", true, true /* daemonAvailable */, true /* noInput */)
 	if err == nil {
-		t.Fatal("ChangePerms with noInput=true succeeded, want the CASCADE_NO_INPUT hard error")
+		t.Fatal("ChangeStorePerms with noInput=true succeeded, want the CASCADE_NO_INPUT hard error")
 	}
 	kind, ok := cascade.KindOf(err)
 	if !ok || kind != cascade.KindInvalidInput {
-		t.Fatalf("ChangePerms no-input error kind = %v (ok=%v), want KindInvalidInput", kind, ok)
+		t.Fatalf("ChangeStorePerms no-input error kind = %v (ok=%v), want KindInvalidInput", kind, ok)
 	}
 }
 
-func TestChangePerms_GrantAndRevoke(t *testing.T) {
+func TestChangeStorePerms_GrantAndRevoke(t *testing.T) {
 	ctx := context.Background()
 	store := storetest.NewMemStore()
 	if err := SaveMetadata(ctx, store, PluginMetadata{Name: "demo", Grants: []string{"fs.read"}}); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 
-	rec, err := ChangePerms(ctx, store, "demo", "net.http", true, true, false)
+	rec, err := ChangeStorePerms(ctx, store, "demo", "net.http", true, true, false)
 	if err != nil {
 		t.Fatalf("grant: %v", err)
 	}
@@ -192,12 +192,12 @@ func TestChangePerms_GrantAndRevoke(t *testing.T) {
 		t.Fatalf("after grant, Grants = %v, want 2 entries", rec.Grants)
 	}
 	// Idempotent re-grant.
-	rec2, err := ChangePerms(ctx, store, "demo", "net.http", true, true, false)
+	rec2, err := ChangeStorePerms(ctx, store, "demo", "net.http", true, true, false)
 	if err != nil || len(rec2.Grants) != 2 {
 		t.Fatalf("idempotent re-grant: rec=%+v err=%v", rec2, err)
 	}
 
-	rec3, err := ChangePerms(ctx, store, "demo", "net.http", false, true, false)
+	rec3, err := ChangeStorePerms(ctx, store, "demo", "net.http", false, true, false)
 	if err != nil {
 		t.Fatalf("revoke: %v", err)
 	}
@@ -205,10 +205,10 @@ func TestChangePerms_GrantAndRevoke(t *testing.T) {
 		t.Fatalf("after revoke, Grants = %v, want [fs.read]", rec3.Grants)
 	}
 
-	// ChangePerms on an unknown plugin refuses NotFound (with a daemon and
+	// ChangeStorePerms on an unknown plugin refuses NotFound (with a daemon and
 	// input available, so the refusal really is about the name).
-	if _, err := ChangePerms(ctx, store, "ghost", "net.http", true, true, false); err == nil {
-		t.Fatal("ChangePerms on an unknown plugin succeeded, want KindNotFound")
+	if _, err := ChangeStorePerms(ctx, store, "ghost", "net.http", true, true, false); err == nil {
+		t.Fatal("ChangeStorePerms on an unknown plugin succeeded, want KindNotFound")
 	}
 }
 

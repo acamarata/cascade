@@ -162,12 +162,12 @@ func TestSetEnabledDoesNotReportSuccessOnAFailedWrite(t *testing.T) {
 	}
 }
 
-func TestChangePermsPropagatesAStoreFailure(t *testing.T) {
+func TestChangeStorePermsPropagatesAStoreFailure(t *testing.T) {
 	store := seededFailingStore(t, func(f *failingStore) { f.failPut = true })
 	// daemonAvailable=true, noInput=false: both elevation gates satisfied, so
 	// the call reaches the store and this asserts the STORE failure rather
 	// than a refusal that never got that far.
-	_, err := ChangePerms(context.Background(), store, "seeded", "storage.read", true, true, false)
+	_, err := ChangeStorePerms(context.Background(), store, "seeded", "storage.read", true, true, false)
 	if !errors.Is(err, errStoreFailure) {
 		t.Fatalf("error = %v, want the store's own failure", err)
 	}

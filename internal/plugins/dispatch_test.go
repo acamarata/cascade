@@ -100,11 +100,11 @@ func TestPermsStoreOnlyGrantAddsNoAuthority(t *testing.T) {
 	}
 	widen := map[string]func() error{
 		"perms grant net.http:evil.example": func() error {
-			_, err := ChangePerms(ctx, f.store, "trustdemo", "net.http:evil.example", true, true, false)
+			_, err := ChangeStorePerms(ctx, f.store, "trustdemo", "net.http:evil.example", true, true, false)
 			return err
 		},
 		"perms grant oauth:repo": func() error {
-			_, err := ChangePerms(ctx, f.store, "trustdemo", "oauth:repo", true, true, false)
+			_, err := ChangeStorePerms(ctx, f.store, "trustdemo", "oauth:repo", true, true, false)
 			return err
 		},
 		"raw SaveMetadata": func() error {

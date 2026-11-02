@@ -65,7 +65,7 @@ func SetEnabled(ctx context.Context, store provider.Store, name string, enabled 
 // RemovePlugin tears down (when teardown is non-nil) and deletes name's
 // metadata record. Removing always reduces grants to nothing, so §5.14
 // never elevates this verb — RemovePlugin takes no daemonAvailable
-// parameter, unlike AddPlugin/UpdatePlugin/ChangePerms, and that omission
+// parameter, unlike AddPlugin/UpdatePlugin/ChangeStorePerms, and that omission
 // is itself the enforcement: there is no elevation branch to gate.
 func RemovePlugin(ctx context.Context, store provider.Store, teardown ProcessTeardown, name string) (PluginMetadata, error) {
 	if err := validateName(name); err != nil {
