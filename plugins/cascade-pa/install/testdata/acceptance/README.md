@@ -44,9 +44,9 @@ fixtures never share signing material.
   verifies.
 
 **Drift note:** the checksum above is pinned to `plugins/github/manifest.toml`
-as it existed on 2026-10-29, after the `cascade-github.prs.diff` tool was added
-(sha256 `0f2636028178d60b2c6d4ec9d2061640eac2b1c10df916dbed5bd115d6aabe26`;
-the 2026-09-21 original was `53f2a071...a418`). The artifact signature and the
+as it existed on 2026-11-02, after the generic process-verb RPC methods were
+added (sha256 `5675bbe3ee8b0e85f3a55587d6d6797d3d37561671b1cf430ff8a09cbd3f70dd`;
+2026-10-29 `0f2636028178...abe26`, the 2026-09-21 original `53f2a071...a418`). The artifact signature and the
 index signature were re-made with the same fixed-seed key; `index.json.minisig`
 still covers the 2026-09-21 bytes (its throwaway key was never kept, and no
 code reads it). If a

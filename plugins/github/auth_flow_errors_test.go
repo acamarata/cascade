@@ -59,45 +59,6 @@ func TestBeginRefusesAnUnusableClientID(t *testing.T) {
 	}
 }
 
-// brokenStream fails every write, standing in for a host that closed the
-// pipe while this plugin was still answering.
-type brokenStream struct{}
-
-func (brokenStream) Write([]byte) (int, error) { return 0, errors.New("pipe closed") }
-
-// TestCompleteReportsAStreamItCannotWriteTo is the failure that matters
-// most on this path: the token was obtained, but the notification carrying
-// it to the vault could not be written. That must surface as an error — a
-// caller told "stored" when nothing was stored would never retry.
-func TestCompleteReportsAStreamItCannotWriteTo(t *testing.T) {
-	t.Setenv("CASCADE_NO_INPUT", "")
-	waiter := &fakeWaiter{}
-	poster := &fakePoster{body: `{"access_token":"gho_live","token_type":"bearer"}`}
-	p, _ := newTestPlugin(&fakeDoer{}, waiter, poster)
-	result := beginFlow(t, p)
-	waiter.query = url.Values{"code": {"the-code"}, "state": {result["state"]}}
-
-	// The host's pipe goes away between begin and complete.
-	p.out = brokenStream{}
-
-	id := uint64(2)
-	out, _ := p.dispatch(frame{JSONRPC: "2.0", ID: &id, Method: "cascade.auth.complete"})
-	if out.Error == nil {
-		t.Fatal("a token that could not be handed to the vault was reported as stored")
-	}
-	if !strings.Contains(out.Error.Message, "pipe closed") {
-		t.Errorf("error = %q, want the write failure", out.Error.Message)
-	}
-}
-
-// TestEmitRefusesWithNoStream proves a broker with nowhere to write fails
-// as a typed error rather than a nil-pointer panic mid-flow.
-func TestEmitRefusesWithNoStream(t *testing.T) {
-	if err := (&broker{}).emit([]byte(`{}`)); err == nil {
-		t.Fatal("emit succeeded with no output stream")
-	}
-}
-
 // TestTheDefaultListenerIsTheRealOne proves an unconfigured flowState
 // reaches the production loopback constructor rather than silently doing
 // nothing — the seam exists for tests, and its ABSENCE must mean
@@ -116,26 +77,6 @@ func TestMalformedBeginParamsAreRefused(t *testing.T) {
 		Params: json.RawMessage(`{"client_id":{"not":"a string"}}`)})
 	if !reply || out.Error == nil {
 		t.Fatalf("malformed begin params returned %+v, want an error", out)
-	}
-}
-
-// TestStoreTokenNotificationRoundTrips proves the frame decodes back to
-// exactly the key and value it was given, rather than only that it
-// contains them somewhere.
-func TestStoreTokenNotificationRoundTrips(t *testing.T) {
-	raw, err := StoreTokenNotification(TokenKey(), "gho_secret")
-	if err != nil {
-		t.Fatalf("StoreTokenNotification: %v", err)
-	}
-	var decoded struct {
-		Method string            `json:"method"`
-		Params map[string]string `json:"params"`
-	}
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		t.Fatalf("the frame is not JSON: %v", err)
-	}
-	if decoded.Params["key"] != TokenKey() || decoded.Params["value"] != "gho_secret" {
-		t.Fatalf("params = %v", decoded.Params)
 	}
 }
 

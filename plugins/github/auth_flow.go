@@ -1,21 +1,23 @@
 // Purpose (this file): the plugin's two auth verbs — begin a PKCE flow,
 //
-//	and complete it: wait for the callback, redeem the code, hand the token
-//	to the vault, and arm this process's API client with it.
+//	and complete it: wait for the callback, redeem the code, and arm this
+//	process's API client with the token.
 //
 // Inputs: cascade.auth.begin / cascade.auth.complete frames.
-// Outputs: an authorization URL, then a host_secret_ref notification
+// Outputs: an authorization URL, then a reply that never claims the token
 //
-//	carrying the token, written to stdout as a frame of its own.
+//	was stored (stored:false, naming DEF-P2-plugin-secret-store).
 //
-// Constraints: the token is handed to the host and held in memory. It is
+// Constraints: the token is held in this process's memory only. It is
 //
-//	never written to a file, a log line or the manifest, and never returned
-//	in a reply frame — a reply is correlated and recorded by the host, and
-//	the vault is the only place a token belongs. The PKCE verifier never
-//	leaves this process at all.
+//	never written to a file, a log line, the manifest, a notification or a
+//	reply frame, and it is never sent to the host: no host component stores
+//	a plugin-sent secret yet, so claiming otherwise would be false (R14
+//	F-5). The PKCE verifier never leaves this process either.
 //
-// SPORT: plugins/github:auth-flow (ADD) — P1-E25-W5-S51-T1.
+// SPORT: plugins/github:auth-flow (ADD) — P1-E25-W5-S51-T1; token handling
+//
+//	(CHANGE) — P1-PLG-04.
 package main
 
 import (
@@ -132,33 +134,28 @@ func (s *flowState) take() *pendingFlow {
 	return flow
 }
 
-// complete waits for the callback, redeems the code, and returns the token
-// together with the notification that stores it.
-func (s *flowState) complete(ctx context.Context, post auth.Poster) (token string, store []byte, err error) {
+// complete waits for the callback, redeems the code, and returns the token.
+func (s *flowState) complete(ctx context.Context, post auth.Poster) (string, error) {
 	flow := s.take()
 	if flow == nil {
-		return "", nil, cascade.New(cascade.KindConflict,
+		return "", cascade.New(cascade.KindConflict,
 			"github: no authorization is in progress; call cascade.auth.begin first")
 	}
 	defer func() { _ = flow.loopback.Close() }()
 
 	code, err := flow.loopback.Wait(ctx, flow.pkce)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 	cfg, err := auth.Config(flow.clientID)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 	tokens, err := auth.Exchange(ctx, post, cfg, code, flow.pkce.Verifier, flow.loopback.RedirectURI())
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
-	store, err = StoreTokenNotification(TokenKey(), tokens.AccessToken)
-	if err != nil {
-		return "", nil, err
-	}
-	return tokens.AccessToken, store, nil
+	return tokens.AccessToken, nil
 }
 
 // authBeginReply answers cascade.auth.begin.
@@ -179,24 +176,22 @@ func (p *broker) authBeginReply(in frame) (frame, bool) {
 }
 
 // authCompleteReply answers cascade.auth.complete: it waits out the
-// browser, stores the token, and reports only that it worked.
+// browser, redeems the code and arms this process's client with the token.
 //
-// The token itself is NOT in the reply. It goes to the vault through the
-// host_secret_ref notification written to stdout just before this returns,
-// and stays in this process's client for its own calls.
+// The reply says stored:false. Nothing stores a plugin's token on the host
+// side in P1 (DEF-P2-plugin-secret-store), so the token lives in this
+// process's memory for its life and the durable P1 path is the environment
+// variable. The token itself is not in the reply.
 func (p *broker) authCompleteReply(in frame) (frame, bool) {
-	token, store, err := p.flows.complete(context.Background(), p.post)
+	token, err := p.flows.complete(context.Background(), p.post)
 	if err != nil {
-		return errorReply(in, err), true
-	}
-	if err := p.emit(store); err != nil {
 		return errorReply(in, err), true
 	}
 	p.setToken(token)
 	return frame{JSONRPC: "2.0", ID: in.ID, Result: map[string]any{
-		"stored":   true,
-		"key":      TokenKey(),
-		"scope":    auth.RequiredScope,
-		"verifier": nil, // stated explicitly: nothing secret is returned
+		"stored":       false,
+		"reason":       "DEF-P2-plugin-secret-store: set CASCADE_GITHUB_TOKEN",
+		"deferred_key": TokenKey(), // the vault key a later host store will use; nothing is written to it today
+		"scope":        auth.RequiredScope,
 	}}, true
 }

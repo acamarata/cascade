@@ -116,6 +116,28 @@ Two further rules, both fail-closed:
   plugin's verbs mount, and the plugin appears in `cascade --help` under its
   manifest `id` as a command that refuses with the reason. Rename the verb.
 
+### Generic verb envelope
+
+A process-tier command that has no host implementation is a **generic verb**.
+Declare `rpc_method` on the `[[provides.commands]]` entry (cascade-github uses
+`cascade-github.cmd.<noun>`). The host calls that method on a live, trusted
+handle, once per invocation, with:
+
+```json
+{"args": ["list", "acamarata"], "flags": {"per-page": "2"}}
+```
+
+`args` is every positional argument in order. `flags` holds only the flags
+the user changed, each value as a string. The generic verb accepts the
+flags `state title body head base merge-method label reviewers
+team-reviewers draft per-page`. Reply with a JSON result, or a JSON-RPC error.
+The host never fabricates a result on an error, and returns the error with
+its typed kind. The result is rendered as **untrusted** output: human output
+sits under an `untrusted plugin output` header, and the `--json` envelope's
+data carries `"provenance": "untrusted-source"`. A plugin that is missing,
+disabled or untrusted is not launched; the verb refuses naming
+`cascade plugin add <plugin>`.
+
 The mount lives in `cmd/cascade/plugin_process_mount.go` for process-tier
 plugins and in `cmd/cascade/plugin_namespaces.go` (via
 `BuiltinRegistry.NewCobraCommand`) for builtin ones.

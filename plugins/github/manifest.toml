@@ -98,14 +98,17 @@ description = "Request reviews on a pull request from users or teams."
 [[provides.commands]]
 name = "github-repos"
 description = "List or inspect GitHub repositories."
+rpc_method = "cascade-github.cmd.repos"
 
 [[provides.commands]]
 name = "github-issues"
 description = "List, open, comment on or close GitHub issues."
+rpc_method = "cascade-github.cmd.issues"
 
 [[provides.commands]]
 name = "github-prs"
 description = "List, open, merge or request review on GitHub pull requests."
+rpc_method = "cascade-github.cmd.prs"
 
 [[provides.commands]]
 name = "github-ci-wait"

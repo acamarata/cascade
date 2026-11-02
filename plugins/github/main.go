@@ -4,7 +4,7 @@
 // Purpose: speak the host's stdio JSON-RPC protocol — answer the
 //
 //	cascade.hello handshake, perform tool calls against the GitHub API, and
-//	hand the OAuth token to the host for storage.
+//	hold the OAuth token in memory.
 //
 // Inputs: newline-delimited JSON-RPC frames on stdin.
 // Outputs: newline-delimited JSON-RPC frames on stdout; diagnostics on
@@ -25,13 +25,13 @@
 //	P1-E25-W5-S51-T6, github.com for wiki git): the plugin performs its
 //	own calls rather than describing them for the host.
 //
-//	The token reaches the vault through a host_secret_ref host-fn
-//	notification and is never written into the manifest or any config
-//	file. The host's process ABI has no response path for a
-//	plugin-initiated call (the id is discarded), so host_secret_ref is
-//	used to STORE, which is one-way; the token this process uses for its
-//	own API calls is the one the exchange just returned, held in memory
-//	for the life of the process and never logged.
+//	The token is never sent to the host and never written into the
+//	manifest or any config file. No host component stores a plugin-sent
+//	secret yet (DEF-P2-plugin-secret-store), so cascade.auth.complete keeps
+//	the exchanged token in this process's memory and replies stored:false.
+//	The P1 token path is the CASCADE_GITHUB_TOKEN environment variable
+//	(token_env.go). R14 F-5: a value-carrying host_secret_ref notification
+//	was deleted for this reason.
 //
 //	P1-E25-W5-S51-T3's `github-ci-wait`/`github.ci.merge-on-green` manifest
 //	commands need NO new dispatch code here: wait-on-green polls
@@ -118,7 +118,7 @@ type helloAck struct {
 }
 
 // broker is one running instance: the API transport, the token it holds,
-// the in-flight authorization, and the stream it writes notifications to.
+// the in-flight authorization, and the stdout stream run writes frames to.
 type broker struct {
 	doer  tools.Doer
 	post  auth.Poster
@@ -155,17 +155,6 @@ func (p *broker) client() tools.Client {
 		token = tokenFromEnv(os.Getenv)
 	}
 	return tools.Client{Doer: p.doer, Token: token}
-}
-
-// emit writes one pre-encoded frame (a notification) to stdout.
-func (p *broker) emit(encoded []byte) error {
-	if p.out == nil {
-		return cascade.New(cascade.KindInternal, "github: no output stream")
-	}
-	if _, err := p.out.Write(append(encoded, '\n')); err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "github: writing a notification")
-	}
-	return nil
 }
 
 // run reads frames until stdin closes. A decode failure on one frame is
@@ -220,6 +209,8 @@ func (p *broker) dispatch(in frame) (out frame, reply bool) {
 		return p.authBeginReply(in)
 	case in.Method == "cascade.auth.complete":
 		return p.authCompleteReply(in)
+	case strings.HasPrefix(in.Method, cmdPrefix):
+		return p.cmdReply(in) // cmd_envelope.go (P1-PLG-04): the generic verbs' {args, flags} envelope.
 	case strings.HasPrefix(in.Method, PluginName+".wiki."):
 		return p.wikiReply(in) // wiki_cmd.go (P1-E25-W5-S51-T6): git exec, not a tools.Client REST call.
 	case strings.HasPrefix(in.Method, PluginName+"."):
@@ -244,36 +235,9 @@ func (p *broker) dispatch(in frame) (out frame, reply bool) {
 // says "this plugin does not attest its manifest", which is true.
 func manifestHash() string { return "" }
 
-// StoreTokenNotification builds the host_secret_ref frame that hands a
-// token to the vault.
-//
-// It is a NOTIFICATION, with no id, because the host's process ABI has no
-// response path for a plugin-initiated call: an id would be discarded and
-// the plugin would wait for a reply that never comes. Storing is one-way,
-// which is all this needs.
-//
-// The token is never written to a file, a log line or the manifest: this
-// frame is the only place it leaves the process, and it goes to the host's
-// vault.
-func StoreTokenNotification(key, token string) ([]byte, error) {
-	if key == "" {
-		return nil, cascade.New(cascade.KindInvalidInput, "github: a secret key is required")
-	}
-	if token == "" {
-		return nil, cascade.New(cascade.KindInvalidInput, "github: refusing to store an empty token")
-	}
-	params, err := json.Marshal(map[string]string{"key": key, "value": token})
-	if err != nil {
-		return nil, cascade.Wrap(cascade.KindInternal, err, "github: encoding the secret-store call")
-	}
-	encoded, err := json.Marshal(frame{JSONRPC: "2.0", Method: "host_secret_ref", Params: params})
-	if err != nil {
-		return nil, cascade.Wrap(cascade.KindInternal, err, "github: encoding the host_secret_ref frame")
-	}
-	return encoded, nil
-}
-
-// TokenKey is the vault key this plugin stores its token under. It is
+// TokenKey is the vault key the host-side never-pay resolver probes for this
+// plugin's token (cipolicy.TokenVaultKey). This plugin does not write it in P1
+// (DEF-P2-plugin-secret-store). It is
 // derived from the plugin name so two harness plugins can never collide,
 // and it names the provider rather than the user: one token per install.
 func TokenKey() string { return PluginName + ".oauth_token" }

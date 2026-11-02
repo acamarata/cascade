@@ -140,8 +140,33 @@ plugin authors in `.github/wiki/Plugin-Author-Guide.md`. The `ci wait`/`ci
 merge-on-green`/`ci watch add|list|remove` verbs are all HOST-implemented
 (`cmd/cascade/github_ci_cmd.go`, `cmd/cascade/github_ci_watch_cmd.go`): their
 `RunE` reaches `internal/ci`/`internal/runtime`, never the plugin process.
-The three T1 verbs have no host implementation, so they return the same
-typed process-tier refusal `merge-on-green` does.
+The three T1 verbs (`repos`, `issues`, `prs`) have no host implementation:
+they are generic process verbs, described next.
+
+### Reachable verbs and the untrusted-output label
+
+A generic verb dispatches to the plugin's declared `rpc_method`
+(`cascade-github.cmd.repos|issues|prs`) through a live, trusted handle
+(`LaunchInstalled` in `internal/plugins`), with the envelope
+`{"args": [<positional strings>], "flags": {<changed flag>: <string>}}`, and
+closes the handle before it returns. Each call writes an intent and a
+terminal effect record.
+
+```
+$ cascade github repos list acamarata --per-page 2
+untrusted plugin output (cascade-github):
+[ ... ]
+$ cascade github repos list acamarata --json
+{"version":1,"ok":true,"data":{"provenance":"untrusted-source","plugin":"cascade-github","result":[ ... ]}}
+```
+
+The plugin's result is attacker-reachable text, so human output prints it
+under the `untrusted plugin output` header and the `--json` envelope's data
+carries `"provenance": "untrusted-source"`. A plugin that is missing,
+disabled, untrusted or no longer matches its trusted digest is never
+launched; the verb returns a typed `unavailable` error naming
+`cascade plugin add cascade-github`. A plugin error reply keeps its own
+typed kind, and no result is written.
 
 ## `cascade github ci watch add|list|remove`
 

@@ -73,46 +73,60 @@ type processPluginCommand struct {
 	Spec plugin.CommandSpec
 }
 
-// processPluginCommands is the compiled-in mount set. Every entry is a
-// verbatim copy of a provides.commands entry in the named manifest, and
-// TestProcessPluginSpecsMatchTheShippedManifest fails if the two drift.
+// githubCommandSpecs is the cascade-github mount set (see below).
+var githubCommandSpecs = []plugin.CommandSpec{
+	{
+		Name:        "github-repos",
+		Description: "List or inspect GitHub repositories.",
+		RPCMethod:   "cascade-github.cmd.repos",
+	},
+	{
+		Name:        "github-issues",
+		Description: "List, open, comment on or close GitHub issues.",
+		RPCMethod:   "cascade-github.cmd.issues",
+	},
+	{
+		Name:        "github-prs",
+		Description: "List, open, merge or request review on GitHub pull requests.",
+		RPCMethod:   "cascade-github.cmd.prs",
+	},
+	{
+		Name: "github-ci-wait",
+		Description: "Block until every required GitHub Actions check for a repo+ref reports success " +
+			"(P1-E25-W5-S51-T3).",
+	},
+	{
+		Name: "github.ci.merge-on-green",
+		Description: "Merge a pull request once its required checks are green, gated by an explicit " +
+			"merge-on-green policy grant (L3, P1-E25-W5-S51-T3).",
+	},
+	{
+		Name:        "github-ci-watch-add",
+		Description: "Watch a repository's CI results, routing failures to the attention queue (P1-E25-W5-S51-T4).",
+	},
+	{
+		Name:        "github-ci-watch-list",
+		Description: "List configured [ci.watch] entries (P1-E25-W5-S51-T4).",
+	},
+	{
+		Name:        "github-ci-watch-remove",
+		Description: "Stop watching a repository's CI results (P1-E25-W5-S51-T4).",
+	},
+	{
+		Name:        "github-wiki-sync",
+		Description: "Push .github/wiki/ to the repository's GitHub wiki (public repos only, P1-E25-W5-S51-T6).",
+	},
+	{
+		Name: "github-wiki-check",
+		Description: "Report drift between .github/wiki/ and the repository's GitHub wiki, read-only " +
+			"(P1-E25-W5-S51-T6).",
+	},
+}
+
+// processPluginCommands is the compiled-in mount set. Every entry is a verbatim copy of a
+// provides.commands entry in the named manifest (TestProcessPluginSpecsMatchTheShippedManifest).
 func processPluginCommands() []processPluginCommand {
-	specs := []plugin.CommandSpec{
-		{Name: "github-repos", Description: "List or inspect GitHub repositories."},
-		{Name: "github-issues", Description: "List, open, comment on or close GitHub issues."},
-		{Name: "github-prs", Description: "List, open, merge or request review on GitHub pull requests."},
-		{
-			Name: "github-ci-wait",
-			Description: "Block until every required GitHub Actions check for a repo+ref reports success " +
-				"(P1-E25-W5-S51-T3).",
-		},
-		{
-			Name: "github.ci.merge-on-green",
-			Description: "Merge a pull request once its required checks are green, gated by an explicit " +
-				"merge-on-green policy grant (L3, P1-E25-W5-S51-T3).",
-		},
-		{
-			Name:        "github-ci-watch-add",
-			Description: "Watch a repository's CI results, routing failures to the attention queue (P1-E25-W5-S51-T4).",
-		},
-		{
-			Name:        "github-ci-watch-list",
-			Description: "List configured [ci.watch] entries (P1-E25-W5-S51-T4).",
-		},
-		{
-			Name:        "github-ci-watch-remove",
-			Description: "Stop watching a repository's CI results (P1-E25-W5-S51-T4).",
-		},
-		{
-			Name:        "github-wiki-sync",
-			Description: "Push .github/wiki/ to the repository's GitHub wiki (public repos only, P1-E25-W5-S51-T6).",
-		},
-		{
-			Name: "github-wiki-check",
-			Description: "Report drift between .github/wiki/ and the repository's GitHub wiki, read-only " +
-				"(P1-E25-W5-S51-T6).",
-		},
-	}
+	specs := githubCommandSpecs
 	out := make([]processPluginCommand, 0, len(specs))
 	for _, s := range specs {
 		out = append(out, processPluginCommand{PluginID: cascadeGitHubPluginID, Spec: s})
@@ -235,7 +249,7 @@ func attachProcessVerb(root *cobra.Command, owned map[string]*cobra.Command,
 }
 
 // processLeafCmd builds one verb: the host implementation when this binary
-// has one, else the generic process-dispatch verb.
+// has one, else the generic verb (plugin_process_dispatch.go).
 func processLeafCmd(use string, c processPluginCommand, hosted map[string]func() *cobra.Command) *cobra.Command {
 	if build, ok := hosted[c.Spec.Name]; ok {
 		cmd := build()
@@ -245,14 +259,16 @@ func processLeafCmd(use string, c processPluginCommand, hosted map[string]func()
 		}
 		return cmd
 	}
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   use,
 		Short: c.Spec.Description,
 		Args:  cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return errProcessPluginUnreachable(c.PluginID, cmd.CommandPath())
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return dispatchProcessVerb(cmd, args, c)
 		},
 	}
+	addProcessVerbFlags(cmd)
+	return cmd
 }
 
 // processNamespaceShort labels an intermediate namespace. It names the
@@ -264,19 +280,6 @@ func processNamespaceShort(pluginID, path string) string {
 		return "Commands contributed by the " + pluginID + " plugin"
 	}
 	return "`" + trimmed + "` commands contributed by the " + pluginID + " plugin"
-}
-
-// errProcessPluginUnreachable is the typed refusal a process-runtime verb
-// returns while no process-tier plugin can be launched. It names the real
-// blocker rather than reporting a generic failure: internal/plugins/
-// dispatch.go's ProvisionElevated evaluates every process-tier install
-// through process.ProcessRuntime.Launch's trust gate, which refuses
-// TrustTierUntrusted, and no mechanism marks any manifest trusted yet.
-func errProcessPluginUnreachable(pluginID, commandPath string) error {
-	return cascade.Newf(cascade.KindUnavailable,
-		"%s: the %s plugin is a process-tier plugin, and this build has no trust-elevation path that can "+
-			"launch one, so there is no plugin process to dispatch this verb to (see internal/plugins/"+
-			"dispatch.go's ProvisionElevated)", commandPath, pluginID)
 }
 
 // collidingProcessPluginCmd is what a plugin whose derived noun collides

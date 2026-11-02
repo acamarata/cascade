@@ -68,10 +68,9 @@ func TestAuthBeginNeverReturnsTheVerifier(t *testing.T) {
 	}
 }
 
-// TestAuthCompleteStoresTheTokenAndArmsTheClient is the flow's whole point,
-// asserted on STATE rather than on the reply: the vault notification is on
-// the stream, and the next API call carries the token.
-func TestAuthCompleteStoresTheTokenAndArmsTheClient(t *testing.T) {
+// TestAuthCompleteArmsTheClientAndNeverClaimsStored asserts on STATE: the
+// next API call carries the token, and the reply does not claim a store.
+func TestAuthCompleteArmsTheClientAndNeverClaimsStored(t *testing.T) {
 	t.Setenv("CASCADE_NO_INPUT", "")
 	waiter := &fakeWaiter{}
 	poster := &fakePoster{body: `{"access_token":"gho_live","token_type":"bearer","scope":"repo"}`}
@@ -86,17 +85,9 @@ func TestAuthCompleteStoresTheTokenAndArmsTheClient(t *testing.T) {
 	if !ok || reply.Error != nil {
 		t.Fatalf("auth.complete returned %+v", reply)
 	}
-
-	// The token went to the vault as a notification on the stream.
-	if !strings.Contains(out.String(), "host_secret_ref") {
-		t.Fatalf("no host_secret_ref notification was written; stream = %q", out.String())
+	if out.Len() != 0 {
+		t.Errorf("auth.complete wrote to the stream: %q", out.String())
 	}
-	if !strings.Contains(out.String(), "gho_live") {
-		t.Error("the store notification does not carry the token")
-	}
-
-	// The token is NOT in the reply: a reply is correlated and recorded by
-	// the host, and the vault is the only place a token belongs.
 	encoded, err := json.Marshal(reply)
 	if err != nil {
 		t.Fatal(err)
@@ -145,8 +136,8 @@ func TestAuthCompleteRejectsAForgedCallback(t *testing.T) {
 	if reply.Error == nil {
 		t.Fatal("a callback carrying the wrong state was accepted")
 	}
-	if strings.Contains(out.String(), "host_secret_ref") {
-		t.Error("a token was stored despite the state mismatch")
+	if out.Len() != 0 {
+		t.Error("the stream was written to despite the state mismatch")
 	}
 	if poster.form != nil {
 		t.Error("the code was sent to the token endpoint despite the state mismatch")
@@ -191,9 +182,8 @@ func TestASecondBeginClosesTheFirstListener(t *testing.T) {
 	}
 }
 
-// TestTokenEndpointFailureIsNotStored proves a refused exchange stores
-// nothing: a blank or absent token in the vault reads later as a token that
-// exists and fails every call.
+// TestTokenEndpointFailureIsNotStored proves a refused exchange arms
+// nothing and writes nothing.
 func TestTokenEndpointFailureIsNotStored(t *testing.T) {
 	t.Setenv("CASCADE_NO_INPUT", "")
 	waiter := &fakeWaiter{}
@@ -208,7 +198,62 @@ func TestTokenEndpointFailureIsNotStored(t *testing.T) {
 	if reply.Error == nil {
 		t.Fatal("a refused exchange reported success")
 	}
-	if strings.Contains(out.String(), "host_secret_ref") {
-		t.Error("a token was stored after the exchange was refused")
+	if out.Len() != 0 {
+		t.Error("the stream was written to after the exchange was refused")
+	}
+}
+
+// completeFlow runs begin and complete against a token endpoint that
+// returns token, returning the reply and every byte the plugin wrote.
+func completeFlow(t *testing.T, token string) (frame, string) {
+	t.Helper()
+	t.Setenv("CASCADE_NO_INPUT", "")
+	waiter := &fakeWaiter{}
+	poster := &fakePoster{body: `{"access_token":"` + token + `","token_type":"bearer","scope":"repo"}`}
+	p, _ := newTestPlugin(&fakeDoer{}, waiter, poster)
+	begin := beginFlow(t, p)
+	waiter.query = url.Values{"code": {"the-code"}, "state": {begin["state"]}}
+	in := strings.NewReader(`{"jsonrpc":"2.0","id":2,"method":"cascade.auth.complete"}` + "\n")
+	var stdout, stderr strings.Builder
+	if err := p.run(in, &stdout, &stderr); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	var reply frame
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout.String())), &reply); err != nil {
+		t.Fatalf("the stream is not one reply frame: %q (%v)", stdout.String(), err)
+	}
+	return reply, stdout.String() + stderr.String()
+}
+
+// TestAuthCompleteNeverClaimsStored: no host stores a plugin secret in P1,
+// so the reply says stored:false and names the deferral and the env path.
+func TestAuthCompleteNeverClaimsStored(t *testing.T) {
+	reply, _ := completeFlow(t, "gho_claimcheck")
+	result, ok := reply.Result.(map[string]any)
+	if reply.Error != nil || !ok {
+		t.Fatalf("auth.complete reply = %+v", reply)
+	}
+	if result["stored"] != false {
+		t.Fatalf("stored = %v, want false", result["stored"])
+	}
+	reason, _ := result["reason"].(string)
+	if !strings.Contains(reason, "DEF-P2-plugin-secret-store") || !strings.Contains(reason, "CASCADE_GITHUB_TOKEN") {
+		t.Fatalf("reason = %q, want the deferral id and the environment-token path", reason)
+	}
+	if _, has := result["key"]; has {
+		t.Errorf("the reply carries a stored-key member: %v", result)
+	}
+}
+
+// TestPluginNeverSendsTokenValue: a canary token obtained through the auth
+// flow appears in no frame the plugin writes to stdout or stderr.
+func TestPluginNeverSendsTokenValue(t *testing.T) {
+	const canary = "gho_CANARY_never_on_the_wire_0451"
+	reply, wire := completeFlow(t, canary)
+	if reply.Error != nil {
+		t.Fatalf("auth.complete: %+v", reply)
+	}
+	if strings.Contains(wire, canary) || strings.Contains(wire, "host_secret_ref") {
+		t.Fatalf("the plugin wrote the token or a host_secret_ref frame: %q", wire)
 	}
 }

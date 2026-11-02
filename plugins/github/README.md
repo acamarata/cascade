@@ -55,9 +55,12 @@ manifest as `net.http:api.github.com`.
 
 The plugin runs an OAuth authorization-code flow with PKCE and asks for the
 classic **`repo`** scope. The verifier never leaves the process; only the
-challenge goes on the wire. The resulting token is handed to Cascade's vault
-through a `host_secret_ref` notification and is **never written to a config
-file or to the manifest**.
+challenge goes on the wire. The resulting token is **never written to a config
+file or to the manifest**, and it is **never sent to the host**: no host
+component stores a plugin-sent secret yet (`DEF-P2-plugin-secret-store`), so
+the plugin does not claim a vault store. **The environment token is the P1
+path**: set `CASCADE_GITHUB_TOKEN` (or `GITHUB_TOKEN` / `GH_TOKEN`). There is
+no vault storage until `DEF-P2-plugin-secret-store` lands.
 
 The flow is two calls:
 
@@ -67,15 +70,27 @@ The flow is two calls:
   cannot be completed by a process that may not prompt, and returning an
   authorization URL nobody can open would look like success.
 - `cascade.auth.complete` waits up to five minutes for the redirect,
-  verifies it against the flow's state, redeems the code, and emits the
-  `host_secret_ref` notification. The token is not in the reply — a reply is
-  correlated and recorded by the host, and the vault is the only place a
-  token belongs.
+  verifies it against the flow's state, redeems the code, and keeps the token
+  in this process's memory for its life. The reply says `"stored": false`
+  with a `reason` naming `DEF-P2-plugin-secret-store` and
+  `CASCADE_GITHUB_TOKEN`. The token is not in the reply, and no frame
+  carries it.
 
-A failed exchange stores nothing. GitHub answers a failed exchange with HTTP
+A failed exchange arms nothing. GitHub answers a failed exchange with HTTP
 200 and an `error` member rather than an error status, so the response is
-validated before anything is stored; otherwise a non-token would be written
-to the vault and fail one call at a time afterwards.
+validated before the token is accepted; otherwise a non-token would arm the
+client and fail one call at a time afterwards.
+
+### Generic verbs
+
+`cascade github repos|issues|prs ...` call `cascade-github.cmd.<noun>` with
+`{"args": [...], "flags": {...}}` (see the Plugin Author Guide). Sub-verbs:
+`repos list <owner>|get <owner/repo>|clone-url <owner/repo>`;
+`issues list|get|create|comment|close <owner/repo> [number]`;
+`prs list|get|diff|create|merge|review-request <owner/repo> [number]`. Flags:
+`--state --title --body --label --head --base --draft --merge-method
+--reviewers --team-reviewers --per-page`. Arguments are validated before any
+egress. Output is labelled untrusted-source.
 
 ### Using a fine-grained token instead
 
@@ -368,8 +383,8 @@ is added for it).
   git bundle captured from `acamarata/hijri-core`'s public wiki (Art.2);
   provenance (tool, version, date, source repo) is in that directory's
   own `README.md`.
-- **Authentication.** `client()` (`main.go`) uses the interactively-
-  authorized vault token when one exists, else falls back to
+- **Authentication.** `client()` (`main.go`) uses the token the OAuth flow
+  armed in this process's memory when one exists, else falls back to
   `CASCADE_GITHUB_TOKEN`/`GITHUB_TOKEN`/`GH_TOKEN` from this process's own
   environment (`token_env.go`, the same precedence `cascade github ci
   wait` uses) — the only way a CI-launched process, which never runs the

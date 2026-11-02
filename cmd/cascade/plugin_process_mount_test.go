@@ -8,6 +8,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/acamarata/cascade/internal/plugins"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/plugin"
 )
@@ -240,16 +242,35 @@ func TestProcessPluginMountSkipsUnmountableNames(t *testing.T) {
 }
 
 // TestProcessVerbWithoutAHostImplementationRefuses proves the generic
-// process-dispatch verb is honest: it names the launch path that does not
-// exist rather than failing vaguely or pretending to succeed.
+// process-dispatch verb refuses honestly when its plugin cannot launch: a
+// typed unavailable error naming the install command, with nothing started.
 func TestProcessVerbWithoutAHostImplementationRefuses(t *testing.T) {
-	_, err := execRoot(t, "github", "repos")
-	if !cascade.HasKind(err, cascade.KindUnavailable) {
-		t.Fatalf("err = %v, want KindUnavailable", err)
+	prev := processVerbLauncher
+	processVerbLauncher = func(context.Context, string) (*plugins.TrustedHandle, error) {
+		return nil, cascade.New(cascade.KindNotFound, "plugins: cascade-github is not installed")
 	}
-	for _, want := range []string{"cascade-github", "ProvisionElevated"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("err = %q, want it to name %q", err.Error(), want)
+	t.Cleanup(func() { processVerbLauncher = prev })
+	_, err := execRoot(t, "github", "repos")
+	if !cascade.HasKind(err, cascade.KindUnavailable) || !strings.Contains(err.Error(), "`cascade plugin add cascade-github`") {
+		t.Fatalf("err = %v, want KindUnavailable naming `cascade plugin add cascade-github`", err)
+	}
+}
+
+// TestGenericProcessVerbsDeclareAnRPCMethod holds the three generic
+// cascade-github verbs to the cmd.<noun> methods the plugin routes.
+func TestGenericProcessVerbsDeclareAnRPCMethod(t *testing.T) {
+	want := map[string]string{
+		"github-repos": "cascade-github.cmd.repos", "github-issues": "cascade-github.cmd.issues", "github-prs": "cascade-github.cmd.prs",
+	}
+	for _, c := range processPluginCommands() {
+		if m, ok := want[c.Spec.Name]; ok {
+			if c.Spec.RPCMethod != m {
+				t.Errorf("%s rpc_method = %q, want %q", c.Spec.Name, c.Spec.RPCMethod, m)
+			}
+			delete(want, c.Spec.Name)
 		}
+	}
+	if len(want) != 0 {
+		t.Errorf("generic verbs missing from the mount set: %v", want)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -12,8 +13,7 @@ import (
 
 // Purpose (this file): the plugin's own contract — its manifest loads under
 //   the real v2 loader, it registers no builtin, its stdio dispatch answers
-//   the handshake and routes every advertised tool, and the token leaves the
-//   process only as a host_secret_ref notification.
+//   the handshake, routes every advertised tool and the generic-verb envelope.
 // SPORT: plugins/github tests (ADD) — P1-E25-W5-S51-T1.
 
 // loadManifest parses manifest.toml with the REAL loader, which runs with
@@ -220,42 +220,6 @@ func TestUnknownMethodIsARealRefusal(t *testing.T) {
 	}
 }
 
-// TestStoreTokenNotificationIsANotification pins the frame that hands the
-// token to the vault: no id, because the host's process ABI has no response
-// path for a plugin-initiated call, and the correct method name.
-func TestStoreTokenNotificationIsANotification(t *testing.T) {
-	raw, err := StoreTokenNotification(TokenKey(), "gho_secret")
-	if err != nil {
-		t.Fatalf("StoreTokenNotification: %v", err)
-	}
-	var decoded map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		t.Fatalf("the frame is not JSON: %v", err)
-	}
-	if _, present := decoded["id"]; present {
-		t.Fatal("the store frame carries an id; the host discards it and the plugin would wait forever")
-	}
-	var method string
-	if err := json.Unmarshal(decoded["method"], &method); err != nil || method != "host_secret_ref" {
-		t.Fatalf("method = %q, want host_secret_ref", method)
-	}
-	if !bytes.Contains(raw, []byte("gho_secret")) {
-		t.Fatal("the token is not in the frame that is supposed to carry it to the vault")
-	}
-}
-
-// TestStoreTokenNotificationRefusesEmptyValues proves the plugin never
-// writes a blank token into the vault, which would read later as a token
-// that exists and fail every call.
-func TestStoreTokenNotificationRefusesEmptyValues(t *testing.T) {
-	if _, err := StoreTokenNotification("", "t"); err == nil {
-		t.Error("an empty key was accepted")
-	}
-	if _, err := StoreTokenNotification(TokenKey(), ""); err == nil {
-		t.Error("an empty token was accepted")
-	}
-}
-
 // TestRunAnswersAStreamAndSurvivesABadFrame drives the real loop. The
 // undecodable line in the middle is the point: the host owns the stream's
 // framing, and one unreadable line must not take down a plugin that can
@@ -280,5 +244,55 @@ func TestRunAnswersAStreamAndSurvivesABadFrame(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "undecodable") {
 		t.Errorf("stderr = %q, want the skipped frame reported", stderr.String())
+	}
+}
+
+// TestGitHubPluginHandlesCmdEnvelope maps the {args, flags} envelope onto the
+// repos.list tool and returns the recorded fixture's result.
+func TestGitHubPluginHandlesCmdEnvelope(t *testing.T) {
+	fixture, err := os.ReadFile(filepath.Join("testdata", "fixtures", "repos.list.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doer := &fakeDoer{body: fixture}
+	p, _ := newTestPlugin(doer, nil, nil)
+	id := uint64(1)
+	viaCmd, ok := p.dispatch(frame{JSONRPC: "2.0", ID: &id, Method: PluginName + ".cmd.repos",
+		Params: json.RawMessage(`{"args":["list","acamarata"],"flags":{"per-page":"2"}}`)})
+	if got := doer.last(t).Path; !ok || viaCmd.Error != nil || got != "/users/acamarata/repos?per_page=2" {
+		t.Fatalf("cmd.repos = %+v, request path %q; the flag or owner did not survive the envelope", viaCmd, got)
+	}
+	viaTool, _ := p.dispatch(frame{JSONRPC: "2.0", ID: &id, Method: PluginName + ".repos.list",
+		Params: json.RawMessage(`{"owner":"acamarata","per_page":2}`)})
+	a, _ := json.Marshal(viaCmd.Result)
+	b, _ := json.Marshal(viaTool.Result)
+	if string(a) != string(b) || !strings.Contains(string(a), "acamarata/qibla") {
+		t.Fatalf("cmd result %.120s differs from the tool result %.120s", a, b)
+	}
+}
+
+// TestGitHubPluginRefusesBadCmdEnvelopes: typed refusals, no egress.
+func TestGitHubPluginRefusesBadCmdEnvelopes(t *testing.T) {
+	for name, c := range map[string]struct{ method, params, want string }{
+		"unknown noun":     {".cmd.nope", `{"args":["list"]}`, "no generic verb"},
+		"no sub-verb":      {".cmd.repos", `{"args":[]}`, "sub-verb is required"},
+		"unknown sub-verb": {".cmd.issues", `{"args":["frobnicate"]}`, "unknown sub-verb"},
+		"no target":        {".cmd.issues", `{"args":["get"]}`, "owner argument"},
+		"no slash":         {".cmd.issues", `{"args":["get","acamarata"]}`, "<owner>/<repo>"},
+		"no number":        {".cmd.issues", `{"args":["get","a/b"]}`, "needs a number"},
+		"bad number":       {".cmd.prs", `{"args":["merge","a/b","x"]}`, "not a number"},
+		"unknown flag":     {".cmd.prs", `{"args":["list","a/b"],"flags":{"nope":"1"}}`, "unknown flag"},
+		"bad boolean":      {".cmd.prs", `{"args":["create","a/b"],"flags":{"draft":"maybe"}}`, "not a boolean"},
+		"bad envelope":     {".cmd.prs", `{"args":"list"}`, "verb envelope"},
+	} {
+		doer, id := &fakeDoer{}, uint64(1)
+		p, _ := newTestPlugin(doer, nil, nil)
+		out, _ := p.dispatch(frame{JSONRPC: "2.0", ID: &id, Method: PluginName + c.method, Params: json.RawMessage(c.params)})
+		if out.Error == nil || !strings.Contains(out.Error.Message, c.want) {
+			t.Errorf("%s: reply = %+v, want an error containing %q", name, out, c.want)
+		}
+		if len(doer.calls) != 0 {
+			t.Errorf("%s: a refused envelope reached the transport", name)
+		}
 	}
 }
