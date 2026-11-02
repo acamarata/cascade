@@ -11,6 +11,9 @@ package conversation
 import (
 	"context"
 	"encoding/json"
+
+	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // handleSearch is chat.search: the FTS5 index, over the wire.
@@ -38,11 +41,47 @@ func (a *Adapter) handleSearch(ctx context.Context, raw json.RawMessage) (any, e
 	}
 	out := make([]searchResultWire, 0, len(matches))
 	for _, m := range matches {
+		allowed, err := a.searchHitAllowed(ctx, m.Turn.ThreadID)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
+			continue
+		}
 		segs, segErr := a.store.ListSegments(ctx, m.Turn.ID)
 		if segErr != nil {
 			return nil, segErr
 		}
 		out = append(out, newSearchResult(m.Turn, segs, -m.Rank))
+	}
+	return searchResultSet{Results: out}, nil
+}
+
+// searchHitAllowed checks the owning thread before rendering a hit's content.
+func (a *Adapter) searchHitAllowed(ctx context.Context, threadID string) (bool, error) {
+	tier, err := a.store.ThreadPrivacy(ctx, threadID)
+	if err != nil {
+		return false, cascade.Wrap(cascade.KindUnavailable, err, "conversation: chat.search: privacy read failed")
+	}
+	return tier != provider.SensitivityLocalOnly || servesLocalOnly(ctx), nil
+}
+
+// rankedResults renders narrowed hits using their rank position as score.
+func (a *Adapter) rankedResults(ctx context.Context, hits []TurnMatch) (any, error) {
+	out := make([]searchResultWire, 0, len(hits))
+	for i, m := range hits {
+		allowed, err := a.searchHitAllowed(ctx, m.Turn.ThreadID)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
+			continue
+		}
+		segs, err := a.store.ListSegments(ctx, m.Turn.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, newSearchResult(m.Turn, segs, float64(len(hits)-i)))
 	}
 	return searchResultSet{Results: out}, nil
 }

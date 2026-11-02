@@ -24,6 +24,7 @@ import (
 	"github.com/acamarata/cascade/internal/context/scope"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // The chat.* JSON-RPC 2.0 method names this adapter registers.
@@ -190,6 +191,13 @@ func (a *Adapter) handleGetThread(ctx context.Context, raw json.RawMessage) (any
 	if !ok {
 		return nil, cascade.Wrapf(cascade.KindNotFound, ErrTurnNotFound, "conversation: thread not found")
 	}
+	tier, tierErr := a.store.ThreadPrivacy(ctx, p.ThreadID)
+	if tierErr != nil {
+		return nil, cascade.Wrap(cascade.KindUnavailable, tierErr, "conversation: chat.get_thread: privacy read failed")
+	}
+	if tier == provider.SensitivityLocalOnly && !servesLocalOnly(ctx) {
+		return nil, cascade.New(cascade.KindPermissionDenied, "conversation: chat.get_thread: local-only thread requires owner CLI")
+	}
 	turns, err := a.store.ListTurns(ctx, p.ThreadID)
 	if err != nil {
 		return nil, err
@@ -226,7 +234,15 @@ func (a *Adapter) handleListThreads(ctx context.Context, raw json.RawMessage) (a
 	if err != nil {
 		return nil, err
 	}
-	return listThreadsResult{Threads: threads}, nil
+	threads, err = a.listScopedThreads(ctx, threads)
+	if err != nil {
+		return nil, err
+	}
+	filtered, err := a.filterListableThreads(ctx, threads)
+	if err != nil {
+		return nil, err
+	}
+	return listThreadsResult{Threads: filtered}, nil
 }
 
 // scopedSearch is chat.search over the caller's view. A narrowed view runs
@@ -270,18 +286,4 @@ func (a *Adapter) scopedSearch(ctx context.Context, raw json.RawMessage) (any, e
 		hits = hits[:limit]
 	}
 	return a.rankedResults(ctx, hits)
-}
-
-// rankedResults renders narrowed hits. The score is the hit's rank position,
-// not bm25: bm25 weighs terms by the whole index, foreign threads included.
-func (a *Adapter) rankedResults(ctx context.Context, hits []TurnMatch) (any, error) {
-	out := make([]searchResultWire, 0, len(hits))
-	for i, m := range hits {
-		segs, err := a.store.ListSegments(ctx, m.Turn.ID)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, newSearchResult(m.Turn, segs, float64(len(hits)-i)))
-	}
-	return searchResultSet{Results: out}, nil
 }

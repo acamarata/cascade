@@ -139,6 +139,20 @@ as looser than it was created, and a refused request leaves no marker.
 Enforcement is the conductor's -- see the security posture note on
 [thread privacy modes](https://github.com/acamarata/cascade/blob/main/docs/security-posture/egress-firewall.md).
 
+The RPC read surface also protects local-only content. Only a request with
+the owner CLI marker and no principal may list, fetch or search local-only
+threads. Other callers see those threads omitted from `chat.list_threads`
+and `chat.search`; `chat.get_thread` refuses them with `KindPermissionDenied`.
+Principal scope filtering applies before the list's privacy check. Admitted
+threads retain the store's order. A privacy read failure returns
+`KindUnavailable` with no partial result.
+
+Both MCP transports stamp callers with `OwnerCLI == false`, including a
+socket peer sending the owner CLI header. A request without a caller also
+has no local-only access. No request parameter or configuration disables
+this rule. The owner CLI keeps its full view; a client carrying a principal
+token sends only that token and cannot read local-only content.
+
 ## Thread project
 
 A thread records WHERE it belongs once, when it is created. This is a
@@ -176,6 +190,11 @@ the target is refused whole. The block transits the `conversation-resume`
 egress class through the process firewall, and the client sends it once as
 `leading_context` on the next `chat.append_turn`, where it is stored as
 segment 0. A principal resumes only between threads in its own scope.
+If any contributing source thread is local-only, callers without the owner
+CLI marker are refused with `KindPermissionDenied`, with no leading context
+or turn written. This applies to both topic and query resume. The same
+caller rule protects `chat.reply_open` and `chat.reply`: a refused local-only
+reply opens no stream and makes no door call.
 
 ## Secret scrub pipeline
 

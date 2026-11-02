@@ -99,7 +99,7 @@ func (a *Adapter) handleResume(ctx context.Context, raw json.RawMessage) (any, e
 	}
 	// A field literal, not a type conversion: the wire carries a thread
 	// id, the request carries the tier resolved from it.
-	res, err := a.resume.Resume(ctx, ResumeRequest{
+	res, err := a.resumeWithPrivacy(ctx, ResumeRequest{
 		TopicID: p.TopicID, Query: p.Query, Budget: p.Budget, IntoTier: intoTier, Cwd: p.Cwd, Admits: admits,
 	})
 	if err != nil {
@@ -122,8 +122,39 @@ func (a *Adapter) resolveIntoTier(ctx context.Context, sessionThreadID string) (
 	if !ok {
 		return provider.SensitivityRestricted, errResumeSessionThreadNotFound(sessionThreadID)
 	}
-	return a.store.ThreadPrivacy(ctx, sessionThreadID)
+	tier, err := a.store.ThreadPrivacy(ctx, sessionThreadID)
+	if err != nil {
+		return 0, cascade.Wrap(cascade.KindUnavailable, err, "conversation: chat.resume: privacy read failed")
+	}
+	return tier, nil
 }
+
+// resumeWithPrivacy checks contributing threads through the resumer's view
+// predicate. A refused contributor fails the whole call without a context block.
+func (a *Adapter) resumeWithPrivacy(ctx context.Context, req ResumeRequest) (ResumeResult, error) {
+	admits := req.Admits
+	var privacyErr error
+	req.Admits = func(id string) bool {
+		if privacyErr != nil || (admits != nil && !admits(id)) {
+			return false
+		}
+		tier, err := a.store.ThreadPrivacy(ctx, id)
+		if err != nil {
+			privacyErr = cascade.Wrap(cascade.KindUnavailable, err, "conversation: chat.resume: privacy read failed")
+		} else if tier == provider.SensitivityLocalOnly && !servesLocalOnly(ctx) {
+			privacyErr = errResumeLocalOnly
+		}
+		return privacyErr == nil
+	}
+	res, err := a.resume.Resume(ctx, req)
+	if privacyErr != nil {
+		return ResumeResult{}, privacyErr
+	}
+	return res, err
+}
+
+var errResumeLocalOnly = cascade.New(cascade.KindPermissionDenied,
+	"conversation: chat.resume: local-only contributing thread requires owner CLI")
 
 // decodeResumeParams decodes raw into resumeParams, DisallowUnknownFields
 // matching this adapter's other handlers.

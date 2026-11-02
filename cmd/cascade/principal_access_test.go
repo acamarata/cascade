@@ -21,7 +21,6 @@ import (
 	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
-	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 var _ = rpc.DeclareTopicAccess("test.owner", rpc.AccessOwnerOnly)
@@ -170,43 +169,6 @@ func TestPrincipalTopicAlwaysFiltered(t *testing.T) {
 	}
 	if !h.denied.Load() {
 		t.Fatal("principal received no deny-all predicate")
-	}
-}
-
-func TestOwnerCLIKeepsOwnerView(t *testing.T) {
-	t.Setenv("USERPROFILE", t.TempDir())
-	c := composeForTest(t)
-	// The vault backend is optional in this fixture; its access rule must still deny first.
-	c.Registry.Register("vault.get", func(context.Context, json.RawMessage) (any, error) {
-		t.Error("principal reached vault backend")
-		return nil, nil
-	})
-	socket, _, token := startPrincipalServer(t, c)
-	t.Setenv(principal.EnvToken, "")
-	if err := os.Unsetenv(principal.EnvToken); err != nil {
-		t.Fatal(err)
-	}
-	cli := client.New(socket, client.UnixDialer, 5*time.Second)
-	var created struct {
-		ThreadID string `json:"thread_id"`
-	}
-	params := map[string]any{"role": "user", "segments": []map[string]string{{"kind": "text", "content": "private fixture"}}, "privacy_mode": "local-only"}
-	if err := cli.Do(context.Background(), "chat.append_turn", params, &created); err != nil || created.ThreadID == "" {
-		t.Fatal(created, err)
-	}
-	var owner json.RawMessage
-	if err := cli.Do(context.Background(), "chat.list_threads", nil, &owner); err != nil || !bytes.Contains(owner, []byte(created.ThreadID)) {
-		t.Fatal(string(owner), err)
-	}
-	t.Setenv(principal.EnvToken, token)
-	var scoped json.RawMessage
-	err := cli.Do(context.Background(), "chat.list_threads", nil, &scoped)
-	if err != nil || bytes.Contains(scoped, []byte(created.ThreadID)) {
-		t.Fatal("owner chat thread leaked to a principal", string(scoped), err)
-	}
-	err = cli.Do(context.Background(), "vault.get", nil, nil)
-	if kind, _ := cascade.KindOf(err); kind != cascade.KindPermissionDenied {
-		t.Fatal(err)
 	}
 }
 

@@ -136,6 +136,13 @@ func (r *Replier) checkTarget(ctx context.Context, threadID, turnID string) erro
 	} else if !ok {
 		return errReplyThreadNotFound
 	}
+	tier, tierErr := r.cfg.Store.ThreadPrivacy(ctx, threadID)
+	if tierErr != nil {
+		return cascade.Wrap(cascade.KindUnavailable, tierErr, "conversation: chat.reply: privacy read failed")
+	}
+	if tier == provider.SensitivityLocalOnly && !servesLocalOnly(ctx) {
+		return errReplyLocalOnly
+	}
 	ref, ok, err := r.sql.lookupTurn(ctx, turnID)
 	switch {
 	case err != nil:
@@ -149,6 +156,9 @@ func (r *Replier) checkTarget(ctx context.Context, threadID, turnID string) erro
 	}
 	return nil
 }
+
+var errReplyLocalOnly = cascade.New(cascade.KindPermissionDenied,
+	"conversation: chat.reply: local-only thread requires owner CLI")
 
 // stream runs the main reply call and gathers its text, publishing each
 // delta to stream id. A cancelled ctx wins over every other outcome: the
