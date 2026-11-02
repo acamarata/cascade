@@ -170,6 +170,14 @@ type ServeDeps struct {
 	// among them) is refused on this surface. Local `cascade node enroll` is
 	// unchanged.
 	Elevation rpc.MiddlewareFunc
+	// AttestSigner builds and signs the attestation for one ci.attest.sign
+	// request (contract:node-attest-sign). Nil leaves ci.attest.sign
+	// unmounted. It is reached only after the request verified against the
+	// controller key ControllerBinding pins.
+	AttestSigner AttestSigner
+	// ControllerBinding is where the pinned controller key is read from, per
+	// request. Nil (or a binding without a key) refuses every ci.attest.sign.
+	ControllerBinding ControllerBindingBackend
 }
 
 // RPCPath re-exports internal/rpc.RPCPath's value as a plain string, so
@@ -191,9 +199,49 @@ type ServeRegistry struct {
 
 // NewServeRegistry is BuildServeRegistry wrapped behind ServeRegistry —
 // the CLI composition root's only allowed way to obtain the node agent's
-// RPC surface.
+// RPC surface. ci.attest.sign is mounted here, and only when
+// deps.AttestSigner is non-nil.
 func NewServeRegistry(deps ServeDeps) *ServeRegistry {
-	return &ServeRegistry{reg: BuildServeRegistry(deps)}
+	reg := BuildServeRegistry(deps)
+	if deps.AttestSigner != nil {
+		reg.Register(AttestSignMethod, attestSignHandler(attestSignDeps{
+			binding: deps.ControllerBinding, clock: deps.Clock, nodeID: deps.Self.NodeID, signer: deps.AttestSigner,
+		}))
+	}
+	return &ServeRegistry{reg: reg}
+}
+
+// Call dispatches one method through the registry in process, with the same
+// middleware chain a socket request takes, and decodes the result into out.
+// Its shape is the call seam ci.RequestNodeSignature takes. A handler error
+// comes back as a cascade error of the same Kind.
+func (r *ServeRegistry) Call(ctx context.Context, method string, params, out any) error {
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return cascade.Wrap(cascade.KindInvalidInput, err, "nodes: encode call params")
+	}
+	result, eo := r.reg.Dispatch(ctx, &rpc.Request{JSONRPC: "2.0", Method: method, Params: raw})
+	if eo != nil {
+		kind, ok := cascade.KindFromJSONRPCCode(eo.Code)
+		if !ok {
+			kind = cascade.KindInternal
+			if strings.HasPrefix(eo.Message, "method not found") {
+				kind = cascade.KindNotFound
+			}
+		}
+		return cascade.New(kind, eo.Message)
+	}
+	if out == nil {
+		return nil
+	}
+	body, err := json.Marshal(result)
+	if err != nil {
+		return cascade.Wrap(cascade.KindInternal, err, "nodes: encode call result")
+	}
+	if err := json.Unmarshal(body, out); err != nil {
+		return cascade.Wrap(cascade.KindIntegrity, err, "nodes: decode call result")
+	}
+	return nil
 }
 
 // Handler returns an http.Handler dispatching through this registry, for
@@ -209,55 +257,3 @@ func (r *ServeRegistry) Handler() http.Handler {
 // decorator), so it is exposed directly rather than as a ServeRegistry
 // method.
 var ConnContext = rpc.ConnContext
-
-// ControllerBinding is the local record of this node's enrollment with a
-// controller: the endpoint the heartbeat scheduler sends to, and the
-// controller-issued enrollment id every frame embeds (heartbeat_sign.go's
-// DeriveEnrollmentID, computed and returned BY the controller during
-// enrollment; this node persists it verbatim rather than re-deriving it,
-// since only the controller holds the DeviceRecord DeriveEnrollmentID is
-// computed from).
-type ControllerBinding struct {
-	Endpoint     string `json:"endpoint"`
-	EnrollmentID string `json:"enrollment_id"`
-}
-
-// ControllerBindingBackend persists ControllerBinding, captured at
-// enrollment (08-INIT-CONFIG-SPEC §1 step 2: worker profile -> controller
-// endpoint -> node enroll handoff). The WRITE side is S-36.T4's
-// `node enroll` CLI verb, out of this ticket's files_scope; this ticket
-// owns the READ side the heartbeat scheduler consumes, and an absent
-// file (no enrollment has run yet on this node) is a valid "nothing to
-// heartbeat to yet" state, never an error.
-type ControllerBindingBackend interface {
-	// Load returns the binding and true, or a zero value and false if
-	// this node has not yet enrolled with a controller.
-	Load() (ControllerBinding, bool, error)
-}
-
-// NewFileControllerBindingBackend returns a ControllerBindingBackend
-// reading <dataDir>/nodes/controller_binding.json, mirroring
-// NewFileSelfIdentityBackend's identical precedent.
-func NewFileControllerBindingBackend(dataDir string) ControllerBindingBackend {
-	return fileControllerBindingBackend{path: filepath.Join(dataDir, "nodes", "controller_binding.json")}
-}
-
-type fileControllerBindingBackend struct{ path string }
-
-func (b fileControllerBindingBackend) Load() (ControllerBinding, bool, error) {
-	data, err := os.ReadFile(b.path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return ControllerBinding{}, false, nil
-		}
-		return ControllerBinding{}, false, cascade.Wrap(cascade.KindUnavailable, err, "nodes: read controller binding")
-	}
-	var binding ControllerBinding
-	if err := json.Unmarshal(data, &binding); err != nil {
-		return ControllerBinding{}, false, cascade.Wrap(cascade.KindIntegrity, err, "nodes: controller binding file is not valid JSON")
-	}
-	if strings.TrimSpace(binding.Endpoint) == "" {
-		return ControllerBinding{}, false, nil
-	}
-	return binding, true, nil
-}

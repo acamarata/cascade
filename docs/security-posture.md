@@ -32,6 +32,8 @@ See also [CI acceptance binding: one nonce per re-run, bound to the job, checkpo
 
 See also [CI OIDC tokens: how a GitHub Actions token earns the ephemeral class](security-posture/ci-oidc.md).
 
+See also [node attestation signing: the pinned controller key and the node-built record](security-posture/node-attest-signing.md).
+
 ## Doctor security checks
 
 `cascade doctor` reports six security checks. All are read-only: none selects

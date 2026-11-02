@@ -225,6 +225,9 @@ var specElevationRows = []struct {
 	// challenge them like every other elevated verb (P1-SEC-08).
 	{"node.rotate_key", ElevationRule{Always: true}},
 	{"node.revoke", ElevationRule{Always: true}},
+	// node.bind (P1-CI-13) is a local CLI verb: it pins the controller key a
+	// node trusts for ci.attest.sign, a write-once trust anchor.
+	{"node.bind", ElevationRule{Always: true}},
 }
 
 // registerSpecElevationRows fills the table from specElevationRows. It is the

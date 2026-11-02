@@ -94,17 +94,19 @@ func splitUserHost(arg string) (user, addr string, err error) {
 
 // newNodeAdmitCmd builds `cascade node enroll <user@host>` ⚠.
 func newNodeAdmitCmd(deps nodeCLIDeps) *cobra.Command {
-	var trustTier, hostKeyOverride, payloadFile string
+	var trustTier, hostKeyOverride, payloadFile, endpoint string
 	cmd := &cobra.Command{
 		Use:         "enroll USER@HOST",
 		Short:       "Admit a node into the fleet over ssh (elevated)",
 		Args:        usageArgs(cobra.ExactArgs(1)),
 		Annotations: map[string]string{"local": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runNodeAdmit(cmd, deps, args[0], trustTier, hostKeyOverride, payloadFile)
+			return runNodeEnroll(cmd, deps, nodeAdmitArgs{hostArg: args[0], trustTier: trustTier,
+				hostKeyOverride: hostKeyOverride, payloadFile: payloadFile}, endpoint)
 		},
 	}
 	cmd.Flags().StringVar(&trustTier, "trust-tier", "", "required: worker-trusted or controller")
+	cmd.Flags().StringVar(&endpoint, "controller-endpoint", "", "required: the controller endpoint the node's binding records")
 	cmd.Flags().StringVar(&hostKeyOverride, "host-key-fingerprint", "", "out-of-band sha256 ssh host-key fingerprint override")
 	cmd.Flags().StringVar(&payloadFile, "payload-file", "", "read the node's enrollment payload from this file instead of stdin")
 	return cmd
@@ -137,41 +139,60 @@ func composeNodeAdmit(ctx context.Context, deps nodeCLIDeps) (nodeAdmitCompositi
 	return nodeAdmitComposition{dataDir: dataDir, keystore: keystore, self: self, knownHosts: knownHosts}, nil
 }
 
+// nodeAdmitArgs is the enroll verb's positional argument and flags.
+type nodeAdmitArgs struct {
+	hostArg, trustTier, hostKeyOverride, payloadFile string
+}
+
+// runNodeAdmit enrolls a node and prints its row, without a binding.
 func runNodeAdmit(cmd *cobra.Command, deps nodeCLIDeps, hostArg, trustTier, hostKeyOverride, payloadFile string) error {
-	if err := nodes.RefuseOnGOOS(deps.GOOS); err != nil {
-		return err
-	}
-	// R-21.220: --trust-tier is REQUIRED and never defaulted. Checked
-	// before elevation, before any ssh dial, and before any payload is
-	// read: a missing tier writes no device record and touches nothing.
-	if trustTier == "" {
-		return cascade.New(cascade.KindInvalidInput, "node enroll: --trust-tier {worker-trusted|controller} is required (never defaulted)")
-	}
-	if err := deps.Gate.Authorize(cmd.Context(), "node.enroll"); err != nil {
-		return err
-	}
-	user, addr, err := splitUserHost(hostArg)
-	if err != nil {
-		return err
-	}
-	comp, err := composeNodeAdmit(cmd.Context(), deps)
-	if err != nil {
-		return err
-	}
-	target := nodes.Target{NodeID: "enroll-probe", User: user, Addr: addr}
-	observedFP, err := dialForHostKey(cmd.Context(), deps, comp.keystore, comp.self, comp.knownHosts, target, hostKeyOverride)
-	if err != nil {
-		return err
-	}
-	nodePayload, err := loadNodeAdmitPayload(cmd, payloadFile)
-	if err != nil {
-		return err
-	}
-	rec, err := admitNode(cmd.Context(), deps, comp, nodePayload, trustTier, user+"@"+addr, observedFP, hostKeyOverride)
+	rec, err := admitFromCLI(cmd, deps, nodeAdmitArgs{hostArg, trustTier, hostKeyOverride, payloadFile}, nil)
 	if err != nil {
 		return err
 	}
 	return nodeOutputWriter(cmd).Result(newNodeRowView(rec, deps.Clock))
+}
+
+// admitFromCLI runs every enrollment step. prepare, when non-nil, runs after
+// elevation and before any ssh dial, so a refusal there enrolls nothing.
+func admitFromCLI(cmd *cobra.Command, deps nodeCLIDeps, a nodeAdmitArgs, prepare func(context.Context) error) (nodes.DeviceRecord, error) {
+	hostArg, trustTier, hostKeyOverride, payloadFile := a.hostArg, a.trustTier, a.hostKeyOverride, a.payloadFile
+	if err := nodes.RefuseOnGOOS(deps.GOOS); err != nil {
+		return nodes.DeviceRecord{}, err
+	}
+	// R-21.220: --trust-tier is REQUIRED and never defaulted. Checked
+	// before elevation, before any ssh dial, and before any payload is
+	// read: a missing tier writes no device record and touches nothing.
+	none := nodes.DeviceRecord{}
+	if trustTier == "" {
+		return none, cascade.New(cascade.KindInvalidInput, "node enroll: --trust-tier {worker-trusted|controller} is required (never defaulted)")
+	}
+	if err := deps.Gate.Authorize(cmd.Context(), "node.enroll"); err != nil {
+		return none, err
+	}
+	user, addr, err := splitUserHost(hostArg)
+	if err != nil {
+		return none, err
+	}
+	if prepare != nil {
+		if err := prepare(cmd.Context()); err != nil {
+			return none, err
+		}
+	}
+	comp, err := composeNodeAdmit(cmd.Context(), deps)
+	if err != nil {
+		return none, err
+	}
+	target := nodes.Target{NodeID: "enroll-probe", User: user, Addr: addr}
+	observedFP, err := dialForHostKey(cmd.Context(), deps, comp.keystore, comp.self, comp.knownHosts, target, hostKeyOverride)
+	if err != nil {
+		return none, err
+	}
+	nodePayload, err := loadNodeAdmitPayload(cmd, payloadFile)
+	if err != nil {
+		return none, err
+	}
+	return admitNode(cmd.Context(), deps, comp, nodePayload, trustTier, user+"@"+addr, observedFP, hostKeyOverride)
 }
 
 // admitNode builds the EnrollDeps/EnrollPayload and calls the real

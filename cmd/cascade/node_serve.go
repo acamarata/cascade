@@ -44,6 +44,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/acamarata/cascade/internal/ci"
 	"github.com/acamarata/cascade/internal/nodes"
 	cruntime "github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -120,10 +121,11 @@ func runNodeServe(ctx context.Context, deps nodeServeDeps) error {
 	if err := nodes.RefuseOnGOOS(deps.GOOS); err != nil {
 		return err
 	}
-	comp, err := composeNodeServe(ctx, deps)
+	comp, closeAttest, err := composeNodeServeAttested(ctx, deps)
 	if err != nil {
 		return drainOrFail(ctx, err)
 	}
+	defer closeAttest()
 	stopBackground, err := startNodeServeBackgroundLoops(ctx, comp, deps)
 	if err != nil {
 		return drainOrFail(ctx, err)
@@ -158,6 +160,28 @@ func runNodeServe(ctx context.Context, deps nodeServeDeps) error {
 	}
 	_ = srv.Shutdown(context.Background())
 	return nil
+}
+
+// composeNodeServeAttested is composeNodeServe with ci.attest.sign mounted:
+// a NodeAttestor over the node's own store is composed into
+// ServeDeps.AttestSigner, with the pin read from the node's own binding.
+func composeNodeServeAttested(ctx context.Context, deps nodeServeDeps) (nodeServeComposition, func(), error) {
+	comp, err := composeNodeServe(ctx, deps)
+	if err != nil {
+		return comp, nil, err
+	}
+	attestor, closeStore, err := ci.OpenNodeAttestor(ctx, comp.self, comp.keystore, comp.dataDir, deps.Clock)
+	if err != nil {
+		return comp, nil, err
+	}
+	actionLog, enrollmentID := nodeDispatchLeg(comp.dataDir, comp.self)
+	comp.registry = nodes.NewServeRegistry(nodes.ServeDeps{
+		Records: comp.recordStore, KnownHosts: comp.knownHosts, Keystore: comp.keystore, Self: comp.self,
+		Sequences: nodes.NewSequenceStore(), Clock: deps.Clock, Timeout: nodes.DefaultHeartbeatTimeout,
+		Actions: actionLog, EnrollmentID: enrollmentID,
+		AttestSigner: attestor.Sign, ControllerBinding: nodes.NewFileControllerBindingBackend(comp.dataDir),
+	})
+	return comp, func() { _ = closeStore() }, nil
 }
 
 // startNodeServeBackgroundLoops starts every background loop runNodeServe

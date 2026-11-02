@@ -20,14 +20,15 @@ const specVerbListVerbatim = `vault get/rotate · approval grant · standing-gra
 	`node enroll/remove/upgrade · sync conflicts resolve (discarding server-primary) · ` +
 	`policy or sensitivity loosening · enabling remote elevation (allow_remote) · ` +
 	`enabling the remote plugin runtime (enable_remote_runtime) · uninstall --purge-data · ` +
-	`config accept loosening · policy authorize · node rotate key/revoke · ci repo register`
+	`config accept loosening · policy authorize · node rotate key/revoke · ci repo register · node bind`
 
 // The two amendments to §5.14 this transcription carries (P1-SEC-03): plugin
 // add is no longer conditional on process_tier/grant_expand (the CLI never
 // sends them, so the condition gated nothing) and plugin update joins it;
 // config accept loosening (P1-SEC-04) and policy authorize (P1-SEC-10) are
 // elevated verbs whose rows this ticket registers. node rotate key/revoke
-// (R-21.220) joined for the local signed gate (P1-SEC-08).
+// (R-21.220) joined for the local signed gate (P1-SEC-08). node bind joined
+// for the controller-key pin (P1-CI-13).
 
 // translateSpecVerb maps one englishy clause from specVerbListVerbatim to
 // the one or more RPC method names elevationTable registers for it. This
@@ -46,10 +47,11 @@ var specVerbToMethods = map[string][]string{
 	"plugin add/plugin update/perms grant/perms revoke": {
 		"plugin.add", "plugin.update", "perms.grant", "perms.revoke",
 	},
-	"config accept loosening":                                    {"config.accept_loosening"},
-	"policy authorize":                                           {"policy.authorize"},
-	"node rotate key/revoke":                                     {"node.rotate_key", "node.revoke"},
-	"node enroll/remove/upgrade":                                 {"node.enroll", "node.remove", "node.upgrade"},
+	"config accept loosening":    {"config.accept_loosening"},
+	"policy authorize":           {"policy.authorize"},
+	"node rotate key/revoke":     {"node.rotate_key", "node.revoke"},
+	"node bind":                  {"node.bind"},
+	"node enroll/remove/upgrade": {"node.enroll", "node.remove", "node.upgrade"},
 	"sync conflicts resolve (discarding server-primary)":         {"sync.conflicts_resolve"},
 	"policy or sensitivity loosening":                            {"policy.set", "sensitivity.set"},
 	"enabling remote elevation (allow_remote)":                   {"elevation.set_allow_remote"},
@@ -95,8 +97,8 @@ func TestElevationTableMatchesSpec(t *testing.T) {
 			t.Errorf("elevationTable registers %q but it is not derivable from the spec verb list", m)
 		}
 	}
-	if len(clauses) != 15 {
-		t.Errorf("spec verb list has %d clauses, expected 15 (drift in specVerbListVerbatim itself)", len(clauses))
+	if len(clauses) != 16 {
+		t.Errorf("spec verb list has %d clauses, expected 16 (drift in specVerbListVerbatim itself)", len(clauses))
 	}
 }
 

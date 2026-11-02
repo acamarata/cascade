@@ -40,6 +40,18 @@ the same refusal `node serve` uses).
   wire (see the contradiction noted in the ticket journal — the existing
   ssh `Session` has no remote-dial primitive to do so, and adding one is
   outside this ticket's files_scope).
+  `--controller-endpoint <url>` is REQUIRED (refused before any dial when
+  empty). On success enroll prints the binding object
+  `{endpoint, enrollment_id, controller_pubkey_b64}`; the key is the
+  controller's installation public key, never its per-node identity key.
+  Enroll never writes a binding on the node.
+- **`bind --binding-file <path>`** ⚠ (elevated, `node.bind`, run on the
+  node): pins the printed binding at `<data_dir>/nodes/controller_binding.json`
+  (0600 under a 0700 parent). Elevation is requested before the file is
+  decoded in full, and the prompt names the controller key id. The pin is
+  write-once: the same key is a no-op, a different key is a conflict, a
+  malformed key is invalid input. Refused on Windows tier-2.
+  See [node attest signing](../security-posture/node-attest-signing.md).
 - **`list`** ✦ / **`status <id>`** ✦ (read-only, never elevated): render
   the device record joined with derived liveness. `status`'s `tunnel`
   field is currently always `"unknown (no in-process tunnel session)"` —
