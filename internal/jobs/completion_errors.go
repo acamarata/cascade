@@ -20,6 +20,7 @@ package jobs
 // SPORT: jobs/completion-gate/ADD (P1-E29-W6-S60-T3).
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -28,6 +29,29 @@ import (
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
+
+func (cp *CompletionPolicy) checkCompletion(ctx context.Context, req TransitionRequest, derived RiskClass) error {
+	gates, err := GateSetForRiskClass(derived)
+	if err != nil {
+		return err
+	}
+	missing, err := cp.missingEvidence(ctx, req, gates)
+	if err != nil {
+		return err
+	}
+	if len(missing) > 0 {
+		return cp.deny(ctx, req, &ErrorCompletionDenied{MissingEvidence: missing})
+	}
+	if requiresHumanApproval(derived, req.Target) {
+		if err := cp.checkApproval(ctx, req); err != nil {
+			return cp.deny(ctx, req, &ErrorCompletionDenied{ExpiredApproval: true, Reason: err.Error()})
+		}
+	}
+	if mismatch := cp.checkpointMismatch(ctx, req); mismatch != nil {
+		return cp.deny(ctx, req, &ErrorCompletionDenied{CheckpointMismatch: mismatch})
+	}
+	return nil
+}
 
 // ApprovalScopeAction encodes {job_id, tree_hash, policy_version} as the
 // fixed-length (64 hex chars, always <= the approval queue's own 64-char
@@ -102,6 +126,9 @@ func evidenceKindsForGateSet(gates GateSet) []EvidenceKind {
 	}
 	if has[GateAdversarialReview] {
 		add(EvidenceAdversarial)
+	}
+	if has[GateCleanNodeVerification] {
+		add(EvidenceCIAttestation)
 	}
 	return out
 }

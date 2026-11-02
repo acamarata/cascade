@@ -30,6 +30,7 @@ import (
 // (Amended: plugin add unconditional, plugin update, config accept
 // loosening, policy authorize, node rotate key/revoke (R-21.220, P1-SEC-08).)
 var specElevationVerbs = []string{
+	"ci.repo_register",
 	"approval.grant",
 	"backup.create",
 	"backup.export",
@@ -58,8 +59,7 @@ var specElevationVerbs = []string{
 	"vault.rotate",
 }
 
-// testPolicyElevatedVerb is registered in the rpc table at init, as a later
-// ticket's file would: policy's class set follows with no edit here.
+// testPolicyElevatedVerb proves registered verbs join policy's class set.
 const testPolicyElevatedVerb = "test.policy_registered_verb"
 
 func init() { rpc.RegisterElevatedVerb(testPolicyElevatedVerb, rpc.ElevationRule{Always: true}) }

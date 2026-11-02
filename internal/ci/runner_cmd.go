@@ -66,6 +66,9 @@ type CmdDeps struct {
 	// AttestVerify runs `ci attest verify` (contract:ci-cli-attach). It is
 	// nil until P1-CI-04 binds it; nil refuses with KindUnavailable.
 	AttestVerify func(cmd *cobra.Command, args []string) error
+	// RepoRegister and RepoList attach the repository identity commands.
+	RepoRegister func(cmd *cobra.Command, args []string) error
+	RepoList     func(cmd *cobra.Command, args []string) error
 }
 
 // ProductionCmdDeps builds CmdDeps against the real environment --
@@ -102,6 +105,23 @@ func NewCICmd(deps CmdDeps) *cobra.Command {
 	root.AddCommand(newCIStatusCmd(deps))
 	root.AddCommand(newCIWatchCmd(deps))
 	root.AddCommand(newCIAttestCmd(deps))
+	repo := &cobra.Command{Use: "repo", Short: "Manage CI repository registration"}
+	register := &cobra.Command{Use: "register", RunE: func(c *cobra.Command, a []string) error {
+		if deps.RepoRegister == nil {
+			return cascade.New(cascade.KindUnavailable, "ci repo register: daemon unavailable")
+		}
+		return deps.RepoRegister(c, a)
+	}}
+	register.Flags().String("path", "", "repository path")
+	register.Flags().StringSlice("baseline", nil, "explicitly attested branch names")
+	list := &cobra.Command{Use: "list", RunE: func(c *cobra.Command, a []string) error {
+		if deps.RepoList == nil {
+			return cascade.New(cascade.KindUnavailable, "ci repo list: unavailable")
+		}
+		return deps.RepoList(c, a)
+	}}
+	repo.AddCommand(register, list)
+	root.AddCommand(repo)
 	return root
 }
 

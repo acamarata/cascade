@@ -136,6 +136,8 @@ linters:
         # exemption here, in review, by name.
         cmd-rpc-server-boundary:
           files:
+            # Daemon composition registers the owner-only CI repository handler.
+            - "!**/cmd/cascade/wire_ci_repo.go"
             # depguard globs need a "/" after "**", so "cmd/cascade/**/*.go"
             # alone matches only subdirectories; the first line covers the
             # package's own files (a seeded import there was not reported).

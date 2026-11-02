@@ -219,6 +219,7 @@ var specElevationRows = []struct {
 	// never does.
 	{"config.accept_loosening", ElevationRule{Always: true}},
 	{"policy.authorize", ElevationRule{Always: true}},
+	{"ci.repo_register", ElevationRule{Always: true}},
 	// node.rotate_key and node.revoke (R-21.220) are local CLI verbs with no
 	// RPC handler; their rows exist so the local gate (cmd/cascade) can
 	// challenge them like every other elevated verb (P1-SEC-08).

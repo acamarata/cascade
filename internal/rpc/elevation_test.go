@@ -20,7 +20,7 @@ const specVerbListVerbatim = `vault get/rotate · approval grant · standing-gra
 	`node enroll/remove/upgrade · sync conflicts resolve (discarding server-primary) · ` +
 	`policy or sensitivity loosening · enabling remote elevation (allow_remote) · ` +
 	`enabling the remote plugin runtime (enable_remote_runtime) · uninstall --purge-data · ` +
-	`config accept loosening · policy authorize · node rotate key/revoke`
+	`config accept loosening · policy authorize · node rotate key/revoke · ci repo register`
 
 // The two amendments to §5.14 this transcription carries (P1-SEC-03): plugin
 // add is no longer conditional on process_tier/grant_expand (the CLI never
@@ -35,6 +35,7 @@ const specVerbListVerbatim = `vault get/rotate · approval grant · standing-gra
 // bridged; elevationTable itself never appears on the right-hand side of
 // this map by construction (it's the reference the test compares AGAINST).
 var specVerbToMethods = map[string][]string{
+	"ci repo register":             {"ci.repo_register"},
 	"vault get/rotate":             {"vault.get", "vault.rotate"},
 	"approval grant":               {"approval.grant"},
 	"standing-grant create/change": {"standing_grant.create", "standing_grant.change"},
@@ -94,8 +95,8 @@ func TestElevationTableMatchesSpec(t *testing.T) {
 			t.Errorf("elevationTable registers %q but it is not derivable from the spec verb list", m)
 		}
 	}
-	if len(clauses) != 14 {
-		t.Errorf("spec verb list has %d clauses, expected 14 (drift in specVerbListVerbatim itself)", len(clauses))
+	if len(clauses) != 15 {
+		t.Errorf("spec verb list has %d clauses, expected 15 (drift in specVerbListVerbatim itself)", len(clauses))
 	}
 }
 

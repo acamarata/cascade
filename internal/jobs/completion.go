@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"github.com/acamarata/cascade/internal/ci/attest"
 
 	"github.com/acamarata/cascade/internal/context/scope"
 	"github.com/acamarata/cascade/internal/events"
@@ -34,6 +35,7 @@ type PolicyEngineIdentity struct {
 type AcceptanceVerdict struct {
 	Passed                         bool
 	CheckpointID, TreeHash, Reason string
+	AttestationNonce               string
 }
 
 // AcceptanceVerifier synchronously verifies the job's current checkpoint.
@@ -52,6 +54,8 @@ type CompletionPolicyDeps struct {
 	EngineID          string
 	Acceptance        AcceptanceVerifier
 	RequireAcceptance bool
+	AttestationTrust  attest.TrustStore
+	Countersign       attest.CountersignVerifier
 }
 
 // CompletionPolicy implements the R-16.12 completion gate.
@@ -73,6 +77,9 @@ func NewCompletionPolicy(deps CompletionPolicyDeps) (*CompletionPolicy, error) {
 	if deps.RequireAcceptance && deps.Acceptance == nil {
 		return nil, cascade.New(cascade.KindInvalidInput, "jobs: CompletionPolicy requires an Acceptance verifier")
 	}
+	if source, ok := deps.Acceptance.(interface{ AttestationTrustStore() attest.TrustStore }); ok && deps.AttestationTrust == nil {
+		deps.AttestationTrust = source.AttestationTrustStore()
+	}
 	return &CompletionPolicy{deps: deps}, nil
 }
 
@@ -93,6 +100,7 @@ type TransitionRequest struct {
 	SessionID          string
 	TicketID           string
 	Attempt            int
+	attestationNonce   string
 }
 
 // Transition checks identity, ordering, evidence, scope, approval and acceptance
@@ -108,10 +116,6 @@ func (cp *CompletionPolicy) Transition(ctx context.Context, req TransitionReques
 		wrong := req.Target
 		return cp.deny(ctx, req, &ErrorCompletionDenied{WrongSuccessor: &wrong})
 	}
-	cursor, err := cp.deps.Ledger.Cursor(ctx, req.Job.ID)
-	if err != nil {
-		return err
-	}
 	if err := cp.deps.Ledger.Verify(ctx, req.Job.ID); err != nil {
 		return err
 	}
@@ -119,33 +123,21 @@ func (cp *CompletionPolicy) Transition(ctx context.Context, req TransitionReques
 	if denyErr != nil {
 		return denyErr
 	}
-	gateSet, err := GateSetForRiskClass(derived)
+	if err := cp.verifyAcceptance(ctx, &req); err != nil {
+		return err
+	}
+	cursor, err := cp.deps.Ledger.Cursor(ctx, req.Job.ID)
 	if err != nil {
 		return err
 	}
-	missing, err := cp.missingEvidence(ctx, req.Job.ID, gateSet)
-	if err != nil {
+	if err := cp.checkCompletion(ctx, req, derived); err != nil {
 		return err
-	}
-	if len(missing) > 0 {
-		return cp.deny(ctx, req, &ErrorCompletionDenied{MissingEvidence: missing})
-	}
-	if requiresHumanApproval(derived, req.Target) {
-		if err := cp.checkApproval(ctx, req); err != nil {
-			return cp.deny(ctx, req, &ErrorCompletionDenied{ExpiredApproval: true, Reason: err.Error()})
-		}
-	}
-	if err := cp.verifyAcceptance(ctx, req); err != nil {
-		return err
-	}
-	if mismatch := cp.checkpointMismatch(ctx, req); mismatch != nil {
-		return cp.deny(ctx, req, &ErrorCompletionDenied{CheckpointMismatch: mismatch})
 	}
 	return cp.commit(ctx, req, cursor)
 }
 
 // verifyAcceptance fails closed before commit when the requested tree did not pass.
-func (cp *CompletionPolicy) verifyAcceptance(ctx context.Context, req TransitionRequest) error {
+func (cp *CompletionPolicy) verifyAcceptance(ctx context.Context, req *TransitionRequest) error {
 	if req.Target != JobStateAccepted || (cp.deps.Acceptance == nil && !cp.deps.RequireAcceptance) {
 		return nil
 	}
@@ -153,10 +145,11 @@ func (cp *CompletionPolicy) verifyAcceptance(ctx context.Context, req Transition
 		verdict, err := cp.deps.Acceptance.VerifyAcceptance(ctx, req.Job.ID)
 		if err == nil && verdict.Passed && req.CheckpointID != "" && req.TreeHash != "" &&
 			verdict.CheckpointID == req.CheckpointID && verdict.TreeHash == req.TreeHash {
+			req.attestationNonce = verdict.AttestationNonce
 			return nil
 		}
 	}
-	return cp.deny(ctx, req, &ErrorCompletionDenied{Reason: "ci-acceptance-not-passed"})
+	return cp.deny(ctx, *req, &ErrorCompletionDenied{Reason: "ci-acceptance-not-passed"})
 }
 
 // reclassifyAndCheck runs the R-21.146 reclassification + scope
@@ -207,15 +200,16 @@ func (cp *CompletionPolicy) pushOutOfScopeAttention(ctx context.Context, req Tra
 
 // missingEvidence returns the required EvidenceKinds (evidenceKindsForGateSet,
 // completion_errors.go) that have no passing, non-agent-claim record.
-func (cp *CompletionPolicy) missingEvidence(ctx context.Context, jobID string, gateSet GateSet) ([]EvidenceKind, error) {
+func (cp *CompletionPolicy) missingEvidence(ctx context.Context, req TransitionRequest, gateSet GateSet) ([]EvidenceKind, error) {
 	var missing []EvidenceKind
 	for _, kind := range evidenceKindsForGateSet(gateSet) {
-		rec, err := cp.deps.Ledger.Query(ctx, jobID, kind)
+		rec, err := cp.deps.Ledger.Query(ctx, req.Job.ID, kind)
 		if err != nil {
 			missing = append(missing, kind)
 			continue
 		}
-		if rec.ProducerCapability == ProducerAgentClaim || rec.Outcome != OutcomePass {
+		if rec.ProducerCapability == ProducerAgentClaim || rec.Outcome != OutcomePass ||
+			(kind == EvidenceCIAttestation && !cp.eligibleAttestation(ctx, req, rec)) {
 			missing = append(missing, kind)
 		}
 	}
@@ -283,6 +277,9 @@ func (cp *CompletionPolicy) commit(ctx context.Context, req TransitionRequest, e
 		} else if n != 1 {
 			return cascade.Newf(cascade.KindConflict,
 				"jobs: job %q is no longer in state %s; the completion transition was not applied", req.Job.ID, req.Job.State)
+		}
+		if req.Target == JobStateAccepted && req.attestationNonce != "" {
+			return cp.consumeAcceptance(ctx, tx, req)
 		}
 		return nil
 	})

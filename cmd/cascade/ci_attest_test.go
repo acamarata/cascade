@@ -35,11 +35,18 @@ type attestFixture struct {
 	start                             time.Time
 }
 
+// skipIfGitExecDenied is a no-op; git failures are always fatal so that
+// tests pass or fail explicitly rather than skipping under harness sandboxes.
+func skipIfGitExecDenied(t *testing.T, _ error) {
+	t.Helper()
+}
+
 func gitT(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	c := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false"}, args...)...)
 	c.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull)
 	out, err := c.CombinedOutput()
+	skipIfGitExecDenied(t, err)
 	if err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
@@ -222,8 +229,8 @@ func TestCiAttestVerifyBindsRepo(t *testing.T) {
 	if err := f.runInProcess(t, f.commit, "--require", "--repo-id", "repo-a"); err != nil {
 		t.Fatalf("repo A record for --repo-id repo-a: %v, want exit 0", err)
 	}
-	if err := f.runInProcess(t, f.commit, "--require"); cascade.ExitCode(err) != 2 {
-		t.Fatalf("no repo id anywhere: %v, want exit 2", err)
+	if err := f.runInProcess(t, f.commit, "--require"); !errors.Is(err, jobs.ErrRepoNotRegistered) {
+		t.Fatalf("no repo id anywhere: %v, want ErrRepoNotRegistered", err)
 	}
 	g := newAttestFixture(t)
 	gdb := g.openDB(t)

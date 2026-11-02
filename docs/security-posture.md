@@ -28,6 +28,8 @@ See also [credential helpers: a digest-pinned program that prints a gateway key,
 
 See also [CI attestations: signed records of acceptance re-runs and how they verify](security-posture/ci-attestation.md).
 
+See also [CI acceptance binding: one nonce per re-run, bound to the job, checkpoint and registration](security-posture/ci-acceptance-binding.md).
+
 ## Doctor security checks
 
 `cascade doctor` reports six security checks. All are read-only: none selects

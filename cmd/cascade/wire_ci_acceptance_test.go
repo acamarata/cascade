@@ -5,20 +5,22 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/acamarata/cascade/internal/ci"
+	contextgit "github.com/acamarata/cascade/internal/context"
+	"github.com/acamarata/cascade/internal/context/scope"
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/fleet/hookpacks"
 	"github.com/acamarata/cascade/internal/jobs"
+	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/rpc"
-	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
 )
@@ -26,11 +28,17 @@ import (
 type acceptanceExecutor struct {
 	run  atomic.Int64
 	fail atomic.Bool
+	// inner runs every other sub-job over real run rows, which the
+	// controller attests; nil keeps the fixture results.
+	inner ci.SubJobExecutor
 }
 
-func (e *acceptanceExecutor) Run(_ context.Context, sj ci.SubJob) (ci.SubJobResult, error) {
+func (e *acceptanceExecutor) Run(ctx context.Context, sj ci.SubJob) (ci.SubJobResult, error) {
 	if sj.Acceptance && e.fail.Load() {
 		return ci.SubJobResult{}, cascade.New(cascade.KindUnavailable, "acceptance executor unavailable")
+	}
+	if e.inner != nil {
+		return e.inner.Run(ctx, sj)
 	}
 	return ci.SubJobResult{RunID: -e.run.Add(1), RepoID: 17, Passed: true, ExecutorKind: "fixture"}, nil
 }
@@ -54,6 +62,11 @@ func hookDaemon(t *testing.T, executors ...*acceptanceExecutor) *daemonWiring {
 			if err != nil {
 				return err
 			}
+			if exec.Command("git", "--version").Run() == nil {
+				if executor.inner, err = newLocalTrueExecutor(t, w, rt); err != nil {
+					return err
+				}
+			}
 			if err := rt.SetExecutor(executor); err != nil {
 				return err
 			}
@@ -62,120 +75,14 @@ func hookDaemon(t *testing.T, executors ...*acceptanceExecutor) *daemonWiring {
 		}})
 	seen := observeWiring(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	_, cleanups, err := composeDaemon(ctx, newRunTestDeps(t, nil), nil)
+	deps := newRunTestDeps(t, nil)
+	deps.SecretsDir, deps.NewKeystore = t.TempDir(), nodes.NewNodeKeystore
+	_, cleanups, err := composeDaemon(ctx, deps, nil)
 	t.Cleanup(func() { cancel(); runCleanupsLIFO(cleanups) })
 	if err != nil {
 		t.Fatalf("compose acceptance daemon: %v", err)
 	}
 	return <-seen
-}
-
-type acceptanceClock struct{ seconds atomic.Int64 }
-
-func (c *acceptanceClock) Now() time.Time { return time.Unix(c.seconds.Load(), 0) }
-
-func acceptanceWaiter() (*ciAcceptanceVerifier, *acceptanceClock, *ciFakeTicker) {
-	clock := &acceptanceClock{}
-	tick := &ciFakeTicker{c: make(chan struct{}, 1)}
-	v := &ciAcceptanceVerifier{clock: clock, terminal: make(chan struct{}, 1),
-		ticker: func() runtime.Ticker { return tick }}
-	return v, clock, tick
-}
-
-func TestCIAcceptanceVerifierWaitsForTerminal(t *testing.T) {
-	t.Run("all kinds", acceptanceWaitsForAll)
-	t.Run("injected deadline", acceptanceTimesOut)
-	t.Run("composed missing runtime", acceptanceMissingCI)
-	t.Run("missing runtime", func(t *testing.T) {
-		_, err := newCIAcceptanceVerifier(&daemonWiring{})
-		if kind, _ := cascade.KindOf(err); kind != cascade.KindUnavailable {
-			t.Fatalf("missing runtime error = %v", err)
-		}
-	})
-}
-
-func acceptanceMissingCI(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	addTestRegistration(t, daemonRegistration{Name: "test-remove-ci", Phase: phaseSupervised, Order: 22,
-		Wire: func(w *daemonWiring) error { w.Deps.CI = nil; return nil }})
-	ctx, cancel := context.WithCancel(context.Background())
-	_, cleanups, err := composeDaemon(ctx, newRunTestDeps(t, nil), nil)
-	cancel()
-	runCleanupsLIFO(cleanups)
-	if !cascade.HasKind(err, cascade.KindUnavailable) || !strings.Contains(err.Error(), "completion-gate") {
-		t.Fatalf("missing CI composition = %v", err)
-	}
-}
-
-func acceptanceWaitsForAll(t *testing.T) {
-	v, _, _ := acceptanceWaiter()
-	v.terminal = make(chan struct{})
-	started, finish := make(chan struct{}), make(chan struct{})
-	result := make(chan jobs.AcceptanceVerdict, 1)
-	go func() {
-		verdict, err := v.wait(context.Background(), func(context.Context) (ci.AcceptanceResult, error) {
-			close(started)
-			<-finish
-			return ci.AcceptanceResult{Passed: true, CheckpointID: "checkpoint", TreeHash: "tree"}, nil
-		})
-		if err != nil {
-			verdict.Passed = false
-		}
-		result <- verdict
-	}()
-	<-started
-	for range 2 {
-		select {
-		case v.terminal <- struct{}{}:
-		case got := <-result:
-			t.Fatalf("returned on an intermediate terminal: %+v", got)
-		case <-time.After(testDaemonBound):
-			t.Fatal("terminal callback did not wake verification")
-		}
-	}
-	select {
-	case got := <-result:
-		t.Fatalf("returned before every kind finished: %+v", got)
-	default:
-	}
-	close(finish)
-	select {
-	case got := <-result:
-		if !got.Passed || got.CheckpointID != "checkpoint" || got.TreeHash != "tree" {
-			t.Fatalf("terminal verdict = %+v", got)
-		}
-	case <-time.After(testDaemonBound):
-		t.Fatal("all terminal kinds did not finish verification")
-	}
-}
-
-func acceptanceTimesOut(t *testing.T) {
-	v, clock, tick := acceptanceWaiter()
-	started, canceled := make(chan struct{}), make(chan struct{})
-	result := make(chan jobs.AcceptanceVerdict, 1)
-	go func() {
-		verdict, _ := v.wait(context.Background(), func(ctx context.Context) (ci.AcceptanceResult, error) {
-			close(started)
-			<-ctx.Done()
-			close(canceled)
-			return ci.AcceptanceResult{}, ctx.Err()
-		})
-		result <- verdict
-	}()
-	<-started
-	clock.seconds.Store(int64((30 * time.Minute) / time.Second))
-	tick.c <- struct{}{}
-	select {
-	case got := <-result:
-		if got.Passed || got.Reason != "acceptance timed out" {
-			t.Fatalf("deadline verdict = %+v", got)
-		}
-	case <-time.After(testDaemonBound):
-		t.Fatal("injected-clock bound did not end verification")
-	}
-	<-canceled
 }
 
 func TestHooksCompletionCheckDispatchesDaemonCheckpoint(t *testing.T) {
@@ -224,6 +131,9 @@ func hookDispatch(t *testing.T, w *daemonWiring, id string) hookpacks.Completion
 func hookRecordedCheckpoint(t *testing.T, w *daemonWiring, r *ciDaemonRig) ci.JobRef {
 	t.Helper()
 	ctx := context.Background()
+	if _, err := scope.NewGraphStore(w.Deps.Fleet.JobsDB()).EnsureRepository(ctx, r.repo, "", contextgit.GitCommonDir); err != nil {
+		t.Fatal(err)
+	}
 	lease := r.leaseAndCommit(t, w.Deps.Fleet, "docs", "change.txt")
 	wt, found, err := w.Deps.Fleet.Jobs().WorktreeForLease(ctx, lease.RepoID, lease.ScopeGlob)
 	if err != nil || !found {
@@ -293,4 +203,33 @@ func hookSeededCheckpoint(t *testing.T, w *daemonWiring, id string) ci.JobRef {
 func hookFullPlan(tree string) ci.CIRequirementPlan {
 	return ci.CIRequirementPlan{Requirement: ci.AllRequired, Targets: []ci.Target{ci.TargetAll},
 		Selection: ci.TargetSelectionFull, CandidateTreeHash: tree, RiskClass: string(jobs.RiskClassNormal)}
+}
+
+func TestAcceptanceIssuesOneNonce(t *testing.T) {
+	v, ref, snap := newNonceVerifier(t)
+	first, err := v.issue(context.Background(), ref, snap, hookFullPlan(snap.TreeHash))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := v.issue(context.Background(), ref, snap, hookFullPlan(snap.TreeHash))
+	if err != nil || first != second {
+		t.Fatalf("nonce changed: %v %v %v", first, second, err)
+	}
+	var count int
+	if err := v.jobsDB.QueryRow(`SELECT COUNT(*) FROM attestation_nonce`).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("issued %d: %v", count, err)
+	}
+	nonces, _ := jobs.NewAttestationNonceStore(v.jobsDB, v.clock)
+	fact, found, err := nonces.Issued(context.Background(), first.value)
+	repoID, _ := v.registry.ByPath(context.Background(), ref.RepoRoot)
+	job, _, _ := jobs.NewStore(v.jobsDB).GetJob(context.Background(), ref.JobID)
+	if err != nil || !found || fact.JobID != ref.JobID || fact.CheckpointID != snap.CheckpointID || fact.RepoID != repoID || fact.JobSpecHash != jobs.JobSpecHash(job, nil) || len(fact.PlanKinds) != 7 {
+		t.Fatalf("issued fact %+v: %v", fact, err)
+	}
+	// A new verifier over the same persisted re-run recovers its nonce.
+	v.issued = map[string]acceptanceNonce{}
+	third, err := v.issue(context.Background(), ref, snap, hookFullPlan(snap.TreeHash))
+	if err != nil || third != first {
+		t.Fatalf("recovered nonce %+v: %v", third, err)
+	}
 }

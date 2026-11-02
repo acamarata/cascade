@@ -121,13 +121,9 @@ func TestCompletionOutOfLeaseScopeWithNoAttentionConfigured(t *testing.T) {
 }
 
 func TestCompletionCheckApprovalWithNoQueueConfigured(t *testing.T) {
-	cp, _, ledger, _, job := newCompletionFixture(t, RiskClassCritical)
-	job.State = JobStateReviewing
-	passAll(t, ledger, []EvidenceKind{EvidenceBuild, EvidenceLint, EvidenceTests, EvidenceReview, EvidenceAdversarial})
-	err := cp.Transition(context.Background(), TransitionRequest{
-		Job: &job, Target: JobStateAccepted, Caller: PolicyEngineIdentity{EngineID: testEngineID},
-		PlannedRiskClass: RiskClassCritical,
-	})
+	cp, _, req, row := attestedCompletion(t, RiskClassCritical, false)
+	appendAttestedEvidence(t, cp, req, row)
+	err := cp.Transition(context.Background(), req)
 	denial, ok := err.(*ErrorCompletionDenied)
 	if !ok || !denial.ExpiredApproval {
 		t.Fatalf("Transition to accepted with no approval queue configured = %v, want ExpiredApproval", err)

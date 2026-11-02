@@ -255,9 +255,9 @@ func newApprovalQueueForTest(t *testing.T) (*policy.StoreApprovals, func(jobID, 
 }
 
 func TestCompletionApprovalToken(t *testing.T) {
-	cp, store, ledger, _, job := newCompletionFixture(t, RiskClassCritical)
-	setJobState(t, store, &job, JobStateReviewing)
-	passAll(t, ledger, []EvidenceKind{EvidenceBuild, EvidenceLint, EvidenceTests, EvidenceReview, EvidenceAdversarial})
+	cp, _, base, row := attestedCompletion(t, RiskClassCritical, false)
+	appendAttestedEvidence(t, cp, base, row)
+	job, tree := *base.Job, base.TreeHash
 
 	ctx := context.Background()
 	queue, mintScope := newApprovalQueueForTest(t)
@@ -268,7 +268,7 @@ func TestCompletionApprovalToken(t *testing.T) {
 	reqID, nonce := mintScope("job-1", "wrong-tree", "pv-1")
 	err = cp.Transition(ctx, TransitionRequest{
 		Job: &job, Target: JobStateAccepted, Caller: PolicyEngineIdentity{EngineID: testEngineID},
-		PlannedRiskClass: RiskClassCritical, TreeHash: "tree-real", PolicyVersion: "pv-1",
+		PlannedRiskClass: RiskClassCritical, TreeHash: tree, PolicyVersion: "pv-1", CheckpointID: base.CheckpointID,
 		ApprovalRequestID: reqID, ApprovalNonce: nonce,
 	})
 	if denial, ok := err.(*ErrorCompletionDenied); !ok || !denial.ExpiredApproval {
@@ -276,10 +276,10 @@ func TestCompletionApprovalToken(t *testing.T) {
 	}
 
 	// The matching token succeeds.
-	reqID2, nonce2 := mintScope("job-1", "tree-real", "pv-1")
+	reqID2, nonce2 := mintScope("job-1", tree, "pv-1")
 	err = cp.Transition(ctx, TransitionRequest{
 		Job: &job, Target: JobStateAccepted, Caller: PolicyEngineIdentity{EngineID: testEngineID},
-		PlannedRiskClass: RiskClassCritical, TreeHash: "tree-real", PolicyVersion: "pv-1",
+		PlannedRiskClass: RiskClassCritical, TreeHash: tree, PolicyVersion: "pv-1", CheckpointID: base.CheckpointID,
 		ApprovalRequestID: reqID2, ApprovalNonce: nonce2,
 	})
 	if err != nil {
@@ -290,7 +290,7 @@ func TestCompletionApprovalToken(t *testing.T) {
 	job.State = JobStateReviewing
 	err = cp.Transition(ctx, TransitionRequest{
 		Job: &job, Target: JobStateAccepted, Caller: PolicyEngineIdentity{EngineID: testEngineID},
-		PlannedRiskClass: RiskClassCritical, TreeHash: "tree-real", PolicyVersion: "pv-1",
+		PlannedRiskClass: RiskClassCritical, TreeHash: tree, PolicyVersion: "pv-1", CheckpointID: base.CheckpointID,
 		ApprovalRequestID: reqID2, ApprovalNonce: nonce2,
 	})
 	if denial, ok := err.(*ErrorCompletionDenied); !ok || !denial.ExpiredApproval {

@@ -30,6 +30,7 @@ package jobs
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/json"
 	"time"
 
@@ -246,6 +247,11 @@ func (l *EvidenceLedger) Append(ctx context.Context, rec EvidenceRecord, auth Ap
 	if err := validateEvidenceRecord(rec); err != nil {
 		return EvidenceRecord{}, err
 	}
+	if rec.Kind == EvidenceCIAttestation {
+		if _, err := resolveAttestation(ctx, l.store, rec); err != nil {
+			return EvidenceRecord{}, err
+		}
+	}
 	if l.authz != nil {
 		if err := l.authz.Authorize(ctx, auth); err != nil {
 			return EvidenceRecord{}, err
@@ -259,3 +265,6 @@ func (l *EvidenceLedger) Append(ctx context.Context, rec EvidenceRecord, auth Ap
 
 // Query and Cursor are defined in migration_evidence.go, alongside the
 // other row-level SQL this file's Append shares with them.
+
+// DB returns the shared domain database for controller attestation composition.
+func (s *CiAttestationStore) DB() *sql.DB { return s.db }

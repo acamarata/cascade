@@ -16,10 +16,6 @@
 //	(itself build-tag-selected), so this file only ever holds a
 //	service.Installer interface value.
 //
-// Inputs: cobra args/flags; a daemonDeps injected at construction so no
-//
-//	test touches the real home directory or process environment (Art.7.1).
-//
 // Outputs: process output via internal/output.Writer; a taxonomy error on
 //
 //	failure. NEVER prints via os.Stdout/os.Stderr directly (forbidigo +
@@ -48,16 +44,19 @@ import (
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/output"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // daemonDeps carries every external input the daemon command tree needs.
 type daemonDeps struct {
-	Paths      runtime.PathProvider
-	Getenv     runtime.Getenv
-	Environ    func() []string
-	Clock      runtime.Clock
-	Executable func() (string, error)
+	SecretsDir  string
+	NewKeystore func(secrets.Config) (*nodes.NodeKeystore, error)
+	Paths       runtime.PathProvider
+	Getenv      runtime.Getenv
+	Environ     func() []string
+	Clock       runtime.Clock
+	Executable  func() (string, error)
 	// HomeDir resolves the real user home directory install/uninstall's
 	// service units are rooted under (~/Library/LaunchAgents, ~/.config/
 	// systemd/user) — distinct from Paths.Root() (CASCADE_HOME). Injected
@@ -86,6 +85,7 @@ type daemonDeps struct {
 // does.
 func productionDaemonDeps() daemonDeps {
 	return daemonDeps{
+		NewKeystore: nodes.NewNodeKeystore,
 		Paths:       lazyPaths{},
 		Getenv:      os.Getenv,
 		Environ:     os.Environ,

@@ -222,3 +222,16 @@ the step's output pipes cannot keep the command waiting past its deadline.
 A timed-out step is a failed step — the sequence halts, the run is
 recorded with a `timed_out` conclusion for that step, and the exit status
 is non-zero.
+# Repository registration
+
+`cascade ci repo register --path <repository>` records the repository identity
+and a signed baseline through the local daemon. Registration requires local
+elevation and the controller installation key. There is no daemonless fallback.
+
+The default baseline includes only the checked-out branch. Branches with an
+upstream remote are excluded until an owned-remote predicate is configured.
+Detached HEAD registers an empty baseline and prints a notice. Use repeatable
+`--baseline <branch>` flags to explicitly attest branches, including while detached.
+The command prints stored baseline tips and the current policy's excluded tips.
+Re-registration preserves the original timestamp and baseline; changing the
+explicit baseline is refused. `ci repo list` exposes no trust records.

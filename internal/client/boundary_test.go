@@ -57,6 +57,8 @@ func clientModuleRoot(t *testing.T) string {
 // MOUNTS the memory.* namespace on the daemon's registry. It serves RPC, it
 // does not dial it.
 var cmdRPCBoundaryExempt = map[string]bool{
+	// Daemon composition registers the owner-only CI repository handler.
+	"wire_ci_repo.go":           true,
 	"daemon_unix_run.go":        true,
 	"daemon_unix_run_memory.go": true,
 	"daemon_unix_handlers.go":   true,

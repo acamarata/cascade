@@ -6,9 +6,13 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/internal/ci"
+	"github.com/acamarata/cascade/internal/jobs"
+	"github.com/acamarata/cascade/internal/runtime"
 )
 
 var _ = registerRootMount(rootMount{Name: "ci", Order: 280, Mount: mountCIAttachedCmd})
@@ -19,8 +23,22 @@ func mountCIAttachedCmd(root *cobra.Command) {
 	deps := ci.ProductionCmdDeps()
 	deps.WatchEvents = ciWatchEvents(productionStatusDeps())
 	deps.AttestVerify = ciAttestVerify(productionCIAttestVerifyDeps())
+	deps.RepoRegister = ciRepoRegister(productionStatusDeps(), productionElevatedCallDeps(nil))
+	deps.RepoList = ciRepoList
 	cmd := ci.NewCICmd(deps)
 	addCIAttestVerifyFlags(cmd)
 	guardUnknownSubcommands(cmd)
 	root.AddCommand(cmd)
+}
+
+func acceptanceNonceRepo(ctx context.Context, db *sql.DB, clock runtime.Clock, nonce, repoID string) error {
+	nonces, _ := jobs.NewAttestationNonceStore(db, clock)
+	fact, ok, err := nonces.Issued(ctx, nonce)
+	if err != nil {
+		return err
+	}
+	if !ok || fact.RepoID != repoID {
+		return ci.ErrCheckpointStale
+	}
+	return nil
 }

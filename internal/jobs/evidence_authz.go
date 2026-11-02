@@ -36,7 +36,11 @@ package jobs
 
 import (
 	"context"
+	"database/sql"
 	"strings"
+
+	"github.com/acamarata/cascade/internal/ci/attest"
+	"github.com/acamarata/cascade/internal/runtime"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -141,4 +145,80 @@ func requireIdentitySource(kind EvidenceKind, identity string) error {
 			"jobs: evidence kind %q requires an attestor_identity prefixed %q", string(kind), want)
 	}
 	return nil
+}
+
+// resolveAttestation binds evidence to a stored record and its issuing job.
+func resolveAttestation(ctx context.Context, store *Store, evidence EvidenceRecord) (CiAttestationRow, error) {
+	denied := func() (CiAttestationRow, error) { return CiAttestationRow{}, ErrEvidenceProducerDenied }
+	if !strings.HasPrefix(evidence.ArtifactRef, "ci_attestation:") {
+		return denied()
+	}
+	rows, _ := NewCiAttestationStore(store.db)
+	row, ok, err := rows.ByID(ctx, strings.TrimPrefix(evidence.ArtifactRef, "ci_attestation:"))
+	if err != nil {
+		return CiAttestationRow{}, err
+	}
+	if !ok || row.CheckSigned() != nil || evidence.AttestorIdentity != "node:"+row.NodeID ||
+		evidence.CheckpointID != row.CheckpointID || evidence.TreeHash != row.TreeHash {
+		return denied()
+	}
+	nonces, _ := NewAttestationNonceStore(store.db, runtime.SystemClock{})
+	fact, ok, err := nonces.Issued(ctx, row.Nonce)
+	if err != nil {
+		return CiAttestationRow{}, err
+	}
+	if !ok || fact.JobID != evidence.JobID || fact.CheckpointID != row.CheckpointID ||
+		fact.RepoID != row.RepoID || fact.JobSpecHash != row.JobSpecHash || fact.PolicyVersion != row.PolicyVersion {
+		return denied()
+	}
+	return row, nil
+}
+
+func (cp *CompletionPolicy) consumeAcceptance(ctx context.Context, tx *sql.Tx, req TransitionRequest) error {
+	var commit, checkpoint, tree string
+	err := tx.QueryRowContext(ctx, `SELECT commit_sha, checkpoint_id, tree_hash FROM ci_attestation WHERE nonce = ?`, req.attestationNonce).Scan(&commit, &checkpoint, &tree)
+	if err != nil {
+		return cascade.Wrap(cascade.KindIntegrity, err, "jobs: acceptance nonce has no attestation")
+	}
+	if checkpoint != req.CheckpointID || tree != req.TreeHash {
+		return cascade.New(cascade.KindIntegrity, "jobs: acceptance attestation mismatch")
+	}
+	nonces, _ := NewAttestationNonceStore(cp.deps.Store.db, cp.deps.Clock)
+	return nonces.ConsumeOnAcceptTx(ctx, tx, req.attestationNonce, req.Job.ID, commit, tree, cp.deps.Clock.Now())
+}
+
+// eligibleAttestation re-verifies the proof against current trust and job spec.
+func (cp *CompletionPolicy) eligibleAttestation(ctx context.Context, req TransitionRequest, evidence EvidenceRecord) bool {
+	if cp.deps.AttestationTrust == nil {
+		return false
+	}
+	row, err := resolveAttestation(ctx, cp.deps.Store, evidence)
+	if err != nil || row.CheckpointID != req.CheckpointID || row.TreeHash != req.TreeHash {
+		return false
+	}
+	if req.attestationNonce != "" && row.Nonce != req.attestationNonce {
+		return false
+	}
+	sa := attest.SignedAttestation{CanonicalJSON: []byte(row.CanonicalJSON), Signature: row.Signature}
+	if attest.VerifySignature(ctx, sa, row.CommitSHA, req.TreeHash, cp.deps.AttestationTrust, cp.deps.Clock.Now()) != nil ||
+		!attest.DeriveClass(sa, cp.deps.AttestationTrust, cp.deps.Countersign).Eligible() {
+		return false
+	}
+	nonces, _ := NewAttestationNonceStore(cp.deps.Store.db, cp.deps.Clock)
+	fact, ok, err := nonces.Issued(ctx, row.Nonce)
+	if err != nil || !ok || fact.JobID != req.Job.ID || fact.CheckpointID != req.CheckpointID ||
+		row.RepoID != fact.RepoID || row.JobSpecHash != fact.JobSpecHash ||
+		row.PolicyVersion != fact.PolicyVersion || row.CheckpointID != fact.CheckpointID {
+		return false
+	}
+	job, ok, err := cp.deps.Store.GetJob(ctx, req.Job.ID)
+	if err != nil || !ok {
+		return false
+	}
+	deps, err := cp.deps.Store.Dependencies(ctx, job.ID)
+	if err != nil || JobSpecHash(job, deps) != fact.JobSpecHash {
+		return false
+	}
+	record, err := attest.DecodeCanonical(sa.CanonicalJSON)
+	return err == nil && record.Passing(fact.PlanKinds)
 }

@@ -1,20 +1,5 @@
-// Purpose: `cascade ci attest verify <commit-sha> [--require] [--repo-id <id>]`
-// (contract:ci-attestation), bound through CmdDeps.AttestVerify in
-// mount_ci.go.
-//
-// Inputs: a commit-ish, the repo id (--repo-id, else the repo's git config
-// key cascade.gate.repoId), the local cascade.db and the node record store.
-// Outputs: exit 0 when at least one stored record for the commit's real
-// tree verifies, passes its accepted plan, derives an eligible class and
-// matches the accepted fact's repo id, job spec hash and policy version, or
-// (without --require) when no record exists; exit 1 on any verification
-// failure, when records exist but none is eligible, or with --require and
-// no record; exit 2 for a bad commit or no repo id.
-// Constraints: the tree comes from the commit itself (git rev-parse
-// <sha>^{tree}), never from a record; the repo id is bound by the caller,
-// never derived; cascade.db is opened read-only, so verification can never
-// consume a nonce.
-// SPORT: cmd/cascade ci attest verify (ADD, P1-CI-04).
+// Purpose: verify stored acceptance attestations against a real commit tree.
+// The controller registry resolves repository identity when no override exists.
 package main
 
 import (
@@ -29,13 +14,15 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/internal/ci/attest"
+	contextgit "github.com/acamarata/cascade/internal/context"
+	"github.com/acamarata/cascade/internal/context/scope"
 	"github.com/acamarata/cascade/internal/jobs"
 	"github.com/acamarata/cascade/internal/nodes"
 	cruntime "github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// ciAttestVerifyDeps carries the verb's external inputs.
 type ciAttestVerifyDeps struct {
 	Paths cruntime.PathProvider
 	Clock cruntime.Clock
@@ -47,16 +34,13 @@ func productionCIAttestVerifyDeps() ciAttestVerifyDeps {
 	return ciAttestVerifyDeps{Paths: lazyPaths{}, Clock: cruntime.NewSystemClock(), Git: gitInWorkingDir}
 }
 
-// gitInWorkingDir runs git in the process working directory.
 func gitInWorkingDir(ctx context.Context, args ...string) (string, error) {
 	out, err := exec.CommandContext(ctx, "git", args...).Output()
 	return strings.TrimSpace(string(out)), err
 }
 
-// attestSubject is what every stored record is verified against.
 type attestSubject struct{ commit, tree, repoID string }
 
-// attestVerifyResult is the verb's data output.
 type attestVerifyResult struct {
 	Commit   string `json:"commit"`
 	Tree     string `json:"tree"`
@@ -69,8 +53,6 @@ func (r attestVerifyResult) String() string {
 	return fmt.Sprintf("commit=%s tree=%s repo_id=%s records=%d eligible=%d", r.Commit, r.Tree, r.RepoID, r.Records, r.Eligible)
 }
 
-// addCIAttestVerifyFlags registers `ci attest verify`'s own flags on the
-// verb internal/ci mounts.
 func addCIAttestVerifyFlags(ciCmd *cobra.Command) {
 	verify, _, err := ciCmd.Find([]string{"attest", "verify"})
 	if err != nil || verify == nil || verify.Name() != "verify" {
@@ -80,7 +62,6 @@ func addCIAttestVerifyFlags(ciCmd *cobra.Command) {
 	verify.Flags().String("repo-id", "", "the controller's repo id to bind (default: git config cascade.gate.repoId)")
 }
 
-// ciAttestVerify returns the CmdDeps.AttestVerify binding.
 func ciAttestVerify(deps ciAttestVerifyDeps) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
@@ -111,8 +92,6 @@ func ciAttestVerify(deps ciAttestVerifyDeps) func(cmd *cobra.Command, args []str
 	}
 }
 
-// resolveAttestSubject resolves the commit, its real tree and the bound
-// repo id.
 func resolveAttestSubject(ctx context.Context, deps ciAttestVerifyDeps, rev, repoFlag string) (attestSubject, error) {
 	if rev == "" || strings.HasPrefix(rev, "-") || strings.ContainsAny(rev, " \t\r\n\x00") {
 		return attestSubject{}, cascade.New(cascade.KindInvalidInput, "ci attest verify: the commit must be a revision, not an option")
@@ -132,10 +111,44 @@ func resolveAttestSubject(ctx context.Context, deps ciAttestVerifyDeps, rev, rep
 		repoID, _ = deps.Git(ctx, "config", "--get", "cascade.gate.repoId")
 	}
 	if repoID == "" {
-		return attestSubject{}, cascade.New(cascade.KindInvalidInput,
-			"ci attest verify: no repo id; pass --repo-id or set git config cascade.gate.repoId")
+		repoID, err = attestRegistryRepoID(ctx, deps)
+		if err != nil {
+			return attestSubject{}, err
+		}
 	}
 	return attestSubject{commit: commit, tree: tree, repoID: repoID}, nil
+}
+
+func attestRegistryRepoID(ctx context.Context, deps ciAttestVerifyDeps) (string, error) {
+	role, err := nodes.ResolveRole(nodes.NewFileControllerBindingBackend(deps.Paths.DataDir()))
+	if err != nil {
+		return "", err
+	}
+	if role != nodes.RoleController {
+		return "", jobs.ErrRepoNotRegistered
+	}
+	root, err := deps.Git(ctx, "rev-parse", "--show-toplevel")
+	if err != nil || root == "" {
+		return "", jobs.ErrRepoNotRegistered
+	}
+	dir := deps.Paths.DataDir()
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", cascade.Wrap(cascade.KindUnavailable, err, "ci attest verify: create data directory")
+	}
+	path := filepath.Join(dir, "cascade.db")
+	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path)+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		return "", cascade.Wrap(cascade.KindUnavailable, err, "ci attest verify: open registry")
+	}
+	defer func() { _ = db.Close() }()
+	if err = jobs.ApplyRepoRegistrySchema(ctx, db, migrate.SQLiteEmitter{}, deps.Clock, path, filepath.Join(dir, "backups")); err != nil {
+		return "", err
+	}
+	reg, err := jobs.NewRepoRegistry(db, scope.NewGraphStore(db), contextgit.GitCommonDir, deps.Clock)
+	if err != nil {
+		return "", err
+	}
+	return reg.ByPath(ctx, root)
 }
 
 // verifyStoredAttestations checks every stored record for the subject. Any
@@ -164,8 +177,6 @@ func verifyStoredAttestations(ctx context.Context, deps ciAttestVerifyDeps, subj
 	return res, nil
 }
 
-// evaluateAttestationRow verifies row (an error fails the verb) and reports
-// whether it is an eligible passing record of the bound repo.
 func evaluateAttestationRow(ctx context.Context, env *attestEnv, subj attestSubject, row jobs.CiAttestationRow, clock cruntime.Clock) (bool, error) {
 	sa := attest.SignedAttestation{CanonicalJSON: []byte(row.CanonicalJSON), Signature: row.Signature}
 	if err := row.CheckSigned(); err != nil {
@@ -195,7 +206,6 @@ func evaluateAttestationRow(ctx context.Context, env *attestEnv, subj attestSubj
 	return attest.DeriveClass(sa, env.trust, nil).Eligible(), nil
 }
 
-// attestEnv is the read-only view the verb verifies through.
 type attestEnv struct {
 	rows   *jobs.CiAttestationStore
 	nonces *jobs.AttestationNonceStore
