@@ -176,3 +176,54 @@ detectors do not already cover.
   `.accept` daemon verbs behind `cascade context facts`
   (`docs/cli-reference/context.md`). `context.facts.accept` is always
   elevated.
+
+## Maintenance pipeline
+
+`Maintenance.Apply` (`internal/repo/maintenance.go`) applies a batch of changed
+repo-relative paths through one journaled pipeline. It is driven by a change
+source (a watcher, a git hook, a repair sweep); this package has none of those.
+
+**Admission first.** `AdmitBatch` runs on the whole batch, in slices of
+`MaxAdmitBatch`, before any path's bytes are read or hashed. Only
+`Admission.Content` is hashed, chunked and embedded. A FIFO, a symlink or a file
+over `MaxAdmitBytes` is refused unread.
+
+**Legs, in fixed order, per path (sorted).** Each leg is idempotent for the same
+(path, content hash):
+
+| Leg | Work |
+|---|---|
+| 1 | Admission verdict. A refused path is deindexed here: its old chunk ids are deleted, facts citing it are rejected, and one `Attention("repo.ingest:<repo>:<rel>", reason)` is raised. It runs no later leg. |
+| 2 | Only the detector families whose evidence the path can change (and CI, harness or layout scans when the path touches them); the inventory is written only when a fact moved. |
+| 3 | The Go graph for the changed file's package only (`ExtractPackages`, then `MergePackages` into the stored row, graph generation + 1, one `GraphStore.Upsert`), then `IndexLeg.WriteGraph`. |
+| 4 | `IndexLeg.DeleteChunks` for the path's journaled chunk ids, then `WriteFTS`. |
+| 5 | `IndexLeg.WriteVector`. A pending result or an error is recorded as `vector_pending`, never as a failure. |
+| 6 | Every `proposed` or `accepted` ledger row whose `Fact` or `Source` cites the path as a whole path segment becomes `rejected` ("source path changed - pending re-validation") through `LedgerStore.UpdateState`. No new state exists. |
+
+**Intent journal.** Before leg 1 an `repo_watch_intent` row records the path,
+hash and generation, and `legs_done` grows as legs finish. The row clears in the
+same transaction that writes the path's new hash and chunk ids to
+`repo_watch_path`. A leg error reports the path `Failed`, keeps its intent, and
+the other paths continue.
+
+**Cursor rule.** The `repo_watch_cursor` row advances once, after the last path,
+and only when every path of the batch (and every replayed intent) applied. It
+never moves back (`KindConflict` on a lower generation). A path hash is never
+ahead of its effects.
+
+**Crash recovery.** `Apply` starts with `Replay`, which re-runs every unfinished
+intent from leg 1 against the file as it is now. A crash after any leg therefore
+converges FTS, vectors (or `vector_pending`), graph and ledger to the journaled
+state.
+
+**Never a full reindex.** The steady-state path loads one package, reruns one
+detector family and rewrites one path's chunks. The first graph of a repository
+(and any repair) comes from a full scan, not from this pipeline: a missing stored
+graph yields a graph holding only the reloaded package. Imports of packages that
+are not graph nodes are dropped when merging, because `SymbolGraph.Validate`
+requires both ends of an edge to be nodes.
+
+`internal/repo` imports neither retrieval, fleet nor daemon: the index and the
+attention sink are the injected `IndexLeg` and `Attention`. The one
+retrieval package in its dependency list is the leaf `internal/retrieval/corpus`,
+reached through `internal/secrets`.

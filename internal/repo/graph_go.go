@@ -58,15 +58,26 @@ var _ GraphExtractor = goExtractor{}
 // a syntax error) is a typed refusal, never a silently-skipped package:
 // a caller must not mistake a partial graph for a complete one.
 func (goExtractor) Extract(ctx context.Context, root string) (*SymbolGraph, error) {
+	return loadGraph(ctx, root, []string{"./..."})
+}
+
+// onGraphLoad is a test seam: it sees every pattern list handed to the
+// go/packages loader, so a test can prove a scoped load never widens.
+var onGraphLoad = func([]string) {}
+
+// loadGraph loads patterns (relative to root) with goPackagesLoadMode and
+// emits one SymbolGraph. Extract and ExtractPackages share it.
+func loadGraph(ctx context.Context, root string, patterns []string) (*SymbolGraph, error) {
 	if root == "" {
 		return nil, cascade.New(cascade.KindInvalidInput, "repo: graph extraction requires a non-empty root")
 	}
+	onGraphLoad(patterns)
 	cfg := &packages.Config{
 		Context: ctx,
 		Dir:     root,
 		Mode:    goPackagesLoadMode,
 	}
-	pkgs, err := packages.Load(cfg, "./...")
+	pkgs, err := packages.Load(cfg, patterns...)
 	if err != nil {
 		return nil, cascade.Wrapf(cascade.KindUnavailable, err, "repo: go/packages load of %q", root)
 	}
