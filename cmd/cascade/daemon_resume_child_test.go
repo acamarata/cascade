@@ -19,12 +19,10 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/user"
-	"path/filepath"
 	goruntime "runtime"
 	"strconv"
 	"strings"
@@ -35,10 +33,11 @@ import (
 
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/daemon"
+	providerdispatch "github.com/acamarata/cascade/internal/providers/dispatch"
+	"github.com/acamarata/cascade/internal/providers/health"
 	providerregistry "github.com/acamarata/cascade/internal/providers/registry"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/secrets"
-	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
 	providertransport "github.com/acamarata/cascade/providers/transport"
@@ -141,18 +140,11 @@ func swapConductorRegistration(t *testing.T, o childOpts) {
 // production constructor wireConductorExecute uses, over store;
 // TestDenyConductorMirrorsProductionWiring fails when the two drift apart.
 func wireDenyConductor(w *daemonWiring, store provider.Store, pol conductor.PolicyEvaluator) (daemon.ConductorFanOut, error) {
-	regDB, err := openMigratedDB(w.Ctx, filepath.Join(w.Paths.DataDir(), providerRegistryDBFile), func(ctx context.Context, db *sql.DB) error {
-		return providerregistry.ApplyMigrationSchema(ctx, db, migrate.SQLiteEmitter{}, w.Clock, "", "")
-	})
+	reg, err := openDaemonProviderRegistry(w.Ctx, w.Paths, w.Clock)
 	if err != nil {
 		return daemon.ConductorFanOut{}, err
 	}
-	reg := providerregistry.NewRegistry(regDB, w.Clock)
 	credentials, err := daemonCredentialSource(w.Paths)
-	if err != nil {
-		return daemon.ConductorFanOut{}, err
-	}
-	resolver, err := newDaemonResolver(reg, credentials, w.Clock, providertransport.NewHTTPTransport(&http.Client{}), admittedDaemonConfig(w.Paths))
 	if err != nil {
 		return daemon.ConductorFanOut{}, err
 	}
@@ -161,16 +153,25 @@ func wireDenyConductor(w *daemonWiring, store provider.Store, pol conductor.Poli
 		return daemon.ConductorFanOut{}, err
 	}
 	security.Policy = pol
+	cfg := admittedDaemonConfig(w.Paths)
+	healthMgr, err := startDaemonProviderHealth(w.Ctx, w.Manifest, reg, store, w.Clock, cfg)
+	if err != nil {
+		return daemon.ConductorFanOut{}, err
+	}
+	resolver, err := newDaemonResolver(reg, credentials, w.Clock, providertransport.NewHTTPTransport(&http.Client{}), cfg, providerdispatch.WithHealth(healthMgr))
+	if err != nil {
+		return daemon.ConductorFanOut{}, err
+	}
 	accounting, err := wireConductorAccounting(w.Ctx, w.Paths, w.Clock, reg)
 	if err != nil {
 		return daemon.ConductorFanOut{}, err
 	}
-	return registerDenyConductor(w, store, reg, resolver, security, accounting)
+	return registerDenyConductor(w, store, reg, healthMgr, resolver, security, accounting)
 }
 
 // registerDenyConductor finishes wireDenyConductor exactly as
 // wireConductorExecute and wireConductorAndReachability do.
-func registerDenyConductor(w *daemonWiring, store provider.Store, reg *providerregistry.Registry, resolver conductor.ProviderResolver,
+func registerDenyConductor(w *daemonWiring, store provider.Store, reg *providerregistry.Registry, healthMgr *health.Manager, resolver conductor.ProviderResolver,
 	security daemon.ConductorSecurity, accounting daemon.ConductorAccounting) (daemon.ConductorFanOut, error) {
 	live, err := conductorPolicyFor(w.Paths, w.Clock)
 	if err != nil {
@@ -183,7 +184,7 @@ func registerDenyConductor(w *daemonWiring, store provider.Store, reg *providerr
 	fan := daemon.NewConductorFanOut(store, w.Clock)
 	if err := daemon.RegisterConductorExecuteHandler(w.Registry, w.Manifest, providerregistry.NewReader(reg),
 		live.Quota, resolver, auditLog, w.Clock, security, accounting, fan,
-		conductorRouterOptions(nodeTunnelLookup(w.Opts), w.Paths, w.Clock, nil)...); err != nil {
+		conductorRouterOptionsEligible(nodeTunnelLookup(w.Opts), w.Paths, w.Clock, laneEligibleByHealth(reg, healthMgr), nil)...); err != nil {
 		return fan, err
 	}
 	return fan, daemon.WireReachability(w.Ctx, w.Manifest, w.Paths, w.Clock)

@@ -65,7 +65,8 @@ func (r *Resolver) build(lane registry.LaneRecord, rec registry.ProviderRecord, 
 		return nil, err
 	}
 	recorder := &laneRecorder{lookup: r.lookup, lane: lane.LaneName, clock: r.clock, log: r.log, mu: &r.laneMu}
-	return &laneOutcomeProvider{inner: driver, rec: recorder}, nil
+	obs := &healthObserver{name: rec.Name, counter: &r.transients, health: r.health, log: r.log}
+	return &laneOutcomeProvider{inner: driver, rec: recorder, health: obs}, nil
 }
 
 // newDriver is the DriverKind switch: one real providers/* constructor per

@@ -117,6 +117,7 @@ func TestSchedulerProbesDueProvidersAndReschedules(t *testing.T) {
 	}
 
 	sched := NewScheduler(mgr, reg, clk, DefaultIntervals())
+	clk.Advance(DefaultIntervals().DegradedBase) // a fresh demotion is held for DegradedBase
 	sched.scanOnce(ctx)
 	if prober.calls != 1 {
 		t.Fatalf("first scan: Prober called %d times, want 1", prober.calls)

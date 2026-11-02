@@ -280,6 +280,43 @@ OAuth providers do not dispatch yet, so every row this path can turn amber
 belongs to a key provider. The credential value never appears in arguments,
 output, logs, events or error text.
 
+## Health: transient demotion and automatic recovery
+
+A provider that keeps failing upstream is taken out of routing, and put back
+without anyone running a command.
+
+**Demotion.** Every driver call reports its outcome to a per-provider counter
+in the dispatch resolver. A transient outcome (a 5xx, an overload, a dropped
+connection) adds one. A success, or any non-transient outcome (a 401, a 429, a
+capability denial), resets the count to zero. The third consecutive transient
+outcome demotes the provider once, through the one health writer
+(`DemoteProvider`, reason `transient_upstream`), and the count starts again.
+Attempts count, not calls, so one call that exhausts its three attempts on a
+lane is enough. A failed demotion write is logged with the provider name and
+error only and never changes the call's result.
+
+**Effect.** A degraded provider is skipped by the router's health filter, so
+the next call lands on another provider. The retry loop also asks, before each
+extra attempt, whether the lane's provider is still healthy or unknown. A lane
+demoted in the middle of a call is not tried again; the call spills. Lane state
+is unchanged: a 5xx still writes no lane state.
+
+**Recovery.** The daemon runs the health scheduler on its run context. It
+probes degraded providers after 60 s (doubling with each demotion), dead
+providers after 900 s (doubling to 3600 s), and rechecks the rest every 300 s.
+The first healthy probe sets the provider healthy and its demotion count to
+zero. `cascade provider health` and `cascade doctor` report degraded
+providers.
+
+**What counts as healthy.** An ordinary provider is healthy when its base URL
+answers with a status below 500. A gateway provider is not judged that way,
+because its root can answer while real calls still fail. Its probe is one
+authenticated request (`max_tokens` 1, the account's header style) through the
+admitted account to `/v1/messages`, and only a 2xx is healthy. A 4xx, a 5xx, a
+transport failure, an account that is not admitted, or a missing token keeps
+the provider degraded. Each gateway probe is a real request and counts against
+a live account's usage; probes are rare, but they are not free.
+
 ## Known gaps
 
 - The recorded PKCE fixture

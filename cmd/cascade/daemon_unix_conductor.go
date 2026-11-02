@@ -89,14 +89,10 @@ func wireConductorAndReachability(ctx context.Context, registry *rpc.Registry, m
 // at the true credential boundary per request, never a prompt from a
 // process with nobody to answer it.
 func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest *daemon.Manifest, paths runtime.PathProvider, clock runtime.Clock, store provider.Store, tunnels nodes.TunnelStateLookup, routerOpts ...conductor.RouterOption) (daemon.ConductorFanOut, error) {
-	regDB, err := openMigratedDB(ctx, filepath.Join(paths.DataDir(), providerRegistryDBFile),
-		func(ctx context.Context, db *sql.DB) error {
-			return providerregistry.ApplyMigrationSchema(ctx, db, migrate.SQLiteEmitter{}, clock, "", "")
-		})
+	reg, err := openDaemonProviderRegistry(ctx, paths, clock)
 	if err != nil {
 		return daemon.ConductorFanOut{}, err
 	}
-	reg := providerregistry.NewRegistry(regDB, clock)
 	reader := providerregistry.NewReader(reg)
 	live, err := conductorPolicyFor(paths, clock)
 	if err != nil {
@@ -107,13 +103,21 @@ func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest 
 	if cerr != nil {
 		return daemon.ConductorFanOut{}, cerr
 	}
-	resolver, err := newDaemonResolver(reg, credentials, clock, providertransport.NewHTTPTransport(&http.Client{}), admittedDaemonConfig(paths))
-	if err != nil {
-		return daemon.ConductorFanOut{}, err
-	}
 	security, serr := conductorSecurity(paths)
 	if serr != nil {
 		return daemon.ConductorFanOut{}, serr
+	}
+	// After conductorSecurity, which binds the process firewall the health
+	// probes run behind. One Manager serves the resolver's transient
+	// counter, the scheduler and the retry loop's lane eligibility.
+	cfg := admittedDaemonConfig(paths)
+	healthMgr, herr := startDaemonProviderHealth(ctx, manifest, reg, store, clock, cfg)
+	if herr != nil {
+		return daemon.ConductorFanOut{}, herr
+	}
+	resolver, err := newDaemonResolver(reg, credentials, clock, providertransport.NewHTTPTransport(&http.Client{}), cfg, providerdispatch.WithHealth(healthMgr))
+	if err != nil {
+		return daemon.ConductorFanOut{}, err
 	}
 	accounting, aerr := wireConductorAccounting(ctx, paths, clock, reg)
 	if aerr != nil {
@@ -131,7 +135,20 @@ func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest 
 	fanOut := daemon.NewConductorFanOut(store, clock)
 	return fanOut, daemon.RegisterConductorExecuteHandler(registry, manifest, reader, quota, resolver, auditWriter, clock,
 		security, accounting, fanOut,
-		conductorRouterOptions(tunnels, paths, clock, routerOpts)...)
+		conductorRouterOptionsEligible(tunnels, paths, clock, laneEligibleByHealth(reg, healthMgr), routerOpts)...)
+}
+
+// openDaemonProviderRegistry opens the durable providers.db the `provider`
+// verbs already use, migrated, as a registry.
+func openDaemonProviderRegistry(ctx context.Context, paths runtime.PathProvider, clock runtime.Clock) (*providerregistry.Registry, error) {
+	regDB, err := openMigratedDB(ctx, filepath.Join(paths.DataDir(), providerRegistryDBFile),
+		func(ctx context.Context, db *sql.DB) error {
+			return providerregistry.ApplyMigrationSchema(ctx, db, migrate.SQLiteEmitter{}, clock, "", "")
+		})
+	if err != nil {
+		return nil, err
+	}
+	return providerregistry.NewRegistry(regDB, clock), nil
 }
 
 // newDaemonResolver builds the conductor's provider resolver: the
@@ -140,14 +157,24 @@ func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest 
 // accepted baseline, never the raw file) with a call-time token source of
 // this daemon process (P1-GWY-08). The accounts are read once here: an
 // account accepted later applies at the next start. A nil cfg admits none.
-func newDaemonResolver(reg providerdispatch.RegistryLookup, credentials providerdispatch.CredentialSource, clock runtime.Clock, tr providertransport.Transport, cfg *runtime.Config) (*providerdispatch.Resolver, error) {
-	accounts, err := gateway.AccountsFrom(runtime.EffectiveConfigOf(cfg))
+func newDaemonResolver(reg providerdispatch.RegistryLookup, credentials providerdispatch.CredentialSource, clock runtime.Clock, tr providertransport.Transport, cfg *runtime.Config, opts ...providerdispatch.ResolverOption) (*providerdispatch.Resolver, error) {
+	accounts, src, err := daemonGateways(cfg)
 	if err != nil {
 		return nil, err
 	}
+	return providerdispatch.NewResolver(reg, credentials, clock, tr, append([]providerdispatch.ResolverOption{providerdispatch.WithGatewayAccounts(accounts, src)}, opts...)...)
+}
+
+// daemonGateways returns the admitted gateway accounts of cfg and the
+// call-time token source of this daemon process, shared by the resolver and
+// the health prober so both see one admitted set.
+func daemonGateways(cfg *runtime.Config) ([]gateway.Account, gateway.Source, error) {
+	accounts, err := gateway.AccountsFrom(runtime.EffectiveConfigOf(cfg))
+	if err != nil {
+		return nil, gateway.Source{}, err
+	}
 	home, _ := os.UserHomeDir()
-	src := gateway.Source{Getenv: os.Getenv, Home: home, User: os.Getenv("USER")}
-	return providerdispatch.NewResolver(reg, credentials, clock, tr, providerdispatch.WithGatewayAccounts(accounts, src))
+	return accounts, gateway.Source{Getenv: os.Getenv, Home: home, User: os.Getenv("USER")}, nil
 }
 
 // admittedDaemonConfig returns the live (admitted) config of the composed
@@ -171,17 +198,24 @@ func admittedDaemonConfig(paths runtime.PathProvider) *runtime.Config {
 // restricted-permit option). One helper so the production wiring and the
 // resume tests' deny wiring cannot differ.
 func conductorRouterOptions(tunnels nodes.TunnelStateLookup, paths runtime.PathProvider, clock runtime.Clock, extra []conductor.RouterOption) []conductor.RouterOption {
+	return conductorRouterOptionsEligible(tunnels, paths, clock, nil, extra)
+}
+
+// conductorRouterOptionsEligible is conductorRouterOptions with the retry
+// loop's lane-eligibility seam (provider health, P1-GWY-09); nil means every
+// lane is always eligible.
+func conductorRouterOptionsEligible(tunnels nodes.TunnelStateLookup, paths runtime.PathProvider, clock runtime.Clock, eligible conductor.LaneEligible, extra []conductor.RouterOption) []conductor.RouterOption {
 	placement := conductor.NodePlacement(nodes.Engine{Tunnels: tunnels}, nodeRecordStore(paths, clock))
-	return append([]conductor.RouterOption{placement, daemonRetryOption(clock)}, extra...)
+	return append([]conductor.RouterOption{placement, daemonRetryOption(clock, eligible)}, extra...)
 }
 
 // daemonRetryOption applies SetRetry to the Executor built over the
 // daemon's router (P1-GWY-03): the default policy on the daemon clock, a
 // pause that ends early with its context, and a source seeded once from the
-// clock. No eligibility seam yet: P1-GWY-09 wires provider health.
-func daemonRetryOption(clock runtime.Clock) conductor.RouterOption {
+// clock. eligible is the provider-health seam (laneEligibleByHealth).
+func daemonRetryOption(clock runtime.Clock, eligible conductor.LaneEligible) conductor.RouterOption {
 	seed := uint64(clock.Now().UnixNano())
-	return conductor.RetryOption(conductor.DefaultRetryPolicy(), clock, contextSleep, rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)), nil)
+	return conductor.RetryOption(conductor.DefaultRetryPolicy(), clock, contextSleep, rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)), eligible)
 }
 
 // contextSleep pauses for d on a timer, returning ctx.Err() if ctx ends first.

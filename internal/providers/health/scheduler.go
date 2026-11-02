@@ -130,8 +130,20 @@ func (s *Scheduler) scanOnce(ctx context.Context) {
 		if seen && now.Before(due) {
 			continue
 		}
+		if s.inDegradedHold(rec, now) {
+			continue
+		}
 		s.probeOne(ctx, rec)
 	}
+}
+
+// inDegradedHold reports whether rec was demoted to degraded less than
+// DegradedBase ago (HealthCheckedAt is when its status was last set). Such a
+// provider is not probed yet, even on the first scan that sees it: a fresh
+// demotion always gets its full back-off before a recovery probe.
+func (s *Scheduler) inDegradedHold(rec registry.ProviderRecord, now time.Time) bool {
+	return rec.HealthStatus == registry.HealthDegraded && !rec.HealthCheckedAt.IsZero() &&
+		now.Before(rec.HealthCheckedAt.Add(s.intervals.DegradedBase))
 }
 
 // probeOne runs one scheduled check for rec: RecoverProbe for a degraded

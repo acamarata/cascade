@@ -45,7 +45,7 @@ func (h HealthStatus) Valid() bool {
 // ratified by R-14.33/R-14.88.
 type DemotionReason string
 
-// The five closed DemotionReason members.
+// The six closed DemotionReason members.
 const (
 	// ReasonRateLimited429 is a 429 response; advances demotion_count
 	// under the threshold path.
@@ -66,12 +66,16 @@ const (
 	// demotion_count and MUST NOT change health_status -- see
 	// DemoteProvider's doc comment.
 	ReasonCapabilityDenied DemotionReason = "capability_denied"
+	// ReasonTransientUpstream is the third consecutive transient outcome
+	// (5xx, timeout, connection failure) on one provider; advances
+	// demotion_count under the threshold path (P1-GWY-09).
+	ReasonTransientUpstream DemotionReason = "transient_upstream"
 )
 
-// Valid reports whether r is one of the five declared members.
+// Valid reports whether r is one of the six declared members.
 func (r DemotionReason) Valid() bool {
 	switch r {
-	case ReasonRateLimited429, ReasonDeadKeyHard, ReasonDeadKeySoft, ReasonIntakeFail, ReasonCapabilityDenied:
+	case ReasonRateLimited429, ReasonDeadKeyHard, ReasonDeadKeySoft, ReasonIntakeFail, ReasonCapabilityDenied, ReasonTransientUpstream:
 		return true
 	}
 	return false

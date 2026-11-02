@@ -33,7 +33,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,7 +40,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/acamarata/cascade/internal/events"
-	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/providers/health"
 	"github.com/acamarata/cascade/internal/providers/registry"
 	"github.com/acamarata/cascade/internal/providers/usage"
@@ -123,12 +121,7 @@ func openProviderStorage(ctx context.Context, deps providerDeps) (*providerStora
 
 	reg := registry.NewRegistry(regDB, clock)
 	bus := events.New(eventStore, clock)
-	httpDeps := deps.HealthHTTPDoer
-	if httpDeps == nil {
-		httpDeps = realHTTPDoer{client: &http.Client{Timeout: providerDoctorTimeout}}
-	}
-	prober := httpReachabilityProber{doer: httpDeps}
-	mgr := health.NewManager(reg, bus, clock, 0).WithEgress(egressEngineForHealth(), prober)
+	mgr := health.NewManager(reg, bus, clock, 0).WithEgress(egressEngineForHealth(), newRoutedProber(deps, gatewayProbeConfig{}))
 
 	closers := []func() error{regDB.Close, usageDB.Close, eventStore.Close}
 	return &providerStorage{Registry: reg, Usage: usage.NewManager(usageDB, clock), Health: mgr, closers: closers}, nil
@@ -148,22 +141,6 @@ func openMigratedDB(ctx context.Context, path string, apply func(context.Context
 		return nil, err
 	}
 	return db, nil
-}
-
-// egressEngineForHealth returns the process firewall's engine, the one
-// `provider add` writes through, gating the reachability prober behind the
-// same egress class. On failure it returns a gate that refuses every class
-// with the firewall's cause (Kind and message, no path), never a typed nil
-// *egress.Engine, so the probe fails closed and says why.
-func egressEngineForHealth() health.Egress {
-	engine, err := egress.ProcessEngine(egress.DefaultRegistry())
-	if err != nil {
-		return firewallUnavailable{cause: firewallCause(err)}
-	}
-	if engine == nil {
-		return firewallUnavailable{cause: cascade.New(cascade.KindInternal, "egress firewall unavailable: no engine")}
-	}
-	return engine
 }
 
 // providerVaultBroker builds the secrets.Broker `provider add` already

@@ -109,10 +109,14 @@ func (t observingTransport) Send(ctx context.Context, method, url string, header
 }
 
 // laneOutcomeProvider is the decorator: it forwards every verb to inner
-// and records the outcome of the HTTP-backed ones on the lane.
+// and records the outcome of the HTTP-backed ones on the lane and on the
+// transient counter (transient_health.go). Each verb reads only fields of
+// its receiver after the forward, so the conductor seam gate still sees a
+// pure forwarder (seam_decorators_test.go).
 type laneOutcomeProvider struct {
-	inner provider.ModelProvider
-	rec   *laneRecorder
+	inner  provider.ModelProvider
+	rec    *laneRecorder
+	health *healthObserver
 }
 
 var _ provider.ModelProvider = (*laneOutcomeProvider)(nil)
@@ -125,6 +129,7 @@ func (p *laneOutcomeProvider) Chat(ctx context.Context, req provider.ChatRequest
 	ctx, slot := withObservation(ctx)
 	resp, err := p.inner.Chat(ctx, req)
 	p.rec.record(ctx, slot, err)
+	p.health.observe(ctx, err)
 	return resp, err
 }
 
@@ -133,6 +138,7 @@ func (p *laneOutcomeProvider) Embed(ctx context.Context, req provider.ModelEmbed
 	ctx, slot := withObservation(ctx)
 	resp, err := p.inner.Embed(ctx, req)
 	p.rec.record(ctx, slot, err)
+	p.health.observe(ctx, err)
 	return resp, err
 }
 
@@ -141,6 +147,7 @@ func (p *laneOutcomeProvider) Count(ctx context.Context, req provider.CountReque
 	ctx, slot := withObservation(ctx)
 	resp, err := p.inner.Count(ctx, req)
 	p.rec.record(ctx, slot, err)
+	p.health.observe(ctx, err)
 	return resp, err
 }
 
@@ -150,6 +157,7 @@ func (p *laneOutcomeProvider) Stream(ctx context.Context, req provider.ChatReque
 	ctx, slot := withObservation(ctx)
 	err := p.inner.Stream(ctx, req, sink)
 	p.rec.record(ctx, slot, err)
+	p.health.observe(ctx, err)
 	return err
 }
 

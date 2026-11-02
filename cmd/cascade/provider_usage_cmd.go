@@ -15,14 +15,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/acamarata/cascade/internal/providers/health"
 	"github.com/acamarata/cascade/internal/providers/registry"
 	"github.com/acamarata/cascade/internal/providers/usage"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -223,62 +220,4 @@ func runProviderHealth(cmd *cobra.Command, deps providerDeps) error {
 		return cascade.Newf(cascade.KindUnavailable, "provider health: %d provider(s) not healthy", unhealthy)
 	}
 	return nil
-}
-
-// providerDoctorTimeout bounds every doctor-driven reachability probe.
-const providerDoctorTimeout = 10 * time.Second
-
-// httpDoer is httpReachabilityProber's transport seam, deliberately typed
-// without net/http in its signature: providerDeps.HealthHTTPDoer lets a
-// test substitute a fake with no net/http import at all, so
-// TestProviderTest_* stays outside the no-network-unit-lane gate (a
-// _test.go file importing net/http is flagged even when, as here, it
-// never opens a real socket -- internal/build's gate is import-based).
-// realHTTPDoer (below) is the only implementation that imports net/http;
-// it is never referenced from a _test.go file.
-type httpDoer interface {
-	// Get performs a GET against url and returns its status code, or an
-	// error if the request could not be sent/completed at all.
-	Get(ctx context.Context, url string) (status int, err error)
-}
-
-// realHTTPDoer is the production httpDoer: a real outbound GET through
-// *http.Client. This is the one place provider_health_cmd.go's
-// reachability probe touches net/http.
-type realHTTPDoer struct{ client *http.Client }
-
-func (d realHTTPDoer) Get(ctx context.Context, url string) (int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return 0, err
-	}
-	resp, err := d.client.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	return resp.StatusCode, nil
-}
-
-type httpReachabilityProber struct {
-	doer httpDoer
-}
-
-// Probe implements health.Prober. This is a REAL, network-capable probe
-// scoped to reachability rather than a full per-vendor authenticated
-// 1-token verify: it issues a GET to the provider's BaseURL and treats
-// any response with status < 500 as reachable. A true per-vendor verify
-// call (matching each driver's own auth header shape) needs a live
-// provider.ModelProvider instance per driver kind, which is out of this
-// ticket's files_scope (providers/* driver packages) -- see this
-// ticket's journal for the full scope note.
-func (p httpReachabilityProber) Probe(ctx context.Context, rec registry.ProviderRecord) (health.ProbeResult, error) {
-	if rec.BaseURL == "" {
-		return health.ProbeResult{Success: false, TransportErr: "no base_url configured"}, nil
-	}
-	status, err := p.doer.Get(ctx, rec.BaseURL)
-	if err != nil {
-		return health.ProbeResult{Endpoint: rec.BaseURL, Success: false, TransportErr: err.Error()}, nil
-	}
-	return health.ProbeResult{Endpoint: rec.BaseURL, Status: status, Success: status < 500}, nil
 }

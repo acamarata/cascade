@@ -110,6 +110,10 @@ type Resolver struct {
 	// Empty means no gateway record is admitted: every one is refused.
 	gateways   []gateway.Account
 	gatewaySrc gateway.Source
+	// health and transients are the consecutive-transient demotion seam
+	// (transient_health.go, WithHealth): nil health counts nothing.
+	health     provider.HealthManager
+	transients transientCounter
 }
 
 // NewResolver builds a Resolver. credentials may be nil: every
