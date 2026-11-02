@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-02T07:46:17Z",
+  "generated_at": "2026-11-02T14:51:57Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2214,6 +2214,20 @@
       ]
     },
     {
+      "name": "baseline git fact readers",
+      "sites": [
+        {
+          "file": "internal/ci/registration_baseline_git.go",
+          "line": 7,
+          "status": "",
+          "raw": "baseline git fact readers."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "build/testkit",
       "sites": [
         {
@@ -2739,6 +2753,12 @@
           "status": "ADD",
           "ticket": "P1-E15-W4-S32-T4",
           "raw": "cli/plugin-lifecycle/ADD (P1-E15-W4-S32-T4)."
+        },
+        {
+          "file": "cmd/cascade/plugin_perms_test.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "cli/plugin-lifecycle/ADD (P1-PLG-11)."
         },
         {
           "file": "cmd/cascade/plugin_platform_unix.go",
@@ -4264,20 +4284,6 @@
       ]
     },
     {
-      "name": "cmd/cascade ci attest verify",
-      "sites": [
-        {
-          "file": "cmd/cascade/ci_attest.go",
-          "line": 17,
-          "status": "ADD",
-          "raw": "cmd/cascade ci attest verify (ADD, P1-CI-04)."
-        }
-      ],
-      "statuses": [
-        "ADD"
-      ]
-    },
-    {
       "name": "cmd/cascade ci watch wiring",
       "sites": [
         {
@@ -4712,9 +4718,9 @@
         },
         {
           "file": "cmd/cascade/wire_plugin_perms.go",
-          "line": 10,
+          "line": 11,
           "status": "",
-          "raw": "cmd/cascade daemon registrations (perms.grant, perms.revoke; P1-SEC-08)."
+          "raw": "cmd/cascade daemon registrations (perms.grant, perms.revoke; P1-PLG-11)."
         },
         {
           "file": "cmd/cascade/wire_plugin_update.go",
@@ -6347,7 +6353,7 @@
         },
         {
           "file": "cmd/cascade/daemon.go",
-          "line": 33,
+          "line": 29,
           "status": "ADD",
           "ticket": "T-2",
           "raw": "cmd/cascade/daemon (ADD, per T-2 sport_updates; CHANGE, per"
@@ -6813,7 +6819,7 @@
         },
         {
           "file": "cmd/cascade/hooks.go",
-          "line": 52,
+          "line": 6,
           "status": "ADD",
           "ticket": "P1-E32-W6-S66-T1",
           "raw": "cmd/cascade/daemon (ADD, P1-E32-W6-S66-T1)."
@@ -14332,6 +14338,32 @@
       ]
     },
     {
+      "name": "internal.ci.Dispatcher/AcceptanceRerun",
+      "sites": [
+        {
+          "file": "internal/ci/stream_acceptance.go",
+          "line": 4,
+          "status": "",
+          "raw": "internal.ci.Dispatcher/AcceptanceRerun (P1-CI-02)."
+        },
+        {
+          "file": "internal/ci/stream_acceptance_refusals_test.go",
+          "line": 2,
+          "status": "",
+          "raw": "internal.ci.Dispatcher/AcceptanceRerun (P1-CI-02)."
+        },
+        {
+          "file": "internal/ci/stream_acceptance_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "internal.ci.Dispatcher/AcceptanceRerun (P1-CI-02)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal.ci.Dispatcher/TESTED",
       "sites": [
         {
@@ -14625,6 +14657,20 @@
           "line": 21,
           "status": "ADD",
           "raw": "internal.ci.NewDispatcher/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.NewGitHubJWKSource",
+      "sites": [
+        {
+          "file": "internal/ci/attest_oidc_jwks.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal.ci.NewGitHubJWKSource/ADDED (P1-CI-14)."
         }
       ],
       "statuses": [
@@ -14995,6 +15041,20 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "internal.ci.VerifyGitHubOIDC",
+      "sites": [
+        {
+          "file": "internal/ci/attest_oidc.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal.ci.VerifyGitHubOIDC/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -15775,6 +15835,12 @@
           "status": "ADD",
           "ticket": "P1-E20-W5-S43-T2",
           "raw": "internal.conversation.adapter/ADDED (tests) (P1-E20-W5-S43-T2)."
+        },
+        {
+          "file": "internal/conversation/adapter_listprivacy.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal.conversation.adapter (ADDED -- p1-cpa-04)."
         },
         {
           "file": "internal/conversation/adapter_newthread_test.go",
@@ -21625,6 +21691,12 @@
           "raw": "internal/client (ADD)."
         },
         {
+          "file": "internal/client/model_facing_unit_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal/client (ADD)."
+        },
+        {
           "file": "internal/client/policy_test.go",
           "line": 16,
           "status": "ADD",
@@ -26250,7 +26322,7 @@
       "sites": [
         {
           "file": "internal/plugins/lifecycle_records_test.go",
-          "line": 21,
+          "line": 50,
           "status": "ADD",
           "raw": "internal/plugins lifecycle-record tests (ADD)."
         }
@@ -26303,13 +26375,27 @@
       ]
     },
     {
+      "name": "internal/plugins perms RPC tests",
+      "sites": [
+        {
+          "file": "internal/plugins/perms_rpc_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "internal/plugins perms RPC tests (P1-PLG-11)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/plugins perms.grant/perms.revoke RPC",
       "sites": [
         {
           "file": "internal/plugins/perms_rpc.go",
-          "line": 10,
+          "line": 15,
           "status": "",
-          "raw": "internal/plugins perms.grant/perms.revoke RPC (P1-SEC-08)."
+          "raw": "internal/plugins perms.grant/perms.revoke RPC (P1-PLG-11)."
         }
       ],
       "statuses": [
@@ -31791,7 +31877,7 @@
       "sites": [
         {
           "file": "internal/jobs/completion.go",
-          "line": 16,
+          "line": 5,
           "status": "ADD",
           "ticket": "P1-E29-W6-S60-T3",
           "raw": "jobs/completion-gate/ADD (P1-E29-W6-S60-T3)."
@@ -31993,6 +32079,26 @@
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T1",
           "raw": "jobs/domain-schema/ADD (P1-E29-W6-S59-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "jobs/evidence-ledger-read",
+      "sites": [
+        {
+          "file": "internal/jobs/evidence_query.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "jobs/evidence-ledger-read/ADD (P1-PBD-06)."
+        },
+        {
+          "file": "internal/jobs/migration_evidence_class.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "jobs/evidence-ledger-read/ADD (P1-PBD-06)."
         }
       ],
       "statuses": [
@@ -32232,6 +32338,34 @@
           "status": "ADD",
           "ticket": "P1-E34-W7-S70-T2",
           "raw": "jobs/release-gate/ADD (P1-E34-W7-S70-T2)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "jobs/repository-registry",
+      "sites": [
+        {
+          "file": "internal/jobs/repo_registry.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "jobs/repository-registry/ADD."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "jobs/repository-trust-fetch",
+      "sites": [
+        {
+          "file": "internal/jobs/repo_trust_fetch.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "jobs/repository-trust-fetch/ADD."
         }
       ],
       "statuses": [
@@ -32499,6 +32633,20 @@
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T1",
           "raw": "jobs/store/ADD (P1-E29-W6-S59-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "jobs/trust-record-signatures",
+      "sites": [
+        {
+          "file": "internal/jobs/trust_record_sig.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "jobs/trust-record-signatures/ADD."
         }
       ],
       "statuses": [
@@ -33034,6 +33182,34 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "local acceptance attestation binding",
+      "sites": [
+        {
+          "file": "internal/ci/attest_local.go",
+          "line": 7,
+          "status": "",
+          "raw": "local acceptance attestation binding."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "local branch registration facts",
+      "sites": [
+        {
+          "file": "internal/ci/branch_tips.go",
+          "line": 7,
+          "status": "",
+          "raw": "local branch registration facts."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -40115,6 +40291,20 @@
       ]
     },
     {
+      "name": "registration baseline selection",
+      "sites": [
+        {
+          "file": "internal/ci/registration_baseline.go",
+          "line": 7,
+          "status": "",
+          "raw": "registration baseline selection."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "release artifact gate",
       "sites": [
         {
@@ -41923,7 +42113,7 @@
       ]
     }
   ],
-  "total_sites": 4041,
-  "unspecified_count": 356,
+  "total_sites": 4058,
+  "unspecified_count": 362,
   "multi_status_count": 129
 }
