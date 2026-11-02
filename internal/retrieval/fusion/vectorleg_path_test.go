@@ -26,7 +26,7 @@ func TestVectorLegKeepsPathInsideCorpus(t *testing.T) {
 	root := t.TempDir()
 	for _, path := range []string{"docs/inside.md", "docs/../inside.md", "inside.md"} {
 		t.Run(path, func(t *testing.T) {
-			checkVectorPath(t, path, root, true, filepath.Clean(path))
+			checkVectorPath(t, path, root, true, filepath.ToSlash(filepath.Clean(path)))
 		})
 	}
 }
