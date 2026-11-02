@@ -37,6 +37,7 @@ func TestEgressClassesR21265Registered(t *testing.T) {
 		{EgressClassConversationResume, "conversation-resume", "P1-E22-W5-S47-T2", true, true},
 		{EgressClassGitHubPRDiff, "github-pr-diff", "P1-PLG-05", true, false},
 		{EgressClassCIOIDCJWKS, "ci-oidc-jwks", "P1-CI-14", true, false},
+		{EgressClassAgentDriver, "agent-driver", "P1-AGT-03", true, false},
 	}
 	registry := DefaultRegistry()
 	if got, want := len(registry.Classes()), len(cases); got != want {
@@ -102,7 +103,7 @@ func TestRegistrantListByteEqual(t *testing.T) {
 		"Y/S-52.T2 (backend-integration) · AF/S-66.T2 (ci-mirror-push) · J/S-20.T1 (provider-intake) · " +
 		"F/S-12.T5 (spike-measurement) · S/S-41.T3 (backup-target) · O/S-33.T4 (plugin-remote) · " +
 		"X/S-50.T1 (registry-fetch, the fetch living in internal/plugins/registryfetch) · " +
-		"AN/S-77.T5 (fleet-discovery) · P1-PLG-05 (github-pr-diff) · P1-PLG-08 (plugin-host-http)"
+		"AN/S-77.T5 (fleet-discovery) · P1-PLG-05 (github-pr-diff) · P1-PLG-08 (plugin-host-http) · P1-AGT-03 (agent-driver)"
 
 	got := godocOwnerList(t)
 	if got != specList {
@@ -212,5 +213,35 @@ func TestCIOIDCJWKSClassPublicOnly(t *testing.T) {
 		if !errors.Is(err, ErrSensitivityViolation) || out != nil {
 			t.Errorf("tier %s: got %q, %v; want sensitivity refusal", tier, out, err)
 		}
+	}
+}
+
+// TestAgentDriverEgressClassRegistered: exactly one agent-driver row, enabled,
+// refusing restricted content, and part of the inventory the default registry
+// reports at daemon start.
+func TestAgentDriverEgressClassRegistered(t *testing.T) {
+	count := 0
+	for _, row := range defaultClasses {
+		if row.Class == EgressClassAgentDriver {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("defaultClasses holds %d agent-driver rows, want exactly 1", count)
+	}
+	cfg, ok := DefaultRegistry().Lookup(EgressClassAgentDriver)
+	if !ok || !cfg.Enabled || cfg.AllowRestricted || cfg.AllowLocalOnly || cfg.Owner != "P1-AGT-03" {
+		t.Fatalf("agent-driver config = %+v (registered %v), want enabled, no restricted, owner P1-AGT-03", cfg, ok)
+	}
+	found := false
+	for _, c := range DefaultRegistry().Classes() {
+		found = found || c == EgressClassAgentDriver
+	}
+	if !found {
+		t.Fatalf("Classes() = %v lacks agent-driver", DefaultRegistry().Classes())
+	}
+	out, err := newTestEngine(t, nil).InterceptClass(context.Background(), EgressClassAgentDriver, TierRestricted, []byte("x"))
+	if !errors.Is(err, ErrSensitivityViolation) || out != nil {
+		t.Fatalf("restricted tier through agent-driver = %q, %v; want ErrSensitivityViolation", out, err)
 	}
 }

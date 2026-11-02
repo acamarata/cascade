@@ -136,7 +136,10 @@ func TestArchSpawnCallers_RealTree(t *testing.T) {
 	expect(t, "real tree", v, err, "")
 	// Non-vacuity: with the allowance switched off the scan sees the suite's calls.
 	v, err = scanSpawn(root, func(string) bool { return false })
-	if err != nil || len(v) == 0 || !strings.HasPrefix(v[0].File, "providers/agents/conformance/") {
+	conformance := slices.ContainsFunc(v, func(x AgentSpawnViolation) bool {
+		return strings.HasPrefix(x.File, "providers/agents/conformance/")
+	})
+	if err != nil || !conformance {
 		t.Fatalf("an unallowed scan of the real tree found %v (error %v), want the conformance Spawn calls", agentWhere(v), err)
 	}
 	v, err = ScanSpawnCallers(spawnFixture(t, nil))

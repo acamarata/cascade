@@ -34,6 +34,8 @@ See also [CI OIDC tokens: how a GitHub Actions token earns the ephemeral class](
 
 See also [node attestation signing: the pinned controller key and the node-built record](security-posture/node-attest-signing.md).
 
+See also [driver custody: the host shim, the agent-driver output filter and their limits](security-posture/driver-custody.md).
+
 ## Doctor security checks
 
 `cascade doctor` reports six security checks. All are read-only: none selects

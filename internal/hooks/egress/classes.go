@@ -200,6 +200,12 @@ const (
 	// only {public}: the JWKS endpoint is a public document and no
 	// vaulted value belongs in the request.
 	EgressClassCIOIDCJWKS EgressClass = "ci-oidc-jwks"
+	// EgressClassAgentDriver is the stdio of an external agent driver child
+	// (P1-AGT-03): every output chunk the host shim relays from a vendor CLI
+	// transits this class after the per-spawn literal scrub. AllowRestricted
+	// is NOT set. It covers driver STDIO only; the vendor CLI's own TLS
+	// egress is not inspected (R-21.177).
+	EgressClassAgentDriver EgressClass = "agent-driver"
 )
 
 // defaultClasses is the registration table. It is a slice of pairs rather
@@ -257,6 +263,7 @@ var defaultClasses = []struct {
 		AllowedTiers:    []SensitivityTier{TierPublic},
 		Owner:           "P1-CI-14",
 	}},
+	{EgressClassAgentDriver, InterceptConfig{Enabled: true, AllowRestricted: false, Owner: "P1-AGT-03"}},
 }
 
 // defaultRegistry holds the classes this build ships with. It is package

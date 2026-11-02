@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"s-0001","tools":["Read","Grep"]}
+{"type":"assistant","message":{"content":[{"type":"text","text":"reading KEY_PLACEHOLDER from the environment"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"found CANARY_PLACEHOLDER in the tree"}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","content":"nothing sensitive here"}]}}
+{"type":"result","subtype":"success","is_error":false,"num_turns":2}
