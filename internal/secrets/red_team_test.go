@@ -250,3 +250,19 @@ func TestRedTeamBridgeClass_IsRegisteredStrictly(t *testing.T) {
 		t.Fatalf("the bridge class admits restricted or local-only content: %+v", cfg)
 	}
 }
+
+// TestRedTeamNoVaultInJWKSRequest asserts that no vaulted value appears in
+// an outbound request gated by the ci-oidc-jwks egress class. The JWKS
+// fetch is a public document; any vault substitution would indicate a
+// misconfiguration that could leak credentials to GitHub's endpoint.
+func TestRedTeamNoVaultInJWKSRequest(t *testing.T) {
+	engine := redTeamEngine(t)
+	payload := []byte("GET /.well-known/jwks " + redTeamSecret)
+	out, err := engine.InterceptClass(context.Background(), egress.EgressClassCIOIDCJWKS, egress.TierPublic, payload)
+	if err != nil {
+		t.Fatalf("InterceptClass(ci-oidc-jwks, public): %v", err)
+	}
+	if strings.Contains(string(out), redTeamSecret) {
+		t.Fatalf("vault value leaked through ci-oidc-jwks egress: %q", out)
+	}
+}

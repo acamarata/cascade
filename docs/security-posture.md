@@ -30,6 +30,8 @@ See also [CI attestations: signed records of acceptance re-runs and how they ver
 
 See also [CI acceptance binding: one nonce per re-run, bound to the job, checkpoint and registration](security-posture/ci-acceptance-binding.md).
 
+See also [CI OIDC tokens: how a GitHub Actions token earns the ephemeral class](security-posture/ci-oidc.md).
+
 ## Doctor security checks
 
 `cascade doctor` reports six security checks. All are read-only: none selects

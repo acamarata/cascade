@@ -193,6 +193,13 @@ const (
 	// EgressClassGitHubPRDiff gates review PR-diff requests before the trusted
 	// cascade-github process plugin starts. Only internal and public are admitted.
 	EgressClassGitHubPRDiff EgressClass = "github-pr-diff"
+	// EgressClassCIOIDCJWKS is the GitHub Actions OIDC JWKS fetch
+	// (P1-CI-14): the controller's token verifier retrieves the issuer's
+	// public keys through this class before accepting an ephemeral-runner
+	// attestation. AllowRestricted is NOT set and AllowedTiers admits
+	// only {public}: the JWKS endpoint is a public document and no
+	// vaulted value belongs in the request.
+	EgressClassCIOIDCJWKS EgressClass = "ci-oidc-jwks"
 )
 
 // defaultClasses is the registration table. It is a slice of pairs rather
@@ -243,6 +250,12 @@ var defaultClasses = []struct {
 		AllowRestricted: false,
 		AllowedTiers:    []SensitivityTier{TierInternal, TierPublic},
 		Owner:           "P1-PLG-05",
+	}},
+	{EgressClassCIOIDCJWKS, InterceptConfig{
+		Enabled:         true,
+		AllowRestricted: false,
+		AllowedTiers:    []SensitivityTier{TierPublic},
+		Owner:           "P1-CI-14",
 	}},
 }
 

@@ -36,6 +36,7 @@ func TestEgressClassesR21265Registered(t *testing.T) {
 		{EgressClassRecallWhat, "recall-what", "P1-E22-W5-S47-T1", true, false},
 		{EgressClassConversationResume, "conversation-resume", "P1-E22-W5-S47-T2", true, true},
 		{EgressClassGitHubPRDiff, "github-pr-diff", "P1-PLG-05", true, false},
+		{EgressClassCIOIDCJWKS, "ci-oidc-jwks", "P1-CI-14", true, false},
 	}
 	registry := DefaultRegistry()
 	if got, want := len(registry.Classes()), len(cases); got != want {
@@ -187,6 +188,29 @@ func TestEgressClassPluginHostHTTPRegistered(t *testing.T) {
 	for _, tier := range []SensitivityTier{TierLocalOnly, TierRestricted} {
 		if out, err := engine.InterceptClass(context.Background(), EgressClassPluginHostHTTP, tier, []byte("payload")); err == nil || out != nil {
 			t.Fatalf("host HTTP admitted %s", tier)
+		}
+	}
+}
+
+// TestCIOIDCJWKSClassPublicOnly asserts the GitHub Actions OIDC JWKS class
+// admits only the public tier and refuses restricted/internal/local-only.
+func TestCIOIDCJWKSClassPublicOnly(t *testing.T) {
+	cfg, ok := DefaultRegistry().Lookup(EgressClassCIOIDCJWKS)
+	if !ok || string(EgressClassCIOIDCJWKS) != "ci-oidc-jwks" || !cfg.Enabled || cfg.AllowRestricted || cfg.AllowLocalOnly || cfg.Owner != "P1-CI-14" {
+		t.Fatalf("ci-oidc-jwks config = %+v, registered=%v", cfg, ok)
+	}
+	if len(cfg.AllowedTiers) != 1 || cfg.AllowedTiers[0] != TierPublic {
+		t.Fatalf("ci-oidc-jwks must admit only public tier: %+v", cfg.AllowedTiers)
+	}
+	engine := newTestEngine(t, nil)
+	out, err := engine.InterceptClass(context.Background(), EgressClassCIOIDCJWKS, TierPublic, []byte("jwks"))
+	if err != nil || string(out) != "jwks" {
+		t.Fatalf("public tier refused: %q, %v", out, err)
+	}
+	for _, tier := range []SensitivityTier{TierLocalOnly, TierRestricted, TierInternal} {
+		out, err := engine.InterceptClass(context.Background(), EgressClassCIOIDCJWKS, tier, []byte("jwks"))
+		if !errors.Is(err, ErrSensitivityViolation) || out != nil {
+			t.Errorf("tier %s: got %q, %v; want sensitivity refusal", tier, out, err)
 		}
 	}
 }
