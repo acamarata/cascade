@@ -152,6 +152,7 @@ event record and the plugin store belong to the daemon.
 ```
 cascade plugin update <name> [--yes] [--accept-grant=<grant> ...]
 cascade plugin update <name> --from <path> [--checksum <hash>]
+cascade plugin update <name> --reverify
 ```
 
 Two candidate sources, selected by whether `--from` is given — **both commit
@@ -170,6 +171,27 @@ the registry path is NOT exempt from the daemon-mediated elevation flow the
 - **`--from <path>`**: the original local-manifest path — reads a candidate
   manifest from disk and checksum-pins it with `--checksum`, then calls the
   identical `UpdatePlugin`.
+
+## update --reverify
+
+`cascade plugin update <name> --reverify` re-pins a process plugin whose
+executable changed after it was trusted (typically after a `cascade` upgrade;
+the launch refusal prints this exact command). It needs a running daemon and
+an elevated approval, and cannot be combined with `--from`, `--checksum`,
+`--accept-grant` or `--all`.
+
+The CLI fetches the `[registry]` index and the registry's latest manifest for
+`<name>` (checksum and signature verified), then sends the index bytes, the
+manifest and its checksum through `plugin.update` with `reverify`. The daemon
+verifies the index with the registry key and re-pins only when the entry
+checksum equals the sha256 of the manifest and the manifest's signed
+`exec_sha256` for this platform equals the sibling executable's digest. The
+manifest must be the installed version; otherwise the daemon refuses naming
+both versions. Any failure exits non-zero, names the failed link and changes
+nothing. Without published digests the refusal is `no signed executable
+digest for <platform>`; fall back to `cascade plugin remove <name>` and an
+elevated `cascade plugin add`. Chain details:
+[plugin trust](../security-posture/plugin-trust.md).
 
 An update never installs: `<name>` must already be installed, or the
 command exits non-zero with `<name> is not installed; use cascade plugin add`

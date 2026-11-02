@@ -40,11 +40,15 @@ func newPluginUpdateCmd(deps pluginDeps) *cobra.Command {
 	var all bool
 	var yes bool
 	var acceptGrant []string
+	var reverify bool
 	cmd := &cobra.Command{
 		Use:   "update [name]",
 		Short: "Update one installed plugin — from the signed registry (default) or a local manifest via --from",
 		Args:  usageArgs(cobra.MaximumNArgs(1)),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if reverify {
+				return runPluginUpdateReverify(cmd, deps, args)
+			}
 			return runPluginUpdate(cmd, deps, args, checksum, all, yes, acceptGrant)
 		},
 	}
@@ -52,6 +56,7 @@ func newPluginUpdateCmd(deps pluginDeps) *cobra.Command {
 	cmd.Flags().BoolVar(&all, "all", false, "update every installed plugin instead of one name")
 	cmd.Flags().String("from", "", "path to a local candidate manifest, bypassing the registry")
 	cmd.Flags().BoolVar(&yes, "yes", false, "accept non-interactive defaults (never auto-accepts a grant expansion — see --accept-grant)")
+	cmd.Flags().BoolVar(&reverify, "reverify", false, "re-pin a process plugin's executable after it changed, only against the signed registry index (needs the daemon and an elevated approval)")
 	cmd.Flags().StringArrayVar(&acceptGrant, "accept-grant", nil, "explicitly accept one new capability grant the update requests (repeatable, one per grant)")
 	return cmd
 }

@@ -184,7 +184,8 @@ var trustWriters = map[string]string{
 	"internal/plugins/perms_rpc.go:applyPermsChange":     "TrustGrants",
 	"internal/plugins/dispatch.go:ProvisionElevated":     "TrustTier ExecDigest TrustGrants",
 	"internal/plugins/lifecycle_update.go:commitUpdate":  "TrustTier ExecDigest TrustGrants",
-	"internal/plugins/trust_grant_sweep_seed.go:granted": "TrustTier", // the seeded input below
+	"internal/plugins/reverify.go:reverifyTrust":         "TrustTier ExecDigest", // the attested re-pin (P1-PLG-12)
+	"internal/plugins/trust_grant_sweep_seed.go:granted": "TrustTier",            // the seeded input below
 }
 
 // trustBuilders are the only functions that may build a non-zero

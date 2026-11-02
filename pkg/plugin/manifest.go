@@ -2,6 +2,8 @@ package plugin
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -85,12 +87,9 @@ type ToolSpec struct {
 // a namespaced PluginStorage area per declared domain; reaching outside a
 // declared domain requires an explicit capability grant.
 type DomainSpec struct {
-	// Name is the domain identifier, scoped under the plugin's own
-	// namespace by the host (required). Must not claim the
-	// "plugin.__host__.*" namespace reserved by R-14.100 for host-owned
-	// storage slots — Validate rejects a claim here as cheap defence in
-	// depth at the manifest parse boundary (R-14.127b); authoritative
-	// enforcement remains the host's (O/S-32.T3/T4).
+	// Name is the domain identifier, scoped under the plugin namespace
+	// (required). Must not claim the "plugin.__host__.*" namespace reserved
+	// by R-14.100 (R-14.127b); the host enforces authoritatively.
 	Name string `toml:"name"`
 	// Description is the human-readable summary of what the domain
 	// stores.
@@ -153,14 +152,9 @@ type PermissionDisplay struct {
 // error.
 type Manifest struct {
 	// ID uniquely identifies the plugin across the host registry. Must
-	// match [a-z][a-z0-9-]* (required; enforced by Validate — R-14.127).
-	// ID becomes both a storage namespace and a CLI/RPC mount point, so an
-	// unvalidated ID is a path-traversal and namespace-collision surface,
-	// not a style nit. It must also not claim the "plugin.__host__.*"
-	// namespace reserved by R-14.100 (R-14.127b); since that namespace
-	// contains characters ("." and "_") the id pattern itself already
-	// excludes, this second check is defence in depth, not redundant
-	// syntax.
+	// match [a-z][a-z0-9-]* and not claim the "plugin.__host__.*" namespace
+	// reserved by R-14.100 (R-14.127, R-14.127b): it becomes a storage
+	// namespace and a CLI/RPC mount point.
 	ID string `toml:"id"`
 	// Name is the plugin's human display name (required).
 	Name string `toml:"name"`
@@ -169,18 +163,10 @@ type Manifest struct {
 	Schema string `toml:"schema"`
 	// Version is the plugin's own semver version string (required).
 	Version string `toml:"version"`
-	// HostVersion is the semver range of host versions this plugin
-	// expects to run under (required). Its semver CORE is validated with
-	// the same strictness as Version — no leading zeros in any numeric
-	// component (R-14.128) — while the RANGE OPERATORS differ: an
-	// optional comparator (^, ~, >=, <=, >, <, =) prefixes a possibly-
-	// partial core (major, major.minor, or major.minor.patch), and
-	// space-separated tokens AND together (e.g. ">=1.2.0 <2.0.0"); the
-	// bare wildcard "*" matches any host version. Two range forms are
-	// documented KNOWN GAPS, rejected rather than silently ignored:
-	// npm-style "||" alternation (e.g. "1.0.0 || 2.0.0") and "1.x"-style
-	// wildcard segments. Neither is supported; an author using one meets
-	// a documented limit, not a silent rejection.
+	// HostVersion is the semver range of host versions this plugin expects
+	// (required): an optional comparator (^, ~, >=, <=, >, <, =) before a
+	// possibly-partial core, space-separated tokens ANDed, or "*". "||" and
+	// "1.x" forms are documented gaps, rejected (R-14.128).
 	HostVersion string `toml:"host_version"`
 	// Runtime selects how the host executes this plugin (required).
 	Runtime RuntimeMode `toml:"runtime"`
@@ -193,23 +179,50 @@ type Manifest struct {
 	// Permissions lists the consent-dialog entries shown to the user
 	// before enabling this plugin.
 	Permissions []PermissionDisplay `toml:"permissions"`
-	// Remote declares the connection endpoint for a RuntimeRemote
-	// manifest (P1-E15-W4-S33-T4); zero value for every other runtime.
-	// Added because no field named a remote endpoint anywhere in this
-	// struct before this ticket, despite RuntimeRemote already being a
-	// valid RuntimeMode — see remote_spec.go's header comment.
+	// Remote declares the endpoint of a RuntimeRemote manifest; zero for
+	// every other runtime (P1-E15-W4-S33-T4).
 	Remote RemoteSpec `toml:"remote"`
+	// ExecSHA256 optionally lists the signed sha256 (lowercase hex) of the
+	// plugin executable per "<goos>/<goarch>" (ExecDigestFor).
+	ExecSHA256 map[string]string `toml:"exec_sha256"`
 }
 
-// ErrCode identifies which of ParseManifest/Validate's named rejection
-// rules produced a ValidationError. It is a plugin-package-local
-// sub-taxonomy layered on top of pkg/cascade's Kind enumeration (R-14.2):
-// every ErrCode maps to exactly one cascade.Kind via ErrCode.Kind, which is
-// the Kind ParseManifest's returned *cascade.Error carries. ErrCode exists
-// because a single cascade.Kind (e.g. KindInvalidInput) is too coarse for a
-// plugin author to tell "empty id" apart from "malformed semver" — the
-// ErrCode is the machine-readable discriminator; the cascade.Kind is the
-// wire-stable severity/response class.
+var (
+	execDigestRe   = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	execPlatformRe = regexp.MustCompile(`^[a-z][a-z0-9]*/[a-z0-9]+$`)
+)
+
+// ValidateExecSHA256 checks every key is "<goos>/<goarch>" and every value
+// is 64 lowercase hex characters.
+func ValidateExecSHA256(table map[string]string) error {
+	for k, v := range table {
+		if !execPlatformRe.MatchString(k) || strings.Count(k, "/") != 1 {
+			return cascade.Newf(cascade.KindInvalidInput, "exec_sha256: key %q is not <goos>/<goarch>", k)
+		}
+		if !execDigestRe.MatchString(v) {
+			return cascade.Newf(cascade.KindInvalidInput, "exec_sha256[%s]: not a lowercase sha256 hex digest", k)
+		}
+	}
+	return nil
+}
+
+// ExecDigestFor returns the signed executable digest for goos/goarch after
+// validating the whole table; a table without that platform is KindNotFound.
+func (m Manifest) ExecDigestFor(goos, goarch string) (string, error) {
+	if err := ValidateExecSHA256(m.ExecSHA256); err != nil {
+		return "", err
+	}
+	d, ok := m.ExecSHA256[goos+"/"+goarch]
+	if !ok {
+		return "", cascade.Newf(cascade.KindNotFound, "no signed executable digest for %s/%s", goos, goarch)
+	}
+	return d, nil
+}
+
+// ErrCode identifies which named rejection rule produced a ValidationError:
+// a plugin-package sub-taxonomy over cascade.Kind (R-14.2), mapped by
+// ErrCode.Kind. A single Kind is too coarse to tell "empty id" from
+// "malformed semver".
 type ErrCode string
 
 // The closed set of manifest ErrCode values, one per named rejection rule
@@ -226,21 +239,14 @@ const (
 	// string.
 	ErrCodeUnknownRuntimeMode ErrCode = "unknown-runtime-mode"
 	// ErrCodeRequiredField reports rule R3: an empty id or name, or an id
-	// that does not match the required [a-z][a-z0-9-]* pattern
-	// (R-14.127) — reused rather than a new code because "id is not an
-	// acceptable id" is the same acceptance-criterion bucket as "id is
-	// missing", not a distinct rule.
+	// outside [a-z][a-z0-9-]* (R-14.127).
 	ErrCodeRequiredField ErrCode = "required-field"
 	// ErrCodeMalformedVersion reports rule R4: version or host_version is
 	// not a well-formed semver value.
 	ErrCodeMalformedVersion ErrCode = "malformed-version"
-	// ErrCodeCommandNameCollision reports rule R5: a provides.commands
-	// entry whose name collides with a reserved core noun or utility
-	// verb. Also reused (R-14.127b, not a new code — the closest existing
-	// fit) for an id or provides.domains[].Name that claims the
-	// "plugin.__host__.*" namespace reserved by R-14.100: both findings
-	// are, at bottom, a plugin-declared name colliding with a name the
-	// host itself owns.
+	// ErrCodeCommandNameCollision reports rule R5: a command name that
+	// collides with a reserved verb, or an id/domain claiming the
+	// "plugin.__host__.*" namespace (R-14.127b).
 	ErrCodeCommandNameCollision ErrCode = "command-name-collision"
 	// ErrCodeInvalidCapabilityRef reports rule R6: an empty or duplicate
 	// requires entry.
@@ -269,14 +275,9 @@ func (e ValidationError) Error() string {
 	return fmt.Sprintf("%s: %s: %s", e.Field, e.Kind, e.Message)
 }
 
-// errCodeKind maps each ErrCode to the single cascade.Kind ParseManifest's
-// returned *cascade.Error carries for a rejection of that kind. Every
-// manifest rejection is, from the host's perspective, either a malformed
-// document the caller must fix (KindInvalidInput), a schema version the
-// host does not support (KindUnsupported), or a name that conflicts with a
-// reserved host command (KindConflict) — see the DECISIONS note in this
-// ticket's journal for why R1/R5 are singled out from the otherwise-uniform
-// KindInvalidInput mapping.
+// errCodeKind maps each ErrCode to the one cascade.Kind ParseManifest's
+// returned *cascade.Error carries (R1 is unsupported, R5 a conflict, the
+// rest invalid input).
 var errCodeKind = map[ErrCode]cascade.Kind{
 	ErrCodeParse:                cascade.KindInvalidInput,
 	ErrCodeSchemaVersion:        cascade.KindUnsupported,

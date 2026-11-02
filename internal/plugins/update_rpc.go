@@ -29,11 +29,15 @@ var _ = rpc.DeclareAccess(UpdateRPCMethod, rpc.AccessOwnerOnly)
 
 // UpdateParams is the "plugin.update" wire request: the candidate manifest
 // bytes, the id the caller means to update, and an optional pinned checksum
-// the manifest bytes must match.
+// the manifest bytes must match. Reverify with IndexBytes (the signed
+// registry index) asks to re-pin the installed version's executable digest
+// instead of updating (reverify.go).
 type UpdateParams struct {
 	ID            string `json:"id"`
 	Checksum      string `json:"checksum"`
 	ManifestBytes []byte `json:"manifest_bytes"`
+	Reverify      bool   `json:"reverify,omitempty"`
+	IndexBytes    []byte `json:"index_bytes,omitempty"`
 }
 
 // updateRPCResult mirrors plugin.add's result shape.
@@ -47,9 +51,14 @@ type updateRPCResult struct {
 var errUpdateNotAttested = cascade.New(cascade.KindElevationRequired,
 	"plugin.update: no verified elevation for this call; update not applied")
 
+// errUpdateNoStore refuses a plugin.update (or reverify) wired without a
+// plugin store, before any record is read.
+var errUpdateNoStore = cascade.New(cascade.KindUnavailable, "plugin.update: no plugin store; update not applied")
+
 // UpdateRPCHandler builds the "plugin.update" handler over store.
 // handshaker supplies the process handshake for each call; a nil func (or a
-// nil result) leaves commitUpdate's process-tier guard to refuse.
+// nil result) leaves commitUpdate's process-tier guard to refuse. A reverify
+// call is refused here (no registry verifier); WithReverify adds one.
 func UpdateRPCHandler(store provider.Store, handshaker func() ProcessHandshaker) func(ctx context.Context, raw json.RawMessage) (any, error) {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		w, ok := rpc.VerifiedElevationFrom(ctx)
@@ -57,13 +66,16 @@ func UpdateRPCHandler(store provider.Store, handshaker func() ProcessHandshaker)
 			return nil, errUpdateNotAttested
 		}
 		if store == nil {
-			return nil, cascade.New(cascade.KindUnavailable, "plugin.update: no plugin store; update not applied")
+			return nil, errUpdateNoStore
 		}
 		var p UpdateParams
 		dec := json.NewDecoder(bytes.NewReader(raw))
 		dec.DisallowUnknownFields()
 		if err := dec.Decode(&p); err != nil {
 			return nil, cascade.Wrap(cascade.KindInvalidInput, err, "plugin.update: decode params")
+		}
+		if p.Reverify || len(p.IndexBytes) > 0 {
+			return reverifyResult(ctx, store, nil, p)
 		}
 		var hs ProcessHandshaker
 		if handshaker != nil {
@@ -75,6 +87,46 @@ func UpdateRPCHandler(store provider.Store, handshaker func() ProcessHandshaker)
 		}
 		return updateRPCResult{Message: "updated " + res.Metadata.Name + " to v" + res.Metadata.InstalledVersion, Grants: res.Metadata.Grants}, nil
 	}
+}
+
+// WithReverify serves reverify calls of the "plugin.update" handler next
+// with verify as the index verifier; every other call goes to next. A
+// reverify call needs the same witness as an update.
+func WithReverify(next func(ctx context.Context, raw json.RawMessage) (any, error), store provider.Store, verify IndexVerifier) func(ctx context.Context, raw json.RawMessage) (any, error) {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var probe struct {
+			Reverify   bool            `json:"reverify"`
+			IndexBytes json.RawMessage `json:"index_bytes"`
+		}
+		if json.Unmarshal(raw, &probe) != nil || (!probe.Reverify && len(probe.IndexBytes) == 0) {
+			return next(ctx, raw)
+		}
+		if w, ok := rpc.VerifiedElevationFrom(ctx); !ok || w.Method() != UpdateRPCMethod || w.ParamsHash() != rpc.ParamsHash(raw) {
+			return nil, errUpdateNotAttested
+		}
+		if store == nil {
+			return nil, errUpdateNoStore
+		}
+		var p UpdateParams
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&p); err != nil {
+			return nil, cascade.Wrap(cascade.KindInvalidInput, err, "plugin.update: decode params")
+		}
+		return reverifyResult(ctx, store, verify, p)
+	}
+}
+
+// reverifyResult runs reverifyTrust and shapes its result.
+func reverifyResult(ctx context.Context, store provider.Store, verify IndexVerifier, p UpdateParams) (any, error) {
+	if !p.Reverify {
+		return nil, cascade.New(cascade.KindInvalidInput, "plugin.update: index_bytes is only accepted with reverify")
+	}
+	rec, err := reverifyTrust(ctx, store, verify, p)
+	if err != nil {
+		return nil, err
+	}
+	return updateRPCResult{Message: "re-verified " + rec.Name + " v" + rec.InstalledVersion, Grants: rec.TrustGrants}, nil
 }
 
 // applyAttestedUpdate re-runs UpdatePlugin's guards for an attested call and

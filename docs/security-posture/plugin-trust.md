@@ -59,8 +59,35 @@ checksum; the installed record; then the process handshake. An elevated
 update to another runtime records no trust.
 
 After upgrading `cascade`, a plugin's sibling executable usually changes, so
-it no longer matches the recorded `exec_digest`. Re-add the plugin with an
-elevated `cascade plugin add` to pin the new executable.
+it no longer matches the recorded `exec_digest`, and the manifest version
+often stays the same. The launch refusal names the recovery:
+`cascade plugin update <id> --reverify`, for example
+`cascade plugin update cascade-github --reverify`.
+
+`--reverify` is not a second trust source. The CLI fetches the registry index
+and the installed version's manifest and sends both through the elevated
+`plugin.update` RPC. The daemon re-pins `exec_digest` only when every link
+holds:
+
+1. The elevation witness names `plugin.update` and covers these exact params.
+2. The record exists, is a process plugin, was trusted before (it carries a
+   prior `exec_digest`) and is installed at the manifest's version.
+3. The index verifies with the registry key (the configured one or the
+   embedded one) and is not a rollback (sequence 0, an older sequence, or the
+   same sequence with other bytes is refused).
+4. The index entry for this id and version has a checksum equal to the
+   call's checksum and to the sha256 of the manifest bytes.
+5. The manifest's signed `exec_sha256` for this `<goos>/<goarch>` equals the
+   sha256 of the resolved sibling executable (a symlink or a
+   group/world-writable file refuses).
+
+Any failure is policy-denied, names the failed link and writes nothing; the
+granted capabilities (`trust_grants`) never change. A manifest without an
+`exec_sha256` entry for the platform refuses with `no signed executable digest
+for <platform>`; publishing those digests for first-party plugins is a
+release-pipeline job. Until a plugin's digests are published, the fallback
+is the old one: `cascade plugin remove <id>`, then an elevated
+`cascade plugin add <id>`.
 
 ## Limits
 

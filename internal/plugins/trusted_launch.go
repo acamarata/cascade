@@ -110,7 +110,7 @@ func beginLaunch(ctx context.Context, env LaunchEnv, rec PluginMetadata, want st
 		var digest string
 		if digest, err = ExecutableDigest(path); err == nil && digest != want {
 			err = cascade.Newf(cascade.KindPolicyDenied, "plugins: %s: executable changed since it was trusted; "+
-				"run `cascade plugin update %s --reverify`", rec.Name, rec.Name)
+				"run `%s`", rec.Name, ReverifyCommand(rec.Name))
 		}
 	}
 	if err != nil {
