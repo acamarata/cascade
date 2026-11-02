@@ -617,22 +617,6 @@
     "symbol": "internal/policy.NextApprovalState"
   },
   {
-    "caller_site": "internal/daemon/provider_health_poller.go",
-    "expected_caller": "a future daemon-resident health-poller subsystem (internal/daemon/provider_health_poller.go), not yet built; retire this entry when that lands",
-    "reason": "P1-E10-W3-S21-T2 wired health.NewManager (construction) via a one-shot CLI/doctor check, which has no periodic scheduler loop; DefaultIntervals/NewScheduler are for a daemon-resident background poller, a separate composition root not yet built (internal/daemon/subsystems.go exists but does not run one). Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "retire_ticket": "cap:provider-drivers",
-    "expires": "P1-EXIT-07",
-    "symbol": "internal/providers/health.DefaultIntervals"
-  },
-  {
-    "caller_site": "internal/daemon/provider_health_poller.go",
-    "expected_caller": "a future daemon-resident health-poller subsystem (internal/daemon/provider_health_poller.go), not yet built; retire this entry when that lands",
-    "reason": "P1-E10-W3-S21-T2 wired health.NewManager (construction) via a one-shot CLI/doctor check, which has no periodic scheduler loop; DefaultIntervals/NewScheduler are for a daemon-resident background poller, a separate composition root not yet built (internal/daemon/subsystems.go exists but does not run one). Restored after a concurrent-write race destroyed 45 entries at once (R-14.224); the exemption itself is not new.",
-    "retire_ticket": "cap:provider-drivers",
-    "expires": "P1-EXIT-07",
-    "symbol": "internal/providers/health.NewScheduler"
-  },
-  {
     "caller_site": "internal/providers/intake/types.go",
     "expected_caller": "none in production by design; every caller of this constructor is a test substituting an isolated Registry (cmd/cascade/provider_cmd_test.go, internal/providers/intake's own *_test.go files)",
     "reason": "The provider add/list split fix (P1-E10-W3-S21-T2's disclosed defect, S-20.T1 follow-up) retires MemoryRegistry as `provider add`'s production store: productionProviderDeps no longer constructs one, and resolveProviderRegistry (cmd/cascade/provider_cmd.go) opens the durable internal/providers/registry.Registry instead, via a registryAdapter (provider_registry_adapter.go). NewMemoryRegistry itself stays exported and used: it remains the fast, disk-free intake.Registry seam providerDeps.Registry's own doc comment describes, injected by cmd/cascade's isolated CLI unit tests (provider_cmd_test.go) and internal/providers/intake's own package tests, so no production caller constructs one anymore.",
@@ -1026,78 +1010,6 @@
     "symbol": "internal/plugins.WireClaudeInboxPush"
   },
   {
-    "added_by_ticket": "P1-AGT-02",
-    "caller_site": "internal/providers/agents/spawn.go",
-    "expected_caller": "internal/providers/agents/spawn.go, the host shim that builds the Resolver from the plugin registry's presence callback and resolves a lane before every spawn; retire this entry once that file calls NewResolver",
-    "reason": "P1-AGT-02 ships the lane resolver (unknown lane, absent plugin and no-fallback refusals) implemented and tested, but its only production caller is the host shim of P1-AGT-03.",
-    "retire_ticket": "P1-AGT-03",
-    "symbol": "internal/providers/agents.NewResolver"
-  },
-  {
-    "added_by_ticket": "P1-AGT-02",
-    "caller_site": "internal/providers/agents/spawn.go",
-    "expected_caller": "internal/providers/agents/spawn.go, the host shim that projects the signed scope envelope of a dispatch onto AgentJobSpec.Envelope before it spawns; retire this entry once that file calls ProjectEnvelope",
-    "reason": "P1-AGT-02 ships the one conversion from a verified signed envelope to the driver-facing SpawnEnvelope implemented and tested, but the only production caller is the host shim of P1-AGT-03.",
-    "retire_ticket": "P1-AGT-03",
-    "symbol": "internal/providers/agents.ProjectEnvelope"
-  },
-  {
-    "added_by_ticket": "P1-AGT-14",
-    "caller_site": "internal/providers/agents/spawn.go",
-    "expected_caller": "internal/providers/agents/spawn.go, Shim.Spawn: the spawn order renders the relay hook pack (RenderAgentHookPack) into the pack directory it hands the driver as HookPackPath; retire this entry once that file calls it",
-    "reason": "P1-AGT-14 ships the hook relay and RenderAgentHookPack implemented and tested (including a live run of the real harness through the driver). The only production caller is the host shim's Spawn order, which is P1-AGT-03 (spawn.go); until it lands nothing writes the relay entries into a pack. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
-    "retire_ticket": "P1-AGT-03",
-    "symbol": "internal/providers/agents.RenderAgentHookPack"
-  },
-  {
-    "added_by_ticket": "P1-AGT-15",
-    "caller_site": "internal/providers/agents/spawn.go",
-    "expected_caller": "internal/providers/agents/spawn.go, the host shim Spawn: provisions the per-spawn runtime profile (home, config dir, tmp) before the driver child starts; retire this entry once that file calls it",
-    "reason": "P1-AGT-15 ships the driver credential inputs implemented and tested, but the host shim that composes them per driver spawn (P1-AGT-03) does not exist yet, so a call from production code now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists.",
-    "retire_ticket": "P1-AGT-03",
-    "symbol": "internal/providers/agents.ProvisionRuntimeProfile"
-  },
-  {
-    "added_by_ticket": "P1-AGT-15",
-    "caller_site": "internal/providers/agents/spawn.go",
-    "expected_caller": "internal/providers/agents/spawn.go, the host shim Spawn: builds the exact driver and tool environments and the secret list for the output scrub; retire this entry once that file calls it",
-    "reason": "P1-AGT-15 ships the driver credential inputs implemented and tested, but the host shim that composes them per driver spawn (P1-AGT-03) does not exist yet, so a call from production code now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists.",
-    "retire_ticket": "P1-AGT-03",
-    "symbol": "internal/providers/agents.BuildDriverEnv"
-  },
-  {
-    "added_by_ticket": "P1-AGT-13",
-    "caller_site": "internal/providers/agents/spawn.go",
-    "expected_caller": "internal/providers/agents/spawn.go, the host shim Spawn: starts one proxy per driver spawn over [agents.egress.<driver-id>] and puts Env() in the child environment; retire this entry once that file calls it",
-    "reason": "P1-AGT-13 ships the per-spawn containment (egress proxy bound to the audit log, lease-marker sweep) implemented and tested, but the shim that composes it per driver spawn (P1-AGT-03) does not exist yet, so a call from production code now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists.",
-    "retire_ticket": "P1-AGT-03",
-    "symbol": "internal/providers/agents.StartSpawnProxy"
-  },
-  {
-    "added_by_ticket": "P1-AGT-13",
-    "caller_site": "internal/providers/agents/spawn.go",
-    "expected_caller": "internal/providers/agents/spawn.go, the host shim Spawn: binds the spawn proxy's Journal to the redacting audit log and effect writer; retire this entry once that file calls it",
-    "reason": "P1-AGT-13 ships the per-spawn containment (egress proxy bound to the audit log, lease-marker sweep) implemented and tested, but the shim that composes it per driver spawn (P1-AGT-03) does not exist yet, so a call from production code now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists.",
-    "retire_ticket": "P1-AGT-03",
-    "symbol": "internal/providers/agents.ProxyJournal"
-  },
-  {
-    "added_by_ticket": "P1-AGT-13",
-    "caller_site": "internal/providers/agents/spawn.go",
-    "expected_caller": "internal/providers/agents/spawn.go, the host shim Spawn: mints the spawn's CASCADE_LEASE_ID marker; retire this entry once that file calls it",
-    "reason": "P1-AGT-13 ships the per-spawn containment (egress proxy bound to the audit log, lease-marker sweep) implemented and tested, but the shim that composes it per driver spawn (P1-AGT-03) does not exist yet, so a call from production code now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists.",
-    "retire_ticket": "P1-AGT-03",
-    "symbol": "internal/providers/agents.NewLeaseMarker"
-  },
-  {
-    "added_by_ticket": "P1-AGT-13",
-    "caller_site": "internal/providers/agents/spawn.go",
-    "expected_caller": "internal/providers/agents/spawn.go, the host shim Spawn: kills every marked process at Release and fails closed on a survivor; retire this entry once that file calls it",
-    "reason": "P1-AGT-13 ships the per-spawn containment (egress proxy bound to the audit log, lease-marker sweep) implemented and tested, but the shim that composes it per driver spawn (P1-AGT-03) does not exist yet, so a call from production code now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists.",
-    "retire_ticket": "P1-AGT-03",
-    "symbol": "internal/providers/agents.SweepLease"
-  },
-  {
     "added_by_ticket": "P1-TOP-01",
     "caller_site": "internal/fleet/topology/lane_ceiling.go",
     "expected_caller": "internal/fleet/topology/lane_ceiling.go, the lane-ceiling resolver that derives a profile lane's lane type from EndpointIsLocal(profile); retire this entry once that file calls EndpointIsLocal",
@@ -1384,5 +1296,45 @@
     "reason": "P1-CI-14 ships the OIDC verifier and JWKS source implemented and tested (valid token, every named rejection, fetch failure, cache expiry), but the token ingress and the call site are the hosted runner of P1-NODE-09, so nothing in production calls NewGitHubJWKSource yet. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once runner_gha.go exists without the call.",
     "retire_ticket": "P1-NODE-09",
     "symbol": "internal/ci.NewGitHubJWKSource"
+  },
+  {
+    "added_by_ticket": "P1-CI-13",
+    "caller_site": "internal/ci/runner_node.go",
+    "expected_caller": "internal/ci/runner_node.go, the node runner P1-NODE-08 registers, which asks the node to sign its completed run through ci.attest.sign; retire this entry once that file calls RequestNodeSignature",
+    "reason": "P1-CI-13 ships the controller-side request leg implemented and exercised end to end over the real node serve registry (TestAttestSignSucceedsAfterRealEnrollment), but its production caller is the node runner of P1-NODE-08; a CI to NODE edge would cycle the Epic DAG (ticket rationale). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once runner_node.go exists without the call.",
+    "retire_ticket": "P1-NODE-08",
+    "symbol": "internal/ci.RequestNodeSignature"
+  },
+  {
+    "added_by_ticket": "P1-AGT-13",
+    "caller_site": "internal/delegation/service.go",
+    "expected_caller": "internal/delegation/service.go, the delegation Service that composes the host shim per spawn (P1-AGT-08) and supplies this input to it; retire this entry once that file calls NewLeaseMarker",
+    "reason": "P1-AGT-13 ships the per-spawn containment (egress proxy bound to the audit log, lease-marker sweep) implemented and tested, but the shim that composes it per driver spawn (P1-AGT-03) does not exist yet, so a call from production code now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists. Repointed by P1-AGT-03: the shim takes this input through ShimDeps/the spawn request, so the production call sits in the P1-AGT-08 composition, not in spawn.go.",
+    "retire_ticket": "P1-AGT-08",
+    "symbol": "internal/providers/agents.NewLeaseMarker"
+  },
+  {
+    "added_by_ticket": "P1-AGT-02",
+    "caller_site": "internal/delegation/service.go",
+    "expected_caller": "internal/delegation/service.go, the delegation Service that composes the host shim per spawn (P1-AGT-08) and supplies this input to it; retire this entry once that file calls NewResolver",
+    "reason": "P1-AGT-02 ships the lane resolver (unknown lane, absent plugin and no-fallback refusals) implemented and tested, but its only production caller is the host shim of P1-AGT-03. Repointed by P1-AGT-03: the shim takes this input through ShimDeps/the spawn request, so the production call sits in the P1-AGT-08 composition, not in spawn.go.",
+    "retire_ticket": "P1-AGT-08",
+    "symbol": "internal/providers/agents.NewResolver"
+  },
+  {
+    "added_by_ticket": "P1-AGT-02",
+    "caller_site": "internal/delegation/service.go",
+    "expected_caller": "internal/delegation/service.go, the delegation Service that composes the host shim per spawn (P1-AGT-08) and supplies this input to it; retire this entry once that file calls ProjectEnvelope",
+    "reason": "P1-AGT-02 ships the one conversion from a verified signed envelope to the driver-facing SpawnEnvelope implemented and tested, but the only production caller is the host shim of P1-AGT-03. Repointed by P1-AGT-03: the shim takes this input through ShimDeps/the spawn request, so the production call sits in the P1-AGT-08 composition, not in spawn.go.",
+    "retire_ticket": "P1-AGT-08",
+    "symbol": "internal/providers/agents.ProjectEnvelope"
+  },
+  {
+    "added_by_ticket": "P1-AGT-03",
+    "caller_site": "internal/delegation/service.go",
+    "expected_caller": "internal/delegation/service.go, the delegation Service whose shim field is built by NewShim (P1-AGT-08); retire this entry once that file calls NewShim",
+    "reason": "P1-AGT-03 ships the host shim (credential custody, pre-spawn scan, executable gate, effect intent, output filter) implemented and tested, but its only production caller is the delegation Service of P1-AGT-08. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once service.go exists without the call.",
+    "retire_ticket": "P1-AGT-08",
+    "symbol": "internal/providers/agents.NewShim"
   }
 ]
