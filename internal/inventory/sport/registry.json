@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-02T06:02:09Z",
+  "generated_at": "2026-11-02T07:46:17Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -6274,6 +6274,20 @@
       ]
     },
     {
+      "name": "cmd/cascade/context-facts",
+      "sites": [
+        {
+          "file": "cmd/cascade/context_facts_elevation_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "cmd/cascade/context-facts (tests)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd/cascade/context-harness",
       "sites": [
         {
@@ -6883,6 +6897,12 @@
       "name": "cmd/cascade/daemon:conductor-quota-deny",
       "sites": [
         {
+          "file": "cmd/cascade/conductor_deny_noconfig_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade/daemon:conductor-quota-deny (tests)."
+        },
+        {
           "file": "cmd/cascade/conductor_deny_store.go",
           "line": 22,
           "status": "ADD",
@@ -7131,6 +7151,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/embedder",
+      "sites": [
+        {
+          "file": "cmd/cascade/embedder_socket_platform_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "cmd/cascade/embedder (tests)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -41889,7 +41923,7 @@
       ]
     }
   ],
-  "total_sites": 4038,
-  "unspecified_count": 354,
+  "total_sites": 4041,
+  "unspecified_count": 356,
   "multi_status_count": 129
 }
