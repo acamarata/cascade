@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-02T14:51:57Z",
+  "generated_at": "2026-11-02T22:19:42Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -132,6 +132,20 @@
           "line": 24,
           "status": "ADD",
           "raw": "ApprovalVerifier/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "AttestSignRequest",
+      "sites": [
+        {
+          "file": "internal/nodes/attest_sign.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "AttestSignRequest/ADDED"
         }
       ],
       "statuses": [
@@ -294,6 +308,20 @@
           "line": 5,
           "status": "ADD",
           "raw": "ConsumeResult/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "ControllerBindingStore",
+      "sites": [
+        {
+          "file": "internal/nodes/controller_binding.go",
+          "line": 24,
+          "status": "ADD",
+          "raw": "ControllerBindingStore/ADDED (P1-CI-13)."
         }
       ],
       "statuses": [
@@ -2296,6 +2324,20 @@
           "line": 13,
           "status": "",
           "raw": "bundle subcommand."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "ci tests",
+      "sites": [
+        {
+          "file": "internal/ci/attest_node_paths_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "ci tests (EXTEND) - P1-CI-13."
         }
       ],
       "statuses": [
@@ -4477,6 +4519,26 @@
       ]
     },
     {
+      "name": "cmd/cascade controllerPubKeyB64",
+      "sites": [
+        {
+          "file": "cmd/cascade/node_bind_key_unix.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "cmd/cascade controllerPubKeyB64/ADDED (P1-CI-13)."
+        },
+        {
+          "file": "cmd/cascade/node_bind_key_windows.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "cmd/cascade controllerPubKeyB64/ADDED (P1-CI-13)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade daemon",
       "sites": [
         {
@@ -4555,6 +4617,26 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "cmd/cascade daemon provider_health",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_provider_health.go",
+          "line": 28,
+          "status": "ADD",
+          "raw": "cmd/cascade daemon provider_health/ADD (P1-GWY-09)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_provider_health_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "cmd/cascade daemon provider_health/ADD (P1-GWY-09)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -5527,6 +5609,26 @@
           "line": 10,
           "status": "ADD",
           "raw": "cmd/cascade provider-deps-constructor (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade provider_health_probe",
+      "sites": [
+        {
+          "file": "cmd/cascade/provider_health_probe.go",
+          "line": 26,
+          "status": "ADD",
+          "raw": "cmd/cascade provider_health_probe/ADD (P1-GWY-09)."
+        },
+        {
+          "file": "cmd/cascade/provider_health_probe_test.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "cmd/cascade provider_health_probe/ADD (P1-GWY-09)."
         }
       ],
       "statuses": [
@@ -7662,6 +7764,33 @@
       ]
     },
     {
+      "name": "cmd/cascade/node bind",
+      "sites": [
+        {
+          "file": "cmd/cascade/node_attest_windows_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "cmd/cascade/node bind (windows, P1-CI-13)."
+        },
+        {
+          "file": "cmd/cascade/node_bind.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "cmd/cascade/node bind/ADDED"
+        },
+        {
+          "file": "cmd/cascade/node_bind_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "cmd/cascade/node bind (ADD tests, P1-CI-13)."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade/node enroll",
       "sites": [
         {
@@ -7691,6 +7820,20 @@
           "line": 26,
           "status": "ADD",
           "raw": "cmd/cascade/node rotate-key/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/node serve ci.attest.sign",
+      "sites": [
+        {
+          "file": "cmd/cascade/node_attest_integration_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "cmd/cascade/node serve ci.attest.sign (ADD tests, P1-CI-13)."
         }
       ],
       "statuses": [
@@ -13810,6 +13953,12 @@
       "name": "internal.build tests",
       "sites": [
         {
+          "file": "internal/build/agent_env_gate_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "internal.build tests (EXTEND) - P1-AGT-03."
+        },
+        {
           "file": "internal/build/arch_agent_envelope_test.go",
           "line": 5,
           "status": "ADD",
@@ -14720,6 +14869,20 @@
       ]
     },
     {
+      "name": "internal.ci.NodeAttestor",
+      "sites": [
+        {
+          "file": "internal/ci/attest_node.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal.ci.NodeAttestor/ADDED (P1-CI-13)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.ci.Refusal",
       "sites": [
         {
@@ -14727,6 +14890,20 @@
           "line": 25,
           "status": "ADD",
           "raw": "internal.ci.Refusal/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.RequestNodeSignature",
+      "sites": [
+        {
+          "file": "internal/ci/attest_request.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal.ci.RequestNodeSignature/ADDED (P1-CI-13)."
         }
       ],
       "statuses": [
@@ -18012,6 +18189,20 @@
       ]
     },
     {
+      "name": "internal.jobs.CiAttestSignedStore",
+      "sites": [
+        {
+          "file": "internal/jobs/ci_attest_signed.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal.jobs.CiAttestSignedStore/ADDED (P1-CI-13)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.jobs.CiAttestationStore",
       "sites": [
         {
@@ -19324,6 +19515,12 @@
           "raw": "internal.providers.agents/ADD (P1-AGT-14, contract:agent-hook-relay)."
         },
         {
+          "file": "internal/providers/agents/prespawn.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-03, contract:driver-custody-shim)."
+        },
+        {
           "file": "internal/providers/agents/profile.go",
           "line": 15,
           "status": "ADD",
@@ -19334,6 +19531,18 @@
           "line": 9,
           "status": "ADD",
           "raw": "internal.providers.agents/ADD (P1-AGT-02, contract:scope-envelope use)."
+        },
+        {
+          "file": "internal/providers/agents/spawn.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-03, contract:driver-custody-shim)."
+        },
+        {
+          "file": "internal/providers/agents/stdio.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-03, contract:driver-custody-shim)."
         }
       ],
       "statuses": [
@@ -19364,6 +19573,12 @@
           "raw": "internal.providers.agents tests (ADD) - P1-AGT-02."
         },
         {
+          "file": "internal/providers/agents/custody_redteam_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "internal.providers.agents tests (ADD) - P1-AGT-03."
+        },
+        {
           "file": "internal/providers/agents/detector_match_test.go",
           "line": 6,
           "status": "ADD",
@@ -19388,6 +19603,12 @@
           "raw": "internal.providers.agents tests (ADD) - P1-AGT-15."
         },
         {
+          "file": "internal/providers/agents/prespawn_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "internal.providers.agents tests (ADD) - P1-AGT-03."
+        },
+        {
           "file": "internal/providers/agents/profile_link_test.go",
           "line": 4,
           "status": "ADD",
@@ -19404,6 +19625,24 @@
           "line": 4,
           "status": "ADD",
           "raw": "internal.providers.agents tests (ADD) - P1-AGT-02."
+        },
+        {
+          "file": "internal/providers/agents/spawn_effect_test.go",
+          "line": 4,
+          "status": "ADD",
+          "raw": "internal.providers.agents tests (ADD) - P1-AGT-03."
+        },
+        {
+          "file": "internal/providers/agents/spawn_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "internal.providers.agents tests (ADD) - P1-AGT-03."
+        },
+        {
+          "file": "internal/providers/agents/stdio_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "internal.providers.agents tests (ADD) - P1-AGT-03."
         }
       ],
       "statuses": [
@@ -24682,6 +24921,20 @@
       ]
     },
     {
+      "name": "internal/nodes AttestSignMethod",
+      "sites": [
+        {
+          "file": "internal/nodes/attest_sign.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "internal/nodes AttestSignMethod/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/nodes BuildServeRegistry",
       "sites": [
         {
@@ -24708,6 +24961,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes ControllerBinding",
+      "sites": [
+        {
+          "file": "internal/nodes/controller_binding.go",
+          "line": 24,
+          "status": "CHANGE",
+          "raw": "internal/nodes ControllerBinding/CHG"
+        }
+      ],
+      "statuses": [
+        "CHANGE"
       ]
     },
     {
@@ -29293,6 +29560,26 @@
       ]
     },
     {
+      "name": "internal/providers/dispatch transient_health",
+      "sites": [
+        {
+          "file": "internal/providers/dispatch/transient_health.go",
+          "line": 27,
+          "status": "ADD",
+          "raw": "internal/providers/dispatch transient_health/ADD (P1-GWY-09)."
+        },
+        {
+          "file": "internal/providers/dispatch/transient_health_test.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal/providers/dispatch transient_health/ADD (P1-GWY-09)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/providers/gateway compare",
       "sites": [
         {
@@ -33660,6 +33947,46 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "node enroll --controller-endpoint",
+      "sites": [
+        {
+          "file": "cmd/cascade/node_bind.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "node enroll --controller-endpoint/ADDED (P1-CI-13)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "nodes tests",
+      "sites": [
+        {
+          "file": "internal/nodes/attest_sign_paths_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "nodes tests (EXTEND) - P1-CI-13."
+        },
+        {
+          "file": "internal/nodes/controller_binding_paths_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "nodes tests (EXTEND) - P1-CI-13."
+        },
+        {
+          "file": "internal/nodes/serve_paths_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "nodes tests (EXTEND) - P1-CI-13."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -42113,7 +42440,7 @@
       ]
     }
   ],
-  "total_sites": 4058,
-  "unspecified_count": 362,
-  "multi_status_count": 129
+  "total_sites": 4091,
+  "unspecified_count": 364,
+  "multi_status_count": 130
 }
