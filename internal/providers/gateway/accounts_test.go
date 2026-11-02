@@ -58,7 +58,7 @@ func TestParseAccountsHTTPSOnly(t *testing.T) {
 func TestParseAccountsHelperNeedsDigest(t *testing.T) {
 	m := accountTable()
 	delete(m, "key_env")
-	m["credential_helper"] = "/owner/program"
+	m["credential_helper"] = filepath.Join(t.TempDir(), "program") // absolute on every platform
 	parseTable(t, m, "helper_sha256")
 	for _, digest := range []string{"bad", strings.Repeat("A", 64)} {
 		m["helper_sha256"] = digest
