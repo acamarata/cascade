@@ -31,6 +31,7 @@ import (
 	"github.com/acamarata/cascade/internal/mcp"
 	"github.com/acamarata/cascade/internal/mcp/transport"
 	_ "github.com/acamarata/cascade/internal/plugins" // init(): cascade-pa's Conversations
+	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/pkg/plugin"
 	"github.com/acamarata/cascade/plugins/cascade-pa/tools"
 )
@@ -51,8 +52,9 @@ func callCpaSendOverStdio(t *testing.T, args map[string]string) tools.SendOutput
 	out := &bytes.Buffer{}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	// Serve with the owner caller cascade mcp stdio stamps (cmd/cascade/mcp.go).
 	srv := mcp.NewServer(mcp.NewToolRegistry(plugin.Builtins, mcp.AllowAllFilter{}))
-	if err := transport.NewStdioTransport(srv, strings.NewReader(frames), out).Serve(ctx); err != nil {
+	if err := transport.NewStdioTransport(srv, strings.NewReader(frames), out).Serve(principal.WithCaller(ctx, principal.Caller{})); err != nil {
 		t.Fatalf("stdio Serve: %v", err)
 	}
 	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {

@@ -48,5 +48,7 @@ func candidatePath(record Record, metaPath string, corpusRoot func(string) (stri
 	if metaPath == "" {
 		return "", true
 	}
-	return clean, true
+	// Metadata paths are repo-relative slash paths on every OS; Clean uses the
+	// OS separator, so convert back before the path leaves this package.
+	return filepath.ToSlash(clean), true
 }

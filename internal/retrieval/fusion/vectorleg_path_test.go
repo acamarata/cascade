@@ -67,3 +67,10 @@ func checkVectorPath(t *testing.T, path, root string, keep bool, want string) {
 		t.Fatalf("hits=%+v withheld=%d, want one withheld hit", list.Hits, withheld)
 	}
 }
+
+func TestCandidatePathKeepsSlashForm(t *testing.T) {
+	got, ok := candidatePath(Record{}, "docs/sub/../retrieval.md", nil)
+	if !ok || got != "docs/retrieval.md" {
+		t.Fatalf("candidatePath = %q, %v; want the slash form docs/retrieval.md", got, ok)
+	}
+}

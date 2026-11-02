@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,7 +19,9 @@ type registryAudit struct {
 
 func registryPackages(t *testing.T, pattern string) []*packages.Package {
 	t.Helper()
-	pkgs, err := packages.Load(&packages.Config{Dir: archModuleRoot(t), Mode: packages.NeedName | packages.NeedFiles | packages.NeedImports | packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo}, pattern)
+	// Load for one fixed GOOS: the register and signer call sites live in !windows
+	// files, so a host-OS load on windows would see no positive controls.
+	pkgs, err := packages.Load(&packages.Config{Dir: archModuleRoot(t), Env: append(os.Environ(), "GOOS=linux", "CGO_ENABLED=0"), Mode: packages.NeedName | packages.NeedFiles | packages.NeedImports | packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo}, pattern)
 	if err != nil {
 		t.Fatal(err)
 	}
