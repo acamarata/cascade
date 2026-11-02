@@ -22,8 +22,9 @@ var _ = registerDaemonWiring(daemonRegistration{
 		if err != nil {
 			return err
 		}
-		return wireCompletionHookPack(w.Ctx, w.Registry, w.Store, w.Clock, w.Bus, w.Paths,
+		w.Deps.Evidence, err = wireCompletionEvidence(w.Ctx, w.Registry, w.Store, w.Clock, w.Bus, w.Paths,
 			verifier, w.Deps.CI.Dispatcher(), w.Deps.Fleet.Leases(), completionController(w.Paths))
+		return err
 	},
 })
 

@@ -47,6 +47,7 @@ job.cancel
 job.list
 job.retry
 job.show
+jobs.evidence.list
 lease.list
 lease.release
 mcp.dispatch
@@ -70,6 +71,7 @@ perms.grant
 perms.revoke
 plugin.add
 plugin.intent
+plugin.pbd.evidence
 plugin.review.pr_diff
 plugin.review.review
 plugin.search

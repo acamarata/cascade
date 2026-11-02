@@ -296,6 +296,12 @@ linters:
             # the accept elevation row; it never dials the daemon (the CLI
             # half, context_facts.go, uses internal/client).
             - "!**/cmd/cascade/context_facts_rpc.go"
+            # jobs_evidence_rpc.go and jobs_evidence_sse.go serve jobs.evidence.list,
+            # plugin.pbd.evidence and the jobs.evidence stream from the daemon's own
+            # registry and event bus, declare their owner-only access and never dial
+            # the daemon.
+            - "!**/cmd/cascade/jobs_evidence_rpc.go"
+            - "!**/cmd/cascade/jobs_evidence_sse.go"
             - "!**/*_test.go"
           deny:
             - pkg: "github.com/acamarata/cascade/internal/rpc"

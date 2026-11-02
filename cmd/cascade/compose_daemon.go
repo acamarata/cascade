@@ -34,6 +34,7 @@ import (
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/internal/jobs"
 	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -84,6 +85,8 @@ type daemonWiring struct {
 // daemonRuntime is everything platformDaemonRun holds beyond daemonWiring's
 // other fields. A test-built wiring (no composeDaemon) leaves it zero.
 type daemonRuntime struct {
+	// Evidence is the completion gate's sole writer ledger, shared with reads.
+	Evidence    *jobs.EvidenceLedger
 	Config      *runtime.Config
 	RawDB       *sql.DB
 	Policy      *policyWiring

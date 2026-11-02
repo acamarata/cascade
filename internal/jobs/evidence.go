@@ -32,11 +32,14 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
+	"sync"
 	"time"
 
 	"github.com/acamarata/cascade/internal/audit"
+	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // EvidenceKind is the closed, seven-member evidence vocabulary. The zero
@@ -138,7 +141,8 @@ type EvidenceRecord struct {
 	ResultHash         string
 	IdempotencyKey     string
 	ArtifactRef        string
-	CreatedAt          time.Time // assigned by Append; ignored on input
+	CreatedAt          time.Time                 // assigned by Append; ignored on input
+	DataClass          *provider.SensitivityTier `json:"data_class"` // outside canonicalRow
 }
 
 // canonicalJSON is the exact wire shape prevHash chains over: field
@@ -185,10 +189,12 @@ func chainHash(r EvidenceRecord) ([]byte, error) {
 // EvidenceLedger is the per-job append-only evidence ledger, backed by
 // the jobs_evidence table.
 type EvidenceLedger struct {
-	store   *Store
-	clock   runtime.Clock
-	effects audit.EffectWriter
-	authz   *ProducerAuthz
+	store    *Store
+	clock    runtime.Clock
+	effects  audit.EffectWriter
+	authz    *ProducerAuthz
+	bus      *events.Bus // nil = no publish (P1-PBD-06)
+	appendMu sync.Mutex
 }
 
 // NewEvidenceLedger constructs a ledger. effects is REQUIRED -- a ledger
@@ -244,6 +250,8 @@ func (l *EvidenceLedger) Append(ctx context.Context, rec EvidenceRecord, auth Ap
 	if l == nil {
 		return EvidenceRecord{}, cascade.New(cascade.KindInvalidInput, "jobs: nil EvidenceLedger")
 	}
+	l.appendMu.Lock()
+	defer l.appendMu.Unlock()
 	if err := validateEvidenceRecord(rec); err != nil {
 		return EvidenceRecord{}, err
 	}
@@ -258,9 +266,19 @@ func (l *EvidenceLedger) Append(ctx context.Context, rec EvidenceRecord, auth Ap
 		}
 	}
 	if existing, ok, err := l.lookup(ctx, rec.JobID, rec.IdempotencyKey); err != nil || ok {
+		if err == nil && existing.DataClass == nil {
+			class := l.jobEvidenceClass(ctx, rec.JobID)
+			existing.DataClass = &class
+		}
 		return existing, err
 	}
-	return l.appendWithEffect(ctx, rec)
+	class := l.effectiveEvidenceClass(ctx, rec)
+	rec.DataClass = &class
+	out, err := l.appendWithEffect(ctx, rec)
+	if err == nil {
+		l.publishEvidenceChanged(ctx, out)
+	}
+	return out, err
 }
 
 // Query and Cursor are defined in migration_evidence.go, alongside the

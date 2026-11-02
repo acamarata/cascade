@@ -47,13 +47,21 @@ func completionController(paths runtime.PathProvider) func() bool {
 // *jobs.CompletionPolicy, and registers both the completion-gate hook
 // pack (descriptor side) and its live RPC handler (dispatch side).
 func wireCompletionHookPack(ctx context.Context, registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider, acceptance ...any) error {
+	_, err := wireCompletionEvidence(ctx, registry, store, clock, bus, paths, acceptance...)
+	return err
+}
+
+func wireCompletionEvidence(ctx context.Context, registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider, acceptance ...any) (*jobs.EvidenceLedger, error) {
 	// Legacy startup-recovery callers do not mount a completion handler.
 	if len(acceptance) == 0 {
-		_, _, err := completionLedger(ctx, store, clock, paths, nil, nil)
-		return err
+		ledger, _, err := completionLedger(ctx, store, clock, paths, nil, nil)
+		if ledger != nil {
+			ledger.WithBus(bus)
+		}
+		return ledger, err
 	}
 	if len(acceptance) != 4 {
-		return cascade.New(cascade.KindInvalidInput, "completion gate: acceptance dependencies required")
+		return nil, cascade.New(cascade.KindInvalidInput, "completion gate: acceptance dependencies required")
 	}
 	verifier, _ := acceptance[0].(jobs.AcceptanceVerifier)
 	checkpoints, _ := acceptance[1].(completionCheckpoints)
@@ -64,30 +72,31 @@ func wireCompletionHookPack(ctx context.Context, registry *rpc.Registry, store p
 
 // registerCompletionGate requires an exact-checkpoint source before mounting.
 func registerCompletionGate(ctx context.Context, registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider,
-	verifier jobs.AcceptanceVerifier, checkpoints completionCheckpoints, leases *jobs.LeaseManager, isController func() bool) error {
+	verifier jobs.AcceptanceVerifier, checkpoints completionCheckpoints, leases *jobs.LeaseManager, isController func() bool) (*jobs.EvidenceLedger, error) {
 	if checkpoints == nil {
-		return cascade.New(cascade.KindInvalidInput, "completion gate: checkpoints required")
+		return nil, cascade.New(cascade.KindInvalidInput, "completion gate: checkpoints required")
 	}
 	if v, ok := verifier.(*ciAcceptanceVerifier); ok && checkpoints != v.dispatcher {
-		return cascade.New(cascade.KindInvalidInput, "completion gate: acceptance and checkpoints must use the same dispatcher")
+		return nil, cascade.New(cascade.KindInvalidInput, "completion gate: acceptance and checkpoints must use the same dispatcher")
 	}
 	ledger, jstore, err := completionLedger(ctx, store, clock, paths, leases, isController)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	ledger.WithBus(bus)
 	policy, err := jobs.NewCompletionPolicy(jobs.CompletionPolicyDeps{
 		Store: jstore, Ledger: ledger, Bus: bus, Clock: clock, EngineID: completionGateEngineID,
 		Acceptance: verifier, RequireAcceptance: true,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	gate := &completionPolicyGate{policy: policy, store: jstore, checkpoints: checkpoints}
 	resolver := &completionJobResolver{store: jstore}
 	if err := hookpacks.RegisterCompletionHookPack(hookpacks.DefaultRegistry, gate, resolver); err != nil {
-		return err
+		return nil, err
 	}
-	return hookpacks.RegisterCompletionCheckHandler(registry, clock, bus, gate, resolver, 0)
+	return ledger, hookpacks.RegisterCompletionCheckHandler(registry, clock, bus, gate, resolver, 0)
 }
 
 // completionLedger opens the evidence store and binds producers to the lease authority.

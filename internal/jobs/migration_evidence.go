@@ -25,10 +25,11 @@ import (
 
 const tableEvidence = "jobs_evidence"
 
-const evidenceSchemaVersion = 1
+const evidenceSchemaVersion = 2
 
 // EvidenceMigrationSet is the jobs_evidence table's own MigrationSet,
-// distinct from MigrationSet() (migration.go) per R-16.77.
+// distinct from MigrationSet() (migration.go) per R-16.77. Version 2
+// adds the jobs_evidence_class side table (P1-PBD-06).
 func EvidenceMigrationSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
 		SetID:         "jobs-evidence",
@@ -63,6 +64,7 @@ func EvidenceMigrationSet() migrate.MigrationSet {
 					},
 				},
 			},
+			evidenceClassStep(),
 		},
 	}
 }
@@ -104,6 +106,14 @@ func existingByIdempotencyKeyTx(ctx context.Context, tx *sql.Tx, jobID, key stri
 	rec.StartedAt = unixToTime(started)
 	rec.EndedAt = unixToTime(ended)
 	rec.CreatedAt = unixToTime(created)
+	class, found, err := queryEvidenceClassTx(ctx, tx, jobID, rec.Seq)
+	if err != nil {
+		return EvidenceRecord{}, false, err
+	}
+	if found {
+		tier := tierOrLocalOnly(class)
+		rec.DataClass = &tier
+	}
 	return rec, true, nil
 }
 
@@ -185,7 +195,7 @@ func insertEvidenceRowTx(ctx context.Context, tx *sql.Tx, rec EvidenceRecord) er
 	if err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "jobs: insert evidence row")
 	}
-	return nil
+	return insertEvidenceClassRowTx(ctx, tx, rec.JobID, rec.Seq, evidenceClassWord(rec))
 }
 
 func unixToTime(u int64) time.Time {
@@ -266,6 +276,9 @@ func (l *EvidenceLedger) Query(ctx context.Context, jobID string, kind EvidenceK
 	}
 	if err != nil {
 		return EvidenceRecord{}, cascade.Wrap(cascade.KindUnavailable, err, "jobs: query evidence")
+	}
+	if err := l.readEvidenceClass(ctx, &rec); err != nil {
+		return EvidenceRecord{}, err
 	}
 	return rec, nil
 }
