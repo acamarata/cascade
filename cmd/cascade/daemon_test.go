@@ -28,8 +28,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -121,7 +124,46 @@ func TestDaemonStartStopRestartStatus_RealBinary(t *testing.T) {
 	// instead (see internal/daemon's shortTempDir for the same fix there).
 	home := shortHomeDir(t)
 	run := realBinaryRunner(t, binPath, home)
+	t.Cleanup(func() { reapRealDaemon(t, run) })
 	e2eRoundTrip(t, run)
+}
+
+var (
+	statusRunningRe = regexp.MustCompile(`"running":\s*true`)
+	statusPIDRe     = regexp.MustCompile(`"pid":\s*(\d+)`)
+)
+
+// reapRealDaemon makes sure no daemon outlives the real-binary test, even
+// when the round-trip fails midway. It asks the daemon to stop, then asks
+// the binary's own status check (which refuses to call a reused PID
+// "running") whether anything is still alive, and only then kills that PID
+// and waits for it to exit. The daemon is detached from the test process,
+// so polling replaces wait(2).
+func reapRealDaemon(t *testing.T, run func(...string) (string, int)) {
+	t.Helper()
+	_, _ = run("daemon", "stop")
+	out, _ := run("daemon", "status", "--json")
+	m := statusPIDRe.FindStringSubmatch(out)
+	if !statusRunningRe.MatchString(out) || m == nil {
+		return
+	}
+	pid, err := strconv.Atoi(m[1])
+	if err != nil || pid <= 0 {
+		return
+	}
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return
+	}
+	_ = p.Kill()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if p.Signal(syscall.Signal(0)) != nil {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Errorf("daemon pid %d still alive after kill", pid)
 }
 
 // realBinaryRunner returns a closure that invokes the built binary with
