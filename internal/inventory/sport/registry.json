@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-03T01:09:58Z",
+  "generated_at": "2026-11-03T07:46:14Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -19502,6 +19502,12 @@
           "line": 8,
           "status": "ADD",
           "raw": "internal.providers.agents/ADD (P1-AGT-02)."
+        },
+        {
+          "file": "internal/providers/agents/harness_codex.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-05)."
         },
         {
           "file": "internal/providers/agents/hookbridge.go",
@@ -39718,6 +39724,56 @@
       ]
     },
     {
+      "name": "providers.agents.codex",
+      "sites": [
+        {
+          "file": "providers/agents/codex/approval.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "providers.agents.codex/ADD (P1-AGT-05)."
+        },
+        {
+          "file": "providers/agents/codex/dispatch.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "providers.agents.codex/ADD (P1-AGT-05)."
+        },
+        {
+          "file": "providers/agents/codex/driver.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "providers.agents.codex/ADD (P1-AGT-05)."
+        },
+        {
+          "file": "providers/agents/codex/frame.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "providers.agents.codex/ADD (P1-AGT-05)."
+        },
+        {
+          "file": "providers/agents/codex/job.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "providers.agents.codex/ADD (P1-AGT-05)."
+        },
+        {
+          "file": "providers/agents/codex/session.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "providers.agents.codex/ADD (P1-AGT-05)."
+        },
+        {
+          "file": "providers/agents/codex/spawn.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "providers.agents.codex/ADD (P1-AGT-05)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "providers.agents.conformance",
       "sites": [
         {
@@ -42647,7 +42703,7 @@
       ]
     }
   ],
-  "total_sites": 4112,
+  "total_sites": 4120,
   "unspecified_count": 369,
   "multi_status_count": 131
 }
