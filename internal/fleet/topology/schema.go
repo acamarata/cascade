@@ -261,3 +261,30 @@ func laneTable() migrate.TableDef {
 		},
 	}
 }
+
+// tableBillingEvidence holds the evidence rows a paid promotion writes in
+// the same transaction as its billing_tier change (schema v2).
+const tableBillingEvidence = "config_domain_billing_evidence"
+
+// billingEvidenceTable is the config_domain_billing_evidence TableDef. It
+// holds key material references and fingerprints only, never a credential.
+func billingEvidenceTable() migrate.TableDef {
+	text := func(name string) migrate.ColumnDef {
+		return migrate.ColumnDef{Name: name, Type: migrate.TypeText, NotNull: true}
+	}
+	return migrate.TableDef{
+		Name: tableBillingEvidence,
+		Columns: []migrate.ColumnDef{
+			{Name: "id", Type: migrate.TypeInteger, PrimaryKey: true, AutoIncrement: true, NotNull: true},
+			text("domain_id"), text("provider"), text("instance_id"), text("endpoint"),
+			text("auth_ref"), text("credential_fingerprint"), text("promoted_by"),
+			text("test_outcome"), text("probe_kind"),
+			{Name: "probe_status", Type: migrate.TypeInteger, NotNull: true},
+			text("probe_endpoint"),
+			{Name: "observed_at", Type: migrate.TypeInteger, NotNull: true},
+		},
+		ForeignKeys: []migrate.ForeignKeyDef{
+			{Column: "domain_id", RefTable: tableQuotaDomain, RefColumn: "id"},
+		},
+	}
+}

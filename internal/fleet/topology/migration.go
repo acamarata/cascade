@@ -30,14 +30,15 @@ import (
 
 // topologySchemaVersion is this package's own MigrationSet sequence
 // number, independent of every other package's (R-16.77).
-const topologySchemaVersion = 1
+const topologySchemaVersion = 2
 
 // SchemaVersion is topologySchemaVersion, exported for a future
 // composition root's reader-ceiling max(), matching registry.SchemaVersion's
 // and scope.SchemaVersion's own pattern.
 const SchemaVersion = topologySchemaVersion
 
-// MigrationSet is fleet topology's five-table schema, inside the `config`
+// MigrationSet is fleet topology's six-table schema (v1's five plus the
+// v2 billing-evidence table), inside the `config`
 // storage domain.
 func MigrationSet() migrate.MigrationSet {
 	accountStep := migrate.MigrationStep{Kind: migrate.StepCreateTable, Table: tblPtr(accountTable()), Description: "config_account: one row per provider account (R-21.24)"}
@@ -45,12 +46,14 @@ func MigrationSet() migrate.MigrationSet {
 	profileStep := migrate.MigrationStep{Kind: migrate.StepCreateTable, Table: tblPtr(runtimeProfileTable()), Description: "config_runtime_profile: one row per (provider, runtime) pair (R-21.24)"}
 	credStep := migrate.MigrationStep{Kind: migrate.StepCreateTable, Table: tblPtr(credentialTable()), Description: "config_credential: one row per lane record's credential, secret_ref only (R-21.24, R-16.44)"}
 	laneStep := migrate.MigrationStep{Kind: migrate.StepCreateTable, Table: tblPtr(laneTable()), Description: "config_lane: one row per lane, derived id, model_identity + offering_snapshot columns (R-21.24, R-21.72, R-21.101)"}
+	// v2 (P1-TOP-19): a new table only; no existing table is altered.
+	evidenceStep := migrate.MigrationStep{Kind: migrate.StepCreateTable, Table: tblPtr(billingEvidenceTable()), Description: "config_domain_billing_evidence: evidence rows written with each paid promotion (P1-TOP-19)"}
 
 	return migrate.MigrationSet{
 		SetID:         "fleet-topology",
 		SchemaVersion: topologySchemaVersion,
 		ReaderCeiling: topologySchemaVersion,
-		Steps:         []migrate.MigrationStep{accountStep, quotaStep, profileStep, credStep, laneStep},
+		Steps:         []migrate.MigrationStep{accountStep, quotaStep, profileStep, credStep, laneStep, evidenceStep},
 	}
 }
 

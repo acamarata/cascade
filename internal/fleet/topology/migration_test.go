@@ -88,10 +88,80 @@ func TestMigrationSetIdentity(t *testing.T) {
 	if set.SetID != "fleet-topology" {
 		t.Errorf("SetID = %q, want \"fleet-topology\"", set.SetID)
 	}
-	if set.SchemaVersion != topologySchemaVersion || set.ReaderCeiling != topologySchemaVersion {
-		t.Errorf("SchemaVersion/ReaderCeiling should both equal topologySchemaVersion")
+	if set.SchemaVersion != 2 || set.ReaderCeiling != 2 || SchemaVersion != 2 {
+		t.Errorf("SchemaVersion/ReaderCeiling = %d/%d, want 2/2", set.SchemaVersion, set.ReaderCeiling)
 	}
-	if len(set.Steps) != 5 {
-		t.Fatalf("expected 5 migration steps (one per entity table), got %d", len(set.Steps))
+	if len(set.Steps) != 6 {
+		t.Fatalf("expected 6 migration steps (v1's five tables plus billing evidence), got %d", len(set.Steps))
+	}
+	// v2 only appends: the five v1 steps keep their exact definitions.
+	v1 := []string{tableAccount, tableQuotaDomain, tableRuntimeProfile, tableCredential, tableLane}
+	for i, name := range v1 {
+		if set.Steps[i].Kind != migrate.StepCreateTable || set.Steps[i].Table.Name != name {
+			t.Errorf("step %d = %v %q, want create %q", i, set.Steps[i].Kind, set.Steps[i].Table.Name, name)
+		}
+	}
+	if last := set.Steps[5]; last.Kind != migrate.StepCreateTable || last.Table.Name != tableBillingEvidence {
+		t.Errorf("step 5 must create %q", tableBillingEvidence)
+	}
+}
+
+// migrationSetV1 rebuilds the shipped v1 set: the first five steps at
+// SchemaVersion 1.
+func migrationSetV1() migrate.MigrationSet {
+	set := MigrationSet()
+	set.SchemaVersion, set.ReaderCeiling, set.Steps = 1, 1, set.Steps[:5]
+	return set
+}
+
+func TestMigrationV2AddsBillingEvidenceTable(t *testing.T) {
+	isolatedRoot(t)
+	db := openRealSQLiteFile(t)
+	ctx := context.Background()
+	cfg := migrate.ApplyConfig{DB: db, Dialect: migrate.SQLiteEmitter{}, Clock: newTestClock()}
+	if err := migrate.Apply(ctx, cfg, migrationSetV1()); err != nil {
+		t.Fatalf("apply v1: %v", err)
+	}
+	var n int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE name = ?`, tableBillingEvidence).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("v1 already has %s: n=%d err=%v", tableBillingEvidence, n, err)
+	}
+	s := NewStore(db)
+	acct := Account{ID: "acct-v1", Provider: "prov-v1", Billing: BillingInfo{Kind: BillingAPI}, Role: AccountRoleWorkforce}
+	dom := QuotaDomain{ID: "dom-v1", AccountRef: acct.ID, Kind: QuotaDomainAPIProject, BillingTier: BillingTierDiscover}
+	if err := s.UpsertAccount(ctx, acct); err != nil {
+		t.Fatalf("v1 account: %v", err)
+	}
+	if err := s.UpsertQuotaDomain(ctx, dom); err != nil {
+		t.Fatalf("v1 domain: %v", err)
+	}
+	for i := 0; i < 2; i++ { // the second v2 apply is a no-op
+		if err := ApplyMigrationSchema(ctx, db, migrate.SQLiteEmitter{}, newTestClock(), "", ""); err != nil {
+			t.Fatalf("apply v2 (pass %d): %v", i, err)
+		}
+	}
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE name = ?`, tableBillingEvidence).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("v2 lacks %s: n=%d err=%v", tableBillingEvidence, n, err)
+	}
+	got, err := s.GetQuotaDomain(ctx, "dom-v1")
+	if err != nil || got.AccountRef != dom.AccountRef || got.BillingTier != BillingTierDiscover || got.Kind != dom.Kind {
+		t.Fatalf("v1 domain after v2: %+v, %v", got, err)
+	}
+	if a, err := s.GetAccount(ctx, "acct-v1"); err != nil || a != acct {
+		t.Fatalf("v1 account after v2: %+v, %v", a, err)
+	}
+	ev, err := s.BillingEvidenceFor(ctx, "dom-v1")
+	if err != nil || len(ev) != 0 {
+		t.Fatalf("v2 evidence on v1 domain: %d, %v", len(ev), err)
+	}
+	// Every v2 column is NOT NULL and domain_id references a real domain.
+	if _, err := db.ExecContext(ctx, `INSERT INTO `+tableBillingEvidence+` (domain_id) VALUES ('dom-v1')`); err == nil {
+		t.Fatal("a row with NULL columns was accepted")
+	}
+	if err := s.insertEvidence(ctx, passingEvidence("ghost", "a")); err == nil {
+		t.Fatal("an evidence row for an unknown domain was accepted")
+	}
+	if err := s.insertEvidence(ctx, passingEvidence("dom-v1", "a")); err != nil {
+		t.Fatalf("valid evidence row: %v", err)
 	}
 }
