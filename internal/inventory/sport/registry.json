@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-03T18:45:00Z",
+  "generated_at": "2026-11-03T20:48:48Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -12475,6 +12475,20 @@
           "status": "ADD",
           "ticket": "P1-E40-W9-S78-T1",
           "raw": "fleet/topology/batch/ADD (P1-E40-W9-S78-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/billing_promotion",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/billing_promotion.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "fleet/topology/billing_promotion/ADD (P1-TOP-19)."
         }
       ],
       "statuses": [
@@ -42751,7 +42765,7 @@
       ]
     }
   ],
-  "total_sites": 4125,
+  "total_sites": 4126,
   "unspecified_count": 369,
   "multi_status_count": 131
 }
