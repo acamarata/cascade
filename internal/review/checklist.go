@@ -16,12 +16,13 @@
 //   contract's word "High" maps to it, and the message cites D7). The
 //   reviewer never accepts a worker's word that a test ran: "ran clean" with
 //   no command and no exit code is exactly the input this refuses.
-// SPORT: internal/review.checklist/ADD (P1-E25-W5-S52-T4).
+// SPORT: internal/review.checklist/ADD (P1-E25-W5-S52-T4; v1: P1-PBD-01).
 
 package review
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/acamarata/cascade/pkg/provider"
@@ -58,6 +59,9 @@ type Checklist struct {
 	// RequiredChecks are the commands the response must report an
 	// execution record for: the command as run, and its exit code.
 	RequiredChecks []string
+	// v1 marks a checklist the provider injected as checklist v1, so a
+	// violated dimension is reported under its "[D<n>] " number.
+	v1 bool
 }
 
 // Empty reports whether the caller declared no checklist at all, in which
@@ -192,7 +196,7 @@ func (c Checklist) Violations(answers []wireChecklistAnswer, executed []wireExec
 	if c.Empty() {
 		return nil
 	}
-	var out []provider.ReviewFinding
+	out := c.violatedV1Findings(answers)
 	for _, d := range c.unansweredDimensions(answers) {
 		out = append(out, provider.ReviewFinding{
 			Severity: provider.ReviewSeverityMajor,
@@ -207,6 +211,88 @@ func (c Checklist) Violations(answers []wireChecklistAnswer, executed []wireExec
 				" -- no execution record (command plus exit code) accompanies this required check, " +
 				"so it is a violated D7 finding (AMD-20260916/6, R-14.249): the reviewer never accepts " +
 				"a worker's word that a check ran",
+		})
+	}
+	return out
+}
+
+// checklistV1Dimensions is checklist v1: the ten dimensions a native CR-B
+// or CR-C review answers when its caller declared none. Index plus one is
+// the D-number, so the order is contract and never reshuffled.
+var checklistV1Dimensions = [...]string{
+	"correctness",
+	"error-handling",
+	"security",
+	"concurrency",
+	"tests",
+	"scope",
+	"contract",
+	"simplicity",
+	"performance",
+	"docs",
+}
+
+// ChecklistV1Dimensions returns a copy of the ten checklist v1 dimensions
+// in D-number order (D1 first).
+func ChecklistV1Dimensions() []string {
+	return append([]string(nil), checklistV1Dimensions[:]...)
+}
+
+// ChecklistV1Context renders checklist v1 in the DIMENSION: spelling, so
+// ParseChecklist reads it back as exactly the ten v1 dimensions.
+func ChecklistV1Context() string {
+	var b strings.Builder
+	for _, d := range checklistV1Dimensions {
+		b.WriteString("DIMENSION: " + d + "\n")
+	}
+	return b.String()
+}
+
+// withChecklistV1 appends checklist v1 to reqContext for a CR-B or CR-C
+// request that declared no DIMENSION: line of its own. CR-A and a
+// self-declared checklist pass through unchanged; injected reports whether
+// v1 was added.
+func withChecklistV1(level provider.ReviewCRLevel, reqContext string) (string, bool) {
+	if level != provider.ReviewCRLevelB && level != provider.ReviewCRLevelC {
+		return reqContext, false
+	}
+	if dimensionPattern.MatchString(reqContext) {
+		return reqContext, false
+	}
+	if reqContext != "" && !strings.HasSuffix(reqContext, "\n") {
+		reqContext += "\n"
+	}
+	return reqContext + ChecklistV1Context(), true
+}
+
+// v1Number returns the D-number of a checklist v1 dimension name, or 0
+// when name is not a v1 dimension.
+func v1Number(name string) int {
+	key := strings.ToLower(strings.TrimSpace(name))
+	for i, d := range checklistV1Dimensions {
+		if d == key {
+			return i + 1
+		}
+	}
+	return 0
+}
+
+// violatedV1Findings turns every v1 dimension the model answered
+// "violated" into a major finding whose Message starts "[D<n>] ". A
+// checklist the provider did not inject yields none.
+func (c Checklist) violatedV1Findings(answers []wireChecklistAnswer) []provider.ReviewFinding {
+	if !c.v1 {
+		return nil
+	}
+	var out []provider.ReviewFinding
+	for _, a := range answers {
+		n := v1Number(a.Name)
+		if n == 0 || strings.ToLower(strings.TrimSpace(a.Status)) != "violated" {
+			continue
+		}
+		out = append(out, provider.ReviewFinding{
+			Severity: provider.ReviewSeverityMajor,
+			Message:  "[D" + strconv.Itoa(n) + "] " + checklistV1Dimensions[n-1] + " violated: " + strings.TrimSpace(a.Reason),
 		})
 	}
 	return out

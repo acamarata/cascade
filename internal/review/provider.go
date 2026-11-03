@@ -78,15 +78,20 @@ var _ provider.ReviewProvider = (*Provider)(nil)
 // CR-A/CR-B/CR-C split, the CR-C two-pass fan-out and the family gate all
 // live behind. ctx reaches Execute UNCHANGED: the thread privacy a caller
 // attached is what the router enforces, and swapping in a fresh context here
-// would silently strip it.
+// would silently strip it. A CR-B or CR-C request that declared no
+// DIMENSION: line gets checklist v1 appended to its Context first
+// (checklist.go), so the ten v1 dimensions reach the model prompt.
 func (p *Provider) Review(ctx context.Context, req provider.ReviewRequest) (provider.ReviewResponse, error) {
 	if !req.Level.Valid() {
 		return provider.ReviewResponse{}, cascade.Newf(cascade.KindInvalidInput, "internal/review: invalid review level %q", req.Level)
 	}
+	var injected bool
+	req.Context, injected = withChecklistV1(req.Level, req.Context)
 	plan, err := NewPlan(req, ConsequenceClassForLevel(req.Level))
 	if err != nil {
 		return provider.ReviewResponse{}, err
 	}
+	plan.Checks.v1 = injected
 	resp, _, err := Review(ctx, plan, req.Level, p.executor, p.registry, p.events)
 	return resp, err
 }
