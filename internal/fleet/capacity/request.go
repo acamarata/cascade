@@ -20,6 +20,7 @@ package capacity
 
 import (
 	"github.com/acamarata/cascade/internal/conductor"
+	"github.com/acamarata/cascade/internal/fleet/topology"
 	"github.com/acamarata/cascade/internal/jobs"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -170,6 +171,33 @@ type ResourceRequest struct {
 	PreferredTier TierEnum
 	ReserveTier0  bool
 	DataClass     *provider.SensitivityTier
+	// Rank inputs (P1-TOP-09). TaskClass stays the hard filter; these only
+	// order lanes that already passed it. Roles: nil means no preference.
+	// Producer: nil means no producer to stay independent of.
+	// IndependenceWeight: nil means unset; when set it must lie in [0,1].
+	Roles              []topology.Role
+	Producer           *topology.ModelIdentity
+	IndependenceWeight *float64
+}
+
+// ErrUnknownRole refuses a Roles entry outside topology.Role's closed set.
+var ErrUnknownRole = cascade.New(cascade.KindInvalidInput, "capacity: unknown role in roles")
+
+// ErrIndependenceWeightRange refuses an IndependenceWeight outside [0,1]
+// (NaN included).
+var ErrIndependenceWeightRange = cascade.New(cascade.KindInvalidInput, "capacity: independence_weight must lie in [0,1]")
+
+// validateRankFields checks the P1-TOP-09 Rank fields fail closed.
+func validateRankFields(req ResourceRequest) error {
+	for _, r := range req.Roles {
+		if !r.Valid() {
+			return ErrUnknownRole
+		}
+	}
+	if w := req.IndependenceWeight; w != nil && !(*w >= 0 && *w <= 1) {
+		return ErrIndependenceWeightRange
+	}
+	return nil
 }
 
 // conductorTaskClasses is every §5.16 task-class member ResourceRequest.
@@ -235,6 +263,9 @@ func ValidateResourceRequest(req ResourceRequest, derivedFloor *provider.Sensiti
 		out.RiskClass = jobs.RiskClassCritical
 	} else if !validRiskClass(out.RiskClass) {
 		return ResourceRequest{}, cascade.Newf(cascade.KindInvalidInput, "capacity: unknown risk_class %q", out.RiskClass)
+	}
+	if err := validateRankFields(out); err != nil {
+		return ResourceRequest{}, err
 	}
 	floor := new(provider.TierOrLocalOnly(derivedFloor))
 	if out.DataClass == nil {

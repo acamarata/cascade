@@ -9,13 +9,13 @@ package capacity
 import (
 	"encoding"
 	"encoding/json"
-	"github.com/acamarata/cascade/pkg/provider"
 	"testing"
 
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // TestResourceRequestEnums round-trips every enum this ticket declares
