@@ -92,6 +92,35 @@ func assertFailedVerificationMintsNothing(t *testing.T, args string) {
 	}
 }
 
+// TestVerifiedElevationRefusedUnderToolOrigin verifies that a context
+// carrying a valid witness from the P1-SEC-03 middleware but marked with
+// OriginTool yields ok=false from VerifiedElevationFrom. A tool caller
+// cannot rehydrate secrets even when it holds a valid attestation witness.
+func TestVerifiedElevationRefusedUnderToolOrigin(t *testing.T) {
+	skipIfPlatformRefuses(t)
+	const args = `{"target":"db-password"}`
+
+	// Obtain a valid witness from the middleware.
+	f := newMWFixture(t, "vault.get")
+	nonce := f.challenge(t, args)
+	if _, err := f.wrapped(context.Background(), f.envelope(t, args, nonce)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify the witness is present without OriginTool.
+	if _, ok := VerifiedElevationFrom(f.gotCtx); !ok {
+		t.Fatal("setup: witness should be present before adding OriginTool")
+	}
+
+	// Attach OriginTool to the context carrying the witness.
+	toolCtx := WithOrigin(f.gotCtx, OriginTool)
+
+	// VerifiedElevationFrom must refuse under OriginTool.
+	if _, ok := VerifiedElevationFrom(toolCtx); ok {
+		t.Error("VerifiedElevationFrom returned ok=true for a context with OriginTool; tool callers must be refused")
+	}
+}
+
 // A witness already in the incoming context never reaches another dispatch:
 // the middleware strips it from every call it does not verify itself.
 func TestWitnessDoesNotRideIntoAnotherDispatch(t *testing.T) {

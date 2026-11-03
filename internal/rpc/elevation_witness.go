@@ -95,8 +95,13 @@ func withoutVerifiedElevation(ctx context.Context) context.Context {
 }
 
 // VerifiedElevationFrom returns the witness attached to ctx. It reports false
-// when ctx carries none, and for the zero value.
+// when ctx carries none, and for the zero value. It also reports false when
+// the context origin is OriginTool: a tool caller cannot rehydrate secrets
+// even when it holds a valid attestation witness.
 func VerifiedElevationFrom(ctx context.Context) (VerifiedElevation, bool) {
+	if o, ok := OriginFrom(ctx); ok && o == OriginTool {
+		return VerifiedElevation{}, false
+	}
 	v, ok := ctx.Value(witnessKey{}).(VerifiedElevation)
 	if !ok || v.method == "" || v.paramsHash == "" || v.issuer == nil {
 		return VerifiedElevation{}, false

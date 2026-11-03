@@ -24,7 +24,7 @@ import (
 
 // rehydrateCallerAllowlist is the set of module-relative paths (a
 // directory, or one file) whose files may reach RehydrateOnly.
-var rehydrateCallerAllowlist = []string{"internal/secrets", "internal/conductor/executor"}
+var rehydrateCallerAllowlist = []string{"internal/secrets", "cmd/cascade/hooks_rehydrate.go"}
 
 // rehydrateCallerAllowed matches the slash-separated rel by whole segments.
 func rehydrateCallerAllowed(rel string) bool {
@@ -235,7 +235,8 @@ func TestArchRehydrateCallersDetectsRehydrateOnly(t *testing.T) {
 		"cmd/app/main.go": "package main\n\nimport (\n\t\"example.com/fixture/internal/hooks\"\n\t\"example.com/fixture/internal/secrets\"\n)\n\n" +
 			"func main() { hooks.Run(&secrets.Rehydrator{}) }\n",
 	})
-	want := []string{"internal/hooks/binding.go:11: selects RehydrateOnly", "internal/plugins/call.go:11: selects RehydrateOnly",
+	want := []string{"internal/conductor/executor/run.go:11: selects RehydrateOnly",
+		"internal/hooks/binding.go:11: selects RehydrateOnly", "internal/plugins/call.go:11: selects RehydrateOnly",
 		"internal/secretsish/call.go:11: selects RehydrateOnly", "internal/wrap/wrap.go:13: selects RehydrateOnly"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("findings:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
