@@ -12,6 +12,7 @@ var auditOnlyInventory = []struct {
 	class  EgressClass
 	reason string
 }{
+	{EgressClassFleetDiscovery, "Fleet discovery is not wired yet; its caller does not yet transit the egress engine."},
 	{EgressClassOAuth, "Token endpoint requests do not yet transit the egress engine."},
 	{EgressClassSpikeMeasurement, "Measurement requests do not yet transit the egress engine."},
 	{EgressClassWikiGitPush, "The git push process does not yet transit the egress engine."},

@@ -7,6 +7,20 @@ import (
 	"testing"
 )
 
+// TestFleetDiscoveryClassOnce asserts EgressClassFleetDiscovery appears
+// exactly once in defaultClasses and no registration function is called.
+func TestFleetDiscoveryClassOnce(t *testing.T) {
+	count := 0
+	for _, entry := range defaultClasses {
+		if entry.Class == EgressClassFleetDiscovery {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("EgressClassFleetDiscovery appears %d times in defaultClasses, want 1", count)
+	}
+}
+
 // TestEgressClassesR21265Registered asserts each shipped class's
 // identifier, owner and enabled/disabled verdict. The expectations are
 // written out here rather than read back from defaultClasses, so a change
@@ -39,6 +53,7 @@ func TestEgressClassesR21265Registered(t *testing.T) {
 		{EgressClassCIOIDCJWKS, "ci-oidc-jwks", "P1-CI-14", true, false},
 		{EgressClassAgentDriver, "agent-driver", "P1-AGT-03", true, false},
 		{EgressClassProviderUsage, "provider-usage", "P1-GWY-04", true, false},
+		{EgressClassFleetDiscovery, "fleet-discovery", "P1-TOP-18", true, false},
 	}
 	registry := DefaultRegistry()
 	if got, want := len(registry.Classes()), len(cases); got != want {

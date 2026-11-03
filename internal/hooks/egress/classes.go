@@ -266,6 +266,8 @@ var defaultClasses = []struct {
 	{EgressClassAgentDriver, InterceptConfig{Enabled: true, AllowRestricted: false, Owner: "P1-AGT-03"}},
 	{EgressClassProviderUsage, InterceptConfig{Enabled: true, AllowRestricted: false,
 		AllowedTiers: []SensitivityTier{TierInternal, TierPublic}, Owner: "P1-GWY-04"}},
+	{EgressClassFleetDiscovery, InterceptConfig{Enabled: true, AllowRestricted: false,
+		AllowedTiers: []SensitivityTier{TierInternal, TierPublic}, Owner: "P1-TOP-18"}},
 }
 
 // EgressClassProviderUsage is the gateway quota poll (P1-GWY-04): every GET
