@@ -60,9 +60,6 @@ func Deferrals() []Deferral {
 				"different capability that internal/repo's reachability-only graph does not yet provide. " +
 				"AG/S-67.T3 builds it and registers it as a `graph` corpus in the retrieval engine — at " +
 				"which point recall.query answers this without a second tool (R-14.266)"},
-		// CASCADE-ALLOW: P1-HRN-06 owns the compact-profile inbox reads.
-		{"cascade.inbox.list", "P1-HRN-06",
-			"cascade_inbox_list is a compact-profile name P1-HRN-06 owns; internal/notify.Inbox is in-daemon memory with no RPC namespace"},
 		// CASCADE-ALLOW: P1-HRN-05 owns cascade_cpa_send.
 		{"cascade.inbox.send", "P1-HRN-05",
 			"the mutating counterpart is cascade_cpa_send in the compact-write profile, which P1-HRN-05 owns"},
@@ -97,11 +94,10 @@ func Deferrals() []Deferral {
 			"RETIRED by R-14.266. v2 has no api-routes.yaml to check, and the tool issued outbound HTTP — " +
 				"a model-callable surface that makes arbitrary requests needs a registered egress class, " +
 				"which nothing would register for a concept this build does not have."},
-		// CASCADE-ALLOW: P1-HRN-06 owns the compact-profile inbox reads.
-		{"cascade.scan_inbox", "P1-HRN-06",
-			"v1 drained a filesystem inbox directory; v2 routes notifications through internal/notify, and " +
-				"the read surface a model gets is cascade_inbox_list, which P1-HRN-06 owns alongside the " +
-				"inbox list tool (R-14.266)"},
+		// CASCADE-ALLOW: Retired by R-14.266; reads served by cascade_inbox_list.
+		{"cascade.scan_inbox", Retired,
+			"RETIRED by R-14.266. v1's filesystem inbox scan does not return. Notification summaries are " +
+				"SERVED by cascade_inbox_list (inbox.list), the registered session-bound read surface."},
 		// CASCADE-ALLOW: Retired by R-14.266.
 		{"cascade.security.secret_scan", Retired,
 			"RETIRED by R-14.266, and the reason is not that it would be hard. A tool that scans a " +

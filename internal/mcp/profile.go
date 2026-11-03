@@ -54,6 +54,8 @@ var CompactToolNames = []string{
 	"cascade_context_slice",
 	"cascade_memory_recall",
 	"cascade_plugin_pbd_status",
+	"cascade_inbox_list",
+	"cascade_inbox_read",
 }
 
 // CompactWriteToolNames is the set compact-write adds on top of

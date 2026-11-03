@@ -148,9 +148,11 @@
           }
         }
       },
-      "status": "deferred",
-      "deferred_to": "P1-HRN-06",
-      "reason": "cascade_inbox_list is a compact-profile name P1-HRN-06 owns; internal/notify.Inbox is in-daemon memory with no RPC namespace"
+      "status": "registered",
+      "name": "cascade_inbox_list",
+      "rpc_method": "inbox.list",
+      "capability": "inbox.read",
+      "alias": ""
     },
     {
       "v1_name": "cascade.inbox.send",
@@ -641,8 +643,8 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-HRN-06",
-      "reason": "v1 drained a filesystem inbox directory; v2 routes notifications through internal/notify with no such directory"
+      "deferred_to": "retired",
+      "reason": "RETIRED by R-14.266. v1's filesystem inbox scan does not return. Notification summaries are SERVED by cascade_inbox_list (inbox.list), the registered session-bound read surface."
     },
     {
       "v1_name": "cascade.security.secret_scan",
@@ -862,6 +864,16 @@
       "name": "cascade_ci_status",
       "rpc_method": "ci.status",
       "capability": "ci.read",
+      "alias": ""
+    },
+    {
+      "v1_name": "NEW-IN-V2:cascade_inbox_read",
+      "v1_description": "(no v1 ancestor -- reading a notification body as an MCP tool is new in v2)",
+      "v1_input_schema": {},
+      "status": "registered",
+      "name": "cascade_inbox_read",
+      "rpc_method": "inbox.read",
+      "capability": "inbox.read",
       "alias": ""
     }
   ]

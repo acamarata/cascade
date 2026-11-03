@@ -125,6 +125,7 @@ func Specs() []Spec {
 	out = append(out, contextSpecs()...)
 	out = append(out, memorySpecs()...)
 	out = append(out, pluginSpecs()...)
+	out = append(out, inboxSpecs()...)
 	return append(out, ciSpecs()...)
 }
 
