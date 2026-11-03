@@ -86,10 +86,11 @@ func TestRegisterHarnessDuplicatePanics(t *testing.T) {
 		t.Fatalf("duplicate panic %q", msg)
 	}
 	claude := Bindings()[0]
+	before := len(Bindings())
 	if msg := mustPanic(t, "re-registering claude", func() { RegisterHarness(claude, noFactory) }); !strings.Contains(msg, `"claude" registered twice`) {
 		t.Fatalf("global duplicate panic %q", msg)
 	}
-	if n := len(Bindings()); n != 1 {
+	if n := len(Bindings()); n != before {
 		t.Fatalf("a refused registration changed the table: %d rows", n)
 	}
 	mustPanic(t, "a nil factory", func() { r.add(fakeBinding("nilf"), nil) })

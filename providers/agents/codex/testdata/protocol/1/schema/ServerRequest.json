@@ -1,0 +1,250 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ServerRequest",
+  "description": "Request from the server to the client.",
+  "oneOf": [
+    {
+      "type": "object",
+      "title": "item_commandExecution_requestApprovalRequest",
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "item/commandExecution/requestApproval"
+          ]
+        },
+        "params": {
+          "$ref": "#/definitions/CommandExecutionRequestApprovalParams"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "title": "item_fileChange_requestApprovalRequest",
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "item/fileChange/requestApproval"
+          ]
+        },
+        "params": {
+          "$ref": "#/definitions/FileChangeRequestApprovalParams"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "title": "item_permissions_requestApprovalRequest",
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "item/permissions/requestApproval"
+          ]
+        },
+        "params": {
+          "$ref": "#/definitions/PermissionsRequestApprovalParams"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "title": "item_tool_requestUserInputRequest",
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "item/tool/requestUserInput"
+          ]
+        },
+        "params": {
+          "$ref": "#/definitions/ToolRequestUserInputParams"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "title": "mcpServer_elicitation_requestRequest",
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "mcpServer/elicitation/request"
+          ]
+        },
+        "params": {
+          "$ref": "#/definitions/McpServerElicitationRequestParams"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "title": "item_tool_callRequest",
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "item/tool/call"
+          ]
+        },
+        "params": {
+          "$ref": "#/definitions/DynamicToolCallParams"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "title": "account_chatgptAuthTokens_refreshRequest",
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "account/chatgptAuthTokens/refresh"
+          ]
+        },
+        "params": {
+          "$ref": "#/definitions/ChatgptAuthTokensRefreshParams"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "title": "attestation_generateRequest",
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "attestation/generate"
+          ]
+        },
+        "params": {
+          "$ref": "#/definitions/AttestationGenerateParams"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "title": "applyPatchApprovalRequest",
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "applyPatchApproval"
+          ]
+        },
+        "params": {
+          "$ref": "#/definitions/ApplyPatchApprovalParams"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "title": "execCommandApprovalRequest",
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "execCommandApproval"
+          ]
+        },
+        "params": {
+          "$ref": "#/definitions/ExecCommandApprovalParams"
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "RequestId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer",
+          "format": "int64"
+        }
+      ]
+    }
+  }
+}

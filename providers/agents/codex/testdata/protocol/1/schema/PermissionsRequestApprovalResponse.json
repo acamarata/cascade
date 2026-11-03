@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PermissionsRequestApprovalResponse",
+  "type": "object",
+  "required": [
+    "permissions",
+    "scope"
+  ],
+  "properties": {
+    "permissions": {
+      "$ref": "#/definitions/GrantedPermissionProfile"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "turn",
+        "session"
+      ]
+    }
+  },
+  "definitions": {
+    "GrantedPermissionProfile": {
+      "type": "object",
+      "properties": {
+        "fileSystem": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "network": {
+          "type": "object",
+          "properties": {
+            "hosts": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
