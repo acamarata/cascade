@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-03T10:30:56Z",
+  "generated_at": "2026-11-03T18:45:00Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -33154,6 +33154,20 @@
           "raw": "jobs/worktree-manager (ADD, P1-E29-W6-S59-T3)."
         },
         {
+          "file": "internal/jobs/worktree_sparse.go",
+          "line": 23,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S62-T2",
+          "raw": "jobs/worktree-manager (ADD, P1-E30-W6-S62-T2)."
+        },
+        {
+          "file": "internal/jobs/worktree_sparse_test.go",
+          "line": 9,
+          "status": "ADD",
+          "ticket": "P1-E30-W6-S62-T2",
+          "raw": "jobs/worktree-manager (ADD, P1-E30-W6-S62-T2)."
+        },
+        {
           "file": "internal/jobs/worktree_store.go",
           "line": 23,
           "status": "ADD",
@@ -42737,7 +42751,7 @@
       ]
     }
   ],
-  "total_sites": 4123,
+  "total_sites": 4125,
   "unspecified_count": 369,
   "multi_status_count": 131
 }
