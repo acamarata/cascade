@@ -161,6 +161,14 @@ linters:
             # the daemon's own Registry, and never dials the daemon (P1-PLG-14,
             # P1-BF-R305).
             - "!**/cmd/cascade/wire_review_pr_diff.go"
+            # bundle_install_rpc.go and bundle_activate_rpc.go earn their exemption
+            # by name: they declare bundle.install (always elevated) and
+            # bundle.activate|status|rollback AccessOwnerOnly and mount them on
+            # the daemon's own Registry, reading the verified elevation witness
+            # from the handler context; neither dials the daemon (P1-HRN-16a,
+            # P1-BF-R352).
+            - "!**/cmd/cascade/bundle_install_rpc.go"
+            - "!**/cmd/cascade/bundle_activate_rpc.go"
             # daemon_unix_conductor.go earns its exemption by name, per this
             # rule's own comment above: it is a new COMPOSITION-ROOT file, not a
             # hand-rolled client. It is called only from buildRPCServer, it

@@ -6,6 +6,10 @@ approval.show
 audit.clipboard_effect
 audit.gate_append
 bridge.send
+bundle.activate
+bundle.install
+bundle.rollback
+bundle.status
 cascade_search
 chat.append_turn
 chat.create_thread

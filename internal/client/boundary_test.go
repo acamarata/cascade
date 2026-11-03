@@ -84,6 +84,11 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// plugin.review.pr_diff verb on the daemon's own Registry and never dials
 	// the daemon; mirrors .golangci.yml's exemption for it.
 	"wire_review_pr_diff.go": true,
+	// bundle_install_rpc.go and bundle_activate_rpc.go declare the owner-only
+	// bundle verbs and mount them on the daemon's own Registry; neither dials
+	// the daemon. Mirrors .golangci.yml's exemptions for them.
+	"bundle_install_rpc.go":  true,
+	"bundle_activate_rpc.go": true,
 	// daemon_unix_jobs_rpc.go and daemon_unix_jobs_rpc_adapters.go: the
 	// P1-E29-W6-S60-T1 composition-root call site for job.*/lease.* — see
 	// .golangci.yml's cmd-rpc-server-boundary comment (edited together
