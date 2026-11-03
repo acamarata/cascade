@@ -102,6 +102,11 @@ type DeviceRecord struct {
 	// does. See travel.go's RouteConfig doc comment for the same
 	// invariant stated at the type.
 	Route *RouteConfig `json:"route,omitempty"`
+	// NodeRoute is the enrolled dispatch route (route.go, P1-NODE-18):
+	// written once by EnrollNode from the payload and the verified host
+	// key, read back only through RecordStore.Target, which refuses an
+	// incomplete one rather than guessing.
+	NodeRoute Route `json:"node_route,omitzero"`
 }
 
 // Clock abstracts time.Now so this package never reads the wall clock
@@ -151,6 +156,11 @@ func ErrAlreadyEnrolled(nodeID string) error {
 // a live identity is always a typed conflict, never a silent overwrite,
 // regardless of whether the new key matches the old one.
 func (s *RecordStore) Enroll(identity Identity, tier Tier) (DeviceRecord, error) {
+	return s.enroll(identity, tier, Route{})
+}
+
+// enroll is Enroll plus the enrolled route EnrollNode records.
+func (s *RecordStore) enroll(identity Identity, tier Tier, route Route) (DeviceRecord, error) {
 	if _, ok := Rank(tier); !ok {
 		return DeviceRecord{}, cascade.Newf(cascade.KindInvalidInput, "nodes: cannot enroll with invalid trust_tier %q", tier)
 	}
@@ -166,6 +176,7 @@ func (s *RecordStore) Enroll(identity Identity, tier Tier) (DeviceRecord, error)
 		PubKeyB64:  identity.PubKeyB64(),
 		Tier:       tier,
 		EnrolledAt: s.clock.Now(),
+		NodeRoute:  route,
 	}
 	records[identity.NodeID] = rec
 	if err := s.backend.Save(records); err != nil {

@@ -60,6 +60,10 @@ type EnrollPayload struct {
 	// flag value (a sha256 hex string), or "" when not supplied.
 	HostKeyOverride  string `json:"host_key_fingerprint_override,omitempty"`
 	NodeSignatureB64 string `json:"node_signature_b64"`
+	// SocketDir is the node's absolute <dataDir>/nodes directory, printed
+	// by the node in its enrollment payload. Optional: without it the
+	// enrolled route is incomplete and RecordStore.Target refuses it.
+	SocketDir string `json:"socket_dir,omitempty"`
 }
 
 // maxEnrollPayloadBytes bounds the decoder against a memory-exhaustion
@@ -98,6 +102,9 @@ func DecodeEnrollHandshakePayload(raw []byte) (EnrollPayload, error) {
 	}
 	if p.NodeSignatureB64 == "" {
 		return EnrollPayload{}, cascade.New(cascade.KindInvalidInput, "nodes: enroll payload missing node_signature_b64")
+	}
+	if err := validateSocketDir(p.SocketDir); err != nil {
+		return EnrollPayload{}, err
 	}
 	// trust_tier is intentionally NOT defaulted here, not even to a
 	// placeholder: an empty TrustTier is preserved verbatim so
@@ -142,6 +149,9 @@ func EnrollNode(ctx context.Context, deps EnrollDeps, precondition runtime.Eleva
 	if err != nil {
 		return DeviceRecord{}, err
 	}
+	if err := validateSocketDir(p.SocketDir); err != nil {
+		return DeviceRecord{}, err
+	}
 	if err := deps.KnownHosts.Verify(p.Host, p.HostKeyFingerprint, p.HostKeyOverride); err != nil {
 		return DeviceRecord{}, err
 	}
@@ -174,7 +184,7 @@ func EnrollNode(ctx context.Context, deps EnrollDeps, precondition runtime.Eleva
 		return DeviceRecord{}, err
 	}
 
-	return deps.Records.Enroll(identity, tier)
+	return deps.Records.enroll(identity, tier, routeFromPayload(p))
 }
 
 func decodeSignature(b64 string) ([]byte, error) {
