@@ -29,5 +29,8 @@ type fakeSession struct{}
 func (fakeSession) ListenUnix(string) (nodes.Listener, error) {
 	return nil, cascade.New(cascade.KindUnavailable, "not used")
 }
+func (fakeSession) DialUnix(string) (nodes.Conn, error) {
+	return nil, cascade.New(cascade.KindUnavailable, "not used")
+}
 func (fakeSession) Close() error          { return nil }
 func (fakeSession) Done() <-chan struct{} { ch := make(chan struct{}); return ch }

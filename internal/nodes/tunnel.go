@@ -1,42 +1,21 @@
 // Purpose: the controller<->node ssh tunnel transport (R-21.220 host-key
-//
-//	binding): the state/dial abstractions reconnect.go's state machine
-//	drives, plus the production ssh dialer over golang.org/x/crypto/ssh.
-//
-// Inputs: a Target (the ssh reachability info for one enrolled node), the
-//
-//	collaborators a Session needs: KnownHosts (R-21.220 pinning),
-//	NodeKeystore (the controller's own signing identity, R-21.220
-//	custody).
-//
-// Outputs: a maintained ssh session forwarding the node's RPC/stream
-//
-//	channel back to this process (the D-24 ssh-forwarded-socket pattern),
-//	or a typed fail-closed refusal.
-//
-// Constraints: TARGET, NOT DEVICERECORD (CONTRADICTION — full quote in the
-//
-//	ticket journal). The ticket's HOW section reads "tunnel establishment:
-//	from the enrolled node's device record (S-36.T1) over ssh to
-//	<user@host>," implying DeviceRecord carries the ssh address. It does
-//	not: records.go's DeviceRecord has no Host/User field, and records.go
-//	is S-36.T1's file, out of this ticket's files_scope. This is the SAME
-//	gap liveness.go's Liveness-derived-not-persisted note and
-//	heartbeat_sign.go's DeriveEnrollmentID note already document; this
-//	file follows their identical precedent — Target is caller-supplied
-//	rather than read off a field that does not exist.
-//
-//	CONN/LISTENER, NOT net.Conn/net.Listener. An untagged _test.go file
-//	may not import "net"/"net/http" (Art.7.2). Session/Listener are
-//	declared over this file's own Conn alias (io.ReadWriteCloser) so unit
-//	tests fake a Dialer/Session/Listener with io.Pipe, never importing
-//	"net". The production ssh adapter (this file) freely imports "net"
-//	and "golang.org/x/crypto/ssh" — internal/nodes is already
-//	egress-allowlisted for "net" ("node dispatch transport").
-//
+//	binding): the state/dial abstractions reconnect.go drives, plus the
+//	production ssh dialer over golang.org/x/crypto/ssh.
+// Inputs: a Target (ssh reachability for one enrolled node), KnownHosts
+//	(R-21.220 pinning) and the controller's signing identity: NodeKeystore
+//	(NewSSHDialer) or the installation envelope.Signer
+//	(NewSSHDialerFromSigner); the private key never leaves custody.
+// Outputs: an ssh session forwarding the node's RPC/stream channel (the
+//	D-24 ssh-forwarded-socket pattern) and direct-streamlocal dials over
+//	the SAME authenticated client, or a typed fail-closed refusal.
+// Constraints: Target is caller-supplied, not read off DeviceRecord
+//	(records.go has no Host/User field; the liveness.go precedent).
+//	Session/Listener speak this file's Conn alias (io.ReadWriteCloser),
+//	not net.Conn, so untagged unit tests never import "net" (Art.7.2).
+//	No agent, no X11 forwarding, no second connection, no plain fallback.
 // SPORT: internal/nodes TunnelState/ADDED, Target/ADDED, Dialer/ADDED
-//
-//	(P1-E17-W4-S36-T3).
+//	(P1-E17-W4-S36-T3); Session.DialUnix/ADDED,
+//	NewSSHDialerFromSigner/ADDED (P1-NODE-18).
 
 package nodes
 
@@ -50,16 +29,15 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/envelope"
 )
 
-// TunnelState is the reconnect state machine's three states (this
-// ticket's contract: "down -> reconnecting -> up").
+// TunnelState is the reconnect state machine's state: down -> reconnecting -> up.
 type TunnelState int
 
 const (
-	// TunnelDown reports no session and no active retry — either never
-	// started, a terminal refusal (host-key changed/unknown) stopped it,
-	// or Manager.Stop was called.
+	// TunnelDown reports no session and no retry: never started, a terminal
+	// host-key refusal (changed/unknown) or Manager.Stop.
 	TunnelDown TunnelState = iota
 	// TunnelReconnecting reports the loop dialing or waiting on backoff.
 	TunnelReconnecting
@@ -81,9 +59,7 @@ func (s TunnelState) String() string {
 	}
 }
 
-// Target is the ssh reachability info for one enrolled node's tunnel. See
-// this file's package doc CONTRADICTIONS note for why it is caller-
-// supplied rather than read off a DeviceRecord field.
+// Target is the caller-supplied ssh reachability for one node's tunnel.
 type Target struct {
 	NodeID string
 	User   string
@@ -91,22 +67,16 @@ type Target struct {
 	Addr string
 }
 
-// knownHostsKey is the KnownHosts pinning key for t, matching enroll.go's
-// EnrollPayload.Host convention ("user@host", enroll_test.go's
-// "worker@host1").
+// knownHostsKey is t's KnownHosts pinning key (EnrollPayload.Host's "user@host").
 func (t Target) knownHostsKey() string {
 	return t.User + "@" + t.Addr
 }
 
-// Conn is a bidirectional byte stream: io.ReadWriteCloser exactly, kept
-// as this package's own alias (rather than net.Conn) so unit tests never
-// need to import "net" — see package doc.
+// Conn is a bidirectional byte stream (io.ReadWriteCloser, never net.Conn).
 type Conn = io.ReadWriteCloser
 
-// Listener accepts connections forwarded from the node side of the
-// tunnel (the D-24 pattern's remote-listen half: ssh -R streamlocal
-// semantics — a socket on the NODE's filesystem, whose connections
-// arrive here in the controller process).
+// Listener accepts connections forwarded from a socket on the NODE's
+// filesystem (ssh -R streamlocal, the D-24 remote-listen half).
 type Listener interface {
 	Accept() (Conn, error)
 	Close() error
@@ -114,22 +84,19 @@ type Listener interface {
 
 // Session is one established ssh connection to a node.
 type Session interface {
-	// ListenUnix opens a REMOTE listener on the node's filesystem at
-	// remoteSocketPath. Idempotent per remoteSocketPath is the caller's
-	// (Manager's) responsibility, not this interface's.
+	// ListenUnix opens a REMOTE listener at remoteSocketPath on the node.
 	ListenUnix(remoteSocketPath string) (Listener, error)
+	// DialUnix opens direct-streamlocal to remotePath on the node over the
+	// SAME authenticated client, never a second connection.
+	DialUnix(remotePath string) (Conn, error)
 	Close() error
-	// Done reports (by closing) when the underlying connection ends, for
-	// any reason: remote close, network drop, or a local Close() call.
+	// Done closes when the connection ends for any reason.
 	Done() <-chan struct{}
 }
 
-// HostKeyVerifier is called with the SHA-256 fingerprint (HostKeyFingerprint's
-// format) of the key the remote host actually presented mid-handshake.
-// Production wires this to KnownHosts.Verify; its error is returned
-// UNCHANGED to the underlying ssh handshake, which refuses the connection
-// before any channel exists on ANY non-nil return — R-21.220's fail-closed
-// check is therefore atomic with connection establishment.
+// HostKeyVerifier gets the HostKeyFingerprint of the key the host presented
+// mid-handshake (production: KnownHosts.Verify). Any non-nil return refuses
+// the connection before a channel exists (R-21.220, fail closed).
 type HostKeyVerifier func(fingerprint string) error
 
 // Dialer establishes a Session to target, verifying the presented host
@@ -138,11 +105,8 @@ type Dialer interface {
 	Dial(ctx context.Context, target Target, verify HostKeyVerifier) (Session, error)
 }
 
-// keystoreSigner adapts NodeKeystore.Sign to ssh.Signer, so ssh
-// authenticates as this controller's already-enrolled identity without a
-// second key ever being generated or a private key ever leaving custody
-// (R-21.220 — Sign is the ONLY path to the private key, unchanged from
-// keystore.go's own contract).
+// keystoreSigner adapts NodeKeystore.Sign to ssh.Signer; Sign is the only
+// path to the custody-held private key (R-21.220).
 type keystoreSigner struct {
 	ctx      context.Context
 	keystore *NodeKeystore
@@ -153,8 +117,7 @@ type keystoreSigner struct {
 func (s *keystoreSigner) PublicKey() ssh.PublicKey {
 	k, err := ssh.NewPublicKey(s.pub)
 	if err != nil {
-		// s.pub is always a valid-length ed25519 key by construction
-		// (NewTunnel validates it); this cannot fail in practice.
+		// s.pub is a valid-length ed25519 key by construction.
 		panic("nodes: ssh public key conversion failed: " + err.Error())
 	}
 	return k
@@ -168,30 +131,77 @@ func (s *keystoreSigner) Sign(_ io.Reader, data []byte) (*ssh.Signature, error) 
 	return &ssh.Signature{Format: ssh.KeyAlgoED25519, Blob: sig}, nil
 }
 
-// sshDialer is the production Dialer, over a real TCP dial and a real ssh
-// handshake.
+// envelopeSSHSigner adapts the installation envelope.Signer to ssh-ed25519
+// ssh.Signer, the only such adapter in the non-test tree.
+type envelopeSSHSigner struct {
+	ctx    context.Context
+	signer envelope.Signer
+	pub    ssh.PublicKey
+}
+
+func (s *envelopeSSHSigner) PublicKey() ssh.PublicKey { return s.pub }
+
+func (s *envelopeSSHSigner) Sign(_ io.Reader, data []byte) (*ssh.Signature, error) {
+	sig, err := s.signer.Sign(s.ctx, data)
+	if err != nil {
+		return nil, err
+	}
+	return &ssh.Signature{Format: ssh.KeyAlgoED25519, Blob: sig}, nil
+}
+
+// sshDialer is the production Dialer; authSigner yields one Dial's identity.
 type sshDialer struct {
-	keystore         *NodeKeystore
 	controllerNodeID string
-	controllerPub    ed25519.PublicKey
+	authSigner       func(ctx context.Context) (ssh.Signer, error)
 	handshakeTimeout time.Duration
+}
+
+func defaultHandshakeTimeout(d time.Duration) time.Duration {
+	if d <= 0 {
+		return 15 * time.Second
+	}
+	return d
 }
 
 // NewSSHDialer returns the production Dialer, authenticating as
 // controllerNodeID via keystore's custody-held private key.
 func NewSSHDialer(keystore *NodeKeystore, controllerNodeID string, controllerPub ed25519.PublicKey, handshakeTimeout time.Duration) Dialer {
-	if handshakeTimeout <= 0 {
-		handshakeTimeout = 15 * time.Second
+	auth := func(ctx context.Context) (ssh.Signer, error) {
+		return &keystoreSigner{ctx: ctx, keystore: keystore, nodeID: controllerNodeID, pub: controllerPub}, nil
 	}
-	return &sshDialer{keystore: keystore, controllerNodeID: controllerNodeID, controllerPub: controllerPub, handshakeTimeout: handshakeTimeout}
+	return &sshDialer{controllerNodeID: controllerNodeID, authSigner: auth, handshakeTimeout: defaultHandshakeTimeout(handshakeTimeout)}
 }
 
-// Dial implements Dialer over a real net.Dial + ssh.NewClientConn. Any
-// error verify returns (ErrHostKeyUnknown/ErrHostKeyChanged, typed
-// KindPermissionDenied) propagates verbatim through the ssh handshake —
-// TestTunnelHostKeyChangedRefused/TestTunnelUnknownHostKeyRefused assert
-// this end to end.
+// NewSSHDialerFromSigner returns the production Dialer authenticating with
+// the controller installation identity s (contract:installation-identity):
+// the userauth key is exactly s.PublicKey(); a nil s or a bad key refuses
+// every Dial KindInvalidInput.
+func NewSSHDialerFromSigner(s envelope.Signer, controllerNodeID string, handshakeTimeout time.Duration) Dialer {
+	auth := func(ctx context.Context) (ssh.Signer, error) {
+		if s == nil {
+			return nil, cascade.New(cascade.KindInvalidInput, "nodes: ssh dialer has no installation signer")
+		}
+		pub := s.PublicKey()
+		if len(pub) != ed25519.PublicKeySize {
+			return nil, cascade.New(cascade.KindInvalidInput, "nodes: installation public key is not an ed25519 key")
+		}
+		k, err := ssh.NewPublicKey(pub)
+		if err != nil {
+			return nil, cascade.Wrap(cascade.KindInvalidInput, err, "nodes: installation public key rejected")
+		}
+		return &envelopeSSHSigner{ctx: ctx, signer: s, pub: k}, nil
+	}
+	return &sshDialer{controllerNodeID: controllerNodeID, authSigner: auth, handshakeTimeout: defaultHandshakeTimeout(handshakeTimeout)}
+}
+
+// Dial implements Dialer over net.Dial + ssh.NewClientConn. verify's typed
+// refusal (KindPermissionDenied) comes back verbatim; x/crypto/ssh re-runs
+// it on every re-key, so a key changing on a started channel ends it too.
 func (d *sshDialer) Dial(ctx context.Context, target Target, verify HostKeyVerifier) (Session, error) {
+	signer, err := d.authSigner(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var netDialer net.Dialer
 	conn, err := netDialer.DialContext(ctx, "tcp", target.Addr)
 	if err != nil {
@@ -199,7 +209,7 @@ func (d *sshDialer) Dial(ctx context.Context, target Target, verify HostKeyVerif
 	}
 	cfg := &ssh.ClientConfig{
 		User:            target.User,
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(&keystoreSigner{ctx: ctx, keystore: d.keystore, nodeID: d.controllerNodeID, pub: d.controllerPub})},
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
 		HostKeyCallback: func(_ string, _ net.Addr, key ssh.PublicKey) error { return verify(HostKeyFingerprint(key.Marshal())) },
 		Timeout:         d.handshakeTimeout,
 	}
@@ -237,11 +247,20 @@ func (s *sshSession) ListenUnix(remoteSocketPath string) (Listener, error) {
 	return sshListener{l}, nil
 }
 
+// DialUnix opens direct-streamlocal to remotePath on the
+// already-authenticated client; bytes are never read or logged here.
+func (s *sshSession) DialUnix(remotePath string) (Conn, error) {
+	c, err := s.client.Dial("unix", remotePath)
+	if err != nil {
+		return nil, cascade.Wrap(cascade.KindUnavailable, err, "nodes: ssh direct-streamlocal dial failed")
+	}
+	return c, nil
+}
+
 func (s *sshSession) Close() error          { return s.client.Close() }
 func (s *sshSession) Done() <-chan struct{} { return s.done }
 
-// sshListener adapts net.Listener to this package's Listener (Conn, not
-// net.Conn, in Accept's return — see package doc).
+// sshListener adapts net.Listener to this package's Listener.
 type sshListener struct{ l net.Listener }
 
 func (s sshListener) Accept() (Conn, error) {
@@ -255,10 +274,7 @@ func (s sshListener) Accept() (Conn, error) {
 func (s sshListener) Close() error { return s.l.Close() }
 
 // TunnelEventPublisher is the seam tunnel state transitions publish
-// through, duck-typed against internal/runtime.EventPublisher's exact
-// method signature (mirrors heartbeat.go's Ticker / records.go's Clock
-// precedent: this package must not import internal/runtime for a
-// one-method interface it does not otherwise need).
+// through, duck-typed against internal/runtime.EventPublisher.
 type TunnelEventPublisher interface {
 	Publish(ctx context.Context, name string, payload map[string]interface{})
 }
@@ -270,22 +286,15 @@ type DiscardTunnelEvents struct{}
 // Publish implements TunnelEventPublisher by discarding the event.
 func (DiscardTunnelEvents) Publish(context.Context, string, map[string]interface{}) {}
 
-// windowsTunnelHint is the actionable refusal message for the
-// controller-side tunnel service on Windows (R-21.226), mirroring
-// serve.go's windowsTier2Hint convention exactly.
+// windowsTunnelHint is the Windows tier-2 refusal message (R-21.226).
 const windowsTunnelHint = "cascade has no controller-side ssh tunnel service on Windows (tier-2); " +
 	"the tunnel service is daemon-class, outside the binary + headless one-shot promise (06-FORGE-SPEC §2)"
 
 // RefuseTunnelServiceOnGOOS reports the typed tier-2 refusal for
-// goos == "windows", nil otherwise. Mirrors serve.go's RefuseOnGOOS
-// exactly: a pure function, unit-tested against the literal string
-// "windows" on every platform; tunnel_windows_test.go additionally
-// asserts it natively on a real windows/amd64 build (R-21.226).
+// goos == "windows", nil otherwise (mirrors serve.go's RefuseOnGOOS).
 func RefuseTunnelServiceOnGOOS(goos string) error {
 	if goos == "windows" {
 		return cascade.New(cascade.KindUnsupported, "node tunnel: "+windowsTunnelHint)
 	}
 	return nil
 }
-
-// Manager lives in reconnect.go (the 300-line file cap left no room here).

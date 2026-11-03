@@ -3,10 +3,15 @@ package nodes
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"errors"
+	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/ssh"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -36,62 +41,52 @@ func (f *fakeSleeper) Sleep(ctx context.Context, d time.Duration) bool {
 func (f *fakeSleeper) snapshot() []time.Duration {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	out := make([]time.Duration, len(f.waits))
-	copy(out, f.waits)
-	return out
+	return slices.Clone(f.waits)
 }
 
 type fakeSession struct { // its own Listener too (ListenUnix returns self); Accept blocks until Close
-	ch     chan Conn
-	closed chan struct{}
-	done   chan struct{}
-	once   sync.Once
+	closed, done chan struct{}
+	once         sync.Once
 }
 
 func newFakeSession() *fakeSession {
-	return &fakeSession{ch: make(chan Conn), closed: make(chan struct{}), done: make(chan struct{})}
+	return &fakeSession{closed: make(chan struct{}), done: make(chan struct{})}
 }
 func (s *fakeSession) ListenUnix(string) (Listener, error) { return s, nil }
-func (s *fakeSession) Accept() (Conn, error) {
-	select {
-	case c := <-s.ch:
-		return c, nil
-	case <-s.closed:
-		return nil, errors.New("listener closed")
-	}
-}
-func (s *fakeSession) Close() error {
-	s.once.Do(func() { close(s.closed); close(s.done) })
-	return nil
-}
-func (s *fakeSession) Done() <-chan struct{} { return s.done }
+func (s *fakeSession) DialUnix(string) (Conn, error)       { return nil, errors.New("fake: no node socket") }
+func (s *fakeSession) Accept() (Conn, error)               { <-s.closed; return nil, errors.New("listener closed") }
+func (s *fakeSession) Done() <-chan struct{}               { return s.done }
+func (s *fakeSession) Close() error                        { s.once.Do(func() { close(s.closed); close(s.done) }); return nil }
+func (s *sessionListenErr) DialUnix(string) (Conn, error) {
+	return nil, errors.New("fake: no node socket")
+} // reconnect_more_test.go's fake
 
 type fakeDialer struct { // dials a scripted outcome sequence, invoking verify each time
 	mu       sync.Mutex
 	calls    int
 	fp       string
+	fps      []string // per-call presented key; fp past its end
+	lastErr  error
 	outcomes []func() (Session, error)
 }
 
 func (d *fakeDialer) Dial(_ context.Context, _ Target, verify HostKeyVerifier) (Session, error) {
 	d.mu.Lock()
-	i := d.calls
+	i, fp := d.calls, d.fp
+	if i < len(d.fps) {
+		fp = d.fps[i]
+	}
 	d.calls++
+	err := verify(fp) // never re-enters the dialer
+	d.lastErr = err
 	d.mu.Unlock()
-	if err := verify(d.fp); err != nil {
+	if err != nil {
 		return nil, err
 	}
-	if i >= len(d.outcomes) {
-		i = len(d.outcomes) - 1
-	}
-	return d.outcomes[i]()
+	return d.outcomes[min(i, len(d.outcomes)-1)]()
 }
-func (d *fakeDialer) callCount() int {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.calls
-}
-func testTarget() Target { return Target{NodeID: "n1", User: "worker", Addr: "host1:22"} }
+func (d *fakeDialer) callCount() int { d.mu.Lock(); defer d.mu.Unlock(); return d.calls }
+func testTarget() Target             { return Target{NodeID: "n1", User: "worker", Addr: "host1:22"} }
 
 func pinTarget(t *testing.T, kh *KnownHosts, target Target, fp string) {
 	t.Helper()
@@ -99,36 +94,36 @@ func pinTarget(t *testing.T, kh *KnownHosts, target Target, fp string) {
 		t.Fatalf("seed pin: %v", err)
 	}
 }
-
-func waitState(t *testing.T, tun *Tunnel, want TunnelState, timeout time.Duration) {
+func pinnedKH(t *testing.T, fp string) *KnownHosts { // testTarget pinned to fp
 	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for tun.State() != want && time.Now().Before(deadline) {
+	kh := NewKnownHosts(newMemKnownHostsBackend())
+	pinTarget(t, kh, testTarget(), fp)
+	return kh
+}
+func eventually(timeout time.Duration, ok func() bool) bool {
+	for deadline := time.Now().Add(timeout); !ok() && time.Now().Before(deadline); {
 		time.Sleep(time.Millisecond)
 	}
-	if tun.State() != want {
+	return ok()
+}
+func waitState(t *testing.T, tun *Tunnel, want TunnelState, timeout time.Duration) {
+	t.Helper()
+	if !eventually(timeout, func() bool { return tun.State() == want }) {
 		t.Fatalf("state = %v, want %v within %v", tun.State(), want, timeout)
 	}
 }
-
 func assertDown(t *testing.T, tun *Tunnel) {
 	t.Helper()
 	if got := tun.State(); got != TunnelDown {
 		t.Fatalf("state = %v, want TunnelDown", got)
 	}
 }
-
 func waitCallCount(t *testing.T, d *fakeDialer, n int, timeout time.Duration) {
 	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for d.callCount() < n && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
-	if d.callCount() < n {
+	if !eventually(timeout, func() bool { return d.callCount() >= n }) {
 		t.Fatalf("dial called %d times within %v, want >= %d", d.callCount(), timeout, n)
 	}
 }
-
 func assertCallCount(t *testing.T, d *fakeDialer, want int) {
 	t.Helper()
 	if got := d.callCount(); got != want {
@@ -136,53 +131,91 @@ func assertCallCount(t *testing.T, d *fakeDialer, want int) {
 	}
 }
 
-func TestTunnelHostKeyChangedRefused(t *testing.T) { // a changed host key is terminal
-	kh := NewKnownHosts(newMemKnownHostsBackend())
-	pinTarget(t, kh, testTarget(), "original-fp")
-	unreachable := []func() (Session, error){func() (Session, error) { return nil, nil }} // verify refuses first
-	dialer, sleeper := &fakeDialer{fp: "changed-fp", outcomes: unreachable}, &fakeSleeper{}
+// assertRefusedOnce: one dial, terminal down, no backoff (R-21.220).
+func assertRefusedOnce(t *testing.T, kh *KnownHosts, fp string) {
+	t.Helper()
+	dialer, sleeper := &fakeDialer{fp: fp, outcomes: []func() (Session, error){func() (Session, error) { return nil, nil }}}, &fakeSleeper{}
 	tun := newTunnel(TunnelConfig{Target: testTarget(), Dialer: dialer, KnownHosts: kh, Sleeper: sleeper})
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	tun.run(ctx)
 	assertDown(t, tun)
-	assertCallCount(t, dialer, 1) // no reconnect on host-key change
+	assertCallCount(t, dialer, 1)
 	if len(sleeper.snapshot()) != 0 {
 		t.Fatalf("backoff was waited on; host-key refusal must never retry")
 	}
 }
 
+// TestTunnelHostKeyChangedRefused: a changed host key is terminal.
+func TestTunnelHostKeyChangedRefused(t *testing.T) {
+	assertRefusedOnce(t, pinnedKH(t, "original-fp"), "changed-fp")
+}
+
 // TestTunnelUnknownHostKeyRefused: first-contact with no pin/override refuses too.
 func TestTunnelUnknownHostKeyRefused(t *testing.T) {
-	kh := NewKnownHosts(newMemKnownHostsBackend())
-	dialer := &fakeDialer{fp: "never-pinned-fp", outcomes: []func() (Session, error){func() (Session, error) { return nil, nil }}}
-	tun := newTunnel(TunnelConfig{Target: testTarget(), Dialer: dialer, KnownHosts: kh})
+	assertRefusedOnce(t, NewKnownHosts(newMemKnownHostsBackend()), "never-pinned-fp")
+}
+
+// TestChannelRefusesChangedHostKey: a started tunnel whose host later
+// presents a changed key goes terminal: down, no retry, no call delivered.
+func TestChannelRefusesChangedHostKey(t *testing.T) {
+	kh, target, first, sleeper := pinnedKH(t, "pinned-fp"), testTarget(), newFakeSession(), &fakeSleeper{}
+	dialer := &fakeDialer{fps: []string{"pinned-fp", "changed-fp"}, outcomes: []func() (Session, error){
+		func() (Session, error) { return first, nil }, func() (Session, error) { t.Error("changed key reached a session"); return nil, nil }}}
+	var delivered atomic.Int32
+	tun := newTunnel(TunnelConfig{Target: target, Dialer: dialer, KnownHosts: kh, Sleeper: sleeper,
+		LocalDial: func(context.Context) (Conn, error) { delivered.Add(1); return nil, errors.New("unused") }})
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
+	go func() { eventually(time.Second, func() bool { return tun.State() == TunnelUp }); _ = first.Close() }() // drop; redial sees a new key
 	tun.run(ctx)
 	assertDown(t, tun)
-	assertCallCount(t, dialer, 1)
+	assertCallCount(t, dialer, 2)
+	want := ErrHostKeyChanged(target.knownHostsKey())
+	if k, _ := cascade.KindOf(dialer.lastErr); k != cascade.KindPermissionDenied || dialer.lastErr.Error() != want.Error() {
+		t.Fatalf("refusal = %v, want %v", dialer.lastErr, want)
+	}
+	if n := len(sleeper.snapshot()); n != 0 || delivered.Load() != 0 || ctx.Err() != nil {
+		t.Fatalf("backoff waits %d, calls delivered %d, ctx %v; want a prompt terminal stop", n, delivered.Load(), ctx.Err())
+	}
 }
+
+type testEnvelopeSigner struct{ priv ed25519.PrivateKey }
+
+func (s testEnvelopeSigner) PublicKey() ed25519.PublicKey { return s.priv.Public().(ed25519.PublicKey) }
+func (s testEnvelopeSigner) Sign(_ context.Context, m []byte) ([]byte, error) {
+	return ed25519.Sign(s.priv, m), nil
+}
+
+// TestSSHDialerFromSignerUsesInstallationKey: the userauth key is the
+// Signer's Ed25519 public key, and its signatures verify under it.
+func TestSSHDialerFromSignerUsesInstallationKey(t *testing.T) {
+	s := testEnvelopeSigner{ed25519.NewKeyFromSeed(bytes.Repeat([]byte{7}, ed25519.SeedSize))}
+	signer, err := NewSSHDialerFromSigner(s, "controller", 0).(*sshDialer).authSigner(context.Background())
+	want, _ := ssh.NewPublicKey(s.PublicKey())
+	if err != nil || signer.PublicKey().Type() != ssh.KeyAlgoED25519 || !bytes.Equal(signer.PublicKey().Marshal(), want.Marshal()) {
+		t.Fatalf("userauth key (err %v) is not the installation key %x", err, want.Marshal())
+	}
+	sig, err := signer.Sign(nil, []byte("session-id"))
+	if err != nil || signer.PublicKey().Verify([]byte("session-id"), sig) != nil {
+		t.Fatalf("signature does not verify under the installation key: %v", err)
+	}
+	_, err = NewSSHDialerFromSigner(nil, "controller", 0).Dial(context.Background(), testTarget(), nil)
+	if k, _ := cascade.KindOf(err); k != cascade.KindInvalidInput || err.Error() != "invalid-input: nodes: ssh dialer has no installation signer" {
+		t.Fatalf("nil signer: got %v, want the KindInvalidInput refusal", err)
+	}
+}
+
+var refusedDial = func() (Session, error) { return nil, cascade.New(cascade.KindUnavailable, "refused") }
 
 // TestTunnelHostKeyVerifiedEveryAttempt: Nth reconnect verifies as the 1st did.
 func TestTunnelHostKeyVerifiedEveryAttempt(t *testing.T) {
-	kh := NewKnownHosts(newMemKnownHostsBackend())
-	target := testTarget()
-	pinTarget(t, kh, target, "good-fp")
-	session := newFakeSession()
+	session, sleeper := newFakeSession(), &fakeSleeper{} // 3 dial calls below == 3 identical host-key checks
 	dialer := &fakeDialer{fp: "good-fp", outcomes: []func() (Session, error){
-		func() (Session, error) { return nil, cascade.New(cascade.KindUnavailable, "refused") },
-		func() (Session, error) { return nil, cascade.New(cascade.KindUnavailable, "refused") },
-		func() (Session, error) { return session, nil },
-	}}
-	sleeper := &fakeSleeper{} // 3 dial calls below == 3 identical host-key checks
-	tun := newTunnel(TunnelConfig{Target: target, Dialer: dialer, KnownHosts: kh, Sleeper: sleeper})
+		refusedDial, refusedDial, func() (Session, error) { return session, nil }}}
+	tun := newTunnel(TunnelConfig{Target: testTarget(), Dialer: dialer, KnownHosts: pinnedKH(t, "good-fp"), Sleeper: sleeper})
 	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		time.Sleep(50 * time.Millisecond)
-		cancel() // before Close: guarantees run()'s next ctx.Err() check sees it
-		_ = session.Close()
-	}()
+	go func() { time.Sleep(50 * time.Millisecond); cancel(); _ = session.Close() }() // cancel first: run's next ctx check sees it
 	tun.run(ctx)
 	assertCallCount(t, dialer, 3) // 2 failures + 1 success, same host-key check each time
 	if len(sleeper.snapshot()) != 2 {
@@ -192,39 +225,22 @@ func TestTunnelHostKeyVerifiedEveryAttempt(t *testing.T) {
 
 // TestTunnelReconnectStorm_BoundedBackoff: repeated drops cap the backoff.
 func TestTunnelReconnectStorm_BoundedBackoff(t *testing.T) {
-	kh := NewKnownHosts(newMemKnownHostsBackend())
-	target := testTarget()
-	pinTarget(t, kh, target, "fp")
-	refused := func() (Session, error) { return nil, cascade.New(cascade.KindUnavailable, "refused") }
-	dialer := &fakeDialer{fp: "fp", outcomes: []func() (Session, error){refused}}
+	dialer := &fakeDialer{fp: "fp", outcomes: []func() (Session, error){refusedDial}}
 	sleeper, policy := &fakeSleeper{}, ReconnectPolicy{InitialBackoff: time.Millisecond, MaxBackoff: 4 * time.Millisecond}
-	tun := newTunnel(TunnelConfig{Target: target, Dialer: dialer, KnownHosts: kh, Sleeper: sleeper, Policy: policy})
+	tun := newTunnel(TunnelConfig{Target: testTarget(), Dialer: dialer, KnownHosts: pinnedKH(t, "fp"), Sleeper: sleeper, Policy: policy})
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() { waitCallCount(t, dialer, 6, 2*time.Second); cancel() }()
 	tun.run(ctx)
-	waits := sleeper.snapshot()
-	if len(waits) == 0 {
-		t.Fatal("expected backoff waits")
-	}
-	for _, w := range waits {
-		if w > policy.MaxBackoff {
-			t.Fatalf("backoff %v exceeded cap %v", w, policy.MaxBackoff)
-		}
+	if waits := sleeper.snapshot(); len(waits) == 0 || slices.Max(waits) > policy.MaxBackoff {
+		t.Fatalf("backoff waits %v: want some, none above the cap %v", waits, policy.MaxBackoff)
 	}
 	assertDown(t, tun)
 }
-
 func TestTunnelDropMidStreamThenShutdown(t *testing.T) {
-	kh := NewKnownHosts(newMemKnownHostsBackend())
-	target := testTarget()
-	pinTarget(t, kh, target, "fp")
-	first := newFakeSession()
-	second := newFakeSession()
+	first, second := newFakeSession(), newFakeSession()
 	dialer := &fakeDialer{fp: "fp", outcomes: []func() (Session, error){
-		func() (Session, error) { return first, nil },
-		func() (Session, error) { return second, nil },
-	}}
-	tun := newTunnel(TunnelConfig{Target: target, Dialer: dialer, KnownHosts: kh, Sleeper: &fakeSleeper{}})
+		func() (Session, error) { return first, nil }, func() (Session, error) { return second, nil }}}
+	tun := newTunnel(TunnelConfig{Target: testTarget(), Dialer: dialer, KnownHosts: pinnedKH(t, "fp"), Sleeper: &fakeSleeper{}})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { tun.run(ctx); close(done) }()
@@ -241,16 +257,13 @@ func TestTunnelDropMidStreamThenShutdown(t *testing.T) {
 	assertDown(t, tun)
 }
 func TestManagerStart_Idempotent(t *testing.T) {
-	kh := NewKnownHosts(newMemKnownHostsBackend())
-	target := testTarget()
-	pinTarget(t, kh, target, "fp")
+	kh, target := pinnedKH(t, "fp"), testTarget()
 	up := func() (Session, error) { return newFakeSession(), nil }
 	dialer, m := &fakeDialer{fp: "fp", outcomes: []func() (Session, error){up}}, NewManager()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	t1 := m.Start(ctx, TunnelConfig{Target: target, Dialer: dialer, KnownHosts: kh})
-	t2 := m.Start(ctx, TunnelConfig{Target: target, Dialer: dialer, KnownHosts: kh})
-	if t1 != t2 {
+	if t2 := m.Start(ctx, TunnelConfig{Target: target, Dialer: dialer, KnownHosts: kh}); t1 != t2 {
 		t.Fatal("Start for an already-running node id returned a different *Tunnel (duplicate)")
 	}
 	waitCallCount(t, dialer, 1, time.Second)
@@ -260,14 +273,11 @@ func TestManagerStart_Idempotent(t *testing.T) {
 	}
 }
 func TestRefuseTunnelServiceOnGOOS(t *testing.T) {
-	err := RefuseTunnelServiceOnGOOS("windows")
-	if k, ok := cascade.KindOf(err); !ok || k != cascade.KindUnsupported {
+	if k, ok := cascade.KindOf(RefuseTunnelServiceOnGOOS("windows")); !ok || k != cascade.KindUnsupported {
 		t.Fatalf("windows: expected KindUnsupported, got %v (ok=%v)", k, ok)
 	}
-	for _, goos := range []string{"linux", "darwin"} {
-		if err := RefuseTunnelServiceOnGOOS(goos); err != nil {
-			t.Fatalf("%s: unexpected refusal: %v", goos, err)
-		}
+	if l, d := RefuseTunnelServiceOnGOOS("linux"), RefuseTunnelServiceOnGOOS("darwin"); l != nil || d != nil {
+		t.Fatalf("unexpected refusal: linux %v, darwin %v", l, d)
 	}
 }
 
@@ -277,24 +287,14 @@ type memConn struct { // finite reader + mutex-guarded writer (Write races the o
 	w  bytes.Buffer
 }
 
-func (c *memConn) Read(p []byte) (int, error) { return c.r.Read(p) }
-func (c *memConn) Write(p []byte) (int, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.w.Write(p)
-}
-func (c *memConn) String() string { c.mu.Lock(); defer c.mu.Unlock(); return c.w.String() }
-func (c *memConn) Close() error   { return nil }
-
+func (c *memConn) Read(p []byte) (int, error)  { return c.r.Read(p) }
+func (c *memConn) Write(p []byte) (int, error) { c.mu.Lock(); defer c.mu.Unlock(); return c.w.Write(p) }
+func (c *memConn) String() string              { c.mu.Lock(); defer c.mu.Unlock(); return c.w.String() }
+func (c *memConn) Close() error                { return nil }
 func TestPipeConn(t *testing.T) {
-	remote := &memConn{r: bytes.NewReader([]byte("hi"))}
-	local := &memConn{r: bytes.NewReader([]byte("yo"))}
+	remote, local := &memConn{r: bytes.NewReader([]byte("hi"))}, &memConn{r: bytes.NewReader([]byte("yo"))}
 	pipeConn(remote, local)
-	deadline := time.Now().Add(time.Second)
-	for (local.String() != "hi" || remote.String() != "yo") && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
-	if local.String() != "hi" || remote.String() != "yo" {
+	if !eventually(time.Second, func() bool { return local.String() == "hi" && remote.String() == "yo" }) {
 		t.Fatalf("pipeConn: local=%q remote=%q", local.String(), remote.String())
 	}
 }

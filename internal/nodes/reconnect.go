@@ -6,13 +6,13 @@
 // Outputs: TunnelState transitions, emitted as events and readable via
 //	Tunnel.State/Manager.State; a forwarded byte stream while up.
 // Constraints: R-21.220 — a host-key refusal (KindPermissionDenied) is
-//	TERMINAL: sets TunnelDown, returns, never retries. Every other dial
+//	TERMINAL: sets TunnelDown, returns, never retries, delivers nothing;
+//	on a started tunnel it is a changed key (P1-NODE-18). Every other dial
 //	failure is transient and feeds capped exponential backoff, waited on
 //	Sleeper (never a bare time.Sleep — Art.7.3), bounded by ctx and,
 //	optionally, ReconnectPolicy.MaxAttempts. Manager.Start is idempotent
 //	per node id — never a duplicate tunnel/forward.
-// SPORT: internal/nodes Tunnel/ADDED, ReconnectPolicy/ADDED, Manager/ADDED
-//	(P1-E17-W4-S36-T3).
+// SPORT: internal/nodes Tunnel/ADDED, ReconnectPolicy/ADDED, Manager/ADDED (P1-E17-W4-S36-T3).
 
 package nodes
 
@@ -180,7 +180,8 @@ func (t *Tunnel) run(parent context.Context) {
 		session, err := t.cfg.Dialer.Dial(ctx, t.cfg.Target, verify)
 		if err != nil {
 			if kind, ok := cascade.KindOf(err); ok && kind == cascade.KindPermissionDenied {
-				// R-21.220: a host-key refusal is terminal — never retry.
+				// R-21.220: terminal, never retried, also when the pinned key
+				// changed under a started tunnel (no call is delivered).
 				t.setState(parent, TunnelDown, "node.tunnel.host_key_refused")
 				return
 			}
