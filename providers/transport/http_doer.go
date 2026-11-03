@@ -79,9 +79,24 @@ type netTransport struct{ client *http.Client }
 
 // NewHTTPTransport wraps client as a Transport. The composition root
 // calls this once and passes the result to internal/providers/dispatch's
-// NewResolver; client must not be nil.
+// NewResolver; client must not be nil. The transport sends through a
+// shallow copy whose CheckRedirect refuses every redirect, so a 3xx
+// reaches the driver as its own non-2xx status and the request body and
+// key headers are never replayed to a second host. The caller's client
+// is left untouched. A nil client stays nil (there is nothing to copy).
 func NewHTTPTransport(client *http.Client) Transport {
-	return netTransport{client: client}
+	if client == nil {
+		return netTransport{}
+	}
+	refusing := *client
+	refusing.CheckRedirect = refuseRedirect
+	return netTransport{client: &refusing}
+}
+
+// refuseRedirect stops the client at the first 3xx and hands back that
+// response unchanged.
+func refuseRedirect(*http.Request, []*http.Request) error {
+	return http.ErrUseLastResponse
 }
 
 func (t netTransport) Send(ctx context.Context, method, url string, headers map[string]string, body []byte) (int, map[string][]string, io.ReadCloser, error) {

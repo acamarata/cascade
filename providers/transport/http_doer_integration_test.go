@@ -108,3 +108,53 @@ func TestOpenAIDoer_RealRoundTrip(t *testing.T) {
 		t.Fatalf("body = %q, want ok", got)
 	}
 }
+
+// TestNewHTTPTransportRefusesRedirect proves the transport NewHTTPTransport
+// builds never follows a 3xx (P1-TOP-19): the 3xx and its body reach the
+// caller, the redirect target sees nothing, and the caller's own client is
+// left as it was.
+func TestNewHTTPTransportRefusesRedirect(t *testing.T) {
+	var targetHits int
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		targetHits++
+		_, _ = w.Write([]byte("followed"))
+	}))
+	defer target.Close()
+
+	client := &http.Client{}
+	tr := NewHTTPTransport(client)
+	for _, code := range []int{http.StatusFound, http.StatusTemporaryRedirect, http.StatusPermanentRedirect} {
+		origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Location", target.URL+"/v1/x")
+			w.WriteHeader(code)
+			_, _ = w.Write([]byte("moved"))
+		}))
+		status, _, body, err := tr.Send(context.Background(), "POST", origin.URL, map[string]string{"authorization": "Bearer k"}, []byte("payload"))
+		if err != nil {
+			origin.Close()
+			t.Fatalf("Send over %d: %v", code, err)
+		}
+		got, _ := io.ReadAll(body)
+		_ = body.Close()
+		origin.Close()
+		if status != code || string(got) != "moved" {
+			t.Fatalf("Send over %d = %d %q, want %d %q", code, status, got, code, "moved")
+		}
+	}
+	if targetHits != 0 {
+		t.Fatalf("redirect target received %d requests, want 0", targetHits)
+	}
+	if client.CheckRedirect != nil {
+		t.Fatal("NewHTTPTransport mutated the caller's client CheckRedirect")
+	}
+
+	status, _, body, err := tr.Send(context.Background(), "GET", target.URL, nil, nil)
+	if err != nil {
+		t.Fatalf("Send over 200: %v", err)
+	}
+	got, _ := io.ReadAll(body)
+	_ = body.Close()
+	if status != http.StatusOK || string(got) != "followed" || targetHits != 1 {
+		t.Fatalf("Send over 200 = %d %q (target hits %d), want 200 followed 1", status, got, targetHits)
+	}
+}

@@ -82,9 +82,25 @@ type healthObserver struct {
 	log     *slog.Logger
 }
 
+// skipTransientKey marks a context whose calls the counter ignores.
+type skipTransientKey struct{}
+
+// WithoutTransientCount returns a child of ctx whose driver calls neither
+// add to nor reset the consecutive-transient counter (a health probe's
+// own call must not demote or rescue the provider it probes).
+func WithoutTransientCount(ctx context.Context) context.Context {
+	return context.WithValue(ctx, skipTransientKey{}, true)
+}
+
+// transientCountSkipped reports whether ctx carries WithoutTransientCount.
+func transientCountSkipped(ctx context.Context) bool {
+	skip, _ := ctx.Value(skipTransientKey{}).(bool)
+	return skip
+}
+
 // observe feeds one call outcome and demotes on the threshold.
 func (o *healthObserver) observe(ctx context.Context, err error) {
-	if o == nil || o.health == nil {
+	if o == nil || o.health == nil || transientCountSkipped(ctx) {
 		return
 	}
 	if !o.counter.observe(o.name, err) {
