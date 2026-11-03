@@ -1,10 +1,9 @@
 // Purpose: Lane CRUD (paired with store.go's Account/QuotaDomain/Credential
-// CRUD), RetireLane, CheckReservable, and Reconcile(ctx), rewriting
-// J/S-20.T2 records into topology rows in one transaction. UpsertLane's ON
+// CRUD), RetireLane, CheckReservable, the registry -> topology derivation
+// helpers and Reconcile's transaction (Report, validation). The pass body
+// and its reconcile-scoped writers live in reconcile_upsert.go. UpsertLane's ON
 // CONFLICT clause never touches discovered_at/lane_class/base_shadow_price/
-// roles/model_identity/offering_snapshot, so an unconditional re-upsert of
-// unchanged input still writes byte-identical rows. A violation aborts the
-// transaction with ErrTopologyInvariant, prior rows intact.
+// roles/model_identity/offering_snapshot.
 // SPORT: fleet/topology/reconcile/ADD (P1-E40-W9-S77-T1).
 
 package topology
@@ -152,68 +151,6 @@ func scanLane(row rowScanner) (Lane, error) {
 	return rec, nil
 }
 
-// Report summarizes one Reconcile pass.
-type Report struct {
-	ProvidersReconciled int
-	LanesReconciled     int
-	Violations          []Violation
-}
-
-// Reconcile rewrites every J/S-20.T2 provider/lane record into topology
-// rows inside one transaction, re-running Validate before commit. Every
-// derived row is upserted unconditionally -- see this file's header
-// comment for why that is still idempotent.
-func Reconcile(ctx context.Context, store *Store, reg *registry.Registry, clock Clock) (Report, error) {
-	providers, err := reg.ListProviders(ctx)
-	if err != nil {
-		return Report{}, err
-	}
-	lanes, err := reg.ListLanes(ctx)
-	if err != nil {
-		return Report{}, err
-	}
-	byProvider := make(map[string][]registry.LaneRecord, len(providers))
-	for _, l := range lanes {
-		byProvider[l.ProviderName] = append(byProvider[l.ProviderName], l)
-	}
-
-	var report Report
-	txErr := store.withTx(ctx, func(tx *Store) error {
-		for _, p := range providers {
-			if err := reconcileProvider(ctx, tx, clock, p, byProvider[p.Name], &report); err != nil {
-				return err
-			}
-		}
-		snap, err := tx.snapshot(ctx)
-		if err != nil {
-			return err
-		}
-		if violations := Validate(ctx, snap); len(violations) > 0 {
-			report.Violations = violations
-			return ErrTopologyInvariant
-		}
-		return nil
-	})
-	return report, txErr
-}
-
-// reconcileProvider derives/upserts one Account plus every one of its
-// lanes' QuotaDomain/RuntimeProfile/Credential/Lane rows.
-func reconcileProvider(ctx context.Context, tx *Store, clock Clock, p registry.ProviderRecord, lanes []registry.LaneRecord, report *Report) error {
-	billing := billingKindFor(p, lanes)
-	account := Account{ID: AccountID(p.Name), Provider: string(p.Driver), Billing: BillingInfo{Kind: billing}, Role: AccountRoleWorkforce}
-	if err := tx.UpsertAccount(ctx, account); err != nil {
-		return err
-	}
-	report.ProvidersReconciled++
-	for _, l := range lanes {
-		if err := reconcileLane(ctx, tx, clock, p, l, billing, report); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // billingKindFor: pool when any lane has a non-empty PoolMembership, else
 // subscription for oauth auth, else api.
 func billingKindFor(p registry.ProviderRecord, lanes []registry.LaneRecord) BillingKind {
@@ -265,36 +202,71 @@ func domainIDForBilling(b BillingKind, providerName, poolMembership string) Doma
 	}
 }
 
-// reconcileLane derives/upserts one lane's QuotaDomain and RuntimeProfile,
-// then its Credential and Lane rows: RuntimeProfile is upserted before
-// Credential/Lane so "one profile per lane" holds on the FIRST run.
-func reconcileLane(ctx context.Context, tx *Store, clock Clock, p registry.ProviderRecord, l registry.LaneRecord, billing BillingKind, report *Report) error {
-	domainID := domainIDForBilling(billing, p.Name, l.PoolMembership)
-	domain := QuotaDomain{ID: domainID, AccountRef: AccountID(p.Name), Kind: domainKindForBilling(billing), BillingTier: BillingTierDiscover}
-	if err := tx.UpsertQuotaDomain(ctx, domain); err != nil {
+// Report summarizes one Reconcile pass. Every count is of rows the pass
+// actually inserted or changed; a pass over unchanged inputs is all zero.
+type Report struct {
+	// ProvidersReconciled counts account rows inserted or changed.
+	ProvidersReconciled int
+	// LanesReconciled counts lane rows inserted or changed (un-retirements included).
+	LanesReconciled int
+	// RowsWritten counts every topology row inserted or changed, retirements included.
+	RowsWritten int
+	// Retired counts lanes retired because the registry no longer derives them.
+	Retired int
+	// Unretired counts retired lanes the registry derives again.
+	Unretired int
+	// Violations lists the invariant failures that aborted the pass.
+	Violations []Violation
+}
+
+// Reconcile derives every registry provider/lane record into topology rows
+// inside one transaction, retires the lanes it no longer derives and
+// re-runs Validate before commit. On error the Report carries only the
+// violations: no row of the pass was kept.
+func Reconcile(ctx context.Context, store *Store, reg *registry.Registry, clock Clock) (Report, error) {
+	providers, err := reg.ListProviders(ctx)
+	if err != nil {
+		return Report{}, err
+	}
+	lanes, err := reg.ListLanes(ctx)
+	if err != nil {
+		return Report{}, err
+	}
+	byProvider := make(map[string][]registry.LaneRecord, len(providers))
+	for _, l := range lanes {
+		byProvider[l.ProviderName] = append(byProvider[l.ProviderName], l)
+	}
+	var report Report
+	txErr := store.withTx(ctx, func(tx *Store) error {
+		report = Report{}
+		desired := make(map[LaneID]Lane)
+		for _, p := range providers {
+			if err := reconcileProvider(ctx, tx, p, byProvider[p.Name], desired, &report); err != nil {
+				return err
+			}
+		}
+		if err := writeDesiredLanes(ctx, tx, clock, desired, &report); err != nil {
+			return err
+		}
+		if err := retireVanishedLanes(ctx, tx, clock, desired, &report); err != nil {
+			return err
+		}
+		return validatePass(ctx, tx, &report)
+	})
+	if txErr != nil {
+		return Report{Violations: report.Violations}, txErr
+	}
+	return report, nil
+}
+
+func validatePass(ctx context.Context, tx *Store, report *Report) error {
+	snap, err := tx.snapshot(ctx)
+	if err != nil {
 		return err
 	}
-
-	profileID := RuntimeProfileID(p.Name + ":" + string(p.Driver))
-	profile := RuntimeProfile{ID: profileID, Runtime: runtimeKindForDriver(p.Driver)}
-	if err := tx.UpsertRuntimeProfile(ctx, profile); err != nil {
-		return err
+	if violations := Validate(ctx, snap); len(violations) > 0 {
+		report.Violations = violations
+		return ErrTopologyInvariant
 	}
-
-	credID := CredentialID(l.LaneName)
-	cred := Credential{ID: credID, AccountRef: AccountID(p.Name), QuotaDomainRef: domainID, SecretRef: VaultKeyRef(p.AuthRef.String()), RuntimeProfileRef: profileID, Health: CredentialOK}
-	if err := tx.UpsertCredential(ctx, cred); err != nil {
-		return err
-	}
-
-	modelID := ""
-	if len(l.ModelFilter) == 1 {
-		modelID = l.ModelFilter[0]
-	}
-	lane := Lane{ID: LaneIDFor(profileID, domainID, "", modelID, EffortNA, InteractionInteractive),
-		RuntimeProfileRef: profileID, QuotaDomainRef: domainID, CredentialRef: &credID, ModelID: modelID,
-		Effort: EffortNA, InteractionClass: InteractionInteractive, Health: LaneHealth(l.State),
-		LaneClass: LaneClassUnranked, BaseShadowPrice: 1.0, DiscoveredAt: clock.Now()}
-	report.LanesReconciled++
-	return tx.UpsertLane(ctx, lane)
+	return nil
 }

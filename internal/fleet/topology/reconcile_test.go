@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/providers/registry"
@@ -24,30 +26,26 @@ func newTestRegistry(t *testing.T) *registry.Registry {
 
 func seedOAuthProviderWithLane(t *testing.T, reg *registry.Registry) {
 	t.Helper()
-	ctx := context.Background()
-	provider := registry.ProviderRecord{Name: "anthropic-1", Driver: registry.DriverAnthropic, Auth: registry.AuthOAuth,
-		AuthRef: "vault://anthropic-1/oauth", AccountKind: registry.AccountPersonal, Tier: registry.TierMid}
-	if err := reg.UpsertProvider(ctx, provider); err != nil {
+	seedRegistry(context.Background(), t, reg, registry.ProviderRecord{Name: "anthropic-1", Driver: registry.DriverAnthropic,
+		Auth: registry.AuthOAuth, AuthRef: "vault://anthropic-1/oauth", AccountKind: registry.AccountPersonal, Tier: registry.TierMid},
+		registry.LaneRecord{LaneName: "anthropic-1", ProviderName: "anthropic-1", ModelFilter: []string{"claude-opus"},
+			Capacity: registry.CapacityInteractiveUsage, State: registry.LaneStateAvailable})
+}
+
+func seedRegistry(ctx context.Context, t *testing.T, reg *registry.Registry, p registry.ProviderRecord, l registry.LaneRecord) {
+	t.Helper()
+	if err := reg.UpsertProvider(ctx, p); err != nil {
 		t.Fatalf("seed provider: %v", err)
 	}
-	lane := registry.LaneRecord{LaneName: "anthropic-1", ProviderName: "anthropic-1", ModelFilter: []string{"claude-opus"},
-		Capacity: registry.CapacityInteractiveUsage, State: registry.LaneStateAvailable}
-	if err := reg.UpsertLane(ctx, lane); err != nil {
+	if err := reg.UpsertLane(ctx, l); err != nil {
 		t.Fatalf("seed lane: %v", err)
 	}
 }
 
 func TestReconcileDerivesSubscriptionLane(t *testing.T) {
-	ctx := context.Background()
-	reg := newTestRegistry(t)
+	ctx, reg, store := context.Background(), newTestRegistry(t), newTestStore(t)
 	seedOAuthProviderWithLane(t, reg)
-	store := newTestStore(t)
-
-	report, err := Reconcile(ctx, store, reg, newTestClock())
-	if err != nil {
-		t.Fatalf("Reconcile: %v (violations: %+v)", err, report.Violations)
-	}
-	if report.ProvidersReconciled != 1 || report.LanesReconciled != 1 {
+	if report := mustPass(ctx, t, store, reg, newTestClock()); report.ProvidersReconciled != 1 || report.LanesReconciled != 1 {
 		t.Fatalf("Report = %+v, want 1 provider and 1 lane", report)
 	}
 	assertSubscriptionAccountAndDomain(ctx, t, store)
@@ -92,11 +90,8 @@ func assertSubscriptionProfileAndCredential(ctx context.Context, t *testing.T, s
 		t.Errorf("Credential = %+v, unexpected derivation", cred)
 	}
 	lanes, err := store.ListLanes(ctx, false)
-	if err != nil {
-		t.Fatalf("ListLanes: %v", err)
-	}
-	if len(lanes) != 1 {
-		t.Fatalf("ListLanes = %d, want 1", len(lanes))
+	if err != nil || len(lanes) != 1 {
+		t.Fatalf("ListLanes = %d lanes (%v), want 1", len(lanes), err)
 	}
 	if lanes[0].LaneClass != LaneClassUnranked || lanes[0].BaseShadowPrice != 1.0 {
 		t.Errorf("first-run lane should be unranked at base price 1.0, got %+v", lanes[0])
@@ -106,66 +101,96 @@ func assertSubscriptionProfileAndCredential(ctx context.Context, t *testing.T, s
 	}
 }
 
-// TestReconcile is the named acceptance test for idempotence: a second
-// Reconcile over unchanged registry input preserves discovered_at and
-// writes byte-identical rows.
+// TestReconcile: a re-run over unchanged input keeps every lane row, discovered_at included.
 func TestReconcile(t *testing.T) {
-	ctx := context.Background()
-	reg := newTestRegistry(t)
+	ctx, reg, store := context.Background(), newTestRegistry(t), newTestStore(t)
 	seedOAuthProviderWithLane(t, reg)
-	store := newTestStore(t)
-
-	if _, err := Reconcile(ctx, store, reg, newTestClock()); err != nil {
-		t.Fatalf("first Reconcile: %v", err)
-	}
-	before, err := store.GetLane(ctx, mustLaneID(ctx, t, store))
-	if err != nil {
-		t.Fatalf("GetLane after first reconcile: %v", err)
-	}
-
-	laterClock := fakeClock{t: newTestClock().Now().AddDate(0, 0, 1)}
-	if _, err := Reconcile(ctx, store, reg, laterClock); err != nil {
-		t.Fatalf("second Reconcile: %v", err)
-	}
-	after, err := store.GetLane(ctx, before.ID)
-	if err != nil {
-		t.Fatalf("GetLane after second reconcile: %v", err)
-	}
-	if !after.DiscoveredAt.Equal(before.DiscoveredAt) {
-		t.Errorf("discovered_at changed on re-run: before %v, after %v", before.DiscoveredAt, after.DiscoveredAt)
-	}
-	if after.LaneClass != before.LaneClass || after.BaseShadowPrice != before.BaseShadowPrice {
-		t.Errorf("lane_class/base_shadow_price should survive a re-run unchanged")
+	mustPass(ctx, t, store, reg, newTestClock())
+	before := mustSnapshot(ctx, t, store).Lanes
+	mustPass(ctx, t, store, reg, fakeClock{t: newTestClock().Now().AddDate(0, 0, 1)})
+	if after := mustSnapshot(ctx, t, store).Lanes; len(before) != 1 || !reflect.DeepEqual(after, before) {
+		t.Errorf("lane rows changed on re-run:\nbefore %+v\nafter  %+v", before, after)
 	}
 }
 
-func mustLaneID(ctx context.Context, t *testing.T, store *Store) LaneID {
-	t.Helper()
-	lanes, err := store.ListLanes(ctx, false)
-	if err != nil || len(lanes) == 0 {
-		t.Fatalf("expected at least one lane, err=%v", err)
+// TestReconcileIdempotent: a second pass over unchanged inputs changes no
+// row of any table and reports zero counts; a failure injected after the
+// credential write (a test-only trigger on the lane table) leaves the
+// pre-pass rows, and the next pass converges.
+func TestReconcileIdempotent(t *testing.T) {
+	ctx, reg, store := context.Background(), newTestRegistry(t), newTestStore(t)
+	seedOAuthProviderWithLane(t, reg)
+	at := func(days int) fakeClock { return fakeClock{t: newTestClock().Now().AddDate(0, 0, days)} }
+	if rep := mustPass(ctx, t, store, reg, at(0)); rep.RowsWritten != 5 || rep.LanesReconciled != 1 {
+		t.Fatalf("first pass Report = %+v, want 5 rows and 1 lane written", rep)
 	}
-	return lanes[0].ID
+	assertZeroPass(ctx, t, store, reg, at(1))
+	before := mustSnapshot(ctx, t, store)
+	mustExec(ctx, t, store, `CREATE TRIGGER inject_fail BEFORE INSERT ON `+tableLane+` BEGIN SELECT RAISE(ABORT, 'injected lane failure'); END`)
+	p, err := reg.GetProvider(ctx, "anthropic-1")
+	if p.AuthRef = "vault://anthropic-1/rotated"; err != nil || reg.UpsertProvider(ctx, p) != nil {
+		t.Fatalf("rotate the provider auth ref: %v", err)
+	}
+	rep, err := Reconcile(ctx, store, reg, at(2))
+	if err == nil || !strings.Contains(err.Error(), "injected lane failure") || rep.RowsWritten != 0 {
+		t.Fatalf("injected failure: Report = %+v, err = %v", rep, err)
+	}
+	if got := mustSnapshot(ctx, t, store); !reflect.DeepEqual(got, before) {
+		t.Fatalf("the failed pass changed rows:\nbefore %+v\nafter  %+v", before, got)
+	}
+	mustExec(ctx, t, store, `DROP TRIGGER inject_fail`)
+	if rep := mustPass(ctx, t, store, reg, at(3)); rep.RowsWritten != 1 {
+		t.Fatalf("converging pass Report = %+v, want only the credential written", rep)
+	}
+	if c, err := store.GetCredential(ctx, "anthropic-1"); err != nil || c.SecretRef != "vault://anthropic-1/rotated" {
+		t.Fatalf("credential after converging pass = %+v (%v)", c, err)
+	}
+	assertZeroPass(ctx, t, store, reg, at(4))
+}
+
+func assertZeroPass(ctx context.Context, t *testing.T, store *Store, reg *registry.Registry, clock fakeClock) {
+	t.Helper()
+	before := mustSnapshot(ctx, t, store)
+	if rep := mustPass(ctx, t, store, reg, clock); !reflect.DeepEqual(rep, Report{}) {
+		t.Errorf("unchanged-input pass Report = %+v, want all zero", rep)
+	}
+	if after := mustSnapshot(ctx, t, store); !reflect.DeepEqual(after, before) {
+		t.Errorf("unchanged-input pass changed rows:\nbefore %+v\nafter  %+v", before, after)
+	}
+}
+
+func mustPass(ctx context.Context, t *testing.T, store *Store, reg *registry.Registry, clock fakeClock) Report {
+	t.Helper()
+	rep, err := Reconcile(ctx, store, reg, clock)
+	if err != nil {
+		t.Fatalf("Reconcile: %v (violations %+v)", err, rep.Violations)
+	}
+	return rep
+}
+
+func mustSnapshot(ctx context.Context, t *testing.T, store *Store) Snapshot {
+	t.Helper()
+	snap, err := store.snapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return snap
+}
+
+func mustExec(ctx context.Context, t *testing.T, store *Store, q string) {
+	t.Helper()
+	if _, err := store.rdb.ExecContext(ctx, q); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestReconcilePoolLaneDerivesSharedPoolDomain(t *testing.T) {
-	ctx := context.Background()
-	reg := newTestRegistry(t)
-	provider := registry.ProviderRecord{Name: "pool-1", Driver: registry.DriverAnthropic, Auth: registry.AuthKey,
-		AuthRef: "vault://pool-1/key", AccountKind: registry.AccountShared, Tier: registry.TierMid}
-	if err := reg.UpsertProvider(ctx, provider); err != nil {
-		t.Fatalf("seed provider: %v", err)
-	}
-	lane := registry.LaneRecord{LaneName: "pool-lane-1", ProviderName: "pool-1", PoolMembership: "shared-pool-a",
-		Capacity: registry.CapacityAPICredit, State: registry.LaneStateAvailable}
-	if err := reg.UpsertLane(ctx, lane); err != nil {
-		t.Fatalf("seed lane: %v", err)
-	}
-	store := newTestStore(t)
-
-	if _, err := Reconcile(ctx, store, reg, newTestClock()); err != nil {
-		t.Fatalf("Reconcile: %v", err)
-	}
+	ctx, reg, store := context.Background(), newTestRegistry(t), newTestStore(t)
+	seedRegistry(ctx, t, reg, registry.ProviderRecord{Name: "pool-1", Driver: registry.DriverAnthropic, Auth: registry.AuthKey,
+		AuthRef: "vault://pool-1/key", AccountKind: registry.AccountShared, Tier: registry.TierMid},
+		registry.LaneRecord{LaneName: "pool-lane-1", ProviderName: "pool-1", PoolMembership: "shared-pool-a",
+			Capacity: registry.CapacityAPICredit, State: registry.LaneStateAvailable})
+	mustPass(ctx, t, store, reg, newTestClock())
 	domain, err := store.GetQuotaDomain(ctx, "pool:shared-pool-a")
 	if err != nil {
 		t.Fatalf("GetQuotaDomain(pool:shared-pool-a): %v", err)
@@ -183,23 +208,12 @@ func TestReconcilePoolLaneDerivesSharedPoolDomain(t *testing.T) {
 }
 
 func TestReconcileOllamaMapsRuntime(t *testing.T) {
-	ctx := context.Background()
-	reg := newTestRegistry(t)
-	provider := registry.ProviderRecord{Name: "ollama-1", Driver: registry.DriverOllama, Auth: registry.AuthKey,
-		AuthRef: "vault://ollama-1/key", AccountKind: registry.AccountPersonal, Tier: registry.TierFree}
-	if err := reg.UpsertProvider(ctx, provider); err != nil {
-		t.Fatalf("seed provider: %v", err)
-	}
-	lane := registry.LaneRecord{LaneName: "ollama-1", ProviderName: "ollama-1",
-		Capacity: registry.CapacityAPICredit, State: registry.LaneStateAvailable}
-	if err := reg.UpsertLane(ctx, lane); err != nil {
-		t.Fatalf("seed lane: %v", err)
-	}
-	store := newTestStore(t)
-
-	if _, err := Reconcile(ctx, store, reg, newTestClock()); err != nil {
-		t.Fatalf("Reconcile: %v", err)
-	}
+	ctx, reg, store := context.Background(), newTestRegistry(t), newTestStore(t)
+	seedRegistry(ctx, t, reg, registry.ProviderRecord{Name: "ollama-1", Driver: registry.DriverOllama, Auth: registry.AuthKey,
+		AuthRef: "vault://ollama-1/key", AccountKind: registry.AccountPersonal, Tier: registry.TierFree},
+		registry.LaneRecord{LaneName: "ollama-1", ProviderName: "ollama-1",
+			Capacity: registry.CapacityAPICredit, State: registry.LaneStateAvailable})
+	mustPass(ctx, t, store, reg, newTestClock())
 	profile, err := store.GetRuntimeProfile(ctx, "ollama-1:ollama")
 	if err != nil {
 		t.Fatalf("GetRuntimeProfile: %v", err)
@@ -275,10 +289,6 @@ func TestReconcileMatchesGoldenDerivation(t *testing.T) {
 		t.Errorf("Lane.LaneClass = %q, golden wants %q", lanes[0].LaneClass, wantLane["lane_class"])
 	}
 }
-
-// TestReconcileAbortsOnInvariantViolation proves an invariant-breaking
-// state aborts the whole transaction and leaves prior rows byte-identical
-// (asserted via a before/after snapshot comparison).
 
 func TestRuntimeKindForDriver(t *testing.T) {
 	if got := runtimeKindForDriver(registry.DriverOllama); got != RuntimeOllama {
