@@ -1,0 +1,10 @@
+id = "antigravity"
+name = "Antigravity Harness"
+schema = "cascade.plugin/v2"
+version = "0.1.0"
+host_version = ">=0.1.0"
+runtime = "builtin"
+
+[[provides.commands]]
+name = "detect"
+description = "Report whether the agy binary is present in PATH."
