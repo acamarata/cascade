@@ -633,33 +633,12 @@
     "symbol": "internal/providers/intake.ParseInitConfig"
   },
   {
-    "caller_site": "internal/repo/watch.go",
-    "expected_caller": "the S-67.T4 watcher/rescan driver; retire this entry once it lands",
-    "reason": "Same as RegisteredLanguages above: the per-language extractor lookup this ticket ships has no driver ticket in files_scope. TestGraphExtract_RealCounterpart exercises the concrete goExtractor{} directly, not this lookup.",
-    "retire_ticket": "P1-GEN-04",
-    "symbol": "internal/repo.ExtractorFor"
-  },
-  {
-    "caller_site": "internal/repo/watch.go",
-    "expected_caller": "the S-67.T4 watcher/rescan driver, which enumerates registered languages before dispatching an extractor; retire this entry once it lands",
-    "reason": "P1-E33-W7-S67-T3 ships the Go symbol/dependency graph extractor and its language registry with no driver ticket of its own: the rescan driver that walks a repository and calls the registry to pick an extractor is S-67.T4 (watchers), explicitly out of this ticket's files_scope/boundaries (HOW-7: 'no watchers (S-67.T4)').",
-    "retire_ticket": "P1-GEN-04",
-    "symbol": "internal/repo.RegisteredLanguages"
-  },
-  {
     "caller_site": "cmd/cascade/retrieval.go",
     "expected_caller": "a future ingest command (e.g. `cascade retrieval ingest` or a repo-scan composition root) that calls IngestGitRepo and hands its Chunks to embed.Pipeline.Run; retire this entry once that lands",
     "reason": "P1-E25-W5-S52-T6 builds the code-corpus git ingest as a standalone function: no ingest command yet calls it and feeds the result to internal/retrieval/embed's Pipeline.Run, the write path this function's own doc comment names as its intended consumer.",
     "retire_ticket": "cap:retrieval-fusion",
     "expires": "P1-EXIT-07",
     "symbol": "internal/retrieval.IngestGitRepo"
-  },
-  {
-    "caller_site": "internal/repo/watch.go",
-    "expected_caller": "the S-67.T4 watcher/rescan driver; retire this entry once it lands",
-    "reason": "P1-E33-W7-S67-T3 ships the graph-corpus serialization function with no driver ticket in files_scope: the rescan driver that extracts a SymbolGraph and feeds it to this function before the existing FTS5/embed upsert paths write it is S-67.T4 (watchers). TestIngestSymbolGraph_* exercises the function directly with a hand-built SymbolGraph, not through a production caller.",
-    "retire_ticket": "P1-GEN-04",
-    "symbol": "internal/retrieval.IngestSymbolGraph"
   },
   {
     "caller_site": "internal/retrieval/eval/verb.go",
@@ -996,13 +975,6 @@
     "symbol": "internal/rpc.WithOwnerUIDForTest"
   },
   {
-    "caller_site": "internal/repo/maintenance.go",
-    "expected_caller": "P1-GEN-04's maintenance pipeline (internal/repo/maintenance.go), which admits a single changed path from a watcher event through Admit and the batch of an initial scan through AdmitBatch; if it only uses AdmitBatch, repoint or retire this entry in that ticket",
-    "reason": "P1-GEN-03 ships the ingest admission guard; Admit is the one-path form of AdmitBatch named by contract:repo-ingest-admission. IngestGitRepo, the only production caller at this tip, always has many paths and uses AdmitBatch, so tests are the only callers of Admit here.",
-    "retire_ticket": "P1-GEN-04",
-    "symbol": "internal/repo.Admit"
-  },
-  {
     "caller_site": "cmd/cascade/wire_inbox_delivery.go",
     "expected_caller": "P1-HRN-07's daemon composition (cmd/cascade/wire_inbox_delivery.go), which subscribes every live session in the sessions store to the one notify.Service through WireClaudeInboxPush and unsubscribes it when the session closes",
     "reason": "P1-HRN-02 ships the hydration queue, the bridge and the context.slice drain; the drain side is composed (wire_inbox_hydration.go registers it flag-off) but nothing constructs the router subscription until P1-HRN-07 builds the per-session subscription wiring, so internal/plugins tests are the only callers today",
@@ -1136,14 +1108,6 @@
     "reason": "P1-SUP-05 ships the dispatch-time vault-binding seam (contract:hooks-vault-binding) tested behind the real Rehydrator.RehydrateOnly over a counting in-memory vault; the packet prohibits any cmd/cascade composition file, so its production caller is P1-SUP-02. ParseHooksSection is removed because the guarded [hooks] family (cmd/cascade/guarded_hooks.go hooksFamilyExtract) now calls it in shipped code.",
     "retire_ticket": "P1-SUP-02",
     "symbol": "internal/hooks.BoundRehydrate"
-  },
-  {
-    "added_by_ticket": "P1-PLG-03",
-    "caller_site": "internal/plugins/reverify.go",
-    "expected_caller": "internal/plugins/reverify.go, the attested re-verification that P1-PLG-12 adds; it is the first production path that reads a record held at the untrusted tier before it re-pins trust, and it compares against TrustTierUntrusted; retire this entry once that file references it. P1-PLG-08 host calls do not read a tier: a launched child is trusted by construction, so hostserver.go never needed the constant.",
-    "reason": "P1-PLG-03 ships the process trust tiers. Launch only compares against TrustTierTrusted, so nothing in production reads the untrusted constant yet. The caller named earlier (hostserver.go) exists and does not need it, so the promise moved to the file that will hold a real reader. P1-PLG-12 is the nearest open plugin trust ticket, but its contract does not name the constant, so the owner should confirm or re-key this row.",
-    "retire_ticket": "P1-PLG-12",
-    "symbol": "internal/plugins/process.TrustTierUntrusted"
   },
   {
     "added_by_ticket": "P1-CPA-16",
@@ -1336,5 +1300,45 @@
     "reason": "P1-AGT-03 ships the host shim (credential custody, pre-spawn scan, executable gate, effect intent, output filter) implemented and tested, but its only production caller is the delegation Service of P1-AGT-08. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once service.go exists without the call.",
     "retire_ticket": "P1-AGT-08",
     "symbol": "internal/providers/agents.NewShim"
+  },
+  {
+    "added_by_ticket": "P1-GEN-04",
+    "caller_site": "cmd/cascade/repo_watch_compose.go",
+    "expected_caller": "cmd/cascade/repo_watch_compose.go, the daemon composition of the repo watcher and maintenance pipeline that P1-GEN-13 adds; retire this entry once that file calls NewMaintenance",
+    "reason": "P1-GEN-04 ships the journaled, crash-safe maintenance pipeline implemented and tested; the daemon composition that constructs it per repository is P1-GEN-13, so a production call now would be a fabricated one.",
+    "retire_ticket": "P1-GEN-13",
+    "symbol": "internal/repo.NewMaintenance"
+  },
+  {
+    "added_by_ticket": "P1-GEN-04",
+    "caller_site": "cmd/cascade/repo_watch_compose.go",
+    "expected_caller": "cmd/cascade/repo_watch_compose.go, the daemon composition of the repo watcher and maintenance pipeline that P1-GEN-13 adds; retire this entry once that file calls NewWatchJournal",
+    "reason": "P1-GEN-04 ships the watch journal the maintenance pipeline resumes from; the composition that opens it on the daemon store is P1-GEN-13.",
+    "retire_ticket": "P1-GEN-13",
+    "symbol": "internal/repo.NewWatchJournal"
+  },
+  {
+    "added_by_ticket": "P1-GEN-04",
+    "caller_site": "cmd/cascade/repo_watch_compose.go",
+    "expected_caller": "cmd/cascade/repo_watch_compose.go, the daemon composition of the repo watcher and maintenance pipeline that P1-GEN-13 adds; retire this entry once that file calls ApplyWatchJournalSchema",
+    "reason": "P1-GEN-04 ships the watch journal schema; the composition that applies it to the daemon store before opening the journal is P1-GEN-13.",
+    "retire_ticket": "P1-GEN-13",
+    "symbol": "internal/repo.ApplyWatchJournalSchema"
+  },
+  {
+    "added_by_ticket": "P1-GEN-03",
+    "caller_site": "cmd/cascade/repo_watch_compose.go",
+    "expected_caller": "cmd/cascade/repo_watch_compose.go, the P1-GEN-13 watcher composition; it must either admit a single watcher path through Admit or retire this symbol; retire this entry once that file calls Admit",
+    "reason": "P1-GEN-03 ships the ingest admission guard; Admit is the one-path form of AdmitBatch named by contract:repo-ingest-admission. Repointed by P1-GEN-04: the maintenance pipeline admits every batch through AdmitBatch, so maintenance.go never calls Admit; the next candidate caller is the watcher composition of P1-GEN-13.",
+    "retire_ticket": "P1-GEN-13",
+    "symbol": "internal/repo.Admit"
+  },
+  {
+    "added_by_ticket": "P1-GEN-03",
+    "caller_site": "cmd/cascade/repo_indexleg.go",
+    "expected_caller": "cmd/cascade/repo_indexleg.go, the P1-GEN-13 IndexLeg binding that writes a reloaded package's SymbolGraph into the graph corpus; retire this entry once that file calls IngestSymbolGraph",
+    "reason": "P1-E33-W7-S67-T3 ships the graph-corpus serialization function. Repointed by P1-GEN-04: internal/repo may not import internal/retrieval (GEN-04 acceptance [8]), so the maintenance pipeline reaches corpora only through the injected IndexLeg; the production caller is the IndexLeg binding of P1-GEN-13, not a watch.go in internal/repo.",
+    "retire_ticket": "P1-GEN-13",
+    "symbol": "internal/retrieval.IngestSymbolGraph"
   }
 ]
