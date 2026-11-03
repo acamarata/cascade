@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-03T07:46:14Z",
+  "generated_at": "2026-11-03T10:30:56Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4755,6 +4755,12 @@
           "line": 14,
           "status": "",
           "raw": "cmd/cascade daemon registrations (audit.gate_append, P1-SEC-08)."
+        },
+        {
+          "file": "cmd/cascade/wire_gateway_quota.go",
+          "line": 8,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-GWY-04)."
         },
         {
           "file": "cmd/cascade/wire_inbox_hydration.go",
@@ -10843,6 +10849,20 @@
           "status": "ADD",
           "ticket": "P1-E18-W4-S40-T3",
           "raw": "fleet.Metrics tests (ADD) — P1-E18-W4-S40-T3."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet.capacity quota windows",
+      "sites": [
+        {
+          "file": "internal/fleet/capacity/quota.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "fleet.capacity quota windows (ADD, P1-GWY-04)."
         }
       ],
       "statuses": [
@@ -39413,6 +39433,20 @@
       ]
     },
     {
+      "name": "provider.usage quota windows",
+      "sites": [
+        {
+          "file": "internal/providers/usage/quota.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "provider.usage quota windows (ADD, P1-GWY-04)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "providers.agents.claude",
       "sites": [
         {
@@ -42703,7 +42737,7 @@
       ]
     }
   ],
-  "total_sites": 4120,
+  "total_sites": 4123,
   "unspecified_count": 369,
   "multi_status_count": 131
 }
