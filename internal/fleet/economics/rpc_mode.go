@@ -40,6 +40,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/acamarata/cascade/internal/audit"
+	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -165,21 +167,35 @@ func ModeShowHandler(store *SchedulerModeStore, resolver ProjectResolver, clock 
 	}
 }
 
-// ModeSetHandler returns the fleet.mode.set rpc.HandlerFunc.
-func ModeSetHandler(store *SchedulerModeStore, resolver ProjectResolver, clock Clock) rpc.HandlerFunc {
+// decodeModeSet is shared by elevation classification and the handler.
+func decodeModeSet(raw json.RawMessage) (fleetModeSetParams, Mode, error) {
+	var params fleetModeSetParams
+	if err := json.Unmarshal(raw, &params); err != nil {
+		return params, "", cascade.Wrap(cascade.KindInvalidInput, err, "fleet.mode.set: decode params")
+	}
+	m, err := ParseMode(params.Mode)
+	return params, m, err
+}
+
+// ModeSetLoosens classifies incident changes for conditional elevation.
+// Undecodable params and unknown modes fail closed and require elevation.
+func ModeSetLoosens(raw json.RawMessage) bool {
+	_, m, err := decodeModeSet(raw)
+	return err != nil || m == ModeIncident
+}
+
+// ModeSetHandler returns the fleet.mode.set rpc.HandlerFunc. Incident changes
+// require an effect writer; other modes preserve the unaudited write path.
+func ModeSetHandler(store *SchedulerModeStore, resolver ProjectResolver, clock Clock, effects ...audit.EffectWriter) rpc.HandlerFunc {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		if store == nil || clock == nil {
 			return nil, cascade.New(cascade.KindUnavailable, "fleet.mode.set: daemon scheduler-mode subsystem not yet initialised")
 		}
-		var params fleetModeSetParams
-		if err := json.Unmarshal(raw, &params); err != nil {
-			return nil, cascade.Wrap(cascade.KindInvalidInput, err, "fleet.mode.set: decode params")
-		}
-		projectID, err := resolveProjectID(ctx, params.ProjectID, resolver)
+		params, m, err := decodeModeSet(raw)
 		if err != nil {
 			return nil, err
 		}
-		m, err := ParseMode(params.Mode)
+		projectID, err := resolveProjectID(ctx, params.ProjectID, resolver)
 		if err != nil {
 			return nil, err
 		}
@@ -190,7 +206,7 @@ func ModeSetHandler(store *SchedulerModeStore, resolver ProjectResolver, clock C
 				return nil, cascade.Wrap(cascade.KindInvalidInput, err, "fleet.mode.set: parse ttl")
 			}
 		}
-		state, err := store.Set(ctx, projectID, m, ttl)
+		state, err := setModeEffect(ctx, store, projectID, m, ttl, raw, effects)
 		if err != nil {
 			return nil, err
 		}
@@ -202,11 +218,46 @@ func ModeSetHandler(store *SchedulerModeStore, resolver ProjectResolver, clock C
 	}
 }
 
+// setModeEffect commits an incident intent before Set, then confirms only a
+// successful write. A write error leaves an intent for unknown-outcome recovery.
+func setModeEffect(ctx context.Context, store *SchedulerModeStore, projectID string, m Mode, ttl time.Duration, raw json.RawMessage, effects []audit.EffectWriter) (ModeState, error) {
+	if m != ModeIncident {
+		return store.Set(ctx, projectID, m, ttl)
+	}
+	if len(effects) != 1 || effects[0] == nil {
+		return ModeState{}, cascade.New(cascade.KindUnavailable, "fleet.mode.set: incident audit unavailable")
+	}
+	caller, ok := principal.CallerFrom(ctx)
+	actor := "owner-cli"
+	if !ok || (caller.Principal == nil && !caller.OwnerCLI) {
+		return ModeState{}, cascade.New(cascade.KindPermissionDenied, "fleet.mode.set: caller principal required")
+	}
+	if caller.Principal != nil {
+		actor = caller.Principal.ID
+		if actor == "" {
+			return ModeState{}, cascade.New(cascade.KindPermissionDenied, "fleet.mode.set: caller principal required")
+		}
+	}
+	hash := rpc.ParamsHash(raw)
+	identity, _ := json.Marshal([]string{actor, projectID, hash})
+	h, err := effects[0].BeginEffect(ctx, audit.EffectRequest{Kind: audit.KindExternalEffect,
+		Actor: actor, Action: MethodFleetModeSet, Key: MethodFleetModeSet + ":" + rpc.ParamsHash(identity), ParamsHash: hash})
+	if err != nil {
+		return ModeState{}, err
+	}
+	state, err := store.Set(ctx, projectID, m, ttl)
+	if err != nil {
+		return ModeState{}, err
+	}
+	_, err = effects[0].ConfirmEffect(ctx, h, "incident mode set")
+	return state, err
+}
+
 // RegisterHandlers binds MethodFleetModeShow/Set on reg. Registry.Register
 // is already a generic, method-name-agnostic call -- see this file's
 // header CONTRACT DEVIATION note for why registry.go itself needs no
 // change.
-func RegisterHandlers(reg *rpc.Registry, store *SchedulerModeStore, resolver ProjectResolver, clock Clock) {
+func RegisterHandlers(reg *rpc.Registry, store *SchedulerModeStore, resolver ProjectResolver, clock Clock, effects ...audit.EffectWriter) {
 	reg.Register(MethodFleetModeShow, ModeShowHandler(store, resolver, clock))
-	reg.Register(MethodFleetModeSet, ModeSetHandler(store, resolver, clock))
+	reg.Register(MethodFleetModeSet, ModeSetHandler(store, resolver, clock, effects...))
 }
