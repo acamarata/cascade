@@ -115,6 +115,7 @@
   "internal/storage/storetest": { "tier": "core", "floor": 85.0, "baseline": 89.3 },
   "internal/sync": { "tier": "core", "floor": 85.0, "baseline": 90.8 },
   "internal/testkit": { "tier": "core", "floor": 85.0, "baseline": 100.0 },
+  "internal/tools/docgen": { "tier": "core", "floor": 85.0, "baseline": 91.0 },
   "internal/tools/promotion": { "tier": "core", "floor": 85.0, "baseline": 87.7 },
   "internal/tools/registry-gen": { "tier": "core", "floor": 85.0, "baseline": 95.0 },
   "internal/uninstall": { "tier": "core", "floor": 85.0, "baseline": 91.1 },
