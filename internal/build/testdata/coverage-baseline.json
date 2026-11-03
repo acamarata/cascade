@@ -141,6 +141,7 @@
   "plugins/pbd/internal/dispatch": { "tier": "plugins", "floor": 80.0, "baseline": 100.0 },
   "plugins/pbd/internal/pews": { "tier": "plugins", "floor": 80.0, "baseline": 89.1 },
   "plugins/review": { "tier": "plugins", "floor": 80.0, "baseline": 92.5 },
+  "providers/agents/antigravity": { "tier": "plugins", "floor": 80.0, "baseline": 95.4 },
   "providers/agents/claude": { "tier": "plugins", "floor": 80.0, "baseline": 92.8 },
   "providers/agents/codex": { "tier": "plugins", "floor": 80.0, "baseline": 91.5 },
   "providers/agents/conformance": { "tier": "plugins", "floor": 80.0, "baseline": 86.9 },

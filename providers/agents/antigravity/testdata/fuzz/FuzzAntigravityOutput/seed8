@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"event\":\"init\",\"conversation_id\":\"c\",\"init\":{}}\n{\"event\":\"result\",\"result\":{\"conversation_id\":\"c\",\"status\":\"SUCCESS\",\"response\":\"X\"}}")
