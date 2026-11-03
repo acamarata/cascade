@@ -31,6 +31,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // sourceMapping is one normative source-Kind mapping table row: the Class
@@ -38,6 +39,13 @@ import (
 type sourceMapping struct {
 	class    Class
 	priority Priority
+}
+
+// routerTrustedOrigins maps the bus Kinds whose Origin claims trust to their
+// Origin.Source name in TrustedProducers. Every other Kind's Origin is the
+// Kind itself and untrusted-source.
+var routerTrustedOrigins = map[events.EventKind]string{
+	"supervision.stalled": "supervision.stall",
 }
 
 // sourceKindMapping is the ticket's normative source-Kind mapping table.
@@ -124,7 +132,9 @@ func (r *NotificationRouter) handle(ev events.Event) {
 		CorrelationID: payload.CorrelationID,
 		Payload:       payload.Body,
 		Timestamp:     r.clock.Now(),
+		Origin:        routerOrigin(ev.Kind, payload.ID),
 	}
+	stamp(&n)
 	r.queues.enqueue(n)
 }
 
@@ -168,4 +178,15 @@ func (r *NotificationRouter) reclassifyAccumulated(matchID string) int {
 // the queue it is being returned to, not back into the buffer it just left.
 func (r *NotificationRouter) requeue(n Notification) {
 	r.queues.enqueueNow(n)
+}
+
+// routerOrigin is the Origin of a bus-decoded event: an internal-tier record
+// named by the payload id, trusted only for a routerTrustedOrigins Kind.
+func routerOrigin(kind events.EventKind, id string) Origin {
+	o := Origin{Source: string(kind), RecordRef: id, Tier: provider.SensitivityInternal,
+		Trust: provider.ProvenanceUntrustedSource}
+	if src, ok := routerTrustedOrigins[kind]; ok {
+		o.Source, o.Trust = src, provider.ProvenanceTrusted
+	}
+	return o
 }

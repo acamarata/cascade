@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 // Priority orders a Notification for dispatch. Lower values drain first:
@@ -190,6 +191,14 @@ type Notification struct {
 	// CorrelationID links related Notifications (e.g. one CI run's
 	// started/failed pair) for a consuming surface; opaque to the router.
 	CorrelationID string
+
+	// Origin names the producer and record this item came from. The Inbox
+	// keeps the first Origin recorded for an id (provenance.go).
+	Origin Origin
+	// DataClass and Trust are written only by stamp (provenance.go),
+	// derived from Origin; a producer-set value is overwritten.
+	DataClass provider.SensitivityTier `json:"data_class"`
+	Trust     provider.Provenance      `json:"trust"`
 }
 
 // expired reports whether n is past its ExpiresAt as of now. A zero

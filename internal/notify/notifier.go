@@ -87,6 +87,7 @@ func (nf *Notifier) prepare(ctx context.Context, n Notification) (Notification, 
 		return n, err
 	}
 	n.Timestamp = nf.clock.Now()
+	stamp(&n)
 	return n, nil
 }
 

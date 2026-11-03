@@ -120,7 +120,7 @@ func (ib *Inbox) record(notif Notification) {
 	defer ib.mu.Unlock()
 	if existing, ok := ib.records[notif.ID]; ok {
 		if sameAddressing(existing.n, notif) {
-			existing.n = notif
+			existing.n = mergeRecord(existing.n, notif)
 		}
 		return
 	}
