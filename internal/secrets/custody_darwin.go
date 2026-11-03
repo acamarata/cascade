@@ -217,21 +217,6 @@ func (k *keychainCustody) List(ctx context.Context) ([]string, error) {
 	return k.readIndex(ctx)
 }
 
-// isKeychainNotFound classifies the security tool's "not found" failure.
-// It reads the tool's own stderr text; anything it cannot positively
-// classify is NOT treated as not-found, so an unreadable keychain surfaces
-// as unavailable rather than as a missing secret.
-func isKeychainNotFound(err error) bool {
-	var re *runnerError
-	if !errors.As(err, &re) {
-		return false
-	}
-	text := strings.ToLower(re.stderr)
-	return strings.Contains(text, "could not be found") ||
-		strings.Contains(text, "specified item could not be found") ||
-		strings.Contains(text, "errsecitemnotfound")
-}
-
 // redactRunner strips a runnerError's captured stderr before the failure
 // travels any further. The security tool's diagnostics can quote the
 // arguments it was given, and Set's arguments include the (hex-encoded)
