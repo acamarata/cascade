@@ -264,7 +264,15 @@ var defaultClasses = []struct {
 		Owner:           "P1-CI-14",
 	}},
 	{EgressClassAgentDriver, InterceptConfig{Enabled: true, AllowRestricted: false, Owner: "P1-AGT-03"}},
+	{EgressClassProviderUsage, InterceptConfig{Enabled: true, AllowRestricted: false,
+		AllowedTiers: []SensitivityTier{TierInternal, TierPublic}, Owner: "P1-GWY-04"}},
 }
+
+// EgressClassProviderUsage is the gateway quota poll (P1-GWY-04): every GET
+// of an admitted gateway account's usage endpoint acquires this class's
+// capability first. Its destinations are the admitted gateway hosts that
+// declare a usage endpoint; the request carries no content.
+const EgressClassProviderUsage EgressClass = "provider-usage"
 
 // defaultRegistry holds the classes this build ships with. It is package
 // state because registration happens at init, which is what makes a class

@@ -1,0 +1,8 @@
+# The usage source the replay test decodes usage.json with.
+source = "endpoint"
+window = "5h"
+path = "/v1/usage"
+used_pointer = "/windows/five_hour/used"
+limit_pointer = "/windows/five_hour/limit"
+utilization_pointer = "/windows/five_hour/utilization"
+resets_at_pointer = "/windows/five_hour/resets_at"

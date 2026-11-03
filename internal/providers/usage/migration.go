@@ -51,7 +51,7 @@ const tableProviderUsage = "provider_usage"
 // usageSchemaVersion is this package's MigrationSet target version -- the
 // next unused slot in the single global sequence (see this file's SCHEMA
 // VERSION doc comment).
-const usageSchemaVersion = 6
+const usageSchemaVersion = 7
 
 // SchemaVersion is usageSchemaVersion exported for a future composition
 // root's reader-ceiling max(), matching registry.SchemaVersion's own
@@ -67,7 +67,7 @@ func MigrationSet() migrate.MigrationSet {
 		SetID:         "providers-usage",
 		SchemaVersion: usageSchemaVersion,
 		ReaderCeiling: usageSchemaVersion,
-		Steps:         []migrate.MigrationStep{providerUsageTableStep()},
+		Steps:         []migrate.MigrationStep{providerUsageTableStep(), providerQuotaWindowTableStep()},
 	}
 }
 
@@ -88,6 +88,29 @@ func providerUsageTableStep() migrate.MigrationStep {
 				{Name: "errors", Type: migrate.TypeInteger, NotNull: true},
 				{Name: "cost_micro_usd", Type: migrate.TypeInteger, NotNull: true},
 				{Name: "last_used_at", Type: migrate.TypeInteger, NotNull: true},
+			},
+		},
+	}
+}
+
+// providerQuotaWindowTableStep is version 7 (P1-GWY-04): one quota-window
+// observation per (provider, window), upserted by RecordQuota. Version 6
+// stores gain the table on upgrade; their provider_usage rows are untouched.
+func providerQuotaWindowTableStep() migrate.MigrationStep {
+	return migrate.MigrationStep{
+		Kind:        migrate.StepCreateTable,
+		Description: "provider_quota_window: last quota-window observation per (provider, window)",
+		Table: &migrate.TableDef{
+			Name: tableProviderQuotaWindow,
+			Columns: []migrate.ColumnDef{
+				{Name: "provider_name", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
+				{Name: "window", Type: migrate.TypeText, PrimaryKey: true, NotNull: true},
+				{Name: "used", Type: migrate.TypeInteger, NotNull: true},
+				{Name: "limit_value", Type: migrate.TypeInteger, NotNull: true},
+				{Name: "utilization_pct", Type: migrate.TypeReal, NotNull: true},
+				{Name: "resets_at", Type: migrate.TypeInteger, NotNull: true},
+				{Name: "observed_at", Type: migrate.TypeInteger, NotNull: true},
+				{Name: "last_error", Type: migrate.TypeText, NotNull: true},
 			},
 		},
 	}

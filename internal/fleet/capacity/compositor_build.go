@@ -229,10 +229,13 @@ func expireProviderSlot(slot ProviderSlot, now time.Time, ttl time.Duration) Pro
 	expired := make(map[BucketKind]Bucket, len(slot.Buckets))
 	for kind, b := range slot.Buckets {
 		b.State = StateUnknown
+		b.FiveHour.UtilizationPct = WindowUtilizationUnknown
+		b.SevenDay.UtilizationPct = WindowUtilizationUnknown
 		expired[kind] = b
 	}
 	slot.Buckets = expired
 	slot.State = StateUnknown
+	slot.Quota = staleQuota(slot.Quota)
 	return slot
 }
 

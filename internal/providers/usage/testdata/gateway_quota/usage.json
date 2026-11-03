@@ -1,0 +1,11 @@
+{
+  "account": "redacted",
+  "windows": {
+    "five_hour": {
+      "used": 420,
+      "limit": 1000,
+      "utilization": 42.5,
+      "resets_at": "2026-09-06T15:00:00Z"
+    }
+  }
+}

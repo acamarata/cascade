@@ -95,6 +95,7 @@ type Compositor struct {
 	prev       FleetSnapshot
 	havePrev   bool
 	onChange   ChangeFunc
+	quota      QuotaSource
 }
 
 // NewCompositor returns a ready Compositor. ttl bounds how long a
@@ -144,7 +145,7 @@ func (c *Compositor) UpdateProviders(ctx context.Context, src ProviderSource) er
 
 	next := make(map[string]ProviderSlot, len(recs))
 	for _, rec := range recs {
-		next[rec.Name] = buildProviderSlot(rec, byProvider[rec.Name], now)
+		next[rec.Name] = c.withQuota(ctx, buildProviderSlot(rec, byProvider[rec.Name], now))
 	}
 	nextLanes := buildLaneSlots(ctx, src, recs, byProvider, now)
 

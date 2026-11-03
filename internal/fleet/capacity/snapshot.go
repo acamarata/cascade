@@ -147,6 +147,10 @@ type ProviderSlot struct {
 	ResetEstimate  time.Time                  `json:"reset_estimate"`
 	ReauthRequired bool                       `json:"reauth_required"`
 	UpdatedAt      time.Time                  `json:"updated_at"`
+	// Quota is every quota window the provider's usage source reported
+	// (P1-GWY-04), stale ones included and flagged. Additive: absent when
+	// the provider has no quota source.
+	Quota []QuotaWindow `json:"quota,omitempty"`
 }
 
 // NodeSlot is one node's aggregated presence/capacity view.

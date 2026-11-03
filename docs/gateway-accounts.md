@@ -90,3 +90,37 @@ applies at the next start.
   path. No request is sent and the lane row is unchanged.
 - Each call records its outcome on the lane like any other provider. Retry,
   backoff and health writes are not part of dispatch.
+
+## Quota
+
+The provider usage store (`provider-usage.db`, table `provider_quota_window`,
+schema version 7) holds the last quota-window reading per account and window.
+Fleet capacity and the widget read it through one seam; no second store exists.
+
+Sources:
+
+| `source` | Status | How it is read |
+|---|---|---|
+| `endpoint` | implemented | `GET <base_url><path>` every 60 s per admitted account, after acquiring the `provider-usage` egress capability; the body is decoded over the four RFC 6901 pointers |
+| `headers` | refused | parses, but every use returns KindUnsupported; no capture of this kind exists yet |
+
+A missing pointer leaves that figure unknown (`-1`). Utilization is the
+reported value when present, else `100 * used / limit` when `limit > 0`, else
+unknown. Known values are clamped to 0..100.
+
+Stale semantics: a failed read keeps the last values and stores only a
+content-free class (`egress-refused`, `credential`, `unavailable`,
+`status-<code>`, `decode`, `store`). A window reads stale when it has a last
+error or its last success is older than 120 s (twice the poll interval).
+
+Mapping:
+
+| Window | fleet.capacity | widget row |
+|---|---|---|
+| `5h` | `quota[]` and the bucket's `five_hour.utilization_pct`; `resets_in` from the window reset when later than the lane estimate | `five_hour.utilization_pct` |
+| `week` | `quota[]` and the bucket's `seven_day.utilization_pct` | `seven_day.utilization_pct` |
+| `day`, `month` | `quota[]` only | not shown |
+
+A stale or failed window never fills a utilization: the widget shows null and
+`quota[].stale` is true, with the last values and `observed_at`. Nothing maps
+an unknown or stale window to 0.

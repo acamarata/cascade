@@ -38,6 +38,7 @@ func TestEgressClassesR21265Registered(t *testing.T) {
 		{EgressClassGitHubPRDiff, "github-pr-diff", "P1-PLG-05", true, false},
 		{EgressClassCIOIDCJWKS, "ci-oidc-jwks", "P1-CI-14", true, false},
 		{EgressClassAgentDriver, "agent-driver", "P1-AGT-03", true, false},
+		{EgressClassProviderUsage, "provider-usage", "P1-GWY-04", true, false},
 	}
 	registry := DefaultRegistry()
 	if got, want := len(registry.Classes()), len(cases); got != want {
