@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-02T22:19:42Z",
+  "generated_at": "2026-11-03T01:09:58Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2845,6 +2845,12 @@
           "raw": "cli/plugin-lifecycle/CHANGE (P1-E24-W5-S50-T8, reworked)."
         },
         {
+          "file": "cmd/cascade/plugin_update_reverify.go",
+          "line": 14,
+          "status": "CHANGE",
+          "raw": "cli/plugin-lifecycle/CHANGE (P1-PLG-12)."
+        },
+        {
           "file": "cmd/cascade/plugin_update_rework_test.go",
           "line": 10,
           "status": "CHANGE",
@@ -4806,7 +4812,7 @@
         },
         {
           "file": "cmd/cascade/wire_plugin_update.go",
-          "line": 11,
+          "line": 16,
           "status": "",
           "raw": "cmd/cascade daemon registrations (plugin.update)."
         },
@@ -5369,6 +5375,20 @@
           "line": 8,
           "status": "",
           "raw": "cmd/cascade plugin launch tests (P1-PLG-03)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade plugin reverify tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_update_reverify_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "cmd/cascade plugin reverify tests (P1-PLG-12)."
         }
       ],
       "statuses": [
@@ -8455,6 +8475,41 @@
           "status": "ADD",
           "ticket": "P1-E14-W3-S30-T5",
           "raw": "cmd/cascade:plugin-namespaces (ADD) — P1-E14-W3-S30-T5 (Art.9)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade:plugin-process-dispatch",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_process_dispatch.go",
+          "line": 28,
+          "status": "ADD",
+          "raw": "cmd/cascade:plugin-process-dispatch (ADD) — P1-PLG-04."
+        },
+        {
+          "file": "cmd/cascade/plugin_process_dispatch_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "cmd/cascade:plugin-process-dispatch (TESTED) — P1-PLG-04."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade:plugin-process-dispatch tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/plugin_process_dispatch_paths_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "cmd/cascade:plugin-process-dispatch tests (ADD)."
         }
       ],
       "statuses": [
@@ -26704,6 +26759,34 @@
       ]
     },
     {
+      "name": "internal/plugins plugin reverify",
+      "sites": [
+        {
+          "file": "internal/plugins/reverify.go",
+          "line": 18,
+          "status": "",
+          "raw": "internal/plugins plugin reverify (P1-PLG-12)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins plugin reverify path tests",
+      "sites": [
+        {
+          "file": "internal/plugins/reverify_paths_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal/plugins plugin reverify path tests (P1-PLG-12)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/plugins plugin.intent RPC",
       "sites": [
         {
@@ -26882,6 +26965,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins reverify tests",
+      "sites": [
+        {
+          "file": "internal/plugins/reverify_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "internal/plugins reverify tests (P1-PLG-12)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -34895,7 +34992,7 @@
       "sites": [
         {
           "file": "pkg/plugin/manifest.go",
-          "line": 19,
+          "line": 21,
           "status": "ADD",
           "ticket": "P1-E03-W1-S05-T6",
           "raw": "pkg/plugin manifest-v2-schema (ADD) — P1-E03-W1-S05-T6."
@@ -34903,6 +35000,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "pkg/plugin manifest-v2-schema exec_sha256",
+      "sites": [
+        {
+          "file": "pkg/plugin/manifest_exec_digest_test.go",
+          "line": 13,
+          "status": "",
+          "raw": "pkg/plugin manifest-v2-schema exec_sha256."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -37502,6 +37613,20 @@
       ]
     },
     {
+      "name": "plugins/github cmd envelope",
+      "sites": [
+        {
+          "file": "plugins/github/cmd_envelope.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "plugins/github cmd envelope (ADD) — P1-PLG-04."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "plugins/github tests",
       "sites": [
         {
@@ -37517,6 +37642,12 @@
           "status": "ADD",
           "ticket": "P1-E25-W5-S51-T1",
           "raw": "plugins/github tests (ADD) — P1-E25-W5-S51-T1."
+        },
+        {
+          "file": "plugins/github/cmd_envelope_paths_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "plugins/github tests (ADD)."
         },
         {
           "file": "plugins/github/fakes_test.go",
@@ -37914,7 +38045,7 @@
           "line": 18,
           "status": "ADD",
           "ticket": "P1-E25-W5-S51-T1",
-          "raw": "plugins/github:auth-flow (ADD) — P1-E25-W5-S51-T1."
+          "raw": "plugins/github:auth-flow (ADD) — P1-E25-W5-S51-T1; token handling"
         }
       ],
       "statuses": [
@@ -40889,6 +41020,70 @@
       ]
     },
     {
+      "name": "repo/maintenance-journal",
+      "sites": [
+        {
+          "file": "internal/repo/cursor.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "repo/maintenance-journal/ADD (contract:repo-maintenance, P1-GEN-04)."
+        },
+        {
+          "file": "internal/repo/cursor_paths_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "repo/maintenance-journal/ADD test coverage (P1-GEN-04)."
+        },
+        {
+          "file": "internal/repo/cursor_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "repo/maintenance-journal/ADD test coverage (P1-GEN-04)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "repo/maintenance-pipeline",
+      "sites": [
+        {
+          "file": "internal/repo/maintenance.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "repo/maintenance-pipeline/ADD (contract:repo-maintenance, P1-GEN-04)."
+        },
+        {
+          "file": "internal/repo/maintenance_crash_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "repo/maintenance-pipeline/ADD test coverage (P1-GEN-04)."
+        },
+        {
+          "file": "internal/repo/maintenance_legs.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "repo/maintenance-pipeline/ADD (P1-GEN-04)."
+        },
+        {
+          "file": "internal/repo/maintenance_paths_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "repo/maintenance-pipeline/ADD test coverage (P1-GEN-04)."
+        },
+        {
+          "file": "internal/repo/maintenance_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "repo/maintenance-pipeline/ADD test coverage (P1-GEN-04)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "repo/scan-orchestration",
       "sites": [
         {
@@ -40926,6 +41121,18 @@
           "status": "ADD",
           "ticket": "P1-E33-W7-S67-T3",
           "raw": "repo/symbol-dependency-graph/ADD (P1-E33-W7-S67-T3)."
+        },
+        {
+          "file": "internal/repo/graph_go_scoped.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "repo/symbol-dependency-graph/ADD (P1-GEN-04)."
+        },
+        {
+          "file": "internal/repo/graph_go_scoped_test.go",
+          "line": 3,
+          "status": "ADD",
+          "raw": "repo/symbol-dependency-graph/ADD scoped-load test coverage (P1-GEN-04)."
         },
         {
           "file": "internal/repo/graph_store.go",
@@ -42440,7 +42647,7 @@
       ]
     }
   ],
-  "total_sites": 4091,
-  "unspecified_count": 364,
-  "multi_status_count": 130
+  "total_sites": 4112,
+  "unspecified_count": 369,
+  "multi_status_count": 131
 }
