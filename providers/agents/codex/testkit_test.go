@@ -12,6 +12,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -30,8 +31,14 @@ type kit struct {
 	drv                   *Driver
 }
 
+// newKit builds the replay harness. The driver refuses on Windows by
+// design (tier-2, provider.ErrPlatform; see spawn_windows_test.go), so
+// every replay-driven test skips there.
 func newKit(t *testing.T) *kit {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("the codex driver refuses on windows by design; spawn_windows_test.go covers the refusal")
+	}
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("USERPROFILE", t.TempDir())
 	base := t.TempDir()
