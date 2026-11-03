@@ -4,18 +4,16 @@ package jobs
 //
 //	ordering, contending-lease exclusion (including expired_unconfirmed
 //	per R-21.139), the fenced-epoch carry-through, and the
-//	Admit-once-per-admissible-node governor contract.
+//	no-per-node-permit rule (P1-TOP-04c: admitNodes never calls the
+//	governor).
 //
 // SPORT: jobs/scheduler/ADD (tests) (P1-E29-W6-S59-T5).
 
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/acamarata/cascade/internal/fleet/governor"
-	"github.com/acamarata/cascade/internal/runtime"
-	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 func node(id string, priority int, scope ...string) DagNode {
@@ -36,8 +34,8 @@ func TestAdmit_TwoNonContendingNodesBothAdmittedInPriorityOrder(t *testing.T) {
 	if delta.LeasesToAcquire[0].JobID != "high" || delta.LeasesToAcquire[1].JobID != "low" {
 		t.Fatalf("order = %s,%s, want high before low (priority desc)", delta.LeasesToAcquire[0].JobID, delta.LeasesToAcquire[1].JobID)
 	}
-	if calls != 2 {
-		t.Fatalf("governor calls = %d, want exactly one per admissible node (2)", calls)
+	if calls != 0 {
+		t.Fatalf("governor calls = %d, want 0 (no per-node permit)", calls)
 	}
 }
 
@@ -108,23 +106,6 @@ func TestAdmit_DepsMustAllBeAccepted(t *testing.T) {
 	}
 }
 
-func TestAdmit_QueueFullStopsIteration(t *testing.T) {
-	sched := NewScheduler(nil)
-	dag := ExecutionDag{Nodes: []DagNode{node("a", 2, "a/**"), node("b", 1, "b/**")}}
-	var calls int
-	gov := func(context.Context, governor.AdmissionRequest) (governor.Permit, error) {
-		calls++
-		return governor.Permit{}, governor.ErrQueueFull
-	}
-	delta := sched.Advance(controllerCtx(), dag, LeaseAcquired{}, nil, nil, gov)
-	if calls != 1 {
-		t.Fatalf("governor calls = %d, want exactly 1 (iteration stops on ErrQueueFull)", calls)
-	}
-	if len(delta.Errors) != 1 || len(delta.LeasesToAcquire) != 0 {
-		t.Fatalf("delta = %#v, want one recorded error and no admissions", delta)
-	}
-}
-
 func TestAdmit_MalformedScopeRecordsErrorAndSkipsNode(t *testing.T) {
 	sched := NewScheduler(nil)
 	dag := ExecutionDag{Nodes: []DagNode{node("bad", 1, "/absolute/not/allowed")}}
@@ -137,53 +118,47 @@ func TestAdmit_MalformedScopeRecordsErrorAndSkipsNode(t *testing.T) {
 	}
 }
 
-// inertTicker never ticks, so a Sampler built on it never publishes a
-// sample and its controller refuses for a stale signal.
-type inertTicker struct{}
-
-func (inertTicker) C() <-chan struct{} { return nil }
-func (inertTicker) Stop()              {}
-
-// splitGovernor routes the higher-priority node to refuse and every other
-// node to a plain grant, counting calls.
-func splitGovernor(refuse GovernorFn, calls *int) GovernorFn {
-	return func(ctx context.Context, req governor.AdmissionRequest) (governor.Permit, error) {
+// countingGovernor counts calls and refuses every one, so any call it
+// sees would also show up as a lost admission.
+func countingGovernor(calls *int) GovernorFn {
+	return func(context.Context, governor.AdmissionRequest) (governor.Permit, error) {
 		*calls++
-		if req.Priority == 10 {
-			return refuse(ctx, req)
-		}
-		return governor.Permit{}, nil
+		return governor.Permit{}, governor.ErrQueueFull
 	}
 }
 
-func TestAdmitSkipsRefusedNodeGrantsHealthy(t *testing.T) {
-	clk := runtime.NewFixedClock(time.Unix(1_700_000_000, 0))
-	nilSampler := governor.NewAdmissionController(nil, governor.AdmissionConfig{}, clk)
-	unsampled := governor.NewAdmissionController(
-		governor.NewSampler(governor.SamplerConfig{}, clk, inertTicker{}, nil), governor.AdmissionConfig{}, clk)
-	noSignal := func(context.Context, governor.AdmissionRequest) (governor.Permit, error) {
-		return governor.Permit{}, cascade.Wrapf(cascade.KindUnavailable, governor.ErrNoResourceSignal, "posture=no-signal")
+func TestSchedulerAdmitsNoPerNodePermit(t *testing.T) {
+	dag := ExecutionDag{Nodes: []DagNode{
+		node("a", 3, "a/**"),
+		node("b", 2, "b/**"),
+		node("c", 1, "c/**"),
+		{ID: "blocked", Deps: []string{"c"}, MutableScope: []string{"d/**"}},
+		node("resumed", 0, "e/**"),
+	}}
+	states := map[string]JobState{"resumed": JobStateLeased}
+	var calls int
+	delta := NewScheduler(nil).Advance(controllerCtx(), dag, LeaseAcquired{}, states, nil, countingGovernor(&calls))
+	if calls != 0 {
+		t.Fatalf("governor calls = %d, want 0: admitNodes takes no per-node permit", calls)
 	}
-	cases := map[string]GovernorFn{"nil sampler": nilSampler.Admit, "stale signal": unsampled.Admit, "no signal": noSignal}
-	for name, refuse := range cases {
-		t.Run(name, func(t *testing.T) {
-			dag := ExecutionDag{Nodes: []DagNode{node("blind", 10, "a/**"), node("healthy", 1, "b/**")}}
-			var calls int
-			delta := NewScheduler(nil).Advance(controllerCtx(), dag, LeaseAcquired{}, nil, nil, splitGovernor(refuse, &calls))
-			if calls != 2 {
-				t.Fatalf("governor calls = %d, want 2: the refused node must not stop the batch", calls)
-			}
-			if len(delta.Errors) != 1 || governor.IsDraining(delta.Errors[0]) {
-				t.Fatalf("Errors = %v, want exactly the blind node's non-draining refusal", delta.Errors)
-			}
-			if len(delta.LeasesToAcquire) != 1 || delta.LeasesToAcquire[0].JobID != "healthy" {
-				t.Fatalf("LeasesToAcquire = %#v, want exactly one grant, on healthy", delta.LeasesToAcquire)
-			}
-			for _, l := range delta.LeasesToAcquire {
-				if l.JobID == "blind" {
-					t.Fatalf("blind node was granted: %#v", l)
-				}
-			}
-		})
+	if len(delta.Errors) != 0 {
+		t.Fatalf("Errors = %v, want none", delta.Errors)
+	}
+	got := make([]string, 0, len(delta.LeasesToAcquire))
+	for _, l := range delta.LeasesToAcquire {
+		got = append(got, l.JobID)
+	}
+	want := []string{"a", "b", "c", "resumed"}
+	if len(got) != len(want) {
+		t.Fatalf("admitted = %v, want %v (blocked waits on its dep)", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("admitted = %v, want %v", got, want)
+		}
+	}
+	wantTr := StateTransition{JobID: "resumed", From: JobStateLeased, To: JobStateRunning}
+	if len(delta.JobsToAdvance) != 1 || delta.JobsToAdvance[0] != wantTr {
+		t.Fatalf("JobsToAdvance = %#v, want only %#v", delta.JobsToAdvance, wantTr)
 	}
 }

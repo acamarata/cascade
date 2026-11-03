@@ -132,16 +132,13 @@ func (AttentionRaised) eventKind() string { return "attention_raised" }
 // LeaseIntent is one admitted node's lease-acquisition instruction: the
 // (repo id, normalized prefix scope) and the lease epoch Advance
 // observed, so the coordinator's acquire is FENCED (S-59.T2 step 10).
-// Permit is the governor grant for this admission; the coordinator calls
-// Permit.Release() when JobID reaches a terminal state (HOW 2c) --
-// ownership transfers to the caller because Advance itself is stateless
-// and cannot hold it across calls.
+// It carries no governor permit (P1-TOP-04): capacity is admitted by the
+// reservation ledger, so nothing is held while a reservation is parked.
 type LeaseIntent struct {
 	JobID     string
 	RepoID    string
 	ScopeGlob string
 	Epoch     int64
-	Permit    governor.Permit
 }
 
 // StateTransition is one JobsToAdvance entry: a caller-visible job state
@@ -184,6 +181,15 @@ type ScheduleDelta struct {
 // never the concrete AdmissionController, keeping this package's own
 // admission seam func-typed.
 type GovernorFn func(context.Context, governor.AdmissionRequest) (governor.Permit, error)
+
+// ReserveFn takes a fresh fleet reservation for jobID (contract
+// fleet-reservation, Reserver.Reserve). The composition root binds it;
+// this package never imports internal/fleet/economics.
+type ReserveFn func(ctx context.Context, jobID string) error
+
+// AdoptFn claims an existing reservation, by id, for this process
+// (contract fleet-reservation, Reserver.Adopt).
+type AdoptFn func(ctx context.Context, reservationID string) error
 
 // Scheduler is the stateless AC/S-59.T5 scheduling authority. clock is
 // its only field -- an immutable constructor-injected dependency, not

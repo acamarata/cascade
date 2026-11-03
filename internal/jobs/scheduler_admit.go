@@ -2,24 +2,23 @@ package jobs
 
 // Purpose: HOW 2c's admissibility rule, deterministic ordering, and the
 //
-//	Admit-once-per-admissible-node governor call (R-16.64).
+//	no-per-node-permit admission rule (P1-TOP-04).
 //
 // Inputs: an ExecutionDag, the caller's jobStates map, the active leases
 //
-//	in scope right now, and governorFn.
+//	in scope right now. governorFn is accepted and never called.
 //
 // Outputs: a ScheduleDelta whose LeasesToAcquire holds one entry per
 //
 //	admitted node, in priority-desc/id-asc order; Errors accumulates a
-//	malformed-scope or ErrLeaseFenced-shaped failure per node without
-//	aborting the rest of the batch (except ErrQueueFull/ErrDraining,
-//	which stop iteration per HOW 2c).
+//	malformed-scope failure per node without aborting the batch.
 //
 // Constraints: a node whose deps are not all ACCEPTED, or whose
 //
 //	mutable_scope intersects any Contending() active lease (including
-//	expired_unconfirmed, R-21.139), is never admitted. governorFn is
-//	called AT MOST once per admissible node per Advance invocation.
+//	expired_unconfirmed, R-21.139), is never admitted. No governor
+//	Admit call is made per node; capacity admission is the reservation
+//	ledger's job (Readmit, scheduler_readmit.go).
 //
 // SPORT: jobs/scheduler/ADD (P1-E29-W6-S59-T5).
 
@@ -27,16 +26,17 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"sort"
 	"strings"
-
-	"github.com/acamarata/cascade/internal/fleet/governor"
 )
 
-// admitNodes implements HOW 2c: collect admissible nodes, order them
-// deterministically, and call governorFn once per node in that order.
-func (s *Scheduler) admitNodes(ctx context.Context, dag ExecutionDag, jobStates map[string]JobState, activeLeases []ResourceLease, governorFn GovernorFn) ScheduleDelta {
+// admitNodes implements HOW 2c: collect admissible nodes and order them
+// deterministically. It takes no governor permit per node (P1-TOP-04):
+// admission control lives on the reservation path (ReserveFn/AdoptFn),
+// so no permit is ever held while a reservation is parked. The
+// GovernorFn parameter is kept only so Advance's signature is unchanged;
+// it is never called here.
+func (s *Scheduler) admitNodes(_ context.Context, dag ExecutionDag, jobStates map[string]JobState, activeLeases []ResourceLease, _ GovernorFn) ScheduleDelta {
 	var delta ScheduleDelta
 	admissible, scopes := collectAdmissible(dag, jobStates, activeLeases, &delta)
 
@@ -48,34 +48,17 @@ func (s *Scheduler) admitNodes(ctx context.Context, dag ExecutionDag, jobStates 
 	})
 
 	for _, n := range admissible {
-		permit, err := governorFn(ctx, governor.AdmissionRequest{Kind: "job", Weight: 1, Priority: n.Priority})
-		if err != nil {
-			delta.Errors = append(delta.Errors, err)
-			// A signal refusal (or a controller with no sampler) blinds only
-			// this node: skip it and keep admitting the batch.
-			if governor.IsSignalRefusal(err) {
-				continue
-			}
-			if errors.Is(err, governor.ErrQueueFull) || governor.IsDraining(err) {
-				break
-			}
-			continue
-		}
 		scope := scopes[n.ID]
 		repoID, epoch := observedFence(scope, activeLeases)
 		if jobStates[n.ID] == JobStateLeased {
 			// R-16.68c resume re-entry: this job already holds its lease
 			// (Resume re-entered it at `leased`); admission here moves it
-			// straight to `running` rather than requesting a fresh
-			// acquire for a scope it already holds.
+			// straight to `running`. The coordinator re-admits its
+			// reservation through Readmit before applying the transition.
 			delta.JobsToAdvance = append(delta.JobsToAdvance, StateTransition{JobID: n.ID, From: JobStateLeased, To: JobStateRunning})
-			delta.LeasesToAcquire = append(delta.LeasesToAcquire, LeaseIntent{
-				JobID: n.ID, RepoID: repoID, ScopeGlob: scope.String(), Epoch: epoch, Permit: permit,
-			})
-			continue
 		}
 		delta.LeasesToAcquire = append(delta.LeasesToAcquire, LeaseIntent{
-			JobID: n.ID, RepoID: repoID, ScopeGlob: scope.String(), Epoch: epoch, Permit: permit,
+			JobID: n.ID, RepoID: repoID, ScopeGlob: scope.String(), Epoch: epoch,
 		})
 	}
 	return delta
