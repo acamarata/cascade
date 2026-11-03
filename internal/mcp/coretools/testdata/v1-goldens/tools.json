@@ -149,8 +149,8 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-E37-W8-S73-T3",
-      "reason": "cascade_inbox_list is a compact-profile name AK/S-73.T3 owns; internal/notify.Inbox is in-daemon memory with no RPC namespace"
+      "deferred_to": "P1-HRN-06",
+      "reason": "cascade_inbox_list is a compact-profile name P1-HRN-06 owns; internal/notify.Inbox is in-daemon memory with no RPC namespace"
     },
     {
       "v1_name": "cascade.inbox.send",
@@ -199,8 +199,8 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-E37-W8-S73-T3",
-      "reason": "the mutating counterpart is cascade_cpa_send in the compact-write profile, which AK/S-73.T3 owns"
+      "deferred_to": "P1-HRN-05",
+      "reason": "the mutating counterpart is cascade_cpa_send in the compact-write profile, which P1-HRN-05 owns"
     },
     {
       "v1_name": "cascade.master_lists",
@@ -641,7 +641,7 @@
         }
       },
       "status": "deferred",
-      "deferred_to": "P1-E37-W8-S73-T3",
+      "deferred_to": "P1-HRN-06",
       "reason": "v1 drained a filesystem inbox directory; v2 routes notifications through internal/notify with no such directory"
     },
     {

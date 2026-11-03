@@ -60,12 +60,12 @@ func Deferrals() []Deferral {
 				"different capability that internal/repo's reachability-only graph does not yet provide. " +
 				"AG/S-67.T3 builds it and registers it as a `graph` corpus in the retrieval engine — at " +
 				"which point recall.query answers this without a second tool (R-14.266)"},
-		// CASCADE-ALLOW: P1-E37-W8-S73-T3 owns the compact-profile inbox tools.
-		{"cascade.inbox.list", "P1-E37-W8-S73-T3",
-			"cascade_inbox_list is a compact-profile name AK/S-73.T3 owns; internal/notify.Inbox is in-daemon memory with no RPC namespace"},
-		// CASCADE-ALLOW: P1-E37-W8-S73-T3 owns cascade_cpa_send.
-		{"cascade.inbox.send", "P1-E37-W8-S73-T3",
-			"the mutating counterpart is cascade_cpa_send in the compact-write profile, which AK/S-73.T3 owns"},
+		// CASCADE-ALLOW: P1-HRN-06 owns the compact-profile inbox reads.
+		{"cascade.inbox.list", "P1-HRN-06",
+			"cascade_inbox_list is a compact-profile name P1-HRN-06 owns; internal/notify.Inbox is in-daemon memory with no RPC namespace"},
+		// CASCADE-ALLOW: P1-HRN-05 owns cascade_cpa_send.
+		{"cascade.inbox.send", "P1-HRN-05",
+			"the mutating counterpart is cascade_cpa_send in the compact-write profile, which P1-HRN-05 owns"},
 		// CASCADE-ALLOW: Retired by R-14.266.
 		{"cascade.master_lists", Retired,
 			"RETIRED by R-14.266. v1's master lists were a file in a project's .claude tree; v2 has no such " +
@@ -97,11 +97,11 @@ func Deferrals() []Deferral {
 			"RETIRED by R-14.266. v2 has no api-routes.yaml to check, and the tool issued outbound HTTP — " +
 				"a model-callable surface that makes arbitrary requests needs a registered egress class, " +
 				"which nothing would register for a concept this build does not have."},
-		// CASCADE-ALLOW: P1-E37-W8-S73-T3 owns the compact-profile inbox tools.
-		{"cascade.scan_inbox", "P1-E37-W8-S73-T3",
+		// CASCADE-ALLOW: P1-HRN-06 owns the compact-profile inbox reads.
+		{"cascade.scan_inbox", "P1-HRN-06",
 			"v1 drained a filesystem inbox directory; v2 routes notifications through internal/notify, and " +
-				"the read surface a model gets is cascade_inbox_list, which AK/S-73.T3 owns alongside the " +
-				"other two inbox tools (R-14.266)"},
+				"the read surface a model gets is cascade_inbox_list, which P1-HRN-06 owns alongside the " +
+				"inbox list tool (R-14.266)"},
 		// CASCADE-ALLOW: Retired by R-14.266.
 		{"cascade.security.secret_scan", Retired,
 			"RETIRED by R-14.266, and the reason is not that it would be hard. A tool that scans a " +
