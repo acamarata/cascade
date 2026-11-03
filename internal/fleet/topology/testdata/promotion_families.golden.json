@@ -1,0 +1,10 @@
+[
+  {"name": "no hints", "hints": [], "want": "worker-dedicated"},
+  {"name": "only unusable hints", "hints": ["", "unranked", "not-a-class"], "want": "worker-dedicated"},
+  {"name": "single hint", "hints": ["worker-fast"], "want": "worker-fast"},
+  {"name": "most shared wins", "hints": ["pool-cheap", "worker-fast", "worker-fast"], "want": "worker-fast"},
+  {"name": "tie to smaller class", "hints": ["worker-fast", "api-free"], "want": "api-free"},
+  {"name": "tie order independent", "hints": ["api-free", "worker-fast"], "want": "api-free"},
+  {"name": "three way tie", "hints": ["local", "deep", "lead"], "want": "deep"},
+  {"name": "unusable hints do not count", "hints": ["", "", "pool-cheap"], "want": "pool-cheap"}
+]
