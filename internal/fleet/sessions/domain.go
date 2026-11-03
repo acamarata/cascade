@@ -45,6 +45,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -68,6 +69,11 @@ const (
 	changedNamespace = "fleet.sessions"
 	changedKind      = events.EventKind("fleet.sessions.changed")
 )
+
+// writeMu serialises every read-modify-write in this package, across all
+// Store values, so a concurrent write can never drop a taint. Taken once
+// per write and never re-entered.
+var writeMu sync.Mutex
 
 func sessionKey(id string) string { return sessionKeyPrefix + id }
 
@@ -93,15 +99,12 @@ type SessionRecord struct {
 	ToolCount            int64   `json:"tool_count"`
 	CompactionCount      int64   `json:"compaction_count"`
 	ParentSessionID      *string `json:"parent_session_id,omitempty"`
-}
 
-// Filter selects a subset of List's results. A nil/zero field matches
-// every value for that column; all non-nil fields must match (AND).
-type Filter struct {
-	Harness         *string
-	Account         *string
-	State           *string
-	ParentSessionID *string
+	// Sticky taint (contract:session-taint). Set only by MarkUntrusted and
+	// never cleared; Upsert carries them over from the stored row.
+	Untrusted      bool   `json:"untrusted"`
+	UntrustedSince *int64 `json:"untrusted_since,omitempty"`
+	UntrustedRef   string `json:"untrusted_ref,omitempty"`
 }
 
 // Touch field names — the closed R-16.48 activity-column set Touch
@@ -176,54 +179,29 @@ func (s *Store) getLocked(ctx context.Context, id string) (SessionRecord, error)
 	return rec, nil
 }
 
-// List returns every record matching filter, in session_id order.
-func (s *Store) List(ctx context.Context, filter Filter) ([]SessionRecord, error) {
-	it, err := s.store.Scan(ctx, DefaultNamespace, sessionKeyPrefix)
-	if err != nil {
-		return nil, cascade.Wrap(cascade.KindUnavailable, err, "sessions: scanning sessions")
-	}
-	defer func() { _ = it.Close() }()
-
-	var out []SessionRecord
-	for it.Next(ctx) {
-		var rec SessionRecord
-		if uerr := json.Unmarshal(it.Value(), &rec); uerr != nil {
-			return nil, cascade.Wrapf(cascade.KindIntegrity, uerr, "sessions: decoding key %q", it.Key())
-		}
-		if filter.matches(rec) {
-			out = append(out, rec)
-		}
-	}
-	if err := it.Err(); err != nil {
-		return nil, cascade.Wrap(cascade.KindUnavailable, err, "sessions: iterating sessions")
-	}
-	return out, nil
-}
-
-func (f Filter) matches(rec SessionRecord) bool {
-	if f.Harness != nil && rec.Harness != *f.Harness {
-		return false
-	}
-	if f.Account != nil && rec.Account != *f.Account {
-		return false
-	}
-	if f.State != nil && rec.State != *f.State {
-		return false
-	}
-	if f.ParentSessionID != nil {
-		if rec.ParentSessionID == nil || *rec.ParentSessionID != *f.ParentSessionID {
-			return false
-		}
-	}
-	return true
-}
-
-// Upsert creates or fully overwrites rec's row, stamps UpdatedAt from the
-// injected clock, and emits fleet.sessions.changed on success.
+// Upsert creates or overwrites rec's row, stamps UpdatedAt from the
+// injected clock, and emits fleet.sessions.changed on success. The three
+// Untrusted fields always come from the stored row when one exists, so an
+// Upsert can never clear a taint (P1-HRN-08 R22 B-1).
 func (s *Store) Upsert(ctx context.Context, rec SessionRecord) error {
 	if rec.SessionID == "" {
 		return cascade.Wrap(cascade.KindInvalidInput, ErrInvalidRecord, "sessions: Upsert requires a session id")
 	}
+	writeMu.Lock()
+	defer writeMu.Unlock()
+	cur, err := s.getLocked(ctx, rec.SessionID)
+	switch {
+	case err == nil:
+		rec.Untrusted, rec.UntrustedSince, rec.UntrustedRef = cur.Untrusted, cur.UntrustedSince, cur.UntrustedRef
+	case !cascade.HasKind(err, cascade.KindNotFound):
+		return err
+	}
+	return s.putLocked(ctx, rec)
+}
+
+// putLocked stamps UpdatedAt, writes rec and emits the change event. The
+// caller must hold writeMu.
+func (s *Store) putLocked(ctx context.Context, rec SessionRecord) error {
 	rec.UpdatedAt = s.clock.Now().UnixMilli()
 	data, err := json.Marshal(rec)
 	if err != nil {
@@ -242,6 +220,8 @@ func (s *Store) Upsert(ctx context.Context, rec SessionRecord) error {
 // matches). It hardcodes no transition graph — validity is exactly
 // "current state equals from" (R-14.41: the graph belongs to S-25.T1).
 func (s *Store) TransitionState(ctx context.Context, id, from, to string) error {
+	writeMu.Lock()
+	defer writeMu.Unlock()
 	rec, err := s.getLocked(ctx, id)
 	if err != nil {
 		return err
@@ -250,7 +230,7 @@ func (s *Store) TransitionState(ctx context.Context, id, from, to string) error 
 		return cascade.Wrapf(cascade.KindConflict, ErrInvalidTransition, "session %q: current state %q != from %q", id, rec.State, from)
 	}
 	rec.State = to
-	return s.Upsert(ctx, rec)
+	return s.putLocked(ctx, rec)
 }
 
 // Touch sets or increments exactly one R-16.48 activity column on an
@@ -259,6 +239,8 @@ func (s *Store) TransitionState(ctx context.Context, id, from, to string) error 
 // ErrNotFound for an unknown session_id and ErrUnknownField for any name
 // outside the closed FieldXxx set.
 func (s *Store) Touch(ctx context.Context, id, field string) error {
+	writeMu.Lock()
+	defer writeMu.Unlock()
 	rec, err := s.getLocked(ctx, id)
 	if err != nil {
 		return err
@@ -278,7 +260,7 @@ func (s *Store) Touch(ctx context.Context, id, field string) error {
 	default:
 		return cascade.Wrapf(cascade.KindInvalidInput, ErrUnknownField, "field %q", field)
 	}
-	return s.Upsert(ctx, rec)
+	return s.putLocked(ctx, rec)
 }
 
 // emit best-effort publishes fleet.sessions.changed for rec. A nil bus
