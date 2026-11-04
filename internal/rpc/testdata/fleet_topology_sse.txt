@@ -1,0 +1,6 @@
+id: AAAAAAAAAAE
+data: {"seq":1,"kind":"lane.health_changed","source":"lane.health_changed","payload":"eyJzY2hlbWFfdmVyc2lvbiI6MSwibGFuZV9pZCI6ImxhbmUtbG9jYWwtMSIsImZyb20iOiJoZWFsdGh5IiwidG8iOiJkZWdyYWRlZCIsInJlYXNvbiI6InByb2JlLXRpbWVvdXQifQ=="}
+
+id: AAAAAAAAAAI
+data: {"seq":2,"kind":"fleet.topology.reconciled","source":"fleet.topology.reconciled","payload":"eyJzY2hlbWFfdmVyc2lvbiI6MSwiZ2VuZXJhdGlvbiI6NywibGFuZXMiOjMsImNoYW5nZWQiOjF9"}
+

@@ -78,3 +78,22 @@ payload shapes and confirm each carries `schema_version`.
 Hand-authored seed corpus (`go test fuzz v1` format) seeding the fuzzer
 with an unknown-field rejection case; see `supervisor_fuzz_test.go`'s own
 header for what it exercises.
+
+## fleet_topology_sse.txt (P1-TOP-11, Art.2 provenance)
+
+Captured from the real shared `internal/rpc.SSEHandler` (the production
+GET `/events` handler), built by `NewFleetTopologySSEHandler` and mounted
+under the real `SSEMux` as `topic=fleet.topology`, over a real
+`internal/events.Bus` on `storetest.NewMemStore()` and a frozen clock.
+Two real `FleetTopologyEmitter` calls (`EmitLaneHealthChanged`,
+`EmitReconciled`) produced the two records, in the shared `id:`/`data:`
+envelope `sse.go` writes. No new SSE dialect.
+
+- Tool: `go test` (`TestFleetTopologySSEWireFixture`,
+  `internal/rpc/fleet_topology_sse_test.go`).
+- Recapture: run that test with `CASCADE_UPDATE_FIXTURES=1`.
+- Date: 2026-11-04.
+
+Disclosed deviation: captured over an in-process HTTP round trip, not a
+live daemon socket, the same precedent as `supervisor-sse-fixture.ndjson`
+above.
