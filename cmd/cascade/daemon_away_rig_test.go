@@ -166,7 +166,7 @@ func (r *awayRig) subscribe(id string) *awaySub {
 }
 
 func awayGlobal(id string) notify.Notification {
-	return notify.Notification{ID: id, Class: notify.ClassGlobalCritical, Priority: notify.PriorityUrgent}
+	return notify.Notification{ID: id, Class: notify.ClassGlobalCritical, Source: "node.offline", Priority: notify.PriorityUrgent}
 }
 
 // reloadRig writes body as config.toml, loads it as the daemon's boot config

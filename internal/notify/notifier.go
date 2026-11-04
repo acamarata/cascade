@@ -24,6 +24,7 @@ package notify
 
 import (
 	"context"
+	"sync"
 
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -34,8 +35,11 @@ import (
 // enqueues by priority — the same path event-bus-decoded notifications
 // take (router.go).
 type Notifier struct {
-	queues *queueSet
-	clock  runtime.Clock
+	queues     *queueSet
+	clock      runtime.Clock
+	authMu     sync.RWMutex
+	authSet    bool
+	authorizer SendAuthorizer
 }
 
 // NewNotifier returns a Notifier enqueueing into queues, timestamping with
@@ -56,6 +60,9 @@ func (nf *Notifier) Deliver(ctx context.Context, n Notification) error {
 	if err != nil {
 		return err
 	}
+	if err := nf.authorize(ctx, n); err != nil {
+		return err
+	}
 	nf.queues.enqueue(n)
 	return nil
 }
@@ -70,6 +77,9 @@ func (nf *Notifier) Deliver(ctx context.Context, n Notification) error {
 func (nf *Notifier) DeliverNow(ctx context.Context, n Notification) error {
 	n, err := nf.prepare(ctx, n)
 	if err != nil {
+		return err
+	}
+	if err := nf.authorize(ctx, n); err != nil {
 		return err
 	}
 	nf.queues.enqueueNow(n)

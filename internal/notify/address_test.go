@@ -239,8 +239,8 @@ func TestReadAddressedCanceled(t *testing.T) {
 
 func TestReadAddressedSkipsUnaddressedClasses(t *testing.T) {
 	s, _ := newAddressedService(t)
-	global := Notification{ID: "g-1", Class: ClassGlobalCritical, Priority: PriorityUrgent, CorrelationID: "job-1"}
-	scoped := Notification{ID: "sc-1", Class: ClassScoped, TargetScope: "sess-a", CorrelationID: "job-1"}
+	global := Notification{ID: "g-1", Class: ClassGlobalCritical, Source: "node.offline", Priority: PriorityUrgent, CorrelationID: "job-1"}
+	scoped := Notification{ID: "sc-1", Class: ClassScoped, OriginScope: "sess-a", TargetScope: "sess-a", CorrelationID: "job-1"}
 	deliverDrained(t, s, global, scoped)
 	for _, ctx := range []context.Context{asOwnerCLI(), asPrincipal("prin-a", "sess-a")} {
 		if got, err := s.ReadAddressed(ctx, "job-1"); err != nil || len(got) != 0 {
@@ -268,8 +268,8 @@ func TestSessionInboxNeverSeesPrincipalItems(t *testing.T) {
 
 func TestReadAddressedClassGuard(t *testing.T) {
 	s, _ := newAddressedService(t)
-	scoped := Notification{ID: "sc-2", Class: ClassScoped, TargetScope: "proj-x", TargetSession: "sess-a", CorrelationID: "job-1"}
-	global := Notification{ID: "g-2", Class: ClassGlobalCritical, TargetSession: "sess-a", CorrelationID: "job-1"}
+	scoped := Notification{ID: "sc-2", Class: ClassScoped, OriginScope: "proj-x", TargetScope: "proj-x", TargetSession: "sess-a", CorrelationID: "job-1"}
+	global := Notification{ID: "g-2", Class: ClassGlobalCritical, Source: "node.offline", TargetSession: "sess-a", CorrelationID: "job-1"}
 	deliverDrained(t, s, scoped, global)
 	a := asPrincipal("prin-a", "sess-a")
 	if got, err := s.ReadAddressed(a, "job-1"); err != nil || len(got) != 0 {

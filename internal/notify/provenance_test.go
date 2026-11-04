@@ -198,7 +198,7 @@ func TestProducerWithoutOriginIsLocalOnly(t *testing.T) {
 	queues := newQueueSet(DefaultConfig(), silentLogger())
 	nf := NewNotifier(queues, fixedClock{now: time.Unix(42, 0)})
 	err := nf.Deliver(context.Background(), Notification{
-		ID: "p1", Class: ClassGlobalCritical, Priority: PriorityUrgent, Visibility: VisibilityShared,
+		ID: "p1", Class: ClassGlobalCritical, Source: "node.offline", Priority: PriorityUrgent, Visibility: VisibilityShared,
 		DataClass: provider.SensitivityPublic, Trust: provider.ProvenanceTrusted,
 	})
 	if err != nil {

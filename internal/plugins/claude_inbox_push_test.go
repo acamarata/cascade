@@ -82,7 +82,7 @@ func (r inboxRig) drain(t *testing.T, sid string) ([]claude.InboxRecord, claude.
 
 func TestClaudeInboxPushGlobalCriticalAttention(t *testing.T) {
 	rig := newInboxRig(t, "sess-a", "sess-b")
-	rig.deliver(t, notify.Notification{ID: "gc1", Class: notify.ClassGlobalCritical, Visibility: notify.VisibilityShared, Payload: []byte("disk full")})
+	rig.deliver(t, notify.Notification{ID: "gc1", Class: notify.ClassGlobalCritical, Source: "disk.nearly.full", Visibility: notify.VisibilityShared, Payload: []byte("disk full")})
 	items, err := rig.attn.ListInScopes(context.Background(), []supervision.ScopeRef{{Kind: scope.ScopeKindGlobal}}, supervision.Filter{})
 	if err != nil || len(items) != 1 {
 		t.Fatalf("attention queue = (%+v, %v), want exactly one item for two sessions", items, err)
@@ -104,7 +104,7 @@ func TestClaudeInboxPushGlobalCriticalAttention(t *testing.T) {
 func TestClaudeInboxPushAdapterVisibilityNoCrossSession(t *testing.T) {
 	rig := newInboxRig(t, "sess-a", "sess-b")
 	rig.deliver(t, notify.Notification{
-		ID: "p1", Class: notify.ClassGlobalCritical, Visibility: notify.VisibilityPrivate,
+		ID: "p1", Class: notify.ClassGlobalCritical, Source: "node.offline", Visibility: notify.VisibilityPrivate,
 		TargetSession: "sess-a", Payload: []byte("PRIVATE-TO-A secret"),
 	})
 	rig.deliver(t, notify.Notification{ID: "p2", Class: notify.ClassAddressed, Visibility: "bogus", TargetSession: "sess-a"})

@@ -28,6 +28,7 @@ package notify
 import (
 	"context"
 	"log/slog"
+	"sort"
 
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -60,6 +61,18 @@ var sourceKindMapping = map[events.EventKind]sourceMapping{
 	"node.offline":          {ClassGlobalCritical, PriorityUrgent},
 	"disk.nearly.full":      {ClassGlobalCritical, PriorityHigh},
 	"elevation.required":    {ClassGlobalCritical, PriorityUrgent},
+}
+
+// GlobalCriticalSources returns a sorted copy of the router's closed global-critical sources.
+func GlobalCriticalSources() []string {
+	var sources []string
+	for source, mapping := range sourceKindMapping {
+		if mapping.class == ClassGlobalCritical {
+			sources = append(sources, string(source))
+		}
+	}
+	sort.Strings(sources)
+	return sources
 }
 
 // NotificationRouter decodes notification-class events off an

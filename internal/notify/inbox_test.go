@@ -33,7 +33,7 @@ func TestNotifierDeliverAssignsTimestampAndEnqueues(t *testing.T) {
 	nf := NewNotifier(queues, clk)
 
 	err := nf.Deliver(context.Background(), Notification{
-		ID: "n1", Class: ClassGlobalCritical, Priority: PriorityUrgent,
+		ID: "n1", Class: ClassGlobalCritical, Source: "node.offline", Priority: PriorityUrgent,
 	})
 	if err != nil {
 		t.Fatalf("Deliver: %v", err)

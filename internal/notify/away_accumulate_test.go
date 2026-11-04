@@ -53,7 +53,7 @@ func TestAwayDirectDeliverDuringAwayIsAccumulated(t *testing.T) {
 	h.driveToAway(t)
 
 	err := h.notifier.Deliver(context.Background(), Notification{
-		ID: "direct-1", Class: ClassScoped, TargetScope: "proj-1", Priority: PriorityHigh,
+		ID: "direct-1", Class: ClassScoped, OriginScope: "proj-1", TargetScope: "proj-1", Priority: PriorityHigh,
 	})
 	if err != nil {
 		t.Fatalf("Deliver: %v", err)

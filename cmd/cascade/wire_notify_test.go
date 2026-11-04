@@ -96,7 +96,7 @@ func TestDispatcherRunsUnderSupervision(t *testing.T) {
 	svc := built()[0]
 	svc.Registry.Subscribe(panicSub{}, notify.CandidateSession{SessionID: "s"})
 	err := svc.Notifier.Deliver(context.Background(),
-		notify.Notification{ID: "boom", Class: notify.ClassGlobalCritical, Priority: notify.PriorityUrgent})
+		notify.Notification{ID: "boom", Class: notify.ClassGlobalCritical, Source: "node.offline", Priority: notify.PriorityUrgent})
 	if err != nil {
 		t.Fatalf("Deliver: %v", err)
 	}

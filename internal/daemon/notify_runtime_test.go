@@ -52,7 +52,7 @@ func TestNotifyRuntimeDispatcherDrainsPerTick(t *testing.T) {
 	rec := recordingSub{got: make(chan notify.Notification, 1)}
 	rt.Service().Registry.Subscribe(rec, notify.CandidateSession{SessionID: "s"})
 	err := rt.Service().Notifier.Deliver(context.Background(),
-		notify.Notification{ID: "g-1", Class: notify.ClassGlobalCritical, Priority: notify.PriorityUrgent})
+		notify.Notification{ID: "g-1", Class: notify.ClassGlobalCritical, Source: "node.offline", Priority: notify.PriorityUrgent})
 	if err != nil {
 		t.Fatalf("Deliver: %v", err)
 	}

@@ -57,7 +57,7 @@ func TestClaudeInboxPushPersistentErrorDoesNotRepeat(t *testing.T) {
 	} {
 		rig := newInboxRig(t, "sess-a", "sess-b")
 		setup(rig)
-		rig.deliver(t, notify.Notification{ID: "persist-1", Class: notify.ClassGlobalCritical, Visibility: notify.VisibilityShared, Payload: []byte("x")})
+		rig.deliver(t, notify.Notification{ID: "persist-1", Class: notify.ClassGlobalCritical, Source: "node.offline", Visibility: notify.VisibilityShared, Payload: []byte("x")})
 		for turn := 1; turn <= 3; turn++ {
 			recs, _ := rig.drain(t, "sess-a")
 			want := 0
