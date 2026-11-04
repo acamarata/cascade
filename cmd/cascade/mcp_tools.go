@@ -79,6 +79,11 @@ func mcpToolCapabilities() []policy.Capability {
 			DefaultPolicy: policy.ClassRead,
 		},
 		{
+			Name:          coretools.CapabilityInboxRead,
+			Desc:          "read notifications visible to the current session",
+			DefaultPolicy: policy.ClassRead,
+		},
+		{
 			Name:          coretools.CapabilityCIRead,
 			Desc:          "read recorded CI results",
 			DefaultPolicy: policy.ClassRead,
@@ -147,6 +152,7 @@ func registerMCPToolMethods(ctx context.Context, registry *rpc.Registry, paths r
 	ciDeps := ci.ProductionCmdDeps()
 	ciDeps.Paths, ciDeps.Clock = paths, clock
 	ci.RegisterMCPMethods(registry, ciDeps, os.Getwd)
+	registerMCPInboxMethods(registry, paths)
 	return closers
 }
 
@@ -269,7 +275,7 @@ func applyPrincipalMode(reg *rpc.Registry, getenv func(string) string, dial func
 		case dialErr != nil:
 			reg.Register(method, refuseUnreachable(method, dialErr))
 		default:
-			reg.Register(method, scopedForwarder(c, method))
+			reg.Register(method, mcpInboxForwarder(method, scopedForwarder(c, method)))
 		}
 	}
 	return nil
