@@ -1,0 +1,2 @@
+go test fuzz v1
+string("{\"event_id\":\"evt-1\",\"kind\":\"exec.task.started\",\"event_id\":\"evt-2\"}")
