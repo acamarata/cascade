@@ -1628,10 +1628,108 @@
     "symbol": "internal/repo.DefaultFileCountCeiling"
   },
   {
-    "caller_site": "internal/learn/proposal_engine.go",
-    "expected_caller": "internal/learn/proposal_engine.go, which P1-LRN-02b adds the proposal engine that persists proposals through the store; retire this entry once that file calls NewProposalStore",
-    "reason": "P1-LRN-02d ships NewProposalStore with its tests; its first production caller is internal/learn/proposal_engine.go from P1-LRN-02b.",
-    "retire_ticket": "P1-LRN-02b",
+    "caller_site": "internal/daemon/subsystems_fleet_topology.go",
+    "expected_caller": "internal/daemon/subsystems_fleet_topology.go, which P1-TOP-06e adds (the FleetRuntime topology pass that applies lane reversal pins); retire this entry once that file calls ParseLaneReversalPins",
+    "reason": "P1-TOP-06b ships ParseLaneReversalPins with its tests; its first production caller is internal/daemon/subsystems_fleet_topology.go from P1-TOP-06e.",
+    "retire_ticket": "P1-TOP-06e",
+    "symbol": "internal/runtime.ParseLaneReversalPins"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_fleet_topology_rpc.go",
+    "expected_caller": "cmd/cascade/wire_fleet_topology_rpc.go, which P1-TOP-11f adds (registers the fleet.topology topic); retire this entry once that file calls NewFleetTopologyEmitter",
+    "reason": "P1-TOP-11c ships NewFleetTopologyEmitter with its tests; its first production caller is cmd/cascade/wire_fleet_topology_rpc.go from P1-TOP-11f.",
+    "retire_ticket": "P1-TOP-11f",
+    "symbol": "internal/rpc.NewFleetTopologyEmitter"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_fleet_topology_rpc.go",
+    "expected_caller": "cmd/cascade/wire_fleet_topology_rpc.go, which P1-TOP-11f adds (registers the fleet.topology topic); retire this entry once that file calls NewFleetTopologySSEHandler",
+    "reason": "P1-TOP-11c ships NewFleetTopologySSEHandler with its tests; its first production caller is cmd/cascade/wire_fleet_topology_rpc.go from P1-TOP-11f.",
+    "retire_ticket": "P1-TOP-11f",
+    "symbol": "internal/rpc.NewFleetTopologySSEHandler"
+  },
+  {
+    "caller_site": "cmd/cascade/hooks_approval.go",
+    "expected_caller": "cmd/cascade/hooks_approval.go, which P1-PBD-09d adds (the completion-approval hook over the stored request rows); retire this entry once that file calls ApplyCompletionApprovalSchema",
+    "reason": "P1-PBD-09a ships ApplyCompletionApprovalSchema with its tests; its first production caller is cmd/cascade/hooks_approval.go from P1-PBD-09d.",
+    "retire_ticket": "P1-PBD-09d",
+    "symbol": "internal/jobs.ApplyCompletionApprovalSchema"
+  },
+  {
+    "caller_site": "cmd/cascade/hooks_approval.go",
+    "expected_caller": "cmd/cascade/hooks_approval.go, which P1-PBD-09d adds (the completion-approval hook over the stored request rows); retire this entry once that file calls ErrApprovalPending",
+    "reason": "P1-PBD-09a ships ErrApprovalPending with its tests; its first production caller is cmd/cascade/hooks_approval.go from P1-PBD-09d.",
+    "retire_ticket": "P1-PBD-09d",
+    "symbol": "internal/jobs.ErrApprovalPending"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_learn_routing.go",
+    "expected_caller": "cmd/cascade/wire_learn_routing.go, which P1-LRN-07f adds (the supervised learn-routing-fold loop); retire this entry once that file calls NewLaneStore",
+    "reason": "P1-LRN-07d ships NewLaneStore with its tests; its first production caller is cmd/cascade/wire_learn_routing.go from P1-LRN-07f.",
+    "retire_ticket": "P1-LRN-07f",
+    "symbol": "internal/learn.NewLaneStore"
+  },
+  {
+    "caller_site": "internal/learn/detect_loop.go",
+    "expected_caller": "internal/learn/detect_loop.go, which P1-LRN-05c adds (the DetectLoop that creates proposals; it validates each change shape before Create (R358)); retire this entry once that file calls ValidateChangeShape",
+    "reason": "P1-LRN-02a ships ValidateChangeShape with its tests; its first production caller is internal/learn/detect_loop.go from P1-LRN-05c.",
+    "retire_ticket": "P1-LRN-05c",
+    "symbol": "internal/learn.ValidateChangeShape"
+  },
+  {
+    "caller_site": "internal/learn/detect_loop.go",
+    "expected_caller": "internal/learn/detect_loop.go, which P1-LRN-05c adds (the DetectLoop: FindingFeed.Run -> DetectPatterns -> Create); retire this entry once that file calls DetectPatterns",
+    "reason": "P1-LRN-02b ships DetectPatterns with its tests; its first production caller is internal/learn/detect_loop.go from P1-LRN-05c.",
+    "retire_ticket": "P1-LRN-05c",
+    "symbol": "internal/learn.DetectPatterns"
+  },
+  {
+    "caller_site": "internal/learn/detect_loop.go",
+    "expected_caller": "internal/learn/detect_loop.go, which P1-LRN-05c adds (the DetectLoop: FindingFeed.Run -> DetectPatterns -> Create); retire this entry once that file calls NewSQLiteOutcomeReader",
+    "reason": "P1-LRN-02b ships NewSQLiteOutcomeReader with its tests; its first production caller is internal/learn/detect_loop.go from P1-LRN-05c.",
+    "retire_ticket": "P1-LRN-05c",
+    "symbol": "internal/learn.NewSQLiteOutcomeReader"
+  },
+  {
+    "caller_site": "internal/learn/detect_loop.go",
+    "expected_caller": "internal/learn/detect_loop.go, which P1-LRN-05c adds (the DetectLoop: FindingFeed.Run -> DetectPatterns -> Create); retire this entry once that file calls NewProposalStore",
+    "reason": "P1-LRN-02d ships NewProposalStore with its tests; its first production caller is internal/learn/detect_loop.go from P1-LRN-05c.",
+    "retire_ticket": "P1-LRN-05c",
     "symbol": "internal/learn.NewProposalStore"
+  },
+  {
+    "caller_site": "internal/learn/detect_loop.go",
+    "expected_caller": "internal/learn/detect_loop.go, which P1-LRN-05c adds (the DetectLoop: FindingFeed.Run -> DetectPatterns -> Create); retire this entry once that file calls NewFindingFeed",
+    "reason": "P1-LRN-02e ships NewFindingFeed with its tests; its first production caller is internal/learn/detect_loop.go from P1-LRN-05c.",
+    "retire_ticket": "P1-LRN-05c",
+    "symbol": "internal/learn.NewFindingFeed"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_node_remote.go",
+    "expected_caller": "cmd/cascade/wire_node_remote.go, which P1-NODE-02e adds (wires nodeRemoteDispatcher into the router); retire this entry once that file calls NewRemoteRoute",
+    "reason": "P1-NODE-02d ships NewRemoteRoute with its tests; its first production caller is cmd/cascade/wire_node_remote.go from P1-NODE-02e.",
+    "retire_ticket": "P1-NODE-02e",
+    "symbol": "internal/conductor.NewRemoteRoute"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_learn_status.go",
+    "expected_caller": "cmd/cascade/wire_learn_status.go, which P1-LRN-04c adds (the learn-status daemon wiring); retire this entry once that file calls RegisterLearnHandlers",
+    "reason": "P1-LRN-04a ships RegisterLearnHandlers with its tests; its first production caller is cmd/cascade/wire_learn_status.go from P1-LRN-04c.",
+    "retire_ticket": "P1-LRN-04c",
+    "symbol": "internal/learn.RegisterLearnHandlers"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_conductor_chooser.go",
+    "expected_caller": "cmd/cascade/wire_conductor_chooser.go, which P1-TOP-02e adds (binds the chooser PrivacyGate and CredentialGate for the production router (R358)); retire this entry once that file calls BillingPrivacyGate",
+    "reason": "P1-TOP-02b ships BillingPrivacyGate with its tests; its first production caller is cmd/cascade/wire_conductor_chooser.go from P1-TOP-02e.",
+    "retire_ticket": "P1-TOP-02e",
+    "symbol": "internal/fleet/topology.BillingPrivacyGate"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_conductor_chooser.go",
+    "expected_caller": "cmd/cascade/wire_conductor_chooser.go, which P1-TOP-02e adds (binds the chooser PrivacyGate and CredentialGate for the production router (R358)); retire this entry once that file calls EvidenceCredentialGate",
+    "reason": "P1-TOP-02b ships EvidenceCredentialGate with its tests; its first production caller is cmd/cascade/wire_conductor_chooser.go from P1-TOP-02e.",
+    "retire_ticket": "P1-TOP-02e",
+    "symbol": "internal/fleet/topology.EvidenceCredentialGate"
   }
 ]
