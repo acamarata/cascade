@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-04T16:01:17Z",
+  "generated_at": "2026-11-04T20:19:31Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5204,6 +5204,20 @@
       ]
     },
     {
+      "name": "cmd/cascade guarded ci.hosted",
+      "sites": [
+        {
+          "file": "cmd/cascade/guarded_ci_hosted.go",
+          "line": 6,
+          "status": "",
+          "raw": "cmd/cascade guarded ci.hosted (P1-NODE-09)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd/cascade guarded families",
       "sites": [
         {
@@ -9075,6 +9089,20 @@
       ]
     },
     {
+      "name": "conductor.remote dispatch seam",
+      "sites": [
+        {
+          "file": "internal/conductor/remote.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "conductor.remote dispatch seam (ADD) — P1-NODE-02."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "conductor.restricted-permits",
       "sites": [
         {
@@ -12164,6 +12192,20 @@
       ]
     },
     {
+      "name": "fleet/economics/reserve-override",
+      "sites": [
+        {
+          "file": "internal/fleet/economics/reserve_override.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "fleet/economics/reserve-override/ADD (P1-TOP-20)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "fleet/economics/tables",
       "sites": [
         {
@@ -12636,10 +12678,10 @@
       "sites": [
         {
           "file": "internal/fleet/topology/chooser.go",
-          "line": 23,
+          "line": 13,
           "status": "ADD",
           "ticket": "P1-E40-W9-S78-T1",
-          "raw": "fleet/topology/chooser/ADD (P1-E40-W9-S78-T1)."
+          "raw": "fleet/topology/chooser/ADD (P1-E40-W9-S78-T1, P1-TOP-02b)."
         }
       ],
       "statuses": [
@@ -14896,6 +14938,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.HostedGuard",
+      "sites": [
+        {
+          "file": "internal/ci/runner_gha_guard.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal.ci.HostedGuard (P1-NODE-09)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -18693,6 +18749,34 @@
       ]
     },
     {
+      "name": "internal.learn.LanePosterior",
+      "sites": [
+        {
+          "file": "internal/learn/lane_posterior.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal.learn.LanePosterior/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.LaneStore",
+      "sites": [
+        {
+          "file": "internal/learn/lane_posterior.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal.learn.LaneStore/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.learn.LearnedConfig",
       "sites": [
         {
@@ -18986,6 +19070,20 @@
       ]
     },
     {
+      "name": "internal.learn.ValidateChangeShape",
+      "sites": [
+        {
+          "file": "internal/learn/change_shape.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal.learn.ValidateChangeShape/ADDED (P1-LRN-02a)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.learn.ValidateNoIdentifiers",
       "sites": [
         {
@@ -18993,6 +19091,20 @@
           "line": 16,
           "status": "ADD",
           "raw": "internal.learn.ValidateNoIdentifiers/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.learn.ValidateSupport",
+      "sites": [
+        {
+          "file": "internal/learn/support.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal.learn.ValidateSupport/ADDED (P1-LRN-02a)."
         }
       ],
       "statuses": [
@@ -19039,6 +19151,20 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "internal.learn.proposal",
+      "sites": [
+        {
+          "file": "internal/learn/proposal.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal.learn.proposal/ADDED (P1-LRN-02a)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -20919,6 +21045,20 @@
           "line": 10,
           "status": "ADD",
           "raw": "internal.rpc request_guard (guardLocalRequest, socketHosts) [ADD]"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.rpc.FleetTopologySSE",
+      "sites": [
+        {
+          "file": "internal/rpc/fleet_topology_sse.go",
+          "line": 22,
+          "status": "ADD",
+          "raw": "internal.rpc.FleetTopologySSE/ADDED (P1-TOP-11)."
         }
       ],
       "statuses": [
@@ -33858,6 +33998,20 @@
       ]
     },
     {
+      "name": "learn/outcome-reader",
+      "sites": [
+        {
+          "file": "internal/learn/outcome_reader.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "learn/outcome-reader/ADD."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "learn/privacy_test",
       "sites": [
         {
@@ -33869,6 +34023,20 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "learn/proposal-engine",
+      "sites": [
+        {
+          "file": "internal/learn/proposal_engine.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "learn/proposal-engine/ADD."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -43168,7 +43336,7 @@
       ]
     }
   ],
-  "total_sites": 4162,
-  "unspecified_count": 376,
+  "total_sites": 4174,
+  "unspecified_count": 378,
   "multi_status_count": 132
 }
