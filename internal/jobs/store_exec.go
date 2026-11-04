@@ -82,6 +82,24 @@ func (s *Store) GetExecution(ctx context.Context, id string) (Execution, bool, e
 	return e, true, nil
 }
 
+// LatestExecutionForJob reads the execution with the highest attempt for a job.
+func (s *Store) LatestExecutionForJob(ctx context.Context, jobID string) (Execution, bool, error) {
+	var e Execution
+	var state string
+	row := s.db.QueryRowContext(ctx,
+		`SELECT id, job_id, attempt, state, started_at, ended_at, pgid, heartbeat_at
+		 FROM `+tableExecution+` WHERE job_id = ? ORDER BY attempt DESC LIMIT 1`, jobID)
+	err := row.Scan(&e.ID, &e.JobID, &e.Attempt, &state, &e.StartedAt, &e.EndedAt, &e.PGID, &e.HeartbeatAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Execution{}, false, nil
+	}
+	if err != nil {
+		return Execution{}, false, cascade.Wrap(cascade.KindUnavailable, err, "jobs: latest execution for job")
+	}
+	e.State = DecodeExecutionState(state)
+	return e, true, nil
+}
+
 // IntegrityCheck reports the ids of every jobs_execution row whose
 // job_id does not reference an existing jobs_job row -- the plan-named
 // audit surface, usable even against a database populated by a path

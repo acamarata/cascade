@@ -2,6 +2,8 @@ package jobs
 
 import (
 	"context"
+	"errors"
+	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
 	"testing"
 )
@@ -14,6 +16,42 @@ func TestPutExecutionOrphanRefused(t *testing.T) {
 	e := Execution{ID: "exec-orphan", JobID: "never-created", State: ExecutionRunning}
 	if err := s.PutExecution(ctx, e); err == nil {
 		t.Error("PutExecution(orphan job_id) = nil, want typed orphan-execution error")
+	}
+}
+
+// TestLatestExecutionForJob checks attempt ordering, isolation, and query errors.
+func TestLatestExecutionForJob(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	ctx := context.Background()
+	s := newTestStore(t)
+	for _, id := range []string{"latest", "other"} {
+		if err := s.PutJob(ctx, baseJob(id)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := Execution{ID: "highest", JobID: "latest", Attempt: 3, State: ExecutionSucceeded, StartedAt: 10, EndedAt: 20, PGID: 42, HeartbeatAt: 15}
+	for _, e := range []Execution{want,
+		{ID: "newest-time", JobID: "latest", Attempt: 1, State: ExecutionRunning, StartedAt: 100},
+		{ID: "other-exec", JobID: "other", Attempt: 9, State: ExecutionRunning}} {
+		if err := s.PutExecution(ctx, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, ok, err := s.LatestExecutionForJob(ctx, "latest"); err != nil || !ok || got != want {
+		t.Fatalf("LatestExecutionForJob = %+v, %v, %v; want %+v, true, nil", got, ok, err, want)
+	}
+	if got, ok, err := s.LatestExecutionForJob(ctx, "missing"); err != nil || ok || got != (Execution{}) {
+		t.Fatalf("missing = %+v, %v, %v; want zero, false, nil", got, ok, err)
+	}
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	got, ok, err := s.LatestExecutionForJob(cancelled, "latest")
+	wantErr := cascade.Wrap(cascade.KindUnavailable, context.Canceled, "jobs: latest execution for job")
+	if got != (Execution{}) || ok || !errors.Is(err, context.Canceled) || err.Error() != wantErr.Error() {
+		t.Fatalf("cancelled query = %+v, %v, %v; want zero, false, %v", got, ok, err, wantErr)
+	}
+	if kind, _ := cascade.KindOf(err); kind != cascade.KindUnavailable {
+		t.Fatalf("cancelled query kind = %v; want unavailable", kind)
 	}
 }
 
