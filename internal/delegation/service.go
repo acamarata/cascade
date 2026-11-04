@@ -19,6 +19,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/fleet/capacity"
 	"github.com/acamarata/cascade/internal/jobs"
+	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -33,6 +34,12 @@ type Request struct {
 	Need string
 	// JobID is the job id (required for mutations).
 	JobID string
+	// Mutation is true when the delegated work may write the job's repo.
+	Mutation bool
+	// JobProject is the project of the job named by JobID.
+	JobProject string
+	// InScope is the job row's in-scope path prefixes.
+	InScope []string
 	// Deadline is the requested deadline.
 	Deadline string
 	// MinQuality is the requested minimum quality.
@@ -48,7 +55,14 @@ type Response struct {
 	Accepted bool
 	// LeaseID is the Fleet lease granted to the delegation.
 	LeaseID string
+	// InScopePrefixes are the job's in-scope prefixes; empty without a job.
+	InScopePrefixes []string
+	// ToolPolicy is "all" for a mutation and "readonly" otherwise.
+	ToolPolicy string
 }
+
+// ErrInvalidParam refuses a mutation request that names no job_id.
+var ErrInvalidParam = cascade.New(cascade.KindInvalidInput, "delegation: job_id is required for a mutation")
 
 // fleetLeaser is the Fleet seam Delegate leases capacity through;
 // *capacity.Fleet satisfies it.
@@ -85,6 +99,12 @@ func (s *Service) Delegate(ctx context.Context, req *Request) (*Response, error)
 		return nil, cascade.New(cascade.KindInvalidInput, "delegation: nil request")
 	}
 	s.applyDefaults(req)
+	if req.Mutation && req.JobID == "" {
+		return nil, ErrInvalidParam
+	}
+	if err := checkJobScope(ctx, req); err != nil {
+		return nil, err
+	}
 	if err := s.verifyParent(ctx, req.Parent); err != nil {
 		return nil, err
 	}
@@ -96,7 +116,28 @@ func (s *Service) Delegate(ctx context.Context, req *Request) (*Response, error)
 	if err != nil {
 		return nil, err
 	}
-	return &Response{Accepted: true, LeaseID: lease.ID}, nil
+	resp := &Response{Accepted: true, LeaseID: lease.ID, ToolPolicy: "readonly", InScopePrefixes: []string{}}
+	if req.JobID != "" {
+		resp.InScopePrefixes = append(resp.InScopePrefixes, req.InScope...)
+	}
+	if req.Mutation {
+		resp.ToolPolicy = "all"
+	}
+	return resp, nil
+}
+
+// checkJobScope refuses a principal caller whose Scope differs from the
+// job's project. The owner CLI carries no principal and may delegate on
+// any job.
+func checkJobScope(ctx context.Context, req *Request) error {
+	c, ok := principal.CallerFrom(ctx)
+	if !ok || c.Principal == nil || req.JobID == "" {
+		return nil
+	}
+	if c.Principal.Scope != req.JobProject {
+		return deniedf("job %s is outside the caller scope %q", req.JobID, c.Principal.Scope)
+	}
+	return nil
 }
 
 // verifyParent refuses a parent record whose stored chain does not

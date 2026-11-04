@@ -136,3 +136,53 @@ func TestDelegateRefusesBeforeLease(t *testing.T) {
 	_, err = NewService(Deps{Store: c.st}).Delegate(context.Background(), &Request{Parent: good})
 	wantCascadeErr(t, err, cascade.KindInvalidInput, "pinned controller key are required")
 }
+
+func TestDelegateMutationRequiresJobID(t *testing.T) {
+	c := newChain(t)
+	_, good := c.add(c.root)
+	svc, f := c.service(t0)
+	ctx := context.Background()
+	resp, err := svc.Delegate(ctx, &Request{AgentID: "a", Mutation: true, InScope: []string{"cmd"}, Parent: good})
+	if resp != nil || err != ErrInvalidParam || f.leases != 0 {
+		t.Fatalf("Delegate = %+v, %v with %d leases; want ErrInvalidParam and no lease", resp, err, f.leases)
+	}
+	wantCascadeErr(t, err, cascade.KindInvalidInput, "job_id is required for a mutation")
+	resp, err = svc.Delegate(ctx, &Request{AgentID: "a", InScope: []string{"cmd"}, Parent: good})
+	if err != nil || resp == nil || len(resp.InScopePrefixes) != 0 || resp.ToolPolicy != "readonly" {
+		t.Fatalf("no job_id: Delegate = %+v, %v; want readonly with no prefixes", resp, err)
+	}
+	resp, err = svc.Delegate(ctx, &Request{AgentID: "a", JobID: "j1", InScope: []string{"cmd"}, Parent: good})
+	if err != nil || resp == nil || resp.ToolPolicy != "readonly" || strings.Join(resp.InScopePrefixes, ",") != "cmd" {
+		t.Fatalf("read-only job: Delegate = %+v, %v; want readonly with the job prefixes", resp, err)
+	}
+	resp, err = svc.Delegate(ctx, &Request{AgentID: "a", JobID: "j1", Mutation: true, InScope: []string{"cmd"}, Parent: good})
+	if err != nil || resp == nil || resp.ToolPolicy != "all" || strings.Join(resp.InScopePrefixes, ",") != "cmd" {
+		t.Fatalf("mutation job: Delegate = %+v, %v; want all with the job prefixes", resp, err)
+	}
+	if f.leases != 3 {
+		t.Fatalf("fleet double recorded %d leases, want 3", f.leases)
+	}
+}
+
+func TestDelegateRefusesJobOutsideCallerScope(t *testing.T) {
+	c := newChain(t)
+	_, good := c.add(c.root)
+	req := func() *Request {
+		return &Request{AgentID: "a", JobID: "j1", JobProject: "proj-a", Mutation: true, InScope: []string{"cmd"}, Parent: good}
+	}
+	other := principal.WithCaller(context.Background(), principal.Caller{Principal: &principal.Principal{ID: "p-x", Scope: "proj-b"}})
+	svc, f := c.service(t0)
+	resp, err := svc.Delegate(other, req())
+	if resp != nil || f.leases != 0 {
+		t.Fatalf("outside scope: Delegate = %+v with %d leases; want a refusal and no lease", resp, f.leases)
+	}
+	wantCascadeErr(t, err, cascade.KindPermissionDenied, `job j1 is outside the caller scope "proj-b"`)
+	same := principal.WithCaller(context.Background(), principal.Caller{Principal: &principal.Principal{ID: "p-y", Scope: "proj-a"}})
+	if resp, err = svc.Delegate(same, req()); err != nil || resp == nil || f.leases != 1 {
+		t.Fatalf("same scope: Delegate = %+v, %v with %d leases; want one lease", resp, err, f.leases)
+	}
+	owner := principal.WithCaller(context.Background(), principal.Caller{OwnerCLI: true})
+	if resp, err = svc.Delegate(owner, req()); err != nil || resp == nil || resp.ToolPolicy != "all" || f.leases != 2 {
+		t.Fatalf("owner CLI: Delegate = %+v, %v with %d leases; want a mutation lease", resp, err, f.leases)
+	}
+}
