@@ -110,6 +110,9 @@ func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest 
 	// After conductorSecurity, which binds the process firewall the health
 	// probes run behind. One Manager serves the resolver's transient
 	// counter, the scheduler and the retry loop's lane eligibility.
+	// Gateway tokens come from the start snapshot (P1-GWY-10, the reader
+	// daemonGateways takes from daemonSnapshotGetenv), never the process
+	// environment the daemon scrubbed at start.
 	cfg := admittedDaemonConfig(paths)
 	healthMgr, herr := startDaemonProviderHealth(ctx, manifest, reg, store, clock, cfg)
 	if herr != nil {
@@ -158,7 +161,7 @@ func openDaemonProviderRegistry(ctx context.Context, paths runtime.PathProvider,
 // this daemon process (P1-GWY-08). The accounts are read once here: an
 // account accepted later applies at the next start. A nil cfg admits none.
 func newDaemonResolver(reg providerdispatch.RegistryLookup, credentials providerdispatch.CredentialSource, clock runtime.Clock, tr providertransport.Transport, cfg *runtime.Config, opts ...providerdispatch.ResolverOption) (*providerdispatch.Resolver, error) {
-	accounts, src, err := daemonGateways(cfg)
+	accounts, src, err := daemonGateways(cfg, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -166,15 +169,22 @@ func newDaemonResolver(reg providerdispatch.RegistryLookup, credentials provider
 }
 
 // daemonGateways returns the admitted gateway accounts of cfg and the
-// call-time token source of this daemon process, shared by the resolver and
-// the health prober so both see one admitted set.
-func daemonGateways(cfg *runtime.Config) ([]gateway.Account, gateway.Source, error) {
+// call-time token source of this daemon process, shared by the resolver, the
+// health prober and the quota pollers so all see one admitted set. Every
+// variable the source reads goes through getenv, the start snapshot
+// (credentialEnv.Getenv). A nil getenv reads the snapshot this process's
+// daemon published (daemonSnapshotGetenv); with none (no composed daemon, a
+// bare wiring test) it is an empty snapshot, so every name falls through.
+func daemonGateways(cfg *runtime.Config, getenv func(string) string) ([]gateway.Account, gateway.Source, error) {
 	accounts, err := gateway.AccountsFrom(runtime.EffectiveConfigOf(cfg))
 	if err != nil {
 		return nil, gateway.Source{}, err
 	}
+	if getenv == nil {
+		getenv = daemonSnapshotGetenv()
+	}
 	home, _ := os.UserHomeDir()
-	return accounts, gateway.Source{Getenv: os.Getenv, Home: home, User: os.Getenv("USER")}, nil
+	return accounts, gateway.Source{Getenv: getenv, Home: home, User: getenv("USER")}, nil
 }
 
 // admittedDaemonConfig returns the live (admitted) config of the composed

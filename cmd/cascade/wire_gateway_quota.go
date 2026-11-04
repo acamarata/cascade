@@ -89,7 +89,8 @@ func wireGatewayQuota(w *daemonWiring) error {
 		return err
 	}
 	store := usage.NewManager(db, w.Clock)
-	accounts, src, err := daemonGateways(w.Deps.Config)
+	// The token source reads the start snapshot (P1-GWY-10).
+	accounts, src, err := daemonGateways(w.Deps.Config, w.Deps.Daemon.Getenv)
 	if err != nil {
 		_ = db.Close()
 		return err

@@ -30,6 +30,7 @@ package main
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/acamarata/cascade/internal/conductor"
@@ -68,11 +69,58 @@ func startProviderHealth(run context.Context, manifest *daemon.Manifest, reg *pr
 // the daemon store's event bus, probing gateway records through the accounts
 // admitted in cfg (the same set the resolver is built over).
 func startDaemonProviderHealth(run context.Context, manifest *daemon.Manifest, reg *providerregistry.Registry, store provider.Store, clock runtime.Clock, cfg *runtime.Config) (*health.Manager, error) {
-	accounts, src, err := daemonGateways(cfg)
+	accounts, src, err := daemonGateways(cfg, nil)
 	if err != nil {
 		return nil, err
 	}
 	return startProviderHealth(run, manifest, reg, events.New(store, clock), clock, productionProviderDeps(), gatewayProbeConfig{Accounts: accounts, Source: src})
+}
+
+// The gateway-snapshot registration publishes the daemon's start-snapshot
+// reader (w.Deps.Daemon.Getenv, which composeDaemon sets to
+// credentialEnv.Getenv) before "conductor" (Order 10) builds the resolver and
+// the health prober, and withdraws it when the run ends. The scrub is
+// process-wide (it unsets the process environment), so the snapshot is too.
+var _ = registerDaemonWiring(daemonRegistration{
+	Name: "gateway-snapshot", Phase: phaseConductor, Order: 5,
+	Wire: func(w *daemonWiring) error {
+		if w.Deps.Daemon.Getenv == nil {
+			return nil
+		}
+		entry := &snapshotEntry{getenv: w.Deps.Daemon.Getenv}
+		snapshotReader.mu.Lock()
+		snapshotReader.cur = entry
+		snapshotReader.mu.Unlock()
+		context.AfterFunc(w.Ctx, func() {
+			snapshotReader.mu.Lock()
+			defer snapshotReader.mu.Unlock()
+			if snapshotReader.cur == entry {
+				snapshotReader.cur = nil
+			}
+		})
+		return nil
+	},
+})
+
+// snapshotEntry is one daemon run's published start-snapshot reader.
+type snapshotEntry struct{ getenv func(string) string }
+
+// snapshotReader is the reader of the daemon running in this process.
+var snapshotReader struct {
+	mu  sync.Mutex
+	cur *snapshotEntry
+}
+
+// daemonSnapshotGetenv returns the published start-snapshot reader, or an
+// empty snapshot's reader when no daemon published one (a bare wiring test):
+// nothing scrubbed, so every name falls through to the process environment.
+func daemonSnapshotGetenv() func(string) string {
+	snapshotReader.mu.Lock()
+	defer snapshotReader.mu.Unlock()
+	if snapshotReader.cur != nil {
+		return snapshotReader.cur.getenv
+	}
+	return (&credentialEnv{}).Getenv
 }
 
 // laneEligibleByHealth is the retry loop's eligibility seam: a lane may
