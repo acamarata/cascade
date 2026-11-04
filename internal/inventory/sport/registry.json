@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-04T02:53:54Z",
+  "generated_at": "2026-11-04T05:33:17Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -455,7 +455,7 @@
       "sites": [
         {
           "file": "internal/nodes/tunnel.go",
-          "line": 37,
+          "line": 16,
           "status": "ADD",
           "raw": "Dialer/ADDED"
         }
@@ -1157,9 +1157,10 @@
       "sites": [
         {
           "file": "internal/nodes/reconnect.go",
-          "line": 14,
+          "line": 15,
           "status": "ADD",
-          "raw": "Manager/ADDED"
+          "ticket": "P1-E17-W4-S36-T3",
+          "raw": "Manager/ADDED (P1-E17-W4-S36-T3)."
         }
       ],
       "statuses": [
@@ -1615,7 +1616,7 @@
       "sites": [
         {
           "file": "internal/nodes/reconnect.go",
-          "line": 14,
+          "line": 15,
           "status": "ADD",
           "raw": "ReconnectPolicy/ADDED"
         }
@@ -2082,7 +2083,7 @@
       "sites": [
         {
           "file": "internal/nodes/tunnel.go",
-          "line": 37,
+          "line": 16,
           "status": "ADD",
           "raw": "Target/ADDED"
         }
@@ -4589,6 +4590,12 @@
     {
       "name": "cmd/cascade daemon",
       "sites": [
+        {
+          "file": "cmd/cascade/conductor_redirect_integration_test.go",
+          "line": 16,
+          "status": "CHANGE",
+          "raw": "cmd/cascade daemon (CHANGE, P1-TOP-19)."
+        },
         {
           "file": "cmd/cascade/daemon_unix_conductor_gateway_test.go",
           "line": 13,
@@ -10598,6 +10605,20 @@
       ]
     },
     {
+      "name": "domain:jobs/jobs_lane_posterior, jobs_family_pair",
+      "sites": [
+        {
+          "file": "internal/learn/migration_routing.go",
+          "line": 11,
+          "status": "",
+          "raw": "domain:jobs/jobs_lane_posterior, jobs_family_pair,"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "domain:jobs/jobs_learned_config, jobs_learned_config_submission",
       "sites": [
         {
@@ -12553,6 +12574,21 @@
       ]
     },
     {
+      "name": "fleet/topology/bucket_seed",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/bucket_seed.go",
+          "line": 13,
+          "status": "ADD",
+          "ticket": "P1-E40-W9-S77-T3",
+          "raw": "fleet/topology/bucket_seed/ADD (P1-E40-W9-S77-T3)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "fleet/topology/candidates",
       "sites": [
         {
@@ -12862,6 +12898,34 @@
       ]
     },
     {
+      "name": "fleet/topology/promotion",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/promotion.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "fleet/topology/promotion/ADD (P1-TOP-06)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/promotion_reversal",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/promotion_reversal.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "fleet/topology/promotion_reversal/ADD (P1-TOP-06)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "fleet/topology/quota_snapshot",
       "sites": [
         {
@@ -12896,10 +12960,30 @@
       "sites": [
         {
           "file": "internal/fleet/topology/reconcile.go",
-          "line": 8,
+          "line": 7,
           "status": "ADD",
           "ticket": "P1-E40-W9-S77-T1",
           "raw": "fleet/topology/reconcile/ADD (P1-E40-W9-S77-T1)."
+        },
+        {
+          "file": "internal/fleet/topology/reconcile_upsert.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "fleet/topology/reconcile/ADD (P1-TOP-06)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/reconcile_agents",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/reconcile_agents.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "fleet/topology/reconcile_agents/ADD (P1-TOP-06)."
         }
       ],
       "statuses": [
@@ -19449,6 +19533,20 @@
       ]
     },
     {
+      "name": "internal.notify.provenance",
+      "sites": [
+        {
+          "file": "internal/notify/provenance.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "internal.notify.provenance/ADDED (P1-HRN-03)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.plugins.conformance",
       "sites": [
         {
@@ -20894,6 +20992,20 @@
           "line": 14,
           "status": "ADD",
           "raw": "internal.runtime.parseLearnSection/ADDED (test coverage)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.secrets",
+      "sites": [
+        {
+          "file": "internal/secrets/oauth_transport_json.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal.secrets/ADD (P1-TOP-13a JSON grant poster)."
         }
       ],
       "statuses": [
@@ -25046,6 +25158,24 @@
       "name": "internal/nodes",
       "sites": [
         {
+          "file": "internal/nodes/dispatch_payload.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal/nodes (ADD) — P1-NODE-02b (contract:remote-dispatch-route)."
+        },
+        {
+          "file": "internal/nodes/dispatch_payload_fuzz_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "internal/nodes (ADD fuzz) — P1-NODE-02b."
+        },
+        {
+          "file": "internal/nodes/dispatch_payload_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "internal/nodes (ADD tests) — P1-NODE-02b."
+        },
+        {
           "file": "internal/nodes/tunnel_windows.go",
           "line": 12,
           "status": "",
@@ -25054,7 +25184,8 @@
         }
       ],
       "statuses": [
-        ""
+        "",
+        "ADD"
       ]
     },
     {
@@ -25584,7 +25715,7 @@
       "sites": [
         {
           "file": "internal/nodes/reconnect.go",
-          "line": 14,
+          "line": 15,
           "status": "ADD",
           "raw": "internal/nodes Tunnel/ADDED"
         }
@@ -25598,7 +25729,7 @@
       "sites": [
         {
           "file": "internal/nodes/tunnel.go",
-          "line": 37,
+          "line": 16,
           "status": "ADD",
           "raw": "internal/nodes TunnelState/ADDED"
         }
@@ -29748,6 +29879,12 @@
           "raw": "internal/providers/dispatch transient_health/ADD (P1-GWY-09)."
         },
         {
+          "file": "internal/providers/dispatch/transient_health_probe_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal/providers/dispatch transient_health/ADD (P1-TOP-19)."
+        },
+        {
           "file": "internal/providers/dispatch/transient_health_test.go",
           "line": 14,
           "status": "ADD",
@@ -29901,7 +30038,7 @@
           "line": 19,
           "status": "ADD",
           "ticket": "P1-E25-W5-S52-T4",
-          "raw": "internal/review.checklist/ADD (P1-E25-W5-S52-T4)."
+          "raw": "internal/review.checklist/ADD (P1-E25-W5-S52-T4; v1: P1-PBD-01)."
         }
       ],
       "statuses": [
@@ -32421,6 +32558,12 @@
           "raw": "jobs/completion-gate/ADD (P1-E29-W6-S60-T3)."
         },
         {
+          "file": "internal/jobs/gate_attempts.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "jobs/completion-gate/ADD (P1-PBD-04)."
+        },
+        {
           "file": "internal/jobs/gate_stall_integration_test.go",
           "line": 12,
           "status": "ADD",
@@ -32440,6 +32583,12 @@
           "status": "ADD",
           "ticket": "P1-E29-W6-S60-T3",
           "raw": "jobs/completion-gate/ADD (P1-E29-W6-S60-T3)."
+        },
+        {
+          "file": "internal/jobs/migration_gate_attempts.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "jobs/completion-gate/ADD (P1-PBD-04)."
         }
       ],
       "statuses": [
@@ -32839,6 +32988,34 @@
       ]
     },
     {
+      "name": "jobs/reviewer-assignment",
+      "sites": [
+        {
+          "file": "internal/jobs/reviewer_assignment.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "jobs/reviewer-assignment/ADD (P1-PBD-01b)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "jobs/reviewer-policy",
+      "sites": [
+        {
+          "file": "internal/jobs/reviewer_policy.go",
+          "line": 22,
+          "status": "ADD",
+          "raw": "jobs/reviewer-policy/ADD (P1-PBD-01a)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "jobs/risk-classifier",
       "sites": [
         {
@@ -33111,6 +33288,26 @@
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T1",
           "raw": "jobs/store/ADD (P1-E29-W6-S59-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "jobs/terminal-observer",
+      "sites": [
+        {
+          "file": "internal/jobs/store_terminal_observer.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "jobs/terminal-observer/ADD (P1-TOP-10b)."
+        },
+        {
+          "file": "internal/jobs/store_terminal_observer_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "jobs/terminal-observer/ADD (P1-TOP-10b)."
         }
       ],
       "statuses": [
@@ -33513,6 +33710,20 @@
           "line": 5,
           "status": "",
           "raw": "learn/migration_config_test (P1-LRN-01)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "learn/migration_routing_test",
+      "sites": [
+        {
+          "file": "internal/learn/migration_routing_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "learn/migration_routing_test (P1-LRN-07a)."
         }
       ],
       "statuses": [
@@ -39800,6 +40011,12 @@
           "status": "ADD",
           "ticket": "P1-E30-W6-S61-T2",
           "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
+        },
+        {
+          "file": "providers/agents/claude/usage.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "providers.agents.claude/ADD (P1-TOP-13a usage endpoints)."
         }
       ],
       "statuses": [
@@ -42839,7 +43056,7 @@
       ]
     }
   ],
-  "total_sites": 4133,
-  "unspecified_count": 372,
-  "multi_status_count": 131
+  "total_sites": 4154,
+  "unspecified_count": 373,
+  "multi_status_count": 132
 }
