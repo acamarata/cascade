@@ -78,3 +78,33 @@ func TestDecodeEvent_Empty(t *testing.T) {
 		t.Fatalf("decodeEvent(nil) = %v, want KindIntegrity", err)
 	}
 }
+
+// TestEncodeDecodeEvent_StreamFieldsRoundTrip proves the stream extension
+// survives the envelope codec field for field.
+func TestEncodeDecodeEvent_StreamFieldsRoundTrip(t *testing.T) {
+	want := Event{
+		Seq: 7, Kind: "k", Source: "s", Payload: []byte("p"), Timestamp: time.Unix(5, 0).UTC(),
+		StreamID: "task:one", StreamSeq: 3, RunID: "run-1", ProjectID: "proj-1", Producer: "jobs", PayloadVersion: 4,
+	}
+	got, err := decodeEvent(encodeEvent(want))
+	if err != nil {
+		t.Fatalf("decodeEvent: %v", err)
+	}
+	if got.StreamID != want.StreamID || got.StreamSeq != want.StreamSeq || got.RunID != want.RunID ||
+		got.ProjectID != want.ProjectID || got.Producer != want.Producer || got.PayloadVersion != want.PayloadVersion {
+		t.Fatalf("stream fields round-trip: got %+v, want %+v", got, want)
+	}
+}
+
+// TestDecodeEvent_TruncatedStreamExtension proves every cut inside the
+// stream extension is an integrity error, never a panic or a silent
+// legacy read.
+func TestDecodeEvent_TruncatedStreamExtension(t *testing.T) {
+	full := encodeEvent(Event{Seq: 1, Kind: "k", StreamID: "s", StreamSeq: 1, Producer: "p"})
+	base := len(encodeEvent(Event{Seq: 1, Kind: "k"})) - legacyExtensionSize()
+	for cut := base + 1; cut < len(full); cut++ {
+		if _, err := decodeEvent(full[:cut]); !cascade.HasKind(err, cascade.KindIntegrity) {
+			t.Fatalf("decodeEvent(cut at %d of %d) = %v, want KindIntegrity", cut, len(full), err)
+		}
+	}
+}

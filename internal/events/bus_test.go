@@ -186,3 +186,76 @@ func TestEventBusPublishError(t *testing.T) {
 		t.Fatalf("Publish after Close error = %v, want KindUnavailable", err)
 	}
 }
+
+// TestEXE01LegacyAC5 proves events.Event carries StreamID and StreamSeq and
+// that Publish assigns them server-side: an empty stream becomes
+// bus:<namespace>, each stream numbers independently from 1, a
+// producer-supplied sequence is refused, and a restarted Bus resumes every
+// stream at its durable high-water mark.
+func TestEXE01LegacyAC5(t *testing.T) {
+	ctx := context.Background()
+	store := storetest.NewMemStore()
+	clock := testkit.NewFrozenClock(time.Unix(1_700_000_000, 0))
+	bus := events.New(store, clock)
+
+	if got := events.BusStreamID("ns"); got != "bus:ns" {
+		t.Fatalf("BusStreamID(ns) = %q, want bus:ns", got)
+	}
+	ev, err := bus.Publish(ctx, "ns", "k", "src", []byte("a"))
+	if err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if ev.StreamID != "bus:ns" || ev.StreamSeq != 1 || ev.Seq != 1 {
+		t.Fatalf("Publish default stream = (%q, %d, seq %d), want (bus:ns, 1, seq 1)", ev.StreamID, ev.StreamSeq, ev.Seq)
+	}
+	draft := events.Event{Kind: "k", StreamID: "task:one", RunID: "run-1", ProjectID: "proj-1", Producer: "jobs", PayloadVersion: 2}
+	for want := uint64(1); want <= 2; want++ {
+		got, perr := bus.PublishEvent(ctx, "ns", draft)
+		if perr != nil {
+			t.Fatalf("PublishEvent: %v", perr)
+		}
+		if got.StreamID != "task:one" || got.StreamSeq != want || got.Seq != want+1 {
+			t.Fatalf("PublishEvent = (%q, %d, seq %d), want (task:one, %d, seq %d)", got.StreamID, got.StreamSeq, got.Seq, want, want+1)
+		}
+		if got.RunID != "run-1" || got.ProjectID != "proj-1" || got.Producer != "jobs" || got.PayloadVersion != 2 {
+			t.Fatalf("PublishEvent dropped envelope fields: %+v", got)
+		}
+	}
+	for _, bad := range []events.Event{{Kind: "k", StreamSeq: 9}, {Kind: "k", Seq: 9}} {
+		if _, perr := bus.PublishEvent(ctx, "ns", bad); !cascade.HasKind(perr, cascade.KindInvalidInput) {
+			t.Fatalf("PublishEvent with producer sequence = %v, want KindInvalidInput", perr)
+		}
+	}
+
+	replayed, err := bus.Replay(ctx, "ns", 0)
+	if err != nil || len(replayed) != 3 {
+		t.Fatalf("Replay = %d event(s), %v; want 3", len(replayed), err)
+	}
+	if r := replayed[2]; r.StreamID != "task:one" || r.StreamSeq != 2 || r.Producer != "jobs" {
+		t.Fatalf("replayed event lost stream fields: %+v", r)
+	}
+	_ = bus.Close()
+	assertStreamResumesAfterRestart(ctx, t, events.New(store, clock), draft)
+}
+
+// assertStreamResumesAfterRestart checks that a Bus reopened over the
+// same store resumes task:one at its durable high-water mark (2) and the
+// default stream at 1, so the next allocations are 3 and 2.
+func assertStreamResumesAfterRestart(ctx context.Context, t *testing.T, restarted *events.Bus, draft events.Event) {
+	t.Helper()
+	t.Cleanup(func() { _ = restarted.Close() })
+	if head, herr := restarted.StreamHead(ctx, "ns", "task:one"); herr != nil || head != 2 {
+		t.Fatalf("StreamHead after restart = %d, %v; want 2", head, herr)
+	}
+	next, err := restarted.PublishEvent(ctx, "ns", draft)
+	if err != nil || next.StreamSeq != 3 || next.Seq != 4 {
+		t.Fatalf("PublishEvent after restart = (%d, seq %d), %v; want (3, seq 4)", next.StreamSeq, next.Seq, err)
+	}
+	if again, perr := restarted.Publish(ctx, "ns", "k", "src", nil); perr != nil || again.StreamSeq != 2 {
+		t.Fatalf("Publish after restart default stream seq = %d, %v; want 2", again.StreamSeq, perr)
+	}
+	tail, err := restarted.ReplayStream(ctx, "ns", "task:one", 1)
+	if err != nil || len(tail) != 2 || tail[0].StreamSeq != 2 || tail[1].StreamSeq != 3 {
+		t.Fatalf("ReplayStream(after 1) = %+v, %v; want stream seqs 2 and 3", tail, err)
+	}
+}

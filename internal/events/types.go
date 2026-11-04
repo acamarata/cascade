@@ -69,13 +69,33 @@ type Event struct {
 	// Timestamp is the instant Publish recorded, read from the Bus's
 	// injected runtime.Clock — never a bare time.Now (R-14.11).
 	Timestamp time.Time
+	// StreamID names the ordered stream this event belongs to within its
+	// namespace. Publish fills an empty StreamID with BusStreamID(namespace).
+	StreamID string
+	// StreamSeq is the event's 1-based position within StreamID, allocated
+	// by the Bus at Publish time (never by the producer). It is strictly
+	// increasing and gapless per stream and survives a restart.
+	StreamSeq uint64
+	// RunID optionally names the run the event belongs to.
+	RunID string
+	// ProjectID optionally names the project the event belongs to.
+	ProjectID string
+	// Producer optionally names the component that produced the event.
+	Producer string
+	// PayloadVersion is the schema version of Payload; 0 means unversioned.
+	PayloadVersion uint32
 }
 
 // clone returns a copy of e whose Payload slice is independently owned, so
 // a caller mutating a slice it received from Subscribe/Replay (or passed
 // into Publish) can never corrupt the bus's own state or another
-// recipient's copy.
+// recipient's copy. It also resolves a StreamSeq persisted in its compact
+// form (see the envelope format comment) back to the event's Seq, so every
+// event Replay or Subscribe hands out carries its full stream position.
 func (e Event) clone() Event {
+	if e.StreamID != "" && e.StreamSeq == 0 {
+		e.StreamSeq = e.Seq
+	}
 	if e.Payload == nil {
 		return e
 	}
@@ -92,6 +112,22 @@ func (e Event) clone() Event {
 //	[4+N] Kind:    4-byte length prefix, then N raw bytes
 //	[4+N] Source:  4-byte length prefix, then N raw bytes
 //	[4+N] Payload: 4-byte length prefix, then N raw bytes
+//
+// followed by the stream extension (always written by encodeEvent):
+//
+//	[4+N] StreamID, [8] StreamSeq, [4+N] RunID, [4+N] ProjectID,
+//	[4+N] Producer, [4] PayloadVersion
+//
+// StreamSeq is written as 0 when it equals Seq (always the case on a
+// namespace whose events all use one stream), so the persisted record of an
+// event differs from another only by its Seq; clone resolves the 0 back to
+// Seq. A real StreamSeq is never 0, so the compact form is unambiguous.
+//
+// A record that ends right after Payload is a legacy record written before
+// the extension existed; it decodes with an empty StreamID and a zero
+// StreamSeq, and the Bus places it on BusStreamID(namespace) at StreamSeq
+// equal to Seq (recoverLog, cursor.go). Any other tail is an integrity
+// error.
 const (
 	envelopeSeqSize    = 8
 	envelopeTimeSize   = 8
@@ -116,7 +152,16 @@ func encodeEvent(e Event) []byte {
 	buf = appendLenPrefixed(buf, kindB)
 	buf = appendLenPrefixed(buf, sourceB)
 	buf = appendLenPrefixed(buf, e.Payload)
-	return buf
+	buf = appendLenPrefixed(buf, []byte(e.StreamID))
+	streamSeq := e.StreamSeq
+	if streamSeq == e.Seq {
+		streamSeq = 0
+	}
+	buf = binary.BigEndian.AppendUint64(buf, streamSeq)
+	buf = appendLenPrefixed(buf, []byte(e.RunID))
+	buf = appendLenPrefixed(buf, []byte(e.ProjectID))
+	buf = appendLenPrefixed(buf, []byte(e.Producer))
+	return binary.BigEndian.AppendUint32(buf, e.PayloadVersion)
 }
 
 // decodeEvent deserializes data produced by encodeEvent. It returns a
@@ -145,17 +190,53 @@ func decodeEvent(data []byte) (Event, error) {
 	if err != nil {
 		return Event{}, err
 	}
-	if len(rest) != 0 {
-		return Event{}, cascade.Newf(cascade.KindIntegrity, "events: envelope has %d trailing byte(s)", len(rest))
-	}
-
-	return Event{
+	ev := Event{
 		Seq:       seq,
 		Kind:      EventKind(kindB),
 		Source:    string(sourceB),
 		Payload:   payloadB,
 		Timestamp: time.Unix(0, tsNano).UTC(),
-	}, nil
+	}
+	if len(rest) == 0 {
+		return ev, nil // legacy record, see the envelope format comment
+	}
+	if err := decodeStreamExtension(rest, &ev); err != nil {
+		return Event{}, err
+	}
+	return ev, nil
+}
+
+// decodeStreamExtension reads the stream extension that follows Payload
+// into ev, bounds-checking every fixed-width read and refusing any
+// trailing bytes.
+func decodeStreamExtension(rest []byte, ev *Event) error {
+	streamB, rest, err := readLenPrefixed(rest)
+	if err != nil {
+		return err
+	}
+	if len(rest) < envelopeSeqSize {
+		return cascade.Newf(cascade.KindIntegrity,
+			"events: envelope truncated reading stream sequence (%d byte(s) left)", len(rest))
+	}
+	ev.StreamID = string(streamB)
+	ev.StreamSeq = binary.BigEndian.Uint64(rest[:envelopeSeqSize])
+	rest = rest[envelopeSeqSize:]
+	for _, dst := range []*string{&ev.RunID, &ev.ProjectID, &ev.Producer} {
+		var v []byte
+		if v, rest, err = readLenPrefixed(rest); err != nil {
+			return err
+		}
+		*dst = string(v)
+	}
+	if len(rest) < envelopeLenSize {
+		return cascade.Newf(cascade.KindIntegrity,
+			"events: envelope truncated reading payload version (%d byte(s) left)", len(rest))
+	}
+	ev.PayloadVersion = binary.BigEndian.Uint32(rest[:envelopeLenSize])
+	if tail := len(rest) - envelopeLenSize; tail != 0 {
+		return cascade.Newf(cascade.KindIntegrity, "events: envelope has %d trailing byte(s)", tail)
+	}
+	return nil
 }
 
 // appendLenPrefixed appends a 4-byte big-endian length prefix and v itself
@@ -188,7 +269,7 @@ func readLenPrefixed(b []byte) (value, rest []byte, err error) {
 }
 
 // parseEventSeq extracts the Seq encoded in an "event:"-prefixed Store key
-// (bus.go's eventKey format), used by recoverMaxSeq to reconstruct a
+// (bus.go's eventKey format), used by recoverLog (cursor.go) to reconstruct a
 // namespace's sequence counter from Store state alone (the "simulated
 // restart" path — no in-memory state survives a real process restart).
 func parseEventSeq(key string) (uint64, error) {

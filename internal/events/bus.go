@@ -98,6 +98,13 @@ const eventKeyPrefix = "event:"
 // Store.Scan's documented "in key order" walk double as replay order.
 const eventSeqDigits = 20
 
+// busStreamPrefix prefixes the default stream of a namespace.
+const busStreamPrefix = "bus:"
+
+// BusStreamID returns the default stream of namespace, "bus:<namespace>":
+// the stream every event published without an explicit StreamID joins.
+func BusStreamID(namespace string) string { return busStreamPrefix + namespace }
+
 func eventKey(seq uint64) string {
 	return fmt.Sprintf("%s%0*d", eventKeyPrefix, eventSeqDigits, seq)
 }
@@ -106,12 +113,13 @@ func eventKey(seq uint64) string {
 // Publish will assign, every currently active subscription keyed by
 // cursor name, and the "wake" broadcast channel deliverLoop's goroutines
 // block on between polls (bus_subscribe.go's pull). None of this survives
-// a process restart by construction — nextSeq is reconstructed from Store
-// on first touch (recoverMaxSeq) and subs starts empty (a restarted
+// a process restart by construction — nextSeq and the per-stream
+// high-water marks are reconstructed from Store on first touch (recoverLog) and subs starts empty (a restarted
 // process must call Subscribe again; its cursor resumes from Store,
 // exactly as the durability contract promises).
 type namespaceLog struct {
 	nextSeq uint64
+	streams streamCursors
 	subs    map[string]*subscription
 	wake    chan struct{}
 }
@@ -141,13 +149,27 @@ func New(store provider.Store, clock runtime.Clock) *Bus {
 }
 
 // Publish appends an Event of the given kind, source, and payload to
-// namespace's log and returns the persisted Event (with its assigned Seq
-// and Timestamp filled in). When ctx carries a Cause (WithCause), Publish
-// records it in memory for the new event (cause.go); the persisted record
-// is unchanged. Publish returns a cascade.KindUnavailable
-// error, never a swallowed one, if the underlying Store write fails or if
-// the Bus has been Closed.
+// namespace's default stream, BusStreamID(namespace). It is PublishEvent
+// with only those fields set.
 func (b *Bus) Publish(ctx context.Context, namespace string, kind EventKind, source string, payload []byte) (Event, error) {
+	return b.PublishEvent(ctx, namespace, Event{Kind: kind, Source: source, Payload: payload})
+}
+
+// PublishEvent appends draft to namespace's log and returns the persisted
+// Event. The Bus owns Seq, StreamSeq and Timestamp: it assigns the next
+// namespace Seq, the next sequence of draft.StreamID (BusStreamID(namespace)
+// when empty) and the clock reading. A draft that already carries a Seq or
+// StreamSeq is refused with cascade.KindInvalidInput — sequences are never
+// producer-supplied. When ctx carries a Cause (WithCause), PublishEvent
+// records it in memory for the new event (cause.go). It returns a
+// cascade.KindUnavailable error, never a swallowed one, if the Store write
+// fails or the Bus has been Closed; on failure no sequence is consumed.
+func (b *Bus) PublishEvent(ctx context.Context, namespace string, draft Event) (Event, error) {
+	if draft.Seq != 0 || draft.StreamSeq != 0 {
+		return Event{}, cascade.Newf(cascade.KindInvalidInput,
+			"events: publish to namespace %q carries a producer-supplied sequence (seq %d, stream seq %d)",
+			namespace, draft.Seq, draft.StreamSeq)
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -159,17 +181,18 @@ func (b *Bus) Publish(ctx context.Context, namespace string, kind EventKind, sou
 		return Event{}, err
 	}
 
-	ev := Event{
-		Seq:       log.nextSeq + 1,
-		Kind:      kind,
-		Source:    source,
-		Payload:   append([]byte(nil), payload...),
-		Timestamp: b.clock.Now(),
+	ev := draft.clone()
+	if ev.StreamID == "" {
+		ev.StreamID = BusStreamID(namespace)
 	}
+	ev.Seq = log.nextSeq + 1
+	ev.StreamSeq = log.streams.next(ev.StreamID)
+	ev.Timestamp = b.clock.Now()
 	if err := b.store.Put(ctx, namespace, eventKey(ev.Seq), encodeEvent(ev)); err != nil {
 		return Event{}, cascade.Wrapf(cascade.KindUnavailable, err, "events: publishing to namespace %q", namespace)
 	}
 	log.nextSeq = ev.Seq
+	log.streams.commit(ev.StreamID, ev.StreamSeq)
 	if c, ok := CauseFrom(ctx); ok {
 		b.causes.record(causeKey{namespace: namespace, seq: ev.Seq}, c)
 	}
@@ -187,45 +210,18 @@ func (b *Bus) namespaceLogLocked(ctx context.Context, namespace string) (*namesp
 	if ok {
 		return log, nil
 	}
-	maxSeq, err := recoverMaxSeq(ctx, b.store, namespace)
+	maxSeq, streams, err := recoverLog(ctx, b.store, namespace)
 	if err != nil {
 		return nil, err
 	}
 	log = &namespaceLog{
 		nextSeq: maxSeq,
+		streams: streams,
 		subs:    make(map[string]*subscription),
 		wake:    make(chan struct{}),
 	}
 	b.logs[namespace] = log
 	return log, nil
-}
-
-// recoverMaxSeq reconstructs namespace's current Seq high-water mark by
-// scanning its persisted event records — the "simulated restart" recovery
-// path: a fresh Bus instance over a Store that already holds prior events
-// (TestEventBusReplayCursor) must resume Publish numbering exactly where
-// the previous instance left off, never re-using or gapping a Seq.
-func recoverMaxSeq(ctx context.Context, store provider.Store, namespace string) (uint64, error) {
-	it, err := store.Scan(ctx, namespace, eventKeyPrefix)
-	if err != nil {
-		return 0, cascade.Wrapf(cascade.KindUnavailable, err, "events: recovering sequence for namespace %q", namespace)
-	}
-	defer func() { _ = it.Close() }()
-
-	var maxSeq uint64
-	for it.Next(ctx) {
-		seq, perr := parseEventSeq(it.Key())
-		if perr != nil {
-			return 0, perr
-		}
-		if seq > maxSeq {
-			maxSeq = seq
-		}
-	}
-	if iterErr := it.Err(); iterErr != nil {
-		return 0, cascade.Wrapf(cascade.KindUnavailable, iterErr, "events: recovering sequence for namespace %q", namespace)
-	}
-	return maxSeq, nil
 }
 
 // ResetCursorToHead commits cursorName's cursor in namespace at the
