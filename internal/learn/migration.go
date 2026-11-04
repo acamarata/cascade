@@ -2,7 +2,7 @@ package learn
 
 // Purpose: the learn package's own migration set — four tables inside the
 //   EXISTING jobs domain (table prefix jobs_), under an independent SetID
-//   so later tickets append steps and raise the same set (SchemaVersion 2
+//   so later tickets append steps and raise the same set (SchemaVersion 3
 //   here) without colliding with internal/jobs' own "jobs"
 //   set or internal/conductor's "conductor-usage" set (R-16.77: the
 //   ledger is keyed by (SetID, schema_version), so two sets sharing a
@@ -13,7 +13,9 @@ package learn
 //   .sql file and no migrate.Builder (neither exists in this tree).
 // SPORT: domain:jobs/jobs_telemetry_outcomes, jobs_telemetry_finding —
 //   new tables under SetID learn v1 (P1-E31-W6-S64-T1);
-//   jobs_capability_score_observations, jobs_scheduler_decisions — v2 (P1-CAP-03).
+//   jobs_capability_score_observations, jobs_scheduler_decisions — v2 (P1-CAP-03);
+//   jobs_scheduler_decision_economics, jobs_scheduler_decision_outcome — v3
+//   (P1-TOP-10, DDL in decision_outcome.go).
 
 import (
 	"context"
@@ -34,12 +36,13 @@ const (
 
 // learnSetID / learnSchemaVersion: see this file's header SetID doc
 // comment. SchemaVersion 2 (P1-CAP-03) appends the capability-score and
-// scheduler-decision tables after the version-1 steps; the ledger re-runs
-// every step at the new version (CREATE ... IF NOT EXISTS), so a database
-// already at version 1 upgrades by applying the set again.
+// scheduler-decision tables after the version-1 steps and SchemaVersion 3
+// (P1-TOP-10) the decision child tables; the ledger re-runs every step at
+// the new version (CREATE ... IF NOT EXISTS), so a database at an earlier
+// version upgrades by applying the set again.
 const (
 	learnSetID         = "learn"
-	learnSchemaVersion = 2
+	learnSchemaVersion = 3
 )
 
 // Table names the version-2 steps create (jobs_ prefix, same domain).
@@ -51,13 +54,16 @@ const (
 // MigrationSet is the learn package's schema at the current SchemaVersion.
 func MigrationSet() migrate.MigrationSet { return migrationSetAt(learnSchemaVersion) }
 
-// migrationSetAt builds the set as it stood at version (1 or 2): the only
-// composite literal of this SetID, so tests can build a genuine version-1
+// migrationSetAt builds the set as it stood at version (1, 2 or 3): the only
+// composite literal of this SetID, so tests can build a genuine earlier
 // database and upgrade it with MigrationSet.
 func migrationSetAt(version int) migrate.MigrationSet {
 	steps := learnStepsV1()
 	if version >= 2 {
 		steps = append(steps, learnStepsV2()...)
+	}
+	if version >= 3 {
+		steps = append(steps, learnStepsV3()...)
 	}
 	return migrate.MigrationSet{
 		SetID:         learnSetID,
