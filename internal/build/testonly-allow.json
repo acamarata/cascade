@@ -1340,5 +1340,61 @@
     "reason": "P1-E33-W7-S67-T3 ships the graph-corpus serialization function. Repointed by P1-GEN-04: internal/repo may not import internal/retrieval (GEN-04 acceptance [8]), so the maintenance pipeline reaches corpora only through the injected IndexLeg; the production caller is the IndexLeg binding of P1-GEN-13, not a watch.go in internal/repo.",
     "retire_ticket": "P1-GEN-13",
     "symbol": "internal/retrieval.IngestSymbolGraph"
+  },
+  {
+    "caller_site": "internal/fleet/economics/refresh_grant.go",
+    "expected_caller": "internal/fleet/economics/refresh_grant.go, the refresh grant P1-TOP-13d adds, which wraps the fresh token pair in an Entry before WriteDurable; retire this entry once that file calls NewEntry",
+    "reason": "P1-TOP-13b ships the custody-backed harness credential store; the first producer of a new entry is the refresh grant of P1-TOP-13d.",
+    "retire_ticket": "P1-TOP-13",
+    "symbol": "internal/secrets.NewEntry"
+  },
+  {
+    "caller_site": "internal/mcp/profile_capability.go",
+    "expected_caller": "internal/mcp/profile_capability.go, the profile capability filter P1-HRN-05c adds over the MCP server; retire this entry once that file calls ProfileMembers",
+    "reason": "P1-HRN-05a ships the tool profiles and member sets (contract:mcp-tool-profile); the server-side filter that applies them is P1-HRN-05c, so a production call now would be a fabricated one.",
+    "retire_ticket": "P1-HRN-05",
+    "symbol": "internal/mcp.ProfileMembers"
+  },
+  {
+    "caller_site": "internal/mcp/profile_capability.go",
+    "expected_caller": "internal/mcp/profile_capability.go (P1-HRN-05c), which resolves compact aliases under the compact profiles; retire this entry once that file reads CompactAlias",
+    "reason": "P1-HRN-05a ships the compact alias table with the member sets; the profile filter that resolves aliases is P1-HRN-05c.",
+    "retire_ticket": "P1-HRN-05",
+    "symbol": "internal/mcp.CompactAlias"
+  },
+  {
+    "caller_site": "providers/agents/antigravity/run.go",
+    "expected_caller": "providers/agents/antigravity/run.go, the run loop P1-AGT-07f adds, which decodes the child's stream-json through the filter; retire this entry once that file calls NewDecoder",
+    "reason": "P1-AGT-07d ships the stream-json decoder, filter and protocol pin; the run loop that feeds it the child's output is P1-AGT-07f.",
+    "retire_ticket": "P1-AGT-07",
+    "symbol": "providers/agents/antigravity.NewDecoder"
+  },
+  {
+    "caller_site": "providers/agents/antigravity/driver.go",
+    "expected_caller": "providers/agents/antigravity/driver.go, the Driver P1-AGT-07e adds, whose Negotiate uses protocol.go; retire this entry once that file calls Negotiate",
+    "reason": "P1-AGT-07d ships the protocol revision and range check; the Driver that exposes it is P1-AGT-07e.",
+    "retire_ticket": "P1-AGT-07",
+    "symbol": "providers/agents/antigravity.Negotiate"
+  },
+  {
+    "caller_site": "providers/agents/antigravity/probe.go",
+    "expected_caller": "providers/agents/antigravity/probe.go, the CLI probe P1-AGT-07c adds, which checks the pinned version and the stream-json interface; retire this entry once that file calls CheckHarness",
+    "reason": "P1-AGT-07d ships the protocol pin check; the probe that reads the CLI's version and help text is P1-AGT-07c (not yet landed).",
+    "retire_ticket": "P1-AGT-07",
+    "symbol": "providers/agents/antigravity.CheckHarness"
+  },
+  {
+    "caller_site": "internal/conductor/reserve_call.go",
+    "expected_caller": "internal/conductor/reserve_call.go, the per-adapter-call reservation P1-TOP-04a adds, which holds the one governor Admit per call and classifies its refusals; retire this entry once that file calls IsDraining",
+    "reason": "P1-TOP-04c removes the per-node governor permit from admitNodes (contract: admitNodes calls no governor), which was the only production classifier of a draining refusal; the one Admit per adapter call moves to the conductor reservation of P1-TOP-04a.",
+    "retire_ticket": "P1-TOP-04",
+    "symbol": "internal/fleet/governor.IsDraining"
+  },
+  {
+    "caller_site": "internal/conductor/reserve_call.go",
+    "expected_caller": "internal/conductor/reserve_call.go, the per-adapter-call reservation P1-TOP-04a adds; retire this entry once that file calls IsSignalRefusal",
+    "reason": "P1-TOP-04c removes the per-node governor permit from admitNodes, the only production caller that told a signal refusal apart; the per-call Admit of P1-TOP-04a is the next one.",
+    "retire_ticket": "P1-TOP-04",
+    "symbol": "internal/fleet/governor.IsSignalRefusal"
   }
 ]
