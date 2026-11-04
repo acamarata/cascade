@@ -93,6 +93,10 @@ type Selection struct {
 	Provider string `json:"provider"`
 	// Model is the resolved model identifier within that lane.
 	Model string `json:"model"`
+	// NodeID names the chosen node, when placement selected a specific
+	// NODE machine rather than only a lane. Empty means no node was
+	// chosen (or the router does not yet populate it).
+	NodeID string `json:"node_id,omitempty"`
 	// ReasonFlags carries the router's own filter-by-filter provenance
 	// tags for this pick (e.g. "cost:cheapest-selected"), in filter
 	// order. Added (T0 decision, P1-E11-W3-S22-T2 unblock) so the frozen
