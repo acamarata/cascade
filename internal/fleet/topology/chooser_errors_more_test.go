@@ -35,7 +35,7 @@ func TestExtractRetryAfter(t *testing.T) {
 }
 
 func TestOnProviderErrorRefusesUnclassifiableErrors(t *testing.T) {
-	c := NewChooser(newTestClock(), 1, alwaysAllow, nil)
+	c := NewChooser(newTestClock(), 1, alwaysAllow, admitAllCreds, nil)
 	ctx := context.Background()
 	_, err := c.OnProviderError(ctx, "d1", "cred", errors.New("plain error"))
 	if !errors.Is(err, ErrTopologyInvariant) {
@@ -60,7 +60,7 @@ func TestOn429HonoursRetryAfterAndBucketResetAt(t *testing.T) {
 	reset := clock.Now().Add(7 * time.Minute)
 	dom := QuotaDomain{ID: "d1", AccountRef: "a1", Kind: QuotaDomainAPIProject,
 		Dimensions: map[string]Bucket{DimensionRPM: {Name: DimensionRPM, Limit: 10, ResetAt: reset}}}
-	c := NewChooser(clock, 1, alwaysAllow, nil)
+	c := NewChooser(clock, 1, alwaysAllow, admitAllCreds, nil)
 	c.SetTopology([]Account{{ID: "a1"}}, []QuotaDomain{dom}, nil, nil)
 	ctx := context.Background()
 

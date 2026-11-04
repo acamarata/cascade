@@ -12,7 +12,7 @@ func TestCandidatesSkipsRetiredLanes(t *testing.T) {
 	acct, dom, lane, cred := baseTopology()
 	retiredAt := newTestClock().Now()
 	lane.RetiredAt = &retiredAt
-	c := NewChooser(newTestClock(), 1, alwaysAllow, nil)
+	c := NewChooser(newTestClock(), 1, alwaysAllow, admitAllCreds, nil)
 	c.SetTopology([]Account{acct}, []QuotaDomain{dom}, []Lane{lane}, []Credential{cred})
 
 	_, err := c.Candidates(context.Background(), ChooseRequest{ModelID: "model-x"})
@@ -26,7 +26,7 @@ func TestCandidatesSkipsRetiredLanes(t *testing.T) {
 // exercising bucket.go's Reservable through the eligibility predicate.
 func TestCandidatesRefusesUnreservableEstimate(t *testing.T) {
 	acct, dom, lane, cred := baseTopology()
-	c := NewChooser(newTestClock(), 1, alwaysAllow, nil)
+	c := NewChooser(newTestClock(), 1, alwaysAllow, admitAllCreds, nil)
 	c.SetTopology([]Account{acct}, []QuotaDomain{dom}, []Lane{lane}, []Credential{cred})
 
 	_, err := c.Candidates(context.Background(), ChooseRequest{
@@ -43,7 +43,7 @@ func TestCandidatesRefusesUnreservableEstimate(t *testing.T) {
 // ignored.
 func TestCandidatesRefusesUnknownDimensionEstimate(t *testing.T) {
 	acct, dom, lane, cred := baseTopology()
-	c := NewChooser(newTestClock(), 1, alwaysAllow, nil)
+	c := NewChooser(newTestClock(), 1, alwaysAllow, admitAllCreds, nil)
 	c.SetTopology([]Account{acct}, []QuotaDomain{dom}, []Lane{lane}, []Credential{cred})
 
 	_, err := c.Candidates(context.Background(), ChooseRequest{

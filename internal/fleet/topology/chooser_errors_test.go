@@ -26,7 +26,7 @@ func TestChooser429ConstrainsScopeNotDomain(t *testing.T) {
 	credA := Credential{ID: "cred-a", AccountRef: "a1", QuotaDomainRef: "d1", RuntimeProfileRef: "rp", Health: CredentialOK}
 	credB := Credential{ID: "cred-b", AccountRef: "a1", QuotaDomainRef: "d1", RuntimeProfileRef: "rp", Health: CredentialOK}
 
-	c := NewChooser(newTestClock(), 1, alwaysAllow, nil)
+	c := NewChooser(newTestClock(), 1, alwaysAllow, admitAllCreds, nil)
 	c.SetTopology(
 		[]Account{acct, acct2},
 		[]QuotaDomain{domSameScope, domOtherScope},
@@ -59,7 +59,7 @@ func TestChooser429ConstrainsScopeNotDomain(t *testing.T) {
 	// lane still fails, because the domain itself is ineligible via its
 	// scope -- Choose is only ever consulted after Candidates/Rank pick a
 	// domain, and no candidate named d1.
-	if _, err := c.Choose(context.Background(), laneSameScope); err != nil {
+	if _, err := c.Choose(context.Background(), laneSameScope, "internal"); err != nil {
 		t.Fatalf("Choose still resolves a credential inside d1 (scope constraint is a Candidates-level gate): %v", err)
 	}
 }
@@ -71,14 +71,14 @@ func TestChooser401QuarantinesCredentialOnly(t *testing.T) {
 	_, dom, lane, _ := baseTopology()
 	credA := Credential{ID: "cred-a", QuotaDomainRef: "d1", RuntimeProfileRef: "rp", Health: CredentialOK}
 	credB := Credential{ID: "cred-b", QuotaDomainRef: "d1", RuntimeProfileRef: "rp", Health: CredentialOK}
-	c := NewChooser(newTestClock(), 1, alwaysAllow, nil)
+	c := NewChooser(newTestClock(), 1, alwaysAllow, admitAllCreds, nil)
 	c.SetTopology([]Account{{ID: "a1"}}, []QuotaDomain{dom}, []Lane{lane}, []Credential{credA, credB})
 
 	if _, err := c.OnProviderError(context.Background(), "d1", "cred-a", cascade.New(cascade.KindPermissionDenied, "401")); err != nil {
 		t.Fatalf("OnProviderError: %v", err)
 	}
 
-	chosen, err := c.Choose(context.Background(), lane)
+	chosen, err := c.Choose(context.Background(), lane, "internal")
 	if err != nil {
 		t.Fatalf("Choose: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestChooser401QuarantinesCredentialOnly(t *testing.T) {
 // making every lane referencing it ineligible.
 func TestChooser403QuarantinesDomain(t *testing.T) {
 	acct, dom, lane, cred := baseTopology()
-	c := NewChooser(newTestClock(), 1, alwaysAllow, nil)
+	c := NewChooser(newTestClock(), 1, alwaysAllow, admitAllCreds, nil)
 	c.SetTopology([]Account{acct}, []QuotaDomain{dom}, []Lane{lane}, []Credential{cred})
 
 	if _, err := c.OnProviderError(context.Background(), "d1", "cred-1", cascade.New(cascade.KindCapabilityDenied, "403")); err != nil {
@@ -112,7 +112,7 @@ func TestChooser403QuarantinesDomain(t *testing.T) {
 // shape and the max-5-attempts reroute.
 func TestChooser5xxDecorrelatedBackoff(t *testing.T) {
 	_, dom, lane, cred := baseTopology()
-	c := NewChooser(newTestClock(), 1, alwaysAllow, nil)
+	c := NewChooser(newTestClock(), 1, alwaysAllow, admitAllCreds, nil)
 	c.SetTopology([]Account{{ID: "a1"}}, []QuotaDomain{dom}, []Lane{lane}, []Credential{cred})
 
 	var last Retry

@@ -13,7 +13,7 @@ import (
 // seam invokes exactly what was injected).
 func TestScopeTransitionRollsBackHeldReservations(t *testing.T) {
 	var calls int
-	c := NewChooser(newTestClock(), 1, alwaysAllow, recordingCascade(&calls))
+	c := NewChooser(newTestClock(), 1, alwaysAllow, admitAllCreds, recordingCascade(&calls))
 	casc, err := c.OnScopeTransition(context.Background(), "scope:a1", ScopeStateRateLimited, newTestClock().Now().Add(time.Minute))
 	if err != nil {
 		t.Fatalf("OnScopeTransition: %v", err)
@@ -39,7 +39,7 @@ func TestCommittedReservationsSurviveScopeTransition(t *testing.T) {
 		// so the test asserts the seam carries it through unmodified.
 		return Cascade{Scope: scope, AffectedStates: []string{"held:r1:rolled_back", "committed:r2:untouched"}}, nil
 	}
-	c := NewChooser(newTestClock(), 1, alwaysAllow, fn)
+	c := NewChooser(newTestClock(), 1, alwaysAllow, admitAllCreds, fn)
 	casc, err := c.OnScopeTransition(context.Background(), "scope:a1", ScopeStateRateLimited, time.Time{})
 	if err != nil {
 		t.Fatalf("OnScopeTransition: %v", err)
@@ -59,7 +59,7 @@ func TestCommittedReservationsSurviveScopeTransition(t *testing.T) {
 // call" (R-21.126).
 func TestRateLimitedEmittedOncePerScope(t *testing.T) {
 	var calls int
-	c := NewChooser(newTestClock(), 1, alwaysAllow, recordingCascade(&calls))
+	c := NewChooser(newTestClock(), 1, alwaysAllow, admitAllCreds, recordingCascade(&calls))
 
 	if _, err := c.OnScopeTransition(context.Background(), "scope:a1", ScopeStateRateLimited, time.Time{}); err != nil {
 		t.Fatalf("first transition: %v", err)
@@ -88,7 +88,7 @@ func TestOnDomainQuarantinedDelegatesToScopeTransition(t *testing.T) {
 	var calls int
 	acct := Account{ID: "a1", Role: AccountRoleWorkforce}
 	dom := QuotaDomain{ID: "d1", AccountRef: "a1", Kind: QuotaDomainAPIProject}
-	c := NewChooser(newTestClock(), 1, alwaysAllow, recordingCascade(&calls))
+	c := NewChooser(newTestClock(), 1, alwaysAllow, admitAllCreds, recordingCascade(&calls))
 	c.SetTopology([]Account{acct}, []QuotaDomain{dom}, nil, nil)
 
 	casc, err := c.OnDomainQuarantined(context.Background(), "d1")
@@ -109,7 +109,7 @@ func TestOnDomainQuarantinedDelegatesToScopeTransition(t *testing.T) {
 // TestScopeTransitionFailsClosedWithoutCascadeFn asserts an unconfigured
 // CascadeFn refuses rather than silently succeeding with no rollback.
 func TestScopeTransitionFailsClosedWithoutCascadeFn(t *testing.T) {
-	c := NewChooser(newTestClock(), 1, alwaysAllow, nil)
+	c := NewChooser(newTestClock(), 1, alwaysAllow, admitAllCreds, nil)
 	if _, err := c.OnScopeTransition(context.Background(), "scope:a1", ScopeStateRateLimited, time.Time{}); err == nil {
 		t.Fatal("expected OnScopeTransition to fail closed with no CascadeFn configured")
 	}

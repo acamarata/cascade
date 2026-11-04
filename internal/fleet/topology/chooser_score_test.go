@@ -3,9 +3,16 @@ package topology
 import (
 	"context"
 	"testing"
+
+	"github.com/acamarata/cascade/pkg/provider"
 )
 
 func alwaysAllow(QuotaDomain, string) bool { return true }
+
+// admitAllCreds is a CredentialGate whose local-only ceiling admits every tier.
+func admitAllCreds(context.Context, Credential, QuotaDomain) (Ceiling, error) {
+	return Ceiling{Tier: provider.SensitivityLocalOnly, Reason: CeilingLaneType}, nil
+}
 
 // recordingCascade returns a CascadeFn that counts its own invocations and
 // echoes the requested state back in AffectedStates, for tests asserting
@@ -23,7 +30,7 @@ func recordingCascade(calls *int) CascadeFn {
 // Jitter is a draw from the seeded source (deterministic given the seed).
 func TestSignalBundleFeedsUtilitySixthTerm(t *testing.T) {
 	now := newTestClock().Now()
-	c := NewChooser(newTestClock(), 42, alwaysAllow, nil)
+	c := NewChooser(newTestClock(), 42, alwaysAllow, admitAllCreds, nil)
 	acct := Account{ID: "a1", Role: AccountRoleWorkforce}
 	dom := QuotaDomain{ID: "d1", AccountRef: "a1", Kind: QuotaDomainAPIProject,
 		Dimensions: map[string]Bucket{DimensionRPM: {Name: DimensionRPM, Source: SourceUnknown, RemainingFraction: 1}}}
@@ -61,7 +68,7 @@ func TestSignalBundleFeedsUtilitySixthTerm(t *testing.T) {
 // ranked or sorted-by-score slice.
 func TestNoDispatchScoreObjective(t *testing.T) {
 	now := newTestClock().Now()
-	c := NewChooser(newTestClock(), 7, alwaysAllow, nil)
+	c := NewChooser(newTestClock(), 7, alwaysAllow, admitAllCreds, nil)
 	acct := Account{ID: "a1", Role: AccountRoleWorkforce}
 	d1 := QuotaDomain{ID: "d1", AccountRef: "a1", Kind: QuotaDomainAPIProject,
 		Dimensions: map[string]Bucket{DimensionRPM: {Name: DimensionRPM, Source: SourceUnknown, RemainingFraction: 1}}}
@@ -91,8 +98,8 @@ func TestSeededJitterAndLaneIDTieBreak(t *testing.T) {
 	dom := QuotaDomain{ID: "d1", AccountRef: "a1", Kind: QuotaDomainAPIProject,
 		Dimensions: map[string]Bucket{DimensionRPM: {Name: DimensionRPM, Source: SourceUnknown, RemainingFraction: 1}}}
 
-	c1 := NewChooser(newTestClock(), 99, alwaysAllow, nil)
-	c2 := NewChooser(newTestClock(), 99, alwaysAllow, nil)
+	c1 := NewChooser(newTestClock(), 99, alwaysAllow, admitAllCreds, nil)
+	c2 := NewChooser(newTestClock(), 99, alwaysAllow, admitAllCreds, nil)
 	for i := 0; i < 3; i++ {
 		j1 := c1.Signals(acct, dom, 0.2, now).Jitter
 		j2 := c2.Signals(acct, dom, 0.2, now).Jitter
@@ -101,7 +108,7 @@ func TestSeededJitterAndLaneIDTieBreak(t *testing.T) {
 		}
 	}
 
-	c := NewChooser(newTestClock(), 1, alwaysAllow, nil)
+	c := NewChooser(newTestClock(), 1, alwaysAllow, admitAllCreds, nil)
 	c.SetTopology(
 		[]Account{acct},
 		[]QuotaDomain{dom},
