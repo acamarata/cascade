@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -12,6 +13,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/acamarata/cascade/internal/runtime"
 )
 
 // scrubTestNames are test-only variable names standing in for the
@@ -133,5 +136,58 @@ func TestScrubRunsBeforeAdmission(t *testing.T) {
 		if pos < scrub {
 			t.Fatalf("%s runs before scrubCredentialEnv", later)
 		}
+	}
+}
+
+func TestUpgradeRelaunchCarriesAdmittedCredentials(t *testing.T) {
+	// Two admitted accounts' key_env names plus one host-injected name the
+	// config never admits; values are test canaries, not credentials.
+	accounts := []string{"GWYTEST_ACCT_A_KEY", "GWYTEST_ACCT_B_KEY"}
+	names := append([]string{"GWYTEST_HOST_TOKEN"}, accounts...)
+	for _, n := range names {
+		t.Setenv(n, scrubCanary+n)
+	}
+	creds, _ := scrubCredentialEnv(names, os.LookupEnv, os.Unsetenv)
+	creds.Admit(accounts)
+	for _, n := range names {
+		if _, set := os.LookupEnv(n); set {
+			t.Fatalf("%s still in the process environment after the scrub", n)
+		}
+	}
+	relaunch := creds.RelaunchEnviron()
+	for _, n := range accounts {
+		if !slices.Contains(relaunch, n+"="+scrubCanary+n) {
+			t.Fatalf("relaunch environ lacks admitted %s", n)
+		}
+	}
+	if slices.ContainsFunc(relaunch, func(kv string) bool { return strings.HasPrefix(kv, "GWYTEST_HOST_TOKEN=") }) {
+		t.Fatal("relaunch environ carries an unadmitted name")
+	}
+	for _, n := range names {
+		if _, set := os.LookupEnv(n); set {
+			t.Fatalf("RelaunchEnviron put %s back into the process environment", n)
+		}
+	}
+}
+
+func TestReconcileAdmitsNewAndDropsRemoved(t *testing.T) {
+	t.Setenv("GWYTEST_REC_OLD", scrubCanary+"old")
+	creds, _ := scrubCredentialEnv([]string{"GWYTEST_REC_OLD"}, os.LookupEnv, os.Unsetenv)
+	creds.Admit([]string{"GWYTEST_REC_OLD"})
+	t.Setenv("GWYTEST_REC_NEW", scrubCanary+"new")
+	hook := reconcileCredentials(creds, func() *runtime.Config { return nil }, nil)
+	hook(context.Background()) // a nil accepted config changes nothing
+	if creds.Getenv("GWYTEST_REC_OLD") != scrubCanary+"old" {
+		t.Fatal("nil accepted config dropped an entry")
+	}
+	creds.Reconcile([]string{"GWYTEST_REC_NEW"})
+	if _, set := os.LookupEnv("GWYTEST_REC_NEW"); set {
+		t.Fatal("reconcile left a newly named variable in the process environment")
+	}
+	if creds.Getenv("GWYTEST_REC_NEW") != scrubCanary+"new" {
+		t.Fatal("newly named variable not admitted from the snapshot")
+	}
+	if slices.ContainsFunc(creds.RelaunchEnviron(), func(kv string) bool { return strings.HasPrefix(kv, "GWYTEST_REC_OLD=") }) {
+		t.Fatal("a name no longer configured kept its credential")
 	}
 }

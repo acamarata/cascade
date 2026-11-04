@@ -29,6 +29,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"os"
 	"sort"
 
 	"github.com/acamarata/cascade/internal/conductor"
@@ -118,6 +119,41 @@ type daemonRuntime struct {
 	// (conductor_deny_store.go). The conductor wiring and the reservation
 	// owner (P1-TOP-04) read these same two values; neither builds its own.
 	ConductorPolicy *conductorPolicy
+	// Creds is the start-time credential snapshot (P1-GWY-10); registrations
+	// read gateway and credential values through Creds.Getenv only.
+	Creds *credentialEnv
+}
+
+// Reconcile brings the snapshot in line with names, the credentialNames of a
+// newly accepted config, under one write lock: every newly named name is
+// snapshotted from the process environment, unset and admitted, and every
+// entry whose name names no longer lists is deleted, so a removed gateway
+// loses its credential at once. Names and values are never logged here.
+func (c *credentialEnv) Reconcile(names []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	keep := make(map[string]bool, len(names))
+	var fresh []string
+	for _, n := range names {
+		if n == "" {
+			continue
+		}
+		keep[n] = true
+		if !c.scrubbed[n] {
+			fresh = append(fresh, n)
+		}
+	}
+	c.scrubLocked(fresh, os.LookupEnv, os.Unsetenv)
+	for _, n := range fresh {
+		c.admitted[n] = true
+	}
+	for n := range c.scrubbed {
+		if !keep[n] {
+			delete(c.scrubbed, n)
+			delete(c.admitted, n)
+			delete(c.values, n)
+		}
+	}
 }
 
 // conductorPolicy is built once in composeDaemon over Reloader.Current();

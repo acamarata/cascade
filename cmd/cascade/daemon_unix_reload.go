@@ -101,6 +101,20 @@ func (b acceptHookBus) Publish(ctx context.Context, namespace string, kind event
 	return ev, err
 }
 
+// reconcileCredentials returns the config.reload.accepted hook: it reconciles
+// creds from current's accepted config, then runs next. A nil creds (a
+// test-built wiring) leaves only next.
+func reconcileCredentials(creds *credentialEnv, current func() *runtime.Config, next func(context.Context)) func(context.Context) {
+	return func(ctx context.Context) {
+		if cfg := current(); creds != nil && cfg != nil {
+			creds.Reconcile(credentialNames(runtime.EffectiveConfigOf(cfg)))
+		}
+		if next != nil {
+			next(ctx)
+		}
+	}
+}
+
 // wireHotReload builds the real HotReloader (over store's real
 // StoreAuditRecorder — R-14.175's other named gap, closed here in the
 // same call rather than as a separate seam) and starts the real
