@@ -81,25 +81,33 @@ var ErrNodePlacementUnavailable = cascade.New(cascade.KindUnavailable,
 // ordinary model call on exactly the path it took before this seam
 // existed.
 func (r *DefaultRouter) consultPlacement(req provider.ModelRequest, flags []string) ([]string, error) {
+	_, flags, err := r.eligibleNodes(req, flags)
+	return flags, err
+}
+
+// eligibleNodes is consultPlacement's body, returning the eligible records
+// as well so the remote route (remote.go) can name the node it chose. A
+// request with no node capabilities returns no records and no error.
+func (r *DefaultRouter) eligibleNodes(req provider.ModelRequest, flags []string) ([]nodes.DeviceRecord, []string, error) {
 	required := req.Requirements.NodeCapabilities
 	if len(required) == 0 {
-		return flags, nil
+		return nil, flags, nil
 	}
 	if r.placement == nil || r.fleet == nil {
-		return append(flags, "placement:no-engine-wired"), ErrNodePlacementUnavailable
+		return nil, append(flags, "placement:no-engine-wired"), ErrNodePlacementUnavailable
 	}
 	records, err := r.fleet.List()
 	if err != nil {
-		return append(flags, "placement:fleet-unreadable"), err
+		return nil, append(flags, "placement:fleet-unreadable"), err
 	}
 	eligible, err := r.placement.Eligible(
 		nodes.Requirement{Capabilities: required, Sensitivity: placementSensitivity(req)},
 		nodes.CandidatesFrom(records),
 	)
 	if err != nil {
-		return append(flags, "placement:no-eligible-node"), err
+		return nil, append(flags, "placement:no-eligible-node"), err
 	}
-	return append(flags, "placement:eligible-nodes="+strconv.Itoa(len(eligible))), nil
+	return eligible, append(flags, "placement:eligible-nodes="+strconv.Itoa(len(eligible))), nil
 }
 
 // placementSensitivity maps the request's routing classification onto the
