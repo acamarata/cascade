@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-04T09:59:32Z",
+  "generated_at": "2026-11-04T16:01:17Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -10651,7 +10651,7 @@
       "sites": [
         {
           "file": "internal/learn/migration_config.go",
-          "line": 13,
+          "line": 16,
           "status": "",
           "raw": "domain:jobs/jobs_learned_config, jobs_learned_config_submission,"
         }
@@ -12737,6 +12737,20 @@
       ]
     },
     {
+      "name": "fleet/topology/exploration",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/exploration.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "fleet/topology/exploration/ADD (P1-TOP-02a)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "fleet/topology/freshness",
       "sites": [
         {
@@ -12760,6 +12774,20 @@
           "status": "ADD",
           "ticket": "P1-E40-W9-S77-T1",
           "raw": "fleet/topology/invariants/ADD (P1-E40-W9-S77-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "fleet/topology/lane_ceiling",
+      "sites": [
+        {
+          "file": "internal/fleet/topology/lane_ceiling.go",
+          "line": 21,
+          "status": "ADD",
+          "raw": "fleet/topology/lane_ceiling/ADD (P1-TOP-02a)."
         }
       ],
       "statuses": [
@@ -18775,6 +18803,20 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "internal.learn.ProposalStore",
+      "sites": [
+        {
+          "file": "internal/learn/proposal_store.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal.learn.ProposalStore/ADDED (P1-LRN-02)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -33830,6 +33872,20 @@
       ]
     },
     {
+      "name": "learn/proposal_store_test",
+      "sites": [
+        {
+          "file": "internal/learn/proposal_store_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "learn/proposal_store_test (P1-LRN-02)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "learn/reconcile",
       "sites": [
         {
@@ -43112,7 +43168,7 @@
       ]
     }
   ],
-  "total_sites": 4158,
-  "unspecified_count": 375,
+  "total_sites": 4162,
+  "unspecified_count": 376,
   "multi_status_count": 132
 }
