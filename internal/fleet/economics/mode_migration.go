@@ -1,5 +1,5 @@
 // Purpose: the ONE MigrationSet (B/S-02.T3 typed DSL) that creates
-//   policy_scheduler_mode and policy_scheduler_mode_journal inside the
+//   scheduler mode, journal, and reserve override tables inside the
 //   EXISTING `policy` storage domain (R-21.22/R-16.51) -- no new domain,
 //   no thirteenth DomainID.
 //
@@ -29,17 +29,32 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// tableSchedulerMode and tableSchedulerModeJournal are this package's two
+// These constants name this package's scheduler policy
 // tables inside the `policy` domain (TablePrefix "policy",
 // internal/storage/domains.go).
 const (
 	tableSchedulerMode        = "policy_scheduler_mode"
 	tableSchedulerModeJournal = "policy_scheduler_mode_journal"
+	tableReserveOverride      = "policy_reserve_override"
 )
 
 // modeSchemaVersion is this package's own MigrationSet sequence number,
 // independent of every other package's (R-16.77).
-const modeSchemaVersion = 1
+const modeSchemaVersion = 2
+
+// reserveOverrideTable retains grants so revocation cannot reset the weekly cap.
+func reserveOverrideTable() migrate.TableDef {
+	return migrate.TableDef{
+		Name: tableReserveOverride,
+		Columns: []migrate.ColumnDef{
+			{Name: "id", Type: migrate.TypeInteger, PrimaryKey: true, AutoIncrement: true},
+			{Name: "project_id", Type: migrate.TypeText, NotNull: true},
+			{Name: "set_at", Type: migrate.TypeInteger, NotNull: true},
+			{Name: "expires_at", Type: migrate.TypeInteger, NotNull: true},
+			{Name: "cleared", Type: migrate.TypeInteger, NotNull: true},
+		},
+	}
+}
 
 // schedulerModeTable is the policy_scheduler_mode TableDef: one row per
 // project_id (R-21.22), carrying the R-21.118 renewal-cap columns.
@@ -83,11 +98,12 @@ func modeTblPtr(t migrate.TableDef) *migrate.TableDef { return &t }
 func MigrationSet() migrate.MigrationSet {
 	modeStep := migrate.MigrationStep{Kind: migrate.StepCreateTable, Table: modeTblPtr(schedulerModeTable()), Description: "policy_scheduler_mode: one row per project, R-21.22/R-21.118"}
 	journalStep := migrate.MigrationStep{Kind: migrate.StepCreateTable, Table: modeTblPtr(schedulerModeJournalTable()), Description: "policy_scheduler_mode_journal: append-only HUMAN_APPROVAL_REQUIRED record, R-21.118"}
+	reserveStep := migrate.MigrationStep{Kind: migrate.StepCreateTable, Table: modeTblPtr(reserveOverrideTable()), Description: "policy_reserve_override: TTL-bounded grants with weekly cap"}
 	return migrate.MigrationSet{
 		SetID:         "fleet-economics-mode",
 		SchemaVersion: modeSchemaVersion,
 		ReaderCeiling: modeSchemaVersion,
-		Steps:         []migrate.MigrationStep{modeStep, journalStep},
+		Steps:         []migrate.MigrationStep{modeStep, journalStep, reserveStep},
 	}
 }
 
