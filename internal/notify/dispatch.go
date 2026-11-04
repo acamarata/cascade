@@ -81,6 +81,9 @@ var priorityOrder = [4]Priority{PriorityUrgent, PriorityHigh, PriorityNormal, Pr
 type queueSet struct {
 	queues [4]chan Notification
 	log    *slog.Logger
+	inbox  *Inbox
+	clock  runtime.Clock
+	drops  dropCounter
 
 	accumMu      sync.Mutex
 	accumulating bool
@@ -114,8 +117,7 @@ func (q *queueSet) enqueueNow(n Notification) {
 	select {
 	case q.queues[p] <- n:
 	default:
-		q.log.Warn("notify: priority queue full, dropping notification",
-			"priority", p.String(), "id", n.ID, "source", n.Source)
+		q.drop(n, p, DropQueueFull)
 	}
 }
 
@@ -141,6 +143,7 @@ type Dispatcher struct {
 // NewDispatcher returns a Dispatcher draining queues into registry's
 // subscribers, recording outcomes in inbox.
 func NewDispatcher(queues *queueSet, registry *Registry, inbox *Inbox, clock runtime.Clock, log *slog.Logger) *Dispatcher {
+	queues.bind(inbox, clock)
 	return &Dispatcher{queues: queues, registry: registry, inbox: inbox, clock: clock, log: log}
 }
 

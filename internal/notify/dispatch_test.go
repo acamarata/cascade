@@ -169,3 +169,28 @@ func TestDispatchPriorityOrder(t *testing.T) {
 		t.Fatalf("dispatch order = %v, want [urgent normal low]", order)
 	}
 }
+
+func TestFullQueueDropRecordsInboxAndEmits(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.BufferNormal = 1
+	queues := newQueueSet(cfg, silentLogger())
+	registry := NewRegistry()
+	inbox := NewInbox()
+	NewDispatcher(queues, registry, inbox, fixedClock{now: time.Unix(100, 0)}, silentLogger())
+
+	var events []DropEvent
+	queues.drops.setSink(func(_ context.Context, e DropEvent) { events = append(events, e) })
+
+	queues.enqueue(Notification{ID: "first", Priority: PriorityNormal, Class: ClassGlobalCritical})
+	queues.enqueue(Notification{ID: "second", Priority: PriorityNormal, Class: ClassGlobalCritical, TargetSession: "a", Visibility: VisibilityPrivate})
+
+	if _, err := inbox.Read(context.Background(), session("a"), "second"); err != nil {
+		t.Fatalf("dropped item not readable in the inbox: %v", err)
+	}
+	if got := queues.drops.count(DropQueueFull); got != 1 {
+		t.Fatalf("queue-full drop count = %d, want 1", got)
+	}
+	if len(events) != 1 || events[0].ID != "second" || events[0].Reason != DropQueueFull {
+		t.Fatalf("sink events = %+v, want one queue-full event for second", events)
+	}
+}
