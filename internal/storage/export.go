@@ -142,8 +142,7 @@ type exportRow struct {
 	Value string `json:"value"`
 }
 
-// newExportRow builds the wire row for one (key, value) pair, base64-
-// encoding value.
+// newExportRow builds a wire row, base64-encoding value.
 func newExportRow(key string, value []byte) exportRow {
 	return exportRow{Type: recordTypeRow, Key: key, Value: base64.StdEncoding.EncodeToString(value)}
 }
@@ -260,11 +259,12 @@ func exportDomainRows(ctx context.Context, tx *sql.Tx, domain DomainID, w io.Wri
 	return nil
 }
 
-// jobsDomainExcludedTables is the jobs domain's R-21.162 excluded set (telemetry, the reservation
-// ledger and the learned-config tables); Export derives its exclusion from it via exportExcluded.
+// jobsDomainExcludedTables excludes telemetry, reservations, learned configs
+// and proposal bookkeeping from jobs-domain exports via exportExcluded.
 var jobsDomainExcludedTables = []string{
 	"jobs_telemetry_outcomes", "jobs_telemetry_finding", "jobs_reservation",
 	"jobs_learned_config", "jobs_learned_config_submission", "jobs_learned_config_version",
+	"jobs_learn_proposal_trigger", "jobs_learn_finding_feed",
 }
 
 // JobsDomainExcludedTables returns a copy of the jobs domain's excluded table names.

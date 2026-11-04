@@ -226,7 +226,7 @@ func assertExcludedTables(t *testing.T, names ...string) {
 // TestExportExcludesLearnedConfigTables stores a learned config (all three
 // learned-config tables carry a row, through the real migration and store)
 // and asserts Export's jobs-domain output carries the kv row but none of
-// them, and that the excluded list names all six tables.
+// them, and that the excluded list names the learned-config tables.
 func TestExportExcludesLearnedConfigTables(t *testing.T) {
 	db := bootstrappedTestDB(t)
 	ctx := context.Background()
@@ -270,7 +270,29 @@ func TestExportExcludesLearnedConfigTables(t *testing.T) {
 	}
 	assertExcludedTables(t, "jobs_telemetry_outcomes", "jobs_telemetry_finding", "jobs_reservation",
 		"jobs_learned_config", "jobs_learned_config_submission", "jobs_learned_config_version")
-	if n := len(storage.JobsDomainExcludedTables()); n != 6 {
-		t.Errorf("JobsDomainExcludedTables() has %d names, want 6", n)
+	if n := len(storage.JobsDomainExcludedTables()); n != 8 {
+		t.Errorf("JobsDomainExcludedTables() has %d names, want 8", n)
 	}
+}
+
+// TestExportExcludesProposalTables checks both proposal tables and ordinary jobs data.
+func TestExportExcludesProposalTables(t *testing.T) {
+	db := bootstrappedTestDB(t)
+	for _, table := range []string{"jobs_learn_proposal_trigger", "jobs_learn_finding_feed"} {
+		if _, err := db.Exec(`CREATE TABLE ` + table + ` (id TEXT PRIMARY KEY)`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`INSERT INTO ` + table + ` VALUES ('proposal-export-canary')`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seedKVRow(t, db, string(storage.DomainJobs), "ordinary-key", []byte("ordinary-value"))
+	var buf bytes.Buffer
+	if err := storage.Export(context.Background(), db, storage.DomainJobs, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "proposal-export-canary") || !strings.Contains(buf.String(), "ordinary-key") {
+		t.Fatalf("unexpected export: %s", buf.String())
+	}
+	assertExcludedTables(t, "jobs_learn_proposal_trigger", "jobs_learn_finding_feed")
 }
