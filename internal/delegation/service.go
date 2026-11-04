@@ -1,9 +1,12 @@
 // Purpose (this file): delegation.Service core: Deps, NewService and
-// the Delegate RPC method. Delegate applies request defaults before any
-// further processing.
+// the Delegate RPC method. Delegate applies request defaults, then
+// verifies the parent delegation record's whole signed chain
+// (VerifyChain at the injected clock's now) before it asks the Fleet for
+// a lease. An unsigned, tampered, expired or wider parent refuses with
+// no Lease call.
 //
-// Inputs: a configured Deps with injected runtime.Clock and unexported
-// fleet/shim seams.
+// Inputs: a configured Deps with injected runtime.Clock, the jobs store,
+// the pinned controller key and the unexported fleet seam.
 // Outputs: a configured Service instance.
 //
 // SPORT: delegation.service (ADD, P1-AGT-08).
@@ -12,7 +15,10 @@ package delegation
 
 import (
 	"context"
+	"crypto/ed25519"
 
+	"github.com/acamarata/cascade/internal/fleet/capacity"
+	"github.com/acamarata/cascade/internal/jobs"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -31,18 +37,35 @@ type Request struct {
 	Deadline string
 	// MinQuality is the requested minimum quality.
 	MinQuality string
+	// Parent is the caller's copy of the parent delegation record; it
+	// must verify against the stored chain before any lease.
+	Parent jobs.DelegationRecord
 }
 
 // Response is a delegation response.
 type Response struct {
 	// Accepted is true if the delegation was accepted.
 	Accepted bool
+	// LeaseID is the Fleet lease granted to the delegation.
+	LeaseID string
+}
+
+// fleetLeaser is the Fleet seam Delegate leases capacity through;
+// *capacity.Fleet satisfies it.
+type fleetLeaser interface {
+	Lease(ctx context.Context, req capacity.ResourceRequest, d capacity.DispatchRef, attempt int) (capacity.Lease, error)
 }
 
 // Deps contains the injected dependencies for the delegation service.
 type Deps struct {
 	// Clock is the injected runtime.Clock.
 	Clock runtime.Clock
+	// Store is the jobs store holding the delegation records.
+	Store *jobs.Store
+	// Pinned is the controller public key every envelope verifies under.
+	Pinned ed25519.PublicKey
+	// fleet leases capacity once the parent record verifies.
+	fleet fleetLeaser
 }
 
 // Service is the delegation service.
@@ -55,13 +78,38 @@ func NewService(deps Deps) *Service {
 	return &Service{deps: deps}
 }
 
-// Delegate applies request defaults before any further processing.
+// Delegate applies request defaults, verifies the parent record and only
+// then leases capacity from the Fleet.
 func (s *Service) Delegate(ctx context.Context, req *Request) (*Response, error) {
 	if req == nil {
 		return nil, cascade.New(cascade.KindInvalidInput, "delegation: nil request")
 	}
 	s.applyDefaults(req)
-	return &Response{Accepted: true}, nil
+	if err := s.verifyParent(ctx, req.Parent); err != nil {
+		return nil, err
+	}
+	if s.deps.fleet == nil {
+		return nil, invalidf("Delegate: a fleet is required")
+	}
+	lease, err := s.deps.fleet.Lease(ctx, capacity.ResourceRequest{Intent: req.Need},
+		capacity.DispatchRef{JobID: req.JobID, AgentOnly: true}, 0)
+	if err != nil {
+		return nil, err
+	}
+	return &Response{Accepted: true, LeaseID: lease.ID}, nil
+}
+
+// verifyParent refuses a parent record whose stored chain does not
+// verify under the pinned key at the injected clock's now.
+func (s *Service) verifyParent(ctx context.Context, parent jobs.DelegationRecord) error {
+	if s.deps.Clock == nil || len(s.deps.Pinned) != ed25519.PublicKeySize {
+		return invalidf("Delegate: a clock and a pinned controller key are required")
+	}
+	if parent.ID == "" || len(parent.Signed) == 0 {
+		return integrityf("parent: the request carries no signed parent record")
+	}
+	_, err := VerifyChain(ctx, s.deps.Store, parent, s.deps.Pinned, s.deps.Clock.Now())
+	return err
 }
 
 // applyDefaults populates missing fields with sensible defaults.
