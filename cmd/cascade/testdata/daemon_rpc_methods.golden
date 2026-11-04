@@ -54,6 +54,7 @@ job.show
 jobs.evidence.list
 lease.list
 lease.release
+mcp.capability.check
 mcp.dispatch
 memory.consolidate
 memory.forget

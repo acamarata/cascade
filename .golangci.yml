@@ -169,6 +169,11 @@ linters:
             # P1-BF-R352).
             - "!**/cmd/cascade/bundle_install_rpc.go"
             - "!**/cmd/cascade/bundle_activate_rpc.go"
+            # mcp_capability_rpc.go earns its exemption by name: it declares
+            # mcp.capability.check AccessOwnerView and mounts it on the daemon's
+            # own Registry, reading the caller principal from the handler
+            # context; it never dials the daemon (P1-HRN-05d, P1-BF-R356).
+            - "!**/cmd/cascade/mcp_capability_rpc.go"
             # daemon_unix_conductor.go earns its exemption by name, per this
             # rule's own comment above: it is a new COMPOSITION-ROOT file, not a
             # hand-rolled client. It is called only from buildRPCServer, it
