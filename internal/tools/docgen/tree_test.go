@@ -62,7 +62,7 @@ func TestDiffTree(t *testing.T) {
 }
 
 func TestDiffTreeBadInput(t *testing.T) {
-	for _, ps := range [][]Page{{{Path: "../x.md"}}, {{Path: ""}}, {{Path: "a.md"}, {Path: "a.md"}}, {{Path: "/abs.md"}}} {
+	for _, ps := range [][]Page{{{Path: "../x.md"}}, {{Path: ""}}, {{Path: "a.md"}, {Path: "a.md"}}, {{Path: "/abs.md"}}, {{Path: "C:/x.md"}}, {{Path: `\\srv\x.md`}}} {
 		if _, err := DiffTree(t.TempDir(), ps); !cascade.HasKind(err, cascade.KindInvalidInput) {
 			t.Fatalf("%v: %v", ps, err)
 		}

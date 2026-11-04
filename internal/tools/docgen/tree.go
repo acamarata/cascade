@@ -151,7 +151,7 @@ func checkPages(pages []Page) error {
 	seen := map[string]bool{}
 	for _, p := range pages {
 		clean := filepath.ToSlash(filepath.Clean(filepath.FromSlash(p.Path)))
-		if p.Path == "" || clean != p.Path || filepath.IsAbs(p.Path) || strings.HasPrefix(clean, "../") || clean == ".." {
+		if p.Path == "" || clean != p.Path || rooted(p.Path) || strings.HasPrefix(clean, "../") || clean == ".." {
 			return cascade.Newf(cascade.KindInvalidInput, "docgen: bad page path %q", p.Path)
 		}
 		if seen[p.Path] {
@@ -160,4 +160,12 @@ func checkPages(pages []Page) error {
 		seen[p.Path] = true
 	}
 	return nil
+}
+
+// rooted reports a page path that is absolute on any platform: a leading
+// slash, a Windows volume or drive prefix, or the host's own absolute form.
+// filepath.IsAbs alone is host-specific: "/abs.md" is not absolute on Windows.
+func rooted(p string) bool {
+	return strings.HasPrefix(p, "/") || strings.HasPrefix(p, `\`) || filepath.IsAbs(p) ||
+		filepath.VolumeName(filepath.FromSlash(p)) != "" || (len(p) >= 2 && p[1] == ':')
 }
