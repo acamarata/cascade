@@ -8,8 +8,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"github.com/acamarata/cascade/internal/ci/attest"
 
+	"github.com/acamarata/cascade/internal/ci/attest"
 	"github.com/acamarata/cascade/internal/context/scope"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/fleet/supervision"
@@ -18,15 +18,17 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// EventGateDenied is the R-16.73 event every completion-gate denial
-// publishes exactly once; a successful Transition publishes none.
+// EventGateDenied is published once per completion-gate denial (R-16.73).
+// EventJobAccepted {job_id, attestation_nonce} is published once per
+// accepted job, only after the accepted transaction commits.
 const (
-	completionGateNamespace                  = "jobs.gate"
-	EventGateDenied         events.EventKind = "jobs.gate.denied"
+	completionGateNamespace                      = "jobs.gate"
+	completionAcceptedNamespace                  = "jobs.accepted"
+	EventGateDenied             events.EventKind = "jobs.gate.denied"
+	EventJobAccepted            events.EventKind = "jobs.accepted"
 )
 
-// PolicyEngineIdentity is the caller-identity token step 1 checks (see
-// this file's header comment).
+// PolicyEngineIdentity is the caller-identity token Transition checks first.
 type PolicyEngineIdentity struct {
 	EngineID string
 }
@@ -152,9 +154,8 @@ func (cp *CompletionPolicy) verifyAcceptance(ctx context.Context, req *Transitio
 	return cp.deny(ctx, *req, &ErrorCompletionDenied{Reason: "ci-acceptance-not-passed"})
 }
 
-// reclassifyAndCheck runs the R-21.146 reclassification + scope
-// containment step, returning the derived class and, on a denial, the
-// (already-published) error to return from Transition.
+// reclassifyAndCheck runs R-21.146 reclassification + scope containment,
+// returning the derived class or the (already-published) denial.
 func (cp *CompletionPolicy) reclassifyAndCheck(ctx context.Context, req TransitionRequest) (RiskClass, error) {
 	derived, esc, outOfScope, err := Reclassify(ctx, req.PlannedRiskClass, req.ActualFootprint, req.LeaseScopePrefixes, req.ProbeRoot)
 	if err != nil {
@@ -184,8 +185,7 @@ func (cp *CompletionPolicy) deny(ctx context.Context, req TransitionRequest, den
 	return denial
 }
 
-// pushOutOfScopeAttention raises one R/S-39.T1 attention item for an
-// OutOfLeaseScope denial, regardless of risk class.
+// pushOutOfScopeAttention raises one R/S-39.T1 attention item per OutOfLeaseScope denial.
 func (cp *CompletionPolicy) pushOutOfScopeAttention(ctx context.Context, req TransitionRequest) {
 	if cp.deps.Attention == nil {
 		return
@@ -198,8 +198,7 @@ func (cp *CompletionPolicy) pushOutOfScopeAttention(ctx context.Context, req Tra
 	})
 }
 
-// missingEvidence returns the required EvidenceKinds (evidenceKindsForGateSet,
-// completion_errors.go) that have no passing, non-agent-claim record.
+// missingEvidence returns required EvidenceKinds lacking a passing, non-agent-claim record.
 func (cp *CompletionPolicy) missingEvidence(ctx context.Context, req TransitionRequest, gateSet GateSet) ([]EvidenceKind, error) {
 	var missing []EvidenceKind
 	for _, kind := range evidenceKindsForGateSet(gateSet) {
@@ -216,11 +215,8 @@ func (cp *CompletionPolicy) missingEvidence(ctx context.Context, req TransitionR
 	return missing, nil
 }
 
-// checkpointMismatch compares req.CheckpointID against the checkpoint
-// id on the job's evidence rows (R-21.144). Until AP/S-81.T1's real
-// checkpoint record lands, the contract's own text treats it as an
-// opaque caller-supplied string compared verbatim; an empty
-// CheckpointID never mismatches (no binding requested).
+// checkpointMismatch compares req.CheckpointID verbatim against the evidence
+// rows' checkpoint id (R-21.144); an empty CheckpointID never mismatches.
 func (cp *CompletionPolicy) checkpointMismatch(ctx context.Context, req TransitionRequest) *string {
 	if req.CheckpointID == "" {
 		return nil
@@ -249,12 +245,9 @@ func (cp *CompletionPolicy) checkApproval(ctx context.Context, req TransitionReq
 	return err
 }
 
-// commit re-reads the ledger cursor in the SAME store transaction as
-// the state write: a row appended after Transition's initial read can
-// never retroactively satisfy an already-evaluated gate. The UPDATE
-// carries the evaluated state (`AND state = ?`) and must change exactly
-// one row, so two transitions evaluated from one state cannot both win
-// and a job moved out of band after evaluation is left untouched.
+// commit re-reads the ledger cursor in the SAME transaction as the state
+// write, and the UPDATE must change exactly one row in the evaluated state,
+// so late evidence or a racing transition can never win an evaluated gate.
 func (cp *CompletionPolicy) commit(ctx context.Context, req TransitionRequest, evaluatedCursor int64) error {
 	var denial *ErrorCompletionDenied
 	txErr := cp.deps.Store.withTx(ctx, func(tx *sql.Tx) error {
@@ -290,5 +283,17 @@ func (cp *CompletionPolicy) commit(ctx context.Context, req TransitionRequest, e
 		return cp.deny(ctx, req, denial)
 	}
 	req.Job.State = req.Target
+	cp.publishAccepted(ctx, req)
 	return cp.deps.Store.afterTransition(ctx, req.Job.ID, req.Target)
+}
+
+// publishAccepted emits one jobs.accepted event; commit calls it only post-commit.
+func (cp *CompletionPolicy) publishAccepted(ctx context.Context, req TransitionRequest) {
+	if cp.deps.Bus == nil || req.Target != JobStateAccepted {
+		return
+	}
+	payload, err := json.Marshal(map[string]string{"job_id": req.Job.ID, "attestation_nonce": req.attestationNonce})
+	if err == nil {
+		_, _ = cp.deps.Bus.Publish(ctx, completionAcceptedNamespace, EventJobAccepted, "jobs.completion", payload)
+	}
 }
