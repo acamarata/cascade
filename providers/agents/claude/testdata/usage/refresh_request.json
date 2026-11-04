@@ -1,0 +1,7 @@
+{
+  "grant_type": "refresh_token",
+  "refresh_token": "CANARY_REFRESH_TOKEN_0000000000000000000000000000000000000000",
+  "client_id": "cascade-client",
+  "timestamp": "2026-11-04T10:00:00Z",
+  "user_agent": "cascade/0.1.0"
+}

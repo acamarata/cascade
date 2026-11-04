@@ -1,0 +1,16 @@
+{
+  "windows": [
+    {
+      "duration_hours": 5,
+      "tokens_used": 12345,
+      "tokens_limit": 100000,
+      "resets_at": "2026-11-04T15:00:00Z"
+    },
+    {
+      "duration_hours": 168,
+      "tokens_used": 50000,
+      "tokens_limit": 1000000,
+      "resets_at": "2026-11-11T10:00:00Z"
+    }
+  ]
+}
