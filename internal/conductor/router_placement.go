@@ -18,6 +18,7 @@ package conductor
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -151,4 +152,26 @@ type RouterOption func(*DefaultRouter)
 // same nil handling.
 func NodePlacement(engine NodeEligibility, fleet NodeFleet) RouterOption {
 	return func(r *DefaultRouter) { r.WithNodePlacement(engine, fleet) }
+}
+
+// ErrRelayNodePlacement is the refusal a relayed call gets when it asks
+// for node placement (P1-NODE-06a). A relayed call is already running on
+// the lane it was recorded against; placing it on a node again would
+// re-enter placement and the remote dispatch path from inside a relay.
+// KindConflict: the request contradicts the relay origin it carries.
+var ErrRelayNodePlacement = cascade.New(cascade.KindConflict,
+	"conductor: a relayed call may not request node placement")
+
+// refuseRelayPlacement reports ErrRelayNodePlacement when flags show the
+// request named node capabilities. consultPlacement contributes a
+// "placement:" flag exactly when it does, so the flag set is the record
+// of a node.* requirement by the time filterRelayOrigin runs, which is
+// still ahead of every provider call and every remote dispatch.
+func refuseRelayPlacement(flags []string) ([]string, error) {
+	for _, f := range flags {
+		if strings.HasPrefix(f, "placement:") {
+			return append(flags, "relay:node-placement-refused"), ErrRelayNodePlacement
+		}
+	}
+	return flags, nil
 }

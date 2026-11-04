@@ -190,6 +190,11 @@ func (r *DefaultRouter) SelectExplain(ctx context.Context, req provider.ModelReq
 		return provider.Selection{}, flags, err
 	}
 
+	cands, flags, err = filterRelayOrigin(ctx, cands, flags)
+	if err != nil {
+		return provider.Selection{}, flags, err
+	}
+
 	cands, flags, err = filterCapability(cands, req, flags)
 	if err != nil {
 		return provider.Selection{}, flags, err
