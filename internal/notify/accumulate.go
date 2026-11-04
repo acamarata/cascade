@@ -9,8 +9,8 @@
 //
 // Inputs: every Notification any producer emits — router.go's bus-decode
 //
-//	path, Notifier.Deliver (inbox.go) and Dispatcher.Drain's own retry
-//	re-queue all arrive here, because enqueue is the one call they share.
+//	path and Notifier.Deliver arrive here. Dispatcher retries bypass
+//	this gate through enqueueNow.
 //
 // Outputs: with the gate off, n continues to enqueueNow (dispatch.go) and
 //
@@ -22,7 +22,7 @@
 //     the only way an accumulated notification leaves it, so the away
 //     controller's return transition drains as well as flips, inside the
 //     same critical section (away.go observeActivityLocked).
-//   - enqueueNow deliberately BYPASSES this gate, for the two callers that
+//   - enqueueNow deliberately BYPASSES this gate for dispatcher retries and callers that
 //     must not re-accumulate: router.requeue (a re-queue must land in the
 //     queue it is being returned to) and Notifier.DeliverNow (an
 //     already-closed episode's return digest must not be buffered into the
@@ -34,6 +34,9 @@ package notify
 
 import "sort"
 
+// DropAccumulationFull is the drop reason for a full away buffer.
+const DropAccumulationFull = "accumulation-full"
+
 // enqueue is the accumulation gate every producer passes through: while
 // away-mode accumulation is on, n is buffered instead of queued, so a
 // Dispatcher.Drain sees nothing new to fan out no matter which producer
@@ -42,6 +45,11 @@ import "sort"
 func (q *queueSet) enqueue(n Notification) {
 	q.accumMu.Lock()
 	if q.accumulating {
+		if len(q.accumBuf) >= q.accumLimit {
+			q.accumMu.Unlock()
+			q.drop(n, n.Priority, DropAccumulationFull)
+			return
+		}
 		q.accumBuf = append(q.accumBuf, n)
 		q.accumMu.Unlock()
 		return

@@ -25,8 +25,8 @@
 //
 //	queueSet also owns the away-mode accumulation buffer, because
 //	queueSet.enqueue is the single choke point EVERY producer reaches —
-//	router.go's bus-decode path, Notifier.Deliver (inbox.go) and Drain's
-//	own retry re-queue. Gating above it would leave a 02:00
+//	router.go's bus-decode path and Notifier.Deliver. Drain's retries
+//	bypass the gate. Gating above it would leave a 02:00
 //	Notifier.Deliver dispatched to an absent operator and absent from the
 //	return digest. The buffer's own methods live in accumulate.go so that
 //	addition does not push this file past Art.10.3's 300-line cap; only the
@@ -50,11 +50,13 @@ import (
 // Config holds the [notify] section's hot-reloadable keys (08-INIT-CONFIG-
 // SPEC §3; R-14.109 ratifies these literal defaults).
 type Config struct {
-	DispatchTimeout   time.Duration
-	BufferUrgent      int
-	BufferHigh        int
-	BufferNormal      int
-	BufferLow         int
+	DispatchTimeout time.Duration
+	BufferUrgent    int
+	BufferHigh      int
+	BufferNormal    int
+	BufferLow       int
+	// BufferAccumulate bounds the number of notifications buffered while away.
+	BufferAccumulate  int
 	PriorityThreshold Priority
 }
 
@@ -69,6 +71,7 @@ func DefaultConfig() Config {
 		BufferHigh:        128,
 		BufferNormal:      256,
 		BufferLow:         256,
+		BufferAccumulate:  4096,
 		PriorityThreshold: PriorityLow,
 	}
 }
@@ -88,6 +91,7 @@ type queueSet struct {
 	accumMu      sync.Mutex
 	accumulating bool
 	accumBuf     []Notification
+	accumLimit   int
 }
 
 func newQueueSet(cfg Config, log *slog.Logger) *queueSet {
@@ -98,17 +102,16 @@ func newQueueSet(cfg Config, log *slog.Logger) *queueSet {
 			PriorityNormal: make(chan Notification, cfg.BufferNormal),
 			PriorityLow:    make(chan Notification, cfg.BufferLow),
 		},
-		log: log,
+		log:        log,
+		accumLimit: cfg.BufferAccumulate,
 	}
 }
 
 // enqueueNow places n on its priority's queue, or on Low's queue when n
 // carries an invalid Priority (fail closed toward the least-urgent lane,
 // never dropped silently). A full queue drops n with a slog WARN rather
-// than blocking the caller. It bypasses the accumulation gate, for the one
-// caller that must not re-accumulate: the digest's re-queue of an
-// unrepresented original (router.requeue) is by definition a return to the
-// NORMAL queue.
+// than blocking the caller. It bypasses the accumulation gate for dispatcher
+// retries, router.requeue and Notifier.DeliverNow.
 func (q *queueSet) enqueueNow(n Notification) {
 	p := n.Priority
 	if !p.Valid() {
@@ -171,7 +174,7 @@ func (d *Dispatcher) Drain(ctx context.Context) int {
 	// next Drain call, defeating the "re-delivery at the next drain tick"
 	// contract.
 	for _, n := range retryQueue {
-		d.queues.enqueue(n)
+		d.queues.enqueueNow(n)
 	}
 	return processed
 }

@@ -194,3 +194,81 @@ func TestFullQueueDropRecordsInboxAndEmits(t *testing.T) {
 		t.Fatalf("sink events = %+v, want one queue-full event for second", events)
 	}
 }
+
+// TestAccumulationBufferBounded checks overflow uses the existing inbox and drop sink.
+func TestAccumulationBufferBounded(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.BufferAccumulate != 4096 {
+		t.Fatalf("default accumulation limit = %d, want 4096", cfg.BufferAccumulate)
+	}
+	cfg.BufferAccumulate = 2
+	now := time.Unix(100, 0)
+	svc := NewService(cfg, fixedClock{now: now}, silentLogger())
+	queues := svc.Dispatcher.queues
+	var events []DropEvent
+	queues.drops.setSink(func(_ context.Context, e DropEvent) {
+		if _, err := svc.Inbox.Read(context.Background(), session("a"), e.ID); err != nil {
+			t.Fatalf("drop sink ran before inbox record: %v", err)
+		}
+		if queues.accumulatedLen() != 2 || queues.drops.count(e.Reason) != 1 {
+			t.Fatal("drop sink observed incorrect buffer length or counter")
+		}
+		events = append(events, e)
+	})
+	svc.Router.SetAccumulate(true)
+	for _, id := range []string{"first", "second", "overflow"} {
+		err := svc.Notifier.Deliver(context.Background(), Notification{
+			ID: id, Source: "test", Priority: PriorityNormal, Class: ClassAddressed,
+			TargetSession: "a", Visibility: VisibilityPrivate, Payload: []byte("private body"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := svc.Dispatcher.Drain(context.Background()); got != 0 {
+		t.Fatalf("drain processed %d accumulated items, want 0", got)
+	}
+	want := DropEvent{ID: "overflow", Source: "test", Priority: PriorityNormal, Reason: DropAccumulationFull, At: now}
+	if len(events) != 1 || events[0] != want {
+		t.Fatalf("drop events = %+v, want %+v", events, want)
+	}
+	if queues.drops.count(DropQueueFull) != 0 {
+		t.Fatal("accumulation overflow counted as queue-full")
+	}
+	items := svc.Router.DrainAccumulated()
+	if len(items) != 2 || items[0].ID != "first" || items[1].ID != "second" || queues.accumulatedLen() != 0 {
+		t.Fatal("buffer did not retain and drain exactly the first two items")
+	}
+}
+
+// TestRetryBypassesAccumulation checks failures retry at the next drain while away.
+func TestRetryBypassesAccumulation(t *testing.T) {
+	d, queues, registry, _ := newTestDispatcher(t, time.Unix(100, 0))
+	attempts := 0
+	registry.Subscribe(stubSubscriber{id: "fail-once", matches: true, recv: func(Notification) error {
+		attempts++
+		if attempts == 1 {
+			queues.setAccumulate(true)
+			queues.enqueue(Notification{ID: "away", Priority: PriorityNormal})
+			return errors.New("retry")
+		}
+		return nil
+	}}, session("a"))
+	queues.enqueue(Notification{ID: "retry", Priority: PriorityNormal, Class: ClassGlobalCritical})
+	if got := d.Drain(context.Background()); got != 1 || attempts != 1 {
+		t.Fatalf("first drain processed %d with %d attempts, want 1 each", got, attempts)
+	}
+	if !queues.isAccumulating() || queues.accumulatedLen() != 1 || len(queues.queues[PriorityNormal]) != 1 {
+		t.Fatal("retry did not bypass the active accumulation gate")
+	}
+	if got := d.Drain(context.Background()); got != 1 || attempts != 2 {
+		t.Fatalf("retry drain processed %d with %d attempts, want 1 and 2", got, attempts)
+	}
+	items := queues.drainAccumulated()
+	if len(items) != 1 || items[0].ID != "away" {
+		t.Fatal("retry changed the away buffer")
+	}
+	if queues.drops.count(DropAccumulationFull) != 0 || queues.drops.count(DropQueueFull) != 0 {
+		t.Fatal("retry unexpectedly dropped")
+	}
+}
