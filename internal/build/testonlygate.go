@@ -82,11 +82,13 @@ type TestOnlyAllowEntry struct {
 const UnownedTicket = "UNOWNED"
 
 // retireKeyPattern accepts a plan ticket id or a capability id, matched as
-// written so a padded key cannot slip past IsCapKey.
-var retireKeyPattern = regexp.MustCompile(`^(P\d+-[A-Z]{2,5}-\d{2,3}|cap:[a-z0-9-]+)$`)
+// written so a padded key cannot slip past IsCapKey. A ticket id may carry
+// one lowercase split letter (P1-TOP-13d) when a re-forge split the ticket.
+var retireKeyPattern = regexp.MustCompile(`^(P\d+-[A-Z]{2,5}-\d{2,3}[a-z]?|cap:[a-z0-9-]+)$`)
 
-// pewttIDPattern is a plan ticket id alone: Expires and AddedByTicket.
-var pewttIDPattern = regexp.MustCompile(`^P\d+-[A-Z]{2,5}-\d{2,3}$`)
+// pewttIDPattern is a plan ticket id alone, with the same optional split
+// letter: Expires and AddedByTicket.
+var pewttIDPattern = regexp.MustCompile(`^P\d+-[A-Z]{2,5}-\d{2,3}[a-z]?$`)
 
 // IsCapKey reports whether a retire key is a capability id.
 func IsCapKey(key string) bool { return strings.HasPrefix(key, "cap:") }
