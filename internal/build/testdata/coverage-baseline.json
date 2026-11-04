@@ -34,6 +34,7 @@
   "internal/events/routing": { "tier": "core", "floor": 85.0, "baseline": 91.4 },
   "internal/events/scheduler": { "tier": "core", "floor": 85.0, "baseline": 89.6 },
   "internal/evidence": { "tier": "core", "floor": 85.0, "baseline": 85.2 },
+  "internal/executive": { "tier": "core", "floor": 85.0, "baseline": 94.5 },
   "internal/fleet": { "tier": "core", "floor": 85.0, "baseline": 92.6 },
   "internal/fleet/capacity": { "tier": "core", "floor": 85.0, "baseline": 94.8 },
   "internal/fleet/census": { "tier": "core", "floor": 85.0, "baseline": 92.1 },

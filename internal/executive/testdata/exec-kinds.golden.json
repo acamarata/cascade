@@ -1,0 +1,10 @@
+{
+  "kinds": [
+    "exec.task.started",
+    "exec.task.completed",
+    "exec.task.failed",
+    "exec.run.started",
+    "exec.run.completed",
+    "exec.run.failed"
+  ]
+}
