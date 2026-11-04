@@ -29,6 +29,7 @@ Available Commands:
   plugin         Manage the plugin lifecycle: install, inspect, and remove
   policy         Explain and inspect policy decisions
   provider       Register and manage model providers
+  provider exec  Launch a harness on a gateway account
   recall         Search the retrieval index and print cited results
   review         Run a CR-A/CR-B/CR-C adversarial code review over a diff
   run            Dispatch a one-shot or streaming model task through the conductor

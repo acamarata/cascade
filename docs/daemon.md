@@ -28,7 +28,9 @@ order:
 
 1. Resolve paths and load `config.toml`, running the schema-version
    upgrade frame if needed, and resolve `[daemon]` settings (socket path,
-   shutdown grace).
+   shutdown grace). Immediately after loading the config, snapshot and
+   remove every gateway credential variable from the daemon's own
+   environment, before admission, opening the store, or spawning anything.
 2. Construct the log provider.
 3. Open the daemon's on-disk store (`cascade.db`, `providers/sqlite`) and
    construct the event bus over it.
@@ -48,6 +50,25 @@ order:
 6. Serve the IPC surface (above) until a termination signal or the
    context is canceled. The upgrade hand-off (see below) answers
    `SIGUSR2` while serving.
+
+## Operator harness on a gateway account
+
+`cascade provider exec [<account>] -- <command> [args...]` launches an
+operator (T0) harness on a gateway account. The `--` separator is required;
+the command is resolved on the inherited `PATH`.
+
+Without an account, `provider exec` removes the host-injected gateway
+variables from the command's environment and preserves `HOME`. With an
+account, it also removes competing credential variables and injects the
+account's gateway environment and credential resolved by its helper.
+On Unix, it replaces the current process in place, so no parent process
+remains holding the credential and the command determines the exit status.
+Windows is unsupported.
+
+At daemon start, gateway credential variables are kept in a private
+snapshot and removed from the process environment. Gateway sources read
+admitted credentials from that snapshot. Credentials are never printed
+or logged; only removed variable names may be logged.
 
 ## Shutdown order
 
