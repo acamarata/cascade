@@ -1,46 +1,18 @@
-// Purpose: the GitHub Actions REST polling client (P1-E25-W5-S51-T2, task
-//
-//	2): list workflow runs and their jobs, with ETag conditional requests
-//	and page-based pagination, gated by the ci-poll egress class.
-//
-// Inputs: a Doer (production: a *http.Client adapter built by the
-//
-//	composition root, matching internal/providers/intake/transport.go's
-//	own "Doer interface here, concrete net/http adapter in the
-//	composition root" split -- this package never imports net/http, so it
-//	never needs an internal/build egress-allowlist entry of its own) and
-//	an *egress.Engine.
-//
-// Outputs: PollResult{Runs, Jobs, Steps, NotModified} on success, or a
-//
-//	typed cascade.Error. On HTTP 304 Not Modified, NotModified is true and
-//	Runs/Jobs/Steps are nil -- the caller must skip Upsert entirely, never
-//	write an empty page over real data (R-21.265's own "a call made with a
-//	zero Capability or against a disabled class returns before any byte
-//	is read" framing applies equally here: a 304 short-circuits before any
-//	normalize call, not merely before any write).
-//
-// Constraints: every outbound call first transits the never-pay policy
-//
-//	guard (P1-E25-W5-S51-T5: guardActionsPoll refuses to spend a request
-//	on a repository [ci.policy] routes to the local gate, and refuses
-//	outright when no policy resolver was supplied -- R-14.77), and then
-//	egress.Engine.Capability +
-//	egress.SensitivityPass on EgressClassCIPoll before doer.Do runs, per
-//	06 §5.17 (matching intake.acquireIntakeGate's exact two-check
-//	sequence). Pagination stops once the accumulated run/job count
-//	reaches the page's own total_count, or once a page returns fewer
-//	than PerPage items, whichever comes first -- never an unbounded loop.
-//
-// SPORT: internal.ci.Client/ADDED, internal.ci.Client.PollRuns/ADDED
-//
-//	(P1-E25-W5-S51-T2).
+// Purpose: GitHub Actions polling, dispatch and artifact transport.
+// Inputs: injected transport, egress engine and never-pay route resolver.
+// Outputs: runs, jobs and artifact archives, or typed failures.
+// Constraints: route and ci-poll gates precede every outbound operation.
+// A 304 returns no rows; callers must skip writes. Dispatch additionally
+// requires admitted hosted configuration and live public visibility.
+// SPORT: internal.ci.Client (P1-E25-W5-S51-T2, P1-NODE-09).
 
 package ci
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -62,6 +34,7 @@ type HTTPRequest struct {
 	Method  string
 	URL     string
 	Headers map[string]string
+	Body    []byte
 }
 
 // HTTPResponse is one inbound response, fully buffered.
@@ -82,6 +55,8 @@ type PollResult struct {
 
 // Client is the GitHub Actions polling client for one (owner, repo).
 type Client struct {
+	// Allowed reads the admitted ci.hosted.allow value; nil refuses dispatch.
+	Allowed func() (bool, error)
 	doer    Doer
 	engine  *egress.Engine
 	routes  RouteResolver
@@ -90,15 +65,102 @@ type Client struct {
 	etags   map[string]string
 }
 
-// NewClient builds a Client. baseURL defaults to https://api.github.com
-// when empty.
-//
-// routes is the never-pay policy resolver (route.go), and it is a
-// CONSTRUCTOR parameter rather than an optional setter on purpose: polling
-// Actions is the paid direction R-14.77 exists to stop, so a Client that
-// was never given a policy must refuse every call rather than poll
-// unguarded. Passing nil is allowed by the type system and refused by
-// every verb.
+// Artifact identifies one run artifact returned by GitHub.
+type Artifact struct {
+	ID      int64  `json:"id"`
+	Name    string `json:"name"`
+	Expired bool   `json:"expired"`
+}
+
+// TriggerWorkflowDispatch starts a workflow only after explicit admission.
+// The hosted runner must also enforce the job sensitivity and source guards.
+func (c *Client) TriggerWorkflowDispatch(ctx context.Context, owner, repo, workflow, ref string) error {
+	if c.Allowed == nil {
+		return cascade.New(cascade.KindPolicyDenied, "ci: ci.hosted.allow is not admitted")
+	}
+	allowed, err := c.Allowed()
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return cascade.New(cascade.KindPolicyDenied, "ci: ci.hosted.allow is false")
+	}
+	if !githubName.MatchString(workflow) || !strings.HasSuffix(workflow, ".yml") || ref == "" {
+		return cascade.New(cascade.KindInvalidInput, "ci: invalid workflow filename or ref")
+	}
+	private, err := c.RepoVisibility(ctx, owner, repo)
+	if err != nil {
+		return err
+	}
+	if private {
+		return cascade.New(cascade.KindPolicyDenied, "ci: hosted dispatch requires a public repository")
+	}
+	if err := guardActionsPoll(ctx, c.routes, owner+"/"+repo); err != nil {
+		return err
+	}
+	if _, err := c.acquireCIPollGate(); err != nil {
+		return err
+	}
+	body, _ := json.Marshal(map[string]string{"ref": ref})
+	url := fmt.Sprintf("%s/repos/%s/%s/actions/workflows/%s/dispatches", c.baseURL, owner, repo, workflow)
+	resp, err := c.doer.Do(ctx, HTTPRequest{Method: "POST", URL: url, Body: body,
+		Headers: map[string]string{"Accept": "application/vnd.github+json", "Content-Type": "application/json"}})
+	if err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "ci: dispatch request failed")
+	}
+	if resp.Status != 204 {
+		return cascade.Newf(cascade.KindUnavailable, "ci: dispatch returned HTTP %d", resp.Status)
+	}
+	return nil
+}
+
+// ListRunArtifacts lists every artifact page for the correlated run.
+func (c *Client) ListRunArtifacts(ctx context.Context, owner, repo string, runID int64) ([]Artifact, error) {
+	if runID <= 0 {
+		return nil, cascade.New(cascade.KindInvalidInput, "ci: invalid run id")
+	}
+	var artifacts []Artifact
+	for page := 1; ; page++ {
+		path := fmt.Sprintf("/actions/runs/%d/artifacts?per_page=%d&page=%d", runID, perPage, page)
+		resp, err := c.githubGet(ctx, owner, repo, path)
+		if err != nil {
+			return nil, err
+		}
+		if resp.Status != 200 {
+			return nil, cascade.Newf(cascade.KindUnavailable, "ci: list artifacts returned HTTP %d", resp.Status)
+		}
+		var body struct {
+			Total     int        `json:"total_count"`
+			Artifacts []Artifact `json:"artifacts"`
+		}
+		if err := json.Unmarshal(resp.Body, &body); err != nil {
+			return nil, cascade.Wrap(cascade.KindIntegrity, err, "ci: invalid artifacts response")
+		}
+		artifacts = append(artifacts, body.Artifacts...)
+		if len(body.Artifacts) < perPage || len(artifacts) >= body.Total {
+			return artifacts, nil
+		}
+	}
+}
+
+// DownloadArtifact fetches the ZIP bytes; its contents are not trusted evidence.
+// The transport owns GitHub's archive redirect and must not forward credentials.
+func (c *Client) DownloadArtifact(ctx context.Context, owner, repo string, artifactID int64) ([]byte, error) {
+	if artifactID <= 0 {
+		return nil, cascade.New(cascade.KindInvalidInput, "ci: invalid artifact id")
+	}
+	resp, err := c.githubGet(ctx, owner, repo, fmt.Sprintf("/actions/artifacts/%d/zip", artifactID))
+	if err != nil {
+		return nil, err
+	}
+	if resp.Status != 200 {
+		return nil, cascade.Newf(cascade.KindUnavailable, "ci: download artifact returned HTTP %d", resp.Status)
+	}
+	return resp.Body, nil
+}
+
+// NewClient builds a Client with a default baseURL of https://api.github.com.
+// Every verb refuses a nil never-pay route resolver.
 func NewClient(doer Doer, engine *egress.Engine, baseURL string, repoID int64, routes RouteResolver) *Client {
 	if baseURL == "" {
 		baseURL = "https://api.github.com"
@@ -123,14 +185,8 @@ func (c *Client) acquireCIPollGate() (egress.Capability, error) {
 	return token, nil
 }
 
-// PollRuns fetches every workflow-run page for owner/repo (pagination by
-// page number, stopping once the accumulated count reaches the first
-// page's own total_count or a page returns fewer than perPage items),
-// applying the If-None-Match conditional header -- cached from a prior
-// call -- to the FIRST page's request only. A 304 on that first page
-// short-circuits the whole call with PollResult.NotModified=true and no
-// normalize call; GitHub's own semantics make a conditional 304 on page 1
-// mean "nothing changed," so later pages are never fetched in that case.
+// PollRuns fetches run pages up to total_count. Only the first page carries
+// a cached ETag; its 304 returns NotModified without fetching later pages.
 func (c *Client) PollRuns(ctx context.Context, owner, repo string) (PollResult, error) {
 	if err := guardActionsPoll(ctx, c.routes, owner+"/"+repo); err != nil {
 		return PollResult{}, err

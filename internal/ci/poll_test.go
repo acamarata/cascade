@@ -15,7 +15,12 @@
 package ci
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
+	"encoding/json"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/hooks/egress"
@@ -179,4 +184,113 @@ func TestPageCount(t *testing.T) {
 	if got := pageCount(250, 100); got != 3 {
 		t.Errorf("pageCount(250,100) = %d, want 3", got)
 	}
+}
+
+// TestGitHubActionsOIDCFromRunArtifact exercises dispatch and artifact retrieval locally.
+func TestGitHubActionsOIDCFromRunArtifact(t *testing.T) {
+	listing, err := os.ReadFile("testdata/github/artifacts.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dispatches := 0
+	doer := actionsDoer(t, listing, oidcFixtureArchive(t), &dispatches)
+	c := NewClient(doer, testEngine(t), actionsTestBase, 1, allowActionsRoutes)
+	ctx := context.Background()
+	if err := c.TriggerWorkflowDispatch(ctx, "o", "r", "cascade-ci.yml", "main"); err == nil {
+		t.Fatal("dispatch allowed without admitted configuration")
+	}
+	c.Allowed = func() (bool, error) { return false, nil }
+	if err := c.TriggerWorkflowDispatch(ctx, "o", "r", "cascade-ci.yml", "main"); err == nil {
+		t.Fatal("dispatch allowed with hosted configuration disabled")
+	}
+	c.Allowed = func() (bool, error) { return true, nil }
+	if err := c.TriggerWorkflowDispatch(ctx, "o", "r", "cascade-ci.yml", "main"); err != nil {
+		t.Fatal(err)
+	}
+	artifacts, err := c.ListRunArtifacts(ctx, "o", "r", 7)
+	if err != nil || len(artifacts) != 1 {
+		t.Fatalf("artifacts: %v, %v", artifacts, err)
+	}
+	if artifacts[0].Name != "cascade-oidc" || artifacts[0].Expired {
+		t.Fatal("unexpected artifact")
+	}
+	data, err := c.DownloadArtifact(ctx, "o", "r", artifacts[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil || len(zr.File) != 1 || zr.File[0].Name != "token.jwt" {
+		t.Fatalf("invalid archive: %v", err)
+	}
+	if dispatches != 1 {
+		t.Fatalf("dispatches = %d", dispatches)
+	}
+	assertActionsRoutesEnforced(ctx, t, c)
+}
+
+// assertActionsRoutesEnforced checks that, with no route resolver or a
+// local-only one, every Actions call is refused before it reaches GitHub.
+func assertActionsRoutesEnforced(ctx context.Context, t *testing.T, c *Client) {
+	t.Helper()
+	for _, routes := range []RouteResolver{nil, localOnlyRoutes} {
+		c.routes = routes
+		if err := c.TriggerWorkflowDispatch(ctx, "o", "r", "cascade-ci.yml", "main"); err == nil {
+			t.Fatal("dispatch bypassed route policy")
+		}
+		if _, err := c.ListRunArtifacts(ctx, "o", "r", 7); err == nil {
+			t.Fatal("artifact listing bypassed route policy")
+		}
+		if _, err := c.DownloadArtifact(ctx, "o", "r", 101); err == nil {
+			t.Fatal("artifact download bypassed route policy")
+		}
+	}
+}
+
+// oidcFixtureArchive returns a zip holding one token.jwt entry. The entry
+// is an invalid placeholder: it exercises transport without storing an
+// OIDC token.
+func oidcFixtureArchive(t *testing.T) []byte {
+	t.Helper()
+	var archive bytes.Buffer
+	zw := zip.NewWriter(&archive)
+	f, err := zw.Create("token.jwt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.Write([]byte("invalid fixture payload")); err != nil {
+		t.Fatal(err)
+	}
+	if err = zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return archive.Bytes()
+}
+
+// actionsTestBase is the API base the in-memory Actions doer answers for.
+const actionsTestBase = "https://api.github.test"
+
+// actionsDoer answers the four GitHub REST routes the dispatch and
+// artifact calls use, in memory, counting accepted workflow dispatches.
+func actionsDoer(t *testing.T, listing, archive []byte, dispatches *int) doerFunc {
+	t.Helper()
+	return doerFunc(func(_ context.Context, req HTTPRequest) (HTTPResponse, error) {
+		path, _, _ := strings.Cut(strings.TrimPrefix(req.URL, actionsTestBase), "?")
+		switch path {
+		case "/repos/o/r":
+			return HTTPResponse{Status: 200, Body: []byte(`{"private":false,"visibility":"public"}`)}, nil
+		case "/repos/o/r/actions/workflows/cascade-ci.yml/dispatches":
+			var body map[string]string
+			if req.Method != "POST" || json.Unmarshal(req.Body, &body) != nil || body["ref"] != "main" {
+				t.Error("invalid workflow dispatch request")
+				return HTTPResponse{Status: 400}, nil
+			}
+			*dispatches++
+			return HTTPResponse{Status: 204}, nil
+		case "/repos/o/r/actions/runs/7/artifacts":
+			return HTTPResponse{Status: 200, Body: listing}, nil
+		case "/repos/o/r/actions/artifacts/101/zip":
+			return HTTPResponse{Status: 200, Body: archive}, nil
+		}
+		return HTTPResponse{Status: 404}, nil
+	})
 }

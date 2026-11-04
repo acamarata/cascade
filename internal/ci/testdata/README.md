@@ -3,7 +3,20 @@
 Art.2 (12-QUALITY-CONSTITUTION.md) requires that at least one test exercise a
 fixture captured FROM the real GitHub Actions REST API, never a self-authored
 dialect. Every file in `fixtures/` below was captured that way. Nothing in this
-directory was hand-written to look like a GitHub response.
+directory's `fixtures/` captures was hand-written to look like a GitHub response.
+
+## P1-NODE-09 offline GitHub artifact fixture
+
+`github/artifacts.json` is a synthetic, hand-authored example of the GitHub
+REST list-run-artifacts response (`total_count`, `artifacts`, `id`, `name`,
+`expired`, `size_in_bytes`). It was added on 2026-11-04 from the endpoint's
+wire schema and is not a live capture. No workflow was dispatched to obtain it.
+`TestGitHubActionsOIDCFromRunArtifact` serves it from an in-memory Doer (no socket) and
+constructs a ZIP containing `token.jwt` in memory. That entry contains only
+an invalid placeholder, never a credential, key or signed token. This proves
+dispatch serialization and artifact transport, not OIDC verification or
+countersigning, which remain covered by the existing OIDC tests. The binding
+`plan/p1/interfaces/P1-NODE-09.md` was absent from the supplied working tree.
 
 ## Capture method
 
