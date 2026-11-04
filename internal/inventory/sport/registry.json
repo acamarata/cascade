@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-04T08:06:15Z",
+  "generated_at": "2026-11-04T09:59:32Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5367,6 +5367,34 @@
           "line": 10,
           "status": "",
           "raw": "cmd/cascade installation identity tests (P1-SEC-40)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade mcp profile capability wiring",
+      "sites": [
+        {
+          "file": "cmd/cascade/wire_mcp_profile.go",
+          "line": 13,
+          "status": "",
+          "raw": "cmd/cascade mcp profile capability wiring (P1-HRN-05)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade mcp.capability.check verb",
+      "sites": [
+        {
+          "file": "cmd/cascade/mcp_capability_rpc.go",
+          "line": 14,
+          "status": "",
+          "raw": "cmd/cascade mcp.capability.check verb (P1-HRN-05)."
         }
       ],
       "statuses": [
@@ -43084,7 +43112,7 @@
       ]
     }
   ],
-  "total_sites": 4156,
-  "unspecified_count": 373,
+  "total_sites": 4158,
+  "unspecified_count": 375,
   "multi_status_count": 132
 }
