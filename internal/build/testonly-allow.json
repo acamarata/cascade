@@ -983,14 +983,6 @@
   },
   {
     "added_by_ticket": "P1-TOP-01",
-    "caller_site": "internal/fleet/topology/lane_ceiling.go",
-    "expected_caller": "internal/fleet/topology/lane_ceiling.go, the lane-ceiling resolver that derives a profile lane's lane type from EndpointIsLocal(profile); retire this entry once that file calls EndpointIsLocal",
-    "reason": "P1-TOP-01 ships topology.EndpointIsLocal, the one locality input of the data-class ceiling (an explicit loopback or unix-socket endpoint is local, an empty endpoint is remote on every profile), implemented over topology.URLIsLocal, the one locality classifier the router also calls. Its only consumer is the lane-ceiling resolver in P1-TOP-02, which does not exist yet, so wiring a call here now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once lane_ceiling.go exists.",
-    "retire_ticket": "P1-TOP-02",
-    "symbol": "internal/fleet/topology.EndpointIsLocal"
-  },
-  {
-    "added_by_ticket": "P1-TOP-01",
     "caller_site": "internal/fleet/topology/enroll.go",
     "expected_caller": "internal/fleet/topology/enroll.go, the enrollment path that calls EnsureHome before it writes a claude-cli subscription credential row; retire this entry once that file calls EnsureHome",
     "reason": "P1-TOP-01 ships topology.EnsureHome, the per-profile 0700 runtime home, implemented and tested (mode creation, tightening, symlink and file refusal, windows declared refusal). Its first production caller is account enrollment in P1-TOP-07 (enroll.go), and the spawn path that passes the home to a runtime is P1-TOP-17; neither exists yet. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once enroll.go exists.",
@@ -1606,5 +1598,40 @@
     "reason": "P1-TOP-06d ships SeedUndiscoveredBuckets with its tests; its first production caller is internal/daemon/subsystems_fleet_topology.go from P1-TOP-06e.",
     "retire_ticket": "P1-TOP-06",
     "symbol": "internal/fleet/topology.SeedUndiscoveredBuckets"
+  },
+  {
+    "caller_site": "internal/learn/canary.go",
+    "expected_caller": "internal/learn/canary.go, which P1-LRN-06a adds the routing canary that explores only where topology.ExplorationEligible holds; retire this entry once that file calls ExplorationEligible",
+    "reason": "P1-TOP-02a ships ExplorationEligible with its tests; its first production caller is internal/learn/canary.go from P1-LRN-06a.",
+    "retire_ticket": "P1-LRN-06a",
+    "symbol": "internal/fleet/topology.ExplorationEligible"
+  },
+  {
+    "caller_site": "internal/executive/delivery.go",
+    "expected_caller": "internal/executive/delivery.go, which P1-EXE-01d adds the durable delivery path that decodes journaled envelopes on recovery; retire this entry once that file calls DecodeEnvelope",
+    "reason": "P1-EXE-01b ships DecodeEnvelope with its tests; its first production caller is internal/executive/delivery.go from P1-EXE-01d.",
+    "retire_ticket": "P1-EXE-01d",
+    "symbol": "internal/executive.DecodeEnvelope"
+  },
+  {
+    "caller_site": "internal/runtime/init/ingestguard.go",
+    "expected_caller": "internal/runtime/init/ingestguard.go, which P1-NODE-13c adds the guarded init Walk that enforces the file-count ceiling per root; retire this entry once that file calls EnforceCeiling",
+    "reason": "P1-NODE-13a ships EnforceCeiling with its tests; its first production caller is internal/runtime/init/ingestguard.go from P1-NODE-13c.",
+    "retire_ticket": "P1-NODE-13c",
+    "symbol": "internal/repo.EnforceCeiling"
+  },
+  {
+    "caller_site": "internal/runtime/init/ingestguard.go",
+    "expected_caller": "internal/runtime/init/ingestguard.go, which P1-NODE-13c adds the guarded init Walk that applies the default ceiling when none is configured; retire this entry once that file calls DefaultFileCountCeiling",
+    "reason": "P1-NODE-13a ships DefaultFileCountCeiling with its tests; its first production caller is internal/runtime/init/ingestguard.go from P1-NODE-13c.",
+    "retire_ticket": "P1-NODE-13c",
+    "symbol": "internal/repo.DefaultFileCountCeiling"
+  },
+  {
+    "caller_site": "internal/learn/proposal_engine.go",
+    "expected_caller": "internal/learn/proposal_engine.go, which P1-LRN-02b adds the proposal engine that persists proposals through the store; retire this entry once that file calls NewProposalStore",
+    "reason": "P1-LRN-02d ships NewProposalStore with its tests; its first production caller is internal/learn/proposal_engine.go from P1-LRN-02b.",
+    "retire_ticket": "P1-LRN-02b",
+    "symbol": "internal/learn.NewProposalStore"
   }
 ]
