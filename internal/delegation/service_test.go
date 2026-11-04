@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/fleet/capacity"
 	"github.com/acamarata/cascade/internal/jobs"
 	"github.com/acamarata/cascade/internal/principal"
@@ -27,18 +28,34 @@ type fakeClock struct{ now time.Time }
 
 func (f fakeClock) Now() time.Time { return f.now }
 
-// fleetDouble records every Lease call and grants a fixed lease.
-type fleetDouble struct{ leases int }
+// fleetDouble records every Lease and Release call and grants a fixed
+// lease on lane (default "agent:drv-1").
+type fleetDouble struct {
+	leases, releases int
+	lane             string
+}
 
 func (f *fleetDouble) Lease(context.Context, capacity.ResourceRequest, capacity.DispatchRef, int) (capacity.Lease, error) {
 	f.leases++
-	return capacity.Lease{ID: "lease-1"}, nil
+	lane := f.lane
+	if lane == "" {
+		lane = "agent:drv-1"
+	}
+	return capacity.Lease{ID: "lease-1", LaneID: conductor.LaneID(lane)}, nil
 }
 
-// service returns a Service over c's store with a fresh fleet double.
+func (f *fleetDouble) Release(context.Context, capacity.Lease) error {
+	f.releases++
+	return nil
+}
+
+// service returns a Service over c's store with a fresh fleet double and
+// the registered driver drv-1.
 func (c *chain) service(now time.Time) (*Service, *fleetDouble) {
 	f := &fleetDouble{}
-	return NewService(Deps{Clock: fakeClock{now: now}, Store: c.st, Pinned: c.s.PublicKey(), fleet: f}), f
+	svc := NewService(Deps{Clock: fakeClock{now: now}, Store: c.st, Pinned: c.s.PublicKey(), Signer: c.s, fleet: f})
+	svc.SetAgentLanes([]capacity.AgentLane{{DriverID: "drv-1"}})
+	return svc, f
 }
 
 // TestDelegateAppliesRequestDefaults verifies default values are populated.
@@ -130,7 +147,7 @@ func TestDelegateRefusesBeforeLease(t *testing.T) {
 			t.Fatalf("%s: the fleet double recorded %d Lease calls, want 0", tc.name, f.leases)
 		}
 	}
-	noFleet := NewService(Deps{Clock: fakeClock{now: t0}, Store: c.st, Pinned: c.s.PublicKey()})
+	noFleet := NewService(Deps{Clock: fakeClock{now: t0}, Store: c.st, Pinned: c.s.PublicKey(), Signer: c.s})
 	_, err = noFleet.Delegate(context.Background(), &Request{Parent: good})
 	wantCascadeErr(t, err, cascade.KindInvalidInput, "a fleet is required")
 	_, err = NewService(Deps{Store: c.st}).Delegate(context.Background(), &Request{Parent: good})
@@ -185,4 +202,52 @@ func TestDelegateRefusesJobOutsideCallerScope(t *testing.T) {
 	if resp, err = svc.Delegate(owner, req()); err != nil || resp == nil || resp.ToolPolicy != "all" || f.leases != 2 {
 		t.Fatalf("owner CLI: Delegate = %+v, %v with %d leases; want a mutation lease", resp, err, f.leases)
 	}
+}
+
+func TestDelegateResolvesDriverForLeasedAgentLane(t *testing.T) {
+	c := newChain(t)
+	_, good := c.add(c.root)
+	svc, f := c.service(t0)
+	resp, err := svc.Delegate(context.Background(), &Request{AgentID: "a", Parent: good})
+	if err != nil || resp == nil || resp.Driver != "drv-1" || f.leases != 1 || f.releases != 0 {
+		t.Fatalf("Delegate = %+v, %v (%d leases, %d releases); want driver drv-1", resp, err, f.leases, f.releases)
+	}
+	f.lane = "agent:unknown"
+	resp, err = svc.Delegate(context.Background(), &Request{AgentID: "a", Parent: good})
+	if resp != nil || f.leases != 2 || f.releases != 1 {
+		t.Fatalf("unresolvable: Delegate = %+v (%d leases, %d releases); want a released lease", resp, f.leases, f.releases)
+	}
+	wantCascadeErr(t, err, cascade.KindUnavailable, "agent:unknown")
+}
+
+// nodeSigner is a node-role installation signer: it refuses every Sign.
+type nodeSigner struct{ testSigner }
+
+func (nodeSigner) Sign(context.Context, []byte) ([]byte, error) {
+	return nil, cascade.New(cascade.KindPermissionDenied, "installation key: only the controller daemon holds the installation identity key")
+}
+
+func TestDelegateSignsWithInstallationKey(t *testing.T) {
+	c := newChain(t)
+	_, good := c.add(c.root)
+	svc, _ := c.service(t0)
+	resp, err := svc.Delegate(context.Background(), &Request{AgentID: "agent-7", Parent: good})
+	if err != nil || resp == nil {
+		t.Fatalf("Delegate = %+v, %v", resp, err)
+	}
+	installationPublicKey := c.s.PublicKey()
+	env, err := envelope.Verify(resp.Record, installationPublicKey, t0)
+	if err != nil || env.Principal != "agent-7" {
+		t.Fatalf("record: Verify = %+v, %v; want principal agent-7", env, err)
+	}
+	if _, err := envelope.Verify(resp.Record, newSigner(t).PublicKey(), t0); err == nil {
+		t.Fatal("record verified under a foreign key")
+	}
+	f := &fleetDouble{}
+	node := NewService(Deps{Clock: fakeClock{now: t0}, Store: c.st, Pinned: c.s.PublicKey(), Signer: nodeSigner{c.s}, fleet: f})
+	resp, err = node.Delegate(context.Background(), &Request{AgentID: "agent-7", Parent: good})
+	if resp != nil || f.leases != 0 {
+		t.Fatalf("node role: Delegate = %+v with %d leases; want a refusal and no lease", resp, f.leases)
+	}
+	wantCascadeErr(t, err, cascade.KindPermissionDenied, "only the controller daemon")
 }
