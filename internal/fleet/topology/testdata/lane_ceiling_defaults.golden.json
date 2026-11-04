@@ -1,0 +1,278 @@
+[
+  {
+    "billing": "free",
+    "lane_type": "controller-local",
+    "permitted": false,
+    "offering": "known",
+    "tier": "public",
+    "reason": "billing-cap"
+  },
+  {
+    "billing": "free",
+    "lane_type": "controller-local",
+    "permitted": false,
+    "offering": "unknown",
+    "tier": "public",
+    "reason": "billing-cap"
+  },
+  {
+    "billing": "free",
+    "lane_type": "controller-local",
+    "permitted": true,
+    "offering": "known",
+    "tier": "public",
+    "reason": "billing-cap"
+  },
+  {
+    "billing": "free",
+    "lane_type": "controller-local",
+    "permitted": true,
+    "offering": "unknown",
+    "tier": "public",
+    "reason": "billing-cap"
+  },
+  {
+    "billing": "free",
+    "lane_type": "external-api",
+    "permitted": false,
+    "offering": "known",
+    "tier": "public",
+    "reason": "billing-cap"
+  },
+  {
+    "billing": "free",
+    "lane_type": "external-api",
+    "permitted": false,
+    "offering": "unknown",
+    "tier": "public",
+    "reason": "offering-policy"
+  },
+  {
+    "billing": "free",
+    "lane_type": "external-api",
+    "permitted": true,
+    "offering": "known",
+    "tier": "public",
+    "reason": "billing-cap"
+  },
+  {
+    "billing": "free",
+    "lane_type": "external-api",
+    "permitted": true,
+    "offering": "unknown",
+    "tier": "public",
+    "reason": "offering-policy"
+  },
+  {
+    "billing": "free",
+    "lane_type": "unresolved",
+    "permitted": false,
+    "offering": "known",
+    "refused": true
+  },
+  {
+    "billing": "free",
+    "lane_type": "unresolved",
+    "permitted": false,
+    "offering": "unknown",
+    "refused": true
+  },
+  {
+    "billing": "free",
+    "lane_type": "unresolved",
+    "permitted": true,
+    "offering": "known",
+    "refused": true
+  },
+  {
+    "billing": "free",
+    "lane_type": "unresolved",
+    "permitted": true,
+    "offering": "unknown",
+    "refused": true
+  },
+  {
+    "billing": "paid",
+    "lane_type": "controller-local",
+    "permitted": false,
+    "offering": "known",
+    "tier": "local-only",
+    "reason": "local-endpoint"
+  },
+  {
+    "billing": "paid",
+    "lane_type": "controller-local",
+    "permitted": false,
+    "offering": "unknown",
+    "tier": "local-only",
+    "reason": "local-endpoint"
+  },
+  {
+    "billing": "paid",
+    "lane_type": "controller-local",
+    "permitted": true,
+    "offering": "known",
+    "tier": "local-only",
+    "reason": "local-endpoint"
+  },
+  {
+    "billing": "paid",
+    "lane_type": "controller-local",
+    "permitted": true,
+    "offering": "unknown",
+    "tier": "local-only",
+    "reason": "local-endpoint"
+  },
+  {
+    "billing": "paid",
+    "lane_type": "external-api",
+    "permitted": false,
+    "offering": "known",
+    "tier": "internal",
+    "reason": "restricted-permit"
+  },
+  {
+    "billing": "paid",
+    "lane_type": "external-api",
+    "permitted": false,
+    "offering": "unknown",
+    "tier": "public",
+    "reason": "offering-policy"
+  },
+  {
+    "billing": "paid",
+    "lane_type": "external-api",
+    "permitted": true,
+    "offering": "known",
+    "tier": "restricted",
+    "reason": "lane-type"
+  },
+  {
+    "billing": "paid",
+    "lane_type": "external-api",
+    "permitted": true,
+    "offering": "unknown",
+    "tier": "public",
+    "reason": "offering-policy"
+  },
+  {
+    "billing": "paid",
+    "lane_type": "unresolved",
+    "permitted": false,
+    "offering": "known",
+    "refused": true
+  },
+  {
+    "billing": "paid",
+    "lane_type": "unresolved",
+    "permitted": false,
+    "offering": "unknown",
+    "refused": true
+  },
+  {
+    "billing": "paid",
+    "lane_type": "unresolved",
+    "permitted": true,
+    "offering": "known",
+    "refused": true
+  },
+  {
+    "billing": "paid",
+    "lane_type": "unresolved",
+    "permitted": true,
+    "offering": "unknown",
+    "refused": true
+  },
+  {
+    "billing": "discover",
+    "lane_type": "controller-local",
+    "permitted": false,
+    "offering": "known",
+    "tier": "public",
+    "reason": "billing-cap"
+  },
+  {
+    "billing": "discover",
+    "lane_type": "controller-local",
+    "permitted": false,
+    "offering": "unknown",
+    "tier": "public",
+    "reason": "billing-cap"
+  },
+  {
+    "billing": "discover",
+    "lane_type": "controller-local",
+    "permitted": true,
+    "offering": "known",
+    "tier": "public",
+    "reason": "billing-cap"
+  },
+  {
+    "billing": "discover",
+    "lane_type": "controller-local",
+    "permitted": true,
+    "offering": "unknown",
+    "tier": "public",
+    "reason": "billing-cap"
+  },
+  {
+    "billing": "discover",
+    "lane_type": "external-api",
+    "permitted": false,
+    "offering": "known",
+    "tier": "public",
+    "reason": "billing-cap"
+  },
+  {
+    "billing": "discover",
+    "lane_type": "external-api",
+    "permitted": false,
+    "offering": "unknown",
+    "tier": "public",
+    "reason": "offering-policy"
+  },
+  {
+    "billing": "discover",
+    "lane_type": "external-api",
+    "permitted": true,
+    "offering": "known",
+    "tier": "public",
+    "reason": "billing-cap"
+  },
+  {
+    "billing": "discover",
+    "lane_type": "external-api",
+    "permitted": true,
+    "offering": "unknown",
+    "tier": "public",
+    "reason": "offering-policy"
+  },
+  {
+    "billing": "discover",
+    "lane_type": "unresolved",
+    "permitted": false,
+    "offering": "known",
+    "refused": true
+  },
+  {
+    "billing": "discover",
+    "lane_type": "unresolved",
+    "permitted": false,
+    "offering": "unknown",
+    "refused": true
+  },
+  {
+    "billing": "discover",
+    "lane_type": "unresolved",
+    "permitted": true,
+    "offering": "known",
+    "refused": true
+  },
+  {
+    "billing": "discover",
+    "lane_type": "unresolved",
+    "permitted": true,
+    "offering": "unknown",
+    "refused": true
+  }
+]
