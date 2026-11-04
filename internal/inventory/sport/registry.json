@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-03T20:48:48Z",
+  "generated_at": "2026-11-04T02:53:54Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4132,6 +4132,48 @@
           "line": 28,
           "status": "",
           "raw": "cmd/cascade away mode composition (P1-HRN-11)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade bundle activate/status/rollback RPCs",
+      "sites": [
+        {
+          "file": "cmd/cascade/bundle_activate_rpc.go",
+          "line": 19,
+          "status": "",
+          "raw": "cmd/cascade bundle activate/status/rollback RPCs (P1-HRN-16)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade bundle install RPC",
+      "sites": [
+        {
+          "file": "cmd/cascade/bundle_install_rpc.go",
+          "line": 17,
+          "status": "",
+          "raw": "cmd/cascade bundle install RPC (P1-HRN-16)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade bundle verbs wiring",
+      "sites": [
+        {
+          "file": "cmd/cascade/wire_bundle_install.go",
+          "line": 13,
+          "status": "",
+          "raw": "cmd/cascade bundle verbs wiring (P1-HRN-16)."
         }
       ],
       "statuses": [
@@ -32874,14 +32916,14 @@
         },
         {
           "file": "internal/jobs/scheduler_admit.go",
-          "line": 24,
+          "line": 23,
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T5",
           "raw": "jobs/scheduler/ADD (P1-E29-W6-S59-T5)."
         },
         {
           "file": "internal/jobs/scheduler_admit_test.go",
-          "line": 9,
+          "line": 10,
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T5",
           "raw": "jobs/scheduler/ADD (tests) (P1-E29-W6-S59-T5)."
@@ -32899,6 +32941,18 @@
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T5",
           "raw": "jobs/scheduler/ADD (tests) (P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "internal/jobs/scheduler_readmit.go",
+          "line": 23,
+          "status": "ADD",
+          "raw": "jobs/scheduler/ADD (P1-TOP-04c)."
+        },
+        {
+          "file": "internal/jobs/scheduler_readmit_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "jobs/scheduler/ADD (tests) (P1-TOP-04c)."
         },
         {
           "file": "internal/jobs/scheduler_reenter.go",
@@ -39475,6 +39529,26 @@
       ]
     },
     {
+      "name": "providers.agents.antigravity",
+      "sites": [
+        {
+          "file": "providers/agents/antigravity/output.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "providers.agents.antigravity/ADD (P1-AGT-07)."
+        },
+        {
+          "file": "providers/agents/antigravity/protocol.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "providers.agents.antigravity/ADD (P1-AGT-07)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "providers.agents.claude",
       "sites": [
         {
@@ -42765,7 +42839,7 @@
       ]
     }
   ],
-  "total_sites": 4126,
-  "unspecified_count": 369,
+  "total_sites": 4133,
+  "unspecified_count": 372,
   "multi_status_count": 131
 }
