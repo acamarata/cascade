@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-04T05:33:17Z",
+  "generated_at": "2026-11-04T08:06:15Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -26370,6 +26370,34 @@
       ]
     },
     {
+      "name": "internal/plugins builtin-antigravity wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/builtin_antigravity_wiring.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal/plugins builtin-antigravity wiring (ADD) — P1-CORE-02."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins builtin-antigravity wiring tests",
+      "sites": [
+        {
+          "file": "internal/plugins/builtin_antigravity_wiring_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal/plugins builtin-antigravity wiring tests (ADD) — P1-CORE-02."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/plugins builtin-registry",
       "sites": [
         {
@@ -43056,7 +43084,7 @@
       ]
     }
   ],
-  "total_sites": 4154,
+  "total_sites": 4156,
   "unspecified_count": 373,
   "multi_status_count": 132
 }
