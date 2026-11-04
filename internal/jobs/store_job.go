@@ -46,6 +46,10 @@ type Store struct {
 	// wired, which is correct for every caller that never acquires a
 	// lease (store_job_test.go's plain transition tests, for one).
 	onTerminal func(ctx context.Context, jobID string) error
+
+	// observers holds the terminal observers and their error sink
+	// (store_terminal_observer.go); notified after the lease-release hook.
+	observers terminalObservers
 }
 
 // NewStore wraps db. db must already carry the MigrationSet tables
@@ -170,9 +174,14 @@ func (s *Store) PutTransition(ctx context.Context, id string, to JobState, updat
 
 // afterTransition runs the terminal hook once a transition has landed id in
 // a terminal state. Every path that writes a job's state calls it:
-// PutTransition and the completion policy's commit.
+// PutTransition and the completion policy's commit. The registered
+// terminal observers run after the lease-release hook returns.
 func (s *Store) afterTransition(ctx context.Context, id string, to JobState) error {
-	if !to.Terminal() || s.onTerminal == nil {
+	if !to.Terminal() {
+		return nil
+	}
+	defer s.notifyTerminalObservers(ctx, id, to)
+	if s.onTerminal == nil {
 		return nil
 	}
 	// A node daemon holds no lease authority, so it has nothing to release;
