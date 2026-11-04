@@ -30,6 +30,15 @@ var ErrForcePushRefused = errors.New("git gate: force push refused")
 // ErrRefDeletionRefused is returned when a push would delete a ref.
 var ErrRefDeletionRefused = errors.New("git gate: ref deletion refused")
 
+// ErrUnattestedEvidence is returned when an unattested or unverified commit is pushed.
+var ErrUnattestedEvidence = errors.New("unattested evidence")
+
+// ErrVerifyFailed is returned when signature verification fails.
+var ErrVerifyFailed = errors.New("verify failed")
+
+// AttestWant binds receive verification to the receiving repository and exact tip.
+type AttestWant struct{ RepoID, GateDir, CommitSHA, TreeHash string }
+
 // PreReceiveRef is one ref update as git hands it to a pre-receive hook.
 type PreReceiveRef struct{ Old, New, Ref string }
 
