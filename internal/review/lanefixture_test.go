@@ -142,6 +142,7 @@ func realRouter(t *testing.T, reg *laneRegistry) *conductor.DefaultRouter {
 	r := conductor.NewRouter(reg, &laneOrderSpiller{order: order},
 		testkit.NewFrozenClock(time.Unix(0, 0)), conductor.TaskClasses())
 	conductor.WithRestrictedPermits(permits)(r)
+	conductor.WithLaneTierCap(reviewTestCap)(r)
 	return r
 }
 
