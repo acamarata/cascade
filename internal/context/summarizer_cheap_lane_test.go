@@ -154,6 +154,7 @@ func TestSummarizerCheapLane(t *testing.T) {
 	affinity := laneAffinityFor(rows, req.TaskClass)
 	spiller := &affinityOrderSpiller{order: []conductor.LaneID{conductor.LaneID("lane-" + affinity)}}
 	router := conductor.NewRouter(newTwoLaneRegistry(), spiller, testkit.NewFrozenClock(time.Unix(0, 0)), rows)
+	conductor.WithLaneTierCap(contextTestCap)(router)
 
 	sel, flags, err := router.SelectExplain(context.Background(), req)
 	if err != nil {
@@ -184,6 +185,7 @@ func TestSummarizerCheapLaneEveryGranularityRoutesTheSameWay(t *testing.T) {
 	router := conductor.NewRouter(newTwoLaneRegistry(),
 		&affinityOrderSpiller{order: []conductor.LaneID{conductor.LaneID("lane-" + laneAffinityFor(rows, string(conductor.TaskClassSummarize)))}},
 		testkit.NewFrozenClock(time.Unix(0, 0)), rows)
+	conductor.WithLaneTierCap(contextTestCap)(router)
 
 	for _, level := range []Granularity{GranularityTurnWindow, GranularityThread, GranularityEpoch} {
 		req, err := s.buildModelRequest(context.Background(), "e", level, "", "content")

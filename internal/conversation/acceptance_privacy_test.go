@@ -118,6 +118,7 @@ func acceptancePrivacyAssertLocalRefused(ctx context.Context, t *testing.T, extO
 	t.Helper()
 	quota := &acceptanceQuotaCounter{answer: acceptanceExternalLaneName}
 	router := conductor.NewRouter(extOnlyReg, quota, nil, nil)
+	conductor.WithLaneTierCap(conversationTestCap)(router)
 	rctx := conductor.ContextWithThreadPrivacy(ctx, conductor.ThreadPrivacy{ThreadID: localThreadID, Mode: localMode})
 
 	_, err := router.Select(rctx, acceptanceChatReq())
@@ -138,6 +139,7 @@ func acceptancePrivacyAssertPublicRoutes(ctx context.Context, t *testing.T, reg 
 	t.Helper()
 	quota := &acceptanceQuotaCounter{answer: acceptanceExternalLaneName}
 	router := conductor.NewRouter(reg, quota, nil, nil)
+	conductor.WithLaneTierCap(conversationTestCap)(router)
 	rctx := conductor.ContextWithThreadPrivacy(ctx, conductor.ThreadPrivacy{ThreadID: publicThreadID, Mode: publicMode})
 
 	req := acceptanceChatReq()
@@ -198,6 +200,7 @@ func TestAcceptancePrivacyModes_LocalOnlyPermitsControllerLocalLane(t *testing.T
 	reg := newAcceptancePrivacyRegistry(t)
 	quota := &acceptanceQuotaCounter{answer: acceptanceLocalLaneName}
 	router := conductor.NewRouter(reg, quota, nil, nil)
+	conductor.WithLaneTierCap(conversationTestCap)(router)
 	rctx := conductor.ContextWithThreadPrivacy(ctx, conductor.ThreadPrivacy{ThreadID: threadID, Mode: mode})
 
 	sel, err := router.Select(rctx, acceptanceChatReq(), acceptanceExternalLaneName)

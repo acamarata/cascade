@@ -108,7 +108,9 @@ func routerForClass(t *testing.T, rows []conductor.TaskClassRow, class string, r
 		}
 	}
 	spiller := &affinityOrderSpiller{order: order}
-	return conductor.NewRouter(reg, spiller, testkit.NewFrozenClock(time.Unix(0, 0)), rows), first
+	r := conductor.NewRouter(reg, spiller, testkit.NewFrozenClock(time.Unix(0, 0)), rows)
+	conductor.WithLaneTierCap(contextTestCap)(r)
+	return r, first
 }
 
 // stageRequestFor builds the request the real stage for class would dispatch:
