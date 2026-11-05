@@ -71,6 +71,9 @@ type DefaultRouter struct {
 	// restricted_external_lanes list (restricted_permits.go), set once at
 	// construction by WithRestrictedPermits. The zero value permits nothing.
 	restrictedPermits RestrictedPermits
+	// laneTierCap is the per-lane sensitivity ceiling (lane_tiercap.go),
+	// set by WithLaneTierCap. NewDaemonRouter refuses without one.
+	laneTierCap LaneTierCap
 }
 
 // NewRouter builds a Router. No vendor names or provider identifiers are
@@ -94,7 +97,14 @@ var _ Router = (*DefaultRouter)(nil)
 // composition root that CALLS NewDaemonRouter with a real registry, event
 // bus and taxonomy table is S-22.T4's, not this ticket's - see the
 // journal and this file's own new testonly-allow.json entry.
-func NewDaemonRouter(reg *registry.Registry, extra map[string]interface{}, bus EventPublisher, clock Clock, classes []TaskClassRow) (*DefaultRouter, error) {
+func NewDaemonRouter(reg *registry.Registry, extra map[string]interface{}, bus EventPublisher, clock Clock, classes []TaskClassRow, opts ...RouterOption) (*DefaultRouter, error) {
+	probe := &DefaultRouter{}
+	for _, o := range opts {
+		o(probe)
+	}
+	if probe.laneTierCap == nil {
+		return nil, ErrLaneTierCapMissing
+	}
 	reader := registry.NewReader(reg)
 	cfg, divergent, err := ParseQuotaConfig(extra)
 	if err != nil {
@@ -107,7 +117,11 @@ func NewDaemonRouter(reg *registry.Registry, extra map[string]interface{}, bus E
 			return nil, perr
 		}
 	}
-	return NewRouter(reader, quota, clock, classes), nil
+	r := NewRouter(reader, quota, clock, classes)
+	for _, o := range opts {
+		o(r)
+	}
+	return r, nil
 }
 
 // laneCandidate pairs one registry lane record with its owning provider
