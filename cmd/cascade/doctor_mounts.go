@@ -51,6 +51,7 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	reg := doctor.NewCheckRegistry()
 	reg.Register(doctor.NewDoctorSelfCheck())
 	reg.Register(gatewayPostureCheck{paths: paths})
+	reg.Register(newNotifyDropsDoctorCheck(paths))
 	// retrieval_index: the on-disk retrieval index exists unconditionally,
 	// so there is no unimplemented interface between this check and
 	// something real to probe.

@@ -65,3 +65,44 @@ request.
 An item reaches the Inbox when the dispatcher drains it, so a read issued
 before that drain returns nothing. The Inbox is in memory only: it does not
 survive a daemon restart.
+
+## Drop diagnostics
+
+A full priority queue drops the newest item without waiting for capacity.
+The drop path records it in the existing Inbox before incrementing its
+reason counter and invoking the metadata-only `DropSink`. Eligible callers
+can still read that item under the normal Inbox access rules. The warning
+line carries identifiers and priority, never the notification body.
+
+The drop diagnostics contract defines two reasons:
+
+| Reason | Meaning |
+|---|---|
+| `queue-full` | The item's priority queue has no capacity. |
+| `accumulation-full` | The away-mode accumulation buffer has reached `BufferAccumulate` (default 4096). |
+
+The daemon publisher's `notify.dropped` event belongs to the `notify`
+namespace. Its JSON payload is exactly `{id, source, priority, reason}`;
+it carries no notification body, nested payload, address or correlation ID.
+The bus envelope supplies the timestamp. The sink receives a `DropEvent`
+with `ID`, `Source`, `Priority`, `Reason` and `At`, never the notification.
+One drop produces one event and one warning. Sink implementations must not
+block producers. Dispatcher retries bypass the away-mode accumulation gate.
+
+`notify.stats` is the owner-only RPC for the daemon's one notification
+service. Its result has `dropped` (reason to unsigned count) and `accumulated`
+(current accumulation depth), with no notification contents. Counters are
+cumulative since daemon start and reset on restart; reading stats does not
+reset them or create another Inbox.
+
+The `notify-drops` doctor check calls `notify.stats` through an injected
+client caller. Zero drops reports OK. Nonzero counters report a warning
+listing each reason and count in sorted order. A missing or refused daemon
+socket reports `skip` with `daemon not running`; other RPC errors and
+malformed or incomplete counter results report an error naming `notify.stats`.
+
+This checkout currently contains the queue-full sink and counter path.
+The accumulation limit, exported service stats, `notify.stats` registration,
+and daemon event publisher are prerequisites supplied by the other drop
+diagnostics tickets. Until those are present, a running daemon without
+`notify.stats` correctly produces a failed doctor check.
