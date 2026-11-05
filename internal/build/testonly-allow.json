@@ -1230,22 +1230,6 @@
     "symbol": "internal/context/generate.RenderScopedHarness"
   },
   {
-    "added_by_ticket": "P1-CI-14",
-    "caller_site": "internal/ci/runner_gha.go",
-    "expected_caller": "internal/ci/runner_gha.go, the GitHub Actions runner that produces ephemeral-oidc records only through the countersign; retire this entry once that file calls CountersignOIDC",
-    "reason": "P1-CI-14 ships the OIDC verifier and JWKS source implemented and tested (valid token, every named rejection, fetch failure, cache expiry), but the token ingress and the call site are the hosted runner of P1-NODE-09, so nothing in production calls CountersignOIDC yet. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once runner_gha.go exists without the call.",
-    "retire_ticket": "P1-NODE-09",
-    "symbol": "internal/ci.CountersignOIDC"
-  },
-  {
-    "added_by_ticket": "P1-CI-14",
-    "caller_site": "internal/ci/runner_gha.go",
-    "expected_caller": "internal/ci/runner_gha.go, the GitHub Actions runner that builds the JWKS source over the ci-oidc-jwks egress class for the verifier; retire this entry once that file calls NewGitHubJWKSource",
-    "reason": "P1-CI-14 ships the OIDC verifier and JWKS source implemented and tested (valid token, every named rejection, fetch failure, cache expiry), but the token ingress and the call site are the hosted runner of P1-NODE-09, so nothing in production calls NewGitHubJWKSource yet. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once runner_gha.go exists without the call.",
-    "retire_ticket": "P1-NODE-09",
-    "symbol": "internal/ci.NewGitHubJWKSource"
-  },
-  {
     "added_by_ticket": "P1-CI-13",
     "caller_site": "internal/ci/runner_node.go",
     "expected_caller": "internal/ci/runner_node.go, the node runner P1-NODE-08 registers, which asks the node to sign its completed run through ci.attest.sign; retire this entry once that file calls RequestNodeSignature",
@@ -1487,34 +1471,6 @@
     "symbol": "internal/learn.RoutingMigrationSet"
   },
   {
-    "caller_site": "cmd/cascade/docs.go",
-    "expected_caller": "cmd/cascade/docs.go, which P1-DOC-04c mounts the daemonless `cascade docs gen` command; retire this entry once that file calls DiffTree",
-    "reason": "P1-DOC-04a ships DiffTree with its tests; its first production caller is cmd/cascade/docs.go from P1-DOC-04c.",
-    "retire_ticket": "P1-DOC-04",
-    "symbol": "internal/tools/docgen.DiffTree"
-  },
-  {
-    "caller_site": "cmd/cascade/docs.go",
-    "expected_caller": "cmd/cascade/docs.go, which P1-DOC-04c mounts the daemonless `cascade docs gen` command; retire this entry once that file calls RenderCommands",
-    "reason": "P1-DOC-04a ships RenderCommands with its tests; its first production caller is cmd/cascade/docs.go from P1-DOC-04c.",
-    "retire_ticket": "P1-DOC-04",
-    "symbol": "internal/tools/docgen.RenderCommands"
-  },
-  {
-    "caller_site": "cmd/cascade/docs.go",
-    "expected_caller": "cmd/cascade/docs.go, which P1-DOC-04c mounts the daemonless `cascade docs gen` command; retire this entry once that file calls RenderConfigKeys",
-    "reason": "P1-DOC-04a ships RenderConfigKeys with its tests; its first production caller is cmd/cascade/docs.go from P1-DOC-04c.",
-    "retire_ticket": "P1-DOC-04",
-    "symbol": "internal/tools/docgen.RenderConfigKeys"
-  },
-  {
-    "caller_site": "cmd/cascade/docs.go",
-    "expected_caller": "cmd/cascade/docs.go, which P1-DOC-04c mounts the daemonless `cascade docs gen` command; retire this entry once that file calls WriteTree",
-    "reason": "P1-DOC-04a ships WriteTree with its tests; its first production caller is cmd/cascade/docs.go from P1-DOC-04c.",
-    "retire_ticket": "P1-DOC-04",
-    "symbol": "internal/tools/docgen.WriteTree"
-  },
-  {
     "caller_site": "cmd/cascade/wire_fleet_reserve.go",
     "expected_caller": "cmd/cascade/wire_fleet_reserve.go, which P1-TOP-20d registers fleet.reserve.allow/clear and the elevated verb rule; retire this entry once that file calls ModeSetLoosens",
     "reason": "P1-TOP-20b ships ModeSetLoosens with its tests; its first production caller is cmd/cascade/wire_fleet_reserve.go from P1-TOP-20d.",
@@ -1711,20 +1667,6 @@
     "symbol": "internal/fleet/topology.EvidenceCredentialGate"
   },
   {
-    "caller_site": "cmd/cascade/docs.go",
-    "expected_caller": "cmd/cascade/docs.go, which P1-DOC-04c adds (the `cascade docs gen` verb that renders docs/reference/config-keys.md); retire this entry once that file calls KnownConfigKeys",
-    "reason": "P1-DOC-04b ships KnownConfigKeys with its tests; its first production caller is cmd/cascade/docs.go from P1-DOC-04c.",
-    "retire_ticket": "P1-DOC-04c",
-    "symbol": "internal/runtime.KnownConfigKeys"
-  },
-  {
-    "caller_site": "cmd/cascade/docs.go",
-    "expected_caller": "cmd/cascade/docs.go, which P1-DOC-04c adds (the `cascade docs gen` verb that renders docs/reference/config-keys.md); retire this entry once that file calls KnownKeys",
-    "reason": "P1-DOC-04b ships KnownKeys with its tests; its first production caller is cmd/cascade/docs.go from P1-DOC-04c.",
-    "retire_ticket": "P1-DOC-04c",
-    "symbol": "internal/runtime/initconfig.KnownKeys"
-  },
-  {
     "caller_site": "internal/nodes/relay.go",
     "expected_caller": "internal/nodes/relay.go, which P1-NODE-06c adds (the node relay handler that stamps the relay origin before re-entering the router); retire this entry once that file calls WithRelayOrigin",
     "reason": "P1-NODE-06a ships WithRelayOrigin with its tests; its first production caller is internal/nodes/relay.go from P1-NODE-06c.",
@@ -1751,5 +1693,21 @@
     "reason": "P1-HRN-03b ships RaiseDataClass with its tests; its first production caller is the CI result fanout from P1-HRN-03f. P1-CI-06b creates internal/ci/fanout.go without the call, so the promised caller_site moves to a file that does not exist yet (R216 pattern; P1-BF-R363).",
     "retire_ticket": "P1-HRN-03",
     "symbol": "internal/notify.RaiseDataClass"
+  },
+  {
+    "added_by_ticket": "P1-CI-14",
+    "caller_site": "internal/daemon/subsystems_ci_hosted.go",
+    "expected_caller": "internal/daemon/subsystems_ci_hosted.go, which P1-NODE-09d adds beside subsystems_ci.go to build the JWKS source over the ci-oidc-jwks egress class and hand it to the GitHub Actions runner; retire this entry once that file calls NewGitHubJWKSource",
+    "reason": "P1-CI-14 ships the OIDC verifier and JWKS source implemented and tested (valid token, every named rejection, fetch failure, cache expiry), but the token ingress and the call site are the hosted runner of P1-NODE-09, so nothing in production calls NewGitHubJWKSource yet. P1-NODE-09c's runner takes the source as an injected JWKSource, so the construction moves to the daemon wiring of P1-NODE-09d (R216 pattern; P1-BF-R368).",
+    "retire_ticket": "P1-NODE-09",
+    "symbol": "internal/ci.NewGitHubJWKSource"
+  },
+  {
+    "added_by_ticket": "P1-NODE-09c",
+    "caller_site": "internal/daemon/subsystems_ci_hosted.go",
+    "expected_caller": "internal/daemon/subsystems_ci_hosted.go, which P1-NODE-09d adds beside subsystems_ci.go to register the GitHub Actions runner in RunnerSet[ExecutorGitHubActions]; retire this entry once that file calls NewGitHubActionsRunner",
+    "reason": "P1-NODE-09c ships GitHubActionsRunner with its refusal, attestation and timeout tests; its production caller is the daemon RunnerSet wiring of P1-NODE-09d (P1-BF-R368).",
+    "retire_ticket": "P1-NODE-09",
+    "symbol": "internal/ci.NewGitHubActionsRunner"
   }
 ]
