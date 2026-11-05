@@ -88,11 +88,26 @@ func TestCascadePAClient_Stream_ClosesTokensBeforeError(t *testing.T) {
 		sawToken = true
 	}
 	if sawToken {
-		t.Error("Stream: sent a token, want zero tokens (no daemon component streams a reply yet)")
+		t.Error("Stream: sent a token after transport failure")
 	}
 	err := <-errs
 	if err == nil {
 		t.Fatal("Stream: err = nil, want a transport error")
+	}
+}
+
+func TestCascadePAReplyStreamFailureAndCancel(t *testing.T) {
+	frames := make(chan client.Event)
+	completed := make(chan error, 1)
+	want := errors.New("reply refused")
+	completed <- want
+	if err := forwardReply(context.Background(), frames, nil, completed); err != want || err.Error() != "reply refused" {
+		t.Fatalf("RPC refusal = %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := forwardReply(ctx, frames, nil, nil); err != context.Canceled || err.Error() != "context canceled" {
+		t.Fatalf("canceled stream = %v", err)
 	}
 }
 

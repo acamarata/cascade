@@ -1,36 +1,22 @@
-// Purpose: success-path coverage for every cascadepa_*_wiring.go adapter
-//
-//	method (OneShot, Show, Edit, List, Act, Forget, CheckDigest), using
-//	the rpcDoer seam (cascadepa_wiring.go) instead of a real socket:
-//	internal/plugins is not on the egress ruling's allowed-"net"-importer
-//	list, and internal/build's Art.7.2 gate bars "net"/"net/http" from
-//	every untagged _test.go file, so no unit-lane test can drive these
-//	success branches through an actual daemon connection. fakeRPCDoer is
-//	a real collaborator satisfying the exact interface *client.Client
-//	implements in production -- not a mock of the adapters under test.
-//
-// SPORT: internal/plugins:cascadepa-wiring (TEST) -- closes the ratchet
-//
-//	gap the three composition-root files' success branches otherwise
-//	leave uncovered.
+// Wire-contract coverage uses rpcDoer without opening real sockets.
 package plugins
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"net/url"
+	"reflect"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/client"
 	"github.com/acamarata/cascade/internal/memory"
 	"github.com/acamarata/cascade/internal/memory/review"
 	cascadepa "github.com/acamarata/cascade/plugins/cascade-pa"
 	pacmd "github.com/acamarata/cascade/plugins/cascade-pa/cmd"
 )
 
-// fakeRPCDoer stands in for *internal/client.Client's Do method. fill, if
-// set, writes into out (a pointer to the same result type the real RPC
-// method decodes into); err, if set, is returned instead. gotParams
-// records the params argument verbatim so a test can assert on the REAL
-// wire request an adapter method built, not only on the result it mapped
-// back.
+// fakeRPCDoer records wire requests for append-only and memory fixtures.
 type fakeRPCDoer struct {
 	err          error
 	fill         func(out any)
@@ -39,6 +25,10 @@ type fakeRPCDoer struct {
 }
 
 func (f *fakeRPCDoer) Do(_ context.Context, method string, params, out any) error {
+	// Append-only fixtures stop here; replyRPCFixture covers generation.
+	if method == "chat.reply_open" {
+		return errors.New("fixture has no reply stream")
+	}
 	f.calledMethod = method
 	f.gotParams = params
 	if f.err != nil {
@@ -50,31 +40,85 @@ func (f *fakeRPCDoer) Do(_ context.Context, method string, params, out any) erro
 	return nil
 }
 
-func TestCascadePAClient_OneShot_SuccessMapsThreadAndTurn(t *testing.T) {
-	doer := &fakeRPCDoer{fill: func(out any) {
-		res := out.(*appendTurnResult)
-		res.ThreadID = "thread-1"
-		res.TurnID = "turn-2"
-	}}
-	c := newCascadePAClient(nil, 0, nil)
-	c.doer = doer
-
-	_, err := c.OneShot(context.Background(), pacmd.OneShotRequest{Prompt: "hi"})
-	if err == nil {
-		t.Fatal("OneShot: err = nil, want errReplyGenerationUnavailable")
+func TestCascadePAOneShotRepliesThroughChatReply(t *testing.T) {
+	d := &replyRPCFixture{t: t}
+	got, err := (&cascadePAClient{doer: d}).OneShot(context.Background(), pacmd.OneShotRequest{Prompt: "hi"})
+	if err != nil || got.Content != "durable reply" || got.ThreadID != "th" || got.TurnID != "a" {
+		t.Fatalf("reply = %+v, error = %v", got, err)
 	}
-	if got := err.Error(); !containsAll(got, "thread thread-1 turn turn-2") {
-		t.Errorf("OneShot: err = %q, want it to name the recorded thread/turn", got)
-	}
-	if doer.calledMethod == "" {
-		t.Error("OneShot never called Do")
+	if !reflect.DeepEqual(d.calls, []string{"chat.append_turn", "chat.reply_open", "chat.reply", "chat.get_thread"}) {
+		t.Fatal(d.calls)
 	}
 }
 
-// TestCascadePAClient_OneShot_SendsLeadingContext proves
-// pacmd.OneShotRequest.LeadingContext reaches the real wire request
-// cascadePAClient.OneShot builds -- the seam a resumed block travels
-// through to become segment 0 of the next turn.
+func TestCascadePAStreamSubscribesBeforeReply(t *testing.T) {
+	d := &replyRPCFixture{t: t}
+	tokens, errs := (&cascadePAClient{doer: d}).Stream(context.Background(), pacmd.OneShotRequest{Prompt: "hi"})
+	var got string
+	for token := range tokens {
+		got += token
+	}
+	if err := <-errs; err != nil || got != "live reply" {
+		t.Fatalf("tokens %q, error %v", got, err)
+	}
+	if !reflect.DeepEqual(d.calls, []string{"chat.append_turn", "chat.reply_open", "subscribe", "chat.reply", "chat.get_thread"}) {
+		t.Fatal(d.calls)
+	}
+}
+
+type replyRPCFixture struct {
+	t        *testing.T
+	calls    []string
+	frames   chan client.Event
+	terminal bool
+}
+
+func (d *replyRPCFixture) Do(_ context.Context, method string, params, out any) error {
+	d.calls = append(d.calls, method)
+	var raw string
+	switch method {
+	case "chat.append_turn":
+		if keys := wireKeys(d.t, params); keys["role"] != "user" {
+			d.t.Error(keys)
+		}
+		raw = `{"thread_id":"th","turn_id":"u"}`
+	case "chat.reply_open":
+		if keys := wireKeys(d.t, params); keys["thread_id"] != "th" || keys["turn_id"] != "u" {
+			d.t.Error(keys)
+		}
+		raw = `{"stream_id":"server-stream"}`
+	case "chat.reply":
+		if keys := wireKeys(d.t, params); len(keys) != 1 || keys["stream_id"] != "server-stream" {
+			d.t.Error(keys)
+		}
+		if d.frames != nil {
+			d.frames <- client.Event{Data: `{"type":"delta","thread_id":"th","delta":"live reply"}`}
+			d.frames <- client.Event{Data: `{"type":"done","thread_id":"th"}`}
+			d.terminal = true
+			close(d.frames)
+		}
+		raw = `{"thread_id":"th","turn_id":"u","assistant_turn_id":"a"}`
+	case "chat.get_thread":
+		if d.frames != nil && !d.terminal {
+			d.t.Error("read before terminal frame")
+		}
+		raw = `{"turns":[{"turn":{"ID":"a","Role":"assistant"},"segments":[{"Kind":"text","Content":"durable reply"}]}]}`
+	default:
+		d.t.Errorf("unexpected method %s", method)
+	}
+	return json.Unmarshal([]byte(raw), out)
+}
+
+func (d *replyRPCFixture) StreamTopic(_ context.Context, topic string, query url.Values) (<-chan client.Event, func(), error) {
+	d.calls = append(d.calls, "subscribe")
+	if topic != "chat.reply" || query.Get("stream_id") != "server-stream" {
+		d.t.Error(topic, query)
+	}
+	d.frames = make(chan client.Event)
+	return d.frames, func() {}, nil
+}
+
+// Leading context travels with the user turn.
 func TestCascadePAClient_OneShot_SendsLeadingContext(t *testing.T) {
 	doer := &fakeRPCDoer{fill: func(out any) {
 		res := out.(*appendTurnResult)
@@ -94,10 +138,7 @@ func TestCascadePAClient_OneShot_SendsLeadingContext(t *testing.T) {
 	}
 }
 
-// TestCascadePAClient_Resume_SuccessMapsFields proves cascadePAClient.Resume
-// (V/S-47.T2) maps every chat.resume wire field onto pacmd.ResumeResult
-// and dispatches the real internal/conversation.MethodResume method name,
-// mirroring OneShot's own SuccessMapsThreadAndTurn test above.
+// Resume maps the daemon's composed context into the CLI result.
 func TestCascadePAClient_Resume_SuccessMapsFields(t *testing.T) {
 	doer := &fakeRPCDoer{fill: func(out any) {
 		res := out.(*resumeResult)
@@ -125,10 +166,7 @@ func TestCascadePAClient_Resume_SuccessMapsFields(t *testing.T) {
 	}
 }
 
-// TestCascadePAClient_CreateThread_SuccessMapsThreadID proves
-// cascadePAClient.CreateThread dispatches the real internal/conversation.MethodCreateThread method
-// name, sends privacyMode on the wire, and maps the result's thread_id
-// back.
+// CreateThread maps the daemon's new thread ID.
 func TestCascadePAClient_CreateThread_SuccessMapsThreadID(t *testing.T) {
 	doer := &fakeRPCDoer{fill: func(out any) {
 		res := out.(*createThreadResult)

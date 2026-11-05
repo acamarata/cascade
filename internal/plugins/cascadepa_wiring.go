@@ -2,8 +2,10 @@ package plugins
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/acamarata/cascade/internal/client"
@@ -13,151 +15,59 @@ import (
 	pacmd "github.com/acamarata/cascade/plugins/cascade-pa/cmd"
 )
 
-// Purpose (this file): closes the disclosed composition-root gap from
-//
-//	P1-E20-W5-S43-T3 (recorded in internal/build/testonly-allow.json
-//	naming plugins/cascade-pa/cmd.SetClient, expected_caller pointing at
-//	this exact file path): injects a real internal/client-backed
-//	implementation of plugins/cascade-pa/cmd.Client so `cascade chat`
-//	reaches the daemon's unix-socket JSON-RPC transport instead of the
-//	package default unconfiguredClient.
-//
-// Inputs: none at import time. Each call resolves the daemon socket path
-//
-//	lazily via runtime.NewDefaultPathProvider, mirroring
-//	cmd/cascade/root_paths.go's lazyPaths deferred-resolution pattern so
-//	importing this package never touches the environment.
-//
-// Outputs: registers a *cascadePAClient with plugins/cascade-pa/cmd via
-//
-//	SetClient. OneShot/Stream perform a real chat.append_turn round trip
-//	(internal/conversation.MethodAppendTurn, the wire method T2's Adapter
-//	registers) and then report, honestly, that no daemon component yet
-//	generates an assistant reply -- see errReplyGenerationUnavailable.
-//
-// Constraints: this package (internal/plugins) is the one place allowed to
-//
-//	import both internal/** and plugins/** (Art.10.2) -- see this file's
-//	sibling registry.go's own codex/opencode generator-wiring init() for
-//	the identical precedent this follows.
-//
-// SPORT: internal/plugins:cascadepa-wiring (ADD) -- FIX-cascade-chat-client-wiring.
-
-// cascadePAClientTimeout bounds every chat.append_turn round trip this
-// adapter issues, matching cmd/cascade/status.go's statusDialTimeout
-// precedent for the identical unix-socket transport.
+// The adapter records user input, dispatches generation, and reads the durable
+// reply. Paths resolve at invocation time; importing the plugin does no I/O.
 const cascadePAClientTimeout = 5 * time.Second
+const chatReplyTimeout = 10 * time.Minute
 
 func init() {
 	pacmd.SetClient(newCascadePAClient(client.UnixDialer, cascadePAClientTimeout, runtime.NewDefaultPathProvider))
 }
 
-// pathResolver matches runtime.NewDefaultPathProvider's signature so tests
-// can inject a fake without touching the real environment (Art.7.1).
 type pathResolver func() (runtime.PathProvider, error)
 
-// rpcDoer is the minimal seam every cascadepa_*_wiring.go adapter needs
-// from *internal/client.Client: one JSON-RPC round trip. *client.Client
-// already satisfies this (its Do method has this identical shape), so
-// returning rpcDoer from each file's rpcClient() method is a pure
-// narrowing, never a behavior change. It exists so a unit test can
-// substitute a fake round trip and prove each adapter method's SUCCESS
-// mapping: internal/plugins is not on the egress ruling's allowed-"net"-
-// importer list (internal/build/egress_allow.go), and internal/build's
-// Art.7.2 gate bars "net"/"net/http" from every untagged _test.go file,
-// so no unit-lane test can reach a success response through a real
-// socket. The doer field below defaults to nil in every production
-// constructor; only a same-package test ever sets it.
+// rpcDoer permits transport-free tests of the client-side wire contract.
 type rpcDoer interface {
 	Do(ctx context.Context, method string, params, out any) error
 }
 
-// cascadePAClient adapts internal/client's unix-socket JSON-RPC transport
-// to plugins/cascade-pa/cmd.Client. Path resolution is deferred to each
-// call, never performed at init time, so importing this package (and thus
-// running its init()) never touches the environment.
+type replySubscriber interface {
+	StreamTopic(context.Context, string, url.Values) (<-chan client.Event, func(), error)
+}
+
 type cascadePAClient struct {
 	dial         client.DialFunc
 	timeout      time.Duration
 	resolvePaths pathResolver
-	// doer, when non-nil, replaces the real rpcClient() construction --
-	// see rpcDoer's own doc comment. Always nil in production.
-	doer rpcDoer
-	// getwd is os.Getwd (tests inject): the "cwd" every owner call sends so
-	// the daemon records the thread's project once. Nil or a failure sends "".
-	getwd func() (string, error)
+	doer         rpcDoer
+	getwd        func() (string, error)
 }
 
-// newCascadePAClient builds a cascadePAClient from its three collaborators,
-// injected so tests substitute a fake dialer and a fake path resolver
-// without a real socket or a real home directory.
 func newCascadePAClient(dial client.DialFunc, timeout time.Duration, resolvePaths pathResolver) *cascadePAClient {
 	return &cascadePAClient{dial: dial, timeout: timeout, resolvePaths: resolvePaths, getwd: os.Getwd}
 }
 
-// appendTurnParams/appendSegmentWire/appendTurnResult mirror
-// internal/conversation/adapter.go's wire shapes exactly. Duplicated
-// rather than imported: that package's own types are unexported (they are
-// the JSON-RPC server side's decode target, not a public SDK), so this
-// client-side encode target is this adapter's own, matching
-// internal/client's own documented practice of never importing
-// internal/rpc's server-side literals (client.go's rpcPath doc comment).
+// These shapes mirror the private chat.append_turn server wire types.
 type appendTurnParams struct {
-	ThreadID string              `json:"thread_id"`
-	Role     string              `json:"role"`
-	Segments []appendSegmentWire `json:"segments"`
-	// PrivacyMode carries `chat --private` / `--local-only` as the §5.16
-	// tier NAME, matching cascade run's own wire choice: a name survives
-	// as itself, where SensitivityTier's numeric encoding would put the
-	// fail-closed tier at 0 and make an omitted field indistinguishable
-	// from an explicit "restricted".
-	PrivacyMode string `json:"privacy_mode,omitempty"`
-	// Origin/Untrusted mirror chat.append_turn's turn-origin stamp. Only a
-	// host binding sets them, from a constant of its own (see
-	// bridgeChatService.AppendTurn); `cascade chat` leaves both zero.
-	Origin    string `json:"origin,omitempty"`
-	Untrusted bool   `json:"untrusted,omitempty"`
-	// LeadingContext carries pacmd.OneShotRequest.LeadingContext onto the
-	// wire: a resume's composed block, stored by the daemon as segment 0 of
-	// this turn (internal/conversation/adapter_wire.go's identically named
-	// field).
-	LeadingContext string `json:"leading_context,omitempty"`
-	// Cwd is the owner CLI's working directory (cascadePAClient.getwd); only
-	// `cascade chat` sets it, the bridge, echo and tool callers never do.
-	Cwd string `json:"cwd,omitempty"`
+	ThreadID       string              `json:"thread_id"`
+	Role           string              `json:"role"`
+	Segments       []appendSegmentWire `json:"segments"`
+	PrivacyMode    string              `json:"privacy_mode,omitempty"`
+	Origin         string              `json:"origin,omitempty"`
+	Untrusted      bool                `json:"untrusted,omitempty"`
+	LeadingContext string              `json:"leading_context,omitempty"`
+	Cwd            string              `json:"cwd,omitempty"`
 }
-
 type appendSegmentWire struct {
 	Kind    string `json:"kind"`
 	Content string `json:"content"`
 }
-
 type appendTurnResult struct {
 	ThreadID string `json:"thread_id"`
 	TurnID   string `json:"turn_id"`
 	Seq      int64  `json:"seq"`
 }
 
-// errReplyGenerationUnavailable is OneShot/Stream's honest outcome once
-// the user's turn is genuinely appended over the real transport: no
-// daemon component yet generates an assistant reply to a
-// chat.append_turn call (internal/conversation.Adapter registers
-// append_turn/get_thread/list_threads only -- there is no chat.generate
-// or equivalent anywhere in the tree today). Returning fabricated reply
-// content here would be exactly the Art.1 stub this phase forbids; this
-// is real, disclosed, deliberate behavior, not a stand-in for missing
-// wiring -- matching unconfiguredClient's own contract in
-// plugins/cascade-pa/cmd/chat.go.
-var errReplyGenerationUnavailable = cascade.New(cascade.KindUnsupported,
-	"cascade chat: message recorded, but no daemon component generates an "+
-		"assistant reply yet (internal/conversation.Adapter registers "+
-		"chat.append_turn/get_thread/list_threads only)")
-
-// rpcClient resolves the daemon socket path and builds an internal/client
-// Client dialing it. A path-resolution failure is reported as
-// KindUnavailable rather than panicking -- the real environment can always
-// fail to resolve a home directory, and this call happens per-request, at
-// invocation time, never at import/construction time.
 func (c *cascadePAClient) rpcClient() (rpcDoer, error) {
 	if c.doer != nil {
 		return c.doer, nil
@@ -169,44 +79,80 @@ func (c *cascadePAClient) rpcClient() (rpcDoer, error) {
 	return client.New(paths.SocketPath(), c.dial, c.timeout), nil
 }
 
-// OneShot appends req as a "user" turn via the real chat.append_turn RPC,
-// then returns errReplyGenerationUnavailable naming the thread/turn that
-// were genuinely recorded -- see that error's doc comment for why no
-// content is fabricated. A transport failure (no daemon listening, a
-// timeout, cancellation) returns internal/client's own classified taxonomy
-// error instead, unmodified -- this is the signal that distinguishes a
-// real, wired client from unconfiguredClient's canned message.
+// openReply records the user turn before requesting a server-bound stream ID.
+func (c *cascadePAClient) openReply(ctx context.Context, rpc rpcDoer, req pacmd.OneShotRequest) (string, error) {
+	params := appendTurnParams{ThreadID: req.Thread, Role: "user",
+		Segments:    []appendSegmentWire{{Kind: "text", Content: req.Prompt}},
+		PrivacyMode: req.Privacy, LeadingContext: req.LeadingContext, Cwd: c.cwd()}
+	var turn appendTurnResult
+	if err := rpc.Do(ctx, conversation.MethodAppendTurn, params, &turn); err != nil {
+		return "", err
+	}
+	var opened struct {
+		StreamID string `json:"stream_id"`
+	}
+	paramsOpen := struct {
+		ThreadID string `json:"thread_id"`
+		TurnID   string `json:"turn_id"`
+	}{turn.ThreadID, turn.TurnID}
+	if err := rpc.Do(ctx, "chat.reply_open", paramsOpen, &opened); err != nil {
+		return "", err
+	}
+	return opened.StreamID, nil
+}
+
+// OneShot returns only the persisted assistant turn from a completed reply.
 func (c *cascadePAClient) OneShot(ctx context.Context, req pacmd.OneShotRequest) (pacmd.OneShotResult, error) {
-	rpc, err := c.rpcClient()
+	ctx, cancel := context.WithTimeout(ctx, chatReplyTimeout)
+	defer cancel()
+	replyClient := *c
+	replyClient.timeout = chatReplyTimeout
+	rpc, err := replyClient.rpcClient()
 	if err != nil {
 		return pacmd.OneShotResult{}, err
 	}
-	params := appendTurnParams{
-		ThreadID:       req.Thread,
-		Role:           "user",
-		Segments:       []appendSegmentWire{{Kind: "text", Content: req.Prompt}},
-		PrivacyMode:    req.Privacy,
-		LeadingContext: req.LeadingContext,
-		Cwd:            c.cwd(),
-	}
-	var result appendTurnResult
-	if err := rpc.Do(ctx, conversation.MethodAppendTurn, params, &result); err != nil {
+	id, err := c.openReply(ctx, rpc, req)
+	if err != nil {
 		return pacmd.OneShotResult{}, err
 	}
-	return pacmd.OneShotResult{}, cascade.Wrap(cascade.KindUnsupported, errReplyGenerationUnavailable,
-		fmt.Sprintf("thread %s turn %s", result.ThreadID, result.TurnID))
+	var reply conversation.ReplyResult
+	if err := rpc.Do(ctx, "chat.reply", map[string]string{"stream_id": id}, &reply); err != nil {
+		return pacmd.OneShotResult{}, err
+	}
+	return readReply(ctx, rpc, reply)
 }
 
-// Stream performs the same real append as OneShot, asynchronously: tokens
-// is always closed with zero tokens sent (no daemon component streams
-// assistant output yet -- see errReplyGenerationUnavailable), and errs
-// carries OneShot's outcome once tokens closes, matching
-// unconfiguredClient.Stream's own channel-ordering contract.
+func readReply(ctx context.Context, rpc rpcDoer, reply conversation.ReplyResult) (pacmd.OneShotResult, error) {
+	if err := ctx.Err(); err != nil {
+		return pacmd.OneShotResult{}, err
+	}
+	var history getThreadResultWire
+	if err := rpc.Do(ctx, conversation.MethodGetThread, getThreadParamsWire{ThreadID: reply.ThreadID}, &history); err != nil {
+		return pacmd.OneShotResult{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return pacmd.OneShotResult{}, err
+	}
+	for _, turn := range history.Turns {
+		if turn.Turn.ID != reply.AssistantTurnID || turn.Turn.Role != "assistant" {
+			continue
+		}
+		var text strings.Builder
+		for _, segment := range turn.Segments {
+			if segment.Kind == "text" {
+				text.WriteString(segment.Content)
+			}
+		}
+		return pacmd.OneShotResult{ThreadID: reply.ThreadID, TurnID: reply.AssistantTurnID, Content: text.String()}, nil
+	}
+	return pacmd.OneShotResult{}, cascade.New(cascade.KindIntegrity, "cascade chat: completed reply has no durable assistant turn")
+}
+
+// Stream subscribes before dispatch, emits deltas, and verifies the durable reply.
 func (c *cascadePAClient) Stream(ctx context.Context, req pacmd.OneShotRequest) (<-chan string, <-chan error) {
-	tokens := make(chan string)
-	errs := make(chan error, 1)
+	tokens, errs := make(chan string), make(chan error, 1)
 	go func() {
-		_, err := c.OneShot(ctx, req)
+		err := c.streamReply(ctx, req, tokens)
 		close(tokens)
 		errs <- err
 		close(errs)
@@ -214,20 +160,91 @@ func (c *cascadePAClient) Stream(ctx context.Context, req pacmd.OneShotRequest) 
 	return tokens, errs
 }
 
-// resumeParams/resumeResult mirror internal/conversation/adapter_resume.go's
-// wire shapes, duplicated client-side for the same reason appendTurnParams
-// is above: that package's types are unexported server decode targets.
-// SessionThreadID names the destination session thread (its stored marker
-// is the daemon's target tier); Cwd feeds recall.what's scope resolution.
+func (c *cascadePAClient) streamReply(ctx context.Context, req pacmd.OneShotRequest, tokens chan<- string) error {
+	ctx, cancel := context.WithTimeout(ctx, chatReplyTimeout)
+	defer cancel()
+	replyClient := *c
+	replyClient.timeout = chatReplyTimeout
+	rpc, err := replyClient.rpcClient()
+	if err != nil {
+		return err
+	}
+	id, err := c.openReply(ctx, rpc, req)
+	if err != nil {
+		return err
+	}
+	subscriber, ok := rpc.(replySubscriber)
+	if !ok {
+		return cascade.New(cascade.KindInternal, "cascade chat: reply subscription unavailable")
+	}
+	frames, closeStream, err := subscriber.StreamTopic(ctx, "chat.reply", url.Values{"stream_id": {id}})
+	if err != nil {
+		return err
+	}
+	defer closeStream()
+	completed := make(chan error, 1)
+	var reply conversation.ReplyResult
+	go func() {
+		defer close(completed)
+		completed <- rpc.Do(ctx, "chat.reply", map[string]string{"stream_id": id}, &reply)
+	}()
+	if err := forwardReply(ctx, frames, tokens, completed); err != nil {
+		return err
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-completed:
+		if err != nil {
+			return err
+		}
+	}
+	_, err = readReply(ctx, rpc, reply)
+	return err
+}
+
+func forwardReply(ctx context.Context, frames <-chan client.Event, tokens chan<- string, completed <-chan error) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-completed:
+			if err != nil {
+				return err
+			}
+			completed = nil
+		case event, ok := <-frames:
+			if !ok {
+				return cascade.New(cascade.KindUnavailable, "cascade chat: reply stream ended before terminal frame")
+			}
+			var frame conversation.Frame
+			if err := json.Unmarshal([]byte(event.Data), &frame); err != nil {
+				return cascade.Wrap(cascade.KindIntegrity, err, "cascade chat: invalid reply frame")
+			}
+			switch frame.Type {
+			case "delta":
+				select {
+				case tokens <- frame.Delta:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			case "done":
+				return nil
+			case "error":
+				return cascade.New(cascade.KindUnavailable, "cascade chat: reply failed: "+frame.Kind)
+			default:
+				return cascade.New(cascade.KindIntegrity, "cascade chat: unknown reply frame")
+			}
+		}
+	}
+}
+
 type resumeParams struct {
 	TopicID         string `json:"topic_id,omitempty"`
 	Query           string `json:"query,omitempty"`
 	SessionThreadID string `json:"session_thread_id,omitempty"`
 	Cwd             string `json:"cwd,omitempty"`
 }
-
-// resumeResult is chat.resume's result {thread_id, leading_context,
-// tokens, trimmed[]}.
 type resumeResult struct {
 	ThreadID       string   `json:"thread_id"`
 	LeadingContext string   `json:"leading_context"`
@@ -235,10 +252,7 @@ type resumeResult struct {
 	Trimmed        []string `json:"trimmed"`
 }
 
-// Resume performs the real chat.resume round trip
-// (internal/conversation.MethodResume). A transport failure or a
-// server-side refusal returns internal/client's classified taxonomy error
-// unmodified, matching OneShot.
+// Resume composes the daemon's recalled context into the current session.
 func (c *cascadePAClient) Resume(ctx context.Context, req pacmd.ResumeRequest) (pacmd.ResumeResult, error) {
 	rpc, err := c.rpcClient()
 	if err != nil {
@@ -249,44 +263,30 @@ func (c *cascadePAClient) Resume(ctx context.Context, req pacmd.ResumeRequest) (
 	if err := rpc.Do(ctx, conversation.MethodResume, params, &result); err != nil {
 		return pacmd.ResumeResult{}, err
 	}
-	return pacmd.ResumeResult{
-		ThreadID: result.ThreadID, LeadingContext: result.LeadingContext, Tokens: result.Tokens, Trimmed: result.Trimmed,
-	}, nil
+	return pacmd.ResumeResult{ThreadID: result.ThreadID, LeadingContext: result.LeadingContext, Tokens: result.Tokens, Trimmed: result.Trimmed}, nil
 }
 
-// createThreadParams/createThreadResult mirror
-// internal/conversation/adapter_createthread.go's wire shapes. privacy_mode
-// is required and always sent (never omitted), so an empty value reaches
-// the daemon and is refused there.
 type createThreadParams struct {
 	PrivacyMode string `json:"privacy_mode"`
-	// Cwd is the owner CLI's working directory (cascadePAClient.getwd).
-	Cwd string `json:"cwd,omitempty"`
+	Cwd         string `json:"cwd,omitempty"`
 }
-
 type createThreadResult struct {
 	ThreadID string `json:"thread_id"`
 }
 
-// CreateThread performs the real chat.create_thread round trip
-// (internal/conversation.MethodCreateThread): the daemon mints the id and
-// writes the thread and its marker in one transaction. Errors are
-// internal/client's classified taxonomy errors, unmodified.
+// CreateThread asks the daemon to mint a thread with its privacy marker.
 func (c *cascadePAClient) CreateThread(ctx context.Context, privacyMode string) (string, error) {
 	rpc, err := c.rpcClient()
 	if err != nil {
 		return "", err
 	}
-	params := createThreadParams{PrivacyMode: privacyMode, Cwd: c.cwd()}
 	var result createThreadResult
-	if err := rpc.Do(ctx, conversation.MethodCreateThread, params, &result); err != nil {
+	if err := rpc.Do(ctx, conversation.MethodCreateThread, createThreadParams{PrivacyMode: privacyMode, Cwd: c.cwd()}, &result); err != nil {
 		return "", err
 	}
 	return result.ThreadID, nil
 }
 
-// cwd returns the process working directory, or "" when it is unknown (no
-// getwd, or it failed): the daemon then records no project for the thread.
 func (c *cascadePAClient) cwd() string {
 	if c.getwd == nil {
 		return ""
