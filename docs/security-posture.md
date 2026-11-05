@@ -36,6 +36,8 @@ See also [node attestation signing: the pinned controller key and the node-built
 
 See also [driver custody: the host shim, the agent-driver output filter and their limits](security-posture/driver-custody.md).
 
+See also [inbox send authorization: the send authorizer and its two capabilities](security-posture/inbox-send.md).
+
 ## Doctor security checks
 
 `cascade doctor` reports six security checks. All are read-only: none selects
