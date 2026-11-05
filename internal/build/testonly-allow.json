@@ -1078,14 +1078,6 @@
     "symbol": "internal/delegation.RegisterPreSpawnGate"
   },
   {
-    "added_by_ticket": "P1-AGT-11",
-    "caller_site": "cmd/cascade/wire_delegate.go",
-    "expected_caller": "cmd/cascade/wire_delegate.go, the delegate wiring that applies the jobs_delegation set to the daemon's jobs database before the service starts; retire this entry once that file calls ApplyDelegationSchema",
-    "reason": "P1-AGT-11 ships the jobs_delegation migration and triggers implemented and tested, but the daemon start-up that applies it belongs to the delegate wiring of P1-AGT-08.",
-    "retire_ticket": "P1-AGT-08",
-    "symbol": "internal/jobs.ApplyDelegationSchema"
-  },
-  {
     "added_by_ticket": "P1-CPA-14",
     "caller_site": "plugins/cascade-pa/whatsapp/bridge.go",
     "expected_caller": "W/S-49.T3's WhatsApp Business Cloud API adapter, which decodes an inbound webhook payload and stamps it Origin=bridge-whatsapp/Untrusted=true (R-21.227) the same way telegram/module.go's stampInbound does for Telegram; retire this entry when that file lands",
@@ -1395,13 +1387,6 @@
     "reason": "P1-NODE-18b ships NewSSHDialerFromSigner with its tests; its first production caller is cmd/cascade/wire_node_channel.go from P1-NODE-18k.",
     "retire_ticket": "P1-NODE-18",
     "symbol": "internal/nodes.NewSSHDialerFromSigner"
-  },
-  {
-    "caller_site": "internal/ci/fanout.go",
-    "expected_caller": "internal/ci/fanout.go, which P1-HRN-03f makes the CI result producer name its data class; retire this entry once that file calls RaiseDataClass",
-    "reason": "P1-HRN-03b ships RaiseDataClass with its tests; its first production caller is internal/ci/fanout.go from P1-HRN-03f.",
-    "retire_ticket": "P1-HRN-03",
-    "symbol": "internal/notify.RaiseDataClass"
   },
   {
     "caller_site": "internal/daemon/subsystems_fleet_topology.go",
@@ -1766,5 +1751,12 @@
     "reason": "P1-TOP-02c adds the LaneTierCap router option and the fail-closed admit helper with their tests; routing does not consult the cap yet and the production composition that passes it is P1-TOP-02e.",
     "retire_ticket": "P1-TOP-02e",
     "symbol": "internal/conductor.WithLaneTierCap"
+  },
+  {
+    "caller_site": "internal/ci/fanout_dataclass.go",
+    "expected_caller": "internal/ci/fanout_dataclass.go, which P1-HRN-03f adds beside internal/ci/fanout.go so the CI result producer names its data class; retire this entry once the CI fanout calls RaiseDataClass",
+    "reason": "P1-HRN-03b ships RaiseDataClass with its tests; its first production caller is the CI result fanout from P1-HRN-03f. P1-CI-06b creates internal/ci/fanout.go without the call, so the promised caller_site moves to a file that does not exist yet (R216 pattern; P1-BF-R363).",
+    "retire_ticket": "P1-HRN-03",
+    "symbol": "internal/notify.RaiseDataClass"
   }
 ]
