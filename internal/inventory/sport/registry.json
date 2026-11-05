@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-04T20:19:31Z",
+  "generated_at": "2026-11-05T01:08:54Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -14564,27 +14564,14 @@
       "sites": [
         {
           "file": "internal/ci/poll.go",
-          "line": 35,
-          "status": "ADD",
-          "raw": "internal.ci.Client/ADDED"
+          "line": 7,
+          "status": "",
+          "ticket": "P1-E25-W5-S51-T2",
+          "raw": "internal.ci.Client (P1-E25-W5-S51-T2, P1-NODE-09)."
         }
       ],
       "statuses": [
-        "ADD"
-      ]
-    },
-    {
-      "name": "internal.ci.Client.PollRuns",
-      "sites": [
-        {
-          "file": "internal/ci/poll.go",
-          "line": 35,
-          "status": "ADD",
-          "raw": "internal.ci.Client.PollRuns/ADDED"
-        }
-      ],
-      "statuses": [
-        "ADD"
+        ""
       ]
     },
     {
@@ -17284,7 +17271,7 @@
         },
         {
           "file": "internal/events/cursor.go",
-          "line": 28,
+          "line": 32,
           "status": "ADD",
           "ticket": "P1-E03-W1-S04-T3",
           "raw": "internal.events.Bus/ADDED (cursor persistence) (P1-E03-W1-S04-T3)."
@@ -43336,7 +43323,7 @@
       ]
     }
   ],
-  "total_sites": 4174,
-  "unspecified_count": 378,
+  "total_sites": 4173,
+  "unspecified_count": 379,
   "multi_status_count": 132
 }
