@@ -1,9 +1,7 @@
 // Purpose (this file): delegation.Service: Delegate verifies the parent
-// record's signed chain before any Fleet.Lease, then runs the spawn leg:
-// entitlement (Abort, then provider.ErrEntitlement), the child record,
-// the session principal (SessionID = provider.SessionIDFor(record ID)),
-// the marker, PreSpawnGates, Service.shim Spawn, BindDelegationSpawn and
-// Commit. A refusal after the lease Aborts it and refuses the record.
+// chain, resolves a mutation's DispatchRef.RepoID (RTM-CI-17), leases,
+// then spawns: entitlement, child record, session principal, marker,
+// PreSpawnGates, shim Spawn, BindDelegationSpawn and Commit.
 // SPORT: delegation.service (ADD, P1-AGT-08).
 
 package delegation
@@ -27,18 +25,16 @@ import (
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
-// Request is a delegation request. JobID is required for a mutation;
-// JobProject and InScope come from the job row; Parent is the caller's
-// copy of the parent record, verified against the stored chain.
+// Request is a delegation request (a mutation needs JobID); JobProject, InScope and RepoRoot (the
+// worktree repo root) come from the job; Parent is the caller's copy, verified against the chain.
 type Request struct {
-	AgentID, Lane, Need, JobID, JobProject, Deadline, MinQuality string
-	Mutation                                                     bool
-	InScope                                                      []string
-	Parent                                                       jobs.DelegationRecord
+	AgentID, Lane, Need, JobID, JobProject, RepoRoot, Deadline, MinQuality string
+	Mutation                                                               bool
+	InScope                                                                []string
+	Parent                                                                 jobs.DelegationRecord
 }
 
-// Response is a delegation response: the lease, the job's in-scope prefixes,
-// the tool policy (all or readonly), the driver and the signed child record.
+// Response carries the lease, in-scope prefixes, tool policy, driver and signed child record.
 type Response struct {
 	Accepted                    bool
 	LeaseID, ToolPolicy, Driver string
@@ -62,16 +58,17 @@ type spawner interface {
 	Spawn(ctx context.Context, req agents.SpawnRequest) (agents.SpawnHandle, error)
 }
 
-// Deps are the service's injected dependencies. Signer is the
-// installation key (a node role refuses); Shim is the only Spawn caller.
+// Deps are the injected dependencies: Signer is the installation key (a node role refuses),
+// Shim the only Spawn caller, RepoIDOf a repo root's registered id (nil in production: none).
 type Deps struct {
-	Clock  runtime.Clock
-	Store  *jobs.Store
-	Pinned ed25519.PublicKey
-	Signer envelope.Signer
-	Minter *principal.Minter
-	Shim   spawner
-	fleet  fleetLeaser
+	Clock    runtime.Clock
+	Store    *jobs.Store
+	Pinned   ed25519.PublicKey
+	Signer   envelope.Signer
+	Minter   *principal.Minter
+	Shim     spawner
+	RepoIDOf func(ctx context.Context, root string) (string, error)
+	fleet    fleetLeaser
 }
 
 // Service is the delegation service.
@@ -98,13 +95,12 @@ func (s *Service) SetAgentLanes(lanes []capacity.AgentLane) {
 	s.lanes = m
 }
 
-// Delegate verifies the parent record, leases capacity and spawns the
-// delegated agent through the shim.
+// Delegate verifies the parent record, leases capacity and spawns the agent via the shim.
 func (s *Service) Delegate(ctx context.Context, req *Request) (*Response, error) {
 	if req == nil {
 		return nil, cascade.New(cascade.KindInvalidInput, "delegation: nil request")
 	}
-	s.applyDefaults(req)
+	req.Deadline, req.Need, req.MinQuality = cmp.Or(req.Deadline, "standard"), cmp.Or(req.Need, "compute"), cmp.Or(req.MinQuality, "standard")
 	if req.Mutation && req.JobID == "" {
 		return nil, ErrInvalidParam
 	}
@@ -119,7 +115,12 @@ func (s *Service) Delegate(ctx context.Context, req *Request) (*Response, error)
 	if err != nil {
 		return nil, err
 	}
-	lease, driver, err := s.lease(ctx, req)
+	repoID, err := s.repoID(ctx, req)
+	if err != nil { // refuse the stored child record before any lease
+		return nil, cmp.Or(s.insertChild(ctx, req, rec, ""),
+			s.deps.Store.FinishDelegation(ctx, rec.Env.ID, jobs.DelegationRefused, err.Error()), err)
+	}
+	lease, driver, err := s.lease(ctx, req, repoID)
 	if err != nil {
 		return nil, err
 	}
@@ -136,14 +137,27 @@ func (s *Service) Delegate(ctx context.Context, req *Request) (*Response, error)
 	return resp, nil
 }
 
-// lease leases capacity and resolves the lane's driver (Release when
-// none); no programmatic entitlement Aborts before ErrEntitlement.
-func (s *Service) lease(ctx context.Context, req *Request) (capacity.Lease, string, error) {
+// repoID resolves a mutation's RepoRoot through RepoIDOf: a nil seam, a reason-only
+// request or KindNotFound is no repo (""); any other error is returned as is.
+func (s *Service) repoID(ctx context.Context, req *Request) (string, error) {
+	if !req.Mutation || s.deps.RepoIDOf == nil {
+		return "", nil
+	}
+	id, err := s.deps.RepoIDOf(ctx, req.RepoRoot)
+	if cascade.HasKind(err, cascade.KindNotFound) {
+		return "", nil
+	}
+	return id, err
+}
+
+// lease leases (DispatchRef.RepoID = repoID) and resolves the lane's driver (Release
+// when none); no programmatic entitlement Aborts before ErrEntitlement.
+func (s *Service) lease(ctx context.Context, req *Request, repoID string) (capacity.Lease, string, error) {
 	if s.deps.fleet == nil {
 		return capacity.Lease{}, "", invalidf("Delegate: a fleet is required")
 	}
 	lease, err := s.deps.fleet.Lease(ctx, capacity.ResourceRequest{Intent: req.Need},
-		capacity.DispatchRef{JobID: req.JobID, AgentOnly: true}, 0)
+		capacity.DispatchRef{JobID: req.JobID, RepoID: repoID, AgentOnly: true}, 0)
 	if err != nil {
 		return capacity.Lease{}, "", err
 	}
@@ -157,14 +171,13 @@ func (s *Service) lease(ctx context.Context, req *Request) (capacity.Lease, stri
 	return lease, lane.DriverID, nil
 }
 
-// spawn stores the child record, mints its session principal, binds the
-// marker, runs the gates, spawns, binds the spawn and commits the lease.
+// spawn stores the child record, mints its principal, binds the marker, gates, spawns and commits.
 func (s *Service) spawn(ctx context.Context, req *Request, rec envelope.Signed, lease capacity.Lease, policy string) error {
 	if s.shim == nil || s.deps.Minter == nil {
 		return s.abort(ctx, lease, "", invalidf("Delegate: a shim and a minter are required"))
 	}
 	id := rec.Env.ID
-	if err := s.insertChild(ctx, req, rec, lease); err != nil {
+	if err := s.insertChild(ctx, req, rec, string(lease.LaneID)); err != nil {
 		return s.abort(ctx, lease, "", err)
 	}
 	job := provider.AgentJobSpec{JobID: provider.AgentJobID(id), ToolPolicy: policy}
@@ -194,19 +207,18 @@ func (s *Service) spawn(ctx context.Context, req *Request, rec envelope.Signed, 
 	return s.deps.fleet.Commit(ctx, lease)
 }
 
-// insertChild stores the signed child record live.
-func (s *Service) insertChild(ctx context.Context, req *Request, rec envelope.Signed, lease capacity.Lease) error {
+// insertChild stores the signed child record live on lane.
+func (s *Service) insertChild(ctx context.Context, req *Request, rec envelope.Signed, lane string) error {
 	b, err := json.Marshal(rec)
 	if err != nil {
 		return cascade.Wrap(cascade.KindInternal, err, "delegation: encode the child record")
 	}
 	return s.deps.Store.InsertDelegation(ctx, jobs.DelegationRecord{ID: rec.Env.ID, Signed: b,
 		AgentPrincipal: rec.Env.Principal, JobID: req.JobID, Mutation: req.Mutation,
-		Lane: string(lease.LaneID), State: jobs.DelegationLive, CreatedAt: s.deps.Clock.Now()})
+		Lane: lane, State: jobs.DelegationLive, CreatedAt: s.deps.Clock.Now()})
 }
 
-// mintSession mints the child's node-job principal with SessionID =
-// provider.SessionIDFor(job) (the claude --session-id), until expiry.
+// mintSession mints the child's node-job principal, SessionID = provider.SessionIDFor(job).
 func (s *Service) mintSession(ctx context.Context, req *Request, env envelope.Envelope, job provider.AgentJobID) (string, error) {
 	digest, err := envelope.Digest(env)
 	if err != nil {
@@ -244,14 +256,9 @@ func (s *Service) abort(ctx context.Context, lease capacity.Lease, id string, ca
 	return cmp.Or(err, cause)
 }
 
-// checkJobScope refuses a principal caller whose Scope differs from the
-// job's project; the owner CLI carries no principal.
+// checkJobScope refuses a principal caller outside the job's project (the owner CLI has none).
 func checkJobScope(ctx context.Context, req *Request) error {
-	c, ok := principal.CallerFrom(ctx)
-	if !ok || c.Principal == nil || req.JobID == "" {
-		return nil
-	}
-	if c.Principal.Scope != req.JobProject {
+	if c, ok := principal.CallerFrom(ctx); ok && c.Principal != nil && req.JobID != "" && c.Principal.Scope != req.JobProject {
 		return deniedf("job %s is outside the caller scope %q", req.JobID, c.Principal.Scope)
 	}
 	return nil
@@ -268,9 +275,8 @@ func (s *Service) verifyParent(ctx context.Context, parent jobs.DelegationRecord
 	return VerifyChain(ctx, s.deps.Store, parent, s.deps.Pinned, s.deps.Clock.Now())
 }
 
-// signChild signs the child record for agentID under the
-// installation key, re-parented to the verified parent; a node-role
-// signer's KindPermissionDenied comes back unchanged.
+// signChild signs agentID's child record under the installation key, re-parented
+// to the verified parent; a node-role signer's KindPermissionDenied comes back.
 func (s *Service) signChild(ctx context.Context, penv envelope.Envelope, agentID string) (envelope.Signed, error) {
 	if s.deps.Signer == nil {
 		return envelope.Signed{}, invalidf("Delegate: an installation key signer is required")
@@ -279,22 +285,14 @@ func (s *Service) signChild(ctx context.Context, penv envelope.Envelope, agentID
 	if err != nil {
 		return envelope.Signed{}, ruleErr("parent", err)
 	}
-	id, err := newID()
-	if err != nil {
+	child := penv
+	if child.ID, err = newID(); err != nil {
 		return envelope.Signed{}, err
 	}
-	child := penv
-	child.ID, child.Principal, child.ParentDigest = id, agentID, pd
+	child.Principal, child.ParentDigest = agentID, pd
 	signed, err := envelope.Issue(ctx, s.deps.Signer, child)
 	if inner := errors.Unwrap(err); inner != nil && cascade.HasKind(inner, cascade.KindPermissionDenied) {
 		return envelope.Signed{}, cascade.Wrap(cascade.KindPermissionDenied, inner, "delegation: sign")
 	}
 	return signed, err
-}
-
-// applyDefaults populates missing fields with sensible defaults.
-func (s *Service) applyDefaults(req *Request) {
-	req.Deadline = cmp.Or(req.Deadline, "standard")
-	req.Need = cmp.Or(req.Need, "compute")
-	req.MinQuality = cmp.Or(req.MinQuality, "standard")
 }
