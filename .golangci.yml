@@ -319,6 +319,9 @@ linters:
             # the daemon.
             - "!**/cmd/cascade/jobs_evidence_rpc.go"
             - "!**/cmd/cascade/jobs_evidence_sse.go"
+            # hooks_rpc.go mounts hooks.list and hooks.fires on the daemon's own
+            # registry and declares their owner-only access; it never dials the daemon.
+            - "!**/cmd/cascade/hooks_rpc.go"
             - "!**/*_test.go"
           deny:
             - pkg: "github.com/acamarata/cascade/internal/rpc"

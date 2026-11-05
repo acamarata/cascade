@@ -201,11 +201,11 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// context_facts_rpc.go mounts and declares context.facts.* on the
 	// daemon's own registry and never dials the daemon; mirrors .golangci.yml.
 	"context_facts_rpc.go": true,
-	// jobs_evidence_rpc.go and jobs_evidence_sse.go serve the evidence list,
-	// plugin.pbd.evidence and the jobs.evidence stream from the daemon's own
-	// registry and bus and never dial the daemon; mirrors .golangci.yml.
+	// jobs_evidence_rpc.go, jobs_evidence_sse.go and hooks_rpc.go serve their verbs and
+	// stream from the daemon's own registry and bus, never dialing it; mirrors .golangci.yml.
 	"jobs_evidence_rpc.go": true,
 	"jobs_evidence_sse.go": true,
+	"hooks_rpc.go":         true,
 }
 
 // scanCmdCascadeRPCImports returns, sorted, the base filenames under dir
