@@ -57,3 +57,8 @@ receives a `t.TempDir()` root and every stored fact is repo-relative.
 - `fixture-graph-malformed/` -- a minimal Go module whose one file has a
   real syntax error, proving the extractor returns a typed error rather
   than a panic or a silently-partial graph.
+- `fixture-watch/` -- a hand-authored three-file tree (`src/main.txt`,
+  `src/deep/leaf.txt`, `docs/notes.md`) the watcher tests copy under a
+  `t.TempDir()` root before adding the `.git`, dot-prefixed and vendored
+  directories they must skip; those are created by the test at run time,
+  never checked in, so no ignore rule hides any part of the fixture.

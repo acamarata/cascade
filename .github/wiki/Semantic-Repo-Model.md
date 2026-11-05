@@ -227,3 +227,29 @@ requires both ends of an edge to be nodes.
 attention sink are the injected `IndexLeg` and `Attention`. The one
 retrieval package in its dependency list is the leaf `internal/retrieval/corpus`,
 reached through `internal/secrets`.
+
+## Change feed
+
+`repo.Watcher` feeds the maintenance pipeline. It watches directories only
+(fsnotify is not recursive and kqueue costs one descriptor per watch),
+skipping `.git` and every `ExcludedPath` segment, follows directories as
+they are created, and stops at `MaxWatches` (4096): past the cap it raises
+one `repo.watch-capped:<repo>` attention item, releases every watch and the
+repository runs sweep-only. Events coalesce for `DebounceWindow` (500ms) on
+the injected clock into one `Batch`, whose `Commit` and `TreeOID` come from
+`ReadGitState` (`git status --porcelain=v1 -z`, `git diff --name-only -z
+<since>..HEAD` when the cursor commit is an ancestor, `git rev-parse
+HEAD^{tree}`).
+
+The gap list is closed: an fsnotify overflow or error, a watcher start, an
+unreadable journal and `ErrGap` (the cursor commit is not an ancestor of
+HEAD) each schedule exactly one `Reconciler.Sweep` before the next batch.
+A sweep also runs every `ReconcileInterval` (10 minutes); neither the
+interval nor the watcher has a config key or kill switch. `Sweep` replays
+unfinished intents first; a tree OID equal to the cursor's with a clean
+status repairs nothing; otherwise every tracked path is hashed and only
+the paths whose hash differs from the journal (all of them when the tree
+marker is absent) go through `Maintenance.Apply`. A non-zero repair raises
+one `repo.drift:<repo>:<tree oid>` item. `Quiesce` stops new batches, waits
+for the in-flight one to commit and returns the journaled cursor; `Resume`
+restarts delivery.
