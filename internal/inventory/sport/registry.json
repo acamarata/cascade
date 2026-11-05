@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-05T14:32:13Z",
+  "generated_at": "2026-11-05T18:20:09Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -22596,6 +22596,12 @@
           "raw": "internal/client (ADD, per T-3 sport_updates)."
         },
         {
+          "file": "internal/client/stream_topic_unit_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal/client (ADD)."
+        },
+        {
           "file": "internal/client/transport_test.go",
           "line": 12,
           "status": "ADD",
@@ -43743,7 +43749,7 @@
       ]
     }
   ],
-  "total_sites": 4211,
+  "total_sites": 4212,
   "unspecified_count": 391,
   "multi_status_count": 132
 }
