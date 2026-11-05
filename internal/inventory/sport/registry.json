@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-05T03:51:01Z",
+  "generated_at": "2026-11-05T06:41:34Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -41551,6 +41551,50 @@
       ]
     },
     {
+      "name": "repo/change-feed",
+      "sites": [
+        {
+          "file": "internal/repo/gitwatch.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "repo/change-feed/ADD (contract:repo-change-feed, P1-GEN-14)."
+        },
+        {
+          "file": "internal/repo/gitwatch_test.go",
+          "line": 4,
+          "status": "ADD",
+          "raw": "repo/change-feed/ADD test coverage (P1-GEN-14)."
+        },
+        {
+          "file": "internal/repo/reconcile.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "repo/change-feed/ADD (contract:repo-change-feed, P1-GEN-14)."
+        },
+        {
+          "file": "internal/repo/reconcile_test.go",
+          "line": 4,
+          "status": "ADD",
+          "raw": "repo/change-feed/ADD test coverage (P1-GEN-14)."
+        },
+        {
+          "file": "internal/repo/watch.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "repo/change-feed/ADD (contract:repo-change-feed, P1-GEN-14)."
+        },
+        {
+          "file": "internal/repo/watch_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "repo/change-feed/ADD test coverage (P1-GEN-14)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "repo/graph-cross-scope-gating",
       "sites": [
         {
@@ -43363,7 +43407,7 @@
       ]
     }
   ],
-  "total_sites": 4177,
+  "total_sites": 4183,
   "unspecified_count": 379,
   "multi_status_count": 132
 }
