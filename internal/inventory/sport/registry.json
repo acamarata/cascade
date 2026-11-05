@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-05T06:41:34Z",
+  "generated_at": "2026-11-05T09:25:14Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4031,6 +4031,20 @@
       "statuses": [
         "",
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade MCP process tools tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/mcp_process_tools_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "cmd/cascade MCP process tools tests (P1-PLG-06)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -9041,6 +9055,20 @@
       ],
       "statuses": [
         "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "conductor.lane-tiercap",
+      "sites": [
+        {
+          "file": "internal/conductor/lane_tiercap.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "conductor.lane-tiercap/ADD (P1-TOP-02c)."
+        }
+      ],
+      "statuses": [
         "ADD"
       ]
     },
@@ -24993,6 +25021,34 @@
       ]
     },
     {
+      "name": "internal/mcp installed process tools",
+      "sites": [
+        {
+          "file": "internal/mcp/registry_process.go",
+          "line": 15,
+          "status": "",
+          "raw": "internal/mcp installed process tools (P1-PLG-06)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/mcp installed process tools tests",
+      "sites": [
+        {
+          "file": "internal/mcp/registry_process_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/mcp installed process tools tests (P1-PLG-06)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/mcp tests",
       "sites": [
         {
@@ -26970,6 +27026,20 @@
       ]
     },
     {
+      "name": "internal/plugins first-party manifests",
+      "sites": [
+        {
+          "file": "internal/plugins/first_party_manifests.go",
+          "line": 9,
+          "status": "",
+          "raw": "internal/plugins first-party manifests (P1-PLG-06)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/plugins harness-generator-wiring tests",
       "sites": [
         {
@@ -27033,6 +27103,48 @@
           "line": 4,
           "status": "",
           "raw": "internal/plugins install middleware tests."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins installed process tools",
+      "sites": [
+        {
+          "file": "internal/plugins/installed_tools.go",
+          "line": 17,
+          "status": "",
+          "raw": "internal/plugins installed process tools (P1-PLG-06)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins installed process tools e2e",
+      "sites": [
+        {
+          "file": "internal/plugins/installed_tools_e2e_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "internal/plugins installed process tools e2e (P1-PLG-06)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins installed process tools tests",
+      "sites": [
+        {
+          "file": "internal/plugins/installed_tools_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "internal/plugins installed process tools tests (P1-PLG-06)."
         }
       ],
       "statuses": [
@@ -27723,6 +27835,48 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal/plugins/plugintest",
+      "sites": [
+        {
+          "file": "internal/plugins/plugintest/plugintest.go",
+          "line": 13,
+          "status": "",
+          "raw": "internal/plugins/plugintest (P1-PLG-06)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins/plugintest grant path",
+      "sites": [
+        {
+          "file": "internal/plugins/plugintest/grant.go",
+          "line": 11,
+          "status": "",
+          "raw": "internal/plugins/plugintest grant path (P1-PLG-06)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/plugins/plugintest tests",
+      "sites": [
+        {
+          "file": "internal/plugins/plugintest/plugintest_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "internal/plugins/plugintest tests (P1-PLG-06)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -43407,7 +43561,7 @@
       ]
     }
   ],
-  "total_sites": 4183,
-  "unspecified_count": 379,
+  "total_sites": 4194,
+  "unspecified_count": 389,
   "multi_status_count": 132
 }
