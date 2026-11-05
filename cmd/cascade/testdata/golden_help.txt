@@ -14,6 +14,7 @@ Available Commands:
   config         Inspect and edit cascade's config.toml
   context        Session-scope and context-engine commands
   daemon         Manage the cascade daemon process
+  docs           Generate the reference documentation
   doctor         Diagnose the local cascade installation
   fleet          Inspect the local fleet of harness sessions
   github         Commands contributed by the cascade-github plugin
