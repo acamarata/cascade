@@ -1,7 +1,6 @@
-// Purpose (this file): delegation.Service: Delegate verifies the parent
-// chain, resolves a mutation's DispatchRef.RepoID (RTM-CI-17), leases,
-// then spawns: entitlement, child record, session principal, marker,
-// PreSpawnGates, shim Spawn, BindDelegationSpawn and Commit.
+// Purpose (this file): delegation.Service: Delegate verifies the parent chain, resolves a mutation's
+// DispatchRef.RepoID (RTM-CI-17), leases, then spawns: entitlement, child record, session principal,
+// marker, PreSpawnGates, shim Spawn (LeaseID, ChildPrincipal: RTM-CI-18), BindDelegationSpawn, Commit.
 // SPORT: delegation.service (ADD, P1-AGT-08).
 
 package delegation
@@ -45,6 +44,9 @@ type Response struct {
 // ErrInvalidParam refuses a mutation request that names no job_id.
 var ErrInvalidParam = cascade.New(cascade.KindInvalidInput, "delegation: job_id is required for a mutation")
 
+// ErrSpawnBinding refuses a spawn whose lease id or child principal is empty (RTM-CI-18).
+var ErrSpawnBinding = cascade.New(cascade.KindInternal, "delegation: the spawn carries no lease id or child principal")
+
 // fleetLeaser is the Fleet seam; *capacity.Fleet satisfies it.
 type fleetLeaser interface {
 	Lease(ctx context.Context, req capacity.ResourceRequest, d capacity.DispatchRef, attempt int) (capacity.Lease, error)
@@ -71,16 +73,18 @@ type Deps struct {
 	fleet    fleetLeaser
 }
 
-// Service is the delegation service.
+// Service is the delegation service; newPrincipalID maps AgentID to the child principal id.
 type Service struct {
-	deps  Deps
-	lanes map[string]capacity.AgentLane
-	shim  spawner
+	deps           Deps
+	lanes          map[string]capacity.AgentLane
+	shim           spawner
+	newPrincipalID func(agentID string) (string, error)
 }
 
 // NewService returns a configured service instance.
 func NewService(deps Deps) *Service {
-	return &Service{deps: deps, lanes: map[string]capacity.AgentLane{}, shim: deps.Shim}
+	return &Service{deps: deps, lanes: map[string]capacity.AgentLane{}, shim: deps.Shim,
+		newPrincipalID: func(agentID string) (string, error) { return agentID, nil }}
 }
 
 // SetAgentLanes registers the agent drivers whose "agent:<id>" lanes a
@@ -104,8 +108,8 @@ func (s *Service) Delegate(ctx context.Context, req *Request) (*Response, error)
 	if req.Mutation && req.JobID == "" {
 		return nil, ErrInvalidParam
 	}
-	if err := checkJobScope(ctx, req); err != nil {
-		return nil, err
+	if c, ok := principal.CallerFrom(ctx); ok && c.Principal != nil && req.JobID != "" && c.Principal.Scope != req.JobProject {
+		return nil, deniedf("job %s is outside the caller scope %q", req.JobID, c.Principal.Scope) // the owner CLI has none
 	}
 	penv, err := s.verifyParent(ctx, req.Parent)
 	if err != nil {
@@ -124,13 +128,8 @@ func (s *Service) Delegate(ctx context.Context, req *Request) (*Response, error)
 	if err != nil {
 		return nil, err
 	}
-	resp := &Response{Accepted: true, LeaseID: lease.ID, ToolPolicy: "readonly", InScopePrefixes: []string{}, Driver: driver, Record: rec}
-	if req.JobID != "" {
-		resp.InScopePrefixes = append(resp.InScopePrefixes, req.InScope...)
-	}
-	if req.Mutation {
-		resp.ToolPolicy = "all"
-	}
+	resp := &Response{Accepted: true, LeaseID: lease.ID, ToolPolicy: map[bool]string{false: "readonly", true: "all"}[req.Mutation],
+		InScopePrefixes: append([]string{}, map[bool][]string{true: req.InScope}[req.JobID != ""]...), Driver: driver, Record: rec}
 	if err := s.spawn(ctx, req, rec, lease, resp.ToolPolicy); err != nil {
 		return nil, err
 	}
@@ -171,37 +170,46 @@ func (s *Service) lease(ctx context.Context, req *Request, repoID string) (capac
 	return lease, lane.DriverID, nil
 }
 
-// spawn stores the child record, mints its principal, binds the marker, gates, spawns and commits.
+// spawn stores the child record, mints its principal, binds the marker, gates, spawns and
+// commits; an empty lease id or child principal refuses ErrSpawnBinding before any Spawn.
 func (s *Service) spawn(ctx context.Context, req *Request, rec envelope.Signed, lease capacity.Lease, policy string) error {
 	if s.shim == nil || s.deps.Minter == nil {
 		return s.abort(ctx, lease, "", invalidf("Delegate: a shim and a minter are required"))
 	}
-	id := rec.Env.ID
+	id, child := rec.Env.ID, rec.Env.Principal
+	if child == "" { // the store refuses a principal-less record: refuse before the insert
+		return s.abort(ctx, lease, "", ErrSpawnBinding)
+	}
 	if err := s.insertChild(ctx, req, rec, string(lease.LaneID)); err != nil {
 		return s.abort(ctx, lease, "", err)
 	}
 	job := provider.AgentJobSpec{JobID: provider.AgentJobID(id), ToolPolicy: policy}
 	tok, err := s.mintSession(ctx, req, rec.Env, job.JobID)
-	if err != nil {
-		return s.abort(ctx, lease, id, err)
+	marker := ""
+	if err == nil {
+		marker, err = agents.NewLeaseMarker()
 	}
-	marker, err := agents.NewLeaseMarker()
 	if err == nil {
 		err = s.deps.Store.BindDelegationMarker(ctx, id, marker)
 	}
 	if err == nil {
 		err = s.runGates(ctx, id, rec.Env)
 	}
-	if err != nil {
-		return s.abort(ctx, lease, id, err)
+	if err == nil && lease.ID == "" {
+		err = ErrSpawnBinding
 	}
-	h, err := s.shim.Spawn(ctx, agents.SpawnRequest{Lane: string(lease.LaneID), Job: job, PrincipalToken: tok,
-		LeaseMarker: marker, LeaseID: lease.ID, ChildPrincipal: rec.Env.Principal})
-	if err != nil {
-		return s.abort(ctx, lease, id, err)
+	var h agents.SpawnHandle
+	if err == nil {
+		h, err = s.shim.Spawn(ctx, agents.SpawnRequest{Lane: string(lease.LaneID), Job: job, PrincipalToken: tok,
+			LeaseMarker: marker, LeaseID: lease.ID, ChildPrincipal: child})
 	}
-	if err := s.deps.Store.BindDelegationSpawn(ctx, id, lease.ID, string(h.JobID)); err != nil {
-		_ = h.Release(ctx)
+	if err == nil {
+		if err = s.deps.Store.BindDelegationSpawn(ctx, id, lease.ID, string(h.JobID)); err != nil {
+			_ = h.Release(ctx)
+		}
+	}
+	if err != nil { // the minted token never outlives a refused spawn
+		s.deps.Minter.Revoke(child)
 		return s.abort(ctx, lease, id, err)
 	}
 	return s.deps.fleet.Commit(ctx, lease)
@@ -238,11 +246,8 @@ func (s *Service) mintSession(ctx context.Context, req *Request, env envelope.En
 // runGates runs every registered PreSpawnGate over the stored record.
 func (s *Service) runGates(ctx context.Context, id string, env envelope.Envelope) error {
 	rec, err := s.deps.Store.GetDelegation(ctx, id)
-	for _, g := range PreSpawnGates() {
-		if err != nil {
-			return err
-		}
-		err = g(ctx, rec, env)
+	for gates, i := PreSpawnGates(), 0; err == nil && i < len(gates); i++ {
+		err = gates[i](ctx, rec, env)
 	}
 	return err
 }
@@ -254,14 +259,6 @@ func (s *Service) abort(ctx context.Context, lease capacity.Lease, id string, ca
 		err = s.deps.Store.FinishDelegation(ctx, id, jobs.DelegationRefused, cause.Error())
 	}
 	return cmp.Or(err, cause)
-}
-
-// checkJobScope refuses a principal caller outside the job's project (the owner CLI has none).
-func checkJobScope(ctx context.Context, req *Request) error {
-	if c, ok := principal.CallerFrom(ctx); ok && c.Principal != nil && req.JobID != "" && c.Principal.Scope != req.JobProject {
-		return deniedf("job %s is outside the caller scope %q", req.JobID, c.Principal.Scope)
-	}
-	return nil
 }
 
 // verifyParent refuses a parent whose stored chain does not verify now.
@@ -286,10 +283,13 @@ func (s *Service) signChild(ctx context.Context, penv envelope.Envelope, agentID
 		return envelope.Signed{}, ruleErr("parent", err)
 	}
 	child := penv
-	if child.ID, err = newID(); err != nil {
+	child.ParentDigest = pd
+	if child.ID, err = newID(); err == nil {
+		child.Principal, err = s.newPrincipalID(agentID)
+	}
+	if err != nil {
 		return envelope.Signed{}, err
 	}
-	child.Principal, child.ParentDigest = agentID, pd
 	signed, err := envelope.Issue(ctx, s.deps.Signer, child)
 	if inner := errors.Unwrap(err); inner != nil && cascade.HasKind(inner, cascade.KindPermissionDenied) {
 		return envelope.Signed{}, cascade.Wrap(cascade.KindPermissionDenied, inner, "delegation: sign")
