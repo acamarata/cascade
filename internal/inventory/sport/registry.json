@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-05T12:06:23Z",
+  "generated_at": "2026-11-05T14:32:13Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5134,6 +5134,32 @@
       ]
     },
     {
+      "name": "cmd/cascade domain_promote_probe",
+      "sites": [
+        {
+          "file": "cmd/cascade/domain_promote_probe.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "cmd/cascade domain_promote_probe/ADD (P1-TOP-19d)."
+        },
+        {
+          "file": "cmd/cascade/domain_promote_probe_integration_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "cmd/cascade domain_promote_probe/ADD (P1-TOP-19d)."
+        },
+        {
+          "file": "cmd/cascade/domain_promote_probe_test.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "cmd/cascade domain_promote_probe/ADD (P1-TOP-19d)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade elevate-helper",
       "sites": [
         {
@@ -5309,6 +5335,34 @@
           "line": 15,
           "status": "",
           "raw": "cmd/cascade held-record decision tests (P1-SEC-41)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade hooks RPCs",
+      "sites": [
+        {
+          "file": "cmd/cascade/hooks_rpc.go",
+          "line": 10,
+          "status": "",
+          "raw": "cmd/cascade hooks RPCs (P1-SUP-02b)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade inbox send authorization wiring",
+      "sites": [
+        {
+          "file": "cmd/cascade/wire_inbox_send_auth.go",
+          "line": 14,
+          "status": "",
+          "raw": "cmd/cascade inbox send authorization wiring (P1-HRN-15)."
         }
       ],
       "statuses": [
@@ -43689,7 +43743,7 @@
       ]
     }
   ],
-  "total_sites": 4206,
-  "unspecified_count": 389,
+  "total_sites": 4211,
+  "unspecified_count": 391,
   "multi_status_count": 132
 }
