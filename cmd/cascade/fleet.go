@@ -133,6 +133,8 @@ func newFleetCmd(deps fleetSessionsDeps) *cobra.Command {
 	cmd.AddCommand(newFleetModeCmd(deps))
 	// usage (P1-E18-W4-S40-T5, Epic R acceptance ticket).
 	cmd.AddCommand(newFleetUsageCmd(deps))
+	// learn (P1-LRN-04: fleet learn status|explain|reset).
+	cmd.AddCommand(newFleetLearnCmd(deps))
 	return cmd
 }
 
