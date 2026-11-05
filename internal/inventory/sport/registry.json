@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-05T01:08:54Z",
+  "generated_at": "2026-11-05T03:51:01Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -8961,6 +8961,20 @@
       ]
     },
     {
+      "name": "conductor.filter-relay-origin",
+      "sites": [
+        {
+          "file": "internal/conductor/filters_relay.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "conductor.filter-relay-origin/ADD (P1-NODE-06a)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "conductor.flow",
       "sites": [
         {
@@ -9086,6 +9100,20 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "conductor.relay-origin",
+      "sites": [
+        {
+          "file": "internal/conductor/relay_origin.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "conductor.relay-origin/ADD (P1-NODE-06a)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -32874,6 +32902,18 @@
           "raw": "jobs/delegation-record/ADD (P1-AGT-11)."
         },
         {
+          "file": "internal/jobs/delegation_byjob.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "jobs/delegation-record/ADD (P1-CI-06a)."
+        },
+        {
+          "file": "internal/jobs/delegation_byjob_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "jobs/delegation-record/ADD (P1-CI-06a)."
+        },
+        {
           "file": "internal/jobs/delegation_schema.go",
           "line": 25,
           "status": "ADD",
@@ -43323,7 +43363,7 @@
       ]
     }
   ],
-  "total_sites": 4173,
+  "total_sites": 4177,
   "unspecified_count": 379,
   "multi_status_count": 132
 }
