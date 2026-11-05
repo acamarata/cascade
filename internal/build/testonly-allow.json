@@ -1759,5 +1759,12 @@
     "reason": "P1-GEN-14 ships the debounced fsnotify Watcher with its tests; its first production caller is the daemon composition from P1-GEN-13b.",
     "retire_ticket": "P1-GEN-13b",
     "symbol": "internal/repo.NewWatcher"
+  },
+  {
+    "caller_site": "cmd/cascade/daemon_unix_conductor_lanecap.go",
+    "expected_caller": "cmd/cascade/daemon_unix_conductor_lanecap.go, which P1-TOP-02e adds beside daemon_unix_conductor.go to build the production router with WithLaneTierCap over the fleet topology; retire this entry once that file calls WithLaneTierCap",
+    "reason": "P1-TOP-02c adds the LaneTierCap router option and the fail-closed admit helper with their tests; routing does not consult the cap yet and the production composition that passes it is P1-TOP-02e.",
+    "retire_ticket": "P1-TOP-02e",
+    "symbol": "internal/conductor.WithLaneTierCap"
   }
 ]

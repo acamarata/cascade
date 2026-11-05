@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-05T06:10:52Z",
+  "generated_at": "2026-11-05T08:42:58Z",
   "tickets": [
     "P1-AGT-01",
     "P1-AGT-02",
@@ -196,6 +196,7 @@
     "P1-PLG-03",
     "P1-PLG-04",
     "P1-PLG-05",
+    "P1-PLG-06",
     "P1-PLG-07",
     "P1-PLG-08",
     "P1-PLG-09",
@@ -271,6 +272,7 @@
     "P1-TOP-01",
     "P1-TOP-02a",
     "P1-TOP-02b",
+    "P1-TOP-02c",
     "P1-TOP-04c",
     "P1-TOP-06a",
     "P1-TOP-06b",
