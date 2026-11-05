@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-05T09:25:14Z",
+  "generated_at": "2026-11-05T12:06:23Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -3927,6 +3927,20 @@
       ]
     },
     {
+      "name": "cmd.cascade.wireCIFanout",
+      "sites": [
+        {
+          "file": "cmd/cascade/wire_ci_fanout.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "cmd.cascade.wireCIFanout/ADDED (P1-CI-06)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd.cascade/TEST",
       "sites": [
         {
@@ -7594,6 +7608,50 @@
           "status": "ADD",
           "ticket": "P1-E29-W6-S60-T1",
           "raw": "cmd/cascade/fleet-jobs-cli (ADD, P1-E29-W6-S60-T1)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/fleet-learn-cli",
+      "sites": [
+        {
+          "file": "cmd/cascade/fleet_learn.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "cmd/cascade/fleet-learn-cli (ADD, P1-LRN-04)."
+        },
+        {
+          "file": "cmd/cascade/fleet_learn_explain.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "cmd/cascade/fleet-learn-cli (ADD, P1-LRN-04)."
+        },
+        {
+          "file": "cmd/cascade/fleet_learn_reset.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "cmd/cascade/fleet-learn-cli (ADD, P1-LRN-04)."
+        },
+        {
+          "file": "cmd/cascade/fleet_learn_status.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "cmd/cascade/fleet-learn-cli (ADD, P1-LRN-04)."
+        },
+        {
+          "file": "cmd/cascade/fleet_learn_status_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "cmd/cascade/fleet-learn-cli (ADD, P1-LRN-04)."
+        },
+        {
+          "file": "cmd/cascade/fleet_learn_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "cmd/cascade/fleet-learn-cli (ADD, P1-LRN-04)."
         }
       ],
       "statuses": [
@@ -15267,6 +15325,20 @@
       ]
     },
     {
+      "name": "internal.ci.RegisterCIFanout",
+      "sites": [
+        {
+          "file": "internal/ci/fanout.go",
+          "line": 22,
+          "status": "ADD",
+          "raw": "internal.ci.RegisterCIFanout/ADDED (P1-CI-06)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.ci.RequestNodeSignature",
       "sites": [
         {
@@ -22621,6 +22693,20 @@
       ]
     },
     {
+      "name": "internal/context.lane-tiercap-fixture",
+      "sites": [
+        {
+          "file": "internal/context/lane_tiercap_fixture_test.go",
+          "line": 24,
+          "status": "ADD",
+          "raw": "internal/context.lane-tiercap-fixture (ADD, P1-TOP-02h)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/context/hydration",
       "sites": [
         {
@@ -22661,6 +22747,20 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "internal/conversation.lane-tiercap-fixture",
+      "sites": [
+        {
+          "file": "internal/conversation/lane_tiercap_fixture_test.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal/conversation.lane-tiercap-fixture (ADD, P1-TOP-02h)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -30543,6 +30643,20 @@
       ]
     },
     {
+      "name": "internal/review.lane-tiercap-fixture",
+      "sites": [
+        {
+          "file": "internal/review/lane_tiercap_fixture_test.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "internal/review.lane-tiercap-fixture (ADD, P1-TOP-02j)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal/review.prose",
       "sites": [
         {
@@ -30641,6 +30755,20 @@
           "status": "ADD",
           "ticket": "P1-E25-W5-S52-T4",
           "raw": "internal/review.templates/ADD (P1-E25-W5-S52-T4)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/review.tiercap-callers",
+      "sites": [
+        {
+          "file": "internal/review/tiercap_callers_test.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "internal/review.tiercap-callers (ADD, P1-TOP-02j)."
         }
       ],
       "statuses": [
@@ -43561,7 +43689,7 @@
       ]
     }
   ],
-  "total_sites": 4194,
+  "total_sites": 4206,
   "unspecified_count": 389,
   "multi_status_count": 132
 }
