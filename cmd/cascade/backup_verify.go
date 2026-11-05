@@ -18,6 +18,8 @@ import (
 	"github.com/acamarata/cascade/internal/backup"
 	"github.com/acamarata/cascade/internal/mcp"
 	"github.com/acamarata/cascade/internal/mcp/coretools"
+	"github.com/acamarata/cascade/internal/plugins"
+	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/pkg/plugin"
 )
 
@@ -105,6 +107,39 @@ func daemonMCPToolRegistry(methods coretools.Dispatcher, filter mcp.CapabilityFi
 	// plugin and backup tools skip the method registry's access check, so
 	// they are owner-only: a caller principal admitted to mcp.dispatch is
 	// refused (mcp_scoped_forward.go ownerOnlyBuiltins/ownerOnlyCore).
-	return mcp.NewToolRegistry(ownerOnlyBuiltins(plugin.Builtins), filter,
-		append(ownerOnlyCore(core), coretools.Registrations(methods)...)...)
+	// Installed process plugin tools (P1-PLG-06) are owner-only for the
+	// same reason: they act with the owner's own grants.
+	return mcp.NewToolRegistryWithProcess(ownerOnlyBuiltins(plugin.Builtins), ownerOnlyProcess(plugins.InstalledToolSource()),
+		filter, append(ownerOnlyCore(core), coretools.Registrations(methods)...)...)
+}
+
+// ownerOnlyProcess gates each process registration's call on the owner.
+func ownerOnlyProcess(source mcp.ProcessToolSource) mcp.ProcessToolSource {
+	return func() []mcp.ProcessToolRegistration {
+		regs := source()
+		out := make([]mcp.ProcessToolRegistration, len(regs))
+		for i, reg := range regs {
+			out[i] = reg
+			if next := reg.Call; next != nil {
+				out[i].Call = func(ctx context.Context, tool string, input []byte) ([]byte, error) {
+					if err := requireOwnerCaller(ctx); err != nil {
+						return nil, err
+					}
+					return next(ctx, tool, input)
+				}
+			}
+		}
+		return out
+	}
+}
+
+// withOwnerProcessTools adds the installed process plugin tools to the
+// stdio registry tools when getenv names no caller principal: a
+// principal-bearing process is withheld every in-process tool that would
+// answer from the owner's own data (mcp_scoped_forward.go mcpServeTools).
+func withOwnerProcessTools(tools *mcp.ToolRegistry, getenv func(string) string) *mcp.ToolRegistry {
+	if getenv == nil || getenv(principal.EnvToken) != "" {
+		return tools
+	}
+	return tools.WithProcess(plugins.InstalledToolSource())
 }

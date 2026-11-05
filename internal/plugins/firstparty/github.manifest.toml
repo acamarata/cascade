@@ -1,0 +1,161 @@
+# cascade-github plugin manifest (cascade.plugin/v2).
+#
+# This plugin is PROCESS tier: the host's ProcessRuntime launches the
+# compiled binary from this manifest. It is never registered in the
+# compile-time builtin registry; main_test.go asserts this package
+# registers nothing, and internal/plugins/builtin_tier_only_test.go asserts
+# the populated registry carries no cascade-github entry.
+#
+# The manifest is parsed with DisallowUnknownFields, so every key below is
+# one the v2 schema defines. Two consequences worth stating rather than
+# leaving to be rediscovered:
+#
+#   - The schema has no dedicated net-scope key. The single host this
+#     plugin may reach, api.github.com, is therefore declared as a required
+#     capability below and repeated in the consent permission text, which
+#     is what an operator actually reads before enabling it.
+#   - The schema has no OAuth-scope key either. The classic `repo` scope is
+#     declared the same way. README.md carries the fine-grained-token
+#     permission mapping.
+
+id = "cascade-github"
+name = "Cascade GitHub"
+schema = "cascade.plugin/v2"
+version = "0.1.0"
+host_version = ">=0.1.0"
+runtime = "process"
+
+# Capabilities this plugin needs granted before the host will enable it.
+#
+# net.http:github.com (added P1-E25-W5-S51-T6) is the git hosting
+# endpoint `cascade github wiki sync`/`wiki check` clone and push against
+# (https://github.com/{owner}/{repo}.wiki.git) -- distinct from
+# api.github.com, which is this plugin's REST API endpoint and carries no
+# git-protocol traffic of its own.
+requires = [
+  "net.http:api.github.com",
+  "net.http:github.com",
+  "oauth:repo",
+  "host.secret_ref",
+]
+
+[[provides.tools]]
+name = "cascade-github.repos.list"
+description = "List a user's or organization's repositories."
+
+[[provides.tools]]
+name = "cascade-github.repos.get"
+description = "Fetch one repository's record."
+
+[[provides.tools]]
+name = "cascade-github.repos.clone_url"
+description = "Report the clone URL GitHub gives for a repository."
+
+[[provides.tools]]
+name = "cascade-github.issues.list"
+description = "List a repository's issues, optionally filtered by state."
+
+[[provides.tools]]
+name = "cascade-github.issues.get"
+description = "Fetch one issue by number."
+
+[[provides.tools]]
+name = "cascade-github.issues.create"
+description = "Open an issue with a title, optional body and optional labels."
+
+[[provides.tools]]
+name = "cascade-github.issues.comment"
+description = "Add a comment to an issue."
+
+[[provides.tools]]
+name = "cascade-github.issues.close"
+description = "Close an issue, changing its state and nothing else."
+
+[[provides.tools]]
+name = "cascade-github.prs.list"
+description = "List a repository's pull requests, optionally filtered by state."
+
+[[provides.tools]]
+name = "cascade-github.prs.get"
+description = "Fetch one pull request by number."
+
+[[provides.tools]]
+name = "cascade-github.prs.diff"
+description = "Fetch one pull request's diff, limited to 8 MiB."
+
+[[provides.tools]]
+name = "cascade-github.prs.create"
+description = "Open a pull request from a head branch into a base branch."
+
+[[provides.tools]]
+name = "cascade-github.prs.merge"
+description = "Merge a pull request using merge, squash or rebase."
+
+[[provides.tools]]
+name = "cascade-github.prs.review_request"
+description = "Request reviews on a pull request from users or teams."
+
+[[provides.commands]]
+name = "github-repos"
+description = "List or inspect GitHub repositories."
+rpc_method = "cascade-github.cmd.repos"
+
+[[provides.commands]]
+name = "github-issues"
+description = "List, open, comment on or close GitHub issues."
+rpc_method = "cascade-github.cmd.issues"
+
+[[provides.commands]]
+name = "github-prs"
+description = "List, open, merge or request review on GitHub pull requests."
+rpc_method = "cascade-github.cmd.prs"
+
+[[provides.commands]]
+name = "github-ci-wait"
+description = "Block until every required GitHub Actions check for a repo+ref reports success (P1-E25-W5-S51-T3)."
+
+# The DOT form of the mount-path rule (see .github/wiki/Plugin-Author-Guide.md
+# and cmd/cascade/plugin_process_mount.go): segments are separated by ".", so
+# the leaf verb may itself contain hyphens. The hyphen form used by the four
+# commands above cannot express `merge-on-green` as ONE segment -- it would
+# mount five levels deep -- and 07-CLI-COMMAND-TREE contracts
+# `cascade github ci merge-on-green`.
+[[provides.commands]]
+name = "github.ci.merge-on-green"
+description = "Merge a pull request once its required checks are green, gated by an explicit merge-on-green policy grant (L3, P1-E25-W5-S51-T3)."
+
+[[provides.commands]]
+name = "github-ci-watch-add"
+description = "Watch a repository's CI results, routing failures to the attention queue (P1-E25-W5-S51-T4)."
+
+[[provides.commands]]
+name = "github-ci-watch-list"
+description = "List configured [ci.watch] entries (P1-E25-W5-S51-T4)."
+
+[[provides.commands]]
+name = "github-ci-watch-remove"
+description = "Stop watching a repository's CI results (P1-E25-W5-S51-T4)."
+
+[[provides.commands]]
+name = "github-wiki-sync"
+description = "Push .github/wiki/ to the repository's GitHub wiki (public repos only, P1-E25-W5-S51-T6)."
+
+[[provides.commands]]
+name = "github-wiki-check"
+description = "Report drift between .github/wiki/ and the repository's GitHub wiki, read-only (P1-E25-W5-S51-T6)."
+
+[[permissions]]
+name = "network"
+description = "Reach api.github.com to call the GitHub REST API."
+
+[[permissions]]
+name = "network-wiki-git"
+description = "Reach github.com (git protocol, {owner}/{repo}.wiki.git) to clone and push a public repository's wiki for `cascade github wiki sync`, and to clone it read-only for `cascade github wiki check`. No other host is reached."
+
+[[permissions]]
+name = "oauth"
+description = "Complete a GitHub OAuth authorization in your browser, requesting the classic `repo` scope."
+
+[[permissions]]
+name = "host-secret-ref"
+description = "Hand the resulting token to Cascade's vault for storage. The token is never written to a config file or to this manifest."

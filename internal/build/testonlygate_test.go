@@ -14,6 +14,8 @@ import (
 //     every exported symbol here is called from a _test.go file by design.
 //   - internal/testkit and internal/storage/storetest are shared test
 //     infrastructure, published for other packages' tests to consume.
+//     internal/plugins/plugintest is the same class: the trusted
+//     test-plugin fixture other packages' tests install through.
 //   - pkg is the public API. Its consumers are outside this repository
 //     entirely, so "nothing in this tree calls it" is expected rather than
 //     suspicious. The dead-code gate already applies its own SDK-intent rule
@@ -22,6 +24,7 @@ var testOnlyExemptDirs = []string{
 	"internal/build",
 	"internal/testkit",
 	"internal/storage/storetest",
+	"internal/plugins/plugintest",
 	"pkg",
 }
 

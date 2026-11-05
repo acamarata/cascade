@@ -218,7 +218,7 @@ func TestLoadNilWarnUsesDefaultSlog(t *testing.T) {
 var dynamicEnvReads = map[string][]string{
 	"cmd/cascade/backup_key.go:187":            {"<operator-named>"}, // --passphrase-env
 	"cmd/cascade/init_adapters.go:30":          {"<caller-named>"},
-	"cmd/cascade/mcp.go:87":                    {"CASCADE_PRINCIPAL_TOKEN"}, // os.LookupEnv through mcpPrincipalGetenv: principal.EnvToken
+	"cmd/cascade/mcp.go:86":                    {"CASCADE_PRINCIPAL_TOKEN"}, // os.LookupEnv through mcpPrincipalGetenv: principal.EnvToken
 	"cmd/cascade/profile_attach.go:62":         {"<caller-named>"},
 	"internal/backup/targets.go:227":           {"<operator-named>"}, // name match only: passes getenv and the S3 prefix to s3.go
 	"internal/backup/targets/s3.go:69":         {"<operator-named>"}, // target S3 env prefix + suffix

@@ -350,6 +350,29 @@ invalid state and every subsequent call fails fast with
 waits are driven off a context-derived timer, never a bare `time.Sleep`,
 so a shutdown request interrupts a pending restart immediately.
 
+**MCP exposure of process-plugin tools.** Both MCP surfaces (`cascade mcp
+serve --stdio` and the daemon's `mcp.dispatch`) list a first-party
+process plugin's `[[provides.tools]]` only when all of these hold, and a
+single failure hides every tool the plugin declares:
+
+- the installed record is enabled and trusted (an owner-attested `cascade
+  plugin add` or `cascade plugin update`), and the executable beside the
+  cascade binary still hashes to the digest pinned at that grant;
+- the record's effective grants are exactly the manifest's non-empty
+  `requires`: one revoked grant hides the tools, and so does an extra one;
+- every tool name starts with the plugin id and a dot (`cascade-github.`)
+  and does not reuse the name of a builtin or core tool.
+
+The manifest the host checks is the copy embedded in the cascade binary,
+never a file read at run time. Each `tools/call` re-checks the record
+before launching anything (a failed re-check is a policy-denied tool
+error), then launches the plugin through the recorded trusted launch,
+calls the method named by the tool's full name, and stops the process.
+The result the model sees is `{"result": ..., "_meta":
+{"cascade/provenance": "untrusted-source"}}`, or `"error"` in place of
+`"result"` when the plugin replied with an error, so plugin output is
+always marked as untrusted content.
+
 ## 6. Credential and secret access
 
 **Broker-only, via `host_secretref` (§4). Never in manifest literals or

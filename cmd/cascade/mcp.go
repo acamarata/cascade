@@ -73,10 +73,9 @@ type mcpDeps struct {
 func productionMCPDeps() mcpDeps {
 	paths := lazyPaths{}
 	// The first-party v1-parity tool set (P1-E16-W4-S34-T2) and the
-	// capability filter that gates it. Both are built per call, because
-	// the filter is consulted once per registry and a grant change is
-	// meant to take effect on the NEXT registration pass — which is this
-	// call.
+	// capability filter that gates it. Both are built per call, because the
+	// filter is consulted once per registry and a grant change is meant to
+	// take effect on the NEXT registration pass — which is this call.
 	tools := func() *mcp.ToolRegistry {
 		bDeps := productionBackupDeps()
 		wiring := buildMCPToolWiring(context.Background(), paths, runtime.SystemClock{})
@@ -84,7 +83,8 @@ func productionMCPDeps() mcpDeps {
 			backup.MCPRegistration(backupSnapshotLister(bDeps)),
 			backup.VerifyMCPRegistration(backupVerifyRunner(bDeps)),
 		}
-		return mcpServeTools(wiring, mcpPrincipalGetenv(os.LookupEnv), dialMCPDaemon(paths), plugin.Builtins, core)
+		getenv := mcpPrincipalGetenv(os.LookupEnv) // owner view also lists installed process tools (P1-PLG-06)
+		return withOwnerProcessTools(mcpServeTools(wiring, getenv, dialMCPDaemon(paths), plugin.Builtins, core), getenv)
 	}
 	return mcpDeps{
 		Paths:    paths,

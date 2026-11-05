@@ -74,6 +74,7 @@
   "internal/output": { "tier": "core", "floor": 85.0, "baseline": 91.3 },
   "internal/plugins": { "tier": "core", "floor": 85.0, "baseline": 95.5 },
   "internal/plugins/host": { "tier": "core", "floor": 85.0, "baseline": 98.6 },
+  "internal/plugins/plugintest": { "tier": "core", "floor": 85.0, "baseline": 86.2 },
   "internal/plugins/process": { "tier": "core", "floor": 85.0, "baseline": 90.8 },
   "internal/plugins/registryfetch": { "tier": "core", "floor": 85.0, "baseline": 90.3 },
   "internal/plugins/remote": { "tier": "core", "floor": 85.0, "baseline": 92.9 },

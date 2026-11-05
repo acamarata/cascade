@@ -67,6 +67,10 @@ linters:
             - "**/providers/**/*.go"
             - "!**/*_test.go"
             - "!**/internal/providers/**/*.go"
+            # internal/plugins/plugintest is a test-helper package (its only
+            # callers are tests) inside internal/; the same path-segment
+            # coincidence as internal/providers, not first-party plugin code.
+            - "!**/internal/plugins/plugintest/*.go"
           deny:
             - pkg: "github.com/acamarata/cascade/internal"
               desc: "plugins/** and providers/** may import pkg/** only - never internal/** (12-QUALITY-CONSTITUTION.md Art.10.2)"
