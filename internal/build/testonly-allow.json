@@ -1752,5 +1752,12 @@
     "reason": "P1-NODE-06a ships WithRelayOrigin with its tests; its first production caller is internal/nodes/relay.go from P1-NODE-06c.",
     "retire_ticket": "P1-NODE-06c",
     "symbol": "internal/conductor.WithRelayOrigin"
+  },
+  {
+    "caller_site": "cmd/cascade/repo_watch_compose.go",
+    "expected_caller": "cmd/cascade/repo_watch_compose.go, which P1-GEN-13b adds (one watcher and sweep loop per repository composed in the daemon); retire this entry once that file calls NewWatcher",
+    "reason": "P1-GEN-14 ships the debounced fsnotify Watcher with its tests; its first production caller is the daemon composition from P1-GEN-13b.",
+    "retire_ticket": "P1-GEN-13b",
+    "symbol": "internal/repo.NewWatcher"
   }
 ]
