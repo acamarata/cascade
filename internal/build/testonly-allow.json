@@ -1396,13 +1396,6 @@
     "symbol": "internal/fleet/topology.EligibleTaskClasses"
   },
   {
-    "caller_site": "cmd/cascade/domain_promote_probe.go",
-    "expected_caller": "cmd/cascade/domain_promote_probe.go, which P1-TOP-19d runs the promote probe in the daemon; retire this entry once that file calls WithoutTransientCount",
-    "reason": "P1-TOP-19b ships WithoutTransientCount with its tests; its first production caller is cmd/cascade/domain_promote_probe.go from P1-TOP-19d.",
-    "retire_ticket": "P1-TOP-19",
-    "symbol": "internal/providers/dispatch.WithoutTransientCount"
-  },
-  {
     "caller_site": "internal/jobs/completion_reviewer.go",
     "expected_caller": "internal/jobs/completion_reviewer.go, which P1-PBD-01h refuses accepted for review-class jobs without a distinct-family reviewer; retire this entry once that file calls ErrHumanApprovalRequired",
     "reason": "P1-PBD-01b ships ErrHumanApprovalRequired with its tests; its first production caller is internal/jobs/completion_reviewer.go from P1-PBD-01h.",
