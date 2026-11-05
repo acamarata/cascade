@@ -15,6 +15,9 @@ package conductor
 
 import (
 	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/provider"
@@ -69,6 +72,7 @@ func TestRoutingMatrixEdge_NoCapableProvider(t *testing.T) {
 	reg.providers[0].Capabilities.Search = provider.CapabilityUnsupported
 	quota := &fakeQuota{order: []LaneID{"lane-a"}}
 	r := NewRouter(reg, quota, nil, nil)
+	WithLaneTierCap(conductorTestCap)(r)
 	req := chatReq()
 	req.RequiredCapabilities.Search = true
 
@@ -111,4 +115,36 @@ func TestRoutingMatrix_CostTieUnreachable(t *testing.T) {
 			t.Fatalf("filterCost(%s): flags = %v, want exactly [cost:cheapest-selected] - no tie branch exists", laneName, flags)
 		}
 	}
+}
+
+// conductorRouterCallerFiles are the router test callers whose
+// constructions must each pass the fixture LaneTierCap.
+var conductorRouterCallerFiles = []string{
+	"routing_matrix_test.go", "routing_matrix_edge_test.go", "filters_capability_test.go",
+	"filters_dispatch_test.go", "filters_dispatch_ceiling_test.go", "privacy_test.go",
+}
+
+// uncappedRouterCalls parses the test file name and returns how many
+// NewRouter/NewDaemonRouter constructions it holds and how many of them do
+// not pass WithLaneTierCap(conductorTestCap).
+func uncappedRouterCalls(t *testing.T, name string) (found, missing int) {
+	t.Helper()
+	f, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", name, err)
+	}
+	ast.Inspect(f, func(n ast.Node) bool {
+		if block, ok := n.(*ast.BlockStmt); ok {
+			for i, stmt := range block.List {
+				for _, call := range routerConstructions(stmt) {
+					found++
+					if !constructionCapped(call, block.List, i) {
+						missing++
+					}
+				}
+			}
+		}
+		return true
+	})
+	return found, missing
 }

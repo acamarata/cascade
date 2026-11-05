@@ -165,6 +165,7 @@ func TestRoutingMatrix(t *testing.T) {
 			reg := pairRegistry()
 			quota := &fakeQuota{order: []LaneID{"lane-a"}}
 			r := NewRouter(reg, quota, nil, nil)
+			WithLaneTierCap(conductorTestCap)(r)
 			sel, flags, err := r.SelectExplain(context.Background(), req)
 			if err != nil {
 				t.Fatalf("SelectExplain: %v", err)
@@ -210,6 +211,7 @@ func TestRoutingMatrix_FilterStages(t *testing.T) {
 			}
 			quota := &fakeQuota{order: []LaneID{"lane-a"}}
 			r := NewRouter(reg, quota, nil, nil)
+			WithLaneTierCap(conductorTestCap)(r)
 			WithRestrictedPermits(permitsOf(t, row.PermitLanes...))(r)
 			req := chatReq()
 			req.Sensitivity = sensitivityByName[row.Sensitivity]
@@ -262,10 +264,12 @@ func TestRoutingMatrixDeterminism(t *testing.T) {
 			req := pairRequest(row)
 			quota1 := &fakeQuota{order: []LaneID{"lane-a"}}
 			r1 := NewRouter(pairRegistry(), quota1, nil, nil)
+			WithLaneTierCap(conductorTestCap)(r1)
 			sel1, flags1, err1 := r1.SelectExplain(context.Background(), req)
 
 			quota2 := &fakeQuota{order: []LaneID{"lane-a"}}
 			r2 := NewRouter(pairRegistry(), quota2, nil, nil)
+			WithLaneTierCap(conductorTestCap)(r2)
 			sel2, flags2, err2 := r2.SelectExplain(context.Background(), req)
 
 			if err1 != err2 {
@@ -278,5 +282,16 @@ func TestRoutingMatrixDeterminism(t *testing.T) {
 				t.Fatalf("flags differ across two calls: %v vs %v", flags1, flags2)
 			}
 		})
+	}
+}
+
+// TestConductorRouterCallersPassTierCap fails on any router construction in
+// the conductor caller files that does not pass WithLaneTierCap(conductorTestCap).
+func TestConductorRouterCallersPassTierCap(t *testing.T) {
+	for _, name := range append(conductorRouterCallerFiles, placementSensitivityCallerFiles...) {
+		found, missing := uncappedRouterCalls(t, name)
+		if found == 0 || missing != 0 {
+			t.Errorf("%s: %d router constructions, %d without WithLaneTierCap(conductorTestCap)", name, found, missing)
+		}
 	}
 }

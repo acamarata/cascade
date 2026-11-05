@@ -30,6 +30,7 @@ func testUnconfiguredNoCeilings(t *testing.T, clock *testkit.FrozenClock) {
 	t.Helper()
 	p := NewQuotaPolicy(QuotaConfig{}, clock)
 	r := NewRouter(twoLaneRegistry(), p, clock, nil)
+	WithLaneTierCap(conductorTestCap)(r)
 
 	sel, err := r.Select(context.Background(), internalReq())
 	if err != nil {
@@ -53,6 +54,7 @@ func testUnconfiguredWithCeilings(t *testing.T, clock *testkit.FrozenClock) {
 	}
 	p := NewQuotaPolicy(cfg, clock)
 	r := NewRouter(twoLaneRegistry(), p, clock, nil)
+	WithLaneTierCap(conductorTestCap)(r)
 	ctx := context.Background()
 
 	// Call 1: lane-local admitted.

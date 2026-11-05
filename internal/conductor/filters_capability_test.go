@@ -29,6 +29,7 @@ func TestRouter_SensitivityGate_LocalOnly_AdmitsLocalLane(t *testing.T) {
 	reg := twoLaneRegistry()
 	quota := &fakeQuota{order: []LaneID{"lane-local", "lane-remote"}}
 	r := NewRouter(reg, quota, nil, nil)
+	WithLaneTierCap(conductorTestCap)(r)
 	req := chatReq()
 	req.Sensitivity = provider.SensitivityLocalOnly
 
@@ -54,6 +55,7 @@ func TestRouter_SensitivityGate_LocalOnly_NoLocalLane_ErrNoLane(t *testing.T) {
 	}
 	quota := &fakeQuota{order: []LaneID{"lane-remote"}}
 	r := NewRouter(reg, quota, nil, nil)
+	WithLaneTierCap(conductorTestCap)(r)
 	req := chatReq()
 	req.Sensitivity = provider.SensitivityLocalOnly
 

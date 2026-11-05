@@ -109,6 +109,7 @@ func TestPrivacyModeRouterFilters(t *testing.T) {
 	// make this test pass against a gate that filters nothing.
 	quota := &fakeQuota{order: []LaneID{"lane-remote", "lane-local"}}
 	r := NewRouter(reg, quota, nil, nil)
+	WithLaneTierCap(conductorTestCap)(r)
 	ctx := ContextWithThreadPrivacy(context.Background(), ThreadPrivacy{
 		ThreadID: "th-1", Mode: provider.SensitivityLocalOnly,
 	})
@@ -132,6 +133,7 @@ func TestPrivacyModeNoThreadIsUntouched(t *testing.T) {
 	reg := privacyRegistry()
 	quota := &fakeQuota{order: []LaneID{"lane-local"}}
 	r := NewRouter(reg, quota, nil, nil)
+	WithLaneTierCap(conductorTestCap)(r)
 
 	_, flags, err := r.SelectExplain(context.Background(), chatReq())
 	if err != nil {
@@ -169,6 +171,7 @@ func TestPrivacyModeIntegration(t *testing.T) {
 	t.Run("local-only thread refuses an external-only registry", func(t *testing.T) {
 		quota := &fakeQuota{order: []LaneID{"lane-remote"}}
 		r := NewRouter(externalOnlyRegistry(), quota, nil, nil)
+		WithLaneTierCap(conductorTestCap)(r)
 		ctx := ContextWithThreadPrivacy(context.Background(), ThreadPrivacy{
 			ThreadID: "th-secret", Mode: provider.SensitivityLocalOnly,
 		})
@@ -185,6 +188,7 @@ func TestPrivacyModeIntegration(t *testing.T) {
 		reg.providers[0].BaseURL = "" // locality cannot be computed
 		quota := &fakeQuota{order: []LaneID{"lane-remote"}}
 		r := NewRouter(reg, quota, nil, nil)
+		WithLaneTierCap(conductorTestCap)(r)
 		// Mode left at its zero value ON PURPOSE: §5.16's unset-is-restricted
 		// rule is the thing under test, not a tier the caller named.
 		ctx := ContextWithThreadPrivacy(context.Background(), ThreadPrivacy{ThreadID: "th-default"})
@@ -201,6 +205,7 @@ func TestPrivacyModeIntegration(t *testing.T) {
 		reg.providers[0].BaseURL = ""
 		quota := &fakeQuota{order: []LaneID{"lane-remote"}}
 		r := NewRouter(reg, quota, nil, nil)
+		WithLaneTierCap(conductorTestCap)(r)
 		ctx := ContextWithThreadPrivacy(context.Background(), ThreadPrivacy{
 			ThreadID: "th-open", Mode: provider.SensitivityPublic,
 		})

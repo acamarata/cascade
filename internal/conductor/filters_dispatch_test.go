@@ -15,6 +15,7 @@ func TestRouter_StaleHealthExcluded(t *testing.T) {
 	reg.providers[0].HealthStatus = "demoted"
 	quota := &fakeQuota{order: []LaneID{"lane-a"}}
 	r := NewRouter(reg, quota, nil, nil)
+	WithLaneTierCap(conductorTestCap)(r)
 
 	_, err := r.Select(context.Background(), chatReq())
 	if err != ErrAllProvidersEvicted {
@@ -32,6 +33,7 @@ func TestRouter_UnknownCostExcluded(t *testing.T) {
 	reg := oneHealthyLane()
 	quota := &fakeQuota{order: []LaneID{"lane-a"}}
 	r := NewRouter(reg, quota, nil, nil)
+	WithLaneTierCap(conductorTestCap)(r)
 
 	_, flags, err := r.SelectExplain(context.Background(), chatReq())
 	if err != nil {
@@ -53,6 +55,7 @@ func TestRouter_TieBreakCostThenLaneID(t *testing.T) {
 	reg := twoLaneRegistry()
 	quota := &fakeQuota{order: []LaneID{"lane-remote", "lane-local"}}
 	r := NewRouter(reg, quota, nil, nil)
+	WithLaneTierCap(conductorTestCap)(r)
 
 	sel, err := r.Select(context.Background(), internalReq())
 	if err != nil {
@@ -81,6 +84,7 @@ func TestFilterQuotaCallsNextLane(t *testing.T) {
 	reg.providers[1].HealthStatus = "evicted" // lane-remote is health-filtered out
 	quota := &fakeQuota{order: []LaneID{"lane-remote", "lane-local"}}
 	r := NewRouter(reg, quota, nil, nil)
+	WithLaneTierCap(conductorTestCap)(r)
 
 	sel, err := r.Select(context.Background(), chatReq())
 	if err != nil {
@@ -110,6 +114,7 @@ func TestFilterQuotaCallsNextLane_AllLanesExhausted(t *testing.T) {
 	reg := oneHealthyLane()
 	quota := &fakeQuota{forceErr: ErrAllLanesExhausted}
 	r := NewRouter(reg, quota, nil, nil)
+	WithLaneTierCap(conductorTestCap)(r)
 
 	_, err := r.Select(context.Background(), chatReq())
 	if err != ErrAllLanesExhausted {
