@@ -122,6 +122,7 @@ func TestSensitivity_LocalOnlyNeverEgresses(t *testing.T) {
 	}
 	quota := &fakeQuota{order: []LaneID{"lane-remote"}}
 	router := NewRouter(reg, quota, nil, nil)
+	WithLaneTierCap(conductorTestCap)(router)
 	req := chatReq()
 	req.Sensitivity = provider.SensitivityLocalOnly
 

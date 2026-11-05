@@ -57,6 +57,7 @@ func TestRouterConsultsNodeEligibility(t *testing.T) {
 	fleet := fakeFleet{records: []nodes.DeviceRecord{placeableNode("node-1", "browser", "docker")}}
 	r := NewRouter(oneHealthyLane(), &fakeQuota{order: []LaneID{"lane-a"}}, nil, nil).
 		WithNodePlacement(nodes.Engine{Tunnels: upTunnels}, fleet)
+	WithLaneTierCap(conductorTestCap)(r)
 
 	sel, flags, err := r.SelectExplain(context.Background(), nodeReq("browser"))
 	if err != nil {
@@ -89,6 +90,7 @@ func TestRouterSkipsPlacementWithoutNodeRequirements(t *testing.T) {
 	fleet := &countingFleet{}
 	r := NewRouter(oneHealthyLane(), &fakeQuota{order: []LaneID{"lane-a"}}, nil, nil).
 		WithNodePlacement(nodes.Engine{Tunnels: upTunnels}, fleet)
+	WithLaneTierCap(conductorTestCap)(r)
 
 	_, flags, err := r.SelectExplain(context.Background(), chatReq())
 	if err != nil {
@@ -120,6 +122,7 @@ func (f *countingFleet) List() ([]nodes.DeviceRecord, error) {
 // successful response.
 func TestRouterRefusesNodeWorkWithNoPlacementEngine(t *testing.T) {
 	r := NewRouter(oneHealthyLane(), &fakeQuota{order: []LaneID{"lane-a"}}, nil, nil)
+	WithLaneTierCap(conductorTestCap)(r)
 
 	_, flags, err := r.SelectExplain(context.Background(), nodeReq("browser"))
 	if !errors.Is(err, ErrNodePlacementUnavailable) {
@@ -138,6 +141,7 @@ func TestRouterPropagatesAFleetReadFailure(t *testing.T) {
 	boom := errors.New("record store unreadable")
 	r := NewRouter(oneHealthyLane(), &fakeQuota{order: []LaneID{"lane-a"}}, nil, nil).
 		WithNodePlacement(nodes.Engine{Tunnels: upTunnels}, fakeFleet{err: boom})
+	WithLaneTierCap(conductorTestCap)(r)
 
 	_, flags, err := r.SelectExplain(context.Background(), nodeReq("browser"))
 	if !errors.Is(err, boom) {
@@ -186,6 +190,7 @@ func TestRouterRefusesNodeWorkThatMayNotLeaveTheController(t *testing.T) {
 	fleet := fakeFleet{records: []nodes.DeviceRecord{placeableNode("node-1", "browser")}}
 	r := NewRouter(oneHealthyLane(), &fakeQuota{order: []LaneID{"lane-a"}}, nil, nil).
 		WithNodePlacement(nodes.Engine{Tunnels: upTunnels}, fleet)
+	WithLaneTierCap(conductorTestCap)(r)
 
 	req := nodeReq("browser")
 	req.Policy.ExternalAllowed = false
@@ -209,6 +214,7 @@ func TestWithNodePlacementIgnoresAHalfWiredSeam(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := NewRouter(oneHealthyLane(), &fakeQuota{order: []LaneID{"lane-a"}}, nil, nil).
 				WithNodePlacement(tc.engine, tc.fleet)
+			WithLaneTierCap(conductorTestCap)(r)
 			if _, _, err := r.SelectExplain(context.Background(), nodeReq("browser")); !errors.Is(err, ErrNodePlacementUnavailable) {
 				t.Fatalf("err = %v, want ErrNodePlacementUnavailable", err)
 			}
@@ -222,6 +228,7 @@ func TestWithNodePlacementIgnoresAHalfWiredSeam(t *testing.T) {
 func TestNodePlacementOptionWiresTheSameSeam(t *testing.T) {
 	fleet := fakeFleet{records: []nodes.DeviceRecord{placeableNode("node-1", "browser")}}
 	r := NewRouter(oneHealthyLane(), &fakeQuota{order: []LaneID{"lane-a"}}, nil, nil)
+	WithLaneTierCap(conductorTestCap)(r)
 	NodePlacement(nodes.Engine{Tunnels: upTunnels}, fleet)(r)
 
 	if _, flags, err := r.SelectExplain(context.Background(), nodeReq("browser")); err != nil {
