@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-05T18:20:09Z",
+  "generated_at": "2026-11-05T21:49:56Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5054,6 +5054,20 @@
       ]
     },
     {
+      "name": "cmd/cascade docs generator",
+      "sites": [
+        {
+          "file": "cmd/cascade/docs.go",
+          "line": 17,
+          "status": "",
+          "raw": "cmd/cascade docs generator (P1-DOC-04c)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd/cascade doctor security mounts",
       "sites": [
         {
@@ -5951,6 +5965,12 @@
         },
         {
           "file": "cmd/cascade/mount_daemon.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/mount_docs.go",
           "line": 2,
           "status": "",
           "raw": "cmd/cascade root mounts (P1-CORE-01)."
@@ -15089,6 +15109,20 @@
           "line": 15,
           "status": "ADD",
           "raw": "internal.ci.ExecutorKind/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.GitHubActionsRunner",
+      "sites": [
+        {
+          "file": "internal/ci/runner_gha.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "internal.ci.GitHubActionsRunner/ADDED."
         }
       ],
       "statuses": [
@@ -43749,7 +43783,7 @@
       ]
     }
   ],
-  "total_sites": 4212,
-  "unspecified_count": 391,
+  "total_sites": 4215,
+  "unspecified_count": 392,
   "multi_status_count": 132
 }
