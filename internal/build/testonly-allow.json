@@ -1731,5 +1731,26 @@
     "reason": "P1-TOP-02b ships EvidenceCredentialGate with its tests; its first production caller is cmd/cascade/wire_conductor_chooser.go from P1-TOP-02e.",
     "retire_ticket": "P1-TOP-02e",
     "symbol": "internal/fleet/topology.EvidenceCredentialGate"
+  },
+  {
+    "caller_site": "cmd/cascade/docs.go",
+    "expected_caller": "cmd/cascade/docs.go, which P1-DOC-04c adds (the `cascade docs gen` verb that renders docs/reference/config-keys.md); retire this entry once that file calls KnownConfigKeys",
+    "reason": "P1-DOC-04b ships KnownConfigKeys with its tests; its first production caller is cmd/cascade/docs.go from P1-DOC-04c.",
+    "retire_ticket": "P1-DOC-04c",
+    "symbol": "internal/runtime.KnownConfigKeys"
+  },
+  {
+    "caller_site": "cmd/cascade/docs.go",
+    "expected_caller": "cmd/cascade/docs.go, which P1-DOC-04c adds (the `cascade docs gen` verb that renders docs/reference/config-keys.md); retire this entry once that file calls KnownKeys",
+    "reason": "P1-DOC-04b ships KnownKeys with its tests; its first production caller is cmd/cascade/docs.go from P1-DOC-04c.",
+    "retire_ticket": "P1-DOC-04c",
+    "symbol": "internal/runtime/initconfig.KnownKeys"
+  },
+  {
+    "caller_site": "internal/nodes/relay.go",
+    "expected_caller": "internal/nodes/relay.go, which P1-NODE-06c adds (the node relay handler that stamps the relay origin before re-entering the router); retire this entry once that file calls WithRelayOrigin",
+    "reason": "P1-NODE-06a ships WithRelayOrigin with its tests; its first production caller is internal/nodes/relay.go from P1-NODE-06c.",
+    "retire_ticket": "P1-NODE-06c",
+    "symbol": "internal/conductor.WithRelayOrigin"
   }
 ]
