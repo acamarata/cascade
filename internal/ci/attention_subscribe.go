@@ -67,7 +67,8 @@ type WatchSource func(ctx context.Context) (RouteOptions, error)
 // RouteCIResults reads sub.Events until it closes, ctx is canceled, or
 // sub.Errs delivers a fatal subscription error (returned as-is). Every
 // EventKindRunCompleted event describing a FAILED run is matched against
-// the operator's watches and routed; every other Kind is ignored.
+// the operator's watches and routed; every other Kind is ignored, and so
+// is a via_stream run, which reaches its origin through the fanout.
 func RouteCIResults(ctx context.Context, sub *events.Subscription, watches WatchSource, pusher AttentionPusher) error {
 	if sub == nil {
 		return nil
@@ -120,9 +121,12 @@ func handleRunCompleted(ctx context.Context, ev events.Event, watches WatchSourc
 
 // candidateFromRunCompleted builds the routing candidate for one
 // completed-run event. A passing run, a run with no id, and a run with no
-// repository identity are all "nothing to route" -- never a guess.
+// repository identity are all "nothing to route" -- never a guess. A
+// via_stream run is skipped too: the checkpoint stream's OnTerminal fanout
+// (RegisterCIFanout) already delivers it to its delegation origin, so
+// routing it here as well would notify twice for one result (P1-CI-06).
 func candidateFromRunCompleted(p runCompletedPayload) (AttentionCandidate, bool) {
-	if p.Passed || p.RunID == 0 || p.Repo == "" {
+	if p.ViaStream || p.Passed || p.RunID == 0 || p.Repo == "" {
 		return AttentionCandidate{}, false
 	}
 	var jobs []FailedJob

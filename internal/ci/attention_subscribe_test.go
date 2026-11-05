@@ -253,3 +253,40 @@ func TestRouteCIResults_WatchSourceFailureDropsTheEvent(t *testing.T) {
 		t.Fatalf("pushed %d items despite an unreadable config, want 0", len(pusher.pushed))
 	}
 }
+
+// TestStreamResultDeliveredOnce: a failed stream-dispatched run reaches
+// both the ci_results bus (via_stream) and the OnTerminal fanout; exactly
+// one notification is delivered and the bus subscriber pushes nothing for
+// it. A later non-stream tripwire push is the barrier.
+func TestStreamResultDeliveredOnce(t *testing.T) {
+	db := fanoutDB(t, -21, ConclusionFailure)
+	bus, sub := newCIResultsBus(t)
+	n := &recNotifier{}
+	pusher := &fakePusher{notify: make(chan supervision.AttentionItem, 4)}
+	publishRunCompleted(t, bus, runCompletedPayload{
+		RunID: -21, RepoID: 7, Repo: "acamarata/cascade", FailedStep: StepTest, ViaStream: true})
+	fireFanout(db, delegated("prin-a"), n, pusher, fanoutEvent(-21))
+	publishRunCompleted(t, bus, runCompletedPayload{RunID: tripwireRunID, Repo: "acamarata/cascade", FailedStep: StepLint})
+	if err := runSubscriber(t, bus, sub, staticWatches(watchedOnly()), pusher, func() { awaitPush(t, pusher) }); err != nil {
+		t.Fatalf("RouteCIResults: %v", err)
+	}
+	if len(n.got) != 1 || n.got[0].TargetPrincipal != "prin-a" || n.got[0].CorrelationID != "deleg-1" {
+		t.Fatalf("delivered %+v, want exactly one item addressed to prin-a", n.got)
+	}
+	if len(pusher.pushed) != 1 || pusher.pushed[0].SourceRef != "ci:acamarata/cascade:-999" {
+		t.Fatalf("pushed %+v, want only the tripwire", pusher.pushed)
+	}
+}
+
+// TestRouteCIResultsSkipsViaStream: the subscriber builds no candidate for
+// a via_stream run, and the same run without the flag still routes.
+func TestRouteCIResultsSkipsViaStream(t *testing.T) {
+	p := runCompletedPayload{RunID: -22, Repo: "acamarata/cascade", FailedStep: StepTest, ViaStream: true}
+	if _, ok := candidateFromRunCompleted(p); ok {
+		t.Fatalf("a via_stream run produced a candidate; the fanout already delivers it")
+	}
+	p.ViaStream = false
+	if _, ok := candidateFromRunCompleted(p); !ok {
+		t.Fatalf("a non-stream failed run produced no candidate")
+	}
+}
