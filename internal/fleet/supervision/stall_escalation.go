@@ -31,10 +31,37 @@ package supervision
 
 import (
 	"context"
+	"time"
 
 	"github.com/acamarata/cascade/internal/context/scope"
 	"github.com/acamarata/cascade/internal/fleet/governor"
+	"github.com/acamarata/cascade/internal/nodes"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
+
+// GateDenial is the most recent gate denial recorded for a job: which
+// attempt it was, the gate's reason verbatim, and when it was denied.
+type GateDenial struct {
+	Attempt  int
+	Reason   string
+	DeniedAt time.Time
+}
+
+// GateStallActions are the composition-root seams the gate-stall
+// sequence (gate_stall.go) runs once per gate-denied stall episode:
+// read the last denial, fail the job, collect and run its scope
+// releases, and compute the retry hint shown to a person. Every field
+// is required; WithGateStallActions refuses a nil one.
+type GateStallActions struct {
+	LastDenial func(ctx context.Context, jobID string) (GateDenial, error)
+	FailJob    func(ctx context.Context, jobID string, d GateDenial) error
+	Releases   func(ctx context.Context, jobID string) ([]nodes.ScopeRelease, error)
+	RetryHint  func(attempt int) (time.Duration, error)
+}
+
+// ErrGateStallActionsInvalid is returned (wrapped, naming the field) by
+// WithGateStallActions when any GateStallActions field is nil.
+var ErrGateStallActionsInvalid = cascade.New(cascade.KindInvalidInput, "supervision: gate-stall actions need every field")
 
 // ApprovalRequester is the minimal seam the human-escalation step needs
 // from the I/S-18.T3 approval queue: file one approval request for a

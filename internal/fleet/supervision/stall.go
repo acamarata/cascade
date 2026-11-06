@@ -85,6 +85,7 @@ type Detector struct {
 	published map[string]bool
 	advanced  map[string]time.Time
 	epoch     map[string]uint64
+	gate      gateStallHook
 }
 
 // Alive reports whether Run's delivery loop is currently subscribed —
@@ -114,6 +115,7 @@ func NewDetector(j journal.Store, retryer governor.Retryer, enricher governor.Co
 		published: make(map[string]bool),
 		advanced:  make(map[string]time.Time),
 		epoch:     make(map[string]uint64),
+		gate:      gateStallHook{store: store},
 	}
 	supervisor := &stallSupervisor{store: store, lookup: d.lookupStallEvent}
 	notifier := &stallNotifier{requester: requester, lookup: d.lookupStallEvent}
@@ -198,6 +200,7 @@ func (d *Detector) Observe(ctx context.Context, sig StallSignal) error {
 		if !d.tracker.RecordGateDenied(sig.JobID, now) {
 			return nil
 		}
+		d.gate.run(ctx, sig.SessionID, sig.JobID)
 	}
 	ev := StallEvent{SessionID: sig.SessionID, StallKind: signalToStallKind(sig.Kind), StalledSince: now}
 	return d.recordAndAdvance(ctx, ev, epoch)
