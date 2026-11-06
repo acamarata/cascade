@@ -81,6 +81,12 @@ type Config struct {
 	// every test supplies a fake that performs no real exec call — this
 	// package's own tests never shell out to launchctl/systemctl.
 	Runner Runner
+	// User is the login name used for the node agent's linger check.
+	// The daemon installer ignores it.
+	User string
+	// NodeServeArgs are appended after node serve by the node installer.
+	// The daemon installer ignores them.
+	NodeServeArgs []string
 }
 
 // DeltaReport describes what Install or Uninstall actually did.
