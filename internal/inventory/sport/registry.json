@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-06T00:45:58Z",
+  "generated_at": "2026-11-06T16:11:02Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -40667,6 +40667,12 @@
           "raw": "providers.agents.claude/ADD (P1-E30-W6-S61-T2)."
         },
         {
+          "file": "providers/agents/claude/kernel.go",
+          "line": 20,
+          "status": "ADD",
+          "raw": "providers.agents.claude/ADD (P1-GEN-12)."
+        },
+        {
           "file": "providers/agents/claude/probe.go",
           "line": 13,
           "status": "ADD",
@@ -43803,7 +43809,7 @@
       ]
     }
   ],
-  "total_sites": 4217,
+  "total_sites": 4218,
   "unspecified_count": 392,
   "multi_status_count": 132
 }
