@@ -1,0 +1,2 @@
+go test fuzz v1
+string("0000 1111 refs/heads/main\nzz yy refs/tags/v1\n\n")
