@@ -32,15 +32,17 @@ const (
 	tableDecisionOutcome   = "jobs_scheduler_decision_outcome"
 )
 
-// OutcomeKind is the closed set of realised results for one decision. It uses
-// the same vocabulary as OutcomeClass so the two stored values compare directly.
+// OutcomeKind is the closed set of stored outcomes for one decision (P1-TOP-10
+// contract). A decision with no row is pending. completed, failed and cancelled
+// equal jobs.TerminalOutcome's values; expired is written only by the orphan sweep.
 type OutcomeKind string
 
 // The closed outcome kinds.
 const (
-	OutcomeKindAccepted OutcomeKind = "accepted"
-	OutcomeKindRejected OutcomeKind = "rejected"
-	OutcomeKindUnknown  OutcomeKind = "unknown"
+	OutcomeKindCompleted OutcomeKind = "completed"
+	OutcomeKindFailed    OutcomeKind = "failed"
+	OutcomeKindCancelled OutcomeKind = "cancelled"
+	OutcomeKindExpired   OutcomeKind = "expired"
 )
 
 // The sentinels callers compare by identity. Each message names no value.
@@ -60,7 +62,7 @@ var (
 // ErrUnknownOutcomeKind and the zero OutcomeKind.
 func ParseOutcomeKind(raw string) (OutcomeKind, error) {
 	switch OutcomeKind(raw) {
-	case OutcomeKindAccepted, OutcomeKindRejected, OutcomeKindUnknown:
+	case OutcomeKindCompleted, OutcomeKindFailed, OutcomeKindCancelled, OutcomeKindExpired:
 		return OutcomeKind(raw), nil
 	default:
 		return "", ErrUnknownOutcomeKind

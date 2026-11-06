@@ -90,13 +90,13 @@ func TestEconomicsDecisionMigrationIdempotent(t *testing.T) {
 // refused by ParseOutcomeKind and by InsertDecisionOutcome with nothing stored.
 func TestOutcomeKindClosedSet(t *testing.T) {
 	const msg = "invalid-input: learn: outcome_kind is not one of the closed enum values"
-	for _, k := range []OutcomeKind{OutcomeKindAccepted, OutcomeKindRejected, OutcomeKindUnknown} {
+	for _, k := range []OutcomeKind{OutcomeKindCompleted, OutcomeKindFailed, OutcomeKindCancelled, OutcomeKindExpired} {
 		if got, err := ParseOutcomeKind(string(k)); err != nil || got != k {
 			t.Errorf("ParseOutcomeKind(%q) = %q, %v", k, got, err)
 		}
 	}
 	db, ctx := newDecisionDB(t), context.Background()
-	for _, raw := range []string{"", "ACCEPTED", "accepted ", "success", "free text"} {
+	for _, raw := range []string{"accepted", "rejected", "unknown", "pending", "", "COMPLETED", "ACCEPTED", "accepted ", "success", "free text"} {
 		got, err := ParseOutcomeKind(raw)
 		if got != "" {
 			t.Errorf("ParseOutcomeKind(%q) kind = %q, want empty", raw, got)
@@ -116,25 +116,46 @@ func TestOutcomeKindClosedSet(t *testing.T) {
 	}
 }
 
+// TestOutcomeKindExpiredInsertable: expiry is stored once and refuses a new kind.
+func TestOutcomeKindExpiredInsertable(t *testing.T) {
+	db, ctx, clock := newDecisionDB(t), context.Background(), newTestClock()
+	if n, err := InsertDecisionOutcome(ctx, db, clock, "dec-1", OutcomeKindExpired); err != nil || n != 1 {
+		t.Fatalf("expired insert = %d, %v; want 1, nil", n, err)
+	}
+	var kind string
+	if err := db.QueryRow(`SELECT outcome_kind FROM ` + tableDecisionOutcome + ` WHERE decision_id = 'dec-1'`).Scan(&kind); err != nil || kind != "expired" {
+		t.Fatalf("stored outcome = %q, %v; want expired, nil", kind, err)
+	}
+	if n, err := InsertDecisionOutcome(ctx, db, clock, "dec-1", OutcomeKindExpired); err != nil || n != 0 {
+		t.Fatalf("repeat expiry = %d, %v; want 0, nil", n, err)
+	}
+	n, err := InsertDecisionOutcome(ctx, db, clock, "dec-1", OutcomeKindCompleted)
+	requireSentinel(t, err, ErrOutcomeKindConflict,
+		"conflict: learn: decision outcome already recorded with a different outcome_kind")
+	if n != 0 || countRows(t, db, tableDecisionOutcome) != 1 {
+		t.Fatal("repeat or conflicting expiry changed the stored row count")
+	}
+}
+
 // TestDecisionOutcomeInsertOnce: the first insert changes 1 row, a repeat 0, a
 // conflicting kind refuses, an absent decision refuses, and the first row
 // (kind and time) is what stays stored.
 func TestDecisionOutcomeInsertOnce(t *testing.T) {
 	db, ctx, clock := newDecisionDB(t), context.Background(), newTestClock()
 	later := fakeClock{t: clock.t.Add(time.Hour)}
-	if n, err := InsertDecisionOutcome(ctx, db, clock, "dec-1", OutcomeKindAccepted); err != nil || n != 1 {
+	if n, err := InsertDecisionOutcome(ctx, db, clock, "dec-1", OutcomeKindCompleted); err != nil || n != 1 {
 		t.Fatalf("first insert = %d, %v; want 1, nil", n, err)
 	}
-	if n, err := InsertDecisionOutcome(ctx, db, later, "dec-1", OutcomeKindAccepted); err != nil || n != 0 {
+	if n, err := InsertDecisionOutcome(ctx, db, later, "dec-1", OutcomeKindCompleted); err != nil || n != 0 {
 		t.Fatalf("repeat insert = %d, %v; want 0, nil", n, err)
 	}
-	n, err := InsertDecisionOutcome(ctx, db, later, "dec-1", OutcomeKindRejected)
+	n, err := InsertDecisionOutcome(ctx, db, later, "dec-1", OutcomeKindFailed)
 	requireSentinel(t, err, ErrOutcomeKindConflict,
 		"conflict: learn: decision outcome already recorded with a different outcome_kind")
 	if n != 0 {
 		t.Fatalf("conflicting insert changed %d rows", n)
 	}
-	n, err = InsertDecisionOutcome(ctx, db, clock, "dec-absent", OutcomeKindAccepted)
+	n, err = InsertDecisionOutcome(ctx, db, clock, "dec-absent", OutcomeKindCompleted)
 	requireSentinel(t, err, ErrDecisionNotRecorded,
 		"not-found: learn: decision outcome names no recorded scheduler decision")
 	if n != 0 {
@@ -146,8 +167,8 @@ func TestDecisionOutcomeInsertOnce(t *testing.T) {
 	if err := row.Scan(&kind, &at); err != nil {
 		t.Fatal(err)
 	}
-	if kind != string(OutcomeKindAccepted) || at != clock.t.Unix() {
-		t.Fatalf("stored = (%q, %d), want the first insert's (%q, %d)", kind, at, OutcomeKindAccepted, clock.t.Unix())
+	if kind != string(OutcomeKindCompleted) || at != clock.t.Unix() {
+		t.Fatalf("stored = (%q, %d), want the first insert's (%q, %d)", kind, at, OutcomeKindCompleted, clock.t.Unix())
 	}
 	if got := countRows(t, db, tableDecisionOutcome); got != 1 {
 		t.Fatalf("outcome rows = %d, want 1", got)
@@ -161,7 +182,7 @@ func TestDecisionOutcomeInsertInTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n, err := InsertDecisionOutcome(ctx, tx, newTestClock(), "dec-1", OutcomeKindRejected); err != nil || n != 1 {
+	if n, err := InsertDecisionOutcome(ctx, tx, newTestClock(), "dec-1", OutcomeKindFailed); err != nil || n != 1 {
 		t.Fatalf("insert in tx = %d, %v", n, err)
 	}
 	if err := tx.Rollback(); err != nil {
@@ -178,16 +199,16 @@ func TestDecisionOutcomeRefusesBadArguments(t *testing.T) {
 	store := &faultyOutcomeStore{}
 	cases := map[string]func() (int64, error){
 		"nil store": func() (int64, error) {
-			return InsertDecisionOutcome(ctx, nil, clock, "dec-1", OutcomeKindAccepted)
+			return InsertDecisionOutcome(ctx, nil, clock, "dec-1", OutcomeKindCompleted)
 		},
 		"nil clock": func() (int64, error) {
-			return InsertDecisionOutcome(ctx, store, nil, "dec-1", OutcomeKindAccepted)
+			return InsertDecisionOutcome(ctx, store, nil, "dec-1", OutcomeKindCompleted)
 		},
 		"empty id": func() (int64, error) {
-			return InsertDecisionOutcome(ctx, store, clock, "", OutcomeKindAccepted)
+			return InsertDecisionOutcome(ctx, store, clock, "", OutcomeKindCompleted)
 		},
 		"oversize id": func() (int64, error) {
-			return InsertDecisionOutcome(ctx, store, clock, strings.Repeat("d", 65), OutcomeKindAccepted)
+			return InsertDecisionOutcome(ctx, store, clock, strings.Repeat("d", 65), OutcomeKindCompleted)
 		},
 	}
 	for name, call := range cases {
@@ -233,7 +254,7 @@ func TestDecisionOutcomeStoreFaultsAreUnavailable(t *testing.T) {
 		"result": {resultErr: boom, row: closed},
 		"read":   {row: closed},
 	} {
-		n, err := InsertDecisionOutcome(context.Background(), store, newTestClock(), "dec-1", OutcomeKindAccepted)
+		n, err := InsertDecisionOutcome(context.Background(), store, newTestClock(), "dec-1", OutcomeKindCompleted)
 		if n != 0 || !cascade.HasKind(err, cascade.KindUnavailable) {
 			t.Errorf("%s: = %d, %v; want 0, KindUnavailable", name, n, err)
 		}
