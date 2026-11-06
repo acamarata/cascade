@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-05T21:49:56Z",
+  "generated_at": "2026-11-06T00:45:58Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4898,6 +4898,12 @@
           "line": 16,
           "status": "",
           "raw": "cmd/cascade daemon registrations (plugin.update)."
+        },
+        {
+          "file": "cmd/cascade/wire_policy_kernel.go",
+          "line": 13,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (policy-kernel, P1-GEN-12a)."
         },
         {
           "file": "cmd/cascade/wire_presence.go",
@@ -10116,6 +10122,20 @@
           "line": 15,
           "status": "ADD",
           "raw": "context-engine/policy-kernel (ADD, P1-GEN-06)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "context-engine/policy-kernel daemon file",
+      "sites": [
+        {
+          "file": "internal/context/policy/kernel_file.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "context-engine/policy-kernel daemon file (ADD, P1-GEN-12a)."
         }
       ],
       "statuses": [
@@ -43783,7 +43803,7 @@
       ]
     }
   ],
-  "total_sites": 4215,
+  "total_sites": 4217,
   "unspecified_count": 392,
   "multi_status_count": 132
 }
