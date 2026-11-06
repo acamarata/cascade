@@ -34,6 +34,7 @@ package nodes
 
 import (
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -135,6 +136,7 @@ type RecordBackend interface {
 type RecordStore struct {
 	backend RecordBackend
 	clock   Clock
+	mu      sync.Mutex // fallback for backends without recordLocker
 }
 
 // NewRecordStore constructs a store over backend, driven by clock.
@@ -164,13 +166,6 @@ func (s *RecordStore) enroll(identity Identity, tier Tier, route Route) (DeviceR
 	if _, ok := Rank(tier); !ok {
 		return DeviceRecord{}, cascade.Newf(cascade.KindInvalidInput, "nodes: cannot enroll with invalid trust_tier %q", tier)
 	}
-	records, err := s.backend.Load()
-	if err != nil {
-		return DeviceRecord{}, cascade.Wrap(cascade.KindUnavailable, err, "nodes: read device records")
-	}
-	if _, exists := records[identity.NodeID]; exists {
-		return DeviceRecord{}, ErrAlreadyEnrolled(identity.NodeID)
-	}
 	rec := DeviceRecord{
 		NodeID:     identity.NodeID,
 		PubKeyB64:  identity.PubKeyB64(),
@@ -178,9 +173,15 @@ func (s *RecordStore) enroll(identity Identity, tier Tier, route Route) (DeviceR
 		EnrolledAt: s.clock.Now(),
 		NodeRoute:  route,
 	}
-	records[identity.NodeID] = rec
-	if err := s.backend.Save(records); err != nil {
-		return DeviceRecord{}, cascade.Wrap(cascade.KindUnavailable, err, "nodes: write device records")
+	err := s.mutate(func(records map[string]DeviceRecord) error {
+		if _, exists := records[identity.NodeID]; exists {
+			return ErrAlreadyEnrolled(identity.NodeID)
+		}
+		records[identity.NodeID] = rec
+		return nil
+	})
+	if err != nil {
+		return DeviceRecord{}, err
 	}
 	return rec, nil
 }
@@ -216,35 +217,25 @@ func (s *RecordStore) List() ([]DeviceRecord, error) {
 // Remove deletes nodeID's device record outright (`node remove <id>`,
 // S-36.T4's elevated verb — unlike Drain/Rotate/Revoke, this is a true
 // deletion, not a preserved-record state transition). Removing an unknown
-// node id returns cascade.ErrNotFound (via Get), never a silent success:
+// node id returns cascade.ErrNotFound, never a silent success:
 // a typo'd id must not be reported as "removed" when nothing was.
 func (s *RecordStore) Remove(nodeID string) error {
-	if _, err := s.Get(nodeID); err != nil {
-		return err
-	}
-	records, err := s.backend.Load()
-	if err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "nodes: read device records")
-	}
-	delete(records, nodeID)
-	if err := s.backend.Save(records); err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "nodes: write device records")
-	}
-	return nil
+	return s.mutate(func(records map[string]DeviceRecord) error {
+		if _, exists := records[nodeID]; !exists {
+			return cascade.Newf(cascade.KindNotFound, "nodes: no device record for node %q", nodeID)
+		}
+		delete(records, nodeID)
+		return nil
+	})
 }
 
-// put writes rec back into the store, for use by rotate.go's Rotate/Revoke
-// which mutate an existing record's key material and revoked-key set.
+// put writes a caller snapshot back into the store. Heartbeat and presence
+// callers retain this path until their field-scoped update migration.
 func (s *RecordStore) put(rec DeviceRecord) error {
-	records, err := s.backend.Load()
-	if err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "nodes: read device records")
-	}
-	records[rec.NodeID] = rec
-	if err := s.backend.Save(records); err != nil {
-		return cascade.Wrap(cascade.KindUnavailable, err, "nodes: write device records")
-	}
-	return nil
+	return s.mutate(func(records map[string]DeviceRecord) error {
+		records[rec.NodeID] = rec
+		return nil
+	})
 }
 
 // PendingCandidate is one discovery finding — a candidate device, a new

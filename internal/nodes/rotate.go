@@ -68,35 +68,26 @@ func SignRotationRequest(nodeID, newPubKeyB64 string, currentPriv ed25519.Privat
 // record's trust_tier and SyncCursors are preserved unchanged — Rotate
 // only ever touches PubKeyB64 and RevokedKeys.
 func (s *RecordStore) Rotate(nodeID, newPubKeyB64 string, signature []byte) (DeviceRecord, error) {
-	rec, err := s.Get(nodeID)
-	if err != nil {
-		return DeviceRecord{}, err
-	}
-	currentPub, err := ParsePublicKey(rec.PubKeyB64)
-	if err != nil {
-		return DeviceRecord{}, cascade.Wrap(cascade.KindIntegrity, err, "nodes: stored current public key is corrupt")
-	}
-	if containsFingerprint(rec.RevokedKeys, fingerprintOfKey(currentPub)) {
-		return DeviceRecord{}, ErrKeyRevoked(nodeID)
-	}
-	newPub, err := ParsePublicKey(newPubKeyB64)
-	if err != nil {
-		return DeviceRecord{}, err
-	}
-	if len(signature) != ed25519.SignatureSize ||
-		!ed25519.Verify(currentPub, rotationSigningPayload(nodeID, newPubKeyB64), signature) {
-		return DeviceRecord{}, ErrRotationSignatureInvalid()
-	}
-
-	supersededFP := fingerprintOfKey(currentPub)
-	rec.RevokedKeys = append(append([]string(nil), rec.RevokedKeys...), supersededFP)
-	rec.PubKeyB64 = newPubKeyB64
-	_ = newPub // parsed only to validate shape; the b64 string is what persists
-
-	if err := s.put(rec); err != nil {
-		return DeviceRecord{}, err
-	}
-	return rec, nil
+	return s.update(nodeID, func(rec *DeviceRecord) error {
+		currentPub, err := ParsePublicKey(rec.PubKeyB64)
+		if err != nil {
+			return cascade.Wrap(cascade.KindIntegrity, err, "nodes: stored current public key is corrupt")
+		}
+		if containsFingerprint(rec.RevokedKeys, fingerprintOfKey(currentPub)) {
+			return ErrKeyRevoked(nodeID)
+		}
+		if _, err := ParsePublicKey(newPubKeyB64); err != nil {
+			return err
+		}
+		if len(signature) != ed25519.SignatureSize ||
+			!ed25519.Verify(currentPub, rotationSigningPayload(nodeID, newPubKeyB64), signature) {
+			return ErrRotationSignatureInvalid()
+		}
+		supersededFP := fingerprintOfKey(currentPub)
+		rec.RevokedKeys = append(append([]string(nil), rec.RevokedKeys...), supersededFP)
+		rec.PubKeyB64 = newPubKeyB64
+		return nil
+	})
 }
 
 // Revoke invalidates nodeID's current key outright: it is moved into
@@ -106,22 +97,17 @@ func (s *RecordStore) Rotate(nodeID, newPubKeyB64 string, signature []byte) (Dev
 // Rotate's preservation contract — `cascade node revoke` is the elevated
 // CLI verb (S-36.T4) this operation backs.
 func (s *RecordStore) Revoke(nodeID string) (DeviceRecord, error) {
-	rec, err := s.Get(nodeID)
-	if err != nil {
-		return DeviceRecord{}, err
-	}
-	pub, err := ParsePublicKey(rec.PubKeyB64)
-	if err != nil {
-		return DeviceRecord{}, cascade.Wrap(cascade.KindIntegrity, err, "nodes: stored current public key is corrupt")
-	}
-	fp := fingerprintOfKey(pub)
-	if !containsFingerprint(rec.RevokedKeys, fp) {
-		rec.RevokedKeys = append(append([]string(nil), rec.RevokedKeys...), fp)
-	}
-	if err := s.put(rec); err != nil {
-		return DeviceRecord{}, err
-	}
-	return rec, nil
+	return s.update(nodeID, func(rec *DeviceRecord) error {
+		pub, err := ParsePublicKey(rec.PubKeyB64)
+		if err != nil {
+			return cascade.Wrap(cascade.KindIntegrity, err, "nodes: stored current public key is corrupt")
+		}
+		fp := fingerprintOfKey(pub)
+		if !containsFingerprint(rec.RevokedKeys, fp) {
+			rec.RevokedKeys = append(append([]string(nil), rec.RevokedKeys...), fp)
+		}
+		return nil
+	})
 }
 
 // SignatureRevoked reports whether pubKeyB64 (the key that produced a

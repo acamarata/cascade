@@ -30,12 +30,49 @@ import (
 type fileRecordBackend struct {
 	path  string
 	sleep func(time.Duration) // backoff between retries; time.Sleep in production
+	clock runtime.Clock       // lock-wait deadline source; nil means the system clock
+}
+
+// now reads the injected clock, falling back to the system clock.
+func (b fileRecordBackend) now() time.Time {
+	if b.clock != nil {
+		return b.clock.Now()
+	}
+	return runtime.NewSystemClock().Now()
 }
 
 // NewFileRecordBackend returns a RecordBackend that persists at
 // <dataDir>/nodes/devices.json.
 func NewFileRecordBackend(dataDir string) RecordBackend {
-	return fileRecordBackend{path: filepath.Join(dataDir, "nodes", "devices.json"), sleep: time.Sleep}
+	return fileRecordBackend{path: filepath.Join(dataDir, "nodes", "devices.json"), sleep: time.Sleep, clock: runtime.NewSystemClock()}
+}
+
+// lockRecords holds a stable sidecar inode across the entire transaction.
+// The file is never removed: every process must lock the same inode.
+func (b fileRecordBackend) lockRecords() (func(), error) {
+	if err := os.MkdirAll(filepath.Dir(b.path), 0o700); err != nil {
+		return nil, cascade.Wrap(cascade.KindUnavailable, err, "nodes: lock device records")
+	}
+	f, err := os.OpenFile(b.path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, cascade.Wrap(cascade.KindUnavailable, err, "nodes: lock device records")
+	}
+	deadline := b.now().Add(recordLockWait)
+	for {
+		locked, err := tryLockRecordFile(f)
+		if err != nil {
+			_ = f.Close()
+			return nil, cascade.Wrap(cascade.KindUnavailable, err, "nodes: lock device records")
+		}
+		if locked {
+			return func() { unlockRecordFile(f); _ = f.Close() }, nil
+		}
+		if !b.now().Before(deadline) {
+			_ = f.Close()
+			return nil, ErrRecordStoreLocked()
+		}
+		b.sleep(5 * time.Millisecond)
+	}
 }
 
 // Load reads the store under the path's shared lock, retrying a bounded

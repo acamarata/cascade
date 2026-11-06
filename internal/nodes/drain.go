@@ -42,16 +42,8 @@ package nodes
 // sync cursors are all preserved. Draining an already-drained node is a
 // no-op success (idempotent), never a conflict.
 func (s *RecordStore) Drain(nodeID string) (DeviceRecord, error) {
-	rec, err := s.Get(nodeID)
-	if err != nil {
-		return DeviceRecord{}, err
-	}
-	if rec.Drained {
-		return rec, nil
-	}
-	rec.Drained = true
-	if err := s.put(rec); err != nil {
-		return DeviceRecord{}, err
-	}
-	return rec, nil
+	return s.update(nodeID, func(rec *DeviceRecord) error {
+		rec.Drained = true
+		return nil
+	})
 }
