@@ -29,6 +29,9 @@ func knownKeys() []string {
 		"server.postgres_dsn_env", "server.redis_url_env", "server.s3_env_prefix",
 		"telemetry.enabled",
 		"daemon.install",
+		"roots.paths", "roots.maintain", "roots.max_files", "roots.accept_discovered",
+		"nodes.scan_lan", "nodes.pair", "nodes.travel",
+		"policy.preset",
 	}
 }
 

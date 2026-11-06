@@ -48,6 +48,9 @@ type InitConfig struct {
 	Telemetry TelemetryConfig `toml:"telemetry"`
 	// Daemon drives step 8.
 	Daemon DaemonConfig `toml:"daemon"`
+	Roots  RootsConfig  `toml:"roots"`  // Roots drives repository discovery (R-16.34).
+	Nodes  NodesConfig  `toml:"nodes"`  // Nodes drives fleet pairing (R-16.34).
+	Policy PolicyConfig `toml:"policy"` // Policy picks the step 8c preset (R-16.34).
 }
 
 // PluginsConfig selects catalog entries.
@@ -202,6 +205,9 @@ func (c *InitConfig) Validate() error {
 		if err := c.Providers[i].validate(i); err != nil {
 			return err
 		}
+	}
+	if err := validateDiscovery(c.Roots, c.Nodes, c.Policy); err != nil {
+		return err
 	}
 	return nil
 }

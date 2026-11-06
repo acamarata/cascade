@@ -1,0 +1,2 @@
+go test fuzz v1
+string("schema = \"cascade.init/v1\"\n\n[roots]\npaths = [\"~/Code\", \"~/Sites\"]\nmaintain = true\nmax_files = 200000\naccept_discovered = false\n\n[nodes]\nscan_lan = false\npair = [\"mini.local\"]\ntravel = true\n\n[policy]\npreset = \"balanced\"\n")

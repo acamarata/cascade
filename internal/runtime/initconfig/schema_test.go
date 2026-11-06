@@ -210,6 +210,7 @@ func FuzzInitConfigSchema(f *testing.F) {
 		validConfig, "", "schema = \"cascade.init/v1\"", "[[[", "schema = 1",
 		"schema = \"cascade.init/v1\"\n[[providers]]\nname=\"a\"\nauth=\"oauth\"\n",
 		"schema = \"cascade.init/v1\"\nprofil = \"local\"\n",
+		seedDiscoveryBody, seedUnknownPresetBody, seedMalformedPairBody,
 	} {
 		f.Add(seed)
 	}
@@ -230,6 +231,14 @@ func FuzzInitConfigSchema(f *testing.F) {
 			}
 			if p.Name == "" || p.KeyEnv == "" {
 				t.Fatalf("Parse accepted an incomplete directive: %+v", p)
+			}
+		}
+		if validateDiscovery(cfg.Roots, cfg.Nodes, cfg.Policy) != nil || cfg.Roots.MaxFiles < 0 {
+			t.Fatalf("Parse accepted invalid discovery tables: %+v %+v %+v", cfg.Roots, cfg.Nodes, cfg.Policy)
+		}
+		for _, entry := range append(append([]string{}, cfg.Roots.Paths...), cfg.Nodes.Pair...) {
+			if strings.TrimSpace(entry) == "" {
+				t.Fatalf("Parse accepted an empty paths or pair entry in %q", body)
 			}
 		}
 	})
