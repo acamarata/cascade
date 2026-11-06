@@ -66,7 +66,7 @@ const SchemaVersion = jobsSchemaVersion
 // MigrationSet is the jobs domain's seven-table schema plus the
 // ci_attestation and attestation_nonce tables (contract:ci-attestation)
 // and the node-local ci_attest_run and ci_attest_signed tables
-// (contract:node-attest-sign), appended at the same schema version: Apply runs the steps past the
+// (contract:node-attest-sign) and the node-side ci_attest_trust table, appended at the same schema version: Apply runs the steps past the
 // ledger's applied prefix.
 func MigrationSet() migrate.MigrationSet {
 	return migrate.MigrationSet{
@@ -86,6 +86,7 @@ func MigrationSet() migrate.MigrationSet {
 			attestationNonceTableStep(),
 			ciAttestRunTableStep(),
 			ciAttestSignedTableStep(),
+			ciAttestTrustTableStep(),
 		},
 	}
 }
