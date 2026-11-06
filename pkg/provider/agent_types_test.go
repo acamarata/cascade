@@ -130,7 +130,7 @@ func TestCapacitySnapshotZeroStateUnknown(t *testing.T) {
 func TestDriverDefaultsSpawnFlagsEmpty(t *testing.T) {
 	d := provider.NewDriverDefaults()
 	strs := []string{d.SessionNameFlag, d.KernelPromptFile, d.SubagentKernelPromptFile,
-		d.PluginDir, d.Effort, d.FallbackModel, d.MCPConfigPath}
+		d.PluginDir, d.Effort, d.FallbackModel, d.MCPConfigPath, d.KernelPrompt, d.SubagentKernelPrompt}
 	for i, s := range strs {
 		if s != "" {
 			t.Fatalf("spawn-flag string %d = %q, want empty", i, s)

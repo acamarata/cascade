@@ -191,6 +191,10 @@ type DriverDefaults struct {
 	ApprovalTimeout time.Duration
 	// PollInterval is the cadence Status polling uses. Default 5s.
 	PollInterval time.Duration
+	// KernelPrompt and SubagentKernelPrompt are the verified kernel text a
+	// driver sets from the *File fields after checking them against
+	// PolicyKernelSHA256; composition never sets them.
+	KernelPrompt, SubagentKernelPrompt string
 }
 
 // NewDriverDefaults returns 30s cancel grace, 30m approval timeout and a

@@ -180,6 +180,7 @@ func defaultsFlags(in argvInput) ([]string, error) {
 	if d.KernelPromptFile != "" {
 		out = append(out, "--append-system-prompt-file", d.KernelPromptFile)
 	}
+	out = append(out, kernelTextFlags(d)...)
 	if in.pluginDirEmitted() {
 		out = append(out, "--plugin-dir", d.PluginDir)
 	}

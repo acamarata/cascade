@@ -203,10 +203,7 @@ type spawnPlan struct {
 // prepare runs the guards that need no job child, in order, and returns the
 // plan. No guard is skippable: each returns before the next runs.
 func (d *Driver) prepare(ctx context.Context, job provider.AgentJobSpec, prof Profile, id provider.AgentJobID) (*spawnPlan, error) {
-	if err := refuseUnsupportedDefaults(d.cfg.Defaults); err != nil {
-		return nil, err
-	}
-	policy, err := provider.ResolveToolPolicy(job.ToolPolicy)
+	def, policy, err := spawnDefaults(d.cfg.Defaults, job.ToolPolicy)
 	if err != nil {
 		return nil, err
 	}
@@ -232,10 +229,10 @@ func (d *Driver) prepare(ctx context.Context, job provider.AgentJobSpec, prof Pr
 	if err != nil {
 		return nil, err
 	}
-	in := argvInput{def: d.cfg.Defaults, desc: d.cfg.Descriptor, version: version, policy: policy,
+	in := argvInput{def: def, desc: d.cfg.Descriptor, version: version, policy: policy,
 		cred: prof.CredentialClass, name: sessionName(job, id), jobID: id, root: lease.Root, addDirs: dirs,
 		home: job.Env.Home, prompt: job.Prompt, model: job.Model, effort: job.Effort}
-	argv, err := buildArgv(in)
+	argv, err := headlessArgv(in)
 	if err != nil {
 		return nil, err
 	}
