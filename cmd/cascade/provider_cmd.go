@@ -88,6 +88,7 @@ func newProviderCmd(deps providerDeps) *cobra.Command {
 	}
 	cmd.AddCommand(newProviderAddCmd(deps))
 	cmd.AddCommand(newGatewayAwareReauthCmd(deps))
+	cmd.AddCommand(newProviderExecCmd())
 	mountProviderQueryCmds(cmd, deps)
 	return cmd
 }
