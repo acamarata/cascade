@@ -7,10 +7,8 @@ package daemon
 //	subsystem "governor-sampler" on the run context, configured from
 //	[governor], and keeps the manifest row "admission" at its signal posture
 //	so status.get reports it.
-//
 // Inputs: FleetRuntimeDeps. Outputs: a *FleetRuntime read as w.Deps.Fleet.
 // Constraints: no second AdmissionController or Sampler, no bare go statement
-//
 //	(Manifest.GoSupervised only), no change to the admission decision logic.
 //	A later ticket adds ONE step in NewFleetRuntime plus its own
 //	subsystems_fleet_<part>.go file, and registers teardown with addCloser.
@@ -92,6 +90,7 @@ type FleetRuntime struct {
 	closeErr  error
 	res       fleetReservation // the reservation step (subsystems_fleet_reservation.go)
 	capa      fleetCapacity    // the capacity step (subsystems_fleet_capacity.go)
+	topo      fleetTopology    // the topology step (subsystems_fleet_topology.go)
 }
 
 // NewFleetRuntime validates deps, then runs the builder steps in order. The
@@ -106,6 +105,7 @@ func NewFleetRuntime(ctx context.Context, deps FleetRuntimeDeps) (*FleetRuntime,
 		{name: "admission", build: r.buildAdmission},
 		{name: "reservation", build: r.buildReservation},
 		{name: "capacity", build: r.buildCapacity},
+		{name: "topology", build: r.buildTopology},
 	}
 	for _, step := range steps {
 		if err := step.build(ctx, deps); err != nil {
