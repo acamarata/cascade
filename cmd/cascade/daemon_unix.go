@@ -63,11 +63,11 @@ func composeDaemon(ctx context.Context, deps daemonDeps, observe registryObserve
 	if err != nil {
 		return daemon.RunOptions{}, cleanups, err
 	}
-	logProvider, err := runtime.NewLogProvider(cfg.Logging, paths, deps.Clock)
+	creds, removedCreds := scrubDaemonEnv(cfg, &deps)
+	logProvider, err := openDaemonLog(cfg, paths, deps, removedCreds, &cleanups)
 	if err != nil {
 		return daemon.RunOptions{}, cleanups, err
 	}
-	cleanups = append(cleanups, func() { _ = logProvider.Close() })
 
 	store, rawDB, closeStore, err := openRuntimeStore(ctx, paths, deps.Clock)
 	if err != nil {
@@ -120,7 +120,19 @@ func composeDaemon(ctx context.Context, deps daemonDeps, observe registryObserve
 	if err != nil {
 		return daemon.RunOptions{}, cleanups, err
 	}
-	return daemonRunOptions(deps, settings, paths, logProvider, server, manifest, connections, store, bus, cancelRun), cleanups, nil
+	return daemonRunOptions(deps, creds, settings, paths, logProvider, server, manifest, connections, store, bus, cancelRun), cleanups, nil
+}
+
+// openDaemonLog opens the daemon log, registers its Close as a cleanup and
+// records the credential names the start-time scrub removed.
+func openDaemonLog(cfg *runtime.Config, paths runtime.PathProvider, deps daemonDeps, removed []string, cleanups *[]func()) (*runtime.LogProvider, error) {
+	logProvider, err := runtime.NewLogProvider(cfg.Logging, paths, deps.Clock)
+	if err != nil {
+		return nil, err
+	}
+	*cleanups = append(*cleanups, func() { _ = logProvider.Close() })
+	logProvider.Logger().Info("daemon: removed credential variables from the environment", "names", removed)
+	return logProvider, nil
 }
 
 // startFleetRuntime builds the daemon's one fleet runtime over the values
@@ -149,11 +161,12 @@ func withFleetRuntime(opt rpcServerOption, fleet *daemon.FleetRuntime) rpcServer
 }
 
 // daemonRunOptions assembles the RunOptions composeDaemon hands daemon.Run
-// and wires the upgrade path.
-func daemonRunOptions(deps daemonDeps, settings daemon.Settings, paths runtime.PathProvider, lp *runtime.LogProvider, server *http.Server, manifest *daemon.Manifest, connections *int64, store provider.Store, bus *events.Bus, cancelRun context.CancelFunc) daemon.RunOptions {
+// and wires the upgrade path. The relaunch environment is creds.RelaunchEnviron,
+// evaluated when the relaunch happens, so admitted credentials survive it.
+func daemonRunOptions(deps daemonDeps, creds *credentialEnv, settings daemon.Settings, paths runtime.PathProvider, lp *runtime.LogProvider, server *http.Server, manifest *daemon.Manifest, connections *int64, store provider.Store, bus *events.Bus, cancelRun context.CancelFunc) daemon.RunOptions {
 	opts := daemon.RunOptions{
 		Settings: settings, PIDPath: daemon.PIDFilePath(paths), Logger: lp.Logger(), Clock: deps.Clock,
-		Server: server, Environ: deps.Environ, Manifest: manifest, Connections: connections,
+		Server: server, Environ: creds.RelaunchEnviron, Manifest: manifest, Connections: connections,
 	}
 	wireUpgrade(&opts, deps, store, bus, manifest.RelaunchJoin(cancelRun, settings.ShutdownGrace))
 	return opts
