@@ -1,7 +1,7 @@
 package runtime
 
 // Purpose: the config secret screen (LooksLikeSecret, the injected
-// SecretLiteralScanner, ScanTreeForSecrets) and Validate (P1-SEC-30, AUD-027).
+// SecretLiteralScanner, ScanTreeForSecrets) (P1-SEC-30, AUD-027).
 // Outputs: *SecretLiteralsError with every hit, or KindUnavailable with no scanner.
 // Constraints: fail closed; errors name fields, key positions and classes, never
 // values or secret key names. Every f688c0b LooksLikeSecret refusal stays.
@@ -267,20 +267,6 @@ func sortedTreeKeys(leaves map[string]interface{}) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-// Validate type-checks [elevation] and [logging] and refuses a newer schema.
-func Validate(tree map[string]interface{}) error {
-	if _, err := parseElevationSection(tree); err != nil {
-		return err
-	}
-	if _, err := parseLoggingSection(tree, func(string, ...interface{}) {}); err != nil {
-		return err
-	}
-	if from := schemaVersionOf(tree); from > CurrentSchemaVersion {
-		return &SchemaError{FoundVersion: from, CurrentVersion: CurrentSchemaVersion}
-	}
-	return nil
 }
 
 // DecodeConfigFile decodes path (missing = empty) without Load's upgrade rewrite.

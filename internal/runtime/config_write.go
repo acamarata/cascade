@@ -88,6 +88,7 @@ var knownConfigKeys = []string{
 	"plugins.enable", "plugins.disable", "plugins.harness", "plugins.enable_remote_runtime",
 	"elevation.allow_remote", "elevation.helper_pubkey",
 	"widget.show_project_names",
+	"fleet.discovery.interval",
 }
 
 // bareKeyPattern matches a single valid TOML bare key segment (the subset
