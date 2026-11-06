@@ -178,6 +178,10 @@ type ServeDeps struct {
 	// ControllerBinding is where the pinned controller key is read from, per
 	// request. Nil (or a binding without a key) refuses every ci.attest.sign.
 	ControllerBinding ControllerBindingBackend
+	// AttestPutter stores one controller-accepted attestation for
+	// ci.attest.put. Nil leaves ci.attest.put unmounted. It is reached only
+	// after the request verified against the pinned controller key.
+	AttestPutter AttestPutter
 }
 
 // RPCPath re-exports internal/rpc.RPCPath's value as a plain string, so
@@ -200,13 +204,16 @@ type ServeRegistry struct {
 // NewServeRegistry is BuildServeRegistry wrapped behind ServeRegistry —
 // the CLI composition root's only allowed way to obtain the node agent's
 // RPC surface. ci.attest.sign is mounted here, and only when
-// deps.AttestSigner is non-nil.
+// deps.AttestSigner is non-nil; ci.attest.put only when deps.AttestPutter is.
 func NewServeRegistry(deps ServeDeps) *ServeRegistry {
 	reg := BuildServeRegistry(deps)
 	if deps.AttestSigner != nil {
 		reg.Register(AttestSignMethod, attestSignHandler(attestSignDeps{
 			binding: deps.ControllerBinding, clock: deps.Clock, nodeID: deps.Self.NodeID, signer: deps.AttestSigner,
 		}))
+	}
+	if deps.AttestPutter != nil {
+		reg.Register(AttestPutMethod, attestPutHandler(attestPutDeps{binding: deps.ControllerBinding, putter: deps.AttestPutter}))
 	}
 	return &ServeRegistry{reg: reg}
 }
