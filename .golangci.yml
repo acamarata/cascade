@@ -322,6 +322,12 @@ linters:
             # hooks_rpc.go mounts hooks.list and hooks.fires on the daemon's own
             # registry and declares their owner-only access; it never dials the daemon.
             - "!**/cmd/cascade/hooks_rpc.go"
+            # context_generate_rpc.go, hooks_runners.go and mcp_inbox_forward.go register
+            # context.generate, the hook runners and the inbox MCP forwarders on the
+            # daemon's own registry at composition; none of them dials the daemon.
+            - "!**/cmd/cascade/context_generate_rpc.go"
+            - "!**/cmd/cascade/hooks_runners.go"
+            - "!**/cmd/cascade/mcp_inbox_forward.go"
             - "!**/*_test.go"
           deny:
             - pkg: "github.com/acamarata/cascade/internal/rpc"

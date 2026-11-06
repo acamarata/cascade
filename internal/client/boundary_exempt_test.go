@@ -1,0 +1,174 @@
+// Purpose: the cmd-rpc-server-boundary exemption list, split out of
+//	boundary_test.go to keep both files under the 300-line cap. It mirrors
+//	the .golangci.yml depguard exemptions by name.
+
+package client
+
+// cmdRPCBoundaryExempt mirrors .golangci.yml's cmd-rpc-server-boundary
+// rule's exemption list exactly — the composition-root files
+// legitimately importing internal/rpc for reasons other than a
+// hand-rolled outbound call. daemon_unix_handlers.go was split out of
+// daemon_unix_run.go for the 300-line cap and carries the same daemon-SIDE
+// role: it serves RPC, it does not dial it, so the rule's "use
+// internal/client.Client instead" does not apply (R-14.197).
+// daemon_unix_run_memory.go was split out of daemon_unix_run.go for the
+// same 300-line cap and for the same reason as daemon_unix_handlers.go: it
+// MOUNTS the memory.* namespace on the daemon's registry. It serves RPC, it
+// does not dial it.
+var cmdRPCBoundaryExempt = map[string]bool{
+	// Daemon composition registers the owner-only CI repository handler.
+	"wire_ci_repo.go":           true,
+	"daemon_unix_run.go":        true,
+	"daemon_unix_run_memory.go": true,
+	"daemon_unix_handlers.go":   true,
+	// daemon_unix_conductor.go is the R-16.80 composition-root connector: it
+	// REGISTERS "conductor.execute" on the daemon's own registry and never
+	// dials the daemon, so the rule's "use internal/client.Client instead"
+	// does not apply — the same daemon-SIDE reasoning as
+	// daemon_unix_handlers.go above. It cannot live in internal/daemon
+	// alongside RegisterFleetAttentionHandler because it needs
+	// cmd/cascade-local openMigratedDB and providerRegistryDBFile.
+	"daemon_unix_conductor.go": true,
+	// daemon_unix_evidence.go registers "conductor.expand" on the daemon's
+	// own registry from buildRPCServer, on the identical daemon-SIDE
+	// reasoning as daemon_unix_conductor.go above. This map mirrors
+	// .golangci.yml's cmd-rpc-server-boundary exemption list; the two must
+	// be edited together or this gate and the linter disagree.
+	"daemon_unix_evidence.go": true,
+	// wire_clipboard_effect.go only declares and registers the owner-only
+	// audit.clipboard_effect verb on the daemon's own Registry and never dials
+	// the daemon (P1-SEC-09); mirrors .golangci.yml's exemption for it.
+	"wire_clipboard_effect.go": true,
+	// wire_review_pr_diff.go only declares and registers the owner-only
+	// plugin.review.pr_diff verb on the daemon's own Registry and never dials
+	// the daemon; mirrors .golangci.yml's exemption for it.
+	"wire_review_pr_diff.go": true,
+	// bundle_install_rpc.go and bundle_activate_rpc.go declare the owner-only
+	// bundle verbs and mount them on the daemon's own Registry; neither dials
+	// the daemon. Mirrors .golangci.yml's exemptions for them.
+	"bundle_install_rpc.go":  true,
+	"bundle_activate_rpc.go": true,
+	// mcp_capability_rpc.go mounts mcp.capability.check on the daemon's own
+	// Registry and never dials it. Mirrors .golangci.yml's exemption for it.
+	"mcp_capability_rpc.go": true,
+	// daemon_unix_jobs_rpc.go and daemon_unix_jobs_rpc_adapters.go: the
+	// P1-E29-W6-S60-T1 composition-root call site for job.*/lease.* — see
+	// .golangci.yml's cmd-rpc-server-boundary comment (edited together
+	// with this map) for the full justification.
+	"daemon_unix_jobs_rpc.go":          true,
+	"daemon_unix_jobs_rpc_adapters.go": true,
+	// daemon_unix_run_fleetjobs.go (P1-E40-W9-S77-T3): a mechanical
+	// relocation of wireFleetAndNodeHandlers/wireFleetNodeAndJobHandlers/
+	// wireJobRPCHandlers out of daemon_unix_run.go under its own 300-line
+	// cap. This mirrors .golangci.yml's cmd-rpc-server-boundary exemption
+	// list; the two must be edited together.
+	"daemon_unix_run_fleetjobs.go": true,
+	// daemon_unix_run_options.go (P1-E17-W4-S37-T1): the same kind of
+	// relocation — the rpcServerOption type, its constructors and the two
+	// helpers buildRPCServer reads them through, split out of
+	// daemon_unix_run.go under its own 300-line cap. Every option either
+	// REGISTERS on the daemon's own registry or contributes a collaborator
+	// to it; none dials the daemon. This map mirrors .golangci.yml's
+	// cmd-rpc-server-boundary exemption list; the two must be edited
+	// together.
+	"daemon_unix_run_options.go": true,
+	// compose_daemon.go: a pure move of platformDaemonRun's body into
+	// composeDaemon, the composition root's registration core. It REGISTERS
+	// on the daemon's own registry and SSE mux and never dials the daemon.
+	// This map mirrors .golangci.yml's cmd-rpc-server-boundary exemption
+	// list; the two must be edited together.
+	"compose_daemon.go": true,
+	// chat_wiring.go (P1-E20-W5-S43-T5; renamed from daemon_unix_chat.go
+	// and de-tagged by P1-E45-W10-S88-T2): the composition-root call
+	// site that REGISTERS chat.append_turn/get_thread/list_threads on the
+	// daemon's own registry. It serves RPC and never dials it — the
+	// identical daemon-SIDE reasoning as daemon_unix_conductor.go and
+	// daemon_unix_evidence.go above. It needs the daemon's own
+	// PathProvider and event bus to site the store and the SSE mirror, so
+	// it cannot live in internal/daemon either. This map mirrors
+	// .golangci.yml's cmd-rpc-server-boundary exemption list; the two must
+	// be edited together.
+	"chat_wiring.go": true,
+	// daemon_unix_memory_recall.go (P1-E20-W5-S43-T5): a mechanical
+	// relocation of registerMemoryAndRecall out of daemon_unix_run.go
+	// under its own 300-line cap — the same move, for the same reason,
+	// that daemon_unix_run_memory.go and daemon_unix_run_fleetjobs.go
+	// already carry exemptions for. It MOUNTS memory.* and recall.* on the
+	// daemon's registry and dials nothing.
+	"daemon_unix_memory_recall.go": true,
+	// mcp_tools.go (P1-E16-W4-S34-T2): the method table the first-party
+	// MCP tools dispatch through. It REGISTERS on a registry it
+	// constructs itself and never dials the daemon -- the identical
+	// composition-root reasoning as mcp.go's own exemption below, which
+	// it was split out of for the 300-line cap. This map mirrors
+	// .golangci.yml's cmd-rpc-server-boundary exemption list; the two
+	// must be edited together.
+	"mcp_tools.go":      true,
+	"mcp.go":            true,
+	"elevate_helper.go": true,
+	// elevated_call.go composes custody signing for Client.DoElevated and
+	// references rpc.Attestation wire data without dialing the daemon itself.
+	// This mirrors the matching .golangci.yml cmd-rpc-server-boundary exemption.
+	"elevated_call.go": true,
+	// daemon_unix_config_accept.go registers config.accept_loosening on the
+	// daemon's own registry and never dials the daemon. This mirrors the
+	// matching .golangci.yml cmd-rpc-server-boundary exemption.
+	"daemon_unix_config_accept.go": true,
+	// vault_elevated_gate.go runs the local elevation ceremony in-process,
+	// reusing rpc.ElevationMiddleware as a verifier, and never dials the
+	// daemon. This mirrors the matching .golangci.yml cmd-rpc-server-boundary
+	// exemption.
+	"vault_elevated_gate.go": true,
+	// daemon_unix_policy_authorize.go registers policy.authorize on the
+	// daemon's own registry and never dials the daemon. This mirrors the
+	// matching .golangci.yml cmd-rpc-server-boundary exemption.
+	"daemon_unix_policy_authorize.go": true,
+	// backup_elevation.go never dials the daemon: it runs the 06 §5.14
+	// nonce + local-auth-signature + middleware-verify + single-use-ledger
+	// ceremony entirely in-process, reusing the daemon's own
+	// rpc.ElevationMiddleware as a verification primitive rather than a
+	// second hand-rolled copy of it. This map mirrors .golangci.yml's
+	// cmd-rpc-server-boundary exemption list; the two must be edited
+	// together or this gate and the linter disagree (P1-E19-W4-S42-T3).
+	"backup_elevation.go": true,
+	// hooks.go (P1-E32-W6-S66-T1): the AF/S-66.T1 composition-root
+	// connector. It REGISTERS fleet.sessions.completion_check on the
+	// daemon's own registry and never dials the daemon, the identical
+	// daemon-SIDE reasoning as daemon_unix_jobs_rpc.go above. This map
+	// mirrors .golangci.yml's cmd-rpc-server-boundary exemption list; the
+	// two must be edited together or this gate and the linter disagree.
+	"hooks.go": true,
+	// plugin_rpc.go (P1-E15-W4-S32-T4 COMPLETION PASS): the D/S-07.T4
+	// plugin.add composition-root connector. It REGISTERS "plugin.add" on
+	// the daemon's own registry and never dials the daemon, the identical
+	// daemon-SIDE reasoning as hooks.go above. It cannot live in
+	// internal/daemon: internal/plugins imports internal/client, which
+	// imports internal/daemon — a real cycle. This map mirrors
+	// .golangci.yml's cmd-rpc-server-boundary exemption list; the two must
+	// be edited together or this gate and the linter disagree.
+	"plugin_rpc.go": true,
+	// plugin_rpc_bridge.go (fix18 round 2): wireCascadePABridge and its
+	// bridge.send registration, split out of plugin_rpc.go under that
+	// file's own 300-line cap (the SAME move daemon_unix_run_memory.go
+	// made for daemon_unix_run.go). It REGISTERS "bridge.send" and
+	// "pa.pair_code" on the daemon's own registry and never dials the
+	// daemon — identical daemon-SIDE reasoning to plugin_rpc.go directly
+	// above. This map mirrors .golangci.yml's cmd-rpc-server-boundary
+	// exemption list; the two must be edited together or this gate and
+	// the linter disagree.
+	"plugin_rpc_bridge.go": true,
+	// context_facts_rpc.go mounts and declares context.facts.* on the
+	// daemon's own registry and never dials the daemon; mirrors .golangci.yml.
+	"context_facts_rpc.go": true,
+	// jobs_evidence_rpc.go, jobs_evidence_sse.go and hooks_rpc.go serve their verbs and
+	// stream from the daemon's own registry and bus, never dialing it; mirrors .golangci.yml.
+	"jobs_evidence_rpc.go": true,
+	"jobs_evidence_sse.go": true,
+	"hooks_rpc.go":         true,
+	// context_generate_rpc.go, hooks_runners.go and mcp_inbox_forward.go register
+	// context.generate, the hook runners and the inbox MCP forwarders on the
+	// daemon's own registry and never dial it; mirrors .golangci.yml.
+	"context_generate_rpc.go": true,
+	"hooks_runners.go":        true,
+	"mcp_inbox_forward.go":    true,
+}

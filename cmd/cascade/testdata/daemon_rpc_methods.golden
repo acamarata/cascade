@@ -27,6 +27,7 @@ config.accept_loosening
 context.facts.accept
 context.facts.list
 context.facts.propose
+context.generate
 context.harness_list
 context.harness_sync
 context.hydration.degraded
