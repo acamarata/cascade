@@ -72,6 +72,7 @@ node.dispatch.claim
 node.dispatch.journal
 node.dispatch.report
 node.upgrade
+notify.stats
 pa.pair_code
 perms.grant
 perms.revoke
