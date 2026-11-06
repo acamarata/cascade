@@ -16,16 +16,20 @@ package secrets
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 const (
-	darwinCustodyName = "macos-keychain"
-	securityBin       = "/usr/bin/security"
+	darwinCustodyName   = "macos-keychain"
+	securityBin         = "/usr/bin/security"
+	keychainValuePrefix = "cv1:"
 	// keychainAccountPrefix namespaces this vault's account attribute so a
 	// List can enumerate exactly the entries cascade filed, and never the
 	// user's unrelated keychain items.
@@ -133,7 +137,7 @@ func (k *keychainCustody) Available() bool { return k.probe(context.Background()
 func (k *keychainCustody) account(name string) string { return keychainAccountPrefix + name }
 
 // Set writes a generic password, replacing any existing entry (-U), with
-// the value passed as hex through -X so plaintext never enters argv.
+// a printable cv1 envelope passed as hex through -X so plaintext never enters argv.
 func (k *keychainCustody) Set(ctx context.Context, name string, value []byte) error {
 	if err := validateSecretName(name); err != nil {
 		return err
@@ -142,8 +146,9 @@ func (k *keychainCustody) Set(ctx context.Context, name string, value []byte) er
 	if err != nil {
 		return err
 	}
+	stored := keychainValuePrefix + base64.StdEncoding.EncodeToString(value)
 	_, err = k.run(ctx, securityBin, "add-generic-password",
-		"-a", k.account(name), "-s", k.service, "-U", "-X", hex.EncodeToString(value), keychain)
+		"-a", k.account(name), "-s", k.service, "-U", "-X", hex.EncodeToString([]byte(stored)), keychain)
 	if err != nil {
 		return ErrCustodyUnavailable(darwinCustodyName, redactRunner(err))
 	}
@@ -169,17 +174,24 @@ func (k *keychainCustody) Get(ctx context.Context, name string) ([]byte, error) 
 		}
 		return nil, ErrCustodyUnavailable(darwinCustodyName, redactRunner(err))
 	}
-	return decodeKeychainValue(out)
+	value, err := decodeKeychainValue(out)
+	if err != nil {
+		return nil, cascade.Wrapf(cascade.KindIntegrity, err,
+			"secrets: keychain item %q could not be decoded", name)
+	}
+	return value, nil
 }
 
-// decodeKeychainValue turns `security -w` output back into the stored
-// bytes. The tool prints hex for a value written with -X; a value written
-// by some other tool comes back as raw text, which is accepted as-is rather
-// than refused, since refusing would make a pre-existing keychain entry
-// permanently unreadable.
+// decodeKeychainValue decodes the printable cv1 envelope from security -w.
+// Pre-cv1 output is returned as raw text: hex-shaped text is ambiguous and
+// must never be guessed to represent other bytes. Errors withhold output.
 func decodeKeychainValue(out []byte) ([]byte, error) {
-	text := strings.TrimRight(string(out), "\n")
-	if decoded, err := hex.DecodeString(text); err == nil && len(text)%2 == 0 {
+	text := strings.TrimSuffix(string(out), "\n")
+	if strings.HasPrefix(text, keychainValuePrefix) {
+		decoded, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(text, keychainValuePrefix))
+		if err != nil {
+			return nil, cascade.New(cascade.KindIntegrity, "secrets: invalid cv1 keychain encoding")
+		}
 		return decoded, nil
 	}
 	return []byte(text), nil

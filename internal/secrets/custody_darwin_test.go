@@ -53,7 +53,7 @@ func (f *fakeSecurity) run(_ context.Context, name string, args ...string) ([]by
 		if !ok {
 			return nil, &runnerError{err: errors.New("exit status 44"), stderr: "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain."}
 		}
-		return []byte(value + "\n"), nil
+		return fakeSecurityOutput(value)
 	case "delete-generic-password":
 		account := flagValue(args, "-a")
 		if _, ok := f.items[account]; !ok {
@@ -76,6 +76,8 @@ func flagValue(args []string, flag string) string {
 
 func newFakeKeychain(t *testing.T) (*keychainCustody, *fakeSecurity) {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CASCADE_HOME", t.TempDir())
 	fake := newFakeSecurity()
 	custody, err := platformCustody(Config{
 		Service: "cascade-unit-test", Runner: fake.run, KeychainPath: fakeKeychainPath,
