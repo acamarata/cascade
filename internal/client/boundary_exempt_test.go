@@ -171,4 +171,12 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	"context_generate_rpc.go": true,
 	"hooks_runners.go":        true,
 	"mcp_inbox_forward.go":    true,
+	// chat_reply_wiring.go, wire_chat_reply.go, daemon_unix_fleet_health.go and
+	// wire_fleet_domain_promote.go compose and register the chat reply verbs and
+	// topic, the fleet health handler and the fleet.domains verbs on the daemon's
+	// own registry; none of them dials the daemon. Mirrors .golangci.yml.
+	"chat_reply_wiring.go":         true,
+	"wire_chat_reply.go":           true,
+	"daemon_unix_fleet_health.go":  true,
+	"wire_fleet_domain_promote.go": true,
 }

@@ -328,6 +328,14 @@ linters:
             - "!**/cmd/cascade/context_generate_rpc.go"
             - "!**/cmd/cascade/hooks_runners.go"
             - "!**/cmd/cascade/mcp_inbox_forward.go"
+            # chat_reply_wiring.go, wire_chat_reply.go, daemon_unix_fleet_health.go and
+            # wire_fleet_domain_promote.go compose and register the chat reply verbs and
+            # topic, the fleet health handler and the fleet.domains verbs on the daemon's
+            # own registry; none of them dials the daemon.
+            - "!**/cmd/cascade/chat_reply_wiring.go"
+            - "!**/cmd/cascade/wire_chat_reply.go"
+            - "!**/cmd/cascade/daemon_unix_fleet_health.go"
+            - "!**/cmd/cascade/wire_fleet_domain_promote.go"
             - "!**/*_test.go"
           deny:
             - pkg: "github.com/acamarata/cascade/internal/rpc"
