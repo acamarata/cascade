@@ -1709,5 +1709,13 @@
     "reason": "P1-NODE-09c ships GitHubActionsRunner with its refusal, attestation and timeout tests; its production caller is the daemon RunnerSet wiring of P1-NODE-09d (P1-BF-R368).",
     "retire_ticket": "P1-NODE-09",
     "symbol": "internal/ci.NewGitHubActionsRunner"
+  },
+  {
+    "added_by_ticket": "P1-NODE-21f",
+    "caller_site": "cmd/cascade/node_service.go",
+    "expected_caller": "cmd/cascade/node_service.go, the `cascade node service install|uninstall` verbs that build service.NewNodeAgentInstaller() and call Install/Uninstall; retire this entry once that file calls NewNodeAgentInstaller",
+    "reason": "P1-NODE-21f ships the linux node agent installer (linger check, unit render, systemctl sequence) with tests that inject GOOS and LingerDir; the CLI verb that constructs it from the host defaults is P1-NODE-21g, which depends on this ticket. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
+    "retire_ticket": "P1-NODE-21g",
+    "symbol": "internal/daemon/service.NewNodeAgentInstaller"
   }
 ]
