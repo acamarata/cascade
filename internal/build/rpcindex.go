@@ -1,0 +1,157 @@
+package build
+
+import (
+	"fmt"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/acamarata/cascade/pkg/cascade"
+)
+
+// RPCMethodRow is the computed reference for one golden RPC method.
+// Access omits its Access prefix; Elevation is always, conditional or none.
+// Unresolved values remain empty and are accompanied by findings.
+type RPCMethodRow struct {
+	Method, Access, Elevation, DocPage, DocAnchor string
+}
+
+// DocRuleRPCAccess reports missing or unresolved access declarations.
+const DocRuleRPCAccess DocRule = "rpc_access"
+
+// DocRuleRPCElevation reports unresolved elevation registrations.
+const DocRuleRPCElevation DocRule = "rpc_elevation"
+
+// DocRuleRPCDoc reports methods lacking a documenting page.
+const DocRuleRPCDoc DocRule = "rpc_doc"
+
+// DocRuleRPCUnregistered reports methods absent from access and registry scans.
+const DocRuleRPCUnregistered DocRule = "rpc_unregistered"
+
+const rpcGoldenPath = "cmd/cascade/testdata/daemon_rpc_methods.golden"
+
+// LoadRPCMethodGolden reads the non-comment, non-empty golden method set.
+func LoadRPCMethodGolden(repoRoot string) ([]string, error) {
+	b, err := readFileFn(filepath.Join(repoRoot, rpcGoldenPath))
+	if err != nil {
+		return nil, cascade.Wrap(cascade.KindUnavailable, err, "rpcindex: reading method golden")
+	}
+	seen := map[string]bool{}
+	var methods []string
+	for _, line := range strings.Split(string(b), "\n") {
+		method := strings.TrimSpace(line)
+		if method != "" && !strings.HasPrefix(method, "#") && !seen[method] {
+			seen[method] = true
+			methods = append(methods, method)
+		}
+	}
+	if len(methods) == 0 {
+		return nil, cascade.New(cascade.KindInvalidInput, "rpcindex: method golden contains no methods")
+	}
+	sort.Strings(methods)
+	return methods, nil
+}
+
+// BuildRPCMethodRows implements contract:rpc-method-reference, returning sorted
+// computed rows and findings. Any input failure returns nil rows and findings.
+//
+//nolint:revive // name fixed by the ticket contract
+func BuildRPCMethodRows(repoRoot string) ([]RPCMethodRow, []DocFinding, error) {
+	methods, err := LoadRPCMethodGolden(repoRoot)
+	if err != nil {
+		return nil, nil, err
+	}
+	access, au, err := ScanDeclaredAccess(repoRoot)
+	if err != nil {
+		return nil, nil, err
+	}
+	elevation, eu, err := ScanElevatedVerbs(repoRoot)
+	if err != nil {
+		return nil, nil, err
+	}
+	files, err := rpcSourceFiles(repoRoot)
+	if err != nil {
+		return nil, nil, err
+	}
+	registered, err := collectRegisteredMethods(repoRoot, files)
+	if err != nil {
+		return nil, nil, err
+	}
+	docs, err := rpcDocumentedMethods(repoRoot, methods)
+	if err != nil {
+		return nil, nil, err
+	}
+	findings := rpcScanFindings(DocRuleRPCAccess, au)
+	findings = append(findings, rpcScanFindings(DocRuleRPCElevation, eu)...)
+	rows, rowFindings := rpcComputeRows(methods, access, elevation, registered, docs, len(eu) != 0)
+	return rows, append(findings, rowFindings...), nil
+}
+
+func rpcComputeRows(methods []string, access, elevation map[string]string, registered map[string]bool, docs map[string]rpcDocLocation, unresolvedElevation bool) ([]RPCMethodRow, []DocFinding) {
+	var rows []RPCMethodRow
+	var findings []DocFinding
+	for _, method := range methods {
+		row := RPCMethodRow{Method: method, Access: access[method], Elevation: elevation[method]}
+		_, declared := access[method]
+		if !declared && !registered[method] {
+			findings = append(findings, rpcFinding(DocRuleRPCUnregistered, "unregistered method", method))
+		}
+		if !declared {
+			findings = append(findings, rpcFinding(DocRuleRPCAccess, "undeclared access", method))
+		}
+		if _, exists := elevation[method]; !exists && !unresolvedElevation {
+			row.Elevation = "none"
+		}
+		if doc, ok := docs[method]; ok {
+			row.DocPage, row.DocAnchor = doc.page, doc.anchor
+		} else {
+			findings = append(findings, rpcFinding(DocRuleRPCDoc, "undocumented method", method))
+		}
+		rows = append(rows, row)
+	}
+	return rows, findings
+}
+
+func rpcFinding(rule DocRule, detail, subject string) DocFinding {
+	return DocFinding{Rule: rule, Detail: detail + ": " + subject, Key: string(rule) + "|" + subject}
+}
+
+func rpcScanFindings(rule DocRule, unresolved []string) []DocFinding {
+	var out []DocFinding
+	for _, entry := range unresolved {
+		parts := strings.SplitN(entry, ": ", 2)
+		subject, detail := parts[0], parts[1]
+		if tail, ok := strings.CutPrefix(detail, "conflicting classes: "); ok {
+			subject, detail = tail, "conflicting classes"
+		}
+		finding := rpcFinding(rule, detail, subject)
+		pos := strings.LastIndex(parts[0], ":")
+		if pos >= 0 {
+			finding.File = parts[0][:pos]
+			_, _ = fmt.Sscanf(parts[0][pos+1:], "%d", &finding.Line)
+		}
+		out = append(out, finding)
+	}
+	return out
+}
+
+// RenderRPCMethodReference renders deterministic Markdown with relative links.
+func RenderRPCMethodReference(rows []RPCMethodRow) []byte {
+	var b strings.Builder
+	b.WriteString("# RPC method reference\n\nGenerated by the RPC method reference generator.\n\n| Method | Access | Elevation | Documented in |\n|---|---|---|---|\n")
+	ordered := append([]RPCMethodRow(nil), rows...)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Method < ordered[j].Method })
+	for _, row := range ordered {
+		doc := ""
+		if row.DocPage != "" {
+			target, _ := filepath.Rel("docs/reference", row.DocPage)
+			target = filepath.ToSlash(target)
+			if row.DocAnchor != "" {
+				target += "#" + row.DocAnchor
+			}
+			doc = "[" + row.DocPage + "](" + target + ")"
+		}
+		fmt.Fprintf(&b, "| `%s` | %s | %s | %s |\n", row.Method, row.Access, row.Elevation, doc)
+	}
+	return []byte(b.String())
+}

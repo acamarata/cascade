@@ -1,0 +1,6 @@
+fixture.noaccess
+fixture.variable
+fixture.undocumented
+fixture.ghost
+fixture.conflict
+fixture.good

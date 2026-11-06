@@ -1,0 +1,4 @@
+# fixture methods
+fixture.qualified
+fixture.bare
+fixture.conditional
