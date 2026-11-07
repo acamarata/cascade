@@ -1,0 +1,295 @@
+{
+  "exec.AGENT_HEARTBEAT": {
+    "version": 1,
+    "type": "AgentPayload",
+    "fields": [
+      "lane_id"
+    ]
+  },
+  "exec.AGENT_RESERVED": {
+    "version": 1,
+    "type": "AgentPayload",
+    "fields": [
+      "lane_id"
+    ]
+  },
+  "exec.AGENT_STARTED": {
+    "version": 1,
+    "type": "AgentPayload",
+    "fields": [
+      "lane_id"
+    ]
+  },
+  "exec.AGENT_STOPPED": {
+    "version": 1,
+    "type": "AgentPayload",
+    "fields": [
+      "lane_id"
+    ]
+  },
+  "exec.ARTIFACT_WRITTEN": {
+    "version": 1,
+    "type": "ArtifactPayload",
+    "fields": [
+      "task_id",
+      "ref"
+    ]
+  },
+  "exec.CHECKPOINT_CREATED": {
+    "version": 1,
+    "type": "StatePayload",
+    "fields": [
+      "runtime_session_id"
+    ]
+  },
+  "exec.CONFLICT_DETECTED": {
+    "version": 1,
+    "type": "DecisionPayload",
+    "fields": [
+      "subject_id"
+    ]
+  },
+  "exec.CONTEXT_COMPACTED": {
+    "version": 1,
+    "type": "StatePayload",
+    "fields": [
+      "runtime_session_id"
+    ]
+  },
+  "exec.CONTEXT_COMPACTING": {
+    "version": 1,
+    "type": "StatePayload",
+    "fields": [
+      "runtime_session_id"
+    ]
+  },
+  "exec.DECISION_REQUIRED": {
+    "version": 1,
+    "type": "DecisionPayload",
+    "fields": [
+      "subject_id"
+    ]
+  },
+  "exec.EVIDENCE_ADDED": {
+    "version": 1,
+    "type": "ArtifactPayload",
+    "fields": [
+      "task_id",
+      "ref"
+    ]
+  },
+  "exec.FINAL_ACCEPTANCE_READY": {
+    "version": 1,
+    "type": "ProjectPayload",
+    "fields": [
+      "project_id"
+    ]
+  },
+  "exec.HUMAN_APPROVAL_REQUIRED": {
+    "version": 1,
+    "type": "SafetyPayload",
+    "fields": [
+      "subject_id"
+    ]
+  },
+  "exec.LEASE_ACQUIRED": {
+    "version": 1,
+    "type": "WorkspacePayload",
+    "fields": [
+      "task_id"
+    ]
+  },
+  "exec.LEASE_CONFLICT": {
+    "version": 1,
+    "type": "WorkspacePayload",
+    "fields": [
+      "task_id"
+    ]
+  },
+  "exec.LEASE_EXPIRED": {
+    "version": 1,
+    "type": "WorkspacePayload",
+    "fields": [
+      "task_id"
+    ]
+  },
+  "exec.PATCH_READY": {
+    "version": 1,
+    "type": "ArtifactPayload",
+    "fields": [
+      "task_id",
+      "ref"
+    ]
+  },
+  "exec.PERMISSION_DENIED": {
+    "version": 1,
+    "type": "SafetyPayload",
+    "fields": [
+      "subject_id"
+    ]
+  },
+  "exec.PHASE_CHANGED": {
+    "version": 1,
+    "type": "ProjectPayload",
+    "fields": [
+      "project_id"
+    ]
+  },
+  "exec.PRIVACY_POLICY_BLOCKED": {
+    "version": 1,
+    "type": "PrivacyBlockedPayload",
+    "fields": [
+      "subject_id",
+      "safe_alternative_exists"
+    ]
+  },
+  "exec.PROJECT_CANCELLED": {
+    "version": 1,
+    "type": "ProjectPayload",
+    "fields": [
+      "project_id"
+    ]
+  },
+  "exec.PROJECT_COMPLETED": {
+    "version": 1,
+    "type": "ProjectPayload",
+    "fields": [
+      "project_id"
+    ]
+  },
+  "exec.PROJECT_STARTED": {
+    "version": 1,
+    "type": "ProjectPayload",
+    "fields": [
+      "project_id"
+    ]
+  },
+  "exec.QUOTA_EXHAUSTED": {
+    "version": 1,
+    "type": "QuotaPayload",
+    "fields": [
+      "lane_id"
+    ]
+  },
+  "exec.QUOTA_LOW": {
+    "version": 1,
+    "type": "QuotaLowPayload",
+    "fields": [
+      "lane_id",
+      "affected_role"
+    ]
+  },
+  "exec.QUOTA_RECOVERED": {
+    "version": 1,
+    "type": "QuotaPayload",
+    "fields": [
+      "lane_id"
+    ]
+  },
+  "exec.RATE_LIMITED": {
+    "version": 1,
+    "type": "QuotaPayload",
+    "fields": [
+      "lane_id"
+    ]
+  },
+  "exec.SCOPE_CHANGE": {
+    "version": 1,
+    "type": "DecisionPayload",
+    "fields": [
+      "subject_id"
+    ]
+  },
+  "exec.T0_AWAKE": {
+    "version": 1,
+    "type": "ExecutivePayload",
+    "fields": [
+      "runtime_session_id"
+    ]
+  },
+  "exec.T0_SLEEPING": {
+    "version": 1,
+    "type": "ExecutivePayload",
+    "fields": [
+      "runtime_session_id"
+    ]
+  },
+  "exec.T0_WAKE_REQUESTED": {
+    "version": 1,
+    "type": "ExecutivePayload",
+    "fields": [
+      "runtime_session_id"
+    ]
+  },
+  "exec.TASK_BLOCKED": {
+    "version": 1,
+    "type": "TaskPayload",
+    "fields": [
+      "task_id"
+    ]
+  },
+  "exec.TASK_COMPLETED": {
+    "version": 1,
+    "type": "TaskPayload",
+    "fields": [
+      "task_id"
+    ]
+  },
+  "exec.TASK_CREATED": {
+    "version": 1,
+    "type": "TaskPayload",
+    "fields": [
+      "task_id"
+    ]
+  },
+  "exec.TASK_FAILED": {
+    "version": 1,
+    "type": "TaskFailedPayload",
+    "fields": [
+      "task_id",
+      "consecutive_failed_attempts"
+    ]
+  },
+  "exec.TASK_READY": {
+    "version": 1,
+    "type": "TaskPayload",
+    "fields": [
+      "task_id"
+    ]
+  },
+  "exec.TASK_STARTED": {
+    "version": 1,
+    "type": "TaskPayload",
+    "fields": [
+      "task_id"
+    ]
+  },
+  "exec.VERIFY_FAILED": {
+    "version": 1,
+    "type": "VerifyPayload",
+    "fields": [
+      "subject_id"
+    ]
+  },
+  "exec.VERIFY_PASSED": {
+    "version": 1,
+    "type": "VerifyPayload",
+    "fields": [
+      "subject_id"
+    ]
+  },
+  "exec.VERIFY_REQUESTED": {
+    "version": 1,
+    "type": "VerifyPayload",
+    "fields": [
+      "subject_id"
+    ]
+  },
+  "exec.WORKTREE_ALLOCATED": {
+    "version": 1,
+    "type": "WorkspacePayload",
+    "fields": [
+      "task_id"
+    ]
+  }
+}
