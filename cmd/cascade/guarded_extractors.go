@@ -211,24 +211,16 @@ func extractAuthFamily(extra map[string]interface{}) (json.RawMessage, error) {
 	return json.Marshal(v)
 }
 
-// extractLanesFamily models [agents.lanes.<lane>].posture ahead of its reader.
+// extractLanesFamily runs runtime.ParseAgentLanes and models each lane's posture.
 func extractLanesFamily(extra map[string]interface{}) (json.RawMessage, error) {
-	lanes, err := subTable(extra, "agents", "lanes")
+	lanes, err := runtime.ParseAgentLanes(extra)
 	if err != nil {
 		return nil, err
 	}
 	v := map[string]interface{}{}
-	for lane := range lanes {
-		t, err := subTable(lanes, lane)
-		if err != nil {
-			return nil, err
-		}
-		entry := map[string]interface{}{}
-		if err := putStringKey(entry, t, "posture", "agents.lanes."+lane); err != nil {
-			return nil, err
-		}
-		if len(entry) > 0 {
-			v[lane] = entry
+	for _, l := range lanes {
+		if l.Posture != runtime.AgentPostureInteractive {
+			v[l.Driver] = map[string]interface{}{"posture": l.Posture}
 		}
 	}
 	return json.Marshal(v)
