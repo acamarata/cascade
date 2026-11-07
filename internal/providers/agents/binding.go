@@ -43,13 +43,20 @@ const (
 	CredentialOAuthToken   = "oauth_token"
 	CredentialAPIKey       = "api_key"
 	CredentialCompatKey    = "compat_key"
+	// CredentialGateway routes the harness to one admitted gateway account.
+	// It lives only in Binding.Gateway, never in Binding.Credentials.
+	CredentialGateway = "gateway"
 )
 
 // CredentialSpec is one credential class a harness accepts and the single
 // environment variable that carries it. KeyVar is "" for subscription.
+// BaseURLVar and ManagedVar are set on the gateway row alone: the variable
+// carrying the account base URL and the fixed host-managed flag.
 type CredentialSpec struct {
-	Class  string
-	KeyVar string
+	Class      string
+	KeyVar     string
+	BaseURLVar string
+	ManagedVar string
 }
 
 // Binding binds a harness to its owning plugin and credential table. Anything
@@ -65,6 +72,10 @@ type Binding struct {
 	ConfigDirVar string
 	// Credentials is the closed per-harness credential table (B-1).
 	Credentials []CredentialSpec
+	// Gateway is the gateway credential row; the zero value means the harness
+	// offers no gateway class. It is apart from Credentials because it names
+	// three variables and needs an account, not a key source.
+	Gateway CredentialSpec
 	// Binaries are the vendor executable basenames, for the exec gate.
 	Binaries []string
 }
@@ -186,7 +197,33 @@ func validateBinding(b Binding) error {
 			return fmt.Errorf("binary %q is not a bare basename", bin)
 		}
 	}
-	return validateCredentials(b.Credentials)
+	if err := validateCredentials(b.Credentials); err != nil {
+		return err
+	}
+	return validateGatewayRow(b)
+}
+
+// validateGatewayRow accepts the zero row, or a gateway row whose three
+// variables are distinct environment names apart from the config directory.
+func validateGatewayRow(b Binding) error {
+	g := b.Gateway
+	if g == (CredentialSpec{}) {
+		return nil
+	}
+	if g.Class != CredentialGateway {
+		return fmt.Errorf("gateway row has class %q", g.Class)
+	}
+	seen := map[string]bool{b.ConfigDirVar: true}
+	for _, v := range []string{g.KeyVar, g.BaseURLVar, g.ManagedVar} {
+		if !envVarName.MatchString(v) {
+			return fmt.Errorf("gateway row variable %q is not an environment variable name", v)
+		}
+		if seen[v] {
+			return fmt.Errorf("gateway row variable %q is used twice", v)
+		}
+		seen[v] = true
+	}
+	return nil
 }
 
 func validateCredentials(creds []CredentialSpec) error {
@@ -195,6 +232,9 @@ func validateCredentials(creds []CredentialSpec) error {
 	}
 	seen := map[string]bool{}
 	for _, c := range creds {
+		if c.BaseURLVar != "" || c.ManagedVar != "" {
+			return fmt.Errorf("%s credential names a gateway variable", c.Class)
+		}
 		switch c.Class {
 		case CredentialSubscription:
 			if c.KeyVar != "" {

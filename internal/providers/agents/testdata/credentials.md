@@ -1,7 +1,8 @@
 # Claude harness credential variable names: provenance
 
 The claude row of the binding table (`harness_claude.go`) names three
-environment variables. None comes from operator configuration.
+environment variables, and its gateway row names three more. None comes from
+operator configuration.
 
 | Variable | Class | Where it is observed |
 |---|---|---|
@@ -9,7 +10,12 @@ environment variables. None comes from operator configuration.
 | `CLAUDE_CODE_OAUTH_TOKEN` | `oauth_token` | the harness binary prints `export CLAUDE_CODE_OAUTH_TOKEN=<token>` as the way to hand the `claude setup-token` token to a process |
 | `ANTHROPIC_API_KEY` | `api_key` | `claude --help`, option `--bare`: "Anthropic auth is strictly ANTHROPIC_API_KEY or apiKeyHelper via --settings (OAuth and keychain are never read)" |
 
-Captured 2026-10-13 against harness `2.1.288` (`claude --version`).
+| `ANTHROPIC_AUTH_TOKEN` | `gateway` (bearer value) | the P1-GWY-01 channel record (`cli-channel.txt`, untracked evidence); not re-captured here |
+| `ANTHROPIC_BASE_URL` | `gateway` (account base URL) | the P1-GWY-01 channel record; not re-captured here |
+| `CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST` | `gateway` (fixed flag) | the P1-GWY-01 channel record; not re-captured here |
+
+Captured 2026-10-13 against harness `2.1.288` (`claude --version`), except the
+three gateway rows.
 Method: `claude --help </dev/null` (read the `--bare`, `--model` and `--effort`
 options), `claude setup-token --help` (confirms the subcommand: "Set up a
 long-lived authentication token (requires Claude subscription)"), and a

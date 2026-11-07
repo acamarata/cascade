@@ -14,7 +14,9 @@
 // socket input and the contract signature is fixed): the spawn shim appends it;
 // a value holding a newline, carriage return or NUL is refused
 // (naming the variable, never the value); the key value is read from the
-// daemon environment only, never the vault (E.1).
+// daemon environment only, never the vault (E.1). Class gateway takes its
+// three values from the GatewayEnv argument alone, never from getenv; the
+// argument is absent for every other class (gateway_env.go).
 // SPORT: internal.providers.agents/ADD (P1-AGT-15, contract:driver-credentials).
 
 package agents
@@ -40,14 +42,16 @@ type BuiltEnv struct {
 // proxyKeys are the six variables that come from the per-spawn proxy alone.
 var proxyKeys = []string{"HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy", "NO_PROXY", "no_proxy"}
 
-// BuildDriverEnv builds the driver and tool environments for one spawn.
+// BuildDriverEnv builds the driver and tool environments for one spawn. gw is
+// nil for every class but gateway, which takes exactly one GatewayEnv.
 func BuildDriverEnv(b Binding, a DriverAuth, p RuntimeProfile, jobID, principalToken, leaseMarker string,
-	proxyEnv []string, getenv func(string) string) (BuiltEnv, error) {
+	proxyEnv []string, getenv func(string) string, gw ...GatewayEnv) (BuiltEnv, error) {
 	keyVar, err := KeyVarFor(b, a.Class)
 	if err != nil {
 		return BuiltEnv{}, err
 	}
-	if err := checkChildVars(b, keyVar); err != nil {
+	spec, _ := credentialRow(b, a.Class)
+	if err := checkChildVars(b, keyVar, spec.BaseURLVar, spec.ManagedVar); err != nil {
 		return BuiltEnv{}, err
 	}
 	if jobID == "" || principalToken == "" || leaseMarker == "" {
@@ -65,14 +69,11 @@ func BuildDriverEnv(b Binding, a DriverAuth, p RuntimeProfile, jobID, principalT
 	for k, v := range proxies {
 		values[k] = v
 	}
-	var key string
-	if keyVar != "" {
-		if key = getenv(a.KeyEnv); key == "" {
-			return BuiltEnv{}, cascade.Newf(cascade.KindUnavailable, "agents: %s: the daemon environment variable %s is not set", b.Harness, a.KeyEnv)
-		}
-		values[keyVar] = key
+	key, err := credentialValues(b, a, spec, getenv, gw, values)
+	if err != nil {
+		return BuiltEnv{}, err
 	}
-	env, err := orderedEnv(provider.DriverEnvAllowlist(b.ConfigDirVar, keyVar), values)
+	env, err := orderedEnv(provider.DriverEnvAllowlist(b.ConfigDirVar, keyVar, spec.BaseURLVar, spec.ManagedVar), values)
 	if err != nil {
 		return BuiltEnv{}, err
 	}
@@ -83,17 +84,17 @@ func BuildDriverEnv(b Binding, a DriverAuth, p RuntimeProfile, jobID, principalT
 	return BuiltEnv{Driver: env, Tool: BuildToolEnv(env, b, keyVar), Secrets: secretValues(key, principalToken, proxies)}, nil
 }
 
-// checkChildVars refuses a binding whose config-directory or key variable
-// collides with a base allowlist name or with each other: the later value
-// would silently replace the first and the key would be emitted twice.
-func checkChildVars(b Binding, keyVar string) error {
+// checkChildVars refuses a binding whose config-directory or credential
+// variable collides with a base allowlist name or with each other: the later
+// value would silently replace the first and the key would be emitted twice.
+func checkChildVars(b Binding, credVars ...string) error {
 	base := provider.DriverEnvAllowlist()
-	for _, v := range []string{b.ConfigDirVar, keyVar} {
+	for _, v := range append([]string{b.ConfigDirVar}, credVars...) {
 		if v != "" && slices.Contains(base, v) {
 			return cascade.Newf(cascade.KindInvalidInput, "agents: %s: variable %s is already a base environment name", b.Harness, v)
 		}
 	}
-	if keyVar != "" && keyVar == b.ConfigDirVar {
+	if slices.Contains(credVars, b.ConfigDirVar) {
 		return cascade.Newf(cascade.KindInvalidInput, "agents: %s: the key variable and the config directory variable are the same name", b.Harness)
 	}
 	return nil
@@ -119,12 +120,17 @@ func orderedEnv(allow []string, values map[string]string) ([]string, error) {
 
 // BuildToolEnv is the driver environment minus the key variable and the
 // vendor config-directory variable: the tools a harness spawns are untrusted
-// and never see the credential or where it lives. The input is not modified.
+// and never see the credential or where it lives. The gateway row's variables
+// are dropped too. The input is not modified.
 func BuildToolEnv(driver []string, b Binding, keyVar string) []string {
+	g := b.Gateway
 	out := make([]string, 0, len(driver))
 	for _, kv := range driver {
 		name, _, _ := strings.Cut(kv, "=")
 		if name == b.ConfigDirVar || (keyVar != "" && name == keyVar) {
+			continue
+		}
+		if g.Class != "" && (name == g.KeyVar || name == g.BaseURLVar || name == g.ManagedVar) {
 			continue
 		}
 		out = append(out, kv)

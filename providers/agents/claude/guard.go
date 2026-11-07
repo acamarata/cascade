@@ -58,7 +58,7 @@ func checkSpawnEnv(env provider.SpawnEnv, prof Profile) error {
 	if err != nil {
 		return err
 	}
-	values, err := parsePairs(env.Driver, provider.DriverEnvAllowlist(prof.VendorAuthVar, keyVar))
+	values, err := parsePairs(env.Driver, driverAllowlist(prof, keyVar))
 	if err != nil {
 		return err
 	}
@@ -74,6 +74,9 @@ func checkSpawnEnv(env provider.SpawnEnv, prof Profile) error {
 	}
 	if len(values[keyVar]) < minKeyValueLen {
 		return envRejected("the key variable %s must be set beside %s (at least %d bytes)", keyVar, prof.VendorAuthVar, minKeyValueLen)
+	}
+	if err := checkGatewayVars(prof, values); err != nil {
+		return err
 	}
 	if strings.ContainsAny(home, " \t\n,()") {
 		return envRejected("runtime home %q holds a character the harness rule lists split on", home)

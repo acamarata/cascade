@@ -4,13 +4,15 @@
 // Inputs: the raw Config.Extra tree and the registered bindings.
 // Outputs: one DriverAuth per configured harness, or KindInvalidInput naming
 // the offending harness, key or class.
-// Constraints: the accepted keys are exactly class, key_env and auth_source
-// (anything else, vendor_auth_var included, is refused as an unknown key);
-// the class must be one the harness's table offers; key_env is the NAME of a
-// daemon environment variable holding the value (key classes only) and may
-// not name a CASCADE_ control variable; auth_source is an absolute path
-// (subscription only). Nothing here reads the environment, the vault or the
-// file: the value is read later, from the daemon environment only (E.1).
+// Constraints: the accepted keys are exactly class, key_env, auth_source and
+// gateway (anything else, vendor_auth_var included, is refused as an unknown
+// key); the class must be one the harness's table offers; key_env is the NAME
+// of a daemon environment variable holding the value (key classes only) and
+// may not name a CASCADE_ control variable; auth_source is an absolute path
+// (subscription only); gateway names an admitted account (class gateway only,
+// which takes neither key_env nor auth_source). Nothing here reads the
+// environment, the vault or the file: a key is read later from the daemon
+// environment only (E.1), a gateway token through gateway.Source.
 // SPORT: internal.providers.agents/ADD (P1-AGT-15, contract:driver-credentials).
 
 package agents
@@ -35,6 +37,8 @@ type DriverAuth struct {
 	// AuthSource is the absolute vendor auth file path, linked in place.
 	// It is empty for every class but subscription.
 	AuthSource string
+	// Gateway names the gateway account. It is empty for every class but gateway.
+	Gateway string
 }
 
 // daemonVarPrefix marks the daemon's own control variables, never a key source.
@@ -95,9 +99,9 @@ func authTables(extra map[string]any) (map[string]any, error) {
 // parseAuthTable validates one harness table.
 func parseAuthTable(b Binding, table map[string]any) (DriverAuth, error) {
 	for key := range table {
-		if key != "class" && key != "key_env" && key != "auth_source" {
+		if key != "class" && key != "key_env" && key != "auth_source" && key != "gateway" {
 			return DriverAuth{}, cascade.Newf(cascade.KindInvalidInput,
-				"agents: [agents.auth.%s]: unknown key %q (accepted: class, key_env, auth_source; a variable name never comes from config)", b.Harness, key)
+				"agents: [agents.auth.%s]: unknown key %q (accepted: class, key_env, auth_source, gateway; a variable name never comes from config)", b.Harness, key)
 		}
 	}
 	a := DriverAuth{Harness: b.Harness}
@@ -115,6 +119,9 @@ func parseAuthTable(b Binding, table map[string]any) (DriverAuth, error) {
 		return DriverAuth{}, err
 	}
 	if a.AuthSource, err = authString(b, table, "auth_source"); err != nil {
+		return DriverAuth{}, err
+	}
+	if a.Gateway, err = authString(b, table, "gateway"); err != nil {
 		return DriverAuth{}, err
 	}
 	return a, checkAuthShape(b, a)
@@ -135,6 +142,12 @@ func authString(b Binding, table map[string]any, key string) (string, error) {
 
 // checkAuthShape enforces which fields each class requires or forbids.
 func checkAuthShape(b Binding, a DriverAuth) error {
+	if a.Class == CredentialGateway {
+		return checkGatewayShape(b, a)
+	}
+	if a.Gateway != "" {
+		return cascade.Newf(cascade.KindInvalidInput, "agents: [agents.auth.%s]: gateway is only allowed for class gateway", b.Harness)
+	}
 	if a.Class == CredentialSubscription {
 		switch {
 		case a.KeyEnv != "":
@@ -159,14 +172,39 @@ func checkAuthShape(b Binding, a DriverAuth) error {
 	return nil
 }
 
+// checkGatewayShape requires the account name and refuses every key source:
+// the token comes from the account's own credential, never from this table.
+func checkGatewayShape(b Binding, a DriverAuth) error {
+	switch {
+	case a.KeyEnv != "":
+		return cascade.Newf(cascade.KindInvalidInput, "agents: [agents.auth.%s]: key_env is not allowed for class gateway", b.Harness)
+	case a.AuthSource != "":
+		return cascade.Newf(cascade.KindInvalidInput, "agents: [agents.auth.%s]: auth_source is not allowed for class gateway", b.Harness)
+	case a.Gateway == "":
+		return cascade.Newf(cascade.KindInvalidInput, "agents: [agents.auth.%s]: gateway is required for class gateway", b.Harness)
+	}
+	return nil
+}
+
+// credentialRow returns the row for class from the binding alone.
+func credentialRow(b Binding, class string) (CredentialSpec, bool) {
+	if class == CredentialGateway {
+		return b.Gateway, b.Gateway.Class == CredentialGateway
+	}
+	for _, c := range b.Credentials {
+		if c.Class == class {
+			return c, true
+		}
+	}
+	return CredentialSpec{}, false
+}
+
 // KeyVarFor returns the child-side variable that carries class for b, from
 // the binding's table only; "" for subscription. A class the table does not
 // offer is KindInvalidInput.
 func KeyVarFor(b Binding, class string) (string, error) {
-	for _, c := range b.Credentials {
-		if c.Class == class {
-			return c.KeyVar, nil
-		}
+	if c, ok := credentialRow(b, class); ok {
+		return c.KeyVar, nil
 	}
 	return "", cascade.Newf(cascade.KindInvalidInput, "agents: %s: credential class %q is not offered by this harness", b.Harness, class)
 }

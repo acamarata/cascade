@@ -12,7 +12,6 @@ package agents
 import (
 	"context"
 	"path/filepath"
-	"slices"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
@@ -32,6 +31,8 @@ var claudeRow = Binding{
 		{Class: CredentialOAuthToken, KeyVar: claude.KeyVarOAuthToken},
 		{Class: CredentialAPIKey, KeyVar: claude.KeyVarAPIKey},
 	},
+	Gateway: CredentialSpec{Class: CredentialGateway, KeyVar: claude.KeyVarGatewayToken,
+		BaseURLVar: claude.GatewayBaseURLVar, ManagedVar: claude.GatewayManagedVar},
 	Binaries: []string{"claude"},
 }
 
@@ -50,7 +51,7 @@ func checkSite(b Binding, site SpawnSite) error {
 	if site.KeyVar == "" && site.CredentialClass == "" {
 		return nil
 	}
-	if !slices.ContainsFunc(b.Credentials, func(c CredentialSpec) bool { return c.Class == site.CredentialClass && c.KeyVar == site.KeyVar }) {
+	if c, ok := credentialRow(b, site.CredentialClass); !ok || c.KeyVar != site.KeyVar {
 		return cascade.Newf(cascade.KindInvalidInput, "agents: %s: credential class %q with variable %q is not in the binding's table", b.Harness, site.CredentialClass, site.KeyVar)
 	}
 	return nil

@@ -26,7 +26,7 @@ starts no child, leaves no profile directory, no proxy and no effect record.
 6. `RunPreSpawnScan` over the process detector (`ProcessDetectorMatch`). A hit is `ErrPreSpawnSecretFound`; a scan failure or an unavailable detector refuses too.
 7. `ProvisionRuntimeProfile`, then the relay hook pack (`RenderAgentHookPack`).
 8. Build the driver from its factory. Its `Executable()` must equal the configured absolute vendor path (or that path with symlinks resolved) and carry a basename the binding lists. A driver that cannot report its executable refuses.
-9. Start the per-spawn proxy, then `BuildDriverEnv` for the exact driver and tool environments.
+9. For class gateway, resolve the admitted account. Start the per-spawn proxy, then `BuildDriverEnv` for the exact driver and tool environments.
 10. Bind the output filter at the join of the envelope's tier and the job's data class.
 11. Mint a job id if empty. Write the effect intent (`agent.spawn:<job id>`, actor `agent-driver:<harness>`), call the driver, then confirm with `pgid=<n>`, or fail the intent.
 
@@ -40,9 +40,27 @@ A harness binding names its credential classes and the one child-side variable f
 |---|---|---|---|
 | claude | `oauth_token` | `CLAUDE_CODE_OAUTH_TOKEN` | daemon environment variable named by `key_env` |
 | claude | `api_key` | `ANTHROPIC_API_KEY` | daemon environment variable named by `key_env` |
+| claude | `gateway` | `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST` | the admitted gateway account named by `gateway` |
 | any | `subscription` | none | the vendor CLI's own auth file, linked in place |
 
 The daemon reads a key class only from its own environment. An unset `key_env` variable is a typed error naming it. The vault is never read for driver credentials.
+
+## Gateway credential class
+
+`[agents.auth.<harness>]` takes `class = "gateway"` with `gateway = "<account>"`, on a harness whose binding has a gateway row (claude only). `gateway` is required, is refused on any other class, and `key_env` and `auth_source` are refused with it. The account must be in the admitted `[gateways.<name>]` family; any other name is not found, and nothing starts.
+
+At the spawn, after the driver gate, the shim resolves the account's token through `gateway.Source`: the account's own environment variable, or its digest-pinned helper. Cascade code does not read the vault or the keychain. The token is resolved fresh for each spawn and zeroed when `Spawn` returns. `BuildDriverEnv` then sets exactly the row's three variables: the token, the account base URL and the fixed host-managed flag, whose value is `1`. None is ever copied from the daemon environment, and the three names come from the binding alone. The token joins the secrets the output filter scrubs. The token is not written to the profile, any file, the journal or a log.
+
+The spawn's proxy allows the claude base allowlist plus the account's host and port, derived from the same account as the base URL. That list is a new one for that spawn: no other spawn's allowlist changes, and the base allowlist is not widened. `BuildDriverEnv` refuses a base URL whose host differs from the proxy entry.
+
+The claude driver admits the class itself. It permits `ANTHROPIC_AUTH_TOKEN` as the key variable and, for this class only, `ANTHROPIC_BASE_URL` and `CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST` beside it; any other class carrying either is refused as outside the allowlist. It refuses a base URL that is not https (http only on a loopback host) and a managed flag other than `1`. A gateway lane emits no `--bare` and no `--max-budget-usd`.
+
+Disclosed residuals:
+
+- The token is visible to the session's own tools. The tool environment the host builds omits all three variables, but the harness's own tool subprocesses inherit the harness environment (`DEF-P2-driver-tool-isolation`). The fix path is `DEF-P2-claude-apikeyhelper-channel`.
+- The helper is runnable by any same-uid process (ADR-0006 section 3).
+
+Open gap: the claude driver's own environment guard (`checkSpawnEnv` in `providers/agents/claude`) accepts only classes `api_key` and `oauth_token` and the base allowlist plus one key variable. Until it admits this class and its three variables, a gateway spawn through the real driver is refused before any job child starts. The shim, the environments and the proxy above are in place.
 
 ## Environments
 
@@ -50,8 +68,8 @@ The child never inherits the daemon environment. `os.Environ` is banned under `p
 
 | Environment | Names |
 |---|---|
-| Driver | `PATH`, `HOME`, `TMPDIR`, `LANG`, `CASCADE_JOB_ID`, `CASCADE_SOCKET`, `CASCADE_PRINCIPAL_TOKEN`, `CASCADE_LEASE_ID`, `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, the three lowercase proxy names, the vendor config directory variable and, for a key class, its key variable |
-| Tool | the driver list minus the key variable and the config directory variable |
+| Driver | `PATH`, `HOME`, `TMPDIR`, `LANG`, `CASCADE_JOB_ID`, `CASCADE_SOCKET`, `CASCADE_PRINCIPAL_TOKEN`, `CASCADE_LEASE_ID`, `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, the three lowercase proxy names, the vendor config directory variable and, for a key class, its key variable; class gateway has the row's three variables instead of a key variable |
+| Tool | the driver list minus the key variable, the gateway row's variables and the config directory variable |
 
 `HOME` and `TMPDIR` name the per-spawn profile. The proxy variables come from the per-spawn proxy alone; `NO_PROXY` stays empty. The principal token enters through `principal.BindEnv`, never argv.
 

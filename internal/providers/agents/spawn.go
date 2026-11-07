@@ -6,7 +6,8 @@
 // Outputs: a SpawnHandle whose Release undoes everything the spawn made.
 // Constraints: order is fixed: lane resolve, envelope, tool policy, minimal
 // tree, secret scan, runtime profile, hook pack, driver, executable gate,
-// proxy, environments, output filter, effect intent, Spawn, effect confirm.
+// gateway account, proxy, environments, output filter, effect intent, Spawn,
+// effect confirm.
 // A refusal before the intent starts no child and leaves no profile, proxy
 // or effect. A driver failure fails the intent. Secrets never reach a log.
 // SPORT: internal.providers.agents/ADD (P1-AGT-03, contract:driver-custody-shim).
@@ -32,6 +33,7 @@ import (
 // Effects, ProxyJournal, Getenv and Clock are required; Exe and ProfileBase
 // must be absolute. A harness missing from Postures, Defaults or EgressAllow
 // gets the zero posture, provider.NewDriverDefaults and a deny-all allowlist.
+// Gateway is read only for a harness whose credential class is gateway.
 type ShimDeps struct {
 	Resolver     *Resolver
 	Auth         map[HarnessID]DriverAuth
@@ -45,15 +47,17 @@ type ShimDeps struct {
 	Postures map[HarnessID]provider.CompliancePosture
 	Defaults map[HarnessID]provider.DriverDefaults
 	// Exe is the cascade binary the hook relay pack calls.
-	Exe    string
-	Getenv func(string) string
-	Clock  runtime.Clock
+	Exe     string
+	Getenv  func(string) string
+	Clock   runtime.Clock
+	Gateway GatewayDeps
 }
 
 // Shim spawns external agent drivers under custody. Build with NewShim.
 type Shim struct {
 	d     ShimDeps
 	sweep func(ctx context.Context, marker string) error
+	dial  egressproxy.DialFunc // nil: StartSpawnProxy (ProductionDial); tests set a fake
 }
 
 // NewShim validates d and returns the shim.
@@ -109,12 +113,14 @@ type spawnRun struct {
 	proxy   *egressproxy.Proxy
 	built   BuiltEnv
 	began   bool
+	gw      []GatewayEnv // nil for every class but gateway
 }
 
 // Spawn runs the custody order and starts the driver's child.
 func (s *Shim) Spawn(ctx context.Context, req SpawnRequest) (SpawnHandle, error) {
 	r := &spawnRun{s: s, req: req, job: req.Job}
-	steps := []func(context.Context) error{r.admit, r.checkTree, r.provision, r.buildDriver, r.startProxy, r.buildEnv, r.bindFilter}
+	defer r.forgetGatewayToken()
+	steps := []func(context.Context) error{r.admit, r.checkTree, r.provision, r.buildDriver, r.resolveGateway, r.startProxy, r.buildEnv, r.bindFilter}
 	for _, step := range steps {
 		if err := step(ctx); err != nil {
 			r.rollback()
@@ -200,21 +206,10 @@ func (r *spawnRun) buildDriver(context.Context) error {
 	return checkExecutable(drv, want, r.b)
 }
 
-// startProxy starts the per-spawn egress proxy for this driver.
-func (r *spawnRun) startProxy(ctx context.Context) error {
-	id := egressproxy.DriverID(r.b.Harness)
-	p, err := StartSpawnProxy(ctx, id, string(r.job.JobID), r.s.d.EgressAllow[id], r.s.d.ProxyJournal)
-	if err != nil {
-		return err
-	}
-	r.proxy = p
-	return nil
-}
-
 // buildEnv builds the exact driver and tool environments.
 func (r *spawnRun) buildEnv(context.Context) error {
 	built, err := BuildDriverEnv(r.b, r.auth, r.prof, string(r.job.JobID), r.req.PrincipalToken,
-		r.req.LeaseMarker, r.proxy.Env(), r.s.d.Getenv)
+		r.req.LeaseMarker, r.proxy.Env(), r.s.d.Getenv, r.gw...)
 	if err != nil {
 		return err
 	}
