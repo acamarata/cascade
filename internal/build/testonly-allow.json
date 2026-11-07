@@ -238,26 +238,11 @@
     "symbol": "internal/fleet/economics.ExecutiveRoleLadder"
   },
   {
-    "caller_site": "internal/daemon/fleet_health_rpc.go",
-    "expected_caller": "AP/S-82.T2's fleet.health.summary RPC handler, which calls HealthKeys(snapshot, lanes, domains, accounts, clock) and returns the result over the wire",
-    "reason": "P1-E41-W9-S80-T1 ships the R-21.52 fleet health-summary projection, fully implemented and tested against every key/state combination (TestHealthKeys, TestHealthKeysScarce, TestHealthKeysUnavailable, TestHealthKeysRedaction). Its named consumer is AP/S-82.T2's fleet.health.summary RPC handler, which has not landed in this tree yet -- explicitly named in this ticket's own spec_refs.",
-    "retire_ticket": "P1-EXE-15",
-    "symbol": "internal/fleet/economics.HealthKeys"
-  },
-  {
     "caller_site": "internal/fleet/economics/mode.go",
     "expected_caller": "AO/S-79.T3's eligibility/ranking surface, or a future `cascade fleet mode set` shell-completion list",
     "reason": "P1-E41-W9-S79-T2 ships the closed eight-value Mode enum as data. Modes() is the enumeration accessor a config/CLI listing surface would call; this ticket's own scope explicitly excludes eligibility, correlation and utility ranking (AO/S-79.T3), which is the first consumer that needs to enumerate every mode.",
     "retire_ticket": "P1-TOP-08",
     "symbol": "internal/fleet/economics.Modes"
-  },
-  {
-    "caller_site": "internal/daemon/economics_wiring.go",
-    "expected_caller": "AO/S-79's scarcity scheduler composition root, which constructs one WindowAccountant per subscription_window domain and calls Buckets on each accounting pass",
-    "reason": "P1-E41-W9-S80-T1 ships WindowAccountant, the subscription-window bucket accountant, fully implemented and tested against a real modernc/sqlite topology+usage store pair. Its constructor's real caller is the scarcity scheduler / periodic accounting job that owns a live topology.Store, topology.QuotaStore and provider.UsageReader triple at daemon runtime -- that composition-root wiring belongs to AO/S-79's scheduler tickets, out of this ticket's files_scope (internal/fleet/economics and internal/runtime config only).",
-    "retire_ticket": "cap:fleet-sessions",
-    "expires": "P1-EXIT-07",
-    "symbol": "internal/fleet/economics.NewWindowAccountant"
   },
   {
     "caller_site": "internal/daemon/economics_wiring.go",
@@ -382,13 +367,6 @@
   },
   {
     "caller_site": "internal/jobs/fleet_reconcile.go",
-    "expected_caller": "P1-E40-W9-S77-T5's six-hour reconcile job",
-    "reason": "R-21.24's own full_desc names Reconcile as the function that rewrites J/S-20.T2 provider-registry records into topology rows, but the recurring job that calls it on a schedule is R-21.28's mandatory six-hour discovery/reconcile job, explicitly scoped to P1-E40-W9-S77-T5 (\"Add provider lane discovery and the reconcile job\"), not this ticket. Reconcile is fully implemented, transactional, and tested end to end against a real *registry.Registry (reconcile_test.go).",
-    "retire_ticket": "P1-TOP-06",
-    "symbol": "internal/fleet/topology.Reconcile"
-  },
-  {
-    "caller_site": "internal/jobs/fleet_reconcile.go",
     "expected_caller": "P1-E40-W9-S77-T5's six-hour reconcile job, which selects the winning non-expired observation across every source before calling UpsertBucket",
     "reason": "P1-E40-W9-S77-T3 (R-21.109) ships Select, the highest-precedence non-expired observation among several. Like Merge above, its caller is R-21.28's six-hour discovery/reconcile job, which is the only place multiple observations of one bucket are ever collected together before a single reconciled write.",
     "retire_ticket": "P1-TOP-06",
@@ -505,13 +483,6 @@
     "reason": "Golden-parity checking (TestParityChecker_GoldenCoverage and its siblings, all real end to end over the rebuilt index) is, by design, CI-gate infrastructure over this package's own testdata/v1-goldens/recall fixtures — the same shape as internal/retrieval/eval's LoadCorpus/RunKnownItem (R-16.9's CI-only evaluation harness, also testonly-allow-exempted in this file): its fixtures live under a relative testdata path that only resolves from this package's own directory, so it is not a function a shipped, installed binary could call against a real user's migration. No 07-CLI-COMMAND-TREE.md verb exists for it and none is proposed.",
     "retire_ticket": "UNOWNED",
     "symbol": "internal/migration/v1.NewParityChecker"
-  },
-  {
-    "caller_site": "internal/nodes/presence_cancel.go",
-    "expected_caller": "the presence-aware stall/cancellation path a forward ticket builds once W9 reservations, AC/S-59 leases and worktrees each expose their own release function",
-    "reason": "The R-21.197 one-transaction release seam this ticket's contract requires (a job whose node went unavailable, when canceled, releases its W9 reservation, AC lease and worktree together). No ticket in this tree has yet built the real reservation/lease/worktree types this seam composes - AH/S-70.T3 builds the analogous gate-denied stall/release path but for a different trigger. This function is real, tested (TestCancelReleasesReservationLeaseWorktree/TestCancelInFlightRunsAllDespiteOneFailure), and ready to compose whichever ticket lands those release functions first. (caller_site corrected during the AC/S-59.T5 x T3 merge-fix: internal/jobs/scheduler.go now exists and never called this symbol -- the earlier promise could not come true.)",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/nodes.CancelInFlight"
   },
   {
     "caller_site": "cmd/cascade/node_status.go",
@@ -863,13 +834,6 @@
     "symbol": "internal/hooks.PluginCallRunner"
   },
   {
-    "caller_site": "cmd/cascade/daemon_unix_hooks.go",
-    "expected_caller": "P1-SUP-02's daemon composition, which builds the runner table with AgentNoteRunner over the journal note writer",
-    "reason": "The runner-table constructor for agent-note ships with the engine; the table is assembled at the composition root, which is P1-SUP-02's scope, so only internal/hooks tests call it at this tip.",
-    "retire_ticket": "P1-SUP-02",
-    "symbol": "internal/hooks.AgentNoteRunner"
-  },
-  {
     "caller_site": "internal/learn/finding.go",
     "expected_caller": "cmd/cascade/wire_learn.go (P1-LRN-05), which composes the store, feed, detector and router; P1-LRN-02's FindingFeed receives a FindingWriter (NewFindingFeed(db, ledger, w FindingWriter)) and does not build one",
     "reason": "PCI s64t1-findingwriter-owner-is-s71t2, settled at CR: legacy P1-E35-W7-S71-T2 is carried to P1-LRN-02, whose outputs take the writer as a parameter; the non-test construction lands in P1-LRN-05's daemon composition (plan/p1/epics/LRN/tickets.yaml P1-LRN-05 objective). Wiring it to a fabricated/synthetic signal instead would violate the same no-fabricated-data rule this ticket enforces for outcome.go's HONEST GAP fields.",
@@ -910,30 +874,6 @@
     "reason": "P1-E40-W9-S77-T3 (R-21.109) ships SlidingWindowSum, the rolling-window (rpm/tpm) timestamped-consumption sum. Its caller is AO/S-79.T4's dispatch path, which records each request's timestamped consumption and sums the trailing window before computing pressure for a rolling dimension -- this ticket ships the formula and its test (TestSlidingWindowSumOnlyCountsWithinWindow) but not the consumption event log that future ticket owns.",
     "retire_ticket": "UNOWNED",
     "symbol": "internal/fleet/topology.SlidingWindowSum"
-  },
-  {
-    "added_by_ticket": "P1-GEN-05",
-    "caller_site": "internal/context/generate/run.go",
-    "expected_caller": "the generate run orchestrator in internal/context/generate/run.go (P1-GEN-11), which builds one Writer per `cascade context generate` run over the prior manifest",
-    "reason": "P1-GEN-05 builds the never-destroy Writer, its manifest and its drift check as the shared base package; the first projectors (P1-GEN-06, -08, -10) and the run orchestrator that constructs the Writer land in later tickets, so no shipping code constructs it yet.",
-    "retire_ticket": "P1-GEN-11",
-    "symbol": "internal/context/generate.NewWriter"
-  },
-  {
-    "added_by_ticket": "P1-GEN-05",
-    "caller_site": "internal/context/generate/run.go",
-    "expected_caller": "the same run orchestrator, which writes Writer.Manifest after the last file is applied",
-    "reason": "The canonical manifest writer is built with the Writer; the run that publishes the next manifest is P1-GEN-11, so only tests call it today.",
-    "retire_ticket": "P1-GEN-11",
-    "symbol": "internal/context/generate.WriteManifest"
-  },
-  {
-    "added_by_ticket": "P1-GEN-05",
-    "caller_site": "internal/context/generate/run.go",
-    "expected_caller": "the run orchestrator's --check leg in internal/context/generate/run.go, mounted by cascade context generate --check (P1-GEN-11)",
-    "reason": "The four-condition drift check is built with the manifest; the verb that runs it is P1-GEN-11, so only tests call it today.",
-    "retire_ticket": "P1-GEN-11",
-    "symbol": "internal/context/generate.Check"
   },
   {
     "added_by_ticket": "P1-LRN-01",
@@ -1012,14 +952,6 @@
     "reason": "principal.Status is implemented and tested for a consumer inside the daemon process; a CLI doctor run holds no minter, so any call from it would be a fake caller. The row is reviewed again at phase exit: expose a daemon status source that carries the counts (P2), or delete Status.",
     "retire_ticket": "P1-EXIT-07",
     "symbol": "internal/principal.Status"
-  },
-  {
-    "added_by_ticket": "P1-PLG-03",
-    "caller_site": "cmd/cascade/hooks_rehydrate.go",
-    "expected_caller": "cmd/cascade/hooks_rehydrate.go, which rehydrates secret-bearing params and wraps the plugin Call ctx with WithParamsDigest over the tagged form; retire this entry once that file references it",
-    "reason": "P1-PLG-03 ships the params-hash override on TrustedHandle.Call, implemented and tested (TestCallParamsDigestOverride, TestAuditSweepNoPlaintextHash); the rehydrating caller is P1-SUP-02.",
-    "retire_ticket": "P1-SUP-02",
-    "symbol": "internal/plugins.WithParamsDigest"
   },
   {
     "added_by_ticket": "P1-CAP-05",
@@ -1118,62 +1050,6 @@
     "symbol": "internal/conversation.NewReplyHub"
   },
   {
-    "added_by_ticket": "P1-GEN-06",
-    "caller_site": "internal/context/generate/run.go",
-    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it registers the repository, builds the policy view with BuildView and hands it to every renderer; retire this entry once that file calls the symbol",
-    "reason": "P1-GEN-06 builds the policy view from the accepted fact ledger and tests it directly. The sync driver that feeds the renderers is P1-GEN-11, so nothing in production calls it yet.",
-    "retire_ticket": "P1-GEN-11",
-    "symbol": "internal/context/generate.BuildView"
-  },
-  {
-    "added_by_ticket": "P1-GEN-06",
-    "caller_site": "internal/context/generate/run.go",
-    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it renders the rules leg with RenderRules over the view; retire this entry once that file calls the symbol",
-    "reason": "P1-GEN-06 renders the .claude/rules and managed rules blocks and tests them against goldens. Only the P1-GEN-11 generation run calls the renderer in production.",
-    "retire_ticket": "P1-GEN-11",
-    "symbol": "internal/context/generate.RenderRules"
-  },
-  {
-    "added_by_ticket": "P1-GEN-06",
-    "caller_site": "internal/context/generate/run.go",
-    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it checks every written path against the closed list of generated locations; retire this entry once that file calls the symbol",
-    "reason": "P1-GEN-06 fixes the closed list of locations a generator may write. The enforcing caller is the P1-GEN-11 generation run; until then only tests read the list.",
-    "retire_ticket": "P1-GEN-11",
-    "symbol": "internal/context/generate.GeneratedLocations"
-  },
-  {
-    "added_by_ticket": "P1-GEN-06",
-    "caller_site": "internal/context/generate/run.go",
-    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it lints the manifest for entries outside the generated locations after each run; retire this entry once that file calls the symbol",
-    "reason": "P1-GEN-06 ships the report-only locations lint over a manifest. The generation run in P1-GEN-11 is the first production caller.",
-    "retire_ticket": "P1-GEN-11",
-    "symbol": "internal/context/generate.LintLocations"
-  },
-  {
-    "added_by_ticket": "P1-GEN-06",
-    "caller_site": "internal/context/generate/run.go",
-    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it sizes the rendered policy kernel against its token budget with policy.TokenCount; retire this entry once that file calls the symbol",
-    "reason": "P1-GEN-06 ships the P1 token counter (the naive four code points per token estimate) and tests the kernel against its budget with it. No production caller sizes the kernel until the P1-GEN-11 run; if that run does not need it, delete the counter instead.",
-    "retire_ticket": "P1-GEN-11",
-    "symbol": "internal/context/policy.TokenCount"
-  },
-  {
-    "added_by_ticket": "P1-GEN-08",
-    "caller_site": "internal/context/generate/run.go",
-    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it renders the agents and skills leg with RenderAgentsSkills; retire this entry once that file calls the symbol",
-    "reason": "P1-GEN-08 renders the specialist agents and the five skills from compiled templates and tests them against goldens. Only the P1-GEN-11 generation run calls it in production.",
-    "retire_ticket": "P1-GEN-11",
-    "symbol": "internal/context/generate.RenderAgentsSkills"
-  },
-  {
-    "added_by_ticket": "P1-GEN-08",
-    "caller_site": "internal/context/generate/run.go",
-    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it writes the rendered agents and skills through the Writer, keeping hand edits; retire this entry once that file calls the symbol",
-    "reason": "P1-GEN-08 ships the hand-edit-preserving writer for agents and skills. Only the P1-GEN-11 generation run calls it in production.",
-    "retire_ticket": "P1-GEN-11",
-    "symbol": "internal/context/generate.WriteAgentsSkills"
-  },
-  {
     "added_by_ticket": "P1-GEN-08",
     "caller_site": "plugins/claude/bundle_deps.go",
     "expected_caller": "the Claude plugin bundle that P1-HRN-12 adds; internal/plugins/claude_wiring.go passes repo.TemplateHashes() as the bundle's TemplateHashes seam so the bundle skills match the compiled templates; retire this entry once production code calls repo.TemplateHashes",
@@ -1204,30 +1080,6 @@
     "reason": "Same gap as canon.Parse: the closed name list is used by the canon tests and the hookpacks subset test only. The P1-HRN-12 bundle is its expected consumer.",
     "retire_ticket": "P1-HRN-12",
     "symbol": "internal/fleet/hookpacks/canon.Names"
-  },
-  {
-    "added_by_ticket": "P1-GEN-09",
-    "caller_site": "internal/context/generate/run.go",
-    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it renders the workflows leg with RenderWorkflows over the protocol probe; retire this entry once that file calls the symbol",
-    "reason": "P1-GEN-09 renders harness workflows only behind the fail-closed probe and records the deferral otherwise. Only the P1-GEN-11 generation run calls it in production.",
-    "retire_ticket": "P1-GEN-11",
-    "symbol": "internal/context/generate.RenderWorkflows"
-  },
-  {
-    "added_by_ticket": "P1-GEN-09",
-    "caller_site": "internal/context/generate/run.go",
-    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it passes generate.NewExecProbe() to RenderWorkflows as the production WorkflowsSupportProbe; retire this entry once that file calls the symbol",
-    "reason": "P1-GEN-09 ships the production probe (exec.LookPath plus two isolated invocations of the harness CLI). The run that supplies it to RenderWorkflows is P1-GEN-11.",
-    "retire_ticket": "P1-GEN-11",
-    "symbol": "internal/context/generate.NewExecProbe"
-  },
-  {
-    "added_by_ticket": "P1-GEN-10",
-    "caller_site": "internal/context/generate/run.go",
-    "expected_caller": "internal/context/generate/run.go, the generation run (Run) that P1-GEN-11 adds; it renders the scoped AGENTS.md and tool config leg with RenderScopedHarness; retire this entry once that file calls the symbol",
-    "reason": "P1-GEN-10 renders scoped AGENTS.md and the tool configs and tests them against goldens. Only the P1-GEN-11 generation run calls it in production.",
-    "retire_ticket": "P1-GEN-11",
-    "symbol": "internal/context/generate.RenderScopedHarness"
   },
   {
     "added_by_ticket": "P1-CI-13",
@@ -1302,14 +1154,6 @@
     "symbol": "internal/repo.Admit"
   },
   {
-    "added_by_ticket": "P1-GEN-03",
-    "caller_site": "cmd/cascade/repo_indexleg.go",
-    "expected_caller": "cmd/cascade/repo_indexleg.go, the P1-GEN-13 IndexLeg binding that writes a reloaded package's SymbolGraph into the graph corpus; retire this entry once that file calls IngestSymbolGraph",
-    "reason": "P1-E33-W7-S67-T3 ships the graph-corpus serialization function. Repointed by P1-GEN-04: internal/repo may not import internal/retrieval (GEN-04 acceptance [8]), so the maintenance pipeline reaches corpora only through the injected IndexLeg; the production caller is the IndexLeg binding of P1-GEN-13, not a watch.go in internal/repo.",
-    "retire_ticket": "P1-GEN-13",
-    "symbol": "internal/retrieval.IngestSymbolGraph"
-  },
-  {
     "caller_site": "internal/fleet/economics/refresh_grant.go",
     "expected_caller": "internal/fleet/economics/refresh_grant.go, the refresh grant P1-TOP-13d adds, which wraps the fresh token pair in an Entry before WriteDurable; retire this entry once that file calls NewEntry",
     "reason": "P1-TOP-13b ships the custody-backed harness credential store; the first producer of a new entry is the refresh grant of P1-TOP-13d.",
@@ -1371,13 +1215,6 @@
     "reason": "P1-NODE-18b ships NewSSHDialerFromSigner with its tests; its first production caller is cmd/cascade/wire_node_channel.go from P1-NODE-18k.",
     "retire_ticket": "P1-NODE-18",
     "symbol": "internal/nodes.NewSSHDialerFromSigner"
-  },
-  {
-    "caller_site": "internal/daemon/subsystems_fleet_topology.go",
-    "expected_caller": "internal/daemon/subsystems_fleet_topology.go, which P1-TOP-06e adds the FleetRuntime topology builder step; retire this entry once that file calls EligibleTaskClasses",
-    "reason": "P1-TOP-06a ships EligibleTaskClasses with its tests; its first production caller is internal/daemon/subsystems_fleet_topology.go from P1-TOP-06e.",
-    "retire_ticket": "P1-TOP-06",
-    "symbol": "internal/fleet/topology.EligibleTaskClasses"
   },
   {
     "caller_site": "internal/jobs/completion_reviewer.go",
@@ -1450,13 +1287,6 @@
     "symbol": "internal/review.ChecklistV1Dimensions"
   },
   {
-    "caller_site": "cmd/cascade/hooks_runners.go",
-    "expected_caller": "cmd/cascade/hooks_runners.go, which P1-SUP-02c registers the plugin-call and agent-note hook runners under OriginTool; retire this entry once that file calls WithOrigin",
-    "reason": "P1-SUP-02a ships WithOrigin with its tests; its first production caller is cmd/cascade/hooks_runners.go from P1-SUP-02c.",
-    "retire_ticket": "P1-SUP-02",
-    "symbol": "internal/rpc.WithOrigin"
-  },
-  {
     "caller_site": "cmd/cascade/daemon_unix_gate_stall.go",
     "expected_caller": "cmd/cascade/daemon_unix_gate_stall.go, which P1-PBD-04d wires the gate-stall path in the daemon and applies its schema; retire this entry once that file calls ApplyGateAttemptsSchema",
     "reason": "P1-PBD-04a ships ApplyGateAttemptsSchema with its tests; its first production caller is cmd/cascade/daemon_unix_gate_stall.go from P1-PBD-04d.",
@@ -1520,20 +1350,6 @@
     "symbol": "internal/fleet/hookpacks.ToolGateHookTimeoutSeconds"
   },
   {
-    "caller_site": "internal/daemon/subsystems_fleet_topology.go",
-    "expected_caller": "internal/daemon/subsystems_fleet_topology.go, which P1-TOP-06e adds the FleetRuntime topology builder step that runs the reconcile; retire this entry once that file calls ReconcileAgentLanes",
-    "reason": "P1-TOP-06d ships ReconcileAgentLanes with its tests; its first production caller is internal/daemon/subsystems_fleet_topology.go from P1-TOP-06e.",
-    "retire_ticket": "P1-TOP-06",
-    "symbol": "internal/fleet/topology.ReconcileAgentLanes"
-  },
-  {
-    "caller_site": "internal/daemon/subsystems_fleet_topology.go",
-    "expected_caller": "internal/daemon/subsystems_fleet_topology.go, which P1-TOP-06e adds the FleetRuntime topology builder step that seeds buckets; retire this entry once that file calls SeedUndiscoveredBuckets",
-    "reason": "P1-TOP-06d ships SeedUndiscoveredBuckets with its tests; its first production caller is internal/daemon/subsystems_fleet_topology.go from P1-TOP-06e.",
-    "retire_ticket": "P1-TOP-06",
-    "symbol": "internal/fleet/topology.SeedUndiscoveredBuckets"
-  },
-  {
     "caller_site": "internal/learn/canary.go",
     "expected_caller": "internal/learn/canary.go, which P1-LRN-06a adds the routing canary that explores only where topology.ExplorationEligible holds; retire this entry once that file calls ExplorationEligible",
     "reason": "P1-TOP-02a ships ExplorationEligible with its tests; its first production caller is internal/learn/canary.go from P1-LRN-06a.",
@@ -1560,13 +1376,6 @@
     "reason": "P1-NODE-13a ships DefaultFileCountCeiling with its tests; its first production caller is internal/runtime/init/ingestguard.go from P1-NODE-13c.",
     "retire_ticket": "P1-NODE-13c",
     "symbol": "internal/repo.DefaultFileCountCeiling"
-  },
-  {
-    "caller_site": "internal/daemon/subsystems_fleet_topology.go",
-    "expected_caller": "internal/daemon/subsystems_fleet_topology.go, which P1-TOP-06e adds (the FleetRuntime topology pass that applies lane reversal pins); retire this entry once that file calls ParseLaneReversalPins",
-    "reason": "P1-TOP-06b ships ParseLaneReversalPins with its tests; its first production caller is internal/daemon/subsystems_fleet_topology.go from P1-TOP-06e.",
-    "retire_ticket": "P1-TOP-06e",
-    "symbol": "internal/runtime.ParseLaneReversalPins"
   },
   {
     "caller_site": "cmd/cascade/wire_fleet_topology_rpc.go",
@@ -1717,5 +1526,69 @@
     "reason": "P1-NODE-21f ships the linux node agent installer (linger check, unit render, systemctl sequence) with tests that inject GOOS and LingerDir; the CLI verb that constructs it from the host defaults is P1-NODE-21g, which depends on this ticket. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
     "retire_ticket": "P1-NODE-21g",
     "symbol": "internal/daemon/service.NewNodeAgentInstaller"
+  },
+  {
+    "added_by_ticket": "P1-AGT-08a",
+    "caller_site": "cmd/cascade/delegate_rpc.go",
+    "expected_caller": "cmd/cascade/delegate_rpc.go, the conductor.delegate handler that maps its params onto DelegationNeed through ClassifyDelegation; retire this entry once that file calls it",
+    "reason": "P1-AGT-08a declares DelegationNeed and ClassifyDelegation in the conductor and tests them alone. The RPC verb that classifies each request is P1-AGT-08k, which depends on this ticket through the service-core chain.",
+    "retire_ticket": "P1-AGT-08k",
+    "symbol": "internal/conductor.ClassifyDelegation"
+  },
+  {
+    "added_by_ticket": "P1-GEN-11a",
+    "caller_site": "internal/context/hydration/nativechain.go",
+    "expected_caller": "internal/context/hydration/nativechain.go, the code that calls GeneratedLocations once P2-EFF-52 lands; retire this entry once that file calls it",
+    "reason": "P1-GEN-06 fixes the closed list of locations a generator may write. The enforcing caller is the P1-GEN-11 generation run; until then only tests read the list. The earlier caller_site file now exists without the call, so the entry points at the file in P2-EFF-52 that will make it.",
+    "retire_ticket": "P2-EFF-52",
+    "symbol": "internal/context/generate.GeneratedLocations"
+  },
+  {
+    "added_by_ticket": "P1-CI-15b",
+    "caller_site": "cmd/cascade/ci_attest_role.go",
+    "expected_caller": "cmd/cascade/ci_attest_role.go, the role-based trust store picker that opens the node store with jobs.NewCiAttestTrustStore and wraps it in ci.NewVouchedTrustStore; retire this entry once that file calls it",
+    "reason": "P1-CI-15b adds the node-side ci_attest_trust table and its store, tested directly. The node role branch of `cascade ci attest verify` that opens it is P1-CI-15g, which depends on P1-CI-15d and P1-CI-15e.",
+    "retire_ticket": "P1-CI-15g",
+    "symbol": "internal/jobs.NewCiAttestTrustStore"
+  },
+  {
+    "added_by_ticket": "P1-TOP-10a",
+    "caller_site": "internal/learn/decision_outcome_sweep.go",
+    "expected_caller": "internal/learn/decision_outcome_sweep.go, ReconcileTerminalOutcomes and SweepOrphanedPending, which write every outcome row through InsertDecisionOutcome; retire this entry once that file calls it",
+    "reason": "P1-TOP-10a adds the insert-once outcome writer and tests it on its own. The reconcile and orphan sweep in P1-TOP-10d is the first production writer and depends on this ticket.",
+    "retire_ticket": "P1-TOP-10d",
+    "symbol": "internal/learn.InsertDecisionOutcome"
+  },
+  {
+    "added_by_ticket": "P1-CI-05a",
+    "caller_site": "cmd/cascade/node_gitgate.go",
+    "expected_caller": "cmd/cascade/node_gitgate.go, the `cascade node git-gate pre-receive` verb that reads the hook stdin and calls ci.CheckPush over the parsed refs; retire this entry once that file calls CheckPush",
+    "reason": "P1-CI-05a ships the pre-receive ref gate that refuses deletion and non-fast-forward pushes, tested on its own. The verb that feeds it the hook input is P1-CI-05e, which depends on this ticket through P1-CI-05b and P1-CI-05d.",
+    "retire_ticket": "P1-CI-05e",
+    "symbol": "internal/ci.CheckPush"
+  },
+  {
+    "added_by_ticket": "P1-CI-05a",
+    "caller_site": "cmd/cascade/node_gitgate.go",
+    "expected_caller": "cmd/cascade/node_gitgate.go, the `cascade node git-gate pre-receive` verb that parses the hook stdin with ci.ParsePreReceiveStdin before calling CheckPush; retire alongside ci.CheckPush",
+    "reason": "Sibling of ci.CheckPush: P1-CI-05a ships the stdin parser with tests only. The pre-receive verb in P1-CI-05e is its first production caller.",
+    "retire_ticket": "P1-CI-05e",
+    "symbol": "internal/ci.ParsePreReceiveStdin"
+  },
+  {
+    "added_by_ticket": "P1-TOP-06e",
+    "caller_site": "internal/fleet/economics/rank_predicates.go",
+    "expected_caller": "internal/fleet/economics/rank_predicates.go, the code that calls EligibleTaskClasses once P1-TOP-08d lands; retire this entry once that file calls it",
+    "reason": "P1-TOP-06a ships EligibleTaskClasses with its tests; its first production caller is internal/daemon/subsystems_fleet_topology.go from P1-TOP-06e. The earlier caller_site file now exists without the call, so the entry points at the file in P1-TOP-08d that will make it.",
+    "retire_ticket": "P1-TOP-08d",
+    "symbol": "internal/fleet/topology.EligibleTaskClasses"
+  },
+  {
+    "added_by_ticket": "P1-EXE-14a",
+    "caller_site": "internal/rpc/fleet_health.go",
+    "expected_caller": "internal/rpc/fleet_health.go, the fleet.health.summary handler that passes the FleetRuntime Health call through SummarizeFleetHealth; retire this entry once that file calls it",
+    "reason": "P1-EXE-14a projects the fleet health result into the five R-21.39 keys and is tested with a fake health function. The RPC handler that serves it is P1-EXE-14b, which depends on this ticket.",
+    "retire_ticket": "P1-EXE-14b",
+    "symbol": "internal/executive.SummarizeFleetHealth"
   }
 ]
