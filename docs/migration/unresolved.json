@@ -10,5 +10,11 @@
     "class": "command",
     "path": "cmd/cascade/hooks_runners_test.go",
     "reason": "no declared v2 replacement"
+  },
+  {
+    "pointer": "cascade hook",
+    "class": "command",
+    "path": "internal/inventory/sport/registry.json",
+    "reason": "no declared v2 replacement"
   }
 ]
