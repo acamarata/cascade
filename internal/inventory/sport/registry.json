@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-06T16:11:02Z",
+  "generated_at": "2026-11-07T22:58:45Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -132,6 +132,20 @@
           "line": 24,
           "status": "ADD",
           "raw": "ApprovalVerifier/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "AttestPutAcceptance",
+      "sites": [
+        {
+          "file": "internal/nodes/attest_put.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "AttestPutAcceptance/ADDED"
         }
       ],
       "statuses": [
@@ -4168,6 +4182,38 @@
       ]
     },
     {
+      "name": "cmd/cascade billing evidence",
+      "sites": [
+        {
+          "file": "cmd/cascade/evidence_key.go",
+          "line": 15,
+          "status": "",
+          "raw": "cmd/cascade billing evidence (NEW, P1-TOP-19c)."
+        },
+        {
+          "file": "cmd/cascade/evidence_key_agent.go",
+          "line": 11,
+          "status": "",
+          "raw": "cmd/cascade billing evidence (NEW, P1-TOP-19c)."
+        },
+        {
+          "file": "cmd/cascade/evidence_key_agent_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade billing evidence (NEW, P1-TOP-19c)."
+        },
+        {
+          "file": "cmd/cascade/evidence_key_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade billing evidence (NEW, P1-TOP-19c)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd/cascade bundle activate/status/rollback RPCs",
       "sites": [
         {
@@ -5355,6 +5401,26 @@
           "line": 15,
           "status": "",
           "raw": "cmd/cascade held-record decision tests (P1-SEC-41)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade hook runners",
+      "sites": [
+        {
+          "file": "cmd/cascade/hooks_runners.go",
+          "line": 16,
+          "status": "",
+          "raw": "cmd/cascade hook runners (P1-SUP-02)."
+        },
+        {
+          "file": "cmd/cascade/hooks_runners_test.go",
+          "line": 5,
+          "status": "",
+          "raw": "cmd/cascade hook runners (TEST, P1-SUP-02)."
         }
       ],
       "statuses": [
@@ -8922,6 +8988,26 @@
       ]
     },
     {
+      "name": "conductor.delegate",
+      "sites": [
+        {
+          "file": "internal/conductor/delegate_classify.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "conductor.delegate/ADD (P1-AGT-08a)."
+        },
+        {
+          "file": "internal/conductor/delegate_classify_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "conductor.delegate/ADD (P1-AGT-08a)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "conductor.door",
       "sites": [
         {
@@ -9791,6 +9877,20 @@
       ]
     },
     {
+      "name": "context-engine/generate-run",
+      "sites": [
+        {
+          "file": "internal/context/generate/run.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "context-engine/generate-run (ADD, P1-GEN-11)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "context-engine/generation-check",
       "sites": [
         {
@@ -10402,6 +10502,34 @@
       ]
     },
     {
+      "name": "context.generate",
+      "sites": [
+        {
+          "file": "cmd/cascade/context_generate_rpc.go",
+          "line": 7,
+          "status": "",
+          "raw": "context.generate (P1-GEN-11c)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "context.generate wiring",
+      "sites": [
+        {
+          "file": "cmd/cascade/wire_context_generate.go",
+          "line": 7,
+          "status": "",
+          "raw": "context.generate wiring (P1-GEN-11c)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "context/repo-identity",
       "sites": [
         {
@@ -10523,6 +10651,20 @@
           "line": 35,
           "status": "",
           "raw": "contract:hooks-vault-binding (P1-SUP-05)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "contract:receive-gate ref rules",
+      "sites": [
+        {
+          "file": "internal/ci/gitgate_refs.go",
+          "line": 9,
+          "status": "",
+          "raw": "contract:receive-gate ref rules (P1-CI-05a)."
         }
       ],
       "statuses": [
@@ -10890,6 +11032,20 @@
           "line": 16,
           "status": "",
           "raw": "domain:jobs/jobs_learned_config, jobs_learned_config_submission,"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "domain:jobs/jobs_scheduler_decision_economics",
+      "sites": [
+        {
+          "file": "internal/learn/decision_outcome.go",
+          "line": 14,
+          "status": "",
+          "raw": "domain:jobs/jobs_scheduler_decision_economics,"
         }
       ],
       "statuses": [
@@ -15419,6 +15575,20 @@
       ]
     },
     {
+      "name": "internal.ci.ParsePreReceiveStdin/FUZZED",
+      "sites": [
+        {
+          "file": "internal/ci/gitgate_fuzz_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "internal.ci.ParsePreReceiveStdin/FUZZED (P1-CI-05a)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal.ci.Refusal",
       "sites": [
         {
@@ -18972,6 +19142,20 @@
       ]
     },
     {
+      "name": "internal.learn.InsertDecisionOutcome/TESTED",
+      "sites": [
+        {
+          "file": "internal/learn/decision_outcome_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal.learn.InsertDecisionOutcome/TESTED,"
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal.learn.LanePosterior",
       "sites": [
         {
@@ -20080,21 +20264,33 @@
         },
         {
           "file": "internal/providers/agents/driver_auth.go",
-          "line": 14,
+          "line": 16,
           "status": "ADD",
           "raw": "internal.providers.agents/ADD (P1-AGT-15, contract:driver-credentials)."
         },
         {
           "file": "internal/providers/agents/env.go",
-          "line": 18,
+          "line": 20,
           "status": "ADD",
           "raw": "internal.providers.agents/ADD (P1-AGT-15, contract:driver-credentials)."
+        },
+        {
+          "file": "internal/providers/agents/gateway_env.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-GWY-05, contract:gateway-agent-credential)."
         },
         {
           "file": "internal/providers/agents/harness_claude.go",
           "line": 8,
           "status": "ADD",
           "raw": "internal.providers.agents/ADD (P1-AGT-02)."
+        },
+        {
+          "file": "internal/providers/agents/harness_claude_gateway_test.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-GWY)."
         },
         {
           "file": "internal/providers/agents/harness_codex.go",
@@ -20188,7 +20384,7 @@
         },
         {
           "file": "internal/providers/agents/spawn.go",
-          "line": 12,
+          "line": 13,
           "status": "ADD",
           "raw": "internal.providers.agents/ADD (P1-AGT-03, contract:driver-custody-shim)."
         },
@@ -20239,6 +20435,12 @@
           "raw": "internal.providers.agents tests (ADD) - P1-AGT-15."
         },
         {
+          "file": "internal/providers/agents/driver_auth_gateway_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "internal.providers.agents tests (ADD) - P1-GWY-05."
+        },
+        {
           "file": "internal/providers/agents/driver_auth_test.go",
           "line": 4,
           "status": "ADD",
@@ -20255,6 +20457,12 @@
           "line": 5,
           "status": "ADD",
           "raw": "internal.providers.agents tests (ADD) - P1-AGT-15."
+        },
+        {
+          "file": "internal/providers/agents/gateway_env_test.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "internal.providers.agents tests (ADD) - P1-GWY-05."
         },
         {
           "file": "internal/providers/agents/prespawn_test.go",
@@ -20285,6 +20493,12 @@
           "line": 4,
           "status": "ADD",
           "raw": "internal.providers.agents tests (ADD) - P1-AGT-03."
+        },
+        {
+          "file": "internal/providers/agents/spawn_gateway_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal.providers.agents tests (ADD) - P1-GWY-05."
         },
         {
           "file": "internal/providers/agents/spawn_test.go",
@@ -23590,7 +23804,7 @@
         },
         {
           "file": "internal/daemon/subsystems_fleet.go",
-          "line": 19,
+          "line": 17,
           "status": "ADD",
           "raw": "internal/daemon (ADD, P1-CAP-12; capacity step P1-CAP-05)."
         },
@@ -23671,6 +23885,18 @@
           "line": 6,
           "status": "ADD",
           "raw": "internal/daemon (ADD, P1-CAP-12)."
+        },
+        {
+          "file": "internal/daemon/subsystems_fleet_topology.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-TOP-06e)."
+        },
+        {
+          "file": "internal/daemon/subsystems_fleet_topology_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-TOP-06e)."
         },
         {
           "file": "internal/daemon/subsystems_fleet_txlock_test.go",
@@ -23765,6 +23991,18 @@
           "status": "ADD",
           "ticket": "P1-E18-W4-S40-T4",
           "raw": "internal/daemon (ADD, P1-E18-W4-S40-T4)."
+        },
+        {
+          "file": "internal/daemon/topology_observations.go",
+          "line": 17,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-TOP-06e)."
+        },
+        {
+          "file": "internal/daemon/topology_observations_test.go",
+          "line": 8,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-TOP-06e)."
         },
         {
           "file": "internal/daemon/upgrade.go",
@@ -25680,6 +25918,20 @@
       ],
       "statuses": [
         "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes AttestPutMethod",
+      "sites": [
+        {
+          "file": "internal/nodes/attest_put.go",
+          "line": 19,
+          "status": "ADD",
+          "raw": "internal/nodes AttestPutMethod/ADDED"
+        }
+      ],
+      "statuses": [
         "ADD"
       ]
     },
@@ -29069,16 +29321,16 @@
       "name": "internal/plugins:cascadepa-wiring",
       "sites": [
         {
-          "file": "internal/plugins/cascadepa_rpc_success_test.go",
-          "line": 12,
+          "file": "internal/plugins/cascadepa_wiring_errors_test.go",
+          "line": 6,
           "status": "",
-          "raw": "internal/plugins:cascadepa-wiring (TEST) -- closes the ratchet"
+          "raw": "internal/plugins:cascadepa-wiring (TEST) -- FIX-cascade-chat-client-wiring."
         },
         {
-          "file": "internal/plugins/cascadepa_wiring.go",
-          "line": 44,
-          "status": "ADD",
-          "raw": "internal/plugins:cascadepa-wiring (ADD) -- FIX-cascade-chat-client-wiring."
+          "file": "internal/plugins/cascadepa_wiring_frames_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "internal/plugins:cascadepa-wiring (TEST) -- FIX-cascade-chat-client-wiring."
         },
         {
           "file": "internal/plugins/cascadepa_wiring_test.go",
@@ -29088,8 +29340,7 @@
         }
       ],
       "statuses": [
-        "",
-        "ADD"
+        ""
       ]
     },
     {
@@ -40529,9 +40780,15 @@
         },
         {
           "file": "providers/agents/claude/credential.go",
-          "line": 12,
+          "line": 13,
           "status": "ADD",
           "raw": "providers.agents.claude/ADD (P1-AGT-01, named deviation B-1)."
+        },
+        {
+          "file": "providers/agents/claude/credential_gateway_test.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "providers.agents.claude/ADD (P1-GWY)."
         },
         {
           "file": "providers/agents/claude/descriptor.go",
@@ -43809,7 +44066,7 @@
       ]
     }
   ],
-  "total_sites": 4218,
-  "unspecified_count": 392,
-  "multi_status_count": 132
+  "total_sites": 4245,
+  "unspecified_count": 401,
+  "multi_status_count": 131
 }
