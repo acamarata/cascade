@@ -1,0 +1,300 @@
+{
+  "namespaces": [
+    "jobs",
+    "jobs.lease",
+    "ci_results",
+    "notify",
+    "policy"
+  ],
+  "rows": [
+    {
+      "namespace": "jobs",
+      "bus_kind": "job.leased",
+      "live": true
+    },
+    {
+      "namespace": "jobs",
+      "bus_kind": "job.transitioned",
+      "field": "to",
+      "value": "leased",
+      "live": true
+    },
+    {
+      "namespace": "jobs",
+      "bus_kind": "job.transitioned",
+      "field": "to",
+      "value": "running",
+      "exec": "exec.TASK_STARTED",
+      "live": true
+    },
+    {
+      "namespace": "jobs",
+      "bus_kind": "job.transitioned",
+      "field": "to",
+      "value": "verifying",
+      "exec": "exec.VERIFY_REQUESTED",
+      "live": true
+    },
+    {
+      "namespace": "jobs",
+      "bus_kind": "job.transitioned",
+      "field": "to",
+      "value": "reviewing",
+      "live": true
+    },
+    {
+      "namespace": "jobs",
+      "bus_kind": "job.transitioned",
+      "field": "to",
+      "value": "accepted",
+      "live": true
+    },
+    {
+      "namespace": "jobs",
+      "bus_kind": "job.transitioned",
+      "field": "to",
+      "value": "rejected",
+      "live": true
+    },
+    {
+      "namespace": "jobs",
+      "bus_kind": "job.transitioned",
+      "field": "to",
+      "value": "cancelling",
+      "live": true
+    },
+    {
+      "namespace": "jobs",
+      "bus_kind": "job.transitioned",
+      "field": "to",
+      "value": "cancelled",
+      "live": true
+    },
+    {
+      "namespace": "jobs",
+      "bus_kind": "job.transitioned",
+      "field": "to",
+      "value": "failed",
+      "live": true
+    },
+    {
+      "namespace": "jobs",
+      "bus_kind": "job.completed",
+      "exec": "exec.TASK_COMPLETED",
+      "live": true
+    },
+    {
+      "namespace": "jobs",
+      "bus_kind": "job.failed",
+      "exec": "exec.TASK_FAILED",
+      "live": true
+    },
+    {
+      "namespace": "jobs.lease",
+      "bus_kind": "jobs.lease.acquired",
+      "exec": "exec.LEASE_ACQUIRED",
+      "live": true
+    },
+    {
+      "namespace": "jobs.lease",
+      "bus_kind": "jobs.lease.contended",
+      "exec": "exec.LEASE_CONFLICT",
+      "live": true
+    },
+    {
+      "namespace": "jobs.lease",
+      "bus_kind": "jobs.lease.renewed",
+      "live": true
+    },
+    {
+      "namespace": "jobs.lease",
+      "bus_kind": "jobs.lease.released",
+      "live": true
+    },
+    {
+      "namespace": "jobs.lease",
+      "bus_kind": "jobs.lease.expired",
+      "exec": "exec.LEASE_EXPIRED",
+      "live": true
+    },
+    {
+      "namespace": "ci_results",
+      "bus_kind": "ci.run.completed",
+      "field": "passed",
+      "value": true,
+      "exec": "exec.VERIFY_PASSED",
+      "live": true
+    },
+    {
+      "namespace": "ci_results",
+      "bus_kind": "ci.run.completed",
+      "field": "passed",
+      "value": false,
+      "exec": "exec.VERIFY_FAILED",
+      "live": true
+    },
+    {
+      "namespace": "notify",
+      "bus_kind": "notify.notification",
+      "exec": "exec.DECISION_REQUIRED",
+      "live": false
+    }
+  ],
+  "producers": [
+    {
+      "exec": "exec.PROJECT_STARTED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.PHASE_CHANGED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.PROJECT_COMPLETED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.PROJECT_CANCELLED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.TASK_CREATED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.TASK_READY",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.TASK_BLOCKED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.AGENT_RESERVED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.AGENT_STARTED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.AGENT_HEARTBEAT",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.AGENT_STOPPED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.ARTIFACT_WRITTEN",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.EVIDENCE_ADDED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.PATCH_READY",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.CONFLICT_DETECTED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.SCOPE_CHANGE",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.QUOTA_LOW",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.QUOTA_EXHAUSTED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.QUOTA_RECOVERED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.RATE_LIMITED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.WORKTREE_ALLOCATED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.CHECKPOINT_CREATED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.CONTEXT_COMPACTING",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.CONTEXT_COMPACTED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.T0_WAKE_REQUESTED",
+      "producer": "wake engine",
+      "live": true
+    },
+    {
+      "exec": "exec.T0_AWAKE",
+      "producer": "wake engine",
+      "live": true
+    },
+    {
+      "exec": "exec.T0_SLEEPING",
+      "producer": "wake engine",
+      "live": true
+    },
+    {
+      "exec": "exec.HUMAN_APPROVAL_REQUIRED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.PRIVACY_POLICY_BLOCKED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.PERMISSION_DENIED",
+      "producer": "none",
+      "live": false
+    },
+    {
+      "exec": "exec.FINAL_ACCEPTANCE_READY",
+      "producer": "none",
+      "live": false
+    }
+  ]
+}

@@ -50,6 +50,10 @@ type Store struct {
 	// observers holds the terminal observers and their error sink
 	// (store_terminal_observer.go); notified after the lease-release hook.
 	observers terminalObservers
+
+	// transition is the observer of every committed state write
+	// (store_transition_observer.go).
+	transition transitionObserver
 }
 
 // NewStore wraps db. db must already carry the MigrationSet tables
@@ -177,6 +181,7 @@ func (s *Store) PutTransition(ctx context.Context, id string, to JobState, updat
 // PutTransition and the completion policy's commit. The registered
 // terminal observers run after the lease-release hook returns.
 func (s *Store) afterTransition(ctx context.Context, id string, to JobState) error {
+	defer s.notifyTransition(ctx, id, to)
 	if !to.Terminal() {
 		return nil
 	}
