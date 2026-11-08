@@ -107,9 +107,11 @@ jobs:
       # on linux but 380-570 s on the windows runner, where the same store
       # tests run 20-50x slower. The default 10 m package cap then tripped
       # on runner speed alone, mid-way through passing tests. A real hang
-      # still fails, at 25 m.
+      # still fails, at the bound. internal/build took 1256 s on macos-15 and
+      # ran past 25m in run 42512400065, so the bound is 40m as in the race
+      # and coverage jobs.
       - name: go test ./...
-        run: go test -timeout 25m ./... -v
+        run: go test -timeout 40m ./... -v
 
       # P1-E20-W5-S44-T5: internal/conversation's two live-daemon/real-socket
       # cases (`!windows && integration`) never ran under `-tags=integration`
