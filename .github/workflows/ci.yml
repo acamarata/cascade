@@ -1379,13 +1379,15 @@ jobs:
           if-no-files-found: error
 
   integration-lanes-red-proof:
-    # EXPECTED TO FAIL (R18 M7). Runs only the seeded row, a test that fails on
-    # purpose, through the same plan/run/report path as the lane above. It has
-    # no continue-on-error and is not in ci-gate needs: it concludes failure on
-    # every run, so the workflow run itself is red by design and ci-gate is the
-    # verdict. integration-lanes-red-assert proves it failed for the right
-    # reason. No registry row may name this job.
-    name: integration-lanes-red-proof (expected to fail)
+    # PASSES WHEN THE SEEDED ROW FAILS (R18 M7, inverted). Runs only the seeded
+    # row, a test that fails on purpose, through the same plan/run/report path
+    # as the lane above. The aggregate step fails by design and carries a
+    # step-level continue-on-error; the next step fails this job unless that
+    # step's outcome is failure, so a seeded row that ever goes green turns the
+    # job red. No job-level continue-on-error, and the job is not in ci-gate
+    # needs. integration-lanes-red-assert needs this job to succeed and proves
+    # the failure was the seeded row's. No registry row may name this job.
+    name: integration-lanes-red-proof (passes when the seeded row fails)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -1408,8 +1410,19 @@ jobs:
           done < "$D/plan.tsv"
 
       - name: aggregate the seeded row (fails by design)
+        id: aggregate
+        continue-on-error: true
         shell: bash
         run: go run ./internal/build/gen/integrationlane report --dir "$RUNNER_TEMP/integration-lanes-red" --out "$RUNNER_TEMP/integration-lanes-red/report.json"
+
+      - name: the seeded row must have failed
+        shell: bash
+        run: |
+          outcome="${{ steps.aggregate.outcome }}"
+          if [ "$outcome" != "failure" ]; then
+            echo "::error::the seeded row aggregate concluded $outcome, expected failure: the seeded red proof did not fail"
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
@@ -1419,10 +1432,11 @@ jobs:
           if-no-files-found: error
 
   integration-lanes-red-assert:
-    # Passes only when the red-proof job concluded failure AND its report shows
-    # the seeded row failing through TestSeededRed with at least one run event.
-    # A skipped or cancelled red-proof, a build error, a tag mismatch (zero run
-    # events) or a seeded test that passed all fail this job.
+    # Passes only when the red-proof job succeeded (it confirmed the seeded row
+    # failed) AND its report shows the seeded row failing through TestSeededRed
+    # with at least one run event. A skipped or cancelled red-proof, a build
+    # error, a tag mismatch (zero run events) or a seeded test that passed all
+    # fail this job.
     name: integration-lanes-red-assert
     needs: [integration-lanes-red-proof]
     if: always()
@@ -1435,12 +1449,12 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: the red proof must have failed
+      - name: the red proof must have confirmed the seeded failure
         shell: bash
         run: |
           result="${{ needs.integration-lanes-red-proof.result }}"
-          if [ "$result" != "failure" ]; then
-            echo "::error::integration-lanes-red-proof concluded $result, expected failure: the seeded red proof did not fail"
+          if [ "$result" != "success" ]; then
+            echo "::error::integration-lanes-red-proof concluded $result, expected success: the seeded failure was not confirmed"
             exit 1
           fi
 

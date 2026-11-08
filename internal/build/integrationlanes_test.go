@@ -27,7 +27,15 @@ func validCI(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return string(b)
+	// The fixture's red-proof job gains the inverted-proof steps here (the
+	// fixture file itself stays untouched).
+	out := strings.Replace(string(b), "      - run: go run ./internal/build/gen/integrationlane report\n",
+		"      - continue-on-error: true\n        id: aggregate\n        run: go run ./internal/build/gen/integrationlane report\n"+
+			"      - run: test \"${{ steps.aggregate.outcome }}\" = failure\n", 1)
+	if out == string(b) {
+		t.Fatal("the red-proof fixture did not change")
+	}
+	return out
 }
 
 // writeTree writes files (path -> content) under a fresh temp dir with HOME and
@@ -179,6 +187,9 @@ func TestIntegrationLanesRedProofShape(t *testing.T) {
 		"assert is not in ci-gate": strings.Replace(ok, "integration-lanes-red-assert, pg]", "pg]", 1),
 		"assert lacks if":          strings.Replace(ok, "    if: always()\n    runs-on: ubuntu-latest\n    steps:\n      - run: go run ./internal/build/gen/integrationlane assert-red", "    runs-on: ubuntu-latest\n    steps:\n      - run: go run ./internal/build/gen/integrationlane assert-red", 1),
 		"does not need":            strings.Replace(ok, "needs: integration-lanes-red-proof", "needs: integration-lanes", 1),
+		"step has no id":           strings.Replace(ok, "        id: aggregate\n", "", 1),
+		"no later step checking":   strings.Replace(ok, "steps.aggregate.outcome", "steps.other.result", 1),
+		"exactly one step":         strings.Replace(ok, "      - continue-on-error: true\n        id: aggregate\n", "      - id: aggregate\n", 1),
 	}
 	for want, ci := range cases {
 		if ci == ok {

@@ -121,10 +121,12 @@ type ciJob struct {
 
 // ciStep is one job step.
 type ciStep struct {
-	Name string `yaml:"name"`
-	If   string `yaml:"if"`
-	Uses string `yaml:"uses"`
-	Run  string `yaml:"run"`
+	ID              string `yaml:"id"`
+	Name            string `yaml:"name"`
+	If              string `yaml:"if"`
+	Uses            string `yaml:"uses"`
+	Run             string `yaml:"run"`
+	ContinueOnError any    `yaml:"continue-on-error"`
 }
 
 // ciNeeds is a job's `needs`, written as a scalar or a list.
@@ -199,53 +201,6 @@ func stepHasTags(run, tags string) bool {
 func alwaysIf(cond string) bool {
 	c := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(cond), "${{"), "}}"))
 	return c == "always()"
-}
-
-// redProofProblems checks the R18 M7 shape: the lane job and the assert job
-// block ci-gate; the red-proof job is expected to fail, so it is never in
-// ci-gate needs and never soft-fails, and its report upload runs even then.
-func redProofProblems(wf ciWorkflow) []string {
-	var out []string
-	add := func(m string) { out = append(out, "red proof: "+m) }
-	gate := wf.Jobs[CIGateJob].Needs
-	if lane, ok := wf.Jobs[LaneJob]; !ok || !slices.Contains(gate, LaneJob) || softFail(lane) {
-		add(LaneJob + " must exist, be in ci-gate needs and not have continue-on-error")
-	}
-	if proof, ok := wf.Jobs[RedProofJob]; !ok {
-		add(RedProofJob + " job is missing")
-	} else {
-		uploads := 0
-		for _, s := range proof.Steps {
-			if strings.HasPrefix(s.Uses, "actions/upload-artifact") {
-				uploads++
-				if !alwaysIf(s.If) {
-					add(RedProofJob + " upload step lacks if: always()")
-				}
-			}
-		}
-		if uploads == 0 {
-			add(RedProofJob + " has no report upload step")
-		}
-		if softFail(proof) {
-			add(RedProofJob + " has continue-on-error")
-		}
-		if slices.Contains(gate, RedProofJob) {
-			add(RedProofJob + " must not be in ci-gate needs (it is expected to fail)")
-		}
-	}
-	assert, ok := wf.Jobs[RedAssertJob]
-	switch {
-	case !ok:
-		add(RedAssertJob + " job is missing")
-	case !slices.Contains(assert.Needs, RedProofJob):
-		add(RedAssertJob + " does not need " + RedProofJob)
-	case !alwaysIf(assert.If):
-		add(RedAssertJob + " lacks if: always()")
-	}
-	if ok && !slices.Contains(gate, RedAssertJob) {
-		add(RedAssertJob + " is not in ci-gate needs")
-	}
-	return out
 }
 
 // redReport is the slice of the lane report AssertRedProof reads (the JSON the
