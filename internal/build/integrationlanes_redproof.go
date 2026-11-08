@@ -1,5 +1,6 @@
 // Purpose: the R18 M7 workflow-shape lint for the integration-lane red proof
 // (split out of integrationlanes_table.go to keep that file under the 300-line cap).
+
 package build
 
 import (
