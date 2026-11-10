@@ -1,10 +1,105 @@
 {
-  "kinds": [
-    "exec.task.started",
-    "exec.task.completed",
-    "exec.task.failed",
-    "exec.run.started",
-    "exec.run.completed",
-    "exec.run.failed"
+  "groups": [
+    {
+      "group": "project",
+      "kinds": [
+        "exec.PROJECT_STARTED",
+        "exec.PHASE_CHANGED",
+        "exec.PROJECT_COMPLETED",
+        "exec.PROJECT_CANCELLED"
+      ]
+    },
+    {
+      "group": "task",
+      "kinds": [
+        "exec.TASK_CREATED",
+        "exec.TASK_READY",
+        "exec.TASK_STARTED",
+        "exec.TASK_COMPLETED",
+        "exec.TASK_FAILED",
+        "exec.TASK_BLOCKED"
+      ]
+    },
+    {
+      "group": "agent",
+      "kinds": [
+        "exec.AGENT_RESERVED",
+        "exec.AGENT_STARTED",
+        "exec.AGENT_HEARTBEAT",
+        "exec.AGENT_STOPPED"
+      ]
+    },
+    {
+      "group": "artifact",
+      "kinds": [
+        "exec.ARTIFACT_WRITTEN",
+        "exec.EVIDENCE_ADDED",
+        "exec.PATCH_READY"
+      ]
+    },
+    {
+      "group": "decision",
+      "kinds": [
+        "exec.DECISION_REQUIRED",
+        "exec.CONFLICT_DETECTED",
+        "exec.SCOPE_CHANGE"
+      ]
+    },
+    {
+      "group": "verify",
+      "kinds": [
+        "exec.VERIFY_REQUESTED",
+        "exec.VERIFY_PASSED",
+        "exec.VERIFY_FAILED"
+      ]
+    },
+    {
+      "group": "quota",
+      "kinds": [
+        "exec.QUOTA_LOW",
+        "exec.QUOTA_EXHAUSTED",
+        "exec.QUOTA_RECOVERED",
+        "exec.RATE_LIMITED"
+      ]
+    },
+    {
+      "group": "workspace",
+      "kinds": [
+        "exec.WORKTREE_ALLOCATED",
+        "exec.LEASE_ACQUIRED",
+        "exec.LEASE_CONFLICT",
+        "exec.LEASE_EXPIRED"
+      ]
+    },
+    {
+      "group": "state",
+      "kinds": [
+        "exec.CHECKPOINT_CREATED",
+        "exec.CONTEXT_COMPACTING",
+        "exec.CONTEXT_COMPACTED"
+      ]
+    },
+    {
+      "group": "executive",
+      "kinds": [
+        "exec.T0_WAKE_REQUESTED",
+        "exec.T0_AWAKE",
+        "exec.T0_SLEEPING"
+      ]
+    },
+    {
+      "group": "safety",
+      "kinds": [
+        "exec.HUMAN_APPROVAL_REQUIRED",
+        "exec.PRIVACY_POLICY_BLOCKED",
+        "exec.PERMISSION_DENIED"
+      ]
+    },
+    {
+      "group": "acceptance",
+      "kinds": [
+        "exec.FINAL_ACCEPTANCE_READY"
+      ]
+    }
   ]
 }

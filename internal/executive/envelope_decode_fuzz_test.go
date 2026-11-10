@@ -14,8 +14,8 @@ import (
 // It runs clean for the configured seed corpus and random inputs.
 func FuzzExecEnvelopeDecode(f *testing.F) {
 	seeds := []string{
-		`{"event_id":"evt-1","kind":"exec.task.started","stream_id":"s1","stream_seq":1,"run_id":"r1","project_id":"p1","producer":"prod","payload_version":1,"payload":null,"occurred_at":"2024-01-01T00:00:00Z"}`,
-		`{"event_id":"evt-1","kind":"exec.task.started","event_id":"evt-2"}`,
+		`{"event_id":"evt-1","kind":"exec.TASK_STARTED","stream_id":"s1","stream_seq":1,"run_id":"r1","project_id":"p1","producer":"prod","payload_version":1,"payload":null,"occurred_at":"2024-01-01T00:00:00Z"}`,
+		`{"event_id":"evt-1","kind":"exec.TASK_STARTED","event_id":"evt-2"}`,
 		`{not valid json`,
 	}
 	for _, s := range seeds {
@@ -42,28 +42,35 @@ func FuzzExecEnvelopeDecode(f *testing.F) {
 	})
 }
 
-// TestEXE01LegacyAC12 runs the checked-in FuzzExecEnvelopeDecode seed
-// corpus through DecodeEnvelope: valid.json decodes, duplicate-key.json is
-// refused as a duplicate key and malformed.json as malformed input.
+func readCorpusSeed(t *testing.T, name string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("testdata", "fuzz", "FuzzExecEnvelopeDecode", name))
+	if err != nil {
+		t.Fatalf("read corpus %s: %v", name, err)
+	}
+	lines := strings.SplitN(strings.TrimSpace(string(raw)), "\n", 2)
+	if len(lines) != 2 || lines[0] != "go test fuzz v1" {
+		t.Fatalf("corpus %s is not go test fuzz v1", name)
+	}
+	arg := strings.TrimSuffix(strings.TrimPrefix(lines[1], "string("), ")")
+	s, err := strconv.Unquote(arg)
+	if err != nil {
+		t.Fatalf("corpus %s: unquote: %v", name, err)
+	}
+	return []byte(s)
+}
+
+// TestEXE01LegacyAC12 verifies the seed corpus: valid.json decodes to
+// exec.TASK_STARTED, duplicate-key and malformed input still refuse.
 func TestEXE01LegacyAC12(t *testing.T) {
-	want := map[string]error{"valid.json": nil, "duplicate-key.json": errDuplicateKey, "malformed.json": errMalformed}
-	for name, wantErr := range want {
-		raw, err := os.ReadFile(filepath.Join("testdata", "fuzz", "FuzzExecEnvelopeDecode", name))
-		if err != nil {
-			t.Fatalf("read %s: %v", name, err)
-		}
-		lines := strings.SplitN(string(raw), "\n", 2)
-		if len(lines) != 2 || lines[0] != "go test fuzz v1" {
-			t.Fatalf("%s: not a go fuzz v1 corpus file", name)
-		}
-		body := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(lines[1]), "string("), ")")
-		data, err := strconv.Unquote(body)
-		if err != nil {
-			t.Fatalf("%s: unquote: %v", name, err)
-		}
-		_, err = DecodeEnvelope([]byte(data))
-		if !errors.Is(err, wantErr) || (wantErr == nil) != (err == nil) {
-			t.Errorf("%s: DecodeEnvelope err = %v, want %v", name, err, wantErr)
-		}
+	env, err := DecodeEnvelope(readCorpusSeed(t, "valid.json"))
+	if err != nil || env.Kind != KindTaskStarted {
+		t.Fatalf("valid.json: env %+v err %v; want kind exec.TASK_STARTED", env, err)
+	}
+	if _, err := DecodeEnvelope(readCorpusSeed(t, "duplicate-key.json")); !errors.Is(err, errDuplicateKey) {
+		t.Fatalf("duplicate-key.json: err %v, want errDuplicateKey", err)
+	}
+	if _, err := DecodeEnvelope([]byte(`{not valid json`)); !errors.Is(err, errMalformed) {
+		t.Fatalf("malformed: err %v, want errMalformed", err)
 	}
 }

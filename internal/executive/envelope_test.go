@@ -43,7 +43,7 @@ func TestEXE01LegacyAC3(t *testing.T) {
 
 // TestDecodeEnvelopeRejectsDuplicateKeys ensures strict decoding rejects duplicate keys.
 func TestDecodeEnvelopeRejectsDuplicateKeys(t *testing.T) {
-	input := `{"event_id":"1","kind":"exec.task.started","event_id":"2"}`
+	input := `{"event_id":"1","kind":"exec.TASK_STARTED","event_id":"2"}`
 	_, err := DecodeEnvelope([]byte(input))
 	if err == nil {
 		t.Fatal("expected error for duplicate keys")
@@ -109,14 +109,16 @@ func TestDecodeEnvelopeRefusals(t *testing.T) {
 		want error
 	}{
 		"unknown kind":       {`{"event_id":"e","kind":"exec.nope"}`, errMalformed},
-		"unknown field":      {`{"event_id":"e","kind":"exec.task.started","extra":1}`, errMalformed},
-		"nested duplicate":   {`{"event_id":"e","kind":"exec.task.started","payload":{"a":1,"a":2}}`, errDuplicateKey},
-		"array duplicate":    {`{"event_id":"e","kind":"exec.task.started","payload":[{"a":1,"a":2}]}`, errDuplicateKey},
+		"unknown field":      {`{"event_id":"e","kind":"exec.TASK_STARTED","extra":1}`, errMalformed},
+		"nested duplicate":   {`{"event_id":"e","kind":"exec.TASK_STARTED","payload":{"a":1,"a":2}}`, errDuplicateKey},
+		"array duplicate":    {`{"event_id":"e","kind":"exec.TASK_STARTED","payload":[{"a":1,"a":2}]}`, errDuplicateKey},
 		"truncated object":   {`{"event_id":"e",`, errMalformed},
 		"truncated array":    {`{"payload":[1,`, errMalformed},
 		"non-object scalar":  {`42`, errMalformed},
 		"empty input":        {``, errMalformed},
-		"array payload kept": {`{"event_id":"e","kind":"exec.task.started","payload":[1,2]}`, nil},
+		"old lowercase kind": {`{"event_id":"e","kind":"exec.task.started"}`, errMalformed},
+		"empty kind":         {`{"event_id":"e"}`, errMalformed},
+		"array payload kept": {`{"event_id":"e","kind":"exec.TASK_STARTED","payload":[1,2]}`, nil},
 	}
 	for name, tc := range cases {
 		_, err := DecodeEnvelope([]byte(tc.in))
