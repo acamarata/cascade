@@ -110,6 +110,30 @@ cannot disagree:
 The check never reports OK without a sample it took. It adds about one
 second to a doctor run.
 
+## `agent_lanes`
+
+Reports each configured `[agents.lanes.<driver>]` lane. The check reads only
+the effective `config.toml`; it never reads the environment, the vault or an
+auth file. One line per lane, in lane order, joined by `; `:
+
+```
+agent:<driver> harness=<driver|unregistered> enabled=<bool> posture=<posture> class=<class|unset>
+```
+
+`class` is the credential class from that lane's own `[agents.auth.<driver>]`
+table, or `unset` when the lane has none. Two warnings can follow a line, and
+either one makes the check a warning:
+
+| Warning | Meaning |
+|---|---|
+| `(warning: ProgrammaticEntitlement false)` | this lane's posture is not `programmatic` |
+| `(warning: harness not registered)` | no registered harness has that driver name |
+
+With no lanes configured the check is OK (`no agent lanes configured`). A
+config that will not load, or a lane or auth table that does not parse, is an
+error carrying the parser's message. No credential value, `key_env` name or
+`auth_source` path is ever printed. The check is not fixable.
+
 ## Security checks
 
 Six checks report the security posture. All are read-only: they open the

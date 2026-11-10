@@ -111,6 +111,9 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	// admission_signal (doctor_mounts_fleet.go): samples this host once and
 	// classifies it with the classifier daemon admission uses; local only.
 	reg.Register(newAdmissionSignalDoctorCheck(clock))
+	// agent_lanes (doctor_mounts_agents.go): each [agents.lanes.*] lane's
+	// harness, posture and credential class, never a value.
+	reg.Register(newAgentLanesDoctorCheck(paths))
 	// Daemon-state checks (doctor_daemon_state.go), each answered from the
 	// one status.get the run asks for, and each a warning, never a pass,
 	// when no daemon answers: the subsystem census, dropped hook events,
