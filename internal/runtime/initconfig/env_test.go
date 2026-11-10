@@ -7,6 +7,8 @@ package initconfig
 //   pass against any ordering at all.
 
 import (
+	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -212,4 +214,87 @@ func TestResolveToleratesANilEnvironment(t *testing.T) {
 	if spec == nil {
 		t.Fatal("Resolve returned a nil spec and a nil error")
 	}
+}
+
+// discoveryFile sets every discovery field to a value the env below
+// contradicts, so a mapping that read the wrong source fails.
+func discoveryFile() *InitConfig {
+	return &InitConfig{
+		Schema: SchemaVersion,
+		Roots:  RootsConfig{Paths: []string{"/file"}, Maintain: true, MaxFiles: 7, AcceptDiscovered: true},
+		Nodes:  NodesConfig{ScanLAN: true, Pair: []string{"file-host"}, Travel: true},
+		Policy: PolicyConfig{Preset: "strict"},
+	}
+}
+
+// discoveryEnv sets every listed key, plus the codes both hosts need.
+var discoveryEnv = map[string]string{
+	EnvRootsPaths: "/a" + string(filepath.ListSeparator) + "/b", EnvRootsMaintain: "0",
+	EnvRootsMaxFiles: "42", EnvRootsAcceptDiscovered: "false", EnvNodesScanLAN: "no",
+	EnvNodesPair: "a.invalid, b.invalid", EnvNodesTravel: "off", EnvPolicyPreset: "custom",
+	"CASCADE_INIT_NODE_CODE_A_INVALID": "code-one", "CASCADE_INIT_NODE_CODE_B_INVALID": "code-two",
+	"CASCADE_INIT_NODE_CODE_FILE_HOST": "code-three",
+}
+
+// wantInvalid asserts a KindInvalidInput refusal carrying want, with no spec.
+func wantInvalid(t *testing.T, spec *Spec, err error, want string) {
+	t.Helper()
+	if spec != nil || err == nil {
+		t.Fatalf("Resolve = %+v, %v; want a refusal and no spec", spec, err)
+	}
+	if kind, ok := cascade.KindOf(err); !ok || kind != cascade.KindInvalidInput || !strings.Contains(err.Error(), want) {
+		t.Fatalf("error = %v (kind %v), want KindInvalidInput naming %q", err, kind, want)
+	}
+}
+
+// TestInitEnvMappings pins every CASCADE_INIT_ discovery key to its
+// DiscoveryOverlay field, an unset key to a nil one, and the refusal of a
+// paired host without its code. Precedence rows live in 12a's test.
+func TestInitEnvMappings(t *testing.T) {
+	o, err := discoveryOverlay(envFor(discoveryEnv))
+	if err != nil {
+		t.Fatalf("discoveryOverlay: %v", err)
+	}
+	if o.RootsPaths == nil || fmt.Sprint(*o.RootsPaths) != "[/a /b]" || o.NodesPair == nil || fmt.Sprint(*o.NodesPair) != "[a.invalid b.invalid]" ||
+		o.RootsMaxFiles == nil || *o.RootsMaxFiles != 42 || o.PolicyPreset == nil || *o.PolicyPreset != "custom" {
+		t.Fatalf("list, number or preset keys misrouted: %+v", o)
+	}
+	for name, p := range map[string]*bool{"maintain": o.RootsMaintain, "accept": o.RootsAcceptDiscovered,
+		"scan": o.NodesScanLAN, "travel": o.NodesTravel} {
+		if p == nil || *p {
+			t.Fatalf("%s: want a non-nil false, got %v", name, p)
+		}
+	}
+	if o, err = discoveryOverlay(envFor(nil)); err != nil || fmt.Sprintf("%+v", o) != fmt.Sprintf("%+v", DiscoveryOverlay{}) {
+		t.Fatalf("empty env must give a silent overlay: %+v, %v", o, err)
+	}
+	spec, err := Resolve(Flags{}, envFor(discoveryEnv), discoveryFile())
+	if err != nil || spec.Policy.Preset != "custom" || spec.Roots.MaxFiles != 42 {
+		t.Fatalf("Resolve did not pass the env overlay through the resolver: %+v, %v", spec, err)
+	}
+	if dump := fmt.Sprintf("%+v", *spec); strings.Contains(dump, "code-") {
+		t.Fatalf("a pairing code entered the spec: %s", dump)
+	}
+	if spec, _ = Resolve(Flags{PolicyPreset: "balanced"}, envFor(discoveryEnv), nil); spec == nil || spec.Policy.Preset != "balanced" {
+		t.Fatalf("the --policy flag did not reach the resolver: %+v", spec)
+	}
+	testInitEnvRefusals(t)
+}
+
+// testInitEnvRefusals covers the typed refusals, each before any spec.
+func testInitEnvRefusals(t *testing.T) {
+	spec, err := Resolve(Flags{}, envFor(map[string]string{EnvNodesPair: "a.invalid,b.invalid",
+		"CASCADE_INIT_NODE_CODE_B_INVALID": "code-two"}), nil)
+	wantInvalid(t, spec, err, "CASCADE_INIT_NODE_CODE_A_INVALID")
+	if strings.Contains(err.Error(), "code-two") {
+		t.Fatalf("the refusal quoted a code: %v", err)
+	}
+	spec, err = Resolve(Flags{}, envFor(nil), discoveryFile())
+	wantInvalid(t, spec, err, "CASCADE_INIT_NODE_CODE_FILE_HOST")
+	spec, err = Resolve(Flags{}, envFor(map[string]string{EnvRootsMaxFiles: "many"}), nil)
+	wantInvalid(t, spec, err, EnvRootsMaxFiles)
+	spec, err = Resolve(Flags{}, envFor(map[string]string{EnvRootsMaxFiles: "-1"}), nil)
+	wantInvalid(t, spec, err, "max_files")
+	spec, err = Resolve(Flags{}, envFor(map[string]string{EnvPolicyPreset: "lax"}), nil)
+	wantInvalid(t, spec, err, "lax")
 }

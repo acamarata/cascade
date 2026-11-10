@@ -217,6 +217,7 @@ func TestLoadNilWarnUsesDefaultSlog(t *testing.T) {
 // dynamicEnvReadSlices binds slice-driven rows to declarations checked by TestDynamicEnvReadSlicesMatchTable.
 var dynamicEnvReads = map[string][]string{
 	"cmd/cascade/backup_key.go:187":                {"<operator-named>"}, // --passphrase-env
+	"cmd/cascade/daemon_env_scrub.go:175":          {"<caller-named>"},   // credentialEnv.Getenv passthrough for names outside the scrub set
 	"cmd/cascade/init_adapters.go:30":              {"<caller-named>"},
 	"cmd/cascade/mcp.go:86":                        {"CASCADE_PRINCIPAL_TOKEN"}, // os.LookupEnv through mcpPrincipalGetenv: principal.EnvToken
 	"cmd/cascade/profile_attach.go:62":             {"<caller-named>"},
@@ -234,7 +235,7 @@ var dynamicEnvReads = map[string][]string{
 	"internal/providers/intake/core.go:177":        {"<caller-named>"},
 	"internal/providers/intake/core.go:195":        {"<caller-named>"},
 	"internal/runtime/config_load.go:145":          {"CASCADE_PROFILE"},
-	"internal/runtime/initconfig/env.go:100":       {"<caller-named>"},
+	"internal/runtime/initconfig/env.go:108":       {"<caller-named>", "CASCADE_INIT_NODE_CODE_<HOST>"},
 	"internal/runtime/profile_server.go:119":       {"<operator-named>"}, // server-profile DSN env-ref
 	"internal/runtime/profile_server.go:152":       {"<operator-named>"}, // server-profile s3_env_prefix + suffix
 	"internal/secrets/oauth_transport.go:68":       {"<caller-named>"},

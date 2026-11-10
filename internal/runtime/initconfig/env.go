@@ -7,13 +7,13 @@ package initconfig
 // Outputs: a *Spec the wizard substitutes at each step site, or a
 //   refusal.
 // Constraints: the order is flags > env > file > defaults, applied by ONE
-//   function. Four sources merged at four call sites is four chances to
-//   apply them in a different order, and the symptom is a machine
-//   configured from the wrong one.
+//   function; four call sites would be four chances to get it wrong.
 // SPORT: internal/runtime/initconfig env map (ADD) — P1-E16-W4-S35-T7.
 
 import (
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -21,8 +21,7 @@ import (
 
 // The environment variables this package reads.
 const (
-	// EnvConfig names a setup file, and its presence implies a
-	// non-interactive run.
+	// EnvConfig names a setup file; its presence implies no prompts.
 	EnvConfig = "CASCADE_INIT_CONFIG"
 	// EnvYes accepts every default, overriding both file and env.
 	EnvYes = "CASCADE_YES"
@@ -32,46 +31,52 @@ const (
 	EnvHome = "CASCADE_HOME"
 	// EnvProfile overrides the profile.
 	EnvProfile = "CASCADE_PROFILE"
-	// EnvTelemetry, set to "0", always wins over an enabling setup file.
-	// Telemetry is opt-in, and a file somebody else wrote must not be
-	// able to opt this machine in over its own environment.
+	// EnvTelemetry, set to "0", always wins over an enabling setup file:
+	// telemetry is opt-in, and the environment outranks someone's file.
 	EnvTelemetry = "CASCADE_TELEMETRY"
+	// The [roots], [nodes] and [policy] map; roots split like PATH.
+	EnvRootsPaths            = "CASCADE_INIT_ROOTS_PATHS"
+	EnvRootsMaintain         = "CASCADE_INIT_ROOTS_MAINTAIN"
+	EnvRootsMaxFiles         = "CASCADE_INIT_ROOTS_MAX_FILES"
+	EnvRootsAcceptDiscovered = "CASCADE_INIT_ROOTS_ACCEPT_DISCOVERED"
+	EnvNodesScanLAN          = "CASCADE_INIT_NODES_SCAN_LAN"
+	EnvNodesPair             = "CASCADE_INIT_NODES_PAIR"
+	EnvNodesTravel           = "CASCADE_INIT_NODES_TRAVEL"
+	EnvPolicyPreset          = "CASCADE_INIT_POLICY_PRESET"
+	// EnvNodeCodePrefix starts every pairing-code name; see NodeCodeEnv.
+	EnvNodeCodePrefix = "CASCADE_INIT_NODE_CODE_"
 )
 
 // Flags are the command-line values that outrank everything else.
 type Flags struct {
-	// ConfigPath is --config.
+	// ConfigPath is --config, Yes is --yes, Profile is --profile.
 	ConfigPath string
-	// Yes is --yes.
-	Yes bool
-	// Profile is --profile.
-	Profile string
-	// Harnesses is --harness.
+	Yes        bool
+	Profile    string
+	// Harnesses is --harness, NoDaemon is --no-daemon.
 	Harnesses []string
-	// NoDaemon is --no-daemon.
-	NoDaemon bool
+	NoDaemon  bool
+	// PolicyPreset is --policy.
+	PolicyPreset string
 }
 
-// Spec is the merged, non-interactive answer set.
-//
-// Every field a step might otherwise prompt for is present-or-absent
-// rather than zero-or-set: "the file said false" and "nothing said
-// anything" are different, and only the second may fall back to a default
-// or to a prompt. That distinction is what the prompt guard reads.
+// Spec is the merged, non-interactive answer set. A prompted field is
+// present-or-absent, not zero-or-set: "the file said false" differs from
+// "nothing said anything", and only the second may default or prompt.
 type Spec struct {
 	// Profile, empty when nothing supplied one.
 	Profile string
-	// Plugins names the catalog entries to enable, nil when unset.
-	Plugins []string
-	// PluginsSet distinguishes "enable nothing" from "nothing said".
+	// Plugins names the catalog entries to enable; PluginsSet tells
+	// "enable nothing" from "nothing said".
+	Plugins    []string
 	PluginsSet bool
-	// Providers are the directives to run, in order.
-	Providers []ProviderDirective
-	// ProvidersSet distinguishes "add no providers" from "nothing said".
+	// Providers are the directives to run, in order; ProvidersSet tells
+	// "add none" from "nothing said".
+	Providers    []ProviderDirective
 	ProvidersSet bool
-	// Harnesses names the harnesses to wire, nil when unset.
-	Harnesses []string
-	// HarnessesSet distinguishes "wire none" from "nothing said".
+	// Harnesses names the harnesses to wire; HarnessesSet tells "wire
+	// none" from "nothing said".
+	Harnesses    []string
 	HarnessesSet bool
 	// DetectHarnesses runs step 6 at all.
 	DetectHarnesses bool
@@ -83,14 +88,17 @@ type Spec struct {
 	// Daemon and DaemonSet: unset means the profile's default.
 	Daemon    bool
 	DaemonSet bool
-	// Yes reports that every unset field may take its default without a
-	// prompt.
-	Yes bool
-	// NoInput makes an unanswerable site a hard error rather than a
-	// prompt.
+	// Yes takes every unset default unprompted; NoInput makes an
+	// unanswerable site a hard error, not a prompt.
+	Yes     bool
 	NoInput bool
 	// Home overrides the cascade home, empty when unset.
 	Home string
+	// Roots, Nodes and Policy are the merged discovery sections. They
+	// never carry a pairing code; NodeCodeFor reads one when needed.
+	Roots  RootsConfig
+	Nodes  NodesConfig
+	Policy PolicyConfig
 }
 
 // EnvFunc reads one environment variable.
@@ -99,11 +107,7 @@ type EnvFunc func(key string) string
 // OSEnv is the production EnvFunc.
 func OSEnv(key string) string { return os.Getenv(key) }
 
-// Resolve merges the three sources under the ratified precedence.
-//
-// flags > env > file > defaults, applied here and nowhere else. A caller
-// that merged two of them itself before calling would silently change
-// that order for the fields it touched.
+// Resolve merges flags > env > file > defaults, here and nowhere else.
 func Resolve(flags Flags, env EnvFunc, file *InitConfig) (*Spec, error) {
 	if env == nil {
 		env = func(string) string { return "" }
@@ -116,14 +120,32 @@ func Resolve(flags Flags, env EnvFunc, file *InitConfig) (*Spec, error) {
 	applyFile(spec, file)
 	applyEnv(spec, env)
 	applyFlags(spec, flags)
+	envO, err := discoveryOverlay(env)
+	if err != nil {
+		return nil, err
+	}
+	var flagsO DiscoveryOverlay
+	if flags.PolicyPreset != "" {
+		flagsO.PolicyPreset = &flags.PolicyPreset
+	}
+	disc, err := ResolveDiscovery(file, envO, flagsO)
+	if err != nil {
+		return nil, err
+	}
+	spec.Roots, spec.Nodes, spec.Policy = disc.Roots, disc.Nodes, disc.Policy
 	if err := spec.validate(); err != nil {
 		return nil, err
+	}
+	// Refused before the wizard runs a step: no half-set-up, unpaired host.
+	for _, host := range spec.Nodes.Pair {
+		if _, err := NodeCodeFor(host, env); err != nil {
+			return nil, err
+		}
 	}
 	return spec, nil
 }
 
-// applyFile lays the file's values down first, so env and then flags can
-// overwrite them.
+// applyFile lays the file down first, for env and flags to overwrite.
 func applyFile(spec *Spec, file *InitConfig) {
 	if file == nil {
 		return
@@ -142,6 +164,41 @@ func applyFile(spec *Spec, file *InitConfig) {
 	}
 	spec.Telemetry, spec.TelemetrySet = file.Telemetry.Enabled, true
 	spec.Daemon, spec.DaemonSet = file.Daemon.Install, true
+}
+
+// discoveryOverlay maps the CASCADE_INIT_* discovery keys onto an overlay;
+// an unset key leaves its field nil. Precedence is ResolveDiscovery's.
+func discoveryOverlay(env EnvFunc) (DiscoveryOverlay, error) {
+	var o DiscoveryOverlay
+	if v := env(EnvRootsPaths); v != "" {
+		p := filepath.SplitList(v)
+		o.RootsPaths = &p
+	}
+	if v := env(EnvRootsMaxFiles); v != "" {
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return DiscoveryOverlay{}, cascade.Newf(cascade.KindInvalidInput,
+				"cascade init: %s=%q is not a whole number", EnvRootsMaxFiles, v)
+		}
+		o.RootsMaxFiles = &n
+	}
+	for key, field := range map[string]**bool{
+		EnvRootsMaintain: &o.RootsMaintain, EnvRootsAcceptDiscovered: &o.RootsAcceptDiscovered,
+		EnvNodesScanLAN: &o.NodesScanLAN, EnvNodesTravel: &o.NodesTravel,
+	} {
+		if v := env(key); v != "" {
+			b := truthy(v)
+			*field = &b
+		}
+	}
+	if v := env(EnvNodesPair); v != "" {
+		p := strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ' ' })
+		o.NodesPair = &p
+	}
+	if v := env(EnvPolicyPreset); v != "" {
+		o.PolicyPreset = &v
+	}
+	return o, nil
 }
 
 // applyEnv overwrites the file's values where the environment speaks.
@@ -184,25 +241,15 @@ func (s *Spec) validate() error {
 	return nil
 }
 
-// validProfileName reports whether name is one of the three.
-//
-// Duplicated from internal/runtime/init on purpose: the dependency runs
-// one way — the wizard imports this package and this package imports
-// nothing of the wizard's — and three string constants are a smaller cost
-// than inverting that. A test in the wizard's package asserts the two
-// agree, so the duplication cannot drift silently.
+// validProfileName reports whether name is one of the three. Duplicated
+// from internal/runtime/init on purpose (the import runs one way); a test
+// in the wizard's package asserts the two agree.
 func validProfileName(name string) bool {
-	switch name {
-	case "local", "server", "worker":
-		return true
-	default:
-		return false
-	}
+	return name == "local" || name == "server" || name == "worker"
 }
 
-// truthy reads an environment flag. Anything but the empty string, "0",
-// "false", "no" and "off" is true, which is the convention every other
-// CASCADE_* variable in this codebase already follows.
+// truthy reads an environment flag: anything but "", "0", "false", "no"
+// and "off" is true, as for every other CASCADE_* variable.
 func truthy(v string) bool {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "", "0", "false", "no", "off":
@@ -212,13 +259,9 @@ func truthy(v string) bool {
 	}
 }
 
-// KeyFor reads the key a directive points at, once.
-//
-// The VALUE never enters the Spec, the journal or any log line: this is
-// called at the moment the provider is added and the result goes straight
-// to intake. An empty variable is a refusal NAMING the variable, because
-// a provider added with an empty key fails later, somewhere that cannot
-// say which setup file sent it.
+// KeyFor reads the key a directive points at, once, when the provider is
+// added; the value goes straight to intake, never to the Spec, journal or
+// a log. An empty variable is a refusal NAMING the variable.
 func (p ProviderDirective) KeyFor(env EnvFunc) (string, error) {
 	if p.KeyEnv == "" {
 		return "", cascade.Newf(cascade.KindInvalidInput,
@@ -231,4 +274,26 @@ func (p ProviderDirective) KeyFor(env EnvFunc) (string, error) {
 			p.Name, p.KeyEnv)
 	}
 	return value, nil
+}
+
+// NodeCodeEnv names the variable host's pairing code is read from: the
+// host upper-cased, every byte outside [A-Z0-9] turned into '_'.
+func NodeCodeEnv(host string) string {
+	return EnvNodeCodePrefix + strings.Map(func(r rune) rune {
+		if (r < 'A' || r > 'Z') && (r < '0' || r > '9') {
+			return '_'
+		}
+		return r
+	}, strings.ToUpper(host))
+}
+
+// NodeCodeFor reads host's pairing code from NodeCodeEnv(host) only; the
+// value never enters the Spec, and a refusal names the variable alone.
+func NodeCodeFor(host string, env EnvFunc) (string, error) {
+	key := NodeCodeEnv(host)
+	if env == nil || env(key) == "" {
+		return "", cascade.Newf(cascade.KindInvalidInput,
+			"cascade init: [nodes] pairs %q, but %s is unset or empty", host, key)
+	}
+	return env(key), nil
 }
