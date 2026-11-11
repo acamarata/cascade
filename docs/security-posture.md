@@ -38,6 +38,8 @@ See also [driver custody: the host shim, the agent-driver output filter and thei
 
 See also [inbox send authorization: the send authorizer and its two capabilities](security-posture/inbox-send.md).
 
+See also [receive gate: bound fields, failing runs and cross-repo rejection at the receiving repository](security-posture/receive-gate.md).
+
 ## Doctor security checks
 
 `cascade doctor` reports six security checks. All are read-only: none selects

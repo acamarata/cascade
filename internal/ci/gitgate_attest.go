@@ -15,7 +15,6 @@ package ci
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/acamarata/cascade/internal/ci/attest"
@@ -111,26 +110,26 @@ func checkGateBinding(ctx context.Context, want AttestWant, gates GateBinding, c
 // row checks one stored attestation row end to end.
 func (c attestCheck) row(ctx context.Context, row jobs.CiAttestationRow) error {
 	if err := row.CheckSigned(); err != nil {
-		return fmt.Errorf("%w: %v", ErrVerifyFailed, err)
+		return cascade.Wrapf(cascade.KindIntegrity, ErrVerifyFailed, "ci: %v", err)
 	}
 	sa := attest.SignedAttestation{CanonicalJSON: []byte(row.CanonicalJSON), Signature: row.Signature}
 	if err := attest.VerifySignature(ctx, sa, c.want.CommitSHA, c.want.TreeHash, c.ts, c.now); err != nil {
-		return fmt.Errorf("%w: %v", ErrVerifyFailed, err)
+		return cascade.Wrapf(cascade.KindIntegrity, ErrVerifyFailed, "ci: %v", err)
 	}
 	countersign, _ := c.ts.(attest.CountersignVerifier)
 	if class := attest.DeriveClass(sa, c.ts, countersign); !class.Eligible() {
-		return fmt.Errorf("%w: derived attestor class %q", ErrUnattestedEvidence, class)
+		return cascade.Wrapf(cascade.KindPolicyDenied, ErrUnattestedEvidence, "ci: derived attestor class %q", class)
 	}
 	rec, err := attest.DecodeCanonical(sa.CanonicalJSON)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrVerifyFailed, err)
+		return cascade.Wrapf(cascade.KindIntegrity, ErrVerifyFailed, "ci: %v", err)
 	}
 	fact, ok, err := c.accepted.AcceptedFor(ctx, rec.Nonce, c.want.CommitSHA, c.want.TreeHash, rec.CheckpointID)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("%w: no acceptance fact for this commit, tree and checkpoint", ErrUnattestedEvidence)
+		return cascade.Wrap(cascade.KindPolicyDenied, ErrUnattestedEvidence, "ci: no acceptance fact for this commit, tree and checkpoint")
 	}
 	return c.fact(rec, fact)
 }
@@ -138,10 +137,12 @@ func (c attestCheck) row(ctx context.Context, row jobs.CiAttestationRow) error {
 // fact compares the acceptance fact against want and the signed record;
 // the record is never compared against itself.
 func (c attestCheck) fact(rec attest.AttestationRecord, fact jobs.AcceptanceFact) error {
-	if fact.Commit != c.want.CommitSHA || fact.Tree != c.want.TreeHash || fact.RepoID != c.want.RepoID ||
-		rec.RepoID != fact.RepoID || rec.CheckpointID != fact.CheckpointID ||
+	if fact.Commit != c.want.CommitSHA || fact.Tree != c.want.TreeHash || fact.RepoID != c.want.RepoID {
+		return cascade.Wrap(cascade.KindPolicyDenied, ErrUnattestedEvidence, "ci: the acceptance fact does not bind the gated repository and tip")
+	}
+	if rec.RepoID != fact.RepoID || rec.CheckpointID != fact.CheckpointID ||
 		rec.JobSpecHash != fact.JobSpecHash || rec.PolicyVersion != fact.PolicyVersion {
-		return fmt.Errorf("%w: the acceptance fact does not bind this record", ErrUnattestedEvidence)
+		return cascade.Wrap(cascade.KindPolicyDenied, ErrUnattestedEvidence, "ci: the acceptance fact does not bind this record")
 	}
 	if c.currentPolicy != nil {
 		current, err := c.currentPolicy()
@@ -149,11 +150,11 @@ func (c attestCheck) fact(rec attest.AttestationRecord, fact jobs.AcceptanceFact
 			return cascade.Wrap(cascade.KindPolicyDenied, err, "ci: read the current policy version")
 		}
 		if fact.PolicyVersion != current {
-			return fmt.Errorf("%w: the acceptance fact's policy version is not current", ErrUnattestedEvidence)
+			return cascade.Wrap(cascade.KindPolicyDenied, ErrUnattestedEvidence, "ci: the acceptance fact's policy version is not current")
 		}
 	}
 	if !rec.Passing(fact.PlanKinds) {
-		return fmt.Errorf("%w: the attested run did not pass", ErrUnattestedEvidence)
+		return cascade.Wrap(cascade.KindPolicyDenied, ErrUnattestedEvidence, "ci: the attested run did not pass")
 	}
 	return nil
 }

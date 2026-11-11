@@ -5,6 +5,33 @@ node-serve mode, hosting the node-side JSON-RPC surface on a unix socket
 under the data directory (`<data_dir>/nodes/node.sock`). The controller
 reaches this surface over an ssh tunnel — see Transport below.
 
+## Git gate
+
+The receive-gate contract uses `cascade node git-gate install [--repo <path>]
+--repo-id <registry id>` to install an elevated pre-receive hook. Installation
+binds the receiving repository's canonical Git common directory to its registry
+id before writing the hook or `cascade.gate.repoId` config key. Missing or
+unregistered ids refuse pushes. On a controller, changing the config id cannot
+override the registry binding. Bare and shallow repositories need no history
+lookup to resolve their gate identity.
+
+Every protected ref's new tip requires a signed, fresh, eligible, passing
+attestation and a controller acceptance fact. The record's repository,
+checkpoint, job specification hash and policy version must match that fact;
+the fact's repository must match the gated repository. A passing attestation
+for another registration cannot authorize the same commit here. A nonzero exit
+status, expired record, revoked key, or unattested/unverified class refuses.
+Controllers also require the fact's policy version to match the current policy;
+an unreadable policy refuses. Nodes use the verified controller-signed fact's
+policy version and enforce their configured `[nodes.repos]` membership.
+
+The contract's `cascade node git-gate status [--repo <path>] [--json]` is read-only
+and reports hook and binary integrity, repository binding and mirror state.
+The hook pins an absolute executable path and SHA-256 digest. Re-run install
+after `cascade self-update`; binary drift refuses pushes until reinstallation.
+See [Receive gate](../security-posture/receive-gate.md) for refusal rules,
+deployment requirements and the same-uid database-edit residual.
+
 ## Identity
 
 On first run, a node generates its own Ed25519 identity (`internal/nodes`)
