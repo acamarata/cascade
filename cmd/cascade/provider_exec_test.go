@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -108,6 +109,9 @@ func writeHelper(t *testing.T, name, code string) string {
 		t.Fatal(err)
 	}
 	binPath := filepath.Join(dir, name)
+	if runtime.GOOS == "windows" {
+		binPath += ".exe" // exec.LookPath on Windows finds only names with a PATHEXT suffix
+	}
 	cmd := exec.Command("go", "build", "-o", binPath, srcPath)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to build helper: %v\n%s", err, out)

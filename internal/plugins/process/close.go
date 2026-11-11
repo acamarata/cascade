@@ -115,6 +115,12 @@ func (h *Handle) terminate(ctx context.Context) error {
 	if !waitFor(ctx, reaped, h.stopGrace) {
 		_ = cmd.Signal(syscall.SIGKILL)
 	}
+	// An expired deadline reports itself even when the child died meanwhile:
+	// a select over two ready channels would pick one at random.
+	if ctx.Err() != nil {
+		return cascade.Wrapf(cascade.KindUnavailable, ctx.Err(),
+			"process: plugin %q was not reaped before the close deadline", h.Manifest.Name)
+	}
 	select {
 	case <-done:
 		return nil

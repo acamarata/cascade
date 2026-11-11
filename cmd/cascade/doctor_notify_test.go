@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/client"
 	"github.com/acamarata/cascade/internal/doctor"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -27,6 +28,7 @@ func TestNotifyDropsDoctorCheck(t *testing.T) {
 		{name: "zero reason", result: `{"dropped":{"queue-full":0},"accumulated":0}`, status: doctor.StatusOK},
 		{name: "down missing", err: fmt.Errorf("dial: %w", fs.ErrNotExist), status: doctor.Status("skip"), message: "daemon not running"},
 		{name: "down refused", err: fmt.Errorf("dial: %w", syscall.ECONNREFUSED), status: doctor.Status("skip"), message: "daemon not running"},
+		{name: "down dial failed", err: fmt.Errorf("dial: %w", tooLongSocketDialErr()), status: doctor.Status("skip"), message: "daemon not running"},
 		{name: "RPC unavailable", err: cascade.New(cascade.KindUnavailable, "private detail"), status: doctor.StatusError, message: "notify.stats: RPC error"},
 		{name: "RPC refused", err: cascade.New(cascade.KindPermissionDenied, "private detail"), status: doctor.StatusError, message: "notify.stats: RPC error"},
 		{name: "timeout", err: context.DeadlineExceeded, status: doctor.StatusError, message: "notify.stats: RPC error"},
@@ -76,4 +78,11 @@ func TestNotifyDropsDoctorContract(t *testing.T) {
 	if err != nil || got.Status != doctor.StatusError {
 		t.Fatalf("nil caller = %+v, %v", got, err)
 	}
+}
+
+// tooLongSocketDialErr is the dial error UnixDialer returns for a socket path
+// past the platform limit, as on a CI runner whose temp HOME is deep.
+func tooLongSocketDialErr() error {
+	_, err := client.UnixDialer(context.Background(), "/"+strings.Repeat("d", 200)+"/daemon.sock")
+	return err
 }

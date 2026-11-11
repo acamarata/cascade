@@ -9,6 +9,7 @@ package delegation
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -72,7 +73,7 @@ func TestDelegateReadOnlyGetsEmptyTree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat root: %v", err)
 	}
-	if perm := info.Mode().Perm(); perm != 0o700 {
+	if perm := info.Mode().Perm(); perm != 0o700 && runtime.GOOS != "windows" { // Windows has no unix mode bits
 		t.Errorf("permissions = %o, want 700", perm)
 	}
 

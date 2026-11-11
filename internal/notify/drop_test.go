@@ -46,7 +46,13 @@ func TestNotifyDroppedEventHasNoPayload(t *testing.T) {
 	}
 	want := DropEvent{ID: n.ID, Source: n.Source, Reason: DropQueueFull,
 		Priority: n.Priority, At: time.Unix(100, 0)}
-	if !reflect.DeepEqual(DropEvent(decoded), want) {
+	got := DropEvent(decoded)
+	// JSON keeps the instant, not the Location: compare At by value.
+	if !got.At.Equal(want.At) {
+		t.Fatalf("drop event At = %v, want %v", got.At, want.At)
+	}
+	got.At = want.At
+	if !reflect.DeepEqual(got, want) {
 		t.Fatal("drop event metadata differs from the dropped notification")
 	}
 	if bytes.Contains(data, n.Payload) {

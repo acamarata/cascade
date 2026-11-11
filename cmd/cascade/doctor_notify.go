@@ -41,15 +41,16 @@ func (notifyDropsCheck) Fix(context.Context) (doctor.FixResult, error) {
 	return doctor.FixResult{}, doctor.ErrCheckNotFixable
 }
 
-// Run reads only notify.stats. Only a missing or refused socket means down;
-// RPC refusals, deadlines and malformed results are failed checks.
+// Run reads only notify.stats. A missing or refused socket, or any failed
+// dial (a socket path the platform cannot hold, Windows' own refusal errno),
+// means down; RPC refusals, deadlines and malformed results are failed checks.
 func (c notifyDropsCheck) Run(ctx context.Context) (doctor.CheckResult, error) {
 	if c.call == nil {
 		return notifyStatsFailure("caller unavailable"), nil
 	}
 	var raw json.RawMessage
 	if err := c.call(ctx, notify.StatsMethod, nil, &raw); err != nil {
-		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ECONNREFUSED) {
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ECONNREFUSED) || isDialFailure(err) {
 			return doctor.CheckResult{Status: doctor.Status("skip"), Message: "daemon not running"}, nil
 		}
 		kind, _ := cascade.KindOf(err)
