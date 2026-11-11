@@ -43,11 +43,13 @@ func main() {
 	home := os.Getenv("HOME")
 	t.Setenv("HOME", home)
 
-	// Run: cascade provider exec -- childBin
+	// Run: cascade provider exec -- childBin. The exec step runs the child
+	// as a subprocess here: syscall.Exec would replace this test binary.
 	cmd := &cobra.Command{}
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stdout)
+	gotArgv := captureExec(t, &stdout)
 
 	err := runProviderExec(cmd, []string{"--", childBin})
 	if err != nil {
@@ -55,6 +57,9 @@ func main() {
 	}
 
 	output := stdout.String()
+	if len(*gotArgv) == 0 || (*gotArgv)[0] != childBin {
+		t.Fatalf("exec argv = %q, want argv[0] %q", *gotArgv, childBin)
+	}
 
 	// Verify host-injected vars are gone
 	if strings.Contains(output, "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST=") {
@@ -108,4 +113,23 @@ func writeHelper(t *testing.T, name, code string) string {
 		t.Fatalf("failed to build helper: %v\n%s", err, out)
 	}
 	return binPath
+}
+
+// captureExec replaces platformExecFn for one test with a runner that starts
+// the child as a subprocess and writes its output to out: syscall.Exec would
+// replace the test binary itself. It returns where the child's argv lands.
+func captureExec(t *testing.T, out *bytes.Buffer) *[]string {
+	t.Helper()
+	var argv []string
+	orig := platformExecFn
+	t.Cleanup(func() { platformExecFn = orig })
+	platformExecFn = func(path string, args []string, env []string) error {
+		argv = args
+		child := exec.Command(path, args[1:]...)
+		child.Env = env
+		child.Stdout = out
+		child.Stderr = out
+		return child.Run()
+	}
+	return &argv
 }

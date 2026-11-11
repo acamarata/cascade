@@ -77,8 +77,14 @@ func runProviderExec(_ *cobra.Command, args []string) error {
 	}
 
 	// Platform-specific exec
-	return platformExec(cmdPath, cmdArgs, env)
+	return platformExecFn(cmdPath, cmdArgs, env)
 }
+
+// platformExecFn is the exec step runProviderExec calls: platformExec in
+// production. Tests replace it with a runner that starts the child and
+// captures its output, because syscall.Exec would replace the test binary
+// itself and silently end the package's test run.
+var platformExecFn = platformExec
 
 // parseExecArgs splits the arguments into account (optional) and command.
 // The -- separator is required.
