@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-11T17:56:44Z",
+  "generated_at": "2026-11-11T18:46:54Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -41122,10 +41122,22 @@
       "name": "providers.agents.antigravity",
       "sites": [
         {
+          "file": "providers/agents/antigravity/argv.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "providers.agents.antigravity/ADD (P1-AGT-07c)."
+        },
+        {
           "file": "providers/agents/antigravity/output.go",
           "line": 17,
           "status": "ADD",
           "raw": "providers.agents.antigravity/ADD (P1-AGT-07)."
+        },
+        {
+          "file": "providers/agents/antigravity/probe.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "providers.agents.antigravity/ADD (P1-AGT-07c)."
         },
         {
           "file": "providers/agents/antigravity/protocol.go",
@@ -44497,7 +44509,7 @@
       ]
     }
   ],
-  "total_sites": 4282,
+  "total_sites": 4284,
   "unspecified_count": 406,
   "multi_status_count": 132
 }
