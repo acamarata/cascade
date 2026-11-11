@@ -15,11 +15,6 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-var (
-	_ = rpc.DeclareAccess("inbox.list", rpc.AccessScoped)
-	_ = rpc.DeclareAccess("inbox.read", rpc.AccessScoped)
-)
-
 // registerMCPInboxMethods binds the session-only inbox reads.
 func registerMCPInboxMethods(reg *rpc.Registry, paths runtime.PathProvider) {
 	token := os.Getenv(principal.EnvToken)

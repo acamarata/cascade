@@ -18,6 +18,27 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
+func TestMCPInboxAccessDeclaredOnce(t *testing.T) {
+	d := t.TempDir()
+	for _, key := range []string{"HOME", "USERPROFILE", "CASCADE_HOME"} {
+		t.Setenv(key, d)
+	}
+	reg := rpc.NewRegistry()
+	reg.SetAccessPolicy(nil)
+	for _, method := range []string{"inbox.list", "inbox.read", "inbox.ack"} {
+		reg.Register(method, func(context.Context, json.RawMessage) (any, error) { return true, nil })
+		for _, caller := range []principal.Caller{{OwnerCLI: true}, {Principal: &principal.Principal{ID: "p"}}} {
+			ctx := principal.WithCaller(context.Background(), caller)
+			if _, err := reg.Dispatch(ctx, &rpc.Request{Method: method}); err != nil {
+				t.Errorf("%s caller %+v refused: %v", method, caller, err)
+			}
+		}
+	}
+	if !mcpAccessClassed("inbox.list") || !mcpAccessClassed("inbox.read") {
+		t.Fatal("inbox reads must carry an access class")
+	}
+}
+
 // TestMCPInboxWithoutPrincipalRefuses checks refusal and bound-token forwarding.
 func TestMCPInboxWithoutPrincipalRefuses(t *testing.T) {
 	paths, remote := inboxDaemonFixture(t)
