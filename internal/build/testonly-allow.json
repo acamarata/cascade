@@ -892,14 +892,6 @@
     "symbol": "internal/learn.NewConfigStore"
   },
   {
-    "added_by_ticket": "P1-LRN-01",
-    "caller_site": "internal/learn/config_reader.go",
-    "expected_caller": "P1-LRN-03's RuntimeConfigReader (internal/learn/config_reader.go), which maps a learnable config key to its target before reading the current value",
-    "reason": "TargetForConfigKey is the knob-name -> target-id namespace C-p1-requirements item 28 folds into P1-LRN-01 (P2-INT-11/-12/-13 bind to it); P1-LRN-01 classifies and stores only, and the first in-phase reader of config keys is P1-LRN-03's config reader.",
-    "retire_ticket": "P1-LRN-03",
-    "symbol": "internal/learn.TargetForConfigKey"
-  },
-  {
     "caller_site": "internal/repo/discovery_proposals.go",
     "expected_caller": "T1's deferred discovery.go producer, feeding AI/S-71's real proposal store (repointed at the Epic gate, BF-204: P1-NODE-14 builds the R-21.163 discovery proposal store; interim pending T0 ratification)",
     "reason": "A plain data shape for a discovery finding awaiting approval (R-21.163). Its own producer (discovery.go) was explicitly deferred by P1-E36-W7-S72-T1's journal, and its consumer (the AI/S-71 proposal store, R-21.161) had not landed as of this ticket. Building either here would either fabricate a producer with nothing to discover, or create the second competing proposal store R-21.161 forbids.",
@@ -971,38 +963,6 @@
   },
   {
     "added_by_ticket": "P1-AGT-11",
-    "caller_site": "internal/delegation/service.go",
-    "expected_caller": "internal/delegation/service.go, the delegate service that mints a root envelope for an owner-cli caller before MintChild; retire this entry once that file calls MintRoot",
-    "reason": "P1-AGT-11 ships contract:delegation-record implemented and tested, but the delegate service that consumes it (P1-AGT-08) does not exist yet, so nothing in production calls MintRoot.",
-    "retire_ticket": "P1-AGT-08",
-    "symbol": "internal/delegation.MintRoot"
-  },
-  {
-    "added_by_ticket": "P1-AGT-11",
-    "caller_site": "internal/delegation/service.go",
-    "expected_caller": "internal/delegation/service.go, the delegate service that narrows the parent envelope for each child before InsertDelegation; retire this entry once that file calls MintChild",
-    "reason": "P1-AGT-11 ships contract:delegation-record implemented and tested, but the delegate service that consumes it (P1-AGT-08) does not exist yet, so nothing in production calls MintChild.",
-    "retire_ticket": "P1-AGT-08",
-    "symbol": "internal/delegation.MintChild"
-  },
-  {
-    "added_by_ticket": "P1-AGT-11",
-    "caller_site": "internal/delegation/service.go",
-    "expected_caller": "internal/delegation/service.go, the delegate service that verifies the parent record's chain before any lease; retire this entry once that file calls VerifyChain",
-    "reason": "P1-AGT-11 ships contract:delegation-record implemented and tested, but the delegate service that consumes it (P1-AGT-08) does not exist yet, so nothing in production calls VerifyChain.",
-    "retire_ticket": "P1-AGT-08",
-    "symbol": "internal/delegation.VerifyChain"
-  },
-  {
-    "added_by_ticket": "P1-AGT-11",
-    "caller_site": "internal/delegation/service.go",
-    "expected_caller": "internal/delegation/service.go, the delegate service that runs every registered pre-spawn gate after BindDelegationMarker and before Shim.Spawn; retire this entry once that file calls PreSpawnGates",
-    "reason": "P1-AGT-11 ships contract:delegation-record implemented and tested, but the delegate service that consumes it (P1-AGT-08) does not exist yet, so nothing in production calls PreSpawnGates.",
-    "retire_ticket": "P1-AGT-08",
-    "symbol": "internal/delegation.PreSpawnGates"
-  },
-  {
-    "added_by_ticket": "P1-AGT-11",
     "caller_site": "internal/executive/envelope_debit.go",
     "expected_caller": "internal/executive/envelope_debit.go, the executive budget debit that registers itself as a pre-spawn gate at init; retire this entry once that file calls RegisterPreSpawnGate",
     "reason": "P1-AGT-11 ships the pre-spawn gate registry implemented and tested; its first registrant is the P1-EXE-04 budget debit, which does not exist yet.",
@@ -1032,22 +992,6 @@
     "reason": "Composer's slot vocabulary (tier, memory, retrieval, history) is tested end to end, but the chat reply composes no memory slot in P1 (P1-CPA-16 reply.go and reply_prompt.go tag retrieval and history only). The caller named earlier (reply.go) exists without the call, so the promise moved to the file a memory reader would add. No P1 ticket adds that file, so P1-CPA-13 stays as the nominal owner (the EPIC forbids UNOWNED for this row); the owner should confirm or re-key it.",
     "retire_ticket": "P1-CPA-13",
     "symbol": "internal/context.SlotKindMemory"
-  },
-  {
-    "added_by_ticket": "P1-CPA-16",
-    "caller_site": "cmd/cascade/chat_reply_wiring.go",
-    "expected_caller": "cmd/cascade/chat_reply_wiring.go, the daemon composition that P1-CPA-13 adds; it builds the Replier from a ReplyConfig (store, journal, tiered door, counter, effects) and registers chat.reply; retire this entry once that file calls conversation.NewReplier",
-    "reason": "P1-CPA-16 builds the reply pipeline (prompt envelope, tiered door, durable assistant turn) and tests it through NewReplier, but the daemon composition that constructs it is P1-CPA-13, so nothing in production calls it yet.",
-    "retire_ticket": "P1-CPA-13",
-    "symbol": "internal/conversation.NewReplier"
-  },
-  {
-    "added_by_ticket": "P1-CPA-16",
-    "caller_site": "cmd/cascade/chat_reply_wiring.go",
-    "expected_caller": "cmd/cascade/chat_reply_wiring.go, the daemon composition that P1-CPA-13 adds; it constructs the ReplyHub (server-minted stream ids, grace window) the chat.reply_open and chat.reply handlers share; retire this entry once that file calls conversation.NewReplyHub",
-    "reason": "Same gap as conversation.NewReplier: the stream hub is built and tested by P1-CPA-16, and the composition root that constructs it lands with P1-CPA-13.",
-    "retire_ticket": "P1-CPA-13",
-    "symbol": "internal/conversation.NewReplyHub"
   },
   {
     "added_by_ticket": "P1-GEN-08",
@@ -1088,38 +1032,6 @@
     "reason": "P1-CI-13 ships the controller-side request leg implemented and exercised end to end over the real node serve registry (TestAttestSignSucceedsAfterRealEnrollment), but its production caller is the node runner of P1-NODE-08; a CI to NODE edge would cycle the Epic DAG (ticket rationale). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once runner_node.go exists without the call.",
     "retire_ticket": "P1-NODE-08",
     "symbol": "internal/ci.RequestNodeSignature"
-  },
-  {
-    "added_by_ticket": "P1-AGT-13",
-    "caller_site": "internal/delegation/service.go",
-    "expected_caller": "internal/delegation/service.go, the delegation Service that composes the host shim per spawn (P1-AGT-08) and supplies this input to it; retire this entry once that file calls NewLeaseMarker",
-    "reason": "P1-AGT-13 ships the per-spawn containment (egress proxy bound to the audit log, lease-marker sweep) implemented and tested, but the shim that composes it per driver spawn (P1-AGT-03) does not exist yet, so a call from production code now would be a fabricated one. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once spawn.go exists. Repointed by P1-AGT-03: the shim takes this input through ShimDeps/the spawn request, so the production call sits in the P1-AGT-08 composition, not in spawn.go.",
-    "retire_ticket": "P1-AGT-08",
-    "symbol": "internal/providers/agents.NewLeaseMarker"
-  },
-  {
-    "added_by_ticket": "P1-AGT-02",
-    "caller_site": "internal/delegation/service.go",
-    "expected_caller": "internal/delegation/service.go, the delegation Service that composes the host shim per spawn (P1-AGT-08) and supplies this input to it; retire this entry once that file calls NewResolver",
-    "reason": "P1-AGT-02 ships the lane resolver (unknown lane, absent plugin and no-fallback refusals) implemented and tested, but its only production caller is the host shim of P1-AGT-03. Repointed by P1-AGT-03: the shim takes this input through ShimDeps/the spawn request, so the production call sits in the P1-AGT-08 composition, not in spawn.go.",
-    "retire_ticket": "P1-AGT-08",
-    "symbol": "internal/providers/agents.NewResolver"
-  },
-  {
-    "added_by_ticket": "P1-AGT-02",
-    "caller_site": "internal/delegation/service.go",
-    "expected_caller": "internal/delegation/service.go, the delegation Service that composes the host shim per spawn (P1-AGT-08) and supplies this input to it; retire this entry once that file calls ProjectEnvelope",
-    "reason": "P1-AGT-02 ships the one conversion from a verified signed envelope to the driver-facing SpawnEnvelope implemented and tested, but the only production caller is the host shim of P1-AGT-03. Repointed by P1-AGT-03: the shim takes this input through ShimDeps/the spawn request, so the production call sits in the P1-AGT-08 composition, not in spawn.go.",
-    "retire_ticket": "P1-AGT-08",
-    "symbol": "internal/providers/agents.ProjectEnvelope"
-  },
-  {
-    "added_by_ticket": "P1-AGT-03",
-    "caller_site": "internal/delegation/service.go",
-    "expected_caller": "internal/delegation/service.go, the delegation Service whose shim field is built by NewShim (P1-AGT-08); retire this entry once that file calls NewShim",
-    "reason": "P1-AGT-03 ships the host shim (credential custody, pre-spawn scan, executable gate, effect intent, output filter) implemented and tested, but its only production caller is the delegation Service of P1-AGT-08. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once service.go exists without the call.",
-    "retire_ticket": "P1-AGT-08",
-    "symbol": "internal/providers/agents.NewShim"
   },
   {
     "added_by_ticket": "P1-GEN-04",
@@ -1357,13 +1269,6 @@
     "symbol": "internal/fleet/topology.ExplorationEligible"
   },
   {
-    "caller_site": "internal/executive/delivery.go",
-    "expected_caller": "internal/executive/delivery.go, which P1-EXE-01d adds the durable delivery path that decodes journaled envelopes on recovery; retire this entry once that file calls DecodeEnvelope",
-    "reason": "P1-EXE-01b ships DecodeEnvelope with its tests; its first production caller is internal/executive/delivery.go from P1-EXE-01d.",
-    "retire_ticket": "P1-EXE-01d",
-    "symbol": "internal/executive.DecodeEnvelope"
-  },
-  {
     "caller_site": "internal/runtime/init/ingestguard.go",
     "expected_caller": "internal/runtime/init/ingestguard.go, which P1-NODE-13c adds the guarded init Walk that enforces the file-count ceiling per root; retire this entry once that file calls EnforceCeiling",
     "reason": "P1-NODE-13a ships EnforceCeiling with its tests; its first production caller is internal/runtime/init/ingestguard.go from P1-NODE-13c.",
@@ -1552,14 +1457,6 @@
     "symbol": "internal/jobs.NewCiAttestTrustStore"
   },
   {
-    "added_by_ticket": "P1-TOP-10a",
-    "caller_site": "internal/learn/decision_outcome_sweep.go",
-    "expected_caller": "internal/learn/decision_outcome_sweep.go, ReconcileTerminalOutcomes and SweepOrphanedPending, which write every outcome row through InsertDecisionOutcome; retire this entry once that file calls it",
-    "reason": "P1-TOP-10a adds the insert-once outcome writer and tests it on its own. The reconcile and orphan sweep in P1-TOP-10d is the first production writer and depends on this ticket.",
-    "retire_ticket": "P1-TOP-10d",
-    "symbol": "internal/learn.InsertDecisionOutcome"
-  },
-  {
     "added_by_ticket": "P1-CI-05a",
     "caller_site": "cmd/cascade/node_gitgate.go",
     "expected_caller": "cmd/cascade/node_gitgate.go, the `cascade node git-gate pre-receive` verb that reads the hook stdin and calls ci.CheckPush over the parsed refs; retire this entry once that file calls CheckPush",
@@ -1590,5 +1487,316 @@
     "reason": "P1-EXE-14a projects the fleet health result into the five R-21.39 keys and is tested with a fake health function. The RPC handler that serves it is P1-EXE-14b, which depends on this ticket.",
     "retire_ticket": "P1-EXE-14b",
     "symbol": "internal/executive.SummarizeFleetHealth"
+  },
+  {
+    "added_by_ticket": "P1-AGT-11",
+    "caller_site": "cmd/cascade/wire_delegate.go",
+    "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k caller of MintChild; retire this entry once that file calls it",
+    "reason": "P1-AGT-11 ships contract:delegation-record implemented and tested, but the delegate service that consumes it (P1-AGT-08) does not exist yet, so nothing in production calls MintChild.",
+    "retire_ticket": "P1-AGT-08k",
+    "symbol": "internal/delegation.MintChild"
+  },
+  {
+    "added_by_ticket": "P1-AGT-11",
+    "caller_site": "cmd/cascade/wire_delegate.go",
+    "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k caller of MintRoot; retire this entry once that file calls it",
+    "reason": "P1-AGT-11 ships contract:delegation-record implemented and tested, but the delegate service that consumes it (P1-AGT-08) does not exist yet, so nothing in production calls MintRoot.",
+    "retire_ticket": "P1-AGT-08k",
+    "symbol": "internal/delegation.MintRoot"
+  },
+  {
+    "added_by_ticket": "P1-AGT-02",
+    "caller_site": "cmd/cascade/wire_delegate.go",
+    "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k caller of NewResolver; retire this entry once that file calls it",
+    "reason": "P1-AGT-02 ships the lane resolver (unknown lane, absent plugin and no-fallback refusals) implemented and tested, but its only production caller is the host shim of P1-AGT-03. Repointed by P1-AGT-03: the shim takes this input through ShimDeps/the spawn request, so the production call sits in the P1-AGT-08 composition, not in spawn.go.",
+    "retire_ticket": "P1-AGT-08k",
+    "symbol": "internal/providers/agents.NewResolver"
+  },
+  {
+    "added_by_ticket": "P1-AGT-03",
+    "caller_site": "cmd/cascade/wire_delegate.go",
+    "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k caller of NewShim; retire this entry once that file calls it",
+    "reason": "P1-AGT-03 ships the host shim (credential custody, pre-spawn scan, executable gate, effect intent, output filter) implemented and tested, but its only production caller is the delegation Service of P1-AGT-08. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once service.go exists without the call.",
+    "retire_ticket": "P1-AGT-08k",
+    "symbol": "internal/providers/agents.NewShim"
+  },
+  {
+    "added_by_ticket": "P1-AGT-02",
+    "caller_site": "cmd/cascade/wire_delegate.go",
+    "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k caller of ProjectEnvelope; retire this entry once that file calls it",
+    "reason": "P1-AGT-02 ships the one conversion from a verified signed envelope to the driver-facing SpawnEnvelope implemented and tested, but the only production caller is the host shim of P1-AGT-03. Repointed by P1-AGT-03: the shim takes this input through ShimDeps/the spawn request, so the production call sits in the P1-AGT-08 composition, not in spawn.go.",
+    "retire_ticket": "P1-AGT-08k",
+    "symbol": "internal/providers/agents.ProjectEnvelope"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_delegate.go",
+    "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k caller of NewService; retire this entry once that file calls it",
+    "reason": "NewService ships with its tests; its first production caller is cmd/cascade/wire_delegate.go from P1-AGT-08k, not built yet.",
+    "retire_ticket": "P1-AGT-08k",
+    "symbol": "internal/delegation.NewService"
+  },
+  {
+    "added_by_ticket": "P1-AGT-08i",
+    "caller_site": "cmd/cascade/wire_delegate.go",
+    "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k caller of AllocWorktree; retire this entry once that file calls it",
+    "reason": "AllocWorktree ships with its tests; its first production caller is cmd/cascade/wire_delegate.go from P1-AGT-08k, not built yet.",
+    "retire_ticket": "P1-AGT-08k",
+    "symbol": "internal/delegation.AllocWorktree"
+  },
+  {
+    "added_by_ticket": "P1-CI-05d",
+    "caller_site": "cmd/cascade/node_gitgate.go",
+    "expected_caller": "cmd/cascade/node_gitgate.go, the P1-CI-05e caller of BindGateRepoID; retire this entry once that file calls it",
+    "reason": "BindGateRepoID ships with its tests; its first production caller is cmd/cascade/node_gitgate.go from P1-CI-05e, not built yet.",
+    "retire_ticket": "P1-CI-05e",
+    "symbol": "internal/ci.BindGateRepoID"
+  },
+  {
+    "added_by_ticket": "P1-CI-05d",
+    "caller_site": "cmd/cascade/node_gitgate.go",
+    "expected_caller": "cmd/cascade/node_gitgate.go, the P1-CI-05e caller of ResolveGateWant; retire this entry once that file calls it",
+    "reason": "ResolveGateWant ships with its tests; its first production caller is cmd/cascade/node_gitgate.go from P1-CI-05e, not built yet.",
+    "retire_ticket": "P1-CI-05e",
+    "symbol": "internal/ci.ResolveGateWant"
+  },
+  {
+    "added_by_ticket": "P1-EXE-01d",
+    "caller_site": "internal/executive/wake.go",
+    "expected_caller": "internal/executive/wake.go, the P1-EXE-06b caller of DefaultDedupeWindow; retire this entry once that file calls it",
+    "reason": "DefaultDedupeWindow ships with its tests; its first production caller is internal/executive/wake.go from P1-EXE-06b, not built yet.",
+    "retire_ticket": "P1-EXE-06b",
+    "symbol": "internal/executive.DefaultDedupeWindow"
+  },
+  {
+    "added_by_ticket": "P1-EXE-01d",
+    "caller_site": "internal/executive/mount.go",
+    "expected_caller": "internal/executive/mount.go, the P1-EXE-01g caller of DeriveStreamID; retire this entry once that file calls it",
+    "reason": "DeriveStreamID ships with its tests; its first production caller is internal/executive/mount.go from P1-EXE-01g, not built yet.",
+    "retire_ticket": "P1-EXE-01g",
+    "symbol": "internal/executive.DeriveStreamID"
+  },
+  {
+    "added_by_ticket": "P1-EXE-01d",
+    "caller_site": "internal/executive/escalation.go",
+    "expected_caller": "internal/executive/escalation.go, the P1-EXE-01g caller of GroupOf; retire this entry once that file calls it",
+    "reason": "GroupOf ships with its tests; its first production caller is internal/executive/escalation.go from P1-EXE-01g, not built yet.",
+    "retire_ticket": "P1-EXE-01g",
+    "symbol": "internal/executive.GroupOf"
+  },
+  {
+    "added_by_ticket": "P1-EXE-01d",
+    "caller_site": "internal/executive/wake.go",
+    "expected_caller": "internal/executive/wake.go, the P1-EXE-06b caller of NewDeliverer; retire this entry once that file calls it",
+    "reason": "NewDeliverer ships with its tests; its first production caller is internal/executive/wake.go from P1-EXE-06b, not built yet.",
+    "retire_ticket": "P1-EXE-06b",
+    "symbol": "internal/executive.NewDeliverer"
+  },
+  {
+    "added_by_ticket": "P1-EXE-01d",
+    "caller_site": "internal/executive/mount.go",
+    "expected_caller": "internal/executive/mount.go, the P1-EXE-01g caller of StreamHead; retire this entry once that file calls it",
+    "reason": "StreamHead ships with its tests; its first production caller is internal/executive/mount.go from P1-EXE-01g, not built yet.",
+    "retire_ticket": "P1-EXE-01g",
+    "symbol": "internal/executive.StreamHead"
+  },
+  {
+    "added_by_ticket": "P1-EXE-01e",
+    "caller_site": "internal/executive/mount.go",
+    "expected_caller": "internal/executive/mount.go, the P1-EXE-01g caller of AdapterRows; retire this entry once that file calls it",
+    "reason": "AdapterRows ships with its tests; its first production caller is internal/executive/mount.go from P1-EXE-01g, not built yet.",
+    "retire_ticket": "P1-EXE-01g",
+    "symbol": "internal/executive.AdapterRows"
+  },
+  {
+    "added_by_ticket": "P1-EXE-01e",
+    "caller_site": "internal/executive/mount.go",
+    "expected_caller": "internal/executive/mount.go, the P1-EXE-01g caller of DormantKinds; retire this entry once that file calls it",
+    "reason": "DormantKinds ships with its tests; its first production caller is internal/executive/mount.go from P1-EXE-01g, not built yet.",
+    "retire_ticket": "P1-EXE-01g",
+    "symbol": "internal/executive.DormantKinds"
+  },
+  {
+    "added_by_ticket": "P1-EXE-01e",
+    "caller_site": "internal/executive/mount.go",
+    "expected_caller": "internal/executive/mount.go, the P1-EXE-01g caller of NewAdapter; retire this entry once that file calls it",
+    "reason": "NewAdapter ships with its tests; its first production caller is internal/executive/mount.go from P1-EXE-01g, not built yet.",
+    "retire_ticket": "P1-EXE-01g",
+    "symbol": "internal/executive.NewAdapter"
+  },
+  {
+    "added_by_ticket": "P1-EXE-01e",
+    "caller_site": "internal/executive/mount.go",
+    "expected_caller": "internal/executive/mount.go, the P1-EXE-01g caller of SourceNamespaces; retire this entry once that file calls it",
+    "reason": "SourceNamespaces ships with its tests; its first production caller is internal/executive/mount.go from P1-EXE-01g, not built yet.",
+    "retire_ticket": "P1-EXE-01g",
+    "symbol": "internal/executive.SourceNamespaces"
+  },
+  {
+    "added_by_ticket": "P1-EXE-01e",
+    "caller_site": "cmd/cascade/wire_executive_bus_mount.go",
+    "expected_caller": "cmd/cascade/wire_executive_bus_mount.go, the P1-EXE-01h caller of PublishTransitions; retire this entry once that file calls it",
+    "reason": "PublishTransitions ships with its tests; its first production caller is cmd/cascade/wire_executive_bus_mount.go from P1-EXE-01h, not built yet.",
+    "retire_ticket": "P1-EXE-01h",
+    "symbol": "internal/jobs.PublishTransitions"
+  },
+  {
+    "added_by_ticket": "P1-EXE-01f",
+    "caller_site": "cmd/cascade/executive_events_rpc.go",
+    "expected_caller": "cmd/cascade/executive_events_rpc.go, the P1-EXE-01h caller of MarshalPublic; retire this entry once that file calls it",
+    "reason": "MarshalPublic ships with its tests; its first production caller is cmd/cascade/executive_events_rpc.go from P1-EXE-01h, not built yet.",
+    "retire_ticket": "P1-EXE-01h",
+    "symbol": "internal/executive.MarshalPublic"
+  },
+  {
+    "added_by_ticket": "P1-EXE-01f",
+    "caller_site": "cmd/cascade/executive_events_rpc.go",
+    "expected_caller": "cmd/cascade/executive_events_rpc.go, the P1-EXE-01h caller of NewEventDTO; retire this entry once that file calls it",
+    "reason": "NewEventDTO ships with its tests; its first production caller is cmd/cascade/executive_events_rpc.go from P1-EXE-01h, not built yet.",
+    "retire_ticket": "P1-EXE-01h",
+    "symbol": "internal/executive.NewEventDTO"
+  },
+  {
+    "added_by_ticket": "P1-EXE-01f",
+    "caller_site": "cmd/cascade/executive_events_rpc.go",
+    "expected_caller": "cmd/cascade/executive_events_rpc.go, the P1-EXE-01h caller of PublicDTOTypes; retire this entry once that file calls it",
+    "reason": "PublicDTOTypes ships with its tests; its first production caller is cmd/cascade/executive_events_rpc.go from P1-EXE-01h, not built yet.",
+    "retire_ticket": "P1-EXE-01h",
+    "symbol": "internal/executive.PublicDTOTypes"
+  },
+  {
+    "added_by_ticket": "P1-EXE-01f",
+    "caller_site": "internal/executive/mount.go",
+    "expected_caller": "internal/executive/mount.go, the P1-EXE-01g caller of SanitizeError; retire this entry once that file calls it",
+    "reason": "SanitizeError ships with its tests; its first production caller is internal/executive/mount.go from P1-EXE-01g, not built yet.",
+    "retire_ticket": "P1-EXE-01g",
+    "symbol": "internal/executive.SanitizeError"
+  },
+  {
+    "added_by_ticket": "P1-LRN-03b",
+    "caller_site": "internal/learn/router.go",
+    "expected_caller": "internal/learn/router.go, the P1-LRN-03e caller of DiffTier; retire this entry once that file calls it",
+    "reason": "DiffTier ships with its tests; its first production caller is internal/learn/router.go from P1-LRN-03e, not built yet.",
+    "retire_ticket": "P1-LRN-03e",
+    "symbol": "internal/learn.DiffTier"
+  },
+  {
+    "added_by_ticket": "P1-LRN-03b",
+    "caller_site": "internal/learn/router.go",
+    "expected_caller": "internal/learn/router.go, the P1-LRN-03e caller of EventKinds; retire this entry once that file calls it",
+    "reason": "EventKinds ships with its tests; its first production caller is internal/learn/router.go from P1-LRN-03e, not built yet.",
+    "retire_ticket": "P1-LRN-03e",
+    "symbol": "internal/learn.EventKinds"
+  },
+  {
+    "added_by_ticket": "P1-LRN-03b",
+    "caller_site": "internal/learn/router.go",
+    "expected_caller": "internal/learn/router.go, the P1-LRN-03e caller of LearnEventNamespace; retire this entry once that file calls it",
+    "reason": "LearnEventNamespace ships with its tests; its first production caller is internal/learn/router.go from P1-LRN-03e, not built yet.",
+    "retire_ticket": "P1-LRN-03e",
+    "symbol": "internal/learn.LearnEventNamespace"
+  },
+  {
+    "added_by_ticket": "P1-NODE-12d",
+    "caller_site": "internal/runtime/init/steps_reconverge.go",
+    "expected_caller": "internal/runtime/init/steps_reconverge.go, the P1-NODE-12e caller of ReconvergeDiscovery; retire this entry once that file calls it",
+    "reason": "ReconvergeDiscovery ships with its tests; its first production caller is internal/runtime/init/steps_reconverge.go from P1-NODE-12e, not built yet.",
+    "retire_ticket": "P1-NODE-12e",
+    "symbol": "internal/runtime/init.ReconvergeDiscovery"
+  },
+  {
+    "added_by_ticket": "P1-PBD-01e",
+    "caller_site": "cmd/cascade/hooks_reviewer.go",
+    "expected_caller": "cmd/cascade/hooks_reviewer.go, the P1-PBD-05b caller of ApplyReviewerSchema; retire this entry once that file calls it",
+    "reason": "ApplyReviewerSchema ships with its tests; its first production caller is cmd/cascade/hooks_reviewer.go from P1-PBD-05b, not built yet.",
+    "retire_ticket": "P1-PBD-05b",
+    "symbol": "internal/jobs.ApplyReviewerSchema"
+  },
+  {
+    "added_by_ticket": "P1-PBD-01e",
+    "caller_site": "internal/jobs/completion_reviewer.go",
+    "expected_caller": "internal/jobs/completion_reviewer.go, the P1-PBD-01h caller of ReviewEvidenceRef; retire this entry once that file calls it",
+    "reason": "ReviewEvidenceRef ships with its tests; its first production caller is internal/jobs/completion_reviewer.go from P1-PBD-01h, not built yet.",
+    "retire_ticket": "P1-PBD-01h",
+    "symbol": "internal/jobs.ReviewEvidenceRef"
+  },
+  {
+    "added_by_ticket": "P1-PBD-02a",
+    "caller_site": "plugins/pbd/evidence_mount.go",
+    "expected_caller": "plugins/pbd/evidence_mount.go, the P1-PBD-02b caller of EvidenceRPC; retire this entry once that file calls it",
+    "reason": "EvidenceRPC ships with its tests; its first production caller is plugins/pbd/evidence_mount.go from P1-PBD-02b, not built yet.",
+    "retire_ticket": "P1-PBD-02b",
+    "symbol": "plugins/pbd.EvidenceRPC"
+  },
+  {
+    "added_by_ticket": "P1-PBD-02a",
+    "caller_site": "plugins/pbd/evidence_mount.go",
+    "expected_caller": "plugins/pbd/evidence_mount.go, the P1-PBD-02b caller of RunEvidence; retire this entry once that file calls it",
+    "reason": "RunEvidence ships with its tests; its first production caller is plugins/pbd/evidence_mount.go from P1-PBD-02b, not built yet.",
+    "retire_ticket": "P1-PBD-02b",
+    "symbol": "plugins/pbd.RunEvidence"
+  },
+  {
+    "added_by_ticket": "P1-PBD-02a",
+    "caller_site": "internal/plugins/pbd_evidence_wiring.go",
+    "expected_caller": "internal/plugins/pbd_evidence_wiring.go, the P1-PBD-02d caller of SetEvidenceReader; retire this entry once that file calls it",
+    "reason": "SetEvidenceReader ships with its tests; its first production caller is internal/plugins/pbd_evidence_wiring.go from P1-PBD-02d, not built yet.",
+    "retire_ticket": "P1-PBD-02d",
+    "symbol": "plugins/pbd.SetEvidenceReader"
+  },
+  {
+    "added_by_ticket": "P1-TOP-08a",
+    "caller_site": "cmd/cascade/fleet_capacity_economics.go",
+    "expected_caller": "cmd/cascade/fleet_capacity_economics.go, the P1-TOP-12b caller of ExplainRanking; retire this entry once that file calls it",
+    "reason": "ExplainRanking ships with its tests; its first production caller is cmd/cascade/fleet_capacity_economics.go from P1-TOP-12b, not built yet.",
+    "retire_ticket": "P1-TOP-12b",
+    "symbol": "internal/fleet/economics.ExplainRanking"
+  },
+  {
+    "added_by_ticket": "P1-TOP-08a",
+    "caller_site": "internal/fleet/economics/rank_terms.go",
+    "expected_caller": "internal/fleet/economics/rank_terms.go, the P1-TOP-08c caller of UtilityTerm; retire this entry once that file calls it",
+    "reason": "UtilityTerm ships with its tests; its first production caller is internal/fleet/economics/rank_terms.go from P1-TOP-08c, not built yet.",
+    "retire_ticket": "P1-TOP-08c",
+    "symbol": "internal/fleet/economics.UtilityTerm"
+  },
+  {
+    "added_by_ticket": "P1-TOP-10c",
+    "caller_site": "internal/learn/decision_economics.go",
+    "expected_caller": "internal/learn/decision_economics.go, the P1-TOP-10f caller of RegretAggregate; retire this entry once that file calls it",
+    "reason": "RegretAggregate ships with its tests; its first production caller is internal/learn/decision_economics.go from P1-TOP-10f, not built yet.",
+    "retire_ticket": "P1-TOP-10f",
+    "symbol": "internal/learn.RegretAggregate"
+  },
+  {
+    "added_by_ticket": "P1-TOP-10d",
+    "caller_site": "cmd/cascade/wire_decision_outcome_sweep.go",
+    "expected_caller": "cmd/cascade/wire_decision_outcome_sweep.go, the P1-TOP-10g caller of ReconcileTerminalOutcomes; retire this entry once that file calls it",
+    "reason": "ReconcileTerminalOutcomes ships with its tests; its first production caller is cmd/cascade/wire_decision_outcome_sweep.go from P1-TOP-10g, not built yet.",
+    "retire_ticket": "P1-TOP-10g",
+    "symbol": "internal/learn.ReconcileTerminalOutcomes"
+  },
+  {
+    "added_by_ticket": "P1-TOP-10d",
+    "caller_site": "cmd/cascade/wire_decision_outcome_sweep.go",
+    "expected_caller": "cmd/cascade/wire_decision_outcome_sweep.go, the P1-TOP-10g caller of SweepOrphanedPending; retire this entry once that file calls it",
+    "reason": "SweepOrphanedPending ships with its tests; its first production caller is cmd/cascade/wire_decision_outcome_sweep.go from P1-TOP-10g, not built yet.",
+    "retire_ticket": "P1-TOP-10g",
+    "symbol": "internal/learn.SweepOrphanedPending"
+  },
+  {
+    "added_by_ticket": "P1-TOP-11b",
+    "caller_site": "cmd/cascade/wire_fleet_topology_rpc.go",
+    "expected_caller": "cmd/cascade/wire_fleet_topology_rpc.go, the P1-TOP-11f caller of RegisterFleetTopology; retire this entry once that file calls it",
+    "reason": "RegisterFleetTopology ships with its tests; its first production caller is cmd/cascade/wire_fleet_topology_rpc.go from P1-TOP-11f, not built yet.",
+    "retire_ticket": "P1-TOP-11f",
+    "symbol": "internal/rpc.RegisterFleetTopology"
+  },
+  {
+    "added_by_ticket": "P1-TOP-18c",
+    "caller_site": "cmd/cascade/wire_fleet_discovery.go",
+    "expected_caller": "cmd/cascade/wire_fleet_discovery.go, the P1-TOP-18e caller of FleetDiscoveryInterval; retire this entry once that file calls it",
+    "reason": "FleetDiscoveryInterval ships with its tests; its first production caller is cmd/cascade/wire_fleet_discovery.go from P1-TOP-18e, not built yet.",
+    "retire_ticket": "P1-TOP-18e",
+    "symbol": "internal/runtime.FleetDiscoveryInterval"
   }
 ]
