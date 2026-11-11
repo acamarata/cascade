@@ -1,0 +1,7 @@
+--print
+--output-format
+stream-json
+--mode
+--model
+--effort
+--print-timeout
