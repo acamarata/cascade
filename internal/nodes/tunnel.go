@@ -156,13 +156,6 @@ type sshDialer struct {
 	handshakeTimeout time.Duration
 }
 
-func defaultHandshakeTimeout(d time.Duration) time.Duration {
-	if d <= 0 {
-		return 15 * time.Second
-	}
-	return d
-}
-
 // NewSSHDialer returns the production Dialer, authenticating as
 // controllerNodeID via keystore's custody-held private key.
 func NewSSHDialer(keystore *NodeKeystore, controllerNodeID string, controllerPub ed25519.PublicKey, handshakeTimeout time.Duration) Dialer {
@@ -207,12 +200,7 @@ func (d *sshDialer) Dial(ctx context.Context, target Target, verify HostKeyVerif
 	if err != nil {
 		return nil, cascade.Wrap(cascade.KindUnavailable, err, "nodes: ssh tunnel tcp dial failed")
 	}
-	cfg := &ssh.ClientConfig{
-		User:            target.User,
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: func(_ string, _ net.Addr, key ssh.PublicKey) error { return verify(HostKeyFingerprint(key.Marshal())) },
-		Timeout:         d.handshakeTimeout,
-	}
+	cfg := d.clientConfig(target.User, signer, verify)
 	sshConn, chans, reqs, err := ssh.NewClientConn(conn, target.Addr, cfg)
 	if err != nil {
 		_ = conn.Close()

@@ -31,6 +31,9 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
+// TranscriptDomain separates enrollment signatures from other signed messages.
+const TranscriptDomain = "cascade.node.enroll.v1"
+
 // Transcript is the enrollment handshake's mutually-signed record: it
 // binds the node identity, the controller identity, and the pinned ssh
 // host-key fingerprint into one payload both parties sign.
@@ -48,13 +51,15 @@ type Transcript struct {
 }
 
 // SigningPayload returns the deterministic byte sequence both signers
-// sign: NodeID | NodePubKeyB64 | ControllerPubKeyB64 | HostKeyFingerprint,
-// each field length-prefix-delimited with a single 0x1F separator so no
+// sign: TranscriptDomain | NodeID | NodePubKeyB64 | ControllerPubKeyB64 |
+// HostKeyFingerprint, each field delimited with a single 0x1F separator so no
 // concatenation ambiguity exists between adjacent fields (e.g. NodeID
 // "ab" + PubKey "cd" is never confusable with NodeID "abc" + PubKey "d").
 func (t Transcript) SigningPayload() []byte {
 	const sep = byte(0x1F)
 	var buf []byte
+	buf = append(buf, []byte(TranscriptDomain)...)
+	buf = append(buf, sep)
 	buf = append(buf, []byte(t.NodeID)...)
 	buf = append(buf, sep)
 	buf = append(buf, []byte(t.NodePubKeyB64)...)
@@ -111,7 +116,7 @@ func VerifyTranscript(t Transcript, expectedHostKeyFingerprint string) error {
 // signature. Callers assign the result to either NodeSignature or
 // ControllerSignature depending on which identity priv belongs to. In
 // production, priv is never held directly by a caller of this function —
-// enroll.go signs via NodeKeystore.Sign instead, which never returns the
+// BuildNodeEnrollPayload and enroll.go sign via NodeKeystore.Sign, which never returns the
 // private key itself; this function exists for the in-process
 // end-to-end test path and for any caller that already holds a raw key
 // (e.g. a test fixture).
