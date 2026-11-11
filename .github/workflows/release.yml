@@ -141,7 +141,21 @@ jobs:
           rm -f /tmp/syft.tar.gz /tmp/syft
 
       - name: Install minisign
-        run: sudo apt-get update && sudo apt-get install -y minisign
+        # Pinned release asset, verified against its sha256 before extraction,
+        # instead of apt: the runner's apt mirror is a single point of failure
+        # (two release runs died resolving it on 2026-11-11). The checksum is
+        # of minisign-0.12-linux.tar.gz, whose .minisig verified against the
+        # upstream author's published key.
+        run: |
+          set -eu
+          curl -sSfL --retry 5 --retry-all-errors -o /tmp/minisign.tar.gz \
+            https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz
+          echo "9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73  /tmp/minisign.tar.gz" | sha256sum -c -
+          arch=$(uname -m); case "$arch" in x86_64|aarch64) ;; *) echo "unsupported arch $arch"; exit 1 ;; esac
+          tar -xzf /tmp/minisign.tar.gz -C /tmp "minisign-linux/$arch/minisign"
+          sudo install -m 0755 "/tmp/minisign-linux/$arch/minisign" /usr/local/bin/minisign
+          rm -rf /tmp/minisign.tar.gz /tmp/minisign-linux
+          minisign -v
 
       # QEMU + buildx: the dockers: stanza builds linux/amd64 and linux/arm64
       # images, which needs QEMU and a buildx builder on this runner.
@@ -214,8 +228,22 @@ jobs:
           install-only: true
 
       - name: Install minisign
+        # Pinned release asset, verified against its sha256 before extraction,
+        # instead of apt: the runner's apt mirror is a single point of failure
+        # (two release runs died resolving it on 2026-11-11). The checksum is
+        # of minisign-0.12-linux.tar.gz, whose .minisig verified against the
+        # upstream author's published key.
         run: |
-          if [ "$RUNNER_OS" = "macOS" ]; then brew install minisign; else sudo apt-get update && sudo apt-get install -y minisign; fi
+          set -eu
+          if [ "$RUNNER_OS" = "macOS" ]; then brew install minisign; exit 0; fi
+          curl -sSfL --retry 5 --retry-all-errors -o /tmp/minisign.tar.gz \
+            https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz
+          echo "9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73  /tmp/minisign.tar.gz" | sha256sum -c -
+          arch=$(uname -m); case "$arch" in x86_64|aarch64) ;; *) echo "unsupported arch $arch"; exit 1 ;; esac
+          tar -xzf /tmp/minisign.tar.gz -C /tmp "minisign-linux/$arch/minisign"
+          sudo install -m 0755 "/tmp/minisign-linux/$arch/minisign" /usr/local/bin/minisign
+          rm -rf /tmp/minisign.tar.gz /tmp/minisign-linux
+          minisign -v
 
       - name: Generate ephemeral minisign keys (this job only)
         run: |
