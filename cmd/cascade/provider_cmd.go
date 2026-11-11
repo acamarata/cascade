@@ -73,7 +73,7 @@ func mountProviderCmd(root *cobra.Command) {
 func newProviderCmd(deps providerDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "provider",
-		Short: "Register and manage model providers",
+		Short: "Register and manage model providers; provider exec launches a harness",
 		Long: "Register a model provider through the universal intake path.\n\n" +
 			"`provider add` accepts a key (via --key or --key-env) or an OAuth grant\n" +
 			"(--oauth), probes the credential's shape against anthropic-compat,\n" +

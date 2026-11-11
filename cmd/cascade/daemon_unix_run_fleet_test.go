@@ -129,8 +129,11 @@ func TestBuildRPCServerMountsFleetSessionsSSE(t *testing.T) {
 	if _, ok := topicHandler.(*sessions.SSEHandler); !ok {
 		t.Fatalf("SSEMux.Topics[%q] = %T, want *sessions.SSEHandler", sessions.Topic, topicHandler)
 	}
-	if _, ok := mux.Topics[capacity.FleetCapacityTopic]; !ok || len(mux.Topics) != 4 {
-		t.Fatalf("SSEMux.Topics = %d entries (fleet.capacity mounted: %v), want exactly fleet.sessions, fleet.capacity, ci and jobs.evidence", len(mux.Topics), ok)
+	if _, ok := mux.Topics[capacity.FleetCapacityTopic]; !ok || len(mux.Topics) != 5 {
+		t.Fatalf("SSEMux.Topics = %d entries (fleet.capacity mounted: %v), want exactly fleet.sessions, fleet.capacity, ci, jobs.evidence and chat.reply", len(mux.Topics), ok)
+	}
+	if h, ok := mux.Topics[chatReplyTopicName]; !ok || h == nil {
+		t.Fatalf("SSEMux.Topics[%q] missing, want the chat reply handler mounted", chatReplyTopicName)
 	}
 	if h, ok := mux.Topics["jobs.evidence"]; !ok || h == nil {
 		t.Fatal("SSEMux.Topics[\"jobs.evidence\"] missing, want the evidence handler mounted")

@@ -120,9 +120,14 @@ func TestScrubRunsBeforeAdmission(t *testing.T) {
 		}
 		return true
 	})
+	// composeDaemon scrubs through scrubDaemonEnv, which calls
+	// scrubCredentialEnv before it returns; either name counts.
 	scrub, ok := first["scrubCredentialEnv"]
 	if !ok {
-		t.Fatal("composeDaemon never calls scrubCredentialEnv")
+		scrub, ok = first["scrubDaemonEnv"]
+	}
+	if !ok {
+		t.Fatal("composeDaemon never calls scrubCredentialEnv (directly or through scrubDaemonEnv)")
 	}
 	load, ok := first["loadDaemonConfig"]
 	if !ok || load > scrub {
