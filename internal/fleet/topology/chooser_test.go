@@ -189,10 +189,10 @@ func TestReaddedProviderDoesNotInheritEvidence(t *testing.T) {
 	cr := Credential{ID: "cred-a", QuotaDomainRef: "d1", Health: CredentialOK}
 	base := EvidenceKey{Endpoint: "https://a", InstanceID: "i1", AuthRef: "ra", CredentialFingerprint: "fa"}
 	changes := map[string]func(*EvidenceKey){
-		"base-url":    func(k *EvidenceKey) { k.Endpoint = "https://other" },
-		"instance-id": func(k *EvidenceKey) { k.InstanceID = "i2" },
-		"auth-ref":    func(k *EvidenceKey) { k.AuthRef = "rb" },
-		"fingerprint": func(k *EvidenceKey) { k.CredentialFingerprint = "fb" },
+		"endpoint":               func(k *EvidenceKey) { k.Endpoint = "https://other" },
+		"instance-id":            func(k *EvidenceKey) { k.InstanceID = "i2" },
+		"auth-ref":               func(k *EvidenceKey) { k.AuthRef = "rb" },
+		"credential-fingerprint": func(k *EvidenceKey) { k.CredentialFingerprint = "fb" },
 	}
 	for name, change := range changes {
 		cur := base

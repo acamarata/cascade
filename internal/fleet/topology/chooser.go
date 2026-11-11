@@ -59,7 +59,7 @@ func BillingPrivacyGate(d QuotaDomain, dataClass string) bool {
 // production gate.
 type CredentialGate func(ctx context.Context, cred Credential, d QuotaDomain) (Ceiling, error)
 
-// EvidenceCredentialGate binds the per-provider evidence rule: a
+// EvidenceCredentialGate uses the shared EvidenceKey in billing_promotion.go. A
 // credential reads internal only when its domain is paid and its OWN
 // stored row (stored, found) equals current(cred); anything else reads
 // public with reason billing-cap. A nil fn keeps public; an invalid
