@@ -98,6 +98,8 @@ type TemplateContext struct {
 	ID        string
 	Footprint []string
 	DependsOn []string
+	// Review is required by review, adversarial and qa templates.
+	Review *ReviewDispatch
 
 	PassThroughFields
 }

@@ -168,8 +168,7 @@ func readOnlyNode(tc TemplateContext, minTaskClass conductor.TaskClass, extraCap
 
 // ReviewTemplate resolves the "review" kind: read-only, min_task_class
 // =review, capabilities carry the preferred-family hint
-// ("family:distinct-from-author"); AH/S-69.T2 owns ENFORCEMENT of that
-// hint, not this ticket.
+// ("family:distinct-from-author"). The injected policy enforces dispatch.
 type ReviewTemplate struct{}
 
 // Resolve implements JobTemplate.
@@ -178,7 +177,7 @@ func (ReviewTemplate) Resolve(ctx context.Context) (DagNode, error) {
 	if err != nil {
 		return DagNode{}, err
 	}
-	return readOnlyNode(tc, conductor.TaskClassReview, []string{"review", "family:distinct-from-author"}, nil), nil
+	return enforceReview(tc, TemplateKindReview, readOnlyNode(tc, conductor.TaskClassReview, []string{"review", "family:distinct-from-author"}, nil))
 }
 
 // AdversarialTemplate resolves the "adversarial" kind: read-only,
@@ -191,7 +190,7 @@ func (AdversarialTemplate) Resolve(ctx context.Context) (DagNode, error) {
 	if err != nil {
 		return DagNode{}, err
 	}
-	return readOnlyNode(tc, conductor.TaskClassReview, []string{"review", "adversarial"}, nil), nil
+	return enforceReview(tc, TemplateKindAdversarial, readOnlyNode(tc, conductor.TaskClassReview, []string{"review", "adversarial"}, nil))
 }
 
 // QaTemplate resolves the "qa" kind: read-only, min_task_class=review,
@@ -204,7 +203,7 @@ func (QaTemplate) Resolve(ctx context.Context) (DagNode, error) {
 	if err != nil {
 		return DagNode{}, err
 	}
-	return readOnlyNode(tc, conductor.TaskClassReview, nil, nil), nil
+	return enforceReview(tc, TemplateKindQA, readOnlyNode(tc, conductor.TaskClassReview, nil, nil))
 }
 
 // ciCleanRoomKey is the NodeRequirements key CiTemplate sets. The value

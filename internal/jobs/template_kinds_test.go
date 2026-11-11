@@ -66,6 +66,7 @@ func TestReviewTemplate_Resolve(t *testing.T) {
 	node, err := (ReviewTemplate{}).Resolve(withTC(TemplateContext{
 		ID:        "t-2",
 		Footprint: []string{"should/be/dropped.go"},
+		Review:    validReviewDispatch(),
 	}))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
@@ -88,7 +89,7 @@ func TestReviewTemplate_Resolve(t *testing.T) {
 }
 
 func TestAdversarialTemplate_Resolve(t *testing.T) {
-	node, err := (AdversarialTemplate{}).Resolve(withTC(TemplateContext{ID: "t-3"}))
+	node, err := (AdversarialTemplate{}).Resolve(withTC(TemplateContext{ID: "t-3", Review: validReviewDispatch()}))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -105,7 +106,7 @@ func TestAdversarialTemplate_Resolve(t *testing.T) {
 }
 
 func TestQaTemplate_Resolve(t *testing.T) {
-	node, err := (QaTemplate{}).Resolve(withTC(TemplateContext{ID: "t-4"}))
+	node, err := (QaTemplate{}).Resolve(withTC(TemplateContext{ID: "t-4", Review: validReviewDispatch()}))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
