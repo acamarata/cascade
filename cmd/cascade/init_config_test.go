@@ -9,6 +9,7 @@ package main
 //   module carries no testscript runner; see those files' own headers).
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -282,7 +283,13 @@ func TestASubprocessHandOffIsRefusedUnderTest(t *testing.T) {
 	// The adapter's own test drives a REAL child with the test binary's
 	// own flags, and that must still work — otherwise the guard would
 	// have removed the only coverage this adapter has.
-	if err := sub.Run(context.Background(), "-test.run=^$", "-test.count=1"); err != nil {
-		t.Errorf("the guard blocked the adapter's own real-child test: %v", err)
+	// The child's own output goes to a buffer: printed into this test
+	// binary's stdout, its "no tests to run" and "coverage:" lines are read
+	// by `go test` as this package's result, and a multi-package coverage
+	// run then drops cmd/cascade from the merged profile.
+	child := &bytes.Buffer{}
+	quiet := initSubprocess{in: strings.NewReader(""), out: child, err: child}
+	if err := quiet.Run(context.Background(), "-test.run=^$", "-test.count=1"); err != nil {
+		t.Errorf("the guard blocked the adapter's own real-child test: %v\n%s", err, child)
 	}
 }
