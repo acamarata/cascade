@@ -64,7 +64,7 @@ func mintable(k Kind) bool {
 	switch k {
 	case KindSession, KindMCP, KindHook, KindNodeJob, KindRemoteClient:
 		return true
-	case KindPlugin:
+	case KindPlugin, KindNode:
 		return false
 	default:
 		return false
