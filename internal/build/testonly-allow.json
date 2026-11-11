@@ -1136,13 +1136,6 @@
     "symbol": "internal/jobs.ErrHumanApprovalRequired"
   },
   {
-    "caller_site": "internal/review/job_policy.go",
-    "expected_caller": "internal/review/job_policy.go, which P1-PBD-01d implements jobs.ReviewPolicySource in internal/review; retire this entry once that file calls RequireDistinctFamily",
-    "reason": "P1-PBD-01b ships RequireDistinctFamily with its tests; its first production caller is internal/review/job_policy.go from P1-PBD-01d.",
-    "retire_ticket": "P1-PBD-01",
-    "symbol": "internal/jobs.RequireDistinctFamily"
-  },
-  {
     "caller_site": "internal/jobs/completion_reviewer.go",
     "expected_caller": "internal/jobs/completion_reviewer.go, which P1-PBD-01h checks the observed reviewer family before accepted; retire this entry once that file calls VerifyObservedFamily",
     "reason": "P1-PBD-01b ships VerifyObservedFamily with its tests; its first production caller is internal/jobs/completion_reviewer.go from P1-PBD-01h.",
@@ -1190,13 +1183,6 @@
     "reason": "P1-PBD-01a ships VerifyReadOnly with its tests; its first production caller is internal/jobs/completion_reviewer.go from P1-PBD-01h.",
     "retire_ticket": "P1-PBD-01",
     "symbol": "internal/jobs.VerifyReadOnly"
-  },
-  {
-    "caller_site": "internal/review/job_policy.go",
-    "expected_caller": "internal/review/job_policy.go, which P1-PBD-01d implements jobs.ReviewPolicySource with the v1 checklist; retire this entry once that file calls ChecklistV1Dimensions",
-    "reason": "P1-PBD-01c ships ChecklistV1Dimensions with its tests; its first production caller is internal/review/job_policy.go from P1-PBD-01d.",
-    "retire_ticket": "P1-PBD-01",
-    "symbol": "internal/review.ChecklistV1Dimensions"
   },
   {
     "caller_site": "cmd/cascade/daemon_unix_gate_stall.go",
@@ -1281,20 +1267,6 @@
     "reason": "P1-NODE-13a ships DefaultFileCountCeiling with its tests; its first production caller is internal/runtime/init/ingestguard.go from P1-NODE-13c.",
     "retire_ticket": "P1-NODE-13c",
     "symbol": "internal/repo.DefaultFileCountCeiling"
-  },
-  {
-    "caller_site": "cmd/cascade/wire_fleet_topology_rpc.go",
-    "expected_caller": "cmd/cascade/wire_fleet_topology_rpc.go, which P1-TOP-11f adds (registers the fleet.topology topic); retire this entry once that file calls NewFleetTopologyEmitter",
-    "reason": "P1-TOP-11c ships NewFleetTopologyEmitter with its tests; its first production caller is cmd/cascade/wire_fleet_topology_rpc.go from P1-TOP-11f.",
-    "retire_ticket": "P1-TOP-11f",
-    "symbol": "internal/rpc.NewFleetTopologyEmitter"
-  },
-  {
-    "caller_site": "cmd/cascade/wire_fleet_topology_rpc.go",
-    "expected_caller": "cmd/cascade/wire_fleet_topology_rpc.go, which P1-TOP-11f adds (registers the fleet.topology topic); retire this entry once that file calls NewFleetTopologySSEHandler",
-    "reason": "P1-TOP-11c ships NewFleetTopologySSEHandler with its tests; its first production caller is cmd/cascade/wire_fleet_topology_rpc.go from P1-TOP-11f.",
-    "retire_ticket": "P1-TOP-11f",
-    "symbol": "internal/rpc.NewFleetTopologySSEHandler"
   },
   {
     "caller_site": "cmd/cascade/hooks_approval.go",
@@ -1784,19 +1756,43 @@
     "symbol": "internal/learn.SweepOrphanedPending"
   },
   {
-    "added_by_ticket": "P1-TOP-11b",
-    "caller_site": "cmd/cascade/wire_fleet_topology_rpc.go",
-    "expected_caller": "cmd/cascade/wire_fleet_topology_rpc.go, the P1-TOP-11f caller of RegisterFleetTopology; retire this entry once that file calls it",
-    "reason": "RegisterFleetTopology ships with its tests; its first production caller is cmd/cascade/wire_fleet_topology_rpc.go from P1-TOP-11f, not built yet.",
-    "retire_ticket": "P1-TOP-11f",
-    "symbol": "internal/rpc.RegisterFleetTopology"
-  },
-  {
     "added_by_ticket": "P1-TOP-18c",
     "caller_site": "cmd/cascade/wire_fleet_discovery.go",
     "expected_caller": "cmd/cascade/wire_fleet_discovery.go, the P1-TOP-18e caller of FleetDiscoveryInterval; retire this entry once that file calls it",
     "reason": "FleetDiscoveryInterval ships with its tests; its first production caller is cmd/cascade/wire_fleet_discovery.go from P1-TOP-18e, not built yet.",
     "retire_ticket": "P1-TOP-18e",
     "symbol": "internal/runtime.FleetDiscoveryInterval"
+  },
+  {
+    "added_by_ticket": "P1-HRN-06a",
+    "caller_site": "cmd/cascade/wire_inbox.go",
+    "expected_caller": "cmd/cascade/wire_inbox.go, the P1-HRN-06d caller of RegisterInboxRPC; retire this entry once that file calls it",
+    "reason": "P1-HRN-06a ships internal/notify.RegisterInboxRPC with its tests; the daemon wiring that mounts the inbox methods is a later ticket. Its first production caller is cmd/cascade/wire_inbox.go from P1-HRN-06d, not built yet.",
+    "retire_ticket": "P1-HRN-06d",
+    "symbol": "internal/notify.RegisterInboxRPC"
+  },
+  {
+    "added_by_ticket": "P1-PBD-01d",
+    "caller_site": "cmd/cascade/hooks_reviewer.go",
+    "expected_caller": "cmd/cascade/hooks_reviewer.go, the P1-PBD-05b caller of NewJobReviewPolicy; retire this entry once that file calls it",
+    "reason": "P1-PBD-01d ships internal/review.NewJobReviewPolicy with its tests; the reviewer hook that builds the policy is a later ticket. Its first production caller is cmd/cascade/hooks_reviewer.go from P1-PBD-05b, not built yet.",
+    "retire_ticket": "P1-PBD-05b",
+    "symbol": "internal/review.NewJobReviewPolicy"
+  },
+  {
+    "added_by_ticket": "P1-PBD-01d",
+    "caller_site": "cmd/cascade/hooks_reviewer.go",
+    "expected_caller": "cmd/cascade/hooks_reviewer.go, the P1-PBD-05b caller of ProviderFamily; retire this entry once that file calls it",
+    "reason": "P1-PBD-01d ships internal/review.ProviderFamily with its tests; the reviewer hook that resolves provider families is a later ticket. Its first production caller is cmd/cascade/hooks_reviewer.go from P1-PBD-05b, not built yet.",
+    "retire_ticket": "P1-PBD-05b",
+    "symbol": "internal/review.ProviderFamily"
+  },
+  {
+    "added_by_ticket": "P1-TOP-08b",
+    "caller_site": "internal/fleet/economics/rank_terms.go",
+    "expected_caller": "internal/fleet/economics/rank_terms.go, the P1-TOP-08c caller of CorrelationPenalty; retire this entry once that file calls it",
+    "reason": "P1-TOP-08b ships internal/fleet/economics.CorrelationPenalty with its tests; the rank terms that apply the penalty are the next ticket. Its first production caller is internal/fleet/economics/rank_terms.go from P1-TOP-08c, not built yet.",
+    "retire_ticket": "P1-TOP-08c",
+    "symbol": "internal/fleet/economics.CorrelationPenalty"
   }
 ]
