@@ -78,6 +78,13 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// This map mirrors .golangci.yml's cmd-rpc-server-boundary exemption
 	// list; the two must be edited together.
 	"compose_daemon.go": true,
+	// wire_fleet_topology_rpc.go and fleet_topology_adapt.go build the fleet
+	// topology handler deps and DTOs and mount them, the emitter and the SSE
+	// topic on the daemon's own registry and bus; neither dials the daemon.
+	// This map mirrors .golangci.yml's cmd-rpc-server-boundary exemption
+	// list; the two must be edited together.
+	"wire_fleet_topology_rpc.go": true,
+	"fleet_topology_adapt.go":    true,
 	// chat_wiring.go (P1-E20-W5-S43-T5; renamed from daemon_unix_chat.go
 	// and de-tagged by P1-E45-W10-S88-T2): the composition-root call
 	// site that REGISTERS chat.append_turn/get_thread/list_threads on the

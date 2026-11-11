@@ -40,8 +40,13 @@ fleet.attention.ack
 fleet.attention.get
 fleet.attention.list
 fleet.capacity
+fleet.domains.list
+fleet.domains.show
 fleet.journal_replay
 fleet.journal_show
+fleet.lanes.explain
+fleet.lanes.list
+fleet.lanes.show
 fleet.mode.set
 fleet.mode.show
 fleet.quota.snapshot
