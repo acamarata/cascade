@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-11T18:46:54Z",
+  "generated_at": "2026-11-11T20:05:50Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -26827,6 +26827,34 @@
       ]
     },
     {
+      "name": "internal/nodes enrollment host-key binding",
+      "sites": [
+        {
+          "file": "internal/nodes/tunnel_hostkey.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal/nodes enrollment host-key binding."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "internal/nodes node enrollment payload",
+      "sites": [
+        {
+          "file": "internal/nodes/enroll_payload.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal/nodes node enrollment payload."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/nodes placement",
       "sites": [
         {
@@ -44509,7 +44537,7 @@
       ]
     }
   ],
-  "total_sites": 4284,
-  "unspecified_count": 406,
+  "total_sites": 4286,
+  "unspecified_count": 408,
   "multi_status_count": 132
 }
