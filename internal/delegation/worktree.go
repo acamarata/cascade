@@ -10,6 +10,7 @@ package delegation
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -28,11 +29,19 @@ type Worktree struct {
 // For mutation jobs, it creates job/<jobID> with a .git marker.
 // For read-only jobs, it creates an empty 0700 directory.
 func AllocWorktree(base string, jobID string, mutation bool) (*Worktree, error) {
+	if jobID == "" || jobID == "." || jobID == ".." || filepath.IsAbs(jobID) || strings.ContainsAny(jobID, `/\`) {
+		return nil, cascade.New(cascade.KindInvalidInput, "worktree: job_id must be a nonempty path component")
+	}
+	root := filepath.Join(base, "ro-"+jobID)
 	if mutation {
-		if jobID == "" {
-			return nil, cascade.New(cascade.KindInvalidInput, "worktree: job_id required for mutation")
-		}
-		root := filepath.Join(base, "job", jobID)
+		root = filepath.Join(base, "job", jobID)
+	}
+	// Verify containment before creating any part of the worktree.
+	rel, err := filepath.Rel(base, root)
+	if err != nil || rel == "." || !filepath.IsLocal(rel) {
+		return nil, cascade.New(cascade.KindInvalidInput, "worktree: root must stay under base")
+	}
+	if mutation {
 		if err := os.MkdirAll(root, 0o755); err != nil {
 			return nil, err
 		}
@@ -44,7 +53,6 @@ func AllocWorktree(base string, jobID string, mutation bool) (*Worktree, error) 
 		return &Worktree{Root: root, GitCwd: root, ReadOnly: false}, nil
 	}
 	// Read-only: empty 0700 directory.
-	root := filepath.Join(base, "ro-"+jobID)
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return nil, err
 	}

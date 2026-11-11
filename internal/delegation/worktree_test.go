@@ -11,7 +11,41 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/acamarata/cascade/pkg/cascade"
 )
+
+// TestAllocWorktreeRejectsTraversal verifies invalid IDs create no directories.
+func TestAllocWorktreeRejectsTraversal(t *testing.T) {
+	for _, mutation := range []bool{true, false} {
+		mode := "read_only"
+		if mutation {
+			mode = "mutation"
+		}
+		for _, id := range []string{"../x", "a/b", "..", ".", "absolute", `a\b`} {
+			t.Run(mode+"/"+id, func(t *testing.T) {
+				parent := t.TempDir()
+				base := filepath.Join(parent, "base")
+				jobID := id
+				if id == "absolute" {
+					jobID = filepath.Join(parent, "outside")
+				}
+				wt, err := AllocWorktree(base, jobID, mutation)
+				kind, ok := cascade.KindOf(err)
+				if wt != nil || !ok || kind != cascade.KindInvalidInput {
+					t.Errorf("AllocWorktree(%q, mutation=%v) = %+v, %v; want nil, KindInvalidInput", jobID, mutation, wt, err)
+				}
+				entries, err := os.ReadDir(parent)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(entries) != 0 {
+					t.Errorf("invalid job ID created entries: %v", entries)
+				}
+			})
+		}
+	}
+}
 
 // TestDelegateAllocatesMinimalWorktree verifies mutation worktrees
 // contain only job/<job id> and no extraneous paths.
