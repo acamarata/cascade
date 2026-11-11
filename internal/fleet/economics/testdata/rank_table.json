@@ -1,0 +1,19 @@
+{
+  "correlation": [
+    {"name":"same-session","producer":{"CanonicalID":"model-a","Family":"family-a"},"producer_provider":"provider-x","producer_session":"lane-a","candidate":{"LaneID":"lane-a","Provider":"provider-x","Identity":{"CanonicalID":"model-a","Family":"family-a"}},"penalty":1.00,"floor":1.00},
+    {"name":"same-model","producer":{"CanonicalID":"model-a","Family":"family-a"},"producer_provider":"provider-x","candidate":{"LaneID":"lane-b","Provider":"provider-x","Identity":{"CanonicalID":"model-a","Family":"family-a"}},"penalty":0.90,"floor":0.80},
+    {"name":"same-family-same-provider","producer":{"CanonicalID":"model-a","Family":"family-a"},"producer_provider":"provider-x","candidate":{"Provider":"provider-x","Identity":{"CanonicalID":"model-b","Family":"family-a"}},"penalty":0.75,"floor":0.50},
+    {"name":"different-family-same-provider","producer":{"CanonicalID":"model-a","Family":"family-a"},"producer_provider":"provider-x","candidate":{"Provider":"provider-x","Identity":{"CanonicalID":"model-b","Family":"family-b"}},"penalty":0.50,"floor":0.35},
+    {"name":"same-model-different-provider","producer":{"CanonicalID":"model-a","Family":"family-a"},"producer_provider":"provider-x","candidate":{"Provider":"provider-y","Identity":{"CanonicalID":"model-a","Family":"family-a"}},"penalty":0.70,"floor":0.80},
+    {"name":"different-family-different-provider","producer":{"CanonicalID":"model-a","Family":"family-a"},"producer_provider":"provider-x","candidate":{"Provider":"provider-y","Identity":{"CanonicalID":"model-b","Family":"family-b"}},"penalty":0.30,"floor":0.15},
+    {"name":"two-hosts-one-model","producer":{"CanonicalID":"model-a","Family":"family-a"},"producer_provider":"provider-x","producer_session":"host-a","candidate":{"LaneID":"host-b","RegistryLane":"model-alias-b","Provider":"provider-y","Identity":{"CanonicalID":"model-a","Family":"family-a"}},"penalty":0.70,"floor":0.80}
+  ],
+  "precedence": [
+    {"name":"nil-producer","producer":null,"candidate":{},"penalty":0.00},
+    {"name":"unknown-producer-family","producer":{"CanonicalID":"model-a"},"candidate":{"Identity":{"CanonicalID":"model-b","Family":"family-b"}},"penalty":1.00},
+    {"name":"unknown-candidate-family","producer":{"CanonicalID":"model-a","Family":"family-a"},"candidate":{"Identity":{"CanonicalID":"model-b"}},"penalty":1.00},
+    {"name":"empty-candidate-canonical","producer":{"CanonicalID":"model-a","Family":"family-a"},"candidate":{"Identity":{"Family":"family-b"}},"penalty":0.75},
+    {"name":"empty-producer-canonical","producer":{"Family":"family-a"},"candidate":{"Identity":{"CanonicalID":"model-b","Family":"family-b"}},"penalty":0.75}
+  ],
+  "learned_floors": {"same_model":0.80,"same_family":0.50,"same_provider":0.35,"different_provider":0.15}
+}
