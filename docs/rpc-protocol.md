@@ -108,6 +108,7 @@ the `topic` query parameter:
 ```
 GET /events                       # no topic -> the daemon-wide stream below
 GET /events?topic=fleet.sessions  # -> the fleet.sessions SSE stream
+GET /events?topic=chat.reply&stream=<stream_id>  # -> one caller-bound reply
 ```
 
 Before any of this, the request passes the same local-request guard as
@@ -121,9 +122,8 @@ documents; an unrelated query key belonging to that stream (`filter`,
 below) or to a caller's own convention is none of this mux's business
 and does not change that. A request with exactly one `topic` value,
 under the byte-exact key `topic`, that names a registered stream, byte
-for byte after percent-decoding (today: `fleet.sessions`, the fleet
-sessions domain's own `event`/`data`/`id`/`retry` SSE format; see the
-Fleet CLI wiki page), serves that stream instead, with its own filter
+for byte after percent-decoding (including `fleet.sessions` and
+`chat.reply`), serves that stream instead, with its own filter
 and format rules. **Everything else is refused with HTTP 400 before
 either stream's subscribe logic runs**: an unknown topic, a repeated
 `topic` parameter (`?topic=fleet.sessions&topic=x`, in either order), an
@@ -301,6 +301,128 @@ underlying `capacity.Compositor` snapshot, and a push or ack through
 status.widget's own attention-queue reader. The payload is a full,
 redacted `WidgetSnapshot` with an incrementing `seq` for client dedup
 (small enough that a delta encoding is not needed).
+
+## chat.reply_open
+
+Access class: **owner-view**. Opens a reply stream for an existing user
+turn; it neither appends a turn nor invokes the provider. The owner can
+target threads in its view; a principal can target only threads attributed
+to its project scope. Local-only threads require the owner CLI marker.
+
+Params and result:
+
+```json
+{"thread_id": "<existing thread>", "turn_id": "<user turn>"}
+{"stream_id": "<daemon-minted id>"}
+```
+
+Both ids are required; unknown fields are refused. A missing thread or
+turn returns `not-found`; a turn in another thread or a non-user turn
+returns `invalid-input`. Missing identity, scope denial or a disallowed
+local-only caller returns `permission-denied`.
+
+The stream id contains 128 random bits encoded as 32 hexadecimal characters.
+It binds the thread, user turn and caller identity (principal id, owner CLI,
+or owner view). It expires after 60 seconds if unclaimed. It is single-use
+for `chat.reply`, not a transferable authorization credential.
+
+**Availability:** in this tree `wireChatReply` registers both reply methods
+when explicitly composed, but `wireChatHandlers` does not invoke it. Normal
+daemon composition therefore lacks both RPC methods. The SSE topic wiring
+alone does not register them. See
+[P1-CPA-13 limits](../.github/docs/p1/chat-reply-completion.md).
+
+## chat.reply
+
+Access class: **owner-view**, with the same target checks as
+`chat.reply_open`. Generation runs synchronously in the RPC request's
+context; SSE is a separate subscription to its output.
+
+Params and result:
+
+```json
+{"stream_id": "<id returned by chat.reply_open>"}
+{"thread_id": "<thread>", "turn_id": "<user turn>", "assistant_turn_id": "<stored assistant turn>", "replayed": false}
+```
+
+Unknown fields are refused. An unknown or expired stream returns
+`not-found`; another caller's stream returns `permission-denied`; reuse,
+concurrent generation for the same user turn or an exhausted attempt limit
+returns `conflict`. A retry must open a new stream. If the user turn already
+has a durable reply, that new stream publishes its stored content and the
+result has `replayed: true`, with no new model call or assistant turn.
+
+A new reply composes history, dispatches through the configured reply door,
+and journals the assistant turn and reply mapping before completing. Effect
+intent precedes dispatch; confirmation follows persistence. The helper runs
+`RecoverPending` before registering the methods, marking unfinished intents
+as unknown outcome. The result contains ids, not reply text: clients read
+`chat.get_thread` for the durable content.
+
+The contract requires conductor policy denial (`policy-denied`) and quota
+exhaustion (`quota-exhausted`) to make zero provider calls, and thread privacy
+and scrub to apply before all egress, including context stages. Production
+proof is outstanding because the daemon composition is missing.
+
+Cancellation during generation returns `canceled`; provider failure returns
+its typed kind, or `unavailable` if untyped. A provider stream that ends
+without completion is `unavailable`. Partial text is discarded and no
+assistant turn is stored for these failures. Once generation completes,
+persistence is protected from late request cancellation. An error after
+persistence (for example effect confirmation failure) does not imply the
+turn is absent; read the thread before retrying.
+
+## SSE topic: chat.reply
+
+Registered by `chat-reply-topic` on non-Windows daemon builds, using the
+same per-composition `ReplyHub` that the Replier must receive.
+
+```text
+GET /events?topic=chat.reply&stream=<stream_id>
+```
+
+`stream_id=<stream_id>` is an alias used by the shipped client. Exactly one
+value across `stream` and `stream_id` is required; it must be nonempty and
+at most 64 bytes. Missing, repeated or both parameters return HTTP 400.
+Subscribe before issuing `chat.reply` to render generation live.
+
+Access class: **owner-view**. The handler implements `EventVisibleConsumer`.
+Both the caller binding and the SEC-18 event-visibility predicate must
+admit delivery. The predicate is checked before the handshake and before
+every frame. A principal without an admitting predicate remains deny-all;
+knowing a stream id cannot bypass either check. Another caller subscribing
+to a bound stream gets HTTP 403 and zero frames. Unknown or expired ids
+return HTTP 404. Topic-handler refusals use JSON-RPC-shaped error envelopes
+before any SSE headers or frames.
+
+Successful responses use `Content-Type: text/event-stream` and
+`Cache-Control: no-cache`. Each frame is a JSON `data:` record followed by
+a blank line:
+
+```text
+data: {"type":"delta","delta":"hello","thread_id":"<thread>"}
+
+data: {"type":"done","thread_id":"<thread>"}
+
+```
+
+On failure the terminal frame is instead:
+
+```text
+data: {"type":"error","kind":"canceled","thread_id":"<thread>"}
+
+```
+
+Terminal frames carry no text; errors expose only the kind. The connection
+ends after `done` or `error`. This topic uses no `event:`, `id:` or `retry:`
+fields and no `Last-Event-ID` cursor. Frames are buffered from the beginning
+and retained for 60 seconds after termination; a late subscriber gets the
+buffer from its start. This memory buffer is not a durable event log and
+does not survive daemon restart. Reply text is not sent through the general
+event bus. Clients must check the RPC result and read the stored assistant
+turn after a successful terminal frame; deltas alone do not prove success.
+The frame fields are additive to the P2 run-stream contract; renaming them
+requires C7.
 
 ## chat.create_thread
 

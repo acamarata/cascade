@@ -1,6 +1,6 @@
 # `cascade chat`
 
-Records a conversation turn against the daemon.
+Records a user turn and requests a durable reply from the daemon.
 
 ```
 cascade chat [prompt] [flags]
@@ -10,7 +10,7 @@ cascade chat [prompt] [flags]
 |---|---|
 | `-m`, `--message` | the prompt, equivalent to the positional argument |
 | `--thread` | continue an existing thread by id |
-| `--json` | emit `{turn_id, thread_id, content}` |
+| `--json` | emit the completed reply as `{turn_id, thread_id, content}`; `turn_id` identifies the assistant turn |
 | `--quiet` | suppress the metadata headers in one-shot output |
 | `--private` | create the thread `restricted` |
 | `--local-only` | create the thread `local-only` |
@@ -25,26 +25,47 @@ With a prompt it sends one turn and exits. With no prompt it opens the
 interactive terminal UI; under `CASCADE_NO_INPUT=1` with no prompt it
 exits non-zero instead, for automation parity.
 
-## What it does today, and what it does not
+## Replies, streaming and cancellation
 
-**It records.** The turn, its segments and the thread row are written to
-the conversation domain through the daemon's `chat.append_turn`, and the
-turn is echoed to any connected SSE client before the call returns.
+The client first records the user turn through `chat.append_turn`, then
+calls `chat.reply_open` with its thread and turn ids. The daemon mints a
+caller-bound `stream_id`; `chat.reply {stream_id}` requests generation.
+One-shot mode (`cascade chat -m "hello"`) waits for that call, then reads
+`chat.get_thread` and returns the stored assistant turn's text. A successful
+append alone is not a successful reply. The reply timeout is ten minutes.
 
-**It does not answer.** No daemon component generates an assistant reply
-yet, so a successful record is reported as:
+The interactive TUI uses the streaming client: after opening the reply it
+subscribes to `GET /events?topic=chat.reply&stream_id=<stream_id>` **before**
+calling `chat.reply`. The equivalent `stream=<stream_id>` query is also
+accepted. It renders `delta` frames as they arrive, waits for a terminal
+frame and the RPC result, then verifies the durable assistant turn through
+`chat.get_thread`. There is no separate `chat --stream` flag.
 
-```
-$ cascade chat --thread notes "hello"
-error: unsupported: thread notes turn ce102e69…: cascade chat: message
-recorded, but no daemon component generates an assistant reply yet
-```
+Cancelling an in-progress generation cancels the request. Cancellation
+after the first token is a failure (`canceled`), stores no partial
+assistant turn and must not print a successful reply. In the TUI, Ctrl-C
+during a stream aborts that turn and returns to input. Deltas already shown
+are provisional. Cancellation after generation has completed does not undo
+a committed turn; the client still refuses success if its context was
+cancelled before readback completed.
 
-That refusal is deliberate and is the honest shape of the current state:
-the turn named in it really is stored, and fabricating reply content to
-make the exit code nicer would be the kind of stub this project forbids.
-The reply generator is a later ticket; when it lands, this page changes
-and nothing else has to.
+Owner denial of the `chat` task class and exhausted conductor quota are
+required to refuse with `policy-denied` (`KindPolicyDenied`) and
+`quota-exhausted` (`KindQuotaExhausted`), with zero provider calls. One-shot
+RPC errors retain their typed kinds; a streaming terminal `error` frame
+names the server kind, while the client currently wraps that frame as
+`unavailable`. A failed reply can leave the already-recorded user turn.
+Local-only routing must cover classification and summarization as well as
+the reply, and scrub and privacy checks must run before provider egress.
+
+**Composition limit in this tree.** The client and reply handlers exist,
+but `wireChatHandlers` does not call `wireChatReply`. The normal daemon
+therefore does not register `chat.reply_open` or `chat.reply`: a CLI request
+can record its user turn and then fail with method-not-found. The flow above
+describes the implemented client and explicitly composed reply service,
+not a verified production round trip. P1-CPA-13b must be reopened for the
+missing composition and production enforcement proof. See
+[contract, proof and limits](../../.github/docs/p1/chat-reply-completion.md).
 
 ## It needs a running daemon
 
@@ -55,6 +76,12 @@ cascade daemon start   # or: cascade daemon run
 Conversation state lives in the daemon's own `cascade.db`. Without one,
 the command reports a transport failure naming the socket — not a missing
 feature.
+
+Windows is tier-2 and has no daemon. Its daemon commands refuse with a
+typed `unsupported` error; interactive chat also retains its Windows TUI
+refusal. The current Windows reply test checks daemon start/run, not a
+`cascade chat -m` invocation, so the command-level proof remains outstanding
+under P1-CPA-13e.
 
 Until the `chat.*` namespace was registered at the composition root, this
 command answered `chat.append_turn: method not found` against a daemon
@@ -191,9 +218,8 @@ own `resolveChatSegmenterDeps`/`resolveChatRetrievalStore` doc comments
 for exactly what is missing and where). Until both close, `--topics` and
 `--threads` report only threads something else has already filed under a
 `topic:`-prefixed id — there is no live pipeline auto-filing new ones
-from ordinary `cascade chat` turns. This is the same honest shape this
-page's own "It does not answer" section already documents for reply
-generation: the surface is real, the upstream producer is a later ticket.
+from ordinary `cascade chat` turns. Topic routing remains a separate
+composition limit from the reply service described above.
 
 ## Resume (bring-into-chat)
 
