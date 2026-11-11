@@ -135,7 +135,7 @@ func requireIdentitySource(kind EvidenceKind, identity string) error {
 		want = identityPrefixNode
 	case EvidenceHumanApproval:
 		want = identityPrefixApproval
-	case EvidenceBuild, EvidenceLint, EvidenceTests, EvidenceReview, EvidenceAdversarial:
+	case EvidenceBuild, EvidenceLint, EvidenceTests, EvidenceReview, EvidenceAdversarial, EvidenceQA:
 		want = identityPrefixDaemon
 	default:
 		want = identityPrefixDaemon

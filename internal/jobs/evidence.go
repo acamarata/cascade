@@ -42,37 +42,6 @@ import (
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
-// EvidenceKind is the closed, seven-member evidence vocabulary. The zero
-// value is deliberately not a member (R-16.37 no-permissive-zero rule).
-type EvidenceKind string
-
-const (
-	// EvidenceBuild is a passing build's evidence row.
-	EvidenceBuild EvidenceKind = "build"
-	// EvidenceLint is a passing lint run's evidence row.
-	EvidenceLint EvidenceKind = "lint"
-	// EvidenceTests is a passing test run's evidence row.
-	EvidenceTests EvidenceKind = "tests"
-	// EvidenceReview is a passing code review's evidence row.
-	EvidenceReview EvidenceKind = "review"
-	// EvidenceAdversarial is a passing adversarial review's evidence row.
-	EvidenceAdversarial EvidenceKind = "adversarial"
-	// EvidenceCIAttestation is a real CI attestation's evidence row.
-	EvidenceCIAttestation EvidenceKind = "ci_attestation"
-	// EvidenceHumanApproval is a Critical-class human approval's row.
-	EvidenceHumanApproval EvidenceKind = "human_approval"
-)
-
-// Valid reports whether k is one of the seven closed members.
-func (k EvidenceKind) Valid() bool {
-	switch k {
-	case EvidenceBuild, EvidenceLint, EvidenceTests, EvidenceReview,
-		EvidenceAdversarial, EvidenceCIAttestation, EvidenceHumanApproval:
-		return true
-	}
-	return false
-}
-
 // ProducerCapability is the closed, four-member set of principals that
 // may ever appear on an evidence row's producer_capability column.
 type ProducerCapability string

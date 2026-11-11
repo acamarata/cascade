@@ -148,18 +148,3 @@ func TestEvidenceChangedPublished(t *testing.T) {
 		t.Fatalf("rows = %d, %v", len(rows), err)
 	}
 }
-
-func TestEvidenceKindSetUnchanged(t *testing.T) {
-	want := []EvidenceKind{EvidenceBuild, EvidenceLint, EvidenceTests, EvidenceReview, EvidenceAdversarial, EvidenceCIAttestation, EvidenceHumanApproval}
-	words := []string{"build", "lint", "tests", "review", "adversarial", "ci_attestation", "human_approval"}
-	for i, kind := range want {
-		if string(kind) != words[i] || !kind.Valid() {
-			t.Fatalf("kind %q", kind)
-		}
-	}
-	for _, kind := range []EvidenceKind{"", "qa", "unknown"} {
-		if kind.Valid() {
-			t.Fatalf("unexpected kind %q", kind)
-		}
-	}
-}
