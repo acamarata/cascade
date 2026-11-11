@@ -22,7 +22,7 @@ func attestedCompletion(t *testing.T, risk RiskClass, failed bool) (*CompletionP
 	t.Setenv("USERPROFILE", home)
 	cp, store, ledger, _, job := newCompletionFixture(t, risk)
 	setJobState(t, store, &job, JobStateReviewing)
-	passAll(t, ledger, []EvidenceKind{EvidenceBuild, EvidenceLint, EvidenceTests, EvidenceReview, EvidenceAdversarial})
+	passAll(t, ledger, []EvidenceKind{EvidenceBuild, EvidenceLint, EvidenceTests, EvidenceReview, EvidenceAdversarial, EvidenceQA})
 	pub, key, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)

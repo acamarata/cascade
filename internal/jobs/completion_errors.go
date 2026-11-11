@@ -72,9 +72,9 @@ func ApprovalScopeAction(jobID, treeHash, policyVersion string) string {
 // evidenceKindsForGateSet maps a RiskClass's GateItem set to the
 // EvidenceKinds completion.go's completeness check requires a passing
 // row for. GateHumanApproval maps to the separate Critical-class
-// approval check, not to completeness; nothing maps to
-// EvidenceCIAttestation until AF/S-65.T4 wires it; GateIntegrationChecks/
-// GateIndependentQA/GateAffectedFullIntegration/GateCleanNodeVerification/
+// approval check, not to completeness. GateCleanNodeVerification maps
+// to EvidenceCIAttestation; GateIndependentQA maps to EvidenceQA.
+// GateIntegrationChecks/GateAffectedFullIntegration/
 // GateRollbackEvidence/GateReleaseGate have no EvidenceKind counterpart
 // yet either -- a documented gap-filling mapping, same posture as
 // model.go's own DataClass/EvidenceKind precedent, since no ticket owns a
@@ -126,6 +126,9 @@ func evidenceKindsForGateSet(gates GateSet) []EvidenceKind {
 	}
 	if has[GateAdversarialReview] {
 		add(EvidenceAdversarial)
+	}
+	if has[GateIndependentQA] {
+		add(EvidenceQA)
 	}
 	if has[GateCleanNodeVerification] {
 		add(EvidenceCIAttestation)

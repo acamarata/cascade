@@ -87,7 +87,7 @@ func hookEvidence(t *testing.T, w *daemonWiring, id string) (*jobs.EvidenceLedge
 		t.Fatal(err)
 	}
 	auth := jobs.AppendAuthorization{ExecutionID: id + "-exec", LeaseRepoID: ls[0].RepoID, LeaseScopeGlob: ls[0].ScopeGlob, LeaseEpoch: ls[0].Epoch}
-	for _, kind := range []jobs.EvidenceKind{jobs.EvidenceBuild, jobs.EvidenceLint, jobs.EvidenceTests, jobs.EvidenceReview, jobs.EvidenceAdversarial} {
+	for _, kind := range []jobs.EvidenceKind{jobs.EvidenceBuild, jobs.EvidenceLint, jobs.EvidenceTests, jobs.EvidenceReview, jobs.EvidenceAdversarial, jobs.EvidenceQA} {
 		if _, err := ledger.Append(ctx, hookRecord(id, kind, string(kind)), auth); err != nil {
 			t.Fatal(err)
 		}
