@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-11T14:54:12Z",
+  "generated_at": "2026-11-11T17:56:44Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4987,6 +4987,12 @@
           "line": 4,
           "status": "",
           "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        },
+        {
+          "file": "cmd/cascade/wire_fleet_topology_rpc.go",
+          "line": 8,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-TOP-11)."
         },
         {
           "file": "cmd/cascade/wire_gate_audit.go",
@@ -44491,7 +44497,7 @@
       ]
     }
   ],
-  "total_sites": 4281,
+  "total_sites": 4282,
   "unspecified_count": 406,
   "multi_status_count": 132
 }
