@@ -1101,13 +1101,6 @@
     "symbol": "providers/agents/antigravity.Negotiate"
   },
   {
-    "caller_site": "providers/agents/antigravity/probe.go",
-    "expected_caller": "providers/agents/antigravity/probe.go, the CLI probe P1-AGT-07c adds, which checks the pinned version and the stream-json interface; retire this entry once that file calls CheckHarness",
-    "reason": "P1-AGT-07d ships the protocol pin check; the probe that reads the CLI's version and help text is P1-AGT-07c (not yet landed).",
-    "retire_ticket": "P1-AGT-07",
-    "symbol": "providers/agents/antigravity.CheckHarness"
-  },
-  {
     "caller_site": "internal/conductor/reserve_call.go",
     "expected_caller": "internal/conductor/reserve_call.go, the per-adapter-call reservation P1-TOP-04a adds, which holds the one governor Admit per call and classifies its refusals; retire this entry once that file calls IsDraining",
     "reason": "P1-TOP-04c removes the per-node governor permit from admitNodes (contract: admitNodes calls no governor), which was the only production classifier of a draining refusal; the one Admit per adapter call moves to the conductor reservation of P1-TOP-04a.",
@@ -1794,5 +1787,28 @@
     "reason": "P1-TOP-08b ships internal/fleet/economics.CorrelationPenalty with its tests; the rank terms that apply the penalty are the next ticket. Its first production caller is internal/fleet/economics/rank_terms.go from P1-TOP-08c, not built yet.",
     "retire_ticket": "P1-TOP-08c",
     "symbol": "internal/fleet/economics.CorrelationPenalty"
+  },
+  {
+    "added_by_ticket": "P1-AGT-07c",
+    "caller_site": "providers/agents/antigravity/driver.go",
+    "expected_caller": "providers/agents/antigravity/driver.go, the P1-AGT-07e caller of BuildArgv; retire this entry once that file calls it",
+    "reason": "P1-AGT-07c ships providers/agents/antigravity.BuildArgv with its tests; the driver that spawns the harness is the next ticket. Its first production caller is providers/agents/antigravity/driver.go from P1-AGT-07e, not built yet.",
+    "retire_ticket": "P1-AGT-07e",
+    "symbol": "providers/agents/antigravity.BuildArgv"
+  },
+  {
+    "added_by_ticket": "P1-AGT-07c",
+    "caller_site": "providers/agents/antigravity/driver.go",
+    "expected_caller": "providers/agents/antigravity/driver.go, the P1-AGT-07e caller of Probe; retire this entry once that file calls it",
+    "reason": "P1-AGT-07c ships providers/agents/antigravity.Probe with its tests; the driver's probe-decided refusal is the next ticket. Its first production caller is providers/agents/antigravity/driver.go from P1-AGT-07e, not built yet.",
+    "retire_ticket": "P1-AGT-07e",
+    "symbol": "providers/agents/antigravity.Probe"
+  },
+  {
+    "caller_site": "providers/agents/antigravity/driver.go",
+    "expected_caller": "providers/agents/antigravity/driver.go, the P1-AGT-07e driver, whose probe-decided refusal checks the pinned version and the stream-json interface; retire this entry once that file calls CheckHarness",
+    "reason": "P1-AGT-07d ships the protocol pin check; the probe that reads the CLI's version and help text is P1-AGT-07c (not yet landed).",
+    "retire_ticket": "P1-AGT-07e",
+    "symbol": "providers/agents/antigravity.CheckHarness"
   }
 ]
