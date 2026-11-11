@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"type\":\"text\",\"sessionID\":\"ses_fixture\",\"part\":{\"id\":\"prt_text\",\"text\":\"ready\"}}")

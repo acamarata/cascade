@@ -1,0 +1,3 @@
+{"type":"step_start","timestamp":1788666072991,"sessionID":"ses_fixture","part":{"id":"prt_start","type":"step-start"}}
+{"type":"text","timestamp":1788666073000,"sessionID":"ses_fixture","part":{"id":"prt_text","type":"text","text":"ready"}}
+{"type":"step_finish","timestamp":1788666073100,"sessionID":"ses_fixture","part":{"id":"prt_finish","type":"step-finish","reason":"stop","cost":0,"tokens":{"input":1,"output":1}}}

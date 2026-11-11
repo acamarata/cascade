@@ -150,6 +150,7 @@
   "providers/agents/codex": { "tier": "plugins", "floor": 80.0, "baseline": 91.5 },
   "providers/agents/conformance": { "tier": "plugins", "floor": 80.0, "baseline": 86.9 },
   "providers/agents/local": { "tier": "plugins", "floor": 80.0, "baseline": 88.3 },
+  "providers/agents/opencode": { "tier": "plugins", "floor": 80.0, "baseline": 98.0 },
   "providers/anthropic": { "tier": "plugins", "floor": 80.0, "baseline": 84.9 },
   "providers/embeddings": { "tier": "plugins", "floor": 80.0, "baseline": 100.0 },
   "providers/embeddings/bgem3": { "tier": "plugins", "floor": 80.0, "baseline": 95.5 },

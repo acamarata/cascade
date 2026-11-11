@@ -1,0 +1,1 @@
+["/fixture/opencode","run","--format","json","--dir","/fixture/worktree","--pure","-m","zhipu/glm","--variant","high","--","-literal prompt"]
