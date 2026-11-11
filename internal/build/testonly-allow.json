@@ -1158,20 +1158,6 @@
   },
   {
     "caller_site": "internal/jobs/completion_reviewer.go",
-    "expected_caller": "internal/jobs/completion_reviewer.go, which P1-PBD-01h enforces the reviewer policy on review-class completions (P1-PBD-01g edits only existing template files); retire this entry once that file calls BuildCleanReviewContext",
-    "reason": "P1-PBD-01a ships BuildCleanReviewContext with its tests; its first production caller is internal/jobs/completion_reviewer.go from P1-PBD-01h.",
-    "retire_ticket": "P1-PBD-01",
-    "symbol": "internal/jobs.BuildCleanReviewContext"
-  },
-  {
-    "caller_site": "internal/jobs/completion_reviewer.go",
-    "expected_caller": "internal/jobs/completion_reviewer.go, which P1-PBD-01h enforces the reviewer policy on review-class completions (P1-PBD-01g edits only existing template files); retire this entry once that file calls EnforceReadOnlyLease",
-    "reason": "P1-PBD-01a ships EnforceReadOnlyLease with its tests; its first production caller is internal/jobs/completion_reviewer.go from P1-PBD-01h.",
-    "retire_ticket": "P1-PBD-01",
-    "symbol": "internal/jobs.EnforceReadOnlyLease"
-  },
-  {
-    "caller_site": "internal/jobs/completion_reviewer.go",
     "expected_caller": "internal/jobs/completion_reviewer.go, which P1-PBD-01h refuses accepted for review-class jobs that were not read-only; retire this entry once that file calls VerifyReadOnly",
     "reason": "P1-PBD-01a ships VerifyReadOnly with its tests; its first production caller is internal/jobs/completion_reviewer.go from P1-PBD-01h.",
     "retire_ticket": "P1-PBD-01",
@@ -1810,5 +1796,21 @@
     "reason": "P1-AGT-07d ships the protocol pin check; the probe that reads the CLI's version and help text is P1-AGT-07c (not yet landed).",
     "retire_ticket": "P1-AGT-07e",
     "symbol": "providers/agents/antigravity.CheckHarness"
+  },
+  {
+    "added_by_ticket": "P1-NODE-20a",
+    "caller_site": "cmd/cascade/node_enroll_payload.go",
+    "expected_caller": "cmd/cascade/node_enroll_payload.go, the P1-NODE-20d caller of BuildNodeEnrollPayload; retire this entry once that file calls it",
+    "reason": "P1-NODE-20a ships internal/nodes.BuildNodeEnrollPayload with its tests; the CLI that emits the enroll payload is a later ticket. Its first production caller is cmd/cascade/node_enroll_payload.go from P1-NODE-20d, not built yet.",
+    "retire_ticket": "P1-NODE-20d",
+    "symbol": "internal/nodes.BuildNodeEnrollPayload"
+  },
+  {
+    "added_by_ticket": "P1-NODE-20a",
+    "caller_site": "cmd/cascade/node_enroll_payload.go",
+    "expected_caller": "cmd/cascade/node_enroll_payload.go, the P1-NODE-20d caller of HostKeyFingerprintFromFile; retire this entry once that file calls it",
+    "reason": "P1-NODE-20a ships internal/nodes.HostKeyFingerprintFromFile with its tests; the CLI that reads the host key for the payload is a later ticket. Its first production caller is cmd/cascade/node_enroll_payload.go from P1-NODE-20d, not built yet.",
+    "retire_ticket": "P1-NODE-20d",
+    "symbol": "internal/nodes.HostKeyFingerprintFromFile"
   }
 ]
