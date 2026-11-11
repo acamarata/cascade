@@ -54,6 +54,7 @@ func TestEgressClassesR21265Registered(t *testing.T) {
 		{EgressClassAgentDriver, "agent-driver", "P1-AGT-03", true, false},
 		{EgressClassProviderUsage, "provider-usage", "P1-GWY-04", true, false},
 		{EgressClassFleetDiscovery, "fleet-discovery", "P1-TOP-18", true, false},
+		{EgressClassExternalExecutor, "external-executor", "P1-NODE-09", true, false},
 	}
 	registry := DefaultRegistry()
 	if got, want := len(registry.Classes()), len(cases); got != want {
@@ -259,5 +260,37 @@ func TestAgentDriverEgressClassRegistered(t *testing.T) {
 	out, err := newTestEngine(t, nil).InterceptClass(context.Background(), EgressClassAgentDriver, TierRestricted, []byte("x"))
 	if !errors.Is(err, ErrSensitivityViolation) || out != nil {
 		t.Fatalf("restricted tier through agent-driver = %q, %v; want ErrSensitivityViolation", out, err)
+	}
+}
+
+// TestDefaultClassesExternalExecutor asserts the external-executor class
+// is registered exactly once with public-only tiers and the P1-NODE-09 owner.
+func TestDefaultClassesExternalExecutor(t *testing.T) {
+	count := 0
+	for _, row := range defaultClasses {
+		if row.Class == EgressClassExternalExecutor {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("defaultClasses holds %d external-executor rows, want exactly 1", count)
+	}
+	cfg, ok := DefaultRegistry().Lookup(EgressClassExternalExecutor)
+	if !ok || !cfg.Enabled || cfg.AllowRestricted || cfg.AllowLocalOnly || cfg.Owner != "P1-NODE-09" {
+		t.Fatalf("external-executor config = %+v (registered %v), want enabled, no restricted, owner P1-NODE-09", cfg, ok)
+	}
+	if len(cfg.AllowedTiers) != 1 || cfg.AllowedTiers[0] != TierPublic {
+		t.Fatalf("external-executor must admit only public tier: %+v", cfg.AllowedTiers)
+	}
+	engine := newTestEngine(t, nil)
+	out, err := engine.InterceptClass(context.Background(), EgressClassExternalExecutor, TierPublic, []byte("payload"))
+	if err != nil || string(out) != "payload" {
+		t.Fatalf("public tier refused: %q, %v", out, err)
+	}
+	for _, tier := range []SensitivityTier{TierLocalOnly, TierRestricted, TierInternal} {
+		out, err := engine.InterceptClass(context.Background(), EgressClassExternalExecutor, tier, []byte("payload"))
+		if !errors.Is(err, ErrSensitivityViolation) || out != nil {
+			t.Errorf("tier %s: got %q, %v; want sensitivity refusal", tier, out, err)
+		}
 	}
 }

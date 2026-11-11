@@ -206,6 +206,10 @@ const (
 	// is NOT set. It covers driver STDIO only; the vendor CLI's own TLS
 	// egress is not inspected (R-21.177).
 	EgressClassAgentDriver EgressClass = "agent-driver"
+	// EgressClassExternalExecutor is the external executor traffic (P1-NODE-09):
+	// outbound requests from the external executor transit this class.
+	// AllowRestricted is NOT set and AllowedTiers admits only {public}.
+	EgressClassExternalExecutor EgressClass = "external-executor"
 )
 
 // defaultClasses is the registration table. It is a slice of pairs rather
@@ -268,6 +272,12 @@ var defaultClasses = []struct {
 		AllowedTiers: []SensitivityTier{TierInternal, TierPublic}, Owner: "P1-GWY-04"}},
 	{EgressClassFleetDiscovery, InterceptConfig{Enabled: true, AllowRestricted: false,
 		AllowedTiers: []SensitivityTier{TierInternal, TierPublic}, Owner: "P1-TOP-18"}},
+	{EgressClassExternalExecutor, InterceptConfig{
+		Enabled:         true,
+		AllowRestricted: false,
+		AllowedTiers:    []SensitivityTier{TierPublic},
+		Owner:           "P1-NODE-09",
+	}},
 }
 
 // EgressClassProviderUsage is the gateway quota poll (P1-GWY-04): every GET
@@ -275,26 +285,3 @@ var defaultClasses = []struct {
 // capability first. Its destinations are the admitted gateway hosts that
 // declare a usage endpoint; the request carries no content.
 const EgressClassProviderUsage EgressClass = "provider-usage"
-
-// defaultRegistry holds the classes this build ships with. It is package
-// state because registration happens at init, which is what makes a class
-// available before any composition root has run.
-var defaultRegistry = newDefaultRegistry()
-
-// newDefaultRegistry builds and populates the default registry. A failed
-// registration panics: it means this build has two policies for one
-// outbound path, and choosing one at random is not an option a firewall
-// gets to take.
-func newDefaultRegistry() *Registry {
-	r := NewRegistry()
-	for _, entry := range defaultClasses {
-		r.MustRegister(entry.Class, entry.Config)
-	}
-	return r
-}
-
-// DefaultRegistry returns the registry carrying the classes this build
-// registers at init. A registrant landing a new outbound path registers
-// on this registry; a test that needs isolation builds its own with
-// NewRegistry.
-func DefaultRegistry() *Registry { return defaultRegistry }

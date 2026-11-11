@@ -19,7 +19,7 @@ import (
 )
 
 func TestAuditOnlyMatchesTransit(t *testing.T) {
-	want := []EgressClass{EgressClassFleetDiscovery, EgressClassOAuth, EgressClassSpikeMeasurement, EgressClassWikiGitPush}
+	want := []EgressClass{EgressClassExternalExecutor, EgressClassFleetDiscovery, EgressClassOAuth, EgressClassSpikeMeasurement, EgressClassWikiGitPush}
 	if got := AuditOnlyClasses(); !reflect.DeepEqual(got, want) {
 		t.Errorf("audit-only=%v, want %v", got, want)
 	}

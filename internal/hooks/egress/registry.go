@@ -110,3 +110,26 @@ func (r *Registry) Capability(class EgressClass) (Capability, error) {
 	}
 	return Capability{class: class}, nil
 }
+
+// defaultRegistry holds the classes this build ships with. It is package
+// state because registration happens at init, which is what makes a class
+// available before any composition root has run.
+var defaultRegistry = newDefaultRegistry()
+
+// newDefaultRegistry builds and populates the default registry. A failed
+// registration panics: it means this build has two policies for one
+// outbound path, and choosing one at random is not an option a firewall
+// gets to take.
+func newDefaultRegistry() *Registry {
+	r := NewRegistry()
+	for _, entry := range defaultClasses {
+		r.MustRegister(entry.Class, entry.Config)
+	}
+	return r
+}
+
+// DefaultRegistry returns the registry carrying the classes this build
+// registers at init. A registrant landing a new outbound path registers
+// on this registry; a test that needs isolation builds its own with
+// NewRegistry.
+func DefaultRegistry() *Registry { return defaultRegistry }
