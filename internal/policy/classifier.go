@@ -139,7 +139,7 @@ func (c mvdanClassifier) classifyStmts(ctx context.Context, stmts []*syntax.Stmt
 	return worst, nil
 }
 
-// classifyStmt classifies one statement together with its redirections.
+// classifyStmt classifies one statement, its redirections and substitutions.
 func (c mvdanClassifier) classifyStmt(ctx context.Context, stmt *syntax.Stmt) (RiskLevel, error) {
 	if stmt == nil || stmt.Cmd == nil {
 		return L4, newUnknownError("the command contains an empty statement")
@@ -152,7 +152,11 @@ func (c mvdanClassifier) classifyStmt(ctx context.Context, stmt *syntax.Stmt) (R
 	if err != nil {
 		return L4, err
 	}
-	return maxLevel(level, redirLevel), nil
+	substLevel, err := c.stmtSubstitutionLevel(ctx, stmt)
+	if err != nil {
+		return L4, err
+	}
+	return maxLevel(level, maxLevel(redirLevel, substLevel)), nil
 }
 
 // classifyCommand dispatches on the modeled command forms.
@@ -173,20 +177,15 @@ func (c mvdanClassifier) classifyCommand(ctx context.Context, cmd syntax.Command
 	}
 }
 
-// classifyCall classifies a single invocation: its environment prefix, the
-// substitutions embedded in its words, and the command itself.
+// classifyCall classifies a single invocation and its environment prefix.
 func (c mvdanClassifier) classifyCall(ctx context.Context, call *syntax.CallExpr) (RiskLevel, error) {
 	assignLevel, err := assignmentLevel(call.Assigns)
 	if err != nil {
 		return L4, err
 	}
-	substLevel, err := c.substitutionLevel(ctx, call)
-	if err != nil {
-		return L4, err
-	}
 	if len(call.Args) == 0 {
 		// An assignment with no command: shell state only.
-		return maxLevel(assignLevel, substLevel), nil
+		return assignLevel, nil
 	}
 	name, ok := resolveWord(call.Args[0])
 	if !ok || name == "" {
@@ -198,7 +197,7 @@ func (c mvdanClassifier) classifyCall(ctx context.Context, call *syntax.CallExpr
 	if err != nil {
 		return L4, err
 	}
-	return maxLevel(level, maxLevel(assignLevel, substLevel)), nil
+	return maxLevel(level, assignLevel), nil
 }
 
 // classifyInvocation resolves one argv against the wrapper forms first and
@@ -217,38 +216,46 @@ func (c mvdanClassifier) classifyInvocation(
 	return rule.level(base, args)
 }
 
-// substitutionLevel classifies every command substitution embedded in a
-// call's words and assignments. Those commands run, so `ls $(rm -rf /)` is
-// as dangerous as the deletion it hides.
-func (c mvdanClassifier) substitutionLevel(
-	ctx context.Context, call *syntax.CallExpr,
+// stmtSubstitutionLevel classifies substitutions anywhere in a statement.
+// Parameter literal parts are also checked because the parser represents
+// process substitution inside parameter expansions as literal text.
+func (c mvdanClassifier) stmtSubstitutionLevel(
+	ctx context.Context, stmt *syntax.Stmt,
 ) (RiskLevel, error) {
 	worst := L0
 	var walkErr error
-	visit := func(n syntax.Node) bool {
+	var paramStack []bool
+	paramDepth := 0
+	syntax.Walk(stmt, func(n syntax.Node) bool {
 		if walkErr != nil {
 			return false
 		}
-		sub, ok := n.(*syntax.CmdSubst)
-		if !ok {
-			return true
-		}
-		level, err := c.classifyStmts(ctx, sub.Stmts)
-		if err != nil {
-			walkErr = err
+		if n == nil {
+			if paramStack[len(paramStack)-1] {
+				paramDepth--
+			}
+			paramStack = paramStack[:len(paramStack)-1]
 			return false
 		}
-		worst = maxLevel(worst, level)
-		return false
-	}
-	for _, word := range call.Args {
-		syntax.Walk(word, visit)
-	}
-	for _, assign := range call.Assigns {
-		if assign.Value != nil {
-			syntax.Walk(assign.Value, visit)
+		switch sub := n.(type) {
+		case *syntax.CmdSubst:
+			level, err := c.classifyStmts(ctx, sub.Stmts)
+			walkErr = err
+			worst = maxLevel(worst, level)
+			return false
+		case *syntax.ProcSubst:
+			walkErr = newUnknownError("the command uses ProcSubst, a shell form this classifier does not model")
+		case *syntax.ParamExp:
+			paramDepth++
+		case *syntax.Lit:
+			if paramDepth > 0 && strings.Contains(sub.Value, "<(") {
+				walkErr = newUnknownError("the parameter expansion uses ProcSubst, a shell form this classifier does not model")
+			}
 		}
-	}
+		_, isParam := n.(*syntax.ParamExp)
+		paramStack = append(paramStack, isParam)
+		return walkErr == nil
+	})
 	if walkErr != nil {
 		return L4, walkErr
 	}
