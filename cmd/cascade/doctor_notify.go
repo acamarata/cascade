@@ -51,7 +51,10 @@ func (c notifyDropsCheck) Run(ctx context.Context) (doctor.CheckResult, error) {
 	var raw json.RawMessage
 	if err := c.call(ctx, notify.StatsMethod, nil, &raw); err != nil {
 		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ECONNREFUSED) || isDialFailure(err) {
-			return doctor.CheckResult{Status: doctor.Status("skip"), Message: "daemon not running"}, nil
+			// Warn, like every other daemon-state check: a down daemon is
+			// neither healthy nor proven broken, and doctor has only three tiers.
+			return doctor.CheckResult{Status: doctor.StatusWarn, Message: "daemon not running",
+				Remediation: "start it with `cascade daemon start`; this check reads the live daemon"}, nil
 		}
 		kind, _ := cascade.KindOf(err)
 		return notifyStatsFailure(fmt.Sprintf("RPC error (%s, %T)", kind, err)), nil
