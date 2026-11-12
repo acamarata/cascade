@@ -265,8 +265,8 @@ func RegisterCompletionHookPack(reg *HookRegistry, gate PolicyGate, resolver Job
 	reg.RegisterPack("completion-gate", HookPack{
 		Name: "completion-gate",
 		Descriptors: []HookDescriptor{
-			{EventType: EventTaskCompleted, Matcher: "", CommandTemplate: completionHookCommand(EventTaskCompleted, defaultCompletionTimeout)},
-			{EventType: EventStop, Matcher: "", CommandTemplate: completionHookCommand(EventStop, defaultCompletionTimeout)},
+			{EventType: EventTaskCompleted, Matcher: "", CommandTemplate: completionHookCommand(EventTaskCompleted, defaultCompletionTimeout), TimeoutSeconds: CompletionGateHookTimeoutSeconds},
+			{EventType: EventStop, Matcher: "", CommandTemplate: completionHookCommand(EventStop, defaultCompletionTimeout), TimeoutSeconds: CompletionGateHookTimeoutSeconds},
 		},
 	})
 	return nil

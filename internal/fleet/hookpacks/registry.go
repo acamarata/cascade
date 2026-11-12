@@ -121,4 +121,5 @@ var DefaultRegistry = NewHookRegistry()
 
 func init() {
 	DefaultRegistry.RegisterPack("sessions", SessionsPack())
+	DefaultRegistry.RegisterPack("tool-gate", ToolGatePack())
 }
