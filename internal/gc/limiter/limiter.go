@@ -57,12 +57,11 @@ func New(rpm int, clock Clock) (*Limiter, error) {
 
 func isNilClock(c Clock) bool {
 	v := reflect.ValueOf(c)
-	switch v.Kind() {
-	case reflect.Ptr, reflect.Interface:
+	k := v.Kind()
+	if k == reflect.Pointer || k == reflect.Interface {
 		return v.IsNil()
-	default:
-		return false
 	}
+	return false
 }
 
 // Rate returns the configured rate in requests per minute.

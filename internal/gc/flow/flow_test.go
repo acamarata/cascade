@@ -74,7 +74,7 @@ func TestIllegalEventKeepsState(t *testing.T) {
 
 	// unknown events
 	m2, _ := New(&fakeClock{t: time.Now()})
-	state, actions, err = m2.Step(Event{Kind: "unknown"})
+	state, _, err = m2.Step(Event{Kind: "unknown"})
 	if !errors.Is(err, ErrIllegalEvent) {
 		t.Errorf("expected ErrIllegalEvent, got %v", err)
 	}
@@ -84,8 +84,8 @@ func TestIllegalEventKeepsState(t *testing.T) {
 
 	// repeated Start
 	m3, _ := New(&fakeClock{t: time.Now()})
-	m3.Step(Event{Kind: Start, At: time.Now()})
-	state, actions, err = m3.Step(Event{Kind: Start, At: time.Now()})
+	_, _, _ = m3.Step(Event{Kind: Start, At: time.Now()})
+	state, _, err = m3.Step(Event{Kind: Start, At: time.Now()})
 	if !errors.Is(err, ErrIllegalEvent) {
 		t.Errorf("expected ErrIllegalEvent, got %v", err)
 	}
