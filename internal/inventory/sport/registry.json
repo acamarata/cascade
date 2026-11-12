@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-12T00:52:34Z",
+  "generated_at": "2026-11-12T04:20:28Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -11902,6 +11902,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "fleet.health.summary",
+      "sites": [
+        {
+          "file": "internal/rpc/fleet_health.go",
+          "line": 6,
+          "status": "",
+          "raw": "fleet.health.summary."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -44613,7 +44627,7 @@
       ]
     }
   ],
-  "total_sites": 4292,
-  "unspecified_count": 411,
+  "total_sites": 4293,
+  "unspecified_count": 412,
   "multi_status_count": 132
 }
