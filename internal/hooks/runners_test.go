@@ -117,7 +117,7 @@ func TestUnrunnableTypeRefusedAtDispatch(t *testing.T) {
 
 // TestEveryActionRoutedWithOriginHook proves plugin-call and agent-note
 // each call RouteAction once, with OriginHook, the type's capability, the
-// tagged params hash and command, before the rehydration seam runs.
+// tagged params hash and command-less declaration, before rehydration.
 func TestEveryActionRoutedWithOriginHook(t *testing.T) {
 	r := vaultRig(t)
 	order := &callOrder{}
@@ -129,7 +129,6 @@ func TestEveryActionRoutedWithOriginHook(t *testing.T) {
 		{ID: "n", Namespace: "jobs", ActionType: ActionTypeAgentNote, ActionParams: map[string]string{"note": "daily"}},
 	}
 	wantCap := map[string]string{"p": "hooks.plugin", "n": "hooks.note"}
-	wantCmd := map[string]string{"p": "plugin-call mail.send", "n": "agent-note daily"}
 	for i, h := range hooks {
 		if fire, _ := r.d.dispatchHook(context.Background(), h, "jobs", uint64(i+1)); fire.ResultCode != ResultSuccess {
 			t.Fatalf("fire = %+v", fire)
@@ -141,7 +140,7 @@ func TestEveryActionRoutedWithOriginHook(t *testing.T) {
 	}
 	for i, a := range actions {
 		tagged := r.seam.calls[i]
-		if a.Origin != routing.OriginHook || a.Capability != wantCap[a.Ref] || a.Command != wantCmd[a.Ref] ||
+		if a.Origin != routing.OriginHook || a.Capability != wantCap[a.Ref] || a.Command != "" || !a.CommandLess ||
 			a.Verb != string(EventKindHookFire) || string(a.Params) != paramsHash(tagged) {
 			t.Fatalf("routed action %d = %+v", i, a)
 		}

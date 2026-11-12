@@ -48,7 +48,7 @@ type RehydrateFunc func(ctx context.Context, fire Fire, tagged map[string]string
 
 // PluginParamName and PluginToolParam are the action_params keys a
 // plugin-call names its plugin and tool with; NoteNameParam names an
-// agent note. They build the routed command text.
+// agent note. They identify the target in the routing summary.
 const (
 	PluginParamName = "plugin"
 	PluginToolParam = "tool"
@@ -92,13 +92,31 @@ func AgentNoteRunner(nw NoteWriter) ActionRunner {
 // router's audit row.
 func routeCommand(t ActionType, tagged map[string]string) string {
 	switch t {
-	case ActionTypePluginCall:
-		return string(t) + " " + tagged[PluginParamName] + "." + tagged[PluginToolParam]
-	case ActionTypeAgentNote:
-		return string(t) + " " + tagged[NoteNameParam]
+	case ActionTypePluginCall, ActionTypeAgentNote:
+		return ""
 	case ActionTypeShell:
 		return tagged[ShellCommandParam]
 	default:
 		return string(t)
+	}
+}
+
+// hookCommandLess is an explicit allow-list; new action types fail closed.
+func hookCommandLess(t ActionType) bool {
+	return t == ActionTypePluginCall || t == ActionTypeAgentNote
+}
+
+// routeSummary names the target without including payload parameter values.
+func routeSummary(hook HookConfig, tagged map[string]string) string {
+	summary := "hook " + hook.ID + " " + string(hook.ActionType) + " action"
+	switch hook.ActionType {
+	case ActionTypePluginCall:
+		return summary + " " + tagged[PluginParamName] + "." + tagged[PluginToolParam]
+	case ActionTypeAgentNote:
+		return summary + " " + tagged[NoteNameParam]
+	case ActionTypeShell:
+		return summary
+	default:
+		return summary
 	}
 }

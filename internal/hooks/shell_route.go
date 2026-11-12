@@ -78,14 +78,15 @@ func (d *Dispatcher) routeAction(ctx context.Context, fire Fire, tagged map[stri
 		}
 	}
 	verdict, _, err := d.router.RouteAction(ctx, routing.Action{
-		Subject:    d.routeSubject,
-		Capability: capability,
-		Verb:       string(EventKindHookFire),
-		Command:    routeCommand(hook.ActionType, tagged),
-		Params:     []byte(paramsHash(tagged)),
-		Origin:     routing.OriginHook,
-		Ref:        hook.ID,
-		Summary:    "hook " + hook.ID + " " + string(hook.ActionType) + " action",
+		Subject:     d.routeSubject,
+		Capability:  capability,
+		Verb:        string(EventKindHookFire),
+		Command:     routeCommand(hook.ActionType, tagged),
+		CommandLess: hookCommandLess(hook.ActionType),
+		Params:      []byte(paramsHash(tagged)),
+		Origin:      routing.OriginHook,
+		Ref:         hook.ID,
+		Summary:     routeSummary(hook, tagged),
 	})
 	switch {
 	case verdict == policy.VerdictAllow && err == nil:
