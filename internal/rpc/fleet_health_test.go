@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -18,6 +19,7 @@ func fleetHealthTestEnv(t *testing.T) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	t.Setenv("CASCADE_HOME", home)
 }
 
@@ -57,6 +59,82 @@ func TestEXE14LegacyAC6(t *testing.T) {
 		if err != nil || string(raw) != want {
 			t.Fatalf("result=%s err=%v; want %s", raw, err, want)
 		}
+	}
+}
+
+// fakeFleetHealthRuntime models the source behind the RPC-owned Summary seam.
+type fakeFleetHealthRuntime struct {
+	AccountID, CredentialKind, CredentialRef, SecretRef string
+	Calls                                               int
+	Err                                                 error
+}
+
+func (f *fakeFleetHealthRuntime) Summary(context.Context) (FleetHealthSummaryDTO, error) {
+	f.Calls++
+	summary := fleetHealthTestSummary()
+	// Taint the source status too, so forwarding it would fail the proof.
+	summary.Status = strings.Join([]string{f.AccountID, f.CredentialKind, f.CredentialRef, f.SecretRef}, ":")
+	return summary, f.Err
+}
+
+func TestEXE14LegacyAC8(t *testing.T) {
+	fleetHealthTestEnv(t)
+	source := &fakeFleetHealthRuntime{
+		AccountID: "fixture-owner-14c", CredentialKind: "fixture-auth-kind-14c",
+		CredentialRef: "fixture-auth-ref-14c", SecretRef: "fixture-vault-ref-14c",
+	}
+	registry := NewRegistry()
+	if err := RegisterFleetHealthSummary(registry, FleetHealthDeps{Summary: source.Summary}); err != nil {
+		t.Fatal(err)
+	}
+	result, refusal := registry.Dispatch(context.Background(), &Request{Method: FleetHealthSummaryMethod})
+	if refusal != nil || source.Calls != 1 {
+		t.Fatalf("refusal=%v calls=%d", refusal, source.Calls)
+	}
+	want := fleetHealthTestSummary()
+	want.Status = "ok"
+	wantJSON, err := json.Marshal(NewEnvelope(1, want, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(NewEnvelope(1, result, refusal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != string(wantJSON) {
+		t.Fatal("response differs from the five-key health summary")
+	}
+	for _, seeded := range []string{source.AccountID, source.CredentialKind, source.CredentialRef, source.SecretRef} {
+		if strings.Contains(string(raw), seeded) {
+			t.Error("seeded source metadata reached the response")
+		}
+	}
+	if regexp.MustCompile(`(?i)(secret|credential|api[_-]?key|token|account_id|bearer)`).Match(raw) {
+		t.Error("sensitive metadata name reached the response")
+	}
+	t.Run("source refusal", func(t *testing.T) {
+		assertFleetHealthRefusalRedacted(t, registry, source)
+	})
+}
+
+func assertFleetHealthRefusalRedacted(t *testing.T, registry *Registry, source *fakeFleetHealthRuntime) {
+	t.Helper()
+	source.Err = errors.New(source.AccountID + source.CredentialKind + source.CredentialRef + source.SecretRef)
+	result, refusal := registry.Dispatch(context.Background(), &Request{Method: FleetHealthSummaryMethod})
+	if result != nil || refusal == nil || refusal.Code != cascade.KindUnavailable.JSONRPCCode() || source.Calls != 2 {
+		t.Fatal("source failure did not return a typed refusal without a result")
+	}
+	raw, err := json.Marshal(NewEnvelope(1, result, refusal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, seeded := range []string{source.AccountID, source.CredentialKind, source.CredentialRef, source.SecretRef} {
+		if strings.Contains(string(raw), seeded) {
+			t.Error("seeded source metadata reached the refusal response")
+		}
+	}
+	if regexp.MustCompile(`(?i)(secret|credential|api[_-]?key|token|account_id|bearer)`).Match(raw) {
+		t.Error("sensitive metadata name reached the refusal response")
 	}
 }
 

@@ -54,8 +54,8 @@ func RegisterFleetHealthSummary(registry *Registry, deps FleetHealthDeps) error 
 		if !validFleetHealthSummary(summary) {
 			return nil, cascade.New(cascade.KindInternal, "fleet.health.summary: malformed health source")
 		}
-		summary.Status = "ok"
-		return summary, nil
+		// Construct the public response explicitly; source status is untrusted.
+		return FleetHealthSummaryDTO{Status: "ok", Keys: summary.Keys}, nil
 	})
 	return nil
 }
