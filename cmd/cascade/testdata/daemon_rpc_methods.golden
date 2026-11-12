@@ -21,6 +21,8 @@ chat.threads_list
 chat.topics_list
 ci.repo_register
 ci.watch_replay_end
+conductor.delegate
+conductor.delegate_wait
 conductor.execute
 conductor.expand
 config.accept_loosening

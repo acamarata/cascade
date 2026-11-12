@@ -51,6 +51,9 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// mcp_capability_rpc.go mounts mcp.capability.check on the daemon's own
 	// Registry and never dials it. Mirrors .golangci.yml's exemption for it.
 	"mcp_capability_rpc.go": true,
+	// delegate_rpc.go mounts conductor.delegate and conductor.delegate_wait on
+	// the daemon's own Registry from wire_delegate.go; it never dials the daemon.
+	"delegate_rpc.go": true,
 	// daemon_unix_jobs_rpc.go and daemon_unix_jobs_rpc_adapters.go: the
 	// P1-E29-W6-S60-T1 composition-root call site for job.*/lease.* — see
 	// .golangci.yml's cmd-rpc-server-boundary comment (edited together

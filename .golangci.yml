@@ -184,6 +184,12 @@ linters:
             # own Registry, reading the caller principal from the handler
             # context; it never dials the daemon (P1-HRN-05d, P1-BF-R356).
             - "!**/cmd/cascade/mcp_capability_rpc.go"
+            # delegate_rpc.go earns its exemption on the same grounds: it declares
+            # conductor.delegate and conductor.delegate_wait AccessOwnerView and
+            # mounts them on the daemon's own Registry from wire_delegate.go,
+            # reading the caller principal from the handler context; it never
+            # dials the daemon.
+            - "!**/cmd/cascade/delegate_rpc.go"
             # daemon_unix_conductor.go earns its exemption by name, per this
             # rule's own comment above: it is a new COMPOSITION-ROOT file, not a
             # hand-rolled client. It is called only from buildRPCServer, it
