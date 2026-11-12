@@ -26,21 +26,18 @@
 //	internal/nodes.NewProber/NewNetworkWatcher too.
 //
 // SPORT: cmd/cascade/node (ADD, per T-2 sport_updates).
+
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"syscall"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -197,7 +194,7 @@ func composeNodeServeAttested(ctx context.Context, deps nodeServeDeps) (nodeServ
 // loop needs are built and deferred in exactly one place.
 func startNodeServeBackgroundLoops(ctx context.Context, comp nodeServeComposition, deps nodeServeDeps) (func(), error) {
 	heartbeatCtx, stopHeartbeat := context.WithCancel(ctx)
-	startOutboundHeartbeat(heartbeatCtx, comp.dataDir, comp.self, comp.keystore)
+	startOutboundHeartbeat(heartbeatCtx, comp.dataDir, comp.self, comp.keystore, deps.Clock)
 
 	presenceCtx, stopPresence := context.WithCancel(ctx)
 	closePresence, err := startPresenceSubsystems(presenceCtx, comp, deps)
@@ -218,17 +215,20 @@ func startNodeServeBackgroundLoops(ctx context.Context, comp nodeServeCompositio
 // controller endpoint captured at enrollment") when this node has a
 // ControllerBinding on disk. No binding yet (a node that has never
 // enrolled) is a valid, silent no-op — there is nothing to heartbeat to.
-func startOutboundHeartbeat(ctx context.Context, dataDir string, self nodes.Identity, keystore *nodes.NodeKeystore) {
+func startOutboundHeartbeat(ctx context.Context, dataDir string, self nodes.Identity, keystore *nodes.NodeKeystore, clocks ...cruntime.Clock) {
 	binding, ok, err := nodes.NewFileControllerBindingBackend(dataDir).Load()
 	if err != nil || !ok {
 		return
 	}
 	var seq uint64
-	client := &http.Client{Timeout: 10 * time.Second}
+	var clock cruntime.Clock = cruntime.SystemClock{}
+	if len(clocks) > 0 {
+		clock = clocks[0]
+	}
 	go nodes.RunHeartbeatLoop(ctx, nodes.HeartbeatLoopOptions{
 		Ticker:       nodes.NewSystemTicker(nodes.DefaultHeartbeatInterval),
 		NextSequence: func() uint64 { seq++; return seq },
-		Send:         httpHeartbeatSender(client, binding.Endpoint),
+		Send:         httpHeartbeatSender(binding, self.NodeID, clock, dialHeartbeatSocket),
 		BuildReport: func() nodes.CapabilityReport {
 			return nodes.CapabilityReport{K12: nodes.NewK12Preset(0, runtime.NumCPU())}
 		},
@@ -236,40 +236,6 @@ func startOutboundHeartbeat(ctx context.Context, dataDir string, self nodes.Iden
 		NodeID:       self.NodeID,
 		EnrollmentID: binding.EnrollmentID,
 	})
-}
-
-// httpHeartbeatSender POSTs a JSON-RPC 2.0 "node.heartbeat" request to
-// endpoint+RPCPath, matching 06-FORGE-SPEC §2's locked IPC shape
-// (HTTP/1.1, POST /rpc). A non-2xx or a transport failure is the typed
-// controller-unreachable error path RunHeartbeatLoop retries on the next
-// tick (this ticket's own contract: never a crash).
-func httpHeartbeatSender(client *http.Client, endpoint string) nodes.HeartbeatSender {
-	return func(ctx context.Context, f nodes.HeartbeatFrame) error {
-		params, err := json.Marshal(f)
-		if err != nil {
-			return err
-		}
-		reqBody, err := json.Marshal(map[string]any{
-			"jsonrpc": "2.0", "id": 1, "method": "node.heartbeat", "params": json.RawMessage(params),
-		})
-		if err != nil {
-			return err
-		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(endpoint, "/")+nodes.RPCPath, bytes.NewReader(reqBody))
-		if err != nil {
-			return err
-		}
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := client.Do(req)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = resp.Body.Close() }()
-		if resp.StatusCode/100 != 2 {
-			return cascade.Newf(cascade.KindUnavailable, "node serve: heartbeat POST returned status %d", resp.StatusCode)
-		}
-		return nil
-	}
 }
 
 // listenNodeSocket binds a unix socket at path with 0600 permissions,
