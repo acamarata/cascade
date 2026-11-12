@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-12T06:06:24Z",
+  "generated_at": "2026-11-12T21:23:34Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5085,6 +5085,12 @@
           "raw": "cmd/cascade daemon registrations (P1-HRN-10)."
         },
         {
+          "file": "cmd/cascade/wire_repo_watch.go",
+          "line": 5,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
+        },
+        {
           "file": "cmd/cascade/wire_resume.go",
           "line": 26,
           "status": "",
@@ -6060,6 +6066,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade repository maintenance composition",
+      "sites": [
+        {
+          "file": "cmd/cascade/repo_watch_compose.go",
+          "line": 12,
+          "status": "",
+          "raw": "cmd/cascade repository maintenance composition."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -44639,7 +44659,7 @@
       ]
     }
   ],
-  "total_sites": 4295,
-  "unspecified_count": 412,
+  "total_sites": 4297,
+  "unspecified_count": 413,
   "multi_status_count": 132
 }
