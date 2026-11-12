@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-11T20:05:50Z",
+  "generated_at": "2026-11-12T00:52:34Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -29772,6 +29772,20 @@
       ]
     },
     {
+      "name": "internal/plugins:pbd-evidence-wiring",
+      "sites": [
+        {
+          "file": "internal/plugins/pbd_evidence_wiring.go",
+          "line": 7,
+          "status": "",
+          "raw": "internal/plugins:pbd-evidence-wiring (P1-PBD-02d)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "internal/plugins:review-wiring",
       "sites": [
         {
@@ -33936,6 +33950,54 @@
       ]
     },
     {
+      "name": "jobs/completion-gate/MOVE",
+      "sites": [
+        {
+          "file": "internal/jobs/completion_checks.go",
+          "line": 4,
+          "status": "",
+          "raw": "jobs/completion-gate/MOVE (P1-PBD-01h)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "jobs/completion-reviewer",
+      "sites": [
+        {
+          "file": "internal/jobs/completion_reviewer.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "jobs/completion-reviewer/ADD (P1-PBD-01h)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "jobs/completion-reviewer/TEST",
+      "sites": [
+        {
+          "file": "internal/jobs/completion_reviewer_errors_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "jobs/completion-reviewer/TEST (P1-PBD-01h)."
+        },
+        {
+          "file": "internal/jobs/completion_reviewer_test.go",
+          "line": 4,
+          "status": "",
+          "raw": "jobs/completion-reviewer/TEST (P1-PBD-01h)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "jobs/dag-planner",
       "sites": [
         {
@@ -35810,6 +35872,20 @@
       ],
       "statuses": [
         ""
+      ]
+    },
+    {
+      "name": "nodes/controller-designation",
+      "sites": [
+        {
+          "file": "internal/nodes/designation.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "nodes/controller-designation (ADD, P1-NODE-16)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -44537,7 +44613,7 @@
       ]
     }
   ],
-  "total_sites": 4286,
-  "unspecified_count": 408,
+  "total_sites": 4292,
+  "unspecified_count": 411,
   "multi_status_count": 132
 }
