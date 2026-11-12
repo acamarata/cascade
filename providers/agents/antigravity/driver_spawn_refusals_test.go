@@ -89,6 +89,7 @@ func TestAntigravityDefaultBinaryName(t *testing.T) {
 // TestAntigravityMalformedStreamFails: a child line that is not stream-json
 // kills the group and the job ends failed with the decoder's error.
 func TestAntigravityMalformedStreamFails(t *testing.T) {
+	requireProcessGroups(t)
 	d, spec := kit(t)
 	spec.Prompt = "garbage"
 	ctx := context.Background()

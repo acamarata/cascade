@@ -123,6 +123,7 @@ func assertRefused(t *testing.T, d *ag.Driver) {
 }
 
 func TestAntigravityEnvAllowlist(t *testing.T) {
+	requireProcessGroups(t)
 	d, spec := kit(t)
 	t.Setenv("UNLISTED_PARENT_MARKER", "parent-only")
 	r, err := d.Spawn(context.Background(), spec)
@@ -188,6 +189,7 @@ func TestAntigravityEntitlementFalseRefuses(t *testing.T) {
 }
 
 func TestAntigravityUsesSpecJobID(t *testing.T) {
+	requireProcessGroups(t)
 	d, spec := kit(t)
 	spec.Prompt = "hold"
 	r, err := d.Spawn(context.Background(), spec)
@@ -228,6 +230,7 @@ func TestAntigravityExecutableReported(t *testing.T) {
 }
 
 func TestAntigravityMessageUnsupported(t *testing.T) {
+	requireProcessGroups(t)
 	d, spec := kit(t)
 	r, err := d.Spawn(context.Background(), spec)
 	if err != nil {
@@ -243,6 +246,7 @@ func TestAntigravityMessageUnsupported(t *testing.T) {
 var buildHome = os.Getenv("HOME")
 
 func TestAntigravityDriverWiring(t *testing.T) {
+	requireProcessGroups(t)
 	_, spec := kit(t)
 	root, err := filepath.Abs("../../..")
 	if err != nil {

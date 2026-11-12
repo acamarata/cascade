@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -59,6 +60,7 @@ func TestAntigravityUnknownJobRefuses(t *testing.T) {
 // gets a generated one; after Collect the job is accepted, has no
 // artifacts, and a late Cancel is a no-op.
 func TestAntigravityGeneratesJobIDAndReportsTerminal(t *testing.T) {
+	requireProcessGroups(t)
 	d, spec := kit(t)
 	spec.JobID = ""
 	ctx := context.Background()
@@ -87,6 +89,7 @@ func TestAntigravityGeneratesJobIDAndReportsTerminal(t *testing.T) {
 // ErrRunCancelled without waiting; Cancel kills the held child and the job
 // ends cancelled.
 func TestAntigravityCancelHeldJob(t *testing.T) {
+	requireProcessGroups(t)
 	d, spec := kit(t)
 	spec.Prompt = "hold"
 	ctx := context.Background()
@@ -118,5 +121,14 @@ func sentinel(t *testing.T, got, want error) {
 	t.Helper()
 	if got != want || got == nil || got.Error() != want.Error() {
 		t.Fatalf("error = %v, want %v", got, want)
+	}
+}
+
+// requireProcessGroups skips tests that spawn the child: the driver runs it
+// in a native process group, which only unix provides.
+func requireProcessGroups(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("native process groups require unix")
 	}
 }
