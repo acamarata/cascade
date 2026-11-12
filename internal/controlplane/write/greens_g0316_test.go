@@ -5,22 +5,13 @@ import (
 	"testing"
 )
 
-func TestGreensDecreasedSeverityError(t *testing.T) {
-	lc := NewGreensLifecycle()
-	if lc.Kind != "greens_decreased" {
-		t.Errorf("Kind = %q, want %q", lc.Kind, "greens_decreased")
-	}
-	if lc.Severity != "error" {
-		t.Errorf("Severity = %q, want %q", lc.Severity, "error")
-	}
-	if lc.State != GreensOpen {
-		t.Errorf("State = %q, want %q", lc.State, GreensOpen)
-	}
+type greensCase struct {
+	name string
+	in   GreensLifecycle
+}
 
-	tests := []struct {
-		name string
-		in   GreensLifecycle
-	}{
+func greensInvalidCases() []greensCase {
+	return []greensCase{
 		{
 			name: "invalid kind",
 			in:   GreensLifecycle{Kind: "wrong", Severity: "error", State: GreensOpen},
@@ -50,6 +41,21 @@ func TestGreensDecreasedSeverityError(t *testing.T) {
 			in:   GreensLifecycle{},
 		},
 	}
+}
+
+func TestGreensDecreasedSeverityError(t *testing.T) {
+	lc := NewGreensLifecycle()
+	if lc.Kind != "greens_decreased" {
+		t.Errorf("Kind = %q, want %q", lc.Kind, "greens_decreased")
+	}
+	if lc.Severity != "error" {
+		t.Errorf("Severity = %q, want %q", lc.Severity, "error")
+	}
+	if lc.State != GreensOpen {
+		t.Errorf("State = %q, want %q", lc.State, GreensOpen)
+	}
+
+	tests := greensInvalidCases()
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -62,7 +68,9 @@ func TestGreensDecreasedSeverityError(t *testing.T) {
 			}
 		})
 	}
+}
 
+func TestGreensValidStates(t *testing.T) {
 	validTests := []struct {
 		name string
 		in   GreensLifecycle

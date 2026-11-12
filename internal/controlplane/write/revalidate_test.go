@@ -77,16 +77,16 @@ func TestRevalidateDefaultModeStillParks(t *testing.T) {
 	}
 }
 
-func TestRevalidateValidationAndDependencyFailure(t *testing.T) {
-	errTest := errors.New("test error")
+type revalidateCase struct {
+	name      string
+	req       Request
+	wantErr   error
+	wantPark  int
+	wantNotif int
+}
 
-	cases := []struct {
-		name      string
-		req       Request
-		wantErr   error
-		wantPark  int
-		wantNotif int
-	}{
+func revalidateCases0(_ error) []revalidateCase {
+	return []revalidateCase{
 		{
 			name: "unknown mode",
 			req: Request{
@@ -127,6 +127,11 @@ func TestRevalidateValidationAndDependencyFailure(t *testing.T) {
 			},
 			wantErr: ErrInvalidRevalidate,
 		},
+	}
+}
+
+func revalidateCases1(_ error) []revalidateCase {
+	return []revalidateCase{
 		{
 			name: "blank park Caller",
 			req: Request{
@@ -167,6 +172,11 @@ func TestRevalidateValidationAndDependencyFailure(t *testing.T) {
 			},
 			wantErr: ErrInvalidRevalidate,
 		},
+	}
+}
+
+func revalidateCases2(errTest error) []revalidateCase {
+	return []revalidateCase{
 		{
 			name: "nil Stale",
 			req: Request{
@@ -198,6 +208,11 @@ func TestRevalidateValidationAndDependencyFailure(t *testing.T) {
 			wantErr:  errTest,
 			wantPark: 0,
 		},
+	}
+}
+
+func revalidateCases3(errTest error) []revalidateCase {
+	return []revalidateCase{
 		{
 			name: "later park error",
 			req: Request{
@@ -231,6 +246,18 @@ func TestRevalidateValidationAndDependencyFailure(t *testing.T) {
 			wantErr:   errTest,
 			wantNotif: 1,
 		},
+	}
+}
+
+func TestRevalidateValidationAndDependencyFailure(t *testing.T) {
+	errTest := errors.New("test error")
+
+	var cases []revalidateCase
+	for _, g := range [][]revalidateCase{
+		revalidateCases0(errTest), revalidateCases1(errTest),
+		revalidateCases2(errTest), revalidateCases3(errTest),
+	} {
+		cases = append(cases, g...)
 	}
 
 	for _, tc := range cases {

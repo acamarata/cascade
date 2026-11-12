@@ -27,14 +27,14 @@ func (m *mockEventSink) InsertScheduledIndexEvent(event ScheduledIndexEvent) err
 	return m.err
 }
 
-func TestWriteScheduledIndexEventValid(t *testing.T) {
+func TestEmitScheduledIndexEventValid(t *testing.T) {
 	sink := &mockEventSink{}
 	event := ScheduledIndexEvent{
 		Counts: 3,
 		Names:  []string{"a", "b", "c"},
 	}
 
-	err := WriteScheduledIndexEvent(sink, event)
+	err := EmitScheduledIndexEvent(sink, event)
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
@@ -59,7 +59,7 @@ func TestWriteScheduledIndexEventValid(t *testing.T) {
 	expectedErr := errors.New("sink error")
 	sink.err = expectedErr
 	sink.calls = nil
-	err = WriteScheduledIndexEvent(sink, event)
+	err = EmitScheduledIndexEvent(sink, event)
 	if err != expectedErr {
 		t.Errorf("expected exact error %v, got %v", expectedErr, err)
 	}

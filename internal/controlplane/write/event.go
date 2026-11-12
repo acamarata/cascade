@@ -17,10 +17,10 @@ type EventSink interface {
 	InsertScheduledIndexEvent(event ScheduledIndexEvent) error
 }
 
-// WriteScheduledIndexEvent writes a ScheduledIndexEvent to the given sink.
+// EmitScheduledIndexEvent writes a ScheduledIndexEvent to the given sink.
 // It passes a copied Names slice to the sink to prevent mutation of the caller's input.
 // If the sink returns an error, it is propagated unchanged without retry.
-func WriteScheduledIndexEvent(sink EventSink, event ScheduledIndexEvent) error {
+func EmitScheduledIndexEvent(sink EventSink, event ScheduledIndexEvent) error {
 	if sink == nil {
 		return ErrInvalidScheduledIndexEvent
 	}

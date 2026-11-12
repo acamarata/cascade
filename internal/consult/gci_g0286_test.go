@@ -6,14 +6,16 @@ import (
 	"testing"
 )
 
-func TestGCIBlockOrdering(t *testing.T) {
-	tests := []struct {
-		name      string
-		sections  []GCISection
-		omissions string
-		want      string
-		wantErr   error
-	}{
+type gciBlockCase struct {
+	name      string
+	sections  []GCISection
+	omissions string
+	want      string
+	wantErr   error
+}
+
+func gciBlockOrderingCases() []gciBlockCase {
+	return []gciBlockCase{
 		{
 			name: "regular before binding",
 			sections: []GCISection{
@@ -79,7 +81,10 @@ func TestGCIBlockOrdering(t *testing.T) {
 			wantErr: ErrBudgetExceeded,
 		},
 	}
+}
 
+func TestGCIBlockOrdering(t *testing.T) {
+	tests := gciBlockOrderingCases()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := AssembleGCIBlock(tt.sections, tt.omissions)

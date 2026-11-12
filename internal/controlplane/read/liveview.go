@@ -82,6 +82,10 @@ func GetLiveView(s Store, id string, now time.Time) (*LiveView, error) {
 		return nil, ErrUnknownTicket
 	}
 
+	return projectLiveView(rec, now)
+}
+
+func projectLiveView(rec TicketRecord, now time.Time) (*LiveView, error) {
 	if rec.Attempts < 0 {
 		return nil, ErrInvalidLiveView
 	}
