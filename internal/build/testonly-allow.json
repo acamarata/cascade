@@ -947,14 +947,6 @@
     "symbol": "internal/fleet/economics.ApplyOverrides"
   },
   {
-    "added_by_ticket": "P1-CAP-05",
-    "caller_site": "internal/daemon/fleet_candidates.go",
-    "expected_caller": "the AO/S-79.T4 dispatch path's config-to-Tables resolution step",
-    "reason": "P1-E41-W9-S79-T2 ships Tables as an immutable snapshot type consumed by ApplyOverrides. Its real production caller is the daemon composition root that resolves the live [fleet.economics] overrides before a dispatch decision, which is AO/S-79.T3/T4's scope (this ticket's own NOT IN SCOPE section names both), not T2's.",
-    "retire_ticket": "P1-TOP-09",
-    "symbol": "internal/fleet/economics.NewTables"
-  },
-  {
     "added_by_ticket": "P1-AGT-11",
     "caller_site": "internal/executive/envelope_debit.go",
     "expected_caller": "internal/executive/envelope_debit.go, the executive budget debit that registers itself as a pre-spawn gate at init; retire this entry once that file calls RegisterPreSpawnGate",
@@ -1783,43 +1775,43 @@
     "symbol": "internal/jobs.ReviewEvidenceRef"
   },
   {
-    "added_by_ticket": "P1-TOP-08e",
-    "caller_site": "internal/fleet/capacity/rank_selector.go",
-    "expected_caller": "internal/fleet/capacity/rank_selector.go, the P1-TOP-09b capacity selector that ranks candidates through the economics ranker; retire this entry once that file calls Rank",
-    "reason": "P1-TOP-08e ships the ranker and its sealed registry with goldens; its first production caller is the capacity selector of P1-TOP-09b, which depends on it.",
-    "retire_ticket": "P1-TOP-09b",
-    "symbol": "internal/fleet/economics.Rank"
+    "added_by_ticket": "P1-TOP-09c",
+    "caller_site": "internal/daemon/fleet_candidates.go",
+    "expected_caller": "internal/daemon/fleet_candidates.go, which P1-TOP-09e adds; retire this entry once that file calls NewRankSelector",
+    "reason": "P1-TOP-09c ships the rank-only selector with tests; the daemon builds it over its candidate source in P1-TOP-09e, which depends on it.",
+    "retire_ticket": "P1-TOP-09e",
+    "symbol": "internal/fleet/capacity.NewRankSelector"
+  },
+  {
+    "added_by_ticket": "P1-TOP-08",
+    "caller_site": "internal/daemon/fleet_candidates.go",
+    "expected_caller": "internal/daemon/fleet_candidates.go, which P1-TOP-09e adds; retire this entry once that file calls EffectiveLaneClass",
+    "reason": "Candidates are built from lanes and accounts by the daemon candidate source of P1-TOP-09e, which resolves the effective class there.",
+    "retire_ticket": "P1-TOP-09e",
+    "symbol": "internal/fleet/economics.EffectiveLaneClass"
+  },
+  {
+    "added_by_ticket": "P1-TOP-08c",
+    "caller_site": "internal/daemon/fleet_candidates.go",
+    "expected_caller": "internal/daemon/fleet_candidates.go, which P1-TOP-09e adds; retire this entry once that file calls EvaluateUtilityTerms",
+    "reason": "The ranker sums the registry's term rows; the daemon candidate source of P1-TOP-09e explains a candidate's score with this helper.",
+    "retire_ticket": "P1-TOP-09e",
+    "symbol": "internal/fleet/economics.EvaluateUtilityTerms"
   },
   {
     "added_by_ticket": "P1-TOP-08e",
-    "caller_site": "internal/fleet/capacity/rank_selector.go",
-    "expected_caller": "internal/fleet/capacity/rank_selector.go, the P1-TOP-09b capacity selector that ranks candidates through the economics ranker; retire this entry once that file calls RegisterPredicate",
-    "reason": "The sealed registry accepts extra predicates before first use; the capacity selector of P1-TOP-09b registers its learned inputs.",
-    "retire_ticket": "P1-TOP-09b",
+    "caller_site": "internal/daemon/subsystems_fleet_learned.go",
+    "expected_caller": "internal/daemon/subsystems_fleet_learned.go, which P1-TOP-09f adds; retire this entry once that file calls RegisterPredicate",
+    "reason": "The sealed registry takes extra predicates before first use; the learned-input subsystem of P1-TOP-09f registers them.",
+    "retire_ticket": "P1-TOP-09f",
     "symbol": "internal/fleet/economics.RegisterPredicate"
   },
   {
     "added_by_ticket": "P1-TOP-08e",
-    "caller_site": "internal/fleet/capacity/rank_selector.go",
-    "expected_caller": "internal/fleet/capacity/rank_selector.go, the P1-TOP-09b capacity selector that ranks candidates through the economics ranker; retire this entry once that file calls RegisterTerm",
-    "reason": "The sealed registry accepts extra utility terms before first use; the capacity selector of P1-TOP-09b registers its learned inputs.",
-    "retire_ticket": "P1-TOP-09b",
+    "caller_site": "internal/daemon/subsystems_fleet_learned.go",
+    "expected_caller": "internal/daemon/subsystems_fleet_learned.go, which P1-TOP-09f adds; retire this entry once that file calls RegisterTerm",
+    "reason": "The sealed registry takes extra utility terms before first use; the learned-input subsystem of P1-TOP-09f registers them.",
+    "retire_ticket": "P1-TOP-09f",
     "symbol": "internal/fleet/economics.RegisterTerm"
-  },
-  {
-    "added_by_ticket": "P1-TOP-08c",
-    "caller_site": "internal/fleet/capacity/rank_selector.go",
-    "expected_caller": "internal/fleet/capacity/rank_selector.go, the P1-TOP-09b capacity selector that ranks candidates through the economics ranker; retire this entry once that file calls EvaluateUtilityTerms",
-    "reason": "P1-TOP-08e ranks through the registry's term rows, not this one-shot helper; the selector of P1-TOP-09b explains a candidate's score with it.",
-    "retire_ticket": "P1-TOP-09b",
-    "symbol": "internal/fleet/economics.EvaluateUtilityTerms"
-  },
-  {
-    "added_by_ticket": "P1-TOP-08",
-    "caller_site": "internal/fleet/capacity/rank_selector.go",
-    "expected_caller": "internal/fleet/capacity/rank_selector.go, the P1-TOP-09b capacity selector that ranks candidates through the economics ranker; retire this entry once that file calls EffectiveLaneClass",
-    "reason": "P1-TOP-08e takes the lane class from the candidate snapshot; the selector of P1-TOP-09b builds candidates from lanes and accounts and resolves the effective class there.",
-    "retire_ticket": "P1-TOP-09b",
-    "symbol": "internal/fleet/economics.EffectiveLaneClass"
   }
 ]
