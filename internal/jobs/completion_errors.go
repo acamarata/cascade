@@ -225,7 +225,12 @@ type ErrorCompletionDenied struct {
 	// structured payload of its own (an expired/absent/foreign approval
 	// token) -- named so ExpiredApproval never denies silently.
 	Reason string
+	// Cause preserves the underlying completion refusal for errors.Is and errors.As.
+	Cause error
 }
+
+// Unwrap returns the underlying completion refusal.
+func (e *ErrorCompletionDenied) Unwrap() error { return e.Cause }
 
 // Error implements the error interface, naming every populated field.
 func (e *ErrorCompletionDenied) Error() string {

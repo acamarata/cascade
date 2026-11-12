@@ -58,6 +58,7 @@ type CompletionPolicyDeps struct {
 	RequireAcceptance bool
 	AttestationTrust  attest.TrustStore
 	Countersign       attest.CountersignVerifier
+	Reviewer          *ReviewerEnforcement
 }
 
 // CompletionPolicy implements the R-16.12 completion gate.
@@ -103,6 +104,8 @@ type TransitionRequest struct {
 	TicketID           string
 	Attempt            int
 	attestationNonce   string
+
+	ReviewerTreeAtCompletion string
 }
 
 // Transition checks identity, ordering, evidence, scope, approval and acceptance
@@ -124,6 +127,9 @@ func (cp *CompletionPolicy) Transition(ctx context.Context, req TransitionReques
 	derived, denyErr := cp.reclassifyAndCheck(ctx, req)
 	if denyErr != nil {
 		return denyErr
+	}
+	if err := cp.checkReviewer(ctx, req, derived); err != nil {
+		return err
 	}
 	if err := cp.verifyAcceptance(ctx, &req); err != nil {
 		return err
@@ -196,42 +202,6 @@ func (cp *CompletionPolicy) pushOutOfScopeAttention(ctx context.Context, req Tra
 		ScopeRef:  scope.Ref{Kind: scope.ScopeKindTask, ID: req.Job.ID},
 		Priority:  0,
 	})
-}
-
-// missingEvidence returns required EvidenceKinds lacking a passing, non-agent-claim record.
-func (cp *CompletionPolicy) missingEvidence(ctx context.Context, req TransitionRequest, gateSet GateSet) ([]EvidenceKind, error) {
-	var missing []EvidenceKind
-	for _, kind := range evidenceKindsForGateSet(gateSet) {
-		rec, err := cp.deps.Ledger.Query(ctx, req.Job.ID, kind)
-		if err != nil {
-			missing = append(missing, kind)
-			continue
-		}
-		if rec.ProducerCapability == ProducerAgentClaim || rec.Outcome != OutcomePass ||
-			(kind == EvidenceCIAttestation && !cp.eligibleAttestation(ctx, req, rec)) {
-			missing = append(missing, kind)
-		}
-	}
-	return missing, nil
-}
-
-// checkpointMismatch compares req.CheckpointID verbatim against the evidence
-// rows' checkpoint id (R-21.144); an empty CheckpointID never mismatches.
-func (cp *CompletionPolicy) checkpointMismatch(ctx context.Context, req TransitionRequest) *string {
-	if req.CheckpointID == "" {
-		return nil
-	}
-	for _, kind := range []EvidenceKind{EvidenceBuild, EvidenceLint, EvidenceTests, EvidenceReview, EvidenceAdversarial} {
-		rec, err := cp.deps.Ledger.Query(ctx, req.Job.ID, kind)
-		if err != nil {
-			continue
-		}
-		if rec.CheckpointID != "" && rec.CheckpointID != req.CheckpointID {
-			got := rec.CheckpointID
-			return &got
-		}
-	}
-	return nil
 }
 
 // checkApproval consumes the Critical-class token bound to job, tree and policy.
