@@ -1073,20 +1073,6 @@
     "symbol": "internal/secrets.NewEntry"
   },
   {
-    "caller_site": "internal/mcp/profile_capability.go",
-    "expected_caller": "internal/mcp/profile_capability.go, the profile capability filter P1-HRN-05c adds over the MCP server; retire this entry once that file calls ProfileMembers",
-    "reason": "P1-HRN-05a ships the tool profiles and member sets (contract:mcp-tool-profile); the server-side filter that applies them is P1-HRN-05c, so a production call now would be a fabricated one.",
-    "retire_ticket": "P1-HRN-05",
-    "symbol": "internal/mcp.ProfileMembers"
-  },
-  {
-    "caller_site": "internal/mcp/profile_capability.go",
-    "expected_caller": "internal/mcp/profile_capability.go (P1-HRN-05c), which resolves compact aliases under the compact profiles; retire this entry once that file reads CompactAlias",
-    "reason": "P1-HRN-05a ships the compact alias table with the member sets; the profile filter that resolves aliases is P1-HRN-05c.",
-    "retire_ticket": "P1-HRN-05",
-    "symbol": "internal/mcp.CompactAlias"
-  },
-  {
     "caller_site": "providers/agents/antigravity/run.go",
     "expected_caller": "providers/agents/antigravity/run.go, the run loop P1-AGT-07f adds, which decodes the child's stream-json through the filter; retire this entry once that file calls NewDecoder",
     "reason": "P1-AGT-07d ships the stream-json decoder, filter and protocol pin; the run loop that feeds it the child's output is P1-AGT-07f.",
@@ -1122,20 +1108,6 @@
     "symbol": "internal/nodes.NewSSHDialerFromSigner"
   },
   {
-    "caller_site": "internal/jobs/completion_reviewer.go",
-    "expected_caller": "internal/jobs/completion_reviewer.go, which P1-PBD-01h refuses accepted for review-class jobs without a distinct-family reviewer; retire this entry once that file calls ErrHumanApprovalRequired",
-    "reason": "P1-PBD-01b ships ErrHumanApprovalRequired with its tests; its first production caller is internal/jobs/completion_reviewer.go from P1-PBD-01h.",
-    "retire_ticket": "P1-PBD-01",
-    "symbol": "internal/jobs.ErrHumanApprovalRequired"
-  },
-  {
-    "caller_site": "internal/jobs/completion_reviewer.go",
-    "expected_caller": "internal/jobs/completion_reviewer.go, which P1-PBD-01h checks the observed reviewer family before accepted; retire this entry once that file calls VerifyObservedFamily",
-    "reason": "P1-PBD-01b ships VerifyObservedFamily with its tests; its first production caller is internal/jobs/completion_reviewer.go from P1-PBD-01h.",
-    "retire_ticket": "P1-PBD-01",
-    "symbol": "internal/jobs.VerifyObservedFamily"
-  },
-  {
     "caller_site": "internal/fleet/economics/refresh_grant.go",
     "expected_caller": "internal/fleet/economics/refresh_grant.go, which P1-TOP-13d adds RefreshGrantOnce, the custody-gated grant path; retire this entry once that file calls NewJSONGrantPoster",
     "reason": "P1-TOP-13a ships NewJSONGrantPoster with its tests; its first production caller is internal/fleet/economics/refresh_grant.go from P1-TOP-13d.",
@@ -1155,13 +1127,6 @@
     "reason": "P1-TOP-13a ships FetchUsage with its tests; its first production caller is internal/fleet/economics/usage_poll.go from P1-TOP-13e.",
     "retire_ticket": "P1-TOP-13",
     "symbol": "providers/agents/claude.FetchUsage"
-  },
-  {
-    "caller_site": "internal/jobs/completion_reviewer.go",
-    "expected_caller": "internal/jobs/completion_reviewer.go, which P1-PBD-01h refuses accepted for review-class jobs that were not read-only; retire this entry once that file calls VerifyReadOnly",
-    "reason": "P1-PBD-01a ships VerifyReadOnly with its tests; its first production caller is internal/jobs/completion_reviewer.go from P1-PBD-01h.",
-    "retire_ticket": "P1-PBD-01",
-    "symbol": "internal/jobs.VerifyReadOnly"
   },
   {
     "caller_site": "cmd/cascade/daemon_unix_gate_stall.go",
@@ -1204,27 +1169,6 @@
     "reason": "P1-HRN-08b ships MethodToolGate with its tests; its first production caller is cmd/cascade/fleet_tool_gate.go from P1-HRN-08d.",
     "retire_ticket": "P1-HRN-08",
     "symbol": "internal/fleet/hookpacks.MethodToolGate"
-  },
-  {
-    "caller_site": "internal/fleet/hookpacks/tool_gate_command.go",
-    "expected_caller": "internal/fleet/hookpacks/tool_gate_command.go, which P1-HRN-08c registers the tool-gate hook pack with its capability; retire this entry once that file calls ToolGateCapability",
-    "reason": "P1-HRN-08b ships ToolGateCapability with its tests; its first production caller is internal/fleet/hookpacks/tool_gate_command.go from P1-HRN-08c.",
-    "retire_ticket": "P1-HRN-08",
-    "symbol": "internal/fleet/hookpacks.ToolGateCapability"
-  },
-  {
-    "caller_site": "internal/fleet/hookpacks/tool_gate_command.go",
-    "expected_caller": "internal/fleet/hookpacks/tool_gate_command.go, which P1-HRN-08c gives the gate hook command its client deadline; retire this entry once that file calls ToolGateClientDeadline",
-    "reason": "P1-HRN-08b ships ToolGateClientDeadline with its tests; its first production caller is internal/fleet/hookpacks/tool_gate_command.go from P1-HRN-08c.",
-    "retire_ticket": "P1-HRN-08",
-    "symbol": "internal/fleet/hookpacks.ToolGateClientDeadline"
-  },
-  {
-    "caller_site": "internal/fleet/hookpacks/tool_gate_command.go",
-    "expected_caller": "internal/fleet/hookpacks/tool_gate_command.go, which P1-HRN-08c renders the tool-gate descriptor with TimeoutSeconds; retire this entry once that file calls ToolGateHookTimeoutSeconds",
-    "reason": "P1-HRN-08b ships ToolGateHookTimeoutSeconds with its tests; its first production caller is internal/fleet/hookpacks/tool_gate_command.go from P1-HRN-08c.",
-    "retire_ticket": "P1-HRN-08",
-    "symbol": "internal/fleet/hookpacks.ToolGateHookTimeoutSeconds"
   },
   {
     "caller_site": "internal/learn/canary.go",
@@ -1400,14 +1344,6 @@
     "symbol": "internal/context/generate.GeneratedLocations"
   },
   {
-    "added_by_ticket": "P1-CI-15b",
-    "caller_site": "cmd/cascade/ci_attest_role.go",
-    "expected_caller": "cmd/cascade/ci_attest_role.go, the role-based trust store picker that opens the node store with jobs.NewCiAttestTrustStore and wraps it in ci.NewVouchedTrustStore; retire this entry once that file calls it",
-    "reason": "P1-CI-15b adds the node-side ci_attest_trust table and its store, tested directly. The node role branch of `cascade ci attest verify` that opens it is P1-CI-15g, which depends on P1-CI-15d and P1-CI-15e.",
-    "retire_ticket": "P1-CI-15g",
-    "symbol": "internal/jobs.NewCiAttestTrustStore"
-  },
-  {
     "added_by_ticket": "P1-CI-05a",
     "caller_site": "cmd/cascade/node_gitgate.go",
     "expected_caller": "cmd/cascade/node_gitgate.go, the `cascade node git-gate pre-receive` verb that reads the hook stdin and calls ci.CheckPush over the parsed refs; retire this entry once that file calls CheckPush",
@@ -1422,14 +1358,6 @@
     "reason": "Sibling of ci.CheckPush: P1-CI-05a ships the stdin parser with tests only. The pre-receive verb in P1-CI-05e is its first production caller.",
     "retire_ticket": "P1-CI-05e",
     "symbol": "internal/ci.ParsePreReceiveStdin"
-  },
-  {
-    "added_by_ticket": "P1-TOP-06e",
-    "caller_site": "internal/fleet/economics/rank_predicates.go",
-    "expected_caller": "internal/fleet/economics/rank_predicates.go, the code that calls EligibleTaskClasses once P1-TOP-08d lands; retire this entry once that file calls it",
-    "reason": "P1-TOP-06a ships EligibleTaskClasses with its tests; its first production caller is internal/daemon/subsystems_fleet_topology.go from P1-TOP-06e. The earlier caller_site file now exists without the call, so the entry points at the file in P1-TOP-08d that will make it.",
-    "retire_ticket": "P1-TOP-08d",
-    "symbol": "internal/fleet/topology.EligibleTaskClasses"
   },
   {
     "added_by_ticket": "P1-EXE-14a",
@@ -1663,14 +1591,6 @@
     "symbol": "internal/jobs.ApplyReviewerSchema"
   },
   {
-    "added_by_ticket": "P1-PBD-01e",
-    "caller_site": "internal/jobs/completion_reviewer.go",
-    "expected_caller": "internal/jobs/completion_reviewer.go, the P1-PBD-01h caller of ReviewEvidenceRef; retire this entry once that file calls it",
-    "reason": "ReviewEvidenceRef ships with its tests; its first production caller is internal/jobs/completion_reviewer.go from P1-PBD-01h, not built yet.",
-    "retire_ticket": "P1-PBD-01h",
-    "symbol": "internal/jobs.ReviewEvidenceRef"
-  },
-  {
     "added_by_ticket": "P1-PBD-02a",
     "caller_site": "plugins/pbd/evidence_mount.go",
     "expected_caller": "plugins/pbd/evidence_mount.go, the P1-PBD-02b caller of EvidenceRPC; retire this entry once that file calls it",
@@ -1687,28 +1607,12 @@
     "symbol": "plugins/pbd.RunEvidence"
   },
   {
-    "added_by_ticket": "P1-PBD-02a",
-    "caller_site": "internal/plugins/pbd_evidence_wiring.go",
-    "expected_caller": "internal/plugins/pbd_evidence_wiring.go, the P1-PBD-02d caller of SetEvidenceReader; retire this entry once that file calls it",
-    "reason": "SetEvidenceReader ships with its tests; its first production caller is internal/plugins/pbd_evidence_wiring.go from P1-PBD-02d, not built yet.",
-    "retire_ticket": "P1-PBD-02d",
-    "symbol": "plugins/pbd.SetEvidenceReader"
-  },
-  {
     "added_by_ticket": "P1-TOP-08a",
     "caller_site": "cmd/cascade/fleet_capacity_economics.go",
     "expected_caller": "cmd/cascade/fleet_capacity_economics.go, the P1-TOP-12b caller of ExplainRanking; retire this entry once that file calls it",
     "reason": "ExplainRanking ships with its tests; its first production caller is cmd/cascade/fleet_capacity_economics.go from P1-TOP-12b, not built yet.",
     "retire_ticket": "P1-TOP-12b",
     "symbol": "internal/fleet/economics.ExplainRanking"
-  },
-  {
-    "added_by_ticket": "P1-TOP-08a",
-    "caller_site": "internal/fleet/economics/rank_terms.go",
-    "expected_caller": "internal/fleet/economics/rank_terms.go, the P1-TOP-08c caller of UtilityTerm; retire this entry once that file calls it",
-    "reason": "UtilityTerm ships with its tests; its first production caller is internal/fleet/economics/rank_terms.go from P1-TOP-08c, not built yet.",
-    "retire_ticket": "P1-TOP-08c",
-    "symbol": "internal/fleet/economics.UtilityTerm"
   },
   {
     "added_by_ticket": "P1-TOP-10c",
@@ -1767,14 +1671,6 @@
     "symbol": "internal/review.ProviderFamily"
   },
   {
-    "added_by_ticket": "P1-TOP-08b",
-    "caller_site": "internal/fleet/economics/rank_terms.go",
-    "expected_caller": "internal/fleet/economics/rank_terms.go, the P1-TOP-08c caller of CorrelationPenalty; retire this entry once that file calls it",
-    "reason": "P1-TOP-08b ships internal/fleet/economics.CorrelationPenalty with its tests; the rank terms that apply the penalty are the next ticket. Its first production caller is internal/fleet/economics/rank_terms.go from P1-TOP-08c, not built yet.",
-    "retire_ticket": "P1-TOP-08c",
-    "symbol": "internal/fleet/economics.CorrelationPenalty"
-  },
-  {
     "added_by_ticket": "P1-AGT-07c",
     "caller_site": "providers/agents/antigravity/driver.go",
     "expected_caller": "providers/agents/antigravity/driver.go, the P1-AGT-07e caller of BuildArgv; retire this entry once that file calls it",
@@ -1812,5 +1708,109 @@
     "reason": "P1-NODE-20a ships internal/nodes.HostKeyFingerprintFromFile with its tests; the CLI that reads the host key for the payload is a later ticket. Its first production caller is cmd/cascade/node_enroll_payload.go from P1-NODE-20d, not built yet.",
     "retire_ticket": "P1-NODE-20d",
     "symbol": "internal/nodes.HostKeyFingerprintFromFile"
+  },
+  {
+    "added_by_ticket": "P1-HRN-05c",
+    "caller_site": "cmd/cascade/guarded_mcp.go",
+    "expected_caller": "cmd/cascade/guarded_mcp.go, which P1-HRN-05e adds; retire this entry once that file calls ToolCapability",
+    "reason": "P1-HRN-05c ships the tool capability name and the server-side checker seam; the CLI checker that maps a tool to its policy capability is P1-HRN-05e.",
+    "retire_ticket": "P1-HRN-05e",
+    "symbol": "internal/mcp.ToolCapability"
+  },
+  {
+    "added_by_ticket": "P1-HRN-05c",
+    "caller_site": "cmd/cascade/mcp_profile.go",
+    "expected_caller": "cmd/cascade/mcp_profile.go, which P1-HRN-05e adds; retire this entry once that file calls ExecutiveMCPConfigJSON",
+    "reason": "P1-HRN-05c ships the compact-write MCP config; the profile surface that emits it is P1-HRN-05e.",
+    "retire_ticket": "P1-HRN-05e",
+    "symbol": "internal/mcp.ExecutiveMCPConfigJSON"
+  },
+  {
+    "added_by_ticket": "P1-HRN-05a",
+    "caller_site": "cmd/cascade/mcp_profile.go",
+    "expected_caller": "cmd/cascade/mcp_profile.go, which P1-HRN-05e adds; retire this entry once that file calls CompactAlias",
+    "reason": "The call-time checker of P1-HRN-05c filters by profile without resolving aliases; alias resolution for the served profile moves to the P1-HRN-05e profile surface.",
+    "retire_ticket": "P1-HRN-05e",
+    "symbol": "internal/mcp.CompactAlias"
+  },
+  {
+    "added_by_ticket": "P1-HRN-05a",
+    "caller_site": "cmd/cascade/mcp_profile.go",
+    "expected_caller": "cmd/cascade/mcp_profile.go, which P1-HRN-05e adds; retire this entry once that file calls ProfileMembers",
+    "reason": "The call-time checker of P1-HRN-05c checks the compact-write names directly; listing a profile's members moves to the P1-HRN-05e profile surface.",
+    "retire_ticket": "P1-HRN-05e",
+    "symbol": "internal/mcp.ProfileMembers"
+  },
+  {
+    "added_by_ticket": "P1-HRN-08b",
+    "caller_site": "cmd/cascade/fleet_tool_gate.go",
+    "expected_caller": "cmd/cascade/fleet_tool_gate.go, which P1-HRN-08d adds; retire this entry once that file calls ToolGateCapability",
+    "reason": "P1-HRN-08c registers the pack and renders its descriptor; the capability is checked by the fleet tool-gate command of P1-HRN-08d.",
+    "retire_ticket": "P1-HRN-08d",
+    "symbol": "internal/fleet/hookpacks.ToolGateCapability"
+  },
+  {
+    "added_by_ticket": "P1-HRN-08b",
+    "caller_site": "cmd/cascade/fleet_tool_gate.go",
+    "expected_caller": "cmd/cascade/fleet_tool_gate.go, which P1-HRN-08d adds; retire this entry once that file calls ToolGateClientDeadline",
+    "reason": "The client deadline bounds the fleet tool-gate command's daemon call, which P1-HRN-08d adds; the pack file only renders the hook descriptor.",
+    "retire_ticket": "P1-HRN-08d",
+    "symbol": "internal/fleet/hookpacks.ToolGateClientDeadline"
+  },
+  {
+    "added_by_ticket": "P1-NODE-16a",
+    "caller_site": "internal/nodes/designation_bootstrap.go",
+    "expected_caller": "internal/nodes/designation_bootstrap.go, which P1-NODE-16ab adds; retire this entry once that file calls Designate",
+    "reason": "P1-NODE-16aa ships the designation type, file backend and handover with tests; the bootstrap that opens the backend and designates is P1-NODE-16ab, which depends on it.",
+    "retire_ticket": "P1-NODE-16",
+    "symbol": "internal/nodes.Designate"
+  },
+  {
+    "added_by_ticket": "P1-NODE-16a",
+    "caller_site": "internal/nodes/designation_bootstrap.go",
+    "expected_caller": "internal/nodes/designation_bootstrap.go, which P1-NODE-16ab adds; retire this entry once that file calls Handover",
+    "reason": "P1-NODE-16aa ships the designation type, file backend and handover with tests; the bootstrap that opens the backend and designates is P1-NODE-16ab, which depends on it.",
+    "retire_ticket": "P1-NODE-16",
+    "symbol": "internal/nodes.Handover"
+  },
+  {
+    "added_by_ticket": "P1-NODE-16a",
+    "caller_site": "internal/nodes/designation_bootstrap.go",
+    "expected_caller": "internal/nodes/designation_bootstrap.go, which P1-NODE-16ab adds; retire this entry once that file calls NewFileDesignationBackend",
+    "reason": "P1-NODE-16aa ships the designation type, file backend and handover with tests; the bootstrap that opens the backend and designates is P1-NODE-16ab, which depends on it.",
+    "retire_ticket": "P1-NODE-16",
+    "symbol": "internal/nodes.NewFileDesignationBackend"
+  },
+  {
+    "added_by_ticket": "P1-PBD-01e",
+    "caller_site": "cmd/cascade/hooks_reviewer.go",
+    "expected_caller": "cmd/cascade/hooks_reviewer.go, which P1-PBD-05b adds; retire this entry once that file calls ReviewEvidenceRef",
+    "reason": "P1-PBD-01h records the reviewer decision row; citing it as evidence happens in the reviewer hook surface of P1-PBD-05b, which depends on P1-PBD-01h.",
+    "retire_ticket": "P1-PBD-05b",
+    "symbol": "internal/jobs.ReviewEvidenceRef"
+  },
+  {
+    "added_by_ticket": "P1-TOP-08c",
+    "caller_site": "internal/fleet/economics/rank.go",
+    "expected_caller": "internal/fleet/economics/rank.go, which P1-TOP-08e adds; retire this entry once that file calls EvaluateUtilityTerms",
+    "reason": "P1-TOP-08c ships the six utility terms with tests; the ranker that sums them is P1-TOP-08e, which depends on it.",
+    "retire_ticket": "P1-TOP-08e",
+    "symbol": "internal/fleet/economics.EvaluateUtilityTerms"
+  },
+  {
+    "added_by_ticket": "P1-TOP-08d",
+    "caller_site": "internal/fleet/economics/rank.go",
+    "expected_caller": "internal/fleet/economics/rank.go, which P1-TOP-08e adds; retire this entry once that file calls EligibilityPredicates",
+    "reason": "P1-TOP-08d ships the nine eligibility predicates with tests; the ranker that filters candidates through them is P1-TOP-08e.",
+    "retire_ticket": "P1-TOP-08e",
+    "symbol": "internal/fleet/economics.EligibilityPredicates"
+  },
+  {
+    "added_by_ticket": "P1-TOP-08d",
+    "caller_site": "internal/fleet/economics/rank.go",
+    "expected_caller": "internal/fleet/economics/rank.go, which P1-TOP-08e adds; retire this entry once that file calls PremiumPermitted",
+    "reason": "P1-TOP-08d ships the premium bar with tests; the ranker that applies it is P1-TOP-08e.",
+    "retire_ticket": "P1-TOP-08e",
+    "symbol": "internal/fleet/economics.PremiumPermitted"
   }
 ]
