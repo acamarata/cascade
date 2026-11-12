@@ -1058,20 +1058,6 @@
     "symbol": "internal/secrets.NewEntry"
   },
   {
-    "caller_site": "providers/agents/antigravity/run.go",
-    "expected_caller": "providers/agents/antigravity/run.go, the run loop P1-AGT-07f adds, which decodes the child's stream-json through the filter; retire this entry once that file calls NewDecoder",
-    "reason": "P1-AGT-07d ships the stream-json decoder, filter and protocol pin; the run loop that feeds it the child's output is P1-AGT-07f.",
-    "retire_ticket": "P1-AGT-07",
-    "symbol": "providers/agents/antigravity.NewDecoder"
-  },
-  {
-    "caller_site": "providers/agents/antigravity/driver.go",
-    "expected_caller": "providers/agents/antigravity/driver.go, the Driver P1-AGT-07e adds, whose Negotiate uses protocol.go; retire this entry once that file calls Negotiate",
-    "reason": "P1-AGT-07d ships the protocol revision and range check; the Driver that exposes it is P1-AGT-07e.",
-    "retire_ticket": "P1-AGT-07",
-    "symbol": "providers/agents/antigravity.Negotiate"
-  },
-  {
     "caller_site": "internal/conductor/reserve_call.go",
     "expected_caller": "internal/conductor/reserve_call.go, the per-adapter-call reservation P1-TOP-04a adds, which holds the one governor Admit per call and classifies its refusals; retire this entry once that file calls IsDraining",
     "reason": "P1-TOP-04c removes the per-node governor permit from admitNodes (contract: admitNodes calls no governor), which was the only production classifier of a draining refusal; the one Admit per adapter call moves to the conductor reservation of P1-TOP-04a.",
@@ -1648,29 +1634,6 @@
     "symbol": "internal/review.ProviderFamily"
   },
   {
-    "added_by_ticket": "P1-AGT-07c",
-    "caller_site": "providers/agents/antigravity/driver.go",
-    "expected_caller": "providers/agents/antigravity/driver.go, the P1-AGT-07e caller of BuildArgv; retire this entry once that file calls it",
-    "reason": "P1-AGT-07c ships providers/agents/antigravity.BuildArgv with its tests; the driver that spawns the harness is the next ticket. Its first production caller is providers/agents/antigravity/driver.go from P1-AGT-07e, not built yet.",
-    "retire_ticket": "P1-AGT-07e",
-    "symbol": "providers/agents/antigravity.BuildArgv"
-  },
-  {
-    "added_by_ticket": "P1-AGT-07c",
-    "caller_site": "providers/agents/antigravity/driver.go",
-    "expected_caller": "providers/agents/antigravity/driver.go, the P1-AGT-07e caller of Probe; retire this entry once that file calls it",
-    "reason": "P1-AGT-07c ships providers/agents/antigravity.Probe with its tests; the driver's probe-decided refusal is the next ticket. Its first production caller is providers/agents/antigravity/driver.go from P1-AGT-07e, not built yet.",
-    "retire_ticket": "P1-AGT-07e",
-    "symbol": "providers/agents/antigravity.Probe"
-  },
-  {
-    "caller_site": "providers/agents/antigravity/driver.go",
-    "expected_caller": "providers/agents/antigravity/driver.go, the P1-AGT-07e driver, whose probe-decided refusal checks the pinned version and the stream-json interface; retire this entry once that file calls CheckHarness",
-    "reason": "P1-AGT-07d ships the protocol pin check; the probe that reads the CLI's version and help text is P1-AGT-07c (not yet landed).",
-    "retire_ticket": "P1-AGT-07e",
-    "symbol": "providers/agents/antigravity.CheckHarness"
-  },
-  {
     "added_by_ticket": "P1-NODE-20a",
     "caller_site": "cmd/cascade/node_enroll_payload.go",
     "expected_caller": "cmd/cascade/node_enroll_payload.go, the P1-NODE-20d caller of BuildNodeEnrollPayload; retire this entry once that file calls it",
@@ -1821,5 +1784,13 @@
     "reason": "The rpc handler takes an injected summary function; the daemon mount of P1-EXE-14d passes the FleetRuntime health through SummarizeFleetHealth.",
     "retire_ticket": "P1-EXE-14d",
     "symbol": "internal/executive.SummarizeFleetHealth"
+  },
+  {
+    "added_by_ticket": "P1-AGT-07e",
+    "caller_site": "internal/providers/agents/harness_antigravity.go",
+    "expected_caller": "internal/providers/agents/harness_antigravity.go, the P1-AGT-07g harness registration that constructs the antigravity driver; retire this entry once that file calls New",
+    "reason": "P1-AGT-07e ships the driver constructor gated on the probe, with tests; the harness that builds it is P1-AGT-07g.",
+    "retire_ticket": "P1-AGT-07g",
+    "symbol": "providers/agents/antigravity.New"
   }
 ]
