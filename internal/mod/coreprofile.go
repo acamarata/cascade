@@ -37,37 +37,46 @@ func CoreMembers(src []byte) (map[string]bool, error) {
 				continue
 			}
 
-			for i, name := range valSpec.Names {
-				if name.Name == "coreProfile" {
-					if i < len(valSpec.Values) {
-						compLit, ok := valSpec.Values[i].(*ast.CompositeLit)
-						if !ok {
-							continue
-						}
-
-						members := make(map[string]bool)
-						for _, elt := range compLit.Elts {
-							lit, ok := elt.(*ast.BasicLit)
-							if !ok || lit.Kind != token.STRING {
-								continue
-							}
-							unquoted, err := strconv.Unquote(lit.Value)
-							if err == nil {
-								members[unquoted] = true
-							}
-						}
-
-						if len(members) == 0 {
-							return nil, ErrNoCoreProfile
-						}
-						return members, nil
-					}
-				}
+			if members, ok := findCoreProfileMembers(valSpec); ok {
+				return members, nil
 			}
 		}
 	}
 
 	return nil, ErrNoCoreProfile
+}
+
+func findCoreProfileMembers(valSpec *ast.ValueSpec) (map[string]bool, bool) {
+	for i, name := range valSpec.Names {
+		if name.Name == "coreProfile" && i < len(valSpec.Values) {
+			compLit, ok := valSpec.Values[i].(*ast.CompositeLit)
+			if !ok {
+				continue
+			}
+			if members, ok := extractMembers(compLit); ok {
+				return members, true
+			}
+		}
+	}
+	return nil, false
+}
+
+func extractMembers(compLit *ast.CompositeLit) (map[string]bool, bool) {
+	members := make(map[string]bool)
+	for _, elt := range compLit.Elts {
+		lit, ok := elt.(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			continue
+		}
+		unquoted, err := strconv.Unquote(lit.Value)
+		if err == nil {
+			members[unquoted] = true
+		}
+	}
+	if len(members) == 0 {
+		return nil, false
+	}
+	return members, true
 }
 
 // IsCore reports whether the given name is present in the provided core members map.

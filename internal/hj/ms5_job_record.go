@@ -21,7 +21,7 @@ type MS5JobRecord struct {
 var (
 	mu      sync.Mutex
 	records []MS5JobRecord
-	nextID  int = 1
+	nextID  = 1
 )
 
 // RecordMS5Job parses, masks, and records an MS5 job command.
@@ -38,20 +38,9 @@ func RecordMS5Job(cmd string) (MS5JobRecord, error) {
 		return MS5JobRecord{}, ErrInvalidPromptCommand
 	}
 
-	promptIdx := -1
-	promptCount := 0
-	for i, t := range tokens {
-		if t == "--prompt" {
-			promptIdx = i
-			promptCount++
-		}
-	}
-
-	if promptCount != 1 {
-		return MS5JobRecord{}, ErrInvalidPromptCommand
-	}
-	if promptIdx == 0 || promptIdx != len(tokens)-2 {
-		return MS5JobRecord{}, ErrInvalidPromptCommand
+	promptIdx, err := findPromptIdx(tokens)
+	if err != nil {
+		return MS5JobRecord{}, err
 	}
 
 	value := tokens[promptIdx+1]
@@ -59,14 +48,7 @@ func RecordMS5Job(cmd string) (MS5JobRecord, error) {
 		return MS5JobRecord{}, ErrInvalidPromptCommand
 	}
 
-	var maskedValue string
-	if value == "MASKED" {
-		maskedValue = "MASKED"
-	} else {
-		maskedValue = strings.Repeat("*", len(value)-1)
-	}
-
-	tokens[promptIdx+1] = maskedValue
+	tokens[promptIdx+1] = maskValue(value)
 	maskedCmd := strings.Join(tokens, " ")
 
 	mu.Lock()
@@ -80,6 +62,31 @@ func RecordMS5Job(cmd string) (MS5JobRecord, error) {
 	nextID++
 
 	return rec, nil
+}
+
+func findPromptIdx(tokens []string) (int, error) {
+	promptIdx := -1
+	promptCount := 0
+	for i, t := range tokens {
+		if t == "--prompt" {
+			promptIdx = i
+			promptCount++
+		}
+	}
+	if promptCount != 1 {
+		return -1, ErrInvalidPromptCommand
+	}
+	if promptIdx == 0 || promptIdx != len(tokens)-2 {
+		return -1, ErrInvalidPromptCommand
+	}
+	return promptIdx, nil
+}
+
+func maskValue(value string) string {
+	if value == "MASKED" {
+		return "MASKED"
+	}
+	return strings.Repeat("*", len(value)-1)
 }
 
 // MS5Records returns an independent, insertion-ordered copy of all recorded MS5 jobs.

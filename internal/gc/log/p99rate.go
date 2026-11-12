@@ -41,7 +41,7 @@ func NewRateTracker(c Clock) (*RateTracker, error) {
 	}
 	// Check for typed nil interface values.
 	v := reflect.ValueOf(c)
-	if v.Kind() == reflect.Ptr && v.IsNil() {
+	if v.Kind() == reflect.Pointer && v.IsNil() {
 		return nil, ErrInvalidClock
 	}
 	return &RateTracker{

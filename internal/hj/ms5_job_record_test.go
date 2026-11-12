@@ -6,6 +6,11 @@ import (
 )
 
 func TestMS5JobRecordRetainsMaskedPromptCommand(t *testing.T) {
+	testMaskedPromptCommand(t)
+	testInvalidPromptCommands(t)
+}
+
+func testMaskedPromptCommand(t *testing.T) {
 	rec, err := RecordMS5Job("run --prompt MASKED")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -46,7 +51,9 @@ func TestMS5JobRecordRetainsMaskedPromptCommand(t *testing.T) {
 	if recordsAgain[0].Command != "run --prompt MASKED" {
 		t.Errorf("storage was mutated by snapshot")
 	}
+}
 
+func testInvalidPromptCommands(t *testing.T) {
 	invalids := []string{
 		"",
 		"   ",

@@ -9,49 +9,38 @@ import (
 // results for the same request, and that defensive copying prevents external
 // mutation from affecting the pipeline.
 func TestSameResultAcrossCallers(t *testing.T) {
-	// Create lessons that transform requests
-	appendA := func(r Request) Request {
-		return Request{Text: r.Text + "A"}
-	}
-	appendB := func(r Request) Request {
-		return Request{Text: r.Text + "B"}
-	}
-
-	// Create the lesson slice
+	appendA := func(r Request) Request { return Request{Text: r.Text + "A"} }
+	appendB := func(r Request) Request { return Request{Text: r.Text + "B"} }
 	lessons := []Lesson{appendA, appendB}
 
-	// Create the applier - this should defensively copy the slice
 	applier := New(lessons, nil)
 	if applier == nil {
 		t.Fatal("New returned nil")
 	}
 
-	// Prepare the same input request
 	input := Request{Text: "start"}
+	expected := Request{Text: "startAB"}
 
-	// Apply through ask
 	askResult, err := applier.Ask(input)
 	if err != nil {
 		t.Fatalf("Ask returned error: %v", err)
 	}
-
-	// Apply through forge
-	forgeResult, err := applier.Forge(input)
-	if err != nil {
-		t.Fatalf("Forge returned error: %v", err)
-	}
-
-	// Verify both callers produce identical results
-	if askResult != forgeResult {
-		t.Errorf("Ask and Forge produced different results: ask=%v, forge=%v", askResult, forgeResult)
-	}
-
-	// Verify the transformation is correct
-	expected := Request{Text: "startAB"}
 	if askResult != expected {
 		t.Errorf("Expected %v, got %v", expected, askResult)
 	}
 
+	forgeResult, err := applier.Forge(input)
+	if err != nil {
+		t.Fatalf("Forge returned error: %v", err)
+	}
+	if askResult != forgeResult {
+		t.Errorf("Ask and Forge produced different results: ask=%v, forge=%v", askResult, forgeResult)
+	}
+
+	verifyDefensiveCopying(t, applier, lessons, input, expected)
+}
+
+func verifyDefensiveCopying(t *testing.T, applier *Applier, lessons []Lesson, input Request, expected Request) {
 	// Verify defensive copying: mutate the original slice
 	lessons[0] = func(r Request) Request {
 		return Request{Text: r.Text + "X"}
@@ -62,7 +51,6 @@ func TestSameResultAcrossCallers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Ask returned error after mutation: %v", err)
 	}
-
 	if askResult2 != expected {
 		t.Errorf("Applier was affected by external slice mutation: expected %v, got %v", expected, askResult2)
 	}
@@ -71,7 +59,6 @@ func TestSameResultAcrossCallers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Forge returned error after mutation: %v", err)
 	}
-
 	if forgeResult2 != expected {
 		t.Errorf("Applier was affected by external slice mutation: expected %v, got %v", expected, forgeResult2)
 	}

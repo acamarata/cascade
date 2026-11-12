@@ -78,7 +78,7 @@ func New(c Clock) (*Machine, error) {
 		return nil, ErrInvalidClock
 	}
 	v := reflect.ValueOf(c)
-	if v.Kind() == reflect.Ptr && v.IsNil() {
+	if v.Kind() == reflect.Pointer && v.IsNil() {
 		return nil, ErrInvalidClock
 	}
 	return &Machine{state: Idle, clock: c}, nil
