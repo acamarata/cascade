@@ -7,7 +7,6 @@ package antigravity
 // SPORT: providers.agents.antigravity/ADD (P1-AGT-07e).
 
 import (
-	"bufio"
 	"context"
 	cryptorand "crypto/rand"
 	"encoding/hex"
@@ -16,7 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/acamarata/cascade/pkg/procgroup"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -28,15 +26,6 @@ type Driver struct {
 	approve chan provider.ApprovalRequest
 	mu      sync.Mutex
 	jobs    map[provider.AgentJobID]*job
-}
-
-type job struct {
-	cmd    *exec.Cmd
-	pgid   int
-	done   chan struct{}
-	state  provider.AgentRunState
-	result provider.CollectResult
-	err    error
 }
 
 var _ provider.AgentProvider = (*Driver)(nil)
@@ -152,82 +141,6 @@ func (d *Driver) lookup(id provider.AgentJobID) (*job, error) {
 	return j, nil
 }
 
-// Spawn validates custody before starting one print process in its own group.
-func (d *Driver) Spawn(ctx context.Context, spec provider.AgentJobSpec) (provider.SpawnResult, error) {
-	if err := d.preflight(spec); err != nil {
-		return provider.SpawnResult{}, err
-	}
-	argv, err := BuildArgv(d.cfg.Binary, d.cfg.Defaults, spec, spec.Envelope.ExpiresAt.Sub(d.cfg.Clock.Now()))
-	if err != nil {
-		return provider.SpawnResult{}, err
-	}
-	if err := ctx.Err(); err != nil {
-		return provider.SpawnResult{}, ErrRunCancelled
-	}
-	id := spec.JobID
-	if id == "" {
-		id = newJobID()
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if old := d.jobs[id]; old != nil && !old.state.Terminal() {
-		return provider.SpawnResult{}, ErrDuplicateJob
-	}
-	cmd := exec.Command(argv[0], argv[1:]...)
-	cmd.Env, cmd.Dir, cmd.SysProcAttr = append([]string(nil), spec.Env.Driver...), spec.WorktreeRoot, procgroup.Attr()
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return provider.SpawnResult{}, ErrStart
-	}
-	if err = cmd.Start(); err != nil {
-		return provider.SpawnResult{}, ErrStart
-	}
-	pgid, err := procgroup.Lookup(cmd.Process.Pid)
-	if err != nil {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-		return provider.SpawnResult{}, ErrStart
-	}
-	j := &job{cmd: cmd, pgid: pgid, done: make(chan struct{}), state: provider.AgentRunRunning,
-		result: provider.CollectResult{JobID: id, DataClass: spec.DataClass, Artifacts: []string{}}}
-	d.jobs[id] = j
-	go d.readJob(j, bufio.NewScanner(stdout), spec.Filter)
-	return provider.SpawnResult{JobID: id, ProcessGroupID: pgid}, nil
-}
-
-func (d *Driver) readJob(j *job, scanner *bufio.Scanner, filter provider.OutputFilter) {
-	decoder, _ := NewDecoder(filter)
-	var failure error
-	scanner.Buffer(make([]byte, 4096), 4*1024*1024)
-	for scanner.Scan() {
-		if _, failure = decoder.Decode(scanner.Bytes()); failure != nil {
-			_ = procgroup.Signal(j.pgid, procgroup.SigKill)
-			break
-		}
-	}
-	if scanner.Err() != nil && failure == nil {
-		failure = ErrMalformedEvent
-	}
-	if err := j.cmd.Wait(); err != nil && failure == nil {
-		failure = ErrNonZeroExit
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if j.err == nil {
-		j.err = failure
-	}
-	j.result.Output = decoder.Output()
-	switch j.err {
-	case nil:
-		j.state = provider.AgentRunAccepted
-	case ErrRunCancelled:
-		j.state = provider.AgentRunCancelled
-	default:
-		j.state = provider.AgentRunFailed
-	}
-	close(j.done)
-}
-
 // Status reports the current job state.
 func (d *Driver) Status(_ context.Context, id provider.AgentJobID) (provider.AgentRunState, error) {
 	j, err := d.lookup(id)
@@ -237,44 +150,6 @@ func (d *Driver) Status(_ context.Context, id provider.AgentJobID) (provider.Age
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return j.state, nil
-}
-
-// Cancel kills the process group and waits until the leader is reaped.
-func (d *Driver) Cancel(ctx context.Context, id provider.AgentJobID) error {
-	j, err := d.lookup(id)
-	if err != nil {
-		return err
-	}
-	d.mu.Lock()
-	if j.state.Terminal() {
-		d.mu.Unlock()
-		return nil
-	}
-	j.state, j.err = provider.AgentRunCancelling, ErrRunCancelled
-	d.mu.Unlock()
-	_ = procgroup.Signal(j.pgid, procgroup.SigKill)
-	select {
-	case <-j.done:
-		return nil
-	case <-ctx.Done():
-		return provider.ErrCancelUnconfirmed
-	}
-}
-
-// Collect waits for a terminal job and returns its filtered result.
-func (d *Driver) Collect(ctx context.Context, id provider.AgentJobID) (provider.CollectResult, error) {
-	j, err := d.lookup(id)
-	if err != nil {
-		return provider.CollectResult{}, err
-	}
-	select {
-	case <-j.done:
-		d.mu.Lock()
-		defer d.mu.Unlock()
-		return j.result, j.err
-	case <-ctx.Done():
-		return provider.CollectResult{}, ErrRunCancelled
-	}
 }
 
 // Artifacts returns a fresh slice of the job's discovered paths.
