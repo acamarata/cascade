@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-12T04:20:28Z",
+  "generated_at": "2026-11-12T06:06:24Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -41246,6 +41246,18 @@
           "raw": "providers.agents.antigravity/ADD (P1-AGT-07c)."
         },
         {
+          "file": "providers/agents/antigravity/config.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "providers.agents.antigravity/ADD (P1-AGT-07e)."
+        },
+        {
+          "file": "providers/agents/antigravity/driver.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "providers.agents.antigravity/ADD (P1-AGT-07e)."
+        },
+        {
           "file": "providers/agents/antigravity/output.go",
           "line": 17,
           "status": "ADD",
@@ -44627,7 +44639,7 @@
       ]
     }
   ],
-  "total_sites": 4293,
+  "total_sites": 4295,
   "unspecified_count": 412,
   "multi_status_count": 132
 }
