@@ -99,6 +99,8 @@ type TemplateContext struct {
 	Footprint []string
 	DependsOn []string
 	// Review is required by review, adversarial and qa templates.
+	// Dispatch uses ErrMutableReview from reviewer_policy.go and
+	// ErrNoDistinctFamily from reviewer_assignment.go.
 	Review *ReviewDispatch
 
 	PassThroughFields

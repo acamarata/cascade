@@ -10,6 +10,7 @@ import (
 // ReviewerTreeForJob returns the clean, fenced snapshot tree for jobID's
 // single held or renewing lease. Missing leases or worktrees are not found;
 // ambiguous leases and dirty worktrees are conflicts. Ignored files are allowed.
+// Dirty worktrees wrap ErrReviewerMutatedWorktree from reviewer_policy.go.
 // It never stages, resets, or commits reviewer changes.
 func (m *WorktreeManager) ReviewerTreeForJob(ctx context.Context, jobID string) (string, error) {
 	lease, err := m.reviewerLeaseForJob(ctx, jobID)
