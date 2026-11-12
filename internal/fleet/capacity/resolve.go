@@ -48,6 +48,7 @@ type leasePlan struct {
 	domain   string
 	estimate economics.Estimate
 	ids      leaseIDs
+	ranked   *economics.Ranked
 }
 
 // leaseIDs are the identifiers minted for one lease.
@@ -71,13 +72,18 @@ func (f *Fleet) plan(ctx context.Context, req ResourceRequest, d DispatchRef, at
 		return leasePlan{}, err
 	}
 	p := leasePlan{req: req, d: d, attempt: attempt, estimate: est, tier: joinedTier(req)}
-	if p.sel, err = f.choose(ctx, p); err != nil {
+	if p.sel, err = f.choose(ctx, &p); err != nil {
 		return leasePlan{}, err
 	}
 	if p.node, err = f.place(ctx, d, p.tier); err != nil {
 		return leasePlan{}, err
 	}
-	if p.domain, err = f.domainFor(ctx, p.sel.Lane); err != nil {
+	if p.ranked != nil {
+		p.domain = string(p.ranked.Candidate.DomainID)
+		if p.domain == "" {
+			return leasePlan{}, refuse(ErrNoQuotaDomain, nil, "ranked lane %q", p.sel.Lane)
+		}
+	} else if p.domain, err = f.domainFor(ctx, p.sel.Lane); err != nil {
 		return leasePlan{}, err
 	}
 	if p.ids, err = mintLeaseIDs(); err != nil {
@@ -110,19 +116,28 @@ func (f *Fleet) derivedFloor(ctx context.Context, jobID string) (*provider.Sensi
 }
 
 // choose reads the snapshot, narrows the lanes and asks the Selector.
-func (f *Fleet) choose(ctx context.Context, p leasePlan) (Selection, error) {
+func (f *Fleet) choose(ctx context.Context, p *leasePlan) (Selection, error) {
 	read, err := f.deps.Snapshot(ctx)
 	if err != nil {
 		return Selection{}, refuse(ErrNoCapableTier, err, "read the capacity snapshot")
 	}
 	snap := isolate(read) // Floors and the Selector never touch the snapshot owner's maps
-	eligible, err := f.eligibleLanes(snap, p)
+	eligible, err := f.eligibleLanes(snap, *p)
 	if err != nil {
 		return Selection{}, err
 	}
 	facts := captureFacts(snap, eligible)
 	in := SelectInput{Snapshot: snap, Eligible: slices.Clone(eligible), Request: p.req, Scorer: f.deps.Scorer(globalScorerKey), Attempt: p.attempt}
-	sel, err := f.deps.Selector.Select(ctx, in)
+	var sel Selection
+	if ranked, ok := f.deps.Selector.(interface {
+		SelectRanked(context.Context, SelectInput) (Selection, economics.Ranked, error)
+	}); ok {
+		var candidate economics.Ranked
+		sel, candidate, err = ranked.SelectRanked(ctx, in)
+		p.ranked = &candidate
+	} else {
+		sel, err = f.deps.Selector.Select(ctx, in)
+	}
 	if err != nil {
 		return Selection{}, selectRefusal(err)
 	}

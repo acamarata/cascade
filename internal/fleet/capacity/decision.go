@@ -24,6 +24,12 @@ import (
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
+// RankedDecisionRecorder receives the selected candidate's price, correlation
+// and predicted failure alongside the decision, on the same Bind transaction.
+type RankedDecisionRecorder interface {
+	RecordRanked(context.Context, DecisionExecer, DecisionRecord, economics.Ranked) error
+}
+
 // bindFn returns the BindFn that writes p's execution row and decision row.
 func (f *Fleet) bindFn(p leasePlan) economics.BindFn {
 	return func(ctx context.Context, tx *sql.Tx, _ economics.Reservation) error {
@@ -35,6 +41,9 @@ func (f *Fleet) bindFn(p leasePlan) economics.BindFn {
 			if err := f.deps.Jobs.PutExecutionTx(ctx, tx, e); err != nil {
 				return err
 			}
+		}
+		if recorder, ok := f.deps.Decisions.(RankedDecisionRecorder); ok && p.ranked != nil {
+			return recorder.RecordRanked(ctx, tx, f.decisionRecord(p), *p.ranked)
 		}
 		return f.deps.Decisions.Record(ctx, tx, f.decisionRecord(p))
 	}
@@ -61,9 +70,13 @@ func (f *Fleet) recheckFloor(ctx context.Context, tx *sql.Tx, p leasePlan) error
 // (tier, jump fired, reason code, reserve flag), the lane, the node and the
 // score read at selection.
 func (f *Fleet) decisionRecord(p leasePlan) DecisionRecord {
+	score := p.sel.Score
+	if p.ranked != nil {
+		score = p.ranked.Utility
+	}
 	return DecisionRecord{
 		ID: p.ids.decision, JobID: p.d.JobID, ExecutionID: p.ids.execution, TaskClass: p.req.TaskClass,
-		SelectedTier: p.sel.Tier.Tier, LaneID: p.sel.Lane, NodeID: p.node, ScoreAtSelection: p.sel.Score,
+		SelectedTier: p.sel.Tier.Tier, LaneID: p.sel.Lane, NodeID: p.node, ScoreAtSelection: score,
 		FallbackLevel: fallbackLevelGlobal, JumpRuleFired: p.sel.Tier.JumpTriggered,
 		JumpReasonCode: p.sel.Tier.JumpReasonCode, ReserveTier0: p.sel.Tier.ReserveApplied, DecidedAt: f.deps.Clock.Now(),
 	}
