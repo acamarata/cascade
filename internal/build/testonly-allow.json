@@ -1315,22 +1315,6 @@
     "symbol": "internal/context/generate.GeneratedLocations"
   },
   {
-    "added_by_ticket": "P1-CI-05a",
-    "caller_site": "cmd/cascade/node_gitgate.go",
-    "expected_caller": "cmd/cascade/node_gitgate.go, the `cascade node git-gate pre-receive` verb that reads the hook stdin and calls ci.CheckPush over the parsed refs; retire this entry once that file calls CheckPush",
-    "reason": "P1-CI-05a ships the pre-receive ref gate that refuses deletion and non-fast-forward pushes, tested on its own. The verb that feeds it the hook input is P1-CI-05e, which depends on this ticket through P1-CI-05b and P1-CI-05d.",
-    "retire_ticket": "P1-CI-05e",
-    "symbol": "internal/ci.CheckPush"
-  },
-  {
-    "added_by_ticket": "P1-CI-05a",
-    "caller_site": "cmd/cascade/node_gitgate.go",
-    "expected_caller": "cmd/cascade/node_gitgate.go, the `cascade node git-gate pre-receive` verb that parses the hook stdin with ci.ParsePreReceiveStdin before calling CheckPush; retire alongside ci.CheckPush",
-    "reason": "Sibling of ci.CheckPush: P1-CI-05a ships the stdin parser with tests only. The pre-receive verb in P1-CI-05e is its first production caller.",
-    "retire_ticket": "P1-CI-05e",
-    "symbol": "internal/ci.ParsePreReceiveStdin"
-  },
-  {
     "added_by_ticket": "P1-AGT-11",
     "caller_site": "cmd/cascade/wire_delegate.go",
     "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k caller of MintChild; retire this entry once that file calls it",
@@ -1384,22 +1368,6 @@
     "reason": "AllocWorktree ships with its tests; its first production caller is cmd/cascade/wire_delegate.go from P1-AGT-08k, not built yet.",
     "retire_ticket": "P1-AGT-08k",
     "symbol": "internal/delegation.AllocWorktree"
-  },
-  {
-    "added_by_ticket": "P1-CI-05d",
-    "caller_site": "cmd/cascade/node_gitgate.go",
-    "expected_caller": "cmd/cascade/node_gitgate.go, the P1-CI-05e caller of BindGateRepoID; retire this entry once that file calls it",
-    "reason": "BindGateRepoID ships with its tests; its first production caller is cmd/cascade/node_gitgate.go from P1-CI-05e, not built yet.",
-    "retire_ticket": "P1-CI-05e",
-    "symbol": "internal/ci.BindGateRepoID"
-  },
-  {
-    "added_by_ticket": "P1-CI-05d",
-    "caller_site": "cmd/cascade/node_gitgate.go",
-    "expected_caller": "cmd/cascade/node_gitgate.go, the P1-CI-05e caller of ResolveGateWant; retire this entry once that file calls it",
-    "reason": "ResolveGateWant ships with its tests; its first production caller is cmd/cascade/node_gitgate.go from P1-CI-05e, not built yet.",
-    "retire_ticket": "P1-CI-05e",
-    "symbol": "internal/ci.ResolveGateWant"
   },
   {
     "added_by_ticket": "P1-EXE-01d",
