@@ -1,0 +1,7 @@
+[
+  {"name":"build-six-terms","mode":"build","quality":0.8,"sp":0,"latency_ms":4000,"failure":0.15,"ewma429":0.1,"producer":true,"contributions":[4,0,-0.125,-0.2,-0.15,-0.28],"utility":3.245,"order":["a","b"]},
+  {"name":"verify-independence","mode":"verify","quality":0.8,"sp":0,"latency_ms":4000,"failure":0.15,"ewma429":0.1,"producer":true,"contributions":[4,0,-1.2,-0.12,-0.15,-0.28],"utility":2.25,"order":["a","b"]},
+  {"name":"incident-risk-weight","mode":"incident","quality":0.8,"sp":0,"latency_ms":4000,"failure":0.15,"ewma429":0.1,"producer":false,"contributions":[4.8,0,0,-0.4,-0.225,-0.42],"utility":3.755,"order":["a","b"]},
+  {"name":"equal-utility-equal-sp","mode":"build","quality":1,"sp":1,"latency_ms":0,"failure":0,"ewma429":0,"producer":false,"contributions":[5,-1.2476649250079015,0,0,0,0],"utility":3.7523350749920985,"order":["a","b"]},
+  {"name":"equal-utility-different-sp","mode":"build","quality":1,"sp":2,"latency_ms":0,"failure":0,"ewma429":0,"producer":false,"zero_scarcity":true,"contributions":[5,0,0,0,0,0],"utility":5,"order":["b","a"]}
+]
