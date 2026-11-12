@@ -138,6 +138,8 @@ func recoveryCrash(t *testing.T, orphan bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	reopened := c.db
+	t.Cleanup(func() { _ = reopened.Close() }) // Windows cannot remove an open jobs.db
 	c.st = jobs.NewStore(c.db)
 	assertRecovery(ctx, t, c, rec.ID, path, w, orphan)
 }
