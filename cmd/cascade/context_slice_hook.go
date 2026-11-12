@@ -19,6 +19,7 @@
 //	true.
 //
 // SPORT: cmd/cascade/context-slice-hook (ADD) — P1-E16-W4-S34-T4.
+
 package main
 
 import (
@@ -32,6 +33,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/context/hydration"
 	"github.com/acamarata/cascade/internal/daemon"
+	"github.com/acamarata/cascade/pkg/inboxenv"
 	"github.com/acamarata/cascade/pkg/provider"
 	"github.com/acamarata/cascade/plugins/claude"
 )
@@ -177,7 +179,7 @@ func inboxRecordsFromViews(views []daemon.InboxEnvelopeView) []claude.InboxRecor
 	for _, v := range views {
 		recs = append(recs, claude.InboxRecord{
 			Envelope: claude.Envelope{
-				ID: v.ID, Class: v.Class, OriginScope: v.OriginScope, DataClass: v.DataClass, Summary: v.Summary,
+				ID: v.ID, Class: v.Class, OriginScope: v.OriginScope, DataClass: v.DataClass, Trust: v.Trust, Summary: v.Summary,
 			},
 			TargetScope: v.TargetScope, TargetSession: v.TargetSession, TargetTask: v.TargetTask,
 			Visibility: v.Visibility, CorrelationID: v.CorrelationID, ExpiresAtMs: v.ExpiresAtMs,
@@ -222,15 +224,20 @@ func filterByScore(chunks []provider.RetrievedChunk, floor float64) []provider.R
 	return kept
 }
 
+// retrievalHeading heads the data block the retrieval entries render in.
+const retrievalHeading = "Cascade retrieval (untrusted-source data)"
+
 // renderCapsule builds the injected text. The first line is the fixed
-// R-16.6a header; the body is one line per surviving chunk.
+// R-16.6a header; the body is the untrusted-source data block holding one
+// entry per surviving chunk, so a path carrying a fence or a control
+// sequence is escaped rather than read as harness syntax.
 func renderCapsule(scopeLabel string, chunks []provider.RetrievedChunk) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "Cascade context (scope: %s, %d items)\n", scopeLabel, len(chunks))
+	entries := make([]string, 0, len(chunks))
 	for _, c := range chunks {
-		fmt.Fprintf(&b, "\n- %s", c.Path)
+		entries = append(entries, "- "+c.Path)
 	}
-	return b.String()
+	return fmt.Sprintf("Cascade context (scope: %s, %d items)\n\n%s", scopeLabel, len(chunks),
+		inboxenv.RenderDataBlock(retrievalHeading, entries))
 }
 
 // emitHookInjection writes the harness's injection object to out.

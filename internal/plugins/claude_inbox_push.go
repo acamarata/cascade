@@ -173,15 +173,16 @@ func (b *ClaudeInboxBridge) raiseAttention(ctx context.Context, n notify.Notific
 }
 
 // inboxEventFrom builds the plugin DTO. TargetSession is n's own field,
-// never the subscriber's id. DataClass stays the zero value, restricted: a
-// Notification carries no data class and deriving one is P1-HRN-03's work,
-// so the class is the fail-closed default and Source is never consulted.
-// Trust is untrusted: inbox text is data.
+// never the subscriber's id. DataClass and Trust are the values notify
+// stamped at ingestion (provenance.go is their only writer), copied as they
+// are: this adapter applies no visibility floor of its own, and Source is
+// never consulted. An unstamped Notification carries the zero values,
+// restricted and untrusted, so a gap fails closed.
 func inboxEventFrom(n notify.Notification) claude.InboxEvent {
 	return claude.InboxEvent{
 		ID: n.ID, Class: string(n.Class.Resolve()), OriginScope: n.OriginScope, TargetScope: n.TargetScope,
 		TargetSession: n.TargetSession, TargetTask: n.TargetTask, Visibility: string(n.Visibility.Resolve()),
 		CorrelationID: n.CorrelationID, ExpiresAt: n.ExpiresAt, Body: n.Payload,
-		DataClass: provider.SensitivityRestricted, Trust: provider.ProvenanceUntrustedSource,
+		DataClass: n.DataClass, Trust: n.Trust,
 	}
 }

@@ -27,7 +27,8 @@ import (
 )
 
 // InboxEnvelopeView is one drained envelope on the context.slice wire: the
-// R-21.178 envelope, the R-16.5 metadata and the provenance tag. Every
+// R-21.178 envelope (with its stamped data class and trust), the R-16.5
+// metadata and the provenance tag. Every
 // string arrives already escaped by its producer; the hook renders it as
 // an untrusted-source data block.
 type InboxEnvelopeView struct {
@@ -35,6 +36,7 @@ type InboxEnvelopeView struct {
 	Class         string `json:"class"`
 	OriginScope   string `json:"origin_scope"`
 	DataClass     string `json:"data_class"`
+	Trust         string `json:"trust"`
 	Summary       string `json:"summary"`
 	TargetScope   string `json:"target_scope"`
 	TargetSession string `json:"target_session"`

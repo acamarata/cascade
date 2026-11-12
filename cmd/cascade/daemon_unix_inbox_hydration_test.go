@@ -118,6 +118,7 @@ func deliverAddressed(t *testing.T, store provider.Store, clock runtime.Clock, s
 	if err := svc.Notifier.Deliver(ctx, notify.Notification{
 		ID: "hook-env-1", Class: notify.ClassAddressed, TargetSession: sid, OriginScope: "repo-a",
 		Visibility: notify.VisibilityPrivate, Payload: []byte("HOOK-BODY-SENTINEL " + strings.Repeat("z", 40)),
+		Origin: notify.Origin{Source: "test.producer", RecordRef: "hook-env-1", Tier: provider.SensitivityInternal},
 	}); err != nil {
 		t.Fatal(err)
 	}
