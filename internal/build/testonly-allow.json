@@ -1760,5 +1760,13 @@
     "reason": "P1-AGT-07e ships the driver constructor gated on the probe, with tests; the harness that builds it is P1-AGT-07g.",
     "retire_ticket": "P1-AGT-07g",
     "symbol": "providers/agents/antigravity.New"
+  },
+  {
+    "added_by_ticket": "P1-AGT-08j",
+    "caller_site": "cmd/cascade/wire_delegate.go",
+    "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k daemon wiring of the delegate RPCs, which runs recovery before serving them; retire this entry once that file calls RecoverPendingSpawns",
+    "reason": "P1-AGT-08j ships startup recovery with tests; the daemon that must call it before serving delegate RPCs is wired in P1-AGT-08k, which depends on it.",
+    "retire_ticket": "P1-AGT-08k",
+    "symbol": "internal/delegation.RecoverPendingSpawns"
   }
 ]
