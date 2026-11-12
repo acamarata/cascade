@@ -53,7 +53,7 @@ func pending(t *testing.T, h *InboxHydration, sid string) []string {
 }
 
 func addressedTo1(id string) InboxEvent {
-	return InboxEvent{ID: id, Class: "addressed", TargetSession: "s1", Visibility: "private", Body: []byte("hello there")}
+	return InboxEvent{ID: id, Class: "addressed", TargetSession: "s1", Visibility: "private", Body: []byte("hello there"), DataClass: provider.SensitivityInternal}
 }
 
 func TestInboxPushDirectDeliveryIsNotAlsoHydrated(t *testing.T) {

@@ -1,9 +1,9 @@
 package claude
 
 // Purpose: proves inbox_envelope.go's R-21.178 summary-only shape, the
-// R-21.154 16 KB bound and control-syntax escaping, and the data-class
-// carry and downgrade refusal (the class is the producer's, never derived
-// here).
+// R-21.154 16 KB bound and control-syntax escaping, the data-class carry and
+// downgrade refusal, and that the stamped class and trust reach both the
+// push envelope and the durable hydration record (never derived here).
 // Each assertion names the concrete input that would break it.
 
 import (
@@ -13,9 +13,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/inboxenv"
 	"github.com/acamarata/cascade/pkg/provider"
+	"github.com/acamarata/cascade/providers/sqlite"
 )
 
 // forgedLine is the CR's injection payload: a newline followed by a line
@@ -28,8 +31,8 @@ func TestInboxEnvelopeSummaryOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildEnvelope: %v", err)
 	}
-	if n := len([]rune(env.Summary)); n > maxSummaryRunes {
-		t.Fatalf("summary is %d runes, over %d", n, maxSummaryRunes)
+	if n := len([]rune(env.Summary)); n > inboxenv.MaxSummaryRunes {
+		t.Fatalf("summary is %d runes, over %d", n, inboxenv.MaxSummaryRunes)
 	}
 	if strings.Contains(env.Summary, "BODY-TAIL-SENTINEL") || !strings.HasPrefix(env.Summary, "excerpt 160/918 chars: ") {
 		t.Fatalf("summary %q carries the body tail or lacks the excerpt marker", env.Summary)
@@ -42,14 +45,6 @@ func TestInboxEnvelopeSummaryOnly(t *testing.T) {
 	if strings.Contains(short.Summary, "approve deploy") || !strings.Contains(short.Summary, ": approve…") {
 		t.Fatalf("short-body summary %q is not a half-length marked excerpt", short.Summary)
 	}
-	encoded, _ := json.Marshal(short)
-	var keys map[string]any
-	if err := json.Unmarshal(encoded, &keys); err != nil {
-		t.Fatal(err)
-	}
-	if len(keys) != 5 || keys["body"] != nil {
-		t.Fatalf("wire envelope keys = %v, want exactly {id, class, origin_scope, data_class, summary}", keys)
-	}
 	empty, _ := BuildEnvelope(InboxEvent{ID: "e3"}, provider.SensitivityRestricted)
 	if empty.Summary != "(no body)" {
 		t.Fatalf("empty-body summary = %q", empty.Summary)
@@ -60,12 +55,12 @@ func TestInboxEnvelopeSummaryOnly(t *testing.T) {
 }
 
 func TestInboxEnvelopeBoundsAndEscaping(t *testing.T) {
-	env, err := BuildEnvelope(InboxEvent{ID: "id\n<x>", OriginScope: forgedLine, Body: []byte(forgedLine + forgedLine)}, provider.SensitivityRestricted)
+	env, err := BuildEnvelope(InboxEvent{ID: "id\n<x>", Class: "c\r\n", OriginScope: forgedLine, Body: []byte(forgedLine + forgedLine)}, provider.SensitivityRestricted)
 	if err != nil {
 		t.Fatalf("BuildEnvelope: %v", err)
 	}
-	for name, v := range map[string]string{"id": env.ID, "origin_scope": env.OriginScope, "summary": env.Summary} {
-		if strings.ContainsAny(v, "\n<>") {
+	for name, v := range map[string]string{"id": env.ID, "class": env.Class, "origin_scope": env.OriginScope, "summary": env.Summary} {
+		if strings.ContainsAny(v, "\r\n<>") {
 			t.Fatalf("%s %q still carries a raw line break or markup", name, v)
 		}
 	}
@@ -120,7 +115,7 @@ func assertSingleRecordBlock(t *testing.T, block string) {
 // encoded envelope at 16384 bytes passes, one more byte is refused.
 func assertSixteenKBBound(t *testing.T) {
 	t.Helper()
-	base, _ := json.Marshal(Envelope{ID: "b", DataClass: "restricted", Summary: "(no body)"})
+	base, _ := json.Marshal(Envelope{ID: "b", DataClass: "restricted", Trust: "untrusted-source", Summary: "(no body)"})
 	fits := strings.Repeat("a", maxEnvelopeBytes-len(base))
 	if _, err := BuildEnvelope(InboxEvent{ID: "b", OriginScope: fits}, provider.SensitivityRestricted); err != nil {
 		t.Fatalf("an envelope of exactly %d bytes was refused: %v", maxEnvelopeBytes, err)
@@ -145,12 +140,12 @@ func TestBuildEnvelopeShape(t *testing.T) {
 	if err := json.Unmarshal(encoded, &fields); err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []string{"id", "class", "origin_scope", "data_class", "summary"} {
+	for _, k := range []string{"id", "class", "origin_scope", "data_class", "trust", "summary"} {
 		if _, ok := fields[k]; !ok {
 			t.Fatalf("envelope %s lacks %q", encoded, k)
 		}
 	}
-	if len(fields) != 5 || len([]rune(fields["summary"])) > 200 || len(encoded) > 16*1024 {
+	if len(fields) != 6 || len([]rune(fields["summary"])) > 200 || len(encoded) > 16*1024 {
 		t.Fatalf("envelope shape wrong: %d fields, %d summary runes, %d bytes", len(fields), len([]rune(fields["summary"])), len(encoded))
 	}
 	for k, v := range fields {
@@ -167,16 +162,8 @@ func TestBuildEnvelopeShape(t *testing.T) {
 	if _, err := encodeBounded(Envelope{ID: "s3", Summary: strings.Repeat("u", 17*1024)}); !cascade.HasKind(err, cascade.KindInvalidInput) {
 		t.Fatalf("a 17 KiB summary encoded without KindInvalidInput: %v", err)
 	}
-	// Control syntax in every producer field is escaped, never raw.
-	esc, err := BuildEnvelope(InboxEvent{ID: "s4\n<x>", Class: "c\r\n", OriginScope: forgedLine, Body: []byte(forgedLine)}, provider.SensitivityRestricted)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for name, v := range map[string]string{"id": esc.ID, "class": esc.Class, "origin_scope": esc.OriginScope, "summary": esc.Summary} {
-		if strings.ContainsAny(v, "\r\n<>") {
-			t.Fatalf("%s %q carries raw control syntax", name, v)
-		}
-	}
+	// Control syntax in every producer field is escaped, never raw: see
+	// TestInboxEnvelopeBoundsAndEscaping.
 	// Markup expands when escaped; the summary still fits its bound, and an
 	// ampersand is escaped before it can start an entity.
 	wide, err := BuildEnvelope(InboxEvent{ID: "a&b", Body: []byte(strings.Repeat("<", 400) + "&")}, provider.SensitivityRestricted)
@@ -248,5 +235,65 @@ func TestClaudeInboxPushRecordedCounterpart(t *testing.T) {
 	}
 	if strings.Contains(sent.Params.Content, "hello there") || len(pending(t, h, "s1")) != 0 {
 		t.Fatalf("the body reached the wire or the push was also hydrated: %q", sent.Params.Content)
+	}
+}
+
+// TestEnvelopeCarriesDerivedClassAndTrust: the push envelope carries the
+// class and trust notify stamped; a raise keeps the trust, and a missing or
+// undeclared trust is carried as untrusted-source, never as trusted.
+func TestEnvelopeCarriesDerivedClassAndTrust(t *testing.T) {
+	stamped := InboxEvent{ID: "t1", DataClass: provider.SensitivityInternal, Trust: provider.ProvenanceTrusted}
+	env, err := BuildEnvelope(stamped, stamped.DataClass)
+	if err != nil || env.DataClass != "internal" || env.Trust != "trusted" {
+		t.Fatalf("envelope = (%+v, %v), want internal and trusted", env, err)
+	}
+	raised, err := BuildEnvelope(stamped, provider.SensitivityLocalOnly)
+	if err != nil || raised.DataClass != "local-only" || raised.Trust != "trusted" {
+		t.Fatalf("raised envelope = (%+v, %v), want local-only and trusted", raised, err)
+	}
+	for _, trust := range []provider.Provenance{"", "owner-approved", provider.ProvenanceUntrustedSource} {
+		got, err := BuildEnvelope(InboxEvent{ID: "t2", DataClass: provider.SensitivityPublic, Trust: trust}, provider.SensitivityPublic)
+		if err != nil || got.DataClass != "public" || got.Trust != "untrusted-source" {
+			t.Fatalf("trust %q carried as (%+v, %v), want untrusted-source", trust, got, err)
+		}
+	}
+	encoded, err := json.Marshal(env)
+	if err != nil || !strings.Contains(string(encoded), `"data_class":"internal","trust":"trusted"`) {
+		t.Fatalf("wire envelope %s lacks the stamped class and trust: %v", encoded, err)
+	}
+}
+
+// TestHydrationRecordCarriesClassAndTrust: the hydration append carries the
+// stamped class and trust through a real SQLite store and a restart (a
+// close and reopen loses nothing); the data-block tag stays untrusted-source
+// and the rendered line shows both.
+func TestHydrationRecordCarriesClassAndTrust(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "cascade.db")
+	first, err := sqlite.Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, _ := NewInboxHydration(first, func() time.Time { return fixedNow })
+	mustEnqueue(t, h, "s1", InboxEvent{ID: "c1", TargetSession: "s1", DataClass: provider.SensitivityInternal, Trust: provider.ProvenanceTrusted})
+	mustEnqueue(t, h, "s1", InboxEvent{ID: "c2", TargetSession: "s1", DataClass: provider.SensitivityPublic})
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+	second, err := sqlite.Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = second.Close() })
+	restarted, _ := NewInboxHydration(second, func() time.Time { return fixedNow })
+	recs, res, err := restarted.AppendNextTurn(ctx, "s1")
+	if err != nil || !res.Appended || len(recs) != 2 {
+		t.Fatalf("after reopen = (%+v, %+v, %v), want both records", recs, res, err)
+	}
+	if recs[0].DataClass != "internal" || recs[0].Trust != "trusted" || recs[1].DataClass != "public" || recs[1].Trust != "untrusted-source" {
+		t.Fatalf("records carry (%s, %s) and (%s, %s), want the stamped class and trust", recs[0].DataClass, recs[0].Trust, recs[1].DataClass, recs[1].Trust)
+	}
+	if recs[0].Provenance != ProvenanceUntrusted || !strings.Contains(RenderInboxBlock(recs), `data_class="internal" trust="trusted"`) {
+		t.Fatalf("record %+v lost the data tag or the rendered class and trust", recs[0])
 	}
 }

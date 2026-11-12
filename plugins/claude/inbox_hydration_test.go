@@ -1,10 +1,11 @@
 package claude
 
-// Purpose: proves InboxHydration, the PRIMARY path (P1-E37-W8-S73-T1): a
-// record reaches only its own session, exactly once, with the provenance
-// tag, derived data class and R-16.5 metadata; an expired record is dropped
-// at drain; the queue is bounded; a store failure is typed; and a real
-// SQLite store keeps pending records across a close/reopen (a restart).
+// Purpose: proves InboxHydration, the PRIMARY path: a record reaches only
+// its own session, exactly once, with the provenance tag, stamped data class
+// and R-16.5 metadata; a record above the model ceiling is withheld; an
+// expired record is dropped at drain; the queue is bounded; a store failure
+// is typed. The restart and class/trust round trip live in
+// TestHydrationRecordCarriesClassAndTrust.
 
 import (
 	"context"
@@ -31,11 +32,11 @@ func TestInboxHydrationPrimaryPath(t *testing.T) {
 	ev := InboxEvent{
 		ID: "h1", Class: "addressed", OriginScope: "repo-a", TargetScope: "repo-a", TargetSession: "s1",
 		TargetTask: "task-9", Visibility: "private", CorrelationID: "run-7",
-		ExpiresAt: now.Add(time.Hour), Body: []byte("SESSION-ONE-ONLY payload"),
+		ExpiresAt: now.Add(time.Hour), Body: []byte("SESSION-ONE-ONLY payload"), DataClass: provider.SensitivityInternal,
 	}
 	mustEnqueue(t, h, "s1", ev)
 	mustEnqueue(t, h, "s1", ev) // a redelivered id is kept once
-	mustEnqueue(t, h, "s2", InboxEvent{ID: "h2", Class: "global-critical", Visibility: "shared", Body: []byte("other")})
+	mustEnqueue(t, h, "s2", InboxEvent{ID: "h2", Class: "global-critical", Visibility: "shared", Body: []byte("other"), DataClass: provider.SensitivityPublic})
 	expired := InboxEvent{ID: "h3", Class: "addressed", TargetSession: "s1", ExpiresAt: now.Add(time.Minute)}
 	mustEnqueue(t, h, "s1", expired)
 	now = now.Add(2 * time.Minute)
@@ -45,7 +46,8 @@ func TestInboxHydrationPrimaryPath(t *testing.T) {
 		t.Fatalf("drain s1 = (%d records, %+v, %v), want the one unexpired record", len(recs), res, err)
 	}
 	want := InboxRecord{
-		Envelope:    Envelope{ID: "h1", Class: "addressed", OriginScope: "repo-a", DataClass: "restricted", Summary: recs[0].Summary},
+		Envelope: Envelope{ID: "h1", Class: "addressed", OriginScope: "repo-a", DataClass: "internal",
+			Trust: "untrusted-source", Summary: recs[0].Summary},
 		TargetScope: "repo-a", TargetSession: "s1", TargetTask: "task-9", Visibility: "private", CorrelationID: "run-7",
 		ExpiresAtMs: ev.ExpiresAt.UnixMilli(), Provenance: ProvenanceUntrusted,
 	}
@@ -68,30 +70,6 @@ func mustEnqueue(t *testing.T, h *InboxHydration, sid string, ev InboxEvent) {
 	t.Helper()
 	if err := h.Enqueue(context.Background(), sid, ev); err != nil {
 		t.Fatalf("Enqueue(%s, %s): %v", sid, ev.ID, err)
-	}
-}
-
-func TestInboxHydrationSurvivesRestart(t *testing.T) {
-	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "cascade.db")
-	first, err := sqlite.Open(ctx, path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	h, _ := NewInboxHydration(first, func() time.Time { return fixedNow })
-	mustEnqueue(t, h, "s1", InboxEvent{ID: "durable-1", Class: "addressed", TargetSession: "s1", Body: []byte("kept")})
-	if err := first.Close(); err != nil {
-		t.Fatal(err)
-	}
-	second, err := sqlite.Open(ctx, path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = second.Close() })
-	restarted, _ := NewInboxHydration(second, func() time.Time { return fixedNow })
-	recs, res, err := restarted.AppendNextTurn(ctx, "s1")
-	if err != nil || !res.Appended || len(recs) != 1 || recs[0].ID != "durable-1" {
-		t.Fatalf("after reopen: (%+v, %+v, %v), want durable-1", recs, res, err)
 	}
 }
 
@@ -146,6 +124,7 @@ func TestHydratedRecordCarriesRoutingMetadata(t *testing.T) {
 	mustEnqueue(t, h, "s1", InboxEvent{
 		ID: "meta-2", Class: "addressed", OriginScope: "repo-a", TargetScope: "repo-a", TargetSession: "s1",
 		TargetTask: "task-5", Visibility: "private", CorrelationID: "corr-10", ExpiresAt: expiry, Body: []byte("second"),
+		DataClass: provider.SensitivityPublic,
 	})
 	recs, _, err := h.AppendNextTurn(ctx, "s1")
 	if err != nil || len(recs) != 2 {
@@ -168,9 +147,9 @@ func TestHydratedRecordCarriesRoutingMetadata(t *testing.T) {
 			t.Errorf("record %s provenance = %q: a producer's Trust tag must never mark hydrated text trusted", r.ID, r.Provenance)
 		}
 	}
-	// The ported data class is the producer's, carried and never lowered.
-	if recs[0].DataClass != "internal" || recs[1].DataClass != "restricted" {
-		t.Fatalf("data classes = %q, %q; want the events' own (internal, restricted)", recs[0].DataClass, recs[1].DataClass)
+	// The ported data class is the stamped one, carried and never lowered.
+	if recs[0].DataClass != "internal" || recs[1].DataClass != "public" {
+		t.Fatalf("data classes = %q, %q; want the events' own (internal, public)", recs[0].DataClass, recs[1].DataClass)
 	}
 	if recs[0].TargetScope != "repo-b" || recs[0].TargetTask != "task-4" || recs[0].CorrelationID != "corr-9" {
 		t.Fatalf("record 1 routing metadata drifted: %+v", recs[0])
@@ -185,13 +164,13 @@ func TestAppendNextTurnReportsResult(t *testing.T) {
 	if err != nil || res.Appended || res.SessionID != "s1" || len(recs) != 0 {
 		t.Fatalf("empty queue = (%d, %+v, %v), want (0, {s1 false}, nil)", len(recs), res, err)
 	}
-	mustEnqueue(t, h, "s1", InboxEvent{ID: "r1", Class: "addressed", TargetSession: "s1", ExpiresAt: now.Add(time.Minute)})
+	mustEnqueue(t, h, "s1", InboxEvent{ID: "r1", Class: "addressed", TargetSession: "s1", ExpiresAt: now.Add(time.Minute), DataClass: provider.SensitivityInternal})
 	now = now.Add(time.Hour)
 	recs, res, err = h.AppendNextTurn(ctx, "s1")
 	if err != nil || res.Appended || len(recs) != 0 {
 		t.Fatalf("all-expired queue = (%d, %+v, %v): Appended must be false when nothing is returned", len(recs), res, err)
 	}
-	mustEnqueue(t, h, "s1", InboxEvent{ID: "r2", Class: "addressed", TargetSession: "s1"})
+	mustEnqueue(t, h, "s1", InboxEvent{ID: "r2", Class: "addressed", TargetSession: "s1", DataClass: provider.SensitivityInternal})
 	recs, res, err = h.AppendNextTurn(ctx, "s1")
 	if err != nil || !res.Appended || res.SessionID != "s1" || len(recs) != 1 {
 		t.Fatalf("one live record = (%d, %+v, %v), want (1, {s1 true}, nil)", len(recs), res, err)
@@ -214,10 +193,12 @@ type recordingTx struct {
 	s *recordingStore
 }
 
-func (s *recordingStore) note(namespace string) {
+// note records namespace and returns it, so each Tx method stays one line.
+func (s *recordingStore) note(namespace string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.namespaces[namespace] = true
+	return namespace
 }
 
 func (s *recordingStore) Tx(ctx context.Context, fn func(context.Context, provider.Tx) error) error {
@@ -225,47 +206,19 @@ func (s *recordingStore) Tx(ctx context.Context, fn func(context.Context, provid
 }
 
 func (t recordingTx) Get(ctx context.Context, ns, key string) ([]byte, error) {
-	t.s.note(ns)
-	return t.Tx.Get(ctx, ns, key)
+	return t.Tx.Get(ctx, t.s.note(ns), key)
 }
 
 func (t recordingTx) Delete(ctx context.Context, ns, key string) error {
-	t.s.note(ns)
-	return t.Tx.Delete(ctx, ns, key)
+	return t.Tx.Delete(ctx, t.s.note(ns), key)
 }
 
 func (t recordingTx) CompareAndSwap(ctx context.Context, ns, key string, old, val []byte) error {
-	t.s.note(ns)
-	return t.Tx.CompareAndSwap(ctx, ns, key, old, val)
+	return t.Tx.CompareAndSwap(ctx, t.s.note(ns), key, old, val)
 }
 
 func (t recordingTx) Put(ctx context.Context, ns, key string, val []byte) error {
-	t.s.note(ns)
-	return t.Tx.Put(ctx, ns, key, val)
-}
-
-// TestAppendNextTurnNeverAcks proves the drain has no acknowledgement path:
-// it reads and clears only its own queue namespace, so the source inbox
-// record (another namespace, S-73.T2's to acknowledge) stays unread. The
-// real notify inbox is checked in internal/plugins.
-func TestAppendNextTurnNeverAcks(t *testing.T) {
-	ctx := context.Background()
-	rec := &recordingStore{Store: storetest.NewMemStore(), namespaces: map[string]bool{}}
-	h, _ := NewInboxHydration(rec, func() time.Time { return fixedNow })
-	const inboxNS = "notify.inbox"
-	if err := rec.Put(ctx, inboxNS, "unread-1", []byte(`{"read":false}`)); err != nil {
-		t.Fatal(err)
-	}
-	mustEnqueue(t, h, "s1", InboxEvent{ID: "unread-1", Class: "addressed", TargetSession: "s1"})
-	if recs, res, err := h.AppendNextTurn(ctx, "s1"); err != nil || !res.Appended || len(recs) != 1 {
-		t.Fatalf("drain = (%d, %+v, %v)", len(recs), res, err)
-	}
-	if len(rec.namespaces) != 1 || !rec.namespaces[HydrationNamespace] {
-		t.Fatalf("the drain touched namespaces %v, want only %q", rec.namespaces, HydrationNamespace)
-	}
-	if got, err := rec.Get(ctx, inboxNS, "unread-1"); err != nil || string(got) != `{"read":false}` {
-		t.Fatalf("the source inbox record changed: (%q, %v)", got, err)
-	}
+	return t.Tx.Put(ctx, t.s.note(ns), key, val)
 }
 
 // failingDeleteStore fails the delete the drain uses to clear the queue.
@@ -283,7 +236,7 @@ func TestHydrationAppendFailureKeepsInboxRecord(t *testing.T) {
 	ctx := context.Background()
 	mem := storetest.NewMemStore()
 	h, _ := NewInboxHydration(mem, func() time.Time { return fixedNow })
-	mustEnqueue(t, h, "s1", InboxEvent{ID: "keep-1", Class: "addressed", TargetSession: "s1", Body: []byte("still queued")})
+	mustEnqueue(t, h, "s1", InboxEvent{ID: "keep-1", Class: "addressed", TargetSession: "s1", Body: []byte("still queued"), DataClass: provider.SensitivityInternal})
 	broken, _ := NewInboxHydration(failingDeleteStore{Store: mem}, func() time.Time { return fixedNow })
 	recs, res, err := broken.AppendNextTurn(ctx, "s1")
 	if !cascade.HasKind(err, cascade.KindUnavailable) || !strings.Contains(err.Error(), "disk full") {
@@ -295,5 +248,48 @@ func TestHydrationAppendFailureKeepsInboxRecord(t *testing.T) {
 	again, res, err := h.AppendNextTurn(ctx, "s1")
 	if err != nil || !res.Appended || len(again) != 1 || again[0].ID != "keep-1" {
 		t.Fatalf("after the failed drain the record is gone: (%+v, %+v, %v)", again, res, err)
+	}
+}
+
+// TestHydrationWithholdsLocalOnly: on a real SQLite store, local-only and
+// restricted records never reach the turn, are counted in Withheld and leave
+// the queue; internal and public records are returned. The drain has no
+// acknowledgement path: it touches only its own queue namespace, so every
+// source inbox record (S-73.T2's to acknowledge) stays unread.
+func TestHydrationWithholdsLocalOnly(t *testing.T) {
+	ctx := context.Background()
+	db, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "cascade.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	store := &recordingStore{Store: db, namespaces: map[string]bool{}}
+	h, _ := NewInboxHydration(store, func() time.Time { return fixedNow })
+	ids := []string{"lo", "rs", "in", "pu"}
+	tiers := []provider.SensitivityTier{provider.SensitivityLocalOnly, provider.SensitivityRestricted, provider.SensitivityInternal, provider.SensitivityPublic}
+	for i, id := range ids {
+		if err := store.Put(ctx, "notify.inbox", id, []byte(`{"read":false}`)); err != nil {
+			t.Fatal(err)
+		}
+		mustEnqueue(t, h, "s1", InboxEvent{ID: id, Class: "addressed", TargetSession: "s1", DataClass: tiers[i]})
+	}
+	recs, res, err := h.AppendNextTurn(ctx, "s1")
+	if err != nil || res.Withheld != 2 || !res.Appended || len(recs) != 2 || recs[0].ID != "in" || recs[1].ID != "pu" {
+		t.Fatalf("drain = (%+v, %+v, %v), want in and pu returned and two withheld", recs, res, err)
+	}
+	if again, res, err := h.AppendNextTurn(ctx, "s1"); err != nil || len(again) != 0 || res.Withheld != 0 {
+		t.Fatalf("second drain = (%d, %+v, %v): withheld records stayed queued", len(again), res, err)
+	}
+	if len(store.namespaces) != 1 || !store.namespaces[HydrationNamespace] {
+		t.Fatalf("the drain touched namespaces %v, want only %q", store.namespaces, HydrationNamespace)
+	}
+	for _, id := range ids {
+		if got, err := store.Get(ctx, "notify.inbox", id); err != nil || string(got) != `{"read":false}` {
+			t.Fatalf("inbox record %s changed: (%q, %v)", id, got, err)
+		}
+	}
+	mustEnqueue(t, h, "s1", InboxEvent{ID: "only-lo", Class: "addressed", DataClass: provider.SensitivityLocalOnly})
+	if recs, res, err := h.AppendNextTurn(ctx, "s1"); err != nil || len(recs) != 0 || res.Appended || res.Withheld != 1 {
+		t.Fatalf("all-withheld drain = (%d, %+v, %v), want nothing appended and one withheld", len(recs), res, err)
 	}
 }

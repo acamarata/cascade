@@ -2,24 +2,24 @@
 // envelope.
 //
 // Purpose: InboxEvent (the plugin-local DTO the host adapter builds from a
-// real internal/notify.Notification), Envelope (the exact R-21.178 wire
-// shape {id, class, origin_scope, data_class, summary}) and BuildEnvelope,
-// which carries the event's class, escapes and bounds it.
+// stamped internal/notify.Notification), Envelope (pkg/inboxenv's wire shape
+// {id, class, origin_scope, data_class, trust, summary}) and BuildEnvelope,
+// which carries the event's stamped class and trust, escapes and bounds it.
 //
-// Inputs: an InboxEvent (its DataClass already decided by the producer) and
-// a requested data class.
+// Inputs: an InboxEvent (its DataClass and Trust stamped at notify
+// ingestion) and a requested data class.
 // Outputs: an Envelope, or a typed A-T7 refusal: provider.ErrDataClassDowngrade
 // for a request below the event's class, ErrEnvelopeTooLarge past the 16 KB
 // bound, ErrEnvelopeInvalid for an event with no id.
 //
 // Constraints: the data class type is pkg/provider.SensitivityTier (no
-// parallel vocabulary); this package never derives or lowers a class
-// (deriving it is the producer's job); the body is NEVER placed on the envelope, only a marked
-// excerpt of at most half of it; every string field has harness control
-// syntax escaped (escapeControl); plugins/** imports pkg/** only (Art.10.2).
+// parallel vocabulary); this package never derives or lowers a class or
+// raises a trust (stamping is internal/notify's job); escaping, the summary
+// and the bound come from pkg/inboxenv; the body is NEVER placed on the
+// envelope, only a marked excerpt of at most half of it; plugins/** imports
+// pkg/** only (Art.10.2).
 //
-// SPORT: plugins/claude/inbox-push-envelope + inbox-data-class (ADD) —
-// P1-E37-W8-S73-T1.
+// SPORT: plugins/claude/inbox-push-envelope + inbox-data-class (ADD).
 package claude
 
 import (
@@ -30,6 +30,7 @@ import (
 	"unicode"
 
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/inboxenv"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -51,36 +52,24 @@ type InboxEvent struct {
 	// Body is the record's content. Only a marked excerpt of it ever
 	// leaves this package.
 	Body []byte
-	// DataClass is the event's class as the producer decided it. The zero
-	// value is SensitivityRestricted (fail closed); an invalid value
-	// refuses the build.
+	// DataClass is the class notify stamped at ingestion. The zero value is
+	// SensitivityRestricted (fail closed); an invalid value refuses the build.
 	DataClass provider.SensitivityTier
-	// Trust is the producer's provenance tag. The hydrated record is data
-	// either way: it is always tagged ProvenanceUntrusted.
+	// Trust is the provenance notify stamped at ingestion. Anything but a
+	// declared member is carried as untrusted-source.
 	Trust provider.Provenance
 }
 
-// Envelope is the exact R-21.178 wire shape.
-type Envelope struct {
-	ID          string `json:"id"`
-	Class       string `json:"class"`
-	OriginScope string `json:"origin_scope"`
-	DataClass   string `json:"data_class"`
-	Summary     string `json:"summary"`
-}
+// Envelope is the exact R-21.178 wire shape, shared with every other
+// injection surface through pkg/inboxenv.
+type Envelope = inboxenv.Envelope
 
-const (
-	// maxSummaryRunes is R-21.178's summary bound.
-	maxSummaryRunes = 200
-	// maxExcerptRunes caps the body excerpt inside the summary.
-	maxExcerptRunes = 160
-	// maxEnvelopeBytes is R-21.154's encoded-envelope bound (16 KB).
-	maxEnvelopeBytes = 16 * 1024
-)
+// maxEnvelopeBytes is R-21.154's encoded-envelope bound (16 KB).
+const maxEnvelopeBytes = inboxenv.MaxEncodedBytes
 
 var (
 	// ErrEnvelopeTooLarge refuses an encoded envelope or record over 16 KB.
-	ErrEnvelopeTooLarge = cascade.New(cascade.KindInvalidInput, "claude: encoded inbox envelope exceeds the 16 KB bound")
+	ErrEnvelopeTooLarge = inboxenv.ErrEnvelopeTooLarge
 	// ErrEnvelopeInvalid refuses an event with no id.
 	ErrEnvelopeInvalid = cascade.New(cascade.KindInvalidInput, "claude: inbox event has no id")
 )
@@ -103,9 +92,19 @@ func carryDataClass(ev InboxEvent, requested provider.SensitivityTier) (provider
 	return requested, nil
 }
 
-// BuildEnvelope carries ev's class (raised by requested, never lowered),
-// builds the escaped summary-only Envelope and checks the 16 KB bound. A
-// caller that wants no raise passes ev.DataClass.
+// carryTrust returns the trust an envelope carries: the stamped member, or
+// untrusted-source for anything else, so a missing stamp never reads as
+// trusted.
+func carryTrust(p provider.Provenance) provider.Provenance {
+	if p == provider.ProvenanceTrusted {
+		return p
+	}
+	return provider.ProvenanceUntrustedSource
+}
+
+// BuildEnvelope carries ev's class (raised by requested, never lowered) and
+// stamped trust, builds the escaped summary-only Envelope and checks the
+// 16 KB bound. A caller that wants no raise passes ev.DataClass.
 func BuildEnvelope(ev InboxEvent, requested provider.SensitivityTier) (Envelope, error) {
 	if ev.ID == "" {
 		return Envelope{}, ErrEnvelopeInvalid
@@ -115,11 +114,12 @@ func BuildEnvelope(ev InboxEvent, requested provider.SensitivityTier) (Envelope,
 		return Envelope{}, err
 	}
 	env := Envelope{
-		ID:          escapeControl(ev.ID),
-		Class:       escapeControl(ev.Class),
-		OriginScope: escapeControl(ev.OriginScope),
+		ID:          inboxenv.EscapeControl(ev.ID),
+		Class:       inboxenv.EscapeControl(ev.Class),
+		OriginScope: inboxenv.EscapeControl(ev.OriginScope),
 		DataClass:   class.String(),
-		Summary:     summarize(ev.Body),
+		Trust:       carryTrust(ev.Trust).String(),
+		Summary:     inboxenv.Summarize(ev.Body),
 	}
 	if _, err := encodeBounded(env); err != nil {
 		return Envelope{}, err
@@ -127,49 +127,8 @@ func BuildEnvelope(ev InboxEvent, requested provider.SensitivityTier) (Envelope,
 	return env, nil
 }
 
-// summarize returns a MARKED excerpt of body: at most half its runes and
-// at most maxExcerptRunes, escaped, prefixed with the shown/total count and
-// suffixed with an ellipsis, clamped to maxSummaryRunes. It never equals
-// the body: the body only leaves through cascade_inbox_read (S-73.T2).
-func summarize(body []byte) string {
-	text := []rune(strings.ToValidUTF8(string(body), "\uFFFD"))
-	if len(text) == 0 {
-		return "(no body)"
-	}
-	shown := min(len(text)/2, maxExcerptRunes)
-	prefix := fmt.Sprintf("excerpt %d/%d chars: ", shown, len(text))
-	excerpt := []rune(escapeControl(string(text[:shown])))
-	room := maxSummaryRunes - len([]rune(prefix)) - 1
-	if len(excerpt) > room {
-		excerpt = excerpt[:room]
-	}
-	return prefix + string(excerpt) + "…"
-}
-
-// escapeControl neutralises harness control syntax in untrusted text: the
-// markup characters & < > become entities, and every line break, control
-// or invisible format character becomes a visible \u escape (a newline
-// renders as \u000a), so a value
-// can never open a tag, close the data block or start a new line.
-func escapeControl(s string) string {
-	var b strings.Builder
-	for _, r := range s {
-		switch r {
-		case '&':
-			b.WriteString("&amp;")
-		case '<':
-			b.WriteString("&lt;")
-		case '>':
-			b.WriteString("&gt;")
-		default:
-			writeGuardedRune(&b, r)
-		}
-	}
-	return b.String()
-}
-
-// guardControl is escapeControl without the '&' rule. The renderer applies
-// it to fields that escapeControl already processed, so it is a no-op for
+// guardControl is inboxenv.EscapeControl without the '&' rule. The renderer
+// applies it to fields that EscapeControl already processed, so it is a no-op for
 // them (no double escaping), while still neutralising any raw value.
 func guardControl(s string) string {
 	var b strings.Builder
