@@ -31,6 +31,7 @@ type Request struct {
 	Mutation                                                               bool
 	InScope                                                                []string
 	Parent                                                                 jobs.DelegationRecord
+	Worktree                                                               *Worktree // the collector releases it
 }
 
 // Response carries the lease, in-scope prefixes, tool policy, driver and signed child record.
@@ -79,6 +80,7 @@ type Service struct {
 	lanes          map[string]capacity.AgentLane
 	shim           spawner
 	newPrincipalID func(agentID string) (string, error)
+	collection     *Collection // nil: Delegate starts no collector (BindCollection)
 }
 
 // NewService returns a configured service instance.
@@ -212,7 +214,7 @@ func (s *Service) spawn(ctx context.Context, req *Request, rec envelope.Signed, 
 		s.deps.Minter.Revoke(child)
 		return s.abort(ctx, lease, id, err)
 	}
-	return s.deps.fleet.Commit(ctx, lease)
+	return s.started(ctx, req, rec, lease, h)
 }
 
 // insertChild stores the signed child record live on lane.

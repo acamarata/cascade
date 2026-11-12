@@ -15,8 +15,12 @@ import (
 var _ = registerDaemonWiring(daemonRegistration{
 	Name: "principal", Phase: phaseMiddleware, Order: 5,
 	Wire: func(w *daemonWiring) error {
-		minter := principal.NewMinter(w.Clock)
-		minter.Audit = runtime.NewStoreAuditRecorder(w.Store, w.Clock)
+		minter := w.Deps.Minter
+		if minter == nil {
+			minter = principal.NewMinter(w.Clock)
+			minter.Audit = runtime.NewStoreAuditRecorder(w.Store, w.Clock)
+			w.Deps.Minter = minter
+		}
 		w.Registry.SetAccessPolicy(func(token string) (principal.Principal, error) {
 			return minter.Resolve(token, w.Clock.Now())
 		})

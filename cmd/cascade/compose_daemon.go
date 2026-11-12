@@ -37,6 +37,7 @@ import (
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/jobs"
 	"github.com/acamarata/cascade/internal/memory"
+	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -122,6 +123,10 @@ type daemonRuntime struct {
 	// Creds is the start-time credential snapshot (P1-GWY-10); registrations
 	// read gateway and credential values through Creds.Getenv only.
 	Creds *credentialEnv
+	// Minter is the daemon's one principal minter; the principal registration
+	// (phaseMiddleware, Order 5) sets it, so every token a later registration
+	// mints resolves through the same admission policy.
+	Minter *principal.Minter
 }
 
 // Reconcile brings the snapshot in line with names, the credentialNames of a
