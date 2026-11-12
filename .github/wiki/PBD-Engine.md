@@ -305,3 +305,27 @@ go vet ./plugins/pbd/...
 No production caller exists yet — this ticket's own HOW section forbids
 adding one. See `internal/build/testonly-allow.json`'s entry for
 `plugins/pbd/internal/pews.Convert`.
+
+## Reviewer policy (P1-PBD-01)
+
+`internal/jobs` enforces a reviewer-policy contract (`contract:reviewer-policy`) for review-class jobs. A blind `ReviewContext` builder takes no job, session or author input. A distinct-family ladder reads review count and family independence from an injected `ReviewPolicySource`; the production source is `internal/review`'s `JobReviewPolicy` (consequence-class rules), never a `jobs` literal. `Review`, `Adversarial` and `QaTemplate.Resolve` enforce it. `CompletionPolicy.Transition` refuses `accepted` for a review-class job unless its worktree is proven unchanged via `WorktreeManager.ReviewerTreeForJob` and the observed author and reviewer families pass the ladder; degraded independence requires a consumed approval token.
+
+### Concrete providers wired by P1-PBD-01d, P1-PBD-01g and P1-PBD-01h
+
+The reviewer policy depends on concrete providers introduced across the P1-PBD-01 splits:
+
+- **P1-PBD-01d** wires `JobReviewPolicy` as the production `ReviewPolicySource`. It resolves consequence-class rules into `ReviewRule` values (gate counts, `RequireDistinctFamily`, `HoldWithoutDistinct`) so that `internal/jobs` never contains a hard-coded review gate literal.
+- **P1-PBD-01g** wires the provider family resolver (`ProviderFamilyResolver`). It maps registered provider names to their driver families via the provider registry, deduplicates drivers for `AvailableFamilies`, and fails closed (`Resolved: false`) on unknown, empty or nil inputs so that unresolved authors are never treated as distinct.
+- **P1-PBD-01h** wires `ReviewerEnforcement` into `CompletionPolicyDeps`. Its `Inputs` seam provides `AuthorFamilies` and `ReviewerFamily` lookups against the jobs store, while its `Decisions` seam records `ReviewerDecision` rows through `Store.RecordReviewerDecision`. Transition denies a review-class job at the accepted edge when `Reviewer` is nil, when `VerifyReadOnly` detects a mutated worktree, or when the observed family ladder returns a hold or degraded state without a valid approval token.
+
+### Read-only lease enforcement
+
+`EnforceReadOnlyLease` inspects a node's `MinTaskClass` and `MutableScope`. A review-class node carrying any mutable scope glob returns `ErrMutableReview`; implement nodes and review nodes with an empty scope pass. Template resolution sets `NodeRequirements` for `review_context`, `reviewer_assignment` and `reviewer_family_distinct` on every resolved review node.
+
+### Clean review context
+
+`BuildCleanReviewContext` applies a field-by-field allowlist over `ReviewSubject`. Only `CheckpointID`, `Rubric`, `Ticket`, `Footprint` and `Diff` survive. Paths matching `ExcludedReviewPaths` (author instruction files and generated projections) are dropped from both footprint and diff sections. The resulting `Diff.Provenance` is always `provider.ProvenanceUntrustedSource`. An empty checkpoint id, rubric id or ticket id yields `KindInvalidInput`.
+
+### Distinct-family ladder
+
+`RequireDistinctFamily` dispatches on the injected `ReviewRule`. Low risk with one family proceeds without degradation. Normal risk with one family sets `IndependenceDegraded` and `RequiresHumanApproval`. High and Critical risk with one family return `ErrNoDistinctFamily` (kind `KindElevationRequired`). When a second resolved family is available, `Candidates` carries only the distinct families and `FamilyDistinct` is true. `VerifyObservedFamily` applies the same ladder at completion time using observed author and reviewer families.
