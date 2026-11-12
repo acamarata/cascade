@@ -37,6 +37,7 @@ import (
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/envelope"
 )
 
 // EnrollPayload is the untrusted wire shape of the enrollment handshake:
@@ -114,21 +115,23 @@ func DecodeEnrollHandshakePayload(raw []byte) (EnrollPayload, error) {
 }
 
 // EnrollDeps carries every collaborator EnrollNode needs: the device
-// record store, the known_hosts pinning store, the controller's own
-// keystore (to produce ControllerSignature), and the controller's own
-// enrolled identity — public half only; the private half never leaves
-// Keystore.Sign.
+// record store, the known_hosts pinning store, and the controller identity
+// and signer. Keystore supports callers awaiting installation-signer migration.
 type EnrollDeps struct {
 	Records             *RecordStore
 	KnownHosts          *KnownHosts
 	Keystore            *NodeKeystore
 	ControllerNodeID    string
 	ControllerPubKeyB64 string
+	// ControllerSigner is the controller installation identity (contract:installation-identity).
+	// It is the only key that signs the controller half; ControllerPubKeyB64
+	// must be base64.StdEncoding of its PublicKey().
+	ControllerSigner envelope.Signer
 }
 
 // EnrollNode runs the full enrollment operation: the daemonless-elevation
 // precondition, host-key verification, trust_tier validation, transcript
-// completion (the controller signs its half via the keystore) and
+// completion (the controller signs its half via the installation signer) and
 // verification, then a conflict-checked device-record write. Every
 // failure mode is a typed fail-closed error; there is no path that
 // returns a zero-value success.
@@ -152,27 +155,13 @@ func EnrollNode(ctx context.Context, deps EnrollDeps, precondition runtime.Eleva
 	if err := validateSocketDir(p.SocketDir); err != nil {
 		return DeviceRecord{}, err
 	}
+	if err := verifyControllerSigner(deps); err != nil {
+		return DeviceRecord{}, err
+	}
 	if err := deps.KnownHosts.Verify(p.Host, p.HostKeyFingerprint, p.HostKeyOverride); err != nil {
 		return DeviceRecord{}, err
 	}
-
-	nodeSig, err := decodeSignature(p.NodeSignatureB64)
-	if err != nil {
-		return DeviceRecord{}, err
-	}
-	tr := Transcript{
-		NodeID:              identity.NodeID,
-		NodePubKeyB64:       identity.PubKeyB64(),
-		ControllerPubKeyB64: deps.ControllerPubKeyB64,
-		HostKeyFingerprint:  p.HostKeyFingerprint,
-		NodeSignature:       nodeSig,
-	}
-	ctrlSig, err := deps.Keystore.Sign(ctx, deps.ControllerNodeID, tr.SigningPayload())
-	if err != nil {
-		return DeviceRecord{}, err
-	}
-	tr.ControllerSignature = ctrlSig
-	if err := VerifyTranscript(tr, p.HostKeyFingerprint); err != nil {
+	if err := verifyEnrollmentTranscript(ctx, deps, identity, p); err != nil {
 		return DeviceRecord{}, err
 	}
 
@@ -185,6 +174,47 @@ func EnrollNode(ctx context.Context, deps EnrollDeps, precondition runtime.Eleva
 	}
 
 	return deps.Records.enroll(identity, tier, routeFromPayload(p))
+}
+
+func verifyControllerSigner(deps EnrollDeps) error {
+	if deps.ControllerSigner != nil && base64.StdEncoding.EncodeToString(deps.ControllerSigner.PublicKey()) != deps.ControllerPubKeyB64 {
+		return cascade.New(cascade.KindIntegrity, "nodes: enrollment controller key is not the installation key")
+	}
+	return nil
+}
+
+func controllerSign(ctx context.Context, deps EnrollDeps, payload []byte) ([]byte, error) {
+	if deps.ControllerSigner == nil {
+		// transitional: removed by P1-NODE-20c
+		return deps.Keystore.Sign(ctx, deps.ControllerNodeID, payload)
+	}
+	if err := verifyControllerSigner(deps); err != nil {
+		return nil, err
+	}
+	sig, err := deps.ControllerSigner.Sign(ctx, payload)
+	if err != nil {
+		return nil, cascade.Wrap(cascade.KindUnavailable, err, "nodes: installation signer failed")
+	}
+	return sig, nil
+}
+
+func verifyEnrollmentTranscript(ctx context.Context, deps EnrollDeps, identity Identity, p EnrollPayload) error {
+	nodeSig, err := decodeSignature(p.NodeSignatureB64)
+	if err != nil {
+		return err
+	}
+	tr := Transcript{
+		NodeID:              identity.NodeID,
+		NodePubKeyB64:       identity.PubKeyB64(),
+		ControllerPubKeyB64: deps.ControllerPubKeyB64,
+		HostKeyFingerprint:  p.HostKeyFingerprint,
+		NodeSignature:       nodeSig,
+	}
+	tr.ControllerSignature, err = controllerSign(ctx, deps, tr.SigningPayload())
+	if err != nil {
+		return err
+	}
+	return VerifyTranscript(tr, p.HostKeyFingerprint)
 }
 
 func decodeSignature(b64 string) ([]byte, error) {

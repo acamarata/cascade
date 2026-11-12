@@ -56,6 +56,7 @@ func newTestHarness(t *testing.T) *testHarness {
 			Keystore:            ks,
 			ControllerNodeID:    ctrlIdent.NodeID,
 			ControllerPubKeyB64: ctrlIdent.PubKeyB64(),
+			ControllerSigner:    testEnvelopeSigner{priv: ctrlPriv},
 		},
 		keystore:   ks,
 		knownHosts: knownHosts,
