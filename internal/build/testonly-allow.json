@@ -1019,38 +1019,6 @@
     "symbol": "internal/ci.RequestNodeSignature"
   },
   {
-    "added_by_ticket": "P1-GEN-04",
-    "caller_site": "cmd/cascade/repo_watch_compose.go",
-    "expected_caller": "cmd/cascade/repo_watch_compose.go, the daemon composition of the repo watcher and maintenance pipeline that P1-GEN-13 adds; retire this entry once that file calls NewMaintenance",
-    "reason": "P1-GEN-04 ships the journaled, crash-safe maintenance pipeline implemented and tested; the daemon composition that constructs it per repository is P1-GEN-13, so a production call now would be a fabricated one.",
-    "retire_ticket": "P1-GEN-13",
-    "symbol": "internal/repo.NewMaintenance"
-  },
-  {
-    "added_by_ticket": "P1-GEN-04",
-    "caller_site": "cmd/cascade/repo_watch_compose.go",
-    "expected_caller": "cmd/cascade/repo_watch_compose.go, the daemon composition of the repo watcher and maintenance pipeline that P1-GEN-13 adds; retire this entry once that file calls NewWatchJournal",
-    "reason": "P1-GEN-04 ships the watch journal the maintenance pipeline resumes from; the composition that opens it on the daemon store is P1-GEN-13.",
-    "retire_ticket": "P1-GEN-13",
-    "symbol": "internal/repo.NewWatchJournal"
-  },
-  {
-    "added_by_ticket": "P1-GEN-04",
-    "caller_site": "cmd/cascade/repo_watch_compose.go",
-    "expected_caller": "cmd/cascade/repo_watch_compose.go, the daemon composition of the repo watcher and maintenance pipeline that P1-GEN-13 adds; retire this entry once that file calls ApplyWatchJournalSchema",
-    "reason": "P1-GEN-04 ships the watch journal schema; the composition that applies it to the daemon store before opening the journal is P1-GEN-13.",
-    "retire_ticket": "P1-GEN-13",
-    "symbol": "internal/repo.ApplyWatchJournalSchema"
-  },
-  {
-    "added_by_ticket": "P1-GEN-03",
-    "caller_site": "cmd/cascade/repo_watch_compose.go",
-    "expected_caller": "cmd/cascade/repo_watch_compose.go, the P1-GEN-13 watcher composition; it must either admit a single watcher path through Admit or retire this symbol; retire this entry once that file calls Admit",
-    "reason": "P1-GEN-03 ships the ingest admission guard; Admit is the one-path form of AdmitBatch named by contract:repo-ingest-admission. Repointed by P1-GEN-04: the maintenance pipeline admits every batch through AdmitBatch, so maintenance.go never calls Admit; the next candidate caller is the watcher composition of P1-GEN-13.",
-    "retire_ticket": "P1-GEN-13",
-    "symbol": "internal/repo.Admit"
-  },
-  {
     "caller_site": "internal/fleet/economics/refresh_grant.go",
     "expected_caller": "internal/fleet/economics/refresh_grant.go, the refresh grant P1-TOP-13d adds, which wraps the fresh token pair in an Entry before WriteDurable; retire this entry once that file calls NewEntry",
     "reason": "P1-TOP-13b ships the custody-backed harness credential store; the first producer of a new entry is the refresh grant of P1-TOP-13d.",
@@ -1252,13 +1220,6 @@
     "reason": "P1-NODE-06a ships WithRelayOrigin with its tests; its first production caller is internal/nodes/relay.go from P1-NODE-06c.",
     "retire_ticket": "P1-NODE-06c",
     "symbol": "internal/conductor.WithRelayOrigin"
-  },
-  {
-    "caller_site": "cmd/cascade/repo_watch_compose.go",
-    "expected_caller": "cmd/cascade/repo_watch_compose.go, which P1-GEN-13b adds (one watcher and sweep loop per repository composed in the daemon); retire this entry once that file calls NewWatcher",
-    "reason": "P1-GEN-14 ships the debounced fsnotify Watcher with its tests; its first production caller is the daemon composition from P1-GEN-13b.",
-    "retire_ticket": "P1-GEN-13b",
-    "symbol": "internal/repo.NewWatcher"
   },
   {
     "caller_site": "cmd/cascade/daemon_unix_conductor_lanecap.go",
@@ -1578,14 +1539,6 @@
     "symbol": "internal/runtime.FleetDiscoveryInterval"
   },
   {
-    "added_by_ticket": "P1-HRN-06a",
-    "caller_site": "cmd/cascade/wire_inbox.go",
-    "expected_caller": "cmd/cascade/wire_inbox.go, the P1-HRN-06d caller of RegisterInboxRPC; retire this entry once that file calls it",
-    "reason": "P1-HRN-06a ships internal/notify.RegisterInboxRPC with its tests; the daemon wiring that mounts the inbox methods is a later ticket. Its first production caller is cmd/cascade/wire_inbox.go from P1-HRN-06d, not built yet.",
-    "retire_ticket": "P1-HRN-06d",
-    "symbol": "internal/notify.RegisterInboxRPC"
-  },
-  {
     "added_by_ticket": "P1-PBD-01d",
     "caller_site": "cmd/cascade/hooks_reviewer.go",
     "expected_caller": "cmd/cascade/hooks_reviewer.go, the P1-PBD-05b caller of NewJobReviewPolicy; retire this entry once that file calls it",
@@ -1768,5 +1721,13 @@
     "reason": "P1-AGT-08j ships startup recovery with tests; the daemon that must call it before serving delegate RPCs is wired in P1-AGT-08k, which depends on it.",
     "retire_ticket": "P1-AGT-08k",
     "symbol": "internal/delegation.RecoverPendingSpawns"
+  },
+  {
+    "added_by_ticket": "P1-GEN-03",
+    "caller_site": "cmd/cascade/repo_watch_repair.go",
+    "expected_caller": "cmd/cascade/repo_watch_repair.go, the P1-GEN-13c repair path (sweep and --rebuild), which admits the single repository path through Admit; retire this entry once that file calls Admit",
+    "reason": "P1-GEN-13b composes the watchers, which admit batches through the maintenance pipeline (AdmitBatch); the one-path admission belongs to the repair rebuild of P1-GEN-13c.",
+    "retire_ticket": "P1-GEN-13c",
+    "symbol": "internal/repo.Admit"
   }
 ]
