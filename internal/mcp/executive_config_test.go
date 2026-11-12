@@ -1,14 +1,15 @@
 package mcp
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 func TestExecutiveMCPConfigIsCompactWrite(t *testing.T) {
-	got, err := ExecutiveMCPConfigJSON("/opt/cascade/bin/cascade")
-	want := `{"mcpServers":{"cascade":{"command":"/opt/cascade/bin/cascade","args":["mcp","serve","--stdio","--profile","compact-write"]}}}`
+	got, err := ExecutiveMCPConfigJSON(absBin("/opt/cascade/bin/cascade"))
+	want := `{"mcpServers":{"cascade":{"command":"` + absBin("/opt/cascade/bin/cascade") + `","args":["mcp","serve","--stdio","--profile","compact-write"]}}}`
 	if err != nil || string(got) != want {
 		t.Fatalf("config = %s, error = %v; want %s", got, err, want)
 	}
@@ -21,9 +22,17 @@ func TestExecutiveMCPConfigIsCompactWrite(t *testing.T) {
 }
 
 func TestExecutiveMCPConfigEscapesBinary(t *testing.T) {
-	got, err := ExecutiveMCPConfigJSON("/opt/a\"b\\c/cascade")
-	want := `{"mcpServers":{"cascade":{"command":"/opt/a\"b\\c/cascade","args":["mcp","serve","--stdio","--profile","compact-write"]}}}`
+	got, err := ExecutiveMCPConfigJSON(absBin("/opt/a\"b\\c/cascade"))
+	want := `{"mcpServers":{"cascade":{"command":"` + absBin("") + `/opt/a\"b\\c/cascade","args":["mcp","serve","--stdio","--profile","compact-write"]}}}`
 	if err != nil || string(got) != want {
 		t.Fatalf("config = %s, error = %v; want %s", got, err, want)
 	}
+}
+
+// absBin makes a slash path absolute on this OS: Windows needs a volume.
+func absBin(p string) string {
+	if runtime.GOOS == "windows" {
+		return "C:" + p
+	}
+	return p
 }

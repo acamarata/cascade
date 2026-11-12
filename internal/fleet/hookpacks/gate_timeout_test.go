@@ -3,6 +3,7 @@ package hookpacks_test
 
 import (
 	"encoding/json"
+	"runtime"
 	"testing"
 	"time"
 
@@ -10,6 +11,9 @@ import (
 )
 
 func TestGateHookTimeoutExceedsDeadline(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the tool-gate hook command is a POSIX shell line; Windows hook packs are tier-2")
+	}
 	cases := []struct {
 		pack     hookpacks.HookPack
 		deadline int

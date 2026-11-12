@@ -4,6 +4,7 @@ package hookpacks_test
 import (
 	"encoding/json"
 	"errors"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -11,6 +12,9 @@ import (
 )
 
 func TestToolGatePackRenderedCommand(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the tool-gate hook command is a POSIX shell line; Windows hook packs are tier-2")
+	}
 	pack := hookpacks.ToolGatePack()
 	if pack.Name != "tool-gate" || len(pack.Descriptors) != 1 || pack.Descriptors[0].EventType != hookpacks.EventPreToolUse {
 		t.Fatalf("unexpected tool-gate pack: %+v", pack)

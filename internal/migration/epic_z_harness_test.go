@@ -110,7 +110,7 @@ func epicDoctorReport(data []byte, rc int) error {
 		case "ok":
 		case "warn":
 			switch entry.Name {
-			case "completion-gate-hooks", "hook-events", "provider_health", "subsystem_census":
+			case "completion-gate-hooks", "hook-events", "notify-drops", "provider_health", "subsystem_census":
 				warnings++
 			case "elevation_custody":
 				// P1-SEC-12 contract: an unenrolled host warns and says elevated
