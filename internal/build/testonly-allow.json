@@ -1345,14 +1345,6 @@
     "symbol": "internal/ci.ParsePreReceiveStdin"
   },
   {
-    "added_by_ticket": "P1-EXE-14a",
-    "caller_site": "internal/rpc/fleet_health.go",
-    "expected_caller": "internal/rpc/fleet_health.go, the fleet.health.summary handler that passes the FleetRuntime Health call through SummarizeFleetHealth; retire this entry once that file calls it",
-    "reason": "P1-EXE-14a projects the fleet health result into the five R-21.39 keys and is tested with a fake health function. The RPC handler that serves it is P1-EXE-14b, which depends on this ticket.",
-    "retire_ticket": "P1-EXE-14b",
-    "symbol": "internal/executive.SummarizeFleetHealth"
-  },
-  {
     "added_by_ticket": "P1-AGT-11",
     "caller_site": "cmd/cascade/wire_delegate.go",
     "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k caller of MintChild; retire this entry once that file calls it",
@@ -1813,5 +1805,21 @@
     "reason": "The sealed registry takes extra utility terms before first use; the learned-input subsystem of P1-TOP-09f registers them.",
     "retire_ticket": "P1-TOP-09f",
     "symbol": "internal/fleet/economics.RegisterTerm"
+  },
+  {
+    "added_by_ticket": "P1-EXE-14b",
+    "caller_site": "cmd/cascade/daemon_unix_fleet_health.go",
+    "expected_caller": "cmd/cascade/daemon_unix_fleet_health.go, the P1-EXE-14d daemon mount of fleet.health.summary; retire this entry once that file calls RegisterFleetHealthSummary",
+    "reason": "P1-EXE-14b ships the handler and its access row; the daemon mounts it in P1-EXE-14d.",
+    "retire_ticket": "P1-EXE-14d",
+    "symbol": "internal/rpc.RegisterFleetHealthSummary"
+  },
+  {
+    "added_by_ticket": "P1-EXE-14a",
+    "caller_site": "cmd/cascade/daemon_unix_fleet_health.go",
+    "expected_caller": "cmd/cascade/daemon_unix_fleet_health.go, the P1-EXE-14d daemon mount of fleet.health.summary; retire this entry once that file calls SummarizeFleetHealth",
+    "reason": "The rpc handler takes an injected summary function; the daemon mount of P1-EXE-14d passes the FleetRuntime health through SummarizeFleetHealth.",
+    "retire_ticket": "P1-EXE-14d",
+    "symbol": "internal/executive.SummarizeFleetHealth"
   }
 ]
