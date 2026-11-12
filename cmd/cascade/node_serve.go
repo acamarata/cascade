@@ -174,12 +174,17 @@ func composeNodeServeAttested(ctx context.Context, deps nodeServeDeps) (nodeServ
 	if err != nil {
 		return comp, nil, err
 	}
+	putter, err := attestor.NewAttestPutter()
+	if err != nil {
+		_ = closeStore()
+		return comp, nil, err
+	}
 	actionLog, enrollmentID := nodeDispatchLeg(comp.dataDir, comp.self)
 	comp.registry = nodes.NewServeRegistry(nodes.ServeDeps{
 		Records: comp.recordStore, KnownHosts: comp.knownHosts, Keystore: comp.keystore, Self: comp.self,
 		Sequences: nodes.NewSequenceStore(), Clock: deps.Clock, Timeout: nodes.DefaultHeartbeatTimeout,
 		Actions: actionLog, EnrollmentID: enrollmentID,
-		AttestSigner: attestor.Sign, ControllerBinding: nodes.NewFileControllerBindingBackend(comp.dataDir),
+		AttestSigner: attestor.Sign, AttestPutter: putter.Put, ControllerBinding: nodes.NewFileControllerBindingBackend(comp.dataDir),
 	})
 	return comp, func() { _ = closeStore() }, nil
 }

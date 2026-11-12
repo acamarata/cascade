@@ -225,7 +225,7 @@ func openAttestEnv(ctx context.Context, deps ciAttestVerifyDeps) (*attestEnv, fu
 		return nil, nil, err
 	}
 	closeDB := func() { _ = db.Close() }
-	trust, err := attestTrustStore(dataDir, deps.Clock)
+	trust, err := attestTrustForRole(db, dataDir, deps.Clock)
 	if err != nil {
 		closeDB()
 		return nil, nil, err
