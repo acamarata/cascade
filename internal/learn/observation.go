@@ -110,13 +110,60 @@ func foldObservation(row scoreRow, success bool, now time.Time) scoreRow {
 	return next
 }
 
-// observationFor maps a recorded outcome to its observation: scope
-// repo:<RepoID>, the outcome's task class and lane tier, success = accepted.
+// ObserveDecision feeds the attached observer from the stored scheduler outcome.
+// A missing outcome row is pending. Read and parse errors refuse observation;
+// the telemetry outcome class never overrides the authoritative decision kind.
+func (w *SQLiteOutcomeWriter) ObserveDecision(ctx context.Context, decisionID string, o TelemetryOutcome) error {
+	if w == nil || w.db == nil || w.clock == nil {
+		return cascade.New(cascade.KindInvalidInput, "learn: ObserveDecision requires a constructed SQLiteOutcomeWriter")
+	}
+	var raw sql.NullString
+	err := w.db.QueryRowContext(ctx, `SELECT o.outcome_kind FROM `+tableSchedulerDecision+` d
+		LEFT JOIN `+tableDecisionOutcome+` o ON o.decision_id = d.id WHERE d.id = ?`, decisionID).Scan(&raw)
+	if err == sql.ErrNoRows {
+		return ErrDecisionNotRecorded
+	}
+	if err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "learn: read decision outcome for observation")
+	}
+	if !raw.Valid {
+		return nil
+	}
+	kind, err := ParseOutcomeKind(raw.String)
+	if err != nil {
+		return err
+	}
+	scope, tc, tier, success, ok := observationFor(o, kind)
+	if !ok || w.obs == nil {
+		return nil
+	}
+	return w.obs.Observe(ctx, scope, tc, tier, success)
+}
+
+// observationFor maps completed and failed outcomes to scope repo:<RepoID>,
+// task class and lane tier. With no scheduler kind, the legacy telemetry
+// classes accepted and rejected map to completed and failed respectively.
 // ok is false when the outcome cannot name a scored cell: an unknown or empty
 // repo id (the reconciler's neutral default would pool every repo under one
 // key), a lane tier that is not a capacity.Tier, or a task class with no
 // prior. Such an outcome is still recorded; it just feeds no posterior.
-func observationFor(o TelemetryOutcome) (scope ScopeKey, tc conductor.TaskClass, tier capacity.Tier, success, ok bool) {
+func observationFor(o TelemetryOutcome, kinds ...OutcomeKind) (scope ScopeKey, tc conductor.TaskClass, tier capacity.Tier, success, ok bool) {
+	var kind OutcomeKind
+	if len(kinds) == 1 {
+		kind = kinds[0]
+	} else if len(kinds) == 0 {
+		switch o.FinalOutcome {
+		case OutcomeAccepted:
+			kind = OutcomeKindCompleted
+		case OutcomeRejected:
+			kind = OutcomeKindFailed
+		case OutcomeUnknown:
+			// No class: the outcome feeds no posterior.
+		}
+	}
+	if kind != OutcomeKindCompleted && kind != OutcomeKindFailed {
+		return "", "", "", false, false
+	}
 	tc, tier = conductor.TaskClass(o.TaskClass), capacity.Tier(o.LaneTier)
 	if o.RepoID == "" || o.RepoID == "unknown" || !tier.Valid() {
 		return "", "", "", false, false
@@ -124,5 +171,5 @@ func observationFor(o TelemetryOutcome) (scope ScopeKey, tc conductor.TaskClass,
 	if _, _, has := PriorAlphaBeta(tier, tc); !has {
 		return "", "", "", false, false
 	}
-	return repoScope(o.RepoID), tc, tier, o.FinalOutcome == OutcomeAccepted, true
+	return repoScope(o.RepoID), tc, tier, kind == OutcomeKindCompleted, true
 }

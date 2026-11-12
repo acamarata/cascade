@@ -84,18 +84,19 @@ func TestObservationForMapping(t *testing.T) {
 	if !ok || scope != "repo:repo-opaque-1" || tc != conductor.TaskClassCode || tier != capacity.TierOne || !success {
 		t.Fatalf("observationFor(accepted) = %q %q %q %v %v", scope, tc, tier, success, ok)
 	}
-	for outcome, want := range map[OutcomeClass]bool{OutcomeAccepted: true, OutcomeRejected: false, OutcomeUnknown: false} {
+	for outcome, want := range map[OutcomeClass]bool{OutcomeAccepted: true, OutcomeRejected: false} {
 		o.FinalOutcome = outcome
 		if _, _, _, got, ok := observationFor(o); !ok || got != want {
 			t.Errorf("observationFor(%s) success = %v ok = %v, want %v", outcome, got, ok, want)
 		}
 	}
 	for name, mut := range map[string]func(*TelemetryOutcome){
-		"unknown repo":   func(x *TelemetryOutcome) { x.RepoID = "unknown" },
-		"empty repo":     func(x *TelemetryOutcome) { x.RepoID = "" },
-		"unknown tier":   func(x *TelemetryOutcome) { x.LaneTier = "unknown" },
-		"no prior class": func(x *TelemetryOutcome) { x.TaskClass = "chat" },
-		"bogus class":    func(x *TelemetryOutcome) { x.TaskClass = "bogus" },
+		"unknown outcome": func(x *TelemetryOutcome) { x.FinalOutcome = OutcomeUnknown },
+		"unknown repo":    func(x *TelemetryOutcome) { x.RepoID = "unknown" },
+		"empty repo":      func(x *TelemetryOutcome) { x.RepoID = "" },
+		"unknown tier":    func(x *TelemetryOutcome) { x.LaneTier = "unknown" },
+		"no prior class":  func(x *TelemetryOutcome) { x.TaskClass = "chat" },
+		"bogus class":     func(x *TelemetryOutcome) { x.TaskClass = "bogus" },
 	} {
 		x := baseOutcome("job-map-2")
 		mut(&x)
@@ -196,5 +197,88 @@ func TestObservationStoredThroughScorer(t *testing.T) {
 	failing := NewSQLiteOutcomeWriter(s.db, clock).WithObservationWriter(&spyObserver{err: cascade.New(cascade.KindUnavailable, "boom")})
 	if err := failing.Record(ctx, baseOutcome("job-real-4")); !cascade.HasKind(err, cascade.KindUnavailable) {
 		t.Errorf("Record with a failing observer = %v, want its KindUnavailable error", err)
+	}
+}
+
+// TestPosteriorReadsOnlyCompletedAndFailed exercises the decision observer
+// with persisted outcomes, real posterior writes and filled regrets.
+func TestPosteriorReadsOnlyCompletedAndFailed(t *testing.T) {
+	home := t.TempDir()
+	for _, key := range []string{"HOME", "USERPROFILE", "CASCADE_HOME"} {
+		t.Setenv(key, home)
+	}
+	s := newTestScorer(t, newStepClock())
+	w := NewSQLiteOutcomeWriter(s.db, s.clock).WithObservationWriter(s)
+	ctx := context.Background()
+	scope, tc, tier := repoScope("repo-opaque-1"), conductor.TaskClassCode, capacity.TierOne
+	seedScore(t, s, scope, tc, tier, 3, 2, 5, s.clock.Now())
+	for i, kind := range []OutcomeKind{OutcomeKindCancelled, OutcomeKindExpired, "", OutcomeKindCompleted, OutcomeKindFailed} {
+		id := "decision-" + string(rune('a'+i))
+		seedRegretDecision(t, s.db, id, id, 0.25, kind)
+		if err := (&RegretFiller{DB: s.db}).Fill(ctx, id, 1); err != nil {
+			t.Fatal(err)
+		}
+		before, err := s.Posterior(ctx, scope, tc, tier)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := w.ObserveDecision(ctx, id, baseOutcome(id)); err != nil {
+			t.Fatal(err)
+		}
+		after, err := s.Posterior(ctx, scope, tc, tier)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := before
+		if kind == OutcomeKindCompleted {
+			want.Alpha++
+			want.Observations++
+		}
+		if kind == OutcomeKindFailed {
+			want.Beta++
+			want.Observations++
+		}
+		if after != want {
+			t.Fatalf("%q posterior = %+v, want %+v", kind, after, want)
+		}
+		assertDecisionRegretCount(t, s, max(0, i-2))
+	}
+}
+
+func assertDecisionRegretCount(t *testing.T, s *SQLiteCapabilityScorer, count int) {
+	t.Helper()
+	got, err := RegretAggregate(context.Background(), s.db)
+	want := RegretSummary{Count: count, Total: float64(count) * 0.75}
+	if count > 0 {
+		want.Avg = 0.75
+	}
+	if err != nil || got != want {
+		t.Fatalf("RegretAggregate = %+v, %v; want %+v", got, err, want)
+	}
+}
+
+// TestObserveDecisionRefusesReadAndParseErrors proves faults cannot feed a posterior.
+func TestObserveDecisionRefusesReadAndParseErrors(t *testing.T) {
+	s := newTestScorer(t, newStepClock())
+	w := NewSQLiteOutcomeWriter(s.db, s.clock).WithObservationWriter(s)
+	ctx, o := context.Background(), baseOutcome("job-refuse")
+	seedRegretDecision(t, s.db, "decision-refuse", o.JobID, 0.25, OutcomeKindCompleted)
+	err := w.ObserveDecision(ctx, "missing", o)
+	requireSentinel(t, err, ErrDecisionNotRecorded,
+		"not-found: learn: decision outcome names no recorded scheduler decision")
+	if _, err := s.db.Exec(`UPDATE ` + tableDecisionOutcome + ` SET outcome_kind = 'invalid'`); err != nil {
+		t.Fatal(err)
+	}
+	err = w.ObserveDecision(ctx, "decision-refuse", o)
+	requireSentinel(t, err, ErrUnknownOutcomeKind,
+		"invalid-input: learn: outcome_kind is not one of the closed enum values")
+	if n := countRows(t, s.db, tableCapabilityScore); n != 0 {
+		t.Fatalf("refusals wrote %d posterior rows", n)
+	}
+	if err := s.db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.ObserveDecision(ctx, "decision-refuse", o); !cascade.HasKind(err, cascade.KindUnavailable) {
+		t.Fatalf("closed DB: %v, want unavailable", err)
 	}
 }
