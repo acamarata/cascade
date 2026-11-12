@@ -217,13 +217,6 @@
     "symbol": "internal/fleet/economics.ClampFractionCaps"
   },
   {
-    "caller_site": "internal/fleet/economics/rank.go",
-    "expected_caller": "AO/S-79.T3's rank.go, which calls EffectiveLaneClass on every candidate lane before computing its shadow price",
-    "reason": "P1-E41-W9-S80-T1 ships the R-21.34/R-21.45 executive-overflow derivation, fully implemented and tested (TestEffectiveLaneClassExecutiveOverflow). P1-E41-W9-S79-T1 (pressure/shadow-price/reserve-barrier) landed shadow_price.go taking BasePrice as a caller-supplied field on ShadowPriceInput, never deriving it from a Lane/Account pair itself (06-FORGE-SPEC S5.1 -- that ticket's own contract names no such call). The real caller is AO/S-79.T3's ranking pass (rank.go), which resolves each candidate lane's EFFECTIVE class before building the ShadowPriceInput it hands to ShadowPrice.",
-    "retire_ticket": "P1-TOP-08",
-    "symbol": "internal/fleet/economics.EffectiveLaneClass"
-  },
-  {
     "caller_site": "internal/fleet/economics/eligibility.go",
     "expected_caller": "AO/S-79.T3's eligibility.go, which calls ExecutiveOverflowEligible(reserveState) before including an executive-overflow candidate",
     "reason": "P1-E41-W9-S80-T1 ships the R-21.34/R-21.45 hard-reserve eligibility gate for the executive-overflow lane, fully implemented and tested (TestExecutiveOverflowEligibleOnlyAtHardReserve). P1-E41-W9-S79-T1 (pressure/shadow-price/reserve-barrier) owns no eligibility predicate -- its ShadowPrice/ReserveBarrier are pure pricing functions with no ReserveState input, and eligibility/correlation/utility ranking is explicitly out of that ticket's scope. The real caller is AO/S-79.T3's eligibility filter (eligibility.go), which checks this before ever offering an executive-overflow candidate to a workforce account.",
@@ -1790,27 +1783,43 @@
     "symbol": "internal/jobs.ReviewEvidenceRef"
   },
   {
+    "added_by_ticket": "P1-TOP-08e",
+    "caller_site": "internal/fleet/capacity/rank_selector.go",
+    "expected_caller": "internal/fleet/capacity/rank_selector.go, the P1-TOP-09b capacity selector that ranks candidates through the economics ranker; retire this entry once that file calls Rank",
+    "reason": "P1-TOP-08e ships the ranker and its sealed registry with goldens; its first production caller is the capacity selector of P1-TOP-09b, which depends on it.",
+    "retire_ticket": "P1-TOP-09b",
+    "symbol": "internal/fleet/economics.Rank"
+  },
+  {
+    "added_by_ticket": "P1-TOP-08e",
+    "caller_site": "internal/fleet/capacity/rank_selector.go",
+    "expected_caller": "internal/fleet/capacity/rank_selector.go, the P1-TOP-09b capacity selector that ranks candidates through the economics ranker; retire this entry once that file calls RegisterPredicate",
+    "reason": "The sealed registry accepts extra predicates before first use; the capacity selector of P1-TOP-09b registers its learned inputs.",
+    "retire_ticket": "P1-TOP-09b",
+    "symbol": "internal/fleet/economics.RegisterPredicate"
+  },
+  {
+    "added_by_ticket": "P1-TOP-08e",
+    "caller_site": "internal/fleet/capacity/rank_selector.go",
+    "expected_caller": "internal/fleet/capacity/rank_selector.go, the P1-TOP-09b capacity selector that ranks candidates through the economics ranker; retire this entry once that file calls RegisterTerm",
+    "reason": "The sealed registry accepts extra utility terms before first use; the capacity selector of P1-TOP-09b registers its learned inputs.",
+    "retire_ticket": "P1-TOP-09b",
+    "symbol": "internal/fleet/economics.RegisterTerm"
+  },
+  {
     "added_by_ticket": "P1-TOP-08c",
-    "caller_site": "internal/fleet/economics/rank.go",
-    "expected_caller": "internal/fleet/economics/rank.go, which P1-TOP-08e adds; retire this entry once that file calls EvaluateUtilityTerms",
-    "reason": "P1-TOP-08c ships the six utility terms with tests; the ranker that sums them is P1-TOP-08e, which depends on it.",
-    "retire_ticket": "P1-TOP-08e",
+    "caller_site": "internal/fleet/capacity/rank_selector.go",
+    "expected_caller": "internal/fleet/capacity/rank_selector.go, the P1-TOP-09b capacity selector that ranks candidates through the economics ranker; retire this entry once that file calls EvaluateUtilityTerms",
+    "reason": "P1-TOP-08e ranks through the registry's term rows, not this one-shot helper; the selector of P1-TOP-09b explains a candidate's score with it.",
+    "retire_ticket": "P1-TOP-09b",
     "symbol": "internal/fleet/economics.EvaluateUtilityTerms"
   },
   {
-    "added_by_ticket": "P1-TOP-08d",
-    "caller_site": "internal/fleet/economics/rank.go",
-    "expected_caller": "internal/fleet/economics/rank.go, which P1-TOP-08e adds; retire this entry once that file calls EligibilityPredicates",
-    "reason": "P1-TOP-08d ships the nine eligibility predicates with tests; the ranker that filters candidates through them is P1-TOP-08e.",
-    "retire_ticket": "P1-TOP-08e",
-    "symbol": "internal/fleet/economics.EligibilityPredicates"
-  },
-  {
-    "added_by_ticket": "P1-TOP-08d",
-    "caller_site": "internal/fleet/economics/rank.go",
-    "expected_caller": "internal/fleet/economics/rank.go, which P1-TOP-08e adds; retire this entry once that file calls PremiumPermitted",
-    "reason": "P1-TOP-08d ships the premium bar with tests; the ranker that applies it is P1-TOP-08e.",
-    "retire_ticket": "P1-TOP-08e",
-    "symbol": "internal/fleet/economics.PremiumPermitted"
+    "added_by_ticket": "P1-TOP-08",
+    "caller_site": "internal/fleet/capacity/rank_selector.go",
+    "expected_caller": "internal/fleet/capacity/rank_selector.go, the P1-TOP-09b capacity selector that ranks candidates through the economics ranker; retire this entry once that file calls EffectiveLaneClass",
+    "reason": "P1-TOP-08e takes the lane class from the candidate snapshot; the selector of P1-TOP-09b builds candidates from lanes and accounts and resolves the effective class there.",
+    "retire_ticket": "P1-TOP-09b",
+    "symbol": "internal/fleet/economics.EffectiveLaneClass"
   }
 ]
