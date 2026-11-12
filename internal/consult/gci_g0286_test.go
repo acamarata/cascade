@@ -15,6 +15,11 @@ type gciBlockCase struct {
 }
 
 func gciBlockOrderingCases() []gciBlockCase {
+	return append(gciBlockValidCases(), gciBlockInvalidCases()...)
+}
+
+// gciBlockValidCases are the orderings and empty inputs that assemble without error.
+func gciBlockValidCases() []gciBlockCase {
 	return []gciBlockCase{
 		{
 			name: "regular before binding",
@@ -34,6 +39,25 @@ func gciBlockOrderingCases() []gciBlockCase {
 			},
 			want: "# B1\nb1\n\n# B2\nb2\n\n# R1\nr1\n\n# R2\nr2",
 		},
+		{
+			name:     "empty sections",
+			sections: []GCISection{},
+			want:     "",
+			wantErr:  nil,
+		},
+		{
+			name:      "nil sections",
+			sections:  nil,
+			omissions: "something",
+			want:      "",
+			wantErr:   nil,
+		},
+	}
+}
+
+// gciBlockInvalidCases are the inputs AssembleGCIBlock must refuse.
+func gciBlockInvalidCases() []gciBlockCase {
+	return []gciBlockCase{
 		{
 			name: "blank name",
 			sections: []GCISection{
@@ -58,19 +82,6 @@ func gciBlockOrderingCases() []gciBlockCase {
 			},
 			want:    "",
 			wantErr: ErrInvalidGCISection,
-		},
-		{
-			name:     "empty sections",
-			sections: []GCISection{},
-			want:     "",
-			wantErr:  nil,
-		},
-		{
-			name:      "nil sections",
-			sections:  nil,
-			omissions: "something",
-			want:      "",
-			wantErr:   nil,
 		},
 		{
 			name: "budget exceeded",
