@@ -253,7 +253,7 @@ func TestVaultGrantRequiresSignature(t *testing.T) {
 
 func TestLocalGateUnknownVerbRefuses(t *testing.T) {
 	f := newGateFixture(t, nil)
-	for _, verb := range []string{"local.vault.get", "node.git_gate_install"} {
+	for _, verb := range []string{"local.vault.get", "node.not_a_verb"} {
 		err := f.gate.Authorize(t.Context(), verb)
 		if !cascade.HasKind(err, cascade.KindElevationRequired) || !strings.Contains(err.Error(), "not an elevated verb") {
 			t.Fatalf("%s = %v, want the not-an-elevated-verb refusal", verb, err)

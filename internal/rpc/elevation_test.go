@@ -20,7 +20,7 @@ const specVerbListVerbatim = `vault get/rotate · approval grant · standing-gra
 	`node enroll/remove/upgrade · sync conflicts resolve (discarding server-primary) · ` +
 	`policy or sensitivity loosening · enabling remote elevation (allow_remote) · ` +
 	`enabling the remote plugin runtime (enable_remote_runtime) · uninstall --purge-data · ` +
-	`config accept loosening · policy authorize · node rotate key/revoke · ci repo register · node bind`
+	`config accept loosening · policy authorize · node rotate key/revoke · ci repo register · node bind · node git-gate install`
 
 // The two amendments to §5.14 this transcription carries (P1-SEC-03): plugin
 // add is no longer conditional on process_tier/grant_expand (the CLI never
@@ -28,7 +28,8 @@ const specVerbListVerbatim = `vault get/rotate · approval grant · standing-gra
 // config accept loosening (P1-SEC-04) and policy authorize (P1-SEC-10) are
 // elevated verbs whose rows this ticket registers. node rotate key/revoke
 // (R-21.220) joined for the local signed gate (P1-SEC-08). node bind joined
-// for the controller-key pin (P1-CI-13).
+// for the controller-key pin (P1-CI-13); git-gate install joined for the
+// receive hook and repository binding (P1-CI-05).
 
 // translateSpecVerb maps one englishy clause from specVerbListVerbatim to
 // the one or more RPC method names elevationTable registers for it. This
@@ -51,6 +52,7 @@ var specVerbToMethods = map[string][]string{
 	"policy authorize":           {"policy.authorize"},
 	"node rotate key/revoke":     {"node.rotate_key", "node.revoke"},
 	"node bind":                  {"node.bind"},
+	"node git-gate install":      {"node.git_gate_install"},
 	"node enroll/remove/upgrade": {"node.enroll", "node.remove", "node.upgrade"},
 	"sync conflicts resolve (discarding server-primary)":         {"sync.conflicts_resolve"},
 	"policy or sensitivity loosening":                            {"policy.set", "sensitivity.set"},
@@ -97,8 +99,8 @@ func TestElevationTableMatchesSpec(t *testing.T) {
 			t.Errorf("elevationTable registers %q but it is not derivable from the spec verb list", m)
 		}
 	}
-	if len(clauses) != 16 {
-		t.Errorf("spec verb list has %d clauses, expected 16 (drift in specVerbListVerbatim itself)", len(clauses))
+	if len(clauses) != 17 {
+		t.Errorf("spec verb list has %d clauses, expected 17 (drift in specVerbListVerbatim itself)", len(clauses))
 	}
 }
 
@@ -223,10 +225,10 @@ func TestElevation_UnknownVerbNeverElevates(t *testing.T) {
 	}
 }
 
-// TestElevationVerbSetMatchesSpec is the same cross-check as
+// TestElevatedVerbNamesMatchSpec is the same cross-check as
 // TestElevationTableMatchesSpec through the public accessor, the one policy
 // and the MCP filter read.
-func TestElevationVerbSetMatchesSpec(t *testing.T) {
+func TestElevatedVerbNamesMatchSpec(t *testing.T) {
 	want := map[string]bool{}
 	for _, clause := range strings.Split(specVerbListVerbatim, " · ") {
 		for _, m := range specVerbToMethods[clause] {
@@ -253,6 +255,22 @@ func TestElevationVerbSetMatchesSpec(t *testing.T) {
 		if !IsElevated(m, nil) || !IsElevated(m, json.RawMessage(`{}`)) {
 			t.Errorf("%s must be elevated whatever its params", m)
 		}
+	}
+}
+
+// TestGitGateInstallVerbIsElevated checks the live table and dispatch gate.
+func TestGitGateInstallVerbIsElevated(t *testing.T) {
+	const method = "node.git_gate_install"
+	for _, params := range []string{``, `{}`, `null`, `{"repo_id":"repo-1"}`} {
+		if !IsElevated(method, json.RawMessage(params)) {
+			t.Errorf("%s must always require elevation (params %q)", method, params)
+		}
+	}
+	skipIfPlatformRefuses(t)
+	f := newMWFixture(t, method)
+	f.challenge(t, `{"repo_id":"repo-1"}`)
+	if f.calls != 0 {
+		t.Fatal("install handler reached without elevation")
 	}
 }
 

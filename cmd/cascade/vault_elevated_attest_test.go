@@ -262,7 +262,7 @@ func TestLocalGateNeverPassesThroughWithoutSignature(t *testing.T) {
 	trust := rpc.MapTrustStore{fp: pub}
 	// The middleware passes an unlisted verb through; the guarded handler
 	// must still refuse it, because no witness was minted.
-	for _, verb := range []string{"local.vault.get", "node.git_gate_install", "status.get"} {
+	for _, verb := range []string{"local.vault.get", "node.not_a_verb", "status.get"} {
 		params, hash, _ := localChallenge(verb)
 		if err := f.gate.ceremony(t.Context(), verb, params, hash, elevation.CustodyPlatform, f.ks, trust, &gateAuditor{sink: f.tap}); !cascade.HasKind(err, cascade.KindElevationRequired) {
 			t.Fatalf("%s passed through the ceremony: %v", verb, err)

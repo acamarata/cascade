@@ -28,7 +28,7 @@ import (
 //	 loosening · policy authorize"
 //
 // (Amended: plugin add unconditional, plugin update, config accept
-// loosening, policy authorize, node rotate key/revoke/bind (R-21.220, P1-SEC-08, P1-CI-13).)
+// loosening, policy authorize, node rotate key/revoke/bind and git-gate install.)
 var specElevationVerbs = []string{
 	"ci.repo_register",
 	"approval.grant",
@@ -40,9 +40,8 @@ var specElevationVerbs = []string{
 	"backup.restore",
 	"config.accept_loosening",
 	"elevation.set_allow_remote",
-	"node.bind", "node.enroll",
-	"node.remove", "node.revoke", "node.rotate_key",
-	"node.upgrade",
+	"node.bind", "node.enroll", "node.git_gate_install",
+	"node.remove", "node.revoke", "node.rotate_key", "node.upgrade",
 	"perms.grant",
 	"perms.revoke",
 	"plugin.add",

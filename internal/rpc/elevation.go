@@ -228,6 +228,8 @@ var specElevationRows = []struct {
 	// node.bind (P1-CI-13) is a local CLI verb: it pins the controller key a
 	// node trusts for ci.attest.sign, a write-once trust anchor.
 	{"node.bind", ElevationRule{Always: true}},
+	// Installing the receive hook and repository binding changes push policy.
+	{"node.git_gate_install", ElevationRule{Always: true}},
 }
 
 // registerSpecElevationRows fills the table from specElevationRows. It is the

@@ -26,7 +26,7 @@ import (
 // and ordinary non-elevated verbs, so every branch of
 // CanAttemptDaemonlessElevation is reached.
 var sampleVerbs = []string{
-	"vault.get", "vault.rotate", "backup.restore", "node.enroll",
+	"vault.get", "vault.rotate", "backup.restore", "node.enroll", "node.git_gate_install",
 	"uninstall.purge_data", "plugin.add", "policy.set", "sensitivity.set",
 	"status.get", "config.get", "not.a.real.verb",
 }
@@ -64,7 +64,7 @@ func TestCanAttemptDaemonlessElevation_FailsClosed(t *testing.T) {
 		{"not elevated, nothing available", "status.get", false, false, false},
 		{"not elevated, both available", "status.get", true, true, false},
 		{"local-prefixed verb is not the table verb", "local.vault.get", true, true, false},
-		{"unknown node verb", "node.git_gate_install", true, true, false},
+		{"unknown node verb", "node.unknown", true, true, false},
 		{"elevated, nothing available", "vault.get", false, false, false},
 		{"elevated, helper only", "vault.rotate", true, false, false},
 		{"elevated, authenticator only", "backup.restore", false, true, false},
@@ -79,6 +79,22 @@ func TestCanAttemptDaemonlessElevation_FailsClosed(t *testing.T) {
 					tc.verb, tc.helperEnrolled, tc.authenticatorAvailable, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestGitGateInstallDaemonlessRefusesWithoutElevation checks the live RPC row.
+func TestGitGateInstallDaemonlessRefusesWithoutElevation(t *testing.T) {
+	const verb = "node.git_gate_install"
+	if !rpc.IsElevated(verb, nil) || !IsElevationClassVerb(verb) {
+		t.Fatal("git-gate install is absent from the production elevation table")
+	}
+	for _, axes := range [][2]bool{{false, false}, {false, true}, {true, false}} {
+		if CanAttemptDaemonlessElevation(verb, axes[0], axes[1]) {
+			t.Fatalf("git-gate install allowed with enrolled=%v available=%v", axes[0], axes[1])
+		}
+		if err := ErrElevationRequired(verb, axes[0], axes[1]); !cascade.HasKind(err, cascade.KindElevationRequired) {
+			t.Fatalf("git-gate install refusal = %v; want KindElevationRequired", err)
+		}
 	}
 }
 

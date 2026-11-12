@@ -36,6 +36,7 @@ import (
 // second list here to drift: a verb registered there is local-only and never
 // bridge-approvable or standing the moment it exists. The slice is a copy, so
 // a caller cannot shrink the local-only set by writing to it.
+// This includes node.git_gate_install (P1-CI-05) and node.bind (P1-CI-13).
 //
 // approval_matrix_test.go re-transcribes the spec prose into an independent
 // list and asserts set equality, so an omission in the table fails that test
