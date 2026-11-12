@@ -99,14 +99,15 @@ func checkAccess(ctx context.Context, a Access) error {
 	if a > accessMax {
 		return errUnknownAccess
 	}
+	if a == AccessNode {
+		return errAccessDenied
+	}
 	c, ok := principal.CallerFrom(ctx)
 	switch a {
 	case AccessUnmarked:
 		return errUnmarked
 	case AccessOpen, AccessIngest:
 		return nil
-	case AccessNode:
-		return errAccessDenied
 	case AccessOwnerOnly:
 		if ok && c.Principal == nil {
 			return nil
@@ -119,6 +120,8 @@ func checkAccess(ctx context.Context, a Access) error {
 		if ok && c.Principal != nil {
 			return nil
 		}
+	case AccessNode:
+		// Refused before the switch; the node class never reaches an owner handler.
 	}
 	return errAccessDenied
 }
