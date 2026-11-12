@@ -111,8 +111,10 @@ func TestBuiltinRegistry_List(t *testing.T) {
 	// plugins/nself to bind the real egress engine), and this assertion
 	// failing on that change is the registry proving the new plugin actually
 	// reaches plugin.Builtins() rather than being built and left
-	// unreachable. antigravity joined with builtin_antigravity_wiring.go.
-	wantIDs := []string{"antigravity", "cascade-claude", "cascade-codex", "cascade-nself", "cascade-opencode", "cascade-pa", "cascade-review", "example-builtin"}
+	// unreachable. antigravity joined with builtin_antigravity_wiring.go, and pbd
+	// with pbd_evidence_wiring.go (it imports plugins/pbd to inject the
+	// host evidence reader).
+	wantIDs := []string{"antigravity", "cascade-claude", "cascade-codex", "cascade-nself", "cascade-opencode", "cascade-pa", "cascade-review", "example-builtin", "pbd"}
 	if len(list) != len(wantIDs) {
 		t.Fatalf("List() len = %d, want %d (%v)", len(list), len(wantIDs), wantIDs)
 	}
