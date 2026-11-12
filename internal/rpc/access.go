@@ -24,8 +24,10 @@ const (
 	AccessOwnerView
 	AccessScoped
 	AccessIngest
-	accessMax = AccessNode
 )
+
+// accessMax includes node methods so policy checks deny them as a known class.
+const accessMax = AccessNode
 
 // DefaultStreamTopic marks the daemon-wide stream.
 const DefaultStreamTopic = ""
