@@ -63,7 +63,8 @@ type CompletionPolicyDeps struct {
 
 // CompletionPolicy implements the R-16.12 completion gate.
 type CompletionPolicy struct {
-	deps CompletionPolicyDeps
+	deps          CompletionPolicyDeps
+	queryEvidence func(ctx context.Context, jobID string, kind EvidenceKind) (EvidenceRecord, error)
 }
 
 // NewCompletionPolicy validates required collaborators and a non-empty EngineID.

@@ -47,7 +47,11 @@ func (cp *CompletionPolicy) checkCompletion(ctx context.Context, req TransitionR
 			return cp.deny(ctx, req, &ErrorCompletionDenied{ExpiredApproval: true, Reason: err.Error()})
 		}
 	}
-	if mismatch := cp.checkpointMismatch(ctx, req); mismatch != nil {
+	mismatch, err := cp.checkpointMismatch(ctx, req)
+	if err != nil {
+		return cp.deny(ctx, req, &ErrorCompletionDenied{Reason: "checkpoint binding unreadable: " + err.Error()})
+	}
+	if mismatch != nil {
 		return cp.deny(ctx, req, &ErrorCompletionDenied{CheckpointMismatch: mismatch})
 	}
 	return nil

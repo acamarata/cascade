@@ -24,19 +24,26 @@ func (cp *CompletionPolicy) missingEvidence(ctx context.Context, req TransitionR
 
 // checkpointMismatch compares req.CheckpointID verbatim against the evidence
 // rows' checkpoint id (R-21.144); an empty CheckpointID never mismatches.
-func (cp *CompletionPolicy) checkpointMismatch(ctx context.Context, req TransitionRequest) *string {
+func (cp *CompletionPolicy) checkpointMismatch(ctx context.Context, req TransitionRequest) (*string, error) {
 	if req.CheckpointID == "" {
-		return nil
+		return nil, nil
 	}
-	for _, kind := range []EvidenceKind{EvidenceBuild, EvidenceLint, EvidenceTests, EvidenceReview, EvidenceAdversarial} {
-		rec, err := cp.deps.Ledger.Query(ctx, req.Job.ID, kind)
-		if err != nil {
+	q := cp.queryEvidence
+	if q == nil {
+		q = cp.deps.Ledger.Query
+	}
+	for _, kind := range []EvidenceKind{EvidenceBuild, EvidenceLint, EvidenceTests, EvidenceReview, EvidenceAdversarial, EvidenceQA} {
+		rec, err := q(ctx, req.Job.ID, kind)
+		if err == ErrNoEvidence {
 			continue
+		}
+		if err != nil {
+			return nil, err
 		}
 		if rec.CheckpointID != "" && rec.CheckpointID != req.CheckpointID {
 			got := rec.CheckpointID
-			return &got
+			return &got, nil
 		}
 	}
-	return nil
+	return nil, nil
 }
