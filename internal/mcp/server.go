@@ -141,11 +141,12 @@ func ParseFrame(line []byte) (*Frame, *ErrorObject) {
 	return &f, nil
 }
 
-// Server is the MCP dispatch core: it holds nothing but a *ToolRegistry
-// (registry.go). Dispatch is safe for concurrent use — every call is
-// independent.
+// Server is the MCP dispatch core over a ToolRegistry and an optional
+// call-time checker. Dispatch is safe for concurrent use after configuration.
 type Server struct {
-	Tools *ToolRegistry
+	Tools       *ToolRegistry
+	toolProfile ToolProfile
+	toolChecker ToolCapabilityChecker
 }
 
 // NewServer builds a Server over tools.
@@ -210,6 +211,11 @@ func (s *Server) dispatchToolsCall(ctx context.Context, f *Frame) *Response {
 	}
 	if p.Name == "" {
 		return errResponse(f.ID, codeInvalidParams, `tools/call requires "name"`)
+	}
+	if err := s.checkTool(ctx, p.Name); err != nil {
+		return &Response{JSONRPC: "2.0", ID: f.ID, Result: toolCallResult{
+			Content: []contentBlock{{Type: "text", Text: err.Error()}}, IsError: true,
+		}}
 	}
 	out, err := s.Tools.Call(ctx, p.Name, p.Arguments)
 	if err != nil {
