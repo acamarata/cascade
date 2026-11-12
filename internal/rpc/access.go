@@ -24,7 +24,7 @@ const (
 	AccessOwnerView
 	AccessScoped
 	AccessIngest
-	accessMax = AccessIngest
+	accessMax = AccessNode
 )
 
 // DefaultStreamTopic marks the daemon-wide stream.
@@ -89,9 +89,8 @@ func (r *Registry) SetEventVisibleFactory(f func(principal.Principal) func(strin
 }
 
 func declaredAccess(method string) Access {
-	accessMu.RLock()
-	defer accessMu.RUnlock()
-	return methodAccess[method]
+	a, _ := AccessOf(method)
+	return a
 }
 
 func checkAccess(ctx context.Context, a Access) error {
@@ -104,6 +103,8 @@ func checkAccess(ctx context.Context, a Access) error {
 		return errUnmarked
 	case AccessOpen, AccessIngest:
 		return nil
+	case AccessNode:
+		return errAccessDenied
 	case AccessOwnerOnly:
 		if ok && c.Principal == nil {
 			return nil
