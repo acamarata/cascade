@@ -10,7 +10,7 @@ type mockStore struct {
 	err   error
 }
 
-func (m *mockStore) PendingTasks(phase string) (int, error) {
+func (m *mockStore) PendingTasks(_ string) (int, error) {
 	return m.count, m.err
 }
 
@@ -22,36 +22,11 @@ func TestCheckPhaseIdleWorkLeftFailsClosedOnInvalidPhase(t *testing.T) {
 		phase   string
 		wantErr error
 	}{
-		{
-			name:    "empty phase",
-			store:   &mockStore{},
-			phase:   "",
-			wantErr: ErrInvalidPhase,
-		},
-		{
-			name:    "whitespace phase",
-			store:   &mockStore{},
-			phase:   "   ",
-			wantErr: ErrInvalidPhase,
-		},
-		{
-			name:    "nil store",
-			store:   nil,
-			phase:   "phase1",
-			wantErr: ErrPhaseStoreUnavailable,
-		},
-		{
-			name:    "negative count",
-			store:   &mockStore{count: -1},
-			phase:   "phase1",
-			wantErr: ErrInvalidWorkCount,
-		},
-		{
-			name:    "store error",
-			store:   &mockStore{err: storeErr},
-			phase:   "phase1",
-			wantErr: storeErr,
-		},
+		{"empty phase", &mockStore{}, "", ErrInvalidPhase},
+		{"whitespace phase", &mockStore{}, "   ", ErrInvalidPhase},
+		{"nil store", nil, "phase1", ErrPhaseStoreUnavailable},
+		{"negative count", &mockStore{count: -1}, "phase1", ErrInvalidWorkCount},
+		{"store error", &mockStore{err: storeErr}, "phase1", storeErr},
 	}
 
 	for _, tt := range tests {

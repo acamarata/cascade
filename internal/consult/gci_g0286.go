@@ -28,7 +28,7 @@ var ErrInvalidGCISection = errors.New("invalid gci section")
 // Returns "", ErrInvalidGCISection for blank/whitespace-only Name or Body or duplicate Names.
 // Returns "", nil for nil/empty sections.
 // The omissions parameter is accepted for interface compatibility but currently unused.
-func AssembleGCIBlock(sections []GCISection, omissions string) (string, error) {
+func AssembleGCIBlock(sections []GCISection, _ string) (string, error) {
 	if len(sections) == 0 {
 		return "", nil
 	}

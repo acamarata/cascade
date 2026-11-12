@@ -19,15 +19,15 @@ type PhaseWorkStore interface {
 	PendingTasks(phase string) (int, error)
 }
 
-// report holds the outcome of an idle work check for a specific phase.
-type report struct {
+// Report holds the outcome of an idle work check for a specific phase.
+type Report struct {
 	Phase    string
 	WorkLeft int
 }
 
 // CheckPhaseIdleWorkLeft verifies whether a phase has pending work.
 // It returns a report, a crunchCreated flag (always false), and any error encountered.
-func CheckPhaseIdleWorkLeft(s PhaseWorkStore, phase string) (*report, bool, error) {
+func CheckPhaseIdleWorkLeft(s PhaseWorkStore, phase string) (*Report, bool, error) {
 	if strings.TrimSpace(phase) == "" {
 		return nil, false, ErrInvalidPhase
 	}
@@ -43,7 +43,7 @@ func CheckPhaseIdleWorkLeft(s PhaseWorkStore, phase string) (*report, bool, erro
 		return nil, false, ErrInvalidWorkCount
 	}
 
-	return &report{
+	return &Report{
 		Phase:    phase,
 		WorkLeft: count,
 	}, false, nil

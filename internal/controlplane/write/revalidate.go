@@ -49,62 +49,69 @@ func Revalidate(req Request) (RevalidateResult, error) {
 		mode = "park"
 	}
 
-	if mode != "park" && mode != "notify_only" {
-		return RevalidateResult{}, ErrInvalidRevalidate
-	}
-
-	if mode == "park" {
+	switch mode {
+	case "park":
 		if strings.TrimSpace(req.Caller) == "" {
 			return RevalidateResult{}, ErrInvalidRevalidate
 		}
-	} else if mode == "notify_only" {
+	case "notify_only":
 		if req.Caller != "owner" {
 			return RevalidateResult{}, ErrInvalidRevalidate
 		}
+	default:
+		return RevalidateResult{}, ErrInvalidRevalidate
 	}
 
-	seen := make(map[string]struct{})
-	for _, item := range req.Stale {
-		if strings.TrimSpace(item.ID) == "" || item.ID != strings.TrimSpace(item.ID) {
-			return RevalidateResult{}, ErrInvalidRevalidate
-		}
-		if _, exists := seen[item.ID]; exists {
-			return RevalidateResult{}, ErrInvalidRevalidate
-		}
-		seen[item.ID] = struct{}{}
+	if err := validateStaleItems(req.Stale); err != nil {
+		return RevalidateResult{}, err
 	}
-
 	if len(req.Stale) == 0 {
 		return RevalidateResult{}, nil
 	}
-
 	if mode == "park" {
-		if req.Parker == nil {
-			return RevalidateResult{}, ErrInvalidRevalidate
-		}
-		var parked int
-		for _, item := range req.Stale {
-			if err := req.Parker.Park(item); err != nil {
-				return RevalidateResult{Parked: parked}, err
-			}
-			parked++
-		}
-		return RevalidateResult{Parked: parked}, nil
+		return parkAll(req)
 	}
+	return notifyAll(req)
+}
 
-	if mode == "notify_only" {
-		if req.Notifier == nil {
-			return RevalidateResult{}, ErrInvalidRevalidate
+func validateStaleItems(items []Item) error {
+	seen := make(map[string]struct{})
+	for _, item := range items {
+		if strings.TrimSpace(item.ID) == "" || item.ID != strings.TrimSpace(item.ID) {
+			return ErrInvalidRevalidate
 		}
-		var notices int
-		for _, item := range req.Stale {
-			if err := req.Notifier.Notify(item); err != nil {
-				return RevalidateResult{Notices: notices}, err
-			}
-			notices++
+		if _, exists := seen[item.ID]; exists {
+			return ErrInvalidRevalidate
 		}
-		return RevalidateResult{Notices: notices}, nil
+		seen[item.ID] = struct{}{}
 	}
+	return nil
+}
 
-	return RevalidateResult{}, nil
+func parkAll(req Request) (RevalidateResult, error) {
+	if req.Parker == nil {
+		return RevalidateResult{}, ErrInvalidRevalidate
+	}
+	var parked int
+	for _, item := range req.Stale {
+		if err := req.Parker.Park(item); err != nil {
+			return RevalidateResult{Parked: parked}, err
+		}
+		parked++
+	}
+	return RevalidateResult{Parked: parked}, nil
+}
+
+func notifyAll(req Request) (RevalidateResult, error) {
+	if req.Notifier == nil {
+		return RevalidateResult{}, ErrInvalidRevalidate
+	}
+	var notices int
+	for _, item := range req.Stale {
+		if err := req.Notifier.Notify(item); err != nil {
+			return RevalidateResult{Notices: notices}, err
+		}
+		notices++
+	}
+	return RevalidateResult{Notices: notices}, nil
 }

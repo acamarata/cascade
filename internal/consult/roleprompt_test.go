@@ -83,9 +83,13 @@ func TestRolePromptMissingFallsBack(t *testing.T) {
 	if got != "Identify flaws and risks." {
 		t.Errorf("Empty dir: got %q, want fallback", got)
 	}
+}
+
+func TestRolePromptInvalidFallsBack(t *testing.T) {
+	dir := t.TempDir()
 
 	// Invalid roles: . and ..
-	got = LoadRolePrompt(dir, ".")
+	got := LoadRolePrompt(dir, ".")
 	if got != "Provide a concise, accurate response." {
 		t.Errorf("Role '.': got %q, want fallback", got)
 	}
@@ -122,7 +126,10 @@ func TestRolePromptMissingFallsBack(t *testing.T) {
 	if got != "Provide a concise, accurate response." {
 		t.Errorf("Empty body: got %q, want fallback", got)
 	}
+}
 
+func TestRolePromptSymlinkEscapeFallsBack(t *testing.T) {
+	dir := t.TempDir()
 	// Symlink escape
 	outsideDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(outsideDir, "Escape.md"), []byte("Escaped"), 0644); err != nil {
@@ -132,7 +139,7 @@ func TestRolePromptMissingFallsBack(t *testing.T) {
 	if err := os.Symlink(filepath.Join(outsideDir, "Escape.md"), symlink); err != nil {
 		t.Fatal(err)
 	}
-	got = LoadRolePrompt(dir, "Escape")
+	got := LoadRolePrompt(dir, "Escape")
 	if got != "Provide a concise, accurate response." {
 		t.Errorf("Symlink escape: got %q, want fallback", got)
 	}

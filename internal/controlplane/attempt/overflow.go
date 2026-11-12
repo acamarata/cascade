@@ -1,3 +1,4 @@
+// Package attempt records attempt overflow escalations.
 package attempt
 
 import (

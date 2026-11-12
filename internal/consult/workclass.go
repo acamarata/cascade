@@ -17,7 +17,7 @@ var ErrUnknownTaskClass = errors.New("D3543: unknown task class")
 // ValidateWorkClass checks whether the provided task class name is recognized.
 // It does not trim or normalize the input. Empty, whitespace-only, unknown or
 // differently cased names return zero constraints and ErrUnknownTaskClass.
-func ValidateWorkClass(name string) (ClassConstraints, error) {
+func ValidateWorkClass(_ string) (ClassConstraints, error) {
 	// No supported classes are registered in this iteration.
 	return ClassConstraints{}, ErrUnknownTaskClass
 }
