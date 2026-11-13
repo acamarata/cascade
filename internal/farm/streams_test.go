@@ -32,9 +32,9 @@ func TestTypesCompile_FARM23(t *testing.T) {
 				EscalateTo: "next",
 			},
 		}
-		var streams int = plan.Streams
-		var binding Binding = plan.Binding
-		var action Action = plan.Action
+		var streams = plan.Streams
+		var binding = plan.Binding
+		var action = plan.Action
 		if streams != 64 || binding != BindingRPM || action.Type != actionType ||
 			!action.WaitUntil.Equal(deadline) || action.EscalateTo != "next" {
 			t.Fatalf("plan fields did not retain their values: %+v", plan)

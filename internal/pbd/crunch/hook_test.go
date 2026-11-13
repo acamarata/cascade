@@ -5,21 +5,35 @@ import (
 	"testing"
 )
 
-func TestPriorityHookOverridesOrder(t *testing.T) {
-	tasks := []HookTask{
+func hookTestTasks() []HookTask {
+	return []HookTask{
 		{ID: "a", Priority: 1},
 		{ID: "b", Priority: 3},
 		{ID: "c", Priority: 2},
 	}
+}
+
+func assertOrder(t *testing.T, out []HookTask, want, msg string) {
+	t.Helper()
+	if len(out) != len(want) {
+		t.Fatalf("%s: %+v", msg, out)
+	}
+	for i := range want {
+		if out[i].ID != want[i:i+1] {
+			t.Fatalf("%s: %+v", msg, out)
+		}
+	}
+}
+
+func TestPriorityHookOverridesOrder(t *testing.T) {
+	tasks := hookTestTasks()
 
 	// nil hook stably sorts descending
 	out, err := Schedule(tasks, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(out) != 3 || out[0].ID != "b" || out[1].ID != "c" || out[2].ID != "a" {
-		t.Fatalf("nil hook did not sort descending: %+v", out)
-	}
+	assertOrder(t, out, "bca", "nil hook did not sort descending")
 
 	tasksEqual := []HookTask{
 		{ID: "a", Priority: 2},
@@ -30,9 +44,7 @@ func TestPriorityHookOverridesOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(outEq) != 3 || outEq[0].ID != "a" || outEq[1].ID != "b" || outEq[2].ID != "c" {
-		t.Fatalf("nil hook did not preserve order for equal priorities: %+v", outEq)
-	}
+	assertOrder(t, outEq, "abc", "nil hook did not preserve order for equal priorities")
 
 	// hook returns high before low
 	hook := func(ts []HookTask) ([]HookTask, error) {
@@ -42,52 +54,51 @@ func TestPriorityHookOverridesOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(out2) != 3 || out2[0].ID != "b" || out2[1].ID != "c" || out2[2].ID != "a" {
-		t.Fatalf("hook did not override order: %+v", out2)
-	}
+	assertOrder(t, out2, "bca", "hook did not override order")
+}
 
-	// invalid, duplicate, empty or altered tasks return ErrInvalidHook
-	_, err = Schedule([]HookTask{}, nil)
-	if !errors.Is(err, ErrInvalidHook) {
-		t.Fatalf("expected ErrInvalidHook for empty, got %v", err)
+func TestScheduleRejectsInvalidInput(t *testing.T) {
+	cases := []struct {
+		name  string
+		tasks []HookTask
+	}{
+		{"empty", []HookTask{}},
+		{"duplicate", []HookTask{{ID: "a", Priority: 1}, {ID: "a", Priority: 2}}},
+		{"empty ID", []HookTask{{ID: "", Priority: 1}}},
 	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Schedule(tc.tasks, nil)
+			if !errors.Is(err, ErrInvalidHook) {
+				t.Fatalf("expected ErrInvalidHook for %s, got %v", tc.name, err)
+			}
+		})
+	}
+}
 
-	_, err = Schedule([]HookTask{{ID: "a", Priority: 1}, {ID: "a", Priority: 2}}, nil)
-	if !errors.Is(err, ErrInvalidHook) {
-		t.Fatalf("expected ErrInvalidHook for duplicate, got %v", err)
+func TestScheduleRejectsBadHookResults(t *testing.T) {
+	cases := []struct {
+		name string
+		hook PriorityHook
+	}{
+		{"altered task", func(ts []HookTask) ([]HookTask, error) {
+			ts[0].Priority = 99
+			return ts, nil
+		}},
+		{"missing task", func(ts []HookTask) ([]HookTask, error) {
+			return ts[:1], nil
+		}},
+		{"added task", func(ts []HookTask) ([]HookTask, error) {
+			return append(ts, HookTask{ID: "z", Priority: 1}), nil
+		}},
 	}
-
-	_, err = Schedule([]HookTask{{ID: "", Priority: 1}}, nil)
-	if !errors.Is(err, ErrInvalidHook) {
-		t.Fatalf("expected ErrInvalidHook for empty ID, got %v", err)
-	}
-
-	// altered tasks
-	alteredHook := func(ts []HookTask) ([]HookTask, error) {
-		ts[0].Priority = 99
-		return ts, nil
-	}
-	_, err = Schedule(tasks, alteredHook)
-	if !errors.Is(err, ErrInvalidHook) {
-		t.Fatalf("expected ErrInvalidHook for altered task, got %v", err)
-	}
-
-	// missing task
-	missingHook := func(ts []HookTask) ([]HookTask, error) {
-		return ts[:1], nil
-	}
-	_, err = Schedule(tasks, missingHook)
-	if !errors.Is(err, ErrInvalidHook) {
-		t.Fatalf("expected ErrInvalidHook for missing task, got %v", err)
-	}
-
-	// added task
-	addedHook := func(ts []HookTask) ([]HookTask, error) {
-		return append(ts, HookTask{ID: "z", Priority: 1}), nil
-	}
-	_, err = Schedule(tasks, addedHook)
-	if !errors.Is(err, ErrInvalidHook) {
-		t.Fatalf("expected ErrInvalidHook for added task, got %v", err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Schedule(hookTestTasks(), tc.hook)
+			if !errors.Is(err, ErrInvalidHook) {
+				t.Fatalf("expected ErrInvalidHook for %s, got %v", tc.name, err)
+			}
+		})
 	}
 }
 

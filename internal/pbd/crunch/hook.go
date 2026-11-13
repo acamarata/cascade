@@ -37,19 +37,9 @@ var ErrInvalidHook = errors.New(ErrCodeD1542 + ": invalid hook result")
 // A nil hook sorts tasks by descending priority, preserving original order for equal priorities.
 // A non-nil hook is called once; its output must contain each original task exactly once unchanged.
 func Schedule(tasks []HookTask, hook PriorityHook) ([]HookTask, error) {
-	if len(tasks) == 0 {
+	seen, ok := indexTasks(tasks)
+	if !ok {
 		return nil, ErrInvalidHook
-	}
-
-	seen := make(map[string]bool, len(tasks))
-	for _, t := range tasks {
-		if t.ID == "" {
-			return nil, ErrInvalidHook
-		}
-		if seen[t.ID] {
-			return nil, ErrInvalidHook
-		}
-		seen[t.ID] = true
 	}
 
 	cp := make([]HookTask, len(tasks))
@@ -69,32 +59,55 @@ func Schedule(tasks []HookTask, hook PriorityHook) ([]HookTask, error) {
 		return nil, err
 	}
 
-	if len(result) != len(tasks) {
+	if !validResult(tasks, result, seen) {
 		return nil, ErrInvalidHook
-	}
-
-	resSeen := make(map[string]bool, len(result))
-	for _, r := range result {
-		orig, ok := seen[r.ID]
-		_ = orig
-		if !ok || resSeen[r.ID] {
-			return nil, ErrInvalidHook
-		}
-		resSeen[r.ID] = true
-
-		var match bool
-		for _, t := range tasks {
-			if t.ID == r.ID && t.Priority == r.Priority {
-				match = true
-				break
-			}
-		}
-		if !match {
-			return nil, ErrInvalidHook
-		}
 	}
 
 	out := make([]HookTask, len(result))
 	copy(out, result)
 	return out, nil
+}
+
+// indexTasks returns the set of task IDs and false if the input is empty,
+// has an empty ID or has a duplicate ID.
+func indexTasks(tasks []HookTask) (map[string]bool, bool) {
+	if len(tasks) == 0 {
+		return nil, false
+	}
+	seen := make(map[string]bool, len(tasks))
+	for _, t := range tasks {
+		if t.ID == "" || seen[t.ID] {
+			return nil, false
+		}
+		seen[t.ID] = true
+	}
+	return seen, true
+}
+
+// validResult reports whether result holds each original task exactly once, unchanged.
+func validResult(tasks, result []HookTask, seen map[string]bool) bool {
+	if len(result) != len(tasks) {
+		return false
+	}
+	resSeen := make(map[string]bool, len(result))
+	for _, r := range result {
+		if !seen[r.ID] || resSeen[r.ID] {
+			return false
+		}
+		resSeen[r.ID] = true
+		if !containsTask(tasks, r) {
+			return false
+		}
+	}
+	return true
+}
+
+// containsTask reports whether tasks has an entry with the same ID and priority as r.
+func containsTask(tasks []HookTask, r HookTask) bool {
+	for _, t := range tasks {
+		if t.ID == r.ID && t.Priority == r.Priority {
+			return true
+		}
+	}
+	return false
 }
