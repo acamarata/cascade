@@ -36,7 +36,12 @@ func TestInjectReseedRecapPending(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			want := CodePayload{Text: tc.payload.Text, ReseedRecap: append(ReseedRecap(nil), tc.payload.ReseedRecap...)}
+			// pending=true replaces the recap with the latest
+			// min(len(history), M1286RecapLimit) items, nil when history is empty.
+			want := CodePayload{Text: tc.payload.Text}
+			if n := min(len(tc.history), M1286RecapLimit); n > 0 {
+				want.ReseedRecap = append(ReseedRecap(nil), tc.history[len(tc.history)-n:]...)
+			}
 			got := InjectReseedRecap(tc.payload, true, tc.history)
 			if !reflect.DeepEqual(got, want) {
 				t.Fatalf("got %#v, want %#v", got, want)

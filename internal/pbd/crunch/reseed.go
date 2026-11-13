@@ -21,9 +21,28 @@ const M1286RecapLimit = 3
 
 // InjectReseedRecap returns the payload unchanged when reseedPending is false,
 // preserving any preexisting recap. Caller owns code.reseedPending.
-func InjectReseedRecap(payload CodePayload, reseedPending bool, _ []HistoryItem) CodePayload {
+// When reseedPending is true, it replaces the recap with a fresh copy of the
+// latest min(len(history), M1286RecapLimit) items in their original order,
+// or clears the recap to nil when history is empty or nil.
+func InjectReseedRecap(payload CodePayload, reseedPending bool, history []HistoryItem) CodePayload {
 	if !reseedPending {
 		return payload
 	}
+
+	limit := M1286RecapLimit
+	if len(history) < limit {
+		limit = len(history)
+	}
+
+	var recap ReseedRecap
+	if limit > 0 {
+		start := len(history) - limit
+		recap = make(ReseedRecap, limit)
+		for i := 0; i < limit; i++ {
+			recap[i] = history[start+i]
+		}
+	}
+
+	payload.ReseedRecap = recap
 	return payload
 }
