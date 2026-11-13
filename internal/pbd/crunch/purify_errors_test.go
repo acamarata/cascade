@@ -79,9 +79,9 @@ func TestPurifyFailsWithoutJev(t *testing.T) {
 	}
 
 	// blank jev output
-	out, err = PurifyCW("transcript", func(s string) (string, error) {
+	out, err = PurifyCW("transcript", func(_ string) (string, error) {
 		return "redacted", nil
-	}, func(s string) (string, error) {
+	}, func(_ string) (string, error) {
 		return "   ", nil
 	})
 	if out != "" || !errors.Is(err, ErrT0411) {

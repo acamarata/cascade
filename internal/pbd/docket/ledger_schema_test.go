@@ -14,7 +14,11 @@ func newTestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("sql.Open: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("db.Close: %v", err)
+		}
+	})
 	return db
 }
 
@@ -46,7 +50,11 @@ func TestLedgerMigrationColumns(t *testing.T) {
 		if err != nil {
 			t.Fatalf("PRAGMA table_info(%s): %v", tbl, err)
 		}
-		defer rows.Close()
+		defer func() {
+			if err := rows.Close(); err != nil {
+				t.Errorf("rows.Close: %v", err)
+			}
+		}()
 
 		found := false
 		for rows.Next() {

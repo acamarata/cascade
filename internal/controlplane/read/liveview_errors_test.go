@@ -32,8 +32,11 @@ type liveViewCase struct {
 
 func liveViewFailCases() []liveViewCase {
 	now := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	storeErr := errors.New("store failure")
 
+	return append(liveViewInputCases(now), liveViewStoreCases(now)...)
+}
+
+func liveViewInputCases(now time.Time) []liveViewCase {
 	return []liveViewCase{
 		{
 			name:    "nil store",
@@ -56,6 +59,13 @@ func liveViewFailCases() []liveViewCase {
 			now:     time.Time{},
 			wantErr: ErrInvalidLiveView,
 		},
+	}
+}
+
+func liveViewStoreCases(now time.Time) []liveViewCase {
+	storeErr := errors.New("store failure")
+
+	return []liveViewCase{
 		{
 			name: "future state timestamp",
 			store: &recFakeStore{

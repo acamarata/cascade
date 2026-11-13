@@ -26,7 +26,7 @@ type HealthReading struct {
 // it returns a zero Item and false without mutating the backlog or invoking
 // the logger. The health readings and logs are provided for downstream use
 // when the backlog is genuinely empty.
-func OnEmptyBacklog(b *Backlog, _ HealthReading, _ []string, logf func(string)) (Item, bool) {
+func OnEmptyBacklog(b *Backlog, _ HealthReading, _ []string, _ func(string)) (Item, bool) {
 	if len(b.Items) > 0 {
 		return Item{}, false
 	}
