@@ -11,6 +11,7 @@ var ErrGreensDecreased = errors.New("D1089")
 // TickGreens processes a greens lifecycle finding for a single tick.
 // It validates the input; if invalid or empty, it returns the original value and ErrInvalidGreensLifecycle without mutation.
 // When cliRebase is false and the state is open or reopened, it returns State=GreensReopened, Severity="error", and ErrGreensDecreased on every tick.
+// When cliRebase is true and the state is open or reopened, it returns State=GreensClosed, Severity="error", and nil error.
 // The input value is never mutated.
 func TickGreens(f GreensLifecycle, cliRebase bool) (GreensLifecycle, error) {
 	v, err := ValidateGreensLifecycle(f)
@@ -18,7 +19,14 @@ func TickGreens(f GreensLifecycle, cliRebase bool) (GreensLifecycle, error) {
 		return v, err
 	}
 
-	if !cliRebase {
+	if cliRebase {
+		if f.State == GreensOpen || f.State == GreensReopened {
+			out := f
+			out.State = GreensClosed
+			out.Severity = "error"
+			return out, nil
+		}
+	} else {
 		if f.State == GreensOpen || f.State == GreensReopened {
 			out := f
 			out.State = GreensReopened
