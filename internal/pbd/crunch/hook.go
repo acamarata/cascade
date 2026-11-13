@@ -111,3 +111,28 @@ func containsTask(tasks []HookTask, r HookTask) bool {
 	}
 	return false
 }
+
+// RungHook is a function that selects a rung (model or option) based on the attempt number.
+type RungHook func(attempt int) (string, error)
+
+// SelectRung determines the rung using an optional RungHook.
+// If attempt is negative, it returns an empty string and ErrInvalidHook.
+// If hook is nil, it returns the default rung "A".
+// Otherwise, it calls the hook once, propagates any error it returns,
+// and validates that the output is exactly "A" or "B". If not, it returns an empty string and ErrInvalidHook.
+func SelectRung(attempt int, hook RungHook) (string, error) {
+	if attempt < 0 {
+		return "", ErrInvalidHook
+	}
+	if hook == nil {
+		return "A", nil
+	}
+	res, err := hook(attempt)
+	if err != nil {
+		return "", err
+	}
+	if res != "A" && res != "B" {
+		return "", ErrInvalidHook
+	}
+	return res, nil
+}
