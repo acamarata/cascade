@@ -62,5 +62,12 @@ func PopulateGCAuth(t GCTicket, evidence []GCQuotaEvidence, estimate GCResetEsti
 			return GCAuth{}, ErrGCAuthFields
 		}
 	}
-	return GCAuth{ID: t.ID}, nil
+	return GCAuth{
+		ID:          t.ID,
+		OwnerFlag:   true,
+		SummaryOps:  []string{"build", "verify", "land"},
+		DigestNodes: []string{"ticket", "usage"},
+		Model:       "local-model",
+		GateOpen:    !t.Gated,
+	}, nil
 }
