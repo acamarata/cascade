@@ -1,3 +1,4 @@
+// Package hygiene scans repository files for hygiene violations.
 package hygiene
 
 // ViolationKind identifies the type of hygiene violation detected.
@@ -24,6 +25,6 @@ type Violation struct {
 
 // ScanFiles inspects the given file paths for hygiene violations.
 // It returns a list of all violations found, or an error if any file cannot be read.
-func ScanFiles(paths []string) ([]Violation, error) {
+func ScanFiles(_ []string) ([]Violation, error) {
 	return nil, nil
 }

@@ -10,7 +10,6 @@ import (
 
 func TestScanPinsFlagsChangedManifest(t *testing.T) {
 	dir := t.TempDir()
-
 	manifestPath := filepath.Join(dir, "manifest.yaml")
 	fixturePath := filepath.Join(dir, "fixture.yaml")
 
