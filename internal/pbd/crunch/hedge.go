@@ -46,6 +46,7 @@ func Hedge(ctx context.Context, t HedgeTicket, modelA, modelB string, run HedgeR
 		return HedgeResult{}, err
 	}
 
+	parentCtx := ctx
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -65,6 +66,18 @@ func Hedge(ctx context.Context, t HedgeTicket, modelA, modelB string, run HedgeR
 			if o.err == nil && o.res.Green {
 				cancel()
 				wg.Wait()
+
+				if err := parentCtx.Err(); err != nil {
+					return HedgeResult{}, err
+				}
+
+				if o.res.Commit != nil {
+					if err := o.res.Commit(); err != nil {
+						return HedgeResult{}, errors.Join(ErrHedgeCommit, err)
+					}
+				}
+
+				o.res.Commit = nil
 				return o.res, nil
 			}
 			if o.model == modelA {

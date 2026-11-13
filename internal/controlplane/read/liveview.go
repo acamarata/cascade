@@ -63,6 +63,7 @@ var ErrUnknownTicket = errors.New("D4608")
 var ErrInvalidLiveView = errors.New("invalid live ticket view")
 
 // GetLiveView retrieves and projects a LiveView for the given ticket ID.
+// It performs strict validation on inputs and store records before returning a view.
 func GetLiveView(s Store, id string, now time.Time) (*LiveView, error) {
 	if s == nil {
 		return nil, ErrInvalidLiveView

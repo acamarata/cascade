@@ -24,6 +24,7 @@ type SlugAnswer struct {
 // An invalid (blank) slug returns 0 and ErrInvalidSlug.
 // A valid slug with Finished false returns 0 and nil.
 // A valid slug with Finished true returns 0 and ErrReplaceBlocked.
+// Invalid Slug takes precedence if Finished is also true.
 func ApplySlugAnswer(ev SlugAnswer) (wave int, err error) {
 	if strings.TrimSpace(ev.Slug) == "" {
 		return 0, ErrInvalidSlug

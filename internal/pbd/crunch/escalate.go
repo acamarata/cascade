@@ -48,21 +48,29 @@ func Escalate(t EscalationTicket) (EscalationResult, error) {
 		return EscalationResult{}, ErrInvalidEscalation
 	}
 
-	if t.Lane == "senior" && t.Attempts >= 3 {
+	// Senior lane with more than 2 attempts is exhausted.
+	if t.Lane == "senior" && t.Attempts > 2 {
 		return EscalationResult{}, ErrEscalationExhausted
 	}
 
+	// Threshold met: escalate to senior lane.
 	if t.GCFailures >= 3 || t.ModelFailures >= 2 {
 		return EscalationResult{
 			Escalated:  true,
-			Lane:       t.Lane,
-			AllowRetry: false,
+			Lane:       "senior",
+			AllowRetry: t.Attempts < 2,
 		}, nil
+	}
+
+	// Below thresholds: preserve lane, no escalation.
+	allowRetry := true
+	if t.Lane == "senior" && t.Attempts == 2 {
+		allowRetry = false
 	}
 
 	return EscalationResult{
 		Escalated:  false,
 		Lane:       t.Lane,
-		AllowRetry: true,
+		AllowRetry: allowRetry,
 	}, nil
 }

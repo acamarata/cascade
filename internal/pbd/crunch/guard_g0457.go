@@ -65,9 +65,8 @@ func (e *ExecEnv) Guard(lane string) error {
 
 	now := e.Now()
 
-	quotaErr := e.Quota(lane)
-	if quotaErr != nil {
-		return errors.Join(ErrQuotaFloor, quotaErr)
+	if err := e.Quota(lane); err != nil {
+		return errors.Join(ErrQuotaFloor, err)
 	}
 
 	if e.cooldownUntil != nil {

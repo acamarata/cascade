@@ -1,7 +1,10 @@
 // Package background provides retry journaling primitives.
 package background
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // ErrInvalidRetryEntry signals an invalid retry entry (code D0294).
 var ErrInvalidRetryEntry = errors.New("D0294")
@@ -54,5 +57,8 @@ func JournalRetry(entry RetryEntry, journal RetryJournal, _ RetryVerdictSink) er
 	default:
 		return ErrInvalidRetryEntry
 	}
-	return journal.AppendRetry(entry)
+	if err := journal.AppendRetry(entry); err != nil {
+		return fmt.Errorf("%w: %w", ErrRetryJournal, err)
+	}
+	return nil
 }
