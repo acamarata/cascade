@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-13T11:36:44Z",
+  "generated_at": "2026-11-13T18:08:21Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4841,6 +4841,20 @@
       ],
       "statuses": [
         "CHANGE"
+      ]
+    },
+    {
+      "name": "cmd/cascade daemon inbox delivery",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_inbox_delivery.go",
+          "line": 22,
+          "status": "",
+          "raw": "cmd/cascade daemon inbox delivery (P1-HRN-07)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -44650,7 +44664,7 @@
       ]
     }
   ],
-  "total_sites": 4297,
-  "unspecified_count": 412,
+  "total_sites": 4298,
+  "unspecified_count": 413,
   "multi_status_count": 132
 }
