@@ -18,6 +18,7 @@ type EventSink interface {
 }
 
 // EmitScheduledIndexEvent writes a ScheduledIndexEvent to the given sink.
+// It normalizes nil Names to a nonnil empty slice.
 // It passes a copied Names slice to the sink to prevent mutation of the caller's input.
 // If the sink returns an error, it is propagated unchanged without retry.
 func EmitScheduledIndexEvent(sink EventSink, event ScheduledIndexEvent) error {
@@ -25,9 +26,15 @@ func EmitScheduledIndexEvent(sink EventSink, event ScheduledIndexEvent) error {
 		return ErrInvalidScheduledIndexEvent
 	}
 
+	// Normalize nil Names to a nonnil empty slice
+	names := event.Names
+	if names == nil {
+		names = []string{}
+	}
+
 	// Copy names slice to prevent sink mutation from affecting caller input
-	copiedNames := make([]string, len(event.Names))
-	copy(copiedNames, event.Names)
+	copiedNames := make([]string, len(names))
+	copy(copiedNames, names)
 
 	copiedEvent := ScheduledIndexEvent{
 		Counts: event.Counts,
