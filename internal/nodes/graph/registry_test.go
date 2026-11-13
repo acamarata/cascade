@@ -4,7 +4,7 @@ import "testing"
 
 func TestRegisterSameNameSameKeySameID(t *testing.T) {
 	r := NewRegistry()
-	name := "mm6"
+	name := "node-a"
 	key := []byte("key-one")
 
 	first, err := r.Register(name, key)
@@ -34,7 +34,7 @@ func TestRegisterSameNameSameKeySameID(t *testing.T) {
 
 func TestRegisterSameNameDifferentKeyDistinct(t *testing.T) {
 	r := NewRegistry()
-	name := "mm6"
+	name := "node-a"
 	keyOne := []byte("key-one")
 	keyTwo := []byte("key-two")
 
@@ -66,10 +66,10 @@ func TestRegisterSameNameDifferentKeyDistinct(t *testing.T) {
 func TestRegisterEmptyKeyFails(t *testing.T) {
 	r := NewRegistry()
 
-	if _, err := r.Register("mm6", nil); err == nil {
+	if _, err := r.Register("node-a", nil); err == nil {
 		t.Fatal("Register with nil key succeeded, want error")
 	}
-	if _, err := r.Register("mm6", []byte{}); err == nil {
+	if _, err := r.Register("node-a", []byte{}); err == nil {
 		t.Fatal("Register with empty key succeeded, want error")
 	}
 

@@ -65,8 +65,8 @@ func TestNodeIdentityFromLane(t *testing.T) {
 		lane string
 		want string
 	}{
-		{lane: "LM@mm6", want: "mm6"},
-		{lane: "CMD@mm4", want: "mm4"},
+		{lane: "LM@node-a", want: "node-a"},
+		{lane: "CMD@node-b", want: "node-b"},
 	}
 
 	for _, tc := range cases {
@@ -81,7 +81,7 @@ func TestNodeIdentityFromLane(t *testing.T) {
 }
 
 func TestNodeIdentityBadLaneFails(t *testing.T) {
-	if _, err := NodeIdentity("mm6"); err == nil {
-		t.Fatal("NodeIdentity(mm6) succeeded, want error")
+	if _, err := NodeIdentity("node-a"); err == nil {
+		t.Fatal("NodeIdentity(node-a) succeeded, want error")
 	}
 }

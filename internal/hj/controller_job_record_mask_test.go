@@ -19,14 +19,14 @@ func resetMS5State(t *testing.T) {
 	})
 }
 
-// TestMS5JobRecordMasksSecretInCommand verifies that RecordMS5Job masks the
+// TestControllerJobRecordMasksSecretInCommand verifies that RecordControllerJob masks the
 // prompt value in the stored command. It uses table-driven sub-tests to cover
 // normalized whitespace, a one-byte value replaced by the empty token, and
 // preservation of other tokens. Snapshots must contain only masked text.
-func TestMS5JobRecordMasksSecretInCommand(t *testing.T) {
+func TestControllerJobRecordMasksSecretInCommand(t *testing.T) {
 	resetMS5State(t)
 
-	rec, err := RecordMS5Job("run --prompt secret")
+	rec, err := RecordControllerJob("run --prompt secret")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestMS5JobRecordMasksSecretInCommand(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			r, err := RecordMS5Job(tc.cmd)
+			r, err := RecordControllerJob(tc.cmd)
 			if err != nil {
 				t.Fatalf("unexpected error for cmd %q: %v", tc.cmd, err)
 			}
@@ -51,7 +51,7 @@ func TestMS5JobRecordMasksSecretInCommand(t *testing.T) {
 		})
 	}
 
-	all := MS5Records()
+	all := ControllerRecords()
 	for _, snap := range all {
 		if strings.Contains(snap.Command, "secret") {
 			t.Errorf("snapshot record contains unmasked text: %q", snap.Command)
