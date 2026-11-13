@@ -32,10 +32,21 @@ func Bypass(in BypassInput) (BypassDecision, error) {
 		return BypassDecision{}, ErrInvalidBypassInput
 	}
 
-	admitted := in.Occupancy < in.Cap
-	if !admitted && in.Cap == 0 && in.Hot {
-		admitted = true
+	var limit int
+	switch in.Lane {
+	case "A3":
+		limit = in.Cap
+	case "A2":
+		limit = in.OverflowCap
 	}
 
-	return BypassDecision{Admitted: admitted, Bypassed: false}, nil
+	if in.Occupancy < limit {
+		return BypassDecision{Admitted: true, Bypassed: false}, nil
+	}
+
+	if in.Hot && in.GateDeadlines >= 3 && in.RunSeats == 0 {
+		return BypassDecision{Admitted: true, Bypassed: true}, nil
+	}
+
+	return BypassDecision{Admitted: false, Bypassed: false}, nil
 }
