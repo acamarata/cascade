@@ -20,7 +20,7 @@ func (f *fakeStore) Ticket(_ string) (TicketRecord, bool, error) {
 	return f.record, f.found, f.err
 }
 
-type liveViewCase struct {
+type liveViewOKCase struct {
 	name            string
 	record          TicketRecord
 	found           bool
@@ -39,7 +39,7 @@ func plainRecord(owner string, attempts int) TicketRecord {
 	}
 }
 
-func liveViewCases(now time.Time) []liveViewCase {
+func liveViewCases(now time.Time) []liveViewOKCase {
 	baseRecord := plainRecord("alice", 2)
 	baseRecord.Blockers = []Blocker{
 		{Ticket: "T0", Kind: "dependency", Ref: "R0", CreatedAt: now.Add(-2 * time.Hour), Cleared: false},
@@ -52,7 +52,7 @@ func liveViewCases(now time.Time) []liveViewCase {
 	}
 	baseRecord.StateEnteredAt = now.Add(-30 * time.Minute)
 
-	return []liveViewCase{
+	return []liveViewOKCase{
 		{"all fields populated", baseRecord, true, 30 * time.Minute, false},
 		{"zero StateEnteredAt yields duration 0", plainRecord("alice", 2), true, 0, true},
 		{"zero attempts", plainRecord("alice", 0), true, 0, true},
