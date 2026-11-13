@@ -4,12 +4,23 @@ package hygiene
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
 )
 
-const scratchBase = "/Volumes/D5/tmp"
+// scratchBase is the root every scratch directory lives under, in slash form. It comes from
+// CASCADE_SCRATCH_DIR when set, else <os temp dir>/cascade-scratch, so no host path is built in.
+var scratchBase = defaultScratchBase()
+
+func defaultScratchBase() string {
+	if d := os.Getenv("CASCADE_SCRATCH_DIR"); d != "" {
+		return path.Clean(filepath.ToSlash(d))
+	}
+	return path.Clean(filepath.ToSlash(filepath.Join(os.TempDir(), "cascade-scratch")))
+}
 
 var validTopic = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
@@ -30,15 +41,15 @@ func ScratchPath(topic, date string) (string, error) {
 }
 
 // ValidateScratch checks that the given path is within a valid scratch
-// directory under /Volumes/D5/tmp/<topic>-<YYYYMMDD>/.
+// directory under <scratch base>/<topic>-<YYYYMMDD>/.
 // It rejects paths outside this hierarchy, including escapes via "..".
-func ValidateScratch(path string) error {
-	cleaned := filepath.Clean(path)
+func ValidateScratch(p string) error {
+	cleaned := path.Clean(filepath.ToSlash(p))
 	if !strings.HasPrefix(cleaned, scratchBase+"/") {
 		return errors.New("path is outside scratch base")
 	}
 	rel := cleaned[len(scratchBase)+1:]
-	parts := strings.SplitN(rel, string(filepath.Separator), 2)
+	parts := strings.SplitN(rel, "/", 2)
 	if len(parts) < 2 || parts[1] == "" {
 		return errors.New("path is not under a topic directory")
 	}
