@@ -3,7 +3,8 @@
 // Purpose: registers the fleet-topology daemon wiring: the fleet runtime's
 // topology pass is bound once over the runtime's one provider registry, the
 // agent lanes registered through setFleetAgentLanes and provider-usage.db;
-// one ReconcileNow runs before serve, then one supervised pass every 60 s.
+// one ReconcileNow runs before serve, then one supervised pass every 60 s
+// whatever the first pass returned.
 // Constraints: no second registry open or topology store. An invalid lane
 // pin refuses start before any write; any other pre-serve error fails the
 // manifest entry and the daemon keeps serving with no rows (leases refuse
@@ -59,6 +60,12 @@ var topologyRegistry = func(fleet *daemon.FleetRuntime) (*registry.Registry, err
 
 // newTopologyTicker builds the periodic pass ticker; tests replace it.
 var newTopologyTicker = func(d time.Duration) runtime.Ticker { return runtime.NewSystemTicker(d) }
+
+// topologyReconcile runs one topology pass; tests replace it to inject a
+// failing pass.
+var topologyReconcile = func(ctx context.Context, fleet *daemon.FleetRuntime) (topology.Report, error) {
+	return fleet.ReconcileNow(ctx)
+}
 
 // agentLanePrefix marks the lanes the SetAgentLanes source adds to the
 // fleet snapshot (capacity.AgentLaneSlots).
@@ -119,9 +126,9 @@ func wireFleetTopology(w *daemonWiring) error {
 		_ = db.Close()
 		return err
 	}
-	first := true
-	if rep, err := fleet.ReconcileNow(w.Ctx); err != nil {
-		first = false
+	// A failed pre-serve pass stays recorded as failed; the supervised loop
+	// still starts, so the next tick retries it.
+	if rep, err := topologyReconcile(w.Ctx, fleet); err != nil {
 		w.Manifest.Failed(fleetTopologySubsystem, err.Error())
 	} else {
 		w.Manifest.Started(fleetTopologySubsystem, topologyDetail(rep))
@@ -129,11 +136,7 @@ func wireFleetTopology(w *daemonWiring) error {
 	w.Manifest.GoSupervised(w.Ctx, fleetTopologyPassSubsystem, "every "+fleetTopologyInterval.String(),
 		func(ctx context.Context) error {
 			defer func() { _ = db.Close() }()
-			if first {
-				runTopologyLoop(ctx, fleet, w.Logger)
-			} else {
-				<-ctx.Done()
-			}
+			runTopologyLoop(ctx, fleet, w.Logger)
 			return nil
 		})
 	return nil
@@ -167,7 +170,7 @@ func runTopologyLoop(ctx context.Context, fleet *daemon.FleetRuntime, logger *sl
 			return
 		case <-t.C():
 		}
-		if _, err := fleet.ReconcileNow(ctx); err != nil && logger != nil && ctx.Err() == nil {
+		if _, err := topologyReconcile(ctx, fleet); err != nil && logger != nil && ctx.Err() == nil {
 			logger.Warn("fleet topology pass failed", slog.String("error", err.Error()))
 		}
 	}

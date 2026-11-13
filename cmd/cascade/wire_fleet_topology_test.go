@@ -1,10 +1,8 @@
 //go:build !windows
 
-// Purpose: the fleet-topology wiring: the composed daemon's topology rows
-// exist before serve and back real leases, Reconcile, NewWindowAccountant and
-// HealthKeys have no production caller outside the topology mount, an
-// unreadable registry fails closed, and a [fleet.lanes] pin is applied,
-// idempotent, audited on the daemon bus and restored; an invalid pin refuses start.
+// Purpose: the fleet-topology wiring: topology rows exist before serve and back real leases; Reconcile,
+// NewWindowAccountant and HealthKeys have no caller outside the mount; an unreadable registry fails closed;
+// the 60 s loop retries a failed first pass; a [fleet.lanes] pin applies, audits and restores, a bad one refuses start.
 // SPORT: cmd/cascade/daemon (ADD, P1-TOP-06f).
 package main
 
@@ -36,19 +34,16 @@ import (
 )
 
 // agentTopologyLane is the claude-cli agent lane's topology id.
-var agentTopologyLane = topology.LaneIDFor("agent:claude-cli", "agent:claude-cli", "", "",
-	topology.EffortNA, topology.InteractionInteractive)
+var agentTopologyLane = topology.LaneIDFor("agent:claude-cli", "agent:claude-cli", "", "", topology.EffortNA, topology.InteractionInteractive)
 
 // want fails the test with the message unless ok.
 func want(t *testing.T, ok bool, format string, args ...any) {
-	t.Helper()
-	if !ok {
+	if t.Helper(); !ok {
 		t.Fatalf(format, args...)
 	}
 }
 
-// composeTopology composes a daemon over a fresh HOME with config written
-// first; seed runs in phaseFleet just before the topology mount.
+// composeTopologyPass composes a daemon over a fresh HOME with config; seed runs in phaseFleet before the mount.
 func composeTopologyPass(t *testing.T, config string, clock runtime.Clock, seed func(*daemonWiring)) (capDaemon, error) {
 	t.Helper()
 	for _, k := range []string{"HOME", "USERPROFILE", "CASCADE_HOME"} {
@@ -61,8 +56,7 @@ func composeTopologyPass(t *testing.T, config string, clock runtime.Clock, seed 
 	if config != "" {
 		want(t, os.WriteFile(deps.Paths.ConfigPath(), []byte(config), 0o600) == nil, "write config")
 	}
-	addTestRegistration(t, daemonRegistration{Name: "test-topology-seed", Phase: phaseFleet, Order: 59,
-		Wire: func(w *daemonWiring) error { seed(w); return nil }})
+	addTestRegistration(t, daemonRegistration{Name: "test-topology-seed", Phase: phaseFleet, Order: 59, Wire: func(w *daemonWiring) error { seed(w); return nil }})
 	seen := observeWiring(t)
 	_, cleanups, err := composeDaemon(context.Background(), deps, func(*rpc.Registry, *rpc.SSEMux) {})
 	if t.Cleanup(func() { runCleanupsLIFO(cleanups) }); err != nil {
@@ -78,20 +72,18 @@ func runningTopology(t *testing.T, config string, clock runtime.Clock, seed func
 	t.Helper()
 	d, err := composeTopologyPass(t, config, clock, seed)
 	want(t, err == nil, "composeDaemon: %v", err)
-	r := manifestRow(d, fleetTopologySubsystem)
+	r, _ := subsystemState(d.c.Opts.Manifest, fleetTopologySubsystem)
 	want(t, r.State == daemon.SubsystemRunning, "fleet-topology = %+v, want running after the pre-serve pass", r)
 	return d
 }
 
-// seedTopologyFleet stores a key and an oauth provider and, unless noAgent,
-// one agent lane.
+// seedTopologyFleet stores a key and an oauth provider and, unless noAgent, one agent lane.
 func seedTopologyFleet(t *testing.T, noAgent ...bool) func(*daemonWiring) {
 	return func(w *daemonWiring) {
 		reg := w.Deps.Fleet.CapacityParts().Registry
 		for name, auth := range map[string]registry.AuthType{"key": registry.AuthKey, "oauth": registry.AuthOAuth} {
 			seedCapProvider(t, reg, registry.ProviderRecord{Name: name + "-prov", Driver: registry.DriverOpenAICompat,
-				BaseURL: "https://example.invalid/v1", Auth: auth, Tier: registry.TierMid},
-				registry.LaneRecord{LaneName: name + "-lane-1"})
+				BaseURL: "https://example.invalid/v1", Auth: auth, Tier: registry.TierMid}, registry.LaneRecord{LaneName: name + "-lane-1"})
 		}
 		if len(noAgent) == 0 {
 			w.Deps.Fleet.SetAgentLanes(func() []capacity.AgentLane {
@@ -102,15 +94,6 @@ func seedTopologyFleet(t *testing.T, noAgent ...bool) func(*daemonWiring) {
 	}
 }
 
-// manifestRow returns the named manifest row.
-func manifestRow(d capDaemon, name string) daemon.SubsystemStatus {
-	snap := d.c.Opts.Manifest.Snapshot()
-	if i := slices.IndexFunc(snap, func(s daemon.SubsystemStatus) bool { return s.Name == name }); i >= 0 {
-		return snap[i]
-	}
-	return daemon.SubsystemStatus{}
-}
-
 // fundDomain writes roomy rpm/tpm/rpd buckets on domain (no Reconcile).
 func fundDomain(t *testing.T, d capDaemon, domain topology.DomainID) {
 	t.Helper()
@@ -119,17 +102,15 @@ func fundDomain(t *testing.T, d capDaemon, domain topology.DomainID) {
 	acct, aerr := store.GetAccount(ctx, dom.AccountRef)
 	want(t, err == nil && aerr == nil, "domain %s after the mounted pass: %v, %v", domain, err, aerr)
 	for _, dim := range []string{topology.DimensionRPM, topology.DimensionTPM, topology.DimensionRPD} {
-		b := topology.Bucket{Name: dim, Limit: 1_000_000, RemainingFraction: 1, Window: topology.BucketWindowDay,
-			Source: topology.SourceProviderStatus, Confidence: 1, LimitScopeID: topology.ResolveScope(acct, dom),
-			CapacityObserved: 1_000_000, WindowID: "w1", Version: 1, ObservedAt: time.Now()}
+		b := topology.Bucket{Name: dim, Limit: 1_000_000, RemainingFraction: 1, Window: topology.BucketWindowDay, Source: topology.SourceProviderStatus,
+			Confidence: 1, LimitScopeID: topology.ResolveScope(acct, dom), CapacityObserved: 1_000_000, WindowID: "w1", Version: 1, ObservedAt: time.Now()}
 		err := d.rt.Quota().UpsertBucket(ctx, dom.ID, dim, b)
 		want(t, err == nil, "UpsertBucket(%s): %v", dim, err)
 	}
 }
 
-// agentDomainFleet is a Fleet over the composed deps whose DomainOf resolves an
-// agent: lane through its topology credential row; the production adapter
-// refuses every agent: lane (DEBT P1-AGT-08, internal/daemon).
+// agentDomainFleet is a Fleet over the composed deps whose DomainOf resolves an agent: lane through its
+// topology credential row; the production adapter refuses every agent: lane (DEBT P1-AGT-08, internal/daemon).
 func agentDomainFleet(t *testing.T, d capDaemon) *capacity.Fleet {
 	t.Helper()
 	deps := d.parts.Deps
@@ -231,7 +212,7 @@ func TestReconcileRegistryUnreadableFailsClosed(t *testing.T) {
 	t.Cleanup(func() { topologyRegistry = saved })
 	d, err := composeTopologyPass(t, "", nil, seedTopologyFleet(t))
 	want(t, err == nil, "composeDaemon must keep serving: %v", err)
-	r := manifestRow(d, fleetTopologySubsystem)
+	r, _ := subsystemState(d.c.Opts.Manifest, fleetTopologySubsystem)
 	want(t, r.State == daemon.SubsystemError && strings.Contains(r.Detail, "injected"), "fleet-topology = %+v, want failed naming the cause", r)
 	lanes, err := d.rt.Topology().ListLanes(context.Background(), true)
 	want(t, err == nil && len(lanes) == 0, "topology lanes = %d, %v; want no row", len(lanes), err)
@@ -281,6 +262,29 @@ func TestLaneReversalConfigPin(t *testing.T) {
 	rep, err = d.rt.ReconcileNow(ctx)
 	want(t, err == nil && rep.RowsWritten == 0, "pass after the restore = %+v, %v; want the restore applied once", rep, err)
 	awaitAudit(t, d, 2)
+}
+
+func TestTopologyPassRetriesAfterFailedFirst(t *testing.T) {
+	savedTick, savedPass, tick, calls := newTopologyTicker, topologyReconcile, &awayStepper{c: make(chan struct{}, 1)}, 0
+	t.Cleanup(func() { newTopologyTicker, topologyReconcile = savedTick, savedPass })
+	newTopologyTicker = func(time.Duration) runtime.Ticker { return tick }
+	topologyReconcile = func(ctx context.Context, f *daemon.FleetRuntime) (topology.Report, error) {
+		if calls++; calls == 1 {
+			return topology.Report{}, cascade.New(cascade.KindUnavailable, "injected first pass failure")
+		}
+		return f.ReconcileNow(ctx)
+	}
+	d, err := composeTopologyPass(t, "", nil, seedTopologyFleet(t))
+	want(t, err == nil, "composeDaemon must keep serving: %v", err)
+	lanes, err := d.rt.Topology().ListLanes(context.Background(), true)
+	want(t, err == nil && len(lanes) == 0, "lanes after the failed first pass = %d, %v; want none", len(lanes), err)
+	tick.c <- struct{}{}
+	waitFor(t, "the retried pass's topology rows after one tick", func() bool {
+		lanes, err := d.rt.Topology().ListLanes(context.Background(), false)
+		return err == nil && len(lanes) > 0
+	})
+	r, _ := subsystemState(d.c.Opts.Manifest, fleetTopologySubsystem)
+	want(t, r.State == daemon.SubsystemError && strings.Contains(r.Detail, "injected first"), "fleet-topology = %+v, want the pre-serve failure", r)
 }
 
 // awaitAudit waits, bounded, until the daemon bus holds n relayed audit events.
