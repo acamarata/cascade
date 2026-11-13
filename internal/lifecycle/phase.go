@@ -66,6 +66,6 @@ func Transition(from, to Phase) error {
 // It logs at Info level with message prefix "observed" followed by the target phase
 // and returns nil. Force overrides normal flow without transition validation.
 func Force(ctx context.Context, logger *slog.Logger, to Phase) error {
-	logger.Info("observed forcing phase to " + string(to))
+	logger.InfoContext(ctx, "observed forcing phase to "+string(to))
 	return nil
 }

@@ -11,7 +11,7 @@ func TestHedgeSkipsFasterRed(t *testing.T) {
 	aDone := make(chan struct{})
 	bRelease := make(chan struct{})
 
-	run := func(ctx context.Context, ticket HedgeTicket, model string) (HedgeResult, error) {
+	run := func(_ context.Context, _ HedgeTicket, model string) (HedgeResult, error) {
 		switch model {
 		case "A":
 			close(aDone)
