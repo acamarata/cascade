@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -21,7 +22,7 @@ func TestEmitEscalateEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat: %v", err)
 	}
-	if info.Mode().Perm() != 0600 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 { // windows reports 0666
 		t.Fatalf("expected mode 0600, got %v", info.Mode().Perm())
 	}
 
@@ -91,14 +92,16 @@ func TestEmitEscalateEventWriteFailures(t *testing.T) {
 		t.Fatalf("expected ErrEscalationWrite for directory, got %v", err)
 	}
 
-	// Permissions failure: existing file with broad permissions
-	broadPath := filepath.Join(dir, "broad.jsonl")
-	if err := os.WriteFile(broadPath, []byte(""), 0644); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	err = WriteEscalate(broadPath, Outcome{Status: "done"})
-	if !errors.Is(err, ErrEscalationWrite) {
-		t.Fatalf("expected ErrEscalationWrite for broad permissions, got %v", err)
+	// Permissions failure: existing file with broad permissions (POSIX modes only)
+	if runtime.GOOS != "windows" {
+		broadPath := filepath.Join(dir, "broad.jsonl")
+		if err := os.WriteFile(broadPath, []byte(""), 0644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		err = WriteEscalate(broadPath, Outcome{Status: "done"})
+		if !errors.Is(err, ErrEscalationWrite) {
+			t.Fatalf("expected ErrEscalationWrite for broad permissions, got %v", err)
+		}
 	}
 
 	// Non-existent parent directory
