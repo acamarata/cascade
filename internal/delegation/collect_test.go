@@ -67,12 +67,20 @@ type collectFixture struct {
 	releases int
 }
 
-func newCollectFixture(t *testing.T) *collectFixture {
+func newCollectFixture(t *testing.T, origin ...string) *collectFixture {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	ch, parent, svc, fleet, shim := setup(t)
+	if len(origin) != 0 {
+		root, err := MintRoot(context.Background(), ch.s, principal.Principal{ID: origin[0]}, srcMut())
+		if err != nil {
+			t.Fatal(err)
+		}
+		ch.root, ch.rootB = root, ch.wire(root)
+		_, parent = ch.add(root)
+	}
 	clock := runtime.NewFixedClock(t0)
 	svc.deps.Clock = clock
 	resp, err := svc.Delegate(context.Background(), &Request{AgentID: "collect-child", Parent: parent})
@@ -88,24 +96,25 @@ func newCollectFixture(t *testing.T) *collectFixture {
 		t.Fatal(err)
 	}
 	f := &collectFixture{chain: ch, fleet: fleet, clock: clock}
-	f.resolve = func() (principal.Principal, error) {
-		return svc.deps.Minter.Resolve(shim.reqs[0].PrincipalToken, t0)
-	}
+	f.resolve = func() (principal.Principal, error) { return svc.deps.Minter.Resolve(shim.reqs[0].PrincipalToken, t0) }
 	f.driver = &collectDriver{status: func(context.Context) provider.AgentRunState { return provider.AgentRunAccepted }}
 	f.c = &collector{service: svc, notify: notify.NewService(notify.DefaultConfig(), clock, nil), record: rec,
 		env: resp.Record.Env, lease: capacity.Lease{ID: resp.LeaseID}, worktree: wt, start: t0, maxWallClock: time.Hour}
 	f.c.handle = agents.SpawnHandle{JobID: provider.AgentJobID(rec.AgentJobID), Driver: f.driver,
-		Release: func(_ context.Context) error {
-			f.releases++
-			if _, err := os.Stat(wt.Root); err != nil {
-				t.Error("handle released after worktree", err)
-			}
-			if _, err := f.resolve(); err != nil {
-				t.Error("principal revoked before handle release", err)
-			}
-			return nil
-		}}
+		Release: func(context.Context) error { return f.releaseHandle(t) }}
 	return f
+}
+
+func (f *collectFixture) releaseHandle(t *testing.T) error {
+	t.Helper()
+	f.releases++
+	if _, err := os.Stat(f.c.worktree.Root); err != nil {
+		t.Error("handle released after worktree", err)
+	}
+	if _, err := f.resolve(); err != nil {
+		t.Error("principal revoked before handle release", err)
+	}
+	return nil
 }
 
 func (f *collectFixture) assertReleased(t *testing.T, state jobs.DelegationState, reason string) {
@@ -245,23 +254,46 @@ func TestCollectorDaemonStop(t *testing.T) {
 	f.assertReleased(t, jobs.DelegationFailed, "daemon stopped")
 }
 
-func TestCollectorAddressedWait(t *testing.T) {
-	f := newCollectFixture(t)
+// TestDelegateWaitReturnsAddressedResult checks the public wait path and inbox drain.
+func TestDelegateWaitReturnsAddressedResult(t *testing.T) {
+	f := newCollectFixture(t, "wait-origin")
+	f.c.service.collection = &Collection{Notify: f.c.notify, Ticks: func() runtime.Ticker { return &manualTicker{} }}
 	if err := f.c.run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	owner := principal.WithCaller(context.Background(), principal.Caller{OwnerCLI: true})
+	owner := principal.WithCaller(context.Background(), principal.Caller{Principal: &principal.Principal{ID: "wait-origin", Scope: "project-a"}})
 	id := f.c.record.ID
-	before, err := f.c.service.wait(owner, f.c.notify, id, 0, nil)
+	before, err := f.c.service.Wait(owner, id, 0)
 	if err != nil || before.Output != "" {
 		t.Fatalf("before drain = %+v, %v", before, err)
 	}
 	f.c.notify.Dispatcher.Drain(context.Background())
-	result, err := f.c.service.wait(owner, f.c.notify, id, 0, nil)
-	if err != nil || result.Output != "finished" || result.State != jobs.DelegationSucceeded || len(result.Artifacts) != 1 {
+	result, err := f.c.service.Wait(owner, id, 0)
+	if err != nil || result.JobID != id || result.Output != "finished" || result.State != jobs.DelegationSucceeded ||
+		len(result.Artifacts) != 1 || result.Artifacts[0] != "result.txt" || result.DataClass != provider.SensitivityRestricted {
 		t.Fatalf("result = %+v, %v", result, err)
 	}
-	other := principal.WithCaller(context.Background(), principal.Caller{Principal: &principal.Principal{ID: "intruder"}})
-	_, err = f.c.service.wait(other, f.c.notify, id, 0, nil)
-	wantCascadeErr(t, err, cascade.KindPermissionDenied, "only the delegation origin may wait")
+}
+
+// TestDelegateWaitRefusesOtherScope verifies that refusals neither leak nor consume results.
+func TestDelegateWaitRefusesOtherScope(t *testing.T) {
+	f := newCollectFixture(t, "wait-origin")
+	f.c.service.collection = &Collection{Notify: f.c.notify, Ticks: func() runtime.Ticker { return &manualTicker{} }}
+	if err := f.c.run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	f.c.notify.Dispatcher.Drain(context.Background())
+	other := principal.WithCaller(context.Background(), principal.Caller{Principal: &principal.Principal{ID: "intruder", Scope: "other-project"}})
+	sameScope := principal.WithCaller(context.Background(), principal.Caller{Principal: &principal.Principal{ID: "other-principal", Scope: "project-a"}})
+	for _, ctx := range []context.Context{other, sameScope, context.Background(), principal.WithCaller(context.Background(), principal.Caller{OwnerCLI: true})} {
+		got, err := f.c.service.Wait(ctx, f.c.record.ID, 0)
+		wantCascadeErr(t, err, cascade.KindPermissionDenied, "only the delegation origin may wait")
+		if got.JobID != "" || got.Output != "" || len(got.Artifacts) != 0 {
+			t.Fatalf("refused Wait leaked a result: %+v", got)
+		}
+	}
+	owner := principal.WithCaller(context.Background(), principal.Caller{Principal: &principal.Principal{ID: "wait-origin", Scope: "project-a"}})
+	if got, err := f.c.service.Wait(owner, f.c.record.ID, 0); err != nil || got.Output != "finished" {
+		t.Fatalf("origin Wait after refusals = %+v, %v", got, err)
+	}
 }

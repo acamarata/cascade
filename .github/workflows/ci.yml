@@ -205,12 +205,12 @@ jobs:
       # of the lane); the log is captured to a file, not a pipe, so the
       # go test exit code gates the step, and the named tests must show an
       # EXECUTED and PASS line each.
-      - name: go test -tags=integration ./internal/plugins/ ./internal/secrets/ (whole packages)
+      - name: go test -tags=integration ./internal/plugins/ ./internal/secrets/ ./internal/delegation/ (whole packages)
         if: matrix.goos != 'windows'
         run: |
           log="$RUNNER_TEMP/integration-plugins-secrets.log"
           rc=0
-          go test -tags=integration -count=1 -race ./internal/plugins/ ./internal/secrets/ -v > "$log" 2>&1 || rc=$?
+          go test -tags=integration -count=1 -race ./internal/plugins/ ./internal/secrets/ ./internal/delegation/ -v > "$log" 2>&1 || rc=$?
           cat "$log"
           test "$rc" -eq 0 || exit 1
           for name in TestBuiltinRegistry_Integration_RealConfigLoadAndRegistration TestOAuthPKCEFixture; do

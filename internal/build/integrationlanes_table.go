@@ -94,7 +94,7 @@ var IntegrationLanes = slices.Concat(
 	// the driver spawn proxy tests carry the security tag as well; a bare integration build compiles none of them
 	[]LaneRow{{"./internal/providers/agents", "integration security", "^(TestProxiedDialEffectRecordsIntentConfirm|TestSpawnProxyCloseDuringDialFailsTheEffect|TestSpawnProxyAbsentTableDeniesEveryDestination|TestRedTeamNetworkRefusedByBroker|TestSpawnProxyCredentialsDifferPerSpawn|TestSpawnProxyClosedAtReleaseRefusesConnect)$", LaneJob, unixRunners, nil}},
 	rows(LaneRow{Tags: "integration", Job: "build-test", OS: unixRunners}, "./internal/conversation", "./internal/daemon",
-		"./internal/integration", "./internal/plugins", "./internal/secrets"),
+		"./internal/delegation", "./internal/integration", "./internal/plugins", "./internal/secrets"),
 	rows(LaneRow{Tags: "integration", Job: "node-dispatch-real-git", OS: linuxOnly}, "./internal/nodes"),
 	rows(LaneRow{Tags: "integration", Job: "sync-merge-real-git", OS: linuxOnly}, "./internal/sync"),
 	rows(LaneRow{Tags: "integration", Job: "plugin-integration", OS: linuxOnly}, "./plugins/cascade-pa",
