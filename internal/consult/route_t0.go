@@ -47,6 +47,14 @@ func RouteT0Plan(req T0Request) (T0Route, error) {
 		return T0Route{}, ErrInvalidT0Request
 	}
 
+	// Quota short routes to GC2 regardless of BurnAccount
+	if req.NativeQuotaShort {
+		return T0Route{
+			Destination: "GC2",
+			Account:     "",
+		}, nil
+	}
+
 	// Return a valid route
 	return T0Route{
 		Destination: "t0-default",
