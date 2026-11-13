@@ -21,8 +21,10 @@ var resourceRe = regexp.MustCompile(`^(tool|node|fixture|cred):[a-z][a-z0-9_-]*$
 var capRe = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 
 // ValidateResources checks that every resource matches the allowed syntax
-// and that credentials are present in lane.CredClasses. Nil or empty
-// resources return nil if lane capabilities themselves validate.
+// and that credentials are present in lane.CredClasses.
+// It rejects raw values, URLs, paths, whitespace, equals signs, extra colons,
+// assignments, and embedded payloads. Nil or empty resources return nil
+// if lane capabilities themselves validate.
 func ValidateResources(resources Resources, lane LaneCaps) error {
 	seen := make(map[string]bool)
 	for _, r := range resources {

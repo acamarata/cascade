@@ -3,11 +3,21 @@ package background
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 )
 
 // ErrInvalidSwarmBranch is returned when inputs for swarm branch creation are invalid.
 var ErrInvalidSwarmBranch = errors.New("invalid swarm branch")
+
+// ErrInvalidBase is returned when the base branch does not exist.
+var ErrInvalidBase = errors.New("D2221: invalid base")
+
+// ErrSwarmBranchExists is returned when the target swarm branch already exists.
+var ErrSwarmBranchExists = errors.New("D2222: swarm branch exists")
+
+// ErrSwarmBranchCreate is returned when branch creation fails.
+var ErrSwarmBranchCreate = errors.New("D2223: swarm branch create failed")
 
 // GitOps defines the interface for local git operations used by swarm branch creation.
 type GitOps interface {
@@ -81,17 +91,20 @@ func CreateSwarmBranch(g GitOps, base, run, id string) (string, error) {
 
 	branchName := "swarm/" + run + "/" + id
 
+	// Check if base exists
 	if !g.RefExists(actualBase) {
-		return "", ErrInvalidSwarmBranch
+		return "", ErrInvalidBase
 	}
 
+	// Check if destination branch already exists
 	if g.RefExists(branchName) {
-		return branchName, nil
+		return "", ErrSwarmBranchExists
 	}
 
+	// Create the branch
 	err := g.CreateBranch(branchName, actualBase)
 	if err != nil {
-		return "", ErrInvalidSwarmBranch
+		return "", fmt.Errorf("%w: %v", ErrSwarmBranchCreate, err)
 	}
 
 	return branchName, nil

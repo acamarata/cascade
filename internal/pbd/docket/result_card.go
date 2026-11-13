@@ -60,9 +60,13 @@ func Render(c CommitInfo) (string, error) {
 
 // BuildResultCard formats a CommitInfo into a human-readable result card.
 // It renders "files:\n" followed by "- " and each file, then "decls:\n"
-// followed by "- " and each declaration. An empty Decls slice produces
-// the header with no entries. Returns ErrCardEmpty if Files is empty,
-// ErrCardInput if validation fails or the output exceeds Cap.
+// followed by "- " and each declaration. The total output including headers
+// and final newline must not exceed Cap bytes. If full rendering exceeds Cap,
+// whole entries are dropped from the end of the flattened Decls-then-Files
+// order until the card fits, and a "[truncated]\n" marker is appended.
+// Both headers are always kept even if all entries are removed.
+// An exactly Cap-byte full card is unchanged with no marker.
+// Returns ErrCardEmpty if Files is empty, ErrCardInput if validation fails.
 func BuildResultCard(c CommitInfo) (string, error) {
 	if len(c.Files) == 0 {
 		return "", ErrCardEmpty
@@ -75,26 +79,58 @@ func BuildResultCard(c CommitInfo) (string, error) {
 		return "", err
 	}
 
-	var b strings.Builder
-	b.WriteString("files:\n")
+	const filesHeader = "files:\n"
+	const declsHeader = "decls:\n"
+	const truncMarker = "[truncated]\n"
+
+	type entry struct {
+		text   string
+		isDecl bool
+	}
+	all := make([]entry, 0, len(c.Decls)+len(c.Files))
 	for _, f := range c.Files {
-		b.WriteString("- ")
-		b.WriteString(f)
-		b.WriteByte('\n')
+		all = append(all, entry{text: f, isDecl: false})
 	}
-	b.WriteString("decls:\n")
 	for _, d := range c.Decls {
-		b.WriteString("- ")
-		b.WriteString(d)
-		b.WriteByte('\n')
+		all = append(all, entry{text: d, isDecl: true})
 	}
 
-	out := b.String()
-	if len(out) > Cap {
-		return "", ErrCardInput
+	render := func(entries []entry) string {
+		var b strings.Builder
+		b.WriteString(filesHeader)
+		for _, e := range entries {
+			if !e.isDecl {
+				b.WriteString("- ")
+				b.WriteString(e.text)
+				b.WriteByte('\n')
+			}
+		}
+		b.WriteString(declsHeader)
+		for _, e := range entries {
+			if e.isDecl {
+				b.WriteString("- ")
+				b.WriteString(e.text)
+				b.WriteByte('\n')
+			}
+		}
+		return b.String()
 	}
 
-	return out, nil
+	full := render(all)
+	if len(full) <= Cap {
+		return full, nil
+	}
+
+	kept := len(all)
+	for kept > 0 {
+		kept--
+		candidate := render(all[:kept])
+		if len(candidate)+len(truncMarker) <= Cap {
+			return candidate + truncMarker, nil
+		}
+	}
+
+	return filesHeader + declsHeader + truncMarker, nil
 }
 
 func validateList(list []string) error {

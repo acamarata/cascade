@@ -42,7 +42,13 @@ var (
 )
 
 // RecordStaleBinaryRelaunch records a stale binary relaunch for the given role.
+// If the role is RoleSupervisor, it returns ErrSupervisorRelaunchForbidden immediately
+// without inspecting or calling the log, as supervisor running state is caller-owned.
 func RecordStaleBinaryRelaunch(role Role, binaryID string, log ManagerLog) error {
+	if role == RoleSupervisor {
+		return ErrSupervisorRelaunchForbidden
+	}
+
 	switch role {
 	case RoleManager:
 		if strings.TrimSpace(binaryID) == "" {
@@ -60,8 +66,6 @@ func RecordStaleBinaryRelaunch(role Role, binaryID string, log ManagerLog) error
 			return errors.Join(ErrManagerLogUnavailable, err)
 		}
 		return nil
-	case RoleSupervisor:
-		return ErrSupervisorRelaunchForbidden
 	default:
 		return ErrInvalidRelaunch
 	}

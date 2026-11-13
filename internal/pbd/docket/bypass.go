@@ -44,6 +44,10 @@ func Bypass(in BypassInput) (BypassDecision, error) {
 		return BypassDecision{Admitted: true, Bypassed: false}, nil
 	}
 
+	// At or beyond limit, bypass is permitted only when:
+	// - the request is Hot
+	// - GateDeadlines >= 3
+	// - RunSeats == 0
 	if in.Hot && in.GateDeadlines >= 3 && in.RunSeats == 0 {
 		return BypassDecision{Admitted: true, Bypassed: true}, nil
 	}

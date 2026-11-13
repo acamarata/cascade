@@ -84,3 +84,45 @@ func (s *SubSend) Context(chatID string) string {
 	}
 	return s.ctxs[chatID]
 }
+
+// Send appends job verbatim to the chat's queue.
+// Send on nil/unknown/blank chat returns unknown-chat Error;
+// Send on a known chat with blank/whitespace-only job returns empty-job Error.
+// Validation never mutates queues/context.
+func (s *SubSend) Send(chatID, job string) error {
+	if s == nil || s.ctxs == nil {
+		return ErrUnknownChat
+	}
+	if strings.TrimSpace(chatID) == "" {
+		return ErrUnknownChat
+	}
+	if _, exists := s.ctxs[chatID]; !exists {
+		return ErrUnknownChat
+	}
+	if strings.TrimSpace(job) == "" {
+		return ErrEmptyJob
+	}
+	if s.queues == nil {
+		s.queues = make(map[string][]string)
+	}
+	s.queues[chatID] = append(s.queues[chatID], job)
+	return nil
+}
+
+// Run returns and clears the job queue for the given chat ID.
+// It returns a non-nil empty slice if the queue is empty or was just cleared.
+// It returns nil for unknown chat IDs or nil receivers.
+func (s *SubSend) Run(chatID string) []string {
+	if s == nil || s.queues == nil {
+		return nil
+	}
+	q, exists := s.queues[chatID]
+	if !exists {
+		return nil
+	}
+	s.queues[chatID] = nil
+	if q == nil {
+		return []string{}
+	}
+	return q
+}
