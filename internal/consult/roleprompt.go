@@ -69,20 +69,59 @@ func LoadRolePrompt(dir, role string) string {
 		return fallback
 	}
 
+	if !utf8.Valid(data) {
+		return fallback
+	}
+
 	body := string(data)
 	body = strings.TrimPrefix(body, "\xef\xbb\xbf")
 	body = strings.ReplaceAll(body, "\r\n", "\n")
+
+	body = stripFrontMatter(body)
 	body = strings.TrimSpace(body)
 
 	if body == "" {
 		return fallback
 	}
 
-	if utf8.RuneCountInString(body) > 5000 {
-		return fallback
-	}
+	body = truncateRunes(body, 5000)
 
 	return body
+}
+
+// stripFrontMatter removes a leading YAML-style front matter block delimited
+// by lines containing exactly "---". If the opening delimiter is present but
+// no closing delimiter follows, the entire content is discarded (returns "").
+func stripFrontMatter(s string) string {
+	if !strings.HasPrefix(s, "---\n") && s != "---" {
+		return s
+	}
+	rest := s[4:]
+	idx := strings.Index(rest, "\n---\n")
+	if idx >= 0 {
+		return rest[idx+5:]
+	}
+	if strings.HasSuffix(rest, "\n---") {
+		return rest[:len(rest)-4]
+	}
+	if rest == "---" {
+		return ""
+	}
+	return ""
+}
+
+// truncateRunes returns the first maxRunes Unicode code points of s.
+func truncateRunes(s string, maxRunes int) string {
+	count := utf8.RuneCountInString(s)
+	if count <= maxRunes {
+		return s
+	}
+	byteIdx := 0
+	for i := 0; i < maxRunes; i++ {
+		_, size := utf8.DecodeRuneInString(s[byteIdx:])
+		byteIdx += size
+	}
+	return s[:byteIdx]
 }
 
 func validRole(role string) bool {
