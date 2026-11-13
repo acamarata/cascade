@@ -32,7 +32,17 @@ func TestCallerSitesAreWiredOnceTheirFileExists(t *testing.T) {
 		t.Fatal(err) // fail closed: an unreadable allow list blocks, never skips
 	}
 
-	broken, err := CheckCallerSitesWired(root, deadcodeModulePath, allow)
+	manifest := filepath.Join(root, "internal", "build", closedTicketManifestPath)
+	known, err := LoadKnownTicketIDs(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed, err := LoadClosedTicketManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	broken, err := checkCallerSitesByTicketState(root, deadcodeModulePath, allow, known, closed)
 	if err != nil {
 		t.Fatalf("test-only gate: checking caller sites: %v", err)
 	}

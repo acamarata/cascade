@@ -43,8 +43,22 @@ type BrokenCallerSite struct {
 // through its qualified selector without that scan). Both reuse the exact
 // declared/used collectors the rest of this gate already computes with.
 func CheckCallerSitesWired(moduleRoot, modulePath string, allow map[string]TestOnlyAllowEntry) ([]BrokenCallerSite, error) {
+	return checkCallerSitesByTicketState(moduleRoot, modulePath, allow, nil, nil)
+}
+
+// checkCallerSitesByTicketState is CheckCallerSitesWired with the retire
+// ticket's state: a row whose retire_ticket is known to the plan but not
+// closed is skipped, because its ticket has not finished and a later
+// ticket may still add the call. A row whose retire_ticket is closed, or
+// is absent from known (UNOWNED, a typo, a capability key), is checked in
+// full. Nil sets make every row checked.
+func checkCallerSitesByTicketState(moduleRoot, modulePath string, allow map[string]TestOnlyAllowEntry,
+	known, closed map[string]bool) ([]BrokenCallerSite, error) {
 	var broken []BrokenCallerSite
 	for key, e := range allow {
+		if known[e.RetireTicket] && !closed[e.RetireTicket] {
+			continue
+		}
 		full := filepath.Join(moduleRoot, e.CallerSite)
 		info, statErr := os.Stat(full)
 		if statErr != nil || info.IsDir() {
