@@ -1,8 +1,5 @@
 package parity
 
-// Matrix is a slice of row status strings.
-type Matrix []string
-
 // Summary holds the counts of each row kind in a parity ledger.
 type Summary struct {
 	Parity int
@@ -10,11 +7,11 @@ type Summary struct {
 	Waived int
 }
 
-// Summarize tallies the rows of a Matrix into a Summary.
+// Summarize tallies the rows of a Matrix into a Summary by their Status.
 func Summarize(m Matrix) Summary {
 	var s Summary
-	for _, r := range m {
-		switch r {
+	for _, r := range m.Rows {
+		switch r.Status {
 		case "parity":
 			s.Parity++
 		case "gap":
