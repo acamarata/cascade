@@ -25,10 +25,10 @@ var ErrInvalidGCISection = errors.New("invalid gci section")
 // AssembleGCIBlock assembles sections into a formatted GCI block string.
 // Binding sections are placed first, preserving input order within each group.
 // Each section is rendered as "# "+Name+"\n"+Body, joined by "\n\n".
+// If omissions is non-empty and sections are present, it is appended as a final "# Omissions" section.
 // Returns "", ErrInvalidGCISection for blank/whitespace-only Name or Body or duplicate Names.
 // Returns "", nil for nil/empty sections.
-// The omissions parameter is accepted for interface compatibility but currently unused.
-func AssembleGCIBlock(sections []GCISection, _ string) (string, error) {
+func AssembleGCIBlock(sections []GCISection, omissions string) (string, error) {
 	if len(sections) == 0 {
 		return "", nil
 	}
@@ -62,6 +62,13 @@ func AssembleGCIBlock(sections []GCISection, _ string) (string, error) {
 	}
 
 	result := strings.Join(parts, "\n\n")
+
+	if omissions != "" {
+		if result != "" {
+			result += "\n\n"
+		}
+		result += "# Omissions\n" + omissions
+	}
 
 	tokens := (len(result) + 3) / 4
 	if tokens > 1200 {
