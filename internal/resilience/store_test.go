@@ -18,22 +18,13 @@ func TestStoreTypesCompile(_ *testing.T) {
 	// Struct field checks
 	now := time.Now()
 
-	m := Meta{}
-	_ = m
-
 	w := Wait{Since: now, Kind: WaitingDisk}
 	_ = w.Since
 	_ = w.Kind
 
-	hb := Heartbeat{}
-	_ = hb
-
 	r := Restart{Count: 1, Last: now}
 	_ = r.Count
 	_ = r.Last
-
-	s := Stall{}
-	_ = s
 
 	ev := Event{At: now}
 	_ = ev.At

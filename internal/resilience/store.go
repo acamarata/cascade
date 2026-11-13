@@ -17,26 +17,17 @@ const (
 	WaitingOwner
 )
 
-// Meta holds metadata about the resilience store.
-type Meta struct{}
-
 // Wait represents a wait condition with a start time and kind.
 type Wait struct {
 	Since time.Time
 	Kind  WaitKind
 }
 
-// Heartbeat represents a heartbeat signal from a process.
-type Heartbeat struct{}
-
 // Restart tracks restart attempts and the last restart time.
 type Restart struct {
 	Count int
 	Last  time.Time
 }
-
-// Stall represents a stall condition in a process.
-type Stall struct{}
 
 // Event represents a timed event in the process lifecycle.
 type Event struct {
