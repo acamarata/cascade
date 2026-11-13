@@ -92,7 +92,7 @@ func newMemHandler(t *testing.T, store provider.Store, p *memProvider) (*rpc.Reg
 	reg, clock := rpc.NewRegistry(), runtime.NewSystemClock()
 	fan := NewConductorFanOut(store, clock)
 	if err := RegisterConductorExecuteHandler(reg, NewManifest(nil, clock), laneReader{}, laneQuota{}, memResolver{p},
-		newTestAuditWriter(t), clock, fullSecurity(t), ConductorAccounting{}, fan); err != nil {
+		newTestAuditWriter(t), clock, fullSecurity(t), ConductorAccounting{Reserver: passReserver{}}, fan); err != nil {
 		t.Fatal(err)
 	}
 	return reg, fan
