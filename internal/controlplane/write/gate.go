@@ -28,3 +28,9 @@ func RunGate(open bool, reason string) (Decision, error) {
 	}
 	return Decision{Allowed: false, Reason: reason}, nil
 }
+
+// RunStop signals the end of a turn without invoking any tool, network or CLI action.
+// It always returns true and nil, representing an end_turn terminal reason for callers to map.
+func RunStop() (turnEnded bool, err error) {
+	return true, nil
+}
