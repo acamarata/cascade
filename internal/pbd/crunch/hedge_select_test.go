@@ -44,7 +44,7 @@ func TestHedgeSkipsFasterRed(t *testing.T) {
 func TestHedgeCancelsLoser(t *testing.T) {
 	bCancelled := make(chan struct{})
 
-	run := func(ctx context.Context, ticket HedgeTicket, model string) (HedgeResult, error) {
+	run := func(ctx context.Context, _ HedgeTicket, model string) (HedgeResult, error) {
 		switch model {
 		case "A":
 			return HedgeResult{Green: true}, nil

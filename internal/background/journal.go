@@ -42,7 +42,7 @@ type RetryVerdictSink interface {
 }
 
 // JournalRetry validates and records a retry entry into the journal.
-func JournalRetry(entry RetryEntry, journal RetryJournal, verdict RetryVerdictSink) error {
+func JournalRetry(entry RetryEntry, journal RetryJournal, _ RetryVerdictSink) error {
 	if journal == nil {
 		return ErrInvalidRetryEntry
 	}

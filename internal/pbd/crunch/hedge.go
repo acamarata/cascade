@@ -49,27 +49,13 @@ func Hedge(ctx context.Context, t HedgeTicket, modelA, modelB string, run HedgeR
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	type outcome struct {
-		model string
-		res   HedgeResult
-		err   error
-	}
-
-	ch := make(chan outcome, 2)
+	ch := make(chan hedgeOutcome, 2)
 
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	go func() {
-		defer wg.Done()
-		res, err := run(ctx, t, modelA)
-		ch <- outcome{modelA, res, err}
-	}()
-	go func() {
-		defer wg.Done()
-		res, err := run(ctx, t, modelB)
-		ch <- outcome{modelB, res, err}
-	}()
+	go hedgeLaunch(ctx, &wg, ch, t, modelA, run)
+	go hedgeLaunch(ctx, &wg, ch, t, modelB, run)
 
 	var errA, errB error
 
@@ -82,17 +68,9 @@ func Hedge(ctx context.Context, t HedgeTicket, modelA, modelB string, run HedgeR
 				return o.res, nil
 			}
 			if o.model == modelA {
-				if o.err == nil {
-					errA = ErrHedgeRed
-				} else {
-					errA = o.err
-				}
+				errA = hedgeFailure(o.err)
 			} else {
-				if o.err == nil {
-					errB = ErrHedgeRed
-				} else {
-					errB = o.err
-				}
+				errB = hedgeFailure(o.err)
 			}
 		case <-ctx.Done():
 			wg.Wait()
@@ -102,4 +80,26 @@ func Hedge(ctx context.Context, t HedgeTicket, modelA, modelB string, run HedgeR
 
 	wg.Wait()
 	return HedgeResult{}, errors.Join(errA, errB)
+}
+
+// hedgeOutcome is one model's finished run.
+type hedgeOutcome struct {
+	model string
+	res   HedgeResult
+	err   error
+}
+
+// hedgeLaunch runs one model and reports its outcome on ch.
+func hedgeLaunch(ctx context.Context, wg *sync.WaitGroup, ch chan<- hedgeOutcome, t HedgeTicket, model string, run HedgeRunFunc) {
+	defer wg.Done()
+	res, err := run(ctx, t, model)
+	ch <- hedgeOutcome{model, res, err}
+}
+
+// hedgeFailure maps a non-green outcome's error to the error recorded for it.
+func hedgeFailure(err error) error {
+	if err == nil {
+		return ErrHedgeRed
+	}
+	return err
 }

@@ -8,22 +8,28 @@ import (
 	"unicode/utf8"
 )
 
-// TestRolePromptPerRoleDiffers verifies that LoadRolePrompt yields distinct
-// results for Critic and Judge roles on repeated reads with no cache/state,
-// that missing files yield exact distinct built-ins, and that no home
-// expansion occurs.
-func TestRolePromptPerRoleDiffers(t *testing.T) {
+const (
+	perRoleCriticBody = "You are the critic reviewer."
+	perRoleJudgeBody  = "You are the judge evaluator."
+)
+
+// writePerRoleFiles writes Critic.md and Judge.md into a fresh temp dir.
+func writePerRoleFiles(t *testing.T) string {
+	t.Helper()
 	dir := t.TempDir()
-
-	criticBody := "You are the critic reviewer."
-	judgeBody := "You are the judge evaluator."
-
-	if err := os.WriteFile(filepath.Join(dir, "Critic.md"), []byte(criticBody), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "Critic.md"), []byte(perRoleCriticBody), 0o644); err != nil {
 		t.Fatalf("write Critic.md: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "Judge.md"), []byte(judgeBody), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "Judge.md"), []byte(perRoleJudgeBody), 0o644); err != nil {
 		t.Fatalf("write Judge.md: %v", err)
 	}
+	return dir
+}
+
+// TestRolePromptPerRoleDiffers verifies that LoadRolePrompt yields distinct
+// results for Critic and Judge roles on repeated reads with no cache/state.
+func TestRolePromptPerRoleDiffers(t *testing.T) {
+	dir := writePerRoleFiles(t)
 
 	// Distinct bodies yield distinct results on repeated reads.
 	c1 := LoadRolePrompt(dir, "Critic")
@@ -48,8 +54,11 @@ func TestRolePromptPerRoleDiffers(t *testing.T) {
 			t.Fatalf("STOP: role %s prompt exceeds 5000 Unicode code points (%d)", name, utf8.RuneCountInString(prompt))
 		}
 	}
+}
 
-	// Missing files yield exact distinct built-ins.
+// TestRolePromptMissingFilesBuiltins verifies that missing files yield exact
+// distinct built-ins and that no home expansion occurs.
+func TestRolePromptMissingFilesBuiltins(t *testing.T) {
 	emptyDir := t.TempDir()
 	mc := LoadRolePrompt(emptyDir, "Critic")
 	mj := LoadRolePrompt(emptyDir, "Judge")
@@ -68,14 +77,20 @@ func TestRolePromptPerRoleDiffers(t *testing.T) {
 	if strings.Contains(mj, "~") && strings.HasPrefix(mj, "~") {
 		t.Error("home expansion detected in Judge built-in")
 	}
+}
 
-	// Role containing path separators falls back to the built-in.
+// TestRolePromptPathSeparatorFallsBack verifies that a role containing path
+// separators falls back to the built-in.
+func TestRolePromptPathSeparatorFallsBack(t *testing.T) {
+	dir := writePerRoleFiles(t)
+	emptyDir := t.TempDir()
+
 	slash := LoadRolePrompt(dir, "../Critic")
 	expectedSlash := LoadRolePrompt(emptyDir, "../Critic")
 	if slash != expectedSlash {
 		t.Errorf("role with path separator did not fall back to built-in; got %q, want %q", slash, expectedSlash)
 	}
-	if slash == criticBody {
+	if slash == perRoleCriticBody {
 		t.Error("role with path separator read file from dir; expected built-in fallback")
 	}
 }

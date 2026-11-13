@@ -1,3 +1,5 @@
+// Package yamlstrict loads epic, ticket and sport YAML with strict validation,
+// rejecting malformed input and duplicate keys.
 package yamlstrict
 
 import (
@@ -30,7 +32,7 @@ func LoadStrict(kind string, data []byte, out any) error {
 	}
 
 	v := reflect.ValueOf(out)
-	if v.Kind() != reflect.Ptr {
+	if v.Kind() != reflect.Pointer {
 		return ErrInvalidYAMLInput
 	}
 	if v.IsNil() {

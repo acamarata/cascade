@@ -18,7 +18,11 @@ func TestLockPreventsModification(t *testing.T) {
 	if err := LockTrees(root); err != nil {
 		t.Fatalf("LockTrees: %v", err)
 	}
-	defer UnlockTrees(root)
+	defer func() {
+		if err := UnlockTrees(root); err != nil {
+			t.Fatalf("UnlockTrees: %v", err)
+		}
+	}()
 
 	if err := CheckWritable(root); !errors.Is(err, ErrTreeLocked) {
 		t.Errorf("CheckWritable(root) = %v, want ErrTreeLocked", err)
@@ -51,7 +55,11 @@ func TestLockMultiplePaths(t *testing.T) {
 	if err := LockTrees(dir1, dir2); err != nil {
 		t.Fatalf("LockTrees: %v", err)
 	}
-	defer UnlockTrees(dir1, dir2)
+	defer func() {
+		if err := UnlockTrees(dir1, dir2); err != nil {
+			t.Fatalf("UnlockTrees: %v", err)
+		}
+	}()
 
 	if err := CheckWritable(dir1); !errors.Is(err, ErrTreeLocked) {
 		t.Errorf("CheckWritable(dir1) = %v, want ErrTreeLocked", err)

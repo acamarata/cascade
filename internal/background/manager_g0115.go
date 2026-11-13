@@ -12,6 +12,7 @@ type Pass struct {
 // Action represents a signal action returned by Decide.
 type Action string
 
+// Actions returned by Decide.
 const (
 	ActionRestart Action = "restart"
 	ActionKill    Action = "kill"

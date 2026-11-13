@@ -6,16 +6,21 @@ import (
 	"time"
 )
 
+// newReportEnv returns an ExecEnv whose clock reads *now.
+func newReportEnv(now *time.Time) *ExecEnv {
+	return &ExecEnv{
+		Now:   func() time.Time { return *now },
+		Quota: func(string) error { return nil },
+	}
+}
+
 // TestStatus429TriggersTenMinuteCooldown verifies that ReportStatus with 429
 // sets a 10-minute cooldown, repeated 429s extend it, other statuses are no-ops,
-// another lane is unaffected, and invalid inputs return ErrInvalidGuard.
+// and another lane is unaffected.
 func TestStatus429TriggersTenMinuteCooldown(t *testing.T) {
 	base := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	now := base
-	e := &ExecEnv{
-		Now:   func() time.Time { return now },
-		Quota: func(lane string) error { return nil },
-	}
+	e := newReportEnv(&now)
 
 	lane := "api"
 
@@ -62,41 +67,39 @@ func TestStatus429TriggersTenMinuteCooldown(t *testing.T) {
 	if _, ok := e.cooldownUntil[otherLane]; ok {
 		t.Fatal("non-429 status should not create cooldown entry for other lane")
 	}
+}
 
-	// Invalid inputs return ErrInvalidGuard without mutation.
+// TestReportStatusInvalidInputsReturnErrInvalidGuard verifies that invalid
+// inputs return ErrInvalidGuard without mutating state.
+func TestReportStatusInvalidInputsReturnErrInvalidGuard(t *testing.T) {
+	base := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	now := base
+	e := newReportEnv(&now)
+	lane := "api"
+
+	if err := e.ReportStatus(lane, 429); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	existingDeadline := e.cooldownUntil[lane]
 
-	// Nil receiver.
 	var nilEnv *ExecEnv
-	if err := nilEnv.ReportStatus(lane, 429); !errors.Is(err, ErrInvalidGuard) {
-		t.Fatalf("nil receiver: expected ErrInvalidGuard, got %v", err)
+	cases := []struct {
+		name   string
+		env    *ExecEnv
+		lane   string
+		status int
+	}{
+		{"nil receiver", nilEnv, lane, 429},
+		{"empty lane", e, "", 429},
+		{"status 99", e, lane, 99},
+		{"status 600", e, lane, 600},
+		{"nil Now", &ExecEnv{Quota: func(string) error { return nil }}, lane, 429},
+		{"nil Quota", &ExecEnv{Now: func() time.Time { return now }}, lane, 429},
 	}
-
-	// Empty lane.
-	if err := e.ReportStatus("", 429); !errors.Is(err, ErrInvalidGuard) {
-		t.Fatalf("empty lane: expected ErrInvalidGuard, got %v", err)
-	}
-
-	// Status below 100.
-	if err := e.ReportStatus(lane, 99); !errors.Is(err, ErrInvalidGuard) {
-		t.Fatalf("status 99: expected ErrInvalidGuard, got %v", err)
-	}
-
-	// Status above 599.
-	if err := e.ReportStatus(lane, 600); !errors.Is(err, ErrInvalidGuard) {
-		t.Fatalf("status 600: expected ErrInvalidGuard, got %v", err)
-	}
-
-	// Nil Now.
-	eNoNow := &ExecEnv{Quota: func(string) error { return nil }}
-	if err := eNoNow.ReportStatus(lane, 429); !errors.Is(err, ErrInvalidGuard) {
-		t.Fatalf("nil Now: expected ErrInvalidGuard, got %v", err)
-	}
-
-	// Nil Quota.
-	eNoQuota := &ExecEnv{Now: func() time.Time { return now }}
-	if err := eNoQuota.ReportStatus(lane, 429); !errors.Is(err, ErrInvalidGuard) {
-		t.Fatalf("nil Quota: expected ErrInvalidGuard, got %v", err)
+	for _, c := range cases {
+		if err := c.env.ReportStatus(c.lane, c.status); !errors.Is(err, ErrInvalidGuard) {
+			t.Fatalf("%s: expected ErrInvalidGuard, got %v", c.name, err)
+		}
 	}
 
 	// Verify state was not mutated by invalid calls.

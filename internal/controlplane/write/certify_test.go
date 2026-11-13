@@ -13,10 +13,10 @@ func TestCertifyWriteBeforeRead(t *testing.T) {
 			}
 			return nil
 		},
-		Read: func(id string) (string, error) {
+		Read: func(_ string) (string, error) {
 			return "data", nil
 		},
-		Validate: func(id, data string) (string, error) {
+		Validate: func(_, _ string) (string, error) {
 			return "ok", nil
 		},
 	}
@@ -38,7 +38,7 @@ func TestCertifyWriteFailureStopsRead(t *testing.T) {
 	readCalled := false
 	validateCalled := false
 	s := Steps{
-		Write: func(id string) error {
+		Write: func(_ string) error {
 			return errors.New("write failed")
 		},
 		Read: func(id string) (string, error) {

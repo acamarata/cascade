@@ -15,7 +15,7 @@ func (tv *trackingVerifier) FreeNodes() ([]string, error) {
 	return []string{"node1"}, nil
 }
 
-func (tv *trackingVerifier) Verify(target VerifyTarget, commands []string) error {
+func (tv *trackingVerifier) Verify(_ VerifyTarget, commands []string) error {
 	tv.verifyCalled = true
 	return nil
 }

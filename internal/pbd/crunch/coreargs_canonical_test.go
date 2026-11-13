@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-// TestExtractCoreArgsMatchesRunOnce validates the canonical fixture and edge cases.
-func TestExtractCoreArgsMatchesRunOnce(t *testing.T) {
-	t.Run("canonical fixture", func(t *testing.T) {
+// TestExtractCoreArgsCanonicalFixture validates the canonical fixture.
+func TestExtractCoreArgsCanonicalFixture(t *testing.T) {
+	{
 		fixture := []string{
 			"--dir", "/work",
 			"--verify=go test ./...",
@@ -28,9 +28,12 @@ func TestExtractCoreArgsMatchesRunOnce(t *testing.T) {
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("got %+v, want %+v", got, want)
 		}
-	})
+	}
+}
 
-	t.Run("both forms work", func(t *testing.T) {
+// TestExtractCoreArgsBothForms validates both flag forms.
+func TestExtractCoreArgsBothForms(t *testing.T) {
+	{
 		args := []string{"--dir=/tmp", "--verify", "true"}
 		got, err := ExtractCoreArgs(args)
 		if err != nil {
@@ -39,9 +42,12 @@ func TestExtractCoreArgsMatchesRunOnce(t *testing.T) {
 		if got.Dir != "/tmp" || got.Verify != "true" {
 			t.Errorf("got %+v", got)
 		}
-	})
+	}
+}
 
-	t.Run("defaults", func(t *testing.T) {
+// TestExtractCoreArgsDefaults validates default values.
+func TestExtractCoreArgsDefaults(t *testing.T) {
+	{
 		args := []string{"--dir=/tmp", "--prompt=hi"}
 		got, err := ExtractCoreArgs(args)
 		if err != nil {
@@ -53,9 +59,12 @@ func TestExtractCoreArgsMatchesRunOnce(t *testing.T) {
 		if got.Scope != nil {
 			t.Errorf("expected nil Scope, got %v", got.Scope)
 		}
-	})
+	}
+}
 
-	t.Run("input slice unchanged", func(t *testing.T) {
+// TestExtractCoreArgsInputUnchanged validates the input slice is not modified.
+func TestExtractCoreArgsInputUnchanged(t *testing.T) {
+	{
 		fixture := []string{"--dir", "/work", "--verify=go test ./...", "--prompt", "fix bug", "--scope=a.go", "--scope", "b.go"}
 		orig := make([]string, len(fixture))
 		copy(orig, fixture)
@@ -63,5 +72,5 @@ func TestExtractCoreArgsMatchesRunOnce(t *testing.T) {
 		if !reflect.DeepEqual(fixture, orig) {
 			t.Errorf("input slice was modified: got %v, want %v", fixture, orig)
 		}
-	})
+	}
 }

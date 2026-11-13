@@ -23,7 +23,6 @@ func (f *fakeGitOps) CreateBranch(name, base string) error {
 }
 
 func TestSwarmBranchFromBase(t *testing.T) {
-	// nil gitops
 	t.Run("nil_gitops", func(t *testing.T) {
 		branch, err := CreateSwarmBranch(nil, "main", "r1", "t1")
 		if branch != "" {
@@ -34,49 +33,28 @@ func TestSwarmBranchFromBase(t *testing.T) {
 		}
 	})
 
-	// invalid base
-	t.Run("invalid_base_whitespace", func(t *testing.T) {
-		branch, err := CreateSwarmBranch(&fakeGitOps{}, "   ", "r1", "t1")
-		if branch != "" {
-			t.Errorf("expected empty branch, got %q", branch)
-		}
-		if !errors.Is(err, ErrInvalidSwarmBranch) {
-			t.Errorf("expected ErrInvalidSwarmBranch, got %v", err)
-		}
-	})
+	cases := []struct {
+		name, base, run, id string
+	}{
+		{"invalid_base_whitespace", "   ", "r1", "t1"},
+		{"invalid_base_dot", "main.", "r1", "t1"},
+		{"invalid_run", "main", "r1/x", "t1"},
+		{"invalid_id", "main", "r1", "t1/x"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			branch, err := CreateSwarmBranch(&fakeGitOps{}, tc.base, tc.run, tc.id)
+			if branch != "" {
+				t.Errorf("expected empty branch, got %q", branch)
+			}
+			if !errors.Is(err, ErrInvalidSwarmBranch) {
+				t.Errorf("expected ErrInvalidSwarmBranch, got %v", err)
+			}
+		})
+	}
+}
 
-	t.Run("invalid_base_dot", func(t *testing.T) {
-		branch, err := CreateSwarmBranch(&fakeGitOps{}, "main.", "r1", "t1")
-		if branch != "" {
-			t.Errorf("expected empty branch, got %q", branch)
-		}
-		if !errors.Is(err, ErrInvalidSwarmBranch) {
-			t.Errorf("expected ErrInvalidSwarmBranch, got %v", err)
-		}
-	})
-
-	// invalid run
-	t.Run("invalid_run", func(t *testing.T) {
-		branch, err := CreateSwarmBranch(&fakeGitOps{}, "main", "r1/x", "t1")
-		if branch != "" {
-			t.Errorf("expected empty branch, got %q", branch)
-		}
-		if !errors.Is(err, ErrInvalidSwarmBranch) {
-			t.Errorf("expected ErrInvalidSwarmBranch, got %v", err)
-		}
-	})
-
-	// invalid id
-	t.Run("invalid_id", func(t *testing.T) {
-		branch, err := CreateSwarmBranch(&fakeGitOps{}, "main", "r1", "t1/x")
-		if branch != "" {
-			t.Errorf("expected empty branch, got %q", branch)
-		}
-		if !errors.Is(err, ErrInvalidSwarmBranch) {
-			t.Errorf("expected ErrInvalidSwarmBranch, got %v", err)
-		}
-	})
-
+func TestSwarmBranchFromBaseCreates(t *testing.T) {
 	// base="main", run="r1", id="t1"
 	t.Run("base_main_run_r1_id_t1", func(t *testing.T) {
 		g := &fakeGitOps{refs: map[string]bool{"main": true}}

@@ -61,22 +61,25 @@ func TestRestartBackoff(t *testing.T) {
 	}
 }
 
-// TestEventsTrim verifies that EmitEvent inserts events, TrimEvents deletes
-// events older than 14 days while preserving recent ones, RecordHeartbeat
-// updates the heartbeat timestamp, MarkSeenRunning inserts a row, and
-// RecordStall inserts a stall record.
-func TestEventsTrim(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-	db, err := Open(dbPath)
+// openEventsTestDB opens a fresh store in a temp dir and closes it on cleanup.
+func openEventsTestDB(t *testing.T) *DBStore {
+	t.Helper()
+	db, err := Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+// TestEventsTrim verifies that EmitEvent inserts events and TrimEvents deletes
+// events older than 14 days while preserving recent ones.
+func TestEventsTrim(t *testing.T) {
+	db := openEventsTestDB(t)
 
 	// Insert an old event (20 days ago)
 	oldTime := time.Now().UTC().Add(-20 * 24 * time.Hour)
-	err = db.EmitEvent(Event{At: oldTime})
+	err := db.EmitEvent(Event{At: oldTime})
 	if err != nil {
 		t.Fatalf("EmitEvent old failed: %v", err)
 	}
@@ -123,9 +126,15 @@ func TestEventsTrim(t *testing.T) {
 	if !at.Equal(recentTime) {
 		t.Errorf("Remaining event time mismatch: got %v, want %v", at, recentTime)
 	}
+}
+
+// TestEventZeroTimeAndHeartbeat verifies that EmitEvent accepts a zero time
+// and that RecordHeartbeat updates the heartbeat timestamp.
+func TestEventZeroTimeAndHeartbeat(t *testing.T) {
+	db := openEventsTestDB(t)
 
 	// EmitEvent with zero time should use current UTC time
-	err = db.EmitEvent(Event{})
+	err := db.EmitEvent(Event{})
 	if err != nil {
 		t.Fatalf("EmitEvent zero time failed: %v", err)
 	}
@@ -143,9 +152,15 @@ func TestEventsTrim(t *testing.T) {
 	if time.Since(hbAt) > time.Minute {
 		t.Errorf("Heartbeat timestamp too old: %v", hbAt)
 	}
+}
+
+// TestSeenRunningAndStall verifies that MarkSeenRunning inserts a row and
+// RecordStall inserts a stall record.
+func TestSeenRunningAndStall(t *testing.T) {
+	db := openEventsTestDB(t)
 
 	// MarkSeenRunning should insert into seen_running
-	err = db.MarkSeenRunning()
+	err := db.MarkSeenRunning()
 	if err != nil {
 		t.Fatalf("MarkSeenRunning failed: %v", err)
 	}

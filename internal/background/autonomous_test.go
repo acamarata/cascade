@@ -52,18 +52,23 @@ func TestNonAutonomousModeUnaffected(t *testing.T) {
 		t.Errorf("nil normal err = %v, want %v", err, ErrInvalidBoundaryRequest)
 	}
 
-	_, err = HandleBoundary(Mode("unknown"), req, normal)
-	if !errors.Is(err, ErrInvalidBoundaryRequest) {
-		t.Errorf("unknown mode err = %v, want %v", err, ErrInvalidBoundaryRequest)
-	}
+	checkRejectedModes(t, req, normal)
+}
 
-	_, err = HandleBoundary(Mode(""), req, normal)
-	if !errors.Is(err, ErrInvalidBoundaryRequest) {
-		t.Errorf("empty mode err = %v, want %v", err, ErrInvalidBoundaryRequest)
+func checkRejectedModes(t *testing.T, req BoundaryRequest, normal BoundaryNormal) {
+	t.Helper()
+	cases := []struct {
+		name string
+		mode Mode
+	}{
+		{"unknown mode", Mode("unknown")},
+		{"empty mode", Mode("")},
+		{"interactive mode", ModeInteractive},
 	}
-
-	_, err = HandleBoundary(ModeInteractive, req, normal)
-	if !errors.Is(err, ErrInvalidBoundaryRequest) {
-		t.Errorf("interactive mode err = %v, want %v", err, ErrInvalidBoundaryRequest)
+	for _, c := range cases {
+		_, err := HandleBoundary(c.mode, req, normal)
+		if !errors.Is(err, ErrInvalidBoundaryRequest) {
+			t.Errorf("%s err = %v, want %v", c.name, err, ErrInvalidBoundaryRequest)
+		}
 	}
 }

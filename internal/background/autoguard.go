@@ -27,6 +27,8 @@ func Guard(m Mode, call func() error) (suppressed bool, err error) {
 	case ModeInteractive:
 		err = call()
 		return false, err
+	case BoundaryModeNormal:
+		return false, ErrM1889
 	default:
 		return false, ErrM1889
 	}

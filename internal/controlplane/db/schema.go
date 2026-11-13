@@ -10,7 +10,7 @@ import (
 var ErrNotImplemented = errors.New("db: operation unavailable")
 
 // Migrate applies the database schema migrations to the given database.
-func Migrate(db *sql.DB) error {
+func Migrate(_ *sql.DB) error {
 	return ErrNotImplemented
 }
 

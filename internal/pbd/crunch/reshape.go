@@ -14,29 +14,38 @@ type ReshapeTicket struct {
 // ErrInvalidTicket indicates that a ticket or its references are invalid.
 var ErrInvalidTicket = errors.New("crunch: invalid ticket")
 
+// validateReshapeQueue rejects empty or duplicate IDs, empty parents and
+// blocked tickets without parents.
+func validateReshapeQueue(queue []ReshapeTicket) error {
+	seen := make(map[string]bool)
+	for _, t := range queue {
+		if t.ID == "" {
+			return ErrInvalidTicket
+		}
+		if seen[t.ID] {
+			return ErrInvalidTicket
+		}
+		seen[t.ID] = true
+		for _, p := range t.Parents {
+			if p == "" {
+				return ErrInvalidTicket
+			}
+		}
+		if t.Blocked && len(t.Parents) == 0 {
+			return ErrInvalidTicket
+		}
+	}
+	return nil
+}
+
 // ReshapeRequeue reorders tickets and populates assumed parents for blocked tickets.
 func ReshapeRequeue(queue []ReshapeTicket) ([]ReshapeTicket, error) {
 	if len(queue) == 0 {
 		return nil, nil
 	}
 
-	seen := make(map[string]bool)
-	for _, t := range queue {
-		if t.ID == "" {
-			return nil, ErrInvalidTicket
-		}
-		if seen[t.ID] {
-			return nil, ErrInvalidTicket
-		}
-		seen[t.ID] = true
-		for _, p := range t.Parents {
-			if p == "" {
-				return nil, ErrInvalidTicket
-			}
-		}
-		if t.Blocked && len(t.Parents) == 0 {
-			return nil, ErrInvalidTicket
-		}
+	if err := validateReshapeQueue(queue); err != nil {
+		return nil, err
 	}
 
 	var unblocked []ReshapeTicket

@@ -48,7 +48,7 @@ func RunGreens(args []string, current, baseline int, out io.Writer) int {
 	}
 
 	if current < baseline {
-		fmt.Fprintln(out, "dropped")
+		_, _ = fmt.Fprintln(out, "dropped")
 		return 1
 	}
 

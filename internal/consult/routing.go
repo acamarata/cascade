@@ -126,11 +126,7 @@ func UnmarshalContextMemory(data []byte) (*ContextMemory, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 
 	// Read opening '['
-	t, err := dec.Token()
-	if err != nil {
-		return nil, ErrInvalidContextMemory
-	}
-	if delim, ok := t.(json.Delim); !ok || delim != '[' {
+	if !expectDelim(dec, '[') {
 		return nil, ErrInvalidContextMemory
 	}
 
@@ -138,84 +134,20 @@ func UnmarshalContextMemory(data []byte) (*ContextMemory, error) {
 	seen := make(map[string]bool)
 
 	for dec.More() {
-		// Read opening '{'
-		t, err := dec.Token()
-		if err != nil {
+		ctxID, pref, ok := readPreferenceRecord(dec)
+		if !ok {
 			return nil, ErrInvalidContextMemory
 		}
-		if delim, ok := t.(json.Delim); !ok || delim != '{' {
-			return nil, ErrInvalidContextMemory
-		}
-
-		var ctxID, class, model string
-		seenKeys := make(map[string]bool)
-
-		for dec.More() {
-			keyT, err := dec.Token()
-			if err != nil {
-				return nil, ErrInvalidContextMemory
-			}
-			key, ok := keyT.(string)
-			if !ok {
-				return nil, ErrInvalidContextMemory
-			}
-			if seenKeys[key] {
-				return nil, ErrInvalidContextMemory
-			}
-			seenKeys[key] = true
-
-			valT, err := dec.Token()
-			if err != nil {
-				return nil, ErrInvalidContextMemory
-			}
-			val, ok := valT.(string)
-			if !ok {
-				return nil, ErrInvalidContextMemory
-			}
-
-			switch key {
-			case "context_id":
-				ctxID = val
-			case "class":
-				class = val
-			case "model":
-				model = val
-			default:
-				return nil, ErrInvalidContextMemory
-			}
-		}
-
-		// Read closing '}'
-		t, err = dec.Token()
-		if err != nil {
-			return nil, ErrInvalidContextMemory
-		}
-		if delim, ok := t.(json.Delim); !ok || delim != '}' {
-			return nil, ErrInvalidContextMemory
-		}
-
-		if len(seenKeys) != 3 {
-			return nil, ErrInvalidContextMemory
-		}
-
-		if strings.TrimSpace(ctxID) == "" || strings.TrimSpace(class) == "" || strings.TrimSpace(model) == "" {
-			return nil, ErrInvalidContextMemory
-		}
-
 		if seen[ctxID] {
 			return nil, ErrInvalidContextMemory
 		}
 		seen[ctxID] = true
 
-		m.preferences[ctxID] = RoutingPreference{Class: class, Model: model}
+		m.preferences[ctxID] = pref
 	}
 
 	// Read closing ']'
-	t, err = dec.Token()
-	if err != nil {
-		return nil, ErrInvalidContextMemory
-	}
-	if delim, ok := t.(json.Delim); !ok || delim != ']' {
+	if !expectDelim(dec, ']') {
 		return nil, ErrInvalidContextMemory
 	}
 
@@ -224,4 +156,72 @@ func UnmarshalContextMemory(data []byte) (*ContextMemory, error) {
 	}
 
 	return m, nil
+}
+
+// expectDelim reads the next token and reports whether it is the delimiter want.
+func expectDelim(dec *json.Decoder, want json.Delim) bool {
+	t, err := dec.Token()
+	if err != nil {
+		return false
+	}
+	delim, ok := t.(json.Delim)
+	return ok && delim == want
+}
+
+// readPreferenceRecord reads one {"context_id","class","model"} object with
+// exactly those three non-blank string keys, each appearing once.
+func readPreferenceRecord(dec *json.Decoder) (string, RoutingPreference, bool) {
+	if !expectDelim(dec, '{') {
+		return "", RoutingPreference{}, false
+	}
+
+	var ctxID, class, model string
+	seenKeys := make(map[string]bool)
+
+	for dec.More() {
+		keyT, err := dec.Token()
+		if err != nil {
+			return "", RoutingPreference{}, false
+		}
+		key, ok := keyT.(string)
+		if !ok || seenKeys[key] {
+			return "", RoutingPreference{}, false
+		}
+		seenKeys[key] = true
+
+		valT, err := dec.Token()
+		if err != nil {
+			return "", RoutingPreference{}, false
+		}
+		val, ok := valT.(string)
+		if !ok {
+			return "", RoutingPreference{}, false
+		}
+
+		switch key {
+		case "context_id":
+			ctxID = val
+		case "class":
+			class = val
+		case "model":
+			model = val
+		default:
+			return "", RoutingPreference{}, false
+		}
+	}
+
+	// Read closing '}'
+	if !expectDelim(dec, '}') {
+		return "", RoutingPreference{}, false
+	}
+
+	if len(seenKeys) != 3 {
+		return "", RoutingPreference{}, false
+	}
+
+	if strings.TrimSpace(ctxID) == "" || strings.TrimSpace(class) == "" || strings.TrimSpace(model) == "" {
+		return "", RoutingPreference{}, false
+	}
+
+	return ctxID, RoutingPreference{Class: class, Model: model}, true
 }
