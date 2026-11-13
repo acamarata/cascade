@@ -47,18 +47,14 @@ func TestStoreTypesCompile(_ *testing.T) {
 
 // TestOpenCreatesTables verifies that Open creates a SQLite database
 // with WAL mode, synchronous=FULL, and all required tables.
-func TestOpenCreatesTables(t *testing.T) {
-	// Test empty path returns error
-	_, err := Open("")
-	if err == nil {
+func TestOpenRejectsEmptyPath(t *testing.T) {
+	if _, err := Open(""); err == nil {
 		t.Fatal("Open with empty path should return error")
 	}
+}
 
-	// Create temp directory for test database
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	// Open database
+func TestOpenCreatesTables(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
 	db, err := Open(dbPath)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
@@ -124,7 +120,7 @@ func TestStoreWaitsKeepSince(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// SetWait should insert
 	err = db.SetWait(WaitingDisk)

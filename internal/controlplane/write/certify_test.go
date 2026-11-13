@@ -45,7 +45,7 @@ func TestCertifyWriteFailureStopsRead(t *testing.T) {
 			readCalled = true
 			return "", nil
 		},
-		Validate: func(_, data string) (string, error) {
+		Validate: func(_, _ string) (string, error) {
 			validateCalled = true
 			return "", nil
 		},
@@ -73,10 +73,10 @@ func TestCertifyValidationAfterWrite(t *testing.T) {
 		Write: func(_ string) error {
 			return nil
 		},
-		Read: func(id string) (string, error) {
+		Read: func(_ string) (string, error) {
 			return "data", nil
 		},
-		Validate: func(id, data string) (string, error) {
+		Validate: func(_, _ string) (string, error) {
 			return "ok", nil
 		},
 	}

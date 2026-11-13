@@ -11,7 +11,7 @@ type fakeModel struct {
 }
 
 // Call satisfies the Model interface.
-func (f *fakeModel) Call(_ context.Context, _ Rule, group []BatchFailureEvent) error {
+func (f *fakeModel) Call(_ context.Context, _ Rule, _ []BatchFailureEvent) error {
 	f.calls++
 	return nil
 }
