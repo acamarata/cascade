@@ -2,14 +2,12 @@
 
 package delegation
 
-// Purpose: the delegate and delegate_wait round trip over a real daemon
-// socket. An rpc.Handler with the access policy on serves both verbs on a
-// unix socket under a t.TempDir CASCADE_HOME; the caller principal is minted
-// by the daemon's principal.Minter and resolved from its header. The
-// delegation service runs with a bound collection under a daemon.Manifest,
-// and its spawner resolves the lane to a test-only driver registered through
-// agents.RegisterHarness, so no vendor CLI runs. Only the same principal
-// reads the addressed result back.
+// Purpose: delegate and delegate_wait over a real daemon socket under a
+// t.TempDir CASCADE_HOME, armed like the daemon's (owner-peer guard over a
+// SpawnRegistry), callers minted by principal.Minter, the lane resolved to a
+// test-only driver registered through agents.RegisterHarness (no vendor CLI).
+// Only the origin reads the addressed result back; a spawned child that drops
+// its principal token cannot act as the owner CLI.
 
 import (
 	"bytes"
@@ -18,7 +16,12 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"os"
+	"os/exec"
+	"slices"
 	"strings"
+	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -37,6 +40,7 @@ import (
 const (
 	socketHarness = "antigravity"
 	socketBinary  = "agy"
+	childVar      = "CASCADE_TEST_DELEGATED_CHILD" // set: this binary is the delegated child
 )
 
 var (
@@ -46,6 +50,8 @@ var (
 		Runtime: agents.RuntimeHarnessCLI, LaneID: agents.LanePrefix + socketHarness, ConfigDirVar: "TEST_AGENT_CONFIG_DIR",
 		Credentials: []agents.CredentialSpec{{Class: agents.CredentialSubscription}}, Binaries: []string{socketBinary}},
 		func(agents.SpawnSite) (provider.AgentProvider, error) { return socketDriver{}, nil })
+	spawns    = agents.NewSpawnRegistry() // the guard's live-spawn source, as daemonSpawns is the daemon's
+	guardOnce sync.Once                   // rpc.SetOwnerPeerGuard panics on a second call
 )
 
 // socketDriver is the test-only harness driver: every job is accepted at once.
@@ -104,11 +110,12 @@ func newSocketDaemon(t *testing.T) *socketDaemon {
 	err = d.svc.BindCollection(Collection{Ctx: context.Background(), Supervisor: d.manifest, Notify: d.notify, MaxWallClock: time.Hour,
 		Ticks: func() runtime.Ticker { return &manualTicker{c: make(chan struct{})} }})
 	failIf(t, err != nil, "BindCollection: %v", err)
+	guardOnce.Do(func() { rpc.SetOwnerPeerGuard(agents.AgentPeerGuard(spawns.Live)) })
 	d.serve(t)
 	return d
 }
 
-// serve mounts both verbs behind the access policy on a unix socket.
+// serve mounts both verbs behind the access policy on an armed unix socket.
 func (d *socketDaemon) serve(t *testing.T) {
 	t.Helper()
 	reg := rpc.NewRegistry()
@@ -117,20 +124,23 @@ func (d *socketDaemon) serve(t *testing.T) {
 	reg.Register("conductor.delegate_wait", d.wait)
 	ln, err := net.Listen("unix", "d.sock")
 	failIf(t, err != nil, "listen: %v", err)
-	srv := &http.Server{Handler: rpc.NewHandler(reg), ConnContext: rpc.ConnContext, ReadHeaderTimeout: time.Minute}
+	srv := &http.Server{Handler: rpc.NewHandler(reg), ConnContext: rpc.GuardedConnContext(rpc.ConnContext), ReadHeaderTimeout: time.Minute}
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(ln) }()
 	t.Cleanup(func() { _ = srv.Close(); <-served; d.manifest.Wait() })
-	d.client = &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-		return (&net.Dialer{}).DialContext(ctx, "unix", "d.sock")
+	d.client = unixClient("d.sock")
+}
+
+// unixClient is an HTTP client that dials the unix socket sock.
+func unixClient(sock string) *http.Client {
+	return &http.Client{Timeout: time.Minute, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", sock)
 	}}}
 }
 
 // delegate delegates from the calling principal's own stored record.
 func (d *socketDaemon) delegate(ctx context.Context, raw json.RawMessage) (any, error) {
-	var p struct {
-		AgentID string `json:"agent_id"`
-	}
+	var p map[string]string
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return nil, cascade.Wrap(cascade.KindInvalidInput, err, "delegation: params")
 	}
@@ -142,7 +152,7 @@ func (d *socketDaemon) delegate(ctx context.Context, raw json.RawMessage) (any, 
 	if err != nil || !ok {
 		return nil, cmp.Or[error](err, deniedf("the caller holds no delegation to delegate from"))
 	}
-	resp, err := d.svc.Delegate(ctx, &Request{AgentID: p.AgentID, Parent: parent})
+	resp, err := d.svc.Delegate(ctx, &Request{AgentID: p["agent_id"], Parent: parent})
 	if err != nil {
 		return nil, err
 	}
@@ -151,13 +161,11 @@ func (d *socketDaemon) delegate(ctx context.Context, raw json.RawMessage) (any, 
 
 // wait is delegate_wait over the service's origin-checked Wait.
 func (d *socketDaemon) wait(ctx context.Context, raw json.RawMessage) (any, error) {
-	var p struct {
-		JobID string `json:"job_id"`
-	}
+	var p map[string]string
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return nil, cascade.Wrap(cascade.KindInvalidInput, err, "delegation: params")
 	}
-	return d.svc.Wait(ctx, p.JobID, 0)
+	return d.svc.Wait(ctx, p["job_id"], 0)
 }
 
 // call posts one JSON-RPC request with the caller header hdr (an empty name sends none).
@@ -217,16 +225,14 @@ func TestDelegateRoundTrip(t *testing.T) {
 	_, eo := d.call(t, other, "conductor.delegate", map[string]string{"agent_id": "rt-intruder"})
 	wantSocketDenied(t, "a principal with no record", eo, "holds no delegation")
 	raw, eo := d.call(t, sess, "conductor.delegate", map[string]string{"agent_id": "rt-child"})
-	var out struct {
-		JobID string `json:"job_id"`
-	}
-	failIf(t, eo != nil || json.Unmarshal(raw, &out) != nil || out.JobID == "", "delegate = %s, %+v; want a job id", raw, eo)
+	var out map[string]string
+	failIf(t, eo != nil || json.Unmarshal(raw, &out) != nil || out["job_id"] == "", "delegate = %s, %+v; want a job id", raw, eo)
 	d.manifest.Wait()
-	rec, err := d.chain.st.GetDelegation(context.Background(), out.JobID)
+	rec, err := d.chain.st.GetDelegation(context.Background(), out["job_id"])
 	failIf(t, err != nil || rec.State != jobs.DelegationSucceeded || rec.OriginPrincipal != "rt-origin" ||
 		strings.Join(d.fleet.calls, ",") != "commit,release", "record = %+v, %v, fleet %v", rec, err, d.fleet.calls)
 	d.notify.Dispatcher.Drain(context.Background())
-	d.readResult(t, sess, out.JobID)
+	d.readResult(t, sess, out["job_id"])
 	for _, r := range []struct {
 		who, want string
 		hdr       [2]string
@@ -236,11 +242,11 @@ func TestDelegateRoundTrip(t *testing.T) {
 		{"an unknown token", "caller principal not recognized", [2]string{principal.HeaderToken, "fake-" + "token"}},
 		{"no caller", "caller not permitted", [2]string{}},
 	} {
-		raw, eo := d.call(t, r.hdr, "conductor.delegate_wait", map[string]string{"job_id": out.JobID})
+		raw, eo := d.call(t, r.hdr, "conductor.delegate_wait", map[string]string{"job_id": out["job_id"]})
 		failIf(t, len(raw) != 0 && string(raw) != "null", "%s read %s", r.who, raw)
 		wantSocketDenied(t, r.who, eo, r.want)
 	}
-	d.readResult(t, sess, out.JobID) // the refusals neither leak nor consume the result
+	d.readResult(t, sess, out["job_id"]) // the refusals neither leak nor consume the result
 }
 
 // wantSocketDenied asserts eo is a KindPermissionDenied error object naming want.
@@ -248,4 +254,46 @@ func wantSocketDenied(t *testing.T, who string, eo *rpc.ErrorObject, want string
 	t.Helper()
 	failIf(t, eo == nil || eo.Code != cascade.KindPermissionDenied.JSONRPCCode() || !strings.Contains(eo.Message, want),
 		"%s: error = %+v; want KindPermissionDenied naming %q", who, eo, want)
+}
+
+// childShim spawns this test binary as the delegated child (own process group,
+// lease marker set, CASCADE_PRINCIPAL_TOKEN dropped), registered live until it exits.
+type childShim struct{ out *bytes.Buffer }
+
+func (c childShim) Spawn(_ context.Context, r agents.SpawnRequest) (agents.SpawnHandle, error) {
+	entry := spawns.Register(agents.LiveSpawn{Marker: r.LeaseMarker})
+	cmd := exec.Command(os.Args[0], "-test.run=^TestDelegatedChildCannotActAsOwner$")
+	cmd.Env = append(slices.DeleteFunc(os.Environ(), func(kv string) bool {
+		return strings.HasPrefix(kv, principal.EnvToken+"=") || strings.HasPrefix(kv, agents.LeaseMarkerEnv+"=")
+	}), childVar+"=1", agents.LeaseMarkerEnv+"="+r.LeaseMarker)
+	cmd.Stdout, cmd.SysProcAttr = c.out, &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		entry.Release()
+		return agents.SpawnHandle{}, err
+	}
+	pid := cmd.Process.Pid
+	entry.Set(agents.LiveSpawn{Marker: r.LeaseMarker, PGID: pid, PID: pid})
+	release := sync.OnceValue(func() error { err := cmd.Wait(); entry.Release(); return err })
+	return agents.SpawnHandle{JobID: r.Job.JobID, PGID: pid, Driver: socketDriver{},
+		Release: func(context.Context) error { return release() }}, nil
+}
+
+// TestDelegatedChildCannotActAsOwner (ADR-0006 section 3, M-2): a delegated child with no
+// principal token calls conductor.delegate as the owner CLI; the owner-peer guard refuses
+// it (child mode: the test is that child). The round trip shows a non-agent owner passes.
+func TestDelegatedChildCannotActAsOwner(t *testing.T) {
+	if os.Getenv(childVar) != "" {
+		failIf(t, os.Getenv(principal.EnvToken) != "" || os.Getenv(agents.LeaseMarkerEnv) == "", "child environ: want a lease marker, no token")
+		_, eo := (&socketDaemon{client: unixClient("d.sock")}).call(t, [2]string{principal.HeaderOwnerCLI, "owner-cli"}, "conductor.delegate", nil)
+		wantSocketDenied(t, "a delegated child as the owner CLI", eo, "agent processes may not act as the owner")
+		return
+	}
+	d, out := newSocketDaemon(t), &bytes.Buffer{}
+	d.svc.shim = childShim{out: out}
+	d.origin(t, "guard-origin")
+	raw, eo := d.call(t, d.mint(t, "guard-origin", "project:guard"), "conductor.delegate", map[string]string{"agent_id": "guard-child"})
+	failIf(t, eo != nil, "delegate = %s, %+v; want a dispatched child", raw, eo)
+	d.manifest.Wait()
+	failIf(t, !strings.HasPrefix(out.String(), "PASS"), "owner-cli call from a delegated child was accepted:\n%s", out)
+	failIf(t, len(spawns.Live()) != 0, "the spawn is still live after its release: %v", spawns.Live())
 }
