@@ -7,9 +7,9 @@ import (
 )
 
 func TestAssumeDoneSchedulesDependent(t *testing.T) {
-	ts := []Ticket{
-		{ID: "T1", State: Parked},
-		{ID: "T2", State: Pending, Deps: []string{"T1"}},
+	ts := []SchedTicket{
+		{ID: "T1", State: SchedParked},
+		{ID: "T2", State: SchedPending, Deps: []string{"T1"}},
 	}
 	res := Schedule(ts, true)
 	sort.Strings(res.Schedulable)
@@ -19,9 +19,9 @@ func TestAssumeDoneSchedulesDependent(t *testing.T) {
 }
 
 func TestWithoutFlagStaysBlocked(t *testing.T) {
-	ts := []Ticket{
-		{ID: "T1", State: Parked},
-		{ID: "T2", State: Pending, Deps: []string{"T1"}},
+	ts := []SchedTicket{
+		{ID: "T1", State: SchedParked},
+		{ID: "T2", State: SchedPending, Deps: []string{"T1"}},
 	}
 	res := Schedule(ts, false)
 	sort.Strings(res.Blocked)
@@ -31,9 +31,9 @@ func TestWithoutFlagStaysBlocked(t *testing.T) {
 }
 
 func TestNonParkedParentUnaffected(t *testing.T) {
-	ts := []Ticket{
-		{ID: "T1", State: Running},
-		{ID: "T2", State: Pending, Deps: []string{"T1"}},
+	ts := []SchedTicket{
+		{ID: "T1", State: SchedRunning},
+		{ID: "T2", State: SchedPending, Deps: []string{"T1"}},
 	}
 	res := Schedule(ts, true)
 	sort.Strings(res.Blocked)
@@ -43,10 +43,10 @@ func TestNonParkedParentUnaffected(t *testing.T) {
 }
 
 func TestAssumeDoneIgnoresUnfinishedNonParked(t *testing.T) {
-	ts := []Ticket{
-		{ID: "T1", State: Parked},
-		{ID: "T3", State: Pending},
-		{ID: "T2", State: Pending, Deps: []string{"T1", "T3"}},
+	ts := []SchedTicket{
+		{ID: "T1", State: SchedParked},
+		{ID: "T3", State: SchedPending},
+		{ID: "T2", State: SchedPending, Deps: []string{"T1", "T3"}},
 	}
 	res := Schedule(ts, true)
 	sort.Strings(res.Blocked)
