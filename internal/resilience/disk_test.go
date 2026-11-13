@@ -99,3 +99,73 @@ func TestWithinTimesOutAStalledStat(t *testing.T) {
 		t.Fatalf("expected ErrStatTimedOut, got %v", err)
 	}
 }
+
+// TestCandidateVolumeBecomesRequiredOnceSeen verifies that a candidate volume
+// transitions from Known=false to Known=true after first successful mount and
+// remains required even if later unmounted.
+func TestCandidateVolumeBecomesRequiredOnceSeen(t *testing.T) {
+	resetKnownVolumes()
+
+	cfg := DiskConfig{
+		RequiredVolumes: []string{"/mnt/candidate"},
+		StatTimeout:     time.Second,
+	}
+
+	// First call: volume is mounted successfully.
+	statFnMounted := func(path string, timeout time.Duration) (uint64, error) {
+		return 1024, nil
+	}
+
+	states, err := DiscoverVolumes(cfg, statFnMounted)
+	if err != nil {
+		t.Fatalf("first call: unexpected error: %v", err)
+	}
+	if len(states) != 1 {
+		t.Fatalf("first call: got %d states, want 1", len(states))
+	}
+	if !states[0].Mounted {
+		t.Fatal("first call: expected Mounted=true")
+	}
+	if !states[0].Known {
+		t.Fatal("first call: expected Known=true after successful mount")
+	}
+
+	// Second call: volume is unmounted (stat times out).
+	statFnUnmounted := func(path string, timeout time.Duration) (uint64, error) {
+		return 0, ErrStatTimedOut
+	}
+
+	states, err = DiscoverVolumes(cfg, statFnUnmounted)
+	if !errors.Is(err, ErrVolumeMissing) {
+		t.Fatalf("second call: expected ErrVolumeMissing, got %v", err)
+	}
+	if len(states) != 1 {
+		t.Fatalf("second call: got %d states, want 1", len(states))
+	}
+	if states[0].Mounted {
+		t.Fatal("second call: expected Mounted=false")
+	}
+	if !states[0].Known {
+		t.Fatal("second call: expected Known=true to persist after unmount")
+	}
+
+	// Unknown unmounted volume should not trigger ErrVolumeMissing.
+	cfgUnknown := DiskConfig{
+		RequiredVolumes: []string{"/mnt/unknown"},
+		StatTimeout:     time.Second,
+	}
+	states, err = DiscoverVolumes(cfgUnknown, statFnUnmounted)
+	if err != nil {
+		t.Fatalf("unknown volume: expected no error, got %v", err)
+	}
+	if states[0].Known {
+		t.Fatal("unknown volume: expected Known=false")
+	}
+}
+
+// resetKnownVolumes clears the known-volume registry between test cases.
+func resetKnownVolumes() {
+	knownMu.Lock()
+	defer knownMu.Unlock()
+	knownVolumes = make(map[string]bool)
+}
