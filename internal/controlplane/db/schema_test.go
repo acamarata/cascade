@@ -1,6 +1,9 @@
 package db
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 // TestSchemaConstantsExist verifies that all required table name constants,
 // phase status values, and migration SQL strings are defined and non-empty.
@@ -88,4 +91,12 @@ func TestSchemaMigrationConstantsExist(t *testing.T) {
 		{"Migration005", Migration005},
 		{"Migration006", Migration006},
 	})
+}
+
+// TestMigrateStubReturnsErrNotImplemented asserts that Migrate is stubbed and returns ErrNotImplemented.
+func TestMigrateStubReturnsErrNotImplemented(t *testing.T) {
+	err := Migrate(nil)
+	if !errors.Is(err, ErrNotImplemented) {
+		t.Errorf("Migrate(nil) = %v, want ErrNotImplemented", err)
+	}
 }

@@ -75,29 +75,134 @@ func (s *DBStore) Close() error {
 	return s.db.Close()
 }
 
+// waitKindString returns the string representation of a WaitKind.
+func waitKindString(kind WaitKind) (string, error) {
+	switch kind {
+	case WaitingDisk:
+		return "waiting_disk", nil
+	case WaitingNet:
+		return "waiting_net", nil
+	case WaitingModels:
+		return "waiting_models", nil
+	case WaitingOwner:
+		return "waiting_owner", nil
+	default:
+		return "", errors.New("unknown WaitKind")
+	}
+}
+
 // SetWait records that the process is waiting for the given kind of resource.
-func (s *DBStore) SetWait(kind WaitKind) error { return nil }
+// It upserts into the wait table setting since to time.Now().UTC(), keeping
+// existing since if the row already exists for that kind.
+func (s *DBStore) SetWait(kind WaitKind) error {
+	_, err := waitKindString(kind)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`
+		INSERT INTO wait (kind, since) VALUES (?, ?)
+		ON CONFLICT(kind) DO NOTHING`,
+		int(kind), time.Now().UTC())
+	return err
+}
 
 // ClearWait removes the wait condition for the given kind.
-func (s *DBStore) ClearWait(kind WaitKind) error { return nil }
+// It reads since from the wait table, computes elapsed duration,
+// writes elapsed to meta table as last_wait_<kind>_duration,
+// then deletes the wait row.
+func (s *DBStore) ClearWait(kind WaitKind) error {
+	name, err := waitKindString(kind)
+	if err != nil {
+		return err
+	}
+
+	var since time.Time
+	err = s.db.QueryRow("SELECT since FROM wait WHERE kind=?", int(kind)).Scan(&since)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+
+	elapsed := time.Since(since)
+	metaKey := "last_wait_" + name + "_duration"
+
+	_, err = s.db.Exec("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", metaKey, elapsed.String())
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.Exec("DELETE FROM wait WHERE kind=?", int(kind))
+	return err
+}
 
 // RecordHeartbeat records a heartbeat signal.
-func (s *DBStore) RecordHeartbeat() error { return nil }
+func (s *DBStore) RecordHeartbeat() error {
+	_, err := s.db.Exec("INSERT INTO heartbeat (at) VALUES (?)", time.Now().UTC())
+	return err
+}
 
 // MarkSeenRunning marks the process as seen running.
-func (s *DBStore) MarkSeenRunning() error { return nil }
+func (s *DBStore) MarkSeenRunning() error {
+	_, err := s.db.Exec("INSERT INTO seen_running (at) VALUES (?)", time.Now().UTC())
+	return err
+}
 
 // NextRestartDelay returns the delay before the next restart attempt.
-func (s *DBStore) NextRestartDelay() time.Duration { return 0 }
+// It reads the current restart count, computes an exponential backoff
+// (1, 2, 4, 8, 16, 30 minutes), increments the count and updates the
+// last restart timestamp. If no restart record exists, it initializes one.
+func (s *DBStore) NextRestartDelay() time.Duration {
+	var count int
+	err := s.db.QueryRow("SELECT count FROM restart LIMIT 1").Scan(&count)
+	if err == sql.ErrNoRows {
+		_, err = s.db.Exec("INSERT INTO restart (count, last) VALUES (0, ?)", time.Now().UTC())
+		if err != nil {
+			return 0
+		}
+		count = 0
+	} else if err != nil {
+		return 0
+	}
+
+	delay := 1 << count
+	if delay > 30 {
+		delay = 30
+	}
+	dur := time.Duration(delay) * time.Minute
+
+	_, err = s.db.Exec("UPDATE restart SET count = count + 1, last = ?", time.Now().UTC())
+	if err != nil {
+		return 0
+	}
+
+	return dur
+}
 
 // RecordStall records a stall condition with the given reason.
-func (s *DBStore) RecordStall(reason string) error { return nil }
+func (s *DBStore) RecordStall(reason string) error {
+	_, err := s.db.Exec("INSERT INTO stall (reason, at) VALUES (?, ?)", reason, time.Now().UTC())
+	return err
+}
 
 // EmitEvent records a lifecycle event.
-func (s *DBStore) EmitEvent(ev Event) error { return nil }
+func (s *DBStore) EmitEvent(ev Event) error {
+	at := ev.At
+	if at.IsZero() {
+		at = time.Now().UTC()
+	} else {
+		at = at.UTC()
+	}
+	_, err := s.db.Exec("INSERT INTO event (at) VALUES (?)", at)
+	return err
+}
 
 // TrimEvents removes old events to keep the store size bounded.
-func (s *DBStore) TrimEvents() error { return nil }
+func (s *DBStore) TrimEvents() error {
+	_, err := s.db.Exec("DELETE FROM event WHERE at < datetime('now', '-14 days')")
+	return err
+}
 
 // Open opens a SQLite database at the given path, sets WAL mode and synchronous=FULL,
 // and creates the required tables if they do not exist.
