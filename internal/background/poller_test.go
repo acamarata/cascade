@@ -63,12 +63,11 @@ func TestPollInterval(t *testing.T) {
 		clk.ch <- time.Now().Add(20 * time.Second)
 		clk.ch <- time.Now().Add(30 * time.Second)
 
-		time.Sleep(50 * time.Millisecond)
+		close(clk.ch)
+		code := <-done // Run has returned: every read happened before this receive
 		if rdr.calls != 3 {
 			t.Fatalf("expected 3 reads, got %d", rdr.calls)
 		}
-		close(clk.ch)
-		code := <-done
 		if code != 0 {
 			t.Fatalf("expected exit 0, got %d", code)
 		}

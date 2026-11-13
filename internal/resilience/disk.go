@@ -61,8 +61,9 @@ func WithinTimeout(ctx context.Context, path string, timeout time.Duration) (uin
 	}
 
 	ch := make(chan result, 1)
+	stat := statFunc // read once here: the goroutine may outlive this call
 	go func() {
-		free, err := statFunc(ctx, path)
+		free, err := stat(ctx, path)
 		ch <- result{free: free, err: err}
 	}()
 

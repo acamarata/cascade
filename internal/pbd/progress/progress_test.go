@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -29,7 +30,7 @@ func TestAppendChangeWritesOneJSONLine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat failed: %v", err)
 	}
-	if mode := info.Mode().Perm(); mode != 0600 {
+	if mode := info.Mode().Perm(); runtime.GOOS != "windows" && mode != 0600 {
 		t.Errorf("expected mode 0600, got %o", mode)
 	}
 
