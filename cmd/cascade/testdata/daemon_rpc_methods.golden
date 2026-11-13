@@ -57,6 +57,8 @@ fleet.quota.snapshot
 fleet.sessions.completion_check
 fleet.sessions.hook_event
 fleet.sessions.list
+hooks.fires
+hooks.list
 inbox.ack
 inbox.list
 inbox.read
