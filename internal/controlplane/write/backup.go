@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+
+	"github.com/acamarata/cascade/internal/runtime"
 )
 
 // Set writes data to the file at path. If an existing file is present,
@@ -19,12 +21,12 @@ func Set(path string, data []byte) error {
 		}
 	} else {
 		bakPath := path + ".bak"
-		if writeErr := os.WriteFile(bakPath, old, 0644); writeErr != nil {
+		if writeErr := runtime.WriteFileAtomic(bakPath, old, 0644); writeErr != nil {
 			return fmt.Errorf("writing backup: %w", writeErr)
 		}
 	}
 
-	if writeErr := os.WriteFile(path, data, 0644); writeErr != nil {
+	if writeErr := runtime.WriteFileAtomic(path, data, 0644); writeErr != nil {
 		return fmt.Errorf("writing new config: %w", writeErr)
 	}
 

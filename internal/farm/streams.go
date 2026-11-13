@@ -1,7 +1,14 @@
 // Package farm defines stream planning data types.
 package farm
 
-import "time"
+import (
+	"time"
+
+	"github.com/acamarata/cascade/internal/runtime"
+)
+
+// clock is the time source for stream planning.
+var clock runtime.Clock = runtime.NewSystemClock()
 
 // Binding identifies the constraint that limits a stream plan.
 type Binding string
@@ -77,7 +84,7 @@ func PlanStreams(ready, ceiling, rpmUsed, rpmLimit int, ladder []string) Plan {
 			action.EscalateTo = ladder[1]
 		} else {
 			action.Type = ActionWait
-			now := time.Now()
+			now := clock.Now()
 			action.WaitUntil = now.Truncate(time.Minute).Add(time.Minute)
 		}
 	}
