@@ -2,7 +2,6 @@
 package port
 
 import (
-	"errors"
 	"testing"
 	"time"
 )
@@ -49,15 +48,8 @@ func TestResultFields(t *testing.T) {
 
 // TestPortErrorInterface verifies compile-time assertions for PortError.
 func TestPortErrorInterface(t *testing.T) {
-	var _ PortError = ErrInvalid
-	var _ PortError = ErrNotFound
-	var _ PortError = ErrConflict
-	var _ PortError = ErrDenied
-	var _ PortError = ErrUnavailable
-	var _ PortError = ErrTimeout
-	var _ PortError = ErrExhausted
-	var _ PortError = ErrInternal
-
+	// The typed slice literal is the compile-time assertion that every
+	// sentinel satisfies PortError.
 	sentinels := []PortError{
 		ErrInvalid, ErrNotFound, ErrConflict, ErrDenied,
 		ErrUnavailable, ErrTimeout, ErrExhausted, ErrInternal,
@@ -77,9 +69,6 @@ func TestPortErrorInterface(t *testing.T) {
 
 // TestErrNotImplemented verifies the ErrNotImplemented sentinel.
 func TestErrNotImplemented(t *testing.T) {
-	if !errors.Is(ErrNotImplemented, errors.New("not implemented")) {
-		// errors.Is compares by value for errors.New, so we check the string
-	}
 	if ErrNotImplemented.Error() != "not implemented" {
 		t.Errorf("unexpected error message: %s", ErrNotImplemented.Error())
 	}

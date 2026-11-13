@@ -15,7 +15,7 @@ var ErrInvalidEscalation = errors.New("invalid escalation")
 var ErrEscalationWrite = errors.New("escalation write failed")
 
 // WriteEscalate appends a compact JSON representation of o to the file at path.
-func WriteEscalate(path string, o Outcome) error {
+func WriteEscalate(path string, o Outcome) (err error) {
 	if path == "" {
 		return ErrInvalidEscalation
 	}
@@ -40,7 +40,11 @@ func WriteEscalate(path string, o Outcome) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrEscalationWrite, err)
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("%w: %v", ErrEscalationWrite, cerr)
+		}
+	}()
 
 	info, err := f.Stat()
 	if err != nil {

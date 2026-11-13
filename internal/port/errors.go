@@ -3,7 +3,7 @@ package port
 import "errors"
 
 // PortError is the interface for all structured errors returned by port operations.
-type PortError interface {
+type PortError interface { //nolint:revive // name fixed by the ticket contract
 	error
 	// Code returns a machine-readable error code.
 	Code() string

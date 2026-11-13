@@ -25,12 +25,14 @@ func (shortWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func TestSnapshotRoundTripRefused(t *testing.T) {
-	tests := []struct {
-		name    string
-		snap    Snapshot
-		wantErr bool
-	}{
+type roundTripCase struct {
+	name    string
+	snap    Snapshot
+	wantErr bool
+}
+
+func roundTripCases() []roundTripCase {
+	return []roundTripCase{
 		{
 			name: "T1,T2 true survive",
 			snap: Snapshot{
@@ -61,8 +63,32 @@ func TestSnapshotRoundTripRefused(t *testing.T) {
 			wantErr: false,
 		},
 	}
+}
 
-	for _, tt := range tests {
+func checkRoundTripLens(t *testing.T, want, got Snapshot) {
+	t.Helper()
+	if want.TicketIDs == nil {
+		if len(got.TicketIDs) != 0 {
+			t.Errorf("TicketIDs not empty, got %v", got.TicketIDs)
+		}
+	} else {
+		if len(got.TicketIDs) != len(want.TicketIDs) {
+			t.Errorf("TicketIDs length mismatch")
+		}
+	}
+	if want.RefusedMarks == nil {
+		if len(got.RefusedMarks) != 0 {
+			t.Errorf("RefusedMarks not empty, got %v", got.RefusedMarks)
+		}
+	} else {
+		if len(got.RefusedMarks) != len(want.RefusedMarks) {
+			t.Errorf("RefusedMarks length mismatch")
+		}
+	}
+}
+
+func TestSnapshotRoundTripRefused(t *testing.T) {
+	for _, tt := range roundTripCases() {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			err := SaveSnapshot(&buf, tt.snap)
@@ -77,83 +103,60 @@ func TestSnapshotRoundTripRefused(t *testing.T) {
 			if err != nil {
 				t.Fatalf("LoadSnapshot() error = %v", err)
 			}
+			checkRoundTripLens(t, tt.snap, got)
+		})
+	}
+}
 
-			if tt.snap.TicketIDs == nil {
-				if len(got.TicketIDs) != 0 {
-					t.Errorf("TicketIDs not empty, got %v", got.TicketIDs)
-				}
-			} else {
-				if len(got.TicketIDs) != len(tt.snap.TicketIDs) {
-					t.Errorf("TicketIDs length mismatch")
-				}
-			}
-			if tt.snap.RefusedMarks == nil {
-				if len(got.RefusedMarks) != 0 {
-					t.Errorf("RefusedMarks not empty, got %v", got.RefusedMarks)
-				}
-			} else {
-				if len(got.RefusedMarks) != len(tt.snap.RefusedMarks) {
-					t.Errorf("RefusedMarks length mismatch")
-				}
+func TestSnapshotJSONFieldsAndNewline(t *testing.T) {
+	var buf bytes.Buffer
+	s := Snapshot{
+		TicketIDs:    []string{"T1", "T2"},
+		RefusedMarks: map[string]bool{"T2": true, "T1": false},
+	}
+	if err := SaveSnapshot(&buf, s); err != nil {
+		t.Fatal(err)
+	}
+	data := buf.String()
+	if !strings.HasSuffix(data, "\n") {
+		t.Errorf("missing newline")
+	}
+	if !strings.Contains(data, `"ticket_ids"`) {
+		t.Errorf("missing ticket_ids field")
+	}
+	if !strings.Contains(data, `"refused_marks"`) {
+		t.Errorf("missing refused_marks field")
+	}
+	// sorted map keys in json: T1 then T2
+	idx1 := strings.Index(data, `"T1"`)
+	idx2 := strings.Index(data, `"T2"`)
+	if idx1 > idx2 {
+		t.Errorf("map keys not sorted: T1 at %d, T2 at %d", idx1, idx2)
+	}
+}
+
+func TestLoadSnapshotRejectsBadInput(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		what  string
+	}{
+		{"corrupt data", "{corrupt", "corrupt data"},
+		{"duplicate-key JSON", `{"ticket_ids":["A","A"],"refused_marks":{}}`, "duplicate IDs"},
+		{"trailing JSON", `{"ticket_ids":[],"refused_marks":{}}{}`, "trailing JSON"},
+		{"wrong-type data", `{"ticket_ids":"not-an-array","refused_marks":{}}`, "wrong type"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := LoadSnapshot(strings.NewReader(tc.input))
+			if !errors.Is(err, ErrInvalidSnapshot) {
+				t.Errorf("expected ErrInvalidSnapshot for %s, got %v", tc.what, err)
 			}
 		})
 	}
+}
 
-	t.Run("JSON fields and newline", func(t *testing.T) {
-		var buf bytes.Buffer
-		s := Snapshot{
-			TicketIDs:    []string{"T1", "T2"},
-			RefusedMarks: map[string]bool{"T2": true, "T1": false},
-		}
-		if err := SaveSnapshot(&buf, s); err != nil {
-			t.Fatal(err)
-		}
-		data := buf.String()
-		if !strings.HasSuffix(data, "\n") {
-			t.Errorf("missing newline")
-		}
-		if !strings.Contains(data, `"ticket_ids"`) {
-			t.Errorf("missing ticket_ids field")
-		}
-		if !strings.Contains(data, `"refused_marks"`) {
-			t.Errorf("missing refused_marks field")
-		}
-		// sorted map keys in json: T1 then T2
-		idx1 := strings.Index(data, `"T1"`)
-		idx2 := strings.Index(data, `"T2"`)
-		if idx1 > idx2 {
-			t.Errorf("map keys not sorted: T1 at %d, T2 at %d", idx1, idx2)
-		}
-	})
-
-	t.Run("corrupt data", func(t *testing.T) {
-		_, err := LoadSnapshot(strings.NewReader("{corrupt"))
-		if !errors.Is(err, ErrInvalidSnapshot) {
-			t.Errorf("expected ErrInvalidSnapshot, got %v", err)
-		}
-	})
-
-	t.Run("duplicate-key JSON", func(t *testing.T) {
-		_, err := LoadSnapshot(strings.NewReader(`{"ticket_ids":["A","A"],"refused_marks":{}}`))
-		if !errors.Is(err, ErrInvalidSnapshot) {
-			t.Errorf("expected ErrInvalidSnapshot for duplicate IDs, got %v", err)
-		}
-	})
-
-	t.Run("trailing JSON", func(t *testing.T) {
-		_, err := LoadSnapshot(strings.NewReader(`{"ticket_ids":[],"refused_marks":{}}{}`))
-		if !errors.Is(err, ErrInvalidSnapshot) {
-			t.Errorf("expected ErrInvalidSnapshot for trailing JSON, got %v", err)
-		}
-	})
-
-	t.Run("wrong-type data", func(t *testing.T) {
-		_, err := LoadSnapshot(strings.NewReader(`{"ticket_ids":"not-an-array","refused_marks":{}}`))
-		if !errors.Is(err, ErrInvalidSnapshot) {
-			t.Errorf("expected ErrInvalidSnapshot for wrong type, got %v", err)
-		}
-	})
-
+func TestSnapshotNilEndpoints(t *testing.T) {
 	t.Run("nil reader", func(t *testing.T) {
 		_, err := LoadSnapshot(nil)
 		if !errors.Is(err, ErrInvalidSnapshot) {
@@ -167,7 +170,9 @@ func TestSnapshotRoundTripRefused(t *testing.T) {
 			t.Errorf("expected ErrInvalidSnapshot for nil writer, got %v", err)
 		}
 	})
+}
 
+func TestSaveSnapshotWriterErrors(t *testing.T) {
 	t.Run("propagated writer error", func(t *testing.T) {
 		werr := errors.New("disk full")
 		err := SaveSnapshot(failWriter{err: werr}, Snapshot{})

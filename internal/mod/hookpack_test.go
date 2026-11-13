@@ -6,11 +6,18 @@ import (
 	"testing"
 )
 
+func mustRegister(t *testing.T, hp *HookPack, name string, fn func() error) {
+	t.Helper()
+	if err := hp.Register(name, fn); err != nil {
+		t.Fatalf("register %q failed: %v", name, err)
+	}
+}
+
 func TestRunAllExecutesInOrder(t *testing.T) {
 	hp := NewHookPack()
 	var order []string
-	hp.Register("a", func() error { order = append(order, "a"); return nil })
-	hp.Register("b", func() error { order = append(order, "b"); return nil })
+	mustRegister(t, hp, "a", func() error { order = append(order, "a"); return nil })
+	mustRegister(t, hp, "b", func() error { order = append(order, "b"); return nil })
 	if err := hp.RunAll(); err != nil {
 		t.Fatalf("RunAll returned error: %v", err)
 	}
@@ -42,9 +49,9 @@ func TestRegisterEmptyNameRejected(t *testing.T) {
 func TestRunAllReturnsFirstErrorWithName(t *testing.T) {
 	hp := NewHookPack()
 	var calledC bool
-	hp.Register("a", func() error { return nil })
-	hp.Register("b", func() error { return errors.New("b failed") })
-	hp.Register("c", func() error { calledC = true; return nil })
+	mustRegister(t, hp, "a", func() error { return nil })
+	mustRegister(t, hp, "b", func() error { return errors.New("b failed") })
+	mustRegister(t, hp, "c", func() error { calledC = true; return nil })
 	err := hp.RunAll()
 	if err == nil {
 		t.Fatalf("expected error, got nil")
