@@ -73,7 +73,11 @@ func TestTestOnlyUsage_RealTreeGreen(t *testing.T) {
 	}
 
 	violations, stale := FilterTestOnlyAllowed(candidates, allow)
+	held := heldDeadCodeKeys(t, root)
 	for _, s := range stale {
+		if held[s] {
+			continue // dead, not stale: an open row holds it until its ticket adds the caller
+		}
 		t.Errorf("test-only gate: allow-list entry %q matches nothing. It is either wired now, in which "+
 			"case delete the entry, or renamed, in which case fix it. A stale exemption hides the next one.", s)
 	}

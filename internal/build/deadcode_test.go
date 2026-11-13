@@ -43,12 +43,49 @@ func TestDeadCode_RealTreeGreen(t *testing.T) {
 		t.Fatal("dead-code gate: scanned zero declared symbols — gate regression, not a legitimately empty tree")
 	}
 
-	if v := InternalDeadCodeViolations(declared, used); len(v) != 0 {
-		t.Errorf("dead-code gate: %d unused internal/ symbol(s): %+v", len(v), v)
+	held := heldDeadCodeKeys(t, root)
+	var remaining []DeadCodeViolation
+	for _, d := range InternalDeadCodeViolations(declared, used) {
+		if !held[d.Dir+"."+d.Name] {
+			remaining = append(remaining, d)
+		}
+	}
+	if len(remaining) != 0 {
+		t.Errorf("dead-code gate: %d unused internal/ symbol(s): %+v", len(remaining), remaining)
 	}
 	if v := PkgUnusedWithoutSDKIntent(declared, used); len(v) != 0 {
 		t.Errorf("dead-code gate: %d unused pkg/ symbol(s) missing an SDK-intent note: %+v", len(v), v)
 	}
+}
+
+// heldDeadCodeKeys returns the allow keys whose dead internal/ symbol is
+// held by an open test-only row (see DeadCodeAllowedByOpenRow). Every load
+// fails closed: an unreadable allow list or manifest blocks, never skips.
+func heldDeadCodeKeys(t *testing.T, root string) map[string]bool {
+	t.Helper()
+	declared, used, err := ScanModuleSymbols(root, deadcodeModulePath, deadcodeShippedRoots)
+	if err != nil {
+		t.Fatalf("dead-code gate: scanning real tree: %v", err)
+	}
+	allow, err := LoadTestOnlyAllowList(filepath.Join(root, "internal", "build", "testonly-allow.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := filepath.Join(root, "internal", "build", closedTicketManifestPath)
+	known, err := LoadKnownTicketIDs(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed, err := LoadClosedTicketManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, held := DeadCodeAllowedByOpenRow(InternalDeadCodeViolations(declared, used), allow, known, closed)
+	out := make(map[string]bool, len(held))
+	for _, k := range held {
+		out[k] = true
+	}
+	return out
 }
 
 func deadcodeFixtureModule(t *testing.T) string {
