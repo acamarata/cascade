@@ -53,7 +53,7 @@ func TestRewriteReplacesAfterCompletion(t *testing.T) {
 	t.Run("local model replaces summary", func(t *testing.T) {
 		rewriter := &fakeRewriter{
 			local: true,
-			rewrite: func(_ context.Context, summary string) (string, error) {
+			rewrite: func(_ context.Context, _ string) (string, error) {
 				return "new text", nil
 			},
 		}
@@ -88,7 +88,7 @@ func TestRewriteHostedNonPrivateAllowed(t *testing.T) {
 	t.Run("hosted non-private model is allowed", func(t *testing.T) {
 		rewriter := &fakeRewriter{
 			local: false,
-			rewrite: func(_ context.Context, summary string) (string, error) {
+			rewrite: func(_ context.Context, _ string) (string, error) {
 				return "new text", nil
 			},
 		}
@@ -150,7 +150,7 @@ func TestRewritePrivateSessionLocalSucceeds(t *testing.T) {
 	t.Run("private session with local model succeeds", func(t *testing.T) {
 		rewriter := &fakeRewriter{
 			local: true,
-			rewrite: func(_ context.Context, summary string) (string, error) {
+			rewrite: func(_ context.Context, _ string) (string, error) {
 				return "rewritten private text", nil
 			},
 		}

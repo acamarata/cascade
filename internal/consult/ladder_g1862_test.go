@@ -50,15 +50,15 @@ func TestLadderStopsAtBA(t *testing.T) {
 	baCalls := 0
 	ceoCalls := 0
 
-	pm := func(ctx context.Context, question string) (bool, string) {
+	pm := func(_ context.Context, _ string) (bool, string) {
 		pmCalls++
 		return false, ""
 	}
-	ba := func(ctx context.Context, question string) (bool, string) {
+	ba := func(_ context.Context, _ string) (bool, string) {
 		baCalls++
 		return true, "ba answer"
 	}
-	ceo := func(ctx context.Context, question string) (bool, string) {
+	ceo := func(_ context.Context, _ string) (bool, string) {
 		ceoCalls++
 		return true, "ceo"
 	}
@@ -86,15 +86,15 @@ func TestLadderStopsAtBA(t *testing.T) {
 
 func TestLadderReachesCEO(t *testing.T) {
 	var order []string
-	pm := func(ctx context.Context, question string) (bool, string) {
+	pm := func(_ context.Context, _ string) (bool, string) {
 		order = append(order, "PM")
 		return false, ""
 	}
-	ba := func(ctx context.Context, question string) (bool, string) {
+	ba := func(_ context.Context, _ string) (bool, string) {
 		order = append(order, "BA")
 		return false, ""
 	}
-	ceo := func(ctx context.Context, question string) (bool, string) {
+	ceo := func(_ context.Context, _ string) (bool, string) {
 		order = append(order, "CEO")
 		return true, "ceo answer"
 	}
@@ -115,9 +115,9 @@ func TestLadderReachesCEO(t *testing.T) {
 }
 
 func TestLadderUnresolvedFailsClosed(t *testing.T) {
-	pm := func(ctx context.Context, question string) (bool, string) { return false, "" }
-	ba := func(ctx context.Context, question string) (bool, string) { return false, "" }
-	ceo := func(ctx context.Context, question string) (bool, string) { return false, "" }
+	pm := func(_ context.Context, _ string) (bool, string) { return false, "" }
+	ba := func(_ context.Context, _ string) (bool, string) { return false, "" }
+	ceo := func(_ context.Context, _ string) (bool, string) { return false, "" }
 
 	_, err := RunLadder(context.Background(), "q", []Rung{pm, ba, ceo})
 	if !errors.Is(err, ErrUnresolved) {
