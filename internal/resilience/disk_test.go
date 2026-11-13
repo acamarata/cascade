@@ -179,3 +179,81 @@ func resetKnownVolumes() {
 	defer knownMu.Unlock()
 	knownVolumes = make(map[string]bool)
 }
+
+// TestDiskMissingStartsNothingThenRecovers verifies that WaitUntilReady
+// loops without side effects when a required volume is missing, and
+// returns nil once the volume becomes mounted.
+func TestDiskMissingStartsNothingThenRecovers(t *testing.T) {
+	resetKnownVolumes()
+
+	cfg := DiskConfig{
+		RequiredVolumes: []string{"/mnt/data"},
+		DataHome:        "/data/home",
+		FreeSpaceFloor:  1 << 30,
+		RetryInterval:   10 * time.Millisecond,
+		StatTimeout:     time.Second,
+	}
+
+	callCount := 0
+	discoverFn := func(cfg DiskConfig, statFn func(string, time.Duration) (uint64, error)) ([]VolumeState, error) {
+		callCount++
+		if callCount == 1 {
+			return []VolumeState{
+				{Path: "/mnt/data", Mounted: false, FreeBytes: 0, Known: true},
+			}, ErrVolumeMissing
+		}
+		return []VolumeState{
+			{Path: "/mnt/data", Mounted: true, FreeBytes: 2 << 30, Known: true},
+		}, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := WaitUntilReady(ctx, cfg, discoverFn)
+	if err != nil {
+		t.Fatalf("WaitUntilReady: expected nil error, got %v", err)
+	}
+	if callCount < 2 {
+		t.Fatalf("expected at least 2 calls to discoverFn, got %d", callCount)
+	}
+}
+
+// TestDiskFullIsAWait verifies that WaitUntilReady loops without side effects
+// when a volume is mounted but has less than FreeSpaceFloor free bytes,
+// and returns nil once sufficient free space becomes available.
+func TestDiskFullIsAWait(t *testing.T) {
+	resetKnownVolumes()
+
+	cfg := DiskConfig{
+		RequiredVolumes: []string{"/mnt/data"},
+		DataHome:        "/data/home",
+		FreeSpaceFloor:  1 << 30,
+		RetryInterval:   10 * time.Millisecond,
+		StatTimeout:     time.Second,
+	}
+
+	callCount := 0
+	discoverFn := func(cfg DiskConfig, statFn func(string, time.Duration) (uint64, error)) ([]VolumeState, error) {
+		callCount++
+		if callCount == 1 {
+			return []VolumeState{
+				{Path: "/mnt/data", Mounted: true, FreeBytes: 100 << 20, Known: true},
+			}, nil
+		}
+		return []VolumeState{
+			{Path: "/mnt/data", Mounted: true, FreeBytes: 2 << 30, Known: true},
+		}, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := WaitUntilReady(ctx, cfg, discoverFn)
+	if err != nil {
+		t.Fatalf("WaitUntilReady: expected nil error, got %v", err)
+	}
+	if callCount < 2 {
+		t.Fatalf("expected at least 2 calls to discoverFn, got %d", callCount)
+	}
+}
