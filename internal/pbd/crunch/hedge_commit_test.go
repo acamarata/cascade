@@ -16,7 +16,7 @@ func TestHedgeCommitsOnce(t *testing.T) {
 
 func testHedgeOnlySelectedCommits(t *testing.T) {
 	var commitsA, commitsB atomic.Int32
-	run := func(ctx context.Context, tk HedgeTicket, model string) (HedgeResult, error) {
+	run := func(_ context.Context, _ HedgeTicket, model string) (HedgeResult, error) {
 		if model == "modelA" {
 			return HedgeResult{
 				Green: true,
@@ -51,7 +51,7 @@ func testHedgeOnlySelectedCommits(t *testing.T) {
 }
 
 func testHedgeNilCommit(t *testing.T) {
-	run := func(ctx context.Context, tk HedgeTicket, model string) (HedgeResult, error) {
+	run := func(_ context.Context, _ HedgeTicket, _ string) (HedgeResult, error) {
 		return HedgeResult{
 			Green:  true,
 			Commit: nil,
@@ -71,7 +71,7 @@ func testHedgeNilCommit(t *testing.T) {
 
 func testHedgeCommitError(t *testing.T) {
 	cause := errors.New("commit failure")
-	run := func(ctx context.Context, tk HedgeTicket, model string) (HedgeResult, error) {
+	run := func(_ context.Context, _ HedgeTicket, _ string) (HedgeResult, error) {
 		return HedgeResult{
 			Green: true,
 			Commit: func() error {
@@ -97,7 +97,7 @@ func testHedgeCommitError(t *testing.T) {
 func testHedgeParentCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
-	run := func(ctx context.Context, tk HedgeTicket, model string) (HedgeResult, error) {
+	run := func(_ context.Context, _ HedgeTicket, _ string) (HedgeResult, error) {
 		return HedgeResult{
 			Green:  true,
 			Commit: func() error { return nil },
@@ -117,7 +117,7 @@ func TestHedgeBothFail(t *testing.T) {
 	errB := errors.New("failure B")
 
 	t.Run("both error", func(t *testing.T) {
-		run := func(ctx context.Context, tk HedgeTicket, model string) (HedgeResult, error) {
+		run := func(_ context.Context, _ HedgeTicket, model string) (HedgeResult, error) {
 			if model == "modelA" {
 				return HedgeResult{}, errA
 			}
@@ -137,7 +137,7 @@ func TestHedgeBothFail(t *testing.T) {
 
 	t.Run("one red one error", func(t *testing.T) {
 		var commitCalled atomic.Bool
-		run := func(ctx context.Context, tk HedgeTicket, model string) (HedgeResult, error) {
+		run := func(_ context.Context, _ HedgeTicket, model string) (HedgeResult, error) {
 			if model == "modelA" {
 				return HedgeResult{Green: false, Commit: func() error {
 					commitCalled.Store(true)

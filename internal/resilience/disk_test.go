@@ -112,7 +112,7 @@ func TestCandidateVolumeBecomesRequiredOnceSeen(t *testing.T) {
 	}
 
 	// First call: volume is mounted successfully.
-	statFnMounted := func(_ string, timeout time.Duration) (uint64, error) {
+	statFnMounted := func(_ string, _ time.Duration) (uint64, error) {
 		return 1024, nil
 	}
 
