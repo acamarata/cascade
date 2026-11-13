@@ -49,13 +49,19 @@ func TestRollupProducesOneSummaryPerTicket(t *testing.T) {
 	if summaries[1].Count != 1 {
 		t.Errorf("expected T2 count 1, got %d", summaries[1].Count)
 	}
+}
+
+// TestRollupRejectsInvalidEvents verifies duplicate and empty-ID validation
+// and that the input slice is not mutated.
+func TestRollupRejectsInvalidEvents(t *testing.T) {
+	now := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
 
 	// Test duplicate detection
 	duplicateEvents := []RetentionEvent{
 		{TicketID: "T1", At: now, Kind: "created"},
 		{TicketID: "T1", At: now, Kind: "created"},
 	}
-	_, err = RollupEvents(duplicateEvents)
+	_, err := RollupEvents(duplicateEvents)
 	if !errors.Is(err, ErrEventRetention) {
 		t.Errorf("expected ErrEventRetention for duplicates, got %v", err)
 	}

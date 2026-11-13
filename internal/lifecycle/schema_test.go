@@ -14,7 +14,11 @@ func TestSchemaMigrationsRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close db: %v", err)
+		}
+	}()
 
 	if err := runMigrations(db); err != nil {
 		t.Fatalf("first run: %v", err)

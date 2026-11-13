@@ -50,6 +50,8 @@ func RecordStaleBinaryRelaunch(role Role, binaryID string, log ManagerLog) error
 	}
 
 	switch role {
+	case RoleSupervisor:
+		return ErrSupervisorRelaunchForbidden
 	case RoleManager:
 		if strings.TrimSpace(binaryID) == "" {
 			return ErrInvalidRelaunch

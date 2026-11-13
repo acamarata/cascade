@@ -109,17 +109,10 @@ func RollupEvents(events []RetentionEvent) ([]Summary, error) {
 	}
 
 	seen := make(map[tuple]struct{})
-
-	var order []string
-	counts := make(map[string]int)
-	firsts := make(map[string]time.Time)
-	lasts := make(map[string]time.Time)
+	acc := newRollupAccumulator()
 
 	for _, e := range events {
-		if e.TicketID == "" || e.Kind == "" {
-			return nil, ErrEventRetention
-		}
-		if e.At.IsZero() {
+		if e.TicketID == "" || e.Kind == "" || e.At.IsZero() {
 			return nil, ErrEventRetention
 		}
 
@@ -133,30 +126,54 @@ func RollupEvents(events []RetentionEvent) ([]Summary, error) {
 		}
 		seen[t] = struct{}{}
 
-		if counts[e.TicketID] == 0 {
-			order = append(order, e.TicketID)
-			firsts[e.TicketID] = e.At
-			lasts[e.TicketID] = e.At
-		} else {
-			if e.At.Before(firsts[e.TicketID]) {
-				firsts[e.TicketID] = e.At
-			}
-			if e.At.After(lasts[e.TicketID]) {
-				lasts[e.TicketID] = e.At
-			}
-		}
-		counts[e.TicketID]++
+		acc.add(e)
 	}
 
-	result := make([]Summary, len(order))
-	for i, tid := range order {
+	return acc.summaries(), nil
+}
+
+// rollupAccumulator tracks per-ticket counts and time bounds in first-seen order.
+type rollupAccumulator struct {
+	order  []string
+	counts map[string]int
+	firsts map[string]time.Time
+	lasts  map[string]time.Time
+}
+
+func newRollupAccumulator() *rollupAccumulator {
+	return &rollupAccumulator{
+		counts: make(map[string]int),
+		firsts: make(map[string]time.Time),
+		lasts:  make(map[string]time.Time),
+	}
+}
+
+func (a *rollupAccumulator) add(e RetentionEvent) {
+	id := e.TicketID
+	if a.counts[id] == 0 {
+		a.order = append(a.order, id)
+		a.firsts[id] = e.At
+		a.lasts[id] = e.At
+	} else {
+		if e.At.Before(a.firsts[id]) {
+			a.firsts[id] = e.At
+		}
+		if e.At.After(a.lasts[id]) {
+			a.lasts[id] = e.At
+		}
+	}
+	a.counts[id]++
+}
+
+func (a *rollupAccumulator) summaries() []Summary {
+	result := make([]Summary, len(a.order))
+	for i, tid := range a.order {
 		result[i] = Summary{
 			TicketID: tid,
-			Count:    counts[tid],
-			FirstAt:  firsts[tid],
-			LastAt:   lasts[tid],
+			Count:    a.counts[tid],
+			FirstAt:  a.firsts[tid],
+			LastAt:   a.lasts[tid],
 		}
 	}
-
-	return result, nil
+	return result
 }

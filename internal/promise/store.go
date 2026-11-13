@@ -43,7 +43,7 @@ func NewMemoryStore() *MemoryStore {
 
 // Submit adds a promise to the store. If a promise with the same
 // IdempotencyKey already exists, it returns that existing promise.
-func (s *MemoryStore) Submit(ctx context.Context, p *Promise) (*Promise, error) {
+func (s *MemoryStore) Submit(_ context.Context, p *Promise) (*Promise, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -60,7 +60,7 @@ func (s *MemoryStore) Submit(ctx context.Context, p *Promise) (*Promise, error) 
 }
 
 // Get retrieves a promise by its ID. Returns ErrNotFound if not found.
-func (s *MemoryStore) Get(ctx context.Context, id string) (*Promise, error) {
+func (s *MemoryStore) Get(_ context.Context, id string) (*Promise, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -73,7 +73,7 @@ func (s *MemoryStore) Get(ctx context.Context, id string) (*Promise, error) {
 }
 
 // Update persists changes to a promise's state, including heartbeat updates.
-func (s *MemoryStore) Update(ctx context.Context, p *Promise) error {
+func (s *MemoryStore) Update(_ context.Context, p *Promise) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

@@ -9,7 +9,7 @@ type supervisorTestMockLog struct {
 	called bool
 }
 
-func (m *supervisorTestMockLog) AppendRelaunch(entry RelaunchEntry) error {
+func (m *supervisorTestMockLog) AppendRelaunch(_ RelaunchEntry) error {
 	m.called = true
 	return nil
 }
