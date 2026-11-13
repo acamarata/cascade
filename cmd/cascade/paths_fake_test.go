@@ -27,14 +27,8 @@ type fakeDaemonPaths struct{ root string }
 func (p fakeDaemonPaths) Root() string       { return p.root }
 func (p fakeDaemonPaths) ConfigPath() string { return filepath.Join(p.root, "config.toml") }
 func (p fakeDaemonPaths) SocketPath() string { return filepath.Join(p.root, "daemon.sock") }
-func (p fakeDaemonPaths) DataDir() string {
-	dir := filepath.Join(p.root, "data")
-	if p.root != "" {
-		seedFixtureDesignation(dir)
-	}
-	return dir
-}
-func (p fakeDaemonPaths) LogDir() string { return filepath.Join(p.root, "logs") }
+func (p fakeDaemonPaths) DataDir() string    { return fixtureDataDir(p.root) }
+func (p fakeDaemonPaths) LogDir() string     { return filepath.Join(p.root, "logs") }
 func (p fakeDaemonPaths) StorageRoot(prof runtime.Profile) string {
 	return filepath.Join(p.root, "data", "storage", string(prof))
 }

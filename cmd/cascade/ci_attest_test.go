@@ -75,6 +75,7 @@ func newAttestFixture(t *testing.T) *attestFixture {
 	if _, err := records.Enroll(id, nodes.TierWorkerTrusted); err != nil {
 		t.Fatalf("Enroll: %v", err)
 	}
+	writeTestDesignation(t, f.dataDir) // a designated controller home
 	return f
 }
 

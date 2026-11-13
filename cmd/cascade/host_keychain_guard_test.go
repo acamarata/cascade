@@ -76,6 +76,7 @@ func firewallTestPaths(t *testing.T) runtime.PathProvider {
 	if err != nil {
 		t.Fatal(err)
 	}
+	writeTestDesignation(t, paths.DataDir()) // a designated controller home
 	return paths
 }
 

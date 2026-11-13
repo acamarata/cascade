@@ -293,7 +293,7 @@ type fakeMemoryPaths struct{ root string }
 func (p fakeMemoryPaths) Root() string       { return p.root }
 func (p fakeMemoryPaths) ConfigPath() string { return filepath.Join(p.root, "config.toml") }
 func (p fakeMemoryPaths) SocketPath() string { return filepath.Join(p.root, "daemon.sock") }
-func (p fakeMemoryPaths) DataDir() string    { return filepath.Join(p.root, "data") }
+func (p fakeMemoryPaths) DataDir() string    { return fixtureDataDir(p.root) }
 func (p fakeMemoryPaths) LogDir() string     { return filepath.Join(p.root, "logs") }
 func (p fakeMemoryPaths) StorageRoot(prof runtime.Profile) string {
 	return filepath.Join(p.root, "data", "storage", string(prof))

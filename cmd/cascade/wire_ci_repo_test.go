@@ -43,6 +43,7 @@ func newCIRepoHarness(t *testing.T) ciRepoHarness {
 	}
 	t.Cleanup(func() { daemonRegistrations = saved })
 	paths := fakeDaemonPaths{root: t.TempDir()}
+	writeTestDesignation(t, paths.DataDir()) // DataDir seeds only an existing dir
 	reg, call := newElevatedTestRegistry(t, paths.DataDir())
 	return ciRepoHarness{paths, reg, call}
 }

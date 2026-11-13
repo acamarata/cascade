@@ -13,7 +13,9 @@ package daemon
 
 import (
 	"context"
+	"crypto/ed25519"
 	"database/sql"
+	"encoding/base64"
 	"github.com/acamarata/cascade/pkg/provider"
 	"path/filepath"
 	"testing"
@@ -21,6 +23,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/fleet/journal"
 	"github.com/acamarata/cascade/internal/jobs"
+	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/internal/storage/storetest"
@@ -103,7 +106,7 @@ func TestRegisterScheduler_ResumesStaleRunningJobAtLeased(t *testing.T) {
 	defer cancel()
 
 	m := NewManifest(nil, runtime.NewFixedClock(fixedResumeNow))
-	sched, err := m.RegisterScheduler(ctx, bus, runtime.NewFixedClock(fixedResumeNow), nil, "sched-test-resume", store, js, 0)
+	sched, err := m.RegisterScheduler(ctx, bus, runtime.NewFixedClock(fixedResumeNow), designatedControllerBinding(t), "sched-test-resume", store, js, 0)
 	if err != nil {
 		t.Fatalf("RegisterScheduler: %v", err)
 	}
@@ -141,9 +144,9 @@ func TestRegisterScheduler_ResumeSkippedOnNonController(t *testing.T) {
 	defer cancel()
 
 	m := NewManifest(nil, runtime.NewFixedClock(fixedResumeNow))
-	// fakeBindingBackend{ok: true} resolves nodes.ResolveRole to RoleNode
-	// (subsystems_scheduler_test.go's own precedent).
-	sched, err := m.RegisterScheduler(ctx, bus, runtime.NewFixedClock(fixedResumeNow), fakeBindingBackend{ok: true}, "sched-test-resume-node", store, js, 0)
+	// boundNodeBinding holds a complete binding and no designation, so
+	// nodes.ResolveRole resolves RoleNode.
+	sched, err := m.RegisterScheduler(ctx, bus, runtime.NewFixedClock(fixedResumeNow), boundNodeBinding(t), "sched-test-resume-node", store, js, 0)
 	if err != nil {
 		t.Fatalf("RegisterScheduler on a node daemon: %v (want no error -- resume is skipped, not fatal)", err)
 	}
@@ -171,4 +174,21 @@ func TestRegisterScheduler_ResumeSkippedOnNonController(t *testing.T) {
 	if !found {
 		t.Fatalf("Manifest snapshot has no %q entry: %+v", jobSchedulerSubsystem, m.Snapshot())
 	}
+}
+
+// boundNodeBinding returns the production file binding backend over a fresh
+// data dir holding a complete controller binding and no designation, so
+// nodes.ResolveRole resolves RoleNode.
+func boundNodeBinding(t *testing.T) nodes.ControllerBindingBackend {
+	t.Helper()
+	pub := ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize)).Public().(ed25519.PublicKey)
+	store := nodes.NewFileControllerBindingBackend(t.TempDir())
+	err := store.Save(nodes.ControllerBinding{
+		Endpoint: "ctl.example.invalid:7000", EnrollmentID: "enroll-scheduler-test",
+		ControllerPubKeyB64: base64.StdEncoding.EncodeToString(pub),
+	})
+	if err != nil {
+		t.Fatalf("save controller binding: %v", err)
+	}
+	return store
 }

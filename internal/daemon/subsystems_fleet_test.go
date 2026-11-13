@@ -96,7 +96,7 @@ func newFleetRig(t *testing.T, configTOML string) *fleetRig {
 	t.Cleanup(func() { newRowTicker, samplerCollect = savedTicker, savedCollect })
 	return &fleetRig{ctx: ctx, cancel: cancel, ticker: ft, rowTicker: rowT, clock: clock, deps: FleetRuntimeDeps{
 		Paths: paths, Clock: clock, Manifest: NewManifest(nil, clock), Bus: events.New(store, clock),
-		Config: &runtime.Config{}, Store: store, Binding: fakeBindingBackend{}, SamplerTicker: ft,
+		Config: &runtime.Config{}, Store: store, Binding: designatedControllerBinding(t), SamplerTicker: ft,
 	}}
 }
 

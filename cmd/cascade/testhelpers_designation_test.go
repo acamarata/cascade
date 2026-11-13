@@ -2,9 +2,10 @@ package main
 
 // Purpose: seed the controller designation the cmd/cascade daemon fixtures
 //   need, through the production file designation backend.
-// Constraints: no build tag (fakeDaemonPaths, its one shared caller, is
-//   untagged). A fixture never weakens the role resolver: homes that need a
-//   role conflict remove the record with removeTestDesignation.
+// Constraints: no build tag (fakeDaemonPaths and fakeMemoryPaths, its
+//   shared callers, are untagged). A fixture never weakens the role
+//   resolver: homes that need a role conflict remove the record with
+//   removeTestDesignation.
 // SPORT: cmd/cascade test-support (ADD).
 
 import (
@@ -35,6 +36,16 @@ var designationSeeds = struct {
 	sync.Mutex
 	done map[string]bool
 }{done: map[string]bool{}}
+
+// fixtureDataDir is root's data dir for the fake path providers
+// (fakeDaemonPaths, fakeMemoryPaths), seeded once it exists.
+func fixtureDataDir(root string) string {
+	dir := filepath.Join(root, "data")
+	if root != "" {
+		seedFixtureDesignation(dir)
+	}
+	return dir
+}
 
 // seedFixtureDesignation seeds dataDir once, and only after it exists.
 func seedFixtureDesignation(dataDir string) {
@@ -107,4 +118,46 @@ func removeTestFile(t *testing.T, path string) {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		t.Fatalf("remove %s: %v", path, err)
 	}
+}
+
+// testControllerKeyB64 is a well-formed pinned controller key (32 zero bytes).
+const testControllerKeyB64 = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+
+// fakeDesignations is an in-memory designation backend.
+type fakeDesignations struct {
+	d   nodes.Designation
+	ok  bool
+	err error
+}
+
+func (f fakeDesignations) Load() (nodes.Designation, bool, error) { return f.d, f.ok, f.err }
+func (fakeDesignations) Write(nodes.Designation) error            { return nil }
+func (fakeDesignations) Remove() error                            { return nil }
+
+// fakeBinding is a resolver input for the store half of the eligibility
+// check: a complete binding (ok) or a load error, and no designation.
+type fakeBinding struct {
+	ok  bool
+	err error
+}
+
+func (f fakeBinding) Load() (nodes.ControllerBinding, bool, error) {
+	return nodes.ControllerBinding{Endpoint: "tcp://controller.invalid:7443", ControllerPubKeyB64: testControllerKeyB64}, f.ok, f.err
+}
+
+// DesignationBackend exposes an empty designation, so ok resolves as node.
+func (fakeBinding) DesignationBackend() nodes.DesignationBackend { return fakeDesignations{} }
+
+// seedRunHomeDesignation designates the shared per-run HOME's data dir as a
+// controller for one test, and removes it afterwards if this test wrote it.
+func seedRunHomeDesignation(t *testing.T, dataDir string) {
+	t.Helper()
+	if _, ok, err := nodes.NewFileDesignationBackend(dataDir).Load(); err != nil || ok {
+		if err != nil {
+			t.Fatalf("load designation under %s: %v", dataDir, err)
+		}
+		return
+	}
+	writeTestDesignation(t, dataDir)
+	t.Cleanup(func() { _ = nodes.NewFileDesignationBackend(dataDir).Remove() })
 }
