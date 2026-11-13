@@ -105,6 +105,7 @@ func TestInstallationKeyUsesTestMainCustody(t *testing.T) {
 	if home := os.Getenv("HOME"); paths.DataDir() == "" || !strings.HasPrefix(paths.DataDir(), home+string(os.PathSeparator)) {
 		t.Fatalf("the data directory %q is not under the per-run HOME %q", paths.DataDir(), home)
 	}
+	seedRunHomeDesignation(t, paths.DataDir())
 	ctx := context.Background()
 	intercepted := interceptedHostSelections.Load()
 	attempts, _ := hostCustodyAttempts()

@@ -178,6 +178,7 @@ func TestGitGateMissingPolicyRefuses(t *testing.T) {
 	if deps.GOOS == "windows" {
 		t.Skip(ci.ErrWindowsNotSupported.Error())
 	}
+	writeTestDesignation(t, deps.Paths.DataDir()) // a controller home, so the policy check is reached
 	err := verifyGitGateTip(context.Background(), deps, nil, nil, "", ci.AttestWant{}, "")
 	if !cascade.HasKind(err, cascade.KindUnavailable) || !strings.Contains(err.Error(), "policy-version") {
 		t.Fatalf("missing policy: %v", err)

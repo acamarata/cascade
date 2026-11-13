@@ -69,11 +69,18 @@ func writeBinding(content string) func(*testing.T, runtime.PathProvider) runtime
 	}
 }
 
+// nodeHome is case (a): a complete binding and no designation is a node.
+func nodeHome(t *testing.T, root runtime.PathProvider) runtime.PathProvider {
+	t.Helper()
+	removeTestDesignation(t, root.DataDir())
+	return writeBinding(`{"endpoint":"tcp://controller.invalid:7443","enrollment_id":"enr-fake","controller_pubkey_b64":"`+testControllerKeyB64+`"}`)(t, root)
+}
+
 func refusalCases() []refusalCase {
 	return []refusalCase{
-		{"a resolver says node", anchorNode, writeBinding(`{"endpoint":"tcp://controller.invalid:7443","enrollment_id":"enr-fake"}`)},
+		{"a resolver says node", anchorNode, nodeHome},
 		{"b empty file", anchorError, writeBinding("")},
-		{"b empty endpoint", anchorController, writeBinding(`{"endpoint":"","enrollment_id":"enr-fake"}`)},
+		{"b empty endpoint", anchorError, writeBinding(`{"endpoint":"","enrollment_id":"enr-fake"}`)},
 		{"b not json", anchorError, writeBinding("fake binding")},
 		{"f binding is a directory", anchorError, func(t *testing.T, root runtime.PathProvider) runtime.PathProvider {
 			t.Helper()
@@ -95,7 +102,9 @@ func refusalCases() []refusalCase {
 		}},
 		{"f nodes is a file (ENOTDIR)", anchorError, func(t *testing.T, root runtime.PathProvider) runtime.PathProvider {
 			t.Helper()
-			mkdirAll(t, root.DataDir())
+			if err := os.RemoveAll(filepath.Join(root.DataDir(), "nodes")); err != nil { // the seeded designation dir
+				t.Fatal(err)
+			}
 			if err := os.WriteFile(filepath.Join(root.DataDir(), "nodes"), []byte("x"), 0o600); err != nil {
 				t.Fatal(err)
 			}
@@ -202,16 +211,6 @@ func TestNonControllerRefusesProvisioning(t *testing.T) {
 	})
 	t.Run("h probe errors", testProbeErrors)
 	t.Run("errno table", testBindingProbeAbsentTable)
-}
-
-// fakeBinding is a resolver input for the store half of the check.
-type fakeBinding struct {
-	ok  bool
-	err error
-}
-
-func (f fakeBinding) Load() (nodes.ControllerBinding, bool, error) {
-	return nodes.ControllerBinding{Endpoint: "tcp://controller.invalid:7443"}, f.ok, f.err
 }
 
 // fixedClock is the record store's clock.

@@ -219,8 +219,10 @@ func TestFileControllerBindingBackend(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(nodesDir, "controller_binding.json"), emptyEndpoint, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok, err := backend.Load(); err != nil || ok {
-		t.Fatalf("empty endpoint must resolve to ok=false, got ok=%v err=%v", ok, err)
+	// An incomplete record is kept (ok=true) so role resolution reports
+	// binding-incomplete instead of mistaking it for absence.
+	if got, ok, err := backend.Load(); err != nil || !ok || got.Endpoint != "" {
+		t.Fatalf("empty endpoint must load as an incomplete record, got %+v ok=%v err=%v", got, ok, err)
 	}
 }
 

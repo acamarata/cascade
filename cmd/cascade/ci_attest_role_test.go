@@ -26,6 +26,7 @@ func TestAttestTrustForRoleRefusesBadRole(t *testing.T) {
 	dataDir := t.TempDir()
 	clock := testkit.NewFrozenClock(testkit.NewRealClock().Now())
 	assertMalformedBindingRefused(t, dataDir, clock)
+	writeTestDesignation(t, dataDir) // the controller role below
 
 	db := openAttestRoleDB(t, filepath.Join(dataDir, "cascade.db"), clock)
 	pub, _, err := ed25519.GenerateKey(nil)
@@ -100,10 +101,11 @@ func openAttestRoleDB(t *testing.T, path string, clock *testkit.FrozenClock) *sq
 	return db
 }
 
-// writeTestControllerBinding saves a controller binding for pub, which makes
-// this home the node role.
+// writeTestControllerBinding removes the designation and saves a controller
+// binding for pub, which makes this home the node role.
 func writeTestControllerBinding(t *testing.T, dataDir string, pub ed25519.PublicKey) {
 	t.Helper()
+	removeTestDesignation(t, dataDir)
 	binding := nodes.ControllerBinding{
 		Endpoint:            "https://example.com",
 		EnrollmentID:        "test-enrollment",
@@ -161,10 +163,11 @@ func TestCiAttestVerifyUsesVouchedStoreOnNode(t *testing.T) {
 		t.Fatalf("verify with vouch: %v (exit %d), want exit 0", err, cascade.ExitCode(err))
 	}
 
-	// Controller role (no binding) reads the record store and passes.
+	// Controller role (designation, no binding) reads the record store and passes.
 	if err := os.Remove(filepath.Join(f.dataDir, "nodes", "controller_binding.json")); err != nil {
 		t.Fatal(err)
 	}
+	writeTestDesignation(t, f.dataDir)
 	err = f.runInProcess(t, f.commit, "--require", "--repo-id", "repo-a")
 	if cascade.ExitCode(err) != 0 {
 		t.Fatalf("verify as controller: %v (exit %d), want exit 0", err, cascade.ExitCode(err))
