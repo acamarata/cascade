@@ -1,6 +1,19 @@
 // Package db holds the control plane database schema: table, view, phase status and migration names.
 package db
 
+import (
+	"database/sql"
+	"errors"
+)
+
+// ErrNotImplemented is returned by stub functions that have not yet been implemented.
+var ErrNotImplemented = errors.New("not implemented")
+
+// Migrate applies the database schema migrations to the given database.
+func Migrate(db *sql.DB) error {
+	return ErrNotImplemented
+}
+
 // Table names used in the control plane database schema.
 const (
 	// TableMeta is the schema metadata table.

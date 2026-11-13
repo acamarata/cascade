@@ -48,3 +48,43 @@ type Plan struct {
 	// Action describes the next step.
 	Action Action
 }
+
+// PlanStreams computes the optimal number of streams to start based on
+// ready work, the target stream count (200), and the learned ceiling.
+// When rpmUsed reaches rpmLimit it chooses between waiting for the next
+// window and escalating to the next ladder rung. The returned Plan always
+// carries a Start, Wait, or Escalate action; it never blocks.
+func PlanStreams(ready, ceiling, rpmUsed, rpmLimit int, ladder []string) Plan {
+	target := 200
+	streams := ready
+	binding := BindingReady
+
+	if ceiling < streams {
+		streams = ceiling
+		binding = BindingCeiling
+	}
+	if target < streams {
+		streams = target
+		binding = BindingTarget
+	}
+
+	action := Action{Type: ActionStart}
+
+	if rpmLimit > 0 && rpmUsed >= rpmLimit {
+		binding = BindingRPM
+		if len(ladder) > 1 {
+			action.Type = ActionEscalate
+			action.EscalateTo = ladder[1]
+		} else {
+			action.Type = ActionWait
+			now := time.Now()
+			action.WaitUntil = now.Truncate(time.Minute).Add(time.Minute)
+		}
+	}
+
+	return Plan{
+		Streams: streams,
+		Binding: binding,
+		Action:  action,
+	}
+}
