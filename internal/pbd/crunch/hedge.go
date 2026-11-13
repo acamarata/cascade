@@ -50,27 +50,28 @@ func Hedge(ctx context.Context, t HedgeTicket, modelA, modelB string, run HedgeR
 	defer cancel()
 
 	type outcome struct {
-		res HedgeResult
-		err error
+		model string
+		res   HedgeResult
+		err   error
 	}
 
 	ch := make(chan outcome, 2)
 
-	go func() {
-		res, err := run(ctx, t, modelA)
-		ch <- outcome{res, err}
-	}()
-	go func() {
-		res, err := run(ctx, t, modelB)
-		ch <- outcome{res, err}
-	}()
-
 	var wg sync.WaitGroup
-	wg.Add(1)
+	wg.Add(2)
+
 	go func() {
 		defer wg.Done()
-		<-ctx.Done()
+		res, err := run(ctx, t, modelA)
+		ch <- outcome{modelA, res, err}
 	}()
+	go func() {
+		defer wg.Done()
+		res, err := run(ctx, t, modelB)
+		ch <- outcome{modelB, res, err}
+	}()
+
+	var errA, errB error
 
 	for i := 0; i < 2; i++ {
 		select {
@@ -80,6 +81,19 @@ func Hedge(ctx context.Context, t HedgeTicket, modelA, modelB string, run HedgeR
 				wg.Wait()
 				return o.res, nil
 			}
+			if o.model == modelA {
+				if o.err == nil {
+					errA = ErrHedgeRed
+				} else {
+					errA = o.err
+				}
+			} else {
+				if o.err == nil {
+					errB = ErrHedgeRed
+				} else {
+					errB = o.err
+				}
+			}
 		case <-ctx.Done():
 			wg.Wait()
 			return HedgeResult{}, ctx.Err()
@@ -87,5 +101,5 @@ func Hedge(ctx context.Context, t HedgeTicket, modelA, modelB string, run HedgeR
 	}
 
 	wg.Wait()
-	return HedgeResult{}, ErrHedgeRed
+	return HedgeResult{}, errors.Join(errA, errB)
 }

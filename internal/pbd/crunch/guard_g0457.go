@@ -26,10 +26,14 @@ type ExecEnv struct {
 }
 
 // ReportStatus records an HTTP response status for the given lane.
-// A 429 status triggers a 10-minute cooldown for that lane.
-// This method returns ErrInvalidGuard if the receiver is nil, the lane is empty, or Now is nil.
+// A 429 status triggers a 10-minute cooldown for that lane, extending any existing deadline.
+// Other valid statuses (100..599) are no-ops and never clear or shorten cooldown.
+// Returns ErrInvalidGuard if the receiver is nil, the lane is empty, Now/Quota are nil, or status is outside 100..599.
 func (e *ExecEnv) ReportStatus(lane string, status int) error {
-	if e == nil || lane == "" || e.Now == nil {
+	if e == nil || lane == "" || e.Now == nil || e.Quota == nil {
+		return ErrInvalidGuard
+	}
+	if status < 100 || status > 599 {
 		return ErrInvalidGuard
 	}
 
@@ -38,7 +42,12 @@ func (e *ExecEnv) ReportStatus(lane string, status int) error {
 			e.cooldownUntil = make(map[string]time.Time)
 		}
 		now := e.Now()
-		e.cooldownUntil[lane] = now.Add(10 * time.Minute)
+		newDeadline := now.Add(10 * time.Minute)
+		if existing, ok := e.cooldownUntil[lane]; ok && existing.After(newDeadline) {
+			e.cooldownUntil[lane] = existing
+		} else {
+			e.cooldownUntil[lane] = newDeadline
+		}
 	}
 
 	return nil
