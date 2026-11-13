@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-13T21:19:32Z",
+  "generated_at": "2026-11-13T22:03:44Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4995,6 +4995,12 @@
           "raw": "cmd/cascade daemon registrations (P1-CORE-01)."
         },
         {
+          "file": "cmd/cascade/wire_fleet_topology.go",
+          "line": 13,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (P1-TOP-06f)."
+        },
+        {
           "file": "cmd/cascade/wire_fleet_topology_rpc.go",
           "line": 8,
           "status": "",
@@ -7395,6 +7401,12 @@
           "line": 10,
           "status": "ADD",
           "raw": "cmd/cascade/daemon (ADD, P1-CAP-05)."
+        },
+        {
+          "file": "cmd/cascade/wire_fleet_topology_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "cmd/cascade/daemon (ADD, P1-TOP-06f)."
         }
       ],
       "statuses": [
@@ -44718,7 +44730,7 @@
       ]
     }
   ],
-  "total_sites": 4303,
+  "total_sites": 4305,
   "unspecified_count": 418,
   "multi_status_count": 132
 }
