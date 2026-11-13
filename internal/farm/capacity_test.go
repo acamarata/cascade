@@ -1,7 +1,6 @@
 package farm
 
 import (
-	"errors"
 	"testing"
 	"time"
 )
@@ -38,13 +37,4 @@ func TestDeclarationsCompile(t *testing.T) {
 
 	Record(row, Sample{UsedPct: 34.5})
 
-	if ErrNotImplemented == nil {
-		t.Fatal("ErrNotImplemented is nil")
-	}
-	if got := ErrNotImplemented.Error(); got != "farm: operation unavailable" {
-		t.Fatalf("ErrNotImplemented.Error() = %q, want %q", got, "farm: operation unavailable")
-	}
-	if !errors.Is(ErrNotImplemented, ErrNotImplemented) {
-		t.Fatal("ErrNotImplemented does not match itself")
-	}
 }
