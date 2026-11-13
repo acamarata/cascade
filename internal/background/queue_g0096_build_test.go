@@ -81,12 +81,17 @@ func runUnbuildableCase(t *testing.T, tt unbuildableCase) {
 		t.Fatalf("builder received brief %q, want %q", builder.lastBrief, tt.brief)
 	}
 
+	checkUnbuiltResult(t, q, result, tt.expectedNote)
+}
+
+func checkUnbuiltResult(t *testing.T, q, result BriefQueue, expectedNote string) {
+	t.Helper()
 	if len(result.Tasks) != 1 {
 		t.Fatalf("result has %d tasks, want 1", len(result.Tasks))
 	}
 
-	if result.Tasks[0].Note != tt.expectedNote {
-		t.Errorf("task Note = %q, want %q", result.Tasks[0].Note, tt.expectedNote)
+	if result.Tasks[0].Note != expectedNote {
+		t.Errorf("task Note = %q, want %q", result.Tasks[0].Note, expectedNote)
 	}
 
 	if result.Tasks[0].Status != "queued" {

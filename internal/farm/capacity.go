@@ -70,5 +70,5 @@ func Admit(_ *Capacity, _ Snapshot) Decision {
 
 // Record persists a utilization sample for a farm node. The stub
 // implementation performs no action.
-func Record(_ *Capacity, s Sample) {
+func Record(_ *Capacity, _ Sample) {
 }

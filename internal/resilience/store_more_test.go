@@ -16,7 +16,11 @@ func TestRestartBackoff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("db.Close: %v", err)
+		}
+	}()
 
 	expected := []time.Duration{
 		1 * time.Minute,

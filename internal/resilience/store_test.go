@@ -63,7 +63,11 @@ func TestOpenCreatesTables(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if cerr := db.Close(); cerr != nil {
+			t.Errorf("db.Close failed: %v", cerr)
+		}
+	}()
 
 	// Verify it's a valid DBStore
 	if db == nil {
