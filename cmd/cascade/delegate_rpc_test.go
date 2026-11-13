@@ -238,8 +238,8 @@ func TestDelegateRegistrationWiresOnce(t *testing.T) {
 			t.Errorf("wire_delegate.go never calls %s", need)
 		}
 	}
-	if calls["RepoIDOf"] {
-		t.Error("wire_delegate.go sets RepoIDOf; it stays nil")
+	if !calls["RepoIDOf"] {
+		t.Error("wire_delegate.go never binds RepoIDOf")
 	}
 }
 

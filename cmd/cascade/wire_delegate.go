@@ -22,6 +22,9 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/conductor"
+	cascadecontext "github.com/acamarata/cascade/internal/context"
+	"github.com/acamarata/cascade/internal/context/policy"
+	"github.com/acamarata/cascade/internal/context/scope"
 	"github.com/acamarata/cascade/internal/delegation"
 	"github.com/acamarata/cascade/internal/fleet/capacity"
 	"github.com/acamarata/cascade/internal/hooks/egress"
@@ -113,7 +116,8 @@ func buildDelegateService(ctx context.Context, w *daemonWiring, cfg runtime.Agen
 		return nil, nil, err
 	}
 	svc := delegation.NewService(delegation.Deps{Clock: w.Clock, Store: w.Deps.Fleet.Jobs(), Pinned: signer.PublicKey(),
-		Signer: signer, Minter: w.Deps.Minter, Shim: registeringShim{spawn: shim, live: daemonSpawns}}.WithFleet(w.Deps.Fleet.Fleet()))
+		RepoIDOf: delegateRepoIDOf(scope.NewGraphStore(w.Deps.RawDB), cascadecontext.GitCommonDir),
+		Signer:   signer, Minter: w.Deps.Minter, Shim: registeringShim{spawn: shim, live: daemonSpawns}}.WithFleet(w.Deps.Fleet.Fleet()))
 	svc.SetAgentLanes(lanes)
 	err = svc.BindCollection(delegation.Collection{Ctx: w.Ctx, Supervisor: w.Manifest, Notify: w.Deps.Notify.Service(),
 		Ticks: func() runtime.Ticker { return runtime.NewSystemTicker(time.Second) }, MaxWallClock: cfg.Delegation.MaxWallClock})
@@ -158,6 +162,12 @@ func buildDelegateShim(w *daemonWiring, cfg runtime.AgentsConfig) (*agents.Shim,
 		ProfileBase:  filepath.Join(w.Paths.DataDir(), "agents", "profiles"),
 		Engine:       func() (*egress.Engine, error) { return daemonEgressFirewall(w.Paths, egress.DefaultRegistry()) },
 		ProxyJournal: agents.ProxyJournal(log, effects), Binaries: delegateBinaries(bindings, cfg),
+		Defaults: map[agents.HarnessID]provider.DriverDefaults{"claude": func() provider.DriverDefaults {
+			d := provider.NewDriverDefaults()
+			d.KernelPromptFile = filepath.Join(w.Paths.DataDir(), policy.KernelFileRel)
+			d.SubagentKernelPromptFile = filepath.Join(w.Paths.DataDir(), policy.KernelFileRel)
+			return d
+		}()},
 		Exe: exe, Getenv: getenv, Clock: w.Clock})
 }
 
