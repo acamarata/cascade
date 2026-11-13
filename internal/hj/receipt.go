@@ -103,3 +103,20 @@ func (m *memoryReceiptStore) All() []Receipt {
 
 	return res
 }
+
+var defaultStore = NewMemoryReceiptStore()
+
+// Persist writes a receipt to the package-local default store.
+// It returns its input on successful Save, otherwise Receipt{} and the Save error.
+func Persist(r Receipt) (Receipt, error) {
+	if err := defaultStore.Save(r); err != nil {
+		return Receipt{}, err
+	}
+	return r, nil
+}
+
+// Receipts returns independent snapshots of all receipts from the default store
+// sorted ascending by ID, nil when empty. Concurrent Persist and Receipts calls are safe.
+func Receipts() []Receipt {
+	return defaultStore.All()
+}
