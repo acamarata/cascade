@@ -1,24 +1,24 @@
 // Package docket provides ticket scheduling primitives.
 package docket
 
-// State represents the lifecycle state of a ticket.
-type State string
+// SchedState represents the lifecycle state of a ticket.
+type SchedState string
 
 const (
-	// Parked indicates a ticket that is parked and not actively progressing.
-	Parked State = "parked"
-	// Pending indicates a ticket that is waiting to be started.
-	Pending State = "pending"
-	// Running indicates a ticket that is currently in progress.
-	Running State = "running"
-	// Done indicates a ticket that has been completed.
-	Done State = "done"
+	// SchedParked indicates a ticket that is parked and not actively progressing.
+	SchedParked SchedState = "parked"
+	// SchedPending indicates a ticket that is waiting to be started.
+	SchedPending SchedState = "pending"
+	// SchedRunning indicates a ticket that is currently in progress.
+	SchedRunning SchedState = "running"
+	// SchedDone indicates a ticket that has been completed.
+	SchedDone SchedState = "done"
 )
 
-// Ticket represents a unit of work with dependencies.
-type Ticket struct {
+// SchedTicket represents a unit of work with dependencies.
+type SchedTicket struct {
 	ID    string
-	State State
+	State SchedState
 	Deps  []string
 }
 
@@ -30,15 +30,15 @@ type Result struct {
 
 // Schedule determines which pending tickets are schedulable based on their dependency states.
 // When assumeDone is true, parked dependencies are treated as completed.
-func Schedule(ts []Ticket, assumeDone bool) Result {
-	stateByID := make(map[string]State, len(ts))
+func Schedule(ts []SchedTicket, assumeDone bool) Result {
+	stateByID := make(map[string]SchedState, len(ts))
 	for _, t := range ts {
 		stateByID[t.ID] = t.State
 	}
 
 	var r Result
 	for _, t := range ts {
-		if t.State != Pending {
+		if t.State != SchedPending {
 			continue
 		}
 		blocked := false
@@ -48,10 +48,10 @@ func Schedule(ts []Ticket, assumeDone bool) Result {
 				blocked = true
 				break
 			}
-			if st == Done {
+			if st == SchedDone {
 				continue
 			}
-			if st == Parked && assumeDone {
+			if st == SchedParked && assumeDone {
 				continue
 			}
 			blocked = true
