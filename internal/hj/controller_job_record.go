@@ -1,4 +1,4 @@
-// Package hj provides internal job record tracking for MS5.
+// Package hj provides internal job record tracking for the controller.
 package hj
 
 import (
@@ -9,10 +9,10 @@ import (
 )
 
 // ErrInvalidPromptCommand is returned when the provided command string
-// does not conform to the required format for MS5 job recording.
-var ErrInvalidPromptCommand = errors.New("ms5: invalid prompt command")
+// does not conform to the required format for controller job recording.
+var ErrInvalidPromptCommand = errors.New("controller: invalid prompt command")
 
-// ControllerJobRecord represents a single recorded MS5 job entry.
+// ControllerJobRecord represents a single recorded controller job entry.
 type ControllerJobRecord struct {
 	ID      string
 	Command string
@@ -24,7 +24,7 @@ var (
 	nextID  = 1
 )
 
-// RecordControllerJob parses, masks, and records an MS5 job command.
+// RecordControllerJob parses, masks, and records a controller job command.
 // It rejects commands containing ASCII single quotes, double quotes, or backslashes.
 // The command must contain exactly one "--prompt" flag followed by a value token
 // that does not begin with "--". The value is masked unless it is exactly "MASKED".
@@ -89,7 +89,7 @@ func maskValue(value string) string {
 	return strings.Repeat("*", len(value)-1)
 }
 
-// ControllerRecords returns an independent, insertion-ordered copy of all recorded MS5 jobs.
+// ControllerRecords returns an independent, insertion-ordered copy of all recorded controller jobs.
 // It returns nil if no jobs have been successfully recorded yet.
 func ControllerRecords() []ControllerJobRecord {
 	mu.Lock()
