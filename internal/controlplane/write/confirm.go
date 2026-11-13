@@ -8,9 +8,12 @@ type Tick struct {
 	Load1           float64
 }
 
-// Finding represents a confirmed diagnostic finding.
+// Finding represents a diagnostic finding produced by the control plane. Confirm sets Code; StaleBinaryFinding sets Kind
+// (for it "daemon_stale_binary") and Text, a human-readable description.
 type Finding struct {
 	Code string
+	Kind string
+	Text string
 }
 
 // Confirm evaluates consecutive ticks and returns findings when

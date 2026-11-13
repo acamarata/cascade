@@ -5,8 +5,8 @@ import (
 	"fmt"
 )
 
-// Parent represents the original ticket being split.
-type Parent struct {
+// SplitParent represents the original ticket being split.
+type SplitParent struct {
 	// Acceptance holds the acceptance criteria lines of the parent ticket.
 	Acceptance []string
 	// Scope holds the scope items of the parent ticket.
@@ -31,7 +31,7 @@ var ErrScopeMismatch = errors.New("scope union mismatch")
 // Every parent acceptance line must map to at least one child, and the union of child scopes
 // must exactly equal the parent scope. Invalid splits return typed rejection errors carrying
 // D2466 for unmapped acceptance lines and D2467 for scope union mismatches.
-func ValidateSplit(parent Parent, children []Child) error {
+func ValidateSplit(parent SplitParent, children []Child) error {
 	childAcceptance := make(map[string]bool)
 	for _, c := range children {
 		for _, a := range c.Acceptance {
