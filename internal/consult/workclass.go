@@ -15,9 +15,19 @@ type ClassConstraints struct {
 var ErrUnknownTaskClass = errors.New("D3543: unknown task class")
 
 // ValidateWorkClass checks whether the provided task class name is recognized.
-// It does not trim or normalize the input. Empty, whitespace-only, unknown or
-// differently cased names return zero constraints and ErrUnknownTaskClass.
-func ValidateWorkClass(_ string) (ClassConstraints, error) {
-	// No supported classes are registered in this iteration.
-	return ClassConstraints{}, ErrUnknownTaskClass
+// The writable classes write, build-simple, build and build-hard return
+// ReadOnly=false and RequiresVerify=true. It does not trim or normalize the
+// input. Empty, whitespace-only, unknown or differently cased names return zero
+// constraints and ErrUnknownTaskClass.
+func ValidateWorkClass(name string) (ClassConstraints, error) {
+	switch name {
+	case "write", "build-simple", "build", "build-hard":
+		return ClassConstraints{
+			Class:          name,
+			ReadOnly:       false,
+			RequiresVerify: true,
+		}, nil
+	default:
+		return ClassConstraints{}, ErrUnknownTaskClass
+	}
 }
