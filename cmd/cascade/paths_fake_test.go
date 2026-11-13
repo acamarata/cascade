@@ -9,6 +9,11 @@ package main
 //   `undefined: fakeDaemonPaths`. Tagging those tests !windows would have
 //   fixed the build by deleting windows coverage of commands that ship
 //   there; moving the shared helper keeps both.
+//   DataDir seeds a controller designation once per data dir, after the
+//   data dir exists, so a daemon fixture over a fresh home resolves the
+//   controller role without each test seeding it and a command that must
+//   not create the data dir still does not; role tests remove it with
+//   removeTestDesignation.
 // SPORT: cmd/cascade test-support (ADD).
 
 import (
@@ -22,8 +27,14 @@ type fakeDaemonPaths struct{ root string }
 func (p fakeDaemonPaths) Root() string       { return p.root }
 func (p fakeDaemonPaths) ConfigPath() string { return filepath.Join(p.root, "config.toml") }
 func (p fakeDaemonPaths) SocketPath() string { return filepath.Join(p.root, "daemon.sock") }
-func (p fakeDaemonPaths) DataDir() string    { return filepath.Join(p.root, "data") }
-func (p fakeDaemonPaths) LogDir() string     { return filepath.Join(p.root, "logs") }
+func (p fakeDaemonPaths) DataDir() string {
+	dir := filepath.Join(p.root, "data")
+	if p.root != "" {
+		seedFixtureDesignation(dir)
+	}
+	return dir
+}
+func (p fakeDaemonPaths) LogDir() string { return filepath.Join(p.root, "logs") }
 func (p fakeDaemonPaths) StorageRoot(prof runtime.Profile) string {
 	return filepath.Join(p.root, "data", "storage", string(prof))
 }

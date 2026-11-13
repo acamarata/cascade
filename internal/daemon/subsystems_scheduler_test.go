@@ -14,6 +14,7 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,13 +37,28 @@ func (b fakeBindingBackend) Load() (nodes.ControllerBinding, bool, error) {
 	return b.binding, b.ok, b.err
 }
 
+// designatedControllerBinding returns the production file binding backend
+// over a fresh data dir holding a controller designation and no binding.
+func designatedControllerBinding(t *testing.T) nodes.ControllerBindingBackend {
+	t.Helper()
+	dir := t.TempDir()
+	err := nodes.NewFileDesignationBackend(dir).Write(nodes.Designation{
+		InstallationID: "inst_schedulertest", ControllerNodeID: "node-scheduler-test",
+		Epoch: 1, DesignatedAt: time.Date(2026, 11, 13, 0, 0, 0, 0, time.UTC), Reason: "init",
+	})
+	if err != nil {
+		t.Fatalf("write designation: %v", err)
+	}
+	return nodes.NewFileControllerBindingBackend(dir)
+}
+
 func newSchedulerTestBus() *events.Bus {
 	return events.New(storetest.NewMemStore(), runtime.NewSystemClock())
 }
 
 // TestRegisterScheduler_ControllerRoleStartsAndConsumesRealEvent proves
-// RegisterScheduler resolves RoleController (nil binding, the documented
-// safe default), subscribes for real, and its background consumer reaches
+// RegisterScheduler resolves RoleController (a persisted designation),
+// subscribes for real, and its background consumer reaches
 // Scheduler.Advance for a real bus-published lease_acquired event without
 // error -- the composition root behavior daemon_unix_scheduler_dag_test.go
 // proves is actually mounted; this test proves what runs once it is.
@@ -52,7 +68,7 @@ func TestRegisterScheduler_ControllerRoleStartsAndConsumesRealEvent(t *testing.T
 	defer cancel()
 
 	m := NewManifest(nil, runtime.NewSystemClock())
-	sched, err := m.RegisterScheduler(ctx, bus, runtime.NewSystemClock(), nil, "sched-test-controller", nil, nil, 0)
+	sched, err := m.RegisterScheduler(ctx, bus, runtime.NewSystemClock(), designatedControllerBinding(t), "sched-test-controller", nil, nil, 0)
 	if err != nil {
 		t.Fatalf("RegisterScheduler: %v", err)
 	}
@@ -102,10 +118,11 @@ func TestRegisterScheduler_SubscribeFailureRecordsFailed(t *testing.T) {
 	defer cancel()
 
 	m := NewManifest(nil, runtime.NewSystemClock())
-	if _, err := m.RegisterScheduler(ctx, bus, runtime.NewSystemClock(), nil, "sched-test-dup", nil, nil, 0); err != nil {
+	binding := designatedControllerBinding(t)
+	if _, err := m.RegisterScheduler(ctx, bus, runtime.NewSystemClock(), binding, "sched-test-dup", nil, nil, 0); err != nil {
 		t.Fatalf("first RegisterScheduler: %v", err)
 	}
-	if _, err := m.RegisterScheduler(ctx, bus, runtime.NewSystemClock(), nil, "sched-test-dup", nil, nil, 0); err == nil {
+	if _, err := m.RegisterScheduler(ctx, bus, runtime.NewSystemClock(), binding, "sched-test-dup", nil, nil, 0); err == nil {
 		t.Fatal("second RegisterScheduler with a duplicate cursor name = nil error, want a conflict")
 	}
 
@@ -120,22 +137,44 @@ func TestRegisterScheduler_SubscribeFailureRecordsFailed(t *testing.T) {
 	}
 }
 
-// TestRegisterScheduler_ResolveRoleErrorRecordsFailed proves a
-// ControllerBindingBackend.Load failure is recorded Failed and returned,
-// never silently defaulted to a role.
+// TestRegisterScheduler_ResolveRoleErrorRecordsFailed proves a role
+// conflict (a backend with no designation source, a load error, or a home
+// with neither record) is recorded Failed with the conflict text and is not
+// returned, so daemon start goes on; no scheduler is built for the conflict.
 func TestRegisterScheduler_ResolveRoleErrorRecordsFailed(t *testing.T) {
-	bus := newSchedulerTestBus()
-	m := NewManifest(nil, runtime.NewSystemClock())
-	boom := context.DeadlineExceeded
-	_, err := m.RegisterScheduler(context.Background(), bus, runtime.NewSystemClock(), fakeBindingBackend{err: boom}, "sched-test-resolve-err", nil, nil, 0)
-	if err == nil {
-		t.Fatal("RegisterScheduler with a failing binding = nil error, want one")
+	for name, tc := range map[string]struct {
+		binding nodes.ControllerBindingBackend
+		want    string
+	}{
+		"no-source": {fakeBindingBackend{err: context.DeadlineExceeded}, "role conflict no-source"},
+		"nil":       {nil, "role conflict no-source"},
+		"none":      {nodes.NewFileControllerBindingBackend(t.TempDir()), "role conflict none"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := NewManifest(nil, runtime.NewSystemClock())
+			sched, err := m.RegisterScheduler(context.Background(), newSchedulerTestBus(), runtime.NewSystemClock(), tc.binding, "sched-test-resolve-err", nil, nil, 0)
+			if err != nil || sched != nil {
+				t.Fatalf("RegisterScheduler on a role conflict = %v, %v; want nil, nil (daemon start goes on)", sched, err)
+			}
+			assertSchedulerFailedWith(t, m, tc.want)
+		})
 	}
+}
+
+// assertSchedulerFailedWith requires the jobs.scheduler entry to be in the
+// Error state with a detail naming want and the remedy verb.
+func assertSchedulerFailedWith(t *testing.T, m *Manifest, want string) {
+	t.Helper()
 	for _, s := range m.Snapshot() {
-		if s.Name == jobSchedulerSubsystem && s.State != SubsystemError {
-			t.Fatalf("jobs.scheduler subsystem state = %v, want Error", s.State)
+		if s.Name != jobSchedulerSubsystem {
+			continue
 		}
+		if s.State != SubsystemError || !strings.Contains(s.Detail, want) || !strings.Contains(s.Detail, "cascade node bind") {
+			t.Fatalf("jobs.scheduler = %v %q, want Error naming %q and the remedy", s.State, s.Detail, want)
+		}
+		return
 	}
+	t.Fatalf("Manifest snapshot has no %q entry: %+v", jobSchedulerSubsystem, m.Snapshot())
 }
 
 // TestDecodeSchedulerEvent covers the lease-bus-to-jobs.Event translation

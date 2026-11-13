@@ -2,8 +2,10 @@
 
 // Purpose: the job.*/lease.* surface runs over the fleet runtime's one jobs
 //
-//	store and LeaseManager, and lease authority follows the controller
-//	binding on every call (a node-role daemon grants no lease).
+//	store and LeaseManager, and lease authority follows the persisted
+//	designation and binding on every call (a node-role daemon grants no
+//	lease; a role conflict refuses the controller-only verbs by name and
+//	the daemon still reaches Ready).
 //
 // SPORT: cmd/cascade/daemon (ADD, P1-CAP-10).
 package main
@@ -28,6 +30,7 @@ import (
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage/storetest"
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // newTestFleetRuntime builds a fleet runtime over a fresh data dir under
@@ -52,24 +55,19 @@ func newTestFleetRuntime(t *testing.T, paths runtime.PathProvider, clock runtime
 	return rt
 }
 
-// setRoleBinding makes the data dir's controller binding name a controller
-// (node role) or removes it (controller role).
+// setRoleBinding makes the data dir a node (a complete binding and no
+// designation) or a controller (a designation and no binding).
 func setRoleBinding(t *testing.T, dataDir string, node bool) {
 	t.Helper()
-	path := filepath.Join(dataDir, "nodes", "controller_binding.json")
-	if !node {
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			t.Fatalf("remove binding: %v", err)
-		}
+	if node {
+		removeTestDesignation(t, dataDir)
+		writeTestBinding(t, dataDir, nodes.ControllerBinding{
+			Endpoint: "controller.example.invalid:7000", EnrollmentID: "enroll-fixture", ControllerPubKeyB64: "cGlubmVkLWtleQ",
+		})
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		t.Fatalf("mkdir binding dir: %v", err)
-	}
-	raw, _ := json.Marshal(nodes.ControllerBinding{Endpoint: "controller.example.invalid:7000", EnrollmentID: "enroll-fixture"})
-	if err := os.WriteFile(path, raw, 0o600); err != nil {
-		t.Fatalf("write binding: %v", err)
-	}
+	removeTestFile(t, filepath.Join(dataDir, "nodes", "controller_binding.json"))
+	writeTestDesignation(t, dataDir)
 }
 
 // TestFleetRuntimeLeaseManagerUsesRealRole: the runtime's LeaseManager asks
@@ -211,4 +209,71 @@ func moduleRootForTest(t *testing.T) string {
 		t.Fatalf("git rev-parse --show-toplevel: %v", err)
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// TestNodeWithDeletedBindingRefusesControllerVerbs: a home that ran node
+// bind (tombstone written) and then lost its binding file holds neither
+// record. The daemon still reaches Ready, the controller-only verbs refuse
+// with the "none" role conflict and the scheduler subsystem is Failed.
+func TestNodeWithDeletedBindingRefusesControllerVerbs(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	deps := newRunTestDeps(t, nil)
+	dataDir := deps.Paths.DataDir()
+	setRoleBinding(t, dataDir, true)
+	if err := os.WriteFile(filepath.Join(dataDir, "nodes", "bound_once"), nil, 0o600); err != nil {
+		t.Fatalf("write node-bind tombstone: %v", err)
+	}
+	removeTestFile(t, filepath.Join(dataDir, "nodes", "controller_binding.json"))
+	assertRoleConflictDaemon(t, deps, "none")
+}
+
+// TestDaemonStartsWithRoleConflict: a binding without its pinned key, or a
+// binding next to a designation, is a role conflict the daemon serves
+// through: it reaches Ready and refuses the controller-only verbs by name,
+// and status.get (what `cascade status` prints) names the remedy.
+func TestDaemonStartsWithRoleConflict(t *testing.T) {
+	for kind, b := range map[string]nodes.ControllerBinding{
+		"binding-incomplete": {Endpoint: "controller.example.invalid:7000", EnrollmentID: "enroll-fixture"},
+		"both":               {Endpoint: "controller.example.invalid:7000", EnrollmentID: "enroll-fixture", ControllerPubKeyB64: "cGlubmVkLWtleQ"},
+	} {
+		t.Run(kind, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			deps := newRunTestDeps(t, nil)
+			writeTestDesignation(t, deps.Paths.DataDir())
+			writeTestBinding(t, deps.Paths.DataDir(), b)
+			assertRoleConflictDaemon(t, deps, kind)
+		})
+	}
+}
+
+// assertRoleConflictDaemon starts a daemon over deps and requires the role
+// conflict kind on every controller-only verb, over the guard and over RPC,
+// and on the scheduler subsystem status.get reports.
+func assertRoleConflictDaemon(t *testing.T, deps daemonDeps, kind string) {
+	t.Helper()
+	w, cancel, done := startTestDaemon(t, deps, observeWiring(t))
+	t.Cleanup(func() { cancel(); awaitDaemonReturn(t, done) })
+	want := "role conflict " + kind
+	guard := newRoleGuard(w.Ctx, w.Deps.Fleet.JobsDB())
+	for _, method := range nodes.GuardedMethods {
+		if err := guard.RequireController(method); !cascade.HasKind(err, cascade.KindIntegrity) || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s guard = %v, want KindIntegrity naming %q", method, err, want)
+		}
+	}
+	code := cascade.NewRPCError(cascade.New(cascade.KindIntegrity, kind)).Code
+	ctx := principal.WithCaller(context.Background(), principal.Caller{OwnerCLI: true})
+	for method, p := range map[string]map[string]string{
+		"job.cancel":    {"id": "job-conflict"},
+		"lease.release": {"id": "repo-conflict:a/**", "as_job": "job-conflict"},
+	} {
+		params, _ := json.Marshal(p)
+		_, errObj := w.Registry.Dispatch(ctx, &rpc.Request{Method: method, Params: params})
+		if errObj == nil || errObj.Code != code || !strings.Contains(errObj.Message, want) {
+			t.Errorf("%s = %+v, want the integrity refusal naming %q", method, errObj, want)
+		}
+	}
+	s := subsystem(t, w, "jobs.scheduler")
+	if s.State != daemon.SubsystemError || !strings.Contains(s.Detail, want) || !strings.Contains(s.Detail, "cascade node bind") {
+		t.Errorf("jobs.scheduler = %v %q, want Failed naming %q and the remedy", s.State, s.Detail, want)
+	}
 }

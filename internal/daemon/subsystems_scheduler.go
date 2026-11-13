@@ -11,9 +11,9 @@ package daemon
 //
 // Inputs: a real *events.Bus, this daemon's runtime.Clock, a
 //
-//	nodes.ControllerBindingBackend (nil is nodes.ResolveRole's own
-//	documented safe default: a single-node/not-yet-enrolled daemon
-//	resolves to RoleController), a cursor name for the bus subscription,
+//	nodes.ControllerBindingBackend (nodes.ResolveRole fails closed: a nil
+//	backend, a missing designation or any ambiguous record is a role
+//	conflict, never RoleController), a cursor name for the bus subscription,
 //	and (DEFECT-scheduler-resume-never-called's fix) the real *jobs.Store
 //	and journal.Store Resume needs to re-enter stale `running` jobs at
 //	`leased` on startup, plus the heartbeat reaper's interval.
@@ -131,7 +131,9 @@ func (r schedulerJournalReader) Replay(ctx context.Context, entityID string, cur
 // immediately above. A nil store skips Resume entirely (no data
 // dependency to synthesize, matching RegisterRecallIndexHandler's own
 // "a nil store leaves the namespace unregistered" precedent) -- every
-// production call site wires a real one. A Subscribe failure is recorded
+// production call site wires a real one. A role conflict from
+// nodes.ResolveRole is recorded Failed with the conflict text and returns
+// (nil, nil): the daemon still reaches Ready. A Subscribe failure is recorded
 // as Failed and returned; the consumer's own terminal error, if any, is
 // recorded as Failed asynchronously since it only returns after ctx ends
 // or the subscription's channel closes.
@@ -139,8 +141,10 @@ func (m *Manifest) RegisterScheduler(ctx context.Context, bus *events.Bus, clock
 	m.Register(jobSchedulerSubsystem)
 	role, err := nodes.ResolveRole(binding)
 	if err != nil {
+		// A role conflict degrades this subsystem only: the daemon keeps
+		// serving and the controller-only verbs refuse per call.
 		m.Failed(jobSchedulerSubsystem, err.Error())
-		return nil, err
+		return nil, nil
 	}
 	roleCtx := nodes.WithRole(ctx, role)
 	sched := jobs.NewScheduler(clock)

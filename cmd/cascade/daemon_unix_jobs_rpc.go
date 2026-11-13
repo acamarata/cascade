@@ -15,14 +15,17 @@
 //	registry and never dials the daemon, the daemon-side reasoning behind
 //	its exemption in .golangci.yml's cmd-rpc-server-boundary list and
 //	internal/client/boundary_test.go's cmdRPCBoundaryExempt map. The role
-//	guard asks the runtime on every call, the same answer the LeaseManager
-//	acts on, so a re-designation needs no restart.
+//	guard resolves the persisted designation and binding on every call, so
+//	a re-designation needs no restart and a role conflict refuses the
+//	controller-only verbs by name instead of failing daemon start.
 //
 // SPORT: cmd/cascade/daemon (ADD, P1-E29-W6-S60-T1; CHANGED, P1-CAP-10).
 package main
 
 import (
 	"context"
+	"database/sql"
+	"path/filepath"
 
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/nodes"
@@ -33,14 +36,16 @@ import (
 
 // wireJobRPC registers job.*/lease.* against registry over rt's one jobs
 // store, LeaseManager and handle. The runtime owns and closes the handle.
-func wireJobRPC(_ context.Context, registry *rpc.Registry, rt *daemon.FleetRuntime, clock runtime.Clock, ledger *rpc.NonceLedger, trust rpc.TrustStore) error {
+// The controller guard resolves the persisted role on every call; a role
+// conflict refuses the controller-only verbs and never aborts start.
+func wireJobRPC(ctx context.Context, registry *rpc.Registry, rt *daemon.FleetRuntime, clock runtime.Clock, ledger *rpc.NonceLedger, trust rpc.TrustStore) error {
 	if rt == nil || rt.Jobs() == nil || rt.Leases() == nil {
 		return cascade.New(cascade.KindInvalidInput, "jobs rpc: requires the fleet runtime's jobs store and lease manager")
 	}
 	rpc.RegisterJobHandlers(registry, rpc.JobHandlerDeps{
 		Jobs:   jobStoreAdapter{store: rt.Jobs()},
 		Leases: leaseStoreAdapter{store: rt.Jobs(), lease: rt.Leases()},
-		Guard:  runtimeGuard{rt: rt},
+		Guard:  newRoleGuard(ctx, rt.JobsDB()),
 		Outbox: outboxAdapter{db: rt.JobsDB(), clock: clock},
 		Ledger: ledger,
 		Trust:  trust,
@@ -49,15 +54,42 @@ func wireJobRPC(_ context.Context, registry *rpc.Registry, rt *daemon.FleetRunti
 	return nil
 }
 
-// runtimeGuard implements rpc.ControllerGuard over the runtime's role,
-// resolved on every call.
-type runtimeGuard struct{ rt *daemon.FleetRuntime }
+// roleGuard implements rpc.ControllerGuard over the file binding backend of
+// the runtime's data dir, resolved with nodes.ResolveRole on every call. A
+// nil binding resolves to a no-source conflict, so it refuses.
+type roleGuard struct {
+	binding nodes.ControllerBindingBackend
+}
 
-// RequireController refuses method unless this daemon is the controller now.
-func (g runtimeGuard) RequireController(method string) error {
-	role := nodes.RoleNode
-	if g.rt.IsController() {
-		role = nodes.RoleController
+// newRoleGuard binds the guard to the data dir holding the runtime's
+// cascade.db. When that path cannot be read the guard keeps a nil binding
+// and refuses every controller-only verb instead of failing daemon start.
+func newRoleGuard(ctx context.Context, db *sql.DB) roleGuard {
+	dbPath, err := jobsDBFilePath(ctx, db)
+	if err != nil || dbPath == "" {
+		return roleGuard{}
+	}
+	return roleGuard{binding: nodes.NewFileControllerBindingBackend(filepath.Dir(dbPath))}
+}
+
+// jobsDBFilePath reads the main database file of db via PRAGMA
+// database_list, the only way to recover a path from a bare *sql.DB.
+func jobsDBFilePath(ctx context.Context, db *sql.DB) (string, error) {
+	if db == nil {
+		return "", cascade.New(cascade.KindInvalidInput, "jobs rpc: no jobs database handle")
+	}
+	var path string
+	err := db.QueryRowContext(ctx, "SELECT file FROM pragma_database_list WHERE name = 'main'").Scan(&path)
+	return path, err
+}
+
+// RequireController refuses method unless this daemon is the controller
+// now: a role conflict is ErrRoleConflict (KindIntegrity) naming it, and a
+// node role is nodes.ErrNotController.
+func (g roleGuard) RequireController(method string) error {
+	role, err := nodes.ResolveRole(g.binding)
+	if err != nil {
+		return err
 	}
 	return controllerGuardAdapter{role: role}.RequireController(method)
 }
