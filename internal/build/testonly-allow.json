@@ -1622,14 +1622,6 @@
     "symbol": "providers/agents/antigravity.New"
   },
   {
-    "added_by_ticket": "P1-GEN-03",
-    "caller_site": "cmd/cascade/repo_watch_repair.go",
-    "expected_caller": "cmd/cascade/repo_watch_repair.go, the P1-GEN-13c repair path (sweep and --rebuild), which admits the single repository path through Admit; retire this entry once that file calls Admit",
-    "reason": "P1-GEN-13b composes the watchers, which admit batches through the maintenance pipeline (AdmitBatch); the one-path admission belongs to the repair rebuild of P1-GEN-13c.",
-    "retire_ticket": "P1-GEN-13c",
-    "symbol": "internal/repo.Admit"
-  },
-  {
     "added_by_ticket": "P1-AGT-02",
     "caller_site": "internal/delegation/spawn_envelope.go",
     "expected_caller": "internal/delegation/spawn_envelope.go, which verifies the signed spawn envelope and projects it with ProjectEnvelope before the driver spawn; retire this entry once that file calls ProjectEnvelope",
