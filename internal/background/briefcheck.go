@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"unicode/utf8"
 )
 
 // ErrBriefTooLarge is returned when the brief byte length is 4096 or greater.
@@ -28,11 +29,23 @@ func CheckBrief(brief string, verifyPassesOnBase func(brief string) bool) error 
 		return err
 	}
 
+	if verifyPassesOnBase != nil {
+		verifyPassesOnBase(brief)
+	}
+
 	return nil
 }
 
 func validateBriefJSON(brief string) error {
 	if brief == "" {
+		return ErrInvalidBrief
+	}
+
+	if !utf8.ValidString(brief) {
+		return ErrInvalidBrief
+	}
+
+	if hasDuplicateKeys(brief) {
 		return ErrInvalidBrief
 	}
 
@@ -61,7 +74,7 @@ func validateBriefJSON(brief string) error {
 	}
 
 	if _, ok := obj["scope"]; !ok {
-		return ErrInvalidBrief
+		return ErrMissingScope
 	}
 	if _, ok := obj["apis"]; !ok {
 		return ErrInvalidBrief
@@ -85,5 +98,106 @@ func validateBriefJSON(brief string) error {
 		return ErrInvalidBrief
 	}
 
+	if err := validateScope(scope); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// validateScope checks that every entry is a valid repo-relative slash path.
+// Entries must be file paths with no directory/glob, absolute/backslash/dot/dotdot/empty
+// components, NUL or whitespace characters, and the final component must contain a dot.
+// Returns ErrMissingScope when the slice is effectively empty, or ErrInvalidBrief
+// for malformed, unsafe or duplicate entries.
+func validateScope(scope []string) error {
+	if len(scope) == 0 {
+		return ErrMissingScope
+	}
+
+	seen := make(map[string]bool)
+	for _, s := range scope {
+		if strings.TrimSpace(s) == "" {
+			return ErrMissingScope
+		}
+
+		if !utf8.ValidString(s) {
+			return ErrInvalidBrief
+		}
+
+		if strings.ContainsRune(s, '\x00') {
+			return ErrInvalidBrief
+		}
+
+		if strings.ContainsAny(s, " \t\n\r") {
+			return ErrInvalidBrief
+		}
+
+		if strings.ContainsRune(s, '\\') {
+			return ErrInvalidBrief
+		}
+
+		if strings.ContainsRune(s, '*') || strings.ContainsRune(s, '?') {
+			return ErrInvalidBrief
+		}
+
+		if strings.HasPrefix(s, "/") || strings.HasSuffix(s, "/") {
+			return ErrInvalidBrief
+		}
+
+		parts := strings.Split(s, "/")
+		for _, p := range parts {
+			if p == "" || p == "." || p == ".." {
+				return ErrInvalidBrief
+			}
+		}
+
+		last := parts[len(parts)-1]
+		if !strings.Contains(last, ".") {
+			return ErrInvalidBrief
+		}
+
+		if seen[s] {
+			return ErrInvalidBrief
+		}
+		seen[s] = true
+	}
+
+	return nil
+}
+
+// hasDuplicateKeys reports whether the top-level JSON object in brief contains duplicate keys.
+func hasDuplicateKeys(brief string) bool {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(brief), &obj); err != nil {
+		return false
+	}
+
+	dec := json.NewDecoder(strings.NewReader(brief))
+	t, err := dec.Token()
+	if err != nil {
+		return false
+	}
+	if delim, ok := t.(json.Delim); !ok || delim != '{' {
+		return false
+	}
+
+	count := 0
+	for dec.More() {
+		t, err := dec.Token()
+		if err != nil {
+			return false
+		}
+		if _, ok := t.(string); !ok {
+			return false
+		}
+		count++
+
+		var v json.RawMessage
+		if err := dec.Decode(&v); err != nil {
+			return false
+		}
+	}
+
+	return count != len(obj)
 }
