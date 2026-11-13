@@ -8,6 +8,9 @@ import (
 // ErrInvalidSlug is returned when a SlugAnswer contains a blank slug.
 var ErrInvalidSlug = errors.New("D2554-invalid-slug")
 
+// ErrReplaceBlocked is returned when an attempted replacement of a finished ticket is detected.
+var ErrReplaceBlocked = errors.New("D2554-replace-blocked")
+
 // SlugAnswer represents a stateless GC slug answer event.
 type SlugAnswer struct {
 	// Slug is the identifier for this answer.
@@ -20,12 +23,13 @@ type SlugAnswer struct {
 // It is a pure stateless operation with no current-wave parameter or persisted state.
 // An invalid (blank) slug returns 0 and ErrInvalidSlug.
 // A valid slug with Finished false returns 0 and nil.
+// A valid slug with Finished true returns 0 and ErrReplaceBlocked.
 func ApplySlugAnswer(ev SlugAnswer) (wave int, err error) {
 	if strings.TrimSpace(ev.Slug) == "" {
 		return 0, ErrInvalidSlug
 	}
-	if !ev.Finished {
-		return 0, nil
+	if ev.Finished {
+		return 0, ErrReplaceBlocked
 	}
 	return 0, nil
 }
