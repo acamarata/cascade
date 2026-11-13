@@ -68,8 +68,9 @@ type Action struct {
 
 // Machine is a state machine driven by events.
 type Machine struct {
-	state State
-	clock Clock
+	state       State
+	clock       Clock
+	lastElapsed time.Duration
 }
 
 // New creates a new Machine in the Idle state. It returns ErrInvalidClock if c is nil or typed-nil.
@@ -101,6 +102,14 @@ func (m *Machine) Step(e Event) (State, []Action, error) {
 	case Running:
 		if e.Kind == Start {
 			return m.state, nil, ErrIllegalEvent
+		}
+		if e.Kind == Finish {
+			if e.OK {
+				m.state = Done
+			} else {
+				m.state = Failed
+			}
+			return m.state, []Action{{Kind: "finish", Elapsed: m.lastElapsed}}, nil
 		}
 		return m.state, nil, ErrIllegalEvent
 	default:
