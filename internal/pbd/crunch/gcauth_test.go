@@ -23,60 +23,14 @@ func TestMissingFieldsFailsClosed(t *testing.T) {
 		evidence []GCQuotaEvidence
 		estimate GCResetEstimator
 	}{
-		{
-			name:     "empty ID",
-			ticket:   GCTicket{ID: "", Gated: false},
-			evidence: validEvidence,
-			estimate: estimator,
-		},
-		{
-			name:     "blank ID",
-			ticket:   GCTicket{ID: "   ", Gated: false},
-			evidence: validEvidence,
-			estimate: estimator,
-		},
-		{
-			name:     "nil evidence",
-			ticket:   GCTicket{ID: "valid", Gated: false},
-			evidence: nil,
-			estimate: estimator,
-		},
-		{
-			name:     "empty evidence",
-			ticket:   GCTicket{ID: "valid", Gated: false},
-			evidence: []GCQuotaEvidence{},
-			estimate: estimator,
-		},
-		{
-			name:     "nil estimator",
-			ticket:   GCTicket{ID: "valid", Gated: false},
-			evidence: validEvidence,
-			estimate: nil,
-		},
-		{
-			name:   "invalid evidence usage < 0",
-			ticket: GCTicket{ID: "valid", Gated: false},
-			evidence: []GCQuotaEvidence{
-				{Usage: -1, Capacity: 10},
-			},
-			estimate: estimator,
-		},
-		{
-			name:   "invalid evidence capacity < 0",
-			ticket: GCTicket{ID: "valid", Gated: false},
-			evidence: []GCQuotaEvidence{
-				{Usage: 1, Capacity: -1},
-			},
-			estimate: estimator,
-		},
-		{
-			name:   "invalid evidence usage > capacity",
-			ticket: GCTicket{ID: "valid", Gated: false},
-			evidence: []GCQuotaEvidence{
-				{Usage: 11, Capacity: 10},
-			},
-			estimate: estimator,
-		},
+		{"empty ID", GCTicket{ID: ""}, validEvidence, estimator},
+		{"blank ID", GCTicket{ID: "   "}, validEvidence, estimator},
+		{"nil evidence", GCTicket{ID: "valid"}, nil, estimator},
+		{"empty evidence", GCTicket{ID: "valid"}, []GCQuotaEvidence{}, estimator},
+		{"nil estimator", GCTicket{ID: "valid"}, validEvidence, nil},
+		{"invalid evidence usage < 0", GCTicket{ID: "valid"}, []GCQuotaEvidence{{Usage: -1, Capacity: 10}}, estimator},
+		{"invalid evidence capacity < 0", GCTicket{ID: "valid"}, []GCQuotaEvidence{{Usage: 1, Capacity: -1}}, estimator},
+		{"invalid evidence usage > capacity", GCTicket{ID: "valid"}, []GCQuotaEvidence{{Usage: 11, Capacity: 10}}, estimator},
 	}
 
 	for _, tt := range tests {

@@ -1,3 +1,4 @@
+// Package crunch holds the argument and quota-authorization checks for crunch runs.
 package crunch
 
 import "errors"
