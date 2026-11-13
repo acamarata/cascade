@@ -195,7 +195,7 @@ func TestDiskMissingStartsNothingThenRecovers(t *testing.T) {
 	}
 
 	callCount := 0
-	discoverFn := func(cfg DiskConfig, statFn func(string, time.Duration) (uint64, error)) ([]VolumeState, error) {
+	discoverFn := func(_ DiskConfig, _ func(string, time.Duration) (uint64, error)) ([]VolumeState, error) {
 		callCount++
 		if callCount == 1 {
 			return []VolumeState{
@@ -234,7 +234,7 @@ func TestDiskFullIsAWait(t *testing.T) {
 	}
 
 	callCount := 0
-	discoverFn := func(cfg DiskConfig, statFn func(string, time.Duration) (uint64, error)) ([]VolumeState, error) {
+	discoverFn := func(_ DiskConfig, _ func(string, time.Duration) (uint64, error)) ([]VolumeState, error) {
 		callCount++
 		if callCount == 1 {
 			return []VolumeState{
