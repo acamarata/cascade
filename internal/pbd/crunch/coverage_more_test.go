@@ -1,0 +1,144 @@
+package crunch
+
+import (
+	"errors"
+	"reflect"
+	"testing"
+	"time"
+)
+
+// TestExtractCoreArgsNonEmpty covers the non-empty branch of ExtractCoreArgs.
+func TestExtractCoreArgsNonEmpty(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"single", []string{"--dir"}},
+		{"flags and values", []string{"--dir", "x", "--verify", "go test", "--scope", "a,b"}},
+		{"blank entries", []string{"", " "}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ExtractCoreArgs(tc.args)
+			if err != nil {
+				t.Fatalf("ExtractCoreArgs(%#v) error: %v", tc.args, err)
+			}
+			if !reflect.DeepEqual(got, CoreArgs{}) {
+				t.Fatalf("ExtractCoreArgs(%#v) = %#v, want zero value", tc.args, got)
+			}
+		})
+	}
+}
+
+// TestPopulateGCAuthSuccess covers the success path and boundary values.
+func TestPopulateGCAuthSuccess(t *testing.T) {
+	calls := 0
+	est := func([]GCQuotaEvidence) (time.Time, string, error) {
+		calls++
+		return time.Time{}, "", nil
+	}
+	cases := []struct {
+		name     string
+		ticket   GCTicket
+		evidence []GCQuotaEvidence
+	}{
+		{"typical", GCTicket{ID: "t1"}, []GCQuotaEvidence{{Usage: 1, Capacity: 10}}},
+		{"zero zero", GCTicket{ID: "t2"}, []GCQuotaEvidence{{Usage: 0, Capacity: 0}}},
+		{"usage equals capacity", GCTicket{ID: "t3", Gated: true}, []GCQuotaEvidence{{Usage: 10, Capacity: 10}}},
+		{"stale multiple", GCTicket{ID: " t4 "}, []GCQuotaEvidence{
+			{Usage: 0, Capacity: 5, Stale: true},
+			{Usage: 5, Capacity: 5},
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := PopulateGCAuth(tc.ticket, tc.evidence, est)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.ID != tc.ticket.ID {
+				t.Fatalf("ID = %q, want %q", got.ID, tc.ticket.ID)
+			}
+			if got.OwnerFlag || got.GateOpen || got.Model != "" || got.Samples != nil {
+				t.Fatalf("unexpected populated fields: %+v", got)
+			}
+		})
+	}
+	if calls != 0 {
+		t.Fatalf("estimator called %d times, want 0", calls)
+	}
+}
+
+// TestPopulateGCAuthLaterEvidenceInvalid checks that a bad later entry fails
+// even when earlier entries are valid.
+func TestPopulateGCAuthLaterEvidenceInvalid(t *testing.T) {
+	est := func([]GCQuotaEvidence) (time.Time, string, error) { return time.Time{}, "", nil }
+	ev := []GCQuotaEvidence{{Usage: 1, Capacity: 2}, {Usage: 3, Capacity: 2}}
+	got, err := PopulateGCAuth(GCTicket{ID: "x"}, ev, est)
+	if !errors.Is(err, ErrGCAuthFields) {
+		t.Fatalf("err = %v, want ErrGCAuthFields", err)
+	}
+	if !reflect.DeepEqual(got, GCAuth{}) {
+		t.Fatalf("got %+v, want zero GCAuth", got)
+	}
+}
+
+// TestInjectReseedRecapPending covers the reseedPending=true branch.
+func TestInjectReseedRecapPending(t *testing.T) {
+	hist := []HistoryItem{{Role: "user", Text: "a"}, {Role: "assistant", Text: "b"}}
+	cases := []struct {
+		name    string
+		payload CodePayload
+		history []HistoryItem
+	}{
+		{"absent recap", CodePayload{Text: "t"}, hist},
+		{"preexisting recap", CodePayload{Text: "t", ReseedRecap: ReseedRecap{{Role: "user", Text: "old"}}}, hist},
+		{"nil history", CodePayload{Text: "t"}, nil},
+		{"over limit history", CodePayload{Text: "t"}, make([]HistoryItem, M1286RecapLimit+2)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			want := CodePayload{Text: tc.payload.Text, ReseedRecap: append(ReseedRecap(nil), tc.payload.ReseedRecap...)}
+			got := InjectReseedRecap(tc.payload, true, tc.history)
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("got %#v, want %#v", got, want)
+			}
+		})
+	}
+}
+
+// TestVerifyWithNodesValidInputs covers the success branch with varied inputs.
+func TestVerifyWithNodesValidInputs(t *testing.T) {
+	cases := []struct {
+		name  string
+		nodes []string
+		cmds  []string
+		v     NodeVerifier
+	}{
+		{"nil nodes", nil, []string{"go test"}, &fakeVerifier{}},
+		{"many commands", []string{"a", "b"}, []string{"c1", "c2", "c3"}, &fakeVerifier{freeNodes: []string{"a"}}},
+		{"verifier errors ignored", []string{"a"}, []string{"c"}, &fakeVerifier{freeErr: ErrVerifyNodes, verifyErr: ErrVerifyNodes}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := VerifyWithNodes(tc.nodes, tc.cmds, tc.v)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != (VerifyTarget{}) {
+				t.Fatalf("got %+v, want zero target", got)
+			}
+		})
+	}
+}
+
+// TestVerifyWithNodesNilCommands covers a nil commands slice with a verifier.
+func TestVerifyWithNodesNilCommands(t *testing.T) {
+	got, err := VerifyWithNodes(nil, nil, &fakeVerifier{})
+	if !errors.Is(err, ErrVerifyNodes) {
+		t.Fatalf("err = %v, want ErrVerifyNodes", err)
+	}
+	if got != (VerifyTarget{}) {
+		t.Fatalf("got %+v, want zero target", got)
+	}
+}

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 )
@@ -62,14 +61,10 @@ func AppendChange(path string, c Change) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrAppendChange, err)
 	}
-	n, err := f.Write(data)
-	if err != nil {
+	// (*os.File).Write returns a non-nil error whenever it writes fewer bytes than given, so no short-write branch.
+	if _, err := f.Write(data); err != nil {
 		_ = f.Close()
 		return fmt.Errorf("%w: %v", ErrAppendChange, err)
-	}
-	if n < len(data) {
-		_ = f.Close()
-		return fmt.Errorf("%w: %v", ErrAppendChange, io.ErrShortWrite)
 	}
 	if err := f.Close(); err != nil {
 		return fmt.Errorf("%w: %v", ErrAppendChange, err)
