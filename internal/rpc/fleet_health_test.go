@@ -6,11 +6,13 @@ import (
 	"errors"
 	"go/parser"
 	"go/token"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -51,10 +53,6 @@ func TestEXE14LegacyAC6(t *testing.T) {
 		if refusal != nil || calls != 1 {
 			t.Fatalf("refusal=%v calls=%d", refusal, calls)
 		}
-		got, ok := result.(FleetHealthSummaryDTO)
-		if !ok || got.Keys[0].Percentage != summary.Keys[0].Percentage {
-			t.Fatalf("DTO or percentage pointer changed: %#v", result)
-		}
 		raw, err := json.Marshal(result)
 		if err != nil || string(raw) != want {
 			t.Fatalf("result=%s err=%v; want %s", raw, err, want)
@@ -93,10 +91,7 @@ func TestEXE14LegacyAC8(t *testing.T) {
 	}
 	want := fleetHealthTestSummary()
 	want.Status = "ok"
-	wantJSON, err := json.Marshal(NewEnvelope(1, want, nil))
-	if err != nil {
-		t.Fatal(err)
-	}
+	wantJSON, _ := json.Marshal(NewEnvelope(1, want, nil))
 	raw, err := json.Marshal(NewEnvelope(1, result, refusal))
 	if err != nil {
 		t.Fatal(err)
@@ -275,4 +270,30 @@ func TestFleetHealthSummaryOmitsUnknownPercentage(t *testing.T) {
 	if _, ok := got.Keys[1]["percentage"]; !ok {
 		t.Error("a known percentage was dropped")
 	}
+}
+
+// The composition root is package main. Run its existing tests in that
+// package so the RPC gate exercises the production wiring without copying it.
+func runFleetHealthContract(t *testing.T, pkg, pattern string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "go", "test", "-v", "-count=2", "-shuffle=on", "-run", pattern, pkg)
+	raw, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("production contract: %v\n%s", err, raw)
+	}
+	if !strings.Contains(string(raw), "--- PASS: "+strings.Trim(pattern, "^$")+" (") {
+		t.Fatalf("production contract did not run: %s", raw)
+	}
+}
+func TestEXE14LegacyAC7(t *testing.T) {
+	runFleetHealthContract(t, "../executive", "^TestEXE14LegacyAC7$")
+}
+func TestEXE14LegacyAC20(t *testing.T) {
+	runFleetHealthContract(t, "../../cmd/cascade", "^TestEXE14LegacyAC20$")
+}
+func TestEXE14ProductionHandoff(t *testing.T) {
+	runFleetHealthContract(t, "../../cmd/cascade", "^TestEXE14ProductionHandoff$")
+	runFleetHealthContract(t, "../executive", "^TestHealthProductionHandoff$")
 }

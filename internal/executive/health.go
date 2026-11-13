@@ -20,7 +20,6 @@ package executive
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/acamarata/cascade/internal/fleet/economics"
 	"github.com/acamarata/cascade/pkg/cascade"
@@ -68,13 +67,13 @@ func validState(s economics.HealthState) bool {
 }
 
 // BuildHealthSummary projects src into the five-key summary. An unknown
-// key or state returns a zero summary and ErrHealthSource naming the key;
+// key or state returns a zero summary and ErrHealthSource;
 // a missing key (or a nil map) is reported unavailable with no percentage.
 // Percentages are copied so later changes to src cannot alter the result.
 func BuildHealthSummary(src map[economics.HealthKey]economics.KeyHealth) (HealthSummary, error) {
 	for key, kh := range src {
 		if !key.Valid() || !validState(kh.State) {
-			return HealthSummary{}, fmt.Errorf("%w: key %q", ErrHealthSource, string(key))
+			return HealthSummary{}, ErrHealthSource
 		}
 	}
 	var out HealthSummary
