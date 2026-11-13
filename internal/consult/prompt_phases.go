@@ -43,5 +43,9 @@ func RunPromptPhases(allowedContext, rule, prompt string, generate Generator) (P
 		return PostResult{}, err
 	}
 
-	return PostResult{Output: output}, nil
+	return PostResult{
+		Output:  strings.TrimSpace(output),
+		Summary: "cleanup done",
+		Extras:  "post-complete",
+	}, nil
 }
