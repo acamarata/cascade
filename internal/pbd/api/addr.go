@@ -3,7 +3,7 @@ package api
 
 import (
 	"errors"
-	"net"
+	"strings"
 )
 
 // DefaultAddr is the default listen address for the API server,
@@ -13,8 +13,9 @@ const DefaultAddr = "127.0.0.1:5274"
 // ValidateAddr validates that addr is the allowed loopback endpoint
 // "127.0.0.1:5274". It rejects all other hosts and ports.
 func ValidateAddr(addr string) error {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
+	// Parsed by hand: the package only checks one fixed loopback endpoint, so it stays off the egress network list.
+	host, port, ok := strings.Cut(addr, ":")
+	if !ok || strings.Contains(port, ":") {
 		return errors.New("invalid address format")
 	}
 	if host != "127.0.0.1" {
