@@ -26,6 +26,9 @@ func MapQuota(acct string, pct int, _ bool) (Alloc, error) {
 	case "A3", "CO":
 		return Alloc{Account: acct, FiveHourPct: pct, WeeklyPct: pct}, nil
 	case "A4":
+		if pct < 90 {
+			return Alloc{}, ErrT0308
+		}
 		// 90/90 applied to A4
 		return Alloc{Account: acct, FiveHourPct: 90, WeeklyPct: 90}, nil
 	default:
