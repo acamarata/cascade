@@ -94,3 +94,27 @@ func (a *Applier) Ask(r Request) (Request, error) {
 func (a *Applier) Forge(r Request) (Request, error) {
 	return a.apply("forge", r)
 }
+
+// Apply is the injected lessons entry point for callers named exactly
+// "ask", "loop", "submit", "swarm", "crunch", "forge". It applies the
+// configured lessons and optional hook if the caller is recognized.
+func (a *Applier) Apply(caller string, req Request) (Request, error) {
+	if a == nil {
+		return Request{}, ErrInvalidApplier
+	}
+	switch caller {
+	case "ask", "loop", "submit", "swarm", "crunch", "forge":
+	default:
+		return Request{}, ErrUnknownCaller
+	}
+	if a.invalid {
+		return Request{}, ErrInvalidLesson
+	}
+	for _, l := range a.lessons {
+		req = l(req)
+	}
+	if a.hook != nil {
+		a.hook.Applied(caller)
+	}
+	return req, nil
+}

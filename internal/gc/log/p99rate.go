@@ -3,6 +3,7 @@ package log
 
 import (
 	"errors"
+	"math"
 	"reflect"
 	"time"
 )
@@ -48,6 +49,21 @@ func NewRateTracker(c Clock) (*RateTracker, error) {
 		clock:   c,
 		samples: make([]sample, 0),
 	}, nil
+}
+
+// Observe validates that rpm is finite and positive, returning ErrInvalidRate
+// without reading the clock or mutating state if not. On success it reads the
+// clock exactly once and stores the sample. Equal rates and timestamps are
+// distinct valid observations.
+func (r *RateTracker) Observe(rpm float64) error {
+	if !(rpm > 0) || math.IsInf(rpm, 0) {
+		return ErrInvalidRate
+	}
+	r.samples = append(r.samples, sample{
+		t:   r.clock.Now(),
+		rpm: rpm,
+	})
+	return nil
 }
 
 // Current returns the current rpm and width based on tracked samples.
