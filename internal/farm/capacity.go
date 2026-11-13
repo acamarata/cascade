@@ -2,7 +2,6 @@
 package farm
 
 import (
-	"errors"
 	"time"
 )
 
@@ -61,10 +60,6 @@ type Sample struct {
 	// UsedPct is the observed memory utilization as a percentage.
 	UsedPct float64
 }
-
-// ErrNotImplemented is returned by stub functions that have not yet been
-// implemented.
-var ErrNotImplemented = errors.New("farm: operation unavailable")
 
 // Admit evaluates whether a farm node should accept new work based on its
 // capacity configuration and the current resource snapshot. The stub
