@@ -306,26 +306,64 @@ No production caller exists yet — this ticket's own HOW section forbids
 adding one. See `internal/build/testonly-allow.json`'s entry for
 `plugins/pbd/internal/pews.Convert`.
 
-## Reviewer policy (P1-PBD-01)
+## Reviewer policy
 
-`internal/jobs` enforces a reviewer-policy contract (`contract:reviewer-policy`) for review-class jobs. A blind `ReviewContext` builder takes no job, session or author input. A distinct-family ladder reads review count and family independence from an injected `ReviewPolicySource`; the production source is `internal/review`'s `JobReviewPolicy` (consequence-class rules), never a `jobs` literal. `Review`, `Adversarial` and `QaTemplate.Resolve` enforce it. `CompletionPolicy.Transition` refuses `accepted` for a review-class job unless its worktree is proven unchanged via `WorktreeManager.ReviewerTreeForJob` and the observed author and reviewer families pass the ladder; degraded independence requires a consumed approval token.
+`internal/jobs` enforces review independence for review-class jobs at two points: when a review node is resolved for dispatch and when a review job asks for `accepted`. `jobs` is layer 2 and never imports `internal/review`. The family rule comes only from an injected `ReviewPolicySource`; `jobs` holds no risk-to-review table and no second family resolver.
 
-### Concrete providers wired by P1-PBD-01d, P1-PBD-01g and P1-PBD-01h
+### Blind review context (allowlist and exclusions)
 
-The reviewer policy depends on concrete providers introduced across the P1-PBD-01 splits:
+`BuildCleanReviewContext(jobID, nodeID, baseTree, diff, files)` builds a `ReviewContext` field by field. Its five fields are the whole allowlist: `JobID`, `NodeID`, `BaseTree`, `Diff` and `Files`. There is no field for a session, transcript, journal, author identity, author lane or family, prior verdict or expected outcome, so none can leak.
 
-- **P1-PBD-01d** wires `JobReviewPolicy` as the production `ReviewPolicySource`. It resolves consequence-class rules into `ReviewRule` values (gate counts, `RequireDistinctFamily`, `HoldWithoutDistinct`) so that `internal/jobs` never contains a hard-coded review gate literal.
-- **P1-PBD-01g** wires the provider family resolver (`ProviderFamilyResolver`). It maps registered provider names to their driver families via the provider registry, deduplicates drivers for `AvailableFamilies`, and fails closed (`Resolved: false`) on unknown, empty or nil inputs so that unresolved authors are never treated as distinct.
-- **P1-PBD-01h** wires `ReviewerEnforcement` into `CompletionPolicyDeps`. Its `Inputs` seam provides `AuthorFamilies` and `ReviewerFamily` lookups against the jobs store, while its `Decisions` seam records `ReviewerDecision` rows through `Store.RecordReviewerDecision`. Transition denies a review-class job at the accepted edge when `Reviewer` is nil, when `VerifyReadOnly` detects a mutated worktree, or when the observed family ladder returns a hold or degraded state without a valid approval token.
+- An empty job or node id returns `ErrReviewContextIDs` (`KindInvalidInput`).
+- A file whose path is empty, absolute or escapes the root is dropped.
+- Agent instruction material is dropped, matched case-insensitively: anything under `.claude`, `.cursor`, `.codex`, `.gemini`, `.windsurf`, `.aider` or `.continue`, and any file named `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `CLAUDE.local.md`, `.cursorrules`, `.windsurfrules`, `copilot-instructions.md` or `.clinerules`.
+- Each kept file's `provider.Provenance` is parsed closed. An unset or unknown value becomes `ProvenanceUntrustedSource`, so the reviewed content is data for the reviewer, never an instruction to it.
 
-### Read-only lease enforcement
+### Read-only review nodes
 
-`EnforceReadOnlyLease` inspects a node's `MinTaskClass` and `MutableScope`. A review-class node carrying any mutable scope glob returns `ErrMutableReview`; implement nodes and review nodes with an empty scope pass. Template resolution sets `NodeRequirements` for `review_context`, `reviewer_assignment` and `reviewer_family_distinct` on every resolved review node.
+`ReviewTemplate`, `AdversarialTemplate` and `QaTemplate` resolve read-only nodes with `min_task_class=review`. Each `Resolve` reads the `ReviewDispatch` from `TemplateContext.Review` (policy, author family, eligible families, subject) and refuses when it is missing. It then:
 
-### Clean review context
+1. runs `EnforceReadOnlyLease`, which returns `ErrMutableReview` (`KindPolicyDenied`) when a review, adversarial, qa or ci node carries any mutable scope entry;
+2. builds the blind context;
+3. runs `RequireDistinctFamily` over the eligible families;
+4. records `review_context`, `reviewer_assignment` and `reviewer_family_distinct` in the node's `NodeRequirements`.
 
-`BuildCleanReviewContext` applies a field-by-field allowlist over `ReviewSubject`. Only `CheckpointID`, `Rubric`, `Ticket`, `Footprint` and `Diff` survive. Paths matching `ExcludedReviewPaths` (author instruction files and generated projections) are dropped from both footprint and diff sections. The resulting `Diff.Provenance` is always `provider.ProvenanceUntrustedSource`. An empty checkpoint id, rubric id or ticket id yields `KindInvalidInput`.
+### Family ladder per risk class
 
-### Distinct-family ladder
+`FamilyRef` holds a provider family and a `Resolved` flag. Two references are distinct only when both are resolved, both are non-empty and they differ. An unresolved family is never distinct. `RequireDistinctFamily` (at dispatch, over eligible families) and `VerifyObservedFamily` (at completion, over the family that actually reviewed) share one ladder:
 
-`RequireDistinctFamily` dispatches on the injected `ReviewRule`. Low risk with one family proceeds without degradation. Normal risk with one family sets `IndependenceDegraded` and `RequiresHumanApproval`. High and Critical risk with one family return `ErrNoDistinctFamily` (kind `KindElevationRequired`). When a second resolved family is available, `Candidates` carries only the distinct families and `FamilyDistinct` is true. `VerifyObservedFamily` applies the same ladder at completion time using observed author and reviewer families.
+| Risk class | Distinct family | No distinct family |
+|---|---|---|
+| Low | proceed | proceed |
+| Normal | proceed | proceed degraded: human approval required |
+| High | proceed | hold: `ErrNoDistinctFamily` (`KindElevationRequired`) |
+| Critical | proceed | hold: `ErrNoDistinctFamily` |
+| nil policy or unknown class | hold | hold |
+
+The production `ReviewPolicySource` is `internal/review.JobReviewPolicy`, built by `NewJobReviewPolicy(riskClass)`. It maps each job risk class to the existing `ConsequenceClass` rules (`RequiresDistinctFamily`, `HoldsWithoutDistinctFamily`, both failing closed on an unknown value). It counts review gates from `jobs.GateSetForRiskClass` and refuses an unknown risk class with `ErrUnknownRiskClass`. `review.ProviderFamily` resolves a provider name to its registry driver and fails closed. `review.AvailableFamilies` lists the distinct drivers, and `JobReviewPolicy.CheckAvailable` applies the ladder to them.
+
+### Completion checks and order
+
+`CompletionPolicy.Transition` runs these steps in order: identity, the successor check, ledger verification, reclassification and lease-scope containment, then the reviewer check, then the acceptance re-run, the evidence gates and the commit. The reviewer check comes before the acceptance re-run, so a mutated review never starts a CI run. For a transition to `accepted`, the check does the following:
+
+1. A non-empty `MinTaskClass` outside `conductor.TaskClasses()` is denied (`denied-unreadable`).
+2. A job whose class is not `review` skips the rest.
+3. A missing `ReviewerEnforcement` (or any nil seam: `Inputs`, `Policy`, `Decisions`) denies with `reviewer enforcement not configured`.
+4. A non-empty `MutableScope` on the job is denied (`denied-mutated-worktree`).
+5. `VerifyReadOnly(req.TreeHash, req.ReviewerTreeAtCompletion)` denies a differing or empty tree with `ErrReviewerMutatedWorktree` (`denied-mutated-worktree`). The caller fills `ReviewerTreeAtCompletion` from `WorktreeManager.ReviewerTreeForJob`.
+6. `Policy(derivedRisk)`, `Inputs.AuthorFamilies` and `Inputs.ReviewerFamily` must each succeed, or the job is denied (`denied-unreadable`).
+7. Every observed author family is checked against the reviewer family with `VerifyObservedFamily`. If none was observed, the check treats the author as unresolved. A hold denies (`held`). A degraded result must consume a checkpoint-bound approval token (`checkApproval`); without one the denial carries `ErrHumanApprovalRequired` and `ExpiredApproval`.
+
+### Decision rows and ReviewEvidenceRef
+
+Each reviewer outcome is recorded with `Store.RecordReviewerDecision` before the transition returns. If recording fails, the transition is denied. A `ReviewerDecision` row carries `JobID`, `Phase` (`dispatch` or `completion`), `RiskClass`, `Outcome`, `Authors`, `Reviewer`, `FamilyDistinct`, `Degraded` and `DecidedAt`. Outcomes are a closed set: `assigned`, `degraded`, `held`, `denied-mutated-worktree` and `denied-unreadable`. The row ID is a SHA-256 over the canonical JSON of every other field, so a repeated decision leaves one row. Rows live in the `jobs_reviewer_decision` table under its own `jobs-reviewer` migration set (`ReviewerMigrationSet`). The table has no foreign key to `jobs_job`.
+
+The evidence ledger stays append-only. A mutated-tree review is not voided; it is recorded as a `denied-mutated-worktree` row. `ReviewEvidenceRef(d)` returns `reviewer-decision:<id>`, the `ArtifactRef` that a review `EvidenceRecord` uses to point at the row. Downstream governance binds decisions through this reference. Review count and family independence come from the injected policy, not from the P1 gate set.
+
+### Known limitations
+
+- **Agent lanes.** An `agent:<harness>` lane has no registry provider, so its family is unresolved and never distinct. An agent-authored review degrades at Normal risk (human approval) and holds at High or Critical until a harness-to-family mapping exists.
+- **QA gate.** There is no QA evidence kind yet, and `evidenceKindsForGateSet` maps the independent-QA gate to nothing. The High-risk QA gate is therefore not enforced by evidence.
+- **Order differs from the design.** The design puts the reviewer check after the completeness and approval checks. In the shipped `Transition`, those checks (`checkCompletion`) run after the acceptance re-run, so the reviewer check runs before them. The reviewer check still precedes the acceptance re-run, and a degraded review consumes its own approval token in step 7.
+- **Context shape differs from the design.** The design names the context fields `CheckpointID`, `Rubric`, `Ticket`, `Footprint` and `Diff`. The shipped `ReviewContext` carries `JobID`, `NodeID`, `BaseTree`, `Diff` and `Files`. Both are allowlists with no author, session or verdict field.
+- **Production wiring.** The daemon hook that builds `JobReviewPolicy`, fills `ReviewerInputs` from reservation lanes and sets `CompletionPolicyDeps.Reviewer` is a later ticket. Until then, a review-class job cannot reach `accepted` (step 3 fails closed).
