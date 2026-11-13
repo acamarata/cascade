@@ -20,7 +20,7 @@ func TestBriefRejectsOversized(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			brief := strings.Repeat("x", tc.size)
 			called := false
-			cb := func(b string) bool {
+			cb := func(_ string) bool {
 				called = true
 				return true
 			}

@@ -47,7 +47,10 @@ func TestMapSwarmToGcflow(t *testing.T) {
 			}
 		})
 	}
+}
 
+// TestRunSwarmAttemptInvalid verifies invalid attempts, nil briefs and brief failures.
+func TestRunSwarmAttemptInvalid(t *testing.T) {
 	calls := 0
 	brief := func() (string, error) { calls++; return "base", nil }
 	for _, n := range []int{0, -1} {
