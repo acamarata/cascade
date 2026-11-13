@@ -26,7 +26,7 @@ func TestPrePromptingErrorFailsClosed(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			called := false
-			gen := func(s string) (string, error) {
+			gen := func(_ string) (string, error) {
 				called = true
 				return "", nil
 			}
