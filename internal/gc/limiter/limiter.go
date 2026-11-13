@@ -31,12 +31,13 @@ type Timer interface {
 
 // Limiter controls the rate of operations using a token bucket algorithm.
 type Limiter struct {
-	mu       sync.Mutex
-	clock    Clock
-	rate     int
-	capacity float64
-	tokens   float64
-	last     time.Time
+	mu          sync.Mutex
+	clock       Clock
+	rate        int
+	capacity    float64
+	tokens      float64
+	last        time.Time
+	lastHalving time.Time
 }
 
 // New creates a new Limiter with the given requests-per-minute rate and clock.
@@ -125,4 +126,28 @@ func (l *Limiter) refill() {
 		}
 		l.last = now
 	}
+}
+
+// OnOverload handles overload events by halving the current rate, subject to a 30-second debounce.
+// It first materializes any elapsed recovery/refill, then applies halving/debounce.
+// Every overload resets the recovery quiet-period anchor.
+func (l *Limiter) OnOverload() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.refill()
+
+	now := l.clock.Now()
+
+	if l.lastHalving.IsZero() || now.Sub(l.lastHalving) >= 30*time.Second {
+		l.rate = l.rate / 2
+		if l.rate < 1 {
+			l.rate = 1
+		}
+		l.capacity = float64(l.rate)
+		if l.tokens > l.capacity {
+			l.tokens = l.capacity
+		}
+	}
+	l.lastHalving = now
 }
