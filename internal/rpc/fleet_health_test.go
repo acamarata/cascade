@@ -241,3 +241,38 @@ func TestFleetHealthNoExecutiveImport(t *testing.T) {
 		t.Fatalf("access=%v, want owner view", got)
 	}
 }
+
+func TestFleetHealthSummaryOmitsUnknownPercentage(t *testing.T) {
+	fleetHealthTestEnv(t)
+	summary := fleetHealthTestSummary()
+	summary.Keys[0].Percentage = nil
+	registry := NewRegistry()
+	err := RegisterFleetHealthSummary(registry, FleetHealthDeps{Summary: func(context.Context) (FleetHealthSummaryDTO, error) {
+		return summary, nil
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, refusal := registry.Dispatch(context.Background(), &Request{Method: FleetHealthSummaryMethod})
+	if refusal != nil {
+		t.Fatalf("refusal=%v", refusal)
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Keys []map[string]json.RawMessage `json:"keys"`
+	}
+	if err := json.Unmarshal(raw, &got); err != nil || len(got.Keys) != 5 {
+		t.Fatalf("result=%s err=%v", raw, err)
+	}
+	for _, i := range []int{0, 2, 4} {
+		if pct, ok := got.Keys[i]["percentage"]; ok {
+			t.Errorf("key %d has unknown quota but percentage %s", i, pct)
+		}
+	}
+	if _, ok := got.Keys[1]["percentage"]; !ok {
+		t.Error("a known percentage was dropped")
+	}
+}

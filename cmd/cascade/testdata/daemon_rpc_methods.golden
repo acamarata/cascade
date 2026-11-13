@@ -44,6 +44,7 @@ fleet.attention.list
 fleet.capacity
 fleet.domains.list
 fleet.domains.show
+fleet.health.summary
 fleet.journal_replay
 fleet.journal_show
 fleet.lanes.explain
