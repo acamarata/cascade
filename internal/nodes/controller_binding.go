@@ -90,9 +90,8 @@ func (b fileControllerBindingBackend) Load() (ControllerBinding, bool, error) {
 	if err := json.Unmarshal(data, &binding); err != nil {
 		return ControllerBinding{}, false, cascade.Wrap(cascade.KindIntegrity, err, "nodes: controller binding file is not valid JSON")
 	}
-	if strings.TrimSpace(binding.Endpoint) == "" {
-		return ControllerBinding{}, false, nil
-	}
+	// Preserve incomplete records so role resolution cannot mistake them for
+	// absence and grant controller authority alongside a designation.
 	return binding, true, nil
 }
 
@@ -155,7 +154,7 @@ func (b fileControllerBindingBackend) confirmExisting(binding ControllerBinding)
 	if err != nil {
 		return err
 	}
-	if !ok {
+	if !ok || strings.TrimSpace(existing.Endpoint) == "" {
 		return cascade.New(cascade.KindInvalidInput, "nodes: the existing controller binding is empty or malformed")
 	}
 	if _, err := ParsePublicKey(existing.ControllerPubKeyB64); err != nil {

@@ -1,27 +1,15 @@
-// Purpose: R-21.169's controller-singleton guard: Role() resolves whether
-//	this daemon is the controller or a node, and RequireController
-//	refuses job.advance/lease.acquire/lease.release when it is not.
-// Inputs: a ControllerBindingBackend (serve.go, S-36.T2) — the real,
-//	already-persisted "enrollment record" this ticket's contract names:
-//	its presence means this daemon enrolled ITSELF with a controller
-//	(the node role); its absence means this daemon has never enrolled
-//	anywhere, i.e. it is the controller.
-// Outputs: a Role, or a typed cascade.KindPermissionDenied error from
-//	RequireController.
-// Constraints: R-21.169 — the DAG scheduler and lease authority run ONLY
-//	on the controller daemon under the existing DB advisory lock; a node
-//	daemon refuses job.advance/lease.acquire/lease.release with
-//	ErrNotController rather than silently executing them locally. This
-//	file exposes the guard primitive only; AC/S-59.T5's own handlers
-//	apply it (forward note per this ticket's full_desc item 9 — that
-//	file change belongs to AC/S-59.T5, not here).
-// SPORT: internal/nodes Role/ADDED, RequireController/ADDED,
-//	ErrNotController/ADDED (P1-E36-W7-S72-T2).
+// Purpose: resolve explicit controller authority and guard controller RPCs.
+// Inputs: persisted designation and controller binding in the same data directory.
+// Outputs: a role or a typed integrity conflict; permission errors for node RPCs.
+// Constraints: no implicit authority, election or designation writes.
+// SPORT: internal/nodes controller-designation (P1-NODE-16).
 
 package nodes
 
 import (
 	"context"
+	"reflect"
+	"strings"
 
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -42,26 +30,89 @@ const (
 // a node daemon (R-21.169's three named RPCs).
 var GuardedMethods = []string{"job.advance", "lease.acquire", "lease.release"}
 
-// ResolveRole resolves this daemon's Role from binding: a successfully
-// loaded ControllerBinding means this daemon has enrolled itself with a
-// controller (RoleNode); no binding found means this daemon is the
-// controller (RoleController). binding is nil-safe: a nil
-// ControllerBindingBackend resolves to RoleController, matching an
-// embedded/daemonless or not-yet-configured mode's safe default (no
-// controller to defer to, so this instance IS the authority, exactly the
-// posture a single-node dev setup needs).
+// RoleConflict describes why persisted records cannot establish a role.
+type RoleConflict struct {
+	Kind   string // none | both | binding-incomplete | load-error | no-source
+	Detail string
+}
+
+// ResolveRole requires a readable designation for controller authority, or a
+// complete binding alone for a node. Every ambiguous state fails closed.
 func ResolveRole(binding ControllerBindingBackend) (Role, error) {
-	if binding == nil {
-		return RoleController, nil
-	}
-	_, ok, err := binding.Load()
-	if err != nil {
+	role, conflict, cause := resolveRoleStatus(binding)
+	if conflict != nil {
+		err := roleConflictError(*conflict)
+		if cause != nil {
+			return "", cascade.Wrap(cascade.KindIntegrity, cause, err.Error())
+		}
 		return "", err
 	}
-	if ok {
-		return RoleNode, nil
+	return role, nil
+}
+
+// RoleStatus returns a diagnostic conflict instead of granting ambiguous
+// authority. Backend failures, including panics, never escape this doctor view.
+func RoleStatus(binding ControllerBindingBackend) (Role, *RoleConflict) {
+	role, conflict, _ := resolveRoleStatus(binding)
+	return role, conflict
+}
+
+func resolveRoleStatus(binding ControllerBindingBackend) (role Role, conflict *RoleConflict, cause error) {
+	defer func() {
+		if recover() != nil {
+			role, conflict, cause = "", &RoleConflict{"load-error", "role backend panicked"}, nil
+		}
+	}()
+	source, ok := binding.(DesignationSource)
+	if nilRoleBackend(binding) || !ok {
+		return "", &RoleConflict{"no-source", "binding must expose its persisted designation"}, nil
 	}
-	return RoleController, nil
+	d := source.DesignationBackend()
+	if nilRoleBackend(d) {
+		return "", &RoleConflict{"no-source", "designation backend is required"}, nil
+	}
+	stored, designated, err := d.Load()
+	if err != nil {
+		return "", &RoleConflict{"load-error", "cannot read designation"}, err
+	}
+	if designated {
+		if err := validateDesignation(stored); err != nil {
+			return "", &RoleConflict{"load-error", "invalid stored designation"}, err
+		}
+	}
+	b, bound, err := binding.Load()
+	if err != nil {
+		return "", &RoleConflict{"load-error", "cannot read binding"}, err
+	}
+	if bound && (strings.TrimSpace(b.Endpoint) == "" || strings.TrimSpace(b.ControllerPubKeyB64) == "") {
+		return "", &RoleConflict{"binding-incomplete", "binding requires endpoint and pinned controller key"}, nil
+	}
+	if designated && bound {
+		return "", &RoleConflict{"both", "designation and binding both exist"}, nil
+	}
+	if designated {
+		return RoleController, nil, nil
+	}
+	if bound {
+		return RoleNode, nil, nil
+	}
+	return "", &RoleConflict{"none", "no designation or complete binding exists"}, nil
+}
+
+func nilRoleBackend(backend any) bool {
+	if backend == nil {
+		return true
+	}
+	v := reflect.ValueOf(backend)
+	k := v.Kind()
+	nilable := k == reflect.Chan || k == reflect.Func || k == reflect.Interface ||
+		k == reflect.Map || k == reflect.Pointer || k == reflect.Slice
+	return nilable && v.IsNil()
+}
+
+func roleConflictError(c RoleConflict) error {
+	return cascade.Wrap(cascade.KindIntegrity, ErrRoleConflict,
+		"nodes: role conflict "+c.Kind+": "+c.Detail+"; run `cascade init` on a controller or `cascade node bind` on a node")
 }
 
 // ErrNotController reports that method is refused because this daemon's

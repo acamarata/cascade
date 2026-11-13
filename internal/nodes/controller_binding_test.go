@@ -137,6 +137,7 @@ func TestControllerBindingSaveWriteOnce(t *testing.T) {
 }
 
 func TestControllerBindingLoadWithoutKey(t *testing.T) {
+	designationTestHome(t)
 	dir := t.TempDir()
 	nodesDir := filepath.Join(dir, "nodes")
 	if err := os.MkdirAll(nodesDir, 0o700); err != nil {
@@ -151,4 +152,22 @@ func TestControllerBindingLoadWithoutKey(t *testing.T) {
 		t.Fatalf("load %+v %v %v", got, ok, err)
 	}
 	wantKind(t, VerifyControllerRequest(got, []byte("p"), make([]byte, 64)), cascade.KindPermissionDenied)
+}
+
+func TestControllerBindingLoadPreservesIncompleteRecord(t *testing.T) {
+	designationTestHome(t)
+	for _, raw := range []string{`{}`, `{"endpoint":" "}`, `{"enrollment_id":"e1"}`} {
+		dir := t.TempDir()
+		nodesDir := filepath.Join(dir, "nodes")
+		if err := os.MkdirAll(nodesDir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(nodesDir, "controller_binding.json"), []byte(raw), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, found, err := NewFileControllerBindingBackend(dir).Load()
+		if err != nil || !found {
+			t.Fatalf("Load(%s) = found %v, %v; existing record must remain visible", raw, found, err)
+		}
+	}
 }
