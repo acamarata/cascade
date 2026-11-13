@@ -99,8 +99,12 @@ func TestListStale(t *testing.T) {
 		IdempotencyKey: "key-2",
 		NextAt:         now.Add(time.Hour),
 	}
-	s.Submit(ctx, p1)
-	s.Submit(ctx, p2)
+	if _, err := s.Submit(ctx, p1); err != nil {
+		t.Fatalf("Submit p1 failed: %v", err)
+	}
+	if _, err := s.Submit(ctx, p2); err != nil {
+		t.Fatalf("Submit p2 failed: %v", err)
+	}
 
 	stale, err := s.ListStale(ctx, now)
 	if err != nil {

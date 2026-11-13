@@ -112,7 +112,7 @@ func TestCandidateVolumeBecomesRequiredOnceSeen(t *testing.T) {
 	}
 
 	// First call: volume is mounted successfully.
-	statFnMounted := func(path string, timeout time.Duration) (uint64, error) {
+	statFnMounted := func(_ string, timeout time.Duration) (uint64, error) {
 		return 1024, nil
 	}
 
@@ -131,10 +131,6 @@ func TestCandidateVolumeBecomesRequiredOnceSeen(t *testing.T) {
 	}
 
 	// Second call: volume is unmounted (stat times out).
-	statFnUnmounted := func(path string, timeout time.Duration) (uint64, error) {
-		return 0, ErrStatTimedOut
-	}
-
 	states, err = DiscoverVolumes(cfg, statFnUnmounted)
 	if !errors.Is(err, ErrVolumeMissing) {
 		t.Fatalf("second call: expected ErrVolumeMissing, got %v", err)
@@ -149,18 +145,32 @@ func TestCandidateVolumeBecomesRequiredOnceSeen(t *testing.T) {
 		t.Fatal("second call: expected Known=true to persist after unmount")
 	}
 
-	// Unknown unmounted volume should not trigger ErrVolumeMissing.
+}
+
+// TestUnknownUnmountedVolumeIsNotRequired verifies that an unmounted volume
+// that was never seen does not trigger ErrVolumeMissing.
+func TestUnknownUnmountedVolumeIsNotRequired(t *testing.T) {
+	resetKnownVolumes()
+
 	cfgUnknown := DiskConfig{
 		RequiredVolumes: []string{"/mnt/unknown"},
 		StatTimeout:     time.Second,
 	}
-	states, err = DiscoverVolumes(cfgUnknown, statFnUnmounted)
+	states, err := DiscoverVolumes(cfgUnknown, statFnUnmounted)
 	if err != nil {
 		t.Fatalf("unknown volume: expected no error, got %v", err)
+	}
+	if len(states) != 1 {
+		t.Fatalf("unknown volume: got %d states, want 1", len(states))
 	}
 	if states[0].Known {
 		t.Fatal("unknown volume: expected Known=false")
 	}
+}
+
+// statFnUnmounted simulates a volume whose stat times out.
+func statFnUnmounted(_ string, _ time.Duration) (uint64, error) {
+	return 0, ErrStatTimedOut
 }
 
 // resetKnownVolumes clears the known-volume registry between test cases.

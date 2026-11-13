@@ -62,7 +62,7 @@ func ReadTrace(path string) (Trace, error) {
 
 // AppendSpawn appends a trace record to the specified JSONL file.
 // It enforces single-writer semantics; concurrent writes return ErrDualWrite.
-func AppendSpawn(path string, t Trace) error {
+func AppendSpawn(path string, t Trace) (err error) {
 	mu.Lock()
 	if writers[path] {
 		mu.Unlock()
@@ -87,7 +87,11 @@ func AppendSpawn(path string, t Trace) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	_, err = f.Write(data)
 	return err

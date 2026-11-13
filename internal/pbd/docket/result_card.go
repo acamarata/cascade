@@ -79,44 +79,15 @@ func BuildResultCard(c CommitInfo) (string, error) {
 		return "", err
 	}
 
-	const filesHeader = "files:\n"
-	const declsHeader = "decls:\n"
-	const truncMarker = "[truncated]\n"
-
-	type entry struct {
-		text   string
-		isDecl bool
-	}
-	all := make([]entry, 0, len(c.Decls)+len(c.Files))
+	all := make([]cardEntry, 0, len(c.Decls)+len(c.Files))
 	for _, f := range c.Files {
-		all = append(all, entry{text: f, isDecl: false})
+		all = append(all, cardEntry{text: f, isDecl: false})
 	}
 	for _, d := range c.Decls {
-		all = append(all, entry{text: d, isDecl: true})
+		all = append(all, cardEntry{text: d, isDecl: true})
 	}
 
-	render := func(entries []entry) string {
-		var b strings.Builder
-		b.WriteString(filesHeader)
-		for _, e := range entries {
-			if !e.isDecl {
-				b.WriteString("- ")
-				b.WriteString(e.text)
-				b.WriteByte('\n')
-			}
-		}
-		b.WriteString(declsHeader)
-		for _, e := range entries {
-			if e.isDecl {
-				b.WriteString("- ")
-				b.WriteString(e.text)
-				b.WriteByte('\n')
-			}
-		}
-		return b.String()
-	}
-
-	full := render(all)
+	full := renderCardEntries(all)
 	if len(full) <= Cap {
 		return full, nil
 	}
@@ -124,13 +95,46 @@ func BuildResultCard(c CommitInfo) (string, error) {
 	kept := len(all)
 	for kept > 0 {
 		kept--
-		candidate := render(all[:kept])
-		if len(candidate)+len(truncMarker) <= Cap {
-			return candidate + truncMarker, nil
+		candidate := renderCardEntries(all[:kept])
+		if len(candidate)+len(cardTruncMarker) <= Cap {
+			return candidate + cardTruncMarker, nil
 		}
 	}
 
-	return filesHeader + declsHeader + truncMarker, nil
+	return cardFilesHeader + cardDeclsHeader + cardTruncMarker, nil
+}
+
+const (
+	cardFilesHeader = "files:\n"
+	cardDeclsHeader = "decls:\n"
+	cardTruncMarker = "[truncated]\n"
+)
+
+type cardEntry struct {
+	text   string
+	isDecl bool
+}
+
+// renderCardEntries renders the files section then the decls section.
+func renderCardEntries(entries []cardEntry) string {
+	var b strings.Builder
+	b.WriteString(cardFilesHeader)
+	for _, e := range entries {
+		if !e.isDecl {
+			b.WriteString("- ")
+			b.WriteString(e.text)
+			b.WriteByte('\n')
+		}
+	}
+	b.WriteString(cardDeclsHeader)
+	for _, e := range entries {
+		if e.isDecl {
+			b.WriteString("- ")
+			b.WriteString(e.text)
+			b.WriteByte('\n')
+		}
+	}
+	return b.String()
 }
 
 func validateList(list []string) error {
