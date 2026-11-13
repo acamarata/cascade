@@ -58,6 +58,45 @@ func Render(c CommitInfo) (string, error) {
 	return out, nil
 }
 
+// BuildResultCard formats a CommitInfo into a human-readable result card.
+// It renders "files:\n" followed by "- " and each file, then "decls:\n"
+// followed by "- " and each declaration. An empty Decls slice produces
+// the header with no entries. Returns ErrCardEmpty if Files is empty,
+// ErrCardInput if validation fails or the output exceeds Cap.
+func BuildResultCard(c CommitInfo) (string, error) {
+	if len(c.Files) == 0 {
+		return "", ErrCardEmpty
+	}
+
+	if err := validateList(c.Files); err != nil {
+		return "", err
+	}
+	if err := validateList(c.Decls); err != nil {
+		return "", err
+	}
+
+	var b strings.Builder
+	b.WriteString("files:\n")
+	for _, f := range c.Files {
+		b.WriteString("- ")
+		b.WriteString(f)
+		b.WriteByte('\n')
+	}
+	b.WriteString("decls:\n")
+	for _, d := range c.Decls {
+		b.WriteString("- ")
+		b.WriteString(d)
+		b.WriteByte('\n')
+	}
+
+	out := b.String()
+	if len(out) > Cap {
+		return "", ErrCardInput
+	}
+
+	return out, nil
+}
+
 func validateList(list []string) error {
 	seen := make(map[string]struct{}, len(list))
 	for _, s := range list {

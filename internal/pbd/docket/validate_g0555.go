@@ -3,6 +3,7 @@ package docket
 import (
 	"errors"
 	"regexp"
+	"strings"
 )
 
 // Resources is a slice of symbolic resource identifiers.
@@ -46,8 +47,7 @@ func ValidateResources(resources Resources, lane LaneCaps) error {
 	}
 
 	for _, r := range resources {
-		if len(r) > 5 && r[:5] == "cred:" {
-			name := r[5:]
+		if name, ok := strings.CutPrefix(r, "cred:"); ok {
 			if !capSeen[name] {
 				return ErrInvalidResources
 			}
