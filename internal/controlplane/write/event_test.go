@@ -1,6 +1,7 @@
 package write
 
 import (
+	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
@@ -65,5 +66,55 @@ func TestEmitScheduledIndexEventValid(t *testing.T) {
 	}
 	if len(sink.calls) != 1 {
 		t.Errorf("expected exactly 1 call without retry, got %d", len(sink.calls))
+	}
+}
+
+// TestWriteScheduledIndexEventSchemaExcludesText verifies via reflection and
+// JSON serialization that ScheduledIndexEvent contains only Counts and Names,
+// with no Text, Body, Content, or arbitrary metadata fields.
+func TestWriteScheduledIndexEventSchemaExcludesText(t *testing.T) {
+	val := reflect.ValueOf(ScheduledIndexEvent{})
+	typ := val.Type()
+	if typ.NumField() != 2 {
+		t.Fatalf("expected exactly 2 exported fields, got %d", typ.NumField())
+	}
+
+	f0 := typ.Field(0)
+	if f0.Name != "Counts" || f0.Type.Kind() != reflect.Int {
+		t.Errorf("expected field 0 Counts int, got %s %s", f0.Name, f0.Type.Kind())
+	}
+
+	f1 := typ.Field(1)
+	if f1.Name != "Names" || f1.Type.Kind() != reflect.Slice || f1.Type.Elem().Kind() != reflect.String {
+		t.Errorf("expected field 1 Names []string, got %s %s", f1.Name, f1.Type.Kind())
+	}
+
+	event := ScheduledIndexEvent{Counts: 1, Names: []string{"x"}}
+	data, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("json.Unmarshal failed: %v", err)
+	}
+
+	if len(m) != 2 {
+		t.Errorf("expected exactly 2 keys in serialized output, got %d: %v", len(m), m)
+	}
+
+	if _, ok := m["Counts"]; !ok {
+		t.Errorf("missing Counts key in serialized output")
+	}
+	if _, ok := m["Names"]; !ok {
+		t.Errorf("missing Names key in serialized output")
+	}
+
+	forbidden := []string{"Text", "Body", "Content", "Metadata", "text", "body", "content", "metadata"}
+	for _, k := range forbidden {
+		if _, ok := m[k]; ok {
+			t.Errorf("forbidden key %q found in serialized output", k)
+		}
 	}
 }

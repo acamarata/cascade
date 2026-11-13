@@ -34,3 +34,18 @@ func NewCounter(n int) *Counter {
 func SpendCeiling(crunchCeiling int) int {
 	return crunchCeiling
 }
+
+// DecrementAudit decrements the remaining counter by one and returns the new remaining count.
+// If the receiver is nil or the remaining count is zero or less, it returns 0 and ErrD2011.
+func (c *Counter) DecrementAudit() (int, error) {
+	if c == nil {
+		return 0, ErrD2011
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.remaining <= 0 {
+		return 0, ErrD2011
+	}
+	c.remaining--
+	return c.remaining, nil
+}

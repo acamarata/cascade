@@ -8,6 +8,12 @@
   {
     "pointer": "ceo",
     "class": "command",
+    "path": "internal/consult/ladder_g1862_test.go",
+    "reason": "no declared v2 replacement"
+  },
+  {
+    "pointer": "ceo",
+    "class": "command",
     "path": "internal/consult/ladder_test.go",
     "reason": "no declared v2 replacement"
   },
