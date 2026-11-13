@@ -10,7 +10,7 @@ type fakeStarter struct {
 	called bool
 }
 
-func (f *fakeStarter) Start(runID string, tickets []string, logPath string) (int, error) {
+func (f *fakeStarter) Start(_ string, tickets []string, logPath string) (int, error) {
 	f.called = true
 	return 0, nil
 }
@@ -65,102 +65,79 @@ func TestFlowRunLogPathFormat(t *testing.T) {
 	}
 }
 
-// TestFlowRunEmptyPlanFails verifies validation of starter, plan, and tickets.
+// TestFlowRunInvalidStarterFails verifies that nil and typed-nil starters are rejected.
+func TestFlowRunInvalidStarterFails(t *testing.T) {
+	var typedNil *fakeStarter
+	cases := []struct {
+		name string
+		s    Starter
+	}{
+		{"nil starter", nil},
+		{"typed nil starter", typedNil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ri, err := FlowRun(tc.s, "r1", []string{"T1"})
+			if !errors.Is(err, ErrInvalidStarter) {
+				t.Errorf("err = %v, want ErrInvalidStarter", err)
+			}
+			if ri != (RunInfo{}) {
+				t.Errorf("expected zero RunInfo, got %+v", ri)
+			}
+		})
+	}
+}
+
+// TestFlowRunEmptyPlanFails verifies validation of the plan.
 func TestFlowRunEmptyPlanFails(t *testing.T) {
-	t.Run("nil starter", func(t *testing.T) {
-		ri, err := FlowRun(nil, "r1", []string{"T1"})
-		if !errors.Is(err, ErrInvalidStarter) {
-			t.Errorf("err = %v, want ErrInvalidStarter", err)
-		}
-		if ri != (RunInfo{}) {
-			t.Errorf("expected zero RunInfo, got %+v", ri)
-		}
-	})
+	for _, tc := range []struct {
+		name    string
+		tickets []string
+	}{
+		{"nil tickets", nil},
+		{"empty tickets", []string{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := &fakeStarter{}
+			ri, err := FlowRun(fs, "r1", tc.tickets)
+			if !errors.Is(err, ErrEmptyPlan) {
+				t.Errorf("err = %v, want ErrEmptyPlan", err)
+			}
+			if err.Error() != "empty plan" {
+				t.Errorf("error text = %q, want %q", err.Error(), "empty plan")
+			}
+			if ri != (RunInfo{}) {
+				t.Errorf("expected zero RunInfo, got %+v", ri)
+			}
+			if fs.called {
+				t.Error("Start must not be called")
+			}
+		})
+	}
+}
 
-	t.Run("typed nil starter", func(t *testing.T) {
-		var fs *fakeStarter
-		ri, err := FlowRun(fs, "r1", []string{"T1"})
-		if !errors.Is(err, ErrInvalidStarter) {
-			t.Errorf("err = %v, want ErrInvalidStarter", err)
-		}
-		if ri != (RunInfo{}) {
-			t.Errorf("expected zero RunInfo, got %+v", ri)
-		}
-	})
-
-	t.Run("nil tickets", func(t *testing.T) {
-		fs := &fakeStarter{}
-		ri, err := FlowRun(fs, "r1", nil)
-		if !errors.Is(err, ErrEmptyPlan) {
-			t.Errorf("err = %v, want ErrEmptyPlan", err)
-		}
-		if err.Error() != "empty plan" {
-			t.Errorf("error text = %q, want %q", err.Error(), "empty plan")
-		}
-		if ri != (RunInfo{}) {
-			t.Errorf("expected zero RunInfo, got %+v", ri)
-		}
-		if fs.called {
-			t.Error("Start must not be called")
-		}
-	})
-
-	t.Run("empty tickets", func(t *testing.T) {
-		fs := &fakeStarter{}
-		ri, err := FlowRun(fs, "r1", []string{})
-		if !errors.Is(err, ErrEmptyPlan) {
-			t.Errorf("err = %v, want ErrEmptyPlan", err)
-		}
-		if err.Error() != "empty plan" {
-			t.Errorf("error text = %q, want %q", err.Error(), "empty plan")
-		}
-		if ri != (RunInfo{}) {
-			t.Errorf("expected zero RunInfo, got %+v", ri)
-		}
-		if fs.called {
-			t.Error("Start must not be called")
-		}
-	})
-
-	t.Run("empty ticket entry", func(t *testing.T) {
-		fs := &fakeStarter{}
-		ri, err := FlowRun(fs, "r1", []string{""})
-		if !errors.Is(err, ErrInvalidTicket) {
-			t.Errorf("err = %v, want ErrInvalidTicket", err)
-		}
-		if ri != (RunInfo{}) {
-			t.Errorf("expected zero RunInfo, got %+v", ri)
-		}
-		if fs.called {
-			t.Error("Start must not be called")
-		}
-	})
-
-	t.Run("whitespace ticket entry", func(t *testing.T) {
-		fs := &fakeStarter{}
-		ri, err := FlowRun(fs, "r1", []string{"  "})
-		if !errors.Is(err, ErrInvalidTicket) {
-			t.Errorf("err = %v, want ErrInvalidTicket", err)
-		}
-		if ri != (RunInfo{}) {
-			t.Errorf("expected zero RunInfo, got %+v", ri)
-		}
-		if fs.called {
-			t.Error("Start must not be called")
-		}
-	})
-
-	t.Run("duplicate ticket entries", func(t *testing.T) {
-		fs := &fakeStarter{}
-		ri, err := FlowRun(fs, "r1", []string{"T1", "T1"})
-		if !errors.Is(err, ErrInvalidTicket) {
-			t.Errorf("err = %v, want ErrInvalidTicket", err)
-		}
-		if ri != (RunInfo{}) {
-			t.Errorf("expected zero RunInfo, got %+v", ri)
-		}
-		if fs.called {
-			t.Error("Start must not be called")
-		}
-	})
+// TestFlowRunInvalidTicketFails verifies validation of ticket entries.
+func TestFlowRunInvalidTicketFails(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		tickets []string
+	}{
+		{"empty ticket entry", []string{""}},
+		{"whitespace ticket entry", []string{"  "}},
+		{"duplicate ticket entries", []string{"T1", "T1"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := &fakeStarter{}
+			ri, err := FlowRun(fs, "r1", tc.tickets)
+			if !errors.Is(err, ErrInvalidTicket) {
+				t.Errorf("err = %v, want ErrInvalidTicket", err)
+			}
+			if ri != (RunInfo{}) {
+				t.Errorf("expected zero RunInfo, got %+v", ri)
+			}
+			if fs.called {
+				t.Error("Start must not be called")
+			}
+		})
+	}
 }

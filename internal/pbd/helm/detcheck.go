@@ -1,3 +1,4 @@
+// Package helm enforces the deterministic-logic boundary for helm code.
 package helm
 
 import (

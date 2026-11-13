@@ -11,16 +11,9 @@ import (
 	"strings"
 )
 
-// scratchBase is the root every scratch directory lives under, in slash form. It comes from
-// CASCADE_SCRATCH_DIR when set, else <os temp dir>/cascade-scratch, so no host path is built in.
-var scratchBase = defaultScratchBase()
-
-func defaultScratchBase() string {
-	if d := os.Getenv("CASCADE_SCRATCH_DIR"); d != "" {
-		return path.Clean(filepath.ToSlash(d))
-	}
-	return path.Clean(filepath.ToSlash(filepath.Join(os.TempDir(), "cascade-scratch")))
-}
+// scratchBase is the root every scratch directory lives under, in slash form:
+// <os temp dir>/cascade-scratch, so no host path is built in.
+var scratchBase = path.Clean(filepath.ToSlash(filepath.Join(os.TempDir(), "cascade-scratch")))
 
 var validTopic = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 

@@ -36,10 +36,12 @@ func FlowRun(s Starter, runID string, tickets []string) (RunInfo, error) {
 	}
 	v := reflect.ValueOf(s)
 	switch v.Kind() {
-	case reflect.Ptr, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func, reflect.Interface:
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func, reflect.Interface:
 		if v.IsNil() {
 			return RunInfo{}, ErrInvalidStarter
 		}
+	default:
+		// other kinds cannot be nil
 	}
 
 	if !isValidRunID(runID) {
@@ -77,14 +79,13 @@ func isValidRunID(id string) bool {
 		if r > 127 {
 			return false
 		}
+		alnum := (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
 		if i == 0 {
-			if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')) {
+			if !alnum {
 				return false
 			}
-		} else {
-			if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-') {
-				return false
-			}
+		} else if !alnum && r != '_' && r != '-' {
+			return false
 		}
 	}
 	return true

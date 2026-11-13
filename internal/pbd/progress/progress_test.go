@@ -51,8 +51,18 @@ func TestAppendChangeWritesOneJSONLine(t *testing.T) {
 		t.Errorf("expected %+v, got %+v", c, got)
 	}
 
-	err = AppendChange(path, c)
-	if err != nil {
+	checkSecondAppend(t, path, c)
+
+	badPath := filepath.Join(dir, "nonexistent", "progress.jsonl")
+	if err := AppendChange(badPath, c); !errors.Is(err, ErrAppendChange) {
+		t.Errorf("expected ErrAppendChange, got %v", err)
+	}
+}
+
+// checkSecondAppend appends c again and asserts the file now holds exactly two LF-terminated lines.
+func checkSecondAppend(t *testing.T, path string, c Change) {
+	t.Helper()
+	if err := AppendChange(path, c); err != nil {
 		t.Fatalf("second AppendChange failed: %v", err)
 	}
 	data2, err := os.ReadFile(path)
@@ -62,12 +72,6 @@ func TestAppendChangeWritesOneJSONLine(t *testing.T) {
 	lines2 := bytes.Split(data2, []byte{'\n'})
 	if len(lines2) != 3 || len(lines2[2]) != 0 {
 		t.Errorf("expected two lines ending with LF, got %q", data2)
-	}
-
-	badPath := filepath.Join(dir, "nonexistent", "progress.jsonl")
-	err = AppendChange(badPath, c)
-	if !errors.Is(err, ErrAppendChange) {
-		t.Errorf("expected ErrAppendChange, got %v", err)
 	}
 }
 

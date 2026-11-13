@@ -62,15 +62,17 @@ func AppendChange(path string, c Change) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrAppendChange, err)
 	}
-	defer f.Close()
-
 	n, err := f.Write(data)
 	if err != nil {
+		_ = f.Close()
 		return fmt.Errorf("%w: %v", ErrAppendChange, err)
 	}
 	if n < len(data) {
+		_ = f.Close()
 		return fmt.Errorf("%w: %v", ErrAppendChange, io.ErrShortWrite)
 	}
-
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("%w: %v", ErrAppendChange, err)
+	}
 	return nil
 }
