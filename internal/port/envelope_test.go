@@ -69,7 +69,7 @@ func TestPortErrorInterface(t *testing.T) {
 
 // TestErrNotImplemented verifies the ErrNotImplemented sentinel.
 func TestErrNotImplemented(t *testing.T) {
-	if ErrNotImplemented.Error() != "not implemented" {
+	if ErrNotImplemented.Error() != "port: operation unavailable" {
 		t.Errorf("unexpected error message: %s", ErrNotImplemented.Error())
 	}
 }

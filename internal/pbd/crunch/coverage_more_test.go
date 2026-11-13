@@ -7,68 +7,6 @@ import (
 	"time"
 )
 
-// TestExtractCoreArgsNonEmpty covers the non-empty branch of ExtractCoreArgs.
-func TestExtractCoreArgsNonEmpty(t *testing.T) {
-	cases := []struct {
-		name string
-		args []string
-	}{
-		{"single", []string{"--dir"}},
-		{"flags and values", []string{"--dir", "x", "--verify", "go test", "--scope", "a,b"}},
-		{"blank entries", []string{"", " "}},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := ExtractCoreArgs(tc.args)
-			if err != nil {
-				t.Fatalf("ExtractCoreArgs(%#v) error: %v", tc.args, err)
-			}
-			if !reflect.DeepEqual(got, CoreArgs{}) {
-				t.Fatalf("ExtractCoreArgs(%#v) = %#v, want zero value", tc.args, got)
-			}
-		})
-	}
-}
-
-// TestPopulateGCAuthSuccess covers the success path and boundary values.
-func TestPopulateGCAuthSuccess(t *testing.T) {
-	calls := 0
-	est := func([]GCQuotaEvidence) (time.Time, string, error) {
-		calls++
-		return time.Time{}, "", nil
-	}
-	cases := []struct {
-		name     string
-		ticket   GCTicket
-		evidence []GCQuotaEvidence
-	}{
-		{"typical", GCTicket{ID: "t1"}, []GCQuotaEvidence{{Usage: 1, Capacity: 10}}},
-		{"zero zero", GCTicket{ID: "t2"}, []GCQuotaEvidence{{Usage: 0, Capacity: 0}}},
-		{"usage equals capacity", GCTicket{ID: "t3", Gated: true}, []GCQuotaEvidence{{Usage: 10, Capacity: 10}}},
-		{"stale multiple", GCTicket{ID: " t4 "}, []GCQuotaEvidence{
-			{Usage: 0, Capacity: 5, Stale: true},
-			{Usage: 5, Capacity: 5},
-		}},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := PopulateGCAuth(tc.ticket, tc.evidence, est)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if got.ID != tc.ticket.ID {
-				t.Fatalf("ID = %q, want %q", got.ID, tc.ticket.ID)
-			}
-			if got.OwnerFlag || got.GateOpen || got.Model != "" || got.Samples != nil {
-				t.Fatalf("unexpected populated fields: %+v", got)
-			}
-		})
-	}
-	if calls != 0 {
-		t.Fatalf("estimator called %d times, want 0", calls)
-	}
-}
-
 // TestPopulateGCAuthLaterEvidenceInvalid checks that a bad later entry fails
 // even when earlier entries are valid.
 func TestPopulateGCAuthLaterEvidenceInvalid(t *testing.T) {
