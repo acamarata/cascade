@@ -1,6 +1,9 @@
 package crunch
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // Alloc represents a quota allocation with account and percentage limits.
 type Alloc struct {
@@ -34,4 +37,11 @@ func MapQuota(acct string, pct int, _ bool) (Alloc, error) {
 	default:
 		return Alloc{}, ErrT0308
 	}
+}
+
+// FormatAllocation returns a formatted log string for the given allocation.
+// It produces exactly "account=%s five_hour=%d weekly=%d" without a trailing newline.
+// It is a pure formatter of any Alloc, including zero values, and performs no logging or validation.
+func FormatAllocation(a Alloc) string {
+	return fmt.Sprintf("account=%s five_hour=%d weekly=%d", a.Account, a.FiveHourPct, a.WeeklyPct)
 }

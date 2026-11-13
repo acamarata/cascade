@@ -33,3 +33,26 @@ func SizeConcurrency(h Health) (int, error) {
 		return 0, ErrInvalidHealth
 	}
 }
+
+// V2BigModelCap is the hard cap for big model requests under v2 policy.
+const V2BigModelCap = 0
+
+// ErrInvalidModelSize is returned when an unrecognized or malformed model size is provided.
+var ErrInvalidModelSize = errors.New("invalid model size")
+
+// ErrBigModelCap is returned when a big model request exceeds the v2 hard cap.
+var ErrBigModelCap = errors.New("P2-CRUN-05")
+
+// CheckBigModel enforces the BigModelCapper policy.
+// It accepts only exact modelSize "small" or "big"; all other or empty values return ErrInvalidModelSize.
+// For v2=true, any big request returns ErrBigModelCap and small returns nil.
+// For v2=false, either valid model size returns nil.
+func CheckBigModel(modelSize string, v2 bool) error {
+	if modelSize != "small" && modelSize != "big" {
+		return ErrInvalidModelSize
+	}
+	if v2 && modelSize == "big" {
+		return ErrBigModelCap
+	}
+	return nil
+}
