@@ -5,20 +5,16 @@ import (
 	"fmt"
 )
 
-// Runner represents a node that can execute tasks.
+// Runner represents a node that can execute tasks. Production marks a host that serves live traffic; the registry
+// that builds the Runner list sets it, so no host address is built into the code.
 type Runner struct {
-	ID   string
-	Host string
-}
-
-var productionHosts = map[string]bool{
-	"5.75.235.42":     true,
-	"167.235.195.186": true,
-	"159.69.190.92":   true,
+	ID         string
+	Host       string
+	Production bool
 }
 
 // ResolveRunner resolves a runner from reg by override, then id, then host.
-// It returns an error if the resolved runner has a production host or no match is found.
+// It returns an error if the resolved runner is marked Production or no match is found.
 func ResolveRunner(reg []Runner, override, id, host string) (Runner, error) {
 	var r Runner
 	var found bool
@@ -57,7 +53,7 @@ func ResolveRunner(reg []Runner, override, id, host string) (Runner, error) {
 		return Runner{}, errors.New("no matching runner found")
 	}
 
-	if productionHosts[r.Host] {
+	if r.Production {
 		return Runner{}, fmt.Errorf("production host %s refused", r.Host)
 	}
 
