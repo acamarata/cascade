@@ -257,3 +257,27 @@ func TestDiskFullIsAWait(t *testing.T) {
 		t.Fatalf("expected at least 2 calls to discoverFn, got %d", callCount)
 	}
 }
+
+// TestWaitReasonNamesFullAndMissing verifies the wait reason says which
+// condition holds the start back.
+func TestWaitReasonNamesFullAndMissing(t *testing.T) {
+	cfg := DiskConfig{FreeSpaceFloor: 1 << 30}
+	full := func(_ DiskConfig, _ func(string, time.Duration) (uint64, error)) ([]VolumeState, error) {
+		return []VolumeState{{Path: "/v", Mounted: true, FreeBytes: 1}}, nil
+	}
+	missing := func(_ DiskConfig, _ func(string, time.Duration) (uint64, error)) ([]VolumeState, error) {
+		return []VolumeState{{Path: "/v"}}, nil
+	}
+	if err := waitReason(context.Background(), cfg, full); !errors.Is(err, ErrVolumeFull) {
+		t.Fatalf("full volume reason = %v, want ErrVolumeFull", err)
+	}
+	if err := waitReason(context.Background(), cfg, missing); !errors.Is(err, ErrVolumeMissing) {
+		t.Fatalf("missing volume reason = %v, want ErrVolumeMissing", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := WaitUntilReady(ctx, DiskConfig{FreeSpaceFloor: 1 << 30, RetryInterval: time.Hour}, full)
+	if !errors.Is(err, context.Canceled) || !errors.Is(err, ErrVolumeFull) {
+		t.Fatalf("cancelled wait = %v, want context.Canceled wrapping ErrVolumeFull", err)
+	}
+}
