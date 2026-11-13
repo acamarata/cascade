@@ -17,7 +17,7 @@ var ErrT0308 = errors.New("T0308")
 // The pct argument must be 0..100 inclusive.
 // Invalid or empty account strings, or out-of-range percentages, return
 // an empty Alloc and ErrT0308.
-func MapQuota(acct string, pct int, fullTilt bool) (Alloc, error) {
+func MapQuota(acct string, pct int, _ bool) (Alloc, error) {
 	if pct < 0 || pct > 100 {
 		return Alloc{}, ErrT0308
 	}

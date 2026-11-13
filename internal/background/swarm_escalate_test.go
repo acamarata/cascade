@@ -54,9 +54,13 @@ func TestEmitEscalateEvent(t *testing.T) {
 	if string(data3) != expected3 {
 		t.Fatalf("expected repeat append, got %q", string(data3))
 	}
+}
+
+func TestEmitEscalateEventInvalidInput(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "escalate.jsonl")
 
 	// Invalid path
-	err = WriteEscalate("", Outcome{Status: "done"})
+	err := WriteEscalate("", Outcome{Status: "done"})
 	if !errors.Is(err, ErrInvalidEscalation) {
 		t.Fatalf("expected ErrInvalidEscalation for blank path, got %v", err)
 	}
@@ -72,18 +76,26 @@ func TestEmitEscalateEvent(t *testing.T) {
 	if !errors.Is(err, ErrInvalidEscalation) {
 		t.Fatalf("expected ErrInvalidEscalation for needs-owner without detail, got %v", err)
 	}
+}
+
+func TestEmitEscalateEventWriteFailures(t *testing.T) {
+	dir := t.TempDir()
 
 	// I/O error: directory instead of file
 	dirPath := filepath.Join(dir, "subdir")
-	os.Mkdir(dirPath, 0755)
-	err = WriteEscalate(dirPath, Outcome{Status: "done"})
+	if err := os.Mkdir(dirPath, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	err := WriteEscalate(dirPath, Outcome{Status: "done"})
 	if !errors.Is(err, ErrEscalationWrite) {
 		t.Fatalf("expected ErrEscalationWrite for directory, got %v", err)
 	}
 
 	// Permissions failure: existing file with broad permissions
 	broadPath := filepath.Join(dir, "broad.jsonl")
-	os.WriteFile(broadPath, []byte(""), 0644)
+	if err := os.WriteFile(broadPath, []byte(""), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
 	err = WriteEscalate(broadPath, Outcome{Status: "done"})
 	if !errors.Is(err, ErrEscalationWrite) {
 		t.Fatalf("expected ErrEscalationWrite for broad permissions, got %v", err)

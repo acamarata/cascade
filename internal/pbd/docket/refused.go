@@ -76,6 +76,18 @@ func LoadSnapshot(r io.Reader) (Snapshot, error) {
 		return Snapshot{}, wrapErr(ErrInvalidSnapshot)
 	}
 
+	s, err := decodeSnapshot(r)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	if err := validateSnapshot(s); err != nil {
+		return Snapshot{}, err
+	}
+	return s, nil
+}
+
+// decodeSnapshot reads and strictly decodes r, filling nil collections.
+func decodeSnapshot(r io.Reader) (Snapshot, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return Snapshot{}, wrapErr(ErrInvalidSnapshot)
@@ -120,24 +132,27 @@ func LoadSnapshot(r io.Reader) (Snapshot, error) {
 	if s.RefusedMarks == nil {
 		s.RefusedMarks = map[string]bool{}
 	}
+	return s, nil
+}
 
+// validateSnapshot rejects empty or duplicate ticket ids and empty marks.
+func validateSnapshot(s Snapshot) error {
 	seen := make(map[string]struct{}, len(s.TicketIDs))
 	for _, id := range s.TicketIDs {
 		if id == "" {
-			return Snapshot{}, wrapErr(ErrInvalidSnapshot)
+			return wrapErr(ErrInvalidSnapshot)
 		}
 		if _, dup := seen[id]; dup {
-			return Snapshot{}, wrapErr(ErrInvalidSnapshot)
+			return wrapErr(ErrInvalidSnapshot)
 		}
 		seen[id] = struct{}{}
 	}
 	for k := range s.RefusedMarks {
 		if k == "" {
-			return Snapshot{}, wrapErr(ErrInvalidSnapshot)
+			return wrapErr(ErrInvalidSnapshot)
 		}
 	}
-
-	return s, nil
+	return nil
 }
 
 func wrapErr(err error) error {
