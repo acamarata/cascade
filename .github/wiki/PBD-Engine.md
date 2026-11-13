@@ -5,6 +5,21 @@
 structure, and (in later tickets) authoring and linting it. This page
 covers the tree store and native validator, mounted as `pbd validate`.
 
+## Evidence kinds
+
+Completion evidence includes the independent QA row:
+
+| Kind | Passing evidence | Producer identity |
+|---|---|---|
+| `qa` | An independent QA run with outcome `pass` | `daemon:` prefix |
+
+High and Critical jobs require passing `qa` evidence alongside their other
+required evidence, including eligible `ci_attestation` evidence. A missing or
+failed QA row leaves `qa` in `MissingEvidence` and denies completion without
+changing the stored job state. A passing daemon QA row satisfies the QA
+requirement; all other completion gates still apply. Low and Normal jobs do
+not require the QA row.
+
 ## Tree layout
 
 A PEWS tree is a directory rooted anywhere the caller names:

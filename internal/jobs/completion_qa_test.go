@@ -9,6 +9,61 @@ import (
 	"time"
 )
 
+// TestCompletionHighRequiresQAEvidence checks missing, failing and passing QA rows.
+func TestCompletionHighRequiresQAEvidence(t *testing.T) {
+	isolateQAHome(t)
+	cp, store, ledger, _, job := newCompletionFixture(t, RiskClassHigh)
+	passAll(t, ledger, []EvidenceKind{EvidenceBuild, EvidenceLint, EvidenceTests, EvidenceReview, EvidenceAdversarial})
+	req := TransitionRequest{
+		Job: &job, Target: JobStateVerifying,
+		Caller: PolicyEngineIdentity{EngineID: testEngineID}, PlannedRiskClass: RiskClassHigh,
+	}
+	t.Run("absent", func(t *testing.T) { assertHighQAMissing(t, cp, store, req, true) })
+	for _, tc := range []struct {
+		name    string
+		outcome Outcome
+		missing bool
+	}{
+		{"failing", OutcomeFail, true},
+		{"passing", OutcomePass, false},
+		{"latest failing", OutcomeFail, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := passRecord(EvidenceQA, "qa-"+tc.name)
+			rec.Outcome = tc.outcome
+			written, err := ledger.Append(context.Background(), rec, baseAuth())
+			if err != nil {
+				t.Fatalf("Append QA: %v", err)
+			}
+			if !strings.HasPrefix(written.AttestorIdentity, "daemon:") {
+				t.Fatalf("QA identity = %q, want daemon: prefix", written.AttestorIdentity)
+			}
+			assertHighQAMissing(t, cp, store, req, tc.missing)
+		})
+	}
+}
+
+func assertHighQAMissing(t *testing.T, cp *CompletionPolicy, store *Store, req TransitionRequest, want bool) {
+	t.Helper()
+	err := cp.Transition(context.Background(), req)
+	denial, ok := err.(*ErrorCompletionDenied)
+	if !ok {
+		t.Fatalf("Transition = %v, want evidence denial", err)
+	}
+	if got := containsEvidence(denial.MissingEvidence, EvidenceQA); got != want {
+		t.Fatalf("MissingEvidence = %v, want QA missing = %v", denial.MissingEvidence, want)
+	}
+	for _, kind := range []EvidenceKind{EvidenceBuild, EvidenceLint, EvidenceTests, EvidenceReview, EvidenceAdversarial} {
+		if containsEvidence(denial.MissingEvidence, kind) {
+			t.Fatalf("passing %s evidence is missing", kind)
+		}
+	}
+	stored, found, err := store.GetJob(context.Background(), req.Job.ID)
+	if err != nil || !found || stored.State != JobStateRunning || req.Job.State != JobStateRunning {
+		t.Fatalf("denial changed state: stored=%s request=%s found=%v err=%v", stored.State, req.Job.State, found, err)
+	}
+}
+
 // TestEvidenceKindsForGateSetQA pins QA to High and Critical gate sets.
 func TestEvidenceKindsForGateSetQA(t *testing.T) {
 	for _, tc := range []struct {
@@ -72,6 +127,13 @@ func TestEvidenceQAProducerIdentity(t *testing.T) {
 
 func newQALedgerFixture(t *testing.T) *EvidenceLedger {
 	t.Helper()
+	isolateQAHome(t)
+	l, _, _ := newLedgerFixture(t, time.Date(2026, 9, 11, 0, 0, 0, 0, time.UTC))
+	return l
+}
+
+func isolateQAHome(t *testing.T) {
+	t.Helper()
 	operatorHome := os.Getenv("HOME")
 	home := t.TempDir()
 	if qaHomeIsolated(operatorHome, home) {
@@ -83,8 +145,6 @@ func newQALedgerFixture(t *testing.T) *EvidenceLedger {
 			t.Fatalf("isolation guard refused temporary %s", key)
 		}
 	}
-	l, _, _ := newLedgerFixture(t, time.Date(2026, 9, 11, 0, 0, 0, 0, time.UTC))
-	return l
 }
 
 func qaHomeIsolated(home, temporaryHome string) bool {

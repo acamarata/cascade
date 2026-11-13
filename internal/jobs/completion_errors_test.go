@@ -122,6 +122,7 @@ func TestCompletionOutOfLeaseScopeWithNoAttentionConfigured(t *testing.T) {
 
 func TestCompletionCheckApprovalWithNoQueueConfigured(t *testing.T) {
 	cp, _, req, row := attestedCompletion(t, RiskClassCritical, false)
+	passAll(t, cp.deps.Ledger, []EvidenceKind{EvidenceQA})
 	appendAttestedEvidence(t, cp, req, row)
 	err := cp.Transition(context.Background(), req)
 	denial, ok := err.(*ErrorCompletionDenied)

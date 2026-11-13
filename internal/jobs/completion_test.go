@@ -256,6 +256,7 @@ func newApprovalQueueForTest(t *testing.T) (*policy.StoreApprovals, func(jobID, 
 
 func TestCompletionApprovalToken(t *testing.T) {
 	cp, _, base, row := attestedCompletion(t, RiskClassCritical, false)
+	passAll(t, cp.deps.Ledger, []EvidenceKind{EvidenceQA})
 	appendAttestedEvidence(t, cp, base, row)
 	job, tree := *base.Job, base.TreeHash
 
