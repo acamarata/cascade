@@ -4,13 +4,18 @@ import (
 	"testing"
 )
 
+// fixtureBase pins the scratch root so the tests never depend on the host temp dir.
+const fixtureBase = "/scratch-fixture"
+
+func init() { scratchBase = fixtureBase }
+
 func TestScratchPathBuildsExpectedDir(t *testing.T) {
 	path, err := ScratchPath("gate", "2026-11-05")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if path != "/Volumes/D5/tmp/gate-20261105/" {
-		t.Errorf("expected /Volumes/D5/tmp/gate-20261105/, got %s", path)
+	if path != "/scratch-fixture/gate-20261105/" {
+		t.Errorf("expected /scratch-fixture/gate-20261105/, got %s", path)
 	}
 }
 
@@ -26,7 +31,7 @@ func TestScratchPathRejectsBadTopic(t *testing.T) {
 }
 
 func TestValidateScratchAcceptsUnderTopicDir(t *testing.T) {
-	err := ValidateScratch("/Volumes/D5/tmp/gate-20261105/a.txt")
+	err := ValidateScratch("/scratch-fixture/gate-20261105/a.txt")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -35,8 +40,8 @@ func TestValidateScratchAcceptsUnderTopicDir(t *testing.T) {
 func TestValidateScratchRejectsOutsidePaths(t *testing.T) {
 	paths := []string{
 		"/tmp/a",
-		"/Volumes/D5/tmp/a.txt",
-		"/Volumes/D5/tmp/gate-20261105/../x",
+		"/scratch-fixture/a.txt",
+		"/scratch-fixture/gate-20261105/../x",
 	}
 	for _, p := range paths {
 		err := ValidateScratch(p)
