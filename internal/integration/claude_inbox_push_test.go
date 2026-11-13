@@ -31,6 +31,7 @@ import (
 	"github.com/acamarata/cascade/internal/fleet/supervision"
 	"github.com/acamarata/cascade/internal/notify"
 	"github.com/acamarata/cascade/internal/plugins"
+	"github.com/acamarata/cascade/pkg/provider"
 	"github.com/acamarata/cascade/plugins/claude"
 	"github.com/acamarata/cascade/providers/sqlite"
 )
@@ -75,9 +76,12 @@ func readCapturedFixtures(t *testing.T) {
 	}
 }
 
-func TestClaudeInboxPushRecordedCounterpart(t *testing.T) {
-	readCapturedFixtures(t)
-	ctx := context.Background()
+const inboxCounterpartPad = "never on the wire "
+
+// newInboxCounterpart wires the real router, bridge and store and returns the
+// service and bridge for one session.
+func newInboxCounterpart(ctx context.Context, t *testing.T) (*notify.Service, *plugins.ClaudeInboxBridge) {
+	t.Helper()
 	clock := inboxFixedClock{now: time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)}
 	store, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "cascade.db"))
 	if err != nil {
@@ -94,22 +98,62 @@ func TestClaudeInboxPushRecordedCounterpart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer unwire()
-	body := "COUNTERPART-BODY " + strings.Repeat("never on the wire ", 20)
-	if err := svc.Notifier.Deliver(ctx, notify.Notification{
-		ID: "counterpart-1", Class: notify.ClassAddressed, TargetSession: "cc-session-1",
-		OriginScope: "repo-a", Visibility: notify.VisibilityPrivate, Payload: []byte(body),
-	}); err != nil {
+	t.Cleanup(unwire)
+	return svc, bridge
+}
+
+// deliverAndHydrate delivers n, drains the dispatcher and reads the session's
+// next-turn hydration.
+func deliverAndHydrate(ctx context.Context, t *testing.T, svc *notify.Service, bridge *plugins.ClaudeInboxBridge, n notify.Notification) ([]claude.InboxRecord, claude.AppendResult) {
+	t.Helper()
+	if err := svc.Notifier.Deliver(ctx, n); err != nil {
 		t.Fatal(err)
 	}
 	svc.Dispatcher.Drain(ctx)
 	recs, res, err := bridge.ReadNextTurnForSession(ctx, "cc-session-1")
-	if err != nil || !res.Appended || len(recs) != 1 {
-		t.Fatalf("hydration = (%+v, %+v, %v), want the one addressed record", recs, res, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return recs, res
+}
+
+func addressedNotification(id, body string) notify.Notification {
+	return notify.Notification{
+		ID: id, Class: notify.ClassAddressed, TargetSession: "cc-session-1",
+		OriginScope: "repo-a", Visibility: notify.VisibilityPrivate, Payload: []byte(body),
+	}
+}
+
+// TestClaudeInboxPushRecordedCounterpart proves the model ceiling: an
+// addressed notification without an Origin stamps local-only and is withheld.
+func TestClaudeInboxPushRecordedCounterpart(t *testing.T) {
+	readCapturedFixtures(t)
+	ctx := context.Background()
+	svc, bridge := newInboxCounterpart(ctx, t)
+	body := "COUNTERPART-BODY " + strings.Repeat(inboxCounterpartPad, 20)
+	recs, res := deliverAndHydrate(ctx, t, svc, bridge, addressedNotification("counterpart-1", body))
+	if len(recs) != 0 || res.Appended || res.Withheld != 1 {
+		t.Fatalf("hydration = (%+v, %+v), want no records and Withheld 1", recs, res)
+	}
+}
+
+// TestClaudeInboxPushAdmittedClass proves a notification whose Origin stamps
+// the lowest class the ceiling admits is appended once, rendered with its
+// class, and never carries the body.
+func TestClaudeInboxPushAdmittedClass(t *testing.T) {
+	readCapturedFixtures(t)
+	ctx := context.Background()
+	svc, bridge := newInboxCounterpart(ctx, t)
+	body := "COUNTERPART-BODY " + strings.Repeat(inboxCounterpartPad, 20)
+	n := addressedNotification("counterpart-2", body)
+	n.Origin = notify.Origin{Source: "counterpart.test", RecordRef: "rec-1", Tier: provider.SensitivityPublic}
+	recs, res := deliverAndHydrate(ctx, t, svc, bridge, n)
+	if !res.Appended || res.Withheld != 0 || len(recs) != 1 {
+		t.Fatalf("hydration = (%+v, %+v), want the one addressed record", recs, res)
 	}
 	block := claude.RenderInboxBlock(recs)
-	if strings.Contains(block, body) || strings.Contains(block, strings.Repeat("never on the wire ", 10)) ||
-		!strings.Contains(block, `provenance="untrusted-source"`) || recs[0].DataClass != "restricted" {
+	if strings.Contains(block, body) || strings.Contains(block, strings.Repeat(inboxCounterpartPad, 10)) ||
+		!strings.Contains(block, `provenance="untrusted-source"`) || recs[0].DataClass != "internal" {
 		t.Fatalf("hydrated block carries the body or lacks its tags:\n%s", block)
 	}
 }
