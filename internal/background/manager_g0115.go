@@ -26,10 +26,16 @@ func Decide(p Pass, emptyRun int) Action {
 		return ActionNone
 	}
 	if !p.Exited {
+		if p.Duration > 25*time.Minute {
+			return ActionKill
+		}
 		return ActionNone
 	}
-	if !p.Empty {
-		return ActionNone
+	if p.Empty {
+		if emptyRun >= 3 {
+			return ActionStop
+		}
+		return ActionRestart
 	}
-	return ActionRestart
+	return ActionNone
 }
