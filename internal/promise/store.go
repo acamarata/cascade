@@ -94,7 +94,7 @@ func (s *MemoryStore) Update(_ context.Context, p *Promise) error {
 }
 
 // ListStale returns all promises with NextAt before the given time.
-func (s *MemoryStore) ListStale(ctx context.Context, before time.Time) ([]*Promise, error) {
+func (s *MemoryStore) ListStale(_ context.Context, before time.Time) ([]*Promise, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
