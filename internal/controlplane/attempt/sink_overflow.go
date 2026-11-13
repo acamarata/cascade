@@ -33,6 +33,9 @@ type overflowSink struct {
 	done      chan struct{}
 	closeErr  error
 	closeOnce sync.Once
+	// workerErrs holds every appendRow failure; only the worker writes it,
+	// and Close reads it after the worker has finished (close(done)).
+	workerErrs []error
 }
 
 func newOverflowSink(base Sink, dir string, appendRow func(string, OverflowRow) error) (OverflowSink, error) {
@@ -81,7 +84,9 @@ func (s *overflowSink) RecordOverflow(row OverflowRow) error {
 
 func (s *overflowSink) worker() {
 	for row := range s.ch {
-		_ = s.appendRow(s.dir, row)
+		if err := s.appendRow(s.dir, row); err != nil {
+			s.workerErrs = append(s.workerErrs, err)
+		}
 	}
 	close(s.done)
 }
@@ -100,7 +105,7 @@ func (s *overflowSink) Close() error {
 	<-s.done
 
 	s.closeOnce.Do(func() {
-		s.closeErr = errors.Join(s.base.Close())
+		s.closeErr = errors.Join(append(s.workerErrs, s.base.Close())...)
 	})
 	return s.closeErr
 }
