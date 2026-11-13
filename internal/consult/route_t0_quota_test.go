@@ -7,45 +7,19 @@ import (
 
 // TestRouteT0PlanQuotaShortUsesGC2 verifies that NativeQuotaShort routes to GC2.
 func TestRouteT0PlanQuotaShortUsesGC2(t *testing.T) {
+	gc2 := T0Route{Destination: "GC2", Account: ""}
 	tests := []struct {
 		name    string
 		req     T0Request
 		want    T0Route
 		wantErr error
 	}{
-		{
-			name: "empty model, quota short",
-			req:  T0Request{Tier: "T0", Model: "", NativeQuotaShort: true},
-			want: T0Route{Destination: "GC2", Account: ""},
-		},
-		{
-			name: "GC2 model, quota short, burn account",
-			req:  T0Request{Tier: "T0", Model: "GC2", NativeQuotaShort: true, BurnAccount: true},
-			want: T0Route{Destination: "GC2", Account: ""},
-		},
-		{
-			name: "Haiku 5.5 model, quota short",
-			req:  T0Request{Tier: "T0", Model: "Haiku 5.5", NativeQuotaShort: true},
-			want: T0Route{Destination: "GC2", Account: ""},
-		},
-		{
-			name:    "invalid tier",
-			req:     T0Request{Tier: "T1", NativeQuotaShort: true},
-			want:    T0Route{},
-			wantErr: ErrInvalidT0Request,
-		},
-		{
-			name:    "invalid model",
-			req:     T0Request{Tier: "T0", Model: "GPT-4", NativeQuotaShort: true},
-			want:    T0Route{},
-			wantErr: ErrInvalidT0Request,
-		},
-		{
-			name:    "whitespace model",
-			req:     T0Request{Tier: "T0", Model: " GC2 ", NativeQuotaShort: true},
-			want:    T0Route{},
-			wantErr: ErrInvalidT0Request,
-		},
+		{"empty model, quota short", T0Request{Tier: "T0", Model: "", NativeQuotaShort: true}, gc2, nil},
+		{"GC2 model, quota short, burn account", T0Request{Tier: "T0", Model: "GC2", NativeQuotaShort: true, BurnAccount: true}, gc2, nil},
+		{"Haiku 5.5 model, quota short", T0Request{Tier: "T0", Model: "Haiku 5.5", NativeQuotaShort: true}, gc2, nil},
+		{"invalid tier", T0Request{Tier: "T1", NativeQuotaShort: true}, T0Route{}, ErrInvalidT0Request},
+		{"invalid model", T0Request{Tier: "T0", Model: "GPT-4", NativeQuotaShort: true}, T0Route{}, ErrInvalidT0Request},
+		{"whitespace model", T0Request{Tier: "T0", Model: " GC2 ", NativeQuotaShort: true}, T0Route{}, ErrInvalidT0Request},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

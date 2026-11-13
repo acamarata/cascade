@@ -16,6 +16,39 @@ type RetentionEvent struct {
 	Kind     string
 }
 
+// validateEvents checks every event for required fields, future timestamps
+// and duplicate (ticket, time, kind) tuples.
+func validateEvents(events []RetentionEvent, now time.Time) error {
+	type tuple struct {
+		ticket string
+		at     int64
+		kind   string
+	}
+
+	seen := make(map[tuple]struct{})
+	for _, e := range events {
+		if e.TicketID == "" || e.Kind == "" {
+			return ErrEventRetention
+		}
+		if e.At.IsZero() {
+			return ErrEventRetention
+		}
+		if e.At.After(now) {
+			return ErrEventRetention
+		}
+		t := tuple{
+			ticket: e.TicketID,
+			at:     e.At.UnixNano(),
+			kind:   e.Kind,
+		}
+		if _, ok := seen[t]; ok {
+			return ErrEventRetention
+		}
+		seen[t] = struct{}{}
+	}
+	return nil
+}
+
 // TrimEvents filters events based on a retention cutoff duration from now.
 // It returns a fresh slice of retained events preserving input order.
 // It returns ErrEventRetention if validation fails.
@@ -27,32 +60,8 @@ func TrimEvents(events []RetentionEvent, now time.Time, cutoff time.Duration) ([
 		return nil, ErrEventRetention
 	}
 
-	type tuple struct {
-		ticket string
-		at     int64
-		kind   string
-	}
-
-	seen := make(map[tuple]struct{})
-	for _, e := range events {
-		if e.TicketID == "" || e.Kind == "" {
-			return nil, ErrEventRetention
-		}
-		if e.At.IsZero() {
-			return nil, ErrEventRetention
-		}
-		if e.At.After(now) {
-			return nil, ErrEventRetention
-		}
-		t := tuple{
-			ticket: e.TicketID,
-			at:     e.At.UnixNano(),
-			kind:   e.Kind,
-		}
-		if _, ok := seen[t]; ok {
-			return nil, ErrEventRetention
-		}
-		seen[t] = struct{}{}
+	if err := validateEvents(events, now); err != nil {
+		return nil, err
 	}
 
 	if len(events) == 0 {

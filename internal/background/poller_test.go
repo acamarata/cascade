@@ -24,14 +24,14 @@ type fakeReader struct {
 	calls int
 }
 
-func (f *fakeReader) ReadNode(ctx context.Context, nodeID, pos string) (string, error) {
+func (f *fakeReader) ReadNode(_ context.Context, _, _ string) (string, error) {
 	f.calls++
 	return "v", nil
 }
 
 type errReader struct{}
 
-func (e *errReader) ReadNode(ctx context.Context, nodeID, pos string) (string, error) {
+func (e *errReader) ReadNode(_ context.Context, _, _ string) (string, error) {
 	return "", errors.New("fail")
 }
 
@@ -39,7 +39,7 @@ type fakeReporter struct {
 	calls int
 }
 
-func (f *fakeReporter) Unreadable(nodeID string, err error) {
+func (f *fakeReporter) Unreadable(_ string, _ error) {
 	f.calls++
 }
 
@@ -125,7 +125,10 @@ func TestPollInvalidConfiguration(t *testing.T) {
 			}
 		})
 	}
+}
 
+// TestPollInvalidTicker verifies that bad ticker output returns 1.
+func TestPollInvalidTicker(t *testing.T) {
 	t.Run("nil ticker channel returns 1", func(t *testing.T) {
 		nc := &nilChanClock{}
 		rdr := &fakeReader{}
@@ -150,6 +153,11 @@ func TestPollInvalidConfiguration(t *testing.T) {
 			t.Fatalf("expected exit 1, got %d", code)
 		}
 	})
+}
+
+// TestPollInvalidConfigNoSideEffects verifies invalid configs leave state untouched.
+func TestPollInvalidConfigNoSideEffects(t *testing.T) {
+	validClock := &fakeClock{ch: make(chan time.Time)}
 
 	t.Run("invalid config does not mutate positions or call reader/reporter", func(t *testing.T) {
 		rdr := &fakeReader{}
@@ -176,7 +184,7 @@ func TestPollInvalidConfiguration(t *testing.T) {
 
 type nilChanClock struct{ stopCalls int }
 
-func (n *nilChanClock) NewTicker(d time.Duration) (<-chan time.Time, func()) {
+func (n *nilChanClock) NewTicker(_ time.Duration) (<-chan time.Time, func()) {
 	return nil, func() { n.stopCalls++ }
 }
 
@@ -184,7 +192,7 @@ type nilStopClock struct {
 	ch chan time.Time
 }
 
-func (n *nilStopClock) NewTicker(d time.Duration) (<-chan time.Time, func()) {
+func (n *nilStopClock) NewTicker(_ time.Duration) (<-chan time.Time, func()) {
 	return n.ch, nil
 }
 

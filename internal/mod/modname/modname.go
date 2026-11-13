@@ -1,3 +1,4 @@
+// Package modname validates module names against the naming rules and the module map.
 package modname
 
 import (

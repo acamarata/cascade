@@ -2,7 +2,6 @@
 package consult
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -36,11 +35,11 @@ func LoadScopedSections(gci, msg string) (string, error) {
 		endTag := "<!-- /binding -->"
 		startIdx := strings.Index(gci, startTag)
 		if startIdx == -1 {
-			return "", errors.New(fmt.Sprintf("M1010: unknown binding section \"%s\"", key))
+			return "", fmt.Errorf("M1010: unknown binding section \"%s\"", key)
 		}
 		endIdx := strings.Index(gci[startIdx+len(startTag):], endTag)
 		if endIdx == -1 {
-			return "", errors.New(fmt.Sprintf("M1010: unknown binding section \"%s\"", key))
+			return "", fmt.Errorf("M1010: unknown binding section \"%s\"", key)
 		}
 		endIdx += startIdx + len(startTag) + len(endTag)
 		if result.Len() > 0 {

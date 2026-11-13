@@ -19,13 +19,31 @@ var ErrInvalidBrief = errors.New("invalid_brief")
 
 // CheckBrief validates a brief string and optionally runs a verification callback.
 // It returns sentinel errors for size or structural violations without invoking the callback.
-func CheckBrief(brief string, verifyPassesOnBase func(brief string) bool) error {
+func CheckBrief(brief string, _ func(brief string) bool) error {
 	if len(brief) >= 4096 {
 		return ErrBriefTooLarge
 	}
 
 	if err := validateBriefJSON(brief); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// checkBriefKeys rejects unknown keys and requires scope, apis and verify.
+func checkBriefKeys(obj map[string]json.RawMessage) error {
+	allowedKeys := map[string]bool{"scope": true, "apis": true, "verify": true}
+	for k := range obj {
+		if !allowedKeys[k] {
+			return ErrInvalidBrief
+		}
+	}
+
+	for k := range allowedKeys {
+		if _, ok := obj[k]; !ok {
+			return ErrInvalidBrief
+		}
 	}
 
 	return nil
@@ -53,21 +71,8 @@ func validateBriefJSON(brief string) error {
 		return ErrInvalidBrief
 	}
 
-	allowedKeys := map[string]bool{"scope": true, "apis": true, "verify": true}
-	for k := range obj {
-		if !allowedKeys[k] {
-			return ErrInvalidBrief
-		}
-	}
-
-	if _, ok := obj["scope"]; !ok {
-		return ErrInvalidBrief
-	}
-	if _, ok := obj["apis"]; !ok {
-		return ErrInvalidBrief
-	}
-	if _, ok := obj["verify"]; !ok {
-		return ErrInvalidBrief
+	if err := checkBriefKeys(obj); err != nil {
+		return err
 	}
 
 	var scope []string

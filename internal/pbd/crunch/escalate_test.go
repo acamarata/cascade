@@ -25,53 +25,29 @@ func TestNoEscalateBelowThresholds(t *testing.T) {
 	if res.Lane != "junior" {
 		t.Errorf("expected Lane=junior, got %s", res.Lane)
 	}
+}
 
-	// empty ID
-	_, err = Escalate(EscalationTicket{ID: "", Lane: "junior"})
-	if !errors.Is(err, ErrInvalidEscalation) {
-		t.Errorf("expected ErrInvalidEscalation for empty ID, got %v", err)
+func TestEscalateRejectsInvalidTickets(t *testing.T) {
+	tests := []struct {
+		name   string
+		ticket EscalationTicket
+	}{
+		{"empty ID", EscalationTicket{ID: "", Lane: "junior"}},
+		{"whitespace ID", EscalationTicket{ID: "   ", Lane: "junior"}},
+		{"empty Lane", EscalationTicket{ID: "id1", Lane: ""}},
+		{"whitespace Lane", EscalationTicket{ID: "id1", Lane: "   "}},
+		{"negative GCFailures", EscalationTicket{ID: "id1", Lane: "junior", GCFailures: -1}},
+		{"negative ModelFailures", EscalationTicket{ID: "id1", Lane: "junior", ModelFailures: -1}},
+		{"negative Attempts", EscalationTicket{ID: "id1", Lane: "junior", Attempts: -1}},
+		{"non-senior Attempts>0", EscalationTicket{ID: "id1", Lane: "junior", Attempts: 1}},
 	}
-
-	// whitespace ID
-	_, err = Escalate(EscalationTicket{ID: "   ", Lane: "junior"})
-	if !errors.Is(err, ErrInvalidEscalation) {
-		t.Errorf("expected ErrInvalidEscalation for whitespace ID, got %v", err)
-	}
-
-	// empty Lane
-	_, err = Escalate(EscalationTicket{ID: "id1", Lane: ""})
-	if !errors.Is(err, ErrInvalidEscalation) {
-		t.Errorf("expected ErrInvalidEscalation for empty Lane, got %v", err)
-	}
-
-	// whitespace Lane
-	_, err = Escalate(EscalationTicket{ID: "id1", Lane: "   "})
-	if !errors.Is(err, ErrInvalidEscalation) {
-		t.Errorf("expected ErrInvalidEscalation for whitespace Lane, got %v", err)
-	}
-
-	// negative GCFailures
-	_, err = Escalate(EscalationTicket{ID: "id1", Lane: "junior", GCFailures: -1})
-	if !errors.Is(err, ErrInvalidEscalation) {
-		t.Errorf("expected ErrInvalidEscalation for negative GCFailures, got %v", err)
-	}
-
-	// negative ModelFailures
-	_, err = Escalate(EscalationTicket{ID: "id1", Lane: "junior", ModelFailures: -1})
-	if !errors.Is(err, ErrInvalidEscalation) {
-		t.Errorf("expected ErrInvalidEscalation for negative ModelFailures, got %v", err)
-	}
-
-	// negative Attempts
-	_, err = Escalate(EscalationTicket{ID: "id1", Lane: "junior", Attempts: -1})
-	if !errors.Is(err, ErrInvalidEscalation) {
-		t.Errorf("expected ErrInvalidEscalation for negative Attempts, got %v", err)
-	}
-
-	// non-senior Attempts>0
-	_, err = Escalate(EscalationTicket{ID: "id1", Lane: "junior", Attempts: 1})
-	if !errors.Is(err, ErrInvalidEscalation) {
-		t.Errorf("expected ErrInvalidEscalation for non-senior Attempts>0, got %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Escalate(tt.ticket)
+			if !errors.Is(err, ErrInvalidEscalation) {
+				t.Errorf("expected ErrInvalidEscalation for %s, got %v", tt.name, err)
+			}
+		})
 	}
 }
 
