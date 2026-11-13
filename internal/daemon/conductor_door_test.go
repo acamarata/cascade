@@ -91,7 +91,7 @@ func bindDoor(t *testing.T, p *doorProvider, quota conductor.QuotaSpiller, sec C
 	t.Helper()
 	aw, clock := &doorAudit{}, runtime.NewSystemClock()
 	if err := RegisterConductorExecuteHandler(rpc.NewRegistry(), NewManifest(nil, clock), doorLanes{}, quota, p,
-		aw, clock, sec, ConductorAccounting{}, ConductorFanOut{}); err != nil {
+		aw, clock, sec, ConductorAccounting{Reserver: passReserver{}}, ConductorFanOut{}); err != nil {
 		t.Fatal(err)
 	}
 	return aw

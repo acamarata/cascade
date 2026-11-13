@@ -70,6 +70,7 @@ func wireConductorAccounting(
 		Store:      conductor.NewUsageStore(jobsDB),
 		Aggregator: usage.NewManager(usageDB, clock),
 		Cost:       rateCardEstimator{reg: reg},
+		Reserver:   interimReserver{},
 	}, nil
 }
 

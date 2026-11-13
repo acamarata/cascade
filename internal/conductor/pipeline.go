@@ -48,6 +48,10 @@ type ExecutorConfig struct {
 	Sensitivity SensitivityGate
 	Firewall    *egress.Engine
 	Clock       runtime.Clock
+	// Reserver holds a call reservation around every Execute and
+	// ExecuteStream dispatch. It is required per call: NewExecutor accepts a
+	// nil Reserver, but each such dispatch refuses with ErrUnreservedDispatch.
+	Reserver CallReserver
 }
 
 // Pipeline holds the security pipeline's readiness state. The zero value

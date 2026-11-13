@@ -114,6 +114,7 @@ func RegisterConductorExecuteHandler(
 		Policy:      security.Policy,
 		Sensitivity: security.Sensitivity,
 		Firewall:    security.Firewall,
+		Reserver:    accounting.Reserver,
 	})
 	if cerr != nil {
 		manifest.Failed(conductorExecutorSubsystem, cerr.Error())
@@ -189,6 +190,9 @@ type ConductorAccounting struct {
 	Aggregator conductor.UsageAggregator
 	// Cost prices a dispatch from the registry's rate card.
 	Cost conductor.CostEstimator
+	// Reserver holds a call reservation around every dispatch; nil refuses
+	// each dispatch with conductor.ErrUnreservedDispatch (fail-closed).
+	Reserver conductor.CallReserver
 }
 
 // wire attaches whatever was supplied. Each setter is nil-safe by its own

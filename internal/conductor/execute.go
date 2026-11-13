@@ -62,6 +62,10 @@ func (e *Executor) Execute(ctx context.Context, req provider.ModelRequest) (prov
 		return provider.ModelResponse{}, err
 	}
 	req, tier, sel := pass.Payload.(provider.ModelRequest), pass.Tier, pass.Sel
+	hold, err := e.holdCall(ctx, req, tier, sel)
+	if err != nil {
+		return provider.ModelResponse{}, err
+	}
 
 	rawID, idErr := cascade.NewID()
 	if idErr != nil {
@@ -79,7 +83,7 @@ func (e *Executor) Execute(ctx context.Context, req provider.ModelRequest) (prov
 		resp, derr = e.doorChat(c, s, chatReq)
 		return resp.Usage, false, derr
 	}
-	finalSel, st, _, err := e.withRetry(dctx, req, sel, run, e.abandonedUsage(ctx, req, jobID, start))
+	finalSel, st, _, err := e.retryHeld(dctx, hold, req, sel, run, e.abandonedUsage(ctx, req, jobID, start))
 	key := req.TaskID + "|" + req.TaskClass
 	if err != nil {
 		mapped := mapProviderError(err)
@@ -151,6 +155,11 @@ func (e *Executor) executeStream(ctx context.Context, req provider.ModelRequest,
 	if err != nil {
 		return nil, nil, err
 	}
+	sreq := pass.Payload.(provider.ModelRequest)
+	hold, err := e.holdCall(ctx, sreq, pass.Tier, pass.Sel)
+	if err != nil {
+		return nil, nil, err
+	}
 	ch := make(chan provider.StreamEvent, 1)
 	cctx, cancel := context.WithCancelCause(ctx)
 	var once sync.Once
@@ -160,7 +169,7 @@ func (e *Executor) executeStream(ctx context.Context, req provider.ModelRequest,
 			go drain(ch)
 		})
 	})
-	go e.runStream(cctx, pass.Payload.(provider.ModelRequest), jobID, pass, ch)
+	go e.runStream(cctx, sreq, jobID, pass, hold, ch)
 	return ch, cancelFn, nil
 }
 
@@ -169,7 +178,7 @@ func (e *Executor) executeStream(ctx context.Context, req provider.ModelRequest,
 // before any output reached the caller is retried or fails over once, every
 // attempt is attributed, and exactly one terminal audit record is written
 // (success, provider failure, or cancellation carrying context.Cause).
-func (e *Executor) runStream(ctx context.Context, req provider.ModelRequest, jobID JobID, pass doorPass, ch chan<- provider.StreamEvent) {
+func (e *Executor) runStream(ctx context.Context, req provider.ModelRequest, jobID JobID, pass doorPass, hold callHold, ch chan<- provider.StreamEvent) {
 	defer close(ch)
 	start := e.usageClockStart()
 	chatReq := toChatRequest(req)
@@ -180,7 +189,7 @@ func (e *Executor) runStream(ctx context.Context, req provider.ModelRequest, job
 		return last.finish(e.doorStream(c, s, chatReq, &ignored, last.sink))
 	}
 	dctx := context.WithoutCancel(ctx)
-	sel, st, u, err := e.withRetry(ctx, req, pass.Sel, run, e.abandonedUsage(dctx, req, jobID, start))
+	sel, st, u, err := e.retryHeld(ctx, hold, req, pass.Sel, run, e.abandonedUsage(dctx, req, jobID, start))
 	outcome, cause := "success", error(nil)
 	if err != nil {
 		outcome, cause = "provider_failure", err

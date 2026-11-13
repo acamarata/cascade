@@ -64,7 +64,7 @@ func redirectRig(t *testing.T, baseURL string) *fanRig {
 	r.fan = daemon.NewConductorFanOut(r.store, clock)
 	if err := daemon.RegisterConductorExecuteHandler(r.reg, r.manifest, providerregistry.NewReader(reg),
 		conductor.NewQuotaPolicy(cfg, clock), resolver, audit.New(storetest.NewMemStore(), clock, nil), clock,
-		security, daemon.ConductorAccounting{}, r.fan); err != nil {
+		security, daemon.ConductorAccounting{Reserver: passReserver{}}, r.fan); err != nil {
 		t.Fatal(err)
 	}
 	return r

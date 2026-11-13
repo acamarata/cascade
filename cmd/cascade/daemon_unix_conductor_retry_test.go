@@ -81,7 +81,7 @@ func retryDaemonExecute(t *testing.T, cred map[string]interface{}, tr *scriptedT
 	store := storetest.NewMemStore()
 	rpcReg := rpc.NewRegistry()
 	if err := daemon.RegisterConductorExecuteHandler(rpcReg, daemon.NewManifest(nil, clock), providerregistry.NewReader(reg),
-		policy.Quota, resolver, audit.New(store, clock, nil), clock, security, daemon.ConductorAccounting{},
+		policy.Quota, resolver, audit.New(store, clock, nil), clock, security, daemon.ConductorAccounting{Reserver: passReserver{}},
 		daemon.NewConductorFanOut(store, clock), conductorRouterOptions(nil, paths, clock, nil)...); err != nil {
 		t.Fatalf("RegisterConductorExecuteHandler: %v", err)
 	}

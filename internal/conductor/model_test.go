@@ -186,7 +186,7 @@ func newReadyConfig(t *testing.T) (ExecutorConfig, *readyDeps) {
 		Classifier: &fakeClassifier{}, Taxonomy: fakeTaxonomy{},
 		Policy: &fakePolicy{}, Audit: deps.audit,
 		Sensitivity: fakeSensitivityGate{}, Firewall: firewall,
-		Clock: runtime.NewFixedClock(time.Unix(0, 0)),
+		Clock: runtime.NewFixedClock(time.Unix(0, 0)), Reserver: passReserver{},
 	}
 	return cfg, deps
 }

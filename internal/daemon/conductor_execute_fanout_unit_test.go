@@ -133,7 +133,7 @@ func newFuEnv(t *testing.T, mint func() (cascade.ID, error)) *fuEnv {
 	p, clock, reg := &fuProvider{st: st}, runtime.NewSystemClock(), rpc.NewRegistry()
 	fan := NewConductorFanOut(st, clock)
 	fan.IDSource = mint
-	if err := RegisterConductorExecuteHandler(reg, NewManifest(nil, clock), p, p, p, newTestAuditWriter(t), clock, fullSecurity(t), ConductorAccounting{}, fan); err != nil {
+	if err := RegisterConductorExecuteHandler(reg, NewManifest(nil, clock), p, p, p, newTestAuditWriter(t), clock, fullSecurity(t), ConductorAccounting{Reserver: passReserver{}}, fan); err != nil {
 		t.Fatal(err)
 	}
 	return &fuEnv{t: t, ctx: context.Background(), reg: reg, fan: fan, st: st, p: p}

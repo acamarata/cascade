@@ -188,7 +188,7 @@ func executeChatThroughConductor(t *testing.T, paths fakeMemoryPaths, clock runt
 	rpcReg := rpc.NewRegistry()
 	opts := conductorRouterOptionsEligible(nil, paths, clock, laneEligibleByHealth(reg, mgr), nil)
 	if err := daemon.RegisterConductorExecuteHandler(rpcReg, daemon.NewManifest(nil, clock), providerregistry.NewReader(reg),
-		policy.Quota, resolver, audit.New(store, clock, nil), clock, security, daemon.ConductorAccounting{},
+		policy.Quota, resolver, audit.New(store, clock, nil), clock, security, daemon.ConductorAccounting{Reserver: passReserver{}},
 		daemon.NewConductorFanOut(store, clock), opts...); err != nil {
 		t.Fatalf("RegisterConductorExecuteHandler: %v", err)
 	}
