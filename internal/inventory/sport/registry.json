@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-13T18:08:21Z",
+  "generated_at": "2026-11-13T21:19:32Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -1661,20 +1661,6 @@
           "line": 21,
           "status": "ADD",
           "raw": "RegisterUpgradeHandler/ADDED"
-        }
-      ],
-      "statuses": [
-        "ADD"
-      ]
-    },
-    {
-      "name": "RequireController",
-      "sites": [
-        {
-          "file": "internal/nodes/controller.go",
-          "line": 18,
-          "status": "ADD",
-          "raw": "RequireController/ADDED"
         }
       ],
       "statuses": [
@@ -5589,6 +5575,34 @@
       ]
     },
     {
+      "name": "cmd/cascade hooks composition",
+      "sites": [
+        {
+          "file": "cmd/cascade/wire_hooks.go",
+          "line": 16,
+          "status": "",
+          "raw": "cmd/cascade hooks composition (P1-SUP-02)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade hooks composition tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/wire_hooks_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade hooks composition tests (P1-SUP-02)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd/cascade inbox send authorization wiring",
       "sites": [
         {
@@ -6475,7 +6489,13 @@
         },
         {
           "file": "cmd/cascade/paths_fake_test.go",
-          "line": 12,
+          "line": 17,
+          "status": "ADD",
+          "raw": "cmd/cascade test-support (ADD)."
+        },
+        {
+          "file": "cmd/cascade/testhelpers_designation_test.go",
+          "line": 9,
           "status": "ADD",
           "raw": "cmd/cascade test-support (ADD)."
         }
@@ -7099,7 +7119,7 @@
         },
         {
           "file": "cmd/cascade/daemon_unix_jobs_rpc.go",
-          "line": 21,
+          "line": 22,
           "status": "ADD",
           "ticket": "P1-E29-W6-S60-T1",
           "raw": "cmd/cascade/daemon (ADD, P1-E29-W6-S60-T1; CHANGED, P1-CAP-10)."
@@ -7113,7 +7133,7 @@
         },
         {
           "file": "cmd/cascade/daemon_unix_jobs_rpc_role_test.go",
-          "line": 8,
+          "line": 10,
           "status": "ADD",
           "raw": "cmd/cascade/daemon (ADD, P1-CAP-10)."
         },
@@ -13805,6 +13825,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "hook rehydration in the cmd/cascade composition",
+      "sites": [
+        {
+          "file": "cmd/cascade/hooks_rehydrate.go",
+          "line": 14,
+          "status": "",
+          "raw": "hook rehydration in the cmd/cascade composition (P1-SUP-02)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -26629,20 +26663,6 @@
       ]
     },
     {
-      "name": "internal/nodes Role",
-      "sites": [
-        {
-          "file": "internal/nodes/controller.go",
-          "line": 18,
-          "status": "ADD",
-          "raw": "internal/nodes Role/ADDED"
-        }
-      ],
-      "statuses": [
-        "ADD"
-      ]
-    },
-    {
       "name": "internal/nodes Rotate",
       "sites": [
         {
@@ -26858,6 +26878,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "internal/nodes controller-designation",
+      "sites": [
+        {
+          "file": "internal/nodes/controller.go",
+          "line": 5,
+          "status": "",
+          "raw": "internal/nodes controller-designation (P1-NODE-16)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -35922,6 +35956,12 @@
           "line": 5,
           "status": "ADD",
           "raw": "nodes/controller-designation (ADD, P1-NODE-16)."
+        },
+        {
+          "file": "internal/nodes/designation_bootstrap.go",
+          "line": 5,
+          "status": "ADD",
+          "raw": "nodes/controller-designation (ADD, P1-NODE-16)."
         }
       ],
       "statuses": [
@@ -44632,6 +44672,20 @@
       ]
     },
     {
+      "name": "tests for hook rehydration in the cmd/cascade composition",
+      "sites": [
+        {
+          "file": "cmd/cascade/hooks_rehydrate_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "tests for hook rehydration in the cmd/cascade composition (P1-SUP-02)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "windows-parity-pass-3",
       "sites": [
         {
@@ -44664,7 +44718,7 @@
       ]
     }
   ],
-  "total_sites": 4298,
-  "unspecified_count": 413,
+  "total_sites": 4303,
+  "unspecified_count": 418,
   "multi_status_count": 132
 }
