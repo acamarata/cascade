@@ -3,6 +3,7 @@ package limiter
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 )
@@ -15,11 +16,25 @@ func (f *fakeTimer) C() <-chan time.Time { return f.ch }
 func (f *fakeTimer) Stop() bool          { return true }
 
 type fakeClock struct {
+	mu    sync.Mutex
 	now   time.Time
 	timer *fakeTimer
 }
 
-func (f *fakeClock) Now() time.Time { return f.now }
+// Now returns the fake time; it is safe to call while another goroutine advances the clock.
+func (f *fakeClock) Now() time.Time {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.now
+}
+
+// Advance moves the fake time forward by d and returns the new time.
+func (f *fakeClock) Advance(d time.Duration) time.Time {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.now = f.now.Add(d)
+	return f.now
+}
 func (f *fakeClock) NewTimer(_ time.Duration) Timer {
 	return f.timer
 }
@@ -68,8 +83,7 @@ func testDrainBucketThenRefill(t *testing.T) {
 		t.Fatalf("Wait 1: %v", err)
 	}
 	go func() {
-		fc.now = fc.now.Add(60 * time.Second)
-		ch <- fc.now
+		ch <- fc.Advance(60 * time.Second)
 	}()
 	if err := l.Wait(ctx); err != nil {
 		t.Fatalf("Wait 2: %v", err)
