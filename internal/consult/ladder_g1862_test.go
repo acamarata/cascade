@@ -11,15 +11,15 @@ func TestLadderStopsAtPM(t *testing.T) {
 	baCalls := 0
 	ceoCalls := 0
 
-	pm := func(_ context.Context, question string) (bool, string) {
+	pm := func(_ context.Context, _ string) (bool, string) {
 		pmCalls++
 		return true, "yes"
 	}
-	ba := func(_ context.Context, question string) (bool, string) {
+	ba := func(_ context.Context, _ string) (bool, string) {
 		baCalls++
 		return true, "ba"
 	}
-	ceo := func(_ context.Context, question string) (bool, string) {
+	ceo := func(_ context.Context, _ string) (bool, string) {
 		ceoCalls++
 		return true, "ceo"
 	}
