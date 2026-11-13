@@ -7,7 +7,7 @@ import (
 )
 
 // ErrNotImplemented is returned by stub functions that have not yet been implemented.
-var ErrNotImplemented = errors.New("not implemented")
+var ErrNotImplemented = errors.New("db: operation unavailable")
 
 // Migrate applies the database schema migrations to the given database.
 func Migrate(db *sql.DB) error {
