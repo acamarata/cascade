@@ -374,13 +374,6 @@
     "symbol": "internal/fleet/topology.ValidateReserve"
   },
   {
-    "caller_site": "cmd/cascade/daemon_unix_run.go",
-    "expected_caller": "the daemon run path, once hooks are dispatched",
-    "reason": "Subsystem is built and tested. Its command surface is scheduled for a later wave, so nothing that ships calls it yet. Listed so the state is visible rather than assumed. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/hooks.NewDispatcher"
-  },
-  {
     "caller_site": "plugins/pbd/plan_compile.go",
     "expected_caller": "AH/S-70.T1's acceptance ticket, which exercises the compiler end to end from a live plugins/pbd caller",
     "reason": "AH/S-69.T3's own contract text names this as a pure PEWS 17-field-to-PlanInput compiler whose live plugins/pbd caller is an explicit downstream integration point outside this ticket's scope (\"not in scope: ... wiring a live plugins/pbd caller to this function\"); the party holding a decoded PEWS ticket that will build a PEWSContract and call this does not exist yet. Real and fully tested (pews_compiler_test.go) against the real TicketInput/PlanInput/GateSet shapes it produces.",
@@ -684,13 +677,6 @@
     "symbol": "internal/runtime.ResolveTelemetryConfig"
   },
   {
-    "caller_site": "internal/conductor/executor.go",
-    "expected_caller": "the conductor executor's action-dispatch function (internal/conductor/executor), when that package lands",
-    "reason": "Rehydration is executor-only by ruling, and the executor is a later wave. Wiring it anywhere else now would violate the boundary this ticket's own arch gate enforces. No ticket names an owner for this exemption; retire_ticket is UNOWNED and the count is tracked so this cannot grow silently.",
-    "retire_ticket": "UNOWNED",
-    "symbol": "internal/secrets.NewRehydrator"
-  },
-  {
     "caller_site": "internal/memory/scan_boundary.go",
     "expected_caller": "the memory-write and recall scan boundaries (04-PEWS-PLAN-W1-W3.md Epic H S-15), or the action-boundary rehydration point (S-16.T2) - whichever lands first; retire this entry then, together with internal/secrets.ParseDetectionConfig once the [secrets] section has a typed consumer",
     "reason": "The scrubber is the composed rewrite boundary - one detector over the default registry, one rewriter, one configuration - and it ships before the two boundaries that will scan. This ticket (P1-E08-W2-S15-T4) owns the tag grammar and the rewrite direction; the memory-write path and the recall pipeline that call a scrubber are other tickets in this sprint and wave, built in parallel, and the action-boundary rehydration that reverses the rewrite is S-16.T2. Wiring into a boundary that is itself mid-change would couple two lanes for no gain. Building the constructor here is what retired the internal/secrets.NewDetector and internal/secrets.DefaultRegistry entries: the detector and its pattern table are now constructed by shipping code, and this single entry stands in place of the two.",
@@ -811,13 +797,6 @@
     "reason": "P1-E30-W6-S62-T1 builds the R-21.170 per-model authoring Qualifier fully implemented and unit-tested (missing/failing/stale-hash rows all fail closed, a passing row grants authoring for that model id only), but the composition root that constructs one over a real ModelProvider, the real config-domain ConfigStore adapter, and a real Clock is the same conductor agent-lane quota bridge (S-62.T2) that constructs local.Driver, out of this files_scope.",
     "retire_ticket": "P1-AGT-08",
     "symbol": "providers/agents/local.NewQualifier"
-  },
-  {
-    "caller_site": "cmd/cascade/daemon_unix_hooks.go",
-    "expected_caller": "P1-SUP-02's daemon composition, which calls WatchReload before its initial hook build and runs the returned ReloadWatch alongside the Dispatcher",
-    "reason": "P1-SUP-01 ships hot reload in the engine library only; composition is P1-SUP-02 and cmd/cascade is prohibited here, so reload_test.go is the only caller at this tip.",
-    "retire_ticket": "P1-SUP-02",
-    "symbol": "internal/hooks.WatchReload"
   },
   {
     "caller_site": "cmd/cascade/daemon_unix_hooks.go",
@@ -954,14 +933,6 @@
     "reason": "P1-E23-W5-S48-T2 (this ticket) declares OriginBridgeWhatsApp in plugins/cascade-pa/bridge.go alongside OriginBridgeTelegram so the closed two-member Origin vocabulary is proven and documented in one place (R-21.227's own text names both origins), matching the ticket's own InboundMessage contract. Only the Telegram adapter exists in P1; W/S-49.T3 is the WhatsApp adapter and its own files_scope.add lists plugins/cascade-pa/whatsapp/bridge.go, which does not exist yet. Deleting the constant now and having T3 re-add it would churn the Origin vocabulary bridge.go's own compile-time InboundMessage tests already assert against (bridge_test.go's TestInboundMessage_UntrustedIsNeverClearedByThisType). Re-keyed by P1-CPA-14 (T0, 2026-10-30): the WhatsApp adapter is deferred to P2 (DEF-P2-whatsapp-bridge), so no P1 ticket will create plugins/cascade-pa/whatsapp/bridge.go; recorded honestly as UNOWNED instead of a closed retire_ticket.",
     "retire_ticket": "UNOWNED",
     "symbol": "plugins/cascade-pa.OriginBridgeWhatsApp"
-  },
-  {
-    "added_by_ticket": "P1-SUP-05",
-    "caller_site": "cmd/cascade/wire_hooks.go",
-    "expected_caller": "P1-SUP-02's cmd/cascade/wire_hooks.go, which sets the one Dispatcher's Rehydrate to hooks.BoundRehydrate(admittedHookBindings(w.Deps.Reloader), rehydrateOver(secrets.NewRehydrator(fw.Broker()))); retire this entry once that file calls BoundRehydrate",
-    "reason": "P1-SUP-05 ships the dispatch-time vault-binding seam (contract:hooks-vault-binding) tested behind the real Rehydrator.RehydrateOnly over a counting in-memory vault; the packet prohibits any cmd/cascade composition file, so its production caller is P1-SUP-02. ParseHooksSection is removed because the guarded [hooks] family (cmd/cascade/guarded_hooks.go hooksFamilyExtract) now calls it in shipped code.",
-    "retire_ticket": "P1-SUP-02",
-    "symbol": "internal/hooks.BoundRehydrate"
   },
   {
     "added_by_ticket": "P1-CPA-16",
@@ -1537,26 +1508,10 @@
   {
     "added_by_ticket": "P1-NODE-16a",
     "caller_site": "internal/nodes/designation_bootstrap.go",
-    "expected_caller": "internal/nodes/designation_bootstrap.go, which P1-NODE-16ab adds; retire this entry once that file calls Designate",
-    "reason": "P1-NODE-16aa ships the designation type, file backend and handover with tests; the bootstrap that opens the backend and designates is P1-NODE-16ab, which depends on it.",
-    "retire_ticket": "P1-NODE-16",
-    "symbol": "internal/nodes.Designate"
-  },
-  {
-    "added_by_ticket": "P1-NODE-16a",
-    "caller_site": "internal/nodes/designation_bootstrap.go",
     "expected_caller": "internal/nodes/designation_bootstrap.go, which P1-NODE-16ab adds; retire this entry once that file calls Handover",
     "reason": "P1-NODE-16aa ships the designation type, file backend and handover with tests; the bootstrap that opens the backend and designates is P1-NODE-16ab, which depends on it.",
     "retire_ticket": "P1-NODE-16",
     "symbol": "internal/nodes.Handover"
-  },
-  {
-    "added_by_ticket": "P1-NODE-16a",
-    "caller_site": "internal/nodes/designation_bootstrap.go",
-    "expected_caller": "internal/nodes/designation_bootstrap.go, which P1-NODE-16ab adds; retire this entry once that file calls NewFileDesignationBackend",
-    "reason": "P1-NODE-16aa ships the designation type, file backend and handover with tests; the bootstrap that opens the backend and designates is P1-NODE-16ab, which depends on it.",
-    "retire_ticket": "P1-NODE-16",
-    "symbol": "internal/nodes.NewFileDesignationBackend"
   },
   {
     "added_by_ticket": "P1-PBD-01e",
@@ -1621,5 +1576,29 @@
     "reason": "The delegate RPCs are wired, but the delegation service still builds the job spec itself and never projects a signed envelope; the projection step moves into the delegation follow-up ticket. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
     "retire_ticket": "P1-AGT-08n",
     "symbol": "internal/providers/agents.ProjectEnvelope"
+  },
+  {
+    "added_by_ticket": "P1-NODE-16a",
+    "caller_site": "cmd/cascade/daemon_unix.go",
+    "expected_caller": "cmd/cascade/daemon_unix.go, which P1-NODE-16d changes; retire this entry once that file calls BootstrapDesignation",
+    "reason": "P1-NODE-16ab ships the first-start designation bootstrap with tests; composeDaemon calls it in P1-NODE-16d, which depends on it.",
+    "retire_ticket": "P1-NODE-16d",
+    "symbol": "internal/nodes.BootstrapDesignation"
+  },
+  {
+    "added_by_ticket": "P1-NODE-16a",
+    "caller_site": "cmd/cascade/node_bind.go",
+    "expected_caller": "cmd/cascade/node_bind.go, which P1-NODE-16e changes; retire this entry once that file calls SupersedeBootstrap",
+    "reason": "P1-NODE-16ab ships the bootstrap supersede step with tests; the elevated cascade node bind calls it in P1-NODE-16e, which depends on it.",
+    "retire_ticket": "P1-NODE-16e",
+    "symbol": "internal/nodes.SupersedeBootstrap"
+  },
+  {
+    "added_by_ticket": "P1-NODE-16b",
+    "caller_site": "cmd/cascade/doctor_mounts_node_role.go",
+    "expected_caller": "cmd/cascade/doctor_mounts_node_role.go, which P1-NODE-16f changes; retire this entry once that file calls RoleStatus",
+    "reason": "P1-NODE-16b ships the role status with its conflict kinds and tests; the doctor node-role mount reports it in P1-NODE-16f, which depends on it.",
+    "retire_ticket": "P1-NODE-16f",
+    "symbol": "internal/nodes.RoleStatus"
   }
 ]
