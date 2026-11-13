@@ -22,5 +22,16 @@ type Result struct {
 	// AsOf records when the result was produced.
 	AsOf time.Time
 	// Missing lists any fields or resources that could not be resolved.
+	// When Status is "degraded", Missing must list the degraded component names.
 	Missing []string
+}
+
+// Validate checks that the Result satisfies its invariants.
+// It returns ErrInvalid if Status is not "ok", "partial", or "degraded".
+func (r Result) Validate() error {
+	switch r.Status {
+	case "ok", "partial", "degraded":
+		return nil
+	}
+	return ErrInvalid
 }

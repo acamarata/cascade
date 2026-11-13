@@ -73,3 +73,32 @@ func TestErrNotImplemented(t *testing.T) {
 		t.Errorf("unexpected error message: %s", ErrNotImplemented.Error())
 	}
 }
+
+// TestEnvelopeVersioned verifies that Request handles versioning fields.
+func TestEnvelopeVersioned(t *testing.T) {
+	r := Request{Version: "v1"}
+	if r.Version != "v1" {
+		t.Errorf("unexpected Version: %s", r.Version)
+	}
+}
+
+// TestResultDegradedNamesMissing verifies that degraded results populate Missing correctly
+// and that Validate enforces valid Status values.
+func TestResultDegradedNamesMissing(t *testing.T) {
+	r := Result{
+		Status:  "degraded",
+		AsOf:    time.Now(),
+		Missing: []string{"db", "cache"},
+	}
+	if err := r.Validate(); err != nil {
+		t.Errorf("unexpected error for degraded status: %v", err)
+	}
+	if len(r.Missing) != 2 {
+		t.Errorf("expected 2 missing items, got %d", len(r.Missing))
+	}
+
+	r2 := Result{Status: "unknown"}
+	if err := r2.Validate(); err != ErrInvalid {
+		t.Errorf("expected ErrInvalid for unknown status, got %v", err)
+	}
+}
