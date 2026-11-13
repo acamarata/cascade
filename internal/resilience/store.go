@@ -7,7 +7,12 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+
+	"github.com/acamarata/cascade/internal/runtime"
 )
+
+// clock is the time source for the store.
+var clock runtime.Clock = runtime.NewSystemClock()
 
 // WaitKind represents the kind of wait condition a process is experiencing.
 type WaitKind int
@@ -92,7 +97,7 @@ func waitKindString(kind WaitKind) (string, error) {
 }
 
 // SetWait records that the process is waiting for the given kind of resource.
-// It upserts into the wait table setting since to time.Now().UTC(), keeping
+// It upserts into the wait table setting since to clock.Now().UTC(), keeping
 // existing since if the row already exists for that kind.
 func (s *DBStore) SetWait(kind WaitKind) error {
 	_, err := waitKindString(kind)
@@ -102,7 +107,7 @@ func (s *DBStore) SetWait(kind WaitKind) error {
 	_, err = s.db.Exec(`
 		INSERT INTO wait (kind, since) VALUES (?, ?)
 		ON CONFLICT(kind) DO NOTHING`,
-		int(kind), time.Now().UTC())
+		int(kind), clock.Now().UTC())
 	return err
 }
 
@@ -125,7 +130,7 @@ func (s *DBStore) ClearWait(kind WaitKind) error {
 		return err
 	}
 
-	elapsed := time.Since(since)
+	elapsed := clock.Now().Sub(since)
 	metaKey := "last_wait_" + name + "_duration"
 
 	_, err = s.db.Exec("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", metaKey, elapsed.String())
@@ -139,13 +144,13 @@ func (s *DBStore) ClearWait(kind WaitKind) error {
 
 // RecordHeartbeat records a heartbeat signal.
 func (s *DBStore) RecordHeartbeat() error {
-	_, err := s.db.Exec("INSERT INTO heartbeat (at) VALUES (?)", time.Now().UTC())
+	_, err := s.db.Exec("INSERT INTO heartbeat (at) VALUES (?)", clock.Now().UTC())
 	return err
 }
 
 // MarkSeenRunning marks the process as seen running.
 func (s *DBStore) MarkSeenRunning() error {
-	_, err := s.db.Exec("INSERT INTO seen_running (at) VALUES (?)", time.Now().UTC())
+	_, err := s.db.Exec("INSERT INTO seen_running (at) VALUES (?)", clock.Now().UTC())
 	return err
 }
 
@@ -157,7 +162,7 @@ func (s *DBStore) NextRestartDelay() time.Duration {
 	var count int
 	err := s.db.QueryRow("SELECT count FROM restart LIMIT 1").Scan(&count)
 	if err == sql.ErrNoRows {
-		_, err = s.db.Exec("INSERT INTO restart (count, last) VALUES (0, ?)", time.Now().UTC())
+		_, err = s.db.Exec("INSERT INTO restart (count, last) VALUES (0, ?)", clock.Now().UTC())
 		if err != nil {
 			return 0
 		}
@@ -172,7 +177,7 @@ func (s *DBStore) NextRestartDelay() time.Duration {
 	}
 	dur := time.Duration(delay) * time.Minute
 
-	_, err = s.db.Exec("UPDATE restart SET count = count + 1, last = ?", time.Now().UTC())
+	_, err = s.db.Exec("UPDATE restart SET count = count + 1, last = ?", clock.Now().UTC())
 	if err != nil {
 		return 0
 	}
@@ -182,7 +187,7 @@ func (s *DBStore) NextRestartDelay() time.Duration {
 
 // RecordStall records a stall condition with the given reason.
 func (s *DBStore) RecordStall(reason string) error {
-	_, err := s.db.Exec("INSERT INTO stall (reason, at) VALUES (?, ?)", reason, time.Now().UTC())
+	_, err := s.db.Exec("INSERT INTO stall (reason, at) VALUES (?, ?)", reason, clock.Now().UTC())
 	return err
 }
 
@@ -190,7 +195,7 @@ func (s *DBStore) RecordStall(reason string) error {
 func (s *DBStore) EmitEvent(ev Event) error {
 	at := ev.At
 	if at.IsZero() {
-		at = time.Now().UTC()
+		at = clock.Now().UTC()
 	} else {
 		at = at.UTC()
 	}

@@ -3,7 +3,6 @@ package resilience
 import (
 	"context"
 	"errors"
-	"syscall"
 	"time"
 )
 
@@ -47,15 +46,6 @@ var (
 // statFunc is the function used to perform a filesystem stat. It can be
 // overridden in tests to simulate blocking behaviour.
 var statFunc = defaultStat
-
-// defaultStat performs a syscall.Statfs and returns the available free bytes.
-func defaultStat(_ context.Context, path string) (uint64, error) {
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs(path, &stat); err != nil {
-		return 0, err
-	}
-	return stat.Bavail * uint64(stat.Bsize), nil
-}
 
 // WithinTimeout executes a filesystem stat on path inside a goroutine,
 // returning free bytes if it completes before timeout. If the stat call
