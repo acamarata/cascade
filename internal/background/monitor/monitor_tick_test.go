@@ -18,7 +18,7 @@ func (f *fakeClock) Now() time.Time {
 	return f.now
 }
 
-func (f *fakeClock) AfterFunc(d time.Duration, fn func()) func() {
+func (f *fakeClock) AfterFunc(_ time.Duration, fn func()) func() {
 	f.fns = append(f.fns, fn)
 	f.stop = func() {
 		f.fns = nil
@@ -84,12 +84,13 @@ func TestGapWithin3IntervalsNoIncident(t *testing.T) {
 	})
 }
 
-// TestMonitorInvalidInput verifies that invalid inputs are rejected with ErrInvalidMonitorInput.
-func TestMonitorInvalidInput(t *testing.T) {
-	tests := []struct {
-		name string
-		fn   func() error
-	}{
+type invalidInputCase struct {
+	name string
+	fn   func() error
+}
+
+func emitterInvalidCases() []invalidInputCase {
+	return []invalidInputCase{
 		{
 			name: "NewEmitter nil clock",
 			fn: func() error {
@@ -129,6 +130,11 @@ func TestMonitorInvalidInput(t *testing.T) {
 				return err
 			},
 		},
+	}
+}
+
+func gapInvalidCases() []invalidInputCase {
+	return []invalidInputCase{
 		{
 			name: "GapIncident zero now",
 			fn: func() error {
@@ -166,6 +172,11 @@ func TestMonitorInvalidInput(t *testing.T) {
 			},
 		},
 	}
+}
+
+// TestMonitorInvalidInput verifies that invalid inputs are rejected with ErrInvalidMonitorInput.
+func TestMonitorInvalidInput(t *testing.T) {
+	tests := append(emitterInvalidCases(), gapInvalidCases()...)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

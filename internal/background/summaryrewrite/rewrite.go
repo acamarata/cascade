@@ -84,8 +84,9 @@ func isNilInterface(v any) bool {
 	}
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
-	case reflect.Ptr, reflect.Interface:
+	case reflect.Pointer, reflect.Interface:
 		return rv.IsNil()
+	default:
+		return false
 	}
-	return false
 }

@@ -41,15 +41,21 @@ func TestSupervisorBoundaries(t *testing.T) {
 	}
 
 	var validSup Supervisor
-	validSup.Run([]string{"BOUNDARY:first"})
+	if err := validSup.Run([]string{"BOUNDARY:first"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if len(validSup.State.Skipped) != 1 || validSup.State.Skipped[0] != "BOUNDARY:first" {
 		t.Fatalf("expected ['BOUNDARY:first'], got %v", validSup.State.Skipped)
 	}
-	validSup.Run([]string{"BOUNDARY:second"})
+	if err := validSup.Run([]string{"BOUNDARY:second"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if len(validSup.State.Skipped) != 2 || validSup.State.Skipped[1] != "BOUNDARY:second" {
 		t.Fatalf("expected appended 'BOUNDARY:second', got %v", validSup.State.Skipped)
 	}
-	validSup.Run([]string{"", "work", "BOUNDARY:"})
+	if err := validSup.Run([]string{"", "work", "BOUNDARY:"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if len(validSup.State.Skipped) != 3 || validSup.State.Skipped[2] != "BOUNDARY:" {
 		t.Fatalf("expected 'BOUNDARY:' verbatim, got %v", validSup.State.Skipped)
 	}

@@ -11,12 +11,12 @@ type Config struct{}
 
 // DiscoverPlanRoots returns the root paths for plans. It is a stub that
 // always returns nil and ErrNotImplemented.
-func DiscoverPlanRoots(cfg Config) ([]string, error) {
+func DiscoverPlanRoots(_ Config) ([]string, error) {
 	return nil, ErrNotImplemented
 }
 
 // Ingest processes the given plan roots. It is a stub that always returns
 // ErrNotImplemented.
-func Ingest(roots []string) error {
+func Ingest(_ []string) error {
 	return ErrNotImplemented
 }

@@ -23,7 +23,11 @@ func TestOpenSetsWALAndBusyTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open returned error: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("failed to close db: %v", err)
+		}
+	}()
 
 	var journalMode string
 	err = db.QueryRow("PRAGMA journal_mode").Scan(&journalMode)

@@ -1,57 +1,16 @@
 package docket
 
-import (
-	"testing"
-	"time"
-)
+import "testing"
 
 func TestMessageRowInsertRejectsBodyField(t *testing.T) {
-	validTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-
 	tests := []struct {
 		name string
 		row  MessageRow
 	}{
-		{
-			name: "body field lowercase",
-			row: MessageRow{
-				"folder": "inbox",
-				"state":  "pending",
-				"time":   validTime,
-				"label":  "test",
-				"body":   "message content",
-			},
-		},
-		{
-			name: "Body field capitalized",
-			row: MessageRow{
-				"folder": "inbox",
-				"state":  "pending",
-				"time":   validTime,
-				"label":  "test",
-				"Body":   "message content",
-			},
-		},
-		{
-			name: "BODY field uppercase",
-			row: MessageRow{
-				"folder": "inbox",
-				"state":  "pending",
-				"time":   validTime,
-				"label":  "test",
-				"BODY":   "message content",
-			},
-		},
-		{
-			name: "extra unknown field",
-			row: MessageRow{
-				"folder":  "inbox",
-				"state":   "pending",
-				"time":    validTime,
-				"label":   "test",
-				"unknown": "value",
-			},
-		},
+		{"body field lowercase", mrpRow(map[string]any{"body": "message content"})},
+		{"Body field capitalized", mrpRow(map[string]any{"Body": "message content"})},
+		{"BODY field uppercase", mrpRow(map[string]any{"BODY": "message content"})},
+		{"extra unknown field", mrpRow(map[string]any{"unknown": "value"})},
 	}
 
 	columns := []string{"folder", "state", "time", "label"}

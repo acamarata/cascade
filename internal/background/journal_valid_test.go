@@ -22,7 +22,7 @@ type validTestSink struct {
 	called bool
 }
 
-func (s *validTestSink) WriteVerdict(entry RetryEntry) error {
+func (s *validTestSink) WriteVerdict(_ RetryEntry) error {
 	s.called = true
 	return nil
 }

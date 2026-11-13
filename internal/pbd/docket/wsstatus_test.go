@@ -11,7 +11,7 @@ type fakeRunner struct {
 	err    error
 }
 
-func (f *fakeRunner) Run(dir string, args []string) ([]byte, error) {
+func (f *fakeRunner) Run(_ string, args []string) ([]byte, error) {
 	return f.output, f.err
 }
 

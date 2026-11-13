@@ -33,8 +33,11 @@ func TestReseedRecapEmptyHistory(t *testing.T) {
 	if result2.Text != "world" {
 		t.Errorf("expected text unchanged, got %s", result2.Text)
 	}
+}
 
-	// Test that it preserves empty and duplicate item strings
+// TestReseedRecapPreservesEmptyDuplicateItems verifies empty and duplicate
+// item strings survive the reseed.
+func TestReseedRecapPreservesEmptyDuplicateItems(t *testing.T) {
 	hist3 := []HistoryItem{{Role: "user", Text: ""}, {Role: "user", Text: ""}}
 	payload3 := CodePayload{Text: "test3"}
 	result3 := InjectReseedRecap(payload3, true, hist3)
@@ -49,7 +52,11 @@ func TestReseedRecapEmptyHistory(t *testing.T) {
 			t.Errorf("recap[%d] = {%q,%q}, want {%q,%q}", i, result3.ReseedRecap[i].Role, result3.ReseedRecap[i].Text, hist3[i].Role, hist3[i].Text)
 		}
 	}
+}
 
+// TestReseedRecapDoesNotMutateInputs verifies caller history and existing
+// recap storage are left untouched, and that pending=false changes nothing.
+func TestReseedRecapDoesNotMutateInputs(t *testing.T) {
 	// Test that it does not mutate caller history
 	hist4 := []HistoryItem{{Role: "user", Text: "h1"}}
 	payload4 := CodePayload{Text: "test4", ReseedRecap: ReseedRecap{{Role: "user", Text: "old"}}}

@@ -225,13 +225,13 @@ func Open(path string) (*DBStore, error) {
 
 	_, err = db.Exec("PRAGMA journal_mode=WAL")
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 
 	_, err = db.Exec("PRAGMA synchronous=FULL")
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 
@@ -248,7 +248,7 @@ func Open(path string) (*DBStore, error) {
 	for _, q := range tables {
 		_, err = db.Exec(q)
 		if err != nil {
-			db.Close()
+			_ = db.Close()
 			return nil, err
 		}
 	}

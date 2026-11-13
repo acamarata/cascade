@@ -4,190 +4,68 @@ import (
 	"testing"
 )
 
+type scopeCase struct {
+	name     string
+	brief    string
+	wantErr  error
+	callback bool
+}
+
+// scopeCasesA lists missing-scope and malformed-path briefs.
+func scopeCasesA() []scopeCase {
+	return []scopeCase{
+		{"missing scope field", `{"apis":[],"verify":""}`, ErrMissingScope, false},
+		{"null scope field", `{"scope":null,"apis":[],"verify":""}`, ErrMissingScope, false},
+		{"empty scope array", `{"scope":[],"apis":[],"verify":""}`, ErrMissingScope, false},
+		{"scope with empty string", `{"scope":[""],"apis":[],"verify":""}`, ErrMissingScope, false},
+		{"scope with whitespace-only string", `{"scope":["   "],"apis":[],"verify":""}`, ErrMissingScope, false},
+		{"duplicate scope entries", `{"scope":["a.txt","a.txt"],"apis":[],"verify":""}`, ErrInvalidBrief, false},
+		{"absolute path", `{"scope":["/etc/passwd"],"apis":[],"verify":""}`, ErrInvalidBrief, false},
+		{"path with backslash", `{"scope":["a\\b.txt"],"apis":[],"verify":""}`, ErrInvalidBrief, false},
+		{"path with dot component", `{"scope":["./a.txt"],"apis":[],"verify":""}`, ErrInvalidBrief, false},
+		{"path with dotdot component", `{"scope":["../a.txt"],"apis":[],"verify":""}`, ErrInvalidBrief, false},
+		{"glob pattern", `{"scope":["*.txt"],"apis":[],"verify":""}`, ErrInvalidBrief, false},
+		{"glob pattern with path", `{"scope":["dir/*.txt"],"apis":[],"verify":""}`, ErrInvalidBrief, false},
+		{"path with NUL byte", "{\"scope\":[\"a.txt\x00b.txt\"],\"apis\":[],\"verify\":\"\"}", ErrInvalidBrief, false},
+		{"path with whitespace", `{"scope":["a b.txt"],"apis":[],"verify":""}`, ErrInvalidBrief, false},
+		{"path with tab", "{\"scope\":[\"a\tb.txt\"],\"apis\":[],\"verify\":\"\"}", ErrInvalidBrief, false},
+		{"path with newline", "{\"scope\":[\"a\nb.txt\"],\"apis\":[],\"verify\":\"\"}", ErrInvalidBrief, false},
+		{"directory path without filename", `{"scope":["dir/"],"apis":[],"verify":""}`, ErrInvalidBrief, false},
+	}
+}
+
+// scopeCasesB lists malformed-shape briefs and valid briefs.
+func scopeCasesB() []scopeCase {
+	return []scopeCase{
+		{"filename without extension", `{"scope":["filename"],"apis":[],"verify":""}`, ErrInvalidBrief, false},
+		{"empty component in path", `{"scope":["a//b.txt"],"apis":[],"verify":""}`, ErrInvalidBrief, false},
+		{"leading slash", `{"scope":["/a.txt"],"apis":[],"verify":""}`, ErrInvalidBrief, false},
+		{"trailing slash", `{"scope":["a.txt/"],"apis":[],"verify":""}`, ErrInvalidBrief, false},
+		{"scope is not array", `{"scope":"a.txt","apis":[],"verify":""}`, ErrInvalidBrief, false},
+		{"scope is number", `{"scope":123,"apis":[],"verify":""}`, ErrInvalidBrief, false},
+		{"scope is object", `{"scope":{},"apis":[],"verify":""}`, ErrInvalidBrief, false},
+		{"invalid JSON", `{"scope":["a.txt"`, ErrInvalidBrief, false},
+		{"invalid UTF-8", "{\"scope\":[\"a.txt\xff\"],\"apis\":[],\"verify\":\"\"}", ErrInvalidBrief, false},
+		{"unknown key", `{"scope":["a.txt"],"apis":[],"verify":"","unknown":"value"}`, ErrInvalidBrief, false},
+		{"duplicate key in JSON", `{"scope":["a.txt"],"apis":[],"verify":"","scope":["b.txt"]}`, ErrInvalidBrief, false},
+		{"trailing objects", `{"scope":["a.txt"],"apis":[],"verify":""}{"scope":["b.txt"]}`, ErrInvalidBrief, false},
+		{"empty string brief", "", ErrInvalidBrief, false},
+		{"valid single file", `{"scope":["a.txt"],"apis":[],"verify":""}`, nil, true},
+		{"valid nested path", `{"scope":["dir/subdir/file.go"],"apis":[],"verify":""}`, nil, true},
+		{"valid multiple files", `{"scope":["a.txt","b.go","c.js"],"apis":[],"verify":""}`, nil, true},
+	}
+}
+
 // TestBriefRejectsMissingScope validates that CheckBrief returns the correct
 // sentinel errors for missing, null, empty, and invalid scope fields.
 func TestBriefRejectsMissingScope(t *testing.T) {
 	callbackInvoked := false
-	callback := func(brief string) bool {
+	callback := func(_ string) bool {
 		callbackInvoked = true
 		return true
 	}
 
-	tests := []struct {
-		name     string
-		brief    string
-		wantErr  error
-		callback bool
-	}{
-		{
-			name:    "missing scope field",
-			brief:   `{"apis":[],"verify":""}`,
-			wantErr: ErrMissingScope,
-		},
-		{
-			name:    "null scope field",
-			brief:   `{"scope":null,"apis":[],"verify":""}`,
-			wantErr: ErrMissingScope,
-		},
-		{
-			name:    "empty scope array",
-			brief:   `{"scope":[],"apis":[],"verify":""}`,
-			wantErr: ErrMissingScope,
-		},
-		{
-			name:    "scope with empty string",
-			brief:   `{"scope":[""],"apis":[],"verify":""}`,
-			wantErr: ErrMissingScope,
-		},
-		{
-			name:    "scope with whitespace-only string",
-			brief:   `{"scope":["   "],"apis":[],"verify":""}`,
-			wantErr: ErrMissingScope,
-		},
-		{
-			name:    "duplicate scope entries",
-			brief:   `{"scope":["a.txt","a.txt"],"apis":[],"verify":""}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "absolute path",
-			brief:   `{"scope":["/etc/passwd"],"apis":[],"verify":""}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "path with backslash",
-			brief:   `{"scope":["a\\b.txt"],"apis":[],"verify":""}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "path with dot component",
-			brief:   `{"scope":["./a.txt"],"apis":[],"verify":""}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "path with dotdot component",
-			brief:   `{"scope":["../a.txt"],"apis":[],"verify":""}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "glob pattern",
-			brief:   `{"scope":["*.txt"],"apis":[],"verify":""}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "glob pattern with path",
-			brief:   `{"scope":["dir/*.txt"],"apis":[],"verify":""}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "path with NUL byte",
-			brief:   "{\"scope\":[\"a.txt\x00b.txt\"],\"apis\":[],\"verify\":\"\"}",
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "path with whitespace",
-			brief:   `{"scope":["a b.txt"],"apis":[],"verify":""}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "path with tab",
-			brief:   "{\"scope\":[\"a\tb.txt\"],\"apis\":[],\"verify\":\"\"}",
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "path with newline",
-			brief:   "{\"scope\":[\"a\nb.txt\"],\"apis\":[],\"verify\":\"\"}",
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "directory path without filename",
-			brief:   `{"scope":["dir/"],"apis":[],"verify":""}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "filename without extension",
-			brief:   `{"scope":["filename"],"apis":[],"verify":""}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "empty component in path",
-			brief:   `{"scope":["a//b.txt"],"apis":[],"verify":""}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "leading slash",
-			brief:   `{"scope":["/a.txt"],"apis":[],"verify":""}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "trailing slash",
-			brief:   `{"scope":["a.txt/"],"apis":[],"verify":""}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "scope is not array",
-			brief:   `{"scope":"a.txt","apis":[],"verify":""}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "scope is number",
-			brief:   `{"scope":123,"apis":[],"verify":""}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "scope is object",
-			brief:   `{"scope":{},"apis":[],"verify":""}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "invalid JSON",
-			brief:   `{"scope":["a.txt"`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "invalid UTF-8",
-			brief:   "{\"scope\":[\"a.txt\xff\"],\"apis\":[],\"verify\":\"\"}",
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "unknown key",
-			brief:   `{"scope":["a.txt"],"apis":[],"verify":"","unknown":"value"}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "duplicate key in JSON",
-			brief:   `{"scope":["a.txt"],"apis":[],"verify":"","scope":["b.txt"]}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "trailing objects",
-			brief:   `{"scope":["a.txt"],"apis":[],"verify":""}{"scope":["b.txt"]}`,
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:    "empty string brief",
-			brief:   "",
-			wantErr: ErrInvalidBrief,
-		},
-		{
-			name:     "valid single file",
-			brief:    `{"scope":["a.txt"],"apis":[],"verify":""}`,
-			wantErr:  nil,
-			callback: true,
-		},
-		{
-			name:     "valid nested path",
-			brief:    `{"scope":["dir/subdir/file.go"],"apis":[],"verify":""}`,
-			wantErr:  nil,
-			callback: true,
-		},
-		{
-			name:     "valid multiple files",
-			brief:    `{"scope":["a.txt","b.go","c.js"],"apis":[],"verify":""}`,
-			wantErr:  nil,
-			callback: true,
-		},
-	}
+	tests := append(scopeCasesA(), scopeCasesB()...)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

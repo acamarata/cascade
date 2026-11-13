@@ -11,7 +11,7 @@ import "strings"
 // Routing agent questions is conditioned solely on guard == autonomousSilent
 // after mode validation.
 // Traceability: D4699, D4702, D4704.
-func HandleAutonomous(mode Mode, guard SilenceGuard, req BoundaryRequest, supervisor BoundarySupervisor, normal BoundaryNormal) (BoundaryResult, error) {
+func HandleAutonomous(mode Mode, guard SilenceGuard, req BoundaryRequest, supervisor BoundarySupervisor, _ BoundaryNormal) (BoundaryResult, error) {
 	// D4699: mode validation
 	if mode != ModeAutonomous {
 		return BoundaryResult{}, ErrInvalidBoundaryRequest

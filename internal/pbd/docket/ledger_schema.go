@@ -16,7 +16,7 @@ func ApplyLedgerMigration(db *sql.DB) error {
 	if err != nil {
 		return ErrLedgerMigration
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Check which tables already exist so the migration is idempotent.
 	existing := map[string]bool{}
@@ -27,16 +27,18 @@ func ApplyLedgerMigration(db *sql.DB) error {
 	for rows.Next() {
 		var n string
 		if err := rows.Scan(&n); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return ErrLedgerMigration
 		}
 		existing[n] = true
 	}
 	if err := rows.Err(); err != nil {
-		rows.Close()
+		_ = rows.Close()
 		return ErrLedgerMigration
 	}
-	rows.Close()
+	if err := rows.Close(); err != nil {
+		return ErrLedgerMigration
+	}
 
 	stmts := map[string]string{
 		"ticket_ledger": `CREATE TABLE ticket_ledger (id INTEGER PRIMARY KEY)`,

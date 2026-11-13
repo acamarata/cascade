@@ -66,19 +66,7 @@ func Hedge(ctx context.Context, t HedgeTicket, modelA, modelB string, run HedgeR
 			if o.err == nil && o.res.Green {
 				cancel()
 				wg.Wait()
-
-				if err := parentCtx.Err(); err != nil {
-					return HedgeResult{}, err
-				}
-
-				if o.res.Commit != nil {
-					if err := o.res.Commit(); err != nil {
-						return HedgeResult{}, errors.Join(ErrHedgeCommit, err)
-					}
-				}
-
-				o.res.Commit = nil
-				return o.res, nil
+				return hedgeCommit(parentCtx, o.res)
 			}
 			if o.model == modelA {
 				errA = hedgeFailure(o.err)
@@ -93,6 +81,22 @@ func Hedge(ctx context.Context, t HedgeTicket, modelA, modelB string, run HedgeR
 
 	wg.Wait()
 	return HedgeResult{}, errors.Join(errA, errB)
+}
+
+// hedgeCommit commits the selected green result once and clears its Commit.
+func hedgeCommit(parentCtx context.Context, res HedgeResult) (HedgeResult, error) {
+	if err := parentCtx.Err(); err != nil {
+		return HedgeResult{}, err
+	}
+
+	if res.Commit != nil {
+		if err := res.Commit(); err != nil {
+			return HedgeResult{}, errors.Join(ErrHedgeCommit, err)
+		}
+	}
+
+	res.Commit = nil
+	return res, nil
 }
 
 // hedgeOutcome is one model's finished run.

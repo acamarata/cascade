@@ -19,32 +19,8 @@ var ErrMessageMetadata = errors.New("D5903")
 // keys with valid values. Returns a fresh map with the original values on success.
 // A nil row is valid and returns nil, nil.
 func ValidateMessageRowMetadata(columns []string, row MessageRow) (MessageRow, error) {
-	required := map[string]bool{
-		"folder": false,
-		"state":  false,
-		"time":   false,
-		"label":  false,
-	}
-
-	if len(columns) != 4 {
+	if !validMessageColumns(columns) {
 		return nil, ErrMessageMetadata
-	}
-
-	for _, col := range columns {
-		if col == "" {
-			return nil, ErrMessageMetadata
-		}
-		found, ok := required[col]
-		if !ok || found {
-			return nil, ErrMessageMetadata
-		}
-		required[col] = true
-	}
-
-	for _, v := range required {
-		if !v {
-			return nil, ErrMessageMetadata
-		}
 	}
 
 	if row == nil {
@@ -55,64 +31,20 @@ func ValidateMessageRowMetadata(columns []string, row MessageRow) (MessageRow, e
 		return nil, ErrMessageMetadata
 	}
 
-	for k := range row {
-		if !required[k] {
-			return nil, ErrMessageMetadata
-		}
-	}
-
-	// Validate folder
-	folderVal, ok := row["folder"]
+	folder, ok := messageRowText(row, "folder")
 	if !ok {
 		return nil, ErrMessageMetadata
 	}
-	folder, ok := folderVal.(string)
-	if !ok || strings.TrimSpace(folder) == "" {
-		return nil, ErrMessageMetadata
-	}
-
-	// Validate state
-	stateVal, ok := row["state"]
+	state, ok := messageRowText(row, "state")
 	if !ok {
 		return nil, ErrMessageMetadata
 	}
-	state, ok := stateVal.(string)
-	if !ok || strings.TrimSpace(state) == "" {
-		return nil, ErrMessageMetadata
-	}
-
-	// Validate time
-	timeVal, ok := row["time"]
-	if !ok {
-		return nil, ErrMessageMetadata
-	}
-	t, ok := timeVal.(time.Time)
+	t, ok := row["time"].(time.Time)
 	if !ok || t.IsZero() {
 		return nil, ErrMessageMetadata
 	}
-
-	// Validate label
-	labelVal, ok := row["label"]
-	if !ok {
-		return nil, ErrMessageMetadata
-	}
-	label, ok := labelVal.(string)
-	if !ok {
-		return nil, ErrMessageMetadata
-	}
-	if !utf8.ValidString(label) {
-		return nil, ErrMessageMetadata
-	}
-	if len(label) < 1 || len(label) > 64 {
-		return nil, ErrMessageMetadata
-	}
-	if strings.ContainsAny(label, "/\\") {
-		return nil, ErrMessageMetadata
-	}
-	if label == "." || label == ".." {
-		return nil, ErrMessageMetadata
-	}
-	if strings.ContainsAny(label, "\r\n\x00") {
+	label, ok := row["label"].(string)
+	if !ok || !validMessageLabel(label) {
 		return nil, ErrMessageMetadata
 	}
 
@@ -124,4 +56,60 @@ func ValidateMessageRowMetadata(columns []string, row MessageRow) (MessageRow, e
 	fresh["label"] = label
 
 	return fresh, nil
+}
+
+// validMessageColumns reports whether columns are exactly the four required
+// keys, each non-empty and appearing once.
+func validMessageColumns(columns []string) bool {
+	if len(columns) != 4 {
+		return false
+	}
+
+	required := map[string]bool{
+		"folder": false,
+		"state":  false,
+		"time":   false,
+		"label":  false,
+	}
+
+	for _, col := range columns {
+		found, ok := required[col]
+		if col == "" || !ok || found {
+			return false
+		}
+		required[col] = true
+	}
+
+	for _, v := range required {
+		if !v {
+			return false
+		}
+	}
+	return true
+}
+
+// messageRowText returns row[key] as a string that is not blank.
+func messageRowText(row MessageRow, key string) (string, bool) {
+	v, ok := row[key].(string)
+	if !ok || strings.TrimSpace(v) == "" {
+		return "", false
+	}
+	return v, true
+}
+
+// validMessageLabel reports whether label is a safe 1-64 byte label.
+func validMessageLabel(label string) bool {
+	if !utf8.ValidString(label) {
+		return false
+	}
+	if len(label) < 1 || len(label) > 64 {
+		return false
+	}
+	if strings.ContainsAny(label, "/\\") {
+		return false
+	}
+	if label == "." || label == ".." {
+		return false
+	}
+	return !strings.ContainsAny(label, "\r\n\x00")
 }

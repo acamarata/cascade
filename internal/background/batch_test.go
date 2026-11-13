@@ -11,7 +11,7 @@ type fakeModel struct {
 }
 
 // Call satisfies the Model interface.
-func (f *fakeModel) Call(ctx context.Context, r Rule, group []BatchFailureEvent) error {
+func (f *fakeModel) Call(_ context.Context, r Rule, group []BatchFailureEvent) error {
 	f.calls++
 	return nil
 }
@@ -22,79 +22,43 @@ func (f *fakeModel) Call(ctx context.Context, r Rule, group []BatchFailureEvent)
 func TestHandleBatchNoMatchingRules(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("nil group and nil rules", func(t *testing.T) {
-		m := &fakeModel{}
-		got, err := HandleBatch(ctx, m, nil, nil)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got != (BatchTicket{}) {
-			t.Fatalf("expected zero BatchTicket, got %+v", got)
-		}
-		if m.calls != 0 {
-			t.Fatalf("expected 0 calls, got %d", m.calls)
-		}
-	})
+	cases := []struct {
+		name  string
+		rules []Rule
+		group []BatchFailureEvent
+	}{
+		{"nil group and nil rules", nil, nil},
+		{"empty group and empty rules", []Rule{}, []BatchFailureEvent{}},
+		{
+			"no kind match",
+			[]Rule{{ID: "r1", Kind: "alpha"}},
+			[]BatchFailureEvent{{Name: "e1", Kind: "beta"}},
+		},
+		{
+			"case sensitive no fold",
+			[]Rule{{ID: "r1", Kind: "Alpha"}},
+			[]BatchFailureEvent{{Name: "e1", Kind: "alpha"}},
+		},
+		{
+			"no wildcard",
+			[]Rule{{ID: "r1", Kind: "*"}},
+			[]BatchFailureEvent{{Name: "e1", Kind: "alpha"}},
+		},
+	}
 
-	t.Run("empty group and empty rules", func(t *testing.T) {
-		m := &fakeModel{}
-		got, err := HandleBatch(ctx, m, []Rule{}, []BatchFailureEvent{})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got != (BatchTicket{}) {
-			t.Fatalf("expected zero BatchTicket, got %+v", got)
-		}
-		if m.calls != 0 {
-			t.Fatalf("expected 0 calls, got %d", m.calls)
-		}
-	})
-
-	t.Run("no kind match", func(t *testing.T) {
-		m := &fakeModel{}
-		rules := []Rule{{ID: "r1", Kind: "alpha"}}
-		group := []BatchFailureEvent{{Name: "e1", Kind: "beta"}}
-		got, err := HandleBatch(ctx, m, rules, group)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got != (BatchTicket{}) {
-			t.Fatalf("expected zero BatchTicket, got %+v", got)
-		}
-		if m.calls != 0 {
-			t.Fatalf("expected 0 calls, got %d", m.calls)
-		}
-	})
-
-	t.Run("case sensitive no fold", func(t *testing.T) {
-		m := &fakeModel{}
-		rules := []Rule{{ID: "r1", Kind: "Alpha"}}
-		group := []BatchFailureEvent{{Name: "e1", Kind: "alpha"}}
-		got, err := HandleBatch(ctx, m, rules, group)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got != (BatchTicket{}) {
-			t.Fatalf("expected zero BatchTicket, got %+v", got)
-		}
-		if m.calls != 0 {
-			t.Fatalf("expected 0 calls, got %d", m.calls)
-		}
-	})
-
-	t.Run("no wildcard", func(t *testing.T) {
-		m := &fakeModel{}
-		rules := []Rule{{ID: "r1", Kind: "*"}}
-		group := []BatchFailureEvent{{Name: "e1", Kind: "alpha"}}
-		got, err := HandleBatch(ctx, m, rules, group)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got != (BatchTicket{}) {
-			t.Fatalf("expected zero BatchTicket, got %+v", got)
-		}
-		if m.calls != 0 {
-			t.Fatalf("expected 0 calls, got %d", m.calls)
-		}
-	})
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &fakeModel{}
+			got, err := HandleBatch(ctx, m, tc.rules, tc.group)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != (BatchTicket{}) {
+				t.Fatalf("expected zero BatchTicket, got %+v", got)
+			}
+			if m.calls != 0 {
+				t.Fatalf("expected 0 calls, got %d", m.calls)
+			}
+		})
+	}
 }

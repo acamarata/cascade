@@ -18,7 +18,7 @@ func TestPurifyFailsWithoutRedact(t *testing.T) {
 	// redact error
 	stageErr := errors.New("stage failure")
 	jevRun := false
-	out, err = PurifyCW("transcript", func(s string) (string, error) {
+	out, err = PurifyCW("transcript", func(_ string) (string, error) {
 		return "", stageErr
 	}, func(s string) (string, error) {
 		jevRun = true
@@ -36,7 +36,7 @@ func TestPurifyFailsWithoutRedact(t *testing.T) {
 
 	// blank redact output
 	jevRun = false
-	out, err = PurifyCW("transcript", func(s string) (string, error) {
+	out, err = PurifyCW("transcript", func(_ string) (string, error) {
 		return "   ", nil
 	}, func(s string) (string, error) {
 		jevRun = true
@@ -66,9 +66,9 @@ func TestPurifyFailsWithoutJev(t *testing.T) {
 
 	// jev error
 	stageErr := errors.New("stage failure")
-	out, err = PurifyCW("transcript", func(s string) (string, error) {
+	out, err = PurifyCW("transcript", func(_ string) (string, error) {
 		return "redacted", nil
-	}, func(s string) (string, error) {
+	}, func(_ string) (string, error) {
 		return "", stageErr
 	})
 	if out != "" || !errors.Is(err, ErrT0411) {

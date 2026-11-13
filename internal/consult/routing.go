@@ -168,6 +168,30 @@ func expectDelim(dec *json.Decoder, want json.Delim) bool {
 	return ok && delim == want
 }
 
+// readStringPair reads one string key (not already in seenKeys, which it
+// updates) and its string value.
+func readStringPair(dec *json.Decoder, seenKeys map[string]bool) (string, string, bool) {
+	keyT, err := dec.Token()
+	if err != nil {
+		return "", "", false
+	}
+	key, ok := keyT.(string)
+	if !ok || seenKeys[key] {
+		return "", "", false
+	}
+	seenKeys[key] = true
+
+	valT, err := dec.Token()
+	if err != nil {
+		return "", "", false
+	}
+	val, ok := valT.(string)
+	if !ok {
+		return "", "", false
+	}
+	return key, val, true
+}
+
 // readPreferenceRecord reads one {"context_id","class","model"} object with
 // exactly those three non-blank string keys, each appearing once.
 func readPreferenceRecord(dec *json.Decoder) (string, RoutingPreference, bool) {
@@ -179,21 +203,7 @@ func readPreferenceRecord(dec *json.Decoder) (string, RoutingPreference, bool) {
 	seenKeys := make(map[string]bool)
 
 	for dec.More() {
-		keyT, err := dec.Token()
-		if err != nil {
-			return "", RoutingPreference{}, false
-		}
-		key, ok := keyT.(string)
-		if !ok || seenKeys[key] {
-			return "", RoutingPreference{}, false
-		}
-		seenKeys[key] = true
-
-		valT, err := dec.Token()
-		if err != nil {
-			return "", RoutingPreference{}, false
-		}
-		val, ok := valT.(string)
+		key, val, ok := readStringPair(dec, seenKeys)
 		if !ok {
 			return "", RoutingPreference{}, false
 		}

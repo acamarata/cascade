@@ -59,43 +59,15 @@ type SubSpawnRegistry map[string]SubSpawnTool
 
 // SubSpawn validates the inputs, opens a scoped sub-chat, and returns a report.
 func SubSpawn(ctx context.Context, chats SubChats, registry SubSpawnRegistry, req SubSpawnRequest) (SubSpawnReport, error) {
-	if ctx == nil {
-		return SubSpawnReport{}, ErrInvalidSubSpawn
-	}
-	if chats == nil {
-		return SubSpawnReport{}, ErrInvalidSubSpawn
-	}
-	if strings.TrimSpace(req.Task) == "" {
-		return SubSpawnReport{}, ErrInvalidSubSpawn
-	}
-	if strings.TrimSpace(req.Role) == "" {
-		return SubSpawnReport{}, ErrRoleRequired
-	}
-	if strings.TrimSpace(req.Scope) == "" {
-		return SubSpawnReport{}, ErrInvalidSubSpawn
-	}
-
-	if err := ctx.Err(); err != nil {
+	if err := validateSubSpawn(ctx, chats, req); err != nil {
 		return SubSpawnReport{}, err
-	}
-
-	meta := map[string]string{
-		"tool":       "sub_spawn",
-		"P2-PEWB-17": "preserved",
-		"P2-ADVX-34": "preserved",
-		"P2-HRNC-39": "preserved",
-		"P2-LIFE-25": "preserved",
-		"D4742":      "preserved",
-		"D6044":      "preserved",
-		"D6048":      "preserved",
-		"D6099":      "preserved",
 	}
 
 	id, err := chats.Open(ctx, SubChatRequest{
 		Task:     req.Task,
 		Role:     req.Role,
 		Scope:    req.Scope,
-		Metadata: meta,
+		Metadata: subSpawnMetadata(),
 	})
 	if err != nil {
 		return SubSpawnReport{}, fmt.Errorf("%w: %v", ErrSubChat, err)
@@ -131,6 +103,41 @@ func SubSpawn(ctx context.Context, chats SubChats, registry SubSpawnRegistry, re
 		Status: "completed",
 		Report: report,
 	}, nil
+}
+
+// validateSubSpawn checks the SubSpawn inputs in the contract's order.
+func validateSubSpawn(ctx context.Context, chats SubChats, req SubSpawnRequest) error {
+	if ctx == nil {
+		return ErrInvalidSubSpawn
+	}
+	if chats == nil {
+		return ErrInvalidSubSpawn
+	}
+	if strings.TrimSpace(req.Task) == "" {
+		return ErrInvalidSubSpawn
+	}
+	if strings.TrimSpace(req.Role) == "" {
+		return ErrRoleRequired
+	}
+	if strings.TrimSpace(req.Scope) == "" {
+		return ErrInvalidSubSpawn
+	}
+	return ctx.Err()
+}
+
+// subSpawnMetadata returns the metadata attached to every sub-chat request.
+func subSpawnMetadata() map[string]string {
+	return map[string]string{
+		"tool":       "sub_spawn",
+		"P2-PEWB-17": "preserved",
+		"P2-ADVX-34": "preserved",
+		"P2-HRNC-39": "preserved",
+		"P2-LIFE-25": "preserved",
+		"D4742":      "preserved",
+		"D6044":      "preserved",
+		"D6048":      "preserved",
+		"D6099":      "preserved",
+	}
 }
 
 // isValidSubChatID checks that id matches the format subchat:<positive decimal integer>.

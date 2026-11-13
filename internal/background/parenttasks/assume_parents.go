@@ -20,7 +20,7 @@ var ErrInvalidParentInput = errors.New("invalid parent input")
 // When Parents is empty it is preserved unchanged (still reject duplicate/empty entries in AssumedParents).
 // With nil/empty Parents return the ticket unchanged, nil error.
 // Never mutates the input ticket, slices or done map.
-func AssumeParents(ticket Ticket, done map[string]bool) (Ticket, error) {
+func AssumeParents(ticket Ticket, _ map[string]bool) (Ticket, error) {
 	// Validate empty ID
 	if ticket.ID == "" {
 		return Ticket{}, ErrInvalidParentInput

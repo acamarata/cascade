@@ -5,40 +5,26 @@ import (
 	"testing"
 )
 
+type invalidDelegateStateCase struct {
+	name  string
+	input *DelegateState
+}
+
+func invalidDelegateStateCases() []invalidDelegateStateCase {
+	return []invalidDelegateStateCase{
+		{name: "nil state", input: nil},
+		{name: "Started is true", input: &DelegateState{Started: true, Turn: 0, Role: "valid"}},
+		{name: "positive Turn", input: &DelegateState{Started: false, Turn: 1, Role: "valid"}},
+		{name: "negative Turn", input: &DelegateState{Started: false, Turn: -1, Role: "valid"}},
+		{name: "blank Role", input: &DelegateState{Started: false, Turn: 0, Role: ""}},
+		{name: "whitespace Role", input: &DelegateState{Started: false, Turn: 0, Role: "   "}},
+	}
+}
+
 // TestEnableManagerFailsClosed verifies that invalid delegate state returns
 // ErrInvalidDelegateState and does not mutate the input.
 func TestEnableManagerFailsClosed(t *testing.T) {
-	tests := []struct {
-		name  string
-		input *DelegateState
-	}{
-		{
-			name:  "nil state",
-			input: nil,
-		},
-		{
-			name:  "Started is true",
-			input: &DelegateState{Started: true, Turn: 0, Role: "valid"},
-		},
-		{
-			name:  "positive Turn",
-			input: &DelegateState{Started: false, Turn: 1, Role: "valid"},
-		},
-		{
-			name:  "negative Turn",
-			input: &DelegateState{Started: false, Turn: -1, Role: "valid"},
-		},
-		{
-			name:  "blank Role",
-			input: &DelegateState{Started: false, Turn: 0, Role: ""},
-		},
-		{
-			name:  "whitespace Role",
-			input: &DelegateState{Started: false, Turn: 0, Role: "   "},
-		},
-	}
-
-	for _, tt := range tests {
+	for _, tt := range invalidDelegateStateCases() {
 		t.Run(tt.name, func(t *testing.T) {
 			var orig DelegateState
 			if tt.input != nil {

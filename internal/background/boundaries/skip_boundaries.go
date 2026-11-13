@@ -1,3 +1,4 @@
+// Package boundaries skips and records BOUNDARY: steps while a Supervisor runs a step list.
 package boundaries
 
 import (
