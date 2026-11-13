@@ -94,7 +94,11 @@ func TestFanOutSweepExpiresUnattached(t *testing.T) {
 		t.Fatalf("inside the ttl: marker %q, records %d; want untouched", st.Final, kept)
 	}
 	clock.Advance(2 * time.Hour)
-	waitFor(t, "the expired marker", func() bool { st, _ := fanOutState(t, store, id); return st.Final == resume.OutcomeExpired })
+	// The sweep writes the marker before it deletes the records: wait for both.
+	waitFor(t, "the expired marker and no records", func() bool {
+		st, kept := fanOutState(t, store, id)
+		return st.Final == resume.OutcomeExpired && kept == 0
+	})
 	if st, kept := fanOutState(t, store, id); kept != 0 || len(st.Starts) != 0 {
 		t.Fatalf("after the ttl: records %d, starts %v; want every record deleted and nothing dispatched", kept, st.Starts)
 	}
