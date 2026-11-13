@@ -40,7 +40,7 @@ func TestPhaseConstantsExist(t *testing.T) {
 		t.Fatal("ErrIllegalTransition must not be nil")
 	}
 
-	var err error = ErrIllegalTransition
+	var err = ErrIllegalTransition
 	if !errors.Is(err, ErrIllegalTransition) {
 		t.Fatal("ErrIllegalTransition does not match itself via errors.Is")
 	}

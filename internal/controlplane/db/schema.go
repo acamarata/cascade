@@ -1,3 +1,4 @@
+// Package db holds the control plane database schema: table, view, phase status and migration names.
 package db
 
 // Table names used in the control plane database schema.

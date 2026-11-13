@@ -4,11 +4,24 @@ import "testing"
 
 // TestSchemaConstantsExist verifies that all required table name constants,
 // phase status values, and migration SQL strings are defined and non-empty.
-func TestSchemaConstantsExist(t *testing.T) {
-	tables := []struct {
-		name  string
-		value string
-	}{
+// namedConst is one schema constant and the name its test reports.
+type namedConst struct {
+	name  string
+	value string
+}
+
+// assertNonEmpty fails for every constant in cs whose value is empty.
+func assertNonEmpty(t *testing.T, kind string, cs []namedConst) {
+	t.Helper()
+	for _, c := range cs {
+		if c.value == "" {
+			t.Errorf("%s constant %s is empty", kind, c.name)
+		}
+	}
+}
+
+func TestSchemaTableConstantsExist(t *testing.T) {
+	assertNonEmpty(t, "table", []namedConst{
 		{"TableMeta", TableMeta},
 		{"TablePlanSource", TablePlanSource},
 		{"TablePhase", TablePhase},
@@ -21,34 +34,22 @@ func TestSchemaConstantsExist(t *testing.T) {
 		{"TablePark", TablePark},
 		{"TableRun", TableRun},
 		{"TableEvent", TableEvent},
-	}
-	for _, tc := range tables {
-		if tc.value == "" {
-			t.Errorf("table constant %s is empty", tc.name)
-		}
-	}
+	})
+}
 
-	views := []struct {
-		name  string
-		value string
-	}{
+func TestSchemaViewConstantsExist(t *testing.T) {
+	assertNonEmpty(t, "view", []namedConst{
 		{"ViewTicketState", ViewTicketState},
 		{"ViewOpenTicket", ViewOpenTicket},
 		{"ViewBlockedBy", ViewBlockedBy},
 		{"ViewStaleLeases", ViewStaleLeases},
 		{"ViewLiveLease", ViewLiveLease},
 		{"ViewReadyFrontier", ViewReadyFrontier},
-	}
-	for _, v := range views {
-		if v.value == "" {
-			t.Errorf("view constant %s is empty", v.name)
-		}
-	}
+	})
+}
 
-	statuses := []struct {
-		name  string
-		value string
-	}{
+func phaseStatusConsts() []namedConst {
+	return []namedConst{
 		{"PhaseSeeded", PhaseSeeded},
 		{"PhaseRTP", PhaseRTP},
 		{"PhaseRTF", PhaseRTF},
@@ -57,12 +58,11 @@ func TestSchemaConstantsExist(t *testing.T) {
 		{"PhaseFinished", PhaseFinished},
 		{"PhaseInProgress", PhaseInProgress},
 	}
-	for _, s := range statuses {
-		if s.value == "" {
-			t.Errorf("phase status constant %s is empty", s.name)
-		}
-	}
+}
 
+func TestSchemaPhaseStatusConstantsExist(t *testing.T) {
+	statuses := phaseStatusConsts()
+	assertNonEmpty(t, "phase status", statuses)
 	expectedStatuses := map[string]bool{
 		"seeded": false, "rtp": false, "rtf": false, "rtb": false,
 		"rtd": false, "finished": false, "in_progress": false,
@@ -77,21 +77,15 @@ func TestSchemaConstantsExist(t *testing.T) {
 			t.Errorf("missing expected phase status value: %s", k)
 		}
 	}
+}
 
-	migrations := []struct {
-		name  string
-		value string
-	}{
+func TestSchemaMigrationConstantsExist(t *testing.T) {
+	assertNonEmpty(t, "migration", []namedConst{
 		{"Migration001", Migration001},
 		{"Migration002", Migration002},
 		{"Migration003", Migration003},
 		{"Migration004", Migration004},
 		{"Migration005", Migration005},
 		{"Migration006", Migration006},
-	}
-	for _, m := range migrations {
-		if m.value == "" {
-			t.Errorf("migration constant %s is empty", m.name)
-		}
-	}
+	})
 }

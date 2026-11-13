@@ -1,3 +1,4 @@
+// Package lifecycle defines the phase lifecycle states and their legal transitions.
 package lifecycle
 
 import "errors"

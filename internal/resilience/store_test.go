@@ -8,7 +8,7 @@ import (
 
 // TestStoreTypesCompile verifies that all required types, constants, and
 // interface methods exist and have the expected signatures.
-func TestStoreTypesCompile(t *testing.T) {
+func TestStoreTypesCompile(_ *testing.T) {
 	// WaitKind constants
 	_ = WaitingDisk
 	_ = WaitingNet
