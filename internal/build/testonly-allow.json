@@ -1260,75 +1260,12 @@
     "symbol": "internal/daemon/service.NewNodeAgentInstaller"
   },
   {
-    "added_by_ticket": "P1-AGT-08a",
-    "caller_site": "cmd/cascade/delegate_rpc.go",
-    "expected_caller": "cmd/cascade/delegate_rpc.go, the conductor.delegate handler that maps its params onto DelegationNeed through ClassifyDelegation; retire this entry once that file calls it",
-    "reason": "P1-AGT-08a declares DelegationNeed and ClassifyDelegation in the conductor and tests them alone. The RPC verb that classifies each request is P1-AGT-08k, which depends on this ticket through the service-core chain.",
-    "retire_ticket": "P1-AGT-08k",
-    "symbol": "internal/conductor.ClassifyDelegation"
-  },
-  {
     "added_by_ticket": "P1-GEN-11a",
     "caller_site": "internal/context/hydration/nativechain.go",
     "expected_caller": "internal/context/hydration/nativechain.go, the code that calls GeneratedLocations once P2-EFF-52 lands; retire this entry once that file calls it",
     "reason": "P1-GEN-06 fixes the closed list of locations a generator may write. The enforcing caller is the P1-GEN-11 generation run; until then only tests read the list. The earlier caller_site file now exists without the call, so the entry points at the file in P2-EFF-52 that will make it.",
     "retire_ticket": "P2-EFF-52",
     "symbol": "internal/context/generate.GeneratedLocations"
-  },
-  {
-    "added_by_ticket": "P1-AGT-11",
-    "caller_site": "cmd/cascade/wire_delegate.go",
-    "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k caller of MintChild; retire this entry once that file calls it",
-    "reason": "P1-AGT-11 ships contract:delegation-record implemented and tested, but the delegate service that consumes it (P1-AGT-08) does not exist yet, so nothing in production calls MintChild.",
-    "retire_ticket": "P1-AGT-08k",
-    "symbol": "internal/delegation.MintChild"
-  },
-  {
-    "added_by_ticket": "P1-AGT-11",
-    "caller_site": "cmd/cascade/wire_delegate.go",
-    "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k caller of MintRoot; retire this entry once that file calls it",
-    "reason": "P1-AGT-11 ships contract:delegation-record implemented and tested, but the delegate service that consumes it (P1-AGT-08) does not exist yet, so nothing in production calls MintRoot.",
-    "retire_ticket": "P1-AGT-08k",
-    "symbol": "internal/delegation.MintRoot"
-  },
-  {
-    "added_by_ticket": "P1-AGT-02",
-    "caller_site": "cmd/cascade/wire_delegate.go",
-    "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k caller of NewResolver; retire this entry once that file calls it",
-    "reason": "P1-AGT-02 ships the lane resolver (unknown lane, absent plugin and no-fallback refusals) implemented and tested, but its only production caller is the host shim of P1-AGT-03. Repointed by P1-AGT-03: the shim takes this input through ShimDeps/the spawn request, so the production call sits in the P1-AGT-08 composition, not in spawn.go.",
-    "retire_ticket": "P1-AGT-08k",
-    "symbol": "internal/providers/agents.NewResolver"
-  },
-  {
-    "added_by_ticket": "P1-AGT-03",
-    "caller_site": "cmd/cascade/wire_delegate.go",
-    "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k caller of NewShim; retire this entry once that file calls it",
-    "reason": "P1-AGT-03 ships the host shim (credential custody, pre-spawn scan, executable gate, effect intent, output filter) implemented and tested, but its only production caller is the delegation Service of P1-AGT-08. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once service.go exists without the call.",
-    "retire_ticket": "P1-AGT-08k",
-    "symbol": "internal/providers/agents.NewShim"
-  },
-  {
-    "added_by_ticket": "P1-AGT-02",
-    "caller_site": "cmd/cascade/wire_delegate.go",
-    "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k caller of ProjectEnvelope; retire this entry once that file calls it",
-    "reason": "P1-AGT-02 ships the one conversion from a verified signed envelope to the driver-facing SpawnEnvelope implemented and tested, but the only production caller is the host shim of P1-AGT-03. Repointed by P1-AGT-03: the shim takes this input through ShimDeps/the spawn request, so the production call sits in the P1-AGT-08 composition, not in spawn.go.",
-    "retire_ticket": "P1-AGT-08k",
-    "symbol": "internal/providers/agents.ProjectEnvelope"
-  },
-  {
-    "caller_site": "cmd/cascade/wire_delegate.go",
-    "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k caller of NewService; retire this entry once that file calls it",
-    "reason": "NewService ships with its tests; its first production caller is cmd/cascade/wire_delegate.go from P1-AGT-08k, not built yet.",
-    "retire_ticket": "P1-AGT-08k",
-    "symbol": "internal/delegation.NewService"
-  },
-  {
-    "added_by_ticket": "P1-AGT-08i",
-    "caller_site": "cmd/cascade/wire_delegate.go",
-    "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k caller of AllocWorktree; retire this entry once that file calls it",
-    "reason": "AllocWorktree ships with its tests; its first production caller is cmd/cascade/wire_delegate.go from P1-AGT-08k, not built yet.",
-    "retire_ticket": "P1-AGT-08k",
-    "symbol": "internal/delegation.AllocWorktree"
   },
   {
     "added_by_ticket": "P1-EXE-01d",
@@ -1691,22 +1628,6 @@
     "symbol": "internal/fleet/economics.RegisterTerm"
   },
   {
-    "added_by_ticket": "P1-EXE-14b",
-    "caller_site": "cmd/cascade/daemon_unix_fleet_health.go",
-    "expected_caller": "cmd/cascade/daemon_unix_fleet_health.go, the P1-EXE-14d daemon mount of fleet.health.summary; retire this entry once that file calls RegisterFleetHealthSummary",
-    "reason": "P1-EXE-14b ships the handler and its access row; the daemon mounts it in P1-EXE-14d.",
-    "retire_ticket": "P1-EXE-14d",
-    "symbol": "internal/rpc.RegisterFleetHealthSummary"
-  },
-  {
-    "added_by_ticket": "P1-EXE-14a",
-    "caller_site": "cmd/cascade/daemon_unix_fleet_health.go",
-    "expected_caller": "cmd/cascade/daemon_unix_fleet_health.go, the P1-EXE-14d daemon mount of fleet.health.summary; retire this entry once that file calls SummarizeFleetHealth",
-    "reason": "The rpc handler takes an injected summary function; the daemon mount of P1-EXE-14d passes the FleetRuntime health through SummarizeFleetHealth.",
-    "retire_ticket": "P1-EXE-14d",
-    "symbol": "internal/executive.SummarizeFleetHealth"
-  },
-  {
     "added_by_ticket": "P1-AGT-07e",
     "caller_site": "internal/providers/agents/harness_antigravity.go",
     "expected_caller": "internal/providers/agents/harness_antigravity.go, the P1-AGT-07g harness registration that constructs the antigravity driver; retire this entry once that file calls New",
@@ -1715,19 +1636,19 @@
     "symbol": "providers/agents/antigravity.New"
   },
   {
-    "added_by_ticket": "P1-AGT-08j",
-    "caller_site": "cmd/cascade/wire_delegate.go",
-    "expected_caller": "cmd/cascade/wire_delegate.go, the P1-AGT-08k daemon wiring of the delegate RPCs, which runs recovery before serving them; retire this entry once that file calls RecoverPendingSpawns",
-    "reason": "P1-AGT-08j ships startup recovery with tests; the daemon that must call it before serving delegate RPCs is wired in P1-AGT-08k, which depends on it.",
-    "retire_ticket": "P1-AGT-08k",
-    "symbol": "internal/delegation.RecoverPendingSpawns"
-  },
-  {
     "added_by_ticket": "P1-GEN-03",
     "caller_site": "cmd/cascade/repo_watch_repair.go",
     "expected_caller": "cmd/cascade/repo_watch_repair.go, the P1-GEN-13c repair path (sweep and --rebuild), which admits the single repository path through Admit; retire this entry once that file calls Admit",
     "reason": "P1-GEN-13b composes the watchers, which admit batches through the maintenance pipeline (AdmitBatch); the one-path admission belongs to the repair rebuild of P1-GEN-13c.",
     "retire_ticket": "P1-GEN-13c",
     "symbol": "internal/repo.Admit"
+  },
+  {
+    "added_by_ticket": "P1-AGT-02",
+    "caller_site": "internal/delegation/spawn_envelope.go",
+    "expected_caller": "internal/delegation/spawn_envelope.go, which verifies the signed spawn envelope and projects it with ProjectEnvelope before the driver spawn; retire this entry once that file calls ProjectEnvelope",
+    "reason": "The delegate RPCs are wired, but the delegation service still builds the job spec itself and never projects a signed envelope; the projection step moves into the delegation follow-up ticket. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
+    "retire_ticket": "P1-AGT-08n",
+    "symbol": "internal/providers/agents.ProjectEnvelope"
   }
 ]
