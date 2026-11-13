@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-13T01:13:28Z",
+  "generated_at": "2026-11-13T04:42:05Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4880,6 +4880,12 @@
     {
       "name": "cmd/cascade daemon registrations",
       "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_fleet_health.go",
+          "line": 11,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (fleet health summary)."
+        },
         {
           "file": "cmd/cascade/plugin_intent_mount_test.go",
           "line": 6,
@@ -34021,6 +34027,12 @@
           "raw": "jobs/completion-reviewer/TEST (P1-PBD-01h)."
         },
         {
+          "file": "internal/jobs/completion_reviewer_policy_integration_test.go",
+          "line": 8,
+          "status": "",
+          "raw": "jobs/completion-reviewer/TEST."
+        },
+        {
           "file": "internal/jobs/completion_reviewer_test.go",
           "line": 4,
           "status": "",
@@ -44658,7 +44670,7 @@
       ]
     }
   ],
-  "total_sites": 4297,
+  "total_sites": 4299,
   "unspecified_count": 413,
   "multi_status_count": 132
 }
