@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func resetMS5State(t *testing.T) {
+func resetControllerState(t *testing.T) {
 	t.Helper()
 	mu.Lock()
 	records = nil
@@ -24,7 +24,7 @@ func resetMS5State(t *testing.T) {
 // normalized whitespace, a one-byte value replaced by the empty token, and
 // preservation of other tokens. Snapshots must contain only masked text.
 func TestControllerJobRecordMasksSecretInCommand(t *testing.T) {
-	resetMS5State(t)
+	resetControllerState(t)
 
 	rec, err := RecordControllerJob("run --prompt secret")
 	if err != nil {
