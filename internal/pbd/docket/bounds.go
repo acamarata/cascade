@@ -9,6 +9,9 @@ var ErrStatusTooLong = errors.New("D1441: status exceeds 255 bytes")
 // ErrSizeTooLarge is returned when a size value exceeds 10000.
 var ErrSizeTooLarge = errors.New("D1441: size exceeds 10000")
 
+// ErrTooManyDeps is returned when dependencies exceed 64.
+var ErrTooManyDeps = errors.New("D1441: dependencies exceed 64")
+
 // LeanBrief represents a minimal brief with status, size, and dependencies.
 type LeanBrief struct {
 	Status string
@@ -32,12 +35,24 @@ func ValidateSize(n int) error {
 	return nil
 }
 
+// ValidateDeps returns ErrTooManyDeps if deps has more than 64 elements, nil otherwise.
+// It does not check for blank or duplicate strings; content validation is out of scope.
+func ValidateDeps(deps []string) error {
+	if len(deps) > 64 {
+		return ErrTooManyDeps
+	}
+	return nil
+}
+
 // Validate checks Status, then Size, then Deps, returning the first error or nil.
 func Validate(b LeanBrief) error {
 	if err := ValidateStatus(b.Status); err != nil {
 		return err
 	}
 	if err := ValidateSize(b.Size); err != nil {
+		return err
+	}
+	if err := ValidateDeps(b.Deps); err != nil {
 		return err
 	}
 	return nil

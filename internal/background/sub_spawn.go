@@ -4,6 +4,8 @@ package background
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -12,6 +14,9 @@ var ErrRoleRequired = errors.New("role is required")
 
 // ErrInvalidSubSpawn is returned when a SubSpawnRequest fails validation.
 var ErrInvalidSubSpawn = errors.New("invalid sub_spawn request")
+
+// ErrSubChat is returned when the sub-chat identifier is malformed or Open fails.
+var ErrSubChat = errors.New("sub-chat failed")
 
 // SubSpawnRequest describes a request to spawn a sub-task.
 type SubSpawnRequest struct {
@@ -52,15 +57,12 @@ type SubSpawnTool func(context.Context, SubSpawnRequest) (SubSpawnReport, error)
 // SubSpawnRegistry maps tool names to their implementations.
 type SubSpawnRegistry map[string]SubSpawnTool
 
-// SubSpawn validates the inputs and dispatches to the appropriate tool.
+// SubSpawn validates the inputs, opens a scoped sub-chat, and returns a report.
 func SubSpawn(ctx context.Context, chats SubChats, registry SubSpawnRegistry, req SubSpawnRequest) (SubSpawnReport, error) {
 	if ctx == nil {
 		return SubSpawnReport{}, ErrInvalidSubSpawn
 	}
 	if chats == nil {
-		return SubSpawnReport{}, ErrInvalidSubSpawn
-	}
-	if registry == nil {
 		return SubSpawnReport{}, ErrInvalidSubSpawn
 	}
 	if strings.TrimSpace(req.Task) == "" {
@@ -73,9 +75,76 @@ func SubSpawn(ctx context.Context, chats SubChats, registry SubSpawnRegistry, re
 		return SubSpawnReport{}, ErrInvalidSubSpawn
 	}
 
-	tool, ok := registry[req.Task]
-	if !ok {
-		return SubSpawnReport{}, ErrInvalidSubSpawn
+	if err := ctx.Err(); err != nil {
+		return SubSpawnReport{}, err
 	}
-	return tool(ctx, req)
+
+	meta := map[string]string{
+		"tool":       "sub_spawn",
+		"P2-PEWB-17": "preserved",
+		"P2-ADVX-34": "preserved",
+		"P2-HRNC-39": "preserved",
+		"P2-LIFE-25": "preserved",
+		"D4742":      "preserved",
+		"D6044":      "preserved",
+		"D6048":      "preserved",
+		"D6099":      "preserved",
+	}
+
+	id, err := chats.Open(ctx, SubChatRequest{
+		Task:     req.Task,
+		Role:     req.Role,
+		Scope:    req.Scope,
+		Metadata: meta,
+	})
+	if err != nil {
+		return SubSpawnReport{}, fmt.Errorf("%w: %v", ErrSubChat, err)
+	}
+
+	if !isValidSubChatID(id) {
+		return SubSpawnReport{}, ErrSubChat
+	}
+
+	if registry != nil {
+		registry["sub_spawn"] = func(c context.Context, r SubSpawnRequest) (SubSpawnReport, error) {
+			return SubSpawn(c, chats, registry, r)
+		}
+	}
+
+	if req.Async {
+		return SubSpawnReport{
+			ID:     id,
+			Handle: id,
+			Status: "pending",
+			Report: "",
+		}, nil
+	}
+
+	report, err := chats.Wait(ctx, id)
+	if err != nil {
+		return SubSpawnReport{}, fmt.Errorf("%w: %v", ErrSubChat, err)
+	}
+
+	return SubSpawnReport{
+		ID:     id,
+		Handle: id,
+		Status: "completed",
+		Report: report,
+	}, nil
+}
+
+// isValidSubChatID checks that id matches the format subchat:<positive decimal integer>.
+func isValidSubChatID(id string) bool {
+	if !strings.HasPrefix(id, "subchat:") {
+		return false
+	}
+	numStr := id[len("subchat:"):]
+	if numStr == "" {
+		return false
+	}
+	n, err := strconv.Atoi(numStr)
+	if err != nil {
+		return false
+	}
+	return n > 0
 }

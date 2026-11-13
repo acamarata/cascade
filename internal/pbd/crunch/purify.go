@@ -24,7 +24,7 @@ func PurifyCW(transcript string, redact, jev Stage) (string, error) {
 
 	redacted, err := redact(transcript)
 	if err != nil {
-		return "", err
+		return "", ErrT0411
 	}
 	if strings.TrimSpace(redacted) == "" {
 		return "", ErrT0411
@@ -32,7 +32,7 @@ func PurifyCW(transcript string, redact, jev Stage) (string, error) {
 
 	jeved, err := jev(redacted)
 	if err != nil {
-		return "", err
+		return "", ErrT0411
 	}
 	if strings.TrimSpace(jeved) == "" {
 		return "", ErrT0411

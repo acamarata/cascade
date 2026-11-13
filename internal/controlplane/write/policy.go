@@ -32,6 +32,8 @@ func NewConductor(p PolicyFunc) (*Conductor, error) {
 // Decide evaluates the policy for the given subject.
 // If the conductor is nil or lacks a PolicyFunc, it fails closed with ErrD1147.
 // If the subject is empty or whitespace, it fails closed with ErrInvalidSubject.
+// Otherwise, it calls the injected PolicyFunc exactly once with the original subject,
+// returning its bool and nil, or false and its unwrapped error.
 func (c *Conductor) Decide(subject string) (bool, error) {
 	if c == nil || c.policy == nil {
 		return false, ErrD1147

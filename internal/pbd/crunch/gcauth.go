@@ -62,6 +62,15 @@ func PopulateGCAuth(t GCTicket, evidence []GCQuotaEvidence, estimate GCResetEsti
 			return GCAuth{}, ErrGCAuthFields
 		}
 	}
+
+	evCopy := make([]GCQuotaEvidence, len(evidence))
+	copy(evCopy, evidence)
+
+	resetTime, source, err := estimate(evCopy)
+	if err != nil {
+		return GCAuth{}, errors.Join(ErrGCUsageEstimate, err)
+	}
+
 	return GCAuth{
 		ID:          t.ID,
 		OwnerFlag:   true,
@@ -69,5 +78,8 @@ func PopulateGCAuth(t GCTicket, evidence []GCQuotaEvidence, estimate GCResetEsti
 		DigestNodes: []string{"ticket", "usage"},
 		Model:       "local-model",
 		GateOpen:    !t.Gated,
+		Samples: []GCUsageSample{
+			{ResetAt: resetTime, Source: source},
+		},
 	}, nil
 }

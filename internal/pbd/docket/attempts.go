@@ -75,10 +75,12 @@ func OpenAttempt(ticket *AttemptTicket, newAttempt Attempt) error {
 	result := make([]Attempt, len(ticket.Attempts), len(ticket.Attempts)+1)
 	copy(result, ticket.Attempts)
 
-	// Mark any existing open attempt without outcome as abandoned.
+	// Mark every existing State=="open" and Outcome=="" as "abandoned".
+	// Leaves existing abandoned attempts and every terminal attempt unchanged.
 	for i := range result {
-		if result[i].Outcome == "" && result[i].State == "open" {
-			result[i].State = "abandoned"
+		a := &result[i]
+		if a.Outcome == "" && a.State == "open" {
+			a.State = "abandoned"
 		}
 	}
 
