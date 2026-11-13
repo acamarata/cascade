@@ -207,20 +207,24 @@ func (dc *DigestCompiler) buildFor(session CandidateSession, drained []Notificat
 	counts := map[Priority]int{}
 	var urgentLinks []string
 	var inScope []int
+	var items []Notification
 	for i, item := range drained {
 		if !ScopeDeliveryPredicate(session, item) {
 			continue
 		}
 		inScope = append(inScope, i)
+		items = append(items, item)
 		counts[item.Priority]++
 		if item.Priority == PriorityUrgent && item.DeepLink != "" && len(urgentLinks) < dc.cfg.DigestUrgentDeepLinks {
 			urgentLinks = append(urgentLinks, item.DeepLink)
 		}
 	}
 	withheld := len(drained) - len(inScope)
+	tier, trust := JoinItems(items)
 	return Notification{
 		ID:            episodeID + ":" + session.SessionID,
 		Source:        "notify.away.digest",
+		Origin:        Origin{Source: "notify.away.digest", RecordRef: episodeID, Tier: tier, Trust: trust},
 		Priority:      PriorityUrgent,
 		Class:         ClassAddressed,
 		TargetSession: session.SessionID,

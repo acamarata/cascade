@@ -8,7 +8,62 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/events"
+	"github.com/acamarata/cascade/pkg/provider"
 )
+
+// TestDigestCarriesJoinOfItems pins the class and trust of counted items.
+func TestDigestCarriesJoinOfItems(t *testing.T) {
+	dc, router, _ := newTestDigestCompiler(t, time.Unix(1000, 0), DefaultAwayConfig())
+	items := []Notification{
+		{Class: ClassScoped, TargetScope: "p1", Visibility: VisibilityPrivate,
+			Origin: Origin{Source: "supervision.stall", Tier: provider.SensitivityInternal, Trust: provider.ProvenanceTrusted}},
+		{Class: ClassScoped, TargetScope: "p1", Visibility: VisibilityPrivate,
+			Origin: Origin{Source: "external", Tier: provider.SensitivityLocalOnly, Trust: provider.ProvenanceUntrustedSource}},
+	}
+	for i := range items {
+		stamp(&items[i])
+	}
+	for _, tc := range []struct {
+		name  string
+		items []Notification
+		tier  provider.SensitivityTier
+		trust provider.Provenance
+	}{
+		{"mixed", items, provider.SensitivityLocalOnly, provider.ProvenanceUntrustedSource},
+		{"trusted", items[:1], provider.SensitivityInternal, provider.ProvenanceTrusted},
+		{"empty", nil, provider.SensitivityLocalOnly, provider.ProvenanceUntrustedSource},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			checkDigestJoin(t, dc, tc.items, tc.tier, tc.trust)
+		})
+	}
+	dc.requeueUnrepresented(items, nil)
+	for _, want := range items {
+		select {
+		case got := <-router.queues.queues[want.Priority]:
+			if got.Origin != want.Origin || got.DataClass != want.DataClass || got.Trust != want.Trust {
+				t.Fatalf("requeue changed stamps: got %+v, want %+v", got, want)
+			}
+		default:
+			t.Fatal("requeue lost an item")
+		}
+	}
+}
+
+func checkDigestJoin(t *testing.T, dc *DigestCompiler, items []Notification, tier provider.SensitivityTier, trust provider.Provenance) {
+	t.Helper()
+	count := len(items)
+	withheld := Notification{Class: ClassScoped, TargetScope: "other", DataClass: provider.SensitivityLocalOnly, Trust: provider.ProvenanceUntrustedSource}
+	items = append(append([]Notification(nil), items...), withheld)
+	n, counted := dc.buildFor(session("s1", "p1"), items, "ep", "node")
+	if len(counted) != count || n.Origin != (Origin{Source: "notify.away.digest", RecordRef: "ep", Tier: tier, Trust: trust}) {
+		t.Fatalf("digest origin = %+v, counted = %v; want %s/%s over %d items", n.Origin, counted, tier, trust, count)
+	}
+	n, err := dc.notifier.prepare(context.Background(), n)
+	if err != nil || n.DataClass != tier || n.Trust != trust {
+		t.Fatalf("prepared digest = %+v, %v; want %s/%s", n, err, tier, trust)
+	}
+}
 
 // seedAccumulated fills router's accumulation buffer through the real gate
 // (queueSet.enqueue, the call every producer makes) and then closes the gate,
