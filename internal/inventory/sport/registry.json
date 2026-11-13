@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-12T21:23:34Z",
+  "generated_at": "2026-11-13T01:13:28Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -39185,10 +39185,9 @@
       "sites": [
         {
           "file": "plugins/claude/inbox_hydration.go",
-          "line": 22,
+          "line": 25,
           "status": "ADD",
-          "ticket": "P1-E37-W8-S73-T1",
-          "raw": "plugins/claude/inbox-next-turn-hydration (ADD) — P1-E37-W8-S73-T1."
+          "raw": "plugins/claude/inbox-next-turn-hydration (ADD)."
         }
       ],
       "statuses": [
@@ -39215,9 +39214,9 @@
       "sites": [
         {
           "file": "plugins/claude/inbox_envelope.go",
-          "line": 21,
+          "line": 22,
           "status": "ADD",
-          "raw": "plugins/claude/inbox-push-envelope + inbox-data-class (ADD) —"
+          "raw": "plugins/claude/inbox-push-envelope + inbox-data-class (ADD)."
         }
       ],
       "statuses": [
