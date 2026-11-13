@@ -23,7 +23,7 @@ func TestRecordSplitFirstTime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("splits.jsonl not created: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	lines := 0
@@ -58,7 +58,7 @@ func TestRecordSplitRepeatIsNoop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("splits.jsonl not found: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	lines := 0

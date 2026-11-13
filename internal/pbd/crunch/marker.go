@@ -16,7 +16,7 @@ var ErrD1378 = errors.New("D1378: marker rejected")
 // It verifies that the path points to a regular file within the size cap.
 // Oversized markers or non-regular files return ErrD1378 immediately without truncation.
 // An empty file returns an empty byte slice and a nil error.
-func ReadMarker(path string) ([]byte, error) {
+func ReadMarker(path string) (data []byte, retErr error) {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return nil, ErrD1378
@@ -38,9 +38,14 @@ func ReadMarker(path string) ([]byte, error) {
 	if err != nil {
 		return nil, ErrD1378
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && retErr == nil {
+			data = nil
+			retErr = ErrD1378
+		}
+	}()
 
-	data, err := io.ReadAll(f)
+	data, err = io.ReadAll(f)
 	if err != nil {
 		return nil, ErrD1378
 	}

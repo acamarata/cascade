@@ -47,24 +47,14 @@ func (r *SlotRecoverer) Recover() error {
 
 	dirs, err := listDirs()
 	if err != nil {
-		r.mu.Lock()
-		r.closed = true
-		r.mu.Unlock()
+		r.markClosed()
 		return err
 	}
 
 	seen := make(map[string]struct{}, len(dirs))
 	for _, d := range dirs {
-		if d == "" {
-			r.mu.Lock()
-			r.closed = true
-			r.mu.Unlock()
-			return ErrInvalidRecovery
-		}
-		if _, ok := seen[d]; ok {
-			r.mu.Lock()
-			r.closed = true
-			r.mu.Unlock()
+		if _, ok := seen[d]; d == "" || ok {
+			r.markClosed()
 			return ErrInvalidRecovery
 		}
 		seen[d] = struct{}{}
@@ -72,15 +62,18 @@ func (r *SlotRecoverer) Recover() error {
 
 	for _, d := range dirs {
 		if err := processDir(d); err != nil {
-			r.mu.Lock()
-			r.closed = true
-			r.mu.Unlock()
+			r.markClosed()
 			return err
 		}
 	}
 
+	r.markClosed()
+	return nil
+}
+
+// markClosed marks the recoverer as closed.
+func (r *SlotRecoverer) markClosed() {
 	r.mu.Lock()
 	r.closed = true
 	r.mu.Unlock()
-	return nil
 }

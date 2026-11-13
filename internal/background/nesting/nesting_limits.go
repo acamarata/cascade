@@ -37,12 +37,10 @@ func isNilLane(lane LaneWidth) bool {
 		return true
 	}
 	v := reflect.ValueOf(lane)
-	switch v.Kind() {
-	case reflect.Pointer, reflect.Interface, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func:
-		return v.IsNil()
-	default:
-		return false
-	}
+	k := v.Kind()
+	nilable := k == reflect.Pointer || k == reflect.Interface || k == reflect.Slice ||
+		k == reflect.Map || k == reflect.Chan || k == reflect.Func
+	return nilable && v.IsNil()
 }
 
 // Admit attempts to admit a task. It returns "running" and nil if the task starts immediately,

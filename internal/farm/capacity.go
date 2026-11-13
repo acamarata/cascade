@@ -69,7 +69,7 @@ var ErrNotImplemented = errors.New("farm: operation unavailable")
 // Admit evaluates whether a farm node should accept new work based on its
 // capacity configuration and the current resource snapshot. The stub
 // implementation always returns an empty Decision.
-func Admit(_ *Capacity, snap Snapshot) Decision {
+func Admit(_ *Capacity, _ Snapshot) Decision {
 	return Decision{}
 }
 

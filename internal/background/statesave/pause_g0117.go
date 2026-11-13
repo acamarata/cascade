@@ -1,3 +1,4 @@
+// Package statesave runs a save callback and reports the resulting process state.
 package statesave
 
 import "errors"

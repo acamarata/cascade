@@ -36,6 +36,9 @@ func TestSubSendPreservesContext(t *testing.T) {
 		}
 	})
 
+}
+
+func TestSubSendRegisterRejections(t *testing.T) {
 	t.Run("blank ID returns ErrInvalidChat", func(t *testing.T) {
 		var s SubSend
 		testCases := []string{"", "   ", "\t", "\n"}

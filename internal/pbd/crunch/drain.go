@@ -8,7 +8,7 @@ const DrainMaxJobAge = 10 * time.Minute
 
 // DrainWidth enforces a pure drain policy by returning zero capacity regardless of the
 // input width.
-func DrainWidth(width int) int {
+func DrainWidth(_ int) int {
 	return 0
 }
 

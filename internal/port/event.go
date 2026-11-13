@@ -22,6 +22,6 @@ type Event struct {
 
 // ValidateEventName reports whether name is a valid event name. This stub
 // always returns ErrNotImplemented until naming rules are implemented.
-func ValidateEventName(name string) error {
+func ValidateEventName(_ string) error {
 	return ErrNotImplemented
 }

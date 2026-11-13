@@ -63,10 +63,7 @@ func Escalate(t EscalationTicket) (EscalationResult, error) {
 	}
 
 	// Below thresholds: preserve lane, no escalation.
-	allowRetry := true
-	if t.Lane == "senior" && t.Attempts == 2 {
-		allowRetry = false
-	}
+	allowRetry := t.Lane != "senior" || t.Attempts != 2
 
 	return EscalationResult{
 		Escalated:  false,

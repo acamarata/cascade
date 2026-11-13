@@ -12,12 +12,44 @@ import (
 // front matter delimited by exactly "---" on its own lines, while preserving
 // non-leading delimiters and falling back for malformed inputs.
 func TestRolePromptStripsFrontMatter(t *testing.T) {
-	tests := []struct {
-		name       string
-		content    string
-		want       string
-		isFallback bool
-	}{
+	tests := frontMatterCases()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "Test.md")
+			if err := os.WriteFile(path, []byte(tt.content), 0644); err != nil {
+				t.Fatalf("WriteFile: %v", err)
+			}
+
+			got := LoadRolePrompt(dir, "Test")
+
+			if tt.isFallback {
+				wantFallback := builtinFallback("Test")
+				if got != wantFallback {
+					t.Errorf("LoadRolePrompt() = %q, want fallback %q", got, wantFallback)
+				}
+			} else {
+				wantBody := strings.TrimSpace(tt.want)
+				if got != wantBody {
+					t.Errorf("LoadRolePrompt() = %q, want %q", got, wantBody)
+				}
+			}
+		})
+	}
+}
+
+// frontMatterCase is one front matter stripping scenario.
+type frontMatterCase struct {
+	name       string
+	content    string
+	want       string
+	isFallback bool
+}
+
+// frontMatterCases returns the table for TestRolePromptStripsFrontMatter.
+func frontMatterCases() []frontMatterCase {
+	return []frontMatterCase{
 		{
 			name:    "simple front matter stripped",
 			content: "---\nname: x\n---\nBody",
@@ -48,30 +80,6 @@ func TestRolePromptStripsFrontMatter(t *testing.T) {
 			content:    "---\nname: x\n---\n",
 			isFallback: true,
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			path := filepath.Join(dir, "Test.md")
-			if err := os.WriteFile(path, []byte(tt.content), 0644); err != nil {
-				t.Fatalf("WriteFile: %v", err)
-			}
-
-			got := LoadRolePrompt(dir, "Test")
-
-			if tt.isFallback {
-				wantFallback := builtinFallback("Test")
-				if got != wantFallback {
-					t.Errorf("LoadRolePrompt() = %q, want fallback %q", got, wantFallback)
-				}
-			} else {
-				wantBody := strings.TrimSpace(tt.want)
-				if got != wantBody {
-					t.Errorf("LoadRolePrompt() = %q, want %q", got, wantBody)
-				}
-			}
-		})
 	}
 }
 

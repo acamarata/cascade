@@ -46,7 +46,9 @@ func TestRecoveryInvalidInput(t *testing.T) {
 			}
 		})
 	}
+}
 
+func TestRecoveryZeroValueAndValidation(t *testing.T) {
 	t.Run("zero value Recover", func(t *testing.T) {
 		var r SlotRecoverer
 		err := r.Recover()
@@ -90,6 +92,12 @@ func TestRecoveryInvalidInput(t *testing.T) {
 			t.Fatal("no processing should occur on list validation failure")
 		}
 	})
+
+}
+
+func TestRecoveryListErrorAndCapacity(t *testing.T) {
+	noopList := func() ([]string, error) { return nil, nil }
+	noopProcess := func(string) error { return nil }
 
 	t.Run("list error propagates and keeps slots closed", func(t *testing.T) {
 		listErr := errors.New("list failed")

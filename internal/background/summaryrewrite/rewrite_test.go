@@ -82,7 +82,9 @@ func TestRewriteReplacesAfterCompletion(t *testing.T) {
 			t.Errorf("expected store to hold 'new text', got %q", got)
 		}
 	})
+}
 
+func TestRewriteHostedNonPrivateAllowed(t *testing.T) {
 	t.Run("hosted non-private model is allowed", func(t *testing.T) {
 		rewriter := &fakeRewriter{
 			local: false,
@@ -142,7 +144,9 @@ func TestRewritePrivateSessionUsesLocalOnly(t *testing.T) {
 			t.Errorf("expected store to not be called, got %d calls", store.calls)
 		}
 	})
+}
 
+func TestRewritePrivateSessionLocalSucceeds(t *testing.T) {
 	t.Run("private session with local model succeeds", func(t *testing.T) {
 		rewriter := &fakeRewriter{
 			local: true,

@@ -91,6 +91,11 @@ func validateBriefJSON(brief string) error {
 		return err
 	}
 
+	return validateBriefFields(obj)
+}
+
+// validateBriefFields decodes the typed brief fields and validates the scope.
+func validateBriefFields(obj map[string]json.RawMessage) error {
 	var scope []string
 	if err := json.Unmarshal(obj["scope"], &scope); err != nil {
 		return ErrInvalidBrief
@@ -106,11 +111,7 @@ func validateBriefJSON(brief string) error {
 		return ErrInvalidBrief
 	}
 
-	if err := validateScope(scope); err != nil {
-		return err
-	}
-
-	return nil
+	return validateScope(scope)
 }
 
 // validateScope checks that every entry is a valid repo-relative slash path.
@@ -125,50 +126,59 @@ func validateScope(scope []string) error {
 
 	seen := make(map[string]bool)
 	for _, s := range scope {
-		if strings.TrimSpace(s) == "" {
-			return ErrMissingScope
-		}
-
-		if !utf8.ValidString(s) {
-			return ErrInvalidBrief
-		}
-
-		if strings.ContainsRune(s, '\x00') {
-			return ErrInvalidBrief
-		}
-
-		if strings.ContainsAny(s, " \t\n\r") {
-			return ErrInvalidBrief
-		}
-
-		if strings.ContainsRune(s, '\\') {
-			return ErrInvalidBrief
-		}
-
-		if strings.ContainsRune(s, '*') || strings.ContainsRune(s, '?') {
-			return ErrInvalidBrief
-		}
-
-		if strings.HasPrefix(s, "/") || strings.HasSuffix(s, "/") {
-			return ErrInvalidBrief
-		}
-
-		parts := strings.Split(s, "/")
-		for _, p := range parts {
-			if p == "" || p == "." || p == ".." {
-				return ErrInvalidBrief
-			}
-		}
-
-		last := parts[len(parts)-1]
-		if !strings.Contains(last, ".") {
-			return ErrInvalidBrief
+		if err := validateScopeEntry(s); err != nil {
+			return err
 		}
 
 		if seen[s] {
 			return ErrInvalidBrief
 		}
 		seen[s] = true
+	}
+
+	return nil
+}
+
+// validateScopeEntry checks a single scope entry for the rules documented on validateScope.
+func validateScopeEntry(s string) error {
+	if strings.TrimSpace(s) == "" {
+		return ErrMissingScope
+	}
+
+	if !utf8.ValidString(s) {
+		return ErrInvalidBrief
+	}
+
+	if strings.ContainsRune(s, '\x00') {
+		return ErrInvalidBrief
+	}
+
+	if strings.ContainsAny(s, " \t\n\r") {
+		return ErrInvalidBrief
+	}
+
+	if strings.ContainsRune(s, '\\') {
+		return ErrInvalidBrief
+	}
+
+	if strings.ContainsRune(s, '*') || strings.ContainsRune(s, '?') {
+		return ErrInvalidBrief
+	}
+
+	if strings.HasPrefix(s, "/") || strings.HasSuffix(s, "/") {
+		return ErrInvalidBrief
+	}
+
+	parts := strings.Split(s, "/")
+	for _, p := range parts {
+		if p == "" || p == "." || p == ".." {
+			return ErrInvalidBrief
+		}
+	}
+
+	last := parts[len(parts)-1]
+	if !strings.Contains(last, ".") {
+		return ErrInvalidBrief
 	}
 
 	return nil

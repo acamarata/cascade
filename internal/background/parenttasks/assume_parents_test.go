@@ -44,11 +44,13 @@ func TestAssumeParentsNoParents(t *testing.T) {
 	})
 }
 
-func TestAssumeParentsInvalidInput(t *testing.T) {
-	tests := []struct {
-		name   string
-		ticket Ticket
-	}{
+type invalidInputCase struct {
+	name   string
+	ticket Ticket
+}
+
+func invalidInputCases() []invalidInputCase {
+	return []invalidInputCase{
 		{
 			name:   "empty ticket ID",
 			ticket: Ticket{ID: "", Parents: []string{"p1"}},
@@ -78,8 +80,10 @@ func TestAssumeParentsInvalidInput(t *testing.T) {
 			ticket: Ticket{ID: "t1", Parents: []string{"p1"}, AssumedParents: []string{"ap1"}},
 		},
 	}
+}
 
-	for _, tt := range tests {
+func TestAssumeParentsInvalidInput(t *testing.T) {
+	for _, tt := range invalidInputCases() {
 		t.Run(tt.name, func(t *testing.T) {
 			// Save original to check for mutation
 			origParents := append([]string(nil), tt.ticket.Parents...)

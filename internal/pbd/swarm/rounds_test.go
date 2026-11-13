@@ -61,7 +61,7 @@ func TestZeroRoundsNeverSplits(t *testing.T) {
 		calls++
 		return 0, nil
 	}
-	round := func(i int) error { return nil }
+	round := func(_ int) error { return nil }
 	ladder := &Ladder{}
 	if err := RunRounds(0, round, split, ladder); err != nil {
 		t.Fatalf("unexpected error: %v", err)

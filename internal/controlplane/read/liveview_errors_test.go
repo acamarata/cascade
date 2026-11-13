@@ -10,7 +10,7 @@ type errFakeStore struct {
 	err error
 }
 
-func (f *errFakeStore) Ticket(id string) (TicketRecord, bool, error) {
+func (f *errFakeStore) Ticket(_ string) (TicketRecord, bool, error) {
 	return TicketRecord{}, false, f.err
 }
 
@@ -18,21 +18,23 @@ type recFakeStore struct {
 	rec TicketRecord
 }
 
-func (f *recFakeStore) Ticket(id string) (TicketRecord, bool, error) {
+func (f *recFakeStore) Ticket(_ string) (TicketRecord, bool, error) {
 	return f.rec, true, nil
 }
 
-func TestLiveViewUnknownTicketFailsClosed(t *testing.T) {
+type liveViewCase struct {
+	name    string
+	store   Store
+	id      string
+	now     time.Time
+	wantErr error
+}
+
+func liveViewFailCases() []liveViewCase {
 	now := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	storeErr := errors.New("store failure")
 
-	tests := []struct {
-		name    string
-		store   Store
-		id      string
-		now     time.Time
-		wantErr error
-	}{
+	return []liveViewCase{
 		{
 			name:    "nil store",
 			store:   nil,
@@ -91,8 +93,10 @@ func TestLiveViewUnknownTicketFailsClosed(t *testing.T) {
 			wantErr: ErrUnknownTicket,
 		},
 	}
+}
 
-	for _, tt := range tests {
+func TestLiveViewUnknownTicketFailsClosed(t *testing.T) {
+	for _, tt := range liveViewFailCases() {
 		t.Run(tt.name, func(t *testing.T) {
 			view, err := GetLiveView(tt.store, tt.id, tt.now)
 			if view != nil {

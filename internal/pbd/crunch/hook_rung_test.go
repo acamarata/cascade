@@ -40,7 +40,7 @@ func TestRungHookInvalidModel(t *testing.T) {
 		t.Fatalf("SelectRung(-1, nil) error = %v, want ErrInvalidHook", err)
 	}
 
-	badHook := func(attempt int) (string, error) {
+	badHook := func(_ int) (string, error) {
 		return "C", nil
 	}
 	_, err = SelectRung(0, badHook)
@@ -49,7 +49,7 @@ func TestRungHookInvalidModel(t *testing.T) {
 	}
 
 	hookErr := HookError{Code: ErrCodeD1542, Msg: "boom"}
-	errHook := func(attempt int) (string, error) {
+	errHook := func(_ int) (string, error) {
 		return "", hookErr
 	}
 	_, err = SelectRung(0, errHook)

@@ -23,7 +23,9 @@ func TestGreensDecreasedClosesOnCLIRebase(t *testing.T) {
 			t.Errorf("expected severity error, got %s", result.Severity)
 		}
 	})
+}
 
+func TestGreensCLIRebaseClosesReopened(t *testing.T) {
 	t.Run("cliRebase closes reopened state", func(t *testing.T) {
 		lc := NewGreensLifecycle()
 		lc.State = GreensReopened
@@ -39,7 +41,9 @@ func TestGreensDecreasedClosesOnCLIRebase(t *testing.T) {
 			t.Errorf("expected severity error, got %s", result.Severity)
 		}
 	})
+}
 
+func TestGreensClosedStaysClosed(t *testing.T) {
 	t.Run("closed stays closed on subsequent ticks", func(t *testing.T) {
 		lc := NewGreensLifecycle()
 		lc.State = GreensClosed
@@ -55,7 +59,9 @@ func TestGreensDecreasedClosesOnCLIRebase(t *testing.T) {
 			t.Errorf("expected severity error, got %s", result.Severity)
 		}
 	})
+}
 
+func TestGreensCLIRebaseEndToEnd(t *testing.T) {
 	t.Run("end to end flow", func(t *testing.T) {
 		lc := NewGreensLifecycle()
 

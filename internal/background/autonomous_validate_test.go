@@ -23,7 +23,11 @@ func TestBoundaryActionReplacedWithSafestAlternative(t *testing.T) {
 			}
 		})
 	}
+}
 
+// TestBoundaryActionAllowedUnchanged verifies that non-boundary actions pass
+// through unchanged in autonomous mode.
+func TestBoundaryActionAllowedUnchanged(t *testing.T) {
 	t.Run("read", func(t *testing.T) {
 		req := BoundaryRequest{Action: "read"}
 		res, err := HandleAutonomous(ModeAutonomous, autonomousSilent, req, nil, nil)
@@ -45,7 +49,11 @@ func TestBoundaryActionReplacedWithSafestAlternative(t *testing.T) {
 			t.Errorf("expected action 'noop', got '%s'", res.Action)
 		}
 	})
+}
 
+// TestBoundaryActionInvalidRequests verifies that invalid requests are rejected
+// in autonomous mode.
+func TestBoundaryActionInvalidRequests(t *testing.T) {
 	t.Run("unknown_action", func(t *testing.T) {
 		req := BoundaryRequest{Action: "unknown"}
 		_, err := HandleAutonomous(ModeAutonomous, autonomousSilent, req, nil, nil)
