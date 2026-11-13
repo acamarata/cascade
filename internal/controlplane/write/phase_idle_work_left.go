@@ -27,6 +27,8 @@ type report struct {
 
 // CheckPhaseIdleWorkLeft verifies whether a phase has pending work.
 // It returns a report, a crunchCreated flag (always false), and any error encountered.
+// On success it returns &report{Phase: phase, WorkLeft: n}, false, nil, including at zero.
+// No write, enqueue, crunch creation or global mutation occurs on any path.
 func CheckPhaseIdleWorkLeft(s PhaseWorkStore, phase string) (*report, bool, error) {
 	if strings.TrimSpace(phase) == "" {
 		return nil, false, ErrInvalidPhase
