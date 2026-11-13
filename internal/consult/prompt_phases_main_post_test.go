@@ -6,7 +6,7 @@ import (
 )
 
 func TestPostPromptingReturnsCleanupSummaryExtras(t *testing.T) {
-	gen := func(s string) (string, error) {
+	gen := func(_ string) (string, error) {
 		return " draft ", nil
 	}
 	res, err := RunPromptPhases("ctx", "rule", "prompt", gen)
@@ -24,7 +24,7 @@ func TestPostPromptingReturnsCleanupSummaryExtras(t *testing.T) {
 	}
 
 	// Empty generated output is accepted
-	genEmpty := func(s string) (string, error) {
+	genEmpty := func(_ string) (string, error) {
 		return "", nil
 	}
 	resEmpty, err := RunPromptPhases("ctx", "rule", "prompt", genEmpty)
@@ -73,7 +73,7 @@ func TestPhasesExecuteAroundMainGeneration(t *testing.T) {
 
 	// main error identity propagates with zero result
 	mainErr := errors.New("main phase failed")
-	genErr := func(s string) (string, error) {
+	genErr := func(_ string) (string, error) {
 		return "", mainErr
 	}
 	resErr, err := RunPromptPhases("ctx", "rule", "prompt", genErr)

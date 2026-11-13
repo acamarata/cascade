@@ -62,7 +62,9 @@ func TestSubSendPreservesContext(t *testing.T) {
 			t.Errorf("Context after duplicate = %q, want %q", got, "context4")
 		}
 	})
+}
 
+func TestSubSendPreservesContextMultiple(t *testing.T) {
 	t.Run("context preserved after multiple registrations", func(t *testing.T) {
 		var s SubSend
 		registrations := []struct {
@@ -101,7 +103,9 @@ func TestSubSendPreservesContext(t *testing.T) {
 			t.Errorf("Context on nil = %q, want empty string", got)
 		}
 	})
+}
 
+func TestSubSendConstructorAndErrors(t *testing.T) {
 	t.Run("NewSubSend creates initialized instance", func(t *testing.T) {
 		s := NewSubSend()
 		if s == nil {
@@ -129,7 +133,9 @@ func TestSubSendPreservesContext(t *testing.T) {
 		}
 
 		// Test ErrDuplicateChat matching
-		s.Register("chat7", "context7")
+		if err := s.Register("chat7", "context7"); err != nil {
+			t.Fatalf("Register chat7 failed: %v", err)
+		}
 		err = s.Register("chat7", "duplicate")
 		if !errors.Is(err, ErrDuplicateChat) {
 			t.Error("ErrDuplicateChat did not match")

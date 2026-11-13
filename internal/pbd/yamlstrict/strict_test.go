@@ -40,7 +40,7 @@ func TestRejectsInvalidInput(t *testing.T) {
 			var before any
 			if tt.out != nil {
 				v := reflect.ValueOf(tt.out)
-				if v.Kind() == reflect.Ptr && !v.IsNil() {
+				if v.Kind() == reflect.Pointer && !v.IsNil() {
 					before = reflect.Indirect(v).Interface()
 				}
 			}

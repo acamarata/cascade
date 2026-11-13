@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	_ "modernc.org/sqlite"
+	_ "modernc.org/sqlite" // registers the pure-Go "sqlite" database/sql driver
 
 	"github.com/acamarata/cascade/internal/runtime"
 )

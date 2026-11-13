@@ -6,12 +6,9 @@ import (
 	"time"
 )
 
-type fakeClock struct {
-	dur time.Duration
-}
+type fakeClock struct{}
 
-func (f fakeClock) After(d time.Duration) <-chan time.Time {
-	f.dur = d
+func (f fakeClock) After(_ time.Duration) <-chan time.Time {
 	ch := make(chan time.Time, 1)
 	ch <- time.Now()
 	return ch

@@ -15,7 +15,7 @@ func TestEmptyBacklogNonEmptySkips(t *testing.T) {
 	logs := []string{"some log line"}
 
 	logCalls := 0
-	logger := func(s string) {
+	logger := func(_ string) {
 		logCalls++
 	}
 

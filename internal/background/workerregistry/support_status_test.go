@@ -56,7 +56,9 @@ func TestRegisterValidation(t *testing.T) {
 	}
 
 	// Duplicate
-	r.Register(Worker{Name: "w4"})
+	if err = r.Register(Worker{Name: "w4"}); err != nil {
+		t.Fatalf("Register w4: %v", err)
+	}
 	err = r.Register(Worker{Name: "w4"})
 	if !errors.Is(err, ErrDuplicateWorker) {
 		t.Errorf("expected ErrDuplicateWorker for duplicate name, got %v", err)
@@ -71,7 +73,9 @@ func TestRegisterValidation(t *testing.T) {
 
 	// Explicit valid status wins
 	r2 := NewRegistry()
-	r2.Register(Worker{Name: "w6", Experimental: true, Status: "supported"})
+	if err = r2.Register(Worker{Name: "w6", Experimental: true, Status: "supported"}); err != nil {
+		t.Fatalf("Register w6: %v", err)
+	}
 	list := r2.List()
 	if list[0].Status != "supported" {
 		t.Errorf("expected explicit status 'supported', got %q", list[0].Status)

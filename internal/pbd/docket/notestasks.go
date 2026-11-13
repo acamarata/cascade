@@ -23,6 +23,35 @@ type TaskEntry struct {
 	Text string
 }
 
+// scanTaskFile returns the task lines of one markdown file, labelled with rel.
+func scanTaskFile(path, rel string) (entries []TaskEntry, err error) {
+	f, openErr := os.Open(path)
+	if openErr != nil {
+		return nil, openErr
+	}
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
+
+	scanner := bufio.NewScanner(f)
+	lineNum := 0
+	for scanner.Scan() {
+		lineNum++
+		line := scanner.Text()
+		trimmed := strings.TrimLeft(line, " \t")
+		if strings.HasPrefix(trimmed, "- [ ]") || strings.HasPrefix(trimmed, "- [x]") {
+			entries = append(entries, TaskEntry{
+				Path: rel,
+				Line: lineNum,
+				Text: line,
+			})
+		}
+	}
+	return entries, scanner.Err()
+}
+
 // NotesTasks returns every task across all .md files in notesDir.
 // A task is a line starting with "- [ ]" or "- [x]".
 // Results are sorted by path, then by line number.
@@ -52,28 +81,12 @@ func NotesTasks(notesDir string) ([]TaskEntry, error) {
 		}
 		rel = filepath.ToSlash(rel)
 
-		f, openErr := os.Open(path)
-		if openErr != nil {
-			return openErr
+		fileEntries, scanErr := scanTaskFile(path, rel)
+		if scanErr != nil {
+			return scanErr
 		}
-		defer f.Close()
-
-		scanner := bufio.NewScanner(f)
-		lineNum := 0
-		for scanner.Scan() {
-			lineNum++
-			line := scanner.Text()
-			trimmed := strings.TrimLeft(line, " \t")
-			if strings.HasPrefix(trimmed, "- [ ] ") || strings.HasPrefix(trimmed, "- [x] ") ||
-				strings.HasPrefix(trimmed, "- [ ]") || strings.HasPrefix(trimmed, "- [x]") {
-				entries = append(entries, TaskEntry{
-					Path: rel,
-					Line: lineNum,
-					Text: line,
-				})
-			}
-		}
-		return scanner.Err()
+		entries = append(entries, fileEntries...)
+		return nil
 	})
 
 	if err != nil {

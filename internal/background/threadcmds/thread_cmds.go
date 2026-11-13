@@ -1,3 +1,4 @@
+// Package threadcmds provides thread commands (append, wait, result) over a pluggable thread store.
 package threadcmds
 
 import (

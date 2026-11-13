@@ -62,6 +62,8 @@ func walkNode(n *yaml.Node, visited map[*yaml.Node]bool) error {
 				return err
 			}
 		}
+	default:
+		// ScalarNode and any other kinds have nothing to walk.
 	}
 	return nil
 }

@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// TestDiskTypesCompile verifies that the disk resilience data shapes and
-// error sentinels exist with the fields expected by later tickets.
+// TestDiskTypesCompile verifies that the disk resilience data shapes exist
+// with the fields expected by later tickets.
 func TestDiskTypesCompile(t *testing.T) {
 	cfg := DiskConfig{
 		RequiredVolumes: []string{"/data"},
@@ -53,7 +53,11 @@ func TestDiskTypesCompile(t *testing.T) {
 	if !state.Known {
 		t.Fatal("VolumeState.Known: expected true")
 	}
+}
 
+// TestDiskErrorSentinels verifies that the disk error sentinels exist and
+// are distinct.
+func TestDiskErrorSentinels(t *testing.T) {
 	sentinels := []error{
 		ErrVolumeMissing,
 		ErrVolumeFull,

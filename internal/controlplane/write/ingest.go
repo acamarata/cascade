@@ -56,16 +56,7 @@ func ParseTicketYAML(src string) ([]Row, error) {
 		key := strings.TrimSpace(parts[0])
 		val := strings.TrimSpace(parts[1])
 
-		switch key {
-		case "phase":
-			current.Phase = val
-		case "title":
-			current.Title = val
-		case "status":
-			current.Status = val
-		case "deps":
-			current.Deps = parseDeps(val)
-		default:
+		if !setRowField(current, key, val) {
 			return nil, ErrD3825
 		}
 	}
@@ -79,6 +70,23 @@ func ParseTicketYAML(src string) ([]Row, error) {
 	}
 
 	return rows, nil
+}
+
+// setRowField assigns val to the Row field named by key. It reports false for unknown keys.
+func setRowField(r *Row, key, val string) bool {
+	switch key {
+	case "phase":
+		r.Phase = val
+	case "title":
+		r.Title = val
+	case "status":
+		r.Status = val
+	case "deps":
+		r.Deps = parseDeps(val)
+	default:
+		return false
+	}
+	return true
 }
 
 // parseDeps extracts a string slice from a bracketed, comma-separated value like "[a, b]".

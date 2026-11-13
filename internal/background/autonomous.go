@@ -63,6 +63,8 @@ func HandleBoundary(mode Mode, req BoundaryRequest, normal BoundaryNormal) (Boun
 			return BoundaryResult{}, ErrInvalidBoundaryRequest
 		}
 		return normal(req)
+	case ModeAutonomous, ModeInteractive:
+		return BoundaryResult{}, ErrInvalidBoundaryRequest
 	default:
 		return BoundaryResult{}, ErrInvalidBoundaryRequest
 	}

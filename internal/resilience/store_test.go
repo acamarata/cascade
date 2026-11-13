@@ -128,11 +128,7 @@ func TestStoreWaitsKeepSince(t *testing.T) {
 		t.Fatalf("SetWait failed: %v", err)
 	}
 
-	var since1 time.Time
-	err = db.QueryRow("SELECT since FROM wait WHERE kind=?", int(WaitingDisk)).Scan(&since1)
-	if err != nil {
-		t.Fatalf("QueryRow failed: %v", err)
-	}
+	since1 := queryWaitSince(t, db)
 
 	time.Sleep(20 * time.Millisecond)
 
@@ -142,11 +138,7 @@ func TestStoreWaitsKeepSince(t *testing.T) {
 		t.Fatalf("SetWait failed: %v", err)
 	}
 
-	var since2 time.Time
-	err = db.QueryRow("SELECT since FROM wait WHERE kind=?", int(WaitingDisk)).Scan(&since2)
-	if err != nil {
-		t.Fatalf("QueryRow failed: %v", err)
-	}
+	since2 := queryWaitSince(t, db)
 
 	if !since1.Equal(since2) {
 		t.Errorf("SetWait did not preserve since: %v != %v", since1, since2)
@@ -158,7 +150,28 @@ func TestStoreWaitsKeepSince(t *testing.T) {
 		t.Fatalf("ClearWait failed: %v", err)
 	}
 
+	assertClearedWait(t, db)
+}
+
+// queryWaitSince reads the stored since timestamp for the WaitingDisk row.
+func queryWaitSince(t *testing.T, db *DBStore) time.Time {
+	t.Helper()
+
+	var since time.Time
+	err := db.QueryRow("SELECT since FROM wait WHERE kind=?", int(WaitingDisk)).Scan(&since)
+	if err != nil {
+		t.Fatalf("QueryRow failed: %v", err)
+	}
+	return since
+}
+
+// assertClearedWait checks the meta duration, the deleted wait row and the
+// errors for unknown wait kinds after ClearWait(WaitingDisk).
+func assertClearedWait(t *testing.T, db *DBStore) {
+	t.Helper()
+
 	var durStr string
+	var err error
 	err = db.QueryRow("SELECT value FROM meta WHERE key=?", "last_wait_waiting_disk_duration").Scan(&durStr)
 	if err != nil {
 		t.Fatalf("QueryRow meta failed: %v", err)

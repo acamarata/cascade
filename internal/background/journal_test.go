@@ -9,7 +9,7 @@ type testJournal struct {
 	appended bool
 }
 
-func (j *testJournal) AppendRetry(entry RetryEntry) error {
+func (j *testJournal) AppendRetry(_ RetryEntry) error {
 	j.appended = true
 	return nil
 }
@@ -18,7 +18,7 @@ type testSink struct {
 	written bool
 }
 
-func (s *testSink) WriteVerdict(entry RetryEntry) error {
+func (s *testSink) WriteVerdict(_ RetryEntry) error {
 	s.written = true
 	return nil
 }

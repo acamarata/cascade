@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	// Register the pure-Go SQLite driver used by sql.Open("sqlite", ...).
 	_ "modernc.org/sqlite"
 )
 
@@ -21,19 +22,19 @@ func Open(path string) (*sql.DB, error) {
 
 	// Verify the connection works
 	if err := db.Ping(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
 	// Set journal mode to WAL
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to set journal_mode=WAL: %w", err)
 	}
 
 	// Set busy timeout to 3000ms
 	if _, err := db.Exec("PRAGMA busy_timeout=3000"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to set busy_timeout=3000: %w", err)
 	}
 

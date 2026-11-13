@@ -25,7 +25,7 @@ type LiveCountSource interface {
 }
 
 // BackgroundEnqueuer enqueues work by identifier.
-type BackgroundEnqueuer interface {
+type BackgroundEnqueuer interface { //nolint:revive // name fixed by the ticket contract
 	// Enqueue adds the item identified by id to the background queue.
 	Enqueue(id string) error
 }
@@ -48,7 +48,7 @@ var ErrLiveCountLimit = errors.New("live count limit reached")
 
 // Schedule validates req and, for manual triggers, enqueues the item directly.
 // It returns true on success or false with an error describing the failure.
-func Schedule(req ScheduleRequest, live LiveCountSource, queue BackgroundEnqueuer) (bool, error) {
+func Schedule(req ScheduleRequest, _ LiveCountSource, queue BackgroundEnqueuer) (bool, error) {
 	if strings.TrimSpace(req.ID) == "" {
 		return false, ErrInvalidSchedule
 	}

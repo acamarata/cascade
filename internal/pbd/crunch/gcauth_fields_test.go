@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func stubEstimator(evidence []GCQuotaEvidence) (time.Time, string, error) {
+func stubEstimator(_ []GCQuotaEvidence) (time.Time, string, error) {
 	return time.Now(), "stub", nil
 }
 

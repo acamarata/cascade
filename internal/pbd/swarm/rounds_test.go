@@ -12,7 +12,7 @@ func TestSplitPassCalledBetweenRounds(t *testing.T) {
 		calls++
 		return 0, nil
 	}
-	round := func(i int) error { return nil }
+	round := func(_ int) error { return nil }
 	ladder := &Ladder{}
 	if err := RunRounds(3, round, split, ladder); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -25,7 +25,7 @@ func TestSplitPassCalledBetweenRounds(t *testing.T) {
 // TestLadderSplitsAssigned verifies that a split returning 4 sets Ladder.Splits to 4.
 func TestLadderSplitsAssigned(t *testing.T) {
 	split := func() (int, error) { return 4, nil }
-	round := func(i int) error { return nil }
+	round := func(_ int) error { return nil }
 	ladder := &Ladder{}
 	if err := RunRounds(2, round, split, ladder); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -40,7 +40,7 @@ func TestSplitPassErrorStopsRun(t *testing.T) {
 	errSplit := errors.New("split failed")
 	split := func() (int, error) { return 0, errSplit }
 	roundCalls := 0
-	round := func(i int) error {
+	round := func(_ int) error {
 		roundCalls++
 		return nil
 	}

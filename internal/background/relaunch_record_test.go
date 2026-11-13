@@ -19,7 +19,6 @@ func (m *mockManagerLog) AppendRelaunch(entry RelaunchEntry) error {
 }
 
 func TestRecordManagerRelaunchUpdatesManagerLog(t *testing.T) {
-	// Valid manager relaunch
 	log := &mockManagerLog{}
 	err := RecordStaleBinaryRelaunch(RoleManager, "cascade-old", log)
 	if err != nil {
@@ -38,39 +37,35 @@ func TestRecordManagerRelaunchUpdatesManagerLog(t *testing.T) {
 	if e.Code != "D1094" {
 		t.Errorf("expected code 'D1094', got %s", e.Code)
 	}
+}
 
-	// Empty binaryID
-	log2 := &mockManagerLog{}
-	err = RecordStaleBinaryRelaunch(RoleManager, "", log2)
-	if !errors.Is(err, ErrInvalidRelaunch) {
-		t.Errorf("expected ErrInvalidRelaunch, got %v", err)
+func TestRecordManagerRelaunchRejectsInvalidInput(t *testing.T) {
+	cases := []struct {
+		name     string
+		role     Role
+		binaryID string
+	}{
+		{"empty binaryID", RoleManager, ""},
+		{"blank binaryID with whitespace", RoleManager, "   "},
+		{"unknown role", "unknown", "some-id"},
 	}
-	if len(log2.entries) != 0 {
-		t.Errorf("expected no entries, got %d", len(log2.entries))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			l := &mockManagerLog{}
+			err := RecordStaleBinaryRelaunch(tc.role, tc.binaryID, l)
+			if !errors.Is(err, ErrInvalidRelaunch) {
+				t.Errorf("expected ErrInvalidRelaunch, got %v", err)
+			}
+			if len(l.entries) != 0 {
+				t.Errorf("expected no entries, got %d", len(l.entries))
+			}
+		})
 	}
+}
 
-	// Blank binaryID with whitespace
-	log3 := &mockManagerLog{}
-	err = RecordStaleBinaryRelaunch(RoleManager, "   ", log3)
-	if !errors.Is(err, ErrInvalidRelaunch) {
-		t.Errorf("expected ErrInvalidRelaunch, got %v", err)
-	}
-	if len(log3.entries) != 0 {
-		t.Errorf("expected no entries, got %d", len(log3.entries))
-	}
-
-	// Unknown role
-	log4 := &mockManagerLog{}
-	err = RecordStaleBinaryRelaunch("unknown", "some-id", log4)
-	if !errors.Is(err, ErrInvalidRelaunch) {
-		t.Errorf("expected ErrInvalidRelaunch, got %v", err)
-	}
-	if len(log4.entries) != 0 {
-		t.Errorf("expected no entries, got %d", len(log4.entries))
-	}
-
+func TestRecordManagerRelaunchLogAndRoleErrors(t *testing.T) {
 	// Nil log
-	err = RecordStaleBinaryRelaunch(RoleManager, "cascade-old", nil)
+	err := RecordStaleBinaryRelaunch(RoleManager, "cascade-old", nil)
 	if !errors.Is(err, ErrManagerLogUnavailable) {
 		t.Errorf("expected ErrManagerLogUnavailable, got %v", err)
 	}

@@ -11,84 +11,38 @@ import (
 func TestCredentialClassNotInLaneReturnsD4555(t *testing.T) {
 	credResource := Resources{"cred:github_read"}
 
-	t.Run("nil caps", func(t *testing.T) {
-		lane := LaneCaps{CredClasses: nil}
-		err := ValidateResources(credResource, lane)
-		if !errors.Is(err, ErrInvalidResources) {
-			t.Fatalf("expected ErrInvalidResources, got %v", err)
-		}
-	})
+	cases := []struct {
+		name      string
+		resources Resources
+		caps      []string
+		wantErr   bool
+		msg       string
+	}{
+		{"nil caps", credResource, nil, true, "expected ErrInvalidResources"},
+		{"empty caps", credResource, []string{}, true, "expected ErrInvalidResources"},
+		{"nonmatching caps", credResource, []string{"github_write", "gitlab_read"}, true, "expected ErrInvalidResources"},
+		{"differently cased cred", Resources{"cred:GitHub_Read"}, []string{"github_read"}, true, "expected ErrInvalidResources for differently cased cred"},
+		{"differently cased cap", credResource, []string{"GitHub_Read"}, true, "expected ErrInvalidResources for differently cased cap"},
+		{"duplicate caps", credResource, []string{"github_read", "github_read"}, true, "expected ErrInvalidResources for duplicate caps"},
+		{"wildcard in caps", credResource, []string{"*"}, true, "expected ErrInvalidResources for wildcard cap"},
+		{"invalid cap chars", credResource, []string{"github.read"}, true, "expected ErrInvalidResources for invalid cap chars"},
+		{"cap starts with number", credResource, []string{"1github"}, true, "expected ErrInvalidResources for cap starting with number"},
+		{"matching case passes", credResource, []string{"github_read"}, false, "expected nil error for matching cred"},
+	}
 
-	t.Run("empty caps", func(t *testing.T) {
-		lane := LaneCaps{CredClasses: []string{}}
-		err := ValidateResources(credResource, lane)
-		if !errors.Is(err, ErrInvalidResources) {
-			t.Fatalf("expected ErrInvalidResources, got %v", err)
-		}
-	})
-
-	t.Run("nonmatching caps", func(t *testing.T) {
-		lane := LaneCaps{CredClasses: []string{"github_write", "gitlab_read"}}
-		err := ValidateResources(credResource, lane)
-		if !errors.Is(err, ErrInvalidResources) {
-			t.Fatalf("expected ErrInvalidResources, got %v", err)
-		}
-	})
-
-	t.Run("differently cased cred", func(t *testing.T) {
-		lane := LaneCaps{CredClasses: []string{"github_read"}}
-		upperCred := Resources{"cred:GitHub_Read"}
-		err := ValidateResources(upperCred, lane)
-		if !errors.Is(err, ErrInvalidResources) {
-			t.Fatalf("expected ErrInvalidResources for differently cased cred, got %v", err)
-		}
-	})
-
-	t.Run("differently cased cap", func(t *testing.T) {
-		lane := LaneCaps{CredClasses: []string{"GitHub_Read"}}
-		err := ValidateResources(credResource, lane)
-		if !errors.Is(err, ErrInvalidResources) {
-			t.Fatalf("expected ErrInvalidResources for differently cased cap, got %v", err)
-		}
-	})
-
-	t.Run("duplicate caps", func(t *testing.T) {
-		lane := LaneCaps{CredClasses: []string{"github_read", "github_read"}}
-		err := ValidateResources(credResource, lane)
-		if !errors.Is(err, ErrInvalidResources) {
-			t.Fatalf("expected ErrInvalidResources for duplicate caps, got %v", err)
-		}
-	})
-
-	t.Run("wildcard in caps", func(t *testing.T) {
-		lane := LaneCaps{CredClasses: []string{"*"}}
-		err := ValidateResources(credResource, lane)
-		if !errors.Is(err, ErrInvalidResources) {
-			t.Fatalf("expected ErrInvalidResources for wildcard cap, got %v", err)
-		}
-	})
-
-	t.Run("invalid cap chars", func(t *testing.T) {
-		lane := LaneCaps{CredClasses: []string{"github.read"}}
-		err := ValidateResources(credResource, lane)
-		if !errors.Is(err, ErrInvalidResources) {
-			t.Fatalf("expected ErrInvalidResources for invalid cap chars, got %v", err)
-		}
-	})
-
-	t.Run("cap starts with number", func(t *testing.T) {
-		lane := LaneCaps{CredClasses: []string{"1github"}}
-		err := ValidateResources(credResource, lane)
-		if !errors.Is(err, ErrInvalidResources) {
-			t.Fatalf("expected ErrInvalidResources for cap starting with number, got %v", err)
-		}
-	})
-
-	t.Run("matching case passes", func(t *testing.T) {
-		lane := LaneCaps{CredClasses: []string{"github_read"}}
-		err := ValidateResources(credResource, lane)
-		if err != nil {
-			t.Fatalf("expected nil error for matching cred, got %v", err)
-		}
-	})
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lane := LaneCaps{CredClasses: tc.caps}
+			err := ValidateResources(tc.resources, lane)
+			if tc.wantErr {
+				if !errors.Is(err, ErrInvalidResources) {
+					t.Fatalf("%s, got %v", tc.msg, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("%s, got %v", tc.msg, err)
+			}
+		})
+	}
 }

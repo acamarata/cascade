@@ -12,12 +12,12 @@ type mockSubChats struct {
 	waitCalls int
 }
 
-func (m *mockSubChats) Open(ctx context.Context, req SubChatRequest) (string, error) {
+func (m *mockSubChats) Open(_ context.Context, req SubChatRequest) (string, error) {
 	m.openCalls++
 	return "id", nil
 }
 
-func (m *mockSubChats) Wait(ctx context.Context, id string) (string, error) {
+func (m *mockSubChats) Wait(_ context.Context, id string) (string, error) {
 	m.waitCalls++
 	return "result", nil
 }
@@ -28,7 +28,7 @@ func TestSubSpawnMissingRoleFailsClosed(t *testing.T) {
 	ctx := context.Background()
 	chats := &mockSubChats{}
 	registry := SubSpawnRegistry{
-		"task1": func(ctx context.Context, req SubSpawnRequest) (SubSpawnReport, error) {
+		"task1": func(_ context.Context, req SubSpawnRequest) (SubSpawnReport, error) {
 			return SubSpawnReport{ID: "should-not-run"}, nil
 		},
 	}

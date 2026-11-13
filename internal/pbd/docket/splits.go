@@ -21,7 +21,7 @@ type splitEntry struct {
 
 // RecordSplit appends one JSON line to splits.jsonl in stateDir and returns
 // true the first time id is seen. A repeat id appends nothing and returns false.
-func RecordSplit(stateDir, id string) (bool, error) {
+func RecordSplit(stateDir, id string) (recorded bool, err error) {
 	path := filepath.Join(stateDir, splitsFile)
 
 	has, err := HasSplit(stateDir, id)
@@ -36,7 +36,11 @@ func RecordSplit(stateDir, id string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			recorded, err = false, cerr
+		}
+	}()
 
 	entry := splitEntry{ID: id}
 	data, err := json.Marshal(entry)
@@ -54,7 +58,7 @@ func RecordSplit(stateDir, id string) (bool, error) {
 
 // HasSplit reads splits.jsonl in stateDir and returns true if id has been recorded.
 // A missing file returns false, nil. A malformed line returns false, ErrSplitsCorrupt.
-func HasSplit(stateDir, id string) (bool, error) {
+func HasSplit(stateDir, id string) (found bool, err error) {
 	path := filepath.Join(stateDir, splitsFile)
 
 	f, err := os.Open(path)
@@ -64,7 +68,11 @@ func HasSplit(stateDir, id string) (bool, error) {
 		}
 		return false, err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			found, err = false, cerr
+		}
+	}()
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
