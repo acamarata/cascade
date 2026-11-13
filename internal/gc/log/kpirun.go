@@ -1,7 +1,7 @@
 package log
 
 import (
-	"crypto/rand"
+	crand "crypto/rand"
 	"encoding/hex"
 )
 
@@ -29,6 +29,6 @@ func (r *RunID) Start() string {
 // freshID produces a random hex string suitable for use as a run id.
 func freshID() string {
 	b := make([]byte, 16)
-	_, _ = rand.Read(b)
+	_, _ = crand.Read(b)
 	return hex.EncodeToString(b)
 }

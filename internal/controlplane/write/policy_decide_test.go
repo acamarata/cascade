@@ -10,7 +10,7 @@ import (
 // and that the constructor returns a valid conductor for non-nil policies.
 func TestPolicyFuncInjection(t *testing.T) {
 	calls := 0
-	pf := func(subject string) (bool, error) {
+	pf := func(_ string) (bool, error) {
 		calls++
 		return true, nil
 	}

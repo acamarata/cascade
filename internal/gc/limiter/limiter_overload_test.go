@@ -18,7 +18,7 @@ func (c *testClock) Now() time.Time {
 	return c.now
 }
 
-func (c *testClock) NewTimer(d time.Duration) Timer {
+func (c *testClock) NewTimer(_ time.Duration) Timer {
 	return &testTimer{ch: make(chan time.Time, 1), fired: false}
 }
 

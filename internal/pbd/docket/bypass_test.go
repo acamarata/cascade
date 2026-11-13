@@ -5,14 +5,15 @@ import (
 	"testing"
 )
 
-// TestBypassDeniedWhenCapNotExceeded verifies admission decisions and input validation.
-func TestBypassDeniedWhenCapNotExceeded(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   BypassInput
-		want    BypassDecision
-		wantErr bool
-	}{
+type bypassCase struct {
+	name    string
+	input   BypassInput
+	want    BypassDecision
+	wantErr bool
+}
+
+func bypassAdmissionCases() []bypassCase {
+	return []bypassCase{
 		{
 			name:    "A3 below limit admitted",
 			input:   BypassInput{Lane: "A3", Hot: true, Cap: 10, OverflowCap: 5, Occupancy: 3, GateDeadlines: 2, RunSeats: 1},
@@ -31,6 +32,11 @@ func TestBypassDeniedWhenCapNotExceeded(t *testing.T) {
 			want:    BypassDecision{Admitted: false, Bypassed: false},
 			wantErr: false,
 		},
+	}
+}
+
+func bypassInvalidCases() []bypassCase {
+	return []bypassCase{
 		{
 			name:    "empty lane invalid",
 			input:   BypassInput{Lane: "", Cap: 10},
@@ -74,6 +80,11 @@ func TestBypassDeniedWhenCapNotExceeded(t *testing.T) {
 			wantErr: true,
 		},
 	}
+}
+
+// TestBypassDeniedWhenCapNotExceeded verifies admission decisions and input validation.
+func TestBypassDeniedWhenCapNotExceeded(t *testing.T) {
+	tests := append(bypassAdmissionCases(), bypassInvalidCases()...)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

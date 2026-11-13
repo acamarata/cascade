@@ -10,7 +10,7 @@ type fakeStarter struct {
 	called bool
 }
 
-func (f *fakeStarter) Start(_ string, tickets []string, logPath string) (int, error) {
+func (f *fakeStarter) Start(_ string, _ []string, logPath string) (int, error) {
 	f.called = true
 	return 0, nil
 }

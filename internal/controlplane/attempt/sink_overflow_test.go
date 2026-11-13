@@ -63,8 +63,14 @@ func TestAppendOverflowRow(t *testing.T) {
 		t.Fatalf("RecordOverflow: %v", err)
 	}
 
+	checkCloseSemantics(t, sink, base)
+	checkSingleEscalationLine(t, dir)
+}
+
+func checkCloseSemantics(t *testing.T, sink OverflowSink, base *fakeBase) {
+	t.Helper()
 	// Close
-	err = sink.Close()
+	err := sink.Close()
 	if !errors.Is(err, base.err) {
 		t.Errorf("Close error: %v", err)
 	}
@@ -86,7 +92,10 @@ func TestAppendOverflowRow(t *testing.T) {
 	if !errors.Is(err, ErrOverflowClosed) {
 		t.Errorf("RecordOverflow after Close: %v", err)
 	}
+}
 
+func checkSingleEscalationLine(t *testing.T, dir string) {
+	t.Helper()
 	// Verify JSON line
 	path := filepath.Join(dir, "escalations.jsonl")
 	data, err := os.ReadFile(path)
@@ -104,6 +113,26 @@ func TestAppendOverflowRow(t *testing.T) {
 	if m["ticket"] != "T-1" {
 		t.Errorf("ticket: %v", m["ticket"])
 	}
+}
+
+func readLines(t *testing.T, path string) []string {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			t.Errorf("Close: %v", cerr)
+		}
+	}()
+
+	var lines []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	return lines
 }
 
 func TestAppendMultipleRows(t *testing.T) {
@@ -138,17 +167,7 @@ func TestAppendMultipleRows(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	f, err := os.Open(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-
-	var lines []string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
+	lines := readLines(t, path)
 	if len(lines) != 4 {
 		t.Fatalf("expected 4 lines, got %d: %v", len(lines), lines)
 	}

@@ -6,7 +6,7 @@ type countingHook struct {
 	calls int
 }
 
-func (h *countingHook) Applied(caller string) {
+func (h *countingHook) Applied(_ string) {
 	h.calls++
 }
 

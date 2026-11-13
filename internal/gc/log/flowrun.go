@@ -35,13 +35,11 @@ func FlowRun(s Starter, runID string, tickets []string) (RunInfo, error) {
 		return RunInfo{}, ErrInvalidStarter
 	}
 	v := reflect.ValueOf(s)
-	switch v.Kind() {
-	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func, reflect.Interface:
-		if v.IsNil() {
-			return RunInfo{}, ErrInvalidStarter
-		}
-	default:
-		// other kinds cannot be nil
+	k := v.Kind()
+	nilable := k == reflect.Pointer || k == reflect.Map || k == reflect.Slice ||
+		k == reflect.Chan || k == reflect.Func || k == reflect.Interface
+	if nilable && v.IsNil() {
+		return RunInfo{}, ErrInvalidStarter
 	}
 
 	if !isValidRunID(runID) {

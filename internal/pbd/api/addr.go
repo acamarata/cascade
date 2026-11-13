@@ -1,3 +1,4 @@
+// Package api defines the PBD API server listen address and its loopback-only validation.
 package api
 
 import (
