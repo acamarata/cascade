@@ -48,9 +48,9 @@ func TestResolveRunnerByIDThenHost(t *testing.T) {
 // production host returns an error and an empty Runner.
 func TestResolveRunnerProductionHostRefused(t *testing.T) {
 	reg := []Runner{
-		{ID: "n1", Host: "5.75.235.42"},
+		{ID: "n1", Host: "192.0.2.10", Production: true},
 	}
-	r, err := ResolveRunner(reg, "", "", "5.75.235.42")
+	r, err := ResolveRunner(reg, "", "", "192.0.2.10")
 	if err == nil {
 		t.Fatalf("expected error for production host, got nil")
 	}
