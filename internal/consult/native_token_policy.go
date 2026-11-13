@@ -34,14 +34,17 @@ func (e *PolicyError) Unwrap() error {
 
 // ValidateNativeTokenUse checks whether the given use string is permitted.
 // If allowed, it returns the supplied violations slice unchanged and a nil error.
-// If not allowed, it appends a new NativeTokenViolation to the slice and returns
-// a *PolicyError wrapping ErrNativeTokenUseNotAllowed.
+// If not allowed, it appends a new NativeTokenViolation to a fresh copy of the slice
+// and returns a *PolicyError wrapping ErrNativeTokenUseNotAllowed.
+// The input slice and its backing array are never mutated.
 func ValidateNativeTokenUse(use string, violations []NativeTokenViolation) ([]NativeTokenViolation, error) {
 	switch use {
 	case "T0 coordination", "CR/QA", "hard-ticket escalation", "planning sign-off":
 		return violations, nil
 	default:
-		v := append(violations, NativeTokenViolation{Code: "D4652", Use: use})
+		fresh := make([]NativeTokenViolation, len(violations), len(violations)+1)
+		copy(fresh, violations)
+		v := append(fresh, NativeTokenViolation{Code: "D4652", Use: use})
 		return v, &PolicyError{Code: "D4652", Use: use}
 	}
 }
