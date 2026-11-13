@@ -55,9 +55,13 @@ func RouteT0Plan(req T0Request) (T0Route, error) {
 		}, nil
 	}
 
-	// Return a valid route
-	return T0Route{
-		Destination: "t0-default",
-		Account:     "t0-account",
-	}, nil
+	// Burn account routes to Haiku 5.5; otherwise no burn account available.
+	if req.BurnAccount {
+		return T0Route{
+			Destination: "Haiku 5.5",
+			Account:     "burn",
+		}, nil
+	}
+
+	return T0Route{}, ErrNoBurnAccount
 }
