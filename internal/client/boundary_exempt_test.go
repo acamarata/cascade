@@ -179,6 +179,7 @@ var cmdRPCBoundaryExempt = map[string]bool{
 	// context.generate, the hook runners and the inbox MCP forwarders on the
 	// daemon's own registry and never dial it; mirrors .golangci.yml.
 	"context_generate_rpc.go": true,
+	"context_repair_rpc.go":   true,
 	"hooks_runners.go":        true,
 	"mcp_inbox_forward.go":    true,
 	// chat_reply_wiring.go, wire_chat_reply.go, daemon_unix_fleet_health.go and

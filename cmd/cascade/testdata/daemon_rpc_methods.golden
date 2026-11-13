@@ -34,6 +34,7 @@ context.harness_list
 context.harness_sync
 context.hydration.degraded
 context.hydration.report
+context.repair
 context.scope.show
 context.show
 context.slice

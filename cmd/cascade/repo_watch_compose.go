@@ -1,58 +1,46 @@
-// Purpose: the daemon's repository maintenance loop. It re-lists the
-// registered repositories on an interval, keeps exactly one repo.Watcher
-// running per repository, stops the watcher of a repository that is no
-// longer registered, and restarts one whose run failed.
-// Inputs: cascade.db (inventory, scope, graph, ledger and watch journal),
-// the full-text index, the daemon's embedder Selection, the vector and meta
-// stores, the injected Clock and an Attention func.
-// Outputs: running watchers; an attention item per failed watcher.
-// Constraints: a repository's root comes from the scope graph's repo_path
-// binding; a repository without one is skipped. Each Watcher sweeps on start
-// and every repo.ReconcileInterval, so no second sweep loop runs here.
-// SPORT: cmd/cascade repository maintenance composition.
+//go:build !windows
 
+// Purpose: shared repository trees and serialized maintenance sweeps.
+// Constraints: every content read passes admission; repair quiesces the watcher.
 package main
 
 import (
 	"context"
 	"database/sql"
 	"errors"
-	"log/slog"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
-	"time"
 
 	"github.com/acamarata/cascade/internal/context/scope"
 	"github.com/acamarata/cascade/internal/repo"
-	"github.com/acamarata/cascade/internal/retrieval"
-	"github.com/acamarata/cascade/internal/retrieval/embedsel"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage/migrate"
 	"github.com/acamarata/cascade/pkg/cascade"
-	"github.com/acamarata/cascade/pkg/provider"
 )
 
-// repoWatchRelist is how often the loop re-lists registered repositories.
+// repoWatchRelist bounds discovery of newly registered repositories.
 var repoWatchRelist = repo.ReconcileInterval
 
-// repoWatchEvent observes a watcher's life ("start", "stop"); a test seam.
+// repoWatchEvent observes watcher starts and stops in lifecycle tests.
 var repoWatchEvent = func(string, string) {}
 
-// repoWatchEnv is everything one repository's watcher is built from.
-type repoWatchEnv struct {
-	db        *sql.DB
-	idx       *retrieval.Index
-	sel       *embedsel.Selection
-	vectors   provider.VectorStore
-	meta      provider.Store
-	clock     runtime.Clock
-	attention repo.Attention
-	log       *slog.Logger
+// repoTree owns one repository's pipeline. Repair holds mu and quiesces watcher.
+type repoTree struct {
+	mu          sync.Mutex
+	id, root    string
+	journal     *repo.WatchJournal
+	maintenance *repo.Maintenance
+	leg         repo.IndexLeg
+	watcher     *repo.Watcher
+	refused     map[string]string
+	cancel      context.CancelFunc
+	done        chan struct{}
 }
 
-// openRepoWatchDB opens <DataDir>/cascade.db and applies every schema the
-// maintenance pipeline reads or writes. The caller closes the handle.
+// openRepoWatchDB opens the shared repository database and applies its schemas.
 func openRepoWatchDB(ctx context.Context, paths runtime.PathProvider, clock runtime.Clock) (*sql.DB, error) {
 	dataDir := paths.DataDir()
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
@@ -63,6 +51,7 @@ func openRepoWatchDB(ctx context.Context, paths runtime.PathProvider, clock runt
 	if err != nil {
 		return nil, cascade.Wrap(cascade.KindUnavailable, err, "repo watch: open cascade.db")
 	}
+	db.SetMaxOpenConns(1)
 	mc, backups := migrateClock{clock}, filepath.Join(dataDir, "backups")
 	for _, apply := range []func(context.Context, *sql.DB, migrate.Dialect, migrate.Clock, string, string) error{
 		scope.ApplyScopeSchema, repo.ApplyInventorySchema, repo.ApplyGraphSchema,
@@ -76,13 +65,11 @@ func openRepoWatchDB(ctx context.Context, paths runtime.PathProvider, clock runt
 	return db, nil
 }
 
-// rootOf returns the filesystem root bound to repoID; ok is false when the
-// scope graph holds no binding.
-func (e *repoWatchEnv) rootOf(ctx context.Context, repoID string) (string, bool, error) {
+// rootOf resolves the persisted binding, without retaining caller paths.
+func (s *repoWatchSet) rootOf(ctx context.Context, id string) (string, bool, error) {
 	var root string
-	err := e.db.QueryRowContext(ctx,
-		`SELECT root_path FROM context_repo_path WHERE repository_id = ? ORDER BY root_path LIMIT 1`,
-		repoID).Scan(&root)
+	err := s.db.QueryRowContext(ctx,
+		`SELECT root_path FROM context_repo_path WHERE repository_id = ? ORDER BY root_path LIMIT 1`, id).Scan(&root)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}
@@ -92,158 +79,111 @@ func (e *repoWatchEnv) rootOf(ctx context.Context, repoID string) (string, bool,
 	return root, true, nil
 }
 
-// newWatcher builds the Watcher for one repository.
-func (e *repoWatchEnv) newWatcher(repoID, root string) (*repo.Watcher, error) {
-	journal, err := repo.NewWatchJournal(e.db)
-	if err != nil {
-		return nil, err
-	}
-	leg, err := newRepoIndexLeg(e.idx, e.sel, e.vectors, e.meta, e.clock)
+// newTree builds the one maintenance writer and starts it quiesced.
+func (s *repoWatchSet) newTree(ctx context.Context, id, root string) (*repoTree, error) {
+	j, err := repo.NewWatchJournal(s.db)
 	if err != nil {
 		return nil, err
 	}
 	m, err := repo.NewMaintenance(repo.MaintenanceDeps{
-		Root: root, RepositoryID: repoID, Journal: journal,
-		Inventory: repo.NewStore(e.db), Graph: repo.NewGraphStore(e.db), Ledger: repo.NewLedgerStore(e.db),
-		Index: leg, Attention: e.attention, Clock: e.clock,
+		Root: root, RepositoryID: id, Journal: j,
+		Inventory: repo.NewStore(s.db), Graph: repo.NewGraphStore(s.db), Ledger: repo.NewLedgerStore(s.db),
+		Index: s.leg, Attention: s.attention, Clock: s.w.Clock,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return repo.NewWatcher(root, m, e.clock)
+	watcher, err := repo.NewWatcher(root, m, s.w.Clock)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := watcher.Quiesce(ctx); err != nil {
+		return nil, err
+	}
+	return &repoTree{id: id, root: root, journal: j, maintenance: m, leg: s.leg,
+		watcher: watcher, refused: map[string]string{}, done: make(chan struct{})}, nil
 }
 
-// runningWatch is one started watcher.
-type runningWatch struct {
-	cancel context.CancelFunc
-	done   chan struct{}
+// sweep locks the tree and waits for any watcher batch before maintenance.
+func (t *repoTree) sweep(ctx context.Context) (repo.BatchReport, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if _, err := t.watcher.Quiesce(ctx); err != nil {
+		t.watcher.Resume()
+		return repo.BatchReport{}, err
+	}
+	defer t.watcher.Resume()
+	return t.sweepLocked(ctx)
 }
 
-// repoWatchLoop keeps one watcher per registered repository.
-type repoWatchLoop struct {
-	env     *repoWatchEnv
-	mu      sync.Mutex
-	running map[string]*runningWatch
-	wg      sync.WaitGroup
+// sweepLocked replays interrupted work and applies only admitted drift.
+func (t *repoTree) sweepLocked(ctx context.Context) (repo.BatchReport, error) {
+	replay, err := t.maintenance.Replay(ctx)
+	if err != nil {
+		return replay, err
+	}
+	prior, err := t.journal.Paths(ctx, t.id)
+	if err != nil {
+		return replay, err
+	}
+	paths, err := t.listedPaths(prior)
+	if err != nil {
+		return replay, err
+	}
+	drift, err := t.drifted(ctx, paths, prior)
+	if err != nil || len(drift) == 0 {
+		return replay, err
+	}
+	cur, _, err := t.journal.Cursor(ctx, t.id)
+	if err != nil {
+		return replay, err
+	}
+	return t.maintenance.Apply(ctx, repo.Batch{Changed: drift, FSSeq: cur.FSSeq + 1, Commit: cur.Commit})
 }
 
-func newRepoWatchLoop(env *repoWatchEnv) *repoWatchLoop {
-	return &repoWatchLoop{env: env, running: map[string]*runningWatch{}}
-}
-
-// run lists, reconciles and sleeps until ctx is done, then stops every
-// watcher and closes the database handle.
-func (l *repoWatchLoop) run(ctx context.Context) error {
-	defer func() { _ = l.env.db.Close() }()
-	defer l.wg.Wait()
-	defer l.stopAll()
-	for {
-		if err := l.relist(ctx); err != nil && ctx.Err() == nil {
-			l.env.log.Warn("repo watch: list repositories", "error", err.Error())
+// listedPaths includes vanished journaled files, so their chunks are retracted.
+func (t *repoTree) listedPaths(prior map[string]repo.PathState) ([]string, error) {
+	paths := map[string]bool{}
+	for rel := range prior {
+		paths[rel] = true
+	}
+	err := filepath.WalkDir(t.root, func(full string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
-		select {
-		case <-ctx.Done():
+		if full == t.root {
 			return nil
-		case <-time.After(repoWatchRelist):
 		}
-	}
-}
-
-// relist starts a watcher for each new row and stops those of removed rows.
-func (l *repoWatchLoop) relist(ctx context.Context) error {
-	rows, err := repo.NewStore(l.env.db).List(ctx)
-	if err != nil {
-		return err
-	}
-	want := make(map[string]bool, len(rows))
-	for _, inv := range rows {
-		want[inv.Repository.ID] = true
-		if err := l.ensure(ctx, inv.Repository.ID); err != nil && ctx.Err() == nil {
-			l.env.log.Warn("repo watch: start watcher", "repository", inv.Repository.ID, "error", err.Error())
+		rel, err := filepath.Rel(t.root, full)
+		if err != nil {
+			return err
 		}
-	}
-	l.mu.Lock()
-	var gone []string
-	for id := range l.running {
-		if !want[id] {
-			gone = append(gone, id)
+		rel = filepath.ToSlash(rel)
+		if repo.ExcludedPath(rel) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
-	}
-	l.mu.Unlock()
-	for _, id := range gone {
-		l.stop(id)
-	}
-	return nil
-}
-
-// ensure starts the watcher for repoID unless one already runs.
-func (l *repoWatchLoop) ensure(ctx context.Context, repoID string) error {
-	l.mu.Lock()
-	_, ok := l.running[repoID]
-	l.mu.Unlock()
-	if ok {
+		if !d.IsDir() {
+			paths[rel] = true
+		}
 		return nil
-	}
-	root, bound, err := l.env.rootOf(ctx, repoID)
-	if err != nil || !bound {
-		return err
-	}
-	w, err := l.env.newWatcher(repoID, root)
+	})
 	if err != nil {
-		return err
+		return nil, cascade.Wrap(cascade.KindUnavailable, err, "repo watch: list repository paths")
 	}
-	wctx, cancel := context.WithCancel(ctx)
-	rw := &runningWatch{cancel: cancel, done: make(chan struct{})}
-	l.mu.Lock()
-	l.running[repoID] = rw
-	l.mu.Unlock()
-	l.wg.Add(1)
-	go l.runWatcher(wctx, repoID, w, rw)
-	repoWatchEvent("start", repoID)
-	return nil
+	out := make([]string, 0, len(paths))
+	for rel := range paths {
+		out = append(out, rel)
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
-// runWatcher runs w until it stops. A failed run is dropped from the running
-// set so the next listing restarts it, and raises an attention item.
-func (l *repoWatchLoop) runWatcher(ctx context.Context, repoID string, w *repo.Watcher, rw *runningWatch) {
-	defer l.wg.Done()
-	defer close(rw.done)
-	err := w.Run(ctx)
-	repoWatchEvent("stop", repoID)
-	if err == nil || ctx.Err() != nil {
-		return
-	}
-	l.mu.Lock()
-	if l.running[repoID] == rw {
-		delete(l.running, repoID)
-	}
-	l.mu.Unlock()
-	if aerr := l.env.attention(context.WithoutCancel(ctx), "repo.watch:"+repoID, err.Error()); aerr != nil {
-		l.env.log.Warn("repo watch: raise attention", "repository", repoID, "error", aerr.Error())
-	}
-}
-
-// stop cancels the watcher of repoID and waits for it.
-func (l *repoWatchLoop) stop(repoID string) {
-	l.mu.Lock()
-	rw, ok := l.running[repoID]
-	delete(l.running, repoID)
-	l.mu.Unlock()
-	if ok {
-		rw.cancel()
-		<-rw.done
-	}
-}
-
-// stopAll stops every running watcher.
-func (l *repoWatchLoop) stopAll() {
-	l.mu.Lock()
-	ids := make([]string, 0, len(l.running))
-	for id := range l.running {
-		ids = append(ids, id)
-	}
-	l.mu.Unlock()
-	for _, id := range ids {
-		l.stop(id)
+// sweepLogged is the non-request sweep; its report is intentionally ignored.
+func (s *repoWatchSet) sweepLogged(ctx context.Context, t *repoTree) {
+	if _, err := t.sweep(ctx); err != nil && ctx.Err() == nil {
+		s.w.Logger.Warn("repo watch: sweep", "repository", t.id, "error", err.Error())
 	}
 }

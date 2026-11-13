@@ -105,6 +105,7 @@ func newContextCmd(deps contextScopeDeps) *cobra.Command {
 	// operation under two names; see context_harness_cmd.go.
 	contextCmd.AddCommand(newContextHarnessCmd(deps))
 	// facts (P1-GEN-02) lives in context_facts.go.
+	contextCmd.AddCommand(newContextRepairCmd(deps))
 	contextCmd.AddCommand(newContextFactsCmd(deps))
 	return contextCmd
 }
