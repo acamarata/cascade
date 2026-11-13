@@ -4,18 +4,6 @@ import (
 	"database/sql"
 )
 
-// ProjectCfg stores configuration for a project.
-type ProjectCfg struct {
-	// Mode must be "shadow" or "apply".
-	Mode string
-	// DisplayName is the human-readable name of the project.
-	DisplayName string
-	// RepoPath is the filesystem path to the repository.
-	RepoPath string
-	// ChatContext holds contextual information for chat interactions.
-	ChatContext string
-}
-
 // PhaseState tracks the current phase of a project.
 type PhaseState struct {
 	// Phase is the current phase name.
@@ -32,20 +20,6 @@ type Decision struct {
 	Reason string
 }
 
-// Authorization records an authorization event.
-type Authorization struct {
-	// GrantedBy identifies who granted the authorization.
-	GrantedBy string
-}
-
-// Step records an execution step.
-type Step struct {
-	// Action is the name or description of the action performed.
-	Action string
-	// Result is the outcome of the action.
-	Result string
-}
-
 // OwnerQueue records items waiting for owner attention.
 type OwnerQueue struct {
 	// Phase is the phase associated with the queue item.
@@ -54,36 +28,6 @@ type OwnerQueue struct {
 	Kind string
 	// Subject is the specific subject of the queue item.
 	Subject string
-}
-
-// Touchpoint records interactions.
-type Touchpoint struct {
-	// Actor is the entity performing the interaction.
-	Actor string
-	// Note contains details about the interaction.
-	Note string
-}
-
-// Wait records waiting periods.
-type Wait struct {
-	// Reason describes why the wait is occurring.
-	Reason string
-}
-
-// Hunt records hunt state for crash safety.
-type Hunt struct {
-	// Target is the subject being hunted.
-	Target string
-	// State is the current state of the hunt.
-	State string
-}
-
-// Meta stores arbitrary metadata.
-type Meta struct {
-	// Key is the metadata key.
-	Key string
-	// Value is the metadata value.
-	Value string
 }
 
 const migrationProjectCfg = `CREATE TABLE IF NOT EXISTS project_cfg (
