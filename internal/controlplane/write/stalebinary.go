@@ -1,17 +1,6 @@
 // Package write implements findings and restarter behaviour for the control plane.
 package write
 
-// Finding represents a diagnostic finding produced by the control plane.
-// It carries a classification kind and a human-readable text.
-type Finding struct {
-	// Kind classifies the finding. For StaleBinaryFinding the value is
-	// "daemon_stale_binary".
-	Kind string
-
-	// Text is a human-readable description of the finding.
-	Text string
-}
-
 // Restarter is an abstraction over a component that can restart a daemon or
 // service. Implementations must not perform any network, CLI or launchd
 // operations when used only for constructing findings.

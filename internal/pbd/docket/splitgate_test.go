@@ -7,7 +7,7 @@ import (
 )
 
 func TestValidateSplitAllMappedExactScopePasses(t *testing.T) {
-	parent := Parent{
+	parent := SplitParent{
 		Acceptance: []string{"A1"},
 		Scope:      []string{"auth"},
 	}
@@ -24,7 +24,7 @@ func TestValidateSplitAllMappedExactScopePasses(t *testing.T) {
 }
 
 func TestValidateSplitUnmappedAcceptanceRejectsD2466(t *testing.T) {
-	parent := Parent{
+	parent := SplitParent{
 		Acceptance: []string{"A2"},
 		Scope:      []string{"auth"},
 	}
@@ -48,7 +48,7 @@ func TestValidateSplitUnmappedAcceptanceRejectsD2466(t *testing.T) {
 }
 
 func TestValidateSplitChildScopeOutsideParentRejectsD2467(t *testing.T) {
-	parent := Parent{
+	parent := SplitParent{
 		Acceptance: []string{"A1"},
 		Scope:      []string{"auth"},
 	}
@@ -72,7 +72,7 @@ func TestValidateSplitChildScopeOutsideParentRejectsD2467(t *testing.T) {
 }
 
 func TestValidateSplitMissingScopeCoverageRejectsD2467(t *testing.T) {
-	parent := Parent{
+	parent := SplitParent{
 		Acceptance: []string{"A1"},
 		Scope:      []string{"auth", "billing"},
 	}
