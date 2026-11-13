@@ -12,7 +12,7 @@ type PortError interface { //nolint:revive // name fixed by the ticket contract
 }
 
 // ErrNotImplemented is returned when an operation has no implementation yet.
-var ErrNotImplemented error = errors.New("not implemented")
+var ErrNotImplemented error = errors.New("port: operation unavailable")
 
 // portError is the internal stub implementation of PortError.
 type portError struct {

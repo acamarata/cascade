@@ -3,6 +3,7 @@ package mod
 import (
 	"errors"
 	"fmt"
+	"github.com/acamarata/cascade/internal/runtime"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -33,7 +34,7 @@ func MountClaudeMD(repoFile string, threadDirs []string) error {
 		}
 
 		target := filepath.Join(dir, "CLAUDE.md")
-		if err := os.WriteFile(target, data, 0644); err != nil {
+		if err := runtime.WriteFileAtomic(target, data, 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", target, err)
 		}
 	}
