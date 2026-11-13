@@ -1026,20 +1026,6 @@
     "symbol": "internal/secrets.NewEntry"
   },
   {
-    "caller_site": "internal/conductor/reserve_call.go",
-    "expected_caller": "internal/conductor/reserve_call.go, the per-adapter-call reservation P1-TOP-04a adds, which holds the one governor Admit per call and classifies its refusals; retire this entry once that file calls IsDraining",
-    "reason": "P1-TOP-04c removes the per-node governor permit from admitNodes (contract: admitNodes calls no governor), which was the only production classifier of a draining refusal; the one Admit per adapter call moves to the conductor reservation of P1-TOP-04a.",
-    "retire_ticket": "P1-TOP-04",
-    "symbol": "internal/fleet/governor.IsDraining"
-  },
-  {
-    "caller_site": "internal/conductor/reserve_call.go",
-    "expected_caller": "internal/conductor/reserve_call.go, the per-adapter-call reservation P1-TOP-04a adds; retire this entry once that file calls IsSignalRefusal",
-    "reason": "P1-TOP-04c removes the per-node governor permit from admitNodes, the only production caller that told a signal refusal apart; the per-call Admit of P1-TOP-04a is the next one.",
-    "retire_ticket": "P1-TOP-04",
-    "symbol": "internal/fleet/governor.IsSignalRefusal"
-  },
-  {
     "caller_site": "cmd/cascade/wire_node_channel.go",
     "expected_caller": "cmd/cascade/wire_node_channel.go, which P1-NODE-18k wires the node channel into the controller daemon; retire this entry once that file calls NewSSHDialerFromSigner",
     "reason": "P1-NODE-18b ships NewSSHDialerFromSigner with its tests; its first production caller is cmd/cascade/wire_node_channel.go from P1-NODE-18k.",
