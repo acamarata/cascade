@@ -5,13 +5,13 @@ import (
 	"testing"
 )
 
-func TestMS5JobRecordRetainsMaskedPromptCommand(t *testing.T) {
+func TestControllerJobRecordRetainsMaskedPromptCommand(t *testing.T) {
 	testMaskedPromptCommand(t)
 	testInvalidPromptCommands(t)
 }
 
 func testMaskedPromptCommand(t *testing.T) {
-	rec, err := RecordMS5Job("run --prompt MASKED")
+	rec, err := RecordControllerJob("run --prompt MASKED")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -22,7 +22,7 @@ func testMaskedPromptCommand(t *testing.T) {
 		t.Errorf("expected ID '1', got %q", rec.ID)
 	}
 
-	records := MS5Records()
+	records := ControllerRecords()
 	if len(records) != 1 {
 		t.Fatalf("expected 1 record, got %d", len(records))
 	}
@@ -30,7 +30,7 @@ func testMaskedPromptCommand(t *testing.T) {
 		t.Errorf("snapshot mismatch: %+v", records[0])
 	}
 
-	rec2, err := RecordMS5Job("run --prompt secret")
+	rec2, err := RecordControllerJob("run --prompt secret")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -41,13 +41,13 @@ func testMaskedPromptCommand(t *testing.T) {
 		t.Errorf("expected masked command 'run --prompt *****', got %q", rec2.Command)
 	}
 
-	records = MS5Records()
+	records = ControllerRecords()
 	if len(records) != 2 {
 		t.Fatalf("expected 2 records, got %d", len(records))
 	}
 	records[0].Command = "mutated"
 
-	recordsAgain := MS5Records()
+	recordsAgain := ControllerRecords()
 	if recordsAgain[0].Command != "run --prompt MASKED" {
 		t.Errorf("storage was mutated by snapshot")
 	}
@@ -66,7 +66,7 @@ func testInvalidPromptCommands(t *testing.T) {
 		"run \\--prompt MASKED",
 	}
 	for _, cmd := range invalids {
-		_, err := RecordMS5Job(cmd)
+		_, err := RecordControllerJob(cmd)
 		if !errors.Is(err, ErrInvalidPromptCommand) {
 			t.Errorf("expected ErrInvalidPromptCommand for %q, got %v", cmd, err)
 		}
