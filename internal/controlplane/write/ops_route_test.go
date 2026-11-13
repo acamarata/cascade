@@ -6,11 +6,13 @@ import (
 	"testing"
 )
 
+type ctxKey string
+
 func TestRouteHookDist(t *testing.T) {
 	called := 0
 	var gotCtx context.Context
 	var gotPayload []byte
-	ctx := context.WithValue(context.Background(), "key", "val")
+	ctx := context.WithValue(context.Background(), ctxKey("key"), "val")
 	payload := []byte("data")
 
 	handlers := Handlers{
@@ -20,7 +22,7 @@ func TestRouteHookDist(t *testing.T) {
 			gotPayload = p
 			return nil
 		},
-		"hook-run": func(c context.Context, p []byte) error {
+		"hook-run": func(_ context.Context, _ []byte) error {
 			t.Fatal("hook-run called")
 			return nil
 		},
@@ -66,7 +68,7 @@ func TestRouteUnknownOpFailsClosed(t *testing.T) {
 	payload := []byte("data")
 
 	called := 0
-	dummyHandler := func(c context.Context, p []byte) error {
+	dummyHandler := func(_ context.Context, _ []byte) error {
 		called++
 		return nil
 	}
@@ -103,10 +105,22 @@ func TestRouteUnknownOpFailsClosed(t *testing.T) {
 		})
 	}
 
+}
+
+func TestRouteNilContext(t *testing.T) {
+	payload := []byte("data")
+	called := 0
+	dummyHandler := func(_ context.Context, _ []byte) error {
+		called++
+		return nil
+	}
+	// A nil interface value, declared so the intent (nil ctx) is explicit.
+	var nilCtx context.Context
+
 	// Valid selection with nil ctx
 	t.Run("valid selection nil ctx", func(t *testing.T) {
 		called = 0
-		err := Route(nil, "hook-dist", payload, Handlers{"hook-dist": dummyHandler})
+		err := Route(nilCtx, "hook-dist", payload, Handlers{"hook-dist": dummyHandler})
 		if !errors.Is(err, ErrInvalidRoute) {
 			t.Fatalf("expected ErrInvalidRoute, got %v", err)
 		}
@@ -121,7 +135,7 @@ func TestRouteUnknownOpFailsClosed(t *testing.T) {
 	// Invalid selection takes precedence over nil ctx
 	t.Run("invalid selection precedence over nil ctx", func(t *testing.T) {
 		called = 0
-		err := Route(nil, "unknown", payload, Handlers{"hook-dist": dummyHandler})
+		err := Route(nilCtx, "unknown", payload, Handlers{"hook-dist": dummyHandler})
 		if !errors.Is(err, ErrUnknownOp) {
 			t.Fatalf("expected ErrUnknownOp, got %v", err)
 		}

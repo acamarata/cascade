@@ -7,7 +7,7 @@ import (
 )
 
 // AttemptRecord holds the six canonical fields describing a single attempt.
-type AttemptRecord struct {
+type AttemptRecord struct { //nolint:revive // name fixed by the ticket contract
 	Lane, Model, Node, Outcome, Cause, SHA string
 }
 

@@ -18,7 +18,7 @@ func (f *fakeVerifier) FreeNodes() ([]string, error) {
 }
 
 // Verify simulates command verification against the target.
-func (f *fakeVerifier) Verify(target VerifyTarget, commands []string) error {
+func (f *fakeVerifier) Verify(_ VerifyTarget, commands []string) error {
 	return f.verifyErr
 }
 

@@ -65,7 +65,9 @@ func TestSaveRoutingPreference(t *testing.T) {
 
 func TestLoadRoutingPreference(t *testing.T) {
 	var m ContextMemory
-	m.SaveRoutingPreference("ctx1", RoutingPreference{Class: "c1", Model: "m1"})
+	if err := m.SaveRoutingPreference("ctx1", RoutingPreference{Class: "c1", Model: "m1"}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
 
 	// exact saved bytes survive Load
 	p, err := m.LoadRoutingPreference("ctx1")
@@ -98,7 +100,9 @@ func TestLoadRoutingPreference(t *testing.T) {
 
 func TestLoadMissingPreferenceFailsClosed(t *testing.T) {
 	var m ContextMemory
-	m.SaveRoutingPreference("ctx1", RoutingPreference{Class: "c1", Model: "m1"})
+	if err := m.SaveRoutingPreference("ctx1", RoutingPreference{Class: "c1", Model: "m1"}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
 
 	// absent valid ctxID yields zero preference and ErrNoRoutingPreference
 	p, err := m.LoadRoutingPreference("ctxMissing")

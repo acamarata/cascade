@@ -21,7 +21,7 @@ const M1286RecapLimit = 3
 
 // InjectReseedRecap returns the payload unchanged when reseedPending is false,
 // preserving any preexisting recap. Caller owns code.reseedPending.
-func InjectReseedRecap(payload CodePayload, reseedPending bool, history []HistoryItem) CodePayload {
+func InjectReseedRecap(payload CodePayload, reseedPending bool, _ []HistoryItem) CodePayload {
 	if !reseedPending {
 		return payload
 	}

@@ -26,7 +26,7 @@ var ErrVerifyNodes = errors.New("D2204")
 
 // VerifyWithNodes selects a target and verifies commands using the provided NodeVerifier.
 // It returns a zero VerifyTarget and ErrVerifyNodes if v is nil or commands is empty.
-func VerifyWithNodes(args []string, commands []string, v NodeVerifier) (VerifyTarget, error) {
+func VerifyWithNodes(_ []string, commands []string, v NodeVerifier) (VerifyTarget, error) {
 	if v == nil || len(commands) == 0 {
 		return VerifyTarget{}, ErrVerifyNodes
 	}
