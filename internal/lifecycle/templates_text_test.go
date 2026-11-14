@@ -1,6 +1,8 @@
 package lifecycle
 
 import (
+	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -65,5 +67,88 @@ func TestEveryTemplateRendersItsSample(t *testing.T) {
 				t.Errorf("Render(%s) = %q, contains filler words", tt.kind, result)
 			}
 		})
+	}
+}
+
+func TestPlanConfirmEndsWithAskCard(t *testing.T) {
+	askJSON := `{"kind":"decision","question":"Ready to forge?"}`
+	data := TemplateData{
+		ProjectID: "p42",
+		AskBlock:  askJSON,
+	}
+	output, err := Render(KindPlanConfirm, data)
+	if err != nil {
+		t.Fatalf("Render failed: %v", err)
+	}
+	trimmed := strings.TrimRight(output, "\n")
+	expectedEnd := "```ask\n" + askJSON + "\n```"
+	if !strings.HasSuffix(trimmed, expectedEnd) {
+		t.Errorf("Output does not end with expected ask card.\nGot: %q\nExpected suffix: %q", trimmed, expectedEnd)
+	}
+	idx := strings.LastIndex(trimmed, "```ask\n")
+	body := trimmed[idx+len("```ask\n"):]
+	body = strings.TrimSuffix(body, "\n```")
+	if !json.Valid([]byte(body)) {
+		t.Errorf("Ask block body is not valid JSON: %q", body)
+	}
+}
+
+func TestCompleteShowsReportAndAutoSeed(t *testing.T) {
+	data := TemplateData{
+		ProjectID: "p42",
+		Progress:  []string{"Landed 40, parked 2"},
+		Decisions: []string{"a", "b"},
+	}
+	output, err := Render(KindComplete, data)
+	if err != nil {
+		t.Fatalf("Render failed: %v", err)
+	}
+	if !strings.Contains(output, "Landed 40, parked 2") {
+		t.Errorf("Missing progress")
+	}
+	if !strings.Contains(output, "1. a") {
+		t.Errorf("Missing decision 1")
+	}
+	if !strings.Contains(output, "2. b") {
+		t.Errorf("Missing decision 2")
+	}
+	if !strings.Contains(output, "Next: the following phase is seeded automatically.") {
+		t.Errorf("Missing auto-seed message")
+	}
+	matched, _ := regexp.MatchString(`(?i)\byes\b`, output)
+	if matched {
+		t.Errorf("Output contains 'yes': %q", output)
+	}
+}
+
+func TestCompleteAskCardOnlyForOwnerItems(t *testing.T) {
+	data1 := TemplateData{
+		ProjectID: "p42",
+		Progress:  []string{"Landed 40"},
+		Decisions: []string{"a"},
+		AskBlock:  "",
+	}
+	out1, err := Render(KindComplete, data1)
+	if err != nil {
+		t.Fatalf("Render failed: %v", err)
+	}
+	if strings.Contains(out1, "```ask") {
+		t.Errorf("Empty AskBlock should not produce an ask card, got: %q", out1)
+	}
+
+	askJSON := `{"kind":"decision","question":"Ready?"}`
+	data2 := TemplateData{
+		ProjectID: "p42",
+		Progress:  []string{"Landed 40"},
+		Decisions: []string{"a"},
+		AskBlock:  askJSON,
+	}
+	out2, err := Render(KindComplete, data2)
+	if err != nil {
+		t.Fatalf("Render failed: %v", err)
+	}
+	trimmed := strings.TrimRight(out2, "\n")
+	if !strings.HasSuffix(trimmed, "```ask\n"+askJSON+"\n```") {
+		t.Errorf("Ask card is not the last block, got: %q", trimmed)
 	}
 }

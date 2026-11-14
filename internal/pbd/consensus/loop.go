@@ -95,14 +95,14 @@ func Run(ctx context.Context, subject string, ladder [][]Reviewer, fix Fixer, p 
 		for _, r := range rung {
 			rev, err := r.Review(ctx, current, round)
 			if err != nil {
-				return Verdict{
-					Agreed:    false,
-					Rounds:    round,
-					Subject:   current,
-					Open:      open,
-					Reviewers: reviewers,
-					Reason:    err.Error(),
-				}, err
+				rev = Review{
+					Approve: false,
+					Findings: []Finding{{
+						Reviewer: r.ID(),
+						Severity: "blocking",
+						Text:     fmt.Sprintf("reviewer %s: %s", r.ID(), err.Error()),
+					}},
+				}
 			}
 			if !rev.Approve {
 				allApproved = false
@@ -135,7 +135,17 @@ func Run(ctx context.Context, subject string, ladder [][]Reviewer, fix Fixer, p 
 			}, nil
 		}
 
-		if len(blocking) > 0 && fix != nil {
+		if len(blocking) > 0 {
+			if fix == nil {
+				return Verdict{
+					Agreed:    false,
+					Rounds:    round,
+					Subject:   current,
+					Open:      open,
+					Reviewers: reviewers,
+					Reason:    "no fixer available",
+				}, nil
+			}
 			fixed, err := fix(ctx, current, blocking)
 			if err != nil {
 				return Verdict{
