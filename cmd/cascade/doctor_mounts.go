@@ -33,6 +33,7 @@ import (
 	cascadecontext "github.com/acamarata/cascade/internal/context"
 	"github.com/acamarata/cascade/internal/context/hydration"
 	"github.com/acamarata/cascade/internal/doctor"
+	"github.com/acamarata/cascade/internal/doctor/topologycheck"
 	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/retrieval/lifecycle"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -135,6 +136,13 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	reg.Register(newApprovalKeyDoctorCheck(paths))
 	reg.Register(newEgressAuditOnlyDoctorCheck())
 	reg.Register(newCallerPrincipalDoctorCheck())
+	// Fleet topology checks (doctor_mounts_topology.go): group providers,
+	// the set `doctor --providers` runs; read-only over cascade.db.
+	src := topologyDoctorSourceFor(paths, clock)
+	reg.Register(topologycheck.NewFreeDomainAbovePublicCheck(src, src))
+	reg.Register(topologycheck.NewDiscoverDomainAbovePublicCheck(src, src))
+	reg.Register(topologycheck.NewCredentialWithoutDomainCheck(src))
+	reg.Register(topologycheck.NewDomainWithoutCredentialCheck(src))
 	checks, err := secretsDoctorChecks(ctx, paths, clock)
 	if err != nil {
 		return nil, err

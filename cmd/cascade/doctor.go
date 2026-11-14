@@ -98,8 +98,9 @@ type doctorFlags struct {
 	harness bool
 	// storage narrows the run to the storage check, which the default
 	// report leaves out. Like harness it is a filter over the one registry.
-	storage bool
-	widget  bool // narrows the run to the widget check (a filter like storage)
+	storage   bool
+	widget    bool // narrows the run to the widget check (a filter like storage)
+	providers bool // narrows the run to group providers (RunOptions.ProvidersOnly)
 }
 
 // newDoctorCmd builds the `doctor` command and its `bundle` subcommand.
@@ -126,6 +127,7 @@ func newDoctorCmd(deps doctorDeps) *cobra.Command {
 		"run only the storage health probes (left out of the default report)")
 	cmd.Flags().BoolVar(&f.widget, "widget", false,
 		"run only the menu-bar widget check (left out of the default report)")
+	addDoctorProvidersFlag(cmd, f)
 	cmd.AddCommand(newDoctorBundleCmd(deps))
 	cmd.AddCommand(newDoctorCountsCmd(deps))
 	cmd.AddCommand(newDoctorSportCmd(deps))
@@ -178,11 +180,9 @@ func executeChecks(ctx context.Context, deps doctorDeps, f *doctorFlags) (doctor
 		return doctor.RunReport{}, cascade.New(cascade.KindNotFound,
 			"cascade doctor: no diagnostic checks are registered for this run")
 	}
-	return doctor.Run(ctx, checks, doctor.RunOptions{
-		FirstRunOnly: f.firstRun,
-		Fix:          f.fix,
-		Clock:        deps.Clock,
-	}), nil
+	return runDoctorChecks(ctx, checks, doctor.RunOptions{
+		FirstRunOnly: f.firstRun, Fix: f.fix, ProvidersOnly: f.providers, Clock: deps.Clock,
+	})
 }
 
 // redactDoctorReport runs every human-authored string in the report through
