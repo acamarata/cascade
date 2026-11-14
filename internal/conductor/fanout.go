@@ -14,7 +14,9 @@
 //   AuthorizeFn) plus the exec function each leg dispatches through.
 // Outputs: an index-ordered []provider.ModelResponse, or the first error
 //   encountered (or ctx.Err() if ctx was cancelled).
-// Constraints: every leg takes its own admission permit via withPermit and
+// Constraints: under Executor.LegPermit each leg reserves its own row
+//   through the Executor's CallReserver and the parent holds no permit;
+//   every leg takes its own admission permit via withPermit and
 //   releases it on every path; FanOut never returns while a launched
 //   goroutine is still running. No credential and no model input or
 //   output content reaches a journal entry - only the fan-out id, leg
@@ -236,6 +238,21 @@ func (r *fanOutRun) failLeg(ctx context.Context, idx int, attempt uint64, digest
 		return legResult{index: idx, err: errors.Join(legErr, err)}
 	}
 	return legResult{index: idx, err: legErr}
+}
+
+// LegPermit is the WithPermitFn the Executor's fan-out legs run under when
+// the Executor's CallReserver meters them. It takes no permit of its own:
+// each leg's Execute reserves its own row (the leg's ReservationID is
+// cleared, so it never borrows the parent's) and holds that row's one
+// permit for the adapter call only, so the parent holds no permit while
+// legs run. A ctx that is already done refuses before fn runs.
+func (e *Executor) LegPermit() WithPermitFn {
+	return func(ctx context.Context, fn func(context.Context) error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return fn(ctx)
+	}
 }
 
 // ExecuteFanOutResponse dispatches n legs via Executor.ExecuteFanOut and
