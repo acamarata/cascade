@@ -96,10 +96,25 @@ func (r RunReport) Outcome() Outcome {
 	return OutcomeOK
 }
 
+// GroupProviders is the check group RunOptions.ProvidersOnly selects.
+const GroupProviders = "providers"
+
+// GroupedCheck is the optional interface a Check implements to declare
+// its group; the Runner's ProvidersOnly filter reads it.
+type GroupedCheck interface {
+	Check
+	// Group returns the check's group name.
+	Group() string
+}
+
 // RunOptions configures a Runner invocation.
 type RunOptions struct {
 	// FirstRunOnly runs only Metadata().FirstRun checks (--first-run).
 	FirstRunOnly bool
+	// ProvidersOnly runs only the checks in group providers (a
+	// GroupedCheck whose Group is GroupProviders); every other check is
+	// skipped and absent from the report.
+	ProvidersOnly bool
 	// Fix, when true, calls Fix on every check whose Run reported
 	// warn/error and whose Metadata().Fixable is true, after all Run
 	// calls complete (--fix).
@@ -140,12 +155,26 @@ func Run(ctx context.Context, checks []Check, opts RunOptions) RunReport {
 		clock = cascaderuntime.NewSystemClock()
 	}
 
+	if opts.ProvidersOnly {
+		checks = providerChecks(checks)
+	}
 	entries := runChecksBounded(ctx, checks, resolveConcurrency(opts.Concurrency), timeout)
 	if opts.Fix {
 		applyFixes(ctx, checks, entries, timeout)
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 	return RunReport{Entries: entries, GeneratedAt: clock.Now()}
+}
+
+// providerChecks keeps only the checks in group providers.
+func providerChecks(checks []Check) []Check {
+	out := make([]Check, 0, len(checks))
+	for _, c := range checks {
+		if g, ok := c.(GroupedCheck); ok && g.Group() == GroupProviders {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // runChecksBounded runs every check in its own goroutine, at most

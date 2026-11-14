@@ -29,6 +29,7 @@
   "internal/daemon/service": { "tier": "core", "floor": 85.0, "baseline": 85.2 },
   "internal/delegation": { "tier": "core", "floor": 85.0, "baseline": 95.5 },
   "internal/doctor": { "tier": "core", "floor": 85.0, "baseline": 89.8 },
+  "internal/doctor/topologycheck": { "tier": "core", "floor": 85.0, "baseline": 100.0 },
   "internal/elevation": { "tier": "core", "floor": 85.0, "baseline": 85.5 },
   "internal/events": { "tier": "core", "floor": 85.0, "baseline": 86.4 },
   "internal/events/routing": { "tier": "core", "floor": 85.0, "baseline": 91.4 },

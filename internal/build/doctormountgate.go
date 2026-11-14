@@ -72,6 +72,18 @@ var DoctorMountExemptions = map[string]string{
 		"Store (internal/build/testonly-allow.json's internal/fleet/supervision.NewStore entry, P1-E18-W4-S39-T1) " +
 		"does not exist yet, so there is no live store to check. Mounts in productionCheckRegistry in the SAME " +
 		"change that wires the daemon composition root's production Store.",
+	"NewFreeDomainAbovePublicCheck": "topologycheck is a leaf only cmd/cascade imports; P1-TOP-07c builds its reader adapters over the topology store " +
+		"and the reservation ledger in cmd/cascade/doctor_mounts_topology.go, registers it in productionCheckRegistry and " +
+		"deletes this row in the same change.",
+	"NewDiscoverDomainAbovePublicCheck": "topologycheck is a leaf only cmd/cascade imports; P1-TOP-07c builds its reader adapters over the topology store " +
+		"and the reservation ledger in cmd/cascade/doctor_mounts_topology.go, registers it in productionCheckRegistry and " +
+		"deletes this row in the same change.",
+	"NewCredentialWithoutDomainCheck": "topologycheck is a leaf only cmd/cascade imports; P1-TOP-07c builds its reader adapters over the topology store " +
+		"and the reservation ledger in cmd/cascade/doctor_mounts_topology.go, registers it in productionCheckRegistry and " +
+		"deletes this row in the same change.",
+	"NewDomainWithoutCredentialCheck": "topologycheck is a leaf only cmd/cascade imports; P1-TOP-07c builds its reader adapters over the topology store " +
+		"and the reservation ledger in cmd/cascade/doctor_mounts_topology.go, registers it in productionCheckRegistry and " +
+		"deletes this row in the same change.",
 }
 
 // ScanDoctorCheckConstructors returns every function in the tree that
