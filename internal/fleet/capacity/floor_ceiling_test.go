@@ -9,6 +9,7 @@ import (
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/fleet/topology"
 	"github.com/acamarata/cascade/internal/storage/migrate"
+	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -76,6 +77,37 @@ func TestLeaseFloorReadErrorRefuses(t *testing.T) {
 	f.rebuild()
 	_, err := f.fleet.Lease(t.Context(), request(), dispatchFor("job-1"), 1)
 	requireSentinel(t, err, ErrNoCapableTier, "lane-ceiling: ceiling read failed")
+	f.zeroRows()
+}
+
+// TestLeaseFloorUnreconciledLaneRefusesNoQuotaDomain: lanes the topology has
+// no row for refuse ErrNoQuotaDomain (not a capability gap); once one removed
+// lane is above its ceiling instead, the refusal is ErrNoCapableTier.
+func TestLeaseFloorUnreconciledLaneRefusesNoQuotaDomain(t *testing.T) {
+	absent := cascade.New(cascade.KindNotFound, "credential not found")
+	f := newFx(t)
+	f.seedJob("job-1", provider.SensitivityInternal)
+	delete(f.snap.Lanes, "lane-t0")
+	f.deps.Floors = []LaneFilter{NewCeilingFloor(func(context.Context, conductor.LaneID, conductor.LaneType) (topology.Ceiling, error) {
+		return topology.Ceiling{}, absent
+	})}
+	f.rebuild()
+	_, err := f.fleet.Lease(t.Context(), request(), dispatchFor("job-1"), 1)
+	requireSentinel(t, err, ErrNoQuotaDomain, "lane-ceiling", "lane-t1", "lane-t2", "credential not found")
+	f.zeroRows()
+
+	f.deps.Floors = []LaneFilter{NewCeilingFloor(func(_ context.Context, id conductor.LaneID, _ conductor.LaneType) (topology.Ceiling, error) {
+		if id == "lane-t1" {
+			return topology.Ceiling{}, absent
+		}
+		return topology.Ceiling{Tier: provider.SensitivityPublic, Reason: topology.CeilingBillingCap}, nil
+	})}
+	f.rebuild()
+	_, err = f.fleet.Lease(t.Context(), request(), dispatchFor("job-1"), 1)
+	requireSentinel(t, err, ErrNoCapableTier, "lane-t1", "lane-t2", "billing-cap")
+	if hasSentinel(err, ErrNoQuotaDomain) {
+		t.Fatalf("mixed refusal = %v, want no ErrNoQuotaDomain while a lane sits above its ceiling", err)
+	}
 	f.zeroRows()
 }
 

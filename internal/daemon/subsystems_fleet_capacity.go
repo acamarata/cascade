@@ -173,6 +173,7 @@ func (c *fleetCapacity) buildFleet(d FleetRuntimeDeps, r *FleetRuntime) error {
 		return err
 	}
 	p := &c.parts
+	wireTopologySensitivity()
 	p.Deps = capacity.FleetDeps{
 		Snapshot: func(context.Context) (capacity.FleetSnapshot, error) { return c.snapshot(d.Clock) },
 		Selector: capacity.NewTierPolicySelector(p.Policy), Scorer: p.Scorer.For, Reserver: r.res.reserver, Reservations: r.res.resStore,

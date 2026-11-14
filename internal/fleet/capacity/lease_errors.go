@@ -109,6 +109,7 @@ type removedLane struct {
 	lane   conductor.LaneID
 	kind   string
 	reason string
+	cause  error // the error behind a floor refusal, when the floor reports one
 }
 
 // describeRemoved renders removed lanes sorted by id, each with its lane type

@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -126,11 +127,23 @@ func awaitLane(t *testing.T, d capDaemon, lane conductor.LaneID) {
 	t.Fatalf("lane %q never reached the capacity snapshot", lane)
 }
 
-// localLease leases local-only work (no job, so the data class floor is local-only).
+// localLease leases local-only work (no job: the data class floor reads local-only).
 func localLease(d capDaemon) (capacity.Lease, error) {
 	req := capacity.ResourceRequest{Intent: "p1-cap-05 test", TaskClass: conductor.TaskClassCode, MinQuality: capacity.QualityStandard,
 		Deadline: capacity.DeadlineInteractive, Sensitivity: provider.SensitivityLocalOnly, RiskClass: jobs.RiskClassLow}
 	return d.rt.Fleet().Lease(context.Background(), req, capacity.DispatchRef{ProjectID: "project-cap", HydratedTokens: 100, Requests: 1}, 1)
+}
+
+// publicLease leases public work for a fresh public job (a discover-tier domain caps lanes at public).
+func publicLease(t *testing.T, d capDaemon, id string) (capacity.Lease, error) {
+	t.Helper()
+	ctx, public := context.Background(), provider.SensitivityPublic
+	j := jobs.Job{ID: id, State: jobs.JobStatePending, CreatedAt: 1, UpdatedAt: 1, RiskClass: string(jobs.RiskClassLow),
+		ConsequenceClass: jobs.ConsequenceNormal, DataClass: &public}
+	want(t, d.rt.Jobs().PutJob(ctx, j) == nil, "PutJob(%s)", id)
+	req := capacity.ResourceRequest{Intent: "p1-cap-05 test", TaskClass: conductor.TaskClassCode, MinQuality: capacity.QualityStandard,
+		Deadline: capacity.DeadlineInteractive, Sensitivity: public, RiskClass: jobs.RiskClassLow, DataClass: &public}
+	return d.rt.Fleet().Lease(ctx, req, capacity.DispatchRef{JobID: id, ProjectID: "project-cap", HydratedTokens: 100, Requests: 1}, 1)
 }
 
 // rowCount counts rows of table on the runtime handle (a read only).
@@ -144,13 +157,16 @@ func rowCount(t *testing.T, d capDaemon, table string) int {
 }
 
 // isNoQuotaDomain reports capacity.ErrNoQuotaDomain in err's chain by identity.
-func isNoQuotaDomain(err error) bool {
+func isNoQuotaDomain(err error) bool { return hasLeaseSentinel(err, capacity.ErrNoQuotaDomain) }
+
+// hasLeaseSentinel reports sentinel in err's chain by identity (errors.Is compares Kind only).
+func hasLeaseSentinel(err, sentinel error) bool {
 	for err != nil {
-		if err == capacity.ErrNoQuotaDomain {
+		if err == sentinel {
 			return true
 		}
 		if multi, ok := err.(interface{ Unwrap() []error }); ok {
-			return slices.ContainsFunc(multi.Unwrap(), isNoQuotaDomain)
+			return slices.ContainsFunc(multi.Unwrap(), func(e error) bool { return hasLeaseSentinel(e, sentinel) })
 		}
 		err = errors.Unwrap(err)
 	}
@@ -167,7 +183,10 @@ func TestFleetComposedAtDaemonStart(t *testing.T) {
 	seedLocalProvider(t, d)
 	reconcileAndFund(t, d, "local-llm:api")
 	awaitLane(t, d, "local-llm-1")
-	lease, err := localLease(d)
+	if _, err := localLease(d); !hasLeaseSentinel(err, capacity.ErrNoCapableTier) || !strings.Contains(err.Error(), "billing-cap") {
+		t.Fatalf("local-only Lease on a discover-tier domain = %v, want the lane-ceiling billing-cap refusal", err)
+	}
+	lease, err := publicLease(t, d, "job-cap-composed")
 	if err != nil {
 		t.Fatalf("Lease: %v", err)
 	}
@@ -187,7 +206,7 @@ func TestLeaseRefusesOnUnreconciledDaemon(t *testing.T) {
 	d := composeCapacity(t)
 	seedLocalProvider(t, d)
 	awaitLane(t, d, "local-llm-1")
-	if _, err := localLease(d); !isNoQuotaDomain(err) {
+	if _, err := publicLease(t, d, "job-cap-unreconciled"); !isNoQuotaDomain(err) {
 		t.Fatalf("Lease before Reconcile = %v, want capacity.ErrNoQuotaDomain", err)
 	}
 	for _, table := range []string{"jobs_reservation", "jobs_scheduler_decisions"} {
@@ -196,7 +215,7 @@ func TestLeaseRefusesOnUnreconciledDaemon(t *testing.T) {
 		}
 	}
 	reconcileAndFund(t, d, "local-llm:api")
-	lease, err := localLease(d)
+	lease, err := publicLease(t, d, "job-cap-reconciled")
 	if err != nil {
 		t.Fatalf("Lease after Reconcile: %v", err)
 	}

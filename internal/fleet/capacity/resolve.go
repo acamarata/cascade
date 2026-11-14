@@ -156,7 +156,7 @@ func (f *Fleet) eligibleLanes(snap FleetSnapshot, p leasePlan) ([]conductor.Lane
 	}
 	kept, removed = f.applyFloors(snap, kept, p.req)
 	if len(kept) == 0 {
-		return nil, refuse(ErrNoCapableTier, nil, "lane floors removed every lane: %s", describeRemoved(removed))
+		return nil, floorRefusal(removed)
 	}
 	return kept, nil
 }
@@ -198,8 +198,8 @@ func (f *Fleet) applyFloors(snap FleetSnapshot, ids []conductor.LaneID, req Reso
 	var removed []removedLane
 	for _, id := range ids {
 		slot := snap.Lanes[id]
-		if name, reason, ok := admitAll(f.deps.Floors, req, slot); !ok {
-			removed = append(removed, removedLane{lane: id, kind: slot.LaneType.String(), reason: name + ": " + reason})
+		if name, reason, ok, cause := admitAll(f.deps.Floors, req, slot); !ok {
+			removed = append(removed, removedLane{lane: id, kind: slot.LaneType.String(), reason: name + ": " + reason, cause: cause})
 			continue
 		}
 		kept = append(kept, id)
@@ -207,14 +207,15 @@ func (f *Fleet) applyFloors(snap FleetSnapshot, ids []conductor.LaneID, req Reso
 	return kept, removed
 }
 
-// admitAll reports the first floor that refuses slot.
-func admitAll(floors []LaneFilter, req ResourceRequest, slot ProviderSlot) (name, reason string, ok bool) {
+// admitAll reports the first floor that refuses slot, with the error behind
+// the refusal when that floor reports one.
+func admitAll(floors []LaneFilter, req ResourceRequest, slot ProviderSlot) (name, reason string, ok bool, cause error) {
 	for _, fl := range floors {
-		if admitted, why := fl.Admit(req, slot); !admitted {
-			return fl.Name(), why, false
+		if admitted, why, err := admitWithCause(fl, req, slot); !admitted {
+			return fl.Name(), why, false, err
 		}
 	}
-	return "", "", true
+	return "", "", true, nil
 }
 
 // sensitivityRefusal explains an emptied lane set: local-only work is a

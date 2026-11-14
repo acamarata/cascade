@@ -3,7 +3,9 @@
 // data class) fits the lane's data-class ceiling (topology.TierAdmits).
 // Inputs: a cap that reads one lane's Ceiling.
 // Outputs: an admit or a refusal with a reason.
-// Constraints: a nil cap or a cap error never reads as admit.
+// Constraints: a nil cap or a cap error never reads as admit. A lease whose
+// lanes the floors all removed for want of a topology row refuses
+// ErrNoQuotaDomain (as Lease did before the floor), any other ErrNoCapableTier.
 //
 // SPORT: fleet.capacity.lease.
 
@@ -14,6 +16,7 @@ import (
 
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/fleet/topology"
+	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -65,16 +68,58 @@ func (ceilingFloor) Name() string { return CeilingFloorName }
 
 // Admit reports whether req's joined tier fits slot's ceiling.
 func (f ceilingFloor) Admit(req ResourceRequest, slot ProviderSlot) (bool, string) {
+	ok, why, _ := f.admitCause(req, slot)
+	return ok, why
+}
+
+// admitCause is Admit plus the cap's read error, so a refused lease can tell
+// a lane the topology holds no row for from a lane above its ceiling.
+func (f ceilingFloor) admitCause(req ResourceRequest, slot ProviderSlot) (bool, string, error) {
 	if f.cap == nil {
-		return false, "lane-ceiling: no cap"
+		return false, "lane-ceiling: no cap", nil
 	}
 	c, err := f.cap(context.Background(), slot.LaneID, slot.LaneType)
 	if err != nil {
-		return false, err.Error()
+		return false, err.Error(), err
 	}
 	tier := provider.JoinSensitivity(req.Sensitivity, provider.TierOrLocalOnly(req.DataClass))
 	if !topology.TierAdmits(tier, c) {
-		return false, "request tier " + tier.String() + " above lane ceiling " + c.Tier.String() + " (" + string(c.Reason) + ")"
+		return false, "request tier " + tier.String() + " above lane ceiling " + c.Tier.String() + " (" + string(c.Reason) + ")", nil
 	}
-	return true, ""
+	return true, "", nil
+}
+
+// causedFilter is a floor that also reports the error behind a refusal.
+type causedFilter interface {
+	admitCause(req ResourceRequest, slot ProviderSlot) (bool, string, error)
+}
+
+// admitWithCause runs fl, with its refusal error when fl reports one.
+func admitWithCause(fl LaneFilter, req ResourceRequest, slot ProviderSlot) (bool, string, error) {
+	if cf, ok := fl.(causedFilter); ok {
+		return cf.admitCause(req, slot)
+	}
+	ok, why := fl.Admit(req, slot)
+	return ok, why, nil
+}
+
+// floorRefusal explains a lane set the floors emptied. When every removed
+// lane was refused because the topology holds no row for it (no credential,
+// no domain, no live lane: what DomainOf reports as no quota domain), the
+// lease refuses ErrNoQuotaDomain, so an unreconciled daemon is never reported
+// as a capability gap. Any other refusal is ErrNoCapableTier. Both refuse.
+func floorRefusal(removed []removedLane) error {
+	detail := describeRemoved(removed)
+	for _, r := range removed {
+		if !lacksQuotaDomain(r.cause) {
+			return refuse(ErrNoCapableTier, nil, "lane floors removed every lane: %s", detail)
+		}
+	}
+	return refuse(ErrNoQuotaDomain, nil, "lane floors removed every lane: %s", detail)
+}
+
+// lacksQuotaDomain is domainFor's no-quota-domain rule over a floor's error;
+// a nil error (a tier refusal) is not.
+func lacksQuotaDomain(err error) bool {
+	return err != nil && (hasSentinel(err, ErrNoQuotaDomain) || cascade.HasKind(err, cascade.KindNotFound))
 }
