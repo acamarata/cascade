@@ -80,6 +80,7 @@ type runFlags struct {
 	Stream      bool
 	DryRun      bool
 	Input       []string
+	Agent       agentFlags
 }
 
 // mountRunCmd attaches `run` to root (golden_help.txt carries it).
@@ -107,19 +108,9 @@ func newRunCmd(deps runDeps) *cobra.Command {
 			"  # it authoring task classes, then verify the result before use:\n" +
 			"  cascade run --task classify --input \"triage this\"\n" +
 			"  cascade run --task code --input \"...\"  # refuses until the model qualifies",
-		Args: usageArgs(cobra.NoArgs),
-		PreRunE: func(*cobra.Command, []string) error {
-			if err := validateTaskClass(flags.Task); err != nil {
-				return err
-			}
-			return validateFanOutFlags(flags)
-		},
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			if flags.FanOut >= 2 {
-				return runFanOutCmd(cmd, deps, flags)
-			}
-			return runRunCmd(cmd, deps, flags)
-		},
+		Args:    usageArgs(cobra.NoArgs),
+		PreRunE: func(*cobra.Command, []string) error { return preflightRun(flags) },
+		RunE:    func(cmd *cobra.Command, _ []string) error { return dispatchRun(cmd, deps, flags) },
 	}
 	f := cmd.Flags()
 	f.StringVar(&flags.Task, "task", "", "task class: "+strings.Join(runTaskClasses, "|")+" (required)")
@@ -130,6 +121,7 @@ func newRunCmd(deps runDeps) *cobra.Command {
 	f.BoolVar(&flags.DryRun, "dry-run", false, "log the request without dispatching to any provider")
 	f.StringArrayVar(&flags.Input, "input", nil, "repeatable chat turn, \"role:content\" (role defaults to user); reads stdin if omitted")
 	f.StringVar(&flags.Resume, "resume", "", "re-attach to the fan-out with this request id")
+	addRunAgentFlags(cmd, &flags.Agent)
 	_ = f.MarkHidden("fan-out")
 	_ = f.MarkHidden("resume")
 	return cmd
