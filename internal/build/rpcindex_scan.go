@@ -114,7 +114,7 @@ func (s *rpcDeclarationScan) record(src rpcSource, call *ast.CallExpr, args []as
 }
 
 func rpcAccessClass(root, rel string, expr ast.Expr) string {
-	for _, class := range []string{"Open", "OwnerOnly", "OwnerView", "Scoped", "Ingest"} {
+	for _, class := range []string{"Open", "OwnerOnly", "OwnerView", "Scoped", "Ingest", "Node"} {
 		if rpcSymbol(root, rel, expr, "Access"+class) {
 			return class
 		}
