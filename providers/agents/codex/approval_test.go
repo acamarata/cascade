@@ -75,14 +75,17 @@ func assertFailClosed(t *testing.T, k *kit, id provider.AgentJobID, want error) 
 	if len(ans) != 1 || string(ans[0]["result"]) != `{"decision":"decline"}` {
 		t.Fatalf("answers = %v, want one decline", ans)
 	}
-	if !k.wroteMethod("turn/interrupt") {
-		t.Fatal("no turn/interrupt was sent")
-	}
+	// The interrupt is written before Collect can return, but the fake child
+	// records it from its own read loop: wait for the record, not a delay.
+	waitFor(t, "the turn/interrupt record", func() bool { return k.wroteMethod("turn/interrupt") })
 }
 
 func TestCodexApprovalTimeoutCancelsFailClosed(t *testing.T) {
 	k := approvalKit(t)
 	k.cfg.Defaults.ApprovalTimeout = 150 * time.Millisecond
+	// A grace shorter than a loaded runner's read loop lets the TERM rung
+	// kill the child before it records the interrupt.
+	k.cfg.Defaults.CancelGrace = 10 * time.Second
 	d := k.driver()
 	res, err := d.Spawn(testCtx(t), k.spec())
 	if err != nil {

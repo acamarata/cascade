@@ -325,8 +325,24 @@ jobs:
 
       # -timeout 40m: hosted b41 took 1370 s here against the old 25m (1500 s)
       # bound; the slow packages (internal/build, cmd/cascade) only grow.
-      - name: go test -race ./...
-        run: go test -race -timeout 40m ./...
+      - name: go test -race (every package except cmd/cascade)
+        run: go test -race -timeout 40m $(go list ./... | grep -v '^github.com/[^/]*/[^/]*/cmd/cascade$')
+
+  # cmd/cascade passed the 40m race bound on its own at 2400 s, so it runs in
+  # its own job with room. Every package is still under -race.
+  race-cmd-cascade:
+    name: race detector (cmd/cascade)
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: go test -race ./cmd/cascade/
+        run: go test -race -timeout 75m ./cmd/cascade/
 
   coverage:
     # P1-E01-W1-S01-T4: measures coverage on every push. This lane does NOT
@@ -1471,7 +1487,7 @@ jobs:
 
   ci-gate:
     name: ci-gate (required status)
-    needs: [build-test, darwin-amd64-build, linux-pam-build, conformance-suite, race, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, redis-storetest-under-docker, s3-storetest-under-docker, server-profile-assembly, plugin-integration, node-dispatch-real-git, node-kill-mid-run, sync-merge-real-git, changes, widget, golden-parity, integration-lanes, integration-lanes-red-assert]
+    needs: [build-test, darwin-amd64-build, linux-pam-build, conformance-suite, race, race-cmd-cascade, lint, hygiene, coverage-gate, redirected-home, retrieval-eval-gate, storetest-under-docker, pgvector-storetest-under-docker, redis-storetest-under-docker, s3-storetest-under-docker, server-profile-assembly, plugin-integration, node-dispatch-real-git, node-kill-mid-run, sync-merge-real-git, changes, widget, golden-parity, integration-lanes, integration-lanes-red-assert]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     if: always()
@@ -1479,7 +1495,7 @@ jobs:
       - name: All lanes green
         run: |
           set -eu
-          for r in "${{ needs.build-test.result }}" "${{ needs.darwin-amd64-build.result }}" "${{ needs.linux-pam-build.result }}" "${{ needs.conformance-suite.result }}" "${{ needs.race.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}" "${{ needs.retrieval-eval-gate.result }}" "${{ needs.storetest-under-docker.result }}" "${{ needs.pgvector-storetest-under-docker.result }}" "${{ needs.redis-storetest-under-docker.result }}" "${{ needs.s3-storetest-under-docker.result }}" "${{ needs.server-profile-assembly.result }}" "${{ needs.plugin-integration.result }}" "${{ needs.node-dispatch-real-git.result }}" "${{ needs.node-kill-mid-run.result }}" "${{ needs.sync-merge-real-git.result }}" "${{ needs.golden-parity.result }}" "${{ needs.integration-lanes.result }}" "${{ needs.integration-lanes-red-assert.result }}"; do
+          for r in "${{ needs.build-test.result }}" "${{ needs.darwin-amd64-build.result }}" "${{ needs.linux-pam-build.result }}" "${{ needs.conformance-suite.result }}" "${{ needs.race.result }}" "${{ needs.race-cmd-cascade.result }}" "${{ needs.lint.result }}" "${{ needs.hygiene.result }}" "${{ needs.coverage-gate.result }}" "${{ needs.redirected-home.result }}" "${{ needs.retrieval-eval-gate.result }}" "${{ needs.storetest-under-docker.result }}" "${{ needs.pgvector-storetest-under-docker.result }}" "${{ needs.redis-storetest-under-docker.result }}" "${{ needs.s3-storetest-under-docker.result }}" "${{ needs.server-profile-assembly.result }}" "${{ needs.plugin-integration.result }}" "${{ needs.node-dispatch-real-git.result }}" "${{ needs.node-kill-mid-run.result }}" "${{ needs.sync-merge-real-git.result }}" "${{ needs.golden-parity.result }}" "${{ needs.integration-lanes.result }}" "${{ needs.integration-lanes-red-assert.result }}"; do
             if [ "$r" != "success" ]; then
               echo "ci-gate: a required lane did not succeed ($r)"
               exit 1
