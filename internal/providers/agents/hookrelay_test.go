@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/acamarata/cascade/internal/testkit"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
 )
@@ -40,7 +41,7 @@ func (f failReader) Read([]byte) (int, error) {
 }
 
 func relayCtx(t *testing.T) context.Context {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), testkit.Deadline(t, 20*time.Second))
 	t.Cleanup(cancel)
 	return ctx
 }
@@ -146,7 +147,11 @@ func TestHookRelaySeqStrictlyIncreasesUnderConcurrency(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	r.wait()
+	select {
+	case <-r.done:
+	case <-time.After(testkit.Deadline(t, 20*time.Second)):
+		t.Fatal("the fake driver did not receive every expected connection")
+	}
 	for i, e := range errs {
 		if e != "" {
 			t.Fatalf("relay process %d: %s", i, e)
