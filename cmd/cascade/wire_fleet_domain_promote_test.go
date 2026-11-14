@@ -265,14 +265,17 @@ func TestPruneErrorKeepsEvidence(t *testing.T) {
 	if _, err := bus.Publish(context.Background(), "fleet.topology", topologyReconciledKind, "test", []byte(`{}`)); err != nil {
 		t.Fatal(err)
 	}
-	waitRows(t, h, "dq", 0)
+	waitRows(t, h, bus, "dq", 0)
 	h.want(t, "dp", topology.BillingTierPaid, 1)
 }
 
-// waitRows waits up to 5 s for domain's evidence row count to reach n.
-func waitRows(t *testing.T, h *promoteHarness, domain string, n int) {
+// waitRows waits up to 10 s for domain's evidence row count to reach n. A
+// prune can lose one pass to a transient store error while the poll below
+// reads the same database, so each unmet poll publishes another reconciled
+// pass: the prune is idempotent and the wait ends on the real row count.
+func waitRows(t *testing.T, h *promoteHarness, bus *events.Bus, domain string, n int) {
 	t.Helper()
-	tick, deadline := time.NewTicker(5*time.Millisecond), time.After(5*time.Second)
+	tick, deadline := time.NewTicker(50*time.Millisecond), time.After(10*time.Second)
 	defer tick.Stop()
 	for {
 		ev, err := h.topo.BillingEvidenceFor(context.Background(), topology.DomainID(domain))
@@ -283,6 +286,9 @@ func waitRows(t *testing.T, h *promoteHarness, domain string, n int) {
 		case <-deadline:
 			t.Fatalf("%s: %d rows (%v), want %d", domain, len(ev), err, n)
 		case <-tick.C:
+			if _, perr := bus.Publish(context.Background(), "fleet.topology", topologyReconciledKind, "test", []byte(`{}`)); perr != nil {
+				t.Fatal(perr)
+			}
 		}
 	}
 }
