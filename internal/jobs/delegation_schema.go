@@ -8,9 +8,12 @@ package jobs
 //	its own SetID, following migration_outbox.go.
 //
 // SetID: "jobs", "jobs-evidence" and "jobs-outbox" are claimed; this file
-// claims the distinct "jobs-delegation" SetID at schema_version 1. The
-// migration is additive (one new table and its indexes); a binary that
-// predates it never reads the table.
+// claims the distinct "jobs-delegation" SetID. Version 1 is the table and
+// its indexes. Version 2 adds the nullable execution_id and reservation_id
+// columns (the lease's, so start-up recovery can rebuild it): the DSL has no
+// ALTER, so ApplyDelegationSchema adds them after the set applies, guarded by
+// the table's own column list, and a version 1 database upgrades in place.
+// A version 1 binary refuses a version 2 database through ReaderCeiling.
 //
 // TRIGGERS: the migration DSL has no CHECK or trigger support, so
 // ApplyDelegationSchema adds the triggers after the set applies, with
@@ -38,7 +41,7 @@ import (
 
 const tableDelegation = "jobs_delegation"
 
-const delegationSchemaVersion = 1
+const delegationSchemaVersion = 2
 
 // DelegationMigrationSet is the jobs_delegation table's own MigrationSet,
 // distinct from the other jobs sets per R-16.77.
@@ -115,7 +118,8 @@ var delegationTriggers = []string{
 	   OR NEW.origin_principal IS NOT OLD.origin_principal OR NEW.origin_session IS NOT OLD.origin_session
 	   OR NEW.agent_principal IS NOT OLD.agent_principal OR NEW.depth IS NOT OLD.depth
 	   OR NEW.job_id IS NOT OLD.job_id OR NEW.mutation IS NOT OLD.mutation OR NEW.lane IS NOT OLD.lane
-	   OR NEW.created_at IS NOT OLD.created_at
+	   OR NEW.created_at IS NOT OLD.created_at OR NEW.execution_id IS NOT OLD.execution_id
+	   OR NEW.reservation_id IS NOT OLD.reservation_id
 	 BEGIN SELECT RAISE(ABORT, '` + msgDelegationImmutable + `'); END`,
 	`CREATE TRIGGER IF NOT EXISTS jobs_delegation_spawn_once BEFORE UPDATE ON ` + tableDelegation + `
 	 WHEN OLD.lease_id IS NOT NULL AND (NEW.lease_id IS NOT OLD.lease_id OR NEW.agent_job_id IS NOT OLD.agent_job_id)
@@ -139,6 +143,7 @@ var delegationTriggers = []string{
 	`CREATE TRIGGER IF NOT EXISTS jobs_delegation_state_insert BEFORE INSERT ON ` + tableDelegation + `
 	 WHEN NEW.state <> 'live' OR NEW.lease_id IS NOT NULL OR NEW.agent_job_id IS NOT NULL
 	   OR NEW.lease_marker IS NOT NULL OR NEW.reason <> ''
+	   OR ((NEW.execution_id IS NULL) <> (NEW.reservation_id IS NULL))
 	 BEGIN SELECT RAISE(ABORT, '` + msgDelegationState + `'); END`,
 	`CREATE TRIGGER IF NOT EXISTS jobs_delegation_no_delete BEFORE DELETE ON ` + tableDelegation + `
 	 BEGIN SELECT RAISE(ABORT, '` + msgDelegationNoDelete + `'); END`,
@@ -163,31 +168,27 @@ func ApplyDelegationSchema(ctx context.Context, db *sql.DB, dialect migrate.Dial
 	if err != nil {
 		return err
 	}
-	for _, stmt := range delegationTriggers {
-		if _, err := db.ExecContext(ctx, stmt); err != nil {
-			return cascade.Wrap(cascade.KindUnavailable, err, "jobs: create delegation trigger")
-		}
-	}
-	return nil
+	return upgradeDelegationTable(ctx, db)
 }
 
 // delegationCols is the column list every read selects, in scan order.
 const delegationCols = `id, envelope_digest, signed, parent_digest, parent_signed, origin_principal,
 	origin_session, agent_principal, depth, job_id, mutation, lane, lease_id, agent_job_id,
-	lease_marker, state, reason, created_at, updated_at`
+	lease_marker, state, reason, created_at, updated_at, execution_id, reservation_id`
 
 // rowScanner is the Scan method *sql.Row and *sql.Rows share.
 type rowScanner interface{ Scan(dest ...any) error }
 
 // scanDelegation reads one record; ok is false when there is no row.
 func scanDelegation(r rowScanner) (rec DelegationRecord, ok bool, err error) {
-	var lease, agentJob, marker sql.NullString
+	var lease, agentJob, marker, execution, reservation sql.NullString
 	var mutation int
 	var state string
 	var created, updated int64
 	err = r.Scan(&rec.ID, &rec.EnvelopeDigest, &rec.Signed, &rec.ParentDigest, &rec.ParentSigned,
 		&rec.OriginPrincipal, &rec.OriginSession, &rec.AgentPrincipal, &rec.Depth, &rec.JobID,
-		&mutation, &rec.Lane, &lease, &agentJob, &marker, &state, &rec.Reason, &created, &updated)
+		&mutation, &rec.Lane, &lease, &agentJob, &marker, &state, &rec.Reason, &created, &updated,
+		&execution, &reservation)
 	if errors.Is(err, sql.ErrNoRows) {
 		return DelegationRecord{}, false, nil
 	}
@@ -196,6 +197,7 @@ func scanDelegation(r rowScanner) (rec DelegationRecord, ok bool, err error) {
 	}
 	rec.Mutation, rec.State = mutation != 0, DelegationState(state)
 	rec.LeaseID, rec.AgentJobID, rec.LeaseMarker = lease.String, agentJob.String, marker.String
+	rec.ExecutionID, rec.ReservationID = execution.String, reservation.String
 	rec.CreatedAt, rec.UpdatedAt = time.Unix(0, created).UTC(), time.Unix(0, updated).UTC()
 	return rec, true, nil
 }
@@ -230,16 +232,17 @@ func insertDelegationTx(ctx context.Context, tx *sql.Tx, row DelegationRecord) e
 	if len(row.ParentSigned) != 0 {
 		parentSigned = row.ParentSigned
 	}
-	mutation := 0
+	mutation, execution, reservation := 0, sql.NullString{String: row.ExecutionID, Valid: row.ExecutionID != ""},
+		sql.NullString{String: row.ReservationID, Valid: row.ReservationID != ""}
 	if row.Mutation {
 		mutation = 1
 	}
 	res, err := tx.ExecContext(ctx, `INSERT INTO `+tableDelegation+` (`+delegationCols+`)
-		 SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'live', '', ?, ?
+		 SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 'live', '', ?, ?, ?, ?
 		 WHERE ? = '' OR (SELECT COUNT(*) FROM `+tableDelegation+` WHERE parent_digest = ? AND state = 'live') < ?`,
 		row.ID, row.EnvelopeDigest, row.Signed, row.ParentDigest, parentSigned, row.OriginPrincipal,
 		row.OriginSession, row.AgentPrincipal, row.Depth, row.JobID, mutation, row.Lane,
-		row.CreatedAt.UnixNano(), row.UpdatedAt.UnixNano(),
+		row.CreatedAt.UnixNano(), row.UpdatedAt.UnixNano(), execution, reservation,
 		row.ParentDigest, row.ParentDigest, DelegationMaxLiveChildren)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {

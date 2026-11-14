@@ -15,10 +15,8 @@ package jobs
 // OriginPrincipal is ignored. The depth and fan-out checks run inside the
 // insert's own transaction and statement (m-6).
 //
-// Caps: DelegationMaxDepth and DelegationMaxLiveChildren live here, not in
-// internal/delegation, because internal/delegation imports this package;
-// delegation.MaxDepth and delegation.MaxLiveChildren alias them so the limits
-// have one source of truth.
+// Caps: DelegationMaxDepth and DelegationMaxLiveChildren live here (internal/delegation
+// imports this package); delegation.MaxDepth and MaxLiveChildren alias them.
 //
 // SPORT: jobs/delegation-record/ADD (P1-AGT-11).
 
@@ -78,6 +76,8 @@ type DelegationRecord struct {
 	Lane            string
 	LeaseID         string
 	AgentJobID      string
+	ExecutionID     string // the lease's execution and reservation, set at insert
+	ReservationID   string // (both or neither) so recovery can rebuild the lease
 	LeaseMarker     string // set-once before spawn (M-4)
 	State           DelegationState
 	Reason          string
@@ -115,6 +115,8 @@ func checkInsert(r DelegationRecord) (envelope.Envelope, string, error) {
 		return envelope.Envelope{}, "", invalidDelegation("bindings and reason are set after insert")
 	case r.CreatedAt.IsZero():
 		return envelope.Envelope{}, "", invalidDelegation("CreatedAt is required")
+	case (r.ExecutionID == "") != (r.ReservationID == ""):
+		return envelope.Envelope{}, "", invalidDelegation("an execution ID and a reservation ID are set together")
 	}
 	signed, err := envelope.Decode(r.Signed)
 	if err != nil {

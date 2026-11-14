@@ -9,7 +9,6 @@ import (
 	"cmp"
 	"context"
 	"crypto/ed25519"
-	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -123,7 +122,7 @@ func (s *Service) Delegate(ctx context.Context, req *Request) (*Response, error)
 	}
 	repoID, err := s.repoID(ctx, req)
 	if err != nil { // refuse the stored child record before any lease
-		return nil, cmp.Or(s.insertChild(ctx, req, rec, ""),
+		return nil, cmp.Or(s.insertChild(ctx, req, rec, capacity.Lease{}),
 			s.deps.Store.FinishDelegation(ctx, rec.Env.ID, jobs.DelegationRefused, err.Error()), err)
 	}
 	lease, driver, err := s.lease(ctx, req, repoID)
@@ -170,62 +169,6 @@ func (s *Service) lease(ctx context.Context, req *Request, repoID string) (capac
 		return capacity.Lease{}, "", s.abort(ctx, lease, "", provider.ErrEntitlement)
 	}
 	return lease, lane.DriverID, nil
-}
-
-// spawn stores the child record, mints its principal, binds the marker, gates, spawns and
-// commits; an empty lease id or child principal refuses ErrSpawnBinding before any Spawn.
-func (s *Service) spawn(ctx context.Context, req *Request, rec envelope.Signed, lease capacity.Lease, policy string) error {
-	if s.shim == nil || s.deps.Minter == nil {
-		return s.abort(ctx, lease, "", invalidf("Delegate: a shim and a minter are required"))
-	}
-	id, child := rec.Env.ID, rec.Env.Principal
-	if child == "" { // the store refuses a principal-less record: refuse before the insert
-		return s.abort(ctx, lease, "", ErrSpawnBinding)
-	}
-	if err := s.insertChild(ctx, req, rec, string(lease.LaneID)); err != nil {
-		return s.abort(ctx, lease, "", err)
-	}
-	job := provider.AgentJobSpec{JobID: provider.AgentJobID(id), ToolPolicy: policy}
-	tok, err := s.mintSession(ctx, req, rec.Env, job.JobID)
-	marker := ""
-	if err == nil {
-		marker, err = agents.NewLeaseMarker()
-	}
-	if err == nil {
-		err = s.deps.Store.BindDelegationMarker(ctx, id, marker)
-	}
-	if err == nil {
-		err = s.runGates(ctx, id, rec.Env)
-	}
-	if err == nil && lease.ID == "" {
-		err = ErrSpawnBinding
-	}
-	var h agents.SpawnHandle
-	if err == nil {
-		h, err = s.shim.Spawn(ctx, agents.SpawnRequest{Lane: string(lease.LaneID), Job: job, PrincipalToken: tok,
-			LeaseMarker: marker, LeaseID: lease.ID, ChildPrincipal: child})
-	}
-	if err == nil {
-		if err = s.deps.Store.BindDelegationSpawn(ctx, id, lease.ID, string(h.JobID)); err != nil {
-			_ = h.Release(ctx)
-		}
-	}
-	if err != nil { // the minted token never outlives a refused spawn
-		s.deps.Minter.Revoke(child)
-		return s.abort(ctx, lease, id, err)
-	}
-	return s.started(ctx, req, rec, lease, h)
-}
-
-// insertChild stores the signed child record live on lane.
-func (s *Service) insertChild(ctx context.Context, req *Request, rec envelope.Signed, lane string) error {
-	b, err := json.Marshal(rec)
-	if err != nil {
-		return cascade.Wrap(cascade.KindInternal, err, "delegation: encode the child record")
-	}
-	return s.deps.Store.InsertDelegation(ctx, jobs.DelegationRecord{ID: rec.Env.ID, Signed: b,
-		AgentPrincipal: rec.Env.Principal, JobID: req.JobID, Mutation: req.Mutation,
-		Lane: lane, State: jobs.DelegationLive, CreatedAt: s.deps.Clock.Now()})
 }
 
 // mintSession mints the child's node-job principal, SessionID = provider.SessionIDFor(job).

@@ -7,17 +7,20 @@
 // service's origin-checked Wait.
 // Inputs: strict JSON params; the caller bound by the access middleware.
 // Outputs: {job_id, status "dispatched"} and {job_id, state, output?, artifacts?, data_class}.
-// Constraints: every refusal is a typed cascade error; a mutation needs the job's
-// worktree binding, which this daemon does not resolve yet, and is refused.
+// Constraints: every refusal is a typed cascade error; a mutation runs in the job's
+// worktree (the checkout its held lease is bound to) over its mutable scope, and a
+// job without one, or a wiring without the job store, is refused.
 package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"path/filepath"
 	"time"
 
 	"github.com/acamarata/cascade/internal/conductor"
@@ -30,8 +33,8 @@ import (
 )
 
 const (
-	delegateIntentMax  = 64 << 10
-	delegateWaitMax    = 10 * time.Minute
+	delegateIntentMax = 64 << 10
+	delegateWaitMax   = 10 * time.Minute
 )
 
 var (
@@ -39,9 +42,15 @@ var (
 	_ = rpc.DeclareAccess(delegateWaitMethod, rpc.AccessOwnerView)
 )
 
-// errDelegateMutationUnbound refuses a mutation: the job worktree binding is not wired.
+// errDelegateMutationUnbound refuses a mutation whose job worktree binding cannot be resolved.
 var errDelegateMutationUnbound = cascade.New(cascade.KindUnavailable,
-	"conductor.delegate: mutation delegations need the job's worktree binding, which this daemon does not resolve yet")
+	"conductor.delegate: mutation delegations need the job's worktree binding: none is held or the job store is not wired")
+
+// jobBinding is a mutation job's worktree binding: the checkout root and in-scope prefixes.
+type jobBinding struct {
+	root  string
+	scope []string
+}
 
 // delegateParams are the conductor.delegate params.
 type delegateParams struct {
@@ -90,8 +99,11 @@ func (h delegateHandlers) delegate(ctx context.Context, raw json.RawMessage) (an
 	if err != nil {
 		return nil, err
 	}
+	var bind jobBinding
 	if need.Mutation {
-		return nil, errDelegateMutationUnbound
+		if bind, err = h.rt.jobBinding(ctx, need.JobID); err != nil {
+			return nil, err
+		}
 	}
 	svc, err := h.rt.service(ctx)
 	if err != nil {
@@ -101,12 +113,13 @@ func (h delegateHandlers) delegate(ctx context.Context, raw json.RawMessage) (an
 	if err != nil {
 		return nil, err
 	}
-	parent, wt, finish, err := h.rt.parent(ctx, policy)
+	parent, wt, finish, err := h.rt.parent(ctx, policy, bind)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := svc.Delegate(ctx, &delegation.Request{AgentID: agentID, Need: need.TaskClass,
-		Deadline: need.Deadline, MinQuality: need.MinQuality, JobID: need.JobID, Parent: parent, Worktree: wt})
+	resp, err := svc.Delegate(ctx, &delegation.Request{AgentID: agentID, Need: need.TaskClass, Deadline: need.Deadline,
+		MinQuality: need.MinQuality, JobID: need.JobID, Mutation: need.Mutation, RepoRoot: bind.root, InScope: bind.scope,
+		Parent: parent, Worktree: wt})
 	if err != nil {
 		_ = wt.Release()
 	}
@@ -132,6 +145,57 @@ func (h delegateHandlers) wait(ctx context.Context, raw json.RawMessage) (any, e
 	timeout := min(time.Duration(p.TimeoutMS)*time.Millisecond, delegateWaitMax)
 	res, err := svc.Wait(ctx, p.JobID, timeout)
 	return res, cascadeOrInternal(err, "conductor.delegate_wait")
+}
+
+// jobBinding resolves jobID's worktree binding from the job store: the one worktree its
+// held or renewing leases are bound to, and the prefixes of its mutable scope.
+func (rt *delegateRuntime) jobBinding(ctx context.Context, jobID string) (jobBinding, error) {
+	if rt.binder == nil {
+		return jobBinding{}, errDelegateMutationUnbound
+	}
+	job, ok, err := rt.binder.GetJob(ctx, jobID)
+	if err != nil || !ok {
+		return jobBinding{}, cmp.Or[error](err, cascade.Newf(cascade.KindNotFound, "conductor.delegate: job %s does not exist", jobID))
+	}
+	scope, err := scopePrefixes(job.MutableScope)
+	if err == nil && len(scope) == 0 {
+		err = cascade.Newf(cascade.KindInvalidInput, "conductor.delegate: job %s has no in-scope prefix to mutate", jobID)
+	}
+	if err != nil {
+		return jobBinding{}, err
+	}
+	root, err := heldWorktree(ctx, rt.binder, job.ID)
+	if err != nil {
+		return jobBinding{}, err
+	}
+	return jobBinding{root: root, scope: scope}, nil
+}
+
+// heldWorktree is the path of the one worktree jobID's live leases are bound to.
+func heldWorktree(ctx context.Context, store *jobs.Store, jobID string) (string, error) {
+	leases, err := store.LeasesForHolder(ctx, jobID)
+	if err != nil {
+		return "", err
+	}
+	root := ""
+	for _, l := range leases {
+		if l.State != jobs.LeaseHeld && l.State != jobs.LeaseRenewing {
+			continue
+		}
+		wt, ok, err := store.WorktreeForLease(ctx, l.RepoID, l.ScopeGlob)
+		switch {
+		case err != nil:
+			return "", err
+		case ok && root != "" && wt.Path != root:
+			return "", cascade.Newf(cascade.KindConflict, "conductor.delegate: job %s holds more than one worktree", jobID)
+		case ok:
+			root = wt.Path
+		}
+	}
+	if root == "" || !filepath.IsAbs(root) {
+		return "", errDelegateMutationUnbound
+	}
+	return filepath.Clean(root), nil
 }
 
 // callerParent is the stored delegation of a principal caller; one without a

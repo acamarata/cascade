@@ -7,8 +7,9 @@
 // is built on the first delegate call, once the notify runtime exists.
 // Inputs: the daemon wiring (fleet runtime, config, paths, store, manifest).
 // Outputs: the two verbs over a delegateRuntime; daemonSpawns tracks every spawn.
-// Constraints: never arms the owner-peer guard (the RPC server does); RepoIDOf
-// stays nil; a wiring without a fleet or config serves both verbs as KindUnavailable.
+// Constraints: never arms the owner-peer guard (the RPC server does); recovery
+// rebuilds leases from the ids stored with each record (delegation.StoredLease);
+// a wiring without a fleet or config serves both verbs as KindUnavailable.
 package main
 
 import (
@@ -63,6 +64,7 @@ type delegateRuntime struct {
 	build     func(ctx context.Context) (*delegation.Service, scopeenvelope.Signer, error)
 	reason    string
 	store     *jobs.Store
+	binder    *jobs.Store // resolves a mutation job's worktree binding; nil refuses mutations
 	clock     runtime.Clock
 	base      string
 	wallClock time.Duration
@@ -85,14 +87,14 @@ func newDelegateRuntime(w *daemonWiring) (*delegateRuntime, error) {
 	}
 	lanes := delegateLanes(cfg)
 	fleet.SetAgentLanes(func() []capacity.AgentLane { return lanes })
-	rt.store, rt.base, rt.wallClock = fleet.Jobs(), filepath.Join(w.Paths.DataDir(), "delegate"), cfg.Delegation.WallClock
+	rt.store, rt.binder, rt.base, rt.wallClock = fleet.Jobs(), fleet.Jobs(), filepath.Join(w.Paths.DataDir(), "delegate"), cfg.Delegation.WallClock
 	effects, err := openEffectLog(w.Store, w.Clock, nil, w.Paths)
 	if err != nil {
 		rt.reason = err.Error()
 		return rt, nil
 	}
 	err = delegation.RecoverPendingSpawns(w.Ctx, delegation.RecoveryDeps{Effects: effects, Store: rt.store,
-		Fleet: fleet.Fleet(), ResolveLease: resolveRecoveredLease, ReleaseWorktree: rt.releaseOwnerWorktree})
+		Fleet: fleet.Fleet(), ResolveLease: delegation.StoredLease(fleet.Fleet()), ReleaseWorktree: rt.releaseOwnerWorktree})
 	if err != nil && w.Logger != nil {
 		w.Logger.Warn("delegate: spawn recovery left records live", "error", err.Error())
 	}
@@ -214,16 +216,6 @@ func builtinPluginPresence() agents.PluginPresence {
 	return func(id string) bool { return present[id] }
 }
 
-// resolveRecoveredLease: a record that never leased has nothing to release. A
-// leased one cannot be rebuilt (the record keeps only the lease id), so its
-// cleanup is refused and the record stays live for a later recovery.
-func resolveRecoveredLease(_ context.Context, rec jobs.DelegationRecord) (capacity.Lease, bool, error) {
-	if rec.LeaseID == "" {
-		return capacity.Lease{}, false, nil
-	}
-	return capacity.Lease{}, false, cascade.Newf(cascade.KindUnavailable, "delegate: lease %s of %s cannot be rebuilt after a restart", rec.LeaseID, rec.ID)
-}
-
 // releaseOwnerWorktree removes an owner hop's read-only worktree; any other record holds none.
 func (rt *delegateRuntime) releaseOwnerWorktree(_ context.Context, rec jobs.DelegationRecord) error {
 	id, ok := strings.CutPrefix(rec.AgentPrincipal, ownerHopPrefix)
@@ -233,9 +225,10 @@ func (rt *delegateRuntime) releaseOwnerWorktree(_ context.Context, rec jobs.Dele
 	return (&delegation.Worktree{Root: filepath.Join(rt.base, "ro-"+id)}).Release()
 }
 
-// parent resolves the record a delegation hangs from: a principal caller's own
-// record, or a fresh owner hop under a read-only worktree for the owner CLI.
-func (rt *delegateRuntime) parent(ctx context.Context, policy string) (jobs.DelegationRecord, *delegation.Worktree, func(context.Context, error) error, error) {
+// parent resolves the record a delegation hangs from: a principal caller's own record,
+// or for the owner CLI a fresh owner hop over the mutation job's in-scope prefixes
+// (bind) or, for a read-only delegation, a fresh read-only worktree.
+func (rt *delegateRuntime) parent(ctx context.Context, policy string, bind jobBinding) (jobs.DelegationRecord, *delegation.Worktree, func(context.Context, error) error, error) {
 	pass := func(_ context.Context, err error) error { return err }
 	c, _ := principal.CallerFrom(ctx)
 	switch {
@@ -249,11 +242,14 @@ func (rt *delegateRuntime) parent(ctx context.Context, policy string) (jobs.Dele
 	if err != nil {
 		return jobs.DelegationRecord{}, nil, pass, err
 	}
-	wt, err := delegation.AllocWorktree(rt.base, id, false)
-	if err != nil {
-		return jobs.DelegationRecord{}, nil, pass, err
+	src, wt := delegation.Sources{RepoRoot: bind.root, InScope: bind.scope}, (*delegation.Worktree)(nil)
+	if bind.root == "" {
+		if wt, err = delegation.AllocWorktree(rt.base, id, false); err != nil {
+			return jobs.DelegationRecord{}, nil, pass, err
+		}
+		src = delegation.Sources{ReadOnlyDir: wt.Root}
 	}
-	rec, err := rt.ownerHop(ctx, id, wt.Root, policy)
+	rec, err := rt.ownerHop(ctx, id, src, policy)
 	if err != nil {
 		_ = wt.Release()
 		return jobs.DelegationRecord{}, nil, pass, err
@@ -267,11 +263,11 @@ func (rt *delegateRuntime) parent(ctx context.Context, policy string) (jobs.Dele
 	return rec, wt, finish, nil
 }
 
-// ownerHop signs an owner root over dir, stores its first hop and returns it.
-func (rt *delegateRuntime) ownerHop(ctx context.Context, id, dir, policy string) (jobs.DelegationRecord, error) {
+// ownerHop signs an owner root over src's roots, stores its first hop and returns it.
+func (rt *delegateRuntime) ownerHop(ctx context.Context, id string, src delegation.Sources, policy string) (jobs.DelegationRecord, error) {
 	now := rt.clock.Now()
-	src := delegation.Sources{ReadOnlyDir: dir, ToolPolicy: policy, Sensitivity: provider.SensitivityInternal,
-		Budget: scopeenvelope.Budget{WallClock: rt.wallClock}, Now: now, TTL: rt.wallClock}
+	src.ToolPolicy, src.Sensitivity, src.Now, src.TTL = policy, provider.SensitivityInternal, now, rt.wallClock
+	src.Budget = scopeenvelope.Budget{WallClock: rt.wallClock}
 	root, err := delegation.MintRoot(ctx, rt.signer, principal.Principal{ID: delegation.OwnerCLI}, src)
 	if err != nil {
 		return jobs.DelegationRecord{}, err

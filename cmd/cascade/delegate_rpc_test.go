@@ -271,10 +271,10 @@ func TestDelegateStartHelpers(t *testing.T) {
 	if len(lanes) != 1 || lanes[0].DriverID != "a" || !lanes[0].Posture.ProgrammaticEntitlement {
 		t.Fatalf("lanes = %+v; want only the enabled programmatic lane", lanes)
 	}
-	if _, _, err := resolveRecoveredLease(context.Background(), jobs.DelegationRecord{ID: "d", LeaseID: "l"}); !cascade.HasKind(err, cascade.KindUnavailable) {
+	if _, _, err := delegation.StoredLease(nil)(context.Background(), jobs.DelegationRecord{ID: "d", LeaseID: "l"}); !cascade.HasKind(err, cascade.KindUnavailable) {
 		t.Fatalf("leased recovery = %v; want KindUnavailable", err)
 	}
-	if l, committed, err := resolveRecoveredLease(context.Background(), jobs.DelegationRecord{ID: "d"}); err != nil || l.ID != "" || committed {
+	if l, committed, err := delegation.StoredLease(nil)(context.Background(), jobs.DelegationRecord{ID: "d"}); err != nil || l.ID != "" || committed {
 		t.Fatalf("unleased recovery = %+v, %v, %v; want nothing to release", l, committed, err)
 	}
 	rt := &delegateRuntime{base: t.TempDir()}

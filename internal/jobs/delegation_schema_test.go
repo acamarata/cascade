@@ -208,7 +208,7 @@ func TestDelegationInsertTriggerRefusesNonLive(t *testing.T) {
 	f.add(f.root, "a")
 	err := f.rawExec(`INSERT INTO jobs_delegation (` + delegationCols + `)
 		SELECT 'z', 'dz', signed, parent_digest, parent_signed, origin_principal, origin_session, 'agent-z', depth,
-		job_id, mutation, lane, NULL, NULL, NULL, 'succeeded', '', created_at, updated_at FROM jobs_delegation WHERE id = 'a'`)
+		job_id, mutation, lane, NULL, NULL, NULL, 'succeeded', '', created_at, updated_at, NULL, NULL FROM jobs_delegation WHERE id = 'a'`)
 	if err == nil || !strings.Contains(err.Error(), msgDelegationState) {
 		t.Fatalf("raw non-live INSERT: err = %v, want %q", err, msgDelegationState)
 	}
