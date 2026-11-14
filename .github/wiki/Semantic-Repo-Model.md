@@ -253,3 +253,7 @@ marker is absent) go through `Maintenance.Apply`. A non-zero repair raises
 one `repo.drift:<repo>:<tree oid>` item. `Quiesce` stops new batches, waits
 for the in-flight one to commit and returns the journaled cursor; `Resume`
 restarts delivery.
+
+## Daemon maintenance
+
+The daemon runs one supervised watcher and one sweep loop per registered repository. Daemonless paths never watch.

@@ -70,3 +70,13 @@ projection on its own before any consumer sees it; a fact whose text talks
 about gates, risk classes, capabilities, egress, permissions or autonomy is
 withheld and its id reported as denied. No fact, in any state, can set a
 policy field.
+
+## `repair`
+
+```
+cascade context repair [--rebuild [--reason <text>]]
+```
+
+Performs a maintenance sweep over the registered repository's tracked paths. A plain run reconciles drifted paths and reports the repaired count.
+
+With `--rebuild` and a `--reason` (1..200 characters), the command first writes an audit record (`KindConfigReload`, action `context.repair.rebuild`, actor `local-owner`) and then discards the repository's journal rows and chunk ids before re-running ingestion and maintenance over every tracked path. The audit append must succeed before any discard occurs; an audit failure leaves every journal row and chunk intact and refuses the command.
