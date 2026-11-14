@@ -175,7 +175,7 @@ func discoverDirHasShippableGoFile(dir string) (bool, error) {
 	}
 	fset := token.NewFileSet()
 	for _, name := range pkg.GoFiles {
-		shippable, declErr := fileHasNonImportDecl(fset, filepath.Join(dir, name))
+		shippable, declErr := fileHasStatements(fset, filepath.Join(dir, name))
 		if declErr != nil {
 			return false, declErr
 		}
@@ -186,28 +186,33 @@ func discoverDirHasShippableGoFile(dir string) (bool, error) {
 	return false, nil
 }
 
-// fileHasNonImportDecl parses path and reports whether it declares
-// anything beyond an import block: any FuncDecl, or any GenDecl whose
-// token is not IMPORT (var, const, type). A file with none of those —
-// just "package x" and comments, this repo's doc.go convention for a
-// package nobody has started building yet — reports false. path has
-// already passed go/build's default-tag filter (discoverDirHasShippableGoFile
-// only calls this for names in pkg.GoFiles), so this function does no
+// fileHasStatements parses path and reports whether it holds anything a
+// coverage profile can measure: a function or method with a body, or a
+// function literal anywhere in the file (a var initialised with a closure
+// is measured too). Go's cover tool counts statements, and statements only
+// live in function bodies, so a file of only types, consts and plain vars
+// produces no profile lines at all. Such a package is CheckCoverage's
+// "nothing to measure" case, never "missing". A doc.go-only scaffold
+// ("package x" and comments) reports false the same way. path has already
+// passed go/build's default-tag filter (discoverDirHasShippableGoFile only
+// calls this for names in pkg.GoFiles), so this function does no
 // build-constraint evaluation of its own.
-func fileHasNonImportDecl(fset *token.FileSet, path string) (bool, error) {
+func fileHasStatements(fset *token.FileSet, path string) (bool, error) {
 	file, err := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
 	if err != nil {
 		return false, fmt.Errorf("coverage gate: parsing %s: %w", path, err)
 	}
-	for _, decl := range file.Decls {
-		if _, isFunc := decl.(*ast.FuncDecl); isFunc {
-			return true, nil
+	found := false
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.FuncDecl:
+			found = found || x.Body != nil
+		case *ast.FuncLit:
+			found = true
 		}
-		if gen, isGen := decl.(*ast.GenDecl); isGen && gen.Tok != token.IMPORT {
-			return true, nil
-		}
-	}
-	return false, nil
+		return !found
+	})
+	return found, nil
 }
 
 // CheckCompleteness reports one CoverageViolation{Reason: "missing"} for
