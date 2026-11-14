@@ -6,8 +6,7 @@ package runtime
 //   two concurrent Loads never see each other's warnings (BF-008). Also
 //   declares every dynamic env read, so a name built at run time is never
 //   mistaken for a generic override (TestReservedEnvDynamicReadsDeclared).
-// Inputs: fake Environ/Getenv, files in t.TempDir(), fresh HOME per test.
-// Outputs: n/a (test-only).
+// Inputs: fake Environ/Getenv, files in t.TempDir(), fresh HOME per test. Outputs: n/a (test-only).
 // Constraints: no package-global callback exists; isolation is per Load.
 //   A nil Warn routes to the default slog logger (captured here with
 //   slog.SetDefault, restored in t.Cleanup; that test is not parallel).
@@ -219,7 +218,8 @@ var dynamicEnvReads = map[string][]string{
 	"cmd/cascade/backup_key.go:187":                {"<operator-named>"}, // --passphrase-env
 	"cmd/cascade/daemon_env_scrub.go:175":          {"<caller-named>"},   // credentialEnv.Getenv passthrough for names outside the scrub set
 	"cmd/cascade/init_adapters.go:30":              {"<caller-named>"},
-	"cmd/cascade/mcp.go:86":                        {"CASCADE_PRINCIPAL_TOKEN"}, // os.LookupEnv through mcpPrincipalGetenv: principal.EnvToken
+	"cmd/cascade/mcp.go:83":                        {"CASCADE_PRINCIPAL_TOKEN"}, // os.LookupEnv through mcpPrincipalGetenv: principal.EnvToken
+	"cmd/cascade/mcp_profile.go:183":               {"CASCADE_PRINCIPAL_TOKEN"}, // serve --profile: mcpPrincipalGetenv over the serve lookup
 	"cmd/cascade/profile_attach.go:62":             {"<caller-named>"},
 	"internal/backup/targets.go:227":               {"<operator-named>"}, // name match only: passes getenv and the S3 prefix to s3.go
 	"internal/backup/targets/s3.go:69":             {"<operator-named>"}, // target S3 env prefix + suffix

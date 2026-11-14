@@ -22,7 +22,6 @@
 // `serve --socket` binds its own owner-only socket (the daemon SocketPath
 // plus "-mcp"); the daemon serves mcp.dispatch on its own socket through
 // wire_mcp.go. Caller-principal rules: mcp_scoped_forward.go.
-//
 // SPORT: cmd/cascade/mcp (ADD, per T-6 sport_updates).
 package main
 
@@ -64,18 +63,16 @@ type mcpDeps struct {
 	// forbidigo and internal/build's outputgate.go enforce it).
 	ServeStdio  func(ctx context.Context, in io.Reader, out io.Writer) error
 	ServeSocket func(ctx context.Context) error
-	// StdinIsPipe reports whether stdin is a non-TTY pipe, per the
-	// contract's "stdio default when stdin is a pipe" rule.
+	// StdinIsPipe: stdin is a non-TTY pipe (stdio default).
 	StdinIsPipe func() bool
+	Profile     func(ctx context.Context, flag string) serveProfileState
 }
 
 // productionMCPDeps builds mcpDeps against the real environment.
 func productionMCPDeps() mcpDeps {
 	paths := lazyPaths{}
-	// The first-party v1-parity tool set (P1-E16-W4-S34-T2) and the
-	// capability filter that gates it. Both are built per call, because the
-	// filter is consulted once per registry and a grant change is meant to
-	// take effect on the NEXT registration pass — which is this call.
+	// The first-party v1-parity tool set and its capability filter, built
+	// per call so a grant change takes effect on the NEXT registration pass.
 	tools := func() *mcp.ToolRegistry {
 		bDeps := productionBackupDeps()
 		wiring := buildMCPToolWiring(context.Background(), paths, runtime.SystemClock{})
@@ -94,6 +91,7 @@ func productionMCPDeps() mcpDeps {
 		},
 		ServeSocket: func(ctx context.Context) error { return serveSocketReal(ctx, paths, tools()) },
 		StdinIsPipe: stdinIsPipe,
+		Profile:     productionServeProfile(paths.resolve(), os.LookupEnv),
 	}
 }
 
@@ -110,7 +108,7 @@ func stdinIsPipe() bool {
 // included, gets the owner caller: Principal nil, OwnerCLI false.
 func serveStdioReal(ctx context.Context, tools *mcp.ToolRegistry, in io.Reader, out io.Writer) error {
 	srv := mcp.NewServer(tools)
-	tr := transport.NewStdioTransport(srv, in, out)
+	tr := transport.NewStdioTransport(profileServer(ctx, srv), in, out)
 	return tr.Serve(principal.WithCaller(ctx, principal.Caller{}))
 }
 
@@ -203,7 +201,7 @@ func newMCPCmd(deps mcpDeps) *cobra.Command {
 
 func newMCPServeCmd(deps mcpDeps) *cobra.Command {
 	var stdioFlag, socketFlag bool
-	var captureDir string
+	var captureDir, profileFlag string
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Start the MCP server on the selected transport",
@@ -212,12 +210,13 @@ func newMCPServeCmd(deps mcpDeps) *cobra.Command {
 			if stdioFlag && socketFlag {
 				return cascade.New(cascade.KindInvalidInput, "--stdio and --socket are mutually exclusive")
 			}
+			ctx := serveContext(cmd.Context(), cmd.ErrOrStderr(), deps.Profile, profileFlag)
 			useSocket := socketFlag
 			if !stdioFlag && !socketFlag {
 				useSocket = !deps.StdinIsPipe()
 			}
 			if useSocket {
-				return deps.ServeSocket(cmd.Context())
+				return deps.ServeSocket(ctx)
 			}
 			in, out := cmd.InOrStdin(), cmd.OutOrStdout()
 			if captureDir != "" {
@@ -228,11 +227,12 @@ func newMCPServeCmd(deps mcpDeps) *cobra.Command {
 				defer closeCapture()
 				in, out = tappedIn, tappedOut
 			}
-			return deps.ServeStdio(cmd.Context(), in, out)
+			return deps.ServeStdio(ctx, in, out)
 		},
 	}
 	cmd.Flags().BoolVar(&stdioFlag, "stdio", false, "serve MCP over line-framed stdio")
 	cmd.Flags().BoolVar(&socketFlag, "socket", false, "serve MCP over the cascade unix socket")
+	cmd.Flags().StringVar(&profileFlag, "profile", "", "tool profile: compact, compact-write or full (never wider than [mcp].profile without a grant)")
 	cmd.Flags().StringVar(&captureDir, "capture", "",
 		"tee raw stdio frames to <dir>/{in,out}.jsonl (diagnostic; stdio only)")
 	return cmd
