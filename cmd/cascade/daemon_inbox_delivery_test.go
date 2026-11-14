@@ -11,15 +11,18 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/acamarata/cascade/internal/context/scope"
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/fleet/hookpacks"
 	"github.com/acamarata/cascade/internal/fleet/sessions"
+	"github.com/acamarata/cascade/internal/fleet/supervision"
 	"github.com/acamarata/cascade/internal/notify"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/storage/storetest"
@@ -195,5 +198,51 @@ func TestAddressedItemReachesOnlyItsSession(t *testing.T) {
 		if !strings.Contains(k, "sess-a") && strings.Contains(v, "addr-a-1") {
 			t.Fatalf("the item addressed to A landed under %q", k)
 		}
+	}
+}
+
+// globalAttention lists the global-scope attention items kept in store.
+func globalAttention(t *testing.T, store provider.Store, clock hydrationTestClock) []supervision.AttentionItem {
+	t.Helper()
+	queue := supervision.NewStore(store, clock, nil, supervision.NewSystemIDGenerator(), 0)
+	items, err := queue.ListInScopes(context.Background(), []supervision.ScopeRef{{Kind: scope.ScopeKindGlobal}}, supervision.Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return items
+}
+
+func TestGlobalCriticalRaisesAttentionOnce(t *testing.T) {
+	f := newDeliveryFixture(t,
+		sessionRec("sess-a", sessions.StateActive.String()),
+		sessionRec("sess-b", sessions.StateActive.String()))
+	waitSubscribed(t, f.subs, []string{"sess-a", "sess-b"})
+	if n := len(globalAttention(t, f.store, f.clock)); n != 0 {
+		t.Fatalf("attention queue holds %d items before any delivery", n)
+	}
+
+	ctx := context.Background()
+	gc := notify.Notification{
+		ID: "gc-once-1", Class: notify.ClassGlobalCritical, Source: "disk.nearly.full", Visibility: notify.VisibilityShared,
+		Payload: []byte("SECRET-BODY-TEXT"),
+		Origin:  notify.Origin{Source: "test.producer", RecordRef: "gc-once-1", Tier: provider.SensitivityInternal},
+	}
+	for i := 0; i < 2; i++ {
+		if err := f.svc.Notifier.Deliver(ctx, gc); err != nil {
+			t.Fatal(err)
+		}
+		f.svc.Dispatcher.Drain(ctx)
+	}
+
+	items := globalAttention(t, f.store, f.clock)
+	if len(items) != 1 || !strings.HasSuffix(items[0].SourceRef, "gc-once-1") {
+		t.Fatalf("attention items = %+v, want exactly one for gc-once-1 across two sessions and a redelivery", items)
+	}
+	if strings.Contains(fmt.Sprintf("%+v", items[0]), "SECRET-BODY-TEXT") {
+		t.Fatalf("the attention item carries the notification body: %+v", items[0])
+	}
+	listed, _ := f.svc.Inbox.List(ctx, notify.SessionScopeRef{SessionID: "sess-a"}, notify.InboxOpts{})
+	if len(listed) != 1 || listed[0].ID != "gc-once-1" {
+		t.Fatalf("cascade inbox lists %+v, want the global-critical item", listed)
 	}
 }
