@@ -69,10 +69,11 @@ func (r *Registry) Register(w Worker) error {
 	return nil
 }
 
-// List returns a copy of all registered workers.
+// List returns a detached slice of all registered workers in registration order.
+// An empty, zero or nil registry returns a non-nil empty slice.
 func (r *Registry) List() []Worker {
 	if r == nil {
-		return nil
+		return []Worker{}
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()

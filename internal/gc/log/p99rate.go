@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"reflect"
+	"sort"
 	"time"
 )
 
@@ -87,6 +88,23 @@ func (r *RateTracker) Current() (rpm float64, width int) {
 		return 10, 90
 	}
 
-	// Nearest-rank p99 calculation would go here for >= 30 samples.
-	return 10, 90
+	// Sort a copy of the samples by rpm for percentile calculation.
+	// Samples are not removed by sorting.
+	sorted := make([]float64, len(r.samples))
+	for i, s := range r.samples {
+		sorted[i] = s.rpm
+	}
+	sort.Float64s(sorted)
+
+	// Nearest-rank p99: rank is ceil(0.99*n), one-based.
+	n := len(sorted)
+	rank := int(math.Ceil(0.99 * float64(n)))
+	rpm = sorted[rank-1]
+
+	// Width calculation: int(max(1,min(200,floor(900/rpm))))
+	// Clamp floating-point result before int conversion to handle tiny finite rates.
+	w := math.Max(1, math.Min(200, math.Floor(900.0/rpm)))
+	width = int(w)
+
+	return rpm, width
 }

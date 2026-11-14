@@ -1,0 +1,65 @@
+rows:
+  - id: pp-01
+    capability: fs-lock
+    unsupported_platform: plan9
+    tests: [TestFsLock]
+  - id: pp-02
+    capability: fs-inotify
+    unsupported_platform: darwin
+    tests: [TestFsInotify]
+  - id: pp-03
+    capability: fs-inotify
+    unsupported_platform: windows
+    tests: [TestFsInotifyWin]
+  - id: pp-04
+    capability: fs-inotify
+    unsupported_platform: freebsd
+    tests: [TestFsInotifyBsd]
+  - id: pp-05
+    capability: ipc-unix-socket
+    unsupported_platform: windows
+    tests: [TestIpcUnix]
+  - id: pp-06
+    capability: ipc-epoll
+    unsupported_platform: darwin
+    tests: [TestIpcEpoll]
+  - id: pp-07
+    capability: ipc-epoll
+    unsupported_platform: windows
+    tests: [TestIpcEpollWin]
+  - id: pp-08
+    capability: ipc-kqueue
+    unsupported_platform: linux
+    tests: [TestIpcKqueue]
+  - id: pp-09
+    capability: ipc-kqueue
+    unsupported_platform: windows
+    tests: [TestIpcKqueueWin]
+  - id: pp-10
+    capability: ipc-iocp
+    unsupported_platform: linux
+    tests: [TestIpcIocp]
+  - id: pp-11
+    capability: ipc-iocp
+    unsupported_platform: darwin
+    tests: [TestIpcIocpMac]
+  - id: pp-12
+    capability: ipc-iocp
+    unsupported_platform: freebsd
+    tests: [TestIpcIocpBsd]
+  - id: pp-13
+    capability: mem-madvise
+    unsupported_platform: windows
+    tests: [TestMemMadvise]
+  - id: pp-14
+    capability: mem-mlock
+    unsupported_platform: windows
+    tests: [TestMemMlock]
+  - id: pp-15
+    capability: mem-mlock
+    unsupported_platform: plan9
+    tests: [TestMemMlockPlan9]
+  - id: pp-16
+    capability: mem-mmap
+    unsupported_platform: plan9
+    tests: [TestMemMmap]

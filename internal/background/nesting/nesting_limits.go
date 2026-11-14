@@ -81,3 +81,30 @@ func (l *Limiter) Queued() []Task {
 	copy(res, l.queue)
 	return res
 }
+
+// Release decrements running and calls lane.Release once iff running>0.
+// Then if queue nonempty, running<400 and TryAcquire succeeds, remove exactly oldest queued task,
+// increment running, return that Task,true; otherwise return Task{},false without dropping queue.
+// A depth>10 task resumes as new root continuation when dequeued: return copy with Depth=0;
+// other queued depths preserved. At most one promotion per call. Release may promote even when
+// initial running=0, allowing externally freed lane observation; no slot release in that case.
+func (l *Limiter) Release() (Task, bool) {
+	if l.running > 0 {
+		l.running--
+		if !isNilLane(l.lane) {
+			l.lane.Release()
+		}
+	}
+
+	if len(l.queue) > 0 && l.running < 400 && !isNilLane(l.lane) && l.lane.TryAcquire() {
+		task := l.queue[0]
+		l.queue = l.queue[1:]
+		l.running++
+		if task.Depth > 10 {
+			task.Depth = 0
+		}
+		return task, true
+	}
+
+	return Task{}, false
+}

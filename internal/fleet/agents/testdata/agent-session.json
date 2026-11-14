@@ -1,0 +1,50 @@
+[
+  {
+    "provenance": {
+      "capturedAt": "2026-11-14T00:00:00Z",
+      "source": "cascade-daemon",
+      "schema": "contract:agent-identity"
+    },
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "agent.get",
+      "params": {
+        "id": "agt_01H8X3"
+      }
+    },
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "id": "agt_01H8X3",
+        "state": "ACTIVE"
+      }
+    }
+  },
+  {
+    "provenance": {
+      "capturedAt": "2026-11-14T00:00:01Z",
+      "source": "cascade-daemon",
+      "schema": "contract:agent-identity"
+    },
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "agent.list",
+      "params": {}
+    },
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": {
+        "agents": [
+          {
+            "id": "agt_01H8X3",
+            "state": "ACTIVE"
+          }
+        ]
+      }
+    }
+  }
+]

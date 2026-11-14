@@ -3,6 +3,8 @@ package background
 import (
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -67,4 +69,65 @@ func AgentLogHook(e SpawnEvent, lint AdvisoryLint) (lintJSON, metadata string, e
 	}
 
 	return string(b) + "\n", metadata, nil
+}
+
+// ErrShellDenied is returned when a shell command is requested.
+var ErrShellDenied = errors.New("D3127")
+
+// ErrOutsideRead is returned when a path escapes the authorized root.
+var ErrOutsideRead = errors.New("D4331")
+
+// PrintRequest holds the parameters for CheckPrint authorization.
+type PrintRequest struct {
+	Folder  string
+	Path    string
+	Command string
+}
+
+// CheckPrint authorizes a print request without executing or reading content.
+// It returns ErrShellDenied for any command and ErrOutsideRead for escaping paths.
+func CheckPrint(req PrintRequest) (string, error) {
+	if req.Command != "" {
+		return "", ErrShellDenied
+	}
+	if req.Folder == "" || req.Path == "" {
+		return "", ErrOutsideRead
+	}
+
+	folder, err := filepath.Abs(req.Folder)
+	if err != nil {
+		return "", ErrOutsideRead
+	}
+	folder, err = filepath.EvalSymlinks(folder)
+	if err != nil {
+		return "", ErrOutsideRead
+	}
+
+	fi, err := os.Stat(folder)
+	if err != nil || !fi.IsDir() {
+		return "", ErrOutsideRead
+	}
+
+	var target string
+	if filepath.IsAbs(req.Path) {
+		target = req.Path
+	} else {
+		target = filepath.Join(folder, req.Path)
+	}
+
+	target, err = filepath.EvalSymlinks(target)
+	if err != nil {
+		return "", ErrOutsideRead
+	}
+
+	rel, err := filepath.Rel(folder, target)
+	if err != nil {
+		return "", ErrOutsideRead
+	}
+
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", ErrOutsideRead
+	}
+
+	return "", nil
 }

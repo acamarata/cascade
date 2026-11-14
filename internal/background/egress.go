@@ -105,35 +105,7 @@ func validatePath(p string) error {
 	return nil
 }
 
-// validateDiff ensures all paths referenced in diff headers exist in the allowed files set.
+// validateDiff delegates to scanDiff for strict linear diff validation.
 func validateDiff(diff string, allowed map[string]bool) error {
-	if diff == "" {
-		return nil
-	}
-
-	lines := strings.Split(diff, "\n")
-	for _, line := range lines {
-		var path string
-		if strings.HasPrefix(line, "diff --git ") {
-			rest := strings.TrimPrefix(line, "diff --git ")
-			if strings.HasPrefix(rest, "a/") {
-				idx := strings.Index(rest[2:], " b/")
-				if idx >= 0 {
-					path = rest[2 : 2+idx]
-				}
-			}
-		} else if strings.HasPrefix(line, "--- a/") {
-			path = strings.TrimPrefix(line, "--- a/")
-		} else if strings.HasPrefix(line, "+++ b/") {
-			path = strings.TrimPrefix(line, "+++ b/")
-		}
-
-		if path != "" && path != "/dev/null" {
-			if !allowed[path] {
-				return ErrEgress
-			}
-		}
-	}
-
-	return nil
+	return scanDiff(diff, allowed)
 }
