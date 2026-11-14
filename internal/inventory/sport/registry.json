@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-14T03:35:12Z",
+  "generated_at": "2026-11-14T16:17:43Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -2272,6 +2272,12 @@
           "status": "ADD",
           "ticket": "T-4",
           "raw": "build/testkit (ADD, placeholder per T-4 sport_updates)."
+        },
+        {
+          "file": "internal/testkit/designation.go",
+          "line": 13,
+          "status": "ADD",
+          "raw": "build/testkit (ADD)."
         },
         {
           "file": "internal/testkit/golden.go",
@@ -5481,7 +5487,7 @@
       "sites": [
         {
           "file": "cmd/cascade/guarded_extractors.go",
-          "line": 7,
+          "line": 5,
           "status": "",
           "raw": "cmd/cascade guarded families (P1 config baseline)."
         }
@@ -5526,6 +5532,20 @@
           "line": 11,
           "status": "",
           "raw": "cmd/cascade guarded hooks family tests (P1-SUP-05)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade guarded mcp",
+      "sites": [
+        {
+          "file": "cmd/cascade/guarded_mcp.go",
+          "line": 8,
+          "status": "",
+          "raw": "cmd/cascade guarded mcp (P1-HRN-05e)."
         }
       ],
       "statuses": [
@@ -5730,6 +5750,20 @@
           "line": 13,
           "status": "",
           "raw": "cmd/cascade mcp profile capability wiring (P1-HRN-05)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade mcp profile resolution",
+      "sites": [
+        {
+          "file": "cmd/cascade/mcp_profile.go",
+          "line": 12,
+          "status": "",
+          "raw": "cmd/cascade mcp profile resolution (P1-HRN-05)."
         }
       ],
       "statuses": [
@@ -6925,6 +6959,12 @@
           "raw": "cmd/cascade/daemon (ADD, per T-2 sport_updates; CHANGE, per"
         },
         {
+          "file": "cmd/cascade/daemon_first_start_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade/daemon (test)."
+        },
+        {
           "file": "cmd/cascade/daemon_lifecycle_lint_test.go",
           "line": 18,
           "status": "ADD",
@@ -7395,6 +7435,12 @@
           "status": "ADD",
           "ticket": "P1-E32-W6-S66-T1",
           "raw": "cmd/cascade/daemon (ADD, P1-E32-W6-S66-T1)."
+        },
+        {
+          "file": "cmd/cascade/upgrade_designation_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "cmd/cascade/daemon (test)."
         },
         {
           "file": "cmd/cascade/wire_fleet_capacity_socket_integration_test.go",
@@ -8094,7 +8140,7 @@
       "sites": [
         {
           "file": "cmd/cascade/mcp.go",
-          "line": 26,
+          "line": 25,
           "status": "ADD",
           "ticket": "T-6",
           "raw": "cmd/cascade/mcp (ADD, per T-6 sport_updates)."
@@ -8486,6 +8532,18 @@
           "line": 12,
           "status": "CHANGE",
           "raw": "cmd/cascade/run (CHANGE, P1-CORE-19)."
+        },
+        {
+          "file": "cmd/cascade/run_agent.go",
+          "line": 11,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/run (CHANGE)."
+        },
+        {
+          "file": "cmd/cascade/run_agent_test.go",
+          "line": 5,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/run (CHANGE)."
         },
         {
           "file": "cmd/cascade/run_exec.go",
@@ -43715,7 +43773,7 @@
         },
         {
           "file": "internal/runtime/config_env_warn_test.go",
-          "line": 14,
+          "line": 13,
           "status": "ADD",
           "raw": "runtime/config (ADD, P1-CORE-16)."
         },
@@ -44736,7 +44794,7 @@
       ]
     }
   ],
-  "total_sites": 4306,
-  "unspecified_count": 418,
+  "total_sites": 4313,
+  "unspecified_count": 420,
   "multi_status_count": 132
 }
