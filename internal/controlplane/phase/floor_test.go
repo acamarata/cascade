@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// TestPhaseState verifies that PhaseState constants and the Floor stub exist.
+// TestPhaseState verifies that the ten PhaseState constants exist and are non-empty.
 func TestPhaseState(t *testing.T) {
 	// Verify all ten phase constants are defined.
 	phases := []PhaseState{
@@ -15,16 +15,5 @@ func TestPhaseState(t *testing.T) {
 		if p == "" {
 			t.Error("phase constant must not be empty")
 		}
-	}
-
-	// Floor is a stub: it must return an error for any input.
-	_, err := Floor(nil, "")
-	if err == nil {
-		t.Error("Floor stub must return an error for any input")
-	}
-
-	_, err = Floor([]string{"T-1"}, "done")
-	if err == nil {
-		t.Error("Floor stub must return an error for any input")
 	}
 }
