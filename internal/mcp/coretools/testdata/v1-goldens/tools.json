@@ -875,6 +875,26 @@
       "rpc_method": "inbox.read",
       "capability": "inbox.read",
       "alias": ""
+    },
+    {
+      "v1_name": "NEW-IN-V2:cascade_conductor_delegate",
+      "v1_description": "(no v1 ancestor -- delegation as an MCP tool is new in v2)",
+      "v1_input_schema": {},
+      "status": "registered",
+      "name": "cascade_conductor_delegate",
+      "rpc_method": "conductor.delegate",
+      "capability": "agents.delegate",
+      "alias": ""
+    },
+    {
+      "v1_name": "NEW-IN-V2:cascade_conductor_delegate_wait",
+      "v1_description": "(no v1 ancestor -- delegation as an MCP tool is new in v2)",
+      "v1_input_schema": {},
+      "status": "registered",
+      "name": "cascade_conductor_delegate_wait",
+      "rpc_method": "conductor.delegate_wait",
+      "capability": "agents.delegate",
+      "alias": ""
     }
   ]
 }

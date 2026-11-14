@@ -30,8 +30,6 @@ import (
 )
 
 const (
-	delegateMethod     = "conductor.delegate"
-	delegateWaitMethod = "conductor.delegate_wait"
 	delegateIntentMax  = 64 << 10
 	delegateWaitMax    = 10 * time.Minute
 )

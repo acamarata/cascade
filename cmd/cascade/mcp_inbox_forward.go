@@ -1,4 +1,5 @@
-// Purpose: forward inbox reads with the session principal and strict inputs.
+// Purpose: forward inbox reads and the conductor delegate methods with the
+// session principal and strict inputs.
 // Constraints: never send an owner marker or widen the session's inbox scope.
 package main
 
@@ -102,4 +103,22 @@ func validateMCPInboxInput(method string, input map[string]any) error {
 		return invalid
 	}
 	return nil
+}
+
+// registerMCPDelegateMethods binds conductor.delegate and
+// conductor.delegate_wait to the daemon through the session principal.
+func registerMCPDelegateMethods(reg *rpc.Registry, paths runtime.PathProvider) {
+	token := os.Getenv(principal.EnvToken)
+	for _, method := range []string{delegateMethod, delegateWaitMethod} {
+		if token == "" {
+			reg.Register(method, refuseWith(errMCPDelegatePrincipal))
+			continue
+		}
+		c, err := dialMCPDaemon(paths)(token)
+		if err != nil {
+			reg.Register(method, refuseUnreachable(method, err))
+			continue
+		}
+		reg.Register(method, scopedForwarder(c, method))
+	}
 }

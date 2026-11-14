@@ -47,10 +47,10 @@ import (
 // this machine, the same scope the harness's own configuration has.
 var mcpToolSubject = policy.Subject{Kind: policy.SubjectUser, ID: "mcp"}
 
-// mcpToolCapabilities are the capabilities the first-party tool set
+// mcpBaseCapabilities are the capabilities the first-party tool set
 // declares, seeded into the engine's registry so a grant for one of them
 // is resolvable at all (an unregistered capability denies).
-func mcpToolCapabilities() []policy.Capability {
+func mcpBaseCapabilities() []policy.Capability {
 	return []policy.Capability{
 		{
 			Name:          coretools.CapabilityContextRead,
@@ -147,12 +147,12 @@ func registerMCPToolMethods(ctx context.Context, registry *rpc.Registry, paths r
 	// plugin.search: the SAME wiring function the daemon calls
 	// (plugin_rpc.go's registerDBPathHandlers); it needs no closer.
 	wirePluginSearchHandler(ctx, registry, paths, clock)
-	// ci.run and ci.status: process-local, never daemon RPCs. They run over
-	// the serve process's own paths and clock, in its working directory.
+	// ci.run and ci.status: process-local, never daemon RPCs.
 	ciDeps := ci.ProductionCmdDeps()
 	ciDeps.Paths, ciDeps.Clock = paths, clock
 	ci.RegisterMCPMethods(registry, ciDeps, os.Getwd)
 	registerMCPInboxMethods(registry, paths)
+	registerMCPDelegateMethods(registry, paths)
 	return closers
 }
 

@@ -110,7 +110,7 @@ func registrationFor(dispatcher Dispatcher, spec Spec, name string) mcp.CoreRegi
 		// answers for it. Both run; neither replaces the other.
 		Grants:             []string{"read"},
 		RequiredCapability: spec.Capability,
-		Handler:            handlerFor(dispatcher, spec.Method),
+		Handler:            typedDelegateErrors(spec, handlerFor(dispatcher, spec.Method)),
 	}
 }
 
