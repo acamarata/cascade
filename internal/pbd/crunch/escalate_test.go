@@ -1,0 +1,74 @@
+package crunch
+
+import (
+	"errors"
+	"testing"
+)
+
+func TestNoEscalateBelowThresholds(t *testing.T) {
+	res, err := Escalate(EscalationTicket{
+		ID:            "id1",
+		Lane:          "junior",
+		GCFailures:    2,
+		ModelFailures: 1,
+		Attempts:      0,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.Escalated {
+		t.Errorf("expected Escalated=false, got true")
+	}
+	if !res.AllowRetry {
+		t.Errorf("expected AllowRetry=true, got false")
+	}
+	if res.Lane != "junior" {
+		t.Errorf("expected Lane=junior, got %s", res.Lane)
+	}
+}
+
+func TestEscalateRejectsInvalidTickets(t *testing.T) {
+	tests := []struct {
+		name   string
+		ticket EscalationTicket
+	}{
+		{"empty ID", EscalationTicket{ID: "", Lane: "junior"}},
+		{"whitespace ID", EscalationTicket{ID: "   ", Lane: "junior"}},
+		{"empty Lane", EscalationTicket{ID: "id1", Lane: ""}},
+		{"whitespace Lane", EscalationTicket{ID: "id1", Lane: "   "}},
+		{"negative GCFailures", EscalationTicket{ID: "id1", Lane: "junior", GCFailures: -1}},
+		{"negative ModelFailures", EscalationTicket{ID: "id1", Lane: "junior", ModelFailures: -1}},
+		{"negative Attempts", EscalationTicket{ID: "id1", Lane: "junior", Attempts: -1}},
+		{"non-senior Attempts>0", EscalationTicket{ID: "id1", Lane: "junior", Attempts: 1}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Escalate(tt.ticket)
+			if !errors.Is(err, ErrInvalidEscalation) {
+				t.Errorf("expected ErrInvalidEscalation for %s, got %v", tt.name, err)
+			}
+		})
+	}
+}
+
+func TestNegativeExhaustedRetriesFailsClosed(t *testing.T) {
+	res, err := Escalate(EscalationTicket{
+		ID:       "id1",
+		Lane:     "senior",
+		Attempts: 3,
+	})
+	if res != (EscalationResult{}) {
+		t.Errorf("expected zero result for exhausted senior attempts, got %+v", res)
+	}
+	if !errors.Is(err, ErrEscalationExhausted) {
+		t.Errorf("expected ErrEscalationExhausted, got %v", err)
+	}
+	if err.Error() != "CRUN:002_EXHAUSTED" {
+		t.Errorf("expected error text CRUN:002_EXHAUSTED, got %s", err.Error())
+	}
+
+	_, err = Escalate(EscalationTicket{ID: "id1", Lane: "senior", Attempts: -1})
+	if !errors.Is(err, ErrInvalidEscalation) {
+		t.Errorf("expected ErrInvalidEscalation for negative Attempts, got %v", err)
+	}
+}
