@@ -1,3 +1,4 @@
+// Package swarm runs swarm rounds, calling a split pass between rounds and assigning ladder splits.
 package swarm
 
 import "errors"
