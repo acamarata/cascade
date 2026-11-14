@@ -156,7 +156,7 @@ func TestComposePostStageCondensesAndRemeasures(t *testing.T) {
 
 	result, err := c.Compose(context.Background(), 100, []Slot{
 		{Kind: SlotKindTier, Label: "a", Content: "alpha beta"},
-		{Kind: SlotKindMemory, Label: "b", Content: "gamma delta"},
+		{Kind: SlotKindRetrieval, Label: "b", Content: "gamma delta"},
 	})
 	if err != nil {
 		t.Fatalf("Compose: %v", err)

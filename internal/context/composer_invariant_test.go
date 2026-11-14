@@ -67,7 +67,7 @@ func (fixtureCounter) Count(_ context.Context, text string) (int, error) {
 // marker, never real content.
 func slotFromFixture(sf slotFixture) Slot {
 	kind := map[string]SlotKind{
-		"tier": SlotKindTier, "memory": SlotKindMemory,
+		"tier":      SlotKindTier,
 		"retrieval": SlotKindRetrieval, "history": SlotKindHistory,
 	}[sf.Kind]
 	return Slot{Kind: kind, Label: sf.Label, Content: fmt.Sprintf("%s|tokens=%d", sf.Label, sf.Tokens)}
@@ -185,7 +185,7 @@ func generatedSlots(tierSize, memCount, retrievalCount int) []Slot {
 			Content: fmt.Sprintf("gci|tokens=%d", tierSize)})
 	}
 	for i := 0; i < memCount; i++ {
-		slots = append(slots, Slot{Kind: SlotKindMemory, Label: fmt.Sprintf("soul-%d", i),
+		slots = append(slots, Slot{Kind: SlotKindHistory, Label: fmt.Sprintf("soul-%d", i),
 			Content: fmt.Sprintf("soul-%d|tokens=7", i)})
 	}
 	for i := 0; i < retrievalCount; i++ {

@@ -8,8 +8,8 @@ cases:
     slots:
       - {kind: tier, label: gci, tokens: 10}
       - {kind: tier, label: pai, tokens: 5}
-      - {kind: memory, label: soul-1, tokens: 20}
-      - {kind: memory, label: soul-2, tokens: 20}
+      - {kind: retrieval, label: soul-1, tokens: 20}
+      - {kind: retrieval, label: soul-2, tokens: 20}
       - {kind: retrieval, label: chunk-1, tokens: 30}
       - {kind: retrieval, label: chunk-2, tokens: 30}
       - {kind: history, label: turn-1, tokens: 15}
@@ -17,7 +17,7 @@ cases:
     budget: 50
     slots:
       - {kind: tier, label: gci, tokens: 20}
-      - {kind: memory, label: soul-1, tokens: 15}
+      - {kind: retrieval, label: soul-1, tokens: 15}
       - {kind: retrieval, label: chunk-1, tokens: 15}
   - name: low-priority-retrieval-hit-alone-exceeds-budget
     budget: 30
@@ -28,16 +28,16 @@ cases:
     budget: 5
     slots:
       - {kind: tier, label: gci, tokens: 500}
-      - {kind: memory, label: soul-1, tokens: 1}
+      - {kind: retrieval, label: soul-1, tokens: 1}
   - name: many-small-memory-candidates-tail-drops
     budget: 40
     slots:
       - {kind: tier, label: gci, tokens: 10}
-      - {kind: memory, label: soul-1, tokens: 10}
-      - {kind: memory, label: soul-2, tokens: 10}
-      - {kind: memory, label: soul-3, tokens: 10}
-      - {kind: memory, label: soul-4, tokens: 10}
-      - {kind: memory, label: soul-5, tokens: 10}
+      - {kind: retrieval, label: soul-1, tokens: 10}
+      - {kind: retrieval, label: soul-2, tokens: 10}
+      - {kind: retrieval, label: soul-3, tokens: 10}
+      - {kind: retrieval, label: soul-4, tokens: 10}
+      - {kind: retrieval, label: soul-5, tokens: 10}
   - name: many-retrieval-hits-tail-drops
     budget: 25
     slots:
@@ -67,6 +67,6 @@ cases:
     budget: 10
     slots:
       - {kind: tier, label: gci, tokens: 5}
-      - {kind: memory, label: soul-1, tokens: 100}
+      - {kind: retrieval, label: soul-1, tokens: 100}
       - {kind: retrieval, label: chunk-1, tokens: 200}
       - {kind: history, label: turn-1, tokens: 300}

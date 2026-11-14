@@ -79,7 +79,7 @@ func TestSegmentTransformSplitsTheOverShareSlot(t *testing.T) {
 	long := "0123456789012345678901234567890123456789"
 	in := &StageInput{Slots: []Slot{
 		{Kind: SlotKindTier, Label: "long", Content: long},
-		{Kind: SlotKindMemory, Label: "short", Content: "tiny"},
+		{Kind: SlotKindRetrieval, Label: "short", Content: "tiny"},
 	}}
 	exec := &stageExecutor{replies: []string{"1:10,20\n2:0\n"}}
 	if err := mustPreStage(t, PreStageSegment, exec).Execute(context.Background(), in); err != nil {
