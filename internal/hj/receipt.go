@@ -4,6 +4,7 @@ package hj
 import (
 	"errors"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -57,16 +58,18 @@ func NewMemoryReceiptStore() ReceiptStore {
 	}
 }
 
-// Save stores a receipt in memory.
+// Save validates and stores a receipt in memory. It checks invalid state first,
+// then empty ID (after trimming whitespace), then duplicate ID. The original ID is preserved.
 func (m *memoryReceiptStore) Save(r Receipt) error {
-	if r.ID == "" {
-		return ErrInvalidReceipt
-	}
 	switch r.State {
 	case Queue, Taken, ReceiptAttempt, Fail, TurnEnded, End, Ready, Due, For, CountsFor, Prune:
 		// valid
 	default:
 		return ErrInvalidReceiptState
+	}
+
+	if strings.TrimSpace(r.ID) == "" {
+		return ErrInvalidReceipt
 	}
 
 	m.mu.Lock()
