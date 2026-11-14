@@ -1,16 +1,8 @@
 package port
 
 import (
-	"errors"
 	"testing"
 )
-
-func TestValidateEventNameReturnsErrUnavailable(t *testing.T) {
-	err := ValidateEventName("capp.intake.v1.ItemReceived")
-	if !errors.Is(err, ErrUnavailable) {
-		t.Fatalf("ValidateEventName = %v, want %v", err, ErrUnavailable)
-	}
-}
 
 func TestEventZeroValue(t *testing.T) {
 	var event Event

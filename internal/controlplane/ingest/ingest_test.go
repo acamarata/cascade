@@ -9,21 +9,6 @@ import (
 	"testing"
 )
 
-// TestDeclarationsExist asserts the declarations exist and that Ingest is
-// still a stub returning ErrNotImplemented.
-func TestDeclarationsExist(t *testing.T) {
-	if ErrNotImplemented == nil {
-		t.Fatal("ErrNotImplemented is nil")
-	}
-	var row TicketRow
-	if row.Key != "" {
-		t.Fatalf("zero TicketRow.Key = %q, want empty string", row.Key)
-	}
-	if err := Ingest(nil); !errors.Is(err, ErrNotImplemented) {
-		t.Fatalf("Ingest error = %v, want ErrNotImplemented", err)
-	}
-}
-
 // planTree builds base/hq (a phases folder), base/.ai (a legacy current.yaml)
 // and base/other (not a plan) and returns base.
 func planTree(t *testing.T) string {

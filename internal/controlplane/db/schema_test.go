@@ -1,7 +1,6 @@
 package db
 
 import (
-	"errors"
 	"testing"
 )
 
@@ -91,12 +90,4 @@ func TestSchemaMigrationConstantsExist(t *testing.T) {
 		{"Migration005", Migration005},
 		{"Migration006", Migration006},
 	})
-}
-
-// TestMigrateStubReturnsErrNotImplemented asserts that Migrate is stubbed and returns ErrNotImplemented.
-func TestMigrateStubReturnsErrNotImplemented(t *testing.T) {
-	err := Migrate(nil)
-	if !errors.Is(err, ErrNotImplemented) {
-		t.Errorf("Migrate(nil) = %v, want ErrNotImplemented", err)
-	}
 }

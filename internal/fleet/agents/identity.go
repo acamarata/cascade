@@ -17,13 +17,3 @@ type Agent struct {
 	ID    string
 	State AgentState
 }
-
-// NewAgent creates a new Agent stub.
-func NewAgent(_ string) (*Agent, error) {
-	return nil, ErrNotImplemented
-}
-
-// Transition changes the agent to the target state.
-func (a *Agent) Transition(_ AgentState) error {
-	return ErrNotImplemented
-}
