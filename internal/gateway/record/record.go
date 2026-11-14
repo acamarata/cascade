@@ -33,7 +33,7 @@ func ReadServiceRecord(dataHome string) ([]Record, error) {
 		}
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var records []Record
 	scanner := bufio.NewScanner(f)

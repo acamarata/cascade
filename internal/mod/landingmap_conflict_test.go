@@ -12,7 +12,7 @@ type conflictMock struct {
 }
 
 // Lookup returns the preconfigured value and presence flag.
-func (c *conflictMock) Lookup(name string) (string, bool) {
+func (c *conflictMock) Lookup(_ string) (string, bool) {
 	return c.val, c.ok
 }
 

@@ -25,11 +25,16 @@ func isAbsent(r LandingResolver) bool {
 		return true
 	}
 	v := reflect.ValueOf(r)
-	switch v.Kind() {
-	case reflect.Ptr, reflect.Interface, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func:
+	if nillableKind[v.Kind()] {
 		return v.IsNil()
 	}
 	return false
+}
+
+// nillableKind holds the reflect kinds whose zero value is nil, the only kinds IsNil may be called on.
+var nillableKind = map[reflect.Kind]bool{
+	reflect.Pointer: true, reflect.Interface: true, reflect.Map: true,
+	reflect.Slice: true, reflect.Chan: true, reflect.Func: true,
 }
 
 // CheckLanding checks that both modulesTable and modulesMap resolve "Landing" to "Crunch".

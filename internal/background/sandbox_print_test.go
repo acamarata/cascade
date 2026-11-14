@@ -26,38 +26,33 @@ func TestPrintDenyShellCommand(t *testing.T) {
 	}
 }
 
-func TestPrintDenyOutsideRead(t *testing.T) {
+func TestPrintDenyOutsideRead_BasicCases(t *testing.T) {
 	root := t.TempDir()
 
-	// blank folder
-	out, err := CheckPrint(PrintRequest{Folder: "", Path: "file.txt"})
-	if !errors.Is(err, ErrOutsideRead) || out != "" {
-		t.Fatalf("blank folder failed")
+	cases := []struct {
+		name   string
+		folder string
+		path   string
+	}{
+		{"blank folder", "", "file.txt"},
+		{"blank path", root, ""},
+		{"missing root", filepath.Join(root, "missing"), "file.txt"},
+		{"outside path", root, "/etc/passwd"},
+		{"../ escape", root, "../file.txt"},
 	}
 
-	// blank path
-	out, err = CheckPrint(PrintRequest{Folder: root, Path: ""})
-	if !errors.Is(err, ErrOutsideRead) || out != "" {
-		t.Fatalf("blank path failed")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := CheckPrint(PrintRequest{Folder: tc.folder, Path: tc.path})
+			if !errors.Is(err, ErrOutsideRead) || out != "" {
+				t.Fatalf("%s failed", tc.name)
+			}
+		})
 	}
+}
 
-	// missing root
-	out, err = CheckPrint(PrintRequest{Folder: filepath.Join(root, "missing"), Path: "file.txt"})
-	if !errors.Is(err, ErrOutsideRead) || out != "" {
-		t.Fatalf("missing root failed")
-	}
-
-	// outside path
-	out, err = CheckPrint(PrintRequest{Folder: root, Path: "/etc/passwd"})
-	if !errors.Is(err, ErrOutsideRead) || out != "" {
-		t.Fatalf("outside path failed")
-	}
-
-	// ../ escape
-	out, err = CheckPrint(PrintRequest{Folder: root, Path: "../file.txt"})
-	if !errors.Is(err, ErrOutsideRead) || out != "" {
-		t.Fatalf("../ escape failed")
-	}
+func TestPrintDenyOutsideRead_SymlinkAndFileRoot(t *testing.T) {
+	root := t.TempDir()
 
 	// escaping symlink
 	outsideDir := t.TempDir()
@@ -71,7 +66,7 @@ func TestPrintDenyOutsideRead(t *testing.T) {
 		t.Fatalf("symlink failed: %v", err)
 	}
 
-	out, err = CheckPrint(PrintRequest{Folder: root, Path: "escape_link"})
+	out, err := CheckPrint(PrintRequest{Folder: root, Path: "escape_link"})
 	if !errors.Is(err, ErrOutsideRead) || out != "" {
 		t.Fatalf("escaping symlink failed")
 	}

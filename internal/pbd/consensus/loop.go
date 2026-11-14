@@ -80,44 +80,74 @@ func Run(ctx context.Context, subject string, ladder [][]Reviewer, fix Fixer, p 
 	return runRounds(ctx, subject, ladder, fix, p, reviewers)
 }
 
-func runRounds(ctx context.Context, subject string, ladder [][]Reviewer, fix Fixer, p Policy, reviewers []string) (Verdict, error) {
-	current := subject
+func collectRoundReviews(ctx context.Context, rung []Reviewer, subject string, round int) (bool, []Finding, []Finding) {
 	var open []Finding
 	var blocking []Finding
+	allApproved := true
+
+	for _, r := range rung {
+		rev, err := r.Review(ctx, subject, round)
+		if err != nil {
+			rev = Review{
+				Approve: false,
+				Findings: []Finding{{
+					Reviewer: r.ID(),
+					Severity: "blocking",
+					Text:     fmt.Sprintf("reviewer %s: %s", r.ID(), err.Error()),
+				}},
+			}
+		}
+		if !rev.Approve {
+			allApproved = false
+		}
+		open = append(open, rev.Findings...)
+		for _, f := range rev.Findings {
+			if f.Severity == "blocking" {
+				blocking = append(blocking, f)
+			}
+		}
+	}
+	return allApproved, open, blocking
+}
+
+func applyFix(ctx context.Context, fix Fixer, subject string, blocking []Finding, round int, reviewers []string, open []Finding) (string, *Verdict) {
+	if fix == nil {
+		v := Verdict{
+			Agreed:    false,
+			Rounds:    round,
+			Subject:   subject,
+			Open:      open,
+			Reviewers: reviewers,
+			Reason:    "no fixer available",
+		}
+		return subject, &v
+	}
+	fixed, err := fix(ctx, subject, blocking)
+	if err != nil {
+		v := Verdict{
+			Agreed:    false,
+			Rounds:    round,
+			Subject:   subject,
+			Open:      open,
+			Reviewers: reviewers,
+			Reason:    err.Error(),
+		}
+		return subject, &v
+	}
+	return fixed, nil
+}
+
+func runRounds(ctx context.Context, subject string, ladder [][]Reviewer, fix Fixer, p Policy, reviewers []string) (Verdict, error) {
+	current := subject
 
 	for round := 1; round <= p.MaxRounds; round++ {
-		open = nil
-		blocking = nil
-		allApproved := true
-
 		rungIdx := round - 1
 		if rungIdx >= len(ladder) {
 			rungIdx = len(ladder) - 1
 		}
 		rung := ladder[rungIdx]
 
-		for _, r := range rung {
-			rev, err := r.Review(ctx, current, round)
-			if err != nil {
-				rev = Review{
-					Approve: false,
-					Findings: []Finding{{
-						Reviewer: r.ID(),
-						Severity: "blocking",
-						Text:     fmt.Sprintf("reviewer %s: %s", r.ID(), err.Error()),
-					}},
-				}
-			}
-			if !rev.Approve {
-				allApproved = false
-			}
-			open = append(open, rev.Findings...)
-			for _, f := range rev.Findings {
-				if f.Severity == "blocking" {
-					blocking = append(blocking, f)
-				}
-			}
-		}
+		allApproved, open, blocking := collectRoundReviews(ctx, rung, current, round)
 
 		if allApproved && len(blocking) == 0 {
 			return Verdict{
@@ -140,28 +170,11 @@ func runRounds(ctx context.Context, subject string, ladder [][]Reviewer, fix Fix
 		}
 
 		if len(blocking) > 0 {
-			if fix == nil {
-				return Verdict{
-					Agreed:    false,
-					Rounds:    round,
-					Subject:   current,
-					Open:      open,
-					Reviewers: reviewers,
-					Reason:    "no fixer available",
-				}, nil
+			var v *Verdict
+			current, v = applyFix(ctx, fix, current, blocking, round, reviewers, open)
+			if v != nil {
+				return *v, nil
 			}
-			fixed, err := fix(ctx, current, blocking)
-			if err != nil {
-				return Verdict{
-					Agreed:    false,
-					Rounds:    round,
-					Subject:   current,
-					Open:      open,
-					Reviewers: reviewers,
-					Reason:    err.Error(),
-				}, nil
-			}
-			current = fixed
 		}
 	}
 
@@ -169,7 +182,6 @@ func runRounds(ctx context.Context, subject string, ladder [][]Reviewer, fix Fix
 		Agreed:    false,
 		Rounds:    p.MaxRounds,
 		Subject:   current,
-		Open:      open,
 		Reviewers: reviewers,
 		Reason:    fmt.Sprintf("no consensus after %d rounds", p.MaxRounds),
 	}, nil

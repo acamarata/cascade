@@ -1,3 +1,4 @@
+// Package supervise provides supervisor management for processes.
 package supervise
 
 import (
@@ -12,11 +13,11 @@ var ErrNotImplemented = errors.New("supervise: operation unavailable")
 type Supervisor struct{}
 
 // Stop stops the supervisor. It returns ErrNotImplemented as a stub.
-func Stop(ctx context.Context, s *Supervisor) error {
+func Stop(_ context.Context, _ *Supervisor) error {
 	return ErrNotImplemented
 }
 
 // Restart restarts the supervisor. It returns ErrNotImplemented as a stub.
-func Restart(ctx context.Context, s *Supervisor) error {
+func Restart(_ context.Context, _ *Supervisor) error {
 	return ErrNotImplemented
 }

@@ -52,7 +52,7 @@ func LoadState(_ string) (*TopicState, error) {
 }
 
 // SaveState saves the topic state to the given path.
-func SaveState(_ string, ts *TopicState) error {
+func SaveState(_ string, _ *TopicState) error {
 	return ErrNotImplemented
 }
 

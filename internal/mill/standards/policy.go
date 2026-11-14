@@ -24,7 +24,7 @@ type Policy struct {
 // Allows determines whether a ticket may land based on the policy and gate result.
 // If gateResult is nil or points to false, Allows returns false meaning no landing.
 // When CAPP_QUALITY is not "enforce", it defaults to warn behavior.
-func (p *Policy) Allows(ticket string, head string, gateResult *bool) bool {
+func (p *Policy) Allows(_ string, _ string, gateResult *bool) bool {
 	if gateResult == nil {
 		return false
 	}

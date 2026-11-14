@@ -51,7 +51,7 @@ func TestDropsOtherFields(t *testing.T) {
 
 	// Verify that the struct doesn't have a "text" field
 	val := reflect.ValueOf(records[0])
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 	for i := 0; i < val.NumField(); i++ {
