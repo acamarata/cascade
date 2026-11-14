@@ -18,35 +18,47 @@ type CoreArgs struct {
 	Scope []string
 }
 
-// ErrInvalidFlags is returned when flags cannot be parsed correctly.
+// ErrInvalidFlags is returned when flags cannot be parsed correctly: an
+// unknown flag, a positional token, a bare "--", a repeated scalar flag or a
+// duplicate scope path. Its Error text is the literal code "1".
 var ErrInvalidFlags = errors.New("1")
 
-// ErrMissingRequired is returned when required arguments are absent.
+// ErrMissingRequired is returned when a flag value is missing or blank, or
+// when a nonempty invocation lacks --dir or --prompt. Its Error text is the
+// literal code "2".
 var ErrMissingRequired = errors.New("2")
 
 // ExtractCoreArgs parses the provided argument slice and returns the
 // corresponding CoreArgs. A nil or empty slice is treated as an explicit
-// absence and returns a zero-value CoreArgs with no error.
+// absence and returns a zero-value CoreArgs with no error. Flags take the
+// forms "--name value" and "--name=value". The first syntax or value error
+// in argument order is returned; required flags are checked after the scan.
+// Every failure returns the zero CoreArgs, and args is never modified.
 func ExtractCoreArgs(args []string) (CoreArgs, error) {
+	if len(args) == 0 {
+		return CoreArgs{}, nil
+	}
 	var ca CoreArgs
+	seen := map[string]bool{}
+	scopes := map[string]bool{}
 	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if !strings.HasPrefix(arg, "--") {
-			return ca, ErrInvalidFlags
+		name, val, used, err := coreArgsNext(args, i)
+		if err != nil {
+			return CoreArgs{}, err
 		}
-		rest := strings.TrimPrefix(arg, "--")
-		var name, val string
-		if idx := strings.Index(rest, "="); idx >= 0 {
-			name = rest[:idx]
-			val = rest[idx+1:]
-		} else {
-			name = rest
-			if i+1 >= len(args) {
-				return ca, ErrInvalidFlags
+		i += used
+		if name == "scope" {
+			if scopes[val] {
+				return CoreArgs{}, ErrInvalidFlags
 			}
-			val = args[i+1]
-			i++
+			scopes[val] = true
+			ca.Scope = append(ca.Scope, val)
+			continue
 		}
+		if seen[name] {
+			return CoreArgs{}, ErrInvalidFlags
+		}
+		seen[name] = true
 		switch name {
 		case "dir":
 			ca.Dir = val
@@ -54,11 +66,41 @@ func ExtractCoreArgs(args []string) (CoreArgs, error) {
 			ca.Verify = val
 		case "prompt":
 			ca.Prompt = val
-		case "scope":
-			ca.Scope = append(ca.Scope, val)
-		default:
-			return ca, ErrInvalidFlags
 		}
 	}
+	if !seen["dir"] || !seen["prompt"] {
+		return CoreArgs{}, ErrMissingRequired
+	}
 	return ca, nil
+}
+
+// coreArgsNext reads the flag at args[i] and returns its name, its value and
+// how many extra tokens the value consumed (0 for "--name=value", 1 for
+// "--name value"). It reports ErrInvalidFlags for a positional token, a bare
+// "--" or an unknown name, and ErrMissingRequired for an absent or blank
+// value, including a following token that begins with "--".
+func coreArgsNext(args []string, i int) (string, string, int, error) {
+	arg := args[i]
+	if !strings.HasPrefix(arg, "--") || arg == "--" {
+		return "", "", 0, ErrInvalidFlags
+	}
+	rest := arg[2:]
+	name, val, hasEq := strings.Cut(rest, "=")
+	switch name {
+	case "dir", "verify", "prompt", "scope":
+	default:
+		return "", "", 0, ErrInvalidFlags
+	}
+	used := 0
+	if !hasEq {
+		if i+1 >= len(args) || strings.HasPrefix(args[i+1], "--") {
+			return "", "", 0, ErrMissingRequired
+		}
+		val = args[i+1]
+		used = 1
+	}
+	if strings.TrimSpace(val) == "" {
+		return "", "", 0, ErrMissingRequired
+	}
+	return name, val, used, nil
 }

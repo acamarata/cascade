@@ -34,12 +34,12 @@ func TestExtractCoreArgsCanonicalFixture(t *testing.T) {
 // TestExtractCoreArgsBothForms validates both flag forms.
 func TestExtractCoreArgsBothForms(t *testing.T) {
 	{
-		args := []string{"--dir=/tmp", "--verify", "true"}
+		args := []string{"--dir=/tmp", "--verify", "true", "--prompt", "p"}
 		got, err := ExtractCoreArgs(args)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if got.Dir != "/tmp" || got.Verify != "true" {
+		if got.Dir != "/tmp" || got.Verify != "true" || got.Prompt != "p" {
 			t.Errorf("got %+v", got)
 		}
 	}
