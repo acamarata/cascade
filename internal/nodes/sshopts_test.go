@@ -1,9 +1,6 @@
 package nodes
 
-import (
-	"testing"
-	"time"
-)
+import "testing"
 
 func TestOptionsFixedSet(t *testing.T) {
 	opts, err := NewSSHOptions()
