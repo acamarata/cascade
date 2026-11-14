@@ -121,6 +121,53 @@ Mapping:
 | `week` | `quota[]` and the bucket's `seven_day.utilization_pct` | `seven_day.utilization_pct` |
 | `day`, `month` | `quota[]` only | not shown |
 
+The poller records each window under the gateway account's name, and
+`fleet capacity` looks windows up by the provider's name. Today a quota
+window shows only on a provider that has the same name as its account.
+
 A stale or failed window never fills a utilization: the widget shows null and
 `quota[].stale` is true, with the last values and `observed_at`. Nothing maps
 an unknown or stale window to 0.
+
+## Operator harness (T0)
+
+`cascade provider exec [<account>] -- <command>` is meant to run an operator
+harness on a gateway account and replace itself with the command, so no
+parent keeps the credential. Today it only removes variables: the
+host-injected gateway variables always, and `ANTHROPIC_API_KEY` and
+`CLAUDE_CODE_OAUTH_TOKEN` when an account is named. It does not yet inject
+the account's base URL or the credential its source resolves, so a harness
+started this way does not reach the gateway. The daemon's credential
+snapshot at start is described in [daemon](daemon.md).
+
+## Retry and health
+
+A gateway call that fails transiently (a 5xx other than 501 and 505, a 529,
+an `overloaded_error` body or stream event, or a transport break) is retried
+by the conductor's Executor and then spills to another lane. The policy is in
+[transient retry](conductor/transient-retry.md). A provider that keeps
+failing is demoted to degraded; its recovery probe is one authenticated
+request through the admitted account, and only a 2xx makes it healthy again.
+See the health section of the [provider guide](provider-guide.md).
+
+## Credential helper cost
+
+A helper runs on every call; nothing caches its output. The cost of that
+choice has not been measured on a real helper yet: the measurement runs
+with the live acceptance legs, which wait on the owner's authorization for
+live gateway requests. Until then the no-cache decision stands without data.
+
+## Acceptance
+
+`TestGatewayAcceptanceFake` (`cmd/cascade`, `-tags integration`) proves the
+offline legs for registration and dispatch, transient retry, spill and
+health, and the quota window. The agent-session and operator-harness legs
+are not covered yet. The binary is built from the tree with `-tags devkeys`
+and CGO off, so elevation uses the file custody tier and never a keychain.
+It runs under a fresh `HOME` and `CASCADE_HOME` against two loopback fake
+gateways
+(`internal/providers/dispatch/testdata/fakegateway`). The fakes check the
+token, journal each request, fail on a scripted fault and serve a
+constructed usage source. Every shape they return is constructed from the
+public Messages API reference; no live capture exists (see
+`providers/anthropic/testdata/gateway/README.md`).
