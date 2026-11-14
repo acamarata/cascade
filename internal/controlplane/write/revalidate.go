@@ -55,8 +55,12 @@ func Revalidate(req Request) (RevalidateResult, error) {
 			return RevalidateResult{}, ErrInvalidRevalidate
 		}
 	case "notify_only":
-		if req.Caller != "owner" {
-			return RevalidateResult{}, ErrInvalidRevalidate
+		if req.Caller != "" {
+			if req.Caller != "owner" {
+				return RevalidateResult{}, ErrOwnerOnly
+			}
+		} else {
+			return RevalidateResult{}, ErrOwnerOnly
 		}
 	default:
 		return RevalidateResult{}, ErrInvalidRevalidate
