@@ -6,6 +6,7 @@
 //	elevated `node bind` saves it, an unelevated bind writes nothing.
 //
 // SPORT: cmd/cascade/node bind (ADD tests, P1-CI-13).
+
 package main
 
 import (
@@ -110,6 +111,7 @@ func bindOnNode(t *testing.T, e enrolledNode, gate *elevationGate) (string, erro
 	deps := testNodeCLIDeps(t, nil)
 	deps.Paths = e.nodeSrv.Paths
 	deps.Gate = gate
+	removeTestDesignation(t, deps.Paths.DataDir()) // a node home holds no designation
 	cmd, out := jsonCmd(t)
 	err := runNodeBind(cmd, deps, writeBindingFile(t, e.binding))
 	return out.String(), err

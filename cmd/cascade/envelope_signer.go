@@ -13,14 +13,14 @@
 //
 // Outputs: productionEnvelopeSigner, installationPublicKey, and the
 //
-//	fail-closed eligibility check controllerEligible / controllerEligibleWith
-//	/ bindingProbeAbsent.
+//	fail-closed eligibility check controllerEligibleWith / bindingProbeAbsent.
 //
 // Constraints: FAIL CLOSED. Eligibility is decided on every call, before the
 //
-//	memo is read, from node-only artifacts: a daemon is eligible only when
-//	its controller-binding path is proven absent and the role resolver
-//	agrees. Any probe error is a refusal, never "no binding". Custody errors,
+//	memo is read: a daemon is eligible only when its controller-binding path
+//	is proven absent and nodes.ResolveRole finds a controller designation.
+//	Node, both and none are refusals, and any probe error is a refusal,
+//	never "no binding". Custody errors,
 //	a corrupt vault and a malformed entry are returned as errors and nothing
 //	is generated or written over them. The private key lives in vault custody
 //	and in this process's memory only; nothing here exports, logs or formats
@@ -103,7 +103,7 @@ func (installationSigner) Format(f fmt.State, _ rune) {
 
 // productionEnvelopeSigner returns the process's scope-envelope signer over
 // the installation key, provisioning the key create-only on first use.
-// controllerEligible runs on EVERY call before the memo is read; a daemon
+// controllerEligibleWith runs on EVERY call before the memo is read; a daemon
 // that is not the controller is refused KindPermissionDenied and nothing is
 // read or written. Custody errors come back unchanged.
 func productionEnvelopeSigner(ctx context.Context, paths runtime.PathProvider) (scopeenvelope.Signer, error) {
@@ -129,7 +129,7 @@ func installationPublicKey(ctx context.Context, paths runtime.PathProvider) (ed2
 // installationSignerFor is the shared body: eligibility, then the memo, then
 // provisioning. It never returns a nil signer with a nil error.
 func installationSignerFor(ctx context.Context, paths runtime.PathProvider) (*installationSigner, error) {
-	if ok, reason := controllerEligible(paths); !ok {
+	if ok, reason := controllerEligibleWith(paths, os.Lstat); !ok {
 		return nil, cascade.Wrapf(cascade.KindPermissionDenied, errInstallationKeyIneligible,
 			"installation key: refusing to provision or read it: %s", reason)
 	}
@@ -194,17 +194,11 @@ func keyPairMatches(priv ed25519.PrivateKey, pub ed25519.PublicKey) bool {
 		subtle.ConstantTimeCompare(priv[ed25519.SeedSize:], pub) == 1
 }
 
-// controllerEligible is the fail-closed controller check over the real
-// filesystem. P1-NODE-16 replaces it with contract:controller-designation.
-func controllerEligible(paths runtime.PathProvider) (bool, string) {
-	return controllerEligibleWith(paths, os.Lstat)
-}
-
-// controllerEligibleWith decides eligibility on node-only artifacts. It is
-// eligible ONLY when the controller-binding path is proven absent (lstat, so
-// any entry there, a dangling symlink included, is present) and the role
-// resolver agrees. It never trusts the resolver alone: an empty-endpoint
-// binding resolves as controller there and is refused here. Every probe
+// controllerEligibleWith decides eligibility through the controller
+// designation. It is eligible ONLY when the controller-binding path is proven
+// absent (lstat, so any entry there, a dangling symlink included, is present)
+// and nodes.ResolveRole resolves the designation to controller. Node, both
+// and none (no designation) all refuse; so does an empty-endpoint binding. Every probe
 // error is classified by bindingProbeAbsent; a nil provider and an empty or
 // relative data directory are not eligible.
 func controllerEligibleWith(paths runtime.PathProvider, lstat func(string) (fs.FileInfo, error)) (bool, string) {
@@ -225,9 +219,9 @@ func controllerEligibleWith(paths runtime.PathProvider, lstat func(string) (fs.F
 	return controllerByResolver(nodes.NewFileControllerBindingBackend(dir))
 }
 
-// controllerByResolver is the second, agreeing half: the node-records store
-// opened from the data directory must exist and resolve to controller.
-// Unlike nodes.ResolveRole, a nil store is a refusal, not "controller".
+// controllerByResolver is the second, agreeing half: nodes.ResolveRole over
+// the data directory's binding and designation must resolve to controller.
+// A nil store is a refusal.
 func controllerByResolver(binding nodes.ControllerBindingBackend) (bool, string) {
 	if binding == nil {
 		return false, "no node-records store: the role cannot be proven"
