@@ -1,0 +1,41 @@
+# inbox.txtar
+#
+# testscript: executable
+#
+# `cascade inbox` through the REAL composition root, run in process by
+# TestScript (script_test.go). The runner serves no daemon, so these legs
+# assert the daemon-only rule and the argument rules; the verbs against a
+# serving daemon are TestInboxCLI in inbox_test.go.
+
+env CASCADE_NO_INPUT=1
+
+# No daemon: every verb refuses with the fixed message and a non-zero exit.
+[!windows] ! exec cascade inbox list
+[!windows] stderr 'the daemon is not running'
+[!windows] ! exec cascade inbox read item1
+[!windows] stderr 'the daemon is not running'
+[!windows] ! exec cascade inbox ack item1
+[!windows] stderr 'the daemon is not running'
+[!windows] ! exec cascade --json inbox list
+[!windows] stdout '"ok":\s*false'
+
+# The refusal never prompts.
+[!windows] ! stderr '(?i)\[y/n\]'
+
+# Windows has no inbox.
+[windows] ! exec cascade inbox list
+[windows] stderr 'not supported on windows'
+
+# Missing and extra arguments are usage errors.
+! exec cascade inbox read
+stderr 'invalid arguments'
+! exec cascade inbox ack
+stderr 'invalid arguments'
+! exec cascade inbox list extra-arg
+stderr 'invalid arguments'
+
+# The noun is listed in help.
+exec cascade inbox --help
+stdout 'list'
+stdout 'read'
+stdout 'ack'
