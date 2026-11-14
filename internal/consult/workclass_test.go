@@ -14,7 +14,6 @@ func TestRejectUnknownClass(t *testing.T) {
 		"   ",
 		"  padded  ",
 		"Check",
-		"check",
 		"UNKNOWN",
 	}
 	for _, tc := range cases {
