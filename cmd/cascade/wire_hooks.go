@@ -36,7 +36,7 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// The hooks manifest entries and the capabilities each action type is routed as.
+// Manifest entries and the capabilities each action type is routed as.
 const (
 	hooksSubsystem          = "hooks"
 	hooksReloadSubsystem    = "hooks-reload"
@@ -51,8 +51,7 @@ const (
 
 var _ = registerDaemonWiring(daemonRegistration{Name: hooksSubsystem, Phase: phaseSupervised, Order: 40, Wire: wireHooks})
 
-// hooksParts is everything buildHooks constructs before anything starts.
-type hooksParts struct {
+type hooksParts struct { // what buildHooks constructs
 	d         *hooks.Dispatcher
 	watch     *hooks.ReloadWatch
 	rejects   *events.Subscription
@@ -79,10 +78,18 @@ func wireHooksWith(w *daemonWiring, build func(*daemonWiring) (*hooksParts, erro
 	w.Manifest.GoSupervised(w.Ctx, hooksAttentionSubsystem, "filing refused hook edits", func(ctx context.Context) error {
 		return watchRefusedHookEdits(ctx, w, parts)
 	})
+	noteRefusedHooksSection(w)
 	return nil
 }
 
-// hooksParser reads the canonical hook list the family extractor produced.
+// noteRefusedHooksSection marks hooks Failed when the on-disk [hooks] section is refused at load.
+func noteRefusedHooksSection(w *daemonWiring) {
+	if _, err := onDiskHooksValue(w.Ctx, w); err != nil && cascade.HasKind(err, cascade.KindInvalidInput) {
+		w.Manifest.Failed(hooksSubsystem, "[hooks] section refused at load: "+err.Error())
+	}
+}
+
+// hooksParser reads the canonical hook list.
 func hooksParser(raw any) ([]hooks.HookConfig, error) {
 	v, _ := raw.(json.RawMessage)
 	return decodeHookList(v)
@@ -99,7 +106,7 @@ func hooksSectionSource(hr *runtime.HotReloader) func() (any, error) {
 	}
 }
 
-// hooksSeams are the process-wide pieces the Dispatcher is built over.
+// hooksSeams are the process-wide Dispatcher seams.
 type hooksSeams struct {
 	engine     *egress.Engine
 	token      egress.Capability
@@ -179,10 +186,9 @@ func hooksAttentionParts(w *daemonWiring, d *hooks.Dispatcher, watch *hooks.Relo
 	if err != nil {
 		return nil, err
 	}
-	parts := &hooksParts{d: d, watch: watch, rejects: sub,
-		attention: supervision.NewStore(w.Store, w.Clock, w.Bus, supervision.NewSystemIDGenerator(), 0)}
-	raiseUnacceptedHookEdit(w.Ctx, w, parts.attention)
-	return parts, nil
+	store := supervision.NewStore(w.Store, w.Clock, w.Bus, supervision.NewSystemIDGenerator(), 0)
+	raiseUnacceptedHookEdit(w.Ctx, w, store)
+	return &hooksParts{d: d, watch: watch, rejects: sub, attention: store}, nil
 }
 
 // initialHooksRegistry registers the admitted hooks of the reloader's config.

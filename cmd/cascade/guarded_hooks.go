@@ -38,10 +38,10 @@ func init() {
 }
 
 // hookLoadable reports the action types the [[hooks]] section may load:
-// plugin-call and agent-note. P1-SUP-02 makes its body read the runner
-// registrations; any other type refuses the section.
+// exactly the types with a registered runner (shell never has one); any
+// other type refuses the section.
 func hookLoadable(t hooks.ActionType) bool {
-	return t == hooks.ActionTypePluginCall || t == hooks.ActionTypeAgentNote
+	return hookRunnable(t)
 }
 
 // hookTagNames is VaultBindingsOf's tag reader: the names the rehydrate
