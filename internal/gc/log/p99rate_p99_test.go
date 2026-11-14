@@ -43,40 +43,58 @@ func TestRatePublishesP99At30Samples(t *testing.T) {
 	if rpm2 != rpm || width2 != width {
 		t.Errorf("second call: got (%v,%d), want (%v,%d)", rpm2, width2, rpm, width)
 	}
+}
 
-	// 30 tiny positive rates give width 200
-	rt2, _ := NewRateTracker(fc)
+// TestRatePublishesP99TinyRates verifies that 30 tiny positive rates give width 200.
+func TestRatePublishesP99TinyRates(t *testing.T) {
+	fc := &p99FakeClock{now: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)}
+	rt, err := NewRateTracker(fc)
+	if err != nil {
+		t.Fatalf("NewRateTracker: %v", err)
+	}
 	for i := 0; i < 30; i++ {
-		if err := rt2.Observe(0.001); err != nil {
+		if err := rt.Observe(0.001); err != nil {
 			t.Fatalf("Observe tiny: %v", err)
 		}
 	}
-	_, w2 := rt2.Current()
-	if w2 != 200 {
-		t.Errorf("tiny rates width = %d, want 200", w2)
+	_, w := rt.Current()
+	if w != 200 {
+		t.Errorf("tiny rates width = %d, want 200", w)
 	}
+}
 
-	// Rates > 900 give width 1
-	rt3, _ := NewRateTracker(fc)
+// TestRatePublishesP99LargeRates verifies that rates > 900 give width 1.
+func TestRatePublishesP99LargeRates(t *testing.T) {
+	fc := &p99FakeClock{now: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)}
+	rt, err := NewRateTracker(fc)
+	if err != nil {
+		t.Fatalf("NewRateTracker: %v", err)
+	}
 	for i := 0; i < 30; i++ {
-		if err := rt3.Observe(1000); err != nil {
+		if err := rt.Observe(1000); err != nil {
 			t.Fatalf("Observe large: %v", err)
 		}
 	}
-	_, w3 := rt3.Current()
-	if w3 != 1 {
-		t.Errorf("large rates width = %d, want 1", w3)
+	_, w := rt.Current()
+	if w != 1 {
+		t.Errorf("large rates width = %d, want 1", w)
 	}
+}
 
-	// 100 rates 1..100 give p99 = 99
-	rt4, _ := NewRateTracker(fc)
+// TestRatePublishesP99At100Samples verifies that 100 rates 1..100 give p99 = 99.
+func TestRatePublishesP99At100Samples(t *testing.T) {
+	fc := &p99FakeClock{now: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)}
+	rt, err := NewRateTracker(fc)
+	if err != nil {
+		t.Fatalf("NewRateTracker: %v", err)
+	}
 	for i := 1; i <= 100; i++ {
-		if err := rt4.Observe(float64(i)); err != nil {
+		if err := rt.Observe(float64(i)); err != nil {
 			t.Fatalf("Observe(%d): %v", i, err)
 		}
 	}
-	rpm4, _ := rt4.Current()
-	if rpm4 != 99 {
-		t.Errorf("100 samples rpm = %v, want 99", rpm4)
+	rpm, _ := rt.Current()
+	if rpm != 99 {
+		t.Errorf("100 samples rpm = %v, want 99", rpm)
 	}
 }

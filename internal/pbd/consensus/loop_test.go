@@ -16,7 +16,7 @@ type fakeReviewer struct {
 func (f *fakeReviewer) ID() string     { return f.id }
 func (f *fakeReviewer) Family() string { return f.family }
 func (f *fakeReviewer) CE() int        { return f.ce }
-func (f *fakeReviewer) Review(ctx context.Context, subject string, round int) (Review, error) {
+func (f *fakeReviewer) Review(_ context.Context, subject string, round int) (Review, error) {
 	f.called = true
 	return Review{Approve: true}, nil
 }

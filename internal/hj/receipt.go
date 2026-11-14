@@ -12,6 +12,7 @@ import (
 type ReceiptState string
 
 const (
+	// Receipt lifecycle states.
 	Queue          ReceiptState = "Queue"
 	Taken          ReceiptState = "Taken"
 	ReceiptAttempt ReceiptState = "Attempt"

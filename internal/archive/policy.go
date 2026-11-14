@@ -14,6 +14,6 @@ var ErrNotImplemented = errors.New("archive: operation unavailable")
 
 // ParsePolicies parses raw policy data into a slice of TargetPolicy values.
 // It currently returns nil, ErrNotImplemented as a stub implementation.
-func ParsePolicies(raw map[string][]string) ([]TargetPolicy, error) {
+func ParsePolicies(_ map[string][]string) ([]TargetPolicy, error) {
 	return nil, ErrNotImplemented
 }

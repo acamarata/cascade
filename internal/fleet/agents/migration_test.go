@@ -25,7 +25,11 @@ func TestAgentMigrationIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("close db: %v", err)
+		}
+	}()
 
 	ctx := context.Background()
 	clk := &testClock{t: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)}

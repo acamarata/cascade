@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestPersistQueueState(t *testing.T) {
+func TestPersistQueueStateEmptyStore(t *testing.T) {
 	// NewMemoryReceiptStore is independent and empty (All()==nil)
 	store1 := NewMemoryReceiptStore()
 	if all := store1.All(); all != nil {
@@ -16,6 +16,11 @@ func TestPersistQueueState(t *testing.T) {
 	if all := store2.All(); all != nil {
 		t.Fatalf("expected nil All() for empty store2, got %v", all)
 	}
+}
+
+func TestPersistQueueStateSaveAndRetrieve(t *testing.T) {
+	store1 := NewMemoryReceiptStore()
+	store2 := NewMemoryReceiptStore()
 
 	// Save a receipt with Queue state
 	r := Receipt{ID: "receipt-1", State: Queue}
@@ -36,6 +41,14 @@ func TestPersistQueueState(t *testing.T) {
 	if all2 := store2.All(); all2 != nil {
 		t.Fatalf("store2 was not independent, got %v", all2)
 	}
+}
+
+func TestPersistQueueStateErrors(t *testing.T) {
+	store1 := NewMemoryReceiptStore()
+	r := Receipt{ID: "receipt-1", State: Queue}
+	if err := store1.Save(r); err != nil {
+		t.Fatalf("unexpected error saving receipt: %v", err)
+	}
 
 	// ErrDuplicateReceipt
 	err := store1.Save(r)
@@ -54,7 +67,9 @@ func TestPersistQueueState(t *testing.T) {
 	if !errors.Is(err, ErrInvalidReceiptState) {
 		t.Fatalf("expected ErrInvalidReceiptState, got %v", err)
 	}
+}
 
+func TestPersistQueueStateSortedSnapshots(t *testing.T) {
 	// All returns independent snapshots sorted ascending by ID
 	store3 := NewMemoryReceiptStore()
 	_ = store3.Save(Receipt{ID: "c", State: Queue})

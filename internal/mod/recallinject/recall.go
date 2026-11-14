@@ -1,3 +1,4 @@
+// Package recallinject provides utilities to classify file paths and tag them using an injected classification function.
 package recallinject
 
 import "errors"

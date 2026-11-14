@@ -12,7 +12,7 @@ type missingMock struct {
 }
 
 // Lookup returns the configured fixture response.
-func (m *missingMock) Lookup(name string) (string, bool) {
+func (m *missingMock) Lookup(_ string) (string, bool) {
 	if m == nil {
 		panic("Lookup invoked on nil pointer")
 	}

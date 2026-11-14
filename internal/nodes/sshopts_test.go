@@ -16,9 +16,9 @@ func TestOptionsFixedSet(t *testing.T) {
 
 	// Ensure fields exist and have correct types
 	var o SSHOptions
-	var _ bool = o.BatchMode
-	var _ time.Duration = o.ConnectTimeout
-	var _ bool = o.DisableAgentForwarding
-	var _ string = o.KnownHostsPolicy
-	var _ bool = o.KeepAlive
+	var _ = o.BatchMode
+	var _ = o.ConnectTimeout
+	var _ = o.DisableAgentForwarding
+	var _ = o.KnownHostsPolicy
+	var _ = o.KeepAlive
 }

@@ -10,6 +10,11 @@ import (
 // TestAgentRPCFixture verifies that the agent-session.json fixture
 // and its documentation exist and match the contract schema.
 func TestAgentRPCFixture(t *testing.T) {
+	checkAgentSessionJSON(t)
+	checkAgentFixtureDocs(t)
+}
+
+func checkAgentSessionJSON(t *testing.T) {
 	fixturePath := "../fleet/agents/testdata/agent-session.json"
 	data, err := os.ReadFile(fixturePath)
 	if err != nil {
@@ -49,7 +54,9 @@ func TestAgentRPCFixture(t *testing.T) {
 	if !hasList {
 		t.Error("agent-session.json lacks agent.list record")
 	}
+}
 
+func checkAgentFixtureDocs(t *testing.T) {
 	readmePath := "../fleet/agents/testdata/README.md"
 	readme, err := os.ReadFile(readmePath)
 	if err != nil {

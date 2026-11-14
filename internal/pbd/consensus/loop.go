@@ -77,6 +77,10 @@ func Run(ctx context.Context, subject string, ladder [][]Reviewer, fix Fixer, p 
 		}
 	}
 
+	return runRounds(ctx, subject, ladder, fix, p, reviewers)
+}
+
+func runRounds(ctx context.Context, subject string, ladder [][]Reviewer, fix Fixer, p Policy, reviewers []string) (Verdict, error) {
 	current := subject
 	var open []Finding
 	var blocking []Finding

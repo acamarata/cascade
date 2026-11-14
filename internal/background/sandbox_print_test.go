@@ -62,7 +62,9 @@ func TestPrintDenyOutsideRead(t *testing.T) {
 	// escaping symlink
 	outsideDir := t.TempDir()
 	outsideFile := filepath.Join(outsideDir, "secret.txt")
-	os.WriteFile(outsideFile, []byte("secret"), 0600)
+	if err := os.WriteFile(outsideFile, []byte("secret"), 0600); err != nil {
+		t.Fatalf("write outside file: %v", err)
+	}
 
 	symlinkPath := filepath.Join(root, "escape_link")
 	if err := os.Symlink(outsideFile, symlinkPath); err != nil {
@@ -76,7 +78,9 @@ func TestPrintDenyOutsideRead(t *testing.T) {
 
 	// non-directory root
 	fileRoot := filepath.Join(root, "afile.txt")
-	os.WriteFile(fileRoot, []byte("hi"), 0600)
+	if err := os.WriteFile(fileRoot, []byte("hi"), 0600); err != nil {
+		t.Fatalf("write file root: %v", err)
+	}
 	out, err = CheckPrint(PrintRequest{Folder: fileRoot, Path: "file.txt"})
 	if !errors.Is(err, ErrOutsideRead) || out != "" {
 		t.Fatalf("non-directory root failed")

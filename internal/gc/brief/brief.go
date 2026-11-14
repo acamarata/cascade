@@ -1,3 +1,4 @@
+// Package brief defines the Brief type and validation rules for garbage collection briefs.
 package brief
 
 import (

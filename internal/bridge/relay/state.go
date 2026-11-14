@@ -47,16 +47,16 @@ type Relay struct {
 }
 
 // LoadState loads the topic state from the given path.
-func LoadState(path string) (*TopicState, error) {
+func LoadState(_ string) (*TopicState, error) {
 	return nil, ErrNotImplemented
 }
 
 // SaveState saves the topic state to the given path.
-func SaveState(path string, ts *TopicState) error {
+func SaveState(_ string, ts *TopicState) error {
 	return ErrNotImplemented
 }
 
 // Quarantine marks the given path as quarantined.
-func Quarantine(path string) error {
+func Quarantine(_ string) error {
 	return ErrNotImplemented
 }
