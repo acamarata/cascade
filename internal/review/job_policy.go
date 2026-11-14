@@ -78,12 +78,6 @@ func (p JobReviewPolicy) CheckAvailable(ctx context.Context, reg provider.Provid
 	return jobs.RequireDistinctFamily(p, author, eligible)
 }
 
-// ProviderFamily resolves an account name to its driver, failing closed.
-func ProviderFamily(ctx context.Context, reg provider.ProviderRegistryReader, providerName string) jobs.FamilyRef {
-	f := resolveFamily(ctx, reg, provider.Selection{Provider: providerName})
-	return jobs.FamilyRef{Family: f.family, Resolved: f.resolved}
-}
-
 // AvailableFamilies returns distinct drivers in registry order.
 func AvailableFamilies(ctx context.Context, reg provider.ProviderRegistryReader) ([]string, error) {
 	if reg == nil {

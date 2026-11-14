@@ -60,19 +60,20 @@ func wireCompletionEvidence(ctx context.Context, registry *rpc.Registry, store p
 		}
 		return ledger, err
 	}
-	if len(acceptance) != 4 {
+	if len(acceptance) != 4 && len(acceptance) != 6 {
 		return nil, cascade.New(cascade.KindInvalidInput, "completion gate: acceptance dependencies required")
 	}
 	verifier, _ := acceptance[0].(jobs.AcceptanceVerifier)
 	checkpoints, _ := acceptance[1].(completionCheckpoints)
 	leases, _ := acceptance[2].(*jobs.LeaseManager)
 	isController, _ := acceptance[3].(func() bool)
-	return registerCompletionGate(ctx, registry, store, clock, bus, paths, verifier, checkpoints, leases, isController)
+	// The optional Fleet and provider registry reader feed the reviewer enforcement.
+	return registerCompletionGate(ctx, registry, store, clock, bus, paths, verifier, checkpoints, leases, isController, reviewerSourcesOf(acceptance[4:]))
 }
 
 // registerCompletionGate requires an exact-checkpoint source before mounting.
 func registerCompletionGate(ctx context.Context, registry *rpc.Registry, store provider.Store, clock runtime.Clock, bus *events.Bus, paths runtime.PathProvider,
-	verifier jobs.AcceptanceVerifier, checkpoints completionCheckpoints, leases *jobs.LeaseManager, isController func() bool) (*jobs.EvidenceLedger, error) {
+	verifier jobs.AcceptanceVerifier, checkpoints completionCheckpoints, leases *jobs.LeaseManager, isController func() bool, reviewer reviewerSources) (*jobs.EvidenceLedger, error) {
 	if checkpoints == nil {
 		return nil, cascade.New(cascade.KindInvalidInput, "completion gate: checkpoints required")
 	}
@@ -84,14 +85,18 @@ func registerCompletionGate(ctx context.Context, registry *rpc.Registry, store p
 		return nil, err
 	}
 	ledger.WithBus(bus)
+	enforcement, err := composeReviewer(ctx, clock, reviewer)
+	if err != nil {
+		return nil, err
+	}
 	policy, err := jobs.NewCompletionPolicy(jobs.CompletionPolicyDeps{
 		Store: jstore, Ledger: ledger, Bus: bus, Clock: clock, EngineID: completionGateEngineID,
-		Acceptance: verifier, RequireAcceptance: true,
+		Acceptance: verifier, RequireAcceptance: true, Reviewer: enforcement,
 	})
 	if err != nil {
 		return nil, err
 	}
-	gate := &completionPolicyGate{policy: policy, store: jstore, checkpoints: checkpoints}
+	gate := &completionPolicyGate{policy: policy, store: jstore, checkpoints: checkpoints, reviewerTree: reviewer.treeSource()}
 	resolver := &completionJobResolver{store: jstore}
 	if err := hookpacks.RegisterCompletionHookPack(hookpacks.DefaultRegistry, gate, resolver); err != nil {
 		return nil, err
@@ -164,6 +169,8 @@ type completionPolicyGate struct {
 	policy      *jobs.CompletionPolicy
 	store       *jobs.Store
 	checkpoints completionCheckpoints
+	// reviewerTree reads a review job's leased worktree tree; nil denies.
+	reviewerTree func(context.Context, jobs.Job) (string, error)
 }
 
 // completionCheckpoints supplies the dispatcher's current immutable binding.
@@ -211,6 +218,9 @@ func (g *completionPolicyGate) CompletionCheck(ctx context.Context, jobID string
 			return false, "completion gate: current checkpoint unavailable", nil
 		}
 		req.CheckpointID, req.TreeHash = snap.CheckpointID, snap.TreeHash
+		if reason := g.fillReviewerTree(ctx, job, &req); reason != "" {
+			return false, reason, nil
+		}
 	}
 	err = g.policy.Transition(ctx, req)
 	if err == nil {
@@ -218,7 +228,7 @@ func (g *completionPolicyGate) CompletionCheck(ctx context.Context, jobID string
 	}
 	var denied *jobs.ErrorCompletionDenied
 	if errors.As(err, &denied) {
-		return false, denied.Error(), nil
+		return false, g.reviewerDenial(ctx, job, denied.Error()), nil
 	}
 	return false, "", err
 }

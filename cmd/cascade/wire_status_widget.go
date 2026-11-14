@@ -67,12 +67,14 @@ func wireStatusWidget(w *daemonWiring) error {
 		return err
 	}
 	showNames := w.Deps.Config != nil && w.Deps.Config.Widget.ShowProjectNames
-	deps, err := daemon.RegisterStatusWidgetHandler(w.Ctx, w.Registry, w.Store, providerregistry.NewRegistry(regDB, w.Clock),
+	reg := providerregistry.NewRegistry(regDB, w.Clock)
+	deps, err := daemon.RegisterStatusWidgetHandler(w.Ctx, w.Registry, w.Store, reg,
 		w.Clock, w.Bus, w.Paths, func() bool { return showNames })
 	if err != nil {
 		_ = regDB.Close()
 		return err
 	}
+	w.Deps.ProviderRegistry = providerregistry.NewReader(reg)
 	ticker := statusWidgetTicker()
 	w.Manifest.GoSupervised(w.Ctx, daemon.StatusWidgetRefreshSubsystem, "every "+daemon.StatusWidgetRefreshInterval.String(),
 		func(ctx context.Context) error {

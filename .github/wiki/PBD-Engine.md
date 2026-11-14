@@ -355,7 +355,7 @@ adding one. See `internal/build/testonly-allow.json`'s entry for
 | Critical | proceed | hold: `ErrNoDistinctFamily` |
 | nil policy or unknown class | hold | hold |
 
-The production `ReviewPolicySource` is `internal/review.JobReviewPolicy`, built by `NewJobReviewPolicy(riskClass)`. It maps each job risk class to the existing `ConsequenceClass` rules (`RequiresDistinctFamily`, `HoldsWithoutDistinctFamily`, both failing closed on an unknown value). It counts review gates from `jobs.GateSetForRiskClass` and refuses an unknown risk class with `ErrUnknownRiskClass`. `review.ProviderFamily` resolves a provider name to its registry driver and fails closed. `review.AvailableFamilies` lists the distinct drivers, and `JobReviewPolicy.CheckAvailable` applies the ladder to them.
+The production `ReviewPolicySource` is `internal/review.JobReviewPolicy`, built by `NewJobReviewPolicy(riskClass)`. It maps each job risk class to the existing `ConsequenceClass` rules (`RequiresDistinctFamily`, `HoldsWithoutDistinctFamily`, both failing closed on an unknown value). It counts review gates from `jobs.GateSetForRiskClass` and refuses an unknown risk class with `ErrUnknownRiskClass`. `review.AvailableFamilies` lists the distinct drivers, and `JobReviewPolicy.CheckAvailable` applies the ladder to them.
 
 ### Completion checks and order
 
