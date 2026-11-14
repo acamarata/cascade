@@ -4,22 +4,22 @@ package graph
 type NodeState struct {
 	// Healthy indicates whether the node is functioning correctly.
 	Healthy bool
-	// CamVerdict is the readiness verdict from cam.
-	CamVerdict string
+	// OpsToolVerdict is the readiness verdict from opstool.
+	OpsToolVerdict string
 	// TdarrVerdict is the readiness verdict from Tdarr.
 	TdarrVerdict string
 }
 
 // StatusPayload represents the status information of a node.
 type StatusPayload struct {
-	// CamVerdict is the cam readiness verdict included in the payload.
-	CamVerdict string
+	// OpsToolVerdict is the opstool readiness verdict included in the payload.
+	OpsToolVerdict string
 	// TdarrVerdict is the Tdarr readiness verdict included in the payload.
 	TdarrVerdict string
 }
 
 // BuildStatus creates a StatusPayload from the given NodeState.
-// When the node is unhealthy, it includes the cam and Tdarr verdicts.
+// When the node is unhealthy, it includes the opstool and Tdarr verdicts.
 // If an unhealthy node is missing a verdict, it returns "unknown" for that field.
 // When the node is healthy, the verdict fields are omitted (empty strings).
 func BuildStatus(node NodeState) StatusPayload {
@@ -27,9 +27,9 @@ func BuildStatus(node NodeState) StatusPayload {
 		return StatusPayload{}
 	}
 
-	cam := node.CamVerdict
-	if cam == "" {
-		cam = "unknown"
+	opstool := node.OpsToolVerdict
+	if opstool == "" {
+		opstool = "unknown"
 	}
 
 	tdarr := node.TdarrVerdict
@@ -38,7 +38,7 @@ func BuildStatus(node NodeState) StatusPayload {
 	}
 
 	return StatusPayload{
-		CamVerdict:   cam,
-		TdarrVerdict: tdarr,
+		OpsToolVerdict: opstool,
+		TdarrVerdict:   tdarr,
 	}
 }

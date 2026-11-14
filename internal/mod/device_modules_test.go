@@ -6,11 +6,11 @@ import (
 	"testing"
 )
 
-func TestCheckDeviceModulesAllInCam(t *testing.T) {
+func TestCheckDeviceModulesAllInOpsTool(t *testing.T) {
 	modules := map[string]string{
-		"nas": "cam/nas",
-		"mac": "cam/mac",
-		"iot": "cam/iot",
+		"nas": "opstool/nas",
+		"mac": "opstool/mac",
+		"iot": "opstool/iot",
 	}
 	err := CheckDeviceModules(modules)
 	if err != nil {

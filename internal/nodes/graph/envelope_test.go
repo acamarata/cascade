@@ -65,7 +65,7 @@ func TestNodeIdentityFromLane(t *testing.T) {
 		lane string
 		want string
 	}{
-		{lane: "LM@node-a", want: "node-a"},
+		{lane: "Local@node-a", want: "node-a"},
 		{lane: "CMD@node-b", want: "node-b"},
 	}
 

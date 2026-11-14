@@ -5,13 +5,13 @@ import (
 	"testing"
 )
 
-// TestQuotaMapAcctC verifies MapQuota for account A3 and validation cases.
+// TestQuotaMapAcctC verifies MapQuota for account acct-c and validation cases.
 func TestQuotaMapAcctC(t *testing.T) {
-	got, err := MapQuota("A3", 75, false)
+	got, err := MapQuota("acct-c", 75, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	want := Alloc{Account: "A3", FiveHourPct: 75, WeeklyPct: 75}
+	want := Alloc{Account: "acct-c", FiveHourPct: 75, WeeklyPct: 75}
 	if got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
@@ -22,12 +22,12 @@ func TestQuotaMapAcctC(t *testing.T) {
 		pct     int
 		wantErr bool
 	}{
-		{"pct zero", "A3", 0, false},
-		{"pct hundred", "A3", 100, false},
+		{"pct zero", "acct-c", 0, false},
+		{"pct hundred", "acct-c", 100, false},
 		{"unknown account", "XX", 50, true},
 		{"blank account", "", 50, true},
-		{"pct negative", "A3", -1, true},
-		{"pct over", "A3", 101, true},
+		{"pct negative", "acct-c", -1, true},
+		{"pct over", "acct-c", 101, true},
 	}
 
 	for _, tt := range tests {
@@ -53,13 +53,13 @@ func TestQuotaMapAcctC(t *testing.T) {
 	}
 }
 
-// TestQuotaMapTertiary verifies MapQuota for account CO.
+// TestQuotaMapTertiary verifies MapQuota for account tertiary.
 func TestQuotaMapTertiary(t *testing.T) {
-	got, err := MapQuota("CO", 80, false)
+	got, err := MapQuota("tertiary", 80, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	want := Alloc{Account: "CO", FiveHourPct: 80, WeeklyPct: 80}
+	want := Alloc{Account: "tertiary", FiveHourPct: 80, WeeklyPct: 80}
 	if got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}

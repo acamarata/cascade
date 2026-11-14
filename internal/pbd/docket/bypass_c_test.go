@@ -3,9 +3,9 @@ package docket
 import "testing"
 
 func TestBypassDeniedWhenGateDeadlinesBelowThree(t *testing.T) {
-	// over-cap Hot A3 with deadlines 2 and seats 0
+	// over-cap Hot acct-c with deadlines 2 and seats 0
 	in := BypassInput{
-		Lane:          "A3",
+		Lane:          "acct-c",
 		Hot:           true,
 		Cap:           10,
 		Occupancy:     10,
@@ -33,9 +33,9 @@ func TestBypassDeniedWhenGateDeadlinesBelowThree(t *testing.T) {
 }
 
 func TestBypassDeniedWhenRunSeatsAvailable(t *testing.T) {
-	// over-cap Hot A3 with deadlines 3 and seats 1
+	// over-cap Hot acct-c with deadlines 3 and seats 1
 	in := BypassInput{
-		Lane:          "A3",
+		Lane:          "acct-c",
 		Hot:           true,
 		Cap:           10,
 		Occupancy:     10,

@@ -15,8 +15,8 @@ const (
 	KindService TaskKind = "service"
 	// KindCI represents a CI task.
 	KindCI TaskKind = "ci"
-	// KindCam represents a cam task.
-	KindCam TaskKind = "cam"
+	// KindOpsTool represents an opstool task.
+	KindOpsTool TaskKind = "opstool"
 	// KindBuild represents a build task.
 	KindBuild TaskKind = "build"
 	// KindNode represents a node task.
@@ -33,7 +33,7 @@ var validKinds = map[TaskKind]bool{
 	KindModel:   true,
 	KindService: true,
 	KindCI:      true,
-	KindCam:     true,
+	KindOpsTool: true,
 	KindBuild:   true,
 	KindNode:    true,
 	KindScript:  true,

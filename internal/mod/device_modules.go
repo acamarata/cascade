@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-// ErrModuleMoved is returned when a device automation module is located outside the cam package.
+// ErrModuleMoved is returned when a device automation module is located outside the opstool package.
 var ErrModuleMoved = errors.New("module moved")
 
-// CheckDeviceModules checks that device automation modules (nas, mac, iot) are located inside the cam package.
-// It returns ErrModuleMoved mentioning the module name if any maps to a location outside cam.
+// CheckDeviceModules checks that device automation modules (nas, mac, iot) are located inside the opstool package.
+// It returns ErrModuleMoved mentioning the module name if any maps to a location outside opstool.
 func CheckDeviceModules(modules map[string]string) error {
 	deviceModules := map[string]bool{
 		"nas": true,
@@ -23,7 +23,7 @@ func CheckDeviceModules(modules map[string]string) error {
 		if !deviceModules[name] {
 			continue
 		}
-		if !strings.HasPrefix(loc, "cam/") && loc != "cam" {
+		if !strings.HasPrefix(loc, "opstool/") && loc != "opstool" {
 			return fmt.Errorf("%w: %s", ErrModuleMoved, name)
 		}
 	}

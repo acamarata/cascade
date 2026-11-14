@@ -11,11 +11,11 @@ var ErrT0411 = errors.New("T0411")
 // Stage represents a single purification step that transforms a string.
 type Stage func(string) (string, error)
 
-// PurifyCW applies the redact stage then the jev stage to the given transcript.
+// PurifyWebchat applies the redact stage then the sys1b stage to the given transcript.
 // Both stages must be non-nil and the transcript must contain non-whitespace characters.
 // If any stage is bypassed due to invalid inputs or blank outputs, ErrT0411 is returned.
-func PurifyCW(transcript string, redact, jev Stage) (string, error) {
-	if redact == nil || jev == nil {
+func PurifyWebchat(transcript string, redact, sys1b Stage) (string, error) {
+	if redact == nil || sys1b == nil {
 		return "", ErrT0411
 	}
 	if strings.TrimSpace(transcript) == "" {
@@ -30,13 +30,13 @@ func PurifyCW(transcript string, redact, jev Stage) (string, error) {
 		return "", ErrT0411
 	}
 
-	jeved, err := jev(redacted)
+	sys1bOut, err := sys1b(redacted)
 	if err != nil {
 		return "", ErrT0411
 	}
-	if strings.TrimSpace(jeved) == "" {
+	if strings.TrimSpace(sys1bOut) == "" {
 		return "", ErrT0411
 	}
 
-	return jeved, nil
+	return sys1bOut, nil
 }

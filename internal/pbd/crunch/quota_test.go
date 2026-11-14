@@ -18,29 +18,29 @@ func TestT0ManageQuota(t *testing.T) {
 
 func TestAcctCExecuteFullUtilization(t *testing.T) {
 	s := Scheduler{}
-	if !s.Allow(RoleA3, ActionExecute, 100) {
-		t.Error("A3 execute at 100% utilization should be allowed")
+	if !s.Allow(RoleAcctC, ActionExecute, 100) {
+		t.Error("acct-c execute at 100% utilization should be allowed")
 	}
 }
 
 func TestAcctBAllowFullUtilization(t *testing.T) {
 	s := Scheduler{}
-	if !s.Allow(RoleA2, ActionExecute, 100) {
-		t.Error("A2 at 100% utilization should be allowed")
+	if !s.Allow(RoleAcctB, ActionExecute, 100) {
+		t.Error("acct-b at 100% utilization should be allowed")
 	}
 }
 
 func TestAcctDCapAtFiftyPercent(t *testing.T) {
 	s := Scheduler{}
-	if !s.Allow(RoleA4, ActionExecute, 50) {
-		t.Error("A4 at 50% utilization should be allowed")
+	if !s.Allow(RoleAcctD, ActionExecute, 50) {
+		t.Error("acct-d at 50% utilization should be allowed")
 	}
 }
 
 func TestAcctDRejectOverFiftyPercent(t *testing.T) {
 	s := Scheduler{}
-	if s.Allow(RoleA4, ActionExecute, 51) {
-		t.Error("A4 at 51% utilization should be denied")
+	if s.Allow(RoleAcctD, ActionExecute, 51) {
+		t.Error("acct-d at 51% utilization should be denied")
 	}
 }
 

@@ -18,7 +18,7 @@ func TestRailAuditClean(t *testing.T) {
 
 func TestRailAuditFlagsCaller(t *testing.T) {
 	files := map[string]string{
-		"cmd/x.go": "package main\n// cam rail ls\n",
+		"cmd/x.go": "package main\n// opstool rail ls\n",
 	}
 	want := []string{"cmd/x.go"}
 	got := FindRailCallers(files, "")
@@ -29,7 +29,7 @@ func TestRailAuditFlagsCaller(t *testing.T) {
 
 func TestRailAuditIgnoresLegacy(t *testing.T) {
 	files := map[string]string{
-		"Cascade.app/a.go": "package main\n// cam rail\n",
+		"Cascade.app/a.go": "package main\n// opstool rail\n",
 	}
 	got := FindRailCallers(files, "Cascade.app/")
 	if len(got) != 0 {
@@ -39,8 +39,8 @@ func TestRailAuditIgnoresLegacy(t *testing.T) {
 
 func TestRailAuditSorted(t *testing.T) {
 	files := map[string]string{
-		"z.go": "cam rail",
-		"a.go": "cam rail",
+		"z.go": "opstool rail",
+		"a.go": "opstool rail",
 	}
 	want := []string{"a.go", "z.go"}
 	got := FindRailCallers(files, "")

@@ -3,7 +3,7 @@ package docket
 import "testing"
 
 // TestBypassAdmitsBeyondCapWhenDeadlinesMetAndSeatsSpent verifies that a hot ticket
-// is admitted beyond the A3 cap when deadlines are met and no seats are spent.
+// is admitted beyond the acct-c cap when deadlines are met and no seats are spent.
 func TestBypassAdmitsBeyondCapWhenDeadlinesMetAndSeatsSpent(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -16,7 +16,7 @@ func TestBypassAdmitsBeyondCapWhenDeadlinesMetAndSeatsSpent(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			in := BypassInput{
-				Lane:          "A3",
+				Lane:          "acct-c",
 				Hot:           true,
 				Cap:           2,
 				OverflowCap:   0,
@@ -41,7 +41,7 @@ func TestBypassAdmitsBeyondCapWhenDeadlinesMetAndSeatsSpent(t *testing.T) {
 }
 
 // TestBypassAdmitsToAcctBBeyondOverflowCap verifies that a hot ticket is admitted
-// beyond the A2 overflow cap independently from the main cap.
+// beyond the acct-b overflow cap independently from the main cap.
 func TestBypassAdmitsToAcctBBeyondOverflowCap(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -54,7 +54,7 @@ func TestBypassAdmitsToAcctBBeyondOverflowCap(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			in := BypassInput{
-				Lane:          "A2",
+				Lane:          "acct-b",
 				Hot:           true,
 				Cap:           10,
 				OverflowCap:   1,

@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// FindRailCallers scans the given file contents for the text 'cam rail'
+// FindRailCallers scans the given file contents for the text 'opstool rail'
 // and returns sorted paths that reference it, excluding paths under legacyPrefix.
 // An empty result means the audit passes.
 func FindRailCallers(files map[string]string, legacyPrefix string) []string {
@@ -14,7 +14,7 @@ func FindRailCallers(files map[string]string, legacyPrefix string) []string {
 		if legacyPrefix != "" && strings.HasPrefix(path, legacyPrefix) {
 			continue
 		}
-		if strings.Contains(content, "cam rail") {
+		if strings.Contains(content, "opstool rail") {
 			result = append(result, path)
 		}
 	}

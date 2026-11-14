@@ -15,20 +15,20 @@ type bypassCase struct {
 func bypassAdmissionCases() []bypassCase {
 	return []bypassCase{
 		{
-			name:    "A3 below limit admitted",
-			input:   BypassInput{Lane: "A3", Hot: true, Cap: 10, OverflowCap: 5, Occupancy: 3, GateDeadlines: 2, RunSeats: 1},
+			name:    "acct-c below limit admitted",
+			input:   BypassInput{Lane: "acct-c", Hot: true, Cap: 10, OverflowCap: 5, Occupancy: 3, GateDeadlines: 2, RunSeats: 1},
 			want:    BypassDecision{Admitted: true, Bypassed: false},
 			wantErr: false,
 		},
 		{
-			name:    "A2 below limit admitted",
-			input:   BypassInput{Lane: "A2", Hot: false, Cap: 10, OverflowCap: 5, Occupancy: 3, GateDeadlines: 2, RunSeats: 1},
+			name:    "acct-b below limit admitted",
+			input:   BypassInput{Lane: "acct-b", Hot: false, Cap: 10, OverflowCap: 5, Occupancy: 3, GateDeadlines: 2, RunSeats: 1},
 			want:    BypassDecision{Admitted: true, Bypassed: false},
 			wantErr: false,
 		},
 		{
 			name:    "zero capacity and Hot false denied",
-			input:   BypassInput{Lane: "A3", Hot: false, Cap: 0, OverflowCap: 0, Occupancy: 0, GateDeadlines: 0, RunSeats: 0},
+			input:   BypassInput{Lane: "acct-c", Hot: false, Cap: 0, OverflowCap: 0, Occupancy: 0, GateDeadlines: 0, RunSeats: 0},
 			want:    BypassDecision{Admitted: false, Bypassed: false},
 			wantErr: false,
 		},
@@ -51,31 +51,31 @@ func bypassInvalidCases() []bypassCase {
 		},
 		{
 			name:    "negative Cap invalid",
-			input:   BypassInput{Lane: "A3", Cap: -1},
+			input:   BypassInput{Lane: "acct-c", Cap: -1},
 			want:    BypassDecision{},
 			wantErr: true,
 		},
 		{
 			name:    "negative OverflowCap invalid",
-			input:   BypassInput{Lane: "A3", OverflowCap: -1},
+			input:   BypassInput{Lane: "acct-c", OverflowCap: -1},
 			want:    BypassDecision{},
 			wantErr: true,
 		},
 		{
 			name:    "negative Occupancy invalid",
-			input:   BypassInput{Lane: "A3", Occupancy: -1},
+			input:   BypassInput{Lane: "acct-c", Occupancy: -1},
 			want:    BypassDecision{},
 			wantErr: true,
 		},
 		{
 			name:    "negative GateDeadlines invalid",
-			input:   BypassInput{Lane: "A3", GateDeadlines: -1},
+			input:   BypassInput{Lane: "acct-c", GateDeadlines: -1},
 			want:    BypassDecision{},
 			wantErr: true,
 		},
 		{
 			name:    "negative RunSeats invalid",
-			input:   BypassInput{Lane: "A3", RunSeats: -1},
+			input:   BypassInput{Lane: "acct-c", RunSeats: -1},
 			want:    BypassDecision{},
 			wantErr: true,
 		},

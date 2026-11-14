@@ -2,9 +2,9 @@ package consult
 
 // Response represents a single response in the proxy ladder.
 type Response struct {
-	Role   string
-	Answer string
-	GC     bool
+	Role    string
+	Answer  string
+	Gateway bool
 }
 
 // LadderResult holds the outcome of evaluating the proxy ladder.
@@ -25,7 +25,7 @@ func EvaluateLadder(rs []Response) LadderResult {
 	nonGcCEOYes := false
 	for _, r := range rs {
 		if r.Role == "ceo" && r.Answer == "yes" {
-			if r.GC {
+			if r.Gateway {
 				gcCEOYes = true
 			} else {
 				nonGcCEOYes = true

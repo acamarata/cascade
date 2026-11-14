@@ -37,20 +37,20 @@ func RouteT0Plan(req T0Request) (T0Route, error) {
 		return T0Route{}, ErrInvalidT0Request
 	}
 
-	// Check for valid model: empty, "GC2", or "Haiku 5.5"
+	// Check for valid model: empty, "Pool2", or "Haiku 5.5"
 	validModels := map[string]bool{
 		"":          true,
-		"GC2":       true,
+		"Pool2":     true,
 		"Haiku 5.5": true,
 	}
 	if !validModels[req.Model] {
 		return T0Route{}, ErrInvalidT0Request
 	}
 
-	// Quota short routes to GC2 regardless of BurnAccount
+	// Quota short routes to Pool2 regardless of BurnAccount
 	if req.NativeQuotaShort {
 		return T0Route{
-			Destination: "GC2",
+			Destination: "Pool2",
 			Account:     "",
 		}, nil
 	}

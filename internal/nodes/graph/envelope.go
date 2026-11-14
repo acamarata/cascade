@@ -46,14 +46,14 @@ func ParseFrame(frame []byte) (string, map[string][]byte, error) {
 	return env.Nonce, decoded, nil
 }
 
-// NodeIdentity derives the node name from a lane in the LM@X or CMD@X pattern.
+// NodeIdentity derives the node name from a lane in the Local@X or CMD@X pattern.
 func NodeIdentity(lane string) (string, error) {
 	idx := strings.Index(lane, "@")
 	if idx < 0 {
 		return "", errors.New("lane missing @ separator")
 	}
 	prefix := lane[:idx]
-	if prefix != "LM" && prefix != "CMD" {
+	if prefix != "Local" && prefix != "CMD" {
 		return "", errors.New("unsupported lane prefix")
 	}
 	node := lane[idx+1:]

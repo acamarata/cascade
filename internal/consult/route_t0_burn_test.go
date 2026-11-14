@@ -12,7 +12,7 @@ func TestRouteT0PlanQuotaOKUsesHaiku55(t *testing.T) {
 	// BurnAccount=true with explicit non-Opus model
 	req1 := T0Request{
 		Tier:             "T0",
-		Model:            "GC2",
+		Model:            "Pool2",
 		NativeQuotaShort: false,
 		BurnAccount:      true,
 	}
@@ -30,7 +30,7 @@ func TestRouteT0PlanQuotaOKUsesHaiku55(t *testing.T) {
 	// BurnAccount=false yields zero route and ErrNoBurnAccount
 	req2 := T0Request{
 		Tier:             "T0",
-		Model:            "GC2",
+		Model:            "Pool2",
 		NativeQuotaShort: false,
 		BurnAccount:      false,
 	}

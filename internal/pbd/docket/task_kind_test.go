@@ -11,7 +11,7 @@ func TestAllNineKindsAccepted(t *testing.T) {
 		KindModel,
 		KindService,
 		KindCI,
-		KindCam,
+		KindOpsTool,
 		KindBuild,
 		KindNode,
 		KindScript,

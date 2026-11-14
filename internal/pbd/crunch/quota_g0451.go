@@ -16,7 +16,7 @@ type Alloc struct {
 var ErrT0308 = errors.New("T0308")
 
 // MapQuota maps an account and percentage to an allocation.
-// Valid account strings are exactly A3, A4, CO (case-sensitive, no trimming).
+// Valid account strings are exactly acct-c, acct-d, tertiary (case-sensitive, no trimming).
 // The pct argument must be 0..100 inclusive.
 // Invalid or empty account strings, or out-of-range percentages, return
 // an empty Alloc and ErrT0308.
@@ -26,13 +26,13 @@ func MapQuota(acct string, pct int, _ bool) (Alloc, error) {
 	}
 
 	switch acct {
-	case "A3", "CO":
+	case "acct-c", "tertiary":
 		return Alloc{Account: acct, FiveHourPct: pct, WeeklyPct: pct}, nil
-	case "A4":
+	case "acct-d":
 		if pct < 90 {
 			return Alloc{}, ErrT0308
 		}
-		// 90/90 applied to A4
+		// 90/90 applied to acct-d
 		return Alloc{Account: acct, FiveHourPct: 90, WeeklyPct: 90}, nil
 	default:
 		return Alloc{}, ErrT0308

@@ -23,9 +23,9 @@ type BypassDecision struct {
 }
 
 // Bypass evaluates a bypass admission request and returns a decision.
-// It returns ErrInvalidBypassInput if the lane is not A3 or A2, or if any integer field is negative.
+// It returns ErrInvalidBypassInput if the lane is not acct-c or acct-b, or if any integer field is negative.
 func Bypass(in BypassInput) (BypassDecision, error) {
-	if in.Lane != "A3" && in.Lane != "A2" {
+	if in.Lane != "acct-c" && in.Lane != "acct-b" {
 		return BypassDecision{}, ErrInvalidBypassInput
 	}
 	if in.Cap < 0 || in.OverflowCap < 0 || in.Occupancy < 0 || in.GateDeadlines < 0 || in.RunSeats < 0 {
@@ -34,9 +34,9 @@ func Bypass(in BypassInput) (BypassDecision, error) {
 
 	var limit int
 	switch in.Lane {
-	case "A3":
+	case "acct-c":
 		limit = in.Cap
-	case "A2":
+	case "acct-b":
 		limit = in.OverflowCap
 	}
 

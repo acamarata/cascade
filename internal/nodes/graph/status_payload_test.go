@@ -3,16 +3,16 @@ package graph
 import "testing"
 
 // TestUnhealthyStatusHasBothVerdicts verifies that an unhealthy node with
-// cam "ready" and tdarr "not_ready" yields both verdict fields.
+// opstool "ready" and tdarr "not_ready" yields both verdict fields.
 func TestUnhealthyStatusHasBothVerdicts(t *testing.T) {
 	node := NodeState{
-		Healthy:      false,
-		CamVerdict:   "ready",
-		TdarrVerdict: "not_ready",
+		Healthy:        false,
+		OpsToolVerdict: "ready",
+		TdarrVerdict:   "not_ready",
 	}
 	payload := BuildStatus(node)
-	if payload.CamVerdict != "ready" {
-		t.Errorf("expected cam_verdict %q, got %q", "ready", payload.CamVerdict)
+	if payload.OpsToolVerdict != "ready" {
+		t.Errorf("expected opstool_verdict %q, got %q", "ready", payload.OpsToolVerdict)
 	}
 	if payload.TdarrVerdict != "not_ready" {
 		t.Errorf("expected tdarr_verdict %q, got %q", "not_ready", payload.TdarrVerdict)
@@ -23,13 +23,13 @@ func TestUnhealthyStatusHasBothVerdicts(t *testing.T) {
 // verdict fields.
 func TestHealthyStatusOmitsVerdicts(t *testing.T) {
 	node := NodeState{
-		Healthy:      true,
-		CamVerdict:   "ready",
-		TdarrVerdict: "ready",
+		Healthy:        true,
+		OpsToolVerdict: "ready",
+		TdarrVerdict:   "ready",
 	}
 	payload := BuildStatus(node)
-	if payload.CamVerdict != "" {
-		t.Errorf("expected empty cam_verdict for healthy node, got %q", payload.CamVerdict)
+	if payload.OpsToolVerdict != "" {
+		t.Errorf("expected empty opstool_verdict for healthy node, got %q", payload.OpsToolVerdict)
 	}
 	if payload.TdarrVerdict != "" {
 		t.Errorf("expected empty tdarr_verdict for healthy node, got %q", payload.TdarrVerdict)
@@ -40,8 +40,8 @@ func TestHealthyStatusOmitsVerdicts(t *testing.T) {
 // no tdarr verdict yields tdarr_verdict "unknown".
 func TestUnhealthyMissingVerdictIsUnknown(t *testing.T) {
 	node := NodeState{
-		Healthy:    false,
-		CamVerdict: "ready",
+		Healthy:        false,
+		OpsToolVerdict: "ready",
 	}
 	payload := BuildStatus(node)
 	if payload.TdarrVerdict != "unknown" {

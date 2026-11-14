@@ -5,30 +5,30 @@ import (
 	"testing"
 )
 
-// TestQuotaMapAcctD verifies that MapQuota("A4",95,false) returns Alloc{"A4",90,90},nil
+// TestQuotaMapAcctD verifies that MapQuota("acct-d",95,false) returns Alloc{"acct-d",90,90},nil
 // and that repeated requests succeed independently.
 func TestQuotaMapAcctD(t *testing.T) {
-	got, err := MapQuota("A4", 95, false)
+	got, err := MapQuota("acct-d", 95, false)
 	if err != nil {
-		t.Fatalf("MapQuota(\"A4\", 95, false) returned error: %v", err)
+		t.Fatalf("MapQuota(\"acct-d\", 95, false) returned error: %v", err)
 	}
-	want := Alloc{Account: "A4", FiveHourPct: 90, WeeklyPct: 90}
+	want := Alloc{Account: "acct-d", FiveHourPct: 90, WeeklyPct: 90}
 	if got != want {
-		t.Errorf("MapQuota(\"A4\", 95, false) = %+v, want %+v", got, want)
+		t.Errorf("MapQuota(\"acct-d\", 95, false) = %+v, want %+v", got, want)
 	}
 
 	// Repeated requests succeed independently
-	got2, err2 := MapQuota("A4", 95, false)
+	got2, err2 := MapQuota("acct-d", 95, false)
 	if err2 != nil {
-		t.Fatalf("second MapQuota(\"A4\", 95, false) returned error: %v", err2)
+		t.Fatalf("second MapQuota(\"acct-d\", 95, false) returned error: %v", err2)
 	}
 	if got2 != want {
-		t.Errorf("second MapQuota(\"A4\", 95, false) = %+v, want %+v", got2, want)
+		t.Errorf("second MapQuota(\"acct-d\", 95, false) = %+v, want %+v", got2, want)
 	}
 }
 
-// TestEnforce90OnAcctDFullTilt verifies that A4 with pct 90 or 100 and fullTilt=true
-// returns Alloc{"A4",90,90} and nil error.
+// TestEnforce90OnAcctDFullTilt verifies that acct-d with pct 90 or 100 and fullTilt=true
+// returns Alloc{"acct-d",90,90} and nil error.
 func TestEnforce90OnAcctDFullTilt(t *testing.T) {
 	tests := []struct {
 		name string
@@ -37,22 +37,22 @@ func TestEnforce90OnAcctDFullTilt(t *testing.T) {
 		{"pct 90", 90},
 		{"pct 100", 100},
 	}
-	want := Alloc{Account: "A4", FiveHourPct: 90, WeeklyPct: 90}
+	want := Alloc{Account: "acct-d", FiveHourPct: 90, WeeklyPct: 90}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := MapQuota("A4", tt.pct, true)
+			got, err := MapQuota("acct-d", tt.pct, true)
 			if err != nil {
-				t.Fatalf("MapQuota(\"A4\", %d, true) returned error: %v", tt.pct, err)
+				t.Fatalf("MapQuota(\"acct-d\", %d, true) returned error: %v", tt.pct, err)
 			}
 			if got != want {
-				t.Errorf("MapQuota(\"A4\", %d, true) = %+v, want %+v", tt.pct, got, want)
+				t.Errorf("MapQuota(\"acct-d\", %d, true) = %+v, want %+v", tt.pct, got, want)
 			}
 		})
 	}
 }
 
-// TestRejectAcctDBelow90 verifies that A4 with pct 89 and either fullTilt value
+// TestRejectAcctDBelow90 verifies that acct-d with pct 89 and either fullTilt value
 // returns zero allocation and errors.Is(err, ErrT0308).
 func TestRejectAcctDBelow90(t *testing.T) {
 	tests := []struct {
@@ -65,13 +65,13 @@ func TestRejectAcctDBelow90(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := MapQuota("A4", 89, tt.fullTilt)
+			got, err := MapQuota("acct-d", 89, tt.fullTilt)
 			if !errors.Is(err, ErrT0308) {
-				t.Errorf("MapQuota(\"A4\", 89, %v) error = %v, want errors.Is(err, ErrT0308)", tt.fullTilt, err)
+				t.Errorf("MapQuota(\"acct-d\", 89, %v) error = %v, want errors.Is(err, ErrT0308)", tt.fullTilt, err)
 			}
 			want := Alloc{}
 			if got != want {
-				t.Errorf("MapQuota(\"A4\", 89, %v) = %+v, want empty Alloc", tt.fullTilt, got)
+				t.Errorf("MapQuota(\"acct-d\", 89, %v) = %+v, want empty Alloc", tt.fullTilt, got)
 			}
 		})
 	}
