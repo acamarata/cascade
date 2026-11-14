@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -61,12 +60,17 @@ type HarnessCredentials interface {
 	// WriteDurable replaces the live entry, keeping the previous one in a
 	// rollback slot; on any failure the live entry is byte-identical.
 	WriteDurable(ctx context.Context, configDir string, e Entry) error
+	// ReadCopies reads every copy DaemonCopies names; only not-found is Absent.
+	ReadCopies(ctx context.Context, configDir string) ([]CopyEntry, error)
 }
 
 // entryStore is one OS's live entry; read is KindNotFound only when missing.
 type entryStore interface {
 	read(ctx context.Context, configDir string) ([]byte, error)
 	write(ctx context.Context, configDir string, data []byte) error
+	copyRefs(configDir string) ([]CopyRef, error)
+	readCopy(ctx context.Context, ref CopyRef) ([]byte, error)
+	writeCopy(ctx context.Context, ref CopyRef, data []byte) error
 }
 
 var errHarnessCredentialsUnsupported = cascade.New(cascade.KindUnsupported,
@@ -99,41 +103,6 @@ func (h *harnessCredentials) Read(ctx context.Context, configDir string) (Entry,
 		return Entry{}, err
 	}
 	return Entry{data: data}, nil
-}
-
-// WriteDurable implements HarnessCredentials: keep rollback, stage, write,
-// read back by hash, and rewrite the previous entry on a mismatch.
-func (h *harnessCredentials) WriteDurable(ctx context.Context, configDir string, e Entry) error {
-	if !json.Valid(e.data) {
-		return cascade.New(cascade.KindInvalidInput, "secrets: refusing to write an entry that is not a JSON document")
-	}
-	prev, err := h.store.read(ctx, configDir)
-	hadPrev := err == nil
-	if kind, _ := cascade.KindOf(err); err != nil && kind != cascade.KindNotFound {
-		return err
-	}
-	staged, rollback := slotNames(configDir)
-	if hadPrev {
-		expires := binary.BigEndian.AppendUint64(nil, uint64(h.clock.Now().Add(RollbackWindow).Unix()))
-		if err := h.custody.Set(ctx, rollback, append(expires, prev...)); err != nil {
-			return err
-		}
-	}
-	if err := h.custody.Set(ctx, staged, e.data); err != nil {
-		return err
-	}
-	if err := h.store.write(ctx, configDir, e.data); err != nil {
-		_ = h.custody.Delete(ctx, staged)
-		return err
-	}
-	if got, err := h.store.read(ctx, configDir); err != nil || sha256.Sum256(got) != sha256.Sum256(e.data) {
-		if hadPrev {
-			_ = h.store.write(ctx, configDir, prev)
-		}
-		return cascade.New(cascade.KindIntegrity, "secrets: the harness credential entry did not read back as written")
-	}
-	_ = h.custody.Delete(ctx, staged)
-	return nil
 }
 
 // slotNames names one config dir's custody staging and rollback slots.
@@ -273,11 +242,7 @@ func (k *keychainStore) read(ctx context.Context, dir string) ([]byte, error) {
 		k.mu.Lock()
 		k.basis[filepath.Clean(dir)] = svc
 		k.mu.Unlock()
-		text := bytes.TrimRight(out, "\n")
-		if decoded, err := hex.DecodeString(string(text)); err == nil && !json.Valid(text) {
-			return decoded, nil
-		}
-		return text, nil
+		return decodeKeychainEntry(out), nil
 	}
 	return nil, ErrSecretNotFound("harness keychain entry")
 }
