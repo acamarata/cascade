@@ -83,7 +83,7 @@ func TestComposeFitsWhole(t *testing.T) {
 	c := mustComposer(t, fixedTokenCounter{n: 10}, nil)
 	slots := []Slot{
 		{Kind: SlotKindTier, Label: "gci", Content: "a"},
-		{Kind: SlotKindMemory, Label: "soul", Content: "b"},
+		{Kind: SlotKindRetrieval, Label: "soul", Content: "b"},
 		{Kind: SlotKindRetrieval, Label: "chunk", Content: "c"},
 	}
 	res, err := c.Compose(context.Background(), 100, slots)
@@ -198,7 +198,7 @@ func TestComposeDependencyCounterErrorPreservesKind(t *testing.T) {
 
 func TestComposeDeterministic(t *testing.T) {
 	c := mustComposer(t, fixedTokenCounter{n: 3}, nil)
-	slots := []Slot{{Kind: SlotKindTier, Label: "gci", Content: "a"}, {Kind: SlotKindMemory, Label: "m", Content: "b"}}
+	slots := []Slot{{Kind: SlotKindTier, Label: "gci", Content: "a"}, {Kind: SlotKindRetrieval, Label: "m", Content: "b"}}
 	a, err := c.Compose(context.Background(), 10, slots)
 	if err != nil {
 		t.Fatalf("Compose: %v", err)

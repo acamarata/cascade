@@ -23,9 +23,9 @@ import "context"
 // SPORT: context-engine/composer-types (ADD, per T-1 sport_updates;
 //   PipelineStage/StageInput/StageEvent ADD, P1-E21-W5-S46-T3).
 
-// SlotKind identifies which of the composer's four content categories a
+// SlotKind identifies which of the composer's three content categories a
 // Slot belongs to. Unlike provider.SlotKind (three members: tier,
-// retrieval, memory), this vocabulary adds history (conversation turns),
+// retrieval, memory), this vocabulary drops memory and adds history (conversation turns),
 // which pkg/provider cannot express without importing internal/conversation
 // -- a boundary this package does not cross either, so SlotKind stays
 // local to internal/context.
@@ -39,8 +39,6 @@ const (
 
 	// SlotKindTier is tier-instruction content (GCI..PAC, S-08/S-09).
 	SlotKindTier
-	// SlotKindMemory is memory/SOUL-store content (G/S-13, G/S-14).
-	SlotKindMemory
 	// SlotKindRetrieval is retrieval-slot content (fused, cited chunks).
 	SlotKindRetrieval
 	// SlotKindHistory is conversation-history content (internal/conversation
@@ -53,7 +51,6 @@ const (
 var slotKindNames = [...]string{
 	"",
 	"tier",
-	"memory",
 	"retrieval",
 	"history",
 }
@@ -68,7 +65,7 @@ func (k SlotKind) String() string {
 	return slotKindNames[k]
 }
 
-// Valid reports whether k is one of the four defined slot kinds.
+// Valid reports whether k is one of the three defined slot kinds.
 func (k SlotKind) Valid() bool {
 	return k >= SlotKindTier && k <= SlotKindHistory
 }

@@ -10,7 +10,6 @@ func TestSlotKindValidAndString(t *testing.T) {
 	}{
 		{SlotKind(0), false, "invalid-slot-kind"},
 		{SlotKindTier, true, "tier"},
-		{SlotKindMemory, true, "memory"},
 		{SlotKindRetrieval, true, "retrieval"},
 		{SlotKindHistory, true, "history"},
 		{SlotKindHistory + 1, false, "invalid-slot-kind"},

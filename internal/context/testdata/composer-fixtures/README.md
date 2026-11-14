@@ -11,7 +11,7 @@ from a live run.
 ## valid-fixtures.yaml
 
 A table of composer scenarios: a token `budget` and an ordered list of
-`slots`, each declaring a `kind` (`tier`, `memory`, `retrieval`, `history`),
+`slots`, each declaring a `kind` (`tier`, `retrieval`, `history`),
 a `label`, and a declared `tokens` size. The test's `fixtureCounter` reads
 the size directly off each slot's synthesized content (via an embedded
 `|tokens=N` marker) rather than estimating it, so the fixture's declared
