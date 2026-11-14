@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-13T22:03:44Z",
+  "generated_at": "2026-11-14T03:35:12Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -7097,6 +7097,12 @@
           "line": 17,
           "status": "CHANGE",
           "raw": "cmd/cascade/daemon (CHANGED, E/S-09.T4)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_designation.go",
+          "line": 17,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/daemon (CHANGED, nodes/controller-designation)."
         },
         {
           "file": "cmd/cascade/daemon_unix_errors_test.go",
@@ -44730,7 +44736,7 @@
       ]
     }
   ],
-  "total_sites": 4305,
+  "total_sites": 4306,
   "unspecified_count": 418,
   "multi_status_count": 132
 }
