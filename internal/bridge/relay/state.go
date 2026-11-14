@@ -2,9 +2,6 @@ package relay
 
 import "errors"
 
-// ErrNotImplemented is returned when a relay operation is not yet implemented.
-var ErrNotImplemented = errors.New("relay: operation unavailable")
-
 // ErrNotConfigured is returned when the relay is not properly configured.
 var ErrNotConfigured = errors.New("relay: not configured")
 
@@ -44,19 +41,4 @@ type Relay struct {
 	EgressGate EgressGate
 	Ask        AskFunc
 	LogPath    string
-}
-
-// LoadState loads the topic state from the given path.
-func LoadState(_ string) (*TopicState, error) {
-	return nil, ErrNotImplemented
-}
-
-// SaveState saves the topic state to the given path.
-func SaveState(_ string, _ *TopicState) error {
-	return ErrNotImplemented
-}
-
-// Quarantine marks the given path as quarantined.
-func Quarantine(_ string) error {
-	return ErrNotImplemented
 }
