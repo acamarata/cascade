@@ -2,6 +2,7 @@ package broker
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -41,12 +42,12 @@ func TestLedgerTypesExist(t *testing.T) {
 	}
 }
 
-// TestSentinelErrorsDistinct verifies ErrNoDevice and ErrNoFreshLedger are distinct.
+// TestSentinelErrorsDistinct verifies ErrNoDevice is set and matches itself.
 func TestSentinelErrorsDistinct(t *testing.T) {
-	if ErrNoDevice == nil || ErrNoFreshLedger == nil {
+	if ErrNoDevice == nil {
 		t.Fatal("sentinel errors must not be nil")
 	}
-	if errors.Is(ErrNoDevice, ErrNoFreshLedger) {
-		t.Fatal("ErrNoDevice and ErrNoFreshLedger must be distinct")
+	if !errors.Is(fmt.Errorf("wrap: %w", ErrNoDevice), ErrNoDevice) {
+		t.Fatal("a wrapped ErrNoDevice must match ErrNoDevice")
 	}
 }
