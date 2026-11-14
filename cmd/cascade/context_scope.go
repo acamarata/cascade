@@ -107,6 +107,7 @@ func newContextCmd(deps contextScopeDeps) *cobra.Command {
 	// facts (P1-GEN-02) lives in context_facts.go.
 	contextCmd.AddCommand(newContextRepairCmd(deps))
 	contextCmd.AddCommand(newContextFactsCmd(deps))
+	contextCmd.AddCommand(newContextGenerateCmd(deps))
 	return contextCmd
 }
 
