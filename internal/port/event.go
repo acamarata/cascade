@@ -20,8 +20,8 @@ type Event struct {
 	Payload map[string]any
 }
 
-// ValidateEventName reports whether name is a valid event name. This stub
-// always returns ErrNotImplemented until naming rules are implemented.
+// ValidateEventName reports whether name is a valid event name. Naming
+// rules are not defined yet, so it always returns ErrUnavailable.
 func ValidateEventName(_ string) error {
-	return ErrNotImplemented
+	return ErrUnavailable
 }

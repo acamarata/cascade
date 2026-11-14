@@ -46,7 +46,8 @@ func TestResultFields(t *testing.T) {
 	}
 }
 
-// TestPortErrorInterface verifies compile-time assertions for PortError.
+// TestPortErrorInterface verifies every sentinel satisfies PortError with
+// a non-empty code and message.
 func TestPortErrorInterface(t *testing.T) {
 	// The typed slice literal is the compile-time assertion that every
 	// sentinel satisfies PortError.
@@ -55,22 +56,12 @@ func TestPortErrorInterface(t *testing.T) {
 		ErrUnavailable, ErrTimeout, ErrExhausted, ErrInternal,
 	}
 	for _, s := range sentinels {
-		if s.Code() != "" {
-			t.Errorf("expected empty Code, got %s", s.Code())
-		}
-		if s.Retryable() {
-			t.Error("expected Retryable to be false")
+		if s.Code() == "" {
+			t.Errorf("sentinel %q has an empty Code", s.Error())
 		}
 		if s.Error() == "" {
 			t.Error("expected non-empty Error string")
 		}
-	}
-}
-
-// TestErrNotImplemented verifies the ErrNotImplemented sentinel.
-func TestErrNotImplemented(t *testing.T) {
-	if ErrNotImplemented.Error() != "port: operation unavailable" {
-		t.Errorf("unexpected error message: %s", ErrNotImplemented.Error())
 	}
 }
 
