@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-14T16:17:43Z",
+  "generated_at": "2026-11-14T18:19:21Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4893,6 +4893,12 @@
           "raw": "cmd/cascade daemon registrations (fleet health summary)."
         },
         {
+          "file": "cmd/cascade/fleet_domains_promote_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations."
+        },
+        {
           "file": "cmd/cascade/plugin_intent_mount_test.go",
           "line": 6,
           "status": "",
@@ -4981,6 +4987,18 @@
           "line": 7,
           "status": "",
           "raw": "cmd/cascade daemon registrations (P1-CAP-05)."
+        },
+        {
+          "file": "cmd/cascade/wire_fleet_domain_promote.go",
+          "line": 8,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations."
+        },
+        {
+          "file": "cmd/cascade/wire_fleet_domain_promote_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations."
         },
         {
           "file": "cmd/cascade/wire_fleet_node_jobs.go",
@@ -5462,6 +5480,20 @@
           "line": 21,
           "status": "ADD",
           "raw": "cmd/cascade embedder composition (ADDED, P1-CPA-11)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade gateway acceptance",
+      "sites": [
+        {
+          "file": "cmd/cascade/gateway_acceptance_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "cmd/cascade gateway acceptance (ADD)."
         }
       ],
       "statuses": [
@@ -44794,7 +44826,7 @@
       ]
     }
   ],
-  "total_sites": 4313,
+  "total_sites": 4317,
   "unspecified_count": 420,
   "multi_status_count": 132
 }
