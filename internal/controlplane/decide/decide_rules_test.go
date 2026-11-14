@@ -13,11 +13,11 @@ func TestDecideReturnsYesFromRule(t *testing.T) {
 	text := "a_test.go"
 	expectedID := computeExpectedID(kind, text)
 
-	rule1 := func(q Question) (string, bool) {
+	rule1 := func(_ Question) (string, bool) {
 		return YES, true
 	}
 	rule2Called := false
-	rule2 := func(q Question) (string, bool) {
+	rule2 := func(_ Question) (string, bool) {
 		rule2Called = true
 		return NO, true
 	}
@@ -54,7 +54,7 @@ func TestDecideReturnsNoFromRule(t *testing.T) {
 	text := "main.go"
 	expectedID := computeExpectedID(kind, text)
 
-	rule := func(q Question) (string, bool) {
+	rule := func(_ Question) (string, bool) {
 		return NO, true
 	}
 
@@ -79,7 +79,7 @@ func TestDecideReturnsNoFromRule(t *testing.T) {
 	}
 
 	// Verify ID is preserved when rules change but Kind/Text stay the same
-	rule2 := func(q Question) (string, bool) {
+	rule2 := func(_ Question) (string, bool) {
 		return YES, true
 	}
 	q2 := Question{
@@ -98,56 +98,27 @@ func TestDecideReturnsNoFromRule(t *testing.T) {
 
 // TestDecideNoRuleMatchEscalates verifies that nil, empty, or entirely
 // unmatched Rules returns ESCALATE with confidence 0.0 and the correct ID.
-func TestDecideNoRuleMatchEscalates(t *testing.T) {
-	kind := "file-type"
-	text := "unknown"
-	expectedID := computeExpectedID(kind, text)
+// rejecting returns a rule that never matches and proposes answer.
+func rejecting(answer string) Rule {
+	return func(_ Question) (string, bool) { return answer, false }
+}
 
-	testCases := []struct {
-		name  string
-		rules []Rule
-	}{
-		{
-			name:  "nil rules",
-			rules: nil,
-		},
-		{
-			name:  "empty rules",
-			rules: []Rule{},
-		},
-		{
-			name: "unmatched rules",
-			rules: []Rule{
-				func(q Question) (string, bool) {
-					return "", false
-				},
-				func(q Question) (string, bool) {
-					return "", false
-				},
-			},
-		},
-		{
-			name: "unmatched with invalid answer strings",
-			rules: []Rule{
-				func(q Question) (string, bool) {
-					return "INVALID", false
-				},
-				func(q Question) (string, bool) {
-					return "MAYBE", false
-				},
-			},
-		},
+// noMatchRuleSets are rule lists in which no rule matches.
+func noMatchRuleSets() map[string][]Rule {
+	return map[string][]Rule{
+		"nil rules":                             nil,
+		"empty rules":                           {},
+		"unmatched rules":                       {rejecting(""), rejecting("")},
+		"unmatched with invalid answer strings": {rejecting("INVALID"), rejecting("MAYBE")},
 	}
+}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			q := Question{
-				Kind:  kind,
-				Text:  text,
-				Rules: tc.rules,
-			}
-
-			v, err := Decide(q)
+func TestDecideNoRuleMatchEscalates(t *testing.T) {
+	kind, text := "file-type", "unknown"
+	expectedID := computeExpectedID(kind, text)
+	for name, rules := range noMatchRuleSets() {
+		t.Run(name, func(t *testing.T) {
+			v, err := Decide(Question{Kind: kind, Text: text, Rules: rules})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
