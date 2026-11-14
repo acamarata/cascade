@@ -4304,5 +4304,53 @@
     "reason": "P2-GTH-01 ships ScanFiles; P2 Plan names P2-GTH-05 as its production caller in internal/build/hygienegate.go (symbol table). The caller-site gate checks this entry once P2-GTH-05 closes.",
     "retire_ticket": "P2-GTH-05",
     "symbol": "internal/hygiene.ScanFiles"
+  },
+  {
+    "added_by_ticket": "P2-BRKC-22",
+    "caller_site": "internal/monitor/broker/ledger.go",
+    "expected_caller": "internal/monitor/broker/ledger.go, written by P2-BRKC-23 (ledger store Ingest/Devices and Judge), which uses AdmitLimits; retire this entry once that file uses it",
+    "reason": "P2-BRKC-22 ships AdmitLimits; P2 Plan names P2-BRKC-23 as its production user in internal/monitor/broker/ledger.go (ledger store Ingest/Devices and Judge). TestCallerSitesAreWiredOnceTheirFileExists checks this entry once P2-BRKC-23 closes.",
+    "retire_ticket": "P2-BRKC-23",
+    "symbol": "internal/monitor/broker.AdmitLimits"
+  },
+  {
+    "added_by_ticket": "P2-BRKC-22",
+    "caller_site": "internal/monitor/broker/ledger.go",
+    "expected_caller": "internal/monitor/broker/ledger.go, written by P2-BRKC-23 (ledger store Ingest/Devices and Judge), which uses Device; retire this entry once that file uses it",
+    "reason": "P2-BRKC-22 ships Device; P2 Plan names P2-BRKC-23 as its production user in internal/monitor/broker/ledger.go (ledger store Ingest/Devices and Judge). TestCallerSitesAreWiredOnceTheirFileExists checks this entry once P2-BRKC-23 closes.",
+    "retire_ticket": "P2-BRKC-23",
+    "symbol": "internal/monitor/broker.Device"
+  },
+  {
+    "added_by_ticket": "P2-BRKC-22",
+    "caller_site": "internal/monitor/broker/ledger.go",
+    "expected_caller": "internal/monitor/broker/ledger.go, written by P2-BRKC-23 (ledger store Ingest/Devices and Judge), which uses ErrNoDevice; retire this entry once that file uses it",
+    "reason": "P2-BRKC-22 ships ErrNoDevice; P2 Plan names P2-BRKC-23 as its production user in internal/monitor/broker/ledger.go (ledger store Ingest/Devices and Judge). TestCallerSitesAreWiredOnceTheirFileExists checks this entry once P2-BRKC-23 closes.",
+    "retire_ticket": "P2-BRKC-23",
+    "symbol": "internal/monitor/broker.ErrNoDevice"
+  },
+  {
+    "added_by_ticket": "P2-BRKC-22",
+    "caller_site": "internal/monitor/broker/ledger.go",
+    "expected_caller": "internal/monitor/broker/ledger.go, written by P2-BRKC-23 (ledger store Ingest/Devices and Judge), which uses HostDevice; retire this entry once that file uses it",
+    "reason": "P2-BRKC-22 ships HostDevice; P2 Plan names P2-BRKC-23 as its production user in internal/monitor/broker/ledger.go (ledger store Ingest/Devices and Judge). TestCallerSitesAreWiredOnceTheirFileExists checks this entry once P2-BRKC-23 closes.",
+    "retire_ticket": "P2-BRKC-23",
+    "symbol": "internal/monitor/broker.HostDevice"
+  },
+  {
+    "added_by_ticket": "P2-BRKC-22",
+    "caller_site": "internal/monitor/broker/broker.go",
+    "expected_caller": "internal/monitor/broker/broker.go, written by P2-BRKC-26 (Broker New and the poll step), which uses Registry; retire this entry once that file uses it",
+    "reason": "P2-BRKC-22 ships Registry; P2 Plan names P2-BRKC-26 as its production user in internal/monitor/broker/broker.go (Broker New and the poll step). TestCallerSitesAreWiredOnceTheirFileExists checks this entry once P2-BRKC-26 closes.",
+    "retire_ticket": "P2-BRKC-26",
+    "symbol": "internal/monitor/broker.Registry"
+  },
+  {
+    "added_by_ticket": "P2-BRKC-22",
+    "caller_site": "internal/monitor/broker/broker.go",
+    "expected_caller": "internal/monitor/broker/broker.go, written by P2-BRKC-26 (Broker New and the poll step), which uses Sampler; retire this entry once that file uses it",
+    "reason": "P2-BRKC-22 ships Sampler; P2 Plan names P2-BRKC-26 as its production user in internal/monitor/broker/broker.go (Broker New and the poll step). TestCallerSitesAreWiredOnceTheirFileExists checks this entry once P2-BRKC-26 closes.",
+    "retire_ticket": "P2-BRKC-26",
+    "symbol": "internal/monitor/broker.Sampler"
   }
 ]

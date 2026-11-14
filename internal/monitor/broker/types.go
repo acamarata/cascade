@@ -9,14 +9,8 @@ import (
 // HostDevice is the device name of the controller host itself.
 const HostDevice = "host"
 
-// LaneStaleAfter is how long a lane may go without a beat before it counts as stale.
-const LaneStaleAfter = 5 * time.Minute
-
 // ErrNoDevice is returned when no device can take the work.
 var ErrNoDevice = errors.New("broker: no device")
-
-// ErrNoFreshLedger is returned when no device has a recent enough heartbeat ledger.
-var ErrNoFreshLedger = errors.New("broker: no fresh ledger")
 
 // Beat is one heartbeat from a node.
 type Beat struct {
