@@ -135,6 +135,7 @@ func newFleetCmd(deps fleetSessionsDeps) *cobra.Command {
 	cmd.AddCommand(newFleetUsageCmd(deps))
 	// learn (P1-LRN-04: fleet learn status|explain|reset).
 	cmd.AddCommand(newFleetLearnCmd(deps))
+	cmd.AddCommand(newFleetDomainsCmd(deps)) // domains promote|demote
 	return cmd
 }
 

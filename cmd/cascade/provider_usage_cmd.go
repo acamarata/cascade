@@ -26,16 +26,28 @@ import (
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
+// newProviderTestCmd builds `provider test <name> [--promote paid|--demote]`.
 func newProviderTestCmd(deps providerDeps) *cobra.Command {
-	return &cobra.Command{
-		Use:         "test <name>",
-		Short:       "Probe one provider's reachability and report its health",
+	var tier providerTierFlags
+	cmd := &cobra.Command{
+		Use:   "test <name>",
+		Short: "Probe one provider's reachability and report its health",
+		Long: "Probe one provider. With --promote paid, a passing local test is followed by\n" +
+			"an elevated request that the daemon prove the provider itself and promote its\n" +
+			"quota domain to paid. A failing test sends nothing. --demote returns the\n" +
+			"domain to discover.",
 		Args:        usageArgs(cobra.ExactArgs(1)),
 		Annotations: map[string]string{"local": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runProviderTest(cmd, deps, args[0])
+			if err := tier.validate(); err != nil {
+				return err
+			}
+			return runProviderTest(cmd, deps, args[0], tier)
 		},
 	}
+	cmd.Flags().StringVar(&tier.promote, "promote", "", "promote the provider's quota domain to this billing tier (paid)")
+	cmd.Flags().BoolVar(&tier.demote, "demote", false, "return the provider's quota domain to discover")
+	return cmd
 }
 
 // providerTestResult is `cascade provider test`'s --json/table payload.
@@ -54,7 +66,9 @@ func (r providerTestResult) String() string {
 	return fmt.Sprintf("%s: unhealthy %s", r.Name, r.Detail)
 }
 
-func runProviderTest(cmd *cobra.Command, deps providerDeps, name string) error {
+// runProviderTest runs the local test, prints it, then (only when asked, and
+// for a promote only after a pass) changes the billing tier through the daemon.
+func runProviderTest(cmd *cobra.Command, deps providerDeps, name string, tier providerTierFlags) error {
 	store, err := openProviderStorage(cmd.Context(), deps)
 	if err != nil {
 		return err
@@ -69,6 +83,15 @@ func runProviderTest(cmd *cobra.Command, deps providerDeps, name string) error {
 	res := providerTestResult{Name: name, Success: ok, Endpoint: result.Endpoint, Status: result.Status, Detail: result.TransportErr}
 	if err := vaultOutputWriter(cmd).Result(res); err != nil {
 		return err
+	}
+	if tier.active() && (ok || tier.demote) { // a failed test never promotes
+		probes, err := registryProbeCount(cmd.Context(), store.Registry)
+		if err != nil {
+			return err
+		}
+		if err := changeProviderTier(cmd, deps, name, tier, probes); err != nil {
+			return err
+		}
 	}
 	if !ok {
 		return cascade.Newf(cascade.KindUnavailable, "provider test: %q is not reachable", name)
@@ -93,10 +116,16 @@ func newProviderRemoveCmd(deps providerDeps) *cobra.Command {
 // no-op, never an error).
 type providerRemoveResult struct {
 	Name  string `json:"name"`
-	Delta string `json:"delta"` // "removed" or "none"
+	Delta string `json:"delta"`          // "removed" or "none"
+	Note  string `json:"note,omitempty"` // billing evidence left for the next reconcile
 }
 
-func (r providerRemoveResult) String() string { return fmt.Sprintf("%s: delta=%s", r.Name, r.Delta) }
+func (r providerRemoveResult) String() string {
+	if r.Note != "" {
+		return fmt.Sprintf("%s: delta=%s\n  note: %s", r.Name, r.Delta, r.Note)
+	}
+	return fmt.Sprintf("%s: delta=%s", r.Name, r.Delta)
+}
 
 func runProviderRemove(cmd *cobra.Command, deps providerDeps, name string) error {
 	store, err := openProviderStorage(cmd.Context(), deps)
@@ -118,7 +147,8 @@ func runProviderRemove(cmd *cobra.Command, deps providerDeps, name string) error
 	if err := store.Registry.DeleteProvider(cmd.Context(), name); err != nil {
 		return err
 	}
-	return vaultOutputWriter(cmd).Result(providerRemoveResult{Name: name, Delta: "removed"})
+	note := forgetProviderEvidence(cmd.Context(), deps, name)
+	return vaultOutputWriter(cmd).Result(providerRemoveResult{Name: name, Delta: "removed", Note: note})
 }
 
 // revokeProviderVaultEntry deletes authRef from the vault, tolerating an
