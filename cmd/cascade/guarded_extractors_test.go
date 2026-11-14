@@ -280,7 +280,7 @@ func TestLocalSocketKnownOnlyViaFamily(t *testing.T) {
 func TestGuardedExtractorsCoverDecoderFields(t *testing.T) {
 	for typ, want := range map[reflect.Type][]string{
 		reflect.TypeOf(policy.Config{}):         {"ProfileName", "Overlays", "Batching", "RiskGates", "AutoAdvanceCeiling"},
-		reflect.TypeOf(nodes.Section{}):         {"DefaultTrustTier", "KnownHostsPath", "ScanLAN", "DiscoveryNetworks", "DispatchRepoRoot", "DispatchRemote", "Travel"},
+		reflect.TypeOf(nodes.Section{}):         {"DefaultTrustTier", "KnownHostsPath", "ScanLAN", "DiscoveryNetworks", "DispatchRepoRoot", "DispatchRemote", "Travel", "Repos"},
 		reflect.TypeOf(conductor.QuotaConfig{}): {"SpillOrder", "CeilingOverrides", "PersonalTracking"},
 	} {
 		var got []string

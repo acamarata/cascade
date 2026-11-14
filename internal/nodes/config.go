@@ -70,6 +70,10 @@ type Section struct {
 	// presence prober that a node's transient unavailable presence
 	// should not be treated as a hard placement failure.
 	Travel bool `toml:"travel"`
+	// Repos maps a node id to the repository registry ids that node is
+	// targeted with ([nodes.repos]). Nil when absent, so no node is ever
+	// targeted by default. Each list is sorted and free of duplicates.
+	Repos map[string][]string `toml:"repos"`
 }
 
 // parseSection fail-closed-parses raw (the "nodes" sub-tree of a decoded
@@ -108,6 +112,9 @@ func parseSection(raw map[string]interface{}) (Section, error) {
 		return Section{}, err
 	}
 	if err := parseDispatchSection(raw, &sec); err != nil {
+		return Section{}, err
+	}
+	if err := parseReposSection(raw, &sec); err != nil {
 		return Section{}, err
 	}
 	if v, ok := raw["travel"]; ok {

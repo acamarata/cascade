@@ -1,6 +1,4 @@
-// Purpose: registers every guarded config family with internal/runtime. Each
-// Extract runs the section's production decoder and returns a value mirroring
-// the TOML table with every shipped default omitted; FieldSpec rules order keys.
+// Purpose: registers every guarded config family with internal/runtime. Each Extract runs the section's production decoder and returns a value mirroring the TOML table with every shipped default omitted; FieldSpec rules order keys.
 // Inputs: the config tree. Outputs: RegisterGuardedFamily calls at init.
 // Constraints: one decode per family (C5); an invalid section is an Extract
 // error, never a default. [secrets] and [sync] only run their decoders.
@@ -48,6 +46,7 @@ var (
 	nodesSpec = table(map[string]runtime.FieldSpec{
 		"default_trust_tier": ruleAny, "known_hosts_path": ruleAny, "scan_lan": ruleTrue,
 		"discovery_networks": ruleGrows, "dispatch_repo_root": ruleAny, "dispatch_remote": ruleAny, "travel": ruleAny,
+		"repos": table(nil, &ruleGrows),
 	}, nil)
 	conductorSpec = table(map[string]runtime.FieldSpec{
 		"restricted_external_lanes": ruleGrows, "deny_task_classes": {Rule: runtime.RuleSetShrinks},
@@ -133,6 +132,9 @@ func extractNodesFamily(extra map[string]interface{}) (json.RawMessage, error) {
 	putString(v, "dispatch_repo_root", s.DispatchRepoRoot)
 	putString(v, "dispatch_remote", s.DispatchRemote)
 	putList(v, "discovery_networks", s.DiscoveryNetworks)
+	if len(s.Repos) > 0 {
+		v["repos"] = s.Repos
+	}
 	for k, on := range map[string]bool{"scan_lan": s.ScanLAN, "travel": s.Travel} {
 		if on {
 			v[k] = true
@@ -141,8 +143,7 @@ func extractNodesFamily(extra map[string]interface{}) (json.RawMessage, error) {
 	return json.Marshal(v)
 }
 
-// extractConductorFamily runs ParseRestrictedPermits, ConductorDenyTaskClasses and
-// ParseQuotaConfig; a present [conductor.quota] is kept even when empty.
+// extractConductorFamily runs ParseRestrictedPermits, ConductorDenyTaskClasses and ParseQuotaConfig; a present [conductor.quota] is kept even when empty.
 func extractConductorFamily(extra map[string]interface{}) (json.RawMessage, error) {
 	section, err := subTable(extra, "conductor")
 	if err != nil {
