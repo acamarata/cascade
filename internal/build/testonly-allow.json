@@ -1642,14 +1642,6 @@
     "symbol": "internal/controlplane/write.CheckPhaseIdleWorkLeft"
   },
   {
-    "added_by_ticket": "P2-GCOND-27a",
-    "caller_site": "internal/controlplane/write/wire_gcond.go",
-    "expected_caller": "internal/controlplane/write/wire_gcond.go, the P2-WIRE-18 wiring of P2-COND, which calls ErrOwnerOnly; retire this entry once that file calls it",
-    "reason": "P2-GCOND-27a ships ErrOwnerOnly with tests as a P2 gap unit; P2-WIRE-18 wires it into its home P2-COND once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/controlplane/write/wire_gcond.go exists without the call.",
-    "retire_ticket": "P2-WIRE-18",
-    "symbol": "internal/controlplane/write.ErrOwnerOnly"
-  },
-  {
     "added_by_ticket": "P2-GCOND-02a",
     "caller_site": "internal/controlplane/write/wire_gcond.go",
     "expected_caller": "internal/controlplane/write/wire_gcond.go, the P2-WIRE-18 wiring of P2-COND, which calls NewConductor; retire this entry once that file calls it",
@@ -3850,14 +3842,6 @@
     "symbol": "internal/background.TakeStreamTokens"
   },
   {
-    "added_by_ticket": "P2-COND-14",
-    "caller_site": "internal/controlplane/frontier/frontier.go",
-    "expected_caller": "internal/controlplane/frontier/frontier.go, written by P2-COND-15, whose ticket text names LongestPath; retire this entry once that file uses it",
-    "reason": "P2-COND-14 ships LongestPath with tests; P2-COND-15 is the first later ticket that names it and creates internal/controlplane/frontier/frontier.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/controlplane/frontier/frontier.go exists without the reference.",
-    "retire_ticket": "P2-COND-15",
-    "symbol": "internal/controlplane/frontier.LongestPath"
-  },
-  {
     "added_by_ticket": "P2-GCOND-32",
     "caller_site": "internal/controlplane/write/wire_gcond.go",
     "expected_caller": "internal/controlplane/write/wire_gcond.go, the P2-WIRE-18 wiring of P2-COND, which calls RecordProcessRestart; retire this entry once that file calls it",
@@ -4034,22 +4018,6 @@
     "symbol": "internal/resilience.WaitUntilReady"
   },
   {
-    "added_by_ticket": "P2-COND-14",
-    "caller_site": "internal/controlplane/frontier/frontier.go",
-    "expected_caller": "internal/controlplane/frontier/frontier.go, written by P2-COND-15, whose Ready builds the longest-path memo with NewChainMemo; retire this entry once that file calls it",
-    "reason": "P2-COND-14 ships NewChainMemo with tests; P2-COND-15 is its first production caller in frontier.go (P2 plan answer 2026-11-13). The caller-site gate checks this entry once P2-COND-15 closes.",
-    "retire_ticket": "P2-COND-15",
-    "symbol": "internal/controlplane/frontier.NewChainMemo"
-  },
-  {
-    "added_by_ticket": "P2-GTH-01",
-    "caller_site": "internal/hygiene/scan.go",
-    "expected_caller": "internal/hygiene/scan.go, written by P2-GTH-02, whose ticket text names ScanFiles; retire this entry once that file uses it",
-    "reason": "P2-GTH-01 ships ScanFiles with tests; P2-GTH-02 is the first later ticket that names it and creates internal/hygiene/scan.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/hygiene/scan.go exists without the reference.",
-    "retire_ticket": "P2-GTH-02",
-    "symbol": "internal/hygiene.ScanFiles"
-  },
-  {
     "added_by_ticket": "P2-GND-05",
     "caller_site": "internal/jobs/log_limit.go",
     "expected_caller": "internal/jobs/log_limit.go, written by P2-GND-06, whose ticket text names ErrInvalidMax; retire this entry once that file uses it",
@@ -4104,46 +4072,6 @@
     "reason": "P2-PORT-04a ships RetryPolicy with tests; P2-PORT-04c is the first later ticket that names it and creates internal/promise/await.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/promise/await.go exists without the reference.",
     "retire_ticket": "P2-PORT-04c",
     "symbol": "internal/promise.RetryPolicy"
-  },
-  {
-    "added_by_ticket": "P2-GBGA-17a",
-    "caller_site": "internal/background/wire_gbga.go",
-    "expected_caller": "internal/background/wire_gbga.go, the P2-WIRE-07 wiring of P2-BGA, which calls BoundarySupervisor; retire this entry once that file calls it",
-    "reason": "P2-GBGA-17a ships BoundarySupervisor with tests as a P2 gap unit; P2-WIRE-07 wires it into its home P2-BGA once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/background/wire_gbga.go exists without the call.",
-    "retire_ticket": "P2-WIRE-07",
-    "symbol": "internal/background.BoundarySupervisor"
-  },
-  {
-    "added_by_ticket": "P2-GBGA-18a",
-    "caller_site": "internal/background/wire_gbga.go",
-    "expected_caller": "internal/background/wire_gbga.go, the P2-WIRE-07 wiring of P2-BGA, which calls ErrEmptyJob; retire this entry once that file calls it",
-    "reason": "P2-GBGA-18a ships ErrEmptyJob with tests as a P2 gap unit; P2-WIRE-07 wires it into its home P2-BGA once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/background/wire_gbga.go exists without the call.",
-    "retire_ticket": "P2-WIRE-07",
-    "symbol": "internal/background.ErrEmptyJob"
-  },
-  {
-    "added_by_ticket": "P2-GBGA-16a",
-    "caller_site": "internal/background/wire_gbga.go",
-    "expected_caller": "internal/background/wire_gbga.go, the P2-WIRE-07 wiring of P2-BGA, which calls ErrRateLimited; retire this entry once that file calls it",
-    "reason": "P2-GBGA-16a ships ErrRateLimited with tests as a P2 gap unit; P2-WIRE-07 wires it into its home P2-BGA once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/background/wire_gbga.go exists without the call.",
-    "retire_ticket": "P2-WIRE-07",
-    "symbol": "internal/background.ErrRateLimited"
-  },
-  {
-    "added_by_ticket": "P2-GBGA-10a",
-    "caller_site": "internal/background/wire_gbga.go",
-    "expected_caller": "internal/background/wire_gbga.go, the P2-WIRE-07 wiring of P2-BGA, which calls ErrRetryJournal; retire this entry once that file calls it",
-    "reason": "P2-GBGA-10a ships ErrRetryJournal with tests as a P2 gap unit; P2-WIRE-07 wires it into its home P2-BGA once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/background/wire_gbga.go exists without the call.",
-    "retire_ticket": "P2-WIRE-07",
-    "symbol": "internal/background.ErrRetryJournal"
-  },
-  {
-    "added_by_ticket": "P2-GBGA-18a",
-    "caller_site": "internal/background/wire_gbga.go",
-    "expected_caller": "internal/background/wire_gbga.go, the P2-WIRE-07 wiring of P2-BGA, which calls ErrUnknownChat; retire this entry once that file calls it",
-    "reason": "P2-GBGA-18a ships ErrUnknownChat with tests as a P2 gap unit; P2-WIRE-07 wires it into its home P2-BGA once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/background/wire_gbga.go exists without the call.",
-    "retire_ticket": "P2-WIRE-07",
-    "symbol": "internal/background.ErrUnknownChat"
   },
   {
     "added_by_ticket": "P2-GBGA-26c",
@@ -4298,11 +4226,83 @@
     "symbol": "internal/promise.NewMemoryStore"
   },
   {
-    "added_by_ticket": "P2-PORT-03",
-    "caller_site": "internal/promise/await.go",
-    "expected_caller": "internal/promise/await.go, written by P2-PORT-04b, whose ticket text names Store; retire this entry once that file uses it",
-    "reason": "P2-PORT-03 ships Store with tests; P2-PORT-04b is the first later ticket that names it and creates internal/promise/await.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/promise/await.go exists without the reference.",
-    "retire_ticket": "P2-PORT-04b",
-    "symbol": "internal/promise.Store"
+    "added_by_ticket": "P2-COND-06",
+    "caller_site": "internal/controlplane/phase/floor.go",
+    "expected_caller": "internal/controlplane/phase/floor.go, written by P2-COND-07, whose ticket text names Building; retire this entry once that file uses it",
+    "reason": "P2-COND-06 ships Building with tests; P2-COND-07 is the first later ticket that names it and creates internal/controlplane/phase/floor.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/controlplane/phase/floor.go exists without the reference.",
+    "retire_ticket": "P2-COND-07",
+    "symbol": "internal/controlplane/phase.Building"
+  },
+  {
+    "added_by_ticket": "P2-COND-06",
+    "caller_site": "internal/controlplane/phase/floor.go",
+    "expected_caller": "internal/controlplane/phase/floor.go, written by P2-COND-07, whose ticket text names Forging; retire this entry once that file uses it",
+    "reason": "P2-COND-06 ships Forging with tests; P2-COND-07 is the first later ticket that names it and creates internal/controlplane/phase/floor.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/controlplane/phase/floor.go exists without the reference.",
+    "retire_ticket": "P2-COND-07",
+    "symbol": "internal/controlplane/phase.Forging"
+  },
+  {
+    "added_by_ticket": "P2-COND-06",
+    "caller_site": "internal/controlplane/phase/floor.go",
+    "expected_caller": "internal/controlplane/phase/floor.go, written by P2-COND-07, whose ticket text names RTB; retire this entry once that file uses it",
+    "reason": "P2-COND-06 ships RTB with tests; P2-COND-07 is the first later ticket that names it and creates internal/controlplane/phase/floor.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/controlplane/phase/floor.go exists without the reference.",
+    "retire_ticket": "P2-COND-07",
+    "symbol": "internal/controlplane/phase.RTB"
+  },
+  {
+    "added_by_ticket": "P2-COND-06",
+    "caller_site": "internal/controlplane/phase/floor.go",
+    "expected_caller": "internal/controlplane/phase/floor.go, written by P2-COND-07, whose ticket text names RTD; retire this entry once that file uses it",
+    "reason": "P2-COND-06 ships RTD with tests; P2-COND-07 is the first later ticket that names it and creates internal/controlplane/phase/floor.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/controlplane/phase/floor.go exists without the reference.",
+    "retire_ticket": "P2-COND-07",
+    "symbol": "internal/controlplane/phase.RTD"
+  },
+  {
+    "added_by_ticket": "P2-COND-06",
+    "caller_site": "internal/controlplane/phase/floor.go",
+    "expected_caller": "internal/controlplane/phase/floor.go, written by P2-COND-07, whose ticket text names RTF; retire this entry once that file uses it",
+    "reason": "P2-COND-06 ships RTF with tests; P2-COND-07 is the first later ticket that names it and creates internal/controlplane/phase/floor.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/controlplane/phase/floor.go exists without the reference.",
+    "retire_ticket": "P2-COND-07",
+    "symbol": "internal/controlplane/phase.RTF"
+  },
+  {
+    "added_by_ticket": "P2-COND-06",
+    "caller_site": "internal/controlplane/phase/floor.go",
+    "expected_caller": "internal/controlplane/phase/floor.go, written by P2-COND-07, whose ticket text names RTP; retire this entry once that file uses it",
+    "reason": "P2-COND-06 ships RTP with tests; P2-COND-07 is the first later ticket that names it and creates internal/controlplane/phase/floor.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/controlplane/phase/floor.go exists without the reference.",
+    "retire_ticket": "P2-COND-07",
+    "symbol": "internal/controlplane/phase.RTP"
+  },
+  {
+    "added_by_ticket": "P2-COND-06",
+    "caller_site": "internal/controlplane/phase/floor.go",
+    "expected_caller": "internal/controlplane/phase/floor.go, written by P2-COND-07, whose ticket text names Seeded; retire this entry once that file uses it",
+    "reason": "P2-COND-06 ships Seeded with tests; P2-COND-07 is the first later ticket that names it and creates internal/controlplane/phase/floor.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/controlplane/phase/floor.go exists without the reference.",
+    "retire_ticket": "P2-COND-07",
+    "symbol": "internal/controlplane/phase.Seeded"
+  },
+  {
+    "added_by_ticket": "P2-RTM-01a",
+    "caller_site": "cmd/cascade/wire_units_rtm.go",
+    "expected_caller": "cmd/cascade/wire_units_rtm.go, written by P2-WIRB-71, whose ticket text names NewAgent; retire this entry once that file uses it",
+    "reason": "P2-RTM-01a ships NewAgent with tests; P2-WIRB-71 is the first later ticket that names it and creates cmd/cascade/wire_units_rtm.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once cmd/cascade/wire_units_rtm.go exists without the reference.",
+    "retire_ticket": "P2-WIRB-71",
+    "symbol": "internal/fleet/agents.NewAgent"
+  },
+  {
+    "added_by_ticket": "P2-GCRUN-45b",
+    "caller_site": "internal/pbd/crunch/wire_gcrun.go",
+    "expected_caller": "internal/pbd/crunch/wire_gcrun.go, the P2-WIRE-22 wiring of P2-CRUN, which calls VerifyWithNodesArgs; retire this entry once that file calls it",
+    "reason": "P2-GCRUN-45b ships VerifyWithNodesArgs with tests as a P2 gap unit; P2-WIRE-22 wires it into its home P2-CRUN once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/pbd/crunch/wire_gcrun.go exists without the call.",
+    "retire_ticket": "P2-WIRE-22",
+    "symbol": "internal/pbd/crunch.VerifyWithNodesArgs"
+  },
+  {
+    "added_by_ticket": "P2-GTH-01",
+    "caller_site": "internal/build/hygienegate.go",
+    "expected_caller": "internal/build/hygienegate.go, written by P2-GTH-05, which calls ScanFiles; retire this entry once that file calls it",
+    "reason": "P2-GTH-01 ships ScanFiles; P2 Plan names P2-GTH-05 as its production caller in internal/build/hygienegate.go (symbol table). The caller-site gate checks this entry once P2-GTH-05 closes.",
+    "retire_ticket": "P2-GTH-05",
+    "symbol": "internal/hygiene.ScanFiles"
   }
 ]
