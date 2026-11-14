@@ -127,6 +127,9 @@ type daemonRuntime struct {
 	// (phaseMiddleware, Order 5) sets it, so every token a later registration
 	// mints resolves through the same admission policy.
 	Minter *principal.Minter
+	// ProviderRegistry is the provider registry reader the status-widget
+	// registration (phaseOptions) opens; the completion gate reads it.
+	ProviderRegistry provider.ProviderRegistryReader
 }
 
 // Reconcile brings the snapshot in line with names, the credentialNames of a

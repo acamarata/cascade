@@ -32,7 +32,8 @@ func TestConductorAndJobLaddersAgreeOnHold(t *testing.T) {
 func checkJobFamilyParity(t *testing.T, p JobReviewPolicy, reg fakeRegistry) {
 	t.Helper()
 	ctx := context.Background()
-	author := ProviderFamily(ctx, reg, reg.infos[0].Name)
+	observed := resolveFamily(ctx, reg, provider.Selection{Provider: reg.infos[0].Name})
+	author := jobs.FamilyRef{Family: observed.family, Resolved: observed.resolved}
 	if !author.Resolved {
 		t.Fatal("fixture author unresolved")
 	}

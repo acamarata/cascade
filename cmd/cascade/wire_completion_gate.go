@@ -23,7 +23,7 @@ var _ = registerDaemonWiring(daemonRegistration{
 			return err
 		}
 		w.Deps.Evidence, err = wireCompletionEvidence(w.Ctx, w.Registry, w.Store, w.Clock, w.Bus, w.Paths,
-			verifier, w.Deps.CI.Dispatcher(), w.Deps.Fleet.Leases(), completionController(w.Paths))
+			verifier, w.Deps.CI.Dispatcher(), w.Deps.Fleet.Leases(), completionController(w.Paths), w.Deps.Fleet, w.Deps.ProviderRegistry)
 		return err
 	},
 })

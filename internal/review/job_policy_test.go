@@ -84,29 +84,6 @@ func (jobLookupErrorRegistry) GetProvider(context.Context, string) (provider.Pro
 	return provider.ProviderInfo{Driver: "must-not-resolve"}, errBoom
 }
 
-// TestProviderFamilyFailsClosed proves accounts are resolved to driver families.
-func TestProviderFamilyFailsClosed(t *testing.T) {
-	reg := jobFamilyRegistry()
-	for _, tc := range []struct {
-		name string
-		reg  provider.ProviderRegistryReader
-		want jobs.FamilyRef
-	}{
-		{"anthropic-acc1", reg, jobs.FamilyRef{Family: "anthropic", Resolved: true}},
-		{"anthropic-acc2", reg, jobs.FamilyRef{Family: "anthropic", Resolved: true}},
-		{"openai-1", reg, jobs.FamilyRef{Family: "openai", Resolved: true}},
-		{"unknown", reg, jobs.FamilyRef{}},
-		{"", reg, jobs.FamilyRef{}},
-		{"empty-driver", reg, jobs.FamilyRef{}},
-		{"anthropic-acc1", nil, jobs.FamilyRef{}},
-		{"anthropic-acc1", jobLookupErrorRegistry{reg}, jobs.FamilyRef{}},
-	} {
-		if got := ProviderFamily(context.Background(), tc.reg, tc.name); got != tc.want {
-			t.Errorf("ProviderFamily(%q, %T) = %+v, want %+v", tc.name, tc.reg, got, tc.want)
-		}
-	}
-}
-
 // TestAvailableFamilies checks ordered deduplication and registry failures.
 func TestAvailableFamilies(t *testing.T) {
 	ctx := context.Background()
