@@ -7,4 +7,5 @@ import "github.com/spf13/cobra"
 var _ = registerRootMount(rootMount{Name: "fleet", Order: 210, Mount: func(root *cobra.Command) {
 	mountFleetCmd(root)
 	mountFleetCompletionCheck(root)
+	mountFleetToolGate(root)
 }})
