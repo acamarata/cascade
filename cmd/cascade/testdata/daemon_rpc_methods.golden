@@ -43,7 +43,10 @@ fleet.attention.ack
 fleet.attention.get
 fleet.attention.list
 fleet.capacity
+fleet.domains.demote
+fleet.domains.forget
 fleet.domains.list
+fleet.domains.promote
 fleet.domains.show
 fleet.health.summary
 fleet.journal_replay

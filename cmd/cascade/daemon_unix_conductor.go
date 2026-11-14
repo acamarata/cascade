@@ -165,7 +165,12 @@ func newDaemonResolver(reg providerdispatch.RegistryLookup, credentials provider
 	if err != nil {
 		return nil, err
 	}
-	return providerdispatch.NewResolver(reg, credentials, clock, tr, append([]providerdispatch.ResolverOption{providerdispatch.WithGatewayAccounts(accounts, src)}, opts...)...)
+	res, err := providerdispatch.NewResolver(reg, credentials, clock, tr, append([]providerdispatch.ResolverOption{providerdispatch.WithGatewayAccounts(accounts, src)}, opts...)...)
+	if err == nil { // the promote probe dials through this one resolver and keys over the same inputs
+		promoteHandoff.Store(&domainPromoter{probe: promoteProbe{lookup: reg, resolve: res, clock: clock},
+			keys: evidenceKeyDeps{Registry: reg, Credentials: credentials, Gateways: accounts}})
+	}
+	return res, err
 }
 
 // daemonGateways returns the admitted gateway accounts of cfg and the
