@@ -170,7 +170,7 @@ func revalidateCases1(_ error) []revalidateCase {
 				Stale:    []Item{{ID: "a"}},
 				Notifier: &fakeNotifier{errAt: -1},
 			},
-			wantErr: ErrInvalidRevalidate,
+			wantErr: ErrOwnerOnly,
 		},
 	}
 }
