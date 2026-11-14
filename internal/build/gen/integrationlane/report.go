@@ -49,6 +49,7 @@ func reportCmd(o options, w *output.Writer) error {
 	}
 	w.Println(strings.TrimSuffix(strings.Replace(rep.Summary(), "golden-parity:", "integration-lanes:", 1), "\n"))
 	if !rep.OK {
+		printFailedOutput(w, raws)
 		return fmt.Errorf("%d rows, at least one failed (see the summary above)", len(rep.Rows))
 	}
 	return nil
