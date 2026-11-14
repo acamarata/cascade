@@ -2,10 +2,8 @@
 // functions to determine the current phase based on ticket statuses.
 package phase
 
-import "errors"
-
 // PhaseState represents the current life-cycle phase of a project.
-type PhaseState string
+type PhaseState string //nolint:revive // name fixed by the P2 phase contract
 
 // Life-cycle phase constants.
 const (
@@ -30,12 +28,3 @@ const (
 	// Finished is the final phase.
 	Finished PhaseState = "Finished"
 )
-
-// Floor determines the current phase based on the provided tickets and status word.
-// A PHASE.md status word of "done", "closed", or "finished" maps to Finished.
-// Unrecognised status words result in an error.
-// Planning and Deploying are never derived; they are set by their own steps.
-// Currently, this is a stub that returns an error for any input.
-func Floor(tickets []string, statusWord string) (PhaseState, error) {
-	return "", errors.New("not implemented")
-}

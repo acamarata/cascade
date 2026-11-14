@@ -19,11 +19,11 @@ type Agent struct {
 }
 
 // NewAgent creates a new Agent stub.
-func NewAgent(id string) (*Agent, error) {
+func NewAgent(_ string) (*Agent, error) {
 	return nil, ErrNotImplemented
 }
 
 // Transition changes the agent to the target state.
-func (a *Agent) Transition(to AgentState) error {
+func (a *Agent) Transition(_ AgentState) error {
 	return ErrNotImplemented
 }

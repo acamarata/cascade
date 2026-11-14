@@ -13,7 +13,7 @@ func TestAgentDeclarationsCompile(t *testing.T) {
 		t.Error("expected zero values for Agent struct")
 	}
 
-	if ErrNotImplemented == nil || invalid_agent_state == nil || agent_state_conflict == nil {
+	if ErrNotImplemented == nil || errInvalidAgentState == nil || errAgentStateConflict == nil {
 		t.Error("expected sentinels to be initialized")
 	}
 
