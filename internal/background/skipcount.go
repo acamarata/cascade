@@ -67,5 +67,9 @@ func Schedule(req ScheduleRequest, live LiveCountSource, queue BackgroundEnqueue
 		return true, nil
 	}
 
+	if req.Trigger == TriggerQueueAdd {
+		return handleQueueAdd(req, queue)
+	}
+
 	return false, ErrInvalidSchedule
 }
