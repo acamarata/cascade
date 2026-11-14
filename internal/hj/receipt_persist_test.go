@@ -81,14 +81,13 @@ func TestPersistTurnEndedState(t *testing.T) {
 
 func TestPersistOtherStates(t *testing.T) {
 	states := []ReceiptState{End, Ready, Due, For, CountsFor, Prune}
-	expectedIDs := make(map[string]bool)
+	expectedIDs := otherStateIDs(states) // filled before the goroutines start: a shared map write races
 	var wg sync.WaitGroup
 	for _, st := range states {
 		wg.Add(1)
 		go func(st ReceiptState) {
 			defer wg.Done()
 			id := "test-persist-other-" + string(st)
-			expectedIDs[id] = true
 			r := Receipt{ID: id, State: st}
 			got, err := Persist(r)
 			if err != nil {
@@ -125,7 +124,6 @@ func TestPersistOtherStates(t *testing.T) {
 			t.Errorf("Receipts() missing %s", id)
 		}
 	}
-
 	// Check modification of snapshot doesn't affect store
 	for i := range all {
 		all[i].ID = "modified-" + all[i].ID
@@ -136,4 +134,13 @@ func TestPersistOtherStates(t *testing.T) {
 			t.Error("modifying snapshot modified the store")
 		}
 	}
+}
+
+// otherStateIDs returns the receipt IDs TestPersistOtherStates persists, one per state.
+func otherStateIDs(states []ReceiptState) map[string]bool {
+	ids := make(map[string]bool, len(states))
+	for _, st := range states {
+		ids["test-persist-other-"+string(st)] = true
+	}
+	return ids
 }

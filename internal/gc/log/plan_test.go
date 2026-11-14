@@ -4,38 +4,38 @@ import (
 	"testing"
 )
 
-func TestSelectGhostTeamsPlan(t *testing.T) {
+func TestSelectGatewayTeamsPlan(t *testing.T) {
 	u1 := "user1"
-	err := SelectPlan(u1, "ghost-teams")
+	err := SelectPlan(u1, "gateway-teams")
 	if err != nil {
-		t.Fatalf("SelectPlan(user1, \"ghost-teams\") returned error: %v", err)
+		t.Fatalf("SelectPlan(user1, \"gateway-teams\") returned error: %v", err)
 	}
 	// Verify the plan was set
 	if !Allowed(u1, "team-seats") {
-		t.Error("Expected user1 on ghost-teams plan to have team-seats feature")
+		t.Error("Expected user1 on gateway-teams plan to have team-seats feature")
 	}
 }
 
-func TestGhostTeamsAllowsPlanFeature(t *testing.T) {
+func TestGatewayTeamsAllowsPlanFeature(t *testing.T) {
 	u1 := "user1"
-	_ = SelectPlan(u1, "ghost-teams")
+	_ = SelectPlan(u1, "gateway-teams")
 	if !Allowed(u1, "team-seats") {
-		t.Error("Expected Allowed(user1, \"team-seats\") to be true for ghost-teams plan")
+		t.Error("Expected Allowed(user1, \"team-seats\") to be true for gateway-teams plan")
 	}
 }
 
-func TestGhostTeamsDeniesOtherFeature(t *testing.T) {
+func TestGatewayTeamsDeniesOtherFeature(t *testing.T) {
 	u1 := "user1"
-	_ = SelectPlan(u1, "ghost-teams")
+	_ = SelectPlan(u1, "gateway-teams")
 	if Allowed(u1, "enterprise-sso") {
-		t.Error("Expected Allowed(user1, \"enterprise-sso\") to be false for ghost-teams plan")
+		t.Error("Expected Allowed(user1, \"enterprise-sso\") to be false for gateway-teams plan")
 	}
 }
 
 func TestSelectUnknownPlanFails(t *testing.T) {
 	u1 := "user1"
 	// First set a valid plan
-	_ = SelectPlan(u1, "ghost-teams")
+	_ = SelectPlan(u1, "gateway-teams")
 
 	// Try to set an unknown plan
 	err := SelectPlan(u1, "nope")
@@ -45,6 +45,6 @@ func TestSelectUnknownPlanFails(t *testing.T) {
 
 	// Verify the prior plan is unchanged
 	if !Allowed(u1, "team-seats") {
-		t.Error("Expected user1 to still have ghost-teams plan features after failed SelectPlan")
+		t.Error("Expected user1 to still have gateway-teams plan features after failed SelectPlan")
 	}
 }

@@ -11,8 +11,8 @@ import (
 // ReceiptState represents the lifecycle state of a receipt.
 type ReceiptState string
 
+// Receipt lifecycle states.
 const (
-	// Receipt lifecycle states.
 	Queue          ReceiptState = "Queue"
 	Taken          ReceiptState = "Taken"
 	ReceiptAttempt ReceiptState = "Attempt"

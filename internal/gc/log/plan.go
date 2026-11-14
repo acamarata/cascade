@@ -7,14 +7,14 @@ import (
 
 // PlanFeatureMap defines the features available for each known plan.
 var PlanFeatureMap = map[string]map[string]bool{
-	"ghost-teams": {
+	"gateway-teams": {
 		"team-seats": true,
 	},
 }
 
 // knownPlans is a set of valid plan names.
 var knownPlans = map[string]bool{
-	"ghost-teams": true,
+	"gateway-teams": true,
 }
 
 var (
