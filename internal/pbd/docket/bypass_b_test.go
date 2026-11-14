@@ -40,9 +40,9 @@ func TestBypassAdmitsBeyondCapWhenDeadlinesMetAndSeatsSpent(t *testing.T) {
 	}
 }
 
-// TestBypassAdmitsToA2BeyondOverflowCap verifies that a hot ticket is admitted
+// TestBypassAdmitsToAcctBBeyondOverflowCap verifies that a hot ticket is admitted
 // beyond the A2 overflow cap independently from the main cap.
-func TestBypassAdmitsToA2BeyondOverflowCap(t *testing.T) {
+func TestBypassAdmitsToAcctBBeyondOverflowCap(t *testing.T) {
 	tests := []struct {
 		name      string
 		occupancy int

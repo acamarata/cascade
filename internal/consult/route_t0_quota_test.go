@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// TestRouteT0PlanQuotaShortUsesGC2 verifies that NativeQuotaShort routes to GC2.
-func TestRouteT0PlanQuotaShortUsesGC2(t *testing.T) {
+// TestRouteT0PlanQuotaShortUsesPool2 verifies that NativeQuotaShort routes to GC2.
+func TestRouteT0PlanQuotaShortUsesPool2(t *testing.T) {
 	gc2 := T0Route{Destination: "GC2", Account: ""}
 	tests := []struct {
 		name    string

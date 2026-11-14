@@ -12,8 +12,8 @@ type EscalationTicket struct {
 	ID string
 	// Lane is the processing lane for the request.
 	Lane string
-	// GCFailures is the number of garbage collection failures.
-	GCFailures int
+	// GatewayFailures is the number of garbage collection failures.
+	GatewayFailures int
 	// ModelFailures is the number of model failures.
 	ModelFailures int
 	// Attempts is the number of attempts made so far.
@@ -41,7 +41,7 @@ func Escalate(t EscalationTicket) (EscalationResult, error) {
 	if strings.TrimSpace(t.ID) == "" || strings.TrimSpace(t.Lane) == "" {
 		return EscalationResult{}, ErrInvalidEscalation
 	}
-	if t.GCFailures < 0 || t.ModelFailures < 0 || t.Attempts < 0 {
+	if t.GatewayFailures < 0 || t.ModelFailures < 0 || t.Attempts < 0 {
 		return EscalationResult{}, ErrInvalidEscalation
 	}
 	if t.Attempts > 0 && t.Lane != "senior" {
@@ -54,7 +54,7 @@ func Escalate(t EscalationTicket) (EscalationResult, error) {
 	}
 
 	// Threshold met: escalate to senior lane.
-	if t.GCFailures >= 3 || t.ModelFailures >= 2 {
+	if t.GatewayFailures >= 3 || t.ModelFailures >= 2 {
 		return EscalationResult{
 			Escalated:  true,
 			Lane:       "senior",

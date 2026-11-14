@@ -7,11 +7,11 @@ import (
 
 func TestNoEscalateBelowThresholds(t *testing.T) {
 	res, err := Escalate(EscalationTicket{
-		ID:            "id1",
-		Lane:          "junior",
-		GCFailures:    2,
-		ModelFailures: 1,
-		Attempts:      0,
+		ID:              "id1",
+		Lane:            "junior",
+		GatewayFailures: 2,
+		ModelFailures:   1,
+		Attempts:        0,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -36,7 +36,7 @@ func TestEscalateRejectsInvalidTickets(t *testing.T) {
 		{"whitespace ID", EscalationTicket{ID: "   ", Lane: "junior"}},
 		{"empty Lane", EscalationTicket{ID: "id1", Lane: ""}},
 		{"whitespace Lane", EscalationTicket{ID: "id1", Lane: "   "}},
-		{"negative GCFailures", EscalationTicket{ID: "id1", Lane: "junior", GCFailures: -1}},
+		{"negative GatewayFailures", EscalationTicket{ID: "id1", Lane: "junior", GatewayFailures: -1}},
 		{"negative ModelFailures", EscalationTicket{ID: "id1", Lane: "junior", ModelFailures: -1}},
 		{"negative Attempts", EscalationTicket{ID: "id1", Lane: "junior", Attempts: -1}},
 		{"non-senior Attempts>0", EscalationTicket{ID: "id1", Lane: "junior", Attempts: 1}},

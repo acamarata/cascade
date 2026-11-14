@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestWaveDropsToZeroOnGCSlugAnswer(t *testing.T) {
+func TestWaveDropsToZeroOnGatewaySlugAnswer(t *testing.T) {
 	tests := []struct {
 		name     string
 		ev       SlugAnswer
@@ -13,8 +13,8 @@ func TestWaveDropsToZeroOnGCSlugAnswer(t *testing.T) {
 		wantErr  error
 	}{
 		{
-			name:     "gc-slug-answer not finished",
-			ev:       SlugAnswer{Slug: "gc-slug-answer", Finished: false},
+			name:     "gateway-slug-answer not finished",
+			ev:       SlugAnswer{Slug: "gateway-slug-answer", Finished: false},
 			wantWave: 0,
 			wantErr:  nil,
 		},
@@ -26,7 +26,7 @@ func TestWaveDropsToZeroOnGCSlugAnswer(t *testing.T) {
 		},
 		{
 			name:     "repeated call same slug",
-			ev:       SlugAnswer{Slug: "gc-slug-answer", Finished: false},
+			ev:       SlugAnswer{Slug: "gateway-slug-answer", Finished: false},
 			wantWave: 0,
 			wantErr:  nil,
 		},

@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// TestEscalateAfter3GCFailures verifies escalation triggers after 3 or more GC failures.
-func TestEscalateAfter3GCFailures(t *testing.T) {
+// TestEscalateAfter3GatewayFailures verifies escalation triggers after 3 or more GC failures.
+func TestEscalateAfter3GatewayFailures(t *testing.T) {
 	tests := []struct {
 		name string
 		gc   int
@@ -17,10 +17,10 @@ func TestEscalateAfter3GCFailures(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			ticket := EscalationTicket{
-				ID:         "req-1",
-				Lane:       "junior",
-				GCFailures: tc.gc,
-				Attempts:   0,
+				ID:              "req-1",
+				Lane:            "junior",
+				GatewayFailures: tc.gc,
+				Attempts:        0,
 			}
 			res, err := Escalate(ticket)
 			if err != nil {
@@ -97,11 +97,11 @@ func TestSeniorLaneRetryLimitEnforced(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			ticket := EscalationTicket{
-				ID:            "req-3",
-				Lane:          "senior",
-				GCFailures:    tc.gc,
-				ModelFailures: tc.mf,
-				Attempts:      tc.attempts,
+				ID:              "req-3",
+				Lane:            "senior",
+				GatewayFailures: tc.gc,
+				ModelFailures:   tc.mf,
+				Attempts:        tc.attempts,
 			}
 			res, err := Escalate(ticket)
 			if tc.wantErr != nil {

@@ -5,25 +5,25 @@ import (
 	"testing"
 )
 
-// TestRouteCrunchToGcsat verifies that crunch-op-a routes to gcsat.
+// TestRouteCrunchToGcsat verifies that crunch-op-a routes to gatewaysat.
 func TestRouteCrunchToGcsat(t *testing.T) {
 	target, err := Route("crunch-op-a")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if target != "gcsat" {
-		t.Fatalf("expected gcsat, got %s", target)
+	if target != "gatewaysat" {
+		t.Fatalf("expected gatewaysat, got %s", target)
 	}
 }
 
-// TestRouteCrunchToGcsched verifies that crunch-op-b routes to gcsched.
+// TestRouteCrunchToGcsched verifies that crunch-op-b routes to gatewaysched.
 func TestRouteCrunchToGcsched(t *testing.T) {
 	target, err := Route("crunch-op-b")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if target != "gcsched" {
-		t.Fatalf("expected gcsched, got %s", target)
+	if target != "gatewaysched" {
+		t.Fatalf("expected gatewaysched, got %s", target)
 	}
 }
 

@@ -6,14 +6,14 @@ import (
 	"time"
 )
 
-func stubEstimator(_ []GCQuotaEvidence) (time.Time, string, error) {
+func stubEstimator(_ []GatewayQuotaEvidence) (time.Time, string, error) {
 	return time.Now(), "stub", nil
 }
 
 // TestOwnerFlagPopulates verifies that a valid ticket populates ID and OwnerFlag.
 func TestOwnerFlagPopulates(t *testing.T) {
-	ev := []GCQuotaEvidence{{Usage: 1, Capacity: 10, ResetsAt: time.Now()}}
-	auth, err := PopulateGCAuth(GCTicket{ID: "t-1", Gated: false}, ev, stubEstimator)
+	ev := []GatewayQuotaEvidence{{Usage: 1, Capacity: 10, ResetsAt: time.Now()}}
+	auth, err := PopulateGatewayAuth(GatewayTicket{ID: "t-1", Gated: false}, ev, stubEstimator)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -27,8 +27,8 @@ func TestOwnerFlagPopulates(t *testing.T) {
 
 // TestCrunchSummaryOps verifies the exact ordered SummaryOps slice.
 func TestCrunchSummaryOps(t *testing.T) {
-	ev := []GCQuotaEvidence{{Usage: 1, Capacity: 10, ResetsAt: time.Now()}}
-	auth, err := PopulateGCAuth(GCTicket{ID: "t-2", Gated: false}, ev, stubEstimator)
+	ev := []GatewayQuotaEvidence{{Usage: 1, Capacity: 10, ResetsAt: time.Now()}}
+	auth, err := PopulateGatewayAuth(GatewayTicket{ID: "t-2", Gated: false}, ev, stubEstimator)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -43,8 +43,8 @@ func TestCrunchSummaryOps(t *testing.T) {
 
 // TestCrunchlogDigestNodes verifies the exact ordered DigestNodes slice.
 func TestCrunchlogDigestNodes(t *testing.T) {
-	ev := []GCQuotaEvidence{{Usage: 1, Capacity: 10, ResetsAt: time.Now()}}
-	auth, err := PopulateGCAuth(GCTicket{ID: "t-3", Gated: false}, ev, stubEstimator)
+	ev := []GatewayQuotaEvidence{{Usage: 1, Capacity: 10, ResetsAt: time.Now()}}
+	auth, err := PopulateGatewayAuth(GatewayTicket{ID: "t-3", Gated: false}, ev, stubEstimator)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -59,8 +59,8 @@ func TestCrunchlogDigestNodes(t *testing.T) {
 
 // TestModelResolver verifies the Model field is set correctly.
 func TestModelResolver(t *testing.T) {
-	ev := []GCQuotaEvidence{{Usage: 1, Capacity: 10, ResetsAt: time.Now()}}
-	auth, err := PopulateGCAuth(GCTicket{ID: "t-4", Gated: false}, ev, stubEstimator)
+	ev := []GatewayQuotaEvidence{{Usage: 1, Capacity: 10, ResetsAt: time.Now()}}
+	auth, err := PopulateGatewayAuth(GatewayTicket{ID: "t-4", Gated: false}, ev, stubEstimator)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -71,9 +71,9 @@ func TestModelResolver(t *testing.T) {
 
 // TestHookContextGate verifies GateOpen is the inverse of Gated with no hook calls.
 func TestHookContextGate(t *testing.T) {
-	ev := []GCQuotaEvidence{{Usage: 1, Capacity: 10, ResetsAt: time.Now()}}
+	ev := []GatewayQuotaEvidence{{Usage: 1, Capacity: 10, ResetsAt: time.Now()}}
 
-	authGated, err := PopulateGCAuth(GCTicket{ID: "t-5", Gated: true}, ev, stubEstimator)
+	authGated, err := PopulateGatewayAuth(GatewayTicket{ID: "t-5", Gated: true}, ev, stubEstimator)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestHookContextGate(t *testing.T) {
 		t.Error("expected GateOpen false when Gated is true")
 	}
 
-	authOpen, err := PopulateGCAuth(GCTicket{ID: "t-6", Gated: false}, ev, stubEstimator)
+	authOpen, err := PopulateGatewayAuth(GatewayTicket{ID: "t-6", Gated: false}, ev, stubEstimator)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

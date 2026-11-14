@@ -10,14 +10,14 @@ import (
 // TestPopulateGCAuthLaterEvidenceInvalid checks that a bad later entry fails
 // even when earlier entries are valid.
 func TestPopulateGCAuthLaterEvidenceInvalid(t *testing.T) {
-	est := func([]GCQuotaEvidence) (time.Time, string, error) { return time.Time{}, "", nil }
-	ev := []GCQuotaEvidence{{Usage: 1, Capacity: 2}, {Usage: 3, Capacity: 2}}
-	got, err := PopulateGCAuth(GCTicket{ID: "x"}, ev, est)
-	if !errors.Is(err, ErrGCAuthFields) {
-		t.Fatalf("err = %v, want ErrGCAuthFields", err)
+	est := func([]GatewayQuotaEvidence) (time.Time, string, error) { return time.Time{}, "", nil }
+	ev := []GatewayQuotaEvidence{{Usage: 1, Capacity: 2}, {Usage: 3, Capacity: 2}}
+	got, err := PopulateGatewayAuth(GatewayTicket{ID: "x"}, ev, est)
+	if !errors.Is(err, ErrGatewayAuthFields) {
+		t.Fatalf("err = %v, want ErrGatewayAuthFields", err)
 	}
-	if !reflect.DeepEqual(got, GCAuth{}) {
-		t.Fatalf("got %+v, want zero GCAuth", got)
+	if !reflect.DeepEqual(got, GatewayAuth{}) {
+		t.Fatalf("got %+v, want zero GatewayAuth", got)
 	}
 }
 

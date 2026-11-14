@@ -9,16 +9,16 @@ import (
 func TestUsageSamplerFreshEvidence(t *testing.T) {
 	resetTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	calls := 0
-	var received []GCQuotaEvidence
-	est := func(ev []GCQuotaEvidence) (time.Time, string, error) {
+	var received []GatewayQuotaEvidence
+	est := func(ev []GatewayQuotaEvidence) (time.Time, string, error) {
 		calls++
 		received = ev
 		return resetTime, "quota_window", nil
 	}
-	evidence := []GCQuotaEvidence{
+	evidence := []GatewayQuotaEvidence{
 		{Usage: 100, Capacity: 100, ResetsAt: resetTime, Stale: false},
 	}
-	auth, err := PopulateGCAuth(GCTicket{ID: "t1", Gated: false}, evidence, est)
+	auth, err := PopulateGatewayAuth(GatewayTicket{ID: "t1", Gated: false}, evidence, est)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -43,16 +43,16 @@ func TestUsageSamplerFreshEvidence(t *testing.T) {
 
 func TestUsageSamplerStaleEvidencePreserved(t *testing.T) {
 	subTime := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
-	est := func(ev []GCQuotaEvidence) (time.Time, string, error) {
+	est := func(ev []GatewayQuotaEvidence) (time.Time, string, error) {
 		if len(ev) != 1 || !ev[0].Stale {
 			t.Error("stale flag not forwarded")
 		}
 		return subTime, "subscription", nil
 	}
-	evidence := []GCQuotaEvidence{
+	evidence := []GatewayQuotaEvidence{
 		{Usage: 50, Capacity: 100, ResetsAt: subTime, Stale: true},
 	}
-	auth, err := PopulateGCAuth(GCTicket{ID: "t2", Gated: false}, evidence, est)
+	auth, err := PopulateGatewayAuth(GatewayTicket{ID: "t2", Gated: false}, evidence, est)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -68,13 +68,13 @@ func TestUsageSamplerStaleEvidencePreserved(t *testing.T) {
 }
 
 func TestUsageSamplerZeroResetEmptySource(t *testing.T) {
-	est := func(_ []GCQuotaEvidence) (time.Time, string, error) {
+	est := func(_ []GatewayQuotaEvidence) (time.Time, string, error) {
 		return time.Time{}, "", nil
 	}
-	evidence := []GCQuotaEvidence{
+	evidence := []GatewayQuotaEvidence{
 		{Usage: 0, Capacity: 100, ResetsAt: time.Time{}, Stale: false},
 	}
-	auth, err := PopulateGCAuth(GCTicket{ID: "t3", Gated: false}, evidence, est)
+	auth, err := PopulateGatewayAuth(GatewayTicket{ID: "t3", Gated: false}, evidence, est)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestUsageSamplerZeroResetEmptySource(t *testing.T) {
 }
 
 func TestUsageSamplerRepeatedEvidenceInOrder(t *testing.T) {
-	est := func(ev []GCQuotaEvidence) (time.Time, string, error) {
+	est := func(ev []GatewayQuotaEvidence) (time.Time, string, error) {
 		if len(ev) != 3 {
 			t.Fatalf("expected 3 evidence entries, got %d", len(ev))
 		}
@@ -101,9 +101,9 @@ func TestUsageSamplerRepeatedEvidenceInOrder(t *testing.T) {
 		}
 		return time.Time{}, "", nil
 	}
-	ev := GCQuotaEvidence{Usage: 10, Capacity: 20, ResetsAt: time.Time{}, Stale: true}
-	evidence := []GCQuotaEvidence{ev, ev, ev}
-	_, err := PopulateGCAuth(GCTicket{ID: "t4", Gated: false}, evidence, est)
+	ev := GatewayQuotaEvidence{Usage: 10, Capacity: 20, ResetsAt: time.Time{}, Stale: true}
+	evidence := []GatewayQuotaEvidence{ev, ev, ev}
+	_, err := PopulateGatewayAuth(GatewayTicket{ID: "t4", Gated: false}, evidence, est)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -111,23 +111,23 @@ func TestUsageSamplerRepeatedEvidenceInOrder(t *testing.T) {
 
 func TestUsageSamplerEstimatorError(t *testing.T) {
 	cause := errors.New("underlying failure")
-	est := func(_ []GCQuotaEvidence) (time.Time, string, error) {
+	est := func(_ []GatewayQuotaEvidence) (time.Time, string, error) {
 		return time.Time{}, "", cause
 	}
-	evidence := []GCQuotaEvidence{
+	evidence := []GatewayQuotaEvidence{
 		{Usage: 0, Capacity: 100, ResetsAt: time.Time{}, Stale: false},
 	}
-	auth, err := PopulateGCAuth(GCTicket{ID: "t5", Gated: false}, evidence, est)
+	auth, err := PopulateGatewayAuth(GatewayTicket{ID: "t5", Gated: false}, evidence, est)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !errors.Is(err, ErrGCUsageEstimate) {
-		t.Error("error does not wrap ErrGCUsageEstimate")
+	if !errors.Is(err, ErrGatewayUsageEstimate) {
+		t.Error("error does not wrap ErrGatewayUsageEstimate")
 	}
 	if !errors.Is(err, cause) {
 		t.Error("error does not wrap cause")
 	}
 	if auth.ID != "" || auth.OwnerFlag || auth.GateOpen || auth.Model != "" || len(auth.SummaryOps) != 0 || len(auth.DigestNodes) != 0 || len(auth.Samples) != 0 {
-		t.Error("expected zero GCAuth on error")
+		t.Error("expected zero GatewayAuth on error")
 	}
 }

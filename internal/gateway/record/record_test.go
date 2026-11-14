@@ -10,7 +10,7 @@ import (
 
 func TestReadsCountsAndNames(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "gcproxy.jsonl")
+	path := filepath.Join(dir, "gatewayproxy.jsonl")
 	err := os.WriteFile(path, []byte("{\"name\":\"a\",\"count\":3}\n"), 0644)
 	if err != nil {
 		t.Fatal(err)
@@ -31,7 +31,7 @@ func TestReadsCountsAndNames(t *testing.T) {
 
 func TestDropsOtherFields(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "gcproxy.jsonl")
+	path := filepath.Join(dir, "gatewayproxy.jsonl")
 	err := os.WriteFile(path, []byte("{\"name\":\"a\",\"count\":3,\"text\":\"secret\"}\n"), 0644)
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +74,7 @@ func TestMissingFileEmpty(t *testing.T) {
 
 func TestMalformedLineErrors(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "gcproxy.jsonl")
+	path := filepath.Join(dir, "gatewayproxy.jsonl")
 	content := "{\"name\":\"a\",\"count\":3}\nnot json\n"
 	err := os.WriteFile(path, []byte(content), 0644)
 	if err != nil {
@@ -95,14 +95,14 @@ func TestReadsCorrectPath(t *testing.T) {
 	dir2 := t.TempDir()
 
 	// Create a valid file in dir2 (sibling dir)
-	path2 := filepath.Join(dir2, "gcproxy.jsonl")
+	path2 := filepath.Join(dir2, "gatewayproxy.jsonl")
 	err := os.WriteFile(path2, []byte("{\"name\":\"sibling\",\"count\":99}\n"), 0644)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// dir1 has gcproxy.jsonl
-	path1 := filepath.Join(dir1, "gcproxy.jsonl")
+	// dir1 has gatewayproxy.jsonl
+	path1 := filepath.Join(dir1, "gatewayproxy.jsonl")
 	err = os.WriteFile(path1, []byte("{\"name\":\"correct\",\"count\":1}\n"), 0644)
 	if err != nil {
 		t.Fatal(err)

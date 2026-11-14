@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-// TestQuotaMapA4 verifies that MapQuota("A4",95,false) returns Alloc{"A4",90,90},nil
+// TestQuotaMapAcctD verifies that MapQuota("A4",95,false) returns Alloc{"A4",90,90},nil
 // and that repeated requests succeed independently.
-func TestQuotaMapA4(t *testing.T) {
+func TestQuotaMapAcctD(t *testing.T) {
 	got, err := MapQuota("A4", 95, false)
 	if err != nil {
 		t.Fatalf("MapQuota(\"A4\", 95, false) returned error: %v", err)
@@ -27,9 +27,9 @@ func TestQuotaMapA4(t *testing.T) {
 	}
 }
 
-// TestEnforce90OnA4FullTilt verifies that A4 with pct 90 or 100 and fullTilt=true
+// TestEnforce90OnAcctDFullTilt verifies that A4 with pct 90 or 100 and fullTilt=true
 // returns Alloc{"A4",90,90} and nil error.
-func TestEnforce90OnA4FullTilt(t *testing.T) {
+func TestEnforce90OnAcctDFullTilt(t *testing.T) {
 	tests := []struct {
 		name string
 		pct  int
@@ -52,9 +52,9 @@ func TestEnforce90OnA4FullTilt(t *testing.T) {
 	}
 }
 
-// TestRejectA4Below90 verifies that A4 with pct 89 and either fullTilt value
+// TestRejectAcctDBelow90 verifies that A4 with pct 89 and either fullTilt value
 // returns zero allocation and errors.Is(err, ErrT0308).
-func TestRejectA4Below90(t *testing.T) {
+func TestRejectAcctDBelow90(t *testing.T) {
 	tests := []struct {
 		name     string
 		fullTilt bool

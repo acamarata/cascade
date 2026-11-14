@@ -12,7 +12,7 @@ func TestSentinelsWrapAndStayDistinct(t *testing.T) {
 	sentinels := []error{
 		ErrInvalidFlags,
 		ErrMissingRequired,
-		ErrGCUsageEstimate,
+		ErrGatewayUsageEstimate,
 	}
 	for i, s := range sentinels {
 		if s == nil || s.Error() == "" {

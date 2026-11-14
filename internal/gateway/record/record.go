@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 )
 
-// Record represents a single entry from the gcproxy.jsonl file.
+// Record represents a single entry from the gatewayproxy.jsonl file.
 // It only contains the name and count fields; any other fields
 // present in the JSON are dropped and never stored.
 type Record struct {
@@ -19,12 +19,12 @@ type Record struct {
 	Count int `json:"count"`
 }
 
-// ReadServiceRecord reads gcproxy.jsonl from the given dataHome directory
+// ReadServiceRecord reads gatewayproxy.jsonl from the given dataHome directory
 // and returns a slice of Record containing only counts and names.
 // A missing file returns an empty slice and no error.
 // A malformed line returns an error naming the line number.
 func ReadServiceRecord(dataHome string) ([]Record, error) {
-	path := filepath.Join(dataHome, "gcproxy.jsonl")
+	path := filepath.Join(dataHome, "gatewayproxy.jsonl")
 
 	f, err := os.Open(path)
 	if err != nil {

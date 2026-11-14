@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// TestQuotaMapA3 verifies MapQuota for account A3 and validation cases.
-func TestQuotaMapA3(t *testing.T) {
+// TestQuotaMapAcctC verifies MapQuota for account A3 and validation cases.
+func TestQuotaMapAcctC(t *testing.T) {
 	got, err := MapQuota("A3", 75, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -53,8 +53,8 @@ func TestQuotaMapA3(t *testing.T) {
 	}
 }
 
-// TestQuotaMapCO verifies MapQuota for account CO.
-func TestQuotaMapCO(t *testing.T) {
+// TestQuotaMapTertiary verifies MapQuota for account CO.
+func TestQuotaMapTertiary(t *testing.T) {
 	got, err := MapQuota("CO", 80, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

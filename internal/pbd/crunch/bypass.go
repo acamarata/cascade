@@ -9,13 +9,13 @@ import (
 var ErrD0583 = errors.New("D0583")
 
 // Route evaluates the operation type and returns the correct scheduler target.
-// It ensures crunch operations remain on gcsat/gcsched without passing through the Broker queue.
+// It ensures crunch operations remain on gatewaysat/gatewaysched without passing through the Broker queue.
 func Route(op string) (string, error) {
 	switch op {
 	case "crunch-op-a":
-		return "gcsat", nil
+		return "gatewaysat", nil
 	case "crunch-op-b":
-		return "gcsched", nil
+		return "gatewaysched", nil
 	case "broker-route":
 		return "", fmt.Errorf("%w: %s", ErrD0583, op)
 	default:
