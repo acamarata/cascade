@@ -3,6 +3,7 @@ package testkit_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -38,6 +39,9 @@ func TestWriteTestDesignationModesAndIdempotence(t *testing.T) {
 	second, err := os.ReadFile(path)
 	if err != nil || string(first) != string(second) {
 		t.Fatalf("second call changed the record (err %v)", err)
+	}
+	if runtime.GOOS == "windows" {
+		return // Windows reports no POSIX permission bits; the content checks above still ran
 	}
 	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatalf("file mode = %v, err %v; want 0600", info, err)
