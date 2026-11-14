@@ -1458,38 +1458,6 @@
     "symbol": "internal/nodes.HostKeyFingerprintFromFile"
   },
   {
-    "added_by_ticket": "P1-HRN-05c",
-    "caller_site": "cmd/cascade/guarded_mcp.go",
-    "expected_caller": "cmd/cascade/guarded_mcp.go, which P1-HRN-05e adds; retire this entry once that file calls ToolCapability",
-    "reason": "P1-HRN-05c ships the tool capability name and the server-side checker seam; the CLI checker that maps a tool to its policy capability is P1-HRN-05e.",
-    "retire_ticket": "P1-HRN-05e",
-    "symbol": "internal/mcp.ToolCapability"
-  },
-  {
-    "added_by_ticket": "P1-HRN-05c",
-    "caller_site": "cmd/cascade/mcp_profile.go",
-    "expected_caller": "cmd/cascade/mcp_profile.go, which P1-HRN-05e adds; retire this entry once that file calls ExecutiveMCPConfigJSON",
-    "reason": "P1-HRN-05c ships the compact-write MCP config; the profile surface that emits it is P1-HRN-05e.",
-    "retire_ticket": "P1-HRN-05e",
-    "symbol": "internal/mcp.ExecutiveMCPConfigJSON"
-  },
-  {
-    "added_by_ticket": "P1-HRN-05a",
-    "caller_site": "cmd/cascade/mcp_profile.go",
-    "expected_caller": "cmd/cascade/mcp_profile.go, which P1-HRN-05e adds; retire this entry once that file calls CompactAlias",
-    "reason": "The call-time checker of P1-HRN-05c filters by profile without resolving aliases; alias resolution for the served profile moves to the P1-HRN-05e profile surface.",
-    "retire_ticket": "P1-HRN-05e",
-    "symbol": "internal/mcp.CompactAlias"
-  },
-  {
-    "added_by_ticket": "P1-HRN-05a",
-    "caller_site": "cmd/cascade/mcp_profile.go",
-    "expected_caller": "cmd/cascade/mcp_profile.go, which P1-HRN-05e adds; retire this entry once that file calls ProfileMembers",
-    "reason": "The call-time checker of P1-HRN-05c checks the compact-write names directly; listing a profile's members moves to the P1-HRN-05e profile surface.",
-    "retire_ticket": "P1-HRN-05e",
-    "symbol": "internal/mcp.ProfileMembers"
-  },
-  {
     "added_by_ticket": "P1-HRN-08b",
     "caller_site": "cmd/cascade/fleet_tool_gate.go",
     "expected_caller": "cmd/cascade/fleet_tool_gate.go, which P1-HRN-08d adds; retire this entry once that file calls ToolGateCapability",
@@ -1592,5 +1560,37 @@
     "reason": "P1-NODE-16b ships the role status with its conflict kinds and tests; the doctor node-role mount reports it in P1-NODE-16f, which depends on it.",
     "retire_ticket": "P1-NODE-16f",
     "symbol": "internal/nodes.RoleStatus"
+  },
+  {
+    "added_by_ticket": "P1-TOP-07b",
+    "caller_site": "cmd/cascade/doctor_mounts_topology.go",
+    "expected_caller": "cmd/cascade/doctor_mounts_topology.go, the P1-TOP-07c mount of NewFreeDomainAbovePublicCheck; retire this entry once that file calls it",
+    "reason": "NewFreeDomainAbovePublicCheck ships with its tests in the leaf package internal/doctor/topologycheck; its first production caller is cmd/cascade/doctor_mounts_topology.go from P1-TOP-07c, which registers it in productionCheckRegistry and is not built yet.",
+    "retire_ticket": "P1-TOP-07c",
+    "symbol": "internal/doctor/topologycheck.NewFreeDomainAbovePublicCheck"
+  },
+  {
+    "added_by_ticket": "P1-TOP-07b",
+    "caller_site": "cmd/cascade/doctor_mounts_topology.go",
+    "expected_caller": "cmd/cascade/doctor_mounts_topology.go, the P1-TOP-07c mount of NewDiscoverDomainAbovePublicCheck; retire this entry once that file calls it",
+    "reason": "NewDiscoverDomainAbovePublicCheck ships with its tests in the leaf package internal/doctor/topologycheck; its first production caller is cmd/cascade/doctor_mounts_topology.go from P1-TOP-07c, which registers it in productionCheckRegistry and is not built yet.",
+    "retire_ticket": "P1-TOP-07c",
+    "symbol": "internal/doctor/topologycheck.NewDiscoverDomainAbovePublicCheck"
+  },
+  {
+    "added_by_ticket": "P1-TOP-07b",
+    "caller_site": "cmd/cascade/doctor_mounts_topology.go",
+    "expected_caller": "cmd/cascade/doctor_mounts_topology.go, the P1-TOP-07c mount of NewCredentialWithoutDomainCheck; retire this entry once that file calls it",
+    "reason": "NewCredentialWithoutDomainCheck ships with its tests in the leaf package internal/doctor/topologycheck; its first production caller is cmd/cascade/doctor_mounts_topology.go from P1-TOP-07c, which registers it in productionCheckRegistry and is not built yet.",
+    "retire_ticket": "P1-TOP-07c",
+    "symbol": "internal/doctor/topologycheck.NewCredentialWithoutDomainCheck"
+  },
+  {
+    "added_by_ticket": "P1-TOP-07b",
+    "caller_site": "cmd/cascade/doctor_mounts_topology.go",
+    "expected_caller": "cmd/cascade/doctor_mounts_topology.go, the P1-TOP-07c mount of NewDomainWithoutCredentialCheck; retire this entry once that file calls it",
+    "reason": "NewDomainWithoutCredentialCheck ships with its tests in the leaf package internal/doctor/topologycheck; its first production caller is cmd/cascade/doctor_mounts_topology.go from P1-TOP-07c, which registers it in productionCheckRegistry and is not built yet.",
+    "retire_ticket": "P1-TOP-07c",
+    "symbol": "internal/doctor/topologycheck.NewDomainWithoutCredentialCheck"
   }
 ]
