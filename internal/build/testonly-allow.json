@@ -1546,14 +1546,6 @@
     "symbol": "internal/providers/agents.ProjectEnvelope"
   },
   {
-    "added_by_ticket": "P1-NODE-16a",
-    "caller_site": "cmd/cascade/node_bind.go",
-    "expected_caller": "cmd/cascade/node_bind.go, which P1-NODE-16e changes; retire this entry once that file calls SupersedeBootstrap",
-    "reason": "P1-NODE-16ab ships the bootstrap supersede step with tests; the elevated cascade node bind calls it in P1-NODE-16e, which depends on it.",
-    "retire_ticket": "P1-NODE-16e",
-    "symbol": "internal/nodes.SupersedeBootstrap"
-  },
-  {
     "added_by_ticket": "P1-NODE-16b",
     "caller_site": "cmd/cascade/doctor_mounts_node_role.go",
     "expected_caller": "cmd/cascade/doctor_mounts_node_role.go, which P1-NODE-16f changes; retire this entry once that file calls RoleStatus",
@@ -1592,5 +1584,21 @@
     "reason": "NewDomainWithoutCredentialCheck ships with its tests in the leaf package internal/doctor/topologycheck; its first production caller is cmd/cascade/doctor_mounts_topology.go from P1-TOP-07c, which registers it in productionCheckRegistry and is not built yet.",
     "retire_ticket": "P1-TOP-07c",
     "symbol": "internal/doctor/topologycheck.NewDomainWithoutCredentialCheck"
+  },
+  {
+    "added_by_ticket": "P1-NODE-18e",
+    "caller_site": "internal/nodes/nodefacing_handler.go",
+    "expected_caller": "the node-facing registry mounts the node-originated dispatch verbs (claim, report, journal)",
+    "reason": "P1-NODE-18e takes the verbs off the owner registry; the node-facing mount is P1-NODE-18f",
+    "retire_ticket": "P1-NODE-18f",
+    "symbol": "internal/nodes.RegisterDispatchNodeHandlers"
+  },
+  {
+    "added_by_ticket": "P1-NODE-18e",
+    "caller_site": "cmd/cascade/wire_node_channel.go",
+    "expected_caller": "the daemon's node channel wiring registers the dispatch journal on the node-facing registry",
+    "reason": "P1-NODE-18e unmounts the journal from the owner registry; the node channel wiring is P1-NODE-18k",
+    "retire_ticket": "P1-NODE-18k",
+    "symbol": "internal/daemon.RegisterNodeDispatchJournal"
   }
 ]
