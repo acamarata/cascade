@@ -227,4 +227,5 @@ func mountNodeCLICmds(cmd *cobra.Command, deps nodeCLIDeps) {
 	cmd.AddCommand(newNodeRevokeCmd(deps))
 	cmd.AddCommand(newNodeUpgradeCmd(deps))
 	cmd.AddCommand(newNodeBindCmd(deps))
+	cmd.AddCommand(newNodeGitGateCmd(deps))
 }
