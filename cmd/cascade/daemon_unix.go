@@ -74,10 +74,11 @@ func composeDaemon(ctx context.Context, deps daemonDeps, observe registryObserve
 		return daemon.RunOptions{}, cleanups, err
 	}
 	cleanups = append(cleanups, closeStore)
+	// Before any role consumer: a fresh home becomes the controller (epoch 1); failure only logs.
+	bootstrapDaemonDesignation(ctx, deps, paths.DataDir(), logProvider.Logger())
 
-	// The bus closes after the join and the background cleanup and before
-	// the store: Close stops every delivery goroutine a subscriber left
-	// running (they read the store), so none outlives it.
+	// The bus closes after the join and the background cleanup and before the
+	// store: Close stops every delivery goroutine (they read the store).
 	bus := events.New(store, deps.Clock)
 	cleanups = append(cleanups, func() { _ = bus.Close() })
 	baseline := checkBootBaseline(ctx, cfg, paths.ConfigPath(), store, bus, deps.Clock, productionBaselineVerifier(paths.DataDir(), deps.Clock))
@@ -110,7 +111,6 @@ func composeDaemon(ctx context.Context, deps daemonDeps, observe registryObserve
 	cleanups = append(cleanups, cleanupBackground, joinRun)
 	wireCascadePAInstallHostDeps(store, pol.Queue, pol.Registry) // P1-E24-W5-S50-T4 (D1/D2)
 	plugins.SetBridgeApprovalQueue(pol.Queue)                    // P1-E23-W5-S48-T4 FIX-0
-
 	// withNodePlacement hands the placement engine its connection source: the
 	// controller-side tunnel registry this process holds (P1-E17-W4-S37-T1).
 	server, _, connections, err := buildRPCServer(bus, deps.Clock, logProvider.Logger(), settings, paths, memoryAdmin, store,
