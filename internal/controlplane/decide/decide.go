@@ -59,20 +59,7 @@ func Decide(q Question) (Verdict, error) {
 
 	id := computeID(q.Kind, q.Text)
 
-	for _, r := range q.Rules {
-		answer, matched := r(q)
-		if matched {
-			if answer != YES && answer != NO && answer != ESCALATE {
-				return Verdict{}, ErrBadQuestion
-			}
-			return Verdict{
-				Answer: answer,
-				ID:     id,
-			}, nil
-		}
-	}
-
-	return Verdict{ID: id}, nil
+	return invokeRules(q, id)
 }
 
 func computeID(kind, text string) string {
