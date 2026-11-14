@@ -7,7 +7,8 @@
 // required; --all cannot be combined with a filter. A --scope value is
 // validated with internal/learn.ParseScopeKey before any dial.
 //
-// Outputs: "deleted N rows changed=<bool>" in human mode; the versioned envelope in
+// Outputs: "deleted N rows changed=<bool>" in human mode, or "no change
+// (0 observations matched)" when nothing matched; the versioned envelope in
 // --json mode.
 //
 // Constraints: the reset is explicit by flag and never prompts, so
@@ -40,8 +41,12 @@ type learnResetResult struct {
 	Changed     bool `json:"changed"`
 }
 
-// String renders the reset outcome in one line.
+// String renders the reset outcome in one line. A reset that matched no
+// row says so plainly, so a repeated reset reads as the no-op it is.
 func (r learnResetResult) String() string {
+	if r.RowsDeleted == 0 && !r.Changed {
+		return "no change (0 observations matched)"
+	}
 	return fmt.Sprintf("deleted %d rows changed=%t", r.RowsDeleted, r.Changed)
 }
 

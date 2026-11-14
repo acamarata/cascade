@@ -1,0 +1,25 @@
+# testscript: executable
+#
+# fleet_learn.txtar: the daemonless legs of `cascade fleet learn`.
+# Every line below runs without a daemon; the daemon legs live in the
+# integration test over a real socket.
+
+# The group lists its three verbs.
+exec cascade fleet learn --help
+stdout 'status'
+stdout 'explain'
+stdout 'reset'
+
+# An unscoped reset is refused before any dial.
+! exec cascade fleet learn reset
+stderr 'refusing an unscoped reset'
+
+# --all cannot be combined with a filter.
+! exec cascade fleet learn reset --all --scope global
+stderr 'cannot be combined'
+
+# explain takes exactly two positional arguments.
+! exec cascade fleet learn explain a b c
+
+# A malformed scope key is refused locally, before any dial.
+! exec cascade fleet learn explain bogus:thing code

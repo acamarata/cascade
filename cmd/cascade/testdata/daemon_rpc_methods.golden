@@ -70,6 +70,9 @@ job.list
 job.retry
 job.show
 jobs.evidence.list
+learn.explain
+learn.reset
+learn.status
 lease.list
 lease.release
 mcp.capability.check
