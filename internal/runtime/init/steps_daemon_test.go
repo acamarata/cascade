@@ -9,12 +9,132 @@ package init
 //   that does not run in most reviews.
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/nodes"
+	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
+
+// TestMain keeps every wizard run in this package off the host keychain:
+// the identity behind the controller designation is minted into a file
+// vault under the test's own temp data directory.
+func TestMain(m *testing.M) {
+	controllerIdentity = func(ctx context.Context, dataDir string) (nodes.Identity, error) {
+		keystore, err := nodes.NewNodeKeystore(secrets.Config{
+			Service: "cascade-init-test", Dir: filepath.Join(dataDir, "test-vault"), ForceFileVault: true,
+		})
+		if err != nil {
+			return nodes.Identity{}, err
+		}
+		return nodes.EnsureLocalIdentity(ctx, nodes.NewFileSelfIdentityBackend(dataDir), keystore, rand.Reader)
+	}
+	os.Exit(m.Run())
+}
+
+// TestInitWritesDesignation: a fresh `cascade init --yes` leaves the
+// designation at epoch 1 and 0600, the controller role resolves only
+// through it, and a replay leaves its bytes and mtime unchanged.
+func TestInitWritesDesignation(t *testing.T) {
+	w, _, _, _ := fixture(t, Options{Mode: ModeYes}, nil)
+	dataDir := filepath.Dir(w.deps.LocalDBPath)
+	binding := nodes.NewFileControllerBindingBackend(dataDir)
+	if role, err := nodes.ResolveRole(binding); err == nil {
+		t.Fatalf("a fresh home resolved role %q before init wrote anything", role)
+	}
+	if _, err := w.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	path := filepath.Join(dataDir, "nodes", "controller_designation.json")
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("init left no designation: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("designation mode = %o, want 600", perm)
+	}
+	d, ok, err := nodes.NewFileDesignationBackend(dataDir).Load()
+	if err != nil || !ok || d.Epoch != 1 || d.Reason != "init" {
+		t.Fatalf("designation = %+v ok=%v err=%v, want epoch 1 reason init", d, ok, err)
+	}
+	if role, err := nodes.ResolveRole(binding); err != nil || role != nodes.RoleController {
+		t.Fatalf("ResolveRole after init = %q, %v; want controller", role, err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if role, err := nodes.ResolveRole(binding); err == nil {
+		t.Fatalf("without the designation the home still resolved %q", role)
+	}
+	if err := w.designateController(context.Background()); err != nil {
+		t.Fatalf("re-designate: %v", err)
+	}
+	assertReplayWritesNothing(t, w.deps, path)
+}
+
+// assertReplayWritesNothing replays init over a designated home and
+// checks the designation's bytes and mtime are untouched.
+func assertReplayWritesNothing(t *testing.T, deps Deps, path string) {
+	t.Helper()
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read designation: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := New(deps, Options{Mode: ModeYes}).Run(context.Background()); err != nil {
+		t.Fatalf("replay: %v", err)
+	}
+	if err := New(deps, Options{Mode: ModeYes}).designateController(context.Background()); err != nil {
+		t.Fatalf("replayed designation: %v", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := os.Stat(path)
+	if err != nil || !again.ModTime().Equal(info.ModTime()) || !bytes.Equal(before, after) {
+		t.Fatalf("a replay rewrote the designation (err=%v)", err)
+	}
+}
+
+// TestInitRefusesDesignationOnABoundNode: a home already bound to a
+// controller is a node; init stops with KindConflict, writes no
+// designation and installs no daemon.
+func TestInitRefusesDesignationOnABoundNode(t *testing.T) {
+	w, rec, _, _ := fixture(t, Options{Mode: ModeYes}, nil)
+	dataDir := filepath.Dir(w.deps.LocalDBPath)
+	controller, _, err := nodes.GenerateIdentity(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = nodes.NewFileControllerBindingBackend(dataDir).Save(nodes.ControllerBinding{
+		Endpoint: "controller.invalid:7443", EnrollmentID: "enr_test",
+		ControllerPubKeyB64: base64.StdEncoding.EncodeToString(controller.PubKey),
+	})
+	if err != nil {
+		t.Fatalf("seed binding: %v", err)
+	}
+	_, err = w.Run(context.Background())
+	if kind, _ := cascade.KindOf(err); kind != cascade.KindConflict {
+		t.Fatalf("Run on a bound node = %v, want KindConflict", err)
+	}
+	if rec.installed {
+		t.Error("the daemon was installed on a home that refused designation")
+	}
+	if _, ok, _ := nodes.NewFileDesignationBackend(dataDir).Load(); ok {
+		t.Error("a designation was written next to a binding")
+	}
+}
 
 // TestWizardDaemonStepPerPlatform drives step 8 on every platform this
 // build compiles for, over the injected GOOS seam.

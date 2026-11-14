@@ -13,7 +13,13 @@ package init
 
 import (
 	"context"
+	"crypto/rand"
+	"path/filepath"
+	"strings"
 
+	"github.com/acamarata/cascade/internal/nodes"
+	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/internal/secrets"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -59,12 +65,52 @@ func (w *Wizard) stepDaemon(ctx context.Context, state *State) error {
 		w.plan("enroll the elevation helper's key in the daemon trust store")
 		return nil
 	}
+	if err := w.designateController(ctx); err != nil {
+		return err
+	}
 	if err := w.deps.Service.Install(ctx); err != nil {
 		return cascade.Wrap(cascade.KindUnavailable, err, "cascade init: install the daemon service")
 	}
 	state.DaemonInstalled = true
 	w.say("   installed")
 	return w.enrollHelper(ctx, state)
+}
+
+// controllerIdentity resolves this machine's node identity: the same
+// EnsureLocalIdentity over the node keystore `node serve` and `node
+// enroll` use, so the designation names the key the daemon signs with.
+// A package variable only so this package's tests keep custody in a
+// temp file vault instead of the host keychain.
+var controllerIdentity = func(ctx context.Context, dataDir string) (nodes.Identity, error) {
+	keystore, err := nodes.NewNodeKeystore(secrets.Config{Dir: dataDir})
+	if err != nil {
+		return nodes.Identity{}, err
+	}
+	return nodes.EnsureLocalIdentity(ctx, nodes.NewFileSelfIdentityBackend(dataDir), keystore, rand.Reader)
+}
+
+// designateController writes this home's controller designation (epoch
+// 1, reason init) before the daemon is installed, so the daemon resolves
+// its controller role from a persisted record and never from an absent
+// one. nodes.Designate is idempotent: a replay finds the record for this
+// node and writes nothing. A home enrolled as a node, or one designated
+// for another node, is a KindConflict that stops init.
+func (w *Wizard) designateController(ctx context.Context) error {
+	if strings.TrimSpace(w.deps.LocalDBPath) == "" {
+		return cascade.New(cascade.KindInvalidInput, "cascade init: no data directory to write the controller designation in")
+	}
+	dataDir := filepath.Dir(w.deps.LocalDBPath)
+	self, err := controllerIdentity(ctx, dataDir)
+	if err != nil {
+		return cascade.Wrap(cascade.KindUnavailable, err, "cascade init: resolve this node's identity")
+	}
+	d, err := nodes.Designate(ctx, nodes.NewFileDesignationBackend(dataDir),
+		nodes.NewFileControllerBindingBackend(dataDir), self, rand.Reader, runtime.NewSystemClock())
+	if err != nil {
+		return err
+	}
+	w.say("   controller designated: epoch %d", d.Epoch)
+	return nil
 }
 
 // daemonSkipReason reports why step 8 installs nothing, if it does not.

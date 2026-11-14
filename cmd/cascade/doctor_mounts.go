@@ -74,6 +74,7 @@ func productionCheckRegistry(ctx context.Context, paths runtime.PathProvider, cl
 	// check reports a nil store as StatusError rather than as "no nodes
 	// enrolled" - an unreadable subject is never silently OK.
 	reg.Register(nodes.NewHealthCheck(nodesRecordStoreFor(paths, clock), clock, 0))
+	reg.Register(controllerRoleCheck{paths: paths}) // doctor_mounts_node_role.go
 	reg.Register(targets.NewRcloneDoctorCheck(nil)) // backup (P1-E19-W4-S41-T3)
 	// chat_topics_engine (P1-E21-W5-S46-T4 D2): shares chat_topics_
 	// engine.go's own resolver functions with wireChatHandlers' real

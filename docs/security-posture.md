@@ -14,6 +14,8 @@ See also [effect records: intent before, outcome after](security-posture/effect-
 
 See also [control sockets: owner-only, 0600, refuse what is not ours](security-posture/control-sockets.md).
 
+See also [controller designation: one controller, never by default](security-posture/controller-designation.md).
+
 See also [process-plugin trust: granted only by a witnessed install](security-posture/plugin-trust.md).
 
 See also [caller principals: who is calling the daemon, and what each caller may reach](security-posture/caller-principal.md).
