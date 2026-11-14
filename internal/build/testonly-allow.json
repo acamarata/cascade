@@ -1579,14 +1579,6 @@
   },
   {
     "added_by_ticket": "P1-NODE-16a",
-    "caller_site": "cmd/cascade/daemon_unix.go",
-    "expected_caller": "cmd/cascade/daemon_unix.go, which P1-NODE-16d changes; retire this entry once that file calls BootstrapDesignation",
-    "reason": "P1-NODE-16ab ships the first-start designation bootstrap with tests; composeDaemon calls it in P1-NODE-16d, which depends on it.",
-    "retire_ticket": "P1-NODE-16d",
-    "symbol": "internal/nodes.BootstrapDesignation"
-  },
-  {
-    "added_by_ticket": "P1-NODE-16a",
     "caller_site": "cmd/cascade/node_bind.go",
     "expected_caller": "cmd/cascade/node_bind.go, which P1-NODE-16e changes; retire this entry once that file calls SupersedeBootstrap",
     "reason": "P1-NODE-16ab ships the bootstrap supersede step with tests; the elevated cascade node bind calls it in P1-NODE-16e, which depends on it.",
