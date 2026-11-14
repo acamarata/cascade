@@ -234,7 +234,7 @@ func newApprovalQueueForTest(t *testing.T) (*policy.StoreApprovals, func(jobID, 
 	}
 	mintScope := func(jobID, tree, ver string) (string, string) {
 		res, err := queue.Enqueue(ctx, policy.EnqueueRequest{
-			Subject: policy.Subject{Kind: policy.SubjectAgent, ID: "lane-a"}, Capability: approvalCap.Name,
+			Subject: policy.Subject{Kind: policy.SubjectUser, ID: "cascade-operator"}, Capability: approvalCap.Name,
 			Level: policy.L2, Action: ApprovalScopeAction(jobID, tree, ver), Summary: "complete " + jobID,
 		})
 		if err != nil {

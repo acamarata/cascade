@@ -210,10 +210,10 @@ func (cp *CompletionPolicy) checkApproval(ctx context.Context, req TransitionReq
 	if cp.deps.Approvals == nil {
 		return cascade.New(cascade.KindPermissionDenied, "jobs: no approval queue configured")
 	}
-	_, err := cp.deps.Approvals.ConsumeToken(ctx, policy.ConsumeRequest{
+	res, err := cp.deps.Approvals.ConsumeToken(ctx, policy.ConsumeRequest{
 		RequestID: req.ApprovalRequestID, Nonce: req.ApprovalNonce, Action: ApprovalScopeAction(req.Job.ID, req.TreeHash, req.PolicyVersion),
 	})
-	return err
+	return requireHumanPrincipal(res, err)
 }
 
 // commit re-reads the ledger cursor in the SAME transaction as the state
