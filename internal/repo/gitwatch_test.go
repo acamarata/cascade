@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/acamarata/cascade/internal/testkit"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
@@ -192,7 +193,7 @@ func TestWatchSkipsExcludedDirs(t *testing.T) {
 				t.Fatalf("unexpected watch %s", d)
 			}
 			seen[d] = true
-		case <-time.After(30 * time.Second):
+		case <-time.After(testkit.Deadline(t, 30*time.Second)):
 			t.Fatalf("a created directory was not followed: %v", seen)
 		}
 	}
@@ -270,7 +271,7 @@ func TestWatcherClosesOnCancel(t *testing.T) {
 		}
 	})
 	got := openFDs(t)
-	for deadline := time.After(10 * time.Second); got > base; got = openFDs(t) {
+	for deadline := time.After(testkit.Deadline(t, 10*time.Second)); got > base; got = openFDs(t) {
 		goruntime.GC() // descriptors other tests left to finalizers
 		select {
 		case <-deadline:

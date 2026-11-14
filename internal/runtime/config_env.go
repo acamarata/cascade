@@ -116,6 +116,7 @@ var reservedEnvVars = map[string]bool{
 	"CASCADE_IDENTIFIER_PATTERNS_FILE":    true,
 	"CASCADE_MEMORY_REVIEW_ACTION":        true,
 	"CASCADE_TESTKIT_UPDATE_GOLDEN":       true,
+	"CASCADE_TEST_DEADLINE_SCALE":         true,
 	"CASCADE_HYGIENE_SWEEP_RANGE":         true,
 	"CASCADE_HYGIENE_COMMIT_RANGE":        true,
 

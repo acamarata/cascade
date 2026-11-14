@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -64,7 +65,7 @@ func TestAntigravityGeneratesJobIDAndReportsTerminal(t *testing.T) {
 	d, spec := kit(t)
 	spec.JobID = ""
 	ctx := context.Background()
-	r, err := d.Spawn(ctx, spec)
+	r, err := spawnWithin(ctx, d, spec, spawnLimit(10*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,4 +132,27 @@ func requireProcessGroups(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("native process groups require unix")
 	}
+}
+
+// spawnWithin retries a Spawn that failed to start its child (fork or exec
+// refused under machine load) until limit passes; any other error returns at once.
+func spawnWithin(ctx context.Context, d *ag.Driver, spec provider.AgentJobSpec, limit time.Duration) (provider.SpawnResult, error) {
+	end := time.Now().Add(limit)
+	for {
+		r, err := d.Spawn(ctx, spec)
+		if !errors.Is(err, ag.ErrStart) || time.Now().After(end) {
+			return r, err
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// spawnLimit stretches base by CASCADE_TEST_DEADLINE_SCALE. This package's
+// tests may not import an internal/ path (noInternalImports), so it cannot
+// use internal/testkit.Deadline and mirrors only its environment scale.
+func spawnLimit(base time.Duration) time.Duration {
+	if v, err := strconv.ParseFloat(os.Getenv("CASCADE_TEST_DEADLINE_SCALE"), 64); err == nil && v > 1 {
+		return time.Duration(float64(base) * v)
+	}
+	return base
 }

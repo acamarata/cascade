@@ -16,10 +16,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/acamarata/cascade/internal/testkit"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -143,7 +145,7 @@ func TestProbeFailures(t *testing.T) {
 		f := newFx(t)
 		f.initDefault = []byte(`{"type":"assistant"}`)
 		cfg := f.config()
-		cfg.ProbeTimeout = 2 * time.Second
+		cfg.ProbeTimeout = testkit.Deadline(t, 2*time.Second)
 		spawnRefused(t, f, cfg, f.spec(), provider.ErrHarnessIncompatible, "no system/init event")
 	})
 	t.Run("hang past the timeout", func(t *testing.T) {
@@ -151,9 +153,9 @@ func TestProbeFailures(t *testing.T) {
 		pidFile := filepath.Join(f.dir, "probe-pid")
 		f.versionBlock = "echo $$ > " + pidFile + "; exec sleep 30"
 		cfg := f.config()
-		cfg.ProbeTimeout = 300 * time.Millisecond
+		cfg.ProbeTimeout = testkit.Deadline(t, 300*time.Millisecond)
 		spawnRefused(t, f, cfg, f.spec(), provider.ErrHarnessIncompatible, "timed out")
-		pid := readPid(t, pidFile)
+		pid := readPidWithin(t, pidFile, testkit.Deadline(t, 5*time.Second))
 		eventually(t, "the timed-out probe to die", func() bool { return !alive(pid) })
 	})
 	t.Run("binary removed after New", func(t *testing.T) {
@@ -187,4 +189,19 @@ func TestInitShapeAndRefusalUnits(t *testing.T) {
 	if !nonEmptyJSON(json.RawMessage(`[1]`)) {
 		t.Fatal("nonEmptyJSON([1]) = false")
 	}
+}
+
+// readPidWithin polls for a pid file for up to limit and returns its pid.
+func readPidWithin(t *testing.T, p string, limit time.Duration) int {
+	t.Helper()
+	end := time.Now().Add(limit)
+	for time.Now().Before(end) {
+		b, err := os.ReadFile(p)
+		if n, cerr := strconv.Atoi(strings.TrimSpace(string(b))); err == nil && cerr == nil && n > 0 {
+			return n
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for pid file %s", filepath.Base(p))
+	return 0
 }
