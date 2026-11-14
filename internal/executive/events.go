@@ -80,6 +80,9 @@ const (
 // wakeEngineProducer names the producer of the three executive-group kinds.
 const wakeEngineProducer = "wake engine"
 
+// escalationProducer names the producer of exec.ESCALATION.
+const escalationProducer = "escalation ladder"
+
 // noProducer marks an exec.* kind no shipped component produces yet.
 const noProducer = "none"
 
@@ -140,9 +143,11 @@ func ProducerRows() []ProducerRow {
 		if mapped[k] {
 			continue
 		}
-		switch k { //nolint:exhaustive // only the three wake kinds have a live producer; every other exec kind is dormant through the default
+		switch k { //nolint:exhaustive // only the three wake kinds and the escalation ladder have a live producer; every other exec kind is dormant through the default
 		case KindT0WakeRequested, KindT0Awake, KindT0Sleeping:
 			out = append(out, ProducerRow{Exec: k, Producer: wakeEngineProducer, Live: true})
+		case KindEscalation:
+			out = append(out, ProducerRow{Exec: k, Producer: escalationProducer, Live: true})
 		default:
 			out = append(out, ProducerRow{Exec: k, Producer: noProducer, Live: false})
 		}

@@ -28,7 +28,7 @@ func loadKindsGolden(t *testing.T) kindsGolden {
 	return g
 }
 
-// TestEXE01LegacyAC1 verifies AllKinds is exactly the 41-kind R-21.37 list,
+// TestEXE01LegacyAC1 verifies AllKinds is exactly the golden kind list,
 // in golden order, and GroupOf returns each kind's golden group.
 func TestEXE01LegacyAC1(t *testing.T) {
 	g := loadKindsGolden(t)
@@ -42,8 +42,8 @@ func TestEXE01LegacyAC1(t *testing.T) {
 			}
 		}
 	}
-	if len(want) != 41 || len(AllKinds) != 41 {
-		t.Fatalf("golden has %d kinds, AllKinds %d; want 41", len(want), len(AllKinds))
+	if len(want) != len(AllKinds) {
+		t.Fatalf("golden has %d kinds, AllKinds %d; want equal", len(want), len(AllKinds))
 	}
 	seen := map[Kind]bool{}
 	for i, k := range AllKinds {

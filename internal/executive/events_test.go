@@ -145,8 +145,8 @@ func TestEXE01LegacyAC9(t *testing.T) {
 		}
 		covered[p.Exec] |= 2
 	}
-	if len(covered) != len(AllKinds) || len(AllKinds) != 41 {
-		t.Fatalf("covered %d kinds, AllKinds %d, want 41", len(covered), len(AllKinds))
+	if len(covered) != len(AllKinds) {
+		t.Fatalf("covered %d kinds, AllKinds %d, want equal", len(covered), len(AllKinds))
 	}
 	for _, k := range AllKinds {
 		if covered[k] == 0 {

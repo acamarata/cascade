@@ -70,6 +70,17 @@
       "subject_id"
     ]
   },
+  "exec.ESCALATION": {
+    "version": 1,
+    "type": "EscalationPayload",
+    "fields": [
+      "from_job",
+      "kind",
+      "summary",
+      "step",
+      "outcome"
+    ]
+  },
   "exec.EVIDENCE_ADDED": {
     "version": 1,
     "type": "ArtifactPayload",

@@ -39,6 +39,7 @@ var groupPayloads = map[KindGroup]reflect.Type{
 	GroupExecutive:  reflect.TypeOf(ExecutivePayload{}),
 	GroupSafety:     reflect.TypeOf(SafetyPayload{}),
 	GroupAcceptance: reflect.TypeOf(ProjectPayload{}),
+	GroupEscalation: reflect.TypeOf(EscalationPayload{}),
 }
 
 // kindPayloads holds the kinds whose body differs from their group's.
