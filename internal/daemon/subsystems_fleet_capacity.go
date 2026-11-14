@@ -178,7 +178,8 @@ func (c *fleetCapacity) buildFleet(d FleetRuntimeDeps, r *FleetRuntime) error {
 		Selector: capacity.NewTierPolicySelector(p.Policy), Scorer: p.Scorer.For, Reserver: r.res.reserver, Reservations: r.res.resStore,
 		Jobs: r.res.jobs, Decisions: LearnDecisionRecorder{Writer: learn.SQLiteSchedulerDecisionWriter{}}, DomainOf: p.Domains.DomainOf, Place: p.Placer.Place,
 		ControllerNodeID: p.ControllerNodeID, RestrictedPermits: permits, Clock: d.Clock,
-		TTL: time.Duration(jobs.DefaultLeaseDefaults().TTLSeconds) * time.Second,
+		Floors: []capacity.LaneFilter{capacity.NewCeilingFloor(capacity.RegistryLaneCeilings(r.Topology(), permits))},
+		TTL:    time.Duration(jobs.DefaultLeaseDefaults().TTLSeconds) * time.Second,
 	}
 	c.fleet, err = capacity.NewFleet(p.Deps)
 	return err
