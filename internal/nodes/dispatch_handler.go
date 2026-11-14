@@ -206,14 +206,24 @@ func (d *Dispatcher) JournalDepsFor(sink NodeStreamAppender) JournalStreamDeps {
 	return JournalStreamDeps{Attempts: d.attempts, Sink: sink}
 }
 
-// The two verbs the NODE calls over its own tunnel. They live on the
-// controller's registry because the D-24 tunnel is a reverse forward: the
-// node connects out and its calls arrive here (dispatch_rendezvous.go).
+// The two verbs the NODE calls over its own tunnel. The D-24 tunnel is a
+// reverse forward: the node connects out and its calls arrive at the
+// controller (dispatch_rendezvous.go). They are node-originated, so they
+// belong on the node-facing registry and never on the owner registry.
 const (
 	// DispatchClaimMethod is how a node asks for the work placed on it.
 	DispatchClaimMethod = "node.dispatch.claim"
 	// DispatchReportMethod is how a node returns its signed result frame.
 	DispatchReportMethod = "node.dispatch.report"
+)
+
+// The node-originated dispatch verbs are AccessNode: the owner registry
+// refuses them by class, so a forwarded connection that reached the owner
+// socket still could not call them.
+var (
+	_ = rpc.DeclareAccess(DispatchClaimMethod, rpc.AccessNode)
+	_ = rpc.DeclareAccess(DispatchReportMethod, rpc.AccessNode)
+	_ = rpc.DeclareAccess(DispatchJournalMethod, rpc.AccessNode)
 )
 
 // ClaimRequest identifies the node asking for work.

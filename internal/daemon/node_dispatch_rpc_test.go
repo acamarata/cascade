@@ -22,8 +22,9 @@ func configuredSection() nodes.Section {
 	return nodes.Section{DispatchRepoRoot: "/srv/work", DispatchRemote: "/srv/remote.git"}
 }
 
-// TestTheDispatchVerbsAreMounted proves the composition root registers all
-// of them; a verb that is never mounted is engine nobody can reach.
+// TestTheDispatchVerbsAreMounted proves the owner registry carries the
+// controller-initiated node.dispatch and none of the node-originated verbs:
+// claim, report and journal are AccessNode and never go on it.
 func TestTheDispatchVerbsAreMounted(t *testing.T) {
 	registry := rpc.NewRegistry()
 	dispatcher, rendezvous := RegisterNodeDispatchHandlers(
@@ -35,22 +36,14 @@ func TestTheDispatchVerbsAreMounted(t *testing.T) {
 	if dispatcher == nil || rendezvous == nil {
 		t.Fatal("the composition returned no dispatcher or rendezvous")
 	}
-	RegisterNodeDispatchJournal(registry, dispatcher, nil)
-
+	if !registry.Registered(nodes.DispatchMethod) {
+		t.Errorf("%s is not mounted on the owner registry", nodes.DispatchMethod)
+	}
 	for _, method := range []string{
-		nodes.DispatchMethod, nodes.DispatchClaimMethod,
-		nodes.DispatchReportMethod, nodes.DispatchJournalMethod,
+		nodes.DispatchClaimMethod, nodes.DispatchReportMethod, nodes.DispatchJournalMethod,
 	} {
-		req, errObj := rpc.Parse([]byte(`{"jsonrpc":"2.0","method":"` + method + `","params":{},"id":1}`))
-		if errObj != nil {
-			t.Fatalf("Parse(%s): %+v", method, errObj)
-		}
-		// Every call here is expected to FAIL on its own arguments; what
-		// is asserted is that it was not rejected as an unknown method.
-		if _, errObj := registry.Dispatch(context.Background(), req); errObj != nil &&
-			strings.Contains(strings.ToLower(errObj.Message), "method") &&
-			strings.Contains(strings.ToLower(errObj.Message), "not") {
-			t.Errorf("%s is not mounted: %+v", method, errObj)
+		if registry.Registered(method) {
+			t.Errorf("%s is mounted on the owner registry; it is node-originated", method)
 		}
 	}
 }

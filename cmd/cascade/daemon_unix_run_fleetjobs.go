@@ -66,22 +66,18 @@ func wireFleetAndNodeHandlers(registry *rpc.Registry, store provider.Store, cloc
 	}
 	daemon.RegisterSupervisorHandler(registry, store, clock, bus, metricsReg, nil)
 	daemon.RegisterNodeUpgradeHandler(registry, paths, clock)
-	// node.dispatch + the two verbs the NODE calls back over its own
-	// tunnel (P1-E17-W4-S37-T2, see internal/daemon/node_dispatch_rpc.go's
-	// header). The rendezvous is returned but not held here: the node
-	// side reaches it through the registry, which is the only path a
-	// dispatch report can arrive by.
-	dispatcher, _ := daemon.RegisterNodeDispatchHandlers(
+	// node.dispatch only (see internal/daemon/node_dispatch_rpc.go's
+	// header). The node-originated claim/report/journal verbs are AccessNode
+	// and are not mounted on this owner registry; until the node channel is
+	// wired they are mounted nowhere. The dispatch journal still backs the
+	// recovery path through RecoveryStores.
+	daemon.RegisterNodeDispatchHandlers(
 		registry,
 		nodes.NewRecordStore(nodes.NewFileRecordBackend(paths.DataDir()), clock),
 		clock,
 		func() (nodes.Section, error) { return settings.Nodes, nil },
 		daemon.RecoveryStores{Journal: dispatchJournal, Attention: attention},
 	)
-	// The journal-stream verb rides the SAME fencing register, so a
-	// streamed record is fenced against the very attempt the ship leg
-	// minted for it.
-	daemon.RegisterNodeDispatchJournal(registry, dispatcher, dispatchJournal)
 	// The returned *sql.DB is intentionally not closed here: this
 	// composition root does not yet track per-registration close hooks
 	// (registerContextEngineHandlers' own connections have the identical

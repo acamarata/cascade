@@ -85,9 +85,6 @@ memory.soul.edit
 memory.soul.export
 memory.soul.show
 node.dispatch
-node.dispatch.claim
-node.dispatch.journal
-node.dispatch.report
 node.upgrade
 notify.stats
 pa.pair_code

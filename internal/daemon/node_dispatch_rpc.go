@@ -1,14 +1,15 @@
 // Purpose: the daemon composition root's dispatch wiring — the controller
-//   entry point (node.dispatch) and the two verbs the NODE calls back over
-//   its own tunnel (node.dispatch.claim / node.dispatch.report), all over
-//   one process-lifetime fencing register.
+//   entry point (node.dispatch) on the owner registry, and the state the
+//   node-originated verbs (node.dispatch.claim / .report / .journal) share
+//   with it, all over one process-lifetime fencing register.
 // Inputs: the daemon's shared *rpc.Registry, its runtime.PathProvider and
 //   runtime.Clock.
-// Outputs: the three verbs mounted over a real internal/nodes dispatch
-//   engine, closing the same wiring gap node_upgrade_rpc.go closed for
-//   node.upgrade: every symbol below had a test caller only until this file.
+// Outputs: node.dispatch mounted over a real internal/nodes dispatch
+//   engine, plus the dispatcher and rendezvous the node-facing registry
+//   mounts the node-originated verbs over. Those verbs are AccessNode and
+//   never go on the owner registry.
 // Constraints: the fencing register and the rendezvous are built ONCE, here,
-//   and shared by all three verbs. That is the whole point of the file: a
+//   and shared by every dispatch verb. That is the whole point of the file: a
 //   per-call register hands out attempt 1 every time, so nothing ever
 //   supersedes anything and ErrStaleAttempt can never fire — fencing would
 //   be present in the code and absent in fact.
@@ -62,8 +63,8 @@ func (execGitRunner) Run(ctx context.Context, dir string, args ...string) (strin
 	return stdout.String(), nil
 }
 
-// RegisterNodeDispatchHandlers mounts the dispatch verbs on registry and
-// returns the shared dispatcher and the rendezvous the node reports
+// RegisterNodeDispatchHandlers mounts node.dispatch on the owner registry
+// and returns the shared dispatcher and the rendezvous the node reports
 // through. The dispatcher is returned so the journal verb can be mounted
 // over the SAME fencing register (RegisterNodeDispatchJournal); fencing a
 // streamed record against a different register than the one that minted
@@ -86,7 +87,10 @@ func RegisterNodeDispatchHandlers(
 		func(_ context.Context, nodeID string) (nodes.ShipDeps, nodes.RequeueDeps, nodes.DeviceRecord, error) {
 			return resolveDispatchDeps(dispatcher, rendezvous, records, clock, config, recovery, nodeID)
 		})
-	nodes.RegisterDispatchNodeHandlers(registry, rendezvous)
+	// node.dispatch.claim and node.dispatch.report are node-originated and
+	// are NOT mounted here: the owner registry carries only the
+	// controller-initiated verb. The rendezvous is returned so the
+	// node-facing registry can mount them over this same instance.
 	return dispatcher, rendezvous
 }
 
@@ -263,6 +267,9 @@ func (s journalStreamSink) AppendNodeStream(ctx context.Context, entityID, opera
 
 // RegisterNodeDispatchJournal mounts the journal-stream verb over store,
 // fenced against the same register the ship leg mints attempts from.
+//
+// registry must be the node-facing registry: node.dispatch.journal is
+// AccessNode and the owner registry refuses it by class.
 func RegisterNodeDispatchJournal(registry *rpc.Registry, d *nodes.Dispatcher, store *journal.SQLiteStore) {
 	nodes.RegisterDispatchJournalHandler(registry, d.JournalDepsFor(journalStreamSink{store: store}))
 }
