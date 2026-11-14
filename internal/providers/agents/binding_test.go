@@ -35,17 +35,28 @@ func fakeBinding(id string) Binding {
 // sameCred compares by field, so a map field added to CredentialSpec later keeps this file compiling.
 func sameCred(a, b CredentialSpec) bool { return a.Class == b.Class && a.KeyVar == b.KeyVar }
 
+// claudeIndex is the claude row's position in a sorted listing, or -1.
+func claudeIndex(bs []Binding) int {
+	for i, b := range bs {
+		if b.Harness == HarnessClaude {
+			return i
+		}
+	}
+	return -1
+}
+
 func noFactory(SpawnSite) (provider.AgentProvider, error) { return nil, nil }
 
 func TestBindingsListingSortedCopy(t *testing.T) {
 	got := Bindings()
-	if len(got) == 0 || got[0].Harness != HarnessClaude {
+	ci := claudeIndex(got)
+	if ci < 0 {
 		t.Fatalf("Bindings() = %+v, want the claude row", got)
 	}
-	got[0].Harness, got[0].PluginID = "mutated", "mutated"
-	got[0].Credentials[0].KeyVar = "MUTATED"
-	got[0].Binaries[0] = "mutated"
-	again := Bindings()[0]
+	got[ci].Harness, got[ci].PluginID = "mutated", "mutated"
+	got[ci].Credentials[0].KeyVar = "MUTATED"
+	got[ci].Binaries[0] = "mutated"
+	again := Bindings()[ci]
 	if again.Harness != HarnessClaude || again.PluginID != "cascade-claude" || again.Credentials[0].KeyVar != "CLAUDE_CODE_OAUTH_TOKEN" || again.Binaries[0] != "claude" {
 		t.Fatalf("mutating a listing changed the table: %+v", again)
 	}
@@ -85,7 +96,7 @@ func TestRegisterHarnessDuplicatePanics(t *testing.T) {
 	if msg := mustPanic(t, "a second add", func() { r.add(fakeBinding("dup"), noFactory) }); !strings.Contains(msg, "registered twice") {
 		t.Fatalf("duplicate panic %q", msg)
 	}
-	claude := Bindings()[0]
+	claude := Bindings()[claudeIndex(Bindings())]
 	before := len(Bindings())
 	if msg := mustPanic(t, "re-registering claude", func() { RegisterHarness(claude, noFactory) }); !strings.Contains(msg, `"claude" registered twice`) {
 		t.Fatalf("global duplicate panic %q", msg)

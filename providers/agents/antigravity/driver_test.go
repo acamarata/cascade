@@ -278,16 +278,10 @@ func TestAntigravityDriverWiring(t *testing.T) {
 const registryTest = `package agents_test
 import (
  "path/filepath"; "testing"
- "github.com/acamarata/cascade/internal/providers/agents"; "github.com/acamarata/cascade/pkg/provider"; "github.com/acamarata/cascade/providers/agents/antigravity"
+ "github.com/acamarata/cascade/internal/providers/agents"; "github.com/acamarata/cascade/providers/agents/antigravity"
 )
 func TestAntigravityRegistrySeam(t *testing.T) {
  home := t.TempDir(); t.Setenv("HOME", home); t.Setenv("USERPROFILE", home)
- agents.RegisterHarness(agents.Binding{Harness:"antigravity", PluginID:"antigravity",
- Runtime:agents.RuntimeHarnessCLI, LaneID:"agent:antigravity", ConfigDirVar:"ANTIGRAVITY_HOME",
- Binaries:[]string{"agy"}, Credentials:[]agents.CredentialSpec{{Class:agents.CredentialSubscription}}},
- func(site agents.SpawnSite) (provider.AgentProvider,error) {
- return antigravity.New(antigravity.Config{Binary:site.Binary,RuntimeHome:site.RuntimeHome})
- })
  resolver,err:=agents.NewResolver(func(id string)bool{return id=="antigravity"}); if err!=nil {t.Fatal(err)}
  _,factory,err:=resolver.Resolve("agent:antigravity"); if err!=nil {t.Fatal(err)}
  binary:=filepath.Join(home,"agy"); p,err:=factory(agents.SpawnSite{Binary:binary,RuntimeHome:home}); if err!=nil {t.Fatal(err)}
