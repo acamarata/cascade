@@ -99,6 +99,9 @@ func runAgentCmd(cmd *cobra.Command, deps runDeps, a agentFlags) error {
 	if strings.TrimSpace(a.Intent) == "" || a.Timeout < 0 {
 		return cascade.New(cascade.KindInvalidInput, "cascade run: --agent needs a non-empty intent and a non-negative --timeout")
 	}
+	if err := runAgentPlatformCheck(); err != nil {
+		return err
+	}
 	ctx := cmd.Context()
 	if st, ok := runtime.DaemonlessStateFrom(ctx); ok && st.Embedded {
 		return cascade.New(cascade.KindUnavailable, errRunAgentNoDaemon)
