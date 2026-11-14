@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-func TestValidateEventNameReturnsErrNotImplemented(t *testing.T) {
+func TestValidateEventNameReturnsErrUnavailable(t *testing.T) {
 	err := ValidateEventName("capp.intake.v1.ItemReceived")
-	if !errors.Is(err, ErrNotImplemented) {
-		t.Fatalf("ValidateEventName = %v, want %v", err, ErrNotImplemented)
+	if !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("ValidateEventName = %v, want %v", err, ErrUnavailable)
 	}
 }
 

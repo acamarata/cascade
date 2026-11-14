@@ -1,49 +1,55 @@
 package port
 
-import "errors"
-
-// PortError is the interface for all structured errors returned by port operations.
+// PortError is the interface for all structured errors returned by port
+// operations. The set of values is closed: only the eight sentinels below
+// exist, so a caller can switch on Code and decide on Retryable alone.
 type PortError interface { //nolint:revive // name fixed by the ticket contract
 	error
-	// Code returns a machine-readable error code.
+	// Code returns the machine-readable P1 taxonomy code.
 	Code() string
 	// Retryable reports whether the operation may succeed if retried.
 	Retryable() bool
 }
 
-// ErrNotImplemented is returned when an operation has no implementation yet.
-var ErrNotImplemented error = errors.New("port: operation unavailable")
-
-// portError is the internal stub implementation of PortError.
+// portError is the only PortError implementation. It holds a fixed code
+// and message, never a wrapped cause, secret or stack, so it is safe to
+// send across any boundary.
 type portError struct {
-	msg string
+	code      string
+	retryable bool
+	msg       string
 }
 
-// Error returns the error message.
+// newPortError binds a taxonomy code to its retryability.
+func newPortError(code string, retryable bool) *portError {
+	return &portError{code: code, retryable: retryable, msg: "port: " + code}
+}
+
+// Error returns the fixed one-line message.
 func (e *portError) Error() string { return e.msg }
 
-// Code returns an empty string as a stub.
-func (e *portError) Code() string { return "" }
+// Code returns the taxonomy code.
+func (e *portError) Code() string { return e.code }
 
-// Retryable returns false as a stub.
-func (e *portError) Retryable() bool { return false }
+// Retryable reports whether a retry may succeed.
+func (e *portError) Retryable() bool { return e.retryable }
 
-// Sentinel errors for standard failure conditions.
+// Sentinel errors bound to the P1 taxonomy (capp counterpart: proto errors).
 var (
 	// ErrInvalid indicates the request was malformed or failed validation.
-	ErrInvalid PortError = &portError{msg: "invalid"}
+	ErrInvalid PortError = newPortError("invalid", false)
 	// ErrNotFound indicates the requested resource does not exist.
-	ErrNotFound PortError = &portError{msg: "not found"}
+	ErrNotFound PortError = newPortError("not_found", false)
 	// ErrConflict indicates the request conflicts with current state.
-	ErrConflict PortError = &portError{msg: "conflict"}
+	ErrConflict PortError = newPortError("conflict", false)
 	// ErrDenied indicates the caller lacks permission.
-	ErrDenied PortError = &portError{msg: "denied"}
+	ErrDenied PortError = newPortError("denied", false)
 	// ErrUnavailable indicates the service is temporarily unavailable.
-	ErrUnavailable PortError = &portError{msg: "unavailable"}
+	ErrUnavailable PortError = newPortError("unavailable", true)
 	// ErrTimeout indicates the operation exceeded its deadline.
-	ErrTimeout PortError = &portError{msg: "timeout"}
+	ErrTimeout PortError = newPortError("timeout", true)
 	// ErrExhausted indicates a rate limit or quota has been reached.
-	ErrExhausted PortError = &portError{msg: "exhausted"}
+	ErrExhausted PortError = newPortError("exhausted", true)
 	// ErrInternal indicates an unexpected internal failure.
-	ErrInternal PortError = &portError{msg: "internal"}
+	ErrInternal PortError = newPortError("internal", false)
 )
