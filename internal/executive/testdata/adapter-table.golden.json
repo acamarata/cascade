@@ -295,6 +295,11 @@
       "exec": "exec.FINAL_ACCEPTANCE_READY",
       "producer": "none",
       "live": false
+    },
+    {
+      "exec": "exec.ESCALATION",
+      "producer": "escalation ladder",
+      "live": true
     }
   ]
 }

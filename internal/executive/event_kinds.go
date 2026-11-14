@@ -59,6 +59,8 @@ const (
 	GroupSafety KindGroup = "safety"
 	// GroupAcceptance is the acceptance kind group.
 	GroupAcceptance KindGroup = "acceptance"
+	// GroupEscalation is the escalation kind group.
+	GroupEscalation KindGroup = "escalation"
 )
 
 // The closed R-21.37 exec.* kinds; each value is "exec." plus the R-21.37 name.
@@ -145,6 +147,9 @@ const (
 	KindPermissionDenied Kind = "exec.PERMISSION_DENIED"
 	// KindFinalAcceptanceReady is exec.FINAL_ACCEPTANCE_READY (acceptance group).
 	KindFinalAcceptanceReady Kind = "exec.FINAL_ACCEPTANCE_READY"
+	// KindEscalation is exec.ESCALATION (escalation group): one rung of the
+	// worker-to-Conductor escalation ladder.
+	KindEscalation Kind = "exec.ESCALATION"
 )
 
 // kindGroups lists every group and its kinds in R-21.37 order.
@@ -164,6 +169,7 @@ var kindGroups = []struct {
 	{GroupExecutive, []Kind{KindT0WakeRequested, KindT0Awake, KindT0Sleeping}},
 	{GroupSafety, []Kind{KindHumanApprovalRequired, KindPrivacyPolicyBlocked, KindPermissionDenied}},
 	{GroupAcceptance, []Kind{KindFinalAcceptanceReady}},
+	{GroupEscalation, []Kind{KindEscalation}},
 }
 
 // AllKinds is the closed R-21.37 list of every valid exec.* kind, in group order.

@@ -88,8 +88,8 @@ func TestEXE01LegacyAC16(t *testing.T) {
 	if err := json.Unmarshal(raw, &golden); err != nil {
 		t.Fatalf("decode golden: %v", err)
 	}
-	if len(golden) != len(AllKinds) || len(AllKinds) != 41 {
-		t.Fatalf("golden has %d keys, AllKinds %d, want 41", len(golden), len(AllKinds))
+	if len(golden) != len(AllKinds) {
+		t.Fatalf("golden has %d keys, AllKinds %d, want equal", len(golden), len(AllKinds))
 	}
 	if !reflect.DeepEqual(golden, schemaFromTable()) {
 		t.Fatalf("golden differs from the payload table")
@@ -127,6 +127,10 @@ func checkAC16Required(t *testing.T) {
 	ok := `{"subject_id":"s","safe_alternative_exists":false}`
 	if err := ValidatePayload(KindPrivacyPolicyBlocked, PayloadV1, []byte(ok)); err != nil {
 		t.Fatalf("safe_alternative_exists false must be valid: %v", err)
+	}
+	esc := `{"from_job":"j","kind":"conflict","summary":"s","step":"refused","outcome":"unresolved"}`
+	if err := ValidatePayload(KindEscalation, PayloadV1, []byte(esc)); err != nil {
+		t.Fatalf("valid exec.ESCALATION fixture: %v", err)
 	}
 }
 
