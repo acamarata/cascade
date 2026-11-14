@@ -1,9 +1,5 @@
+// Package broker routes work to a system tier by quota and rate headroom.
 package broker
-
-import "errors"
-
-// ErrNotImplemented is returned when a routing operation is not yet implemented.
-var ErrNotImplemented = errors.New("broker: operation unavailable")
 
 // Tier represents a routing tier level for system models.
 type Tier int
@@ -13,22 +9,22 @@ const (
 	TierSys0 Tier = iota
 	// TierSys1 represents the Sys1 routing tier.
 	TierSys1
-	// TierSys2GF represents the Sys2 GF routing tier.
-	TierSys2GF
-	// TierSys2GC represents the Sys2 GC routing tier.
-	TierSys2GC
-	// TierSys2GP represents the Sys2 GP routing tier.
-	TierSys2GP
-	// TierSys2CO represents the Sys2 CO routing tier.
-	TierSys2CO
-	// TierSys2A4 represents the Sys2 A4 routing tier.
-	TierSys2A4
-	// TierSys2A3 represents the Sys2 A3 routing tier.
-	TierSys2A3
-	// TierSys2A2 represents the Sys2 A2 routing tier.
-	TierSys2A2
-	// TierSys2A1 represents the Sys2 A1 routing tier.
-	TierSys2A1
+	// TierSys2Rung1 is rung 1 of the Sys2 ladder, in the order it is tried.
+	TierSys2Rung1
+	// TierSys2Rung2 is rung 2 of the Sys2 ladder, in the order it is tried.
+	TierSys2Rung2
+	// TierSys2Rung3 is rung 3 of the Sys2 ladder, in the order it is tried.
+	TierSys2Rung3
+	// TierSys2Rung4 is rung 4 of the Sys2 ladder, in the order it is tried.
+	TierSys2Rung4
+	// TierSys2Rung5 is rung 5 of the Sys2 ladder, in the order it is tried.
+	TierSys2Rung5
+	// TierSys2Rung6 is rung 6 of the Sys2 ladder, in the order it is tried.
+	TierSys2Rung6
+	// TierSys2Rung7 is rung 7 of the Sys2 ladder, in the order it is tried.
+	TierSys2Rung7
+	// TierSys2Rung8 is rung 8 of the Sys2 ladder, in the order it is tried.
+	TierSys2Rung8
 )
 
 // RouteRequest represents a routing request containing the input string
@@ -60,10 +56,4 @@ type QuotaChecker interface {
 type RPMChecker interface {
 	// CheckRPM checks if the RPM limit for the given key has not been exceeded.
 	CheckRPM(key string) (bool, error)
-}
-
-// Route routes a request to an appropriate system tier based on quotas and rate limits.
-// Currently, it is a stub that always returns ErrNotImplemented.
-func Route(req RouteRequest, qc QuotaChecker, rc RPMChecker) (RouteResult, error) {
-	return RouteResult{}, ErrNotImplemented
 }

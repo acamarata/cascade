@@ -1,8 +1,6 @@
 // Package ladder provides order management for ladder rungs.
 package ladder
 
-import "errors"
-
 // Rung represents a single step in the ladder order.
 type Rung struct {
 	Name       string
@@ -13,23 +11,14 @@ type Rung struct {
 }
 
 const (
-	// KindGC represents the gc kind.
-	KindGC = "gc"
-	// KindGP represents the gp kind.
-	KindGP = "gp"
-	// KindCO represents the co kind.
-	KindCO = "co"
-	// KindClaude represents the claude kind.
-	KindClaude = "claude"
+	// KindPrimary is the primary provider kind.
+	KindPrimary = "primary"
+	// KindSecondary is the secondary provider kind.
+	KindSecondary = "secondary"
+	// KindTertiary is the tertiary provider kind.
+	KindTertiary = "tertiary"
+	// KindWindowed is the kind for accounts with a reset window.
+	KindWindowed = "windowed"
 	// KindReserved represents the reserved kind.
 	KindReserved = "reserved"
 )
-
-// ErrNotImplemented indicates that a ladder operation is unavailable.
-var ErrNotImplemented = errors.New("ladder: operation unavailable")
-
-// Order processes the given rungs and returns the ordered result.
-// It currently returns nil.
-func Order(rungs []Rung) []Rung {
-	return nil
-}

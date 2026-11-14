@@ -4,20 +4,20 @@ package farm
 type LimitKind int
 
 const (
-	// GC_RPM_Headroom represents the garbage collection requests-per-minute headroom limit.
-	GC_RPM_Headroom LimitKind = iota
-	// GC_Stream_Ceiling represents the garbage collection stream ceiling limit.
-	GC_Stream_Ceiling
-	// Node_Load represents the node load limit.
-	Node_Load
+	// GatewayRPMHeadroom represents the gateway requests-per-minute headroom limit.
+	GatewayRPMHeadroom LimitKind = iota
+	// GatewayStreamCeiling represents the gateway stream ceiling limit.
+	GatewayStreamCeiling
+	// NodeLoad represents the node load limit.
+	NodeLoad
 	// Swap represents the swap usage limit.
 	Swap
-	// Account_Quota_Left represents the remaining account quota limit.
-	Account_Quota_Left
-	// Local_Model_RAM represents the local model RAM limit.
-	Local_Model_RAM
-	// Queue_Wait represents the queue wait time limit.
-	Queue_Wait
+	// AccountQuotaLeft represents the remaining account quota limit.
+	AccountQuotaLeft
+	// LocalModelRAM represents the local model RAM limit.
+	LocalModelRAM
+	// QueueWait represents the queue wait time limit.
+	QueueWait
 )
 
 // Evidence holds the raw data sources used to derive bottleneck metrics.

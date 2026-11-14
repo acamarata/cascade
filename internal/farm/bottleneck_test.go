@@ -6,19 +6,17 @@ import "testing"
 // seven limit-kind constants exist and can be used for read-only reporting.
 func TestTypesCompile_FARM26(t *testing.T) {
 	kinds := []LimitKind{
-		GC_RPM_Headroom,
-		GC_Stream_Ceiling,
-		Node_Load,
+		GatewayRPMHeadroom,
+		GatewayStreamCeiling,
+		NodeLoad,
 		Swap,
-		Account_Quota_Left,
-		Local_Model_RAM,
-		Queue_Wait,
+		AccountQuotaLeft,
+		LocalModelRAM,
+		QueueWait,
 	}
-
 	if len(kinds) != 7 {
 		t.Fatalf("expected 7 limit kinds, got %d", len(kinds))
 	}
-
 	seen := make(map[LimitKind]bool, len(kinds))
 	for _, kind := range kinds {
 		if seen[kind] {
@@ -26,7 +24,6 @@ func TestTypesCompile_FARM26(t *testing.T) {
 		}
 		seen[kind] = true
 	}
-
 	evidence := Evidence{
 		UsageLogTable:  "usage-log-table",
 		BrokerSnapshot: "broker-snapshot",
@@ -39,13 +36,13 @@ func TestTypesCompile_FARM26(t *testing.T) {
 	}
 
 	row := BottleneckRow{
-		Kind:     GC_RPM_Headroom,
+		Kind:     GatewayRPMHeadroom,
 		Value:    12.5,
 		Unit:     "req/min",
 		Source:   "usage-log",
 		Measured: true,
 	}
-	if row.Kind != GC_RPM_Headroom {
+	if row.Kind != GatewayRPMHeadroom {
 		t.Fatal("BottleneckRow.Kind must hold the assigned limit kind")
 	}
 	if row.Value != 12.5 {
