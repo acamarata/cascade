@@ -2212,14 +2212,6 @@
   {
     "added_by_ticket": "P2-PORT-01a",
     "caller_site": "internal/atlas/errors.go",
-    "expected_caller": "internal/atlas/errors.go, written by P2-PORT-13, which wraps ErrUnavailable; retire this entry once that file uses it",
-    "reason": "P2-PORT-01a ships ErrUnavailable in the port contract with tests; P2-PORT-13 is its first production caller (internal/atlas/errors.go, P2 plan D54). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/atlas/errors.go exists without the reference.",
-    "retire_ticket": "P2-PORT-13",
-    "symbol": "internal/port.ErrUnavailable"
-  },
-  {
-    "added_by_ticket": "P2-PORT-01a",
-    "caller_site": "internal/atlas/errors.go",
     "expected_caller": "internal/atlas/errors.go, written by P2-PORT-13, which wraps ErrTimeout; retire this entry once that file uses it",
     "reason": "P2-PORT-01a ships ErrTimeout in the port contract with tests; P2-PORT-13 is its first production caller (internal/atlas/errors.go, P2 plan D54). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/atlas/errors.go exists without the reference.",
     "retire_ticket": "P2-PORT-13",
