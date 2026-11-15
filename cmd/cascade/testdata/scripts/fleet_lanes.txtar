@@ -1,0 +1,7 @@
+# Test fleet lanes CLI commands
+
+cascade fleet lanes list --json
+stdout '"version":"1"'
+
+cascade fleet lanes list
+stdout 'ID'

@@ -129,6 +129,7 @@ func newFleetCmd(deps fleetSessionsDeps) *cobra.Command {
 	cmd.AddCommand(newFleetTopCmd(deps))
 	// capacity (P1-E31-W6-S63-T4, R-16.21: fleet absorbs capacity).
 	cmd.AddCommand(newFleetCapacityCmd(deps))
+	cmd.AddCommand(newFleetLanesCmd(deps))
 	// mode (P1-E41-W9-S79-T2, 07 §Round-21: fleet mode show|set).
 	cmd.AddCommand(newFleetModeCmd(deps))
 	// usage (P1-E18-W4-S40-T5, Epic R acceptance ticket).
