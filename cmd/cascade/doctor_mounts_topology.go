@@ -72,6 +72,9 @@ func topologyDoctorSourceFor(paths runtime.PathProvider, clock runtime.Clock) to
 func (s topologyDoctorSource) ListQuotaDomains(ctx context.Context) ([]topology.QuotaDomain, error) {
 	var out []topology.QuotaDomain
 	err := s.withDB(ctx, func(db *sql.DB) (err error) {
+		if ok, err := topologyTableExists(ctx, db, "config_quota_domain"); err != nil || !ok {
+			return err
+		}
 		out, err = topology.NewStore(db).ListQuotaDomains(ctx)
 		return err
 	})
@@ -82,6 +85,9 @@ func (s topologyDoctorSource) ListQuotaDomains(ctx context.Context) ([]topology.
 func (s topologyDoctorSource) ListCredentials(ctx context.Context) ([]topology.Credential, error) {
 	var out []topology.Credential
 	err := s.withDB(ctx, func(db *sql.DB) (err error) {
+		if ok, err := topologyTableExists(ctx, db, "config_credential"); err != nil || !ok {
+			return err
+		}
 		out, err = topology.NewStore(db).ListCredentials(ctx)
 		return err
 	})
@@ -161,4 +167,13 @@ func runDoctorChecks(ctx context.Context, checks []doctor.Check, opts doctor.Run
 			"cascade doctor: no provider checks are registered for this run")
 	}
 	return report, nil
+}
+
+// topologyTableExists reports whether cascade.db holds table yet. A home whose
+// daemon has never started (a fresh v1 migration) has a cascade.db without the
+// topology tables; it holds no rows, the same as a missing cascade.db.
+func topologyTableExists(ctx context.Context, db *sql.DB, table string) (bool, error) {
+	var n int
+	err := db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, table).Scan(&n)
+	return n > 0, err
 }

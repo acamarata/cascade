@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -37,17 +38,18 @@ func TestHarnessBinaryIsGuarded(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	t.Setenv("USERPROFILE", dir)
+	hBin, otherBin := filepath.Join(dir, "h", "bin"), filepath.Join(dir, "other", "bin") // absolute on every OS
 	if _, err := runtime.ResolveDottedPath("fleet.harness_binary"); err != nil {
 		t.Fatalf("fleet.harness_binary is not a known key: %v", err)
 	}
-	if _, err := extractHarnessBinaryFamily(harnessBinaryCfg("/opt/h/bin", "rel/bin").Extra); !cascade.HasKind(err, cascade.KindInvalidInput) {
+	if _, err := extractHarnessBinaryFamily(harnessBinaryCfg(hBin, "rel/bin").Extra); !cascade.HasKind(err, cascade.KindInvalidInput) {
 		t.Fatalf("relative entry: %v, want KindInvalidInput", err)
 	}
 	if raw, err := extractHarnessBinaryFamily(map[string]interface{}{}); err != nil || raw != nil {
 		t.Fatalf("absent key: %s (err %v), want the default", raw, err)
 	}
-	base := runtime.EffectiveConfigOf(harnessBinaryCfg("/opt/h/bin"))
-	cfg := harnessBinaryCfg("/opt/h/bin", "/opt/other/bin")
+	base := runtime.EffectiveConfigOf(harnessBinaryCfg(hBin))
+	cfg := harnessBinaryCfg(hBin, otherBin)
 	eff := runtime.EffectiveConfigOf(cfg)
 	if !hasFleetLoosening(runtime.CompareSecurity(base, eff)) {
 		t.Fatal("an added harness binary is not a loosening of family fleet")
@@ -56,11 +58,11 @@ func TestHarnessBinaryIsGuarded(t *testing.T) {
 		t.Fatal("a harness binary over the defaults is not a loosening of family fleet")
 	}
 	runtime.ApplyEffective(cfg, base)
-	if got := harnessBinaryList(t, cfg); !slices.Equal(got, []interface{}{"/opt/h/bin"}) {
+	if got := harnessBinaryList(t, cfg); !slices.Equal(got, []interface{}{hBin}) {
 		t.Fatalf("unaccepted entry survived write-back: %v", got)
 	}
 	runtime.ApplyEffective(cfg, eff)
-	if got := harnessBinaryList(t, cfg); !slices.Equal(got, []interface{}{"/opt/h/bin", "/opt/other/bin"}) {
+	if got := harnessBinaryList(t, cfg); !slices.Equal(got, []interface{}{hBin, otherBin}) {
 		t.Fatalf("accepted list not written back: %v", got)
 	}
 }
