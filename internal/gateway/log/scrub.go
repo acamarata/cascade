@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 // ScrubbedKey holds four replacement forms of a pool key for scrubbing logs.
@@ -42,16 +43,9 @@ func ScrubForms(key string) (ScrubbedKey, error) {
 	}
 	jsonStr := string(jsonBytes)
 
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(raw); err != nil {
-		return ScrubbedKey{}, fmt.Errorf("json encode: %w", err)
-	}
-	noHTML := buf.String()
-	// json.Encoder.Encode appends a newline; remove it for consistent form length.
-	if len(noHTML) > 0 && noHTML[len(noHTML)-1] == '\n' {
-		noHTML = noHTML[:len(noHTML)-1]
+	noHTML, err := encodeNoHTMLEscape(raw)
+	if err != nil {
+		return ScrubbedKey{}, err
 	}
 
 	type formEntry struct {
@@ -83,4 +77,16 @@ func ScrubForms(key string) (ScrubbedKey, error) {
 	}
 
 	return result, nil
+}
+
+// encodeNoHTMLEscape JSON-encodes s with HTML escaping disabled and without
+// the trailing newline json.Encoder.Encode appends.
+func encodeNoHTMLEscape(s string) (string, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(s); err != nil {
+		return "", fmt.Errorf("json encode: %w", err)
+	}
+	return strings.TrimSuffix(buf.String(), "\n"), nil
 }

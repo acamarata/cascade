@@ -11,10 +11,10 @@ import (
 // interface compile correctly and expose the expected fields and methods.
 func TestTypesCompile(t *testing.T) {
 	// Verify NativeReason constants match the allowed set.
-	var _ NativeReason = ReasonBrowserMCP
-	var _ NativeReason = ReasonPrivateData
-	var _ NativeReason = ReasonGatewayDownBurnCapped
-	var _ NativeReason = ReasonNativeSignOff
+	_ = ReasonBrowserMCP
+	_ = ReasonPrivateData
+	_ = ReasonGatewayDownBurnCapped
+	_ = ReasonNativeSignOff
 
 	if ReasonBrowserMCP != "browser/MCP" {
 		t.Errorf("unexpected ReasonBrowserMCP: %s", ReasonBrowserMCP)

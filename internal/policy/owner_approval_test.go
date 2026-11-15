@@ -55,21 +55,25 @@ func TestOwnerApprovalValidate(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.approval.Validate()
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("expected error, got nil")
-				}
-				if !errors.Is(err, ErrOwnerApprovalInvalid) {
-					t.Fatalf("expected ErrOwnerApprovalInvalid, got %v", err)
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-			}
-		})
+		t.Run(tt.name, func(t *testing.T) { checkOwnerApprovalValidate(t, tt.approval, tt.wantErr) })
+	}
+}
+
+// checkOwnerApprovalValidate asserts Validate's result for one approval record.
+func checkOwnerApprovalValidate(t *testing.T, a OwnerApproval, wantErr bool) {
+	t.Helper()
+	err := a.Validate()
+	if !wantErr {
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		return
+	}
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if !errors.Is(err, ErrOwnerApprovalInvalid) {
+		t.Fatalf("expected ErrOwnerApprovalInvalid, got %v", err)
 	}
 }
 

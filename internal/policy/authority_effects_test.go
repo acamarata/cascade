@@ -42,7 +42,7 @@ func TestParseEffectClassClosed(t *testing.T) {
 func TestAuthorityRequestHasNoBypassField(t *testing.T) {
 	checkNoBypass := func(v interface{}, name string) {
 		typ := reflect.TypeOf(v)
-		if typ.Kind() == reflect.Ptr {
+		if typ.Kind() == reflect.Pointer {
 			typ = typ.Elem()
 		}
 		if typ.Kind() != reflect.Struct {
