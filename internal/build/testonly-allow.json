@@ -968,13 +968,6 @@
     "symbol": "internal/ci.RequestNodeSignature"
   },
   {
-    "caller_site": "internal/fleet/economics/refresh_grant.go",
-    "expected_caller": "internal/fleet/economics/refresh_grant.go, the refresh grant P1-TOP-13d adds, which wraps the fresh token pair in an Entry before WriteDurable; retire this entry once that file calls NewEntry",
-    "reason": "P1-TOP-13b ships the custody-backed harness credential store; the first producer of a new entry is the refresh grant of P1-TOP-13d.",
-    "retire_ticket": "P1-TOP-13",
-    "symbol": "internal/secrets.NewEntry"
-  },
-  {
     "caller_site": "cmd/cascade/wire_node_channel.go",
     "expected_caller": "cmd/cascade/wire_node_channel.go, which P1-NODE-18k wires the node channel into the controller daemon; retire this entry once that file calls NewSSHDialerFromSigner",
     "reason": "P1-NODE-18b ships NewSSHDialerFromSigner with its tests; its first production caller is cmd/cascade/wire_node_channel.go from P1-NODE-18k.",
@@ -1405,14 +1398,6 @@
     "symbol": "internal/delegation.RegisterToolApprovalCapability"
   },
   {
-    "added_by_ticket": "P1-TOP-13c",
-    "caller_site": "internal/fleet/economics/refresh_grant.go",
-    "expected_caller": "internal/fleet/economics/refresh_grant.go, the custody-gated RefreshGrantOnce path, which names the account copy set (DaemonCopies with filepath.EvalSymlinks and $HOME/.claude) when it reports or checks which copies it read; retire this entry once that file calls DaemonCopies",
-    "reason": "P1-TOP-13c ships DaemonCopies as the exported, per-platform name of the copy set the daemon reads; inside secrets the stores call the goos-parameterised daemonCopiesFor (so the keychain store stays testable on every host), so the exported entry point has no production caller until the grant fallback composes the copy set. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
-    "retire_ticket": "P1-TOP-13d",
-    "symbol": "internal/secrets.DaemonCopies"
-  },
-  {
     "added_by_ticket": "P1-EXE-01g",
     "caller_site": "cmd/cascade/daemon_unix_reload.go",
     "expected_caller": "the daemon composition mounts the executive bus so exec.TASK_* events fire at real job transitions",
@@ -1483,5 +1468,13 @@
     "reason": "P1-TOP-04d removed the only production use (NewLegBudget(DefaultFanOutLegBudget) in the daemon fan-out runner); legs are metered per leg by the CallReserver, and P1-TOP-04d may not edit internal/conductor.",
     "retire_ticket": "P1-TOP-04",
     "symbol": "internal/conductor.DefaultFanOutLegBudget"
+  },
+  {
+    "added_by_ticket": "P1-TOP-13d",
+    "caller_site": "internal/fleet/economics/usage_poll.go",
+    "expected_caller": "internal/fleet/economics/usage_poll.go, the usage poller P1-TOP-13e adds, which runs each account's grant tick through RefreshGrantOnce (the one grant path); retire this entry once that file calls RefreshGrantOnce",
+    "reason": "P1-TOP-13d ships RefreshGrantOnce, the custody-gated grant path, with its fake-driven tests; its first production caller is the usage poller from P1-TOP-13e (the release-gate leg of P1-EXIT-15 is the second).",
+    "retire_ticket": "P1-TOP-13e",
+    "symbol": "internal/fleet/economics.RefreshGrantOnce"
   }
 ]
