@@ -61,10 +61,10 @@ func TestConfirmTypesCompile(t *testing.T) {
 
 type mockConfirmStore struct{}
 
-func (m *mockConfirmStore) Issue(ctx context.Context, action string, subjects []string) (ConfirmToken, error) {
+func (m *mockConfirmStore) Issue(_ context.Context, _ string, _ []string) (ConfirmToken, error) {
 	return ConfirmToken{}, nil
 }
 
-func (m *mockConfirmStore) Redeem(ctx context.Context, token string, action string, subjects []string) error {
+func (m *mockConfirmStore) Redeem(_ context.Context, _, _ string, _ []string) error {
 	return nil
 }
