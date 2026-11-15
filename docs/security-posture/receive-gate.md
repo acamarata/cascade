@@ -59,6 +59,32 @@ binding, mirror enablement, last mirror push outcome and backlog without writes.
 The hook process must have a current policy-version reader on a controller;
 absence or failure must refuse rather than skip the policy comparison.
 
+## Node-hosted repositories
+
+The controller delivers accepted attestations and controller-signed acceptance
+facts to node-hosted gated repositories through `ci.attest.put` calls. On
+`jobs.accepted`, the controller sends the row, signer key and acceptance fact
+(under one controller signature) to exactly the nodes listed in `[nodes.repos]`
+for that repository. The node verifies the signature against its pinned
+controller key before storing the row, the acceptance fact and the vouched
+signer key. The node-side `ci attest verify` command uses the vouched trust
+store.
+
+**Node delivery is inactive until P1-NODE-18.** The interim transport returns
+`KindUnavailable` without any I/O; the effect record for each put is written
+intent then failed with that reason, and one attention item per node is raised.
+P1-NODE-18 binds the transport to `NodeChannel.Caller`.
+
+## Node repository routing
+
+The `[nodes.repos]` configuration table maps node identifiers to arrays of
+repository registry identifiers. The controller targets only nodes listed for a
+given repository and known to the record store. An absent table means no node
+is ever targeted by default. A non-array value, a non-string element or an
+empty string element causes `KindInvalidInput` naming the key, and the whole
+configuration file is rejected (no partial table). The table is hot-reloaded
+like other configuration tables.
+
 ## Same-uid residual (M6)
 
 The registry binding prevents a Git config edit from redirecting a controller
