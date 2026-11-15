@@ -19,17 +19,17 @@ const (
 	// RTB is a phase.
 	RTB Phase = "RTB"
 	// Planning is a phase.
-	Planning Phase = "Planning"
+	Planning Phase = "planning"
 	// RTF is a phase.
 	RTF Phase = "RTF"
 	// Forging is a phase.
-	Forging Phase = "Forging"
+	Forging Phase = "forging"
 	// Building is a phase.
-	Building Phase = "Building"
+	Building Phase = "building"
 	// RTD is a phase.
 	RTD Phase = "RTD"
 	// Deploying is a phase.
-	Deploying Phase = "Deploying"
+	Deploying Phase = "deploying"
 	// Finished is the final phase.
 	Finished Phase = "Finished"
 )

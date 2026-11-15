@@ -104,12 +104,12 @@ func TestStageNamesMatchTheConductor(t *testing.T) {
 		{Seeded, "Seeded"},
 		{RTP, "RTP"},
 		{RTB, "RTB"},
-		{Planning, "Planning"},
+		{Planning, "planning"},
 		{RTF, "RTF"},
-		{Forging, "Forging"},
-		{Building, "Building"},
+		{Forging, "forging"},
+		{Building, "building"},
 		{RTD, "RTD"},
-		{Deploying, "Deploying"},
+		{Deploying, "deploying"},
 		{Finished, "Finished"},
 	}
 
