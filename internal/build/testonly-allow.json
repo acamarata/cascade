@@ -217,13 +217,6 @@
     "symbol": "internal/fleet/economics.ClampFractionCaps"
   },
   {
-    "caller_site": "internal/fleet/economics/eligibility.go",
-    "expected_caller": "AO/S-79.T3's eligibility.go, which calls ExecutiveOverflowEligible(reserveState) before including an executive-overflow candidate",
-    "reason": "P1-E41-W9-S80-T1 ships the R-21.34/R-21.45 hard-reserve eligibility gate for the executive-overflow lane, fully implemented and tested (TestExecutiveOverflowEligibleOnlyAtHardReserve). P1-E41-W9-S79-T1 (pressure/shadow-price/reserve-barrier) owns no eligibility predicate -- its ShadowPrice/ReserveBarrier are pure pricing functions with no ReserveState input, and eligibility/correlation/utility ranking is explicitly out of that ticket's scope. The real caller is AO/S-79.T3's eligibility filter (eligibility.go), which checks this before ever offering an executive-overflow candidate to a workforce account.",
-    "retire_ticket": "P1-TOP-08",
-    "symbol": "internal/fleet/economics.ExecutiveOverflowEligible"
-  },
-  {
     "caller_site": "internal/daemon/executive_coordinator.go",
     "expected_caller": "AP/S-81's executive coordinator, which calls ExecutiveRoleLadder(reserveState) to resolve lane preference at hard reserve",
     "reason": "P1-E41-W9-S80-T1 ships the R-21.92 hard-reserve role-resolution ladder, fully implemented and tested (TestExecutiveRoleLadderAtHardReserve). Its caller is AP/S-81's executive coordinator, which resolves the executive role's lane preference in this exact order when at hard reserve -- out of this ticket's files_scope.",
@@ -935,14 +928,6 @@
     "symbol": "plugins/cascade-pa.OriginBridgeWhatsApp"
   },
   {
-    "added_by_ticket": "P1-CPA-16",
-    "caller_site": "internal/conversation/reply_memory.go",
-    "expected_caller": "internal/conversation/reply_memory.go, a future memory and SOUL reader for the chat reply that tags its content with SlotKindMemory before Compose; retire this entry once that file calls SlotKindMemory",
-    "reason": "Composer's slot vocabulary (tier, memory, retrieval, history) is tested end to end, but the chat reply composes no memory slot in P1 (P1-CPA-16 reply.go and reply_prompt.go tag retrieval and history only). The caller named earlier (reply.go) exists without the call, so the promise moved to the file a memory reader would add. No P1 ticket adds that file, so P1-CPA-13 stays as the nominal owner (the EPIC forbids UNOWNED for this row); the owner should confirm or re-key it.",
-    "retire_ticket": "P1-CPA-13",
-    "symbol": "internal/context.SlotKindMemory"
-  },
-  {
     "added_by_ticket": "P1-GEN-08",
     "caller_site": "plugins/claude/bundle_deps.go",
     "expected_caller": "the Claude plugin bundle that P1-HRN-12 adds; internal/plugins/claude_wiring.go passes repo.TemplateHashes() as the bundle's TemplateHashes seam so the bundle skills match the compiled templates; retire this entry once production code calls repo.TemplateHashes",
@@ -1213,67 +1198,11 @@
   },
   {
     "added_by_ticket": "P1-EXE-01d",
-    "caller_site": "internal/executive/mount.go",
-    "expected_caller": "internal/executive/mount.go, the P1-EXE-01g caller of DeriveStreamID; retire this entry once that file calls it",
-    "reason": "DeriveStreamID ships with its tests; its first production caller is internal/executive/mount.go from P1-EXE-01g, not built yet.",
-    "retire_ticket": "P1-EXE-01g",
-    "symbol": "internal/executive.DeriveStreamID"
-  },
-  {
-    "added_by_ticket": "P1-EXE-01d",
-    "caller_site": "internal/executive/escalation.go",
-    "expected_caller": "internal/executive/escalation.go, the P1-EXE-01g caller of GroupOf; retire this entry once that file calls it",
-    "reason": "GroupOf ships with its tests; its first production caller is internal/executive/escalation.go from P1-EXE-01g, not built yet.",
-    "retire_ticket": "P1-EXE-01g",
-    "symbol": "internal/executive.GroupOf"
-  },
-  {
-    "added_by_ticket": "P1-EXE-01d",
     "caller_site": "internal/executive/wake.go",
     "expected_caller": "internal/executive/wake.go, the P1-EXE-06b caller of NewDeliverer; retire this entry once that file calls it",
     "reason": "NewDeliverer ships with its tests; its first production caller is internal/executive/wake.go from P1-EXE-06b, not built yet.",
     "retire_ticket": "P1-EXE-06b",
     "symbol": "internal/executive.NewDeliverer"
-  },
-  {
-    "added_by_ticket": "P1-EXE-01d",
-    "caller_site": "internal/executive/mount.go",
-    "expected_caller": "internal/executive/mount.go, the P1-EXE-01g caller of StreamHead; retire this entry once that file calls it",
-    "reason": "StreamHead ships with its tests; its first production caller is internal/executive/mount.go from P1-EXE-01g, not built yet.",
-    "retire_ticket": "P1-EXE-01g",
-    "symbol": "internal/executive.StreamHead"
-  },
-  {
-    "added_by_ticket": "P1-EXE-01e",
-    "caller_site": "internal/executive/mount.go",
-    "expected_caller": "internal/executive/mount.go, the P1-EXE-01g caller of AdapterRows; retire this entry once that file calls it",
-    "reason": "AdapterRows ships with its tests; its first production caller is internal/executive/mount.go from P1-EXE-01g, not built yet.",
-    "retire_ticket": "P1-EXE-01g",
-    "symbol": "internal/executive.AdapterRows"
-  },
-  {
-    "added_by_ticket": "P1-EXE-01e",
-    "caller_site": "internal/executive/mount.go",
-    "expected_caller": "internal/executive/mount.go, the P1-EXE-01g caller of DormantKinds; retire this entry once that file calls it",
-    "reason": "DormantKinds ships with its tests; its first production caller is internal/executive/mount.go from P1-EXE-01g, not built yet.",
-    "retire_ticket": "P1-EXE-01g",
-    "symbol": "internal/executive.DormantKinds"
-  },
-  {
-    "added_by_ticket": "P1-EXE-01e",
-    "caller_site": "internal/executive/mount.go",
-    "expected_caller": "internal/executive/mount.go, the P1-EXE-01g caller of NewAdapter; retire this entry once that file calls it",
-    "reason": "NewAdapter ships with its tests; its first production caller is internal/executive/mount.go from P1-EXE-01g, not built yet.",
-    "retire_ticket": "P1-EXE-01g",
-    "symbol": "internal/executive.NewAdapter"
-  },
-  {
-    "added_by_ticket": "P1-EXE-01e",
-    "caller_site": "internal/executive/mount.go",
-    "expected_caller": "internal/executive/mount.go, the P1-EXE-01g caller of SourceNamespaces; retire this entry once that file calls it",
-    "reason": "SourceNamespaces ships with its tests; its first production caller is internal/executive/mount.go from P1-EXE-01g, not built yet.",
-    "retire_ticket": "P1-EXE-01g",
-    "symbol": "internal/executive.SourceNamespaces"
   },
   {
     "added_by_ticket": "P1-EXE-01e",
@@ -1308,14 +1237,6 @@
     "symbol": "internal/executive.PublicDTOTypes"
   },
   {
-    "added_by_ticket": "P1-EXE-01f",
-    "caller_site": "internal/executive/mount.go",
-    "expected_caller": "internal/executive/mount.go, the P1-EXE-01g caller of SanitizeError; retire this entry once that file calls it",
-    "reason": "SanitizeError ships with its tests; its first production caller is internal/executive/mount.go from P1-EXE-01g, not built yet.",
-    "retire_ticket": "P1-EXE-01g",
-    "symbol": "internal/executive.SanitizeError"
-  },
-  {
     "added_by_ticket": "P1-LRN-03b",
     "caller_site": "internal/learn/router.go",
     "expected_caller": "internal/learn/router.go, the P1-LRN-03e caller of DiffTier; retire this entry once that file calls it",
@@ -1346,14 +1267,6 @@
     "reason": "ReconvergeDiscovery ships with its tests; its first production caller is internal/runtime/init/steps_reconverge.go from P1-NODE-12e, not built yet.",
     "retire_ticket": "P1-NODE-12e",
     "symbol": "internal/runtime/init.ReconvergeDiscovery"
-  },
-  {
-    "added_by_ticket": "P1-PBD-01e",
-    "caller_site": "cmd/cascade/hooks_reviewer.go",
-    "expected_caller": "cmd/cascade/hooks_reviewer.go, the P1-PBD-05b caller of ApplyReviewerSchema; retire this entry once that file calls it",
-    "reason": "ApplyReviewerSchema ships with its tests; its first production caller is cmd/cascade/hooks_reviewer.go from P1-PBD-05b, not built yet.",
-    "retire_ticket": "P1-PBD-05b",
-    "symbol": "internal/jobs.ApplyReviewerSchema"
   },
   {
     "added_by_ticket": "P1-PBD-02a",
@@ -1412,22 +1325,6 @@
     "symbol": "internal/runtime.FleetDiscoveryInterval"
   },
   {
-    "added_by_ticket": "P1-PBD-01d",
-    "caller_site": "cmd/cascade/hooks_reviewer.go",
-    "expected_caller": "cmd/cascade/hooks_reviewer.go, the P1-PBD-05b caller of NewJobReviewPolicy; retire this entry once that file calls it",
-    "reason": "P1-PBD-01d ships internal/review.NewJobReviewPolicy with its tests; the reviewer hook that builds the policy is a later ticket. Its first production caller is cmd/cascade/hooks_reviewer.go from P1-PBD-05b, not built yet.",
-    "retire_ticket": "P1-PBD-05b",
-    "symbol": "internal/review.NewJobReviewPolicy"
-  },
-  {
-    "added_by_ticket": "P1-PBD-01d",
-    "caller_site": "cmd/cascade/hooks_reviewer.go",
-    "expected_caller": "cmd/cascade/hooks_reviewer.go, the P1-PBD-05b caller of ProviderFamily; retire this entry once that file calls it",
-    "reason": "P1-PBD-01d ships internal/review.ProviderFamily with its tests; the reviewer hook that resolves provider families is a later ticket. Its first production caller is cmd/cascade/hooks_reviewer.go from P1-PBD-05b, not built yet.",
-    "retire_ticket": "P1-PBD-05b",
-    "symbol": "internal/review.ProviderFamily"
-  },
-  {
     "added_by_ticket": "P1-NODE-20a",
     "caller_site": "cmd/cascade/node_enroll_payload.go",
     "expected_caller": "cmd/cascade/node_enroll_payload.go, the P1-NODE-20d caller of BuildNodeEnrollPayload; retire this entry once that file calls it",
@@ -1450,14 +1347,6 @@
     "reason": "P1-NODE-16aa ships the designation type, file backend and handover with tests; the bootstrap that opens the backend and designates is P1-NODE-16ab, which depends on it.",
     "retire_ticket": "P1-NODE-16",
     "symbol": "internal/nodes.Handover"
-  },
-  {
-    "added_by_ticket": "P1-PBD-01e",
-    "caller_site": "cmd/cascade/hooks_reviewer.go",
-    "expected_caller": "cmd/cascade/hooks_reviewer.go, which P1-PBD-05b adds; retire this entry once that file calls ReviewEvidenceRef",
-    "reason": "P1-PBD-01h records the reviewer decision row; citing it as evidence happens in the reviewer hook surface of P1-PBD-05b, which depends on P1-PBD-01h.",
-    "retire_ticket": "P1-PBD-05b",
-    "symbol": "internal/jobs.ReviewEvidenceRef"
   },
   {
     "added_by_ticket": "P1-TOP-09c",
@@ -1500,38 +1389,6 @@
     "symbol": "internal/fleet/economics.RegisterTerm"
   },
   {
-    "added_by_ticket": "P1-TOP-07b",
-    "caller_site": "cmd/cascade/doctor_mounts_topology.go",
-    "expected_caller": "cmd/cascade/doctor_mounts_topology.go, the P1-TOP-07c mount of NewFreeDomainAbovePublicCheck; retire this entry once that file calls it",
-    "reason": "NewFreeDomainAbovePublicCheck ships with its tests in the leaf package internal/doctor/topologycheck; its first production caller is cmd/cascade/doctor_mounts_topology.go from P1-TOP-07c, which registers it in productionCheckRegistry and is not built yet.",
-    "retire_ticket": "P1-TOP-07c",
-    "symbol": "internal/doctor/topologycheck.NewFreeDomainAbovePublicCheck"
-  },
-  {
-    "added_by_ticket": "P1-TOP-07b",
-    "caller_site": "cmd/cascade/doctor_mounts_topology.go",
-    "expected_caller": "cmd/cascade/doctor_mounts_topology.go, the P1-TOP-07c mount of NewDiscoverDomainAbovePublicCheck; retire this entry once that file calls it",
-    "reason": "NewDiscoverDomainAbovePublicCheck ships with its tests in the leaf package internal/doctor/topologycheck; its first production caller is cmd/cascade/doctor_mounts_topology.go from P1-TOP-07c, which registers it in productionCheckRegistry and is not built yet.",
-    "retire_ticket": "P1-TOP-07c",
-    "symbol": "internal/doctor/topologycheck.NewDiscoverDomainAbovePublicCheck"
-  },
-  {
-    "added_by_ticket": "P1-TOP-07b",
-    "caller_site": "cmd/cascade/doctor_mounts_topology.go",
-    "expected_caller": "cmd/cascade/doctor_mounts_topology.go, the P1-TOP-07c mount of NewCredentialWithoutDomainCheck; retire this entry once that file calls it",
-    "reason": "NewCredentialWithoutDomainCheck ships with its tests in the leaf package internal/doctor/topologycheck; its first production caller is cmd/cascade/doctor_mounts_topology.go from P1-TOP-07c, which registers it in productionCheckRegistry and is not built yet.",
-    "retire_ticket": "P1-TOP-07c",
-    "symbol": "internal/doctor/topologycheck.NewCredentialWithoutDomainCheck"
-  },
-  {
-    "added_by_ticket": "P1-TOP-07b",
-    "caller_site": "cmd/cascade/doctor_mounts_topology.go",
-    "expected_caller": "cmd/cascade/doctor_mounts_topology.go, the P1-TOP-07c mount of NewDomainWithoutCredentialCheck; retire this entry once that file calls it",
-    "reason": "NewDomainWithoutCredentialCheck ships with its tests in the leaf package internal/doctor/topologycheck; its first production caller is cmd/cascade/doctor_mounts_topology.go from P1-TOP-07c, which registers it in productionCheckRegistry and is not built yet.",
-    "retire_ticket": "P1-TOP-07c",
-    "symbol": "internal/doctor/topologycheck.NewDomainWithoutCredentialCheck"
-  },
-  {
     "added_by_ticket": "P1-NODE-18e",
     "caller_site": "internal/nodes/nodefacing_handler.go",
     "expected_caller": "the node-facing registry mounts the node-originated dispatch verbs (claim, report, journal)",
@@ -1570,5 +1427,37 @@
     "reason": "P1-TOP-13c ships DaemonCopies as the exported, per-platform name of the copy set the daemon reads; inside secrets the stores call the goos-parameterised daemonCopiesFor (so the keychain store stays testable on every host), so the exported entry point has no production caller until the grant fallback composes the copy set. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
     "retire_ticket": "P1-TOP-13d",
     "symbol": "internal/secrets.DaemonCopies"
+  },
+  {
+    "added_by_ticket": "P1-EXE-01g",
+    "caller_site": "cmd/cascade/daemon_unix_reload.go",
+    "expected_caller": "the daemon composition mounts the executive bus so exec.TASK_* events fire at real job transitions",
+    "reason": "P1-EXE-01g builds the mount; the daemon wiring is P1-EXE-01h",
+    "retire_ticket": "P1-EXE-01h",
+    "symbol": "internal/executive.Mount"
+  },
+  {
+    "added_by_ticket": "P1-EXE-01g",
+    "caller_site": "cmd/cascade/daemon_unix_reload.go",
+    "expected_caller": "the daemon composition builds the escalation ladder when it mounts the executive bus",
+    "reason": "P1-EXE-01g builds the ladder; the daemon wiring is P1-EXE-01h",
+    "retire_ticket": "P1-EXE-01h",
+    "symbol": "internal/executive.NewLadder"
+  },
+  {
+    "added_by_ticket": "P1-EXE-01g",
+    "caller_site": "cmd/cascade/daemon_unix_reload.go",
+    "expected_caller": "the daemon composition recovers each exec stream's high-water from the bus when it mounts the executive bus",
+    "reason": "the adapter mount publishes through the bus, which stamps StreamSeq itself, so mount.go has no real use for StreamHead; durable high-water recovery is the daemon wiring's",
+    "retire_ticket": "P1-EXE-01h",
+    "symbol": "internal/executive.StreamHead"
+  },
+  {
+    "added_by_ticket": "P1-TOP-08",
+    "caller_site": "internal/executive/reserve_ladder.go",
+    "expected_caller": "internal/executive/reserve_ladder.go (P1-EXE-15c), whose hard-reserve LadderStep picks an executive-overflow lane first and falls back to a critic-class lane only when none is eligible; it calls ExecutiveOverflowEligible(reserveState) for that check. Retire this entry once that file calls it",
+    "reason": "P1-TOP-08 closed with the nine rank predicates in rank_predicates.go (P1-TOP-08d). They apply the crunch reserve bars and never offer an executive-overflow candidate, so the eligibility.go caller the legacy row named was never created. The R-21.92 ladder that needs the overflow eligibility gate is P1-EXE-15c (contract:executive-reserve-ladder).",
+    "retire_ticket": "P1-EXE-15c",
+    "symbol": "internal/fleet/economics.ExecutiveOverflowEligible"
   }
 ]
