@@ -15,7 +15,7 @@ import (
 // - With nonempty Question: require guard==autonomousSilent and nonnil supervisor
 // - Call supervisor.Answer once; success sets Route="supervisor" and copies Decision
 // - Safest alternative for every boundary is "noop" with Continue=true
-func HandleAutonomousRoute(mode Mode, guard SilenceGuard, req BoundaryRequest, supervisor BoundarySupervisor) (BoundaryResult, error) {
+func HandleAutonomousRoute(_ Mode, guard SilenceGuard, req BoundaryRequest, supervisor BoundarySupervisor) (BoundaryResult, error) {
 	result := BoundaryResult{
 		Action:   req.Action,
 		Continue: true,
