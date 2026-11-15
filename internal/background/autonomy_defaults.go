@@ -62,7 +62,8 @@ func (r *Resolver) ResolveQuestion(question string, sensibleDefault string) (str
 		if prior, ok := r.defaults[question]; ok {
 			return prior, nil
 		}
-		if strings.TrimSpace(sensibleDefault) == "" {
+		trimmed := strings.TrimSpace(sensibleDefault)
+		if trimmed == "" || trimmed != sensibleDefault {
 			return "", ErrInvalidQuestion
 		}
 		r.defaults[question] = sensibleDefault
