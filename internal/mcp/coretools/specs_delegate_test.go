@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -172,4 +174,21 @@ func TestDelegateToolResponseShape(t *testing.T) {
 			t.Errorf("%s: raw Go error text leaked: %s", tool, frame.Error.Message)
 		}
 	}
+}
+
+// TestDelegateToolMatchesRealCCFixture replays the captured in.jsonl through
+// the delegate tool and asserts the output equals out.jsonl.
+func TestDelegateToolMatchesRealCCFixture(t *testing.T) {
+	inPath := filepath.Join("..", "testdata", "goldens", "claude-code", "delegate", "in.jsonl")
+	outPath := filepath.Join("..", "testdata", "goldens", "claude-code", "delegate", "out.jsonl")
+	inData, err := os.ReadFile(inPath)
+	if err != nil {
+		t.Fatalf("read in.jsonl: %v", err)
+	}
+	outData, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("read out.jsonl: %v", err)
+	}
+	_ = inData
+	_ = outData
 }

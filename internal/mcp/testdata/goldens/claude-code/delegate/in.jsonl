@@ -1,0 +1,3 @@
+{"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"claude-code","version":"2.1.273"}},"jsonrpc":"2.0","id":0}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"method":"tools/call","params":{"name":"cascade_conductor_delegate","arguments":{"intent":"list files"},"_meta":{"progressToken":1}},"jsonrpc":"2.0","id":1}
