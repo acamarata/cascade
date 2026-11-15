@@ -13,9 +13,11 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/exec"
 
+	"github.com/acamarata/cascade/internal/providers/gateway"
 	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/spf13/cobra"
 )
@@ -56,7 +58,7 @@ func newProviderExecCmd() *cobra.Command {
 
 // runProviderExec parses the arguments, scrubs the environment, and execs
 // the command. On unix it replaces the process; on windows it refuses.
-func runProviderExec(_ *cobra.Command, args []string) error {
+func runProviderExec(cmd *cobra.Command, args []string) error {
 	// Parse arguments: [<account>] -- <command> [args...]
 	account, cmdArgs, err := parseExecArgs(args)
 	if err != nil {
@@ -69,6 +71,11 @@ func runProviderExec(_ *cobra.Command, args []string) error {
 
 	// Build the scrubbed environment
 	env := scrubExecEnv(account)
+	if account != "" {
+		if env, err = injectGatewayEnv(cmd.Context(), env, account); err != nil {
+			return err
+		}
+	}
 
 	// Resolve the command path
 	cmdPath, err := exec.LookPath(cmdArgs[0])
@@ -113,6 +120,34 @@ func parseExecArgs(args []string) (account string, cmdArgs []string, err error) 
 	// Everything after -- is the command
 	cmdArgs = args[sepIdx+1:]
 	return account, cmdArgs, nil
+}
+
+// execProviderDeps is where provider exec reads the account record from:
+// production deps in the binary, a fixture in tests.
+var execProviderDeps = productionProviderDeps
+
+// injectGatewayEnv appends the gateway variables of the configured account
+// to env: its base URL and its token, read from the account record's own
+// credential source and never from ANTHROPIC_* variables of the parent.
+func injectGatewayEnv(ctx context.Context, env []string, account string) ([]string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	acct, src, err := configuredGateway(ctx, execProviderDeps(), account)
+	if err != nil {
+		return nil, err
+	}
+	token, err := src.Token(ctx, acct)
+	if err != nil {
+		return nil, err
+	}
+	defer clear(token)
+	tokenVar := "ANTHROPIC_AUTH_TOKEN"
+	if acct.Header == gateway.HeaderXAPIKey {
+		tokenVar = "ANTHROPIC_API_KEY"
+		env = removeEnvVar(env, tokenVar)
+	}
+	return append(env, "ANTHROPIC_BASE_URL="+acct.BaseURL, tokenVar+"="+string(token)), nil
 }
 
 // scrubExecEnv builds the environment for the exec'd process. Without an
