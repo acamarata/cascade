@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-15T00:13:34Z",
+  "generated_at": "2026-11-15T02:41:41Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -5409,6 +5409,32 @@
       ]
     },
     {
+      "name": "cmd/cascade doctor topology mounts",
+      "sites": [
+        {
+          "file": "cmd/cascade/doctor_mounts_topology.go",
+          "line": 24,
+          "status": "ADD",
+          "raw": "cmd/cascade doctor topology mounts/ADDED."
+        },
+        {
+          "file": "cmd/cascade/doctor_mounts_topology_seed_test.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "cmd/cascade doctor topology mounts/ADDED (test fixtures)."
+        },
+        {
+          "file": "cmd/cascade/doctor_mounts_topology_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "cmd/cascade doctor topology mounts/ADDED (tests)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade doctor_ci_tier2.go",
       "sites": [
         {
@@ -5566,6 +5592,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade fleet domains",
+      "sites": [
+        {
+          "file": "cmd/cascade/fleet_domains.go",
+          "line": 17,
+          "status": "",
+          "raw": "cmd/cascade fleet domains."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -5764,6 +5804,20 @@
           "line": 9,
           "status": "",
           "raw": "cmd/cascade hooks composition tests (P1-SUP-02)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade inbox delivery wiring",
+      "sites": [
+        {
+          "file": "cmd/cascade/wire_inbox_delivery.go",
+          "line": 11,
+          "status": "",
+          "raw": "cmd/cascade inbox delivery wiring."
         }
       ],
       "statuses": [
@@ -6212,6 +6266,40 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade provider promote",
+      "sites": [
+        {
+          "file": "cmd/cascade/provider_promote.go",
+          "line": 17,
+          "status": "",
+          "raw": "cmd/cascade provider promote."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade provider promote tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/provider_promote_integration_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "cmd/cascade provider promote tests."
+        },
+        {
+          "file": "cmd/cascade/provider_promote_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "cmd/cascade provider promote tests (P1-TOP-19f)."
+        }
+      ],
+      "statuses": [
+        ""
       ]
     },
     {
@@ -8691,6 +8779,18 @@
       "name": "cmd/cascade/reviewer",
       "sites": [
         {
+          "file": "cmd/cascade/hooks_reviewer.go",
+          "line": 16,
+          "status": "ADD",
+          "raw": "cmd/cascade/reviewer (ADD, P1-PBD-05)."
+        },
+        {
+          "file": "cmd/cascade/hooks_reviewer_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "cmd/cascade/reviewer (ADD, P1-PBD-05)."
+        },
+        {
           "file": "cmd/cascade/reviewer_inputs.go",
           "line": 16,
           "status": "ADD",
@@ -8723,10 +8823,28 @@
           "raw": "cmd/cascade/run (CHANGE)."
         },
         {
+          "file": "cmd/cascade/run_agent_platform_other.go",
+          "line": 5,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/run (CHANGE)."
+        },
+        {
+          "file": "cmd/cascade/run_agent_platform_windows.go",
+          "line": 5,
+          "status": "CHANGE",
+          "raw": "cmd/cascade/run (CHANGE)."
+        },
+        {
           "file": "cmd/cascade/run_agent_test.go",
           "line": 5,
           "status": "CHANGE",
           "raw": "cmd/cascade/run (CHANGE)."
+        },
+        {
+          "file": "cmd/cascade/run_agent_windows_test.go",
+          "line": 6,
+          "status": "",
+          "raw": "cmd/cascade/run (TEST)."
         },
         {
           "file": "cmd/cascade/run_exec.go",
@@ -23372,6 +23490,20 @@
         "",
         "ADD",
         "CHANGE"
+      ]
+    },
+    {
+      "name": "internal/build doccheck",
+      "sites": [
+        {
+          "file": "internal/build/doccheck_p1_agt_12d_test.go",
+          "line": 2,
+          "status": "ADD",
+          "raw": "internal/build doccheck (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
       ]
     },
     {
@@ -45001,7 +45133,7 @@
       ]
     }
   ],
-  "total_sites": 4334,
-  "unspecified_count": 423,
+  "total_sites": 4348,
+  "unspecified_count": 427,
   "multi_status_count": 133
 }
