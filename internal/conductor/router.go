@@ -74,13 +74,23 @@ type DefaultRouter struct {
 	// laneTierCap is the per-lane sensitivity ceiling (lane_tiercap.go),
 	// set by WithLaneTierCap. NewDaemonRouter refuses without one.
 	laneTierCap LaneTierCap
+	// rank makes the final pick (filters_rank.go). NewRouter installs the
+	// lane-name order; WithRanker replaces it and sets rankExplicit, which
+	// adds the rank:<lane>:<utility> explain flag. A nil rank refuses
+	// every request with ErrNoLane.
+	rank         RankFn
+	rankExplicit bool
 }
 
 // NewRouter builds a Router. No vendor names or provider identifiers are
 // hardcoded anywhere in this package; registry, quota and classes are the
-// only sources of lane data.
+// only sources of lane data. A router built without WithRanker keeps the
+// current lane-name order as its ranking (laneNameRank): that order is
+// the Rank order, so the pick is still the first ranked lane the quota
+// stage admits, not a fallback. WithRanker(nil) and the zero value have
+// no RankFn and refuse every request with ErrNoLane.
 func NewRouter(registry provider.ProviderRegistryReader, quota QuotaSpiller, clock Clock, classes []TaskClassRow) *DefaultRouter {
-	return &DefaultRouter{registry: registry, quota: quota, clock: clock, classes: classes}
+	return &DefaultRouter{registry: registry, quota: quota, clock: clock, classes: classes, rank: laneNameRank}
 }
 
 // var _ Router = (*DefaultRouter)(nil) asserts *DefaultRouter satisfies
@@ -104,6 +114,9 @@ func NewDaemonRouter(reg *registry.Registry, extra map[string]interface{}, bus E
 	}
 	if probe.laneTierCap == nil {
 		return nil, ErrLaneTierCapMissing
+	}
+	if !probe.rankExplicit || probe.rank == nil {
+		return nil, ErrRankerMissing
 	}
 	reader := registry.NewReader(reg)
 	cfg, divergent, err := ParseQuotaConfig(extra)
@@ -185,6 +198,9 @@ func (r *DefaultRouter) Select(ctx context.Context, req provider.ModelRequest, e
 // every request that names no node capabilities, which is every request
 // the five filters saw before this seam existed. See router_placement.go.
 func (r *DefaultRouter) SelectExplain(ctx context.Context, req provider.ModelRequest, exclude ...string) (provider.Selection, []string, error) {
+	if r.rank == nil {
+		return provider.Selection{}, nil, ErrNoLane
+	}
 	flags, err := r.consultPlacement(req, nil)
 	if err != nil {
 		return provider.Selection{}, flags, err
@@ -221,7 +237,7 @@ func (r *DefaultRouter) SelectExplain(ctx context.Context, req provider.ModelReq
 	if err != nil {
 		return provider.Selection{}, flags, err
 	}
-	cand, flags, err := filterQuota(ctx, r.quota, snap.lanes, cands, exclude, flags)
+	cand, flags, err := r.filterRank(ctx, req, snap.lanes, cands, exclude, flags)
 	if err != nil {
 		return provider.Selection{}, flags, err
 	}
