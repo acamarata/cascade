@@ -62,7 +62,7 @@ func TestTheClaimHandsTheNodeItsResumePoint(t *testing.T) {
 
 	// Release the waiting caller so the goroutine does not outlive the test.
 	_ = rv.Report(DispatchFrame{DispatchID: "d-1", Attempt: 2, NodeID: "spare"})
-	<-done
+	<-done //nolint:errcheck // only waits for the released caller to return
 }
 
 // TestAFirstAttemptCarriesNoResumePoint keeps the field from reading as a
@@ -88,7 +88,7 @@ func TestAFirstAttemptCarriesNoResumePoint(t *testing.T) {
 	}
 
 	_ = rv.Report(DispatchFrame{DispatchID: "d-first", Attempt: claim.Attempt, NodeID: "n1"})
-	<-done
+	<-done //nolint:errcheck // only waits for the released caller to return
 }
 
 // TestAMachineThatNeverSawTheWorkStillRefusesACompletedAction is the

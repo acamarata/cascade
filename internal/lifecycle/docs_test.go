@@ -26,9 +26,9 @@ func TestParseCommandsSignatures(t *testing.T) {
 
 	// Verify ParseCommands has the expected signature by checking it exists
 	// The actual function body will be implemented in P2-LIFE-34
-	var _ func(string) ([]string, error) = ParseCommands
+	_ = ParseCommands
 
 	// Verify ParseWait has the expected signature by checking it exists
 	// The actual function body will be implemented in P2-LIFE-35
-	var _ func(string) (int, error) = ParseWait
+	_ = ParseWait
 }

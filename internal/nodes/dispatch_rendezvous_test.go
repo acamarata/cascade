@@ -121,7 +121,7 @@ func TestASecondReportIsRefused(t *testing.T) {
 	if err := r.Report(frame); err != nil {
 		t.Fatalf("first Report: %v", err)
 	}
-	<-errs
+	<-errs //nolint:errcheck // only waits for the first report to finish
 
 	if err := r.Report(frame); err == nil {
 		t.Fatal("a redelivered report was accepted after the dispatch completed")

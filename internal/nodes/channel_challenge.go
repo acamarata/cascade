@@ -144,11 +144,11 @@ func authenticateControllerChannel(ctx context.Context, conn Conn, pin ed25519.P
 		}
 	case <-expiry:
 		_ = conn.Close()
-		<-done
+		<-done //nolint:errcheck // the hello reader's error is superseded by the timeout
 		err = errControllerHelloTimeout
 	case <-ctx.Done():
 		_ = conn.Close()
-		<-done
+		<-done //nolint:errcheck // the hello reader's error is superseded by the cancellation
 		err = errControllerHelloCanceled
 	}
 	if err != nil {

@@ -12,13 +12,13 @@ var ErrInvalidWait = errors.New("invalid wait duration")
 
 // ParseCommands parses a command string and returns a slice of individual
 // commands. It returns ErrNoCommands if the input contains no valid commands.
-func ParseCommands(input string) ([]string, error) {
-	return nil, nil
+func ParseCommands(_ string) ([]string, error) {
+	return nil, ErrNoCommands
 }
 
 // ParseWait parses a wait duration string and returns the duration as an
 // integer number of seconds. It returns ErrInvalidWait if the input cannot
 // be parsed as a valid wait duration.
-func ParseWait(input string) (int, error) {
-	return 0, nil
+func ParseWait(_ string) (int, error) {
+	return 0, ErrInvalidWait
 }
