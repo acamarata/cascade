@@ -147,15 +147,17 @@ func TestHookRelaySeqStrictlyIncreasesUnderConcurrency(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	select {
-	case <-r.done:
-	case <-time.After(testkit.Deadline(t, 20*time.Second)):
-		t.Fatal("the fake driver did not receive every expected connection")
-	}
+	// Every relay process has exited: a failed one is the cause, so report it
+	// before waiting for the connections it never made.
 	for i, e := range errs {
 		if e != "" {
 			t.Fatalf("relay process %d: %s", i, e)
 		}
+	}
+	select {
+	case <-r.done:
+	case <-time.After(testkit.Deadline(t, 20*time.Second)):
+		t.Fatal("the fake driver did not receive every expected connection")
 	}
 	frames := r.got()
 	if len(frames) != n {
