@@ -5,7 +5,7 @@ package delegation
 // Purpose: delegate and delegate_wait over a real daemon socket under a
 // t.TempDir CASCADE_HOME, armed like the daemon's (owner-peer guard over a
 // SpawnRegistry), callers minted by principal.Minter, the lane resolved to a
-// test-only driver registered through agents.RegisterHarness (no vendor CLI).
+// test-only driver swapped in through agents.SwapHarnessForTest (no vendor CLI).
 // Only the origin reads the addressed result back; a spawned child that drops
 // its principal token cannot act as the owner CLI.
 
@@ -44,12 +44,8 @@ const (
 )
 
 var (
-	_ = rpc.DeclareAccess("conductor.delegate", rpc.AccessOwnerView)
-	_ = rpc.DeclareAccess("conductor.delegate_wait", rpc.AccessOwnerView)
-	_ = agents.RegisterHarness(agents.Binding{Harness: socketHarness, PluginID: socketHarness,
-		Runtime: agents.RuntimeHarnessCLI, LaneID: agents.LanePrefix + socketHarness, ConfigDirVar: "TEST_AGENT_CONFIG_DIR",
-		Credentials: []agents.CredentialSpec{{Class: agents.CredentialSubscription}}, Binaries: []string{socketBinary}},
-		func(agents.SpawnSite) (provider.AgentProvider, error) { return socketDriver{}, nil })
+	_         = rpc.DeclareAccess("conductor.delegate", rpc.AccessOwnerView)
+	_         = rpc.DeclareAccess("conductor.delegate_wait", rpc.AccessOwnerView)
 	spawns    = agents.NewSpawnRegistry() // the guard's live-spawn source, as daemonSpawns is the daemon's
 	guardOnce sync.Once                   // rpc.SetOwnerPeerGuard panics on a second call
 )
@@ -219,6 +215,7 @@ func (d *socketDaemon) readResult(t *testing.T, hdr [2]string, id string) {
 }
 
 func TestDelegateRoundTrip(t *testing.T) {
+	useSocketHarness()
 	d := newSocketDaemon(t)
 	d.origin(t, "rt-origin")
 	sess, other := d.mint(t, "rt-origin", "project:rt"), d.mint(t, "rt-other", "project:other")
@@ -282,6 +279,7 @@ func (c childShim) Spawn(_ context.Context, r agents.SpawnRequest) (agents.Spawn
 // principal token calls conductor.delegate as the owner CLI; the owner-peer guard refuses
 // it (child mode: the test is that child). The round trip shows a non-agent owner passes.
 func TestDelegatedChildCannotActAsOwner(t *testing.T) {
+	useSocketHarness()
 	if os.Getenv(childVar) != "" {
 		failIf(t, os.Getenv(principal.EnvToken) != "" || os.Getenv(agents.LeaseMarkerEnv) == "", "child environ: want a lease marker, no token")
 		_, eo := (&socketDaemon{client: unixClient("d.sock")}).call(t, [2]string{principal.HeaderOwnerCLI, "owner-cli"}, "conductor.delegate", nil)
