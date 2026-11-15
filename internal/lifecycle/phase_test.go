@@ -134,7 +134,8 @@ func TestForceLogsObserved(t *testing.T) {
 	}
 
 	logOutput := buf.String()
-	if !strings.Contains(logOutput, "observed") {
-		t.Errorf("log output does not contain 'observed': %s", logOutput)
+	expectedMsg := "observed forcing phase to RTB"
+	if !strings.Contains(logOutput, expectedMsg) {
+		t.Errorf("log output does not contain expected message %q: %s", expectedMsg, logOutput)
 	}
 }
