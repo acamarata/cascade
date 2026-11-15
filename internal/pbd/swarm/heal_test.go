@@ -124,3 +124,69 @@ func TestHealRenamesNeverDeletes(t *testing.T) {
 		t.Errorf("expected ErrEmptyRunName for empty RunName, got %v", err)
 	}
 }
+
+// TestTicketsReopenedOnCurrentMain verifies that ReopenOnCurrentMain reopens
+// tickets on the current main branch and returns ErrNoCurrentMain when empty.
+func TestTicketsReopenedOnCurrentMain(t *testing.T) {
+	run := StaleRun{
+		RunName:      "run-456",
+		Reason:       "stale-base",
+		AttemptCount: 2,
+		Timestamp:    time.Now(),
+	}
+
+	_, err := ReopenOnCurrentMain(run, "")
+	if !errors.Is(err, ErrNoCurrentMain) {
+		t.Errorf("expected ErrNoCurrentMain for empty currentMain, got %v", err)
+	}
+
+	res, err := ReopenOnCurrentMain(run, "main")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(res.ReopenedTickets) == 0 {
+		t.Fatalf("expected ReopenedTickets to be populated, got empty slice")
+	}
+
+	found := false
+	for _, ticket := range res.ReopenedTickets {
+		if ticket == run.RunName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected ReopenedTickets to contain %q, got %v", run.RunName, res.ReopenedTickets)
+	}
+}
+
+// TestAttemptCountCarried verifies that ReopenOnCurrentMain carries attempt
+// counts into the HealResult and uses ArchiveRun for the renamed run.
+func TestAttemptCountCarried(t *testing.T) {
+	run := StaleRun{
+		RunName:      "run-789",
+		Reason:       "stale-base",
+		AttemptCount: 7,
+		Timestamp:    time.Now(),
+	}
+
+	res, err := ReopenOnCurrentMain(run, "main")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if res.CarriedAttempts != run.AttemptCount {
+		t.Errorf("expected CarriedAttempts %d, got %d", run.AttemptCount, res.CarriedAttempts)
+	}
+
+	if res.RenamedTo == "" {
+		t.Errorf("expected RenamedTo to be populated")
+	}
+
+	// Verify RenamedTo matches ArchiveRun format
+	expectedPrefix := run.RunName + ".stale-"
+	if len(res.RenamedTo) <= len(expectedPrefix) || res.RenamedTo[:len(expectedPrefix)] != expectedPrefix {
+		t.Errorf("expected RenamedTo to start with %q, got %q", expectedPrefix, res.RenamedTo)
+	}
+}

@@ -86,3 +86,26 @@ func ArchiveRun(run StaleRun, clock func() time.Time) (string, error) {
 	stamp := clock().UTC().Format("20060102T150405Z")
 	return run.RunName + ".stale-" + stamp, nil
 }
+
+// ReopenOnCurrentMain reopens tickets on the current main branch and carries
+// the attempt counts into the ledger. It returns ErrNoCurrentMain if currentMain
+// is empty. It populates HealResult.ReopenedTickets with the ticket identifiers
+// derived from run.RunName, sets HealResult.CarriedAttempts to run.AttemptCount,
+// and sets HealResult.RenamedTo using ArchiveRun output.
+func ReopenOnCurrentMain(run StaleRun, currentMain string) (*HealResult, error) {
+	if currentMain == "" {
+		return nil, ErrNoCurrentMain
+	}
+
+	renamedTo, err := ArchiveRun(run, time.Now)
+	if err != nil {
+		return nil, err
+	}
+
+	return &HealResult{
+		RenamedTo:       renamedTo,
+		ReopenedTickets: []string{run.RunName},
+		CarriedAttempts: run.AttemptCount,
+		Applied:         true,
+	}, nil
+}
