@@ -1,11 +1,9 @@
 //go:build !windows
 
-// Purpose: the completion gate the daemon composition builds binds a
-//
-//	review job's accepted edge to the tree of its leased worktree, over a
-//	real git repository, the daemon's Fleet, jobs store and provider
-//	registry; a dirty worktree or an unreadable tree denies without a
-//	Transition.
+// Purpose: the completion gate the daemon composition builds binds a review
+// job's accepted edge to its leased worktree tree and to the family ladder,
+// over a real git repository and the daemon's Fleet, jobs store and provider
+// registry; a dirty or unreadable tree denies without a Transition.
 //
 // SPORT: cmd/cascade/reviewer (ADD, P1-PBD-05).
 package main
@@ -22,6 +20,7 @@ import (
 	"github.com/acamarata/cascade/internal/fleet/economics"
 	"github.com/acamarata/cascade/internal/jobs"
 	providerregistry "github.com/acamarata/cascade/internal/providers/registry"
+	"github.com/acamarata/cascade/internal/review"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -29,19 +28,20 @@ import (
 // reviewing with complete evidence, a passed acceptance re-run and a
 // clean leased worktree.
 type reviewerGate struct {
-	w   *daemonWiring
-	ref ci.JobRef
+	w      *daemonWiring
+	ref    ci.JobRef
+	ledger *jobs.EvidenceLedger
+	auth   jobs.AppendAuthorization
 }
 
 func newReviewerGate(t *testing.T) reviewerGate {
 	t.Helper()
-	ctx := context.Background()
-	w := hookDaemon(t)
+	ctx, w := context.Background(), hookDaemon(t)
 	if w.Deps.ProviderRegistry == nil {
 		t.Fatal("composed daemon holds no provider registry reader")
 	}
 	ref := hookRecordedCheckpoint(t, w, newCIDaemonRig(t))
-	hookEvidence(t, w, ref.JobID)
+	ledger, auth := hookEvidence(t, w, ref.JobID)
 	passed, err := ciAcceptanceRerun(w.Deps.CI.Dispatcher(), ctx, ref, w.Deps.CI.Model(ref.RepoRoot))
 	if err != nil || !passed.Passed {
 		t.Fatalf("acceptance rerun = %+v, %v", passed, err)
@@ -52,7 +52,7 @@ func newReviewerGate(t *testing.T) reviewerGate {
 		t.Fatal(err)
 	}
 	seedReviewerFamilies(t, w, ref.JobID)
-	return reviewerGate{w: w, ref: ref}
+	return reviewerGate{w: w, ref: ref, ledger: ledger, auth: auth}
 }
 
 // seedReviewerFamilies registers an anthropic and a gemini provider lane in
@@ -83,16 +83,16 @@ func seedReviewerFamilies(t *testing.T, w *daemonWiring, reviewID string) {
 	if err := store.PutDependency(ctx, jobs.TaskDependency{JobID: reviewID, DependsOnJobID: "author"}); err != nil {
 		t.Fatal(err)
 	}
-	reserveLane(t, w, "author", "author-exec", "lane-anthropic-acc1")
-	reserveLane(t, w, reviewID, reviewID+"-review", "lane-gem-main")
+	reserveLane(t, w, "author", "author-exec", "lane-anthropic-acc1", 99)
+	reserveLane(t, w, reviewID, reviewID+"-review", "lane-gem-main", 99)
 }
 
-// reserveLane records execID as jobID's latest execution and binds it to a
-// reservation on lane in the Fleet's reservation ledger.
-func reserveLane(t *testing.T, w *daemonWiring, jobID, execID, lane string) {
+// reserveLane records execID at attempt as jobID's latest execution and
+// binds it to a reservation on lane in the Fleet's reservation ledger.
+func reserveLane(t *testing.T, w *daemonWiring, jobID, execID, lane string, attempt int) {
 	t.Helper()
 	ctx := context.Background()
-	if err := w.Deps.Fleet.Jobs().PutExecution(ctx, jobs.Execution{ID: execID, JobID: jobID, Attempt: 99, State: jobs.ExecutionSucceeded}); err != nil {
+	if err := w.Deps.Fleet.Jobs().PutExecution(ctx, jobs.Execution{ID: execID, JobID: jobID, Attempt: attempt, State: jobs.ExecutionSucceeded}); err != nil {
 		t.Fatalf("PutExecution(%s): %v", execID, err)
 	}
 	rsv, err := economics.NewReservationStore(w.Deps.Fleet.JobsDB(), w.Clock)
@@ -195,5 +195,106 @@ func TestCompletionGateReviewerTreeErrorDenies(t *testing.T) {
 	g.wantDenied(t, "no active reviewer lease")
 	if _, err := reviewerTreeFor(ctx, nil, hookStored(t, g.w, g.ref.JobID)); err == nil {
 		t.Fatal("reviewerTreeFor without a fleet returned a tree")
+	}
+}
+
+// attempt stores risk on the review job and dispatches the composed
+// completion check; it returns the reason and whether the check denied.
+func (g reviewerGate) attempt(t *testing.T, risk string) (reason string, denied bool) {
+	t.Helper()
+	j := hookStored(t, g.w, g.ref.JobID)
+	j.RiskClass = risk
+	if err := g.w.Deps.Fleet.Jobs().PutJob(context.Background(), j); err != nil {
+		t.Fatal(err)
+	}
+	resp := hookDispatch(t, g.w, g.ref.JobID)
+	return resp.Reason, resp.Deny
+}
+
+// The author moves to lane at a later attempt: lane-gem-main shares the
+// reviewer's driver. The gate feeds no change footprint, so a planned low
+// class derives normal and is denied as escalated before any reviewer row.
+func TestCompletionGateFamilyLadder(t *testing.T) {
+	cases := []struct{ name, risk, lane, outcome, reason string }{
+		{"high-shared", "high", "lane-gem-main", jobs.ReviewOutcomeHeld, jobs.ErrNoDistinctFamily.Error()},
+		{"normal-shared", "normal", "lane-gem-main", jobs.ReviewOutcomeDegraded, jobs.ErrHumanApprovalRequired.Error()},
+		{"low-shared", "low", "lane-gem-main", "", "risk escalated: low -> normal"},
+		{"high-distinct", "high", "lane-anthropic-acc1", jobs.ReviewOutcomeAssigned, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			g := newReviewerGate(t)
+			reserveLane(t, g.w, "author", "author-exec2", c.lane, 100)
+			reason, denied := g.attempt(t, c.risk)
+			rows, state := g.decisions(t), hookStored(t, g.w, g.ref.JobID).State
+			if denied != (c.outcome != jobs.ReviewOutcomeAssigned) || denied != (state == jobs.JobStateReviewing) ||
+				!strings.Contains(reason, c.reason) || len(rows) > 1 || (len(rows) == 1) != (c.outcome != "") {
+				t.Fatalf("denied %v state %s reason %q rows %+v", denied, state, reason, rows)
+			}
+			if len(rows) == 1 && (rows[0].Outcome != c.outcome || rows[0].FamilyDistinct != (c.lane != "lane-gem-main")) {
+				t.Fatalf("decision row = %+v, want outcome %s", rows[0], c.outcome)
+			}
+		})
+	}
+}
+
+func TestComposedGateHasReviewerEnforcement(t *testing.T) {
+	w := hookDaemon(t)
+	ctx, rt := context.Background(), w.Deps.Fleet
+	var n int
+	if err := rt.JobsDB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE name = 'jobs_reviewer_decision'`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("daemon jobs handle has %d jobs_reviewer_decision tables (%v)", n, err)
+	}
+	en, err := composeReviewer(ctx, w.Clock, reviewerSources{fleet: rt, registry: w.Deps.ProviderRegistry})
+	if err != nil || en == nil {
+		t.Fatalf("composeReviewer = %v, %v", en, err)
+	}
+	policy, err := en.Policy(jobs.RiskClassHigh)
+	if _, ok := policy.(review.JobReviewPolicy); err != nil || !ok {
+		t.Fatalf("Policy(high) = %T, %v; want review.JobReviewPolicy", policy, err)
+	}
+	in, ok := en.Inputs.(reviewerInputsByID)
+	if !ok || in.in.fleet != rt.Fleet() || in.in.jobs != rt.Jobs() || in.in.reg != w.Deps.ProviderRegistry || en.Decisions != rt.Jobs() {
+		t.Fatalf("Inputs = %#v, Decisions = %#v; want the daemon fleet, jobs store and registry", en.Inputs, en.Decisions)
+	}
+	bare, err := composeReviewer(ctx, w.Clock, reviewerSources{fleet: rt})
+	if err != nil || bare == nil || bare.Inputs != nil {
+		t.Fatalf("without a registry Inputs = %#v, %v; want nil so the gate denies", bare, err)
+	}
+}
+
+// A mutated-tree denial records no row (Transition never ran); a held and a
+// degraded attempt on a shared driver and an accepted one on distinct
+// drivers each record one, and the review evidence binds the accepted row.
+func TestReviewerDecisionRowsOnDaemon(t *testing.T) {
+	g, ctx := newReviewerGate(t), context.Background()
+	writeCIFile(t, filepath.Join(g.ref.WorktreeRoot, "docs", "change.txt"), "reviewer edit\n")
+	g.wantDenied(t, g.ref.WorktreeRoot)
+	ciRigGit(t, g.ref.WorktreeRoot, "checkout", "--", "docs/change.txt")
+	reserveLane(t, g.w, "author", "author-exec2", "lane-gem-main", 100)
+	var row jobs.ReviewerDecision
+	for i, outcome := range []string{jobs.ReviewOutcomeHeld, jobs.ReviewOutcomeDegraded, jobs.ReviewOutcomeAssigned} {
+		if i == 2 {
+			reserveLane(t, g.w, "author", "author-exec3", "lane-anthropic-acc1", 101)
+		}
+		reason, denied := g.attempt(t, map[int]string{0: "high", 1: "normal", 2: "high"}[i])
+		rows := g.decisions(t)
+		for _, r := range rows {
+			if r.Outcome == outcome {
+				row = r
+			}
+		}
+		if len(rows) != i+1 || row.Outcome != outcome || denied != (i < 2) || (denied && !strings.Contains(reason, jobs.ReviewEvidenceRef(row))) {
+			t.Fatalf("attempt %d: denied %v reason %q rows %+v, want %s", i+1, denied, reason, rows, outcome)
+		}
+	}
+	rec := hookRecord(g.ref.JobID, jobs.EvidenceReview, "review-decision")
+	rec.ArtifactRef = jobs.ReviewEvidenceRef(row)
+	if _, err := g.ledger.Append(ctx, rec, g.auth); err != nil {
+		t.Fatalf("append review evidence: %v", err)
+	}
+	got, err := g.ledger.Query(ctx, g.ref.JobID, jobs.EvidenceReview)
+	if err != nil || got.ArtifactRef != "reviewer-decision:"+row.ID || row.ID == "" {
+		t.Fatalf("review evidence = %+v, %v; want ArtifactRef reviewer-decision:%s", got, err, row.ID)
 	}
 }

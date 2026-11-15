@@ -228,9 +228,19 @@ func (g *completionPolicyGate) CompletionCheck(ctx context.Context, jobID string
 	}
 	var denied *jobs.ErrorCompletionDenied
 	if errors.As(err, &denied) {
-		return false, g.reviewerDenial(ctx, job, denied.Error()), nil
+		return false, g.reviewerDenial(ctx, job, completionDeniedReason(denied)), nil
 	}
 	return false, "", err
+}
+
+// completionDeniedReason is the denial text the hook returns. A reviewer
+// hold or degrade names its cause only in Reason, which Error prints just
+// for an expired approval, so the reason is appended otherwise.
+func completionDeniedReason(denied *jobs.ErrorCompletionDenied) string {
+	if denied.Reason == "" || denied.ExpiredApproval {
+		return denied.Error()
+	}
+	return denied.Error() + ": " + denied.Reason
 }
 
 // completionJobResolver adapts *jobs.Store to hookpacks.JobResolver: it
