@@ -74,6 +74,10 @@ func (p conductorExecuteParams) toModelRequest() (provider.ModelRequest, error) 
 		Requirements: p.Requirements,
 		Sensitivity:  tier,
 		FanOut:       p.FanOut,
+		// A client never names a reservation: Execute reserves its own
+		// row through its CallReserver, so a client reservation_id is
+		// cleared here and never reaches the Executor.
+		ReservationID: "",
 	}, nil
 }
 

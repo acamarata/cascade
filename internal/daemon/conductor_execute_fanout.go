@@ -10,6 +10,9 @@ package daemon
 // Inputs: the one production *conductor.Executor and ConductorFanOut (the
 //   fleet journal head reader, the resume.FanOutStore over the daemon
 //   store, the leg budget, the claim table and the id source).
+//   Fresh and resumed legs alike run under the Executor's LegPermit: each
+//   leg's Execute reserves its own row through the CallReserver and the
+//   parent holds no permit.
 // Outputs: the fan-out parent response plus the echoed request_id.
 // Constraints: every leg goes through Executor.ExecuteFanOutResponse (the
 //   executor's own door checks); no request content reaches the journal;
@@ -56,8 +59,9 @@ type ConductorFanOut struct {
 
 // NewConductorFanOut builds the production ConductorFanOut over the
 // daemon store: the fleet journal (DefaultNamespace), the FanOutStore, a
-// DefaultFanOutLegBudget-slot budget and a fresh claim table. A nil store
-// is recorded in Err, so fan-out refuses while fan_out <= 1 still serves.
+// budget that takes no permit (legs are metered per leg by the
+// Executor's CallReserver) and a fresh claim table. A nil store is
+// recorded in Err, so fan-out refuses while fan_out <= 1 still serves.
 func NewConductorFanOut(store provider.Store, clock runtime.Clock) ConductorFanOut {
 	if store == nil || clock == nil {
 		return ConductorFanOut{Err: cascade.New(cascade.KindUnavailable, "fan-out needs the daemon store and clock")}
@@ -65,7 +69,15 @@ func NewConductorFanOut(store provider.Store, clock runtime.Clock) ConductorFanO
 	js := journal.New(store, clock, journal.DefaultNamespace)
 	results, err := resume.NewFanOutStore(js, store)
 	return ConductorFanOut{Journal: js, Results: results, Err: err,
-		Budget: conductor.NewLegBudget(conductor.DefaultFanOutLegBudget), Claims: resume.NewClaims()}
+		Budget: noParentPermit, Claims: resume.NewClaims()}
+}
+
+// noParentPermit is the production fan-out Budget. It takes no slot of
+// its own, so the parent holds no permit while legs run; each leg's
+// Execute reserves one row through the Executor's CallReserver and holds
+// that row's permit for its adapter call only.
+func noParentPermit(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
 }
 
 // unwired names the first missing collaborator, or returns nil.
@@ -142,6 +154,16 @@ func (r fanOutRunner) serve(ctx context.Context, requestID string, req provider.
 	return fanOutResponse{ModelResponse: resp, RequestID: id}, nil
 }
 
+// legPermit is the permit every fresh and resumed leg runs under: the
+// configured Budget around the Executor's LegPermit, which reserves
+// nothing itself and refuses a leg whose ctx is already done.
+func (r fanOutRunner) legPermit() conductor.WithPermitFn {
+	legs := r.exec.LegPermit()
+	return func(ctx context.Context, fn func(context.Context) error) error {
+		return r.cfg.Budget(ctx, func(c context.Context) error { return legs(c, fn) })
+	}
+}
+
 // fanOutID returns the client's request_id (already validated) or a
 // minted id; minted reports which.
 func (r fanOutRunner) fanOutID(requestID string) (string, bool, error) {
@@ -177,7 +199,7 @@ func (r fanOutRunner) start(ctx context.Context, id string, req provider.ModelRe
 	if err := r.cfg.Results.PutRequest(ctx, id, req); err != nil {
 		return r.finish(ctx, id, provider.ModelResponse{}, err, resume.OutcomeTerminal)
 	}
-	resp, err := r.exec.ExecuteFanOutResponse(ctx, id, req, req.FanOut, nil, r.cfg.Budget, r.cfg.Results, r.cfg.Results)
+	resp, err := r.exec.ExecuteFanOutResponse(ctx, id, req, req.FanOut, nil, r.legPermit(), r.cfg.Results, r.cfg.Results)
 	return r.finish(ctx, id, resp, err, fanOutOutcome(ctx, err))
 }
 
@@ -211,7 +233,7 @@ func (r fanOutRunner) reattach(ctx context.Context, id string, req provider.Mode
 			return r.finish(ctx, id, provider.ModelResponse{}, resume.ErrLegAttemptsExhausted, resume.OutcomeUnknown)
 		}
 	}
-	resp, err := r.exec.ExecuteFanOutResponse(ctx, id, stored, st.Cursor.Legs, st.Completed, r.cfg.Budget, r.cfg.Results, r.cfg.Results)
+	resp, err := r.exec.ExecuteFanOutResponse(ctx, id, stored, st.Cursor.Legs, st.Completed, r.legPermit(), r.cfg.Results, r.cfg.Results)
 	return r.finish(ctx, id, resp, err, fanOutOutcome(ctx, err))
 }
 
