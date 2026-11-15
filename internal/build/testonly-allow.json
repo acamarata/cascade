@@ -1053,13 +1053,6 @@
     "symbol": "internal/fleet/hookpacks.ParseToolGateParams"
   },
   {
-    "caller_site": "cmd/cascade/fleet_tool_gate.go",
-    "expected_caller": "cmd/cascade/fleet_tool_gate.go, which P1-HRN-08d adds the hidden `cascade fleet tool-gate` command that forwards to this method; retire this entry once that file calls MethodToolGate",
-    "reason": "P1-HRN-08b ships MethodToolGate with its tests; its first production caller is cmd/cascade/fleet_tool_gate.go from P1-HRN-08d.",
-    "retire_ticket": "P1-HRN-08",
-    "symbol": "internal/fleet/hookpacks.MethodToolGate"
-  },
-  {
     "caller_site": "internal/learn/canary.go",
     "expected_caller": "internal/learn/canary.go, which P1-LRN-06a adds the routing canary that explores only where topology.ExplorationEligible holds; retire this entry once that file calls ExplorationEligible",
     "reason": "P1-TOP-02a ships ExplorationEligible with its tests; its first production caller is internal/learn/canary.go from P1-LRN-06a.",
@@ -1142,13 +1135,6 @@
     "reason": "P1-NODE-02d ships NewRemoteRoute with its tests; its first production caller is cmd/cascade/wire_node_remote.go from P1-NODE-02e.",
     "retire_ticket": "P1-NODE-02e",
     "symbol": "internal/conductor.NewRemoteRoute"
-  },
-  {
-    "caller_site": "cmd/cascade/wire_learn_status.go",
-    "expected_caller": "cmd/cascade/wire_learn_status.go, which P1-LRN-04c adds (the learn-status daemon wiring); retire this entry once that file calls RegisterLearnHandlers",
-    "reason": "P1-LRN-04a ships RegisterLearnHandlers with its tests; its first production caller is cmd/cascade/wire_learn_status.go from P1-LRN-04c.",
-    "retire_ticket": "P1-LRN-04c",
-    "symbol": "internal/learn.RegisterLearnHandlers"
   },
   {
     "caller_site": "cmd/cascade/wire_conductor_chooser.go",
@@ -1458,22 +1444,6 @@
     "symbol": "internal/nodes.HostKeyFingerprintFromFile"
   },
   {
-    "added_by_ticket": "P1-HRN-08b",
-    "caller_site": "cmd/cascade/fleet_tool_gate.go",
-    "expected_caller": "cmd/cascade/fleet_tool_gate.go, which P1-HRN-08d adds; retire this entry once that file calls ToolGateCapability",
-    "reason": "P1-HRN-08c registers the pack and renders its descriptor; the capability is checked by the fleet tool-gate command of P1-HRN-08d.",
-    "retire_ticket": "P1-HRN-08d",
-    "symbol": "internal/fleet/hookpacks.ToolGateCapability"
-  },
-  {
-    "added_by_ticket": "P1-HRN-08b",
-    "caller_site": "cmd/cascade/fleet_tool_gate.go",
-    "expected_caller": "cmd/cascade/fleet_tool_gate.go, which P1-HRN-08d adds; retire this entry once that file calls ToolGateClientDeadline",
-    "reason": "The client deadline bounds the fleet tool-gate command's daemon call, which P1-HRN-08d adds; the pack file only renders the hook descriptor.",
-    "retire_ticket": "P1-HRN-08d",
-    "symbol": "internal/fleet/hookpacks.ToolGateClientDeadline"
-  },
-  {
     "added_by_ticket": "P1-NODE-16a",
     "caller_site": "internal/nodes/designation_bootstrap.go",
     "expected_caller": "internal/nodes/designation_bootstrap.go, which P1-NODE-16ab adds; retire this entry once that file calls Handover",
@@ -1530,30 +1500,6 @@
     "symbol": "internal/fleet/economics.RegisterTerm"
   },
   {
-    "added_by_ticket": "P1-AGT-07e",
-    "caller_site": "internal/providers/agents/harness_antigravity.go",
-    "expected_caller": "internal/providers/agents/harness_antigravity.go, the P1-AGT-07g harness registration that constructs the antigravity driver; retire this entry once that file calls New",
-    "reason": "P1-AGT-07e ships the driver constructor gated on the probe, with tests; the harness that builds it is P1-AGT-07g.",
-    "retire_ticket": "P1-AGT-07g",
-    "symbol": "providers/agents/antigravity.New"
-  },
-  {
-    "added_by_ticket": "P1-AGT-02",
-    "caller_site": "internal/delegation/spawn_envelope.go",
-    "expected_caller": "internal/delegation/spawn_envelope.go, which verifies the signed spawn envelope and projects it with ProjectEnvelope before the driver spawn; retire this entry once that file calls ProjectEnvelope",
-    "reason": "The delegate RPCs are wired, but the delegation service still builds the job spec itself and never projects a signed envelope; the projection step moves into the delegation follow-up ticket. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
-    "retire_ticket": "P1-AGT-08n",
-    "symbol": "internal/providers/agents.ProjectEnvelope"
-  },
-  {
-    "added_by_ticket": "P1-NODE-16b",
-    "caller_site": "cmd/cascade/doctor_mounts_node_role.go",
-    "expected_caller": "cmd/cascade/doctor_mounts_node_role.go, which P1-NODE-16f changes; retire this entry once that file calls RoleStatus",
-    "reason": "P1-NODE-16b ships the role status with its conflict kinds and tests; the doctor node-role mount reports it in P1-NODE-16f, which depends on it.",
-    "retire_ticket": "P1-NODE-16f",
-    "symbol": "internal/nodes.RoleStatus"
-  },
-  {
     "added_by_ticket": "P1-TOP-07b",
     "caller_site": "cmd/cascade/doctor_mounts_topology.go",
     "expected_caller": "cmd/cascade/doctor_mounts_topology.go, the P1-TOP-07c mount of NewFreeDomainAbovePublicCheck; retire this entry once that file calls it",
@@ -1600,5 +1546,29 @@
     "reason": "P1-NODE-18e unmounts the journal from the owner registry; the node channel wiring is P1-NODE-18k",
     "retire_ticket": "P1-NODE-18k",
     "symbol": "internal/daemon.RegisterNodeDispatchJournal"
+  },
+  {
+    "added_by_ticket": "P1-AGT-10a",
+    "caller_site": "internal/delegation/collect.go",
+    "expected_caller": "the delegation collector starts BridgeApprovals for each driver session it supervises",
+    "reason": "P1-AGT-10a builds the approval bridge; the collector wiring is P1-AGT-10d",
+    "retire_ticket": "P1-AGT-10",
+    "symbol": "internal/delegation.BridgeApprovals"
+  },
+  {
+    "added_by_ticket": "P1-AGT-10a",
+    "caller_site": "cmd/cascade/daemon_unix_delegation_approvals.go",
+    "expected_caller": "the daemon composition registers the agents.tool_approval capability at start",
+    "reason": "P1-AGT-10a defines the capability; daemon registration is P1-AGT-10d",
+    "retire_ticket": "P1-AGT-10",
+    "symbol": "internal/delegation.RegisterToolApprovalCapability"
+  },
+  {
+    "added_by_ticket": "P1-TOP-13c",
+    "caller_site": "internal/fleet/economics/refresh_grant.go",
+    "expected_caller": "internal/fleet/economics/refresh_grant.go, the custody-gated RefreshGrantOnce path, which names the account copy set (DaemonCopies with filepath.EvalSymlinks and $HOME/.claude) when it reports or checks which copies it read; retire this entry once that file calls DaemonCopies",
+    "reason": "P1-TOP-13c ships DaemonCopies as the exported, per-platform name of the copy set the daemon reads; inside secrets the stores call the goos-parameterised daemonCopiesFor (so the keychain store stays testable on every host), so the exported entry point has no production caller until the grant fallback composes the copy set. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
+    "retire_ticket": "P1-TOP-13d",
+    "symbol": "internal/secrets.DaemonCopies"
   }
 ]
