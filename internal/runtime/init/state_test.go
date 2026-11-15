@@ -1,10 +1,11 @@
 package init
 
-// Purpose: the journal's contract (P1-E16-W4-S35-T6) — atomic write,
-//   versioned read, and the three ways a read can go wrong.
-// Constraints: Art.7.1 — every path is a t.TempDir().
+// Purpose: the journal's contract (P1-E16-W4-S35-T6) and the V2 step order
+//   and its replay. Constraints: Art.7.1 — every path is a t.TempDir().
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -12,12 +13,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/policy"
+	"github.com/acamarata/cascade/internal/providers/intake"
+	"github.com/acamarata/cascade/internal/runtime/initconfig"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// TestAnAbsentJournalIsNotAnError pins the distinction the resume logic
-// rests on: a machine that has never run init has no journal, and that is
-// the normal case, not a failure.
+// TestAnAbsentJournalIsNotAnError: a machine that never ran init has no
+// journal, and that is the normal case, not a failure.
 func TestAnAbsentJournalIsNotAnError(t *testing.T) {
 	state, found, err := LoadState(t.TempDir())
 	if err != nil {
@@ -31,13 +34,8 @@ func TestAnAbsentJournalIsNotAnError(t *testing.T) {
 	}
 }
 
-// TestTheJournalRoundTripsEveryDecision requires each step's recorded
-// decision to survive a write and a read.
-//
-// Not merely "it round-trips": a journal that recorded only the step
-// NUMBER would pass a shallower test and still force a resumed run to
-// re-ask which providers were added, which is the thing it exists to
-// prevent.
+// TestTheJournalRoundTripsEveryDecision: each step's DECISION survives a
+// write and a read, not merely the step number.
 func TestTheJournalRoundTripsEveryDecision(t *testing.T) {
 	home := t.TempDir()
 	want := State{
@@ -75,8 +73,7 @@ func TestTheJournalRoundTripsEveryDecision(t *testing.T) {
 	}
 }
 
-// TestTheJournalNeverHoldsACredential is a standing assertion about a
-// plaintext file in the cascade home: step 5 records provider NAMES, and
+// TestTheJournalNeverHoldsACredential: step 5 records provider NAMES and
 // nothing about how any of them authenticates.
 func TestTheJournalNeverHoldsACredential(t *testing.T) {
 	raw, err := json.Marshal(State{Providers: []string{"anthropic"}})
@@ -90,9 +87,8 @@ func TestTheJournalNeverHoldsACredential(t *testing.T) {
 	}
 }
 
-// TestAJournalFromTheFutureIsRefused: resuming from a record this build
-// cannot fully read means acting on an unreliable account of what already
-// happened, in the one file whose whole job is to be reliable about that.
+// TestAJournalFromTheFutureIsRefused: a record this build cannot fully read
+// is never resumed from.
 func TestAJournalFromTheFutureIsRefused(t *testing.T) {
 	home := t.TempDir()
 	writeJournal(t, home, `{"schema_version": 999, "completed_step": 3}`)
@@ -106,9 +102,8 @@ func TestAJournalFromTheFutureIsRefused(t *testing.T) {
 	}
 }
 
-// TestACorruptJournalIsRefusedRatherThanTreatedAsFresh is the assertion
-// that matters most here: treating unreadable bytes as "nothing has
-// happened" would re-run steps that already changed the machine.
+// TestACorruptJournalIsRefusedRatherThanTreatedAsFresh: unreadable bytes
+// read as "nothing happened" would re-run steps that changed the machine.
 func TestACorruptJournalIsRefusedRatherThanTreatedAsFresh(t *testing.T) {
 	for name, body := range map[string]string{
 		"not json":            "{{{",
@@ -129,10 +124,8 @@ func TestACorruptJournalIsRefusedRatherThanTreatedAsFresh(t *testing.T) {
 	}
 }
 
-// TestSaveLeavesNoTemporaryFileBehind pins the atomic write's visible
-// consequence: the directory holds the journal and nothing else, so a
-// crash between the write and the rename cannot leave a file a later read
-// might pick up.
+// TestSaveLeavesNoTemporaryFileBehind: after the atomic write the home
+// holds the journal and nothing else.
 func TestSaveLeavesNoTemporaryFileBehind(t *testing.T) {
 	home := t.TempDir()
 	if err := SaveState(home, State{CompletedStep: StepProfile}); err != nil {
@@ -153,10 +146,7 @@ func TestSaveLeavesNoTemporaryFileBehind(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat: %v", err)
 	}
-	// Windows does not carry POSIX permission bits: os.Stat reports 0666
-	// for a file created with 0600, so the mode half of this assertion
-	// measures the platform rather than the code. The temp-file half above
-	// is the part that is portable, and it still runs there.
+	// Windows has no POSIX permission bits (0600 reads back as 0666).
 	if goruntime.GOOS == GOOSWindows {
 		t.Logf("journal mode not asserted: %s has no POSIX permission bits", goruntime.GOOS)
 		return
@@ -166,19 +156,17 @@ func TestSaveLeavesNoTemporaryFileBehind(t *testing.T) {
 	}
 }
 
-// TestDeletingAnAbsentJournalSucceeds: the caller's intent is "there
-// should be no journal", and there is not.
+// TestDeletingAnAbsentJournalSucceeds: "no journal" is already true.
 func TestDeletingAnAbsentJournalSucceeds(t *testing.T) {
 	if err := DeleteState(t.TempDir()); err != nil {
 		t.Fatalf("DeleteState on a machine with no journal: %v", err)
 	}
 }
 
-// TestEveryStepHasAName keeps the journal, the prompts and the log lines
-// from disagreeing about what a step is called.
+// TestEveryStepHasAName: every step in run order has a distinct name.
 func TestEveryStepHasAName(t *testing.T) {
 	seen := map[string]bool{}
-	for s := StepPreflight; s <= LastStep; s++ {
+	for _, s := range stepOrder {
 		name := s.String()
 		if name == "unknown" {
 			t.Errorf("step %d has no name", int(s))
@@ -201,9 +189,8 @@ func writeJournal(t *testing.T, home, body string) {
 	}
 }
 
-// FuzzInitStateJSON drives the journal decoder over untrusted bytes: this
-// file lives in the cascade home and is read on every run, so it must
-// survive anything, refusing rather than panicking.
+// FuzzInitStateJSON: the journal decoder refuses, never panics, on any
+// bytes.
 func FuzzInitStateJSON(f *testing.F) {
 	for _, seed := range []string{
 		`{"schema_version":1,"completed_step":0}`,
@@ -223,11 +210,86 @@ func FuzzInitStateJSON(f *testing.F) {
 		if err != nil {
 			return
 		}
-		if state.CompletedStep < 0 || state.CompletedStep > LastStep {
+		if state.CompletedStep != 0 && state.CompletedStep.position() < 0 {
 			t.Fatalf("LoadState accepted step %d", int(state.CompletedStep))
 		}
 		if state.SchemaVersion > StateSchemaVersion {
 			t.Fatalf("LoadState accepted schema version %d", state.SchemaVersion)
 		}
 	})
+}
+
+// typicalMachine is an interactive `cascade init --profile local` on a
+// machine with one harness and the intake registry wired, the operator
+// taking every default and adding no account.
+func typicalMachine(t *testing.T) (*Wizard, *scriptedPrompter, *bytes.Buffer) {
+	t.Helper()
+	isolateHome(t)
+	prompt := &scriptedPrompter{confirms: []bool{false, true, false, true}, lines: []string{""}}
+	w, rec, out, _ := fixture(t, Options{Profile: ProfileLocal}, prompt)
+	rec.detected, w.deps.Registry = rec.detected[:1], intake.NewMemoryRegistry()
+	return w, prompt, out
+}
+
+// TestWizardV2OrderedSteps: step 5 is the capacity checklist, 8b nodes and
+// 8c policy run after step 8's controller designation, and a journal
+// written before 8b existed still replays.
+func TestWizardV2OrderedSteps(t *testing.T) {
+	w, prompt, out := typicalMachine(t)
+	want := "preflight profile storage plugins providers harnesses telemetry daemon nodes policy doctor"
+	if got := strings.Join(mustRun(t, w).Steps, " "); got != want {
+		t.Errorf("steps ran as %q, want %q", got, want)
+	}
+	if !contains(prompt.asked, capacityMoreQuestion) {
+		t.Errorf("the provider step never asked the capacity question: %v", prompt.asked)
+	}
+	text, at := out.String(), 0
+	for _, mark := range []string{"== providers", "== capacity", "== harnesses",
+		"controller designated: epoch 1", "== nodes", "== policy", "== doctor"} {
+		i := strings.Index(text[at:], mark)
+		if i < 0 {
+			t.Fatalf("%q missing or out of order in:\n%s", mark, text)
+		}
+		at += i
+	}
+	w, _, _, home := fixture(t, Options{Mode: ModeYes}, nil)
+	writeJournal(t, home, `{"schema_version":1,"completed_step":8,"profile":"local","daemon_installed":true}`)
+	report := mustRun(t, w)
+	if got := strings.Join(report.Steps, " "); !report.Resumed || got != "nodes policy doctor" {
+		t.Errorf("a pre-8b journal at step 8 replayed %q (resumed %t), want nodes policy doctor", got, report.Resumed)
+	}
+	writeJournal(t, home, `{"schema_version":1,"completed_step":9,"profile":"local"}`)
+	if state, _, err := LoadState(home); err != nil || !state.Complete() || state.NextStep() != 0 {
+		t.Errorf("a completed pre-8b journal reads as %+v, %v; want complete", state, err)
+	}
+}
+
+// TestInitNoSecretValuesInConfig: the setup file, the journal, the
+// reconverge delta and the doctor notes carry references, never the value
+// a reference resolves to.
+func TestInitNoSecretValuesInConfig(t *testing.T) {
+	w, rec, body := v2Run(t, initconfig.Flags{}, map[string]string{}, "strict")
+	w.deps.Policy = policy.NewController(nil)
+	st := mustRun(t, w).State
+	if !contains(st.Providers, "work") || !contains(st.Nodes, "n1.invalid") || st.PolicyPreset != "strict" {
+		t.Errorf("the run recorded no provider, node or preset name: %+v", st)
+	}
+	journalHome := t.TempDir()
+	saveErr := SaveState(journalHome, st)
+	journal, _ := os.ReadFile(StatePath(journalHome))
+	delta, err := ReconvergeDiscovery(context.Background(), &fakeDiscoveryStore{},
+		DiscoveryState{Nodes: st.Nodes, Providers: st.Providers, Policy: "strict"})
+	deltaJSON, _ := json.Marshal(delta)
+	args, _ := json.Marshal(rec.subArgs)
+	notes := w.deps.Out.(interface{ String() string }).String()
+	for name, text := range map[string]string{"config": body, "journal": string(journal),
+		"delta": string(deltaJSON), "provider add argv": string(args), "doctor notes": notes} {
+		if strings.Contains(text, v2Canary) {
+			t.Errorf("the %s holds the secret value:\n%s", name, text)
+		}
+	}
+	if err != nil || saveErr != nil || !strings.Contains(string(args), "INIT_CANARY_KEY") ||
+		!strings.Contains(notes, "every first-run check passed") {
+		t.Errorf("delta %v, journal %v, or no key_env name in the argv / no doctor run:\n%s\n%s", err, saveErr, args, notes)
+	}
 }

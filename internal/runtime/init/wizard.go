@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/acamarata/cascade/internal/runtime/initconfig"
 
@@ -76,9 +77,12 @@ type Report struct {
 	Diff []string
 	// Converged is set by a --reconverge run, and nil otherwise.
 	Converged *Convergence
+	// Discovery is the additive [roots], [nodes] and [policy] delta of a
+	// --reconverge run; nil when the setup file named none of them.
+	Discovery *DiscoveryDelta
 }
 
-// Wizard runs the nine steps.
+// Wizard runs the steps, in stepOrder.
 type Wizard struct {
 	deps Deps
 	opts Options
@@ -94,16 +98,20 @@ type stepFunc func(w *Wizard, ctx context.Context, state *State) error
 
 // steps maps each step to its implementation. A map rather than a switch
 // so Run cannot silently skip a step the enum has and the switch forgot.
+// Step 5 is the capacity checklist when the intake registry is wired; 8b
+// and 8c run after step 8 has written the controller designation.
 func steps() map[Step]stepFunc {
 	return map[Step]stepFunc{
 		StepPreflight: (*Wizard).stepPreflight,
 		StepProfile:   (*Wizard).stepProfile,
 		StepStorage:   (*Wizard).stepStorage,
 		StepPlugins:   (*Wizard).stepPlugins,
-		StepProviders: (*Wizard).stepProviders,
+		StepProviders: (*Wizard).stepProviderCapacity,
 		StepHarnesses: (*Wizard).stepHarnesses,
 		StepTelemetry: (*Wizard).stepTelemetry,
 		StepDaemon:    (*Wizard).stepDaemon,
+		StepNodes:     (*Wizard).stepNodes,
+		StepPolicy:    (*Wizard).stepPolicy,
 		StepDoctor:    (*Wizard).stepDoctor,
 	}
 }
@@ -123,13 +131,12 @@ func (w *Wizard) Run(ctx context.Context) (Report, error) {
 		return Report{}, err
 	}
 	if w.opts.Reconverge {
-		merged, rerr := w.Reconverge(ctx, w.opts.ReconvergeOptions)
-		return Report{Converged: &merged, Diff: w.diff}, rerr
+		return w.runReconverge(ctx)
 	}
 	report := Report{Resumed: found && state.CompletedStep > 0}
 
 	table := steps()
-	for step := state.NextStep(); step <= LastStep; step++ {
+	for _, step := range state.Remaining() {
 		run, ok := table[step]
 		if !ok {
 			return report, cascade.Newf(cascade.KindInternal, "cascade init: step %d has no implementation", int(step))
@@ -211,7 +218,7 @@ func (w *Wizard) validate() error {
 	if len(missing) == 0 {
 		return nil
 	}
-	sortStrings(missing)
+	sort.Strings(missing)
 	return cascade.Newf(cascade.KindInternal,
 		"cascade init: the wizard was built without %v; a step with no collaborator would be skipped silently", missing)
 }
@@ -247,12 +254,3 @@ func (w *Wizard) interactive() bool {
 // before acting, which is what makes --check a mode rather than a flag
 // each step has to remember.
 func (w *Wizard) writing() bool { return w.opts.Mode != ModeCheck }
-
-// sortStrings is a tiny local sort so validate's message is stable.
-func sortStrings(s []string) {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j] < s[j-1]; j-- {
-			s[j], s[j-1] = s[j-1], s[j]
-		}
-	}
-}

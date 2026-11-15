@@ -1,11 +1,9 @@
 package init
 
-// Purpose: the wizard's behavioural contract (P1-E16-W4-S35-T6) — the
-//   three run modes, the journal-backed resume, the ratified flags, and
-//   the refusals.
-// Constraints: every assertion is about what a COLLABORATOR was asked to
-//   do, not about the wizard's printed text, except where the text is the
-//   deliverable (the step-9 summary).
+// Purpose: the wizard's behavioural contract (P1-E16-W4-S35-T6):
+//   run modes, resume, flags, refusals, the question budget and the canary.
+// Constraints: assertions are on COLLABORATOR calls, not printed text,
+//   except where the text is the deliverable (the summary, doctor notes).
 
 import (
 	"context"
@@ -14,14 +12,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/acamarata/cascade/internal/runtime/initconfig"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// TestWizardYesAllDefaults is the automation path: zero prompts, every
-// default accepted, exit 0, and the machine actually set up.
-//
-// It asserts the real calls, not the transcript. A wizard that printed
-// nine step headers and called nothing would produce identical output.
+// TestWizardYesAllDefaults: --yes takes every default with zero prompts and
+// the machine is actually set up (real calls, not a transcript).
 func TestWizardYesAllDefaults(t *testing.T) {
 	w, rec, out, home := fixture(t, Options{Mode: ModeYes}, nil)
 
@@ -64,9 +60,8 @@ func TestWizardYesAllDefaults(t *testing.T) {
 	}
 }
 
-// TestWizardCheckDryRun: --check writes nothing at all — not the journal,
-// not config, not a harness file — and still reports what a real run
-// would change.
+// TestWizardCheckDryRun: --check writes nothing and still reports what a
+// real run would change.
 func TestWizardCheckDryRun(t *testing.T) {
 	w, rec, out, home := fixture(t, Options{Mode: ModeCheck}, nil)
 
@@ -101,12 +96,8 @@ func TestWizardCheckDryRun(t *testing.T) {
 	}
 }
 
-// TestWizardResumesFromTheJournal is the kill-and-relaunch contract: a
-// run that stopped after step 5 does not re-do steps 1 to 5.
-//
-// The assertion is on which steps the second run PERFORMED, not on the
-// final state — a wizard that re-ran everything would reach the same
-// final state, which is exactly why that would be the wrong assertion.
+// TestWizardResumesFromTheJournal: a run that stopped after step 5 does not
+// re-do steps 1 to 5 — asserted on the steps PERFORMED, not the end state.
 func TestWizardResumesFromTheJournal(t *testing.T) {
 	w, rec, _, home := fixture(t, Options{Mode: ModeYes}, nil)
 	if err := SaveState(home, State{
@@ -130,8 +121,8 @@ func TestWizardResumesFromTheJournal(t *testing.T) {
 			}
 		}
 	}
-	if len(report.Steps) != 4 {
-		t.Errorf("the resumed run performed %v, want the four steps after providers", report.Steps)
+	if len(report.Steps) != 6 {
+		t.Errorf("the resumed run performed %v, want the six steps after providers", report.Steps)
 	}
 	if len(rec.providers) != 0 {
 		t.Errorf("the resumed run re-ran provider intake: %v", rec.providers)
@@ -141,14 +132,12 @@ func TestWizardResumesFromTheJournal(t *testing.T) {
 	}
 }
 
-// TestWizardJournalsAfterEveryStep proves the journal is written as the
-// run goes, not once at the end — which is the whole contract, and the
-// half a single end-of-run write would silently fail to honour.
+// TestWizardJournalsAfterEveryStep: the journal is written as the run goes,
+// not once at the end.
 func TestWizardJournalsAfterEveryStep(t *testing.T) {
 	w, rec, _, home := fixture(t, Options{Mode: ModeYes}, nil)
 	rec.doctorErr = nil
-	// Fail at the last step by making the service install fail, which
-	// stops the run at step 8 with steps 1-7 already done.
+	// A failing service install stops the run at step 8, after 1-7.
 	rec.installErr = cascade.New(cascade.KindUnavailable, "no service manager")
 
 	if _, err := w.Run(context.Background()); err == nil {
@@ -170,8 +159,8 @@ func TestWizardJournalsAfterEveryStep(t *testing.T) {
 	}
 }
 
-// TestWizardRefusesAHalfWiredBuild: a wizard missing a collaborator would
-// skip that step silently and report a machine set up that is not.
+// TestWizardRefusesAHalfWiredBuild: a missing collaborator is a refusal,
+// never a silently skipped step.
 func TestWizardRefusesAHalfWiredBuild(t *testing.T) {
 	w, _, _, home := fixture(t, Options{Mode: ModeYes}, nil)
 	w.deps.Detector = nil
@@ -188,10 +177,8 @@ func TestWizardRefusesAHalfWiredBuild(t *testing.T) {
 	}
 }
 
-// TestReconvergeRefusesWithoutAReadableMachine pins the rule that keeps a
-// reconverge from degrading into a fresh run: converging against a state
-// nobody could read would overwrite the configuration the operator asked
-// to converge, which is the one outcome neither of them wanted.
+// TestReconvergeRefusesWithoutAReadableMachine: converging against a state
+// nobody could read would overwrite the configuration it meant to converge.
 func TestReconvergeRefusesWithoutAReadableMachine(t *testing.T) {
 	w, rec, _, _ := fixture(t, Options{Mode: ModeYes, Reconverge: true}, nil)
 	w.deps.Current = nil
@@ -208,10 +195,8 @@ func TestReconvergeRefusesWithoutAReadableMachine(t *testing.T) {
 	}
 }
 
-// TestPreflightRefusesAnUnusableHome asserts the probe runs before any
-// prompt: a wizard that asked nine questions and then failed on an
-// unwritable home wasted the operator's time on a machine it could have
-// refused immediately.
+// TestPreflightRefusesAnUnusableHome: the home is probed before any
+// question is asked.
 func TestPreflightRefusesAnUnusableHome(t *testing.T) {
 	prompt := &scriptedPrompter{}
 	w, rec, _, _ := fixture(t, Options{}, prompt)
@@ -225,14 +210,8 @@ func TestPreflightRefusesAnUnusableHome(t *testing.T) {
 	}
 }
 
-// TestCheckDoesNotCreateTheCascadeHome is the assertion the first real
-// run of --check failed: the storage probe creates the home so a later
-// step can write to it, and in a mode whose contract is "write nothing"
-// creating a directory is a write.
-//
-// It asserts on the probe's own argument rather than on the filesystem,
-// because the recorder cannot create anything — and the argument is what
-// production's probe branches on.
+// TestCheckDoesNotCreateTheCascadeHome: under --check the probe may not
+// create the home, asserted on the argument production branches on.
 func TestCheckDoesNotCreateTheCascadeHome(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mode Mode
@@ -253,5 +232,68 @@ func TestCheckDoesNotCreateTheCascadeHome(t *testing.T) {
 				t.Errorf("probed with mayCreate = %v, want %v", rec.probedCreate[0], tc.want)
 			}
 		})
+	}
+}
+
+// v2SetupFile answers every V2 site: a provider by key_env, a node by
+// CASCADE_INIT_NODE_CODE_*, and the policy preset.
+const v2SetupFile = completeSetupFile + `[[providers]]
+name = "work"
+auth = "key-env"
+key_env = "INIT_CANARY_KEY"
+[nodes]
+pair = ["n1.invalid"]
+[policy]
+preset = "%s"
+`
+
+// v2Canary is the value both env references resolve to; it must never
+// leave the process that reads it.
+const v2Canary = "canary-value-7c1e0b"
+
+// v2Run builds a spec-driven wizard over v2SetupFile. Its prompter is the
+// spec's own with CASCADE_NO_INPUT forced on, so every would-be prompt is
+// recorded as a refusal at the Prompter boundary and fails the run.
+func v2Run(t *testing.T, flags initconfig.Flags, env map[string]string, preset string) (*Wizard, *recorder, string) {
+	t.Helper()
+	isolateHome(t)
+	env["INIT_CANARY_KEY"], env[initconfig.NodeCodeEnv("n1.invalid")] = v2Canary, v2Canary
+	body := strings.Replace(v2SetupFile, "%s", preset, 1)
+	spec := specFor(t, flags, env, body)
+	strict := *spec
+	strict.Yes, strict.NoInput = false, true
+	mode := map[bool]Mode{false: ModeInteractive, true: ModeYes}[flags.Yes]
+	w, rec, _, _ := fixture(t, Options{Mode: mode, Spec: spec}, NewSpecPrompter(&strict))
+	rec.env, w.deps.Pairer = env, &fakePairer{}
+	return w, rec, body
+}
+
+// mustRun runs w, failing the test on an error.
+func mustRun(t *testing.T, w *Wizard) Report {
+	t.Helper()
+	report, err := w.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	return report
+}
+
+// TestWizardV2QuestionBudget: a typical machine asks at most five
+// questions; --config, --yes and CASCADE_NO_INPUT=1 over a complete spec
+// ask none.
+func TestWizardV2QuestionBudget(t *testing.T) {
+	w, prompt, _ := typicalMachine(t)
+	if mustRun(t, w); len(prompt.asked) > 5 {
+		t.Errorf("a typical machine was asked %d questions, want <= 5: %v", len(prompt.asked), prompt.asked)
+	}
+	for name, yes := range map[string]bool{"--config": false, "--yes": true, "CASCADE_NO_INPUT=1": false} {
+		env := map[string]string{}
+		if name == "CASCADE_NO_INPUT=1" {
+			env[initconfig.EnvNoInput] = "1"
+		}
+		w, _, _ := v2Run(t, initconfig.Flags{Yes: yes}, env, "balanced")
+		if report, err := w.Run(context.Background()); err != nil || !report.State.Complete() {
+			t.Errorf("%s over a complete spec: a prompt was recorded or the run stopped: %v", name, err)
+		}
 	}
 }

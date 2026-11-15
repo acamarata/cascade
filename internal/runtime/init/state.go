@@ -44,7 +44,10 @@ const StateSchemaVersion = 1
 // numbers, so a journal is readable without this file open beside it.
 type Step int
 
-// The nine steps, in the order they run.
+// The wizard's steps. 1-9 are the original nine; StepNodes (8b) and
+// StepPolicy (8c) take values above 9 so every journal written before
+// they existed still decodes to the step it meant. Run order is
+// stepOrder, never the numeric order.
 const (
 	StepPreflight Step = 1
 	StepProfile   Step = 2
@@ -55,10 +58,30 @@ const (
 	StepTelemetry Step = 7
 	StepDaemon    Step = 8
 	StepDoctor    Step = 9
+	StepNodes     Step = 10
+	StepPolicy    Step = 11
 )
 
 // LastStep is the final step; a journal recording it is a completed run.
 const LastStep = StepDoctor
+
+// stepOrder is the order the steps run in: 8b nodes and 8c policy after
+// the daemon step's controller designation, and before doctor. A journal
+// from before 8b existed that records step 8 therefore resumes at 8b.
+var stepOrder = []Step{
+	StepPreflight, StepProfile, StepStorage, StepPlugins, StepProviders,
+	StepHarnesses, StepTelemetry, StepDaemon, StepNodes, StepPolicy, StepDoctor,
+}
+
+// position is s's index in stepOrder, or -1 for a value no step has.
+func (s Step) position() int {
+	for i, step := range stepOrder {
+		if step == s {
+			return i
+		}
+	}
+	return -1
+}
 
 // String names the step for a journal, a prompt and a log line, so those
 // three can never disagree about what step 6 is called.
@@ -82,6 +105,10 @@ func (s Step) String() string {
 		return "daemon"
 	case StepDoctor:
 		return "doctor"
+	case StepNodes:
+		return "nodes"
+	case StepPolicy:
+		return "policy"
 	default:
 		return "unknown"
 	}
@@ -129,18 +156,29 @@ type State struct {
 	// HelperFingerprint is the elevation helper's enrolled key
 	// fingerprint, surfaced in step 9's summary card.
 	HelperFingerprint string `json:"helper_fingerprint,omitempty"`
+	// Nodes are the hosts step 8b paired or found already paired. Host
+	// names only: a pairing code is consumed and never recorded.
+	Nodes []string `json:"nodes,omitempty"`
+	// PolicyPreset is the preset step 8c applied.
+	PolicyPreset string `json:"policy_preset,omitempty"`
 }
 
-// NextStep returns the first step that has not completed.
+// Remaining returns the steps that have not completed, in run order.
+func (s State) Remaining() []Step {
+	return append([]Step(nil), stepOrder[s.CompletedStep.position()+1:]...)
+}
+
+// NextStep returns the first step that has not completed, or zero when
+// every step has.
 func (s State) NextStep() Step {
-	if s.CompletedStep < StepPreflight {
-		return StepPreflight
+	if rest := s.Remaining(); len(rest) > 0 {
+		return rest[0]
 	}
-	return s.CompletedStep + 1
+	return 0
 }
 
 // Complete reports whether every step has finished.
-func (s State) Complete() bool { return s.CompletedStep >= LastStep }
+func (s State) Complete() bool { return s.CompletedStep == LastStep }
 
 // StatePath returns the journal's path within home.
 func StatePath(home string) string { return filepath.Join(home, StateFileName) }
@@ -175,9 +213,9 @@ func LoadState(home string) (state State, found bool, err error) {
 	if state.SchemaVersion > StateSchemaVersion {
 		return State{}, false, ErrStateFromTheFuture
 	}
-	if state.CompletedStep < 0 || state.CompletedStep > LastStep {
+	if state.CompletedStep != 0 && state.CompletedStep.position() < 0 {
 		return State{}, false, cascade.Newf(cascade.KindInvalidInput,
-			"cascade init: the init journal records step %d, which is not one of the nine", int(state.CompletedStep))
+			"cascade init: the init journal records step %d, which is not a wizard step", int(state.CompletedStep))
 	}
 	return state, true, nil
 }
@@ -193,6 +231,7 @@ func SaveState(home string, state State) error {
 	sort.Strings(state.Plugins)
 	sort.Strings(state.Providers)
 	sort.Strings(state.Harnesses)
+	sort.Strings(state.Nodes)
 	raw, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return cascade.Wrap(cascade.KindInternal, err, "cascade init: encode the init journal")

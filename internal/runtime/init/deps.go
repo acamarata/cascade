@@ -8,12 +8,16 @@ package init
 //   of them to the shipped implementation; this package contains no
 //   fallback that does the step's work itself (Art.1). A nil collaborator
 //   is a refusal before anything is written, not a silently skipped step.
+//   The step adapters at the end bind these seams to the capacity (5),
+//   nodes (8b) and policy (8c) steps.
 // SPORT: internal/runtime/init seams (ADD) — P1-E16-W4-S35-T6.
 
 import (
 	"context"
 	"io"
 
+	"github.com/acamarata/cascade/internal/policy"
+	"github.com/acamarata/cascade/internal/providers/intake"
 	"github.com/acamarata/cascade/internal/runtime/initconfig"
 )
 
@@ -168,6 +172,25 @@ type Deps struct {
 	// environment, and so the ONE place that reads a credential is
 	// named rather than reached for inline (Art.7.1).
 	Getenv initconfig.EnvFunc
+
+	// Registry is the provider intake registry the capacity checklist
+	// reads each record's vault reference back from. Nil keeps step 5's
+	// plain add-a-provider loop; set, an interactive step 5 is the
+	// capacity checklist.
+	Registry intake.Registry
+	// LAN and Pairer drive step 8b. They are consulted only when [nodes]
+	// opts in, so a machine that pairs nothing needs neither; one that
+	// opts in without them is refused by the step.
+	LAN    LANSource
+	Pairer NodePairer
+	// Policy is the running autonomy controller step 8c applies the
+	// preset to. Nil keeps the default preset as-is and refuses any
+	// other, since nothing could apply it.
+	Policy *policy.Controller
+	// Discovery is the live [roots], [nodes] and [policy] state a
+	// --reconverge upserts additively. Nil is legitimate while the setup
+	// file names none of those tables and a refusal when it does.
+	Discovery DiscoveryStore
 }
 
 // LiteralSecretGuard refuses a value that looks like a secret typed in
@@ -175,4 +198,68 @@ type Deps struct {
 type LiteralSecretGuard interface {
 	// Check returns a refusal when value carries a literal secret.
 	Check(field, value string) error
+}
+
+// stepProviderCapacity is step 5. An interactive run with the intake
+// registry wired is the capacity checklist (StepCapacity); every other run
+// keeps step 5's own path, which a setup file's directives drive and
+// which asks a non-interactive run nothing.
+func (w *Wizard) stepProviderCapacity(ctx context.Context, state *State) error {
+	if w.deps.Registry == nil || !w.interactive() {
+		return w.stepProviders(ctx, state)
+	}
+	w.say("== providers")
+	return w.StepCapacity(ctx, state, w.deps.Registry)
+}
+
+// stepNodes is step 8b. It pairs only what [nodes] (or its
+// CASCADE_INIT_NODES_* variables) opts into, and asks nothing otherwise:
+// pairing is opt-in, and a question nobody needs is a question over the
+// budget.
+func (w *Wizard) stepNodes(ctx context.Context, state *State) error {
+	var cfg initconfig.NodesConfig
+	if w.opts.Spec != nil {
+		cfg = w.opts.Spec.Nodes
+	}
+	if !cfg.ScanLAN && len(cfg.Pair) == 0 {
+		w.say("== nodes")
+		w.say("   none (opt in with [nodes] scan_lan or pair)")
+		return nil
+	}
+	res, err := w.StepNodes(ctx, cfg, w.deps.LAN, w.deps.Pairer)
+	if err != nil {
+		return err
+	}
+	state.Nodes = mergeNames(res.Existing, res.Paired)
+	return nil
+}
+
+// stepPolicy is step 8c. The preset comes from --policy,
+// CASCADE_INIT_POLICY_PRESET or [policy].preset, else balanced, and the
+// step asks nothing: a later --reconverge with [policy].preset changes
+// it, and one more question would put a typical run over its five.
+func (w *Wizard) stepPolicy(ctx context.Context, state *State) error {
+	w.say("== policy")
+	requested := ""
+	if w.opts.Spec != nil {
+		requested = w.opts.Spec.Policy.Preset
+	}
+	name, err := resolvePolicyPreset(requested)
+	if err != nil {
+		return err
+	}
+	state.PolicyPreset = name
+	switch {
+	case !w.writing() && requested != "":
+		w.plan("apply policy preset %s", name)
+	case !w.writing(), w.deps.Policy == nil && name == defaultPolicyPreset:
+		w.say("   preset %s (the autonomy default)", name)
+	default:
+		profile, err := ApplyPolicyPreset(ctx, w.deps.Policy, name)
+		if err != nil {
+			return err
+		}
+		w.say("   preset %s (autonomy profile %s)", name, profile.Name())
+	}
+	return nil
 }
