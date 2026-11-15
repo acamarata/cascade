@@ -12,49 +12,129 @@
 package main
 
 import (
+	"strings"
 	"testing"
 )
 
 // TestChatReplyWiredInDaemon proves the Replier is composed at the daemon
 // root and chat.reply_open and chat.reply are registered.
 func TestChatReplyWiredInDaemon(t *testing.T) {
-	// The golden file daemon_rpc_methods.golden must list chat.reply_open
-	// and chat.reply. This test verifies the wiring exists and the methods
-	// are registered.
-	t.Log("replier wired with RecoverPending before registration")
+	pol := &chatFixturePolicy{}
+	log := &chatFixtureLog{}
+	store := &threadStore{}
+	reg := newRPCRegistry()
+	prov := &chatFixtureProvider{}
+	r := newComposedReplier(prov, pol, log, store, reg)
+	if r == nil {
+		t.Fatal("composedReplier is nil")
+	}
+	if !reg.Has("chat.reply_open") {
+		t.Fatal("chat.reply_open not registered")
+	}
+	if !reg.Has("chat.reply") {
+		t.Fatal("chat.reply not registered")
+	}
+	if !r.recovered {
+		t.Fatal("RecoverPending not applied")
+	}
 }
 
 // TestP1ChatReplyProductionPath proves `cascade chat -m` on a recorded lane
 // exits 0, returns provider text, and stores both turns.
 func TestP1ChatReplyProductionPath(t *testing.T) {
-	// Production path: recorded provider, real door, both turns persisted.
-	t.Log("production path verified through recorded provider")
+	prov := &chatFixtureProvider{}
+	pol := &chatFixturePolicy{}
+	log := &chatFixtureLog{}
+	store := &threadStore{}
+	reg := newRPCRegistry()
+	r := newComposedReplier(prov, pol, log, store, reg)
+	reply, err := r.Reply("hello")
+	if err != nil {
+		t.Fatalf("reply error: %v", err)
+	}
+	if !strings.HasPrefix(reply, "ok:") {
+		t.Fatalf("reply = %q, want prefix ok:", reply)
+	}
+	assertCalls(t, prov, 1)
+	if store.TurnCount() != 2 {
+		t.Fatalf("turns = %d, want 2", store.TurnCount())
+	}
 }
 
 // TestP1ChatReplyOwnerDenyZeroCalls proves owner deny enforcement makes
 // zero provider calls and returns a typed refusal.
 func TestP1ChatReplyOwnerDenyZeroCalls(t *testing.T) {
-	// Owner deny: 0 provider calls, typed refusal with identity+message.
-	t.Log("owner deny enforcement verified through conductor policy integration")
+	prov := &chatFixtureProvider{}
+	pol := &chatFixturePolicy{ownerDenied: true}
+	log := &chatFixtureLog{}
+	store := &threadStore{}
+	reg := newRPCRegistry()
+	r := newComposedReplier(prov, pol, log, store, reg)
+	reply, err := r.Reply("hello")
+	if err != nil {
+		t.Fatalf("reply error: %v", err)
+	}
+	if !strings.Contains(reply, "refused") {
+		t.Fatalf("reply = %q, want refusal", reply)
+	}
+	assertCalls(t, prov, 0)
 }
 
 // TestP1ChatReplyQuotaZeroCalls proves quota enforcement makes zero
 // provider calls when over budget and returns a typed refusal.
 func TestP1ChatReplyQuotaZeroCalls(t *testing.T) {
-	// Quota: 0 provider calls, typed refusal.
-	t.Log("quota enforcement verified through conductor policy integration")
+	prov := &chatFixtureProvider{}
+	pol := &chatFixturePolicy{quotaZero: true}
+	log := &chatFixtureLog{}
+	store := &threadStore{}
+	reg := newRPCRegistry()
+	r := newComposedReplier(prov, pol, log, store, reg)
+	reply, err := r.Reply("hello")
+	if err != nil {
+		t.Fatalf("reply error: %v", err)
+	}
+	if !strings.Contains(reply, "refused") {
+		t.Fatalf("reply = %q, want refusal", reply)
+	}
+	assertCalls(t, prov, 0)
 }
 
 // TestP1ChatReplyLocalOnlyThreadNoRemoteCall proves local-only threads
 // make no remote calls when over budget.
 func TestP1ChatReplyLocalOnlyThreadNoRemoteCall(t *testing.T) {
-	// Local-only: no remote call, typed refusal.
-	t.Log("local-only enforcement verified through thread tier integration")
+	prov := &chatFixtureProvider{}
+	pol := &chatFixturePolicy{localOnly: true}
+	log := &chatFixtureLog{}
+	store := &threadStore{}
+	reg := newRPCRegistry()
+	r := newComposedReplier(prov, pol, log, store, reg)
+	reply, err := r.Reply("hello")
+	if err != nil {
+		t.Fatalf("reply error: %v", err)
+	}
+	if !strings.Contains(reply, "refused") {
+		t.Fatalf("reply = %q, want refusal", reply)
+	}
+	assertCalls(t, prov, 0)
 }
 
 // TestP1ChatReplyScrubBeforeEgress proves egress scrub runs before the
 // reply leaves the machine.
 func TestP1ChatReplyScrubBeforeEgress(t *testing.T) {
-	// Scrub: vault references substituted before egress.
-	t.Log("egress scrub verified through redacting audit log integration")
+	prov := &chatFixtureProvider{}
+	pol := &chatFixturePolicy{}
+	log := &chatFixtureLog{}
+	store := &threadStore{}
+	reg := newRPCRegistry()
+	r := newComposedReplier(prov, pol, log, store, reg)
+	_, err := r.Reply("secret is vault:secret")
+	if err != nil {
+		t.Fatalf("reply error: %v", err)
+	}
+	if len(log.payloads) != 1 {
+		t.Fatalf("payloads = %d, want 1", len(log.payloads))
+	}
+	if strings.Contains(log.payloads[0], "vault:secret") {
+		t.Fatalf("payload = %q, want scrubbed", log.payloads[0])
+	}
 }
