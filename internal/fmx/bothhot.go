@@ -1,3 +1,4 @@
+// Package fmx lowers how many jobs it admits while both hot lanes are busy, and logs each change.
 package fmx
 
 import "time"

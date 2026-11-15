@@ -19,34 +19,10 @@ func TestStandingGrantTypes(t *testing.T) {
 
 	grantType := reflect.TypeOf(grant)
 
-	// Check OwnerID field exists
-	if _, found := grantType.FieldByName("OwnerID"); !found {
-		t.Error("StandingGrant missing OwnerID field")
-	}
-
-	// Check LaneOps field exists
-	if _, found := grantType.FieldByName("LaneOps"); !found {
-		t.Error("StandingGrant missing LaneOps field")
-	}
-
-	// Check GrantOps field exists
-	if _, found := grantType.FieldByName("GrantOps"); !found {
-		t.Error("StandingGrant missing GrantOps field")
-	}
-
-	// Check JobsOps field exists
-	if _, found := grantType.FieldByName("JobsOps"); !found {
-		t.Error("StandingGrant missing JobsOps field")
-	}
-
-	// Check ExpiresAt field exists
-	if _, found := grantType.FieldByName("ExpiresAt"); !found {
-		t.Error("StandingGrant missing ExpiresAt field")
-	}
-
-	// Check Revoked field exists
-	if _, found := grantType.FieldByName("Revoked"); !found {
-		t.Error("StandingGrant missing Revoked field")
+	for _, field := range []string{"OwnerID", "LaneOps", "GrantOps", "JobsOps", "ExpiresAt", "Revoked"} {
+		if _, found := grantType.FieldByName(field); !found {
+			t.Errorf("StandingGrant missing %s field", field)
+		}
 	}
 
 	// Test DefaultDuration constant
