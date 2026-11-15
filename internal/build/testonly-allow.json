@@ -1533,14 +1533,6 @@
   },
   {
     "added_by_ticket": "P1-NODE-18e",
-    "caller_site": "internal/nodes/nodefacing_handler.go",
-    "expected_caller": "the node-facing registry mounts the node-originated dispatch verbs (claim, report, journal)",
-    "reason": "P1-NODE-18e takes the verbs off the owner registry; the node-facing mount is P1-NODE-18f",
-    "retire_ticket": "P1-NODE-18f",
-    "symbol": "internal/nodes.RegisterDispatchNodeHandlers"
-  },
-  {
-    "added_by_ticket": "P1-NODE-18e",
     "caller_site": "cmd/cascade/wire_node_channel.go",
     "expected_caller": "the daemon's node channel wiring registers the dispatch journal on the node-facing registry",
     "reason": "P1-NODE-18e unmounts the journal from the owner registry; the node channel wiring is P1-NODE-18k",
@@ -1570,5 +1562,21 @@
     "reason": "P1-TOP-13c ships DaemonCopies as the exported, per-platform name of the copy set the daemon reads; inside secrets the stores call the goos-parameterised daemonCopiesFor (so the keychain store stays testable on every host), so the exported entry point has no production caller until the grant fallback composes the copy set. TestCallerSitesAreWiredOnceTheirFileExists fails this entry once that file exists without the call.",
     "retire_ticket": "P1-TOP-13d",
     "symbol": "internal/secrets.DaemonCopies"
+  },
+  {
+    "added_by_ticket": "P1-TOP-09d",
+    "caller_site": "internal/daemon/subsystems.go",
+    "expected_caller": "internal/daemon/subsystems.go, where the daemon composes the Rank selector (NewRankSelector over the one fleet CandidateSource) and passes it to the conductor router through WithRanker, beside the WithLaneTierCap wiring; retire this entry once that file calls WithRanker",
+    "reason": "P1-TOP-09d makes the conductor Router's final pick the first Rank-ordered lane AdmitLane passes and ships WithRanker, tested in internal/conductor/filters_rank_test.go. NewRouter keeps the lane-name order as its default ranking (ruling D155 option A), so the daemon still selects today; the daemon CandidateSource and Rank selector that supply a real RankFn are P1-TOP-09e, which wires WithRanker in subsystems.go and makes RegisterConductorRouter require it.",
+    "retire_ticket": "P1-TOP-09e",
+    "symbol": "internal/conductor.WithRanker"
+  },
+  {
+    "added_by_ticket": "P1-NODE-18f",
+    "caller_site": "cmd/cascade/wire_node_channel.go",
+    "expected_caller": "the daemon's node-channel wiring builds the node-facing registry with NewNodeFacing and serves node RPCs on it",
+    "reason": "P1-NODE-18f builds the node-only registry and its handlers; the daemon mounts it in the node-channel wiring",
+    "retire_ticket": "P1-NODE-18k",
+    "symbol": "internal/nodes.NewNodeFacing"
   }
 ]
