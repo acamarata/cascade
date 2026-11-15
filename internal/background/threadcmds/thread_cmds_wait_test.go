@@ -10,7 +10,7 @@ type fakeWaitClock struct {
 	C chan time.Time
 }
 
-func (f *fakeWaitClock) After(d time.Duration) <-chan time.Time {
+func (f *fakeWaitClock) After(_ time.Duration) <-chan time.Time {
 	return f.C
 }
 
@@ -18,11 +18,11 @@ type waitMemStore struct {
 	doneCh chan struct{}
 }
 
-func (m *waitMemStore) Append(threadID, message string) error { return nil }
-func (m *waitMemStore) Done(threadID string) (<-chan struct{}, error) {
+func (m *waitMemStore) Append(_, _ string) error { return nil }
+func (m *waitMemStore) Done(_ string) (<-chan struct{}, error) {
 	return m.doneCh, nil
 }
-func (m *waitMemStore) Result(threadID string) (string, bool, error) {
+func (m *waitMemStore) Result(_ string) (string, bool, error) {
 	return "", false, nil
 }
 

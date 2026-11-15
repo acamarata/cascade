@@ -1,3 +1,4 @@
+// Package tmplguard renders text templates and refuses output that carries model-generation markers.
 package tmplguard
 
 import (

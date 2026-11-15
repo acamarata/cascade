@@ -19,9 +19,9 @@ type ToolCounter struct {
 	Cap int
 }
 
-// NewToolCounter creates a new ToolCounter with the given initial cap value.
-func NewToolCounter(cap int) *ToolCounter {
-	return &ToolCounter{Cap: cap}
+// NewToolCounter creates a new ToolCounter with the given initial cap limit.
+func NewToolCounter(limit int) *ToolCounter {
+	return &ToolCounter{Cap: limit}
 }
 
 // RecordToolCall records a tool call. It returns true if the call is valid,

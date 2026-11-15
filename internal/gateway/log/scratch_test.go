@@ -42,12 +42,12 @@ func TestScratchRemovedOnPanic(t *testing.T) {
 	base := t.TempDir()
 	var gotPath string
 	defer func() {
-		recover()
+		_ = recover()
 		if _, statErr := os.Stat(gotPath); !os.IsNotExist(statErr) {
 			t.Fatalf("scratch dir still exists at %s after panic", gotPath)
 		}
 	}()
-	RunWithScratch(base, func(path string) error {
+	_ = RunWithScratch(base, func(path string) error {
 		gotPath = path
 		panic("test panic")
 	})

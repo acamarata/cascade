@@ -7,17 +7,17 @@ import "testing"
 func TestTouchpointTypesExist(t *testing.T) {
 	// Verify TouchpointKind values exist
 	_ = TouchpointKind(0)
-	var planningKind TouchpointKind = PlanningKind
-	var completeKind TouchpointKind = CompleteKind
+	planningKind := PlanningKind
+	completeKind := CompleteKind
 	if planningKind == completeKind {
 		t.Error("Planning and Complete kinds should be distinct")
 	}
 
 	// Verify ChatState values exist
 	_ = ChatState(0)
-	var openState ChatState = OpenState
-	var waitingState ChatState = WaitingState
-	var archivedState ChatState = ArchivedState
+	openState := OpenState
+	waitingState := WaitingState
+	archivedState := ArchivedState
 	if openState == waitingState || openState == archivedState || waitingState == archivedState {
 		t.Error("Open, Waiting, and Archived states should be distinct")
 	}
