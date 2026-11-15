@@ -15,12 +15,14 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/acamarata/cascade/internal/fleet/capacity"
 	"github.com/acamarata/cascade/internal/fleet/topology"
 	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/providers/gateway"
+	providerregistry "github.com/acamarata/cascade/internal/providers/registry"
 	"github.com/acamarata/cascade/internal/providers/usage"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage/migrate"
@@ -97,12 +99,33 @@ func wireGatewayQuota(w *daemonWiring) error {
 	}
 	restore := startGatewayQuota(w.Ctx, fleetCompositor(w.Deps.Fleet), w.Manifest.GoSupervised, accounts,
 		newGatewayQuotaPoll(store, w.Clock, src))
+	restoreKey := func() {}
+	if w.Deps.Fleet != nil {
+		restoreKey = capacity.SetDefaultQuotaKey(gatewayQuotaKey(w.Deps.Fleet.CapacityParts().Registry))
+	}
 	w.Manifest.GoSupervised(w.Ctx, "gateway-quota", "provider usage quota windows", func(ctx context.Context) error {
 		<-ctx.Done()
+		restoreKey()
 		restore()
 		return db.Close()
 	})
 	return nil
+}
+
+// gatewayQuotaKey maps a provider to the gateway account its windows are
+// recorded under (the poller records by account): the account of a provider
+// whose auth ref is "gateway:<account>", else "" (the provider's own name).
+func gatewayQuotaKey(reg *providerregistry.Registry) capacity.QuotaKeyFunc {
+	if reg == nil {
+		return nil
+	}
+	return func(ctx context.Context, provider string) string {
+		rec, err := reg.GetProvider(ctx, provider)
+		if err != nil || providerregistry.ValidateGatewayAuthRef(rec.AuthRef) != nil {
+			return ""
+		}
+		return strings.TrimPrefix(rec.AuthRef.String(), "gateway:")
+	}
 }
 
 // goFunc is daemon.Manifest.GoSupervised's shape.

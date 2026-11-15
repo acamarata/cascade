@@ -62,6 +62,34 @@ func SetDefaultQuotaSource(q QuotaSource) (restore func()) {
 	return func() { defaultQuota.CompareAndSwap(next, prev) }
 }
 
+// QuotaKeyFunc maps a provider name to the key its quota windows are stored
+// under (a provider added from a gateway account is stored under the
+// account). "" or an unmapped provider keeps the provider name.
+type QuotaKeyFunc func(ctx context.Context, provider string) string
+
+var defaultQuotaKey atomic.Pointer[QuotaKeyFunc]
+
+// SetDefaultQuotaKey installs k as the process-wide provider-to-quota-key
+// mapping and returns a func restoring the previous one; nil clears it.
+func SetDefaultQuotaKey(k QuotaKeyFunc) (restore func()) {
+	var next *QuotaKeyFunc
+	if k != nil {
+		next = &k
+	}
+	prev := defaultQuotaKey.Swap(next)
+	return func() { defaultQuotaKey.CompareAndSwap(next, prev) }
+}
+
+// quotaKey is the key provider's windows are read under.
+func quotaKey(ctx context.Context, provider string) string {
+	if p := defaultQuotaKey.Load(); p != nil {
+		if k := (*p)(ctx, provider); k != "" {
+			return k
+		}
+	}
+	return provider
+}
+
 // quotaSource returns the compositor's source, else the process default.
 func (c *Compositor) quotaSource() QuotaSource {
 	c.mu.RLock()
@@ -82,7 +110,7 @@ func (c *Compositor) withQuota(ctx context.Context, slot ProviderSlot) ProviderS
 	if q == nil {
 		return slot
 	}
-	obs, err := q(ctx, slot.ProfileRef)
+	obs, err := q(ctx, quotaKey(ctx, slot.ProfileRef))
 	if err != nil {
 		c.mu.RLock()
 		prev := c.providers[slot.ProfileRef].Quota
