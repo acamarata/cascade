@@ -74,3 +74,15 @@ type HealResult struct {
 	// Applied indicates whether the heal was actually applied (false in dry-run).
 	Applied bool
 }
+
+// ArchiveRun renames a stale run by appending a UTC timestamp suffix.
+// It returns the new name in the format <name>.stale-<UTC stamp> without
+// deleting the original run. Returns ErrEmptyRunName if run.RunName is empty.
+func ArchiveRun(run StaleRun, clock func() time.Time) (string, error) {
+	if run.RunName == "" {
+		return "", ErrEmptyRunName
+	}
+
+	stamp := clock().UTC().Format("20060102T150405Z")
+	return run.RunName + ".stale-" + stamp, nil
+}

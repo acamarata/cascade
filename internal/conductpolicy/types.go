@@ -1,6 +1,8 @@
 // Package conductpolicy defines abstract processing lanes, work kinds, reasons and tiers for policy enforcement.
 package conductpolicy
 
+import "errors"
+
 // Lane represents a processing lane.
 type Lane string
 
@@ -86,3 +88,16 @@ func (x Tier) Valid() bool {
 		return false
 	}
 }
+
+var (
+	// ErrUnknownWorkKind indicates an unknown work kind.
+	ErrUnknownWorkKind = errors.New("conductpolicy: unknown work kind")
+	// ErrUnknownReason indicates an unknown reason.
+	ErrUnknownReason = errors.New("conductpolicy: unknown reason")
+	// ErrSameLane indicates that consensus needs two different lanes.
+	ErrSameLane = errors.New("conductpolicy: consensus needs two different lanes")
+	// ErrEmptyAnswer indicates an empty answer.
+	ErrEmptyAnswer = errors.New("conductpolicy: empty answer")
+	// ErrFanoutNeedsOverride indicates that native fan-out needs an explicit override with a reason.
+	ErrFanoutNeedsOverride = errors.New("conductpolicy: native fan-out needs an explicit override with a reason")
+)

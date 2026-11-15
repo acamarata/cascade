@@ -96,3 +96,31 @@ func TestStaleBaseDetected(t *testing.T) {
 		t.Errorf("run-4 should not be included")
 	}
 }
+
+// TestHealRenamesNeverDeletes verifies that ArchiveRun produces the correct
+// renamed string and never deletes the original run.
+func TestHealRenamesNeverDeletes(t *testing.T) {
+	fixedTime := time.Date(2026, 11, 16, 10, 30, 45, 0, time.UTC)
+	clock := func() time.Time { return fixedTime }
+
+	run := StaleRun{
+		RunName: "test-run-abc",
+		Reason:  "stale-base",
+	}
+
+	renamed, err := ArchiveRun(run, clock)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := "test-run-abc.stale-20261116T103045Z"
+	if renamed != expected {
+		t.Errorf("expected renamed string %q, got %q", expected, renamed)
+	}
+
+	emptyRun := StaleRun{RunName: ""}
+	_, err = ArchiveRun(emptyRun, clock)
+	if !errors.Is(err, ErrEmptyRunName) {
+		t.Errorf("expected ErrEmptyRunName for empty RunName, got %v", err)
+	}
+}

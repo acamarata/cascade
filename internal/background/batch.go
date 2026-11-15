@@ -77,21 +77,5 @@ func HandleBatch(ctx context.Context, m Model, rules []Rule, group []BatchFailur
 		return BatchTicket{}, nil
 	}
 
-	// Collect distinct event kinds for matching.
-	kinds := make(map[string]struct{}, len(group))
-	for _, ev := range group {
-		kinds[ev.Kind] = struct{}{}
-	}
-
-	// Process each matching rule exactly once.
-	for _, r := range rules {
-		if _, ok := kinds[r.Kind]; !ok {
-			continue
-		}
-		if err := m.Call(ctx, r, group); err != nil {
-			return BatchTicket{}, ErrBatchModel
-		}
-	}
-
-	return BatchTicket{}, nil
+	return handleBatchCore(ctx, m, rules, group)
 }

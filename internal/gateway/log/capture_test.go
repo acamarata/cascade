@@ -1,9 +1,51 @@
 package log
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 )
+
+func TestCanonicalRequestPreservesLargeIntegers(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  []byte
+		want []byte
+	}{
+		{
+			name: "large int",
+			raw:  []byte(`{"id":9007199254740993}`),
+			want: []byte(`{"id":9007199254740993}`),
+		},
+		{
+			name: "non-JSON body",
+			raw:  []byte(`this is not json`),
+			want: []byte(`this is not json`),
+		},
+		{
+			name: "trailing data",
+			raw:  []byte(`{"id":1}trailing`),
+			want: []byte(`{"id":1}trailing`),
+		},
+		{
+			name: "empty",
+			raw:  []byte(``),
+			want: []byte(``),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := CanonicalRequest(tt.raw)
+			if err != nil {
+				t.Fatalf("CanonicalRequest() error = %v", err)
+			}
+			if !bytes.Equal(got, tt.want) {
+				t.Errorf("CanonicalRequest() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestScrubFormsRejectsSpecialChars(t *testing.T) {
 	invalidKeys := []string{

@@ -51,3 +51,20 @@ func OpenPlanningChat(projectID, templateText string) (*TouchpointChat, error) {
 		ProjectID:    projectID,
 	}, nil
 }
+
+// OpenCompleteChat creates a new complete touchpoint chat for the given project.
+// The chat acts as a port; it embeds the ask card marking the chat as waiting.
+// It returns an error if the projectID is empty.
+func OpenCompleteChat(projectID, templateText string) (*TouchpointChat, error) {
+	if projectID == "" {
+		return nil, errors.New("projectID cannot be empty")
+	}
+
+	return &TouchpointChat{
+		Name:         completeChatName,
+		Kind:         CompleteKind,
+		State:        WaitingState,
+		TemplateText: templateText,
+		ProjectID:    projectID,
+	}, nil
+}

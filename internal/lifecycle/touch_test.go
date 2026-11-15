@@ -100,3 +100,54 @@ func TestPlanningChatOpensAtRTP(t *testing.T) {
 		t.Error("Expected nil chat when projectID is empty")
 	}
 }
+
+// TestCompleteChatOpensAtRTD verifies that OpenCompleteChat creates
+// a properly configured touchpoint chat.
+func TestCompleteChatOpensAtRTD(t *testing.T) {
+	// Test successful creation
+	projectID := "proj-456"
+	templateText := "Complete template text"
+
+	chat, err := OpenCompleteChat(projectID, templateText)
+	if err != nil {
+		t.Fatalf("OpenCompleteChat returned unexpected error: %v", err)
+	}
+
+	if chat == nil {
+		t.Fatal("OpenCompleteChat returned nil chat")
+	}
+
+	// Verify chat name
+	if chat.Name != "P5 Complete" {
+		t.Errorf("Expected chat name 'P5 Complete', got '%s'", chat.Name)
+	}
+
+	// Verify state is Waiting (ask card embeds this)
+	if chat.State != WaitingState {
+		t.Errorf("Expected chat state WaitingState, got %v", chat.State)
+	}
+
+	// Verify template text is stored as first message
+	if chat.TemplateText != templateText {
+		t.Errorf("Expected template text '%s', got '%s'", templateText, chat.TemplateText)
+	}
+
+	// Verify project ID
+	if chat.ProjectID != projectID {
+		t.Errorf("Expected project ID '%s', got '%s'", projectID, chat.ProjectID)
+	}
+
+	// Verify kind
+	if chat.Kind != CompleteKind {
+		t.Errorf("Expected kind CompleteKind, got %v", chat.Kind)
+	}
+
+	// Test empty projectID error case
+	chat, err = OpenCompleteChat("", templateText)
+	if err == nil {
+		t.Error("Expected error for empty projectID, got nil")
+	}
+	if chat != nil {
+		t.Error("Expected nil chat when projectID is empty")
+	}
+}
