@@ -1261,14 +1261,6 @@
     "symbol": "internal/learn.LearnEventNamespace"
   },
   {
-    "added_by_ticket": "P1-NODE-12d",
-    "caller_site": "internal/runtime/init/steps_reconverge.go",
-    "expected_caller": "internal/runtime/init/steps_reconverge.go, the P1-NODE-12e caller of ReconvergeDiscovery; retire this entry once that file calls it",
-    "reason": "ReconvergeDiscovery ships with its tests; its first production caller is internal/runtime/init/steps_reconverge.go from P1-NODE-12e, not built yet.",
-    "retire_ticket": "P1-NODE-12e",
-    "symbol": "internal/runtime/init.ReconvergeDiscovery"
-  },
-  {
     "added_by_ticket": "P1-PBD-02a",
     "caller_site": "plugins/pbd/evidence_mount.go",
     "expected_caller": "plugins/pbd/evidence_mount.go, the P1-PBD-02b caller of EvidenceRPC; retire this entry once that file calls it",
@@ -1475,5 +1467,21 @@
     "reason": "P1-NODE-18f builds the node-only registry and its handlers; the daemon mounts it in the node-channel wiring",
     "retire_ticket": "P1-NODE-18k",
     "symbol": "internal/nodes.NewNodeFacing"
+  },
+  {
+    "added_by_ticket": "P1-TOP-04d",
+    "caller_site": "internal/conductor/fanout.go",
+    "expected_caller": "none planned: the fan-out WithPermitFn seam in internal/conductor/fanout.go is now Executor.LegPermit, so P1-TOP-04 deletes internal/conductor/leg_budget.go (or a plan ruling names a new production caller) before it closes; retire this entry then",
+    "reason": "P1-TOP-04d removed the last production caller (the daemon fan-out runner): fresh and resumed legs are metered per leg by the Executor's CallReserver under LegPermit; NewLegBudget is left for the cmd/cascade crash test until the parent removes it, and P1-TOP-04d may not edit internal/conductor.",
+    "retire_ticket": "P1-TOP-04",
+    "symbol": "internal/conductor.NewLegBudget"
+  },
+  {
+    "added_by_ticket": "P1-TOP-04d",
+    "caller_site": "internal/conductor/fanout.go",
+    "expected_caller": "none planned: P1-TOP-04 deletes internal/conductor/leg_budget.go with NewLegBudget (or a plan ruling names a production caller) before it closes; retire this entry then",
+    "reason": "P1-TOP-04d removed the only production use (NewLegBudget(DefaultFanOutLegBudget) in the daemon fan-out runner); legs are metered per leg by the CallReserver, and P1-TOP-04d may not edit internal/conductor.",
+    "retire_ticket": "P1-TOP-04",
+    "symbol": "internal/conductor.DefaultFanOutLegBudget"
   }
 ]
