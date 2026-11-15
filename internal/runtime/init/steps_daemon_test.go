@@ -15,6 +15,7 @@ import (
 	"encoding/base64"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -57,7 +58,7 @@ func TestInitWritesDesignation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("init left no designation: %v", err)
 	}
-	if perm := info.Mode().Perm(); perm != 0o600 {
+	if perm := info.Mode().Perm(); goruntime.GOOS != "windows" && perm != 0o600 { // Windows reports no POSIX bits
 		t.Errorf("designation mode = %o, want 600", perm)
 	}
 	d, ok, err := nodes.NewFileDesignationBackend(dataDir).Load()
