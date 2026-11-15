@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-15T04:03:11Z",
+  "generated_at": "2026-11-15T19:03:34Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -24215,7 +24215,7 @@
         },
         {
           "file": "internal/daemon/conductor_execute_fanout.go",
-          "line": 19,
+          "line": 22,
           "status": "CHANGE",
           "raw": "internal/daemon (CHANGE, P1-CORE-19)."
         },
@@ -32512,7 +32512,7 @@
       "sites": [
         {
           "file": "internal/runtime/init/deps.go",
-          "line": 11,
+          "line": 13,
           "status": "ADD",
           "ticket": "P1-E16-W4-S35-T6",
           "raw": "internal/runtime/init seams (ADD) — P1-E16-W4-S35-T6."
